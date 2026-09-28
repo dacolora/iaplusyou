@@ -35,7 +35,7 @@ def test_token_vencido_pide_reconectar():
     import meta_errores
     t = meta_errores.explicar(_crudo('{"error":{"message":"Error validating access token: Session has expired",'
                                      '"type":"OAuthException","code":190,"error_subcode":463}}'))
-    assert "vuelve a conectar" in t and "Configuración" in t and "{" not in t
+    assert "vuelve a conectar" in t and "Experimentos" in t and "{" not in t
 
 
 def test_permisos_y_limite_de_llamadas():

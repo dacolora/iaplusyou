@@ -1587,8 +1587,6 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .llave-pasos summary { cursor: pointer; font-size: .82rem; }
 .llave-pasos ol { padding-left: 1.2rem; margin: .4rem 0 0; font-size: .78rem; }
 .llave-pasos li { margin-bottom: .3rem; }
-.llave-meta-conexion { margin-top: .5rem; }
-.llave-meta-conexion .idea-block { margin: 0; }
 
 /* Conectar tu tienda: paso a paso por plataforma */
 .tienda-pasos { display: grid; gap: .4rem; margin: .6rem 0 1rem; }

@@ -2414,3 +2414,1926 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
+
+### Task 10: rutas base — imágenes `<path:>`, `variante`, volver a la ficha, colores, mover, «crear con»
+
+**Files:**
+- Modify: `dashboard.py` (`imagen_producto` 2383–2391, `imagen_producto_archivo` 2403–2413, `_guardar_fotos_producto` 2638–2660, `crear_producto` 2598–2636, `actualizar_producto` 2662–2685, `subir_imagen_producto` 2687–2703, `eliminar_imagen_producto` 2705–2713, `eliminar_producto` 2715–2737, `_volver_productos` 5233–5236, rutas `prod_*` 5422–5617, `ver_cliente` línea 1636)
+- Test: `tests/test_rutas_catalogo.py`
+
+**Interfaces:**
+- Consumes: T1–T2 (`carpeta_de(variante=)`, `agregar_color`, `quitar_color`, `mover_foto_a_color`, `eliminar_imagen(variante=)`, `encontrar`, `encontrar_producto`, `producto_base`, `listar_productos`).
+- Produces: `_volver_catalogo(cliente, cat=None, activo_id=None)`, `_volver_fila(cliente, pid)`; rutas `catalogo_color_agregar` (POST `/productos/<producto_id>/colores`), `catalogo_color_quitar` (POST `/productos/<producto_id>/colores/<color_id>/quitar`), `catalogo_foto_mover` (POST `/productos/<producto_id>/fotos/<nombre>/mover`, campo `variante`), `catalogo_crear_con` (POST `/catalogo/producto/<producto_id>/crear-con`, campo `variante` opcional → `session["fp_prefill"]["productos_catalogo"]`); `imagen_producto`/`imagen_producto_archivo` con `<path:producto_id>` y `?variante=`; `subir_imagen_producto`/`eliminar_imagen_producto` con campo `variante`; toda ruta del catálogo vuelve a `#catalogo?ficha=<cat>:<pid>` (o `#catalogo`).
+
+- [ ] **Step 1: Tests**
+
+```python
+# tests/test_rutas_catalogo.py
+"""Rutas del catálogo por colores (spec 2026-09-28 §10–11): imágenes de
+colores, subir/quitar fotos por color, colores, mover fotos, «crear con»,
+vuelta a la ficha, galería y ficha como fragmentos."""
+import io
+import os
+
+import pytest
+
+from tests.test_rutas_productos import _activo_con_foto, _flashes, _foto, _producto, app  # noqa: F401
+
+JPG = b"\xff\xd8\xff\xe0fake-jpg"
+
+
+def _con_colores(app, pid="original", nombre="Original", colores=("Pink", "Beige"), generales=1, cliente="acme"):
+    import catalogo_productos as cp
+    base = app["tmp"] / "clientes" / cliente / "productos" / pid
+    base.mkdir(parents=True, exist_ok=True)
+    meta = cp.cargar_meta(cliente)
+    meta[pid] = {"nombre": nombre, "descripcion": "slides", "tipo": "calzado", "zonas": ["pies"], "regla": "",
+                 "variantes": {cp.id_desde_nombre(c): {"nombre": f"{nombre} — {c}", "descripcion": "", "fuente_id": None,
+                                                       "url_compra": None, "disponible": True} for c in colores}}
+    cp.guardar_meta(cliente, meta)
+    for c in colores:
+        d = base / cp.id_desde_nombre(c)
+        d.mkdir(exist_ok=True)
+        (d / "01.jpg").write_bytes(JPG)
+    for i in range(generales):
+        (base / f"0{i + 1}.jpg").write_bytes(JPG)
+    return pid
+
+
+def test_imagenes_de_colores_con_barra_en_el_id(app):
+    _con_colores(app)
+    c = app["c"]
+    assert c.get("/cliente/acme/productos/original/pink/imagen?categoria=producto&w=320").status_code == 200
+    assert c.get("/cliente/acme/productos/original/imagen?categoria=producto").status_code == 200   # el primer color
+    assert c.get("/cliente/acme/productos/original/pink/imagen/01.jpg?categoria=producto").status_code == 200
+    assert c.get("/cliente/acme/productos/original/imagen/01.jpg?categoria=producto&variante=pink").status_code == 200
+    assert c.get("/cliente/acme/productos/original/imagen/01.jpg?categoria=producto").status_code == 200      # general
+    assert c.get("/cliente/acme/productos/original/imagen/01.jpg?categoria=producto&variante=..").status_code == 404
+    assert c.get("/cliente/acme/productos/nada/pink/imagen/01.jpg").status_code == 404
+
+
+def test_la_pagina_del_proyecto_crea_una_fila_por_producto_no_por_color(app):
+    import tiendas
+    _con_colores(app)
+    assert app["c"].get("/cliente/acme").status_code == 200
+    filas = tiendas.productos("acme", incluir_archivados=True)
+    assert [f["activo_catalogo_id"] for f in filas] == ["original"]
+
+
+def test_subir_y_quitar_foto_de_un_color_vuelven_a_la_ficha(app):
+    _con_colores(app)
+    c = app["c"]
+    r = c.post("/cliente/acme/productos/original/imagenes/subir",
+               data={"categoria": "producto", "variante": "pink", "imagenes": [_foto("b.jpg")]}, content_type="multipart/form-data")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo?ficha=producto:original")
+    assert sorted(os.listdir(app["tmp"] / "clientes" / "acme" / "productos" / "original" / "pink")) == ["01.jpg", "b.jpg"]
+    r = c.post("/cliente/acme/productos/original/imagenes/01.jpg/eliminar", data={"categoria": "producto", "variante": "pink"})
+    assert r.headers["Location"].endswith("#catalogo?ficha=producto:original")
+    assert os.listdir(app["tmp"] / "clientes" / "acme" / "productos" / "original" / "pink") == ["b.jpg"]
+    r = c.post("/cliente/acme/productos/original/imagenes/b.jpg/eliminar", data={"categoria": "producto", "variante": "pink"})
+    assert any("única foto" in m for m in _flashes(c))
+
+
+def test_actualizar_y_crear_vuelven_a_la_ficha(app):
+    _con_colores(app)
+    c = app["c"]
+    r = c.post("/cliente/acme/productos/original/actualizar", data={"categoria": "producto", "nombre": "Original 2", "descripcion": "x",
+                                                                    "precio": "34.95", "moneda": "EUR", "url_compra": "https://t/o"})
+    assert r.headers["Location"].endswith("#catalogo?ficha=producto:original")
+    import tiendas
+    assert tiendas.por_activo("acme")["original"]["precio"] == 34.95
+    r = c.post("/cliente/acme/productos/crear", data={"nombre": "Gorra", "descripcion": "", "categoria": "producto",
+                                                      "volver": "catalogo", "imagenes": _foto()}, content_type="multipart/form-data")
+    assert r.headers["Location"].endswith("#catalogo?ficha=producto:gorra")
+    r = c.post("/cliente/acme/productos/gorra/eliminar", data={"categoria": "producto"})
+    assert r.headers["Location"].endswith("#catalogo")
+
+
+def test_agregar_color_con_fotos_y_conversion(app):
+    import catalogo_productos as cp
+    c = app["c"]
+    _activo_con_foto("acme", "Cojín")
+    r = c.post("/cliente/acme/productos/cojin/colores", data={"nombre": "Rojo", "imagenes": [_foto("r.jpg")]}, content_type="multipart/form-data")
+    assert any("dime de qué color" in m for m in _flashes(c))
+    r = c.post("/cliente/acme/productos/cojin/colores", data={"nombre": "Rojo", "convertir_actual": "Azul", "imagenes": [_foto("r.jpg")]},
+               content_type="multipart/form-data")
+    assert r.headers["Location"].endswith("#catalogo?ficha=producto:cojin")
+    p = cp.encontrar_producto("acme", "cojin")
+    assert [x["color_id"] for x in p["colores"]] == ["azul", "rojo"] and p["colores"][1]["imagenes"] == ["r.jpg"]
+    r = c.post("/cliente/acme/productos/cojin/colores/azul/quitar")
+    assert r.headers["Location"].endswith("#catalogo?ficha=producto:cojin") and cp.encontrar_producto("acme", "cojin")["n_colores"] == 1
+    r = c.post("/cliente/acme/productos/cojin/colores/rojo/quitar")
+    assert any("único color" in m for m in _flashes(c))
+
+
+def test_mover_foto_general_a_un_color(app):
+    import catalogo_productos as cp
+    _con_colores(app, generales=1)
+    r = app["c"].post("/cliente/acme/productos/original/fotos/01.jpg/mover", data={"variante": "beige"})
+    assert r.headers["Location"].endswith("#catalogo?ficha=producto:original")
+    p = cp.encontrar_producto("acme", "original")
+    assert p["fotos_generales"] == [] and p["colores"][1]["imagenes"] == ["01.jpg", "01_2.jpg"]
+    app["c"].post("/cliente/acme/productos/original/fotos/nada.jpg/mover", data={"variante": "beige"})
+    assert any("No encontré esa imagen" in m for m in _flashes(app["c"]))
+
+
+def test_crear_con_deja_el_color_marcado_para_crear(app):
+    _con_colores(app)
+    c = app["c"]
+    r = c.post("/cliente/acme/catalogo/producto/original/crear-con", data={"variante": "beige"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#creativeflowplus")
+    with c.session_transaction() as s:
+        assert s["fp_prefill"] == {"productos_catalogo": ["producto:original/beige"]}
+    r = c.post("/cliente/acme/catalogo/producto/original/crear-con", data={})
+    with c.session_transaction() as s:
+        assert s["fp_prefill"] == {"productos_catalogo": ["producto:original/pink"]}
+    html = c.get("/cliente/acme").data.decode()
+    assert '"productos_catalogo": ["producto:original/pink"]' in html      # el prefill llega al JS de Crear
+    c.post("/cliente/acme/catalogo/producto/nada/crear-con", data={})
+    assert any("no tiene fotos" in m for m in _flashes(c))
+
+
+def test_prod_rutas_vuelven_a_la_ficha_si_la_fila_tiene_activo(app):
+    import tiendas
+    pid = _producto(nombre="Cojín Azul")
+    r = app["c"].post(f"/cliente/acme/productos/{pid}/archivar")
+    assert r.headers["Location"].endswith("#catalogo")                  # sin activo: la galería
+    tiendas.marcar_producto("acme", pid, archivado=False)
+    _activo_con_foto("acme", "Cojín Azul", "cojin_azul")
+    tiendas.marcar_producto("acme", pid, activo_catalogo_id="cojin_azul")
+    r = app["c"].post(f"/cliente/acme/productos/{pid}/pruebas", data={"texto": "Dura 3 inviernos", "fuente": "ficha"})
+    assert r.headers["Location"].endswith("#catalogo?ficha=producto:cojin_azul")
+```
+
+- [ ] **Step 2: Verificar que fallan**
+
+Run: `venv/bin/python3 -m pytest -q tests/test_rutas_catalogo.py`
+Expected: FAIL (404 en `/original/pink/imagen`, 404 en `/colores`, Location `#cambiar`).
+
+- [ ] **Step 3: Implementar en `dashboard.py`**
+
+Rutas de imagen (reemplazar las dos):
+
+```python
+@app.route("/cliente/<cliente>/productos/<path:producto_id>/imagen")
+def imagen_producto(cliente, producto_id):
+    """Sirve la foto representativa de un activo (`pid` o `pid/color`) directo
+    del disco. `<path:>` porque los ids de color llevan «/» (antes daban 404)."""
+    categoria = _cat(request.args.get("categoria") or request.form.get("categoria"))
+    producto = catalogo_productos.encontrar(cliente, producto_id, categoria=categoria)
+    if not producto and "/" not in producto_id:
+        entrada = catalogo_productos.encontrar_producto(cliente, producto_id, categoria)
+        producto = {"representativa": entrada["representativa"]} if entrada else None
+    if not producto:
+        flash(gettext("No encontré el producto %(id)s", id=producto_id), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+    return _foto_o_miniatura(producto["representativa"])
+
+
+@app.route("/cliente/<cliente>/productos/<path:producto_id>/imagen/<nombre>")
+def imagen_producto_archivo(cliente, producto_id, nombre):
+    """Sirve UNA foto concreta: del producto (`pid`), de un color (`pid/color`,
+    o `pid` + `?variante=`). 404 ante cualquier id o color inválido."""
+    try:
+        carpeta = catalogo_productos.carpeta_de(
+            cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")),
+            variante=(request.args.get("variante") or "").strip() or None)
+    except ValueError:
+        abort(404)
+    ruta = os.path.join(carpeta, secure_filename(nombre))
+    if not os.path.isfile(ruta):
+        abort(404)
+    return _foto_o_miniatura(ruta)
+```
+
+Volver (junto a `_volver_productos`):
+
+```python
+def _volver_catalogo(cliente, cat=None, activo_id=None):
+    """Volver a la pestaña Catálogo; con `cat` + `activo_id`, con la ficha de
+    ese producto abierta (`#catalogo?ficha=<cat>:<pid>`, spec §10.3)."""
+    ancla = "catalogo"
+    if cat and activo_id:
+        ancla = f"catalogo?ficha={cat}:{catalogo_productos.producto_base(activo_id)}"
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor=ancla))
+
+
+def _volver_fila(cliente, pid):
+    """Las rutas prod_* (fila `producto` por id numérico) vuelven a la ficha
+    del activo de esa fila si lo tiene; si no, a la galería."""
+    fila = tiendas.producto(cliente, pid) if pid else None
+    activo = (fila or {}).get("activo_catalogo_id")
+    if activo and catalogo_productos.existe(cliente, activo, "producto"):
+        return _volver_catalogo(cliente, "producto", activo)
+    return _volver_catalogo(cliente)
+```
+
+`_volver_productos(cliente)` pasa a `return _volver_catalogo(cliente)`. En `prod_prueba_agregar`, `prod_prueba_borrar`, `prod_pedidos_actualizar`, `prod_pedido_responder`, `prod_pedido_descartar`, `prod_marcar`, `prod_archivar`, `prod_vincular`, `prod_fotos_subir`: los `return _volver_productos(cliente)` de éxito (y los de error donde la fila existe) pasan a `return _volver_fila(cliente, pid)`; los de «No encontré ese producto» quedan como están.
+
+`_guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto", variante=None)`: `carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria, variante=variante)`.
+
+`crear_producto`: al final, `if volver == "catalogo": return _volver_catalogo(cliente, categoria, producto_id)` antes del `redirect(... _anchor=volver)`. `actualizar_producto`: los tres `return redirect(..., _anchor="cambiar")` pasan a `return _volver_catalogo(cliente, categoria, producto_id)` (calcula `categoria` antes del `try`). `subir_imagen_producto`: lee `variante = (request.form.get("variante") or "").strip() or None`, lo pasa a `_guardar_fotos_producto(..., variante=variante)`, y todos sus `return` pasan a `_volver_catalogo(cliente, _cat(request.form.get("categoria")), producto_id)`. `eliminar_imagen_producto`: `catalogo_productos.eliminar_imagen(cliente, producto_id, nombre, categoria=..., variante=(request.form.get("variante") or "").strip() or None)` y vuelve a la ficha. `eliminar_producto`: su último `return` pasa a `_volver_catalogo(cliente)`, y el `except ValueError` también.
+
+`ver_cliente` (línea 1636): `_asegurar_filas_producto(cliente, catalogo_productos.listar_productos(cliente, "producto"))`.
+
+Rutas nuevas (después de `eliminar_producto`):
+
+```python
+@app.route("/cliente/<cliente>/productos/<producto_id>/colores", methods=["POST"])
+def catalogo_color_agregar(cliente, producto_id):
+    """«+ Color» de la ficha (spec §10.3): crea el color y guarda sus fotos;
+    en un producto plano con fotos exige el nombre del color actual."""
+    nombre = (request.form.get("nombre") or "").strip()
+    archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
+    if not nombre:
+        flash(gettext("Ponle un nombre al color."), "error")
+        return _volver_catalogo(cliente, "producto", producto_id)
+    try:
+        color_id = catalogo_productos.agregar_color(
+            cliente, producto_id, nombre, descripcion=request.form.get("descripcion") or "",
+            convertir_actual=(request.form.get("convertir_actual") or "").strip() or None)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_catalogo(cliente, "producto", producto_id)
+    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, variante=color_id) if archivos else 0
+    if archivos and not guardadas:
+        flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
+    flash(gettext("Color «%(nombre)s» agregado (%(n)s foto(s)).", nombre=nombre, n=guardadas), "ok")
+    return _volver_catalogo(cliente, "producto", producto_id)
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/colores/<color_id>/quitar", methods=["POST"])
+def catalogo_color_quitar(cliente, producto_id, color_id):
+    try:
+        catalogo_productos.quitar_color(cliente, producto_id, color_id)
+        flash(gettext("Color quitado."), "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return _volver_catalogo(cliente, "producto", producto_id)
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/fotos/<nombre>/mover", methods=["POST"])
+def catalogo_foto_mover(cliente, producto_id, nombre):
+    """Una foto de ambiente pasa a ser referencia del color `variante`."""
+    try:
+        final = catalogo_productos.mover_foto_a_color(cliente, producto_id, nombre, (request.form.get("variante") or "").strip())
+        flash(gettext("Foto asignada al color (%(nombre)s).", nombre=final), "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return _volver_catalogo(cliente, "producto", producto_id)
+
+
+@app.route("/cliente/<cliente>/catalogo/producto/<producto_id>/crear-con", methods=["POST"])
+def catalogo_crear_con(cliente, producto_id):
+    """«Crear con este producto» (spec §10.5): deja el color elegido (o el
+    primero con fotos) marcado en el diálogo del catálogo de Crear."""
+    variante = (request.form.get("variante") or "").strip()
+    activo_id = f"{producto_id}/{variante}" if variante else producto_id
+    activo = catalogo_productos.encontrar(cliente, activo_id, categoria="producto")
+    if not activo:
+        flash(gettext("Ese producto no tiene fotos de referencia todavía."), "error")
+        return _volver_catalogo(cliente, "producto", producto_id)
+    session["fp_prefill"] = {"productos_catalogo": [f"producto:{activo['id']}"]}
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+```
+
+- [ ] **Step 4: Correr y ajustar los asserts viejos de vuelta**
+
+Run: `venv/bin/python3 -m pytest -q tests/test_rutas_catalogo.py tests/test_rutas_productos.py tests/test_miniaturas_productos.py`
+En `tests/test_rutas_productos.py` los asserts `r.headers["Location"].endswith("#catalogo")` de rutas que ahora abren la ficha (p. ej. `test_fotos_subir_crea_activo_y_enlaza` → `#catalogo?ficha=producto:espejo_redondo`; pruebas/pedidos/marcar/archivar sobre una fila con activo) pasan a `endswith("#catalogo?ficha=producto:<activo>")`; los de rutas sin fila con activo (importar archivo/URL, archivar una fila sin activo) siguen en `#catalogo`. Los tests de `actualizar_producto`/`subir_imagen_producto`/`eliminar_producto` que esperaban `#cambiar` pasan a la ficha (o `#catalogo` para eliminar).
+Expected: todo PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add dashboard.py tests/test_rutas_catalogo.py tests/test_rutas_productos.py
+git commit -m "Catálogo: rutas por color (imágenes con path, subir/quitar por color, + color, mover foto, crear con) y vuelta a la ficha
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 11: galería y ficha como fragmentos
+
+**Files:**
+- Create: `templates/_catalogo_grid.html`, `templates/_catalogo_tarjeta.html`, `templates/_catalogo_ficha.html`
+- Modify: `dashboard.py` (rutas nuevas después de `catalogo_crear_con`; helper `_usos_por_producto` junto a `_productos_tienda_contexto`; `import sqlalchemy as sa` e `import catalogo_vista` si faltan)
+- Test: `tests/test_rutas_catalogo.py` (añadir)
+
+**Interfaces:**
+- Consumes: `catalogo_vista` (T9), `listar_productos`/`claves_de`/`encontrar_producto` (T1), `_productos_tienda_contexto`/`_experimentos_por_activo` (T8), `_trabajos_productos`, `_producto_comercial_contexto`, `_asegurar_filas_producto`, `ETIQUETAS_FUENTE`, `_moneda_por_defecto`, `PRESUPUESTO_MINIMO_DIARIO`, `swaps_mod.cargar`.
+- Produces: `GET /cliente/<cliente>/catalogo/grid?cat=&q=&filtro=&orden=&pagina=` → `_catalogo_grid.html`; `GET /cliente/<cliente>/catalogo/<cat>/<path:activo_id>/ficha` → `_catalogo_ficha.html` (404 si no existe); `_usos_por_producto(cliente, productos, experimentos_exp=None) -> {pid: contar_usos}`.
+
+- [ ] **Step 1: Tests (añadir a `tests/test_rutas_catalogo.py`)**
+
+```python
+def test_grid_de_productos_con_tarjetas_filtros_y_filas_sin_fotos(app):
+    import tiendas
+    _con_colores(app)                                                       # Original: 2 colores
+    pid_ok = _producto(nombre="Cojín Azul")                                  # importada con activo
+    _activo_con_foto("acme", "Cojín Azul", "cojin_azul")
+    tiendas.marcar_producto("acme", pid_ok, activo_catalogo_id="cojin_azul", en_prueba=True, prioridad=40)
+    _producto(nombre="Espejo redondo")                                      # importada sin activo
+    pid_arch = _producto(nombre="Lámpara")
+    tiendas.marcar_producto("acme", pid_arch, archivado=True)
+    c = app["c"]
+    r = c.get("/cliente/acme/catalogo/grid?cat=producto")
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'data-n-todos="3"' in html and 'data-n-en_prueba="1"' in html and 'data-n-sin_fotos="1"' in html and 'data-n-archivados="1"' in html
+    assert html.index('id="producto-cojin_azul"') < html.index('id="producto-original"') < html.index('id="producto-fila-')
+    cojin = html.split('id="producto-cojin_azul"', 1)[1].split("</article>", 1)[0]
+    assert "89.900 COP" in cojin and "en prueba" in cojin and "CSV/Excel" in cojin and 'data-abrir-ficha="producto:cojin_azul"' in cojin
+    orig = html.split('id="producto-original"', 1)[1].split("</article>", 1)[0]
+    assert "2 colores" in orig and "sin precio" in orig and "sin URL" in orig and orig.count("cat-color-punto") == 2
+    assert "/productos/original/pink/imagen?" in orig
+    espejo = html.split('id="producto-fila-', 1)[1].split("</article>", 1)[0]
+    assert "Sin fotos" in espejo and "Subir fotos" in espejo and "Crear activo desde las fotos de la tienda" in espejo and "Archivar" in espejo
+    assert "Lámpara" not in html
+    html = c.get("/cliente/acme/catalogo/grid?cat=producto&filtro=archivados").data.decode()
+    assert "Lámpara" in html and "Recuperar" in html and 'data-archivado="1"' in html and "Cojín" not in html
+    html = c.get("/cliente/acme/catalogo/grid?cat=producto&filtro=en_prueba").data.decode()
+    assert "cojin_azul" in html and "producto-original" not in html
+    html = c.get("/cliente/acme/catalogo/grid?cat=producto&q=beige").data.decode()
+    assert "producto-original" in html and "cojin_azul" not in html          # busca también por color
+    html = c.get("/cliente/acme/catalogo/grid?cat=producto&q=zzz").data.decode()
+    assert "Nada coincide" in html
+    assert 'data-abrir-detalle="cat-traer"' in c.get("/cliente/acme/catalogo/grid?cat=entorno").data.decode() or "Todavía no hay entornos" in c.get("/cliente/acme/catalogo/grid?cat=entorno").data.decode()
+
+
+def test_grid_pagina_de_60_en_60(app, monkeypatch):
+    import catalogo_vista
+    monkeypatch.setattr(catalogo_vista, "POR_PAGINA", 2)
+    for n in ("A", "B", "C"):
+        _activo_con_foto("acme", f"Prod {n}")
+    html = app["c"].get("/cliente/acme/catalogo/grid?cat=producto&orden=nombre").data.decode()
+    assert 'id="producto-prod_a"' in html and 'id="producto-prod_c"' not in html and 'data-cat-mas="2"' in html
+    html = app["c"].get("/cliente/acme/catalogo/grid?cat=producto&orden=nombre&pagina=2").data.decode()
+    assert 'id="producto-prod_c"' in html and "data-cat-mas" not in html
+
+
+def test_ficha_de_producto_con_colores(app):
+    import tiendas
+    _con_colores(app, generales=1)
+    c = app["c"]
+    r = c.get("/cliente/acme/catalogo/producto/original/beige/ficha")
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'data-color="pink"' in html and 'data-color="beige"' in html and 'aria-selected="true"' in html.split('data-color="beige"', 1)[1][:80]
+    assert 'data-color-fotos="pink" hidden' in html and 'data-color-fotos="beige"' in html
+    assert "Subir fotos a este color" in html and "Quitar color" in html and "+ Color" in html and "¿De qué color son" not in html
+    assert "Fotos de ambiente" in html and "Asignar a color" in html and "/fotos/01.jpg/mover" in html
+    assert 'name="precio"' in html and 'name="url_compra"' in html and "Cuántas promesas parecidas vio ya tu cliente" in html
+    assert "Lo que Claude necesita" in html and "Pruebas del producto" in html
+    assert "Crear con este producto" in html and '<option value="beige" selected' in html and "Crear experimento" in html
+    assert "Dónde se usó" in html and 'data-accion="/cliente/acme/productos/original/eliminar"' in html
+    assert tiendas.por_activo("acme")["original"]["fuente"] == "manual"          # la ficha asegura la fila
+    assert "&lt;script&gt;" not in html and "<script" not in html                  # el fragmento no trae scripts
+
+
+def test_ficha_de_producto_plano_personaje_y_404(app):
+    _activo_con_foto("acme", "Cojín")
+    c = app["c"]
+    html = c.get("/cliente/acme/catalogo/producto/cojin/ficha").data.decode()
+    assert "Fotos de referencia" in html and "¿De qué color son las fotos actuales?" in html and 'value="Cojín"' in html
+    assert "Fotos de ambiente" not in html
+    import catalogo_productos as cp
+    aid = cp.crear("acme", "Ana", categoria="personaje")
+    with open(os.path.join(cp.carpeta_de("acme", aid, "personaje"), "cara.jpg"), "wb") as f:
+        f.write(JPG)
+    html = c.get("/cliente/acme/catalogo/personaje/ana/ficha").data.decode()
+    assert "cara.jpg" in html and 'name="precio"' not in html and "+ Color" not in html and "Eliminar" in html
+    assert c.get("/cliente/acme/catalogo/producto/nada/ficha").status_code == 404
+    assert c.get("/cliente/acme/catalogo/producto/../etc/ficha").status_code == 404
+```
+
+- [ ] **Step 2: Verificar que fallan**
+
+Run: `venv/bin/python3 -m pytest -q tests/test_rutas_catalogo.py -k "grid or ficha"`
+Expected: FAIL (404).
+
+- [ ] **Step 3: Rutas y helper en `dashboard.py`**
+
+Imports: comprobar `import sqlalchemy as sa` y añadir `import catalogo_vista` junto a `import catalogo_productos`.
+
+```python
+def _pagina(valor):
+    try:
+        return max(1, int(valor or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _usos_por_producto(cliente, productos, experimentos_exp=None):
+    """{pid: catalogo_vista.contar_usos(...)} en UNA pasada por las sesiones
+    de Crear, una por los experimentos y una consulta a `campana`."""
+    sesiones = [{str(x).casefold() for x in (e.get("productos_ids") or []) if x}
+                for e in creative_flow.cargar(cliente).values()]
+    por_clave = _experimentos_por_activo(cliente, experimentos_exp)
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.campana.c.catalogo_id, sa.func.count())
+                            .where(db.campana.c.cliente == cliente).group_by(db.campana.c.catalogo_id)).all()
+    campanas = {str(k or "").casefold(): int(n) for k, n in filas}
+    return {p["id"]: catalogo_vista.contar_usos(catalogo_productos.claves_de(p), sesiones, por_clave, campanas)
+            for p in productos}
+
+
+_TRABAJOS_VACIOS = {"vincular": {}, "pedidos": {}, "tiendas": {}, "importar": None}
+
+
+@app.route("/cliente/<cliente>/catalogo/grid")
+def catalogo_grid(cliente):
+    """Galería del catálogo (spec §10.2): fragmento con filtros, orden y páginas de 60."""
+    cat = _cat(request.args.get("cat"))
+    q = (request.args.get("q") or "").strip()
+    filtro = request.args.get("filtro") or "todos"
+    orden = request.args.get("orden") if request.args.get("orden") in catalogo_vista.ORDENES else "prioridad"
+    pagina = _pagina(request.args.get("pagina"))
+    productos = catalogo_productos.listar_productos(cliente, cat)
+    filas, sin_activo, usos, trabajos_grid = {}, [], {}, dict(_TRABAJOS_VACIOS)
+    if cat == "producto":
+        _asegurar_filas_producto(cliente, productos)
+        experimentos_exp = experimentos.cargar(cliente)
+        filas_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
+        filas = _producto_comercial_contexto(filas_tienda)
+        sin_activo = [f for f in filas_tienda if not f["activo_ok"]]
+        usos = _usos_por_producto(cliente, productos, experimentos_exp)
+        trabajos_grid = _trabajos_productos(cliente, [], sin_activo)
+    todas = catalogo_vista.tarjetas(productos, filas, usos, sin_activo)
+    lista = catalogo_vista.ordenar(catalogo_vista.filtrar(todas, q, filtro), orden)
+    trozo, hay_mas = catalogo_vista.paginar(lista, pagina)
+    return render_template("_catalogo_grid.html", cliente=cliente, cat=cat, tarjetas=trozo, hay_mas=hay_mas,
+                           pagina=pagina, contadores=catalogo_vista.contadores(todas), filtro=filtro, q=q, orden=orden,
+                           etiquetas_fuente=ETIQUETAS_FUENTE, trabajos_prod=trabajos_grid,
+                           categorias=catalogo_productos.CATEGORIAS)
+
+
+@app.route("/cliente/<cliente>/catalogo/<cat>/<path:activo_id>/ficha")
+def catalogo_ficha(cliente, cat, activo_id):
+    """Ficha de un activo (spec §10.3): fragmento para el panel lateral. Un id
+    de color abre la ficha de su producto con ese color elegido."""
+    cat = _cat(cat)
+    pid = catalogo_productos.producto_base(activo_id)
+    p = catalogo_productos.encontrar_producto(cliente, pid, cat)
+    if not p:
+        abort(404)
+    comercial = usos = None
+    trabajos_ficha = dict(_TRABAJOS_VACIOS)
+    swaps_usos = 0
+    if cat == "producto":
+        tiendas.asegurar_manual(cliente, pid, p["nombre"], p.get("descripcion") or "")
+        comercial = tiendas.por_activo(cliente).get(pid)
+        usos = _usos_por_producto(cliente, [p]).get(pid)
+        if comercial:
+            trabajos_ficha = _trabajos_productos(cliente, [], [comercial])
+        swaps_usos = sum(1 for e in swaps_mod.cargar(cliente).values()
+                         if catalogo_productos.producto_base(e.get("producto_id")) == pid)
+    variante = activo_id.split("/", 1)[1] if "/" in activo_id else ""
+    ids_colores = [c["color_id"] for c in p["colores"]]
+    color_inicial = variante if variante in ids_colores else next(
+        (c["color_id"] for c in p["colores"] if not c["sin_fotos"]), ids_colores[0] if ids_colores else None)
+    return render_template(
+        "_catalogo_ficha.html", cliente=cliente, cat=cat, p=p, comercial=comercial, usos=usos,
+        color_inicial=color_inicial, trabajos_prod=trabajos_ficha,
+        precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
+        monedas_catalogo=sorted(PRESUPUESTO_MINIMO_DIARIO), moneda_catalogo=_moneda_por_defecto(cliente),
+        etiquetas_fuente=ETIQUETAS_FUENTE, tipos_producto=prompt_swap.TIPOS,
+        zonas_cuerpo=mapa_corporal.ZONAS, presets_cuerpo=mapa_corporal.PRESETS,
+        etiquetas_presets=mapa_corporal.ETIQUETAS_PRESETS, categorias=catalogo_productos.CATEGORIAS,
+        con_mapa=catalogo_productos.CATEGORIAS[cat]["con_mapa"], swaps_usos=swaps_usos)
+```
+
+- [ ] **Step 4: Plantillas**
+
+`templates/_catalogo_grid.html`:
+
+```jinja
+{# Catálogo › galería (spec 2026-09-28 §10.2): fragmento por fetch
+   (catalogo_grid). Contexto: cliente, cat, tarjetas, hay_mas, pagina,
+   contadores, filtro, q, orden, etiquetas_fuente, trabajos_prod, categorias.
+   Sus <script> no correrían: todo el JS vive en _tab_catalogo.html. #}
+<div class="cat-grid" data-cat="{{ cat }}" data-pagina="{{ pagina }}" data-hay-mas="{{ 1 if hay_mas else 0 }}"
+     {% for k, v in contadores.items() %}data-n-{{ k }}="{{ v }}" {% endfor %}>
+  {% if not tarjetas %}
+  <div class="estado-vacio">
+    {% if q or filtro != 'todos' %}
+    <p class="estado-vacio-titulo">{{ _('Nada coincide con ese filtro') }}</p>
+    <p class="estado-vacio-texto">{{ _('Prueba con otra palabra o vuelve a «Todos».') }}</p>
+    {% elif cat == 'producto' %}
+    <p class="estado-vacio-titulo">{{ _('Todavía no hay productos') }}</p>
+    <p class="estado-vacio-texto">{{ _('Tráelos de tu tienda Shopify con solo el dominio, o crea el primero con sus fotos.') }}</p>
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="cat-traer">{{ _('Traer de mi tienda') }}</button>
+    {% else %}
+    <p class="estado-vacio-titulo">{{ _('Todavía no hay %(plural)s', plural=(categorias[cat].plural|traducir|lower)) }}</p>
+    <p class="estado-vacio-texto">{{ categorias[cat].descripcion_ui|traducir }}</p>
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-{{ cat }}">{{ _('+ Nuevo %(nombre)s', nombre=(categorias[cat].nombre|traducir|lower)) }}</button>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="cat-tarjetas">
+    {% for t in tarjetas %}{% include "_catalogo_tarjeta.html" %}{% endfor %}
+  </div>
+  {% if hay_mas %}<p class="cat-mas"><button type="button" class="btn-sm" data-cat-mas="{{ pagina + 1 }}">{{ _('Ver más') }}</button></p>{% endif %}
+  {% endif %}
+</div>
+```
+
+`templates/_catalogo_tarjeta.html`:
+
+```jinja
+{# Una tarjeta de la galería (spec §10.2). `t` viene de catalogo_vista.tarjetas;
+   `cat`, `cliente`, `etiquetas_fuente`, `trabajos_prod` del contexto del grid. #}
+{% if t.tipo == 'activo' %}
+<article class="cat-tarjeta" id="producto-{{ t.id }}" data-abrir-ficha="{{ cat }}:{{ t.id }}" tabindex="0" role="button" aria-label="{{ t.nombre }}">
+  <div class="cat-tarjeta-media">
+    <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=t.id, categoria=cat, w=320) }}" alt="" loading="lazy">
+    {% if t.n_colores %}<span class="cat-chip">{{ ngettext('%(num)s color', '%(num)s colores', t.n_colores) }}</span>{% endif %}
+  </div>
+  <div class="cat-tarjeta-texto">
+    <strong>{{ t.nombre }}</strong>
+    {% if t.colores %}
+    <span class="cat-colores">
+      {% for c in t.colores[:6] %}{% if c.sin_fotos %}<span class="cat-color-punto cat-color-sin-fotos" title="{{ c.nombre }}"></span>{% else %}<img class="cat-color-punto" src="{{ url_for('imagen_producto', cliente=cliente, producto_id=c.id, categoria=cat, w=320) }}" alt="" title="{{ c.nombre }}" loading="lazy">{% endif %}{% endfor %}
+      {% if t.colores | length > 6 %}<small>+{{ t.colores | length - 6 }}</small>{% endif %}
+    </span>
+    {% endif %}
+    {% if cat == 'producto' %}
+    <span class="cat-tarjeta-precio">{% if t.precio is not none %}{{ t.precio | dinero(t.moneda or '') }}{% else %}<span class="vacio" style="padding:0;">{{ _('sin precio') }}</span>{% endif %}</span>
+    <span class="cat-chips">
+      {% if t.fuente %}<span class="tag-estado badge-fuente badge-fuente-{{ t.fuente }}">{{ etiquetas_fuente.get(t.fuente, t.fuente)|traducir }}</span>{% endif %}
+      {% if t.en_prueba %}<span class="tag-estado tag-en-uso">{{ _('en prueba') }}</span>{% endif %}
+      {% if not t.url_compra %}<span class="tag-estado">{{ _('sin URL') }}</span>{% endif %}
+      {% if t.usos %}<span class="tag-estado">{{ _('usado en %(n)s', n=t.usos) }}</span>{% endif %}
+    </span>
+    {% else %}
+    <small class="vacio" style="padding:0;">{{ _('%(n)s foto(s)', n=t.n_fotos) }}</small>
+    {% endif %}
+  </div>
+</article>
+{% else %}
+{% set p = t.fila %}
+{% set trabajo_v = trabajos_prod.vincular.get(p.id) %}
+<article class="cat-tarjeta cat-tarjeta-sinfotos{% if p.archivado %} prod-archivado{% endif %}" id="producto-fila-{{ p.id }}" data-archivado="{{ 1 if p.archivado else 0 }}">
+  <div class="cat-tarjeta-media">
+    {% set foto = p.url_imagen_principal or (p.fotos[0] if p.fotos else None) %}
+    {% if foto %}<img src="{{ foto }}" alt="" loading="lazy">{% else %}<span class="cat-tarjeta-vacia"></span>{% endif %}
+    <span class="cat-chip">{{ _('archivado') if p.archivado else _('Sin fotos') }}</span>
+  </div>
+  <div class="cat-tarjeta-texto">
+    <strong>{{ p.nombre }}</strong>
+    <span class="cat-tarjeta-precio">{% if p.precio is not none %}{{ p.precio | dinero(p.moneda or '') }}{% else %}<span class="vacio" style="padding:0;">{{ _('sin precio') }}</span>{% endif %}</span>
+    <span class="cat-chips">
+      <span class="tag-estado badge-fuente badge-fuente-{{ p.fuente }}">{{ etiquetas_fuente.get(p.fuente, p.fuente)|traducir }}</span>
+      {% if p.n_experimentos %}<span class="tag-estado">{{ _('en %(n)s experimento(s)', n=p.n_experimentos) }}</span>{% endif %}
+    </span>
+    <div class="cat-tarjeta-acciones">
+      {% if p.archivado %}
+      <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline"><input type="hidden" name="archivado" value="0"><button class="btn-guardar btn-xs">{{ _('Recuperar') }}</button></form>
+      {% else %}
+      <form method="post" action="{{ url_for('prod_fotos_subir', cliente=cliente, pid=p.id) }}" enctype="multipart/form-data" class="inline prod-form-fotos" title="{{ _('Elige las fotos desde tu computador: se crea el producto en el catálogo con ellas.') }}">
+        <label class="btn-generar btn-xs prod-subir-fotos">{{ _('Subir fotos') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden></label>
+      </form>
+      {% if p.fotos %}
+      <form method="post" action="{{ url_for('prod_vincular', cliente=cliente, pid=p.id) }}" class="inline"><button class="btn-guardar btn-xs" {% if trabajo_v %}disabled{% endif %}>{% if trabajo_v %}{{ _('Creando activo…') }}{% else %}{{ _('Crear activo desde las fotos de la tienda') }}{% endif %}</button></form>
+      {% if trabajo_v %}<div class="barra-progreso" id="trabajo-{{ trabajo_v.job_id }}" data-poll-job="{{ trabajo_v.job_id }}"><div class="barra-progreso-fill"></div></div><div class="progreso-texto"></div>{% endif %}
+      {% else %}<small class="vacio" style="padding:0;">{{ _('la tienda no trajo fotos') }}</small>{% endif %}
+      <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline prod-form-archivar" data-nombre="{{ p.nombre }}"><button class="btn-rechazar btn-xs">{{ _('Archivar') }}</button></form>
+      {% endif %}
+    </div>
+  </div>
+</article>
+{% endif %}
+```
+
+`templates/_catalogo_ficha.html`:
+
+```jinja
+{# Ficha de un activo del catálogo (spec 2026-09-28 §10.3): fragmento por
+   fetch (catalogo_ficha) dentro de #catalogo-panel. Sus <script> no corren:
+   el JS vive en _tab_catalogo.html. Contexto: cliente, cat, p
+   (listar_productos), comercial (fila producto o None), usos, color_inicial,
+   trabajos_prod, precio_pedidos, monedas_catalogo, moneda_catalogo,
+   etiquetas_fuente, tipos_producto, zonas_cuerpo, presets_cuerpo,
+   etiquetas_presets, categorias, con_mapa, swaps_usos. #}
+{% set prefijo_color = p.nombre ~ ' — ' %}
+<div class="cat-ficha" data-cat="{{ cat }}" data-id="{{ p.id }}">
+  <header class="panel-campana-cab">
+    <div>
+      <h2>{{ p.nombre }}</h2>
+      <small class="vacio" style="padding:0;">{{ categorias[cat].nombre|traducir }}
+        {% if comercial %} · <span class="tag-estado badge-fuente badge-fuente-{{ comercial.fuente }}">{{ etiquetas_fuente.get(comercial.fuente, comercial.fuente)|traducir }}</span>
+        {% if comercial.en_prueba %}<span class="tag-estado tag-en-uso">{{ _('en prueba') }}</span>{% endif %}
+        {% if comercial.prioridad %}<span class="tag-estado">{{ _('prioridad %(n)s', n=comercial.prioridad) }}</span>{% endif %}{% endif %}
+      </small>
+    </div>
+    <button type="button" class="btn-xs" data-panel-cerrar aria-label="{{ _('Cerrar') }}">✕</button>
+  </header>
+
+  {% if comercial %}
+  <p class="cat-ficha-precio">
+    {% if comercial.precio is not none %}<strong>{{ comercial.precio | dinero(comercial.moneda or '') }}</strong>{% else %}<span class="vacio" style="padding:0;">{{ _('sin precio') }}</span>{% endif %}
+    {% set rango = (comercial.extra or {}).get('precios') %}
+    {% if rango %} <small class="vacio" style="padding:0;">{{ _('(de %(min)s a %(max)s)', min=(rango.min | dinero(comercial.moneda or '')), max=(rango.max | dinero(comercial.moneda or ''))) }}</small>{% endif %}
+    {% if comercial.url_compra and comercial.url_compra.startswith(("http://", "https://")) %} · <a href="{{ comercial.url_compra }}" target="_blank" rel="noopener">{{ comercial.url_compra | truncate(48, True) }}</a>{% elif not comercial.url_compra %} · <span class="vacio" style="padding:0;">{{ _('sin URL de compra') }}</span>{% endif %}
+  </p>
+  {% if comercial.fuente != 'manual' %}
+  <p class="vacio cat-sincronizado" style="font-size:.76rem;padding:0;">{{ _('Sincronizado de %(fuente)s: la tienda manda sobre el nombre, la descripción y los colores; el precio, la URL de compra, «en prueba» y la prioridad que pongas aquí se respetan.', fuente=(etiquetas_fuente.get(comercial.fuente, comercial.fuente)|traducir)) }}</p>
+  {% endif %}
+  {% endif %}
+
+  <section class="panel-seccion cat-ficha-fotos">
+    {% if p.tiene_colores %}
+    <h3>{{ ngettext('%(num)s color', '%(num)s colores', p.n_colores) }}</h3>
+    <div class="cat-colores-tira" role="tablist">
+      {% for c in p.colores %}
+      <button type="button" role="tab" class="cat-color-ficha{% if c.sin_fotos %} sin-fotos{% endif %}{% if not c.disponible %} no-disponible{% endif %}" data-color="{{ c.color_id }}" aria-selected="{{ 'true' if c.color_id == color_inicial else 'false' }}" title="{{ c.nombre }}{% if not c.disponible %} · {{ _('ya no está en la tienda') }}{% endif %}">
+        {% if not c.sin_fotos %}<img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=c.id, categoria=cat, w=320) }}" alt="" loading="lazy">{% else %}<span class="cat-color-vacio"></span>{% endif %}
+        <span>{{ c.nombre | replace(prefijo_color, '') }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    {% for c in p.colores %}
+    <div class="cat-color-fotos" data-color-fotos="{{ c.color_id }}" {% if c.color_id != color_inicial %}hidden{% endif %}>
+      <div class="producto-gestion-fotos">
+        {% for img in c.imagenes %}
+        <div class="producto-gestion-foto">
+          <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=cat, variante=c.color_id, w=320) }}" alt="{{ img }}" loading="lazy">
+          <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ cat }}"><input type="hidden" name="variante" value="{{ c.color_id }}"><button type="submit" title="{{ _('Quitar esta foto') }}">✕</button></form>
+        </div>
+        {% endfor %}
+        {% if c.sin_fotos %}<p class="vacio" style="padding:0;">{{ _('Este color no tiene fotos todavía: súbele una para que el modelo lo reproduzca.') }}</p>{% endif %}
+      </div>
+      <div class="panel-acciones">
+        <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data" class="inline"><input type="hidden" name="categoria" value="{{ cat }}"><input type="hidden" name="variante" value="{{ c.color_id }}">
+          <label class="btn-guardar btn-xs prod-subir-fotos">{{ _('Subir fotos a este color') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden></label>
+        </form>
+        <form method="post" action="{{ url_for('catalogo_color_quitar', cliente=cliente, producto_id=p.id, color_id=c.color_id) }}" class="inline cat-form-quitar-color" data-nombre="{{ c.nombre }}"><button type="submit" class="btn-rechazar btn-xs">{{ _('Quitar color') }}</button></form>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <h3>{{ _('Fotos de referencia') }} ({{ p.imagenes | length }})</h3>
+    <div class="producto-gestion-fotos">
+      {% for img in p.imagenes %}
+      <div class="producto-gestion-foto">
+        <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=cat, w=320) }}" alt="{{ img }}" loading="lazy">
+        <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ cat }}"><button type="submit" title="{{ _('Quitar esta foto') }}">✕</button></form>
+      </div>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data" class="inline"><input type="hidden" name="categoria" value="{{ cat }}">
+      <label class="btn-guardar btn-xs prod-subir-fotos">{{ _('Subir fotos') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden></label>
+    </form>
+    {% endif %}
+    {% if cat == 'producto' %}
+    <details class="cat-nuevo-color">
+      <summary class="btn-xs">{{ _('+ Color') }}</summary>
+      <form method="post" action="{{ url_for('catalogo_color_agregar', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data" class="form-nueva-idea">
+        <label class="campo-label">{{ _('Nombre del color') }}<input type="text" name="nombre" placeholder="{{ _('ej. Rosa') }}" required></label>
+        {% if not p.tiene_colores and p.imagenes %}
+        <label class="campo-label">{{ _('¿De qué color son las fotos actuales?') }}<input type="text" name="convertir_actual" value="{{ p.nombre }}" required></label>
+        <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Las fotos que ya tiene pasan a ser ese color; el nuevo color lleva las suyas.') }}</p>
+        {% endif %}
+        <label class="campo-label">{{ _('Fotos del color') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple></label>
+        <button type="submit" class="btn-generar btn-sm">{{ _('Agregar color') }}</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+
+  {% if p.tiene_colores %}
+  <section class="panel-seccion">
+    <h3>{{ _('Fotos de ambiente') }} ({{ p.fotos_generales | length }})</h3>
+    <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('No son referencia del producto: asígnalas a un color para que el modelo las use.') }}</p>
+    <div class="producto-gestion-fotos">
+      {% for img in p.fotos_generales %}
+      <div class="producto-gestion-foto cat-foto-general">
+        <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=cat, w=320) }}" alt="{{ img }}" loading="lazy">
+        <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ cat }}"><button type="submit" title="{{ _('Quitar esta foto') }}">✕</button></form>
+        <form method="post" action="{{ url_for('catalogo_foto_mover', cliente=cliente, producto_id=p.id, nombre=img) }}" class="cat-form-mover">
+          <select name="variante" onchange="this.form.submit()" aria-label="{{ _('Asignar a color') }}">
+            <option value="">{{ _('Asignar a color…') }}</option>
+            {% for c in p.colores %}<option value="{{ c.color_id }}">{{ c.nombre | replace(prefijo_color, '') }}</option>{% endfor %}
+          </select>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data" class="inline"><input type="hidden" name="categoria" value="{{ cat }}">
+      <label class="btn-guardar btn-xs prod-subir-fotos">{{ _('Subir fotos de ambiente') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden></label>
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="panel-seccion">
+    <h3>{{ _('Datos') }}</h3>
+    <form method="post" action="{{ url_for('actualizar_producto', cliente=cliente, producto_id=p.id) }}" class="form-nueva-idea"><input type="hidden" name="categoria" value="{{ cat }}">
+      <div class="fila-campos-idea">
+        <div><label class="campo-label">{{ _('Nombre') }}</label><input type="text" name="nombre" value="{{ p.nombre }}" required></div>
+        {% if con_mapa %}
+        <div><label class="campo-label">{{ _('Tipo') }}</label>
+          <select name="tipo">{% for tid, t in tipos_producto.items() %}<option value="{{ tid }}" {% if p.tipo == tid %}selected{% endif %}>{{ t.etiqueta|traducir }}</option>{% endfor %}</select></div>
+        {% endif %}
+      </div>
+      <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Descripción') }}</label>
+      <textarea name="descripcion" rows="2">{{ p.descripcion }}</textarea>
+      <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Regla de consistencia (opcional)') }}</label>
+      <input type="text" name="regla" value="{{ p.regla_propia or '' }}" placeholder="{{ _('Lo que nunca debe cambiar en este activo') }}">
+      {% if con_mapa %}
+      <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Mapa corporal') }}</label>
+      {% with zonas=zonas_cuerpo, presets=presets_cuerpo, etiquetas_presets=etiquetas_presets, seleccionadas=p.zonas %}{% include "_maniqui.html" %}{% endwith %}
+      {% if p.mapa_texto %}<details style="margin-top:.4rem;"><summary class="btn-guardar btn-sm">{{ _('Ver la instrucción exacta que recibe el modelo →') }}</summary><p class="vacio" style="font-size:.76rem;margin-top:.5rem;">{{ p.mapa_texto }}</p></details>{% endif %}
+      {% endif %}
+      {% if cat == 'producto' %}{% with prefijo="ficha-" ~ p.id %}{% include "_catalogo_campos_comerciales.html" %}{% endwith %}{% endif %}
+      <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Guardar cambios') }}</button>
+    </form>
+  </section>
+
+  {% if cat == 'producto' and comercial %}{% include "_producto_doctrina.html" %}{% endif %}
+
+  {% if usos %}
+  <section class="panel-seccion">
+    <h3>{{ _('Dónde se usó') }}</h3>
+    <p class="panel-sub">
+      <a href="#creativeflowplus">{{ _('Piezas de Crear: %(n)s', n=usos.piezas) }}</a> ·
+      <a href="#experimentos">{{ _('Experimentos: %(n)s', n=usos.experimentos) }}</a> ·
+      <a href="#sprints">{{ _('Campañas de sprints: %(n)s', n=usos.campanas) }}</a>
+      {% if swaps_usos %} · {{ _('%(n)s resultado(s) de «Cambiar producto»', n=swaps_usos) }}{% endif %}
+    </p>
+  </section>
+  {% endif %}
+
+  <footer class="panel-campana-pie">
+    <div class="panel-acciones">
+      {% if cat == 'producto' %}
+      <form method="post" action="{{ url_for('catalogo_crear_con', cliente=cliente, producto_id=p.id) }}" class="inline cat-crear-con">
+        {% if p.tiene_colores %}<select name="variante" aria-label="{{ _('Color') }}">{% for c in p.colores if not c.sin_fotos %}<option value="{{ c.color_id }}" {% if c.color_id == color_inicial %}selected{% endif %}>{{ c.nombre | replace(prefijo_color, '') }}</option>{% endfor %}</select>{% endif %}
+        <button type="submit" class="btn-generar btn-sm">{{ _('Crear con este producto') }}</button>
+      </form>
+      {% if comercial %}
+      <form method="post" action="{{ url_for('prod_experimento', cliente=cliente, pid=comercial.id) }}" class="inline"><button type="submit" class="btn-guardar btn-sm">{{ _('Crear experimento') }}</button></form>
+      {% endif %}
+      {% endif %}
+    </div>
+    <button type="button" class="btn-eliminar-producto btn-sm" data-producto-id="{{ p.id }}" data-producto-nombre="{{ p.nombre }}" data-fotos="{{ p.n_fotos }}" data-usos="{{ swaps_usos or 0 }}" data-accion="{{ url_for('eliminar_producto', cliente=cliente, producto_id=p.id) }}" data-categoria="{{ cat }}">{{ _('Eliminar') }}</button>
+  </footer>
+</div>
+```
+
+`templates/_producto_doctrina.html`: la barra de «Actualizar lo que Claude necesita» pasa a la convención sin script (el JS del panel arranca `[data-poll-job]`): reemplazar las dos líneas `<div class="barra-progreso" id="trabajo-…"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>` + `<script>iniciarPolling(…)</script>` por `<div class="barra-progreso" id="trabajo-{{ trabajo_pedidos.job_id }}" data-poll-job="{{ trabajo_pedidos.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>` (sin `<script>`). El test `test_ficha_de_producto_con_colores` exige que la ficha no traiga `<script`.
+
+- [ ] **Step 5: Correr**
+
+Run: `venv/bin/python3 -m pytest -q tests/test_rutas_catalogo.py tests/test_rutas_productos.py tests/test_i18n_fugas.py`
+Expected: PASS (si `test_i18n_fugas` se queja de textos nuevos sin `_()`, corrígelos en las plantillas).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add dashboard.py templates/_catalogo_grid.html templates/_catalogo_tarjeta.html templates/_catalogo_ficha.html templates/_producto_doctrina.html tests/test_rutas_catalogo.py
+git commit -m "Catálogo: galería y ficha como fragmentos (grid con filtros y páginas; ficha con colores, fotos de ambiente, datos, doctrina, usos y acciones)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 12: la pestaña Catálogo — galería por fetch, panel de la ficha, filtros en el hash, CSS
+
+**Files:**
+- Modify (reescribir): `templates/_tab_catalogo.html`
+- Modify: `dashboard.py` (`ver_cliente` líneas ~1633–1680: contexto del catálogo), `static/style.css` (bloque nuevo al FINAL, después del bloque «Crear: compositor» si está último — siempre después de «Base visual común»)
+- Delete: `templates/_catalogo_lista.html`, `templates/_catalogo_sin_fotos.html`
+- Test: `tests/test_rutas_productos.py` (los tres tests de render, líneas ~438–503), `tests/test_rutas_catalogo.py` (añadir)
+
+**Interfaces:**
+- Consumes: `catalogo_grid`/`catalogo_ficha` (T11), `listar_productos` (T1), `_catalogo_importar.html` (se reescribe en T13; hasta entonces sigue el actual), `iniciarPolling` de base.html.
+- Produces: contexto de página `n_por_categoria` ({cat: n productos}); `window.catalogo = {abrirFicha(clave), cerrar(), recargar()}`; `window.iniciarManiquis(raiz)`; el hash `#catalogo?cat=&filtro=&q=&orden=&ficha=<cat>:<pid>`; ids `nuevo-producto`, `nuevo-personaje`, `nuevo-entorno`, `cat-traer` (lo define T13; hasta entonces el `details` de importar lleva ese id).
+
+- [ ] **Step 1: Tests**
+
+En `tests/test_rutas_productos.py` reemplaza `test_render_productos_dentro_de_catalogo`, `test_render_activo_manual_recibe_fila_y_muestra_precio` y `test_render_importado_archivado_solo_con_mostrar_archivados` por:
+
+```python
+def test_render_catalogo_en_la_pagina_y_lo_demas_en_el_grid(app):
+    """La página trae la pestaña, sus filtros y los formularios; las tarjetas
+    y los importados sin fotos llegan por el fragmento del grid."""
+    import tiendas
+    pid_ok = _producto(nombre="Cojín Azul")
+    _producto(nombre="Espejo redondo", en_prueba=True)
+    tiendas.marcar_producto("acme", pid_ok, activo_catalogo_id="cojin_azul", en_prueba=True, prioridad=40)
+    _activo_con_foto("acme", "Cojín Azul", "cojin_azul")
+    r = app["c"].get("/cliente/acme")
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'data-tab="productos"' not in html and 'id="tab-productos"' not in html
+    assert 'data-tab="catalogo"' in html and 'id="tab-catalogo"' in html
+    pestana = html.split('id="tab-catalogo"', 1)[1].split('id="tab-settings"', 1)[0]
+    assert "Traer productos de" in pestana and "Importar CSV/Excel" in pestana and "Importar desde URL" in pestana
+    assert 'data-cat-grid="producto"' in pestana and 'data-cat-filtro="sin_fotos"' in pestana and 'data-cat-filtro="archivados"' in pestana
+    assert 'id="catalogo-panel"' in pestana and 'id="nuevo-producto"' in pestana and 'data-n-cat="producto">1<' in pestana
+    assert 'id="producto-cojin_azul"' not in pestana                    # las tarjetas no van en la página
+    nuevo = pestana.split('id="nuevo-moneda"', 1)[1].split("</select>", 1)[0]
+    assert 'value="COP" selected' in nuevo and 'value="USD"' in nuevo
+    assert "Adonde llega el anuncio" in pestana
+    grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    assert 'id="producto-cojin_azul"' in grid and "Espejo redondo" in grid and "Subir fotos" in grid
+    tarjeta = grid.split('id="producto-cojin_azul"', 1)[1].split("</article>", 1)[0]
+    assert "89.900 COP" in tarjeta and "en prueba" in tarjeta and "CSV/Excel" in tarjeta
+    ficha = app["c"].get("/cliente/acme/catalogo/producto/cojin_azul/ficha").data.decode()
+    assert 'href="https://tienda.test/cojin"' in ficha and "prioridad 40" in ficha and "Sincronizado de CSV/Excel" in ficha
+    assert "Crear experimento" in ficha and f"/productos/{pid_ok}/experimento" in ficha
+    assert 'name="en_prueba"' in ficha and 'name="url_compra"' in ficha and 'name="precio"' in ficha
+
+
+def test_render_activo_manual_recibe_fila_y_muestra_precio(app):
+    import tiendas
+    c = app["c"]
+    _crear_activo(c, precio="25000", moneda="COP", url_compra="wa.me/573001234567", prioridad="5")
+    _activo_con_foto("acme", "Viejo")
+    assert tiendas.por_activo("acme").get("viejo") is None
+    assert c.get("/cliente/acme").status_code == 200
+    fila_vieja = tiendas.por_activo("acme")["viejo"]
+    assert fila_vieja["fuente"] == "manual" and fila_vieja["nombre"] == "Viejo"
+    grid = c.get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    tarjeta = grid.split('id="producto-cojin_azul"', 1)[1].split("</article>", 1)[0]
+    assert "25.000 COP" in tarjeta and "sin URL" not in tarjeta and 'data-n-sin_fotos="0"' in grid
+    vieja = grid.split('id="producto-viejo"', 1)[1].split("</article>", 1)[0]
+    assert "sin precio" in vieja and "sin URL" in vieja
+    ficha = c.get("/cliente/acme/catalogo/producto/cojin_azul/ficha").data.decode()
+    assert 'href="https://wa.me/573001234567"' in ficha and "prioridad 5" in ficha and "Sincronizado de" not in ficha
+    c.get("/cliente/acme")
+    assert len(tiendas.productos("acme", incluir_archivados=True)) == 2
+
+
+def test_render_importado_archivado_solo_en_su_filtro(app):
+    import tiendas
+    pid = _producto(nombre="Lámpara")
+    tiendas.marcar_producto("acme", pid, archivado=True)
+    grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    assert "Lámpara" not in grid and 'data-n-archivados="1"' in grid
+    grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto&filtro=archivados").data.decode()
+    assert "Lámpara" in grid and 'data-archivado="1"' in grid and "Recuperar" in grid
+```
+
+Y en `tests/test_rutas_catalogo.py`:
+
+```python
+def test_la_pestana_trae_el_js_del_panel_y_el_css(app):
+    html = app["c"].get("/cliente/acme").data.decode()
+    for pieza in ("function abrirFicha(", "function cargarGrid(", "[data-poll-job]", "window.iniciarManiquis",
+                  "history.replaceState(null, '', '#catalogo'", "addEventListener('hashchange'"):
+        assert pieza in html, pieza
+    import os
+    css = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "style.css"), encoding="utf-8").read()
+    i = css.index("Catálogo: galería y ficha")
+    assert i > css.index("Base visual común")
+    bloque = css[i:]
+    for clase in (".cat-tarjetas", ".cat-tarjeta", ".cat-color-punto", ".cat-colores-tira", ".cat-color-ficha", ".cat-panel-lateral",
+                  "@media (max-width: 640px)"):
+        assert clase in bloque, clase
+```
+
+- [ ] **Step 2: Verificar que fallan**
+
+Run: `venv/bin/python3 -m pytest -q tests/test_rutas_productos.py -k render tests/test_rutas_catalogo.py -k pestana`
+Expected: FAIL.
+
+- [ ] **Step 3: `ver_cliente`**
+
+Reemplaza el bloque «Catálogo › Productos: cada activo tiene su fila comercial…» (líneas ~1633–1638) por:
+
+```python
+    # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
+    # la página solo trae contadores por categoría y lo que Crear necesita.
+    activos_producto = _productos_con_uso(cliente)
+    productos_catalogo = catalogo_productos.listar_productos(cliente, "producto")
+    _asegurar_filas_producto(cliente, productos_catalogo)
+    n_por_categoria = {cid: (len(productos_catalogo) if cid == "producto" else len(catalogo_productos.listar_productos(cliente, cid)))
+                       for cid in catalogo_productos.CATEGORIAS}
+```
+
+En `render_template("cliente.html", …)`: quita `producto_comercial=…` y `productos_sin_activo=…`, añade `n_por_categoria=n_por_categoria`, y `trabajos_prod=_trabajos_productos(cliente, tiendas_cliente)`; conserva `productos_tienda=productos_tienda` SOLO si `grep -n productos_tienda templates/*.html` lo muestra usado fuera de las plantillas borradas (si no, quita también `productos_tienda = _productos_tienda_contexto(...)` de `ver_cliente`).
+
+- [ ] **Step 4: `templates/_tab_catalogo.html`**
+
+Escribe el archivo entero. El formulario de «+ Nuevo» se copia tal cual del actual (`git show HEAD:templates/_tab_catalogo.html`, líneas 19–69: `categoria`, `volver=catalogo`, `nombre`, `tipo`, `descripcion`, `regla`, `_catalogo_campos_comerciales.html` con `prefijo="nuevo"`, maniquí, `imagenes`, botón y nota de costo) dentro del `details id="nuevo-<cid>"`; el panel de Logos y el modal de eliminar se copian tal cual (líneas 89–107 y 172–230). El script del maniquí se envuelve en `window.iniciarManiquis(raiz)`.
+
+```jinja
+{# Catálogo (spec 2026-09-28 §10): galería por fragmento (catalogo_grid) con
+   filtros en el hash (#catalogo?cat=&filtro=&q=&orden=), ficha en un panel
+   lateral (catalogo_ficha, #catalogo?ficha=<cat>:<pid>), «+ Nuevo» y
+   «Traer de mi tienda» como desplegables. Contexto de ver_cliente:
+   categorias, n_por_categoria, logos, tiendas_cliente, trabajos_prod,
+   columnas_csv, precios, monedas_catalogo, moneda_catalogo, tipos_producto,
+   zonas_cuerpo, presets_cuerpo, etiquetas_presets, personajes. #}
+<div class="panel-cabecera">
+  <div>
+    <h2>{{ _('Catálogo') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Todo lo que la IA debe reproducir <strong>exacto</strong>: tus productos con sus colores, la cara de tu marca y tus espacios. Cada uno lleva fotos de referencia y una regla de consistencia que va en cada generación; un producto lleva además su precio y su URL de compra.') }}</p>
+  </div>
+  <div class="panel-cabecera-acciones">
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-producto" data-cat-solo="producto">{{ _('+ Nuevo producto') }}</button>
+    <button type="button" class="btn-sm" data-abrir-detalle="cat-traer" data-cat-solo="producto">{{ _('Traer de mi tienda') }}</button>
+  </div>
+</div>
+
+<div class="cat-tabs" id="cat-tabs">
+  {% for cid, c in categorias.items() %}
+  <button type="button" class="cat-tab" data-cat="{{ cid }}">{{ c.plural|traducir }} <span class="cat-n" data-n-cat="{{ cid }}">{{ n_por_categoria[cid] }}</span></button>
+  {% endfor %}
+  <button type="button" class="cat-tab" data-cat="logo">{{ _('Logos') }} <span class="cat-n">{{ logos | length }}</span></button>
+</div>
+
+{% for cid, c in categorias.items() %}
+<div class="cat-panel" data-cat="{{ cid }}" hidden>
+  {% if cid == 'producto' %}
+  {% for t in tiendas_cliente %}{% set trabajo_t = trabajos_prod.tiendas.get(t.id) %}{% if trabajo_t %}
+  <div class="idea-block cat-sync">
+    <div class="idea-header"><div><span class="idea-label">{{ _('Sincronizando') }}</span><div class="idea-texto">{{ _('Leyendo %(nombre)s y creando los productos…', nombre=(t.nombre or t.dominio or t.tipo)) }}</div></div></div>
+    <div class="barra-progreso" id="trabajo-{{ trabajo_t.job_id }}" data-poll-job="{{ trabajo_t.job_id }}"><div class="barra-progreso-fill"></div></div>
+    <div class="progreso-texto"></div>
+  </div>
+  {% endif %}{% endfor %}
+  {% endif %}
+
+  <div class="cat-toolbar">
+    <input type="search" class="cat-buscador" placeholder="{{ _('Buscar por nombre o color…') }}" aria-label="{{ _('Buscar') }}" data-cat-q>
+    {% if cid == 'producto' %}
+    <div class="cat-chips-filtro" role="group" aria-label="{{ _('Filtrar') }}">
+      <button type="button" class="chip activo" data-cat-filtro="todos">{{ _('Todos') }} <span data-n="todos"></span></button>
+      <button type="button" class="chip" data-cat-filtro="en_prueba">{{ _('En prueba') }} <span data-n="en_prueba"></span></button>
+      <button type="button" class="chip" data-cat-filtro="sin_precio">{{ _('Sin precio') }} <span data-n="sin_precio"></span></button>
+      <button type="button" class="chip" data-cat-filtro="sin_url">{{ _('Sin URL') }} <span data-n="sin_url"></span></button>
+      <button type="button" class="chip" data-cat-filtro="sin_fotos">{{ _('Sin fotos') }} <span data-n="sin_fotos"></span></button>
+      <button type="button" class="chip" data-cat-filtro="archivados">{{ _('Archivados') }} <span data-n="archivados"></span></button>
+    </div>
+    <select class="cat-orden" data-cat-orden aria-label="{{ _('Orden') }}">
+      <option value="prioridad">{{ _('Por prioridad') }}</option>
+      <option value="nombre">{{ _('Por nombre') }}</option>
+    </select>
+    {% endif %}
+  </div>
+
+  <div class="cat-grid-wrap" data-cat-grid="{{ cid }}" data-url="{{ url_for('catalogo_grid', cliente=cliente) }}"><p class="vacio">{{ _('Cargando…') }}</p></div>
+
+  {% if cid == 'producto' %}{% include "_catalogo_importar.html" %}{% endif %}
+
+  <details class="comparacion-modelos cat-nuevo" id="nuevo-{{ cid }}">
+    <summary class="btn-guardar btn-sm">{{ _('+ Nuevo %(nombre)s', nombre=(c.nombre|traducir|lower)) }}</summary>
+    <div class="comparacion-contenido">
+      <p class="vacio" style="padding-top:0;">{{ c.descripcion_ui|traducir }}</p>
+      {# ⇩ el <form> de alta se copia tal cual del _tab_catalogo.html anterior (líneas 19–69) ⇩ #}
+      <form method="post" action="{{ url_for('crear_producto', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea" style="margin-bottom:0;">
+        …
+      </form>
+    </div>
+  </details>
+  {% if cid == 'personaje' %}
+  <details class="comparacion-modelos" style="margin-top:1rem;">
+    <summary class="btn-guardar btn-sm">{{ _('Personajes del flujo anterior') }}</summary>
+    <div class="comparacion-contenido">{% include "_seccion_personajes.html" %}</div>
+  </details>
+  {% endif %}
+</div>
+{% endfor %}
+
+<div class="cat-panel" data-cat="logo" hidden>
+  {# ⇩ tal cual el panel de Logos anterior (líneas 89–107) ⇩ #}
+</div>
+
+<div class="tablero-fondo" id="catalogo-fondo" hidden></div>
+<aside class="tablero-panel cat-panel-lateral" id="catalogo-panel" hidden aria-label="{{ _('Ficha') }}" data-url-base="{{ url_for('ver_cliente', cliente=cliente) }}">
+  <div id="catalogo-panel-cuerpo"></div>
+</aside>
+
+<script>
+  // Maniquíes: los del formulario de alta (en la página) y los de la ficha
+  // (fragmento por fetch: sus <script> no corren, así que el panel llama esto).
+  window.iniciarManiquis = function (raiz) {
+    (raiz || document).querySelectorAll('.maniqui-wrap').forEach(function (wrap) {
+      if (wrap.dataset.listo) return;
+      wrap.dataset.listo = '1';
+      var contenedor = wrap.parentElement;
+      var checks = contenedor.querySelectorAll('.maniqui-checks input[type="checkbox"]');
+      if (!checks.length) return;
+      var porZona = {};
+      checks.forEach(function (c) { porZona[c.value] = c; });
+      var resumen = wrap.querySelector('.maniqui-resumen');
+      var zonas = wrap.querySelectorAll('.maniqui-zonas path');
+      function pintar() {
+        var activas = [];
+        zonas.forEach(function (z) {
+          var on = porZona[z.dataset.zona] && porZona[z.dataset.zona].checked;
+          z.classList.toggle('activa', !!on);
+          if (on) activas.push(z.dataset.zona);
+        });
+        resumen.textContent = activas.length
+          ? {{ _('%(n)s zona(s) marcada(s). El modelo va a recibir la ubicación y la proporción exactas.', n='__N__')|tojson }}.replace('__N__', activas.length)
+          : {{ _('Sin zonas: el producto no va sobre una persona (una cobija, un objeto de escena).')|tojson }};
+      }
+      zonas.forEach(function (z) {
+        z.addEventListener('click', function () {
+          var c = porZona[z.dataset.zona];
+          if (!c) return;
+          c.checked = !c.checked;
+          pintar();
+        });
+      });
+      wrap.querySelectorAll('.maniqui-preset').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var ids = (b.dataset.preset || '').split(',').filter(Boolean);
+          checks.forEach(function (c) { c.checked = ids.indexOf(c.value) !== -1; });
+          pintar();
+        });
+      });
+      pintar();
+    });
+  };
+  window.iniciarManiquis(document);
+
+  (function () {
+    var raiz = document.getElementById('tab-catalogo');
+    var tabs = raiz.querySelectorAll('#cat-tabs .cat-tab');
+    var paneles = raiz.querySelectorAll('.cat-panel');
+    var KEY = 'catalogo-cat-{{ cliente }}';
+    var KEY_TAB = 'tab-activa-{{ cliente }}';
+    var H = {'X-Requested-With': 'fetch'};
+    var estado = {cat: 'producto', filtro: 'todos', q: '', orden: 'prioridad'};
+    var panel = document.getElementById('catalogo-panel');
+    var cuerpo = document.getElementById('catalogo-panel-cuerpo');
+    var fondo = document.getElementById('catalogo-fondo');
+    var fichaActual = null, peticionFicha = 0, peticionGrid = 0, cargado = {};
+
+    function leerHash() {
+      var h = location.hash || '', out = {};
+      if (h.indexOf('#catalogo') !== 0) return out;
+      var i = h.indexOf('?');
+      if (i >= 0) new URLSearchParams(h.slice(i + 1)).forEach(function (v, k) { if (v) out[k] = v; });
+      return out;
+    }
+    function escribirHash() {
+      if ((location.hash || '').indexOf('#catalogo') !== 0) return;
+      var q = new URLSearchParams();
+      if (estado.cat !== 'producto') q.set('cat', estado.cat);
+      if (estado.filtro !== 'todos') q.set('filtro', estado.filtro);
+      if (estado.q) q.set('q', estado.q);
+      if (estado.orden !== 'prioridad') q.set('orden', estado.orden);
+      if (fichaActual) q.set('ficha', fichaActual);
+      var s = q.toString();
+      history.replaceState(null, '', '#catalogo' + (s ? '?' + s : ''));
+    }
+    // Las barras de un fragmento (importar, crear activo, pedidos) no traen
+    // <script>: se arrancan buscando [data-poll-job].
+    function arrancarBarras(nodo) {
+      nodo.querySelectorAll('[data-poll-job]').forEach(function (el) {
+        if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
+      });
+    }
+    arrancarBarras(raiz);
+
+    // ---- Galería ----
+    function wrapDe(cat) { return raiz.querySelector('.cat-grid-wrap[data-cat-grid="' + cat + '"]'); }
+    function pintarContadores(cat, grid) {
+      var p = raiz.querySelector('.cat-panel[data-cat="' + cat + '"]');
+      p.querySelectorAll('[data-n]').forEach(function (s) {
+        var v = grid.getAttribute('data-n-' + s.dataset.n);
+        s.textContent = v === null || v === '0' ? '' : v;
+      });
+    }
+    function cargarGrid(cat, pagina, anexar) {
+      var wrap = wrapDe(cat);
+      if (!wrap) return;
+      var q = new URLSearchParams({cat: cat, pagina: String(pagina || 1)});
+      if (cat === 'producto') { q.set('filtro', estado.filtro); q.set('orden', estado.orden); }
+      if (estado.q) q.set('q', estado.q);
+      var mia = ++peticionGrid;
+      if (!anexar) wrap.innerHTML = '<p class="vacio">' + {{ _('Cargando…')|tojson }} + '</p>';
+      fetch(wrap.dataset.url + '?' + q.toString(), {headers: H})
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+        .then(function (html) {
+          if (mia !== peticionGrid) return;
+          if (anexar) {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            var grid = wrap.querySelector('.cat-grid');
+            var viejoMas = grid.querySelector('.cat-mas');
+            if (viejoMas) viejoMas.remove();
+            var tarjetas = grid.querySelector('.cat-tarjetas');
+            tmp.querySelectorAll('.cat-tarjeta').forEach(function (t) { tarjetas.appendChild(t); });
+            var mas = tmp.querySelector('.cat-mas');
+            if (mas) grid.appendChild(mas);
+          } else {
+            wrap.innerHTML = html;
+          }
+          cargado[cat] = true;
+          var g = wrap.querySelector('.cat-grid');
+          if (g) pintarContadores(cat, g);
+          arrancarBarras(wrap);
+        })
+        .catch(function () {
+          if (mia === peticionGrid) wrap.innerHTML = '<p class="campo-error">' + {{ _('No se pudo cargar el catálogo. Revisa tu conexión e intenta de nuevo.')|tojson }} + '</p>';
+        });
+    }
+    function pintarControles() {
+      raiz.querySelectorAll('[data-cat-q]').forEach(function (i) { i.value = estado.q; });
+      raiz.querySelectorAll('[data-cat-filtro]').forEach(function (b) { b.classList.toggle('activo', b.dataset.catFiltro === estado.filtro); });
+      raiz.querySelectorAll('[data-cat-orden]').forEach(function (s) { s.value = estado.orden; });
+    }
+    function activar(cat, recargar) {
+      tabs.forEach(function (t) { t.classList.toggle('activo', t.dataset.cat === cat); });
+      paneles.forEach(function (p) { p.hidden = p.dataset.cat !== cat; });
+      estado.cat = cat;
+      try { localStorage.setItem(KEY, cat); } catch (e) {}
+      if (cat !== 'logo' && (recargar || !cargado[cat])) cargarGrid(cat, 1, false);
+      escribirHash();
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { estado.q = ''; estado.filtro = 'todos'; pintarControles(); activar(t.dataset.cat, true); });
+    });
+    var temporizador = null;
+    raiz.querySelectorAll('[data-cat-q]').forEach(function (i) {
+      i.addEventListener('input', function () {
+        clearTimeout(temporizador);
+        temporizador = setTimeout(function () { estado.q = i.value.trim(); escribirHash(); cargarGrid(estado.cat, 1, false); }, 300);
+      });
+    });
+    raiz.querySelectorAll('[data-cat-filtro]').forEach(function (b) {
+      b.addEventListener('click', function () { estado.filtro = b.dataset.catFiltro; pintarControles(); escribirHash(); cargarGrid('producto', 1, false); });
+    });
+    raiz.querySelectorAll('[data-cat-orden]').forEach(function (s) {
+      s.addEventListener('change', function () { estado.orden = s.value; escribirHash(); cargarGrid('producto', 1, false); });
+    });
+    raiz.addEventListener('click', function (ev) {
+      var mas = ev.target.closest('[data-cat-mas]');
+      if (mas) { mas.disabled = true; cargarGrid(estado.cat, parseInt(mas.dataset.catMas, 10), true); return; }
+      var tarjeta = ev.target.closest('[data-abrir-ficha]');
+      if (tarjeta && !ev.target.closest('form, a, button')) { abrirFicha(tarjeta.dataset.abrirFicha); return; }
+      // «+ Nuevo producto» / «Traer de mi tienda» desde la cabecera: primero la categoría.
+      var abrir = ev.target.closest('[data-abrir-detalle][data-cat-solo]');
+      if (abrir && estado.cat !== abrir.dataset.catSolo) activar(abrir.dataset.catSolo, false);
+    });
+    raiz.addEventListener('keydown', function (ev) {
+      var t = ev.target.closest('[data-abrir-ficha]');
+      if (t && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); abrirFicha(t.dataset.abrirFicha); }
+    });
+    // Confirmaciones: el nombre viaja en data-nombre (escapado por Jinja) y el
+    // mensaje se arma en JS — nunca texto de plantilla dentro de un literal.
+    document.addEventListener('submit', function (ev) {
+      var f = ev.target;
+      if (f.classList.contains('prod-form-archivar')) {
+        var msg = {{ _('¿Archivar «%(nombre)s»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Archivados»).', nombre='__NOMBRE__')|tojson }}.replace('__NOMBRE__', f.dataset.nombre || '');
+        if (!confirm(msg)) ev.preventDefault();
+      } else if (f.classList.contains('cat-form-quitar-color')) {
+        var msg2 = {{ _('¿Quitar el color «%(nombre)s» con sus fotos? No se puede deshacer.', nombre='__NOMBRE__')|tojson }}.replace('__NOMBRE__', f.dataset.nombre || '');
+        if (!confirm(msg2)) ev.preventDefault();
+      }
+    });
+
+    // ---- Ficha (panel lateral) ----
+    function mostrar() { panel.hidden = false; fondo.hidden = false; document.body.classList.add('panel-abierto'); }
+    function cerrar() {
+      panel.hidden = true; fondo.hidden = true; cuerpo.innerHTML = ''; fichaActual = null;
+      document.body.classList.remove('panel-abierto'); escribirHash();
+    }
+    function abrirFicha(clave) {
+      var partes = clave.split(':'), cat = partes[0], id = partes.slice(1).join(':');
+      var mismo = fichaActual === clave;
+      fichaActual = clave; mostrar(); escribirHash();
+      var scroll = mismo ? panel.scrollTop : 0;
+      if (!mismo) cuerpo.innerHTML = '<p class="vacio">' + {{ _('Cargando…')|tojson }} + '</p>';
+      var mia = ++peticionFicha;
+      var url = panel.dataset.urlBase + '/catalogo/' + encodeURIComponent(cat) + '/' + id.split('/').map(encodeURIComponent).join('/') + '/ficha';
+      fetch(url, {headers: H})
+        .then(function (r) {
+          if (r.status === 404) {
+            if (mia === peticionFicha) cuerpo.innerHTML = '<div class="estado-vacio"><p class="estado-vacio-titulo">' + {{ _('Este activo ya no existe')|tojson }} + '</p><p class="estado-vacio-texto">' + {{ _('Pudo borrarse en otra pestaña.')|tojson }} + '</p></div>';
+            return null;
+          }
+          if (!r.ok) throw new Error();
+          return r.text();
+        })
+        .then(function (html) {
+          if (html === null || mia !== peticionFicha) return;
+          cuerpo.innerHTML = html;
+          panel.scrollTop = scroll;
+          arrancarBarras(cuerpo);
+          window.iniciarManiquis(cuerpo);
+        })
+        .catch(function () {
+          if (mia === peticionFicha) cuerpo.innerHTML = '<p class="campo-error">' + {{ _('No se pudo abrir la ficha. Revisa tu conexión e intenta de nuevo.')|tojson }} + '</p>';
+        });
+    }
+    fondo.addEventListener('click', cerrar);
+    panel.addEventListener('click', function (ev) {
+      if (ev.target.closest('[data-panel-cerrar]')) { cerrar(); return; }
+      var color = ev.target.closest('[data-color]');
+      if (!color) return;
+      panel.querySelectorAll('[data-color]').forEach(function (b) { b.setAttribute('aria-selected', b === color ? 'true' : 'false'); });
+      panel.querySelectorAll('[data-color-fotos]').forEach(function (d) { d.hidden = d.dataset.colorFotos !== color.dataset.color; });
+      var sel = panel.querySelector('.cat-crear-con select[name=variante]');
+      if (sel) sel.value = color.dataset.color;
+    });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !panel.hidden) cerrar(); });
+    window.catalogo = {abrirFicha: abrirFicha, cerrar: cerrar, recargar: function () { cargarGrid(estado.cat, 1, false); }};
+
+    // ---- Arranque: el hash manda; si no, la categoría recordada. La galería
+    // solo se pide cuando la pestaña Catálogo está (o entra) a la vista.
+    function enCatalogo() {
+      if ((location.hash || '').indexOf('#catalogo') === 0) return true;
+      if (location.hash && location.hash !== '#') return false;
+      try { return localStorage.getItem(KEY_TAB) === 'catalogo'; } catch (e) { return false; }
+    }
+    var arrancado = false;
+    function arrancar() {
+      if (arrancado) return;
+      arrancado = true;
+      var h = leerHash();
+      var inicial = h.cat || null;
+      if (!inicial) { try { inicial = localStorage.getItem(KEY); } catch (e) {} }
+      if (!raiz.querySelector('.cat-panel[data-cat="' + inicial + '"]')) inicial = 'producto';
+      estado.filtro = h.filtro || 'todos'; estado.q = h.q || ''; estado.orden = h.orden || 'prioridad';
+      pintarControles();
+      activar(inicial, true);
+      if (h.ficha) abrirFicha(h.ficha);
+    }
+    if (enCatalogo()) arrancar();
+    document.querySelectorAll('.sidebar-item[data-tab="catalogo"]').forEach(function (b) { b.addEventListener('click', arrancar); });
+    window.addEventListener('hashchange', function () {
+      if ((location.hash || '').indexOf('#catalogo') !== 0) return;
+      if (!arrancado) { arrancar(); return; }
+      var h = leerHash();
+      if (h.ficha && h.ficha !== fichaActual) abrirFicha(h.ficha);
+      if (h.cat && h.cat !== estado.cat) activar(h.cat, true);
+    });
+  })();
+</script>
+
+{# ⇩ el modal «¿Eliminar este producto?» y su script se copian tal cual del
+   _tab_catalogo.html anterior (líneas 172–230): funciona igual para el botón
+   de la ficha, que llega con los mismos data-* ⇩ #}
+```
+
+`activar()` con la pestaña cerrada es inofensivo: `hidden` solo cambia dentro de la sección.
+
+- [ ] **Step 5: CSS (al final de `static/style.css`)**
+
+```css
+/* ============================================================
+   Catálogo: galería y ficha (spec 2026-09-28 §10)
+   ============================================================ */
+.cat-sync { margin-bottom: .8rem; }
+.cat-toolbar { display: flex; flex-wrap: wrap; gap: .5rem .8rem; align-items: center; margin: 0 0 1rem; }
+.cat-toolbar .cat-buscador { flex: 1 1 14rem; max-width: 22rem; margin: 0; }
+.cat-chips-filtro { display: flex; flex-wrap: wrap; gap: .35rem; }
+.cat-chips-filtro .chip { border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 999px; padding: .3rem .7rem; font: inherit; font-size: .8rem; cursor: pointer; }
+.cat-chips-filtro .chip:hover { color: var(--text); border-color: var(--muted-2); }
+.cat-chips-filtro .chip.activo { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cat-chips-filtro .chip span { opacity: .8; margin-left: .2rem; }
+.cat-chips-filtro .chip span:empty { display: none; }
+.cat-orden { width: auto; margin: 0; font-size: .82rem; }
+.cat-grid-wrap { min-height: 6rem; }
+.cat-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .8rem; }
+.cat-tarjeta { display: flex; flex-direction: column; gap: .4rem; border-radius: 12px; padding: .5rem; background: var(--panel-2); border: 1px solid var(--border); cursor: pointer; transition: border-color .15s, box-shadow .15s; min-width: 0; }
+.cat-tarjeta:hover, .cat-tarjeta:focus-visible { border-color: var(--accent); box-shadow: var(--shadow-soft); outline: none; }
+.cat-tarjeta-sinfotos { cursor: default; border-style: dashed; }
+.cat-tarjeta-media { position: relative; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; background: var(--panel); }
+.cat-tarjeta-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cat-tarjeta-vacia { display: block; width: 100%; height: 100%; background: repeating-linear-gradient(45deg, var(--panel-hover), var(--panel-hover) 6px, var(--panel) 6px, var(--panel) 12px); }
+.cat-chip { position: absolute; left: .4rem; bottom: .4rem; font-size: .68rem; padding: .15rem .45rem; border-radius: 999px; background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+.cat-tarjeta-texto { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+.cat-tarjeta-texto strong { font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-colores { display: flex; align-items: center; gap: .25rem; }
+.cat-color-punto { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); background: var(--panel); display: inline-block; flex: none; }
+.cat-color-sin-fotos { border-style: dashed; }
+.cat-colores small { color: var(--muted); font-size: .7rem; }
+.cat-tarjeta-precio { font-size: .84rem; }
+.cat-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.cat-chips .tag-estado { margin: 0; font-size: .68rem; }
+.cat-tarjeta-acciones { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.cat-tarjeta-acciones form.inline { margin: 0; }
+.cat-mas { text-align: center; margin: .8rem 0; }
+.cat-nuevo { margin-top: 1rem; }
+/* ficha */
+.cat-panel-lateral { width: min(640px, 100%); }
+.cat-ficha-precio { margin: .4rem 0 0; font-size: .95rem; }
+.cat-colores-tira { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: .3rem; }
+.cat-color-ficha { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: .25rem; width: 72px; padding: .3rem; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); color: var(--muted); font: inherit; font-size: .7rem; cursor: pointer; }
+.cat-color-ficha img, .cat-color-vacio { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; display: block; background: var(--panel); border: 1px dashed transparent; }
+.cat-color-ficha.sin-fotos .cat-color-vacio { border-color: var(--border); }
+.cat-color-ficha.no-disponible { opacity: .55; }
+.cat-color-ficha[aria-selected="true"] { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 1px var(--accent); }
+.cat-color-ficha span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-color-fotos { margin-top: .6rem; }
+.cat-foto-general .cat-form-mover { position: static; margin: .3rem 0 0; }
+.cat-foto-general .cat-form-mover select { font-size: .7rem; padding: .2rem .3rem; width: 92px; }
+.cat-nuevo-color { margin-top: .6rem; }
+.cat-nuevo-color form { display: grid; gap: .5rem; margin-top: .5rem; }
+.cat-crear-con { display: inline-flex; gap: .4rem; align-items: center; margin: 0; }
+.cat-crear-con select { width: auto; margin: 0; }
+@media (max-width: 640px) {
+  .cat-tarjetas { grid-template-columns: repeat(2, 1fr); }
+  .cat-toolbar .cat-buscador { max-width: 100%; }
+}
+```
+
+- [ ] **Step 6: Borrar plantillas viejas y correr TODO**
+
+```bash
+git rm templates/_catalogo_lista.html templates/_catalogo_sin_fotos.html
+grep -rn "_catalogo_lista\|_catalogo_sin_fotos\|producto_comercial\|productos_sin_activo" templates/ dashboard.py   # debe quedar vacío
+venv/bin/python3 -m pytest -q
+```
+Expected: suite completa PASS (i18n puede fallar por textos nuevos: lo cierra la Tarea 15; si es lo único rojo, sigue).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add templates/_tab_catalogo.html static/style.css dashboard.py tests/test_rutas_productos.py tests/test_rutas_catalogo.py
+git commit -m "Catálogo: la pestaña como galería por fetch con filtros en el hash y ficha en panel lateral; fuera la lista y la tabla viejas
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 13: «Traer de mi tienda» — Shopify sin llaves en Catálogo y Configuración
+
+**Files:**
+- Modify (reescribir): `templates/_catalogo_importar.html`
+- Modify: `dashboard.py` (`tienda_conectar` 5658–5697, `tienda_sync` 5755–5765, `_encolar_sync_tienda` 5629–5645, `ver_cliente` `tipos_tienda=`), `templates/_tab_settings.html` (líneas 141–142 etiqueta de la tabla; 169–215 formulario «Conectar tienda»), `static/style.css` (`.badge-fuente-shopify_publico`)
+- Test: `tests/test_rutas_catalogo.py` (añadir), `tests/test_rutas_productos.py` (asserts de Configuración si cambian)
+
+**Interfaces:**
+- Consumes: `conectores.TIPOS_CONECTABLES`, `ShopifyPublico.probar()` (`dominio` en el resultado), `tienda_sync_productos` (T6).
+- Produces: `tienda_conectar` acepta `tipo=shopify_publico` (solo `dominio`) y `volver=catalogo`; `tienda_sync` acepta `volver=catalogo`; `details#cat-traer` en la pestaña.
+
+- [ ] **Step 1: Tests (añadir a `tests/test_rutas_catalogo.py`)**
+
+```python
+def test_traer_de_mi_tienda_conecta_shopify_publico_y_vuelve_al_catalogo(app):
+    import tiendas
+    from tests.test_rutas_productos import FalsoConector
+    FalsoConector.resultado = {"ok": True, "nombre": "HappyFlops WW", "detalle": "Tienda pública leída: 19 productos, moneda EUR.",
+                               "dominio": "www.happyflops.com"}
+    r = app["c"].post("/cliente/acme/config/tienda/conectar",
+                      data={"tipo": "shopify_publico", "dominio": "https://happyflops.com/es", "volver": "catalogo"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo")
+    (t,) = tiendas.listar("acme")
+    assert t["tipo"] == "shopify_publico" and t["dominio"] == "www.happyflops.com" and t["nombre"] == "HappyFlops WW"
+    assert FalsoConector.credenciales_vistas[-1] == {"dominio": "https://happyflops.com/es"}
+    assert any(e["tipo"] == "tienda_sync_productos" for e in app["encolados"])
+    assert any("HappyFlops WW" in m for m in _flashes(app["c"]))
+    html = app["c"].get("/cliente/acme").data.decode()
+    pestana = html.split('id="tab-catalogo"', 1)[1].split('id="tab-settings"', 1)[0]
+    assert "Sincronizar ahora" in pestana and "HappyFlops WW" in pestana and 'name="dominio"' not in pestana
+    r = app["c"].post("/cliente/acme/config/tienda/1/sincronizar", data={"volver": "catalogo"})
+    assert r.headers["Location"].endswith("#catalogo")
+
+
+def test_conectar_shopify_con_api_desconecta_la_publica_del_mismo_dominio(app):
+    import tiendas
+    from tests.test_rutas_productos import FalsoConector
+    tiendas.conectar("acme", "shopify_publico", {"dominio": "acme.myshopify.com"}, nombre="Acme", dominio="acme.myshopify.com")
+    FalsoConector.resultado = {"ok": True, "nombre": "Acme Store", "detalle": "ok"}
+    app["c"].post("/cliente/acme/config/tienda/conectar", data={"tipo": "shopify", "dominio": "acme.myshopify.com", "token": "shpat_x"})
+    tipos = sorted(t["tipo"] for t in tiendas.listar("acme"))
+    assert tipos == ["shopify"]
+
+
+def test_catalogo_ofrece_traer_de_mi_tienda_y_configuracion_el_tipo_sin_llaves(app):
+    html = app["c"].get("/cliente/acme").data.decode()
+    pestana = html.split('id="tab-catalogo"', 1)[1].split('id="tab-settings"', 1)[0]
+    assert 'id="cat-traer"' in pestana and "Tu tienda Shopify (sin llaves)" in pestana and 'value="shopify_publico"' in pestana
+    assert "Traer catálogo" in pestana and "Importar CSV/Excel" in pestana and "Importar desde URL" in pestana
+    settings = html.split('id="tab-settings"', 1)[1]
+    assert 'data-tienda-tipo="shopify_publico"' in settings and "Conectar Shopify (sin llaves)" in settings
+    assert settings.index('data-tienda-tipo="shopify_publico"') < settings.index('data-tienda-tipo="shopify"')
+```
+
+- [ ] **Step 2: Verificar que fallan**
+
+Run: `venv/bin/python3 -m pytest -q tests/test_rutas_catalogo.py -k "tienda or traer or sin_llaves"`
+Expected: FAIL («Ese tipo de tienda no se conecta desde aquí»).
+
+- [ ] **Step 3: `dashboard.py`**
+
+`tienda_conectar`:
+
+```python
+    tipo = (request.form.get("tipo") or "").strip()
+    volver = request.form.get("volver") or "config"
+
+    def _volver():
+        return _volver_catalogo(cliente) if volver == "catalogo" else _volver_config(cliente)
+
+    if tipo == "shopify_publico":
+        dominio = (request.form.get("dominio") or "").strip()
+        creds = {"dominio": dominio}
+    elif tipo == "shopify":
+        ...  # igual
+    elif tipo == "woo":
+        ...  # igual
+    else:
+        flash(gettext("Ese tipo de tienda no se conecta desde aquí (Shopify, Shopify sin llaves o WooCommerce; MercadoLibre va por su botón)."), "error")
+        return _volver()
+    try:
+        cls = conectores.por_tipo(tipo)
+        resultado = cls(creds).probar()
+    except (ErrorConector, ValueError) as e:
+        flash(gettext("No pude conectar la tienda: %(error)s", error=cola.sin_token(str(e))), "error")
+        return _volver()
+    except Exception as e:  # noqa: BLE001
+        flash(gettext("No pude conectar la tienda: %(error)s", error=cola.sin_token(str(e) or type(e).__name__)), "error")
+        return _volver()
+    nombre = str((resultado or {}).get("nombre") or "").strip() or None
+    dominio = str((resultado or {}).get("dominio") or dominio or "").strip() or None
+    if tipo == "shopify_publico":
+        creds = {"dominio": dominio}
+    elif tipo == "shopify" and dominio:
+        # La misma tienda ya estaba conectada sin llaves: la Admin API la reemplaza
+        # (misma `fuente`: las filas no se tocan y la primera sync las refresca).
+        from conectores.shopify_publico import normalizar_dominio
+        for t in tiendas.listar(cliente):
+            if t["tipo"] == "shopify_publico" and t.get("dominio") and normalizar_dominio(t["dominio"]) == normalizar_dominio(dominio):
+                tiendas.desconectar(cliente, t["id"])
+    tid = tiendas.conectar(cliente, tipo, creds, nombre=nombre, dominio=dominio)
+    n = _encolar_sync_tienda(cliente, tid, tipo, con_pedidos=bool(getattr(cls, "tiene_pedidos", True)))
+    detalle = str((resultado or {}).get("detalle") or "").strip()
+    extra = gettext("Sincronizando el catálogo…") if n else gettext("Ya había una sincronización en curso.")
+    flash(gettext("Tienda %(nombre)s conectada. %(detalle)s %(extra)s", nombre=(nombre or dominio), detalle=detalle, extra=extra), "ok")
+    return _volver()
+```
+
+(Los `return _volver_config(cliente)` de los chequeos de correo/cifrado al inicio quedan; `normalizar_dominio` lanza `ErrorConector` si un dominio guardado es raro — envuelve la comparación en `try/except ErrorConector: continue`.)
+
+`tienda_sync`: `volver = request.form.get("volver")`; el `return` final pasa a `return _volver_catalogo(cliente) if volver == "catalogo" else _volver_config(cliente)`.
+
+`ver_cliente`: `tipos_tienda=conectores.TIPOS_CONECTABLES`.
+
+- [ ] **Step 4: Plantillas y CSS**
+
+`templates/_catalogo_importar.html` (entero):
+
+```jinja
+{# Catálogo › Productos › «Traer productos de…» (spec 2026-09-28 §10.4):
+   primero la tienda Shopify sin llaves (solo el dominio), luego CSV/Excel,
+   la URL de un producto y el enlace a Configuración para las demás tiendas.
+   Contexto de ver_cliente: trabajos_prod (importar, tiendas), tiendas_cliente,
+   columnas_csv, precios, cifrado_ok. Importar corre en el worker; acá solo se
+   encola. #}
+{% set trabajo_imp = trabajos_prod.importar %}
+{% set tienda_pub = (tiendas_cliente | selectattr('tipo', 'equalto', 'shopify_publico') | list | first) %}
+<details class="comparacion-modelos cat-importar" id="cat-traer" style="margin-top:.6rem;">
+  <summary class="btn-guardar btn-sm">{{ _('Traer productos de… (tu tienda Shopify, CSV/Excel o URL)') }}</summary>
+  <div class="comparacion-contenido">
+    <div class="prod-acciones">
+      <details class="swap-card prod-importar" open>
+        <summary class="swap-card-resumen">{{ _('Tu tienda Shopify (sin llaves)') }}</summary>
+        {% if tienda_pub %}
+        {% set trabajo_t = trabajos_prod.tiendas.get(tienda_pub.id) %}
+        <p class="vacio" style="padding-top:.3rem;font-size:.8rem;">{{ _('Conectada: %(nombre)s · última sincronización: %(cuando)s. Se actualiza sola cada 6 h.', nombre=(tienda_pub.nombre or tienda_pub.dominio), cuando=((tienda_pub.ultima_sync_productos or _('nunca'))[:16])) }}</p>
+        <form method="post" action="{{ url_for('tienda_sync', cliente=cliente, tid=tienda_pub.id) }}" class="inline"><input type="hidden" name="volver" value="catalogo"><button class="btn-generar btn-sm" {% if trabajo_t %}disabled{% endif %}>{{ _('Sincronizar ahora') }}</button></form>
+        {% else %}
+        <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea prod-form-importar">
+          <input type="hidden" name="tipo" value="shopify_publico"><input type="hidden" name="volver" value="catalogo">
+          <input type="text" name="dominio" placeholder="mitienda.com" required {% if not cifrado_ok %}disabled{% endif %}>
+          <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('Leo el catálogo público de tu tienda: productos, colores con su foto de estudio, precio y URL de compra. No necesita ninguna llave y se actualiza solo cada 6 h. Para pedidos y atribución conecta después con la Admin API en Configuración.') }}</p>
+          <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Traer catálogo') }}</button>
+          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA por producto', usd=(precios.regla_producto.usd | usd)) }}</small>{% endif %}
+        </form>
+        {% if not cifrado_ok %}<p class="tag-error">{{ _('Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar tiendas.') }}</p>{% endif %}
+        {% endif %}
+      </details>
+      <details class="swap-card prod-importar">
+        <summary class="swap-card-resumen">{{ _('Importar CSV/Excel') }}</summary>
+        <form method="post" action="{{ url_for('prod_importar_archivo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea prod-form-importar">
+          <input type="file" name="archivo" accept=".csv,.xlsx" required>
+          <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('Primera fila = nombres de columna. Reconozco: <code>%(columnas)s</code>. Máximo 5 MB.', columnas=(columnas_csv|traducir)) }}</p>
+          <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>{{ _('Importar archivo') }}</button>
+          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA por producto', usd=(precios.regla_producto.usd | usd)) }}</small>{% endif %}
+        </form>
+      </details>
+      <details class="swap-card prod-importar">
+        <summary class="swap-card-resumen">{{ _('Importar desde URL') }}</summary>
+        <form method="post" action="{{ url_for('prod_importar_url', cliente=cliente) }}" class="form-nueva-idea prod-form-importar">
+          <input type="url" name="url" placeholder="https://tutienda.com/productos/cojin-azul" required>
+          <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('La página pública de UN producto: leo nombre, precio y fotos de sus datos estructurados.') }}</p>
+          <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>{{ _('Importar producto') }}</button>
+          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA', usd=(precios.regla_producto.usd | usd)) }}</small>{% endif %}
+        </form>
+      </details>
+      <a class="btn-guardar btn-sm prod-link-config" href="#settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); if (window.irAConfig) irAConfig('config-tienda'); return false;">{{ _('Otras tiendas (Configuración › Conexiones)') }}</a>
+    </div>
+  </div>
+</details>
+
+{% if trabajo_imp %}
+<div class="idea-block prod-importando" style="margin-top:.8rem;">
+  <div class="idea-header"><div><span class="idea-label">{{ _('Importando') }}</span><div class="idea-texto">{{ _('Leyendo el catálogo y creando los productos…') }}</div></div></div>
+  <div class="barra-progreso" id="trabajo-{{ trabajo_imp.job_id }}" data-poll-job="{{ trabajo_imp.job_id }}"><div class="barra-progreso-fill"></div></div>
+  <div class="progreso-texto"></div>
+</div>
+{% endif %}
+```
+
+`templates/_tab_settings.html`: en la tabla de tiendas (línea ~142) `{{ {"shopify_publico": _("Shopify (sin llaves)")}.get(t.tipo, t.tipo) }}` en vez de `{{ t.tipo }}`; en los botones de tipo el dict de nombres gana `"shopify_publico": _("Shopify (sin llaves)")`; el panel `data-tienda-panel="shopify"` pasa a `hidden` y ANTES de él va:
+
+```jinja
+  <div class="tienda-tipo-panel" data-tienda-panel="shopify_publico">
+    <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
+      <input type="hidden" name="tipo" value="shopify_publico">
+      <label class="campo-label">{{ _('Dominio de la tienda') }}</label>
+      <input type="text" name="dominio" placeholder="mitienda.com" required {% if not cifrado_ok %}disabled{% endif %}>
+      <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('Solo el catálogo público: productos, colores con su foto, precios y URL de compra, sin ninguna llave. Los pedidos y la atribución necesitan la Admin API (pestaña Shopify).') }}</p>
+      <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Conectar Shopify (sin llaves)') }}</button>
+    </form>
+  </div>
+```
+
+`static/style.css` (junto a `.badge-fuente-shopify`): `.badge-fuente-shopify_publico { color: #8bc36a; background: rgba(94, 142, 62, .12); }`.
+
+- [ ] **Step 5: Correr**
+
+Run: `venv/bin/python3 -m pytest -q tests/test_rutas_catalogo.py tests/test_rutas_productos.py tests/test_rutas_configuracion.py`
+Expected: PASS (ajusta en `test_rutas_productos.py` cualquier assert que contara los tipos de tienda o el texto de la nota de «Conectar tienda»).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add dashboard.py templates/_catalogo_importar.html templates/_tab_settings.html static/style.css tests/test_rutas_catalogo.py tests/test_rutas_productos.py
+git commit -m "Traer de mi tienda: Shopify sin llaves desde Catálogo y Configuración; sincronizar desde el catálogo
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 14: Crear elige producto y color; «Crear con este color»; Sprints agrupa por producto
+
+**Files:**
+- Modify: `templates/_selector_productos.html` (bloque `<div id="sel-…-grilla">`), `templates/_selector_productos_nuevo.html` (buscador: ocultar grupos vacíos), `templates/_tab_creativeflowplus.html` (bloque `prefill` líneas ~496–515 y tras `pintarCatalogo(); refrescar();` línea ~753), `templates/_sprint_panel_armar.html` (líneas 14–19), `static/style.css` (`.producto-grupo*`)
+- Test: `tests/test_rutas_catalogo.py` (añadir), `tests/test_sprints_tablero.py` (añadir)
+
+- [ ] **Step 1: Tests**
+
+```python
+def test_selector_de_crear_agrupa_los_colores_por_producto(app):
+    _con_colores(app)
+    _activo_con_foto("acme", "Cojín")
+    html = app["c"].get("/cliente/acme").data.decode()
+    dialogo = html.split('id="fp-catalogo"', 1)[1].split("</dialog>", 1)[0]
+    grupo = dialogo.split('class="producto-grupo"', 1)[1].split("</div>\n        </div>", 1)[0]
+    assert "Original" in grupo and "2 colores" in grupo
+    assert 'value="producto:original/pink"' in grupo and 'value="producto:original/beige"' in grupo
+    assert 'data-nombre="original original — pink"' in grupo and "<span>Pink</span>" in grupo
+    assert 'value="producto:cojin"' in dialogo and 'class="producto-grupo"' not in dialogo.split('value="producto:cojin"', 1)[0].rsplit("<label", 1)[1]
+    assert "var prefillCat = " in html and "input[name=productos_catalogo][value=" in html
+```
+
+En `tests/test_sprints_tablero.py`, con su fixture de sprint + campaña (mira cómo los demás tests de ese archivo piden `GET /cliente/<c>/sprints/<sid>/campanas/<cid>/panel`):
+
+```python
+def test_panel_agrupa_los_colores_del_producto(<fixture del archivo>):
+    import catalogo_productos as cp
+    # producto con dos colores en el catálogo temporal (BASE_DIR ya apunta a tmp en la fixture)
+    ...crear meta con variantes pink/beige y una foto por color, como en tests/test_rutas_catalogo._con_colores...
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert '<optgroup label="Original">' in html and '<option value="original/pink"' in html and ">Pink<" in html
+```
+
+- [ ] **Step 2: Verificar que fallan** — Run: `venv/bin/python3 -m pytest -q tests/test_rutas_catalogo.py -k selector tests/test_sprints_tablero.py -k optgroup`. Expected: FAIL.
+
+- [ ] **Step 3: Implementar**
+
+`templates/_selector_productos.html`, el bloque de la grilla:
+
+```jinja
+    <div id="sel-{{ sel_id }}-grilla">
+      {% for cid, lista in _activos.items() %}
+      {% if lista %}
+      {% if _modo == "checkbox" %}<p class="campo-label" style="margin:.6rem 0 .3rem;">{{ categorias[cid].plural if categorias is defined else _('Productos') }}</p>{% endif %}
+      <div class="catalogo-productos">
+        {% for grupo in lista | groupby('producto_id') %}
+        {% set entradas = grupo.list %}
+        {% if entradas | length > 1 or entradas[0].variante %}
+        {# Un producto con colores: un encabezado y un tile por color (spec 2026-09-28 §10.5). #}
+        <div class="producto-grupo">
+          <p class="producto-grupo-nombre">{{ entradas[0].nombre_producto }} <small>{{ ngettext('%(num)s color', '%(num)s colores', entradas | length) }}</small></p>
+          <div class="producto-grupo-tiles">
+            {% for p in entradas %}
+            <label class="producto-opcion" data-nombre="{{ (p.nombre_producto ~ ' ' ~ p.nombre) | lower }}">
+              <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
+              <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
+              <span>{{ p.nombre | replace(p.nombre_producto ~ ' — ', '') }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
+        {% set p = entradas[0] %}
+        <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
+          <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
+          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
+          <span>{{ p.nombre }}</span>
+        </label>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+```
+
+`templates/_selector_productos_nuevo.html`, dentro del `input` del buscador, tras recorrer `opciones`: `document.querySelectorAll("#" + id + "-grilla .producto-grupo").forEach(function (g) { g.hidden = !g.querySelector(".producto-opcion:not([hidden])"); });`.
+
+`templates/_tab_creativeflowplus.html`: en el bloque `prefill`, `var ca = …; if (ca && prefill.calidad) ca.checked = prefill.calidad === 'borrador';`. Después de la línea `pintarCatalogo();\n    refrescar();` (≈753):
+
+```javascript
+    // «Crear con este producto» desde el Catálogo: llega el color marcado.
+    var prefillCat = {{ fp_prefill | tojson }};
+    if (prefillCat && prefillCat.productos_catalogo) {
+      prefillCat.productos_catalogo.forEach(function (v) {
+        var cb = form.querySelector('input[name=productos_catalogo][value="' + String(v).replace(/"/g, '') + '"]');
+        if (cb) { cb.checked = true; cb.dispatchEvent(new Event('change', {bubbles: true})); }
+      });
+      pintarCatalogo();
+      refrescar();
+    }
+```
+
+`templates/_sprint_panel_armar.html` (select de producto):
+
+```jinja
+        <select data-campo="catalogo_id">
+          {% if not c.producto %}<option value="{{ c.catalogo_id }}" selected>{{ c.catalogo_id }} (ya no está en el catálogo)</option>{% endif %}
+          {% for grupo in productos | groupby('producto_id') %}
+          {% if grupo.list | length > 1 or grupo.list[0].variante %}
+          <optgroup label="{{ grupo.list[0].nombre_producto }}">
+            {% for p in grupo.list %}<option value="{{ p.id }}" {% if p.id == c.catalogo_id %}selected{% endif %}>{{ p.nombre | replace(p.nombre_producto ~ ' — ', '') }}</option>{% endfor %}
+          </optgroup>
+          {% else %}
+          <option value="{{ grupo.list[0].id }}" {% if grupo.list[0].id == c.catalogo_id %}selected{% endif %}>{{ grupo.list[0].nombre }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+```
+
+`static/style.css` (dentro del bloque «Catálogo: galería y ficha»): `.producto-grupo { flex: 1 1 100%; } .producto-grupo-nombre { margin: .4rem 0 .2rem; font-size: .8rem; color: var(--muted); } .producto-grupo-nombre small { margin-left: .3rem; } .producto-grupo-tiles { display: flex; flex-wrap: wrap; gap: .5rem; }` (si `.catalogo-productos` es `display: grid`, cámbialo a `display: flex; flex-wrap: wrap; gap: .5rem;` o pon `.producto-grupo { grid-column: 1 / -1; }`; mira su regla en la línea ~516).
+
+- [ ] **Step 4: Correr** — `venv/bin/python3 -m pytest -q tests/test_rutas_catalogo.py tests/test_crear_compositor.py tests/test_sprints_tablero.py tests/test_rutas_crear_formatos.py`. Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add templates/_selector_productos.html templates/_selector_productos_nuevo.html templates/_tab_creativeflowplus.html templates/_sprint_panel_armar.html static/style.css tests/test_rutas_catalogo.py tests/test_sprints_tablero.py
+git commit -m "Crear y Sprints eligen producto y color: selector agrupado, «Crear con este producto» y optgroup en el panel
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 15: traducciones al inglés
+
+**Files:**
+- Modify: `translations/en/LC_MESSAGES/messages.po`, `translations/en/LC_MESSAGES/messages.mo`
+- Test: `tests/test_i18n_catalogo.py` (existente)
+
+- [ ] **Step 1: Extraer** — `venv/bin/python3 catalogo_i18n.py actualizar && venv/bin/python3 catalogo_i18n.py pendientes`.
+
+- [ ] **Step 2: Traducir** en el `.po` cada msgid pendiente (glosario en `docs/i18n/glosario.md`; «color» = colour? NO: inglés de EE. UU., «color»; «ficha» = «details»; «tienda» = «store»; «regla de consistencia» = «consistency rule»). Los de este cambio:
+
+| msgid (es) | msgstr (en) |
+|---|---|
+| Todo lo que la IA debe reproducir <strong>exacto</strong>: tus productos con sus colores, la cara de tu marca y tus espacios. Cada uno lleva fotos de referencia y una regla de consistencia que va en cada generación; un producto lleva además su precio y su URL de compra. | Everything the AI must reproduce <strong>exactly</strong>: your products with their colors, the face of your brand and your spaces. Each one carries reference photos and a consistency rule that goes into every generation; a product also carries its price and purchase URL. |
+| + Nuevo producto | + New product |
+| Traer de mi tienda | Import from my store |
+| Buscar por nombre o color… | Search by name or color… |
+| Todos / En prueba / Sin precio / Sin URL / Sin fotos / Archivados | All / In test / No price / No URL / No photos / Archived |
+| Por prioridad / Por nombre | By priority / By name |
+| Cargando… | Loading… |
+| Sincronizando | Syncing |
+| Leyendo %(nombre)s y creando los productos… | Reading %(nombre)s and creating the products… |
+| Personajes del flujo anterior | Characters from the previous flow |
+| Nada coincide con ese filtro | Nothing matches that filter |
+| Prueba con otra palabra o vuelve a «Todos». | Try another word or go back to "All". |
+| Todavía no hay productos | No products yet |
+| Tráelos de tu tienda Shopify con solo el dominio, o crea el primero con sus fotos. | Import them from your Shopify store with just the domain, or create the first one with its photos. |
+| Todavía no hay %(plural)s | No %(plural)s yet |
+| Ver más | Show more |
+| %(num)s color / %(num)s colores | %(num)s color / %(num)s colors |
+| sin URL | no URL |
+| usado en %(n)s | used in %(n)s |
+| Sin fotos | No photos |
+| archivado | archived |
+| Elige las fotos desde tu computador: se crea el producto en el catálogo con ellas. | Pick the photos from your computer: the product is created in the catalog with them. |
+| (de %(min)s a %(max)s) | (from %(min)s to %(max)s) |
+| Sincronizado de %(fuente)s: la tienda manda sobre el nombre, la descripción y los colores; el precio, la URL de compra, «en prueba» y la prioridad que pongas aquí se respetan. | Synced from %(fuente)s: the store owns the name, description and colors; the price, purchase URL, "in test" and priority you set here are kept. |
+| ya no está en la tienda | no longer in the store |
+| Este color no tiene fotos todavía: súbele una para que el modelo lo reproduzca. | This color has no photos yet: upload one so the model can reproduce it. |
+| Subir fotos a este color | Upload photos to this color |
+| Quitar color | Remove color |
+| Fotos de referencia | Reference photos |
+| + Color | + Color |
+| Nombre del color | Color name |
+| ej. Rosa | e.g. Pink |
+| ¿De qué color son las fotos actuales? | What color are the current photos? |
+| Las fotos que ya tiene pasan a ser ese color; el nuevo color lleva las suyas. | The photos it already has become that color; the new color gets its own. |
+| Fotos del color | Photos of the color |
+| Agregar color | Add color |
+| Fotos de ambiente | Lifestyle photos |
+| No son referencia del producto: asígnalas a un color para que el modelo las use. | They are not product references: assign them to a color so the model uses them. |
+| Asignar a color / Asignar a color… | Assign to color / Assign to color… |
+| Subir fotos de ambiente | Upload lifestyle photos |
+| Datos | Details |
+| Dónde se usó | Where it was used |
+| Piezas de Crear: %(n)s / Experimentos: %(n)s / Campañas de sprints: %(n)s | Create pieces: %(n)s / Experiments: %(n)s / Sprint campaigns: %(n)s |
+| %(n)s resultado(s) de «Cambiar producto» | %(n)s "Swap product" result(s) |
+| Crear con este producto | Create with this product |
+| Color | Color |
+| Ficha | Details |
+| Este activo ya no existe / Pudo borrarse en otra pestaña. | This item no longer exists / It may have been deleted in another tab. |
+| No se pudo cargar el catálogo. Revisa tu conexión e intenta de nuevo. | Couldn't load the catalog. Check your connection and try again. |
+| No se pudo abrir la ficha. Revisa tu conexión e intenta de nuevo. | Couldn't open the details. Check your connection and try again. |
+| ¿Archivar «%(nombre)s»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Archivados»). | Archive "%(nombre)s"? Nothing is deleted: it's hidden from the list and the store sync won't bring it back (recover it from "Archived"). |
+| ¿Quitar el color «%(nombre)s» con sus fotos? No se puede deshacer. | Remove the color "%(nombre)s" and its photos? This cannot be undone. |
+| Ponle un nombre al color. | Give the color a name. |
+| Color «%(nombre)s» agregado (%(n)s foto(s)). | Color "%(nombre)s" added (%(n)s photo(s)). |
+| Color quitado. | Color removed. |
+| Foto asignada al color (%(nombre)s). | Photo assigned to the color (%(nombre)s). |
+| Ese producto no tiene fotos de referencia todavía. | That product has no reference photos yet. |
+| No existe ese producto. | That product doesn't exist. |
+| Nombre de color inválido. | Invalid color name. |
+| Este producto ya tiene fotos: dime de qué color son para poder agregar otro. | This product already has photos: tell me what color they are so another can be added. |
+| Ya hay un color con ese nombre (%(id)s). | There is already a color with that name (%(id)s). |
+| Ese color no existe. | That color doesn't exist. |
+| Es el único color con fotos. Si quieres quitarlo, elimina el producto completo. | It is the only color with photos. To remove it, delete the whole product. |
+| Traer productos de… (tu tienda Shopify, CSV/Excel o URL) | Import products from… (your Shopify store, CSV/Excel or URL) |
+| Tu tienda Shopify (sin llaves) | Your Shopify store (no keys) |
+| Conectada: %(nombre)s · última sincronización: %(cuando)s. Se actualiza sola cada 6 h. | Connected: %(nombre)s · last sync: %(cuando)s. It refreshes on its own every 6 h. |
+| nunca | never |
+| Sincronizar ahora | Sync now |
+| Leo el catálogo público de tu tienda: productos, colores con su foto de estudio, precio y URL de compra. No necesita ninguna llave y se actualiza solo cada 6 h. Para pedidos y atribución conecta después con la Admin API en Configuración. | I read your store's public catalog: products, colors with their studio photo, price and purchase URL. No key needed, and it refreshes on its own every 6 h. For orders and attribution, connect the Admin API later in Settings. |
+| Traer catálogo | Import catalog |
+| Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar tiendas. | <code>FLASK_SECRET_KEY</code> is missing from the server's <code>.env</code>: stores can't be saved without it. |
+| Otras tiendas (Configuración › Conexiones) | Other stores (Settings › Connections) |
+| Shopify (sin llaves) | Shopify (no keys) |
+| Solo el catálogo público: productos, colores con su foto, precios y URL de compra, sin ninguna llave. Los pedidos y la atribución necesitan la Admin API (pestaña Shopify). | Only the public catalog: products, colors with their photo, prices and purchase URL, with no key at all. Orders and attribution need the Admin API (Shopify tab). |
+| Conectar Shopify (sin llaves) | Connect Shopify (no keys) |
+| Ese tipo de tienda no se conecta desde aquí (Shopify, Shopify sin llaves o WooCommerce; MercadoLibre va por su botón). | That store type can't be connected here (Shopify, Shopify without keys or WooCommerce; MercadoLibre has its own button). |
+| %(n)s color(es) nuevo(s) | %(n)s new color(s) |
+| %(n)s omitido(s) por no ser productos: %(lista)s | %(n)s skipped for not being products: %(lista)s |
+
+Cualquier otro pendiente que liste el comando también se traduce (nunca se deja `msgstr ""`).
+
+- [ ] **Step 3: Compilar y probar** — `venv/bin/python3 catalogo_i18n.py compilar && venv/bin/python3 -m pytest -q tests/test_i18n_catalogo.py tests/test_i18n_fugas.py`. Expected: PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
+git commit -m "Idioma: el catálogo por colores y la tienda sin llaves en inglés
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 16: documentación y suite completa
+
+**Files:**
+- Modify: `CLAUDE.md` (párrafo «Catálogo ecommerce y conectores», la parte «UI: there is NO Productos tab…»), `CONTEXT.md` (sección nueva «Catálogo»)
+- Create: `docs/adr/0005-catalogo-por-colores-y-shopify-publico.md`
+
+- [ ] **Step 1: `CLAUDE.md`** — dentro del párrafo «Catálogo ecommerce y conectores», reemplaza desde «UI: there is NO Productos tab» hasta «…creates their activo.» por:
+
+```
+UI (2026-09-28, spec `docs/superpowers/specs/2026-09-28-catalogo-por-colores-design.md`, ADR 0005): a
+**product has colors**. On disk `productos.json` keeps `variantes: {color_id: {nombre, descripcion,
+fuente_id, url_compra, disponible}}` and each color is a subfolder `productos/<pid>/<color_id>/` with its
+own reference photos (the root holds "fotos generales" when there are colors, or the reference photos of a
+plain product). `catalogo_productos.listar()` still yields one entry per color (`pid/color`, the ids Crear,
+Sprints and swaps store) plus `producto_id/variante/nombre_producto`; `listar_productos()` yields one entry
+per product with `colores` and `fotos_generales`; `encontrar(pid)` falls back to the first color with
+photos; `producto_base()` strips the color; `claves_de()`/`claves_de_producto()` give every id and name a
+product can be referred by (doctrina pedidos, experiment counts). ONE `producto` row per product
+(`activo_catalogo_id = pid`, migration 0022 folded the old per-color rows). `conectores/shopify_publico.py`
+(`tipo shopify_publico`, `fuente shopify`, only a `dominio`) reads a store's public `/meta.json` +
+`/products.json`: the color option (`OPCIONES_COLOR`, or the first option whose values have distinct
+featured images), one variante per color with its studio photo(s) (`width=1000`), unassigned images as
+generales, price = mode of the variants, currency from meta.json, services skipped (`PALABRAS_SERVICIO`);
+`tareas.tiendas` uses `conector.fuente`. `importador.vincular_activo` creates/refreshes colors
+(`_colocar_colores`: new colors always download, existing ones only with `forzar_fotos` or when empty,
+colors gone from the store become `disponible=False`), pays the regla once per product and never leaves an
+activo without photos. The Catálogo tab (`_tab_catalogo.html`) is a gallery fetched from `catalogo_grid`
+(`catalogo_vista.py` is the pure filter/sort/paginate/usos layer; filters live in the hash
+`#catalogo?cat=&filtro=&q=&orden=`) and a side-panel ficha fetched from `catalogo_ficha`
+(`#catalogo?ficha=<cat>:<pid>`; colors strip, per-color photos, lifestyle photos with «Asignar a color»,
+datos + comercial fields, doctrina, usos, «Crear con este producto» → `fp_prefill.productos_catalogo`,
+«Crear experimento», Eliminar). Every catalog POST returns to that ficha (`_volver_catalogo`/`_volver_fila`);
+image routes are `<path:producto_id>` (ids with «/»). «Traer de mi tienda» (`_catalogo_importar.html`,
+`details#cat-traer`) connects a `shopify_publico` store from the catalog (`tienda_conectar` with
+`volver=catalogo`; connecting the Admin-API Shopify of the same domain replaces the public one);
+Configuración › Conexiones offers «Shopify (sin llaves)» first (`conectores.TIPOS_CONECTABLES`). Crear's
+picker groups colors under their product; the Sprints panel select uses `<optgroup>`. Rows without an
+activo (imported without photos) are cards in the same gallery («Sin fotos» filter) with Subir fotos /
+Crear activo / Archivar.
+```
+
+- [ ] **Step 2: `CONTEXT.md`** — añade al final de «Language»:
+
+```
+### Catálogo
+
+**Producto**: lo que se vende: carpeta `clientes/<c>/productos/<pid>/`, entrada en `productos.json` y UNA fila `producto` (comercial). _Avoid_: activo (a secas), item.
+**Color**: una versión visual del producto (en Shopify «Colour», «Patterns»…) con sus propias fotos de referencia; subcarpeta `<pid>/<color_id>/`, id compuesto `pid/color`. _Avoid_: variante (es el nombre técnico de la meta), colorway, SKU.
+**Producto plano**: producto sin colores; sus fotos de referencia van en la raíz de su carpeta.
+**Foto de estudio**: la foto de referencia de un color (la que Shopify liga a la variante).
+**Foto de ambiente**: foto del producto sin color asignado (lifestyle); en un producto con colores vive en la raíz y no es referencia. _Avoid_: foto general (nombre interno `fotos_generales`).
+**Activo del catálogo**: cualquier entrada de `catalogo_productos.listar()`: un color, un producto plano, un personaje o un entorno. Distinto del «Activo» de Meta.
+**Fila comercial**: la fila `producto` de un producto (precio, moneda, URL de compra, en prueba, prioridad, sofisticación, pruebas, pedidos).
+**Tienda pública**: tienda Shopify conectada solo por su dominio (`shopify_publico`); lee el catálogo público y guarda las filas con fuente `shopify`.
+**Ficha**: el panel lateral de un producto/personaje/entorno en la pestaña Catálogo. _Avoid_: detalle, modal.
+```
+
+- [ ] **Step 3: ADR** `docs/adr/0005-catalogo-por-colores-y-shopify-publico.md` (mismo formato que 0004):
+
+```
+# 0005. Colores como sub-activos en disco, una fila comercial por producto y Shopify público como conector
+
+Fecha: 2026-09-28. Estado: aceptado.
+
+## Contexto
+Happy Flops vende 18 productos con 130 colores; el modelo necesita la foto del color exacto. El catálogo
+tenía «producto = carpeta con hasta 6 fotos» y una fila comercial por carpeta; los tres colores que ya
+existían (`horiginal/beige`…) eran carpetas hermanas con filas propias y sus fotos daban 404.
+Shopify expone el catálogo público (`/products.json`, `/meta.json`) con la foto ligada a cada variante.
+
+## Decisión
+1. Un color es una subcarpeta del producto con su entrada en `variantes` de `productos.json`; su id es
+   `pid/color`. `listar()` sigue devolviendo una entrada por color (lo que Crear, Sprints y los swaps
+   guardan); `listar_productos()` agrupa. No hay tabla de colores en SQLite: las fotos ya viven en disco.
+2. La fila `producto` es del producto, no del color (precio, URL, en prueba, prioridad y la doctrina son
+   del producto). La migración 0022 dobló las filas por color en la del producto.
+3. `shopify_publico` es un conector de primera clase (sin llaves, `fuente = "shopify"`): el catálogo se
+   trae con el dominio y se sincroniza cada 6 h; la Admin API sigue para pedidos y atribución.
+4. La galería y la ficha se cargan por fragmento; nada del catálogo pesa en la página del proyecto.
+
+## Consecuencias
+- Quien busque la fila por un id de activo pasa por `producto_base()`; quien cuente usos, por `claves_de()`.
+- Las tallas no se muestran; los precios por país (Shopify Markets) quedan para después.
+- Un CSV con columna «color» puede entregar `extra.variantes` con la misma forma.
+```
+
+- [ ] **Step 4: Suite completa y compilación** — `venv/bin/python3 -m pytest -q` (todo verde; `-m "not slow"` primero si tarda) y `for f in catalogo_productos.py catalogo_vista.py importador.py conectores/shopify_publico.py dashboard.py; do venv/bin/python3 -m py_compile $f; done`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add CLAUDE.md CONTEXT.md docs/adr/0005-catalogo-por-colores-y-shopify-publico.md
+git commit -m "Docs: catálogo por colores (CLAUDE.md, CONTEXT.md, ADR 0005)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 17: prueba local con el catálogo real de Happy Flops
+
+Se hace en la carpeta PRINCIPAL del repo después de fusionar la rama en `main` (la rama del worktree se fusiona con `git merge --no-ff` desde `main` tras la suite verde), con el `.env` real (la regla de fidelidad paga ≈ 18 × US$ 0.01).
+
+- [ ] **Step 1: Migrar la base local** — `venv/bin/alembic upgrade head` y comprobar: `venv/bin/python3 -c "import tiendas; print([(p['fuente_id'], p['activo_catalogo_id']) for p in tiendas.productos('happyflops', incluir_archivados=True)])"` → `horiginal` y `happyblanket`.
+
+- [ ] **Step 2: Conectar y encolar** (`TZ=America/Bogota` no aplica en la Mac, pero el worker usa hora local igual):
+
+```bash
+venv/bin/python3 - <<'EOF'
+import tiendas, trabajos
+from tareas import tiendas as tt
+tid = tiendas.conectar("happyflops", "shopify_publico", {"dominio": "www.happyflops.com"}, nombre="HappyFlops WW", dominio="www.happyflops.com")
+ok = trabajos.encolar(tt.job_id_sync_productos("happyflops", tid), "tienda_sync_productos", {"cliente": "happyflops", "tienda_id": tid},
+                      cliente="happyflops", duracion_estimada=600, etapas=tt.ETAPAS_IMPORTAR, max_intentos=tt.MAX_INTENTOS_SYNC)
+print("tienda", tid, "encolada", ok)
+EOF
+```
+
+- [ ] **Step 3: Correr el worker** en segundo plano (`venv/bin/python3 worker.py`, Bash con `run_in_background`) y esperar a que la tarea (y sus continuaciones `__cont`) terminen: `venv/bin/python3 -c "import cola; print(cola.job_ids_vivos('happyflops', 'tienda_sync_productos'))"` vacío. Parar el worker.
+
+- [ ] **Step 4: Verificar** — `venv/bin/python3 -c "import catalogo_productos as cp; ps = cp.listar_productos('happyflops'); print(len(ps), sum(p['n_colores'] for p in ps), sum(p['n_fotos'] for p in ps)); print([(p['nombre'], p['n_colores'], len(p['fotos_generales'])) for p in ps])"` → 18 productos nuevos (+ HOriginal y HappyBlanket), 130 colores, `du -sh clientes/happyflops/productos`. Y `venv/bin/python3 -c "import gastos; print(gastos.resumen_mes('happyflops') if hasattr(gastos, 'resumen_mes') else 'ver Configuración › Gasto')"`.
+
+- [ ] **Step 5: Verla** con el lanzador de la memoria «verificar-ui-sin-contrasena» (variante interactiva: app real con sesión admin inyectada, SIN llaves en el entorno, `proyectos.BASE_DIR`/`catalogo_productos.BASE_DIR` apuntando a una COPIA de `clientes/happyflops` y `CREATV_DB_URL` a una copia de `data/creatv.db`), `preview_start`, navegar a `http://localhost:<puerto>/cliente/happyflops#catalogo`, y capturar: la galería, una ficha con 14 colores (HappyFlops Original) cambiando de color, el filtro «Sin precio» vacío, «Traer de mi tienda» mostrando la tienda conectada, el diálogo «Del catálogo» de Crear agrupado, y el celular (`resize_window` mobile). Corregir lo que se vea mal, con su test, antes de desplegar. Quitar la entrada temporal de `.claude/launch.json` al terminar.
+
+---
+
+### Task 18: despliegue y carga en producción
+
+Sigue la memoria «produccion-vps-creatvmachine» al pie de la letra:
+
+- [ ] **Step 1: Push** — `git push origin main` (fast-forward; el submódulo `meta_ads` no cambia).
+- [ ] **Step 2: Ensayar la migración 0022 sobre una copia de la base de producción** (worktree temporal + copia con `sqlite3.Connection.backup()`), comparar conteos de `producto` antes/después (en producción happyflops tiene las 4 filas con «/»), `pragma integrity_check`.
+- [ ] **Step 3: Desplegar** — `ssh deploy@116.203.20.147`, `cd iaplusyou`, comprobar 0 tareas `en_curso`/`pendiente`, respaldo `data/creatv.db.bak_<fecha>` con `Connection.backup()`, `git pull --ff-only origin main && git submodule update --init --recursive`, `venv/bin/pip install -r requirements.txt`, `venv/bin/alembic upgrade head`, como root `systemctl restart iaplusyou creatv-worker` (LOS DOS: conector e importador corren en el worker), `journalctl -u iaplusyou -u creatv-worker -n 50 --no-pager` sin errores, `curl -sI https://app.creatvmachine.com/login` 200.
+- [ ] **Step 4: Cargar Happy Flops** — en el VPS, `TZ=America/Bogota venv/bin/python3 - <<'EOF'` con el mismo script del paso 2 de la Tarea 17; esperar al worker (`cola.job_ids_vivos`) y verificar los conteos como en el paso 4 (18 + 2 productos, 130 colores; `du -sh clientes/happyflops/productos`; el gasto `regla_producto` en Configuración › Gasto).
+- [ ] **Step 5: Humo** — como admin con el test client en el VPS (`PYTHONPATH=.`): `GET /cliente/happyflops` 200, `GET /cliente/happyflops/catalogo/grid?cat=producto` con 20 tarjetas, `GET /cliente/happyflops/catalogo/producto/happyflops_original/ficha` con 14 colores, `GET /cliente/happyflops/productos/happyflops_original/pink/imagen?categoria=producto&w=320` 200.
+- [ ] **Step 6: Memoria** — actualizar la memoria de producción (despliegue, alembic 0022) y escribir la memoria del estado del catálogo por colores.

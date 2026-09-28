@@ -1609,8 +1609,8 @@ def ver_cliente(cliente):
     meta_app = meta_conexion.app_publica(cliente)
     meta_conectado = capacidades_meta.get("estado") == "conectado"
     # Modo de la conexión con Meta (propia / agencia): en agencia la tarjeta
-    # de _meta_conectar.html es «Gestionado por Creatv» (sin app ni botón de
-    # conectar) y Puesta a punto mira que la agencia esté conectada, no la app.
+    # de _meta_conectar.html (en Experimentos) es «Gestionado por Creatv», sin
+    # app ni botón de conectar.
     datos_meta = meta_conexion.cargar(cliente) or {}
     modo_meta = meta_conexion.MODO_AGENCIA if datos_meta.get("modo") == meta_conexion.MODO_AGENCIA else "propia"
     agencia_conectada = meta_agencia.conectada() if modo_meta == meta_conexion.MODO_AGENCIA else False
@@ -2022,7 +2022,7 @@ def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="pro
         elif s.get("por_proyecto") and meta_forma == "agencia":
             # Eligió que Creatv lo gestione pero aún no compartió/conectó.
             presentes = []
-            faltan = ["conexión de agencia: pendiente de que compartas tus activos con Creatv (Configuración › Meta)"]
+            faltan = ["conexión de agencia: pendiente de que compartas tus activos con Creatv (Experimentos › Meta)"]
             nota, pasos = NOTA_META_AGENCIA, PASOS_META_AGENCIA
         elif s.get("por_proyecto"):
             # Meta: la app es del proyecto (clientes/<c>/meta_app.json), no del .env.
@@ -3246,7 +3246,7 @@ def _ir_a_flowmarketing(cliente):
 
 
 MENSAJE_MODO_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» "
-                        "en Configuración › Meta (con nada en marcha).")
+                        "en Experimentos › Meta (con nada en marcha).")
 
 
 def _bloqueo_modo_agencia(cliente):
@@ -3463,7 +3463,7 @@ _RE_PORTAFOLIO = re.compile(r"^\d{5,20}$")
 
 
 def _ir_a_meta(cliente):
-    # La elección de forma y las guías viven en Configuración › Meta.
+    # La elección de forma y las guías viven en Experimentos (_meta_conectar.html).
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -4481,7 +4481,7 @@ def exp_crear(cliente):
     lo pide."""
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Configuración antes de crear un experimento."), "error")
+        flash(gettext("Conecta Meta en Experimentos antes de crear un experimento."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     nombre = (request.form.get("nombre") or "").strip()[:200]
@@ -4570,7 +4570,7 @@ def exp_probar(cliente):
     siendo un clic aparte."""
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Configuración antes de probar piezas."), "error")
+        flash(gettext("Conecta Meta en Experimentos antes de probar piezas."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""

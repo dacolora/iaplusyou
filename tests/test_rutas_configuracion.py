@@ -99,42 +99,44 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
 def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     for var, valor in VALORES_FALSOS.items():
         monkeypatch.setenv(var, valor)
-    # R2: solo ACCOUNT_ID → parcial; SMTP: parcial (faltan otras); Meta: las
-    # dos puestas → configurada; MELI: nada → falta.
+    # R2: solo ACCOUNT_ID → parcial; SMTP: parcial (faltan otras); MELI: nada
+    # → falta. Meta no tiene tarjeta en Configuración desde 2026-09-28: la
+    # conexión vive solo en Experimentos (_meta_conectar.html).
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
     assert "Puesta a punto" in cfg
     esperado = {"anthropic": "configurada", "fal": "configurada", "higgsfield": "configurada",
-                "r2": "parcial", "meta": "falta", "smtp": "parcial", "meli": "falta"}
+                "r2": "parcial", "smtp": "parcial", "meli": "falta"}
     for sid, estado in esperado.items():
         t = _tarjeta(cfg, sid)
         assert _badge(t) == estado, (sid, _badge(t))
         assert 'target="_blank" rel="noopener"' in t
         assert "Cómo conseguirla" in t
         assert "no se escriben desde aquí" in t
-    assert cfg.count('class="llave-tarjeta') == 11
-    # Orden de las tarjetas: las del servidor en «Puesta a punto»; la de Meta,
-    # desde 2026-09-26, a todo el ancho en «Conexiones» (después).
+    assert cfg.count('class="llave-tarjeta') == 10
+    # Orden de las tarjetas: todas las del servidor en «Puesta a punto»;
+    # ninguna en «Conexiones».
     pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli")]
     assert pos == sorted(pos)
     assert cfg.index('id="config-ap-puesta"') < pos[0] and pos[-1] < cfg.index('id="config-ap-conexiones"')
-    assert cfg.index('id="config-ap-conexiones"') < cfg.index('id="llave-meta"')
+    assert 'id="llave-meta"' not in cfg
     # Parcial dice qué falta, y las variables van en <code>.
     assert "<code>R2_SECRET_ACCESS_KEY</code>" in _tarjeta(cfg, "r2") and "Faltan:" in _tarjeta(cfg, "r2")
     assert '<code class="llave-var">ANTHROPIC_API_KEY</code>' in _tarjeta(cfg, "anthropic")
     # NUNCA un valor de llave en el HTML (ni en la tarjeta ni en otra parte).
     for valor in VALORES_FALSOS.values():
         assert valor not in html, valor
-    # Meta: la tarjeta también vive en Configuración (y sigue en Experimentos). Sin forma
-    # elegida ni conexión se ve la elección (spec 2026-09-20 §1).
-    assert "¿Cómo quieres conectar Meta?" in cfg
+    # Meta: la elección de cómo conectar (spec 2026-09-20 §1) se ve en
+    # Experimentos y ya no en Configuración (2026-09-28).
+    fin = cfg.find('<section id="tab-', 10)
+    assert "¿Cómo quieres conectar Meta?" not in (cfg[:fin] if fin > 0 else cfg)
     exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
     assert "¿Cómo quieres conectar Meta?" in exp
 
 
 def test_render_todo_falta(app):
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli"):
+    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli"):
         assert _badge(_tarjeta(cfg, sid)) == "falta", sid
     assert "configurada</span>" not in cfg.split('id="config-tienda"')[0]
 
@@ -146,7 +148,7 @@ def test_render_todo_configurado(app, monkeypatch):
     monkeypatch.setattr(app["dashboard"].meta_conexion, "app_publica", lambda c: {"app_id": "1", "login_config_id": "2"})
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli"):
+    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli"):
         assert _badge(_tarjeta(cfg, sid)) == "configurada", sid
     assert "Faltan:" not in cfg.split('id="config-tienda"')[0]
     for v in TODAS:
@@ -538,44 +540,37 @@ def _cliente_rol_cliente(dashboard):
 
 
 def _puesta_a_punto(cfg):
-    """Lo que el cliente ve de las llaves: desde 2026-09-26 (Configuración en
-    apartados) la tarjeta de Meta vive en «Conexiones» y el cliente no tiene
-    «Puesta a punto»; se mira desde el apartado hasta «Conectar tu tienda»."""
+    """Lo que el cliente ve arriba de «Conectar tu tienda» en «Conexiones»: el
+    cliente no tiene «Puesta a punto» y, desde 2026-09-28, tampoco hay tarjeta
+    de Meta ahí (la conexión vive solo en Experimentos, _meta_conectar.html)."""
     ini = cfg.index('id="config-ap-conexiones"')
     return cfg[ini:cfg.index('id="config-tienda"', ini)]
 
 
-def test_cliente_solo_ve_en_puesta_a_punto_lo_que_le_toca(app, monkeypatch):
+def test_cliente_no_ve_llaves_ni_variables_del_servidor(app, monkeypatch):
     for var, valor in VALORES_FALSOS.items():
         monkeypatch.setenv(var, valor)
     html = _cliente_rol_cliente(app["dashboard"]).get("/cliente/acme").data.decode()
-    puesta = _puesta_a_punto(_config(html))
-    assert puesta.count('class="llave-tarjeta') == 1
-    assert 'id="llave-meta"' in puesta
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify"):
-        assert f'id="llave-{sid}"' not in puesta, sid
+    cfg = _config(html)
+    assert 'class="llave-tarjeta' not in cfg and 'id="config-ap-puesta"' not in cfg
+    assert 'id="llave-meta"' not in html
     for valor in VALORES_FALSOS.values():
         assert valor not in html, valor
     # Ni nombres de variables, ni el .env, ni los pasos para conseguir llaves:
-    # eso es del administrador. Se mira la tarjeta hasta el bloque de conexión
-    # (el bloque de Meta tiene su propia guía).
-    tarjeta = _tarjeta(puesta, "meta").split('class="llave-meta-conexion"')[0]
-    intro = puesta.split('class="llaves-tarjetas"')[0]
-    for trozo in (tarjeta, intro):
-        for texto in ("ANTHROPIC_API_KEY", "SMTP_HOST", ".env", "no se escriben desde aquí", "Cómo conseguirla"):
-            assert texto not in trozo, texto
-    # Lo que sí le toca: elegir cómo conectar Meta y poner el método de pago de
-    # su cuenta publicitaria; y saber que el resto lo pone Creatv.
-    assert "¿Cómo quieres conectar Meta?" in puesta
-    assert "business.facebook.com › Facturación" in tarjeta
-    assert "los pone Creatv" in intro
+    # eso es del administrador.
+    conexiones = _puesta_a_punto(cfg)
+    for texto in ("ANTHROPIC_API_KEY", "SMTP_HOST", ".env", "no se escriben desde aquí", "Cómo conseguirla"):
+        assert texto not in conexiones, texto
+    # Lo que sí le toca: elegir cómo conectar Meta, en Experimentos.
+    exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
+    assert "¿Cómo quieres conectar Meta?" in exp
 
 
 def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
-    # Desde 2026-09-26 las 11 tarjetas se reparten: 10 en «Puesta a punto»
-    # (solo admin) y la de Meta a todo el ancho en «Conexiones».
+    # Desde 2026-09-28 las 10 tarjetas del servidor van en «Puesta a punto»
+    # (solo admin); la de Meta ya no se pinta: la conexión vive en Experimentos.
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
     puesta = cfg[cfg.index('id="config-ap-puesta"'):cfg.index('id="config-ap-conexiones"')]
     assert puesta.count('class="llave-tarjeta') == 10
-    assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 1
+    assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 0
     assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")

@@ -1,7 +1,7 @@
 {# Tarjeta de una llave/servicio de Configuración (dashboard._estado_llaves).
    Se incluye dentro de un `{% for l in llaves … %}` con `l` y `es_admin` en el
-   contexto: en «Puesta a punto» (admin, todas menos Meta) y en «Conexiones»
-   (solo Meta, a todo el ancho, con la elección de cómo conectarla). #}
+   contexto, solo en «Puesta a punto» (admin, todas menos Meta: la conexión con
+   Meta vive en Experimentos, _meta_conectar.html). #}
 <article class="llave-tarjeta llave-{{ l.estado }}" id="llave-{{ l.id }}">
   <header class="llave-cabecera">
     <h3>{{ l.nombre }}</h3>
@@ -34,10 +34,5 @@
       {% for paso in l.pasos %}<li>{{ paso }}</li>{% endfor %}
     </ol>
   </details>
-  {% endif %}
-  {% if l.id == "meta" %}
-  <div class="llave-meta-conexion">
-    {% include "_meta_conectar.html" %}
-  </div>
   {% endif %}
 </article>
