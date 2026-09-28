@@ -47,11 +47,13 @@
             <textarea name="prompt_a" rows="6" style="width:100%;font-size:.8rem;font-family:monospace;padding:.4rem;">{{ item.prompt_relleno }}</textarea>
             <div style="display:flex;gap:.4rem;margin-top:.3rem;">
               <button type="submit" class="btn-guardar btn-sm">{{ _('💾 Guardar cambios') }}</button>
-              <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe el prompt. ¿Seguir?')|tojson }});'>
-                <button type="submit" class="btn-sm">{{ _('🔄 Rearmar con IA') }}</button>
-              </form>
+              {# «Rearmar» tiene su propio <form> vacío afuera (atributo form=): un
+                 <form> anidado lo descarta el navegador y este botón terminaba
+                 enviando «Guardar cambios» (arreglo 2026-09-28). #}
+              <button type="submit" class="btn-sm" form="rearmar-{{ item.id }}">{{ _('🔄 Rearmar con IA') }}</button>
             </div>
           </form>
+          <form method="post" id="rearmar-{{ item.id }}" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe el prompt. ¿Seguir?')|tojson }});'></form>
         </div>
         {% elif item.trabajo_revision %}
         {# Doctrina, bloque 3: la barra de «Revisar con la doctrina» va en la tarjeta. #}

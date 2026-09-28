@@ -27,6 +27,8 @@ def test_tts_payload_y_costo(monkeypatch):
         "similarity_boost": 0.75,
     }
     assert llamadas[0]["timeout"] == 180
+    # Precio de fal verificado el 2026-09-28: US$ 0,10 por 1.000 caracteres
+    # (fal.ai/models/fal-ai/elevenlabs/tts/multilingual-v2/llms.txt).
     assert fal_audio.COSTO_USD_POR_CARACTER == 0.0001
     assert resultado == {"url": "https://fal/x.mp3", "costo_usd": round(len("Hola mundo") * 0.0001, 4)}
 

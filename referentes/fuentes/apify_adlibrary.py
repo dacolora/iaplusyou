@@ -22,16 +22,23 @@ import os
 from datetime import date
 from urllib.parse import quote
 
+from flask_babel import gettext, ngettext
+
 import providers.apify as apify_api
+from idiomas import N_
 from nicho.fuentes.base import ErrorFuente as _ErrorApify
 from referentes.fuentes import apify_actores
 from referentes.fuentes.base import ErrorFuente
+
+# Etapas de progreso: se guardan en español y se traducen al mostrarlas.
+ETAPA_BUSCAR = N_("Buscando en Apify")
+ETAPA_LEER = N_("Leyendo anuncios")
 
 
 def _token():
     t = (os.environ.get("APIFY_TOKEN") or "").strip()
     if not t:
-        raise ErrorFuente("Apify no está configurado (falta APIFY_TOKEN).")
+        raise ErrorFuente(gettext("Apify no está configurado (falta APIFY_TOKEN)."))
     return t
 
 
@@ -224,11 +231,11 @@ def traer(consulta, tope, avanzar, cursor=None):
     url = _url_ad_library(consulta)
     entrada = {"startUrls": [{"url": url}], "resultsLimit": tope}
     estimado = apify_actores.estimar(tope)
-    avanzar(etapa="Buscando en Apify", detalle="apify/facebook-ads-scraper")
+    avanzar(etapa=ETAPA_BUSCAR, detalle="apify/facebook-ads-scraper")
     try:
         run_id, dataset_id, estado = apify_api.arrancar(
             sesion, token, apify_actores.ACTOR, entrada, tope, estimado["usd_fuente"])
-        estado = apify_api.sondear(sesion, token, run_id, estado, "Leyendo anuncios", avanzar)
+        estado = apify_api.sondear(sesion, token, run_id, estado, ETAPA_LEER, avanzar)
         crudos, motivo = apify_api.leer_dataset(sesion, token, dataset_id, tope)
     except _ErrorApify as e:
         raise ErrorFuente(e.usuario) from e
@@ -243,16 +250,18 @@ def traer(consulta, tope, avanzar, cursor=None):
         # error total.
         contados = apify_api.contar_dataset(sesion, token, dataset_id)
         costo_real = round((contados if contados is not None else tope) * apify_actores.USD_POR_RESULTADO, 4)
-        raise ErrorFuente(f"Apify no entregó los resultados ({motivo}); corrida {run_id}, "
-                          f"dataset {dataset_id}: revísalos en console.apify.com.", costo_real=costo_real)
+        raise ErrorFuente(gettext("Apify no entregó los resultados (%(motivo)s); corrida %(corrida)s, "
+                                  "dataset %(dataset)s: revísalos en console.apify.com.",
+                                  motivo=motivo, corrida=run_id, dataset=dataset_id), costo_real=costo_real)
     if not crudos:
         if estado != "SUCCEEDED":
-            raise ErrorFuente(f"Apify {apify_api.frase_estado(estado)} sin resultados (corrida {run_id}); "
-                              "revísala en console.apify.com.")
-        avanzar(etapa="Buscando en Apify", detalle="0 anuncios")
+            raise ErrorFuente(gettext("Apify %(estado)s sin resultados (corrida %(corrida)s); "
+                                      "revísala en console.apify.com.",
+                                      estado=apify_api.frase_estado(estado), corrida=run_id))
+        avanzar(etapa=ETAPA_BUSCAR, detalle=ngettext("%(num)d anuncio", "%(num)d anuncios", 0))
         yield [], None, {}
         return
     costo_real = round(len(crudos) * apify_actores.USD_POR_RESULTADO, 4)
     pagina = [_normalizar(it) for it in crudos if isinstance(it, dict)]
-    avanzar(etapa="Buscando en Apify", detalle=f"{len(crudos)} anuncios")
+    avanzar(etapa=ETAPA_BUSCAR, detalle=ngettext("%(num)d anuncio", "%(num)d anuncios", len(crudos)))
     yield pagina, None, {"costo_real": costo_real}

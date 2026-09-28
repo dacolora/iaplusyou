@@ -4,10 +4,9 @@
    Logos → Marca → informe (admin). Las reglas del decisor ya no están aquí:
    viven en Experimentos › «Reglas del motor» (ruta cfg_reglas). #}
 
-{# ---- Puesta a punto: una tarjeta por servicio externo. El admin ve todas
-   (llaves del .env del servidor); un cliente recibe solo las tarjetas por
-   proyecto (dashboard._llaves_visibles) y de cada una solo su parte:
-   sin variables, sin nota del .env y sin pasos para conseguir llaves. ---- #}
+{# ---- Puesta a punto: una tarjeta por servicio externo, solo para el admin
+   (llaves del .env del servidor; dashboard._llaves_visibles le da [] a un
+   cliente). La conexión con Meta no es una llave: vive en Experimentos. ---- #}
 {% set es_admin = session.get('rol') == 'admin' %}
 <div class="panel-cabecera">
   <div>
@@ -62,22 +61,12 @@
   nunca su valor.') }}
 </p>
 <div class="llaves-tarjetas">
-  {% for l in llaves if l.id != "meta" %}{% include "_llave_tarjeta.html" %}{% endfor %}
+  {% for l in llaves %}{% include "_llave_tarjeta.html" %}{% endfor %}
 </div>
 </section>
 {% endif %}
 
 <section class="config-apartado" id="config-ap-conexiones" data-apartado="conexiones">
-<h2 id="config-meta">Meta</h2>
-<p class="vacio" style="padding-top:0;">
-  {{ _('Para lanzar anuncios y publicar en tu Página de Facebook e Instagram. Los servicios de
-  generación (guiones, imagen y video, voz y música, almacenamiento) y el correo de la
-  plataforma los pone Creatv en el servidor: ahí no tienes que hacer nada.') }}
-</p>
-<div class="llaves-tarjetas llaves-tarjetas-ancha">
-  {% for l in llaves if l.id == "meta" %}{% include "_llave_tarjeta.html" %}{% endfor %}
-</div>
-
 {# ---- Bloque 5: Conectar tu tienda ---- #}
 <h2 id="config-tienda">{{ _('Conectar tu tienda') }}</h2>
 <p class="vacio" style="padding-top:0;">
@@ -261,7 +250,7 @@
   <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">{{ _('Comprobar Pixel') }}</button></form>
 </div>
 {% else %}
-<p class="vacio"><span class="tag-estado">{{ _('sin conexión') }}</span> {{ _('Conecta Meta arriba, en la tarjeta <a href="#llave-meta">Meta (anuncios)</a> de Puesta a punto (o en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a>), para comprobar el Pixel.') }}</p>
+<p class="vacio"><span class="tag-estado">{{ _('sin conexión') }}</span> {{ _('Conecta Meta en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a> para comprobar el Pixel.') }}</p>
 {% endif %}
 <details class="pixel-ayuda">
   <summary>{{ _('Cómo instalar el Pixel según tu plataforma') }}</summary>
@@ -273,67 +262,6 @@
   </ul>
 </details>
 
-{# ---- Triple Whale (atribución alternativa) ---- #}
-<h2 id="config-triple-whale" style="margin-top:2rem;">{{ _('Triple Whale (atribución)') }}</h2>
-<p class="vacio" style="padding-top:0;">
-  {{ _('Conecta tu cuenta de Triple Whale para traer métricas de anuncios por canal y
-  modelo de atribución. Los experimentos pueden usar estas métricas en lugar de
-  los datos de Meta Pixel o la tienda para decidir ganadores y perdedores.') }}
-</p>
-{% if not cifrado_ok %}
-<p class="tag-error">{{ _('Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de Triple Whale. Ponla y reinicia para habilitar este formulario.') }}</p>
-{% endif %}
-
-{% if triple_whale_conectado %}
-<div class="pixel-estado pixel-estado-ok">
-  <span class="tag-estado tag-en-uso">{{ _('conectado') }}</span>
-  <strong>{{ triple_whale_conectado.dominio_tienda }}</strong>
-  <small class="vacio" style="padding:0;display:block;margin-top:.3rem;">
-    {{ _('Modelo:') }} {{ triple_whale_conectado.modelo_atribucion }}<br>
-    {{ _('Ventana:') }} {{ triple_whale_conectado.ventana_atribucion }}
-  </small>
-  <div style="margin-top:.5rem;">
-    <form method="post" action="{{ url_for('cfg_triple_whale_probar', cliente=cliente) }}" class="inline"><button class="btn-guardar btn-xs">{{ _('Probar conexión') }}</button></form>
-    <form method="post" action="{{ url_for('cfg_triple_whale_desconectar', cliente=cliente) }}" class="inline" onsubmit='return confirm({{ _('¿Desconectar Triple Whale? Se quita la atribución por este canal.')|tojson }});'><button class="btn-rechazar btn-xs">{{ _('Desconectar') }}</button></form>
-  </div>
-</div>
-{% else %}
-<details class="swap-card">
-  <summary class="swap-card-resumen">+ {{ _('Conectar Triple Whale') }}</summary>
-  <form method="post" action="{{ url_for('cfg_triple_whale_conectar', cliente=cliente) }}" class="form-nueva-idea" id="form-triple-whale">
-    <label class="campo-label">{{ _('Llave API de Triple Whale') }}</label>
-    <input type="password" name="llave_api" placeholder="tw_..." autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}>
-    <label class="campo-label" style="margin-top:.6rem;">{{ _('Dominio de la tienda (Shopify)') }}</label>
-    <input type="text" name="dominio_tienda" placeholder="mitienda.myshopify.com" {% if not cifrado_ok %}disabled{% endif %}>
-    <label class="campo-label" style="margin-top:.6rem;">{{ _('Moneda') }}</label>
-    <select name="moneda" {% if not cifrado_ok %}disabled{% endif %}>
-      <option value="USD" selected>USD</option>
-      <option value="EUR">EUR</option>
-      <option value="GBP">GBP</option>
-      <option value="AUD">AUD</option>
-      <option value="CAD">CAD</option>
-      <option value="MXN">MXN</option>
-      <option value="COP">COP</option>
-    </select>
-    <label class="campo-label" style="margin-top:.6rem;">{{ _('Modelo de atribución') }}</label>
-    <select name="modelo_atribucion" {% if not cifrado_ok %}disabled{% endif %}>
-      <option value="Triple Attribution" selected>Triple Attribution</option>
-      <option value="First Touch">First Touch</option>
-      <option value="Last Touch">Last Touch</option>
-    </select>
-    <label class="campo-label" style="margin-top:.6rem;">{{ _('Ventana de atribución') }}</label>
-    <select name="ventana_atribucion" {% if not cifrado_ok %}disabled{% endif %}>
-      <option value="lifetime" selected>Lifetime</option>
-      <option value="7">{{ _('7 días') }}</option>
-      <option value="30">{{ _('30 días') }}</option>
-    </select>
-    <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">
-      {{ _('Tu llave API se guarda cifrada. Obtenla en <a href="https://app.triplewhale.com/settings/api-keys" target="_blank" rel="noopener">Triple Whale › Settings › API Keys</a>.') }}
-    </p>
-    <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Conectar Triple Whale') }}</button>
-  </form>
-</details>
-{% endif %}
 
 {# ---- Bloque 6: Canales orgánicos ---- #}
 <h2 id="config-canales-organicos" style="margin-top:2rem;">{{ _('Canales orgánicos') }}</h2>
@@ -355,7 +283,7 @@
       <summary>{{ _('Cómo activarlo') }}</summary>
       <ol>
         {% if c.plataforma == "facebook" %}
-        <li>{{ _('Conecta Meta en <a href="#llave-meta">Puesta a punto › Meta (anuncios)</a> con una cuenta que administre la <strong>Página</strong> donde se publica.') }}</li>
+        <li>{{ _('Conecta Meta en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a> con una cuenta que administre la <strong>Página</strong> donde se publica.') }}</li>
         <li>{{ _('Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro.') }}</li>
         {% elif c.plataforma == "instagram" %}
         <li>{{ _('Primero Facebook (arriba): Instagram publica a través de la Página.') }}</li>
@@ -785,7 +713,7 @@
   // Configuración en apartados (spec 2026-09-26): uno a la vez; se recuerda
   // el último por navegador. window.irAConfig(id) abre el apartado que
   // contiene `id` y lo trae a la vista («Este mes» de la barra lateral,
-  // enlaces #llave-meta, #config-tienda…).
+  // enlaces #config-tienda, #config-pixel…).
   (function () {
     var raiz = document.getElementById('tab-settings');
     if (!raiz) return;

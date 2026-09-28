@@ -12,10 +12,12 @@ import json
 import math
 
 import anthropic
+from flask_babel import gettext
 
 import cola
 import gastos
 import trabajos
+from idiomas import N_
 from nicho import datos, investigacion as inv
 from nicho.fuentes import plataformas
 from tareas import al_interrumpir, ref_sufijo, registrar
@@ -94,16 +96,16 @@ def ejecutar_consultas(tarea):
     
     est = datos.estudio(cliente, eid)
     if not est:
-        return "El estudio ya no existe."
+        return gettext("El estudio ya no existe.")
     
     tema = est.get("tema", "").strip()
     pais = est.get("pais", "CO")
     if not tema:
         # Detener la cadena: sin tema no hay búsquedas
         datos.actualizar_investigacion(cliente, eid, lambda inv: {
-            **inv, "estado": "detenida", "detenida_por": "sin tema"
+            **inv, "estado": "detenida", "detenida_por": N_("sin tema")
         })
-        return "El estudio no tiene tema."
+        return gettext("El estudio no tiene tema.")
     
     job_id = tarea.get("job_id") or f"nicho:{cliente}:{eid}:inv:consultas"
 
@@ -133,7 +135,7 @@ Responde en JSON: {{"consultas": ["...", "..."]}}"""
         consultas = result.get("consultas", [])
         
         if not consultas or len(consultas) == 0:
-            raise ValueError("Claude no devolvió consultas")
+            raise ValueError(gettext("Claude no devolvió consultas"))
         
         # Guardar en investigacion.consultas
         datos.actualizar_investigacion(cliente, eid, lambda inv: {
@@ -153,10 +155,10 @@ Responde en JSON: {{"consultas": ["...", "..."]}}"""
                                proveedor="anthropic",
                                extra={"tokens_entrada": tokens_entrada, "tokens_salida": tokens_salida})
         
-        reportar("Generadas {} consultas: {}".format(len(consultas), ", ".join(consultas)))
+        reportar(gettext("Generadas %(n)s consultas: %(consultas)s", n=len(consultas), consultas=", ".join(consultas)))
 
     except json.JSONDecodeError:
-        raise ValueError(f"Claude no respondió JSON válido")
+        raise ValueError(gettext("Claude no respondió JSON válido"))
     except Exception as e:
         datos.actualizar_investigacion(cliente, eid, lambda inv: {
             **inv, "ultimo_error": cola.recortar(str(e), 300)
@@ -168,7 +170,7 @@ Responde en JSON: {{"consultas": ["...", "..."]}}"""
     # nunca pasaba de "consultas").
     avanzar(cliente, eid)
 
-    return f"Generadas {len(consultas)} consultas: {', '.join(consultas)}"
+    return gettext("Generadas %(n)s consultas: %(consultas)s", n=len(consultas), consultas=", ".join(consultas))
 
 
 @al_interrumpir("nicho_inv_consultas")
@@ -186,7 +188,7 @@ def ejecutar_buscar(tarea):
     
     est = datos.estudio(cliente, eid)
     if not est:
-        return "El estudio ya no existe."
+        return gettext("El estudio ya no existe.")
     
     job_id = tarea.get("job_id") or f"nicho:{cliente}:{eid}:inv:buscar:{plat}"
 
@@ -196,7 +198,7 @@ def ejecutar_buscar(tarea):
     # La búsqueda real en Apify todavía no está implementada (spec §9, Parte 3):
     # se detiene la cadena con un motivo claro en vez de fingir que corrió y
     # dejar el estudio "en curso" para siempre sin ningún aviso.
-    mensaje = f"Búsqueda automática en {plat} todavía no está implementada."
+    mensaje = gettext("Búsqueda automática en %(plataforma)s todavía no está implementada.", plataforma=plat)
     datos.actualizar_investigacion(cliente, eid, lambda inv: {
         **inv, "estado": "detenida", "detenida_por": mensaje
     })
@@ -219,7 +221,7 @@ def ejecutar_seleccionar(tarea):
     
     est = datos.estudio(cliente, eid)
     if not est:
-        return "El estudio ya no existe."
+        return gettext("El estudio ya no existe.")
     
     job_id = tarea.get("job_id") or f"nicho:{cliente}:{eid}:inv:seleccionar"
 
@@ -228,7 +230,7 @@ def ejecutar_seleccionar(tarea):
 
     # La selección real con Claude todavía no está implementada (spec §9, Parte 3):
     # mismo motivo que ejecutar_buscar — detener con un aviso claro, no fingir.
-    mensaje = "La selección automática de productos todavía no está implementada."
+    mensaje = gettext("La selección automática de productos todavía no está implementada.")
     datos.actualizar_investigacion(cliente, eid, lambda inv: {
         **inv, "estado": "detenida", "detenida_por": mensaje
     })

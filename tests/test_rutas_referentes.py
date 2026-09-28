@@ -734,6 +734,12 @@ def test_barridos_muestra_progreso_y_oculta_botones_si_hay_trabajo(app, monkeypa
     assert f'data-poll-job="referentes:barrer:{bid}"' in html
     assert "Clasificar pendientes" not in html
     assert "Reintentar imágenes" not in html
+    # La barra se veía como un punto (celda sin ancho) y su texto («61/100») iba
+    # DENTRO de la barra (overflow hidden): ahora tiene ancho mínimo y el texto
+    # va debajo, como hermano (iniciarPolling lo busca ahí).
+    assert ('<div class="barrido-progreso"><div class="barra-progreso" id="trabajo-referentes:barrer:%d" '
+            'data-poll-job="referentes:barrer:%d"><div class="barra-progreso-fill"></div></div>'
+            '<span class="progreso-texto"></span></div>') % (bid, bid) in html
 
 
 def test_barridos_muestra_botones_si_no_hay_trabajo_en_curso(app, monkeypatch):
@@ -872,7 +878,7 @@ def test_barridos_muestran_fecha_legible(app, monkeypatch):
     monkeypatch.setattr(db, "ahora", lambda: "2026-09-25T15:04:09")
     datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"}, 50)
     html = _barridos_html(app)
-    assert "25 sep · 15:04" in html
+    assert "25 sept · 15:04" in html
     assert "2026-09-25T15:04" not in html
 
 
@@ -1114,10 +1120,29 @@ def test_recrear_adaptar_descarta_una_sofisticacion_invalida_del_catalogo(app, m
     tiendas.anotar_extra("acme", fila, sofisticacion=9)
     visto = {}
 
-    def falso_adaptar(referente, familia, producto, titular_actual, guia=""):
+    def falso_adaptar(referente, familia, producto, titular_actual, guia="", idioma="es"):
         visto["sofisticacion"] = producto.get("sofisticacion")
         return {"titular": "T", "prompt": "P", "angulo": {}}, 10, 5
     monkeypatch.setattr(recrear, "adaptar", falso_adaptar)
     r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
     assert r.status_code == 200
     assert visto["sofisticacion"] is None
+
+
+def test_filtros_plegables_en_el_celular(app):
+    """Revisión de celular 2026-09-28: las pastillas de etapa y consciencia más los
+    cuatro selectores y la búsqueda ocupaban toda la primera pantalla antes del
+    primer anuncio. En el celular van detrás de «Filtros» (con cuántos hay puestos);
+    en escritorio el envoltorio es `display: contents` y todo queda como antes."""
+    _sembrar()
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert 'id="ref-filtros-boton"' in html and 'aria-controls="ref-filtros"' in html
+    assert 'aria-expanded="false"' in html
+    i, j = html.index('id="ref-filtros"'), html.index('id="ref-grid"')
+    bloque = html[i:j]
+    assert 'data-filtro="etapa"' in bloque and 'data-filtro="consciencia"' in bloque
+    assert 'data-filtro="marca"' in bloque and 'data-filtro="q"' in bloque
+    assert "function contarFiltros()" in html
+    css = open("static/style.css", encoding="utf-8").read()
+    assert ".ref-filtros { display: contents; }" in css
+    assert ".ref-filtros:not(.abierto) { display: none; }" in css

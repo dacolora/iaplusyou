@@ -16,7 +16,12 @@ Una corrida se paga aunque termine mal, así que después de `arrancar()` nada
 se abandona: se sondea hasta un estado terminal (o hasta que vence el reloj
 local) y el dataset se lee igual, tolerando fallos pasajeros — perder la
 lectura de un dataset ya pagado sería peor que reintentarla.
+
+Los mensajes se muestran a la persona (nunca van a Claude): pasan por
+`gettext` y salen en el idioma del contexto (el del proyecto en el worker).
 """
+from flask_babel import gettext
+
 from nicho.fuentes import _http
 from nicho.fuentes.base import ErrorFuente
 
@@ -44,8 +49,8 @@ def frase_estado(estado):
     """«terminó en FAILED» / «no terminó en 20 min»: el sujeto de los mensajes
     del final, con el estado terminal real o el reloj local vencido."""
     if estado == ESTADO_SIN_TERMINAR:
-        return f"no terminó en {int(MAX_ESPERA_S / 60)} min"
-    return f"terminó en {estado}"
+        return gettext("no terminó en %(minutos)s min", minutos=int(MAX_ESPERA_S / 60))
+    return gettext("terminó en %(estado)s", estado=estado)
 
 
 def probar_token(sesion, token):
@@ -56,8 +61,8 @@ def probar_token(sesion, token):
     except ErrorFuente as e:
         return {"ok": False, "detalle": e.usuario}
     if r.status_code != 200:
-        return {"ok": False, "detalle": f"Apify no aceptó el token ({r.status_code})."}
-    return {"ok": True, "detalle": "Apify aceptó el token."}
+        return {"ok": False, "detalle": gettext("Apify no aceptó el token (%(codigo)s).", codigo=r.status_code)}
+    return {"ok": True, "detalle": gettext("Apify aceptó el token.")}
 
 
 def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_ids=None):
@@ -74,19 +79,21 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
                     params={"timeout": MAX_ESPERA_S, "maxItems": max_items, "maxTotalChargeUsd": max_total_charge_usd},
                     json=entrada)
     if r.status_code in (401, 403):
-        raise ErrorFuente("Apify no aceptó el token (APIFY_TOKEN).")
+        raise ErrorFuente(gettext("Apify no aceptó el token (APIFY_TOKEN)."))
     if r.status_code == 400:
-        raise ErrorFuente(f"Apify rechazó la entrada del actor: {_mensaje_apify(r) or 'entrada inválida'}")
+        motivo = _mensaje_apify(r) or gettext("entrada inválida")
+        raise ErrorFuente(gettext("Apify rechazó la entrada del actor: %(motivo)s", motivo=motivo))
     if r.status_code not in (200, 201):
-        raise ErrorFuente(f"Apify no arrancó la corrida ({r.status_code}).")
+        raise ErrorFuente(gettext("Apify no arrancó la corrida (%(codigo)s).", codigo=r.status_code))
     corrida = (r.json() or {}).get("data") or {}
     run_id, dataset_id = corrida.get("id") or None, corrida.get("defaultDatasetId") or None
     if on_ids:
         on_ids(run_id, dataset_id)
     if not run_id or not dataset_id:
         # Si el id sí vino, la corrida pudo arrancar (y cobrar) igual.
-        raise ErrorFuente(f"Apify no devolvió los ids de la corrida (corrida {run_id or '?'}, "
-                          f"dataset {dataset_id or '?'}); revísala en console.apify.com.")
+        raise ErrorFuente(gettext("Apify no devolvió los ids de la corrida (corrida %(corrida)s, "
+                                  "dataset %(dataset)s); revísala en console.apify.com.",
+                                  corrida=run_id or "?", dataset=dataset_id or "?"))
     return run_id, dataset_id, corrida.get("status") or "READY"
 
 
@@ -109,16 +116,17 @@ def sondear(sesion, token, run_id, estado, etapa_leyendo, avanzar=None):
             r = _http.pedir(sesion, "GET", f"{URL_API}/actor-runs/{run_id}", "Apify", headers=cabeceras(token))
             malo = "" if r.status_code == 200 else f"HTTP {r.status_code}"
         except ErrorFuente as e:                            # sin URL ni cabeceras: nunca lleva el token
-            r, malo = None, e.usuario or "sin respuesta"
+            r, malo = None, e.usuario or gettext("sin respuesta")
         if malo:
             fallos, ultimo = fallos + 1, malo
             if fallos >= MAX_FALLOS_SONDEO:
-                raise ErrorFuente(f"Apify no respondió el estado {MAX_FALLOS_SONDEO} veces seguidas ({ultimo}); "
-                                  f"corrida {run_id}: revísala en console.apify.com.")
+                raise ErrorFuente(gettext("Apify no respondió el estado %(n)s veces seguidas (%(ultimo)s); "
+                                          "corrida %(corrida)s: revísala en console.apify.com.",
+                                          n=MAX_FALLOS_SONDEO, ultimo=ultimo, corrida=run_id))
             continue
         fallos = 0
         estado = ((r.json() or {}).get("data") or {}).get("status") or estado
-        avanzar(etapa_leyendo, f"Apify: {estado} · corrida {run_id}")
+        avanzar(etapa_leyendo, gettext("Apify: %(estado)s · corrida %(corrida)s", estado=estado, corrida=run_id))
     return estado
 
 
@@ -142,7 +150,7 @@ def leer_dataset(sesion, token, dataset_id, limite):
         try:
             datos = r.json()
         except ValueError:                      # 200 con cuerpo ilegible: cuenta como intento fallido
-            motivo = "respuesta ilegible"
+            motivo = gettext("respuesta ilegible")
             continue
         return (datos if isinstance(datos, list) else []), ""
     return None, motivo

@@ -1,6 +1,6 @@
 {# Formulario «Traer referentes» (referentes.traer_form / referentes.traer_post),
    cargado como fragmento en el mismo <dialog> que la ficha. Contexto:
-   cliente, fuentes_tipos, fuentes_nombres, fuente, consulta, tope, precio
+   cliente, fuentes_tipos, fuentes_nombres (N_, se muestran con |traducir), fuente, consulta, tope, precio
    ({fuente:{usd_fuente,llamadas,detalle}, clasificacion:{usd,texto}, total_usd}|None),
    llaves_faltantes (de la fuente elegida), fuente_llaves_faltantes ({tipo: [...]}).
 
@@ -29,25 +29,25 @@
 {% set fuente_lista = fuentes_tipos and not fuente_llaves_faltantes.get(fuente) %}
 <div class="modal-form ref-traer">
   <header class="modal-form-cab">
-    <h3>Traer referentes</h3>
-    <p>Busca anuncios reales en la biblioteca de anuncios de Meta. Creatv guarda cada imagen y la clasifica por etapa, consciencia y dolor para que la uses como referencia.</p>
+    <h3>{{ _('Traer referentes') }}</h3>
+    <p>{{ _('Busca anuncios reales en la biblioteca de anuncios de Meta. Creatv guarda cada imagen y la clasifica por etapa, consciencia y dolor para que la uses como referencia.') }}</p>
   </header>
 
   <form method="post" action="{{ url_for('referentes.traer_post', cliente=cliente) }}" id="form-traer" data-precio="{{ url_for('referentes.traer_form', cliente=cliente) }}">
     {% if not fuentes_tipos %}
-    <p class="modal-form-aviso">Todavía no hay ninguna fuente de anuncios configurada.</p>
+    <p class="modal-form-aviso">{{ _('Todavía no hay ninguna fuente de anuncios configurada.') }}</p>
     {% elif fuentes_tipos | length == 1 %}
     {% set t = fuentes_tipos[0] %}
     <input type="radio" name="fuente" value="{{ t }}" checked hidden>
-    <p class="ref-traer-fuente">Fuente: <strong>{{ fuentes_nombres.get(t, t) }}</strong></p>
+    <p class="ref-traer-fuente">{{ _('Fuente:') }} <strong>{{ fuentes_nombres.get(t, t) | traducir }}</strong></p>
     {% else %}
     <div class="modal-form-seccion">
-      <span class="modal-form-titulo">Fuente</span>
-      <div class="segmentado" role="radiogroup" aria-label="Fuente">
+      <span class="modal-form-titulo">{{ _('Fuente') }}</span>
+      <div class="segmentado" role="radiogroup" aria-label="{{ _('Fuente') }}">
         {% for t in fuentes_tipos %}
         <label>
           <input type="radio" name="fuente" value="{{ t }}" {% if t == fuente %}checked{% endif %} {% if fuente_llaves_faltantes.get(t) %}disabled{% endif %}>
-          <span>{{ fuentes_nombres.get(t, t) }}</span>
+          <span>{{ fuentes_nombres.get(t, t) | traducir }}</span>
         </label>
         {% endfor %}
       </div>
@@ -57,38 +57,38 @@
     <div id="traer-aviso">
     {% if fuentes_tipos and fuente_llaves_faltantes.get(fuente) %}
     <p class="modal-form-aviso">
-      {{ fuentes_nombres.get(fuente, fuente) }} todavía no está configurada{% if es_admin %}: falta {{ fuente_llaves_faltantes[fuente] | join(', ') }} en el .env del servidor{% else %}. Avísale al equipo de Creatv para activarla{% endif %}.
+      {% if es_admin %}{{ _('%(fuente)s todavía no está configurada: falta %(llaves)s en el .env del servidor.', fuente=fuentes_nombres.get(fuente, fuente) | traducir, llaves=fuente_llaves_faltantes[fuente] | join(', ')) }}{% else %}{{ _('%(fuente)s todavía no está configurada. Avísale al equipo de Creatv para activarla.', fuente=fuentes_nombres.get(fuente, fuente) | traducir) }}{% endif %}
     </p>
     {% endif %}
     </div>
 
     <section class="modal-form-seccion">
-      <span class="modal-form-titulo"><b>1</b> ¿Qué quieres buscar?</span>
-      <div class="opcion-tarjetas" role="radiogroup" aria-label="Tipo de búsqueda">
+      <span class="modal-form-titulo"><b>1</b> {{ _('¿Qué quieres buscar?') }}</span>
+      <div class="opcion-tarjetas" role="radiogroup" aria-label="{{ _('Tipo de búsqueda') }}">
         <label class="opcion-tarjeta">
           <input type="radio" name="modo" value="palabra" {% if consulta.modo == 'palabra' %}checked{% endif %}>
-          <strong>Por palabra clave</strong>
-          <small>Anuncios que hablan de un tema o producto</small>
+          <strong>{{ _('Por palabra clave') }}</strong>
+          <small>{{ _('Anuncios que hablan de un tema o producto') }}</small>
         </label>
         <label class="opcion-tarjeta">
           <input type="radio" name="modo" value="marca" {% if consulta.modo == 'marca' %}checked{% endif %}>
-          <strong>De una marca</strong>
-          <small>Todos los anuncios de una página de Facebook</small>
+          <strong>{{ _('De una marca') }}</strong>
+          <small>{{ _('Todos los anuncios de una página de Facebook') }}</small>
         </label>
       </div>
 
       <div class="modal-form-fila" data-solo="palabra">
-        <label class="modal-form-campo crece">Palabra clave
-          <input type="text" name="palabra" value="{{ consulta.palabra or '' }}" maxlength="120" placeholder="Ej.: crema antiarrugas, sandalias, proteína">
+        <label class="modal-form-campo crece">{{ _('Palabra clave') }}
+          <input type="text" name="palabra" value="{{ consulta.palabra or '' }}" maxlength="120" placeholder="{{ _('Ej.: crema antiarrugas, sandalias, proteína') }}">
         </label>
       </div>
       {# Siempre en inglés (2026-09-27): referentes.traducir traduce la palabra al lanzar. #}
-      <p class="modal-form-ayuda" data-solo="palabra">Escríbela en español o en inglés: se traduce al inglés y se buscan anuncios en inglés, el mercado más grande (la traducción cuesta centavos).</p>
+      <p class="modal-form-ayuda" data-solo="palabra">{{ _('Escríbela en español o en inglés: se traduce al inglés y se buscan anuncios en inglés, el mercado más grande (la traducción cuesta centavos).') }}</p>
 
       <div class="modal-form-fila" data-solo-fuente="apify">
-        <label class="modal-form-campo">País de los anuncios
+        <label class="modal-form-campo">{{ _('País de los anuncios') }}
           <select name="pais">
-            {% set opciones_pais = [('ALL', 'Todos los países'), ('CO', 'Colombia'), ('MX', 'México'), ('AR', 'Argentina'), ('CL', 'Chile'), ('PE', 'Perú'), ('EC', 'Ecuador'), ('US', 'Estados Unidos'), ('ES', 'España')] %}
+            {% set opciones_pais = [('ALL', _('Todos los países')), ('CO', 'Colombia'), ('MX', _('México')), ('AR', 'Argentina'), ('CL', 'Chile'), ('PE', _('Perú')), ('EC', 'Ecuador'), ('US', _('Estados Unidos')), ('ES', _('España'))] %}
             {% set pais = consulta.pais or 'ALL' %}
             {% for cod, nombre in opciones_pais %}<option value="{{ cod }}" {% if cod == pais %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
             {% if pais not in opciones_pais | map('first') | list %}<option value="{{ pais }}" selected>{{ pais }}</option>{% endif %}
@@ -97,57 +97,57 @@
       </div>
 
       <div data-solo="marca">
-        <label class="modal-form-campo">Link de la marca en la biblioteca de anuncios
+        <label class="modal-form-campo">{{ _('Link de la marca en la biblioteca de anuncios') }}
           <input type="text" name="pagina_id" value="{{ consulta.pagina_id or '' }}" placeholder="https://www.facebook.com/ads/library/?view_all_page_id=…">
         </label>
-        <p class="modal-form-ayuda">Abre la marca en <a href="https://www.facebook.com/ads/library/" target="_blank" rel="noopener">facebook.com/ads/library</a>, copia el link de la barra del navegador y pégalo aquí. También sirve el id de la página.</p>
+        <p class="modal-form-ayuda">{{ _('Abre la marca en <a href="https://www.facebook.com/ads/library/" target="_blank" rel="noopener">facebook.com/ads/library</a>, copia el link de la barra del navegador y pégalo aquí. También sirve el id de la página.') }}</p>
       </div>
     </section>
 
     <section class="modal-form-seccion">
-      <span class="modal-form-titulo"><b>2</b> Filtros</span>
+      <span class="modal-form-titulo"><b>2</b> {{ _('Filtros') }}</span>
       <div class="modal-form-fila">
-        <div class="modal-form-campo">Formato
-          <div class="segmentado" role="radiogroup" aria-label="Formato">
-            <label><input type="radio" name="formato" value="imagen" {% if consulta.formato != 'video' %}checked{% endif %}><span>Imagen</span></label>
-            <label><input type="radio" name="formato" value="video" {% if consulta.formato == 'video' %}checked{% endif %}><span>Video</span></label>
+        <div class="modal-form-campo">{{ _('Formato') }}
+          <div class="segmentado" role="radiogroup" aria-label="{{ _('Formato') }}">
+            <label><input type="radio" name="formato" value="imagen" {% if consulta.formato != 'video' %}checked{% endif %}><span>{{ _('Imagen') }}</span></label>
+            <label><input type="radio" name="formato" value="video" {% if consulta.formato == 'video' %}checked{% endif %}><span>{{ _('Video') }}</span></label>
           </div>
         </div>
         <label class="modal-form-check">
           <input type="checkbox" name="solo_activos" {% if consulta.solo_activos %}checked{% endif %}>
-          <span>Solo anuncios que siguen activos</span>
+          <span>{{ _('Solo anuncios que siguen activos') }}</span>
         </label>
       </div>
       <div class="modal-form-fila" data-solo-fuente="atria">
-        <label class="modal-form-campo">Al aire hace al menos
-          <span class="con-unidad"><input type="number" name="min_dias" value="{{ consulta.min_dias or '' }}" min="0" placeholder="—"><em>días</em></span>
+        <label class="modal-form-campo">{{ _('Al aire hace al menos') }}
+          <span class="con-unidad"><input type="number" name="min_dias" value="{{ consulta.min_dias or '' }}" min="0" placeholder="—"><em>{{ _('días') }}</em></span>
         </label>
-        <label class="modal-form-campo">Con al menos
-          <span class="con-unidad"><input type="number" name="min_variantes" value="{{ consulta.min_variantes or '' }}" min="0" placeholder="—"><em>variantes</em></span>
+        <label class="modal-form-campo">{{ _('Con al menos') }}
+          <span class="con-unidad"><input type="number" name="min_variantes" value="{{ consulta.min_variantes or '' }}" min="0" placeholder="—"><em>{{ _('variantes') }}</em></span>
         </label>
       </div>
-      <p class="modal-form-ayuda" data-solo-fuente="atria">Un anuncio que lleva semanas al aire, o que la marca duplicó en muchas variantes, casi siempre es uno que está vendiendo. Déjalos vacíos para no filtrar.</p>
+      <p class="modal-form-ayuda" data-solo-fuente="atria">{{ _('Un anuncio que lleva semanas al aire, o que la marca duplicó en muchas variantes, casi siempre es uno que está vendiendo. Déjalos vacíos para no filtrar.') }}</p>
     </section>
 
     <section class="modal-form-seccion">
-      <span class="modal-form-titulo"><b>3</b> ¿Cuántos?</span>
-      <label class="modal-form-campo">Máximo de anuncios a traer
-        <span class="con-unidad"><input type="number" name="tope" value="{{ tope }}" min="1" max="2000"><em>anuncios</em></span>
+      <span class="modal-form-titulo"><b>3</b> {{ _('¿Cuántos?') }}</span>
+      <label class="modal-form-campo">{{ _('Máximo de anuncios a traer') }}
+        <span class="con-unidad"><input type="number" name="tope" value="{{ tope }}" min="1" max="2000"><em>{{ _('anuncios') }}</em></span>
       </label>
-      <p class="modal-form-ayuda">Cada anuncio que llega se clasifica con Claude; ese es el costo que ves abajo.</p>
+      <p class="modal-form-ayuda">{{ _('Cada anuncio que llega se clasifica con Claude; ese es el costo que ves abajo.') }}</p>
     </section>
 
     <footer class="modal-form-pie">
       <div class="modal-form-precio" id="traer-precio">
         {% if precio %}
         <strong>≈ US$ {{ '%.2f' | format(precio.total_usd) }}</strong>
-        <small>{{ precio.fuente.detalle }} · Clasificar {{ tope }} con Claude: {{ precio.clasificacion.texto }}</small>
+        <small>{{ _('%(fuente)s · Clasificar %(tope)s con Claude: %(precio)s', fuente=precio.fuente.detalle, tope=tope, precio=precio.clasificacion.texto) }}</small>
         {% else %}
-        <small>Escribe qué buscar y completa los datos para ver el precio.</small>
-        <button type="button" class="btn-xs btn-guardar" id="traer-ver-precio">Ver precio</button>
+        <small>{{ _('Escribe qué buscar y completa los datos para ver el precio.') }}</small>
+        <button type="button" class="btn-xs btn-guardar" id="traer-ver-precio">{{ _('Ver precio') }}</button>
         {% endif %}
       </div>
-      <button type="submit" class="btn-generar" id="traer-enviar" {% if not fuente_lista %}disabled{% endif %}>Traer y clasificar</button>
+      <button type="submit" class="btn-generar" id="traer-enviar" {% if not fuente_lista %}disabled{% endif %}>{{ _('Traer y clasificar') }}</button>
     </footer>
   </form>
 </div>

@@ -75,12 +75,11 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
     monkeypatch.setenv("HF_API_KEY_ID", "solo-el-id")          # secreto ausente → parcial
     monkeypatch.setenv("R2_ACCOUNT_ID", "   ")                  # solo espacios = ausente
     llaves = d._estado_llaves()
-    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli", "reddit", "youtube_api", "apify", "atria"]
+    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria"]
     por_id = {l["id"]: l for l in llaves}
     assert por_id["anthropic"]["estado"] == "configurada" and por_id["anthropic"]["faltan"] == []
     assert por_id["higgsfield"]["estado"] == "parcial" and por_id["higgsfield"]["faltan"] == ["HF_API_KEY_SECRET"]
     assert por_id["r2"]["estado"] == "falta" and por_id["fal"]["estado"] == "falta"
-    assert por_id["meta"]["variables"] == [] and por_id["meta"]["estado"] == "falta"   # la app es del proyecto, no del .env
     assert por_id["smtp"]["opcional"] and por_id["meli"]["opcional"] and not por_id["anthropic"]["opcional"]
     # Sin request: el paso de MELI lleva el texto genérico; con URL, la real.
     assert any("<url del sitio>/meli/callback" in p for p in por_id["meli"]["pasos"])
@@ -99,42 +98,44 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
 def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     for var, valor in VALORES_FALSOS.items():
         monkeypatch.setenv(var, valor)
-    # R2: solo ACCOUNT_ID → parcial; SMTP: parcial (faltan otras); Meta: las
-    # dos puestas → configurada; MELI: nada → falta.
+    # R2: solo ACCOUNT_ID → parcial; SMTP: parcial (faltan otras); MELI: nada
+    # → falta. Meta no tiene tarjeta en Configuración desde 2026-09-28: la
+    # conexión vive solo en Experimentos (_meta_conectar.html).
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
     assert "Puesta a punto" in cfg
     esperado = {"anthropic": "configurada", "fal": "configurada", "higgsfield": "configurada",
-                "r2": "parcial", "meta": "falta", "smtp": "parcial", "meli": "falta"}
+                "r2": "parcial", "smtp": "parcial", "meli": "falta"}
     for sid, estado in esperado.items():
         t = _tarjeta(cfg, sid)
         assert _badge(t) == estado, (sid, _badge(t))
         assert 'target="_blank" rel="noopener"' in t
         assert "Cómo conseguirla" in t
         assert "no se escriben desde aquí" in t
-    assert cfg.count('class="llave-tarjeta') == 11
-    # Orden de las tarjetas: las del servidor en «Puesta a punto»; la de Meta,
-    # desde 2026-09-26, a todo el ancho en «Conexiones» (después).
+    assert cfg.count('class="llave-tarjeta') == 10
+    # Orden de las tarjetas: todas las del servidor en «Puesta a punto»;
+    # ninguna en «Conexiones».
     pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli")]
     assert pos == sorted(pos)
     assert cfg.index('id="config-ap-puesta"') < pos[0] and pos[-1] < cfg.index('id="config-ap-conexiones"')
-    assert cfg.index('id="config-ap-conexiones"') < cfg.index('id="llave-meta"')
+    assert 'id="llave-meta"' not in cfg
     # Parcial dice qué falta, y las variables van en <code>.
     assert "<code>R2_SECRET_ACCESS_KEY</code>" in _tarjeta(cfg, "r2") and "Faltan:" in _tarjeta(cfg, "r2")
     assert '<code class="llave-var">ANTHROPIC_API_KEY</code>' in _tarjeta(cfg, "anthropic")
     # NUNCA un valor de llave en el HTML (ni en la tarjeta ni en otra parte).
     for valor in VALORES_FALSOS.values():
         assert valor not in html, valor
-    # Meta: la tarjeta también vive en Configuración (y sigue en Experimentos). Sin forma
-    # elegida ni conexión se ve la elección (spec 2026-09-20 §1).
-    assert "¿Cómo quieres conectar Meta?" in cfg
+    # Meta: la elección de cómo conectar (spec 2026-09-20 §1) se ve en
+    # Experimentos y ya no en Configuración (2026-09-28).
+    fin = cfg.find('<section id="tab-', 10)
+    assert "¿Cómo quieres conectar Meta?" not in (cfg[:fin] if fin > 0 else cfg)
     exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
     assert "¿Cómo quieres conectar Meta?" in exp
 
 
 def test_render_todo_falta(app):
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli"):
+    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli"):
         assert _badge(_tarjeta(cfg, sid)) == "falta", sid
     assert "configurada</span>" not in cfg.split('id="config-tienda"')[0]
 
@@ -146,7 +147,7 @@ def test_render_todo_configurado(app, monkeypatch):
     monkeypatch.setattr(app["dashboard"].meta_conexion, "app_publica", lambda c: {"app_id": "1", "login_config_id": "2"})
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli"):
+    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli"):
         assert _badge(_tarjeta(cfg, sid)) == "configurada", sid
     assert "Faltan:" not in cfg.split('id="config-tienda"')[0]
     for v in TODAS:
@@ -215,40 +216,66 @@ def test_guardar_preferencias_sonido(app, monkeypatch, tmp_path):
     assert 'name="musica_al_crear"' in html and "Sonido al crear" in html
 
 
-def test_triple_whale_formulario_de_conexion_vuelve_a_aparecer(app):
-    """El formulario se quitó de Configuración en 9d3c580 con la intención de
-    moverlo a Experimentos, pero nunca se volvió a agregar en ningún lado —
-    quedó sin ninguna forma de conectar Triple Whale desde la interfaz."""
-    cfg = _config(app["c"].get("/cliente/acme").data.decode())
-    assert 'id="config-triple-whale"' in cfg
-    assert "/cliente/acme/cfg_triple_whale/conectar" in cfg
-    assert 'name="llave_api"' in cfg and 'name="dominio_tienda"' in cfg
-    assert "conectado" not in _tarjeta_id(cfg, "config-triple-whale")
+def _pestana_tw(html):
+    ini = html.index('<section id="tab-triplewhale"')
+    sig = html.find('<section id="tab-', ini + 10)
+    return html[ini:sig if sig > 0 else len(html)]
 
 
-def _tarjeta_id(html, id_):
-    ini = html.index(f'id="{id_}"')
-    fin = html.index('id="config-canales-organicos"', ini)
-    return html[ini:fin]
+def test_triple_whale_formulario_vive_en_su_pestana(app):
+    """Entre 9d3c580 y 05c254d el formulario no estuvo en ningún lado (se quitó
+    de Configuración sin destino). Desde 2026-09-28 vive en la pestaña Triple
+    Whale — movido en un solo commit, con el destino ya existente — y ya no
+    está en Configuración."""
+    html = app["c"].get("/cliente/acme").data.decode()
+    cfg = _config(html)
+    fin = cfg.find('<section id="tab-', 10)
+    cfg = cfg[:fin] if fin > 0 else cfg
+    assert 'id="config-triple-whale"' not in cfg and "cfg_triple_whale" not in cfg
+    tw = _pestana_tw(html)
+    assert 'id="tw-conexion"' in tw and "/cliente/acme/cfg_triple_whale/conectar" in tw
+    assert 'name="llave_api"' in tw and 'name="dominio_tienda"' in tw
+    assert "conectado" not in tw
 
 
-def test_triple_whale_conectar_guarda_y_muestra_estado(app, monkeypatch):
+def _tw_acepta(monkeypatch, gasto=12.5):
+    """Triple Whale acepta la llave y la consulta de prueba (sin red)."""
     import triple_whale
-    import triple_whale_tiendas
     monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: True)
+    monkeypatch.setattr(triple_whale, "probar", lambda llave, dominio, moneda=None: {"gasto_7d": gasto})
+
+
+def _tareas_tw():
+    import sqlalchemy as sa
+    import db
+    with db.conectar() as con:
+        return [dict(r._mapping) for r in con.execute(sa.select(db.tarea.c.tipo, db.tarea.c.job_id, db.tarea.c.payload)
+                                                      .where(db.tarea.c.tipo == "tw_sincronizar"))]
+
+
+def test_triple_whale_conectar_guarda_normaliza_y_encola_la_primera_copia(app, monkeypatch):
+    import triple_whale_tiendas
+    _tw_acepta(monkeypatch)
     r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
-                      data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com",
+                      data={"llave_api": "tw_prueba123", "dominio_tienda": "https://Acme.myshopify.com/admin",
                             "moneda": "cop", "modelo_atribucion": "First Touch", "ventana_atribucion": "30"},
                       follow_redirects=False)
-    assert r.status_code == 302 and r.headers["Location"].endswith("#config-triple-whale")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#triplewhale")
     conectado = triple_whale_tiendas.obtener("acme")
     assert conectado["dominio_tienda"] == "acme.myshopify.com" and conectado["moneda"] == "COP"
+    # Los valores viejos del formulario se traducen al vocabulario de Triple Whale.
+    assert conectado["modelo_atribucion"] == "First Click" and conectado["ventana_atribucion"] == "28_days"
     assert triple_whale_tiendas.obtener_llave("acme") == "tw_prueba123"
+    assert _tareas_tw() == [{"tipo": "tw_sincronizar", "job_id": "acme__tw_sync", "payload": {"cliente": "acme"}}]
 
     html = app["c"].get("/cliente/acme").data.decode()
-    cfg = _tarjeta_id(_config(html), "config-triple-whale")
-    assert "acme.myshopify.com" in cfg and "conectado" in cfg
-    assert "/cliente/acme/cfg_triple_whale/desconectar" in cfg
+    tw = _pestana_tw(html)
+    assert "acme.myshopify.com" in tw and "conectado" in tw
+    assert "/cliente/acme/cfg_triple_whale/desconectar" in tw and "/cliente/acme/cfg_triple_whale/ajustes" in tw
+    cfg = _config(html)
+    fin = cfg.find('<section id="tab-', 10)
+    assert 'id="tw-ajustes"' in tw and "cfg_triple_whale" not in (cfg[:fin] if fin > 0 else cfg)
+    assert "tw_prueba123" not in html
 
 
 def test_triple_whale_conectar_sin_llave_valida_no_guarda(app, monkeypatch):
@@ -257,19 +284,67 @@ def test_triple_whale_conectar_sin_llave_valida_no_guarda(app, monkeypatch):
     monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: False)
     app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
                   data={"llave_api": "tw_mala", "dominio_tienda": "acme.myshopify.com"})
-    assert triple_whale_tiendas.obtener("acme") is None
+    assert triple_whale_tiendas.obtener("acme") is None and _tareas_tw() == []
 
 
-def test_triple_whale_desconectar(app, monkeypatch):
+def test_triple_whale_conectar_con_tienda_que_la_llave_no_ve_no_guarda(app, monkeypatch):
     import triple_whale
     import triple_whale_tiendas
     monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: True)
+
+    def _no_ve(llave, dominio, moneda=None):
+        raise triple_whale.ErrorTienda("Triple Whale no reconoce la tienda")
+    monkeypatch.setattr(triple_whale, "probar", _no_ve)
+    r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
+                      data={"llave_api": "tw_ok", "dominio_tienda": "otra.myshopify.com"}, follow_redirects=True)
+    assert triple_whale_tiendas.obtener("acme") is None
+    assert "no reconoce la tienda" in r.data.decode()
+
+
+def test_triple_whale_conectar_con_dominio_invalido_no_llama_a_triple_whale(app, monkeypatch):
+    import triple_whale
+    import triple_whale_tiendas
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: pytest.fail("no debía llamar"))
+    app["c"].post("/cliente/acme/cfg_triple_whale/conectar", data={"llave_api": "tw_ok", "dominio_tienda": "no es un dominio"})
+    assert triple_whale_tiendas.obtener("acme") is None
+
+
+def test_triple_whale_ajustes_cambian_la_atribucion_y_vuelven_a_traer(app, monkeypatch):
+    import triple_whale_tiendas
+    from triple_whale import datos as tw_datos
+    _tw_acepta(monkeypatch)
     app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
                   data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
-    assert triple_whale_tiendas.obtener("acme") is not None
+    tw_datos.reemplazar_tienda("acme", "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
+    import db
+    import sqlalchemy as sa
+    with db.conectar() as con:
+        con.execute(db.tarea.update().values(estado="ok"))   # la primera copia ya terminó
+    app["c"].post("/cliente/acme/cfg_triple_whale/ajustes",
+                  data={"moneda": "USD", "modelo_atribucion": "Linear Paid", "ventana_atribucion": "7_days"})
+    c = triple_whale_tiendas.obtener("acme")
+    assert (c["modelo_atribucion"], c["ventana_atribucion"]) == ("Linear Paid", "7_days")
+    assert not tw_datos.hay_tienda("acme")   # lo copiado con otra atribución se borró
+    assert len(_tareas_tw()) == 2
+
+
+def test_triple_whale_desconectar_borra_lo_copiado(app, monkeypatch):
+    import triple_whale_tiendas
+    from triple_whale import datos as tw_datos
+    _tw_acepta(monkeypatch)
+    app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
+                  data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
+    tw_datos.reemplazar_tienda("acme", "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
     r = app["c"].post("/cliente/acme/cfg_triple_whale/desconectar", follow_redirects=False)
     assert r.status_code == 302
-    assert triple_whale_tiendas.obtener("acme") is None
+    assert triple_whale_tiendas.obtener("acme") is None and not tw_datos.hay_tienda("acme")
+
+
+def test_triple_whale_post_de_otro_sitio_se_rechaza(app, monkeypatch):
+    _tw_acepta(monkeypatch)
+    r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar", headers={"Sec-Fetch-Site": "cross-site"},
+                      data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
+    assert r.status_code == 403
 
 
 # ---- Gasto real (Task 3): Configuración › Gasto, CSV, sidebar, precios, panel ----
@@ -472,44 +547,37 @@ def _cliente_rol_cliente(dashboard):
 
 
 def _puesta_a_punto(cfg):
-    """Lo que el cliente ve de las llaves: desde 2026-09-26 (Configuración en
-    apartados) la tarjeta de Meta vive en «Conexiones» y el cliente no tiene
-    «Puesta a punto»; se mira desde el apartado hasta «Conectar tu tienda»."""
+    """Lo que el cliente ve arriba de «Conectar tu tienda» en «Conexiones»: el
+    cliente no tiene «Puesta a punto» y, desde 2026-09-28, tampoco hay tarjeta
+    de Meta ahí (la conexión vive solo en Experimentos, _meta_conectar.html)."""
     ini = cfg.index('id="config-ap-conexiones"')
     return cfg[ini:cfg.index('id="config-tienda"', ini)]
 
 
-def test_cliente_solo_ve_en_puesta_a_punto_lo_que_le_toca(app, monkeypatch):
+def test_cliente_no_ve_llaves_ni_variables_del_servidor(app, monkeypatch):
     for var, valor in VALORES_FALSOS.items():
         monkeypatch.setenv(var, valor)
     html = _cliente_rol_cliente(app["dashboard"]).get("/cliente/acme").data.decode()
-    puesta = _puesta_a_punto(_config(html))
-    assert puesta.count('class="llave-tarjeta') == 1
-    assert 'id="llave-meta"' in puesta
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify"):
-        assert f'id="llave-{sid}"' not in puesta, sid
+    cfg = _config(html)
+    assert 'class="llave-tarjeta' not in cfg and 'id="config-ap-puesta"' not in cfg
+    assert 'id="llave-meta"' not in html
     for valor in VALORES_FALSOS.values():
         assert valor not in html, valor
     # Ni nombres de variables, ni el .env, ni los pasos para conseguir llaves:
-    # eso es del administrador. Se mira la tarjeta hasta el bloque de conexión
-    # (el bloque de Meta tiene su propia guía).
-    tarjeta = _tarjeta(puesta, "meta").split('class="llave-meta-conexion"')[0]
-    intro = puesta.split('class="llaves-tarjetas"')[0]
-    for trozo in (tarjeta, intro):
-        for texto in ("ANTHROPIC_API_KEY", "SMTP_HOST", ".env", "no se escriben desde aquí", "Cómo conseguirla"):
-            assert texto not in trozo, texto
-    # Lo que sí le toca: elegir cómo conectar Meta y poner el método de pago de
-    # su cuenta publicitaria; y saber que el resto lo pone Creatv.
-    assert "¿Cómo quieres conectar Meta?" in puesta
-    assert "business.facebook.com › Facturación" in tarjeta
-    assert "los pone Creatv" in intro
+    # eso es del administrador.
+    conexiones = _puesta_a_punto(cfg)
+    for texto in ("ANTHROPIC_API_KEY", "SMTP_HOST", ".env", "no se escriben desde aquí", "Cómo conseguirla"):
+        assert texto not in conexiones, texto
+    # Lo que sí le toca: elegir cómo conectar Meta, en Experimentos.
+    exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
+    assert "¿Cómo quieres conectar Meta?" in exp
 
 
 def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
-    # Desde 2026-09-26 las 11 tarjetas se reparten: 10 en «Puesta a punto»
-    # (solo admin) y la de Meta a todo el ancho en «Conexiones».
+    # Desde 2026-09-28 las 10 tarjetas del servidor van en «Puesta a punto»
+    # (solo admin); la de Meta ya no se pinta: la conexión vive en Experimentos.
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
     puesta = cfg[cfg.index('id="config-ap-puesta"'):cfg.index('id="config-ap-conexiones"')]
     assert puesta.count('class="llave-tarjeta') == 10
-    assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 1
+    assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 0
     assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")

@@ -33,7 +33,8 @@ def test_normalizar():
     assert a["etapa"] == "BOF" and a["consciencia"] == "most-aware" and a["familia"] == "Price Slash Hero"
     assert a["dolor"] == "ninguno-oferta" and a["clasificacion"] == "fuente" and a["tipo"] == "imagen" and a["idioma"] == "en"
     assert a["firma"] == "giant breakup-style headline announcing a sale is ending"
-    assert a["extra"] == {"sweep": "AUG", "firma_original": "giant breakup-style headline announcing a sale is ending", "traducida": False}
+    assert a["extra"] == {"sweep": "AUG", "firma_original": "giant breakup-style headline announcing a sale is ending", "traducida": False,
+                          "i18n": {"en": {"firma": "giant breakup-style headline announcing a sale is ending", "dolor": "ninguno-oferta"}}}
     assert a["imagen_origen"].startswith("https://cdn.tryatria.com/") and a["dias"] == 366 and a["variantes"] == 15
     b = copycoders.normalizar(filas[1], copycoders.URL_SWIPE)
     assert b["imagen_origen"] == "https://go.copycoders.ai/scaling-with-statics-fw/swipe-file/swipe_assets_0803/primal_queen_fd281f1918dfb5c3.jpg.jpg"

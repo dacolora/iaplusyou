@@ -4,10 +4,10 @@
    tipo (imagen|video), formato, formatos, titular, prompt, precio
    (gastos.estimar o None sin producto), precio_adaptar. #}
 <div class="ref-recrear">
-  <p class="ref-recrear-titulo"><strong>Recrear «{{ r.titular or r.id }}» con mi producto</strong></p>
+  <p class="ref-recrear-titulo"><strong>{{ _('Recrear «%(titular)s» con mi producto', titular=r.titular or r.id) }}</strong></p>
   {% if not productos %}
-  <p class="vacio">Todavía no tienes productos con fotos en el catálogo.
-    <a href="#catalogo" onclick="document.querySelector('.sidebar-item[data-tab=catalogo]').click(); return false;">Ir a Catálogo →</a></p>
+  <p class="vacio">{{ _('Todavía no tienes productos con fotos en el catálogo.') }}
+    <a href="#catalogo" onclick="document.querySelector('.sidebar-item[data-tab=catalogo]').click(); return false;">{{ _('Ir a Catálogo →') }}</a></p>
   {% else %}
   <form method="post" action="{{ url_for('referentes.recrear_generar', cliente=cliente, rid=r.id) }}" class="form-nueva-idea ref-recrear-form"
         data-recrear="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id) }}"
@@ -15,31 +15,31 @@
     <input type="hidden" name="tipo" value="{{ tipo }}">
     <input type="hidden" name="angulo" value="" data-recrear-campo="angulo">
     <div class="fe-opciones">
-      <label>Producto
+      <label>{{ _('Producto') }}
         <select name="producto_id" data-recrear-campo="producto_id">
           {% for p in productos %}<option value="{{ p.id }}" {% if producto and p.id == producto.id %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
         </select>
       </label>
-      <label>Formato
+      <label>{{ _('Formato') }}
         <select name="formato" data-recrear-campo="formato">
           {% for f in formatos %}<option value="{{ f }}" {% if f == formato %}selected{% endif %}>{{ f }}</option>{% endfor %}
         </select>
       </label>
     </div>
-    <label>Titular
+    <label>{{ _('Titular') }}
       <input type="text" name="titular" maxlength="200" value="{{ titular }}" data-recrear-campo="titular">
     </label>
-    <label>Prompt
+    <label>{{ _('Prompt') }}
       <textarea name="prompt" rows="6" data-recrear-campo="prompt">{{ prompt }}</textarea>
     </label>
     <div class="ref-recrear-acciones">
-      <button type="button" class="btn-guardar btn-sm" data-recrear-adaptar>Adaptar con IA{% if precio_adaptar.usd is not none %} ≈ {{ precio_adaptar.usd | usd }}{% endif %}</button>
+      <button type="button" class="btn-guardar btn-sm" data-recrear-adaptar>{{ _('Adaptar con IA') }}{% if precio_adaptar.usd is not none %} ≈ {{ precio_adaptar.usd | usd }}{% endif %}</button>
       {% if tipo == "imagen" %}
-      <button type="submit" class="btn-generar btn-sm">Generar imagen{% if precio and precio.usd is not none %} ≈ {{ precio.usd | usd }}{% endif %}</button>
-      <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="video">Como video ▸</button>
+      <button type="submit" class="btn-generar btn-sm">{{ _('Generar imagen') }}{% if precio and precio.usd is not none %} ≈ {{ precio.usd | usd }}{% endif %}</button>
+      <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="video">{{ _('Como video ▸') }}</button>
       {% else %}
-      <button type="submit" class="btn-generar btn-sm">Generar video{% if precio and precio.usd is not none %} ≈ {{ precio.usd | usd }}{% endif %}</button>
-      <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="imagen">← Como imagen</button>
+      <button type="submit" class="btn-generar btn-sm">{{ _('Generar video') }}{% if precio and precio.usd is not none %} ≈ {{ precio.usd | usd }}{% endif %}</button>
+      <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="imagen">{{ _('← Como imagen') }}</button>
       {% endif %}
     </div>
   </form>

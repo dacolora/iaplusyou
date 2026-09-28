@@ -499,6 +499,7 @@ def alertas(cliente, ahora_iso=None, datos=None):
     los números, `tab` donde se resuelve y `experimento_id` (None si no es de
     un experimento). Ninguna acción sale de aquí."""
     import meta_conexion  # noqa: PLC0415 — arrastra requests; el tablero es solo datos
+    import meta_errores  # noqa: PLC0415
     import tiendas  # noqa: PLC0415
 
     ahora = _ahora(ahora_iso)
@@ -517,10 +518,16 @@ def alertas(cliente, ahora_iso=None, datos=None):
                            gettext("La conexión con Meta está rota (token vencido o permisos retirados): "
                                    "vuelve a conectar en Configuración."), "settings"))
 
-    # 2. Experimentos en error (alta).
+    # 2. Experimentos en error (alta). El error crudo de Meta (JSON) se cuenta en
+    # palabras de persona con meta_errores.explicar.
+    modo_meta = None
     for ex in exps:
         if ex["estado"] == "error":
-            detalle = gettext(": %(error)s", error=ex["error"]) if ex.get("error") else ""
+            if modo_meta is None and ex.get("error"):
+                modo_meta = meta_conexion.modo(cliente)
+            # Sin el punto final: la frase de la alerta ya cierra con el suyo.
+            explicado = meta_errores.explicar(ex.get("error"), modo=modo_meta or "propia").rstrip(". ")
+            detalle = gettext(": %(error)s", error=explicado) if explicado else ""
             out.append(_alerta("experimento_error", "alta",
                                gettext("El experimento «%(nombre)s» falló al lanzar%(detalle)s. "
                                        "Revísalo y vuelve a intentarlo.", nombre=ex["nombre"], detalle=detalle),

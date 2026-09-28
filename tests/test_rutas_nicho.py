@@ -55,11 +55,33 @@ def test_crear_estudio_y_pestana(app):
     r = c.post("/cliente/acme/nicho/estudios", data={"nombre": "Detergente", "producto": "Cápsulas", "tema": "lavar", "idioma": "sv", "catalogo_id": "capsulas"})
     e = datos.estudios("acme")[0]
     assert r.status_code == 302 and r.headers["Location"].endswith(f"/cliente/acme/nicho/{e['id']}")
-    assert e["idioma"] == "sv" and e["catalogo_id"] == "capsulas"
+    assert e["idioma"] == "es" and e["catalogo_id"] == "capsulas"
     r = c.post("/cliente/acme/nicho/estudios", data={"nombre": ""})
     assert r.status_code == 302 and r.headers["Location"].endswith("#nicho") and len(datos.estudios("acme")) == 1
     html = c.get("/cliente/acme").data.decode()
     assert 'data-tab="nicho"' in html and "Detergente" in html and "Nuevo estudio" in html
+
+    import idiomas
+    idiomas.guardar_de_proyecto("acme", "en")        # el fixture ya apunta proyectos.BASE_DIR a tmp
+    c.post("/cliente/acme/nicho/estudios", data={"nombre": "Laundry"})
+    assert next(x for x in datos.estudios("acme") if x["nombre"] == "Laundry")["idioma"] == "en"
+    pestana = html[html.index('<section id="tab-nicho"'):html.index('<section id="tab-referentes"')]
+    assert 'name="idioma"' not in pestana             # sin selector en «Nuevo estudio»
+
+
+def test_idioma_de_busqueda_de_youtube_sale_del_pais_del_proyecto(app, monkeypatch):
+    """Revisión final de la fase 5 (minor 5): con inglés por defecto, el idioma
+    de BÚSQUEDA de YouTube no puede seguir al idioma del estudio (spec §B5 lo
+    separa del idioma de salida): sale del país del proyecto."""
+    import idiomas
+    import proyectos
+    from nicho import datos
+    monkeypatch.setenv("YOUTUBE_API_KEY", "clave-de-prueba")
+    idiomas.guardar_de_proyecto("acme", "en")
+    monkeypatch.setattr(proyectos, "pais", lambda c: "CO")
+    eid = datos.crear_estudio("acme", "Laundry", producto="Pods", tema="laundry", idioma="en")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'name="idioma" value="es"' in html          # país CO → español, aunque el estudio esté en inglés
 
 
 def test_contexto(app):
@@ -67,7 +89,7 @@ def test_contexto(app):
     _estudio(datos)
     ctx = rutas.contexto("acme")
     assert ctx["estudios_nicho"][0]["comentarios_total"] == 25 and ctx["productos_nicho"][0]["id"] == "capsulas"
-    assert ctx["min_comentarios_nicho"] == 20 and "es" in ctx["idiomas_nicho"]
+    assert ctx["min_comentarios_nicho"] == 20 and "idiomas_nicho" not in ctx
 
 
 def test_editar_y_archivar(app):
@@ -75,7 +97,7 @@ def test_editar_y_archivar(app):
     eid = _estudio(datos)
     app["c"].post(f"/cliente/acme/nicho/{eid}/editar", data={"nombre": "Otro", "idioma": "en", "catalogo_id": ""})
     e = datos.estudio("acme", eid)
-    assert e["nombre"] == "Otro" and e["idioma"] == "en" and e["catalogo_id"] is None
+    assert e["nombre"] == "Otro" and e["idioma"] == "es" and e["catalogo_id"] is None
     app["c"].post(f"/cliente/acme/nicho/{eid}/archivar")
     assert datos.estudio("acme", eid)["archivado"] is True
     app["c"].post(f"/cliente/acme/nicho/{eid}/archivar", data={"desarchivar": "1"})
@@ -310,7 +332,8 @@ def test_pagina_tarjetas_con_llaves(app, llaves):
     eid = datos.crear_estudio("acme", "X", idioma="en")
     html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
     assert 'name="subreddits"' in html and 'name="periodo"' in html and 'value="year" selected' in html
-    assert 'name="max_videos"' in html and 'name="idioma" value="en"' in html and 'name="region" value="CO"' in html
+    # El idioma de búsqueda de YouTube sale del país del proyecto (CO → es), no del idioma del estudio.
+    assert 'name="max_videos"' in html and 'name="idioma" value="es"' in html and 'name="region" value="CO"' in html
     assert 'id="form-apify"' in html and "Reseñas de Amazon" in html and "Comentarios de TikTok" in html
     assert f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar" in html and "Traer (se cobra)" in html
     assert "(falta " not in html

@@ -18,10 +18,9 @@ MODELO_TTS = "fal-ai/elevenlabs/tts/multilingual-v2"
 MODELO_STT = "fal-ai/whisper"
 MODELO_MUSICA = "fal-ai/stable-audio"
 
-# $/carácter del TTS: fal cobra «$0.1 per 1000 characters» para
-# fal-ai/elevenlabs/tts/multilingual-v2 (verificado el 2026-09-28; la constante
-# estuvo 3× alta desde el 2026-09-15). $/minuto de Whisper y $/pista de Stable
-# Audio siguen estimados (ver Global Constraints del plan de Bloque 2).
+# $/carácter, $/minuto de audio y $/pista, estimados (ver Global Constraints del plan).
+# TTS: US$ 0,10 por 1.000 caracteres, verificado en fal el 2026-09-28 (antes 0.0003,
+# el triple: el gasto de cada voz quedaba anotado ~3× por encima de lo cobrado).
 COSTO_USD_POR_CARACTER = 0.0001
 COSTO_USD_POR_MINUTO_AUDIO = 0.002
 COSTO_USD_POR_PISTA_MUSICA = 0.02

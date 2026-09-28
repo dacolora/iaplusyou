@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_sprint_macros.html" import chip_estado %}
-{% block title %}{{ sprint.nombre }} · Sprints{% endblock %}
+{% block title %}{{ sprint.nombre }} · {{ _('Sprints') }}{% endblock %}
 {% block content %}
 {% include "_sprint_nav.html" %}
 {# Tablero del sprint (spec 2026-09-26): cabecera editable, una tarjeta por
@@ -16,29 +16,29 @@
     <p class="tablero-resumen" id="tablero-resumen">{{ resumen }}</p>
   </div>
   <div class="panel-cabecera-acciones">
-    <button type="button" class="btn-generar btn-sm" data-nueva-campana>+ Campaña</button>
+    <button type="button" class="btn-generar btn-sm" data-alta-campana>+ {{ _('Campaña') }}</button>
     {% if pendientes_sprint %}
-    <button type="button" class="btn-sm" onclick="abrirLote('')">Generar lote ({{ pendientes_sprint | length }})</button>
+    <button type="button" class="btn-sm" onclick="abrirLote('')">{{ _('Generar lote (%(n)s)', n=(pendientes_sprint | length)) }}</button>
     {% endif %}
     {% if lote and (lote.listas or lote.error or lote.generando or lote.encoladas) %}
-    <a class="btn-sm" href="{{ url_for('sprints.revision', cliente=cliente, sid=sprint.id) }}">Revisar ({{ lote.aprobadas }}/{{ lote.listas }} listas)</a>
+    <a class="btn-sm" href="{{ url_for('sprints.revision', cliente=cliente, sid=sprint.id) }}">{{ ngettext('Revisar (%(aprobadas)s/%(num)s lista)', 'Revisar (%(aprobadas)s/%(num)s listas)', lote.listas, aprobadas=lote.aprobadas) }}</a>
     {% endif %}
     <details class="tablero-mas">
-      <summary class="btn-sm">Más</summary>
+      <summary class="btn-sm">{{ _('Más') }}</summary>
       <div class="tablero-mas-menu">
         {% if sprint.estado in ("planeando", "referencias") and sprint.campanas %}
         <form method="post" action="{{ url_for('sprints.marcar_listo', cliente=cliente, sid=sprint.id) }}"
-              onsubmit="return confirm('¿Marcar el sprint como listo para generar aunque falten referentes?');">
-          <button type="submit" class="btn-sm">Marcar listo para generar</button>
+              onsubmit='return confirm({{ _("¿Marcar el sprint como listo para generar aunque falten referentes?")|tojson }});'>
+          <button type="submit" class="btn-sm">{{ _('Marcar listo para generar') }}</button>
         </form>
         {% endif %}
         <form method="post" action="{{ url_for('sprints.archivar', cliente=cliente, sid=sprint.id) }}"
-              onsubmit="return confirm('¿Archivar este sprint? Se puede desarchivar después.');">
-          <button type="submit" class="btn-sm">Archivar</button>
+              onsubmit='return confirm({{ _("¿Archivar este sprint? Se puede desarchivar después.")|tojson }});'>
+          <button type="submit" class="btn-sm">{{ _('Archivar') }}</button>
         </form>
         <form method="post" action="{{ url_for('sprints.eliminar', cliente=cliente, sid=sprint.id) }}"
-              onsubmit="return confirm('¿Eliminar este sprint PERMANENTEMENTE? Se borran sus campañas, ideas y referencias. No se puede deshacer.');">
-          <button type="submit" class="btn-sm btn-rechazar">Eliminar permanentemente</button>
+              onsubmit='return confirm({{ _("¿Eliminar este sprint PERMANENTEMENTE? Se borran sus campañas, ideas y referencias. No se puede deshacer.")|tojson }});'>
+          <button type="submit" class="btn-sm btn-rechazar">{{ _('Eliminar permanentemente') }}</button>
         </form>
       </div>
     </details>
@@ -46,83 +46,83 @@
 </div>
 
 <details class="swap-card tablero-editar" id="tablero-editar">
-  <summary class="swap-card-resumen">✎ Datos del sprint (se guardan solos)</summary>
+  <summary class="swap-card-resumen">✎ {{ _('Datos del sprint (se guardan solos)') }}</summary>
   <div class="tablero-editar-campos" data-sprint-campos
        data-url="{{ url_for('sprints.sprint_campo', cliente=cliente, sid=sprint.id) }}">
-    <label>Nombre <input data-campo="nombre" value="{{ sprint.nombre }}" maxlength="200">
+    <label>{{ _('Nombre') }} <input data-campo="nombre" value="{{ sprint.nombre }}" maxlength="200">
       <small class="campo-error" hidden></small></label>
-    <label>Inicio <input type="date" data-campo="inicio" value="{{ sprint.inicio }}">
+    <label>{{ _('Inicio') }} <input type="date" data-campo="inicio" value="{{ sprint.inicio }}">
       <small class="campo-error" hidden></small></label>
-    <label>Fin <input type="date" data-campo="fin" value="{{ sprint.fin }}">
+    <label>{{ _('Fin') }} <input type="date" data-campo="fin" value="{{ sprint.fin }}">
       <small class="campo-error" hidden></small></label>
-    <label>Momento del mes <select data-campo="momento">
-        <option value="">Ninguno</option>
-        {% for p in presets %}<option value="{{ p.clave }}" {% if p.clave == momento_valor %}selected{% endif %}>{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
-        <option value="propio" {% if momento_valor == 'propio' %}selected{% endif %}>Otro (escríbelo)…</option>
+    <label>{{ _('Momento del mes') }} <select data-campo="momento">
+        <option value="">{{ _('Ninguno') }}</option>
+        {% for p in presets %}<option value="{{ p.clave }}" {% if p.clave == momento_valor %}selected{% endif %}>{{ p.nombre|traducir }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
+        <option value="propio" {% if momento_valor == 'propio' %}selected{% endif %}>{{ _('Otro (escríbelo)…') }}</option>
       </select>
-      <input data-momento-texto maxlength="120" placeholder="Tu momento" value="{{ sprint.momento.nombre if momento_valor == 'propio' else '' }}" {% if momento_valor != 'propio' %}hidden{% endif %}>
+      <input data-momento-texto maxlength="120" placeholder="{{ _('Tu momento') }}" value="{{ sprint.momento.nombre if momento_valor == 'propio' else '' }}" {% if momento_valor != 'propio' %}hidden{% endif %}>
       <small class="campo-error" hidden></small></label>
-    <label class="ancho">Marcas a imitar <small class="vacio">(una por línea; con el link de su Ad Library si lo tienes)</small>
+    <label class="ancho">{{ _('Marcas a imitar') }} <small class="vacio">({{ _('una por línea; con el link de su Ad Library si lo tienes') }})</small>
       <textarea data-campo="marcas" rows="2">{{ marcas_texto }}</textarea><small class="campo-error" hidden></small></label>
   </div>
 </details>
 
 {% if lote and (lote.listas or lote.generando or lote.encoladas or lote.error) %}
 <p class="vacio sprint-lote-resumen" id="sprint-lote-resumen">
-  {{ lote.listas }} listas · {{ lote.generando }} generando · {{ lote.encoladas }} en cola · {{ lote.error }} con error · {{ lote.aprobadas }} aprobadas · USD {{ '%.2f' % lote.costo_usd }} gastado
+  {{ ngettext('%(num)s lista', '%(num)s listas', lote.listas) }} · {{ _('%(generando)s generando · %(encoladas)s en cola · %(error)s con error', generando=lote.generando, encoladas=lote.encoladas, error=lote.error) }} · {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', lote.aprobadas) }} · {{ _('USD %(usd)s gastado', usd='%.2f' % lote.costo_usd) }}
 </p>
 {% endif %}
 
 {% if not sprint.campanas %}
 <div class="estado-vacio">
-  <p class="estado-vacio-titulo">Este sprint todavía no tiene campañas</p>
-  <p class="estado-vacio-texto">Cada campaña es una persona con un producto y los anuncios que va a seguir. Empieza con «+ Campaña».</p>
+  <p class="estado-vacio-titulo">{{ _('Este sprint todavía no tiene campañas') }}</p>
+  <p class="estado-vacio-texto">{{ _('Cada campaña es una persona con un producto y los anuncios que va a seguir. Empieza con «+ Campaña».') }}</p>
 </div>
 {% endif %}
 <div class="tablero-grid" id="tablero-grid">
   {% for c in sprint.campanas %}{% include "_sprint_tarjeta.html" %}{% endfor %}
-  <button type="button" class="tablero-tarjeta tablero-tarjeta-nueva" data-nueva-campana>
-    <strong>+ Campaña</strong><small class="vacio">eliges persona y producto; lo demás en el panel</small>
+  <button type="button" class="tablero-tarjeta tablero-tarjeta-nueva" data-alta-campana>
+    <strong>+ {{ _('Campaña') }}</strong><small class="vacio">{{ _('eliges persona y producto; lo demás en el panel') }}</small>
   </button>
 </div>
 
 <div class="tablero-fondo" id="tablero-fondo" hidden></div>
-<aside class="tablero-panel" id="tablero-panel" hidden aria-label="Campaña"
+<aside class="tablero-panel" id="tablero-panel" hidden aria-label="{{ _('Campaña') }}"
        data-url-base="{{ url_for('sprints.ver', cliente=cliente, sid=sprint.id) }}"
        data-panel-inicial="{{ panel_inicial or '' }}" data-paso-inicial="{{ paso_inicial }}">
   <div id="tablero-panel-cuerpo"></div>
 </aside>
 
-<template id="tablero-nueva">
+<template id="tablero-alta">
   <div class="panel-campana panel-nueva">
     <header class="panel-campana-cab">
-      <div><h2>Nueva campaña</h2><small class="vacio">Primero la persona y el producto; lo demás lo ajustas después.</small></div>
-      <button type="button" class="btn-xs" data-panel-cerrar aria-label="Cerrar">✕</button>
+      <div><h2>{{ _('Nueva campaña') }}</h2><small class="vacio">{{ _('Primero la persona y el producto; lo demás lo ajustas después.') }}</small></div>
+      <button type="button" class="btn-xs" data-panel-cerrar aria-label="{{ _('Cerrar') }}">✕</button>
     </header>
-    <form data-nueva action="{{ url_for('sprints.campana_agregar', cliente=cliente, sid=sprint.id) }}" class="panel-seccion">
-      <label>Persona
-        <select name="persona_id" data-nueva-persona required>
-          <option value="">Elige una persona</option>
-          {% for p in personas_sprint %}<option value="{{ p.id }}">{{ p.nombre }}{% if p.origen == 'investigada' %} · del Nicho{% endif %}</option>{% endfor %}
+    <form data-alta action="{{ url_for('sprints.campana_agregar', cliente=cliente, sid=sprint.id) }}" class="panel-seccion">
+      <label>{{ _('Persona') }}
+        <select name="persona_id" data-alta-persona required>
+          <option value="">{{ _('Elige una persona') }}</option>
+          {% for p in personas_sprint %}<option value="{{ p.id }}">{{ p.nombre }}{% if p.origen == 'investigada' %} · {{ _('del Nicho') }}{% endif %}</option>{% endfor %}
         </select></label>
-      <label>Producto
+      <label>{{ _('Producto') }}
         <select name="catalogo_id" required>
-          <option value="">Elige un producto</option>
+          <option value="">{{ _('Elige un producto') }}</option>
           {% for p in productos_sprint %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}
         </select></label>
       <p class="campo-error" data-error hidden></p>
-      <button type="submit" class="btn-generar">Crear campaña</button>
+      <button type="submit" class="btn-generar">{{ _('Crear campaña') }}</button>
     </form>
     <details class="panel-persona-rapida">
-      <summary class="btn-xs">+ Crear persona rápida</summary>
+      <summary class="btn-xs">+ {{ _('Crear persona rápida') }}</summary>
       <form data-persona-rapida action="{{ url_for('sprints.persona_crear', cliente=cliente) }}">
-        <input name="nombre" required maxlength="120" placeholder="Nombre (p. ej. Mamá práctica)">
-        <input name="resumen" maxlength="200" placeholder="Una línea: qué quiere o qué le duele">
-        <button type="submit" class="btn-sm">Crear y usar</button>
+        <input name="nombre" required maxlength="120" placeholder="{{ _('Nombre (p. ej. Mamá práctica)') }}">
+        <input name="resumen" maxlength="200" placeholder="{{ _('Una línea: qué quiere o qué le duele') }}">
+        <button type="submit" class="btn-sm">{{ _('Crear y usar') }}</button>
         <small class="campo-error" hidden></small>
       </form>
     </details>
-    {% if not productos_sprint %}<p class="vacio">No hay productos en el catálogo: agrégalos en Catálogo › Productos.</p>{% endif %}
+    {% if not productos_sprint %}<p class="vacio">{{ _('No hay productos en el catálogo: agrégalos en Catálogo › Productos.') }}</p>{% endif %}
   </div>
 </template>
 
@@ -130,6 +130,22 @@
 
 <script src="{{ url_for('static', filename='angulo.js') }}"></script>
 <script>
+  var TEXTO_TABLERO = {
+    errorServidor: {{ _('No se pudo guardar: el servidor respondió con un error. Recarga la página e intenta de nuevo.')|tojson }},
+    noGuardado: {{ _('No se pudo guardar.')|tojson }},
+    sinConexion: {{ _('Sin conexión: no se guardó. Intenta de nuevo.')|tojson }},
+    campanaNoExiste: {{ _('Esta campaña ya no existe')|tojson }},
+    borradaEnOtraPestana: {{ _('Pudo borrarse en otra pestaña.')|tojson }},
+    volverAlTablero: {{ _('Volver al tablero')|tojson }},
+    cargandoCampana: {{ _('Cargando la campaña…')|tojson }},
+    noSePudoAbrir: {{ _('No se pudo abrir la campaña. Revisa tu conexión e intenta de nuevo.')|tojson }},
+    lista1: {{ ngettext('%(num)s lista', '%(num)s listas', 1, num='{n}')|tojson }},
+    listasN: {{ ngettext('%(num)s lista', '%(num)s listas', 2, num='{n}')|tojson }},
+    medioLote: {{ _('%(generando)s generando · %(encoladas)s en cola · %(error)s con error', generando='{generando}', encoladas='{encoladas}', error='{error}')|tojson }},
+    aprobada1: {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', 1, num='{n}')|tojson }},
+    aprobadasN: {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', 2, num='{n}')|tojson }},
+    gastadoLote: {{ _('USD %(usd)s gastado', usd='{usd}')|tojson }}
+  };
   (function () {
     var panel = document.getElementById('tablero-panel');
     var cuerpo = document.getElementById('tablero-panel-cuerpo');
@@ -146,10 +162,10 @@
     // llegando tal cual más abajo.
     function json(r) {
       return r.json()
-        .catch(function () { throw new Error('No se pudo guardar: el servidor respondió con un error. Recarga la página e intenta de nuevo.'); })
-        .then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo guardar.'); return j; });
+        .catch(function () { throw new Error(TEXTO_TABLERO.errorServidor); })
+        .then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || TEXTO_TABLERO.noGuardado); return j; });
     }
-    function mensaje(e) { return e instanceof TypeError ? 'Sin conexión: no se guardó. Intenta de nuevo.' : e.message; }
+    function mensaje(e) { return e instanceof TypeError ? TEXTO_TABLERO.sinConexion : e.message; }
     // `f.reset()` limpia los <input> pero no el `data-sucio` que puso el
     // listener global de base.html: sin esto, un formulario ya guardado
     // (persona rápida, nueva campaña) seguía contando como «cambios sin
@@ -203,8 +219,8 @@
     }
     function noExiste() {
       panelActualCid = null;
-      cuerpo.innerHTML = '<div class="estado-vacio"><p class="estado-vacio-titulo">Esta campaña ya no existe</p>' +
-        '<p class="estado-vacio-texto">Pudo borrarse en otra pestaña.</p><a class="btn-sm" href="' + base + '">Volver al tablero</a></div>';
+      cuerpo.innerHTML = '<div class="estado-vacio"><p class="estado-vacio-titulo">' + TEXTO_TABLERO.campanaNoExiste + '</p>' +
+        '<p class="estado-vacio-texto">' + TEXTO_TABLERO.borradaEnOtraPestana + '</p><a class="btn-sm" href="' + base + '">' + TEXTO_TABLERO.volverAlTablero + '</a></div>';
     }
     // Una tarjeta que se refresca tarde (su campaña ya no es la del panel)
     // no se lleva el resaltado de la que sí está abierta.
@@ -216,12 +232,63 @@
           if (html && t) { t.outerHTML = html; if (panelActualCid === String(cid)) marcarActiva(cid); }
         }).catch(function () {});
     }
+    // Lo que la persona estaba escribiendo (campos con data-sucio) sobrevive a que el
+    // panel de la MISMA campaña se vuelva a pintar: antes se perdía si otro guardado
+    // lo recargaba justo mientras escribía. La clave identifica el campo en el HTML nuevo.
+    function claveCampo(el) {
+      var caja = el.closest('[data-cp], [data-describir], .angulo-editor');
+      var dueno = caja ? (caja.dataset.cp || caja.dataset.describir || caja.dataset.url || '') : '';
+      var nombre = el.dataset.campo || el.dataset.anguloCampo || el.name ||
+                   (el.hasAttribute('data-motivo') ? 'motivo' : '') || (el.hasAttribute('data-descripcion') ? 'descripcion' : '');
+      return nombre ? dueno + '|' + nombre : null;
+    }
+    // Cada <details> del panel (tarjeta de idea, editor del ángulo, «Subir»…) sigue
+    // abierto o cerrado como lo dejó la persona: el HTML nuevo llega todo cerrado.
+    function claveDetalle(d) {
+      return d.dataset.cp ? 'cp|' + d.dataset.cp : d.dataset.url ? 'url|' + d.dataset.url : 'clase|' + d.className;
+    }
+    function tomarEscrito() {
+      var escrito = {}, abiertos = {}, activo = document.activeElement, foco = null;
+      cuerpo.querySelectorAll('input[data-sucio], textarea[data-sucio]').forEach(function (el) {
+        var k = claveCampo(el);
+        if (k) escrito[k] = el.value;
+      });
+      cuerpo.querySelectorAll('details').forEach(function (d) { abiertos[claveDetalle(d)] = d.open; });
+      if (activo && cuerpo.contains(activo) && activo.dataset.sucio) {
+        foco = {clave: claveCampo(activo), ini: activo.selectionStart, fin: activo.selectionEnd};
+      }
+      return {escrito: escrito, abiertos: abiertos, foco: foco};
+    }
+    function devolverEscrito(guardado) {
+      if (!guardado) return;
+      cuerpo.querySelectorAll('details').forEach(function (d) {
+        var k = claveDetalle(d);
+        if (k in guardado.abiertos) d.open = guardado.abiertos[k];
+      });
+      if (!Object.keys(guardado.escrito).length) return;
+      cuerpo.querySelectorAll('input, textarea').forEach(function (el) {
+        var k = claveCampo(el);
+        if (!k || !(k in guardado.escrito) || el.readOnly || el.disabled) return;
+        el.value = guardado.escrito[k];
+        // «input» vuelve a marcarlo sin guardar y agenda el autoguardado de las ideas y del ángulo;
+        // los campos que se guardan al salir (data-campo, descripción) reciben su «change».
+        el.dispatchEvent(new Event('input', {bubbles: true}));
+        var alSalir = el.dataset.campo || el.hasAttribute('data-descripcion');
+        if (guardado.foco && guardado.foco.clave === k) {
+          el.focus();
+          try { el.setSelectionRange(guardado.foco.ini, guardado.foco.fin); } catch (e) { /* campos sin selección */ }
+          if (alSalir) el.addEventListener('blur', function () { el.dispatchEvent(new Event('change', {bubbles: true})); }, {once: true});
+        } else if (alSalir) {
+          el.dispatchEvent(new Event('change', {bubbles: true}));
+        }
+      });
+    }
     function abrir(cid, paso) {
       var mismo = panelActualCid === cid;
       if (!paso && mismo) paso = pasoActual;
       mostrar(); marcarUrl(cid, paso); marcarActiva(cid);
       var scroll = mismo ? panel.scrollTop : 0;
-      if (!mismo) cuerpo.innerHTML = '<p class="vacio">Cargando la campaña…</p>';
+      if (!mismo) cuerpo.innerHTML = '<p class="vacio">' + TEXTO_TABLERO.cargandoCampana + '</p>';
       panelActualCid = cid;
       var miPeticion = ++peticionPanel;
       return fetch(base + '/campanas/' + cid + '/panel' + (paso ? '?paso=' + encodeURIComponent(paso) : ''), {headers: H})
@@ -232,20 +299,22 @@
         })
         .then(function (html) {
           if (html === null || miPeticion !== peticionPanel) return;
+          var escrito = mismo ? tomarEscrito() : null;
           cuerpo.innerHTML = html;
           var r = cuerpo.querySelector('.panel-campana[data-cid]');
           if (r) irAPaso(r.dataset.paso);
           if (mismo) panel.scrollTop = scroll;
           if (typeof window.tableroPanelListo === 'function') window.tableroPanelListo();
+          devolverEscrito(escrito);
         })
         .catch(function () {
           if (miPeticion !== peticionPanel) return;
-          cuerpo.innerHTML = '<p class="campo-error">No se pudo abrir la campaña. Revisa tu conexión e intenta de nuevo.</p>';
+          cuerpo.innerHTML = '<p class="campo-error">' + TEXTO_TABLERO.noSePudoAbrir + '</p>';
         });
     }
     function abrirNueva() {
       mostrar(); marcarUrl(null); marcarActiva(null);
-      cuerpo.innerHTML = document.getElementById('tablero-nueva').innerHTML;
+      cuerpo.innerHTML = document.getElementById('tablero-alta').innerHTML;
       panelActualCid = null;
       pasoActual = null; panel.classList.remove('panel-ancho');
       peticionPanel++;    // cualquier `abrir` todavía en vuelo queda obsoleta
@@ -257,7 +326,7 @@
     document.addEventListener('click', function (ev) {
       var pestana = ev.target.closest('[data-ir-paso]');
       if (pestana && panel.contains(pestana)) { irAPaso(pestana.dataset.irPaso); return; }
-      if (ev.target.closest('[data-nueva-campana]')) { abrirNueva(); return; }
+      if (ev.target.closest('[data-alta-campana]')) { abrirNueva(); return; }
       if (ev.target.closest('[data-panel-cerrar]')) { cerrar(); return; }
       var t = ev.target.closest('.tablero-tarjeta[data-cid]');
       if (t && grid.contains(t)) abrir(t.dataset.cid);
@@ -272,7 +341,7 @@
     // Nueva campaña y persona rápida (en el modo «nueva» y en el panel completo).
     panel.addEventListener('submit', function (ev) {
       var f = ev.target;
-      if (f.matches('[data-nueva]')) {
+      if (f.matches('[data-alta]')) {
         ev.preventDefault();
         var err = f.querySelector('[data-error]');
         err.hidden = true;
@@ -286,7 +355,7 @@
         errP.hidden = true;
         fetch(f.action, {method: 'POST', headers: H, body: new FormData(f)})
           .then(json).then(function (j) {
-            var sel = cuerpo.querySelector('[data-nueva-persona], [data-campo="persona_id"]');
+            var sel = cuerpo.querySelector('[data-alta-persona], [data-campo="persona_id"]');
             if (sel) {
               sel.add(new Option(j.nombre, j.id, true, true));
               sel.dispatchEvent(new Event('change', {bubbles: true}));
@@ -318,21 +387,38 @@
         .catch(function (e) {
           el.value = el.dataset.guardado || '';
           delete el.dataset.sucio;
+          if (el.dataset.campo === 'momento') {
+            // Si vuelve a un momento del calendario, el texto propio se esconde: escondido no cuenta.
+            var texto = campos.querySelector('[data-momento-texto]');
+            texto.hidden = el.value !== 'propio';
+            if (texto.hidden) delete texto.dataset.sucio;
+          }
           err.textContent = mensaje(e); err.hidden = false;
         });
+    }
+    // «Otro (escríbelo)…» con el texto vacío no tiene nada que guardar (sigue valiendo el
+    // momento guardado): esas dos marcas de «sin guardar» frenaban recargas en falso.
+    function sinTextoPropio() {
+      delete campos.querySelector('[data-momento-texto]').dataset.sucio;
+      delete campos.querySelector('[data-campo="momento"]').dataset.sucio;
     }
     campos.addEventListener('change', function (ev) {
       var texto = campos.querySelector('[data-momento-texto]');
       var momento = campos.querySelector('[data-campo="momento"]');
       if (ev.target === texto) {
         if (texto.value.trim()) guardarSprint(momento, 'propio:' + texto.value.trim());
+        else sinTextoPropio();
         return;
       }
       var el = ev.target.closest('[data-campo]');
       if (!el) return;
       if (el === momento) {
         texto.hidden = momento.value !== 'propio';
-        if (momento.value === 'propio') { if (texto.value.trim()) guardarSprint(momento, 'propio:' + texto.value.trim()); else texto.focus(); return; }
+        if (momento.value === 'propio') {
+          if (texto.value.trim()) guardarSprint(momento, 'propio:' + texto.value.trim());
+          else { sinTextoPropio(); texto.focus(); }
+          return;
+        }
       }
       guardarSprint(el, el.value);
     });
@@ -352,7 +438,7 @@
           .then(function (r) { return r.json(); })
           .then(function (j) {
             var res = document.getElementById('sprint-lote-resumen');
-            if (res && j.lote) res.textContent = j.lote.listas + ' listas · ' + j.lote.generando + ' generando · ' + j.lote.encoladas + ' en cola · ' + j.lote.error + ' con error · ' + j.lote.aprobadas + ' aprobadas · USD ' + j.lote.costo_usd.toFixed(2) + ' gastado';
+            if (res && j.lote) res.textContent = (j.lote.listas === 1 ? TEXTO_TABLERO.lista1 : TEXTO_TABLERO.listasN).replace('{n}', j.lote.listas) + ' · ' + TEXTO_TABLERO.medioLote.replace('{generando}', j.lote.generando).replace('{encoladas}', j.lote.encoladas).replace('{error}', j.lote.error) + ' · ' + (j.lote.aprobadas === 1 ? TEXTO_TABLERO.aprobada1 : TEXTO_TABLERO.aprobadasN).replace('{n}', j.lote.aprobadas) + ' · ' + TEXTO_TABLERO.gastadoLote.replace('{usd}', j.lote.costo_usd.toFixed(2));
             if (j.estado !== 'generando' && puedeRecargar()) location.reload();
           }).catch(function () {});
       }, 10000);
@@ -362,6 +448,19 @@
   })();
 </script>
 <script>
+  var TEXTO_PANEL = {
+    buscandoReferentes: {{ _('Buscando referentes para esta campaña…')|tojson }},
+    eligeFamilia: {{ _('Elige una familia de la lista.')|tojson }},
+    descrito: {{ _('Descrito ✓')|tojson }},
+    faltaDescribir: {{ _('Falta describir ✎')|tojson }},
+    ideaNoGuardada: {{ _('Una idea no se guardó (mira el aviso en su tarjeta). Inténtalo de nuevo.')|tojson }},
+    calculandoCosto: {{ _('Calculando el costo…')|tojson }},
+    plantillaPiezas: {{ _('Generar %(n)s pieza(s) — US$ %(usd)s', n='{n}', usd='{usd}')|tojson }},
+    nadaQueGenerar: {{ _('Nada que generar')|tojson }},
+    noSePudoCalcular: {{ _('No se pudo calcular el costo.')|tojson }},
+    escribePorQue: {{ _('Escribe por qué no sirve.')|tojson }},
+    noSePudieronCargarSugeridos: {{ _('No se pudieron cargar los sugeridos.')|tojson }}
+  };
   // Panel de la campaña: autoguardado campo por campo, familias, referentes
   // (agregar/quitar), sugeridos gratis y «Sugerir con IA». Usa window.tablero.
   (function () {
@@ -402,11 +501,11 @@
     function cargarSugeridos(extra) {
       var r = raiz(), caja = cuerpo.querySelector('[data-sugeridos]');
       if (!r || !caja) return;
-      caja.innerHTML = '<p class="vacio">Buscando referentes para esta campaña…</p>';
+      caja.innerHTML = '<p class="vacio">' + TEXTO_PANEL.buscandoReferentes + '</p>';
       fetch(r.dataset.urlSugeridos + (extra || ''), {headers: H})
         .then(function (x) { return x.ok ? x.text() : Promise.reject(); })
         .then(function (html) { caja.innerHTML = html; })
-        .catch(function () { caja.innerHTML = '<p class="campo-error">No se pudieron cargar los sugeridos.</p>'; });
+        .catch(function () { caja.innerHTML = '<p class="campo-error">' + TEXTO_PANEL.noSePudieronCargarSugeridos + '</p>'; });
     }
     window.tableroPanelListo = function () {
       cuerpo.querySelectorAll('[data-campo]').forEach(function (el) { el.dataset.guardado = JSON.stringify(valorDe(el)); });
@@ -463,7 +562,7 @@
                                                function (o) { return o.value === v; });
         if (!existe) {
           var err = errorDe(cajaFamilias());
-          if (err) { err.textContent = 'Elige una familia de la lista.'; err.hidden = false; }
+          if (err) { err.textContent = TEXTO_PANEL.eligeFamilia; err.hidden = false; }
           return;
         }
         t.value = '';
@@ -518,7 +617,7 @@
           ok.dataset.reloj = setTimeout(function () { ok.hidden = true; }, 1500);
           pintarConteoReferentes(j);
           var boton = cuerpo.querySelector('[data-abrir-describir="' + caja.dataset.describir + '"]');
-          if (boton) boton.textContent = j.estado === 'lista' ? 'Descrito ✓' : 'Falta describir ✎';
+          if (boton) boton.textContent = j.estado === 'lista' ? TEXTO_PANEL.descrito : TEXTO_PANEL.faltaDescribir;
         })
         .catch(function (e) { err.textContent = T.mensaje(e); err.hidden = false; })
         .then(function () {
@@ -575,8 +674,10 @@
         return guardarIdea(e.card);
       });
       Object.keys(vueloIdea).forEach(function (cp) { promesas.push(vueloIdea[cp]); });
+      // El ángulo de cada idea se autoguarda aparte (angulo.js): también se espera.
+      if (window.guardarAngulosPendientes) promesas.push(window.guardarAngulosPendientes(cuerpo));
       return Promise.all(promesas).then(function (oks) {
-        if (oks.indexOf(false) >= 0) throw new Error('Una idea no se guardó (mira el aviso en su tarjeta). Inténtalo de nuevo.');
+        if (oks.indexOf(false) >= 0) throw new Error(TEXTO_PANEL.ideaNoGuardada);
       });
     }
     // Una respuesta vieja (de un modelo elegido antes) nunca pisa a la última.
@@ -589,7 +690,7 @@
       var mv = caja.querySelector('[data-lote-modelo="video"]').value, mi = caja.querySelector('[data-lote-modelo="imagen"]').value;
       var miPedido = ++pedidoEstimar;
       btn.disabled = true;
-      texto.textContent = 'Calculando el costo…';
+      texto.textContent = TEXTO_PANEL.calculandoCosto;
       fetch(caja.dataset.urlEstimar + '?campana_id=' + encodeURIComponent(caja.dataset.campana) +
             '&modelo_video=' + encodeURIComponent(mv) + '&modelo_imagen=' + encodeURIComponent(mi), {headers: H})
         .then(function (r) { return r.json(); })
@@ -602,10 +703,10 @@
           caja.querySelectorAll('[data-lote-modelo]').forEach(function (s) { delete s.dataset.sucio; });
           texto.textContent = j.texto;
           var n = j.videos + j.imagenes;
-          btn.textContent = n ? 'Generar ' + n + ' pieza(s) — US$ ' + j.usd.toFixed(2) : 'Nada que generar';
+          btn.textContent = n ? TEXTO_PANEL.plantillaPiezas.replace('{n}', n).replace('{usd}', j.usd.toFixed(2)) : TEXTO_PANEL.nadaQueGenerar;
           btn.disabled = !n;
         })
-        .catch(function () { if (miPedido === pedidoEstimar) texto.textContent = 'No se pudo calcular el costo.'; });
+        .catch(function () { if (miPedido === pedidoEstimar) texto.textContent = TEXTO_PANEL.noSePudoCalcular; });
     }
     // ---- Pestaña Piezas (entrega 2): revisión y actualización cada 8 s ----
     var relojPiezas = null;
@@ -623,17 +724,20 @@
     function refrescarPiezas() {
       var r = raiz(), caja = cajaPiezas();
       if (!r || !caja) return Promise.resolve();
+      var cid = r.dataset.cid;
       return fetch(r.dataset.urlPiezas, {headers: H})
         .then(function (x) {
           if (x.status === 404) return null;      // la campaña se borró en otra pestaña: no se pregunta más
           return x.ok ? x.text() : Promise.reject();
         })
         .then(function (html) {
+          // Una respuesta de una campaña que ya no está abierta no toca el reloj de la nueva.
+          if (!sigue(cid)) return;
           if (html === null) { clearTimeout(relojPiezas); relojPiezas = null; return; }
           if (!escribiendoMotivo()) caja.innerHTML = html;
           programarPiezas();
         })
-        .catch(function () { programarPiezas(); });
+        .catch(function () { if (sigue(cid)) programarPiezas(); });
     }
     function trasAccionPieza(cid) {
       T.refrescarTarjeta(cid);
@@ -724,7 +828,7 @@
         if (acc === 'cancelar-rechazo') { motivo.value = ''; delete motivo.dataset.sucio; rechazo.hidden = true; return; }
         var cuerpoRev = {accion: 'aprobar'};
         if (acc === 'confirmar-rechazo') {
-          if (!motivo.value.trim()) { errP.textContent = 'Escribe por qué no sirve.'; errP.hidden = false; return; }
+          if (!motivo.value.trim()) { errP.textContent = TEXTO_PANEL.escribePorQue; errP.hidden = false; return; }
           cuerpoRev = {accion: 'rechazar', motivo: motivo.value.trim()};
         }
         accionPieza.disabled = true;

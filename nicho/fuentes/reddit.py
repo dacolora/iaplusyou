@@ -21,6 +21,9 @@ dos niveles (`depth=2`), ordenados por votos; se saltan `[deleted]`,
 import os
 import re
 
+from flask_babel import gettext
+
+from idiomas import N_
 from nicho.fuentes import _http
 from nicho.fuentes.base import ErrorFuente, Fuente, normalizar_comentario
 
@@ -57,7 +60,7 @@ def normalizar_params(params):
     palabras = (p.get("palabras_clave") or "").strip()
     links = [i for i in (id_post_desde_link(x) for x in (p.get("links") or [])) if i]
     if not palabras and not links:
-        raise ErrorFuente("Reddit necesita palabras clave o links de posts.")
+        raise ErrorFuente(gettext("Reddit necesita palabras clave o links de posts."))
     subreddits = []
     for s in p.get("subreddits") or []:
         s = (s or "").strip().strip("/")
@@ -75,7 +78,7 @@ def _llaves():
     ll = {k: (os.environ.get(k) or "").strip() for k in VARIABLES}
     faltan = [k for k, v in ll.items() if not v]
     if faltan:
-        raise ErrorFuente(f"Falta {', '.join(faltan)} en el .env del servidor.")
+        raise ErrorFuente(gettext("Falta %(llaves)s en el .env del servidor.", llaves=", ".join(faltan)))
     return ll
 
 
@@ -139,12 +142,12 @@ def _token(sesion, ll):
     r = _http.pedir(sesion, "POST", URL_TOKEN, "Reddit", auth=(ll["REDDIT_CLIENT_ID"], ll["REDDIT_CLIENT_SECRET"]),
                     data={"grant_type": "client_credentials"}, headers={"User-Agent": ll["REDDIT_USER_AGENT"]})
     if r.status_code in (401, 403):
-        raise ErrorFuente("Reddit no aceptó las llaves (REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET).")
+        raise ErrorFuente(gettext("Reddit no aceptó las llaves (REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET)."))
     if r.status_code != 200:
-        raise ErrorFuente(f"Reddit no dio token ({r.status_code}).")
+        raise ErrorFuente(gettext("Reddit no dio token (%(codigo)s).", codigo=r.status_code))
     token = (r.json() or {}).get("access_token")
     if not token:
-        raise ErrorFuente("Reddit no devolvió un token.")
+        raise ErrorFuente(gettext("Reddit no devolvió un token."))
     return token
 
 
@@ -155,9 +158,9 @@ def _get(sesion, token, ll, ruta, params):
     if r.status_code == 404:
         return None
     if r.status_code in (401, 403):
-        raise ErrorFuente("Reddit rechazó la llamada (¿la app perdió permisos o el user agent no describe la app?).")
+        raise ErrorFuente(gettext("Reddit rechazó la llamada (¿la app perdió permisos o el user agent no describe la app?)."))
     if r.status_code != 200:
-        raise ErrorFuente(f"Reddit respondió {r.status_code}.")
+        raise ErrorFuente(gettext("Reddit respondió %(codigo)s.", codigo=r.status_code))
     return r.json()
 
 
@@ -201,28 +204,30 @@ class FuenteReddit(Fuente):
         try:
             token = _token(sesion, ll)
         except _http.Error429 as e:
-            self.aviso = f"Reddit limitó las llamadas al pedir el token; intenta en unos minutos. ({e.usuario})"
+            self.aviso = gettext("Reddit limitó las llamadas al pedir el token; intenta en unos minutos. (%(detalle)s)",
+                                 detalle=e.usuario)
             return
-        avanzar("Buscando")
+        avanzar(N_("Buscando"))
         ids = list(p["links"])
         if p["palabras_clave"]:
             posts, limitado = buscar_posts(sesion, token, ll, p)
             ids += [post["id"] for post in posts]
             if limitado:
-                self.aviso = "Reddit limitó las llamadas durante la búsqueda; se leyeron los posts encontrados hasta ahí y los links. Vuelve a buscar en unos minutos."
+                self.aviso = gettext("Reddit limitó las llamadas durante la búsqueda; se leyeron los posts encontrados hasta ahí y "
+                                     "los links. Vuelve a buscar en unos minutos.")
         vistos, pendientes = set(), []
         for i in ids:
             if i not in vistos:
                 vistos.add(i)
                 pendientes.append(i)
         for n, post_id in enumerate(pendientes, start=1):
-            avanzar("Leyendo comentarios", f"post {n} de {len(pendientes)}")
+            avanzar(N_("Leyendo comentarios"), f"post {n} de {len(pendientes)}")
             _http.dormir(PAUSA)
             try:
                 data = _get(sesion, token, ll, f"/comments/{post_id}", {"sort": "top", "limit": p["max_comentarios_por_post"], "depth": 2})
             except _http.Error429:
-                self.aviso = (f"Reddit limitó las llamadas; se guardó lo leído hasta el post {n - 1} de {len(pendientes)}. "
-                              "Vuelve a recolectar en unos minutos.")
+                self.aviso = gettext("Reddit limitó las llamadas; se guardó lo leído hasta el post %(n)s de %(total)s. "
+                                     "Vuelve a recolectar en unos minutos.", n=n - 1, total=len(pendientes))
                 return
             if data is None:
                 continue

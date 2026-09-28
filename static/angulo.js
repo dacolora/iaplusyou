@@ -70,7 +70,7 @@
     var cuenta = caja.querySelector('.angulo-cuenta-gancho');
     if (!gancho || !cuenta) return;
     var n = gancho.value.trim() ? gancho.value.trim().split(/\s+/).length : 0;
-    cuenta.textContent = n + '/12 palabras';
+    cuenta.textContent = (cuenta.dataset.plantilla || '{n}/12').replace('{n}', n);
   }
 
   function iniciar(caja) {
@@ -80,13 +80,15 @@
     if (caja.dataset.soloLectura) return;
     var espera = null;
     var cambios = 0;
+    var enVuelo = null;
     function guardar() {
       var enviado = cambios;
-      fetch(caja.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
+      espera = null;
+      enVuelo = fetch(caja.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
                                body: JSON.stringify({angulo: leer(caja)})})
         .then(function (r) { return r.json(); })
         .then(function (j) {
-          if (!j.ok) { pintarAvisos(caja, [j.error]); return; }
+          if (!j.ok) { pintarAvisos(caja, [j.error]); return false; }
           pintarAvisos(caja, j.avisos);
           var resumen = caja.querySelector('.angulo-resumen');
           if (resumen && j.resumen) resumen.textContent = j.resumen;
@@ -103,9 +105,19 @@
           var ok = caja.querySelector('.angulo-guardado');
           ok.hidden = false;
           setTimeout(function () { ok.hidden = true; }, 1500);
+          return true;
         })
-        .catch(function () {});
+        .catch(function () { return false; })
+        .finally(function () { enVuelo = null; });
+      return enVuelo;
     }
+    // Guarda ya lo que espera su turno (y espera lo que está en vuelo): lo usan
+    // las acciones que leen el ángulo en el servidor justo después.
+    caja._guardarYa = function () {
+      if (espera) { clearTimeout(espera); return guardar(); }
+      return enVuelo || Promise.resolve(true);
+    };
+    caja._pendiente = function () { return !!(espera || enVuelo); };
     caja.querySelectorAll('input, textarea, select').forEach(function (el) {
       el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', function () {
         contarGancho(caja);
@@ -119,5 +131,32 @@
   window.iniciarEditoresAngulo = function (raiz) {
     (raiz || document).querySelectorAll('.angulo-editor').forEach(iniciar);
   };
+  // Promesa que se cumple cuando todo ángulo editado dentro de `raiz` ya está guardado
+  // (true si todos se guardaron bien). «Reescribir», «Aprobar» o «Preparar guion» leen el
+  // ángulo en el servidor: si salen antes de los 800 ms del autoguardado, usarían el viejo.
+  window.guardarAngulosPendientes = function (raiz) {
+    var cajas = Array.prototype.filter.call((raiz || document).querySelectorAll('.angulo-editor'),
+                                            function (c) { return c._guardarYa; });
+    return Promise.all(cajas.map(function (c) { return c._guardarYa(); }))
+      .then(function (oks) { return oks.indexOf(false) < 0; });
+  };
+  // Un formulario que se envía con un ángulo a medio guardar espera ese guardado y se
+  // vuelve a enviar con requestSubmit (así sus confirmaciones siguen corriendo).
+  document.addEventListener('submit', function (ev) {
+    var form = ev.target;
+    if (form.dataset.anguloEsperado) { delete form.dataset.anguloEsperado; return; }
+    var pendientes = Array.prototype.some.call(document.querySelectorAll('.angulo-editor'),
+                                               function (c) { return c._pendiente && c._pendiente(); });
+    if (!pendientes || typeof form.requestSubmit !== 'function') return;
+    // Que el envío detenido no llegue al formulario: su confirm() se pregunta una sola vez,
+    // en el envío de verdad.
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    var boton = ev.submitter || null;
+    window.guardarAngulosPendientes(document).then(function () {
+      form.dataset.anguloEsperado = '1';
+      if (boton && boton.form === form) form.requestSubmit(boton); else form.requestSubmit();
+    });
+  }, true);
   window.iniciarEditoresAngulo();
 })();

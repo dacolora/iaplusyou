@@ -1587,8 +1587,6 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .llave-pasos summary { cursor: pointer; font-size: .82rem; }
 .llave-pasos ol { padding-left: 1.2rem; margin: .4rem 0 0; font-size: .78rem; }
 .llave-pasos li { margin-bottom: .3rem; }
-.llave-meta-conexion { margin-top: .5rem; }
-.llave-meta-conexion .idea-block { margin: 0; }
 
 /* Conectar tu tienda: paso a paso por plataforma */
 .tienda-pasos { display: grid; gap: .4rem; margin: .6rem 0 1rem; }
@@ -1796,6 +1794,9 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 
 /* Referentes — biblioteca (spec 2026-09-23 §8) */
 .ref-panel { display:flex; flex-direction:column; gap:.6rem; margin-top:.6rem; }
+/* Envoltorio de los filtros: en escritorio no existe para el diseño; en el celular se pliega. */
+.ref-filtros { display: contents; }
+.ref-filtros-boton { display: none; }
 .ref-copycoders { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem .8rem; margin:.4rem 0 .8rem; padding:.6rem .8rem;
   border:1px dashed var(--border); border-radius:var(--radius); background:var(--bg); font-size:.85rem; color:var(--muted); }
 .ref-copycoders strong { color:var(--text); }
@@ -1866,6 +1867,10 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .tag-en-curso { color: var(--accent-texto); background: rgba(124, 58, 237, .1); }
 .barrido-fecha { white-space: nowrap; }
 .barrido-sub { display: block; margin-top: .2rem; font-size: .72rem; color: var(--muted); line-height: 1.4; }
+/* La barra del barrido en curso: su celda no tiene otro contenido, así que sin ancho mínimo se encogía a un punto. */
+.barrido-progreso { min-width: 9rem; }
+.barrido-progreso .barra-progreso { margin-top: .2rem; }
+.barrido-progreso .progreso-texto { display: block; margin-top: .3rem; font-size: .72rem; }
 
 /* Opciones excluyentes: control segmentado (pastillas) y tarjetas. El radio
    queda encima, invisible, para que el clic y el teclado sigan siendo suyos. */
@@ -1965,7 +1970,7 @@ summary { cursor: pointer; }
   transform: rotate(-45deg); transition: transform .15s;
 }
 .swap-card[open] > .swap-card-resumen:not(:has(.idea-chevron))::after { transform: rotate(45deg); }
-#nuevo-sprint > summary, #nuevo-estudio > summary { color: var(--accent-texto); }
+#alta-sprint > summary, #nuevo-estudio > summary { color: var(--accent-texto); }
 
 /* Encabezado de pestaña: título grande, una línea, acciones a la derecha. */
 .panel-cabecera {
@@ -2509,6 +2514,63 @@ body.panel-abierto { overflow: hidden; }
   .crear-generar .btn-generar { flex: 1; }
 }
 
+/* ---------- Triple Whale (2026-09-28): pestaña de métricas y evaluación ----------
+   Reusa tiles, secciones, alertas y el gráfico del Tablero (.kpi-tile, .tb-*);
+   aquí solo lo propio: barra de controles, reparto, tablas e ideas. */
+.tw-barra { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: .6rem 1rem; margin: 0 0 1rem; }
+.tw-controles { display: flex; flex-wrap: wrap; gap: .6rem; }
+.tw-controles .campo-label { display: flex; flex-direction: column; gap: .2rem; margin: 0; }
+.tw-sync { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; font-size: .8rem; color: var(--muted); }
+.tw-sync form.inline { margin: 0; }
+.tw-progreso { margin: 0 0 1rem; }
+.tw-aviso { display: block; padding: .4rem .6rem; border-radius: 8px; font-size: .82rem; }
+.tb-alerta-bien { border-left-color: var(--ok); }
+.tb-alerta-bien .tb-alerta-nivel { color: var(--ok); }
+.tw-reparto { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: .8rem; }
+.tw-reparto-item { display: flex; flex-direction: column; gap: .2rem; min-width: 8.5rem; padding: .6rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.tw-reparto-item strong { font-size: 1.2rem; }
+.tw-reparto-item small { color: var(--muted); font-size: .76rem; }
+.tw-tabla-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tw-tabla { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.tw-tabla th { text-align: left; font-weight: 600; color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; padding: .45rem .5rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.tw-tabla td { padding: .5rem; border-bottom: 1px solid var(--border); vertical-align: top; white-space: nowrap; }
+.tw-tabla td.tw-nombre, .tw-tabla td.tw-senales { white-space: normal; min-width: 12rem; }
+.tw-nombre strong { display: block; overflow-wrap: anywhere; }
+.tw-nombre small, .tw-motivo { display: block; color: var(--muted); font-size: .74rem; white-space: normal; max-width: 18rem; }
+.tw-senales .tag-estado { margin: 0 .25rem .25rem 0; display: inline-block; white-space: normal; }
+.tw-nombre .tw-accion { margin: .25rem 0 0; }
+.tw-idea .tag-estado { display: inline-block; margin: .1rem 0 .3rem; }
+.tw-filtros { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .6rem; }
+.tw-filtros .chip { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 999px; padding: .2rem .7rem; font-size: .8rem; cursor: pointer; min-height: 0; }
+.tw-filtros .chip.activo { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tw-evaluar { margin: .4rem 0 .8rem; }
+.tw-eval { margin-top: .6rem; }
+.tw-eval h4 { margin: 1rem 0 .5rem; font-size: .9rem; }
+.tw-eval-resumen { font-size: .92rem; line-height: 1.55; margin: .2rem 0 .6rem; }
+.tw-patrones { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: .4rem 1.2rem; }
+.tw-patrones ul { margin: 0; padding-left: 1.1rem; font-size: .86rem; line-height: 1.5; }
+.tw-ideas, .tw-analizados { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: .8rem; }
+.tw-idea, .tw-analizado { border: 1px solid var(--border); border-radius: 12px; padding: .8rem .9rem; background: var(--bg); font-size: .84rem; min-width: 0; }
+.tw-idea > strong { display: block; font-size: .95rem; margin-bottom: .2rem; }
+.tw-idea p { margin: .4rem 0; line-height: 1.45; }
+.tw-idea form { margin-top: .5rem; }
+.tw-idea-hechas { margin: .5rem 0 0; }
+.tw-idea-piezas { margin: .15rem 0 0; padding-left: 1.1rem; font-size: .8rem; line-height: 1.5; }
+.tw-idea-piezas .tag-estado { display: inline-block; }
+.tw-origen-idea { color: var(--accent-texto, var(--muted)); }
+.tw-angulo { display: grid; grid-template-columns: auto 1fr; gap: .15rem .6rem; margin: .4rem 0; font-size: .8rem; }
+.tw-angulo dt { color: var(--muted); font-weight: 600; }
+.tw-angulo dd { margin: 0; }
+.tw-escena { color: var(--muted); }
+.tw-prompt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tw-analizado { display: flex; gap: .7rem; align-items: flex-start; }
+.tw-analizado img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; flex: none; }
+.tw-analizado p { margin: .3rem 0; line-height: 1.4; }
+@media (max-width: 760px) {
+  .tw-barra { align-items: stretch; }
+  .tw-controles, .tw-controles .campo-label { width: 100%; }
+}
+
 /* ============================================================
    Celular: revisión de pantallas (2026-09-28). Lo que a 375 px se
    salía de la pantalla, quedaba en una sola columna eterna o
@@ -2544,6 +2606,20 @@ body.panel-abierto { overflow: hidden; }
   }
   /* Catálogo › producto: el selector de fotos (20rem) empujaba su formulario 45 px fuera de la tarjeta. */
   .producto-gestion-acciones > * { max-width: 100%; min-width: 0; }
+  /* Referentes: los filtros (8 pastillas, 4 selectores y la búsqueda) ocupaban toda la primera
+     pantalla; se pliegan detrás de «Filtros (n)». */
+  .ref-filtros-boton { display: inline-flex; align-self: flex-start; gap: .3rem; }
+  .ref-filtros:not(.abierto) { display: none; }
+  .ref-filtros.abierto { display: flex; flex-direction: column; gap: .6rem; }
+  /* Botones «×» de quitar (referencia en Crear, foto del catálogo, personaje): 22 px eran
+     poco para un dedo; 32 px en el celular. */
+  .crear-ref-quitar, .producto-gestion-foto button, .personaje-eliminar button {
+    width: 32px; height: 32px; min-width: 32px; min-height: 32px; font-size: .9rem;
+  }
+  /* Selector de opciones en píldora (p. ej. «Fuente» en Traer referentes): con opciones largas se
+     parte en dos líneas y la píldora redonda parecía una mancha; esquinas redondeadas normales. */
+  .segmentado { border-radius: 14px; }
+  .segmentado span { border-radius: 11px; }
   /* Rutas y nombres técnicos largos en un párrafo (Configuración › Marca) se partían fuera de la caja. */
   p code, li code, small code { overflow-wrap: anywhere; }
   /* Tablero › alertas: el error crudo de Meta (JSON sin espacios) empujaba la página a 792 px. */
@@ -2600,6 +2676,10 @@ body.panel-abierto { overflow: hidden; }
       table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) td:empty { display: none; }
   .admin-scroll, .modal-form-tabla { overflow-x: visible; border: 0; background: none; }
 }
+
+/* Detalle técnico de un error (el texto crudo de Meta, para soporte): plegado y sin salirse. */
+.detalle-tecnico { margin: .2rem 0 .6rem; font-size: .76rem; color: var(--muted); }
+.detalle-tecnico code { display: block; margin-top: .3rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ============================================================
    Crear › Audios (_crear_audios.html, spec 2026-09-28)
