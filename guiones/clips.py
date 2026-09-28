@@ -10,6 +10,7 @@ from contextlib import nullcontext
 
 from flask_babel import gettext
 
+import doctrina
 import idiomas
 from guiones import claude, datos, duracion, plantillas, refinador
 from guiones.refinador import Conflicto, NoExiste, _normalizar
@@ -254,8 +255,9 @@ Responde SOLO con JSON, sin texto antes ni después:
             "momentos": [{{"dice": [1], "aire": 0.5, "visual": "..."}}]}}],
  "hooks": {{"hook_2": {{"titulo": "título corto en {nombre}", "lineas": [1, 2], "estado_inicio": "...", "estado_fin": "...", "entornos": [2],
                       "momentos": [{{"dice": [1], "aire": 0.5, "visual": "..."}}]}}}}}}"""
-    orden = idiomas.orden_idioma(idioma)
-    return f"{orden}\n\n{cuerpo}\n\n{orden}"
+    # Doctrina, bloque 4 (§7): la rebanada de la doctrina va aparte, con caché;
+    # la orden de idioma rodea solo las instrucciones del sitio.
+    return doctrina.bloque_system(*doctrina.COMBINACIONES["flowplus_clips"], extra=cuerpo, idioma=idioma)
 
 
 def mensajes(video, esperados, fallas=None):

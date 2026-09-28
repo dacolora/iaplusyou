@@ -21,6 +21,7 @@ from flask_babel import gettext
 
 import db
 import gastos
+import doctrina
 import idiomas
 from nicho.avatares import costo_real, modelo_actual
 
@@ -80,8 +81,9 @@ Responde SOLO con un objeto JSON, sin texto antes ni después y sin bloque de c�
 {{"respuesta": "<explicación para la persona, en {nombre}>", "prompt": "<el prompt COMPLETO revisado, en inglés>"}}
 "prompt" lleva el prompt entero, listo para usar (nunca un fragmento, un resumen, un diff ni "..."), o null si \
 no propones cambios."""
-    orden = idiomas.orden_idioma(idioma)
-    return f"{orden}\n\n{cuerpo}\n\n{orden}"
+    # Doctrina, bloque 4 (§7): la rebanada de la doctrina va aparte, con caché;
+    # la orden de idioma rodea solo las instrucciones del sitio.
+    return doctrina.bloque_system(*doctrina.COMBINACIONES["flowplus_refinador"], extra=cuerpo, idioma=idioma)
 
 
 class ErrorRefinador(ValueError):
@@ -541,7 +543,8 @@ def _llamar_claude(system, messages):
     api = anthropic.Anthropic(api_key=_api_key(), timeout=TIMEOUT_S, max_retries=0)
     resp = api.messages.create(model=MODEL, max_tokens=MAX_TOKENS, system=system, messages=messages)
     uso = getattr(resp, "usage", None)
-    entrada = int(getattr(uso, "input_tokens", 0) or 0)
+    from guiones import claude as guiones_claude
+    entrada = guiones_claude.tokens_entrada_equivalentes(uso)   # la doctrina va con caché (bloque 4 §7)
     salida = int(getattr(uso, "output_tokens", 0) or 0)
     if resp.stop_reason in ("refusal", "max_tokens"):
         mensaje = (gettext("Claude no quiso responder esa solicitud.") if resp.stop_reason == "refusal"
