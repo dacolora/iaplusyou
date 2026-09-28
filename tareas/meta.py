@@ -139,11 +139,11 @@ def publicar(tarea):
 
             ig_user_id = creds["ig_user_id"]
             # Parámetros de rastreo de Triple Whale si el proyecto lo conectó.
-            tags = triple_whale_tiendas.url_tags(cliente)
+            kw_tags = triple_whale_tiendas.kw_url_tags(cliente)
             if entry["contenido_tipo"] == "foto":
                 creative_resp = meta_creative.crear_creative_imagen(
                     f"{entry['nombre']} — creative", entry["contenido_url"], entry["nombre"],
-                    link=destino_url, instagram_user_id=ig_user_id, url_tags=tags,
+                    link=destino_url, instagram_user_id=ig_user_id, **kw_tags,
                 )
             else:
                 # El video se sube a la cuenta publicitaria (advideos) y se
@@ -152,7 +152,7 @@ def publicar(tarea):
                 miniatura_url = _miniatura_para_ad(cliente, ad_id, entry["contenido_url"])
                 creative_resp = meta_creative.crear_creative_video(
                     f"{entry['nombre']} — creative", meta_video_id, miniatura_url,
-                    entry["nombre"], destino_url, instagram_user_id=ig_user_id, url_tags=tags,
+                    entry["nombre"], destino_url, instagram_user_id=ig_user_id, **kw_tags,
                 )
                 ads.actualizar(cliente, ad_id, meta_video_id=meta_video_id)
             creative_id = creative_resp["id"]

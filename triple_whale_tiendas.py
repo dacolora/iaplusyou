@@ -113,6 +113,14 @@ def url_tags(cliente):
     return triple_whale.URL_TAGS if obtener(cliente) else None
 
 
+def kw_url_tags(cliente):
+    """`{"url_tags": …}` para pasar como `**kwargs` a `meta_ads.creative`, o `{}`
+    sin Triple Whale: el argumento solo viaja cuando hay parámetros, así un
+    servidor con el submódulo `meta_ads` sin actualizar sigue creando anuncios
+    mientras ningún proyecto los necesite, en vez de fallar en todos."""
+    tags = url_tags(cliente)
+    return {"url_tags": tags} if tags else {}
+
 def conectados():
     """Proyectos con Triple Whale conectado (para la sincronización periódica)."""
     t = db.triple_whale

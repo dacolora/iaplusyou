@@ -885,3 +885,14 @@ def test_traducir_error_meta():
     assert "developers.facebook.com" in lz.traducir_error_meta(_ERROR_DEV_MODE, modo="propia")
     # Lo que no se reconoce pasa tal cual (los demás tests cuentan con "Meta falló en …").
     assert lz.traducir_error_meta("Meta falló en creative") == "Meta falló en creative"
+
+
+def test_url_tags_solo_viaja_cuando_hay_triple_whale(monkeypatch):
+    """Un servidor con el submódulo meta_ads sin actualizar (sin el argumento
+    `url_tags`) sigue creando anuncios mientras ningún proyecto tenga Triple
+    Whale: el argumento solo se pasa cuando hay parámetros."""
+    import triple_whale_tiendas
+    monkeypatch.setattr(triple_whale_tiendas, "url_tags", lambda cliente: None)
+    assert triple_whale_tiendas.kw_url_tags("acme") == {}
+    monkeypatch.setattr(triple_whale_tiendas, "url_tags", lambda cliente: "tw_source=x&tw_adid=y")
+    assert triple_whale_tiendas.kw_url_tags("acme") == {"url_tags": "tw_source=x&tw_adid=y"}
