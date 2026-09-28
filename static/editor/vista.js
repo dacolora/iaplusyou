@@ -64,15 +64,26 @@ const archivoDe = (m) => `${m?.url ?? ""}\n${m?.url_proxy ?? ""}`;
 // ya hay, en un mapa NUEVO (el de antes no se toca). `recibidos`: los ids que
 // entraron; `cambiados`: los nuevos y los que traen otro archivo (llegó su
 // copia liviana, otra URL) — esos se vuelven a cargar. Lo demás (picos, tira)
-// cambia sin recargar nada.
+// cambia sin recargar nada. Lo que el servidor PREPARA (copia liviana, tira,
+// picos) nunca se pierde: una copia vieja del mismo material (la de la
+// biblioteca, pintada antes de que llegara) que no lo trae se queda con lo
+// que la vista ya tenía — si no, la vista volvía al video original pesado.
+const PREPARADO = ["url_proxy", "proxy_version", "tira_url", "picos"];
+
 export function fusionarMateriales(vigentes, mapa) {
   const materiales = { ...vigentes };
   const recibidos = [];
   const cambiados = [];
-  for (const [k, m] of Object.entries(mapa ?? {})) {
+  for (const [k, llegado] of Object.entries(mapa ?? {})) {
     const mid = Number(k);
-    if (!m || typeof m !== "object" || !Number.isInteger(mid)) continue;
+    if (!llegado || typeof llegado !== "object" || !Number.isInteger(mid)) continue;
     const previo = vigentes?.[mid];
+    const m = { ...llegado };
+    for (const campo of PREPARADO) {
+      if ((m[campo] === null || m[campo] === undefined) && previo?.[campo] !== null && previo?.[campo] !== undefined) {
+        m[campo] = previo[campo];
+      }
+    }
     materiales[mid] = m;
     recibidos.push(mid);
     if (!previo || archivoDe(previo) !== archivoDe(m)) cambiados.push(mid);

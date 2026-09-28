@@ -216,3 +216,25 @@ test("medidasTexto mide solo los textos que se ven en ese instante, como los dib
   const resuelto = Object.getOwnPropertyDescriptor(VistaPrevia.prototype, "resuelto").get;
   assert.equal(resuelto.call({ doc }), doc);
 });
+
+// ---- Fixes finales de la capa 4b ----
+
+test("fusionarMateriales: una copia vieja (de la biblioteca) sin copia liviana, tira ni picos no le quita a la vista los suyos", async () => {
+  const { fusionarMateriales } = await import("../../static/editor/vista.js");
+  const antes = {
+    1: { id: 1, tipo: "video", url: "https://r2/a.mp4", url_proxy: "https://r2/a_p.mp4", proxy_version: 2,
+         tira_url: "https://r2/a_t.jpg", duracion_ms: 4000, nombre: "Clip" },
+    2: { id: 2, tipo: "audio", url: "https://r2/b.wav", url_proxy: null, picos: [0.1, 0.5], duracion_ms: 2000 },
+  };
+  const r = fusionarMateriales(antes, {
+    1: { ...antes[1], url_proxy: null, proxy_version: null, tira_url: null, nombre: "Clip nuevo" },
+    2: { ...antes[2], picos: null },
+  });
+  assert.equal(r.materiales[1].url_proxy, "https://r2/a_p.mp4");
+  assert.equal(r.materiales[1].proxy_version, 2);
+  assert.equal(r.materiales[1].tira_url, "https://r2/a_t.jpg");
+  assert.equal(r.materiales[1].nombre, "Clip nuevo");          // lo demás sí se actualiza
+  assert.deepEqual(r.materiales[2].picos, [0.1, 0.5]);
+  assert.deepEqual(r.cambiados, []);                           // ningún archivo cambió: nada se recarga
+  assert.deepEqual(r.recibidos, [1, 2]);
+});
