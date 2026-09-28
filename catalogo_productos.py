@@ -398,13 +398,21 @@ def encontrar_por_id_o_nombre(cliente, valor, categoria=CATEGORIA_POR_DEFECTO):
     return next((c for c in lista if c.get("nombre_producto") == valor), None)
 
 
-def carpeta_de(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
-    """Ruta en disco de un producto, validada contra fugas de directorio: el id
-    llega desde la URL, así que un '../..' no puede terminar borrando otra cosa."""
+def carpeta_de(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO, variante=None):
+    """Ruta en disco de un activo (o de uno de sus colores con `variante`),
+    validada contra fugas de directorio: el id y el color llegan desde la
+    URL o un formulario, así que un '../..' no puede salir de la carpeta."""
     base = os.path.abspath(_carpeta(cliente, categoria))
     destino = os.path.abspath(os.path.join(base, producto_id))
     if destino != base and not destino.startswith(base + os.sep):
         raise ValueError(f"id de producto inválido: {producto_id!r}")
+    if variante:
+        if os.sep in variante or "/" in variante:
+            raise ValueError(f"color inválido: {variante!r}")
+        ruta_color = os.path.abspath(os.path.join(destino, variante))
+        if not ruta_color.startswith(destino + os.sep):
+            raise ValueError(f"color inválido: {variante!r}")
+        return ruta_color
     return destino
 
 
@@ -492,18 +500,163 @@ def eliminar(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
     modificar_meta(cliente, categoria, _quitar)
 
 
-def eliminar_imagen(cliente, producto_id, nombre_archivo, categoria=CATEGORIA_POR_DEFECTO):
-    """Borra UNA imagen de referencia. Devuelve (ok, mensaje). Nunca deja al
-    activo sin fotos: sin ninguna referencia desaparecería de listar() y
-    quedaría una carpeta fantasma imposible de gestionar desde la UI."""
-    carpeta = carpeta_de(cliente, producto_id, categoria_valida(categoria))
+def eliminar_imagen(cliente, producto_id, nombre_archivo, categoria=CATEGORIA_POR_DEFECTO, variante=None):
+    """Borra UNA imagen. Devuelve (ok, mensaje). Nunca deja sin fotos a un
+    color ni a un producto plano (desaparecerían de listar()); una foto
+    general de un producto con colores sí puede ser la última."""
+    categoria = categoria_valida(categoria)
+    try:
+        carpeta = carpeta_de(cliente, producto_id, categoria, variante=variante)
+    except ValueError as e:
+        return False, str(e)
     seguro = os.path.basename(nombre_archivo)
     ruta = os.path.join(carpeta, seguro)
-    if not os.path.isfile(ruta):
+    if seguro != nombre_archivo or not os.path.isfile(ruta):
         return False, gettext("No encontré esa imagen.")
-    restantes = [f for f in os.listdir(carpeta) if f.lower().endswith(IMAGE_EXTS) and f != seguro]
-    if not restantes:
+    restantes = [f for f in _imagenes_en(carpeta) if f != seguro]
+    es_general = not variante and categoria == "producto" and bool(_variantes_de(cargar_meta(cliente).get(producto_base(producto_id)) or {}))
+    if not restantes and not es_general:
         return False, gettext("Es la única foto del producto. Si quieres quitarla, sube otra primero "
                               "o elimina el producto completo.")
     os.remove(ruta)
     return True, gettext("Imagen eliminada: %(nombre)s", nombre=seguro)
+
+
+def nombre_libre(carpeta, nombre):
+    """`a.jpg` -> `a.jpg`, o `a_2.jpg`, `a_3.jpg`… si ya existe en `carpeta`."""
+    base, ext = os.path.splitext(nombre)
+    candidato, n = nombre, 2
+    while os.path.exists(os.path.join(carpeta, candidato)):
+        candidato = f"{base}_{n}{ext}"
+        n += 1
+    return candidato
+
+
+_CAMPOS_COLOR = ("nombre", "descripcion", "fuente_id", "url_compra", "disponible")
+
+
+def _mover_raiz_a_color(carpeta, color_id):
+    destino = os.path.join(carpeta, color_id)
+    os.makedirs(destino, exist_ok=True)
+    for f in _imagenes_en(carpeta):
+        os.replace(os.path.join(carpeta, f), os.path.join(destino, nombre_libre(destino, f)))
+
+
+def _id_color_desde_nombre(cliente, categoria, pid, nombre):
+    """id_desde_nombre(nombre), pero si `nombre` sigue la convención "<nombre
+    del producto> — <color>" (la de NOMBRES/el importador) se deriva solo del
+    color: si no, cada color heredaría el nombre del producto en su propio id
+    (p. ej. "original_sky_blue" en vez de "sky_blue"), distinto del criterio
+    del resto de colores del mismo producto."""
+    nombre_producto = (cargar_meta(cliente, categoria).get(pid) or {}).get("nombre") or ""
+    prefijo = f"{nombre_producto} — "
+    color_nombre = nombre[len(prefijo):] if nombre_producto and nombre.startswith(prefijo) else nombre
+    return id_desde_nombre(color_nombre)
+
+
+def agregar_color(cliente, pid, nombre, descripcion="", fuente_id=None, url_compra=None, disponible=True,
+                  color_id=None, convertir_actual=None):
+    """Crea el color `color_id` (derivado del nombre si no se pasa) del producto
+    `pid`: entrada en `variantes` y subcarpeta. Un producto plano con fotos
+    en la raíz exige `convertir_actual` (el nombre del color de esas fotos):
+    pasan a ser su primer color. Devuelve el color_id. ValueError si el
+    producto no existe, el color ya existe o hay fotos sin color dicho."""
+    categoria = "producto"
+    carpeta = carpeta_de(cliente, pid, categoria)
+    if not os.path.isdir(carpeta):
+        raise ValueError(gettext("No existe ese producto."))
+    color_id = (color_id or _id_color_desde_nombre(cliente, categoria, pid, nombre)).strip()
+    if not color_id or "/" in color_id or os.sep in color_id:
+        raise ValueError(gettext("Nombre de color inválido."))
+    carpeta_de(cliente, pid, categoria, variante=color_id)  # valida
+
+    def _poner(meta):
+        actual = meta.setdefault(pid, {})
+        variantes = dict(_variantes_de(actual))
+        if not variantes and _imagenes_en(carpeta):
+            if not (convertir_actual or "").strip():
+                raise ValueError(gettext("Este producto ya tiene fotos: dime de qué color son para poder agregar otro."))
+            cid_actual = id_desde_nombre(convertir_actual)
+            _mover_raiz_a_color(carpeta, cid_actual)
+            variantes[cid_actual] = {"nombre": convertir_actual.strip(), "descripcion": "", "fuente_id": None,
+                                     "url_compra": None, "disponible": True}
+            if cid_actual == color_id:
+                variantes[cid_actual].update({"nombre": nombre.strip(), "descripcion": (descripcion or "").strip(),
+                                              "fuente_id": fuente_id, "url_compra": url_compra, "disponible": bool(disponible)})
+                actual["variantes"] = variantes
+                meta[pid] = actual
+                return meta
+        if color_id in variantes:
+            raise ValueError(gettext("Ya hay un color con ese nombre (%(id)s).", id=color_id))
+        variantes[color_id] = {"nombre": nombre.strip(), "descripcion": (descripcion or "").strip(), "fuente_id": fuente_id,
+                               "url_compra": url_compra, "disponible": bool(disponible)}
+        actual["variantes"] = variantes
+        meta[pid] = actual
+        return meta
+    modificar_meta(cliente, categoria, _poner)
+    os.makedirs(os.path.join(carpeta, color_id), exist_ok=True)
+    return color_id
+
+
+def actualizar_color(cliente, pid, color_id, **campos):
+    """nombre, descripcion, fuente_id, url_compra, disponible de un color."""
+    malos = set(campos) - set(_CAMPOS_COLOR)
+    if malos:
+        raise ValueError(f"Campos no permitidos: {sorted(malos)}")
+    carpeta_de(cliente, pid, "producto", variante=color_id)
+
+    def _editar(meta):
+        variantes = _variantes_de(meta.get(pid) or {})
+        if color_id not in variantes:
+            raise ValueError(gettext("Ese color no existe."))
+        for k, v in campos.items():
+            if k in ("nombre", "descripcion"):
+                v = (v or "").strip()
+                if k == "nombre" and not v:
+                    continue
+            if k == "disponible":
+                v = bool(v)
+            variantes[color_id][k] = v
+        meta[pid]["variantes"] = variantes
+        return meta
+    modificar_meta(cliente, "producto", _editar)
+
+
+def quitar_color(cliente, pid, color_id):
+    """Borra el color con sus fotos. Se niega si es el único color con fotos."""
+    import shutil
+
+    carpeta = carpeta_de(cliente, pid, "producto")
+    ruta_color = carpeta_de(cliente, pid, "producto", variante=color_id)
+
+    def _quitar(meta):
+        actual = meta.get(pid) or {}
+        variantes = dict(_variantes_de(actual))
+        if color_id not in variantes:
+            raise ValueError(gettext("Ese color no existe."))
+        otros = [c for c in variantes if c != color_id and _imagenes_en(os.path.join(carpeta, c))]
+        if _imagenes_en(ruta_color) and not otros:
+            raise ValueError(gettext("Es el único color con fotos. Si quieres quitarlo, elimina el producto completo."))
+        variantes.pop(color_id)
+        actual["variantes"] = variantes
+        meta[pid] = actual
+        return meta
+    modificar_meta(cliente, "producto", _quitar)
+    shutil.rmtree(ruta_color, ignore_errors=True)
+
+
+def mover_foto_a_color(cliente, pid, nombre_archivo, color_id):
+    """Una foto general (raíz) pasa a ser referencia del color. Devuelve el
+    nombre final (renumerado si chocaba)."""
+    carpeta = carpeta_de(cliente, pid, "producto")
+    destino = carpeta_de(cliente, pid, "producto", variante=color_id)
+    if color_id not in _variantes_de(cargar_meta(cliente).get(pid) or {}):
+        raise ValueError(gettext("Ese color no existe."))
+    seguro = os.path.basename(nombre_archivo)
+    origen = os.path.join(carpeta, seguro)
+    if not os.path.isfile(origen) or not seguro.lower().endswith(IMAGE_EXTS):
+        raise ValueError(gettext("No encontré esa imagen."))
+    os.makedirs(destino, exist_ok=True)
+    final = nombre_libre(destino, seguro)
+    os.replace(origen, os.path.join(destino, final))
+    return final

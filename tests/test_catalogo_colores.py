@@ -137,3 +137,103 @@ def test_claves_de_producto(cat):
     assert claves["ids"] == {"original", "original/pink", "original/beige"}
     assert claves["nombres"] == {"original", "original — pink", "original — beige"}
     assert cat.claves_de_producto("acme", "nada") == {"ids": {"nada"}, "nombres": set()}
+
+
+def test_carpeta_de_con_variante_valida_fugas(cat):
+    _producto_con_colores(cat)
+    ruta = cat.carpeta_de("acme", "original", "producto", variante="pink")
+    assert ruta.endswith("/clientes/acme/productos/original/pink")
+    assert cat.carpeta_de("acme", "original/pink", "producto") == ruta        # id compuesto: mismo destino
+    for mala in ("..", "../x", "a/b", "/etc"):
+        with pytest.raises(ValueError):
+            cat.carpeta_de("acme", "original", "producto", variante=mala)
+
+
+def test_agregar_color_crea_subcarpeta_y_meta_en_orden(cat):
+    _producto_con_colores(cat, colores=("Pink",))
+    cid = cat.agregar_color("acme", "original", "Original — Sky Blue", descripcion="celeste", fuente_id="v9",
+                            url_compra="https://t/x?variant=9", disponible=False)
+    assert cid == "sky_blue"
+    assert os.path.isdir(cat.carpeta_de("acme", "original", "producto", variante="sky_blue"))
+    v = cat.cargar_meta("acme")["original"]["variantes"]
+    assert list(v) == ["pink", "sky_blue"]
+    assert v["sky_blue"] == {"nombre": "Original — Sky Blue", "descripcion": "celeste", "fuente_id": "v9",
+                             "url_compra": "https://t/x?variant=9", "disponible": False}
+    with pytest.raises(ValueError):
+        cat.agregar_color("acme", "original", "sky blue")   # mismo id normalizado
+    assert cat.agregar_color("acme", "original", "Rojo", color_id="rojo-2") == "rojo-2"
+    with pytest.raises(ValueError):
+        cat.agregar_color("acme", "nada", "Rojo")
+
+
+def test_agregar_color_a_producto_plano_convierte_sus_fotos(cat):
+    carpeta = os.path.join(str(cat.BASE_DIR), "clientes", "acme", "productos", "cojin")
+    _foto(carpeta, "a.jpg")
+    cat.guardar_meta("acme", {"cojin": {"nombre": "Cojín", "descripcion": "", "tipo": "otro", "zonas": [], "regla": ""}})
+    with pytest.raises(ValueError):
+        cat.agregar_color("acme", "cojin", "Rojo")            # hay fotos y no dijo de qué color son
+    cid = cat.agregar_color("acme", "cojin", "Rojo", convertir_actual="Azul")
+    assert cid == "rojo"
+    v = cat.cargar_meta("acme")["cojin"]["variantes"]
+    assert list(v) == ["azul", "rojo"] and v["azul"]["nombre"] == "Azul"
+    assert os.listdir(os.path.join(carpeta, "azul")) == ["a.jpg"] and cat._imagenes_en(carpeta) == []
+    assert [p["id"] for p in cat.listar("acme")] == ["cojin/azul"]
+    # convertir con el MISMO nombre que el color nuevo: una sola variante
+    _foto(os.path.join(str(cat.BASE_DIR), "clientes", "acme", "productos", "gorra"), "g.jpg")
+    assert cat.agregar_color("acme", "gorra", "Negra", convertir_actual="Negra") == "negra"
+    assert list(cat.cargar_meta("acme")["gorra"]["variantes"]) == ["negra"]
+
+
+def test_actualizar_color_solo_campos_permitidos(cat):
+    _producto_con_colores(cat, colores=("Pink",))
+    cat.actualizar_color("acme", "original", "pink", nombre="Rosa", disponible=False, url_compra="https://t/y")
+    v = cat.cargar_meta("acme")["original"]["variantes"]["pink"]
+    assert v["nombre"] == "Rosa" and v["disponible"] is False and v["url_compra"] == "https://t/y"
+    with pytest.raises(ValueError):
+        cat.actualizar_color("acme", "original", "pink", carpeta="x")
+    with pytest.raises(ValueError):
+        cat.actualizar_color("acme", "original", "nada", nombre="x")
+
+
+def test_quitar_color_borra_carpeta_y_se_niega_con_el_ultimo(cat):
+    _producto_con_colores(cat, colores=("Pink", "Beige"), generales=1)
+    cat.quitar_color("acme", "original", "beige")
+    assert list(cat.cargar_meta("acme")["original"]["variantes"]) == ["pink"]
+    assert not os.path.isdir(os.path.join(str(cat.BASE_DIR), "clientes", "acme", "productos", "original", "beige"))
+    with pytest.raises(ValueError):
+        cat.quitar_color("acme", "original", "pink")          # único color con fotos
+    with pytest.raises(ValueError):
+        cat.quitar_color("acme", "original", "nada")
+
+
+def test_mover_foto_a_color_renumera_si_choca(cat):
+    _producto_con_colores(cat, colores=("Pink",), generales=2)
+    base = os.path.join(str(cat.BASE_DIR), "clientes", "acme", "productos", "original")
+    assert cat.mover_foto_a_color("acme", "original", "01.jpg", "pink") == "01_2.jpg"   # pink ya tiene 01.jpg
+    assert cat.mover_foto_a_color("acme", "original", "02.jpg", "pink") == "02.jpg"
+    assert sorted(os.listdir(os.path.join(base, "pink"))) == ["01.jpg", "01_2.jpg", "02.jpg"]
+    assert cat._imagenes_en(base) == []
+    with pytest.raises(ValueError):
+        cat.mover_foto_a_color("acme", "original", "nada.jpg", "pink")
+    with pytest.raises(ValueError):
+        cat.mover_foto_a_color("acme", "original", "01.jpg", "nada")
+
+
+def test_eliminar_imagen_con_variante_y_generales(cat):
+    _producto_con_colores(cat, colores=("Pink",), generales=1)
+    ok, msg = cat.eliminar_imagen("acme", "original", "01.jpg", "producto", variante="pink")
+    assert not ok and "única foto" in msg                       # nunca deja al color sin fotos
+    _foto(os.path.join(str(cat.BASE_DIR), "clientes", "acme", "productos", "original", "pink"), "02.jpg")
+    ok, _msg = cat.eliminar_imagen("acme", "original", "01.jpg", "producto", variante="pink")
+    assert ok and cat.encontrar("acme", "original/pink")["imagenes"] == ["02.jpg"]
+    ok, _msg = cat.eliminar_imagen("acme", "original", "01.jpg", "producto")   # general: puede quedar en cero
+    assert ok and cat.encontrar_producto("acme", "original")["fotos_generales"] == []
+    ok, _msg = cat.eliminar_imagen("acme", "original", "../pink/02.jpg", "producto")
+    assert not ok
+
+
+def test_nombre_libre(cat, tmp_path):
+    d = str(tmp_path / "x"); os.makedirs(d)
+    assert cat.nombre_libre(d, "a.jpg") == "a.jpg"
+    _foto(d, "a.jpg")
+    assert cat.nombre_libre(d, "a.jpg") == "a_2.jpg"
