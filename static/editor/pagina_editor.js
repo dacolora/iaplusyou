@@ -118,6 +118,7 @@ function pintarGuardado(estado, mensaje) {
   const n = $("estado-guardado");
   n.dataset.estado = estado;
   n.textContent = TEXTO_GUARDADO[estado]?.(mensaje) ?? "";
+  n.title = n.textContent;          // en el celular el hueco es fijo: un error largo termina en «…»
   $("recargar").hidden = estado !== "conflicto";
   pintarHerramientas();
 }

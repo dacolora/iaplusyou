@@ -347,6 +347,11 @@
      escenario); la biblioteca y las propiedades suben desde abajo (y se
      cierran con «Listo»). */
   @media (max-width: 760px) {
+    /* El estado del guardado en un hueco fijo, en una línea: «Guardado» →
+       «Cambios sin guardar…» no vuelve a acomodar la barra (y el reproductor
+       no salta). Lo que no cabe termina en «…»; el texto entero va en su
+       `title` (pagina_editor.js). */
+    .ed-guardado { flex: none; width: 10.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ed-escena { padding: .5rem; }
     .ed-herramientas { gap: .35rem; }
     /* cabeceras angostas: solo el icono (el nombre sigue ahí para quien lee con lector de pantalla) */

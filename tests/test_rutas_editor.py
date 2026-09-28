@@ -577,6 +577,25 @@ def test_ningun_ancho_queda_sin_disposicion(dashboard, encolados):
     assert regla and re.search(r"(?<![-\w])width\s*:", regla.group(1)), "el escenario necesita ancho sin media query"
 
 
+def test_el_estado_del_guardado_no_mueve_la_barra_en_el_celular(dashboard, encolados):
+    """Fix final 7: en el celular «Guardado» → «Cambios sin guardar…» cambiaba el
+    ancho del texto, la barra de arriba se volvía a acomodar en otra fila y el
+    reproductor saltaba. El estado va en un hueco de ancho fijo, en una línea,
+    con «…» si no cabe; el texto entero queda en el `title` (el error largo)."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    celular = css[css.index("@media (max-width: 760px)"):]
+    regla = re.search(r"\.ed-guardado \{([^}]*)\}", celular)
+    assert regla, "falta la regla del celular para .ed-guardado"
+    for decl in ("flex: none", "white-space: nowrap", "overflow: hidden", "text-overflow: ellipsis"):
+        assert decl in regla.group(1), decl
+    assert re.search(r"(?<![-\w])width:\s*[\d.]+(em|rem|px)", regla.group(1)), "el hueco necesita un ancho fijo"
+    js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
+    pintar = re.search(r"function pintarGuardado\(estado, mensaje\) \{(.*?)\n\}", js, re.S).group(1)
+    assert "n.title = " in pintar
+
+
 def test_el_escenario_sabe_la_proporcion_del_formato(dashboard, encolados):
     ed, _c, _v = _edicion()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
