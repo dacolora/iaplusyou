@@ -734,6 +734,12 @@ def test_barridos_muestra_progreso_y_oculta_botones_si_hay_trabajo(app, monkeypa
     assert f'data-poll-job="referentes:barrer:{bid}"' in html
     assert "Clasificar pendientes" not in html
     assert "Reintentar imágenes" not in html
+    # La barra se veía como un punto (celda sin ancho) y su texto («61/100») iba
+    # DENTRO de la barra (overflow hidden): ahora tiene ancho mínimo y el texto
+    # va debajo, como hermano (iniciarPolling lo busca ahí).
+    assert ('<div class="barrido-progreso"><div class="barra-progreso" id="trabajo-referentes:barrer:%d" '
+            'data-poll-job="referentes:barrer:%d"><div class="barra-progreso-fill"></div></div>'
+            '<span class="progreso-texto"></span></div>') % (bid, bid) in html
 
 
 def test_barridos_muestra_botones_si_no_hay_trabajo_en_curso(app, monkeypatch):

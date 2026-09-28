@@ -37,7 +37,7 @@
       <td class="num">{{ b.usd_real | usd if b.usd_real else '—' }}</td>
       <td>
         {% if b.trabajo %}
-        <div class="barra-progreso" id="trabajo-{{ b.trabajo }}" data-poll-job="{{ b.trabajo }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+        <div class="barrido-progreso"><div class="barra-progreso" id="trabajo-{{ b.trabajo }}" data-poll-job="{{ b.trabajo }}"><div class="barra-progreso-fill"></div></div><span class="progreso-texto"></span></div>
         {% else %}
           {% if b.pendientes %}
           <form method="post" action="{{ url_for('referentes.clasificar_pendientes', cliente=cliente, bid=b.id) }}" class="inline">
