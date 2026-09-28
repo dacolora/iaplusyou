@@ -44,7 +44,7 @@
     {{ anillo(sp.progreso.porcentaje) }}
     <div>
       <strong>{{ sp.nombre }}</strong> {{ chip_estado(sp.estado) }}
-      <br><small class="vacio">{{ sp.inicio }} → {{ sp.fin }} · {{ _('%(n)s campaña(s)', n=sp.campanas_total) }} · {{ _('%(n)s piezas', n=sp.piezas_planeadas) }} · {{ sp.progreso.texto }}</small>
+      <br><small class="vacio">{{ sp.inicio }} → {{ sp.fin }} · {{ _('%(n)s campaña(s)', n=sp.campanas_total) }} · {{ ngettext('%(num)s pieza', '%(num)s piezas', sp.piezas_planeadas) }} · {{ sp.progreso.texto }}</small>
     </div>
   </a>
   {% else %}

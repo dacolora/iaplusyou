@@ -47,7 +47,7 @@
       <div class="fe-opciones">
         <label>{{ _('Videos') }} <input type="number" name="max_videos" value="5" min="1" max="10" class="mini-input"></label>
         <label>{{ _('Comentarios por video') }} <input type="number" name="max_comentarios_por_video" value="100" min="1" max="500" class="mini-input"></label>
-        <label>{{ _('Idioma') }} <input name="idioma" value="{{ estudio.idioma }}" class="mini-input"></label>
+        <label>{{ _('Idioma') }} <input name="idioma" value="{{ idioma_busqueda or estudio.idioma }}" class="mini-input"></label>
         <label>{{ _('Región') }} <input name="region" value="{{ region_defecto }}" class="mini-input" placeholder="CO"></label>
       </div>
       <small class="vacio">{{ _('Google permite 100 búsquedas por día por proyecto; cada recolección usa una. Los links no gastan búsqueda.') }}</small>

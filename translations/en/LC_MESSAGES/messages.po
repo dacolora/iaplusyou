@@ -140,8 +140,8 @@ msgid "%(aviso)s Si la dejas, se usa tal cual."
 msgstr "%(aviso)s If you leave it, it will be used as is."
 
 #, python-format
-msgid "%(campanas)s · %(planeadas)s piezas planeadas · %(elegidos)s/%(objetivo)s referentes elegidos"
-msgstr "%(campanas)s · %(planeadas)s pieces planned · %(elegidos)s/%(objetivo)s references chosen"
+msgid "%(campanas)s · %(piezas)s · %(elegidos)s/%(objetivo)s referentes elegidos"
+msgstr "%(campanas)s · %(piezas)s · %(elegidos)s/%(objetivo)s references chosen"
 
 #, python-format
 msgid ""
@@ -452,10 +452,6 @@ msgid "%(n)s pieza(s) aprobada(s) por haber pasado el QA."
 msgstr "%(n)s piece(s) approved for passing QA."
 
 #, python-format
-msgid "%(n)s piezas"
-msgstr "%(n)s pieces"
-
-#, python-format
 msgid "%(n)s piezas elegidas tienen puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual."
 msgstr "%(n)s chosen pieces have points to improve according to the doctrine (shown in Create). You can launch anyway."
 
@@ -682,6 +678,12 @@ msgid "%(num)d llamada del plan de Atria"
 msgid_plural "%(num)d llamadas del plan de Atria"
 msgstr[0] "%(num)d call from the Atria plan"
 msgstr[1] "%(num)d calls from the Atria plan"
+
+#, python-format
+msgid "%(num)d pieza planeada"
+msgid_plural "%(num)d piezas planeadas"
+msgstr[0] "%(num)d piece planned"
+msgstr[1] "%(num)d pieces planned"
 
 #, python-format
 msgid "%(num)d por revisar"

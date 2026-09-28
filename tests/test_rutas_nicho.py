@@ -69,6 +69,21 @@ def test_crear_estudio_y_pestana(app):
     assert 'name="idioma"' not in pestana             # sin selector en «Nuevo estudio»
 
 
+def test_idioma_de_busqueda_de_youtube_sale_del_pais_del_proyecto(app, monkeypatch):
+    """Revisión final de la fase 5 (minor 5): con inglés por defecto, el idioma
+    de BÚSQUEDA de YouTube no puede seguir al idioma del estudio (spec §B5 lo
+    separa del idioma de salida): sale del país del proyecto."""
+    import idiomas
+    import proyectos
+    from nicho import datos
+    monkeypatch.setenv("YOUTUBE_API_KEY", "clave-de-prueba")
+    idiomas.guardar_de_proyecto("acme", "en")
+    monkeypatch.setattr(proyectos, "pais", lambda c: "CO")
+    eid = datos.crear_estudio("acme", "Laundry", producto="Pods", tema="laundry", idioma="en")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'name="idioma" value="es"' in html          # país CO → español, aunque el estudio esté en inglés
+
+
 def test_contexto(app):
     from nicho import datos, rutas
     _estudio(datos)
@@ -317,7 +332,8 @@ def test_pagina_tarjetas_con_llaves(app, llaves):
     eid = datos.crear_estudio("acme", "X", idioma="en")
     html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
     assert 'name="subreddits"' in html and 'name="periodo"' in html and 'value="year" selected' in html
-    assert 'name="max_videos"' in html and 'name="idioma" value="en"' in html and 'name="region" value="CO"' in html
+    # El idioma de búsqueda de YouTube sale del país del proyecto (CO → es), no del idioma del estudio.
+    assert 'name="max_videos"' in html and 'name="idioma" value="es"' in html and 'name="region" value="CO"' in html
     assert 'id="form-apify"' in html and "Reseñas de Amazon" in html and "Comentarios de TikTok" in html
     assert f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar" in html and "Traer (se cobra)" in html
     assert "(falta " not in html

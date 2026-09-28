@@ -24,6 +24,7 @@ from nicho import fuentes as fuentes_registro
 from nicho.fuentes import apify as fuente_apify
 from nicho.fuentes import apify_actores
 from nicho.fuentes import archivo as fuente_archivo
+from nicho.fuentes import plataformas
 from nicho.fuentes import reddit as fuente_reddit
 from nicho.fuentes import texto as fuente_texto
 from nicho.fuentes import youtube as fuente_youtube
@@ -164,6 +165,9 @@ def ver(cliente, eid):
                        for k, a in apify_actores.ACTORES.items()],
         recolecciones=list(reversed((est["extra"].get("recolecciones") or [])[-5:])),
         periodos_reddit=fuente_reddit.PERIODOS, max_apify=apify_actores.MAX_RESULTADOS, region_defecto=proyectos.pais(cliente) or "",
+        # El idioma de BÚSQUEDA de YouTube sale del país del proyecto (spec §B5: no es el idioma
+        # de salida; con inglés por defecto, `estudio.idioma` haría buscar en inglés a un cliente LatAm).
+        idioma_busqueda=plataformas.idioma(proyectos.pais(cliente) or ""),
         investigacion=investigacion.resumen(datos.investigacion(cliente, eid)), price_estimate="",
         etiquetas_estudio=datos.ETIQUETAS_ESTADO_ESTUDIO, etiquetas_avatar=datos.ETIQUETAS_ESTADO_AVATAR,
         etiquetas_inv=investigacion.ETIQUETAS_ESTADO, etiquetas_paso_estado=investigacion.ETIQUETAS_ESTADO_PASO,

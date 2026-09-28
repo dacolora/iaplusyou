@@ -72,8 +72,9 @@ def resumen(sp):
     objetivo = sum(int(c.get("referencias_objetivo") or 0) for c in cs)
     elegidos = sum(min(int(c.get("referencias_listas") or 0), int(c.get("referencias_objetivo") or 0)) for c in cs)
     campanas = ngettext("%(num)d campaña", "%(num)d campañas", len(cs))
-    return gettext("%(campanas)s · %(planeadas)s piezas planeadas · %(elegidos)s/%(objetivo)s referentes elegidos",
-                   campanas=campanas, planeadas=planeadas, elegidos=elegidos, objetivo=objetivo)
+    piezas = ngettext("%(num)d pieza planeada", "%(num)d piezas planeadas", planeadas)
+    return gettext("%(campanas)s · %(piezas)s · %(elegidos)s/%(objetivo)s referentes elegidos",
+                   campanas=campanas, piezas=piezas, elegidos=elegidos, objetivo=objetivo)
 
 
 def _fechas_cortas(inicio, fin):
