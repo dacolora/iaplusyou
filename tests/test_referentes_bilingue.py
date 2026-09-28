@@ -122,6 +122,55 @@ def test_clasificar_uno_guarda_i18n(base_temporal, monkeypatch):
     assert ok and datos.referente(None, g)["extra"]["i18n"]["en"] == {"firma": "f-en", "dolor": "d-en"}
 
 
+def test_familia_nueva_de_un_proyecto_en_ingles_va_a_descripcion_en(base_temporal, monkeypatch):
+    """Fix round 1 (Important): un proyecto clasificado en inglés no debe dejar
+    la descripción de una familia nueva en la columna española (la que leen
+    los proyectos en español)."""
+    from referentes import clasificar, datos
+    from tareas import referentes as tr
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    monkeypatch.setattr(clasificar, "clasificar", lambda referente, vocabulario: (
+        {"etapa": "TOF", "consciencia": "unaware", "familia": None,
+         "familia_nueva": {"nombre": "New Format", "descripcion": "An English description."},
+         "dolor": "d", "firma": "f", "lead": None, "i18n": {"en": {"firma": "f", "dolor": "d"}}}, 1, 1))
+    g, _ = datos.guardar_referente(_anuncio("70"), cliente="acme")
+    ok, _, _ = tr._clasificar_uno("acme", datos.referente("acme", g))
+    assert ok
+    f = next(x for x in datos.familias() if x["nombre"] == "EMERGING: New Format")
+    assert f["descripcion_en"] == "An English description." and not (f["descripcion"] or "").strip()
+
+
+def test_familia_nueva_global_sigue_en_descripcion(base_temporal, monkeypatch):
+    """Un referente global (sale en español e inglés) sigue guardando la
+    descripción de una familia nueva en español, como antes del fix."""
+    from referentes import clasificar, datos
+    from tareas import referentes as tr
+    monkeypatch.setattr(clasificar, "clasificar", lambda referente, vocabulario: (
+        {"etapa": "TOF", "consciencia": "unaware", "familia": None,
+         "familia_nueva": {"nombre": "Nuevo Formato", "descripcion": "Una descripción en español."},
+         "dolor": "d", "firma": "f", "lead": None, "i18n": {"es": {"firma": "f", "dolor": "d"}}}, 1, 1))
+    g, _ = datos.guardar_referente(_anuncio("71"))
+    ok, _, _ = tr._clasificar_uno(None, datos.referente(None, g))
+    assert ok
+    f = next(x for x in datos.familias() if x["nombre"] == "EMERGING: Nuevo Formato")
+    assert f["descripcion"] == "Una descripción en español." and not f.get("descripcion_en")
+
+
+def test_validar_normaliza_el_dolor_especial_aunque_venga_en_ingles():
+    """Fix round 1 (minor): bajo la orden de idioma en inglés, Claude puede
+    responder la variante en inglés del dolor especial en vez del valor
+    literal que `recrear.py` compara con `startswith('ninguno-')`."""
+    from referentes import clasificar
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": "X", "familia_nueva": None,
+            "dolor": "None-Offer", "firma": "Some signature text.",
+            "traducciones": {"en": {"firma": "Some signature text in English.", "dolor": "NONE-BRAND"}}}
+    r = clasificar.validar(data, ["X"], salida=("es", "en"))
+    assert r["dolor"] == "ninguno-oferta" and r["i18n"]["en"]["dolor"] == "ninguno-marca"
+    # El valor especial en español, tal cual, no debe alterarse.
+    r2 = clasificar.validar(dict(data, dolor="ninguno-marca"), ["X"], salida=("es",))
+    assert r2["dolor"] == "ninguno-marca"
+
+
 def test_tarea_familias_en_por_tandas_con_gasto_de_creatv(base_temporal, monkeypatch):
     import gastos
     from referentes import copycoders, datos

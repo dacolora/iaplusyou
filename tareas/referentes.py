@@ -253,7 +253,7 @@ def ejecutar_familias_en(tarea):
             raise
         for f in tanda:
             if f["nombre"] in desc:
-                datos.familia_actualizar(f["id"], f["descripcion"], descripcion_en=desc[f["nombre"]])
+                datos.familia_actualizar(f["id"], descripcion_en=desc[f["nombre"]])
                 escritas += 1
         _registrar_familias_en(tarea, n, ent, sal, "familias en inglés")
     return gettext("Descripciones en inglés: %(n)s de %(total)s.", n=escritas, total=len(pendientes))
@@ -503,7 +503,16 @@ def _clasificar_uno(cliente, r):
     if resultado.get("familia_nueva"):
         fn = resultado["familia_nueva"]
         nombre_nuevo = f"EMERGING: {fn['nombre']}"
-        datos.familia_asegurar(nombre_nuevo, fn.get("descripcion") or "", origen="claude")
+        descripcion_nueva = fn.get("descripcion") or ""
+        # La descripción de una familia nueva va a la columna del idioma en
+        # que Claude escribió (spec §B7, fix round 1): un proyecto clasificado
+        # en inglés no debe dejar texto en inglés en la columna española que
+        # leen los proyectos en español; un referente global (es+en) sigue
+        # escribiendo español como siempre.
+        if clasificar.salida_para(r)[0] == "en":
+            datos.familia_asegurar(nombre_nuevo, "", origen="claude", descripcion_en=descripcion_nueva)
+        else:
+            datos.familia_asegurar(nombre_nuevo, descripcion_nueva, origen="claude")
         familia = nombre_nuevo
     # `actualizar_referente` reemplaza `extra` entero: se copia y se agrega el arranque.
     extra = dict(r.get("extra") or {})

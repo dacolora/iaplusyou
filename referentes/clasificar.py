@@ -14,7 +14,7 @@ import anthropic
 import doctrina
 import idiomas
 from generador_prompts import MODEL, _api_key
-from referentes import datos
+from referentes import copycoders, datos
 
 PROMPT = """Eres estratega de marketing directo. Vas a clasificar un anuncio real \
 para una biblioteca de referentes de formatos publicitarios.
@@ -130,6 +130,21 @@ def _resolver_familia(familia, familia_nueva, vocabulario):
     return None, {"nombre": nombre, "descripcion": str(nueva.get("descripcion") or "").strip()}
 
 
+# El dolor especial (`ninguno-oferta`/`ninguno-marca`) es un valor que
+# `recrear.py` compara con `startswith("ninguno-")`; bajo la orden de idioma
+# en inglés Claude puede devolver la variante en inglés de `copycoders.
+# DOLOR_ESPECIAL` (o alguna mayúscula/minúscula rara) en vez del valor
+# especial tal cual — esto lo vuelve a su forma española sin tocar un dolor
+# normal (spec 2026-09-26 §B7, fix round 1).
+_DOLOR_ESPECIAL_INVERSO = {**{k.lower(): v for k, v in copycoders.DOLOR_ESPECIAL.items()},
+                          **{v: v for v in copycoders.DOLOR_ESPECIAL.values()}}
+
+
+def _normalizar_dolor(v):
+    v = (v or "").strip()
+    return _DOLOR_ESPECIAL_INVERSO.get(v.lower(), v)
+
+
 def salida_para(referente):
     """Idiomas en que se escriben firma y dolor (spec 2026-09-26 §B7): un
     referente global (`cliente` NULL) sale en español e inglés en la misma
@@ -166,21 +181,23 @@ def validar(data, vocabulario, salida=("es",)):
     dolor = data.get("dolor")
     if not isinstance(dolor, str) or not dolor.strip():
         raise ClasificacionInvalida(f"Dolor inválido: {dolor}")
+    dolor = _normalizar_dolor(dolor)
     palabras = " ".join(str(data.get("firma") or "").split()).split(" ")
     firma = " ".join(palabras[:40]).strip()
     if not firma:
         raise ClasificacionInvalida("Firma vacía.")
     lead = data.get("lead") if data.get("lead") in doctrina.LEADS else None
     principal = salida[0] if salida else "es"
-    i18n = {principal: {"firma": firma, "dolor": dolor.strip()}}
+    i18n = {principal: {"firma": firma, "dolor": dolor}}
     traducciones = data.get("traducciones") if isinstance(data.get("traducciones"), dict) else {}
     for o in (salida or ())[1:]:
         t = traducciones.get(o) if isinstance(traducciones.get(o), dict) else {}
         firma_o = " ".join(" ".join(str(t.get("firma") or "").split()).split(" ")[:40]).strip()
         if firma_o:            # un idioma que no vino no es error: la llamada ya se pagó y el principal sirve
-            i18n[o] = {"firma": firma_o, "dolor": str(t.get("dolor") or "").strip() or dolor.strip()}
+            dolor_o = str(t.get("dolor") or "").strip()
+            i18n[o] = {"firma": firma_o, "dolor": _normalizar_dolor(dolor_o) if dolor_o else dolor}
     return {"etapa": data["etapa"], "consciencia": data["consciencia"], "familia": familia,
-            "familia_nueva": familia_nueva, "dolor": dolor.strip(), "firma": firma, "lead": lead, "i18n": i18n}
+            "familia_nueva": familia_nueva, "dolor": dolor, "firma": firma, "lead": lead, "i18n": i18n}
 
 
 def clasificar(referente, vocabulario, salida=None):

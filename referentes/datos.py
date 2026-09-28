@@ -91,13 +91,18 @@ def _entero(v):
 
 # ---------------------------------------------------------------- familias ---
 
-def familia_asegurar(nombre, descripcion="", origen="copycoders"):
+def familia_asegurar(nombre, descripcion="", origen="copycoders", descripcion_en=None):
+    """`descripcion_en` (spec §B7, fix round 1): solo se escribe al CREAR la
+    familia (una clasificación en inglés propone la descripción en ese
+    idioma) — una familia que ya existe nunca se toca acá, ni su columna en
+    español (como hoy) ni la de inglés."""
     nombre = _texto(nombre, 120)
     if not nombre:
         raise ErrorDatos("La familia necesita un nombre.")
     if origen not in ("copycoders", "claude", "admin"):
         raise ErrorDatos(f"Origen de familia inválido: {origen}")
     descripcion = _texto(descripcion)
+    descripcion_en = _texto(descripcion_en) or None
     t = db.referente_familia
     with db.conectar() as con:
         f = con.execute(sa.select(t).where(t.c.nombre == nombre)).first()
@@ -105,8 +110,8 @@ def familia_asegurar(nombre, descripcion="", origen="copycoders"):
             if descripcion and not (f.descripcion or "").strip():
                 con.execute(t.update().where(t.c.id == f.id).values(descripcion=descripcion))
             return f.id
-        return con.execute(t.insert().values(nombre=nombre, descripcion=descripcion, origen=origen,
-                                             creado_en=db.ahora())).inserted_primary_key[0]
+        return con.execute(t.insert().values(nombre=nombre, descripcion=descripcion, descripcion_en=descripcion_en,
+                                             origen=origen, creado_en=db.ahora())).inserted_primary_key[0]
 
 
 def familias(cliente=None):
@@ -119,11 +124,18 @@ def familias(cliente=None):
         return [_a_dict(f) for f in con.execute(q)]
 
 
-def familia_actualizar(familia_id, descripcion, descripcion_en=None):
+def familia_actualizar(familia_id, descripcion=None, descripcion_en=None):
+    """`descripcion`/`descripcion_en` en `None` no se tocan (fix round 1): sin
+    esto, `ejecutar_familias_en` reescribía la española con lo que había leído
+    al empezar la tanda, pisando una edición hecha a mano mientras corría."""
     t = db.referente_familia
-    valores = {"descripcion": _texto(descripcion)}
+    valores = {}
+    if descripcion is not None:
+        valores["descripcion"] = _texto(descripcion)
     if descripcion_en is not None:
         valores["descripcion_en"] = _texto(descripcion_en) or None
+    if not valores:
+        return False
     with db.conectar() as con:
         return con.execute(t.update().where(t.c.id == familia_id).values(**valores)).rowcount == 1
 
