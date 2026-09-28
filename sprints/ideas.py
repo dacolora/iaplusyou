@@ -11,6 +11,7 @@ from flask_babel import gettext
 import banco_prompts
 import catalogo_productos
 import doctrina
+from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import producto as doctrina_producto
 import flowplus_prompt
 import idiomas
@@ -60,7 +61,8 @@ REFERENCIAS QUE INSPIRAN ESTA CAMPAÑA (id: qué se ve y qué reutilizar):
 EJEMPLOS DEL TIPO DE ESCENA QUE FUNCIONA (inspiración de estilo, no los copies):
 {banco}
 IDEAS QUE YA EXISTEN EN ESTA CAMPAÑA (no las repitas): {existentes}
-IDEAS DESCARTADAS (evita ese camino): {descartadas}"""
+IDEAS DESCARTADAS (evita ese camino): {descartadas}
+{aprendizajes}"""
 PEDIDO_IDEAS = """
 
 Propón {n_videos} ideas de VIDEO y {n_imagenes} ideas de IMAGEN, distintas entre sí, pensadas para esta audiencia y esta temporada, con el producto como protagonista."""
@@ -265,6 +267,9 @@ def contexto_campana(cliente, campana):
         "ideas_existentes": [i["titulo"] for i in vivas],
         "descartadas": [i["titulo"] for i in (campana.get("ideas") or []) if i.get("estado_idea") == "descartada"],
         "funnel": campana.get("funnel"),
+        # Doctrina, bloque 4: lo que ya ganó y perdió en este proyecto (primero lo del mismo producto).
+        "aprendizajes": doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente),
+                                                                producto=(producto or {}).get("nombre")),
         "producto_fila": producto_fila,
         "fijos": fijos_de(persona, producto_fila, campana.get("consciencia")),
         "consciencia": campana.get("consciencia"),
@@ -300,7 +305,8 @@ def armar_datos(ctx):
         temporada=_temporada_texto(ctx.get("momento") or ctx.get("temporada")), guia=ctx.get("guia") or "",
         referencias=_referencias_texto(ctx.get("referencias") or []), banco=banco,
         existentes=", ".join(ctx.get("ideas_existentes") or []) or "ninguna",
-        descartadas=", ".join(ctx.get("descartadas") or []) or "ninguna")
+        descartadas=", ".join(ctx.get("descartadas") or []) or "ninguna",
+        aprendizajes=ctx.get("aprendizajes") or "APRENDIZAJES DEL PROYECTO: ninguno todavía")
 
 
 def instrucciones(ctx, idioma="es"):
@@ -426,6 +432,10 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
     orden = orden_ideas(idioma, (ctx.get("mercado") or {}).get("idioma"))
     validos = {r["id"] for r in ctx["referencias"]}
     datos_msg = armar_prompt(ctx, n_videos, n_imagenes)
+    # Doctrina, bloque 4: los aprendizajes son DATOS para escribir, pero NO
+    # para verificar cifras — «CTR 2,1 %» de una prueba pasada no vuelve
+    # verificable un «2,1 % de la gente…» inventado.
+    datos_verif = armar_prompt(dict(ctx, aprendizajes=""), n_videos, n_imagenes)
     system = doctrina.bloque_system("angulo", "gancho", "video",
                                     extra=f"{orden}\n\n{instrucciones(ctx, idioma)}\n\n{orden}")
     content = [{"type": "text", "text": datos_msg}]
@@ -436,7 +446,7 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
         if uso is not None:
             uso["entrada"] = uso.get("entrada", 0) + entrada
             uso["salida"] = uso.get("salida", 0) + salida
-        return crudo, parsear(crudo, validos, ctx["duraciones"], datos_msg, fijos=ctx.get("fijos"))
+        return crudo, parsear(crudo, validos, ctx["duraciones"], datos_verif, fijos=ctx.get("fijos"))
 
     try:
         crudo, lista = pedir(content)

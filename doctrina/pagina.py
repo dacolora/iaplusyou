@@ -15,7 +15,7 @@ from idiomas import N_
 TITULOS = {"base": N_("Lo esencial"), "investigar": N_("Investigar"), "angulo": N_("El ángulo"),
           "gancho": N_("El gancho"), "guion": N_("El guion"), "video": N_("El video"),
           "caption": N_("El caption"), "clasificar": N_("Leer anuncios ajenos"),
-          "revisar": N_("Revisar antes de lanzar")}
+          "revisar": N_("Revisar antes de lanzar"), "diagnosticar": N_("Cuando pierde")}
 
 _TITULO = re.compile(r"^(#{1,3})\s+(.*)$")
 _VINETA = re.compile(r"^\s*-\s+(.*)$")

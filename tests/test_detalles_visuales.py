@@ -17,9 +17,10 @@ def test_foto_que_no_carga_se_reemplaza_por_un_recuadro_neutro(app):
 
 def test_miniaturas_de_video_piden_el_primer_cuadro():
     """Safari (iPhone) deja negra una miniatura con preload=metadata hasta
-    darle play; `#t=0.1` le hace pintar ese cuadro."""
+    darle play; `#t=0.1` le hace pintar ese cuadro. Las tarjetas de Crear
+    viven en _crear_tarjetas.html (tarjetas ligeras, 2026-09-28)."""
     for ruta, fragmento in (("templates/_tab_experimentos.html", "{{ el.url_video }}#t=0.1"),
-                            ("templates/_tab_creativeflowplus.html", "{{ item.video_url }}#t=0.1")):
+                            ("templates/_crear_tarjetas.html", "{{ item.video_url }}#t=0.1")):
         assert fragmento in open(ruta, encoding="utf-8").read(), ruta
 
 

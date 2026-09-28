@@ -8,7 +8,7 @@
   <div>
     <h1>{{ _('Revisión de %(nombre)s', nombre=sprint.nombre) }}</h1>
     <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ _('%(terminadas)s terminadas de %(planeadas)s · %(aprobadas)s aprobadas · %(rechazadas)s rechazadas · %(sin_revisar)s sin revisar · %(error)s con error · USD %(usd)s', terminadas=resumen.terminadas, planeadas=resumen.planeadas, aprobadas=resumen.aprobadas, rechazadas=resumen.rechazadas, sin_revisar=resumen.sin_revisar, error=resumen.error, usd='%.2f' % resumen.costo_usd) }}</p>
-    <p class="vacio">{{ _('Atajos:') }} <kbd>A</kbd> {{ _('aprobar') }} · <kbd>R</kbd> {{ _('rechazar') }} · <kbd>←</kbd> <kbd>→</kbd> {{ _('moverse. Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; pasa el cursor para leer la nota.') }}</p>
+    <p class="vacio">{{ _('Atajos:') }} <kbd>A</kbd> {{ _('aprobar') }} · <kbd>R</kbd> {{ _('rechazar') }} · <kbd>←</kbd> <kbd>→</kbd> {{ _('moverse. Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué.') }}</p>
   </div>
 </div>
 
@@ -54,9 +54,8 @@
       </div>
       {% elif p.qa %}
       <div class="sprint-qa">
-        <span class="sprint-qa-score sprint-qa-{{ p.qa.veredicto }}">{{ p.qa.score }}</span>
-        {% for k in checks %}{% set ch = (p.qa.checks or {}).get(k) %}{% if ch %}<span class="qa-check {{ 'ok' if ch.ok else 'mal' }}" title="{{ etiqueta_sprint(k) }}: {{ ch.nota }}">{{ '✓' if ch.ok else '✗' }}</span>{% endif %}{% endfor %}
-        <small class="vacio">{{ etiqueta_sprint(p.qa.veredicto) }}</small>
+        {% from "_sprint_qa.html" import qa_detalle %}
+        {{ qa_detalle(p.qa, checks) }}
         {% set doc = p.doctrina or {} %}
         {% if doc.estado == 'mejorar' %}<span class="tag-estado" title="{{ _('Revisión de la doctrina: se ve en Crear') }}">{{ _('Doctrina: %(n)s por mejorar', n=doc.n) }}</span>{% elif doc.estado == 'bien' %}<span class="tag-estado" title="{{ _('Revisión de la doctrina') }}">{{ _('Doctrina: bien') }}</span>{% elif doc.estado %}<span class="tag-estado" title="{{ _('Se revisa desde la pieza en Crear') }}">{{ _('Doctrina: sin revisar') }}</span>{% endif %}
       </div>

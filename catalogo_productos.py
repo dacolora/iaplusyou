@@ -5,6 +5,7 @@ referencia (mismo producto, distintos ángulos/tomas) para darle a Nano Banana
 la mejor fidelidad posible al generar. Al usuario solo se le muestra UNA foto
 representativa por producto — las demás son material interno.
 """
+import hashlib
 import os
 import re
 import unicodedata
@@ -229,6 +230,37 @@ def listar_todo(cliente):
     for cat in CATEGORIAS:
         todo.extend(listar(cliente, cat))
     return todo
+
+
+ANCHOS_MINIATURA = (320,)
+
+
+def miniatura(ruta, ancho=320):
+    """Ruta de una miniatura JPEG de `ancho` px de la foto `ruta`, hecha con
+    Pillow y guardada en data/miniaturas/ con la fecha y el tamaño del
+    original en el nombre (una foto reemplazada da otra miniatura; las
+    huérfanas pesan KB). Las fotos del catálogo se sirven originales (2–6 MB
+    cada una) y el selector de Crear las muestra a 80 px: 32 fotos eran 34 MB
+    por carga (auditoría 2026-09-28). Si Pillow no puede abrir el archivo,
+    devuelve `ruta` tal cual y se sirve el original."""
+    st = os.stat(ruta)
+    clave = hashlib.sha1(f"{ruta}|{int(st.st_mtime)}|{st.st_size}|{ancho}".encode()).hexdigest()
+    carpeta = os.path.join(BASE_DIR, "data", "miniaturas")
+    destino = os.path.join(carpeta, f"{clave}.jpg")
+    if os.path.exists(destino):
+        return destino
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(ruta) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+            im.thumbnail((ancho, ancho * 2))
+            os.makedirs(carpeta, exist_ok=True)
+            tmp = f"{destino}.{os.getpid()}.parcial"
+            im.save(tmp, "JPEG", quality=82, optimize=True)
+            os.replace(tmp, destino)
+    except Exception:  # noqa: BLE001 — no es una imagen que Pillow entienda: va el original
+        return ruta
+    return destino
 
 
 def encontrar(cliente, producto_id, categoria=None):

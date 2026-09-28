@@ -1,0 +1,106 @@
+{% from "_revision_doctrina.html" import revision_doctrina %}
+{# Detalle de una pieza de Crear: lo que antes iba en el <template> de la
+   tarjeta. Lo pide el modal por fetch (/creative_flow/<id>/detalle). #}
+{% macro detalle_crear(item) %}
+        <div class="detalle-media">
+          {% if item.estado == "video_listo" and item.tipo == "imagen" %}
+          <img src="{{ item.video_url }}" alt="">
+          {% elif item.estado == "video_listo" %}
+          <video src="{{ item.video_url }}" controls autoplay muted loop playsinline></video>
+          {% elif item.referencias %}
+          <img src="{{ item.referencias[0].frame_url }}" alt="" style="opacity:.6;">
+          {% endif %}
+        </div>
+        <div class="detalle-info">
+          <p class="campo-label">{{ _('Qué tenía que pasar') }}</p>
+          <p class="detalle-texto">{{ item.accion_central or _('(sin texto)') }}</p>
+          <p class="vacio" style="padding:0;font-size:.78rem;">
+            {% if item.tipo == "imagen" %}{{ _('Imagen') }}{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}{% endif %}
+            · {{ item.modelo_nombre|traducir }}
+            {% if item.enfoque_nombre %} · {{ item.enfoque_nombre|traducir }}{% endif %}
+            {% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}
+            · <span class="tag-estado">{{ item.estado }}</span>
+          </p>
+          {% if item.referencias %}
+          <p class="campo-label" style="margin-top:.8rem;">{{ _('Referencias') }}</p>
+          <div class="catalogo-productos" style="margin-bottom:.6rem;">
+            {% for r in item.referencias %}
+            <figure style="margin:0;text-align:center;">
+              <img src="{{ r.frame_url }}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;background:var(--panel-2);{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
+              <figcaption class="vacio" style="padding:0;font-size:.66rem;">{{ r.etiqueta }}</figcaption>
+            </figure>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if item.estado == "prompt_listo" and item.tipo != "imagen" %}
+          <section class="fe-seccion">
+            <h4 class="fe-titulo">{{ _('Prompt por planos') }}</h4>
+            {% if item.director and item.director.estado == "fallback" %}
+            <p class="tag-error">{{ _('La IA no pudo armar los planos (%(aviso)s); este es el prompt básico. Puedes editarlo o rearmar.', aviso=item.director.aviso) }}</p>
+            {% endif %}
+            <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}">
+              <label class="campo-label">{{ _('Versión A (lo que recibe el modelo)') }}</label>
+              <textarea name="prompt_a" rows="10" style="width:100%;font-size:.8rem;">{{ item.prompt_relleno }}</textarea>
+              {% if item.director and item.director.prompt_b %}
+              <details style="margin-top:.5rem;"><summary class="vacio" style="cursor:pointer;padding:0;font-size:.78rem;">{{ _('Versión B — %(dif)s', dif=item.director.diferencia_b) }}</summary>
+                <textarea name="prompt_b" rows="10" style="width:100%;font-size:.8rem;">{{ item.director.prompt_b }}</textarea>
+              </details>
+              {% endif %}
+              <button type="submit" class="btn-guardar btn-sm" style="margin-top:.4rem;">{{ _('Guardar cambios') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe las versiones A y B (se pierden tus ediciones). ¿Seguir?')|tojson }});'>
+              <button type="submit" class="btn-sm">{{ _('Rearmar con IA') }}</button>
+            </form>
+          </section>
+          {% elif item.prompt_relleno and item.prompt_relleno != item.accion_central %}
+          <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">{{ _('Ver el prompt completo que recibió el modelo') }}</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
+          {% endif %}
+          {% if item.estado == "error" %}
+          <p class="tag-error">{{ item.error }}</p>
+          {% endif %}
+          {% if item.revision_estado %}{{ revision_doctrina(item, cliente) }}{% endif %}
+
+          <div class="detalle-acciones">
+            {% if item.estado == "video_listo" %}
+            <a class="btn-generar btn-sm" href="{{ item.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>
+            {% endif %}
+            {% if item.estado == "video_listo" and item.tipo != "imagen" %}
+            <a class="btn-generar btn-sm" href="#final?cf={{ item.id }}"
+               onclick="var d = document.getElementById('generado-modal'); if (d) d.close(); location.hash = this.getAttribute('href'); return false;">{{ _('Llevar a final edition') }}</a>
+            {% endif %}
+            {% if item.estado in ("video_listo", "error", "prompt_listo") %}
+            <form method="post" action="{{ url_for('fp_reusar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+              {% if item.estado == "video_listo" and item.tipo == "imagen" %}
+              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="incluir_resultado" value="si" checked> {{ _('Usar esta imagen como referencia') }}</label>
+              {% endif %}
+              <button type="submit" class="btn-guardar btn-sm">{{ _('Editar y crear otra a partir de esta') }}</button>
+            </form>
+            {% endif %}
+            {% if item.estado in ("prompt_listo", "error") %}
+            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd if item.costo_estimado else '' }}">
+              {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.director and item.director.prompt_b and not item.tiene_hija_b %}
+              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> {{ _('Generar también la versión B (dos videos)') }}</label>
+              {% endif %}
+              {% if item.estado == "prompt_listo" %}
+              <p class="vacio" style="padding:0;font-size:.75rem;color:var(--accent-texto);margin-bottom:.4rem;">{{ _('👆 Revisa el prompt arriba antes de generar') }}</p>
+              {% endif %}
+              <button type="submit" class="btn-generar btn-sm fp-generar-btn">{% if item.estado == "error" %}{{ _('Reintentar') }}{% elif item.estado == "prompt_listo" %}{{ _('Generar video') }}{% else %}{{ _('Generar') }}{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
+            </form>
+            {% endif %}
+            {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" %}
+            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+              <button type="submit" class="btn-sm">{{ _('Rearmar el prompt') }}</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('¿Descartar esta pieza?')|tojson }});' style="display:inline;">
+              <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
+            </form>
+            {# Galería primero: videos e imágenes listos van a Experimentos ya
+               marcados (#experimentos?piezas=<pieza_id>); el reload hace que la
+               pestaña lea el hash y abra los tres pasos. #}
+            {% if item.estado == "video_listo" and item.pieza_id %}
+            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ item.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
+            {% endif %}
+          </div>
+        </div>
+{% endmacro %}

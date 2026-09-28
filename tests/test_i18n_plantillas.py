@@ -39,6 +39,10 @@ PLANTILLAS_TRADUCIDAS = [
     # comentarios e investigación.
     "_tab_nicho.html", "_nicho_avatares.html", "_nicho_comentarios.html",
     "_nicho_investigacion.html", "_nicho_nav.html", "nicho_estudio.html",
+    # Doctrina bloque 4: la sección de aprendizajes dentro de Experimentos.
+    "_aprendizajes.html",
+    # Merge de main (2026-09-28): las razones del QA con un toque, dentro de Sprints.
+    "_sprint_qa.html",
 ]
 
 

@@ -591,3 +591,29 @@ def test_pedir_precio_no_disponible_no_bloquea(ent):
     assert ac.pedir("acme", eid, "escalar", {"pais": "CO", "ep_id": ep}, "ganador")[0] == "propuesta"
     prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "escalar"][0]
     assert "precio_estimado" not in prop["payload"]
+
+
+def test_pedir_con_solo_proponer_deja_propuesta_aunque_sea_auto(ent):
+    """Doctrina, bloque 4 (§4): cuando el diagnóstico apunta a la landing, la
+    oferta o la estación, el rescate espera a una persona en todo modo."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+    ex.actualizar("acme", eid, modo="auto")
+    estado, msg = ac.pedir("acme", eid, "rescatar", {"ep_id": ep, "solo_proponer": True},
+                           "perdedora · Diagnóstico: la landing — decide tú si rescatar")
+    assert estado == "propuesta" and "decide tú" in msg
+    assert ("planificar", "rescatar", ep) not in ent["llamadas"]
+    assert ac.pedir("acme", eid, "rescatar", {"ep_id": ep}, "perdedora")[0] == "ejecutada"
+
+
+def test_precio_estimado_del_rescate_respeta_el_salto(ent, monkeypatch):
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+    import creative_flow as cf
+    import gastos
+    monkeypatch.setattr(cf, "cargar", lambda c: {"cf_1": {"modelo": "wan3", "duracion_objetivo": 8}})
+    monkeypatch.setattr(gastos, "estimar", lambda tipo, **k: {"usd": 1.0 if tipo == "final" else 5.0, "texto": "x"})
+    e = ex.obtener("acme", eid)
+    assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep})["usd"] == 1.0                 # escalón 1: una final
+    assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep, "salto": 3})["usd"] == 6.0     # regenerar: video + final
+    ex.actualizar_pieza("acme", ep, escalon_rescate=2)
+    e = ex.obtener("acme", eid)
+    assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep, "salto": 2})["usd"] == 6.0     # nunca vuelve atrás

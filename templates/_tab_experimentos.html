@@ -279,6 +279,9 @@
             {% if pz.metricas.estado_meta_texto %}<small>· {{ pz.metricas.estado_meta_texto }}</small>{% endif %}
             {% if pz.veredicto and pz.veredicto != "pendiente" %}<span class="veredicto veredicto-{{ pz.veredicto }}" title="{{ pz.veredicto_motivo or '' }}">{{ etiquetas_exp.veredicto.get(pz.veredicto, pz.veredicto)|traducir }}</span>{% endif %}
             {% if pz.escalon_rescate %}<span class="tag-estado tag-escalon" title="{{ _('Rescates intentados sobre esta pieza') }}">{{ _('Escalón %(n)s/3', n=pz.escalon_rescate) }}</span>{% endif %}
+            {# Doctrina, bloque 4: por qué perdió y qué sigue (solo informa). #}
+            {% set dg = (pz.extra or {}).get('diagnostico') %}
+            {% if pz.veredicto == 'perdedor' and dg %}<span class="exp-diagnostico">{% if dg.error %}<small class="tag-error">{{ _('El diagnóstico no se pudo hacer: %(error)s', error=dg.error) }}</small>{% else %}{% for c in dg.causas %}<span class="tag-estado" title="{{ c.detalle }}{% if c.evidencia %} ({{ c.evidencia }}){% endif %}">{{ CAUSAS_NOMBRE.get(c.codigo, c.codigo)|traducir }}</span>{% endfor %}<small>{{ _('Siguiente: %(paso)s', paso=SIGUIENTES_NOMBRE.get(dg.siguiente.que, dg.siguiente.que)|traducir) }}{% if dg.siguiente.porque %} — {{ dg.siguiente.porque }}{% endif %}</small> <a href="{{ url_for('doctrina_pagina', cliente=cliente) }}#diagnosticar" target="_blank" rel="noopener">{{ _('¿Por qué?') }}</a>{% endif %}</span>{% endif %}
             {% if pz.error %}<span class="tag-error">{{ pz.error }}</span>{% endif %}</span>
           {% if pz.metricas %}
           <span class="kpis kpis-mini">
@@ -583,3 +586,5 @@
     }
   })();
 </script>
+{# Doctrina, bloque 4: lo que el proyecto ya aprendió de sus pruebas. #}
+{% include "_aprendizajes.html" %}

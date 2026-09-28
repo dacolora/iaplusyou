@@ -40,7 +40,7 @@
         {% for p in lista %}
         <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
           <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
-          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid) }}" alt="{{ p.nombre }}" loading="lazy">
+          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
           <span>{{ p.nombre }}</span>
         </label>
         {% endfor %}
