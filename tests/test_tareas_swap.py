@@ -22,6 +22,7 @@ def test_registro_contiene_swap_generar(base_temporal):
         "catalogo_importar", "cola_limpiar", "db_respaldar", "edicion_desde_clon", "edicion_producir",
         "edicion_proxy", "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_lanzar", "exp_refrescar",
         "exp_refrescar_todos", "final_guion", "final_producir", "flowplus_director", "flowplus_imagen",
+        "flowplus_recuperar",
         "flowplus_video", "materiales_limpiar", "meta_publicar", "meta_refrescar", "musica_generar",
         "nicho_generar_avatares", "nicho_inv_buscar", "nicho_inv_consultas", "nicho_inv_seleccionar",
         "nicho_recolectar", "organico_publicar", "pieza_revisar", "producto_pedidos", "producto_vincular",

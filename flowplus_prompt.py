@@ -19,7 +19,12 @@ Wan 3.0), así que las prohibiciones van dentro del prompt como frases negativas
 explícitas. Las referencias se nombran con los tokens que documentan los
 fabricantes (`Image N` / `Video N`, por orden de subida; spec director §5):
 `asignar_tokens` los calcula por modelo y `sustituir_tokens` cambia las
-menciones `@Imagen N` / `@Video N` / `@Logo N` del texto de la persona.
+menciones `@Imagen N` / `@Video N` / `@Logo N` del texto de la persona. Desde el
+incidente 2026-09-28 también entiende lo que la gente pega de otras
+herramientas (`@Image1`, `@Image 1`, `@[Image 1](image_1)`, `@image_4`, en
+cualquier mayúscula): todas se leen como la mención canónica `@Imagen N`; y
+`menciones_sin_referencia` lista las que no tienen referencia en la bandeja,
+para que la ruta avise antes de cobrar en vez de dejar que el modelo invente.
 
 Idioma del proyecto (spec 2026-09-26 §B4-§B5): todas las frases fijas que van
 al modelo viven en `TEXTOS`, un diccionario por idioma ("es"/"en"); cada
@@ -37,7 +42,26 @@ def _lista(refs, tipo):
     return [r for r in refs if r.get("tipo") == tipo]
 
 
-_MENCION = re.compile(r"@(Imagen|Video|Logo) (\d+)")
+# Menciones que escribe (o pega) la persona. El chip inserta `@Imagen 1`; los
+# textos pegados de otras herramientas traen `@Image1`, `@Image 1`,
+# `@[Image 1](image_1)` o `@image_4` (incidente 2026-09-28: llegaban crudos al
+# modelo y este inventaba o duplicaba personajes). Todas se leen igual; la
+# forma canónica es `@Imagen N` / `@Video N` / `@Logo N` (la etiqueta del chip).
+# `(?<![\w.])` deja en paz los correos (ana@imagen1.com) y `(?![\w@])` exige que
+# el número termine ahí.
+_MENCION = re.compile(
+    r"(?<![\w.])@(?:\[\s*(?P<tipo_b>imagen|image|video|logo)[ _]?(?P<n_b>\d+)\s*\]\([^)\n]*\)"
+    r"|(?P<tipo>imagen|image|video|logo)[ _]?(?P<n>\d+))(?![\w@])",
+    re.IGNORECASE,
+)
+_TIPO_CANONICO = {"imagen": "Imagen", "image": "Imagen", "video": "Video", "logo": "Logo"}
+
+
+def _etiqueta_canonica(m):
+    """`@Imagen N` / `@Video N` / `@Logo N` para cualquier forma de mención."""
+    tipo = (m.group("tipo_b") or m.group("tipo")).lower()
+    n = int(m.group("n_b") or m.group("n"))
+    return f"@{_TIPO_CANONICO[tipo]} {n}"
 
 
 def asignar_tokens(referencias, modelo_id):
@@ -74,9 +98,27 @@ def sustituir_tokens(texto, referencias):
     por_etiqueta = {r.get("etiqueta"): r.get("token") for r in referencias if r.get("token")}
 
     def _cambiar(m):
-        return por_etiqueta.get(m.group(0), m.group(0))
+        return por_etiqueta.get(_etiqueta_canonica(m)) or m.group(0)
 
     return _MENCION.sub(_cambiar, texto or "")
+
+
+def menciones_sin_referencia(texto, referencias):
+    """Menciones del texto (tal como las escribió la persona, sin repetir, en
+    orden) que no tienen referencia: la ruta de Crear avisa y no genera —
+    con ellas el modelo inventaba o duplicaba personajes (incidente
+    2026-09-28: un mapa de cuatro imágenes con dos en la bandeja). Mira
+    etiquetas, no tokens, así que sirve también para la imagen, que no los
+    asigna."""
+    etiquetas = {r.get("etiqueta") for r in referencias}
+    vistas, faltan = set(), []
+    for m in _MENCION.finditer(texto or ""):
+        literal = m.group(0)
+        if _etiqueta_canonica(m) in etiquetas or literal in vistas:
+            continue
+        vistas.add(literal)
+        faltan.append(literal)
+    return faltan
 
 
 def _nombre(r):

@@ -128,3 +128,55 @@ def test_el_primer_plano_no_lleva_corte_y_los_siguientes_si():
     assert lineas[0].startswith("Shot 1 (0-4s): primer plano,") and "Hard cut" not in lineas[0]
     assert lineas[1].startswith("Shot 2 (4-8s): Hard cut. plano medio,")
     assert lineas[2].startswith("Shot 3 (8-12s): Hard cut. plano general,")
+
+
+# --- Incidente 2026-09-28: menciones pegadas de otras herramientas -------------
+# La persona pega textos escritos afuera (Flow Plus, Higgsfield, un chat) con
+# `@Image1`, `@Image 1`, `@[Image 1](image_1)` o `@image_4`; solo `@Imagen 1`
+# (el chip) se traducía y el resto llegaba crudo al modelo.
+
+def _dos_imagenes():
+    refs = [{"tipo": "imagen", "etiqueta": "@Imagen 1"}, {"tipo": "imagen", "etiqueta": "@Imagen 2"},
+            {"tipo": "video", "etiqueta": "@Video 1"}, {"tipo": "imagen", "etiqueta": "@Logo 1", "logo": True}]
+    return flowplus_prompt.asignar_tokens(refs, "wan3")
+
+
+def test_sustituir_tokens_entiende_las_formas_que_pega_la_gente():
+    refs = _dos_imagenes()
+    casos = {
+        "@Image1 = CHARACTER": "Image 1 = CHARACTER",
+        "Use @Image 1 for identity": "Use Image 1 for identity",
+        "@[Image 1](image_1) walks": "Image 1 walks",
+        "@[Imagen 2](imagen_2) al fondo": "Image 2 al fondo",
+        "@image_2= SUPPORTING": "Image 2= SUPPORTING",
+        "@IMAGEN 2 sonríe": "Image 2 sonríe",
+        "@imagen1 gira": "Image 1 gira",
+        "como en @Video1 y @video_1": "como en Video 1 y Video 1",
+        "@Logo1 al fondo": "Image 3 al fondo",
+    }
+    for texto, esperado in casos.items():
+        assert flowplus_prompt.sustituir_tokens(texto, refs) == esperado, texto
+
+
+def test_una_mencion_sin_referencia_se_deja_tal_cual_en_cualquier_forma():
+    refs = _dos_imagenes()
+    assert flowplus_prompt.sustituir_tokens("@Image3 mira", refs) == "@Image3 mira"
+    assert flowplus_prompt.sustituir_tokens("@[Image 4](image_4) mira", refs) == "@[Image 4](image_4) mira"
+    # un correo o una arroba suelta no son menciones
+    assert flowplus_prompt.sustituir_tokens("escribe a ana@imagenes.co", refs) == "escribe a ana@imagenes.co"
+
+
+def test_menciones_sin_referencia_lista_lo_que_no_esta_en_la_bandeja():
+    refs = _dos_imagenes()
+    texto = "@Image1 y @Imagen 2 con @Image3, luego @[Image 4](image_4) y otra vez @Image3; @Video 2 no existe"
+    assert flowplus_prompt.menciones_sin_referencia(texto, refs) == ["@Image3", "@[Image 4](image_4)", "@Video 2"]
+    assert flowplus_prompt.menciones_sin_referencia("@Imagen 1 y @Video 1 y @Logo 1", refs) == []
+    assert flowplus_prompt.menciones_sin_referencia("", refs) == []
+    # sin ninguna referencia, toda mención queda sin dueño
+    assert flowplus_prompt.menciones_sin_referencia("@Imagen 1 gira", []) == ["@Imagen 1"]
+
+
+def test_menciones_sin_referencia_no_necesita_tokens():
+    """La imagen (Seedream) no asigna tokens; la comprobación mira etiquetas."""
+    refs = [{"tipo": "imagen", "etiqueta": "@Imagen 1"}]
+    assert flowplus_prompt.menciones_sin_referencia("@Imagen 1 y @Imagen 2", refs) == ["@Imagen 2"]

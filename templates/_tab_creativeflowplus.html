@@ -209,6 +209,10 @@
       <li>{{ _('Un solo lugar por video: si nombras varios cuartos, el modelo los recorre.') }}</li>
       <li>{{ _('Adjunta solo las fotos de quien aparece: cada foto adjunta invita al modelo a meter a esa persona.') }}</li>
       <li>{{ _('Un dibujo, una foto o una pantalla que sale en la escena, descríbelo con palabras y sin @Imagen: con @Imagen el modelo lo convierte en personajes reales.') }}</li>
+      {# Incidente 2026-09-28: encabezados pegados en cada clip, menciones de otras herramientas y personajes dobles. #}
+      <li>{{ _('Nombra las referencias con los chips de arriba (@Imagen 1, @Video 1). Si pegas texto de otra herramienta, @Image1, @Image 1 o @[Image 1](image_1) también se entienden; una mención sin referencia en la bandeja no genera.') }}</li>
+      <li>{{ _('No pegues en cada clip el mismo encabezado con el mapa de todas las referencias: el modelo pinta todo lo que lee (el dibujo, la hija, la cocina) aunque ese clip no lo pida. Escribe solo lo que pasa en este clip.') }}</li>
+      <li>{{ _('Si un personaje sale dos veces, casi siempre está adjunto y además descrito con otro nombre, o hay fotos de más en la bandeja: deja solo las de este clip.') }}</li>
     </ul>
   </details>
   <div class="crear-velo" id="crear-velo"></div>

@@ -6791,6 +6791,16 @@ def cf_crear_video(cliente):
     if not accion_central:
         flash(gettext("Escribe qué tiene que pasar en el video."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # Incidente 2026-09-28: una mención sin referencia (un mapa de cuatro
+    # imágenes pegado con dos en la bandeja) llegaba al modelo, que inventaba o
+    # duplicaba personajes. Se avisa antes de crear la sesión: no se cobra nada.
+    faltan = flowplus_prompt.menciones_sin_referencia(accion_central, referencias)
+    if faltan:
+        disponibles = ", ".join(r["etiqueta"] for r in referencias if str(r.get("etiqueta") or "").startswith("@"))
+        flash(gettext("Tu texto menciona %(menciones)s, pero en la bandeja solo hay: %(disponibles)s. "
+                      "Sube lo que falta o quita esas menciones y vuelve a generar — no se cobró nada.",
+                      menciones=", ".join(faltan), disponibles=disponibles or gettext("nada")), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     if solo_texto:
         enfoque = "libre"
@@ -6918,6 +6928,31 @@ def cf_rearmar(cliente, cf_id):
         flash(gettext("Rearmando el prompt con IA…"), "ok")
     else:
         flash(gettext("Ya se estaba rearmando."), "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/recuperar", methods=["POST"])
+def cf_recuperar(cliente, cf_id):
+    """«Recuperar el video» (incidente 2026-09-28): la sesión quedó en error
+    porque el worker dejó de esperar a WaveSpeed, pero guardó el id de la
+    predicción (`prediccion`); el worker vuelve a preguntar por ese id y, si
+    terminó, cierra la pieza. No genera ni paga de nuevo (max_intentos=1)."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    pred = (entry or {}).get("prediccion") or {}
+    if not entry or entry.get("estado") != "error" or not pred.get("id") or (entry.get("tipo") or "video") == "imagen":
+        flash(gettext("Esa pieza no tiene nada que recuperar."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # Mismo orden que flowplus_lanzar.lanzar: el estado va ANTES de encolar.
+    creative_flow.actualizar(cliente, cf_id, estado="video_generando")
+    encolado = trabajos.encolar(
+        _job_id_creative_flow(cliente, cf_id), "flowplus_recuperar", {"cliente": cliente, "cf_id": cf_id},
+        cliente=cliente, duracion_estimada=120, etapas=flowplus_lanzar.ETAPAS_CREATIVE_FLOW,
+        max_intentos=1, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL,
+    )
+    if encolado:
+        flash(gettext("Preguntando a WaveSpeed por el video… si ya terminó, aparece aquí sin pagar de nuevo."), "ok")
+    else:
+        flash(gettext("Ya se estaba recuperando — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 

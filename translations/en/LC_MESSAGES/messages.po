@@ -246,6 +246,18 @@ msgid "%(modelo)s llega a %(aviso)s s: se generará de %(aviso)s s."
 msgstr "%(modelo)s tops out at %(aviso)s s: it'll be generated at %(aviso)s s."
 
 #, python-format
+msgid "%(modelo)s no pudo generar: %(detalle)s (código %(codigo)s). Un intento fallido normalmente no se cobra."
+msgstr "%(modelo)s could not generate: %(detalle)s (code %(codigo)s). A failed attempt is normally not charged."
+
+#, python-format
+msgid "%(modelo)s no pudo generar: %(detalle)s. Un intento fallido normalmente no se cobra."
+msgstr "%(modelo)s could not generate: %(detalle)s. A failed attempt is normally not charged."
+
+#, python-format
+msgid "%(modelo)s rechazó el contenido por sensible (el texto o las imágenes): cambia la escena y vuelve a generar. No se cobró. Detalle: %(detalle)s"
+msgstr "%(modelo)s rejected the content as sensitive (the text or the images): change the scene and generate again. Nothing was charged. Detail: %(detalle)s"
+
+#, python-format
 msgid "%(monto)s generación"
 msgstr "%(monto)s generation"
 
@@ -3946,6 +3958,9 @@ msgstr "That piece doesn't exist in this project."
 msgid "Esa pieza no existe."
 msgstr "That piece does not exist."
 
+msgid "Esa pieza no tiene nada que recuperar."
+msgstr "That piece has nothing to recover."
+
 msgid "Esa pieza no tiene una sesión generada."
 msgstr "That piece doesn't have a generated session."
 
@@ -5537,6 +5552,9 @@ msgstr "The piece has no image or frame to evaluate."
 msgid "La pieza se descartó antes de generar; no se cobró nada."
 msgstr "The piece was discarded before generating; nothing was charged."
 
+msgid "La pieza se descartó antes de recuperar; no se cobró nada."
+msgstr "The piece was discarded before recovering; nothing was charged."
+
 msgid "La pieza ya no existe."
 msgstr "The piece no longer exists."
 
@@ -6465,6 +6483,12 @@ msgstr "There's no research in progress to cancel."
 msgid "No hay nada en el catálogo todavía — crea el primero con \"+ Nuevo producto\" o en Catálogo."
 msgstr "There's nothing in the catalog yet — create the first one with “+ New product” or in Catalog."
 
+msgid "No hay nada que recuperar en esta pieza."
+msgstr "There is nothing to recover in this piece."
+
+msgid "No hay nada que recuperar: genera de nuevo."
+msgstr "There is nothing to recover: generate again."
+
 msgid "No hay piezas aprobadas que entregar."
 msgstr "There are no approved pieces to deliver."
 
@@ -6486,6 +6510,9 @@ msgstr "Could not connect to the server. Check your internet and try again."
 #, python-format
 msgid "No pasó la puerta de tráfico: %(fallas)s."
 msgstr "Did not pass the traffic gate: %(fallas)s."
+
+msgid "No pegues en cada clip el mismo encabezado con el mapa de todas las referencias: el modelo pinta todo lo que lee (el dibujo, la hija, la cocina) aunque ese clip no lo pida. Escribe solo lo que pasa en este clip."
+msgstr "Don't paste the same header with the map of every reference into each clip: the model draws everything it reads (the drawing, the daughter, the kitchen) even when that clip doesn't call for it. Write only what happens in this clip."
 
 msgid "No publicado"
 msgstr "Not published"
@@ -6805,6 +6832,9 @@ msgstr "No — text only"
 
 msgid "No — solo texto (misma familia que Gemini Omni Flash Edit)"
 msgstr "No — text only (same family as Gemini Omni Flash Edit)"
+
+msgid "Nombra las referencias con los chips de arriba (@Imagen 1, @Video 1). Si pegas texto de otra herramienta, @Image1, @Image 1 o @[Image 1](image_1) también se entienden; una mención sin referencia en la bandeja no genera."
+msgstr "Name the references with the chips above (@Imagen 1, @Video 1). Text pasted from another tool with @Image1, @Image 1 or @[Image 1](image_1) is understood too; a mention with no reference in the tray does not generate."
 
 msgid "Nombre"
 msgstr "Name"
@@ -7313,6 +7343,9 @@ msgstr "Prices include the scene sound."
 
 msgid "Preferencias de sonido guardadas."
 msgstr "Sound preferences saved."
+
+msgid "Preguntando a WaveSpeed por el video… si ya terminó, aparece aquí sin pagar de nuevo."
+msgstr "Asking WaveSpeed for the video… if it already finished, it shows up here without paying again."
 
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
@@ -7861,6 +7894,9 @@ msgstr "Restore"
 msgid "Recuperar contraseña"
 msgstr "Recover password"
 
+msgid "Recuperar el video (sin pagar de nuevo)"
+msgstr "Recover the video (without paying again)"
+
 msgid "Reddit (Nicho: comentarios reales)"
 msgstr "Reddit (Niche: real comments)"
 
@@ -8394,6 +8430,9 @@ msgstr "If you choose it, Claude writes at that level in this product's ideas, s
 
 msgid "Si tu cliente ya vio tres o más promesas parecidas, hace falta el mecanismo: cómo logra el producto lo que promete."
 msgstr "If your customer has already seen three or more similar promises, you need the mechanism: how the product delivers what it promises."
+
+msgid "Si un personaje sale dos veces, casi siempre está adjunto y además descrito con otro nombre, o hay fotos de más en la bandeja: deja solo las de este clip."
+msgstr "If a character shows up twice, it is almost always attached and also described under another name, or there are extra photos in the tray: keep only the ones for this clip."
 
 msgid ""
 "Si un prompt salió mal, aquí lo corriges con Claude antes de mandarlo a generar:\n"
@@ -9311,6 +9350,10 @@ msgstr "Your answer"
 msgid "Tu sesión se cerró; entra de nuevo."
 msgstr "Your session closed; log in again."
 
+#, python-format
+msgid "Tu texto menciona %(menciones)s, pero en la bandeja solo hay: %(disponibles)s. Sube lo que falta o quita esas menciones y vuelve a generar — no se cobró nada."
+msgstr "Your text mentions %(menciones)s, but the tray only has: %(disponibles)s. Upload what is missing or remove those mentions and generate again — nothing was charged."
+
 msgid "Tu texto va tal cual al modelo"
 msgstr "Your text goes to the model as-is"
 
@@ -9754,6 +9797,14 @@ msgstr "Wan 3.0 (reference, no editing)"
 msgid "Wan-2.2 Animate Replace"
 msgstr "Wan-2.2 Animate Replace"
 
+#, python-format
+msgid "WaveSpeed seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). El video suele terminar igual y se cobra: espera unos minutos y toca «Recuperar el video» — no se paga de nuevo."
+msgstr "WaveSpeed was still working on %(modelo)s after %(min)s min (prediction %(id)s). The video usually finishes anyway and is charged: wait a few minutes and tap “Recover the video” — you don't pay again."
+
+#, python-format
+msgid "WaveSpeed sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos."
+msgstr "WaveSpeed is still working on prediction %(id)s; try again in a few minutes."
+
 msgid "What are other solutions they have tried and failed at?"
 msgstr "What are other solutions they have tried and failed at?"
 
@@ -9879,6 +9930,9 @@ msgstr "That was already being generated — wait for it to finish."
 
 msgid "Ya se estaba rearmando."
 msgstr "It was already being rebuilt."
+
+msgid "Ya se estaba recuperando — espera a que termine."
+msgstr "It was already being recovered — wait for it to finish."
 
 msgid "Ya se estaban produciendo esas finales."
 msgstr "Those final cuts were already being produced."
@@ -10874,6 +10928,9 @@ msgstr "most aware"
 
 msgid "muy nuevo en el catálogo, sin datos de calidad/fidelidad todavía"
 msgstr "very new in the catalog, no quality/fidelity data yet"
+
+msgid "nada"
+msgstr "nothing"
 
 msgid "nada por aprobar"
 msgstr "nothing to approve"

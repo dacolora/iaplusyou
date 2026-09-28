@@ -15,7 +15,8 @@ fecha: cuando aparezca se agrega como una entrada más.
 Sonido de la escena (spec estudio S1): los tres modelos generan audio nativo y
 se pide SIEMPRE salvo que el llamador diga `con_sonido=False`. Parámetros y
 precios verificados en wavespeed.ai/models/* el 2026-09-17: Wan 3.0
-`enable_audio` (default true, sin recargo), Kling O3 Pro `sound` (default
+`generate_audio` (default true, sin recargo; hasta el 2026-09-28 mandábamos
+`enable_audio`, que el esquema publicado ya no tiene), Kling O3 Pro `sound` (default
 false, 0.112 -> 0.140 $/s; solo disponible sin video de referencia, que Kling
 nunca recibe aquí), Seedance 2.5 `generate_audio` (default true, sin recargo).
 `audio_nativo` de cada entrada guarda el nombre del parámetro y el recargo por
@@ -33,7 +34,7 @@ Solo texto (2026-09-25): en Crear las referencias y el catálogo son
 opcionales. Sin ninguna imagen ni video cada modelo va a su ruta de texto
 (`path_texto`, verificadas en wavespeed.ai/docs el 2026-09-25, mismos precios
 que la ruta con referencias): alibaba/wan-3.0/text-to-video (480p/720p,
-`enable_audio`), kwaivgi/kling-video-o3-pro/text-to-video (sin resolución,
+`generate_audio`), kwaivgi/kling-video-o3-pro/text-to-video (sin resolución,
 `sound`), bytedance/seedance-2.5/text-to-video (a diferencia de image-to-video
 SÍ elige formato: `formatos_texto`, `generate_audio`) y
 bytedance/seedream-v5.0-pro (text-to-image, sin sufijo).
@@ -56,7 +57,7 @@ VIDEO = {
         "max_duracion": 30,
         "formatos": ("9:16", "16:9", "1:1", "4:3", "3:4"),
         "max_videos": 5,
-        "audio_nativo": {"parametro": "enable_audio", "recargo_usd_s": 0.0},
+        "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
         "nota": N_("Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido."),
     },
     "kling_o3_pro": {
@@ -206,6 +207,7 @@ def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
     prediction_id = (resp.json().get("data") or {}).get("id")
     if not prediction_id:
         raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")
+    wavespeed_common.avisar_lanzada(on_progreso, prediction_id)
     resultado = wavespeed_common.poll_hasta_listo(
         prediction_id, nombre, timeout_seconds=timeout_seconds, on_progreso=on_progreso,
     )
@@ -233,7 +235,7 @@ def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16",
         return wan3_client.generar_video(
             prompt, refs, duration=duration, resolution=_resolucion_wan(calidad),
             aspect_ratio=aspect_ratio, on_progreso=on_progreso, reference_videos=videos,
-            enable_audio=bool(con_sonido),
+            generate_audio=bool(con_sonido),
         )
     if modelo_id == "kling_o3_pro":
         payload = {
