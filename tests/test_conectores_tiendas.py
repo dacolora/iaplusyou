@@ -39,7 +39,7 @@ class Respuesta:
 class SesionFalsa:
     """`manejador(metodo, url, kw) -> Respuesta | Exception`. Guarda cada
     llamada en `llamadas` (lista de dicts con metodo, url, params, json,
-    data, headers, auth, timeout)."""
+    data, headers, auth, timeout, allow_redirects)."""
 
     def __init__(self, manejador):
         self.manejador = manejador
@@ -48,7 +48,7 @@ class SesionFalsa:
     def request(self, metodo, url, **kw):
         llamada = {"metodo": metodo.upper(), "url": url, "params": kw.get("params") or {},
                    "json": kw.get("json"), "data": kw.get("data"), "headers": kw.get("headers") or {},
-                   "auth": kw.get("auth"), "timeout": kw.get("timeout")}
+                   "auth": kw.get("auth"), "timeout": kw.get("timeout"), "allow_redirects": kw.get("allow_redirects")}
         self.llamadas.append(llamada)
         resultado = self.manejador(llamada["metodo"], url, llamada)
         if isinstance(resultado, Exception):
