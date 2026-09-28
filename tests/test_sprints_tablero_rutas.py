@@ -471,3 +471,27 @@ def test_las_mini_pantallas_viejas_ya_no_existen(app):
     cid = _campana(datos, sid)
     for tipo in ("referencias", "ideas", "revision"):
         assert app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/{tipo}-ajax").status_code == 404
+
+
+def test_buscadores_y_campos_vacios_no_quedan_sin_guardar(app):
+    """Tres marcas `data-sucio` que nada limpiaba y hacían que `recargarOAvisar`
+    (base.html) pidiera «Recargar ahora» en falso al terminar un trabajo:
+    un buscador (familias del panel, o cualquier type="search") nunca guarda
+    nada; «Otro (escríbelo)…» del momento sin texto no tiene qué guardar; y el
+    «otro: ¿qué?» de la página de referencias se guarda con su tarjeta."""
+    from sprints import datos
+    base = open("templates/base.html", encoding="utf-8").read()
+    marcar = base[base.index("function marcarSucio"):base.index("document.addEventListener('input', marcarSucio)")]
+    assert "el.type === 'search'" in marcar and "data-busqueda" in marcar
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    panel = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel?paso=armar",
+                         headers={"X-Requested-With": "fetch"}).data.decode()
+    buscador = panel[panel.index('class="panel-familia-buscar"'):]
+    assert "data-busqueda" in buscador[:buscador.index(">")]
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
+    cambio = html[html.index("campos.addEventListener('change'"):html.index("function puedeRecargar")]
+    assert "function sinTextoPropio()" in html and cambio.count("sinTextoPropio()") == 2
+    refs = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}").data.decode()
+    assert "if (enviado === cambios)" in refs and "input[name=intencion_otro], textarea[name=descripcion]" in refs
+    assert "ta.addEventListener('blur'" not in refs

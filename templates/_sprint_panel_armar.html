@@ -65,7 +65,7 @@
     <div data-campo-caja>
       <div class="panel-familias" data-campo="familias" data-tipo="familias">
         {% for f in c.familias or [] %}<span class="chip-familia" data-familia="{{ f }}">{{ f }} <button type="button" data-quitar-familia aria-label="Quitar {{ f }}">✕</button></span>{% endfor %}
-        <input class="panel-familia-buscar" list="familias-biblioteca" data-agregar-familia
+        <input class="panel-familia-buscar" list="familias-biblioteca" data-agregar-familia data-busqueda
                placeholder="+ familia (busca entre {{ familias | length }})" aria-label="Agregar una familia de formato">
       </div>
       <small class="campo-error" hidden></small>
