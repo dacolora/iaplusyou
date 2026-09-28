@@ -4,6 +4,7 @@ import {
   borrar, cambiarVelocidad, cortarEn, duplicar, idNuevo, MIN_CLIP_MS, moverA, moverPrincipal, normalizar,
   OperacionInvalida, recortar, VELOCIDADES,
 } from "../../static/editor/operaciones.js";
+import * as op from "../../static/editor/operaciones.js";
 import { docBase, DURACIONES } from "./doc_base.mjs";
 
 const principal = (d) => d.pistas[0].clips.map((c) => [c.id, c.inicio_ms, c.duracion_ms, c.recorte.desde_ms, c.recorte.hasta_ms]);
@@ -38,7 +39,8 @@ test("borrar en la principal corre lo que sigue y no deja la edición sin video"
 
 test("borrar un texto lo quita sin mover nada más; el sonido de la escena no se borra solo", () => {
   const { doc } = borrar(docBase(), "t1", DURACIONES);
-  assert.equal(doc.pistas[1].clips.length, 0);
+  // capa 4b: terminar() borra las pistas no principales que quedan sin clips.
+  assert.ok(!doc.pistas.some((p) => p.id === "p_texto"));
   assert.deepEqual(principal(doc), principal(docBase()));
   invalida(() => borrar(docBase(), "s0", DURACIONES), /sonido de la escena/);
   invalida(() => borrar(docBase(), "nada", DURACIONES), /ya no existe/);
@@ -221,8 +223,146 @@ test("recortar una voz que cambia por país se rechaza en español llano; moverl
       /^La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla\.$/);
   }
   assert.equal(moverA(conVozPorDestino(), "a1", 500, DURACIONES).doc.pistas[2].clips[0].inicio_ms, 500);
-  assert.equal(borrar(conVozPorDestino(), "a1", DURACIONES).doc.pistas[2].clips.length, 0);
+  // capa 4b: terminar() borra las pistas no principales que quedan sin clips.
+  assert.ok(!borrar(conVozPorDestino(), "a1", DURACIONES).doc.pistas.some((p) => p.id === "p_voz"));
   const vacio = docBase();
   vacio.pistas[2].clips[0].por_destino = {};                  // {} no distingue por destino: se recorta como siempre
   assert.equal(recortar(vacio, "a1", "fin", -500, DURACIONES).doc.pistas[2].clips[0].duracion_ms, 2500);
+});
+
+// ---- Capa 4b: agregar y cambiar ----
+// `info` es el mapa nuevo {material_id: {duracion_ms, tiene_audio}} (el
+// viejo {material_id: duracion_ms} sigue funcionando, ver el test de más
+// abajo). Material 3: sin audio nativo (para ver que el espejo lo excluye).
+const INFO = { 1: { duracion_ms: 8000, tiene_audio: true }, 2: { duracion_ms: 3000 }, 3: { duracion_ms: 1500, tiene_audio: false } };
+const clipDe = (d, id) => d.pistas.flatMap((p) => p.clips).find((c) => c.id === id);
+
+// Toda operación es pura (no toca el documento que recibe) y deja una
+// `seleccion` que de verdad está en el documento resultante.
+function puro(fn, base = docBase()) {
+  const antes = structuredClone(base);
+  const r = fn(base);
+  assert.deepEqual(base, antes, "no debe tocar el documento de entrada");
+  assert.notEqual(r.doc, base);
+  assert.ok(clipDe(r.doc, r.seleccion), "la selección debe existir en el documento resultante");
+  return r;
+}
+
+test("agregarVideo inserta el material entero después del clip dado y no espeja sonido si el material no trae", () => {
+  const r = puro((d) => op.agregarVideo(d, { id: 3 }, { despuesDe: "v0" }, INFO));
+  assert.deepEqual(principal(r.doc).map((c) => c.slice(1)), [[0, 4000, 0, 4000], [4000, 1500, 0, 1500], [5500, 4000, 4000, 8000]]);
+  assert.equal(clipDe(r.doc, r.seleccion).material_id, 3);
+  assert.equal(clipDe(r.doc, r.seleccion).ken_burns, null);
+  assert.equal(r.doc.pistas.find((p) => p.id === "p_sonido").clips.length, 2);
+  invalida(() => op.agregarVideo(docBase(), { id: 9 }, {}, INFO), /Ese video todavía se está preparando/);
+  invalida(() => op.agregarVideo(docBase(), { id: 3 }, { despuesDe: "t1" }, INFO), /principal/);
+});
+
+test("agregarImagen usa las medidas naturales para cubrir o para el 60% del ancho, y reusa pista solo si no hay solape", () => {
+  const material = { id: 4, ancho: 600, alto: 400 };
+  const a = puro((d) => op.agregarImagen(d, material, 1000, {}, INFO));
+  assert.equal(clipDe(a.doc, a.seleccion).transform.escala, 1.08);
+  const b = puro((d) => op.agregarImagen(d, material, 2000, { llenar: true }, INFO), a.doc);
+  assert.equal(clipDe(b.doc, b.seleccion).transform.escala, 4.8);
+  assert.equal(b.doc.pistas.filter((p) => p.tipo === "imagen").length, 2);
+  const c = op.agregarImagen(a.doc, material, 4000, {}, INFO);      // toca justo donde termina la primera: no hay solape
+  assert.equal(c.doc.pistas.filter((p) => p.tipo === "imagen").length, 1);
+});
+
+test("agregarAudio toma la duración de la fuente entera y distingue el fundido de música del de efecto", () => {
+  for (const rol of ["musica", "efecto"]) {
+    const r = puro((d) => op.agregarAudio(d, { id: 2 }, 1000, { rol }, INFO));
+    const c = clipDe(r.doc, r.seleccion);
+    assert.deepEqual(c.recorte, { desde_ms: 0, hasta_ms: 3000 });
+    assert.equal(c.audio.fundido_salida_ms, rol === "musica" ? 1000 : 0);
+    assert.equal(c.rol_audio, rol);
+  }
+  invalida(() => op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "voz" }, INFO), /rol/i);
+});
+
+test("agregarTexto usa tamaños fraccionarios del lienzo y el fondo de marca en el preset precio", () => {
+  for (const [preset, px, y] of [["titulo", 72, 0.2], ["subtitulo", 48, 0.75], ["precio", 56, 0.6], ["llamado", 52, 0.85]]) {
+    const r = puro((d) => op.agregarTexto(d, 500, preset, INFO));
+    const c = clipDe(r.doc, r.seleccion);
+    assert.equal(c.estilo.tamano, px / 1920);
+    assert.equal(c.transform.y, y);
+    assert.equal(c.texto.literal, preset === "precio" ? "$ 0" : "Escribe aquí");
+    if (preset === "precio") assert.equal(c.estilo.fondo.color, "#7c3aed");
+  }
+  invalida(() => op.agregarTexto(docBase(), 0, "otro", INFO), /texto/i);
+});
+
+test("cortarClip parte el recorte en audio, solo el tiempo en texto (y copia el png), sin tocar la principal aparte", () => {
+  const a = puro((d) => op.cortarClip(d, "a1", 1000, INFO));
+  assert.deepEqual(clipDe(a.doc, a.seleccion).recorte, { desde_ms: 1000, hasta_ms: 3000 });
+  assert.equal(clipDe(a.doc, a.seleccion).inicio_ms, 1000);
+  const base = docBase();
+  base.pngs = { t1: 20 };
+  const t = puro((d) => op.cortarClip(d, "t1", 2000, INFO), base);
+  assert.equal(t.doc.pngs[t.seleccion], 20);
+  assert.equal(clipDe(t.doc, t.seleccion).duracion_ms, 1000);
+  invalida(() => op.cortarClip(docBase(), "a1", 50, INFO), /borde/);
+  invalida(() => op.cortarClip(conVozPorDestino(), "a1", 1000, INFO), /país/);
+  invalida(() => op.cortarClip(docBase(), "s0", 1000, INFO), /sonido/);
+});
+
+test("ponerTransicion normaliza la cola contra el material y rechaza el último clip o uno fuera de la principal", () => {
+  for (const tipo of ["corte", "fundido", "deslizar", "zoom", "desenfoque"]) {
+    const r = puro((d) => op.ponerTransicion(d, "v0", tipo, 500, INFO));
+    assert.deepEqual(clipDe(r.doc, "v0").transicion, tipo === "corte" ? null : { tipo, duracion_ms: 500 });
+  }
+  invalida(() => op.ponerTransicion(docBase(), "v1", "fundido", 500, INFO), /último/);
+  invalida(() => op.ponerTransicion(docBase(), "t1", "fundido", 500, INFO), /principal/);
+  invalida(() => op.ponerTransicion(docBase(), "v0", "inventada", 500, INFO), /transición/);
+});
+
+test("editarTexto guarda solo el destino pedido, conserva los demás y borra todo png que use esa variable", () => {
+  const base = docBase();
+  base.pistas[1].clips[0].texto = { variable: "gancho" };
+  base.variables.textos = { gancho: { es: "Hola", en_US: "Hello" } };
+  const dup = duplicar(base, "t1", INFO).doc;
+  dup.pngs = { t1: 20, t1_2: 21 };
+  const r = puro((d) => op.editarTexto(d, "t1", "Oferta", "es_CO", INFO), dup);
+  assert.deepEqual(r.doc.variables.textos.gancho, { es: "Hola", en_US: "Hello", es_CO: "Oferta" });
+  assert.deepEqual(r.doc.pngs, {});          // t1 Y t1_2 comparten la variable: los dos se invalidan
+  assert.equal(clipDe(puro((d) => op.editarTexto(d, "t1", "Nuevo", "es", INFO)).doc, "t1").texto.literal, "Nuevo");
+  invalida(() => op.editarTexto(base, "t1", " ", "es", INFO), /El texto no puede quedar vacío/);
+  invalida(() => op.editarTexto(base, "t1", "x", "wrong", INFO), /destino/);
+});
+
+test("cambiar acota los campos editables, guarda el tamaño como fracción, rechaza claves de más y borra el png del texto", () => {
+  const base = docBase();
+  base.pngs = { t1: 20 };
+  const r = puro((d) => op.cambiar(d, "t1", {
+    estilo: { tamano: 400, color: "#123456" },
+    transform: { x: -1, y: 2, escala: 9, opacidad: 2 },
+    animacion: { entrada: "deslizar" },
+  }, INFO), base);
+  assert.equal(clipDe(r.doc, "t1").estilo.tamano, 200 / 1920);
+  assert.equal(clipDe(r.doc, "t1").transform.escala, 5);
+  assert.equal(clipDe(r.doc, "t1").transform.x, 0);
+  assert.deepEqual(r.doc.pngs, {});
+  for (const cambios of [
+    { material_id: 9 }, { transform: { rotacion: 45 } }, { estilo: { fuente: "Arial" } },
+    { animacion: { entrada: "rebote" } }, { audio: { volumen: NaN } }, { estilo: { fondo: { unexpected: 1 } } },
+  ]) invalida(() => op.cambiar(base, "t1", cambios, INFO), /./);
+});
+
+test("el volumen del sonido de la escena queda por clip al normalizar y un corte nuevo hereda solo su propio sonido", () => {
+  let d = normalizar(docBase(), INFO);
+  d = op.volumenSonido(d, "v0", 0.2, INFO).doc;
+  d = op.volumenSonido(d, "v1", 0.8, INFO).doc;
+  const r = puro((x) => op.cortarClip(x, "v0", 2000, INFO), d);
+  assert.equal(clipDe(r.doc, "s_v0").audio.volumen, 0.2);
+  assert.equal(clipDe(r.doc, `s_${r.seleccion}`).audio.volumen, 0.2);
+  assert.equal(clipDe(r.doc, "s_v1").audio.volumen, 0.8);
+  // v0 y v1 a velocidad ≠ 1: nada que espejar, p_sonido desaparece; al volver v0 a 1×, vuelve a aparecer.
+  const mudo = op.cambiarVelocidad(op.cambiarVelocidad(d, "v0", 2, INFO).doc, "v1", 2, INFO).doc;
+  assert.ok(!mudo.pistas.some((p) => p.id === "p_sonido"));
+  assert.ok(op.cambiarVelocidad(mudo, "v0", 1, INFO).doc.pistas.some((p) => p.id === "p_sonido"));
+});
+
+test("el mapa de info rico da exactamente el mismo resultado que el mapa viejo de números", () => {
+  assert.deepEqual(recortar(docBase(), "v1", "fin", 99999, INFO).doc, recortar(docBase(), "v1", "fin", 99999, DURACIONES).doc);
+  assert.deepEqual(cambiarVelocidad(docBase(), "v1", 1.5, INFO).doc, cambiarVelocidad(docBase(), "v1", 1.5, DURACIONES).doc);
 });

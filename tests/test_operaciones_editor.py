@@ -22,7 +22,7 @@ def test_las_operaciones_del_navegador_dejan_documentos_validos():
     r = subprocess.run([NODE, "tests/js/salida_operaciones.mjs"], cwd=RAIZ, capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr[-3000:]
     casos = json.loads(r.stdout)
-    assert len(casos) >= 12
+    assert len(casos) >= 30   # capa 4a (13) + capa 4b: agregar/cortar/transición/editar/cambiar (21) + al_final_*
     assert sum(c["nombre"].startswith("al_final_") for c in casos) == 6 * 16   # cada velocidad, al final del archivo
     for caso in casos:
         doc = documento.validar(caso["doc"])

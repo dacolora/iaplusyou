@@ -24,3 +24,32 @@ test("guarda como mucho `limite` pasos", () => {
   assert.equal(h.deshacer(), 7);
   assert.equal(h.deshacer(), null);
 });
+
+// Capa 4b: pasos con la misma `clave` hechos a menos de 800 ms uno del otro
+// se fusionan en uno solo (un deslizador arrastrado = un deshacer); deshacer
+// y rehacer cortan la racha, así que el aplicar siguiente siempre apila,
+// aunque traiga la misma clave. `ahora` es inyectable para no depender del reloj real.
+test("los pasos con la misma clave se fusionan solo dentro de 800 ms; deshacer/rehacer cortan la racha", () => {
+  const h = new Historial("a");
+  let t = 0;
+  h.ahora = () => t;
+  h.aplicar("b", { clave: "x" });
+  t = 799;
+  h.aplicar("c", { clave: "x" });                 // fusiona con "b": un solo paso desde "a"
+  assert.equal(h.deshacer(), "a");
+  assert.equal(h.rehacer(), "c");
+  t = 800;
+  h.aplicar("d", { clave: "x" });                 // 800 ms ya no es "menos de 800": apila
+  assert.equal(h.deshacer(), "c");
+  h.aplicar("e", { clave: "x" });                 // deshacer cortó la racha: apila aunque la clave sea la misma
+  t = 1600;
+  h.aplicar("f", { clave: "x" });                 // 800 ms desde "e": tampoco fusiona
+  assert.equal(h.deshacer(), "e");
+  h.aplicar("g", { clave: "x" });                 // deshacer volvió a cortar la racha
+  t = 1601;
+  h.aplicar("h", { clave: "y" });                 // clave distinta: nunca fusiona
+  assert.equal(h.deshacer(), "g");
+  h.aplicar("i");
+  h.aplicar("j");                                 // sin clave (null): nunca fusiona
+  assert.equal(h.deshacer(), "i");
+});

@@ -26,6 +26,39 @@ anotar("transicion_normalizada", () => {
 // Redondeo (Python redondea a la par, Math.round sube los .5): v1 a cada
 // velocidad, alargado hasta el final de un clon de 9 s, cortado en puntos
 // impares y recortado desde el inicio por cantidades impares.
+// ---- Capa 4b: agregar y cambiar ----
+// INFO es el mapa rico {material_id: {duracion_ms, tiene_audio}} que aceptan
+// agregarVideo/Audio; material 3 no trae audio nativo.
+const INFO = { 1: { duracion_ms: 8000, tiene_audio: true }, 2: { duracion_ms: 3000 }, 3: { duracion_ms: 1500, tiene_audio: false } };
+anotar("agregar_video_otro_material", () => op.agregarVideo(docBase(), { id: 3 }, { despuesDe: "v0" }, INFO), { ...D, 3: 1500 });
+anotar("agregar_imagen", () => op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 1000, {}, INFO));
+anotar("agregar_imagen_llenar", () => op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 1000, { llenar: true }, INFO));
+anotar("agregar_audio_musica", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO));
+anotar("agregar_audio_efecto", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "efecto" }, INFO));
+for (const preset of ["titulo", "subtitulo", "precio", "llamado"]) {
+  anotar(`agregar_texto_${preset}`, () => op.agregarTexto(docBase(), 500, preset, INFO));
+}
+anotar("cortar_audio", () => op.cortarClip(docBase(), "a1", 1000, INFO));
+anotar("cortar_imagen", () => {
+  const primero = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 0, { duracionMs: 4000 }, INFO);
+  return op.cortarClip(primero.doc, primero.seleccion, 2000, INFO);
+});
+for (const tipo of op.TRANSICIONES) {
+  anotar(`transicion_${tipo}`, () => op.ponerTransicion(docBase(), "v0", tipo, 500, INFO));
+}
+anotar("editar_texto_literal", () => op.editarTexto(docBase(), "t1", "Nuevo texto", "es", INFO));
+anotar("editar_texto_variable", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].texto = { variable: "gancho" };
+  return op.editarTexto(d, "t1", "Oferta", "es_CO", INFO);
+});
+anotar("cambiar_estilo_y_transform", () => op.cambiar(docBase(), "t1", {
+  estilo: { tamano: 60, color: "#112233" },
+  transform: { x: 0.3, y: 0.4, escala: 1.2, opacidad: 0.8 },
+}, INFO));
+anotar("cambiar_ken_burns", () => op.cambiar(docBase(), "v0", { ken_burns: "out" }, INFO));
+anotar("volumen_sonido", () => op.volumenSonido(op.normalizar(docBase(), INFO), "v0", 0.3, INFO));
+
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {
   const alFinal = op.recortar(op.cambiarVelocidad(docBase(), "v1", v, D9).doc, "v1", "fin", 99999, D9).doc;
