@@ -9,6 +9,7 @@ import json
 import os
 
 import doctrina
+import idiomas
 from sprints import datos
 
 CLAVES = ("resumen", "paleta", "composicion", "iluminacion", "movimiento", "tipografia", "estetica",
@@ -33,7 +34,7 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con exactamente e
 - "gancho": qué hace la pieza en los primeros tres segundos, o su titular si es imagen; máximo 20 palabras; "" si no se puede saber.
 - "lead": cómo arranca, uno de: "oferta", "promesa", "problema_solucion", "secreto", "proclamacion", "historia"; null si no se puede saber.
 - "prueba": cómo sostiene lo que promete, uno de: "demostracion", "testimonio", "cifra", "autoridad", "ninguna".
-Todo en español. No menciones "fotograma" ni "imagen": describe la escena."""
+Todo en {idioma}. No menciones "fotograma" ni "imagen": describe la escena."""
 
 
 class AnalisisInvalido(RuntimeError):
@@ -119,24 +120,25 @@ def _bloques_imagen(referencia):
     return bloques
 
 
-def _system():
-    return doctrina.bloque_system("clasificar")
+def _system(idioma="es"):
+    return doctrina.bloque_system("clasificar", idioma=idioma)
 
 
-def analizar(referencia, marca=""):
+def analizar(referencia, marca="", idioma="es"):
     """Devuelve el dict con CLAVES. Reintenta una sola vez si el JSON no sirve."""
     etiquetas = [datos.INTENCIONES_NOMBRE.get(i, i) for i in (referencia.get("intencion") or [])]
     intencion = ", ".join(etiquetas) or "todo lo que valga la pena reutilizar"
     if referencia.get("intencion_otro"):
         intencion += f" ({referencia['intencion_otro']})"
     texto = PROMPT_ANALISIS.format(marca=marca or "este proyecto", intencion=intencion,
-                                   descripcion=referencia.get("descripcion") or "sin descripción")
+                                   descripcion=referencia.get("descripcion") or "sin descripción",
+                                   idioma=idiomas.nombre_para_claude(idioma))
     imagenes = _bloques_imagen(referencia)
     if not imagenes:
         raise AnalisisInvalido("La referencia no tiene imagen ni fotograma que analizar.")
     content = [{"type": "text", "text": texto}] + imagenes
     try:
-        return _parsear_json(_llamar(content, max_tokens=4000, system=_system()))
+        return _parsear_json(_llamar(content, max_tokens=4000, system=_system(idioma)))
     except AnalisisInvalido as e:
         content = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). Responde solo el JSON pedido."}]
-        return _parsear_json(_llamar(content, max_tokens=4000, system=_system()))
+        return _parsear_json(_llamar(content, max_tokens=4000, system=_system(idioma)))

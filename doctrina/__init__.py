@@ -20,12 +20,12 @@ CONSCIENCIAS = ("inconsciente", "consciente_del_problema", "consciente_de_la_sol
 CONSCIENCIA_DESDE_INGLES = {"unaware": "inconsciente", "problem-aware": "consciente_del_problema",
                             "solution-aware": "consciente_de_la_solucion",
                             "product-aware": "consciente_del_producto", "most-aware": "muy_consciente"}
-CONSCIENCIAS_NOMBRE = {"inconsciente": "inconsciente", "consciente_del_problema": "consciente del problema",
-                       "consciente_de_la_solucion": "consciente de la solución",
-                       "consciente_del_producto": "consciente del producto", "muy_consciente": "muy consciente"}
+CONSCIENCIAS_NOMBRE = {"inconsciente": N_("inconsciente"), "consciente_del_problema": N_("consciente del problema"),
+                       "consciente_de_la_solucion": N_("consciente de la solución"),
+                       "consciente_del_producto": N_("consciente del producto"), "muy_consciente": N_("muy consciente")}
 LEADS = ("oferta", "promesa", "problema_solucion", "secreto", "proclamacion", "historia")
-LEADS_NOMBRE = {"oferta": "oferta", "promesa": "promesa", "problema_solucion": "problema-solución",
-                "secreto": "secreto", "proclamacion": "proclamación", "historia": "historia"}
+LEADS_NOMBRE = {"oferta": N_("oferta"), "promesa": N_("promesa"), "problema_solucion": N_("problema-solución"),
+                "secreto": N_("secreto"), "proclamacion": N_("proclamación"), "historia": N_("historia")}
 SOFISTICACIONES = {1: "primero", 2: "promesa_ampliada", 3: "mecanismo", 4: "mecanismo_ampliado",
                    5: "identificacion"}
 SOFISTICACIONES_NOMBRE = {1: "nadie prometió esto antes", 2: "ya se prometió: promesa agrandada",

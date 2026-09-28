@@ -18,6 +18,7 @@ from datetime import datetime
 import requests
 
 import doctrina
+import idiomas
 import marca
 from doctrina import revisor
 from final_edition import cortes
@@ -50,7 +51,7 @@ Evalúa y responde SOLO con un objeto JSON con esta forma:
  "doctrina": {{"puntos": [{{"n": 1, "estado": "pasa|mejorar|no_aplica", "detalle": "...", "donde": "..."}}, ... hasta el 12],
               "resumen": "una frase"}}
 }}
-Notas de máximo 20 palabras, en español, concretas (qué está mal y dónde).
+Notas de máximo 20 palabras, en {idioma}, concretas (qué está mal y dónde).
 En "doctrina" contesta los 12 puntos de la LISTA DE REVISIÓN de la doctrina (arriba, en orden) con los DATOS de la
 pieza que van al final: "pasa", "mejorar" (con el detalle concreto y dónde: el segundo, el bloque o el caption) o
 "no_aplica" (lo que no se puede juzgar con lo que hay). No escuchas el audio: lo que dependa del sonido (voz, música, sonido de la escena) es "no_aplica" salvo que el guion o el caption lo digan. Hechos de la pieza, no opiniones."""
@@ -184,6 +185,7 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
     `AnalisisInvalido` con los tokens de las dos llamadas."""
     from nicho.avatares import costo_real
     umbral = int(umbral or UMBRAL_DEFECTO)
+    idioma = idiomas.de_proyecto(cliente)
     persona = datos.persona(cliente, campana["persona_id"]) or {}
     temporada = datos.temporada(cliente, campana["temporada_id"]) or {}
     refs = [r for r in datos.referencias(cliente, campana["id"]) if (r.get("analisis") or {}).get("resumen")]
@@ -193,7 +195,8 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
         persona=f"{persona.get('nombre', '')}: {persona.get('resumen') or persona.get('descripcion') or ''}".strip(": "),
         producto=campana.get("catalogo_id"), temporada=f"{temporada.get('nombre', '')}: {temporada.get('contexto') or ''}".strip(": "),
         titulo=idea.get("titulo") or "", escena=idea.get("escena") or "", guia=(marca.guia_efectiva(cliente) or "").strip() or "(sin guía)",
-        referencias="; ".join(r["analisis"]["resumen"] for r in refs) or "(sin referencias analizadas)")
+        referencias="; ".join(r["analisis"]["resumen"] for r in refs) or "(sin referencias analizadas)",
+        idioma=idiomas.nombre_para_claude(idioma))
     try:
         d = revisor.reunir(cliente, idea.get("cf_id"), entry=entry)
     except Exception:  # noqa: BLE001 — sin datos de la pieza, el QA sigue sin la doctrina
@@ -208,7 +211,7 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
         if not imagenes:
             raise AnalisisInvalido("La pieza no tiene imagen ni fotograma que evaluar.")
         content = [{"type": "text", "text": texto}] + imagenes
-        system = doctrina.bloque_system("revisar")
+        system = doctrina.bloque_system("revisar", idioma=idioma)
         crudo, ent, sal = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system)
         try:
             r = parsear(crudo)

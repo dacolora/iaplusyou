@@ -86,7 +86,7 @@ def ejecutar_analizar(tarea):
     if not ref:
         return "La referencia ya no existe."
     try:
-        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente))
+        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente), idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
         datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis={"error": str(e)})
         raise
