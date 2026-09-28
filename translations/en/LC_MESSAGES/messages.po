@@ -956,6 +956,9 @@ msgstr "Someone changed this prompt; reload the page."
 msgid "Alguien recibe la compra y abre la caja o bolsa hasta descubrir el producto, con la emoción de estrenarlo."
 msgstr "Someone receives their purchase and opens the box or bag until they discover the product, with the thrill of trying it for the first time."
 
+msgid "Alta"
+msgstr "High"
+
 msgid "Analizando referencias…"
 msgstr "Analyzing references…"
 
@@ -1086,6 +1089,12 @@ msgstr "Invalid attribution: %(atribucion)s (use pixel, store or none)."
 msgid "Audio nativo del modelo, sin diálogo ni música."
 msgstr "The model's native audio, no dialogue or music."
 
+msgid "Audios"
+msgstr "Audios"
+
+msgid "Audios: tu texto con la voz que elijas"
+msgstr "Audios: your text in the voice you choose"
+
 msgid "Avanzado (objetivo, atribución, modo, destino)"
 msgstr "Advanced (objective, attribution, mode, destination)"
 
@@ -1100,6 +1109,9 @@ msgstr "Let Creatv know to finish it by hand"
 
 msgid "Avisos por correo desactivados."
 msgstr "Email notifications turned off."
+
+msgid "Baja"
+msgstr "Low"
 
 msgid "Biblioteca de copycoders"
 msgstr "Copycoders library"
@@ -1292,6 +1304,9 @@ msgstr "Cancel"
 
 msgid "Cancelar solicitud"
 msgstr "Cancel request"
+
+msgid "Canción"
+msgstr "Song"
 
 msgid "Canción lista en Mi música."
 msgstr "Song ready in My music."
@@ -1784,6 +1799,9 @@ msgstr "Creating asset…"
 msgid "Creando el activo de «%(nombre)s»… aparece en el Catálogo cuando termine."
 msgstr "Creating the asset for “%(nombre)s”… it shows up in the Catalog when it's done."
 
+msgid "Creando el audio…"
+msgstr "Creating the audio…"
+
 msgid "Creando la canción con ElevenLabs…"
 msgstr "Creating the song with ElevenLabs…"
 
@@ -1796,6 +1814,9 @@ msgstr "Create %(nombre)s"
 
 msgid "Crear activo desde las fotos de la tienda"
 msgstr "Create asset from the store's photos"
+
+msgid "Crear audio"
+msgstr "Create audio"
 
 msgid "Crear canción"
 msgstr "Create song"
@@ -2387,6 +2408,9 @@ msgstr "The dashboard only fills up once experiments are running: create one in 
 msgid "El texto de la publicación no puede estar vacío."
 msgstr "The post's text can't be empty."
 
+msgid "El texto pasa de 3 000 caracteres."
+msgstr "The text is over 3,000 characters."
+
 msgid "El texto que se dice en los clips no es idéntico al guion con las líneas quitadas."
 msgstr "The text spoken in the clips doesn't match the script with the removed lines."
 
@@ -2449,14 +2473,29 @@ msgstr "Choose a .csv or .xlsx file."
 msgid "Elige un archivo de audio."
 msgstr "Choose an audio file."
 
+msgid "Elige un idioma de la lista."
+msgstr "Pick a language from the list."
+
 msgid "Elige un prompt de la lista o pega uno nuevo."
 msgstr "Choose a prompt from the list or paste a new one."
 
 msgid "Elige un usuario y una contraseña para entrar a tu proyecto."
 msgstr "Choose a username and a password to enter your project."
 
+msgid "Elige un volumen de la lista."
+msgstr "Pick a volume from the list."
+
 msgid "Elige una de las dos formas de conectar."
 msgstr "Choose one of the two ways to connect."
+
+msgid "Elige una velocidad de la lista."
+msgstr "Pick a speed from the list."
+
+msgid "Elige una voz de la lista."
+msgstr "Pick a voice from the list."
+
+msgid "Elige una voz y un idioma de la lista."
+msgstr "Pick a voice and a language from the list."
 
 msgid "Eligiendo qué quitar…"
 msgstr "Choosing what to cut…"
@@ -2671,6 +2710,9 @@ msgstr "That Page isn't shared with Creatv; check step 2 of the guide."
 msgid "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."
 msgstr "That Page has no Instagram linked: Reels won't publish until you link it on Facebook."
 
+msgid "Esa canción ya no está en Mi música."
+msgstr "That song is no longer in My music."
+
 msgid "Esa cuenta publicitaria no aparece entre las de tu portafolio; vuelve a buscar."
 msgstr "That ad account doesn't show up among your portfolio's; search again."
 
@@ -2762,6 +2804,9 @@ msgstr "Enter your account's email and we'll send you a link to choose a new one
 msgid "Escribe el id de tu portafolio comercial (solo números)."
 msgstr "Write your business portfolio's id (numbers only)."
 
+msgid "Escribe el texto que quieres que lea la voz."
+msgstr "Write the text you want the voice to read."
+
 msgid "Escribe el tope total."
 msgstr "Enter the total cap."
 
@@ -2792,6 +2837,12 @@ msgstr "Enter a valid email."
 msgid "Escribe un correo válido: ahí te llega el enlace para confirmar la cuenta y recuperar la contraseña."
 msgstr "Enter a valid email: that's where the link to confirm your account and recover your password arrives."
 
+msgid "Escribe un texto, elige la voz y créalo. Aparecerá aquí para escucharlo y descargarlo."
+msgstr "Write a text, pick the voice and create it. It will show up here to listen to and download."
+
+msgid "Escribe un texto, elige la voz y, si quieres, una canción de fondo. Sale un mp3 para escuchar y descargar. Nada se cobra hasta que pulses «Crear audio»."
+msgstr "Write a text, pick the voice and, if you like, a background song. You get an mp3 to listen to and download. Nothing is charged until you press \"Create audio\"."
+
 msgid "Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises."
 msgstr "Writing the script with AI… it'll appear here in a few seconds for you to review."
 
@@ -2806,6 +2857,9 @@ msgstr "Write image prompts"
 
 msgid "Escribir texto con IA"
 msgstr "Write text with AI"
+
+msgid "Escuchar"
+msgstr "Listen"
 
 msgid "Ese anuncio no está en error."
 msgstr "That ad isn't in an error state."
@@ -3368,6 +3422,9 @@ msgstr "Save or cancel your edit to approve."
 msgid "Guardado: tu edición es ahora el prompt vigente."
 msgstr "Saved: your edit is now the current prompt."
 
+msgid "Guardando"
+msgstr "Saving"
+
 msgid "Guardando el video"
 msgstr "Saving the video"
 
@@ -3562,6 +3619,9 @@ msgstr "Login configuration id"
 msgid "Identificador de la app"
 msgstr "App id"
 
+msgid "Idioma"
+msgstr "Language"
+
 msgid "Idioma del proyecto"
 msgstr "Project language"
 
@@ -3712,6 +3772,9 @@ msgstr "Go to %(tab)s →"
 
 msgid "Ir a Crear"
 msgstr "Go to Create"
+
+msgid "Ir a Desde referencias"
+msgstr "Go to From references"
 
 msgid "JPG, PNG, WEBP, MP4 o MOV; también puedes arrastrarlos a la caja. Cada uno queda como @Imagen N / @Video N para nombrarlo en el texto."
 msgstr "JPG, PNG, WEBP, MP4 or MOV; you can also drag them into the box. Each one becomes @Imagen N / @Video N so you can name it in the text."
@@ -3936,6 +3999,9 @@ msgstr "The rules found nothing."
 msgid "Leer guion"
 msgstr "Read script"
 
+msgid "Lenta"
+msgstr "Slow"
+
 msgid "Leyenda"
 msgstr "Legend"
 
@@ -4062,6 +4128,9 @@ msgstr "What it took to build this"
 msgid "Lo que vendes: calzado, ropa, decoración, comida, lo que sea."
 msgstr "What you sell: shoes, clothes, home decor, food, anything."
 
+msgid "Locuciones (audios)"
+msgstr "Voice-overs (audios)"
+
 msgid "Logos"
 msgstr "Logos"
 
@@ -4179,6 +4248,9 @@ msgstr "I stopped at proposal #%(id)s (%(accion)s): %(error)s"
 msgid "Mecanismo"
 msgstr "Mechanism"
 
+msgid "Media"
+msgstr "Medium"
+
 msgid "Mejorar la calidad al final (+$0.04, solo aplica a fotos)"
 msgstr "Improve quality at the end (+$0.04, photos only)"
 
@@ -4270,6 +4342,9 @@ msgstr "Meta: Summary in %(moneda)s"
 
 msgid "Meter en experimento"
 msgstr "Add to experiment"
+
+msgid "Mezclando con la música"
+msgstr "Mixing with the music"
 
 msgid "Mezclando sonido"
 msgstr "Mixing sound"
@@ -4395,6 +4470,9 @@ msgstr "Music when creating"
 msgid "Música al crear: %(estilo)s"
 msgstr "Music when created: %(estilo)s"
 
+msgid "Música de fondo"
+msgstr "Background music"
+
 msgid "Nada elegido todavía."
 msgstr "Nothing chosen yet."
 
@@ -4415,6 +4493,9 @@ msgstr "Niche"
 
 msgid "Ninguna (objeto)"
 msgstr "None (object)"
+
+msgid "Ninguna (solo la voz)"
+msgstr "None (voice only)"
 
 msgid "Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."
 msgstr "None of the photos had a supported format (jpg, jpeg, png, webp)."
@@ -4522,6 +4603,10 @@ msgstr "Not published"
 msgid "No pude borrarla (%(tipo)s); intenta de nuevo."
 msgstr "I couldn't delete it (%(tipo)s); try again."
 
+#, python-format
+msgid "No pude borrarlo (%(tipo)s); intenta de nuevo."
+msgstr "I couldn't delete it (%(tipo)s); try again."
+
 msgid "No pude calcular el panel esta vez. El detalle quedó en el log del servidor; vuelve a cargar en un momento."
 msgstr "I couldn't calculate the panel this time. The detail was logged on the server; reload in a moment."
 
@@ -4563,6 +4648,13 @@ msgstr "I couldn't describe the references (%(tipo)s)."
 #, python-format
 msgid "No pude ejecutar «%(accion)s»: %(error)s"
 msgstr "Couldn't execute “%(accion)s”: %(error)s"
+
+#, python-format
+msgid "No pude generar la muestra (%(tipo)s); intenta de nuevo."
+msgstr "I couldn't generate the sample (%(tipo)s); try again."
+
+msgid "No pude generar la muestra; intenta de nuevo."
+msgstr "I couldn't generate the sample; try again."
 
 msgid "No pude leer tus activos:"
 msgstr "Couldn't read your assets:"
@@ -4673,6 +4765,9 @@ msgstr "Couldn't copy"
 msgid "No se pudo crear el anuncio de %(nombre)s (%(pais)s): %(mensaje)s"
 msgstr "Could not create the ad for %(nombre)s (%(pais)s): %(mensaje)s"
 
+msgid "No se pudo crear el audio."
+msgstr "The audio could not be created."
+
 msgid "No se pudo crear la canción."
 msgstr "Couldn't create the song."
 
@@ -4780,6 +4875,9 @@ msgstr "Project name updated."
 
 msgid "Nombre visible del proyecto"
 msgstr "Project's visible name"
+
+msgid "Normal"
+msgstr "Normal"
 
 msgid "Nota (opcional)"
 msgstr "Note (optional)"
@@ -5717,6 +5815,9 @@ msgstr "Role"
 msgid "Rol inválido: %(rol)s. Opciones: %(opciones)s"
 msgstr "Invalid role: %(rol)s. Options: %(opciones)s"
 
+msgid "Rápida"
+msgstr "Fast"
+
 msgid ""
 "Salen los prompts de lo que está «por crear» (personajes y entornos), del producto en el estilo\n"
 "    del video y la tabla de qué imagen va en cada clip."
@@ -6004,6 +6105,9 @@ msgstr "Syncing…"
 msgid "Sincronizar"
 msgstr "Sync"
 
+msgid "Sintetizando la voz"
+msgstr "Synthesizing the voice"
+
 msgid "Sistema de marca real"
 msgstr "Real brand system"
 
@@ -6088,6 +6192,9 @@ msgstr "Sprints"
 
 msgid "Sube al menos una foto."
 msgstr "Upload at least one photo."
+
+msgid "Sube solo música tuya o con licencia."
+msgstr "Upload only music you own or have licensed."
 
 msgid "Sube solo música tuya o con licencia: Meta silencia o rechaza anuncios con canciones protegidas."
 msgstr "Only upload music that's yours or licensed: Meta mutes or rejects ads with protected songs."
@@ -6191,6 +6298,9 @@ msgstr "Finished with an error."
 
 msgid "Textil de hogar (cobija, manta, cojín)"
 msgstr "Home textile (blanket, throw, cushion)"
+
+msgid "Texto a leer"
+msgstr "Text to read"
 
 msgid "Texto de la publicación"
 msgstr "Post text"
@@ -6326,6 +6436,9 @@ msgstr "You haven't written to Claude yet. Tell it what went wrong with this pro
 #, python-format
 msgid "Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>%(redirect)s</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>."
 msgstr "Not yet possible: <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code>. Whoever administers it creates the app at developers.mercadolibre.com (<code>offline_access</code> permission, redirect <code>%(redirect)s</code>) — see the MercadoLibre card in <em>Setup</em>."
+
+msgid "Todavía no tienes audios"
+msgstr "You don't have any audios yet"
 
 #, python-format
 msgid "Todavía no vemos activos compartidos desde el portafolio %(portafolio)s. A veces Meta tarda unos minutos: revisa que el ID de Creatv sea el de arriba y que hayas marcado la cuenta y la Página."
@@ -6497,6 +6610,9 @@ msgstr "Your text goes to the model as-is"
 msgid "Tu texto, tal cual"
 msgstr "Your text, as-is"
 
+msgid "Tus audios"
+msgstr "Your audios"
+
 msgid "Tus prompts"
 msgstr "Your prompts"
 
@@ -6639,6 +6755,9 @@ msgstr "Go to “API keys” › “Create key”, give it a name (for example �
 msgid "Ve a «Keys» › «Add key», elige alcance «API» y copia la llave."
 msgstr "Go to “Keys” › “Add key”, choose scope “API” and copy the key."
 
+msgid "Velocidad"
+msgstr "Speed"
+
 msgid "Ventana de atribución"
 msgstr "Attribution window"
 
@@ -6761,14 +6880,17 @@ msgstr "Videos"
 msgid "Videos de este guion"
 msgstr "This script's videos"
 
-msgid "Videos e imágenes desde tus referencias, o cambia el producto de una foto o video. Nada se cobra hasta que pulses «Generar»."
-msgstr "Videos and images from your references, or change the product in a photo or video. Nothing is charged until you tap “Generate”."
+msgid "Videos, imágenes y audios desde tus referencias, o cambia el producto de una foto o video. Nada se cobra hasta que pulses «Generar» o «Crear audio»."
+msgstr "Videos, images and audios from your references, or swap the product in a photo or video. Nothing is charged until you press \"Generate\" or \"Create audio\"."
 
 msgid "Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto"
 msgstr "Videos, images, scripts, final cuts and AI text paid for this month; detail in Settings › Spend"
 
 msgid "Visuales"
 msgstr "Visuals"
+
+msgid "Volumen de la música"
+msgstr "Music volume"
 
 msgid "Volver a armar"
 msgstr "Reassemble"
@@ -6790,6 +6912,9 @@ msgstr "Try again"
 
 msgid "Volver al original"
 msgstr "Revert to the original"
+
+msgid "Voz"
+msgstr "Voice"
 
 msgid "Voz (solo en diálogo)"
 msgstr "Voice (dialogue mode only)"
@@ -6918,6 +7043,9 @@ msgstr "This product's list is already being put together."
 
 msgid "Ya se está creando el activo de ese producto — espera a que termine."
 msgstr "That product's asset is already being created — wait for it to finish."
+
+msgid "Ya se está creando un audio — espera a que termine."
+msgstr "An audio is already being created — wait for it to finish."
 
 msgid "Ya se está creando una canción — espera a que termine."
 msgstr "A song is already being created — wait for it to finish."
@@ -7197,6 +7325,9 @@ msgstr "e.g. bright room with a light wood floor, beige sofa and a window on the
 
 msgid "ej. siempre lleva la gorra roja y nunca sonríe con dientes"
 msgstr "e.g. always wears the red cap and never smiles with teeth"
+
+msgid "ej. ¿Cansada de que tus zapatos te maten los pies? Esta semana, envío gratis en toda la tienda."
+msgstr "e.g. Tired of shoes that kill your feet? This week, free shipping storewide."
 
 #, python-format
 msgid "el clip %(i)s no es un objeto"
@@ -7853,6 +7984,9 @@ msgstr "extra %(lista)s (removed or nonexistent)"
 msgid "solo ventas medibles"
 msgstr "measurable sales only"
 
+msgid "solo voz"
+msgstr "voice only"
+
 msgid "style_id de Higgsfield (opcional, avanzado)"
 msgstr "Higgsfield style_id (optional, advanced)"
 
@@ -8016,6 +8150,9 @@ msgstr "“siguiente” has a step that doesn't exist: %(que)s."
 msgid "¿Archivar «%(nombre)s»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Mostrar archivados»)."
 msgstr "Archive “%(nombre)s”? It doesn't get deleted: it's hidden from the list and the store sync won't show it again (you get it back from “Show archived”)."
 
+msgid "¿Borrar este audio?"
+msgstr "Delete this audio?"
+
 #, python-format
 msgid "¿Borrar «%(nombre)s» de Mi música? Los videos ya hechos conservan su audio."
 msgstr "Delete “%(nombre)s” from My music? Videos already made keep their audio."
@@ -8092,6 +8229,9 @@ msgstr "Remove all references?"
 msgid "¿Seguro? Toca otra vez"
 msgstr "Sure? Tap again"
 
+msgid "¿Una canción hecha con IA? Créala en Desde referencias › 🎵 Música y aparecerá aquí."
+msgstr "Want an AI-made song? Create it in From references › 🎵 Music and it will show up here."
+
 msgid "¿Ve la foto del producto?"
 msgstr "Does it see the product photo?"
 
@@ -8137,6 +8277,9 @@ msgstr "← Back"
 #, python-format
 msgid "← padre: %(nombre)s"
 msgstr "← parent: %(nombre)s"
+
+msgid "≈"
+msgstr "≈"
 
 #, python-format
 msgid "≈ %(usd)s"

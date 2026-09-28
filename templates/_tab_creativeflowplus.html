@@ -790,6 +790,9 @@
     function aplicarMusica(d, elegirNuevo) {
       if (d.html !== undefined) mmWrap.innerHTML = d.html;
       if (d.canciones) pintarCanciones(d.canciones);
+      if (d.canciones && !d.deOtroPanel) {
+        try { document.dispatchEvent(new CustomEvent('mi-musica:cambio', {detail: {origen: 'mm', canciones: d.canciones}})); } catch (e) {}
+      }
       if (elegirNuevo && d.nuevo_id) { musicaSel.value = 'mat:' + d.nuevo_id; inicioInput.value = 0; }
       mostrarInicio(); refrescar();
       var err = document.getElementById('mm-error');
@@ -870,6 +873,13 @@
     });
     mostrarInicio();
     vigilarCancion();
+
+    // Una canción subida desde Crear › Audios también entra a este panel.
+    document.addEventListener('mi-musica:cambio', function (ev) {
+      var d = ev.detail || {};
+      if (d.origen === 'mm' || !d.canciones) return;
+      aplicarMusica({html: d.html, canciones: d.canciones, deOtroPanel: true}, false);
+    });
 
     // Enter en un campo de una línea NO envía: «Generar» cobra y solo se lanza
     // con su botón (antes, Enter en «Sonido de la escena» generaba el video).
