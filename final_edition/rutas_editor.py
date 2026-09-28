@@ -206,8 +206,11 @@ def producir(cliente, edicion_id):
 
 @bp.post("/desde/<cf_id>")
 def desde_clon(cliente, cf_id):
-    """«Editar este video» (gratis): encola la preparación y vuelve a la pieza
-    en Final edition, donde la barra muestra el avance."""
+    """«Editar» (gratis): encola la preparación y vuelve a la pieza en Final
+    edition, donde la barra muestra el avance. El `&abrir=editor` del destino
+    es lo que le dice al script de la pestaña que, cuando la recarga
+    automática de iniciarPolling() vea la edición lista, entre directo al
+    editor en vez de quedarse en el detalle (Editor capa 4b, tarea 9)."""
     if not _mismo_origen():
         return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
     entry = creative_flow.cargar(cliente).get(cf_id)
@@ -218,9 +221,9 @@ def desde_clon(cliente, cf_id):
     encolado = trabajos.encolar(tareas_edicion.job_id_desde_clon(cliente, cf_id), "edicion_desde_clon",
                                 {"cliente": cliente, "cf_id": cf_id}, duracion_estimada=40,
                                 etapas=[("Preparando el video", 100)], cliente=cliente, max_intentos=2)
-    flash("Preparando el video para el editor… en unos segundos aparece «Abrir en el editor»." if encolado
+    flash("Preparando el video para el editor… se abre solo en cuanto esté listo." if encolado
           else "Ya se estaba preparando ese video.", "ok")
-    return redirect(volver + f"#final?cf={cf_id}")
+    return redirect(volver + f"#final?cf={cf_id}&abrir=editor")
 
 
 # --- Biblioteca del editor (capa 4b, Task 1): subir, listar y preparar piezas ---

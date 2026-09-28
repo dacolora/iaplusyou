@@ -335,7 +335,9 @@ def test_editar_este_video_encola_la_preparacion_gratis(dashboard, encolados):
     cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira", 8, "", "A")
     creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2.test/v.mp4")
     r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/desde/{cf}")
-    assert r.status_code == 302 and r.headers["Location"].endswith(f"#final?cf={cf}")
+    # capa 4b (9/9): el &abrir=editor es lo que le dice a la pestaña que, al
+    # ver la edición lista, entre directo al editor sin pasar por el detalle.
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"#final?cf={cf}&abrir=editor")
     (args, kw), = [(a, k) for a, k in encolados if a[1] == "edicion_desde_clon"]
     assert args[0] == f"acme__{cf}__editor" and args[2] == {"cliente": "acme", "cf_id": cf}
     assert kw["max_intentos"] == 2 and kw["cliente"] == "acme"
