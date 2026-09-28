@@ -11,6 +11,7 @@ import creative_flow
 import ediciones
 import materiales
 import trabajos
+from final_edition import biblioteca
 from final_edition import documento as documento_mod
 from final_edition import estimar, vista_previa
 from final_edition.documento import DocumentoInvalido
@@ -214,3 +215,61 @@ def desde_clon(cliente, cf_id):
     flash("Preparando el video para el editor… en unos segundos aparece «Abrir en el editor»." if encolado
           else "Ya se estaba preparando ese video.", "ok")
     return redirect(volver + f"#final?cf={cf_id}")
+
+
+# --- Biblioteca del editor (capa 4b, Task 1): subir, listar y preparar piezas ---
+
+@bp.post("/materiales/subir", endpoint="subir")
+def subir_material(cliente):
+    if not _mismo_origen():
+        return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return jsonify({"error": "Elige un archivo."}), 400
+    try:
+        material = biblioteca.subir(cliente, archivo)
+    except biblioteca.SubidaInvalida as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"material": material})
+
+
+@bp.get("/biblioteca", endpoint="biblioteca")
+def ver_biblioteca(cliente):
+    return jsonify(biblioteca.listar(cliente))
+
+
+@bp.post("/biblioteca/pieza/<cf_id>", endpoint="agregar_pieza")
+def agregar_pieza(cliente, cf_id):
+    """Añade una pieza de Crear a la biblioteca (gratis): si ya es un
+    material, lo devuelve tal cual; si no, encola su preparación
+    (`material_de_pieza`) y responde 202 mientras tanto."""
+    if not _mismo_origen():
+        return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
+    if not tareas_edicion._CF_RE.fullmatch(cf_id or ""):
+        return jsonify({"error": "No existe esa pieza."}), 404
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry or entry.get("estado") != "video_listo" or (entry.get("tipo") or "video") != "video":
+        return jsonify({"error": "No existe esa pieza."}), 404
+    existente = biblioteca.material_de_pieza(cliente, cf_id)
+    if existente:
+        return jsonify({"material": vista_previa.material_para(existente)})
+    trabajos.encolar(tareas_edicion.job_id_material_de_pieza(cliente, cf_id), "material_de_pieza",
+                     {"cliente": cliente, "cf_id": cf_id}, duracion_estimada=30, cliente=cliente, max_intentos=2)
+    return jsonify({"preparando": True}), 202
+
+
+@bp.get("/materiales", endpoint="materiales_por_id")
+def materiales_por_id(cliente):
+    """`?ids=1,2,3` -> {materiales: {id: material_para(m)}} solo de este
+    proyecto (un id ajeno o inexistente simplemente no aparece)."""
+    ids = []
+    for parte in (request.args.get("ids") or "").split(","):
+        parte = parte.strip()
+        if parte.isdigit():
+            ids.append(int(parte))
+    out = {}
+    for mid in ids:
+        m = materiales.obtener(cliente, mid)
+        if m:
+            out[str(mid)] = vista_previa.material_para(m)
+    return jsonify({"materiales": out})

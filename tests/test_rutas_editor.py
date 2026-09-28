@@ -1,6 +1,7 @@
 """Rutas de la vista previa del editor (capa 3): entra quien tiene acceso al
 proyecto; la página trae el documento, los materiales y la configuración, y
 encola los proxies que faltan (gratis)."""
+import io
 import json
 import re
 
@@ -451,3 +452,174 @@ def test_el_dialogo_de_producir_no_promete_voz_ni_musica(dashboard, encolados):
     assert "ya están hechos" not in html
     assert "Es gratis" in html and "lo que hay en esta edición" in html
     assert "Reemplazar y producir" in html
+
+
+# --- Biblioteca del editor (capa 4b, Task 1) ---
+
+def test_subir_material_delega_en_la_biblioteca(dashboard, encolados, monkeypatch):
+    from final_edition import rutas_editor
+    llamadas = []
+    monkeypatch.setattr(rutas_editor.biblioteca, "subir",
+                        lambda cliente, archivo: llamadas.append((cliente, archivo.filename)) or {"id": 9, "tipo": "video"})
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/materiales/subir", data={"archivo": (io.BytesIO(b"x"), "clip.mp4")},
+              content_type="multipart/form-data")
+    assert r.status_code == 200 and r.get_json() == {"material": {"id": 9, "tipo": "video"}}
+    assert llamadas == [("acme", "clip.mp4")]
+
+
+def test_subir_material_responde_400_en_subida_invalida(dashboard, encolados, monkeypatch):
+    from final_edition import biblioteca
+    from final_edition import rutas_editor
+
+    def _falla(cliente, archivo):
+        raise biblioteca.SubidaInvalida("Sube un video, una imagen o un audio.")
+    monkeypatch.setattr(rutas_editor.biblioteca, "subir", _falla)
+    r = _cliente_admin(dashboard).post("/cliente/acme/ediciones/materiales/subir",
+                                       data={"archivo": (io.BytesIO(b"MZ"), "virus.exe")},
+                                       content_type="multipart/form-data")
+    assert r.status_code == 400 and "video, una imagen o un audio" in r.get_json()["error"]
+
+
+def test_subir_material_exige_archivo_y_mismo_origen(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/materiales/subir", data={}, content_type="multipart/form-data")
+    assert r.status_code == 400
+    r = c.post("/cliente/acme/ediciones/materiales/subir", data={"archivo": (io.BytesIO(b"x"), "a.mp4")},
+              content_type="multipart/form-data", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+
+
+def test_biblioteca_devuelve_lo_que_arma_el_modulo(dashboard, encolados, monkeypatch):
+    from final_edition import rutas_editor
+    esperado = {"materiales": [{"id": 1}], "piezas": [{"cf_id": "cf_1"}]}
+    monkeypatch.setattr(rutas_editor.biblioteca, "listar", lambda cliente: esperado if cliente == "acme" else None)
+    r = _cliente_admin(dashboard).get("/cliente/acme/ediciones/biblioteca")
+    assert r.status_code == 200 and r.get_json() == esperado
+
+
+def _pieza_lista(dashboard_cliente="acme", tipo=None):
+    import creative_flow
+    cf = creative_flow.crear(dashboard_cliente, [], ["Espejo LED"], [], "gira", 8, "", "A")
+    creative_flow.actualizar(dashboard_cliente, cf, estado="video_listo", video_url="https://r2.test/v.mp4")
+    if tipo:
+        creative_flow.actualizar(dashboard_cliente, cf, tipo=tipo)
+    return cf
+
+
+def test_agregar_pieza_encola_la_preparacion_si_no_es_material(dashboard, encolados):
+    cf = _pieza_lista()
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/biblioteca/pieza/{cf}")
+    assert r.status_code == 202 and r.get_json() == {"preparando": True}
+    (args, kw), = [(a, k) for a, k in encolados if a[1] == "material_de_pieza"]
+    assert args[0] == f"acme__{cf}__material" and args[2] == {"cliente": "acme", "cf_id": cf}
+    assert kw["max_intentos"] == 2 and kw["cliente"] == "acme"
+
+
+def test_agregar_pieza_devuelve_el_material_si_ya_existe(dashboard, encolados):
+    import materiales
+    cf = _pieza_lista()
+    mat = materiales.registrar("acme", tipo="video", origen="crear", url="https://r2/clon.mp4", hash="h-clon",
+                               bytes=1, extra={"cf_id": cf})
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/biblioteca/pieza/{cf}")
+    assert r.status_code == 200 and r.get_json()["material"]["id"] == mat["id"]
+    assert not [a for a, _k in encolados if a[1] == "material_de_pieza"]
+
+
+def test_agregar_pieza_rechaza_id_invalido_ajena_o_no_lista(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    assert c.post("/cliente/acme/ediciones/biblioteca/pieza/../x").status_code == 404
+    assert c.post("/cliente/acme/ediciones/biblioteca/pieza/cf_no_existe").status_code == 404
+    import creative_flow
+    sin_video = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira", 8, "", "A")
+    assert c.post(f"/cliente/acme/ediciones/biblioteca/pieza/{sin_video}").status_code == 404
+    cf_imagen = _pieza_lista(tipo="imagen")
+    assert c.post(f"/cliente/acme/ediciones/biblioteca/pieza/{cf_imagen}").status_code == 404
+    r = c.post(f"/cliente/acme/ediciones/biblioteca/pieza/{_pieza_lista()}", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert not [a for a, _k in encolados if a[1] == "material_de_pieza"]
+
+
+def test_materiales_por_id_solo_los_de_este_proyecto(dashboard, encolados):
+    import materiales
+    propio = materiales.registrar("acme", tipo="video", origen="subida", url="https://r2/a.mp4", hash="h-a", bytes=1)
+    ajeno = materiales.registrar("otro", tipo="video", origen="subida", url="https://r2/b.mp4", hash="h-b", bytes=1)
+    r = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/materiales?ids={propio['id']},{ajeno['id']},999")
+    j = r.get_json()
+    assert r.status_code == 200 and set(j["materiales"]) == {str(propio["id"])}
+    assert j["materiales"][str(propio["id"])]["url"] == "https://r2/a.mp4"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("subido_antes", [True, False])
+def test_preparar_piezas_con_bytes_compartidos_resuelve_listado_y_post(
+        dashboard, encolados, monkeypatch, tmp_path, subido_antes):
+    import final_edition
+    import materiales
+    from final_edition import biblioteca, insumos
+    from tareas import edicion as te
+    from tests.test_biblioteca_editor import _mp4_bytes, _pieza_lista as crear_pieza
+    monkeypatch.setattr(final_edition, "BASE_DIR", str(tmp_path))
+    monkeypatch.setattr(te, "_carpeta", lambda *args: str(tmp_path / "preparar"))
+    monkeypatch.setattr(insumos.cortes, "detectar_cortes", lambda *args: [])
+    subidas = []
+    monkeypatch.setattr(materiales.r2_uploader, "upload_file",
+                        lambda *args: subidas.append(args) or "https://r2.test/subido.mp4")
+    datos = _mp4_bytes(tmp_path)
+    local = tmp_path / "crudo.mp4"
+    local.write_bytes(datos)
+    c = _cliente_admin(dashboard)
+    mid = None
+    if subido_antes:
+        r = c.post("/cliente/acme/ediciones/materiales/subir",
+                   data={"archivo": (io.BytesIO(datos), "Mi original.mp4")})
+        assert r.status_code == 200
+        mid = r.get_json()["material"]["id"]
+        materiales.actualizar_extra("acme", mid, propio={"conservar": True})
+    piezas = [crear_pieza(nombre=nombre, video_local_crudo=str(local))
+              for nombre in ("Primera pieza", "Segunda pieza")]
+    for cf in piezas:
+        url = f"/cliente/acme/ediciones/biblioteca/pieza/{cf}"
+        assert c.post(url).status_code == 202
+        te.ejecutar_material_de_pieza({"payload": {"cliente": "acme", "cf_id": cf}})
+        listado = c.get("/cliente/acme/ediciones/biblioteca").get_json()
+        por_cf = {p["cf_id"]: p for p in listado["piezas"]}
+        preparado = por_cf[cf]["material_id"]
+        assert preparado is not None
+        mid = mid or preparado
+        assert preparado == mid
+        n = len(encolados)
+        repetido = c.post(url)
+        assert repetido.status_code == 200
+        assert repetido.get_json()["material"]["id"] == mid
+        assert len(encolados) == n
+    assert {p["material_id"] for p in biblioteca.listar("acme")["piezas"]} == {mid}
+    mat = materiales.obtener("acme", mid)
+    assert mat["origen"] == ("subida" if subido_antes else "crear")
+    assert mat["extra"]["nombre"] == ("Mi original" if subido_antes else "Primera pieza")
+    if subido_antes:
+        assert mat["extra"]["propio"] == {"conservar": True}
+    else:
+        assert mat["extra"]["cf_id"] == piezas[0]
+    assert biblioteca.material_de_pieza("otro", piezas[0]) is None
+    assert len(subidas) == int(subido_antes)
+
+
+@pytest.mark.parametrize("nombre", ["audio.mp4", pytest.param("silencioso.mp3", marks=pytest.mark.slow)])
+def test_subida_rechaza_stream_equivocado_antes_de_subir_o_encolar(
+        dashboard, encolados, monkeypatch, tmp_path, nombre):
+    import final_edition
+    import materiales
+    from tests.test_biblioteca_editor import _wav_bytes, _mp4_bytes
+    monkeypatch.setattr(final_edition, "BASE_DIR", str(tmp_path))
+    subidas = []
+    monkeypatch.setattr(materiales.r2_uploader, "upload_file",
+                        lambda *args: subidas.append(args) or "https://r2.test/incorrecto")
+    datos = _wav_bytes() if nombre.endswith("mp4") else _mp4_bytes(tmp_path)
+    r = _cliente_admin(dashboard).post("/cliente/acme/ediciones/materiales/subir",
+                                       data={"archivo": (io.BytesIO(datos), nombre)})
+    assert r.status_code == 400
+    assert r.get_json()["error"]
+    assert not subidas and not encolados
+    assert materiales.bytes_usados("acme") == 0
+    assert list((tmp_path / "clientes/acme/tmp_editor").iterdir()) == []
