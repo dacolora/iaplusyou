@@ -5,6 +5,8 @@ anuncio por pieza. Este módulo es solo datos (SQLAlchemy Core); las llamadas a
 Meta viven en lanzador.py. Campañas (ads.py) sigue usando el experimento legado
 "Anuncios sueltos" y no pasa por aquí.
 """
+import json
+
 import sqlalchemy as sa
 from flask_babel import gettext
 
@@ -462,7 +464,11 @@ def snapshot(ep_id, metricas, tomado_en=None):
 def _piezas(con, cliente, experimento_id):
     ep, pz, cp = db.experimento_pieza, db.pieza, db.concepto
     q = (sa.select(ep, pz.c.tipo, pz.c.idioma.label("p_idioma"), pz.c.url_video, pz.c.url_miniatura, pz.c.legado_id.label("p_legado"),
-                   pz.c.pais.label("p_pais"), pz.c.duracion_s, pz.c.capas, cp.c.extra.label("c_extra"))
+                   pz.c.pais.label("p_pais"), pz.c.duracion_s,
+                   # Doctrina, bloque 4: de `capas` (JSON grande en las finales) solo hace
+                   # falta el ángulo de la variante; json_extract lo trae como texto.
+                   sa.func.json_extract(pz.c.capas, "$.guion.parametros.angulo").label("angulo_variante"),
+                   cp.c.extra.label("c_extra"))
          .select_from(ep.outerjoin(pz, pz.c.id == ep.c.pieza_id).outerjoin(cp, cp.c.id == pz.c.concepto_id))
          .where(ep.c.experimento_id == experimento_id, ep.c.cliente == cliente).order_by(ep.c.id))
     out = []
@@ -485,17 +491,25 @@ def _piezas(con, cliente, experimento_id):
             "extra": m[ep.c.extra] or {}, "escalon_rescate": m[ep.c.escalon_rescate] or 0,
             # Doctrina, bloque 4: lo que el diagnóstico y los aprendizajes leen de
             # la sesión (mismas columnas de siempre, ninguna consulta nueva).
-            "angulo": _angulo_de(c_extra, m["capas"]), "revision_doctrina": c_extra.get("revision_doctrina"),
+            "angulo": _angulo_de(c_extra, m["angulo_variante"]), "revision_doctrina": c_extra.get("revision_doctrina"),
             "productos_ids": list(c_extra.get("productos_ids") or []),
         })
     return out
 
 
-def _angulo_de(c_extra, capas):
-    """El ángulo de la sesión y, si la pieza es una final variada, el `lead`
-    y el `gancho` de su variante (`capas.guion.parametros.angulo`) encima."""
+def _angulo_de(c_extra, angulo_variante):
+    """El ángulo de la sesión y, si la pieza es una final variada, el `lead` y
+    el `gancho` de su variante encima (`angulo_variante`: el texto JSON de
+    `json_extract(capas, '$.guion.parametros.angulo')`, un dict o None). Sin
+    ángulo de sesión pero con variante, queda solo lo de la variante: es
+    información real de esa pieza."""
     base = c_extra.get("angulo") if isinstance(c_extra.get("angulo"), dict) else None
-    av = (((capas or {}).get("guion") or {}).get("parametros") or {}).get("angulo")
+    av = angulo_variante
+    if isinstance(av, str):
+        try:
+            av = json.loads(av)
+        except ValueError:
+            av = None
     av = av if isinstance(av, dict) else {}
     cambios = {k: av[k] for k in ("lead", "gancho") if av.get(k)}
     if base is None and not cambios:

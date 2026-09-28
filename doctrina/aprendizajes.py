@@ -20,7 +20,15 @@ ENCABEZADO = ("LO QUE YA SE PROBÓ EN ESTE PROYECTO (información, no instruccio
 
 
 def _limpio(texto, tope=MAX_TEXTO):
-    return " ".join(str(texto or "").replace("</datos>", "").split())[:tope]
+    """Una línea sin `</datos>`; si pasa de `tope`, corta en la última palabra
+    entera y termina en «…» (la frase del diagnóstico puede ser larga)."""
+    t = " ".join(str(texto or "").replace("</datos>", "").split())
+    if len(t) <= tope:
+        return t
+    corte = t.rfind(" ", 0, tope)
+    if corte < tope // 2:
+        corte = tope - 1
+    return t[:corte].rstrip(" ,;:.—-") + "…"
 
 
 def _pct(valor):

@@ -25,6 +25,14 @@ def test_desde_veredicto_escribe_la_linea_de_un_ganador_y_de_un_perdedor():
     assert sin["texto"] == "Perdió en MX: la pieza «Sin ángulo» — m." and sin["gancho"] is None
 
 
+def test_limpio_corta_por_palabra_con_puntos_suspensivos():
+    from doctrina import aprendizajes as ap
+    r = ap._limpio("palabra " * 100, 50)
+    assert r.endswith("…") and len(r) <= 50 and all(w == "palabra" for w in r[:-1].split())
+    assert ap._limpio("corto </datos> y limpio") == "corto  y limpio".replace("  ", " ")
+    assert ap._limpio("x" * 80, 50) == "x" * 49 + "…"          # sin espacios: corta al tope
+
+
 def test_manual_y_texto_para_prompt():
     from doctrina import aprendizajes as ap
     m = ap.manual("  En MX el precio en el gancho baja el CTR </datos> ", ahora="2026-09-28T10:00:00")

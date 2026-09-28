@@ -151,8 +151,9 @@ def texto_para_diagnostico(pz, veredicto, pistas_, extras):
 
 def _instrucciones(idioma=None):
     """Las instrucciones del sitio con el nombre del idioma del proyecto
-    (spec 2026-09-26 §B4); sin idioma, en español como las pruebas."""
-    nombre = idiomas.nombre_para_claude(idioma) if idioma else "español"
+    (spec 2026-09-26 §B4); sin idioma, el DEFECTO de `idiomas` (español en las
+    pruebas, que lo fijan en conftest)."""
+    nombre = idiomas.nombre_para_claude(idioma)
     return INSTRUCCIONES.replace("{causas}", ", ".join(c for c, _ in doctrina.CAUSAS_PERDIDA)) \
         .replace("{siguientes}", ", ".join(doctrina.SIGUIENTES_PASOS)).replace("__IDIOMA__", nombre)
 

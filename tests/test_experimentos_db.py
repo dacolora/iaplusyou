@@ -354,6 +354,10 @@ def test_piezas_traen_el_angulo_la_revision_y_los_productos_de_la_sesion(base_te
     assert por_id[ep_final]["angulo"] == dict(angulo, lead="secreto", gancho="Lo que nadie dice")
     sin = ex.piezas("acme", _experimento_sin_angulo(db, ex))
     assert sin[0]["angulo"] is None and sin[0]["productos_ids"] == []
+    # Solo viaja el ángulo de la variante (json_extract → texto), nunca `capas` entera.
+    assert ex._angulo_de({}, '{"lead": "secreto", "gancho": "x"}') == {"lead": "secreto", "gancho": "x"}
+    assert ex._angulo_de({}, None) is None and ex._angulo_de({}, "no es json") is None
+    assert ex._angulo_de({"angulo": {"gancho": "a"}}, {"lead": "oferta"}) == {"gancho": "a", "lead": "oferta"}
 
 
 def _experimento_sin_angulo(db, ex):
