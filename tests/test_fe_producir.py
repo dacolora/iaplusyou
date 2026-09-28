@@ -85,7 +85,7 @@ def entorno(base_temporal, tmp_path, monkeypatch, clip):
                                                                 "descripcion": "Chancla cómoda", "tipo": "calzado"}])
 
     def fake_generar(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None,
-                     angulo=None):
+                     angulo=None, **kw):
         llamadas["generar"] = dict(producto=producto, referencia=referencia, enfoque=enfoque,
                                    duracion_s=duracion_s, idioma_base=idioma_base, marca=marca, angulo=angulo)
         return dict(GUION_BASE), 0.01
@@ -199,7 +199,7 @@ def test_preparar_guion_guarda_el_angulo_nuevo_y_no_pisa_uno_existente(entorno, 
              "faltantes": [], "origen": "guion"}
 
     def generar_con_angulo(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint,
-                           canal_optimo=None, angulo=None):
+                           canal_optimo=None, angulo=None, **kw):
         entorno["angulo_recibido"] = angulo
         return dict(GUION_BASE, angulo=nuevo), 0.01
     monkeypatch.setattr(guion_mod, "generar_guion_base", generar_con_angulo)
@@ -229,7 +229,7 @@ def test_preparar_guion_no_pisa_el_angulo_que_la_persona_llena_mientras_claude_e
                      "lead": "problema_solucion", "gancho": "gancho de la persona", "faltantes": []}
 
     def generar_con_carrera(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint,
-                            canal_optimo=None, angulo=None):
+                            canal_optimo=None, angulo=None, **kw):
         # Mientras "Claude" trabaja, la persona guarda su ángulo en el editor.
         cf.actualizar("acme", entorno["cf_id"], angulo=de_la_persona)
         return dict(GUION_BASE, angulo=de_claude), 0.01
@@ -345,7 +345,7 @@ def test_producir_recarga_la_sesion_tras_preparar_el_guion_para_que_la_localizac
              "faltantes": [], "origen": "guion"}
 
     def fake_generar_con_angulo(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint,
-                                canal_optimo=None, angulo=None):
+                                canal_optimo=None, angulo=None, **kw):
         return dict(GUION_BASE, angulo=nuevo), 0.01
     monkeypatch.setattr(guion_mod, "generar_guion_base", fake_generar_con_angulo)
 
@@ -713,3 +713,21 @@ def test_preparar_guion_tolera_una_prueba_sin_fuente_y_omite_las_sin_texto(entor
     tiendas.anotar_extra("acme", pid, pruebas=[{"texto": "sin fuente"}, {"fuente": "ficha"}])
     final_edition.preparar_guion("acme", entorno["cf_id"])
     assert entorno["generar"]["producto"]["pruebas"] == [{"texto": "sin fuente", "fuente": None}]
+
+
+def test_preparar_guion_le_pasa_los_aprendizajes_del_proyecto(entorno, monkeypatch):
+    """Doctrina, bloque 4 (§5): preparar_guion lee `proyectos.aprendizajes` y se los da al guion base."""
+    import final_edition
+    import proyectos
+    from final_edition import guion as guion_mod
+    vistos = {}
+    monkeypatch.setattr(proyectos, "aprendizajes", lambda cliente: [{"texto": "Perdió en CO: «¿Frío?»", "producto": None}])
+
+    def fake(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None,
+             angulo=None, aprendizajes=None):
+        vistos["aprendizajes"] = aprendizajes
+        return {"bloques": [{"rol": "hook", "texto_pantalla": "a", "texto_voz": "a", "inicio_s": 0, "fin_s": 8.0}],
+                "idioma": "es", "pais": "CO", "moneda": None, "precio_texto": None}, 0.01
+    monkeypatch.setattr(guion_mod, "generar_guion_base", fake)
+    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+    assert "Perdió en CO: «¿Frío?»" in vistos["aprendizajes"]

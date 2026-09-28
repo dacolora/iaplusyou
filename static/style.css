@@ -1627,6 +1627,12 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .qa-check { font-size: .8rem; cursor: help; }
 .qa-check.ok { color: var(--ok); }
 .qa-check.mal { color: var(--error); }
+/* _sprint_qa.html: al tocar la fila del QA se despliegan las razones (sin hover, sirve en el celular). */
+.qa-detalle > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
+.qa-detalle > summary::-webkit-details-marker { display: none; }
+.qa-razones { list-style: none; margin: .4rem 0 0; padding: 0; display: grid; gap: .25rem; font-size: .8rem; color: var(--text); }
+.qa-razones li.ok { color: var(--muted); }
+.qa-razones li.mal strong { color: var(--error); }
 .sprint-entrega { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .9rem; }
 .sprint-entrega th, .sprint-entrega td { border-bottom: 1px solid var(--border); padding: .45rem .5rem; text-align: left; vertical-align: top; word-break: break-all; }
 .generado-sprint { text-decoration: none; margin-left: .4rem; }

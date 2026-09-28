@@ -698,6 +698,23 @@ def _con_piezas(con_ideas, monkeypatch, tmp_path):
     return sid, cid, iv, ii, cfs
 
 
+def test_razones_del_qa_se_leen_con_un_toque(con_ideas, monkeypatch, tmp_path):
+    """2026-09-28: las razones de cada ✓/✗ vivían solo en el `title` (pasar
+    el cursor): invisibles en el celular. Ahora un <details> las despliega,
+    con el nombre del chequeo en español, en la revisión y en el panel."""
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    datos.actualizar_idea("acme", iv, qa={"veredicto": "falla", "score": 8, "checks": {
+        "presencia_marca": {"ok": False, "nota": "Logo GoDaddy aparece en seg 9"},
+        "formato": {"ok": True, "nota": "9:16, 10.0 s"}}})
+    c = con_ideas["c"]
+    for url in (f"/cliente/acme/sprints/{sid}/revision", f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel?paso=piezas"):
+        html = c.get(url).get_data(as_text=True)
+        assert 'class="qa-detalle"' in html, url
+        assert "<strong>Presencia de marca</strong>: Logo GoDaddy aparece en seg 9" in html, url
+        assert "<strong>Formato</strong>: 9:16, 10.0 s" in html, url
+
+
 def test_revision_pagina_y_acciones(con_ideas, monkeypatch, tmp_path):
     from sprints import datos
     sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)

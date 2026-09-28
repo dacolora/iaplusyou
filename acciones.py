@@ -439,7 +439,7 @@ def _precio_estimado(cliente, ex, accion, payload):
         if accion == "derivar":
             n_re, n_rg = int(reglas.get("n_reediciones") or 0), int(reglas.get("n_regeneraciones") or 0)
         else:
-            escalon = int(pz.get("escalon_rescate") or 0) + 1
+            escalon = min(3, max(int(pz.get("escalon_rescate") or 0) + 1, int(payload.get("salto") or 0)))
             n_re, n_rg = (1, 0) if escalon in (1, 2) else (0, 1)
             n_paises = 1
         final_1 = gastos.estimar("final", paises=1)
@@ -487,6 +487,13 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
         motivo_prop = gettext(
             "profundidad máxima (%(n)s generaciones de derivación); %(motivo)s",
             n=experimentos.profundidad(ex), motivo=motivo).strip()
+    if payload.get("solo_proponer") and puerta != "propuesta":
+        # Doctrina, bloque 4 (§4): el diagnóstico apunta a algo que no es el
+        # creativo (landing, oferta, estación): una persona decide, en todo modo.
+        # (Si ya era propuesta por tope o profundidad, ese motivo se queda: ya
+        # lleva el diagnóstico dentro.)
+        puerta = "propuesta"
+        motivo_prop = motivo
     ep_id = payload.get("ep_id")
     datos = {"accion": accion, "payload": payload, "modo": ex["modo"]}
 
