@@ -44,6 +44,7 @@
         <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
         <small>{{ item.finales | length }} final{{ "es" if item.finales | length != 1 }}{% if ediciones_por_cf.get(item.id) %} · en el editor{% endif %}</small>
       </div>
+    </div>
 {% endmacro %}
 
 {% macro tarjeta_final_fe(item, f) %}
@@ -77,6 +78,7 @@
         <strong>Final {{ f.idioma }}_{{ f.pais }}</strong>
         <small>Final de {{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}{% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}</small>
       </div>
+    </div>
 {% endmacro %}
 
 {% macro lista_videos_fe(items, desde, total) %}

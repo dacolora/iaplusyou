@@ -92,3 +92,18 @@ def test_atajos_de_teclado_se_esconden_en_pantallas_tactiles():
     css = open("static/style.css", encoding="utf-8").read()
     assert "@media (hover: none) { .solo-teclado { display: none; } }" in css
     assert 'class="solo-teclado"' in open("templates/sprint_revision.html", encoding="utf-8").read()
+
+
+def test_cada_tarjeta_cierra_su_div():
+    """Incidente 2026-09-28 (producción): las macros de «tarjetas ligeras» abrían
+    `<div class="generado">` y no lo cerraban, así que cada tarjeta quedaba DENTRO de
+    la anterior y Crear/Final edition salían en una sola columna en escalera. Cada
+    rama de las macros está balanceada, así que el total de la macro también debe estarlo."""
+    import re
+    for ruta in ("templates/_crear_tarjetas.html", "templates/_final_tarjetas.html"):
+        texto = open(ruta, encoding="utf-8").read()
+        macros = re.findall(r"{% macro (tarjeta_\w+)\(.*?%}(.*?){% endmacro %}", texto, re.S)
+        assert macros, ruta
+        for nombre, cuerpo in macros:
+            cuerpo = re.sub(r"{#.*?#}", "", cuerpo, flags=re.S)
+            assert cuerpo.count("<div") == cuerpo.count("</div>"), f"{ruta}::{nombre}"
