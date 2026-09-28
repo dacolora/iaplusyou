@@ -7,9 +7,13 @@ idioma:
     escribe Claude y salen los anuncios de ese proyecto (fases 3-6);
   - antes del login, la cookie `idioma`.
 
-Sin campo = DEFECTO. DEFECTO pasa a "en" y ACTIVO_PARA_TODOS a True al cerrar
-la fase 6: ese día todos los usuarios y proyectos que no eligieron pasan a
-inglés. Mientras tanto el selector solo lo ve el admin.
+Sin campo = DEFECTO. Desde 2026-09-28 (decisión de Daniel) DEFECTO es "en" y
+ACTIVO_PARA_TODOS es True: todos los usuarios y proyectos que no eligieron
+idioma están en inglés, y el selector lo ve todo el mundo — aunque varias
+pantallas (Sprints, Nicho, Referentes, Final edition/editor, admin, el mapa
+del código) sigan solo en español hasta que cierren las fases 5-6. Los tests
+fijan "es"/False (tests/conftest.py) porque comparan textos en español;
+cualquiera puede volver a español desde Configuración › Cuenta y avisos.
 
 El texto en español es la fuente (msgid); el inglés vive en
 translations/en/LC_MESSAGES/messages.po (catalogo_i18n.py lo extrae y compila).
@@ -24,8 +28,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DIR_TRADUCCIONES = os.path.join(BASE_DIR, "translations")
 IDIOMAS = ("en", "es")
 NOMBRES = {"en": "English", "es": "Español"}
-DEFECTO = "es"
-ACTIVO_PARA_TODOS = False
+DEFECTO = "en"
+ACTIVO_PARA_TODOS = True
 COOKIE = "idioma"
 
 _app_fuera = None

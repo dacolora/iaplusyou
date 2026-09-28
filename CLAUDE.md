@@ -795,7 +795,10 @@ git). **Todo texto nuevo que vea una persona pasa por el catálogo**: plantillas
 Luego `venv/bin/python3 catalogo_i18n.py actualizar`, traducir con `docs/i18n/glosario.md` y `compilar`
 (`tests/test_i18n_catalogo.py` falla si falta). Idioma de la persona en `usuarios.json`, del proyecto en
 `proyecto.json`, cookie `idioma` antes del login; `idiomas.en_idioma(x)` para correos y worker.
-`idiomas.DEFECTO`/`ACTIVO_PARA_TODOS` cambian al cerrar la fase 6; los tests fijan español (`conftest`).
+Desde 2026-09-28 (decisión de Daniel) `idiomas.DEFECTO` es `"en"` y `ACTIVO_PARA_TODOS` es `True` para
+todos: quien no eligió idioma ve la app en inglés y el selector queda visible para cualquier cliente; los
+tests siguen fijos en español (`conftest`). Sprints, Nicho, Referentes, Final edition/editor, las páginas de
+admin y el mapa del código siguen solo en español hasta que cierren las fases 5-6.
 Fase 3 (Crear en el idioma del proyecto): las llamadas a Claude reciben el idioma con
 `idiomas.de_proyecto(cliente)`, pasado a `doctrina.bloque_system(..., idioma=)` o envuelto a mano con
 `idiomas.orden_idioma` (va al inicio Y al final de las instrucciones del sitio; el prompt para el modelo de
