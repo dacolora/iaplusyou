@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  barrasOnda, cabeceraFila, candidatosIman, estiloArrastre, etiquetaClip, filaEnY, filasVisuales, fondoTira, iman, imanBordes,
-  indiceDestino, ladosRecortables, marcasRegla, msAPx, msInsercion, nombreFila, PASO_ONDA_PX, pasoRegla, pedidoCortar, puntoSoltar,
-  pxAMs, soltar, VENTANA_PICOS_MS,
+  avisoTransicion, barrasOnda, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, estiloArrastre, etiquetaClip,
+  filaEnY, filasVisuales, fondoTira, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables, marcasRegla, msAPx,
+  msInsercion, nombreFila, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar, pedidoTransicion, puntoSoltar,
+  pxAMs, soltar, unionesConTransicion, VENTANA_PICOS_MS,
 } from "../../static/editor/escala.js";
+import { TRANSICIONES } from "../../static/editor/operaciones.js";
 import { docBase } from "./doc_base.mjs";
 
 test("ms y px a una escala dada", () => {
@@ -305,4 +307,119 @@ test("pedidoCortar: el clip elegido si el cabezal está sobre él; sin elegir, e
   assert.equal(pedidoCortar(doc, "t1", 3000), null);           // justo en el borde tampoco
   assert.deepEqual(pedidoCortar(doc, "s0", 2000), ["cortarEn", 2000]);   // el sonido de la escena sigue al video
   assert.deepEqual(pedidoCortar(doc, "ya-no-existe", 2000), ["cortarEn", 2000]);
+});
+
+// ---- Capa 4b (Task 6): agregar desde la biblioteca ----
+
+const tresClips = () => {
+  const d = docBase();                                          // v0 0..4000, v1 4000..8000
+  const v2 = { ...structuredClone(d.pistas[0].clips[1]), id: "v2", inicio_ms: 8000, duracion_ms: 2000 };
+  d.pistas[0].clips.push(v2);
+  return d;
+};
+
+test("indiceAgregarVideo: después del clip bajo el cabezal; en un corte, ahí; pasado el final, al final", () => {
+  const doc = docBase();
+  assert.equal(indiceAgregarVideo(doc, 0), 1);                 // el cabezal al inicio: después del primero
+  assert.equal(indiceAgregarVideo(doc, 2500), 1);
+  assert.equal(indiceAgregarVideo(doc, 4000), 1);              // justo en el corte v0|v1: en ese corte
+  assert.equal(indiceAgregarVideo(doc, 4000.4), 1);            // el reloj puede dar fracciones
+  assert.equal(indiceAgregarVideo(doc, 6000), 2);
+  assert.equal(indiceAgregarVideo(doc, 8000), 2);              // en el final
+  assert.equal(indiceAgregarVideo(doc, 99999), 2);
+  const vacio = docBase();
+  vacio.pistas[0].clips = [];
+  assert.equal(indiceAgregarVideo(vacio, 500), 0);
+});
+
+test("corteCercano: el clip que termina en el corte más cercano; con un solo clip, ninguno", () => {
+  const doc = tresClips();                                     // cortes en 4000 y 8000
+  assert.equal(corteCercano(doc, 0), "v0");
+  assert.equal(corteCercano(doc, 5900), "v0");
+  assert.equal(corteCercano(doc, 6100), "v1");
+  assert.equal(corteCercano(doc, 99999), "v1");                // el último clip nunca: no tiene siguiente
+  const uno = docBase();
+  uno.pistas[0].clips.pop();
+  assert.equal(corteCercano(uno, 1000), null);
+});
+
+test("pedidoTransicion: el video elegido (si no es el último); si no, el corte más cercano al cabezal", () => {
+  const doc = tresClips();
+  assert.deepEqual(pedidoTransicion(doc, "v1", 500, "fundido"), ["ponerTransicion", "v1", "fundido", 500]);
+  assert.deepEqual(pedidoTransicion(doc, null, 7000, "zoom"), ["ponerTransicion", "v1", "zoom", 500]);
+  assert.deepEqual(pedidoTransicion(doc, "t1", 1000, "deslizar"), ["ponerTransicion", "v0", "deslizar", 500]);  // un texto elegido no cuenta
+  assert.deepEqual(pedidoTransicion(doc, "v2", 9000, "fundido"), ["ponerTransicion", "v1", "fundido", 500]);   // el último: el corte cercano
+  assert.deepEqual(pedidoTransicion(doc, "v0", 9000, "corte"), ["ponerTransicion", "v0", "corte", 500]);       // «Corte» la quita
+  assert.equal(DURACION_TRANSICION_MS, 500);
+  const uno = docBase();
+  uno.pistas[0].clips.pop();
+  assert.equal(pedidoTransicion(uno, "v0", 1000, "fundido"), null);
+});
+
+test("pedidoAgregar con «+»: todo en el cabezal (el video, después del clip bajo el cabezal)", () => {
+  const doc = docBase();
+  const video = { id: 7, tipo: "video" };
+  const imagen = { id: 8, tipo: "imagen", ancho: 600, alto: 400 };
+  const audio = { id: 9, tipo: "audio" };
+  const en = { cabezalMs: 2500 };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "video", material: video }, en), ["agregarVideo", video, { indice: 1 }]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: imagen }, en), ["agregarImagen", imagen, 2500, {}]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: audio }, en), ["agregarAudio", audio, 2500, { rol: "musica" }]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "titulo" }, en), ["agregarTexto", 2500, "titulo"]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "transicion", transicion: "fundido" }, { cabezalMs: 3000, seleccion: null }),
+    ["ponerTransicion", "v0", "fundido", 500]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "precio" }, { cabezalMs: 1234.6 }), ["agregarTexto", 1235, "precio"]);
+  assert.equal(pedidoAgregar(doc, { tipo: "otra" }, en), null);
+});
+
+test("pedidoAgregar al soltar: el video en su lugar de la principal, lo demás en el instante del dedo", () => {
+  const doc = docBase();
+  const video = { id: 7, tipo: "video" };
+  const sobreVideo = { pistaId: "p_video", tipo: "video", tMs: 0, indicePrincipal: 0 };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "video", material: video }, { punto: sobreVideo, cabezalMs: 6000 }),
+    ["agregarVideo", video, { indice: 0 }]);
+  // un video soltado en otra fila (o fuera de las filas) va igual a la principal, por el tiempo
+  const sobreTexto = { pistaId: "p_texto", tipo: "texto", tMs: 5000, indicePrincipal: null };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "video", material: video }, { punto: sobreTexto }), ["agregarVideo", video, { indice: 1 }]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "video", material: video }, { punto: { pistaId: null, tipo: null, tMs: 7000, indicePrincipal: null } }),
+    ["agregarVideo", video, { indice: 2 }]);
+  const imagen = { id: 8, tipo: "imagen" };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: imagen }, { punto: sobreVideo, cabezalMs: 6000 }),
+    ["agregarImagen", imagen, 0, {}]);                          // la imagen es una capa en ese tiempo, aunque caiga en el video
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "llamado" }, { punto: sobreTexto, cabezalMs: 100 }),
+    ["agregarTexto", 5000, "llamado"]);
+  // una transición soltada: el corte más cercano al dedo (la selección no cuenta)
+  assert.deepEqual(pedidoAgregar(tresClips(), { tipo: "transicion", transicion: "zoom" },
+    { punto: { ...sobreTexto, tMs: 7500 }, seleccion: "v0" }), ["ponerTransicion", "v1", "zoom", 500]);
+  const uno = docBase();
+  uno.pistas[0].clips.pop();
+  assert.equal(pedidoAgregar(uno, { tipo: "transicion", transicion: "zoom" }, { punto: sobreTexto }), null);
+});
+
+test("avisoTransicion: dice cuando la transición no cupo entera en el material", () => {
+  const doc = tresClips();
+  const con = (tr) => {
+    const d = structuredClone(doc);
+    d.pistas[0].clips[0].transicion = tr;
+    return d;
+  };
+  assert.equal(avisoTransicion(con({ tipo: "fundido", duracion_ms: 500 }), "v0", "fundido"), null);
+  assert.match(avisoTransicion(con(null), "v0", "fundido"), /quedó en corte/);
+  assert.match(avisoTransicion(con({ tipo: "fundido", duracion_ms: 300 }), "v0", "fundido"), /quedó de 0,3 s/);
+  assert.equal(avisoTransicion(con(null), "v0", "corte"), null);         // «Corte» la quita a propósito
+  assert.equal(avisoTransicion(con(null), "ya-no-existe", "fundido"), null);
+});
+
+test("las transiciones de la biblioteca son las que el render hace, con su nombre", () => {
+  assert.deepEqual(Object.keys(NOMBRES_TRANSICION), TRANSICIONES);
+  assert.equal(NOMBRES_TRANSICION.desenfoque, "Fundido a negro");       // el filtro real es fadeblack
+});
+
+test("unionesConTransicion: dónde marcar en la línea las uniones con transición", () => {
+  const doc = tresClips();
+  doc.pistas[0].clips[0].transicion = { tipo: "fundido", duracion_ms: 500 };
+  doc.pistas[0].clips[1].transicion = { tipo: "corte", duracion_ms: 0 };
+  doc.pistas[0].clips[2].transicion = { tipo: "zoom", duracion_ms: 400 };  // el último: no tiene unión
+  assert.deepEqual(unionesConTransicion(doc), [{ clipId: "v0", ms: 4000, tipo: "fundido", duracion_ms: 500, nombre: "Fundido · 0,5 s" }]);
+  assert.deepEqual(unionesConTransicion(docBase()), []);
 });

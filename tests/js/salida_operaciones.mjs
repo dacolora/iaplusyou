@@ -31,6 +31,7 @@ anotar("transicion_normalizada", () => {
 // agregarVideo/Audio; material 3 no trae audio nativo.
 const INFO = { 1: { duracion_ms: 8000, tiene_audio: true }, 2: { duracion_ms: 3000 }, 3: { duracion_ms: 1500, tiene_audio: false } };
 anotar("agregar_video_otro_material", () => op.agregarVideo(docBase(), { id: 3 }, { despuesDe: "v0" }, INFO), { ...D, 3: 1500 });
+anotar("agregar_video_al_principio", () => op.agregarVideo(docBase(), { id: 3 }, { indice: 0 }, INFO), { ...D, 3: 1500 });
 anotar("agregar_imagen", () => op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 1000, {}, INFO));
 anotar("agregar_imagen_llenar", () => op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 1000, { llenar: true }, INFO));
 anotar("agregar_audio_musica", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO));

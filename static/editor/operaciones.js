@@ -407,26 +407,30 @@ export function cambiarVelocidad(doc, clipId, velocidad, info = {}) {
 // ---- Agregar (capa 4b) --------------------------------------------------
 
 // Inserta un clip del material ENTERO (recorte 0..duración, velocidad 1, sin
-// transición, sin Ken Burns) en la principal, después del clip `despuesDe`
-// (o al final si no se da). El material tiene que traer duración conocida en
-// `info` — si no, todavía se está subiendo/procesando.
-export function agregarVideo(doc, material, { despuesDe = null } = {}, info = {}) {
+// transición, sin Ken Burns) en la principal, después del clip `despuesDe`, o
+// en el lugar `indice` (0 = primero; la biblioteca lo usa al soltar un video
+// en la fila del video), o al final si no se da ninguno (`despuesDe` manda si
+// vienen los dos). El material tiene que traer duración conocida en `info` —
+// si no, todavía se está subiendo/procesando.
+export function agregarVideo(doc, material, { despuesDe = null, indice = null } = {}, info = {}) {
   const res = structuredClone(doc);
   const p = principalDe(res);
   const dur = duracionDe(info, material.id);
   if (dur === undefined || dur === null) throw new OperacionInvalida("Ese video todavía se está preparando.");
-  let indice = p.clips.length;
+  let lugar = p.clips.length;
   if (despuesDe !== null && despuesDe !== undefined) {
     const i = p.clips.findIndex((c) => c.id === despuesDe);
     if (i < 0) throw new OperacionInvalida("Ese clip no está en la pista principal.");
-    indice = i + 1;
+    lugar = i + 1;
+  } else if (indice !== null && indice !== undefined && Number.isFinite(Number(indice))) {
+    lugar = Math.max(0, Math.min(p.clips.length, Math.round(Number(indice))));
   }
   const clip = {
     id: idNuevo(res, "v"), inicio_ms: 0, duracion_ms: dur, material_id: material.id,
     recorte: { desde_ms: 0, hasta_ms: dur }, velocidad: 1, transform: { ...TRANSFORM },
     keyframes: [], animacion: null, transicion: null, ken_burns: null, audio: { ...AUDIO },
   };
-  p.clips.splice(indice, 0, clip);
+  p.clips.splice(lugar, 0, clip);
   recolocar(p);
   return terminar(res, clip.id, info);
 }

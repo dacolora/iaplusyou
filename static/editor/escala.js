@@ -4,8 +4,10 @@
 // principal que se suelta, qué operación pide soltar un arrastre, cómo se ve
 // el clip mientras se arrastra y los nombres de filas y clips. Capa 4b: la
 // cabecera de cada fila, las barras de la onda de un audio, la fila bajo un
-// punto y qué pide soltar ahí algo de la biblioteca, y qué corta «Cortar».
-// Puro: lo prueba Node (linea_tiempo.js solo pone esto en el DOM).
+// punto y qué pide soltar ahí algo de la biblioteca, y qué corta «Cortar»;
+// qué operación pide agregar algo de la biblioteca («+» o soltar), a qué
+// unión va una transición y dónde se marcan las uniones con transición.
+// Puro: lo prueba Node (linea_tiempo.js y biblioteca.js solo ponen esto en el DOM).
 import { cambiaPorDestino, ID_SONIDO } from "./operaciones.js";
 import { formatearPrecio, SIMBOLOS } from "./precio.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
@@ -321,4 +323,122 @@ export function pedidoCortar(doc, seleccionId, tMs) {
   if (!hallado || hallado.pista.id === ID_SONIDO) return ["cortarEn", tMs];
   const { clip } = hallado;
   return clip.inicio_ms < tMs && tMs < clip.inicio_ms + clip.duracion_ms ? ["cortarClip", seleccionId, tMs] : null;
+}
+
+// ---- Capa 4b (Task 6): agregar desde la biblioteca ----------------------
+
+// Las transiciones que el render hace de verdad (operaciones.TRANSICIONES,
+// documento.TRANSICIONES), con el nombre que ve la persona: «desenfoque» es
+// un fundido a negro (el filtro real es fadeblack).
+export const NOMBRES_TRANSICION = { corte: "Corte", fundido: "Fundido", deslizar: "Deslizar", zoom: "Zoom", desenfoque: "Fundido a negro" };
+export const DURACION_TRANSICION_MS = 500;
+
+const segundosTexto = (ms) => `${(Math.round(ms / 100) / 10).toFixed(1).replace(".", ",")} s`;
+
+function clipsPrincipales(doc) {
+  const p = pistaPrincipal(doc);
+  return p && p.tipo === "video" ? p.clips : [];
+}
+
+// Dónde entra un video que se agrega con «+»: después del clip de la
+// principal bajo el cabezal; con el cabezal justo en un corte, en ese corte
+// (entre los dos clips); pasado el final, o sin clips, al final.
+export function indiceAgregarVideo(doc, tMs) {
+  const clips = clipsPrincipales(doc);
+  const t = Math.round(Number(tMs) || 0);
+  for (let i = 0; i < clips.length; i++) {
+    const c = clips[i];
+    if (i > 0 && t === c.inicio_ms) return i;
+    if (t >= c.inicio_ms && t < c.inicio_ms + c.duracion_ms) return i + 1;
+  }
+  return clips.length;
+}
+
+// El corte de la principal más cercano a `tMs`: el id del clip que termina
+// ahí (la transición es del clip de antes del corte). Sin cortes (un solo
+// clip), null.
+export function corteCercano(doc, tMs) {
+  const clips = clipsPrincipales(doc);
+  let mejor = null;
+  let distancia = Infinity;
+  for (const c of clips.slice(0, -1)) {
+    const d = Math.abs(c.inicio_ms + c.duracion_ms - Number(tMs));
+    if (d < distancia) {
+      mejor = c.id;
+      distancia = d;
+    }
+  }
+  return mejor;
+}
+
+// Tocar una transición de la biblioteca: va al video elegido (si es de la
+// principal y no el último: su unión con el siguiente) o, si no, al corte más
+// cercano al cabezal. [nombre, ...args] de operaciones.js, o null sin cortes.
+export function pedidoTransicion(doc, seleccionId, tMs, tipo, duracionMs = DURACION_TRANSICION_MS) {
+  const clips = clipsPrincipales(doc);
+  const i = seleccionId ? clips.findIndex((c) => c.id === seleccionId) : -1;
+  const id = i >= 0 && i < clips.length - 1 ? seleccionId : corteCercano(doc, tMs);
+  return id ? ["ponerTransicion", id, tipo, duracionMs] : null;
+}
+
+// Qué operación pide agregar algo de la biblioteca: [nombre, ...args] para
+// `editor.operar` (sin el documento ni info), o null si no hay dónde.
+// `cosa`: {tipo: "video" | "imagen" | "audio", material}, {tipo: "texto",
+// preset} o {tipo: "transicion", transicion}. Con `punto` (lo que dio
+// LineaTiempo.puntoEn al soltar) va ahí: un video, en su lugar de la
+// principal (soltado en otra fila, por el tiempo: no hay video sobre video);
+// una imagen, como capa en ese instante aunque caiga en la fila del video; una
+// transición, en el corte más cercano al dedo. Sin `punto` («+» o tocar), en
+// el cabezal: el video después del clip bajo el cabezal (indiceAgregarVideo),
+// la transición como pedidoTransicion. El audio entra como música.
+export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccion = null } = {}) {
+  const t = Math.max(0, Math.round(Number(punto ? punto.tMs : cabezalMs) || 0));
+  switch (cosa?.tipo) {
+    case "video": {
+      const enPrincipal = punto && punto.indicePrincipal !== null && punto.indicePrincipal !== undefined;
+      const indice = !punto ? indiceAgregarVideo(doc, t) : enPrincipal ? punto.indicePrincipal : indiceDestino(doc, null, t);
+      return ["agregarVideo", cosa.material, { indice }];
+    }
+    case "imagen":
+      return ["agregarImagen", cosa.material, t, {}];
+    case "audio":
+      return ["agregarAudio", cosa.material, t, { rol: "musica" }];
+    case "texto":
+      return ["agregarTexto", t, cosa.preset];
+    case "transicion": {
+      if (!punto) return pedidoTransicion(doc, seleccion, t, cosa.transicion);
+      const id = corteCercano(doc, t);
+      return id ? ["ponerTransicion", id, cosa.transicion, DURACION_TRANSICION_MS] : null;
+    }
+    default:
+      return null;
+  }
+}
+
+// Después de poner una transición (que no sea «Corte»): si no cupo entera —
+// `normalizar` la acorta o la quita cuando el clip no tiene video de sobra al
+// final, porque el render saca esos cuadros de la cola del primer clip —, qué
+// decirle a la persona; si cupo, null.
+export function avisoTransicion(doc, clipId, tipo, pedidoMs = DURACION_TRANSICION_MS) {
+  if (tipo === "corte") return null;
+  const clip = clipsPrincipales(doc).find((c) => c.id === clipId);
+  if (!clip) return null;
+  const tr = clip.transicion;
+  if (!tr || (tr.tipo ?? "corte") === "corte" || !(tr.duracion_ms > 0)) {
+    return "Esa unión quedó en corte: el primer clip no tiene video de sobra al final para la transición. "
+      + "Recorta un poco su final y vuelve a ponerla.";
+  }
+  if (tr.duracion_ms < pedidoMs) return `La transición quedó de ${segundosTexto(tr.duracion_ms)}: no hay más video al final del primer clip.`;
+  return null;
+}
+
+// Las uniones de la principal que llevan transición, para marcarlas en la
+// línea de tiempo: en `ms` (el final del clip de antes), con su nombre.
+export function unionesConTransicion(doc) {
+  return clipsPrincipales(doc).slice(0, -1)
+    .filter((c) => c.transicion && (c.transicion.tipo ?? "corte") !== "corte" && c.transicion.duracion_ms > 0)
+    .map((c) => ({
+      clipId: c.id, ms: c.inicio_ms + c.duracion_ms, tipo: c.transicion.tipo, duracion_ms: c.transicion.duracion_ms,
+      nombre: `${NOMBRES_TRANSICION[c.transicion.tipo] ?? c.transicion.tipo} · ${segundosTexto(c.transicion.duracion_ms)}`,
+    }));
 }

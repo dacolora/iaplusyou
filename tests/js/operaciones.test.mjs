@@ -258,6 +258,18 @@ test("agregarVideo inserta el material entero después del clip dado y no espeja
   invalida(() => op.agregarVideo(docBase(), { id: 3 }, { despuesDe: "t1" }, INFO), /principal/);
 });
 
+test("agregarVideo con `indice` lo pone en ese lugar de la principal (también el primero)", () => {
+  const primero = puro((d) => op.agregarVideo(d, { id: 3 }, { indice: 0 }, INFO));
+  assert.deepEqual(principal(primero.doc).map((c) => c.slice(1)), [[0, 1500, 0, 1500], [1500, 4000, 0, 4000], [5500, 4000, 4000, 8000]]);
+  assert.equal(primero.doc.pistas[0].clips[0].id, primero.seleccion);
+  const medio = op.agregarVideo(docBase(), { id: 3 }, { indice: 1 }, INFO);
+  assert.equal(medio.doc.pistas[0].clips[1].id, medio.seleccion);
+  assert.equal(op.agregarVideo(docBase(), { id: 3 }, { indice: 99 }, INFO).doc.pistas[0].clips[2].material_id, 3);
+  assert.equal(op.agregarVideo(docBase(), { id: 3 }, { indice: -4 }, INFO).doc.pistas[0].clips[0].material_id, 3);
+  // `despuesDe` manda si vienen los dos
+  assert.equal(op.agregarVideo(docBase(), { id: 3 }, { despuesDe: "v1", indice: 0 }, INFO).doc.pistas[0].clips[2].material_id, 3);
+});
+
 test("agregarImagen usa las medidas naturales para cubrir o para el 60% del ancho, y reusa pista solo si no hay solape", () => {
   const material = { id: 4, ancho: 600, alto: 400 };
   const a = puro((d) => op.agregarImagen(d, material, 1000, {}, INFO));
