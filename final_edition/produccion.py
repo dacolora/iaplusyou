@@ -194,6 +194,26 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
         raise
 
 
+REINTENTOS_GUARDAR = 2
+
+
+def _guardar_reaplicando(cliente, edicion, aplicar):
+    """Guarda `aplicar(documento)` con el CAS de `ediciones.guardar`. Si otro
+    (el autoguardado del editor) guardó antes, recarga la edición y vuelve a
+    aplicar `aplicar` — que es puro: no llama a ningún proveedor — sobre la
+    versión nueva, hasta `REINTENTOS_GUARDAR` veces; después sube el Conflicto."""
+    for intento in range(REINTENTOS_GUARDAR + 1):
+        try:
+            return ediciones.guardar(cliente, edicion["id"], aplicar(edicion["documento"]), edicion["version_n"])
+        except ediciones.Conflicto:
+            if intento == REINTENTOS_GUARDAR:
+                raise
+            recargada = ediciones.cargar(cliente, edicion["id"])
+            if recargada is None:
+                raise
+            edicion = recargada
+
+
 def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
     """Asegura el destino en la edición: localiza el guion (Claude) SOLO si
     ese destino no tiene textos todavía (`borrador.tiene_textos`) — un
@@ -202,8 +222,14 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
     volver a pagarle a Claude; nada si el destino ya está completo del todo
     (`borrador.tiene_destino`) — el base siempre lo está. Sintetiza la voz
     de cada bloque (caché) y fija el precio del destino (None = sin badge).
-    Guarda con CAS (sin reintento: en esta capa solo el worker escribe
-    borradores). Devuelve (edicion recargada, capas, costo_nuevo).
+    Guarda con CAS: desde la capa 4a el editor también escribe los borradores
+    (su autoguardado), así que si guardó entre que se leyó la edición y el
+    guardado de aquí (`ediciones.Conflicto`), `_guardar_reaplicando` recarga
+    la edición y vuelve a aplicar SOLO el paso puro (`agregar_destino` o
+    `fijar_precio`) sobre lo que el editor dejó — Claude y las voces ya se
+    pagaron y no se vuelven a llamar —, hasta 2 reintentos; si sigue
+    chocando, el Conflicto sube como antes (con lo pagado encima).
+    Devuelve (edicion recargada, capas, costo_nuevo).
     `capas["guion"]` siempre; `capas["voz"]` solo si sintetizó (o falló) voz
     nueva. Un fallo en el bloque 0 de la voz es fatal (`VozFatal`, con lo ya
     pagado y las capas construidas hasta ahí) y la edición no se guarda."""
@@ -213,7 +239,9 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
         params = {"idioma": idioma, "pais": pais, "precio": precio}
         if borrador.tiene_destino(doc, idioma, pais):
             _capa(capas, "guion", "anthropic", params, 0.0)
-            nuevo = borrador.fijar_precio(doc, idioma, pais, precio)
+
+            def aplicar(d):
+                return borrador.fijar_precio(d, idioma, pais, precio)
         else:
             if borrador.tiene_textos(doc, idioma, pais):
                 g, c = borrador.guion_destino(doc, idioma, pais), 0.0
@@ -236,8 +264,10 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
                 except VozIncompleta as e:
                     costo += e.costo
                     _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, e.costo, estado="error", error=_mensaje(e))
-            nuevo = borrador.agregar_destino(doc, g, voces, precio)
-        ediciones.guardar(cliente, edicion["id"], nuevo, edicion["version_n"])
+
+            def aplicar(d):
+                return borrador.agregar_destino(d, g, voces, precio)
+        _guardar_reaplicando(cliente, edicion, aplicar)
         return ediciones.cargar(cliente, edicion["id"]), capas, round(costo, 4)
     except VozFatal:
         raise

@@ -58,6 +58,27 @@ def test_versionar_y_restaurar(base_temporal):
     assert [v["n"] for v in e.versiones("acme", ed["id"])] == [1]
 
 
+def test_versionar_con_version_n_rechaza_stale_y_no_crea_version(base_temporal):
+    ed = e.crear("acme", "video", "e", _doc())
+    e.guardar("acme", ed["id"], _doc(), version_n=0)   # ahora version_n=1 en la fila
+    with pytest.raises(e.Conflicto) as ei:
+        e.versionar("acme", ed["id"], "producir", version_n=0)   # stale
+    assert "cambió" in str(ei.value)
+    assert e.versiones("acme", ed["id"]) == []
+
+
+def test_versionar_con_version_n_vigente_congela(base_temporal):
+    ed = e.crear("acme", "video", "e", _doc())
+    v = e.versionar("acme", ed["id"], "producir", version_n=0)
+    assert v["n"] == 1
+
+
+def test_versionar_con_version_n_en_edicion_inexistente_dice_no_existe(base_temporal):
+    with pytest.raises(e.Conflicto) as ei:
+        e.versionar("acme", 999999, "producir", version_n=0)
+    assert "No existe" in str(ei.value)
+
+
 def test_versionar_concurrente_no_repite_n(base_temporal):
     import threading
     ed = e.crear("acme", "video", "e", _doc())
@@ -119,6 +140,19 @@ def test_apuntar_final_escribe_edicion_version_id(base_temporal):
     # I12: devuelve las filas tocadas para que la tarea note una final ausente
     assert e.apuntar_final("acme", "cf_9__es_CO", v["id"]) == 0
     assert e.apuntar_final("otro", "cf_1__es_CO", v["id"]) == 0
+
+
+def test_edicion_de_final_sigue_el_enlace_de_la_version(base_temporal):
+    import db
+    from tests.test_experimentos_db import _pieza
+    _pieza(db, "acme", legado="cf_1__es_CO")
+    assert e.edicion_de_final("acme", "cf_1__es_CO") is None          # sin enlace: hecha por otro camino
+    ed = e.crear("acme", "video", "e", _doc(), cf_id="cf_1")
+    v = e.versionar("acme", ed["id"], "producir")
+    e.apuntar_final("acme", "cf_1__es_CO", v["id"])
+    assert e.edicion_de_final("acme", "cf_1__es_CO") == ed["id"]
+    assert e.edicion_de_final("otro", "cf_1__es_CO") is None
+    assert e.edicion_de_final("acme", "cf_9__es_CO") is None
 
 
 def test_buscar_origen_encuentra_la_receta_y_salta_las_degradadas(base_temporal):

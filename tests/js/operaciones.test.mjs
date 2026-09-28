@@ -1,0 +1,228 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  borrar, cambiarVelocidad, cortarEn, duplicar, idNuevo, MIN_CLIP_MS, moverA, moverPrincipal, normalizar,
+  OperacionInvalida, recortar, VELOCIDADES,
+} from "../../static/editor/operaciones.js";
+import { docBase, DURACIONES } from "./doc_base.mjs";
+
+const principal = (d) => d.pistas[0].clips.map((c) => [c.id, c.inicio_ms, c.duracion_ms, c.recorte.desde_ms, c.recorte.hasta_ms]);
+const sonido = (d) => d.pistas.find((p) => p.id === "p_sonido").clips.map((c) => [c.inicio_ms, c.duracion_ms, c.recorte.desde_ms]);
+const invalida = (fn, re) => assert.throws(fn, (e) => e instanceof OperacionInvalida && re.test(e.message));
+
+test("cortarEn parte el clip bajo el cabezal y deja corte seco entre las mitades", () => {
+  const base = docBase();
+  base.pistas[0].clips[0].transicion = { tipo: "fundido", duracion_ms: 300 };
+  const { doc, seleccion } = cortarEn(base, 2000, DURACIONES);
+  assert.deepEqual(principal(doc), [["v0", 0, 2000, 0, 2000], ["v0_2", 2000, 2000, 2000, 4000], ["v1", 4000, 4000, 4000, 8000]]);
+  assert.equal(doc.pistas[0].clips[0].transicion, null);
+  assert.deepEqual(doc.pistas[0].clips[1].transicion, { tipo: "fundido", duracion_ms: 300 });
+  assert.equal(seleccion, "v0_2");
+  assert.deepEqual(sonido(doc), [[0, 2000, 0], [2000, 2000, 2000], [4000, 4000, 4000]]);
+  assert.equal(base.pistas[0].clips.length, 2, "no toca el documento de entrada");
+});
+
+test("cortarEn rechaza el borde y fuera de un clip", () => {
+  invalida(() => cortarEn(docBase(), 50, DURACIONES), /borde/);
+  invalida(() => cortarEn(docBase(), 4000, DURACIONES), /cabezal dentro/);
+  invalida(() => cortarEn(docBase(), 9000, DURACIONES), /cabezal dentro/);
+});
+
+test("borrar en la principal corre lo que sigue y no deja la edición sin video", () => {
+  const { doc, seleccion } = borrar(docBase(), "v0", DURACIONES);
+  assert.deepEqual(principal(doc), [["v1", 0, 4000, 4000, 8000]]);
+  assert.equal(seleccion, "v1");
+  assert.deepEqual(sonido(doc), [[0, 4000, 4000]]);
+  invalida(() => borrar(doc, "v1", DURACIONES), /al menos un clip/);
+});
+
+test("borrar un texto lo quita sin mover nada más; el sonido de la escena no se borra solo", () => {
+  const { doc } = borrar(docBase(), "t1", DURACIONES);
+  assert.equal(doc.pistas[1].clips.length, 0);
+  assert.deepEqual(principal(doc), principal(docBase()));
+  invalida(() => borrar(docBase(), "s0", DURACIONES), /sonido de la escena/);
+  invalida(() => borrar(docBase(), "nada", DURACIONES), /ya no existe/);
+});
+
+test("duplicar pone la copia justo después", () => {
+  const { doc, seleccion } = duplicar(docBase(), "v0", DURACIONES);
+  assert.deepEqual(principal(doc).map((c) => c.slice(0, 3)), [["v0", 0, 4000], ["v0_2", 4000, 4000], ["v1", 8000, 4000]]);
+  assert.equal(seleccion, "v0_2");
+  const texto = duplicar(docBase(), "t1", DURACIONES).doc.pistas[1].clips;
+  assert.deepEqual(texto.map((c) => [c.id, c.inicio_ms]), [["t1", 1000], ["t1_2", 3000]]);
+});
+
+test("recortar el fin acorta y corre; no pasa del material", () => {
+  const corto = recortar(docBase(), "v0", "fin", -1000, DURACIONES).doc;
+  assert.deepEqual(principal(corto), [["v0", 0, 3000, 0, 3000], ["v1", 3000, 4000, 4000, 8000]]);
+  const largo = recortar(docBase(), "v1", "fin", 5000, DURACIONES).doc;       // v1 ya llega al final del clon
+  assert.deepEqual(principal(largo)[1], ["v1", 4000, 4000, 4000, 8000]);
+  const minimo = recortar(docBase(), "v0", "fin", -99999, DURACIONES).doc;
+  assert.equal(minimo.pistas[0].clips[0].duracion_ms, MIN_CLIP_MS);
+});
+
+test("recortar el inicio mueve el punto de entrada de la fuente", () => {
+  const atras = recortar(docBase(), "v1", "inicio", -500, DURACIONES).doc;
+  assert.deepEqual(principal(atras)[1], ["v1", 4000, 4500, 3500, 8000]);
+  const adelante = recortar(docBase(), "v0", "inicio", 1000, DURACIONES).doc;
+  assert.deepEqual(principal(adelante), [["v0", 0, 3000, 1000, 4000], ["v1", 3000, 4000, 4000, 8000]]);
+  const texto = recortar(docBase(), "t1", "inicio", -5000, DURACIONES).doc.pistas[1].clips[0];
+  assert.deepEqual([texto.inicio_ms, texto.duracion_ms], [0, 3000]);
+});
+
+test("moverPrincipal reordena y moverA mueve capas sin pasar de 0", () => {
+  const { doc } = moverPrincipal(docBase(), "v1", 0, DURACIONES);
+  assert.deepEqual(principal(doc).map((c) => c.slice(0, 3)), [["v1", 0, 4000], ["v0", 4000, 4000]]);
+  assert.deepEqual(sonido(doc), [[0, 4000, 4000], [4000, 4000, 0]]);
+  assert.equal(moverA(docBase(), "t1", -300, DURACIONES).doc.pistas[1].clips[0].inicio_ms, 0);
+  assert.equal(moverA(docBase(), "a1", 2500, DURACIONES).doc.pistas[2].clips[0].inicio_ms, 2500);
+  invalida(() => moverA(docBase(), "v0", 100, DURACIONES), /pista principal/);
+});
+
+test("cambiarVelocidad conserva el tramo de fuente y quita el sonido de ese clip", () => {
+  const { doc } = cambiarVelocidad(docBase(), "v0", 2, DURACIONES);
+  assert.deepEqual(principal(doc), [["v0", 0, 2000, 0, 4000], ["v1", 2000, 4000, 4000, 8000]]);
+  assert.equal(doc.pistas[0].clips[0].velocidad, 2);
+  assert.deepEqual(sonido(doc), [[2000, 4000, 4000]]);
+  invalida(() => cambiarVelocidad(docBase(), "v0", 3, DURACIONES), /velocidad/);
+  invalida(() => cambiarVelocidad(docBase(), "t1", 2, DURACIONES), /video/);
+});
+
+test("cambiarVelocidad nunca pide más material del que hay (v1 ya llega al final del clon)", () => {
+  for (const v of VELOCIDADES) {
+    const { doc } = cambiarVelocidad(docBase(), "v1", v, DURACIONES);
+    const clip = doc.pistas[0].clips.find((c) => c.id === "v1");
+    assert.ok(clip.recorte.hasta_ms <= DURACIONES[1],
+      `${v}×: recorte.hasta_ms ${clip.recorte.hasta_ms} pasa del material (${DURACIONES[1]})`);
+    assert.ok(clip.duracion_ms >= MIN_CLIP_MS, `${v}×: duracion_ms ${clip.duracion_ms} < MIN_CLIP_MS`);
+  }
+});
+
+test("normalizar acorta o quita la transición cuya cola no cabe en el material", () => {
+  const d = docBase();
+  d.pistas[0].clips[0].transicion = { tipo: "fundido", duracion_ms: 500 };
+  d.pistas[0].clips[0].recorte = { desde_ms: 3700, hasta_ms: 7700 };
+  normalizar(d, DURACIONES);
+  assert.deepEqual(d.pistas[0].clips[0].transicion, { tipo: "fundido", duracion_ms: 300 });
+  d.pistas[0].clips[0].recorte = { desde_ms: 4000, hasta_ms: 8000 };
+  normalizar(d, DURACIONES);
+  assert.equal(d.pistas[0].clips[0].transicion, null);
+});
+
+test("idNuevo da ids válidos y únicos", () => {
+  const d = docBase();
+  const id = idNuevo(d, "v0");
+  assert.equal(id, "v0_2");
+  const largo = idNuevo(d, "x".repeat(60));
+  assert.ok(/^[A-Za-z0-9_-]{1,40}$/.test(largo), largo);
+});
+
+// ---- Redondeo: el render (Python) juzga con round-half-to-even ----
+// `compilador.verificar_recortes` pide recorte.desde_ms + round(duracion_ms ×
+// velocidad) <= material, con el round de Python (a la par). Math.round sube
+// los .5: sin ajuste, las dos mitades de un corte (o un recorte del inicio)
+// a velocidad ≠ 1 en un clip que llega al final del archivo piden 1 ms de más.
+const redondeoPython = (x) => {
+  const f = Math.floor(x);
+  const r = x - f;
+  if (r !== 0.5) return Math.round(x);
+  return f % 2 === 0 ? f : f + 1;
+};
+const MATERIAL_9S = 9000;
+
+// v1 a velocidad v, alargado hasta el final de un clon de 9 s.
+function alFinalDelArchivo(v) {
+  const D = { ...DURACIONES, 1: MATERIAL_9S };
+  const conVel = cambiarVelocidad(docBase(), "v1", v, D).doc;
+  return { doc: recortar(conVel, "v1", "fin", 99999, D).doc, D };
+}
+
+function cabeEnElMaterial(doc, D, contexto) {
+  const p = doc.pistas[0];
+  let t = 0;
+  for (const c of p.clips) {
+    assert.equal(c.inicio_ms, t, `${contexto}: la principal no quedó contigua en ${c.id}`);
+    t += c.duracion_ms;
+    assert.ok(c.duracion_ms >= MIN_CLIP_MS, `${contexto}: ${c.id} quedó de ${c.duracion_ms} ms`);
+  }
+  for (const pista of doc.pistas) {
+    for (const c of pista.clips) {
+      if (c.material_id === undefined || D[c.material_id] === undefined) continue;
+      if (pista.tipo === "audio" && c.rol_audio === "musica") continue;
+      const v = Number(c.velocidad ?? 1);
+      const fin = (c.recorte?.desde_ms ?? 0) + redondeoPython(c.duracion_ms * v);
+      assert.ok(fin <= D[c.material_id], `${contexto}: '${c.id}' pide ${fin} ms de un material de ${D[c.material_id]} ms`);
+      assert.equal(c.recorte.hasta_ms, c.recorte.desde_ms + Math.round(c.duracion_ms * v), `${contexto}: recorte de ${c.id}`);
+    }
+  }
+  const sonido = doc.pistas.find((x) => x.id === "p_sonido").clips;
+  assert.deepEqual(sonido.map((c) => [c.inicio_ms, c.duracion_ms, c.recorte.desde_ms]),
+    p.clips.filter((c) => Number(c.velocidad ?? 1) === 1).map((c) => [c.inicio_ms, c.duracion_ms, c.recorte.desde_ms]),
+    `${contexto}: el sonido de la escena no sigue a la principal`);
+}
+
+test("un clip al final del archivo sigue cabiendo tras cortarlo, a cualquier velocidad", () => {
+  for (const v of VELOCIDADES) {
+    const { doc, D } = alFinalDelArchivo(v);
+    const v1 = doc.pistas[0].clips[1];
+    assert.equal(v1.recorte.desde_ms + Math.round(v1.duracion_ms * v), MATERIAL_9S, `${v}×: v1 no llega al final`);
+    const desde = v1.inicio_ms + MIN_CLIP_MS;
+    const hasta = v1.inicio_ms + v1.duracion_ms - MIN_CLIP_MS;
+    for (let t = desde; t < hasta; t += (t < desde + 300 || t > hasta - 300 ? 1 : 7)) {
+      cabeEnElMaterial(cortarEn(doc, t, D).doc, D, `${v}× corte en ${t}`);
+    }
+  }
+});
+
+test("recortar el inicio por cantidades impares no hace pedir material de más, a cualquier velocidad", () => {
+  for (const v of VELOCIDADES) {
+    const { doc, D } = alFinalDelArchivo(v);
+    const largo = doc.pistas[0].clips[1].duracion_ms;
+    for (let d = 1; d < largo - MIN_CLIP_MS; d += (d < 400 ? 2 : 37)) {
+      cabeEnElMaterial(recortar(doc, "v1", "inicio", d, D).doc, D, `${v}× inicio +${d}`);
+      cabeEnElMaterial(recortar(doc, "v1", "inicio", -d, D).doc, D, `${v}× inicio -${d}`);
+    }
+    // cortar primero y recortar el inicio de la segunda mitad (así se reportó: 'v1_2' pedía 8001 ms)
+    const cortado = cortarEn(doc, doc.pistas[0].clips[1].inicio_ms + 1001, D).doc;
+    for (let d = 1; d < 600; d += 2) {
+      cabeEnElMaterial(recortar(cortado, "v1_2", "inicio", d, D).doc, D, `${v}× v1_2 inicio +${d}`);
+    }
+  }
+});
+
+test("normalizar acorta lo justo un clip que pide 1 ms de más (y nunca por debajo del mínimo)", () => {
+  const d = docBase();
+  const D = { 1: 8000, 2: 3000 };
+  d.pistas[0].clips[1] = { ...d.pistas[0].clips[1], velocidad: 0.5, duracion_ms: 7999, recorte: { desde_ms: 4001, hasta_ms: 8001 } };
+  normalizar(d, D);
+  const v1 = d.pistas[0].clips[1];
+  assert.deepEqual([v1.inicio_ms, v1.duracion_ms, v1.recorte.desde_ms, v1.recorte.hasta_ms], [4000, 7998, 4001, 8000]);
+  const corto = docBase();
+  corto.pistas[0].clips[1] = { ...corto.pistas[0].clips[1], velocidad: 0.5, duracion_ms: MIN_CLIP_MS, recorte: { desde_ms: 7951, hasta_ms: 8001 } };
+  normalizar(corto, D);
+  const c1 = corto.pistas[0].clips[1];
+  assert.deepEqual([c1.duracion_ms, c1.recorte.desde_ms, c1.recorte.hasta_ms], [MIN_CLIP_MS, 7950, 8000]);
+  const voz = docBase();
+  voz.pistas[2].clips[0] = { ...voz.pistas[2].clips[0], duracion_ms: 3200, recorte: { desde_ms: 0, hasta_ms: 3200 } };
+  normalizar(voz, D);
+  assert.deepEqual([voz.pistas[2].clips[0].duracion_ms, voz.pistas[2].clips[0].recorte.hasta_ms], [3000, 3000]);
+});
+
+// ---- Voz por destino: resolver la cambia entera por la de cada país ----
+function conVozPorDestino() {
+  const d = docBase();
+  d.pistas[2].clips[0].por_destino = { en_US: { material_id: 2, duracion_ms: 2600 } };
+  return d;
+}
+
+test("recortar una voz que cambia por país se rechaza en español llano; moverla y borrarla sí se puede", () => {
+  for (const lado of ["inicio", "fin"]) {
+    invalida(() => recortar(conVozPorDestino(), "a1", lado, -300, DURACIONES),
+      /^La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla\.$/);
+  }
+  assert.equal(moverA(conVozPorDestino(), "a1", 500, DURACIONES).doc.pistas[2].clips[0].inicio_ms, 500);
+  assert.equal(borrar(conVozPorDestino(), "a1", DURACIONES).doc.pistas[2].clips.length, 0);
+  const vacio = docBase();
+  vacio.pistas[2].clips[0].por_destino = {};                  // {} no distingue por destino: se recorta como siempre
+  assert.equal(recortar(vacio, "a1", "fin", -500, DURACIONES).doc.pistas[2].clips[0].duracion_ms, 2500);
+});

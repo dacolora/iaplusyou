@@ -95,6 +95,7 @@ from tareas import organico as tareas_org
 from tareas import tiendas as tareas_tiendas
 from tareas import doctrina as tareas_doctrina
 from tareas import musica as tareas_musica
+from tareas import edicion as tareas_edicion
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
@@ -2796,10 +2797,13 @@ def _creative_flow_items(cliente):
         item["guion_base"] = None
         item["finales"] = []
         item["trabajo_guion"] = None
+        item["trabajo_editor"] = None
         if entry.get("estado") == "video_listo" and (entry.get("tipo") or "video") != "imagen":
             item["guion_base"] = creative_flow.guion_base(cliente, cf_id)
             jid_guion = tareas_fe.job_id_guion(cliente, cf_id)
             item["trabajo_guion"] = {"job_id": jid_guion} if trabajos.en_curso(jid_guion) else None
+            jid_editor = tareas_edicion.job_id_desde_clon(cliente, cf_id)
+            item["trabajo_editor"] = {"job_id": jid_editor} if trabajos.en_curso(jid_editor) else None
             for f in creative_flow.finales(cliente, cf_id):
                 jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
                 f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None

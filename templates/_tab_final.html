@@ -42,6 +42,29 @@
           <div class="progreso-texto">Escribiendo el guion…</div>
           <script>iniciarPolling({{ item.trabajo_guion.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_guion.job_id) | tojson }});</script>
         </div>
+        {% if item.trabajo_editor %}
+        {# Fix round 1 (Important): el guion y «Editar este video» son dos
+           formularios independientes sin exclusión mutua — pueden estar los
+           dos en curso a la vez. Solo cabe UNA tapa visible (la de arriba,
+           la del guion), pero el trabajo del editor igual necesita su
+           iniciarPolling(...) propio: sin él nada sondea su estado y la
+           página nunca se recarga sola cuando termina. Va contra un
+           contenedor oculto (mismo hermano .progreso-texto que espera
+           iniciarPolling) para no mostrar una segunda tapa encima. #}
+        <div style="display:none;">
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_editor.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto"></div>
+        </div>
+        <script>iniciarPolling({{ item.trabajo_editor.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_editor.job_id) | tojson }});</script>
+        {% endif %}
+        {% elif item.trabajo_editor %}
+        {# Mismo motivo que el guion: la barra de «Editar este video» corre en
+           el worker y necesita arrancar su polling en la tarjeta. #}
+        <div class="generado-velo">
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_editor.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+          <div class="progreso-texto">Preparando para el editor…</div>
+          <script>iniciarPolling({{ item.trabajo_editor.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_editor.job_id) | tojson }});</script>
+        </div>
         {% endif %}
       </div>
       <div class="generado-pie">
@@ -179,6 +202,15 @@
             {% endif %}
           </section>
           {% set _eds = ediciones_por_cf.get(item.id) or [] %}
+          <h5 class="fe-subtitulo">Editor</h5>
+          {% if item.trabajo_editor %}
+          <p class="vacio" style="padding:0;font-size:.78rem;">Preparando el video para el editor… la página se recarga sola.</p>
+          {% else %}
+          <form method="post" action="{{ url_for('editor.desde_clon', cliente=cliente, cf_id=item.id) }}" class="fe-editar">
+            <button type="submit" class="{{ 'btn-sm' if _eds else 'btn-generar btn-sm' }}">{{ 'Empezar otra edición desde el video' if _eds else 'Editar este video' }}</button>
+            <small class="vacio" style="padding:0;">Gratis: una edición con el video tal cual, para cortarlo, recortarlo y reordenarlo.</small>
+          </form>
+          {% endif %}
           {% if _eds %}
           <h5 class="fe-subtitulo">En el editor</h5>
           <ul class="fe-lista">

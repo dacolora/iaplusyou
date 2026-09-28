@@ -58,6 +58,40 @@ def test_cada_pieza_enlaza_sus_ediciones_en_el_editor(app, pieza):
     assert "Abrir en el editor" in html
 
 
+def test_cada_video_listo_se_puede_editar_gratis(app, pieza):
+    html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    assert f"/cliente/acme/ediciones/desde/{pieza}" in html
+    assert "Editar este video" in html
+
+
+def test_el_trabajo_del_editor_solo_se_sondea_y_muestra_su_aviso(app, pieza, monkeypatch):
+    import dashboard
+    from tareas import edicion as tareas_edicion
+    jid_editor = tareas_edicion.job_id_desde_clon("acme", pieza)
+    monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda job_id: job_id == jid_editor)
+    html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    assert f'iniciarPolling("{jid_editor}"' in html
+    assert "Preparando para el editor…" in html
+
+
+def test_el_trabajo_del_editor_se_sondea_aunque_el_del_guion_tambien_este_corriendo(app, pieza, monkeypatch):
+    """Fix round 1 (Important): el guion (fe_preparar) y «Editar este video» son
+    dos formularios independientes sin exclusión mutua — pueden estar los dos
+    en curso a la vez. Solo cabe UNA tapa visible en la tarjeta (la del
+    guion), pero el trabajo del editor igual necesita su propio
+    iniciarPolling(...): si no, nada sondea /trabajo/<job_id>/estado por él y
+    la página nunca se recarga sola cuando termina."""
+    import dashboard
+    from tareas import edicion as tareas_edicion
+    from tareas import final_edition as tareas_fe
+    jid_guion = tareas_fe.job_id_guion("acme", pieza)
+    jid_editor = tareas_edicion.job_id_desde_clon("acme", pieza)
+    monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda job_id: job_id in (jid_guion, jid_editor))
+    html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    assert f'iniciarPolling("{jid_guion}"' in html
+    assert f'iniciarPolling("{jid_editor}"' in html
+
+
 def test_las_rutas_fe_vuelven_a_la_pestana(app, pieza, monkeypatch):
     import trabajos
     monkeypatch.setattr(trabajos, "encolar", lambda *a, **k: True)

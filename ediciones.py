@@ -64,7 +64,13 @@ def guardar(cliente, edicion_id, documento, version_n):
     return nuevo
 
 
-def versionar(cliente, edicion_id, motivo):
+def versionar(cliente, edicion_id, motivo, version_n=None):
+    """Congela el documento guardado en una `edicion_version`. Con `version_n`
+    (opcional, capa 4a §6: la ruta `producir` lo pasa siempre) el freeze es
+    CAS igual que `guardar`: solo congela si la fila sigue en esa versión, así
+    un autoguardado de otra pestaña colado entre que la ruta lee la edición y
+    llama a `versionar` no congela un documento que nadie validó contra los
+    destinos pedidos — `Conflicto` con el mismo mensaje que `guardar` usa."""
     if motivo not in ("producir", "manual"):
         raise ValueError("motivo debe ser producir o manual")
     with db.conectar() as con:
@@ -75,11 +81,20 @@ def versionar(cliente, edicion_id, motivo):
         # uq_edicion_version_n con un IntegrityError crudo). Un UPDATE sin
         # efecto sobre la fila obliga a abrir la transacción y tomar el lock
         # RESERVED ya; con busy_timeout=5000 el segundo escritor espera en
-        # vez de fallar.
-        r = con.execute(db.edicion.update().where(db.edicion.c.id == int(edicion_id), db.edicion.c.cliente == cliente)
+        # vez de fallar. Con `version_n` el mismo UPDATE hace de CAS: si la
+        # fila ya no está en esa versión, rowcount da 0 igual que "no existe",
+        # así que hay que distinguir los dos casos aparte.
+        cond = [db.edicion.c.id == int(edicion_id), db.edicion.c.cliente == cliente]
+        if version_n is not None:
+            cond.append(db.edicion.c.version_n == int(version_n))
+        r = con.execute(db.edicion.update().where(*cond)
                         .values(actualizado_en=db.edicion.c.actualizado_en))
         if r.rowcount != 1:
-            raise Conflicto("No existe esa edición.")
+            existe = con.execute(sa.select(db.edicion.c.id).where(
+                db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id))).first()
+            if not existe:
+                raise Conflicto("No existe esa edición.")
+            raise Conflicto("La edición cambió en otra pestaña; recarga para seguir.")
         ed = _dict(con.execute(sa.select(db.edicion).where(
             db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id))).first())
         n = int(con.execute(sa.select(sa.func.coalesce(sa.func.max(db.edicion_version.c.n), 0))
@@ -141,3 +156,17 @@ def apuntar_final(cliente, final_legado_id, version_id):
             db.pieza.c.cliente == cliente, db.pieza.c.tipo == "final", db.pieza.c.legado_id == final_legado_id)
             .values(edicion_version_id=int(version_id), actualizado_en=db.ahora()))
         return r.rowcount
+
+
+def edicion_de_final(cliente, final_legado_id):
+    """Id de la edición cuya versión congelada produjo esa final
+    (`pieza.edicion_version_id` → `edicion_version.edicion_id`), o None si
+    la final no existe para este cliente o no tiene ese enlace (la hizo otro
+    camino, p. ej. la producción de antes del editor)."""
+    with db.conectar() as con:
+        return con.execute(
+            sa.select(db.edicion_version.c.edicion_id)
+            .select_from(db.pieza.join(db.edicion_version, db.edicion_version.c.id == db.pieza.c.edicion_version_id))
+            .join(db.edicion, db.edicion.c.id == db.edicion_version.c.edicion_id)
+            .where(db.pieza.c.cliente == cliente, db.pieza.c.tipo == "final", db.pieza.c.legado_id == final_legado_id,
+                   db.edicion.c.cliente == cliente)).scalar()
