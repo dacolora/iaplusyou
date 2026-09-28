@@ -47,6 +47,13 @@ PLANTILLAS_TRADUCIDAS = [
     # sprint, Traer referentes y Mis barridos.
     "_tab_referentes.html", "_referente_ficha.html", "_referente_recrear.html", "_referente_usar_en_sprint.html",
     "_referentes_barridos.html", "_referentes_grid.html", "_referentes_traer.html",
+    # Fase 6, Task 1: Final edition (pestaña, tarjetas y detalles por fetch) y
+    # los parciales de Crear por fetch (tarjetas ligeras, 2026-09-28), más la
+    # página del proyecto que los envuelve.
+    "_tab_final.html", "_final_tarjetas.html", "_final_detalle.html", "_final_macros.html",
+    "_final_tarjetas_respuesta.html", "_final_detalle_respuesta.html",
+    "_crear_tarjetas.html", "_crear_detalle.html", "_crear_tarjetas_respuesta.html", "_crear_detalle_respuesta.html",
+    "cliente.html", "_etiquetas_estado.html",
 ]
 
 

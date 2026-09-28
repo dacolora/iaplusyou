@@ -631,3 +631,82 @@ def test_mis_barridos_en_ingles(admin_en, monkeypatch):
     assert "25 Sep · 15:04" in html
     fugas = espanol_visible(html)
     assert not fugas, fugas[:15]
+
+
+# ---- Fase 6, Task 1: Final edition y los parciales de Crear por fetch -----
+
+GUION_EN = {"idioma": "en", "pais": "US", "moneda": None, "precio_texto": None, "precio_base": None, "bloques": [
+    {"rol": "hook", "texto_pantalla": "Hello", "texto_voz": "Hello there", "inicio_s": 0, "fin_s": 1.5},
+    {"rol": "problema", "texto_pantalla": "It hurts", "texto_voz": "Your feet hurt", "inicio_s": 1.5, "fin_s": 3},
+    {"rol": "producto", "texto_pantalla": "Flip-flops", "texto_voz": "These flip-flops", "inicio_s": 3, "fin_s": 5},
+    {"rol": "prueba", "texto_pantalla": "Thousands", "texto_voz": "Thousands wear them", "inicio_s": 5, "fin_s": 6.5},
+    {"rol": "cta", "texto_pantalla": "Order today", "texto_voz": "Order yours", "inicio_s": 6.5, "fin_s": 8}]}
+
+
+def _final_sembrado():
+    """Un video listo con guion, una final lista con capas y una edición en el
+    editor, todo con datos en inglés (una fuga de un dato no es de la UI)."""
+    import creative_flow as cf
+    import ediciones
+    import materiales
+    from final_edition import documento
+    cf_id = cf.crear("acme", [], ["Rose flip-flop"], [], "the person walks", 8, "", "A")
+    cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2.test/clon.mp4", enfoque="producto")
+    cf.guardar_guion_base("acme", cf_id, GUION_EN)
+    fid = cf.crear_final("acme", cf_id, "en", "US")
+    cf.actualizar_final("acme", fid, estado="listo", url_video="https://r2.test/f.mp4",
+                        url_miniatura="https://r2.test/f.png", duracion_s=8.0, costo_usd=0.12,
+                        capas={"guion": {"proveedor": "anthropic", "estado": "ok", "costo_usd": 0.02},
+                               "voz": {"proveedor": "fal/elevenlabs", "estado": "omitida"},
+                               "musica": {"proveedor": "fal/stable-audio", "estado": "error", "error": "timeout"}})
+    clon = materiales.registrar("acme", tipo="video", origen="crear", url="https://r2.test/clon.mp4", hash="h-fe-clon",
+                                bytes=10, duracion_ms=8000, ancho=1080, alto=1920)
+    doc = documento.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "v0", "inicio_ms": 0, "duracion_ms": 4000, "material_id": clon["id"],
+                                  "recorte": {"desde_ms": 0, "hasta_ms": 4000}}]
+    ediciones.crear("acme", "video", "Rose flip-flop cut", doc, cf_id=cf_id)
+    return cf_id, fid
+
+
+# El código de idioma de un destino («🇺🇸 en», «(en)», «United States · en») es
+# un identificador (§B6: no se traduce) y «en» es también la preposición
+# española: el detector no los distingue. Solo se quita al FINAL de un trozo,
+# que es donde lo pintan las plantillas de Final edition.
+_CODIGO_IDIOMA_AL_FINAL = re.compile(r"(?:\((?:es|en|pt)\)|(?<=\s)(?:es|en|pt))$")
+
+
+def _fugas_final(html, ids=None):
+    return [t for t in espanol_visible(html, ids) if _con_marca(_CODIGO_IDIOMA_AL_FINAL.sub("", t))]
+
+
+def test_el_filtro_de_codigos_no_tapa_espanol():
+    assert _fugas_final("<p>🇺🇸 en</p><small>(en)</small><p>🇺🇸 United States · en</p>") == []
+    assert _fugas_final("<p>Genera uno en Crear</p><p>Qué pasó · en</p>") == ["Genera uno en Crear", "Qué pasó · en"]
+
+
+def test_pestana_final_edition_en_ingles(admin_en):
+    _final_sembrado()
+    html = html_de(admin_en, "/cliente/acme")
+    fugas = _fugas_final(html, ("tab-final",))
+    assert not fugas, fugas[:15]
+    assert "Ready videos (1)" in html and "Final cuts (1)" in html
+
+
+@pytest.mark.parametrize("ruta", ["final/detalle", "final/{fid}/detalle"])
+def test_detalles_de_final_edition_en_ingles(admin_en, ruta):
+    cf_id, fid = _final_sembrado()
+    html = html_de(admin_en, f"/cliente/acme/creative_flow/{cf_id}/" + ruta.format(fid=fid))
+    fugas = _fugas_final(html)
+    assert not fugas, (ruta, fugas[:15])
+    for crudo in (">omitida<", ">musica<", ">Lista<", "2. problema<", ">equilibrada<"):   # lo que MARCAS no ve
+        assert crudo not in html, crudo
+
+
+@pytest.mark.parametrize("url", ["/cliente/acme/final/tarjetas?lista=videos&desde=0",
+                                 "/cliente/acme/final/tarjetas?lista=finales&desde=0",
+                                 "/cliente/acme/crear/tarjetas?desde=0",
+                                 "/cliente/acme/creative_flow/{cf}/detalle"])
+def test_tarjetas_y_detalle_por_fetch_en_ingles(admin_en, url):
+    cf_id, _fid = _final_sembrado()
+    fugas = _fugas_final(html_de(admin_en, url.format(cf=cf_id)))
+    assert not fugas, (url, fugas[:15])

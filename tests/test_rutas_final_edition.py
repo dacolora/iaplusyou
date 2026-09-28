@@ -774,3 +774,40 @@ def test_ruta_revisar_encola_solo_piezas_terminadas(base_temporal, monkeypatch):
     c.post("/cliente/acme/creative_flow/cf_no_existe/revisar")
     assert encoladas == [("acme", cf_id)]
 
+
+
+def test_selector_de_idioma_base_marca_el_idioma_del_proyecto():
+    """Decisión B (2026-09-28): el selector se queda; de entrada marca el
+    idioma del proyecto (`idioma_proyecto`, del context processor) y, sin él,
+    «es» como hasta hoy."""
+    env = _entorno_plantilla()
+    item = _item_video_listo()
+    en_ingles = env.get_template("_final_detalle_respuesta.html").render(
+        **_contexto_minimo([item]), item=item, f=None, idioma_proyecto="en")
+    assert 'name="idioma_base"' in en_ingles
+    assert '<option value="en" selected>' in en_ingles and '<option value="es" selected>' not in en_ingles
+    sin_proyecto = _detalle_video_fe(env, item)
+    assert '<option value="es" selected>' in sin_proyecto and '<option value="en" selected>' not in sin_proyecto
+
+
+def test_boton_producir_con_sin_n():
+    env = _entorno_plantilla()
+    html = _detalle_video_fe(env, _item_video_listo(guion_base=GUION_BASE))
+    assert 'data-plantilla="Producir {n} finales' in html and 'data-sin-n="Producir finales' in html
+    tab = _tab_final(env, [_item_video_listo(guion_base=GUION_BASE)])
+    assert "btn.dataset.sinN" in tab and "replace('Producir {n} finales'" not in tab
+
+
+@pytest.mark.parametrize("enviado, esperado", [(None, "en"), ("pt", "pt"), ("es", "es"), ("fr", "en")])
+def test_preparar_idioma_base_elegido_o_el_del_proyecto(base_temporal, monkeypatch, enviado, esperado):
+    """Decisión B (2026-09-28): el guion base no es por destino. Sin elección
+    (o con una que no vale) sale en el idioma del proyecto; la elección
+    explícita del selector gana."""
+    import dashboard
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    cf_id = _sesion_video_listo()
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    datos = {"precio": "24.99", **({"idioma_base": enviado} if enviado else {})}
+    _cliente_admin(dashboard).post(f"/cliente/acme/creative_flow/{cf_id}/final/preparar", data=datos)
+    assert llamadas[0]["payload"]["opciones"] == {"precio": 24.99, "idioma_base": esperado}
