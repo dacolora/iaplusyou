@@ -1,0 +1,33 @@
+{# Audios en Crear (spec 2026-09-28 §1): la lista «Tus audios». La pinta la
+   página y la re-pintan au_lista/au_crear/au_borrar por fetch. Sin <form>:
+   todo va por fetch desde el JS de _crear_audios.html. La barra NO lleva
+   data-poll-job (ese sondeo recarga la página al terminar y borraría el
+   texto escrito): usa data-job + data-estado y su propio sondeo, como
+   mm-progreso. #}
+{% if trabajo_audio %}
+<div class="barra-progreso" id="trabajo-{{ trabajo_audio.job_id }}" data-job="{{ trabajo_audio.job_id }}"
+     data-estado="{{ url_for('estado_trabajo', job_id=trabajo_audio.job_id) }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+<div class="progreso-texto">{{ _('Creando el audio…') }}</div>
+{% endif %}
+{% if audios %}
+<ul class="au-items">
+  {% for a in audios %}
+  <li class="au-item" id="au-item-{{ a.id }}">
+    <div class="au-item-cab">
+      <strong class="au-item-nombre">{{ a.nombre }}</strong>
+      <small class="vacio">{{ a.voz }} · {{ nombres_idioma_audio.get(a.idioma, a.idioma) }} · {{ "%.0f"|format(a.duracion_s) }} s · {% if a.musica and a.musica.estado == 'ok' %}{{ a.musica.nombre }}{% else %}{{ _('solo voz') }}{% endif %}</small>
+    </div>
+    <audio src="{{ a.url }}" controls preload="none"></audio>
+    <div class="au-item-acciones">
+      <a class="btn-sm" href="{{ url_for('au_descargar', cliente=cliente, aid=a.id) }}">{{ _('Descargar') }}</a>
+      <button type="button" class="btn-rechazar btn-sm au-borrar" data-url="{{ url_for('au_borrar', cliente=cliente, aid=a.id) }}" data-nombre="{{ a.nombre }}">{{ _('Borrar') }}</button>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Todavía no tienes audios') }}</p>
+  <p class="estado-vacio-texto">{{ _('Escribe un texto, elige la voz y créalo. Aparecerá aquí para escucharlo y descargarlo.') }}</p>
+</div>
+{% endif %}

@@ -13,6 +13,7 @@ import logging
 import math
 import os
 import re
+import unicodedata
 import secrets
 import socket
 import subprocess
@@ -25,7 +26,7 @@ import requests
 import sqlalchemy as sa
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context
 from flask_babel import Babel, get_locale, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
@@ -53,6 +54,7 @@ import referencias_flowplus
 import materiales
 import ediciones
 import mi_musica
+import audios
 import referencias_link
 import generador_prompts
 from providers import image_provider
@@ -96,6 +98,7 @@ from tareas import organico as tareas_org
 from tareas import tiendas as tareas_tiendas
 from tareas import doctrina as tareas_doctrina
 from tareas import musica as tareas_musica
+from tareas import audios as tareas_audios
 from tareas import edicion as tareas_edicion
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
@@ -1715,6 +1718,7 @@ def ver_cliente(cliente):
         motivo_bloqueo_forma=motivo_bloqueo_forma,
         meta_redirect_uri=os.environ.get("META_REDIRECT_URI", ""),
         **fe_ctx,
+        **_contexto_audios(cliente),
         experimentos=experimentos_exp,
         experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],
         elegibles_exp=experimentos.elegibles(cliente),
@@ -6635,6 +6639,97 @@ def mm_crear(cliente):
 @app.route("/cliente/<cliente>/musica/lista")
 def mm_lista(cliente):
     return _respuesta_mi_musica(cliente)
+
+
+# ---------------------------------------------------------- Audios en Crear ---
+# (spec 2026-09-28) Mismo patrón que Mi música: JSON con la lista ya pintada.
+
+def _contexto_audios(cliente):
+    jid = tareas_audios.job_id(cliente)
+    return {"audios": audios.listar(cliente),
+            "trabajo_audio": {"job_id": jid} if trabajos.en_curso(jid) else None,
+            "voces_audio": audios.voces(), "idiomas_audio": audios.IDIOMAS, "nombres_idioma_audio": audios.NOMBRES_IDIOMA,
+            "velocidades_audio": audios.NOMBRES_VELOCIDAD, "volumenes_audio": audios.NOMBRES_VOLUMEN,
+            "volumen_audio_defecto": audios.VOLUMEN_DEFECTO, "idioma_audio_defecto": audios.idioma_defecto(cliente),
+            "max_caracteres_audio": audios.MAX_CARACTERES, "usd_por_caracter": fal_audio.COSTO_USD_POR_CARACTER}
+
+
+def _respuesta_audios(cliente, error=None, mensaje=None, job_id=None):
+    ctx = _contexto_audios(cliente)
+    html = render_template("_audios_lista.html", cliente=cliente, **ctx)
+    return jsonify({"ok": error is None, "html": html, "audios": ctx["audios"], "trabajo": ctx["trabajo_audio"],
+                    "error": error, "mensaje": mensaje, "job_id": job_id}), (400 if error else 200)
+
+
+@app.route("/cliente/<cliente>/audios/lista")
+def au_lista(cliente):
+    return _respuesta_audios(cliente)
+
+
+@app.route("/cliente/<cliente>/audios/crear", methods=["POST"])
+def au_crear(cliente):
+    if not _mismo_origen():
+        abort(403)
+    try:
+        payload = audios.validar(cliente, request.form)
+    except audios.EntradaInvalida as e:
+        return _respuesta_audios(cliente, error=idiomas.traducir(str(e)))
+    jid = tareas_audios.job_id(cliente)
+    encolado = trabajos.encolar(jid, "audio_generar", {"cliente": cliente, **payload}, duracion_estimada=60,
+                                etapas=list(tareas_audios.ETAPAS), cliente=cliente, max_intentos=1)
+    if not encolado:
+        return _respuesta_audios(cliente, error=idiomas.traducir(audios.MENSAJES["en_curso"]))
+    return _respuesta_audios(cliente, mensaje=gettext("Creando el audio…"), job_id=jid)
+
+
+@app.route("/cliente/<cliente>/audios/<int:aid>/borrar", methods=["POST"])
+def au_borrar(cliente, aid):
+    if not _mismo_origen():
+        abort(403)
+    try:
+        audios.borrar(cliente, aid)
+    except materiales.MaterialEnUso as e:
+        return _respuesta_audios(cliente, error=str(e))
+    except Exception as e:
+        bitacora.registrar(cliente, str(aid), "audios", "error", str(e))
+        return _respuesta_audios(cliente, error=gettext("No pude borrarlo (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__))
+    return _respuesta_audios(cliente)
+
+
+@app.route("/cliente/<cliente>/audios/muestra", methods=["POST"])
+def au_muestra(cliente):
+    """Muestra corta de una voz (se sintetiza una vez para toda la plataforma,
+    la paga Creatv). En línea: fal tarda 2–4 s."""
+    if not _mismo_origen():
+        abort(403)
+    voz, idioma = (request.form.get("voz") or "").strip(), (request.form.get("idioma") or "").strip()
+    if voz not in audios.voces() or idioma not in audios.IDIOMAS:
+        return jsonify({"ok": False, "error": gettext("Elige una voz y un idioma de la lista.")}), 400
+    try:
+        url = audios.muestra(voz, idioma)
+    except Exception as e:
+        bitacora.registrar(cliente, voz, "audios", "muestra_error", str(e))
+        return jsonify({"ok": False, "error": gettext("No pude generar la muestra (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__)}), 502
+    return jsonify({"ok": True, "url": url})
+
+
+@app.route("/cliente/<cliente>/audios/<int:aid>/descargar")
+def au_descargar(cliente, aid):
+    """El mp3 como adjunto con nombre legible: el atributo `download` no
+    funciona con otro origen y R2 no tiene CORS."""
+    a = audios.obtener(cliente, aid)
+    if not a:
+        abort(404)
+    r = requests.get(a["url"], stream=True, timeout=120)
+    if r.status_code != 200:
+        abort(502)
+    base = unicodedata.normalize("NFKD", a["nombre"].replace("…", "")).encode("ascii", "ignore").decode()
+    nombre = re.sub(r"[^A-Za-z0-9 _-]+", "", base).strip()[:60] or f"audio-{aid}"
+    resp = Response(stream_with_context(r.iter_content(1 << 16)), mimetype="audio/mpeg")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}.mp3"'
+    if r.headers.get("Content-Length"):
+        resp.headers["Content-Length"] = r.headers["Content-Length"]
+    return resp
 
 
 @app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
