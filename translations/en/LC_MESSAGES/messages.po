@@ -794,8 +794,8 @@ msgstr ""
 "Proposals waiting for approval, winners and\n"
 "  Meta rejections all land in this email. Empty = no email notifications."
 
-msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Configuración aceptando todos los permisos que pide, y reintenta."
-msgstr "The Meta connection is missing a permission for this: reconnect Meta in Settings, accepting every permission it asks for, and try again."
+msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Experimentos aceptando todos los permisos que pide, y reintenta."
+msgstr "The Meta connection is missing a permission for this: reconnect Meta in Experiments, accepting every permission it asks for, and try again."
 
 msgid "Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>."
 msgstr "Below, in <em>Connect store › MercadoLibre</em>, press <em>Connect with MercadoLibre</em>."
@@ -1517,23 +1517,23 @@ msgstr "With a reference image this model doesn't choose a format: it follows th
 msgid "Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30."
 msgstr "With reference videos (Wan 3.0), their seconds plus the result's can't add up to more than 30."
 
-msgid "Conecta Meta arriba, en la tarjeta <a href=\"#llave-meta\">Meta (anuncios)</a> de Puesta a punto (o en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a>), para comprobar el Pixel."
-msgstr "Connect Meta above, in the <a href=\"#llave-meta\">Meta (ads)</a> card in Setup (or in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a>), to check the Pixel."
+msgid "Conecta Meta arriba para probar"
+msgstr "Connect Meta above to test"
 
 msgid "Conecta Meta con una Página"
 msgstr "Connect Meta with a Page"
 
-msgid "Conecta Meta en <a href=\"#llave-meta\">Puesta a punto › Meta (anuncios)</a> con una cuenta que administre la <strong>Página</strong> donde se publica."
-msgstr "Connect Meta in <a href=\"#llave-meta\">Setup › Meta (ads)</a> with an account that administers the <strong>Page</strong> where it publishes."
+msgid "Conecta Meta en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a> con una cuenta que administre la <strong>Página</strong> donde se publica."
+msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a> with an account that administers the <strong>Page</strong> where it publishes."
 
-msgid "Conecta Meta en Configuración antes de crear un experimento."
-msgstr "Connect Meta in Settings before creating an experiment."
+msgid "Conecta Meta en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a> para comprobar el Pixel."
+msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a> to check the Pixel."
 
-msgid "Conecta Meta en Configuración antes de probar piezas."
-msgstr "Connect Meta in Settings before testing pieces."
+msgid "Conecta Meta en Experimentos antes de crear un experimento."
+msgstr "Connect Meta in Experiments before creating an experiment."
 
-msgid "Conecta Meta en Configuración para probar"
-msgstr "Connect Meta in Settings to test"
+msgid "Conecta Meta en Experimentos antes de probar piezas."
+msgstr "Connect Meta in Experiments before testing pieces."
 
 msgid "Conecta Notion primero."
 msgstr "Connect Notion first."
@@ -3003,8 +3003,8 @@ msgstr "This prompt is already approved. Reopen it to keep correcting it."
 msgid "Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta nada aquí. La cuenta publicitaria y la Página se las asigna el administrador desde el panel; pídele a él cualquier cambio."
 msgstr "Creatv manages this project on Meta (agency mode): it doesn't register an app or connect anything here. The admin assigns the ad account and the Page from the panel; ask them for any change."
 
-msgid "Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» en Configuración › Meta (con nada en marcha)."
-msgstr "Creatv manages this project on Meta. To go back to your own app use “Change form” in Settings › Meta (with nothing running)."
+msgid "Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» en Experimentos › Meta (con nada en marcha)."
+msgstr "Creatv manages this project on Meta. To go back to your own app use “Change form” in Experiments › Meta (with nothing running)."
 
 msgid "Este proyecto no está en modo agencia."
 msgstr "This project isn't in agency mode."
@@ -3779,8 +3779,8 @@ msgstr "The figure “%(cifra)s” in the caption isn't in the product's data or
 msgid "La conexión con Meta está rota (token vencido o permisos retirados): vuelve a conectar en Configuración."
 msgstr "The connection with Meta is broken (expired token or withdrawn permissions): reconnect in Settings."
 
-msgid "La conexión con Meta venció o se retiró: vuelve a conectar Meta en Configuración y reintenta."
-msgstr "The Meta connection expired or was revoked: reconnect Meta in Settings and try again."
+msgid "La conexión con Meta venció o se retiró: vuelve a conectar Meta en Experimentos y reintenta."
+msgstr "The Meta connection expired or was revoked: reconnect Meta in Experiments and try again."
 
 msgid "La conexión de agencia no está activa ahora mismo"
 msgstr "The agency connection isn't active right now"
@@ -4905,15 +4905,6 @@ msgstr "To connect MercadoLibre, <code>FLASK_SECRET_KEY</code> is missing in the
 #, python-format
 msgid "Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>%(redirect)s</code>)."
 msgstr "To connect MercadoLibre, <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code> (app at developers.mercadolibre.com with <code>offline_access</code> permission and redirect <code>%(redirect)s</code>)."
-
-msgid ""
-"Para lanzar anuncios y publicar en tu Página de Facebook e Instagram. Los servicios de\n"
-"  generación (guiones, imagen y video, voz y música, almacenamiento) y el correo de la\n"
-"  plataforma los pone Creatv en el servidor: ahí no tienes que hacer nada."
-msgstr ""
-"To launch ads and publish on your Facebook Page and Instagram. The generation\n"
-"  services (scripts, image and video, voice and music, storage) and the platform's\n"
-"  email are set by Creatv on the server: there's nothing you need to do there."
 
 msgid "Para publicar anuncios y contenido en tu Página de Facebook y tu Instagram. Elige una forma; puedes cambiarla después."
 msgstr "To publish ads and content on your Facebook Page and your Instagram. Choose a form; you can change it later."

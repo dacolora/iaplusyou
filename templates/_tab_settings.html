@@ -345,7 +345,7 @@
       <summary>{{ _('Cómo activarlo') }}</summary>
       <ol>
         {% if c.plataforma == "facebook" %}
-        <li>{{ _('Conecta Meta en <a href="#llave-meta">Puesta a punto › Meta (anuncios)</a> con una cuenta que administre la <strong>Página</strong> donde se publica.') }}</li>
+        <li>{{ _('Conecta Meta en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a> con una cuenta que administre la <strong>Página</strong> donde se publica.') }}</li>
         <li>{{ _('Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro.') }}</li>
         {% elif c.plataforma == "instagram" %}
         <li>{{ _('Primero Facebook (arriba): Instagram publica a través de la Página.') }}</li>
@@ -775,7 +775,7 @@
   // Configuración en apartados (spec 2026-09-26): uno a la vez; se recuerda
   // el último por navegador. window.irAConfig(id) abre el apartado que
   // contiene `id` y lo trae a la vista («Este mes» de la barra lateral,
-  // enlaces #llave-meta, #config-tienda…).
+  // enlaces #config-tienda, #config-pixel…).
   (function () {
     var raiz = document.getElementById('tab-settings');
     if (!raiz) return;

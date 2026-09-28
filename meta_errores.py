@@ -69,11 +69,11 @@ def explicar(texto, modo="propia"):
             "reintenta el lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se "
             "duplica nada.")
     if codigo == 190:
-        return gettext("La conexión con Meta venció o se retiró: vuelve a conectar Meta en Configuración y "
+        return gettext("La conexión con Meta venció o se retiró: vuelve a conectar Meta en Experimentos y "
                        "reintenta.")
     if codigo in _PERMISOS:
         return gettext("A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en "
-                       "Configuración aceptando todos los permisos que pide, y reintenta.")
+                       "Experimentos aceptando todos los permisos que pide, y reintenta.")
     if codigo in _LIMITE:
         return gettext("Meta está frenando las llamadas por un rato (límite de uso): reintenta en unos minutos.")
     if codigo == 368:

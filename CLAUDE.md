@@ -684,8 +684,10 @@ precio/moneda/url_compra/en_prueba/prioridad; importing (CSV/URL) is the "Traer 
 details, imported products without photos sit in "Importados sin fotos" until `prod_fotos_subir`
 or `prod_vincular` creates their activo. Configuración (`_tab_settings.html`) shows one
 apartado at a time (pills, last one remembered, `window.irAConfig(id)` opens the apartado
-holding `id`): Puesta a punto (admin only), Conexiones (Meta full width, store, Pixel, organic
-channels), Marca, Generación, Cuenta y avisos, Gasto. The key cards (`_llave_tarjeta.html`,
+holding `id`): Puesta a punto (admin only), Conexiones (store, Pixel, organic channels — since
+2026-09-28 the Meta connection card is NOT here: it lives only in Experimentos,
+`_meta_conectar.html`; the Triple Whale form still is), Marca, Generación, Cuenta y avisos,
+Gasto. The key cards (`_llave_tarjeta.html`,
 `dashboard._estado_llaves`) list every
 paid key (Anthropic, fal, Higgsfield, R2, Meta, SMTP, MELI) with configured/missing badges —
 computed from `bool(os.environ.get(...))` only, values are never rendered. Since 2026-09-20 that

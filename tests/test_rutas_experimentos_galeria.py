@@ -31,7 +31,7 @@ def test_galeria_sin_meta_no_deja_probar(app, monkeypatch, base_temporal):
     _pieza(base_temporal)
     monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
     html = _html(app)
-    assert 'id="exp-galeria"' in html and "Conecta Meta en Configuración para probar" in html
+    assert 'id="exp-galeria"' in html and "Conecta Meta arriba para probar" in html
     assert 'action="/cliente/acme/experimentos/probar"' not in html
 
 
