@@ -1,40 +1,40 @@
 {% extends "base.html" %}
-{% block title %}{{ estudio.nombre }} · Nicho{% endblock %}
+{% block title %}{{ estudio.nombre }} · {{ _('Nicho') }}{% endblock %}
 {% block content %}
 {% include "_nicho_nav.html" %}
 
 <div class="pagina-cabecera">
   <div>
     <h1>{{ estudio.nombre }}</h1>
-    <p class="vacio"><span class="tag-estado estado-nicho estado-nicho-{{ estudio.estado }}">{{ estudio.estado }}</span>
-      · {{ estudio.producto or 'sin producto' }} · avatares en {{ idiomas.get(estudio.idioma, estudio.idioma) }}
-      · generación {{ estudio.generacion }}{% if estudio.archivado %} · archivado{% endif %}</p>
-    {% if estudio.extra.ultimo_error %}<p class="tag-estado sprint-aviso">Último error: {{ estudio.extra.ultimo_error }}</p>{% endif %}
+    <p class="vacio"><span class="tag-estado estado-nicho estado-nicho-{{ estudio.estado }}">{{ etiquetas_estudio.get(estudio.estado, estudio.estado)|traducir }}</span>
+      · {{ estudio.producto or _('sin producto') }} · {{ _('avatares en %(idioma)s', idioma=idiomas.get(estudio.idioma, estudio.idioma)|traducir) }}
+      · {{ _('generación %(n)s', n=estudio.generacion) }}{% if estudio.archivado %} · {{ _('archivado') }}{% endif %}</p>
+    {% if estudio.extra.ultimo_error %}<p class="tag-estado sprint-aviso">{{ _('Último error: %(error)s', error=estudio.extra.ultimo_error) }}</p>{% endif %}
   </div>
 </div>
 
 <details class="swap-card">
-  <summary class="swap-card-resumen">Editar estudio</summary>
+  <summary class="swap-card-resumen">{{ _('Editar estudio') }}</summary>
   <form method="post" action="{{ url_for('nicho.editar', cliente=cliente, eid=estudio.id) }}" class="form-experimento">
     <div class="fe-opciones">
-      <label>Nombre <input name="nombre" value="{{ estudio.nombre }}" required maxlength="120"></label>
-      <label>Producto del catálogo
-        <select name="catalogo_id"><option value="">(escribir a mano)</option>
+      <label>{{ _('Nombre') }} <input name="nombre" value="{{ estudio.nombre }}" required maxlength="120"></label>
+      <label>{{ _('Producto del catálogo') }}
+        <select name="catalogo_id"><option value="">{{ _('(escribir a mano)') }}</option>
           {% for p in productos_nicho %}<option value="{{ p.id }}" {% if p.id == estudio.catalogo_id %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
         </select></label>
     </div>
-    <label>Qué vendemos <textarea name="producto" rows="2">{{ estudio.producto or '' }}</textarea></label>
-    <label>Qué investigar <textarea name="tema" rows="3">{{ estudio.tema or '' }}</textarea></label>
-    <div class="acciones"><button type="submit" class="btn-generar btn-sm">Guardar</button></div>
+    <label>{{ _('Qué vendemos') }} <textarea name="producto" rows="2">{{ estudio.producto or '' }}</textarea></label>
+    <label>{{ _('Qué investigar') }} <textarea name="tema" rows="3">{{ estudio.tema or '' }}</textarea></label>
+    <div class="acciones"><button type="submit" class="btn-generar btn-sm">{{ _('Guardar') }}</button></div>
   </form>
   <form method="post" action="{{ url_for('nicho.archivar', cliente=cliente, eid=estudio.id) }}" class="inline"
-        onsubmit="return confirm('{{ '¿Desarchivar este estudio?' if estudio.archivado else '¿Archivar este estudio? Se puede desarchivar después.' }}');">
+        onsubmit='return confirm({{ (_("¿Desarchivar este estudio?") if estudio.archivado else _("¿Archivar este estudio? Se puede desarchivar después."))|tojson }});'>
     {% if estudio.archivado %}<input type="hidden" name="desarchivar" value="1">{% endif %}
-    <button type="submit" class="btn-sm btn-peligro">{{ 'Desarchivar' if estudio.archivado else 'Archivar' }}</button>
+    <button type="submit" class="btn-sm btn-peligro">{{ _('Desarchivar') if estudio.archivado else _('Archivar') }}</button>
   </form>
   <form method="post" action="{{ url_for('nicho.eliminar', cliente=cliente, eid=estudio.id) }}" class="inline"
-        onsubmit="return confirm('⚠️ ¿Eliminar este estudio PERMANENTEMENTE? Se borran todos los comentarios y avatares. No se puede deshacer.');">
-    <button type="submit" class="btn-sm btn-rechazar">Eliminar permanentemente</button>
+        onsubmit='return confirm({{ _("⚠️ ¿Eliminar este estudio PERMANENTEMENTE? Se borran todos los comentarios y avatares. No se puede deshacer.")|tojson }});'>
+    <button type="submit" class="btn-sm btn-rechazar">{{ _('Eliminar permanentemente') }}</button>
   </form>
 </details>
 
