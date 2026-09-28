@@ -467,7 +467,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
 
-**Editor (capas 1–3, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–4a, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -548,6 +548,17 @@ are short-side 540 with a keyframe every 15 frames (`tareas.edicion.PROXY_VERSIO
 re-queues older ones, free) and polls for them at most 5 min, swapping each one in as soon as it is ready
 (never while playing). `sembrar_edicion_demo.py` builds a local demo edition (no spend, no R2); its CLI
 refuses when `PLATAFORMA_URL` (env or root `.env`) points to a non-local host.
+Capa 4a (2026-09-27): the page edits — `static/editor/operaciones.js` (pure: cut at playhead, delete
+with ripple on the principal, duplicate, trim from either edge, reorder the principal, move other
+layers with snapping, speed 0.5–2×; every result passes `documento.validar`, checked by
+`tests/test_operaciones_editor.py` on the real JS output; `p_sonido` is rebuilt as a mirror of the
+principal, without the clips at speed ≠ 1; `normalizar` mirrors `verificar_recortes` for transitions),
+`historial.js` (undo/redo in memory), `guardado.js` (debounced PUT `editor.guardar` with CAS
+`version_n`, 409 → «Recargar»; the route refuses materials from another project), a DOM timeline
+(`escala.js` pure + `linea_tiempo.js`) and `pagina_editor.js`; «Editar este video» in the Final edition
+tab (`editor.desde_clon` → free worker task `edicion_desde_clon`, `final_edition/edicion_clon.py`: the
+raw clon as one clip + mirrored scene sound) and «Producir» from the editor (`editor.producir`:
+`versionar` → `crear_final` → `edicion_producir` per destino, free, each destino resolved first).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
