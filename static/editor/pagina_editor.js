@@ -30,9 +30,16 @@
 //   editor.agregarMateriales(mapa)          suma materiales (forma de
 //                                           material_para) a la vista previa
 //                                           ANTES de operar con ellos
+//   editor.enfocarTexto()                   pide el foco para escribir el texto
+//                                           elegido (la biblioteca, al agregar
+//                                           un texto): en el celular cambia a
+//                                           la hoja «Editar» y avisa
+//                                           "foco-texto" — quien muestra ese
+//                                           campo (propiedades) lo enfoca
 //   editor.escuchar(fn) -> dejar()          fn(que) después de cada cambio:
 //                                           "documento" | "seleccion" |
 //                                           "materiales" | "destino" | "tiempo"
+//                                           | "foco-texto"
 //
 // Reglas de los avisos (avisos_editor.js, probadas en Node):
 // - «seleccion» sale solo si la selección cambió de verdad, también cuando la
@@ -43,6 +50,7 @@
 //   recibe ya ve el estado último. Si un oyente provoca un aviso cada vez que
 //   se entera, se corta (y se anota en la consola) en vez de colgar la página.
 import { Avisos } from "./avisos_editor.js";
+import { Biblioteca } from "./biblioteca.js";
 import { pedidoCortar } from "./escala.js";
 import { Guardado } from "./guardado.js";
 import { Historial } from "./historial.js";
@@ -443,6 +451,14 @@ function montarDisposicion() {
   for (const b of document.querySelectorAll("[data-cerrar-hoja]")) b.addEventListener("click", cerrarHoja);
 }
 
+// Agregar un texto lo deja elegido; el campo para escribirlo está en
+// «Editar»: en el celular esa es otra hoja, así que se cambia a ella antes de
+// avisar (el foco va a la hoja y después al campo, si propiedades lo pone).
+function enfocarTexto() {
+  if (hojaAbierta === "ed-biblioteca") abrirHoja("ed-propiedades", $("ed-abrir-propiedades"));
+  avisos.notificar("foco-texto");
+}
+
 // La única puerta para los módulos de la capa 4b (ver el comentario de arriba):
 // las tareas 5–8 se lo pasan a sus módulos al crearlos, aquí abajo.
 const editor = Object.freeze({
@@ -457,12 +473,16 @@ const editor = Object.freeze({
   destino: () => vista.destino,
   info,
   agregarMateriales: (mapa) => vista.agregarMateriales(mapa),
+  enfocarTexto,
   escuchar: (fn) => avisos.escuchar(fn),
 });
 
 montarHerramientas();
 montarProducir();
 montarDisposicion();
+// la biblioteca (Medios · Audio · Texto · Transiciones): carga lo del proyecto
+// mientras la vista previa arranca
+new Biblioteca({ contenedor: $("ed-panel-biblioteca"), pestanas: $("ed-pestanas-biblioteca"), urls: datos.urls, editor, linea });
 refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
 await vista.iniciar();
 refrescar(null);           // con el reloj listo: el cabezal donde está

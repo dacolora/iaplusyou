@@ -16,6 +16,7 @@ test("los módulos de navegador cargan y exportan lo que la página usa", async 
   const a = await import("../../static/editor/motor_audio.js");
   const vp = await import("../../static/editor/vista.js");
   const lt = await import("../../static/editor/linea_tiempo.js");
+  const bib = await import("../../static/editor/biblioteca.js");
   assert.equal(typeof t.rasterizarTexto, "function");
   assert.equal(typeof v.Videos, "function");
   assert.equal(typeof l.dibujarCuadro, "function");
@@ -31,6 +32,11 @@ test("los módulos de navegador cargan y exportan lo que la página usa", async 
   // capa 4b (Task 5): la biblioteca pregunta qué hay bajo el dedo y resalta esa fila
   for (const m of ["dibujar", "moverCabezal", "puntoEn", "resaltar"]) {
     assert.equal(typeof lt.LineaTiempo.prototype[m], "function", `LineaTiempo.${m}`);
+  }
+  // capa 4b (Task 6): la biblioteca que construye pagina_editor.js
+  assert.equal(typeof bib.Biblioteca, "function");
+  for (const m of ["cargar", "agregar", "subir"]) {
+    assert.equal(typeof bib.Biblioteca.prototype[m], "function", `Biblioteca.${m}`);
   }
   const pps = Object.getOwnPropertyDescriptor(lt.LineaTiempo.prototype, "pps");
   assert.equal(typeof pps?.get, "function");

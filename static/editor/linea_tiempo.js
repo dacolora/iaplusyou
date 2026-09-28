@@ -18,10 +18,13 @@
 // entre muchas filas. Cada audio con `picos` dibuja su onda en un <canvas>
 // (escala.barrasOnda), rehecho en cada dibujar (zoom, recorte, volumen). Para
 // soltar desde la biblioteca: `puntoEn(x, y)` dice qué hay bajo el dedo y
-// `resaltar(punto | null)` marca esa fila y dónde entraría.
+// `resaltar(punto | null)` marca esa fila y dónde entraría. Cada unión de la
+// principal con transición lleva su marca (escala.unionesConTransicion);
+// tocarla elige el clip de antes (el que tiene la transición).
 import {
   ANCHO_MIN_PX, barrasOnda, cabeceraFila, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, ladosRecortables, marcasRegla,
-  msAPx, msInsercion, nombreFila, PASO_ONDA_PX, PPS_DEFECTO, PPS_MAX, PPS_MIN, puntoSoltar, pxAMs, soltar, VENTANA_PICOS_MS,
+  msAPx, msInsercion, nombreFila, PASO_ONDA_PX, PPS_DEFECTO, PPS_MAX, PPS_MIN, puntoSoltar, pxAMs, soltar, unionesConTransicion,
+  VENTANA_PICOS_MS,
 } from "./escala.js";
 import { ID_SONIDO } from "./operaciones.js";
 import { duracionMs, pistaPrincipal } from "./tiempo.js";
@@ -42,7 +45,17 @@ const ICONOS = {
   musica: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
   voz: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
   sonido: '<path d="M4 9.5v5h4l5 4v-13l-5 4z"/><path d="M16.5 9a4.5 4.5 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/>',
+  transicion: '<path d="M4 6l8 6-8 6zM20 6l-8 6 8 6z"/>',
 };
+
+function iconoSvg(nombre, tam, clase) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  for (const [k, v] of Object.entries({ class: clase, viewBox: "0 0 24 24", width: String(tam), height: String(tam),
+    "aria-hidden": "true", focusable: "false", fill: "none", stroke: "currentColor", "stroke-width": "1.8",
+    "stroke-linecap": "round", "stroke-linejoin": "round" })) svg.setAttribute(k, v);
+  svg.innerHTML = ICONOS[nombre] ?? ICONOS.video;              // texto fijo de este módulo
+  return svg;
+}
 
 function el(tag, clase, padre) {
   const n = document.createElement(tag);
@@ -176,6 +189,15 @@ export class LineaTiempo {
         // sin asas: el sonido de la escena y la voz que cambia por país
         for (const lado of ladosRecortables(pista, clip)) el("span", "linea-asa", c).dataset.lado = lado;
       }
+      if (pista === principal) {
+        for (const u of unionesConTransicion(doc)) {
+          const m = el("span", `ed-union${u.clipId === seleccion ? " ed-union-elegida" : ""}`, fila);
+          m.dataset.clip = u.clipId;
+          m.style.left = `${msAPx(u.ms, pps)}px`;
+          m.title = `Transición: ${u.nombre}`;
+          m.append(iconoSvg("transicion", 12, "ed-union-icono"));
+        }
+      }
       return fila;
     }));
     this.listaCabeceras.replaceChildren(...cabeceras);
@@ -267,12 +289,7 @@ export class LineaTiempo {
     n.dataset.pista = pista.id;
     n.style.height = `${alto}px`;
     n.title = titulo;
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    for (const [k, v] of Object.entries({ class: "ed-cabecera-icono", viewBox: "0 0 24 24", width: "16", height: "16",
-      "aria-hidden": "true", focusable: "false", fill: "none", stroke: "currentColor", "stroke-width": "1.8",
-      "stroke-linecap": "round", "stroke-linejoin": "round" })) svg.setAttribute(k, v);
-    svg.innerHTML = ICONOS[icono] ?? ICONOS.video;              // texto fijo de este módulo
-    n.append(svg);
+    n.append(iconoSvg(icono, 16, "ed-cabecera-icono"));
     el("span", "ed-cabecera-nombre", n).textContent = nombre;
     return n;
   }
@@ -336,6 +353,16 @@ export class LineaTiempo {
     const activo = document.activeElement;
     if (activo && activo !== document.body) activo.blur?.();
     const tactil = e.pointerType === "touch";
+    // la marca de una transición: elige el clip que la tiene (el de antes del corte)
+    const union = e.target.closest?.(".ed-union");
+    if (union) {
+      if (tactil) this.toque = { pointerId: e.pointerId, clip: union.dataset.clip };
+      else {
+        this.alSeleccionar(union.dataset.clip);
+        e.preventDefault();
+      }
+      return;
+    }
     const clipEl = e.target.closest?.(".linea-clip");
     if (clipEl && !clipEl.classList.contains("linea-espejo")) {
       const id = clipEl.dataset.clip;
