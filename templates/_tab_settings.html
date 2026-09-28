@@ -715,7 +715,7 @@
 
 <h4 style="margin-top:1.5rem;">{{ _('Gasto por modelo') }}</h4>
 <div style="overflow-x:auto;">
-<table>
+<table class="tabla-apilada">
   <thead><tr><th>{{ _('Modelo') }}</th><th>{{ _('Generaciones') }}</th><th>{{ _('Costo') }}</th></tr></thead>
   <tbody>
     {% for modelo, d in informe.operacion.por_modelo.items() %}
