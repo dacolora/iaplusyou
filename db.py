@@ -325,6 +325,73 @@ triple_whale = Table("triple_whale", metadata,
     Column("ultima_sincronizacion", String(19)),             # ISO 8601
     Column("estado", String(20), default="conectada"),       # conectada / error
     Column("error", Text),
+    Column("extra", JSON, default=dict),                     # backfill_desde, ultimo_resumen, gasto_7d (0022)
+)
+
+# --- Triple Whale: métricas copiadas y evaluación (spec 2026-09-28, migración 0022) ---
+# Una fila por (proyecto, canal, anuncio, día): lo que reporta la plataforma
+# (ads_table) más lo que atribuye el Triple Pixel con el modelo y la ventana
+# del proyecto (pixel_joined_tvf). Es una copia: Triple Whale reatribuye días
+# viejos, así que cada sync vuelve a pedir los últimos días y hace upsert.
+# Pedidos en Float: los modelos lineales reparten un pedido entre anuncios.
+tw_anuncio_dia = Table("tw_anuncio_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("canal", String(40), nullable=False),
+    Column("ad_id", String(64), nullable=False),
+    Column("cuenta_id", String(64)),
+    Column("campana_id", String(64)), Column("campana", Text),
+    Column("conjunto_id", String(64)), Column("conjunto", Text),
+    Column("anuncio", Text), Column("estado_anuncio", String(30)),
+    Column("creative_id", String(64)),
+    Column("video_url", Text), Column("destino_url", Text),
+    Column("utm_ok", Boolean),                               # is_utm_valid (None = TW no lo dijo)
+    Column("gasto", Float, default=0.0), Column("impresiones", Integer, default=0),
+    Column("clics", Integer, default=0), Column("clics_salida", Integer, default=0),
+    Column("compras_canal", Float, default=0.0), Column("valor_canal", Float, default=0.0),
+    Column("thruplays", Integer, default=0), Column("vistas_3s", Integer, default=0),
+    Column("p25", Integer, default=0), Column("p50", Integer, default=0),
+    Column("p75", Integer, default=0), Column("p100", Integer, default=0),
+    Column("pedidos", Float, default=0.0), Column("ingresos", Float, default=0.0),
+    Column("nc_pedidos", Float, default=0.0), Column("nc_ingresos", Float, default=0.0),
+    Column("sesiones", Integer, default=0), Column("carritos", Integer, default=0),
+    Column("checkouts", Integer, default=0),
+    Column("con_pixel", Boolean, default=False),            # el Pixel respondió para ese día (aunque sin pedidos)
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "canal", "ad_id", "fecha", name="uq_tw_anuncio_dia"),
+    sa.Index("ix_tw_anuncio_dia_cliente_fecha", "cliente", "fecha"),
+)
+
+# La tienda por día (blended_stats_tvf): ingresos y pedidos reales, gasto total.
+tw_tienda_dia = Table("tw_tienda_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("gasto", Float, default=0.0), Column("ingresos", Float, default=0.0),
+    Column("pedidos", Float, default=0.0), Column("nc_pedidos", Float, default=0.0),
+    Column("nc_ingresos", Float, default=0.0), Column("reembolsos", Float, default=0.0),
+    Column("cogs", Float, default=0.0), Column("utilidad_neta", Float, default=0.0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "fecha", name="uq_tw_tienda_dia"),
+)
+
+# Una evaluación con IA de los anuncios (pagada, max_intentos=1): la muestra
+# que se le mostró a Claude (`anuncios`) y lo que devolvió (`resultado`:
+# patrones, por qué funciona cada anuncio e ideas de anuncios nuevos).
+tw_evaluacion = Table("tw_evaluacion", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("estado", String(12), nullable=False, default="en_cola"),   # en_cola|analizando|lista|error
+    Column("desde", String(10)), Column("hasta", String(10)),
+    Column("moneda", String(3)),
+    Column("anuncios", JSON, default=list),
+    Column("resultado", JSON, default=dict),
+    Column("usd", Float, default=0.0),
+    Column("error", Text),
+    Column("tarea_id", Integer),
+    Column("pedido_por", String(80)),
+    Column("extra", JSON, default=dict),
 )
 
 pedido = Table("pedido", metadata,

@@ -177,95 +177,136 @@ def test_refrescar_guarda_snapshots(entorno):
     assert m["estado_meta_texto"] == "Activo" and e["piezas"][0]["estado_meta"] == "ACTIVE"
 
 
-def test_refrescar_con_triple_whale_suma_los_dias_y_calcula_tasas(entorno, monkeypatch):
-    """La API entrega una fila por día; refrescar() debe sumarlas (snapshot
-    ACUMULADO, mismo contrato que Meta) y calcular ctr/cpc/cpm/thruplay_rate/
-    roas/cpa sobre los totales -- nunca promediando los pixel_roas/pixel_cpa
-    por día."""
+def _tw_conectado(lz, monkeypatch, moneda="COP"):
+    """Triple Whale conectado (sin tocar la base) y la sincronización previa
+    reemplazada por un contador: los tests siembran la copia a mano."""
+    config = {"dominio_tienda": "acme.myshopify.com", "modelo_atribucion": "Triple Attribution",
+              "ventana_atribucion": "lifetime", "moneda": moneda}
+    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: config)
+    llamadas = []
+    monkeypatch.setattr(lz.tw_sync, "sincronizar_si_hace_falta", lambda cliente: llamadas.append(cliente))
+    return llamadas
+
+
+def _sembrar_pixel(ad_id, dias, otros=()):
+    """dias: [(fecha, pedidos, ingresos)] del Triple Pixel para ese anuncio de
+    Meta; otros: [(ad_id, fecha, pedidos, ingresos)] de otros anuncios. Una
+    sola llamada: reemplazar_anuncios_pixel pisa todo el rango."""
+    from triple_whale import datos as tw_datos
+    filas = [(ad_id, f, p, i) for f, p, i in dias] + list(otros)
+    fechas = [f for _, f, _, _ in filas]
+    tw_datos.reemplazar_anuncios_pixel("acme", min(fechas), max(fechas), [
+        {"canal": "facebook-ads", "ad_id": a, "fecha": f, "pedidos": p, "ingresos": i} for a, f, p, i in filas])
+
+
+def test_refrescar_con_triple_whale_toma_trafico_de_meta_y_ventas_del_pixel(entorno, monkeypatch):
+    """Spec 2026-09-28 §7: impresiones, gasto y estado siguen saliendo de
+    Meta; compras e ingresos, de lo que el Triple Pixel atribuyó a ESE
+    anuncio desde que se creó la pieza (sumado: snapshot acumulado). Antes se
+    usaban las `conversions` de ads_table, que son las que reporta Meta."""
     ex, lz = entorno["ex"], entorno["lanzador"]
     eid = entorno["eid"]
     ex.actualizar("acme", eid, atribucion="triple_whale")
     lz.lanzar("acme", eid)
-    ad_id = ex.obtener("acme", eid)["piezas"][0]["meta_ad_id"]
-
-    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: {
-        "dominio_tienda": "acme.myshopify.com", "modelo_atribucion": "Triple Attribution", "ventana_atribucion": "lifetime"})
-    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener_llave", lambda cliente: "tw_prueba")
-
-    llamada = {}
-
-    def _metricas_falsas(**kw):
-        llamada.update(kw)
-        return [
-            {"ad_id": ad_id, "impressions": 1000, "clicks": 20, "thruplays": 100, "spend": 50.0,
-             "conversions": 1, "conversion_value": 80.0},
-            {"ad_id": ad_id, "impressions": 500, "clicks": 10, "thruplays": 40, "spend": 25.0,
-             "conversions": 1, "conversion_value": 40.0},
-            {"ad_id": "otro_anuncio_no_es_este", "impressions": 99999, "clicks": 999, "thruplays": 999,
-             "spend": 999.0, "conversions": 999, "conversion_value": 999.0},
-        ]
-    monkeypatch.setattr(lz.triple_whale, "metricas_por_anuncio", _metricas_falsas)
+    pieza = ex.obtener("acme", eid)["piezas"][0]
+    ad_id, creado = pieza["meta_ad_id"], pieza["creado_en"][:10]
+    llamadas = _tw_conectado(lz, monkeypatch)
+    _sembrar_pixel(ad_id, [(creado, 1.0, 80.0), ("2099-01-01", 1.4, 40.0), ("2000-01-01", 50.0, 9999.0)],
+                   otros=[("otro_anuncio", creado, 99.0, 99999.0)])
 
     assert lz.refrescar("acme", eid) == 3
-    assert llamada["modelo"] == "Triple Attribution" and llamada["ventana"] == "lifetime"
-    assert llamada["shop_id"] == "acme.myshopify.com"
-
+    assert llamadas == ["acme"]   # una sola puesta al día por experimento, no por pieza
     m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
-    assert m["impresiones"] == 1500 and m["clics"] == 30 and m["thruplay"] == 140
-    assert m["gasto"] == 75.0 and m["compras"] == 2 and m["ingresos"] == 120.0
-    assert m["roas"] == round(120.0 / 75.0, 4)
-    assert m["cpa"] == round(75.0 / 2, 2)
-    assert m["ctr"] == round(30 / 1500 * 100, 4)
-    assert m["cpc"] == round(75.0 / 30, 4)
-    assert m["thruplay_rate"] == round(140 / 1500, 4)
+    assert m["impresiones"] == 100 and m["gasto"] == 2.0 and m["estado_meta_texto"] == "Activo"
+    # 1 + 1,4 pedidos (modelo lineal) = 2; lo de antes de crear la pieza no cuenta.
+    assert m["compras"] == 2 and m["ingresos"] == 120.0
+    assert m["roas"] == round(120.0 / 2.0, 4) and m["cpa"] == 1.0
     assert m["fuente_ventas"] == "triple_whale"
+    # Una pieza que Triple Whale no tiene se queda con lo de Meta.
+    otra = ex.obtener("acme", eid)["piezas"][1]["metricas"]
+    assert otra["compras"] == 0 and otra["fuente_ventas"] == "ninguna"
 
 
-def test_refrescar_con_triple_whale_sin_conectar_cae_a_meta(entorno):
-    """Sin cuenta de Triple Whale conectada, el fallback a Meta Pixel debe
-    seguir funcionando exactamente igual que antes de este cambio."""
+def test_refrescar_con_triple_whale_distingue_sin_ventas_de_sin_dato(entorno, monkeypatch):
+    """Meta reporta 3 compras. Si el Pixel de Triple Whale respondió para ese
+    anuncio sin atribuirle nada, las compras son 0; si el Pixel no respondió
+    (solo hay filas de canal), se queda lo de Meta."""
+    from triple_whale import datos as tw_datos
     ex, lz = entorno["ex"], entorno["lanzador"]
     eid = entorno["eid"]
     ex.actualizar("acme", eid, atribucion="triple_whale")
     lz.lanzar("acme", eid)
+    piezas = ex.obtener("acme", eid)["piezas"]
+    hoy = piezas[0]["creado_en"][:10]
+    _tw_conectado(lz, monkeypatch)
+    monkeypatch.setattr(lz.meta_insights, "obtener_resultados", lambda ad_id, objetivo=None: {
+        "impresiones": 100, "gasto_usd": 30.0, "compras": 3, "ingresos": 90.0, "roas": 3.0,
+        "estado_meta": "ACTIVE", "estado_meta_texto": "Activo"})
+    canal = [{"canal": "facebook-ads", "ad_id": p["meta_ad_id"], "fecha": hoy, "gasto": 30} for p in piezas[:2]]
+    tw_datos.reemplazar_anuncios_canal("acme", hoy, hoy, canal)
+    # El Pixel respondió para ese día, con pedidos solo para la primera pieza.
+    tw_datos.reemplazar_anuncios_pixel("acme", hoy, hoy, [
+        {"canal": "facebook-ads", "ad_id": piezas[0]["meta_ad_id"], "fecha": hoy, "pedidos": 1, "ingresos": 45}])
+    lz.refrescar("acme", eid)
+    m = [p["metricas"] for p in ex.obtener("acme", eid)["piezas"]]
+    assert (m[0]["compras"], m[0]["ingresos"], m[0]["fuente_ventas"]) == (1, 45.0, "triple_whale")
+    assert (m[1]["compras"], m[1]["ingresos"], m[1]["fuente_ventas"]) == (0, 0.0, "ninguna")
+    # Sin respuesta del Pixel (una fila de canal nueva, sin consulta del Pixel): queda lo de Meta.
+    manana = "2099-12-31"
+    tw_datos.reemplazar_anuncios_canal("acme", manana, manana, [
+        {"canal": "facebook-ads", "ad_id": piezas[2]["meta_ad_id"], "fecha": manana, "gasto": 1}])
+    lz.refrescar("acme", eid)
+    tercera = ex.obtener("acme", eid)["piezas"][2]["metricas"]
+    assert tercera["compras"] == 3 and tercera["fuente_ventas"] == "meta"
+
+
+def test_refrescar_con_triple_whale_sin_conectar_cae_a_meta(entorno, monkeypatch):
+    """Sin Triple Whale conectado no se intenta sincronizar y el snapshot es
+    exactamente el de Meta."""
+    ex, lz = entorno["ex"], entorno["lanzador"]
+    eid = entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    monkeypatch.setattr(lz.tw_sync, "sincronizar_si_hace_falta",
+                        lambda cliente: (_ for _ in ()).throw(AssertionError("no debía sincronizar")))
     assert lz.refrescar("acme", eid) == 3
     m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
-    assert m["impresiones"] == 100 and m["gasto"] == 2.0   # valores de MetaFalsa, no de Triple Whale
+    assert m["impresiones"] == 100 and m["gasto"] == 2.0 and m["fuente_ventas"] == "ninguna"
 
 
-def test_refrescar_con_triple_whale_sin_anuncio_propio_cae_a_meta(entorno, monkeypatch):
-    """Si Triple Whale no trae ninguna fila para el ad_id de esta pieza (aún
-    no hay datos, o el anuncio es de otro canal), cae a Meta en vez de perder
-    la métrica del todo."""
+def test_refrescar_con_triple_whale_error_de_sync_registra_evento_y_usa_la_copia(entorno, monkeypatch):
     ex, lz = entorno["ex"], entorno["lanzador"]
     eid = entorno["eid"]
     ex.actualizar("acme", eid, atribucion="triple_whale")
     lz.lanzar("acme", eid)
-    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: {
-        "dominio_tienda": "acme.myshopify.com", "modelo_atribucion": "Triple Attribution", "ventana_atribucion": "lifetime"})
-    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener_llave", lambda cliente: "tw_prueba")
-    monkeypatch.setattr(lz.triple_whale, "metricas_por_anuncio", lambda **kw: [])
-    assert lz.refrescar("acme", eid) == 3
-    m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
-    assert m["impresiones"] == 100 and m["gasto"] == 2.0   # cayó a Meta
+    pieza = ex.obtener("acme", eid)["piezas"][0]
+    _tw_conectado(lz, monkeypatch)
 
-
-def test_refrescar_con_triple_whale_error_registra_evento_y_cae_a_meta(entorno, monkeypatch):
-    ex, lz = entorno["ex"], entorno["lanzador"]
-    eid = entorno["eid"]
-    ex.actualizar("acme", eid, atribucion="triple_whale")
-    lz.lanzar("acme", eid)
-    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: {
-        "dominio_tienda": "acme.myshopify.com", "modelo_atribucion": "Triple Attribution", "ventana_atribucion": "lifetime"})
-    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener_llave", lambda cliente: "tw_prueba")
-
-    def _revienta(**kw):
-        raise lz.triple_whale.ErrorTripleWhale("límite de tasa")
-    monkeypatch.setattr(lz.triple_whale, "metricas_por_anuncio", _revienta)
+    def _revienta(cliente):
+        raise lz.triple_whale.ErrorTripleWhale("límite de tasa x-api-key=tw_secreto")
+    monkeypatch.setattr(lz.tw_sync, "sincronizar_si_hace_falta", _revienta)
+    _sembrar_pixel(pieza["meta_ad_id"], [(pieza["creado_en"][:10], 3.0, 30.0)])
 
     assert lz.refrescar("acme", eid) == 3
     eventos = ex.eventos("acme", eid)
     assert any("Triple Whale" in (e.get("mensaje") or "") for e in eventos)
+    assert ex.obtener("acme", eid)["piezas"][0]["metricas"]["compras"] == 3
+
+
+def test_refrescar_con_triple_whale_en_otra_moneda_deja_roas_en_cero(entorno, monkeypatch):
+    """Ingresos de Triple Whale en USD y cuenta en COP: el ROAS no es
+    comparable (queda 0 y un aviso), el CPA sí."""
+    ex, lz = entorno["ex"], entorno["lanzador"]
+    eid = entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    pieza = ex.obtener("acme", eid)["piezas"][0]
+    _tw_conectado(lz, monkeypatch, moneda="USD")
+    _sembrar_pixel(pieza["meta_ad_id"], [(pieza["creado_en"][:10], 2.0, 50.0)])
+    lz.refrescar("acme", eid)
+    m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
+    assert m["compras"] == 2 and m["roas"] == 0.0 and m["cpa"] == 1.0
+    assert ex.obtener("acme", eid)["extra"].get("aviso_moneda") == "USD"
 
 
 def test_cambiar_estado_activa_campana_al_activar_un_pais_pausado(entorno):

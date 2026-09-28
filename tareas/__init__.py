@@ -43,4 +43,4 @@ def cargar_todas():
     """Importa los módulos con tareas reales. Se llama desde worker.main(), no
     al importar el paquete, para que los tests puedan registrar tareas falsas
     sin arrastrar proveedores externos."""
-    from tareas import director, doctrina, edicion, experimentos, final_edition, flowplus, investigacion, meta, musica, nicho, organico, referentes, sprints, swap, tiendas  # noqa: F401
+    from tareas import director, doctrina, edicion, experimentos, final_edition, flowplus, investigacion, meta, musica, nicho, organico, referentes, sprints, swap, tiendas, triple_whale  # noqa: F401

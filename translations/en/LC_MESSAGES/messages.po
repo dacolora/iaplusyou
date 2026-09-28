@@ -97,6 +97,10 @@ msgid "$0.15 en 4k · $0.18 en 8k"
 msgstr "$0.15 at 4k · $0.18 at 8k"
 
 #, python-format
+msgid "%% del gasto"
+msgstr "%% of spend"
+
+#, python-format
 msgid "%(accion)s (falló al ejecutar, quedó pendiente de reintento): %(error)s"
 msgstr "%(accion)s (failed to execute, left pending retry): %(error)s"
 
@@ -197,6 +201,18 @@ msgid "%(n)s actualizado(s)"
 msgstr "%(n)s updated"
 
 #, python-format
+msgid "%(n)s anuncio(s)"
+msgstr "%(n)s ad(s)"
+
+#, python-format
+msgid "%(n)s anuncio(s) de Meta no llevan los parámetros de Triple Whale (%(pct)s%% del gasto): sus ventas pueden quedar sin atribuir."
+msgstr "%(n)s Meta ad(s) don't carry the Triple Whale parameters (%(pct)s%% of spend): their sales may go unattributed."
+
+#, python-format
+msgid "%(n)s anuncio(s) que funcionan se están cansando: es el momento de hacer variantes."
+msgstr "%(n)s working ad(s) are fatiguing: it's time to make variants."
+
+#, python-format
 msgid "%(n)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas."
 msgstr "%(n)s ads that already worked. They don't load in this project until you ask for them."
 
@@ -253,6 +269,10 @@ msgid "%(n)s ganador(es)"
 msgstr "%(n)s winner(s)"
 
 #, python-format
+msgid "%(n)s impresiones"
+msgstr "%(n)s impressions"
+
+#, python-format
 msgid "%(n)s logo(s) guardado(s). Se usan como referencia en cada generación de FlowPlus."
 msgstr "%(n)s logo(s) saved. They're used as reference in every FlowPlus generation."
 
@@ -275,6 +295,10 @@ msgstr "%(n)s words/s · hook: %(hook)s"
 #, python-format
 msgid "%(n)s pedido(s) listos para el cliente."
 msgstr "%(n)s request(s) ready for the client."
+
+#, python-format
+msgid "%(n)s pedidos"
+msgstr "%(n)s orders"
 
 #, python-format
 msgid "%(n)s personas"
@@ -453,6 +477,18 @@ msgstr[0] "%(num)s ad"
 msgstr[1] "%(num)s ads"
 
 #, python-format
+msgid "%(num)s anuncio con datos"
+msgid_plural "%(num)s anuncios con datos"
+msgstr[0] "%(num)s ad with data"
+msgstr[1] "%(num)s ads with data"
+
+#, python-format
+msgid "%(num)s anuncio ganador: úsalo como base para los próximos."
+msgid_plural "%(num)s anuncios ganadores: úsalos como base para los próximos."
+msgstr[0] "%(num)s winning ad: use it as the base for the next ones."
+msgstr[1] "%(num)s winning ads: use them as the base for the next ones."
+
+#, python-format
 msgid "%(num)s cobro(s) a proveedores →"
 msgid_plural "%(num)s cobro(s) a proveedores →"
 msgstr[0] "%(num)s charge to providers →"
@@ -531,6 +567,10 @@ msgstr[1] "%(num)s references"
 #, python-format
 msgid "%(palabras)s palabras · unos %(segundos)s s leído completo a ritmo natural."
 msgstr "%(palabras)s words · about %(segundos)s s read in full at a natural pace."
+
+#, python-format
+msgid "%(pct)s del gasto"
+msgstr "%(pct)s of spend"
 
 #, python-format
 msgid "%(plural)s (%(n)s)"
@@ -659,6 +699,9 @@ msgstr "0 pieces selected"
 msgid "0%% · 0s"
 msgstr "0%% · 0s"
 
+msgid "1 día"
+msgstr "1 day"
+
 msgid "1 línea sin cambios"
 msgstr "1 unchanged line"
 
@@ -671,17 +714,20 @@ msgstr "1 · Where"
 msgid "12 de septiembre de 2026"
 msgstr "September 12, 2026"
 
+msgid "14 días"
+msgstr "14 days"
+
 msgid "2 · Cuánto"
 msgstr "2 · How much"
+
+msgid "28 días"
+msgstr "28 days"
 
 msgid "3 · Revisar"
 msgstr "3 · Review"
 
 msgid "3-6, distintos ángulos"
 msgstr "3-6, different angles"
-
-msgid "30 días"
-msgstr "30 days"
 
 msgid "60 s de música a medida. No nombres artistas, canciones ni sellos: ElevenLabs lo rechaza."
 msgstr "60 s of custom music. Don't name artists, songs, or labels: ElevenLabs rejects it."
@@ -905,6 +951,15 @@ msgstr "This is now done with an experiment: create one (or use one being drafte
 msgid "Ahora se usa el de fábrica."
 msgstr "The default one is being used now."
 
+msgid "Ajustes"
+msgstr "Settings"
+
+msgid "Ajustes guardados. Volvemos a traer las métricas con la nueva atribución."
+msgstr "Settings saved. We're pulling the metrics again with the new attribution."
+
+msgid "Al cambiar la atribución o la moneda se borran las métricas copiadas y se vuelven a traer los 90 días."
+msgstr "Changing the attribution or the currency deletes the copied metrics and pulls the 90 days again."
+
 msgid "Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro."
 msgstr "When connecting, choose that Page: its page token (<code>page_id</code>) gets saved to publish videos on the wall."
 
@@ -913,6 +968,12 @@ msgstr "When reassembling, Claude gets this list to fix it."
 
 msgid "Al volver, la tienda queda conectada y se sincroniza sola cada 6 h."
 msgstr "When you come back, the store is connected and syncs on its own every 6 h."
+
+msgid "Alcance barato"
+msgstr "Cheap reach"
+
+msgid "Alcance caro"
+msgstr "Expensive reach"
 
 msgid "Alertas"
 msgstr "Alerts"
@@ -971,15 +1032,27 @@ msgstr "Before launching it: what the rules see (free) and, if you ask for it, C
 msgid "Anthropic (guiones y prompts)"
 msgstr "Anthropic (scripts and prompts)"
 
+msgid "Anuncio"
+msgstr "Ad"
+
 #, python-format
 msgid "Anuncio creado: %(nombre)s (%(pais)s)"
 msgstr "Ad created: %(nombre)s (%(pais)s)"
+
+msgid "Anuncio por anuncio"
+msgstr "Ad by ad"
+
+msgid "Anuncios nuevos para probar"
+msgstr "New ads to test"
 
 msgid "Anuncios sueltos (anteriores)"
 msgstr "Standalone ads (previous)"
 
 msgid "Apartados de Configuración"
 msgstr "Settings sections"
+
+msgid "Apenas lo conectes traemos los últimos 90 días: gasto, impresiones, clics, vistas de 3 segundos, ThruPlays, pedidos e ingresos atribuidos por el Triple Pixel, por anuncio y por día, más las ventas de la tienda. Con eso cada anuncio recibe un veredicto (ganador, prometedor, perdedor) y un diagnóstico: gancho, retención, clic, conversión o fatiga."
+msgstr "As soon as you connect it we pull the last 90 days: spend, impressions, clicks, 3-second views, ThruPlays, orders and revenue attributed by the Triple Pixel, per ad and per day, plus the store's sales. With that every ad gets a verdict (winner, promising, loser) and a diagnosis: hook, hold, click, conversion or fatigue."
 
 msgid "Apify (Nicho: reseñas/comentarios · Referentes: Ad Library)"
 msgstr "Apify (Niche: reviews/comments · Swipe file: Ad Library)"
@@ -1073,6 +1146,10 @@ msgstr "Let Creatv know to finish it by hand"
 msgid "Avisos por correo desactivados."
 msgstr "Email notifications turned off."
 
+#, python-format
+msgid "Basada en: %(anuncios)s"
+msgstr "Based on: %(anuncios)s"
+
 msgid "Biblioteca de copycoders"
 msgstr "Copycoders library"
 
@@ -1108,6 +1185,10 @@ msgstr "Brazil"
 msgid "Brazo (hombro→codo)"
 msgstr "Arm (shoulder→elbow)"
 
+#, python-format
+msgid "Buenas señales (%(senales)s), aún sin ventas suficientes para llamarlo ganador."
+msgstr "Good signals (%(senales)s), but not enough sales yet to call it a winner."
+
 msgid "Busca videos por palabras clave y trae sus comentarios a un estudio de Nicho. Es una llave distinta del OAuth de publicación."
 msgstr "Searches videos by keyword and brings their comments into a Niche study. It's a different key from the publishing OAuth."
 
@@ -1135,6 +1216,10 @@ msgid "CPC máximo"
 msgstr "Maximum CPC"
 
 #, python-format
+msgid "CPM %(cpm)s"
+msgstr "CPM %(cpm)s"
+
+#, python-format
 msgid "CPM %(valor)s %(moneda)s"
 msgstr "CPM %(valor)s %(moneda)s"
 
@@ -1147,6 +1232,9 @@ msgstr "CTR %(ctr)s%% < %(ctr_min)s%%"
 
 msgid "CTR mínimo (%)"
 msgstr "Minimum CTR (%)"
+
+msgid "Cada anuncio"
+msgstr "Every ad"
 
 msgid "Cada casilla es un anuncio (pieza × país). Las finales solo van a su país."
 msgstr "Each checkbox is an ad (piece × country). Final cuts only go to their own country."
@@ -1207,6 +1295,9 @@ msgstr "Change the product in a photo or video"
 msgid "Cambiar la configuración"
 msgstr "Change the configuration"
 
+msgid "Cambiar moneda o atribución"
+msgstr "Change currency or attribution"
+
 msgid "Cambiar presupuesto"
 msgstr "Change budget"
 
@@ -1248,6 +1339,9 @@ msgstr "Non-updatable fields: %(campos)s"
 msgid "Campos no permitidos: %(campos)s"
 msgstr "Fields not allowed: %(campos)s"
 
+msgid "Canal"
+msgstr "Channel"
+
 msgid "Canales orgánicos"
 msgstr "Organic channels"
 
@@ -1268,6 +1362,9 @@ msgstr "Upload your catalog"
 
 msgid "Cargando el prompt…"
 msgstr "Loading the prompt…"
+
+msgid "Cargando las métricas de Triple Whale…"
+msgstr "Loading the Triple Whale metrics…"
 
 msgid "Cargando tus guiones…"
 msgstr "Loading your scripts…"
@@ -1343,11 +1440,17 @@ msgstr "Claude is responding; wait for its reply before sending another message.
 msgid "Claude está revisando el prompt…"
 msgstr "Claude is reviewing the prompt…"
 
+msgid "Claude mira tus ganadores y tus perdedores (imagen, texto y números), explica qué patrón se repite y propone anuncios nuevos basados en lo que ya vende. No genera nada: cada idea llega a Crear para que decidas."
+msgstr "Claude looks at your winners and your losers (image, text and numbers), explains which pattern repeats and suggests new ads based on what already sells. It doesn't generate anything: each idea goes to Create for you to decide."
+
 msgid "Claude no devolvió JSON."
 msgstr "Claude didn't return JSON."
 
 msgid "Claude no devolvió pedidos."
 msgstr "Claude didn't return any requests."
+
+msgid "Claude no devolvió un análisis que se pueda usar. Puedes intentarlo otra vez."
+msgstr "Claude didn't return a usable analysis. You can try again."
 
 msgid "Claude no encontró líneas de guion en el texto. Revisa que pegaste el guion completo."
 msgstr "Claude didn't find any script lines in the text. Check that you pasted the whole script."
@@ -1383,8 +1486,14 @@ msgstr "Claude is still answering your previous message."
 msgid "Clave secreta de la app"
 msgstr "App secret"
 
+msgid "Clic sin compra"
+msgstr "Clicks without sales"
+
 msgid "Clics"
 msgstr "Clicks"
+
+msgid "Clientes nuevos"
+msgstr "New customers"
 
 msgid "Clientes potenciales"
 msgstr "Leads"
@@ -1493,20 +1602,17 @@ msgstr "Connect Meta in Settings to test"
 msgid "Conecta Notion primero."
 msgstr "Connect Notion first."
 
+msgid "Conecta Triple Whale para evaluar tu contenido"
+msgstr "Connect Triple Whale to evaluate your content"
+
+msgid "Conecta Triple Whale para traer las métricas de todos tus anuncios y de tu tienda (90 días al conectar, y al día cada 2 horas), evaluar tu contenido en la pestaña Triple Whale y, si quieres, decidir los experimentos con sus ventas atribuidas en lugar de Meta Pixel o la tienda."
+msgstr "Connect Triple Whale to pull the metrics of all your ads and your store (90 days when you connect, then kept up to date every 2 hours), evaluate your content in the Triple Whale tab and, if you want, decide experiments with its attributed sales instead of Meta Pixel or the store."
+
 msgid "Conecta tu cuenta de Meta"
 msgstr "Connect your Meta account"
 
 msgid "Conecta tu cuenta de Meta, arma la campaña con lo que generaste y publica. Siempre en pausa al crearse; tú decides cuándo gasta y ves los resultados aquí."
 msgstr "Connect your Meta account, build the campaign with what you generated and publish it. It's always paused when created; you decide when it spends and you see the results here."
-
-msgid ""
-"Conecta tu cuenta de Triple Whale para traer métricas de anuncios por canal y\n"
-"  modelo de atribución. Los experimentos pueden usar estas métricas en lugar de\n"
-"  los datos de Meta Pixel o la tienda para decidir ganadores y perdedores."
-msgstr ""
-"Connect your Triple Whale account to bring in ad metrics by channel and\n"
-"  attribution model. Experiments can use these metrics instead of\n"
-"  Meta Pixel or store data to decide winners and losers."
 
 msgid ""
 "Conecta tu tienda para traer el catálogo solo (cada 6 h) y, en Shopify y\n"
@@ -1540,6 +1646,9 @@ msgstr "Connect with MercadoLibre"
 msgid "Conectar con Meta"
 msgstr "Connect with Meta"
 
+msgid "Conectar en Configuración →"
+msgstr "Connect in Settings →"
+
 msgid "Conectar la agencia →"
 msgstr "Connect the agency →"
 
@@ -1554,6 +1663,9 @@ msgstr "Connect your store"
 
 msgid "Conexiones"
 msgstr "Connections"
+
+msgid "Conexión con Triple Whale correcta."
+msgstr "Triple Whale connection works."
 
 msgid "Configuración"
 msgstr "Settings"
@@ -1621,6 +1733,9 @@ msgstr "Password changed. Other sessions open with the previous one were closed.
 
 msgid "Control total. Media hora."
 msgstr "Full control. Half an hour."
+
+msgid "Convierte"
+msgstr "Converts"
 
 #, python-format
 msgid "Copia el <code>token_tiktok.json</code> resultante a <code>clientes/%(cliente)s/</code> en el servidor."
@@ -1716,6 +1831,9 @@ msgstr "New email"
 
 msgid "Costo"
 msgstr "Cost"
+
+msgid "Costo por venta"
+msgstr "Cost per sale"
 
 msgid "Crea la app (tipo <strong>Negocio</strong>) y elige tu <strong>portafolio comercial</strong>."
 msgstr "Create the app (type <strong>Business</strong>) and choose your <strong>business portfolio</strong>."
@@ -1880,6 +1998,10 @@ msgstr "Copy it as YOUTUBE_API_KEY in the server's .env and restart both service
 msgid "Deja al menos una casilla marcada en la cuadrícula."
 msgstr "Leave at least one checkbox selected in the grid."
 
+#, python-format
+msgid "Del %(desde)s al %(hasta)s, contra los %(n)s días anteriores"
+msgstr "From %(desde)s to %(hasta)s, against the previous %(n)s days"
+
 msgid "Del catálogo"
 msgstr "From the catalog"
 
@@ -1994,6 +2116,9 @@ msgstr "From Notion"
 msgid "Desde referencias"
 msgstr "From references"
 
+msgid "Después, un análisis con IA mira tus ganadores y tus perdedores, explica qué patrón se repite y propone anuncios nuevos que puedes llevar a Crear con un clic."
+msgstr "Then an AI analysis looks at your winners and your losers, explains which pattern repeats and suggests new ads you can take to Create with one click."
+
 msgid "Detalle"
 msgstr "Detail"
 
@@ -2028,8 +2153,8 @@ msgstr "Doctrine: not reviewed"
 msgid "Dominio de la tienda"
 msgstr "Store domain"
 
-msgid "Dominio de la tienda (Shopify)"
-msgstr "Store domain (Shopify)"
+msgid "Dominio de la tienda (el shop-id de Triple Whale)"
+msgstr "Store domain (the Triple Whale shop-id)"
 
 msgid "Duplicar guion"
 msgstr "Duplicate script"
@@ -2042,6 +2167,9 @@ msgstr "Target duration in seconds (empty = full script)"
 
 msgid "Duración que sale marcada en Crear"
 msgstr "Duration that comes pre-selected in Create"
+
+msgid "Día a día"
+msgstr "Day by day"
 
 msgid "Días"
 msgstr "Days"
@@ -2056,6 +2184,9 @@ msgstr ""
 "  organic content, with no ad spend: Instagram Reels, Facebook (Page), TikTok and\n"
 "  YouTube Shorts. Only connected channels are offered; publishing always\n"
 "  asks for your click (or the engine's proposal, with the text in view)."
+
+msgid "Dónde se va el gasto"
+msgstr "Where the spend goes"
 
 msgid "E1 líneas por clip"
 msgstr "E1 lines per clip"
@@ -2087,8 +2218,16 @@ msgstr "E.g.: “I've worn them for three winters and they're still just as warm
 msgid "Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos..."
 msgstr "E.g.: warm palette, earth tones, sunset lighting, rustic settings..."
 
+#, python-format
+msgid "El %(pct)s%% del gasto se fue en anuncios perdedores: pausarlos libera presupuesto para los ganadores."
+msgstr "%(pct)s%% of spend went to losing ads: pausing them frees budget for the winners."
+
 msgid "El JSON no trae la lista «puntos»."
 msgstr "The JSON doesn't include the “points” list."
+
+#, python-format
+msgid "El MER de la tienda cayó %(pct)s%% frente al periodo anterior."
+msgstr "The store's MER dropped %(pct)s%% against the previous period."
 
 msgid "El Pixel está disparando."
 msgstr "The Pixel is firing."
@@ -2162,6 +2301,9 @@ msgstr ""
 
 msgid "El documento sale cuando la versión está armada."
 msgstr "The document is available once the version is assembled."
+
+msgid "El dominio es el <code>shop-id</code> que aparece en la URL de Triple Whale (por ejemplo <code>?shop-id=mitienda.myshopify.com</code>)."
+msgstr "The domain is the <code>shop-id</code> shown in the Triple Whale URL (for example <code>?shop-id=mystore.myshopify.com</code>)."
 
 #, python-format
 msgid "El enlace vence en %(vence)s y sirve una sola vez. Si no pediste cambiar tu contraseña, ignora este correo: tu cuenta sigue igual."
@@ -2455,6 +2597,9 @@ msgstr ""
 "        Give it the <code>read_products</code> and <code>read_orders</code> permissions, install it and copy the\n"
 "        <em>Admin API access token</em> (shown only once)."
 
+msgid "En Triple Whale ve a <a href=\"https://app.triplewhale.com/api-keys\" target=\"_blank\" rel=\"noopener\">Settings › API Keys</a> y genera una llave con los permisos de lectura (consultas SQL / Data Out, Summary Page y Pixel Attribution). Se muestra una sola vez: cópiala."
+msgstr "In Triple Whale go to <a href=\"https://app.triplewhale.com/api-keys\" target=\"_blank\" rel=\"noopener\">Settings › API Keys</a> and generate a key with the read permissions (SQL queries / Data Out, Summary Page and Pixel Attribution). It's shown only once: copy it."
+
 msgid "En WordPress ve a <em>WooCommerce › Ajustes › Avanzado › REST API</em> y pulsa <em>Añadir clave</em>."
 msgstr "In WordPress go to <em>WooCommerce › Settings › Advanced › REST API</em> and press <em>Add key</em>."
 
@@ -2576,10 +2721,6 @@ msgstr "Send me the link"
 msgid "Error"
 msgstr "Error"
 
-#, python-format
-msgid "Error al conectar: %(error)s"
-msgstr "Error connecting: %(error)s"
-
 msgid "Error al subir; recarga la página."
 msgstr "Upload error; reload the page."
 
@@ -2620,6 +2761,9 @@ msgstr "That Page has no Instagram linked: Reels won't publish until you link it
 msgid "Esa cuenta publicitaria no aparece entre las de tu portafolio; vuelve a buscar."
 msgstr "That ad account doesn't show up among your portfolio's; search again."
 
+msgid "Esa evaluación ya no existe."
+msgstr "That evaluation no longer exists."
+
 #, python-format
 msgid "Esa final es de %(pais)s; no se puede meter a otro país."
 msgstr "That final is for %(pais)s; it can't be put into another country."
@@ -2629,6 +2773,9 @@ msgstr "That final cut is being produced; wait for it to finish."
 
 msgid "Esa final ya no existe."
 msgstr "That final cut no longer exists."
+
+msgid "Esa idea no tiene prompt."
+msgstr "That idea has no prompt."
 
 msgid "Esa opción todavía no está disponible: Creatv está terminando de activarla."
 msgstr "That option isn't available yet: Creatv is still finishing activating it."
@@ -2753,8 +2900,14 @@ msgstr "Write text with AI"
 msgid "Ese anuncio no está en error."
 msgstr "That ad isn't in an error state."
 
+msgid "Ese anuncio no tiene miniatura: solo se guardan anuncios que Meta dejó ver."
+msgstr "That ad has no thumbnail: only ads Meta let us see can be saved."
+
 msgid "Ese anuncio todavía no está publicado en Meta."
 msgstr "That ad isn't published on Meta yet."
+
+msgid "Ese anuncio ya estaba en Referentes."
+msgstr "That ad was already in the Swipe file."
 
 msgid "Ese correo no parece válido."
 msgstr "That email doesn't look valid."
@@ -2968,8 +3121,33 @@ msgstr "This deletes the product's folder and all its photos from disk. It can't
 msgid "Está tardando más de lo normal. Puede que siga trabajando: revisa otra vez en un momento."
 msgstr "This is taking longer than usual. It may still be working: check again in a moment."
 
+msgid "Evaluación con IA"
+msgstr "AI evaluation"
+
+msgid "Evaluación de anuncios (IA)"
+msgstr "Ad evaluation (AI)"
+
+#, python-format
+msgid "Evaluación del %(desde)s al %(hasta)s · %(precio)s"
+msgstr "Evaluation from %(desde)s to %(hasta)s · %(precio)s"
+
+#, python-format
+msgid "Evaluación lista: %(n)s idea(s) de anuncios nuevos."
+msgstr "Evaluation ready: %(n)s new ad idea(s)."
+
+#, python-format
+msgid "Evaluando %(n)s anuncio(s) con IA…"
+msgstr "Evaluating %(n)s ad(s) with AI…"
+
+msgid "Evaluando con IA…"
+msgstr "Evaluating with AI…"
+
 msgid "Evaluando…"
 msgstr "Evaluating…"
+
+#, python-format
+msgid "Evaluar %(n)s anuncio(s) con IA · %(precio)s"
+msgstr "Evaluate %(n)s ad(s) with AI · %(precio)s"
 
 msgid "Evaluar ahora"
 msgstr "Evaluate now"
@@ -3031,6 +3209,9 @@ msgstr "Missing <code>FLASK_SECRET_KEY</code> in the server's <code>.env</code>:
 msgid "Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de tiendas. Ponla y reinicia para habilitar estos formularios."
 msgstr "Missing <code>FLASK_SECRET_KEY</code> in the server's <code>.env</code>: without it store credentials can't be saved. Set it and restart to enable these forms."
 
+msgid "Falta FLASK_SECRET_KEY en el .env del servidor: sin ella no se pueden guardar credenciales de Triple Whale."
+msgstr "FLASK_SECRET_KEY is missing from the server .env: without it Triple Whale credentials can't be saved."
+
 msgid "Falta FLASK_SECRET_KEY en el .env del servidor: sin ella no se pueden guardar las credenciales de una tienda."
 msgstr "Missing FLASK_SECRET_KEY in the server's .env: without it a store's credentials can't be saved."
 
@@ -3074,6 +3255,9 @@ msgstr "Missing data: name, objective, at least one country, days (1–90), cap,
 msgid "Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."
 msgstr "Missing data: objective, at least one country, days (1–90), cap, ages (13–65) and a http(s) destination URL."
 
+msgid "Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."
+msgstr "The key or the store domain is missing (for example mystore.myshopify.com)."
+
 #, python-format
 msgid "Faltan los puntos %(puntos)s."
 msgstr "Missing points: %(puntos)s."
@@ -3091,6 +3275,9 @@ msgstr "Missing:"
 
 msgid "Fecha"
 msgstr "Date"
+
+msgid "Filtrar por veredicto"
+msgstr "Filter by verdict"
 
 #, python-format
 msgid "Final %(idioma)s_%(pais)s"
@@ -3122,6 +3309,10 @@ msgstr "Unsupported format. Use jpg, jpeg, png, webp, mp4, mov or webm."
 
 msgid "Formato no válido."
 msgstr "Invalid format."
+
+#, python-format
+msgid "Formato: %(f)s"
+msgstr "Format: %(f)s"
 
 msgid "Fotos"
 msgstr "Photos"
@@ -3155,6 +3346,9 @@ msgstr "Style strength (0-1)"
 msgid "Gafas"
 msgstr "Glasses"
 
+msgid "Ganador"
+msgstr "Winner"
+
 #, python-format
 msgid "Ganador en «%(experimento)s»: %(pieza)s (%(pais)s)"
 msgstr "Winner in “%(experimento)s”: %(pieza)s (%(pais)s)"
@@ -3169,6 +3363,22 @@ msgstr "Winners posted"
 msgid "Gancho"
 msgstr "Hook"
 
+msgid "Gancho débil"
+msgstr "Weak hook"
+
+msgid "Gancho fuerte"
+msgstr "Strong hook"
+
+msgid "Gancho · retención"
+msgstr "Hook · hold"
+
+#, python-format
+msgid "Gancho: %(g)s"
+msgstr "Hook: %(g)s"
+
+msgid "Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos."
+msgstr "Hook: 3-second views / impressions. Hold: ThruPlays / 3-second views."
+
 msgid "Gasto"
 msgstr "Spend"
 
@@ -3177,6 +3387,9 @@ msgstr "This month's spend"
 
 msgid "Gasto del mes (US$)"
 msgstr "Spend this month (US$)"
+
+msgid "Gasto en publicidad"
+msgstr "Ad spend"
 
 msgid "Gasto mínimo (x presupuesto diario)"
 msgstr "Minimum spend (x daily budget)"
@@ -3189,6 +3402,10 @@ msgstr "Real spend on AI APIs"
 
 msgid "Gasto y ventas del mes en curso (Meta Pixel, tienda y Triple Whale si está conectado), tus piezas ganadoras y lo que necesita tu atención. Se actualiza con cada refresco de métricas del worker."
 msgstr "This month's spend and sales (Meta Pixel, store and Triple Whale if connected), your winning pieces and what needs your attention. Updates with every metrics refresh from the worker."
+
+#, python-format
+msgid "Gastó lo de %(n)s ventas al costo por venta de la cuenta y su ROAS es %(roas)s× (meta %(meta)s×)."
+msgstr "It spent the cost of %(n)s sales at the account's cost per sale and its ROAS is %(roas)s× (target %(meta)s×)."
 
 msgid "Gemini Omni Flash Edit"
 msgstr "Gemini Omni Flash Edit"
@@ -3298,6 +3515,9 @@ msgstr "Stores every generated image and video and gives them a permanent public
 msgid "Guarda o cancela tu edición para aprobar."
 msgstr "Save or cancel your edit to approve."
 
+msgid "Guardado en Referentes: desde ahí puedes recrearlo con tu producto o usarlo en un sprint."
+msgstr "Saved to the Swipe file: from there you can recreate it with your product or use it in a sprint."
+
 msgid "Guardado: tu edición es ahora el prompt vigente."
 msgstr "Saved: your edit is now the current prompt."
 
@@ -3330,6 +3550,9 @@ msgstr "Save password"
 
 msgid "Guardar correo"
 msgstr "Save email"
+
+msgid "Guardar en Referentes"
+msgstr "Save to Swipe file"
 
 msgid "Guardar identidad de marca"
 msgstr "Save brand identity"
@@ -3390,6 +3613,12 @@ msgstr "Scripts to clips (Flow Plus)"
 msgid "Guía de estilo (editable a mano, se usa en cada generación de prompts)"
 msgstr "Style guide (hand-editable, used in every prompt generation)"
 
+msgid "Hacen clic pero no compran: revisa que la página cumpla lo que promete el anuncio, el precio y la oferta."
+msgstr "People click but don't buy: check that the page delivers what the ad promises, the price and the offer."
+
+msgid "Hacen falta al menos dos anuncios con datos en este periodo para evaluar con IA."
+msgstr "You need at least two ads with data in this period to evaluate with AI."
+
 msgid "Hasta"
 msgstr "To"
 
@@ -3405,6 +3634,10 @@ msgstr "There are %(usos)s result(s) already generated with this product: they w
 
 msgid "Hecho con Creatv Machine"
 msgstr "Made with Creatv Machine"
+
+#, python-format
+msgid "Hecho en Creatv · %(exp)s"
+msgstr "Made in Creatv · %(exp)s"
 
 msgid "Hechos reales que Claude puede decir en ideas, guiones y captions de este producto, cifras incluidas."
 msgstr "Real facts Claude can state in this product's ideas, scripts and captions, figures included."
@@ -3479,6 +3712,9 @@ msgstr "Your ad account's ID (optional, starts with act_)"
 
 msgid "ID de tu portafolio comercial"
 msgstr "Your business portfolio's ID"
+
+msgid "Idea cargada en Crear: ajusta lo que quieras y genera."
+msgstr "Idea loaded in Create: tweak what you want and generate."
 
 msgid "Ideas de sprint (IA)"
 msgstr "Sprint ideas (AI)"
@@ -3591,6 +3827,15 @@ msgstr "Operations and development report"
 msgid "Ingresos"
 msgstr "Revenue"
 
+msgid "Ingresos atribuidos"
+msgstr "Attributed revenue"
+
+msgid "Ingresos de la tienda"
+msgstr "Store revenue"
+
+msgid "Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos"
+msgstr "Revenue the Triple Pixel attributes to the ads with the chosen model and window"
+
 msgid "Inicia sesión con la cuenta de la tienda y autoriza la app: no se pega ningún token."
 msgstr "Log in with the store's account and authorize the app: no token gets pasted."
 
@@ -3678,6 +3923,9 @@ msgstr "The purchase URL has to start with http:// or https:// (or be wa.me/…)
 msgid "La URL de compra tiene que empezar por http:// o https://."
 msgstr "The purchase URL has to start with http:// or https://."
 
+msgid "La URL del anuncio no lleva los parámetros de Triple Whale: sus ventas pueden no atribuirse."
+msgstr "The ad URL doesn't carry the Triple Whale parameters: its sales may not be attributed."
+
 msgid "La app de Meta necesita el permiso <code>instagram_content_publish</code> aprobado en <strong>App Review</strong>; sin él Meta rechaza la publicación."
 msgstr "The Meta app needs the <code>instagram_content_publish</code> permission approved in <strong>App Review</strong>; without it Meta rejects the post."
 
@@ -3699,6 +3947,10 @@ msgstr "The figure “%(cifra)s” in the caption isn't in the product's data or
 
 msgid "La conexión con Meta está rota (token vencido o permisos retirados): vuelve a conectar en Configuración."
 msgstr "The connection with Meta is broken (expired token or withdrawn permissions): reconnect in Settings."
+
+#, python-format
+msgid "La conexión con Triple Whale falló: %(error)s"
+msgstr "The Triple Whale connection failed: %(error)s"
 
 msgid "La conexión de agencia no está activa ahora mismo"
 msgstr "The agency connection isn't active right now"
@@ -3735,6 +3987,9 @@ msgstr "The engine queued it when it declared it the winner"
 msgid "La escena ocurre en ESTE lugar: conserva paredes, piso, muebles, decoración y luz tal como se ven en las referencias. El producto y las personas se integran ahí; no reconstruyas ni redecores el espacio."
 msgstr "The scene takes place in THIS place: keep walls, floor, furniture, decoration and light exactly as seen in the references. The product and the people blend in there; do not rebuild or redecorate the space."
 
+msgid "La gente se va antes del final: acorta el video o sube el ritmo del cuerpo."
+msgstr "People leave before the end: shorten the video or speed up the body."
+
 msgid "La importación no trae archivo ni URL."
 msgstr "The import has no file or URL."
 
@@ -3743,6 +3998,9 @@ msgstr "The reading is confirmed. To change it, duplicate the script: the copy c
 
 msgid "La llave de Notion no sirve; vuelve a conectarla."
 msgstr "The Notion key doesn't work; reconnect it."
+
+msgid "La llave se guarda cifrada y solo se usa para leer. Probamos la conexión antes de guardarla."
+msgstr "The key is stored encrypted and only used to read. We test the connection before saving it."
 
 msgid "La línea 1 (el hook) no se puede quitar."
 msgstr "Line 1 (the hook) can't be removed."
@@ -3758,6 +4016,9 @@ msgstr "Ad spend is charged to your ad account; the API itself is free."
 
 msgid "La plataforma ya recibió el video; falta confirmar que terminó de procesarlo. Se confirma solo."
 msgstr "The platform already received the video; it still needs to confirm it finished processing it. It confirms itself."
+
+msgid "La primera copia tarda unos minutos. Cuando termine, esta pestaña se recarga sola con la evaluación de cada anuncio."
+msgstr "The first copy takes a few minutes. When it's done, this tab reloads by itself with the evaluation of each ad."
 
 msgid "La prioridad va de 0 a 100; no la guardé."
 msgstr "Priority goes from 0 to 100; I didn't save it."
@@ -3814,6 +4075,14 @@ msgstr "The %(tipo)s store “%(nombre)s” stopped syncing%(detalle)s. Reconnec
 #, python-format
 msgid "La tienda «%(nombre)s» dejó de sincronizar"
 msgstr "The store “%(nombre)s” stopped syncing"
+
+#, python-format
+msgid "La última copia falló: %(error)s"
+msgstr "The last copy failed: %(error)s"
+
+#, python-format
+msgid "La última evaluación falló: %(error)s"
+msgstr "The last evaluation failed: %(error)s"
 
 #, python-format
 msgid "La última revisión no se pudo terminar: %(error)s"
@@ -3895,6 +4164,10 @@ msgstr "Ready to publish again."
 msgid "Listo."
 msgstr "Done."
 
+#, python-format
+msgid "Listo: %(n)s anuncio(s) y %(dias)s día(s) de la tienda, del %(desde)s al %(hasta)s."
+msgstr "Done: %(n)s ad(s) and %(dias)s day(s) of store data, from %(desde)s to %(hasta)s."
+
 msgid "Listo: Claude no lo volverá a pedir."
 msgstr "Done: Claude won't ask for it again."
 
@@ -3927,20 +4200,17 @@ msgstr "Triple Whale API key"
 msgid "Llave de la integración"
 msgstr "Integration key"
 
-msgid "Llave inválida o revocada"
-msgstr "Invalid or revoked key"
-
-msgid "Llave inválida, revocada o sin scope 'Data Out'."
-msgstr "Invalid or revoked key, or missing the 'Data Out' scope."
-
-msgid "Llave y dominio de tienda son requeridos."
-msgstr "API key and store domain are required."
-
 msgid "Llaves y conexiones del proyecto, tu cuenta, tiendas, canales y gasto."
 msgstr "Keys and connections for the project, your account, stores, channels and spend."
 
+msgid "Llegar a la gente sale caro (CPM alto): la audiencia está saturada o el anuncio no engancha."
+msgstr "Reaching people is expensive (high CPM): the audience is saturated or the ad doesn't hook."
+
 msgid "Llegaron de un archivo, una URL o tu tienda pero todavía no tienen fotos en el catálogo, así que Crear no puede usarlos. Súbeles fotos (o créalos con las fotos de la tienda) y pasan a la lista de productos."
 msgstr "They came from a file, a URL or your store but don't have photos in the catalog yet, so Create can't use them. Upload photos for them (or create them with the store's photos) and they move to the product list."
+
+msgid "Llevar a Crear →"
+msgstr "Take to Create →"
 
 msgid "Llevar a final edition"
 msgstr "Take to Final edition"
@@ -3970,8 +4240,17 @@ msgstr "What the AI writes and this project's ads come out in this language."
 msgid "Lo que faltó en los datos cuando Claude escribió anuncios de este producto. Cada respuesta queda como prueba y mejora lo que venga."
 msgstr "What was missing from the data when Claude wrote ads for this product. Each answer is saved as proof and improves what comes next."
 
+msgid "Lo que hace ganar"
+msgstr "What makes them win"
+
+msgid "Lo que hace perder"
+msgstr "What makes them lose"
+
 msgid "Lo que le falta a esta matriz"
 msgstr "What this matrix is missing"
+
+msgid "Lo que necesita tu atención"
+msgstr "What needs your attention"
 
 msgid "Lo que nunca debe cambiar en este activo"
 msgstr "What must never change in this asset"
@@ -3999,6 +4278,9 @@ msgstr "The ones with higher priority go first in the test loop"
 
 msgid "Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final."
 msgstr "Models perform best up to 15 s; for something longer, generate two pieces and join them later in the final edition."
+
+msgid "Los primeros 3 segundos no detienen el scroll: prueba otro arranque y deja el resto igual."
+msgstr "The first 3 seconds don't stop the scroll: try another opening and keep the rest as is."
 
 msgid "Los prompts de imágenes de esta versión ya están hechos o en camino."
 msgstr "This version's image prompts are already done or in progress."
@@ -4037,6 +4319,9 @@ msgstr "Lines"
 
 msgid "Líneas, una por renglón y en orden"
 msgstr "Lines, one per row and in order"
+
+msgid "MER: ingresos de la tienda / todo el gasto en publicidad"
+msgstr "MER: store revenue / all ad spend"
 
 msgid "Manda el enlace para confirmar el correo de cada cuenta y el de recuperar la contraseña; también los avisos (propuestas pendientes, ganadores, rechazos de Meta, lanzamientos fallidos)."
 msgstr "Sends the link to confirm each account's email and the password-recovery one; also the notices (pending proposals, winners, Meta rejections, failed launches)."
@@ -4104,6 +4389,10 @@ msgstr "Mechanism"
 
 msgid "Mejorar la calidad al final (+$0.04, solo aplica a fotos)"
 msgstr "Improve quality at the end (+$0.04, photos only)"
+
+#, python-format
+msgid "Menos de %(n)s impresiones: todavía no dice nada."
+msgstr "Fewer than %(n)s impressions: it doesn't tell us anything yet."
 
 msgid "Menú"
 msgstr "Menu"
@@ -4278,12 +4567,18 @@ msgstr "Mode: %(modo)s."
 msgid "Moneda"
 msgstr "Currency"
 
+msgid "Moneda de las cifras"
+msgstr "Currency of the figures"
+
 msgid "Monto"
 msgstr "Amount"
 
 #, python-format
 msgid "Mostrar archivados (%(n)s)"
 msgstr "Show archived (%(n)s)"
+
+msgid "Mucho clic"
+msgstr "Lots of clicks"
 
 msgid "Muslos"
 msgstr "Thighs"
@@ -4335,6 +4630,9 @@ msgstr "Niche"
 msgid "Ninguna (objeto)"
 msgstr "None (object)"
 
+msgid "Ninguna consulta sirvió."
+msgstr "No query worked."
+
 msgid "Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."
 msgstr "None of the photos had a supported format (jpg, jpeg, png, webp)."
 
@@ -4356,6 +4654,9 @@ msgstr "Not applicable (%(n)s)"
 
 msgid "No aplica — recibe el resultado ya generado"
 msgstr "Not applicable — it receives the already-generated result"
+
+msgid "No cambiaste nada."
+msgstr "You didn't change anything."
 
 msgid "No elegiste ninguna foto."
 msgstr "You didn't choose any photo."
@@ -4418,6 +4719,9 @@ msgstr "No organic channels available to publish %(nombre)s.%(aviso)s"
 msgid "No hay conexión con el servidor."
 msgstr "No connection to the server."
 
+msgid "No hay llave de Triple Whale guardada. Vuelve a conectarlo."
+msgstr "There's no saved Triple Whale key. Connect it again."
+
 msgid "No hay nada en el catálogo todavía — crea el primero con \"+ Nuevo producto\" o en Catálogo."
 msgstr "There's nothing in the catalog yet — create the first one with “+ New product” or in Catalog."
 
@@ -4457,6 +4761,10 @@ msgid "No pude cerrar el experimento: %(error)s"
 msgstr "Couldn't close the experiment: %(error)s"
 
 #, python-format
+msgid "No pude conectar Triple Whale: %(error)s"
+msgstr "I couldn't connect Triple Whale: %(error)s"
+
+#, python-format
 msgid "No pude conectar la tienda: %(error)s"
 msgstr "Couldn't connect the store: %(error)s"
 
@@ -4483,6 +4791,10 @@ msgstr "I couldn't describe the references (%(tipo)s)."
 msgid "No pude ejecutar «%(accion)s»: %(error)s"
 msgstr "Couldn't execute “%(accion)s”: %(error)s"
 
+#, python-format
+msgid "No pude hablar con Triple Whale (%(tipo)s)."
+msgstr "I couldn't reach Triple Whale (%(tipo)s)."
+
 msgid "No pude leer tus activos:"
 msgstr "Couldn't read your assets:"
 
@@ -4507,6 +4819,9 @@ msgstr "I couldn't upload %(archivo)s: %(error)s"
 #, python-format
 msgid "No pude subir la canción (%(tipo)s)."
 msgstr "I couldn't upload the song (%(tipo)s)."
+
+msgid "No retiene"
+msgstr "Doesn't hold"
 
 #, python-format
 msgid "No se creó la publicación en %(nombre)s: %(error)s"
@@ -4555,6 +4870,9 @@ msgstr "I couldn't calculate the 30-day series."
 msgid "No se pudo calcular las alertas."
 msgstr "I couldn't calculate the alerts."
 
+msgid "No se pudo cargar el panel de Triple Whale. Recarga la página."
+msgstr "The Triple Whale panel couldn't be loaded. Reload the page."
+
 msgid "No se pudo cargar el panel de guiones. Recarga la página."
 msgstr "Couldn't load the scripts panel. Reload the page."
 
@@ -4586,6 +4904,10 @@ msgid "No se pudo copiar"
 msgstr "Couldn't copy"
 
 #, python-format
+msgid "No se pudo copiar la miniatura: %(error)s"
+msgstr "The thumbnail couldn't be copied: %(error)s"
+
+#, python-format
 msgid "No se pudo crear el anuncio de %(nombre)s (%(pais)s): %(mensaje)s"
 msgstr "Could not create the ad for %(nombre)s (%(pais)s): %(mensaje)s"
 
@@ -4608,8 +4930,15 @@ msgstr "Couldn't save the review."
 msgid "No se pudo hablar con Notion; intenta de nuevo en un momento."
 msgstr "Couldn't reach Notion; try again in a moment."
 
+#, python-format
+msgid "No se pudo hacer el análisis: %(error)s"
+msgstr "The analysis couldn't be done: %(error)s"
+
 msgid "No se pudo leer el guion. Vuelve a intentarlo."
 msgstr "Couldn't read the script. Try again."
+
+msgid "No se pudo leer la llave guardada: vuelve a conectar Triple Whale."
+msgstr "The saved key couldn't be read: connect Triple Whale again."
 
 #, python-format
 msgid "No se pudo pausar por tope: %(error)s"
@@ -4645,9 +4974,6 @@ msgstr "Couldn't suggest anything (%(tipo)s)."
 
 msgid "No se pudo sugerir."
 msgstr "Couldn't suggest anything."
-
-msgid "No se puede recuperar la llave (descifrado falló)"
-msgstr "Can't retrieve the key (decryption failed)"
 
 msgid "No tienes acceso a ese proyecto."
 msgstr "You don't have access to that project."
@@ -4777,6 +5103,9 @@ msgstr "For"
 msgid "Para aprobar, primero resuelve los problemas de arriba (con Claude o editando a mano)."
 msgstr "To approve, first fix the issues above (with Claude or by editing by hand)."
 
+msgid "Para comparar anuncios entre sí sirve «Triple Attribution» con 7 días; para cuadrar con las ventas totales, «Linear All» o «Total Impact»."
+msgstr "To compare ads against each other, “Triple Attribution” with 7 days works; to reconcile with total sales, “Linear All” or “Total Impact”."
+
 msgid "Para conectar MercadoLibre falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar cifrados los tokens que devuelve MercadoLibre."
 msgstr "To connect MercadoLibre, <code>FLASK_SECRET_KEY</code> is missing in the server's <code>.env</code>: without it the tokens MercadoLibre returns can't be saved encrypted."
 
@@ -4807,6 +5136,12 @@ msgstr ""
 
 msgid "Para que Creatv lo gestione,"
 msgstr "For Creatv to manage it,"
+
+msgid "Para que Triple Whale atribuya las ventas, tus anuncios de Meta deben llevar en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
+msgstr "For Triple Whale to attribute sales, your Meta ads must carry in “URL parameters”: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
+
+msgid "Para quién"
+msgstr "For whom"
 
 msgid "Para volver a tu propia app,"
 msgstr "To go back to your own app,"
@@ -4869,6 +5204,9 @@ msgstr "Country"
 msgid "Pedido rechazado: no viene de esta página."
 msgstr "Request rejected: it doesn't come from this page."
 
+msgid "Pedidos"
+msgstr "Orders"
+
 msgid "Pedidos al cliente (IA)"
 msgstr "Client requests (AI)"
 
@@ -4919,6 +5257,12 @@ msgstr "Paste a link"
 
 msgid "Pensando…"
 msgstr "Thinking…"
+
+msgid "Perdedor"
+msgstr "Loser"
+
+msgid "Periodo"
+msgstr "Period"
 
 msgid "Personaje"
 msgstr "Character"
@@ -4985,6 +5329,9 @@ msgstr "Unknown platform: %(plataforma)s"
 
 msgid "Plegar / desplegar"
 msgstr "Collapse / expand"
+
+msgid "Pocos clics"
+msgstr "Few clicks"
 
 msgid "Política de privacidad"
 msgstr "Privacy policy"
@@ -5136,6 +5483,12 @@ msgstr "Products"
 msgid "Productos, personajes, entornos y logos con su regla de fidelidad. La IA reproduce exactamente tu marca, sin inventar letras ni logotipos."
 msgstr "Products, characters, environments and logos with their fidelity rule. The AI reproduces your brand exactly, without inventing text or logos."
 
+msgid "Promesa"
+msgstr "Promise"
+
+msgid "Prometedor"
+msgstr "Promising"
+
 msgid "Prompt"
 msgstr "Prompt"
 
@@ -5150,6 +5503,9 @@ msgstr "Prompt ready — review it and generate."
 
 msgid "Prompt original"
 msgstr "Original prompt"
+
+msgid "Prompt para el video"
+msgstr "Video prompt"
 
 msgid "Prompt por planos"
 msgstr "Prompt by shots"
@@ -5279,6 +5635,9 @@ msgstr "Press <em>Install app</em> and confirm."
 msgid "Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página."
 msgstr "Press “Connect with Meta” below, log in with your Facebook and choose the ad account and the Page."
 
+msgid "Pulsa «Sincronizar ahora» para traer los últimos 90 días de Triple Whale."
+msgstr "Press “Sync now” to pull the last 90 days from Triple Whale."
+
 msgid "Página"
 msgstr "Page"
 
@@ -5367,6 +5726,13 @@ msgstr "Qwen Image Edit Plus"
 #, python-format
 msgid "ROAS %(roas)s ≥ %(roas_min)s"
 msgstr "ROAS %(roas)s ≥ %(roas_min)s"
+
+#, python-format
+msgid "ROAS %(roas)s× con %(pedidos)s pedidos (meta %(meta)s×)."
+msgstr "ROAS %(roas)s× with %(pedidos)s orders (target %(meta)s×)."
+
+msgid "ROAS (Pixel)"
+msgstr "ROAS (Pixel)"
 
 msgid "ROAS mínimo"
 msgstr "Minimum ROAS"
@@ -5531,6 +5897,12 @@ msgstr "Result"
 msgid "Resultados"
 msgstr "Results"
 
+msgid "Retención"
+msgstr "Hold"
+
+msgid "Retiene"
+msgstr "Holds attention"
+
 msgid "Retrato 3:4"
 msgstr "Portrait 3:4"
 
@@ -5649,6 +6021,9 @@ msgstr "The %(n)s proposals will run in order. The ones that scale, derive, resc
 msgid "Se eliminará «%(nombre)s» y sus %(fotos)s foto(s) de referencia."
 msgstr "“%(nombre)s” and its %(fotos)s reference photo(s) will be deleted."
 
+msgid "Se está cansando"
+msgstr "Fatiguing"
+
 #, python-format
 msgid "Se guardó localmente pero falló la subida a R2: %(error)s"
 msgstr "Saved locally but the upload to R2 failed: %(error)s"
@@ -5707,6 +6082,9 @@ msgstr "Reviewed from the piece in Create"
 msgid "Se suma a la regla base de la categoría:"
 msgstr "This adds to the category's base rule:"
 
+msgid "Se ve pero no invita a hacer clic: aclara la oferta y el llamado a la acción."
+msgstr "It gets seen but doesn't invite a click: make the offer and the call to action clearer."
+
 #, python-format
 msgid "Se vuelve a publicar en %(plataforma)s. Revisa antes que no haya salido ya allá. ¿Reintentar?"
 msgstr "It will be published again on %(plataforma)s. Check first that it hasn't already gone out there. Retry?"
@@ -5735,6 +6113,9 @@ msgstr "Session closed."
 
 msgid "Sesión de CreativeFlowPlus descartada."
 msgstr "CreativeFlowPlus session discarded."
+
+msgid "Señales"
+msgstr "Signals"
 
 msgid "Shopify"
 msgstr "Shopify"
@@ -5782,6 +6163,10 @@ msgstr "Follow the steps to register your app and connect."
 msgid "Siguiente →"
 msgstr "Next →"
 
+#, python-format
+msgid "Sin %(partes)s: Triple Whale no aceptó esa consulta."
+msgstr "Without %(partes)s: Triple Whale didn't accept that query."
+
 msgid "Sin Pixel"
 msgstr "No Pixel"
 
@@ -5806,6 +6191,9 @@ msgstr "No organic channel available: connect a channel at"
 
 msgid "Sin canales para publicar:"
 msgstr "No channels to publish to:"
+
+msgid "Sin datos suficientes"
+msgstr "Not enough data"
 
 msgid "Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token."
 msgstr "Without it the Atria source stays off in “Fetch references” (per project and in the admin panel); Apify is still available if it has its own token."
@@ -5844,6 +6232,9 @@ msgstr "No alternate hooks."
 msgid "Sin música"
 msgstr "No music"
 
+msgid "Sin pedidos atribuidos en el periodo: los veredictos se apoyan solo en el tráfico (gancho, retención, clic), así que no hay ganadores ni perdedores todavía."
+msgstr "No attributed orders in the period: verdicts rely only on traffic (hook, hold, click), so there are no winners or losers yet."
+
 msgid "Sin personajes."
 msgstr "No characters."
 
@@ -5860,6 +6251,9 @@ msgstr "No pieces for: %(paises)s. Add one piece per country or remove the count
 
 msgid "Sin precio: escríbelo abajo para que el anuncio lo muestre"
 msgstr "No price: write it below so the ad can show it"
+
+msgid "Sin rastreo de Triple Whale"
+msgstr "No Triple Whale tracking"
 
 msgid "Sin referencias de marca todavía."
 msgstr "No brand references yet."
@@ -5897,6 +6291,9 @@ msgstr "Syncing…"
 
 msgid "Sincronizar"
 msgstr "Sync"
+
+msgid "Sincronizar ahora"
+msgstr "Sync now"
 
 msgid "Sistema de marca real"
 msgstr "Real brand system"
@@ -6027,6 +6424,9 @@ msgstr "Upload brand reference"
 msgid "Sugerir"
 msgstr "Suggest"
 
+msgid "Sus números de los últimos 7 días cayeron frente a los 7 anteriores: prepara variantes antes de que se apague."
+msgstr "Its numbers for the last 7 days dropped against the 7 before: prepare variants before it dies out."
+
 msgid "Sí"
 msgstr "Yes"
 
@@ -6115,6 +6515,9 @@ msgstr "ThruPlay %(tp)s%% — "
 msgid "ThruPlay mínimo (0–1)"
 msgstr "Minimum ThruPlay (0–1)"
 
+msgid "Ticket promedio"
+msgstr "Average order value"
+
 #, python-format
 msgid "Tiempos con huecos o momentos vacíos en: %(lista)s."
 msgstr "Timing gaps or empty beats in: %(lista)s."
@@ -6161,6 +6564,12 @@ msgstr "Tap where the product goes"
 msgid "Toca una pieza para ver el detalle, descargarla o crear otra a partir de ella."
 msgstr "Tap a piece to see the detail, download it, or create another one from it."
 
+msgid "Toda la vida del cliente (lifetime)"
+msgstr "Customer lifetime"
+
+msgid "Todas las métricas de tus anuncios y de tu tienda según Triple Whale, una evaluación de cada anuncio (qué gana, qué pierde y por qué) y, con IA, ideas de anuncios nuevos basadas en lo que ya funciona."
+msgstr "All the metrics of your ads and your store according to Triple Whale, an evaluation of each ad (what wins, what loses and why) and, with AI, new ad ideas based on what already works."
+
 msgid "Todavía ninguna pieza tiene veredicto «ganador». El decisor lo da cuando una pieza supera las reglas del experimento."
 msgstr "No piece has a “winner” verdict yet. The decision engine gives it once a piece clears the experiment's rules."
 
@@ -6174,6 +6583,9 @@ msgstr "You haven't generated anything in Create yet."
 msgid "Todavía no hay %(plural)s. Crea el primero arriba"
 msgstr "There are no %(plural)s yet. Create the first one above"
 
+msgid "Todavía no hay anuncios con datos suficientes para evaluar con IA."
+msgstr "There are no ads with enough data to evaluate with AI yet."
+
 msgid "Todavía no hay cobros registrados."
 msgstr "No charges recorded yet."
 
@@ -6185,6 +6597,9 @@ msgstr "There are no experiments yet. Select pieces in the gallery above and pre
 
 msgid "Todavía no hay gasto ni ventas en los últimos 30 días. Cuando un experimento empiece a gastar, aquí verás el día a día."
 msgstr "There's no spend or sales yet in the last 30 days. Once an experiment starts spending, you'll see the day-by-day here."
+
+msgid "Todavía no hay métricas copiadas"
+msgstr "No metrics copied yet"
 
 msgid "Todavía no hay métricas."
 msgstr "No metrics yet."
@@ -6218,8 +6633,17 @@ msgstr "Not yet possible: <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> 
 msgid "Todavía no vemos activos compartidos desde el portafolio %(portafolio)s. A veces Meta tarda unos minutos: revisa que el ID de Creatv sea el de arriba y que hayas marcado la cuenta y la Página."
 msgstr "We still don't see assets shared from portfolio %(portafolio)s. Meta sometimes takes a few minutes: check that Creatv's ID is the one above and that you checked the account and the Page."
 
+msgid "Todavía sin copia"
+msgstr "No copy yet"
+
+msgid "Todavía sin copia de métricas."
+msgstr "No metrics copy yet."
+
 msgid "Todavía sin impresiones — dale a «Actualizar métricas» en unas horas."
 msgstr "Still no impressions — hit “Update metrics” in a few hours."
+
+msgid "Todavía sin una señal clara ni para bien ni para mal."
+msgstr "No clear signal yet, good or bad."
 
 msgid "Todo"
 msgstr "All"
@@ -6249,6 +6673,9 @@ msgstr ""
 
 msgid "Todo lo que la IA debe reproducir <strong>exacto</strong>: tus productos, la cara de tu marca y tus espacios. Cada activo lleva fotos de referencia y una regla de consistencia que va en cada generación. Un producto lleva además su precio y su URL de compra, se marca «en prueba» y desde aquí se le crea un experimento."
 msgstr "Everything the AI has to reproduce <strong>exactly</strong>: your products, the face of your brand and your spaces. Each asset carries reference photos and a consistency rule that goes into every generation. A product also carries its price and purchase URL, gets marked “in testing”, and you create an experiment for it from here."
+
+msgid "Todos"
+msgstr "All"
 
 msgid "Todos los proyectos"
 msgstr "All projects"
@@ -6310,20 +6737,66 @@ msgstr "Bring in products from… (CSV/Excel, URL or your store)"
 msgid "Traer y leer"
 msgstr "Fetch and read"
 
+msgid "Trayendo las métricas de Triple Whale…"
+msgstr "Pulling the Triple Whale metrics…"
+
+msgid "Trayendo los últimos 90 días…"
+msgstr "Pulling the last 90 days…"
+
+msgid "Trayendo métricas de Triple Whale…"
+msgstr "Pulling Triple Whale metrics…"
+
 msgid "Triple Whale"
 msgstr "Triple Whale"
 
-msgid "Triple Whale (atribución)"
-msgstr "Triple Whale (attribution)"
+msgid "Triple Whale conectado. Estamos trayendo los últimos 90 días de métricas; mira la pestaña Triple Whale en unos minutos."
+msgstr "Triple Whale connected. We're pulling the last 90 days of metrics; check the Triple Whale tab in a few minutes."
 
-msgid "Triple Whale conectado correctamente."
-msgstr "Triple Whale connected successfully."
+msgid "Triple Whale desconectado. Se borraron las métricas copiadas; las evaluaciones con IA se conservan."
+msgstr "Triple Whale disconnected. The copied metrics were deleted; AI evaluations are kept."
 
-msgid "Triple Whale desconectado."
-msgstr "Triple Whale disconnected."
+#, python-format
+msgid "Triple Whale no aceptó la consulta de: %(partes)s. El resto de las métricas sí llegó."
+msgstr "Triple Whale didn't accept the query for: %(partes)s. The rest of the metrics did arrive."
 
-msgid "Triple Whale no configurado"
-msgstr "Triple Whale not configured"
+#, python-format
+msgid "Triple Whale no aceptó la consulta: %(detalle)s"
+msgstr "Triple Whale didn't accept the query: %(detalle)s"
+
+msgid "Triple Whale no atribuye ninguna venta a tus anuncios en este periodo. Revisa que los anuncios lleven sus parámetros de rastreo (tw_source y tw_adid) o prueba otra ventana de atribución."
+msgstr "Triple Whale attributes no sales to your ads in this period. Check that the ads carry its tracking parameters (tw_source and tw_adid) or try another attribution window."
+
+msgid "Triple Whale no está conectado en este proyecto."
+msgstr "Triple Whale isn't connected in this project."
+
+msgid "Triple Whale no reconoce esa llave (revocada o mal copiada)."
+msgstr "Triple Whale doesn't recognize that key (revoked or mistyped)."
+
+#, python-format
+msgid "Triple Whale no reconoce la tienda «%(tienda)s» con esta llave. Revisa el dominio (el shop-id de la URL de Triple Whale)."
+msgstr "Triple Whale doesn't recognize the store “%(tienda)s” with this key. Check the domain (the shop-id in the Triple Whale URL)."
+
+msgid "Triple Whale no respondió a tiempo."
+msgstr "Triple Whale didn't respond in time."
+
+msgid "Triple Whale no respondió."
+msgstr "Triple Whale didn't respond."
+
+msgid "Triple Whale pidió esperar (límite de llamadas)."
+msgstr "Triple Whale asked us to wait (rate limit)."
+
+msgid "Triple Whale rechazó la llave: está revocada, no tiene el permiso de consultas (Data Out / SQL) o su usuario perdió acceso a la tienda."
+msgstr "Triple Whale rejected the key: it's revoked, it lacks the query permission (Data Out / SQL) or its user lost access to the store."
+
+#, python-format
+msgid "Triple Whale respondió %(codigo)s: %(detalle)s"
+msgstr "Triple Whale answered %(codigo)s: %(detalle)s"
+
+msgid "Triple Whale respondió algo que no es JSON."
+msgstr "Triple Whale answered something that isn't JSON."
+
+msgid "Triple Whale ya no está conectado en este proyecto."
+msgstr "Triple Whale is no longer connected in this project."
 
 #, python-format
 msgid "Triple Whale: Gasto (barras) e ingresos (línea) por día en %(moneda)s durante los últimos 30 días"
@@ -6332,6 +6805,10 @@ msgstr "Triple Whale: Spend (bars) and revenue (line) by day in %(moneda)s over 
 #, python-format
 msgid "Triple Whale: Resumen en %(moneda)s"
 msgstr "Triple Whale: Summary in %(moneda)s"
+
+#, python-format
+msgid "Triple Whale: gasto (barras) e ingresos (línea) por día en %(moneda)s"
+msgstr "Triple Whale: spend (bars) and revenue (line) per day in %(moneda)s"
 
 msgid "Tráfico (clics al enlace)"
 msgstr "Traffic (link clicks)"
@@ -6360,9 +6837,6 @@ msgstr "Your account has no email."
 msgid "Tu cuenta publicitaria"
 msgstr "Your ad account"
 
-msgid "Tu llave API se guarda cifrada. Obtenla en <a href=\"https://app.triplewhale.com/settings/api-keys\" target=\"_blank\" rel=\"noopener\">Triple Whale › Settings › API Keys</a>."
-msgstr "Your API key is stored encrypted. Get it at <a href=\"https://app.triplewhale.com/settings/api-keys\" target=\"_blank\" rel=\"noopener\">Triple Whale › Settings › API Keys</a>."
-
 msgid "Tu mensaje para Claude"
 msgstr "Your message for Claude"
 
@@ -6383,6 +6857,12 @@ msgstr "Your text goes to the model as-is"
 
 msgid "Tu texto, tal cual"
 msgstr "Your text, as-is"
+
+msgid "Tu tienda"
+msgstr "Your store"
+
+msgid "Tus anuncios"
+msgstr "Your ads"
 
 msgid "Tus prompts"
 msgstr "Your prompts"
@@ -6572,11 +7052,17 @@ msgstr "View the applied invariant_block / negative_prompt (raw prompt text)"
 msgid "Ver la instrucción exacta que recibe el modelo →"
 msgstr "See the exact instruction the model gets →"
 
+msgid "Ver métricas y evaluación →"
+msgstr "See metrics and evaluation →"
+
 msgid "Ver por qué usamos estos modelos (comparación completa) →"
 msgstr "See why we use these models (full comparison) →"
 
 msgid "Ver publicación →"
 msgstr "View post →"
+
+msgid "Veredicto"
+msgstr "Verdict"
 
 msgid "Verificado"
 msgstr "Verified"
@@ -6720,6 +7206,10 @@ msgid "WooCommerce, paso a paso"
 msgstr "WooCommerce, step by step"
 
 #, python-format
+msgid "Y %(n)s anuncio(s) más con poco gasto que no se muestran."
+msgstr "And %(n)s more ad(s) with little spend that aren't shown."
+
+#, python-format
 msgid "Ya estaba publicada (o en cola) en %(plataformas)s: no se publica dos veces."
 msgstr "It was already published (or queued) on %(plataformas)s: it doesn't get published twice."
 
@@ -6750,6 +7240,9 @@ msgstr "There was already a post of this piece in progress; try again when it's 
 
 msgid "Ya había una sincronización en curso."
 msgstr "A sync was already running."
+
+msgid "Ya hay una evaluación con IA en curso."
+msgstr "There's already an AI evaluation running."
 
 msgid "Ya hay una importación de archivo en curso — espera a que termine."
 msgstr "A file import is already running — wait for it to finish."
@@ -6824,6 +7317,9 @@ msgstr "That store is already syncing."
 msgid "Ya se están actualizando."
 msgstr "Already updating."
 
+msgid "Ya se están trayendo las métricas de Triple Whale."
+msgstr "The Triple Whale metrics are already being pulled."
+
 msgid "Ya se lo prometieron: hay que prometer más grande"
 msgstr "They've already been promised it: you have to promise bigger"
 
@@ -6887,6 +7383,9 @@ msgstr "attributed by TW"
 msgid "baja"
 msgstr "low"
 
+msgid "bien"
+msgstr "good"
+
 msgid "business.facebook.com › Facturación"
 msgstr "business.facebook.com › Billing"
 
@@ -6921,6 +7420,9 @@ msgstr "purchases · ROAS %(roas)s"
 
 msgid "con 3 personas en cuadro (2 con calzado puesto), edita bien a la más prominente pero deja a la segunda con su calzado original, incluso pidiéndole explícitamente contar y editar a todas. El mejor de los 3 disponibles hoy, no perfecto"
 msgstr "with 3 people in frame (2 wearing shoes), it edits the most prominent one well but leaves the second one with their original footwear, even when explicitly asked to count and edit everyone. The best of the 3 available today, not perfect"
+
+msgid "con error"
+msgstr "with error"
 
 msgid "con la misma foto de 3 personas, no cambió el calzado de nadie"
 msgstr "with the same photo of 3 people, it didn't change anyone's footwear"
@@ -6980,6 +7482,9 @@ msgstr "product fact"
 #, python-format
 msgid "de %(valor)s/día"
 msgstr "of %(valor)s/day"
+
+msgid "de los pedidos"
+msgstr "of orders"
 
 msgid "decidido"
 msgstr "decided"
@@ -7209,6 +7714,9 @@ msgstr "winner"
 msgid "gasto"
 msgstr "spend"
 
+msgid "gasto / pedidos atribuidos"
+msgstr "spend / attributed orders"
+
 msgid "genera desde cero, no edita"
 msgstr "generates from scratch, doesn't edit"
 
@@ -7271,6 +7779,9 @@ msgstr "revenue"
 
 msgid "ingresos / gasto"
 msgstr "revenue / spend"
+
+msgid "ingresos / pedidos"
+msgstr "revenue / orders"
 
 #, python-format
 msgid "la final %(clave)s falló"
@@ -7345,6 +7856,10 @@ msgstr "best CPC %(cpc)s"
 
 msgid "mensaje_id inválido."
 msgstr "Invalid mensaje_id."
+
+#, python-format
+msgid "meta %(meta)s×"
+msgstr "target %(meta)s×"
 
 msgid "mismo problema que Flux Kontext"
 msgstr "same problem as Flux Kontext"
@@ -7554,6 +8069,10 @@ msgstr "retry rescue: failed %(detalle)s"
 
 msgid "rescatar"
 msgstr "rescue"
+
+#, python-format
+msgid "retención %(r)s"
+msgstr "hold %(r)s"
 
 msgid "roas"
 msgstr "roas"
@@ -7841,8 +8360,8 @@ msgstr "Discard this piece?"
 msgid "¿Desconectar Meta de este proyecto? No se borra nada en Meta."
 msgstr "Disconnect Meta from this project? Nothing gets deleted on Meta."
 
-msgid "¿Desconectar Triple Whale? Se quita la atribución por este canal."
-msgstr "Disconnect Triple Whale? Attribution through this channel is removed."
+msgid "¿Desconectar Triple Whale? Se borran las métricas copiadas y se quita la atribución por este canal (las evaluaciones con IA se conservan)."
+msgstr "Disconnect Triple Whale? The copied metrics are deleted and attribution through this channel is removed (AI evaluations are kept)."
 
 msgid "¿Desconectar esta tienda? Sus productos quedan archivados; no se borra nada en la tienda."
 msgstr "Disconnect this store? Its products get archived; nothing is deleted in the store."
@@ -7856,6 +8375,10 @@ msgstr "Delete %(nombre)s? This doesn't affect ideas already generated with it, 
 
 msgid "¿Eliminar este producto?"
 msgstr "Delete this product?"
+
+#, python-format
+msgid "¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s"
+msgstr "Evaluate %(n)s ad(s) with AI? Cost: %(precio)s"
 
 #, python-format
 msgid "¿Marcar a %(usuario)s como verificado sin que abra el enlace del correo?"
@@ -7915,6 +8438,14 @@ msgstr "Last activity"
 msgid "Última actualización: %(fecha)s"
 msgstr "Last updated: %(fecha)s"
 
+#, python-format
+msgid "Última copia de métricas: %(fecha)s"
+msgstr "Last metrics copy: %(fecha)s"
+
+#, python-format
+msgid "Última copia: %(fecha)s"
+msgstr "Last copy: %(fecha)s"
+
 msgid "Última terminada"
 msgstr "Last one done"
 
@@ -7924,6 +8455,10 @@ msgstr "Latest syncs"
 #, python-format
 msgid "Último cambio: %(fecha)s"
 msgstr "Last changed: %(fecha)s"
+
+#, python-format
+msgid "Últimos %(n)s días"
+msgstr "Last %(n)s days"
 
 msgid "Últimos 30 días"
 msgstr "Last 30 days"

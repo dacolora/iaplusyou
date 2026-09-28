@@ -2501,3 +2501,54 @@ body.panel-abierto { overflow: hidden; }
   .crear-generar { margin-left: 0; }
   .crear-generar .btn-generar { flex: 1; }
 }
+
+/* ---------- Triple Whale (2026-09-28): pestaña de métricas y evaluación ----------
+   Reusa tiles, secciones, alertas y el gráfico del Tablero (.kpi-tile, .tb-*);
+   aquí solo lo propio: barra de controles, reparto, tablas e ideas. */
+.tw-barra { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: .6rem 1rem; margin: 0 0 1rem; }
+.tw-controles { display: flex; flex-wrap: wrap; gap: .6rem; }
+.tw-controles .campo-label { display: flex; flex-direction: column; gap: .2rem; margin: 0; }
+.tw-sync { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; font-size: .8rem; color: var(--muted); }
+.tw-sync form.inline { margin: 0; }
+.tw-progreso { margin: 0 0 1rem; }
+.tw-aviso { display: block; padding: .4rem .6rem; border-radius: 8px; font-size: .82rem; }
+.tb-alerta-bien { border-left-color: var(--ok); }
+.tb-alerta-bien .tb-alerta-nivel { color: var(--ok); }
+.tw-reparto { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: .8rem; }
+.tw-reparto-item { display: flex; flex-direction: column; gap: .2rem; min-width: 8.5rem; padding: .6rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.tw-reparto-item strong { font-size: 1.2rem; }
+.tw-reparto-item small { color: var(--muted); font-size: .76rem; }
+.tw-tabla-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tw-tabla { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.tw-tabla th { text-align: left; font-weight: 600; color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; padding: .45rem .5rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.tw-tabla td { padding: .5rem; border-bottom: 1px solid var(--border); vertical-align: top; white-space: nowrap; }
+.tw-tabla td.tw-nombre, .tw-tabla td.tw-senales { white-space: normal; min-width: 12rem; }
+.tw-nombre strong { display: block; overflow-wrap: anywhere; }
+.tw-nombre small, .tw-motivo { display: block; color: var(--muted); font-size: .74rem; white-space: normal; max-width: 18rem; }
+.tw-senales .tag-estado { margin: 0 .25rem .25rem 0; display: inline-block; white-space: normal; }
+.tw-filtros { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .6rem; }
+.tw-filtros .chip { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 999px; padding: .2rem .7rem; font-size: .8rem; cursor: pointer; min-height: 0; }
+.tw-filtros .chip.activo { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tw-evaluar { margin: .4rem 0 .8rem; }
+.tw-eval { margin-top: .6rem; }
+.tw-eval h4 { margin: 1rem 0 .5rem; font-size: .9rem; }
+.tw-eval-resumen { font-size: .92rem; line-height: 1.55; margin: .2rem 0 .6rem; }
+.tw-patrones { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .4rem 1.2rem; }
+.tw-patrones ul { margin: 0; padding-left: 1.1rem; font-size: .86rem; line-height: 1.5; }
+.tw-ideas, .tw-analizados { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .8rem; }
+.tw-idea, .tw-analizado { border: 1px solid var(--border); border-radius: 12px; padding: .8rem .9rem; background: var(--bg); font-size: .84rem; min-width: 0; }
+.tw-idea > strong { display: block; font-size: .95rem; margin-bottom: .2rem; }
+.tw-idea p { margin: .4rem 0; line-height: 1.45; }
+.tw-idea form { margin-top: .5rem; }
+.tw-angulo { display: grid; grid-template-columns: auto 1fr; gap: .15rem .6rem; margin: .4rem 0; font-size: .8rem; }
+.tw-angulo dt { color: var(--muted); font-weight: 600; }
+.tw-angulo dd { margin: 0; }
+.tw-escena { color: var(--muted); }
+.tw-prompt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tw-analizado { display: flex; gap: .7rem; align-items: flex-start; }
+.tw-analizado img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; flex: none; }
+.tw-analizado p { margin: .3rem 0; line-height: 1.4; }
+@media (max-width: 760px) {
+  .tw-barra { align-items: stretch; }
+  .tw-controles, .tw-controles .campo-label { width: 100%; }
+}

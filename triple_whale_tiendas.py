@@ -1,60 +1,76 @@
-"""Gestión de conexiones Triple Whale por proyecto.
+"""Conexión de Triple Whale por proyecto (tabla `triple_whale`).
 
-Tabla `triple_whale`: llave cifrada, dominio de tienda, modelo/ventana, zona horaria.
-Espejo de tiendas.py pero para TW como atribución alternativa.
+Una fila por proyecto: llave cifrada (Fernet, `cifrado.py`), dominio de la
+tienda (el shop-id de Triple Whale), moneda en que se piden las cifras,
+modelo y ventana de atribución, estado de la sincronización y `extra`
+(backfill_desde, ultimo_resumen, gasto_7d). La llave nunca sale de aquí más
+que descifrada para `triple_whale.sql_query`; `obtener` no la devuelve.
 """
-import json
-import db
-import cifrado
 import sqlalchemy as sa
-from datetime import datetime
+
+import cifrado
+import db
+import triple_whale
 
 
 def conectar(cliente: str, llave_descifrada: str, dominio_tienda: str, moneda: str = "USD",
-             modelo_atribucion: str = "Triple Attribution", ventana_atribucion: str = "lifetime",
-             zona_horaria: str = "") -> int:
-    """Crea o reemplaza la conexión de Triple Whale de un proyecto.
-    
-    Args:
-        cliente: proyecto.
-        llave_descifrada: API key del usuario (se cifra con Fernet).
-        dominio_tienda: Shopify domain (ej: example.myshopify.com).
-        moneda: ISO 4217 (ej: USD, COP).
-        modelo_atribucion: atribución en Triple Whale (ej: "Triple Attribution").
-        ventana_atribucion: ventana (ej: "lifetime", "7d").
-        zona_horaria: de la tienda (ej: "America/Bogota").
-    
-    Returns: id de la fila triple_whale.
-    """
+             modelo_atribucion: str = triple_whale.MODELO_DEFECTO,
+             ventana_atribucion: str = triple_whale.VENTANA_DEFECTO, zona_horaria: str = "") -> int:
+    """Crea o reemplaza la conexión del proyecto. Modelo y ventana se
+    normalizan al vocabulario de Triple Whale; si cambian respecto de la
+    conexión anterior (o cambia la tienda o la moneda), las métricas copiadas
+    se borran: fueron calculadas con otra atribución. Devuelve el id."""
     ahora = db.ahora()
-    llave_cifrada = cifrado.cifrar(llave_descifrada)
-    
+    dominio = triple_whale.normalizar_dominio(dominio_tienda) or (dominio_tienda or "").strip()
+    valores = {
+        "actualizado_en": ahora,
+        "llave": cifrado.cifrar(llave_descifrada),
+        "dominio_tienda": dominio,
+        "moneda": triple_whale.normalizar_moneda(moneda),
+        "modelo_atribucion": triple_whale.normalizar_modelo(modelo_atribucion),
+        "ventana_atribucion": triple_whale.normalizar_ventana(ventana_atribucion),
+        "zona_horaria": zona_horaria,
+        "estado": "conectada",
+        "error": None,
+    }
     t = db.triple_whale
     with db.conectar() as con:
-        # Un registro por proyecto: si existe, reemplaza.
-        fila = con.execute(sa.select(t.c.id).where(t.c.cliente == cliente)).first()
-        valores = {
-            "actualizado_en": ahora,
-            "llave": llave_cifrada,
-            "dominio_tienda": dominio_tienda,
-            "moneda": moneda.upper(),
-            "modelo_atribucion": modelo_atribucion,
-            "ventana_atribucion": ventana_atribucion,
-            "zona_horaria": zona_horaria,
-            "estado": "conectada",
-            "error": None,
-        }
+        fila = con.execute(sa.select(t).where(t.c.cliente == cliente)).first()
         if fila:
-            tw_id = fila[0]
-            con.execute(t.update().where(t.c.id == tw_id).values(**valores))
-            return tw_id
-        return con.execute(t.insert().values(
-            cliente=cliente, creado_en=ahora, **valores
-        )).inserted_primary_key[0]
+            cambio = any(getattr(fila, k) != valores[k]
+                         for k in ("dominio_tienda", "moneda", "modelo_atribucion", "ventana_atribucion"))
+            if cambio:
+                valores.update(extra={}, ultima_sincronizacion=None)
+                _borrar_copias(con, cliente)
+            con.execute(t.update().where(t.c.id == fila.id).values(**valores))
+            return fila.id
+        return con.execute(t.insert().values(cliente=cliente, creado_en=ahora, extra={}, **valores)
+                           ).inserted_primary_key[0]
 
 
-def obtener_llave(cliente: str) -> str:
-    """Retorna la llave descifrada. None si no existe / no tiene acceso."""
+def cambiar_ajustes(cliente, moneda=None, modelo_atribucion=None, ventana_atribucion=None):
+    """Cambia moneda / modelo / ventana sin volver a pedir la llave. Si algo
+    cambió borra las copias (hay que volver a traerlas) y devuelve True."""
+    actual = obtener(cliente)
+    if not actual:
+        return False
+    nuevos = {
+        "moneda": triple_whale.normalizar_moneda(moneda or actual["moneda"]),
+        "modelo_atribucion": triple_whale.normalizar_modelo(modelo_atribucion or actual["modelo_atribucion"]),
+        "ventana_atribucion": triple_whale.normalizar_ventana(ventana_atribucion or actual["ventana_atribucion"]),
+    }
+    if all(actual.get(k) == v for k, v in nuevos.items()):
+        return False
+    t = db.triple_whale
+    with db.conectar() as con:
+        _borrar_copias(con, cliente)
+        con.execute(t.update().where(t.c.cliente == cliente).values(
+            actualizado_en=db.ahora(), extra={}, ultima_sincronizacion=None, **nuevos))
+    return True
+
+
+def obtener_llave(cliente: str):
+    """La llave descifrada, o None si no hay conexión."""
     t = db.triple_whale
     with db.conectar() as con:
         fila = con.execute(sa.select(t.c.llave).where(t.c.cliente == cliente)).first()
@@ -63,41 +79,68 @@ def obtener_llave(cliente: str) -> str:
     return cifrado.descifrar(fila[0])
 
 
-def obtener(cliente: str) -> dict:
-    """Retorna la configuración Triple Whale del proyecto (sin llave)."""
+def obtener(cliente: str):
+    """La configuración del proyecto SIN la llave, o None. Modelo y ventana
+    pasan por el vocabulario de Triple Whale (una fila de antes de la 0022
+    puede traer «First Touch» o «7»)."""
     t = db.triple_whale
     with db.conectar() as con:
         fila = con.execute(sa.select(
-            t.c.id, t.c.dominio_tienda, t.c.moneda, t.c.modelo_atribucion,
-            t.c.ventana_atribucion, t.c.zona_horaria, t.c.estado, t.c.error,
-            t.c.ultima_sincronizacion
+            t.c.id, t.c.dominio_tienda, t.c.moneda, t.c.modelo_atribucion, t.c.ventana_atribucion,
+            t.c.zona_horaria, t.c.estado, t.c.error, t.c.ultima_sincronizacion, t.c.extra, t.c.creado_en,
         ).where(t.c.cliente == cliente)).first()
     if not fila:
         return None
     return {
-        "id": fila[0],
-        "dominio_tienda": fila[1],
-        "moneda": fila[2],
-        "modelo_atribucion": fila[3],
-        "ventana_atribucion": fila[4],
-        "zona_horaria": fila[5],
-        "estado": fila[6],
-        "error": fila[7],
-        "ultima_sincronizacion": fila[8],
+        "id": fila.id,
+        "dominio_tienda": fila.dominio_tienda,
+        "moneda": triple_whale.normalizar_moneda(fila.moneda),
+        "modelo_atribucion": triple_whale.normalizar_modelo(fila.modelo_atribucion),
+        "ventana_atribucion": triple_whale.normalizar_ventana(fila.ventana_atribucion),
+        "zona_horaria": fila.zona_horaria,
+        "estado": fila.estado,
+        "error": fila.error,
+        "ultima_sincronizacion": fila.ultima_sincronizacion,
+        "extra": dict(fila.extra or {}),
+        "creado_en": fila.creado_en,
     }
 
 
-def actualizar(cliente: str, **campos):
-    """Actualiza la configuración de Triple Whale del proyecto."""
-    ahora = db.ahora()
+def conectados():
+    """Proyectos con Triple Whale conectado (para la sincronización periódica)."""
     t = db.triple_whale
-    campos["actualizado_en"] = ahora
+    with db.conectar() as con:
+        return [r[0] for r in con.execute(sa.select(t.c.cliente).where(t.c.llave.isnot(None)).order_by(t.c.cliente))]
+
+
+def actualizar(cliente: str, **campos):
+    """Actualiza columnas de la conexión (estado, error, ultima_sincronizacion…)."""
+    campos["actualizado_en"] = db.ahora()
+    t = db.triple_whale
     with db.conectar() as con:
         con.execute(t.update().where(t.c.cliente == cliente).values(**campos))
 
 
-def desconectar(cliente: str):
-    """Elimina la conexión Triple Whale del proyecto."""
+def actualizar_extra(cliente, cambios):
+    """Mezcla `cambios` en `extra` (lectura y escritura en la misma transacción)."""
     t = db.triple_whale
     with db.conectar() as con:
-        con.execute(t.delete().where(t.c.cliente == cliente))
+        fila = con.execute(sa.select(t.c.extra).where(t.c.cliente == cliente)).first()
+        if not fila:
+            return
+        extra = dict(fila.extra or {})
+        extra.update(cambios)
+        con.execute(t.update().where(t.c.cliente == cliente).values(extra=extra, actualizado_en=db.ahora()))
+
+
+def _borrar_copias(con, cliente):
+    con.execute(db.tw_anuncio_dia.delete().where(db.tw_anuncio_dia.c.cliente == cliente))
+    con.execute(db.tw_tienda_dia.delete().where(db.tw_tienda_dia.c.cliente == cliente))
+
+
+def desconectar(cliente: str):
+    """Quita la conexión y las métricas copiadas de Triple Whale. Las
+    evaluaciones con IA (ya pagadas) se conservan."""
+    with db.conectar() as con:
+        _borrar_copias(con, cliente)
+        con.execute(db.triple_whale.delete().where(db.triple_whale.c.cliente == cliente))

@@ -34,7 +34,7 @@ from idiomas import N_
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -89,6 +89,15 @@ TARIFAS = {
     # ≈ US$ 0,060 (casi todo es la salida con pensamiento); redondeado hacia arriba.
     "revision_pieza": 0.07,
 }
+
+# Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
+# llamada con visión (una miniatura por anuncio), la doctrina de clasificar,
+# ángulo, gancho y video en el system (caché) y hasta ~10k tokens de salida con
+# pensamiento. Cálculo a la tarifa de claude-sonnet-5: entrada ~6k de doctrina +
+# ~900 por anuncio (datos + miniatura) ≈ US$ 0,03 con 10 anuncios; salida ≈
+# US$ 0,10. Redondeado hacia arriba; el real se registra con los tokens medidos.
+EVALUACION_TW_BASE_USD = 0.08
+EVALUACION_TW_POR_ANUNCIO_USD = 0.012
 
 # «Proponer ideas» de Sprints (entrega 2 del tablero): una llamada a Claude con
 # la doctrina en el system (caché) y hasta ~1 200 tokens de salida por idea
@@ -223,6 +232,8 @@ _ESTIMADORES = {
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),
     "revision_pieza": lambda **_: (TARIFAS["revision_pieza"], "una llamada a Claude con visión"),
+    "evaluacion_tw": lambda n=1, **_: (EVALUACION_TW_BASE_USD + EVALUACION_TW_POR_ANUNCIO_USD * max(1, int(n or 0)),
+                                       f"{max(1, int(n or 0))} anuncio(s) con Claude"),
     "proponer_ideas": lambda n=1, **_: (IDEAS_BASE_USD + IDEAS_POR_IDEA_USD * max(1, int(n or 0)),
                                         f"{max(1, int(n or 0))} idea(s) con Claude"),
 }

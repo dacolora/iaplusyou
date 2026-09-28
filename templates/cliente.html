@@ -5,6 +5,10 @@
   {% include "_tab_tablero.html" %}
 </section>
 
+<section id="tab-triplewhale" class="tab-panel" role="tabpanel">
+  {% include "_tab_triple_whale.html" %}
+</section>
+
 <section id="tab-nicho" class="tab-panel" role="tabpanel">
   {% include "_tab_nicho.html" %}
 </section>
@@ -49,6 +53,7 @@
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
     var paneles = {
       tablero: document.getElementById('tab-tablero'),
+      triplewhale: document.getElementById('tab-triplewhale'),
       nicho: document.getElementById('tab-nicho'),
       referentes: document.getElementById('tab-referentes'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
