@@ -3155,6 +3155,9 @@ msgstr "Missing:"
 msgid "Fecha"
 msgstr "Date"
 
+msgid "Filtros"
+msgstr "Filters"
+
 #, python-format
 msgid "Final %(idioma)s_%(pais)s"
 msgstr "Final %(idioma)s_%(pais)s"
