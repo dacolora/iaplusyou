@@ -13,6 +13,7 @@ import cola
 import db
 import experimentos
 import meta_conexion
+import meta_errores
 import notificaciones
 import triple_whale
 import triple_whale_tiendas
@@ -55,31 +56,11 @@ def _con_credenciales(cliente, fn):
             meta_auth.limpiar()
 
 
-# Errores de Meta que ningún reintento arregla: se traducen a lo que la persona
-# tiene que hacer. Marcas que identifican cada caso dentro del texto que
-# devuelve meta_ads.auth.llamar (subcode o frase de Meta).
-_APP_EN_DESARROLLO = ("1885183", "modo de desarrollo", "development mode")
-
-
 def traducir_error_meta(mensaje, modo="propia"):
-    """Cambia el JSON crudo de Meta por una instrucción cuando el error tiene
-    remedio conocido fuera del código; lo demás pasa tal cual. Hoy: la app en
-    modo Desarrollo (subcode 1885183) — Meta no crea anuncios a partir de
-    posts de una app que no está en Live, y solo la persona (o el admin de
-    Creatv, en modo agencia) puede cambiar eso en developers.facebook.com."""
-    texto = str(mensaje or "")
-    if any(marca in texto for marca in _APP_EN_DESARROLLO):
-        if modo == "agencia":
-            return gettext(
-                "Meta rechazó el anuncio porque la app de Meta de Creatv (modo agencia) está en modo Desarrollo "
-                "(subcódigo 1885183). Avísale al admin de Creatv para que la pase a modo Live y luego reintenta el "
-                "lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se duplica nada.")
-        return gettext(
-            "Meta rechazó el anuncio porque la app de Meta de este proyecto está en modo Desarrollo (subcódigo "
-            "1885183). Pásala a modo Live en developers.facebook.com › Mis apps › tu app › «Modo de la app» y "
-            "reintenta el lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se "
-            "duplica nada.")
-    return texto
+    """Cambia el JSON crudo de Meta por lo que la persona tiene que hacer
+    (`meta_errores.explicar`, el mismo traductor que usan el Tablero y la
+    tarjeta del experimento al mostrarlo); lo que no es de Meta pasa tal cual."""
+    return meta_errores.explicar(mensaje, modo=modo)
 
 
 def _validar_para_lanzar(cliente, experimento_id):

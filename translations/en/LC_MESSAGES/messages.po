@@ -794,6 +794,9 @@ msgstr ""
 "Proposals waiting for approval, winners and\n"
 "  Meta rejections all land in this email. Empty = no email notifications."
 
+msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Configuración aceptando todos los permisos que pide, y reintenta."
+msgstr "The Meta connection is missing a permission for this: reconnect Meta in Settings, accepting every permission it asks for, and try again."
+
 msgid "Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>."
 msgstr "Below, in <em>Connect store › MercadoLibre</em>, press <em>Connect with MercadoLibre</em>."
 
@@ -2038,6 +2041,9 @@ msgstr "From references"
 
 msgid "Detalle"
 msgstr "Detail"
+
+msgid "Detalle técnico (para soporte)"
+msgstr "Technical detail (for support)"
 
 msgid "Di cuántas personas salen, y que no hay nadie más."
 msgstr "Say how many people appear, and that there is nobody else."
@@ -3773,6 +3779,9 @@ msgstr "The figure “%(cifra)s” in the caption isn't in the product's data or
 msgid "La conexión con Meta está rota (token vencido o permisos retirados): vuelve a conectar en Configuración."
 msgstr "The connection with Meta is broken (expired token or withdrawn permissions): reconnect in Settings."
 
+msgid "La conexión con Meta venció o se retiró: vuelve a conectar Meta en Configuración y reintenta."
+msgstr "The Meta connection expired or was revoked: reconnect Meta in Settings and try again."
+
 msgid "La conexión de agencia no está activa ahora mismo"
 msgstr "The agency connection isn't active right now"
 
@@ -4217,6 +4226,9 @@ msgstr "Meta (Pixel/Store)"
 msgid "Meta (anuncios)"
 msgstr "Meta (ads)"
 
+msgid "Meta bloqueó esta acción por un tiempo por sus políticas: revisa los avisos en tu Business Suite antes de reintentar."
+msgstr "Meta temporarily blocked this action under its policies: check the notices in your Business Suite before trying again."
+
 msgid "Meta conectado:"
 msgstr "Meta connected:"
 
@@ -4225,6 +4237,9 @@ msgstr "Meta disconnected from this project and access revoked on Meta."
 
 msgid "Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio."
 msgstr "Meta disconnected from this project. The app stays authorized on your Facebook until you remove it in Settings › Business Integrations."
+
+msgid "Meta está frenando las llamadas por un rato (límite de uso): reintenta en unos minutos."
+msgstr "Meta is throttling calls for a while (usage limit): try again in a few minutes."
 
 msgid "Meta no dio un motivo"
 msgstr "Meta gave no reason"
@@ -4254,11 +4269,25 @@ msgid "Meta rechazó el anuncio porque la app de Meta de este proyecto está en 
 msgstr "Meta rejected the ad because this project's Meta app is in Development mode (subcode 1885183). Switch it to Live mode at developers.facebook.com › My Apps › your app › “App Mode” and retry the launch: the campaign, ad sets and videos already created are reused, nothing is duplicated."
 
 #, python-format
+msgid "Meta rechazó el pedido (código %(codigo)s%(sub)s)%(mensaje)s."
+msgstr "Meta rejected the request (code %(codigo)s%(sub)s)%(mensaje)s."
+
+msgid "Meta rechazó el pedido. Mira el detalle técnico o reintenta en unos minutos."
+msgstr "Meta rejected the request. Check the technical detail or try again in a few minutes."
+
+#, python-format
+msgid "Meta rechazó el pedido: %(motivo)s"
+msgstr "Meta rejected the request: %(motivo)s"
+
+#, python-format
 msgid "Meta rechazó un anuncio de «%(experimento)s»"
 msgstr "Meta rejected an ad in “%(experimento)s”"
 
 msgid "Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras."
 msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once it starts running, “Update metrics” brings in the numbers."
+
+msgid "Meta tuvo una falla temporal: reintenta en unos minutos."
+msgstr "Meta had a temporary failure: try again in a few minutes."
 
 msgid "Meta ya no acepta la conexión de este proyecto"
 msgstr "Meta no longer accepts this project's connection"

@@ -48,6 +48,7 @@ import idiomas
 import cuentas
 import meta_conexion
 import meta_agencia
+import meta_errores
 import flowplus_prompt
 import referencias_flowplus
 import materiales
@@ -133,6 +134,9 @@ app.config["BABEL_DEFAULT_LOCALE"] = "es"
 app.config["BABEL_TRANSLATION_DIRECTORIES"] = idiomas.DIR_TRADUCCIONES
 Babel(app, locale_selector=idiomas.de_peticion)
 app.jinja_env.filters["traducir"] = idiomas.traducir
+# Errores de Meta: el JSON crudo de la Graph API se muestra en palabras de persona
+# (`{{ e.error|error_meta(modo_meta) }}`); el crudo sigue en el detalle técnico.
+app.jinja_env.filters["error_meta"] = meta_errores.explicar
 
 
 @app.url_defaults

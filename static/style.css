@@ -2608,3 +2608,7 @@ body.panel-abierto { overflow: hidden; }
       table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) td:empty { display: none; }
   .admin-scroll, .modal-form-tabla { overflow-x: visible; border: 0; background: none; }
 }
+
+/* Detalle técnico de un error (el texto crudo de Meta, para soporte): plegado y sin salirse. */
+.detalle-tecnico { margin: .2rem 0 .6rem; font-size: .76rem; color: var(--muted); }
+.detalle-tecnico code { display: block; margin-top: .3rem; white-space: pre-wrap; overflow-wrap: anywhere; }
