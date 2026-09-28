@@ -14,12 +14,12 @@ GUION = {"bloques": [{"rol": "hook", "texto_pantalla": "¿Tus pies sufren en cas
 
 
 def _pieza(db, cliente="acme", tipo="final", guion=GUION, productos_ids=("pantufla_nube",), url="https://r2/f.mp4",
-           accion="camina por la casa", idioma="es"):
+           accion="camina por la casa", idioma="es", idioma_base="es"):
     with db.conectar() as con:
         ahora = db.ahora()
         cid = con.execute(db.concepto.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, origen="manual", legado_id=f"cf_{cliente}",
-            idioma_base="es", extra={"productos_ids": list(productos_ids), "accion_central": accion})).inserted_primary_key[0]
+            idioma_base=idioma_base, extra={"productos_ids": list(productos_ids), "accion_central": accion})).inserted_primary_key[0]
         return con.execute(db.pieza.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo=tipo, estado="listo",
             pais="CO", idioma=idioma, url_video=url, legado_id=f"cf_{cliente}__es_CO", guion=guion, extra={})).inserted_primary_key[0]
@@ -352,7 +352,10 @@ def test_caption_organico_arma_el_mensaje_y_parsea_json(monkeypatch):
     assert msg.count("</url_compra>") == 1
     import doctrina
     assert llamadas["system"][0]["text"] == doctrina.texto("caption")
-    assert llamadas["system"][1]["text"] == gp.CAPTION_ORGANICO_PROMPT
+    # El bloque extra va rodeado de la orden de idioma (spec 2026-09-26 §B4) y
+    # con "Link en bio" ya sustituido en el idioma pedido (acá, español).
+    extra_esperado = gp._con_orden(gp.CAPTION_ORGANICO_PROMPT.replace("__LINK_BIO__", gp.LINK_EN_BIO["es"]), "es")
+    assert llamadas["system"][1]["text"] == extra_esperado
     _Msgs.create = lambda self, **kw: type("R", (), {"content": [_Bloque("no es json")]})()
     with pytest.raises(Exception):
         gp.caption_organico({"nombre_producto": "P"}, ["instagram"])
@@ -397,30 +400,48 @@ def test_redactar_marca_fallback_solo_en_la_plataforma_que_claude_no_devolvio(pr
 
 
 def test_redactar_copy_en_el_idioma_de_la_pieza(proyecto, monkeypatch):
-    """Fallback y CTA salen en español/inglés/portugués según `pieza.idioma`;
-    un idioma sin traducción cae a español."""
+    """Fallback y CTA salen en el idioma de la PIEZA (o del `concepto` si la
+    pieza no lo tiene): el proyecto es solo un respaldo. Hasta la fase 6 las
+    finales siguen generándose por destino (una en inglés para EE.UU., otra
+    en portugués para Brasil), así que un proyecto en español publicando esa
+    final NO puede forzar un caption en español encima de un video en otro
+    idioma — publicar es público e irreversible (revisión final fase 4,
+    hallazgo I1)."""
     import generador_prompts
+    import idiomas
+    import proyectos
     org = proyecto["organico"]
     db = proyecto["db"]
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(proyecto["tmp"]))
     _producto()
 
     def explota(contexto, plataformas):
         raise RuntimeError("no")
     monkeypatch.setattr(generador_prompts, "caption_organico", explota)
 
+    # Proyecto en español, pieza en inglés: la pieza manda.
+    idiomas.guardar_de_proyecto("acme", "es")
     pid_en = _pieza(db, idioma="en")
     out_en = org.redactar("acme", pid_en, ["instagram", "facebook"])
     assert "Link in bio." in out_en["instagram"]["caption"]
     assert "Get it here: https://tienda.co/p/pantufla-nube" in out_en["facebook"]["caption"]
 
+    # Pieza en portugués (ni "es" ni "en"): copy en portugués igual, el
+    # proyecto en español no lo tapa.
     pid_pt = _pieza(db, idioma="pt")
     out_pt = org.redactar("acme", pid_pt, ["instagram", "facebook"])
     assert "Link na bio." in out_pt["instagram"]["caption"]
     assert "Garanta o seu: https://tienda.co/p/pantufla-nube" in out_pt["facebook"]["caption"]
 
-    pid_fr = _pieza(db, idioma="fr")  # sin traducción -> español por defecto
-    out_fr = org.redactar("acme", pid_fr, ["instagram"])
-    assert "Link en bio." in out_fr["instagram"]["caption"]
+    # Ni la pieza ni el concepto dicen idioma: recién ahí cae al del proyecto.
+    idiomas.guardar_de_proyecto("acme", "en")
+    pid_sin = _pieza(db, idioma=None, idioma_base=None)
+    out_sin = org.redactar("acme", pid_sin, ["instagram"])
+    assert "Link in bio." in out_sin["instagram"]["caption"]
+
+    idiomas.guardar_de_proyecto("acme", "es")
+    out = org.redactar("acme", pid_sin, ["instagram"])
+    assert "Link en bio." in out["instagram"]["caption"]
 
 
 # ---------- crear / listar ----------

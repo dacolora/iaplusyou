@@ -89,12 +89,18 @@ def test_arbol_oculta_thruplay_en_imagenes(app, base_temporal):
 
 def test_boton_lanzar_se_bloquea_tras_confirmar(app, base_temporal):
     """M4: tras el confirm() el botón se deshabilita y dice «Lanzando…»
-    para que un doble clic no cree dos experimentos."""
+    para que un doble clic no cree dos experimentos.
+
+    Idioma (Task 5, fase 4): ese texto ahora sale de `TEXTO_LANZANDO`
+    (`{{ _('Lanzando…')|tojson }}`, obligatorio dentro de <script>) para poder
+    traducirse — `tojson` escapa «…» como `\\u2026` (el navegador lo decodifica
+    igual), así que la comprobación es por la variable, no por el carácter
+    exacto en el HTML crudo."""
     _pieza(base_temporal)
     html = _html(app)
     inicio = html.index("EN PAUSA (no gasta hasta que actives)")
     handler = html[inicio:html.index("// El setTimeout", inicio)]
-    assert "ev.submitter" in handler and "disabled = true" in handler and "Lanzando…" in handler
+    assert "ev.submitter" in handler and "disabled = true" in handler and "TEXTO_LANZANDO" in handler
 
 
 def test_galeria_muestra_la_doctrina_y_el_paso_3_la_avisa(app, base_temporal):
@@ -108,4 +114,7 @@ def test_galeria_muestra_la_doctrina_y_el_paso_3_la_avisa(app, base_temporal):
     assert "Doctrina: 1 por mejorar" in html and "Doctrina: bien" in html and "Doctrina: sin revisar" in html
     assert f'name="piezas" value="{con}"' in html and 'data-doctrina-n="1"' in html
     assert f'name="piezas" value="{bien}"' in html and 'data-doctrina-n="0"' in html
-    assert 'id="exp-doctrina-aviso"' in html and "puntos para mejorar según la doctrina" in html
+    # Idioma (fase 4): el aviso del paso 3 es una constante de JS con |tojson,
+    # que escapa los no-ASCII («según» sale como según).
+    assert 'id="exp-doctrina-aviso"' in html and "AVISO_DOCTRINA_VARIAS" in html
+    assert "puntos para mejorar seg\\u00fan la doctrina" in html

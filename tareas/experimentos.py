@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import acciones
 import cola
@@ -21,6 +22,7 @@ import db
 import decisor
 import derivaciones
 import experimentos
+import idiomas
 import lanzador
 import notificaciones
 import organico
@@ -64,7 +66,7 @@ def exp_lanzar(tarea):
 def exp_refrescar(tarea):
     p = tarea["payload"]
     n = lanzador.refrescar(p["cliente"], p["experimento_id"])
-    return f"Métricas actualizadas ({n} anuncios)."
+    return gettext("Métricas actualizadas (%(n)s anuncios).", n=n)
 
 
 def _experimentos_en(estados):
@@ -82,7 +84,7 @@ def exp_refrescar_todos(tarea):
     for eid, cliente in filas:
         cola.encolar("exp_refrescar", {"cliente": cliente, "experimento_id": eid}, cliente=cliente,
                      job_id=job_id_refrescar(cliente, eid), duracion_estimada=30, max_intentos=2)
-    return f"{len(filas)} experimentos en cola."
+    return gettext("%(n)s experimentos en cola.", n=len(filas))
 
 
 @registrar("exp_decidir_todos")
@@ -92,7 +94,7 @@ def exp_decidir_todos(tarea):
     for eid, cliente in filas:
         cola.encolar("exp_decidir", {"cliente": cliente, "experimento_id": eid}, cliente=cliente,
                      job_id=job_id_decidir(cliente, eid), duracion_estimada=30, max_intentos=2)
-    return f"{len(filas)} experimentos en cola para decidir."
+    return gettext("%(n)s experimentos en cola para decidir.", n=len(filas))
 
 
 # --- exp_decidir -----------------------------------------------------------
@@ -151,8 +153,11 @@ def _pedir(cliente, eid, accion, payload, motivo, resultado):
     except Exception as error:  # noqa: BLE001
         mensaje_error = cola.sin_token(str(error))
         resultado["errores"].append(f"{accion}: {mensaje_error}")
-        propuestas.crear(cliente, eid, accion, payload, motivo=f"falló al ejecutar: {mensaje_error}")
-        resultado["propuestas"].append(f"{accion} (falló al ejecutar, quedó pendiente de reintento): {mensaje_error}")
+        propuestas.crear(cliente, eid, accion, payload,
+                         motivo=gettext("falló al ejecutar: %(error)s", error=mensaje_error))
+        resultado["propuestas"].append(gettext(
+            "%(accion)s (falló al ejecutar, quedó pendiente de reintento): %(error)s",
+            accion=accion, error=mensaje_error))
         return None
     if estado == "propuesta":
         resultado["propuestas"].append(mensaje)
@@ -177,15 +182,17 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado):
     es_imagen = bool(pz.get("es_imagen"))
     if es_imagen and accion in ("escalar_y_derivar", "rescatar"):
         experimentos.registrar_evento(cliente, ex["id"], "imagen",
-                                      f"{pz['nombre']} ({pz['pais']}): Pieza de imagen: sin rescate/derivación "
-                                      f"(solo videos).", {"accion": accion}, ep_id=ep_id)
+                                      gettext("%(nombre)s (%(pais)s): Pieza de imagen: sin rescate/derivación "
+                                              "(solo videos).", nombre=pz["nombre"], pais=pz["pais"]),
+                                      {"accion": accion}, ep_id=ep_id)
     if accion == "escalar_y_derivar":
         # "escalar" es una acción por país (sube el presupuesto del conjunto
         # en Meta), no por pieza: con varios ganadores del mismo país en una
         # misma pasada, solo el primero la pide — los demás solo derivan.
         if pz["pais"] in resultado["escalados"]:
             experimentos.registrar_evento(cliente, ex["id"], "escalado",
-                                          f"{pz['nombre']} ({pz['pais']}): escalado ya pedido en esta pasada.",
+                                          gettext("%(nombre)s (%(pais)s): escalado ya pedido en esta pasada.",
+                                                  nombre=pz["nombre"], pais=pz["pais"]),
                                           ep_id=ep_id)
         else:
             resultado["escalados"].add(pz["pais"])
@@ -249,8 +256,10 @@ def _rechazada_por_meta(cliente, ex, pz):
     if not (pz.get("extra") or {}).get("rechazo_avisado"):
         experimentos.registrar_evento(
             cliente, ex["id"], "rechazo_meta",
-            f"{pz['nombre']} ({pz['pais']}): anuncio {pz['estado_meta']} en Meta, el decisor no la evalúa "
-            f"hasta que se corrija o se reemplace.", {"estado_meta": pz["estado_meta"]}, ep_id=pz["id"])
+            gettext("%(nombre)s (%(pais)s): anuncio %(estado_meta)s en Meta, el decisor no la evalúa "
+                    "hasta que se corrija o se reemplace.",
+                    nombre=pz["nombre"], pais=pz["pais"], estado_meta=pz["estado_meta"]),
+            {"estado_meta": pz["estado_meta"]}, ep_id=pz["id"])
         experimentos.marcar_pieza(cliente, pz["id"], rechazo_avisado=True)
     return True
 
@@ -273,35 +282,43 @@ def _dias_transcurridos(ex, snaps_por_pieza, ahora):
 
 def _pausar_por_tope(cliente, ex):
     eid = ex["id"]
-    texto = (f"Tope alcanzado: gasto {float(ex.get('gasto_acumulado') or 0):g} de "
-             f"{float(ex.get('tope_total') or 0):g} {ex.get('moneda') or ''}. Se pausa el experimento.")
+    texto = gettext(
+        "Tope alcanzado: gasto %(gasto)s de %(tope)s %(moneda)s. Se pausa el experimento.",
+        gasto=f"{float(ex.get('gasto_acumulado') or 0):g}", tope=f"{float(ex.get('tope_total') or 0):g}",
+        moneda=ex.get("moneda") or "")
     try:
         lanzador.cambiar_estado(cliente, eid, "PAUSED")
     except Exception as error:  # noqa: BLE001
         experimentos.registrar_evento(cliente, eid, "error",
-                                      f"No se pudo pausar por tope: {cola.sin_token(str(error))}")
+                                      gettext("No se pudo pausar por tope: %(error)s", error=cola.sin_token(str(error))))
         raise
     experimentos.registrar_evento(cliente, eid, "tope", texto)
-    notificaciones.avisar(cliente, "tope", f"Tope alcanzado en «{ex['nombre']}»",
-                          f"{texto}\n\nSi quieres seguir, sube el tope total y vuelve a activarlo desde el panel "
-                          f"del experimento #{eid}.")
+    notificaciones.avisar(cliente, "tope", gettext("Tope alcanzado en «%(experimento)s»", experimento=ex["nombre"]),
+                          gettext("%(texto)s\n\nSi quieres seguir, sube el tope total y vuelve a activarlo desde el "
+                                  "panel del experimento #%(id)s.", texto=texto, id=eid))
     return texto
 
 
 def _avisar_resultado(cliente, ex, resultado):
     for pz in resultado["ganadores"]:
         v = next(v for p, v in resultado["veredictos"] if p["id"] == pz["id"])
-        cuerpo = f"{v['motivo']}\n\nExperimento #{ex['id']}, país {pz['pais']}."
+        cuerpo = gettext("%(motivo)s\n\nExperimento #%(id)s, país %(pais)s.",
+                         motivo=v["motivo"], id=ex["id"], pais=pz["pais"])
         if pz["id"] in resultado["organico_propuesto"]:
-            cuerpo += ("\n\nAdemás quedó una propuesta para publicarla orgánica (Reels, Página, TikTok o Shorts, "
-                       "según lo que tengas conectado) con el texto ya redactado: revísalo y apruébala en el panel.")
-        notificaciones.avisar(cliente, "ganador", f"Ganador en «{ex['nombre']}»: {pz['nombre']} ({pz['pais']})", cuerpo)
+            cuerpo += gettext(
+                "\n\nAdemás quedó una propuesta para publicarla orgánica (Reels, Página, TikTok o Shorts, "
+                "según lo que tengas conectado) con el texto ya redactado: revísalo y apruébala en el panel.")
+        notificaciones.avisar(cliente, "ganador",
+                              gettext("Ganador en «%(experimento)s»: %(pieza)s (%(pais)s)",
+                                      experimento=ex["nombre"], pieza=pz["nombre"], pais=pz["pais"]), cuerpo)
     if resultado["propuestas"]:
         lineas = "\n".join(f"- {m}" for m in resultado["propuestas"])
         notificaciones.avisar(cliente, "propuesta",
-                              f"{len(resultado['propuestas'])} propuesta(s) esperan tu aprobación en «{ex['nombre']}»",
-                              f"El decisor dejó estas propuestas pendientes en el experimento #{ex['id']}:\n\n{lineas}\n\n"
-                              f"Nada se ejecuta hasta que las apruebes en el panel.")
+                              gettext("%(num)s propuesta(s) esperan tu aprobación en «%(experimento)s»",
+                                      num=len(resultado["propuestas"]), experimento=ex["nombre"]),
+                              gettext("El decisor dejó estas propuestas pendientes en el experimento #%(id)s:\n\n"
+                                      "%(lineas)s\n\nNada se ejecuta hasta que las apruebes en el panel.",
+                                      id=ex["id"], lineas=lineas))
 
 
 def _marcar_decidido(cliente, ex):
@@ -333,7 +350,7 @@ def _marcar_decidido(cliente, ex):
         return False
     experimentos.actualizar(cliente, ex["id"], estado="decidido")
     experimentos.registrar_evento(cliente, ex["id"], "estado",
-                                  "Experimento decidido: todas las piezas activas tienen veredicto.")
+                                  gettext("Experimento decidido: todas las piezas activas tienen veredicto."))
     return True
 
 
@@ -343,9 +360,9 @@ def exp_decidir(tarea):
     cliente, eid = p["cliente"], p["experimento_id"]
     ex = experimentos.obtener(cliente, eid)
     if ex is None:
-        return "Ese experimento no existe."
+        return gettext("Ese experimento no existe.")
     if ex["estado"] != "corriendo":
-        return f"Experimento en estado {ex['estado']}: no se decide."
+        return gettext("Experimento en estado %(estado)s: no se decide.", estado=ex["estado"])
     if acciones.tope_alcanzado(ex):
         return _pausar_por_tope(cliente, ex)
 
@@ -376,15 +393,15 @@ def exp_decidir(tarea):
 
     _avisar_resultado(cliente, ex, resultado)
     decidido = _marcar_decidido(cliente, ex)
-    partes = [f"{len(resultado['veredictos'])} veredicto(s)"]
+    partes = [gettext("%(n)s veredicto(s)", n=len(resultado["veredictos"]))]
     if resultado["ganadores"]:
-        partes.append(f"{len(resultado['ganadores'])} ganador(es)")
+        partes.append(gettext("%(n)s ganador(es)", n=len(resultado["ganadores"])))
     if resultado["propuestas"]:
-        partes.append(f"{len(resultado['propuestas'])} propuesta(s) pendiente(s)")
+        partes.append(gettext("%(n)s propuesta(s) pendiente(s)", n=len(resultado["propuestas"])))
     if resultado["errores"]:
-        partes.append(f"{len(resultado['errores'])} acción(es) con error")
+        partes.append(gettext("%(n)s acción(es) con error", n=len(resultado["errores"])))
     if decidido:
-        partes.append("experimento decidido")
+        partes.append(gettext("experimento decidido"))
     return ", ".join(partes) + "."
 
 
@@ -402,9 +419,14 @@ def exp_avanzar_todos(tarea):
         if not any(d.get("estado") == "produciendo" for d in ((extra or {}).get("derivaciones") or [])):
             continue
         n += 1
-        try:
-            derivaciones.avanzar(cliente, eid)
-        except Exception as error:
-            experimentos.registrar_evento(cliente, eid, "error",
-                                          f"No se pudo avanzar la derivación: {cola.sin_token(str(error))}")
-    return f"{n} experimentos con derivaciones en producción revisados."
+        # `de_tarea` nunca lanza (a diferencia de `de_proyecto`: un
+        # proyecto.json que no sea un objeto tumbaría toda la pasada, no
+        # solo la derivación de este cliente — revisión final fase 4, M3).
+        with idiomas.en_idioma(idiomas.de_tarea({"payload": {"cliente": cliente}})):
+            try:
+                derivaciones.avanzar(cliente, eid)
+            except Exception as error:
+                experimentos.registrar_evento(cliente, eid, "error",
+                                              gettext("No se pudo avanzar la derivación: %(error)s",
+                                                      error=cola.sin_token(str(error))))
+    return gettext("%(n)s experimentos con derivaciones en producción revisados.", n=n)

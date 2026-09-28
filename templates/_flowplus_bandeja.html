@@ -3,7 +3,7 @@
    FUERA de #form-flowplus porque lleva sus propios <form> de quitar/vaciar) y
    se reemplaza por fetch tras subir/quitar/link, sin recargar la página. #}
 {% if trabajo_link %}
-<p class="crear-ref-aviso fp-link-descargando" data-job="{{ trabajo_link.job_id }}">⏳ Descargando el video del link… aparece aquí solo cuando termine.</p>
+<p class="crear-ref-aviso fp-link-descargando" data-job="{{ trabajo_link.job_id }}">{{ _('⏳ Descargando el video del link… aparece aquí solo cuando termine.') }}</p>
 {% endif %}
 {% if referencias_bandeja %}
 <div class="crear-refs" id="fp-bandeja">
@@ -13,15 +13,15 @@
     <figcaption>{{ r.etiqueta }}{% if r.origen not in ('archivo', None) %} · {{ r.origen }}{% endif %}</figcaption>
     {# Lo que ves es lo que se usa: viaja con el formulario de Crear (la bandeja es del proyecto). #}
     <input type="hidden" name="ref_ids" value="{{ r.id }}" form="form-flowplus">
-    <form method="post" action="{{ url_for('fp_quitar_referencia', cliente=cliente, rid=r.id) }}" data-fp="quitar"><button type="submit" class="crear-ref-quitar" title="Quitar" aria-label="Quitar {{ r.etiqueta }}">×</button></form>
+    <form method="post" action="{{ url_for('fp_quitar_referencia', cliente=cliente, rid=r.id) }}" data-fp="quitar"><button type="submit" class="crear-ref-quitar" title="{{ _('Quitar') }}" aria-label="{{ _('Quitar %(referencia)s', referencia=r.etiqueta) }}">×</button></form>
   </figure>
   {% endfor %}
   <div class="crear-refs-acciones">
-    <button type="button" class="crear-enlace" id="fp-describir">Describir con IA</button>
-    <form method="post" action="{{ url_for('fp_vaciar_referencias', cliente=cliente) }}" data-fp="vaciar" data-confirm="¿Quitar todas las referencias?"><button type="submit" class="crear-enlace crear-enlace-gris">Quitar todas</button></form>
+    <button type="button" class="crear-enlace" id="fp-describir">{{ _('Describir con IA') }}</button>
+    <form method="post" action="{{ url_for('fp_vaciar_referencias', cliente=cliente) }}" data-fp="vaciar" data-confirm="{{ _('¿Quitar todas las referencias?') }}"><button type="submit" class="crear-enlace crear-enlace-gris">{{ _('Quitar todas') }}</button></form>
     <span class="crear-nota" id="fp-describir-estado"></span>
   </div>
 </div>
 {% else %}
-<p class="crear-refs-vacio">Arrastra aquí imágenes o videos, o toca <strong>+</strong> para sumar referencias o elegir del catálogo. Son opcionales: sin nada, se genera solo con tu texto.</p>
+<p class="crear-refs-vacio">{{ _('Arrastra aquí imágenes o videos, o toca <strong>+</strong> para sumar referencias o elegir del catálogo. Son opcionales: sin nada, se genera solo con tu texto.') }}</p>
 {% endif %}

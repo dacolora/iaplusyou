@@ -9,12 +9,19 @@ se lee como terminada con error, y un resultado que llegue tarde se descarta
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
+import idiomas
 from guiones.refinador import Conflicto, DatoInvalido, NoExiste
 
 MINUTOS_TRABAJO = 6
-INTERRUMPIDO = "Se interrumpió; vuelve a intentarlo."
+# N_: se traduce donde se usa (gettext(INTERRUMPIDO) en _vencer_lotes/_vencer_video)
+# — mismo patrón que refinador.MENSAJE_INTERRUMPIDO. Casi siempre corre dentro de
+# una petición (quien mira el panel); en el raro caso de detectarse desde el
+# propio hilo de fondo justo al reanudar, queda en español (aviso transitorio,
+# se reemplaza en el siguiente intento).
+INTERRUMPIDO = idiomas.N_("Se interrumpió; vuelve a intentarlo.")
 MAX_TEXTO = 60000
 
 
@@ -31,11 +38,11 @@ def _dict(fila):
 def crear_lote(cliente, texto, fuente="texto", notion_page_id=None):
     texto = (texto or "").strip() if isinstance(texto, str) else ""
     if fuente == "texto" and not texto:
-        raise DatoInvalido("Pega el guion primero.")
+        raise DatoInvalido(gettext("Pega el guion primero."))
     if fuente == "notion" and not notion_page_id:
-        raise DatoInvalido("Falta la página de Notion.")
+        raise DatoInvalido(gettext("Falta la página de Notion."))
     if len(texto) > MAX_TEXTO:
-        raise DatoInvalido("El guion es demasiado largo (máximo 60 000 caracteres).")
+        raise DatoInvalido(gettext("El guion es demasiado largo (máximo 60 000 caracteres)."))
     titulo = next((ln.strip() for ln in texto.splitlines() if ln.strip()), "Guion de Notion" if fuente == "notion" else "Guion")
     ahora = db.ahora()
     with db.conectar() as con:
@@ -49,7 +56,7 @@ def _vencer_lotes(con, cliente=None, lote_id=None):
     t = db.guion_lote
     q = t.update().where(t.c.estado == "leyendo", t.c.iniciado_en < _limite())
     q = q.where(t.c.cliente == cliente) if cliente is not None else q.where(t.c.id == lote_id)
-    con.execute(q.values(estado="error", aviso=INTERRUMPIDO))
+    con.execute(q.values(estado="error", aviso=gettext(INTERRUMPIDO)))
 
 
 def lote_para_leer(lote_id):
@@ -99,12 +106,12 @@ def reintentar_lote(cliente, lote_id):
     t = db.guion_lote
     with db.conectar() as con:
         if con.execute(sa.select(t.c.id).where(t.c.id == lote_id, t.c.cliente == cliente)).first() is None:
-            raise NoExiste("Ese guion no existe.")
+            raise NoExiste(gettext("Ese guion no existe."))
         ahora = db.ahora()
         r = con.execute(t.update().where(t.c.id == lote_id, t.c.estado == "error")
                         .values(estado="leyendo", aviso=None, iniciado_en=ahora, actualizado_en=ahora))
         if r.rowcount != 1:
-            raise Conflicto("Ese guion no está en error.")
+            raise Conflicto(gettext("Ese guion no está en error."))
 
 
 def lotes(cliente):
@@ -135,7 +142,7 @@ def guion(cliente, guion_id):
             return None
         d["texto_crudo"] = con.execute(sa.select(t.c.texto_crudo).where(t.c.id == d["lote_id"])).scalar() or ""
         d["videos"] = [_dict(f) for f in con.execute(
-            sa.select(v.c.id, v.c.version_n, v.c.nombre, v.c.estado, v.c.estado_imagenes)
+            sa.select(v.c.id, v.c.version_n, v.c.nombre, v.c.config, v.c.estado, v.c.estado_imagenes)
             .where(v.c.guion_id == guion_id).order_by(v.c.version_n))]
     d["lectura"] = d.get("lectura") or {}
     return d
@@ -149,8 +156,8 @@ def guardar_lectura(cliente, guion_id, lectura):
         if r.rowcount == 1:
             return
         if con.execute(sa.select(g.c.id).where(g.c.id == guion_id, g.c.cliente == cliente)).first() is None:
-            raise NoExiste("Ese guion no existe.")
-        raise Conflicto("Este guion ya está confirmado; duplícalo para cambiar la lectura.")
+            raise NoExiste(gettext("Ese guion no existe."))
+        raise Conflicto(gettext("Este guion ya está confirmado; duplícalo para cambiar la lectura."))
 
 
 def confirmar(cliente, guion_id):
@@ -158,13 +165,13 @@ def confirmar(cliente, guion_id):
     with db.conectar() as con:
         fila = con.execute(sa.select(g).where(g.c.id == guion_id, g.c.cliente == cliente)).first()
         if fila is None:
-            raise NoExiste("Ese guion no existe.")
+            raise NoExiste(gettext("Ese guion no existe."))
         if not (fila.lectura or {}).get("lineas"):
-            raise DatoInvalido("El guion necesita al menos una línea antes de confirmarlo.")
+            raise DatoInvalido(gettext("El guion necesita al menos una línea antes de confirmarlo."))
         r = con.execute(g.update().where(g.c.id == guion_id, g.c.estado == "leido")
                         .values(estado="confirmado", actualizado_en=db.ahora()))
         if r.rowcount != 1:
-            raise Conflicto("Este guion ya estaba confirmado.")
+            raise Conflicto(gettext("Este guion ya estaba confirmado."))
 
 
 def duplicar(cliente, guion_id):
@@ -172,7 +179,7 @@ def duplicar(cliente, guion_id):
     with db.conectar() as con:
         fila = con.execute(sa.select(g).where(g.c.id == guion_id, g.c.cliente == cliente)).first()
         if fila is None:
-            raise NoExiste("Ese guion no existe.")
+            raise NoExiste(gettext("Ese guion no existe."))
         orden = con.execute(sa.select(sa.func.max(g.c.orden)).where(g.c.lote_id == fila.lote_id)).scalar() or 0
         ahora = db.ahora()
         titulo = f"{(fila.titulo or 'Guion')[:190]} (copia)"
@@ -186,9 +193,26 @@ def duplicar(cliente, guion_id):
 # --------------------------------------------------------------- videos ---
 
 def nombre_version(config, version_n):
+    """Lo que se GUARDA en `guion_video.nombre` — siempre en español, nunca
+    cambia con el idioma de quien lo crea (si no, quien lo mira después en
+    otro idioma vería una mezcla, o español fijo para siempre en un proyecto
+    en inglés). Para mostrarlo en pantalla usar `etiqueta_version`, que
+    arma lo mismo pero traducido para quien mira — nunca se persiste."""
     dur = config.get("duracion_objetivo")
     modo = "voz en off" if config.get("modo") == "voiceover" else "diálogo"
     return f"{f'{dur} s' if dur else 'Completo'} · {modo} · v{version_n}"
+
+
+def etiqueta_version(config, version_n):
+    """Como `nombre_version`, pero con `gettext` en las dos palabras que sí
+    son texto (no la duración ni el número de versión, que son datos): para
+    pintar en pantalla dentro de una petición, en el idioma de quien mira.
+    Nunca se guarda — `nombre_version` sigue siendo lo que va a la base."""
+    config = config or {}
+    dur = config.get("duracion_objetivo")
+    modo = gettext("voz en off") if config.get("modo") == "voiceover" else gettext("diálogo")
+    duracion = f"{dur} s" if dur else gettext("Completo")
+    return f"{duracion} · {modo} · v{version_n}"
 
 
 _DEFECTOS_VIDEO = (("config", dict), ("recorte", dict), ("clips", list), ("hooks_alt", dict),
@@ -198,11 +222,11 @@ _DEFECTOS_VIDEO = (("config", dict), ("recorte", dict), ("clips", list), ("hooks
 def _vencer_video(con, video_id):
     v, lim = db.guion_video, _limite()
     con.execute(v.update().where(v.c.id == video_id, v.c.estado == "recortando", v.c.iniciado_en < lim)
-                .values(estado="configurando", aviso=INTERRUMPIDO))
+                .values(estado="configurando", aviso=gettext(INTERRUMPIDO)))
     con.execute(v.update().where(v.c.id == video_id, v.c.estado == "armando", v.c.iniciado_en < lim)
-                .values(estado="error", aviso=INTERRUMPIDO))
+                .values(estado="error", aviso=gettext(INTERRUMPIDO)))
     con.execute(v.update().where(v.c.id == video_id, v.c.estado_imagenes == "escribiendo", v.c.iniciado_en < lim)
-                .values(estado_imagenes="error", aviso_imagenes=INTERRUMPIDO))
+                .values(estado_imagenes="error", aviso_imagenes=gettext(INTERRUMPIDO)))
 
 
 def _video_completo(con, video_id):
@@ -225,7 +249,7 @@ def _bloquear_video(con, cliente, video_id):
     r = con.execute(v.update().where(v.c.id == video_id, v.c.cliente == cliente)
                     .values(actualizado_en=v.c.actualizado_en))
     if r.rowcount != 1:
-        raise NoExiste("Esa versión no existe.")
+        raise NoExiste(gettext("Esa versión no existe."))
     _vencer_video(con, video_id)
     return con.execute(sa.select(v).where(v.c.id == video_id)).first()
 
@@ -236,9 +260,9 @@ def crear_video(cliente, guion_id, config, recorte=None, plan=None, estado="conf
         r = con.execute(g.update().where(g.c.id == guion_id, g.c.cliente == cliente)
                         .values(actualizado_en=g.c.actualizado_en))
         if r.rowcount != 1:
-            raise NoExiste("Ese guion no existe.")
+            raise NoExiste(gettext("Ese guion no existe."))
         if con.execute(sa.select(g.c.estado).where(g.c.id == guion_id)).scalar() != "confirmado":
-            raise Conflicto("Confirma el guion antes de armar un video.")
+            raise Conflicto(gettext("Confirma el guion antes de armar un video."))
         n = (con.execute(sa.select(sa.func.max(v.c.version_n)).where(v.c.guion_id == guion_id)).scalar() or 0) + 1
         ahora = db.ahora()
         r = con.execute(sa.insert(v).values(
@@ -268,14 +292,17 @@ def guardar_config(cliente, video_id, config):
     with db.conectar() as con:
         fila = _bloquear_video(con, cliente, video_id)
         if fila.estado != "configurando":
-            raise Conflicto("Esta versión ya no se puede cambiar; crea una versión nueva.")
+            raise Conflicto(gettext("Esta versión ya no se puede cambiar; crea una versión nueva."))
         con.execute(v.update().where(v.c.id == video_id).values(
             config=config, nombre=nombre_version(config, fila.version_n), aviso=None, actualizado_en=db.ahora()))
 
 
-_YA_TRABAJANDO = {"recortando": "Claude está proponiendo qué quitar; espera a que termine.",
-                  "armando": "Claude está armando los clips; espera a que termine.",
-                  "armado": "Esta versión ya está armada; crea una versión nueva para cambiarla."}
+# N_: cada valor se traduce con gettext() en empezar() (siempre dentro de una
+# petición) — mismo patrón que INTERRUMPIDO/refinador.MENSAJE_INTERRUMPIDO.
+_YA_TRABAJANDO = {"recortando": idiomas.N_("Claude está proponiendo qué quitar; espera a que termine."),
+                  "armando": idiomas.N_("Claude está armando los clips; espera a que termine."),
+                  "armado": idiomas.N_("Esta versión ya está armada; crea una versión nueva para cambiarla.")}
+_YA_TRABAJANDO_DEFECTO = idiomas.N_("Esta versión no admite esa acción ahora.")
 
 
 def empezar(cliente, video_id, estado_nuevo, desde):
@@ -283,7 +310,7 @@ def empezar(cliente, video_id, estado_nuevo, desde):
     with db.conectar() as con:
         fila = _bloquear_video(con, cliente, video_id)
         if fila.estado not in desde:
-            raise Conflicto(_YA_TRABAJANDO.get(fila.estado, "Esta versión no admite esa acción ahora."))
+            raise Conflicto(gettext(_YA_TRABAJANDO.get(fila.estado, _YA_TRABAJANDO_DEFECTO)))
         ahora = db.ahora()
         con.execute(v.update().where(v.c.id == video_id)
                     .values(estado=estado_nuevo, aviso=None, iniciado_en=ahora, actualizado_en=ahora))
@@ -335,7 +362,7 @@ def nueva_version(cliente, video_id, config=None, plan=None):
     recorte se copia si no cambian la duración objetivo ni el hook."""
     base = video(cliente, video_id)
     if base is None:
-        raise NoExiste("Esa versión no existe.")
+        raise NoExiste(gettext("Esa versión no existe."))
     cfg = config or base["config"]
     mismo = (cfg.get("duracion_objetivo") == base["config"].get("duracion_objetivo")
              and cfg.get("hook") == base["config"].get("hook"))
@@ -356,9 +383,9 @@ def empezar_imagenes(cliente, video_id):
     with db.conectar() as con:
         fila = _bloquear_video(con, cliente, video_id)
         if fila.estado != "armado":
-            raise Conflicto("Primero arma los clips de esta versión.")
+            raise Conflicto(gettext("Primero arma los clips de esta versión."))
         if fila.estado_imagenes not in ("ninguno", "error"):
-            raise Conflicto("Los prompts de imágenes de esta versión ya están hechos o en camino.")
+            raise Conflicto(gettext("Los prompts de imágenes de esta versión ya están hechos o en camino."))
         ahora = db.ahora()
         con.execute(v.update().where(v.c.id == video_id).values(
             estado_imagenes="escribiendo", aviso_imagenes=None, iniciado_en=ahora, actualizado_en=ahora))
@@ -391,13 +418,13 @@ def guardar_quitadas(cliente, video_id, quitadas):
     try:
         ns = sorted({int(n) for n in quitadas})
     except (TypeError, ValueError):
-        raise DatoInvalido("Las líneas a quitar tienen que ser números.") from None
+        raise DatoInvalido(gettext("Las líneas a quitar tienen que ser números.")) from None
     if 1 in ns:
-        raise DatoInvalido("La línea 1 (el hook) no se puede quitar.")
+        raise DatoInvalido(gettext("La línea 1 (el hook) no se puede quitar."))
     v = db.guion_video
     with db.conectar() as con:
         fila = _bloquear_video(con, cliente, video_id)
         if fila.estado != "configurando":
-            raise Conflicto("Esta versión ya no se puede cambiar; crea una versión nueva.")
+            raise Conflicto(gettext("Esta versión ya no se puede cambiar; crea una versión nueva."))
         recorte = dict(fila.recorte or {}, quitadas=ns)
         con.execute(v.update().where(v.c.id == video_id).values(recorte=recorte, actualizado_en=db.ahora()))

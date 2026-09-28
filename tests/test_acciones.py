@@ -221,6 +221,39 @@ def test_pedir_registra_evento_error_y_relanza(ent, monkeypatch):
     assert errores[0]["datos"]["accion"] == "pausar"
 
 
+def test_ejecutar_propuesta_mensaje_de_quien_mira_evento_del_proyecto(ent, tmp_path, monkeypatch):
+    """Fix round 1, hallazgo 2: cuando `ejecutar` viene de aprobar una
+    propuesta a mano (propuesta_id/ep_id_evento — dashboard._ejecutar_propuesta),
+    el mensaje que DEVUELVE (para el flash de quien aprobó) sigue el idioma
+    AMBIENTE de esa llamada — el de quien mira, en una ruta —, mientras que el
+    evento que queda en la bitácora sigue SIEMPRE el idioma del proyecto (spec
+    2026-09-26 §B3: lo que se guarda sigue al proyecto, lo que responde una
+    ruta sigue a quien mira), sin importar en qué idioma esté mirando quien
+    aprueba. Antes ambos se armaban juntos dentro de un único
+    idiomas.en_idioma(proyecto) y el flash le llegaba a la persona en el
+    idioma del proyecto, no en el suyo, cuando diferían."""
+    import idiomas
+    import proyectos
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+
+    # Proyecto en español, alguien mirando en inglés aprueba la propuesta.
+    idiomas.guardar_de_proyecto("acme", "es")
+    with idiomas.en_idioma("en"):
+        mensaje = ac.ejecutar("acme", eid, "pausar", {"ep_id": ep}, propuesta_id=1, ep_id_evento=ep)
+    assert mensaje == "Paused Final es_CO (CO)."
+    evento = ex.eventos("acme", eid)[0]   # eventos() viene más nuevo primero (id desc)
+    assert evento["mensaje"] == "Pausada Final es_CO (CO). (propuesta #1 aprobada a mano)"
+
+    # Al revés: proyecto en inglés, alguien mirando en español aprueba.
+    idiomas.guardar_de_proyecto("acme", "en")
+    with idiomas.en_idioma("es"):
+        mensaje2 = ac.ejecutar("acme", eid, "pausar", {"ep_id": ep}, propuesta_id=2, ep_id_evento=ep)
+    assert mensaje2 == "Pausada Final es_CO (CO)."
+    evento2 = ex.eventos("acme", eid)[0]
+    assert evento2["mensaje"] == "Paused Final es_CO (CO). (proposal #2 approved by hand)"
+
+
 def test_pedir_derivar_en_profundidad_maxima_propone_aunque_sea_auto(ent):
     """I-9: a partir de `PROFUNDIDAD_MAXIMA` generaciones (extra.profundidad
     del experimento) un ganador ya no deriva solo ni en `auto`: queda como
@@ -401,6 +434,37 @@ def test_ejecutar_publicar_organico_salta_vivas_y_no_encola_dos_veces(org):
     msg3 = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
     assert "no tiene nada nuevo que publicar" in msg3
     assert len(organico.listar("acme", pieza_id=pid)) == 2
+
+
+def test_ejecutar_publicar_organico_duplicado_en_proyecto_ingles_se_salta(org, monkeypatch):
+    """Fix round 1, hallazgo 1: `_publicar_organico` distinguía la carrera de
+    `organico.crear` («ya está publicada», índice único parcial) mirando un
+    fragmento de texto en español dentro del ValueError — con un proyecto en
+    inglés ese mensaje sale en inglés y la comparación fallaba, así que un
+    duplicado benigno cae en la rama de creación parcial (marca error y
+    relanza) en vez de saltarse. Ahora se distingue por tipo
+    (organico.YaPublicada), no por texto: dentro de idiomas.en_idioma("en")
+    la plataforma se salta igual (queda en `saltadas`), no en error ni
+    relanzando."""
+    import idiomas
+    ac, eid, ep, pid, organico = org["ac"], org["eid"], org["ep"], org["pid"], org["organico"]
+    real = organico.crear
+
+    def crear_con_carrera(cliente, pieza_id, plataforma, *a, **kw):
+        if plataforma == "instagram":
+            # Simula la carrera real de organico.crear: dos procesos crean a
+            # la vez y el índice único parcial deja a uno con YaPublicada,
+            # con el mensaje YA en el idioma ambiente (inglés acá).
+            raise organico.YaPublicada("That piece is already published (or queued) on Instagram Reels.")
+        return real(cliente, pieza_id, plataforma, *a, **kw)
+    monkeypatch.setattr(ac.organico, "crear", crear_con_carrera)
+
+    with idiomas.en_idioma("en"):
+        msg = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert "Facebook" in msg
+    pubs = organico.listar("acme", pieza_id=pid)
+    # Solo Facebook se creó; Instagram se saltó (no quedó en error ni relanzó).
+    assert [(p["plataforma"], p["estado"]) for p in pubs] == [("facebook", "en_cola")]
 
 
 def test_ejecutar_publicar_organico_sin_canales_no_es_error(org):

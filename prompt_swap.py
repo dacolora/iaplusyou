@@ -14,6 +14,7 @@ un mueble, sigue pliegues y ni siquiera hay una por persona. Cada tipo trae sus
 propias reglas de dónde vive el producto, cómo se cuenta y qué significa que
 "quede bien".
 """
+import idiomas
 
 TIPO_POR_DEFECTO = "calzado"
 
@@ -29,7 +30,7 @@ TIPO_POR_DEFECTO = "calzado"
 #                concuerde: con "la cobija" no puede decir "ninguno se queda"
 TIPOS = {
     "calzado": {
-        "etiqueta": "Calzado (chanclas, zapatos, sandalias)",
+        "etiqueta": idiomas.N_("Calzado (chanclas, zapatos, sandalias)"),
         "articulo": "el",
         "sustantivo": "calzado",
         "ubicacion": "en los pies de cada persona",
@@ -50,7 +51,7 @@ TIPOS = {
         "plural": ("todos", "ninguno"),
     },
     "prenda": {
-        "etiqueta": "Prenda de vestir (saco, camiseta, chaqueta)",
+        "etiqueta": idiomas.N_("Prenda de vestir (saco, camiseta, chaqueta)"),
         "articulo": "la",
         "sustantivo": "prenda",
         "ubicacion": "sobre el cuerpo de cada persona",
@@ -68,7 +69,7 @@ TIPOS = {
         "plural": ("todas", "ninguna"),
     },
     "bolso": {
-        "etiqueta": "Bolso o accesorio que se carga",
+        "etiqueta": idiomas.N_("Bolso o accesorio que se carga"),
         "articulo": "el",
         "sustantivo": "bolso",
         "ubicacion": "que carga, sostiene o lleva colgado cada persona",
@@ -86,7 +87,7 @@ TIPOS = {
         "plural": ("todos", "ninguno"),
     },
     "textil_hogar": {
-        "etiqueta": "Textil de hogar (cobija, manta, cojín)",
+        "etiqueta": idiomas.N_("Textil de hogar (cobija, manta, cojín)"),
         "articulo": "la",
         "sustantivo": "cobija o textil",
         "ubicacion": "sobre la persona, la cama, el sofá o donde esté puesta en la escena",
@@ -106,7 +107,7 @@ TIPOS = {
         "plural": ("todas", "ninguna"),
     },
     "otro": {
-        "etiqueta": "Otro (usa la descripción del producto)",
+        "etiqueta": idiomas.N_("Otro (usa la descripción del producto)"),
         "articulo": "el",
         "sustantivo": "producto",
         "ubicacion": "en el lugar exacto de la escena donde está el producto original",

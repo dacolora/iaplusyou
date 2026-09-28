@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 import requests
 import sqlalchemy as sa
+from flask_babel import gettext
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import cifrado
@@ -23,7 +24,7 @@ _LISTAS = ("bulleted_list_item", "numbered_list_item", "to_do")
 
 
 class ErrorNotion(Exception):
-    """Mensaje en español que se muestra tal cual."""
+    """Mensaje ya traducido (gettext, en el idioma de quien mira la pantalla) que se muestra tal cual."""
 
 
 def extraer_id(url):
@@ -76,16 +77,17 @@ def _get(llave_, ruta, http, params=None):
         r = http.get(f"{API}{ruta}", headers={"Authorization": f"Bearer {llave_}", "Notion-Version": VERSION},
                      params=params, timeout=30)
     except requests.RequestException:
-        raise ErrorNotion("No se pudo hablar con Notion; intenta de nuevo en un momento.") from None
+        raise ErrorNotion(gettext("No se pudo hablar con Notion; intenta de nuevo en un momento.")) from None
     if r.status_code == 401:
-        raise ErrorNotion("La llave de Notion no sirve; vuelve a conectarla.")
+        raise ErrorNotion(gettext("La llave de Notion no sirve; vuelve a conectarla."))
     if r.status_code in (403, 404):
-        raise ErrorNotion("Esa página no está compartida con tu integración de Notion "
-                          "(en la página: ··· › Conexiones › tu integración).")
+        raise ErrorNotion(gettext("Esa página no está compartida con tu integración de Notion "
+                                  "(en la página: ··· › Conexiones › tu integración)."))
     if r.status_code == 429:
-        raise ErrorNotion("Notion pidió esperar; intenta en un minuto.")
+        raise ErrorNotion(gettext("Notion pidió esperar; intenta en un minuto."))
     if not r.ok:
-        raise ErrorNotion(f"Notion respondió con un error {r.status_code}; intenta de nuevo.")
+        raise ErrorNotion(gettext("Notion respondió con un error %(status)s; intenta de nuevo.",
+                                  status=r.status_code))
     return r.json()
 
 
@@ -107,7 +109,7 @@ def _hijos(llave_, bloque_id, http, profundidad, cuenta, lineas):
         for b in d.get("results", []):
             cuenta[0] += 1
             if cuenta[0] > MAX_BLOQUES:
-                raise ErrorNotion("La página es demasiado larga (más de 3000 bloques).")
+                raise ErrorNotion(gettext("La página es demasiado larga (más de 3000 bloques)."))
             lineas.append(_texto_bloque(b))
             if b.get("has_children") and profundidad < MAX_PROFUNDIDAD and b.get("type") != "child_page":
                 _hijos(llave_, b["id"], http, profundidad + 1, cuenta, lineas)
@@ -126,5 +128,5 @@ def leer_pagina(llave_, page_id, http=requests):
     _hijos(llave_, page_id, http, 1, [0], lineas)
     texto = re.sub(r"\n{3,}", "\n\n", "\n".join(lineas)).strip()
     if not texto:
-        raise ErrorNotion("La página de Notion está vacía.")
+        raise ErrorNotion(gettext("La página de Notion está vacía."))
     return titulo, texto

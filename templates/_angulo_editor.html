@@ -49,7 +49,7 @@
     <label class="campo-label">Gancho <a href="{{ doctrina_url }}#gancho" target="_blank" rel="noopener">¿Por qué?</a> <small class="vacio angulo-cuenta-gancho"></small>
       <input data-angulo-campo="gancho" value="{{ a.get('gancho') or '' }}" {{ dis }}></label>
     {% set faltantes = [] %}
-    {% for f in a.get('faltantes') or [] %}{% if f is string and not f.startswith(PREFIJO_ERROR) %}{% set _ = faltantes.append(f) %}{% endif %}{% endfor %}
+    {% for f in a.get('faltantes') or [] %}{% if f is string and not f.startswith(PREFIJO_ERROR) %}{% set _nada = faltantes.append(f) %}{% endif %}{% endfor %}
     {% if faltantes %}
     <div class="angulo-faltantes"><span class="campo-label">Lo que Claude no encontró en los datos</span>
       <ul>{% for f in faltantes %}<li>{{ f }}</li>{% endfor %}</ul>
@@ -59,7 +59,7 @@
     {# Revisión final #2 (§11 «la interfaz lo dice»): los «error: …» guardados
        se ven como aviso desde que se abre el editor, no solo tras guardar. #}
     {% set avisos_guardados = [] %}
-    {% for f in a.get('faltantes') or [] %}{% if f is string and f.startswith(PREFIJO_ERROR) %}{% set _ = avisos_guardados.append(mensaje_error(f[(PREFIJO_ERROR | length):])) %}{% endif %}{% endfor %}
+    {% for f in a.get('faltantes') or [] %}{% if f is string and f.startswith(PREFIJO_ERROR) %}{% set _nada = avisos_guardados.append(mensaje_error(f[(PREFIJO_ERROR | length):])) %}{% endif %}{% endfor %}
     <ul class="angulo-avisos" {% if not avisos_guardados %}hidden{% endif %}>{% for texto in avisos_guardados %}<li>{{ texto }}</li>{% endfor %}</ul>
     <span class="angulo-guardado vacio" hidden>Guardado</span>
   </div>

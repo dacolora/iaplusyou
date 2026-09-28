@@ -6,6 +6,7 @@ códigos HTTP; la lógica vive en `guiones.refinador`. `dashboard._guard_por_cli
 protege estas rutas porque la URL lleva <cliente>.
 """
 from flask import Blueprint, jsonify, request, session
+from flask_babel import gettext
 
 import gastos
 import trabajos
@@ -27,7 +28,7 @@ def _mismo_origen():
 @bp.before_request
 def _solo_mismo_origen():
     if request.method == "POST" and not _mismo_origen():
-        return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
+        return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
     return None
 
 
@@ -37,7 +38,7 @@ def _cuerpo():
 
 
 def _sin_cuerpo():
-    return jsonify({"error": "Cuerpo inválido: se esperaba un objeto JSON."}), 400
+    return jsonify({"error": gettext("Cuerpo inválido: se esperaba un objeto JSON.")}), 400
 
 
 def _entero(v):
@@ -91,7 +92,7 @@ def prompt_crear(cliente):
 def prompt_ver(cliente, pid):
     detalle = refinador.obtener(cliente, pid)
     if detalle is None:
-        return jsonify({"error": "Ese prompt no existe."}), 404
+        return jsonify({"error": gettext("Ese prompt no existe.")}), 404
     return _respuesta(detalle)
 
 
@@ -119,9 +120,9 @@ def prompt_usar(cliente, pid):
     if mensaje_id is not None:
         mensaje_id = _entero(mensaje_id)
         if mensaje_id is None:
-            return jsonify({"error": "mensaje_id inválido."}), 400
+            return jsonify({"error": gettext("mensaje_id inválido.")}), 400
     if version_n is None:
-        return jsonify({"error": "Falta la versión del prompt (version_n)."}), 400
+        return jsonify({"error": gettext("Falta la versión del prompt (version_n).")}), 400
     try:
         return _respuesta(refinador.usar_version(cliente, pid, mensaje_id, version_n))
     except refinador.ErrorRefinador as e:
@@ -135,7 +136,7 @@ def prompt_editar(cliente, pid):
         return _sin_cuerpo()
     version_n = _entero(cuerpo.get("version_n"))
     if version_n is None:
-        return jsonify({"error": "Falta la versión del prompt (version_n)."}), 400
+        return jsonify({"error": gettext("Falta la versión del prompt (version_n).")}), 400
     try:
         return _respuesta(refinador.editar(cliente, pid, cuerpo.get("texto"), version_n))
     except refinador.ErrorRefinador as e:
@@ -151,7 +152,7 @@ def prompt_aprobar(cliente, pid):
     if cuerpo.get("version_n") is not None:
         version_n = _entero(cuerpo.get("version_n"))
         if version_n is None:
-            return jsonify({"error": "version_n inválido."}), 400
+            return jsonify({"error": gettext("version_n inválido.")}), 400
     try:
         return _respuesta(refinador.aprobar(cliente, pid, version_n=version_n))
     except refinador.ErrorRefinador as e:

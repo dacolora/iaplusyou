@@ -39,12 +39,14 @@ import os
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import atribucion
 import cifrado
 import cola
 import conectores
 import db
+import idiomas
 import importador
 import notificaciones
 import tiendas
@@ -113,6 +115,9 @@ def _encolar_continuacion(tipo, payload, cliente, job_id, duracion_estimada):
 # --- helpers ---------------------------------------------------------------
 
 _ERRORES_TIENDA = (ErrorConector, cifrado.ErrorCifrado, ValueError)
+# Texto de "que": se traduce con gettext() sobre el valor (nunca en el dict
+# literal, así el extractor de Babel ve el N_() de cada valor).
+QUE_SINCRONIZA = {"productos": idiomas.N_("productos"), "pedidos": idiomas.N_("pedidos")}
 
 
 def _conector(cliente, tienda, cargar_descripciones=False):
@@ -144,10 +149,12 @@ def _marcar_rota(cliente, tienda, tarea, que, error):
     tiendas.actualizar(cliente, tienda["id"], estado="rota", error=mensaje)
     if _ultimo_intento(tarea):
         nombre = tienda.get("nombre") or tienda.get("dominio") or tienda.get("tipo")
+        que_txt = gettext(QUE_SINCRONIZA.get(que, que))
         notificaciones.avisar(
-            cliente, "tienda", f"La tienda «{nombre}» dejó de sincronizar",
-            f"No se pudieron sincronizar los {que} de la tienda {nombre} ({tienda.get('tipo')}):\n\n{mensaje}\n\n"
-            f"Revisa la conexión desde el panel de Tiendas y vuelve a sincronizar.")
+            cliente, "tienda", gettext("La tienda «%(nombre)s» dejó de sincronizar", nombre=nombre),
+            gettext("No se pudieron sincronizar los %(que)s de la tienda %(nombre)s (%(tipo)s):\n\n%(mensaje)s\n\n"
+                    "Revisa la conexión desde el panel de Tiendas y vuelve a sincronizar.",
+                    que=que_txt, nombre=nombre, tipo=tienda.get("tipo"), mensaje=mensaje))
     return mensaje
 
 
@@ -166,7 +173,7 @@ def tienda_sync_productos(tarea):
     job_id = tarea.get("job_id") or job_id_sync_productos(cliente, tid)
     tienda = tiendas.obtener(cliente, tid)
     if tienda is None:
-        return "Esa tienda no existe."
+        return gettext("Esa tienda no existe.")
     try:
         # Primera importación de esta fuente: vale la pena pedir descripciones.
         primera = not any(pr["fuente"] == tienda["tipo"]
@@ -195,7 +202,7 @@ def tienda_sync_productos(tarea):
     tiendas.actualizar(cliente, tid, estado="conectada", error=None, ultima_sync_productos=db.ahora())
     texto = importador.resumen_texto(resumen)
     if archivados:
-        texto += f" {archivados} archivado(s) por no estar ya en la tienda."
+        texto += " " + gettext("%(n)s archivado(s) por no estar ya en la tienda.", n=archivados)
     if resumen.get("pendientes"):
         _encolar_continuacion("tienda_sync_productos", {"cliente": cliente, "tienda_id": tid}, cliente, job_id, 120)
     return texto
@@ -219,7 +226,7 @@ def tienda_sync_pedidos(tarea):
     cliente, tid = p["cliente"], p["tienda_id"]
     tienda = tiendas.obtener(cliente, tid)
     if tienda is None:
-        return "Esa tienda no existe."
+        return gettext("Esa tienda no existe.")
     inicio = db.ahora()
     try:
         con = _conector(cliente, tienda)
@@ -227,7 +234,8 @@ def tienda_sync_pedidos(tarea):
         mensaje = _marcar_rota(cliente, tienda, tarea, "pedidos", error)
         raise ErrorConector(mensaje) from error
     if not getattr(con, "tiene_pedidos", False):
-        return f"La tienda {_nombre(tienda)} no expone pedidos; no hay nada que sincronizar."
+        return gettext("La tienda %(nombre)s no expone pedidos; no hay nada que sincronizar.",
+                       nombre=_nombre(tienda))
     try:
         pedidos = con.pedidos_desde(_desde_para_pedidos(tienda))
     except ErrorConector as error:
@@ -246,7 +254,8 @@ def tienda_sync_pedidos(tarea):
     # `inicio` (no "ahora"): un pedido creado mientras corría la sync entra en
     # la próxima ventana en vez de perderse.
     tiendas.actualizar(cliente, tid, estado="conectada", error=None, ultima_sync_pedidos=inicio)
-    return f"{len(pedidos)} pedido(s) leído(s), {nuevos} nuevo(s), {resueltos} atribuido(s) a piezas."
+    return gettext("%(leidos)s pedido(s) leído(s), %(nuevos)s nuevo(s), %(atribuidos)s atribuido(s) a piezas.",
+                   leidos=len(pedidos), nuevos=nuevos, atribuidos=resueltos)
 
 
 # --- importar archivo / URL --------------------------------------------------
@@ -270,7 +279,7 @@ def catalogo_importar(tarea):
             resumen = importador.desde_url(cliente, url, on_progreso=avanzar, max_activos=MAX_ACTIVOS_IMPORTAR)
         else:
             if not p.get("ruta"):
-                raise ErrorConector("La importación no trae archivo ni URL.")
+                raise ErrorConector(gettext("La importación no trae archivo ni URL."))
             resumen = importador.desde_archivo(cliente, p["ruta"], p.get("nombre_archivo") or p["ruta"],
                                                on_progreso=avanzar, max_activos=MAX_ACTIVOS_IMPORTAR)
             if resumen.get("pendientes"):
@@ -290,13 +299,14 @@ def catalogo_importar(tarea):
                 pass
     if continua:
         guardados = int(resumen.get("nuevos") or 0) + int(resumen.get("actualizados") or 0)
-        texto = (f"Importación en curso: {guardados} producto(s) guardado(s), "
-                 f"{resumen.get('activos', 0)} activo(s) creado(s); el resto se completa solo en unos minutos.")
+        texto = gettext(
+            "Importación en curso: %(guardados)s producto(s) guardado(s), %(activos)s activo(s) creado(s); "
+            "el resto se completa solo en unos minutos.", guardados=guardados, activos=resumen.get("activos", 0))
         errores = resumen.get("errores") or []
         if errores:
-            texto += f" {len(errores)} aviso(s): " + "; ".join(errores[:3])
+            texto += " " + gettext("%(n)s aviso(s): %(detalle)s", n=len(errores), detalle="; ".join(errores[:3]))
         return texto
-    return "Importación lista: " + importador.resumen_texto(resumen)
+    return gettext("Importación lista: %(resumen)s", resumen=importador.resumen_texto(resumen))
 
 
 # --- crear activo de un producto ---------------------------------------------
@@ -312,15 +322,15 @@ def producto_vincular(tarea):
     job_id = tarea.get("job_id") or job_id_vincular(cliente, pid)
     prod = tiendas.producto(cliente, pid)
     if prod is None:
-        raise ErrorConector("Ese producto ya no existe.")
+        raise ErrorConector(gettext("Ese producto ya no existe."))
     trabajos.reportar(job_id, etapa="Bajando fotos", detalle=prod.get("nombre") or f"producto {pid}")
     errores = []
     activo_id = importador.vincular_activo(cliente, pid, forzar_fotos=True, errores=errores)
     trabajos.reportar(job_id, etapa="Creando el activo")
     if not activo_id:
-        raise ErrorConector("No pude crear el activo: "
-                            + (" ".join(errores) or "el producto no tiene fotos descargables."))
-    texto = f"Activo «{activo_id}» listo en el Catálogo."
+        raise ErrorConector(gettext("No pude crear el activo: %(detalle)s",
+                                    detalle=" ".join(errores) or gettext("el producto no tiene fotos descargables.")))
+    texto = gettext("Activo «%(activo_id)s» listo en el Catálogo.", activo_id=activo_id)
     if errores:
         texto += " " + " ".join(errores)
     return texto
@@ -350,7 +360,7 @@ def tienda_sync_productos_todas(tarea):
                         job_id=job_id_sync_productos(cliente, tid), duracion_estimada=120,
                         max_intentos=MAX_INTENTOS_SYNC):
             n += 1
-    return f"{n} tienda(s) en cola para sincronizar productos."
+    return gettext("%(n)s tienda(s) en cola para sincronizar productos.", n=n)
 
 
 def _clientes_con_atribucion_tienda():
@@ -378,7 +388,7 @@ def tienda_sync_pedidos_todas(tarea):
                         job_id=job_id_sync_pedidos(cliente, tid), duracion_estimada=60,
                         max_intentos=MAX_INTENTOS_SYNC):
             n += 1
-    return f"{n} tienda(s) en cola para sincronizar pedidos."
+    return gettext("%(n)s tienda(s) en cola para sincronizar pedidos.", n=n)
 
 
 __all__ = ["ETAPAS_IMPORTAR", "ETAPAS_VINCULAR", "CADA_SYNC_PRODUCTOS", "CADA_SYNC_PEDIDOS", "MAX_INTENTOS_SYNC",

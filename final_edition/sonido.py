@@ -1,11 +1,14 @@
 """Sonido de la escena (spec estudio S1): sugerencia con Claude de qué se
 oye en la escena (1–2 líneas, sin diálogo ni música) para el campo "Sonido
-de la escena" de Crear. S3 sumará aquí el respaldo video→audio."""
+de la escena" de Crear. En el idioma del proyecto (spec 2026-09-26 §B4).
+S3 sumará aquí el respaldo video→audio."""
+import idiomas
+
 MAX_CARACTERES = 200
 
 PROMPT = (
     "Eres diseñador de sonido de anuncios cortos para redes. Describe en una o dos líneas "
-    "(máximo 25 palabras, en español, separadas por comas) qué se OYE en esta escena de video: "
+    "(máximo 25 palabras, en {idioma}, separadas por comas) qué se OYE en esta escena de video: "
     "ambiente, acciones, texturas, respiraciones, risas, pasos, golpes, roces. Sin diálogo hablado "
     "y sin música: solo sonido de la escena. Responde con la descripción y nada más.\n\n"
     "ESCENA: {escena}\nENFOQUE: {enfoque}\n{persona}"
@@ -22,9 +25,10 @@ def _llamar(texto, max_tokens=200):
     return "".join(b.text for b in resp.content if b.type == "text").strip()
 
 
-def sugerir_descripcion(escena, enfoque, persona=None):
-    """Descripción corta del sonido de la escena. `persona` (opcional, del
-    sprint): {resumen, descripcion, tono}. Con escena vacía no llama."""
+def sugerir_descripcion(escena, enfoque, persona=None, idioma="es"):
+    """Descripción corta del sonido de la escena, en el idioma del proyecto.
+    `persona` (opcional, del sprint): {resumen, descripcion, tono}. Con escena
+    vacía no llama."""
     escena = (escena or "").strip()
     if not escena:
         return ""
@@ -33,7 +37,13 @@ def sugerir_descripcion(escena, enfoque, persona=None):
     partes = [str(p[k]).strip() for k in ("resumen", "descripcion", "tono") if p.get(k)]
     if partes:
         linea_persona = "AUDIENCIA: " + ". ".join(partes) + "\n"
-    texto = PROMPT.format(escena=escena[:1000], enfoque=enfoque or "producto", persona=linea_persona)
+    cuerpo = PROMPT.format(escena=escena[:1000], enfoque=enfoque or "producto", persona=linea_persona,
+                          idioma=idiomas.nombre_para_claude(idioma))
+    # La orden de idioma va al principio Y al final (spec 2026-09-26 §B4, como
+    # doctrina.bloque_system): sola al final, el español largo del PROMPT de
+    # en medio la arrastra.
+    orden = idiomas.orden_idioma(idioma)
+    texto = f"{orden}\n\n{cuerpo}\n\n{orden}"
     respuesta = (_llamar(texto) or "").strip().strip('"').strip("'").strip()
     respuesta = " ".join(respuesta.split())
     return respuesta[:MAX_CARACTERES]

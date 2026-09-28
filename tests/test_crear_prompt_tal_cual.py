@@ -59,6 +59,18 @@ def test_el_sonido_solo_entra_si_la_persona_lo_escribio(app):
     assert mudo["prompt_relleno"] == ESPERADO
 
 
+def test_video_directo_en_ingles_etiqueta_sound_no_sonido(app):
+    """Fase 3, ronda de revisión (spec 2026-09-26 §B4-§B5): con el proyecto en
+    inglés, la generación directa etiqueta la línea de sonido SOUND — el texto
+    que escribió la persona (acción central y sonido) sigue tal cual, nunca
+    traducido (regla del incidente 2026-09-26)."""
+    import idiomas
+    idiomas.guardar_de_proyecto("acme", "en")
+    e = _crear(app, con_sonido="si", sonido="  pasos suaves y una cafetera  ")
+    assert e["prompt_relleno"] == ESPERADO + "\nSOUND: pasos suaves y una cafetera."
+    assert "SONIDO:" not in e["prompt_relleno"]
+
+
 def test_imagen_directa_con_referencias_manda_el_texto_tal_cual(app):
     e = _crear(app, tipo="imagen", modelo="seedream_v5_pro")
     assert e["prompt_relleno"] == TEXTO     # en imagen las menciones @Imagen N nunca se tradujeron

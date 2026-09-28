@@ -9,63 +9,63 @@
    tampoco: sus anuncios sueltos viven dentro de Experimentos (cliente.html
    resuelve los hashes viejos). #}
 <aside class="sidebar" id="sidebar">
-  <button type="button" class="sidebar-cerrar" id="sidebar-cerrar" aria-label="Cerrar el menú">×</button>
+  <button type="button" class="sidebar-cerrar" id="sidebar-cerrar" aria-label="{{ _('Cerrar el menú') }}">×</button>
   <a class="sidebar-marca" href="{{ url_for('index') }}" title="Creatv Machine">
     <span class="marca-mark"></span>
     <span class="sidebar-texto marca-texto">Creatv<span class="marca-punto">Flow</span></span>
   </a>
 
   <nav class="sidebar-nav" role="tablist">
-    <button type="button" class="sidebar-item" data-tab="tablero" role="tab" title="Tablero">
+    <button type="button" class="sidebar-item" data-tab="tablero" role="tab" title="{{ _('Tablero') }}">
       <svg viewBox="0 0 24 24"><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="3.5" height="6" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="10.25" y="5" width="3.5" height="12" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="15.5" y="8" width="3.5" height="9" rx="1" stroke="currentColor" stroke-width="2" fill="none"/></svg>
-      <span class="sidebar-texto">Tablero</span>
+      <span class="sidebar-texto">{{ _('Tablero') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="nicho" role="tab" title="Nicho">
+    <button type="button" class="sidebar-item" data-tab="nicho" role="tab" title="{{ _('Nicho') }}">
       <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M15 15l5.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 10.5h5M10.5 8v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <span class="sidebar-texto">Nicho</span>
+      <span class="sidebar-texto">{{ _('Nicho') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="referentes" role="tab" title="Referentes">
+    <button type="button" class="sidebar-item" data-tab="referentes" role="tab" title="{{ _('Referentes') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="4" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="3" y="13" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="13" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>
-      <span class="sidebar-texto">Referentes</span>
+      <span class="sidebar-texto">{{ _('Referentes') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="creativeflowplus" role="tab" title="Crear">
+    <button type="button" class="sidebar-item" data-tab="creativeflowplus" role="tab" title="{{ _('Crear') }}">
       <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-      <span class="sidebar-texto">Crear</span>
+      <span class="sidebar-texto">{{ _('Crear') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="final" role="tab" title="Final edition">
+    <button type="button" class="sidebar-item" data-tab="final" role="tab" title="{{ _('Final edition') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 8l3-4h14l-3 4M9 4l-3 4M15 4l-3 4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
-      <span class="sidebar-texto">Final edition</span>
+      <span class="sidebar-texto">{{ _('Final edition') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="sprints" role="tab" title="Sprints">
+    <button type="button" class="sidebar-item" data-tab="sprints" role="tab" title="{{ _('Sprints') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M7 17h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <span class="sidebar-texto">Sprints</span>
+      <span class="sidebar-texto">{{ _('Sprints') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="Experimentos">
+    <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="{{ _('Experimentos') }}">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="6" cy="19" r="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="18" cy="19" r="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 7v4M12 11l-6 6M12 11l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-      <span class="sidebar-texto">Experimentos</span>
+      <span class="sidebar-texto">{{ _('Experimentos') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="catalogo" role="tab" title="Catálogo">
+    <button type="button" class="sidebar-item" data-tab="catalogo" role="tab" title="{{ _('Catálogo') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 10h18M9 4v16" stroke="currentColor" stroke-width="2"/></svg>
-      <span class="sidebar-texto">Catálogo</span>
+      <span class="sidebar-texto">{{ _('Catálogo') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="settings" role="tab" title="Configuración">
+    <button type="button" class="sidebar-item" data-tab="settings" role="tab" title="{{ _('Configuración') }}">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
-      <span class="sidebar-texto">Configuración</span>
+      <span class="sidebar-texto">{{ _('Configuración') }}</span>
     </button>
   </nav>
 
   <div class="sidebar-pie">
-    <button type="button" class="sidebar-colapsar" id="sidebar-colapsar" title="Plegar / desplegar">
+    <button type="button" class="sidebar-colapsar" id="sidebar-colapsar" title="{{ _('Plegar / desplegar') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9 4v16M13 10l2 2-2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
     </button>
     {% if session.get('rol') == 'admin' %}
-    <a class="sidebar-item sidebar-link" href="{{ url_for('panel') }}" title="Todos los proyectos">
+    <a class="sidebar-item sidebar-link" href="{{ url_for('panel') }}" title="{{ _('Todos los proyectos') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="3" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/></svg>
-      <span class="sidebar-texto">Proyectos</span>
+      <span class="sidebar-texto">{{ _('Proyectos') }}</span>
     </a>
-    <a class="sidebar-item sidebar-link" href="{{ url_for('mapa_codigo') }}" title="Mapa del código">
+    <a class="sidebar-item sidebar-link" href="{{ url_for('mapa_codigo') }}" title="{{ _('Mapa del código') }}">
       <svg viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="2"/></svg>
-      <span class="sidebar-texto">Mapa del código</span>
+      <span class="sidebar-texto">{{ _('Mapa del código') }}</span>
     </a>
     {% endif %}
     <div class="sidebar-usuario">
@@ -74,13 +74,13 @@
         <strong>{{ nombre_proyecto or request.view_args.cliente }}</strong>
         <small>{{ session.get('usuario') }}</small>
       </span>
-      <form method="post" action="{{ url_for('logout') }}" class="sidebar-texto"><button type="submit" class="sidebar-salir" title="Cerrar sesión">Salir</button></form>
+      <form method="post" action="{{ url_for('logout') }}" class="sidebar-texto"><button type="submit" class="sidebar-salir" title="{{ _('Cerrar sesión') }}">{{ _('Salir') }}</button></form>
       {% if gasto_chip %}
       {# Gasto real del mes (generación en USD; pauta en la moneda de la
          cuenta de Meta, solo si hay). Lleva a Configuración › Gasto. #}
       <a class="sidebar-gasto" href="{{ url_for('ver_cliente', cliente=request.view_args.cliente, _anchor='settings') }}"
-         title="Ver el detalle en Configuración › Gasto"
-         onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">Este mes: {{ gasto_chip }}</a>
+         title="{{ _('Ver el detalle en Configuración › Gasto') }}"
+         onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">{{ _('Este mes: %(gasto)s', gasto=gasto_chip) }}</a>
       {% endif %}
     </div>
   </div>

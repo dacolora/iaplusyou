@@ -12,29 +12,29 @@
 
 <div class="panel-cabecera">
   <div>
-    <h2>Crear</h2>
-    <p class="panel-cabecera-desc">Videos e imágenes desde tus referencias, o cambia el producto de una foto o video. Nada se cobra hasta que pulses «Generar».</p>
+    <h2>{{ _('Crear') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Videos e imágenes desde tus referencias, o cambia el producto de una foto o video. Nada se cobra hasta que pulses «Generar».') }}</p>
   </div>
 </div>
 
 <div class="crear-modos" role="tablist" id="crear-modos">
-  <button type="button" class="crear-modo activo" data-modo="referencias" role="tab">Desde referencias</button>
-  <button type="button" class="crear-modo" data-modo="cambiar" role="tab">Cambiar producto en foto o video</button>
+  <button type="button" class="crear-modo activo" data-modo="referencias" role="tab">{{ _('Desde referencias') }}</button>
+  <button type="button" class="crear-modo" data-modo="cambiar" role="tab">{{ _('Cambiar producto en foto o video') }}</button>
   <button type="button" class="crear-modo" data-modo="flowplus" role="tab">Flow Plus</button>
 </div>
 
 <div id="crear-modo-referencias" class="crear-panel activo">
-  <h2>Video desde tus referencias</h2>
+  <h2>{{ _('Video desde tus referencias') }}</h2>
   {% include "_tab_creativeflowplus.html" %}
 </div>
 
 <div id="crear-modo-cambiar" class="crear-panel">
-  <h2>Cambiar el producto de una foto o video</h2>
+  <h2>{{ _('Cambiar el producto de una foto o video') }}</h2>
   {% include "_tab_cambiar_calzado.html" %}
 </div>
 
 <div id="crear-modo-flowplus" class="crear-panel">
-  <h2>Corregir prompts con Claude</h2>
+  <h2>{{ _('Corregir prompts con Claude') }}</h2>
   {% include "_crear_flowplus.html" %}
 </div>
 

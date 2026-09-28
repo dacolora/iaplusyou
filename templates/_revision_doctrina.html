@@ -9,48 +9,48 @@
 {% set rev = item.revision if item.revision is mapping else {} %}
 {% set est = item.revision_estado or 'sin_revisar' %}
 <section class="fe-seccion revision-doctrina">
-  <h4 class="fe-titulo">Revisión de la doctrina</h4>
-  <p class="vacio" style="padding:0;font-size:.76rem;">Antes de lanzarla: lo que ven las reglas (gratis) y, si la pides, la revisión de Claude con los 12 puntos de <a href="{{ doctrina_url }}#revisar" target="_blank" rel="noopener">la lista</a>. Solo informa: no bloquea nada.</p>
+  <h4 class="fe-titulo">{{ _('Revisión de la doctrina') }}</h4>
+  <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Antes de lanzarla: lo que ven las reglas (gratis) y, si la pides, la revisión de Claude con los 12 puntos de <a href="%(url)s#revisar" target="_blank" rel="noopener">la lista</a>. Solo informa: no bloquea nada.', url=doctrina_url) }}</p>
   <div class="revision-rapida">
-    <span class="campo-label">Revisión rápida (gratis)</span>
+    <span class="campo-label">{{ _('Revisión rápida (gratis)') }}</span>
     {% if item.reglas %}
     <ul class="revision-avisos">
-      {% for a in item.reglas %}<li>{{ a.texto }} <small class="vacio">({{ a.donde }})</small> <a href="{{ doctrina_url }}#{{ PUNTOS_REVISION[a.n].rebanada }}" target="_blank" rel="noopener">¿Por qué?</a></li>{% endfor %}
+      {% for a in item.reglas %}<li>{{ a.texto }} <small class="vacio">({{ a.donde }})</small> <a href="{{ doctrina_url }}#{{ PUNTOS_REVISION[a.n].rebanada }}" target="_blank" rel="noopener">{{ _('¿Por qué?') }}</a></li>{% endfor %}
     </ul>
     {% else %}
-    <p class="vacio" style="padding:0;">Las reglas no encontraron nada.</p>
+    <p class="vacio" style="padding:0;">{{ _('Las reglas no encontraron nada.') }}</p>
     {% endif %}
   </div>
   {% if est == 'vieja' %}
-  <p class="vacio revision-vieja" style="padding:0;">La revisión guardada es de una versión anterior de esta pieza.</p>
+  <p class="vacio revision-vieja" style="padding:0;">{{ _('La revisión guardada es de una versión anterior de esta pieza.') }}</p>
   {% elif est == 'error' %}
-  <p class="tag-error">La última revisión no se pudo terminar: {{ rev.error }}</p>
+  <p class="tag-error">{{ _('La última revisión no se pudo terminar: %(error)s', error=rev.error) }}</p>
   {% elif est in ('bien', 'mejorar') %}
   <div class="revision-claude">
-    <span class="campo-label">Revisión con Claude</span>
+    <span class="campo-label">{{ _('Revisión con Claude') }}</span>
     {% if rev.resumen %}<p style="margin:.2rem 0;">{{ rev.resumen }}</p>{% endif %}
     {% set mejorar = (rev.puntos or []) | selectattr('estado', 'equalto', 'mejorar') | list %}
     {% set pasa = (rev.puntos or []) | selectattr('estado', 'equalto', 'pasa') | list %}
     {% set no_aplica = (rev.puntos or []) | selectattr('estado', 'equalto', 'no_aplica') | list %}
     {% if mejorar %}
     <ul class="revision-mejorar">
-      {% for p in mejorar %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo }}</strong>: {{ p.detalle }}{% if p.donde %} <small class="vacio">({{ p.donde }})</small>{% endif %} <a href="{{ doctrina_url }}#{{ PUNTOS_REVISION[p.n].rebanada }}" target="_blank" rel="noopener">¿Por qué?</a></li>{% endfor %}
+      {% for p in mejorar %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo|traducir }}</strong>: {{ p.detalle }}{% if p.donde %} <small class="vacio">({{ p.donde }})</small>{% endif %} <a href="{{ doctrina_url }}#{{ PUNTOS_REVISION[p.n].rebanada }}" target="_blank" rel="noopener">{{ _('¿Por qué?') }}</a></li>{% endfor %}
     </ul>
     {% else %}
-    <p class="vacio" style="padding:0;">Claude no encontró nada para mejorar.</p>
+    <p class="vacio" style="padding:0;">{{ _('Claude no encontró nada para mejorar.') }}</p>
     {% endif %}
-    {% if pasa %}<details><summary class="vacio">Pasa ({{ pasa | length }})</summary><ul>{% for p in pasa %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo }}</strong>{% if p.detalle %}: {{ p.detalle }}{% endif %}</li>{% endfor %}</ul></details>{% endif %}
-    {% if no_aplica %}<details><summary class="vacio">No aplica ({{ no_aplica | length }})</summary><ul>{% for p in no_aplica %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo }}</strong>{% if p.detalle %}: {{ p.detalle }}{% endif %}</li>{% endfor %}</ul></details>{% endif %}
+    {% if pasa %}<details><summary class="vacio">{{ _('Pasa (%(n)s)', n=(pasa | length)) }}</summary><ul>{% for p in pasa %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo|traducir }}</strong>{% if p.detalle %}: {{ p.detalle }}{% endif %}</li>{% endfor %}</ul></details>{% endif %}
+    {% if no_aplica %}<details><summary class="vacio">{{ _('No aplica (%(n)s)', n=(no_aplica | length)) }}</summary><ul>{% for p in no_aplica %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo|traducir }}</strong>{% if p.detalle %}: {{ p.detalle }}{% endif %}</li>{% endfor %}</ul></details>{% endif %}
   </div>
   {% endif %}
   {% if item.revision_error and item.revision_error.video_url == item.video_url %}
-  <p class="tag-error">El último intento de revisión no se pudo terminar: {{ item.revision_error.error }}</p>
+  <p class="tag-error">{{ _('El último intento de revisión no se pudo terminar: %(error)s', error=item.revision_error.error) }}</p>
   {% endif %}
   {% if item.trabajo_revision %}
-  <p class="vacio" style="padding:0;">Revisando la pieza… la página se recarga sola cuando esté lista.</p>
+  <p class="vacio" style="padding:0;">{{ _('Revisando la pieza… la página se recarga sola cuando esté lista.') }}</p>
   {% else %}
   <form method="post" action="{{ url_for('cf_revisar', cliente=cliente, cf_id=item.id) }}" class="inline">
-    <button type="submit" class="btn-sm">{{ 'Revisar con la doctrina' if est == 'sin_revisar' else 'Revisar de nuevo' }} ({{ item.precio_revision }})</button>
+    <button type="submit" class="btn-sm">{{ _('Revisar con la doctrina') if est == 'sin_revisar' else _('Revisar de nuevo') }} ({{ item.precio_revision }})</button>
   </form>
   {% endif %}
 </section>

@@ -1403,7 +1403,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .cat-comercial select { min-width: 5.5rem; }
 .cat-en-prueba { display: flex; align-items: center; gap: .4rem; font-size: .84rem; margin-top: .6rem; }
 .cat-importar > summary { display: inline-block; }
-.cat-sin-fotos .tabla-productos { margin-top: .4rem; }
+.cat-sinfotos .tabla-productos { margin-top: .4rem; }
 .prod-subir-fotos { cursor: pointer; display: inline-block; }
 .prod-form-fotos { margin: 0; }
 
@@ -1743,7 +1743,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .exp-pasos-nav li { cursor:pointer; }
 .exp-pasos-nav li.activo { color:var(--accent-texto); }
 .exp-pasos-botones { display:flex; gap:.6rem; margin-top:1rem; }
-.exp-cuenta { font-weight:600; margin-top:.8rem; }
+.exp-resumen { font-weight:600; margin-top:.8rem; }
 .exp-cuadricula table { border-collapse:collapse; margin:.6rem 0; }
 .exp-cuadricula th, .exp-cuadricula td { border:1px solid var(--border); padding:.3rem .6rem; text-align:center; font-size:.85rem; }
 .exp-cuadricula tbody th { text-align:left; font-weight:500; text-transform:none; letter-spacing:0; }
@@ -2203,6 +2203,11 @@ img.img-rota { object-fit: contain; background: var(--panel-2); padding: 12%; }
 .config-apartados { margin: 0 0 1.4rem; }
 .config-apartado > h2:first-child { margin-top: .4rem; }
 .llaves-tarjetas-ancha { grid-template-columns: minmax(0, 1fr); }
+
+/* Selector de idioma (2026-09-26): enlaces «English · Español» antes del
+   login, en el header público. */
+.idioma-enlaces { margin-left: auto; font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.idioma-enlaces a { color: var(--accent-texto); text-decoration: none; }
 
 /* =====================================================================
    Tablero de Sprints (2026-09-26) — spec

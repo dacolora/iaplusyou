@@ -77,14 +77,17 @@ def test_formulario_de_crear_trae_sonido_musica_y_sugerir(app, monkeypatch, tmp_
     monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
     proyectos.guardar_preferencias_sonido("acme", True, "lujo")
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert 'id="fp-con-sonido" checked>' in html and "<strong>Sonido de la escena</strong>" in html
+    # Task 4 (fase 3): el id se renombró a fp-check-sonido — "fp-con-sonido"
+    # disparaba un falso positivo del guion (\bcon\b) en la guardia de idioma
+    # ahora que _tab_creativeflowplus.html está en PLANTILLAS_TRADUCIDAS.
+    assert 'id="fp-check-sonido" checked>' in html and "<strong>Sonido de la escena</strong>" in html
     assert 'name="musica_estilo"' in html and '<option value="lujo" selected>' in html
     assert 'id="fp-sugerir-sonido"' in html and 'data-recargo="0.028"' in html
 
 
 def test_sugerir_sonido_ruta(app, monkeypatch):
     from final_edition import sonido
-    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None: f"{enfoque}: pasos y risas")
+    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None, idioma=None: f"{enfoque}: pasos y risas")
     r = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "una niña salta", "enfoque": "persona"})
     assert r.status_code == 200 and r.get_json() == {"sonido": "persona: pasos y risas"}
     assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": ""}).status_code == 400
@@ -96,11 +99,11 @@ def test_sugerir_sonido_ruta_hardening(app, monkeypatch):
     ruta con un 500 — cae a "producto". Y un 502 nunca repite el texto de la
     excepción en el body (puede traer detalles internos)."""
     from final_edition import sonido
-    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None: f"{enfoque}: pasos y risas")
+    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None, idioma=None: f"{enfoque}: pasos y risas")
     r = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "x", "enfoque": ["a"]})
     assert r.status_code == 200 and r.get_json() == {"sonido": "producto: pasos y risas"}
 
-    def _boom(escena, enfoque, persona=None):
+    def _boom(escena, enfoque, persona=None, idioma=None):
         raise RuntimeError("secreto")
     monkeypatch.setattr(sonido, "sugerir_descripcion", _boom)
     r2 = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "x", "enfoque": "producto"})

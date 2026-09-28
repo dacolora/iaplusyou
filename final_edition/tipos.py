@@ -5,28 +5,54 @@ texto en pantalla (Pillow).
 """
 import os
 
+from idiomas import N_
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 ROLES = ("hook", "problema", "producto", "prueba", "cta")
 
 # país -> {"nombre", "idioma" (ISO-639-1), "moneda" (ISO-4217), "simbolo", "bandera" (emoji para la UI)}
+# "nombre" es una constante de módulo que se muestra: marcada con N_, se
+# traduce donde se usa ({{ valor|traducir }} / gettext(valor)).
 PAISES = {
-    "CO": {"nombre": "Colombia", "idioma": "es", "moneda": "COP", "simbolo": "$", "bandera": "🇨🇴"},
-    "MX": {"nombre": "México", "idioma": "es", "moneda": "MXN", "simbolo": "$", "bandera": "🇲🇽"},
-    "US": {"nombre": "Estados Unidos", "idioma": "en", "moneda": "USD", "simbolo": "$", "bandera": "🇺🇸"},
-    "ES": {"nombre": "España", "idioma": "es", "moneda": "EUR", "simbolo": "€", "bandera": "🇪🇸"},
-    "BR": {"nombre": "Brasil", "idioma": "pt", "moneda": "BRL", "simbolo": "R$", "bandera": "🇧🇷"},
-    "AR": {"nombre": "Argentina", "idioma": "es", "moneda": "ARS", "simbolo": "$", "bandera": "🇦🇷"},
-    "CL": {"nombre": "Chile", "idioma": "es", "moneda": "CLP", "simbolo": "$", "bandera": "🇨🇱"},
-    "PE": {"nombre": "Perú", "idioma": "es", "moneda": "PEN", "simbolo": "S/", "bandera": "🇵🇪"},
+    "CO": {"nombre": N_("Colombia"), "idioma": "es", "moneda": "COP", "simbolo": "$", "bandera": "🇨🇴"},
+    "MX": {"nombre": N_("México"), "idioma": "es", "moneda": "MXN", "simbolo": "$", "bandera": "🇲🇽"},
+    "US": {"nombre": N_("Estados Unidos"), "idioma": "en", "moneda": "USD", "simbolo": "$", "bandera": "🇺🇸"},
+    "ES": {"nombre": N_("España"), "idioma": "es", "moneda": "EUR", "simbolo": "€", "bandera": "🇪🇸"},
+    "BR": {"nombre": N_("Brasil"), "idioma": "pt", "moneda": "BRL", "simbolo": "R$", "bandera": "🇧🇷"},
+    "AR": {"nombre": N_("Argentina"), "idioma": "es", "moneda": "ARS", "simbolo": "$", "bandera": "🇦🇷"},
+    "CL": {"nombre": N_("Chile"), "idioma": "es", "moneda": "CLP", "simbolo": "$", "bandera": "🇨🇱"},
+    "PE": {"nombre": N_("Perú"), "idioma": "es", "moneda": "PEN", "simbolo": "S/", "bandera": "🇵🇪"},
 }
 
-# Prompts en inglés (Stable Audio funciona mejor con prompts en inglés).
+# Prompts en inglés (Stable Audio funciona mejor con prompts en inglés): NUNCA
+# se traducen, van tal cual al proveedor.
 ESTILOS_MUSICA = {
     "energetico": "upbeat energetic electronic pop, driving beat, bright synths, motivational, commercial",
     "calmado": "calm ambient acoustic, soft piano and strings, gentle, warm, soothing background music",
     "lujo": "elegant luxury cinematic, minimal piano and strings, sophisticated, slow build, premium brand feel",
     "urbano": "modern urban hip hop beat, punchy bass, trendy, confident, street style commercial music",
+}
+
+# Etiqueta que ve la persona por cada estilo (la clave de ESTILOS_MUSICA es el
+# `value` del <select> y no cambia); marcada con N_, se traduce con
+# {{ valor|traducir }} donde se muestra (Configuración > Generación).
+NOMBRES_ESTILOS_MUSICA = {
+    "energetico": N_("energetico"),
+    "calmado": N_("calmado"),
+    "lujo": N_("lujo"),
+    "urbano": N_("urbano"),
+}
+
+# Misma clave, etiqueta legible (Crear > Desde referencias: selects "Música al
+# crear" y "Producir finales", que antes mostraban la clave cruda). Constante
+# aparte de NOMBRES_ESTILOS_MUSICA de arriba para no tocar el español ya
+# mostrado en Configuración > Generación (msgid distinto).
+NOMBRES_ESTILO_MUSICA = {
+    "energetico": N_("Energético"),
+    "calmado": N_("Calmado"),
+    "lujo": N_("Lujo"),
+    "urbano": N_("Urbano"),
 }
 
 # Países cuya moneda no se muestra con decimales (COP, ARS, CLP).

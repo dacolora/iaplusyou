@@ -36,22 +36,26 @@ def guardar_nombre(cliente, nombre):
     _json_store.guardar(_path(cliente), datos)
 
 
-# Modelos por defecto de Crear, idioma del prompt del director ("es" para
-# revisarlo cómodo; "en" para la prueba A/B del spec director §12) y la
-# duración que sale marcada (8 s: los modelos rinden mejor hasta 15 s).
-IDIOMAS_PROMPT = ("es", "en")
-DEFAULTS_FLOWPLUS = {"modelo_video": "wan3", "modelo_imagen": "seedream_v5_pro", "idioma_prompt": "es", "duracion_defecto": 8}
+# Modelos por defecto de Crear y la duración que sale marcada (8 s: los
+# modelos rinden mejor hasta 15 s). El idioma del prompt del director ya no se
+# elige acá: lo reemplaza el idioma del proyecto (`idiomas.de_proyecto`, spec
+# 2026-09-26 §B4).
+DEFAULTS_FLOWPLUS = {"modelo_video": "wan3", "modelo_imagen": "seedream_v5_pro", "duracion_defecto": 8}
 
 
 def preferencias_flowplus(cliente):
     datos = cargar(cliente)
-    return {**DEFAULTS_FLOWPLUS, **datos.get("preferencias_flowplus", {})}
+    prefs = {**DEFAULTS_FLOWPLUS, **datos.get("preferencias_flowplus", {})}
+    # Un proyecto.json de antes de la fase 3 puede traer un `idioma_prompt`
+    # guardado en `preferencias_flowplus`: se filtra de la copia, nunca del
+    # archivo (no se reescribe nada acá).
+    prefs.pop("idioma_prompt", None)
+    return prefs
 
 
-def guardar_preferencias_flowplus(cliente, modelo_video, modelo_imagen, idioma_prompt="es", duracion_defecto=8):
+def guardar_preferencias_flowplus(cliente, modelo_video, modelo_imagen, duracion_defecto=8):
     from providers import flowplus_modelos
     datos = cargar(cliente)
-    idioma = idioma_prompt if idioma_prompt in IDIOMAS_PROMPT else "es"
     try:
         dur = int(duracion_defecto)
     except (TypeError, ValueError):
@@ -59,7 +63,7 @@ def guardar_preferencias_flowplus(cliente, modelo_video, modelo_imagen, idioma_p
     if dur not in flowplus_modelos.DURACIONES_CREAR:
         dur = DEFAULTS_FLOWPLUS["duracion_defecto"]
     datos["preferencias_flowplus"] = {"modelo_video": modelo_video, "modelo_imagen": modelo_imagen,
-                                      "idioma_prompt": idioma, "duracion_defecto": dur}
+                                      "duracion_defecto": dur}
     _json_store.guardar(_path(cliente), datos)
 
 

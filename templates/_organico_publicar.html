@@ -27,21 +27,21 @@
   <ul class="org-lista">
     {% for pub in pubs %}
     <li class="org-pub org-pub-{{ pub.estado }}">
-      <span class="tag-estado org-estado org-estado-{{ pub.estado }}">{{ {"en_cola": "en cola", "publicando": "publicando", "publicada": "publicada", "error": "error"}.get(pub.estado, pub.estado) }}</span>
-      <span class="org-pub-plataforma">{{ pub.nombre_plataforma }}</span>
-      {% if pub.url %}<a href="{{ pub.url }}" target="_blank" rel="noopener">Ver publicación →</a>
-      {% elif pub.estado == "publicada" and pub.id_externo %}<small class="vacio" style="padding:0;">id {{ pub.id_externo }}</small>{% endif %}
-      {% if pub.estado == "publicando" and pub.id_externo %}<small class="vacio" style="padding:0;" title="La plataforma ya recibió el video; falta confirmar que terminó de procesarlo. Se confirma solo.">subida, confirmando (id {{ pub.id_externo }})</small>{% endif %}
+      <span class="tag-estado org-estado org-estado-{{ pub.estado }}">{{ {"en_cola": _("en cola"), "publicando": _("publicando"), "publicada": _("publicada"), "error": _("error")}.get(pub.estado, pub.estado) }}</span>
+      <span class="org-pub-plataforma">{{ pub.nombre_plataforma|traducir }}</span>
+      {% if pub.url %}<a href="{{ pub.url }}" target="_blank" rel="noopener">{{ _('Ver publicación →') }}</a>
+      {% elif pub.estado == "publicada" and pub.id_externo %}<small class="vacio" style="padding:0;">{{ _('id %(id)s', id=pub.id_externo) }}</small>{% endif %}
+      {% if pub.estado == "publicando" and pub.id_externo %}<small class="vacio" style="padding:0;" title="{{ _('La plataforma ya recibió el video; falta confirmar que terminó de procesarlo. Se confirma solo.') }}">{{ _('subida, confirmando (id %(id)s)', id=pub.id_externo) }}</small>{% endif %}
       {% if pub.publicado_en %}<small class="vacio" style="padding:0;">{{ pub.publicado_en[:16] }}</small>{% endif %}
-      {% if pub.origen == "ganador" %}<small class="vacio" style="padding:0;" title="La encoló el motor al declararla ganadora">motor</small>{% endif %}
+      {% if pub.origen == "ganador" %}<small class="vacio" style="padding:0;" title="{{ _('La encoló el motor al declararla ganadora') }}">{{ _('motor') }}</small>{% endif %}
       {% if pub.estado == "error" %}
-      <span class="tag-error">{{ pub.error or "No se pudo publicar." }}</span>
+      <span class="tag-error">{{ pub.error or _("No se pudo publicar.") }}</span>
       {# Sin «Reintentar» si ya subió (tiene id: sería un segundo upload) o si
          otra fila viva de la misma plataforma la reemplazó (unicidad viva). #}
       {% if not trabajo and not pub.id_externo and pub.plataforma not in vivas %}
-      <form method="post" action="{{ url_for('org_reintentar', cliente=cliente, pub_id=pub.id) }}" class="inline" onsubmit="return confirm('Se vuelve a publicar en {{ pub.nombre_plataforma }}. Revisa antes que no haya salido ya allá. ¿Reintentar?');">
+      <form method="post" action="{{ url_for('org_reintentar', cliente=cliente, pub_id=pub.id) }}" class="inline" onsubmit='return confirm({{ _("Se vuelve a publicar en %(plataforma)s. Revisa antes que no haya salido ya allá. ¿Reintentar?", plataforma=(pub.nombre_plataforma|traducir))|tojson }});'>
         <input type="hidden" name="volver" value="{{ volver }}">
-        <button class="btn-guardar btn-xs">Reintentar</button>
+        <button class="btn-guardar btn-xs">{{ _('Reintentar') }}</button>
       </form>
       {% endif %}
       {% endif %}
@@ -56,11 +56,11 @@
      getElementById solo actualizaría la primera barra. #}
   {% set contenedor_id = "trabajo-" ~ trabajo.job_id ~ "-" ~ volver %}
   <div class="barra-progreso" id="{{ contenedor_id }}" data-poll-job="{{ trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-  <div class="progreso-texto">Publicando… 0% · 0s</div>
+  <div class="progreso-texto">{{ _('Publicando… 0%% · 0s') }}</div>
   <script>iniciarPolling({{ trabajo.job_id | tojson }}, {{ contenedor_id | tojson }});</script>
   {% else %}
   <details class="org-publicar">
-    <summary>Publicar orgánico</summary>
+    <summary>{{ _('Publicar orgánico') }}</summary>
     <form method="post" action="{{ url_for('org_publicar', cliente=cliente) }}" class="org-form"
           data-url-redactar="{{ url_for('org_redactar', cliente=cliente) }}"
           onsubmit="return window.orgConfirmar(this);">
@@ -70,36 +70,36 @@
       <div class="org-canales">
         {% for c in canales_org %}
         {% set ya = c.plataforma in vivas %}
-        <label class="org-canal{% if not c.disponible or ya %} org-canal-no{% endif %}"{% if c.motivo %} title="{{ c.motivo }}"{% endif %}>
-          <input type="checkbox" name="plataformas" value="{{ c.plataforma }}" data-nombre="{{ c.nombre }}"
+        <label class="org-canal{% if not c.disponible or ya %} org-canal-no{% endif %}"{% if c.motivo %} title="{{ c.motivo|traducir }}"{% endif %}>
+          <input type="checkbox" name="plataformas" value="{{ c.plataforma }}" data-nombre="{{ c.nombre|traducir }}"
                  {% if not c.disponible or ya %}disabled{% endif %} onchange="window.orgToggle(this)">
-          {{ c.nombre }}
-          {% if ya %}<small>ya publicada</small>{% elif not c.disponible %}<small>{{ c.motivo }}</small>{% endif %}
+          {{ c.nombre|traducir }}
+          {% if ya %}<small>{{ _('ya publicada') }}</small>{% elif not c.disponible %}<small>{{ c.motivo|traducir }}</small>{% endif %}
         </label>
         {% endfor %}
       </div>
       {% set disponibles = canales_org | selectattr("disponible") | rejectattr("plataforma", "in", vivas) | list %}
       {% if disponibles %}
       <div class="org-herramientas">
-        <button type="button" class="btn-guardar btn-xs" onclick="window.orgRedactar(this)">Escribir texto con IA{% if precios and precios.caption_organico and precios.caption_organico.usd is not none %} ≈ {{ precios.caption_organico.usd | usd }}{% endif %}</button>
+        <button type="button" class="btn-guardar btn-xs" onclick="window.orgRedactar(this)">{{ _('Escribir texto con IA') }}{% if precios and precios.caption_organico and precios.caption_organico.usd is not none %} {{ _('≈ %(usd)s', usd=(precios.caption_organico.usd | usd)) }}{% endif %}</button>
         <span class="org-aviso vacio" style="padding:0;"></span>
       </div>
       {% for c in disponibles %}
       {% set conf = plataformas_org[c.plataforma] %}
       <div class="org-texto" data-plataforma="{{ c.plataforma }}" hidden>
-        <label class="campo-label">{{ c.nombre }}</label>
+        <label class="campo-label">{{ c.nombre|traducir }}</label>
         {% if c.plataforma in ("youtube", "facebook") %}
-        <input type="text" name="titulo_{{ c.plataforma }}" placeholder="Título" maxlength="{{ conf.max_titulo or 150 }}">
+        <input type="text" name="titulo_{{ c.plataforma }}" placeholder="{{ _('Título') }}" maxlength="{{ conf.max_titulo or 150 }}">
         {% endif %}
-        <textarea name="caption_{{ c.plataforma }}" rows="4" maxlength="{{ conf.max_caption }}" placeholder="{% if c.plataforma == 'tiktok' %}Texto de la publicación (TikTok no tiene título aparte){% else %}Texto de la publicación{% endif %}"></textarea>
+        <textarea name="caption_{{ c.plataforma }}" rows="4" maxlength="{{ conf.max_caption }}" placeholder="{% if c.plataforma == 'tiktok' %}{{ _('Texto de la publicación (TikTok no tiene título aparte)') }}{% else %}{{ _('Texto de la publicación') }}{% endif %}"></textarea>
       </div>
       {% endfor %}
       <div class="org-pie">
-        <button type="submit" class="btn-aprobar btn-sm">Publicar</button>
-        <small class="vacio" style="padding:0;">Público e irreversible: revisa el texto antes.</small>
+        <button type="submit" class="btn-aprobar btn-sm">{{ _('Publicar') }}</button>
+        <small class="vacio" style="padding:0;">{{ _('Público e irreversible: revisa el texto antes.') }}</small>
       </div>
       {% else %}
-      <p class="vacio" style="padding:.3rem 0 0;">Sin canales para publicar: {% if vivas %}ya está en los conectados; {% endif %}conecta más en <a href="#settings" data-ir-tab="settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">Configuración › Canales orgánicos</a>.</p>
+      <p class="vacio" style="padding:.3rem 0 0;">{{ _('Sin canales para publicar:') }} {% if vivas %}{{ _('ya está en los conectados;') }} {% endif %}{{ _('conecta más en') }} <a href="#settings" data-ir-tab="settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">{{ _('Configuración › Canales orgánicos') }}</a>.</p>
       {% endif %}
     </form>
   </details>
@@ -120,27 +120,27 @@
 {% set nuevas = canales_org | selectattr("disponible") | map(attribute="plataforma") | reject("in", props) | list %}
 <form method="post" action="{{ url_for('prop_aprobar', cliente=cliente, pid=pr.id) }}" class="org-form org-propuesta" data-redacta-al-aprobar="1" onsubmit="return window.orgConfirmar(this);">
   <input type="hidden" name="org_form" value="1">
-  {% if pl.captions_error %}<p class="tag-error">No se pudo redactar el texto ({{ pl.captions_error }}); al aprobar se redacta de nuevo.</p>{% endif %}
+  {% if pl.captions_error %}<p class="tag-error">{{ _('No se pudo redactar el texto (%(error)s); al aprobar se redacta de nuevo.', error=pl.captions_error) }}</p>{% endif %}
   {% for p in props + nuevas %}
   {% set conf = plataformas_org.get(p, {}) %}
   {% set t = (pl.captions or {}).get(p) or {} %}
   {% set marcada = p in props %}
   <label class="org-canal">
-    <input type="checkbox" name="plataformas" value="{{ p }}" data-nombre="{{ conf.nombre or p }}"{% if marcada %} checked{% endif %} onchange="window.orgToggle(this)"> {{ conf.nombre or p }}
-    {% if not marcada %}<small>canal nuevo: sin texto, se redacta al aprobar</small>{% endif %}
+    <input type="checkbox" name="plataformas" value="{{ p }}" data-nombre="{{ (conf.nombre|traducir) if conf.nombre else p }}"{% if marcada %} checked{% endif %} onchange="window.orgToggle(this)"> {{ (conf.nombre|traducir) if conf.nombre else p }}
+    {% if not marcada %}<small>{{ _('canal nuevo: sin texto, se redacta al aprobar') }}</small>{% endif %}
   </label>
   <div class="org-texto" data-plataforma="{{ p }}"{% if not marcada %} hidden{% endif %}>
     {% if p in ("youtube", "facebook") %}
-    <input type="text" name="titulo_{{ p }}" value="{{ t.titulo or '' }}" placeholder="Título" maxlength="{{ conf.max_titulo or 150 }}">
+    <input type="text" name="titulo_{{ p }}" value="{{ t.titulo or '' }}" placeholder="{{ _('Título') }}" maxlength="{{ conf.max_titulo or 150 }}">
     {% endif %}
-    <textarea name="caption_{{ p }}" rows="4" maxlength="{{ conf.max_caption or 2200 }}" placeholder="{% if marcada %}Texto de la publicación{% else %}Sin texto: se redacta con IA al aprobar (o escríbelo aquí){% endif %}">{{ t.caption or '' }}</textarea>
+    <textarea name="caption_{{ p }}" rows="4" maxlength="{{ conf.max_caption or 2200 }}" placeholder="{% if marcada %}{{ _('Texto de la publicación') }}{% else %}{{ _('Sin texto: se redacta con IA al aprobar (o escríbelo aquí)') }}{% endif %}">{{ t.caption or '' }}</textarea>
   </div>
   {% else %}
-  <p class="vacio" style="padding:0;">Sin canal orgánico disponible: conecta un canal en <a href="#settings" data-ir-tab="settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">Configuración › Canales orgánicos</a> para poder aprobarla.</p>
+  <p class="vacio" style="padding:0;">{{ _('Sin canal orgánico disponible: conecta un canal en') }} <a href="#settings" data-ir-tab="settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">{{ _('Configuración › Canales orgánicos') }}</a> {{ _('para poder aprobarla.') }}</p>
   {% endfor %}
   <div class="org-pie">
-    <button class="btn-aprobar btn-xs">Aprobar y publicar</button>
-    <small class="vacio" style="padding:0;">Público e irreversible.</small>
+    <button class="btn-aprobar btn-xs">{{ _('Aprobar y publicar') }}</button>
+    <small class="vacio" style="padding:0;">{{ _('Público e irreversible.') }}</small>
   </div>
 </form>
 {% endmacro %}
@@ -149,6 +149,13 @@
    el bloque se clona desde un <template>. #}
 {% macro org_scripts() %}
 <script>
+  var ORG_AVISO_MARCA_PLATAFORMA = {{ _('Marca al menos una plataforma.')|tojson }};
+  var ORG_TEXTO_ESCRIBIENDO = {{ _('Escribiendo…')|tojson }};
+  var ORG_ERROR_REDACTAR = {{ _('No pude redactar el texto.')|tojson }};
+  var ORG_TEXTO_LISTO_FALLBACK = {{ _('Texto listo, pero sin IA en alguna plataforma: revísalo bien.')|tojson }};
+  var ORG_TEXTO_LISTO = {{ _('Texto listo: revísalo y edítalo si quieres.')|tojson }};
+  var ORG_PLANTILLA_FALTA_TEXTO = {{ _('Falta el texto para: %(nombres)s. Escríbelo o pulsa «Escribir texto con IA».', nombres='{nombres}')|tojson }};
+  var ORG_PLANTILLA_CONFIRMAR_PUBLICAR = {{ _('Se publica el video en %(nombres)s. Es público y no se puede deshacer desde aquí. ¿Publicar?', nombres='{nombres}')|tojson }};
   window.orgToggle = function (cb) {
     var form = cb.closest('form');
     var caja = form && form.querySelector('.org-texto[data-plataforma="' + cb.value + '"]');
@@ -159,16 +166,16 @@
     var aviso = form.querySelector('.org-aviso');
     var marcadas = [];
     form.querySelectorAll('input[name="plataformas"]:checked').forEach(function (cb) { marcadas.push(cb.value); });
-    if (!marcadas.length) { if (aviso) aviso.textContent = 'Marca al menos una plataforma.'; return; }
+    if (!marcadas.length) { if (aviso) aviso.textContent = ORG_AVISO_MARCA_PLATAFORMA; return; }
     var body = new FormData();
     body.append('pieza_id', form.querySelector('input[name="pieza_id"]').value);
     marcadas.forEach(function (p) { body.append('plataformas', p); });
     btn.disabled = true;
-    if (aviso) aviso.textContent = 'Escribiendo…';
+    if (aviso) aviso.textContent = ORG_TEXTO_ESCRIBIENDO;
     fetch(form.dataset.urlRedactar, { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
-        if (!res.ok) { if (aviso) aviso.textContent = res.j.error || 'No pude redactar el texto.'; return; }
+        if (!res.ok) { if (aviso) aviso.textContent = res.j.error || ORG_ERROR_REDACTAR; return; }
         var fallback = false;
         Object.keys(res.j).forEach(function (p) {
           var ta = form.querySelector('textarea[name="caption_' + p + '"]');
@@ -177,16 +184,14 @@
           if (ti) ti.value = res.j[p].titulo || '';
           if (res.j[p].fallback) fallback = true;
         });
-        if (aviso) aviso.textContent = fallback
-          ? 'Texto listo, pero sin IA en alguna plataforma: revísalo bien.'
-          : 'Texto listo: revísalo y edítalo si quieres.';
+        if (aviso) aviso.textContent = fallback ? ORG_TEXTO_LISTO_FALLBACK : ORG_TEXTO_LISTO;
       })
-      .catch(function () { if (aviso) aviso.textContent = 'No pude redactar el texto.'; })
+      .catch(function () { if (aviso) aviso.textContent = ORG_ERROR_REDACTAR; })
       .finally(function () { btn.disabled = false; });
   };
   window.orgConfirmar = function (form) {
     var marcadas = form.querySelectorAll('input[name="plataformas"]:checked');
-    if (!marcadas.length) { alert('Marca al menos una plataforma.'); return false; }
+    if (!marcadas.length) { alert(ORG_AVISO_MARCA_PLATAFORMA); return false; }
     var vacias = [], nombres = [];
     // En la propuesta un texto vacío no frena: acciones lo redacta al aprobar.
     var redacta = form.dataset.redactaAlAprobar === '1';
@@ -197,10 +202,10 @@
       if (ta && !ta.value.trim() && !redacta) vacias.push(nombre);
     });
     if (vacias.length) {
-      alert('Falta el texto para: ' + vacias.join(', ') + '. Escríbelo o pulsa «Escribir texto con IA».');
+      alert(ORG_PLANTILLA_FALTA_TEXTO.replace('{nombres}', vacias.join(', ')));
       return false;
     }
-    return confirm('Se publica el video en ' + nombres.join(', ') + '. Es público y no se puede deshacer desde aquí. ¿Publicar?');
+    return confirm(ORG_PLANTILLA_CONFIRMAR_PUBLICAR.replace('{nombres}', nombres.join(', ')));
   };
 </script>
 {% endmacro %}

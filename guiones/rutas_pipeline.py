@@ -6,6 +6,7 @@ acciones como POST JSON. Mismo prefijo y mismas reglas que guiones/rutas.py
 español, 404 para lo de otro proyecto.
 """
 from flask import Blueprint, Response, jsonify, render_template, request, session
+from flask_babel import gettext
 
 import catalogo_productos
 import gastos
@@ -30,6 +31,14 @@ def _contexto(cliente, guion_id=None, video_id=None):
     v = datos.video(cliente, video_id) if (g and video_id) else None
     if v is not None and v["guion_id"] != g["id"]:
         v = None
+    if g is not None:
+        # `nombre` (guardado) queda tal cual en la base; `etiqueta` es la
+        # misma versión traducida para quien mira, calculada acá porque la
+        # ruta siempre corre dentro de una petición (nunca se guarda).
+        for x in g["videos"]:
+            x["etiqueta"] = datos.etiqueta_version(x.get("config"), x["version_n"])
+    if v is not None:
+        v["etiqueta"] = datos.etiqueta_version(v["config"], v["version_n"])
     ctx = {"cliente": cliente, "lotes": datos.lotes(cliente), "guion": g, "video": v,
            "notion_conectado": notion.conectado(cliente),
            "costos": {"leer": _costo("leer", 750), "recorte": _costo("recorte")}}
@@ -76,10 +85,10 @@ def lote_crear(cliente):
     try:
         if str(cuerpo.get("notion_url") or "").strip():
             if not notion.conectado(cliente):
-                raise Conflicto("Conecta Notion primero.")
+                raise Conflicto(gettext("Conecta Notion primero."))
             page_id = notion.extraer_id(cuerpo["notion_url"])
             if not page_id:
-                raise DatoInvalido("Ese link no parece de una página de Notion.")
+                raise DatoInvalido(gettext("Ese link no parece de una página de Notion."))
             lote_id = datos.crear_lote(cliente, "", fuente="notion", notion_page_id=page_id)
         else:
             lote_id = datos.crear_lote(cliente, cuerpo.get("texto"))
@@ -108,10 +117,10 @@ def notion_conectar(cliente):
     if cuerpo is None:
         return _sin_cuerpo()
     if not _correo_verificado():
-        return jsonify({"error": "Confirma tu correo primero (Configuración › Cuenta)."}), 403
+        return jsonify({"error": gettext("Confirma tu correo primero (Configuración › Cuenta).")}), 403
     llave = str(cuerpo.get("llave") or "").strip()
     if not llave or len(llave) > 200:
-        return jsonify({"error": "Pega la llave de tu integración de Notion."}), 400
+        return jsonify({"error": gettext("Pega la llave de tu integración de Notion.")}), 400
     try:
         notion.probar(llave)
     except notion.ErrorNotion as e:
@@ -143,7 +152,7 @@ def lote_reintentar(cliente, lid):
 def _guion_o_404(cliente, gid):
     g = datos.guion(cliente, gid)
     if g is None:
-        raise NoExiste("Ese guion no existe.")
+        raise NoExiste(gettext("Ese guion no existe."))
     return g
 
 
@@ -185,7 +194,7 @@ def guion_duplicar(cliente, gid):
 def _video_o_404(cliente, vid):
     v = datos.video(cliente, vid)
     if v is None:
-        raise NoExiste("Esa versión no existe.")
+        raise NoExiste(gettext("Esa versión no existe."))
     return v
 
 
@@ -235,7 +244,7 @@ def video_recorte_proponer(cliente, vid):
     try:
         v = _video_o_404(cliente, vid)
         if not v["config"].get("duracion_objetivo"):
-            raise Conflicto("Pon una duración objetivo para poder recortar.")
+            raise Conflicto(gettext("Pon una duración objetivo para poder recortar."))
         datos.empezar(cliente, vid, "recortando", ("configurando",))
     except ErrorRefinador as e:
         return _error(e)
@@ -289,7 +298,7 @@ def video_nueva_version(cliente, vid):
 def video_ver(cliente, vid):
     v = datos.video(cliente, vid)
     if v is None:
-        return jsonify({"error": "Esa versión no existe."}), 404
+        return jsonify({"error": gettext("Esa versión no existe.")}), 404
     prompts = [{k: p[k] for k in ("id", "titulo", "tipo", "estado", "extra")} for p in datos.prompts_de_video(vid)]
     return jsonify({"video": v, "prompts": prompts})
 
@@ -298,9 +307,9 @@ def video_ver(cliente, vid):
 def video_documento(cliente, vid):
     v = datos.video(cliente, vid)
     if v is None:
-        return jsonify({"error": "Esa versión no existe."}), 404
+        return jsonify({"error": gettext("Esa versión no existe.")}), 404
     if v["estado"] != "armado":
-        return jsonify({"error": "El documento sale cuando la versión está armada."}), 409
+        return jsonify({"error": gettext("El documento sale cuando la versión está armada.")}), 409
     md = plantillas.documento_md(v, datos.prompts_de_video(vid))
     return Response(md, mimetype="text/markdown; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{plantillas.nombre_documento(v)}"'})
@@ -322,9 +331,9 @@ def video_imagenes(cliente, vid):
 def video_imagenes_md(cliente, vid):
     v = datos.video(cliente, vid)
     if v is None:
-        return jsonify({"error": "Esa versión no existe."}), 404
+        return jsonify({"error": gettext("Esa versión no existe.")}), 404
     if v["estado_imagenes"] != "listo":
-        return jsonify({"error": "Primero escribe los prompts de imágenes."}), 409
+        return jsonify({"error": gettext("Primero escribe los prompts de imágenes.")}), 409
     md = imagenes.documento_md(v, datos.prompts_de_video(vid))
     return Response(md, mimetype="text/markdown; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{imagenes.nombre_documento(v)}"'})
@@ -345,6 +354,7 @@ def bloque_global_guardar(cliente):
     if texto:
         problemas = refinador.validar(texto, (), "clip")
         if problemas:
-            return jsonify({"error": "El bloque global rompe reglas que no se negocian.", "problemas": problemas}), 422
+            return jsonify({"error": gettext("El bloque global rompe reglas que no se negocian."),
+                            "problemas": problemas}), 422
     proyectos.guardar_bloque_global_flowplus(cliente, texto)
     return jsonify({"ok": True})

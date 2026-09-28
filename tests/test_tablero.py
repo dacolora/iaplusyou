@@ -55,6 +55,15 @@ def test_valor_en_y_delta_con_truncado():
     assert tablero.delta([], "2026-09-01T00:00:00", "2026-09-30T00:00:00", "gasto") == 0.0
 
 
+def test_dinero_redondea_igual_que_main():
+    """`tablero.dinero` pasa por `idiomas.numero` (revisión final fase 4,
+    M2): confirma que el pre-redondeo llega hasta acá y no solo hasta
+    `idiomas.numero`/`gastos.formatear`."""
+    import tablero
+    assert tablero.dinero(12.345, "USD") == "12,35 USD"
+    assert tablero.dinero(0.015, "USD") == "0,01 USD"
+
+
 # ---------- resumen_mes ----------
 
 def test_resumen_mes_excluye_lo_anterior_y_separa_fuentes(base_temporal, sin_red):

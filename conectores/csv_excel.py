@@ -20,9 +20,13 @@ import re
 import unicodedata
 from itertools import islice
 
+import idiomas
 from .base import ErrorConector, normalizar_producto
 
-COLUMNAS_AYUDA = "nombre, precio, moneda, url_compra, fotos (varias con |), descripcion, categoria, sku"
+# Se muestra tal cual en Catálogo › Productos › «Traer productos de…»
+# (_catalogo_importar.html); solo la nota entre paréntesis se traduce, los
+# nombres de columna son los identificadores reales que el parser reconoce.
+COLUMNAS_AYUDA = idiomas.N_("nombre, precio, moneda, url_compra, fotos (varias con |), descripcion, categoria, sku")
 
 # clave normalizada -> alias aceptados (ya sin acentos, en minúscula)
 _ALIAS = {

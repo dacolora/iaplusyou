@@ -1,56 +1,56 @@
 {% from "_gpg_macros.html" import form_config %}
-{% set ESTADOS = {'configurando': 'Configurando', 'recortando': 'Eligiendo qué quitar…', 'armando': 'Armando clips…',
-                  'armado': 'Armado', 'invalido': 'Inválido', 'error': 'Error'} %}
-<section class="gpg-videos" aria-label="Videos de este guion">
+{% set ESTADOS = {'configurando': _('Configurando'), 'recortando': _('Eligiendo qué quitar…'), 'armando': _('Armando clips…'),
+                  'armado': _('Armado'), 'invalido': _('Inválido'), 'error': _('Error')} %}
+<section class="gpg-videos" aria-label="{{ _('Videos de este guion') }}">
   <div class="gpg-cab">
-    <h4>Videos</h4>
-    <button type="button" class="btn-guardar btn-sm" data-gpg-mostrar="gpg-nuevo-video">+ Nuevo video</button>
+    <h4>{{ _('Videos') }}</h4>
+    <button type="button" class="btn-guardar btn-sm" data-gpg-mostrar="gpg-nuevo-video">{{ _('+ Nuevo video') }}</button>
   </div>
   <div class="gpg-guiones">
     {% for x in guion.videos %}
     {% set estado_x = video.estado if (video and video.id == x.id) else x.estado %}
     <button type="button" class="gpg-guion-btn{% if video and video.id == x.id %} activo{% endif %}"
-            data-gpg-ir data-guion="{{ guion.id }}" data-video="{{ x.id }}">{{ x.nombre }} · {{ ESTADOS.get(estado_x, estado_x) }}</button>
-    {% else %}<p class="vacio">Todavía no hay videos. Crea el primero: eliges duración, modo, hook y referencias.</p>{% endfor %}
+            data-gpg-ir data-guion="{{ guion.id }}" data-video="{{ x.id }}">{{ x.etiqueta }} · {{ ESTADOS.get(estado_x, estado_x) }}</button>
+    {% else %}<p class="vacio">{{ _('Todavía no hay videos. Crea el primero: eliges duración, modo, hook y referencias.') }}</p>{% endfor %}
   </div>
   <div id="gpg-nuevo-video" {% if guion.videos %}hidden{% endif %} data-gpg-caja>
-    {{ form_config("gpg-form-nuevo", "/guiones/" ~ guion.id ~ "/videos", config_defecto, guion.lectura, activos, formatos, "Crear video") }}
+    {{ form_config("gpg-form-nuevo", "/guiones/" ~ guion.id ~ "/videos", config_defecto, guion.lectura, activos, formatos, _("Crear video")) }}
   </div>
 
   {% if video %}
-  <section class="gpg-video" data-gpg-caja aria-label="Versión elegida">
+  <section class="gpg-video" data-gpg-caja aria-label="{{ _('Versión elegida') }}">
     <div class="gpg-lote-cab">
-      <h4>{{ video.nombre }}</h4>
+      <h4>{{ video.etiqueta }}</h4>
       <span class="tag-estado">{{ ESTADOS.get(video.estado, video.estado) }}</span>
     </div>
     {% if video.aviso %}<p class="flash error">{{ video.aviso }}</p>{% endif %}
     <div class="gpg-error flash error" hidden></div>
     <p class="gp-ayuda">
-      {{ 'Voz en off' if video.config.modo == 'voiceover' else 'Diálogo a cámara' }} · {{ video.config.formato }} ·
-      {{ video.config.palabras_por_segundo }} palabras/s · hook: {{ video.config.hook }} ·
-      {{ video.config.referencias | length }} referencia{{ 's' if video.config.referencias | length != 1 }}
+      {{ _('Voz en off') if video.config.modo == 'voiceover' else _('Diálogo a cámara') }} · {{ video.config.formato }} ·
+      {{ _('%(n)s palabras/s · hook: %(hook)s', n=video.config.palabras_por_segundo, hook=video.config.hook) }} ·
+      {{ ngettext('%(num)s referencia', '%(num)s referencias', video.config.referencias | length) }}
     </p>
 
-    {% if video.estado == 'recortando' %}<p class="gp-ayuda">Claude está eligiendo qué líneas quitar…</p>{% endif %}
+    {% if video.estado == 'recortando' %}<p class="gp-ayuda">{{ _('Claude está eligiendo qué líneas quitar…') }}</p>{% endif %}
 
     {% if video.estado == 'configurando' %}
       <details id="gpg-det-config-{{ video.id }}">
-        <summary>Cambiar la configuración</summary>
-        {{ form_config("gpg-form-config", "/videos/" ~ video.id ~ "/config", video.config, guion.lectura, activos, formatos, "Guardar configuración") }}
+        <summary>{{ _('Cambiar la configuración') }}</summary>
+        {{ form_config("gpg-form-config", "/videos/" ~ video.id ~ "/config", video.config, guion.lectura, activos, formatos, _("Guardar configuración")) }}
       </details>
 
       {% if video.config.duracion_objetivo %}
       <div class="gpg-recorte">
-        <h5>Duración</h5>
-        <p>El guion completo dura unos {{ recorte_info.completo }} s; el objetivo es {{ video.config.duracion_objetivo }} s.</p>
+        <h5>{{ _('Duración') }}</h5>
+        <p>{{ _('El guion completo dura unos %(completo)s s; el objetivo es %(objetivo)s s.', completo=recorte_info.completo, objetivo=video.config.duracion_objetivo) }}</p>
         {% if recorte_info.completo > video.config.duracion_objetivo %}
           <div class="gp-botones">
             <button type="button" class="btn-guardar btn-sm" data-gpg-accion="/videos/{{ video.id }}/recorte/proponer">
-              Proponer qué quitar · {{ costos.recorte }}</button>
+              {{ _('Proponer qué quitar') }} · {{ costos.recorte }}</button>
           </div>
         {% endif %}
         <form class="gpg-form" id="gpg-form-recorte-{{ video.id }}" data-gpg-post="/videos/{{ video.id }}/recorte" data-gpg-calcular="/videos/{{ video.id }}/calcular">
-          <p class="gp-ayuda">Marca las líneas que salen. Se quitan enteras; la línea 1 (el hook) no se puede quitar.</p>
+          <p class="gp-ayuda">{{ _('Marca las líneas que salen. Se quitan enteras; la línea 1 (el hook) no se puede quitar.') }}</p>
           <ul class="gpg-lineas">
             {% for l in recorte_info.lineas %}
             <li><label>
@@ -59,10 +59,10 @@
             {% endfor %}
           </ul>
           <p data-gpg-estimado>{{ recorte_info.texto }}</p>
-          <p data-gpg-bloques-etiqueta {% if not recorte_info.bloques %}hidden{% endif %}>Lo que sale:</p>
+          <p data-gpg-bloques-etiqueta {% if not recorte_info.bloques %}hidden{% endif %}>{{ _('Lo que sale:') }}</p>
           <ul data-gpg-bloques>{% for b in recorte_info.bloques %}<li>«{{ b }}»</li>{% endfor %}</ul>
           <div class="gpg-error flash error" hidden></div>
-          <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">Guardar qué se quita</button></div>
+          <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">{{ _('Guardar qué se quita') }}</button></div>
         </form>
       </div>
       {% endif %}
@@ -73,13 +73,13 @@
   {% endif %}
 
   <details class="gpg-avanzado" data-gpg-caja id="gpg-det-global">
-    <summary>Avanzado: bloque global del proyecto</summary>
+    <summary>{{ _('Avanzado: bloque global del proyecto') }}</summary>
     <form class="gpg-form" id="gpg-form-global" data-gpg-post="/bloque-global">
-      <p class="gp-ayuda">Va al final de cada prompt de clip en todos los videos de este proyecto. Déjalo vacío para volver al de fábrica.
-        {% if not bloque_global.propio %}Ahora se usa el de fábrica.{% endif %}</p>
+      <p class="gp-ayuda">{{ _('Va al final de cada prompt de clip en todos los videos de este proyecto. Déjalo vacío para volver al de fábrica.') }}
+        {% if not bloque_global.propio %}{{ _('Ahora se usa el de fábrica.') }}{% endif %}</p>
       <textarea name="texto" rows="10" class="gp-mono">{{ bloque_global.texto }}</textarea>
       <div class="gpg-error flash error" hidden></div>
-      <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">Guardar bloque global</button></div>
+      <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">{{ _('Guardar bloque global') }}</button></div>
     </form>
   </details>
 </section>
