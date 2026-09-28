@@ -1,11 +1,11 @@
-{# Tarjeta Meta (Configuración y Experimentos). Cuatro estados (spec §1):
+{# Tarjeta Meta, incluida solo en Experimentos (hasta 2026-09-28 también en
+   Configuración › Conexiones). Cuatro estados (spec §1):
    sin forma y sin conexión → elegir; forma agencia sin conectar → guía y
    autoservicio; forma propia → guía corregida + app + conexión (lo de
    siempre); conectado (modo agencia o propia) → estado + «Cambiar de forma».
    Contexto de ver_cliente: modo_meta, meta_forma, agencia_conectada,
    agencia_disponible, agencia_publica, meta_detalle (sin tokens),
-   capacidades_meta, meta_app, motivo_bloqueo_forma. Sin ids: se incluye
-   dos veces en la misma página. #}
+   capacidades_meta, meta_app, motivo_bloqueo_forma. #}
 {% if modo_meta == "agencia" %}
 {% set md = meta_detalle or {} %}
 <div class="idea-block meta-agencia-tarjeta" style="border-left:3px solid var(--accent);">
@@ -99,3 +99,6 @@
 </div>
 {% endif %}
 {% endif %}{# modo_meta / forma #}
+<p class="vacio" style="padding-top:.3rem;font-size:.8rem;">
+  {{ _('La cuenta publicitaria necesita un método de pago en <a href="https://business.facebook.com/settings/payment-methods" target="_blank" rel="noopener">business.facebook.com › Facturación ↗</a>: sin él Meta no activa ningún anuncio.') }}
+</p>
