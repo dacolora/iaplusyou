@@ -4,6 +4,8 @@ trabajo corriendo). Las lecturas por proyecto (`guiones_base`,
 `finales_por_sesion`, `ultimos_captions`, `con_vivos_precargados`) devuelven
 lo mismo que las lecturas por pieza, y el total de consultas ya no crece con
 el número de piezas."""
+import re
+
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import event
@@ -122,6 +124,24 @@ def test_la_pagina_del_proyecto_no_consulta_por_tarjeta(app):
     assert muchas.tarea <= 3, f"{muchas.tarea} consultas a tarea con 15 piezas"
     # 12 piezas más no pueden costar más de un puñado de consultas extra.
     assert muchas.total - pocas.total <= 6, (pocas.total, muchas.total)
+
+
+def test_la_pagina_no_embebe_detalles_ni_pasa_de_24_tarjetas(app):
+    """Tarjetas ligeras (spec 2026-09-28): ningún <template> de detalle en la
+    página y, por lista, como mucho TARJETAS_POR_PAGINA tarjetas (el resto
+    llega con «Ver más»). Se cuentan las aperturas de tarjeta (`class="generado"`
+    o `class="generado generado-final"`), no las clases hijas."""
+    _sembrar(40)
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert '<template class="generado-detalle">' not in html
+    # En Crear la cuadrícula cierra antes del modal; en Final edition cada
+    # cuadrícula va en su propio <section>.
+    cierres = {"crear-generados": '<dialog id="generado-modal"', "fe-videos": "</section>", "fe-finales": "</section>"}
+    for grid, cierre in cierres.items():
+        assert f'id="{grid}"' in html
+        seg = html.split(f'id="{grid}"')[1].split(cierre)[0]
+        tarjetas = re.findall(r'class="generado( generado-final)?"', seg)
+        assert 1 <= len(tarjetas) <= 24, (grid, len(tarjetas))
 
 
 def test_estaticos_versionados_se_guardan_un_ano(app):
