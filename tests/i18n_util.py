@@ -38,12 +38,17 @@ class _Visible(HTMLParser):
         if abre:
             self.vistos.add(el_id)
         is_void = tag in VACIOS
+        # translate="no" (HTML estándar: «no traducir esto») marca un
+        # identificador que se pinta tal cual, p. ej. el código de idioma de
+        # un destino de Final edition («en» = inglés, no la preposición): su
+        # subárbol no se mira, igual que un <script>.
+        oculta = tag in ("script", "style", "template") or (a.get("translate") or "").lower() == "no"
         if not is_void:
-            self.pila.append((tag, abre))
+            self.pila.append((tag, abre, oculta))
             self.region += abre
-            self.oculto += tag in ("script", "style", "template")
+            self.oculto += oculta
         # Inspect attributes if we're in a region, OR if this is a void element with matching id
-        should_inspect = (self.region and not self.oculto) or (abre and is_void and not self.oculto)
+        should_inspect = ((self.region and not self.oculto) or (abre and is_void and not self.oculto)) and not oculta
         if should_inspect:
             self.trozos += [a[k] for k in ATRIBUTOS if a.get(k)]
             if tag in ("input", "button") and a.get("type") in ("submit", "button") and a.get("value"):
@@ -55,12 +60,12 @@ class _Visible(HTMLParser):
             self.handle_endtag(tag)
 
     def handle_endtag(self, tag):
-        if tag not in [t for t, _abre in self.pila]:
+        if tag not in [t for t, _abre, _oculta in self.pila]:
             return
         while self.pila:
-            t, abre = self.pila.pop()
+            t, abre, oculta = self.pila.pop()
             self.region -= abre
-            self.oculto -= t in ("script", "style", "template")
+            self.oculto -= oculta
             if t == tag:
                 break
 

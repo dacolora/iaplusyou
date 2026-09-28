@@ -668,26 +668,25 @@ def _final_sembrado():
     return cf_id, fid
 
 
-# El código de idioma de un destino («🇺🇸 en», «(en)», «United States · en») es
-# un identificador (§B6: no se traduce) y «en» es también la preposición
-# española: el detector no los distingue. Solo se quita al FINAL de un trozo,
-# que es donde lo pintan las plantillas de Final edition.
-_CODIGO_IDIOMA_AL_FINAL = re.compile(r"(?:\((?:es|en|pt)\)|(?<=\s)(?:es|en|pt))$")
-
-
-def _fugas_final(html, ids=None):
-    return [t for t in espanol_visible(html, ids) if _con_marca(_CODIGO_IDIOMA_AL_FINAL.sub("", t))]
-
-
-def test_el_filtro_de_codigos_no_tapa_espanol():
-    assert _fugas_final("<p>🇺🇸 en</p><small>(en)</small><p>🇺🇸 United States · en</p>") == []
-    assert _fugas_final("<p>Genera uno en Crear</p><p>Qué pasó · en</p>") == ["Genera uno en Crear", "Qué pasó · en"]
+def test_translate_no_salta_solo_el_codigo_de_idioma():
+    """El código de idioma de un destino («en» = inglés, un identificador que
+    no se traduce, §B6) va en un <span translate="no"> y el detector no lo
+    mira; «en» suelto sigue siendo la preposición española y sí cuenta."""
+    codigos = ('<span class="generado-badge">🇺🇸 <span translate="no">en</span></span>'
+               '<small>(<span translate="no">en</span>)</small>'
+               '<p class="detalle-texto">🇺🇸 United States · <span translate="no">en</span></p>')
+    assert espanol_visible(codigos) == []
+    fugas = ('<p>Genera uno en <a>Crear</a></p><p>Filtra en</p><p>Guarda (en)</p>'
+             '<p>Genera uno en Crear</p><p>Qué pasó · en</p>')
+    assert espanol_visible(fugas) == ["Genera uno en", "Filtra en", "Guarda (en)", "Genera uno en Crear", "Qué pasó · en"]
+    # Solo el subárbol marcado: lo que sigue después del </span> vuelve a contar.
+    assert espanol_visible('<p><span translate="no">en</span> Guardar</p>') == ["Guardar"]
 
 
 def test_pestana_final_edition_en_ingles(admin_en):
     _final_sembrado()
     html = html_de(admin_en, "/cliente/acme")
-    fugas = _fugas_final(html, ("tab-final",))
+    fugas = espanol_visible(html, ("tab-final",))
     assert not fugas, fugas[:15]
     assert "Ready videos (1)" in html and "Final cuts (1)" in html
 
@@ -696,7 +695,7 @@ def test_pestana_final_edition_en_ingles(admin_en):
 def test_detalles_de_final_edition_en_ingles(admin_en, ruta):
     cf_id, fid = _final_sembrado()
     html = html_de(admin_en, f"/cliente/acme/creative_flow/{cf_id}/" + ruta.format(fid=fid))
-    fugas = _fugas_final(html)
+    fugas = espanol_visible(html)
     assert not fugas, (ruta, fugas[:15])
     for crudo in (">omitida<", ">musica<", ">Lista<", "2. problema<", ">equilibrada<"):   # lo que MARCAS no ve
         assert crudo not in html, crudo
@@ -708,5 +707,5 @@ def test_detalles_de_final_edition_en_ingles(admin_en, ruta):
                                  "/cliente/acme/creative_flow/{cf}/detalle"])
 def test_tarjetas_y_detalle_por_fetch_en_ingles(admin_en, url):
     cf_id, _fid = _final_sembrado()
-    fugas = _fugas_final(html_de(admin_en, url.format(cf=cf_id)))
+    fugas = espanol_visible(html_de(admin_en, url.format(cf=cf_id)))
     assert not fugas, (url, fugas[:15])

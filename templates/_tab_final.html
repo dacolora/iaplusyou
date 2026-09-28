@@ -132,7 +132,7 @@
       var btn = form && form.querySelector('.fe-producir-btn');
       if (!btn) return;
       var n = form.querySelectorAll('input[name="destinos"]:checked').length;
-      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.sinN;
+      btn.textContent = n === 1 ? btn.dataset.plantillaUno : n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.sinN;
     });
     cuerpo.addEventListener('submit', function (e) {
       var form = e.target;

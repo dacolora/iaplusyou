@@ -73,7 +73,7 @@
                   {% set _ya = _finales_por_destino.get(p.idioma ~ "_" ~ codigo) %}
                   <label class="fe-destino">
                     <input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}" {% if _ya %}data-ya-producida="1"{% endif %}>
-                    {{ p.bandera }} {{ p.nombre|traducir }} <small>({{ p.idioma }})</small>
+                    {{ p.bandera }} {{ p.nombre|traducir }} <small>(<span translate="no">{{ p.idioma }}</span>)</small>
                     <input type="number" name="precio_{{ p.idioma }}_{{ codigo }}" min="0" step="any"
                            placeholder="{{ _('Precio (opcional)') }}" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;"
                            {% if codigo == _g.pais and _g.precio_base is not none %}value="{{ _g.precio_base }}"{% endif %}>
@@ -114,7 +114,7 @@
                   </label>
                 </div>
                 {% set _cu = (' ' ~ _('≈ %(usd)s c/u', usd=(precios.final_por_pais.usd | usd))) if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
-                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="{{ _('Producir {n} finales') }}{{ _cu }}" data-sin-n="{{ _('Producir finales') }}{{ _cu }}">{{ _('Producir finales') }}{{ _cu }}</button>
+                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="{{ _('Producir {n} finales') }}{{ _cu }}" data-plantilla-uno="{{ _('Producir 1 final') }}{{ _cu }}" data-sin-n="{{ _('Producir finales') }}{{ _cu }}">{{ _('Producir finales') }}{{ _cu }}</button>
               </form>
             {% endif %}
 
@@ -177,7 +177,7 @@
         </div>
         <div class="detalle-info">
           <p class="campo-label">{{ _('Final edition') }}</p>
-          <p class="detalle-texto">{{ _bandera }} {{ (paises_fe[f.pais].nombre|traducir) if f.pais in paises_fe else f.pais }} · {{ f.idioma }}</p>
+          <p class="detalle-texto">{{ _bandera }} {{ (paises_fe[f.pais].nombre|traducir) if f.pais in paises_fe else f.pais }} · <span translate="no">{{ f.idioma }}</span></p>
           <p class="vacio" style="padding:0;font-size:.78rem;">
             {{ _('Final de: %(texto)s', texto=(item.accion_central or item.id)) }}
             {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}

@@ -174,7 +174,7 @@ def _orden(idioma):
     """El idioma para `doctrina.bloque_system(idioma=)`: la orden va solo si
     es un idioma de la app (es/en). Un guion base viejo en portugués sigue
     sin orden — `idiomas.orden_idioma("pt")` caería al inglés."""
-    return idioma if idiomas.normalizar(idioma) else None
+    return idiomas.normalizar(idioma)
 
 
 def _system_generar(duracion_s, idioma_base, canal_optimo=None, con_angulo=False):

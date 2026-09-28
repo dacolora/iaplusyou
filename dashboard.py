@@ -6289,7 +6289,7 @@ def fe_preparar(cliente, cf_id):
     # Decisión B (2026-09-28): el guion base no es por destino. La elección
     # explícita del selector gana; sin ella (o con una que no vale), el idioma
     # del proyecto.
-    idioma_base = request.form.get("idioma_base") or idiomas.de_proyecto(cliente)
+    idioma_base = request.form.get("idioma_base")
     if idioma_base not in IDIOMAS_FE:
         idioma_base = idiomas.de_proyecto(cliente)
     opciones = {"precio": _precio_form(request.form.get("precio")), "idioma_base": idioma_base}

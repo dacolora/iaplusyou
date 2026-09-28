@@ -58,7 +58,7 @@
         {% else %}
         <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga class="generado-portada"></video>
         {% endif %}
-        <span class="generado-badge">{{ _bandera }} {{ f.idioma }}</span>
+        <span class="generado-badge">{{ _bandera }} <span translate="no">{{ f.idioma }}</span></span>
         {% if f.estado == "generando" %}
         <div class="generado-velo">
           {% if f.trabajo %}

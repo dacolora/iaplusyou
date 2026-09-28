@@ -794,8 +794,11 @@ def test_boton_producir_con_sin_n():
     env = _entorno_plantilla()
     html = _detalle_video_fe(env, _item_video_listo(guion_base=GUION_BASE))
     assert 'data-plantilla="Producir {n} finales' in html and 'data-sin-n="Producir finales' in html
+    # Un solo destino: «Producir 1 final», no «Producir 1 finales» (fix round 1).
+    assert 'data-plantilla-uno="Producir 1 final' in html and "Producir 1 finales" not in html
     tab = _tab_final(env, [_item_video_listo(guion_base=GUION_BASE)])
     assert "btn.dataset.sinN" in tab and "replace('Producir {n} finales'" not in tab
+    assert "n === 1 ? btn.dataset.plantillaUno" in tab
 
 
 @pytest.mark.parametrize("enviado, esperado", [(None, "en"), ("pt", "pt"), ("es", "es"), ("fr", "en")])
