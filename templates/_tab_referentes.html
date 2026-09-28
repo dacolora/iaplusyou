@@ -183,6 +183,10 @@
 </div>
 {% else %}
 <section class="ref-panel" id="ref-panel" data-grid="{{ url_for('referentes.grid', cliente=cliente) }}">
+  {# En el celular los filtros se pliegan detrás de este botón (revisión 2026-09-28);
+     en escritorio el botón no se ve y .ref-filtros es display: contents. #}
+  <button type="button" class="btn-sm ref-filtros-boton" id="ref-filtros-boton" aria-expanded="false" aria-controls="ref-filtros">{{ _('Filtros') }} <span data-ref-filtros-n></span></button>
+  <div class="ref-filtros" id="ref-filtros">
   <div class="exp-filtros ref-chips" data-filtro="etapa">
     <button type="button" class="chip activo" data-valor="">Todos</button>
     {% for e in ref_etapas %}<button type="button" class="chip" data-valor="{{ e }}">{{ ref_etiquetas_etapa[e] | capitalize }}</button>{% endfor %}
@@ -197,6 +201,7 @@
     <select data-filtro="dolor"><option value="">Cualquier dolor</option>{% for d, n in ref_opciones.dolores %}<option value="{{ d }}">{{ d }} ({{ n }})</option>{% endfor %}</select>
     <select data-filtro="fuente"><option value="">Todas las fuentes</option>{% for f, n in ref_opciones.fuentes %}<option value="{{ f }}">{{ f }} ({{ n }})</option>{% endfor %}<option value="mios">Solo míos</option></select>
     <input type="search" data-filtro="q" placeholder="{{ _('Buscar en titular, firma, marca o dolor') }}" maxlength="80">
+  </div>
   </div>
   <div id="ref-grid" class="ref-grid"><p class="vacio">Cargando referentes…</p></div>
 </section>
@@ -280,7 +285,19 @@
           grid.innerHTML = '<p class="vacio">No se pudo cargar la biblioteca. Recarga la página.</p>';
         });
     }
-    function recargar() { escribirHash(); pedir(1, false); }
+    function contarFiltros() {
+      // Cuántos filtros hay puestos (la selección para un sprint no cuenta): va en el botón del celular.
+      var n = Object.keys(filtros).filter(function (k) { return k !== 'campana' && filtros[k]; }).length;
+      var marca = document.querySelector('[data-ref-filtros-n]');
+      if (marca) marca.textContent = n ? '(' + n + ')' : '';
+    }
+    function recargar() { escribirHash(); contarFiltros(); pedir(1, false); }
+    var botonFiltros = document.getElementById('ref-filtros-boton');
+    if (botonFiltros) botonFiltros.addEventListener('click', function () {
+      var caja = document.getElementById('ref-filtros');
+      var abierto = caja.classList.toggle('abierto');
+      botonFiltros.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    });
 
     panel.querySelectorAll('.ref-chips .chip').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -375,6 +392,7 @@
       cargado = true;
       filtros = leerHash();
       pintarControles();
+      contarFiltros();
       pedir(1, false);
     }
     // La pestaña se activa desde cliente.html (clase .activo en #tab-referentes).
