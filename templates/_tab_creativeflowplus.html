@@ -233,7 +233,7 @@
         {% if item.estado == "video_listo" and item.tipo == "imagen" %}
         <img src="{{ item.video_url }}" alt="" loading="lazy">
         {% elif item.estado == "video_listo" %}
-        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="metadata"></video>
+        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
         {% else %}
         {% set _portada = (item.referencias[0].frame_url if item.referencias else (item.referencias_urls[0] if item.referencias_urls else None)) %}
         {% if _portada %}<img src="{{ _portada }}" alt="" loading="lazy" class="generado-portada">{% endif %}

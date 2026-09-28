@@ -3,6 +3,15 @@ import pytest
 import sqlalchemy as sa
 
 
+@pytest.fixture(autouse=True)
+def _con_copycoders(monkeypatch):
+    """Estos casos siembran la biblioteca global de copycoders y la leen desde
+    un proyecto: el proyecto la trajo (desde 2026-09-28 nace apagada; el caso
+    apagado vive en test_referentes_copycoders_proyecto.py)."""
+    import proyectos
+    monkeypatch.setattr(proyectos, "referentes_copycoders", lambda cliente: True)
+
+
 def _anuncio(**extra):
     base = {"anuncio_id": "1931355470987046", "pagina_id": "110920097280290", "fuente": "copycoders",
             "marca": "Lulutox Tea", "url_anuncio": "https://www.facebook.com/ads/library/?id=1931355470987046",

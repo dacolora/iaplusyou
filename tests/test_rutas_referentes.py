@@ -2,6 +2,15 @@
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _con_copycoders(monkeypatch):
+    """Estos casos siembran la biblioteca global de copycoders y la leen desde
+    un proyecto: el proyecto la trajo (desde 2026-09-28 nace apagada; el caso
+    apagado vive en test_referentes_copycoders_proyecto.py)."""
+    import proyectos
+    monkeypatch.setattr(proyectos, "referentes_copycoders", lambda cliente: True)
+
+
 def _cliente_admin(dashboard):
     dashboard.app.config["TESTING"] = True
     c = dashboard.app.test_client()

@@ -1789,6 +1789,10 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 
 /* Referentes — biblioteca (spec 2026-09-23 §8) */
 .ref-panel { display:flex; flex-direction:column; gap:.6rem; margin-top:.6rem; }
+.ref-copycoders { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem .8rem; margin:.4rem 0 .8rem; padding:.6rem .8rem;
+  border:1px dashed var(--border); border-radius:var(--radius); background:var(--bg); font-size:.85rem; color:var(--muted); }
+.ref-copycoders strong { color:var(--text); }
+.ref-copycoders span { flex:1 1 20rem; min-width:0; }
 .ref-selects { display:flex; gap:.5rem; flex-wrap:wrap; }
 .ref-selects select, .ref-selects input { font-size:.8rem; max-width:16rem; }
 .ref-conteo { color:var(--muted); font-size:.8rem; margin:.2rem 0; }

@@ -292,6 +292,45 @@
         setTimeout(function () { el.classList.add('aparece-visible'); }, i * 40);
       });
     });
+
+    // Videos de las listas (incidente 2026-09-28): la página de un proyecto
+    // trae todas sus pestañas a la vez y cada video con preload=metadata se
+    // pedía al abrirla aunque su pestaña estuviera oculta — cientos de pedidos
+    // a R2 que dejaban la página «cargando». Las tarjetas nacen con
+    // preload="none" y data-precarga, y acá se piden solo cuando entran en
+    // pantalla: una pestaña oculta o un <details> cerrado nunca entran.
+    (function () {
+      var vistos = new WeakSet();
+      function precargar(v) {
+        if (v.readyState === 0) { v.preload = 'metadata'; v.load(); }
+      }
+      var io = ('IntersectionObserver' in window) ? new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          io.unobserve(e.target);
+          precargar(e.target);
+        });
+      }, { rootMargin: '400px 0px' }) : null;
+      function observar(raiz) {
+        if (!raiz.querySelectorAll) return;
+        var lista = (raiz.matches && raiz.matches('video[data-precarga]')) ? [raiz] : [];
+        raiz.querySelectorAll('video[data-precarga]').forEach(function (v) { lista.push(v); });
+        lista.forEach(function (v) {
+          if (vistos.has(v)) return;
+          vistos.add(v);
+          if (io) io.observe(v); else precargar(v);
+        });
+      }
+      document.addEventListener('DOMContentLoaded', function () {
+        observar(document);
+        // Los fragmentos que llegan por fetch (paneles, fichas) también.
+        new MutationObserver(function (cambios) {
+          cambios.forEach(function (c) {
+            c.addedNodes.forEach(function (n) { if (n.nodeType === 1) observar(n); });
+          });
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+    })();
   </script>
 </head>
 <body class="{% if request.view_args and request.view_args.cliente %}con-sidebar{% endif %}">
