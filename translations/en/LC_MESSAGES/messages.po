@@ -197,6 +197,10 @@ msgid "%(n)s actualizado(s)"
 msgstr "%(n)s updated"
 
 #, python-format
+msgid "%(n)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas."
+msgstr "%(n)s ads that already worked. They don't load in this project until you ask for them."
+
+#, python-format
 msgid "%(n)s archivado(s) por no estar ya en la tienda."
 msgstr "%(n)s archived for no longer being in the store."
 
@@ -1069,6 +1073,13 @@ msgstr "Let Creatv know to finish it by hand"
 msgid "Avisos por correo desactivados."
 msgstr "Email notifications turned off."
 
+msgid "Biblioteca de copycoders"
+msgstr "Copycoders library"
+
+#, python-format
+msgid "Biblioteca de copycoders: activa en este proyecto (%(n)s anuncios)."
+msgstr "Copycoders library: active in this project (%(n)s ads)."
+
 #, python-format
 msgid "Bitácora (%(n)s)"
 msgstr "Log (%(n)s)"
@@ -1099,6 +1110,9 @@ msgstr "Arm (shoulder→elbow)"
 
 msgid "Busca videos por palabras clave y trae sus comentarios a un estudio de Nicho. Es una llave distinta del OAuth de publicación."
 msgstr "Searches videos by keyword and brings their comments into a Niche study. It's a different key from the publishing OAuth."
+
+msgid "Buscar en titular, firma, marca o dolor"
+msgstr "Search headline, signature, brand or pain point"
 
 msgid "Buscar mis activos"
 msgstr "Search my assets"
@@ -3898,6 +3912,9 @@ msgstr "Done: edit it to your liking before generating."
 msgid "Listo: este proyecto vuelve a usar su propia app de Meta. %(detalle)s"
 msgstr "Done: this project is back to using its own Meta app. %(detalle)s"
 
+msgid "Listo: la biblioteca de copycoders ya aparece en Referentes."
+msgstr "Done: the copycoders library now shows up in References."
+
 msgid "Listo: la versión de Claude es ahora el prompt vigente."
 msgstr "Done: Claude's version is now the current prompt."
 
@@ -5304,6 +5321,9 @@ msgstr "Let Creatv manage it"
 msgid "Que Creatv lo gestione: sigue los pasos de la tarjeta de Meta."
 msgstr "Let Creatv manage it: follow the steps on the Meta card."
 
+msgid "Quitamos la biblioteca de copycoders de este proyecto. Puedes volver a traerla cuando quieras."
+msgstr "We removed the copycoders library from this project. You can bring it back whenever you want."
+
 msgid "Quitar"
 msgstr "Remove"
 
@@ -5319,6 +5339,9 @@ msgstr "Remove from the list"
 
 msgid "Quitar esta foto"
 msgstr "Remove this photo"
+
+msgid "Quitar la biblioteca"
+msgstr "Remove the library"
 
 msgid "Quitar todas"
 msgstr "Remove all"
@@ -6277,6 +6300,9 @@ msgstr "Brings Reddit posts and comments into a Niche study to build avatars wit
 
 msgid "Traer el guion desde un link de Notion"
 msgstr "Fetch the script from a Notion link"
+
+msgid "Traer la biblioteca de copycoders"
+msgstr "Bring in the copycoders library"
 
 msgid "Traer productos de… (CSV/Excel, URL o tu tienda)"
 msgstr "Bring in products from… (CSV/Excel, URL or your store)"

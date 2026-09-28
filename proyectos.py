@@ -162,6 +162,19 @@ def guardar_meta_forma(cliente, forma):
     _json_store.guardar(_path(cliente), datos)
 
 
+def referentes_copycoders(cliente):
+    """¿Este proyecto quiere ver la biblioteca global de copycoders (miles de
+    anuncios) en Referentes y en las sugerencias de Sprints? Nace apagada: la
+    persona la trae si la va a usar (incidente 2026-09-28)."""
+    return bool(cargar(cliente).get("referentes_copycoders"))
+
+
+def guardar_referentes_copycoders(cliente, activa):
+    datos = cargar(cliente)
+    datos["referentes_copycoders"] = bool(activa)
+    _json_store.guardar(_path(cliente), datos)
+
+
 PAISES_CALENDARIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE")
 
 
