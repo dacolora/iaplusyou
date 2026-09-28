@@ -35,7 +35,7 @@
     <form method="post" action="{{ url_for('triple_whale.sincronizar', cliente=cliente) }}" class="inline">
       <button type="submit" class="btn-sm" {% if tw.job_sync %}disabled{% endif %}>{{ _('Sincronizar ahora') }}</button>
     </form>
-    <a class="btn-sm" href="#settings" data-ir-tab="settings" data-ir-config="config-triple-whale">{{ _('Ajustes') }}</a>
+    <a class="btn-sm" href="#tw-ajustes" data-tw-ajustes>{{ _('Ajustes') }}</a>
   </div>
 </div>
 
