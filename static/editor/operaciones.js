@@ -588,16 +588,19 @@ function colorCambio(v, nombre) {
   }
   return v;
 }
-// Sub-objeto de estilo (contorno/sombra/fondo): solo los campos de `campos`
-// ({campo: [min, max] | null si es color}), acotados; una clave que no está
-// en la lista se rechaza en vez de ignorarse en silencio.
-function subCambio(valor, campos, nombre) {
-  if (valor === null || valor === undefined) return null;
+// Sub-objeto de estilo (contorno/sombra/fondo): SE FUSIONA sobre `actual` (el
+// que ya tenía el clip) — un cambio parcial como {grosor: 0.03} no debe
+// borrar el `color` que ya estaba puesto, igual que `animacion` conserva lo
+// que no se toca. Solo los campos de `campos` ({campo: [min, max] | null si
+// es color}), acotados; una clave que no está en la lista se rechaza en vez
+// de ignorarse en silencio. `null` sigue siendo "sin contorno/sombra/fondo".
+function subCambio(actual, valor, campos, nombre) {
+  if (valor === null) return null;
   if (typeof valor !== "object" || Array.isArray(valor)) throw new OperacionInvalida(`${nombre} debe ser un objeto o null.`);
   for (const clave of Object.keys(valor)) {
     if (!(clave in campos)) throw new OperacionInvalida(`${nombre}.${clave} no se puede cambiar.`);
   }
-  const out = {};
+  const out = { ...(actual && typeof actual === "object" ? actual : {}) };
   for (const [campo, rango] of Object.entries(campos)) {
     if (!(campo in valor)) continue;
     out[campo] = rango === null ? colorCambio(valor[campo], `${nombre}.${campo}`)
@@ -613,9 +616,11 @@ const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion"];
 // Cambia un clip existente por una lista blanca de campos (cualquier otra
 // clave, en cualquier nivel, se rechaza): estilo.{fuente, tamano, color,
 // alineacion, contorno, sombra, fondo, ancho_max} (solo texto),
-// transform.{x, y, escala, opacidad}, audio.{volumen, fundido_entrada_ms,
-// fundido_salida_ms} (solo audio), ken_burns (solo video/superpuesto),
-// animacion.entrada (ninguna|deslizar). Los valores fuera de rango se
+// transform.{x, y, escala, opacidad} (video/superpuesto/imagen/texto: un
+// clip de audio no tiene posición ni tamaño), audio.{volumen,
+// fundido_entrada_ms, fundido_salida_ms} (solo audio, incluido el espejo
+// p_sonido), ken_burns (solo video/superpuesto), animacion.entrada
+// (ninguna|deslizar). Los valores fuera de rango se
 // acotan en vez de rechazarse; `estilo.tamano` llega en PÍXELES (12–200,
 // como los presets de agregarTexto) y se guarda como fracción de la altura
 // del lienzo. Cambiar el estilo de un texto invalida su png en caché.
@@ -653,15 +658,18 @@ export function cambiar(doc, clipId, cambios, info = {}) {
       }
       clip.estilo.alineacion = e.alineacion;
     }
-    if (e.contorno !== undefined) clip.estilo.contorno = subCambio(e.contorno, CAMPOS_CONTORNO, "estilo.contorno");
-    if (e.sombra !== undefined) clip.estilo.sombra = subCambio(e.sombra, CAMPOS_SOMBRA, "estilo.sombra");
-    if (e.fondo !== undefined) clip.estilo.fondo = subCambio(e.fondo, CAMPOS_FONDO, "estilo.fondo");
+    if (e.contorno !== undefined) clip.estilo.contorno = subCambio(clip.estilo.contorno, e.contorno, CAMPOS_CONTORNO, "estilo.contorno");
+    if (e.sombra !== undefined) clip.estilo.sombra = subCambio(clip.estilo.sombra, e.sombra, CAMPOS_SOMBRA, "estilo.sombra");
+    if (e.fondo !== undefined) clip.estilo.fondo = subCambio(clip.estilo.fondo, e.fondo, CAMPOS_FONDO, "estilo.fondo");
     if (e.ancho_max !== undefined) {
       clip.estilo.ancho_max = e.ancho_max === null ? null : acotar(numeroCambio(e.ancho_max, "estilo.ancho_max"), 0, 1);
     }
     tocaEstilo = true;
   }
   if (cambios.transform !== undefined) {
+    if (!["video", "superpuesto", "imagen", "texto"].includes(pista.tipo)) {
+      throw new OperacionInvalida("Un clip de audio no tiene posición ni tamaño.");
+    }
     const t = cambios.transform;
     if (typeof t !== "object" || Array.isArray(t) || t === null) throw new OperacionInvalida("transform debe ser un objeto.");
     for (const clave of Object.keys(t)) {

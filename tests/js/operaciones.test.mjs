@@ -348,6 +348,30 @@ test("cambiar acota los campos editables, guarda el tamaño como fracción, rech
   ]) invalida(() => op.cambiar(base, "t1", cambios, INFO), /./);
 });
 
+test("cambiar: transform solo en clips que lo tienen (un clip de audio, o el espejo de sonido, se rechaza en español llano)", () => {
+  invalida(() => op.cambiar(docBase(), "a1", { transform: { x: 0.3 } }, INFO), /audio/i);
+  invalida(() => op.cambiar(docBase(), "s0", { transform: { x: 0.3 } }, INFO), /audio/i);
+});
+
+test("cambiar: un contorno/sombra/fondo parcial conserva los campos que no se tocan (y null los sigue quitando)", () => {
+  const base = docBase();
+  base.pistas[1].clips[0].estilo = {
+    ...base.pistas[1].clips[0].estilo,
+    contorno: { color: "#ABCDEF", grosor: 0.01 },
+    sombra: { color: "#112233", dx: 0.02, dy: 0.03 },
+    fondo: { color: "#445566", opacidad: 0.5, radio: 0.1, relleno_x: 0.02, relleno_y: 0.02, ancho: 0.4 },
+  };
+  const r1 = puro((d) => op.cambiar(d, "t1", { estilo: { contorno: { grosor: 0.03 } } }, INFO), base);
+  assert.deepEqual(clipDe(r1.doc, "t1").estilo.contorno, { color: "#ABCDEF", grosor: 0.03 });
+  const r2 = op.cambiar(base, "t1", { estilo: { sombra: { dx: 0.05 } } }, INFO);
+  assert.deepEqual(clipDe(r2.doc, "t1").estilo.sombra, { color: "#112233", dx: 0.05, dy: 0.03 });
+  const r3 = op.cambiar(base, "t1", { estilo: { fondo: { opacidad: 0.9 } } }, INFO);
+  assert.deepEqual(clipDe(r3.doc, "t1").estilo.fondo,
+    { color: "#445566", opacidad: 0.9, radio: 0.1, relleno_x: 0.02, relleno_y: 0.02, ancho: 0.4 });
+  // null sigue siendo "sin contorno": el contrato de hoy, sin cambiar.
+  assert.equal(op.cambiar(base, "t1", { estilo: { contorno: null } }, INFO).doc.pistas[1].clips[0].estilo.contorno, null);
+});
+
 test("el volumen del sonido de la escena queda por clip al normalizar y un corte nuevo hereda solo su propio sonido", () => {
   let d = normalizar(docBase(), INFO);
   d = op.volumenSonido(d, "v0", 0.2, INFO).doc;

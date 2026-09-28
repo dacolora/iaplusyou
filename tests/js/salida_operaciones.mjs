@@ -57,6 +57,12 @@ anotar("cambiar_estilo_y_transform", () => op.cambiar(docBase(), "t1", {
   transform: { x: 0.3, y: 0.4, escala: 1.2, opacidad: 0.8 },
 }, INFO));
 anotar("cambiar_ken_burns", () => op.cambiar(docBase(), "v0", { ken_burns: "out" }, INFO));
+// Fix round 1: un cambio parcial de contorno (solo grosor) tiene que conservar el color que ya tenía.
+anotar("cambiar_estilo_parcial", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].estilo = { ...d.pistas[1].clips[0].estilo, contorno: { color: "#ABCDEF", grosor: 0.01 } };
+  return op.cambiar(d, "t1", { estilo: { contorno: { grosor: 0.05 } } }, INFO);
+});
 anotar("volumen_sonido", () => op.volumenSonido(op.normalizar(docBase(), INFO), "v0", 0.3, INFO));
 
 const D9 = { ...D, 1: 9000 };
