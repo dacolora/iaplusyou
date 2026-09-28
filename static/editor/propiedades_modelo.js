@@ -389,3 +389,17 @@ export function motivoRechazo(doc, nombre, args, info = {}) {
     return e?.name === "OperacionInvalida" ? e.message : null;
   }
 }
+
+// Lo que dicen el panel y la biblioteca cuando otra pestaña guardó antes (el
+// guardado quedó en «conflicto» y la página ya no deja editar): el aviso de
+// debajo del video no sirve de nada si la hoja del celular lo tapa.
+export const MENSAJE_CONFLICTO = "La edición cambió en otra pestaña: recarga la página para seguir.";
+
+// El mensaje para una operación que la página no aplicó: el conflicto si lo
+// hay; si no, el porqué de la operación (motivoRechazo) o `otro`.
+export function mensajeRechazo(doc, nombre, args, info = {}, {
+  conflicto = false, otro = "No se pudo hacer ese cambio: el aviso está debajo del video.",
+} = {}) {
+  if (conflicto) return MENSAJE_CONFLICTO;
+  return motivoRechazo(doc, nombre, args, info) ?? otro;
+}

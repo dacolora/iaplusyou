@@ -210,3 +210,19 @@ test("firmaListado: igual si nada cambió (aunque lleguen objetos nuevos), disti
     { carga: "error", datos: datos(), preparando: ["cf1", "cf2"] },
   ]) assert.notEqual(firmaListado(otro), base);
 });
+
+test("_operar: con la edición cambiada en otra pestaña, la biblioteca lo dice así (no «debajo del video»)", async () => {
+  const { Biblioteca } = await import("../../static/editor/biblioteca.js");
+  const { MENSAJE_CONFLICTO } = await import("../../static/editor/propiedades_modelo.js");
+  for (const [conflicto, esperado] of [[true, MENSAJE_CONFLICTO], [false, "No se pudo agregar: el aviso está debajo del video."]]) {
+    const dichos = [];
+    const falsa = {
+      editor: { operar: () => false, doc: () => docBase(), info: () => ({}), tiempo: () => 0, seleccion: null,
+                agregarMateriales: () => {}, enConflicto: () => conflicto },
+      _decir: (t, error) => dichos.push([t, error]),
+      _motivo: Biblioteca.prototype._motivo,
+    };
+    assert.equal(Biblioteca.prototype._operar.call(falsa, { tipo: "texto", preset: "titulo", nombre: "Título" }, null), false);
+    assert.deepEqual(dichos, [[esperado, true]]);
+  }
+});

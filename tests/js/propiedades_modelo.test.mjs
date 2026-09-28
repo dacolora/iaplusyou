@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import * as op from "../../static/editor/operaciones.js";
 import {
   alternarSilencio, AYUDA_VACIA, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, claveForma,
-  COLORES, escalaDePorcentaje, formaDe, modelo, motivoRechazo, textoPorcentaje, textoSegundos, textoVelocidad,
-  TRANSICION_MS,
+  COLORES, escalaDePorcentaje, formaDe, MENSAJE_CONFLICTO, mensajeRechazo, modelo, motivoRechazo, textoPorcentaje,
+  textoSegundos, textoVelocidad, TRANSICION_MS,
 } from "../../static/editor/propiedades_modelo.js";
 import { docBase } from "./doc_base.mjs";
 
@@ -281,4 +281,32 @@ test("un video de una edición sin sonido de la escena muestra el volumen en 0 (
   const lento = op.cambiarVelocidad(d, "v0", 0.5, INFO).doc;
   assert.equal(modelo(lento, "v0", { info: INFO }).sonido.disponible, false);
   assert.match(modelo(lento, "v0", { info: INFO }).sonido.motivo, /velocidad/);
+});
+
+test("mensajeRechazo: con la edición cambiada en otra pestaña lo dice así (no «debajo del video»); si no, el porqué", () => {
+  assert.equal(MENSAJE_CONFLICTO, "La edición cambió en otra pestaña: recarga la página para seguir.");
+  // en conflicto la operación en sí se podía: el motivo es el conflicto
+  assert.equal(mensajeRechazo(docBase(), "cambiar", ["t1", { transform: { x: 0.5 } }], INFO, { conflicto: true }), MENSAJE_CONFLICTO);
+  assert.match(mensajeRechazo(docBase(), "ponerTransicion", ["v1", "fundido", 500], INFO), /último/);
+  assert.match(mensajeRechazo(docBase(), "cambiar", ["t1", { transform: { x: 0.5 } }], INFO), /No se pudo hacer ese cambio/);
+});
+
+test("Propiedades: una operación rechazada vuelve a pintar el control con el valor real y dice el porqué", async () => {
+  const { Propiedades } = await import("../../static/editor/propiedades.js");
+  for (const [conflicto, esperado] of [[true, MENSAJE_CONFLICTO], [false, /último/]]) {
+    const dichos = [];
+    const falsa = {
+      editor: { operar: () => false, operarCon: () => false, doc: () => docBase(), info: () => INFO, enConflicto: () => conflicto },
+      mensaje: { classList: { contains: () => false } },
+      pintadas: 0,
+      pintar() { this.pintadas += 1; },
+      _decir: (t, error) => dichos.push([t, error]),
+    };
+    assert.equal(Propiedades.prototype._operar.call(falsa, "v1:transicion", "ponerTransicion", "v1", "fundido", 500), false);
+    assert.equal(falsa.pintadas, 1);
+    assert.equal(dichos.length, 1);
+    assert.equal(dichos[0][1], true);
+    if (typeof esperado === "string") assert.equal(dichos[0][0], esperado);
+    else assert.match(dichos[0][0], esperado);
+  }
 });

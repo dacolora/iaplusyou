@@ -31,6 +31,7 @@ import {
 import * as operaciones from "./operaciones.js";
 import { TRANSICIONES } from "./operaciones.js";
 import { evaluarRespuesta } from "./pendientes.js";
+import { MENSAJE_CONFLICTO } from "./propiedades_modelo.js";
 
 // ---- Lo puro (lo prueba tests/js/biblioteca.test.mjs) ---------------------
 
@@ -639,7 +640,8 @@ export class Biblioteca {
       return false;
     }
     if (!ed.operar(...pedido)) {
-      this._decir(this._motivo(pedido) ?? "No se pudo agregar: el aviso está debajo del video.", true);
+      const motivo = ed.enConflicto?.() ? MENSAJE_CONFLICTO : this._motivo(pedido);
+      this._decir(motivo ?? "No se pudo agregar: el aviso está debajo del video.", true);
       return false;
     }
     if (cosa.tipo === "transicion") {

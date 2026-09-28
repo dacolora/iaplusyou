@@ -24,7 +24,7 @@
 import { avisoTransicion } from "./escala.js";
 import {
   alternarSilencio, buscar, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, claveForma,
-  escalaDePorcentaje, modelo, motivoRechazo, textoPorcentaje, textoSegundos,
+  escalaDePorcentaje, mensajeRechazo, modelo, textoPorcentaje, textoSegundos,
 } from "./propiedades_modelo.js";
 
 function el(tag, clase, padre, texto) {
@@ -140,15 +140,19 @@ export class Propiedades {
   // ---- Operar ----
 
   // Una operación de operaciones.js sobre la edición; con `clave`, los pasos
-  // seguidos quedan en UN deshacer. Si la página la rechaza, el porqué se dice
-  // también aquí (en el celular la hoja tapa el aviso de debajo del video).
+  // seguidos quedan en UN deshacer. Si la página la rechaza, el control
+  // vuelve a mostrar el valor que de verdad quedó (un deslizador no se queda
+  // donde se soltó) y el porqué se dice también aquí (en el celular la hoja
+  // tapa el aviso de debajo del video); con la edición cambiada en otra
+  // pestaña, eso mismo.
   _operar(clave, nombre, ...args) {
     const ed = this.editor;
     const ok = clave ? ed.operarCon({ clave }, nombre, ...args) : ed.operar(nombre, ...args);
     if (ok) {
       if (this.mensaje.classList.contains("error")) this._decir("");
     } else {
-      this._decir(motivoRechazo(ed.doc(), nombre, args, ed.info()) ?? "No se pudo hacer ese cambio: el aviso está debajo del video.", true);
+      this.pintar();
+      this._decir(mensajeRechazo(ed.doc(), nombre, args, ed.info(), { conflicto: Boolean(ed.enConflicto?.()) }), true);
     }
     return ok;
   }

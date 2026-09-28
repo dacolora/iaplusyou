@@ -30,6 +30,9 @@
 //   editor.tiempo()                         el cabezal, en ms
 //   editor.destino()                        "<idioma>_<PAIS>" que se está viendo
 //   editor.info()                           {id: {duracion_ms, tiene_audio}}
+//   editor.enConflicto()                    true si otra pestaña guardó antes: la
+//                                           página ya no deja editar y los paneles
+//                                           piden recargar
 //   editor.agregarMateriales(mapa)          suma materiales (forma de
 //                                           material_para) a la vista previa
 //                                           ANTES de operar con ellos
@@ -474,6 +477,7 @@ const editor = Object.freeze({
   tiempo: () => vista.tiempo(),
   destino: () => vista.destino,
   info,
+  enConflicto: () => guardado.estado === "conflicto",
   agregarMateriales: (mapa) => vista.agregarMateriales(mapa),
   enfocarTexto,
   escuchar: (fn) => avisos.escuchar(fn),
