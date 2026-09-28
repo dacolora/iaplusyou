@@ -212,7 +212,12 @@
     ocupado(true); mostrarError('');
     fetch(raiz.dataset.urlCrear, {method: 'POST', body: fd, headers: {'X-Requested-With': 'fetch'}})
       .then(function (r) { return r.json(); })
-      .then(function (d) { pintarLista(d); if (!d.ok) ocupado(false); })
+      .then(function (d) {
+        pintarLista(d);
+        // Un 400 con la barra viva («ya se está creando un audio», desde otra
+        // pestaña) deja el botón deshabilitado: la barra manda, no el error.
+        if (!d.ok && !document.querySelector('#au-lista .barra-progreso[data-job]')) ocupado(false);
+      })
       .catch(function () { mostrarError(T.sinConexion); ocupado(false); });
   });
   // El audio se hace en el worker: se consulta su estado y al terminar se
