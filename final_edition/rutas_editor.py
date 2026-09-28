@@ -14,7 +14,9 @@ import trabajos
 from final_edition import documento as documento_mod
 from final_edition import estimar, vista_previa
 from final_edition.documento import DocumentoInvalido
+from final_edition.motor import compilador
 from tareas import edicion as tareas_edicion
+from tareas import final_edition as tareas_fe
 
 bp = Blueprint("editor", __name__, url_prefix="/cliente/<cliente>/ediciones")
 
@@ -92,10 +94,30 @@ def guardar(cliente, edicion_id):
     return jsonify({"version_n": nuevo})
 
 
+def _duraciones(cliente, doc):
+    """{material_id: duracion_ms} de los materiales del documento que son de
+    ESTE proyecto y tienen duración medida (los demás no se juzgan)."""
+    out = {}
+    for mid in doc.get("materiales") or []:
+        m = materiales.obtener(cliente, int(mid))
+        if m and m.get("duracion_ms"):
+            out[int(mid)] = int(m["duracion_ms"])
+    return out
+
+
 @bp.post("/<int:edicion_id>/producir")
 def producir(cliente, edicion_id):
     """Producir desde el editor (spec §6): congela la versión guardada y encola
-    un render por destino. Gratis: voz, música y video ya son materiales."""
+    un render por destino. Gratis: se produce con lo que ya hay en la edición
+    (materiales ya pagados), sin pedir nada nuevo a ningún proveedor.
+
+    Antes de congelar nada, por destino: los textos resuelven, ningún clip
+    pide más material del que hay (`compilador.verificar_recortes`, el mismo
+    chequeo que haría el render en el worker), no hay una final con voz
+    (`final_producir`) produciéndose, y si ya existe una final con video que
+    NO salió de esta edición (la vía automática, otra edición) se pide
+    confirmación — 409 con `reemplazos` — salvo que el cuerpo traiga
+    `reemplazar: true`. Cualquier respuesta que no sea 200 no crea ni encola nada."""
     if not _mismo_origen():
         return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
     ed = _cargar(cliente, edicion_id)
@@ -120,15 +142,38 @@ def producir(cliente, edicion_id):
     destinos = cuerpo["destinos"]
     if not destinos or any(not _DESTINO_RE.match(d) or d not in validos for d in destinos):
         return jsonify({"error": "Elige al menos un destino de esta edición."}), 400
-    problemas = []
+    problemas, recortes = [], []
     for d in destinos:
         idioma, pais = d.split("_")
         try:
-            documento_mod.resolver(doc, idioma, pais)
+            resuelto = documento_mod.resolver(doc, idioma, pais)
         except DocumentoInvalido as e:
             problemas.append(f"{d}: {e}")
+            continue
+        try:
+            compilador.verificar_recortes(resuelto, _duraciones(cliente, resuelto))
+        except ValueError as e:
+            recortes.append(f"{d}: {e}")
     if problemas:
         return jsonify({"error": "Hay textos sin traducir para algún destino.", "problemas": problemas}), 400
+    if recortes:
+        return jsonify({"error": "Esta edición no se puede producir así:", "problemas": recortes}), 400
+    for d in destinos:
+        idioma, pais = d.split("_")
+        if trabajos.en_curso(tareas_fe.job_id_final(cliente, ed["cf_id"], idioma, pais)):
+            return jsonify({"error": "Esa final se está produciendo con voz; espera a que termine."}), 409
+    if cuerpo.get("reemplazar") is not True:
+        reemplazos = []
+        for d in destinos:
+            final = creative_flow.final_por_legado(cliente, f"{ed['cf_id']}__{d}")
+            if final and final.get("video_url") \
+                    and ediciones.edicion_de_final(cliente, f"{ed['cf_id']}__{d}") != edicion_id:
+                reemplazos.append(d)
+        if reemplazos:
+            error = ("Ya hay una final de ese destino hecha por otro camino (puede tener voz); si produces, esta la reemplaza."
+                     if len(reemplazos) == 1 else
+                     "Ya hay finales de esos destinos hechas por otro camino (pueden tener voz); si produces, estas las reemplazan.")
+            return jsonify({"error": error, "reemplazos": reemplazos}), 409
     try:
         version = ediciones.versionar(cliente, edicion_id, motivo="producir", version_n=cuerpo["version_n"])
     except ediciones.Conflicto as e:

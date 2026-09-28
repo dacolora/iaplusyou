@@ -66,7 +66,8 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
                 "producir", "linea", "linea-zoom", "h-cortar", "h-borrar", "h-duplicar", "h-velocidad", "h-deshacer",
                 "h-rehacer", "estado-guardado", "recargar", "aviso-edicion", "producir-dialogo", "producir-destinos",
                 "producir-confirmar", "producir-cancelar", "producir-aviso", "producir-tiempo", "producir-hecho",
-                "producir-hecho-texto", "producir-hecho-enlace"):
+                "producir-hecho-texto", "producir-hecho-enlace", "producir-reemplazo", "producir-reemplazo-texto",
+                "producir-reemplazar"):
         assert f'id="{id_}"' in html, id_
     assert "editor/pagina_editor.js" in html and 'type="module"' in html
     assert "Demo &lt;editor&gt;" in html                     # el nombre va escapado
@@ -271,7 +272,7 @@ def test_producir_avisa_los_textos_sin_traducir(dashboard, encolados):
 def test_producir_no_repite_un_render_que_ya_corre(dashboard, encolados, monkeypatch):
     import trabajos
     ed, _cf = _edicion_con_pieza()
-    monkeypatch.setattr(trabajos, "en_curso", lambda job_id: True)
+    monkeypatch.setattr(trabajos, "en_curso", lambda job_id: job_id.endswith("__producir"))   # el render del editor
     r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
                                        json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
     assert r.status_code == 200
@@ -346,3 +347,107 @@ def test_el_editor_de_una_pieza_vuelve_a_esa_pieza(dashboard, encolados):
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
     assert f'href="/cliente/acme#final?cf={cf}"' in html     # «← Final edition» abre esa pieza
     assert _datos(html)["cf_id"] == cf                         # con pieza, «Producir» queda habilitado
+
+
+def _nada_creado(ed, cf, encolados):
+    import creative_flow
+    import ediciones
+    assert not [a for a, _k in encolados if a[1] == "edicion_producir"]
+    assert ediciones.versiones("acme", ed["id"]) == []
+    return creative_flow.final_por_legado("acme", f"{cf}__es_CO")
+
+
+def test_producir_revisa_los_recortes_antes_de_congelar(dashboard, encolados):
+    # El render falla si un clip pide más material del que hay: la ruta lo
+    # revisa con compilador.verificar_recortes (duraciones de los materiales
+    # de ESTE proyecto) antes de congelar ni crear la final.
+    import ediciones
+    ed, cf = _edicion_con_pieza()
+    doc = ed["documento"]
+    doc["pistas"][0]["clips"][0].update(duracion_ms=9000, recorte={"desde_ms": 0, "hasta_ms": 9000})   # el clon dura 8000
+    nuevo = ediciones.guardar("acme", ed["id"], doc, ed["version_n"])
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": nuevo, "destinos": ["es_CO"]})
+    assert r.status_code == 400
+    j = r.get_json()
+    assert j["error"] == "Esta edición no se puede producir así:"
+    assert j["problemas"] == ["es_CO: El clip 'v0' pide 9000 ms de un material de 8000 ms; acorta el clip o el recorte."]
+    assert _nada_creado(ed, cf, encolados) is None
+
+
+def test_producir_no_pisa_una_final_con_voz_que_se_esta_produciendo(dashboard, encolados, monkeypatch):
+    import trabajos
+    from tareas import final_edition as tareas_fe
+    ed, cf = _edicion_con_pieza()
+    pagada = tareas_fe.job_id_final("acme", cf, "es", "CO")
+    monkeypatch.setattr(trabajos, "en_curso", lambda job_id: job_id == pagada)
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
+    assert r.status_code == 409
+    assert r.get_json() == {"error": "Esa final se está produciendo con voz; espera a que termine."}
+    assert _nada_creado(ed, cf, encolados) is None
+
+
+def _final_con_video(cf, capas=None):
+    import creative_flow
+    final_id = creative_flow.crear_final("acme", cf, "es", "CO")
+    creative_flow.actualizar_final("acme", final_id, estado="listo", url_video="https://r2.test/final.mp4",
+                                   capas=capas or {"voz": {"estado": "ok", "costo_usd": 0.25}}, costo_usd=0.27)
+    return final_id
+
+
+def test_producir_pregunta_antes_de_reemplazar_una_final_hecha_por_otro_camino(dashboard, encolados):
+    import creative_flow
+    ed, cf = _edicion_con_pieza()
+    final_id = _final_con_video(cf)                              # la de la vía automática: sin enlace a esta edición
+    url = f"/cliente/acme/ediciones/{ed['id']}/producir"
+    c = _cliente_admin(dashboard)
+    r = c.post(url, json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
+    assert r.status_code == 409
+    j = r.get_json()
+    assert j["reemplazos"] == ["es_CO"] and j["error"]
+    f = _nada_creado(ed, cf, encolados)
+    assert f["estado"] == "listo" and f["capas"]["voz"]["costo_usd"] == 0.25 and f["costo_usd"] == 0.27   # intacta
+    assert c.post(url, json={"version_n": ed["version_n"], "destinos": ["es_CO"], "reemplazar": "sí"}).status_code == 409
+    r = c.post(url, json={"version_n": ed["version_n"], "destinos": ["es_CO"], "reemplazar": True})
+    assert r.status_code == 200 and r.get_json()["producidas"][0]["encolada"] is True
+    assert creative_flow.final_por_legado("acme", final_id)["estado"] == "generando"
+
+
+def test_producir_reemplaza_sin_preguntar_la_final_de_esta_misma_edicion(dashboard, encolados):
+    import ediciones
+    ed, cf = _edicion_con_pieza()
+    final_id = _final_con_video(cf)
+    ediciones.apuntar_final("acme", final_id, ediciones.versionar("acme", ed["id"], "producir")["id"])
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
+    assert r.status_code == 200, r.get_json()
+
+
+def test_producir_pregunta_si_la_final_salio_de_otra_edicion(dashboard, encolados):
+    import ediciones
+    ed, cf = _edicion_con_pieza()
+    otra = ediciones.crear("acme", "video", "Otra", ed["documento"], cf_id=cf)
+    final_id = _final_con_video(cf)
+    ediciones.apuntar_final("acme", final_id, ediciones.versionar("acme", otra["id"], "producir")["id"])
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
+    assert r.status_code == 409 and r.get_json()["reemplazos"] == ["es_CO"]
+
+
+def test_producir_sin_video_previo_no_pregunta(dashboard, encolados):
+    import creative_flow
+    ed, cf = _edicion_con_pieza()
+    final_id = creative_flow.crear_final("acme", cf, "es", "CO")
+    creative_flow.actualizar_final("acme", final_id, estado="error", error="falló")   # nunca tuvo video
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
+    assert r.status_code == 200
+
+
+def test_el_dialogo_de_producir_no_promete_voz_ni_musica(dashboard, encolados):
+    ed, _cf = _edicion_con_pieza()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    assert "ya están hechos" not in html
+    assert "Es gratis" in html and "lo que hay en esta edición" in html
+    assert "Reemplazar y producir" in html

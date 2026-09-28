@@ -59,7 +59,10 @@
   .editor-dialogo h2::before { display: none; }
   .editor-dialogo p { font-size: .9rem; line-height: 1.5; }
   .editor-dialogo .checks-plataformas label { text-transform: none; }
-  .editor-dialogo-acciones { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
+  .editor-dialogo-acciones { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+  .editor-reemplazo { margin-top: .8rem; padding: .6rem .8rem; border: 1px solid var(--warn); border-radius: var(--radius-sm);
+    background: var(--warn-fondo); }
+  .editor-reemplazo p { margin: 0; overflow-wrap: anywhere; }
   @media (pointer: coarse) {
     .linea-asa { width: 18px; }
   }
@@ -113,12 +116,16 @@
 <label class="editor-zoom">Zoom <input id="linea-zoom" type="range"></label>
 <dialog id="producir-dialogo" class="editor-dialogo" aria-labelledby="producir-titulo">
   <h2 id="producir-titulo">Producir</h2>
-  <p>Elige los destinos. Es gratis: la voz, la música y el video ya están hechos. Tarda <span id="producir-tiempo"></span>.</p>
+  <p>Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id="producir-tiempo"></span>.</p>
   <div id="producir-destinos" class="checks-plataformas"></div>
   <p id="producir-aviso" class="editor-aviso error" hidden></p>
+  <div id="producir-reemplazo" class="editor-reemplazo" hidden>
+    <p id="producir-reemplazo-texto"></p>
+  </div>
   <div class="editor-dialogo-acciones">
     <button id="producir-cancelar" type="button" class="btn-sm">Cancelar</button>
     <button id="producir-confirmar" type="button" class="btn-generar">Producir</button>
+    <button id="producir-reemplazar" type="button" class="btn-generar" hidden>Reemplazar y producir</button>
   </div>
 </dialog>
 <script type="application/json" id="datos-editor">{{ datos|tojson }}</script>

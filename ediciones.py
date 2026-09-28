@@ -156,3 +156,17 @@ def apuntar_final(cliente, final_legado_id, version_id):
             db.pieza.c.cliente == cliente, db.pieza.c.tipo == "final", db.pieza.c.legado_id == final_legado_id)
             .values(edicion_version_id=int(version_id), actualizado_en=db.ahora()))
         return r.rowcount
+
+
+def edicion_de_final(cliente, final_legado_id):
+    """Id de la edición cuya versión congelada produjo esa final
+    (`pieza.edicion_version_id` → `edicion_version.edicion_id`), o None si
+    la final no existe para este cliente o no tiene ese enlace (la hizo otro
+    camino, p. ej. la producción de antes del editor)."""
+    with db.conectar() as con:
+        return con.execute(
+            sa.select(db.edicion_version.c.edicion_id)
+            .select_from(db.pieza.join(db.edicion_version, db.edicion_version.c.id == db.pieza.c.edicion_version_id))
+            .join(db.edicion, db.edicion.c.id == db.edicion_version.c.edicion_id)
+            .where(db.pieza.c.cliente == cliente, db.pieza.c.tipo == "final", db.pieza.c.legado_id == final_legado_id,
+                   db.edicion.c.cliente == cliente)).scalar()

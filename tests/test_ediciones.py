@@ -142,6 +142,19 @@ def test_apuntar_final_escribe_edicion_version_id(base_temporal):
     assert e.apuntar_final("otro", "cf_1__es_CO", v["id"]) == 0
 
 
+def test_edicion_de_final_sigue_el_enlace_de_la_version(base_temporal):
+    import db
+    from tests.test_experimentos_db import _pieza
+    _pieza(db, "acme", legado="cf_1__es_CO")
+    assert e.edicion_de_final("acme", "cf_1__es_CO") is None          # sin enlace: hecha por otro camino
+    ed = e.crear("acme", "video", "e", _doc(), cf_id="cf_1")
+    v = e.versionar("acme", ed["id"], "producir")
+    e.apuntar_final("acme", "cf_1__es_CO", v["id"])
+    assert e.edicion_de_final("acme", "cf_1__es_CO") == ed["id"]
+    assert e.edicion_de_final("otro", "cf_1__es_CO") is None
+    assert e.edicion_de_final("acme", "cf_9__es_CO") is None
+
+
 def test_buscar_origen_encuentra_la_receta_y_salta_las_degradadas(base_temporal):
     import ediciones
     doc = d.nuevo_video("9:16")

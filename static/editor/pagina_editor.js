@@ -206,6 +206,7 @@ function montarProducir() {
   }
   const minutos = Math.max(1, Math.round((Number(datos.estimado_s) || 60) / 60));
   $("producir-tiempo").textContent = minutos === 1 ? "cerca de un minuto por destino" : `unos ${minutos} minutos por destino`;
+  const nombre = (d) => d.replace("_", " · ");
   const lista = $("producir-destinos");
   for (const d of datos.destinos) {
     const l = document.createElement("label");
@@ -213,22 +214,49 @@ function montarProducir() {
     c.type = "checkbox";
     c.value = d;
     c.checked = true;
-    l.append(c, ` ${d.replace("_", " · ")}`);
+    l.append(c, ` ${nombre(d)}`);
     lista.append(l);
   }
   const avisar = (t) => {
     $("producir-aviso").textContent = t || "";
     $("producir-aviso").hidden = !t;
   };
+  const unir = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} y ${xs.at(-1)}` : xs[0]);
+  // Ya hay una final de ese destino que no salió de esta edición (la vía
+  // automática, con voz, u otra edición): producir la reemplaza, así que se
+  // pregunta antes. La confirmación vale para esa selección: cambiarla la quita.
+  const pedirReemplazo = (destinos) => {
+    const cuales = unir(destinos.map(nombre));
+    $("producir-reemplazo-texto").textContent = destinos.length === 1
+      ? `Ya hay una final de ${cuales} hecha por otro camino (puede tener voz). Si produces, esta la reemplaza.`
+      : `Ya hay finales de ${cuales} hechas por otro camino (pueden tener voz). Si produces, estas las reemplazan.`;
+    $("producir-reemplazo").hidden = false;
+    $("producir-reemplazar").hidden = false;
+    $("producir-confirmar").hidden = true;
+  };
+  const sinReemplazo = () => {
+    $("producir-reemplazo").hidden = true;
+    $("producir-reemplazar").hidden = true;
+    $("producir-confirmar").hidden = false;
+  };
+  lista.addEventListener("change", () => {
+    avisar("");
+    sinReemplazo();
+  });
   boton.addEventListener("click", () => {
     avisar("");
+    sinReemplazo();
     dialogo.showModal();
   });
   $("producir-cancelar").addEventListener("click", () => dialogo.close());
-  $("producir-confirmar").addEventListener("click", async () => {
+  $("producir-confirmar").addEventListener("click", () => producir(false));
+  $("producir-reemplazar").addEventListener("click", () => producir(true));
+
+  async function producir(reemplazar) {
     const destinos = [...lista.querySelectorAll("input:checked")].map((c) => c.value);
     if (!destinos.length) return avisar("Marca al menos un destino.");
     $("producir-confirmar").disabled = true;
+    $("producir-reemplazar").disabled = true;
     avisar("");
     try {
       await guardado.ahora();        // se produce lo que se ve: primero se guarda lo pendiente
@@ -238,9 +266,10 @@ function montarProducir() {
       const r = await fetch(datos.urls.producir, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ version_n: guardado.versionN, destinos }),
+        body: JSON.stringify({ version_n: guardado.versionN, destinos, ...(reemplazar ? { reemplazar: true } : {}) }),
       });
       const j = await r.json().catch(() => ({}));
+      if (r.status === 409 && Array.isArray(j.reemplazos) && j.reemplazos.length) return pedirReemplazo(j.reemplazos);
       if (!r.ok) return avisar([j.error || `No se pudo producir (error ${r.status}).`, ...(j.problemas ?? [])].join(" "));
       const n = (j.producidas ?? []).filter((p) => p.encolada).length;
       dialogo.close();
@@ -254,8 +283,9 @@ function montarProducir() {
       avisar("Sin conexión: no se pudo producir. Vuelve a intentar.");
     } finally {
       $("producir-confirmar").disabled = false;
+      $("producir-reemplazar").disabled = false;
     }
-  });
+  }
 }
 
 montarHerramientas();
