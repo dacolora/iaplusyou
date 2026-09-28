@@ -2113,6 +2113,9 @@ msgstr "From"
 msgid "Desde Notion"
 msgstr "From Notion"
 
+msgid "Desde que lo conectes, los anuncios que Creatv lance en Meta llevan solos los parámetros de rastreo de Triple Whale. A los que ya estaban, o a los que crees fuera de Creatv, ponles en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
+msgstr "Once you connect it, the ads Creatv launches on Meta carry Triple Whale's tracking parameters on their own. For ads that already existed, or that you create outside Creatv, add under “URL parameters”: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
+
 msgid "Desde referencias"
 msgstr "From references"
 
@@ -5136,9 +5139,6 @@ msgstr ""
 
 msgid "Para que Creatv lo gestione,"
 msgstr "For Creatv to manage it,"
-
-msgid "Para que Triple Whale atribuya las ventas, tus anuncios de Meta deben llevar en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
-msgstr "For Triple Whale to attribute sales, your Meta ads must carry in “URL parameters”: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
 
 msgid "Para quién"
 msgstr "For whom"

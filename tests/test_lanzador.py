@@ -29,10 +29,10 @@ class MetaFalsa:
                                       actualizar_presupuesto=lambda oid, c, dry_run=False: self._id("presupuesto", oid=oid, centavos=c),
                                       actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         creative = types.SimpleNamespace(subir_video=lambda url, titulo="", dry_run=False, esperar_seg=180: "vid_1",
-                                         crear_creative_video=lambda nombre, vid, mini, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False:
-                                         self._id("creative", link=link),
-                                         crear_creative_imagen=lambda nombre, imagen_url, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False:
-                                         self._id("creative_imagen", link=link, imagen_url=imagen_url))
+                                         crear_creative_video=lambda nombre, vid, mini, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False, url_tags=None:
+                                         self._id("creative", link=link, url_tags=url_tags),
+                                         crear_creative_imagen=lambda nombre, imagen_url, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False, url_tags=None:
+                                         self._id("creative_imagen", link=link, imagen_url=imagen_url, url_tags=url_tags))
         ad = types.SimpleNamespace(crear_ad=lambda nombre, adset_id, creative_id, dry_run=False: self._id("ad", adset_id=adset_id),
                                    actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         insights = types.SimpleNamespace(obtener_resultados=lambda ad_id, objetivo=None:
@@ -225,6 +225,26 @@ def test_refrescar_con_triple_whale_toma_trafico_de_meta_y_ventas_del_pixel(ento
     # Una pieza que Triple Whale no tiene se queda con lo de Meta.
     otra = ex.obtener("acme", eid)["piezas"][1]["metricas"]
     assert otra["compras"] == 0 and otra["fuente_ventas"] == "ninguna"
+
+
+def test_lanzar_con_triple_whale_pone_sus_parametros_de_url_en_cada_creative(entorno, monkeypatch):
+    """Spec 2026-09-28 §10: Triple Whale atribuye por tw_source/tw_adid, que
+    Meta resuelve en los Parámetros de URL (url_tags) del creative. Van solo
+    si el proyecto tiene Triple Whale conectado, y el link sigue llevando el
+    utm_content de la pieza (la atribución por tienda no se pierde)."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: {"dominio_tienda": "acme.myshopify.com"})
+    lz.lanzar("acme", eid)
+    creativos = [kw for t, kw in meta.llamadas if t.startswith("creative")]
+    assert len(creativos) == 3
+    assert {kw["url_tags"] for kw in creativos} == {"tw_source={{site_source_name}}&tw_adid={{ad.id}}"}
+    assert all("utm_content=" in kw["link"] for kw in creativos)
+
+
+def test_lanzar_sin_triple_whale_no_manda_parametros_de_url(entorno):
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    assert {kw["url_tags"] for t, kw in meta.llamadas if t.startswith("creative")} == {None}
 
 
 def test_refrescar_con_triple_whale_distingue_sin_ventas_de_sin_dato(entorno, monkeypatch):

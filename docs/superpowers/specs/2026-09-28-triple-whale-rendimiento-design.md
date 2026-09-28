@@ -158,11 +158,19 @@ otra moneda que la cuenta → ROAS 0 y un aviso (se decide por CPA), como la tie
 4. Las miniaturas de Meta caducan: la de un referente se copia a R2; la de una evaluación se usa en
    el momento y la pestaña puede dejar de mostrarla después.
 
-## 10. Siguiente paso (fuera de este cambio)
+## 10. Parámetros de rastreo en los anuncios de Creatv (hecho) y siguientes pasos
 
-- `meta_ads.creative` no acepta `url_tags`: los anuncios que lanza Creatv no llevan
-  `tw_source={{site_source_name}}&tw_adid={{ad.id}}`, y Triple Whale los atribuye peor. Hay que
-  agregarlo en el submódulo `meta_ads` y pasarlo desde `lanzador`.
+- Hecho: `meta_ads.creative.crear_creative_imagen/video` aceptan `url_tags` (el campo «Parámetros de
+  URL» del AdCreative, donde Meta resuelve `{{ad.id}}` y `{{site_source_name}}`). Con Triple Whale
+  conectado, `lanzador._crear_anuncios` (y el camino viejo `tareas/meta.publicar`) mandan
+  `triple_whale.URL_TAGS` = `tw_source={{site_source_name}}&tw_adid={{ad.id}}` en cada creative
+  (`triple_whale_tiendas.url_tags`; None sin Triple Whale). El link sigue llevando
+  `utm_content=<experimento_pieza.id>`, así la atribución por tienda no cambia. Los anuncios creados
+  antes de conectar no los llevan: cambiarlos después manda el anuncio otra vez a revisión, así que
+  Creatv no los toca y Configuración explica cómo ponerlos a mano.
+
+Siguientes pasos (fuera de este cambio):
+
 - Fotogramas reales (no solo la miniatura) para los anuncios hechos en Creatv, con
   `doctrina.revisor.tiempos()`.
 - Ventas por producto (`orders_table.products_info`) para saber qué producto empujar.

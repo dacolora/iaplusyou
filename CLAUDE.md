@@ -746,8 +746,12 @@ Experiments with `atribucion="triple_whale"`: `lanzador.refrescar` keeps traffic
 Meta (the old path skipped Meta, so rejections went unseen) and overrides purchases/revenue with the Pixel
 orders from `tw_anuncio_dia` since the piece was created (after `sync.sincronizar_si_hace_falta`, once per
 experiment, outside the Meta lock); another currency → ROAS 0 + one evento, like `tienda`. `"triple_whale"`
-stays in `tablero.FUENTES_VENTAS` and `decisor.py`'s `con_atribucion`. None of the SQL has run against a
-real store yet (spec §9); Creatv's own ads still lack Triple Whale's `url_tags` (needs `meta_ads`, spec §10).
+stays in `tablero.FUENTES_VENTAS` and `decisor.py`'s `con_atribucion`. With Triple Whale connected, every
+creative Creatv creates (`lanzador._crear_anuncios`, and the legacy `tareas/meta.publicar`) carries
+`url_tags=triple_whale.URL_TAGS` (`tw_source={{site_source_name}}&tw_adid={{ad.id}}`, resolved by Meta; the
+`meta_ads.creative` functions take an optional `url_tags` for the AdCreative's «URL parameters»), via
+`triple_whale_tiendas.url_tags(cliente)` — None without Triple Whale; ads created before connecting keep
+none (changing them sends the ad back to review). None of the SQL has run against a real store yet (spec §9).
 
 **Gasto real por proyecto** (`gastos.py`, table `gasto`, migration 0010): there are no
 credits or balances — the product shows the real provider price. Every paying task registers

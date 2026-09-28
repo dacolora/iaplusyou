@@ -50,6 +50,11 @@ _VENTANAS_VIEJAS = {"1": "1_day", "1d": "1_day", "7": "7_days", "7d": "7_days", 
                     "28": "28_days", "28d": "28_days", "30": "28_days", "30d": "28_days"}
 # Canal estandarizado de Meta en las tablas de Triple Whale.
 CANAL_META = "facebook-ads"
+# «REQUIRED TRACKING PARAMETERS» de la KB de Meta en Triple Whale: van en los
+# Parámetros de URL del anuncio (url_tags del AdCreative), donde Meta resuelve
+# {{site_source_name}} y {{ad.id}}. Sin ellos Triple Whale igual ve el gasto,
+# pero "attribution accuracy may suffer significantly".
+URL_TAGS = "tw_source={{site_source_name}}&tw_adid={{ad.id}}"
 MONEDAS = ("USD", "EUR", "GBP", "AUD", "CAD", "MXN", "COP", "BRL", "CLP", "PEN", "ARS")
 
 _RE_DOMINIO = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")

@@ -346,7 +346,7 @@
     <ol class="vacio" style="padding-top:.3rem;font-size:.76rem;">
       <li>{{ _('En Triple Whale ve a <a href="https://app.triplewhale.com/api-keys" target="_blank" rel="noopener">Settings › API Keys</a> y genera una llave con los permisos de lectura (consultas SQL / Data Out, Summary Page y Pixel Attribution). Se muestra una sola vez: cópiala.') }}</li>
       <li>{{ _('El dominio es el <code>shop-id</code> que aparece en la URL de Triple Whale (por ejemplo <code>?shop-id=mitienda.myshopify.com</code>).') }}</li>
-      <li>{{ _('Para que Triple Whale atribuya las ventas, tus anuncios de Meta deben llevar en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>.') }}</li>
+      <li>{{ _('Desde que lo conectes, los anuncios que Creatv lance en Meta llevan solos los parámetros de rastreo de Triple Whale. A los que ya estaban, o a los que crees fuera de Creatv, ponles en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>.') }}</li>
     </ol>
     <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('La llave se guarda cifrada y solo se usa para leer. Probamos la conexión antes de guardarla.') }}</p>
     <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Conectar Triple Whale') }}</button>

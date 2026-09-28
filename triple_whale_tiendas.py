@@ -106,6 +106,13 @@ def obtener(cliente: str):
     }
 
 
+def url_tags(cliente):
+    """Los Parámetros de URL de Triple Whale para los anuncios que Creatv
+    crea en Meta, o None si el proyecto no tiene Triple Whale conectado (sin
+    él, tw_source/tw_adid solo ensucian el link)."""
+    return triple_whale.URL_TAGS if obtener(cliente) else None
+
+
 def conectados():
     """Proyectos con Triple Whale conectado (para la sincronización periódica)."""
     t = db.triple_whale

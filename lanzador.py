@@ -149,6 +149,10 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
         if video_guardado:
             videos_por_pieza.setdefault(pz["pieza_id"], video_guardado)
     creadas = 0
+    # Triple Whale conectado: cada creative lleva sus parámetros de rastreo
+    # (tw_source / tw_adid). Se fijan al crear: cambiarlos después manda el
+    # anuncio otra vez a revisión.
+    tags = triple_whale_tiendas.url_tags(cliente)
     for pz in ex["piezas"]:
         if pz["meta_ad_id"]:
             continue
@@ -159,7 +163,8 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
                 # Imagen: ni subida de video ni miniatura; el creative lleva la URL pública.
                 creative_id = meta_creative.crear_creative_imagen(
                     f"{pz['nombre']} — {pz['pais']}", pz["url_imagen"], ex["nombre"],
-                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
+                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"),
+                    url_tags=tags)["id"]
             else:
                 video_id = (pz.get("extra") or {}).get("meta_video_id")
                 if not video_id:
@@ -171,7 +176,8 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
                 mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
                 creative_id = meta_creative.crear_creative_video(
                     f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
-                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
+                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"),
+                    url_tags=tags)["id"]
             experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
         ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adsets[pz["pais"]], creative_id)["id"]
         experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",
