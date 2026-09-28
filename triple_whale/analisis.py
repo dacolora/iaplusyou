@@ -11,13 +11,20 @@ Nunca genera ni publica nada: las ideas solo llegan a Crear si la persona
 pulsa «Llevar a Crear», y ahí se sigue pagando con el botón de siempre.
 
 Miniaturas: de la Marketing API de Meta con la conexión del proyecto
-(`medios_meta`, solo lectura). Sin Meta conectado, o si un anuncio es de otra
-cuenta publicitaria, Claude juzga por el nombre y los números.
+(`medios_meta`, solo lectura), copiadas a R2 (`copiar_miniaturas`) porque las
+URL de Meta caducan. Un anuncio hecho en Creatv tiene su video en R2: Claude
+recibe sus fotogramas reales (`visuales`, los mismos del revisor de la
+doctrina), no la miniatura. Sin Meta conectado, o si un anuncio es de otra
+cuenta publicitaria, Claude juzga por el nombre y los números. Si la tienda
+trae ventas por producto, la lista de los que más venden entra al prompt y
+cada idea dice a cuál apunta.
 """
 import base64
 import io
 import json
 import logging
+import os
+import tempfile
 
 import requests
 from flask_babel import gettext
@@ -25,6 +32,7 @@ from flask_babel import gettext
 import doctrina
 import idiomas
 from referentes import datos as referentes_datos
+from storage import r2_uploader
 
 log = logging.getLogger("creatv.triple_whale.analisis")
 
@@ -35,6 +43,7 @@ N_IDEAS = 4
 MAX_TOKENS = 16000
 LADO_IMAGEN = 768
 TIMEOUT_META = 20
+MAX_PRODUCTOS = 5
 CAMPOS_M = ("gasto", "impresiones", "clics", "ctr", "cpm", "gancho", "retencion", "pedidos", "ingresos", "roas",
             "cpa", "conversion", "ticket", "nc_pedidos")
 
@@ -148,6 +157,92 @@ def _imagen_base64(url):
         return None
 
 
+def _bloque_imagen(datos_b64):
+    return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": datos_b64}}
+
+
+def _fotogramas_pieza(pieza, temporales):
+    """Bloques de visión de una pieza hecha en Creatv: los fotogramas del
+    video (bajado a un temporal que el llamador borra) o la imagen por URL,
+    como los arma el revisor de la doctrina. None si algo falla: entonces se
+    usa la miniatura de Meta, como con cualquier otro anuncio."""
+    from doctrina import revisor
+    from sprints import qa
+    entry = {"tipo": pieza.get("tipo") or "video", "video_url": pieza.get("url_video"),
+             "url_miniatura": pieza.get("url_miniatura")}
+    try:
+        if entry["tipo"] == "video":
+            ruta = qa.archivo_local(entry)
+            if not ruta:
+                return None
+            temporales.append(ruta)
+            return revisor.bloques_visuales(entry, ruta) or None
+        return revisor.bloques_visuales(entry) or None
+    except Exception as e:  # noqa: BLE001 — sin fotogramas queda la miniatura
+        log.info("sin fotogramas para la pieza %s: %s", pieza.get("pieza_id"), type(e).__name__)
+        return None
+
+
+def visuales(cliente, anuncios, medios, creatv=None):
+    """({ad_id: {"bloques": [...], "clase": "fotogramas"|"imagen"}}, temporales).
+    Un anuncio hecho en Creatv (`creatv`, de `datos.piezas_creatv`) manda
+    sus fotogramas reales; los demás, la miniatura en base64. `temporales`
+    son los videos bajados: el llamador los borra al terminar."""
+    salida, temporales = {}, []
+    for a in anuncios:
+        pieza = (creatv or {}).get(a["ad_id"])
+        if pieza and (pieza.get("url_video") or pieza.get("url_miniatura")):
+            bloques = _fotogramas_pieza(pieza, temporales)
+            if bloques:
+                salida[a["ad_id"]] = {"bloques": bloques, "clase": "fotogramas" if pieza.get("tipo") != "imagen"
+                                      else "imagen"}
+                continue
+        medio = medios.get(a["ad_id"]) or {}
+        datos_b64 = _imagen_base64(medio["imagen"]) if medio.get("imagen") else None
+        if datos_b64:
+            salida[a["ad_id"]] = {"bloques": [_bloque_imagen(datos_b64)], "clase": "imagen"}
+    return salida, temporales
+
+
+def borrar_temporales(rutas):
+    for ruta in rutas or []:
+        try:
+            os.remove(ruta)
+        except OSError:
+            pass
+
+
+def clave_miniatura(cliente, evaluacion_id, ref):
+    return f"clientes/{cliente}/triple_whale/eval{int(evaluacion_id)}_{ref}.jpg"
+
+
+def copiar_miniaturas(cliente, evaluacion_id, anuncios, medios):
+    """Las URL de miniatura de Meta caducan: la de cada anuncio se copia a R2
+    y `medio["imagen"]` pasa a ser esa copia (`imagen_origen` guarda la de
+    Meta). Lo que no se pueda copiar queda como estaba. Nunca lanza."""
+    from PIL import Image
+    from referentes import imagenes
+    for a in anuncios:
+        medio = medios.get(a["ad_id"])
+        if not medio or not medio.get("imagen") or medio.get("imagen_origen") or medio.get("origen") == "creatv":
+            continue
+        try:
+            crudo = imagenes._bajar(medio["imagen"])
+            with tempfile.TemporaryDirectory(prefix="tw_mini_") as carpeta:
+                local = os.path.join(carpeta, f"{a['ref']}.jpg")
+                with Image.open(io.BytesIO(crudo)) as im:
+                    im = im.convert("RGB")
+                    im.thumbnail((LADO_IMAGEN, LADO_IMAGEN))
+                    im.save(local, format="JPEG", quality=85)
+                url = r2_uploader.upload_image(local, clave_miniatura(cliente, evaluacion_id, a["ref"]))
+        except Exception as e:  # noqa: BLE001 — se queda la URL de Meta mientras dure
+            log.info("no pude copiar la miniatura de %s a R2: %s", a.get("ref"), type(e).__name__)
+            continue
+        medio["imagen_origen"] = medio["imagen"]
+        medio["imagen"] = url
+    return medios
+
+
 # -------------------------------------------------------------- prompt ---
 
 PROMPT = """Eres estratega creativo de anuncios de performance para ecommerce. Estos son anuncios REALES de {marca}, con sus métricas de Triple Whale del {desde} al {hasta} (moneda {moneda}; atribución «{modelo}», ventana «{ventana}»).
@@ -156,7 +251,7 @@ Medianas de la cuenta: CTR {ctr} %, gancho (vistas de 3 s / impresiones) {gancho
 
 ANUNCIOS:
 {bloques}
-
+{productos}
 Tu trabajo: entender POR QUÉ ganan los ganadores y por qué pierden los perdedores —mirando la imagen cuando la hay, el texto y los números— y proponer {n_ideas} anuncios nuevos que repitan lo que funciona.
 
 Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
@@ -164,12 +259,14 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
  "patrones_ganadores": [{{"patron": "...", "anuncios": ["A1"]}}],
  "patrones_perdedores": [{{"patron": "...", "anuncios": ["A5"]}}],
  "anuncios": [{{"id": "A1", "por_que": "máximo 30 palabras", "gancho": "qué pasa o qué dice en los primeros 3 segundos", "formato": "p. ej. testimonio a cámara, demostración, antes y después", "etapa": "TOF|MOF|BOF", "consciencia": "unaware|problem-aware|solution-aware|product-aware|most-aware"}}],
- "ideas": [{{"titulo": "máximo 8 palabras", "basada_en": ["A1"], "por_que": "qué patrón ganador repite", "angulo": {{"audiencia": "...", "consciencia": "...", "sofisticacion": 3, "deseo": "...", "promesa": "...", "mecanismo": "una frase (o null; obligatorio si sofisticacion es 3 o más)", "pruebas": [{{"texto": "...", "fuente": "demostracion"}}], "lead": "...", "gancho": "...", "faltantes": []}}, "escena": "qué se ve, plano a plano, máximo 60 palabras", "prompt": "prompt en inglés para el modelo de video, 60 a 120 palabras"}}]}}
+ "ideas": [{{"titulo": "máximo 8 palabras", "basada_en": ["A1"], "por_que": "qué patrón ganador repite", "producto": "el producto de la lista de los que más venden al que apunta, tal cual está escrito, o null", "angulo": {{"audiencia": "...", "consciencia": "...", "sofisticacion": 3, "deseo": "...", "promesa": "...", "mecanismo": "una frase (o null; obligatorio si sofisticacion es 3 o más)", "pruebas": [{{"texto": "...", "fuente": "demostracion"}}], "lead": "...", "gancho": "...", "faltantes": []}}, "escena": "qué se ve, plano a plano, máximo 60 palabras", "prompt": "prompt en inglés para el modelo de video, 60 a 120 palabras"}}]}}
 
 Reglas:
 - Un patrón vale si lo sostienen dos anuncios o uno con muchos datos; nombra los anuncios por su id (A1, A2…).
 - Ninguna cifra que no esté en los datos de arriba.
 - Si un anuncio no tiene imagen, júzgalo por su nombre, su texto y sus números, y dilo en "por_que".
+- Si un anuncio viene con fotogramas, están en orden y con su segundo: el gancho se juzga por los primeros.
+- Si hay lista de productos que más venden, cada idea apunta a uno de ellos ("producto"), salvo que los ganadores vendan otro.
 - Las ideas son para {marca}: el mismo producto y la misma promesa que los ganadores, cada una con un gancho distinto. El "prompt" describe la escena para un modelo de video: nada de logos ni marcas ajenas."""
 
 
@@ -193,29 +290,58 @@ def _bloque(a, medio):
         lineas.append(f"  señales: {', '.join(a['fortalezas'] + a['problemas'])}")
     if medio and (medio.get("titulo") or medio.get("texto")):
         lineas.append(f"  texto del anuncio: «{medio.get('titulo') or ''}» {medio.get('texto') or ''}".rstrip())
-    if not (medio and medio.get("imagen")):
+    clase = (medio or {}).get("visual")
+    if clase == "fotogramas":
+        lineas.append("  (abajo van los fotogramas de su video)")
+    elif clase != "imagen":
         lineas.append("  (sin imagen)")
     return "\n".join(lineas)
 
 
-def armar(marca, contexto, anuncios, medios):
-    """(texto de DATOS, bloques de imagen). `contexto`: desde, hasta, moneda,
-    modelo, ventana, benchmarks, meta_roas."""
+def texto_productos(productos, moneda=""):
+    """Bloque «PRODUCTOS QUE MÁS VENDEN» para el prompt; "" sin datos."""
+    lista = [p for p in (productos or []) if p.get("nombre") or p.get("sku") or p.get("producto_id")][:MAX_PRODUCTOS]
+    if not lista:
+        return ""
+    lineas = [f"PRODUCTOS QUE MÁS VENDEN en la tienda en ese periodo ({moneda or 'moneda de la tienda'}):"]
+    for p in lista:
+        nombre = p.get("nombre") or p.get("sku") or p.get("producto_id")
+        sku = f" (sku {p['sku']})" if p.get("sku") and p.get("nombre") else ""
+        lineas.append(f"- «{nombre}»{sku}: {_num(p.get('pedidos'), 0)} pedidos · {_num(p.get('unidades'), 0)} unidades · "
+                      f"ingresos {_num(p.get('ingresos'))}")
+    return "\n" + "\n".join(lineas) + "\n"
+
+
+def armar(marca, contexto, anuncios, medios, bloques=None, productos=None):
+    """(texto de DATOS, bloques de visión). `contexto`: desde, hasta, moneda,
+    modelo, ventana, benchmarks, meta_roas. `bloques` es lo que devolvió
+    `visuales` (sin él, la miniatura de cada anuncio se baja aquí);
+    `productos`, los de `datos.top_productos`."""
     b = contexto.get("benchmarks") or {}
+    if bloques is None:
+        bloques, _ = visuales(None, anuncios, medios)
+    con_visual = {}
+    for a in anuncios:
+        medio = dict(medios.get(a["ad_id"]) or {})
+        medio["visual"] = (bloques.get(a["ad_id"]) or {}).get("clase")
+        con_visual[a["ad_id"]] = medio
     texto = PROMPT.format(
         marca=marca or "este proyecto", desde=contexto["desde"], hasta=contexto["hasta"],
         moneda=contexto.get("moneda") or "", modelo=contexto.get("modelo") or "", ventana=contexto.get("ventana") or "",
         ctr=_num(b.get("ctr")), gancho=_pct(b.get("gancho")), retencion=_pct(b.get("retencion")),
         roas=_num(b.get("roas")), meta=_num(contexto.get("meta_roas")),
-        bloques="\n\n".join(_bloque(a, medios.get(a["ad_id"])) for a in anuncios), n_ideas=N_IDEAS)
+        bloques="\n\n".join(_bloque(a, con_visual.get(a["ad_id"])) for a in anuncios), n_ideas=N_IDEAS,
+        productos=texto_productos(productos, contexto.get("moneda") or ""))
     imagenes = []
     for a in anuncios:
-        medio = medios.get(a["ad_id"]) or {}
-        datos_img = _imagen_base64(medio["imagen"]) if medio.get("imagen") else None
-        if datos_img:
+        v = bloques.get(a["ad_id"])
+        if not v or not v.get("bloques"):
+            continue
+        if v.get("clase") == "fotogramas":
+            imagenes.append({"type": "text", "text": f"Fotogramas de {a['ref']} ({a['veredicto']}), en orden:"})
+        else:
             imagenes.append({"type": "text", "text": f"Imagen de {a['ref']} ({a['veredicto']}):"})
-            imagenes.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
-                                                         "data": datos_img}})
+        imagenes.extend(v["bloques"])
     return texto, imagenes
 
 
@@ -300,6 +426,7 @@ def parsear(texto, validas, datos_texto):
         angulo["origen"] = "triple_whale"
         ideas.append({"titulo": titulo, "prompt": prompt, "por_que": _texto(i.get("por_que"), 300),
                       "escena": _texto(i.get("escena"), 600), "basada_en": _refs(i.get("basada_en"), validas),
+                      "producto": _texto(i.get("producto"), 120) or None,
                       "angulo": doctrina.anotar_errores(angulo, errores)})
     resultado = {"resumen": _texto(data.get("resumen"), 700),
                  "patrones_ganadores": _patrones(data.get("patrones_ganadores"), validas),
@@ -317,10 +444,10 @@ def _llamar(content, system_):
     return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_)
 
 
-def analizar(marca, contexto, anuncios, medios, idioma):
+def analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=None):
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera
     respuesta no sirve; si tampoco, AnalisisInvalido con los tokens pagados."""
-    texto, imagenes = armar(marca, contexto, anuncios, medios)
+    texto, imagenes = armar(marca, contexto, anuncios, medios, bloques=bloques, productos=productos)
     content = [{"type": "text", "text": texto}] + imagenes
     system_ = system(idioma)
     validas = {a["ref"] for a in anuncios}

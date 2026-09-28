@@ -751,7 +751,19 @@ creative Creatv creates (`lanzador._crear_anuncios`, and the legacy `tareas/meta
 `url_tags=triple_whale.URL_TAGS` (`tw_source={{site_source_name}}&tw_adid={{ad.id}}`, resolved by Meta; the
 `meta_ads.creative` functions take an optional `url_tags` for the AdCreative's «URL parameters»), via
 `triple_whale_tiendas.url_tags(cliente)` — None without Triple Whale; ads created before connecting keep
-none (changing them sends the ad back to review). None of the SQL has run against a real store yet (spec §9).
+none (changing them sends the ad back to review). Second round (spec §11–§13): `tw_producto_dia` (migration
+0023) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal,
+never verified: §9.5) → «Lo que más se vende» in the tab (`panel.productos_periodo`, matched to the Catálogo
+by `fuente_id`/name) and the top 5 in the AI prompt (each idea carries `producto`); a Creatv-made ad
+(`datos.piezas_creatv`, now with the pieza's video/thumbnail/state) sends Claude the real frames
+(`analisis.visuales` → `sprints.qa.archivo_local` + `doctrina.revisor.bloques_visuales`, temp file deleted
+in a `finally`; `anuncio.visual`), every Meta thumbnail is copied to R2 first (`analisis.copiar_miniaturas`,
+`clientes/<c>/triple_whale/eval<id>_<ref>.jpg`); after every sync `triple_whale/avisos.py` emails (tipo
+`tw_evaluacion`) new winners, fatiguing winners, new losers and «no attributed sales» once (state in
+`triple_whale.extra.avisados` / `aviso_sin_ventas`; first sync only seeds the baseline); «Pausar»/«Activar» on a
+Creatv piece in the tab (`triple_whale.pieza_estado` → `lanzador.pausar_pieza`/`activar_pieza`); and the
+Tablero shows «Tu tienda según Triple Whale» (`panel.resumen_mes_tienda`, part `tienda_tw`; the cache key
+includes `triple_whale.actualizado_en`). None of the SQL has run against a real store yet (spec §9).
 
 **Gasto real por proyecto** (`gastos.py`, table `gasto`, migration 0010): there are no
 credits or balances — the product shows the real provider price. Every paying task registers

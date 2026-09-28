@@ -203,6 +203,7 @@ from referentes import rutas as referentes_rutas  # noqa: E402  (Blueprint de la
 app.register_blueprint(referentes_rutas.bp)
 
 from triple_whale import rutas as triple_whale_rutas  # noqa: E402  (Blueprint de la pestaña Triple Whale)
+from triple_whale import panel as triple_whale_panel  # noqa: E402  (la tienda según Triple Whale, en el Tablero)
 app.register_blueprint(triple_whale_rutas.bp)
 
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
@@ -4174,6 +4175,8 @@ def _calcular_tablero(cliente):
     partes = {
         "resumen": lambda: tablero.resumen_mes(cliente, ahora, datos=datos),
         "resumen_triple_whale": lambda: tablero.resumen_mes_triple_whale(cliente, ahora, datos=datos),
+        # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
+        "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
         "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
         "serie_triple_whale": lambda: tablero.serie_diaria_triple_whale(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
         "top": lambda: tablero.top_ganadoras(cliente, datos=datos),
@@ -4220,6 +4223,7 @@ def _clave_tablero(cliente):
     el tablero pinte (snapshot del worker, propuesta del motor, estado o
     veredicto tocado por el dueño, publicación orgánica) mueve la clave."""
     ms, ep, pr, ex, pub = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento, db.publicacion
+    tw = db.triple_whale
     with db.conectar() as con:
         ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
             ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
@@ -4231,7 +4235,10 @@ def _clave_tablero(cliente):
         # Bloque 7: una publicación orgánica nueva o que cambió de estado
         # mueve el tile «Ganadoras publicadas» y la alerta de ganadora sin publicar.
         publicaciones = con.execute(sa.select(sa.func.count(), sa.func.max(pub.c.actualizado_en)).where(pub.c.cliente == cliente)).first()
-    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1])
+        # La tienda según Triple Whale (spec 2026-09-28 §13): conectar,
+        # desconectar o una copia nueva mueven sus tiles.
+        triple = con.execute(sa.select(sa.func.max(tw.c.actualizado_en)).where(tw.c.cliente == cliente)).scalar()
+    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple)
 
 
 def invalidar_tablero(cliente=None):

@@ -36,3 +36,18 @@ def test_migracion_0022_sube_conserva_la_conexion_y_baja(tmp_path, monkeypatch):
     assert "tw_anuncio_dia" not in insp.get_table_names()
     assert "extra" not in {c["name"] for c in insp.get_columns("triple_whale")}
     db._reset_para_tests()
+
+
+def test_migracion_0023_crea_ventas_por_producto_y_baja(tmp_path, monkeypatch):
+    from alembic import command
+    import db
+    monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{tmp_path / 'mig23.db'}")
+    db._reset_para_tests()
+    command.upgrade(_config(), "head")
+    insp = sa.inspect(db.engine())
+    assert "tw_producto_dia" in insp.get_table_names()
+    assert {c["name"] for c in insp.get_columns("tw_producto_dia")} == {c.name for c in db.metadata.tables["tw_producto_dia"].columns}
+    assert "uq_tw_producto_dia" in {u["name"] for u in insp.get_unique_constraints("tw_producto_dia")}
+    command.downgrade(_config(), "0022")
+    assert "tw_producto_dia" not in sa.inspect(db.engine()).get_table_names()
+    db._reset_para_tests()

@@ -155,8 +155,12 @@ otra moneda que la cuenta → ROAS 0 y un aviso (se decide por CPA), como la tie
    la tienda saldrían multiplicados — revisar con la primera tienda conectada.
 2. `is_utm_valid` puede no venir: entonces no se opina sobre rastreo.
 3. Cadencia de Meta → Triple Whale no documentada: por eso se re-piden 7 días en cada copia.
-4. Las miniaturas de Meta caducan: la de un referente se copia a R2; la de una evaluación se usa en
-   el momento y la pestaña puede dejar de mostrarla después.
+4. (Resuelto en §12) Las miniaturas de Meta caducan: la de un referente y la de cada evaluación se
+   copian a R2.
+5. `orders_table.products_info` (§11): los nombres de sus medidas por producto no están en el Data
+   Dictionary que leímos; la consulta completa asume `quantity`, `price` y `title`, y la mínima solo
+   cuenta filas y reparte `order_revenue` en partes iguales. Si ninguna sirve, la copia sigue sin
+   productos y la pestaña no muestra esa sección.
 
 ## 10. Parámetros de rastreo en los anuncios de Creatv (hecho) y siguientes pasos
 
@@ -169,8 +173,46 @@ otra moneda que la cuenta → ROAS 0 y un aviso (se decide por CPA), como la tie
   antes de conectar no los llevan: cambiarlos después manda el anuncio otra vez a revisión, así que
   Creatv no los toca y Configuración explica cómo ponerlos a mano.
 
+## 11. Ventas por producto (hecho)
+
+`tw_producto_dia` (migración 0023; `(cliente, producto_id, fecha)` único) copia `orders_table`
+abierta por `products_info` (ARRAY JOIN) en la misma sincronización, con su versión completa y
+mínima (`triple_whale.consultas_productos`, ver §9.5); dos variantes del mismo producto y día se
+suman. La pestaña muestra «Lo que más se vende» (`panel.productos_periodo`: ingresos, % de la tienda,
+pedidos, unidades, variación contra el periodo anterior y, si el `fuente_id` o el nombre coincide con
+un producto del Catálogo, ese producto), no aplica con filtro de canal. El análisis con IA recibe los
+5 que más venden (`analisis.texto_productos`) y cada idea dice a cuál apunta (`idea.producto`).
+
+## 12. Lo que ve Claude y los avisos (hecho)
+
+- **Fotogramas reales.** Un anuncio hecho en Creatv (`datos.piezas_creatv`, ahora con la pieza, su
+  tipo, su video y su miniatura en R2) manda a Claude los fotogramas de su video
+  (`analisis.visuales` → `sprints.qa.archivo_local` + `doctrina.revisor.bloques_visuales`, los mismos
+  del revisor de la doctrina, con «Segundo N:»), o la imagen por URL si es una imagen; el temporal se
+  borra al terminar (`borrar_temporales`, en un `finally`). Los demás anuncios siguen con su miniatura
+  en base64. `anuncio.visual` (`fotogramas | imagen`) queda en la evaluación y la pestaña lo dice.
+- **Miniaturas a R2.** `analisis.copiar_miniaturas` copia la miniatura de Meta de cada anuncio a
+  `clientes/<c>/triple_whale/eval<id>_<ref>.jpg` antes de analizar (`medio.imagen` pasa a ser la
+  copia; `imagen_origen` guarda la de Meta); las piezas de Creatv ya viven en R2 y no se copian.
+- **Avisos por correo** (`triple_whale/avisos.py`, tipo `tw_evaluacion`). Tras cada copia el worker
+  evalúa los últimos 30 días y compara con `triple_whale.extra.avisados`: nuevos ganadores, ganadores o
+  prometedores que se están cansando y nuevos perdedores van en UN correo (`notificaciones.avisar`:
+  sin SMTP o sin correo del proyecto queda en la bitácora); gasto sin ninguna venta atribuida avisa
+  una sola vez (`extra.aviso_sin_ventas`) hasta que vuelvan las ventas. La primera copia solo guarda
+  la base. Un fallo aquí nunca tumba la copia.
+- **Pausar / activar desde la pestaña.** En «Cada anuncio», una pieza de Creatv activa ofrece
+  «Pausar» y una pausada «Activar» (`triple_whale.pieza_estado` → `lanzador.pausar_pieza` /
+  `activar_pieza`, con confirmación y su evento de experimento). Nada más se toca en Meta.
+
+## 13. La tienda en el Tablero (hecho)
+
+Con Triple Whale conectado y datos de tienda, el Tablero muestra «Tu tienda según Triple Whale»:
+ingresos y pedidos del mes, % de clientes nuevos, MER y gasto, con la variación contra los mismos días
+del mes anterior (`panel.resumen_mes_tienda`, parte `tienda_tw` de `_calcular_tablero`; la clave de
+caché del Tablero incluye `triple_whale.actualizado_en`, así una copia nueva lo refresca). El detalle
+sigue en la pestaña.
+
 Siguientes pasos (fuera de este cambio):
 
-- Fotogramas reales (no solo la miniatura) para los anuncios hechos en Creatv, con
-  `doctrina.revisor.tiempos()`.
-- Ventas por producto (`orders_table.products_info`) para saber qué producto empujar.
+- Verificar §9 con la primera tienda real.
+- Enlazar cada idea con la pieza que salió de ella en Crear (hoy «Llevar a Crear» solo precarga).

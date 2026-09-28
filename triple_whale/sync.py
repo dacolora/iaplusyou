@@ -114,6 +114,17 @@ def normalizar_tienda(fila):
             "cogs": _real(fila.get("cogs")), "utilidad_neta": _real(fila.get("net_profit"))}
 
 
+def normalizar_producto(fila):
+    """Fila de orders_table (abierta por producto) -> registro de tw_producto_dia."""
+    fecha = _fecha(fila.get("event_date"))
+    pid = _texto(fila.get("product_id"), 120)
+    if not fecha or not pid or pid.lower() in ("null", "none"):
+        return None
+    return {"fecha": fecha, "producto_id": pid, "nombre": _texto(fila.get("title"), 300),
+            "sku": _texto(fila.get("sku"), 120), "unidades": _real(fila.get("quantity")),
+            "ingresos": _real(fila.get("revenue")), "pedidos": _real(fila.get("orders"))}
+
+
 def _sumar_por_clave(registros, claves_suma):
     """Dos filas con la misma clave (canal, anuncio, día) se suman: la
     consulta ya agrupa, pero un `ad_id` numérico y uno de texto pueden
@@ -129,6 +140,24 @@ def _sumar_por_clave(registros, claves_suma):
         previo = salida[k]
         for c in claves_suma:
             previo[c] = (previo.get(c) or 0) + (r.get(c) or 0)
+    return list(salida.values())
+
+
+def _productos_por_clave(registros):
+    """Dos filas del mismo producto y día (dos variantes) se suman."""
+    salida = {}
+    for r in registros:
+        if r is None:
+            continue
+        k = (r["producto_id"], r["fecha"])
+        if k not in salida:
+            salida[k] = dict(r)
+            continue
+        previo = salida[k]
+        for c in datos.COLUMNAS_PRODUCTO:
+            previo[c] = (previo.get(c) or 0) + (r.get(c) or 0)
+        previo["nombre"] = previo.get("nombre") or r.get("nombre")
+        previo["sku"] = previo.get("sku") or r.get("sku")
     return list(salida.values())
 
 
@@ -187,9 +216,9 @@ def sincronizar(cliente, desde=None, hasta=None, on_progreso=None, hoy=None):
         desde, hasta = rango_pendiente(config, hoy)
     dominio, moneda = config["dominio_tienda"], config["moneda"]
     consultas_pixel = triple_whale.consultas_pixel(config["modelo_atribucion"], config["ventana_atribucion"])
-    indice = {"anuncios": 0, "pixel": 0, "tienda": 0}
-    fallo = {"pixel": None, "tienda": None}
-    cuenta = {"anuncios": set(), "filas_pixel": 0, "dias_tienda": 0}
+    indice = {"anuncios": 0, "pixel": 0, "tienda": 0, "productos": 0}
+    fallo = {"pixel": None, "tienda": None, "productos": None}
+    cuenta = {"anuncios": set(), "filas_pixel": 0, "dias_tienda": 0, "productos": set()}
     lista = tramos(desde, hasta)
     for i, (d, h) in enumerate(lista):
         if on_progreso:
@@ -220,9 +249,20 @@ def sincronizar(cliente, desde=None, hasta=None, on_progreso=None, hoy=None):
             except triple_whale.ErrorConsulta as e:
                 fallo["tienda"] = str(e)
 
+        if fallo["productos"] is None:
+            try:
+                filas, indice["productos"] = triple_whale.consultar_con_respaldo(
+                    llave, dominio, triple_whale.consultas_productos(), d, h, moneda, empezar_en=indice["productos"])
+                registros = _productos_por_clave(normalizar_producto(f) for f in filas)
+                datos.reemplazar_productos(cliente, d, h, registros)
+                cuenta["productos"].update(r["producto_id"] for r in registros)
+            except triple_whale.ErrorConsulta as e:
+                fallo["productos"] = str(e)
+
     resumen = {
         "desde": desde, "hasta": hasta, "tramos": len(lista), "anuncios": len(cuenta["anuncios"]),
         "filas_pixel": cuenta["filas_pixel"], "dias_tienda": cuenta["dias_tienda"],
+        "productos": len(cuenta["productos"]),
         "consultas": {k: ("sin_datos" if fallo.get(k) else NOMBRES_CONSULTA[v]) for k, v in indice.items()},
         "fallos": {k: v for k, v in fallo.items() if v},
     }

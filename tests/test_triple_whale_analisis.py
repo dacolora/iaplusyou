@@ -160,7 +160,23 @@ def evaluacion_en_cola(base_temporal, monkeypatch):
     monkeypatch.setattr(t.trabajos, "reportar", lambda *a, **k: None)
     monkeypatch.setattr(analisis, "medios_meta", lambda cliente, anuncios: {
         anuncios[0]["ad_id"]: {"imagen": "https://x/1.jpg", "titulo": "T", "texto": "B", "tipo": "imagen"}})
+    # Ni R2 ni descargas reales: la copia a R2 devuelve una URL fija y la
+    # miniatura "bajada" es un JPEG diminuto.
+    monkeypatch.setattr(analisis.r2_uploader, "upload_image", lambda local, clave: f"https://r2/{clave}")
+    from referentes import imagenes
+    monkeypatch.setattr(imagenes, "_bajar", lambda url: _JPEG)
     return {"eid": eid, "t": t, "muestra": m}
+
+
+def _jpeg():
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (4, 4), (200, 30, 30)).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+_JPEG = _jpeg()
 
 
 def _gastos():
@@ -172,14 +188,111 @@ def _gastos():
 
 def test_tarea_evaluar_guarda_resultado_medios_y_gasto(evaluacion_en_cola, monkeypatch):
     e = evaluacion_en_cola
-    monkeypatch.setattr(analisis, "analizar", lambda marca, contexto, anuncios, medios, idioma:
-                        (analisis.parsear(respuesta(), {a["ref"] for a in anuncios}, ""), 10000, 5000))
+    recibido = {}
+
+    def _analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=None):
+        recibido.update(bloques=bloques, productos=productos)
+        return analisis.parsear(respuesta(), {a["ref"] for a in anuncios}, ""), 10000, 5000
+    monkeypatch.setattr(analisis, "analizar", _analizar)
+    datos.reemplazar_productos("acme", "2026-09-01", "2026-09-01", [
+        {"fecha": "2026-09-01", "producto_id": "p1", "nombre": "Cojín", "unidades": 3, "ingresos": 90, "pedidos": 2}])
     texto = e["t"].tw_evaluar({"id": 7, "payload": {"cliente": "acme", "evaluacion_id": e["eid"]}})
     assert "1 idea" in texto
     fila = datos.evaluacion("acme", e["eid"])
     assert fila["estado"] == "lista" and fila["resultado"]["ideas"] and fila["usd"] == pytest.approx(0.07)
-    assert fila["anuncios"][0]["medio"]["imagen"] == "https://x/1.jpg" and "medio" not in fila["anuncios"][1]
+    # La miniatura de Meta quedó copiada a R2 (la de Meta caduca) y Claude la vio.
+    medio = fila["anuncios"][0]["medio"]
+    assert medio["imagen"] == f"https://r2/clientes/acme/triple_whale/eval{e['eid']}_A1.jpg"
+    assert medio["imagen_origen"] == "https://x/1.jpg" and fila["anuncios"][0]["visual"] == "imagen"
+    assert "medio" not in fila["anuncios"][1] and "visual" not in fila["anuncios"][1]
+    assert set(recibido["bloques"]) == {fila["anuncios"][0]["ad_id"]}
+    assert recibido["productos"][0]["nombre"] == "Cojín" and fila["extra"]["productos"][0]["producto_id"] == "p1"
     assert _gastos() == [{"tipo": "evaluacion", "usd": pytest.approx(0.07), "referencia": f"tw_eval:{e['eid']}:t7"}]
+
+
+def _experimento_con_anuncio(ad_id, url="https://r2/pieza.mp4", tipo="video", estado="activo"):
+    """Una pieza de Creatv lanzada a Meta con ese ad_id (experimento_pieza)."""
+    import experimentos as ex
+    from tests.test_experimentos_db import PAISES, _pieza
+    import db
+    pid = _pieza(db, tipo=tipo, url=url, legado=f"cf_{ad_id}")
+    eid = ex.crear("acme", "Prueba", PAISES, "OUTCOME_TRAFFIC", 7, 500.0, "https://t.co/p", "USD")
+    ep_id = ex.agregar_pieza("acme", eid, pid, "CO")
+    ex.actualizar_pieza("acme", ep_id, meta_ad_id=str(ad_id), estado=estado)
+    return eid, ep_id
+
+
+def test_tarea_evaluar_manda_los_fotogramas_de_una_pieza_de_creatv_y_borra_el_temporal(evaluacion_en_cola, monkeypatch, tmp_path):
+    e = evaluacion_en_cola
+    ad_id = e["muestra"][1]["ad_id"]
+    _experimento_con_anuncio(ad_id)
+    temporal = tmp_path / "bajado.mp4"
+    temporal.write_bytes(b"mp4")
+    from doctrina import revisor
+    from sprints import qa
+    monkeypatch.setattr(qa, "archivo_local", lambda entry: str(temporal))
+    monkeypatch.setattr(revisor, "bloques_visuales", lambda entry, ruta=None: [
+        {"type": "text", "text": "Segundo 0:"}, {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "QQ=="}}])
+    recibido = {}
+
+    def _analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=None):
+        recibido["texto"], recibido["imagenes"] = analisis.armar(marca, contexto, anuncios, medios, bloques, productos)
+        assert temporal.exists()   # el video sigue mientras Claude lo mira
+        return analisis.parsear(respuesta(), {a["ref"] for a in anuncios}, ""), 100, 50
+    monkeypatch.setattr(analisis, "analizar", _analizar)
+    e["t"].tw_evaluar({"id": 9, "payload": {"cliente": "acme", "evaluacion_id": e["eid"]}})
+    assert not temporal.exists()
+    fila = datos.evaluacion("acme", e["eid"])
+    pieza = fila["anuncios"][1]
+    assert pieza["visual"] == "fotogramas" and pieza["medio"]["origen"] == "creatv"
+    assert "Fotogramas de A2 (ganador), en orden:" in [b.get("text") for b in recibido["imagenes"]]
+    assert "(abajo van los fotogramas de su video)" in recibido["texto"]
+
+
+def test_visuales_cae_a_la_miniatura_si_los_fotogramas_fallan(monkeypatch):
+    from doctrina import revisor
+    from sprints import qa
+    monkeypatch.setattr(qa, "archivo_local", lambda entry: None)
+    monkeypatch.setattr(analisis, "_imagen_base64", lambda url: "QUJD")
+    llamado = []
+    monkeypatch.setattr(revisor, "bloques_visuales", lambda entry, ruta=None: llamado.append(entry) or [{"type": "text", "text": "La imagen:"}])
+    anuncios = [{"ref": "A1", "ad_id": "1", "veredicto": "ganador"}, {"ref": "A2", "ad_id": "2", "veredicto": "perdedor"},
+                {"ref": "A3", "ad_id": "3", "veredicto": "perdedor"}]
+    medios = {"1": {"imagen": "https://x/1.jpg"}, "2": {"imagen": "https://x/2.jpg"}}
+    creatv = {"1": {"tipo": "video", "url_video": "https://r2/v.mp4", "url_miniatura": "https://r2/m.jpg"},
+              "3": {"tipo": "imagen", "url_video": "https://r2/i.png"}}
+    v, temporales = analisis.visuales("acme", anuncios, medios, creatv)
+    assert v["1"]["clase"] == "imagen" and v["1"]["bloques"][0]["source"]["data"] == "QUJD"   # sin video bajado
+    assert v["2"]["clase"] == "imagen"
+    assert v["3"]["clase"] == "imagen" and v["3"]["bloques"][0]["text"] == "La imagen:"        # imagen por URL, sin descarga
+    assert llamado == [{"tipo": "imagen", "video_url": "https://r2/i.png", "url_miniatura": None}] and temporales == []
+
+
+def test_copiar_miniaturas_deja_la_copia_en_r2_y_no_toca_lo_que_ya_vive_alli(monkeypatch):
+    from referentes import imagenes
+    monkeypatch.setattr(imagenes, "_bajar", lambda url: _JPEG if "ok" in url else (_ for _ in ()).throw(imagenes.ImagenInvalida("x")))
+    subidas = []
+    monkeypatch.setattr(analisis.r2_uploader, "upload_image", lambda local, clave: subidas.append(clave) or f"https://r2/{clave}")
+    anuncios = [{"ref": "A1", "ad_id": "1"}, {"ref": "A2", "ad_id": "2"}, {"ref": "A3", "ad_id": "3"}, {"ref": "A4", "ad_id": "4"}]
+    medios = {"1": {"imagen": "https://scontent/ok.jpg"}, "2": {"imagen": "https://scontent/rota.jpg"},
+              "3": {"imagen": "https://r2/mini.jpg", "origen": "creatv"}, "4": {"imagen": None}}
+    analisis.copiar_miniaturas("acme", 12, anuncios, medios)
+    assert medios["1"] == {"imagen": "https://r2/clientes/acme/triple_whale/eval12_A1.jpg", "imagen_origen": "https://scontent/ok.jpg"}
+    assert medios["2"] == {"imagen": "https://scontent/rota.jpg"}    # no se pudo: queda la de Meta
+    assert medios["3"]["imagen"] == "https://r2/mini.jpg" and subidas == ["clientes/acme/triple_whale/eval12_A1.jpg"]
+
+
+def test_armar_pone_los_productos_que_mas_venden_y_parsear_guarda_el_producto_de_la_idea(monkeypatch):
+    m = analisis.muestra(_ev())
+    texto, _ = analisis.armar("Acme", {"desde": "a", "hasta": "b", "moneda": "USD"}, m, {}, bloques={},
+                              productos=[{"nombre": "Cojín", "sku": "C1", "pedidos": 12, "unidades": 15, "ingresos": 480}])
+    assert "PRODUCTOS QUE MÁS VENDEN" in texto and "«Cojín» (sku C1): 12 pedidos" in texto
+    sin, _ = analisis.armar("Acme", {"desde": "a", "hasta": "b"}, m, {}, bloques={}, productos=[])
+    assert "PRODUCTOS QUE MÁS VENDEN" not in sin
+    r = analisis.parsear(respuesta(ideas=[{"titulo": "Caja", "prompt": "Top-down", "producto": "  Cojín  "}]), {"A1"}, "")
+    assert r["ideas"][0]["producto"] == "Cojín"
+    r = analisis.parsear(respuesta(), {"A1"}, "")
+    assert r["ideas"][0]["producto"] is None
 
 
 def test_tarea_evaluar_fallida_registra_lo_pagado_y_queda_en_error(evaluacion_en_cola, monkeypatch):

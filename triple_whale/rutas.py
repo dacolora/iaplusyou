@@ -9,6 +9,9 @@ todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
   viendo; el precio ya estaba a la vista en el botón (y en su confirmación).
 - `idea_crear`: una idea del análisis → Crear precargado (nada se genera).
 - `a_referente`: un anuncio de una evaluación → Referentes del proyecto.
+- `pieza_estado`: pausa o activa en Meta un anuncio hecho en Creatv (una
+  pieza de experimento) desde la tabla, con confirmación; usa
+  `lanzador.pausar_pieza` / `activar_pieza`, que dejan su evento.
 """
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext
@@ -157,4 +160,26 @@ def a_referente(cliente, eid, ref):
         return _volver(cliente)
     flash(gettext("Guardado en Referentes: desde ahí puedes recrearlo con tu producto o usarlo en un sprint.")
           if creado else gettext("Ese anuncio ya estaba en Referentes."), "ok")
+    return _volver(cliente)
+
+
+@bp.post("/pieza/<int:ep_id>/<accion>")
+def pieza_estado(cliente, ep_id, accion):
+    """Pausar o activar en Meta una pieza de experimento (un anuncio hecho en
+    Creatv) desde la evaluación. Reversible y explícito: un clic con confirm."""
+    import lanzador
+    if accion not in ("pausar", "activar"):
+        abort(404)
+    try:
+        if accion == "pausar":
+            lanzador.pausar_pieza(cliente, ep_id)
+            flash(gettext("Anuncio pausado en Meta."), "ok")
+        else:
+            lanzador.activar_pieza(cliente, ep_id)
+            flash(gettext("Anuncio activado en Meta."), "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    except Exception as e:  # noqa: BLE001 — Meta caída o token vencido: se muestra sin el token
+        import cola
+        flash(gettext("Meta no aceptó el cambio: %(error)s", error=cola.sin_token(str(e) or type(e).__name__)), "error")
     return _volver(cliente)

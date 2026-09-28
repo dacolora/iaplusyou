@@ -190,3 +190,80 @@ def test_otro_proyecto_no_ve_el_panel(app):  # noqa: F811
         s.update({"usuario": "otro", "rol": "cliente", "cliente": "otro"})
     r = c.get("/cliente/acme/triple-whale/panel")
     assert r.status_code in (302, 403, 404)
+
+
+# ---- lo que más se vende, pausar/activar, la tienda en el Tablero (spec §11-§13) ----
+
+def _sembrar_productos():
+    import sqlalchemy as sa
+    datos.reemplazar_productos("acme", _hace(9), _hace(0), [
+        {"fecha": _hace(1), "producto_id": "8891", "nombre": "Cojín lumbar", "sku": "C-1", "unidades": 12, "ingresos": 480, "pedidos": 10},
+        {"fecha": _hace(1), "producto_id": "7770", "nombre": "Lámpara", "sku": "L-1", "unidades": 2, "ingresos": 120, "pedidos": 2}])
+    datos.reemplazar_productos("acme", _hace(39), _hace(30), [
+        {"fecha": _hace(35), "producto_id": "8891", "nombre": "Cojín lumbar", "unidades": 6, "ingresos": 240, "pedidos": 5}])
+    with db.conectar() as con:
+        con.execute(db.producto.insert().values(
+            cliente="acme", creado_en=db.ahora(), actualizado_en=db.ahora(), fuente="shopify", fuente_id="8891",
+            nombre="Cojín lumbar Pro", archivado=False, extra={}, fotos=[], prioridad=0, en_prueba=False))
+
+
+def test_panel_muestra_lo_que_mas_se_vende_con_su_variacion_y_el_catalogo(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    _sembrar_productos()
+    html = app["c"].get("/cliente/acme/triple-whale/panel?dias=30").data.decode()
+    assert "Lo que más se vende" in html and "Cojín lumbar" in html and "Lámpara" in html
+    assert "+100 %" in html                                   # 480 vs 240 el periodo anterior
+    assert "En tu catálogo: Cojín lumbar Pro" in html and 'data-ir-tab="catalogo"' in html
+    # Con filtro de canal no aplica (la tienda no se parte por canal).
+    assert "Lo que más se vende" not in app["c"].get("/cliente/acme/triple-whale/panel?canal=tiktok-ads").data.decode()
+
+
+def test_tabla_ofrece_pausar_o_activar_solo_las_piezas_de_creatv(app, monkeypatch):  # noqa: F811
+    from tests.test_triple_whale_analisis import _experimento_con_anuncio
+    _conectar()
+    _sembrar()
+    _, ep_activa = _experimento_con_anuncio("g1", estado="activo")
+    _, ep_pausada = _experimento_con_anuncio("p1", estado="pausado")
+    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    assert f"/cliente/acme/triple-whale/pieza/{ep_activa}/pausar" in html
+    assert f"/cliente/acme/triple-whale/pieza/{ep_pausada}/activar" in html
+    assert f"/pieza/{ep_activa}/activar" not in html and "/pieza/0/" not in html
+    assert html.count("triple-whale/pieza/") == 2          # g2, p2, n1, t1 no son de Creatv
+
+
+def test_pausar_y_activar_van_por_el_lanzador(app, monkeypatch):  # noqa: F811
+    import lanzador
+    _conectar()
+    llamadas = []
+    monkeypatch.setattr(lanzador, "pausar_pieza", lambda cliente, ep_id: llamadas.append(("pausar", cliente, ep_id)))
+    monkeypatch.setattr(lanzador, "activar_pieza", lambda cliente, ep_id: llamadas.append(("activar", cliente, ep_id)))
+    r = app["c"].post("/cliente/acme/triple-whale/pieza/7/pausar")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#triplewhale")
+    app["c"].post("/cliente/acme/triple-whale/pieza/7/activar")
+    assert llamadas == [("pausar", "acme", 7), ("activar", "acme", 7)]
+    assert app["c"].post("/cliente/acme/triple-whale/pieza/7/borrar").status_code == 404
+
+    def _no_existe(cliente, ep_id):
+        raise ValueError("Esa pieza no existe.")
+    monkeypatch.setattr(lanzador, "pausar_pieza", _no_existe)
+    r = app["c"].post("/cliente/acme/triple-whale/pieza/7/pausar", follow_redirects=True)
+    assert "Esa pieza no existe" in r.data.decode()
+
+    def _meta(cliente, ep_id):
+        raise RuntimeError("Meta Ads (x) respondió 400: access_token=EAAB-secreto")
+    monkeypatch.setattr(lanzador, "activar_pieza", _meta)
+    html = app["c"].post("/cliente/acme/triple-whale/pieza/7/activar", follow_redirects=True).data.decode()
+    assert "Meta no aceptó el cambio" in html and "EAAB-secreto" not in html
+    assert app["c"].post("/cliente/acme/triple-whale/pieza/7/pausar", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+
+
+def test_tablero_muestra_la_tienda_segun_triple_whale(app):  # noqa: F811
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert "Tu tienda según Triple Whale" not in html
+    _conectar()
+    _sembrar()
+    html = app["c"].get("/cliente/acme").data.decode()
+    ini = html.index('id="tab-tablero"')
+    tablero = html[ini:html.index('id="tab-triplewhale"')]
+    assert "Tu tienda según Triple Whale" in tablero and "MER" in tablero and 'data-ir-tab="triplewhale"' in tablero

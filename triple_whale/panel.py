@@ -18,6 +18,7 @@ from triple_whale import analisis, datos, evaluacion
 PERIODOS = (7, 14, 30, 90)
 PERIODO_DEFECTO = 30
 MAX_FILAS = 200
+MAX_PRODUCTOS_PANEL = 8
 
 
 def _iso(d):
@@ -59,6 +60,58 @@ def evaluar_periodo(cliente, dias=PERIODO_DEFECTO, canal=None, hoy=None):
     return ev, desde, hasta
 
 
+def productos_periodo(cliente, desde, hasta, desde_prev, hasta_prev, limite=MAX_PRODUCTOS_PANEL):
+    """Los productos que más vendieron (tw_producto_dia) con su variación
+    contra el periodo anterior y, si el nombre o el id coincide con un
+    producto del Catálogo, ese producto (para llevar la idea a Crear con él)."""
+    import tiendas
+    top = datos.top_productos(cliente, desde, hasta, limite)
+    if not top:
+        return []
+    previos = {p["producto_id"]: p for p in datos.top_productos(cliente, desde_prev, hasta_prev, limite=500)}
+    total = sum(float(p["ingresos"] or 0) for p in top) or 0.0
+    catalogo = {}
+    try:
+        for prod in tiendas.productos(cliente):
+            for clave in (str(prod.get("fuente_id") or ""), (prod.get("nombre") or "").strip().lower()):
+                if clave:
+                    catalogo.setdefault(clave, prod)
+    except Exception:  # noqa: BLE001 — sin catálogo, la lista igual sirve
+        catalogo = {}
+    salida = []
+    for p in top:
+        prev = previos.get(p["producto_id"]) or {}
+        ingresos_prev = float(prev.get("ingresos") or 0)
+        variacion = (float(p["ingresos"] or 0) / ingresos_prev - 1) if ingresos_prev else None
+        en_catalogo = catalogo.get(str(p["producto_id"])) or catalogo.get((p.get("nombre") or "").strip().lower())
+        salida.append(dict(p, variacion=variacion, pct_ingresos=(float(p["ingresos"] or 0) / total) if total else None,
+                           catalogo=({"id": en_catalogo["id"], "nombre": en_catalogo["nombre"],
+                                      "activo_id": en_catalogo.get("activo_catalogo_id")} if en_catalogo else None)))
+    return salida
+
+
+def resumen_mes_tienda(cliente, hoy=None):
+    """La tienda según Triple Whale en el mes en curso (para el Tablero):
+    ingresos, pedidos, gasto en publicidad, MER y % de clientes nuevos, más
+    la variación contra los mismos días del mes anterior. None sin conexión o
+    sin datos de tienda."""
+    if not triple_whale_tiendas.obtener(cliente):
+        return None
+    hoy = hoy or date.today()
+    desde = hoy.replace(day=1)
+    dias = (hoy - desde).days + 1
+    serie = datos.serie_tienda(cliente, _iso(desde), _iso(hoy))
+    if not serie:
+        return None
+    fin_prev = desde - timedelta(days=1)
+    ini_prev = fin_prev.replace(day=1)
+    fin_prev_mismo = min(fin_prev, ini_prev + timedelta(days=dias - 1))
+    r = evaluacion.resumen_tienda(serie, datos.serie_tienda(cliente, _iso(ini_prev), _iso(fin_prev_mismo)))
+    r["moneda"] = triple_whale_tiendas.obtener(cliente)["moneda"]
+    r["desde"], r["hasta"] = _iso(desde), _iso(hoy)
+    return r
+
+
 def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, hoy=None):
     config = triple_whale_tiendas.obtener(cliente)
     if not config:
@@ -85,7 +138,9 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, hoy=None):
 
     muestra = analisis.muestra(ev)
     evaluaciones = datos.evaluaciones(cliente, limite=5)
+    productos = productos_periodo(cliente, desde, hasta, desde_prev, hasta_prev) if not canal else []
     return {
+        "productos": productos,
         "conectado": True, "config": config, "moneda": config["moneda"], "dias": dias, "periodos": PERIODOS,
         "desde": desde, "hasta": hasta, "canal": canal, "canales": canales,
         "rango": datos.rango(cliente), "ev": ev, "anuncios": ev["anuncios"][:MAX_FILAS],

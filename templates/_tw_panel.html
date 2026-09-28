@@ -171,6 +171,34 @@
   {% if not ev.hay_ventas %}<p class="vacio">{{ _('Sin pedidos atribuidos en el periodo: los veredictos se apoyan solo en el tráfico (gancho, retención, clic), así que no hay ganadores ni perdedores todavía.') }}</p>{% endif %}
 </section>
 
+{# ---------- lo que más se vende ---------- #}
+{% if tw.productos %}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Lo que más se vende') }}</h3><small class="vacio">{{ _('Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos.') }}</small></div>
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('%% de la tienda') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Unidades') }}</th><th>{{ _('vs. periodo anterior') }}</th></tr></thead>
+      <tbody>
+        {% for p in tw.productos %}
+        <tr>
+          <td class="tw-nombre">
+            <strong>{{ p.nombre or p.sku or p.producto_id }}</strong>
+            {% if p.sku and p.nombre %}<small>{{ p.sku }}</small>{% endif %}
+            {% if p.catalogo %}<small><a href="#catalogo" data-ir-tab="catalogo">{{ _('En tu catálogo: %(nombre)s', nombre=p.catalogo.nombre) }}</a></small>{% endif %}
+          </td>
+          <td>{{ p.ingresos | dinero(moneda) }}</td>
+          <td>{{ p.pct_ingresos | tw_pct(0) }}</td>
+          <td>{{ p.pedidos | tw_num }}</td>
+          <td>{{ p.unidades | tw_num }}</td>
+          <td>{{ p.variacion | tw_var or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
 {# ---------- evaluación con IA ---------- #}
 <section class="tb-seccion" id="tw-ia">
   <div class="tb-seccion-cab"><h3>{{ _('Evaluación con IA') }}</h3></div>
@@ -226,6 +254,7 @@
       <article class="tw-idea">
         <strong>{{ idea.titulo }}</strong>
         {% if idea.basada_en %}{% set nombres = [] %}{% for ref in idea.basada_en %}{% set _x = nombres.append((por_ref.get(ref) or {}).get('nombre') or ref) %}{% endfor %}<small class="vacio">{{ _('Basada en: %(anuncios)s', anuncios=nombres | join(', ')) }}</small>{% endif %}
+        {% if idea.producto %}<small class="tag-estado tag-en-uso">{{ _('Producto: %(p)s', p=idea.producto) }}</small>{% endif %}
         {% if idea.por_que %}<p>{{ idea.por_que }}</p>{% endif %}
         {% set ang = idea.angulo or {} %}
         {% if ang.promesa or ang.gancho %}
@@ -254,6 +283,7 @@
         <div>
           <strong>{{ a.nombre }}</strong>
           <span class="tag-estado {{ clases_veredicto.get(a.veredicto, '') }}">{{ tw.etiquetas_veredicto.get(a.veredicto, a.veredicto) | traducir }}</span>
+          {% if a.visual == 'fotogramas' %}<small class="vacio">{{ _('Claude vio los fotogramas del video') }}</small>{% elif not a.visual and not (a.medio and a.medio.imagen) %}<small class="vacio">{{ _('Sin imagen: Claude juzgó por texto y números') }}</small>{% endif %}
           {% if cl.por_que %}<p>{{ cl.por_que }}</p>{% endif %}
           {% if cl.gancho %}<p><small>{{ _('Gancho: %(g)s', g=cl.gancho) }}</small></p>{% endif %}
           {% if cl.formato %}<p><small>{{ _('Formato: %(f)s', f=cl.formato) }}</small></p>{% endif %}
@@ -291,6 +321,17 @@
             <strong>{{ a.nombre }}</strong>
             <small>{{ a.canal | tw_canal }}{% if a.campana %} · {{ a.campana }}{% endif %}</small>
             {% if a.creatv %}<small><a href="?exp={{ a.creatv.experimento_id }}#experimentos">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a></small>{% endif %}
+            {% if a.creatv and a.creatv.estado == 'activo' %}
+            <form method="post" class="tw-accion" action="{{ url_for('triple_whale.pieza_estado', cliente=cliente, ep_id=a.creatv.ep_id, accion='pausar') }}"
+                  data-confirmar="{{ _('¿Pausar «%(nombre)s» en Meta? Deja de gastar hasta que lo actives.', nombre=a.nombre) }}">
+              <button type="submit" class="btn-xs">{{ _('Pausar en Meta') }}</button>
+            </form>
+            {% elif a.creatv and a.creatv.estado == 'pausado' %}
+            <form method="post" class="tw-accion" action="{{ url_for('triple_whale.pieza_estado', cliente=cliente, ep_id=a.creatv.ep_id, accion='activar') }}"
+                  data-confirmar="{{ _('¿Activar «%(nombre)s» en Meta? Vuelve a gastar presupuesto.', nombre=a.nombre) }}">
+              <button type="submit" class="btn-xs">{{ _('Activar en Meta') }}</button>
+            </form>
+            {% endif %}
           </td>
           <td><span class="tag-estado {{ clases_veredicto[a.veredicto] }}" title="{{ a.motivo }}">{{ tw.etiquetas_veredicto[a.veredicto] | traducir }}</span><small class="tw-motivo">{{ a.motivo }}</small></td>
           <td>{{ am.gasto | dinero(moneda) }}</td>

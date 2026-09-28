@@ -97,6 +97,10 @@ msgid "$0.15 en 4k · $0.18 en 8k"
 msgstr "$0.15 at 4k · $0.18 at 8k"
 
 #, python-format
+msgid "%% de la tienda"
+msgstr "%% of the store"
+
+#, python-format
 msgid "%% del gasto"
 msgstr "%% of spend"
 
@@ -569,6 +573,10 @@ msgid "%(palabras)s palabras · unos %(segundos)s s leído completo a ritmo natu
 msgstr "%(palabras)s words · about %(segundos)s s read in full at a natural pace."
 
 #, python-format
+msgid "%(pct)s de clientes nuevos"
+msgstr "%(pct)s new customers"
+
+#, python-format
 msgid "%(pct)s del gasto"
 msgstr "%(pct)s of spend"
 
@@ -878,6 +886,9 @@ msgstr "Activating starts spending on Meta. Continue?"
 msgid "Activar empieza a gastar presupuesto real en Meta. ¿Seguimos?"
 msgstr "Activating starts spending real budget on Meta. Continue?"
 
+msgid "Activar en Meta"
+msgstr "Activate on Meta"
+
 msgid "Activar país"
 msgstr "Activate country"
 
@@ -1035,9 +1046,15 @@ msgstr "Anthropic (scripts and prompts)"
 msgid "Anuncio"
 msgstr "Ad"
 
+msgid "Anuncio activado en Meta."
+msgstr "Ad activated on Meta."
+
 #, python-format
 msgid "Anuncio creado: %(nombre)s (%(pais)s)"
 msgstr "Ad created: %(nombre)s (%(pais)s)"
+
+msgid "Anuncio pausado en Meta."
+msgstr "Ad paused on Meta."
 
 msgid "Anuncio por anuncio"
 msgstr "Ad by ad"
@@ -1142,6 +1159,10 @@ msgstr "Let Creatv know"
 
 msgid "Avisar a Creatv para que lo termine a mano"
 msgstr "Let Creatv know to finish it by hand"
+
+#, python-format
+msgid "Aviso enviado: %(g)s ganador(es) nuevo(s), %(c)s cansándose, %(p)s perdedor(es) nuevo(s)."
+msgstr "Notice sent: %(g)s new winner(s), %(c)s fatiguing, %(p)s new loser(s)."
 
 msgid "Avisos por correo desactivados."
 msgstr "Email notifications turned off."
@@ -1482,6 +1503,9 @@ msgstr "Claude didn't answer in the expected format. Try again."
 
 msgid "Claude todavía está respondiendo tu mensaje anterior."
 msgstr "Claude is still answering your previous message."
+
+msgid "Claude vio los fotogramas del video"
+msgstr "Claude saw the video's frames"
 
 msgid "Clave secreta de la app"
 msgstr "App secret"
@@ -2653,6 +2677,10 @@ msgstr "At notion.so/profile/integrations create an internal integration (conten
 msgid "En prueba"
 msgstr "In testing"
 
+#, python-format
+msgid "En tu catálogo: %(nombre)s"
+msgstr "In your catalog: %(nombre)s"
+
 msgid "En uso"
 msgstr "In use"
 
@@ -3363,6 +3391,9 @@ msgstr "Winner: CTR %(ctr)s%%, CPC %(cpc)s, %(thruplay_txt)s%(motivo_ventas)s."
 msgid "Ganadoras publicadas"
 msgstr "Winners posted"
 
+msgid "Ganadores que se están cansando (toca hacer variantes)"
+msgstr "Winners that are fatiguing (time to make variants)"
+
 msgid "Gancho"
 msgstr "Hook"
 
@@ -3836,6 +3867,9 @@ msgstr "Attributed revenue"
 msgid "Ingresos de la tienda"
 msgstr "Store revenue"
 
+msgid "Ingresos del mes"
+msgstr "Revenue this month"
+
 msgid "Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos"
 msgstr "Revenue the Triple Pixel attributes to the ads with the chosen model and window"
 
@@ -4252,6 +4286,9 @@ msgstr "What makes them lose"
 msgid "Lo que le falta a esta matriz"
 msgstr "What this matrix is missing"
 
+msgid "Lo que más se vende"
+msgstr "What sells most"
+
 msgid "Lo que necesita tu atención"
 msgstr "What needs your attention"
 
@@ -4435,6 +4472,10 @@ msgstr "Meta disconnected from this project and access revoked on Meta."
 msgid "Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio."
 msgstr "Meta disconnected from this project. The app stays authorized on your Facebook until you remove it in Settings › Business Integrations."
 
+#, python-format
+msgid "Meta no aceptó el cambio: %(error)s"
+msgstr "Meta didn't accept the change: %(error)s"
+
 msgid "Meta no dio un motivo"
 msgstr "Meta gave no reason"
 
@@ -4494,6 +4535,10 @@ msgstr "My music"
 
 msgid "Mi música · gratis"
 msgstr "My music · free"
+
+#, python-format
+msgid "Mira el detalle en la pestaña Triple Whale del proyecto %(cliente)s."
+msgstr "See the details in the Triple Whale tab of the %(cliente)s project."
 
 msgid "Mirando las referencias…"
 msgstr "Looking at the references…"
@@ -5057,6 +5102,12 @@ msgstr "New version with a different configuration"
 msgid "Nuevo producto"
 msgstr "New product"
 
+msgid "Nuevos ganadores"
+msgstr "New winners"
+
+msgid "Nuevos perdedores (pausarlos libera presupuesto)"
+msgstr "New losers (pausing them frees budget)"
+
 msgid "O deja que la IA lo describa a partir de tus referencias."
 msgstr "Or let the AI describe it from your references."
 
@@ -5179,6 +5230,9 @@ msgstr "Paused: %(nombre)s (%(pais)s)"
 
 msgid "Pausar"
 msgstr "Pause"
+
+msgid "Pausar en Meta"
+msgstr "Pause on Meta"
 
 msgid "Pausar país"
 msgstr "Pause country"
@@ -5477,6 +5531,10 @@ msgstr "Product restored."
 msgid "Producto: %(nombre)s — cambiar →"
 msgstr "Product: %(nombre)s — change →"
 
+#, python-format
+msgid "Producto: %(p)s"
+msgstr "Product: %(p)s"
+
 msgid "Productos"
 msgstr "Products"
 
@@ -5726,6 +5784,10 @@ msgstr "Qwen Image Edit Plus"
 #, python-format
 msgid "ROAS %(roas)s ≥ %(roas_min)s"
 msgstr "ROAS %(roas)s ≥ %(roas_min)s"
+
+#, python-format
+msgid "ROAS %(roas)s×"
+msgstr "ROAS %(roas)s×"
 
 #, python-format
 msgid "ROAS %(roas)s× con %(pedidos)s pedidos (meta %(meta)s×)."
@@ -6108,6 +6170,9 @@ msgstr ""
 "Second pass with Bria: it raises the resolution <strong>without regenerating</strong> the\n"
 "    image, so it doesn't change the face, the pose or the background."
 
+msgid "Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos."
+msgstr "According to the store's orders in Triple Whale; it's the product worth pushing in new ads."
+
 msgid "Sesión cerrada."
 msgstr "Session closed."
 
@@ -6228,6 +6293,9 @@ msgstr "No evidence yet: %(imp)s impressions (minimum %(imp_min)s), spend %(gast
 
 msgid "Sin hooks alternativos."
 msgstr "No alternate hooks."
+
+msgid "Sin imagen: Claude juzgó por texto y números"
+msgstr "No image: Claude judged by text and numbers"
 
 msgid "Sin música"
 msgstr "No music"
@@ -6766,6 +6834,10 @@ msgstr "Triple Whale didn't accept the query: %(detalle)s"
 msgid "Triple Whale no atribuye ninguna venta a tus anuncios en este periodo. Revisa que los anuncios lleven sus parámetros de rastreo (tw_source y tw_adid) o prueba otra ventana de atribución."
 msgstr "Triple Whale attributes no sales to your ads in this period. Check that the ads carry its tracking parameters (tw_source and tw_adid) or try another attribution window."
 
+#, python-format
+msgid "Triple Whale no atribuye ninguna venta a tus anuncios en los últimos %(dias)s días aunque hay gasto. Revisa los parámetros de rastreo (tw_source y tw_adid) o la ventana de atribución."
+msgstr "Triple Whale attributes no sales to your ads in the last %(dias)s days even though there is spend. Check the tracking parameters (tw_source and tw_adid) or the attribution window."
+
 msgid "Triple Whale no está conectado en este proyecto."
 msgstr "Triple Whale isn't connected in this project."
 
@@ -6799,12 +6871,19 @@ msgid "Triple Whale ya no está conectado en este proyecto."
 msgstr "Triple Whale is no longer connected in this project."
 
 #, python-format
+msgid "Triple Whale: %(n)s cambio(s) en tus anuncios"
+msgstr "Triple Whale: %(n)s change(s) in your ads"
+
+#, python-format
 msgid "Triple Whale: Gasto (barras) e ingresos (línea) por día en %(moneda)s durante los últimos 30 días"
 msgstr "Triple Whale: Spend (bars) and revenue (line) by day in %(moneda)s over the last 30 days"
 
 #, python-format
 msgid "Triple Whale: Resumen en %(moneda)s"
 msgstr "Triple Whale: Summary in %(moneda)s"
+
+msgid "Triple Whale: anuncios sin ventas atribuidas"
+msgstr "Triple Whale: ads with no attributed sales"
 
 #, python-format
 msgid "Triple Whale: gasto (barras) e ingresos (línea) por día en %(moneda)s"
@@ -6860,6 +6939,9 @@ msgstr "Your text, as-is"
 
 msgid "Tu tienda"
 msgstr "Your store"
+
+msgid "Tu tienda según Triple Whale"
+msgstr "Your store according to Triple Whale"
 
 msgid "Tus anuncios"
 msgstr "Your ads"
@@ -6929,6 +7011,9 @@ msgstr "One single idea"
 
 msgid "Unboxing"
 msgstr "Unboxing"
+
+msgid "Unidades"
+msgstr "Units"
 
 msgid "Urbano"
 msgstr "Urban"
@@ -7354,6 +7439,9 @@ msgstr "right now"
 msgid "alta"
 msgstr "high"
 
+msgid "anuncio por anuncio, ganadores y evaluación con IA"
+msgstr "ad by ad, winners and AI evaluation"
+
 msgid "archivado"
 msgstr "archived"
 
@@ -7713,6 +7801,14 @@ msgstr "winner"
 
 msgid "gasto"
 msgstr "spend"
+
+#, python-format
+msgid "gasto %(gasto)s"
+msgstr "spend %(gasto)s"
+
+#, python-format
+msgid "gasto %(gasto)s %(moneda)s"
+msgstr "spend %(gasto)s %(moneda)s"
 
 msgid "gasto / pedidos atribuidos"
 msgstr "spend / attributed orders"
@@ -8262,6 +8358,12 @@ msgstr "videos, images and final cuts ready"
 msgid "voz en off"
 msgstr "voice-over"
 
+msgid "vs. mes anterior"
+msgstr "vs. last month"
+
+msgid "vs. periodo anterior"
+msgstr "vs. previous period"
+
 msgid "vía WaveSpeed AI"
 msgstr "via WaveSpeed AI"
 
@@ -8338,6 +8440,10 @@ msgid "«Crear credenciales» › «Clave de API»; en «Restricciones de API» 
 msgstr "“Create credentials” › “API key”; in “API restrictions” limit it to YouTube Data API v3."
 
 #, python-format
+msgid "¿Activar «%(nombre)s» en Meta? Vuelve a gastar presupuesto."
+msgstr "Activate “%(nombre)s” on Meta? It starts spending budget again."
+
+#, python-format
 msgid "¿Archivar «%(nombre)s»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Mostrar archivados»)."
 msgstr "Archive “%(nombre)s”? It doesn't get deleted: it's hidden from the list and the store sync won't show it again (you get it back from “Show archived”)."
 
@@ -8393,6 +8499,10 @@ msgstr "Don't have a project yet? <a href=\"%(url)s\">Create one in a minute</a>
 
 msgid "¿Olvidaste tu contraseña?"
 msgstr "Forgot your password?"
+
+#, python-format
+msgid "¿Pausar «%(nombre)s» en Meta? Deja de gastar hasta que lo actives."
+msgstr "Pause “%(nombre)s” on Meta? It stops spending until you activate it."
 
 msgid "¿Por qué?"
 msgstr "Why?"
@@ -8471,6 +8581,10 @@ msgstr "last fired"
 
 msgid "— sin usar —"
 msgstr "— not used —"
+
+#, python-format
+msgid "… y %(n)s más"
+msgstr "… and %(n)s more"
 
 msgid "← Atrás"
 msgstr "← Back"

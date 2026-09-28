@@ -394,6 +394,21 @@ tw_evaluacion = Table("tw_evaluacion", metadata,
     Column("extra", JSON, default=dict),
 )
 
+# Ventas por producto y día (orders_table.products_info): qué se vende de
+# verdad, para saber qué producto empujar en los anuncios nuevos.
+tw_producto_dia = Table("tw_producto_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("producto_id", String(120), nullable=False),
+    Column("nombre", Text), Column("sku", String(120)),
+    Column("unidades", Float, default=0.0), Column("ingresos", Float, default=0.0),
+    Column("pedidos", Float, default=0.0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "producto_id", "fecha", name="uq_tw_producto_dia"),
+    sa.Index("ix_tw_producto_dia_cliente_fecha", "cliente", "fecha"),
+)
+
 pedido = Table("pedido", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False, index=True),

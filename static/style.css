@@ -2526,6 +2526,8 @@ body.panel-abierto { overflow: hidden; }
 .tw-nombre strong { display: block; overflow-wrap: anywhere; }
 .tw-nombre small, .tw-motivo { display: block; color: var(--muted); font-size: .74rem; white-space: normal; max-width: 18rem; }
 .tw-senales .tag-estado { margin: 0 .25rem .25rem 0; display: inline-block; white-space: normal; }
+.tw-nombre .tw-accion { margin: .25rem 0 0; }
+.tw-idea .tag-estado { display: inline-block; margin: .1rem 0 .3rem; }
 .tw-filtros { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .6rem; }
 .tw-filtros .chip { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 999px; padding: .2rem .7rem; font-size: .8rem; cursor: pointer; min-height: 0; }
 .tw-filtros .chip.activo { background: var(--accent); color: #fff; border-color: var(--accent); }

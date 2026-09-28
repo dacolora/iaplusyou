@@ -304,6 +304,42 @@ WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date
 """
 
+# Ventas por producto y día. `products_info` es una columna anidada de
+# orders_table ("products_info.* (product_id, sku, variant_id…)" en el Data
+# Dictionary): ARRAY JOIN la abre a una fila por producto de cada pedido,
+# como en ClickHouse. Los nombres de las medidas por producto (quantity,
+# price, title) no están en el diccionario que leímos: la versión mínima solo
+# cuenta pedidos por producto y reparte los ingresos del pedido en partes
+# iguales.
+_PRODUCTOS_COMPLETA = """
+SELECT
+    event_date,
+    products_info.product_id AS product_id,
+    any(products_info.title) AS title,
+    any(products_info.sku) AS sku,
+    SUM(products_info.quantity) AS quantity,
+    SUM(products_info.price * products_info.quantity) AS revenue,
+    uniq(order_id) AS orders
+FROM orders_table
+ARRAY JOIN products_info
+WHERE event_date BETWEEN @startDate AND @endDate
+GROUP BY event_date, products_info.product_id
+"""
+
+_PRODUCTOS_MINIMA = """
+SELECT
+    event_date,
+    products_info.product_id AS product_id,
+    any(products_info.sku) AS sku,
+    count() AS quantity,
+    SUM(order_revenue / greatest(length(products_info), 1)) AS revenue,
+    uniq(order_id) AS orders
+FROM orders_table
+ARRAY JOIN products_info
+WHERE event_date BETWEEN @startDate AND @endDate
+GROUP BY event_date, products_info.product_id
+"""
+
 _PRUEBA = "SELECT SUM(spend) AS spend FROM ads_table WHERE event_date BETWEEN @startDate AND @endDate"
 
 
@@ -319,6 +355,10 @@ def consultas_pixel(modelo, ventana):
 
 def consultas_tienda():
     return [_TIENDA_COMPLETA, _TIENDA_MINIMA]
+
+
+def consultas_productos():
+    return [_PRODUCTOS_COMPLETA, _PRODUCTOS_MINIMA]
 
 
 # ------------------------------------------------------------ llamadas ---

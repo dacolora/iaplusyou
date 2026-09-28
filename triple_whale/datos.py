@@ -20,6 +20,7 @@ COLUMNAS_CANAL = ("gasto", "impresiones", "clics", "clics_salida", "compras_cana
                   "vistas_3s", "p25", "p50", "p75", "p100")
 COLUMNAS_PIXEL = ("pedidos", "ingresos", "nc_pedidos", "nc_ingresos", "sesiones", "carritos", "checkouts")
 COLUMNAS_TIENDA = ("gasto", "ingresos", "pedidos", "nc_pedidos", "nc_ingresos", "reembolsos", "cogs", "utilidad_neta")
+COLUMNAS_PRODUCTO = ("unidades", "ingresos", "pedidos")
 ESTADOS_EVALUACION = ("en_cola", "analizando", "lista", "error")
 
 
@@ -78,6 +79,20 @@ def reemplazar_tienda(cliente, desde, hasta, registros):
         for r in registros:
             con.execute(t.insert().values(cliente=cliente, fecha=r["fecha"], actualizado_en=ahora,
                                           **{c: r.get(c) or 0 for c in COLUMNAS_TIENDA}))
+
+
+def reemplazar_productos(cliente, desde, hasta, registros):
+    """Ventas por producto y día para [desde, hasta]: borra el rango y lo
+    vuelve a escribir (`registros`: fecha, producto_id, nombre, sku y
+    COLUMNAS_PRODUCTO)."""
+    t = db.tw_producto_dia
+    ahora = db.ahora()
+    with db.conectar() as con:
+        con.execute(t.delete().where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta))
+        for r in registros:
+            con.execute(t.insert().values(cliente=cliente, fecha=r["fecha"], producto_id=r["producto_id"],
+                                          nombre=r.get("nombre"), sku=r.get("sku"), actualizado_en=ahora,
+                                          **{c: r.get(c) or 0 for c in COLUMNAS_PRODUCTO}))
 
 
 # ------------------------------------------------------------- leer ---
@@ -149,6 +164,26 @@ def serie_tienda(cliente, desde, hasta):
         return [dict(r._mapping) for r in con.execute(q)]
 
 
+def top_productos(cliente, desde, hasta, limite=10):
+    """Los productos que más vendieron en [desde, hasta] (por ingresos), con
+    el nombre y el sku más recientes que no estén vacíos."""
+    t = db.tw_producto_dia
+    q = (sa.select(t.c.producto_id, sa.func.max(t.c.nombre).label("nombre"), sa.func.max(t.c.sku).label("sku"),
+                   sa.func.coalesce(sa.func.sum(t.c.unidades), 0).label("unidades"),
+                   sa.func.coalesce(sa.func.sum(t.c.ingresos), 0).label("ingresos"),
+                   sa.func.coalesce(sa.func.sum(t.c.pedidos), 0).label("pedidos"))
+         .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
+         .group_by(t.c.producto_id).order_by(sa.desc("ingresos"), sa.desc("unidades")).limit(limite))
+    with db.conectar() as con:
+        return [dict(r._mapping) for r in con.execute(q)]
+
+
+def hay_productos(cliente):
+    t = db.tw_producto_dia
+    with db.conectar() as con:
+        return bool(con.execute(sa.select(t.c.id).where(t.c.cliente == cliente).limit(1)).first())
+
+
 def rango(cliente):
     """{"desde", "hasta", "filas", "anuncios"} de lo copiado; ceros si nada."""
     t = db.tw_anuncio_dia
@@ -217,14 +252,20 @@ def canales(cliente, desde, hasta):
 
 
 def piezas_creatv(cliente, ad_ids):
-    """{meta_ad_id: {"ep_id", "experimento_id", "experimento"}} de los anuncios
-    que lanzó Creatv (experimento_pieza), para marcarlos en la evaluación."""
+    """{meta_ad_id: {"ep_id", "experimento_id", "experimento", "estado",
+    "pieza_id", "tipo", "url_video", "url_miniatura"}} de los anuncios que
+    lanzó Creatv (experimento_pieza + su pieza): para marcarlos en la
+    evaluación, pausarlos/activarlos desde la pestaña y mandar a Claude los
+    fotogramas del video real (que vive en R2) en vez de la miniatura."""
     ids = [str(a) for a in ad_ids if a]
     if not ids:
         return {}
-    ep, ex = db.experimento_pieza, db.experimento
-    q = (sa.select(ep.c.meta_ad_id, ep.c.id, ep.c.experimento_id, ex.c.nombre)
-         .select_from(ep.join(ex, ex.c.id == ep.c.experimento_id))
+    ep, ex, pz = db.experimento_pieza, db.experimento, db.pieza
+    q = (sa.select(ep.c.meta_ad_id, ep.c.id, ep.c.experimento_id, ex.c.nombre, ep.c.estado, ep.c.pieza_id,
+                   pz.c.tipo, pz.c.url_video, pz.c.url_miniatura)
+         .select_from(ep.join(ex, ex.c.id == ep.c.experimento_id).outerjoin(pz, pz.c.id == ep.c.pieza_id))
          .where(ex.c.cliente == cliente, ep.c.meta_ad_id.in_(ids)))
     with db.conectar() as con:
-        return {r[0]: {"ep_id": r[1], "experimento_id": r[2], "experimento": r[3]} for r in con.execute(q)}
+        return {r[0]: {"ep_id": r[1], "experimento_id": r[2], "experimento": r[3], "estado": r[4],
+                       "pieza_id": r[5], "tipo": "imagen" if r[6] == "imagen" else "video",
+                       "url_video": r[7], "url_miniatura": r[8]} for r in con.execute(q)}

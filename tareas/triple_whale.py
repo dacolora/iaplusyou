@@ -11,6 +11,8 @@
 Un error de Triple Whale (llave revocada, tienda, red) deja la conexión en
 `estado="error"` con el motivo sin token y sube para que la cola reintente.
 """
+import logging
+
 from flask_babel import gettext
 
 import cifrado
@@ -23,13 +25,15 @@ import triple_whale
 import triple_whale_tiendas
 from nicho.avatares import costo_real
 from tareas import al_interrumpir, ref_sufijo, registrar
-from triple_whale import analisis, datos, sync
+from triple_whale import analisis, avisos, datos, sync
+
+log = logging.getLogger("creatv.tareas.triple_whale")
 
 TIPO_SYNC = "tw_sincronizar"
 TIPO_TODAS = "tw_sincronizar_todas"
 TIPO_EVALUAR = "tw_evaluar"
 ETAPAS_SYNC = [("Trayendo métricas", 100)]
-ETAPAS_EVALUAR = [("Buscando miniaturas", 15), ("Analizando con Claude", 85)]
+ETAPAS_EVALUAR = [("Buscando miniaturas", 10), ("Sacando fotogramas", 15), ("Analizando con Claude", 75)]
 MAX_INTENTOS_SYNC = 2
 
 
@@ -89,6 +93,16 @@ def tw_sincronizar(tarea):
     if r["fallos"]:
         texto += " " + gettext("Sin %(partes)s: Triple Whale no aceptó esa consulta.",
                                partes=", ".join(sorted(r["fallos"])))
+    # Lo que cambió desde la copia anterior (nuevos ganadores, fatiga,
+    # perdedores, sin ventas) sale por correo; un fallo aquí no tumba la copia.
+    try:
+        c = avisos.revisar_y_avisar(cliente)
+    except Exception as e:  # noqa: BLE001
+        log.warning("avisos de Triple Whale de %s: %s", cliente, type(e).__name__)
+        c = None
+    if c and c.get("avisado"):
+        texto += " " + gettext("Aviso enviado: %(g)s ganador(es) nuevo(s), %(c)s cansándose, %(p)s perdedor(es) nuevo(s).",
+                               g=len(c["ganadores"]), c=len(c["cansados"]), p=len(c["perdedores"]))
     return texto
 
 
@@ -111,6 +125,22 @@ def tw_evaluar(tarea):
     extra = dict(fila["extra"] or {})
     trabajos.reportar(job_id, etapa="Buscando miniaturas", detalle=gettext("%(n)s anuncio(s)", n=len(anuncios)))
     medios = analisis.medios_meta(cliente, anuncios)
+    # Las piezas hechas en Creatv tienen su video y su miniatura en R2: la
+    # miniatura sirve tal cual y Claude recibe los fotogramas del video.
+    creatv = datos.piezas_creatv(cliente, [a["ad_id"] for a in anuncios if a.get("canal") == triple_whale.CANAL_META])
+    for a in anuncios:
+        pieza = creatv.get(a["ad_id"])
+        if not pieza:
+            continue
+        imagen = pieza.get("url_video") if pieza.get("tipo") == "imagen" else pieza.get("url_miniatura")
+        medio = medios.setdefault(a["ad_id"], {"imagen": None, "titulo": "", "texto": "", "tipo": pieza.get("tipo")})
+        if imagen:
+            medio.update(imagen=imagen, imagen_origen=imagen)
+        medio["origen"] = "creatv"
+    medios = analisis.copiar_miniaturas(cliente, eid, anuncios, medios)
+    trabajos.reportar(job_id, etapa="Sacando fotogramas")
+    bloques, temporales = analisis.visuales(cliente, anuncios, medios, creatv)
+    productos = datos.top_productos(cliente, fila["desde"], fila["hasta"], limite=analisis.MAX_PRODUCTOS)
     trabajos.reportar(job_id, etapa="Analizando con Claude")
     contexto = {"desde": fila["desde"], "hasta": fila["hasta"], "moneda": fila["moneda"],
                 "modelo": extra.get("modelo"), "ventana": extra.get("ventana"),
@@ -118,7 +148,8 @@ def tw_evaluar(tarea):
     referencia = f"tw_eval:{eid}{ref_sufijo(tarea)}"
     try:
         resultado, entrada, salida = analisis.analizar(proyectos.nombre_visible(cliente), contexto, anuncios,
-                                                       medios, idiomas.de_proyecto(cliente))
+                                                       medios, idiomas.de_proyecto(cliente), bloques=bloques,
+                                                       productos=productos)
     except Exception as e:
         entrada = int(getattr(e, "tokens_entrada", 0) or 0)
         salida = int(getattr(e, "tokens_salida", 0) or 0)
@@ -129,6 +160,8 @@ def tw_evaluar(tarea):
         mensaje = analisis.texto_error(e)
         datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)
         raise RuntimeError(mensaje) from None
+    finally:
+        analisis.borrar_temporales(temporales)
     usd = costo_real(entrada, salida)
     gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
                             detalle=f"{len(anuncios)} anuncio(s) de Triple Whale")
@@ -136,7 +169,11 @@ def tw_evaluar(tarea):
         medio = medios.get(a["ad_id"])
         if medio:
             a["medio"] = medio
-    datos.actualizar_evaluacion(eid, estado="lista", resultado=resultado, usd=usd, anuncios=anuncios, error=None)
+        if a["ad_id"] in bloques:
+            a["visual"] = bloques[a["ad_id"]]["clase"]
+    extra["productos"] = productos
+    datos.actualizar_evaluacion(eid, estado="lista", resultado=resultado, usd=usd, anuncios=anuncios, error=None,
+                                extra=extra)
     return gettext("Evaluación lista: %(n)s idea(s) de anuncios nuevos.", n=len(resultado["ideas"]))
 
 
