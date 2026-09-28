@@ -1759,8 +1759,6 @@ def ver_cliente(cliente):
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
         tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
-        tw_sync_job=(tareas_tw.job_id_sync(cliente)
-                     if triple_whale_conectado and trabajos.en_curso(tareas_tw.job_id_sync(cliente)) else None),
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         estado_pixel=estado_pixel,
@@ -7180,7 +7178,8 @@ def _tomar_puerto_o_none(host, puerto):
 # ---- Triple Whale (atribución y rendimiento; spec 2026-09-28) ----
 
 def _volver_tw(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
+    # La conexión vive en la pestaña Triple Whale (2026-09-28), ya no en Configuración.
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="triplewhale"))
 
 
 def _probar_triple_whale(llave, dominio, moneda):
