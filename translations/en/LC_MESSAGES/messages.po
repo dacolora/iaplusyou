@@ -2865,6 +2865,9 @@ msgstr "Wait a moment before requesting another verification email."
 msgid "Esta pieza ya no está en Crear: genera una nueva y métela en un experimento."
 msgstr "This piece is no longer in Create: generate a new one and add it to an experiment."
 
+msgid "Esta pieza ya no existe o no tiene este detalle."
+msgstr "This piece no longer exists or has no such detail."
+
 msgid "Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."
 msgstr "This session has no reference images — discard it and create a new one."
 

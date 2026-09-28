@@ -25,7 +25,8 @@
       listoCambiosSinGuardar: {{ _('¡Listo! Tienes cambios sin guardar en esta página.')|tojson }},
       conexionPerdida: {{ _('Se perdió la conexión con el servidor.')|tojson }},
       cargando: {{ _('Cargando…')|tojson }},
-      detalleNoCargo: {{ _('No se pudo cargar el detalle. Recarga la página.')|tojson }}
+      detalleNoCargo: {{ _('No se pudo cargar el detalle. Recarga la página.')|tojson }},
+      detalleNoExiste: {{ _('Esta pieza ya no existe o no tiene este detalle.')|tojson }}
     };
 
     // Foto que no carga (archivo borrado, R2 que no responde): en vez del ícono
@@ -318,10 +319,12 @@
           arrancarSondeos(cuerpo);
           if (alInsertar) alInsertar(cuerpo);
         })
-        .catch(function () {
+        .catch(function (err) {
           if (n !== modal._pedidoDetalle || !modal.open) return;
           cuerpo.innerHTML = '';
-          cuerpo.appendChild(avisoVacio(T_BASE.detalleNoCargo));
+          // 404: la pieza se descartó o el enlace pide un detalle que no tiene
+          // (p. ej. #final?cf= de una imagen); lo demás es red o servidor.
+          cuerpo.appendChild(avisoVacio(err && err.message === '404' ? T_BASE.detalleNoExiste : T_BASE.detalleNoCargo));
         });
     }
     window.abrirDetalleRemoto = abrirDetalleRemoto;
