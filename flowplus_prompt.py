@@ -9,8 +9,10 @@ que se vieron en los primeros videos de Happy Flops:
      aparece; nunca se inventan letras. Si el proyecto tiene logos subidos en
      FlowSettings, van como referencias extra "@Logo N".
   2. Salieron pies/personas cuando solo se quería el producto. -> Regla de
-     personas: sin persona por defecto (solo producto); si hay persona, se aplica
-     la guía de marca de personas/pies.
+     personas: con un personaje del catálogo o el enfoque «persona» va el bloque
+     CON PERSONA. Sin ellos el prompt NO prohíbe personas ni manos ni remata con
+     «solo y sin nadie» (2026-09-28, pedido de la persona): el producto es el
+     protagonista y la escena la deciden su texto o los planos del director.
 
 Ningún modelo de FlowPlus acepta negative_prompt (verificado en WaveSpeed para
 Wan 3.0), así que las prohibiciones van dentro del prompt como frases negativas
@@ -82,17 +84,6 @@ def _nombre(r):
     return r.get("token") or r["etiqueta"].replace(" (vista 1)", "")
 
 
-_PALABRAS_PERSONA = ("people", "person", "feet", "foot", "toes", "hands", "skin", "nails",
-                     "persona", "gente", "pies", "pie ", "dedos", "manos", "piel", "uñas")
-
-
-def _guia_sin_personas(guia):
-    """Quita de la guía de marca las frases que hablan de personas, pies o manos:
-    en un video de solo producto esas frases empujan al modelo a meter un pie."""
-    frases = [f.strip() for f in guia.replace("\n", " ").split(".") if f.strip()]
-    utiles = [f for f in frases if not any(p in f.lower() for p in _PALABRAS_PERSONA)]
-    return (". ".join(utiles) + ".") if utiles else ""
-
 # Bloque del enfoque unboxing en español (spec 2026-09-26 §B5: extraído para
 # que TEXTOS["es"]["enfoques"]["unboxing"] y ENFOQUES["unboxing"]["bloque"]
 # compartan el mismo texto, sin cambiar ni una letra del de siempre).
@@ -108,7 +99,7 @@ ENFOQUES_UNBOXING_ES = (
 ENFOQUES = {
     "producto": {
         "nombre": N_("Solo producto"),
-        "descripcion": N_("El producto solo, sin nadie: vacío, sin usar, sobre la superficie o flotando."),
+        "descripcion": N_("El producto como protagonista, sin personaje del catálogo: en uso y con el resultado a la vista; manos o personas solo si la escena lo pide."),
         "con_persona": False,
         "bloque": None,
     },
@@ -309,8 +300,6 @@ TEXTOS = {
                         "El producto es el protagonista; la persona lo acompaña."),
         "estilo": "ESTILO DE MARCA", "evitar": "EVITAR",
         "prohibido": ["texto inventado", "logos inventados", "marcas de agua", "subtítulos"],
-        "prohibido_sin_persona": ["personas", "pies", "manos"],
-        "recordatorio": "Recordatorio final: el producto permanece solo y sin nadie durante todo el video.",
         # Bloques por enfoque (ENFOQUES[...]["bloque"]), en su propio
         # subdiccionario para no compartir espacio de nombres con las
         # etiquetas de arriba (una id de enfoque nunca debe poder pisar, p.
@@ -337,8 +326,6 @@ TEXTOS = {
                         "the person accompanies it."),
         "estilo": "BRAND STYLE", "evitar": "AVOID",
         "prohibido": ["invented text", "invented logos", "watermarks", "subtitles"],
-        "prohibido_sin_persona": ["people", "feet", "hands"],
-        "recordatorio": "Final reminder: the product stays alone, with nobody, for the whole video.",
         "enfoques": {"unboxing": (
             "UNBOXING FOCUS: the scene is a person receiving their purchase. It starts with the closed box "
             "or bag on the table or in their hands; they open it with curiosity and take the product out; "
@@ -433,9 +420,9 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
         # Con un personaje del catálogo la escena lleva persona sí o sí: ese personaje.
         con_persona = True
 
-    # Nota: ya no hardcodeamos "VIDEO DE PRODUCTO SOLO" — el usuario edita libremente
-    # el prompt con el esquema de frames/tomas que prefiera. El prompt es completamente
-    # editable en la UI.
+    # Sin personaje del catálogo ni enfoque «persona» el prompt NO prohíbe personas
+    # ni manos ni remata con «solo y sin nadie» (2026-09-28, pedido de la persona):
+    # el producto es el protagonista y la escena la decide su texto o el director.
 
     # --- Contexto de campaña (Sprints): audiencia y temporada ---
     partes.extend(_lineas_contexto(contexto, idioma))
@@ -481,7 +468,7 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
 
     # --- Guía de marca (invariantes) ---
     if guia_marca:
-        partes.append(f"{t['estilo']}: {_guia_sin_personas(guia_marca) if not con_persona else guia_marca.strip()}")
+        partes.append(f"{t['estilo']}: {guia_marca.strip()}")
 
     # --- Enfoque (unboxing, etc.) ---
     if info_enfoque and info_enfoque["bloque"]:
@@ -500,12 +487,8 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
 
     # --- Prohibiciones (los modelos no aceptan negative_prompt) ---
     prohibido = list(t["prohibido"])
-    if not con_persona:
-        prohibido = list(t["prohibido_sin_persona"]) + prohibido
     if negative_marca:
         prohibido.append(negative_marca.strip().rstrip(".")[:400])
     partes.append(f"{t['evitar']}: " + ", ".join(prohibido) + ".")
-    if not con_persona:
-        partes.append(t["recordatorio"])
 
     return "\n".join(partes)

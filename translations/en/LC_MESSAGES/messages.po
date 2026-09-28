@@ -3438,14 +3438,14 @@ msgstr "The daily budget doesn't reach Meta's minimum (%(minimo)s %(moneda)s) in
 msgid "El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s."
 msgstr "The daily budget doesn't reach Meta's minimum (%(minimo)s %(moneda)s) in: %(paises)s."
 
+msgid "El producto como protagonista, sin personaje del catálogo: en uso y con el resultado a la vista; manos o personas solo si la escena lo pide."
+msgstr "The product as the protagonist, with no catalog character: in use and with the result in view; hands or people only if the scene calls for them."
+
 msgid "El producto de la campaña no está en el catálogo o no tiene foto."
 msgstr "The campaign's product isn't in the catalog or has no photo."
 
 msgid "El producto de la campaña ya no está en el catálogo."
 msgstr "The campaign's product is no longer in the catalog."
-
-msgid "El producto solo, sin nadie: vacío, sin usar, sobre la superficie o flotando."
-msgstr "The product alone, with nobody: empty, unused, on the surface or floating."
 
 msgid "El prompt es demasiado largo."
 msgstr "The prompt is too long."

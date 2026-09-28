@@ -366,7 +366,12 @@ Sprints encolan el director con `auto_lanzar` (el costo ya se aprobó). `calidad
 `borrador` = Wan a 480p. Duración por defecto 8 s (`preferencias_flowplus`). `VIDEO` /
 `IMAGEN` there are the only model registry (path, price, limits, `audio_nativo`,
 `familia`, `min_duracion`/`max_duracion`, `formatos`). Crear makes ONE piece per click (the enfoque is
-automatic: `producto`, or `persona` when a catalog personaje is among the references),
+automatic: `producto`, or `persona` when a catalog personaje is among the references; since
+2026-09-28 `armar` never forbids people or hands for `producto` — no «EVITAR: personas, pies,
+manos», no «Recordatorio final … solo y sin nadie», no pruning of the brand guide —: the product
+is the protagonist and the scenes show what it does or changes; the CON PERSONA block still comes
+only with a catalog personaje or the `persona` enfoque, and `director._mensaje` spells out each
+enfoque to Claude with `_ENFOQUES_DIRECTOR`),
 offers 5–30 s (default 8 s) and the formats each model admits (verified on WaveSpeed 2026-09-18: Wan 3.0
 2–30 s and 9:16/16:9/1:1/4:3/3:4; Kling O3 Pro 3–15 s and 9:16/16:9/1:1; Seedance 2.5 4–30 s
 and follows the reference image, `aspect_ratio` None; Seedream V5 Pro takes `aspect_ratio`

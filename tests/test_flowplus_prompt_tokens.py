@@ -69,7 +69,8 @@ def test_sesiones_viejas_sin_token_siguen_usando_la_etiqueta():
 def test_evitar_ya_no_lleva_deformaciones():
     p = flowplus_prompt.armar("gira", [{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1"}], enfoque="producto")
     linea = next(l for l in p.split("\n") if l.startswith("EVITAR: "))
-    assert linea == "EVITAR: personas, pies, manos, texto inventado, logos inventados, marcas de agua, subtítulos."
+    # 2026-09-28: sin personaje ya no se prohíben personas, pies ni manos.
+    assert linea == "EVITAR: texto inventado, logos inventados, marcas de agua, subtítulos."
 
 
 PLANOS = [
