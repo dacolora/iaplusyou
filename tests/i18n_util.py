@@ -109,3 +109,20 @@ def espanol_en_plantilla(ruta):
         # Keep only string literals (start with ', ", or `) that have Spanish marks
         hallazgos += [t for t in tokens if t[0] in ("'", '"', "`") and _con_marca(t)]
     return hallazgos
+
+
+# Palabras españolas que MARCAS no incluye (a propósito: en HTML darían falsos
+# positivos) y que sí delatan un texto suelto en CÓDIGO: etiquetas cortas del
+# editor («Guardado», «Pista»), etapas («Renderizando») y mensajes sin tildes
+# («Ya se estaba preparando ese video.»). Solo lo usan las guardias de código
+# (tests/test_i18n_mensajes.py, tests/test_i18n_editor.py).
+MARCAS_CODIGO = re.compile(
+    r"\b(?:ya|se|esa|ese|eso|esos|esas|este|esta|estos|estas|listo|lista|listos|listas|hecho|hecha|"
+    r"falta|faltan|borrados?|borradas?|elige|marca|destinos?|pista|voz|sonido|efecto|textos?|imagen|encima|"
+    r"precio|pausar|reproducir|guardado|guardando|cambios|recarga|recargar|cortar|duplicar|borrar|velocidad|"
+    r"archivos?|produciendo|preparando|cargando|pudo|pudieron|materiales|renderizando|subiendo|uniendo|"
+    r"tramos?|inexistente|interrumpida|agregado)\b", re.I)
+
+
+def espanol_en_codigo(texto):
+    return _con_marca(texto) or bool(MARCAS_CODIGO.search(texto))
