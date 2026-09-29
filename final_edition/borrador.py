@@ -34,6 +34,8 @@ import hashlib
 import json
 import re
 
+from flask_babel import gettext
+
 from final_edition import documento as documento_mod, tipos
 
 LOGO_MAX_PX = 240
@@ -143,7 +145,7 @@ def _clips_voz(bloques, voces, total_ms, destinos):
 def armar_documento(guion, segmentos, clon, voces, musica, marca, formato, opciones, origen=None):
     """El documento del borrador (validado). Ver el docstring del módulo."""
     if not segmentos:
-        raise ValueError("armar_documento: sin segmentos no hay pista principal.")
+        raise ValueError(gettext("armar_documento: sin segmentos no hay pista principal."))
     idioma, pais = guion.get("idioma") or "es", guion.get("pais") or "CO"
     destino = f"{idioma}_{pais}"
     bloques = {bl["rol"]: bl for bl in guion.get("bloques") or []}

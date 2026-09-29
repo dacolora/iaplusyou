@@ -27,6 +27,9 @@ LETRAS = re.compile(r"[A-Za-zÁÉÍÓÚáéíóúÑñ]{3,}")
 RUTAS = ["final_edition/rutas_editor.py"]
 WORKER = ["ediciones.py", "final_edition/edicion_clon.py", "final_edition/motor/__init__.py", "tareas/edicion.py",
           "final_edition/biblioteca.py"]
+WORKER += ["final_edition/__init__.py", "final_edition/produccion.py", "final_edition/borrador.py",
+           "final_edition/insumos.py", "final_edition/voz.py", "final_edition/musica.py", "providers/fal_audio.py",
+           "tareas/final_edition.py"]
 
 
 def _nombre(llamada):

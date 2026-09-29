@@ -155,6 +155,12 @@ msgid "%(campanas)s · %(piezas)s · %(elegidos)s/%(objetivo)s referentes elegid
 msgstr "%(campanas)s · %(piezas)s · %(elegidos)s/%(objetivo)s references chosen"
 
 #, python-format
+msgid "%(capas)s cobrada"
+msgid_plural "%(capas)s cobradas"
+msgstr[0] "%(capas)s charged"
+msgstr[1] "%(capas)s charged"
+
+#, python-format
 msgid ""
 "%(corto)s\n"
 "\n"
@@ -179,6 +185,18 @@ msgstr "%(cuenta)s marked “in testing” %(verbo)s in any open experiment."
 #, python-format
 msgid "%(dd)s/%(mm)s · gasto %(gasto)s · ingresos %(ingresos)s"
 msgstr "%(dd)s/%(mm)s · spend %(gasto)s · revenue %(ingresos)s"
+
+#, python-format
+msgid "%(destino)s · %(capas)s"
+msgstr "%(destino)s · %(capas)s"
+
+#, python-format
+msgid "%(destino)s · falló en %(capa)s; %(cobro)s"
+msgstr "%(destino)s · failed at %(capa)s; %(cobro)s"
+
+#, python-format
+msgid "%(destino)s · sin cobros (todo cacheado u omitido)"
+msgstr "%(destino)s · no charges (all cached or skipped)"
 
 #, python-format
 msgid "%(error)s (si Claude alcanzó a responder, este intento sí se cobró)"
@@ -629,6 +647,14 @@ msgstr "%(nombre)s (%(pais)s): scaling already requested in this pass."
 #, python-format
 msgid "%(nombre)s limitó las llamadas (429) y no cedió tras %(n)s esperas."
 msgstr "%(nombre)s rate-limited the calls (429) and didn't let up after %(n)s waits."
+
+#, python-format
+msgid "%(nombre)s lista (sin voz/música)."
+msgstr "%(nombre)s ready (no voice/music)."
+
+#, python-format
+msgid "%(nombre)s lista."
+msgstr "%(nombre)s ready."
 
 #, python-format
 msgid "%(nombre)s no respondió (%(error)s). Intenta de nuevo en un rato."
@@ -1939,6 +1965,9 @@ msgstr "Video block (repeats in every clip)"
 msgid "Bolso o accesorio que se carga"
 msgstr "Bag or accessory that's carried"
 
+msgid "Borrador"
+msgstr "Draft"
+
 msgid "Borrador a 480p"
 msgstr "Draft at 480p"
 
@@ -2257,6 +2286,10 @@ msgstr "Song ready in My music."
 
 msgid "Cantidad"
 msgstr "Count"
+
+#, python-format
+msgid "Capa de sonido no soportada: %(sonido)s. Opciones: %(opciones)s"
+msgstr "Unsupported sound layer: %(sonido)s. Options: %(opciones)s"
 
 msgid "Capas"
 msgstr "Layers"
@@ -2929,6 +2962,9 @@ msgstr "Split at the playhead: the selected clip or, if you select none, the vid
 
 msgid "Corte"
 msgstr "Cut"
+
+msgid "Cortes"
+msgstr "Cuts"
 
 msgid "Costo"
 msgstr "Cost"
@@ -3603,6 +3639,26 @@ msgstr "Audio can only be changed on audio clips."
 msgid "El avatar necesita un nombre."
 msgstr "The avatar needs a name."
 
+#, python-format
+msgid "El bloque %(n)s debe tener rol '%(esperado)s' y tiene '%(real)s'."
+msgstr "Block %(n)s must have role '%(esperado)s' and has '%(real)s'."
+
+#, python-format
+msgid "El bloque %(n)s no tiene texto_pantalla."
+msgstr "Block %(n)s has no on-screen text (texto_pantalla)."
+
+#, python-format
+msgid "El bloque %(n)s no tiene texto_voz."
+msgstr "Block %(n)s has no voice text (texto_voz)."
+
+#, python-format
+msgid "El bloque %(n)s se solapa con el bloque anterior."
+msgstr "Block %(n)s overlaps the previous block."
+
+#, python-format
+msgid "El bloque %(n)s tiene tiempos inválidos (inicio_s debe ser menor que fin_s)."
+msgstr "Block %(n)s has invalid times (inicio_s must be less than fin_s)."
+
 msgid "El bloque global rompe reglas que no se negocian."
 msgstr "The global block breaks non-negotiable rules."
 
@@ -3645,6 +3701,9 @@ msgstr "The clip would be too short at that speed."
 #, python-format
 msgid "El clip siguiente empieza así: %(estado)s"
 msgstr "The next clip starts like this: %(estado)s"
+
+msgid "El clon no da para ningún segmento."
+msgstr "The clone is too short for any segment."
 
 msgid "El color debe ser hexadecimal, como #4d8dff."
 msgstr "The color must be hexadecimal, like #4d8dff."
@@ -3766,6 +3825,10 @@ msgstr "The script"
 #, python-format
 msgid "El guion completo dura unos %(completo)s s; el objetivo es %(objetivo)s s."
 msgstr "The full script runs about %(completo)s s; the target is %(objetivo)s s."
+
+#, python-format
+msgid "El guion debe tener %(n)s bloques y tiene %(tiene)s."
+msgstr "The script must have %(n)s blocks and has %(tiene)s."
 
 msgid "El guion es demasiado largo (máximo 60 000 caracteres)."
 msgstr "The script is too long (maximum 60,000 characters)."
@@ -4653,6 +4716,9 @@ msgstr "Write a text, pick the voice and, if you like, a background song. You ge
 msgid "Escribe una palabra clave."
 msgstr "Type a keyword."
 
+msgid "Escribiendo el guion"
+msgstr "Writing the script"
+
 msgid "Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises."
 msgstr "Writing the script with AI… it'll appear here in a few seconds for you to review."
 
@@ -5223,9 +5289,15 @@ msgstr "The %(k)s check is missing."
 msgid "Falta el id de tu portafolio o la cuenta publicitaria."
 msgstr "Missing your portfolio's id or the ad account."
 
+msgid "Falta el idioma del guion."
+msgstr "The script's language is missing."
+
 #, python-format
 msgid "Falta el material %(mid)s de este proyecto."
 msgstr "File %(mid)s of this project is missing."
+
+msgid "Falta el país del guion."
+msgstr "The script's country is missing."
 
 #, python-format
 msgid "Falta el texto fijo «%(fragmento)s»: tiene que ir tal cual."
@@ -5772,6 +5844,9 @@ msgstr "Chosen script"
 msgid "Guion guardado. Ahora elige los destinos y produce las finales."
 msgstr "Script saved. Now pick the markets and produce the final cuts."
 
+msgid "Guion listo — revísalo y produce las finales."
+msgstr "Script ready — review it and produce the final cuts."
+
 #, python-format
 msgid ""
 "Guion «%(titulo)s», %(version)s. Líneas del video, en orden:\n"
@@ -5962,6 +6037,10 @@ msgstr "Language saved."
 #, python-format
 msgid "Idioma no disponible: %(v)s. Opciones: %(opciones)s."
 msgstr "Language not available: %(v)s. Options: %(opciones)s."
+
+#, python-format
+msgid "Idioma no soportado: %(idioma)s (se esperan dos letras minúsculas)."
+msgstr "Unsupported language: %(idioma)s (two lowercase letters expected)."
 
 msgid "Igual que YouTube, <strong>en tu Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> con la cuenta de TikTok del proyecto."
 msgstr "Same as YouTube, <strong>on your Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> with the project's TikTok account."
@@ -6320,6 +6399,10 @@ msgstr "The ad account doesn't have any Pixel."
 msgid "La duración debe ser un número."
 msgstr "Duration must be a number."
 
+#, python-format
+msgid "La duración del guion (%(fin)ss) supera la duración objetivo (%(objetivo)ss)."
+msgstr "The script length (%(fin)ss) exceeds the target length (%(objetivo)ss)."
+
 msgid "La duración objetivo va en segundos (5 o más)."
 msgstr "The target duration is in seconds (5 or more)."
 
@@ -6366,6 +6449,14 @@ msgstr "Final cut %(final)s doesn't exist in pieza; the route must create it wit
 #, python-format
 msgid "La final %(final)s no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar."
 msgstr "Final cut %(final)s doesn't exist; the route must create it with creative_flow.crear_final before queuing."
+
+#, python-format
+msgid "La final %(final_id)s no existe en pieza; la ruta debe crearla con creative_flow.crear_final antes de encolar."
+msgstr "Final cut %(final_id)s does not exist in pieza; the route must create it with creative_flow.crear_final before queuing."
+
+#, python-format
+msgid "La final %(final_id)s no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar."
+msgstr "Final cut %(final_id)s does not exist; the route must create it with creative_flow.crear_final before queuing."
 
 msgid "La gente se va antes del final: acorta el video o sube el ritmo del cuerpo."
 msgstr "People leave before the end: shorten the video or speed up the body."
@@ -6497,6 +6588,10 @@ msgstr "The saved review is from an earlier version of this piece."
 
 msgid "La selección automática de productos todavía no está implementada."
 msgstr "Automatic product selection isn't implemented yet."
+
+#, python-format
+msgid "La sesión %(cf_id)s no tiene video listo para producir."
+msgstr "Session %(cf_id)s has no video ready to produce."
 
 msgid "La tarea se interrumpió antes de llegar a esta plataforma; reintenta desde el panel."
 msgstr "The task was interrupted before reaching this platform; retry from the panel."
@@ -7470,6 +7565,10 @@ msgstr "That version of the edit doesn't exist."
 msgid "No existe esa versión."
 msgstr "That version doesn't exist."
 
+#, python-format
+msgid "No existe la sesión %(cf_id)s de %(cliente)s."
+msgstr "Session %(cf_id)s of %(cliente)s does not exist."
+
 msgid "No había cambios que guardar."
 msgstr "There were no changes to save."
 
@@ -7857,6 +7956,10 @@ msgstr "Couldn't queue the regeneration."
 msgid "No se pudo escuchar ese audio."
 msgstr "Couldn't play that audio."
 
+#, python-format
+msgid "No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s"
+msgstr "Couldn't generate the voice (check the chosen voice, '%(voz)s'): %(error)s"
+
 #, python-brace-format
 msgid "No se pudo guardar (error {status})."
 msgstr "Couldn't save (error {status})."
@@ -8191,6 +8294,9 @@ msgstr "To connect MercadoLibre, <code>FLASK_SECRET_KEY</code> is missing in the
 msgid "Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>%(redirect)s</code>)."
 msgstr "To connect MercadoLibre, <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code> (app at developers.mercadolibre.com with <code>offline_access</code> permission and redirect <code>%(redirect)s</code>)."
 
+msgid "Para producir una variante hay que indicar `variante` (número) y `variante_tipo` (hook | estructura) a la vez."
+msgstr "To produce a variant you must give `variante` (number) and `variante_tipo` (hook | estructura) together."
+
 msgid "Para publicar anuncios y contenido en tu Página de Facebook y tu Instagram. Elige una forma; puedes cambiarla después."
 msgstr "To publish ads and content on your Facebook Page and your Instagram. Choose a form; you can change it later."
 
@@ -8295,6 +8401,10 @@ msgstr "Country %(pais)s not supported."
 
 msgid "País de los anuncios"
 msgstr "Ads' country"
+
+#, python-format
+msgid "País no soportado: %(pais)s. Opciones: %(opciones)s"
+msgstr "Unsupported country: %(pais)s. Options: %(opciones)s"
 
 msgid "País:"
 msgstr "Country:"
@@ -10422,6 +10532,9 @@ msgstr "Text is ready: review it and edit it if you like."
 msgid "Texto pegado"
 msgstr "Pasted text"
 
+msgid "Texto y render"
+msgstr "Text and render"
+
 #, python-brace-format
 msgid "Texto «{rol}»"
 msgstr "Text “{rol}”"
@@ -10506,6 +10619,10 @@ msgstr "Invalid season type: %(tipo)s"
 #, python-format
 msgid "Tipo de temporada inválido: %(tipo)s. Opciones: %(opciones)s"
 msgstr "Invalid season type: %(tipo)s. Options: %(opciones)s"
+
+#, python-format
+msgid "Tipo de variante no soportado: %(tipo)s. Opciones: %(opciones)s"
+msgstr "Unsupported variant type: %(tipo)s. Options: %(opciones)s"
 
 #, python-format
 msgid "Tipo inválido: %(tipo)s"
@@ -11248,6 +11365,14 @@ msgstr "Validations"
 msgid "Variable"
 msgstr "Variable"
 
+#, python-format
+msgid "Variante %(n)s (%(tipo)s)"
+msgstr "Variant %(n)s (%(tipo)s)"
+
+#, python-format
+msgid "Variante %(n)s de la final %(id)s"
+msgstr "Variant %(n)s of final cut %(id)s"
+
 msgid "Vas a iniciar sesión en MercadoLibre y autorizar la app: traemos tus publicaciones activas y tus ventas. No se pega ningún token."
 msgstr "You're going to log in to MercadoLibre and authorize the app: we bring in your active listings and your sales. No token gets pasted."
 
@@ -11878,6 +12003,9 @@ msgstr "drafting"
 msgid "armando el prompt"
 msgstr "building the prompt"
 
+msgid "armar_documento: sin segmentos no hay pista principal."
+msgstr "armar_documento: no segments, so no main track."
+
 msgid "arrancando"
 msgstr "starting"
 
@@ -12472,8 +12600,15 @@ msgstr "experiments and standalone ads"
 msgid "expresiva"
 msgstr "expressive"
 
+#, python-format
+msgid "fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s"
+msgstr "fal.ai (%(modelo)s) didn't return an audio URL: %(datos)s"
+
 msgid "fal.ai (voz y música)"
 msgstr "fal.ai (voice and music)"
+
+msgid "fal_audio.tts: texto vacío."
+msgstr "fal_audio.tts: empty text."
 
 msgid "falla"
 msgstr "fails"
@@ -12583,6 +12718,14 @@ msgstr "deep"
 
 msgid "guion"
 msgstr "script"
+
+#, python-format
+msgid "guion base %(idioma)s"
+msgstr "base script %(idioma)s"
+
+#, python-format
+msgid "guion base %(idioma)s + transcripción de la referencia"
+msgstr "base script %(idioma)s + reference transcription"
 
 #, python-format
 msgid "hasta %(n)s referencias · 2k"
@@ -12719,6 +12862,9 @@ msgstr "the landing page doesn't continue the ad"
 msgid "la pieza «%(nombre)s»"
 msgstr "the piece “%(nombre)s”"
 
+msgid "la producción"
+msgstr "production"
+
 msgid "la promesa"
 msgstr "the promise"
 
@@ -12852,6 +12998,10 @@ msgstr "move."
 msgid "musica"
 msgstr "music"
 
+#, python-format
+msgid "musica.obtener_pista: estilo desconocido '%(estilo)s'. Válidos: %(validos)s."
+msgstr "musica.obtener_pista: unknown style '%(estilo)s'. Valid: %(validos)s."
+
 msgid "muy consciente"
 msgstr "most aware"
 
@@ -12860,6 +13010,9 @@ msgstr "very new in the catalog, no quality/fidelity data yet"
 
 msgid "nada"
 msgstr "nothing"
+
+msgid "nada cobrado"
+msgstr "nothing charged"
 
 msgid "nada por aprobar"
 msgstr "nothing to approve"
@@ -13580,6 +13733,15 @@ msgstr "voice-over"
 
 msgid "voz protagonista"
 msgstr "voice first"
+
+msgid "voz.sintetizar: el guion no tiene bloques."
+msgstr "voz.sintetizar: the script has no blocks."
+
+msgid "voz.sintetizar: falta `cliente` (kwarg o guion['cliente'])."
+msgstr "voz.sintetizar: `cliente` is missing (kwarg or guion['cliente'])."
+
+msgid "voz_bloque: el bloque no tiene texto de voz."
+msgstr "voz_bloque: the block has no voice text."
 
 msgid "vs. mes anterior"
 msgstr "vs. last month"
