@@ -229,9 +229,9 @@ class TestPlataformas:
         """Amazon domain for US is .com."""
         assert plataformas_mod.dominio("amazon", "US") == "com"
 
-    def test_dominio_meli_vacío(self, plataformas_mod):
-        """MELI returns empty (no .com domain)."""
-        assert plataformas_mod.dominio("meli", "AR") == ""
+    def test_dominio_meli_url_del_sitio(self, plataformas_mod):
+        """MELI's dominio is the site's listing URL, not a bare TLD."""
+        assert plataformas_mod.dominio("meli", "AR") == "https://listado.mercadolibre.com.ar/"
 
     def test_estimar_busqueda_positivo(self, plataformas_mod):
         """Search pricing is positive."""
@@ -239,8 +239,10 @@ class TestPlataformas:
         assert usd > 0
 
     def test_estimar_busqueda_desconocido(self, plataformas_mod):
-        """Unknown platform returns 0."""
-        assert plataformas_mod.estimar_busqueda("unkn", 3, 20) == 0.0
+        """Unknown platform raises ErrorFuente."""
+        from nicho.fuentes.base import ErrorFuente
+        with pytest.raises(ErrorFuente):
+            plataformas_mod.estimar_busqueda("unkn", 3, 20)
 
     def test_estimar_resenas_positivo(self, plataformas_mod):
         """Review pricing is positive."""
@@ -253,7 +255,7 @@ class TestPlataformas:
             "amazon", ["phones", "tablets"], "US", 20
         )
         assert len(entradas) == 1
-        assert "categoryOrProductUrls" in entradas[0]
+        assert "categoryOrProductUrls" in entradas[0]["entrada"]
 
     def test_entradas_busqueda_meli_por_query(self, plataformas_mod):
         """MELI: one entry per query."""
@@ -261,14 +263,14 @@ class TestPlataformas:
             "meli", ["phones", "tablets"], "CO", 20
         )
         assert len(entradas) == 2
-        assert all("keyword" in e for e in entradas)
+        assert all("keyword" in e["entrada"] for e in entradas)
 
     def test_leer_producto_amazon_valido(self, plataformas_mod):
         """Read Amazon product."""
         item = {
             "asin": "B001",
             "title": "iPhone",
-            "price": "USD 999.99",
+            "price": 999.99,
             "brand": "Apple",
             "stars": 4.5,
             "reviewsCount": 100,
@@ -589,7 +591,8 @@ class TestEdgeCases:
         assert paso["extra_data"] == {"key": "val"}
 
     def test_leer_producto_precio_fallback(self, plataformas_mod):
-        """leer_producto handles bad prices gracefully."""
+        """leer_producto handles bad prices gracefully: unparseable price is
+        None, never a fake 0 that would corrupt downstream numbers."""
         item = {
             "asin": "B1",
             "title": "X",
@@ -598,7 +601,7 @@ class TestEdgeCases:
         }
         prod = plataformas_mod.leer_producto("amazon", item)
         assert prod is not None
-        assert prod["precio"] == 0
+        assert prod["precio"] is None
 
     def test_estimar_plataformas_vacio(self, investigacion_mod):
         """estimar with no platforms still has Claude + avatares cost."""

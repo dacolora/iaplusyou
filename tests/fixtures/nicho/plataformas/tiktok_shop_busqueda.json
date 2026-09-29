@@ -1,0 +1,7 @@
+[
+  {"productId": "1729000000000000001", "title": "Cloud slippers for foot pain", "price": "$12.99", "rating": 4.8, "soldCount": 5400,
+   "productUrl": "https://www.tiktok.com/shop/pdp/1729000000000000001", "reviewCount": 320, "image": "https://p16.tiktokcdn.com/1.jpg"},
+  {"productId": "1729000000000000002", "title": "Orthopedic slides", "price": 19.5, "currency": "USD", "rating": "4.5", "soldCount": "120",
+   "url": "https://www.tiktok.com/shop/pdp/1729000000000000002"},
+  {"title": "Sin id", "price": "$1"}
+]

@@ -227,10 +227,8 @@ class TestPlataformas:
         assert plat.dominio("amazon", "SE") == "se"
 
     def test_dominio_amazon_co(self):
-        """Amazon domain for CO is com.mx (proxy) or custom."""
-        # CO might not be in the dict, should return default "com"
-        dom = plat.dominio("amazon", "CO")
-        assert isinstance(dom, str)
+        """Amazon has no store in Colombia (ruling R8): dominio is None."""
+        assert plat.dominio("amazon", "CO") is None
 
     def test_idioma_se(self):
         """Language for SE is Swedish."""
@@ -258,13 +256,13 @@ class TestPlataformas:
         """Build Apify input for Amazon search."""
         entradas = plat.entradas_busqueda("amazon", ["skincare", "facial"], "SE", 20)
         assert len(entradas) == 1
-        assert "categoryOrProductUrls" in entradas[0]
+        assert "categoryOrProductUrls" in entradas[0]["entrada"]
 
     def test_entradas_busqueda_meli(self):
         """Build Apify input for MELI search."""
         entradas = plat.entradas_busqueda("meli", ["skincare"], "CO", 20)
         assert len(entradas) == 1
-        assert "keyword" in entradas[0]
+        assert "keyword" in entradas[0]["entrada"]
 
     def test_leer_producto_amazon(self):
         """Normalize Amazon product item."""
@@ -272,7 +270,7 @@ class TestPlataformas:
             "asin": "B01234567",
             "title": "Skincare Set",
             "brand": "FakeBrand",
-            "price": "USD 29.99",
+            "price": 29.99,
             "stars": 4.5,
             "reviewsCount": 123,
             "url": "https://amazon.se/...",
@@ -299,10 +297,10 @@ class TestPlataformas:
             {"fuente_id": "B001", "url": "https://...", "titulo": "P1"},
             {"fuente_id": "B002", "url": "https://...", "titulo": "P2"}
         ]
-        entradas = plat.entradas_resenas("amazon", productos, 50)
+        entradas = plat.entradas_resenas("amazon", productos, "US", 50)
 
         assert len(entradas) == 2
-        assert all("asin" in e for e in entradas)
+        assert all("asin" in e["entrada"] for e in entradas)
 
     def test_leer_resena_amazon(self):
         """Normalize Amazon review."""

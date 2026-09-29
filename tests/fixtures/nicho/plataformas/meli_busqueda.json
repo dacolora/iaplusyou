@@ -1,0 +1,8 @@
+[
+  {"id": "MCO123456789", "title": "Pantuflas ortopédicas para dolor de pies", "price": 89900, "currency": "COP",
+   "url": "https://articulo.mercadolibre.com.co/MCO-123456789-pantuflas", "rating": 4.7, "reviews": 152, "seller": "Tienda Pie Sano",
+   "thumbnail": "https://http2.mlstatic.com/D_1.jpg", "sold": 500},
+  {"productId": "MCO987654321", "title": "Pantuflas con memory foam", "price": "59.900", "currency": "COP",
+   "link": "https://articulo.mercadolibre.com.co/MCO-987654321-memory", "rating": null, "reviewsCount": null},
+  {"title": "Sin id"}
+]

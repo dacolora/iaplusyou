@@ -901,6 +901,22 @@ msgid "%(pct)s del gasto"
 msgstr "%(pct)s of spend"
 
 #, python-format
+msgid "%(plataforma)s no cubre el país %(pais)s."
+msgstr "%(plataforma)s does not cover country %(pais)s."
+
+#, python-format
+msgid "%(plataforma)s: no hay consultas para buscar."
+msgstr "%(plataforma)s: there are no queries to search."
+
+#, python-format
+msgid "%(plataforma)s: no hay productos de los que traer reseñas."
+msgstr "%(plataforma)s: there are no products to fetch reviews from."
+
+#, python-format
+msgid "%(plataforma)s: un producto elegido no tiene link."
+msgstr "%(plataforma)s: a chosen product has no link."
+
+#, python-format
 msgid "%(plural)s (%(n)s)"
 msgstr "%(plural)s (%(n)s)"
 
