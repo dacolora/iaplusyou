@@ -1,5 +1,5 @@
 """
-Worker de Creatv Machine: proceso aparte de gunicorn (servicio systemd
+Worker de Creatv Adstra: proceso aparte de gunicorn (servicio systemd
 creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) una a la
 vez. Si el proceso muere a mitad de una tarea, esa tarea vuelve a `pendiente`
 a los 30 min (recuperar_colgadas) y se reintenta — a diferencia de los hilos

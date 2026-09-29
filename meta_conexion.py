@@ -351,7 +351,7 @@ def credenciales_ads(cliente):
     if datos and datos.get("modo") == MODO_AGENCIA and not datos.get("token"):
         raise MetaConexionError("La agencia no está conectada — un admin tiene que conectar el Business de Creatv.")
     if not datos or not datos.get("token") or not datos.get("ad_account_id"):
-        raise MetaConexionError("Este proyecto no tiene Meta conectado — conéctalo en FlowMarketing.")
+        raise MetaConexionError("Este proyecto no tiene Meta conectado — conéctalo en Configuración › Conexiones.")
     return {
         "token": datos["token"],
         "ad_account_id": datos["ad_account_id"],

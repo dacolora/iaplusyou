@@ -34,7 +34,7 @@ def _bajar(url):
     if not permitido:
         raise ImagenInvalida("Esa URL no está permitida (apunta a una red interna o local).")
     try:
-        r = requests.get(url, timeout=TIMEOUT, stream=True, headers={"User-Agent": "CreatvMachine/1.0"})
+        r = requests.get(url, timeout=TIMEOUT, stream=True, headers={"User-Agent": "CreatvAdstra/1.0"})
         r.raise_for_status()
         trozos, total = [], 0
         for parte in r.iter_content(65536):
