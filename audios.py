@@ -65,6 +65,47 @@ def voces():
     return list(fal_audio.VOCES["es"])
 
 
+# Género y tono de cada voz premade de ElevenLabs según su biblioteca por defecto
+# (2026-09-29): solo orientan la galería de Audios, la persona decide por el
+# oído. El tono concuerda con «voz» (femenino). Una voz que salga de
+# fal_audio.VOCES debe salir de aquí también (tests/test_audios.py lo vigila).
+GENEROS = {"mujer": idiomas.N_("Mujer"), "hombre": idiomas.N_("Hombre"), "neutra": idiomas.N_("Neutra")}
+VOCES_INFO = {
+    "Rachel": ("mujer", idiomas.N_("calmada")),
+    "Adam": ("hombre", idiomas.N_("grave")),
+    "Charlotte": ("mujer", idiomas.N_("seductora")),
+    "Matilda": ("mujer", idiomas.N_("amable")),
+    "Daniel": ("hombre", idiomas.N_("autoritaria, británica")),
+    "Aria": ("mujer", idiomas.N_("expresiva")),
+    "Roger": ("hombre", idiomas.N_("segura")),
+    "Sarah": ("mujer", idiomas.N_("suave")),
+    "Laura": ("mujer", idiomas.N_("animada")),
+    "Charlie": ("hombre", idiomas.N_("natural, australiana")),
+    "George": ("hombre", idiomas.N_("cálida, británica")),
+    "Callum": ("hombre", idiomas.N_("intensa")),
+    "River": ("neutra", idiomas.N_("segura")),
+    "Liam": ("hombre", idiomas.N_("articulada")),
+    "Alice": ("mujer", idiomas.N_("segura, británica")),
+    "Jessica": ("mujer", idiomas.N_("expresiva")),
+    "Eric": ("hombre", idiomas.N_("amigable")),
+    "Chris": ("hombre", idiomas.N_("casual")),
+    "Brian": ("hombre", idiomas.N_("profunda")),
+    "Lily": ("mujer", idiomas.N_("cálida, británica")),
+    "Bill": ("hombre", idiomas.N_("confiable")),
+    "Will": ("hombre", idiomas.N_("amigable")),
+}
+
+
+def fichas_voces():
+    """Una ficha por voz, en el orden de VOCES: {nombre, genero, genero_nombre
+    (msgid), tono (msgid)} para la galería de la plantilla."""
+    fichas = []
+    for v in voces():
+        genero, tono = VOCES_INFO.get(v, ("neutra", ""))
+        fichas.append({"nombre": v, "genero": genero, "genero_nombre": GENEROS[genero], "tono": tono})
+    return fichas
+
+
 def idioma_defecto(cliente):
     i = idiomas.de_proyecto(cliente)
     return i if i in IDIOMAS else "es"

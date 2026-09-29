@@ -180,3 +180,18 @@ def test_muestra_registra_el_gasto_aunque_falle_despues_de_pagar_a_fal(base_temp
     assert len(gastos_) == 1 and gastos_[0]["usd"] == 0.0052
     assert gastos_[0]["referencia"].startswith("muestra_voz:Rachel:es:v1:")
     assert materiales.buscar_hash("_creatv", audios.hash_muestra("Rachel", "es")) is None
+
+
+def test_fichas_de_voces_para_la_galeria():
+    """Galería de voces (2026-09-29): una ficha por voz de fal_audio.VOCES, en el
+    mismo orden, con género (clave de GENEROS) y un tono corto; ningún nombre
+    de VOCES_INFO puede ser una voz que ya no exista en fal."""
+    fichas = audios.fichas_voces()
+    assert [f["nombre"] for f in fichas] == audios.voces()
+    assert set(audios.VOCES_INFO) == set(audios.voces())
+    for f in fichas:
+        assert f["genero"] in audios.GENEROS and f["genero_nombre"] == audios.GENEROS[f["genero"]]
+        assert f["tono"] and isinstance(f["tono"], str)
+    rachel = fichas[0]
+    assert rachel["nombre"] == "Rachel" and rachel["genero"] == "mujer"
+    assert {f["genero"] for f in fichas} >= {"mujer", "hombre"}
