@@ -10,9 +10,10 @@ redes elegidas: consultas → buscar:<plataforma>… → seleccionar →
 resenas:<plataforma>… → redes:<red>… → generar. Cada paso vive en
 `pasos[paso] = {"estado": pendiente|en_curso|hecho|vacio|saltado|error, …}`;
 `gastado_usd` es la suma de los `usd` de los pasos; el `estado` de la
-investigación se deriva del paso que se acaba de tocar (`buscando`,
-`resenas`, …) y pasa a `lista` cuando todos los pasos son finales, o a
-`detenida`/`interrumpida`.
+investigación es el del primer paso pendiente o en curso según el `orden`
+(`buscando`, `resenas`, …) -- el que está corriendo o el que se va a encolar
+enseguida, aunque el worker todavía no lo haya marcado `en_curso` -- y pasa a
+`lista` cuando todos los pasos son finales, o a `detenida`/`interrumpida`.
 Las claves guardadas no se traducen; las etiquetas sí (`|traducir`).
 """
 import math
@@ -127,12 +128,14 @@ def terminada(inv):
 def marcar_paso(inv, paso, estado, **kw):
     """Copia con `pasos[paso]` actualizado (+ kwargs: usd, productos, relevantes,
     resenas, aviso…), `gastado_usd` recalculado y el `estado` de la
-    investigación derivado: el del paso que se acaba de tocar (`paso`), o
-    `lista` si ya no queda nada pendiente. No usa `siguiente_paso` para esto
-    a propósito: adelantar el estado a la fase siguiente ANTES de que su
-    tarea arranque de verdad mostraría, por ejemplo, "generando" mientras
-    "redes:reddit" todavía se está guardando -- `siguiente_paso` sigue
-    sirviendo, aparte, para que el worker sepa qué encolar."""
+    investigación derivado: el del primer paso pendiente o en curso según el
+    `orden` -- el que está corriendo, o el que `avanzar()` va a encolar
+    enseguida sin marcarlo todavía (el worker solo marca `en_curso` una vez
+    que la tarea arranca de verdad) --, o `lista` si ya no queda nada
+    pendiente. Por eso a veces coincide con `estado_por_paso(paso)` (mismo
+    paso, o el siguiente de la misma fase) y a veces salta a la fase
+    siguiente completa (p. ej. a "generando" en cuanto el último paso antes
+    de "generar" queda en un estado final)."""
     nuevo = dict(inv or {})
     pasos = dict(nuevo.get("pasos") or {})
     pasos[paso] = {**(pasos.get(paso) or {}), "estado": estado, **kw}
@@ -142,7 +145,8 @@ def marcar_paso(inv, paso, estado, **kw):
         if terminada(nuevo):
             nuevo["estado"], nuevo["terminada_en"] = "lista", nuevo.get("terminada_en") or _ahora()
         else:
-            nuevo["estado"] = estado_por_paso(paso)
+            siguiente = siguiente_paso({**nuevo, "estado": estado_por_paso(paso)})
+            nuevo["estado"] = estado_por_paso(siguiente or paso)
     return nuevo
 
 

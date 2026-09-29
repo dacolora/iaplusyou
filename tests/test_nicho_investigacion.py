@@ -381,11 +381,13 @@ def test_siguiente_paso_por_orden_y_estados():
     i = inv.marcar_paso(i, "consultas", "en_curso")
     assert inv.siguiente_paso(i) == "consultas" and i["estado"] == "consultas"
     i = inv.marcar_paso(i, "consultas", "hecho", usd=0.01)
+    assert i["estado"] == "buscando"                                                     # avanzar() encola buscar:amazon con este estado, sin marcarlo todavía
     i = inv.marcar_paso(i, "buscar:amazon", "error", aviso="x")
     assert inv.siguiente_paso(i) == "buscar:meli" and i["estado"] == "buscando" and i["gastado_usd"] == 0.01
     for paso, estado in (("buscar:meli", "vacio"), ("seleccionar", "hecho"), ("resenas:amazon", "hecho"), ("resenas:meli", "saltado"), ("redes:reddit", "saltado")):
         i = inv.marcar_paso(i, paso, estado, usd=0.5 if estado == "hecho" else 0)
-    assert inv.siguiente_paso(i) == "generar" and i["estado"] == "redes" and i["gastado_usd"] == 1.01
+    # el próximo a correr es "generar" (redes:reddit ya quedó "saltado"): avanzar() lo encola enseguida.
+    assert inv.siguiente_paso(i) == "generar" and i["estado"] == "generando" and i["gastado_usd"] == 1.01
     i = inv.marcar_paso(i, "generar", "hecho", usd=0.3)
     assert inv.terminada(i) and i["estado"] == "lista" and i["terminada_en"] and inv.siguiente_paso(i) is None
     d = inv.detener(_inv(), "sin tema")
