@@ -59,7 +59,10 @@ from final_edition.documento import FORMATOS, duracion_ms, pista_principal
 from final_edition.motor import subtitulos as sub_mod
 
 _XFADE = {"fundido": "fade", "deslizar": "slideleft", "zoom": "zoomin", "desenfoque": "fadeblack"}
-_DESPLAZ_ANIM_PX = 60
+# La entrada «deslizar» baja la capa desde esta fracción de la altura del
+# lienzo (antes 60 px fijos: un 3 % de un 9:16). Espejo de
+# static/editor/tiempo.js DESPLAZ_ANIM_FRACCION (tests/test_editor_js.py).
+DESPLAZ_ANIM_FRACCION = 0.08
 ZOOM_KEN_BURNS = 1.08
 
 
@@ -139,19 +142,27 @@ def _transicion_real(clip):
     return None
 
 
-def _expr_animacion(clip, caja, fps):
+def desplaz_anim_px(formato):
+    """Píxeles que baja la entrada «deslizar» en ese formato: el 8 % de la
+    altura, redondeado (ningún formato cae en ,5, así que el round de Python
+    y el Math.round del navegador dan lo mismo: 154, 108, 86, 86)."""
+    return int(round(FORMATOS[formato][1] * DESPLAZ_ANIM_FRACCION))
+
+
+def _expr_animacion(clip, caja, fps, desplaz_px):
     """Expresiones x, y (alpha no se usa: la opacidad ya está horneada en el
     PNG) para el overlay según la animación de entrada. Sin animación:
-    constantes."""
+    constantes. `desplaz_px`: cuánto baja la entrada «deslizar»
+    (`desplaz_anim_px` del formato)."""
     an = clip.get("animacion") or {}
     ini = clip["inicio_ms"] / 1000.0
     dur = max(0.001, (an.get("duracion_ms") or 0) / 1000.0)
     x = f"{caja['x']}+0"
     y = f"{caja['y']}"
     if an.get("entrada") == "deslizar" and an.get("duracion_ms"):
-        # el término restado arranca en 60 y baja a 0: la capa empieza 60 px
-        # más arriba de su sitio y va bajando hasta su posición final.
-        y = f"{caja['y']}-if(lt(t-{ini:.3f}\\,{dur:.3f})\\,(1-(t-{ini:.3f})/{dur:.3f})*{_DESPLAZ_ANIM_PX}\\,0)"
+        # el término restado arranca en `desplaz_px` y baja a 0: la capa
+        # empieza así de más arriba de su sitio y va bajando hasta su posición.
+        y = f"{caja['y']}-if(lt(t-{ini:.3f}\\,{dur:.3f})\\,(1-(t-{ini:.3f})/{dur:.3f})*{desplaz_px}\\,0)"
     return x, y
 
 
@@ -176,7 +187,7 @@ def _expr_posicion(cl, keyframes, capa_w, capa_h, formato, desplaz, caja_defecto
     siempre, `_expr_animacion` sobre una caja constante."""
     if len(keyframes) < 2:
         cl_local = {**cl, "inicio_ms": cl["inicio_ms"] - desplaz}
-        return _expr_animacion(cl_local, caja_defecto, fps)
+        return _expr_animacion(cl_local, caja_defecto, fps, desplaz_anim_px(formato))
     kfs = sorted(keyframes, key=lambda k: k["t_ms"])
     base_t = cl["transform"]
     pts_x, pts_y = [], []

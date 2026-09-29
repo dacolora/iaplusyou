@@ -58,6 +58,13 @@ def test_biblioteca_js_acepta_lo_mismo_que_el_servidor():
     assert _constante_js("biblioteca.js", "LIMITES_SUBIDA") == {t: b for t, (b, _ms) in materiales.LIMITES.items()}
 
 
+def test_desplazamiento_de_deslizar_igual_a_python():
+    # Capa 4c (2/10): la entrada «deslizar» baja la capa una fracción de la
+    # altura del lienzo, la misma en la vista previa y en el render.
+    from final_edition.motor import compilador
+    assert _constante_js("tiempo.js", "DESPLAZ_ANIM_FRACCION") == compilador.DESPLAZ_ANIM_FRACCION
+
+
 def test_transiciones_js_iguales_a_python():
     # la biblioteca ofrece solo las transiciones que el render hace
     assert _constante_js("operaciones.js", "TRANSICIONES") == list(documento.TRANSICIONES)

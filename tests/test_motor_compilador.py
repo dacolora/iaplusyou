@@ -152,6 +152,14 @@ def test_keyframes_de_posicion_generan_expresion_en_t():
     assert "664.000" in plan.filtergraph
 
 
+def test_deslizar_baja_el_8_por_ciento_de_la_altura_del_lienzo():
+    # Capa 4c (2/10): 60 px fijos eran un 3 % de un 9:16 (casi no se veía).
+    # El mismo número (redondeado) que usa la vista previa (tiempo.desplazAnimPx).
+    assert [c.desplaz_anim_px(f) for f in ("9:16", "4:5", "1:1", "16:9")] == [154, 108, 86, 86]
+    plan = c.compilar(_doc(), RUTAS, con_ass=False)
+    assert "(1-(t-0.200)/0.300)*154" in plan.filtergraph
+
+
 def test_fundidos_de_audio_solo_en_bordes_reales():
     # ventana=(0,3500) corta la voz y la música (que duran 7000) a mitad de
     # camino: ese corte no es su fin real, así que no debe sonar el fundido

@@ -34,6 +34,9 @@ export const VELOCIDADES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 export const ID_SONIDO = "p_sonido";
 export const TRANSICIONES = ["corte", "fundido", "deslizar", "zoom", "desenfoque"];
 export const FUENTES = ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"];
+// Cuánto dura la entrada «deslizar» elegida en el panel (capa 4c): sin
+// `duracion_ms` ni la vista previa ni el render la aplican.
+export const DURACION_ANIMACION_MS = 400;
 const MAX_PISTAS = 8;   // documento.MAX_PISTAS
 const ESCALA_MIN = 0.05;  // transform.escala: lo que acepta cambiar
 const ESCALA_MAX = 5;
@@ -709,7 +712,8 @@ const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion"];
 // clip de audio no tiene posición ni tamaño), audio.{volumen,
 // fundido_entrada_ms, fundido_salida_ms} (solo audio, incluido el espejo
 // p_sonido), ken_burns (solo video/superpuesto), animacion.entrada
-// (ninguna|deslizar). Los valores fuera de rango se
+// (ninguna|deslizar: con su duración, DURACION_ANIMACION_MS; «ninguna» deja
+// `animacion: null`). Los valores fuera de rango se
 // acotan en vez de rechazarse; `estilo.tamano` llega en PÍXELES (12–200,
 // como los presets de agregarTexto) y se guarda como fracción de la altura
 // del lienzo. Cambiar el estilo de un texto invalida su png en caché.
@@ -801,7 +805,11 @@ export function cambiar(doc, clipId, cambios, info = {}) {
     }
     if (an.entrada !== undefined) {
       if (!["ninguna", "deslizar"].includes(an.entrada)) throw new OperacionInvalida(`animacion.entrada inválida (${an.entrada}).`);
-      clip.animacion = { ...(clip.animacion || {}), entrada: an.entrada };
+      // «ninguna» = sin animación (null, como nace todo clip); una entrada
+      // lleva su duración — la que ya tenía, o DURACION_ANIMACION_MS.
+      const previa = Number(clip.animacion?.duracion_ms) || 0;
+      clip.animacion = an.entrada === "ninguna" ? null
+        : { ...(clip.animacion || {}), entrada: an.entrada, duracion_ms: previa > 0 ? previa : DURACION_ANIMACION_MS };
     }
   }
   if (tocaEstilo && pista.tipo === "texto" && res.pngs) delete res.pngs[clipId];

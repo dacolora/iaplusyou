@@ -131,6 +131,12 @@ anotar("cambiar_fundidos_de_mas", () => {
   const corto = op.recortar(conMusica.doc, conMusica.seleccion, "fin", -2700, INFO).doc;
   return op.cambiar(corto, conMusica.seleccion, { audio: { fundido_entrada_ms: 900, fundido_salida_ms: 900 } }, INFO);
 });
+// Capa 4c (2/10): la entrada «deslizar» lleva su duración; «ninguna» la quita.
+anotar("animacion_deslizar", () => op.cambiar(docBase(), "t1", { animacion: { entrada: "deslizar" } }, INFO));
+anotar("animacion_ninguna", () => {
+  const con = op.cambiar(docBase(), "t1", { animacion: { entrada: "deslizar" } }, INFO).doc;
+  return op.cambiar(con, "t1", { animacion: { entrada: "ninguna" } }, INFO);
+});
 
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {

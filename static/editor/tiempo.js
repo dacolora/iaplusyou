@@ -1,14 +1,23 @@
 // Modelo temporal de la vista previa (spec editor §3): qué se ve en el
 // instante t, sin DOM. Sigue al compilador (final_edition/motor/compilador.py)
 // para que el navegador y ffmpeg lleguen al mismo cuadro.
-import { FPS } from "./formatos.js";
+import { FORMATOS, FPS } from "./formatos.js";
 import { caja, interpolar } from "./geometria.js";
 import { redondearPar } from "./numeros.js";
 
 export const ZOOM_KEN_BURNS = 1.08;       // compilador.ZOOM_KEN_BURNS
-export const DESPLAZ_ANIM_PX = 60;        // compilador._DESPLAZ_ANIM_PX
+// La entrada «deslizar» baja la capa desde esta fracción de la altura del
+// lienzo (compilador.DESPLAZ_ANIM_FRACCION; tests/test_editor_js.py compara
+// los dos). Antes eran 60 px fijos: un 3 % de un 9:16, casi no se veía.
+export const DESPLAZ_ANIM_FRACCION = 0.08;
 export const CAPA_DEFECTO = [400, 200];   // compilador._CAPA_ANCHO/_ALTO_DEFECTO
 const FIELES = new Set(["fundido", "deslizar"]);
+
+// Los píxeles que baja la capa en ese formato, redondeados igual que
+// compilador.desplaz_anim_px (ningún formato cae en ,5: 154, 108, 86, 86).
+export function desplazAnimPx(formato) {
+  return Math.round(FORMATOS[formato][1] * DESPLAZ_ANIM_FRACCION);
+}
 
 export function duracionMs(doc) {
   let fin = 0;
@@ -156,7 +165,7 @@ function porTramos(puntos, t) {
 // Dónde va una capa en t, como el overlay del compilador: tamaño y opacidad
 // del transform en t=0 (con su primer keyframe); x/y lineales por tramos con
 // >= 2 keyframes (cada punto con la caja de SU transform); si no, la entrada
-// «deslizar» baja la capa desde 60 px más arriba.
+// «deslizar» baja la capa desde `desplazAnimPx(formato)` más arriba.
 export function posicionCapa(clip, tMs, anchoCapa, altoCapa, formato) {
   const kfs = clip.keyframes ?? [];
   const base = caja(interpolar(kfs, 0, clip.transform), anchoCapa, altoCapa, formato);
@@ -170,7 +179,7 @@ export function posicionCapa(clip, tMs, anchoCapa, altoCapa, formato) {
     const an = clip.animacion ?? {};
     const transcurrido = tMs - clip.inicio_ms;
     if (an.entrada === "deslizar" && an.duracion_ms && transcurrido < an.duracion_ms) {
-      y = base.y - (1 - transcurrido / an.duracion_ms) * DESPLAZ_ANIM_PX;
+      y = base.y - (1 - transcurrido / an.duracion_ms) * desplazAnimPx(formato);
     }
   }
   return { x, y, w: base.w, h: base.h, opacidad: base.opacidad };

@@ -594,3 +594,12 @@ test("recortar o cambiar los fundidos de un audio nunca los deja más largos que
   caben(c, "fundidos pedidos de más");
   assert.deepEqual(fundidos(c), [150, 150], "se acortan los dos en proporción");
 });
+
+// ---- Capa 4c (2/10): «Animación de entrada: Deslizar» de verdad ----
+test("cambiar animacion.entrada guarda la duración (400 ms) y «ninguna» la quita", () => {
+  const r = puro((d) => op.cambiar(d, "t1", { animacion: { entrada: "deslizar" } }, INFO));
+  assert.deepEqual(clipDe(r.doc, "t1").animacion, { entrada: "deslizar", duracion_ms: op.DURACION_ANIMACION_MS });
+  assert.equal(op.DURACION_ANIMACION_MS, 400);
+  const quitada = op.cambiar(r.doc, "t1", { animacion: { entrada: "ninguna" } }, INFO).doc;
+  assert.equal(clipDe(quitada, "t1").animacion, null);
+});
