@@ -420,6 +420,7 @@ export class Propiedades {
       if (document.activeElement !== area && area.value !== x.texto.valor) area.value = x.texto.valor;
     });
     this._nota(campo, (x) => x.texto.nota);
+    this._nota(campo, (x) => x.avisoEmoji, "ed-prop-aviso");     // capa 4c: se ve mientras se escribe
     this._opciones(this.cuerpo, {
       nombre: "ed-prop-fuente", etiqueta: "Fuente", lista: true,
       opciones: m.fuentes.map((f) => ({ ...f, fuente: f.valor })),

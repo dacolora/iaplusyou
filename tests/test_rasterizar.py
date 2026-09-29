@@ -55,3 +55,25 @@ def test_color_con_alfa_y_opacidad():
     assert r.color("#7c3aed") == (0x7c, 0x3a, 0xed, 255)
     assert r.color("#000000C8") == (0, 0, 0, 200)
     assert r.color("#FFFFFF", 0.5) == (255, 255, 255, 128)
+
+
+# ---- Capa 4c (10/10): emojis ----
+# Pillow dibuja con Inter / Space Grotesk, que no traen emojis: cada uno salía
+# como la caja de «carácter que falta». El rasterizador los quita.
+
+def test_quita_lo_que_la_fuente_no_puede_dibujar_y_deja_lo_demas():
+    assert r.sin_glifos_faltantes("🔥 50% OFF ✅", "Inter-Bold") == "50% OFF"
+    assert r.sin_glifos_faltantes("Hecho en 🇨🇴 con 👨‍👩‍👧", "Inter-Bold") == "Hecho en con"
+    texto = "¡Envío gratis!\nñ á é ü $ 89.900 – 50 % ®"
+    assert r.sin_glifos_faltantes(texto, "Inter-Bold") == texto                 # nada que quitar: tal cual
+    assert r.sin_glifos_faltantes("★ Top", "Inter-Bold") == "★ Top"             # Inter trae la estrella
+    assert r.sin_glifos_faltantes("★ Top", "SpaceGrotesk-Bold") == "Top"        # Space Grotesk no
+    assert r.sin_glifos_faltantes("🔥🔥", "Inter-Bold") == ""
+
+
+def test_el_png_de_un_texto_con_emoji_no_lleva_la_caja(tmp_path):
+    estilo = _estilo(HOOK)
+    con = r.png_texto("🔥 Oferta", estilo, "9:16", str(tmp_path / "con.png"))
+    sin = r.png_texto("Oferta", estilo, "9:16", str(tmp_path / "sin.png"))
+    assert con == sin
+    assert Image.open(str(tmp_path / "con.png")).tobytes() == Image.open(str(tmp_path / "sin.png")).tobytes()

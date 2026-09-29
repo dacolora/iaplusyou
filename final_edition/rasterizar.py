@@ -15,6 +15,7 @@ mide exactamente su caja (texto + relleno del fondo + margen para contorno y
 sombra) y NO se recorta al contenido: esa caja es la que `geometria.caja`
 coloca con el `transform` del clip, así que su tamaño tiene que ser
 predecible para navegador y servidor por igual."""
+import functools
 import os
 import re
 
@@ -43,6 +44,43 @@ def ruta_fuente(nombre):
     if not os.path.isfile(ruta):
         raise FuenteNoDisponible(f"La fuente {nombre} no está en static/fonts.")
     return ruta
+
+
+# Capa 4c: un carácter que la fuente no trae (un emoji: Inter y Space Grotesk
+# no tienen) Pillow lo dibuja como la caja de «carácter que falta». Se
+# reconoce comparando su dibujo con el de un código sin asignar en Unicode,
+# que ninguna fuente trae (el mismo glifo .notdef).
+_SIN_ASIGNAR = "\u0378"
+_TAMANO_PRUEBA = 24
+
+
+@functools.lru_cache(maxsize=None)
+def _fuente_prueba(ruta):
+    fuente = ImageFont.truetype(ruta, _TAMANO_PRUEBA)
+    return fuente, bytes(fuente.getmask(_SIN_ASIGNAR))
+
+
+@functools.lru_cache(maxsize=4096)
+def _tiene_glifo(ruta, ch):
+    fuente, falta = _fuente_prueba(ruta)
+    return bytes(fuente.getmask(ch)) != falta
+
+
+def sin_glifos_faltantes(texto, fuente):
+    """`texto` sin los caracteres que `fuente` no puede dibujar (los emojis,
+    con sus uniones y selectores de variante), en vez de una caja por cada
+    uno; si quitó algo, sin los espacios dobles ni de los bordes que dejó en
+    cada línea. Sin nada que quitar, el texto tal cual. El panel del editor
+    avisa que los emojis no salen (propiedades_modelo.tieneEmoji)."""
+    texto = str(texto or "")
+    ruta = ruta_fuente(fuente)
+    _f, falta = _fuente_prueba(ruta)
+    if not any(falta):                # esa fuente no dibuja caja: no hay nada que arreglar
+        return texto
+    quedan = [ch for ch in texto if ch.isspace() or _tiene_glifo(ruta, ch)]
+    if len(quedan) == len(texto):
+        return texto
+    return "\n".join(re.sub(r"[ \t]{2,}", " ", linea).strip() for linea in "".join(quedan).split("\n"))
 
 
 def color(valor, opacidad=None):
@@ -85,6 +123,7 @@ def png_texto(texto, estilo, formato, ruta):
     ancho_l, alto_l = FORMATOS[formato]
     tam = max(TAMANO_MIN_PX, _px(estilo.get("tamano", 0.04), alto_l))
     fuente = ImageFont.truetype(ruta_fuente(estilo.get("fuente")), tam)
+    texto = sin_glifos_faltantes(texto, estilo.get("fuente"))      # capa 4c: sin cajas de emoji
     espaciado = _px(float(estilo.get("interlineado") or 1.1) - 1.0, tam)
     alinear = _ALINEAR[estilo.get("alineacion") or "centro"]
     contorno = estilo.get("contorno") or None

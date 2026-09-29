@@ -231,17 +231,31 @@ export function paletaDe(doc, color) {
   return lista.map((c) => ({ ...c, elegido: c.color === color }));
 }
 
+// Capa 4c: el video final dibuja los textos con Inter / Space Grotesk, que no
+// traen emojis — el rasterizador del servidor los quita
+// (rasterizar.sin_glifos_faltantes) en vez de dibujar cajas —, pero la vista
+// previa sí los muestra (el navegador cae a la fuente de emojis del equipo):
+// el panel lo avisa. ® ™ © no cuentan (las fuentes los traen).
+const EMOJI_RE = /(?![\u00A9\u00AE\u2122])\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
+export const AVISO_EMOJI = "Los emojis no salen en el video final: se quitan al producirlo.";
+
+export function tieneEmoji(texto) {
+  return typeof texto === "string" && EMOJI_RE.test(texto);
+}
+
 function modeloTexto(doc, { pista, clip }, destino) {
   const [, alto] = lienzo(doc.formato);
   const e = clip.estilo ?? {};
   const color = colorBase(e.color);
   const t = clip.transform ?? {};
   const fondo = e.fondo && typeof e.fondo === "object" ? e.fondo : null;
+  const texto = textoDe(doc, pista, clip, destino);
   return {
     forma: "texto",
     clipId: clip.id,
     nombre: "Texto",
-    texto: textoDe(doc, pista, clip, destino),
+    texto,
+    avisoEmoji: tieneEmoji(texto.valor) ? AVISO_EMOJI : null,
     fuente: typeof e.fuente === "string" ? e.fuente : null,
     fuentes: FUENTES.map((f) => ({ valor: f, texto: NOMBRES_FUENTE[f] ?? f })),
     tamano: { px: Math.round(acotar(Number(e.tamano ?? 0.04) * alto, TAMANO_TEXTO_PX.min, TAMANO_TEXTO_PX.max)),
