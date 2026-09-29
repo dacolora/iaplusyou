@@ -435,7 +435,7 @@ la música arranca 0,6 s antes de la voz, se agacha (`mezcla.DUCKING_VOZ_SOBRE_M
 funde después del `loudnorm` (`audios.filtro_locucion`, puro). `audios.py` define las filas y sus
 hashes; solo la tarea `audio_generar` y `audios.muestra` las crean (vía `materiales.obtener_o_crear`):
 el audio es un `material` (tipo `audio`, origen `locucion`, `extra.{nombre,texto,voz,idioma,velocidad,volumen,musica}`)
-con `padre_id` a la voz cruda (origen `voz`, hash `locucion_voz` = texto+voz+idioma+velocidad: el mismo
+con `padre_id` a la voz cruda (origen `voz`, hash `locucion_voz` = texto+voz+velocidad, sin el idioma (el modelo lo detecta del texto): el mismo
 texto no se paga dos veces; misma combinación completa → «Ya tenías este audio»). Tarea `audio_generar`
 (`max_intentos=1`, un trabajo por proyecto `<cliente>__audio_generar`): registra el gasto tipo `locucion`
 (`locucion:<hash12>:t<tarea>`) en cuanto fal cobró, ANTES de mezclar; una canción borrada entre el clic y
