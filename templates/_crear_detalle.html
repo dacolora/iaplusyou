@@ -74,6 +74,8 @@
               {% if item.estado == "video_listo" and item.tipo == "imagen" %}
               <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="incluir_resultado" value="si" checked> {{ _('Usar esta imagen como referencia') }}</label>
               {% endif %}
+              {# Sin variables quemadas (2026-09-28): para el clip siguiente con los mismos personajes. #}
+              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="solo_referencias" value="si"> {{ _('Solo las referencias (el texto y los ajustes quedan en blanco)') }}</label>
               <button type="submit" class="btn-guardar btn-sm">{{ _('Editar y crear otra a partir de esta') }}</button>
             </form>
             {% endif %}

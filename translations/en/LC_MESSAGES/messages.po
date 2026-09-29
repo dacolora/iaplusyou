@@ -269,6 +269,14 @@ msgid "%(modelo)s rechazó el contenido por sensible (el texto o las imágenes):
 msgstr "%(modelo)s rejected the content as sensitive (the text or the images): change the scene and generate again. Nothing was charged. Detail: %(detalle)s"
 
 #, python-format
+msgid "%(modelo)s solo usa la primera referencia (%(primera)s): no usaría %(sobran)s. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una — no se cobró nada."
+msgstr "%(modelo)s only uses the first reference (%(primera)s): it would not use %(sobran)s. Choose Wan 3.0 or Kling O3 Pro to use them all, or keep just one — nothing was charged."
+
+#, python-format
+msgid "%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. Quita las que sobran o cambia de modelo — no se cobró nada."
+msgstr "%(modelo)s uses up to %(n)s references: it would not use %(sobran)s. Remove the extra ones or change the model — nothing was charged."
+
+#, python-format
 msgid "%(monto)s generación"
 msgstr "%(monto)s generation"
 
@@ -3867,6 +3875,9 @@ msgstr "Delete permanently"
 
 msgid "Emoción"
 msgstr "Emotion"
+
+msgid "Empezar de cero"
+msgstr "Start from scratch"
 
 msgid "Empieza en el segundo"
 msgstr "Starts at second"
@@ -8499,6 +8510,9 @@ msgstr "Reference reused."
 msgid "Referencias"
 msgstr "References"
 
+msgid "Referencias cargadas; el texto y los ajustes quedan en blanco."
+msgstr "References loaded; the text and the settings start blank."
+
 #, python-format
 msgid "Referencias de la campaña %(n)s"
 msgstr "References for campaign %(n)s"
@@ -9203,6 +9217,9 @@ msgstr ""
 
 msgid "Solo esta campaña (bórralas para volver a las del sprint)."
 msgstr "Only this campaign (delete them to go back to the sprint's)."
+
+msgid "Solo las referencias (el texto y los ajustes quedan en blanco)"
+msgstr "Only the references (the text and the settings start blank)"
 
 msgid "Solo míos"
 msgstr "Only mine"
@@ -10243,6 +10260,9 @@ msgstr "Goes at the end of every clip prompt in every video of this project. Lea
 msgid "Vacaciones de mitad de año"
 msgstr "Mid-year vacation"
 
+msgid "Vacía el texto, el sonido, la música, la bandeja y el catálogo; la duración, el modelo y el formato vuelven a los del proyecto."
+msgstr "Clears the text, the sound, the music, the tray and the catalog; the duration, the model and the format go back to the project's."
+
 msgid "Vacío = ambiente natural de la escena."
 msgstr "Empty = the scene's natural ambience."
 
@@ -10729,6 +10749,12 @@ msgstr "Zip from %(fecha)s (%(n)s pieces)"
 #, python-format
 msgid "Zip listo con %(n)s pieza(s)."
 msgstr "Zip ready with %(n)s piece(s)."
+
+msgid "__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una."
+msgstr "__MODELO__ only uses the first reference (__PRIMERA__): it would not use __SOBRAN__. Choose Wan 3.0 or Kling O3 Pro to use them all, or keep just one."
+
+msgid "__MODELO__ usa hasta __N__ referencias: no usaría __SOBRAN__. Quita las que sobran o cambia de modelo."
+msgstr "__MODELO__ uses up to __N__ references: it would not use __SOBRAN__. Remove the extra ones or change the model."
 
 msgid "a quién le habla"
 msgstr "who it speaks to"
@@ -11749,6 +11775,9 @@ msgstr "has no clips"
 msgid "nocturna, dramática"
 msgstr "nighttime, dramatic"
 
+msgid "nombre"
+msgstr "name"
+
 msgid "nombre, precio, moneda, url_compra, fotos (varias con |), descripcion, categoria, sku"
 msgstr "nombre, precio, moneda, url_compra, fotos (multiple with |), descripcion, categoria, sku"
 
@@ -12515,6 +12544,9 @@ msgstr "Delete this product?"
 
 msgid "¿Eliminar este sprint PERMANENTEMENTE? Se borran sus campañas, ideas y referencias. No se puede deshacer."
 msgstr "Delete this sprint PERMANENTLY? Its campaigns, ideas and references will be deleted. This can't be undone."
+
+msgid "¿Empezar de cero? Se vacían el texto, los ajustes y la bandeja de referencias."
+msgstr "Start from scratch? The text, the settings and the reference tray will be cleared."
 
 #, python-format
 msgid "¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s"

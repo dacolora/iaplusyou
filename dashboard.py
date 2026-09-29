@@ -1699,7 +1699,7 @@ def ver_cliente(cliente):
         **_listas_crear_final(cf_items),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
-        fp_prefill=session.pop("fp_prefill", None),
+        fp_prefill=_prefill_para(cliente),
         logos=_logos(cliente),
         referencias_bandeja=referencias_flowplus.listar(cliente),
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
@@ -6739,7 +6739,11 @@ def fp_reusar(cliente, cf_id):
     if not entry:
         flash(gettext("No encontré esa pieza."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    ya = {r["url"] for r in referencias_flowplus.listar(cliente)}
+    # Sin variables quemadas (pedido de Daniel, 2026-09-28): la bandeja queda
+    # SOLO con las referencias de esta pieza — antes se sumaban a lo que
+    # hubiera y las referencias «del pasado» se colaban en la pieza nueva.
+    referencias_flowplus.vaciar(cliente)
+    ya = set()
     for r in entry.get("referencias") or []:
         if r.get("logo") or r.get("url") in ya:
             continue
@@ -6750,7 +6754,15 @@ def fp_reusar(cliente, cf_id):
         ya.add(r["url"])
     if request.form.get("incluir_resultado") == "si" and entry.get("tipo") == "imagen" and entry.get("video_url") not in ya:
         referencias_flowplus.agregar(cliente, "imagen", entry["video_url"], origen="generada", titulo=gettext("Imagen generada"))
+    if request.form.get("solo_referencias") == "si":
+        # Para pasar al clip siguiente con los mismos personajes: solo las
+        # imágenes; el texto y los ajustes arrancan en blanco.
+        session.pop("fp_prefill", None)
+        flash(gettext("Referencias cargadas; el texto y los ajustes quedan en blanco."), "ok")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     session["fp_prefill"] = {
+        # La precarga vale una vez y solo en este proyecto (_prefill_para).
+        "cliente": cliente,
         "texto": entry.get("prompt_fuente") or entry.get("accion_central") or "",
         "tipo": entry.get("tipo") or "video",
         "modelo": entry.get("modelo") or "",
@@ -6768,6 +6780,17 @@ def fp_reusar(cliente, cf_id):
     }
     flash(gettext("Referencias y texto cargados — ajusta lo que quieras y genera."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+def _prefill_para(cliente):
+    """La precarga de «Editar y crear otra a partir de esta» vale UNA vez y
+    solo en el proyecto donde se pidió (sin variables quemadas, 2026-09-28):
+    pedida en un proyecto y abierto otro, se descarta. Las precargas viejas
+    (sin `cliente`) siguen valiendo una vez."""
+    pre = session.pop("fp_prefill", None)
+    if pre and pre.get("cliente") not in (None, cliente):
+        return None
+    return pre
 
 
 @app.route("/cliente/<cliente>/flowplus/describir", methods=["POST"])
@@ -6924,6 +6947,24 @@ def cf_crear_video(cliente):
         flash(gettext("Tu texto menciona %(menciones)s, pero en la bandeja solo hay: %(disponibles)s. "
                       "Sube lo que falta o quita esas menciones y vuelve a generar — no se cobró nada.",
                       menciones=", ".join(faltan), disponibles=disponibles or gettext("nada")), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # Incidente 2026-09-28 («mira lo que sacó»): Seedance 2.5 recibe UNA imagen
+    # y las otras referencias se descartaban en silencio mientras la tarjeta las
+    # mostraba como usadas y se cobraba el modelo más caro. Si el modelo elegido
+    # no usa todas las referencias, se avisa y no se genera: nada se cobra.
+    sobran = flowplus_modelos.referencias_de_mas(modelo, referencias, tipo=tipo)
+    if sobran:
+        info_modelo = (flowplus_modelos.IMAGEN if tipo == "imagen" else flowplus_modelos.VIDEO)[modelo]
+        nombre_modelo = gettext(info_modelo["nombre"])
+        if int(info_modelo.get("max_referencias") or 0) == 1:
+            primera = next((r["etiqueta"] for r in referencias if r["etiqueta"] not in sobran), "")
+            flash(gettext("%(modelo)s solo usa la primera referencia (%(primera)s): no usaría %(sobran)s. "
+                          "Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una — no se cobró nada.",
+                          modelo=nombre_modelo, primera=primera, sobran=", ".join(sobran)), "error")
+        else:
+            flash(gettext("%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. "
+                          "Quita las que sobran o cambia de modelo — no se cobró nada.",
+                          modelo=nombre_modelo, n=info_modelo.get("max_referencias"), sobran=", ".join(sobran)), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     if solo_texto:
