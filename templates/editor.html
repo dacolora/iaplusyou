@@ -196,6 +196,13 @@
     color: #fff; background: var(--accent); border: 1px solid transparent; border-radius: 50%; box-shadow: var(--shadow-soft); }
   .ed-bib-mas:hover:not(:disabled) { filter: brightness(1.15); }
   .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  /* «Borrar» (capa 4c): el tacho arriba a la derecha de la miniatura; siempre visible (con el dedo no hay hover) */
+  .ed-bib-borrar { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+    color: #fff; background: rgba(0, 0, 0, .6); border: 1px solid transparent; border-radius: 50%; }
+  .ed-bib-borrar:hover { color: var(--error); background: rgba(0, 0, 0, .8); }
+  .ed-bib-borrar:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-bib-audio .ed-bib-borrar { position: static; flex: none; color: var(--muted); background: transparent; border-color: var(--border); }
+  .ed-bib-audio .ed-bib-borrar:hover { color: var(--error); border-color: var(--error); }
   .ed-bib-preparando { cursor: default; }
   .ed-bib-origen { opacity: .45; }
   /* audios: una fila con icono, nombre y duración, «Escuchar» y «+» */

@@ -47,7 +47,9 @@ def ver(cliente, edicion_id):
             "biblioteca": url_for("editor.biblioteca", cliente=cliente),
             "subir": url_for("editor.subir", cliente=cliente),
             "agregar_pieza": url_for("editor.agregar_pieza", cliente=cliente, cf_id="__CF__"),
-            "materiales_por_id": url_for("editor.materiales_por_id", cliente=cliente)}
+            "materiales_por_id": url_for("editor.materiales_por_id", cliente=cliente),
+            # capa 4c: «Borrar» en la biblioteca; el navegador pone el id en `__ID__`
+            "borrar_material": url_for("editor.borrar_material", cliente=cliente, material_id="__ID__")}
     datos = vista_previa.datos_pagina(cliente, ed, urls)
     vista_previa.encolar_proxies(cliente, datos["pendientes"])
     return render_template("editor.html", cliente=cliente, edicion=ed, datos=datos)
@@ -244,6 +246,25 @@ def subir_material(cliente):
     except biblioteca.SubidaInvalida as e:
         return jsonify({"error": str(e)}), 400
     return jsonify({"material": material})
+
+
+@bp.post("/materiales/<material_id>/borrar", endpoint="borrar_material")
+def borrar_material(cliente, material_id):
+    """«Borrar» en la biblioteca (capa 4c, gratis): lo que la persona subió o
+    un video de Crear preparado, solo si ninguna edición ni versión lo usa
+    (409 con el nombre de la que lo usa). La decisión es de
+    `biblioteca.borrar`; aquí solo se traduce a HTTP."""
+    if not _mismo_origen():
+        return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
+    if not str(material_id).isdigit():
+        return jsonify({"error": "Ese archivo ya no existe."}), 404
+    try:
+        borrado = biblioteca.borrar(cliente, int(material_id))
+    except biblioteca.NoSePuedeBorrar as e:
+        return jsonify({"error": str(e)}), e.codigo
+    except Exception:
+        return jsonify({"error": "No se pudo borrar el archivo. Vuelve a intentar."}), 502
+    return jsonify({"ok": True, "material_id": borrado["id"]})
 
 
 @bp.get("/biblioteca", endpoint="biblioteca")

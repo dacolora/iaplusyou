@@ -23,13 +23,19 @@
 // (copia liviana, tira, picos: gratis): se pregunta cada 3 s, hasta 5 min,
 // y lo que llega se le pasa a la vista previa, que lo cambia al pausar.
 //
+// Capa 4c: «Borrar» (con confirmación) en cada archivo subido o video de
+// Crear preparado de «Tus archivos» y en cada audio subido — gratis; el
+// servidor se niega si alguna edición lo usa, y la cuota descuenta.
+//
 // Solo toca el DOM de su panel, la línea de tiempo por puntoEn/resaltar y la
 // edición por `editor`. No hace nada al importarse (lo prueba Node).
+import { materialesUsados } from "./avisos_carga.js";
 import {
   avisoTransicion, DURACION_TRANSICION_MS, NOMBRES_TRANSICION, pedidoAgregar,
 } from "./escala.js";
 import * as operaciones from "./operaciones.js";
 import { TRANSICIONES } from "./operaciones.js";
+import { MENSAJE_SESION, sesionTerminada } from "./guardado.js";
 import { evaluarRespuesta } from "./pendientes.js";
 import { MENSAJE_CONFLICTO } from "./propiedades_modelo.js";
 
@@ -138,6 +144,37 @@ export function urlPieza(plantilla, cfId) {
   return String(plantilla).replace("__CF__", encodeURIComponent(cfId));
 }
 
+// Capa 4c: lo que «Borrar» puede quitar — lo subido y los videos de Crear ya
+// preparados (espejo de final_edition/biblioteca.ORIGENES_BORRABLES). Nunca
+// el logo, una voz de guion ni una canción de Mi música (esa, en Crear).
+export const ORIGENES_BORRABLES = ["subida", "crear"];
+
+export function puedeBorrarse(m) {
+  return Boolean(m) && ORIGENES_BORRABLES.includes(m.origen);
+}
+
+export function urlBorrar(plantilla, id) {
+  return String(plantilla).replace("__ID__", encodeURIComponent(String(id)));
+}
+
+// Por qué no se ofrece borrar ese material ahora (o null): el servidor solo
+// ve lo guardado, así que lo que usa la edición abierta se mira aquí.
+export function motivoNoBorrar(m, doc) {
+  if (!puedeBorrarse(m)) return "Ese archivo no se borra desde aquí.";
+  if (materialesUsados(doc).has(Number(m.id))) return "Está en uso en esta edición: quítalo de la línea de tiempo primero.";
+  return null;
+}
+
+// Los datos de la biblioteca sin ese material (uno NUEVO): sale de la lista
+// y la pieza de Crear que lo tenía queda sin material (se puede volver a
+// preparar, gratis).
+export function quitarMaterial(datos, id) {
+  return {
+    materiales: (datos?.materiales ?? []).filter((m) => m.id !== id),
+    piezas: (datos?.piezas ?? []).map((p) => (p.material_id === id ? { ...p, material_id: null } : p)),
+  };
+}
+
 // Las muestras de texto: los presets de operaciones.agregarTexto.
 export const TEXTOS_BIBLIOTECA = [
   { preset: "titulo", nombre: "Título" },
@@ -175,6 +212,7 @@ const ICONOS = {
   play: '<path d="M8 5l11 7-11 7z"/>',
   pausa: '<path d="M8 5v14M16 5v14"/>',
   cerrar: '<path d="M6 6l12 12M18 6L6 18"/>',
+  borrar: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
 };
 const ICONO_DE = { video: "video", pieza: "video", imagen: "imagen", audio: "nota", texto: "texto", transicion: "transicion" };
 const ESTADO_SUBIDA = {
@@ -496,6 +534,17 @@ export class Biblioteca {
     return b;
   }
 
+  // «Borrar» (capa 4c): un botón con el tacho, solo en lo que se puede borrar.
+  _botonBorrar(m, nombre) {
+    const b = el("button", "ed-bib-borrar");
+    b.type = "button";
+    b.dataset.borrar = String(m.id);
+    b.title = "Borrar de tus archivos";
+    b.setAttribute("aria-label", `Borrar «${nombre}» de tus archivos`);
+    b.append(icono("borrar", 14));
+    return b;
+  }
+
   // La miniatura dentro de su caja cuadrada (fondo oscuro, sin deformar).
   _mini(mini, duracion) {
     const caja = el("div", "ed-bib-mini");
@@ -557,6 +606,7 @@ export class Biblioteca {
     item.title = nombre;
     const mini = this._mini(miniatura(m), m.tipo === "video" ? duracionTexto(m.duracion_ms) : "");
     mini.append(this._botonMas(clave, `Agregar «${nombre}» a la edición`));
+    if (puedeBorrarse(m) && this.urls.borrar_material) mini.append(this._botonBorrar(m, nombre));
     item.append(mini);
     el("span", "ed-bib-nombre", item, nombre);
     return item;
@@ -599,6 +649,7 @@ export class Biblioteca {
     oir.dataset.escuchar = clave;
     this._pintarBotonEscucha(oir, nombre);
     fila.append(this._botonMas(clave, `Agregar «${nombre}» como música desde el cabezal`));
+    if (puedeBorrarse(m) && this.urls.borrar_material) fila.append(this._botonBorrar(m, nombre));
     return fila;
   }
 
@@ -616,6 +667,8 @@ export class Biblioteca {
     if (mas) return void this.agregar(mas.dataset.agregar);
     const oir = t.closest?.("[data-escuchar]");
     if (oir) return this._escuchar(oir.dataset.escuchar);
+    const borrar = t.closest?.("[data-borrar]");
+    if (borrar) return void this.borrar(Number(borrar.dataset.borrar));
     const quitar = t.closest?.("[data-quitar-subida]");
     if (quitar) return quitar.closest(".ed-bib-subida")?.remove();
     if (t.closest?.("[data-reintentar]")) return void this.cargar();
@@ -718,6 +771,48 @@ export class Biblioteca {
     this._pintarListas();
     this._decir(j?.error || `No se pudo preparar ese video (error ${r.status}).`, true);
     return false;
+  }
+
+  // ---- Borrar (capa 4c) ----
+
+  // Pregunta antes (no se puede deshacer); lo que usa la edición abierta ni
+  // se manda. El servidor se niega si otra edición (o una versión producida)
+  // lo usa y dice cuál. Borrado, sale de la lista y deja de contar en la cuota.
+  async borrar(id) {
+    const m = this._material(id);
+    if (!m) return false;
+    const nombre = nombreDe(m);
+    const motivo = motivoNoBorrar(m, this.editor.doc());
+    if (motivo) {
+      this._decir(motivo, true);
+      return false;
+    }
+    if (!window.confirm(`¿Borrar «${nombre}»? Sale de tus archivos y no se puede deshacer.`)) return false;
+    let r;
+    let j = null;
+    try {
+      r = await fetch(urlBorrar(this.urls.borrar_material, id), {
+        method: "POST", credentials: "same-origin", headers: { Accept: "application/json" },
+      });
+      if (!sesionTerminada(r)) j = await r.json().catch(() => null);
+    } catch {
+      this._decir("Sin conexión: no se pudo borrar. Vuelve a intentar.", true);
+      return false;
+    }
+    if (sesionTerminada(r)) {
+      this._decir(MENSAJE_SESION, true);
+      return false;
+    }
+    if (!r.ok || !j?.ok) {
+      this._decir(j?.error || `No se pudo borrar (error ${r.status}).`, true);
+      return false;
+    }
+    if (this.escucha?.clave === `m:${id}`) this._pararEscucha();
+    this.esperando.delete(id);
+    this.datos = quitarMaterial(this.datos, id);
+    this._pintarListas();
+    this._decir(`Se borró «${nombre}».`);
+    return true;
   }
 
   // ---- Preguntar por lo que el servidor prepara (cada 3 s, hasta 5 min) ----
@@ -1003,7 +1098,7 @@ export class Biblioteca {
   _abajo(e) {
     if (e.button !== 0 || !e.isPrimary || e.pointerType === "touch" || this.arrastre) return;
     const item = e.target.closest?.("[data-arrastrable]");
-    if (!item || !this.contenedor.contains(item) || e.target.closest("[data-agregar], [data-escuchar]")) return;
+    if (!item || !this.contenedor.contains(item) || e.target.closest("[data-agregar], [data-escuchar], [data-borrar]")) return;
     e.preventDefault();                           // sin seleccionar texto ni robar el foco (S, Supr, Ctrl+Z siguen andando)
     this.arrastre = {
       clave: item.dataset.clave, cosa: this.cosas.get(item.dataset.clave), pointerId: e.pointerId,

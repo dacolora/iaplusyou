@@ -65,6 +65,12 @@ def test_desplazamiento_de_deslizar_igual_a_python():
     assert _constante_js("tiempo.js", "DESPLAZ_ANIM_FRACCION") == compilador.DESPLAZ_ANIM_FRACCION
 
 
+def test_la_biblioteca_ofrece_borrar_lo_mismo_que_el_servidor_acepta():
+    # Capa 4c (8/10): el tacho sale solo donde la ruta sí borra.
+    from final_edition import biblioteca
+    assert _constante_js("biblioteca.js", "ORIGENES_BORRABLES") == list(biblioteca.ORIGENES_BORRABLES)
+
+
 def test_transiciones_js_iguales_a_python():
     # la biblioteca ofrece solo las transiciones que el render hace
     assert _constante_js("operaciones.js", "TRANSICIONES") == list(documento.TRANSICIONES)

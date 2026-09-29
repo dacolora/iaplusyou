@@ -132,24 +132,33 @@ def actualizar_extra(cliente, material_id, **campos):
     return obtener(cliente, mid)
 
 
-def en_uso(cliente, material_id):
-    """True si algún documento vivo (`edicion`) o congelado (`edicion_version`,
-    que se puede restaurar o volver a producir) de ese cliente lo lista en
-    `materiales` (lista que `documento.validar` deriva de los clips)."""
+def edicion_que_lo_usa(cliente, material_id):
+    """{id, nombre, creada_por} de la primera edición de ese cliente cuyo
+    documento vivo (`edicion`) o alguna versión congelada (`edicion_version`,
+    que se puede restaurar o volver a producir) lo lista en `materiales`
+    (lista que `documento.validar` deriva de los clips); None si ninguna. La
+    biblioteca del editor la nombra al negarse a borrarlo (capa 4c)."""
     mid = int(material_id)
 
     def _lo_lista(doc):
         return mid in [int(x) for x in (doc or {}).get("materiales") or []]
+    cols = (db.edicion.c.id, db.edicion.c.nombre, db.edicion.c.creada_por)
     with db.conectar() as con:
-        for (doc,) in con.execute(sa.select(db.edicion.c.documento).where(db.edicion.c.cliente == cliente)):
-            if _lo_lista(doc):
-                return True
-        for (doc,) in con.execute(sa.select(db.edicion_version.c.documento)
-                                  .join(db.edicion, db.edicion.c.id == db.edicion_version.c.edicion_id)
-                                  .where(db.edicion.c.cliente == cliente)):
-            if _lo_lista(doc):
-                return True
-    return False
+        for f in con.execute(sa.select(*cols, db.edicion.c.documento).where(db.edicion.c.cliente == cliente)):
+            if _lo_lista(f.documento):
+                return {"id": f.id, "nombre": f.nombre, "creada_por": f.creada_por}
+        for f in con.execute(sa.select(*cols, db.edicion_version.c.documento)
+                             .join(db.edicion, db.edicion.c.id == db.edicion_version.c.edicion_id)
+                             .where(db.edicion.c.cliente == cliente)):
+            if _lo_lista(f.documento):
+                return {"id": f.id, "nombre": f.nombre, "creada_por": f.creada_por}
+    return None
+
+
+def en_uso(cliente, material_id):
+    """True si algún documento vivo o congelado de ese cliente lo usa
+    (`edicion_que_lo_usa`)."""
+    return edicion_que_lo_usa(cliente, material_id) is not None
 
 
 def _key_de_url(url):
@@ -174,7 +183,8 @@ def borrar(cliente, material_id):
     # La fila es el único handle al objeto en R2: si el borrado ahí falla,
     # propaga y no toca la base — mejor un material huérfano en la base
     # (reintentable) que uno huérfano en R2 (sin ninguna fila que lo recuerde).
-    for url in (mat["url"], mat.get("url_proxy")):
+    # la tira de miniaturas (extra.tira_url, de edicion_proxy) también es suya
+    for url in (mat["url"], mat.get("url_proxy"), (mat.get("extra") or {}).get("tira_url")):
         if url and url.startswith("http"):
             key = _key_de_url(url)
             if _clave_propia(cliente, key):
