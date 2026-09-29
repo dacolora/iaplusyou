@@ -11,17 +11,51 @@
 // no suma escuchas. En pantalla táctil la línea se desliza con el dedo: tocar
 // (sin deslizar) elige un clip o lleva el cabezal, y solo el clip ya elegido
 // se arrastra — si no, deslizar sobre la fila del video nunca movería la vista.
+//
+// Capa 4b: todo va en UNA caja que corre en los dos sentidos (la página nunca
+// de lado): a la izquierda la columna de cabeceras (icono + nombre de cada
+// fila) queda fija mientras la línea corre, y la regla queda arriba al bajar
+// entre muchas filas. Cada audio con `picos` dibuja su onda en un <canvas>
+// (escala.barrasOnda), rehecho en cada dibujar (zoom, recorte, volumen). Para
+// soltar desde la biblioteca: `puntoEn(x, y)` dice qué hay bajo el dedo y
+// `resaltar(punto | null)` marca esa fila y dónde entraría. Cada unión de la
+// principal con transición lleva su marca (escala.unionesConTransicion);
+// tocarla elige el clip de antes (el que tiene la transición).
 import {
-  ANCHO_MIN_PX, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, ladosRecortables, marcasRegla, msAPx, nombreFila,
-  PPS_DEFECTO, PPS_MAX, PPS_MIN, pxAMs, soltar,
+  ANCHO_MIN_PX, barrasOnda, cabeceraFila, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, ladosRecortables, marcasRegla,
+  msAPx, msInsercion, nombreFila, PASO_ONDA_PX, PPS_DEFECTO, PPS_MAX, PPS_MIN, puntoSoltar, pxAMs, soltar, unionesConTransicion,
+  VENTANA_PICOS_MS,
 } from "./escala.js";
 import { ID_SONIDO } from "./operaciones.js";
 import { duracionMs, pistaPrincipal } from "./tiempo.js";
 
-const ALTO_FILA = { video: 56, superpuesto: 34, imagen: 30, texto: 30, audio: 28 };
+const ALTO_FILA = { video: 56, superpuesto: 34, imagen: 30, texto: 30, audio: 36 };
+const ALTO_ESPEJO = 24;          // el sonido de la escena: sin onda (su material es el video), fila baja
+const ETIQUETA_ONDA_PX = 13;     // arriba del clip de audio va su nombre; la onda, debajo
+const ONDA_MAX_PX = 8192;        // ancho máximo del canvas de una onda: más ancho, se estira
 const IMAN_PX = 8;
 const ARRASTRE_MIN_PX = 4;
 const MARGEN_FIN_PX = 120;       // lugar vacío tras el último clip, para soltar ahí
+
+// Iconos de las cabeceras (viewBox 24×24, trazo): texto fijo, sin datos de nadie.
+const ICONOS = {
+  video: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>',
+  texto: '<path d="M5 7V5h14v2M12 5v14M9 19h6"/>',
+  imagen: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M20 16l-4.5-4.5L7 19"/>',
+  musica: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  voz: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+  sonido: '<path d="M4 9.5v5h4l5 4v-13l-5 4z"/><path d="M16.5 9a4.5 4.5 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/>',
+  transicion: '<path d="M4 6l8 6-8 6zM20 6l-8 6 8 6z"/>',
+};
+
+function iconoSvg(nombre, tam, clase) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  for (const [k, v] of Object.entries({ class: clase, viewBox: "0 0 24 24", width: String(tam), height: String(tam),
+    "aria-hidden": "true", focusable: "false", fill: "none", stroke: "currentColor", "stroke-width": "1.8",
+    "stroke-linecap": "round", "stroke-linejoin": "round" })) svg.setAttribute(k, v);
+  svg.innerHTML = ICONOS[nombre] ?? ICONOS.video;              // texto fijo de este módulo
+  return svg;
+}
 
 function el(tag, clase, padre) {
   const n = document.createElement(tag);
@@ -32,10 +66,12 @@ function el(tag, clase, padre) {
 
 export class LineaTiempo {
   // `destino()`: el `<idioma>_<PAIS>` de la vista previa, para escribir los
-  // textos variables con su valor en ese destino.
+  // textos variables con su valor en ese destino. `ventanaPicosMs`: cada
+  // cuánto de fuente hay un pico (config.ventana_picos_ms de la página).
   constructor({ contenedor, zoom, materiales = () => ({}), destino = () => null, alSeleccionar = () => {}, alOperar = () => {},
-    alIr = () => {} }) {
+    alIr = () => {}, ventanaPicosMs = VENTANA_PICOS_MS }) {
     Object.assign(this, { contenedor, zoomInput: zoom, materiales, destino, alSeleccionar, alOperar, alIr });
+    this.ventanaPicosMs = Number(ventanaPicosMs) > 0 ? Number(ventanaPicosMs) : VENTANA_PICOS_MS;
     this._pps = PPS_DEFECTO;
     this.doc = null;
     this.seleccion = null;
@@ -43,11 +79,18 @@ export class LineaTiempo {
     this.arrastre = null;        // {id, modo, lado, pointerId, x0, dx, activo, el, ancho0}
     this.buscando = null;        // pointerId mientras se lleva el cabezal con el mouse
     this.toque = null;           // pantalla táctil: lo que hará el toque si no se desliza
+    this.resaltado = null;       // lo que pidió resaltar la biblioteca mientras arrastra
     this.scroll = el("div", "linea-scroll", contenedor);
-    this.lienzo = el("div", "linea-lienzo", this.scroll);
+    this.marco = el("div", "ed-linea-marco", this.scroll);
+    this.cabeceras = el("div", "ed-cabeceras", this.marco);
+    el("div", "ed-cabeceras-esquina", this.cabeceras);
+    this.listaCabeceras = el("div", "ed-cabeceras-filas", this.cabeceras);
+    this.lienzo = el("div", "linea-lienzo", this.marco);
     this.regla = el("div", "linea-regla", this.lienzo);
     this.filas = el("div", "linea-filas", this.lienzo);
     this.cabezal = el("div", "linea-cabezal", this.lienzo);
+    this.marcaSoltar = el("div", "ed-marca-soltar", this.lienzo);
+    this.marcaSoltar.hidden = true;
     this.lienzo.addEventListener("pointerdown", (e) => this._abajo(e));
     this.lienzo.addEventListener("pointermove", (e) => this._mover(e));
     this.lienzo.addEventListener("pointerup", (e) => this._arriba(e));
@@ -91,7 +134,8 @@ export class LineaTiempo {
     this.seleccion = seleccion;
     const pps = this._pps;
     const total = duracionMs(doc);
-    this.lienzo.style.width = `${Math.max(this.scroll.clientWidth, msAPx(total, pps) + MARGEN_FIN_PX)}px`;
+    const visible = Math.max(0, this.scroll.clientWidth - this.cabeceras.offsetWidth);
+    this.lienzo.style.width = `${Math.max(visible, msAPx(total, pps) + MARGEN_FIN_PX)}px`;
     this.regla.replaceChildren(...marcasRegla(total, pps).map((m) => {
       const n = el("span", "linea-marca");
       n.style.left = `${m.px}px`;
@@ -101,12 +145,17 @@ export class LineaTiempo {
     const principal = pistaPrincipal(doc);
     const mats = this.materiales() ?? {};
     const destino = this.destino();
+    const ondas = [];
+    const cabeceras = [];
     this.filas.replaceChildren(...filasVisuales(doc).map((pista) => {
       const fila = el("div", `linea-fila linea-fila-${pista.tipo}${pista === principal ? " linea-principal" : ""}`);
       const espejo = pista.id === ID_SONIDO;
+      const alto = espejo ? ALTO_ESPEJO : (ALTO_FILA[pista.tipo] ?? 30);
       fila.dataset.pista = pista.id;
-      fila.style.height = `${ALTO_FILA[pista.tipo] ?? 30}px`;
+      fila.dataset.tipo = pista.tipo;
+      fila.style.height = `${alto}px`;
       fila.title = nombreFila(pista, doc);
+      cabeceras.push(this._cabecera(pista, doc, alto, fila.title, pista.clips.some((c) => c.id === seleccion)));
       for (const clip of pista.clips) {
         const c = el("div", `linea-clip linea-${pista.tipo}${espejo ? " linea-espejo" : ""}${clip.id === seleccion ? " linea-seleccion" : ""}`, fila);
         c.dataset.clip = clip.id;
@@ -125,13 +174,38 @@ export class LineaTiempo {
           }
           if (Number(clip.velocidad ?? 1) !== 1) el("span", "linea-insignia", c).textContent = `${clip.velocidad}×`;
         } else {
+          const picos = pista.tipo === "audio" ? mats[clip.material_id]?.picos : null;
+          if (Array.isArray(picos) && picos.length) {
+            // la onda debajo del nombre; el canvas se pinta ya puesto en la página
+            c.classList.add("ed-con-onda");
+            const canvas = el("canvas", "ed-onda", c);
+            canvas.setAttribute("aria-hidden", "true");
+            const altoOnda = alto - 2 - ETIQUETA_ONDA_PX;          // 2: el borde del clip
+            canvas.style.height = `${altoOnda}px`;
+            ondas.push({ canvas, clip, picos, ancho: parseFloat(c.style.width) - 2, alto: altoOnda });
+          }
           el("span", "linea-etiqueta", c).textContent = etiqueta;
         }
         // sin asas: el sonido de la escena y la voz que cambia por país
         for (const lado of ladosRecortables(pista, clip)) el("span", "linea-asa", c).dataset.lado = lado;
       }
+      if (pista === principal) {
+        for (const u of unionesConTransicion(doc)) {
+          const m = el("span", `ed-union${u.clipId === seleccion ? " ed-union-elegida" : ""}`, fila);
+          m.dataset.clip = u.clipId;
+          m.style.left = `${msAPx(u.ms, pps)}px`;
+          m.title = `Transición: ${u.nombre}`;
+          m.append(iconoSvg("transicion", 12, "ed-union-icono"));
+        }
+      }
       return fila;
     }));
+    this.listaCabeceras.replaceChildren(...cabeceras);
+    if (ondas.length) {
+      const color = getComputedStyle(ondas[0].canvas).color;
+      for (const o of ondas) this._pintarOnda(o, color);
+    }
+    this._pintarResaltado();
     this.moverCabezal(cabezalMs);
     // redibujado a mitad de un arrastre (llegó una tira, cambió el zoom): el
     // clip arrastrado es otro nodo, se le vuelve a poner donde va el dedo
@@ -147,8 +221,97 @@ export class LineaTiempo {
     const x = msAPx(tMs, this._pps);
     this.cabezal.style.left = `${x}px`;
     if (seguir && !this.arrastre && this.buscando === null) {
+      // lo que se ve de la línea: la caja menos la columna de cabeceras, que la tapa
       const s = this.scroll;
-      if (x < s.scrollLeft || x > s.scrollLeft + s.clientWidth - 16) s.scrollLeft = Math.max(0, x - s.clientWidth / 4);
+      const visible = s.clientWidth - this.cabeceras.offsetWidth;
+      if (x < s.scrollLeft || x > s.scrollLeft + visible - 16) s.scrollLeft = Math.max(0, x - visible / 4);
+    }
+  }
+
+  // Qué hay bajo un punto de la pantalla para soltar ahí algo de la
+  // biblioteca: `{pistaId, tipo, tMs, indicePrincipal}` (escala.puntoSoltar;
+  // `indicePrincipal` solo sobre la fila del video), o null si el punto está
+  // fuera de la línea de tiempo. Sobre la columna de cabeceras cuenta el
+  // primer instante que se ve; sobre la regla, ninguna fila.
+  puntoEn(clientX, clientY) {
+    if (!this.doc) return null;
+    const caja = this.scroll.getBoundingClientRect();
+    if (!(clientX >= caja.left && clientX < caja.right && clientY >= caja.top && clientY < caja.bottom)) return null;
+    const lienzo = this.lienzo.getBoundingClientRect();
+    const x = Math.max(clientX, this.cabeceras.getBoundingClientRect().right) - lienzo.left;
+    const sobreRegla = clientY < this.regla.getBoundingClientRect().bottom;
+    const filas = [...this.filas.children].map((f) => {
+      const r = f.getBoundingClientRect();
+      return { pistaId: f.dataset.pista, tipo: f.dataset.tipo, top: r.top - lienzo.top, alto: r.height };
+    });
+    return puntoSoltar(this.doc, filas, x, sobreRegla ? -1 : clientY - lienzo.top, this._pps, {
+      toleranciaMs: pxAMs(IMAN_PX, this._pps), cabezalMs: this.cabezalMs,
+    });
+  }
+
+  // Marca la fila (y su cabecera) de un punto de `puntoEn` y una raya donde
+  // entraría: en la principal, el lugar entre clips; en otra fila, el instante;
+  // fuera de las filas, a lo alto de todas. `null` lo quita. Sobrevive a un
+  // redibujado mientras la biblioteca sigue arrastrando.
+  resaltar(punto) {
+    this.resaltado = punto ? { ...punto } : null;
+    this._pintarResaltado();
+  }
+
+  _pintarResaltado() {
+    for (const n of this.marco.querySelectorAll(".ed-fila-destino")) n.classList.remove("ed-fila-destino");
+    const p = this.resaltado;
+    if (!p || !this.doc) {
+      this.marcaSoltar.hidden = true;
+      return;
+    }
+    let top = this.filas.offsetTop;
+    let alto = this.filas.offsetHeight;
+    if (p.pistaId) {
+      const cual = `[data-pista="${CSS.escape(p.pistaId)}"]`;
+      const fila = this.filas.querySelector(cual);
+      this.listaCabeceras.querySelector(cual)?.classList.add("ed-fila-destino");
+      if (fila) {
+        fila.classList.add("ed-fila-destino");
+        top = fila.offsetTop;
+        alto = fila.offsetHeight;
+      }
+    }
+    const enPrincipal = p.indicePrincipal !== null && p.indicePrincipal !== undefined;
+    const ms = enPrincipal ? msInsercion(this.doc, p.indicePrincipal) : Math.max(0, Number(p.tMs) || 0);
+    Object.assign(this.marcaSoltar.style, { left: `${msAPx(ms, this._pps)}px`, top: `${top}px`, height: `${alto}px` });
+    this.marcaSoltar.hidden = false;
+  }
+
+  _cabecera(pista, doc, alto, titulo, elegida) {
+    const { icono, nombre } = cabeceraFila(pista, doc);
+    const n = el("div", `ed-cabecera ed-cabecera-${icono}${elegida ? " ed-cabecera-elegida" : ""}`);
+    n.dataset.pista = pista.id;
+    n.style.height = `${alto}px`;
+    n.title = titulo;
+    n.append(iconoSvg(icono, 16, "ed-cabecera-icono"));
+    el("span", "ed-cabecera-nombre", n).textContent = nombre;
+    return n;
+  }
+
+  // La onda de un clip de audio en su canvas: a la densidad de la pantalla,
+  // y si el clip es tan ancho que el canvas pasaría de ONDA_MAX_PX, un canvas
+  // más chico que el navegador estira (las barras nunca bajan de 2 px suyos).
+  _pintarOnda({ canvas, clip, picos, ancho, alto }, color) {
+    if (!(ancho > 0) || !(alto > 0)) return;
+    const dpr = Math.max(1, Number(globalThis.devicePixelRatio) || 1);
+    const w = Math.max(1, Math.min(ONDA_MAX_PX, Math.round(ancho * dpr)));
+    const h = Math.max(1, Math.round(alto * dpr));
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const escala = w / ancho;                                 // px del canvas por px de la línea
+    const paso = Math.max(2, PASO_ONDA_PX * escala);
+    const grosor = Math.max(1, paso * (2 / 3));
+    ctx.fillStyle = color;
+    for (const b of barrasOnda(picos, clip, this._pps * escala, h, { ventanaMs: this.ventanaPicosMs, paso })) {
+      ctx.fillRect(b.x, h - b.alto, grosor, b.alto);
     }
   }
 
@@ -190,6 +353,16 @@ export class LineaTiempo {
     const activo = document.activeElement;
     if (activo && activo !== document.body) activo.blur?.();
     const tactil = e.pointerType === "touch";
+    // la marca de una transición: elige el clip que la tiene (el de antes del corte)
+    const union = e.target.closest?.(".ed-union");
+    if (union) {
+      if (tactil) this.toque = { pointerId: e.pointerId, clip: union.dataset.clip };
+      else {
+        this.alSeleccionar(union.dataset.clip);
+        e.preventDefault();
+      }
+      return;
+    }
     const clipEl = e.target.closest?.(".linea-clip");
     if (clipEl && !clipEl.classList.contains("linea-espejo")) {
       const id = clipEl.dataset.clip;

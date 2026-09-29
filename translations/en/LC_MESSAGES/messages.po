@@ -1766,6 +1766,9 @@ msgstr "Audience and product"
 msgid "Audio nativo del modelo, sin diálogo ni música."
 msgstr "The model's native audio, no dialogue or music."
 
+msgid "Automático con IA (opcional)"
+msgstr "Automatic with AI (optional)"
+
 msgid "Avanzado (objetivo, atribución, modo, destino)"
 msgstr "Advanced (objective, attribution, mode, destination)"
 
@@ -3297,11 +3300,11 @@ msgstr "Edit the prompt"
 msgid "Editado a mano: las cifras que escribas aquí se usan tal cual."
 msgstr "Edited by hand: any figures you write here are used as is."
 
+msgid "Editar"
+msgstr "Edit"
+
 msgid "Editar a mano"
 msgstr "Edit by hand"
-
-msgid "Editar este video"
-msgstr "Edit this video"
 
 msgid "Editar estudio"
 msgstr "Edit study"
@@ -5209,11 +5212,11 @@ msgstr "Free for your own use (100 calls per minute). If the product is sold, Re
 msgid "Gratis: 100 búsquedas por día por proyecto de Google y 10 000 unidades para leer comentarios."
 msgstr "Free: 100 searches a day per Google project and 10 000 units to read comments."
 
+msgid "Gratis: corta, recorta, reordena, agrega texto y música en el editor."
+msgstr "Free: split, trim, reorder, add text and music in the editor."
+
 msgid "Gratis: solo lectura de tus publicaciones."
 msgstr "Free: read-only access to your listings."
-
-msgid "Gratis: una edición con el video tal cual, para cortarlo, recortarlo y reordenarlo."
-msgstr "Free: an edit with the video as is, to split, trim and reorder it."
 
 msgid "Guarda cada imagen y video generado y les da una URL pública permanente."
 msgstr "Stores every generated image and video and gives them a permanent public URL."
@@ -7831,8 +7834,8 @@ msgstr "Asking WaveSpeed for the video… if it already finished, it shows up he
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
 
-msgid "Preparando el video para el editor… la página se recarga sola."
-msgstr "Preparing the video for the editor… the page reloads on its own."
+msgid "Preparando el video para el editor… la página se recarga y entra sola."
+msgstr "Preparing the video for the editor… the page reloads and opens it on its own."
 
 msgid "Preparando para el editor…"
 msgstr "Preparing for the editor…"

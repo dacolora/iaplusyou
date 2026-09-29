@@ -150,6 +150,18 @@
       var cf;
       try { cf = decodeURIComponent(m[1]); } catch (e) { return; }   // un «%» suelto escrito a mano
       var card = panel.querySelector('#fe-videos .generado[data-cf="' + CSS.escape(cf) + '"]');
+      // Editor capa 4b (9/9): «Editar» encola el trabajo y vuelve acá con
+      // &abrir=editor; cuando iniciarPolling() termina, recarga la MISMA
+      // URL (mismo hash) — si para entonces la tarjeta ya tiene su edición
+      // (data-editor-url, ver _final_tarjetas.html: vacío mientras
+      // trabajo_editor sigue en curso), se entra directo al editor en vez
+      // de abrir el detalle. Si la tarjeta no llegó a pintarse (paginada
+      // fuera de las primeras 24), se cae al detalle remoto de siempre.
+      if (card && /[?&]abrir=editor(?:&|$)/.test(location.hash) && card.dataset.editorUrl) {
+        history.replaceState(null, '', location.pathname + location.search + '#final?cf=' + encodeURIComponent(cf));
+        location.href = card.dataset.editorUrl;
+        return;
+      }
       if (card) { abrir(card); return; }
       abrirDetalleRemoto(modal, cuerpo, URL_DETALLE.replace('__CF__', encodeURIComponent(cf)), alInsertar);
     }

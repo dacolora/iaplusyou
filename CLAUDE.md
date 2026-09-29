@@ -514,7 +514,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
 
-**Editor (capas 1–4a, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–4b, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -613,6 +613,32 @@ destino is first resolved and checked with `verificar_recortes`, a destino whose
 is refused, and a final with video NOT made from this edición — `ediciones.edicion_de_final` — needs
 `reemplazar: true`, which the dialog asks for). The editor and the automatic path now share the borrador:
 `produccion.traducir` re-applies its pure steps on a CAS conflict (up to 2 retries) instead of paying again.
+Capa 4b (2026-09-28, «tipo CapCut», plan `docs/superpowers/plans/2026-09-28-editor-capa4b-capcut.md`): the page is
+library | player | properties with the toolbar and a multi-track timeline below at full width (≤ 760 px: player,
+toolbar and timeline, and the library and properties are bottom sheets — «Medios · Audio · Texto · Transiciones» and
+«Editar», closed with «Listo»); in the Final edition tab «Editar» is the main action of every ready video and the
+automatic AI path is a closed, optional `<details>`. Library: `final_edition/biblioteca.py` (upload video/image/audio
+as free `material` rows with origen `subida` — a phone photo is uploaded already rotated by its EXIF orientation —,
+list the project's materials, the logo included (origen `marca`), plus the ready Crear pieces, and materialize a piece
+with the free task `material_de_pieza`), routes `editor.subir`/`editor.biblioteca`/`editor.agregar_pieza`/
+`editor.materiales_por_id` (`&preparar=<ids>` queues the free `edicion_proxy` for what still lacks its proxy or peaks,
+asked once per material); browser modules `biblioteca.js`, `propiedades.js` (+ the pure `propiedades_modelo.js`),
+`lienzo_interaccion.js` (tap, drag and scale on the player; pure `seleccion.js`), `avisos_editor.js` (how the page
+notifies those modules; they only touch the edition through the `editor` object of `pagina_editor.js`, which also
+exposes `enConflicto()` so the panels say «recarga la página» instead of pointing under the video), and `historial.js`
+merges the consecutive steps of one control into one undo. New pure ops in `operaciones.js`: `agregarVideo/Imagen/
+Audio/Texto`, `cortarClip` (any track but `p_sonido`), `ponerTransicion` (the five the render does; `desenfoque` is
+shown as «Fundido a negro»), `editarTexto` (a variable text changes only the destino being viewed), `cambiar` (a
+whitelist; `fondo.ancho: null` = automatic), `volumenSonido` and `cambiarMezcla` — each with a case in
+`tests/js/salida_operaciones.mjs` that Python validates. Rules: `normalizar` NEVER creates `p_sonido` (a borrador
+whose recipe had no scene sound leaves it out on purpose, and the automatic path reuses that borrador): only
+`agregarVideo` (for its own clip; the clips already there get silent mirrors) and `volumenSonido` (that clip at the
+slider's value, the rest at 0) create it, and with nothing to mirror it stays empty instead of disappearing; nothing
+that is added lengthens the video (image/text layers and música/efecto end at the principal's end — music loops in
+the render — and with the playhead at the end they enter whole, ending there); audio added by hand only reuses a
+track whose clips share its `rol_audio` (music never lands in the voice's gap). Still out: PIP (video over video),
+color filters, rotation, a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla») and the
+editor's i18n (phase 6).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios

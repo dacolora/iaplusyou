@@ -5,7 +5,14 @@
    base.html arranca el sondeo. Se importa `with context` (cliente, paises_fe,
    ediciones_por_cf, url_for, _). #}
 {% macro tarjeta_video_fe(item) %}
-    <div class="generado" data-cf="{{ item.id }}" data-detalle="{{ url_for('fe_detalle_video', cliente=cliente, cf_id=item.id) }}" tabindex="0" role="button">
+    {% set _eds = ediciones_por_cf.get(item.id) or [] %}
+    {# Editor capa 4b (9/9): data-editor-url alimenta el desdeHash() de
+       _tab_final.html — vacío mientras trabajo_editor sigue en curso, para
+       que «Empezar otra edición» no salte a la edición VIEJA apenas se
+       recargue la página, antes de que la nueva termine. #}
+    <div class="generado" data-cf="{{ item.id }}" data-detalle="{{ url_for('fe_detalle_video', cliente=cliente, cf_id=item.id) }}"
+         data-editor-url="{{ url_for('editor.ver', cliente=cliente, edicion_id=_eds[0].id) if (_eds and not item.trabajo_editor) else '' }}"
+         tabindex="0" role="button">
       <div class="generado-media">
         <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
         <span class="generado-tipo">{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}</span>
@@ -42,7 +49,7 @@
       </div>
       <div class="generado-pie">
         <strong>{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}</strong>
-        <small>{{ ngettext('%(num)d final', '%(num)d finales', item.finales | length) }}{% if ediciones_por_cf.get(item.id) %} · {{ _('en el editor') }}{% endif %}</small>
+        <small>{{ ngettext('%(num)d final', '%(num)d finales', item.finales | length) }}{% if _eds %} · {{ _('en el editor') }}{% endif %}</small>
       </div>
     </div>
 {% endmacro %}

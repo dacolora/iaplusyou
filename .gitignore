@@ -58,6 +58,9 @@ clientes/*/importaciones/
 # Referencias subidas a los sprints (imágenes/videos + fotogramas); viven en R2, la copia local es caché
 clientes/*/sprints/
 
+# Subidas del editor a medio procesar (final_edition/biblioteca.py las borra al terminar; el archivo vive en R2)
+clientes/*/tmp_editor/
+
 # worktrees de superpowers / Claude Code
 .claude/worktrees/
 .superpowers/

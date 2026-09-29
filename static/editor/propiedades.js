@@ -1,0 +1,611 @@
+// Panel de propiedades del editor (capa 4b, Task 7): la columna de la derecha
+// («Editar»; en el celular, la hoja que sube desde abajo). Un formulario por
+// clase de lo elegido:
+//
+// - Video (la pista principal): velocidad, volumen del sonido de la escena,
+//   zoom lento, transición al siguiente (y su duración) y borrar.
+// - Texto: el texto, fuente, tamaño, color, contorno, sombra, fondo,
+//   alineación, animación de entrada, centrar y borrar.
+// - Imagen: tamaño (en % del ancho de la pantalla), opacidad, «Llenar la
+//   pantalla», «Centrar» y borrar.
+// - Audio (música, efecto, voz…): volumen, fundidos, silenciar y borrar.
+// - Nada elegido: la mezcla de toda la edición y qué hacer.
+//
+// Qué formulario toca y qué valores muestra lo decide propiedades_modelo.js
+// (puro, probado en Node); aquí solo se pone en el DOM. El formulario se ARMA
+// cuando cambia lo elegido y, con cualquier otro cambio, solo se le ponen los
+// valores nuevos: rehacerlo a mitad de un arrastre cortaría el arrastre. Un
+// deslizador opera al moverse con la clave "<clipId>:<campo>" (un solo
+// deshacer por arrastre). El campo de texto no se toca mientras se escribe en
+// él (editarTexto recorta los espacios: el cursor saltaría).
+//
+// Solo toca el DOM de su panel y la edición por `editor` (pagina_editor.js).
+// No hace nada al importarse (lo prueba Node).
+import { avisoTransicion } from "./escala.js";
+import {
+  alternarSilencio, buscar, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, claveForma,
+  escalaDePorcentaje, mensajeRechazo, modelo, textoPorcentaje, textoSegundos,
+} from "./propiedades_modelo.js";
+
+function el(tag, clase, padre, texto) {
+  const n = document.createElement(tag);
+  if (clase) n.className = clase;
+  if (texto !== undefined) n.textContent = texto;
+  if (padre) padre.append(n);
+  return n;
+}
+
+const KEN_BURNS = [
+  { valor: "ninguno", texto: "Ninguno" },
+  { valor: "in", texto: "Acercar" },
+  { valor: "out", texto: "Alejar" },
+];
+const FONDOS = [
+  { valor: "ninguno", texto: "Ninguno" },
+  { valor: "pildora", texto: "Píldora" },
+  { valor: "caja", texto: "Caja" },
+];
+const ALINEACIONES = [
+  { valor: "izquierda", texto: "Izquierda" },
+  { valor: "centro", texto: "Centro" },
+  { valor: "derecha", texto: "Derecha" },
+];
+const ANIMACIONES = [
+  { valor: "ninguna", texto: "Ninguna" },
+  { valor: "deslizar", texto: "Deslizar" },
+];
+const TEXTO_VACIO = "Escribe algo: un texto no puede quedar vacío.";
+
+export class Propiedades {
+  // `contenedor`: #ed-panel-propiedades (la caja que corre hacia abajo);
+  // `editor`: el de pagina_editor.js; `materiales()`: los de la vista previa
+  // (las medidas de una imagen, para su tamaño en % y «Llenar la pantalla»).
+  constructor({ contenedor, editor, materiales = () => ({}) }) {
+    this.contenedor = contenedor;
+    this.editor = editor;
+    this.materiales = materiales;
+    this.m = null;                    // el modelo que se ve
+    this.clave = null;                // forma:clipId del formulario armado
+    this.pintores = [];               // (m) => pone los valores de m en un control
+    this.textarea = null;
+    this.silencios = new Map();       // clipId -> volumen antes de «Silenciar»
+    this.relojMensaje = null;
+    contenedor.replaceChildren();
+    this.mensaje = el("p", "editor-aviso ed-prop-mensaje", contenedor);
+    this.mensaje.setAttribute("aria-live", "polite");
+    this.mensaje.hidden = true;
+    this.cuerpo = el("div", "ed-prop", contenedor);
+    // un clic con el mouse no deja el foco en el botón (Espacio lo volvería a apretar)
+    this.cuerpo.addEventListener("click", (e) => {
+      const b = e.target.closest?.("button");
+      if (b && e.detail > 0) b.blur();
+    });
+    editor.escuchar((que) => {
+      if (que === "foco-texto") this.enfocarTexto();
+      else if (que !== "tiempo") this.pintar();
+    });
+    this.pintar();
+  }
+
+  // ---- Pintar ----
+
+  pintar() {
+    const ed = this.editor;
+    const m = modelo(ed.doc(), ed.seleccion, { destino: ed.destino(), info: ed.info(), materiales: this.materiales() ?? {} });
+    const otra = claveForma(m) !== this.clave;
+    this.m = m;
+    if (otra) this._armar(m);
+    for (const pintor of this.pintores) pintor(m);
+  }
+
+  // Agregar un texto lo deja elegido y pide escribirlo (editor.enfocarTexto,
+  // que en el celular ya subió esta hoja): el campo, con todo seleccionado
+  // para que lo que se escriba reemplace «Escribe aquí».
+  enfocarTexto() {
+    this.pintar();
+    const t = this.textarea;
+    if (!t || t.disabled || t.readOnly) return;
+    const poner = () => {
+      t.focus();
+      t.select();
+    };
+    poner();
+    if (document.activeElement !== t) requestAnimationFrame(poner);   // la hoja todavía estaba subiendo
+  }
+
+  _armar(m) {
+    const teniaFoco = this.cuerpo.contains(document.activeElement);
+    this.clave = claveForma(m);
+    this.pintores = [];
+    this.textarea = null;
+    this.cuerpo.replaceChildren();
+    this.cuerpo.dataset.forma = m.forma;
+    const armar = {
+      documento: this._armarDocumento, video: this._armarVideo, texto: this._armarTexto, imagen: this._armarImagen,
+      audio: this._armarAudio, sonido: this._armarSonido, otro: this._armarOtro,
+    }[m.forma] ?? this._armarDocumento;
+    armar.call(this, m);
+    // lo que tenía el foco se fue con el formulario de antes: queda en el panel
+    if (teniaFoco) this.contenedor.closest("[tabindex]")?.focus({ preventScroll: true });
+  }
+
+  _decir(texto, error = false) {
+    clearTimeout(this.relojMensaje);
+    this.mensaje.textContent = texto || "";
+    this.mensaje.hidden = !texto;
+    this.mensaje.classList.toggle("error", Boolean(texto) && error);
+    if (texto) this.relojMensaje = setTimeout(() => this._decir(""), error ? 10000 : 6000);
+  }
+
+  // ---- Operar ----
+
+  // Una operación de operaciones.js sobre la edición; con `clave`, los pasos
+  // seguidos quedan en UN deshacer. Si la página la rechaza, el control
+  // vuelve a mostrar el valor que de verdad quedó (un deslizador no se queda
+  // donde se soltó) y el porqué se dice también aquí (en el celular la hoja
+  // tapa el aviso de debajo del video); con la edición cambiada en otra
+  // pestaña, eso mismo.
+  _operar(clave, nombre, ...args) {
+    const ed = this.editor;
+    const ok = clave ? ed.operarCon({ clave }, nombre, ...args) : ed.operar(nombre, ...args);
+    if (ok) {
+      if (this.mensaje.classList.contains("error")) this._decir("");
+    } else {
+      this.pintar();
+      this._decir(mensajeRechazo(ed.doc(), nombre, args, ed.info(), { conflicto: Boolean(ed.enConflicto?.()) }), true);
+    }
+    return ok;
+  }
+
+  _cambiar(clave, cambios) {
+    return this._operar(clave, "cambiar", this.m.clipId, cambios);
+  }
+
+  _clip() {
+    return buscar(this.editor.doc(), this.m?.clipId)?.clip ?? null;
+  }
+
+  _borrar() {
+    if (this.m?.clipId) this._operar(null, "borrar", this.m.clipId);
+  }
+
+  // ---- Controles: cada uno se arma una vez y anota su pintor ----
+
+  _cabeza(nombre) {
+    el("h3", "ed-prop-nombre", this.cuerpo, nombre);
+  }
+
+  _seccion(padre = this.cuerpo, visible = null) {
+    const s = el("div", "ed-prop-sub", padre);
+    if (visible) this.pintores.push((m) => { s.hidden = !visible(m); });
+    return s;
+  }
+
+  _nota(padre, leer, clase = "") {
+    const p = el("p", `ed-prop-nota ${clase}`.trim(), padre);
+    this.pintores.push((m) => {
+      const t = leer(m);
+      p.textContent = t || "";
+      p.hidden = !t;
+    });
+    return p;
+  }
+
+  // Deslizador con su etiqueta y su valor escrito al lado. `leer(m)` da
+  // {valor, min?, max?, deshabilitado?, texto?}; `aplicar(v)` opera al moverse.
+  _deslizador(padre, { id, etiqueta, min = 0, max = 100, paso = 1, escribir = textoPorcentaje, leer, aplicar }) {
+    const campo = el("div", "ed-prop-campo", padre);
+    const fila = el("div", "ed-prop-fila", campo);
+    const label = el("label", "ed-prop-etiqueta", fila, etiqueta);
+    label.htmlFor = id;
+    const salida = el("output", "ed-prop-valor", fila);
+    salida.setAttribute("for", id);
+    const input = el("input", "", campo);
+    Object.assign(input, { type: "range", id, min: String(min), max: String(max), step: String(paso) });
+    input.addEventListener("input", () => {
+      const v = Number(input.value);
+      salida.textContent = escribir(v);
+      aplicar(v);
+    });
+    input.addEventListener("change", () => this.pintar());      // al soltar: el valor que de verdad quedó
+    this.pintores.push((m) => {
+      const r = leer(m);
+      if (r.min !== undefined) input.min = String(r.min);
+      if (r.max !== undefined) input.max = String(r.max);
+      input.disabled = Boolean(r.deshabilitado);
+      if (input.value !== String(r.valor)) input.value = String(r.valor);
+      salida.textContent = r.texto ?? escribir(r.valor);
+    });
+    return input;
+  }
+
+  // Opciones excluyentes (radios con la forma de .segmentado de style.css).
+  // `opciones`: [{valor, texto, fuente?}]; `leer(m)` da {valor, deshabilitado?}.
+  _opciones(padre, { nombre, etiqueta, opciones, leer, aplicar, lista = false }) {
+    const fs = el("fieldset", "ed-prop-campo", padre);
+    el("legend", "ed-prop-etiqueta", fs, etiqueta);
+    const grupo = el("div", `segmentado ed-prop-segmentado${lista ? " ed-prop-lista" : ""}`, fs);
+    const radios = opciones.map((o) => {
+      const l = el("label", "", grupo);
+      const r = el("input", "", l);
+      Object.assign(r, { type: "radio", name: nombre, value: String(o.valor) });
+      const s = el("span", "", l, o.texto);
+      if (o.fuente) s.style.fontFamily = `"${o.fuente}", var(--font-body)`;
+      r.addEventListener("change", () => {
+        if (r.checked) aplicar(o.valor);
+      });
+      return r;
+    });
+    this.pintores.push((m) => {
+      const r = leer(m);
+      for (const radio of radios) {
+        radio.checked = radio.value === String(r.valor);
+        radio.disabled = Boolean(r.deshabilitado);
+      }
+    });
+    return fs;
+  }
+
+  _casilla(padre, { etiqueta, leer, aplicar }) {
+    const l = el("label", "ed-prop-casilla", padre);
+    const c = el("input", "", l);
+    c.type = "checkbox";
+    l.append(etiqueta);
+    c.addEventListener("change", () => aplicar(c.checked));
+    this.pintores.push((m) => {
+      c.checked = Boolean(leer(m));
+    });
+    return c;
+  }
+
+  // Un color libre (<input type=color>) con su etiqueta en la misma fila.
+  _color(padre, { id, etiqueta, leer, aplicar }) {
+    const fila = el("div", "ed-prop-fila", padre);
+    const label = el("label", "ed-prop-etiqueta", fila, etiqueta);
+    label.htmlFor = id;
+    const input = el("input", "ed-prop-color", fila);
+    Object.assign(input, { type: "color", id });
+    input.addEventListener("input", () => aplicar(input.value.toUpperCase()));
+    this.pintores.push((m) => {
+      const v = leer(m).toLowerCase();
+      if (input.value !== v) input.value = v;
+    });
+    return input;
+  }
+
+  _boton(padre, { texto, clase = "btn-sm", leer = null, aplicar }) {
+    const b = el("button", clase, padre, texto);
+    b.type = "button";
+    b.addEventListener("click", () => aplicar());
+    if (leer) {
+      this.pintores.push((m) => {
+        const r = leer(m);
+        b.disabled = Boolean(r.deshabilitado);
+        if (r.texto !== undefined) b.textContent = r.texto;
+        if (r.titulo !== undefined) b.title = r.titulo || "";
+        if (r.presionado !== undefined) b.setAttribute("aria-pressed", String(Boolean(r.presionado)));
+      });
+    }
+    return b;
+  }
+
+  _botonBorrar(leer = null) {
+    const fila = el("div", "ed-prop-acciones ed-prop-pie", this.cuerpo);
+    this._boton(fila, { texto: "Borrar", clase: "btn-sm btn-peligro", leer, aplicar: () => this._borrar() });
+  }
+
+  // ---- Los formularios ----
+
+  // Nada elegido: qué hacer y la mezcla de toda la edición.
+  _armarDocumento(m) {
+    const vacio = el("div", "estado-vacio ed-vacio ed-prop-vacio", this.cuerpo);
+    el("p", "estado-vacio-texto", vacio, m.ayuda);
+    this._cabeza("Toda la edición");
+    const fs = el("fieldset", "ed-prop-campo", this.cuerpo);
+    el("legend", "ed-prop-etiqueta", fs, "Mezcla del sonido");
+    const lista = el("div", "ed-prop-mezclas", fs);
+    const radios = m.opcionesMezcla.map((o) => {
+      const l = el("label", "opcion-tarjeta", lista);
+      const r = el("input", "", l);
+      Object.assign(r, { type: "radio", name: "ed-prop-mezcla", value: o.valor });
+      el("strong", "", l, o.texto);
+      el("small", "", l, o.ayuda);
+      r.addEventListener("change", () => {
+        if (r.checked) this._operar(null, "cambiarMezcla", o.valor);
+      });
+      return r;
+    });
+    this.pintores.push((x) => {
+      for (const r of radios) r.checked = r.value === x.mezcla;
+    });
+    this._nota(fs, (x) => (x.aMedida ? "Esta edición trae volúmenes a medida: elegir una mezcla los reemplaza." : null));
+  }
+
+  _armarVideo(m) {
+    const id = m.clipId;
+    this._cabeza("Video");
+    // Velocidad (antes en la barra de herramientas: conserva su id)
+    const campo = el("div", "ed-prop-campo", this.cuerpo);
+    const label = el("label", "ed-prop-etiqueta", campo, "Velocidad");
+    label.htmlFor = "h-velocidad";
+    const vel = el("select", "", campo);
+    vel.id = "h-velocidad";
+    for (const v of m.velocidades) vel.append(new Option(v.texto, String(v.valor)));
+    vel.addEventListener("change", () => {
+      vel.blur();                    // si no, S, Supr y Ctrl+Z irían al select
+      this._operar(null, "cambiarVelocidad", id, Number(vel.value));
+    });
+    this.pintores.push((x) => {
+      vel.value = String(x.velocidad);
+    });
+    // El sonido de la escena (lo que suena es su espejo en p_sonido)
+    this._deslizador(this.cuerpo, {
+      id: "ed-prop-sonido", etiqueta: "Volumen del sonido",
+      leer: (x) => ({ valor: x.sonido.porcentaje, deshabilitado: !x.sonido.disponible,
+                      texto: x.sonido.disponible ? undefined : "—" }),
+      aplicar: (v) => this._operar(`${id}:sonido`, "volumenSonido", id, v / 100),
+    });
+    this._nota(this.cuerpo, (x) => x.sonido.motivo);
+    this._opciones(this.cuerpo, {
+      nombre: "ed-prop-zoom", etiqueta: "Zoom lento", opciones: KEN_BURNS,
+      leer: (x) => ({ valor: x.kenBurns ?? "ninguno" }),
+      aplicar: (v) => this._cambiar(null, { ken_burns: v === "ninguno" ? null : v }),
+    });
+    this._armarTransicion(m);
+    this._botonBorrar((x) => ({ deshabilitado: !x.puedeBorrar, titulo: x.motivoBorrar }));
+  }
+
+  // Transición al siguiente video: el tipo y su duración. Si no cupo entera
+  // (el primer video no tiene de dónde sacar la cola), se dice aquí.
+  _armarTransicion(m) {
+    const id = m.clipId;
+    const fs = el("fieldset", "ed-prop-campo", this.cuerpo);
+    el("legend", "ed-prop-etiqueta", fs, "Transición al siguiente");
+    const campo = el("div", "ed-prop-campo", fs);
+    const label = el("label", "ed-prop-etiqueta ed-prop-etiqueta-sub", campo, "Tipo");
+    label.htmlFor = "ed-prop-transicion";
+    const tipo = el("select", "", campo);
+    tipo.id = "ed-prop-transicion";
+    for (const t of m.transiciones) tipo.append(new Option(t.texto, t.valor));
+    const poner = (t, ms, clave = null) => {
+      if (!this._operar(clave, "ponerTransicion", id, t, ms)) return;
+      const aviso = avisoTransicion(this.editor.doc(), id, t, ms);
+      if (aviso) this._decir(aviso, true);
+    };
+    const duracion = this._deslizador(fs, {
+      id: "ed-prop-transicion-ms", etiqueta: "Duración", min: m.transicion.min, max: m.transicion.max,
+      paso: m.transicion.paso, escribir: textoSegundos,
+      leer: (x) => ({ valor: x.transicion.duracionMs, texto: textoSegundos(x.transicion.duracionMs),
+                      deshabilitado: !x.transicion.disponible || x.transicion.tipo === "corte" }),
+      aplicar: (v) => poner(this.m.transicion.tipo, v, `${id}:transicion`),
+    });
+    tipo.addEventListener("change", () => {
+      tipo.blur();
+      poner(tipo.value, Number(duracion.value) || m.transicion.duracionMs);
+    });
+    this.pintores.push((x) => {
+      tipo.value = x.transicion.tipo;
+      tipo.disabled = !x.transicion.disponible;
+    });
+    this._nota(fs, (x) => x.transicion.motivo);
+  }
+
+  _armarTexto(m) {
+    const id = m.clipId;
+    const formato = () => this.editor.doc().formato;
+    this._cabeza("Texto");
+    // El texto: se aplica al escribir (un deshacer por racha) y nunca vacío.
+    const campo = el("div", "ed-prop-campo", this.cuerpo);
+    const label = el("label", "ed-prop-etiqueta", campo, "Texto");
+    label.htmlFor = "ed-prop-texto";
+    const area = el("textarea", "", campo);
+    Object.assign(area, { id: "ed-prop-texto", rows: 3 });
+    this.textarea = area;
+    const vacio = el("p", "ed-prop-nota ed-prop-error", campo, TEXTO_VACIO);
+    vacio.hidden = true;
+    area.addEventListener("input", () => {
+      const escrito = area.value;
+      vacio.hidden = Boolean(escrito.trim());
+      if (!vacio.hidden) return;
+      this._operar(`${id}:texto`, "editarTexto", id, escrito, this.m.texto.destino);
+    });
+    area.addEventListener("blur", () => {
+      vacio.hidden = true;
+      // lo que quedó guardado (sin espacios de más; vacío = lo de antes) — salvo
+      // que el campo se esté yendo con su formulario (otro clip elegido)
+      if (area.isConnected && this.textarea === area) this.pintar();
+    });
+    this.pintores.push((x) => {
+      area.readOnly = !x.texto.editable;
+      if (document.activeElement !== area && area.value !== x.texto.valor) area.value = x.texto.valor;
+    });
+    this._nota(campo, (x) => x.texto.nota);
+    this._opciones(this.cuerpo, {
+      nombre: "ed-prop-fuente", etiqueta: "Fuente", lista: true,
+      opciones: m.fuentes.map((f) => ({ ...f, fuente: f.valor })),
+      leer: (x) => ({ valor: x.fuente }),
+      aplicar: (v) => this._cambiar(null, { estilo: { fuente: v } }),
+    });
+    this._deslizador(this.cuerpo, {
+      id: "ed-prop-tamano", etiqueta: "Tamaño", min: m.tamano.min, max: m.tamano.max, escribir: (v) => String(v),
+      leer: (x) => ({ valor: x.tamano.px }),
+      aplicar: (v) => this._cambiar(`${id}:tamano`, { estilo: { tamano: v } }),
+    });
+    this._paleta(m);
+    // Contorno: sí/no y, si sí, su color y su grosor
+    this._casilla(this.cuerpo, {
+      etiqueta: "Contorno", leer: (x) => x.contorno.activo,
+      aplicar: (si) => this._cambiar(null, cambioContorno(si, formato())),
+    });
+    const contorno = this._seccion(this.cuerpo, (x) => x.contorno.activo);
+    this._color(contorno, {
+      id: "ed-prop-contorno-color", etiqueta: "Color del contorno", leer: (x) => x.contorno.color,
+      aplicar: (c) => this._cambiar(`${id}:contorno-color`, { estilo: { contorno: { color: c } } }),
+    });
+    this._deslizador(contorno, {
+      id: "ed-prop-grosor", etiqueta: "Grosor", min: m.contorno.min, max: m.contorno.max, escribir: (v) => String(v),
+      leer: (x) => ({ valor: x.contorno.grosorPx }),
+      aplicar: (v) => this._cambiar(`${id}:grosor`, cambioGrosor(v, formato())),
+    });
+    this._casilla(this.cuerpo, {
+      etiqueta: "Sombra", leer: (x) => x.sombra.activo,
+      aplicar: (si) => this._cambiar(null, cambioSombra(si, formato())),
+    });
+    // Fondo: la forma y, con uno puesto, su color y su opacidad
+    this._opciones(this.cuerpo, {
+      nombre: "ed-prop-fondo", etiqueta: "Fondo", opciones: FONDOS,
+      leer: (x) => ({ valor: x.fondo.tipo }),
+      aplicar: (v) => this._cambiar(null, cambioFondo(v, this._clip()?.estilo?.fondo ?? null)),
+    });
+    const fondo = this._seccion(this.cuerpo, (x) => x.fondo.tipo !== "ninguno");
+    this._color(fondo, {
+      id: "ed-prop-fondo-color", etiqueta: "Color del fondo", leer: (x) => x.fondo.color,
+      aplicar: (c) => this._cambiar(`${id}:fondo-color`, { estilo: { fondo: { color: c } } }),
+    });
+    this._deslizador(fondo, {
+      id: "ed-prop-fondo-opacidad", etiqueta: "Opacidad del fondo",
+      leer: (x) => ({ valor: x.fondo.opacidad }),
+      aplicar: (v) => this._cambiar(`${id}:fondo-opacidad`, { estilo: { fondo: { opacidad: v / 100 } } }),
+    });
+    this._opciones(this.cuerpo, {
+      nombre: "ed-prop-alineacion", etiqueta: "Alineación", opciones: ALINEACIONES,
+      leer: (x) => ({ valor: x.alineacion }),
+      aplicar: (v) => this._cambiar(null, { estilo: { alineacion: v } }),
+    });
+    this._opciones(this.cuerpo, {
+      nombre: "ed-prop-animacion", etiqueta: "Animación de entrada", opciones: ANIMACIONES,
+      leer: (x) => ({ valor: x.animacion }),
+      aplicar: (v) => this._cambiar(null, { animacion: { entrada: v } }),
+    });
+    const fs = el("fieldset", "ed-prop-campo", this.cuerpo);
+    el("legend", "ed-prop-etiqueta", fs, "Posición");
+    const acciones = el("div", "ed-prop-acciones", fs);
+    this._boton(acciones, {
+      texto: "Centrar a lo ancho", leer: (x) => ({ deshabilitado: x.centrado.x, titulo: x.centrado.x ? "Ya está centrado a lo ancho." : "" }),
+      aplicar: () => this._cambiar(null, { transform: { x: 0.5 } }),
+    });
+    this._boton(acciones, {
+      texto: "Centrar a lo alto", leer: (x) => ({ deshabilitado: x.centrado.y, titulo: x.centrado.y ? "Ya está centrado a lo alto." : "" }),
+      aplicar: () => this._cambiar(null, { transform: { y: 0.5 } }),
+    });
+    this._botonBorrar();
+  }
+
+  // Color del texto: blanco, negro, el de la marca, amarillo, rojo y uno libre.
+  _paleta(m) {
+    const id = m.clipId;
+    const fs = el("fieldset", "ed-prop-campo", this.cuerpo);
+    el("legend", "ed-prop-etiqueta", fs, "Color");
+    const fila = el("div", "ed-prop-colores", fs);
+    const muestras = m.paleta.map((c) => {
+      const b = el("button", "ed-prop-muestra", fila);
+      b.type = "button";
+      b.style.background = c.color;
+      b.title = c.nombre;
+      b.setAttribute("aria-label", c.nombre);
+      b.addEventListener("click", () => this._cambiar(null, { estilo: { color: c.color } }));
+      return { b, color: c.color };
+    });
+    const otro = el("label", "ed-prop-otro", fila);
+    const input = el("input", "ed-prop-color", otro);
+    input.type = "color";
+    otro.append("Otro");
+    input.addEventListener("input", () => this._cambiar(`${id}:color`, { estilo: { color: input.value.toUpperCase() } }));
+    this.pintores.push((x) => {
+      for (const { b, color } of muestras) b.setAttribute("aria-pressed", String(color === x.color));
+      const v = x.color.toLowerCase();
+      if (input.value !== v) input.value = v;
+    });
+  }
+
+  _armarImagen(m) {
+    const id = m.clipId;
+    const medidas = () => {
+      const clip = this._clip();
+      return { clip, material: this.materiales()?.[clip?.material_id] ?? null, formato: this.editor.doc().formato };
+    };
+    this._cabeza("Imagen");
+    this._deslizador(this.cuerpo, {
+      id: "ed-prop-imagen-tamano", etiqueta: "Tamaño (del ancho de la pantalla)", min: m.tamano.min, max: m.tamano.max,
+      leer: (x) => ({ valor: x.tamano.porcentaje, min: x.tamano.min, max: x.tamano.max }),
+      aplicar: (v) => {
+        const { clip, material, formato } = medidas();
+        if (clip) this._cambiar(`${id}:escala`, { transform: { escala: escalaDePorcentaje(v, clip, material, formato) } });
+      },
+    });
+    this._deslizador(this.cuerpo, {
+      id: "ed-prop-imagen-opacidad", etiqueta: "Opacidad",
+      leer: (x) => ({ valor: x.opacidad }),
+      aplicar: (v) => this._cambiar(`${id}:opacidad`, { transform: { opacidad: v / 100 } }),
+    });
+    const acciones = el("div", "ed-prop-acciones", this.cuerpo);
+    this._boton(acciones, {
+      texto: "Llenar la pantalla", leer: (x) => ({ deshabilitado: x.llena }),
+      aplicar: () => {
+        const { clip, material, formato } = medidas();
+        if (!clip || !this._cambiar(null, cambioLlenar(clip, material, formato))) return;
+        if (!this.m.llenar.alcanza) this._decir("La imagen es chica: quedó lo más grande posible, pero no llega a llenar toda la pantalla.", true);
+      },
+    });
+    this._boton(acciones, {
+      texto: "Centrar", leer: (x) => ({ deshabilitado: x.centrada }),
+      aplicar: () => this._cambiar(null, { transform: { x: 0.5, y: 0.5 } }),
+    });
+    this._botonBorrar();
+  }
+
+  _armarAudio(m) {
+    const id = m.clipId;
+    this._cabeza(m.nombre);
+    this._deslizador(this.cuerpo, {
+      id: "ed-prop-volumen", etiqueta: "Volumen",
+      leer: (x) => ({ valor: x.volumen }),
+      aplicar: (v) => {
+        this.silencios.delete(id);
+        this._cambiar(`${id}:volumen`, { audio: { volumen: v / 100 } });
+      },
+    });
+    for (const [campo, etiqueta, clave] of [["entradaMs", "Fundido de entrada", "fundido_entrada_ms"],
+      ["salidaMs", "Fundido de salida", "fundido_salida_ms"]]) {
+      this._deslizador(this.cuerpo, {
+        id: `ed-prop-${clave.replaceAll("_", "-")}`, etiqueta, min: 0, max: m.fundidos.max, paso: m.fundidos.paso,
+        escribir: textoSegundos,
+        leer: (x) => ({ valor: x.fundidos[campo], max: x.fundidos.max, texto: textoSegundos(x.fundidos[campo]),
+                        deshabilitado: x.fundidos.max <= 0 }),
+        aplicar: (v) => this._cambiar(`${id}:${clave}`, { audio: { [clave]: v } }),
+      });
+    }
+    const acciones = el("div", "ed-prop-acciones", this.cuerpo);
+    this._boton(acciones, {
+      texto: "Silenciar",
+      leer: (x) => ({ texto: x.silenciado ? "Volver a oír" : "Silenciar", presionado: x.silenciado }),
+      aplicar: () => {
+        const antes = this._clip()?.audio?.volumen ?? 1;
+        const r = alternarSilencio(antes, this.silencios.get(id) ?? null);
+        if (!this._cambiar(null, { audio: { volumen: r.volumen } })) return;
+        if (r.recordar === null) this.silencios.delete(id);
+        else this.silencios.set(id, r.recordar);
+      },
+    });
+    this._nota(this.cuerpo, (x) => x.nota);
+    this._botonBorrar();
+  }
+
+  // El sonido de la escena sigue a su video: se cambia desde ahí.
+  _armarSonido(m) {
+    this._cabeza("Sonido de la escena");
+    el("p", "ed-prop-nota", this.cuerpo, "Es el sonido del video: su volumen se cambia desde el clip de video.");
+    const acciones = el("div", "ed-prop-acciones", this.cuerpo);
+    this._boton(acciones, {
+      texto: "Elegir el video", leer: (x) => ({ deshabilitado: !x.principalId }),
+      aplicar: () => this.m.principalId && this.editor.seleccionar(this.m.principalId),
+    });
+  }
+
+  // Algo que el video final no hace (un video encima de otro): solo se borra.
+  _armarOtro(m) {
+    this._cabeza(m.nombre);
+    el("p", "ed-prop-nota", this.cuerpo, "El video final no muestra este clip: aquí solo se puede borrar.");
+    this._botonBorrar();
+  }
+}

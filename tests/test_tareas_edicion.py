@@ -33,6 +33,7 @@ def entorno(base_temporal, monkeypatch, tmp_path):
 def test_job_ids(entorno):
     assert entorno.job_id_producir("acme", 7, "es", "CO") == "acme__ed7__es_CO__producir"
     assert entorno.job_id_proxy("acme", 3) == "acme__mat3__proxy"
+    assert entorno.job_id_material_de_pieza("acme", "cf_1") == "acme__cf_1__material"
 
 
 def test_renderizar_final_devuelve_urls_versionadas_y_limpia_la_carpeta(entorno, monkeypatch, tmp_path):
@@ -242,18 +243,21 @@ def test_preparar_rutas_estampa_ancho_y_alto_en_clips_imagen(entorno, tmp_path):
 
 def test_proxy_genera_540p_tira_y_cortes_y_los_guarda(entorno, monkeypatch, tmp_path):
     import materiales
-    from final_edition import cortes
+    from final_edition import cortes, mezcla
     mat = materiales.buscar_hash("acme", "h1")
     llamadas = []
     monkeypatch.setattr(cortes, "ffmpeg", lambda args, timeout=300: (llamadas.append(list(args)), open(args[-1], "wb").write(b"x")))
     monkeypatch.setattr(cortes, "duracion", lambda p: 8.0)
     monkeypatch.setattr(cortes, "detectar_cortes", lambda p, umbral=10.0: [3.5])
     monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [{"codec_type": "video", "width": 540, "height": 960}], "format": {"duration": "8.0"}})
+    monkeypatch.setattr(mezcla, "tiene_audio", lambda p: True)
     entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
     m2 = materiales.obtener("acme", mat["id"])
     assert m2["url_proxy"].endswith(f"/materiales/{mat['id']}_proxy.mp4")
     assert m2["extra"]["cortes_ms"] == [3500] and m2["extra"]["tira_url"].endswith("_tira.jpg")
     assert m2["duracion_ms"] == 8000 and (m2["ancho"], m2["alto"]) == (540, 960)
+    # Task 1 (biblioteca): edicion_proxy también guarda tiene_audio.
+    assert m2["extra"]["tiene_audio"] is True
     # I11: la tira tiene tantas celdas como segundos (ceil), no 60 fijas.
     assert any("tile=8x1" in a for args in llamadas for a in args)
     # I2 (review): la carpeta de trabajo se borra siempre (éxito o no) en edicion_proxy.
@@ -415,3 +419,20 @@ def test_tarea_desde_clon_crea_la_edicion(base_temporal, monkeypatch, tmp_path):
     assert llamadas[0][:2] == ("acme", "cf_1") and llamadas[0][2].endswith("clon_cf_1")
     with pytest.raises(ValueError):
         edicion.ejecutar_desde_clon({"payload": {"cliente": "acme", "cf_id": "../x"}})
+
+
+def test_tarea_material_de_pieza_llama_a_la_biblioteca(base_temporal, monkeypatch, tmp_path):
+    """Task 1 (biblioteca): la tarea del worker solo valida `cf_id` y delega
+    en `biblioteca.materializar_pieza`, igual que `ejecutar_desde_clon`
+    delega en `edicion_clon.crear`."""
+    from final_edition import biblioteca
+    from tareas import edicion
+    monkeypatch.setenv("CREATV_SALIDAS", str(tmp_path))
+    llamadas = []
+    monkeypatch.setattr(biblioteca, "materializar_pieza",
+                        lambda cliente, cf_id, carpeta: llamadas.append((cliente, cf_id, carpeta)) or {"id": 42})
+    msg = edicion.ejecutar_material_de_pieza({"payload": {"cliente": "acme", "cf_id": "cf_1"}})
+    assert "42" in msg
+    assert llamadas[0][:2] == ("acme", "cf_1") and llamadas[0][2].endswith("material_cf_1")
+    with pytest.raises(ValueError):
+        edicion.ejecutar_material_de_pieza({"payload": {"cliente": "acme", "cf_id": "../x"}})

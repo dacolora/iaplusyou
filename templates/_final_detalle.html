@@ -11,7 +11,68 @@
         <div class="detalle-info">
           <p class="campo-label">{{ _('Qué tenía que pasar') }}</p>
           <p class="detalle-texto">{{ item.accion_central or _('(sin texto)') }}</p>
+          {% set _eds = ediciones_por_cf.get(item.id) or [] %}
+          {# Editor capa 4b (9/9): «Editar» es la acción principal de cada
+             video listo — gratis y directa. Lo automático con IA (ángulo,
+             guion, «Producir finales») queda como sección opcional más abajo,
+             cerrada por defecto. #}
           <section class="fe-seccion">
+            <h4 class="fe-titulo">{{ _('Editor') }}</h4>
+            {% if item.trabajo_editor %}
+            <p class="vacio" style="padding:0;font-size:.78rem;">{{ _('Preparando el video para el editor… la página se recarga y entra sola.') }}</p>
+            {% else %}
+              {% if _eds %}
+              <a class="btn-generar btn-sm" href="{{ url_for('editor.ver', cliente=cliente, edicion_id=_eds[0].id) }}">{{ _('Editar') }}</a>
+              {% else %}
+              <form method="post" action="{{ url_for('editor.desde_clon', cliente=cliente, cf_id=item.id) }}" class="fe-editar">
+                <button type="submit" class="btn-generar btn-sm">{{ _('Editar') }}</button>
+              </form>
+              {% endif %}
+              <small class="vacio" style="padding:0;display:block;">{{ _('Gratis: corta, recorta, reordena, agrega texto y música en el editor.') }}</small>
+              {% if _eds %}
+              <form method="post" action="{{ url_for('editor.desde_clon', cliente=cliente, cf_id=item.id) }}" class="fe-editar-otra">
+                <button type="submit" class="btn-sm">{{ _('Empezar otra edición desde el video') }}</button>
+              </form>
+              {% endif %}
+            {% endif %}
+            {% if _eds %}
+            <h5 class="fe-subtitulo">{{ _('En el editor') }}</h5>
+            <ul class="fe-lista">
+              {% for e in _eds %}
+              <li class="fe-final">
+                <span class="fe-final-nombre">{{ e.nombre }}</span>
+                <a class="btn-guardar btn-sm" href="{{ url_for('editor.ver', cliente=cliente, edicion_id=e.id) }}">{{ _('Abrir en el editor') }}</a>
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </section>
+
+          {% if item.finales %}
+          <h5 class="fe-subtitulo">{{ _('Finales de esta pieza') }}</h5>
+          <ul class="fe-lista">
+            {% for f in item.finales %}
+            <li class="fe-final">
+              <span class="fe-final-mini">{% if f.url_miniatura %}<img src="{{ f.url_miniatura }}" alt="">{% endif %}</span>
+              <span class="fe-final-nombre">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else "" }} {{ f.idioma }}_{{ f.pais }}</span>
+              <span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>
+              {% if f.estado == "generando" %}
+              <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}{{ _('produciendo…') }}{% else %}{{ _('interrumpida') }}{% endif %}</span>
+              {% elif f.estado == "error" and f.error %}
+              <span class="tag-error" style="font-size:.72rem;">{{ f.error }}</span>
+              {% endif %}
+              {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>{% endif %}
+              <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit='return confirm({{ _("¿Descartar esta final?")|tojson }});' style="display:inline;">
+                <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+
+          <details class="fe-automatico">
+            <summary>{{ _('Automático con IA (opcional)') }}</summary>
+            <section class="fe-seccion">
             <h4 class="fe-titulo">{{ _('Final edition') }}</h4>
             <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.') }}</p>
             {{ editor_angulo(item.angulo, url_for('cf_angulo', cliente=cliente, cf_id=item.id), cliente,
@@ -117,50 +178,8 @@
                 <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="{{ _('Producir {n} finales') }}{{ _cu }}" data-plantilla-uno="{{ _('Producir 1 final') }}{{ _cu }}" data-sin-n="{{ _('Producir finales') }}{{ _cu }}">{{ _('Producir finales') }}{{ _cu }}</button>
               </form>
             {% endif %}
-
-            {% if item.finales %}
-            <h5 class="fe-subtitulo">{{ _('Finales de esta pieza') }}</h5>
-            <ul class="fe-lista">
-              {% for f in item.finales %}
-              <li class="fe-final">
-                <span class="fe-final-mini">{% if f.url_miniatura %}<img src="{{ f.url_miniatura }}" alt="">{% endif %}</span>
-                <span class="fe-final-nombre">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else "" }} {{ f.idioma }}_{{ f.pais }}</span>
-                <span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>
-                {% if f.estado == "generando" %}
-                <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}{{ _('produciendo…') }}{% else %}{{ _('interrumpida') }}{% endif %}</span>
-                {% elif f.estado == "error" and f.error %}
-                <span class="tag-error" style="font-size:.72rem;">{{ f.error }}</span>
-                {% endif %}
-                {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>{% endif %}
-                <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit='return confirm({{ _("¿Descartar esta final?")|tojson }});' style="display:inline;">
-                  <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
-                </form>
-              </li>
-              {% endfor %}
-            </ul>
-            {% endif %}
-          </section>
-          {% set _eds = ediciones_por_cf.get(item.id) or [] %}
-          <h5 class="fe-subtitulo">{{ _('Editor') }}</h5>
-          {% if item.trabajo_editor %}
-          <p class="vacio" style="padding:0;font-size:.78rem;">{{ _('Preparando el video para el editor… la página se recarga sola.') }}</p>
-          {% else %}
-          <form method="post" action="{{ url_for('editor.desde_clon', cliente=cliente, cf_id=item.id) }}" class="fe-editar">
-            <button type="submit" class="{{ 'btn-sm' if _eds else 'btn-generar btn-sm' }}">{{ _('Empezar otra edición desde el video') if _eds else _('Editar este video') }}</button>
-            <small class="vacio" style="padding:0;">{{ _('Gratis: una edición con el video tal cual, para cortarlo, recortarlo y reordenarlo.') }}</small>
-          </form>
-          {% endif %}
-          {% if _eds %}
-          <h5 class="fe-subtitulo">{{ _('En el editor') }}</h5>
-          <ul class="fe-lista">
-            {% for e in _eds %}
-            <li class="fe-final">
-              <span class="fe-final-nombre">{{ e.nombre }}</span>
-              <a class="btn-guardar btn-sm" href="{{ url_for('editor.ver', cliente=cliente, edicion_id=e.id) }}">{{ _('Abrir en el editor') }}</a>
-            </li>
-            {% endfor %}
-          </ul>
-          {% endif %}
+            </section>
+          </details>
         </div>
 {% endmacro %}
 
