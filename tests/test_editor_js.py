@@ -38,6 +38,31 @@ def test_formatos_js_iguales_a_python():
     assert _constante_js("formatos.js", "FORMATOS") == {k: list(v) for k, v in documento.FORMATOS.items()}
 
 
+def test_ventana_de_picos_igual_a_python():
+    # La onda de la línea de tiempo (escala.barrasOnda) lee un pico cada
+    # VENTANA_PICOS_MS de fuente: los que guarda tareas.edicion._picos.
+    import inspect
+
+    from final_edition import vista_previa
+    from tareas import edicion
+    assert _constante_js("escala.js", "VENTANA_PICOS_MS") == vista_previa.VENTANA_PICOS_MS
+    assert inspect.signature(edicion._picos).parameters["ventana_ms"].default == vista_previa.VENTANA_PICOS_MS
+
+
+def test_biblioteca_js_acepta_lo_mismo_que_el_servidor():
+    # biblioteca.js revisa tipo y peso ANTES de subir (un video de 500 MB no
+    # viaja para que el servidor lo rechace): sus copias tienen que ser las de Python.
+    import materiales
+    from final_edition import biblioteca
+    assert _constante_js("biblioteca.js", "EXTENSIONES_SUBIDA") == {ext: t for ext, (t, _ct) in biblioteca.EXTENSIONES.items()}
+    assert _constante_js("biblioteca.js", "LIMITES_SUBIDA") == {t: b for t, (b, _ms) in materiales.LIMITES.items()}
+
+
+def test_transiciones_js_iguales_a_python():
+    # la biblioteca ofrece solo las transiciones que el render hace
+    assert _constante_js("operaciones.js", "TRANSICIONES") == list(documento.TRANSICIONES)
+
+
 def _generador():
     import importlib.util
     ruta = os.path.join(RAIZ, "tests", "fixtures", "generar_casos_editor.py")
@@ -62,3 +87,11 @@ def test_ducking_de_mezcla_es_legible_por_el_navegador():
         partes = dict(p.split("=") for p in cadena.split(":"))
         assert set(partes) == {"threshold", "ratio", "attack", "release"}
         assert all(float(v) > 0 for v in partes.values())
+
+
+def test_mezclas_del_panel_iguales_a_python():
+    # El panel de propiedades ofrece estas mezclas (operaciones.cambiarMezcla):
+    # tienen que ser las que conoce el render (mezcla.PRESETS), ni una más.
+    from final_edition import mezcla
+    assert _constante_js("operaciones.js", "MEZCLAS") == list(mezcla.PRESETS)
+    assert mezcla.PRESET_DEFECTO == "equilibrada"

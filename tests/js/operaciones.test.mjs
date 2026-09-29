@@ -4,6 +4,7 @@ import {
   borrar, cambiarVelocidad, cortarEn, duplicar, idNuevo, MIN_CLIP_MS, moverA, moverPrincipal, normalizar,
   OperacionInvalida, recortar, VELOCIDADES,
 } from "../../static/editor/operaciones.js";
+import * as op from "../../static/editor/operaciones.js";
 import { docBase, DURACIONES } from "./doc_base.mjs";
 
 const principal = (d) => d.pistas[0].clips.map((c) => [c.id, c.inicio_ms, c.duracion_ms, c.recorte.desde_ms, c.recorte.hasta_ms]);
@@ -38,7 +39,8 @@ test("borrar en la principal corre lo que sigue y no deja la edición sin video"
 
 test("borrar un texto lo quita sin mover nada más; el sonido de la escena no se borra solo", () => {
   const { doc } = borrar(docBase(), "t1", DURACIONES);
-  assert.equal(doc.pistas[1].clips.length, 0);
+  // capa 4b: terminar() borra las pistas no principales que quedan sin clips.
+  assert.ok(!doc.pistas.some((p) => p.id === "p_texto"));
   assert.deepEqual(principal(doc), principal(docBase()));
   invalida(() => borrar(docBase(), "s0", DURACIONES), /sonido de la escena/);
   invalida(() => borrar(docBase(), "nada", DURACIONES), /ya no existe/);
@@ -221,8 +223,326 @@ test("recortar una voz que cambia por país se rechaza en español llano; moverl
       /^La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla\.$/);
   }
   assert.equal(moverA(conVozPorDestino(), "a1", 500, DURACIONES).doc.pistas[2].clips[0].inicio_ms, 500);
-  assert.equal(borrar(conVozPorDestino(), "a1", DURACIONES).doc.pistas[2].clips.length, 0);
+  // capa 4b: terminar() borra las pistas no principales que quedan sin clips.
+  assert.ok(!borrar(conVozPorDestino(), "a1", DURACIONES).doc.pistas.some((p) => p.id === "p_voz"));
   const vacio = docBase();
   vacio.pistas[2].clips[0].por_destino = {};                  // {} no distingue por destino: se recorta como siempre
   assert.equal(recortar(vacio, "a1", "fin", -500, DURACIONES).doc.pistas[2].clips[0].duracion_ms, 2500);
+});
+
+// ---- Capa 4b: agregar y cambiar ----
+// `info` es el mapa nuevo {material_id: {duracion_ms, tiene_audio}} (el
+// viejo {material_id: duracion_ms} sigue funcionando, ver el test de más
+// abajo). Material 3: sin audio nativo (para ver que el espejo lo excluye).
+const INFO = { 1: { duracion_ms: 8000, tiene_audio: true }, 2: { duracion_ms: 3000 }, 3: { duracion_ms: 1500, tiene_audio: false } };
+const clipDe = (d, id) => d.pistas.flatMap((p) => p.clips).find((c) => c.id === id);
+
+// Toda operación es pura (no toca el documento que recibe) y deja una
+// `seleccion` que de verdad está en el documento resultante.
+function puro(fn, base = docBase()) {
+  const antes = structuredClone(base);
+  const r = fn(base);
+  assert.deepEqual(base, antes, "no debe tocar el documento de entrada");
+  assert.notEqual(r.doc, base);
+  assert.ok(clipDe(r.doc, r.seleccion), "la selección debe existir en el documento resultante");
+  return r;
+}
+
+test("agregarVideo inserta el material entero después del clip dado y no espeja sonido si el material no trae", () => {
+  const r = puro((d) => op.agregarVideo(d, { id: 3 }, { despuesDe: "v0" }, INFO));
+  assert.deepEqual(principal(r.doc).map((c) => c.slice(1)), [[0, 4000, 0, 4000], [4000, 1500, 0, 1500], [5500, 4000, 4000, 8000]]);
+  assert.equal(clipDe(r.doc, r.seleccion).material_id, 3);
+  assert.equal(clipDe(r.doc, r.seleccion).ken_burns, null);
+  assert.equal(r.doc.pistas.find((p) => p.id === "p_sonido").clips.length, 2);
+  invalida(() => op.agregarVideo(docBase(), { id: 9 }, {}, INFO), /Ese video todavía se está preparando/);
+  invalida(() => op.agregarVideo(docBase(), { id: 3 }, { despuesDe: "t1" }, INFO), /principal/);
+});
+
+test("agregarVideo con `indice` lo pone en ese lugar de la principal (también el primero)", () => {
+  const primero = puro((d) => op.agregarVideo(d, { id: 3 }, { indice: 0 }, INFO));
+  assert.deepEqual(principal(primero.doc).map((c) => c.slice(1)), [[0, 1500, 0, 1500], [1500, 4000, 0, 4000], [5500, 4000, 4000, 8000]]);
+  assert.equal(primero.doc.pistas[0].clips[0].id, primero.seleccion);
+  const medio = op.agregarVideo(docBase(), { id: 3 }, { indice: 1 }, INFO);
+  assert.equal(medio.doc.pistas[0].clips[1].id, medio.seleccion);
+  assert.equal(op.agregarVideo(docBase(), { id: 3 }, { indice: 99 }, INFO).doc.pistas[0].clips[2].material_id, 3);
+  assert.equal(op.agregarVideo(docBase(), { id: 3 }, { indice: -4 }, INFO).doc.pistas[0].clips[0].material_id, 3);
+  // `despuesDe` manda si vienen los dos
+  assert.equal(op.agregarVideo(docBase(), { id: 3 }, { despuesDe: "v1", indice: 0 }, INFO).doc.pistas[0].clips[2].material_id, 3);
+});
+
+test("agregarImagen usa las medidas naturales para cubrir o para el 60% del ancho, y reusa pista solo si no hay solape", () => {
+  const material = { id: 4, ancho: 600, alto: 400 };
+  const a = puro((d) => op.agregarImagen(d, material, 1000, {}, INFO));
+  assert.equal(clipDe(a.doc, a.seleccion).transform.escala, 1.08);
+  const b = puro((d) => op.agregarImagen(d, material, 2000, { llenar: true }, INFO), a.doc);
+  assert.equal(clipDe(b.doc, b.seleccion).transform.escala, 4.8);
+  assert.equal(b.doc.pistas.filter((p) => p.tipo === "imagen").length, 2);
+  const c = op.agregarImagen(a.doc, material, 4000, {}, INFO);      // toca justo donde termina la primera: no hay solape
+  assert.equal(c.doc.pistas.filter((p) => p.tipo === "imagen").length, 1);
+});
+
+test("agregarAudio toma la duración de la fuente entera y distingue el fundido de música del de efecto", () => {
+  for (const rol of ["musica", "efecto"]) {
+    const r = puro((d) => op.agregarAudio(d, { id: 2 }, 1000, { rol }, INFO));
+    const c = clipDe(r.doc, r.seleccion);
+    assert.deepEqual(c.recorte, { desde_ms: 0, hasta_ms: 3000 });
+    assert.equal(c.audio.fundido_salida_ms, rol === "musica" ? 1000 : 0);
+    assert.equal(c.rol_audio, rol);
+  }
+  invalida(() => op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "voz" }, INFO), /rol/i);
+});
+
+test("agregarTexto usa tamaños fraccionarios del lienzo y el fondo de marca en el preset precio", () => {
+  for (const [preset, px, y] of [["titulo", 72, 0.2], ["subtitulo", 48, 0.75], ["precio", 56, 0.6], ["llamado", 52, 0.85]]) {
+    const r = puro((d) => op.agregarTexto(d, 500, preset, INFO));
+    const c = clipDe(r.doc, r.seleccion);
+    assert.equal(c.estilo.tamano, px / 1920);
+    assert.equal(c.transform.y, y);
+    assert.equal(c.texto.literal, preset === "precio" ? "$ 0" : "Escribe aquí");
+    if (preset === "precio") assert.equal(c.estilo.fondo.color, "#7c3aed");
+  }
+  invalida(() => op.agregarTexto(docBase(), 0, "otro", INFO), /texto/i);
+});
+
+test("cortarClip parte el recorte en audio, solo el tiempo en texto (y copia el png), sin tocar la principal aparte", () => {
+  const a = puro((d) => op.cortarClip(d, "a1", 1000, INFO));
+  assert.deepEqual(clipDe(a.doc, a.seleccion).recorte, { desde_ms: 1000, hasta_ms: 3000 });
+  assert.equal(clipDe(a.doc, a.seleccion).inicio_ms, 1000);
+  const base = docBase();
+  base.pngs = { t1: 20 };
+  const t = puro((d) => op.cortarClip(d, "t1", 2000, INFO), base);
+  assert.equal(t.doc.pngs[t.seleccion], 20);
+  assert.equal(clipDe(t.doc, t.seleccion).duracion_ms, 1000);
+  invalida(() => op.cortarClip(docBase(), "a1", 50, INFO), /borde/);
+  invalida(() => op.cortarClip(conVozPorDestino(), "a1", 1000, INFO), /país/);
+  invalida(() => op.cortarClip(docBase(), "s0", 1000, INFO), /sonido/);
+});
+
+test("ponerTransicion normaliza la cola contra el material y rechaza el último clip o uno fuera de la principal", () => {
+  for (const tipo of ["corte", "fundido", "deslizar", "zoom", "desenfoque"]) {
+    const r = puro((d) => op.ponerTransicion(d, "v0", tipo, 500, INFO));
+    assert.deepEqual(clipDe(r.doc, "v0").transicion, tipo === "corte" ? null : { tipo, duracion_ms: 500 });
+  }
+  invalida(() => op.ponerTransicion(docBase(), "v1", "fundido", 500, INFO), /último/);
+  invalida(() => op.ponerTransicion(docBase(), "t1", "fundido", 500, INFO), /principal/);
+  invalida(() => op.ponerTransicion(docBase(), "v0", "inventada", 500, INFO), /transición/);
+});
+
+test("editarTexto guarda solo el destino pedido, conserva los demás y borra todo png que use esa variable", () => {
+  const base = docBase();
+  base.pistas[1].clips[0].texto = { variable: "gancho" };
+  base.variables.textos = { gancho: { es: "Hola", en_US: "Hello" } };
+  const dup = duplicar(base, "t1", INFO).doc;
+  dup.pngs = { t1: 20, t1_2: 21 };
+  const r = puro((d) => op.editarTexto(d, "t1", "Oferta", "es_CO", INFO), dup);
+  assert.deepEqual(r.doc.variables.textos.gancho, { es: "Hola", en_US: "Hello", es_CO: "Oferta" });
+  assert.deepEqual(r.doc.pngs, {});          // t1 Y t1_2 comparten la variable: los dos se invalidan
+  assert.equal(clipDe(puro((d) => op.editarTexto(d, "t1", "Nuevo", "es", INFO)).doc, "t1").texto.literal, "Nuevo");
+  invalida(() => op.editarTexto(base, "t1", " ", "es", INFO), /El texto no puede quedar vacío/);
+  invalida(() => op.editarTexto(base, "t1", "x", "wrong", INFO), /destino/);
+});
+
+test("cambiar acota los campos editables, guarda el tamaño como fracción, rechaza claves de más y borra el png del texto", () => {
+  const base = docBase();
+  base.pngs = { t1: 20 };
+  const r = puro((d) => op.cambiar(d, "t1", {
+    estilo: { tamano: 400, color: "#123456" },
+    transform: { x: -1, y: 2, escala: 9, opacidad: 2 },
+    animacion: { entrada: "deslizar" },
+  }, INFO), base);
+  assert.equal(clipDe(r.doc, "t1").estilo.tamano, 200 / 1920);
+  assert.equal(clipDe(r.doc, "t1").transform.escala, 5);
+  assert.equal(clipDe(r.doc, "t1").transform.x, 0);
+  assert.deepEqual(r.doc.pngs, {});
+  for (const cambios of [
+    { material_id: 9 }, { transform: { rotacion: 45 } }, { estilo: { fuente: "Arial" } },
+    { animacion: { entrada: "rebote" } }, { audio: { volumen: NaN } }, { estilo: { fondo: { unexpected: 1 } } },
+  ]) invalida(() => op.cambiar(base, "t1", cambios, INFO), /./);
+});
+
+test("cambiar: transform solo en clips que lo tienen (un clip de audio, o el espejo de sonido, se rechaza en español llano)", () => {
+  invalida(() => op.cambiar(docBase(), "a1", { transform: { x: 0.3 } }, INFO), /audio/i);
+  invalida(() => op.cambiar(docBase(), "s0", { transform: { x: 0.3 } }, INFO), /audio/i);
+});
+
+test("cambiar: un contorno/sombra/fondo parcial conserva los campos que no se tocan (y null los sigue quitando)", () => {
+  const base = docBase();
+  base.pistas[1].clips[0].estilo = {
+    ...base.pistas[1].clips[0].estilo,
+    contorno: { color: "#ABCDEF", grosor: 0.01 },
+    sombra: { color: "#112233", dx: 0.02, dy: 0.03 },
+    fondo: { color: "#445566", opacidad: 0.5, radio: 0.1, relleno_x: 0.02, relleno_y: 0.02, ancho: 0.4 },
+  };
+  const r1 = puro((d) => op.cambiar(d, "t1", { estilo: { contorno: { grosor: 0.03 } } }, INFO), base);
+  assert.deepEqual(clipDe(r1.doc, "t1").estilo.contorno, { color: "#ABCDEF", grosor: 0.03 });
+  const r2 = op.cambiar(base, "t1", { estilo: { sombra: { dx: 0.05 } } }, INFO);
+  assert.deepEqual(clipDe(r2.doc, "t1").estilo.sombra, { color: "#112233", dx: 0.05, dy: 0.03 });
+  const r3 = op.cambiar(base, "t1", { estilo: { fondo: { opacidad: 0.9 } } }, INFO);
+  assert.deepEqual(clipDe(r3.doc, "t1").estilo.fondo,
+    { color: "#445566", opacidad: 0.9, radio: 0.1, relleno_x: 0.02, relleno_y: 0.02, ancho: 0.4 });
+  // null sigue siendo "sin contorno": el contrato de hoy, sin cambiar.
+  assert.equal(op.cambiar(base, "t1", { estilo: { contorno: null } }, INFO).doc.pistas[1].clips[0].estilo.contorno, null);
+});
+
+test("el volumen del sonido de la escena queda por clip al normalizar y un corte nuevo hereda solo su propio sonido", () => {
+  let d = normalizar(docBase(), INFO);
+  d = op.volumenSonido(d, "v0", 0.2, INFO).doc;
+  d = op.volumenSonido(d, "v1", 0.8, INFO).doc;
+  const r = puro((x) => op.cortarClip(x, "v0", 2000, INFO), d);
+  assert.equal(clipDe(r.doc, "s_v0").audio.volumen, 0.2);
+  assert.equal(clipDe(r.doc, `s_${r.seleccion}`).audio.volumen, 0.2);
+  assert.equal(clipDe(r.doc, "s_v1").audio.volumen, 0.8);
+  // v0 y v1 a velocidad ≠ 1: nada que espejar, p_sonido queda vacía (fix final:
+  // ya no se borra, porque normalizar no la vuelve a crear); al volver v0 a 1×, v0 vuelve a tener su espejo.
+  const mudo = op.cambiarVelocidad(op.cambiarVelocidad(d, "v0", 2, INFO).doc, "v1", 2, INFO).doc;
+  assert.deepEqual(mudo.pistas.find((p) => p.id === "p_sonido").clips, []);
+  assert.ok(clipDe(op.cambiarVelocidad(mudo, "v0", 1, INFO).doc, "s_v0"));
+});
+
+test("el mapa de info rico da exactamente el mismo resultado que el mapa viejo de números", () => {
+  assert.deepEqual(recortar(docBase(), "v1", "fin", 99999, INFO).doc, recortar(docBase(), "v1", "fin", 99999, DURACIONES).doc);
+  assert.deepEqual(cambiarVelocidad(docBase(), "v1", 1.5, INFO).doc, cambiarVelocidad(docBase(), "v1", 1.5, DURACIONES).doc);
+});
+
+// ---- Capa 4b (Task 7): lo que pide el panel de propiedades ----
+
+test("cambiarMezcla pone el preset, quita los volúmenes a medida y rechaza lo que no existe", () => {
+  const base = docBase();
+  base.mezcla = { preset: "equilibrada", volumenes: { musica: 0.1 } };
+  const antes = structuredClone(base);
+  const r = op.cambiarMezcla(base, "voz_protagonista", INFO);
+  assert.deepEqual(base, antes, "no debe tocar el documento de entrada");
+  assert.deepEqual(r.doc.mezcla, { preset: "voz_protagonista", volumenes: null });
+  assert.equal(r.seleccion, null);                   // la mezcla es de toda la edición: nada queda elegido
+  assert.deepEqual(op.MEZCLAS, ["equilibrada", "voz_protagonista", "ambiente_protagonista"]);
+  for (const preset of op.MEZCLAS) assert.equal(op.cambiarMezcla(docBase(), preset, INFO).doc.mezcla.preset, preset);
+  invalida(() => op.cambiarMezcla(docBase(), "estruendosa", INFO), /mezcla/);
+  invalida(() => op.cambiarMezcla(docBase(), null, INFO), /mezcla/);
+});
+
+test("volumenSonido encuentra el sonido de un documento del borrador (espejos s0, s1) sin normalizar antes", () => {
+  // borrador.py nombra los espejos s0, s1…; el editor los rehace como s_<id> al operar
+  const r = puro((x) => op.volumenSonido(x, "v1", 0.4, INFO));
+  assert.equal(clipDe(r.doc, "s_v1").audio.volumen, 0.4);
+  assert.equal(clipDe(r.doc, "s_v0").audio.volumen, 1);
+  assert.equal(r.seleccion, "v1");
+  // sin sonido que espejar (otra velocidad) sigue diciéndolo en llano
+  const lento = op.cambiarVelocidad(docBase(), "v1", 0.5, INFO).doc;
+  invalida(() => op.volumenSonido(lento, "v1", 0.4, INFO), /sonido/);
+});
+
+// ---- Fixes finales de la capa 4b ----
+
+// Un borrador sin sonido de la escena (la receta no lo pidió): borrador.py no
+// arma `p_sonido` a propósito, y el camino automático reusa ese borrador para
+// otros destinos. Editarlo no puede traer el sonido de vuelta.
+function sinSonido() {
+  const d = docBase();
+  d.pistas = d.pistas.filter((p) => p.id !== "p_sonido");
+  return d;
+}
+const INFO5 = { ...INFO, 5: { duracion_ms: 2000, tiene_audio: true } };
+const tienePista = (d, id) => d.pistas.some((p) => p.id === id);
+
+test("normalizar nunca crea p_sonido: cualquier edición de un documento sin sonido de la escena lo deja sin él", () => {
+  const d = sinSonido();
+  assert.ok(!tienePista(normalizar(structuredClone(d), INFO), "p_sonido"));
+  for (const r of [
+    op.moverA(d, "t1", 2500, INFO), op.cambiar(d, "t1", { transform: { x: 0.3 } }, INFO), op.cortarEn(d, 2000, INFO),
+    op.duplicar(d, "v0", INFO), op.cambiarVelocidad(d, "v1", 1, INFO), op.agregarTexto(d, 0, "titulo", INFO),
+    op.agregarVideo(d, { id: 3 }, {}, INFO),                     // un video sin sonido tampoco la abre
+  ]) assert.ok(!tienePista(r.doc, "p_sonido"), "apareció el sonido de la escena");
+});
+
+test("agregarVideo en un documento sin p_sonido: suena solo el clip nuevo; los de antes quedan en silencio", () => {
+  const r = puro((d) => op.agregarVideo(d, { id: 5 }, { despuesDe: "v0" }, INFO5), sinSonido());
+  const sonido = r.doc.pistas.find((p) => p.id === "p_sonido").clips;
+  assert.deepEqual(sonido.map((c) => [c.id, c.audio.volumen]), [["s_v0", 0], [`s_${r.seleccion}`, 1], ["s_v1", 0]]);
+  // con p_sonido ya puesta, el clip nuevo entra con su sonido y lo de antes no cambia
+  const conSonido = op.agregarVideo(normalizar(docBase(), INFO5), { id: 5 }, {}, INFO5);
+  assert.deepEqual(conSonido.doc.pistas.find((p) => p.id === "p_sonido").clips.map((c) => c.audio.volumen), [1, 1, 1]);
+});
+
+test("volumenSonido en un documento sin p_sonido la crea: ese clip al volumen pedido, los demás en silencio", () => {
+  const r = puro((d) => op.volumenSonido(d, "v1", 0.4, INFO), sinSonido());
+  assert.deepEqual(r.doc.pistas.find((p) => p.id === "p_sonido").clips.map((c) => [c.id, c.audio.volumen]),
+    [["s_v0", 0], ["s_v1", 0.4]]);
+  // y a partir de ahí las ediciones la mantienen (sin volver a subir a nadie)
+  const cortado = op.cortarEn(r.doc, 1000, INFO).doc;
+  assert.deepEqual(cortado.pistas.find((p) => p.id === "p_sonido").clips.map((c) => c.audio.volumen), [0, 0, 0.4]);
+  invalida(() => op.volumenSonido(op.cambiarVelocidad(sinSonido(), "v1", 2, INFO).doc, "v1", 0.4, INFO), /sonido/);
+});
+
+test("p_sonido sin nada que espejar queda vacía (no se borra) y vuelve a sonar cuando hay qué", () => {
+  const mudo = op.cambiarVelocidad(op.cambiarVelocidad(docBase(), "v0", 2, INFO).doc, "v1", 2, INFO).doc;
+  assert.deepEqual(mudo.pistas.find((p) => p.id === "p_sonido").clips, []);
+  const vuelve = op.cambiarVelocidad(mudo, "v0", 1, INFO).doc;
+  assert.deepEqual(vuelve.pistas.find((p) => p.id === "p_sonido").clips.map((c) => c.id), ["s_v0"]);
+});
+
+// Nada de lo que se agrega alarga el video: el fin es el de la principal
+// (docBase: 8 s). Más allá, el render congela el último cuadro.
+const finDoc = (d) => Math.max(...d.pistas.flatMap((p) => p.clips.map((c) => c.inicio_ms + c.duracion_ms)));
+const INFO_LARGO = { ...INFO, 6: { duracion_ms: 60000 } };
+
+test("agregarAudio: la música y los efectos terminan donde termina el video", () => {
+  const cancion = puro((d) => op.agregarAudio(d, { id: 6 }, 7000, { rol: "musica" }, INFO_LARGO));
+  const c = clipDe(cancion.doc, cancion.seleccion);
+  assert.deepEqual([c.inicio_ms, c.duracion_ms, c.recorte.desde_ms, c.recorte.hasta_ms], [7000, 1000, 0, 1000]);
+  assert.equal(finDoc(cancion.doc), 8000);
+  const ef = op.agregarAudio(docBase(), { id: 2 }, 6000, { rol: "efecto" }, INFO);      // un efecto de 3 s a los 6 s
+  const efecto = clipDe(ef.doc, ef.seleccion);
+  assert.deepEqual([efecto.inicio_ms, efecto.duracion_ms, efecto.recorte.hasta_ms], [6000, 2000, 2000]);
+  // con el cabezal al final, la canción entra desde donde quepa entera: todo el video
+  const alFinal = op.agregarAudio(docBase(), { id: 6 }, 8000, { rol: "musica" }, INFO_LARGO);
+  const f = clipDe(alFinal.doc, alFinal.seleccion);
+  assert.deepEqual([f.inicio_ms, f.duracion_ms], [0, 8000]);
+  assert.equal(finDoc(alFinal.doc), 8000);
+});
+
+test("agregarTexto y agregarImagen con el cabezal al final: 3 s que terminan al final; más adentro, se acortan", () => {
+  const titulo = op.agregarTexto(docBase(), 8000, "titulo", INFO);
+  const t = clipDe(titulo.doc, titulo.seleccion);
+  assert.deepEqual([t.inicio_ms, t.duracion_ms], [5000, 3000]);
+  const casi = op.agregarTexto(docBase(), 7950, "subtitulo", INFO);            // a menos de MIN_CLIP_MS del final
+  assert.deepEqual([clipDe(casi.doc, casi.seleccion).inicio_ms, clipDe(casi.doc, casi.seleccion).duracion_ms], [5000, 3000]);
+  const img = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 7000, {}, INFO);
+  assert.deepEqual([clipDe(img.doc, img.seleccion).inicio_ms, clipDe(img.doc, img.seleccion).duracion_ms], [7000, 1000]);
+  const imgFin = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 9000, { duracionMs: 12000 }, INFO);
+  assert.deepEqual([clipDe(imgFin.doc, imgFin.seleccion).inicio_ms, clipDe(imgFin.doc, imgFin.seleccion).duracion_ms], [0, 8000]);
+  for (const r of [titulo, casi, img, imgFin]) assert.equal(finDoc(r.doc), 8000);
+});
+
+test("cambiar: fondo.ancho null es «automático» (se quita la clave), no 0", () => {
+  const base = docBase();
+  base.pistas[1].clips[0].estilo = { ...base.pistas[1].clips[0].estilo,
+    fondo: { color: "#445566", opacidad: 0.5, radio: 0.1, relleno_x: 0.02, relleno_y: 0.02, ancho: 0.4 } };
+  const r = puro((d) => op.cambiar(d, "t1", { estilo: { fondo: { ancho: null } } }, INFO), base);
+  const fondo = clipDe(r.doc, "t1").estilo.fondo;
+  assert.ok(!("ancho" in fondo), `quedó ancho=${fondo.ancho}`);
+  assert.equal(fondo.color, "#445566");
+  assert.equal(clipDe(op.cambiar(base, "t1", { estilo: { fondo: { ancho: 0.3 } } }, INFO).doc, "t1").estilo.fondo.ancho, 0.3);
+});
+
+test("agregarImagen: la escala inicial queda entre 0,05 y 5 (una imagen diminuta no entra a 64×)", () => {
+  for (const [material, llenar, escala] of [
+    [{ id: 4, ancho: 10, alto: 10 }, false, 5], [{ id: 4, ancho: 10, alto: 10 }, true, 5],
+    [{ id: 4, ancho: 100000, alto: 100000 }, false, 0.05],
+  ]) {
+    const r = op.agregarImagen(docBase(), material, 1000, { llenar }, INFO);
+    assert.equal(clipDe(r.doc, r.seleccion).transform.escala, escala);
+  }
+});
+
+test("agregarAudio: la música no cae en la pista de la voz; va con otra música o a una pista nueva", () => {
+  const r = puro((d) => op.agregarAudio(d, { id: 2 }, 4000, { rol: "musica" }, INFO));   // p_voz está libre a los 4 s
+  const pista = r.doc.pistas.find((p) => p.clips.some((c) => c.id === r.seleccion));
+  assert.notEqual(pista.id, "p_voz");
+  assert.ok(pista.clips.every((c) => c.rol_audio === "musica"));
+  // otra música en un hueco de esa pista se queda con ella; un efecto no
+  const otra = op.agregarAudio(r.doc, { id: 2 }, 0, { rol: "musica" }, INFO);
+  assert.equal(otra.doc.pistas.find((p) => p.clips.some((c) => c.id === otra.seleccion)).id, pista.id);
+  const efecto = op.agregarAudio(r.doc, { id: 2 }, 0, { rol: "efecto" }, INFO);
+  const pe = efecto.doc.pistas.find((p) => p.clips.some((c) => c.id === efecto.seleccion));
+  assert.ok(![pista.id, "p_voz", "p_sonido"].includes(pe.id), pe.id);
 });

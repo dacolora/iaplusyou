@@ -1256,6 +1256,13 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .fe-final-nombre { font-weight: 600; }
 .fe-capas { list-style: none; padding: 0; margin: 0; font-size: .76rem; display: flex; flex-direction: column; gap: .25rem; }
 .fe-capas strong { text-transform: capitalize; }
+/* Editor capa 4b (9/9): «Editar» es la acción principal; el guion con IA
+   (ángulo, «Preparar guion con IA», «Producir finales») queda plegado, mismo
+   tratamiento de caja que `.org-publicar`. */
+.fe-automatico { margin-top: 1.2rem; border: 1px solid var(--border); border-radius: var(--radius); padding: .5rem .8rem; background: var(--panel); }
+.fe-automatico > summary { cursor: pointer; font-size: .85rem; font-weight: 600; }
+.fe-automatico[open] > summary { margin-bottom: .3rem; }
+.fe-automatico .fe-seccion:first-of-type { margin-top: .6rem; padding-top: 0; border-top: none; }
 .generado-badge { position: absolute; right: .5rem; top: .5rem; background: rgba(15,17,21,.85); color: var(--text); font-size: .74rem; font-weight: 700; padding: .18rem .5rem; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
 .generado-final .generado-media video.generado-portada { filter: saturate(.6); opacity: .8; }
 

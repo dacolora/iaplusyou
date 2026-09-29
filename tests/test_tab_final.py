@@ -77,7 +77,53 @@ def test_cada_pieza_enlaza_sus_ediciones_en_el_editor(app, pieza):
 def test_cada_video_listo_se_puede_editar_gratis(app, pieza):
     html = _detalle_video(app, pieza)
     assert f"/cliente/acme/ediciones/desde/{pieza}" in html
-    assert "Editar este video" in html
+    assert ">Editar<" in html
+
+
+def test_editar_es_la_accion_principal_y_lo_automatico_queda_aparte(app, pieza):
+    """Tarea 9 (editor capa 4b): «Editar» es el botón principal de cada video
+    listo, antes que nada; el guion con IA (ángulo, «Preparar guion con IA»,
+    «Producir finales») queda en un <details> cerrado por defecto más abajo,
+    sin cambiar sus rutas. El detalle llega por fetch (tarjetas ligeras,
+    2026-09-28), ya no va embebido en la página."""
+    html = _detalle_video(app, pieza)
+    i_editar = html.index(f"/cliente/acme/ediciones/desde/{pieza}")
+    i_details = html.index('<details class="fe-automatico">')
+    # La fixture `pieza` ya trae guion_base, así que lo que se ve es
+    # «Producir finales» (con guion_base la pestaña no ofrece «Preparar
+    # guion con IA», ver el `{% if not item.guion_base %}` de la plantilla).
+    i_producir = html.index("Producir finales")
+    assert i_editar < i_details < i_producir
+    assert "Automático con IA (opcional)" in html
+    # Rutas fe_* siguen ahí, tal cual, solo que dentro del <details>.
+    assert f"/cliente/acme/creative_flow/{pieza}/final/preparar" in html
+
+
+def test_editar_con_edicion_existente_enlaza_a_la_mas_reciente(app, pieza):
+    """Con una edición ya creada, el botón principal deja de ser el formulario
+    de desde_clon: pasa a ser un enlace directo a esa edición, y «Empezar
+    otra edición» queda como acción secundaria. data-editor-url va en la
+    TARJETA (la lee desdeHash()); el enlace «Editar» y «Empezar otra
+    edición» van en el detalle, que llega por fetch."""
+    import ediciones
+    from final_edition import documento
+    ed = ediciones.crear("acme", "video", "Borrador es_CO", documento.nuevo_video("9:16"), cf_id=pieza)
+    tarjeta = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    assert f'data-editor-url="/cliente/acme/ediciones/{ed["id"]}"' in tarjeta
+    detalle = _detalle_video(app, pieza)
+    assert f'href="/cliente/acme/ediciones/{ed["id"]}">Editar<' in detalle
+    assert "Empezar otra edición desde el video" in detalle
+
+
+def test_desde_clon_marca_abrir_editor_para_que_la_pestana_entre_sola(app, pieza, monkeypatch):
+    """El redirect de editor.desde_clon lleva &abrir=editor: es lo que le dice
+    al script de la pestaña que, cuando la recarga automática vea la edición
+    lista, entre directo al editor en vez de quedarse en el detalle."""
+    import trabajos
+    monkeypatch.setattr(trabajos, "encolar", lambda *a, **k: True)
+    r = app["c"].post(f"/cliente/acme/ediciones/desde/{pieza}")
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith(f"#final?cf={pieza}&abrir=editor")
 
 
 def test_el_trabajo_del_editor_solo_se_sondea_y_muestra_su_aviso(app, pieza, monkeypatch):

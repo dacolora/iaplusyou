@@ -43,19 +43,28 @@ def config_navegador():
     }
 
 
+def material_para(m):
+    """La forma que el navegador necesita de UN material: original + proxy +
+    lo medido + lo derivado del proxy (picos, tira), más lo que la
+    biblioteca (spec editor capa 4b, Task 1) necesita para mostrarlo sin
+    volver a tocar la base: `tiene_audio`, `nombre` y `origen`."""
+    extra = m.get("extra") or {}
+    return {"id": m["id"], "tipo": m["tipo"], "url": m["url"], "url_proxy": m.get("url_proxy"),
+            "duracion_ms": m.get("duracion_ms"), "ancho": m.get("ancho"), "alto": m.get("alto"),
+            "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
+            "tira_url": extra.get("tira_url"), "tiene_audio": extra.get("tiene_audio"),
+            "nombre": extra.get("nombre"), "origen": m["origen"]}
+
+
 def materiales_para(cliente, doc):
-    """{material_id: lo que el navegador necesita} de los materiales del
-    documento que existen para ESTE cliente (un id ajeno no aparece)."""
+    """{material_id: material_para(m)} de los materiales del documento que
+    existen para ESTE cliente (un id ajeno no aparece)."""
     out = {}
     for mid in doc.get("materiales") or []:
         m = materiales.obtener(cliente, int(mid))
         if not m:
             continue
-        extra = m.get("extra") or {}
-        out[int(mid)] = {"id": int(mid), "tipo": m["tipo"], "url": m["url"], "url_proxy": m.get("url_proxy"),
-                         "duracion_ms": m.get("duracion_ms"), "ancho": m.get("ancho"), "alto": m.get("alto"),
-                         "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
-                         "tira_url": extra.get("tira_url")}
+        out[int(mid)] = material_para(m)
     return out
 
 
