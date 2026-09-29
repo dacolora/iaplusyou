@@ -26,6 +26,7 @@ from flask_babel import gettext
 import cola
 import creative_flow
 import ediciones
+import idiomas
 import materiales
 import trabajos
 from final_edition import cortes, mezcla, motor, rasterizar
@@ -221,7 +222,10 @@ def ejecutar_producir(tarea):
 def _interrumpido(tarea, mensaje):
     p = tarea.get("payload") or {}
     if p.get("cliente") and p.get("final_id"):
-        error = f"interrumpido: {cola.recortar(cola.sin_token(str(mensaje)), 500)}"
+        # Se guarda en la final (la pestaña Final edition lo muestra): el idioma del
+        # proyecto. El hook no pasa por worker.ejecutar (como tareas/nicho.py).
+        with idiomas.en_idioma(idiomas.de_proyecto(p["cliente"])):
+            error = gettext("interrumpido: %(mensaje)s", mensaje=cola.recortar(cola.sin_token(str(mensaje)), 500))
         creative_flow.actualizar_final(p["cliente"], p["final_id"], estado="error", error=error)
 
 

@@ -50,8 +50,12 @@ MARCAS_EDITOR = re.compile(
 # `t` es la función de textos.js: una variable local con ese nombre la tapa
 # (y un `const t` más abajo en la misma función hace que `t(...)` lance
 # ReferenceError por la zona muerta de `const`).
+# Fix round 1: también un `t` entre los parámetros de una flecha, suelto o
+# desestructurado (`(t, ms) =>`, `([, t]) =>`, `({ a: t }) =>`); no `({ t: x })`,
+# que no crea ninguna variable `t`.
 TAPA_T = re.compile(r"\b(?:const|let|var)\s+(?:\{[^}]*\b)?t\b(?!\s*:)|\(\s*t\s*\)\s*=>|\bt\s*=>|"
-                    r"\bfor\s*\(\s*(?:const|let)\s+t\s+of\b|return\s*\{\s*t\s*,")
+                    r"\bfor\s*\(\s*(?:const|let)\s+t\s+of\b|return\s*\{\s*t\s*,|"
+                    r"\((?:[^()]*[\s,\[{])?t\s*(?:[,\]}][^()]*)?\)\s*=>")
 
 
 def _parece_texto(s):
@@ -123,6 +127,16 @@ def test_sin_espanol_suelto_en_los_modulos_del_editor():
         with open(ruta, encoding="utf-8") as f:
             hallazgos += [f"{os.path.basename(ruta)}: {tok[:80]}" for tok in espanol_en_js(f.read(), os.path.basename(ruta))]
     assert not hallazgos, "Texto en español fuera de textos.js:\n" + "\n".join(hallazgos)
+
+
+def test_tapa_t_detecta():
+    tapan = ["const t = 1;", "xs.map((t) => t.x)", "xs.map(t => t)", "for (const t of xs) {}",
+             "xs.filter(([, t]) => ok(t))", "xs.map(({ a: t }) => t)", "const poner = (t, ms, clave = null) => 0;",
+             "f((ms, t) => 0)", "const { a, t } = o;"]
+    no_tapan = ["xs.filter(([, tipo]) => ok(tipo))", "xs.map(({ t: x }) => x)", 't("guardado.ok")',
+                "xs.map((x) => t(x))", "const texto = t(clave);", "f((a, b = t('x')) => 0)"]
+    assert [s for s in tapan if not TAPA_T.search(s)] == []
+    assert [s for s in no_tapan if TAPA_T.search(s)] == []
 
 
 def test_nadie_tapa_t():

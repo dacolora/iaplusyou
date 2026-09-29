@@ -71,6 +71,7 @@ TEXTOS = {
     "vista.nombre_imagen": N_("la imagen"),
     "vista.nombre_video": N_("el video"),
     "vista.nombre_archivo": N_("el archivo"),
+    "vista.nombre_con_archivo": N_("{tipo} «{archivo}»"),
     "vista.carga_una": N_("No se pudo cargar {lista} (el enlace no respondió o el archivo ya no está): esa parte queda vacía en la vista previa."),
     "vista.carga_varias": N_("No se pudieron cargar {lista} (el enlace no respondió o el archivo ya no está): esas partes quedan vacías en la vista previa."),
     "vista.sonido_fallo": N_("No se pudo cargar el sonido de {n} archivo(s) (puede ser la conexión o que el almacenamiento no dé permiso de lectura): la vista previa sigue sin ese sonido."),

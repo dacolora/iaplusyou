@@ -121,7 +121,7 @@ MARCAS_CODIGO = re.compile(
     r"falta|faltan|borrados?|borradas?|elige|marca|destinos?|pista|voz|sonido|efecto|textos?|imagen|encima|"
     r"precio|pausar|reproducir|guardado|guardando|cambios|recarga|recargar|cortar|duplicar|borrar|velocidad|"
     r"archivos?|produciendo|preparando|cargando|pudo|pudieron|materiales|renderizando|subiendo|uniendo|"
-    r"tramos?|inexistente|interrumpida|agregado)\b", re.I)
+    r"tramos?|inexistente|interrumpida|interrumpido|agregado)\b", re.I)
 
 
 def espanol_en_codigo(texto):

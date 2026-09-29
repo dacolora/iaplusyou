@@ -54,7 +54,7 @@ export function tipoDeArchivo(nombre) {
 
 // El `accept` de un <input type=file> para esos tipos.
 export function aceptarPara(tipos) {
-  return Object.entries(EXTENSIONES_SUBIDA).filter(([, t]) => tipos.includes(t)).map(([ext]) => ext).join(",");
+  return Object.entries(EXTENSIONES_SUBIDA).filter(([, tipo]) => tipos.includes(tipo)).map(([ext]) => ext).join(",");
 }
 
 // Lo que el servidor rechazaría igual, dicho antes de mandar el archivo.

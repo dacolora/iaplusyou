@@ -65,6 +65,7 @@ export const ES = {
   "vista.nombre_imagen": "la imagen",
   "vista.nombre_video": "el video",
   "vista.nombre_archivo": "el archivo",
+  "vista.nombre_con_archivo": "{tipo} «{archivo}»",
   "vista.carga_una": "No se pudo cargar {lista} (el enlace no respondió o el archivo ya no está): esa parte queda vacía en la vista previa.",
   "vista.carga_varias": "No se pudieron cargar {lista} (el enlace no respondió o el archivo ya no está): esas partes quedan vacías en la vista previa.",
   "vista.sonido_fallo": "No se pudo cargar el sonido de {n} archivo(s) (puede ser la conexión o que el almacenamiento no dé permiso de lectura): la vista previa sigue sin ese sonido.",

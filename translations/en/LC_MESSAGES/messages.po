@@ -12678,6 +12678,10 @@ msgid "interrumpida: %(mensaje)s"
 msgstr "interrupted: %(mensaje)s"
 
 #, python-format
+msgid "interrumpido: %(mensaje)s"
+msgstr "interrupted: %(mensaje)s"
+
+#, python-format
 msgid "inv: %(estado)s"
 msgstr "research: %(estado)s"
 
@@ -13621,6 +13625,10 @@ msgstr "{mensaje} Choose another market."
 #, python-brace-format
 msgid "{n} %"
 msgstr "{n}%"
+
+#, python-brace-format
+msgid "{tipo} «{archivo}»"
+msgstr "{tipo} “{archivo}”"
 
 msgid "¡Listo! Tienes cambios sin guardar en esta página."
 msgstr "Done! You have unsaved changes on this page."

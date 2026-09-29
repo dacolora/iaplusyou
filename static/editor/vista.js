@@ -261,7 +261,7 @@ export class VistaPrevia {
     try {
       archivo = decodeURIComponent(String(m?.url_proxy || m?.url || "").split("?")[0].split("/").pop() || "");
     } catch { /* nombre raro: solo el tipo */ }
-    return archivo ? `${tipo} «${archivo.slice(0, 40)}»` : tipo;
+    return archivo ? t("vista.nombre_con_archivo", { tipo, archivo: archivo.slice(0, 40) }) : tipo;
   }
 
   avisarFalla(mid) {
