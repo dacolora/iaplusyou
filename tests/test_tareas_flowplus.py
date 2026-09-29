@@ -177,7 +177,7 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
 
     visto = {}
 
-    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None, con_sonido=True, calidad="final"):
+    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None, con_sonido=True, calidad="final", **_):
         visto.update(refs=referencias, videos=videos, ar=aspect_ratio)
         return "https://prov/v.mp4"
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)

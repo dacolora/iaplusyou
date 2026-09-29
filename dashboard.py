@@ -6662,6 +6662,7 @@ def fp_reusar(cliente, cf_id):
         "musica_estilo": entry.get("musica_estilo") or "",
         "musica_inicio_s": entry.get("musica_inicio_s") or 0,
         "calidad": entry.get("calidad") or "final",
+        "mejorar_prompt": bool(entry.get("mejorar_prompt")),
         "preset_camara": entry.get("preset_camara"),
         "plantilla": entry.get("plantilla"),
     }
@@ -6740,6 +6741,9 @@ def cf_crear_video(cliente):
     calidad = (request.form.get("calidad") or "final").strip()
     if calidad not in flowplus_modelos.CALIDADES or modelo != "wan3" or tipo == "imagen":
         calidad = "final"
+    # «Que Wan mejore mi prompt»: opcional y apagado por defecto (el prompt va tal
+    # cual salvo que la persona lo pida); solo existe en Wan 3.0 para video.
+    mejorar_prompt = request.form.get("mejorar_prompt") == "si" and modelo == "wan3" and tipo == "video"
 
     # Las referencias vienen de la bandeja (archivos subidos y links ya
     # descargados), en el orden en que se agregaron, con sus etiquetas.
@@ -6836,7 +6840,7 @@ def cf_crear_video(cliente):
         aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo, referencias=referencias,
         con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
         con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo, musica_inicio_s=musica_inicio_s,
-        prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma,
+        prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma, mejorar_prompt=mejorar_prompt,
         preset_camara=None, plantilla=None,
     )
     # Triple Whale: si el texto vino de «Llevar a Crear», la sesión recuerda de
