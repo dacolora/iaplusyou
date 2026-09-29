@@ -134,6 +134,13 @@ def estimar_costo(comentarios, modelo=None):
             "referencia": referencia, "modelo": modelo, "suficientes": len(sel) >= MIN_COMENTARIOS}
 
 
+def estimar_costo_maximo(modelo=None):
+    """Peor caso de una generación (lo que la investigación aprueba antes de
+    tener comentarios): MAX_COMENTARIOS comentarios de 250 caracteres."""
+    falsos = [{"id": i, "texto": "x" * 250, "fuente": "amazon", "puntuacion": 0, "fecha": None} for i in range(MAX_COMENTARIOS)]
+    return estimar_costo(falsos, modelo)
+
+
 # ------------------------------------------------------------- prompts ---
 
 PROMPT_NUCLEOS = """Eres estratega de investigación de clientes para la marca {marca}.

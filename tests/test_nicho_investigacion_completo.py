@@ -165,11 +165,12 @@ class TestStateMachine:
 
     def test_crear_inicial_estructura_completa(self, investigacion_mod):
         """crear_inicial builds proper structure."""
+        # Solo meli: Amazon no tiene tienda propia en Colombia (R8).
         inv = investigacion_mod.crear_inicial(
             tema="phones",
             pais="CO",
-            plataformas=["amazon", "meli"],
-            redes=["reddit"],
+            plataformas_elegidas=["meli"],
+            redes_elegidas=["reddit"],
             topes={"consultas": 3, "productos_por_consulta": 20}
         )
         assert inv["version"] == 1
@@ -177,15 +178,18 @@ class TestStateMachine:
         assert inv["tema"] == "phones"
         assert inv["pais"] == "CO"
         assert inv["consultas"] == []
-        assert inv["pasos"] == {}
+        # pasos ya no nace vacío: viene prellenado "pendiente" para cada paso del orden.
+        assert set(inv["pasos"]) == set(inv["orden"])
+        assert all(p["estado"] == "pendiente" for p in inv["pasos"].values())
         assert inv["aprobado_usd"] > 0
 
     def test_estimar_devuelve_costos_positivos(self, investigacion_mod):
         """estimar returns breakdown with positive total."""
+        # meli (no amazon): Amazon no tiene tienda propia en Colombia (R8).
         est = investigacion_mod.estimar(
             {},
             "CO",
-            ["amazon"],
+            ["meli"],
             ["reddit"],
             {"consultas": 2, "productos_por_consulta": 20,
              "productos_elegidos": 15, "resenas_por_producto": 100}
@@ -509,30 +513,32 @@ class TestIntegracion:
 
     def test_flujo_tema_a_estado_consultas(self, investigacion_mod):
         """Theme → estado consultas."""
+        # Solo meli: Amazon no tiene tienda propia en Colombia (R8).
         inv = investigacion_mod.crear_inicial(
             tema="smart home",
             pais="CO",
-            plataformas=["amazon", "meli"],
-            redes=["reddit"],
+            plataformas_elegidas=["meli"],
+            redes_elegidas=["reddit"],
             topes={"consultas": 3}
         )
         assert inv["estado"] == "consultas"
         assert inv["tema"] == "smart home"
 
     def test_transicion_consultas_a_buscando(self, investigacion_mod):
-        """Transition: consultas → buscando (when consultas marked done)."""
+        """Transition: consultas -> seleccionar directamente cuando no se elige
+        ninguna plataforma (el `orden` que arma crear_inicial no tiene ningún
+        paso "buscar:" que saltar)."""
         inv = investigacion_mod.crear_inicial(
-            tema="test", pais="CO", plataformas=[], redes=[], topes={}
+            tema="test", pais="CO", plataformas_elegidas=[], redes_elegidas=[], topes={}
         )
         # Mark consultas as done
         inv = investigacion_mod.marcar_paso(
             inv, "consultas", "hecho",
             usd=0.01, productos=0
         )
-        # Next step should be first buscar (if plataforma available)
+        # Sin ninguna plataforma elegida, el siguiente paso real es "seleccionar".
         paso = investigacion_mod.siguiente_paso(inv)
-        # Should advance or be None if no pasos defined
-        assert paso in (None,) or paso.startswith("buscar:")
+        assert paso == "seleccionar"
 
     def test_resumen_incluye_todo(self, investigacion_mod):
         """resumen aggregates all info."""
@@ -560,8 +566,12 @@ class TestEdgeCases:
     """Edge cases and error conditions."""
 
     def test_siguiente_paso_vacio(self, investigacion_mod):
-        """siguiente_paso with minimal dict."""
-        assert investigacion_mod.siguiente_paso({}) == "consultas"
+        """`{}` means no investigación was ever created for the estudio
+        (R2: `datos.investigacion` returns `{}` in that case) -- there is
+        nothing to advance, unlike a real investigación whose `pasos` come
+        prefilled "pendiente" by `crear_inicial` (see test_orden_y_crear_inicial_prellenado
+        in test_nicho_investigacion.py)."""
+        assert investigacion_mod.siguiente_paso({}) is None
 
     def test_siguiente_paso_estado_desconocido(self, investigacion_mod):
         """Unknown estado treated as in progress."""
@@ -572,7 +582,7 @@ class TestEdgeCases:
     def test_crear_inicial_sin_plataformas(self, investigacion_mod):
         """crear_inicial works with empty platforms."""
         inv = investigacion_mod.crear_inicial(
-            tema="test", pais="CO", plataformas=[], redes=[], topes={}
+            tema="test", pais="CO", plataformas_elegidas=[], redes_elegidas=[], topes={}
         )
         assert inv["estado"] == "consultas"
 

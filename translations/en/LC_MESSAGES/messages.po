@@ -2271,6 +2271,9 @@ msgstr "Classify pending"
 msgid "Claude agrupa las líneas en clips de 5 a 15 s; el código pega el diálogo exacto, calcula los tiempos y valida todo antes de mostrarte nada."
 msgstr "Claude groups the lines into 5-to-15-second clips; the code pastes the exact dialogue, calculates the timing and validates everything before showing you anything."
 
+msgid "Claude devolvió menos de 2 consultas."
+msgstr "Claude returned fewer than 2 queries."
+
 #, python-format
 msgid "Claude devolvió un plan incompleto (%(error)s). Vuelve a armar."
 msgstr "Claude returned an incomplete plan (%(error)s). Try assembling again."
@@ -2362,6 +2365,9 @@ msgstr "Claude hasn't asked for anything for this product yet: requests show up 
 
 msgid "Claude no ha pedido nada para este producto."
 msgstr "Claude hasn't requested anything for this product."
+
+msgid "Claude no juzgó ningún producto."
+msgstr "Claude did not judge any product."
 
 msgid "Claude no nombró ninguna causa conocida."
 msgstr "Claude didn't name any known cause."
@@ -10957,6 +10963,15 @@ msgstr "search:meli"
 msgid "buscar:tiktok_shop"
 msgstr "search:tiktok_shop"
 
+msgid "buscar en Amazon"
+msgstr "search Amazon"
+
+msgid "buscar en Mercado Libre"
+msgstr "search Mercado Libre"
+
+msgid "buscar en TikTok Shop"
+msgstr "search TikTok Shop"
+
 msgid "búsqueda"
 msgstr "search"
 
@@ -11376,6 +11391,9 @@ msgstr "testing: %(nombre)s"
 msgid "en_curso"
 msgstr "in progress"
 
+msgid "en curso"
+msgstr "in progress"
+
 msgid "energetico"
 msgstr "Energetic"
 
@@ -11541,6 +11559,9 @@ msgstr "generating"
 
 msgid "generar"
 msgstr "generate"
+
+msgid "avatares"
+msgstr "avatars"
 
 #, python-format
 msgid "generar %(num)d pieza"
@@ -11902,6 +11923,9 @@ msgstr "optional"
 msgid "opcional: una por línea; si tienes el link de su Ad Library, pégalo al lado"
 msgstr "optional: one per line; if you have its Ad Library link, paste it alongside"
 
+msgid "opiniones de Mercado Libre"
+msgstr "Mercado Libre reviews"
+
 msgid "orgánicas este mes"
 msgstr "organic this month"
 
@@ -12085,6 +12109,12 @@ msgstr "social:reddit"
 msgid "redes:youtube"
 msgstr "social:youtube"
 
+msgid "Reddit"
+msgstr "Reddit"
+
+msgid "YouTube"
+msgstr "YouTube"
+
 msgid "reedición"
 msgstr "re-edit"
 
@@ -12146,6 +12176,12 @@ msgstr "reviews:tiktok_shop"
 
 msgid "reseñas"
 msgstr "reviews"
+
+msgid "reseñas de Amazon"
+msgstr "Amazon reviews"
+
+msgid "reseñas de TikTok Shop"
+msgstr "TikTok Shop reviews"
 
 msgid "respuesta ilegible"
 msgstr "unreadable response"
@@ -12230,6 +12266,9 @@ msgstr "selecting"
 
 msgid "seleccionar"
 msgstr "select"
+
+msgid "elegir productos"
+msgstr "choose products"
 
 msgid "sin Instagram vinculado"
 msgstr "no Instagram linked"
@@ -12430,6 +12469,12 @@ msgstr "uuid, only if you already created it in the Higgsfield panel"
 
 msgid "vacio"
 msgstr "empty"
+
+msgid "sin resultados"
+msgstr "no results"
+
+msgid "saltado"
+msgstr "skipped"
 
 msgid "variantes"
 msgstr "variants"

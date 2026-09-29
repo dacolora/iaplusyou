@@ -152,8 +152,8 @@ class TestEstimar:
         """Estimate with no platforms costs only Claude + avatares."""
         result = inv.estimar(
             {}, pais="SE",
-            plataformas=[],
-            redes=[],
+            plataformas_elegidas=[],
+            redes_elegidas=[],
             topes=inv.TOPES_DEFECTO
         )
         # Solo Claude + avatares
@@ -166,8 +166,8 @@ class TestEstimar:
         """Estimate includes search + reviews for one platform."""
         result = inv.estimar(
             {}, pais="SE",
-            plataformas=["amazon"],
-            redes=[],
+            plataformas_elegidas=["amazon"],
+            redes_elegidas=[],
             topes=inv.TOPES_DEFECTO
         )
         assert len(result["filas"]) == 1
@@ -182,21 +182,25 @@ class TestCrearInicial:
 
     def test_crear_inicial_estructura(self):
         """crear_inicial returns valid structure."""
+        # MX (no SE): la investigación real valida cobertura por país (R8) y
+        # meli no tiene tienda en Suecia -- MX tiene tanto Amazon como MELI.
         inv_data = inv.crear_inicial(
             tema="skincare",
-            pais="SE",
-            plataformas=["amazon", "meli"],
-            redes=["reddit"],
+            pais="MX",
+            plataformas_elegidas=["amazon", "meli"],
+            redes_elegidas=["reddit"],
             topes=inv.TOPES_DEFECTO
         )
 
         assert inv_data["version"] == 1
         assert inv_data["estado"] == "consultas"
         assert inv_data["tema"] == "skincare"
-        assert inv_data["pais"] == "SE"
+        assert inv_data["pais"] == "MX"
         assert inv_data["plataformas"] == ["amazon", "meli"]
         assert inv_data["redes"] == ["reddit"]
-        assert inv_data["pasos"] == {}
+        # pasos ya no nace vacío: viene prellenado "pendiente" para cada paso del orden.
+        assert set(inv_data["pasos"]) == set(inv_data["orden"])
+        assert all(p["estado"] == "pendiente" for p in inv_data["pasos"].values())
         assert inv_data["gastado_usd"] == 0.0
         assert inv_data["aprobado_usd"] > 0
 
@@ -347,6 +351,113 @@ class TestConstantes:
         assert len(inv.IDIOMAS) > 10
         assert inv.IDIOMAS.get("CO") == "es"
         assert inv.IDIOMAS.get("SE") == "sv"
+
+
+def _inv(plataformas=("amazon", "meli"), redes=("reddit",), **pasos):
+    from nicho import investigacion as inv
+    i = inv.crear_inicial("tofflor", "SE", list(plataformas), list(redes), inv.TOPES_DEFECTO, estimado={"total_usd": 5.0})
+    for paso, estado in pasos.items():
+        i = inv.marcar_paso(i, paso, estado)
+    return i
+
+
+def test_orden_y_crear_inicial_prellenado():
+    from nicho import investigacion as inv
+    assert inv.orden_pasos(["amazon", "meli"], ["reddit"]) == ["consultas", "buscar:amazon", "buscar:meli", "seleccionar", "resenas:amazon", "resenas:meli", "redes:reddit", "generar"]
+    i = _inv()
+    assert i["orden"] == inv.orden_pasos(["amazon", "meli"], ["reddit"]) and i["aprobado_usd"] == 5.0 and i["gastado_usd"] == 0.0
+    assert all(i["pasos"][p] == {"estado": "pendiente"} for p in i["orden"]) and i["estado"] == "consultas" and i["elegidos"] == {}
+    assert i["iniciada_en"] and i["terminada_en"] is None and i["detenida_por"] is None
+    assert inv.normalizar_topes({"consultas": "9", "productos_por_consulta": 1, "productos_elegidos": None, "resenas_por_producto": 1000}) == \
+        {"consultas": 4, "productos_por_consulta": 5, "productos_elegidos": 15, "resenas_por_producto": 200}
+    with pytest.raises(ValueError):
+        inv.normalizar_topes({"consultas": "muchas"})
+
+
+def test_siguiente_paso_por_orden_y_estados():
+    from nicho import investigacion as inv
+    i = _inv()
+    assert inv.siguiente_paso(i) == "consultas"
+    i = inv.marcar_paso(i, "consultas", "en_curso")
+    assert inv.siguiente_paso(i) == "consultas" and i["estado"] == "consultas"
+    i = inv.marcar_paso(i, "consultas", "hecho", usd=0.01)
+    i = inv.marcar_paso(i, "buscar:amazon", "error", aviso="x")
+    assert inv.siguiente_paso(i) == "buscar:meli" and i["estado"] == "buscando" and i["gastado_usd"] == 0.01
+    for paso, estado in (("buscar:meli", "vacio"), ("seleccionar", "hecho"), ("resenas:amazon", "hecho"), ("resenas:meli", "saltado"), ("redes:reddit", "saltado")):
+        i = inv.marcar_paso(i, paso, estado, usd=0.5 if estado == "hecho" else 0)
+    assert inv.siguiente_paso(i) == "generar" and i["estado"] == "redes" and i["gastado_usd"] == 1.01
+    i = inv.marcar_paso(i, "generar", "hecho", usd=0.3)
+    assert inv.terminada(i) and i["estado"] == "lista" and i["terminada_en"] and inv.siguiente_paso(i) is None
+    d = inv.detener(_inv(), "sin tema")
+    assert d["estado"] == "detenida" and d["detenida_por"] == "sin tema" and inv.siguiente_paso(d) is None and inv.puede_reanudar(d["estado"])
+    assert inv.estado_por_paso("resenas:meli") == "resenas" and inv.estado_por_paso("generar") == "generando"
+    viejo = {"estado": "consultas", "pasos": {"consultas": {"estado": "hecho"}}, "plataformas": ["meli"], "redes": []}
+    assert inv.siguiente_paso(viejo) == "buscar:meli"                                    # sin `orden`: se deriva de plataformas/redes
+
+
+def test_estimar_suma_plataformas_claude_y_avatares(monkeypatch):
+    from nicho import avatares, investigacion as inv
+    monkeypatch.setattr(avatares, "estimar_costo_maximo", lambda: {"usd": 0.4})
+    e = inv.estimar({}, "SE", ["amazon", "tiktok_shop"], ["reddit"], inv.TOPES_DEFECTO)
+    assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.18 and e["filas"][0]["resenas_usd"] == 1.35
+    assert e["avatares_usd"] == 0.4 and 0 < e["claude_usd"] < 0.2
+    assert e["total_usd"] == round(0.18 + 1.35 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
+    with pytest.raises(Exception):
+        inv.estimar({}, "SE", ["meli"], [], inv.TOPES_DEFECTO)                            # MELI no cubre Suecia
+
+
+def test_elegir_y_params_redes():
+    from nicho import investigacion as inv
+    productos = [{"id": 1, "plataforma": "amazon", "fuente_id": "A", "n_resenas": 10}, {"id": 2, "plataforma": "amazon", "fuente_id": "B", "n_resenas": 500},
+                 {"id": 3, "plataforma": "amazon", "fuente_id": "C", "n_resenas": None}, {"id": 4, "plataforma": "meli", "fuente_id": "M", "n_resenas": 3}]
+    decisiones = {1: {"relevante": True, "motivo": "sí"}, 2: {"relevante": True, "motivo": "sí"}, 3: {"relevante": True, "motivo": "sí"}, 4: {"relevante": False, "motivo": "no"}}
+    assert inv.elegir(productos, decisiones, 2) == {"amazon": ["B", "A"]}
+    assert inv.elegir(productos, {}, 2) == {}
+    i = {**_inv(), "consultas": ["tofflor mot fotsmärta", "ortopediska tofflor"]}
+    assert inv.params_redes("reddit", i) == {"palabras_clave": "tofflor mot fotsmärta OR ortopediska tofflor", "subreddits": [], "links": [],
+                                             "max_posts": 25, "max_comentarios_por_post": 50, "periodo": "year"}
+    assert inv.params_redes("youtube", i) == {"palabras_clave": "tofflor mot fotsmärta | ortopediska tofflor", "links": [], "max_videos": 10,
+                                              "max_comentarios_por_video": 100, "idioma": "sv", "region": "SE"}
+
+
+def test_consultas_y_seleccion_con_claude(monkeypatch):
+    from nicho import avatares, investigacion as inv
+    llamadas = []
+
+    def _llamar(texto, max_tokens):
+        llamadas.append(texto)
+        if "consultas" in texto.split("Responde")[-1]:
+            # Nota: el quinto elemento del brief original era "x"*90 escrito
+            # DENTRO de un literal de una sola comilla -- Python no evalúa esa
+            # multiplicación ahí (queda como texto crudo `"x"*90`), lo que
+            # rompe el JSON. Se quita: los otros 4 elementos ya cubren trim,
+            # deduplicado y exclusión de vacíos.
+            return '```json\n{"consultas": ["tofflor mot fotsmärta", " ortopediska tofflor ", "tofflor mot fotsmärta", ""]}\n```', 700, 40
+        return '{"productos": [{"id": 1, "relevante": true, "motivo": "pantufla del nicho"}, {"id": 2, "relevante": false, "motivo": "es un calcetín"}, {"id": 99, "relevante": true}]}', 900, 60
+    monkeypatch.setattr(avatares, "_llamar", _llamar)
+    est = {"tema": "pantuflas para dolor de pies", "producto": "HappyFlops", "idioma": "sv"}
+    consultas, te, ts = inv.consultas_con_claude(est, "SE")
+    assert consultas == ["tofflor mot fotsmärta", "ortopediska tofflor"] and (te, ts) == (700, 40)
+    assert "sv" in llamadas[0] or "sueco" in llamadas[0]
+    productos = [{"id": 1, "plataforma": "amazon", "titulo": "Tofflor", "marca": "A", "precio": 10, "moneda": "SEK", "estrellas": 4.5, "n_resenas": 100},
+                 {"id": 2, "plataforma": "amazon", "titulo": "Strumpor", "marca": None, "precio": None, "moneda": None, "estrellas": None, "n_resenas": None}]
+    decisiones, te, ts = inv.seleccion_con_claude(est, productos)
+    assert decisiones == {1: {"relevante": True, "motivo": "pantufla del nicho"}, 2: {"relevante": False, "motivo": "es un calcetín"}}
+    assert (te, ts) == (900, 60) and "Strumpor" in llamadas[1]
+    assert inv.costo_claude(1000, 100) == avatares.costo_real(1000, 100)
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: ("no es json", 10, 5))
+    with pytest.raises(avatares.AnalisisInvalido) as e:
+        inv.consultas_con_claude(est, "SE")
+    assert e.value.tokens_entrada == 10 and e.value.tokens_salida == 5
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: ('{"consultas": ["solo una"]}', 10, 5))
+    with pytest.raises(avatares.AnalisisInvalido):
+        inv.consultas_con_claude(est, "SE")                                               # menos de 2 consultas no sirve
+
+
+def test_estimar_costo_maximo():
+    from nicho import avatares
+    e = avatares.estimar_costo_maximo()
+    assert e["comentarios"] == avatares.MAX_COMENTARIOS and e["usd"] > 0 and e["suficientes"]
 
 
 if __name__ == "__main__":
