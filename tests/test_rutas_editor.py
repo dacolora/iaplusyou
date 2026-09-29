@@ -913,3 +913,24 @@ def test_borrar_solo_lo_subido_o_lo_de_crear_de_este_proyecto(dashboard, encolad
                   headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
     assert materiales.obtener("acme", foto["id"])
     assert _cliente(dashboard, "otro", "otro").post(f"/cliente/acme/ediciones/materiales/{foto['id']}/borrar").status_code == 302
+
+
+def test_una_cancion_de_mi_musica_no_se_borra_desde_el_editor(dashboard, encolados, r2_borrados):
+    """Arreglo 3: las canciones de Mi música (subidas o creadas) también
+    tienen origen «subida»; se reconocen por `extra.fuente` (mi_musica.py) y
+    se borran solo en Crear › Mi música. La biblioteca lo sabe por
+    `material_para(...)["mi_musica"]`."""
+    import materiales
+    from final_edition import vista_previa
+    _edicion()
+    cancion = materiales.registrar("acme", tipo="audio", origen="subida", url="https://r2.test/clientes/acme/materiales/c.mp3",
+                                   hash="h-cancion", bytes=10, duracion_ms=60000, extra={"nombre": "Mi canción", "fuente": "subida"})
+    audio = materiales.registrar("acme", tipo="audio", origen="subida", url="https://r2.test/clientes/acme/materiales/a.mp3",
+                                 hash="h-audio", bytes=10, duracion_ms=2000, extra={"nombre": "whoosh"})
+    assert vista_previa.material_para(cancion)["mi_musica"] is True
+    assert vista_previa.material_para(audio)["mi_musica"] is False
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/materiales/{cancion['id']}/borrar")
+    assert r.status_code == 400 and "Mi música" in r.get_json()["error"]
+    assert materiales.obtener("acme", cancion["id"]) and r2_borrados == []
+    assert c.post(f"/cliente/acme/ediciones/materiales/{audio['id']}/borrar").status_code == 200

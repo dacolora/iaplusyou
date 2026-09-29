@@ -46,7 +46,9 @@ class SubidaInvalida(ValueError):
 
 # Lo que «Borrar» de la biblioteca puede quitar (capa 4c): lo que la persona
 # subió y los videos de Crear ya preparados como material. Nunca una voz de
-# guion, el logo (marca) ni una canción de Mi música (esa se borra en Crear).
+# guion, el logo (marca) ni una canción de Mi música — creada (origen musica)
+# o subida (origen subida con `extra.fuente`, `vista_previa.es_de_mi_musica`):
+# esas se borran en Crear › Mi música.
 ORIGENES_BORRABLES = ("subida", "crear")
 
 
@@ -68,6 +70,8 @@ def borrar(cliente, material_id):
     mat = materiales.obtener(cliente, int(material_id))
     if not mat:
         raise NoSePuedeBorrar("Ese archivo ya no existe.", 404)
+    if vista_previa.es_de_mi_musica(mat):
+        raise NoSePuedeBorrar("Esa canción es de Mi música: bórrala en Crear › Mi música.", 400)
     if mat["origen"] not in ORIGENES_BORRABLES:
         raise NoSePuedeBorrar("Ese archivo no se borra desde aquí.", 400)
     ed = materiales.edicion_que_lo_usa(cliente, mat["id"])

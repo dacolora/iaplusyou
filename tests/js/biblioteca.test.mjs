@@ -259,6 +259,8 @@ test("se borra lo subido y un video de Crear preparado; el logo, una voz o Mi m�
   assert.equal(puedeBorrarse(video(2, { origen: "crear" })), true);
   assert.equal(puedeBorrarse({ id: 3, tipo: "audio", origen: "subida" }), true);
   for (const origen of ["marca", "voz", "musica"]) assert.equal(puedeBorrarse({ id: 4, tipo: "imagen", origen }), false, origen);
+  // arreglo 3: una canción subida a Mi música también es origen «subida», pero se borra solo en Crear
+  assert.equal(puedeBorrarse({ id: 5, tipo: "audio", origen: "subida", mi_musica: true }), false);
   assert.equal(urlBorrar("/cliente/acme/ediciones/materiales/__ID__/borrar", 12), "/cliente/acme/ediciones/materiales/12/borrar");
 });
 

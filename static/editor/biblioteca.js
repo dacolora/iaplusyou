@@ -146,11 +146,13 @@ export function urlPieza(plantilla, cfId) {
 
 // Capa 4c: lo que «Borrar» puede quitar — lo subido y los videos de Crear ya
 // preparados (espejo de final_edition/biblioteca.ORIGENES_BORRABLES). Nunca
-// el logo, una voz de guion ni una canción de Mi música (esa, en Crear).
+// el logo, una voz de guion ni una canción de Mi música: la creada tiene
+// origen «musica» y la subida trae `mi_musica` (vista_previa.material_para);
+// las dos se borran en Crear › Mi música.
 export const ORIGENES_BORRABLES = ["subida", "crear"];
 
 export function puedeBorrarse(m) {
-  return Boolean(m) && ORIGENES_BORRABLES.includes(m.origen);
+  return Boolean(m) && ORIGENES_BORRABLES.includes(m.origen) && !m.mi_musica;
 }
 
 export function urlBorrar(plantilla, id) {
@@ -642,7 +644,7 @@ export class Biblioteca {
     el("span", "ed-bib-audio-icono", fila).append(icono("nota", 18));
     const txt = el("span", "ed-bib-audio-texto", fila);
     el("span", "ed-bib-nombre", txt, nombre);
-    el("span", "ed-bib-audio-detalle", txt, [duracionTexto(m.duracion_ms), m.origen === "musica" ? "Mi música" : "Subido"]
+    el("span", "ed-bib-audio-detalle", txt, [duracionTexto(m.duracion_ms), m.origen === "musica" || m.mi_musica ? "Mi música" : "Subido"]
       .filter(Boolean).join(" · "));
     const oir = el("button", "btn-sm ed-bib-escuchar", fila);
     oir.type = "button";
