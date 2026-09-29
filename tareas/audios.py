@@ -18,6 +18,16 @@ from tareas import ref_sufijo, registrar
 
 ETAPAS = ((idiomas.N_("Sintetizando la voz"), 55), (idiomas.N_("Mezclando con la música"), 30), (idiomas.N_("Guardando"), 15))
 
+# msgids: estado_trabajo (dashboard.py) los traduce con idiomas.traducir al
+# responder. La ruta /trabajo/<job_id>/estado no tiene auth y el job_id es
+# adivinable, así que el mensaje nunca lleva el texto que escribió la persona
+# (revisión final F1) — solo estas constantes fijas.
+MENSAJES = {
+    "listo": idiomas.N_("Audio listo: ya está en Tus audios."),
+    "repetido": idiomas.N_("Ya tenías este audio con ese texto, voz y música: está en Tus audios."),
+    "solo_voz": idiomas.N_("Audio listo solo con la voz: la canción ya no estaba en Mi música."),
+}
+
 
 def job_id(cliente):
     return f"{cliente}__audio_generar"
@@ -44,7 +54,7 @@ def ejecutar(tarea):
     existente = materiales.buscar_hash(cliente, h_audio)
     if existente:
         materiales.marcar_uso([existente["id"]])
-        return f"Ya tenías este audio: {nombre}"
+        return MENSAJES["repetido"]
 
     carpeta = carpeta_trabajo(cliente, h_audio)
     os.makedirs(carpeta, exist_ok=True)
@@ -91,5 +101,5 @@ def ejecutar(tarea):
     materiales.obtener_o_crear(cliente, h_audio, _subir)
     shutil.rmtree(carpeta, ignore_errors=True)
     if musica_info and musica_info["estado"] == "ausente":
-        return f"Audio listo, solo la voz (la canción ya no estaba en Mi música): {nombre}"
-    return f"Audio listo: {nombre}"
+        return MENSAJES["solo_voz"]
+    return MENSAJES["listo"]

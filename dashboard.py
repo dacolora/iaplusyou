@@ -6710,8 +6710,12 @@ def au_descargar(cliente, aid):
     a = audios.obtener(cliente, aid)
     if not a:
         abort(404)
-    r = requests.get(a["url"], stream=True, timeout=120)
+    try:
+        r = requests.get(a["url"], stream=True, timeout=120)
+    except requests.RequestException:
+        abort(502)
     if r.status_code != 200:
+        r.close()
         abort(502)
     base = unicodedata.normalize("NFKD", a["nombre"].replace("…", "")).encode("ascii", "ignore").decode()
     nombre = re.sub(r"[^A-Za-z0-9 _-]+", "", base).strip()[:60] or f"audio-{aid}"

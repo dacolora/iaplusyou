@@ -33,6 +33,18 @@ def test_tts_payload_y_costo(monkeypatch):
     assert resultado == {"url": "https://fal/x.mp3", "costo_usd": round(len("Hola mundo") * 0.0001, 4)}
 
 
+def test_tts_timeout_personalizado_se_reenvia(monkeypatch):
+    """audios.muestra manda timeout=45 para no colgar el clic de «Escuchar»;
+    todo lo demás (audios.py::ejecutar, el resto de fal_audio) no pasa
+    timeout y se queda con el default de 180 (revisión final F6)."""
+    from providers import fal_audio
+    llamadas = _capturar(monkeypatch, fal_audio, {"audio": {"url": "https://fal/x.mp3"}})
+
+    fal_audio.tts("Hola", timeout=45)
+
+    assert len(llamadas) == 1 and llamadas[0]["timeout"] == 45
+
+
 def test_tts_texto_vacio_lanza_value_error(monkeypatch):
     from providers import fal_audio
     llamadas = _capturar(monkeypatch, fal_audio, {"audio": {"url": "https://fal/x.mp3"}})

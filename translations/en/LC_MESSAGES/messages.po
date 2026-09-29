@@ -1745,6 +1745,12 @@ msgstr "Invalid attribution: %(atribucion)s (use pixel, store or none)."
 msgid "Audiencia y producto"
 msgstr "Audience and product"
 
+msgid "Audio listo solo con la voz: la canción ya no estaba en Mi música."
+msgstr "Audio ready with the voice only: the song was no longer in My music."
+
+msgid "Audio listo: ya está en Tus audios."
+msgstr "Audio ready: it is in Your audios."
+
 msgid "Audio nativo del modelo, sin diálogo ni música."
 msgstr "The model's native audio, no dialogue or music."
 
@@ -3562,6 +3568,9 @@ msgstr "The hook has a different visual style from the rest of the video."
 
 msgid "El id de página de Meta son solo dígitos."
 msgstr "A Meta page id is digits only."
+
+msgid "El idioma lo decide el texto; este selector solo cambia la muestra de la voz."
+msgstr "The text decides the language; this selector only changes the voice sample."
 
 msgid ""
 "El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia\n"
@@ -10674,6 +10683,9 @@ msgstr "They've already been promised it: you have to promise bigger"
 
 msgid "Ya tengo cuenta"
 msgstr "I already have an account"
+
+msgid "Ya tenías este audio con ese texto, voz y música: está en Tus audios."
+msgstr "You already had this audio with that text, voice and music: it is in Your audios."
 
 msgid "Ya vio cómo funciona en otros: hay que mejorar el cómo"
 msgstr "They've seen how it works elsewhere: you have to improve the how"

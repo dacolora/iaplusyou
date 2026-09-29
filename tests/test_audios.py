@@ -75,12 +75,13 @@ def test_nombre_de_corta_a_sesenta_letras():
     assert len(n) <= 60 and n.endswith("…")
 
 
-def test_hash_de_la_voz_cambia_con_texto_voz_idioma_y_velocidad():
+def test_hash_de_la_voz_cambia_con_texto_voz_y_velocidad_no_con_idioma():
     base = audios.hash_voz("Hola", "Rachel", "es", "normal")
     assert base == audios.hash_voz("Hola", "Rachel", "es", "normal")
     assert base != audios.hash_voz("Hola", "Rachel", "es", "rapida")
     assert base != audios.hash_voz("Hola", "Adam", "es", "normal")
     assert base != audios.hash_voz("Hola.", "Rachel", "es", "normal")
+    assert base == audios.hash_voz("Hola", "Rachel", "en", "normal")
     a = audios.hash_audio(base, None, 0, "media")
     assert a == audios.hash_audio(base, None, 0, "alta")            # sin música el volumen no cuenta
     assert a != audios.hash_audio(base, 7, 0, "media") != audios.hash_audio(base, 7, 5, "media")
@@ -142,7 +143,7 @@ def test_muestra_se_sintetiza_una_sola_vez_y_la_paga_creatv(base_temporal, r2, m
     import sqlalchemy as sa
     import db
     llamadas = []
-    monkeypatch.setattr(audios.fal_audio, "tts", lambda texto, voz, idioma="es", on_progreso=None, velocidad=None:
+    monkeypatch.setattr(audios.fal_audio, "tts", lambda texto, voz, idioma="es", on_progreso=None, velocidad=None, timeout=180:
                         llamadas.append((texto, voz)) or {"url": "https://fal/m.mp3", "costo_usd": 0.0052})
     monkeypatch.setattr(audios, "descargar_url", lambda url, destino: open(destino, "wb").write(b"MP3") and destino)
     monkeypatch.setattr(audios.cortes, "duracion", lambda path: 2.5)
@@ -153,8 +154,10 @@ def test_muestra_se_sintetiza_una_sola_vez_y_la_paga_creatv(base_temporal, r2, m
     assert audios.muestra("Rachel", "en") != url and len(llamadas) == 2 and "Hi, I'm Rachel" in llamadas[1][0]
     with db.conectar() as con:
         gastos_ = [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == "_creatv"))]
-    assert sorted((g["tipo"], g["usd"], g["referencia"]) for g in gastos_) == [
-        ("locucion", 0.0052, "muestra_voz:Rachel:en:v1"), ("locucion", 0.0052, "muestra_voz:Rachel:es:v1")]
+    filas = sorted((g["tipo"], g["usd"], g["referencia"]) for g in gastos_)      # "en" < "es"
+    assert len(filas) == 2
+    assert filas[0][:2] == ("locucion", 0.0052) and filas[0][2].startswith("muestra_voz:Rachel:en:v1:")
+    assert filas[1][:2] == ("locucion", 0.0052) and filas[1][2].startswith("muestra_voz:Rachel:es:v1:")
     m = materiales.buscar_hash("_creatv", audios.hash_muestra("Rachel", "es"))
     assert m["origen"] == "voz" and m["duracion_ms"] == 2500 and m["extra"]["muestra"] is True
     with pytest.raises(ValueError):
@@ -164,7 +167,7 @@ def test_muestra_se_sintetiza_una_sola_vez_y_la_paga_creatv(base_temporal, r2, m
 def test_muestra_registra_el_gasto_aunque_falle_despues_de_pagar_a_fal(base_temporal, monkeypatch):
     import sqlalchemy as sa
     import db
-    monkeypatch.setattr(audios.fal_audio, "tts", lambda texto, voz, idioma="es", on_progreso=None, velocidad=None:
+    monkeypatch.setattr(audios.fal_audio, "tts", lambda texto, voz, idioma="es", on_progreso=None, velocidad=None, timeout=180:
                         {"url": "https://fal/m.mp3", "costo_usd": 0.0052})
 
     def _falla(url, destino):
@@ -174,5 +177,6 @@ def test_muestra_registra_el_gasto_aunque_falle_despues_de_pagar_a_fal(base_temp
         audios.muestra("Rachel", "es")
     with db.conectar() as con:
         gastos_ = [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == "_creatv"))]
-    assert len(gastos_) == 1 and gastos_[0]["usd"] == 0.0052 and gastos_[0]["referencia"] == "muestra_voz:Rachel:es:v1"
+    assert len(gastos_) == 1 and gastos_[0]["usd"] == 0.0052
+    assert gastos_[0]["referencia"].startswith("muestra_voz:Rachel:es:v1:")
     assert materiales.buscar_hash("_creatv", audios.hash_muestra("Rachel", "es")) is None

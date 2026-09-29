@@ -34,6 +34,7 @@
           <select id="au-velocidad">{% for k, n in velocidades_audio.items() %}<option value="{{ k }}" {% if k == 'normal' %}selected{% endif %}>{{ n|traducir }}</option>{% endfor %}</select>
         </label>
       </div>
+      <p class="au-ayuda">{{ _('El idioma lo decide el texto; este selector solo cambia la muestra de la voz.') }}</p>
 
       <fieldset class="au-musica">
         <legend>{{ _('Música de fondo') }}</legend>
@@ -61,6 +62,7 @@
         <p class="au-ayuda">{{ _('Sube solo música tuya o con licencia.') }}</p>
       </fieldset>
 
+      <p class="au-ayuda" id="au-aviso" hidden aria-live="polite"></p>
       <p class="campo-error" id="au-error" hidden></p>
       <div class="au-botones">
         <button type="button" class="btn-generar" id="au-crear" disabled>{{ _('Crear audio') }} <span id="au-crear-precio"></span></button>
@@ -115,6 +117,13 @@
     el.textContent = msg || '';
     el.hidden = !msg;
   }
+  // Mensaje neutral del resultado de la tarea (nunca el texto de la persona:
+  // lo pone la tarea del worker, tareas/audios.py MENSAJES).
+  function mostrarAviso(msg) {
+    var el = document.getElementById('au-aviso');
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
   function ocupado(si) { raiz.dataset.ocupado = si ? '1' : ''; refrescarPrecio(); }
   texto.addEventListener('input', refrescarPrecio);
 
@@ -130,7 +139,7 @@
       .then(function (d) {
         if (!d.ok) { mostrarError(d.error || T.sinMuestra); return; }
         muestra.src = d.url;
-        muestra.play().catch(function () {});
+        muestra.play().catch(function () { muestra.hidden = false; muestra.controls = true; });
       })
       .catch(function () { mostrarError(T.sinConexion); })
       .then(function () { escuchar.disabled = false; escuchar.textContent = T.escuchar; });
@@ -209,7 +218,7 @@
     fd.append('musica', musicaSel.value);
     fd.append('inicio_s', inicio.value);
     fd.append('volumen', document.getElementById('au-volumen').value);
-    ocupado(true); mostrarError('');
+    ocupado(true); mostrarError(''); mostrarAviso('');
     fetch(raiz.dataset.urlCrear, {method: 'POST', body: fd, headers: {'X-Requested-With': 'fetch'}})
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -232,15 +241,24 @@
       fetch(barra.dataset.estado).then(function (r) { return r.json(); }).then(function (e) {
         if (e.estado === 'en_progreso') {
           if (textoBarra && e.etapa) textoBarra.textContent = e.etapa + (e.progreso ? ' · ' + Math.round(e.progreso) + '%' : '');
+          var fill = barra.querySelector('.barra-progreso-fill');
+          if (fill && typeof e.progreso === 'number') {
+            fill.style.width = Math.max(0, Math.min(100, e.progreso)) + '%';
+            fill.classList.remove('barra-progreso-indeterminada');
+          }
           return;
         }
         clearInterval(t);
         fetch(raiz.dataset.urlLista, {headers: {'X-Requested-With': 'fetch'}})
           .then(function (r) { return r.json(); })
           .then(function (d) {
-            if (e.estado === 'error') d.error = e.mensaje || T.noSePudo;
+            // El mensaje de la tarea (tareas/audios.py MENSAJES, ya traducido
+            // por estado_trabajo) llega a la pantalla; si fue error, lo toma
+            // el cuadro de error de siempre en vez del aviso neutral.
+            if (e.estado === 'error') { d.error = e.mensaje || T.noSePudo; } else { mostrarAviso(e.mensaje || ''); }
             pintarLista(d);
-          });
+          })
+          .catch(function () { mostrarError(T.sinConexion); ocupado(false); });
       }).catch(function () {});
     }, 4000);
   }

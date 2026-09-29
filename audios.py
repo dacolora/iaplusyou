@@ -9,6 +9,7 @@ voz viven en el cliente interno `_creatv` y las paga Creatv. No importa
 final_edition.musica al cargar (esa importa mi_musica; la tarea la usa)."""
 import os
 import tempfile
+import time
 
 import sqlalchemy as sa
 
@@ -109,8 +110,11 @@ def validar(cliente, form):
 # ------------------------------------------------------------- hashes ---
 
 def hash_voz(texto, voz, idioma, velocidad):
-    """Mismo texto + voz + idioma + velocidad → la voz cruda no se paga dos veces."""
-    return materiales.hash_clave("locucion_voz", texto, voz, idioma, f"{VELOCIDADES[velocidad]:.2f}")
+    """Mismo texto + voz + velocidad → la voz cruda no se paga dos veces; el
+    idioma no entra en la clave: el modelo lo detecta del texto (`fal_audio.tts`
+    nunca manda `language_code`), así que cambiar el selector de idioma no debe
+    volver a cobrar la misma voz (revisión final F2)."""
+    return materiales.hash_clave("locucion_voz", texto, voz, f"{VELOCIDADES[velocidad]:.2f}")
 
 
 def hash_audio(h_voz, musica_id, inicio_s, volumen):
@@ -213,11 +217,15 @@ def hash_muestra(voz, idioma):
 
 def muestra(voz, idioma):
     """URL de la muestra de esa voz en ese idioma. Se sintetiza una sola vez
-    para toda la plataforma (cliente `_creatv`, gasto de `_creatv`). El gasto se
-    registra apenas fal cobra, ANTES de bajar/subir el archivo: si algo de eso
-    falla después, el dinero ya pagado queda anotado (la referencia es estable,
-    así que un reintento actualiza esa misma fila en vez de duplicarla) y el
-    hash no queda cacheado, así que el siguiente intento vuelve a sintetizar.
+    para toda la plataforma (cliente `_creatv`, gasto de `_creatv`), con un
+    timeout corto (45 s: es una frase de una línea, nunca un guion largo) para
+    que un fal lento no cuelgue el clic de «Escuchar». El gasto se registra
+    apenas fal cobra, ANTES de bajar/subir el archivo: si algo de eso falla
+    después, el dinero ya pagado queda anotado — la referencia lleva un sello
+    de tiempo por llamada (nunca la misma entre reintentos), así que un
+    reintento tras un pago fallido registra su propio gasto en vez de pisar el
+    de un intento anterior que también pagó (revisión final F5) — y el hash no
+    queda cacheado, así que el siguiente intento vuelve a sintetizar.
     ValueError si la voz o el idioma no existen; los errores de fal/R2 se
     propagan."""
     if voz not in voces() or idioma not in IDIOMAS:
@@ -226,10 +234,14 @@ def muestra(voz, idioma):
     frase = FRASES_MUESTRA[idioma].format(voz=voz)
 
     def _producir():
-        r = fal_audio.tts(frase, voz, idioma)
+        r = fal_audio.tts(frase, voz, idioma, timeout=45)
         usd = float(r.get("costo_usd") or 0.0)
-        # fal ya cobró: el gasto queda aunque lo que sigue falle.
-        gastos.registrar_seguro(CLIENTE_MUESTRAS, "locucion", usd, f"muestra_voz:{voz}:{idioma}:v{VERSION_MUESTRA}",
+        # fal ya cobró: el gasto queda aunque lo que sigue falle. El sello de
+        # tiempo hace la referencia única por llamada: sin él, dos intentos
+        # (uno fallido tras pagar, y su reintento) pisaban la misma fila de
+        # gasto y solo uno de los dos pagos quedaba anotado.
+        ref = f"muestra_voz:{voz}:{idioma}:v{VERSION_MUESTRA}:{int(time.time() * 1000)}"
+        gastos.registrar_seguro(CLIENTE_MUESTRAS, "locucion", usd, ref,
                                 detalle=f"muestra de voz · {voz} · {idioma}", proveedor="fal/elevenlabs")
         with tempfile.TemporaryDirectory() as tmp:
             local = descargar_url(r["url"], os.path.join(tmp, "muestra.mp3"))

@@ -71,7 +71,7 @@ def _payload(**k):
 def test_tarea_solo_voz_crea_el_material_y_registra_el_gasto(entorno):
     ta = entorno["ta"]
     msg = ta.ejecutar(_tarea(_payload()))
-    assert msg == "Audio listo: Hola mundo"
+    assert msg == ta.MENSAJES["listo"]
     assert entorno["llamadas"] == [{"texto": "Hola mundo", "voz": "Rachel", "velocidad": 1.15}]
     assert entorno["mezclas"] == [{"musica": None, "voz_ms": 2000, "volumen": "media"}]
     (a,) = audios.listar("acme")
@@ -98,7 +98,7 @@ def test_tarea_con_musica_pasa_el_tramo_y_guarda_la_cancion(entorno):
 def test_cancion_borrada_deja_el_audio_solo_con_la_voz(entorno):
     ta = entorno["ta"]
     msg = ta.ejecutar(_tarea(_payload(musica_id=999, inicio_s=3)))
-    assert "solo la voz" in msg
+    assert msg == ta.MENSAJES["solo_voz"]
     assert entorno["mezclas"][0]["musica"] is None
     (a,) = audios.listar("acme")
     assert a["musica"] == {"material_id": 999, "nombre": "", "inicio_s": 3, "estado": "ausente"}
@@ -107,7 +107,8 @@ def test_cancion_borrada_deja_el_audio_solo_con_la_voz(entorno):
 def test_la_voz_cacheada_no_llama_a_fal_ni_registra_gasto(entorno):
     ta = entorno["ta"]
     ta.ejecutar(_tarea(_payload(), tid=5))
-    ta.ejecutar(_tarea(_payload(volumen="alta"), tid=6))          # mismo hash sin música: ya existe, no hace nada
+    msg = ta.ejecutar(_tarea(_payload(volumen="alta"), tid=6))    # mismo hash sin música: ya existe, no hace nada
+    assert msg == ta.MENSAJES["repetido"]
     assert len(entorno["llamadas"]) == 1 and len(entorno["mezclas"]) == 1 and len(_gastos("acme")) == 1
     c = _cancion()
     ta.ejecutar(_tarea(_payload(musica_id=c["id"]), tid=7))       # otro audio, misma voz: mezcla sin pagar

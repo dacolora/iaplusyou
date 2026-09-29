@@ -432,8 +432,9 @@ vez para toda la plataforma, fila `material` y gasto del cliente interno `_creat
 velocidad (`speed` del modelo; nunca `language_code`, multilingual-v2 lo rechaza), y opcionalmente una
 canción de Mi música con «empieza en el segundo» y volumen. El resultado es un mp3 (`libmp3lame` 192k):
 la música arranca 0,6 s antes de la voz, se agacha (`mezcla.DUCKING_VOZ_SOBRE_MUSICA`), sigue 1,5 s y se
-funde después del `loudnorm` (`audios.filtro_locucion`, puro). `audios.py` es el único escritor: el audio
-es un `material` (tipo `audio`, origen `locucion`, `extra.{nombre,texto,voz,idioma,velocidad,volumen,musica}`)
+funde después del `loudnorm` (`audios.filtro_locucion`, puro). `audios.py` define las filas y sus
+hashes; solo la tarea `audio_generar` y `audios.muestra` las crean (vía `materiales.obtener_o_crear`):
+el audio es un `material` (tipo `audio`, origen `locucion`, `extra.{nombre,texto,voz,idioma,velocidad,volumen,musica}`)
 con `padre_id` a la voz cruda (origen `voz`, hash `locucion_voz` = texto+voz+idioma+velocidad: el mismo
 texto no se paga dos veces; misma combinación completa → «Ya tenías este audio»). Tarea `audio_generar`
 (`max_intentos=1`, un trabajo por proyecto `<cliente>__audio_generar`): registra el gasto tipo `locucion`
