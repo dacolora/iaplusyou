@@ -175,8 +175,13 @@ def tienda_sync_productos(tarea):
     if tienda is None:
         return gettext("Esa tienda no existe.")
     try:
+        # Lee la fuente del conector: si el conector tiene un atributo `fuente`,
+        # úsalo; si no, usa el tipo de tienda. Esto permite conectores como
+        # `shopify_publico` que guardan productos con fuente `shopify`.
+        cls = conectores.por_tipo(tienda["tipo"])
+        fuente = getattr(cls, "fuente", None) or tienda["tipo"]
         # Primera importación de esta fuente: vale la pena pedir descripciones.
-        primera = not any(pr["fuente"] == tienda["tipo"]
+        primera = not any(pr["fuente"] == fuente
                           for pr in tiendas.productos(cliente, incluir_archivados=True))
         con = _conector(cliente, tienda, cargar_descripciones=primera)
     except _ERRORES_TIENDA as error:
@@ -196,13 +201,18 @@ def tienda_sync_productos(tarea):
     _guardar_credenciales(cliente, tienda, con)
 
     resumen = importador.importar_lista(
-        cliente, tienda["tipo"], lista, max_activos=MAX_ACTIVOS_SYNC,
+        cliente, fuente, lista, max_activos=MAX_ACTIVOS_SYNC,
         on_progreso=lambda etapa, detalle: trabajos.reportar(job_id, etapa=etapa, detalle=detalle))
-    archivados = tiendas.archivar_faltantes(cliente, tienda["tipo"], [pr["fuente_id"] for pr in lista])
+    archivados = tiendas.archivar_faltantes(cliente, fuente, [pr["fuente_id"] for pr in lista])
     tiendas.actualizar(cliente, tid, estado="conectada", error=None, ultima_sync_productos=db.ahora())
     texto = importador.resumen_texto(resumen)
     if archivados:
         texto += " " + gettext("%(n)s archivado(s) por no estar ya en la tienda.", n=archivados)
+    # Si el conector tiene omitidos, añádelos al resumen
+    omitidos = getattr(con, "omitidos", [])
+    if omitidos:
+        texto += " " + gettext("%(n)s omitido(s) por no ser productos: %(lista)s",
+                              n=len(omitidos), lista=", ".join(omitidos[:5]))
     if resumen.get("pendientes"):
         _encolar_continuacion("tienda_sync_productos", {"cliente": cliente, "tienda_id": tid}, cliente, job_id, 120)
     return texto

@@ -535,3 +535,25 @@ def test_catalogo_importar_avisa_recorte_de_filas(entorno, monkeypatch, tmp_path
     ruta.write_text("nombre\nA\nB\nC\n", encoding="utf-8")
     msg = tareas.REGISTRO["catalogo_importar"]({"payload": {"cliente": "acme", "ruta": str(ruta), "nombre_archivo": "grande.csv"}})
     assert "1 producto(s) nuevo(s)" in msg and "más de 1 filas" in msg
+
+
+def test_sync_productos_usa_la_fuente_del_conector(entorno, monkeypatch):
+    """Un conector `shopify_publico` guarda filas con fuente «shopify» (las
+    mismas que dejaría la Admin API) y archiva faltantes con esa fuente."""
+    import conectores
+    import tiendas
+    from tareas import tiendas as tareas_tiendas
+
+    class FalsoPublico(Falso):
+        tipo = "shopify_publico"
+        fuente = "shopify"
+        tiene_pedidos = False
+
+    monkeypatch.setattr(conectores, "por_tipo", lambda tipo: FalsoPublico)
+    tid = tiendas.conectar("acme", "shopify_publico", {"dominio": "acme.com"}, nombre="Acme", dominio="acme.com")
+    viejo = tiendas.upsert_producto("acme", "shopify", "999", {"nombre": "Ya no está", "fotos": []})
+    Falso.productos = [_prod("1", "Cojín")]
+    tareas_tiendas.tienda_sync_productos({"payload": {"cliente": "acme", "tienda_id": tid}, "intentos": 1, "max_intentos": 3})
+    filas = {p["fuente_id"]: p for p in tiendas.productos("acme", incluir_archivados=True)}
+    assert filas["1"]["fuente"] == "shopify" and not filas["1"]["archivado"]
+    assert filas["999"]["archivado"] and filas["999"]["extra"]["archivado_por"] == "sync"
