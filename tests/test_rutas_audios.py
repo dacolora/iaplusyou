@@ -57,6 +57,12 @@ def test_la_pagina_trae_el_modo_audios(app):
     html = app["c"].get("/cliente/acme").data.decode()
     assert 'data-modo="audios"' in html and 'id="crear-modo-audios"' in html
     assert 'id="au-texto"' in html and 'id="au-lista"' in html and "Todavía no tienes audios" in html
+    # Galería de voces (2026-09-29): una tarjeta por voz con su ▶, filtros por
+    # género y el campo oculto `au-voz` que sigue alimentando el POST.
+    assert 'id="au-voces"' in html and html.count('class="au-voz"') == len(audios.voces())
+    assert 'data-voz="Rachel"' in html and 'data-genero="mujer"' in html and 'data-genero="hombre"' in html
+    assert '<input type="hidden" id="au-voz" value="Rachel">' in html and '<select id="au-voz"' not in html
+    assert 'data-filtro-genero="mujer"' in html
 
 
 def test_lista_devuelve_el_fragmento_y_los_audios(app):

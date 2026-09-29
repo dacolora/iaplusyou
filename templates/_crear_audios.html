@@ -19,13 +19,29 @@
       <textarea id="au-texto" rows="7" maxlength="{{ max_caracteres_audio }}" placeholder="{{ _('ej. ¿Cansada de que tus zapatos te maten los pies? Esta semana, envío gratis en toda la tienda.') }}"></textarea>
       <p class="au-ayuda"><span id="au-contador">0</span> / {{ max_caracteres_audio }} · <span id="au-precio"></span></p>
 
-      <div class="au-fila">
-        <label class="campo-label" for="au-voz">{{ _('Voz') }}
-          <select id="au-voz">{% for v in voces_audio %}<option value="{{ v }}">{{ v }}</option>{% endfor %}</select>
-        </label>
-        <button type="button" class="btn-sm" id="au-escuchar">{{ _('Escuchar') }}</button>
+      {# Galería de voces (2026-09-29): una tarjeta por voz con ▶ para oír su
+         muestra; tocar la tarjeta la elige y escribe el campo oculto #au-voz,
+         que es lo que viaja en el POST (igual que antes con el <select>). #}
+      <fieldset class="au-voces-caja">
+        <legend>{{ _('Voz') }}: <span id="au-voz-nombre">{{ fichas_voces[0].nombre if fichas_voces else '' }}</span></legend>
+        <input type="hidden" id="au-voz" value="{{ fichas_voces[0].nombre if fichas_voces else '' }}">
+        <div class="au-voces-filtros" role="group" aria-label="{{ _('Filtrar voces') }}">
+          <button type="button" class="au-filtro activo" data-filtro-genero="">{{ _('Todas') }}</button>
+          <button type="button" class="au-filtro" data-filtro-genero="mujer">{{ _('Mujer') }}</button>
+          <button type="button" class="au-filtro" data-filtro-genero="hombre">{{ _('Hombre') }}</button>
+        </div>
+        <div class="au-voces" id="au-voces" role="radiogroup" aria-label="{{ _('Voz') }}">
+          {% for f in fichas_voces %}
+          <div class="au-voz" data-voz="{{ f.nombre }}" data-genero="{{ f.genero }}" role="radio" aria-checked="{{ 'true' if loop.first else 'false' }}" tabindex="0">
+            <span class="au-voz-nombre">{{ f.nombre }}</span>
+            <small class="au-voz-tono">{{ f.genero_nombre|traducir }}{% if f.tono %} · {{ f.tono|traducir }}{% endif %}</small>
+            <button type="button" class="au-voz-play" data-voz="{{ f.nombre }}" aria-label="{{ _('Escuchar') }} {{ f.nombre }}">▶</button>
+          </div>
+          {% endfor %}
+        </div>
+        <p class="au-ayuda">{{ _('Toca ▶ para oír una muestra corta y la tarjeta para elegir la voz.') }}</p>
         <audio id="au-muestra" preload="none" hidden></audio>
-      </div>
+      </fieldset>
       <div class="au-fila">
         <label class="campo-label" for="au-idioma">{{ _('Idioma') }}
           <select id="au-idioma">{% for i in idiomas_audio %}<option value="{{ i }}" {% if i == idioma_audio_defecto %}selected{% endif %}>{{ nombres_idioma_audio[i] }}</option>{% endfor %}</select>
@@ -82,8 +98,6 @@
   if (!raiz) return;
   var T = {
     aprox: {{ _('≈')|tojson }},
-    cargando: {{ _('Cargando…')|tojson }},
-    escuchar: {{ _('Escuchar')|tojson }},
     sinMuestra: {{ _('No pude generar la muestra; intenta de nuevo.')|tojson }},
     sinConexion: {{ _('Se perdió la conexión; recarga la página.')|tojson }},
     subiendo: {{ _('Subiendo…')|tojson }},
@@ -127,22 +141,55 @@
   function ocupado(si) { raiz.dataset.ocupado = si ? '1' : ''; refrescarPrecio(); }
   texto.addEventListener('input', refrescarPrecio);
 
-  // Escuchar la voz: una muestra corta por voz e idioma, cacheada en el servidor.
-  var escuchar = document.getElementById('au-escuchar'), muestra = document.getElementById('au-muestra');
-  escuchar.addEventListener('click', function () {
+  // Galería de voces: la tarjeta elige la voz (campo oculto #au-voz) y ▶ pide la
+  // muestra de esa voz en el idioma elegido (cacheada en el servidor, la paga
+  // Creatv una sola vez) y la reproduce; el botón que suena queda marcado.
+  var vozInput = document.getElementById('au-voz'), muestra = document.getElementById('au-muestra');
+  var voces = document.getElementById('au-voces'), botonSonando = null;
+  function elegirVoz(nombre) {
+    vozInput.value = nombre;
+    document.getElementById('au-voz-nombre').textContent = nombre;
+    voces.querySelectorAll('.au-voz').forEach(function (c) {
+      c.setAttribute('aria-checked', c.dataset.voz === nombre ? 'true' : 'false');
+    });
+  }
+  function escucharVoz(boton) {
     var fd = new FormData();
-    fd.append('voz', document.getElementById('au-voz').value);
+    fd.append('voz', boton.dataset.voz);
     fd.append('idioma', document.getElementById('au-idioma').value);
-    escuchar.disabled = true; escuchar.textContent = T.cargando; mostrarError('');
+    boton.disabled = true; boton.textContent = '…'; boton.setAttribute('aria-busy', 'true'); mostrarError('');
     fetch(raiz.dataset.urlMuestra, {method: 'POST', body: fd, headers: {'X-Requested-With': 'fetch'}})
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) { mostrarError(d.error || T.sinMuestra); return; }
+        if (botonSonando) botonSonando.classList.remove('sonando');
+        botonSonando = boton; boton.classList.add('sonando');
         muestra.src = d.url;
         muestra.play().catch(function () { muestra.hidden = false; muestra.controls = true; });
       })
       .catch(function () { mostrarError(T.sinConexion); })
-      .then(function () { escuchar.disabled = false; escuchar.textContent = T.escuchar; });
+      .then(function () { boton.disabled = false; boton.textContent = '▶'; boton.removeAttribute('aria-busy'); });
+  }
+  muestra.addEventListener('ended', function () {
+    if (botonSonando) { botonSonando.classList.remove('sonando'); botonSonando = null; }
+  });
+  voces.addEventListener('click', function (ev) {
+    var play = ev.target.closest('.au-voz-play');
+    if (play) { escucharVoz(play); return; }
+    var tarjeta = ev.target.closest('.au-voz');
+    if (tarjeta) elegirVoz(tarjeta.dataset.voz);
+  });
+  voces.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    var tarjeta = ev.target.closest('.au-voz');
+    if (tarjeta && ev.target === tarjeta) { ev.preventDefault(); elegirVoz(tarjeta.dataset.voz); }
+  });
+  document.querySelectorAll('#au .au-filtro').forEach(function (f) {
+    f.addEventListener('click', function () {
+      document.querySelectorAll('#au .au-filtro').forEach(function (o) { o.classList.toggle('activo', o === f); });
+      var g = f.dataset.filtroGenero;
+      voces.querySelectorAll('.au-voz').forEach(function (c) { c.hidden = !!g && c.dataset.genero !== g; });
+    });
   });
 
   // Música: reproductor, segundo de inicio y volumen solo con una canción elegida.

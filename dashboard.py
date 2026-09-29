@@ -6643,7 +6643,8 @@ def _contexto_audios(cliente):
     jid = tareas_audios.job_id(cliente)
     return {"audios": audios.listar(cliente),
             "trabajo_audio": {"job_id": jid} if trabajos.en_curso(jid) else None,
-            "voces_audio": audios.voces(), "idiomas_audio": audios.IDIOMAS, "nombres_idioma_audio": audios.NOMBRES_IDIOMA,
+            "voces_audio": audios.voces(), "fichas_voces": audios.fichas_voces(),
+            "idiomas_audio": audios.IDIOMAS, "nombres_idioma_audio": audios.NOMBRES_IDIOMA,
             "velocidades_audio": audios.NOMBRES_VELOCIDAD, "volumenes_audio": audios.NOMBRES_VOLUMEN,
             "volumen_audio_defecto": audios.VOLUMEN_DEFECTO, "idioma_audio_defecto": audios.idioma_defecto(cliente),
             "max_caracteres_audio": audios.MAX_CARACTERES, "usd_por_caracter": fal_audio.COSTO_USD_POR_CARACTER}

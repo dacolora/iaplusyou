@@ -462,8 +462,10 @@ with the re-rendered panel and the song list. Voice cloning is NOT here (fal has
 **Audios en Crear** (`audios.py`, `tareas/audios.py`, spec
 `docs/superpowers/specs/2026-09-28-crear-audios-design.md`): cuarto modo de Crear (`data-modo="audios"`,
 `#audios`), pedido por Daniel al estilo de MoneyPrinterTurbo: un texto (≤ 3 000 caracteres) leído por una
-de las 22 voces verificadas de `fal_audio.VOCES` (botón «Escuchar»: muestra por voz e idioma sintetizada UNA
-vez para toda la plataforma, fila `material` y gasto del cliente interno `_creatv`), idioma es/en/pt,
+de las 22 voces verificadas de `fal_audio.VOCES`, elegida en una galería de tarjetas (género y tono de
+`audios.VOCES_INFO`/`fichas_voces`, filtros Mujer/Hombre, ▶ por voz: la muestra por voz e idioma se sintetiza UNA
+vez para toda la plataforma, fila `material` y gasto del cliente interno `_creatv`; `precalentar_muestras.py`
+las genera todas de antemano), idioma es/en/pt,
 velocidad (`speed` del modelo; nunca `language_code`, multilingual-v2 lo rechaza), y opcionalmente una
 canción de Mi música con «empieza en el segundo» y volumen. El resultado es un mp3 (`libmp3lame` 192k):
 la música arranca 0,6 s antes de la voz, se agacha (`mezcla.DUCKING_VOZ_SOBRE_MUSICA`), sigue 1,5 s y se

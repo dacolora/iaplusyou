@@ -5295,6 +5295,9 @@ msgstr "Date"
 msgid "Filtrar por veredicto"
 msgstr "Filter by verdict"
 
+msgid "Filtrar voces"
+msgstr "Filter voices"
+
 msgid "Filtros"
 msgstr "Filters"
 
@@ -5863,6 +5866,9 @@ msgstr ""
 "Hi %(usuario)s,\n"
 "\n"
 "To finish creating your account at %(plataforma)s confirm this email is yours by opening this link:"
+
+msgid "Hombre"
+msgstr "Male"
 
 msgid "Hook"
 msgstr "Hook"
@@ -7240,6 +7246,9 @@ msgstr "Camera movement"
 msgid "Mucho clic"
 msgstr "Lots of clicks"
 
+msgid "Mujer"
+msgstr "Female"
+
 msgid "Muslos"
 msgstr "Thighs"
 
@@ -7329,6 +7338,9 @@ msgstr "Christmas"
 
 msgid "Negro"
 msgstr "Black"
+
+msgid "Neutra"
+msgstr "Neutral"
 
 msgid "Nicho"
 msgstr "Niche"
@@ -10523,11 +10535,17 @@ msgstr "Tap a piece to see the detail, download it, or create another one from i
 msgid "Toca uno para ponerlo donde está el cabezal; con el mouse también puedes arrastrarlo a la línea de tiempo."
 msgstr "Tap one to place it at the playhead; with the mouse you can also drag it to the timeline."
 
+msgid "Toca ▶ para oír una muestra corta y la tarjeta para elegir la voz."
+msgstr "Tap ▶ to hear a short sample and the card to pick the voice."
+
 msgid "Toda la edición"
 msgstr "The whole edit"
 
 msgid "Toda la vida del cliente (lifetime)"
 msgstr "Customer lifetime"
+
+msgid "Todas"
+msgstr "All"
 
 msgid "Todas las familias"
 msgstr "All families"
@@ -11808,8 +11826,17 @@ msgstr "German"
 msgid "alta"
 msgstr "high"
 
+msgid "amable"
+msgstr "friendly"
+
 msgid "ambiente protagonista"
 msgstr "ambience first"
+
+msgid "amigable"
+msgstr "friendly"
+
+msgid "animada"
+msgstr "upbeat"
 
 msgid "anuncio por anuncio, ganadores y evaluación con IA"
 msgstr "ad by ad, winners and AI evaluation"
@@ -11861,6 +11888,9 @@ msgstr "%(lead)s lead"
 msgid "arriba del funnel"
 msgstr "top of the funnel"
 
+msgid "articulada"
+msgstr "articulate"
+
 msgid "asado"
 msgstr "barbecue"
 
@@ -11884,6 +11914,9 @@ msgstr "%(c)s audience"
 
 msgid "ausente"
 msgstr "missing"
+
+msgid "autoritaria, británica"
+msgstr "authoritative, British"
 
 #, python-format
 msgid "avatares en %(idioma)s"
@@ -11929,6 +11962,9 @@ msgstr "calendar"
 msgid "calidad minima"
 msgstr "minimum quality"
 
+msgid "calmada"
+msgstr "calm"
+
 msgid "calmado"
 msgstr "Calm"
 
@@ -11940,6 +11976,9 @@ msgstr "new channel: no text yet, it's written on approval"
 
 msgid "carrito"
 msgstr "shopping cart"
+
+msgid "casual"
+msgstr "casual"
 
 msgid "catalogo"
 msgstr "catalog"
@@ -12022,6 +12061,9 @@ msgstr "connected"
 msgid "conectado"
 msgstr "connected"
 
+msgid "confiable"
+msgstr "trustworthy"
+
 msgid "configuración"
 msgstr "configuration"
 
@@ -12085,6 +12127,9 @@ msgstr "warm"
 
 msgid "cálida, atardecer"
 msgstr "warm, sunset"
+
+msgid "cálida, británica"
+msgstr "warm, British"
 
 msgid "cálida, nocturna, luces"
 msgstr "warm, nighttime, lights"
@@ -12424,6 +12469,9 @@ msgstr "experiment decided"
 msgid "experimentos y anuncios sueltos"
 msgstr "experiments and standalone ads"
 
+msgid "expresiva"
+msgstr "expressive"
+
 msgid "fal.ai (voz y música)"
 msgstr "fal.ai (voice and music)"
 
@@ -12530,6 +12578,9 @@ msgid_plural "generar %(num)d piezas"
 msgstr[0] "generate %(num)d piece"
 msgstr[1] "generate %(num)d pieces"
 
+msgid "grave"
+msgstr "deep"
+
 msgid "guion"
 msgstr "script"
 
@@ -12615,6 +12666,9 @@ msgstr "revenue / spend"
 
 msgid "ingresos / pedidos"
 msgstr "revenue / orders"
+
+msgid "intensa"
+msgstr "intense"
 
 msgid "interrumpida"
 msgstr "interrupted"
@@ -12805,6 +12859,9 @@ msgstr "nothing"
 
 msgid "nada por aprobar"
 msgstr "nothing to approve"
+
+msgid "natural, australiana"
+msgstr "natural, Australian"
 
 msgid "natural, de tarde"
 msgstr "natural, afternoon light"
@@ -13029,6 +13086,9 @@ msgstr "products"
 msgid "productos:"
 msgstr "products:"
 
+msgid "profunda"
+msgstr "deep"
+
 #, python-format
 msgid "profundidad máxima (%(n)s generaciones de derivación); %(motivo)s"
 msgstr "maximum depth (%(n)s derivation generations); %(motivo)s"
@@ -13227,11 +13287,20 @@ msgstr "repeated %(lista)s"
 msgid "secreto"
 msgstr "secret"
 
+msgid "seductora"
+msgstr "seductive"
+
 msgid "seg"
 msgstr "sec"
 
 msgid "segunda pasada opcional. Es el único upscaler del catálogo cuya documentación oficial afirma que \"preserva el contenido original <em>sin regeneración</em>\", que es la condición no negociable acá: la foto tiene que seguir siendo la misma persona, misma pose, mismo fondo. Los Clarity y ultimate-image-upscaler se describen a sí mismos como generativos (uno hasta expone un parámetro <code>creativity</code> para \"agregar detalle generado\") — por eso quedaron fuera"
 msgstr "optional second pass. It's the only upscaler in the catalog whose official documentation states it \"preserves the original content <em>without regeneration</em>\", which is the non-negotiable condition here: the photo has to remain the same person, same pose, same background. Clarity and ultimate-image-upscaler describe themselves as generative (one even exposes a <code>creativity</code> parameter for \"adding generated detail\") — that's why they were left out"
+
+msgid "segura"
+msgstr "confident"
+
+msgid "segura, británica"
+msgstr "confident, British"
 
 msgid "seleccionando"
 msgstr "selecting"
@@ -13362,6 +13431,9 @@ msgstr "Higgsfield style_id (optional, advanced)"
 
 msgid "su esquema no tiene un campo \"video a editar\": todas las referencias alimentan una generación nueva guiada por el prompt (como Higgsfield Soul), no una edición que preserve el video base. WaveSpeed sí resolvió esto con un endpoint <code>video-edit</code> real, que es el que usamos arriba en vez de este"
 msgstr "its schema has no \"video to edit\" field: all references feed a new prompt-guided generation (like Higgsfield Soul), not an edit that preserves the base video. WaveSpeed did solve this with a real <code>video-edit</code> endpoint, which is the one we use above instead of this one"
+
+msgid "suave"
+msgstr "soft"
 
 msgid "suave y cálida"
 msgstr "soft and warm"
