@@ -211,6 +211,10 @@ msgid "%(fase)s (puesto %(n)s)"
 msgstr "%(fase)s (position %(n)s)"
 
 #, python-format
+msgid "%(fecha)s · estado <strong>%(estado)s</strong> · %(leidos)s leídos · %(nuevos)s nuevos · %(con_imagen)s con imagen"
+msgstr "%(fecha)s · status <strong>%(estado)s</strong> · %(leidos)s read · %(nuevos)s new · %(con_imagen)s with an image"
+
+#, python-format
 msgid "%(fuente)s todavía no está configurada. Avísale al equipo de Creatv para activarla."
 msgstr "%(fuente)s isn't set up yet. Ask the Creatv team to turn it on."
 
@@ -637,6 +641,10 @@ msgid "%(nombre)s (%(pais)s): escalado ya pedido en esta pasada."
 msgstr "%(nombre)s (%(pais)s): scaling already requested in this pass."
 
 #, python-format
+msgid "%(nombre)s dejó el modo agencia"
+msgstr "%(nombre)s left agency mode"
+
+#, python-format
 msgid "%(nombre)s limitó las llamadas (429) y no cedió tras %(n)s esperas."
 msgstr "%(nombre)s rate-limited the calls (429) and didn't let up after %(n)s waits."
 
@@ -659,6 +667,14 @@ msgstr "%(nombre)s has nothing new to publish.%(saltadas)s%(sin_canal)s"
 #, python-format
 msgid "%(nombre)s no tiene video para publicar."
 msgstr "%(nombre)s has no video to publish."
+
+#, python-format
+msgid "%(nombre)s pide conectar Meta (agencia)"
+msgstr "%(nombre)s asks to connect Meta (agency)"
+
+#, python-format
+msgid "%(nombre)s se conectó a Meta (agencia)"
+msgstr "%(nombre)s connected to Meta (agency)"
 
 #, python-format
 msgid "%(nombre)s ya agotó los %(n)s escalones de rescate."
@@ -957,6 +973,18 @@ msgid "%(presupuesto)s %(moneda)s/día"
 msgstr "%(presupuesto)s %(moneda)s/day"
 
 #, python-format
+msgid "%(proyecto)s ahora lo gestiona Creatv en Meta: %(cuenta)s · %(pagina)s%(ig)s."
+msgstr "Creatv now manages %(proyecto)s on Meta: %(cuenta)s · %(pagina)s%(ig)s."
+
+#, python-format
+msgid "%(proyecto)s no estaba en modo agencia."
+msgstr "%(proyecto)s wasn't in agency mode."
+
+#, python-format
+msgid "%(proyecto)s volvió a modo propia: si tenía su propia conexión se restauró; si no, tendrá que registrar su app y conectar con Meta."
+msgstr "%(proyecto)s went back to own-app mode: if it had its own connection, it was restored; if not, it will have to register its app and connect with Meta."
+
+#, python-format
 msgid "%(sin_revisar)s sin revisar · %(error)s con error · USD %(usd)s"
 msgstr "%(sin_revisar)s unreviewed · %(error)s with errors · USD %(usd)s"
 
@@ -1045,6 +1073,10 @@ msgstr "(type it in)"
 msgid "(este clon no trae sonido)"
 msgstr "(this clone has no sound)"
 
+#, python-format
+msgid "(falta %(llaves)s)"
+msgstr "(missing %(llaves)s)"
+
 msgid "(imagen)"
 msgstr "(image)"
 
@@ -1071,6 +1103,9 @@ msgstr "(no text)"
 
 msgid "(sin titular)"
 msgstr "(no headline)"
+
+msgid "(sin verificar ahora: Meta no respondió)"
+msgstr "(not verified right now: Meta didn't respond)"
 
 msgid "(sugerida)"
 msgstr "(suggested)"
@@ -1217,6 +1252,10 @@ msgstr "<a href=\"%(url)s\">Meta (agency) →</a> connect Creatv's Business and 
 msgid "<a href=\"%(url)s\">Referentes →</a> importar el swipe file de copycoders y ver la biblioteca global."
 msgstr "<a href=\"%(url)s\">Swipe file →</a> import copycoders' swipe file and see the global library."
 
+#, python-format
+msgid "<em>Generar nuevo token</em>: elige la app de Creatv, caducidad <strong>nunca</strong>, y marca los permisos <code>%(permisos)s</code> (los que la app tenga aprobados; mientras esté en modo desarrollo solo sirven cuentas y Páginas de prueba o de los roles de la app)."
+msgstr "<em>Generate new token</em>: choose Creatv's app, expiration <strong>never</strong>, and tick the permissions <code>%(permisos)s</code> (the ones the app has approved; while it's in development mode only test accounts and Pages, or those of the app's roles, work)."
+
 msgid "<strong>Arriba del panel, «Modo de la app»: pásala de Desarrollo a Live.</strong> Sin esto Meta rechaza cada anuncio (subcódigo 1885183). En Live sin App Review solo pueden usar la app las personas con rol en ella: conecta con el Facebook que la administra."
 msgstr "<strong>At the top of the panel, “App mode”: switch it from Development to Live.</strong> Without this Meta rejects every ad (subcode 1885183). In Live without App Review only people with a role on the app can use it: connect with the Facebook that administers it."
 
@@ -1298,6 +1337,9 @@ msgstr "Below, in <em>Connect store › Shopify</em>, paste the token along with
 msgid "Abajo, en <em>Conectar tienda › WooCommerce</em>, pégalos con la URL de la tienda, que tiene que ir por <code>https://</code>."
 msgstr "Below, in <em>Connect store › WooCommerce</em>, paste them with the store's URL, which has to be over <code>https://</code>."
 
+msgid "Abre <a href=\"https://business.facebook.com/settings/system-users\" target=\"_blank\" rel=\"noopener\">Business Manager › Configuración del negocio › Usuarios › Usuarios del sistema</a> y crea uno llamado <strong>creatv</strong> con rol <strong>administrador</strong>."
+msgstr "Open <a href=\"https://business.facebook.com/settings/system-users\" target=\"_blank\" rel=\"noopener\">Business Manager › Business settings › Users › System users</a> and create one called <strong>creatv</strong> with the <strong>admin</strong> role."
+
 msgid "Abre Experimentos con el nombre y la URL de compra de este producto ya puestos"
 msgstr "Opens Experiments with this product's name and purchase URL already filled in"
 
@@ -1338,6 +1380,9 @@ msgstr "Open campaign %(n)s"
 
 msgid "Aburrimiento"
 msgstr "Boredom"
+
+msgid "Acciones"
+msgstr "Actions"
 
 msgid "Acción desconocida."
 msgstr "Unknown action."
@@ -1392,6 +1437,13 @@ msgid "Activo «%(activo_id)s» listo en el Catálogo."
 msgstr "Asset “%(activo_id)s” ready in the Catalog."
 
 #, python-format
+msgid "Activos actualizados: %(cuentas)s cuenta(s) publicitaria(s) y %(paginas)s Página(s)."
+msgstr "Assets updated: %(cuentas)s ad account(s) and %(paginas)s Page(s)."
+
+msgid "Activos del Business"
+msgstr "Business assets"
+
+#, python-format
 msgid "Actor de Apify desconocido: %(clave)s"
 msgstr "Unknown Apify actor: %(clave)s"
 
@@ -1400,6 +1452,9 @@ msgstr "Updating metrics…"
 
 msgid "Actualizando resultados…"
 msgstr "Updating results…"
+
+msgid "Actualizar desde Meta"
+msgstr "Refresh from Meta"
 
 #, python-format
 msgid "Actualizar lo que Claude necesita (%(precio)s)"
@@ -1429,6 +1484,19 @@ msgstr "Where the ad lands: your store, WhatsApp (wa.me/57…) or your landing p
 
 msgid "Aflojar filtros (todas las etapas)"
 msgstr "Loosen filters (all stages)"
+
+#, python-format
+msgid "Agencia conectada: %(business)s (usuario del sistema %(usuario)s). Ahora asigna cuenta y Página a cada proyecto."
+msgstr "Agency connected: %(business)s (system user %(usuario)s). Now assign an account and a Page to each project."
+
+#, python-format
+msgid "Agencia desconectada. %(num)s proyecto volvió a modo propia y se quedan sin conexión con Meta hasta que registren su app o vuelvas a asignarlos."
+msgid_plural "Agencia desconectada. %(num)s proyectos volvieron a modo propia y se quedan sin conexión con Meta hasta que registren su app o vuelvas a asignarlos."
+msgstr[0] "Agency disconnected. %(num)s project went back to own-app mode and stays without a Meta connection until it registers its app or you assign it again."
+msgstr[1] "Agency disconnected. %(num)s projects went back to own-app mode and stay without a Meta connection until they register their app or you assign them again."
+
+msgid "Agencia desconectada. Ningún proyecto estaba asignado."
+msgstr "Agency disconnected. No project was assigned."
 
 msgid "Agrega al menos una referencia (personaje, entorno o producto)."
 msgstr "Add at least one reference (character, environment or product)."
@@ -1711,6 +1779,9 @@ msgstr "Meta app removed from this project. The existing connection stays until 
 msgid "App de Meta registrada para este proyecto. Ahora sí: Conectar con Meta."
 msgstr "Meta app registered for this project. Now: Connect with Meta."
 
+msgid "App propia registrada, sin conectar"
+msgstr "Own app registered, not connected"
+
 msgid "Aprendizaje guardado."
 msgstr "Learning saved."
 
@@ -1824,6 +1895,9 @@ msgstr "Drag images or videos here, or tap <strong>+</strong> to add references 
 msgid "Arrastra imágenes o videos aquí"
 msgstr "Drag images or videos here"
 
+msgid "Asignar"
+msgstr "Assign"
+
 msgid "Así le explicamos a Claude cómo escribir tus anuncios. Cada pieza que genera la app sigue estas reglas."
 msgstr "This is how we explain to Claude how to write your ads. Every piece the app generates follows these rules."
 
@@ -1849,6 +1923,10 @@ msgstr "Atria isn't set up (ATRIA_API_KEY is missing)."
 #, python-format
 msgid "Atria respondió algo inesperado (HTTP %(codigo)s)."
 msgstr "Atria answered something unexpected (HTTP %(codigo)s)."
+
+#, python-format
+msgid "Atria: %(llamadas)s/%(limite)s llamadas este mes."
+msgstr "Atria: %(llamadas)s/%(limite)s calls this month."
 
 msgid "Atria: se acabaron las llamadas del plan este mes."
 msgstr "Atria: the plan's calls for this month are used up."
@@ -1915,6 +1993,9 @@ msgstr "Let Creatv know"
 msgid "Avisar a Creatv para que lo termine a mano"
 msgstr "Let Creatv know to finish it by hand"
 
+msgid "Aviso"
+msgstr "Notice"
+
 #, python-format
 msgid "Aviso enviado: %(g)s ganador(es) nuevo(s), %(c)s cansándose, %(p)s perdedor(es) nuevo(s)."
 msgstr "Notice sent: %(g)s new winner(s), %(c)s fatiguing, %(p)s new loser(s)."
@@ -1935,6 +2016,9 @@ msgstr "It fades to black and the next one appears."
 #, python-format
 msgid "Barrido terminado: %(n)s referentes clasificados."
 msgstr "Sweep finished: %(n)s references classified."
+
+msgid "Barridos globales (Atria, Apify)"
+msgstr "Global sweeps (Atria, Apify)"
 
 #, python-format
 msgid "Basada en: %(anuncios)s"
@@ -1957,6 +2041,9 @@ msgid "Biblioteca de copycoders: activa en este proyecto (%(num)s anuncios)."
 msgid_plural "Biblioteca de copycoders: activa en este proyecto (%(num)s anuncios)."
 msgstr[0] "Copycoders library: active in this project (%(num)s ad)."
 msgstr[1] "Copycoders library: active in this project (%(num)s ads)."
+
+msgid "Biblioteca de referentes."
+msgstr "Reference library."
 
 #, python-format
 msgid "Bitácora (%(n)s)"
@@ -2402,6 +2489,9 @@ msgstr "Classifying"
 msgid "Clasificando lo pendiente; la lista se actualiza sola."
 msgstr "Classifying what's pending; the list updates on its own."
 
+msgid "Clasificando lo pendiente; la tabla se actualiza sola."
+msgstr "Classifying what's pending; the table updates on its own."
+
 #, python-format
 msgid "Clasificando… %(n)s listos."
 msgstr "Classifying… %(n)s done."
@@ -2620,6 +2710,9 @@ msgstr "As a video ▸"
 msgid "Comparte tu cuenta publicitaria y tu Página con Creatv desde tu Business Suite, como con cualquier agencia. Creatv solo ve lo que compartas y lo puedes revocar cuando quieras."
 msgstr "Share your ad account and your Page with Creatv from your Business Suite, just like with any agency. Creatv only sees what you share and you can revoke it whenever you want."
 
+msgid "Completa los datos y pulsa «Ver precio» para calcular el costo antes de traer."
+msgstr "Fill in the details and press “See price” to work out the cost before bringing anything in."
+
 msgid "Completo"
 msgstr "Full"
 
@@ -2666,6 +2759,12 @@ msgid ""
 "    su propio panel. Vacío = valor de fábrica (en gris). «Sin umbral» apaga esa comparación."
 msgstr "With these rules the engine decides winners and losers across every experiment in the project. Each experiment can override a rule in its own panel. Empty = factory default (in gray). “No threshold” turns off that comparison."
 
+msgid "Con esto se publican los anuncios (cuenta publicitaria) y el contenido orgánico (Página y su Instagram). Se puede cambiar después con \"Desconectar\"."
+msgstr "This is what publishes the ads (ad account) and the organic content (Page and its Instagram). You can change it later with “Disconnect”."
+
+msgid "Con imagen"
+msgstr "With an image"
+
 msgid "Con mi propia app de Meta"
 msgstr "With my own Meta app"
 
@@ -2708,6 +2807,9 @@ msgstr "Connect Notion first."
 msgid "Conecta Triple Whale para evaluar tu contenido"
 msgstr "Connect Triple Whale to evaluate your content"
 
+msgid "Conecta la agencia arriba para poder asignar cuentas y Páginas; mientras tanto solo se ve el modo de cada proyecto."
+msgstr "Connect the agency above to be able to assign accounts and Pages; meanwhile you only see each project's mode."
+
 msgid "Conecta tu cuenta de Meta"
 msgstr "Connect your Meta account"
 
@@ -2746,6 +2848,16 @@ msgstr "Connect with MercadoLibre"
 msgid "Conectar con Meta"
 msgstr "Connect with Meta"
 
+#, python-format
+msgid "Conectar con Meta — %(proyecto)s"
+msgstr "Connect with Meta — %(proyecto)s"
+
+msgid "Conectar el Business de Creatv"
+msgstr "Connect Creatv's Business"
+
+msgid "Conectar la agencia"
+msgstr "Connect the agency"
+
 msgid "Conectar la agencia →"
 msgstr "Connect the agency →"
 
@@ -2758,11 +2870,23 @@ msgstr "Connect store (Settings › Store)"
 msgid "Conectar tu tienda"
 msgstr "Connect your store"
 
+msgid "Conectas UNA vez el Business Manager de Creatv y a cada proyecto le asignas una cuenta publicitaria y una Página de las que ese Business posee o administra para sus clientes. El proyecto ve «Gestionado por Creatv» y no tiene que registrar ninguna app."
+msgstr "You connect Creatv's Business Manager ONCE and assign each project an ad account and a Page from the ones that Business owns or manages for its clients. The project sees “Managed by Creatv” and doesn't have to register any app."
+
 msgid "Conexiones"
 msgstr "Connections"
 
+msgid "Conexión actual"
+msgstr "Current connection"
+
+msgid "Conexión con Meta cancelada. Si ya tenías Meta conectado, sigue igual."
+msgstr "Meta connection canceled. If you already had Meta connected, it stays the same."
+
 msgid "Conexión con Triple Whale correcta."
 msgstr "Triple Whale connection works."
+
+msgid "Conexión de la agencia"
+msgstr "Agency connection"
 
 #, python-format
 msgid "Configura %(llaves)s en el .env del servidor (Configuración › Puesta a punto) y reinicia los dos servicios."
@@ -2825,6 +2949,9 @@ msgstr "Invalid awareness: %(consciencia)s"
 
 msgid "Consistencia visual"
 msgstr "Visual consistency"
+
+msgid "Consulta"
+msgstr "Query"
 
 msgid "Consultas usadas:"
 msgstr "Queries used:"
@@ -3126,6 +3253,9 @@ msgstr "Ad account"
 msgid "Cuenta y avisos"
 msgstr "Account and notices"
 
+msgid "Cuentas publicitarias"
+msgstr "Ad accounts"
+
 msgid "Cuerpo inválido."
 msgstr "Invalid body."
 
@@ -3321,6 +3451,9 @@ msgstr "Discard"
 
 msgid "Desconectar"
 msgstr "Disconnect"
+
+msgid "Desconectar la agencia"
+msgstr "Disconnect the agency"
 
 msgid "Describe el estilo visual del video."
 msgstr "Describe the video's visual style."
@@ -3577,6 +3710,12 @@ msgstr "The %(tipo)s is larger than %(mb)s MB."
 msgid "El Buen Fin"
 msgstr "El Buen Fin"
 
+msgid "El Business no ve ninguna Página. Sin Página un proyecto solo puede pautar anuncios (nada de orgánico)."
+msgstr "The Business can't see any Page. Without a Page a project can only run ads (no organic)."
+
+msgid "El Business no ve ninguna cuenta publicitaria. Asígnaselas al usuario del sistema en Business Manager y pulsa «Actualizar desde Meta»."
+msgstr "The Business can't see any ad account. Assign them to the system user in Business Manager and press “Refresh from Meta”."
+
 msgid "El Excel está vacío."
 msgstr "The Excel file is empty."
 
@@ -3605,11 +3744,20 @@ msgstr "The JSON doesn't include score and checks."
 msgid "El MER de la tienda cayó %(pct)s%% frente al periodo anterior."
 msgstr "The store's MER dropped %(pct)s%% against the previous period."
 
+msgid "El Pixel disparó en los últimos 7 días."
+msgstr "The Pixel fired in the last 7 days."
+
 msgid "El Pixel está disparando."
 msgstr "The Pixel is firing."
 
 msgid "El Pixel existe pero no ha disparado en los últimos días."
 msgstr "The Pixel exists but hasn't fired in the last few days."
+
+msgid "El Pixel existe pero nunca ha disparado."
+msgstr "The Pixel exists but has never fired."
+
+msgid "El Pixel lleva más de 7 días sin disparar."
+msgstr "The Pixel hasn't fired in more than 7 days."
 
 msgid "El acceso fue revocado o expiró"
 msgstr "Access was revoked or expired"
@@ -3874,6 +4022,9 @@ msgstr "The hook has a different visual style from the rest of the video."
 msgid "El id de página de Meta son solo dígitos."
 msgstr "A Meta page id is digits only."
 
+msgid "El id del Business está en <em>Configuración del negocio › Información del negocio</em>."
+msgstr "The Business id is in <em>Business settings › Business info</em>."
+
 msgid "El idioma lo decide el texto; este selector solo cambia la muestra de la voz."
 msgstr "The text decides the language; this selector only changes the voice sample."
 
@@ -3984,6 +4135,34 @@ msgstr "The current prompt is the same as the original."
 msgid "El proveedor entregó el video sin pista de audio"
 msgstr "The provider delivered the video without an audio track"
 
+#, python-format
+msgid ""
+"El proyecto %(nombre)s (%(cliente)s) compartió sus activos pero no los vio desde Configuración.\n"
+"Portafolio %(portafolio)s · cuenta %(cuenta)s · Página %(pagina)s.\n"
+"Nota: %(nota)s\n"
+"Asígnalo en el panel de administración › Meta (agencia)."
+msgstr ""
+"The project %(nombre)s (%(cliente)s) shared its assets but didn't see them from Settings.\n"
+"Portfolio %(portafolio)s · account %(cuenta)s · Page %(pagina)s.\n"
+"Note: %(nota)s\n"
+"Assign it in the admin panel › Meta (agency)."
+
+#, python-format
+msgid ""
+"El proyecto %(nombre)s (%(cliente)s) conectó por su cuenta: cuenta %(cuenta)s (%(id_cuenta)s) · Página %(pagina)s · portafolio %(portafolio)s.\n"
+"Revísalo en el panel de administración › Meta (agencia)."
+msgstr ""
+"The project %(nombre)s (%(cliente)s) connected on its own: account %(cuenta)s (%(id_cuenta)s) · Page %(pagina)s · portfolio %(portafolio)s.\n"
+"Review it in the admin panel › Meta (agency)."
+
+#, python-format
+msgid "El proyecto %(nombre)s (%(cliente)s) volvió a usar su propia app de Meta (sin conexión todavía)."
+msgstr "The project %(nombre)s (%(cliente)s) went back to using its own Meta app (not connected yet)."
+
+#, python-format
+msgid "El proyecto %(nombre)s (%(cliente)s) volvió a usar su propia app de Meta (su conexión anterior se restauró)."
+msgstr "The project %(nombre)s (%(cliente)s) went back to using its own Meta app (its previous connection was restored)."
+
 msgid "El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más."
 msgstr "The project reached its storage limit (2 GB): delete something before uploading more."
 
@@ -4051,6 +4230,10 @@ msgstr "The text is over 3,000 characters."
 
 msgid "El texto que se dice en los clips no es idéntico al guion con las líneas quitadas."
 msgstr "The text spoken in the clips doesn't match the script with the removed lines."
+
+#, python-format
+msgid "El token no ve el Business %(business)s (%(error)s). Revisa que el usuario del sistema pertenezca a ese Business Manager y tenga permiso business_management."
+msgstr "The token can't see the Business %(business)s (%(error)s). Check that the system user belongs to that Business Manager and has the business_management permission."
 
 msgid "El usuario debe tener entre 3 y 40 caracteres: solo minúsculas, números, puntos, guiones y guiones bajos."
 msgstr "The username must be between 3 and 40 characters: only lowercase letters, numbers, dots, hyphens and underscores."
@@ -4133,6 +4316,10 @@ msgstr "Choose the video mode: on-camera dialogue or voice-over."
 msgid "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio)."
 msgstr "Choose the account that will send it (Gmail, Outlook or the domain's email)."
 
+#, python-format
+msgid "Elige la cuenta y la Página de %(proyecto)s."
+msgstr "Choose the account and the Page for %(proyecto)s."
+
 msgid "Elige la pieza y al menos una plataforma."
 msgstr "Choose the piece and at least one platform."
 
@@ -4180,6 +4367,12 @@ msgstr "Choose a username and a password to enter your project."
 
 msgid "Elige un volumen de la lista."
 msgstr "Pick a volume from the list."
+
+msgid "Elige una cuenta publicitaria para asignar."
+msgstr "Choose an ad account to assign."
+
+msgid "Elige una cuenta publicitaria y una Página de la lista."
+msgstr "Choose an ad account and a Page from the list."
 
 msgid "Elige una de las dos formas de conectar."
 msgstr "Choose one of the two ways to connect."
@@ -4322,6 +4515,9 @@ msgstr "Failed"
 
 msgid "En ese link de TrendTrack no encontré el video (¿es un anuncio de imagen, o el link no es público?)."
 msgstr "I couldn't find the video in that TrendTrack link (is it an image ad, or is the link not public?)."
+
+msgid "En ese usuario, <em>Asignar activos</em>: todas las cuentas publicitarias y Páginas que Creatv vaya a operar (propias y las que los clientes compartieron como socios). Las que no asignes no aparecen abajo."
+msgstr "On that user, <em>Assign assets</em>: every ad account and Page Creatv will operate (its own and the ones clients shared as partners). The ones you don't assign don't show up below."
 
 msgid "En espera"
 msgstr "Waiting"
@@ -4503,6 +4699,9 @@ msgstr "That Page doesn't show up among your portfolio's; search again."
 msgid "Esa Página no está compartida con Creatv; revisa el paso 2 de la guía."
 msgstr "That Page isn't shared with Creatv; check step 2 of the guide."
 
+msgid "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en Facebook."
+msgstr "That Page has no Instagram linked: Reels won't publish until it's linked on Facebook."
+
 msgid "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."
 msgstr "That Page has no Instagram linked: Reels won't publish until you link it on Facebook."
 
@@ -4517,6 +4716,9 @@ msgstr "That song is no longer in My music."
 
 msgid "Esa cuenta publicitaria no aparece entre las de tu portafolio; vuelve a buscar."
 msgstr "That ad account doesn't show up among your portfolio's; search again."
+
+msgid "Esa cuenta publicitaria ya está conectada a otro proyecto; avísale a Creatv."
+msgstr "That ad account is already connected to another project; let Creatv know."
 
 msgid "Esa evaluación ya no existe."
 msgstr "That evaluation no longer exists."
@@ -4933,6 +5135,9 @@ msgstr "That prompt can't be edited right now."
 msgid "Ese prompt ya no existe. Elige otro de la lista."
 msgstr "That prompt no longer exists. Choose another one from the list."
 
+msgid "Ese proyecto no tenía solicitud pendiente."
+msgstr "That project had no pending request."
+
 msgid "Ese referente no existe."
 msgstr "That reference doesn't exist."
 
@@ -5090,6 +5295,9 @@ msgstr "This script was already confirmed."
 msgid "Este guion ya está confirmado; duplícalo para cambiar la lectura."
 msgstr "This script is already confirmed; duplicate it to change the reading."
 
+msgid "Este mapa es documentación interna y está en español."
+msgstr "This map is internal documentation and is written in Spanish."
+
 msgid "Este mes"
 msgstr "This month"
 
@@ -5116,11 +5324,31 @@ msgstr "This prompt has issues; fix them before approving it:"
 msgid "Este prompt ya está aprobado. Reábrelo para seguir corrigiendo."
 msgstr "This prompt is already approved. Reopen it to keep correcting it."
 
+#, python-format
+msgid "Este proyecto está gestionado por Creatv (modo agencia): no se puede %(para_que)s. Un admin tiene que volverlo a modo propia primero."
+msgstr "This project is managed by Creatv (agency mode): you can't %(para_que)s. An admin has to switch it back to own-app mode first."
+
+msgid "Este proyecto está gestionado por Creatv (modo agencia): no se puede desconectar así. Un admin tiene que desasignarlo (Volver a modo propia)."
+msgstr "This project is managed by Creatv (agency mode): it can't be disconnected this way. An admin has to unassign it (Back to own-app mode)."
+
+msgid "Este proyecto está gestionado por Creatv (modo agencia): no se puede guardar una conexión propia encima. Un admin tiene que desasignarlo primero."
+msgstr "This project is managed by Creatv (agency mode): you can't save your own connection over it. An admin has to unassign it first."
+
 msgid "Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» en Experimentos › Meta (con nada en marcha)."
 msgstr "Creatv manages this project on Meta. To go back to your own app use “Change form” in Experiments › Meta (with nothing running)."
 
 msgid "Este proyecto no está en modo agencia."
 msgstr "This project isn't in agency mode."
+
+msgid "Este proyecto no tiene Meta conectado — conéctalo en FlowMarketing."
+msgstr "This project doesn't have Meta connected — connect it in FlowMarketing."
+
+#, python-format
+msgid "Este proyecto no tiene registrada su app de Meta — hace falta para %(para_que)s."
+msgstr "This project hasn't registered its Meta app — it's needed to %(para_que)s."
+
+msgid "Este proyecto tiene su propia conexión con Meta. Pasarlo a modo agencia la guarda como respaldo (se restaura con «Volver a propia») y sus anuncios pasan a operarse con la cuenta que asignes. ¿Seguir?"
+msgstr "This project has its own connection with Meta. Switching it to agency mode keeps that as a backup (restored with “Back to own app”) and its ads start running with the account you assign. Continue?"
 
 msgid "Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada."
 msgstr "This project uses Creatv's agency connection: you don't have to register an app or connect anything."
@@ -5310,12 +5538,23 @@ msgid "Falta %(campo)s."
 msgstr "Missing: %(campo)s."
 
 #, python-format
+msgid "Falta %(campo)s: los tres datos de la app de Meta son obligatorios."
+msgstr "%(campo)s is missing: all three Meta app details are required."
+
+#, python-format
+msgid "Falta %(clave)s en el .env — hace falta para %(para_que)s."
+msgstr "%(clave)s is missing from the .env — it's needed to %(para_que)s."
+
+#, python-format
 msgid "Falta %(llaves)s en el .env del servidor (Configuración › Puesta a punto)."
 msgstr "%(llaves)s is missing from the server's .env (Settings › Setup)."
 
 #, python-format
 msgid "Falta %(llaves)s en el .env del servidor."
 msgstr "%(llaves)s is missing from the server's .env."
+
+msgid "Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se puede guardar el token cifrado. Ponla y reinicia la app."
+msgstr "<code>FLASK_SECRET_KEY</code> is missing from the server's <code>.env</code>: without it the encrypted token can't be saved. Set it and restart the app."
 
 msgid "Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de Triple Whale. Ponla y reinicia para habilitar este formulario."
 msgstr "Missing <code>FLASK_SECRET_KEY</code> in the server's <code>.env</code>: without it Triple Whale credentials can't be saved. Set it and restart to enable this form."
@@ -5332,6 +5571,9 @@ msgstr "FLASK_SECRET_KEY is missing from the server .env: without it Triple Whal
 msgid "Falta FLASK_SECRET_KEY en el .env del servidor: sin ella no se pueden guardar las credenciales de una tienda."
 msgstr "Missing FLASK_SECRET_KEY in the server's .env: without it a store's credentials can't be saved."
 
+msgid "Falta FLASK_SECRET_KEY en el .env: sin ella no se puede guardar el token de la agencia."
+msgstr "FLASK_SECRET_KEY is missing from the .env: without it the agency token can't be saved."
+
 msgid "Falta YOUTUBE_API_KEY en el .env del servidor."
 msgstr "YOUTUBE_API_KEY is missing from the server's .env."
 
@@ -5345,6 +5587,9 @@ msgstr "Needs a description ✎"
 #, python-format
 msgid "Falta el check %(k)s."
 msgstr "The %(k)s check is missing."
+
+msgid "Falta el id de tu portafolio comercial."
+msgstr "Your business portfolio's id is missing."
 
 msgid "Falta el id de tu portafolio o la cuenta publicitaria."
 msgstr "Missing your portfolio's id or the ad account."
@@ -5393,6 +5638,9 @@ msgstr "yt-dlp is missing on the server to download from TikTok/Instagram/YouTub
 msgid "Faltan claves: %(faltan)s"
 msgstr "Missing keys: %(faltan)s"
 
+msgid "Faltan datos: hacen falta el token del usuario del sistema y el id del Business."
+msgstr "Missing data: the system user's token and the Business id are required."
+
 msgid "Faltan datos: nombre, objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."
 msgstr "Missing data: name, objective, at least one country, days (1–90), cap, ages (13–65) and a http(s) destination URL."
 
@@ -5423,6 +5671,13 @@ msgstr "{n} file(s) of this edit are missing (they were deleted or aren't from t
 
 msgid "Faltan:"
 msgstr "Missing:"
+
+msgid "Familia"
+msgstr "Family"
+
+#, python-format
+msgid "Familias (%(n)s)"
+msgstr "Families (%(n)s)"
 
 msgid "Fecha"
 msgstr "Date"
@@ -5548,6 +5803,10 @@ msgstr "Unknown source: %(fuente)s"
 
 msgid "Fuente:"
 msgstr "Source:"
+
+#, python-format
+msgid "Fuente: %(detalle)s · Clasificar %(n)s con Claude: %(precio)s ·"
+msgstr "Source: %(detalle)s · Classify %(n)s with Claude: %(precio)s ·"
 
 #, python-format
 msgid "Fuera de 5–15 s: %(lista)s."
@@ -5863,6 +6122,9 @@ msgstr "Save changes"
 msgid "Guardar como prueba"
 msgstr "Save as proof"
 
+msgid "Guardar conexión"
+msgstr "Save connection"
+
 msgid "Guardar configuración"
 msgstr "Save configuration"
 
@@ -5946,6 +6208,9 @@ msgstr "Style guide (hand-editable, used in every prompt generation)"
 msgid "Guía de estilo generada."
 msgstr "Style guide generated."
 
+msgid "Hace falta un <strong>token de usuario del sistema</strong> del Business Manager de Creatv (no un token personal: los del sistema no caducan ni dependen de que alguien siga en el Business) y el <strong>id del Business</strong>."
+msgstr "You need a <strong>system-user token</strong> from Creatv's Business Manager (not a personal token: system ones don't expire or depend on someone staying in the Business) and the <strong>Business id</strong>."
+
 msgid "Hacen clic pero no compran: revisa que la página cumpla lo que promete el anuncio, el precio y la oferta."
 msgstr "People click but don't buy: check that the page delivers what the ad promises, the price and the offer."
 
@@ -5978,6 +6243,9 @@ msgstr "There are %(usos)s result(s) already generated with this product: they w
 
 msgid "Hay textos sin traducir para algún destino."
 msgstr "Some texts aren't translated for a market."
+
+msgid "Hay una conexión guardada pero no se puede leer (¿cambió FLASK_SECRET_KEY?). Vuelve a conectar con un token nuevo: la anterior se reemplaza."
+msgstr "There's a saved connection but it can't be read (did FLASK_SECRET_KEY change?). Connect again with a new token: the previous one gets replaced."
 
 msgid "Hecho con Creatv Machine"
 msgstr "Made with Creatv Machine"
@@ -6069,6 +6337,9 @@ msgstr "Your ad account's ID (optional, starts with act_)"
 msgid "ID de tu portafolio comercial"
 msgstr "Your business portfolio's ID"
 
+msgid "Id del Business"
+msgstr "Business id"
+
 msgid "Idea cargada en Crear: ajusta lo que quieras y genera."
 msgstr "Idea loaded in Create: tweak what you want and generate."
 
@@ -6130,6 +6401,9 @@ msgstr "Unsupported language: %(idioma)s (two lowercase letters expected)."
 msgid "Igual que YouTube, <strong>en tu Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> con la cuenta de TikTok del proyecto."
 msgstr "Same as YouTube, <strong>on your Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> with the project's TikTok account."
 
+msgid "Igual que «Traer referentes» de un proyecto, pero sin dueño: quedan visibles para todos los proyectos."
+msgstr "Same as a project's “Bring in references”, but with no owner: they stay visible to every project."
+
 msgid "Iluminación"
 msgstr "Lighting"
 
@@ -6168,6 +6442,9 @@ msgstr "Image deleted: %(nombre)s"
 msgid "Imagen generada"
 msgstr "Generated image"
 
+msgid "Importaciones anteriores"
+msgstr "Previous imports"
+
 #, python-format
 msgid "Importación en curso: %(guardados)s producto(s) guardado(s), %(activos)s activo(s) creado(s); el resto se completa solo en unos minutos."
 msgstr "Import in progress: %(guardados)s product(s) saved, %(activos)s asset(s) created; the rest completes on its own in a few minutes."
@@ -6187,9 +6464,15 @@ msgstr "Imported without photos (%(n)s)"
 msgid "Importando"
 msgstr "Importing"
 
+msgid "Importando el swipe file; la página se recarga sola cuando termine cada fase."
+msgstr "Importing the swipe file; the page reloads on its own when each phase finishes."
+
 #, python-format
 msgid "Importando «%(nombre)s»… Los productos aparecen aquí cuando termine."
 msgstr "Importing “%(nombre)s”… The products show up here when it's done."
+
+msgid "Importar"
+msgstr "Import"
 
 msgid "Importar CSV/Excel"
 msgstr "Import CSV/Excel"
@@ -6403,6 +6686,10 @@ msgstr "The AI couldn't build the shots (%(aviso)s); this is the basic prompt. Y
 msgid "La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes."
 msgstr "The AI couldn't build the shots; the basic prompt is there for you to edit or rebuild."
 
+#, python-format
+msgid "La Página %(pagina)s no está entre las que ve el Business de la agencia."
+msgstr "The Page %(pagina)s isn't among the ones the agency's Business can see."
+
 msgid "La URL de compra tiene que empezar por http:// o https:// (o ser wa.me/…); no la guardé."
 msgstr "The purchase URL has to start with http:// or https:// (or be wa.me/…); I didn't save it."
 
@@ -6412,6 +6699,18 @@ msgstr "The purchase URL has to start with http:// or https://."
 msgid "La URL del anuncio no lleva los parámetros de Triple Whale: sus ventas pueden no atribuirse."
 msgstr "The ad URL doesn't carry the Triple Whale parameters: its sales may not be attributed."
 
+msgid "La agencia no estaba conectada."
+msgstr "The agency wasn't connected."
+
+msgid "La agencia no está conectada"
+msgstr "The agency isn't connected"
+
+msgid "La agencia no está conectada — un admin tiene que conectar el Business de Creatv."
+msgstr "The agency isn't connected — an admin has to connect Creatv's Business."
+
+msgid "La agencia no está conectada."
+msgstr "The agency isn't connected."
+
 msgid "La app de Meta necesita el permiso <code>instagram_content_publish</code> aprobado en <strong>App Review</strong>; sin él Meta rechaza la publicación."
 msgstr "The Meta app needs the <code>instagram_content_publish</code> permission approved in <strong>App Review</strong>; without it Meta rejects the post."
 
@@ -6420,6 +6719,9 @@ msgstr "Attribution has to be pixel, store, or none."
 
 msgid "La autorización con MercadoLibre no coincide con esta sesión — vuelve a intentarlo desde Configuración."
 msgstr "The MercadoLibre authorization doesn't match this session — try again from Settings."
+
+msgid "La autorización con Meta no coincide con esta sesión — vuelve a intentarlo desde FlowMarketing."
+msgstr "The Meta authorization doesn't match this session — try again from FlowMarketing."
 
 msgid "La autorización se hace <strong>en tu Mac</strong> (abre un navegador y escucha en localhost; no funciona en el servidor): <code>venv/bin/python auth/auth_youtube.py</code> con la cuenta dueña del canal."
 msgstr "Authorization happens <strong>on your Mac</strong> (it opens a browser and listens on localhost; it doesn't work on the server): <code>venv/bin/python auth/auth_youtube.py</code> with the account that owns the channel."
@@ -6468,12 +6770,22 @@ msgstr "The correction failed."
 msgid "La corrida de Apify %(estado)s sin resultados (corrida %(corrida)s); revísala en console.apify.com."
 msgstr "The Apify run %(estado)s with no results (run %(corrida)s); check it at console.apify.com."
 
+msgid "La credencial de agencia es ilegible (¿cambió FLASK_SECRET_KEY?): un admin tiene que volver a conectarla."
+msgstr "The agency credential is unreadable (did FLASK_SECRET_KEY change?): an admin has to connect it again."
+
 #, python-format
 msgid "La cuenta %(que)s: %(cuenta)s ventas por Pixel y no verán compras. Compruébalo en Configuración."
 msgstr "The account %(que)s: %(cuenta)s sales through the Pixel and won't see purchases. Check it in Settings."
 
 msgid "La cuenta de Instagram no está vinculada a la Página"
 msgstr "The Instagram account isn't linked to the Page"
+
+#, python-format
+msgid "La cuenta publicitaria %(cuenta)s no está entre las que ve el Business de la agencia."
+msgstr "The ad account %(cuenta)s isn't among the ones the agency's Business can see."
+
+msgid "La cuenta publicitaria cambió: los experimentos anteriores de ese proyecto dejan de refrescarse."
+msgstr "The ad account changed: that project's previous experiments stop refreshing."
 
 msgid "La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse."
 msgstr "The ad account changed: previous experiments stop refreshing."
@@ -6482,7 +6794,7 @@ msgid "La cuenta publicitaria necesita un método de pago en <a href=\"https://b
 msgstr "The ad account needs a payment method at <a href=\"https://business.facebook.com/settings/payment-methods\" target=\"_blank\" rel=\"noopener\">business.facebook.com › Billing ↗</a>: without one, Meta won't activate any ad."
 
 msgid "La cuenta publicitaria no tiene ningún Pixel."
-msgstr "The ad account doesn't have any Pixel."
+msgstr "The ad account has no Pixel."
 
 msgid "La descarga terminó vacía."
 msgstr "The download came back empty."
@@ -6683,6 +6995,9 @@ msgstr "The saved review is from an earlier version of this piece."
 msgid "La selección automática de productos todavía no está implementada."
 msgstr "Automatic product selection isn't implemented yet."
 
+msgid "La semilla es el swipe file de copycoders: se importa desde su página pública, las imágenes se copian a nuestro R2 y las firmas se traducen (≈ US$1 una sola vez). Se puede volver a importar cuando ellos publiquen un barrido nuevo: solo entra lo nuevo."
+msgstr "The seed is copycoders' swipe file: it's imported from their public page, the images are copied to our R2 and the “why it works” notes are translated (≈ US$1 one time). It can be imported again when they publish a new sweep: only what's new comes in."
+
 #, python-format
 msgid "La sesión %(cf_id)s no tiene video listo para producir."
 msgstr "Session %(cf_id)s has no video ready to produce."
@@ -6737,6 +7052,10 @@ msgstr "The last evaluation failed: %(error)s"
 #, python-format
 msgid "La última revisión no se pudo terminar: %(error)s"
 msgstr "The last review couldn't finish: %(error)s"
+
+#, python-format
+msgid "La última tanda de descripciones en inglés falló: %(error)s"
+msgstr "The last batch of English descriptions failed: %(error)s"
 
 msgid "Lado brillante"
 msgstr "Bright side"
@@ -6836,6 +7155,9 @@ msgid "Leyendo…"
 msgstr "Reading…"
 
 msgid "Leído"
+msgstr "Read"
+
+msgid "Leídos"
 msgstr "Read"
 
 msgid "Libre"
@@ -7101,8 +7423,17 @@ msgstr "Body map (only if it goes on a person)"
 msgid "Mapa del código"
 msgstr "Code map"
 
+msgid "Mapa del código · versión del 20 de septiembre de 2026"
+msgstr "Code map · version of September 20, 2026"
+
 msgid "Marca"
 msgstr "Brand"
+
+msgid "Marca (link del Ad Library)"
+msgstr "Brand (Ad Library link)"
+
+msgid "Marca / link del Ad Library"
+msgstr "Brand / Ad Library link"
 
 msgid "Marca al menos un destino (idioma y país) válido para producir."
 msgstr "Check at least one valid market (language and country) to produce."
@@ -7211,17 +7542,27 @@ msgstr "Month"
 msgid "Meta (Pixel/Tienda)"
 msgstr "Meta (Pixel/Store)"
 
+msgid "Meta (agencia)"
+msgstr "Meta (agency)"
+
 msgid "Meta bloqueó esta acción por un tiempo por sus políticas: revisa los avisos en tu Business Suite antes de reintentar."
 msgstr "Meta temporarily blocked this action under its policies: check the notices in your Business Suite before trying again."
 
 msgid "Meta conectado:"
 msgstr "Meta connected:"
 
+#, python-format
+msgid "Meta conectado: %(cuenta)s · %(pagina)s.%(aviso)s"
+msgstr "Meta connected: %(cuenta)s · %(pagina)s.%(aviso)s"
+
 msgid "Meta desconectado de este proyecto y acceso revocado en Meta."
 msgstr "Meta disconnected from this project and access revoked on Meta."
 
 msgid "Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio."
 msgstr "Meta disconnected from this project. The app stays authorized on your Facebook until you remove it in Settings › Business Integrations."
+
+msgid "Meta en modo agencia."
+msgstr "Meta in agency mode."
 
 msgid "Meta está frenando las llamadas por un rato (límite de uso): reintenta en unos minutos."
 msgstr "Meta is throttling calls for a while (usage limit): try again in a few minutes."
@@ -7230,8 +7571,20 @@ msgstr "Meta is throttling calls for a while (usage limit): try again in a few m
 msgid "Meta no aceptó el cambio: %(error)s"
 msgstr "Meta didn't accept the change: %(error)s"
 
+#, python-format
+msgid "Meta no aceptó la autorización: %(motivo)s"
+msgstr "Meta didn't accept the authorization: %(motivo)s"
+
+#, python-format
+msgid "Meta no autorizó la conexión: %(detalle)s"
+msgstr "Meta didn't authorize the connection: %(detalle)s"
+
 msgid "Meta no dio un motivo"
 msgstr "Meta gave no reason"
+
+#, python-format
+msgid "Meta no entregó token para la Página %(pagina)s: el usuario del sistema necesita la Página asignada con permisos de contenido (pages_manage_posts)."
+msgstr "Meta didn't return a token for the Page %(pagina)s: the system user needs the Page assigned with content permissions (pages_manage_posts)."
 
 msgid "Meta no está conectado."
 msgstr "Meta isn't connected."
@@ -7242,6 +7595,13 @@ msgstr "Meta isn't connected: connect it in Settings to launch and measure exper
 #, python-format
 msgid "Meta no lo está mostrando: %(motivo)s"
 msgstr "Meta isn't showing it: %(motivo)s"
+
+#, python-format
+msgid "Meta no termina de paginar %(edge)s después de %(n)s páginas — parece un bucle; revisa el Business o avisa a soporte."
+msgstr "Meta doesn't finish paging %(edge)s after %(n)s pages — it looks like a loop; check the Business or tell support."
+
+msgid "Meta quedó conectado en Creatv"
+msgstr "Meta is now connected in Creatv"
 
 #, python-format
 msgid "Meta rechazó %(cuenta)s de «%(nombre)s» (DISAPPROVED/WITH_ISSUES): mira el motivo en el experimento."
@@ -7272,11 +7632,22 @@ msgstr "Meta rejected the request: %(motivo)s"
 msgid "Meta rechazó un anuncio de «%(experimento)s»"
 msgstr "Meta rejected an ad in “%(experimento)s”"
 
+#, python-format
+msgid "Meta respondió: %(mensaje)s"
+msgstr "Meta replied: %(mensaje)s"
+
 msgid "Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras."
 msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once it starts running, “Update metrics” brings in the numbers."
 
 msgid "Meta tuvo una falla temporal: reintenta en unos minutos."
 msgstr "Meta had a temporary failure: try again in a few minutes."
+
+#, python-format
+msgid "Meta ya no acepta el token (%(motivo)s). Genera uno nuevo en Business Manager y vuelve a conectar abajo; los proyectos asignados siguen asignados y funcionan en cuanto conectes."
+msgstr "Meta no longer accepts the token (%(motivo)s). Generate a new one in Business Manager and connect again below; assigned projects stay assigned and work as soon as you connect."
+
+msgid "Meta ya no acepta el token. Genera uno nuevo en Business Manager y vuelve a conectar abajo; los proyectos asignados siguen asignados y funcionan en cuanto conectes."
+msgstr "Meta no longer accepts the token. Generate a new one in Business Manager and connect again below; assigned projects stay assigned and work as soon as you connect."
 
 msgid "Meta ya no acepta la conexión de este proyecto"
 msgstr "Meta no longer accepts this project's connection"
@@ -7495,6 +7866,12 @@ msgstr "Mexico"
 
 msgid "Mínimo 8 caracteres. Al guardarla se cierran las sesiones abiertas con la anterior."
 msgstr "At least 8 characters. Saving it closes the sessions open with the previous one."
+
+msgid "Mínimo de días (solo Atria)"
+msgstr "Minimum days (Atria only)"
+
+msgid "Mínimo de variantes (solo Atria)"
+msgstr "Minimum variants (Atria only)"
 
 msgid "Música"
 msgstr "Music"
@@ -7748,6 +8125,9 @@ msgstr "There are no products in the catalog: add them in Catalog › Products."
 msgid "No hay referentes para sugerir"
 msgstr "There are no references to suggest"
 
+msgid "No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\"."
+msgstr "There's no Meta authorization in progress — start again with “Connect with Meta”."
+
 msgid "No hay una cuenta en esta sesión."
 msgstr "There's no account in this session."
 
@@ -7770,6 +8150,10 @@ msgstr "I couldn't open the Excel file (is it damaged or protected?)."
 #, python-format
 msgid "No pude abrir el link de TrendTrack (%(tipo)s)."
 msgstr "I couldn't open the TrendTrack link (%(tipo)s)."
+
+#, python-format
+msgid "No pude asignar %(proyecto)s: %(error)s"
+msgstr "Couldn't assign %(proyecto)s: %(error)s"
 
 #, python-format
 msgid "No pude borrarla (%(tipo)s); intenta de nuevo."
@@ -7797,6 +8181,10 @@ msgstr "Couldn't close the experiment: %(error)s"
 #, python-format
 msgid "No pude conectar Triple Whale: %(error)s"
 msgstr "I couldn't connect Triple Whale: %(error)s"
+
+#, python-format
+msgid "No pude conectar la agencia: %(error)s"
+msgstr "Couldn't connect the agency: %(error)s"
 
 #, python-format
 msgid "No pude conectar la tienda: %(error)s"
@@ -7837,6 +8225,10 @@ msgid "No pude generar la muestra; intenta de nuevo."
 msgstr "I couldn't generate the sample; try again."
 
 #, python-format
+msgid "No pude hablar con Meta (%(error)s)."
+msgstr "Couldn't talk to Meta (%(error)s)."
+
+#, python-format
 msgid "No pude hablar con Triple Whale (%(tipo)s)."
 msgstr "I couldn't reach Triple Whale (%(tipo)s)."
 
@@ -7851,6 +8243,14 @@ msgstr "I couldn't read that audio file."
 
 msgid "No pude leer ese video."
 msgstr "I couldn't read that video."
+
+#, python-format
+msgid "No pude leer los activos del Business: %(error)s"
+msgstr "Couldn't read the Business assets: %(error)s"
+
+#, python-format
+msgid "No pude leer los activos: %(error)s"
+msgstr "Couldn't read the assets: %(error)s"
 
 msgid "No pude leer tus activos:"
 msgstr "Couldn't read your assets:"
@@ -8259,6 +8659,9 @@ msgstr "Project's visible name"
 msgid "Normal"
 msgstr "Normal"
 
+msgid "Nota"
+msgstr "Note"
+
 msgid "Nota (opcional)"
 msgstr "Note (optional)"
 
@@ -8298,6 +8701,9 @@ msgstr "New product"
 
 msgid "Nuevo sprint"
 msgstr "New sprint"
+
+msgid "Nuevos"
+msgstr "New"
 
 msgid "Nuevos ganadores"
 msgstr "New winners"
@@ -8342,6 +8748,9 @@ msgstr "Background opacity"
 
 msgid "Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en Configuración, o elige el objetivo de tráfico."
 msgstr "Optimizing for purchases requires an active Pixel and pixel attribution: press “Check Pixel” in Settings, or choose the traffic objective."
+
+msgid "Origen"
+msgstr "Source"
 
 #, python-format
 msgid "Origen de familia inválido: %(origen)s"
@@ -8536,6 +8945,9 @@ msgstr "Country"
 msgid "País %(pais)s no soportado."
 msgstr "Country %(pais)s not supported."
 
+msgid "País (solo Apify)"
+msgstr "Country (Apify only)"
+
 msgid "País de los anuncios"
 msgstr "Ads' country"
 
@@ -8595,6 +9007,9 @@ msgstr "Paste your Notion integration key."
 
 msgid "Pega las cinco variables en el .env del servidor y reinicia."
 msgstr "Paste the five variables in the server's .env and restart."
+
+msgid "Pega los dos aquí. El token se valida contra Meta (<code>/me</code> y el Business) y se guarda cifrado; si algo falla, no se guarda nada."
+msgstr "Paste both here. The token is checked against Meta (<code>/me</code> and the Business) and saved encrypted; if anything fails, nothing is saved."
 
 msgid "Pega los tres datos aquí, guarda y pulsa «Conectar con Meta»."
 msgstr "Paste the three values here, save and press “Connect with Meta”."
@@ -8787,6 +9202,9 @@ msgstr "To review"
 
 msgid "Por tipo"
 msgstr "By type"
+
+msgid "Portafolio"
+msgstr "Portfolio"
 
 msgid "Posición"
 msgstr "Position"
@@ -9193,6 +9611,12 @@ msgstr "Page"
 msgid "Página %(pagina)s"
 msgstr "Page %(pagina)s"
 
+msgid "Página de Facebook"
+msgstr "Facebook Page"
+
+msgid "Páginas"
+msgstr "Pages"
+
 msgid "Pégala como ANTHROPIC_API_KEY en el .env del servidor y reinicia los dos servicios."
 msgstr "Paste it as ANTHROPIC_API_KEY in the server's .env and restart both services."
 
@@ -9522,6 +9946,9 @@ msgstr "Social networks:"
 msgid "Redundante"
 msgstr "Redundant"
 
+msgid "Reemplazar el token"
+msgstr "Replace the token"
+
 msgid "Reemplazar y producir"
 msgstr "Replace and produce"
 
@@ -9584,6 +10011,13 @@ msgstr "References: Image 1, Image 2…"
 
 msgid "Referentes"
 msgstr "Swipe file"
+
+msgctxt "columna de familias"
+msgid "Referentes"
+msgstr "References"
+
+msgid "Referentes (admin)"
+msgstr "Swipe file (admin)"
 
 msgid "Regalos de pareja y amistad; detalles y experiencias."
 msgstr "Gifts for partners and friends; treats and experiences."
@@ -10134,6 +10568,9 @@ msgstr "No Pixel"
 msgid "Sin Página (solo anuncios)"
 msgstr "No Page (ads only)"
 
+msgid "Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para ese proyecto."
+msgstr "Without an assigned Page only ads can run; organic posting stays off for that project."
+
 msgid "Sin Página solo se pueden pautar anuncios; la publicación orgánica queda apagada."
 msgstr "Without a Page you can only run ads; organic posting stays off."
 
@@ -10152,6 +10589,9 @@ msgstr "No organic channel available: connect a channel at"
 
 msgid "Sin canales para publicar:"
 msgstr "No channels to publish to:"
+
+msgid "Sin conexión con Meta"
+msgstr "No connection with Meta"
 
 msgid "Sin conexión: no se guardó. Intenta de nuevo."
 msgstr "No connection: it wasn't saved. Try again."
@@ -10317,8 +10757,15 @@ msgid "Solicitud cancelada."
 msgstr "Request canceled."
 
 #, python-format
+msgid "Solicitud descartada. %(proyecto)s no recibe aviso."
+msgstr "Request discarded. %(proyecto)s gets no notice."
+
+#, python-format
 msgid "Solicitud enviada el %(fecha)s: Creatv la está revisando y te avisa por correo."
 msgstr "Request sent on %(fecha)s: Creatv is reviewing it and will email you."
+
+msgid "Solicitudes de clientes"
+msgstr "Client requests"
 
 msgid "Solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final."
 msgstr "Wan 3.0 only, half price: to test the prompt before the final version."
@@ -10328,6 +10775,9 @@ msgstr "Wan 3.0 only, no extra cost: the model rewrites your text before generat
 
 msgid "Solo acepto archivos .csv o .xlsx."
 msgstr "I only accept .csv or .xlsx files."
+
+msgid "Solo activos"
+msgstr "Active only"
 
 msgid "Solo anuncios que siguen activos"
 msgstr "Only ads that are still active"
@@ -10350,6 +10800,9 @@ msgstr "Only this campaign (delete them to go back to the sprint's)."
 msgid "Solo las referencias (el texto y los ajustes quedan en blanco)"
 msgstr "Only the references (the text and the settings start blank)"
 
+msgid "Solo lo ve el administrador"
+msgstr "Only the admin sees it"
+
 msgid "Solo míos"
 msgstr "Only mine"
 
@@ -10370,6 +10823,9 @@ msgstr "Only sub-avatars can be discarded; the core is a grouping."
 
 msgid "Solo se evalúa un experimento que está corriendo."
 msgstr "Only an experiment that's running can be evaluated."
+
+msgid "Solo se importa desde go.copycoders.ai."
+msgstr "Imports only come from go.copycoders.ai."
 
 msgid "Solo se puede revisar una pieza terminada."
 msgstr "Only a finished piece can be reviewed."
@@ -10476,6 +10932,9 @@ msgstr "Their day to day (situations)"
 
 msgid "Su día a día (una situación por línea)"
 msgstr "Their day to day (one situation per line)"
+
+msgid "Su propia conexión:"
+msgstr "Its own connection:"
 
 #, python-format
 msgid "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
@@ -10606,6 +11065,9 @@ msgstr "Its numbers for the last 7 days dropped against the 7 before: prepare va
 
 msgid "Swap listo."
 msgstr "Swap ready."
+
+msgid "Swipe file de copycoders"
+msgstr "Copycoders swipe file"
 
 msgid "Sí"
 msgstr "Yes"
@@ -10973,6 +11435,9 @@ msgstr "No videos yet. Create the first one: choose duration, mode, hook and ref
 msgid "Todavía no le has escrito a Claude. Cuéntale qué salió mal en este prompt y te propone una versión corregida."
 msgstr "You haven't written to Claude yet. Tell it what went wrong with this prompt and it'll suggest a fixed version."
 
+msgid "Todavía no se ha traído ningún barrido global fuera de copycoders."
+msgstr "No global sweep has been brought in yet outside copycoders."
+
 #, python-format
 msgid "Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>%(redirect)s</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>."
 msgstr "Not yet possible: <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code>. Whoever administers it creates the app at developers.mercadolibre.com (<code>offline_access</code> permission, redirect <code>%(redirect)s</code>) — see the MercadoLibre card in <em>Setup</em>."
@@ -11049,11 +11514,17 @@ msgstr "All projects"
 msgid "Todos los proyectos."
 msgstr "All projects."
 
+msgid "Token del usuario del sistema"
+msgstr "System-user token"
+
 msgid "Tono de voz"
 msgstr "Tone of voice"
 
 msgid "Top 5 ganadoras"
 msgstr "Top 5 winners"
+
+msgid "Tope"
+msgstr "Cap"
 
 #, python-format
 msgid "Tope alcanzado en «%(experimento)s»"
@@ -11081,6 +11552,13 @@ msgstr "Total"
 
 msgid "Total proyectos"
 msgstr "Total projects"
+
+#, python-format
+msgid "Total ≈ US$ %(total)s"
+msgstr "Total ≈ US$ %(total)s"
+
+msgid "Totales"
+msgstr "Totals"
 
 msgid "Trabajo interno de Creatv sobre la biblioteca de referentes: importaciones, barridos globales, pruebas — no es de ningún proyecto"
 msgstr "Creatv's internal work on the swipe file library: imports, global sweeps, tests — not part of any project"
@@ -11121,6 +11599,9 @@ msgstr "Bring in products from… (CSV/Excel, URL or your store)"
 msgid "Traer referentes"
 msgstr "Get references"
 
+msgid "Traer referentes globales"
+msgstr "Bring in global references"
+
 msgid "Traer referentes nuevos"
 msgstr "Bring in new references"
 
@@ -11133,6 +11614,10 @@ msgstr "Fetching results from Apify is charged: ≈ %(texto)s for up to %(max)s 
 
 msgid "Traer y clasificar"
 msgstr "Get and classify"
+
+#, python-format
+msgid "Traer y clasificar ≈ US$ %(total)s"
+msgstr "Bring in and classify ≈ US$ %(total)s"
 
 msgid "Traer y leer"
 msgstr "Fetch and read"
@@ -11166,12 +11651,18 @@ msgstr "Pulling the last 90 days…"
 msgid "Trayendo métricas de Triple Whale…"
 msgstr "Pulling Triple Whale metrics…"
 
+msgid "Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza."
+msgstr "Bringing in global references; they'll show up in the sweeps table as it goes."
+
 msgid "Trayendo referentes; aparecerán en «Mis barridos» a medida que avanza."
 msgstr "Getting references; they'll show up in “My sweeps” as it moves along."
 
 #, python-format
 msgid "Trayendo… %(traidos)s/%(tope)s."
 msgstr "Getting… %(traidos)s/%(tope)s."
+
+msgid "Traídos"
+msgstr "Brought in"
 
 #, python-format
 msgid "TrendTrack no dejó descargar el video (%(codigo)s)."
@@ -11288,6 +11779,10 @@ msgstr "Your moment"
 msgid "Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado."
 msgstr "Your AI content machine.<br>From the product photo to the published ad."
 
+#, python-format
+msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar piezas en Experimentos y publicar contenido."
+msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · Page %(pagina)s. You can now test pieces in Experiments and publish content."
+
 msgid "Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
 msgstr "Your project uses its own Meta app: CreatvMachine operates only with your credentials and your data doesn't pass through any third-party app."
 
@@ -11318,6 +11813,12 @@ msgstr "Your store"
 
 msgid "Tu tienda según Triple Whale"
 msgstr "Your store according to Triple Whale"
+
+msgid "Tu usuario de Facebook no administra ninguna cuenta publicitaria. Pídele al administrador de tu Business Manager que te dé acceso a la cuenta, y vuelve a conectar."
+msgstr "Your Facebook user doesn't manage any ad account. Ask your Business Manager admin to give you access to the account, and connect again."
+
+msgid "Tu usuario no administra ninguna Página de Facebook. Crea una o pide acceso, y vuelve a conectar."
+msgstr "Your user doesn't manage any Facebook Page. Create one or ask for access, and connect again."
 
 msgid "Tus anuncios"
 msgstr "Your ads"
@@ -11771,6 +12272,9 @@ msgstr "Check again"
 msgid "Volver a conectar"
 msgstr "Reconnect"
 
+msgid "Volver a conectar con otro token"
+msgstr "Connect again with another token"
+
 msgid "Volver a escribir con IA"
 msgstr "Rewrite with AI"
 
@@ -11783,8 +12287,14 @@ msgstr "Try again"
 msgid "Volver a oír"
 msgstr "Unmute"
 
+msgid "Volver a propia"
+msgstr "Back to own app"
+
 msgid "Volver al original"
 msgstr "Revert to the original"
+
+msgid "Volver al panel"
+msgstr "Back to the panel"
 
 msgid "Volver al tablero"
 msgstr "Back to the board"
@@ -11942,6 +12452,9 @@ msgstr "A file import is already running — wait for it to finish."
 
 msgid "Ya hay una importación desde URL en curso — espera a que termine."
 msgstr "A URL import is already running — wait for it to finish."
+
+msgid "Ya hay una importación en curso."
+msgstr "There's already an import in progress."
 
 msgid "Ya hay una investigación en curso."
 msgstr "There's already research in progress."
@@ -12129,8 +12642,14 @@ msgstr "hug"
 msgid "abre el enlace que te mandamos."
 msgstr "open the link we sent you."
 
+msgid "abrir el diálogo de Meta"
+msgstr "open the Meta dialog"
+
 msgid "acción"
 msgstr "action"
+
+msgid "activa"
+msgstr "active"
 
 msgid "activar"
 msgstr "activate"
@@ -12141,6 +12660,12 @@ msgstr "active"
 #, python-format
 msgid "actualizado %(cuando)s"
 msgstr "updated %(cuando)s"
+
+msgid "agencia"
+msgstr "agency"
+
+msgid "agencia conectada"
+msgstr "agency connected"
 
 msgid "ahora mismo"
 msgstr "right now"
@@ -12202,6 +12727,9 @@ msgstr "drafting"
 
 msgid "armando el prompt"
 msgstr "building the prompt"
+
+msgid "armar la URL de vuelta desde Meta (tiene que coincidir con la registrada en la app)"
+msgstr "build the return URL from Meta (it must match the one registered in the app)"
 
 msgid "armar_documento: sin segmentos no hay pista principal."
 msgstr "armar_documento: no segments, so no main track."
@@ -12284,6 +12812,9 @@ msgstr "search:tiktok_shop"
 msgid "búsqueda"
 msgstr "search"
 
+msgid "cada proyecto está en un modo a la vez: <strong>propia</strong> (registra su app y conecta él) o <strong>agencia</strong> (tú le asignas cuenta y Página)"
+msgstr "each project is in one mode at a time: <strong>own app</strong> (it registers its app and connects itself) or <strong>agency</strong> (you assign it an account and a Page)"
+
 msgid "calabaza"
 msgstr "pumpkin"
 
@@ -12298,6 +12829,12 @@ msgstr "calm"
 
 msgid "calmado"
 msgstr "Calm"
+
+msgid "cambiar el código por un token"
+msgstr "exchange the code for a token"
+
+msgid "cambiar un código de autorización por un token"
+msgstr "exchange an authorization code for a token"
 
 msgid "campaña lista"
 msgstr "campaign ready"
@@ -12330,6 +12867,9 @@ msgstr "invalid cf_id: %(cf)s"
 msgid "clics"
 msgstr "clicks"
 
+msgid "cliente"
+msgstr "client"
+
 #, python-format
 msgid "clip 1 con %(hid)s"
 msgstr "clip 1 with %(hid)s"
@@ -12339,6 +12879,9 @@ msgstr "clean clone"
 
 msgid "comentario real de un comprador"
 msgstr "real buyer's comment"
+
+msgid "compartieron sus activos con Creatv pero no los vieron desde Configuración: asígnalos en la tabla de proyectos (el formulario ya trae lo que escribieron) y la solicitud se cierra sola"
+msgstr "they shared their assets with Creatv but didn't see them from Settings: assign them in the projects table (the form already has what they wrote) and the request closes on its own"
 
 msgid "compatibilidad campana"
 msgstr "campaign fit"
@@ -12394,6 +12937,16 @@ msgstr "connected"
 
 msgid "conectado"
 msgstr "connected"
+
+#, python-format
+msgid "conectado el %(fecha)s"
+msgstr "connected on %(fecha)s"
+
+msgid "conectar con una app propia"
+msgstr "connect with your own app"
+
+msgid "conexión rota"
+msgstr "broken connection"
 
 msgid "confiable"
 msgstr "trustworthy"
@@ -12456,6 +13009,11 @@ msgstr "created"
 msgid "cta"
 msgstr "CTA"
 
+msgid "cuenta publicitaria"
+msgid_plural "cuentas publicitarias"
+msgstr[0] "ad account"
+msgstr[1] "ad accounts"
+
 msgid "cálida"
 msgstr "warm"
 
@@ -12484,6 +13042,9 @@ msgstr "of %(valor)s/day"
 
 msgid "de los pedidos"
 msgstr "of orders"
+
+msgid "de un cliente (socio)"
+msgstr "a client's (partner)"
 
 msgid "decidido"
 msgstr "decided"
@@ -12535,6 +13096,10 @@ msgstr "from $0.04 / sec"
 
 msgid "desde $0.144 / seg (540p/5s)"
 msgstr "from $0.144 / sec (540p/5s)"
+
+#, python-format
+msgid "desde %(fecha)s"
+msgstr "since %(fecha)s"
 
 #, python-format
 msgid "desde %(nombre)s"
@@ -12851,6 +13416,11 @@ msgstr "missing a video with valid dimensions"
 msgid "faltan las líneas %(lista)s"
 msgstr "missing lines %(lista)s"
 
+msgid "familia"
+msgid_plural "familias"
+msgstr[0] "family"
+msgstr[1] "families"
+
 msgid "fecha;tipo;proveedor;referencia;detalle;usd"
 msgstr "date;type;provider;reference;detail;usd"
 
@@ -12988,6 +13558,9 @@ msgstr "hook"
 msgid "id %(id)s"
 msgstr "id %(id)s"
 
+msgid "id de página o view_all_page_id"
+msgstr "page id or view_all_page_id"
+
 msgid "ideas aprobadas"
 msgstr "ideas approved"
 
@@ -13013,6 +13586,15 @@ msgstr "impressions"
 
 msgid "imágenes"
 msgstr "images"
+
+msgid "imágenes fallidas"
+msgstr "failed images"
+
+msgid "imágenes por bajar"
+msgstr "images to download"
+
+msgid "inactiva"
+msgstr "inactive"
 
 msgid "inconcluso"
 msgstr "inconclusive"
@@ -13278,6 +13860,9 @@ msgstr "aren't"
 msgid "no gasta: la regla la escribes tú"
 msgstr "costs nothing: you write the rule"
 
+msgid "no indicada"
+msgstr "not given"
+
 msgid "no se puede usar aún"
 msgstr "can't be used yet"
 
@@ -13305,6 +13890,9 @@ msgstr "nombre, precio, moneda, url_compra, fotos (multiple with |), descripcion
 
 msgid "nota"
 msgstr "note"
+
+msgid "nunca"
+msgstr "never"
 
 msgid "o"
 msgstr "or"
@@ -13487,6 +14075,12 @@ msgstr "promise"
 msgid "prompt listo, falta generar"
 msgstr "prompt ready, not generated yet"
 
+msgid "propia"
+msgstr "own"
+
+msgid "propia de Creatv"
+msgstr "Creatv's own"
+
 msgid "proponer ideas"
 msgstr "propose ideas"
 
@@ -13500,6 +14094,14 @@ msgid "proyecto"
 msgid_plural "proyectos"
 msgstr[0] "project"
 msgstr[1] "projects"
+
+msgid "proyecto en modo agencia"
+msgid_plural "proyectos en modo agencia"
+msgstr[0] "project in agency mode"
+msgstr[1] "projects in agency mode"
+
+msgid "proyecto;fecha;tipo;proveedor;referencia;detalle;usd"
+msgstr "project;date;type;provider;reference;detail;usd"
 
 msgid "prueba"
 msgstr "proof"
@@ -13556,6 +14158,11 @@ msgstr "re-edit"
 msgid "referencias"
 msgstr "references"
 
+msgid "referente con imagen"
+msgid_plural "referentes con imagen"
+msgstr[0] "reference with an image"
+msgstr[1] "references with an image"
+
 msgid "regalo"
 msgstr "gift"
 
@@ -13574,6 +14181,9 @@ msgstr "regeneration %(cf_id)s"
 
 msgid "regenerar el video"
 msgstr "regenerate the video"
+
+msgid "registrar una app propia"
+msgstr "register your own app"
 
 msgid "reglas"
 msgstr "rules"
@@ -13674,6 +14284,9 @@ msgstr "charged on your Meta account"
 msgid "se genera solo"
 msgstr "generated automatically"
 
+msgid "se guardan 10 min; si acabas de asignar un activo en Business Manager, actualiza"
+msgstr "kept for 10 min; if you just assigned an asset in Business Manager, refresh"
+
 #, python-format
 msgid "se repiten %(lista)s"
 msgstr "repeated %(lista)s"
@@ -13704,6 +14317,9 @@ msgstr "select"
 
 msgid "sin Instagram vinculado"
 msgstr "no Instagram linked"
+
+msgid "sin Página"
+msgstr "no Page"
 
 msgid "sin Página (solo anuncios)"
 msgstr "no Page (ads only)"
@@ -13765,6 +14381,9 @@ msgstr "no reason given"
 msgid "sin más reintentos"
 msgstr "no more retries"
 
+msgid "sin nombre"
+msgstr "no name"
+
 msgid "sin pauta corriendo"
 msgstr "no ad spend running"
 
@@ -13792,6 +14411,9 @@ msgstr "no topic"
 msgid "sin temporada"
 msgstr "no season"
 
+msgid "sin token"
+msgstr "no token"
+
 msgid "sin umbral"
 msgstr "no threshold"
 
@@ -13806,6 +14428,9 @@ msgstr "no measurable sales"
 
 msgid "sin verificar ahora (Meta no respondió)"
 msgstr "not verified right now (Meta didn't respond)"
+
+msgid "sin vincular"
+msgstr "not linked"
 
 #, python-format
 msgid "sobran %(lista)s (quitadas o inexistentes)"
@@ -13900,6 +14525,9 @@ msgstr "you@company.com"
 msgid "un momento del clip %(i)s no describe qué se ve"
 msgstr "a beat in clip %(i)s doesn't describe what's shown"
 
+msgid "un solo token de usuario del sistema, cifrado en el servidor; nunca vuelve a pantalla"
+msgstr "a single system-user token, encrypted on the server; it never comes back to the screen"
+
 msgid "una por línea; con el link de su Ad Library si lo tienes"
 msgstr "one per line; with its Ad Library link if you have it"
 
@@ -13912,6 +14540,9 @@ msgstr "Urban"
 
 msgid "usuario"
 msgstr "user"
+
+msgid "usuario del sistema"
+msgstr "system user"
 
 msgid "uuid, solo si ya lo creaste en el panel de Higgsfield"
 msgstr "uuid, only if you already created it in the Higgsfield panel"
@@ -14172,6 +14803,9 @@ msgstr "Discard this final cut?"
 msgid "¿Descartar esta pieza?"
 msgstr "Discard this piece?"
 
+msgid "¿Descartar la solicitud? El cliente no recibe aviso."
+msgstr "Discard the request? The client gets no notice."
+
 msgid "¿Desconectar Meta de este proyecto? No se borra nada en Meta."
 msgstr "Disconnect Meta from this project? Nothing gets deleted on Meta."
 
@@ -14180,6 +14814,10 @@ msgstr "Disconnect Triple Whale? The copied metrics are deleted and attribution 
 
 msgid "¿Desconectar esta tienda? Sus productos quedan archivados; no se borra nada en la tienda."
 msgstr "Disconnect this store? Its products get archived; nothing is deleted in the store."
+
+#, python-format
+msgid "¿Desconectar la agencia? %(n)s proyecto(s) en modo agencia volverán a modo propia y se quedarán sin conexión con Meta (anuncios y orgánico) hasta que registren su app o vuelvas a conectarlos. El token se borra del servidor; en Meta no se revoca nada."
+msgstr "Disconnect the agency? %(n)s project(s) in agency mode will go back to own-app mode and stay without a Meta connection (ads and organic) until they register their app or you connect them again. The token is deleted from the server; nothing is revoked on Meta."
 
 msgid "¿Dónde se prueban?"
 msgstr "Where are they tested?"
@@ -14277,6 +14915,10 @@ msgstr "Want an AI-made song? Create it in From references › 🎵 Music and it
 msgid "¿Ve la foto del producto?"
 msgstr "Does it see the product photo?"
 
+#, python-format
+msgid "¿Volver %(nombre)s a modo propia? Si tenía su propia conexión se restaura; si no, queda sin conexión con Meta hasta que registre su app y conecte."
+msgstr "Switch %(nombre)s back to own-app mode? If it had its own connection it's restored; if not, it stays without a Meta connection until it registers its app and connects."
+
 msgid "¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones)."
 msgstr "Rewrite the script with AI? This replaces the current script (including your edits)."
 
@@ -14307,6 +14949,9 @@ msgstr "Last copy: %(fecha)s"
 #, python-format
 msgid "Última generación: %(nucleos)s núcleo(s), %(subs)s sub-avatar(es), %(con)s con evidencia y %(sin)s sin evidencia, %(comentarios)s comentarios"
 msgstr "Last generation: %(nucleos)s core(s), %(subs)s sub-avatar(s), %(con)s with evidence and %(sin)s without evidence, %(comentarios)s comments"
+
+msgid "Última importación:"
+msgstr "Last import:"
 
 msgid "Última terminada"
 msgstr "Last one done"
@@ -14344,6 +14989,12 @@ msgstr "School supplies, uniforms and home organization for the start of the sch
 msgid "último disparo"
 msgstr "last fired"
 
+msgid "— cuenta publicitaria —"
+msgstr "— ad account —"
+
+msgid "— sin Página (solo anuncios) —"
+msgstr "— no Page (ads only) —"
+
 msgid "— sin usar —"
 msgstr "— not used —"
 
@@ -14359,6 +15010,9 @@ msgstr "← As an image"
 
 msgid "← Final edition"
 msgstr "← Final edition"
+
+msgid "← Volver al panel"
+msgstr "← Back to the panel"
 
 #, python-format
 msgid "← padre: %(nombre)s"

@@ -59,6 +59,7 @@ PLANTILLAS_TRADUCIDAS = [
     "_tab_triple_whale.html", "_tw_panel.html",
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
+    "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
 ]
 
 

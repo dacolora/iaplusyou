@@ -810,3 +810,51 @@ def test_describir_referencias_en_el_idioma_pedido(monkeypatch):
     texto = visto["messages"][0]["content"][0]["text"]
     orden = idiomas.orden_idioma("en")
     assert texto.startswith(orden) and texto.rstrip().endswith(orden) and "Describe en inglés" in texto
+
+
+# ---- Fase 6, Task 5: admin, Meta y el mapa ---------------------------------
+
+@pytest.mark.parametrize("url", ["/admin/meta", "/admin/referentes"])
+def test_paginas_de_admin_en_ingles(admin_en, url):
+    fugas = espanol_visible(html_de(admin_en, url))
+    assert not fugas, (url, fugas[:15])
+
+
+def test_aviso_de_fallo_de_las_familias_en_ingles(admin_en, monkeypatch):
+    import dashboard
+    from tareas import referentes as tareas_ref
+    real = dashboard.trabajos.consultar
+    monkeypatch.setattr(dashboard.trabajos, "consultar", lambda job_id: (
+        {"estado": "error", "mensaje": "boom"} if job_id == tareas_ref.JOB_FAMILIAS_EN else real(job_id)))
+    assert "The last batch of English descriptions failed: boom" in html_de(admin_en, "/admin/referentes")
+
+
+def test_meta_elegir_en_ingles(cliente_en, monkeypatch):
+    import dashboard
+    monkeypatch.setattr(dashboard.meta_conexion, "cargar_pendiente", lambda c: {
+        "usuario_meta": "Glow Owner",
+        "activos": {"ad_accounts": [{"id": "act_1", "name": "Glow Ads", "currency": "USD"}],
+                    "pages": [{"id": "9", "name": "Glow Page", "ig_username": None}]}})
+    fugas = espanol_visible(html_de(cliente_en, "/cliente/acme/meta/elegir"))
+    assert not fugas, fugas[:15]
+
+
+def test_detalle_del_pixel_se_traduce_al_mostrarlo(admin_en, monkeypatch):
+    import dashboard
+    monkeypatch.setattr(dashboard.meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
+    monkeypatch.setattr(dashboard.meta_conexion, "estado_pixel", lambda c, solo_cache=False: {
+        "estado": "sin_pixel", "pixel_id": None, "nombre": None, "ultimo_disparo": None,
+        "detalle": "La cuenta publicitaria no tiene ningún Pixel."})
+    assert "The ad account has no Pixel." in html_de(admin_en, "/cliente/acme")
+
+
+def test_barra_del_mapa_en_ingles(admin_en):
+    html = html_de(admin_en, "/mapa")
+    fugas = espanol_visible(html, ("mapa-barra",))
+    assert not fugas, fugas
+    assert "This map is internal documentation and is written in Spanish." in html
+
+
+def test_csv_del_panel_con_encabezados_en_ingles(admin_en):
+    texto = admin_en.get("/panel/gasto.csv").get_data(as_text=True)
+    assert texto.lstrip("﻿").splitlines()[0] == "project;date;type;provider;reference;detail;usd"

@@ -6,6 +6,7 @@ van con fakes en las rutas, y el test integrado usa el Graph falso de
 tests/test_meta_agencia.py. Ningún token aparece en un HTML ni en un flash."""
 import json
 import os
+import re
 
 import pytest
 import sqlalchemy as sa
@@ -444,7 +445,11 @@ def test_nombre_de_proyecto_no_entra_en_el_js_del_confirm(app, monkeypatch):
     _asignar_en_disco("acme")
     proyectos.guardar_nombre("acme", "x'); alert(1); ('")
     html = app["admin"].get("/admin/meta").get_data(as_text=True)
-    assert "alert(1)" not in html.split("confirm('")[1].split("')")[0]
+    # Fase 6 (idioma): los confirm() van en atributos entre comillas simples con
+    # el texto por |tojson (que escapa ' como '): ningún onsubmit trae el nombre.
+    onsubmits = re.findall(r"onsubmit='([^']*)'", html)
+    assert any("this.dataset.nombre" in js for js in onsubmits)
+    assert all("alert(1)" not in js for js in onsubmits)
     assert "this.dataset.nombre" in html and "data-nombre=\"x&#39;); alert(1); (&#39;\"" in html
 
 

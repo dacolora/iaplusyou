@@ -3271,16 +3271,17 @@ def meta_callback():
     cliente = pendiente.get("cliente")
     state_ok = bool(pendiente.get("state")) and request.args.get("state") == pendiente.get("state")
     if not cliente or not state_ok:
-        flash("La autorización con Meta no coincide con esta sesión — vuelve a intentarlo desde FlowMarketing.", "error")
+        flash(gettext("La autorización con Meta no coincide con esta sesión — vuelve a intentarlo desde FlowMarketing."),
+              "error")
         return _ir_a_flowmarketing(cliente) if cliente else redirect(url_for("index"))
     if not usuarios.puede_acceder(_sesion(), cliente):
-        flash("No tienes acceso a ese proyecto.", "error")
+        flash(gettext("No tienes acceso a ese proyecto."), "error")
         return redirect(url_for("index"))
 
     if request.args.get("error"):
         detalle = request.args.get("error_description") or request.args.get("error")
         bitacora.registrar(cliente, "meta", "conexion", "error", f"cancelado o denegado: {detalle}")
-        flash(f"Meta no autorizó la conexión: {detalle}", "error")
+        flash(gettext("Meta no autorizó la conexión: %(detalle)s", detalle=detalle), "error")
         return _ir_a_flowmarketing(cliente)
 
     code = request.args.get("code", "")
@@ -3311,13 +3312,13 @@ def meta_elegir(cliente):
         return bloqueo
     pendiente = meta_conexion.cargar_pendiente(cliente)
     if not pendiente:
-        flash("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\".", "error")
+        flash(gettext("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\"."), "error")
         return _ir_a_flowmarketing(cliente)
     activos = pendiente.get("activos") or {}
     cuentas = activos.get("ad_accounts") or []
     paginas = activos.get("pages") or []
     if not cuentas and not paginas:
-        flash("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\".", "error")
+        flash(gettext("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\"."), "error")
         return _ir_a_flowmarketing(cliente)
 
     if request.method == "GET":
@@ -3329,7 +3330,7 @@ def meta_elegir(cliente):
     cuenta = next((a for a in cuentas if a["id"] == request.form.get("ad_account_id")), None)
     pagina = next((p for p in paginas if p["id"] == request.form.get("page_id")), None)
     if not cuenta or not pagina:
-        flash("Elige una cuenta publicitaria y una Página de la lista.", "error")
+        flash(gettext("Elige una cuenta publicitaria y una Página de la lista."), "error")
         return redirect(url_for("meta_elegir", cliente=cliente))
 
     try:
@@ -3342,8 +3343,10 @@ def meta_elegir(cliente):
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
     bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name')}")
-    aviso = "" if pagina.get("ig_user_id") else " Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."
-    flash(f"Meta conectado: {cuenta.get('name')} · {pagina.get('name')}.{aviso}", "ok")
+    aviso = "" if pagina.get("ig_user_id") else " " + gettext(
+        "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook.")
+    flash(gettext("Meta conectado: %(cuenta)s · %(pagina)s.%(aviso)s",
+                  cuenta=cuenta.get("name"), pagina=pagina.get("name"), aviso=aviso), "ok")
     return _ir_a_flowmarketing(cliente)
 
 
@@ -3372,7 +3375,7 @@ def meta_cancelar(cliente):
     """Aborta una autorización a medias (borra solo meta.pendiente.json).
     No toca meta.json: si el proyecto ya estaba conectado, sigue conectado."""
     meta_conexion.borrar_pendiente(cliente)
-    flash("Conexión con Meta cancelada. Si ya tenías Meta conectado, sigue igual.", "ok")
+    flash(gettext("Conexión con Meta cancelada. Si ya tenías Meta conectado, sigue igual."), "ok")
     return _ir_a_flowmarketing(cliente)
 
 
@@ -3527,13 +3530,22 @@ def meta_agencia_conectar(cliente):
     proyectos.guardar_meta_forma(cliente, "agencia")
     nombre = proyectos.nombre_visible(cliente)
     cuenta = detalle.get("ad_account_nombre") or detalle.get("ad_account_id")
-    pagina = detalle.get("page_nombre") or detalle.get("page_id") or "sin Página"
-    bitacora.registrar(cliente, "meta", "agencia", "ok", f"conectado por el cliente {session.get('usuario')}: {cuenta} · {pagina}")
+    id_cuenta = detalle.get("ad_account_id")
+    pagina_real = detalle.get("page_nombre") or detalle.get("page_id")
+    bitacora.registrar(cliente, "meta", "agencia", "ok",
+                       f"conectado por el cliente {session.get('usuario')}: {cuenta} · {pagina_real or 'sin Página'}")
+
+    def _cuerpo_conexion():   # en el idioma de cada admin (notificaciones.avisar_admin)
+        sin_pagina = gettext("sin Página")
+        return gettext("El proyecto %(nombre)s (%(cliente)s) conectó por su cuenta: cuenta %(cuenta)s (%(id_cuenta)s) · "
+                       "Página %(pagina)s · portafolio %(portafolio)s.\n"
+                       "Revísalo en el panel de administración › Meta (agencia).",
+                       nombre=nombre, cliente=cliente, cuenta=cuenta, id_cuenta=id_cuenta,
+                       pagina=pagina_real or sin_pagina, portafolio=portafolio)
     notificaciones.avisar_admin(
-        "meta_conexion_cliente", f"{nombre} se conectó a Meta (agencia)",
-        f"El proyecto {nombre} ({cliente}) conectó por su cuenta: cuenta {cuenta} ({detalle.get('ad_account_id')}) · "
-        f"Página {pagina} · portafolio {portafolio}.\nRevísalo en el panel de administración › Meta (agencia).",
-        cliente=cliente)
+        "meta_conexion_cliente", lambda: gettext("%(nombre)s se conectó a Meta (agencia)", nombre=nombre),
+        _cuerpo_conexion, cliente=cliente)
+    pagina = pagina_real or gettext("sin Página")
     flash(gettext("Listo: Creatv ya gestiona tu Meta con %(cuenta)s · %(pagina)s.", cuenta=cuenta, pagina=pagina), "ok")
     if detalle.get("cambio_cuenta"):
         flash(gettext("La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse."), "warn")
@@ -3568,12 +3580,18 @@ def meta_agencia_avisar(cliente):
     nombre = proyectos.nombre_visible(cliente)
     bitacora.registrar(cliente, "meta", "agencia", "solicitud",
                        f"portafolio {portafolio} · cuenta {sol['ad_account_id'] or '?'} · Página {sol['page_id'] or '?'}")
+    cuenta_sol, pagina_sol, nota_sol = sol["ad_account_id"], sol["page_id"], sol["nota"]
+
+    def _cuerpo_solicitud():   # en el idioma de cada admin (notificaciones.avisar_admin)
+        no_indicada = gettext("no indicada")
+        return gettext("El proyecto %(nombre)s (%(cliente)s) compartió sus activos pero no los vio desde Configuración.\n"
+                       "Portafolio %(portafolio)s · cuenta %(cuenta)s · Página %(pagina)s.\n"
+                       "Nota: %(nota)s\nAsígnalo en el panel de administración › Meta (agencia).",
+                       nombre=nombre, cliente=cliente, portafolio=portafolio, cuenta=cuenta_sol or no_indicada,
+                       pagina=pagina_sol or no_indicada, nota=nota_sol or "—")
     notificaciones.avisar_admin(
-        "meta_solicitud", f"{nombre} pide conectar Meta (agencia)",
-        f"El proyecto {nombre} ({cliente}) compartió sus activos pero no los vio desde Configuración.\n"
-        f"Portafolio {portafolio} · cuenta {sol['ad_account_id'] or 'no indicada'} · Página {sol['page_id'] or 'no indicada'}.\n"
-        f"Nota: {sol['nota'] or '—'}\nAsígnalo en el panel de administración › Meta (agencia).",
-        cliente=cliente)
+        "meta_solicitud", lambda: gettext("%(nombre)s pide conectar Meta (agencia)", nombre=nombre),
+        _cuerpo_solicitud, cliente=cliente)
     flash(gettext("Listo: Creatv recibió tu solicitud y te avisa por correo cuando quede conectado."), "ok")
     return _ir_a_meta(cliente)
 
@@ -3608,10 +3626,15 @@ def meta_agencia_salir(cliente):
     proyectos.guardar_meta_forma(cliente, "propia")
     nombre = proyectos.nombre_visible(cliente)
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por el cliente {session.get('usuario')})")
-    notificaciones.avisar_admin("meta_cambio_forma", f"{nombre} dejó el modo agencia",
-                                f"El proyecto {nombre} ({cliente}) volvió a usar su propia app de Meta"
-                                + (" (su conexión anterior se restauró)." if restaurada else " (sin conexión todavía)."),
-                                cliente=cliente)
+
+    def _cuerpo_salida():   # en el idioma de cada admin (notificaciones.avisar_admin)
+        if restaurada:
+            return gettext("El proyecto %(nombre)s (%(cliente)s) volvió a usar su propia app de Meta "
+                           "(su conexión anterior se restauró).", nombre=nombre, cliente=cliente)
+        return gettext("El proyecto %(nombre)s (%(cliente)s) volvió a usar su propia app de Meta "
+                       "(sin conexión todavía).", nombre=nombre, cliente=cliente)
+    notificaciones.avisar_admin("meta_cambio_forma", lambda: gettext("%(nombre)s dejó el modo agencia", nombre=nombre),
+                                _cuerpo_salida, cliente=cliente)
     detalle_restaurada = gettext("Tu conexión anterior se restauró.") if restaurada else gettext("Sigue los pasos para registrar tu app y conectar.")
     flash(gettext("Listo: este proyecto vuelve a usar su propia app de Meta. %(detalle)s", detalle=detalle_restaurada), "ok")
     return _ir_a_meta(cliente)
@@ -3692,11 +3715,13 @@ def admin_meta_conectar():
     try:
         registro = meta_agencia.conectar(token, business_id)
     except meta_conexion.MetaConexionError as e:
-        flash(f"No pude conectar la agencia: {cola.sin_token(str(e))}", "error")
+        flash(gettext("No pude conectar la agencia: %(error)s", error=cola.sin_token(str(e))), "error")
         return _volver_admin_meta()
     bitacora.registrar("", "meta", "agencia", "ok", f"Business {registro.get('business_id')} conectado por {session.get('usuario')}")
-    flash(f"Agencia conectada: {registro.get('business_nombre')} (usuario del sistema "
-          f"{registro.get('usuario_nombre') or 'sin nombre'}). Ahora asigna cuenta y Página a cada proyecto.", "ok")
+    sin_nombre = gettext("sin nombre")
+    flash(gettext("Agencia conectada: %(business)s (usuario del sistema %(usuario)s). "
+                  "Ahora asigna cuenta y Página a cada proyecto.",
+                  business=registro.get("business_nombre"), usuario=registro.get("usuario_nombre") or sin_nombre), "ok")
     return _volver_admin_meta()
 
 
@@ -3711,12 +3736,14 @@ def admin_meta_desconectar():
         bitacora.registrar(cid, "meta", "agencia", "ok", "vuelve a modo propia: la agencia se desconectó")
     n = resultado.get("desasignados", 0)
     if not resultado.get("habia") and not n:
-        flash("La agencia no estaba conectada.", "warn")
+        flash(gettext("La agencia no estaba conectada."), "warn")
     elif n:
-        flash(f"Agencia desconectada. {n} proyecto{'s' if n != 1 else ''} volvi{'eron' if n != 1 else 'ó'} a modo propia "
-              "y se quedan sin conexión con Meta hasta que registren su app o vuelvas a asignarlos.", "ok")
+        flash(ngettext("Agencia desconectada. %(num)s proyecto volvió a modo propia y se quedan sin conexión con "
+                       "Meta hasta que registren su app o vuelvas a asignarlos.",
+                       "Agencia desconectada. %(num)s proyectos volvieron a modo propia y se quedan sin conexión con "
+                       "Meta hasta que registren su app o vuelvas a asignarlos.", n), "ok")
     else:
-        flash("Agencia desconectada. Ningún proyecto estaba asignado.", "ok")
+        flash(gettext("Agencia desconectada. Ningún proyecto estaba asignado."), "ok")
     return _volver_admin_meta()
 
 
@@ -3728,9 +3755,10 @@ def admin_meta_activos_actualizar():
     try:
         activos = meta_agencia.listar_activos(forzar=True)
     except meta_conexion.MetaConexionError as e:
-        flash(f"No pude leer los activos del Business: {cola.sin_token(str(e))}", "error")
+        flash(gettext("No pude leer los activos del Business: %(error)s", error=cola.sin_token(str(e))), "error")
         return _volver_admin_meta()
-    flash(f"Activos actualizados: {len(activos['ad_accounts'])} cuenta(s) publicitaria(s) y {len(activos['pages'])} Página(s).", "ok")
+    flash(gettext("Activos actualizados: %(cuentas)s cuenta(s) publicitaria(s) y %(paginas)s Página(s).",
+                  cuentas=len(activos["ad_accounts"]), paginas=len(activos["pages"])), "ok")
     return _volver_admin_meta()
 
 
@@ -3748,28 +3776,40 @@ def admin_meta_asignar(cliente):
     ad_account_id = (request.form.get("ad_account_id") or "").strip()
     page_id = (request.form.get("page_id") or "").strip() or None
     if not ad_account_id:
-        flash("Elige una cuenta publicitaria para asignar.", "error")
+        flash(gettext("Elige una cuenta publicitaria para asignar."), "error")
         return _volver_admin_meta()
     try:
         detalle = meta_agencia.asignar(cliente, ad_account_id, page_id, asignado_por=session.get("usuario"))
     except meta_conexion.MetaConexionError as e:
-        flash(f"No pude asignar {proyectos.nombre_visible(cliente)}: {cola.sin_token(str(e))}", "error")
+        flash(gettext("No pude asignar %(proyecto)s: %(error)s",
+                      proyecto=proyectos.nombre_visible(cliente), error=cola.sin_token(str(e))), "error")
         return _volver_admin_meta()
     cuenta = detalle.get("ad_account_nombre") or detalle.get("ad_account_id")
-    pagina = detalle.get("page_nombre") or detalle.get("page_id") or "sin Página"
-    bitacora.registrar(cliente, "meta", "agencia", "ok", f"asignado por {session.get('usuario')}: {cuenta} · {pagina}")
+    pagina_real = detalle.get("page_nombre") or detalle.get("page_id")
+    nombre = proyectos.nombre_visible(cliente)
+    bitacora.registrar(cliente, "meta", "agencia", "ok",
+                       f"asignado por {session.get('usuario')}: {cuenta} · {pagina_real or 'sin Página'}")
     meta_agencia.borrar_solicitud(cliente)  # asignar() ya la borra; acá también por si asignar fue reemplazado o falló a medias
-    notificaciones.avisar(cliente, "meta_conectado", "Meta quedó conectado en Creatv",
-                          f"Tu proyecto {proyectos.nombre_visible(cliente)} ya está conectado a Meta: cuenta {cuenta} · Página {pagina}. "
-                          "Ya puedes probar piezas en Experimentos y publicar contenido.")
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):   # el correo va en el idioma del proyecto
+        sin_pagina = gettext("sin Página")
+        asunto = gettext("Meta quedó conectado en Creatv")
+        cuerpo = gettext("Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. "
+                         "Ya puedes probar piezas en Experimentos y publicar contenido.",
+                         nombre=nombre, cuenta=cuenta, pagina=pagina_real or sin_pagina)
+    notificaciones.avisar(cliente, "meta_conectado", asunto, cuerpo)
     ig = f" · Instagram @{detalle['ig_username']}" if detalle.get("ig_username") else ""
-    flash(f"{proyectos.nombre_visible(cliente)} ahora lo gestiona Creatv en Meta: {cuenta} · {pagina}{ig}.", "ok")
+    pagina = pagina_real or gettext("sin Página")
+    flash(gettext("%(proyecto)s ahora lo gestiona Creatv en Meta: %(cuenta)s · %(pagina)s%(ig)s.",
+                  proyecto=nombre, cuenta=cuenta, pagina=pagina, ig=ig), "ok")
     if detalle.get("cambio_cuenta"):
-        flash("La cuenta publicitaria cambió: los experimentos anteriores de ese proyecto dejan de refrescarse.", "warn")
+        flash(gettext("La cuenta publicitaria cambió: los experimentos anteriores de ese proyecto dejan de refrescarse."),
+              "warn")
     if page_id and not detalle.get("ig_username"):
-        flash("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en Facebook.", "warn")
+        flash(gettext("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en "
+                      "Facebook."), "warn")
     if not page_id:
-        flash("Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para ese proyecto.", "warn")
+        flash(gettext("Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para "
+                      "ese proyecto."), "warn")
     return _volver_admin_meta()
 
 
@@ -3780,11 +3820,12 @@ def admin_meta_desasignar(cliente):
         abort(403)
     _cliente_o_404(cliente)
     if not meta_agencia.desasignar(cliente):
-        flash(f"{proyectos.nombre_visible(cliente)} no estaba en modo agencia.", "warn")
+        flash(gettext("%(proyecto)s no estaba en modo agencia.", proyecto=proyectos.nombre_visible(cliente)), "warn")
         return _volver_admin_meta()
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por {session.get('usuario')})")
-    flash(f"{proyectos.nombre_visible(cliente)} volvió a modo propia: si tenía su propia conexión se restauró; "
-          "si no, tendrá que registrar su app y conectar con Meta.", "ok")
+    flash(gettext("%(proyecto)s volvió a modo propia: si tenía su propia conexión se restauró; "
+                  "si no, tendrá que registrar su app y conectar con Meta.", proyecto=proyectos.nombre_visible(cliente)),
+          "ok")
     return _volver_admin_meta()
 
 
@@ -3796,9 +3837,10 @@ def admin_meta_solicitud_descartar(cliente):
     _cliente_o_404(cliente)
     if meta_agencia.borrar_solicitud(cliente):
         bitacora.registrar(cliente, "meta", "agencia", "ok", f"solicitud descartada por {session.get('usuario')}")
-        flash(f"Solicitud descartada. {proyectos.nombre_visible(cliente)} no recibe aviso.", "ok")
+        flash(gettext("Solicitud descartada. %(proyecto)s no recibe aviso.", proyecto=proyectos.nombre_visible(cliente)),
+              "ok")
     else:
-        flash("Ese proyecto no tenía solicitud pendiente.", "warn")
+        flash(gettext("Ese proyecto no tenía solicitud pendiente."), "warn")
     return _volver_admin_meta()
 
 
@@ -3850,6 +3892,10 @@ def admin_referentes():
         [(f["nombre"], [f["descripcion"]]) for f in familias_sin_en], por_llamada=tareas_ref.FAMILIAS_POR_LLAMADA))
         if familias_sin_en else None)
 
+    info_familias_en = trabajos.consultar(tareas_ref.JOB_FAMILIAS_EN)
+    familias_en_error = ((info_familias_en.get("mensaje") or info_familias_en.get("error") or "")
+                         if info_familias_en and info_familias_en.get("estado") == "error" else None)
+
     return render_template("admin_referentes.html", url_swipe=tareas_ref.copycoders.URL_SWIPE,
                            trabajo=({"job_id": tareas_ref.trabajo_importacion()} if tareas_ref.trabajo_importacion() else None),
                            ultimo=(historial[0] if historial else None), historial=historial[:10],
@@ -3862,7 +3908,8 @@ def admin_referentes():
                            fuentes_totales=ref_datos.opciones(None)["fuentes"],
                            barridos_otras_fuentes=barridos_otras_fuentes,
                            familias_sin_en=familias_sin_en, precio_familias_en=precio_familias_en,
-                           familias_en_en_curso=trabajos.en_curso(tareas_ref.JOB_FAMILIAS_EN))
+                           familias_en_en_curso=trabajos.en_curso(tareas_ref.JOB_FAMILIAS_EN),
+                           familias_en_error=familias_en_error)
 
 
 @app.route("/admin/referentes/importar", methods=["POST"])
@@ -3873,12 +3920,12 @@ def admin_referentes_importar():
     from tareas import referentes as tareas_ref
     url = (request.form.get("url") or "").strip() or tareas_ref.copycoders.URL_SWIPE
     if not url.startswith("https://go.copycoders.ai/"):
-        flash("Solo se importa desde go.copycoders.ai.", "error")
+        flash(gettext("Solo se importa desde go.copycoders.ai."), "error")
         return redirect(url_for("admin_referentes"))
     if tareas_ref.encolar_importar_copycoders(url, pedido_por=_sesion().get("usuario")):
-        flash("Importando el swipe file; la página se recarga sola cuando termine cada fase.", "ok")
+        flash(gettext("Importando el swipe file; la página se recarga sola cuando termine cada fase."), "ok")
     else:
-        flash("Ya hay una importación en curso.", "error")
+        flash(gettext("Ya hay una importación en curso."), "error")
     return redirect(url_for("admin_referentes"))
 
 
@@ -3895,17 +3942,17 @@ def admin_referentes_traer():
 
     fuente = request.form.get("fuente")
     if fuente not in fuentes.tipos():
-        flash("Elige una fuente.", "error")
+        flash(gettext("Elige una fuente."), "error")
         return redirect(url_for("admin_referentes"))
     if fuentes.llaves_faltantes(fuente):
-        flash("Esa fuente no está configurada.", "error")
+        flash(gettext("Esa fuente no está configurada."), "error")
         return redirect(url_for("admin_referentes"))
     consulta = _consulta_desde(request.form)
     if consulta["modo"] == "marca" and not consulta["pagina_id"]:
-        flash("Pega un link del Ad Library o el id de la página.", "error")
+        flash(gettext("Pega un link del Ad Library o el id de la página."), "error")
         return redirect(url_for("admin_referentes"))
     if consulta["modo"] == "palabra" and not consulta["palabra"]:
-        flash("Escribe una palabra clave.", "error")
+        flash(gettext("Escribe una palabra clave."), "error")
         return redirect(url_for("admin_referentes"))
     from referentes import traducir
     try:
@@ -3923,7 +3970,7 @@ def admin_referentes_traer():
     est_clasificacion = gastos.estimar("clasificacion", n=tope, bilingue=True)
     usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
     tareas_ref.encolar_barrer(None, fuente, consulta, tope, usd_estimado, pedido_por=_sesion().get("usuario"))
-    flash("Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza.", "ok")
+    flash(gettext("Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza."), "ok")
     return redirect(url_for("admin_referentes"))
 
 
@@ -3981,9 +4028,9 @@ def admin_referentes_clasificar(barrido_id):
     from tareas import referentes as tareas_ref
     _barrido_global_o_404(ref_datos, barrido_id)
     if tareas_ref.encolar_clasificar_pendientes(None, barrido_id):
-        flash("Clasificando lo pendiente; la tabla se actualiza sola.", "ok")
+        flash(gettext("Clasificando lo pendiente; la tabla se actualiza sola."), "ok")
     else:
-        flash("Ya hay algo en curso para este barrido.", "error")
+        flash(gettext("Ya hay algo en curso para este barrido."), "error")
     return redirect(url_for("admin_referentes"))
 
 
@@ -3998,9 +4045,9 @@ def admin_referentes_reintentar_imagenes(barrido_id):
     from tareas import referentes as tareas_ref
     _barrido_global_o_404(ref_datos, barrido_id)
     if tareas_ref.encolar_reintentar_imagenes(None, barrido_id):
-        flash("Reintentando las imágenes que fallaron.", "ok")
+        flash(gettext("Reintentando las imágenes que fallaron."), "ok")
     else:
-        flash("Ya hay algo en curso para este barrido.", "error")
+        flash(gettext("Ya hay algo en curso para este barrido."), "error")
     return redirect(url_for("admin_referentes"))
 
 

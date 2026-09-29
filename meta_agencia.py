@@ -24,6 +24,7 @@ import time
 from datetime import datetime
 
 import sqlalchemy as sa
+from flask_babel import gettext
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import cifrado
@@ -148,7 +149,7 @@ def publica():
 def token():
     registro = _cargar()
     if not registro:
-        raise MetaAgenciaError("La agencia no está conectada.")
+        raise MetaAgenciaError(gettext("La agencia no está conectada."))
     return registro["token"]
 
 
@@ -158,16 +159,19 @@ def conectar(token_usuario, business_id):
     token_usuario = str(token_usuario or "").strip()
     business_id = str(business_id or "").strip()
     if not token_usuario or not business_id:
-        raise MetaAgenciaError("Faltan datos: hacen falta el token del usuario del sistema y el id del Business.")
+        raise MetaAgenciaError(gettext(
+            "Faltan datos: hacen falta el token del usuario del sistema y el id del Business."))
     if not cifrado.disponible():
-        raise MetaAgenciaError("Falta FLASK_SECRET_KEY en el .env: sin ella no se puede guardar el token de la agencia.")
+        raise MetaAgenciaError(gettext(
+            "Falta FLASK_SECRET_KEY en el .env: sin ella no se puede guardar el token de la agencia."))
     usuario = meta_conexion._graph_get("me", token_usuario, {"fields": "id,name"})
     try:
         negocio = meta_conexion._graph_get(business_id, token_usuario, {"fields": "id,name"})
     except MetaConexionError as e:
-        raise MetaAgenciaError(
-            f"El token no ve el Business {business_id} ({e}). Revisa que el usuario del sistema "
-            "pertenezca a ese Business Manager y tenga permiso business_management.", codigo=e.codigo) from None
+        raise MetaAgenciaError(gettext(
+            "El token no ve el Business %(business)s (%(error)s). Revisa que el usuario del sistema "
+            "pertenezca a ese Business Manager y tenga permiso business_management.",
+            business=business_id, error=str(e)), codigo=e.codigo) from None
     registro = {
         "business_id": str(negocio.get("id") or business_id),
         "business_nombre": negocio.get("name") or business_id,
@@ -265,9 +269,9 @@ def _paginar(edge, token_usuario, params):
         if not paging.get("next") or not siguiente or siguiente == cursor:
             return filas
         cursor = siguiente
-    raise MetaAgenciaError(
-        f"Meta no termina de paginar {edge} después de {_TOPE_PAGINAS} páginas — parece un bucle; "
-        "revisa el Business o avisa a soporte.")
+    raise MetaAgenciaError(gettext(
+        "Meta no termina de paginar %(edge)s después de %(n)s páginas — parece un bucle; "
+        "revisa el Business o avisa a soporte.", edge=edge, n=_TOPE_PAGINAS))
 
 
 def _negocio(fila):
@@ -326,7 +330,7 @@ def listar_activos(forzar=False):
         return _cache_activos[1]
     registro = _cargar()
     if not registro:
-        raise MetaAgenciaError("La agencia no está conectada.")
+        raise MetaAgenciaError(gettext("La agencia no está conectada."))
     tok, bid = registro["token"], registro["business_id"]
     cuentas, paginas = {}, {}
     for edge, origen in ((f"{bid}/owned_ad_accounts", "propia"), (f"{bid}/client_ad_accounts", "cliente")):
@@ -347,9 +351,9 @@ def _token_pagina(page_id, token_usuario):
         "fields": "access_token,name,instagram_business_account{id,username}",
     })
     if not datos.get("access_token"):
-        raise MetaAgenciaError(
-            f"Meta no entregó token para la Página {page_id}: el usuario del sistema necesita la Página "
-            "asignada con permisos de contenido (pages_manage_posts).")
+        raise MetaAgenciaError(gettext(
+            "Meta no entregó token para la Página %(pagina)s: el usuario del sistema necesita la Página "
+            "asignada con permisos de contenido (pages_manage_posts).", pagina=page_id))
     ig = datos.get("instagram_business_account") or {}
     return {
         "page_access_token": datos["access_token"], "page_nombre": datos.get("name"),
@@ -382,7 +386,7 @@ def solicitar(cliente, portafolio_id, ad_account_id=None, page_id=None, nota=Non
         "creado_en": datetime.now().isoformat(timespec="seconds"),
     }
     if not datos["portafolio_id"]:
-        raise MetaAgenciaError("Falta el id de tu portafolio comercial.")
+        raise MetaAgenciaError(gettext("Falta el id de tu portafolio comercial."))
     valor = json.dumps(datos, ensure_ascii=False)
     with db.conectar() as con:
         con.execute(insert_sqlite(db.kv).values(
@@ -445,19 +449,22 @@ def asignar(cliente, ad_account_id, page_id=None, asignado_por=None, portafolio_
     cuenta asignada es distinta a la que el proyecto tenía."""
     registro = _cargar()
     if not registro:
-        raise MetaAgenciaError("La agencia no está conectada.")
+        raise MetaAgenciaError(gettext("La agencia no está conectada."))
     activos = listar_activos()
     cuenta = next((a for a in activos["ad_accounts"] if a["id"] == ad_account_id), None)
     if not cuenta:
-        raise MetaAgenciaError(f"La cuenta publicitaria {ad_account_id} no está entre las que ve el Business de la agencia.")
+        raise MetaAgenciaError(gettext(
+            "La cuenta publicitaria %(cuenta)s no está entre las que ve el Business de la agencia.",
+            cuenta=ad_account_id))
     ocupada = cuentas_asignadas().get(cuenta["id"])
     if ocupada and ocupada != cliente:
-        raise MetaAgenciaError("Esa cuenta publicitaria ya está conectada a otro proyecto; avísale a Creatv.")
+        raise MetaAgenciaError(gettext("Esa cuenta publicitaria ya está conectada a otro proyecto; avísale a Creatv."))
     pagina = None
     if page_id:
         pagina = next((p for p in activos["pages"] if p["id"] == page_id), None)
         if not pagina:
-            raise MetaAgenciaError(f"La Página {page_id} no está entre las que ve el Business de la agencia.")
+            raise MetaAgenciaError(gettext(
+                "La Página %(pagina)s no está entre las que ve el Business de la agencia.", pagina=page_id))
 
     previo = meta_conexion._cargar_crudo(cliente) or {}
     if previo.get("modo") == MODO:
@@ -542,7 +549,7 @@ def activos_de_portafolio(portafolio_id, cliente=None, forzar=False):
     entonces el id de la Página a mano)."""
     portafolio_id = str(portafolio_id or "").strip()
     if not portafolio_id:
-        raise MetaAgenciaError("Falta el id de tu portafolio comercial.")
+        raise MetaAgenciaError(gettext("Falta el id de tu portafolio comercial."))
     activos = listar_activos(forzar=forzar)
     ocupadas = cuentas_asignadas()
     cuentas = [a for a in activos["ad_accounts"]

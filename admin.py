@@ -30,7 +30,9 @@ import cola
 import db
 import estado
 import experimentos
+import idiomas
 import meta_conexion
+from idiomas import N_
 from referentes import datos as referentes_datos
 import tablero
 
@@ -38,7 +40,9 @@ MESES_HISTORIAL = 6
 ULTIMOS_COBROS = 20
 ULTIMOS_ERRORES = 5
 ESTADOS_PIEZA_GENERADA = ("listo", "degradada")
-ENCABEZADO_CSV = ["proyecto", "fecha", "tipo", "proveedor", "referencia", "detalle", "usd"]
+# La línea entera es UN msgid (como en gastos.py: «proyecto» suelto ya existe en
+# el catálogo y chocaría); `csv_mes` la traduce al escribirla.
+ENCABEZADO_CSV = N_("proyecto;fecha;tipo;proveedor;referencia;detalle;usd").split(";")
 _INICIOS_FORMULA = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -294,12 +298,13 @@ def csv_mes(clientes, ahora_iso=None):
     """CSV (`;`, BOM) con todos los cobros del mes de los proyectos dados, más
     el gasto interno de _creatv (importaciones, barridos globales — nunca de
     ningún proyecto): las mismas columnas que gastos.csv_mes más la del
-    proyecto."""
+    proyecto. Encabezados en el idioma activo (en la ruta, el de quien lo
+    descarga)."""
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
-    w.writerow(ENCABEZADO_CSV)
+    w.writerow(idiomas.traducir(";".join(ENCABEZADO_CSV)).split(";"))
     todos = list(clientes) + [referentes_datos.CLIENTE_CREATV]
     g = db.gasto
     q = (sa.select(g).where(g.c.cliente.in_(todos), g.c.creado_en >= desde, g.c.creado_en <= hasta)
