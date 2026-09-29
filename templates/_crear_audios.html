@@ -1,0 +1,337 @@
+{# Crear › Audios (spec docs/superpowers/specs/2026-09-28-crear-audios-design.md):
+   texto + voz (+ canción de Mi música) → mp3. Todo va por fetch contra las
+   rutas au_* (dashboard.py); la lista la devuelve el servidor ya pintada
+   (_audios_lista.html) y se mete con innerHTML: es HTML escapado por Jinja.
+   Lo que escribe la persona nunca se pinta con innerHTML. La canción se sube
+   con mm_subir (la misma ruta de Mi música) y las dos listas de la página se
+   avisan con el evento `mi-musica:cambio`. #}
+<div class="au" id="au"
+     data-url-crear="{{ url_for('au_crear', cliente=cliente) }}"
+     data-url-lista="{{ url_for('au_lista', cliente=cliente) }}"
+     data-url-muestra="{{ url_for('au_muestra', cliente=cliente) }}"
+     data-url-subir="{{ url_for('mm_subir', cliente=cliente) }}"
+     data-usd-caracter="{{ usd_por_caracter }}">
+  <p class="vacio au-intro">{{ _('Escribe un texto, elige la voz y, si quieres, una canción de fondo. Sale un mp3 para escuchar y descargar. Nada se cobra hasta que pulses «Crear audio».') }}</p>
+
+  <div class="au-layout">
+    <form class="au-form" id="au-form" novalidate>
+      <label class="campo-label" for="au-texto">{{ _('Texto a leer') }}</label>
+      <textarea id="au-texto" rows="7" maxlength="{{ max_caracteres_audio }}" placeholder="{{ _('ej. ¿Cansada de que tus zapatos te maten los pies? Esta semana, envío gratis en toda la tienda.') }}"></textarea>
+      <p class="au-ayuda"><span id="au-contador">0</span> / {{ max_caracteres_audio }} · <span id="au-precio"></span></p>
+
+      {# Galería de voces (2026-09-29): una tarjeta por voz con ▶ para oír su
+         muestra; tocar la tarjeta la elige y escribe el campo oculto #au-voz,
+         que es lo que viaja en el POST (igual que antes con el <select>). #}
+      <fieldset class="au-voces-caja">
+        <legend>{{ _('Voz') }}: <span id="au-voz-nombre">{{ fichas_voces[0].nombre if fichas_voces else '' }}</span></legend>
+        <input type="hidden" id="au-voz" value="{{ fichas_voces[0].nombre if fichas_voces else '' }}">
+        <div class="au-voces-filtros" role="group" aria-label="{{ _('Filtrar voces') }}">
+          <button type="button" class="au-filtro activo" data-filtro-genero="">{{ _('Todas') }}</button>
+          <button type="button" class="au-filtro" data-filtro-genero="mujer">{{ _('Mujer') }}</button>
+          <button type="button" class="au-filtro" data-filtro-genero="hombre">{{ _('Hombre') }}</button>
+        </div>
+        <div class="au-voces" id="au-voces" role="radiogroup" aria-label="{{ _('Voz') }}">
+          {% for f in fichas_voces %}
+          <div class="au-voz" data-voz="{{ f.nombre }}" data-genero="{{ f.genero }}" role="radio" aria-checked="{{ 'true' if loop.first else 'false' }}" tabindex="0">
+            <span class="au-voz-nombre">{{ f.nombre }}</span>
+            <small class="au-voz-tono">{{ f.genero_nombre|traducir }}{% if f.tono %} · {{ f.tono|traducir }}{% endif %}</small>
+            <button type="button" class="au-voz-play" data-voz="{{ f.nombre }}" aria-label="{{ _('Escuchar') }} {{ f.nombre }}">▶</button>
+          </div>
+          {% endfor %}
+        </div>
+        <p class="au-ayuda">{{ _('Toca ▶ para oír una muestra corta y la tarjeta para elegir la voz.') }}</p>
+        <audio id="au-muestra" preload="none" hidden></audio>
+      </fieldset>
+      <div class="au-fila">
+        <label class="campo-label" for="au-idioma">{{ _('Idioma') }}
+          <select id="au-idioma">{% for i in idiomas_audio %}<option value="{{ i }}" {% if i == idioma_audio_defecto %}selected{% endif %}>{{ nombres_idioma_audio[i] }}</option>{% endfor %}</select>
+        </label>
+        <label class="campo-label" for="au-velocidad">{{ _('Velocidad') }}
+          <select id="au-velocidad">{% for k, n in velocidades_audio.items() %}<option value="{{ k }}" {% if k == 'normal' %}selected{% endif %}>{{ n|traducir }}</option>{% endfor %}</select>
+        </label>
+      </div>
+      <p class="au-ayuda">{{ _('El idioma lo decide el texto; este selector solo cambia la muestra de la voz.') }}</p>
+
+      <fieldset class="au-musica">
+        <legend>{{ _('Música de fondo') }}</legend>
+        <div class="au-fila">
+          <label class="campo-label au-musica-sel" for="au-musica">{{ _('Canción') }}
+            <select id="au-musica">
+              <option value="">{{ _('Ninguna (solo la voz)') }}</option>
+              {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="btn-sm au-subir-btn">{{ _('Subir canción') }}<input type="file" id="au-archivo" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*" hidden></label>
+        </div>
+        <p class="au-ayuda" id="au-subida" hidden></p>
+        <div id="au-musica-opciones" hidden>
+          <audio id="au-musica-audio" controls preload="none"></audio>
+          <div class="au-fila">
+            <label class="campo-label au-inicio">{{ _('Empieza en el segundo') }} <input type="number" id="au-inicio" min="0" step="1" value="0"></label>
+            <button type="button" class="btn-sm" id="au-inicio-usar">{{ _('Usar donde va el reproductor') }}</button>
+          </div>
+          <label class="campo-label" for="au-volumen">{{ _('Volumen de la música') }}
+            <select id="au-volumen">{% for k, n in volumenes_audio.items() %}<option value="{{ k }}" {% if k == volumen_audio_defecto %}selected{% endif %}>{{ n|traducir }}</option>{% endfor %}</select>
+          </label>
+        </div>
+        <p class="au-ayuda">{{ _('¿Una canción hecha con IA? Créala en Desde referencias › 🎵 Música y aparecerá aquí.') }} <a href="#creativeflowplus" data-crear-modo="referencias">{{ _('Ir a Desde referencias') }}</a></p>
+        <p class="au-ayuda">{{ _('Sube solo música tuya o con licencia.') }}</p>
+      </fieldset>
+
+      <p class="au-ayuda" id="au-aviso" hidden aria-live="polite"></p>
+      <p class="campo-error" id="au-error" hidden></p>
+      <div class="au-botones">
+        <button type="button" class="btn-generar" id="au-crear" disabled>{{ _('Crear audio') }} <span id="au-crear-precio"></span></button>
+      </div>
+    </form>
+
+    <section class="au-lista-col" aria-label="{{ _('Tus audios') }}">
+      <h3 class="au-sub">{{ _('Tus audios') }}</h3>
+      <div id="au-lista">{% include "_audios_lista.html" %}</div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  var raiz = document.getElementById('au');
+  if (!raiz) return;
+  var T = {
+    aprox: {{ _('≈')|tojson }},
+    sinMuestra: {{ _('No pude generar la muestra; intenta de nuevo.')|tojson }},
+    sinConexion: {{ _('Se perdió la conexión; recarga la página.')|tojson }},
+    subiendo: {{ _('Subiendo…')|tojson }},
+    revisando: {{ _('Revisando el audio…')|tojson }},
+    errorSubir: {{ _('Error al subir; recarga la página.')|tojson }},
+    errorRed: {{ _('Error de red al subir.')|tojson }},
+    noSePudo: {{ _('No se pudo crear el audio.')|tojson }},
+    confirmarBorrar: {{ _('¿Borrar este audio?')|tojson }}
+  };
+  // El separador decimal del idioma de quien mira (el filtro usd ya lo sabe).
+  var sep = {{ (0.5|usd)|tojson }}.indexOf(',') >= 0 ? ',' : '.';
+  var usdCaracter = parseFloat(raiz.dataset.usdCaracter) || 0;
+  var texto = document.getElementById('au-texto'), contador = document.getElementById('au-contador');
+  var precio = document.getElementById('au-precio'), crear = document.getElementById('au-crear');
+  var crearPrecio = document.getElementById('au-crear-precio');
+  var musicaSel = document.getElementById('au-musica'), opciones = document.getElementById('au-musica-opciones');
+  var musicaAudio = document.getElementById('au-musica-audio'), inicio = document.getElementById('au-inicio');
+
+  function fmtUsd(v) { return 'US$ ' + (Math.round(v * 100) / 100).toFixed(2).replace('.', sep); }
+  function refrescarPrecio() {
+    var n = texto.value.replace(/\s+/g, ' ').trim().length;
+    contador.textContent = n;
+    var usd = n * usdCaracter;
+    var etiqueta = T.aprox + ' ' + (n && usd < 0.01 ? 'US$ <0' + sep + '01' : fmtUsd(usd));
+    precio.textContent = etiqueta;
+    crearPrecio.textContent = etiqueta;
+    crear.disabled = !n || raiz.dataset.ocupado === '1';
+  }
+  function mostrarError(msg) {
+    var el = document.getElementById('au-error');
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
+  // Mensaje neutral del resultado de la tarea (nunca el texto de la persona:
+  // lo pone la tarea del worker, tareas/audios.py MENSAJES).
+  function mostrarAviso(msg) {
+    var el = document.getElementById('au-aviso');
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
+  function ocupado(si) { raiz.dataset.ocupado = si ? '1' : ''; refrescarPrecio(); }
+  texto.addEventListener('input', refrescarPrecio);
+
+  // Galería de voces: la tarjeta elige la voz (campo oculto #au-voz) y ▶ pide la
+  // muestra de esa voz en el idioma elegido (cacheada en el servidor, la paga
+  // Creatv una sola vez) y la reproduce; el botón que suena queda marcado.
+  var vozInput = document.getElementById('au-voz'), muestra = document.getElementById('au-muestra');
+  var voces = document.getElementById('au-voces'), botonSonando = null;
+  function elegirVoz(nombre) {
+    vozInput.value = nombre;
+    document.getElementById('au-voz-nombre').textContent = nombre;
+    voces.querySelectorAll('.au-voz').forEach(function (c) {
+      c.setAttribute('aria-checked', c.dataset.voz === nombre ? 'true' : 'false');
+    });
+  }
+  function escucharVoz(boton) {
+    var fd = new FormData();
+    fd.append('voz', boton.dataset.voz);
+    fd.append('idioma', document.getElementById('au-idioma').value);
+    boton.disabled = true; boton.textContent = '…'; boton.setAttribute('aria-busy', 'true'); mostrarError('');
+    fetch(raiz.dataset.urlMuestra, {method: 'POST', body: fd, headers: {'X-Requested-With': 'fetch'}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) { mostrarError(d.error || T.sinMuestra); return; }
+        if (botonSonando) botonSonando.classList.remove('sonando');
+        botonSonando = boton; boton.classList.add('sonando');
+        muestra.src = d.url;
+        muestra.play().catch(function () { muestra.hidden = false; muestra.controls = true; });
+      })
+      .catch(function () { mostrarError(T.sinConexion); })
+      .then(function () { boton.disabled = false; boton.textContent = '▶'; boton.removeAttribute('aria-busy'); });
+  }
+  muestra.addEventListener('ended', function () {
+    if (botonSonando) { botonSonando.classList.remove('sonando'); botonSonando = null; }
+  });
+  voces.addEventListener('click', function (ev) {
+    var play = ev.target.closest('.au-voz-play');
+    if (play) { escucharVoz(play); return; }
+    var tarjeta = ev.target.closest('.au-voz');
+    if (tarjeta) elegirVoz(tarjeta.dataset.voz);
+  });
+  voces.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    var tarjeta = ev.target.closest('.au-voz');
+    if (tarjeta && ev.target === tarjeta) { ev.preventDefault(); elegirVoz(tarjeta.dataset.voz); }
+  });
+  document.querySelectorAll('#au .au-filtro').forEach(function (f) {
+    f.addEventListener('click', function () {
+      document.querySelectorAll('#au .au-filtro').forEach(function (o) { o.classList.toggle('activo', o === f); });
+      var g = f.dataset.filtroGenero;
+      voces.querySelectorAll('.au-voz').forEach(function (c) { c.hidden = !!g && c.dataset.genero !== g; });
+    });
+  });
+
+  // Música: reproductor, segundo de inicio y volumen solo con una canción elegida.
+  function mostrarMusica() {
+    var o = musicaSel.options[musicaSel.selectedIndex];
+    var hay = !!(o && o.value);
+    opciones.hidden = !hay;
+    if (!hay) { musicaAudio.removeAttribute('src'); return; }
+    if (musicaAudio.getAttribute('src') !== o.dataset.url) { musicaAudio.src = o.dataset.url; inicio.value = 0; }
+    inicio.max = Math.max(0, Math.floor(parseFloat(o.dataset.duracion || '0')) - 1);
+  }
+  musicaSel.addEventListener('change', mostrarMusica);
+  document.getElementById('au-inicio-usar').addEventListener('click', function () {
+    inicio.value = Math.floor(musicaAudio.currentTime || 0);
+  });
+  function pintarCanciones(canciones, elegir) {
+    var actual = musicaSel.value;
+    while (musicaSel.options.length > 1) musicaSel.remove(1);
+    canciones.forEach(function (c) {
+      var o = document.createElement('option');
+      o.value = 'mat:' + c.id; o.textContent = c.nombre; o.dataset.url = c.url; o.dataset.duracion = c.duracion_s;
+      musicaSel.appendChild(o);
+    });
+    musicaSel.value = elegir ? ('mat:' + elegir) : actual;
+    if (musicaSel.selectedIndex < 0) musicaSel.value = '';
+    mostrarMusica();
+  }
+  document.getElementById('au-archivo').addEventListener('change', function (e) {
+    if (!e.target.files.length) return;
+    var input = e.target, fd = new FormData();
+    fd.append('cancion', input.files[0]);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', raiz.dataset.urlSubir);
+    xhr.setRequestHeader('X-Requested-With', 'fetch');
+    var aviso = document.getElementById('au-subida');
+    aviso.hidden = false; aviso.textContent = T.subiendo + ' 0%';
+    xhr.upload.onprogress = function (ev) {
+      if (!ev.lengthComputable) return;
+      var p = Math.round(ev.loaded * 100 / ev.total);
+      aviso.textContent = p < 100 ? (T.subiendo + ' ' + p + '%') : T.revisando;
+    };
+    xhr.onload = function () {
+      var d;
+      try { d = JSON.parse(xhr.responseText); } catch (err) { aviso.textContent = T.errorSubir; return; }
+      aviso.textContent = d.error || d.mensaje || '';
+      if (d.canciones) {
+        pintarCanciones(d.canciones, d.nuevo_id);
+        try { document.dispatchEvent(new CustomEvent('mi-musica:cambio', {detail: {origen: 'audios', canciones: d.canciones, html: d.html}})); } catch (err) {}
+      }
+      input.value = '';
+    };
+    xhr.onerror = function () { aviso.textContent = T.errorRed; };
+    xhr.send(fd);
+  });
+  document.addEventListener('mi-musica:cambio', function (ev) {
+    var d = ev.detail || {};
+    if (d.origen === 'audios' || !d.canciones) return;
+    pintarCanciones(d.canciones, null);
+  });
+
+  // Crear: encola en el worker; la lista vuelve pintada y se sondea el trabajo.
+  function pintarLista(d) {
+    if (d.html !== undefined) document.getElementById('au-lista').innerHTML = d.html;
+    mostrarError(d.error);
+    vigilar();
+  }
+  crear.addEventListener('click', function () {
+    var fd = new FormData();
+    fd.append('texto', texto.value);
+    fd.append('voz', document.getElementById('au-voz').value);
+    fd.append('idioma', document.getElementById('au-idioma').value);
+    fd.append('velocidad', document.getElementById('au-velocidad').value);
+    fd.append('musica', musicaSel.value);
+    fd.append('inicio_s', inicio.value);
+    fd.append('volumen', document.getElementById('au-volumen').value);
+    ocupado(true); mostrarError(''); mostrarAviso('');
+    fetch(raiz.dataset.urlCrear, {method: 'POST', body: fd, headers: {'X-Requested-With': 'fetch'}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        pintarLista(d);
+        // Un 400 con la barra viva («ya se está creando un audio», desde otra
+        // pestaña) deja el botón deshabilitado: la barra manda, no el error.
+        if (!d.ok && !document.querySelector('#au-lista .barra-progreso[data-job]')) ocupado(false);
+      })
+      .catch(function () { mostrarError(T.sinConexion); ocupado(false); });
+  });
+  // El audio se hace en el worker: se consulta su estado y al terminar se
+  // vuelve a pedir SOLO la lista (recargar borraría lo que ya escribiste).
+  function vigilar() {
+    var barra = document.querySelector('#au-lista .barra-progreso[data-job]');
+    if (!barra) { ocupado(false); return; }
+    if (barra.dataset.vigilando) return;
+    barra.dataset.vigilando = '1'; ocupado(true);
+    var textoBarra = barra.nextElementSibling;
+    var t = setInterval(function () {
+      fetch(barra.dataset.estado).then(function (r) { return r.json(); }).then(function (e) {
+        if (e.estado === 'en_progreso') {
+          if (textoBarra && e.etapa) textoBarra.textContent = e.etapa + (e.progreso ? ' · ' + Math.round(e.progreso) + '%' : '');
+          var fill = barra.querySelector('.barra-progreso-fill');
+          if (fill && typeof e.progreso === 'number') {
+            fill.style.width = Math.max(0, Math.min(100, e.progreso)) + '%';
+            fill.classList.remove('barra-progreso-indeterminada');
+          }
+          return;
+        }
+        clearInterval(t);
+        fetch(raiz.dataset.urlLista, {headers: {'X-Requested-With': 'fetch'}})
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            // El mensaje de la tarea (tareas/audios.py MENSAJES, ya traducido
+            // por estado_trabajo) llega a la pantalla; si fue error, lo toma
+            // el cuadro de error de siempre en vez del aviso neutral.
+            if (e.estado === 'error') { d.error = e.mensaje || T.noSePudo; } else { mostrarAviso(e.mensaje || ''); }
+            pintarLista(d);
+          })
+          .catch(function () { mostrarError(T.sinConexion); ocupado(false); });
+      }).catch(function () {});
+    }, 4000);
+  }
+  raiz.addEventListener('click', function (ev) {
+    var b = ev.target.closest('.au-borrar');
+    if (b) {
+      if (!confirm(T.confirmarBorrar + ' «' + b.dataset.nombre + '»')) return;
+      fetch(b.dataset.url, {method: 'POST', body: new FormData(), headers: {'X-Requested-With': 'fetch'}})
+        .then(function (r) { return r.json(); }).then(pintarLista)
+        .catch(function () { mostrarError(T.sinConexion); });
+      return;
+    }
+    var m = ev.target.closest('[data-crear-modo]');
+    if (m) {
+      ev.preventDefault();
+      var pastilla = document.querySelector('#crear-modos [data-modo="' + m.dataset.crearModo + '"]');
+      if (pastilla) pastilla.click();
+      window.scrollTo(0, 0);
+    }
+  });
+  // Enter en un campo de una línea no crea nada: solo el botón cobra.
+  var form = document.getElementById('au-form');
+  form.addEventListener('submit', function (e) { e.preventDefault(); });
+  form.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault();
+  });
+  refrescarPrecio(); mostrarMusica(); vigilar();
+})();
+</script>

@@ -140,6 +140,13 @@ def test_la_pagina_lista_mi_musica_en_crear_y_en_la_final(app):
     cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", enfoque="producto")
     cf.guardar_guion_base("acme", cf_id, GUION_BASE)
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert html.count(f'value="mat:{mid}"') == 2                 # «Música al crear» + «Producir finales»
-    assert html.count('class="mm-opciones"') == 2
+    # «Producir finales» va en el detalle de Final edition, que llega por
+    # fetch (tarjetas ligeras, 2026-09-28): una lista en la página y otra ahí.
+    detalle = app["c"].get(f"/cliente/acme/creative_flow/{cf_id}/final/detalle").get_data(as_text=True)
+    # Desde Crear › Audios (2026-09-28) la misma canción también aparece en el
+    # selector «Canción» de ese modo, así que la página trae DOS opciones.
+    assert html.count(f'value="mat:{mid}"') == 2                 # «Música al crear» + Audios
+    assert detalle.count(f'value="mat:{mid}"') == 1              # «Producir finales»
+    assert html.count('class="mm-opciones"') == 1 and detalle.count('class="mm-opciones"') == 1
     assert 'id="mm-panel"' in html and 'id="fp-musica-inicio"' in html and 'name="musica_inicio_s"' in html
+    assert 'name="musica_inicio_s"' in detalle

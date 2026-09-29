@@ -100,7 +100,21 @@ deterministic per (cliente, prompt_id/brief_id, acción) so a repeat click no-op
 instead of double-launching. Tasks that spend credits are queued with
 `max_intentos=1` — they never auto-retry. A queued task stuck running for more than
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
-(once `max_intentos` is exhausted). **`dashboard.py` runs with `use_reloader=False`
+(once `max_intentos` is exhausted) — never one this worker is running right now
+(`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
+`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has two lanes:
+`CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`)
+runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
+`HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
+runs one at a time in order, as before; the main thread only supervises (`worker.repartir`).
+Code reached from a Crear task must therefore be thread-safe: `_json_store.guardar` uses a
+per-thread tmp, `estado.modificar` (used by the worker AND by Flask's approve/reject/publish and
+`sprints.revision`) and `musica._bloqueo` take `flock`, R2 opens one boto3 session per call, and
+`trabajos.reportar` never raises. A task may return `tareas.Continuar(tipo, payload,
+ejecutar_desde=)`: the worker closes it and queues the follow-up with the SAME job_id in one
+transaction (`cola.terminar_y_encolar`, retried; if it still fails the task goes to `error` and its
+`AL_INTERRUMPIR` hook runs), so the card's bar never sees «nothing alive». A thread that fails to
+start gives its task back (`cola.devolver`). **`dashboard.py` runs with `use_reloader=False`
 on purpose**: Flask's auto-reloader kills the whole process on file changes, which
 would silently abort any in-flight background generation.
 
@@ -208,7 +222,9 @@ pieces from Crear (5) jump ahead of batches. `campana_pieza.cf_id` joins
 `pieza.legado_id`, so progress and states come from the real sessions. The
 worker periodic `sprint_qa_pendientes` (5 min) queues `sprint_qa_pieza`
 (`sprints/qa.py`: Claude vision + ffprobe → `campana_pieza.qa`, never
-generates) and emails when a batch finishes. `sprints/revision.py` approves or
+generates) and emails when a batch finishes. The QA row (score, one ✓/✗ per check, verdict) is
+the macro `_sprint_qa.html`: tapping it opens each check's reason (a `<details>`, so it works
+on a phone; the old `title` tooltip was hover-only). `sprints/revision.py` approves or
 rejects (a rejected piece leaves `estado_videos.json`), closes and reopens the
 sprint; `sprints/entrega.py` lists approved links and builds the zip
 (`sprint_empaquetar`). Retries and regenerations always go through the cost
@@ -232,7 +248,11 @@ producto») and links each piece to its panel. «Proponer ideas» shows
 `analisis._llamar_contando`, also when the answer was unusable, `max_intentos=1`). The routes the
 panel calls answer JSON when asked (`_quiere_json`); plain form posts still redirect (to the panel's tab when `volver=panel`). `base.html`'s unsaved-changes guard marks on `input`, and on `change` only `<select>`s.
 `static/angulo.js` clears `data-sucio` on its own fields only after a save that covered the
-latest edit.
+latest edit. It also makes anything that reads the angle on the server wait for its pending
+save (`guardarAngulosPendientes`: «Reescribir», «Aprobar», any form submit — re-sent with `requestSubmit`,
+so its `confirm()` asks once); a reload of the SAME campaign's panel keeps what was being typed, which
+`<details>` were open and the cursor (`tomarEscrito`/`devolverEscrito`). The Blueprint refuses POSTs the
+browser marks as cross-site (`Sec-Fetch-Site`), like Flow Plus and the editor.
 
 **Nicho y avatares** (`nicho/` + `tareas/nicho.py`, spec
 `docs/superpowers/specs/2026-09-18-nicho-avatares-design.md`): personas nacidas de
@@ -253,7 +273,10 @@ comercial); YouTube una llave simple (`search.list` tiene cupo de 100
 llamadas/día, una por recolección); Apify solo actores con precio por resultado
 (`nicho/fuentes/apify_actores.py`) y el token siempre en cabecera. Las llaves
 (`REDDIT_*`, `YOUTUBE_API_KEY`, `APIFY_TOKEN`) viven en el `.env` raíz y se
-muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada.
+muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada — y solo
+la ve el admin: al cliente no se le muestra una fuente sin llave ni instrucciones del `.env`
+(`nicho/rutas._fuentes_conectadas`; si igual la pide, aviso neutro), porque las llaves son de
+Creatv, no suyas (2026-09-27).
 `nicho/avatares.py` hace dos pasadas con Claude (`generador_prompts.MODEL`):
 núcleos, luego sub-avatares por núcleo; cada cita se verifica literal contra el
 comentario (`verificar_evidencia`) y la que no aparece se descarta — un
@@ -274,7 +297,9 @@ copycoders + las que Claude proponga como `EMERGING`), dolor y firma («por qué
 funciona»). Tablas `referente` (`anuncio_id` = id del Ad Library de Meta, UNIQUE
 global; `cliente` NULL = global de Creatv, `<cliente>` = solo ese proyecto; solo
 se lista con `estado_imagen=ok`, la copia en R2 `referentes/<anuncio_id>.jpg`),
-`referente_familia` y `barrido`. `referentes/datos.py` es el único escritor.
+`referente_familia` y `barrido`. `referentes/datos.py` es el único escritor. La búsqueda (`q`) y las marcas a imitar
+comparan sin tildes ni mayúsculas con `db.pliegue`, que `db.engine()` también registra como función SQL
+`pliegue(col)` en cada conexión (el `lower()` de SQLite solo baja ASCII).
 Bloque 1: importación del swipe file de copycoders (`referentes/copycoders.py`
 lee `const DATA=[...]` del HTML público; tarea `referentes_importar_copycoders`
 por fases `anuncios → imagenes → traducir` con continuaciones `__cont`, la única
@@ -288,6 +313,15 @@ dataset/contarlo, compartido con `nicho/fuentes/apify.py`;
 la URL de la Ad Library con país real (a diferencia de Atria, que es solo
 UE) e idioma, una sola corrida por barrido sin cursor que retomar, reporta
 su costo real por resultado a `gastos` bajo el tipo `recoleccion`).
+Barridos por palabra (2026-09-27, tras «dolor de pies» que trajo ruido pagado): SIEMPRE en inglés
+— `referentes/traducir.preparar_consulta` traduce lo escrito con Claude (≈ US$ 0,0002, gasto tipo
+`otro`, bajo `_creatv` si es global), guarda `consulta.palabra_original`, fuerza `idioma=en` (no hay
+selector de idioma en los formularios; «Mis barridos» muestra «dolor de pies» → «Foot pain») y si
+no se puede traducir el barrido no se lanza. Atria va con `order=best_match` (sin él ordena por
+`newest` y su `query` acepta cualquier palabra); Apify, con varias palabras, pide la frase exacta
+(`keyword_exact_phrase` con comillas). `datos.borrar_de_barrido` quita los referentes de un barrido
+y las familias `claude` que quedan vacías (el barrido queda por el historial del gasto; las
+imágenes R2 las borra el llamador).
 `traer()` ahora entrega `(pagina, cursor_siguiente, meta)`: `meta` es `{}`
 para Atria (solo consume cupo del plan) o `{"costo_real": ...}` para una
 fuente que cobra por resultado real. Bloque 6: panel admin completo
@@ -331,15 +365,63 @@ References and catalog are optional (2026-09-25): with nothing attached the piec
 the person's text as-is (+ the SONIDO line), and each model goes through its `path_texto`
 (WaveSpeed text-to-video / text-to-image, same prices; Seedance then does take a format,
 `formatos_texto`). Sprints and derivations never use `libre` (they rotate `ORDEN_ENFOQUES`).
+The reference tray (`referencias_flowplus`, one file per PROJECT, shared by everyone working on
+it) follows «what you see is what gets used» (2026-09-26 incident: a «solo texto» piece took the 4
+references another person had just loaded): the Crear form sends `bandeja_vista=1` + the `ref_ids`
+it shows (hidden inputs with `form="form-flowplus"` in `_flowplus_bandeja.html`); `cf_crear_video`
+uses only those, removes only those after creating (`_consumir_bandeja` → `quitar_varios`), and if
+one of them is gone it generates and charges nothing. Without `bandeja_vista` (scripts/old tests)
+the whole tray is used and emptied, as before.
 Las referencias se nombran `Image N` / `Video N` (`flowplus_prompt.asignar_tokens`,
 por modelo: Wan recibe los videos aparte). Spec:
 `docs/superpowers/specs/2026-09-18-director-prompts-crear-design.md` (Etapa 1 hecha;
-presets de cámara y plantillas de anuncio son las Etapas 2 y 3). Los lotes de
+presets de cámara y plantillas de anuncio son las Etapas 2 y 3).
+**Menciones y recuperación (incidente 2026-09-28,** 6 de 12 videos del día fallaron y los buenos traían
+personajes dobles y el dibujo de otro clip**):** `flowplus_prompt.sustituir_tokens` entiende todo lo que la
+gente pega de otras herramientas (`@Image1`, `@Image 1`, `@[Image 1](image_1)`, `@image_4`, cualquier
+mayúscula) como la mención canónica `@Imagen N`/`@Video N`/`@Logo N`; una mención sin referencia en la
+bandeja hace que `cf_crear_video` avise y NO cree la sesión (`menciones_sin_referencia`: nada se cobra).
+WaveSpeed sigue trabajando cuando el worker deja de esperar (Wan 3.0 pasó de los 20 min cuatro veces ese
+día) y cobra igual: `wavespeed_common.poll_hasta_listo` avisa el `prediction_id` por `on_progreso`
+(`avisar_lanzada` apenas hay id), `tareas/flowplus._avisar_fase_de(..., cf_id=)` lo guarda en la sesión
+(`extra.prediccion`), un tiempo agotado es `EsperaAgotada` (conserva el id) y un rechazo del proveedor es
+`ErrorProveedor` (mensaje, código e id; `_mensaje_error` lo cuenta en palabras en el idioma del proyecto,
+p. ej. Kling 1200 «contenido sensible»). El detalle de la pieza ofrece «Recuperar el video (sin pagar de
+nuevo)» → `cf_recuperar` → tarea `flowplus_recuperar` (`max_intentos=1`, `TIEMPO_RECUPERAR` 10 min):
+vuelve a preguntar por ese id y cierra la pieza con `_terminar_video` (el mismo cierre que la generación
+normal; el gasto se anota ahí, con «recuperado»). Nunca genera de nuevo.
+**Sin variables quemadas (pedido de Daniel, 2026-09-28):** cada creación nueva arranca limpia. «Empezar de cero»
+(`#fp-empezar`, solo JS: `form.reset()` a lo que pintó el servidor + vaciar la bandeja por `fp_vaciar_referencias`)
+deja el texto, el sonido, la música y el catálogo en blanco y la duración/modelo/formato en los del proyecto.
+«Editar y crear otra a partir de esta» (`fp_reusar`) REEMPLAZA la bandeja con las referencias de esa pieza (antes
+se sumaban a lo que hubiera y las referencias «del pasado» se colaban), su precarga (`session["fp_prefill"]`) lleva
+`cliente` y `_prefill_para` la descarta en otro proyecto, y la casilla `solo_referencias` trae solo las imágenes con
+el texto y los ajustes en blanco (para el clip siguiente con los mismos personajes). Y **ningún modelo recibe menos
+referencias de las que la persona ve**: `flowplus_modelos.referencias_de_mas(modelo, referencias, tipo)` cuenta como
+`_preparar`/`generar_video` (Wan: imágenes y videos aparte; Kling: el fotograma del video cuenta como imagen;
+Seedance 2.5: SOLO la primera; Seedream: 10) y `cf_crear_video` avisa y no genera si sobra alguna (incidente «mira lo
+que sacó»: cuatro referencias con Seedance, tres descartadas en silencio, US$ 3,6 cobrados); el compositor muestra el
+mismo aviso en vivo (`#fp-aviso-refs`, `data-max`/`data-max-videos` de los radios de modelo) y frena el envío.
+Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
+`wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
+devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)
+—el hilo queda libre entre vueltas— mientras la predicción tenga menos de `ESPERA_MAXIMA` (2 h); recién después
+queda el botón. El sondeo aguanta hasta `FALLOS_SEGUIDOS` (6) cortes de red o 5xx seguidos, y un error que no sea
+`ErrorProveedor` (estado final fallido) nunca borra el id: se sigue esperando. Un reinicio del worker corta esas esperas enseguida
+(`wavespeed_common.fijar_detener` + `cortable()`, solo en las tareas que saben retomar; un swap o una imagen
+siguen como antes) y el gancho `interrumpida` retoma por la predicción un video que quedó a medias por un
+SIGKILL. Desplegar ya no pierde videos de Crear en curso.
+Los lotes de
 Sprints encolan el director con `auto_lanzar` (el costo ya se aprobó). `calidad`
 `borrador` = Wan a 480p. Duración por defecto 8 s (`preferencias_flowplus`). `VIDEO` /
 `IMAGEN` there are the only model registry (path, price, limits, `audio_nativo`,
 `familia`, `min_duracion`/`max_duracion`, `formatos`). Crear makes ONE piece per click (the enfoque is
-automatic: `producto`, or `persona` when a catalog personaje is among the references),
+automatic: `producto`, or `persona` when a catalog personaje is among the references; since
+2026-09-28 `armar` never forbids people or hands for `producto` — no «EVITAR: personas, pies,
+manos», no «Recordatorio final … solo y sin nadie», no pruning of the brand guide —: the product
+is the protagonist and the scenes show what it does or changes; the CON PERSONA block still comes
+only with a catalog personaje or the `persona` enfoque, and `director._mensaje` spells out each
+enfoque to Claude with `_ENFOQUES_DIRECTOR`),
 offers 5–30 s (default 8 s) and the formats each model admits (verified on WaveSpeed 2026-09-18: Wan 3.0
 2–30 s and 9:16/16:9/1:1/4:3/3:4; Kling O3 Pro 3–15 s and 9:16/16:9/1:1; Seedance 2.5 4–30 s
 and follows the reference image, `aspect_ratio` None; Seedream V5 Pro takes `aspect_ratio`
@@ -347,7 +429,7 @@ for images). `ajustar_duracion`/`ajustar_formato` run in the route AND again in 
 `_preparar` (last barrier before spending), so nothing outside a model's range is ever
 requested. Videos
 ALWAYS ask for the model's native scene sound (`generar_video(..., con_sonido=True)`: Wan 3.0
-`enable_audio`, Kling O3 Pro `sound` — +0.028 $/s, already inside `estimate_video` and the
+`generate_audio` (the published schema's name since 2026-09-28; `enable_audio` was silently ignored), Kling O3 Pro `sound` — +0.028 $/s, already inside `estimate_video` and the
 `usd_por_segundo_efectivo` the templates show —, Seedance 2.5 `generate_audio`), and the
 `armar` prompt (director, Sprints, derivations) carries a `SONIDO:` line ("Sin diálogo
 hablado ni música de fondo" keeps Kling's Chinese/English voices out; the Spanish voice
@@ -376,6 +458,31 @@ from that second to a cached WAV and hands it to the same mixes (`mezclar_musica
 at cost 0. IA styles keep going through `obtener_pista` untouched. The panel `_mi_musica.html` lives
 inside the Crear form, so it has no `<form>`: routes `mm_subir/mm_borrar/mm_crear/mm_lista` answer JSON
 with the re-rendered panel and the song list. Voice cloning is NOT here (fal has no ElevenLabs clone).
+
+**Audios en Crear** (`audios.py`, `tareas/audios.py`, spec
+`docs/superpowers/specs/2026-09-28-crear-audios-design.md`): cuarto modo de Crear (`data-modo="audios"`,
+`#audios`), pedido por Daniel al estilo de MoneyPrinterTurbo: un texto (≤ 3 000 caracteres) leído por una
+de las 22 voces verificadas de `fal_audio.VOCES`, elegida en una galería de tarjetas (género y tono de
+`audios.VOCES_INFO`/`fichas_voces`, filtros Mujer/Hombre, ▶ por voz: la muestra por voz e idioma se sintetiza UNA
+vez para toda la plataforma, fila `material` y gasto del cliente interno `_creatv`; `precalentar_muestras.py`
+las genera todas de antemano), idioma es/en/pt,
+velocidad (`speed` del modelo; nunca `language_code`, multilingual-v2 lo rechaza), y opcionalmente una
+canción de Mi música con «empieza en el segundo» y volumen. El resultado es un mp3 (`libmp3lame` 192k):
+la música arranca 0,6 s antes de la voz, se agacha (`mezcla.DUCKING_VOZ_SOBRE_MUSICA`), sigue 1,5 s y se
+funde después del `loudnorm` (`audios.filtro_locucion`, puro). `audios.py` define las filas y sus
+hashes; solo la tarea `audio_generar` y `audios.muestra` las crean (vía `materiales.obtener_o_crear`):
+el audio es un `material` (tipo `audio`, origen `locucion`, `extra.{nombre,texto,voz,idioma,velocidad,volumen,musica}`)
+con `padre_id` a la voz cruda (origen `voz`, hash `locucion_voz` = texto+voz+velocidad, sin el idioma (el modelo lo detecta del texto): el mismo
+texto no se paga dos veces; misma combinación completa → «Ya tenías este audio»). Tarea `audio_generar`
+(`max_intentos=1`, un trabajo por proyecto `<cliente>__audio_generar`): registra el gasto tipo `locucion`
+(`locucion:<hash12>:t<tarea>`) en cuanto fal cobró, ANTES de mezclar; una canción borrada entre el clic y
+el worker deja el audio solo con la voz (`musica.estado="ausente"`). Rutas JSON `au_lista/au_crear/au_borrar/
+au_muestra/au_descargar` (el mp3 se sirve como adjunto desde Flask: `download` no funciona con otro origen).
+La lista `_audios_lista.html` se re-pinta por fetch y su barra NO lleva `data-poll-job` (recargaría la
+página): sondeo propio como `mm-progreso`. Subir una canción aquí usa `mm_subir` y avisa al panel de Mi
+música con el evento `mi-musica:cambio` (y al revés). `fal_audio.COSTO_USD_POR_CARACTER` es 0,0001 desde
+2026-09-28 (precio real de fal; estuvo 3× alto). Fuera: voz clonada, efectos, subtítulos, usar el audio en
+un video o el editor, ElevenLabs v3.
 
 **Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»
 (`_tab_flowplus.html` → `_crear_flowplus.html`, hash `#flowplus`; the package is `guiones`
@@ -467,7 +574,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
 
-**Editor (capas 1–4a, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–4b, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -566,6 +673,32 @@ destino is first resolved and checked with `verificar_recortes`, a destino whose
 is refused, and a final with video NOT made from this edición — `ediciones.edicion_de_final` — needs
 `reemplazar: true`, which the dialog asks for). The editor and the automatic path now share the borrador:
 `produccion.traducir` re-applies its pure steps on a CAS conflict (up to 2 retries) instead of paying again.
+Capa 4b (2026-09-28, «tipo CapCut», plan `docs/superpowers/plans/2026-09-28-editor-capa4b-capcut.md`): the page is
+library | player | properties with the toolbar and a multi-track timeline below at full width (≤ 760 px: player,
+toolbar and timeline, and the library and properties are bottom sheets — «Medios · Audio · Texto · Transiciones» and
+«Editar», closed with «Listo»); in the Final edition tab «Editar» is the main action of every ready video and the
+automatic AI path is a closed, optional `<details>`. Library: `final_edition/biblioteca.py` (upload video/image/audio
+as free `material` rows with origen `subida` — a phone photo is uploaded already rotated by its EXIF orientation —,
+list the project's materials, the logo included (origen `marca`), plus the ready Crear pieces, and materialize a piece
+with the free task `material_de_pieza`), routes `editor.subir`/`editor.biblioteca`/`editor.agregar_pieza`/
+`editor.materiales_por_id` (`&preparar=<ids>` queues the free `edicion_proxy` for what still lacks its proxy or peaks,
+asked once per material); browser modules `biblioteca.js`, `propiedades.js` (+ the pure `propiedades_modelo.js`),
+`lienzo_interaccion.js` (tap, drag and scale on the player; pure `seleccion.js`), `avisos_editor.js` (how the page
+notifies those modules; they only touch the edition through the `editor` object of `pagina_editor.js`, which also
+exposes `enConflicto()` so the panels say «recarga la página» instead of pointing under the video), and `historial.js`
+merges the consecutive steps of one control into one undo. New pure ops in `operaciones.js`: `agregarVideo/Imagen/
+Audio/Texto`, `cortarClip` (any track but `p_sonido`), `ponerTransicion` (the five the render does; `desenfoque` is
+shown as «Fundido a negro»), `editarTexto` (a variable text changes only the destino being viewed), `cambiar` (a
+whitelist; `fondo.ancho: null` = automatic), `volumenSonido` and `cambiarMezcla` — each with a case in
+`tests/js/salida_operaciones.mjs` that Python validates. Rules: `normalizar` NEVER creates `p_sonido` (a borrador
+whose recipe had no scene sound leaves it out on purpose, and the automatic path reuses that borrador): only
+`agregarVideo` (for its own clip; the clips already there get silent mirrors) and `volumenSonido` (that clip at the
+slider's value, the rest at 0) create it, and with nothing to mirror it stays empty instead of disappearing; nothing
+that is added lengthens the video (image/text layers and música/efecto end at the principal's end — music loops in
+the render — and with the playhead at the end they enter whole, ending there); audio added by hand only reuses a
+track whose clips share its `rol_audio` (music never lands in the voice's gap). Still out: PIP (video over video),
+color filters, rotation, a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla») and the
+editor's i18n (phase 6).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
@@ -583,7 +716,7 @@ appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
 states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
-launch (resumable). UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
+launch (resumable). Meta's raw errors («Meta Ads (<edge>) respondió 400: {JSON cut at 500 chars}») are stored as-is but shown through `meta_errores.explicar` (filter `error_meta`, also used by `tablero.alertas` and `lanzador.traducir_error_meta`): known codes become what to do (1885183 app in Development mode — also recognized in the already-explained text, so it re-renders in the viewer's language —, 190 reconnect, 10/200/294 permissions, 4/17/32/613/80004 rate limit, 368 policy block, 1/2 temporary), otherwise Meta's own `error_user_title/msg`, otherwise the code; the experiment card keeps the raw text in a folded «Detalle técnico». UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
 every piece with a public URL (`experimentos.elegibles`: Crear videos AND images, sprint
 pieces, finals; `origen`, `formato`, `en_experimentos`), the user ticks pieces and a 3-step
 form appears (where: countries + daily budget; how much: cap + days with a live count;
@@ -684,8 +817,11 @@ precio/moneda/url_compra/en_prueba/prioridad; importing (CSV/URL) is the "Traer 
 details, imported products without photos sit in "Importados sin fotos" until `prod_fotos_subir`
 or `prod_vincular` creates their activo. Configuración (`_tab_settings.html`) shows one
 apartado at a time (pills, last one remembered, `window.irAConfig(id)` opens the apartado
-holding `id`): Puesta a punto (admin only), Conexiones (Meta full width, store, Pixel, organic
-channels), Marca, Generación, Cuenta y avisos, Gasto. The key cards (`_llave_tarjeta.html`,
+holding `id`): Puesta a punto (admin only), Conexiones (store, Pixel, organic channels — since
+2026-09-28 the Meta connection card is NOT here: it lives only in Experimentos,
+`_meta_conectar.html`; the Triple Whale form left the same day for the Triple Whale tab,
+`_triple_whale_conectar.html`), Marca, Generación, Cuenta y avisos,
+Gasto. The key cards (`_llave_tarjeta.html`,
 `dashboard._estado_llaves`) list every
 paid key (Anthropic, fal, Higgsfield, R2, Meta, SMTP, MELI) with configured/missing badges —
 computed from `bool(os.environ.get(...))` only, values are never rendered. Since 2026-09-20 that
@@ -715,27 +851,62 @@ When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 `promoted_object={pixel_id, PURCHASE}` on every adset (`meta_ads/adset.py` refuses SALES
 without it). The objective is fixed at creation — Meta doesn't allow changing it.
 
-**Triple Whale** (`triple_whale.py`, `triple_whale_tiendas.py`, table `triple_whale`): an
-optional, per-project alternative to Meta Pixel/store attribution, connected from
-Configuración › Conexiones (Fernet-encrypted API key, same pattern as Shopify/WooCommerce —
-the connect/probar/desconectar form was accidentally removed for ~4 days in 2026-09 by an
-abandoned "move to Experimentos" refactor that never got its second half; restored where it
-was, since Meta never moved either). A project picks `atribucion="triple_whale"` on its
-experiment the same way it picks `pixel`/`tienda`; `lanzador._obtener_metricas_triple_whale`
-calls `triple_whale.metricas_por_anuncio` (Triple Whale's `ads_table`+`pixel_joined_tvf()` SQL,
-one row per ad per day), filters to the piece's `meta_ad_id`, and SUMS the days into a
-lifetime-cumulative snapshot (never averaging the API's own per-day `pixel_roas`/`pixel_cpa`,
-which are ratios) — ctr/cpc/cpm/thruplay_rate are computed from those sums with the same
-formula `meta_ads/insights.py` uses. `"triple_whale"` is a first-class member of
-`tablero.FUENTES_VENTAS` and of `decisor.py`'s `con_atribucion` sales-gate tuple, so a
-Triple-Whale-attributed experiment can win/lose on ROAS/CPA exactly like `pixel`/`tienda` —
-until 2026-09-26 it silently could not (a parameter-name mismatch in the metrics call always
-raised, caught by a broad `except Exception`, so it fell back to Meta Pixel every time; even
-fixed, the missing `FUENTES_VENTAS`/`con_atribucion` entries would still have zeroed revenue
-and blocked the sales gate). The exact SQL (column names, whether the model/window filter
-belongs in the `JOIN ... ON` or the `WHERE`) is Creatv's own best reading of Triple Whale's
-public "Data Dictionary" docs (`docs/triple-whale/investigacion-api-2026.md`) — flagged there
-as **never verified against a real connected store**.
+**Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
+`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023 and 0024): connected from
+the Triple Whale tab itself (`_triple_whale_conectar.html`, included by `_tab_triple_whale.html` in both states;
+until 2026-09-28 the form sat in Configuración › Conexiones, and the `cfg_triple_whale_*` routes now return to
+`#triplewhale`) (Fernet-encrypted API key; `cfg_triple_whale_conectar` requires a verified correo,
+same origin, and tests the key AND a short SQL query before saving; `cfg_triple_whale_ajustes` changes
+currency/model/window). The client (`triple_whale/__init__.py`) follows the documented SQL endpoint:
+`{"shopId", "query", "period": {startDate, endDate}, "currency"}` → `data` (an older version sent an
+undocumented `parameters` and read `rows`, so it never returned anything); `ErrorLlave`/`ErrorTienda`/
+`ErrorConsulta`; `MODELOS`/`VENTANAS` are Triple Whale's own vocabulary (old «First Touch»/«7» values are
+normalized on read); every query has a full and a minimal version (`consultar_con_respaldo` falls back only
+on `ErrorConsulta`). On connect `tw_sincronizar` copies 90 days into `tw_anuncio_dia` (per canal/ad/day:
+what the platform reports from `ads_table` + what the Triple Pixel attributes from `pixel_joined_tvf()` with
+the project's model/window) and `tw_tienda_dia` (`blended_stats_tvf()`); the periodic
+`tw_sincronizar_todas` (2 h, before `exp_refrescar_todos`) re-pulls the last 7 days because Triple Whale
+re-attributes; each `triple_whale.datos.reemplazar_*` zeroes/deletes the range before writing. Changing
+store/currency/model/window or disconnecting deletes the copies (never the paid evaluations). The
+**Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Tablero) fetches its panel
+(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: store KPIs (MER, AOV, new customers,
+vs. previous period), ad KPIs, alerts, the Tablero chart (`app.extensions["grafico_tablero"]`), spend by
+verdict/channel and every ad with a verdict and a diagnosis from the pure `triple_whale/evaluacion.py`
+(compared with the account's own medians; `ganador`/`prometedor`/`en_prueba`/`perdedor`/`sin_datos`; weak
+hook, low hold, few clicks, clicks without sales, expensive CPM, fatigue 7d vs 7d, no TW tracking).
+«Evaluar con IA» (`tw_evaluar`, `max_intentos=1`, price `gastos.estimar("evaluacion_tw", n=)`, real spend as
+tipo `evaluacion`) sends Claude up to 6 winners + 4 losers with their Meta thumbnail (`analisis.medios_meta`,
+read-only Graph) and doctrina `clasificar/angulo/gancho/video`; the result (`tw_evaluacion`) has patterns,
+per-ad «why», and new ad ideas with a validated ángulo and an English video prompt. `triple_whale/puente.py`:
+«Llevar a Crear» sets `session["fp_prefill"]` (nothing is generated) and «Guardar en Referentes» stores a
+winning own ad as a project referente (fuente `triple_whale`, `anuncio_id = tw:<ad_id>`, thumbnail in R2).
+Experiments with `atribucion="triple_whale"`: `lanzador.refrescar` keeps traffic, spend and ad status from
+Meta (the old path skipped Meta, so rejections went unseen) and overrides purchases/revenue with the Pixel
+orders from `tw_anuncio_dia` since the piece was created (after `sync.sincronizar_si_hace_falta`, once per
+experiment, outside the Meta lock); another currency → ROAS 0 + one evento, like `tienda`. `"triple_whale"`
+stays in `tablero.FUENTES_VENTAS` and `decisor.py`'s `con_atribucion`. With Triple Whale connected, every
+creative Creatv creates (`lanzador._crear_anuncios`, and the legacy `tareas/meta.publicar`) carries
+`url_tags=triple_whale.URL_TAGS` (`tw_source={{site_source_name}}&tw_adid={{ad.id}}`, resolved by Meta; the
+`meta_ads.creative` functions take an optional `url_tags` for the AdCreative's «URL parameters»), via
+`triple_whale_tiendas.url_tags(cliente)` — None without Triple Whale; ads created before connecting keep
+none (changing them sends the ad back to review). Second round (spec §11–§13): `tw_producto_dia` (migration
+0024) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal,
+never verified: §9.5) → «Lo que más se vende» in the tab (`panel.productos_periodo`, matched to the Catálogo
+by `fuente_id`/name) and the top 5 in the AI prompt (each idea carries `producto`); a Creatv-made ad
+(`datos.piezas_creatv`, now with the pieza's video/thumbnail/state) sends Claude the real frames
+(`analisis.visuales` → `sprints.qa.archivo_local` + `doctrina.revisor.bloques_visuales`, temp file deleted
+in a `finally`; `anuncio.visual`), every Meta thumbnail is copied to R2 first (`analisis.copiar_miniaturas`,
+`clientes/<c>/triple_whale/eval<id>_<ref>.jpg`); after every sync `triple_whale/avisos.py` emails (tipo
+`tw_evaluacion`) new winners, fatiguing winners, new losers and «no attributed sales» once (state in
+`triple_whale.extra.avisados` / `aviso_sin_ventas`; first sync only seeds the baseline); «Pausar»/«Activar» on a
+Creatv piece in the tab (`triple_whale.pieza_estado` → `lanzador.pausar_pieza`/`activar_pieza`); and the
+Tablero shows «Tu tienda según Triple Whale» (`panel.resumen_mes_tienda`, part `tienda_tw`; the cache key
+includes `triple_whale.actualizado_en`). Idea → pieza → anuncio (spec §14): the prefill of «Llevar a Crear»
+carries `origen_tw` («<evaluación>:<índice>»), the Crear form returns it in a hidden field and `cf_crear_video`
+stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, a bad value is ignored); the
+idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,
+`panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
+the SQL has run against a real store yet (spec §9).
 
 **Gasto real por proyecto** (`gastos.py`, table `gasto`, migration 0010): there are no
 credits or balances — the product shows the real provider price. Every paying task registers
@@ -764,7 +935,8 @@ and bumps `session_version` so every other session dies — `_verificar_sesion` 
 cookie's `sv` on each request and rejects sessions whose usuario no longer exists);
 Configuración › Cuenta (change correo → re-verify; change password → current required).
 Without a verified correo a cliente cannot connect Meta or a store (`_requiere_correo_verificado`;
-admins exempt); admins can mark a user verified from the panel. Rate limits (`cuentas.limite_ok`,
+admins exempt); the «sin correo / confirma tu correo» notice (`#cuenta-banner`) shows only at the
+top of Configuración (`_tab_settings.html`), not on every tab (removed from `base.html` 2026-09-26); admins can mark a user verified from the panel. Rate limits (`cuentas.limite_ok`,
 `kv`, 5/h) per correo and per IP on registration, resend and recovery. Links are built from
 `PLATAFORMA_URL` (never from the `Host` header) and the app 404s requests whose host isn't that
 one (or localhost); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are HttpOnly, SameSite
@@ -779,7 +951,7 @@ fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.b
 those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
 top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
 screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
-(`tests/test_base_visual.py`, `tests/test_movil.py`). Crear's «Desde referencias» form is a **composer**
+(`tests/test_base_visual.py`, `tests/test_movil.py`). Phone review of every screen (2026-09-28, CSS block «Celular: revisión de pantallas» at the end of `style.css`): auto-fill grids use `minmax(min(100%, X), 1fr)` (never a bare fixed minimum — a test rejects it), card galleries (Crear, Final edition, Experimentos, Referentes) are 2 columns ≤ 760 px, button/filter rows (`.acciones`, summaries) wrap, long ids/JSON/URLs break instead of pushing the page, and data tables (`tabla-admin`, `tabla-tiendas`, `tabla-productos`, `gasto-tabla`, `sprint-entrega`, `gpg-tabla`, or opt-in `tabla-apilada`) become one card per row ≤ 640 px with each value labelled from its column header (`static/tablas.js` copies the `<th>` text to `data-etiqueta`, also for tables inserted later by fetch); `.solo-teclado` hides keyboard-only hints on touch screens. Crear's «Desde referencias» form is a **composer**
 (spec `2026-09-27-crear-compositor`, CSS block «Crear: compositor»): a card whose top half is the bandeja
 (OUTSIDE `#form-flowplus`, it carries its own `<form>`s) and whose bottom half is the form, with a bar of pills
 whose menus hold the real radios/selects — the selects stay the hidden source of truth and the menus draw chips
@@ -797,8 +969,21 @@ Luego `venv/bin/python3 catalogo_i18n.py actualizar`, traducir con `docs/i18n/gl
 `proyecto.json`, cookie `idioma` antes del login; `idiomas.en_idioma(x)` para correos y worker.
 Desde 2026-09-28 (decisión de Daniel) `idiomas.DEFECTO` es `"en"` y `ACTIVO_PARA_TODOS` es `True` para
 todos: quien no eligió idioma ve la app en inglés y el selector queda visible para cualquier cliente; los
-tests siguen fijos en español (`conftest`). Sprints, Nicho, Referentes, Final edition/editor, las páginas de
-admin y el mapa del código siguen solo en español hasta que cierren las fases 5-6.
+tests siguen fijos en español (`conftest`). Fase 5 (2026-09-28): Sprints, Nicho y Referentes
+ya están en el catálogo. Sprints guarda lo que escribe (eventos, temporadas adoptadas, el momento del mes) en
+el idioma del proyecto con `sprints.datos.texto_guardado(cliente, N_("…"), …)` y muestra estados con la macro
+`etiqueta_sprint` de `_sprint_macros.html` (los diccionarios traducidos van DENTRO de macros: un `{% set %}` de
+módulo en una plantilla importada se cachea en un solo idioma). Un estudio de Nicho toma el idioma del proyecto
+(sin selector); el idioma de búsqueda de YouTube sale del país del proyecto (`nicho.fuentes.plataformas.idioma`),
+no del idioma del estudio. La biblioteca global de referentes es bilingüe (§B7): `referente.extra.i18n[idioma]`
+(firma/dolor; `referentes.datos.localizado`), `referente_familia.descripcion_en` (migración 0022;
+`descripcion_familia`; botón admin «Escribir en inglés…» → tarea `referentes_familias_en` por tandas de 40, precio
+a la vista, gasto `otro` bajo `_creatv`), `referentes.datos.rellenar_i18n_copycoders()` (idempotente, sin Claude:
+correr una vez al desplegar), y los barridos globales clasifican en español e inglés en UNA llamada
+(`clasificar.salida_para`, tarifa `clasificacion_bilingue`); la ficha sale en el idioma de quien mira y
+Recrear/Adaptar/las referencias de un sprint en el del proyecto. Final edition/editor, las páginas de admin y el
+mapa del código siguen solo en español hasta la fase 6 (plan `docs/superpowers/plans/2026-09-28-fase6-*.md`;
+las finales van en el idioma de cada país — decisión B de Daniel, 2026-09-28).
 Fase 3 (Crear en el idioma del proyecto): las llamadas a Claude reciben el idioma con
 `idiomas.de_proyecto(cliente)`, pasado a `doctrina.bloque_system(..., idioma=)` o envuelto a mano con
 `idiomas.orden_idioma` (va al inicio Y al final de las instrucciones del sitio; el prompt para el modelo de
@@ -837,7 +1022,7 @@ localizar no verifica cifras (convierte unidades y precio y el base ya se verifi
 país base; si no, el guion no recibe precio. Vocabulario único:
 `doctrina.CONSCIENCIAS` (el de Nicho; `normalizar_consciencia` traduce el inglés de referentes y
 `referentes.sugerir.NIVEL_A_CONSCIENCIA` se deriva de ahí), `LEADS`, `SOFISTICACIONES`. Nada de esto agrega pantallas
-ni migraciones (bloque 1 de 4; los bloques 2–4 están en el §14 del spec). Los topes de salida de estos sitios son
+ni migraciones (bloque 1 de 4; los bloques 2–4 vienen en sus propios párrafos). Los topes de salida de estos sitios son
 amplios (4 000–16 000 tokens): el pensamiento adaptativo de `claude-sonnet-5` los consume y con topes chicos la
 respuesta llega vacía (prueba real del 2026-09-26).
 
@@ -879,6 +1064,92 @@ en el system, mismos fotogramas, tope 6 000), por fin registra su gasto real (ti
 `qa:<cp_id>:t<tarea>:i<intento>`) y guarda la revisión en la sesión (`origen: sprint`). La galería de Experimentos
 (`elegibles()["doctrina"]`, aviso en el paso 3) y la revisión del lote muestran la etiqueta con `resumen_galeria`,
 leyendo solo `concepto.extra`. Nada de esto bloquea ni reescribe.
+
+**Doctrina, bloque 4: cerrar el ciclo** (spec
+`docs/superpowers/specs/2026-09-28-doctrina-bloque-4-cerrar-el-ciclo-design.md`): lo que el motor aprende de cada prueba
+vuelve a la siguiente pieza. (1) **Diagnóstico de una perdedora** (`doctrina/diagnostico.py`; rebanada `diagnosticar` =
+la lista de Theriot: `CAUSAS_PERDIDA` (ocho causas, `CAUSAS_NOMBRE` con `N_`), `CAUSAS_NO_CREATIVAS` = landing,
+estacionalidad, posicionamiento, `SIGUIENTES_PASOS`/`SIGUIENTES_NOMBRE`): `exp_decidir` pide la pausa primero (el anuncio deja de gastar
+aunque Claude tarde) y después diagnostica cada `perdedor` nuevo en `_diagnosticar` (timeout 120 s, un reintento;
+una final variada se diagnostica con SU guion) — `pistas()` (puras y gratis: ThruPlay bajo el mínimo → gancho; CTR bajo con retención → sin_urgencia;
+puerta 2 → landing; frecuencia ≥ 3 → repetición; CPC alto con CTR normal → subasta_cara) y una llamada a Claude con los
+DATOS (veredicto y números, ángulo, revisión de la doctrina, guion base, producto; una corrección; `ErrorDiagnostico`
+lleva los tokens pagados; `idioma=` del proyecto). Se guarda en `experimento_pieza.extra.diagnostico`
+(`{version, causas, siguiente, aprendizaje, pistas, modelo, usd, en}` o `{error, pistas, en}`), gasto tipo `revision`,
+tarifa `diagnostico_pieza`, referencia `diagnostico:<ep_id>:t<tarea>` (también con respuesta inválida), evento
+`diagnostico`; nunca frena el veredicto. (2) **El diagnóstico guía el rescate** (`decision_rescate`): `siguiente`
+estructura/regenerar → `payload.salto` 2/3 (`derivaciones._planificar_rescatar` toma `max(escalón siguiente, salto)`:
+nunca vuelve atrás; `acciones._precio_estimado` cobra el escalón real) y oferta/landing/pausar, o causa principal no
+creativa, → `payload.solo_proponer` (`acciones.pedir` deja `propuesta` en todo modo, con el diagnóstico en el motivo).
+`derivar` hace todas las re-ediciones de gancho (ya no alterna hook/estructura) con `contexto_variante =
+{lead_objetivo (el k-ésimo arranque recomendado que no sea el actual ni uno ya probado por una final de la sesión;
+None cuando no queda ninguno: la variante cambia el patrón del gancho), hermana {k, n} cuando se producen varias a
+la vez, ganchos_usados (el del ángulo de la sesión + `capas.guion.parametros.angulo.gancho` de cada final)}`; el
+rescate suma `diagnostico` (causas + siguiente) y excluye el arranque de la pieza que perdió. Los aprendizajes NO se
+guardan en el experimento: `_opciones_de(item, cliente)` los agrega al encolar. `variar_guion(..., angulo=,
+contexto=)` lo escribe en el mensaje (`_contexto_variante_texto`, ganchos y aprendizajes entre etiquetas) — también
+en `final_edition/produccion.py`, que antes variaba sin ángulo y que ahora guarda el `angulo_variante` en
+`capas.guion.parametros.angulo` como el legado (también para los destinos que reutilizan el borrador). (3) **Aprendizajes por proyecto** (`doctrina/aprendizajes.py`;
+`proyecto.json["aprendizajes"]` vía `proyectos.aprendizajes/agregar_aprendizaje/quitar_aprendizaje`, tope 40, los más
+nuevos primero): una línea por ganador o perdedor (`desde_veredicto`: «Ganó en CO: «gancho» (arranque X, audiencia Y)
+para P — CTR 2,1 %, ThruPlay 34 %.» / «Perdió en …: … — motivo. Diagnóstico: …»; gettext, así que sale en el idioma
+del proyecto) o escrita a mano (sección «Aprendizajes del proyecto» al final de Experimentos, `_aprendizajes.html`,
+rutas `apr_agregar`/`apr_quitar`). `texto_para_prompt(lista, producto=)` (los del mismo producto primero, 10, entre `<aprendizajes>`) entra
+como DATOS en las ideas de sprint (`contexto_campana["aprendizajes"]`; las cifras del ángulo se verifican contra
+los DATOS SIN aprendizajes), en el guion base (`generar_guion_base(aprendizajes=)`) y en las variantes. La línea
+del motor cabe en 650 caracteres con la frase del diagnóstico entera (`MAX_TEXTO_MOTOR`); a mano, 300. (4) UI: bajo un veredicto `perdedor` la fila de la pieza
+muestra las causas (`CAUSAS_NOMBRE|traducir`, `title` = detalle y evidencia), «Siguiente: …» y «¿Por qué?» →
+`#diagnosticar` de la página de la doctrina; con error, el motivo. (5) Flow Plus: `guiones/clips.py`, `recorte.py`,
+`imagenes.py` y `refinador.py` arman su system con `doctrina.bloque_system(*COMBINACIONES["flowplus_*"], extra=,
+idioma=)` (clips y refinador `video`+`gancho`, recorte `gancho`, imágenes solo la base; la lectura no lleva doctrina) y
+`guiones.claude.tokens_entrada_equivalentes` suma la caché al gasto (1,25× escribir, 0,1× leer) en `llamar` y en la
+llamada directa del refinador. Límites: un diagnóstico por veredicto; nada se aplica solo salvo lo que el modo ya
+ejecutaba; sin migraciones (todo vive en `extra` y en `proyecto.json`). Con esto los cuatro bloques del spec original
+(§14) están en `main`.
+
+**Rendimiento y almacenamiento (auditoría 2026-09-28, tras el incidente de la página que se
+quedaba cargando):** `/cliente/<c>` trae todas las pestañas en un solo HTML (3 MB en happyflops:
+Crear, Final edition y Experimentos repiten las mismas piezas con sus `<template>` de detalle), así
+que lo que se agrega ahí le cuesta a TODAS las cargas. Reglas que salieron de la auditoría: los
+`<video>` de listas nacen `preload="none" data-precarga` (base.html los pide al entrar en pantalla;
+`tests/test_referentes_copycoders_proyecto.py` rechaza `preload="metadata"`) y las `<img>` van
+`loading="lazy"`; las fotos del catálogo se piden con `?w=320` (`catalogo_productos.miniatura`,
+Pillow, caché en `data/miniaturas/`); nada de una consulta por tarjeta: `ver_cliente` corre bajo
+`trabajos.con_vivos_precargados` (UNA lectura de los job_ids vivos para todos los `en_curso`) y la
+lista de Crear usa `creative_flow.guiones_base`/`finales_por_sesion` y
+`doctrina.revisor.ultimos_captions` (`tests/test_perf_pagina_proyecto.py` falla si el número de
+consultas vuelve a crecer con las piezas); `informe.completo` solo se arma para el admin; los
+estáticos con `?v=` salen `immutable` un año (`/static/editor/` sigue `no-cache`); la biblioteca de
+copycoders está apagada por proyecto hasta que la persona la trae (`proyectos.referentes_copycoders`).
+Mantenimiento diario en el worker (`tareas/mantenimiento.py`): `salidas_limpiar` borra de `salidas/`
+lo que tenga más de 14 días (todo lo de ahí es copia de trabajo: el video vive en R2 y
+`publicador.archivo_local`, `final_edition._clon_local`, `materiales.descargar` y `sprints.qa`
+lo vuelven a bajar), `cola_limpiar` purga las `tarea` cerradas (7 días; periódicas, 1 día) y
+`db_respaldar` guarda `data/respaldos/creatv_<fecha>.db` (`Connection.backup`, 7 copias). Sigue
+pendiente (no se hizo): borrar en R2 lo rechazado/descartado y las versiones viejas de finales,
+`materiales_limpiar` no borra nada porque los proxies viven en la fila del video (no son `EFIMEROS`),
+`metrica_snapshot` inserta cada 2 h aunque nada cambie.
+**Tarjetas ligeras y detalle bajo demanda** (spec
+`docs/superpowers/specs/2026-09-28-tarjetas-ligeras-detalle-bajo-demanda-design.md`): el 61 % de
+la página eran los `<template class="generado-detalle">` de Crear y Final edition (1,86 MB de 3,03).
+Ya no existen: las tarjetas son macros (`_crear_tarjetas.html`: `tarjeta_crear`/`lista_crear`;
+`_final_tarjetas.html`: `tarjeta_video_fe`/`tarjeta_final_fe`/`lista_videos_fe`/`lista_finales_fe`),
+la página pinta las 24 más recientes por lista (`TARJETAS_POR_PAGINA`, `_listas_crear_final`; los
+contadores muestran el total) y «Ver más» pide las siguientes a `crear_tarjetas` /
+`final_tarjetas?lista=videos|finales` (`?desde=N`, `_pagina_desde`). El detalle llega por fetch al
+abrir la tarjeta (`data-detalle` → `cf_detalle`, `fe_detalle_video`, `fe_detalle_final`; macros en
+`_crear_detalle.html` / `_final_detalle.html`, armadas con `_creative_flow_item(cliente, cf_id)` y
+`_contexto_final_edition(cliente)`, que incluye `_contexto_organico`), nunca se cachea, y
+`base.html` lo pinta con `abrirDetalleRemoto(modal, cuerpo, url, alInsertar)` («Cargando…» al
+instante, solo el último pedido gana). `#final?cf=<id>` abre la pieza aunque no esté pintada.
+Reglas: **ninguna barra de progreso lleva `<script>`** — todas `data-poll-job="<job_id>"` sobre el
+`div.barra-progreso#trabajo-<job_id>` y `arrancarSondeos(raiz)` (DOMContentLoaded + el
+MutationObserver de `data-precarga`) arranca el sondeo de lo que aparezca; los clics de tarjetas
+van delegados sobre la cuadrícula (las agregadas por «Ver más» funcionan igual); el sondeo se pausa
+con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minuto → 5 s a los 5 min).
+`tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto. Fuera de
+alcance (anotado en el spec §7): el JS embebido a estáticos, Catálogo/Experimentos por fragmentos,
+el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos, el flujo viejo «Nueva idea».
 
 ## Agent skills
 

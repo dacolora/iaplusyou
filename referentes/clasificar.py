@@ -10,10 +10,12 @@ import json
 import re
 
 import anthropic
+from flask_babel import gettext
 
 import doctrina
+import idiomas
 from generador_prompts import MODEL, _api_key
-from referentes import datos
+from referentes import copycoders, datos
 
 PROMPT = """Eres estratega de marketing directo. Vas a clasificar un anuncio real \
 para una biblioteca de referentes de formatos publicitarios.
@@ -36,9 +38,9 @@ Mira la imagen adjunta y responde SOLO con un objeto JSON con exactamente estas 
  "consciencia": "unaware|problem-aware|solution-aware|product-aware|most-aware",
  "familia": "<nombre exacto del vocabulario>" o null,
  "familia_nueva": {{"nombre": "...", "descripcion": "..."}} o null,
- "dolor": "<texto corto>" o "ninguno-oferta" o "ninguno-marca",
+ "dolor": "<texto corto, en {idioma_texto}>" o "ninguno-oferta" o "ninguno-marca",
  "lead": "oferta|promesa|problema_solucion|secreto|proclamacion|historia" o null,
- "firma": "<máximo 40 palabras, en español, por qué funciona: el deseo que canaliza, el arranque, el mecanismo si lo hay y cómo lo prueba>"}}
+ "firma": "<máximo 40 palabras, en {idioma_texto}, por qué funciona: el deseo que canaliza, el arranque, el mecanismo si lo hay y cómo lo prueba>"{traducciones}}}
 
 Usa "familia_nueva" SOLO si ninguna del vocabulario encaja; en ese caso "familia" debe ser null. \
 Sin texto antes ni después del JSON."""
@@ -70,8 +72,8 @@ def _llamar(content, max_tokens=MAX_TOKENS, system=None):
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": content}], **extra)
     entrada, salida = resp.usage.input_tokens, resp.usage.output_tokens
-    motivo = {"refusal": "Claude rechazó la solicitud.",
-              "max_tokens": "La respuesta de Claude se cortó por largo (max_tokens)."}.get(getattr(resp, "stop_reason", None))
+    motivo = {"refusal": gettext("Claude rechazó la solicitud."),
+              "max_tokens": gettext("La respuesta de Claude se cortó por largo (max_tokens).")}.get(getattr(resp, "stop_reason", None))
     if motivo:
         e = ClasificacionInvalida(motivo)
         e.tokens_entrada, e.tokens_salida = entrada, salida
@@ -91,13 +93,13 @@ def _parsear(texto):
     except ValueError:
         ini, fin = t.find("{"), t.rfind("}")
         if ini < 0 or fin <= ini:
-            raise ClasificacionInvalida("Claude no devolvió JSON.")
+            raise ClasificacionInvalida(gettext("Claude no devolvió JSON."))
         try:
             data = json.loads(t[ini:fin + 1])
         except ValueError as e:
-            raise ClasificacionInvalida(f"JSON inválido: {e}")
+            raise ClasificacionInvalida(gettext("JSON inválido: %(error)s", error=e))
     if not isinstance(data, dict):
-        raise ClasificacionInvalida("El JSON no es un objeto.")
+        raise ClasificacionInvalida(gettext("El JSON no es un objeto."))
     return data
 
 
@@ -129,46 +131,96 @@ def _resolver_familia(familia, familia_nueva, vocabulario):
     return None, {"nombre": nombre, "descripcion": str(nueva.get("descripcion") or "").strip()}
 
 
-def validar(data, vocabulario):
+# El dolor especial (`ninguno-oferta`/`ninguno-marca`) es un valor que
+# `recrear.py` compara con `startswith("ninguno-")`; bajo la orden de idioma
+# en inglés Claude puede devolver la variante en inglés de `copycoders.
+# DOLOR_ESPECIAL` (o alguna mayúscula/minúscula rara) en vez del valor
+# especial tal cual — esto lo vuelve a su forma española sin tocar un dolor
+# normal (spec 2026-09-26 §B7, fix round 1).
+_DOLOR_ESPECIAL_INVERSO = {**{k.lower(): v for k, v in copycoders.DOLOR_ESPECIAL.items()},
+                          **{v: v for v in copycoders.DOLOR_ESPECIAL.values()}}
+
+
+def _normalizar_dolor(v):
+    v = (v or "").strip()
+    return _DOLOR_ESPECIAL_INVERSO.get(v.lower(), v)
+
+
+def salida_para(referente):
+    """Idiomas en que se escriben firma y dolor (spec 2026-09-26 §B7): un
+    referente global (`cliente` NULL) sale en español e inglés en la misma
+    llamada; uno de un proyecto, solo en el idioma de ese proyecto."""
+    cliente = (referente or {}).get("cliente")
+    return (idiomas.de_proyecto(cliente),) if cliente else ("es", "en")
+
+
+def _traducciones(otros):
+    """El pedazo del JSON pedido con la segunda versión (vacío con un idioma)."""
+    if not otros:
+        return ""
+    o = otros[0]
+    nombre = idiomas.nombre_para_claude(o)
+    return (f',\n "traducciones": {{"{o}": {{"firma": "<la misma firma, en {nombre}>", '
+            f'"dolor": "<el mismo dolor, en {nombre}; ninguno-oferta y ninguno-marca quedan igual>"}}}}')
+
+
+def validar(data, vocabulario, salida=("es",)):
     """`vocabulario`: lista de nombres de familia ya existentes. Devuelve un
     dict con `etapa, consciencia, familia (str|None), familia_nueva (dict|None),
-    dolor, firma` listo para que el llamador escriba las columnas y, si aplica,
-    cree la familia nueva."""
+    dolor, firma, i18n` listo para que el llamador escriba las columnas y, si
+    aplica, cree la familia nueva. `salida`: idiomas pedidos (spec §B7); el
+    primero es el que llena `dolor`/`firma`, los siguientes van en `i18n`."""
     if not isinstance(data, dict):
-        raise ClasificacionInvalida("El JSON no es un objeto.")
+        raise ClasificacionInvalida(gettext("El JSON no es un objeto."))
     if data.get("etapa") not in datos.ETAPAS:
-        raise ClasificacionInvalida(f"Etapa inválida: {data.get('etapa')}")
+        raise ClasificacionInvalida(gettext("Etapa inválida: %(etapa)s", etapa=data.get("etapa")))
     if data.get("consciencia") not in datos.CONSCIENCIAS:
-        raise ClasificacionInvalida(f"Consciencia inválida: {data.get('consciencia')}")
+        raise ClasificacionInvalida(gettext("Consciencia inválida: %(consciencia)s", consciencia=data.get("consciencia")))
     familia, familia_nueva = _resolver_familia(data.get("familia"), data.get("familia_nueva"), vocabulario)
     if familia is None and not familia_nueva:
-        raise ClasificacionInvalida("Sin familia del vocabulario ni familia_nueva válida.")
+        raise ClasificacionInvalida(gettext("Sin familia del vocabulario ni familia_nueva válida."))
     dolor = data.get("dolor")
     if not isinstance(dolor, str) or not dolor.strip():
-        raise ClasificacionInvalida(f"Dolor inválido: {dolor}")
+        raise ClasificacionInvalida(gettext("Dolor inválido: %(dolor)s", dolor=dolor))
+    dolor = _normalizar_dolor(dolor)
     palabras = " ".join(str(data.get("firma") or "").split()).split(" ")
     firma = " ".join(palabras[:40]).strip()
     if not firma:
-        raise ClasificacionInvalida("Firma vacía.")
+        raise ClasificacionInvalida(gettext("Firma vacía."))
     lead = data.get("lead") if data.get("lead") in doctrina.LEADS else None
+    principal = salida[0] if salida else "es"
+    i18n = {principal: {"firma": firma, "dolor": dolor}}
+    traducciones = data.get("traducciones") if isinstance(data.get("traducciones"), dict) else {}
+    for o in (salida or ())[1:]:
+        t = traducciones.get(o) if isinstance(traducciones.get(o), dict) else {}
+        firma_o = " ".join(" ".join(str(t.get("firma") or "").split()).split(" ")[:40]).strip()
+        if firma_o:            # un idioma que no vino no es error: la llamada ya se pagó y el principal sirve
+            dolor_o = str(t.get("dolor") or "").strip()
+            i18n[o] = {"firma": firma_o, "dolor": _normalizar_dolor(dolor_o) if dolor_o else dolor}
     return {"etapa": data["etapa"], "consciencia": data["consciencia"], "familia": familia,
-            "familia_nueva": familia_nueva, "dolor": dolor.strip(), "firma": firma, "lead": lead}
+            "familia_nueva": familia_nueva, "dolor": dolor, "firma": firma, "lead": lead, "i18n": i18n}
 
 
-def clasificar(referente, vocabulario):
-    """Una llamada de visión (spec §5). Devuelve (resultado_validado,
-    tokens_entrada, tokens_salida); lanza ClasificacionInvalida (con
-    tokens_entrada/tokens_salida puestos) si Claude no devuelve algo usable."""
+def clasificar(referente, vocabulario, salida=None):
+    """Una llamada de visión (spec §5). `salida`: idiomas de firma y dolor
+    (sin pasarla, `salida_para(referente)`; spec 2026-09-26 §B7). Devuelve
+    (resultado_validado, tokens_entrada, tokens_salida); lanza
+    ClasificacionInvalida (con tokens_entrada/tokens_salida puestos) si Claude
+    no devuelve algo usable."""
+    salida = tuple(s for s in (salida or salida_para(referente)) if idiomas.normalizar(s)) or ("es",)
+    principal, otros = salida[0], salida[1:2]
     texto = PROMPT.format(
         marca=_sin_cierre(referente.get("marca"), "marca"), titular=_sin_cierre(referente.get("titular"), "titular"),
         cuerpo=_sin_cierre(referente.get("cuerpo"), "cuerpo"), idioma=referente.get("idioma") or "desconocido",
-        vocabulario=_sin_cierre("\n".join(f"- {n}" for n in vocabulario), "vocabulario"))
+        vocabulario=_sin_cierre("\n".join(f"- {n}" for n in vocabulario), "vocabulario"),
+        idioma_texto=idiomas.nombre_para_claude(principal), traducciones=_traducciones(otros))
     content = [{"type": "text", "text": texto},
                {"type": "image", "source": {"type": "url", "url": referente["imagen_url"]}}]
-    crudo, ent, sal = _llamar(content, system=doctrina.bloque_system("clasificar"))
+    # Con dos idiomas no va «escribe TODO en X»: el prompt dice cuál va en cada clave.
+    crudo, ent, sal = _llamar(content, system=doctrina.bloque_system("clasificar", idioma=None if otros else principal))
     try:
         data = _parsear(crudo)
-        resultado = validar(data, vocabulario)
+        resultado = validar(data, vocabulario, salida=(principal,) + otros)
     except ClasificacionInvalida as e:
         e.tokens_entrada, e.tokens_salida = ent, sal
         raise

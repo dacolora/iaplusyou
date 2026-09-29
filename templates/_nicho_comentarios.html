@@ -3,70 +3,70 @@
    fuentes_conectadas, actores_apify, recolecciones, periodos_reddit, max_apify,
    region_defecto. Texto y CSV corren en la ruta; Reddit, YouTube y Apify
    encolan `nicho_recolectar` y muestran la barra de progreso mientras vive. #}
-<h3 class="sprint-subtitulo">Comentarios</h3>
+<h3 class="sprint-subtitulo">{{ _('Comentarios') }}</h3>
 <div class="nicho-fuentes">
   <details class="swap-card" {% if not estudio.comentarios_total %}open{% endif %}>
-    <summary class="swap-card-resumen">Pegar texto</summary>
+    <summary class="swap-card-resumen">{{ _('Pegar texto') }}</summary>
     <form method="post" action="{{ url_for('nicho.comentarios_texto', cliente=cliente, eid=estudio.id) }}" class="form-experimento">
-      <label>Comentarios <textarea name="texto" rows="8" required placeholder="Pega aquí los comentarios copiados de Amazon, Facebook, reseñas…"></textarea></label>
+      <label>{{ _('Comentarios') }} <textarea name="texto" rows="8" required placeholder="{{ _('Pega aquí los comentarios copiados de Amazon, Facebook, reseñas…') }}"></textarea></label>
       <div class="fe-opciones">
         {% for codigo, nombre in modos_texto.items() %}
-        <label class="fe-destino"><input type="radio" name="modo" value="{{ codigo }}" {% if loop.first %}checked{% endif %}> {{ nombre }}</label>
+        <label class="fe-destino"><input type="radio" name="modo" value="{{ codigo }}" {% if loop.first %}checked{% endif %}> {{ nombre|traducir }}</label>
         {% endfor %}
       </div>
-      <button type="submit" class="btn-generar btn-sm" {% if estudio.archivado %}disabled{% endif %}>Agregar comentarios</button>
+      <button type="submit" class="btn-generar btn-sm" {% if estudio.archivado %}disabled{% endif %}>{{ _('Agregar comentarios') }}</button>
     </form>
   </details>
   <details class="swap-card">
-    <summary class="swap-card-resumen">Subir CSV o Excel</summary>
+    <summary class="swap-card-resumen">{{ _('Subir CSV o Excel') }}</summary>
     <form method="post" action="{{ url_for('nicho.comentarios_archivo', cliente=cliente, eid=estudio.id) }}" enctype="multipart/form-data" class="form-experimento">
-      <label>Archivo .csv o .xlsx (primera fila con encabezados; columna «texto» o «comentario»; opcionales «url», «likes», «fecha») <input type="file" name="archivo" accept=".csv,.xlsx" required></label>
-      <button type="submit" class="btn-generar btn-sm" {% if estudio.archivado %}disabled{% endif %}>Subir</button>
+      <label>{{ _('Archivo .csv o .xlsx (primera fila con encabezados; columna «texto» o «comentario»; opcionales «url», «likes», «fecha»)') }} <input type="file" name="archivo" accept=".csv,.xlsx" required></label>
+      <button type="submit" class="btn-generar btn-sm" {% if estudio.archivado %}disabled{% endif %}>{{ _('Subir') }}</button>
     </form>
   </details>
   {% for f in fuentes_conectadas %}
   <details class="swap-card nicho-fuente-{{ f.tipo }}">
-    <summary class="swap-card-resumen">{{ f.nombre }}{% if f.faltan %} <small class="vacio">(falta {{ f.faltan | join(', ') }})</small>{% elif f.en_curso %} <small class="vacio">(recolectando…)</small>{% endif %}</summary>
+    <summary class="swap-card-resumen">{{ f.nombre|traducir }}{% if f.faltan %} <small class="vacio">({{ _('falta %(llaves)s', llaves=f.faltan | join(', ')) }})</small>{% elif f.en_curso %} <small class="vacio">({{ _('recolectando…') }})</small>{% endif %}</summary>
     {% if f.faltan %}
-    <p class="vacio">Configura {{ f.faltan | join(', ') }} en el .env del servidor (Configuración › Puesta a punto) y reinicia los dos servicios.</p>
+    <p class="vacio">{{ _('Configura %(llaves)s en el .env del servidor (Configuración › Puesta a punto) y reinicia los dos servicios.', llaves=f.faltan | join(', ')) }}</p>
     {% endif %}
     <form method="post" action="{{ url_for('nicho.recolectar', cliente=cliente, eid=estudio.id, fuente=f.tipo) }}" class="form-experimento"{% if f.tipo == 'apify' %} id="form-apify"{% endif %}>
       {% if f.tipo == 'reddit' %}
-      <label>Palabras clave <input name="palabras_clave" placeholder="foot pain slippers"></label>
-      <label>Subreddits (separados por coma; vacío = toda Reddit) <input name="subreddits" placeholder="Sneakers, BuyItForLife"></label>
-      <label>Links de posts (uno por línea, opcional) <textarea name="links" rows="2"></textarea></label>
+      <label>{{ _('Palabras clave') }} <input name="palabras_clave" placeholder="foot pain slippers"></label>
+      <label>{{ _('Subreddits (separados por coma; vacío = toda Reddit)') }} <input name="subreddits" placeholder="Sneakers, BuyItForLife"></label>
+      <label>{{ _('Links de posts (uno por línea, opcional)') }} <textarea name="links" rows="2"></textarea></label>
       <div class="fe-opciones">
-        <label>Posts <input type="number" name="max_posts" value="10" min="1" max="25" class="mini-input"></label>
-        <label>Comentarios por post <input type="number" name="max_comentarios_por_post" value="50" min="1" max="200" class="mini-input"></label>
-        <label>Periodo <select name="periodo">{% for p in periodos_reddit %}<option value="{{ p }}"{% if p == 'year' %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+        <label>{{ _('Posts') }} <input type="number" name="max_posts" value="10" min="1" max="25" class="mini-input"></label>
+        <label>{{ _('Comentarios por post') }} <input type="number" name="max_comentarios_por_post" value="50" min="1" max="200" class="mini-input"></label>
+        <label>{{ _('Periodo') }} <select name="periodo">{% for p in periodos_reddit %}<option value="{{ p }}"{% if p == 'year' %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
       </div>
-      <small class="vacio">API oficial, gratis para uso propio (100 llamadas por minuto). Si esto se vende como producto, Reddit pide permiso comercial.</small>
+      <small class="vacio">{{ _('API oficial, gratis para uso propio (100 llamadas por minuto). Si esto se vende como producto, Reddit pide permiso comercial.') }}</small>
       {% elif f.tipo == 'youtube' %}
-      <label>Palabras clave <input name="palabras_clave" placeholder="best slippers foot pain"></label>
-      <label>Links de videos (uno por línea, opcional) <textarea name="links" rows="2"></textarea></label>
+      <label>{{ _('Palabras clave') }} <input name="palabras_clave" placeholder="best slippers foot pain"></label>
+      <label>{{ _('Links de videos (uno por línea, opcional)') }} <textarea name="links" rows="2"></textarea></label>
       <div class="fe-opciones">
-        <label>Videos <input type="number" name="max_videos" value="5" min="1" max="10" class="mini-input"></label>
-        <label>Comentarios por video <input type="number" name="max_comentarios_por_video" value="100" min="1" max="500" class="mini-input"></label>
-        <label>Idioma <input name="idioma" value="{{ estudio.idioma }}" class="mini-input"></label>
-        <label>Región <input name="region" value="{{ region_defecto }}" class="mini-input" placeholder="CO"></label>
+        <label>{{ _('Videos') }} <input type="number" name="max_videos" value="5" min="1" max="10" class="mini-input"></label>
+        <label>{{ _('Comentarios por video') }} <input type="number" name="max_comentarios_por_video" value="100" min="1" max="500" class="mini-input"></label>
+        <label>{{ _('Idioma') }} <input name="idioma" value="{{ idioma_busqueda or estudio.idioma }}" class="mini-input"></label>
+        <label>{{ _('Región') }} <input name="region" value="{{ region_defecto }}" class="mini-input" placeholder="CO"></label>
       </div>
-      <small class="vacio">Google permite 100 búsquedas por día por proyecto; cada recolección usa una. Los links no gastan búsqueda.</small>
+      <small class="vacio">{{ _('Google permite 100 búsquedas por día por proyecto; cada recolección usa una. Los links no gastan búsqueda.') }}</small>
       {% else %}
-      <label>Qué traer
-        <select name="actor" id="apify-actor">{% for a in actores_apify %}<option value="{{ a.clave }}" data-ayuda="{{ a.ayuda }}">{{ a.nombre }} · US$ {{ '%.4f' % a.usd_por_resultado }} por resultado</option>{% endfor %}</select>
+      <label>{{ _('Qué traer') }}
+        <select name="actor" id="apify-actor">{% for a in actores_apify %}<option value="{{ a.clave }}" data-ayuda="{{ a.ayuda|traducir }}">{{ a.nombre|traducir }} · {{ _('US$ %(usd)s por resultado', usd='%.4f' % a.usd_por_resultado) }}</option>{% endfor %}</select>
       </label>
-      <label>Links (uno por línea) <textarea name="links" rows="3" required></textarea></label>
-      <small class="vacio" id="apify-ayuda">{{ actores_apify[0].ayuda if actores_apify else '' }}</small>
+      <label>{{ _('Links (uno por línea)') }} <textarea name="links" rows="3" required></textarea></label>
+      <small class="vacio" id="apify-ayuda">{{ actores_apify[0].ayuda|traducir if actores_apify else '' }}</small>
       <div class="fe-opciones">
-        <label>Máximo de resultados <input type="number" name="max_resultados" id="apify-max" value="200" min="1" max="{{ max_apify }}" class="mini-input"></label>
+        <label>{{ _('Máximo de resultados') }} <input type="number" name="max_resultados" id="apify-max" value="200" min="1" max="{{ max_apify }}" class="mini-input"></label>
         <span class="tag-estado" id="apify-estimado">≈ …</span>
       </div>
-      <small class="vacio">Se cobra por resultado (aprox.: Apify suma cómputo). Cada clic es una corrida y no se reintenta sola. Usar estos datos es responsabilidad de quien pone el token.</small>
+      <small class="vacio">{{ _('Se cobra por resultado (aprox.: Apify suma cómputo). Cada clic es una corrida y no se reintenta sola. Usar estos datos es responsabilidad de quien pone el token.') }}</small>
       {% endif %}
-      <button type="submit" class="btn-generar btn-sm"{% if f.faltan or f.en_curso or estudio.archivado %} disabled{% endif %}>{% if f.tipo == 'apify' %}Traer (se cobra){% else %}Recolectar{% endif %}</button>
+      <button type="submit" class="btn-generar btn-sm"{% if f.faltan or f.en_curso or estudio.archivado %} disabled{% endif %}>{% if f.tipo == 'apify' %}{{ _('Traer (se cobra)') }}{% else %}{{ _('Recolectar') }}{% endif %}</button>
     </form>
     {% if f.en_curso %}
-    <div class="barra-progreso" id="trabajo-{{ f.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto">Buscando… 0% · 0s</span></div>
+    <div class="barra-progreso" id="trabajo-{{ f.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto">{{ _('Buscando') }}… 0% · 0s</span></div>
     <script>iniciarPolling({{ f.job_id | tojson }}, {{ ("trabajo-" ~ f.job_id) | tojson }});</script>
     {% endif %}
   </details>
@@ -76,7 +76,7 @@
 {% if recolecciones %}
 <ul class="nicho-recolecciones">
   {% for r in recolecciones %}
-  <li><small class="vacio">{{ r.fecha }}</small> · {{ fuentes_nombre.get(r.fuente, r.fuente) }}: {{ r.nuevos }} nuevo(s), {{ r.repetidos }} repetido(s){% if r.aviso %} · <span class="tag-estado sprint-aviso">{{ r.aviso }}</span>{% endif %}</li>
+  <li><small class="vacio">{{ r.fecha }}</small> · {{ fuentes_nombre.get(r.fuente, r.fuente)|traducir }}: {{ _('%(nuevos)s nuevo(s), %(repetidos)s repetido(s)', nuevos=r.nuevos, repetidos=r.repetidos) }}{% if r.aviso %} · <span class="tag-estado sprint-aviso">{{ r.aviso }}</span>{% endif %}</li>
   {% endfor %}
 </ul>
 {% endif %}
@@ -84,28 +84,28 @@
 {% if conteos %}
 <p class="nicho-conteos">
   {% for fuente, n in conteos.items() %}
-  <a class="tag-estado" href="{{ url_for('nicho.ver', cliente=cliente, eid=estudio.id, fuente=fuente) }}">{{ fuentes_nombre.get(fuente, fuente) }}: {{ n.total }}{% if n.excluidos %} ({{ n.excluidos }} excluidos){% endif %}</a>
+  <a class="tag-estado" href="{{ url_for('nicho.ver', cliente=cliente, eid=estudio.id, fuente=fuente) }}">{{ fuentes_nombre.get(fuente, fuente)|traducir }}: {{ n.total }}{% if n.excluidos %} ({{ _('%(n)s excluidos', n=n.excluidos) }}){% endif %}</a>
   <form method="post" action="{{ url_for('nicho.comentarios_borrar', cliente=cliente, eid=estudio.id, fuente=fuente) }}" class="inline"
-        onsubmit="return confirm('¿Quitar los {{ n.total }} comentarios de {{ fuentes_nombre.get(fuente, fuente) }}?');">
-    <button type="submit" class="btn-sm btn-peligro" title="Quitar todos los de esta fuente">×</button>
+        onsubmit='return confirm({{ _("¿Quitar los %(n)s comentarios de %(fuente)s?", n=n.total, fuente=fuentes_nombre.get(fuente, fuente)|traducir)|tojson }});'>
+    <button type="submit" class="btn-sm btn-peligro" title="{{ _('Quitar todos los de esta fuente') }}">×</button>
   </form>
   {% endfor %}
-  {% if fuente_filtro %}<a class="btn-sm" href="{{ url_for('nicho.ver', cliente=cliente, eid=estudio.id) }}">Ver todas las fuentes</a>{% endif %}
+  {% if fuente_filtro %}<a class="btn-sm" href="{{ url_for('nicho.ver', cliente=cliente, eid=estudio.id) }}">{{ _('Ver todas las fuentes') }}</a>{% endif %}
 </p>
 {% endif %}
 
 <div class="nicho-comentarios">
   {% for c in pagina_comentarios["items"] %}
   <div class="nicho-comentario{% if c.excluido %} excluido{% endif %}">
-    <small class="vacio">{{ fuentes_nombre.get(c.fuente, c.fuente) }}{% if c.puntuacion is not none %} · {{ c.puntuacion }}{% endif %}{% if c.contexto %} · {{ c.contexto }}{% endif %}{% if c.url %} · <a href="{{ c.url }}" target="_blank" rel="noopener">ver original</a>{% endif %}</small>
+    <small class="vacio">{{ fuentes_nombre.get(c.fuente, c.fuente)|traducir }}{% if c.puntuacion is not none %} · {{ c.puntuacion }}{% endif %}{% if c.contexto %} · {{ c.contexto }}{% endif %}{% if c.url %} · <a href="{{ c.url }}" target="_blank" rel="noopener">{{ _('ver original') }}</a>{% endif %}</small>
     <p>{{ c.texto }}</p>
     <form method="post" action="{{ url_for('nicho.comentario_excluir', cliente=cliente, cid=c.id) }}" class="inline">
       {% if c.excluido %}<input type="hidden" name="incluir" value="1">{% endif %}
-      <button type="submit" class="btn-sm">{{ 'Incluir' if c.excluido else 'Excluir' }}</button>
+      <button type="submit" class="btn-sm">{{ _('Incluir') if c.excluido else _('Excluir') }}</button>
     </form>
   </div>
   {% else %}
-  <p class="vacio">Todavía no hay comentarios. Pega texto o sube un archivo arriba.</p>
+  <p class="vacio">{{ _('Todavía no hay comentarios. Pega texto o sube un archivo arriba.') }}</p>
   {% endfor %}
 </div>
 {% if pagina_comentarios.paginas > 1 %}
@@ -129,6 +129,14 @@
     // llegue la respuesta, o respuestas que llegan desordenadas) y `ultimo`
     // guarda la última respuesta buena CON su combinación.
     var pedidas = 0, ultimo = null;
+    // Frases con marcadores: el precio y el tope se ponen en JS (función, para que un «$» del precio no cuente como patrón).
+    var TXT_ESTIMADO = {{ _('≈ %(texto)s por hasta %(max)s resultados (aprox.)', texto='{texto}', max='{max}')|tojson }};
+    var TXT_SIN_ESTIMADO = {{ _('Todavía no hay estimado de Apify; espera un momento y vuelve a intentar.')|tojson }};
+    var TXT_CONFIRMAR = {{ _('Traer resultados de Apify se cobra: ≈ %(texto)s por hasta %(max)s resultados (aprox.). ¿Seguimos?', texto='{texto}', max='{max}')|tojson }};
+    function conDatos(plantilla, u) {
+      return plantilla.replace('{texto}', function () { return u.texto; })
+                      .replace('{max}', function () { return String(u.max_resultados); });
+    }
     function pintar() {
       var op = sel.options[sel.selectedIndex];
       if (op && ayuda) ayuda.textContent = op.dataset.ayuda || '';
@@ -140,7 +148,7 @@
           if (mia !== pedidas) return;                 // respuesta superada por otra petición
           if (!d) { ultimo = null; out.textContent = '≈ ?'; return; }
           ultimo = {clave: clave, max: n, texto: d.texto, max_resultados: d.max_resultados};
-          out.textContent = '≈ ' + ultimo.texto + ' por hasta ' + ultimo.max_resultados + ' resultados (aprox.)';
+          out.textContent = conDatos(TXT_ESTIMADO, ultimo);
         })
         .catch(function () { if (mia === pedidas) { ultimo = null; out.textContent = '≈ ?'; } });
     }
@@ -151,11 +159,11 @@
       if (!ultimo || ultimo.clave !== sel.value || ultimo.max !== (max.value || '1')) {
         ev.preventDefault();
         ev.stopPropagation();                          // que los listeners globales no marquen el botón
-        alert('Todavía no hay estimado de Apify; espera un momento y vuelve a intentar.');
+        alert(TXT_SIN_ESTIMADO);
         pintar();
         return;
       }
-      if (!confirm('Traer resultados de Apify se cobra: ≈ ' + ultimo.texto + ' por hasta ' + ultimo.max_resultados + ' resultados (aprox.). ¿Seguimos?')) {
+      if (!confirm(conDatos(TXT_CONFIRMAR, ultimo))) {
         ev.preventDefault();
         ev.stopPropagation();
       }

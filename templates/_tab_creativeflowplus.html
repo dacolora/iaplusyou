@@ -1,4 +1,4 @@
-{% from "_revision_doctrina.html" import revision_doctrina %}
+{% from "_crear_tarjetas.html" import lista_crear with context %}
 {# Formulario de Crear como compositor (spec 2026-09-27-crear-compositor-design.md).
    Una tarjeta en dos mitades: arriba la bandeja de referencias (FUERA de
    #form-flowplus porque lleva sus propios <form> de quitar/vaciar — los
@@ -26,11 +26,15 @@
     {# Con esto el servidor usa solo los `ref_ids` de la bandeja que ves (ver _flowplus_bandeja.html). #}
     <input type="hidden" name="bandeja_vista" value="1">
     <input type="hidden" name="modelo" id="fp-modelo">
+    {# Triple Whale: «<evaluación>:<idea>» cuando el texto vino de «Llevar a Crear» (solo lo llena el prefill). #}
+    <input type="hidden" name="origen_tw" id="fp-origen-tw" value="">
     <div class="crear-comp-abajo">
       <div class="banco-prompts crear-etiquetas" id="fp-etiquetas"></div>
       <label class="crear-oculto-lector" for="fp-texto">{{ _('Qué tiene que pasar') }}</label>
       <textarea name="accion_central" id="fp-texto" rows="4" placeholder="{{ _('Describe qué tiene que pasar. Ej.: @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1') }}"></textarea>
       <p class="campo-error" id="fp-texto-error" hidden>{{ _('Escribe qué tiene que pasar en el video.') }}</p>
+    {# Incidente 2026-09-28: el modelo elegido no usa todas las referencias de la bandeja (Seedance usa una). #}
+    <p class="campo-error" id="fp-aviso-refs" hidden></p>
 
       <div class="crear-barra">
         <div class="crear-pills">
@@ -72,7 +76,7 @@
             <div class="crear-menu crear-menu-ancho" id="fp-menu-modelo" hidden>
               <div class="crear-opciones" data-solo-video>
                 {% for id, m in modelos_flowplus_video.items() %}
-                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
+                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-max-videos="{{ m.max_videos }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
                 {% endfor %}
               </div>
               <div class="crear-opciones" data-solo-imagen hidden>
@@ -83,6 +87,10 @@
               <label class="crear-interruptor" id="fp-calidad-wrap" data-solo-video>
                 <input type="checkbox" name="calidad" value="borrador" id="fp-calidad">
                 <span><strong>{{ _('Borrador a 480p') }}</strong><small>{{ _('Solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final.') }}</small></span>
+              </label>
+              <label class="crear-interruptor" id="fp-mejorar-wrap" data-solo-video>
+                <input type="checkbox" name="mejorar_prompt" value="si" id="fp-mejorar">
+                <span><strong>{{ _('Que Wan mejore mi prompt') }}</strong><small>{{ _('Solo Wan 3.0, sin costo extra: el modelo reescribe tu texto antes de generar, como hacen Higgsfield y la web de Wan. Apagado, va tal cual lo escribiste.') }}</small></span>
               </label>
               <p class="crear-nota" data-solo-video>{{ _('Precios con el sonido de la escena incluido.') }}</p>
             </div>
@@ -182,6 +190,8 @@
          cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
          quien tiene una idea pero quiere que la IA arme los planos. Nunca obligatorio. #}
       <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('¿No sabes qué escribir?') }} <strong>{{ _('Crear super prompt con IA (gratis)') }}</strong></button>
+      {# Sin variables quemadas (2026-09-28): todo vuelve a los valores del proyecto y la bandeja se vacía. #}
+      <button type="button" class="crear-enlace crear-enlace-gris" id="fp-empezar" title="{{ _('Vacía el texto, el sonido, la música, la bandeja y el catálogo; la duración, el modelo y el formato vuelven a los del proyecto.') }}">{{ _('Empezar de cero') }}</button>
     </div>
 
     <dialog class="generado-modal crear-catalogo" id="fp-catalogo">
@@ -209,6 +219,10 @@
       <li>{{ _('Un solo lugar por video: si nombras varios cuartos, el modelo los recorre.') }}</li>
       <li>{{ _('Adjunta solo las fotos de quien aparece: cada foto adjunta invita al modelo a meter a esa persona.') }}</li>
       <li>{{ _('Un dibujo, una foto o una pantalla que sale en la escena, descríbelo con palabras y sin @Imagen: con @Imagen el modelo lo convierte en personajes reales.') }}</li>
+      {# Incidente 2026-09-28: encabezados pegados en cada clip, menciones de otras herramientas y personajes dobles. #}
+      <li>{{ _('Nombra las referencias con los chips de arriba (@Imagen 1, @Video 1). Si pegas texto de otra herramienta, @Image1, @Image 1 o @[Image 1](image_1) también se entienden; una mención sin referencia en la bandeja no genera.') }}</li>
+      <li>{{ _('No pegues en cada clip el mismo encabezado con el mapa de todas las referencias: el modelo pinta todo lo que lee (el dibujo, la hija, la cocina) aunque ese clip no lo pida. Escribe solo lo que pasa en este clip.') }}</li>
+      <li>{{ _('Si un personaje sale dos veces, casi siempre está adjunto y además descrito con otro nombre, o hay fotos de más en la bandeja: deja solo las de este clip.') }}</li>
     </ul>
   </details>
   <div class="crear-velo" id="crear-velo"></div>
@@ -220,186 +234,14 @@
 
 <div id="creativeflowplus-resultados" style="margin-top:2rem;">
   <div style="display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap;">
-    <h3 style="margin:0;">{{ _('Generados (%(n)s)', n=(creative_flow_items | length)) }}</h3>
+    <h3 style="margin:0;">{{ _('Generados (%(n)s)', n=crear_total) }}</h3>
     <span class="vacio" style="padding:0;font-size:.78rem;">{{ _('Toca una pieza para ver el detalle, descargarla o crear otra a partir de ella.') }}</span>
   </div>
-  {% if not creative_flow_items %}
+  {% if not crear_total %}
   <p class="vacio">{{ _('Todavía no has generado nada en Crear.') }}</p>
   {% endif %}
-  <div class="generados-grid">
-    {% for item in creative_flow_items %}
-    <div class="generado" data-cf="{{ item.id }}" tabindex="0" role="button">
-      <div class="generado-media">
-        {% if item.estado == "video_listo" and item.tipo == "imagen" %}
-        <img src="{{ item.video_url }}" alt="" loading="lazy">
-        {% elif item.estado == "video_listo" %}
-        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
-        {% else %}
-        {% set _portada = (item.referencias[0].frame_url if item.referencias else (item.referencias_urls[0] if item.referencias_urls else None)) %}
-        {% if _portada %}<img src="{{ _portada }}" alt="" loading="lazy" class="generado-portada">{% endif %}
-        {% endif %}
-        <span class="generado-tipo">{% if item.tipo == "imagen" %}{{ _('Imagen') }}{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}{% endif %}</span>
-        {% if item.estado == "video_generando" %}
-        <div class="generado-velo">
-          {% if item.trabajo %}
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Generando… 0%% · 0s') }}</div>
-          <script>iniciarPolling({{ item.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo.job_id) | tojson }});</script>
-          {% else %}
-          <span class="generado-estado">{{ _('Interrumpido') }}</span>
-          {% endif %}
-        </div>
-        {% elif item.estado == "error" %}
-        <div class="generado-velo"><span class="generado-estado error">{{ _('Error') }}</span></div>
-        {% elif item.estado == "prompt_pendiente" %}
-        <div class="generado-velo">
-          {% if item.trabajo_director %}
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo_director.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Armando el prompt con IA…') }}</div>
-          <script>iniciarPolling({{ item.trabajo_director.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_director.job_id) | tojson }});</script>
-          {% else %}
-          <span class="generado-estado">{{ _('Interrumpido — rearma el prompt') }}</span>
-          {% endif %}
-        </div>
-        {% elif item.estado == "prompt_listo" %}
-        <div class="fe-seccion" style="background:var(--panel-2);padding:0.8rem;border-radius:4px;margin-bottom:0.8rem;">
-          <p class="campo-label" style="margin:0 0 0.4rem 0;">{{ _('✏️ Super prompt (editable)') }}</p>
-          {% if item.director and item.director.estado == "fallback" %}
-          <p class="vacio" style="padding:0;font-size:.75rem;color:var(--error);">{{ _('⚠️ La IA no pudo armar los planos (%(aviso)s). Aquí va el prompt básico que puedes editar.', aviso=item.director.aviso) }}</p>
-          {% else %}
-          <p class="vacio" style="padding:0;font-size:.75rem;">{{ _('Revisa, edita si quieres y haz clic en «Generar video».') }}</p>
-          {% endif %}
-          <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}" style="margin-top:.4rem;">
-            <textarea name="prompt_a" rows="6" style="width:100%;font-size:.8rem;font-family:monospace;padding:.4rem;">{{ item.prompt_relleno }}</textarea>
-            <div style="display:flex;gap:.4rem;margin-top:.3rem;">
-              <button type="submit" class="btn-guardar btn-sm">{{ _('💾 Guardar cambios') }}</button>
-              <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe el prompt. ¿Seguir?')|tojson }});'>
-                <button type="submit" class="btn-sm">{{ _('🔄 Rearmar con IA') }}</button>
-              </form>
-            </div>
-          </form>
-        </div>
-        {% elif item.trabajo_revision %}
-        {# Doctrina, bloque 3: la barra de «Revisar con la doctrina» va en la tarjeta. #}
-        <div class="generado-velo">
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo_revision.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Revisando con la doctrina…') }}</div>
-          <script>iniciarPolling({{ item.trabajo_revision.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_revision.job_id) | tojson }});</script>
-        </div>
-        {% endif %}
-      </div>
-      <div class="generado-pie">
-        <strong>{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}</strong>
-        {% if item.variante %}<span class="generado-badge">{{ _('Versión %(v)s', v=item.variante) }}</span>{% elif item.director and item.director.prompt_b %}<span class="generado-badge">{{ _('Versión A') }}</span>{% endif %}
-        {% if item.revision_estado in ("bien", "mejorar") %}<span class="generado-badge" title="{{ _('Revisión de la doctrina') }}">{% if item.revision_estado == "bien" %}{{ _('Doctrina: bien') }}{% else %}{{ _('Doctrina: %(n)s por mejorar', n=item.revision_n) }}{% endif %}</span>{% endif %}
-        {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.ver', cliente=cliente, sid=item.sprint.sprint_id, panel=item.sprint.campana_id, paso='piezas') }}" title="{{ item.sprint.sprint_nombre }}">{{ _('Sprint · Campaña %(n)s', n=item.sprint.campana_n) }}</a>{% endif %}
-        <small>{{ item.modelo_nombre|traducir }}{% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="{{ _('El video trae el sonido de la escena') }}">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="{{ _('El proveedor entregó el video sin pista de audio') }}">{{ _('🔇 sin sonido') }}</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="{{ _('Música al crear: %(estilo)s', estilo=item.capas.musica.estilo) }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
-      </div>
-      <template class="generado-detalle">
-        <div class="detalle-media">
-          {% if item.estado == "video_listo" and item.tipo == "imagen" %}
-          <img src="{{ item.video_url }}" alt="">
-          {% elif item.estado == "video_listo" %}
-          <video src="{{ item.video_url }}" controls autoplay muted loop playsinline></video>
-          {% elif item.referencias %}
-          <img src="{{ item.referencias[0].frame_url }}" alt="" style="opacity:.6;">
-          {% endif %}
-        </div>
-        <div class="detalle-info">
-          <p class="campo-label">{{ _('Qué tenía que pasar') }}</p>
-          <p class="detalle-texto">{{ item.accion_central or _('(sin texto)') }}</p>
-          <p class="vacio" style="padding:0;font-size:.78rem;">
-            {% if item.tipo == "imagen" %}{{ _('Imagen') }}{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}{% endif %}
-            · {{ item.modelo_nombre|traducir }}
-            {% if item.enfoque_nombre %} · {{ item.enfoque_nombre|traducir }}{% endif %}
-            {% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}
-            · <span class="tag-estado">{{ item.estado }}</span>
-          </p>
-          {% if item.referencias %}
-          <p class="campo-label" style="margin-top:.8rem;">{{ _('Referencias') }}</p>
-          <div class="catalogo-productos" style="margin-bottom:.6rem;">
-            {% for r in item.referencias %}
-            <figure style="margin:0;text-align:center;">
-              <img src="{{ r.frame_url }}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;background:var(--panel-2);{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
-              <figcaption class="vacio" style="padding:0;font-size:.66rem;">{{ r.etiqueta }}</figcaption>
-            </figure>
-            {% endfor %}
-          </div>
-          {% endif %}
-          {% if item.estado == "prompt_listo" and item.tipo != "imagen" %}
-          <section class="fe-seccion">
-            <h4 class="fe-titulo">{{ _('Prompt por planos') }}</h4>
-            {% if item.director and item.director.estado == "fallback" %}
-            <p class="tag-error">{{ _('La IA no pudo armar los planos (%(aviso)s); este es el prompt básico. Puedes editarlo o rearmar.', aviso=item.director.aviso) }}</p>
-            {% endif %}
-            <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}">
-              <label class="campo-label">{{ _('Versión A (lo que recibe el modelo)') }}</label>
-              <textarea name="prompt_a" rows="10" style="width:100%;font-size:.8rem;">{{ item.prompt_relleno }}</textarea>
-              {% if item.director and item.director.prompt_b %}
-              <details style="margin-top:.5rem;"><summary class="vacio" style="cursor:pointer;padding:0;font-size:.78rem;">{{ _('Versión B — %(dif)s', dif=item.director.diferencia_b) }}</summary>
-                <textarea name="prompt_b" rows="10" style="width:100%;font-size:.8rem;">{{ item.director.prompt_b }}</textarea>
-              </details>
-              {% endif %}
-              <button type="submit" class="btn-guardar btn-sm" style="margin-top:.4rem;">{{ _('Guardar cambios') }}</button>
-            </form>
-            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe las versiones A y B (se pierden tus ediciones). ¿Seguir?')|tojson }});'>
-              <button type="submit" class="btn-sm">{{ _('Rearmar con IA') }}</button>
-            </form>
-          </section>
-          {% elif item.prompt_relleno and item.prompt_relleno != item.accion_central %}
-          <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">{{ _('Ver el prompt completo que recibió el modelo') }}</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
-          {% endif %}
-          {% if item.estado == "error" %}
-          <p class="tag-error">{{ item.error }}</p>
-          {% endif %}
-          {% if item.revision_estado %}{{ revision_doctrina(item, cliente) }}{% endif %}
-
-          <div class="detalle-acciones">
-            {% if item.estado == "video_listo" %}
-            <a class="btn-generar btn-sm" href="{{ item.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>
-            {% endif %}
-            {% if item.estado == "video_listo" and item.tipo != "imagen" %}
-            <a class="btn-generar btn-sm" href="#final?cf={{ item.id }}"
-               onclick="var d = document.getElementById('generado-modal'); if (d) d.close(); location.hash = this.getAttribute('href'); return false;">{{ _('Llevar a final edition') }}</a>
-            {% endif %}
-            {% if item.estado in ("video_listo", "error", "prompt_listo") %}
-            <form method="post" action="{{ url_for('fp_reusar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              {% if item.estado == "video_listo" and item.tipo == "imagen" %}
-              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="incluir_resultado" value="si" checked> {{ _('Usar esta imagen como referencia') }}</label>
-              {% endif %}
-              <button type="submit" class="btn-guardar btn-sm">{{ _('Editar y crear otra a partir de esta') }}</button>
-            </form>
-            {% endif %}
-            {% if item.estado in ("prompt_listo", "error") %}
-            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd if item.costo_estimado else '' }}">
-              {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.director and item.director.prompt_b and not item.tiene_hija_b %}
-              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> {{ _('Generar también la versión B (dos videos)') }}</label>
-              {% endif %}
-              {% if item.estado == "prompt_listo" %}
-              <p class="vacio" style="padding:0;font-size:.75rem;color:var(--accent-texto);margin-bottom:.4rem;">{{ _('👆 Revisa el prompt arriba antes de generar') }}</p>
-              {% endif %}
-              <button type="submit" class="btn-generar btn-sm fp-generar-btn">{% if item.estado == "error" %}{{ _('Reintentar') }}{% elif item.estado == "prompt_listo" %}{{ _('Generar video') }}{% else %}{{ _('Generar') }}{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
-            </form>
-            {% endif %}
-            {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" %}
-            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              <button type="submit" class="btn-sm">{{ _('Rearmar el prompt') }}</button>
-            </form>
-            {% endif %}
-            <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('¿Descartar esta pieza?')|tojson }});' style="display:inline;">
-              <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
-            </form>
-            {# Galería primero: videos e imágenes listos van a Experimentos ya
-               marcados (#experimentos?piezas=<pieza_id>); el reload hace que la
-               pestaña lea el hash y abra los tres pasos. #}
-            {% if item.estado == "video_listo" and item.pieza_id %}
-            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ item.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
-            {% endif %}
-          </div>
-        </div>
-      </template>
-    </div>
-    {% endfor %}
+  <div class="generados-grid" id="crear-generados" data-tarjetas="{{ url_for('crear_tarjetas', cliente=cliente) }}">
+    {{ lista_crear(crear, 0, crear_total) }}
   </div>
 </div>
 
@@ -410,7 +252,7 @@
 <script>
   // formatearUSD: «US$ 1,00» / «US$ <0,01» (espejo de gastos.formatear). Declarada
   // en este script sin envoltorio, así es global: la usan dos scripts, el estimado del formulario y el botón A+B del
-  // modal (el formulario de generar vive en un <template> clonado).
+  // modal (el formulario de generar llega por fetch con el detalle).
   function formatearUSD(usd) {
     if (usd > 0 && usd < 0.01) return 'US$ <0,01';
     var partes = usd.toFixed(2).split('.');
@@ -423,25 +265,49 @@
     var cuerpo = document.getElementById('generado-modal-cuerpo');
     if (!modal) return;
     function abrir(card) {
-      var tpl = card.querySelector('template.generado-detalle');
-      if (!tpl) return;
-      cuerpo.innerHTML = '';
-      cuerpo.appendChild(tpl.content.cloneNode(true));
-      modal.showModal();
+      if (!card.dataset.detalle) return;
+      abrirDetalleRemoto(modal, cuerpo, card.dataset.detalle, null);
     }
-    document.querySelectorAll('#creativeflowplus-resultados .generado').forEach(function (card) {
-      card.addEventListener('click', function (e) { if (!e.target.closest('form, a, button')) abrir(card); });
-      card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(card); } });
-      var v = card.querySelector('.generado-media video');
-      if (v) {
-        card.addEventListener('mouseenter', function () { v.play().catch(function () {}); });
-        card.addEventListener('mouseleave', function () { v.pause(); v.currentTime = 0; });
-      }
+    // Delegado sobre la zona: las tarjetas que agrega «Ver más» funcionan igual
+    // (spec 2026-09-28 «tarjetas ligeras»).
+    var zona = document.getElementById('creativeflowplus-resultados');
+    zona.addEventListener('click', function (e) {
+      var mas = e.target.closest('[data-siguiente]');
+      if (mas) { cargarMas(mas); return; }
+      var card = e.target.closest('.generado');
+      if (card && !e.target.closest('form, a, button')) abrir(card);
     });
-    // Costo A+B: el formulario de generar también vive en el <template> clonado,
+    zona.addEventListener('keydown', function (e) {
+      var card = e.target.closest('.generado');
+      if (!card || e.target !== card) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(card); }
+    });
+    // Reproducir al pasar el mouse; relatedTarget evita repetir al moverse
+    // dentro de la misma tarjeta.
+    zona.addEventListener('mouseover', function (e) {
+      var card = e.target.closest('.generado');
+      if (!card || card.contains(e.relatedTarget)) return;
+      var v = card.querySelector('.generado-media video');
+      if (v) v.play().catch(function () {});
+    });
+    zona.addEventListener('mouseout', function (e) {
+      var card = e.target.closest('.generado');
+      if (!card || card.contains(e.relatedTarget)) return;
+      var v = card.querySelector('.generado-media video');
+      if (v) { v.pause(); v.currentTime = 0; }
+    });
+    function cargarMas(boton) {
+      var grid = boton.closest('.generados-grid');
+      boton.disabled = true;
+      fetch(grid.dataset.tarjetas + '?desde=' + encodeURIComponent(boton.dataset.siguiente), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+        .then(function (html) { boton.remove(); grid.insertAdjacentHTML('beforeend', html); })
+        .catch(function () { boton.disabled = false; });
+    }
+    // Costo A+B: el formulario de generar llega con el detalle por fetch,
     // así que el checkbox "Generar también la versión B" se delega sobre el
     // cuerpo del modal — un listener en la carga de la página nunca
-    // vería el checkbox (no existe hasta que se clona el detalle).
+    // vería el checkbox (no existe hasta que llega el detalle).
     cuerpo.addEventListener('change', function (e) {
       if (!e.target.matches || !e.target.matches('.fp-version-b')) return;
       var f = e.target.closest('.fp-generar-form');
@@ -496,6 +362,7 @@
     var prefill = {{ fp_prefill | tojson }};
     if (prefill) {
       if (ta && prefill.texto) ta.value = prefill.texto;
+      var origenTw = document.getElementById('fp-origen-tw'); if (origenTw && prefill.origen_tw) origenTw.value = prefill.origen_tw;
       var rTipo = form.querySelector('input[name=tipo][value="' + prefill.tipo + '"]');
       if (rTipo) rTipo.checked = true;
       var rModelo = form.querySelector('input[name=modelo_video][value="' + prefill.modelo + '"], input[name=modelo_imagen][value="' + prefill.modelo + '"]');
@@ -509,6 +376,7 @@
       var mu = document.getElementById('fp-musica'); if (mu && typeof prefill.musica_estilo === 'string') mu.value = prefill.musica_estilo;
       if (inicioInput && prefill.musica_inicio_s) inicioInput.value = prefill.musica_inicio_s;
       var ca = document.getElementById('fp-calidad'); if (ca) ca.checked = prefill.calidad === 'borrador';
+      var me = document.getElementById('fp-mejorar'); if (me) me.checked = !!prefill.mejorar_prompt;
       setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
     }
     // Lo que el modelo admite manda: duraciones fuera de su rango y formatos que
@@ -530,6 +398,8 @@
         // Borrador es solo de Wan 3.0 video: no debe sobrevivir a un cambio a Imagen.
         var calidadImagen = document.getElementById('fp-calidad');
         if (calidadImagen) { calidadImagen.checked = false; calidadImagen.disabled = true; }
+        var mejorarImagen = document.getElementById('fp-mejorar');
+        if (mejorarImagen) { mejorarImagen.checked = false; mejorarImagen.disabled = true; }
         return;
       }
       var min = parseInt(m.dataset.minDuracion || '2', 10), max = parseInt(m.dataset.maxDuracion || '30', 10);
@@ -544,6 +414,10 @@
       var calidad = document.getElementById('fp-calidad');
       if (calidad) { calidad.disabled = m.value !== 'wan3'; if (calidad.disabled) calidad.checked = false; }
       if (calidadWrap) calidadWrap.hidden = m.value !== 'wan3';
+      // «Que Wan mejore mi prompt» solo existe en Wan 3.0; con otro modelo se apaga.
+      var mejorar = document.getElementById('fp-mejorar'), mejorarWrap = document.getElementById('fp-mejorar-wrap');
+      if (mejorar) { mejorar.disabled = m.value !== 'wan3'; if (mejorar.disabled) mejorar.checked = false; }
+      if (mejorarWrap) mejorarWrap.hidden = m.value !== 'wan3';
       var larga = document.getElementById('fp-duracion-larga');
       if (larga) larga.hidden = parseInt(duracion.value, 10) <= 15;
     }
@@ -574,11 +448,12 @@
       precio.textContent = usd ? '≈ ' + formatearUSD(usd) : '';
       if (pieLogos) pieLogos.hidden = sinAdjuntos();
       pintarFichas(); pintarMusica(); pintarPastillas();
+      avisarRefs(m, esImagen);
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
     form.addEventListener('change', function (e) { if (e.target.name === 'productos_catalogo') refrescar(); });
-    ['fp-check-sonido', 'fp-musica', 'fp-calidad'].forEach(function (id) {
+    ['fp-check-sonido', 'fp-musica', 'fp-calidad', 'fp-mejorar'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', refrescar);
     });
@@ -664,7 +539,9 @@
       var m = modeloActual();
       var cal = document.getElementById('fp-calidad');
       pill('fp-pill-tipo', esImagen ? {{ _('🖼 Imagen')|tojson }} : {{ _('🎬 Video')|tojson }});
-      pill('fp-pill-modelo', m ? m.dataset.nombre + (!esImagen && cal && cal.checked ? {{ _(' · borrador')|tojson }} : '') : {{ _('Modelo')|tojson }});
+      var mej = document.getElementById('fp-mejorar');
+      pill('fp-pill-modelo', m ? m.dataset.nombre + (!esImagen && cal && cal.checked ? {{ _(' · borrador')|tojson }} : '')
+                               + (!esImagen && mej && mej.checked ? {{ _(' · prompt mejorado')|tojson }} : '') : {{ _('Modelo')|tojson }});
       pill('fp-pill-duracion', '⏱ ' + duracion.value + ' s', parseInt(duracion.value, 10) > 15);
       var selFormato = esImagen ? formatoImagen : formatoVideo;
       pill('fp-pill-formato', (!esImagen && formatoVideo.disabled) ? {{ _('▯ Formato de la imagen')|tojson }} : '▯ ' + selFormato.value);
@@ -916,8 +793,8 @@
       inicioInput.value = Math.floor(audioPrev.currentTime || 0);
     });
     // Los selectores de «Mi música» de toda la página: el de Crear y el de
-    // «Producir finales» dentro de cada <template> de detalle de la pestaña
-    // Final edition (y el del detalle abierto, que ya es parte del documento).
+    // «Producir finales» del detalle abierto en Final edition (el detalle
+    // llega por fetch con la lista al día; este repinta el que ya está abierto).
     function pintarCanciones(canciones) {
       var grupos = Array.prototype.slice.call(document.querySelectorAll('optgroup.mm-opciones'));
       document.querySelectorAll('template.generado-detalle').forEach(function (t) {
@@ -938,6 +815,9 @@
     function aplicarMusica(d, elegirNuevo) {
       if (d.html !== undefined) mmWrap.innerHTML = d.html;
       if (d.canciones) pintarCanciones(d.canciones);
+      if (d.canciones && !d.deOtroPanel) {
+        try { document.dispatchEvent(new CustomEvent('mi-musica:cambio', {detail: {origen: 'mm', canciones: d.canciones}})); } catch (e) {}
+      }
       if (elegirNuevo && d.nuevo_id) { musicaSel.value = 'mat:' + d.nuevo_id; inicioInput.value = 0; }
       mostrarInicio(); refrescar();
       var err = document.getElementById('mm-error');
@@ -1019,6 +899,13 @@
     mostrarInicio();
     vigilarCancion();
 
+    // Una canción subida desde Crear › Audios también entra a este panel.
+    document.addEventListener('mi-musica:cambio', function (ev) {
+      var d = ev.detail || {};
+      if (d.origen === 'mm' || !d.canciones) return;
+      aplicarMusica({html: d.html, canciones: d.canciones, deOtroPanel: true}, false);
+    });
+
     // Enter en un campo de una línea NO envía: «Generar» cobra y solo se lanza
     // con su botón (antes, Enter en «Sonido de la escena» generaba el video).
     // El link (#fp-form-link) sí se agrega con Enter: su dueño es otro
@@ -1041,6 +928,75 @@
     });
     texto.addEventListener('input', function () {
       if (texto.value.trim()) { texto.classList.remove('co' + 'n-error'); textoError.hidden = true; }
+    });
+
+    // --- Referencias que el modelo elegido no usa (incidente 2026-09-28) ---
+    // Misma cuenta que providers/flowplus_modelos.referencias_de_mas: Wan
+    // recibe imágenes y videos aparte; en los demás el video entra por su
+    // fotograma; Seedance usa solo la primera. El servidor vuelve a comprobarlo
+    // antes de cobrar; esto solo evita el viaje.
+    var avisoRefs = document.getElementById('fp-aviso-refs');
+    var AVISO_REFS = {{ _('__MODELO__ usa hasta __N__ referencias: no usaría __SOBRAN__. Quita las que sobran o cambia de modelo.')|tojson }};
+    var AVISO_REFS_UNA = {{ _('__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una.')|tojson }};
+    var refsSobrantes = [];
+    function etiquetaDe(fig) {
+      var cap = fig.querySelector('figcaption');
+      return cap ? cap.textContent.split(' · ')[0].trim() : '';
+    }
+    function refsDeMas(m, esImagen) {
+      var maxImg = parseInt(m.dataset.max || '0', 10);
+      var maxVid = esImagen ? 0 : parseInt(m.dataset.maxVideos || '0', 10);
+      var nImg = 0, nVid = 0, sobran = [], primera = '';
+      Array.prototype.forEach.call(document.querySelectorAll('#fp-bandeja-wrap #fp-bandeja figure.crear-ref'), function (fig) {
+        var esVideo = fig.classList.contains('es-video') && maxVid > 0;
+        var cabe;
+        if (esVideo) { nVid++; cabe = nVid <= maxVid; } else { nImg++; cabe = nImg <= maxImg; }
+        if (!cabe) sobran.push(etiquetaDe(fig)); else if (!primera) primera = etiquetaDe(fig);
+      });
+      form.querySelectorAll('input[name=productos_catalogo]:checked').forEach(function (cb) {
+        var fotos = /^personaje:/.test(cb.value) ? 3 : 1;   // un personaje entra con hasta 3 fotos
+        for (var i = 0; i < fotos; i++) {
+          nImg++;
+          if (nImg > maxImg) { sobran.push(cb.dataset.nombre || cb.value); break; }
+          if (!primera) primera = cb.dataset.nombre || cb.value;
+        }
+      });
+      return { sobran: sobran, primera: primera, maxImg: maxImg };
+    }
+    function avisarRefs(m, esImagen) {
+      refsSobrantes = [];
+      if (!avisoRefs) return;
+      var pillModelo = document.getElementById('fp-pill-modelo');
+      if (!m) { avisoRefs.hidden = true; return; }
+      var r = refsDeMas(m, esImagen);
+      refsSobrantes = r.sobran;
+      if (!r.sobran.length) { avisoRefs.hidden = true; return; }
+      var plantilla = r.maxImg === 1 ? AVISO_REFS_UNA : AVISO_REFS;
+      avisoRefs.textContent = plantilla.replace('__MODELO__', m.dataset.nombre).replace('__N__', String(r.maxImg))
+        .replace('__PRIMERA__', r.primera).replace('__SOBRAN__', r.sobran.join(', '));
+      avisoRefs.hidden = false;
+      if (pillModelo) pillModelo.classList.add('co' + 'n-aviso');
+    }
+    form.addEventListener('submit', function (e) {
+      if (refsSobrantes.length) { e.preventDefault(); avisoRefs.hidden = false; avisoRefs.scrollIntoView({block: 'center'}); }
+    });
+    avisarRefs(modeloActual(), tipoActual() === 'imagen');
+
+    // --- «Empezar de cero» (sin variables quemadas, 2026-09-28) ---
+    // form.reset() vuelve a lo que pintó el servidor (los valores del
+    // proyecto), no a lo que dejó la precarga de «Editar y crear otra».
+    var btnEmpezar = document.getElementById('fp-empezar');
+    if (btnEmpezar) btnEmpezar.addEventListener('click', function () {
+      var hayRefs = !!document.querySelector('#fp-bandeja-wrap #fp-bandeja');
+      var hayAlgo = hayRefs || !!texto.value.trim() || !!form.querySelector('input[name=productos_catalogo]:checked');
+      if (hayAlgo && !confirm({{ _('¿Empezar de cero? Se vacían el texto, los ajustes y la bandeja de referencias.')|tojson }})) return;
+      form.reset();
+      form.querySelectorAll('input[name=productos_catalogo]:checked').forEach(function (cb) { cb.checked = false; });
+      form.querySelectorAll('[data-sucio]').forEach(function (el) { delete el.dataset.sucio; });
+      texto.classList.remove('co' + 'n-error'); textoError.hidden = true;
+      pintarCatalogo(); refrescar();
+      if (hayRefs) enviar({{ url_for('fp_vaciar_referencias', cliente=cliente)|tojson }}, new FormData());
+      texto.focus();
     });
   })();
 </script>

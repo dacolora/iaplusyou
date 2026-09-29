@@ -5,6 +5,7 @@ import json
 
 import idiomas
 from sprints import analisis
+from tests.test_rutas_sprints import app  # noqa: F401  (fixture)
 from tests.test_sprints_analisis import JSON_OK
 
 ORDEN_EN = idiomas.orden_idioma("en")
@@ -135,3 +136,71 @@ def test_personas_sugeridas_en_ingles(monkeypatch):
     s = _extra(visto["s"])
     assert s.startswith(ORDEN_EN) and s.endswith(ORDEN_EN)
     assert "Todo en inglés, sin texto fuera del JSON." in visto["c"][0]["text"]
+
+
+def test_tablero_en_ingles_y_espanol_intacto():
+    from sprints import tablero
+    from tests.test_sprints_tablero import _c
+    sp = {"inicio": "2026-10-01", "fin": "2026-10-31", "momento": {"nombre": "Hot Sale"}, "marcas": [{"nombre": "Crocs"}],
+          "campanas": [_c(referencias_listas=3)]}
+    with idiomas.en_idioma("en"):
+        assert tablero.siguiente_paso(_c(referencias_listas=3))["texto"] == "choose 2 references"
+        assert tablero.siguiente_paso(_c(referencias_listas=4))["texto"] == "choose 1 reference"
+        assert tablero.resumen(sp) == "1 campaign · 2 pieces planned · 3/5 references chosen"
+        assert tablero.linea_sprint(sp) == "1–31 Oct · Hot Sale · imitates: Crocs"
+    assert tablero.resumen(sp) == "1 campaña · 2 piezas planeadas · 3/5 referentes elegidos"
+    septiembre = dict(sp, inicio="2026-09-01", fin="2026-09-30")
+    assert tablero.linea_sprint(septiembre) == "1–30 sept · Hot Sale · imita: Crocs"      # CLDR (spec §B1)
+
+
+def test_adoptar_temporada_en_el_idioma_del_proyecto(base_temporal, monkeypatch):
+    from sprints import calendario, datos
+    from tests.i18n_util import _con_marca
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    tid = calendario.adoptar("acme", "navidad", pais="CO", anio=2026)
+    t = datos.temporada("acme", tid)
+    assert t["nombre"] == "Christmas" and not _con_marca(t["contexto"])
+    assert not any(_con_marca(e) for e in t["mood_visual"]["elementos"])
+    assert calendario.adoptar("acme", "navidad", pais="CO", anio=2026) == tid       # el clic repetido no duplica
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "es")
+    assert datos.temporada("acme", calendario.adoptar("acme", "navidad", pais="CO", anio=2025))["nombre"] == "Navidad"
+
+
+def test_momento_del_sprint_en_el_idioma_del_proyecto(app):
+    from sprints import datos
+    idiomas.guardar_de_proyecto("acme", "en")
+    app["c"].post("/cliente/acme/sprints/nuevo", data={"nombre": "December", "inicio": "2026-12-01",
+                                                        "fin": "2026-12-31", "momento": "navidad"})
+    m = datos.sprints("acme")[0]["momento"]
+    assert m["clave"] == "navidad" and m["nombre"] == "Christmas"
+
+
+def test_texto_guardado_va_en_el_idioma_del_proyecto(monkeypatch):
+    from sprints import datos
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    assert datos.texto_guardado("acme", "Sprint reabierto a revisión") == "Sprint reopened for review"
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "es")
+    assert datos.texto_guardado("acme", "Sprint reabierto a revisión") == "Sprint reabierto a revisión"
+
+
+def test_fechas_invertidas_en_ingles_sprint_y_temporada():
+    """Fix round 1 (Task 4): _rango/_fecha armaban el mensaje con una variable
+    a medio traducir ("el sprint", "inicio"...) -- ahora es un msgid completo
+    por caso ("el sprint" / "la temporada"; "inicio" / "fin")."""
+    from sprints import datos
+    with idiomas.en_idioma("en"):
+        try:
+            datos.crear_sprint("acme", "Bad", "2026-10-31", "2026-10-01")
+            assert False, "esperaba ErrorDatos"
+        except datos.ErrorDatos as e:
+            assert str(e) == "In the sprint, the start date must be before the end date."
+        try:
+            datos.crear_temporada("acme", "Bad", "2026-10-31", "2026-10-01")
+            assert False, "esperaba ErrorDatos"
+        except datos.ErrorDatos as e:
+            assert str(e) == "In the season, the start date must be before the end date."
+        try:
+            datos.crear_sprint("acme", "Bad", "not-a-date", "2026-10-01")
+            assert False, "esperaba ErrorDatos"
+        except datos.ErrorDatos as e:
+            assert str(e) == "The start date isn't valid (use YYYY-MM-DD)."

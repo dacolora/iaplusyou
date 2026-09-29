@@ -16,6 +16,20 @@ def _seccion(html, tab):
     return html[ini:fin if fin != -1 else len(html)]
 
 
+def _detalle_video(app, cf):
+    """El detalle de un video listo en Final edition: llega por fetch al abrir
+    la tarjeta (tarjetas ligeras, 2026-09-28), ya no va embebido en la página."""
+    r = app["c"].get(f"/cliente/acme/creative_flow/{cf}/final/detalle")
+    assert r.status_code == 200
+    return r.get_data(as_text=True)
+
+
+def _detalle_crear(app, cf):
+    r = app["c"].get(f"/cliente/acme/creative_flow/{cf}/detalle")
+    assert r.status_code == 200
+    return r.get_data(as_text=True)
+
+
 @pytest.fixture()
 def pieza(app):
     cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira sobre la mesa", 8, "", "A")
@@ -34,11 +48,13 @@ def test_la_pestana_existe_en_la_barra_y_en_la_pagina(app):
 def test_producir_finales_vive_en_la_pestana_y_no_en_crear(app, pieza):
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     final, crear = _seccion(html, "final"), _seccion(html, "creativeflowplus")
-    assert f"/cliente/acme/creative_flow/{pieza}/final/producir" in final
-    assert f"/cliente/acme/creative_flow/{pieza}/final/guion" in final
-    assert "/final/producir" not in crear and "/final/guion" not in crear and "/final/preparar" not in crear
-    assert f'href="#final?cf={pieza}"' in crear                       # «Llevar a final edition»
-    assert "Llevar a final edition" in crear
+    detalle_final, detalle_crear = _detalle_video(app, pieza), _detalle_crear(app, pieza)
+    assert f"/cliente/acme/creative_flow/{pieza}/final/producir" in detalle_final
+    assert f"/cliente/acme/creative_flow/{pieza}/final/guion" in detalle_final
+    for h in (crear, detalle_crear):
+        assert "/final/producir" not in h and "/final/guion" not in h and "/final/preparar" not in h
+    assert f'href="#final?cf={pieza}"' in detalle_crear               # «Llevar a final edition»
+    assert "Llevar a final edition" in detalle_crear
     assert "window.feAplicarPrecioBase" in final and "window.feAplicarPrecioBase" not in crear
 
 
@@ -53,15 +69,61 @@ def test_cada_pieza_enlaza_sus_ediciones_en_el_editor(app, pieza):
     import ediciones
     from final_edition import documento
     ed = ediciones.crear("acme", "video", "Borrador es_CO", documento.nuevo_video("9:16"), cf_id=pieza)
-    html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    html = _detalle_video(app, pieza)
     assert f'href="/cliente/acme/ediciones/{ed["id"]}"' in html
     assert "Abrir en el editor" in html
 
 
 def test_cada_video_listo_se_puede_editar_gratis(app, pieza):
-    html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    html = _detalle_video(app, pieza)
     assert f"/cliente/acme/ediciones/desde/{pieza}" in html
-    assert "Editar este video" in html
+    assert ">Editar<" in html
+
+
+def test_editar_es_la_accion_principal_y_lo_automatico_queda_aparte(app, pieza):
+    """Tarea 9 (editor capa 4b): «Editar» es el botón principal de cada video
+    listo, antes que nada; el guion con IA (ángulo, «Preparar guion con IA»,
+    «Producir finales») queda en un <details> cerrado por defecto más abajo,
+    sin cambiar sus rutas. El detalle llega por fetch (tarjetas ligeras,
+    2026-09-28), ya no va embebido en la página."""
+    html = _detalle_video(app, pieza)
+    i_editar = html.index(f"/cliente/acme/ediciones/desde/{pieza}")
+    i_details = html.index('<details class="fe-automatico">')
+    # La fixture `pieza` ya trae guion_base, así que lo que se ve es
+    # «Producir finales» (con guion_base la pestaña no ofrece «Preparar
+    # guion con IA», ver el `{% if not item.guion_base %}` de la plantilla).
+    i_producir = html.index("Producir finales")
+    assert i_editar < i_details < i_producir
+    assert "Automático con IA (opcional)" in html
+    # Rutas fe_* siguen ahí, tal cual, solo que dentro del <details>.
+    assert f"/cliente/acme/creative_flow/{pieza}/final/preparar" in html
+
+
+def test_editar_con_edicion_existente_enlaza_a_la_mas_reciente(app, pieza):
+    """Con una edición ya creada, el botón principal deja de ser el formulario
+    de desde_clon: pasa a ser un enlace directo a esa edición, y «Empezar
+    otra edición» queda como acción secundaria. data-editor-url va en la
+    TARJETA (la lee desdeHash()); el enlace «Editar» y «Empezar otra
+    edición» van en el detalle, que llega por fetch."""
+    import ediciones
+    from final_edition import documento
+    ed = ediciones.crear("acme", "video", "Borrador es_CO", documento.nuevo_video("9:16"), cf_id=pieza)
+    tarjeta = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    assert f'data-editor-url="/cliente/acme/ediciones/{ed["id"]}"' in tarjeta
+    detalle = _detalle_video(app, pieza)
+    assert f'href="/cliente/acme/ediciones/{ed["id"]}">Editar<' in detalle
+    assert "Empezar otra edición desde el video" in detalle
+
+
+def test_desde_clon_marca_abrir_editor_para_que_la_pestana_entre_sola(app, pieza, monkeypatch):
+    """El redirect de editor.desde_clon lleva &abrir=editor: es lo que le dice
+    al script de la pestaña que, cuando la recarga automática vea la edición
+    lista, entre directo al editor en vez de quedarse en el detalle."""
+    import trabajos
+    monkeypatch.setattr(trabajos, "encolar", lambda *a, **k: True)
+    r = app["c"].post(f"/cliente/acme/ediciones/desde/{pieza}")
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith(f"#final?cf={pieza}&abrir=editor")
 
 
 def test_el_trabajo_del_editor_solo_se_sondea_y_muestra_su_aviso(app, pieza, monkeypatch):
@@ -70,7 +132,10 @@ def test_el_trabajo_del_editor_solo_se_sondea_y_muestra_su_aviso(app, pieza, mon
     jid_editor = tareas_edicion.job_id_desde_clon("acme", pieza)
     monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda job_id: job_id == jid_editor)
     html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
-    assert f'iniciarPolling("{jid_editor}"' in html
+    # La barra va en la tarjeta con data-poll-job (base.html arranca el
+    # sondeo); ningún <script>iniciarPolling embebido.
+    assert f'data-poll-job="{jid_editor}"' in html and f'id="trabajo-{jid_editor}"' in html
+    assert "<script>iniciarPolling" not in html
     assert "Preparando para el editor…" in html
 
 
@@ -78,8 +143,8 @@ def test_el_trabajo_del_editor_se_sondea_aunque_el_del_guion_tambien_este_corrie
     """Fix round 1 (Important): el guion (fe_preparar) y «Editar este video» son
     dos formularios independientes sin exclusión mutua — pueden estar los dos
     en curso a la vez. Solo cabe UNA tapa visible en la tarjeta (la del
-    guion), pero el trabajo del editor igual necesita su propio
-    iniciarPolling(...): si no, nada sondea /trabajo/<job_id>/estado por él y
+    guion), pero el trabajo del editor igual necesita su propia barra con
+    data-poll-job: si no, nada sondea /trabajo/<job_id>/estado por él y
     la página nunca se recarga sola cuando termina."""
     import dashboard
     from tareas import edicion as tareas_edicion
@@ -88,8 +153,9 @@ def test_el_trabajo_del_editor_se_sondea_aunque_el_del_guion_tambien_este_corrie
     jid_editor = tareas_edicion.job_id_desde_clon("acme", pieza)
     monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda job_id: job_id in (jid_guion, jid_editor))
     html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
-    assert f'iniciarPolling("{jid_guion}"' in html
-    assert f'iniciarPolling("{jid_editor}"' in html
+    assert f'data-poll-job="{jid_guion}"' in html
+    assert f'data-poll-job="{jid_editor}"' in html
+    assert "<script>iniciarPolling" not in html
 
 
 def test_las_rutas_fe_vuelven_a_la_pestana(app, pieza, monkeypatch):
@@ -104,13 +170,21 @@ def test_las_rutas_fe_vuelven_a_la_pestana(app, pieza, monkeypatch):
 def test_cada_modal_toma_solo_las_tarjetas_de_su_pestana(app, pieza):
     """Todas las pestañas viven en una sola página: el modal de Crear ya no
     puede enlazar `.generado` de toda la página (tomaría las de Final
-    edition), y el de Final edition se acota a su sección."""
+    edition) — se delega sobre #creativeflowplus-resultados —, y el de Final
+    edition sobre su sección (`panel`); delegado, además, para que las
+    tarjetas que agrega «Ver más» abran igual (tarjetas ligeras, 2026-09-28)."""
     creative_flow.crear_final("acme", pieza, "es", "CO")
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     crear, final = _seccion(html, "creativeflowplus"), _seccion(html, "final")
-    assert "document.querySelectorAll('#creativeflowplus-resultados .generado')" in crear
+    assert "var zona = document.getElementById('creativeflowplus-resultados')" in crear
+    assert "zona.addEventListener('click'" in crear and "e.target.closest('.generado')" in crear
     assert "document.querySelectorAll('.generado')" not in html
-    assert "panel.querySelectorAll('.generado')" in final and 'id="fe-modal"' in final
+    assert "var panel = document.getElementById('tab-final')" in final
+    assert "panel.addEventListener('click'" in final and "e.target.closest('.generado')" in final
+    assert 'id="fe-modal"' in final
+    # Cada modal pide el detalle de la tarjeta a su ruta (data-detalle).
+    assert "abrirDetalleRemoto(modal, cuerpo, card.dataset.detalle" in crear
+    assert "abrirDetalleRemoto(modal, cuerpo, card.dataset.detalle" in final
     # La pieza abre por el hash (#final?cf=<id>) cuando la pestaña ya se ve,
     # y cerrar el detalle lo vacía, igual que en Crear.
     assert "document.addEventListener('DOMContentLoaded', desdeHash)" in final

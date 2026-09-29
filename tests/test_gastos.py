@@ -254,6 +254,8 @@ def test_tarifa_y_tipo_de_la_revision_de_la_doctrina():
     r = gastos.estimar("revision_pieza")
     # Medido en la prueba real (2026-09-27, caché fría, 4 fotogramas): ≈ US$ 0,060; redondeado hacia arriba.
     assert r["usd"] == gastos.TARIFAS["revision_pieza"] == 0.07 and "0,07" in r["texto"]
+    d = gastos.estimar("diagnostico_pieza")                         # bloque 4
+    assert d["usd"] == gastos.TARIFAS["diagnostico_pieza"] == 0.03 and "0,03" in d["texto"]
 
 
 def test_estimar_proponer_ideas_por_numero_de_ideas():

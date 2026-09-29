@@ -25,6 +25,26 @@ def guardar(cliente, estado):
     _json_store.guardar(_path(cliente), estado)
 
 
+def modificar(cliente, fn):
+    """cargar → `fn(estado) -> estado` → guardar bajo un `fcntl.flock` exclusivo
+    sobre `<archivo>.lock`, que serializa hilos (varias generaciones a la vez en
+    el worker) y procesos (Flask aprueba/rechaza). `fn` devuelve el dict a
+    guardar (None = no guardar). Devuelve lo que devolvió `fn`."""
+    import fcntl
+
+    ruta = _path(cliente)
+    os.makedirs(os.path.dirname(ruta) or ".", exist_ok=True)
+    with open(f"{ruta}.lock", "a+") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            resultado = fn(cargar(cliente))
+            if resultado is not None:
+                guardar(cliente, resultado)
+            return resultado
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
 def listar_clientes():
     """Nombres de carpeta bajo clientes/, ordenados alfabéticamente."""
     clientes_dir = os.path.join(BASE_DIR, "clientes")

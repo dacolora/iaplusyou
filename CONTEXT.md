@@ -67,8 +67,8 @@ Los principios de venta que la app le da a Claude en cada llamada que escribe o 
 _Avoid_: reglas de estilo (eso es la guía de marca), prompt maestro
 
 **Rebanada**:
-Un archivo de la doctrina para una etapa (investigar, ángulo, gancho, guion, video, caption, clasificar, revisar);
-cada llamada recibe la base más una o dos.
+Un archivo de la doctrina para una etapa (investigar, ángulo, gancho, guion, video, caption, clasificar, revisar,
+diagnosticar); cada llamada recibe la base más una o dos.
 
 **Ángulo**:
 Las decisiones que se toman antes de escribir una pieza: audiencia y su consciencia, sofisticación del mercado,
@@ -120,3 +120,21 @@ Un ángulo guardado desde la app; pasa a ser de quien lo editó y sus cifras se 
 Los 12 puntos de la lista de revisión contestados sobre una pieza terminada: las reglas gratis siempre a la vista y, si
 se pide, la revisión de Claude con los fotogramas. Solo informa; nunca bloquea ni reescribe.
 _Avoid_: QA (el QA de Sprints revisa la calidad técnica; desde el bloque 3 trae también la revisión)
+
+**Diagnóstico (de una perdedora)**:
+Por qué perdió una pieza, según el motor: una o más de las ocho causas de la lista (el gancho no retiene, sin urgencia
+en el deseo, demasiado educativo, estacionalidad, repetición, la landing no continúa el anuncio, posicionamiento
+equivocado, lo visual no da creencia), con su evidencia, más el siguiente paso y una frase de aprendizaje. Se hace solo,
+una vez por veredicto, y solo informa: al rescate y a la persona.
+_Avoid_: veredicto (eso es ganó/perdió; el diagnóstico es el porqué), revisión (la revisión mira la pieza antes de gastar)
+
+**Siguiente paso**:
+Lo único que el diagnóstico recomienda cambiar: otro gancho, otra estructura, regenerar el video, revisar la oferta,
+revisar la landing o pausar. Otra estructura y regenerar saltan el escalón del rescate (nunca hacia atrás); la oferta,
+la landing y pausar dejan el rescate en propuesta en todo modo, porque no los arregla otro creativo.
+
+**Aprendizaje (del proyecto)**:
+Una línea por prueba decidida («Ganó en CO: …», «Perdió en MX: … Diagnóstico: …») o escrita a mano, guardada en el
+proyecto (40 como máximo, las más nuevas primero) y leída como DATOS por las ideas de sprint, el guion base y las
+variantes. Nunca obliga a nada.
+_Avoid_: regla, insight

@@ -5,29 +5,35 @@
    modelos_video, modelos_imagen, modelo_video_defecto, modelo_imagen_defecto. #}
 <dialog id="lote-modal" class="modal-caja sprint-lote-modal">
   <form method="post" action="{{ url_for('sprints.lote', cliente=cliente, sid=sprint.id) }}" id="form-lote">
-    <h3>Generar lote</h3>
+    <h3>{{ _('Generar lote') }}</h3>
     <input type="hidden" name="campana_id" id="lote-campana" value="">
     <div class="fe-opciones">
-      <label>Modelo de video
+      <label>{{ _('Modelo de video') }}
         <select name="modelo_video" id="lote-modelo-video">
-          {% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{{ m.nombre }} (USD {{ '%.3f' % m.usd_por_segundo_efectivo }}/s con sonido)</option>{% endfor %}
+          {% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{{ m.nombre }} {{ _('(USD %(precio)s/s con sonido)', precio='%.3f' % m.usd_por_segundo_efectivo) }}</option>{% endfor %}
         </select>
       </label>
-      <label>Modelo de imagen
+      <label>{{ _('Modelo de imagen') }}
         <select name="modelo_imagen" id="lote-modelo-imagen">
           {% for k, m in modelos_imagen.items() %}<option value="{{ k }}" {% if k == modelo_imagen_defecto %}selected{% endif %}>{{ m.nombre }}</option>{% endfor %}
         </select>
       </label>
     </div>
-    <p class="sprint-lote-estimado" id="lote-estimado">Calculando el costo…</p>
-    <p class="vacio">Se crea una sesión de Crear por idea aprobada. Ninguna se reintenta sola si falla.</p>
+    <p class="sprint-lote-estimado" id="lote-estimado">{{ _('Calculando el costo…') }}</p>
+    <p class="vacio">{{ _('Se crea una sesión de Crear por idea aprobada. Ninguna se reintenta sola si falla.') }}</p>
     <div class="modal-acciones">
-      <button type="button" class="btn-sm" onclick="document.getElementById('lote-modal').close()">Cancelar</button>
-      <button type="submit" class="btn-generar btn-sm" id="lote-confirmar" disabled>Generar</button>
+      <button type="button" class="btn-sm" onclick="document.getElementById('lote-modal').close()">{{ _('Cancelar') }}</button>
+      <button type="submit" class="btn-generar btn-sm" id="lote-confirmar" disabled>{{ _('Generar') }}</button>
     </div>
   </form>
 </dialog>
 <script>
+  var TEXTO_LOTE = {
+    calculando: {{ _('Calculando el costo…')|tojson }},
+    noSePudo: {{ _('No se pudo calcular el costo.')|tojson }},
+    nada: {{ _('Nada que generar')|tojson }},
+    plantillaPiezas: {{ _('Generar %(n)s pieza(s) — USD %(usd)s', n='{n}', usd='{usd}')|tojson }}
+  };
   function abrirLote(campanaId) {
     var modal = document.getElementById('lote-modal');
     document.getElementById('lote-campana').value = campanaId || '';
@@ -41,7 +47,7 @@
     var mv = document.getElementById('lote-modelo-video').value, mi = document.getElementById('lote-modelo-imagen').value;
     var texto = document.getElementById('lote-estimado'), btn = document.getElementById('lote-confirmar');
     var miPedido = ++pedidoEstimarLote;
-    btn.disabled = true; texto.textContent = 'Calculando el costo…';
+    btn.disabled = true; texto.textContent = TEXTO_LOTE.calculando;
     var url = {{ url_for('sprints.lote_estimar', cliente=cliente, sid=sprint.id) | tojson }} + '?modelo_video=' + encodeURIComponent(mv) + '&modelo_imagen=' + encodeURIComponent(mi) + (cid ? '&campana_id=' + encodeURIComponent(cid) : '');
     fetch(url, {headers: {'X-Requested-With': 'fetch'}}).then(function (r) { return r.json(); }).then(function (j) {
       if (miPedido !== pedidoEstimarLote) return;
@@ -51,9 +57,9 @@
       document.querySelectorAll('#lote-modelo-video, #lote-modelo-imagen').forEach(function (s) { delete s.dataset.sucio; });
       texto.textContent = j.texto;
       var n = j.videos + j.imagenes;
-      btn.textContent = n ? 'Generar ' + n + ' pieza(s) — USD ' + j.usd.toFixed(2) : 'Nada que generar';
+      btn.textContent = n ? TEXTO_LOTE.plantillaPiezas.replace('{n}', n).replace('{usd}', j.usd.toFixed(2)) : TEXTO_LOTE.nada;
       btn.disabled = !n;
-    }).catch(function () { if (miPedido === pedidoEstimarLote) texto.textContent = 'No se pudo calcular el costo.'; });
+    }).catch(function () { if (miPedido === pedidoEstimarLote) texto.textContent = TEXTO_LOTE.noSePudo; });
   }
   document.getElementById('lote-modelo-video').addEventListener('change', estimarLote);
   document.getElementById('lote-modelo-imagen').addEventListener('change', estimarLote);

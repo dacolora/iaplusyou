@@ -30,12 +30,16 @@ porcentaje preciso — pegado a una etapa que sí es real, un número estimado
 aparenta ser real, y "en cola · 51%" mientras el proveedor todavía no arrancó es
 justo la mentira que este módulo trata de evitar.
 """
+import functools
+import logging
 import math
 import threading
 import time
 from datetime import datetime
 
 import cola  # cola persistente (db.py); los trabajos migrados al worker viven ahí
+
+log = logging.getLogger("creatv.trabajos")
 
 _LOCK = threading.Lock()
 _TRABAJOS = {}
@@ -200,7 +204,10 @@ def reportar(job_id, etapa=None, progreso=None, detalle=None):
     with _LOCK:
         t = _TRABAJOS.get(job_id)
     if not t:
-        cola.reportar(job_id, etapa=etapa, progreso=progreso, detalle=detalle)
+        try:
+            cola.reportar(job_id, etapa=etapa, progreso=progreso, detalle=detalle)
+        except Exception:  # noqa: BLE001 — p. ej. «database is locked» con varios hilos escribiendo
+            log.warning("no se pudo reportar el avance de %s", job_id, exc_info=True)
         return
     with _LOCK:
         t = _TRABAJOS.get(job_id)
@@ -222,11 +229,34 @@ def reportar(job_id, etapa=None, progreso=None, detalle=None):
             t["detalle"] = detalle
 
 
+_PRECARGA = threading.local()
+
+
+def con_vivos_precargados(fn):
+    """Decorador para una ruta que pinta muchas tarjetas: dentro de `fn`,
+    en_curso() no consulta la base por cada job_id sino que mira UNA lectura
+    de los job_ids pendientes/en_curso (la página del proyecto lo pedía ~600
+    veces por carga, incidente 2026-09-28). Los hilos en memoria (_TRABAJOS)
+    se siguen mirando primero. Se limpia al salir, porque gunicorn reutiliza
+    los hilos entre peticiones."""
+    @functools.wraps(fn)
+    def envoltura(*args, **kwargs):
+        _PRECARGA.vivos = cola.job_ids_vivos_todos()
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            _PRECARGA.vivos = None
+    return envoltura
+
+
 def en_curso(job_id):
     with _LOCK:
         t = _TRABAJOS.get(job_id)
         if t:
             return t["estado"] == "en_progreso"
+    vivos = getattr(_PRECARGA, "vivos", None)
+    if vivos is not None:
+        return job_id in vivos
     fila = cola.consultar_por_job(job_id)
     return bool(fila and fila["estado"] in ("pendiente", "en_curso"))
 

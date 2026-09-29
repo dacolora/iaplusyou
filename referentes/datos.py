@@ -2,7 +2,8 @@
 Biblioteca de referentes (spec 2026-09-23): anuncios reales clasificados por
 etapa, consciencia, familia y dolor. ÚNICO escritor de `referente`,
 `referente_familia` y `barrido`. Solo SQLAlchemy Core sobre data/creatv.db;
-nada de Flask ni de proveedores.
+nada de Flask (salvo `gettext` de flask_babel para los mensajes de error) ni
+de proveedores.
 
 Visibilidad: un proyecto ve los referentes globales (cliente NULL) y los
 suyos. `anuncio_id` (id del Ad Library de Meta) es único global: un anuncio
@@ -11,27 +12,35 @@ que ya existe se actualiza, nunca se duplica ni cambia de dueño.
 import math
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
 import proyectos
+from idiomas import N_
 
 ETAPAS = ("TOF", "MOF", "BOF")
 CONSCIENCIAS = ("unaware", "problem-aware", "solution-aware", "product-aware", "most-aware")
-FUENTES = ("copycoders", "atria", "apify")
+# `triple_whale`: un anuncio PROPIO del proyecto que ganó en Triple Whale
+# (spec 2026-09-28 §6.3), guardado con sus métricas en `extra.triple_whale`.
+FUENTES = ("copycoders", "atria", "apify", "triple_whale")
 CLASIFICACIONES = ("fuente", "claude", "pendiente", "error")
 ESTADOS_IMAGEN = ("ok", "pendiente", "error")
 TIPOS = ("imagen", "video", "carrusel")
 ESTADOS_BARRIDO = ("en_cola", "trayendo", "guardando", "clasificando", "listo", "parcial", "error")
-# Lo que ve la persona en «Mis barridos» (texto, tono de la etiqueta).
-ETIQUETAS_ESTADO_BARRIDO = {"en_cola": ("En cola", "en-curso"), "trayendo": ("Trayendo anuncios", "en-curso"),
-                            "guardando": ("Guardando imágenes", "en-curso"),
-                            "clasificando": ("Clasificando", "en-curso"), "listo": ("Listo", "en-uso"),
-                            "parcial": ("Incompleto", "advertencia"), "error": ("Falló", "descartado")}
-ETIQUETAS_ETAPA = {"TOF": "arriba del funnel", "MOF": "medio del funnel", "BOF": "abajo del funnel"}
-ETIQUETAS_CONSCIENCIA = {"unaware": "inconsciente", "problem-aware": "consciente del problema",
-                         "solution-aware": "consciente de la solución", "product-aware": "consciente del producto",
-                         "most-aware": "muy consciente"}
+# Lo que ve la persona en «Mis barridos» (texto, tono de la etiqueta). La clave
+# guardada no cambia; el texto se traduce al mostrarlo (|traducir / idiomas.traducir).
+ETIQUETAS_ESTADO_BARRIDO = {"en_cola": (N_("En cola"), "en-curso"), "trayendo": (N_("Trayendo anuncios"), "en-curso"),
+                            "guardando": (N_("Guardando imágenes"), "en-curso"),
+                            "clasificando": (N_("Clasificando"), "en-curso"), "listo": (N_("Listo"), "en-uso"),
+                            "parcial": (N_("Incompleto"), "advertencia"), "error": (N_("Falló"), "descartado")}
+ETIQUETAS_ETAPA = {"TOF": N_("arriba del funnel"), "MOF": N_("medio del funnel"), "BOF": N_("abajo del funnel")}
+ETIQUETAS_CONSCIENCIA = {"unaware": N_("inconsciente"), "problem-aware": N_("consciente del problema"),
+                         "solution-aware": N_("consciente de la solución"),
+                         "product-aware": N_("consciente del producto"), "most-aware": N_("muy consciente")}
+# Los dos «dolores» que no son un dolor (el anuncio vende una oferta o la marca).
+ETIQUETAS_DOLOR = {"ninguno-oferta": N_("ninguno-oferta"), "ninguno-marca": N_("ninguno-marca")}
 POR_PAGINA = 60
+DOLORES_MAX = 60      # las opciones del filtro «dolor» que salen de la base (rutas recorta a 50)
 CLIENTE_CREATV = "_creatv"
 
 _CAMPOS_ANUNCIO = ("pagina_id", "fuente", "marca", "url_anuncio", "url_marca", "titular", "cuerpo", "idioma", "pais",
@@ -91,13 +100,18 @@ def _entero(v):
 
 # ---------------------------------------------------------------- familias ---
 
-def familia_asegurar(nombre, descripcion="", origen="copycoders"):
+def familia_asegurar(nombre, descripcion="", origen="copycoders", descripcion_en=None):
+    """`descripcion_en` (spec §B7, fix round 1): solo se escribe al CREAR la
+    familia (una clasificación en inglés propone la descripción en ese
+    idioma) — una familia que ya existe nunca se toca acá, ni su columna en
+    español (como hoy) ni la de inglés."""
     nombre = _texto(nombre, 120)
     if not nombre:
-        raise ErrorDatos("La familia necesita un nombre.")
+        raise ErrorDatos(gettext("La familia necesita un nombre."))
     if origen not in ("copycoders", "claude", "admin"):
-        raise ErrorDatos(f"Origen de familia inválido: {origen}")
+        raise ErrorDatos(gettext("Origen de familia inválido: %(origen)s", origen=origen))
     descripcion = _texto(descripcion)
+    descripcion_en = _texto(descripcion_en) or None
     t = db.referente_familia
     with db.conectar() as con:
         f = con.execute(sa.select(t).where(t.c.nombre == nombre)).first()
@@ -105,8 +119,8 @@ def familia_asegurar(nombre, descripcion="", origen="copycoders"):
             if descripcion and not (f.descripcion or "").strip():
                 con.execute(t.update().where(t.c.id == f.id).values(descripcion=descripcion))
             return f.id
-        return con.execute(t.insert().values(nombre=nombre, descripcion=descripcion, origen=origen,
-                                             creado_en=db.ahora())).inserted_primary_key[0]
+        return con.execute(t.insert().values(nombre=nombre, descripcion=descripcion, descripcion_en=descripcion_en,
+                                             origen=origen, creado_en=db.ahora())).inserted_primary_key[0]
 
 
 def familias(cliente=None):
@@ -119,10 +133,20 @@ def familias(cliente=None):
         return [_a_dict(f) for f in con.execute(q)]
 
 
-def familia_actualizar(familia_id, descripcion):
+def familia_actualizar(familia_id, descripcion=None, descripcion_en=None):
+    """`descripcion`/`descripcion_en` en `None` no se tocan (fix round 1): sin
+    esto, `ejecutar_familias_en` reescribía la española con lo que había leído
+    al empezar la tanda, pisando una edición hecha a mano mientras corría."""
     t = db.referente_familia
+    valores = {}
+    if descripcion is not None:
+        valores["descripcion"] = _texto(descripcion)
+    if descripcion_en is not None:
+        valores["descripcion_en"] = _texto(descripcion_en) or None
+    if not valores:
+        return False
     with db.conectar() as con:
-        return con.execute(t.update().where(t.c.id == familia_id).values(descripcion=_texto(descripcion))).rowcount == 1
+        return con.execute(t.update().where(t.c.id == familia_id).values(**valores)).rowcount == 1
 
 
 def listar_por_familia(familia, limite=3):
@@ -134,23 +158,50 @@ def listar_por_familia(familia, limite=3):
             .order_by(sa.desc(t.c.variantes).nulls_last()).limit(limite))]
 
 
+def familias_sin_descripcion_en():
+    """Familias con descripción en español y sin la de inglés (spec §B7)."""
+    t = db.referente_familia
+    with db.conectar() as con:
+        filas = con.execute(sa.select(t).where(sa.func.coalesce(t.c.descripcion, "") != "",
+                                               sa.func.coalesce(t.c.descripcion_en, "") == "").order_by(t.c.nombre))
+        return [_a_dict(f) for f in filas]
+
+
+def descripcion_familia(f, idioma):
+    """La descripción de una familia en `idioma` (spec §B7): la de inglés si
+    se pide inglés y existe; si no, la de siempre."""
+    if not f:
+        return None
+    if idioma == "en" and (f.get("descripcion_en") or "").strip():
+        return f["descripcion_en"]
+    return f.get("descripcion")
+
+
+def localizado(r, idioma):
+    """Copia de `r` con `firma`/`dolor` en `idioma` si `extra.i18n` los trae
+    (spec §B7); si no, `r` tal cual (las columnas de siempre)."""
+    i18n = ((r.get("extra") or {}).get("i18n") or {}).get(idioma) or {}
+    campos = {k: v for k, v in i18n.items() if k in ("firma", "dolor") and (v or "").strip()}
+    return dict(r, **campos) if campos else r
+
+
 # -------------------------------------------------------------- referentes ---
 
 def _validar_anuncio(a):
     if not _texto(a.get("anuncio_id"), 40):
-        raise ErrorDatos("El anuncio necesita anuncio_id.")
+        raise ErrorDatos(gettext("El anuncio necesita anuncio_id."))
     if a.get("fuente") not in FUENTES:
-        raise ErrorDatos(f"Fuente desconocida: {a.get('fuente')}")
+        raise ErrorDatos(gettext("Fuente desconocida: %(fuente)s", fuente=a.get("fuente")))
     if not _texto(a.get("imagen_origen")):
-        raise ErrorDatos("El anuncio necesita imagen_origen.")
+        raise ErrorDatos(gettext("El anuncio necesita imagen_origen."))
     if a.get("tipo") not in (None, "") + TIPOS:
-        raise ErrorDatos(f"Tipo inválido: {a.get('tipo')}")
+        raise ErrorDatos(gettext("Tipo inválido: %(tipo)s", tipo=a.get("tipo")))
     if a.get("etapa") not in (None, "") + ETAPAS:
-        raise ErrorDatos(f"Etapa inválida: {a.get('etapa')}")
+        raise ErrorDatos(gettext("Etapa inválida: %(etapa)s", etapa=a.get("etapa")))
     if a.get("consciencia") not in (None, "") + CONSCIENCIAS:
-        raise ErrorDatos(f"Consciencia inválida: {a.get('consciencia')}")
+        raise ErrorDatos(gettext("Consciencia inválida: %(consciencia)s", consciencia=a.get("consciencia")))
     if a.get("clasificacion") not in (None, "") + CLASIFICACIONES:
-        raise ErrorDatos(f"Clasificación inválida: {a.get('clasificacion')}")
+        raise ErrorDatos(gettext("Clasificación inválida: %(clasificacion)s", clasificacion=a.get("clasificacion")))
 
 
 def guardar_referente(anuncio, cliente=None, barrido_id=None):
@@ -188,9 +239,9 @@ def guardar_referente(anuncio, cliente=None, barrido_id=None):
 def actualizar_referente(referente_id, **campos):
     malos = set(campos) - set(_REFERENTE_EDITABLES)
     if malos:
-        raise ErrorDatos(f"Campos no editables: {', '.join(sorted(malos))}")
+        raise ErrorDatos(gettext("Campos no editables: %(malos)s", malos=", ".join(sorted(malos))))
     if "clasificacion" in campos and campos["clasificacion"] not in CLASIFICACIONES:
-        raise ErrorDatos(f"Clasificación inválida: {campos['clasificacion']}")
+        raise ErrorDatos(gettext("Clasificación inválida: %(clasificacion)s", clasificacion=campos.get("clasificacion")))
     t = db.referente
     with db.conectar() as con:
         return con.execute(t.update().where(t.c.id == referente_id)
@@ -223,22 +274,23 @@ def _condiciones(cliente, filtros):
         cond.append(t.c.fuente == fuente)
     q = _texto(f.get("q"), 80)
     if q:
-        like = f"%{q}%"
-        cond.append(sa.or_(t.c.titular.ilike(like), t.c.firma.ilike(like), t.c.marca.ilike(like), t.c.dolor.ilike(like)))
+        # Sin tildes ni mayúsculas de ningún lado (`db.pliegue`): «camara» encuentra «Cámara».
+        like = f"%{db.pliegue(q)}%"
+        cond.append(sa.or_(*(sa.func.pliegue(col).like(like) for col in (t.c.titular, t.c.firma, t.c.marca, t.c.dolor))))
     # Filtros opcionales para el pool de sugeridos de Sprints (spec 2026-09-26,
     # fix de la ronda final): una campaña con marcas a imitar o idioma necesita
     # poder pedir DIRECTO esas filas, porque la biblioteca puede tener miles
     # por etapa y el `limite` general (200) nunca las alcanzaría. `marcas_nombres`
     # y `paginas` se combinan con OR entre sí (una marca puede matchear por
     # nombre o por página) y con AND contra el resto de los filtros de arriba.
-    marcas_nombres = [str(x).strip().lower() for x in (f.get("marcas_nombres") or ()) if str(x).strip()]
+    marcas_nombres = [db.pliegue(x) for x in (f.get("marcas_nombres") or ()) if db.pliegue(x)]
     paginas = [str(x).strip() for x in (f.get("paginas") or ()) if str(x).strip()]
     if marcas_nombres or paginas:
         opciones_marca = []
         if paginas:
             opciones_marca.append(t.c.pagina_id.in_(paginas))
         if marcas_nombres:
-            opciones_marca.append(sa.func.lower(t.c.marca).in_(marcas_nombres))
+            opciones_marca.append(sa.func.pliegue(t.c.marca).in_(marcas_nombres))
         cond.append(sa.or_(*opciones_marca))
     idioma = _texto(f.get("idioma"), 5)
     if idioma:
@@ -278,22 +330,26 @@ def opciones(cliente):
     t = db.referente
     base = [_visible_listado(t, cliente), t.c.estado_imagen == "ok"]
 
-    def _grupo(con, col):
+    def _grupo(con, col, limite=None):
         q = (sa.select(col, sa.func.count().label("n")).where(*base, col.isnot(None), col != "")
              .group_by(col).order_by(sa.desc("n"), col))
+        if limite:
+            q = q.limit(limite)
         return [(r[0], int(r[1])) for r in con.execute(q)]
 
     with db.conectar() as con:
         total = con.execute(sa.select(sa.func.count()).select_from(t).where(*base)).scalar() or 0
+        # «dolor» son miles de valores distintos con copycoders: el filtro solo
+        # muestra los más frecuentes (referentes.rutas.MAX_DOLORES_FILTRO).
         return {"total": int(total), "familias": _grupo(con, t.c.familia), "marcas": _grupo(con, t.c.marca),
-                "dolores": _grupo(con, t.c.dolor), "fuentes": _grupo(con, t.c.fuente)}
+                "dolores": _grupo(con, t.c.dolor, limite=DOLORES_MAX), "fuentes": _grupo(con, t.c.fuente)}
 
 
 # ---------------------------------------------------------------- imágenes ---
 
 def marcar_imagen(referente_id, estado, imagen_url=None):
     if estado not in ESTADOS_IMAGEN:
-        raise ErrorDatos(f"Estado de imagen inválido: {estado}")
+        raise ErrorDatos(gettext("Estado de imagen inválido: %(estado)s", estado=estado))
     t = db.referente
     valores = {"estado_imagen": estado, "actualizado_en": db.ahora()}
     if imagen_url:
@@ -407,8 +463,34 @@ def marcar_traducidas(pares):
                 continue
             extra = dict(f.extra or {})
             extra["traducida"] = True
+            extra["i18n"] = {**(extra.get("i18n") or {}), "es": {"firma": firma}}
             n += con.execute(t.update().where(t.c.id == rid)
                              .values(firma=firma, extra=extra, actualizado_en=db.ahora())).rowcount
+    return n
+
+
+def rellenar_i18n_copycoders():
+    """Para lo ya importado de copycoders (spec §B7, sin Claude): la firma
+    original es inglés → i18n.en (con el dolor de origen, que también es
+    inglés o una clave especial); la traducción que ya existe → i18n.es.
+    Devuelve cuántos cambió; una segunda pasada no cambia nada."""
+    t = db.referente
+    n = 0
+    with db.conectar() as con:
+        for f in con.execute(sa.select(t.c.id, t.c.firma, t.c.dolor, t.c.extra).where(t.c.fuente == "copycoders")).all():
+            extra = dict(f.extra or {})
+            i18n = dict(extra.get("i18n") or {})
+            nuevo = dict(i18n)
+            original = (extra.get("firma_original") or "").strip()
+            if original:
+                nuevo["en"] = {"firma": original, **({"dolor": f.dolor} if f.dolor else {})}
+            firma = (f.firma or "").strip()
+            if extra.get("traducida") and firma and firma != original:
+                nuevo["es"] = {"firma": firma}
+            if nuevo != i18n:
+                extra["i18n"] = nuevo
+                con.execute(t.update().where(t.c.id == f.id).values(extra=extra, actualizado_en=db.ahora()))
+                n += 1
     return n
 
 
@@ -416,7 +498,7 @@ def marcar_traducidas(pares):
 
 def crear_barrido(cliente, fuente, consulta, tope, pedido_por=None, usd_estimado=0.0):
     if fuente not in FUENTES:
-        raise ErrorDatos(f"Fuente desconocida: {fuente}")
+        raise ErrorDatos(gettext("Fuente desconocida: %(fuente)s", fuente=fuente))
     ahora = db.ahora()
     with db.conectar() as con:
         return con.execute(db.barrido.insert().values(
@@ -429,9 +511,9 @@ def crear_barrido(cliente, fuente, consulta, tope, pedido_por=None, usd_estimado
 def actualizar_barrido(barrido_id, **campos):
     malos = set(campos) - set(_BARRIDO_COLS)
     if malos:
-        raise ErrorDatos(f"Campos no editables: {', '.join(sorted(malos))}")
+        raise ErrorDatos(gettext("Campos no editables: %(malos)s", malos=", ".join(sorted(malos))))
     if "estado" in campos and campos["estado"] not in ESTADOS_BARRIDO:
-        raise ErrorDatos(f"Estado de barrido inválido: {campos['estado']}")
+        raise ErrorDatos(gettext("Estado de barrido inválido: %(estado)s", estado=campos.get("estado")))
     t = db.barrido
     with db.conectar() as con:
         return con.execute(t.update().where(t.c.id == barrido_id)

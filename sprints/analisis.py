@@ -8,6 +8,8 @@ import base64
 import json
 import os
 
+from flask_babel import gettext
+
 import doctrina
 import idiomas
 from sprints import datos
@@ -54,15 +56,18 @@ def _llamar(content, max_tokens=700, system=None):
     return "".join(b.text for b in resp.content if b.type == "text").strip()
 
 
-def _llamar_contando(content, max_tokens=700, system=None):
+def _llamar_contando(content, max_tokens=700, system=None, timeout=None, max_retries=None):
     """Como `_llamar`, pero devuelve (texto, tokens_entrada, tokens_salida)
     para registrar el gasto real de una acción pagada. `usage.input_tokens`
     no incluye la caché (la doctrina va en el system con cache_control): se
     suman como tokens de entrada equivalentes, escribirla a 1,25× y leerla a
-    0,1× (el precio de Anthropic), para que el gasto no quede corto."""
+    0,1× (el precio de Anthropic), para que el gasto no quede corto. `timeout`
+    (segundos) y `max_retries` van al cliente cuando se dan: un sitio que corre
+    dentro del worker entre dos acciones (el diagnóstico) no puede colgarse."""
     import anthropic
     from generador_prompts import MODEL, _api_key
-    client = anthropic.Anthropic(api_key=_api_key())
+    opciones = {k: v for k, v in (("timeout", timeout), ("max_retries", max_retries)) if v is not None}
+    client = anthropic.Anthropic(api_key=_api_key(), **opciones)
     extra = {"system": system} if system else {}
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": content}], **extra)
@@ -84,16 +89,16 @@ def _parsear_json(texto):
     except ValueError:
         ini, fin = t.find("{"), t.rfind("}")
         if ini < 0 or fin <= ini:
-            raise AnalisisInvalido("Claude no devolvió JSON.")
+            raise AnalisisInvalido(gettext("Claude no devolvió JSON."))
         try:
             data = json.loads(t[ini:fin + 1])
         except ValueError as e:
-            raise AnalisisInvalido(f"JSON inválido: {e}")
+            raise AnalisisInvalido(gettext("JSON inválido: %(error)s", error=e))
     if not isinstance(data, dict):
-        raise AnalisisInvalido("El JSON no es un objeto.")
+        raise AnalisisInvalido(gettext("El JSON no es un objeto."))
     faltan = [k for k in CLAVES if k not in data]
     if faltan:
-        raise AnalisisInvalido(f"Faltan claves: {', '.join(faltan)}")
+        raise AnalisisInvalido(gettext("Faltan claves: %(faltan)s", faltan=", ".join(faltan)))
     data["paleta"] = [c for c in (data.get("paleta") or []) if isinstance(c, str) and datos.COLOR_HEX.match(c)][:5]
     data["elementos"] = [str(e) for e in (data.get("elementos") or [])][:8]
     salida = {k: data[k] for k in CLAVES}
@@ -135,7 +140,7 @@ def analizar(referencia, marca="", idioma="es"):
                                    idioma=idiomas.nombre_para_claude(idioma))
     imagenes = _bloques_imagen(referencia)
     if not imagenes:
-        raise AnalisisInvalido("La referencia no tiene imagen ni fotograma que analizar.")
+        raise AnalisisInvalido(gettext("La referencia no tiene imagen ni fotograma que analizar."))
     content = [{"type": "text", "text": texto}] + imagenes
     try:
         return _parsear_json(_llamar(content, max_tokens=4000, system=_system(idioma)))

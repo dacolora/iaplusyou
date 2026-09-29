@@ -30,6 +30,8 @@ Library de Meta. Verificado EN VIVO 2026-09-25 en apify.com:
 """
 import math
 
+from flask_babel import ngettext
+
 ACTOR = "apify~facebook-ads-scraper"
 USD_POR_RESULTADO = 0.0058          # plan Free, US$5.80/1000 -- ver docstring
 MAX_RESULTADOS = 2000                # mismo tope que ya ofrece el formulario de Traer referentes
@@ -48,5 +50,7 @@ def estimar(tope):
     # round() antes de ceil(): mismo motivo que nicho/fuentes/apify_actores.py
     # (30 × 0.0058 × 100 puede dar un binario como 17.400000000000002).
     usd = math.ceil(round(n * USD_POR_RESULTADO * 100, 6)) / 100
-    return {"usd_fuente": usd, "resultados": n,
-            "detalle": f"≈ US$ {usd:.2f} en Apify ({n} anuncio{'s' if n != 1 else ''} × US$ {USD_POR_RESULTADO:.4f})"}
+    detalle = ngettext("≈ US$ %(usd)s en Apify (%(num)d anuncio × US$ %(unitario)s)",
+                       "≈ US$ %(usd)s en Apify (%(num)d anuncios × US$ %(unitario)s)", n,
+                       usd=f"{usd:.2f}", unitario=f"{USD_POR_RESULTADO:.4f}")
+    return {"usd_fuente": usd, "resultados": n, "detalle": detalle}

@@ -16,7 +16,10 @@ rastrear la corrida en console.apify.com.
 """
 import os
 
+from flask_babel import gettext
+
 import providers.apify as apify_api
+from idiomas import N_
 from nicho.fuentes import _http, apify_actores
 from nicho.fuentes.base import ErrorFuente, Fuente, normalizar_comentario
 
@@ -44,7 +47,7 @@ def normalizar_params(params):
 def _token():
     t = (os.environ.get("APIFY_TOKEN") or "").strip()
     if not t:
-        raise ErrorFuente("Falta APIFY_TOKEN en el .env del servidor.")
+        raise ErrorFuente(gettext("Falta APIFY_TOKEN en el .env del servidor."))
     return t
 
 
@@ -77,7 +80,7 @@ class FuenteApify(Fuente):
         sesion = _http.sesion()
         actor = apify_actores.ACTORES[p["actor"]]
         estimado = apify_actores.estimar(p["actor"], p["max_resultados"])
-        avanzar("Buscando", actor["nombre"])
+        avanzar(N_("Buscando"), actor["nombre"])
         entrada = apify_actores.entrada(p["actor"], p["links"], p["max_resultados"])
 
         def _guardar_ids(run_id, dataset_id):
@@ -87,13 +90,14 @@ class FuenteApify(Fuente):
 
         _, _, estado = apify_api.arrancar(
             sesion, token, actor["actor"], entrada, p["max_resultados"], estimado["usd"], on_ids=_guardar_ids)
-        estado = apify_api.sondear(sesion, token, self.run_id, estado, "Leyendo comentarios", avanzar)
+        estado = apify_api.sondear(sesion, token, self.run_id, estado, N_("Leyendo comentarios"), avanzar)
         crudos, motivo = apify_api.leer_dataset(sesion, token, self.dataset_id, p["max_resultados"])   # la corrida ya se pagó: se lee pase lo que pase
         if crudos is None:
             contados = apify_api.contar_dataset(sesion, token, self.dataset_id)
             self.resultados = p["max_resultados"] if contados is None else contados
-            raise ErrorFuente(f"Apify no entregó los resultados ({motivo}); corrida {self.run_id}, "
-                              f"dataset {self.dataset_id}: revísalos en console.apify.com.")
+            raise ErrorFuente(gettext("Apify no entregó los resultados (%(motivo)s); corrida %(corrida)s, "
+                                      "dataset %(dataset)s: revísalos en console.apify.com.",
+                                      motivo=motivo, corrida=self.run_id, dataset=self.dataset_id))
         self.resultados = len(crudos)                            # ítems CRUDOS: es lo que Apify cobra
         for item in crudos:
             crudo = apify_actores.leer_item(p["actor"], item if isinstance(item, dict) else {})
@@ -102,6 +106,8 @@ class FuenteApify(Fuente):
                 yield c
         if estado != "SUCCEEDED":
             if not self.resultados:
-                raise ErrorFuente(f"La corrida de Apify {apify_api.frase_estado(estado)} sin resultados (corrida {self.run_id}); "
-                                  "revísala en console.apify.com.")
-            self.aviso = f"Apify {apify_api.frase_estado(estado)} (corrida {self.run_id}); se guardaron {self.resultados} resultados."
+                raise ErrorFuente(gettext("La corrida de Apify %(estado)s sin resultados (corrida %(corrida)s); "
+                                          "revísala en console.apify.com.",
+                                          estado=apify_api.frase_estado(estado), corrida=self.run_id))
+            self.aviso = gettext("Apify %(estado)s (corrida %(corrida)s); se guardaron %(n)s resultados.",
+                                 estado=apify_api.frase_estado(estado), corrida=self.run_id, n=self.resultados)

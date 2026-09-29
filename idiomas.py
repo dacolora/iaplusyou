@@ -22,6 +22,7 @@ de las funciones): providers/ y otros módulos del worker importan N_ de acá.
 Formatos de fecha y número por idioma: activo, mes_largo, meses_cortos,
 fecha_corta, dia_mes, numero (Babel/CLDR)."""
 import os
+import threading
 from contextlib import contextmanager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -33,6 +34,7 @@ ACTIVO_PARA_TODOS = True
 COOKIE = "idioma"
 
 _app_fuera = None
+_LOCK_APP_FUERA = threading.Lock()
 
 
 def N_(texto):
@@ -217,13 +219,15 @@ def separador_decimal(idioma=None):
 def _app_fuera_de_peticion():
     global _app_fuera
     if _app_fuera is None:
-        from flask import Flask
-        from flask_babel import Babel
-        app = Flask("idiomas", root_path=BASE_DIR)
-        app.config["BABEL_DEFAULT_LOCALE"] = "es"
-        app.config["BABEL_TRANSLATION_DIRECTORIES"] = DIR_TRADUCCIONES
-        Babel(app, locale_selector=lambda: DEFECTO)
-        _app_fuera = app
+        with _LOCK_APP_FUERA:      # varias tareas del worker a la vez: una sola app
+            if _app_fuera is None:
+                from flask import Flask
+                from flask_babel import Babel
+                app = Flask("idiomas", root_path=BASE_DIR)
+                app.config["BABEL_DEFAULT_LOCALE"] = "es"
+                app.config["BABEL_TRANSLATION_DIRECTORIES"] = DIR_TRADUCCIONES
+                Babel(app, locale_selector=lambda: DEFECTO)
+                _app_fuera = app
     return _app_fuera
 
 

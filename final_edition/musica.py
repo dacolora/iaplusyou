@@ -7,8 +7,10 @@ caché), se vuelve a descargar de R2 sin generar de nuevo; si no hay entrada,
 se genera, se sube a R2 y se registra en el manifest (escritura atómica vía
 `_json_store`).
 """
+import fcntl
 import math
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -39,36 +41,49 @@ def obtener_pista(estilo, segundos, carpeta_cache=None, on_progreso=None):
     archivo_local = os.path.join(carpeta_cache, f"{clave}.wav")
 
     manifest_path = os.path.join(carpeta_cache, "manifest.json")
-    manifest = _json_store.cargar(manifest_path, default={})
-    entrada = manifest.get(clave)
+    # Dos piezas con el mismo estilo terminando a la vez (varias generaciones en
+    # el worker): la que llega segunda espera y usa la pista de la primera en vez
+    # de pagar otra. El manifest se relee y se escribe bajo su propio candado.
+    with _bloqueo(os.path.join(carpeta_cache, f".{clave}.lock")):
+        entrada = _json_store.cargar(manifest_path, default={}).get(clave)
 
-    if entrada:
-        if os.path.exists(archivo_local):
+        if entrada:
+            if not os.path.exists(archivo_local):
+                _descargar(entrada["url"], archivo_local)
             resultado = {"archivo": archivo_local, "url": entrada["url"],
                          "estilo": estilo, "generada": False}
             return resultado, 0
-        _descargar(entrada["url"], archivo_local)
-        resultado = {"archivo": archivo_local, "url": entrada["url"],
-                     "estilo": estilo, "generada": False}
-        return resultado, 0
 
-    prompt = tipos.ESTILOS_MUSICA[estilo]
-    generado = fal_audio.musica(prompt, segundos_norm, on_progreso=on_progreso)
-    costo = float(generado.get("costo_usd") or 0.0)
-    _descargar(generado["url"], archivo_local)
+        prompt = tipos.ESTILOS_MUSICA[estilo]
+        generado = fal_audio.musica(prompt, segundos_norm, on_progreso=on_progreso)
+        costo = float(generado.get("costo_usd") or 0.0)
+        _descargar(generado["url"], archivo_local)
 
-    r2_key = f"musica/{clave}.wav"
-    url_r2 = r2_uploader.upload_file(archivo_local, r2_key, "audio/wav")
+        r2_key = f"musica/{clave}.wav"
+        url_r2 = r2_uploader.upload_file(archivo_local, r2_key, "audio/wav")
 
-    manifest[clave] = {
-        "url": url_r2,
-        "archivo": archivo_local,
-        "creado_en": datetime.now(timezone.utc).isoformat(),
-    }
-    _json_store.guardar(manifest_path, manifest)
+        with _bloqueo(os.path.join(carpeta_cache, ".manifest.lock")):
+            manifest = _json_store.cargar(manifest_path, default={})
+            manifest[clave] = {
+                "url": url_r2,
+                "archivo": archivo_local,
+                "creado_en": datetime.now(timezone.utc).isoformat(),
+            }
+            _json_store.guardar(manifest_path, manifest)
 
     resultado = {"archivo": archivo_local, "url": url_r2, "estilo": estilo, "generada": True}
     return resultado, costo
+
+
+@contextmanager
+def _bloqueo(ruta):
+    """`fcntl.flock` exclusivo sobre `ruta`: serializa hilos y procesos."""
+    with open(ruta, "a+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
 def elegir_estilo(categoria_producto, enfoque):
@@ -113,13 +128,16 @@ def pista_propia(cliente, valor, inicio_s=0, carpeta_cache=None):
     os.makedirs(carpeta, exist_ok=True)
     ext = os.path.splitext(urlparse(m["url"]).path)[1] or ".mp3"
     original = os.path.join(carpeta, f"{m['hash']}{ext}")
-    if not os.path.exists(original):
-        _descargar(m["url"], original)
     tramo = os.path.join(carpeta, f"{m['hash']}_{inicio}.wav")
-    if not os.path.exists(tramo):
-        tmp = tramo + ".tmp.wav"
-        cortes.ffmpeg(["-ss", str(inicio), "-i", original, "-vn", "-ac", "2", "-ar", "48000", tmp])
-        os.replace(tmp, tramo)
+    # Dos videos con la misma canción terminando a la vez: uno baja y recorta,
+    # el otro espera y usa lo mismo.
+    with _bloqueo(os.path.join(carpeta, f".{m['hash']}.lock")):
+        if not os.path.exists(original):
+            _descargar(m["url"], original)
+        if not os.path.exists(tramo):
+            tmp = tramo + ".tmp.wav"
+            cortes.ffmpeg(["-ss", str(inicio), "-i", original, "-vn", "-ac", "2", "-ar", "48000", tmp])
+            os.replace(tmp, tramo)
     c = mi_musica.como_cancion(m)
     return ({"archivo": tramo, "url": m["url"], "estilo": c["nombre"], "generada": False,
              "material_id": m["id"], "inicio_s": inicio, "fuente": c["fuente"]}, 0)

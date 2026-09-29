@@ -25,7 +25,7 @@
 {% endif %}
   <div class="comparacion-contenido">
     <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;">
-      <input type="text" id="sel-{{ sel_id }}-buscador" placeholder="{{ _('Buscar por nombre…') }}" style="flex:1;min-width:180px;margin:0;">
+      <input type="text" id="sel-{{ sel_id }}-buscador" data-busqueda placeholder="{{ _('Buscar por nombre…') }}" style="flex:1;min-width:180px;margin:0;">
       <button type="button" class="btn-guardar btn-sm" id="sel-{{ sel_id }}-add-btn">{{ _('+ Nuevo producto') }}</button>
     </div>
     <p class="vacio" id="sel-{{ sel_id }}-vacio" style="display:none;">{{ _('Ningún producto coincide con esa búsqueda.') }}</p>
@@ -40,7 +40,7 @@
         {% for p in lista %}
         <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
           <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
-          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid) }}" alt="{{ p.nombre }}" loading="lazy">
+          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
           <span>{{ p.nombre }}</span>
         </label>
         {% endfor %}

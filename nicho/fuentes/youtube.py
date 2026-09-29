@@ -26,7 +26,10 @@ import math
 import os
 import re
 
+from flask_babel import gettext
 from googleapiclient.errors import HttpError
+
+from idiomas import N_
 
 from nicho.fuentes.base import ErrorFuente, Fuente, normalizar_comentario
 
@@ -58,7 +61,7 @@ def normalizar_params(params):
     palabras = (p.get("palabras_clave") or "").strip()
     links = [i for i in (id_video_desde_link(x) for x in (p.get("links") or [])) if i]
     if not palabras and not links:
-        raise ErrorFuente("YouTube necesita palabras clave o links de videos.")
+        raise ErrorFuente(gettext("YouTube necesita palabras clave o links de videos."))
     idioma = (p.get("idioma") or "").strip().lower()
     region = (p.get("region") or "").strip().upper()
     return {"palabras_clave": palabras, "links": links[:MAX_VIDEOS],
@@ -72,7 +75,7 @@ def cliente_api():
     """Cliente de la Data API v3 con la llave del .env. Las pruebas lo reemplazan."""
     llave = (os.environ.get("YOUTUBE_API_KEY") or "").strip()
     if not llave:
-        raise ErrorFuente("Falta YOUTUBE_API_KEY en el .env del servidor.")
+        raise ErrorFuente(gettext("Falta YOUTUBE_API_KEY en el .env del servidor."))
     from googleapiclient.discovery import build
     return build("youtube", "v3", developerKey=llave, cache_discovery=False)
 
@@ -119,7 +122,8 @@ def parsear_hilos(resp, video):
 # --------------------------------------------------------------- cliente ---
 
 def _error_llave(e):
-    return ErrorFuente(f"Google rechazó la llamada ({razon(e) or 'error'}): revisa YOUTUBE_API_KEY y que la YouTube Data API v3 esté habilitada.")
+    return ErrorFuente(gettext("Google rechazó la llamada (%(motivo)s): revisa YOUTUBE_API_KEY y que la YouTube Data API v3 "
+                               "esté habilitada.", motivo=razon(e) or "error"))
 
 
 def buscar_videos(yt, p):
@@ -177,12 +181,12 @@ class FuenteYouTube(Fuente):
         avanzar = avanzar or (lambda etapa, detalle=None: None)
         self.aviso = ""
         yt = cliente_api()
-        avanzar("Buscando")
+        avanzar(N_("Buscando"))
         try:
             videos = videos_por_id(yt, p["links"])
         except HttpError as e:
             if razon(e) in _CUOTA:
-                self.aviso = "YouTube agotó la cuota diaria del proyecto de Google; vuelve a intentar mañana."
+                self.aviso = gettext("YouTube agotó la cuota diaria del proyecto de Google; vuelve a intentar mañana.")
                 return
             raise _error_llave(e)
         if p["palabras_clave"]:
@@ -191,8 +195,8 @@ class FuenteYouTube(Fuente):
             except HttpError as e:
                 if razon(e) not in _CUOTA:
                     raise _error_llave(e)
-                self.aviso = ("YouTube agotó las búsquedas del día (100 por proyecto de Google); se leyeron solo los videos de los links. "
-                              "Vuelve a buscar mañana.")
+                self.aviso = gettext("YouTube agotó las búsquedas del día (100 por proyecto de Google); se leyeron solo los "
+                                     "videos de los links. Vuelve a buscar mañana.")
         if not videos:
             return
         vistos, pendientes = set(), []
@@ -202,7 +206,7 @@ class FuenteYouTube(Fuente):
                 pendientes.append(v)
         pendientes = pendientes[:MAX_VIDEOS]
         for n, video in enumerate(pendientes, start=1):
-            avanzar("Leyendo comentarios", f"video {n} de {len(pendientes)}")
+            avanzar(N_("Leyendo comentarios"), f"video {n} de {len(pendientes)}")
             hilos, error = comentarios_video(yt, video, p["max_comentarios_por_video"])
             for crudo in hilos:                        # primero lo leído: esas páginas ya gastaron cuota
                 c = normalizar_comentario(crudo)
@@ -214,7 +218,7 @@ class FuenteYouTube(Fuente):
             if motivo == "commentsDisabled":
                 continue
             if motivo in _CUOTA:
-                self.aviso = (f"YouTube agotó la cuota diaria; se guardó lo leído hasta el video {n} de {len(pendientes)}. "
-                              "Vuelve a recolectar mañana.")
+                self.aviso = gettext("YouTube agotó la cuota diaria; se guardó lo leído hasta el video %(n)s de %(total)s. "
+                                     "Vuelve a recolectar mañana.", n=n, total=len(pendientes))
                 return
             raise _error_llave(error)

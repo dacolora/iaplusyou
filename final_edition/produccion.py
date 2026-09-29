@@ -306,7 +306,7 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
 
     final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=o.get("variante"))
     costo, costo_base, costo_variante = 0.0, 0.0, 0.0
-    capas, guion = {}, None
+    capas, guion, angulo_variante = {}, None, None
     formato = borrador.formato_de(entry.get("aspect_ratio"))
 
     avisar(ETAPAS_FINAL[0][0])
@@ -337,8 +337,17 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         if variante_tipo and ediciones.buscar_origen(cliente, cf_id, borrador.receta(guion_base, o, formato)) is None:
             # La variante se escribe UNA vez por receta: los demás destinos
             # de la misma variante la leen del documento (doc["guion"]).
-            guion_trabajo, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, final_edition._guia_marca(cliente))
+            # Doctrina, bloque 4: la variante recibe el ángulo de la sesión y el
+            # contexto de la derivación (arranque objetivo, ganchos usados,
+            # diagnóstico, aprendizajes). Antes iba sin ángulo.
+            guion_trabajo, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, final_edition._guia_marca(cliente),
+                                                                   angulo=entry.get("angulo"),
+                                                                   contexto=o.get("contexto_variante"))
             costo += float(costo_variante or 0.0)
+            # El arranque y el gancho que la variante eligió quedan dentro del
+            # guion del borrador (doc["guion"]): los otros destinos de la misma
+            # variante, que no vuelven a llamar a Claude, lo leen de ahí.
+            angulo_variante = guion_trabajo.get("angulo_variante") if isinstance(guion_trabajo, dict) else None
             # Capa "guion" desde ya: si el borrador falla más abajo (p. ej.
             # voz fatal), lo que costó variar el guion no debe quedar fuera
             # de `capas` (la sobrescribe la de después con el costo completo).
@@ -377,6 +386,13 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         params_guion = {"idioma": idioma, "pais": pais, "precio": precio}
         if variante_tipo:
             params_guion["variante_tipo"] = variante_tipo
+            if angulo_variante is None:
+                angulo_variante = ((edicion.get("documento") or {}).get("guion") or {}).get("angulo_variante")
+            # Doctrina, bloque 4: `capas.guion.parametros.angulo` es lo que leen
+            # `ganchos_usados`, los aprendizajes y el diagnóstico de esta pieza —
+            # misma regla que el camino legado.
+            if isinstance(angulo_variante, dict) and (angulo_variante.get("lead") or angulo_variante.get("gancho")):
+                params_guion["angulo"] = {k: angulo_variante[k] for k in ("lead", "gancho") if angulo_variante.get(k)}
         _capa(capas, "guion", "anthropic", params_guion, capas_t["guion"]["costo_usd"] + float(costo_variante or 0.0))
         if "voz" in capas_t:
             previa = capas.get("voz") or {}
@@ -384,6 +400,8 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             _capa(capas, "voz", "fal/elevenlabs", capas_t["voz"]["parametros"],
                   float(previa.get("costo_usd") or 0.0) + capas_t["voz"]["costo_usd"], estado=estado,
                   error=capas_t["voz"].get("error") or previa.get("error"))
+        # (`guion_destino` arma un dict nuevo sin `angulo_variante`: el ángulo de
+        # la variante vive en capas.guion.parametros.angulo, como en el legado.)
         guion = borrador.guion_destino(edicion["documento"], idioma, pais)
         # 5. versión congelada + render del motor + subida (claves versionadas)
         avisar(ETAPAS_FINAL[4][0])

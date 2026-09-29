@@ -265,10 +265,29 @@ def ultimo_caption(cliente, cf_id):
     return (fila[0] if fila else "") or ""
 
 
-def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR, producto=_SIN_DAR):
+def ultimos_captions(cliente):
+    """{cf_id: último caption no vacío} de todo el proyecto en UNA consulta —
+    lo mismo que `ultimo_caption`, para la lista de Crear."""
+    import sqlalchemy as sa
+
+    import db
+    pub, pz, cp = db.publicacion, db.pieza, db.concepto
+    with db.conectar() as con:
+        filas = con.execute(
+            sa.select(cp.c.legado_id, pub.c.caption)
+            .select_from(pub.join(pz, pz.c.id == pub.c.pieza_id).join(cp, cp.c.id == pz.c.concepto_id))
+            .where(cp.c.cliente == cliente, pub.c.caption.isnot(None), pub.c.caption != "")
+            .order_by(pub.c.id.desc())).fetchall()
+    out = {}
+    for legado, caption in filas:
+        out.setdefault(legado, caption or "")
+    return out
+
+
+def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR, producto=_SIN_DAR, caption=_SIN_DAR):
     """Todo lo que miran las reglas y Claude de una pieza de Crear. `entry`:
     la sesión ya cargada (la lista de Crear la pasa para no recargar todo).
-    `guion`/`guia`/`producto`: ya resueltos por quien llama, para no repetir
+    `guion`/`guia`/`producto`/`caption`: ya resueltos por quien llama, para no repetir
     la lectura (`producto` en particular evita escanear el catálogo una vez
     por pieza en la lista de Crear — ver `dashboard._creative_flow_items`)."""
     import creative_flow
@@ -300,7 +319,7 @@ def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR, producto=_
     verificables = "\n".join(x for x in (json.dumps(producto, ensure_ascii=False), doctrina.texto_verificable(angulo),
                                          str(entry.get("accion_central") or ""), guia, *textos_guion(guion)) if x)
     return {"entry": entry, "cf_id": cf_id, "angulo": angulo, "guion": guion, "producto": producto, "idea": idea,
-            "caption": ultimo_caption(cliente, cf_id), "guia": guia,
+            "caption": ultimo_caption(cliente, cf_id) if caption is _SIN_DAR else (caption or ""), "guia": guia,
             "sofisticacion_fija": producto.get("sofisticacion"), "verificables": verificables}
 
 

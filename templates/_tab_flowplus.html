@@ -1,4 +1,4 @@
-{# Crear: la página de creación, con tres modos.
+{# Crear: la página de creación, con cuatro modos.
      · Desde referencias (FlowPlus): imágenes/videos/links + catálogo -> video o imagen nuevos.
      · Cambiar producto (lo que era FlowClone): una foto o video real -> la misma
        pieza con el producto reemplazado. Vivía en su propia pestaña; ahora es un
@@ -6,14 +6,17 @@
      · Flow Plus (_crear_flowplus.html): corregir con Claude un prompt que salió
        mal ANTES de mandarlo a generar. Más adelante recibirá los prompts del
        pipeline automático (guion -> prompts de clips -> prompts de imágenes).
-   El modo se recuerda por navegador; #cambiar (o el viejo #calzado) y #flowplus
-   lo abren. Cada cambio de modo avisa con el evento `crear:modo` (detail.modo)
+     · Audios (_crear_audios.html): un texto leído por la voz que la persona
+       elige (ElevenLabs vía fal), solo o sobre una canción de Mi música → mp3
+       para descargar. Spec docs/superpowers/specs/2026-09-28-crear-audios-design.md.
+   El modo se recuerda por navegador; #cambiar (o el viejo #calzado), #flowplus
+   y #audios lo abren. Cada cambio de modo avisa con el evento `crear:modo` (detail.modo)
    para que un modo pueda parar lo que tenga corriendo (el sondeo de Flow Plus). #}
 
 <div class="panel-cabecera">
   <div>
     <h2>{{ _('Crear') }}</h2>
-    <p class="panel-cabecera-desc">{{ _('Videos e imágenes desde tus referencias, o cambia el producto de una foto o video. Nada se cobra hasta que pulses «Generar».') }}</p>
+    <p class="panel-cabecera-desc">{{ _('Videos, imágenes y audios desde tus referencias, o cambia el producto de una foto o video. Nada se cobra hasta que pulses «Generar» o «Crear audio».') }}</p>
   </div>
 </div>
 
@@ -21,6 +24,7 @@
   <button type="button" class="crear-modo activo" data-modo="referencias" role="tab">{{ _('Desde referencias') }}</button>
   <button type="button" class="crear-modo" data-modo="cambiar" role="tab">{{ _('Cambiar producto en foto o video') }}</button>
   <button type="button" class="crear-modo" data-modo="flowplus" role="tab">Flow Plus</button>
+  <button type="button" class="crear-modo" data-modo="audios" role="tab">{{ _('Audios') }}</button>
 </div>
 
 <div id="crear-modo-referencias" class="crear-panel activo">
@@ -38,6 +42,11 @@
   {% include "_crear_flowplus.html" %}
 </div>
 
+<div id="crear-modo-audios" class="crear-panel">
+  <h2>{{ _('Audios: tu texto con la voz que elijas') }}</h2>
+  {% include "_crear_audios.html" %}
+</div>
+
 <script>
   (function () {
     var KEY = 'crear-modo-{{ cliente }}';
@@ -45,7 +54,8 @@
     var paneles = {
       referencias: document.getElementById('crear-modo-referencias'),
       cambiar: document.getElementById('crear-modo-cambiar'),
-      flowplus: document.getElementById('crear-modo-flowplus')
+      flowplus: document.getElementById('crear-modo-flowplus'),
+      audios: document.getElementById('crear-modo-audios')
     };
     function activar(m) {
       if (!paneles[m]) m = 'referencias';
@@ -60,6 +70,6 @@
     try { guardado = localStorage.getItem(KEY); } catch (e) {}
     // #flowplus: este script abre el modo; el de cliente.html abre la pestaña Crear.
     activar((h === 'cambiar' || h === 'calzado') ? 'cambiar'
-      : (h === 'flowplus' ? 'flowplus' : (guardado || 'referencias')));
+      : (h === 'flowplus' ? 'flowplus' : (h === 'audios' ? 'audios' : (guardado || 'referencias'))));
   })();
 </script>

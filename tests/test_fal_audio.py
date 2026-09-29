@@ -27,7 +27,22 @@ def test_tts_payload_y_costo(monkeypatch):
         "similarity_boost": 0.75,
     }
     assert llamadas[0]["timeout"] == 180
-    assert resultado == {"url": "https://fal/x.mp3", "costo_usd": round(len("Hola mundo") * 0.0003, 4)}
+    # Precio de fal verificado el 2026-09-28: US$ 0,10 por 1.000 caracteres
+    # (fal.ai/models/fal-ai/elevenlabs/tts/multilingual-v2/llms.txt).
+    assert fal_audio.COSTO_USD_POR_CARACTER == 0.0001
+    assert resultado == {"url": "https://fal/x.mp3", "costo_usd": round(len("Hola mundo") * 0.0001, 4)}
+
+
+def test_tts_timeout_personalizado_se_reenvia(monkeypatch):
+    """audios.muestra manda timeout=45 para no colgar el clic de «Escuchar»;
+    todo lo demás (audios.py::ejecutar, el resto de fal_audio) no pasa
+    timeout y se queda con el default de 180 (revisión final F6)."""
+    from providers import fal_audio
+    llamadas = _capturar(monkeypatch, fal_audio, {"audio": {"url": "https://fal/x.mp3"}})
+
+    fal_audio.tts("Hola", timeout=45)
+
+    assert len(llamadas) == 1 and llamadas[0]["timeout"] == 45
 
 
 def test_tts_texto_vacio_lanza_value_error(monkeypatch):
@@ -79,6 +94,23 @@ def test_musica(monkeypatch):
     assert llamadas[0]["payload"] == {"prompt": "upbeat energetic electronic pop", "seconds_total": 15}
     assert llamadas[0]["timeout"] == 300
     assert resultado == {"url": "https://fal/music.wav", "costo_usd": 0.02}
+
+
+def test_tts_manda_speed_solo_cuando_la_velocidad_no_es_normal(monkeypatch):
+    from providers import fal_audio
+    llamadas = []
+
+    def _fake(model_path, payload, timeout=600, poll_interval=3, on_progreso=None):
+        llamadas.append(payload)
+        return {"audio": {"url": "https://fal/x.mp3"}}
+    monkeypatch.setattr(fal_audio.fal_client, "llamar", _fake)
+    fal_audio.tts("Hola", "Adam", "es")
+    fal_audio.tts("Hola", "Adam", "es", velocidad=1.0)
+    fal_audio.tts("Hola", "Adam", "es", velocidad=1.15)
+    assert "speed" not in llamadas[0] and "speed" not in llamadas[1]
+    assert llamadas[2]["speed"] == 1.15 and llamadas[2]["voice"] == "Adam"
+    # Nunca language_code: multilingual-v2 lo rechaza (spec §2).
+    assert all("language_code" not in p for p in llamadas)
 
 
 def test_voces():

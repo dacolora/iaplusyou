@@ -1,16 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Cómo escribe Creatv{% endblock %}
+{% block title %}{{ _('Cómo escribe Creatv') }}{% endblock %}
 {% block content %}
 {# Doctrina, bloque 2 (§6): los mismos textos que recibe Claude, de solo lectura. #}
-<div class="pagina-cabecera">
+<div class="pagina-cabecera" id="doctrina-cabecera">
   <div>
-    <h1>Cómo escribe Creatv</h1>
-    <p class="vacio">Así le explicamos a Claude cómo escribir tus anuncios. Cada pieza que genera la app sigue estas reglas.</p>
+    <h1>{{ _('Cómo escribe Creatv') }}</h1>
+    <p class="vacio">{{ _('Así le explicamos a Claude cómo escribir tus anuncios. Cada pieza que genera la app sigue estas reglas.') }}</p>
   </div>
 </div>
+{% if idioma_ui != 'es' %}<p class="vacio">{{ _('Estos textos están en español: son las instrucciones internas que recibe Claude. Claude escribe tus anuncios en el idioma de tu proyecto.') }}</p>{% endif %}
 
-<nav class="doctrina-indice" style="margin:0 0 1.5rem;line-height:1.8;">
-  {% for clave, titulo, _ in secciones %}<a href="#{{ clave }}">{{ titulo }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
+<nav class="doctrina-indice" id="doctrina-indice" style="margin:0 0 1.5rem;line-height:1.8;">
+  {% for clave, titulo, _ in secciones %}<a href="#{{ clave }}">{{ titulo|traducir }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
 </nav>
 
 {% for clave, titulo, html in secciones %}
@@ -19,5 +20,5 @@
 </section>
 {% endfor %}
 
-<p class="vacio">Las citas al final de cada principio indican el libro y el capítulo de donde sale, para quien quiera ir a la fuente.</p>
+<p class="vacio" id="doctrina-pie">{{ _('Las citas al final de cada principio indican el libro y el capítulo de donde sale, para quien quiera ir a la fuente.') }}</p>
 {% endblock %}

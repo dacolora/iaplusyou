@@ -34,6 +34,24 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 | Publicación orgánica | Organic post |
 | Mi música | My music |
 | Flow Plus | Flow Plus |
+| Campaña | Campaign |
+| Persona (arquetipo) | Persona |
+| Referente (un anuncio) | Reference |
+| Familia de formato | Format family |
+| Firma («por qué funciona») | Why it works |
+| Dolor | Pain point |
+| Momento del mes | Moment of the month |
+| Temporada | Season |
+| Idea | Idea |
+| Lote | Batch |
+| Entrega | Delivery |
+| Estudio (Nicho) | Study |
+| Núcleo (de deseo) | Core |
+| Comentario | Comment |
+| Investigación | Research |
+| Arranque (lead) | Lead |
+| Sofisticación | Sophistication |
+| Prueba (de un producto) | Proof |
 
 ## Reglas de estilo
 

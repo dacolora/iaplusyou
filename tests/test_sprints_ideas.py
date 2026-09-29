@@ -591,3 +591,39 @@ def test_proponer_cuenta_los_tokens_aunque_falle(base_temporal, monkeypatch):
     with pytest.raises(ideas.AnalisisInvalido):
         ideas.proponer("acme", cid, 1, 1, uso=uso)
     assert uso == {"entrada": 1600, "salida": 400}
+
+
+def test_los_aprendizajes_del_proyecto_entran_en_los_datos_de_las_ideas(base_temporal, monkeypatch):
+    """Doctrina, bloque 4 (§5): primero los del mismo producto; sin ninguno, la línea lo dice."""
+    import proyectos
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    monkeypatch.setattr(proyectos, "aprendizajes", lambda cliente: [])
+    p = ideas.armar_prompt(ideas.contexto_campana("acme", datos.campana("acme", cid)), 1, 0)
+    assert "APRENDIZAJES DEL PROYECTO: ninguno todavía" in p
+    monkeypatch.setattr(proyectos, "aprendizajes", lambda cliente: [
+        {"texto": "Ganó en CO: «Otra cosa» para Otro producto", "producto": "Otro producto"},
+        {"texto": "Perdió en MX: «¿Frío?» para Espejo LED", "producto": "Espejo LED"}])
+    p = ideas.armar_prompt(ideas.contexto_campana("acme", datos.campana("acme", cid)), 1, 0)
+    assert "LO QUE YA SE PROBÓ EN ESTE PROYECTO" in p
+    assert p.index("Perdió en MX") < p.index("Ganó en CO")          # el del producto de la campaña primero
+
+
+def test_las_cifras_del_angulo_no_se_verifican_contra_los_aprendizajes(base_temporal, monkeypatch):
+    """H4 (revisión B): «ThruPlay 34 %» de una prueba pasada no vuelve
+    verificable un «34 % de la gente…» inventado en el ángulo."""
+    import doctrina
+    import proyectos
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    monkeypatch.setattr(proyectos, "aprendizajes", lambda cliente: [{"texto": "Ganó en CO: «x» — ThruPlay 34 %", "producto": None}])
+    ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
+    con, sin = ideas.armar_prompt(ctx, 1, 0), ideas.armar_prompt(dict(ctx, aprendizajes=""), 1, 0)
+    assert "34 %" in con and "34 %" not in sin and "<aprendizajes>" in con
+    assert doctrina.verificar_cifras("El 34 % de la gente siente frío", con) == []
+    assert doctrina.verificar_cifras("El 34 % de la gente siente frío", sin) == ["34 %"]
+    vistos = []
+    monkeypatch.setattr(ideas, "parsear", lambda crudo, validos, duraciones, datos_texto=None, fijos=None: (vistos.append(datos_texto), [])[1])
+    monkeypatch.setattr(ideas.analisis, "_llamar_contando", lambda content, max_tokens, system, **kw: ("[]", 1, 1))
+    ideas.proponer("acme", cid, 1, 0)
+    assert vistos and "LO QUE YA SE PROBÓ" not in vistos[0] and "34 %" not in vistos[0]
