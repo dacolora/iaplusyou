@@ -574,7 +574,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
 
-**Editor (capas 1–4b, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–4c, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -698,7 +698,14 @@ that is added lengthens the video (image/text layers and música/efecto end at t
 the render — and with the playhead at the end they enter whole, ending there); audio added by hand only reuses a
 track whose clips share its `rol_audio` (music never lands in the voice's gap). Still out: PIP (video over video),
 color filters, rotation, a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla») and the
-editor's i18n (phase 6).
+editor's i18n (phase 6). Capa 4c (2026-09-29, trust fixes, spec §2): audio fades never exceed their clip (`normalizar`
++ a compiler `st >= 0` cap), «deslizar» stores 400 ms and drops 8 % of the canvas height in both engines, moving,
+stretching or duplicating a layer stops at the principal's end, load warnings are recomputed per change
+(`avisos_carga.js`), technical errors fold into «Detalle técnico»/`title`, an expired session says so
+(`guardado.sesionTerminada`, `producir.js`), the library deletes unused `subida`/`crear` materials
+(`editor.borrar_material` → `biblioteca.borrar`, 409 names the edición), «Editar» prefers the person's edición over
+the «Borrador automático» (`ediciones.para_editar`/`nombre_visible`), and `rasterizar.sin_glifos_faltantes` strips
+glyphs the font lacks (emojis) while the panel warns.
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios

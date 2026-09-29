@@ -201,6 +201,19 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   Siguen fuera: video sobre video (PIP), filtros de color, rotación, foto como clip de la
 >   principal (entra como capa de imagen con «Llenar la pantalla») y la traducción del editor
 >   (fase 6 de idioma).
+> - **Capa 4c** (2026-09-29, diez arreglos de confianza tras la auditoría
+>   `.superpowers/sdd/capa4c/auditoria-capcut-4b.md`, sin pagar nada): los fundidos de un audio
+>   nunca pasan de su duración (`normalizar` los acota en proporción; cortar un audio no deja
+>   bajón en el corte; el compilador tiene su tope: `st >= 0`); «deslizar» guarda su duración
+>   (400 ms) y baja el 8 % de la altura del lienzo en los dos motores; **nada alarga el video**
+>   tampoco al mover, alargar por la derecha o duplicar una capa (se topa en el fin de la
+>   principal); los avisos de carga se recalculan tras cada cambio y un clip que pide material
+>   de más se acorta al abrir; los errores técnicos (render, validador) quedan en «Detalle
+>   técnico» / `title`; con la sesión vencida el editor lo dice; «Precio» entra como «Escribe
+>   el precio»; «Borrar» en la biblioteca (solo lo subido o un video de Crear preparado, nunca
+>   algo que use una edición viva o congelada); «Editar» abre la edición de la persona antes que
+>   el «Borrador automático · …»; y el rasterizador quita los caracteres que la fuente no
+>   dibuja (emojis) en vez de cajas, con aviso en el panel.
 >
 > Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
 > - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,
