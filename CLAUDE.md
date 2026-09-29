@@ -100,7 +100,21 @@ deterministic per (cliente, prompt_id/brief_id, acción) so a repeat click no-op
 instead of double-launching. Tasks that spend credits are queued with
 `max_intentos=1` — they never auto-retry. A queued task stuck running for more than
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
-(once `max_intentos` is exhausted). **`dashboard.py` runs with `use_reloader=False`
+(once `max_intentos` is exhausted) — never one this worker is running right now
+(`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
+`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has two lanes:
+`CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`)
+runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
+`HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
+runs one at a time in order, as before; the main thread only supervises (`worker.repartir`).
+Code reached from a Crear task must therefore be thread-safe: `_json_store.guardar` uses a
+per-thread tmp, `estado.modificar` (used by the worker AND by Flask's approve/reject/publish and
+`sprints.revision`) and `musica._bloqueo` take `flock`, R2 opens one boto3 session per call, and
+`trabajos.reportar` never raises. A task may return `tareas.Continuar(tipo, payload,
+ejecutar_desde=)`: the worker closes it and queues the follow-up with the SAME job_id in one
+transaction (`cola.terminar_y_encolar`, retried; if it still fails the task goes to `error` and its
+`AL_INTERRUMPIR` hook runs), so the card's bar never sees «nothing alive». A thread that fails to
+start gives its task back (`cola.devolver`). **`dashboard.py` runs with `use_reloader=False`
 on purpose**: Flask's auto-reloader kills the whole process on file changes, which
 would silently abort any in-flight background generation.
 
@@ -376,6 +390,15 @@ p. ej. Kling 1200 «contenido sensible»). El detalle de la pieza ofrece «Recup
 nuevo)» → `cf_recuperar` → tarea `flowplus_recuperar` (`max_intentos=1`, `TIEMPO_RECUPERAR` 10 min):
 vuelve a preguntar por ese id y cierra la pieza con `_terminar_video` (el mismo cierre que la generación
 normal; el gasto se anota ahí, con «recuperado»). Nunca genera de nuevo.
+Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
+`wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
+devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)
+—el hilo queda libre entre vueltas— mientras la predicción tenga menos de `ESPERA_MAXIMA` (2 h); recién después
+queda el botón. El sondeo aguanta hasta `FALLOS_SEGUIDOS` (6) cortes de red o 5xx seguidos, y un error que no sea
+`ErrorProveedor` (estado final fallido) nunca borra el id: se sigue esperando. Un reinicio del worker corta esas esperas enseguida
+(`wavespeed_common.fijar_detener` + `cortable()`, solo en las tareas que saben retomar; un swap o una imagen
+siguen como antes) y el gancho `interrumpida` retoma por la predicción un video que quedó a medias por un
+SIGKILL. Desplegar ya no pierde videos de Crear en curso.
 Los lotes de
 Sprints encolan el director con `auto_lanzar` (el costo ya se aprobó). `calidad`
 `borrador` = Wan a 480p. Duración por defecto 8 s (`preferencias_flowplus`). `VIDEO` /
@@ -537,7 +560,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
 
-**Editor (capas 1–4a, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–4b, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -636,6 +659,32 @@ destino is first resolved and checked with `verificar_recortes`, a destino whose
 is refused, and a final with video NOT made from this edición — `ediciones.edicion_de_final` — needs
 `reemplazar: true`, which the dialog asks for). The editor and the automatic path now share the borrador:
 `produccion.traducir` re-applies its pure steps on a CAS conflict (up to 2 retries) instead of paying again.
+Capa 4b (2026-09-28, «tipo CapCut», plan `docs/superpowers/plans/2026-09-28-editor-capa4b-capcut.md`): the page is
+library | player | properties with the toolbar and a multi-track timeline below at full width (≤ 760 px: player,
+toolbar and timeline, and the library and properties are bottom sheets — «Medios · Audio · Texto · Transiciones» and
+«Editar», closed with «Listo»); in the Final edition tab «Editar» is the main action of every ready video and the
+automatic AI path is a closed, optional `<details>`. Library: `final_edition/biblioteca.py` (upload video/image/audio
+as free `material` rows with origen `subida` — a phone photo is uploaded already rotated by its EXIF orientation —,
+list the project's materials, the logo included (origen `marca`), plus the ready Crear pieces, and materialize a piece
+with the free task `material_de_pieza`), routes `editor.subir`/`editor.biblioteca`/`editor.agregar_pieza`/
+`editor.materiales_por_id` (`&preparar=<ids>` queues the free `edicion_proxy` for what still lacks its proxy or peaks,
+asked once per material); browser modules `biblioteca.js`, `propiedades.js` (+ the pure `propiedades_modelo.js`),
+`lienzo_interaccion.js` (tap, drag and scale on the player; pure `seleccion.js`), `avisos_editor.js` (how the page
+notifies those modules; they only touch the edition through the `editor` object of `pagina_editor.js`, which also
+exposes `enConflicto()` so the panels say «recarga la página» instead of pointing under the video), and `historial.js`
+merges the consecutive steps of one control into one undo. New pure ops in `operaciones.js`: `agregarVideo/Imagen/
+Audio/Texto`, `cortarClip` (any track but `p_sonido`), `ponerTransicion` (the five the render does; `desenfoque` is
+shown as «Fundido a negro»), `editarTexto` (a variable text changes only the destino being viewed), `cambiar` (a
+whitelist; `fondo.ancho: null` = automatic), `volumenSonido` and `cambiarMezcla` — each with a case in
+`tests/js/salida_operaciones.mjs` that Python validates. Rules: `normalizar` NEVER creates `p_sonido` (a borrador
+whose recipe had no scene sound leaves it out on purpose, and the automatic path reuses that borrador): only
+`agregarVideo` (for its own clip; the clips already there get silent mirrors) and `volumenSonido` (that clip at the
+slider's value, the rest at 0) create it, and with nothing to mirror it stays empty instead of disappearing; nothing
+that is added lengthens the video (image/text layers and música/efecto end at the principal's end — music loops in
+the render — and with the playhead at the end they enter whole, ending there); audio added by hand only reuses a
+track whose clips share its `rol_audio` (music never lands in the voice's gap). Still out: PIP (video over video),
+color filters, rotation, a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla») and the
+editor's i18n (phase 6).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios

@@ -33,7 +33,8 @@ def test_sin_imagenes_cada_modelo_de_video_va_a_su_ruta_de_texto(monkeypatch):
                                         "kwaivgi/kling-video-o3-pro/text-to-video",
                                         "bytedance/seedance-2.5/text-to-video"]
     wan, kling, seedance = (pl for _, pl in llamadas)
-    assert wan == {"prompt": "una mujer camina", "duration": 8, "resolution": "720p", "aspect_ratio": "9:16", "generate_audio": True}
+    assert wan == {"prompt": "una mujer camina", "duration": 8, "resolution": "720p", "aspect_ratio": "9:16", "generate_audio": True,
+                   "enable_prompt_expansion": False}   # el mejorador de Wan solo si se marca la casilla
     assert kling == {"prompt": "una mujer camina", "duration": 8, "aspect_ratio": "9:16", "sound": True}
     assert seedance == {"prompt": "una mujer camina", "duration": 8, "resolution": "720p", "aspect_ratio": "9:16",
                         "generate_audio": True}

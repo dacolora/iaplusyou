@@ -38,6 +38,13 @@ def recortar(texto, n=500):
     return str(texto or "")[:n]
 
 
+def _fecha_texto(valor):
+    """`ejecutar_desde` se compara como texto ISO: un datetime se pasa a texto."""
+    if isinstance(valor, datetime):
+        return valor.isoformat(timespec="seconds")
+    return valor
+
+
 def _fila(r):
     return dict(r._mapping) if r is not None else None
 
@@ -66,12 +73,22 @@ def encolar(tipo, payload, *, cliente=None, job_id=None, duracion_estimada=60, e
         return int(r.inserted_primary_key[0])
 
 
-def reclamar():
+def reclamar(tipos=None, excluir_tipos=None, prioridad_min=None):
+    """Toma la siguiente pendiente (prioridad, luego orden de llegada). Los
+    filtros son los carriles del worker: `tipos` solo esos, `excluir_tipos`
+    todo menos esos, `prioridad_min` deja afuera los lotes cuando ya ocupan
+    sus hilos (spec 2026-09-28-crear-sin-cola)."""
     ahora = db.ahora()
+    condiciones = [db.tarea.c.estado == "pendiente", db.tarea.c.ejecutar_desde <= ahora]
+    if tipos is not None:
+        condiciones.append(db.tarea.c.tipo.in_(tuple(tipos)))
+    if excluir_tipos:
+        condiciones.append(db.tarea.c.tipo.notin_(tuple(excluir_tipos)))
+    if prioridad_min is not None:
+        condiciones.append(db.tarea.c.prioridad >= int(prioridad_min))
     with db.conectar() as con:
-        cand = con.execute(sa.select(db.tarea.c.id).where(
-            db.tarea.c.estado == "pendiente", db.tarea.c.ejecutar_desde <= ahora
-        ).order_by(db.tarea.c.prioridad.desc(), db.tarea.c.ejecutar_desde, db.tarea.c.id).limit(1)).first()
+        cand = con.execute(sa.select(db.tarea.c.id).where(*condiciones).order_by(
+            db.tarea.c.prioridad.desc(), db.tarea.c.ejecutar_desde, db.tarea.c.id).limit(1)).first()
         if not cand:
             return None
         t0 = time.time()
@@ -91,6 +108,36 @@ def terminar(tarea_id, mensaje=None):
             estado="hecha", terminada_en=db.ahora(), mensaje=mensaje or "Listo."))
 
 
+def devolver(tarea_id):
+    """Una tarea reclamada que nunca empezó (su hilo no arrancó) vuelve a
+    pendiente sin gastar el intento."""
+    with db.conectar() as con:
+        con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id, db.tarea.c.estado == "en_curso").values(
+            estado="pendiente", iniciada_en=None, intentos=sa.func.max(db.tarea.c.intentos - 1, 0)))
+
+
+def terminar_y_encolar(tarea_id, mensaje, siguiente):
+    """Cierra la tarea y encola su continuación en UNA transacción: `siguiente`
+    es `{"tipo", "payload"}` (más `ejecutar_desde`, `max_intentos`) y hereda
+    job_id, cliente, etapas, duración estimada y prioridad. Con el mismo job_id
+    la barra de la tarjeta sigue sin ver nunca «nada vivo» (y el dedupe de
+    `encolar`, que miraría a la que todavía está en curso, no aplica). Devuelve
+    el id de la nueva."""
+    with db.conectar() as con:
+        vieja = con.execute(sa.select(db.tarea).where(db.tarea.c.id == tarea_id)).first()
+        con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id).values(
+            estado="hecha", terminada_en=db.ahora(), mensaje=recortar(mensaje or "Listo.")))
+        ahora = db.ahora()
+        r = con.execute(db.tarea.insert().values(
+            cliente=vieja.cliente, job_id=vieja.job_id, tipo=siguiente["tipo"], payload=siguiente.get("payload") or {},
+            estado="pendiente", intentos=0, max_intentos=int(siguiente.get("max_intentos") or 1),
+            prioridad=vieja.prioridad, ejecutar_desde=_fecha_texto(siguiente.get("ejecutar_desde")) or ahora,
+            creada_en=ahora,
+            duracion_estimada=vieja.duracion_estimada, etapas=vieja.etapas or [],
+        ))
+        return int(r.inserted_primary_key[0])
+
+
 def fallar(tarea_id, error):
     with db.conectar() as con:
         fila = con.execute(sa.select(db.tarea.c.intentos, db.tarea.c.max_intentos).where(db.tarea.c.id == tarea_id)).first()
@@ -107,7 +154,7 @@ def fallar(tarea_id, error):
                 mensaje=recortar(sin_token(error))))
 
 
-def recuperar_colgadas(minutos=30):
+def recuperar_colgadas(minutos=30, excluir=()):
     """Devuelve a `pendiente` (o marca `error` si agotó intentos) lo que lleva
     más de `minutos` en_curso. Con minutos=0 (arranque del worker) toma todo lo
     en_curso, incluso lo iniciado en este mismo segundo — por eso el `<=`.
@@ -115,11 +162,17 @@ def recuperar_colgadas(minutos=30):
     Devuelve `(tocadas, interrumpidas)`: cuántas tareas tocó y la lista (dicts,
     misma forma que consultar_por_id) de las que quedaron en `error` sin más
     reintentos — el worker las pasa a tareas.AL_INTERRUMPIR para que la
-    sesión/swap/anuncio de atrás no quede "en curso" para siempre."""
+    sesión/swap/anuncio de atrás no quede "en curso" para siempre.
+
+    `excluir`: ids que este mismo worker está ejecutando ahora (sus hilos);
+    esos no están colgados aunque lleven mucho en curso."""
     limite = (datetime.now() - timedelta(minutes=minutos)).isoformat(timespec="seconds")
+    condiciones = [db.tarea.c.estado == "en_curso", db.tarea.c.iniciada_en <= limite]
+    if excluir:
+        condiciones.append(db.tarea.c.id.notin_(tuple(excluir)))
     with db.conectar() as con:
         filas = con.execute(sa.select(db.tarea.c.id, db.tarea.c.intentos, db.tarea.c.max_intentos).where(
-            db.tarea.c.estado == "en_curso", db.tarea.c.iniciada_en <= limite)).all()
+            *condiciones)).all()
         tocadas = 0
         interrumpidas = []
         for fila in filas:

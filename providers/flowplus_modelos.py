@@ -218,24 +218,27 @@ def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
 
 
 def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16", on_progreso=None,
-                  videos=None, con_sonido=True, calidad="final"):
+                  videos=None, con_sonido=True, calidad="final", mejorar_prompt=False):
     """Devuelve la URL pública del video. referencias: URLs públicas de imágenes
     (la primera es la principal; Seedance solo usa esa). videos: URLs públicas
     de videos de referencia — solo Wan 3.0 los recibe tal cual; para los demás
     el llamador ya convirtió cada video en un fotograma dentro de `referencias`.
     con_sonido: pide el audio nativo del modelo (sonido de la escena); True
     salvo que la pieza se quiera muda a propósito. Sin imágenes ni videos va a
-    la ruta de solo texto del modelo (`path_texto`)."""
+    la ruta de solo texto del modelo (`path_texto`). mejorar_prompt: prende el
+    mejorador propio de Wan 3.0 (`enable_prompt_expansion`) — solo cuando la
+    persona marcó la casilla; los demás modelos no tienen y lo ignoran."""
     info = VIDEO[modelo_id]
     videos = list(videos or [])[: info.get("max_videos", 0)]
     if not referencias and not videos:
-        return _generar_video_texto(modelo_id, prompt, duration, aspect_ratio, on_progreso, con_sonido, calidad)
+        return _generar_video_texto(modelo_id, prompt, duration, aspect_ratio, on_progreso, con_sonido, calidad,
+                                    mejorar_prompt)
     refs = list(referencias)[: info["max_referencias"]]
     if modelo_id == "wan3":
         return wan3_client.generar_video(
             prompt, refs, duration=duration, resolution=_resolucion_wan(calidad),
             aspect_ratio=aspect_ratio, on_progreso=on_progreso, reference_videos=videos,
-            generate_audio=bool(con_sonido),
+            generate_audio=bool(con_sonido), enable_prompt_expansion=bool(mejorar_prompt),
         )
     if modelo_id == "kling_o3_pro":
         payload = {
@@ -252,7 +255,8 @@ def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16",
     raise ValueError(f"Modelo de video desconocido: {modelo_id}")
 
 
-def _generar_video_texto(modelo_id, prompt, duration, aspect_ratio, on_progreso, con_sonido, calidad):
+def _generar_video_texto(modelo_id, prompt, duration, aspect_ratio, on_progreso, con_sonido, calidad,
+                         mejorar_prompt=False):
     """Solo texto: el mismo modelo por su ruta text-to-video. El parámetro de
     audio va siempre explícito (Kling lo trae apagado por defecto); Kling no
     acepta resolución; sin `aspect_ratio` el modelo usa el suyo (16:9)."""
@@ -260,6 +264,7 @@ def _generar_video_texto(modelo_id, prompt, duration, aspect_ratio, on_progreso,
     payload = {"prompt": prompt, "duration": int(duration)}
     if modelo_id == "wan3":
         payload["resolution"] = _resolucion_wan(calidad)
+        payload["enable_prompt_expansion"] = bool(mejorar_prompt)
     elif modelo_id == "seedance25":
         payload["resolution"] = "720p"
     if aspect_ratio:

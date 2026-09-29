@@ -5,7 +5,9 @@ providers/wavespeed_client.py (Wan 2.7 Video Edit) y providers/wan3_client.py
 (Wan 3.0).
 """
 import os
+import threading
 import time
+from contextlib import contextmanager
 
 import requests
 
@@ -55,6 +57,57 @@ class EsperaAgotada(TimeoutError):
                          f"({int(timeout_seconds // 60)} min; predicción {prediction_id}).")
 
 
+class EsperaInterrumpida(EsperaAgotada):
+    """El worker se está deteniendo (reinicio, despliegue) y cortó la espera
+    antes de tiempo: la predicción sigue en WaveSpeed y se retoma por su id
+    (tareas/flowplus: `flowplus_recuperar`). Solo pasa dentro de `cortable()`."""
+
+    def __init__(self, nombre_modelo, prediction_id, esperado_s):
+        self.nombre_modelo, self.prediction_id, self.timeout_seconds = nombre_modelo, prediction_id, esperado_s
+        TimeoutError.__init__(self, f"Se cortó la espera de {nombre_modelo} porque el worker se está reiniciando "
+                                    f"(predicción {prediction_id}); se retoma sola.")
+
+
+# Parada del worker (`worker.main` la fija con `debe_parar`). Solo corta las
+# esperas de quien la pidió con `cortable()`: las tareas que saben retomar una
+# predicción por su id. Un swap o una imagen siguen hasta el final como antes.
+_DETENER = None
+_LOCAL = threading.local()
+# Consultas fallidas seguidas (red caída, 5xx) antes de rendirse.
+FALLOS_SEGUIDOS = 6
+
+
+def fijar_detener(fn):
+    global _DETENER
+    _DETENER = fn
+
+
+@contextmanager
+def cortable(plazo_s=None):
+    """Dentro de este bloque (del hilo actual), una parada del worker corta la
+    espera con `EsperaInterrumpida` en vez de dejarla hasta el final, y
+    `plazo_s` (opcional) acorta la espera: pasado ese tiempo sale
+    `EsperaAgotada` y quien la pidió la retoma después por el id (el hilo del
+    carril de Crear queda libre para otra pieza)."""
+    antes = (getattr(_LOCAL, "cortable", False), getattr(_LOCAL, "plazo", None))
+    _LOCAL.cortable, _LOCAL.plazo = True, plazo_s
+    try:
+        yield
+    finally:
+        _LOCAL.cortable, _LOCAL.plazo = antes
+
+
+def en_cortable():
+    return bool(getattr(_LOCAL, "cortable", False))
+
+
+def _hay_que_cortar():
+    try:
+        return en_cortable() and _DETENER is not None and bool(_DETENER())
+    except Exception:  # noqa: BLE001 — preguntar nunca tumba una espera
+        return False
+
+
 def avisar_lanzada(on_progreso, prediction_id):
     """Primera señal de progreso, apenas WaveSpeed devuelve el id de la
     predicción: así la sesión lo guarda aunque el primer GET del poll falle.
@@ -80,10 +133,24 @@ def poll_hasta_listo(prediction_id, nombre_modelo, interval_seconds=5, timeout_s
     con el id para recuperar el resultado después)."""
     url = f"{BASE_URL}/predictions/{prediction_id}/result"
     inicio = time.time()
-    while time.time() - inicio < timeout_seconds:
-        resp = requests.get(url, headers=headers(), timeout=30)
-        resp.raise_for_status()
-        data = resp.json().get("data") or {}
+    plazo = getattr(_LOCAL, "plazo", None) if en_cortable() else None
+    limite = timeout_seconds if plazo is None else min(timeout_seconds, plazo)
+    fallos = 0
+    while time.time() - inicio < limite:
+        # Un corte suelto de la red (502, timeout, conexión) no tumba la espera
+        # de un video ya pagado; varios seguidos sí (la red está caída de verdad).
+        try:
+            resp = requests.get(url, headers=headers(), timeout=30)
+            resp.raise_for_status()
+            data = resp.json().get("data") or {}
+        except requests.RequestException as e:
+            codigo = getattr(getattr(e, "response", None), "status_code", None)
+            fallos += 1
+            if (codigo is not None and codigo < 500 and codigo != 429) or fallos >= FALLOS_SEGUIDOS:
+                raise
+            time.sleep(interval_seconds)
+            continue
+        fallos = 0
         estado = data.get("status")
         if on_progreso:
             # Un fallo reportando progreso jamás debe tumbar una generación que
@@ -97,5 +164,9 @@ def poll_hasta_listo(prediction_id, nombre_modelo, interval_seconds=5, timeout_s
         if estado in ("failed", "cancelled", "timeout", "deleted"):
             raise ErrorProveedor(nombre_modelo, estado, detalle=data.get("error") or None, codigo=data.get("code"),
                                  prediction_id=prediction_id, datos=data)
+        # Después de avisar el progreso (el id ya quedó guardado): si el worker
+        # se detiene, la espera se corta y otra tarea la retoma por el id.
+        if _hay_que_cortar():
+            raise EsperaInterrumpida(nombre_modelo, prediction_id, time.time() - inicio)
         time.sleep(interval_seconds)
-    raise EsperaAgotada(nombre_modelo, prediction_id, timeout_seconds)
+    raise EsperaAgotada(nombre_modelo, prediction_id, limite)

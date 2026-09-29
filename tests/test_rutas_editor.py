@@ -1,12 +1,16 @@
 """Rutas de la vista previa del editor (capa 3): entra quien tiene acceso al
 proyecto; la página trae el documento, los materiales y la configuración, y
 encola los proxies que faltan (gratis)."""
+import io
 import json
+import os
 import re
 
 import pytest
 
 from tests.test_rutas_productos import _cliente_admin
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 @pytest.fixture()
@@ -63,7 +67,7 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     html = r.get_data(as_text=True)
     for id_ in ("lienzo", "destino", "reproducir", "inicio", "tiempo", "barra", "aviso-destino", "aviso-faltan",
                 "aviso-recortes", "aviso-preparando", "aviso-audio", "aproximada",
-                "producir", "linea", "linea-zoom", "h-cortar", "h-borrar", "h-duplicar", "h-velocidad", "h-deshacer",
+                "producir", "linea", "linea-zoom", "h-cortar", "h-borrar", "h-duplicar", "h-deshacer",
                 "h-rehacer", "estado-guardado", "recargar", "aviso-edicion", "producir-dialogo", "producir-destinos",
                 "producir-confirmar", "producir-cancelar", "producir-aviso", "producir-tiempo", "producir-hecho",
                 "producir-hecho-texto", "producir-hecho-enlace", "producir-reemplazo", "producir-reemplazo-texto",
@@ -84,7 +88,12 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     assert datos["urls"] == {"materiales": f"/cliente/acme/ediciones/{ed['id']}/materiales",
                              "guardar": f"/cliente/acme/ediciones/{ed['id']}",
                              "producir": f"/cliente/acme/ediciones/{ed['id']}/producir",
-                             "final": "/cliente/acme#final"}
+                             "final": "/cliente/acme#final",
+                             # capa 4b: la biblioteca del proyecto (Task 1)
+                             "biblioteca": "/cliente/acme/ediciones/biblioteca",
+                             "subir": "/cliente/acme/ediciones/materiales/subir",
+                             "agregar_pieza": "/cliente/acme/ediciones/biblioteca/pieza/__CF__",
+                             "materiales_por_id": "/cliente/acme/ediciones/materiales"}
     assert datos["estimado_s"] >= 20 and datos["cf_id"] is None
     assert [a[1] for a, _k in encolados] == ["edicion_proxy"]
     assert encolados[0][0][2] == {"cliente": "acme", "material_id": clon["id"]}
@@ -326,7 +335,9 @@ def test_editar_este_video_encola_la_preparacion_gratis(dashboard, encolados):
     cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira", 8, "", "A")
     creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2.test/v.mp4")
     r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/desde/{cf}")
-    assert r.status_code == 302 and r.headers["Location"].endswith(f"#final?cf={cf}")
+    # capa 4b (9/9): el &abrir=editor es lo que le dice a la pestaña que, al
+    # ver la edición lista, entre directo al editor sin pasar por el detalle.
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"#final?cf={cf}&abrir=editor")
     (args, kw), = [(a, k) for a, k in encolados if a[1] == "edicion_desde_clon"]
     assert args[0] == f"acme__{cf}__editor" and args[2] == {"cliente": "acme", "cf_id": cf}
     assert kw["max_intentos"] == 2 and kw["cliente"] == "acme"
@@ -451,3 +462,381 @@ def test_el_dialogo_de_producir_no_promete_voz_ni_musica(dashboard, encolados):
     assert "ya están hechos" not in html
     assert "Es gratis" in html and "lo que hay en esta edición" in html
     assert "Reemplazar y producir" in html
+
+
+# --- Disposición tipo CapCut (capa 4b, Task 4) ---
+
+_VACIOS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+
+def _ancestros(html):
+    """{id: [ids de sus ancestros, del más cercano al más lejano]}."""
+    from html.parser import HTMLParser
+
+    class _P(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.pila, self.out = [], {}
+
+        def handle_starttag(self, tag, attrs):
+            ident = dict(attrs).get("id")
+            if ident:
+                self.out[ident] = [i for _t, i in reversed(self.pila) if i]
+            if tag not in _VACIOS:
+                self.pila.append((tag, ident))
+
+        def handle_endtag(self, tag):
+            for k in range(len(self.pila) - 1, -1, -1):
+                if self.pila[k][0] == tag:
+                    del self.pila[k:]
+                    break
+
+    p = _P()
+    p.feed(html)
+    return p.out
+
+
+def test_la_pagina_tiene_la_disposicion_de_capcut(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    ids = re.findall(r'\sid="([^"]+)"', html)
+    assert len(ids) == len(set(ids)), [i for i in ids if ids.count(i) > 1]
+    arbol = _ancestros(html)
+    # barra de arriba: volver, nombre, destino, guardado y Producir
+    for ident in ("destino", "estado-guardado", "recargar", "producir"):
+        assert "ed-barra" in arbol[ident], ident
+    # fila del medio: biblioteca | reproductor | propiedades
+    for ident in ("ed-biblioteca", "ed-centro", "ed-propiedades"):
+        assert "ed-cuerpo" in arbol[ident], ident
+    assert "ed-biblioteca" in arbol["ed-pestanas-biblioteca"] and "ed-biblioteca" in arbol["ed-panel-biblioteca"]
+    assert "ed-propiedades" in arbol["ed-panel-propiedades"]
+    assert arbol["lienzo"][0] == "ed-escenario" and "ed-centro" in arbol["ed-escenario"]
+    for ident in ("reproducir", "inicio", "tiempo", "barra", "aviso-edicion", "producir-hecho"):
+        assert "ed-centro" in arbol[ident], ident
+    # abajo, a todo el ancho: herramientas y línea de tiempo (fuera de la fila del medio)
+    for ident in ("h-deshacer", "h-rehacer", "h-cortar", "h-borrar", "h-duplicar", "linea-zoom"):
+        assert "ed-herramientas" in arbol[ident], ident
+    # la velocidad ya no está en la barra: es del formulario del video, en «Editar»
+    # (propiedades.js lo arma y conserva el id h-velocidad)
+    assert 'id="h-velocidad"' not in html
+    assert "ed-cuerpo" not in arbol["ed-herramientas"] and "ed-cuerpo" not in arbol["linea"]
+    # la biblioteca: cuatro pestañas con su icono
+    pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
+    for panel in ("medios", "audio", "texto", "transiciones"):
+        boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
+        assert boton and "<svg" in boton.group(1), panel
+    assert pestanas.count('aria-selected="true"') == 1
+    # propiedades: el estado vacío
+    assert "Elige algo en la línea de tiempo o en el video para cambiarlo." in html
+    # celular: hojas que se abren desde abajo y se cierran con «Listo»
+    for ident, hoja in (("ed-abrir-medios", "ed-biblioteca"), ("ed-abrir-propiedades", "ed-propiedades")):
+        boton = re.search(rf'<button[^>]*id="{ident}"[^>]*>', html).group(0)
+        assert f'aria-controls="{hoja}"' in boton and 'aria-expanded="false"' in boton, ident
+    for hoja in ("ed-biblioteca", "ed-propiedades"):
+        cerrar = re.search(rf'<button[^>]*data-cerrar-hoja="{hoja}"[^>]*>\s*Listo\s*</button>', html)
+        assert cerrar, hoja
+    # CSS: la columna del centro puede achicarse (nada empuja la página de lado)
+    # y en el celular el reproductor ocupa como mucho 42vh
+    assert "minmax(0, 1fr)" in html and "42vh" in html
+    assert "@media (max-width: 760px)" in html
+
+
+def test_las_pestanas_de_la_biblioteca_dicen_su_nombre(dashboard, encolados):
+    """Task 6: en una columna de 220–300 px «Transiciones» no cabía y se cortaba
+    («Me…», «Au…»; ni siquiera la elegida sola cabía a 800 px): las pestañas van
+    solo con el icono, el nombre para el lector de pantalla (visualmente oculto,
+    no borrado) y en el cartelito (`title`); el panel abierto lo dice en su título
+    (biblioteca.js), y con lugar (la hoja ancha del celular) se ven los nombres."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
+    for panel, nombre in (("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("transiciones", "Transiciones")):
+        boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
+        assert boton and f'title="{nombre}"' in boton.group(0) and f"<span>{nombre}</span>" in boton.group(1), panel
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    oculta = re.search(r'\.ed-pestanas \.ed-pestana span \{([^}]*)\}', css)
+    assert oculta and "clip-path: inset(50%)" in oculta.group(1) and "display: none" not in oculta.group(1)
+    assert re.search(r"@container ed-pestanas \(min-width: \d+px\)", css), "con lugar, los nombres se ven"
+    # la biblioteca la arma biblioteca.js dentro de su panel; la marca de una unión con transición, la línea
+    assert "#ed-panel-biblioteca [hidden]" in css and ".ed-union {" in css
+
+
+def test_ningun_ancho_queda_sin_disposicion(dashboard, encolados):
+    """Fix 1 de la Task 4: `(min-width: 761px)` + `(max-width: 760px)` dejaban
+    sin regla los 760,x px (zoom del navegador) y el reproductor medía 0×0. El
+    escritorio es el complemento EXACTO del celular y el escenario tiene ancho
+    fuera de toda media query."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    consultas = re.findall(r"@media\s*([^{]+?)\s*\{", css)
+    anchos = [c for c in consultas if "width" in c]
+    assert sorted(anchos) == ["(max-width: 760px)", "not all and (max-width: 760px)"], anchos
+    base = css[:css.index("@media")]
+    regla = re.search(r"\.ed-escenario\s*\{([^}]*)\}", base)
+    assert regla and re.search(r"(?<![-\w])width\s*:", regla.group(1)), "el escenario necesita ancho sin media query"
+
+
+def test_el_estado_del_guardado_no_mueve_la_barra_en_el_celular(dashboard, encolados):
+    """Fix final 7: en el celular «Guardado» → «Cambios sin guardar…» cambiaba el
+    ancho del texto, la barra de arriba se volvía a acomodar en otra fila y el
+    reproductor saltaba. El estado va en un hueco de ancho fijo, en una línea,
+    con «…» si no cabe; el texto entero queda en el `title` (el error largo)."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    celular = css[css.index("@media (max-width: 760px)"):]
+    regla = re.search(r"\.ed-guardado \{([^}]*)\}", celular)
+    assert regla, "falta la regla del celular para .ed-guardado"
+    for decl in ("flex: none", "white-space: nowrap", "overflow: hidden", "text-overflow: ellipsis"):
+        assert decl in regla.group(1), decl
+    assert re.search(r"(?<![-\w])width:\s*[\d.]+(em|rem|px)", regla.group(1)), "el hueco necesita un ancho fijo"
+    js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
+    pintar = re.search(r"function pintarGuardado\(estado, mensaje\) \{(.*?)\n\}", js, re.S).group(1)
+    assert "n.title = " in pintar
+
+
+def test_el_escenario_sabe_la_proporcion_del_formato(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    escenario = re.search(r'<div[^>]*id="ed-escenario"[^>]*>', html).group(0)
+    assert "--ed-ancho: 1080" in escenario and "--ed-alto: 1920" in escenario
+
+
+# --- Biblioteca del editor (capa 4b, Task 1) ---
+
+def test_subir_material_delega_en_la_biblioteca(dashboard, encolados, monkeypatch):
+    from final_edition import rutas_editor
+    llamadas = []
+    monkeypatch.setattr(rutas_editor.biblioteca, "subir",
+                        lambda cliente, archivo: llamadas.append((cliente, archivo.filename)) or {"id": 9, "tipo": "video"})
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/materiales/subir", data={"archivo": (io.BytesIO(b"x"), "clip.mp4")},
+              content_type="multipart/form-data")
+    assert r.status_code == 200 and r.get_json() == {"material": {"id": 9, "tipo": "video"}}
+    assert llamadas == [("acme", "clip.mp4")]
+
+
+def test_subir_material_responde_400_en_subida_invalida(dashboard, encolados, monkeypatch):
+    from final_edition import biblioteca
+    from final_edition import rutas_editor
+
+    def _falla(cliente, archivo):
+        raise biblioteca.SubidaInvalida("Sube un video, una imagen o un audio.")
+    monkeypatch.setattr(rutas_editor.biblioteca, "subir", _falla)
+    r = _cliente_admin(dashboard).post("/cliente/acme/ediciones/materiales/subir",
+                                       data={"archivo": (io.BytesIO(b"MZ"), "virus.exe")},
+                                       content_type="multipart/form-data")
+    assert r.status_code == 400 and "video, una imagen o un audio" in r.get_json()["error"]
+
+
+def test_subir_material_exige_archivo_y_mismo_origen(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/materiales/subir", data={}, content_type="multipart/form-data")
+    assert r.status_code == 400
+    r = c.post("/cliente/acme/ediciones/materiales/subir", data={"archivo": (io.BytesIO(b"x"), "a.mp4")},
+              content_type="multipart/form-data", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+
+
+def test_biblioteca_devuelve_lo_que_arma_el_modulo(dashboard, encolados, monkeypatch):
+    from final_edition import rutas_editor
+    esperado = {"materiales": [{"id": 1}], "piezas": [{"cf_id": "cf_1"}]}
+    monkeypatch.setattr(rutas_editor.biblioteca, "listar", lambda cliente: esperado if cliente == "acme" else None)
+    r = _cliente_admin(dashboard).get("/cliente/acme/ediciones/biblioteca")
+    assert r.status_code == 200 and r.get_json() == esperado
+
+
+def _pieza_lista(dashboard_cliente="acme", tipo=None):
+    import creative_flow
+    cf = creative_flow.crear(dashboard_cliente, [], ["Espejo LED"], [], "gira", 8, "", "A")
+    creative_flow.actualizar(dashboard_cliente, cf, estado="video_listo", video_url="https://r2.test/v.mp4")
+    if tipo:
+        creative_flow.actualizar(dashboard_cliente, cf, tipo=tipo)
+    return cf
+
+
+def test_agregar_pieza_encola_la_preparacion_si_no_es_material(dashboard, encolados):
+    cf = _pieza_lista()
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/biblioteca/pieza/{cf}")
+    assert r.status_code == 202 and r.get_json() == {"preparando": True}
+    (args, kw), = [(a, k) for a, k in encolados if a[1] == "material_de_pieza"]
+    assert args[0] == f"acme__{cf}__material" and args[2] == {"cliente": "acme", "cf_id": cf}
+    assert kw["max_intentos"] == 2 and kw["cliente"] == "acme"
+
+
+def test_agregar_pieza_devuelve_el_material_si_ya_existe(dashboard, encolados):
+    import materiales
+    cf = _pieza_lista()
+    mat = materiales.registrar("acme", tipo="video", origen="crear", url="https://r2/clon.mp4", hash="h-clon",
+                               bytes=1, extra={"cf_id": cf})
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/biblioteca/pieza/{cf}")
+    assert r.status_code == 200 and r.get_json()["material"]["id"] == mat["id"]
+    assert not [a for a, _k in encolados if a[1] == "material_de_pieza"]
+
+
+def test_agregar_pieza_rechaza_id_invalido_ajena_o_no_lista(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    assert c.post("/cliente/acme/ediciones/biblioteca/pieza/../x").status_code == 404
+    assert c.post("/cliente/acme/ediciones/biblioteca/pieza/cf_no_existe").status_code == 404
+    import creative_flow
+    sin_video = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira", 8, "", "A")
+    assert c.post(f"/cliente/acme/ediciones/biblioteca/pieza/{sin_video}").status_code == 404
+    cf_imagen = _pieza_lista(tipo="imagen")
+    assert c.post(f"/cliente/acme/ediciones/biblioteca/pieza/{cf_imagen}").status_code == 404
+    r = c.post(f"/cliente/acme/ediciones/biblioteca/pieza/{_pieza_lista()}", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert not [a for a, _k in encolados if a[1] == "material_de_pieza"]
+
+
+def test_materiales_por_id_solo_los_de_este_proyecto(dashboard, encolados):
+    import materiales
+    propio = materiales.registrar("acme", tipo="video", origen="subida", url="https://r2/a.mp4", hash="h-a", bytes=1)
+    ajeno = materiales.registrar("otro", tipo="video", origen="subida", url="https://r2/b.mp4", hash="h-b", bytes=1)
+    r = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/materiales?ids={propio['id']},{ajeno['id']},999")
+    j = r.get_json()
+    assert r.status_code == 200 and set(j["materiales"]) == {str(propio["id"])}
+    assert j["materiales"][str(propio["id"])]["url"] == "https://r2/a.mp4"
+
+
+def test_materiales_por_id_prepara_lo_pedido_que_falta(dashboard, encolados):
+    """Fix final 11: una canción de Mi música (audio sin picos) agregada desde la
+    biblioteca nunca tenía onda: nadie encolaba su edicion_proxy. Con
+    `preparar=<ids>` la ruta encola (gratis, el mismo job que `ver`) solo lo que
+    de esos ids todavía falta: audios sin picos y videos sin copia liviana."""
+    import materiales
+    from tareas import edicion as te
+    cancion = materiales.registrar("acme", tipo="audio", origen="musica", url="https://r2/c.mp3", hash="h-c", bytes=1,
+                                   duracion_ms=60000)
+    listo = materiales.registrar("acme", tipo="audio", origen="subida", url="https://r2/d.mp3", hash="h-d", bytes=1,
+                                 duracion_ms=3000, extra={"picos": [0.1, 0.2]})
+    ajeno = materiales.registrar("otro", tipo="audio", origen="musica", url="https://r2/e.mp3", hash="h-e", bytes=1)
+    c = _cliente_admin(dashboard)
+    ids = f"{cancion['id']},{listo['id']},{ajeno['id']}"
+    # sin `preparar` solo se lee (lo que la biblioteca pregunta cada 3 s)
+    assert c.get(f"/cliente/acme/ediciones/materiales?ids={ids}").status_code == 200
+    assert encolados == []
+    r = c.get(f"/cliente/acme/ediciones/materiales?ids={ids}&preparar={ids}")
+    assert r.status_code == 200 and set(r.get_json()["materiales"]) == {str(cancion["id"]), str(listo["id"])}
+    assert [(a[0], a[1], a[2]) for a, _k in encolados] == [
+        (te.job_id_proxy("acme", cancion["id"]), "edicion_proxy", {"cliente": "acme", "material_id": cancion["id"]})]
+    assert encolados[0][1]["max_intentos"] == 3
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("subido_antes", [True, False])
+def test_preparar_piezas_con_bytes_compartidos_resuelve_listado_y_post(
+        dashboard, encolados, monkeypatch, tmp_path, subido_antes):
+    import final_edition
+    import materiales
+    from final_edition import biblioteca, insumos
+    from tareas import edicion as te
+    from tests.test_biblioteca_editor import _mp4_bytes, _pieza_lista as crear_pieza
+    monkeypatch.setattr(final_edition, "BASE_DIR", str(tmp_path))
+    monkeypatch.setattr(te, "_carpeta", lambda *args: str(tmp_path / "preparar"))
+    monkeypatch.setattr(insumos.cortes, "detectar_cortes", lambda *args: [])
+    subidas = []
+    monkeypatch.setattr(materiales.r2_uploader, "upload_file",
+                        lambda *args: subidas.append(args) or "https://r2.test/subido.mp4")
+    datos = _mp4_bytes(tmp_path)
+    local = tmp_path / "crudo.mp4"
+    local.write_bytes(datos)
+    c = _cliente_admin(dashboard)
+    mid = None
+    if subido_antes:
+        r = c.post("/cliente/acme/ediciones/materiales/subir",
+                   data={"archivo": (io.BytesIO(datos), "Mi original.mp4")})
+        assert r.status_code == 200
+        mid = r.get_json()["material"]["id"]
+        materiales.actualizar_extra("acme", mid, propio={"conservar": True})
+    piezas = [crear_pieza(nombre=nombre, video_local_crudo=str(local))
+              for nombre in ("Primera pieza", "Segunda pieza")]
+    for cf in piezas:
+        url = f"/cliente/acme/ediciones/biblioteca/pieza/{cf}"
+        assert c.post(url).status_code == 202
+        te.ejecutar_material_de_pieza({"payload": {"cliente": "acme", "cf_id": cf}})
+        listado = c.get("/cliente/acme/ediciones/biblioteca").get_json()
+        por_cf = {p["cf_id"]: p for p in listado["piezas"]}
+        preparado = por_cf[cf]["material_id"]
+        assert preparado is not None
+        mid = mid or preparado
+        assert preparado == mid
+        n = len(encolados)
+        repetido = c.post(url)
+        assert repetido.status_code == 200
+        assert repetido.get_json()["material"]["id"] == mid
+        assert len(encolados) == n
+    assert {p["material_id"] for p in biblioteca.listar("acme")["piezas"]} == {mid}
+    mat = materiales.obtener("acme", mid)
+    assert mat["origen"] == ("subida" if subido_antes else "crear")
+    assert mat["extra"]["nombre"] == ("Mi original" if subido_antes else "Primera pieza")
+    if subido_antes:
+        assert mat["extra"]["propio"] == {"conservar": True}
+    else:
+        assert mat["extra"]["cf_id"] == piezas[0]
+    assert biblioteca.material_de_pieza("otro", piezas[0]) is None
+    assert len(subidas) == int(subido_antes)
+
+
+@pytest.mark.parametrize("nombre", ["audio.mp4", pytest.param("silencioso.mp3", marks=pytest.mark.slow)])
+def test_subida_rechaza_stream_equivocado_antes_de_subir_o_encolar(
+        dashboard, encolados, monkeypatch, tmp_path, nombre):
+    import final_edition
+    import materiales
+    from tests.test_biblioteca_editor import _wav_bytes, _mp4_bytes
+    monkeypatch.setattr(final_edition, "BASE_DIR", str(tmp_path))
+    subidas = []
+    monkeypatch.setattr(materiales.r2_uploader, "upload_file",
+                        lambda *args: subidas.append(args) or "https://r2.test/incorrecto")
+    datos = _wav_bytes() if nombre.endswith("mp4") else _mp4_bytes(tmp_path)
+    r = _cliente_admin(dashboard).post("/cliente/acme/ediciones/materiales/subir",
+                                       data={"archivo": (io.BytesIO(datos), nombre)})
+    assert r.status_code == 400
+    assert r.get_json()["error"]
+    assert not subidas and not encolados
+    assert materiales.bytes_usados("acme") == 0
+    assert list((tmp_path / "clientes/acme/tmp_editor").iterdir()) == []
+
+
+def test_el_panel_de_propiedades_cabe_y_lo_arma_su_modulo(dashboard, encolados):
+    """Task 7 (capa 4b): el panel de la derecha lo arma static/editor/propiedades.js
+    dentro de #ed-panel-propiedades (un formulario por clase de clip; sin nada
+    elegido, la mezcla de la edición). La página trae sus estilos: todo se
+    envuelve o se achica (nada empuja la columna ni la hoja de lado)."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    assert "#ed-panel-propiedades [hidden]" in css
+    for regla in (".ed-prop {", ".ed-prop-campo {", ".ed-prop-fila {", ".ed-prop-colores {", ".ed-prop-acciones {"):
+        assert regla in css, regla
+    campo = re.search(r"\.ed-prop-campo \{([^}]*)\}", css).group(1)
+    assert "min-width: 0" in campo
+    assert re.search(r"\.ed-prop input\[type=\"range\"\] \{[^}]*width: 100%", css)
+    assert re.search(r"\.ed-prop-colores \{[^}]*flex-wrap: wrap", css)
+    js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
+    assert 'import { Propiedades } from "./propiedades.js";' in js
+    assert 'new Propiedades({ contenedor: $("ed-panel-propiedades"), editor' in js
+
+
+def test_la_capa_para_tocar_el_video_cubre_el_lienzo(dashboard, encolados):
+    """Task 8 (capa 4b): #ed-interaccion va dentro del escenario, encima del
+    lienzo y del mismo tamaño; el dedo no mueve la página ahí, nada se sale de
+    lado (la caja de una foto más grande que el video se corta) y la arma
+    static/editor/lienzo_interaccion.js, que recibe la vista previa."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    arbol = _ancestros(html)
+    assert arbol["ed-interaccion"][0] == "ed-escenario"
+    assert html.index('id="lienzo"') < html.index('id="ed-interaccion"')        # encima del lienzo
+    capa = re.search(r'<div[^>]*id="ed-interaccion"[^>]*>', html).group(0)
+    assert 'aria-hidden="true"' in capa
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    regla = re.search(r"\.ed-interaccion \{([^}]*)\}", css).group(1)
+    for decl in ("position: absolute", "inset: 0", "touch-action: none", "overflow: hidden"):
+        assert decl in regla, decl
+    for sel in (".ed-caja {", ".ed-asa {", ".ed-guia {"):
+        assert sel in css, sel
+    assert re.search(r"\.ed-caja \{[^}]*pointer-events: none", css)
+    js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
+    assert 'import { InteraccionLienzo } from "./lienzo_interaccion.js";' in js
+    assert 'new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });' in js

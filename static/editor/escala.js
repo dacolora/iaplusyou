@@ -2,8 +2,12 @@
 // (bordes de clips, 0 y el cabezal), la regla, el orden de las filas en
 // pantalla, la tira de fotogramas de un clip, dónde cae un clip de la
 // principal que se suelta, qué operación pide soltar un arrastre, cómo se ve
-// el clip mientras se arrastra y los nombres de filas y clips. Puro: lo
-// prueba Node (linea_tiempo.js solo pone esto en el DOM).
+// el clip mientras se arrastra y los nombres de filas y clips. Capa 4b: la
+// cabecera de cada fila, las barras de la onda de un audio, la fila bajo un
+// punto y qué pide soltar ahí algo de la biblioteca, y qué corta «Cortar»;
+// qué operación pide agregar algo de la biblioteca («+» o soltar), a qué
+// unión va una transición y dónde se marcan las uniones con transición.
+// Puro: lo prueba Node (linea_tiempo.js y biblioteca.js solo ponen esto en el DOM).
 import { cambiaPorDestino, ID_SONIDO } from "./operaciones.js";
 import { formatearPrecio, SIMBOLOS } from "./precio.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
@@ -122,18 +126,18 @@ export function ladosRecortables(pista, clip) {
 // arrastrado, pero nunca a los bordes que el clip tenía (el siguiente de la
 // principal, el sonido espejo, el 0 o el cabezal suelen estar justo ahí: un
 // recorte más corto que la tolerancia se desharía solo).
-export function soltar(doc, clipId, { modo, lado, deltaMs, toleranciaMs, cabezalMs = 0 }) {
-  let pista = null;
-  let clip = null;
-  for (const p of doc.pistas ?? []) {
-    const c = p.clips.find((x) => x.id === clipId);
-    if (c) {
-      pista = p;
-      clip = c;
-      break;
-    }
+function buscarClip(doc, clipId) {
+  for (const pista of doc.pistas ?? []) {
+    const clip = pista.clips.find((x) => x.id === clipId);
+    if (clip) return { pista, clip };
   }
-  if (!clip) return null;
+  return null;
+}
+
+export function soltar(doc, clipId, { modo, lado, deltaMs, toleranciaMs, cabezalMs = 0 }) {
+  const hallado = buscarClip(doc, clipId);
+  if (!hallado) return null;
+  const { pista, clip } = hallado;
   const delta = Math.round(Number(deltaMs) || 0);
   const cand = candidatosIman(doc, clipId, cabezalMs);
   if (modo === "mover") {
@@ -195,4 +199,246 @@ export function etiquetaClip(pista, clip, doc = null, destino = null) {
   if (pista.tipo === "audio") return NOMBRE_ROL[clip.rol_audio] ?? "Audio";
   if (pista.tipo === "imagen") return "Imagen";
   return "";
+}
+
+// ---- Capa 4b: cabeceras, onda, soltar desde la biblioteca, cortar --------
+
+// La cabecera de una fila (fija a la izquierda de la línea): el icono y un
+// nombre corto. `nombreFila` sigue siendo el nombre largo (el del cartelito).
+const CABECERA_ROL = {
+  voz: { icono: "voz", nombre: "Voz" },
+  musica: { icono: "musica", nombre: "Música" },
+  sonido: { icono: "sonido", nombre: "Sonido" },
+  efecto: { icono: "musica", nombre: "Efecto" },
+  grabacion: { icono: "voz", nombre: "Grabación" },
+};
+
+export function cabeceraFila(pista, doc) {
+  if (pista === pistaPrincipal(doc)) {
+    return pista.tipo === "imagen" ? { icono: "imagen", nombre: "Imagen" } : { icono: "video", nombre: "Video" };
+  }
+  if (pista.id === ID_SONIDO) return { icono: "sonido", nombre: "Sonido" };
+  if (pista.tipo === "audio") return { ...(CABECERA_ROL[pista.clips?.[0]?.rol_audio] ?? { icono: "musica", nombre: "Audio" }) };
+  if (pista.tipo === "texto") return { icono: "texto", nombre: "Texto" };
+  if (pista.tipo === "imagen") return { icono: "imagen", nombre: "Imagen" };
+  if (pista.tipo === "superpuesto") return { icono: "video", nombre: "Video encima" };
+  return { icono: "video", nombre: "Pista" };
+}
+
+// Onda de un clip de audio. `picos` es la energía del MATERIAL, uno por cada
+// `ventanaMs` de fuente, de 0 a 1 (tareas.edicion._picos, lo mismo que usa
+// el agache de la vista previa). Una barra cada `paso` px del clip, con el
+// pico más alto de las ventanas de fuente que caen ahí: arranca en el
+// recorte (`recorte.desde_ms`) y sigue la escala (`pps`). La música entra en
+// bucle (compilador: -stream_loop -1), así que su onda también; cualquier
+// otro audio, pasado su final, no tiene barras. El alto sale del pico por el
+// volumen del clip (tope `alto`): el silencio es una raya de 1 px. `x` y
+// `alto` en las mismas unidades que `pps` y `alto` (px del lienzo, o del
+// canvas si se le pasan ya multiplicados por la densidad de la pantalla).
+export const VENTANA_PICOS_MS = 50;
+export const PASO_ONDA_PX = 3;
+
+export function barrasOnda(picos, clip, pps, alto, { ventanaMs = VENTANA_PICOS_MS, paso = PASO_ONDA_PX } = {}) {
+  const n = Array.isArray(picos) ? picos.length : 0;
+  const dur = Number(clip?.duracion_ms) || 0;
+  if (!n || !(dur > 0) || !(pps > 0) || !(alto > 0) || !(ventanaMs > 0) || !(paso > 0)) return [];
+  const v = Number(clip.velocidad ?? 1) || 1;
+  const desde = Number(clip.recorte?.desde_ms ?? 0) || 0;
+  const bucle = (clip.rol_audio ?? "subida") === "musica";
+  const volumen = Math.max(0, Number(clip.audio?.volumen ?? 1) || 0);
+  const ancho = msAPx(dur, pps);
+  const fuenteMs = (px) => desde + (px / pps) * 1000 * v;
+  const out = [];
+  for (let x = 0; x < ancho; x += paso) {
+    const i0 = Math.floor(fuenteMs(x) / ventanaMs);
+    const i1 = Math.max(i0 + 1, Math.ceil(fuenteMs(Math.min(x + paso, ancho)) / ventanaMs));
+    let pico = -1;
+    for (let i = i0; i < i1; i++) {
+      const k = bucle ? ((i % n) + n) % n : i;
+      if (k >= 0 && k < n) pico = Math.max(pico, Number(picos[k]) || 0);
+    }
+    if (pico < 0) continue;
+    out.push({ x, alto: Math.max(1, Math.round(Math.min(1, pico * volumen) * alto)) });
+  }
+  return out;
+}
+
+// La fila bajo `y`. `filas`: [{pistaId, tipo, top, alto}] de arriba abajo, en
+// las mismas unidades que `y`. En el hueco entre dos filas, la más cercana;
+// arriba de la primera (la regla) o debajo de la última, ninguna.
+export function filaEnY(filas, y) {
+  if (!filas?.length || !(y >= filas[0].top) || y >= filas.at(-1).top + filas.at(-1).alto) return null;
+  let mejor = null;
+  let distancia = Infinity;
+  for (const f of filas) {
+    if (y >= f.top && y < f.top + f.alto) return f;
+    const d = y < f.top ? f.top - y : y - (f.top + f.alto) + 1;
+    if (d < distancia) {
+      mejor = f;
+      distancia = d;
+    }
+  }
+  return mejor;
+}
+
+// Qué hay bajo un punto de la línea de tiempo (x, y en px del lienzo) para
+// soltar ahí algo de la biblioteca: `{pistaId, tipo, tMs, indicePrincipal}`.
+// Sobre la fila del video, `indicePrincipal` es el lugar donde entraría un
+// video (cuántos clips tienen el centro antes del dedo); sobre cualquier otra
+// fila es null. `tMs` siempre es el instante bajo el dedo (nunca antes de 0),
+// pegado con el imán a los bordes de los clips, al 0 y al cabezal. Fuera de
+// las filas (la regla, el espacio de abajo) `pistaId` y `tipo` son null: una
+// pista nueva, en ese instante.
+export function puntoSoltar(doc, filas, x, y, pps, { toleranciaMs = 0, cabezalMs = 0 } = {}) {
+  const fila = filaEnY(filas, y);
+  const crudo = Math.max(0, pxAMs(x, pps));
+  const tMs = Math.max(0, iman(crudo, candidatosIman(doc, null, cabezalMs), toleranciaMs));
+  const principal = pistaPrincipal(doc);
+  const enPrincipal = Boolean(fila) && Boolean(principal) && fila.pistaId === principal.id;
+  return {
+    pistaId: fila?.pistaId ?? null,
+    tipo: fila?.tipo ?? null,
+    tMs,
+    indicePrincipal: enPrincipal ? indiceDestino(doc, null, crudo) : null,
+  };
+}
+
+// Dónde se marca, en la principal, el lugar `indice` (el inicio del clip que
+// quedaría después, o el final si va último).
+export function msInsercion(doc, indice) {
+  const clips = pistaPrincipal(doc)?.clips ?? [];
+  const i = Math.max(0, Math.min(clips.length, Math.round(Number(indice) || 0)));
+  if (i < clips.length) return clips[i].inicio_ms;
+  const ultimo = clips.at(-1);
+  return ultimo ? ultimo.inicio_ms + ultimo.duracion_ms : 0;
+}
+
+// Qué corta «Cortar» (y la tecla S): el clip elegido, en el cabezal, si el
+// cabezal está dentro de él; sin nada elegido (o con el sonido de la escena,
+// que sigue al video), el video de la principal bajo el cabezal. Con un clip
+// elegido y el cabezal fuera de él, null: la página lo dice en vez de cortar
+// otra cosa. Devuelve [nombre, ...args] de operaciones.js (sin doc ni info).
+export function pedidoCortar(doc, seleccionId, tMs) {
+  const hallado = seleccionId ? buscarClip(doc, seleccionId) : null;
+  if (!hallado || hallado.pista.id === ID_SONIDO) return ["cortarEn", tMs];
+  const { clip } = hallado;
+  return clip.inicio_ms < tMs && tMs < clip.inicio_ms + clip.duracion_ms ? ["cortarClip", seleccionId, tMs] : null;
+}
+
+// ---- Capa 4b (Task 6): agregar desde la biblioteca ----------------------
+
+// Las transiciones que el render hace de verdad (operaciones.TRANSICIONES,
+// documento.TRANSICIONES), con el nombre que ve la persona: «desenfoque» es
+// un fundido a negro (el filtro real es fadeblack).
+export const NOMBRES_TRANSICION = { corte: "Corte", fundido: "Fundido", deslizar: "Deslizar", zoom: "Zoom", desenfoque: "Fundido a negro" };
+export const DURACION_TRANSICION_MS = 500;
+
+const segundosTexto = (ms) => `${(Math.round(ms / 100) / 10).toFixed(1).replace(".", ",")} s`;
+
+function clipsPrincipales(doc) {
+  const p = pistaPrincipal(doc);
+  return p && p.tipo === "video" ? p.clips : [];
+}
+
+// Dónde entra un video que se agrega con «+»: después del clip de la
+// principal bajo el cabezal; con el cabezal justo en un corte, en ese corte
+// (entre los dos clips); pasado el final, o sin clips, al final.
+export function indiceAgregarVideo(doc, tMs) {
+  const clips = clipsPrincipales(doc);
+  const t = Math.round(Number(tMs) || 0);
+  for (let i = 0; i < clips.length; i++) {
+    const c = clips[i];
+    if (i > 0 && t === c.inicio_ms) return i;
+    if (t >= c.inicio_ms && t < c.inicio_ms + c.duracion_ms) return i + 1;
+  }
+  return clips.length;
+}
+
+// El corte de la principal más cercano a `tMs`: el id del clip que termina
+// ahí (la transición es del clip de antes del corte). Sin cortes (un solo
+// clip), null.
+export function corteCercano(doc, tMs) {
+  const clips = clipsPrincipales(doc);
+  let mejor = null;
+  let distancia = Infinity;
+  for (const c of clips.slice(0, -1)) {
+    const d = Math.abs(c.inicio_ms + c.duracion_ms - Number(tMs));
+    if (d < distancia) {
+      mejor = c.id;
+      distancia = d;
+    }
+  }
+  return mejor;
+}
+
+// Tocar una transición de la biblioteca: va al video elegido (si es de la
+// principal y no el último: su unión con el siguiente) o, si no, al corte más
+// cercano al cabezal. [nombre, ...args] de operaciones.js, o null sin cortes.
+export function pedidoTransicion(doc, seleccionId, tMs, tipo, duracionMs = DURACION_TRANSICION_MS) {
+  const clips = clipsPrincipales(doc);
+  const i = seleccionId ? clips.findIndex((c) => c.id === seleccionId) : -1;
+  const id = i >= 0 && i < clips.length - 1 ? seleccionId : corteCercano(doc, tMs);
+  return id ? ["ponerTransicion", id, tipo, duracionMs] : null;
+}
+
+// Qué operación pide agregar algo de la biblioteca: [nombre, ...args] para
+// `editor.operar` (sin el documento ni info), o null si no hay dónde.
+// `cosa`: {tipo: "video" | "imagen" | "audio", material}, {tipo: "texto",
+// preset} o {tipo: "transicion", transicion}. Con `punto` (lo que dio
+// LineaTiempo.puntoEn al soltar) va ahí: un video, en su lugar de la
+// principal (soltado en otra fila, por el tiempo: no hay video sobre video);
+// una imagen, como capa en ese instante aunque caiga en la fila del video; una
+// transición, en el corte más cercano al dedo. Sin `punto` («+» o tocar), en
+// el cabezal: el video después del clip bajo el cabezal (indiceAgregarVideo),
+// la transición como pedidoTransicion. El audio entra como música.
+export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccion = null } = {}) {
+  const t = Math.max(0, Math.round(Number(punto ? punto.tMs : cabezalMs) || 0));
+  switch (cosa?.tipo) {
+    case "video": {
+      const enPrincipal = punto && punto.indicePrincipal !== null && punto.indicePrincipal !== undefined;
+      const indice = !punto ? indiceAgregarVideo(doc, t) : enPrincipal ? punto.indicePrincipal : indiceDestino(doc, null, t);
+      return ["agregarVideo", cosa.material, { indice }];
+    }
+    case "imagen":
+      return ["agregarImagen", cosa.material, t, {}];
+    case "audio":
+      return ["agregarAudio", cosa.material, t, { rol: "musica" }];
+    case "texto":
+      return ["agregarTexto", t, cosa.preset];
+    case "transicion": {
+      if (!punto) return pedidoTransicion(doc, seleccion, t, cosa.transicion);
+      const id = corteCercano(doc, t);
+      return id ? ["ponerTransicion", id, cosa.transicion, DURACION_TRANSICION_MS] : null;
+    }
+    default:
+      return null;
+  }
+}
+
+// Después de poner una transición (que no sea «Corte»): si no cupo entera —
+// `normalizar` la acorta o la quita cuando el clip no tiene video de sobra al
+// final, porque el render saca esos cuadros de la cola del primer clip —, qué
+// decirle a la persona; si cupo, null.
+export function avisoTransicion(doc, clipId, tipo, pedidoMs = DURACION_TRANSICION_MS) {
+  if (tipo === "corte") return null;
+  const clip = clipsPrincipales(doc).find((c) => c.id === clipId);
+  if (!clip) return null;
+  const tr = clip.transicion;
+  if (!tr || (tr.tipo ?? "corte") === "corte" || !(tr.duracion_ms > 0)) {
+    return "Esa unión quedó en corte: el primer clip no tiene video de sobra al final para la transición. "
+      + "Recorta un poco su final y vuelve a ponerla.";
+  }
+  if (tr.duracion_ms < pedidoMs) return `La transición quedó de ${segundosTexto(tr.duracion_ms)}: no hay más video al final del primer clip.`;
+  return null;
+}
+
+// Las uniones de la principal que llevan transición, para marcarlas en la
+// línea de tiempo: en `ms` (el final del clip de antes), con su nombre.
+export function unionesConTransicion(doc) {
+  return clipsPrincipales(doc).slice(0, -1)
+    .filter((c) => c.transicion && (c.transicion.tipo ?? "corte") !== "corte" && c.transicion.duracion_ms > 0)
+    .map((c) => ({
+      clipId: c.id, ms: c.inicio_ms + c.duracion_ms, tipo: c.transicion.tipo, duracion_ms: c.transicion.duracion_ms,
+      nombre: `${NOMBRES_TRANSICION[c.transicion.tipo] ?? c.transicion.tipo} · ${segundosTexto(c.transicion.duracion_ms)}`,
+    }));
 }

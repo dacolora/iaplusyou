@@ -28,6 +28,17 @@ def al_interrumpir(tipo):
     return _dec
 
 
+class Continuar:
+    """Lo que devuelve una tarea que no terminó su trabajo pero sabe cómo
+    seguirlo: el worker la cierra `hecha` con `mensaje` y encola, en la misma
+    transacción, la tarea `tipo` con `payload` y el MISMO job_id (la barra de la
+    tarjeta sigue viva). Ej.: un video cuya espera se agotó sigue con
+    `flowplus_recuperar` (spec 2026-09-28-crear-sin-cola)."""
+
+    def __init__(self, tipo, payload, mensaje=None, ejecutar_desde=None):
+        self.tipo, self.payload, self.mensaje, self.ejecutar_desde = tipo, payload, mensaje, ejecutar_desde
+
+
 def ref_sufijo(tarea):
     """Marcador de intento (`:t<tarea_id>`) para la referencia de un gasto:
     el id de la fila `tarea` (nuevo por clic, estable en reintentos del
