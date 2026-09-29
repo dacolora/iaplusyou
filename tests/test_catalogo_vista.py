@@ -27,6 +27,7 @@ def test_tarjetas_activo_y_fila():
     assert o["precio"] == 34.95 and o["fuente"] == "shopify" and o["en_prueba"] and o["prioridad"] == 40 and o["usos"] == 5
     assert "pink" in o["busqueda"] and "original" in o["busqueda"] and not o["sin_fotos"]
     assert t[1]["precio"] is None and t[1]["fuente"] is None and t[1]["fila"] is None
+    assert t[1]["n_colores"] == 0 and t[1]["colores"] == []
     lam = t[2]
     assert lam["id"] == "fila-9" and lam["sin_fotos"] and lam["usos"] == 1 and lam["nombre"] == "Lámpara"
 
@@ -44,7 +45,7 @@ def test_contadores_filtrar_ordenar():
     assert [t["nombre"] for t in cv.filtrar(lista)] == ["Alfa", "Beta", "Delta"]
     assert [t["nombre"] for t in cv.filtrar(lista, filtro="en_prueba")] == ["Beta"]
     assert [t["nombre"] for t in cv.filtrar(lista, filtro="sin_precio")] == ["Beta"]
-    assert [t["nombre"] for t in cv.filtrar(lista, filtro="sin_url")] == ["Alfa"] or [t["nombre"] for t in cv.filtrar(lista, filtro="sin_url")] == ["Beta"]
+    assert [t["nombre"] for t in cv.filtrar(lista, filtro="sin_url")] == ["Beta"]
     assert [t["nombre"] for t in cv.filtrar(lista, filtro="sin_fotos")] == ["Delta"]
     assert [t["nombre"] for t in cv.filtrar(lista, filtro="archivados")] == ["Gamma", "Épsilon"]
     assert [t["nombre"] for t in cv.filtrar(lista, q="ALF")] == ["Alfa"]
