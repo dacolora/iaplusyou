@@ -59,11 +59,12 @@ import { avisosCarga } from "./avisos_carga.js";
 import { Avisos } from "./avisos_editor.js";
 import { Biblioteca } from "./biblioteca.js";
 import { pedidoCortar } from "./escala.js";
-import { Guardado } from "./guardado.js";
+import { Guardado, sesionTerminada } from "./guardado.js";
 import { Historial } from "./historial.js";
 import { InteraccionLienzo } from "./lienzo_interaccion.js";
 import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
+import { respuestaProducir } from "./producir.js";
 import { Propiedades } from "./propiedades.js";
 import { infoDe, VistaPrevia } from "./vista.js";
 
@@ -388,16 +389,15 @@ function montarProducir() {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ version_n: guardado.versionN, destinos, ...(reemplazar ? { reemplazar: true } : {}) }),
       });
-      const j = await r.json().catch(() => ({}));
-      if (r.status === 409 && Array.isArray(j.reemplazos) && j.reemplazos.length) return pedirReemplazo(j.reemplazos);
-      if (!r.ok) return avisar([j.error || `No se pudo producir (error ${r.status}).`, ...(j.problemas ?? [])].join(" "));
-      const n = (j.producidas ?? []).filter((p) => p.encolada).length;
+      // la página de entrar (sesión vencida) no es JSON: ni se intenta leer
+      const j = sesionTerminada(r) ? null : await r.json().catch(() => null);
+      const res = respuestaProducir(r, j);             // producir.js (puro, probado en Node)
+      if (res.que === "reemplazo") return pedirReemplazo(res.destinos);
+      if (res.que === "error") return avisar(res.texto);
       dialogo.close();
       aviso("");
-      $("producir-hecho-texto").textContent = n
-        ? `Produciendo ${n} final${n === 1 ? "" : "es"}. Las vas a ver en Final edition cuando terminen.`
-        : "Esos destinos ya se estaban produciendo.";
-      if (j.url) $("producir-hecho-enlace").href = j.url;
+      $("producir-hecho-texto").textContent = res.texto;
+      if (res.url) $("producir-hecho-enlace").href = res.url;
       $("producir-hecho").hidden = false;
     } catch {
       avisar("Sin conexión: no se pudo producir. Vuelve a intentar.");

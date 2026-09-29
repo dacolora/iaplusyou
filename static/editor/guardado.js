@@ -7,6 +7,18 @@
 // una frase para la persona y, si hay, en `detalle` lo técnico (la ruta del
 // validador): queda en `this.detalle` y le llega a `alCambiar` como tercer
 // argumento (la página lo pone en el `title`, capa 4c).
+export const MENSAJE_SESION = "Tu sesión terminó: recarga la página e inicia sesión.";
+
+// Capa 4c: ¿la respuesta es la página de entrar? Con la sesión vencida el
+// servidor redirige a /login y `fetch` sigue la redirección: llega marcada
+// `redirected` (un PUT, además, como 405) o como HTML, nunca como el JSON que
+// se pidió. Sin cabeceras (las pruebas) no se asume nada.
+export function sesionTerminada(r) {
+  if (r?.redirected) return true;
+  const tipo = r?.headers?.get?.("content-type") ?? "";
+  return /text\/html/i.test(tipo);
+}
+
 function enviarPorDefecto(url, cuerpo) {
   return fetch(url, {
     method: "PUT",
@@ -58,6 +70,12 @@ export class Guardado {
     this.enVuelo = (async () => {
       try {
         const r = await this.enviar(this.url, { documento: doc, version_n: this.versionN });
+        if (sesionTerminada(r)) {
+          // nada se guardó: el cambio sigue pendiente (y el aviso al salir lo protege)
+          this.pendiente = this.pendiente ?? doc;
+          this._poner("error", MENSAJE_SESION);
+          return;
+        }
         const cuerpo = await r.json().catch(() => ({}));
         if (r.status === 200) {
           this.versionN = cuerpo.version_n;

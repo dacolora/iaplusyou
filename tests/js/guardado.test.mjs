@@ -85,3 +85,31 @@ test("capa 4c (5/10): un 400 del validador muestra la frase llana y guarda el de
   assert.equal(g.detalle, "pistas[p_texto].clips[0]: estilo.tamano fuera de rango.");
   assert.deepEqual(vistos.at(-1), ["error", g.mensaje, g.detalle]);
 });
+
+// ---- Capa 4c (6/10): la sesión venció ----
+import { MENSAJE_SESION, sesionTerminada } from "../../static/editor/guardado.js";
+
+const html = { get: (k) => (k.toLowerCase() === "content-type" ? "text/html; charset=utf-8" : null) };
+const json = { get: (k) => (k.toLowerCase() === "content-type" ? "application/json" : null) };
+
+test("sesionTerminada: una redirección o una página HTML son la página de entrar", () => {
+  assert.equal(sesionTerminada({ status: 405, redirected: true, headers: html }), true);
+  assert.equal(sesionTerminada({ status: 200, redirected: false, headers: html }), true);
+  assert.equal(sesionTerminada({ status: 200, redirected: false, headers: json }), false);
+  assert.equal(sesionTerminada({ status: 400 }), false);                // sin cabeceras (las pruebas): no se sabe, no se asume
+  assert.match(MENSAJE_SESION, /sesión terminó.*recarga la página e inicia sesión/);
+});
+
+test("guardar con la sesión vencida dice eso (no «error 405») y no pierde el cambio", async () => {
+  for (const r of [{ status: 405, redirected: true, headers: html }, { status: 200, headers: html }]) {
+    const enviados = [];
+    const g = new Guardado({ url: "/e/1", versionN: 3, programar: () => 1, cancelar: () => {},
+      enviar: async (url, cuerpo) => { enviados.push(cuerpo); return { ...r, json: async () => { throw new Error("no es JSON"); } }; } });
+    g.pedir({ n: 1 });
+    await g.ahora();
+    assert.equal(g.estado, "error");
+    assert.equal(g.mensaje, MENSAJE_SESION);
+    assert.equal(g.versionN, 3, "no toma una versión de la página de entrar");
+    assert.ok(g.sinGuardar, "el cambio sigue pendiente");
+  }
+});
