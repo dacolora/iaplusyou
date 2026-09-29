@@ -318,14 +318,24 @@ def _bajar_a(fotos, carpeta_destino, prod, errores, que=""):
 
 
 def _color_existente(meta_variantes, var):
-    """color_id ya guardado para esta variante: por fuente_id, o por el id derivado del nombre."""
+    """color_id ya guardado para esta variante: por fuente_id primero; si no
+    matchea ninguno, por el id derivado del nombre PERO solo contra un color
+    que no tenga fuente_id propio (hecho a mano, o el que dejó
+    `convertir_actual` al adoptar). Un color con fuente_id de la tienda
+    nunca se funde por coincidencia de nombre — si no, dos variantes de la
+    tienda con `fuente_id` distinto que normalizan igual (p. ej. "Café" y
+    "Cafe") se pisarían entre sí en vez de quedar como dos colores separados
+    (`-2` vía `_color_id_libre`)."""
     fid = str(var.get("fuente_id") or "")
     if fid:
         for cid, datos in meta_variantes.items():
             if str((datos or {}).get("fuente_id") or "") == fid:
                 return cid
     cid = catalogo_productos.id_desde_nombre(var["nombre"])
-    return cid if cid in meta_variantes else None
+    datos = meta_variantes.get(cid)
+    if datos is not None and not (datos or {}).get("fuente_id"):
+        return cid
+    return None
 
 
 def _color_id_libre(meta_variantes, nombre):

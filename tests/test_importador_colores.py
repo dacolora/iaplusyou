@@ -112,3 +112,39 @@ def test_adopta_activo_plano_a_mano_convirtiendo_sus_fotos_en_un_color(entorno):
     assert _meta()["cojin_azul"]["regla"] == "mi regla"
     p = catalogo_productos.encontrar_producto("acme", "cojin_azul")
     assert p["fotos_generales"] == ["01.png", "02.png"] and p["n_colores"] == 3
+
+
+def test_dos_variantes_con_nombres_que_normalizan_igual_no_se_fusionan(entorno):
+    """"Café" y "Cafe" normalizan al mismo slug pero traen `fuente_id`
+    distinto: son colores DISTINTOS y nunca deben fundirse en uno solo
+    (el segundo saca `-2`, como dos colores del mismo nombre a mano)."""
+    import catalogo_productos
+    import importador
+    res = importador.importar_lista("acme", "shopify", [_prod(
+        colores=(("Café", "v1", ("https://cdn.test/cafe1.png",)), ("Cafe", "v2", ("https://cdn.test/cafe2.png",))))])
+    assert res["activos"] == 1 and res["colores"] == 2
+    v = _meta()["cojin_azul"]["variantes"]
+    assert list(v) == ["cafe", "cafe-2"]
+    assert v["cafe"]["fuente_id"] == "v1" and v["cafe-2"]["fuente_id"] == "v2"
+    base = entorno["tmp"] / "clientes" / "acme" / "productos" / "cojin_azul"
+    assert os.listdir(base / "cafe") == ["01.png"] and os.listdir(base / "cafe-2") == ["01.png"]
+
+
+def test_color_a_mano_sin_fuente_id_se_adopta_por_nombre(entorno):
+    """Un color hecho a mano (sin `fuente_id`) sí se adopta por nombre cuando
+    la tienda trae una variante que normaliza igual: se completa con su
+    fuente_id en vez de crear un `-2` (la fusión indebida es solo entre dos
+    colores que YA tienen cada uno su propio fuente_id de la tienda)."""
+    import catalogo_productos
+    import importador
+    catalogo_productos.crear("acme", "Cojín Azul", categoria="producto")
+    catalogo_productos.agregar_color("acme", "cojin_azul", "Cojín Azul — Rojo")
+    carpeta_rojo = catalogo_productos.carpeta_de("acme", "cojin_azul", "producto", variante="rojo")
+    with open(os.path.join(carpeta_rojo, "mano.jpg"), "wb") as f:
+        f.write(b"\xff\xd8\xff\xe0fake")
+    res = importador.importar_lista("acme", "shopify", [_prod(colores=(("Rojo", "v1", ("https://cdn.test/rojo.png",)),))])
+    assert res["activos"] == 1
+    v = _meta()["cojin_azul"]["variantes"]
+    assert list(v) == ["rojo"] and v["rojo"]["fuente_id"] == "v1"
+    assert os.listdir(carpeta_rojo) == ["mano.jpg"]              # ya tenía foto: no se rebaja
+    assert "https://cdn.test/rojo.png" not in entorno["descargas"]
