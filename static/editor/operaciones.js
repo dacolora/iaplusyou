@@ -636,10 +636,13 @@ const PRESETS_TEXTO = {
   llamado: { fuente: "Inter-Bold", px: 52, color: "#000000", y: 0.85, fondo: "blanco" },
 };
 
-// Un texto nuevo, literal («Escribe aquí», o «$ 0» para el preset precio),
-// de 3 s (sin pasar del fin del video: `lugarCapa`), en una pista de texto
-// libre. `estilo.tamano` es px/altura del
-// lienzo, como pide documento.py (fracción de la altura).
+// Un texto nuevo, literal («Escribe aquí», o «Escribe el precio» para el
+// preset precio — antes «$ 0», que salía así en la final si se olvidaba
+// cambiarlo; el precio del producto no se inventa aquí: lo escribe la
+// persona, que tiene el campo enfocado con todo seleccionado), de 3 s (sin
+// pasar del fin del video: `lugarCapa`), en una pista de texto libre.
+// `estilo.tamano` es px/altura del lienzo, como pide documento.py (fracción
+// de la altura).
 export function agregarTexto(doc, tMs, preset, info = {}) {
   const res = structuredClone(doc);
   const def = PRESETS_TEXTO[preset];
@@ -659,7 +662,7 @@ export function agregarTexto(doc, tMs, preset, info = {}) {
   };
   const clip = {
     id: idNuevo(res, preset), inicio_ms: t, duracion_ms: dur,
-    texto: { literal: preset === "precio" ? "$ 0" : "Escribe aquí" },
+    texto: { literal: preset === "precio" ? "Escribe el precio" : "Escribe aquí" },
     estilo, transform: { ...TRANSFORM, y: def.y }, keyframes: [], animacion: null,
   };
   pista.clips.push(clip);

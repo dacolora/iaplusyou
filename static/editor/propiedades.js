@@ -100,7 +100,7 @@ export class Propiedades {
 
   // Agregar un texto lo deja elegido y pide escribirlo (editor.enfocarTexto,
   // que en el celular ya subió esta hoja): el campo, con todo seleccionado
-  // para que lo que se escriba reemplace «Escribe aquí».
+  // para que lo que se escriba reemplace «Escribe aquí» (o «Escribe el precio»).
   enfocarTexto() {
     this.pintar();
     const t = this.textarea;

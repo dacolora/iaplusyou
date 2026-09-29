@@ -298,7 +298,9 @@ test("agregarTexto usa tamaños fraccionarios del lienzo y el fondo de marca en 
     const c = clipDe(r.doc, r.seleccion);
     assert.equal(c.estilo.tamano, px / 1920);
     assert.equal(c.transform.y, y);
-    assert.equal(c.texto.literal, preset === "precio" ? "$ 0" : "Escribe aquí");
+    // capa 4c (7/10): el precio entra como un pedido de escribirlo, nunca como «$ 0» (que salía así si se olvidaba)
+    assert.equal(c.texto.literal, preset === "precio" ? "Escribe el precio" : "Escribe aquí");
+    assert.doesNotMatch(c.texto.literal, /\d|\$/);
     if (preset === "precio") assert.equal(c.estilo.fondo.color, "#7c3aed");
   }
   invalida(() => op.agregarTexto(docBase(), 0, "otro", INFO), /texto/i);
