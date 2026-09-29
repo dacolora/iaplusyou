@@ -58,6 +58,7 @@ PLANTILLAS_TRADUCIDAS = [
     # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
     "_tab_triple_whale.html", "_tw_panel.html",
     "editor.html",   # Fase 6, Task 2: la página del editor
+    "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
 ]
 
 

@@ -736,3 +736,77 @@ def test_mensajes_del_editor_en_ingles(admin_en):
     assert r.get_json()["error"] == "This edit isn't linked to a Create video: it can't be produced from here yet."
     r = admin_en.post("/cliente/acme/ediciones/materiales/subir", data={})
     assert r.status_code == 400 and r.get_json()["error"] == "Choose a file."
+
+
+# ---- Fase 6, Task 4: Crear › Cambiar producto y restos de Configuración -----
+
+def test_cambiar_producto_en_ingles(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("crear-modo-cambiar",))
+    assert not fugas, fugas[:15]
+
+
+def _apartado_gasto(html):
+    """Solo Configuración › Gasto: el Tablero de la misma página ya dice
+    «1 charge to providers →» (otro msgid) y taparía lo que se prueba."""
+    ini = html.index('id="config-ap-gasto"')
+    fin = html.find('<section class="config-apartado"', ini + 1)
+    return html[ini:fin if fin != -1 else None]
+
+
+def test_un_cobro_en_singular_en_ingles(admin_en):
+    import gastos
+    gastos.registrar("acme", "video", 0.5, "video:x", detalle="wan3 · 5 s", proveedor="wavespeed")
+    gasto = _apartado_gasto(html_de(admin_en, "/cliente/acme"))
+    assert "1 charge to providers" in gasto and "charge(s)" not in gasto
+
+
+def test_un_cobro_en_espanol_no_cambia(app_i18n):
+    """El plural inglés sale de ngettext con el MISMO msgid en las dos formas:
+    el español se ve igual. Falla antes del cambio por la primera línea."""
+    import os
+    import gastos
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, "templates", "_tab_settings.html"), encoding="utf-8") as f:
+        assert "ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores'" in f.read()
+    gastos.registrar("acme", "video", 0.5, "video:x", detalle="wan3 · 5 s", proveedor="wavespeed")
+    c = app_i18n.app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"], s["rol"], s["cliente"] = "admin", "admin", None
+    assert "1 cobro(s) a proveedores" in _apartado_gasto(html_de(c, "/cliente/acme"))   # admin sin idioma = es
+
+
+def test_csv_del_gasto_con_encabezados_en_ingles(admin_en):
+    texto = admin_en.get("/cliente/acme/gasto/mes.csv").get_data(as_text=True)
+    assert texto.lstrip("﻿").splitlines()[0] == "date;type;provider;reference;detail;usd"
+
+
+def test_error_de_link_en_ingles(tmp_path):
+    import referencias_link
+    with idiomas.en_idioma("en"), pytest.raises(referencias_link.LinkError) as e:
+        referencias_link.descargar("ftp://algo", str(tmp_path), "x")
+    assert str(e.value) == "That doesn't look like a link (it must start with http:// or https://)."
+
+
+def test_describir_referencias_en_el_idioma_pedido(monkeypatch):
+    import anthropic
+    import generador_prompts
+    import referencias_link
+    visto = {}
+
+    class _Resp:
+        content = [type("B", (), {"type": "text", "text": "A sandal on the sand."})()]
+
+    class _Cliente:
+        def __init__(self, api_key=None):
+            self.messages = self
+
+        def create(self, **kw):
+            visto.update(kw)
+            return _Resp()
+
+    monkeypatch.setattr(anthropic, "Anthropic", _Cliente)
+    monkeypatch.setattr(generador_prompts, "_api_key", lambda: "sk-test")
+    referencias_link.describir([{"etiqueta": "@Imagen 1", "tipo": "imagen", "url": "https://r2/a.jpg"}], idioma="en")
+    texto = visto["messages"][0]["content"][0]["text"]
+    orden = idiomas.orden_idioma("en")
+    assert texto.startswith(orden) and texto.rstrip().endswith(orden) and "Describe en inglés" in texto

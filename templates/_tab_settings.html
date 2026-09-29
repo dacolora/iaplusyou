@@ -553,7 +553,7 @@
   <div class="kpi-tile">
     <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ _('%(n)s cobro(s) a proveedores', n=gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {% for p in pauta_mes %}
   <div class="kpi-tile">

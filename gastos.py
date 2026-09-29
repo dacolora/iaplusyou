@@ -419,7 +419,9 @@ def por_proyecto_mes(clientes, ahora_iso=None):
 
 # ----------------------------------------------------------------- CSV ---
 
-ENCABEZADO_CSV = ["fecha", "tipo", "proveedor", "referencia", "detalle", "usd"]
+# La línea entera es UN msgid (una palabra suelta como «proyecto» ya existe en
+# el catálogo como plural y chocaría); `csv_mes` la traduce al escribirla.
+ENCABEZADO_CSV = N_("fecha;tipo;proveedor;referencia;detalle;usd").split(";")
 _INICIOS_FORMULA = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -434,12 +436,14 @@ def _celda(v):
 def csv_mes(cliente, ahora_iso=None):
     """CSV (`;`) con una fila por cobro del mes en curso, con BOM para que
     Excel lo abra en UTF-8. `usd` con coma decimal y 4 decimales (M5: mismo
-    separador que `tablero.csv_mes`, coherente con el `;` de delimitador)."""
+    separador que `tablero.csv_mes`, coherente con el `;` de delimitador).
+    Encabezados en el idioma activo (en la ruta, el de quien lo descarga); los
+    `detalle` guardados salen tal cual."""
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
-    w.writerow(ENCABEZADO_CSV)
+    w.writerow(idiomas.traducir(";".join(ENCABEZADO_CSV)).split(";"))
     g = db.gasto
     q = (sa.select(g).where(g.c.cliente == cliente, g.c.creado_en >= desde, g.c.creado_en <= hasta)
          .order_by(g.c.creado_en.asc(), g.c.id.asc()))

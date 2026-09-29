@@ -20,7 +20,7 @@ ARCHIVOS_FASE5 = ["sprints/analisis.py", "sprints/ideas.py", "sprints/qa.py", "s
                   "doctrina/revisor.py", "doctrina/pedidos.py", "doctrina/diagnostico.py",
                   "referentes/sugerir.py", "referentes/recrear.py", "nicho/avatares.py",
                   "referentes/clasificar.py", "referentes/copycoders.py"]
-ARCHIVOS_FASE6 = ["final_edition/guion.py"]
+ARCHIVOS_FASE6 = ["final_edition/guion.py", "referencias_link.py"]
 
 
 def _offsets_de_linea(texto):

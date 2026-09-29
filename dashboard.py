@@ -432,7 +432,7 @@ def _requiere_correo_verificado():
     entry = usuarios.obtener(sesion["usuario"])
     if entry and entry.get("correo_verificado"):
         return None
-    flash("Confirma tu correo primero (Configuración › Cuenta).", "error")
+    flash(gettext("Confirma tu correo primero (Configuración › Cuenta)."), "error")
     if sesion.get("cliente"):
         return redirect(url_for("ver_cliente", cliente=sesion["cliente"], _anchor="settings"))
     return redirect(url_for("index"))
@@ -675,7 +675,7 @@ def subir_escena(cliente):
 @app.route("/cliente/<cliente>/escena/<nombre>/eliminar", methods=["POST"])
 def eliminar_escena(cliente, nombre):
     _eliminar_asset(cliente, "escenas", secure_filename(nombre))
-    flash(f"Eliminado: {nombre}", "ok")
+    flash(gettext("Eliminado: %(nombre)s", nombre=nombre), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -689,7 +689,7 @@ def subir_producto_referencia(cliente):
 @app.route("/cliente/<cliente>/producto_referencia/<nombre>/eliminar", methods=["POST"])
 def eliminar_producto_referencia(cliente, nombre):
     _eliminar_asset(cliente, "productos_referencia", secure_filename(nombre))
-    flash(f"Eliminado: {nombre}", "ok")
+    flash(gettext("Eliminado: %(nombre)s", nombre=nombre), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -732,7 +732,7 @@ def analizar_marca(cliente):
     guía de estilo — se usa automáticamente en cada generación de prompts."""
     urls = [r["url"] for r in _marca_referencias(cliente) if r.get("url")]
     if not urls:
-        flash("Sube al menos una referencia de marca (imagen o video) primero.", "error")
+        flash(gettext("Sube al menos una referencia de marca (imagen o video) primero."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     job_id = _job_id_marca(cliente)
@@ -742,12 +742,12 @@ def analizar_marca(cliente):
         data = marca_mod.cargar(cliente)
         data["guia_estilo"] = guia
         marca_mod.guardar(cliente, data)
-        return "Guía de estilo generada."
+        return idiomas.N_("Guía de estilo generada.")
 
     if trabajos.iniciar(job_id, trabajo, duracion_estimada=15):
-        flash("Analizando referencias de marca…", "ok")
+        flash(gettext("Analizando referencias de marca…"), "ok")
     else:
-        flash("Ya se está analizando — espera a que termine.", "warn")
+        flash(gettext("Ya se está analizando — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -764,7 +764,7 @@ def guardar_marca(cliente):
     except ValueError:
         pass
     marca_mod.guardar(cliente, data)
-    flash("Identidad de marca guardada.", "ok")
+    flash(gettext("Identidad de marca guardada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -3050,12 +3050,12 @@ def generar_swap(cliente):
         proveedor_video = "seedance25_edit"
 
     if not archivos:
-        flash("Sube al menos una foto o video primero.", "error")
+        flash(gettext("Sube al menos una foto o video primero."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     producto = catalogo_productos.encontrar(cliente, producto_id)
     if not producto:
-        flash("Elige un producto del catálogo.", "error")
+        flash(gettext("Elige un producto del catálogo."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     lanzados = 0
@@ -3064,11 +3064,11 @@ def generar_swap(cliente):
             lanzados += 1
 
     if lanzados == 1:
-        flash("Generando el swap…", "ok")
+        flash(gettext("Generando el swap…"), "ok")
     elif lanzados > 1:
-        flash(f"Generando {lanzados} swaps…", "ok")
+        flash(gettext("Generando %(n)s swaps…", n=lanzados), "ok")
     else:
-        flash("Ya se estaban generando esos swaps — espera a que terminen.", "warn")
+        flash(gettext("Ya se estaban generando esos swaps — espera a que terminen."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -3126,7 +3126,7 @@ def imagen_swap_original(cliente, swap_id):
     # bitácora guarda el resultado, no la entrada. Sin este guardia,
     # os.path.exists(None) revienta con TypeError y devuelve un 500.
     if not entry or not entry.get("foto_original_local") or not os.path.exists(entry["foto_original_local"]):
-        flash("No encontré la foto original.", "error")
+        flash(gettext("No encontré la foto original."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     return send_file(entry["foto_original_local"])
 
@@ -3134,7 +3134,7 @@ def imagen_swap_original(cliente, swap_id):
 @app.route("/cliente/<cliente>/swap/<swap_id>/eliminar", methods=["POST"])
 def eliminar_swap(cliente, swap_id):
     swaps_mod.eliminar(cliente, swap_id)
-    flash("Eliminado.", "ok")
+    flash(gettext("Eliminado."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -3152,13 +3152,13 @@ def enviar_swap_a_publicidad(cliente, swap_id):
     data = swaps_mod.cargar(cliente)
     entry = data.get(swap_id)
     if not entry or not entry.get("resultado_url"):
-        flash("Ese swap todavía no tiene un resultado listo.", "error")
+        flash(gettext("Ese swap todavía no tiene un resultado listo."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
     nombre = producto["nombre"] if producto else entry.get("producto_id", "Swap")
     ads_mod.crear(cliente, "swap", swap_id, entry["resultado_url"], entry.get("tipo", "foto"), nombre)
-    flash("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza.", "ok")
+    flash(gettext("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -3167,12 +3167,12 @@ def enviar_video_a_publicidad(cliente, brief_id):
     data = estado_mod.cargar(cliente)
     entry = data.get(brief_id)
     if not entry or not entry.get("video_url"):
-        flash("Ese video todavía no tiene una URL pública lista.", "error")
+        flash(gettext("Ese video todavía no tiene una URL pública lista."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
     nombre = entry.get("title") or brief_id
     ads_mod.crear(cliente, "idea_visual", brief_id, entry["video_url"], "video", nombre)
-    flash("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza.", "ok")
+    flash(gettext("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -6531,20 +6531,26 @@ def fp_agregar_link(cliente):
     job_id = _job_id_link(cliente)
 
     def trabajo():
-        carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
-        base = f"link_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
-        try:
-            local_path, meta = referencias_link.descargar(url, carpeta, base)
-            r2_url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/referencias_flowplus/{base}.mp4")
-            frame_path = local_path + FRAME_SUFFIX
-            _extraer_frame(local_path, frame_path)
-            frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/referencias_flowplus/{base}{FRAME_SUFFIX}")
-            referencias_flowplus.agregar(cliente, "video", r2_url, frame_url=frame_url, origen=meta.get("fuente", "link"),
-                                         ruta_local=local_path, titulo=meta.get("titulo") or url)
-            bitacora.registrar(cliente, base, "flowplus_link", "ok", url)
-        except Exception as e:
-            bitacora.registrar(cliente, base, "flowplus_link", "error", str(e))
-            raise
+        # Un hilo de trabajos.iniciar no tiene petición: sin esto un LinkError
+        # saldría en el msgid (español). Lo que se arma adentro va en el idioma
+        # del proyecto; el return fijo lo traduce estado_trabajo para quien mira.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
+            base = f"link_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            try:
+                local_path, meta = referencias_link.descargar(url, carpeta, base)
+                r2_url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/referencias_flowplus/{base}.mp4")
+                frame_path = local_path + FRAME_SUFFIX
+                _extraer_frame(local_path, frame_path)
+                frame_url = r2_uploader.upload_image(frame_path,
+                                                     f"clientes/{cliente}/referencias_flowplus/{base}{FRAME_SUFFIX}")
+                referencias_flowplus.agregar(cliente, "video", r2_url, frame_url=frame_url,
+                                             origen=meta.get("fuente", "link"),
+                                             ruta_local=local_path, titulo=meta.get("titulo") or url)
+                bitacora.registrar(cliente, base, "flowplus_link", "ok", url)
+            except Exception as e:
+                bitacora.registrar(cliente, base, "flowplus_link", "error", str(e))
+                raise
         return idiomas.N_("Video del link agregado a las referencias.")
 
     arranco = trabajos.iniciar(job_id, trabajo, duracion_estimada=40)
@@ -6805,7 +6811,8 @@ def fp_describir(cliente):
     if not refs:
         return jsonify({"ok": False, "error": gettext("Agrega primero una imagen, un video o un link.")}), 400
     try:
-        texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente))
+        texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente),
+                                           idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
         bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
         return jsonify({"ok": False, "error": gettext("No pude describir las referencias (%(tipo)s).", tipo=type(e).__name__)}), 502

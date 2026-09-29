@@ -19,6 +19,9 @@ import subprocess
 import tempfile
 
 import requests
+from flask_babel import gettext
+
+import idiomas
 
 MAX_SEGUNDOS = 15
 _UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/128 Safari/537.36"}
@@ -36,20 +39,20 @@ def _descargar_trendtrack(url, destino):
     try:
         html = requests.get(url, headers=_UA, timeout=30).text
     except requests.RequestException as e:
-        raise LinkError(f"No pude abrir el link de TrendTrack ({type(e).__name__}).") from None
+        raise LinkError(gettext("No pude abrir el link de TrendTrack (%(tipo)s).", tipo=type(e).__name__)) from None
     m = re.search(r'https://medias\.trendtrack\.io/[^"\'\\\s<>]+\.mp4', html)
     if not m:
-        raise LinkError("En ese link de TrendTrack no encontré el video (¿es un anuncio de imagen, o el link no es público?).")
+        raise LinkError(gettext("En ese link de TrendTrack no encontré el video (¿es un anuncio de imagen, o el link no es público?)."))
     video_url = m.group(0)
     try:
         with requests.get(video_url, headers=_UA, timeout=120, stream=True) as r:
             if not r.ok:
-                raise LinkError(f"TrendTrack no dejó descargar el video ({r.status_code}).")
+                raise LinkError(gettext("TrendTrack no dejó descargar el video (%(codigo)s).", codigo=r.status_code))
             with open(destino, "wb") as f:
                 for chunk in r.iter_content(1 << 16):
                     f.write(chunk)
     except requests.RequestException as e:
-        raise LinkError(f"Falló la descarga del video de TrendTrack ({type(e).__name__}).") from None
+        raise LinkError(gettext("Falló la descarga del video de TrendTrack (%(tipo)s).", tipo=type(e).__name__)) from None
     return {"fuente": "trendtrack", "titulo": None}
 
 
@@ -57,7 +60,7 @@ def _descargar_ytdlp(url, destino):
     try:
         import yt_dlp
     except ImportError:
-        raise LinkError("Falta yt-dlp en el servidor para descargar de TikTok/Instagram/YouTube.") from None
+        raise LinkError(gettext("Falta yt-dlp en el servidor para descargar de TikTok/Instagram/YouTube.")) from None
     opts = {
         "outtmpl": destino, "format": "mp4/bestvideo*+bestaudio/best", "merge_output_format": "mp4",
         "quiet": True, "no_warnings": True, "noplaylist": True, "max_filesize": 200 * 1024 * 1024,
@@ -66,7 +69,7 @@ def _descargar_ytdlp(url, destino):
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
     except Exception as e:
-        raise LinkError(f"No pude descargar ese link ({type(e).__name__}): puede ser privado, requerir inicio de sesión o no ser un video.") from None
+        raise LinkError(gettext("No pude descargar ese link (%(tipo)s): puede ser privado, requerir inicio de sesión o no ser un video.", tipo=type(e).__name__)) from None
     return {"fuente": info.get("extractor_key", "").lower() or "link", "titulo": info.get("title")}
 
 
@@ -75,13 +78,13 @@ def descargar(url, carpeta, nombre_base):
     MAX_SEGUNDOS. Devuelve (ruta_mp4, meta)."""
     url = url.strip()
     if not re.match(r"^https?://", url):
-        raise LinkError("Eso no parece un link (tiene que empezar por http:// o https://).")
+        raise LinkError(gettext("Eso no parece un link (tiene que empezar por http:// o https://)."))
     os.makedirs(carpeta, exist_ok=True)
     bruto = os.path.join(carpeta, nombre_base + ".orig.mp4")
     final = os.path.join(carpeta, nombre_base + ".mp4")
     meta = _descargar_trendtrack(url, bruto) if _es_trendtrack(url) else _descargar_ytdlp(url, bruto)
     if not os.path.exists(bruto) or os.path.getsize(bruto) == 0:
-        raise LinkError("La descarga terminó vacía.")
+        raise LinkError(gettext("La descarga terminó vacía."))
     # Recorte a 15 s + re-encode a H.264 (los modelos exigen mp4 estándar).
     try:
         subprocess.run(
@@ -90,7 +93,8 @@ def descargar(url, carpeta, nombre_base):
             check=True, capture_output=True,
         )
     except subprocess.CalledProcessError as e:
-        raise LinkError(f"No pude preparar el video descargado: {e.stderr.decode(errors='ignore')[-200:]}") from None
+        raise LinkError(gettext("No pude preparar el video descargado: %(detalle)s",
+                                detalle=e.stderr.decode(errors="ignore")[-200:])) from None
     finally:
         try:
             os.remove(bruto)
@@ -122,7 +126,7 @@ def fotogramas(video_path, n=4):
     return imgs
 
 
-DESCRIPCION_PROMPT = """Eres director creativo de anuncios cortos para redes. Vas a ver fotogramas de uno o varios videos/imágenes de referencia, en orden. Describe en español, en un solo párrafo de máximo 90 palabras y en segunda persona (como instrucción para un generador de video), lo que habría que recrear:
+DESCRIPCION_PROMPT = """Eres director creativo de anuncios cortos para redes. Vas a ver fotogramas de uno o varios videos/imágenes de referencia, en orden. Describe en __IDIOMA__, en un solo párrafo de máximo 90 palabras y en segunda persona (como instrucción para un generador de video), lo que habría que recrear:
 - qué producto aparece y cómo se muestra (encuadre, ángulo, distancia),
 - si hay una persona y qué hace con el producto (o si no hay nadie),
 - el movimiento de cámara y el ritmo (lento, rápido, cortes, zoom),
@@ -130,12 +134,16 @@ DESCRIPCION_PROMPT = """Eres director creativo de anuncios cortos para redes. Va
 No inventes marcas ni textos. No menciones "fotograma" ni "imagen": describe la escena directamente. Si son varias referencias, nómbralas como @Video 1, @Imagen 1, etc. en el orden dado."""
 
 
-def describir(referencias, cliente_hint=""):
+def describir(referencias, cliente_hint="", idioma="es"):
     """referencias: [{etiqueta, tipo, ruta_local?, url?}]. Usa Claude con visión
-    sobre fotogramas/imágenes. Devuelve el texto en español."""
+    sobre fotogramas/imágenes. Devuelve el texto en el idioma pedido (el del
+    proyecto: la sugerencia cae en el cuadro de la persona, que la edita)."""
     import anthropic
     from generador_prompts import _api_key, MODEL
-    content = [{"type": "text", "text": DESCRIPCION_PROMPT + (f"\nContexto del cliente: {cliente_hint}" if cliente_hint else "")}]
+    orden = idiomas.orden_idioma(idioma)
+    pista = f"\nContexto del cliente: {cliente_hint}" if cliente_hint else ""
+    instrucciones = DESCRIPCION_PROMPT.replace("__IDIOMA__", idiomas.nombre_para_claude(idioma))
+    content = [{"type": "text", "text": f"{orden}\n\n{instrucciones}{pista}\n\n{orden}"}]
     total = 0
     for r in referencias:
         content.append({"type": "text", "text": f"--- {r['etiqueta']} ({r['tipo']}) ---"})
@@ -150,7 +158,7 @@ def describir(referencias, cliente_hint=""):
         if total >= 16:
             break
     if total == 0:
-        raise LinkError("No hay imágenes ni videos que describir.")
+        raise LinkError(gettext("No hay imágenes ni videos que describir."))
     client = anthropic.Anthropic(api_key=_api_key())
     resp = client.messages.create(model=MODEL, max_tokens=300, messages=[{"role": "user", "content": content}])
     return "".join(b.text for b in resp.content if b.type == "text").strip()

@@ -337,10 +337,6 @@ msgid "%(n)s anuncios"
 msgstr "%(n)s ads"
 
 #, python-format
-msgid "%(n)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas."
-msgstr "%(n)s ads that already worked. They don't load in this project until you ask for them."
-
-#, python-format
 msgid "%(n)s aprobada(s) sin generar (%(videos)s, %(imagenes)s)"
 msgstr "%(n)s approved without generating (%(videos)s, %(imagenes)s)"
 
@@ -367,10 +363,6 @@ msgstr "%(n)s notice(s): %(muestra)s"
 #, python-format
 msgid "%(n)s campaña(s)"
 msgstr "%(n)s campaign(s)"
-
-#, python-format
-msgid "%(n)s cobro(s) a proveedores"
-msgstr "%(n)s charge(s) to providers"
 
 #, python-format
 msgid "%(n)s comentario(s) de %(f)s fuente(s)"
@@ -829,10 +821,22 @@ msgstr[0] "%(num)s winning ad: use it as the base for the next ones."
 msgstr[1] "%(num)s winning ads: use them as the base for the next ones."
 
 #, python-format
+msgid "%(num)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas."
+msgid_plural "%(num)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas."
+msgstr[0] "%(num)s ad that already worked. It doesn't load in this project until you ask for it."
+msgstr[1] "%(num)s ads that already worked. They don't load in this project until you ask for them."
+
+#, python-format
 msgid "%(num)s aprobada"
 msgid_plural "%(num)s aprobadas"
 msgstr[0] "%(num)s approved"
 msgstr[1] "%(num)s approved"
+
+#, python-format
+msgid "%(num)s cobro(s) a proveedores"
+msgid_plural "%(num)s cobro(s) a proveedores"
+msgstr[0] "%(num)s charge to providers"
+msgstr[1] "%(num)s charges to providers"
 
 #, python-format
 msgid "%(num)s cobro(s) a proveedores →"
@@ -1567,6 +1571,9 @@ msgstr "Analyzing with AI…"
 msgid "Analizando de nuevo."
 msgstr "Analyzing again."
 
+msgid "Analizando referencias de marca…"
+msgstr "Analyzing brand references…"
+
 msgid "Analizando referencias…"
 msgstr "Analyzing references…"
 
@@ -1946,8 +1953,10 @@ msgid "Biblioteca de copycoders"
 msgstr "Copycoders library"
 
 #, python-format
-msgid "Biblioteca de copycoders: activa en este proyecto (%(n)s anuncios)."
-msgstr "Copycoders library: active in this project (%(n)s ads)."
+msgid "Biblioteca de copycoders: activa en este proyecto (%(num)s anuncios)."
+msgid_plural "Biblioteca de copycoders: activa en este proyecto (%(num)s anuncios)."
+msgstr[0] "Copycoders library: active in this project (%(num)s ad)."
+msgstr[1] "Copycoders library: active in this project (%(num)s ads)."
 
 #, python-format
 msgid "Bitácora (%(n)s)"
@@ -2280,6 +2289,10 @@ msgstr "Cancel request"
 
 msgid "Canción"
 msgstr "Song"
+
+#, python-format
+msgid "Canción %(id)s"
+msgstr "Song %(id)s"
 
 msgid "Canción lista en Mi música."
 msgstr "Song ready in My music."
@@ -3119,6 +3132,9 @@ msgstr "Invalid body."
 msgid "Cuerpo inválido: se esperaba un objeto JSON."
 msgstr "Invalid body: a JSON object was expected."
 
+msgid "Cumplimiento de marca:"
+msgstr "Brand compliance:"
+
 msgid "Cuándo"
 msgstr "When"
 
@@ -3554,6 +3570,10 @@ msgstr "E.g.: warm palette, earth tones, sunset lighting, rustic settings..."
 msgid "El %(pct)s%% del gasto se fue en anuncios perdedores: pausarlos libera presupuesto para los ganadores."
 msgstr "%(pct)s%% of spend went to losing ads: pausing them frees budget for the winners."
 
+#, python-format
+msgid "El %(tipo)s pesa más de %(mb)s MB."
+msgstr "The %(tipo)s is larger than %(mb)s MB."
+
 msgid "El Buen Fin"
 msgstr "El Buen Fin"
 
@@ -3937,6 +3957,9 @@ msgstr "The campaign's product isn't in the catalog or has no photo."
 msgid "El producto de la campaña ya no está en el catálogo."
 msgstr "The campaign's product is no longer in the catalog."
 
+msgid "El producto ya no está en el catálogo; no se generó el swap."
+msgstr "The product is no longer in the catalog; the swap wasn't generated."
+
 msgid "El prompt es demasiado largo."
 msgstr "The prompt is too long."
 
@@ -4042,6 +4065,9 @@ msgstr "The video %(nombre)s was uploaded, but I couldn't extract its reference 
 #, python-format
 msgid "El video dura %(total)s s y el objetivo es %(objetivo)s s."
 msgstr "The video is %(total)s s long and the target is %(objetivo)s s."
+
+msgid "El video dura más de 2 min."
+msgstr "The video is longer than 2 min."
 
 msgid "El video final no muestra este clip: aquí solo se puede borrar."
 msgstr "The final video doesn't show this clip: here you can only delete it."
@@ -4188,6 +4214,9 @@ msgstr "Data deletion"
 msgid "Eliminado de la lista."
 msgstr "Removed from the list."
 
+msgid "Eliminado."
+msgstr "Deleted."
+
 #, python-format
 msgid "Eliminado: %(nombre)s"
 msgstr "Deleted: %(nombre)s"
@@ -4290,6 +4319,9 @@ msgstr "In the sprint, the start date must be before the end date."
 
 msgid "En error"
 msgstr "Failed"
+
+msgid "En ese link de TrendTrack no encontré el video (¿es un anuncio de imagen, o el link no es público?)."
+msgstr "I couldn't find the video in that TrendTrack link (is it an image ad, or is the link not public?)."
 
 msgid "En espera"
 msgstr "Waiting"
@@ -4404,6 +4436,9 @@ msgstr "Sending…"
 
 msgid "Enviar"
 msgstr "Send"
+
+msgid "Enviar a Publicidad"
+msgstr "Send to Advertising"
 
 msgid "Enviarme el enlace"
 msgstr "Send me the link"
@@ -4774,6 +4809,9 @@ msgstr "That ad was already in the Swipe file."
 msgid "Ese aprendizaje ya no existe."
 msgstr "That learning no longer exists."
 
+msgid "Ese archivo no trae audio."
+msgstr "That file has no audio."
+
 msgid "Ese audio todavía se está preparando."
 msgstr "That audio is still being prepared."
 
@@ -4843,6 +4881,9 @@ msgstr "That hook doesn't exist in the script."
 msgid "Ese link no parece de una página de Notion."
 msgstr "That link doesn't look like a Notion page."
 
+msgid "Ese material está en una edición; quítalo de ahí primero."
+msgstr "That media is in an edit; remove it from there first."
+
 msgid "Ese mensaje no trae una versión para usar."
 msgstr "That message doesn't carry a version to use."
 
@@ -4898,8 +4939,14 @@ msgstr "That reference doesn't exist."
 msgid "Ese sprint no existe."
 msgstr "That sprint doesn't exist."
 
+msgid "Ese swap todavía no tiene un resultado listo."
+msgstr "That swap doesn't have a finished result yet."
+
 msgid "Ese tipo de tienda no se conecta desde aquí (Shopify o WooCommerce; MercadoLibre va por su botón)."
 msgstr "That store type doesn't connect from here (Shopify or WooCommerce; MercadoLibre has its own button)."
+
+msgid "Ese video todavía no tiene una URL pública lista."
+msgstr "That video doesn't have a public URL ready yet."
 
 msgid "Ese video todavía se está preparando."
 msgstr "That video is still being prepared."
@@ -4909,6 +4956,9 @@ msgstr "That's already your email and it's confirmed."
 
 msgid "Eso no es un clip de texto."
 msgstr "That isn't a text clip."
+
+msgid "Eso no parece un link (tiene que empezar por http:// o https://)."
+msgstr "That doesn't look like a link (it must start with http:// or https://)."
 
 msgid "Esos destinos ya se estaban produciendo."
 msgstr "Those markets were already being produced."
@@ -5138,6 +5188,9 @@ msgstr "Study permanently deleted."
 msgid "Estudio guardado."
 msgstr "Study saved."
 
+msgid "Está en disco:"
+msgstr "It's on disk:"
+
 msgid "Está tardando más de lo normal. Puede que siga trabajando: revisa otra vez en un momento."
 msgstr "This is taking longer than usual. It may still be working: check again in a moment."
 
@@ -5171,6 +5224,9 @@ msgstr "Evaluating %(n)s ad(s) with AI…"
 
 msgid "Evaluando con IA…"
 msgstr "Evaluating with AI…"
+
+msgid "Evaluando cumplimiento de marca…"
+msgstr "Checking brand compliance…"
 
 msgid "Evaluando…"
 msgstr "Evaluating…"
@@ -5244,6 +5300,10 @@ msgstr "Launch of “%(experimento)s” failed"
 #, python-format
 msgid "Falló el lanzamiento: %(mensaje)s"
 msgstr "Launch failed: %(mensaje)s"
+
+#, python-format
+msgid "Falló la descarga del video de TrendTrack (%(tipo)s)."
+msgstr "Downloading the TrendTrack video failed (%(tipo)s)."
 
 #, python-format
 msgid "Falta %(campo)s."
@@ -5325,6 +5385,9 @@ msgstr "Missing token_tiktok.json (authorize from your Mac with auth/auth_tiktok
 
 msgid "Falta token_youtube.json (autoriza desde tu Mac con auth/auth_youtube.py)"
 msgstr "Missing token_youtube.json (authorize from your Mac with auth/auth_youtube.py)"
+
+msgid "Falta yt-dlp en el servidor para descargar de TikTok/Instagram/YouTube."
+msgstr "yt-dlp is missing on the server to download from TikTok/Instagram/YouTube."
 
 #, python-format
 msgid "Faltan claves: %(faltan)s"
@@ -5449,6 +5512,9 @@ msgstr "Format: %(f)s"
 #, python-format
 msgid "Foto real del producto %(nombre)s, tal como es."
 msgstr "Real photo of the product %(nombre)s, as it is."
+
+msgid "Foto(s) o video(s) originales"
+msgstr "Original photo(s) or video(s)"
 
 msgid "Fotos"
 msgstr "Photos"
@@ -5616,6 +5682,9 @@ msgstr "Generation this month"
 msgid "Generación por mes (US$)"
 msgstr "Generation by month (US$)"
 
+msgid "Generación probada por la bitácora, reconstruida tras haberse eliminado. Su costo no quedó registrado."
+msgstr "Generation proven by the log, rebuilt after it was deleted. Its cost wasn't recorded."
+
 #, python-format
 msgid "Generadas %(n)s consultas: %(consultas)s"
 msgstr "Generated %(n)s queries: %(consultas)s"
@@ -5628,6 +5697,10 @@ msgid "Generando"
 msgstr "Generating"
 
 #, python-format
+msgid "Generando %(n)s swaps…"
+msgstr "Generating %(n)s swaps…"
+
+#, python-format
 msgid "Generando %(que)s con %(modelo)s…"
 msgstr "Generating %(que)s with %(modelo)s…"
 
@@ -5636,6 +5709,9 @@ msgstr "Generating with the model"
 
 msgid "Generando desde el referente…"
 msgstr "Generating from the reference…"
+
+msgid "Generando el swap…"
+msgstr "Generating the swap…"
 
 #, python-format
 msgid "Generando el video con %(modelo)s%(detalle)s · %(duracion)s s…"
@@ -5763,6 +5839,9 @@ msgstr "Saving the video"
 msgid "Guardando imágenes"
 msgstr "Saving images"
 
+msgid "Guardando y evaluando la marca"
+msgstr "Saving and checking the brand"
+
 msgid "Guardando…"
 msgstr "Saving…"
 
@@ -5863,6 +5942,9 @@ msgstr "Scripts to clips (Flow Plus)"
 
 msgid "Guía de estilo (editable a mano, se usa en cada generación de prompts)"
 msgstr "Style guide (hand-editable, used in every prompt generation)"
+
+msgid "Guía de estilo generada."
+msgstr "Style guide generated."
 
 msgid "Hacen clic pero no compran: revisa que la página cumpla lo que promete el anuncio, el precio y la oferta."
 msgstr "People click but don't buy: check that the page delivers what the ad promises, the price and the offer."
@@ -6012,6 +6094,9 @@ msgstr "Sprint ideas (AI)"
 
 msgid "Identidad de marca"
 msgstr "Brand identity"
+
+msgid "Identidad de marca guardada."
+msgstr "Brand identity saved."
 
 msgid "Identificador de configuración de inicio de sesión"
 msgstr "Login configuration id"
@@ -6342,6 +6427,9 @@ msgstr "Authorization happens <strong>on your Mac</strong> (it opens a browser a
 msgid "La biblioteca no tiene anuncios nuevos que encajen"
 msgstr "The library has no new ads that fit"
 
+msgid "La canción dura más de 10 min."
+msgstr "The song is longer than 10 min."
+
 msgid "La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre."
 msgstr "The face of the brand: a real person, an ambassador or a created character that has to look the same every time."
 
@@ -6395,6 +6483,9 @@ msgstr "The ad account needs a payment method at <a href=\"https://business.face
 
 msgid "La cuenta publicitaria no tiene ningún Pixel."
 msgstr "The ad account doesn't have any Pixel."
+
+msgid "La descarga terminó vacía."
+msgstr "The download came back empty."
 
 msgid "La duración debe ser un número."
 msgstr "Duration must be a number."
@@ -6457,6 +6548,9 @@ msgstr "Final cut %(final_id)s does not exist in pieza; the route must create it
 #, python-format
 msgid "La final %(final_id)s no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar."
 msgstr "Final cut %(final_id)s does not exist; the route must create it with creative_flow.crear_final before queuing."
+
+msgid "La generación se interrumpió (el servidor se reinició). Elimínala y vuelve a intentarlo."
+msgstr "The generation was interrupted (the server restarted). Delete it and try again."
 
 msgid "La gente se va antes del final: acorta el video o sube el ritmo del cuerpo."
 msgstr "People leave before the end: shorten the video or speed up the body."
@@ -7081,6 +7175,9 @@ msgstr "Medium"
 msgid "Medios"
 msgstr "Media"
 
+msgid "Mejorando la calidad de la imagen"
+msgstr "Improving the image quality"
+
 msgid "Mejorar la calidad al final (+$0.04, solo aplica a fotos)"
 msgstr "Improve quality at the end (+$0.04, photos only)"
 
@@ -7262,6 +7359,12 @@ msgstr "Model for IMAGE"
 
 msgid "Modelo para VIDEO"
 msgstr "Model for VIDEO"
+
+msgid "Modelo para fotos"
+msgstr "Model for photos"
+
+msgid "Modelo para videos"
+msgstr "Model for videos"
 
 msgid ""
 "Modelo que viene marcado en Crear › Cambiar producto cada vez que subes una\n"
@@ -7536,6 +7639,9 @@ msgstr "I couldn't find that session."
 msgid "No encontré ese producto."
 msgstr "I couldn't find that product."
 
+msgid "No encontré la foto original."
+msgstr "I couldn't find the original photo."
+
 msgid "No encontré una columna con comentarios (ponle «texto» o «comentario» de encabezado)."
 msgstr "I didn't find a column with comments (give it “text” or “comment” as its header)."
 
@@ -7612,6 +7718,9 @@ msgstr "There are no families missing an English description."
 msgid "No hay ideas aprobadas sin generar. Aprueba ideas para poder generarlas."
 msgstr "There are no approved ideas left to generate. Approve ideas so you can generate them."
 
+msgid "No hay imágenes ni videos que describir."
+msgstr "There are no images or videos to describe."
+
 msgid "No hay investigación en curso para cancelar."
 msgstr "There's no research in progress to cancel."
 
@@ -7657,6 +7766,10 @@ msgstr "Not published"
 
 msgid "No pude abrir el Excel (¿está dañado o protegido?)."
 msgstr "I couldn't open the Excel file (is it damaged or protected?)."
+
+#, python-format
+msgid "No pude abrir el link de TrendTrack (%(tipo)s)."
+msgstr "I couldn't open the TrendTrack link (%(tipo)s)."
 
 #, python-format
 msgid "No pude borrarla (%(tipo)s); intenta de nuevo."
@@ -7705,6 +7818,10 @@ msgid "No pude crear el activo: %(detalle)s"
 msgstr "Could not create the asset: %(detalle)s"
 
 #, python-format
+msgid "No pude descargar ese link (%(tipo)s): puede ser privado, requerir inicio de sesión o no ser un video."
+msgstr "I couldn't download that link (%(tipo)s): it may be private, require signing in, or not be a video."
+
+#, python-format
 msgid "No pude describir las referencias (%(tipo)s)."
 msgstr "I couldn't describe the references (%(tipo)s)."
 
@@ -7742,6 +7859,13 @@ msgstr "Couldn't read your assets:"
 msgid "No pude leer tus activos: %(error)s"
 msgstr "Couldn't read your assets: %(error)s"
 
+msgid "No pude medir la duración de ese audio."
+msgstr "I couldn't measure the length of that audio."
+
+#, python-format
+msgid "No pude preparar el video descargado: %(detalle)s"
+msgstr "I couldn't prepare the downloaded video: %(detalle)s"
+
 msgid "No pude quitar esa pieza (¿ya está en Meta?)."
 msgstr "Couldn't remove that piece (is it already on Meta?)."
 
@@ -7774,6 +7898,9 @@ msgstr "Doesn't know they have the problem"
 
 msgid "No se agregó ningún referente."
 msgstr "No reference was added."
+
+msgid "No se conserva la foto original de esta generación."
+msgstr "The original photo of this generation wasn't kept."
 
 #, python-format
 msgid "No se creó la publicación en %(nombre)s: %(error)s"
@@ -7955,6 +8082,13 @@ msgstr "Couldn't queue the regeneration."
 
 msgid "No se pudo escuchar ese audio."
 msgstr "Couldn't play that audio."
+
+#, python-format
+msgid "No se pudo evaluar el cumplimiento de marca (%(error)s)."
+msgstr "Brand compliance couldn't be checked (%(error)s)."
+
+msgid "No se pudo evaluar el cumplimiento de marca."
+msgstr "Brand compliance couldn't be checked."
 
 #, python-format
 msgid "No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s"
@@ -8228,6 +8362,9 @@ msgstr "Invalid reference origin: %(origen)s"
 #, python-format
 msgid "Origen desconocido: %(origen)s"
 msgstr "Unknown origin: %(origen)s"
+
+msgid "Original"
+msgstr "Original"
 
 #, python-format
 msgid "Otra idea (%(precio)s)"
@@ -8694,6 +8831,9 @@ msgstr "Preparing the video for the editor… the page reloads and opens it on i
 msgid "Preparando el video para el editor… se abre solo en cuanto esté listo."
 msgstr "Preparing the video for the editor… it opens on its own as soon as it's ready."
 
+msgid "Preparando la imagen"
+msgstr "Preparing the image"
+
 msgid "Preparando materiales"
 msgstr "Preparing files"
 
@@ -9118,6 +9258,9 @@ msgstr "Let Creatv manage it: follow the steps on the Meta card."
 
 msgid "Que Wan mejore mi prompt"
 msgstr "Let Wan enhance my prompt"
+
+msgid "Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."
+msgstr "It's now in Experiments › Standalone ads — create an experiment with that piece."
 
 msgid "Quitamos la biblioteca de copycoders de este proyecto. Puedes volver a traerla cuando quieras."
 msgstr "We removed the copycoders library from this project. You can bring it back whenever you want."
@@ -9603,6 +9746,10 @@ msgstr "Result"
 msgid "Resultados"
 msgstr "Results"
 
+#, python-format
+msgid "Resultados (%(n)s)"
+msgstr "Results (%(n)s)"
+
 msgid "Retención"
 msgstr "Hold"
 
@@ -9802,6 +9949,13 @@ msgid "Se está escribiendo el guion… la página se recarga sola cuando esté 
 msgstr "The script is being written… the page reloads on its own once it's ready."
 
 #, python-format
+msgid "Se generó, pero no se pudo subir al almacenamiento (%(error)s)."
+msgstr "It was generated, but it couldn't be uploaded to storage (%(error)s)."
+
+msgid "Se generó, pero no se pudo subir al almacenamiento."
+msgstr "It was generated, but it couldn't be uploaded to storage."
+
+#, python-format
 msgid "Se guardó localmente pero falló la subida a R2: %(error)s"
 msgstr "Saved locally but the upload to R2 failed: %(error)s"
 
@@ -9862,6 +10016,12 @@ msgstr "Reviewed from the piece in Create"
 
 msgid "Se suma a la regla base de la categoría:"
 msgstr "This adds to the category's base rule:"
+
+msgid "Se usa el modelo de fotos o el de videos según lo que subas. Mejora de calidad activada (solo fotos); los valores por defecto se cambian en Configuración."
+msgstr "The photo or video model is used depending on what you upload. Quality enhancement on (photos only); the defaults are changed in Settings."
+
+msgid "Se usa el modelo de fotos o el de videos según lo que subas. Mejora de calidad desactivada (solo fotos); los valores por defecto se cambian en Configuración."
+msgstr "The photo or video model is used depending on what you upload. Quality enhancement off (photos only); the defaults are changed in Settings."
 
 msgid "Se ve en el video"
 msgstr "Seen in the video"
@@ -10038,12 +10198,18 @@ msgstr "Without this nobody can confirm their email or recover their password on
 msgid "Sin esto no aparece el botón «Conectar con MercadoLibre» en Tienda."
 msgstr "Without this the “Connect with MercadoLibre” button doesn't show up in Store."
 
+msgid "Sin evaluación de marca: este proyecto no tiene invariantes definidas."
+msgstr "No brand check: this project has no invariants defined."
+
 #, python-format
 msgid "Sin evidencia todavía: %(imp)s impresiones (mínimo %(imp_min)s), gasto %(gasto)s (mínimo %(gasto_min)s), %(horas)s h de %(ventana)s."
 msgstr "No evidence yet: %(imp)s impressions (minimum %(imp_min)s), spend %(gasto)s (minimum %(gasto_min)s), %(horas)s h of %(ventana)s."
 
 msgid "Sin familia del vocabulario ni familia_nueva válida."
 msgstr "No family from the vocabulary and no valid familia_nueva."
+
+msgid "Sin foto original: entrada reconstruida desde la bitácora"
+msgstr "No original photo: entry rebuilt from the log"
 
 msgid "Sin hooks alternativos."
 msgstr "No alternate hooks."
@@ -10315,8 +10481,14 @@ msgstr "Their day to day (one situation per line)"
 msgid "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
 msgstr "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
 
+msgid "Sube al menos una foto o video primero."
+msgstr "Upload at least one photo or video first."
+
 msgid "Sube al menos una foto."
 msgstr "Upload at least one photo."
+
+msgid "Sube al menos una referencia de marca (imagen o video) primero."
+msgstr "Upload at least one brand reference (image or video) first."
 
 msgid "Sube solo música tuya o con licencia."
 msgstr "Upload only music you own or have licensed."
@@ -10333,8 +10505,14 @@ msgstr ""
 "      best models on the market, swap the product in real photos and videos, and launch campaigns on\n"
 "      Meta from the same place — no agency, no editor, no waiting."
 
+msgid "Sube un mp3, wav, m4a, aac u ogg."
+msgstr "Upload an mp3, wav, m4a, aac or ogg."
+
 msgid "Sube un video, una imagen o un audio."
 msgstr "Upload a video, an image or an audio file."
+
+msgid "Sube una o varias fotos y/o videos reales (3-10s) y elige el producto — puedes mezclar fotos y videos en la misma subida. El resultado es lo mismo que subiste — misma pose, mismo rostro, mismo fondo, mismo movimiento si es video — con el calzado reemplazado por el que elegiste, uno por cada archivo. Nada más cambia."
+msgstr "Upload one or more real photos and/or videos (3-10s) and choose the product — you can mix photos and videos in the same upload. The result is exactly what you uploaded — same pose, same face, same background, same movement if it's a video — with the footwear replaced by the one you chose, one per file. Nothing else changes."
 
 #, python-brace-format
 msgid "Subida de «{nombre}»"
@@ -10349,6 +10527,12 @@ msgstr "Uploaded: %(nombre)s"
 
 msgid "Subiendo"
 msgstr "Uploading"
+
+msgid "Subiendo las fotos del producto"
+msgstr "Uploading the product photos"
+
+msgid "Subiendo tu video original"
+msgstr "Uploading your original video"
 
 #, python-brace-format
 msgid "Subiendo {n} %"
@@ -10419,6 +10603,9 @@ msgstr "Suggest from the library (free)"
 
 msgid "Sus números de los últimos 7 días cayeron frente a los 7 anteriores: prepara variantes antes de que se apague."
 msgstr "Its numbers for the last 7 days dropped against the 7 before: prepare variants before it dies out."
+
+msgid "Swap listo."
+msgstr "Swap ready."
 
 msgid "Sí"
 msgstr "Yes"
@@ -10684,6 +10871,9 @@ msgstr "We haven't checked this account's Pixel yet. Checking it takes a few sec
 
 msgid "Todavía no has generado nada en Crear."
 msgstr "You haven't generated anything in Create yet."
+
+msgid "Todavía no has generado ningún swap."
+msgstr "You haven't generated any swaps yet."
 
 msgid "Todavía no has traído referentes."
 msgstr "You haven't got any references yet."
@@ -10982,6 +11172,10 @@ msgstr "Getting references; they'll show up in “My sweeps” as it moves along
 #, python-format
 msgid "Trayendo… %(traidos)s/%(tope)s."
 msgstr "Getting… %(traidos)s/%(tope)s."
+
+#, python-format
+msgid "TrendTrack no dejó descargar el video (%(codigo)s)."
+msgstr "TrendTrack didn't allow downloading the video (%(codigo)s)."
 
 msgid "Triple Whale"
 msgstr "Triple Whale"
@@ -11813,8 +12007,14 @@ msgstr "It was already being rebuilt."
 msgid "Ya se estaba recuperando — espera a que termine."
 msgstr "It was already being recovered — wait for it to finish."
 
+msgid "Ya se estaban generando esos swaps — espera a que terminen."
+msgstr "Those swaps were already being generated — wait for them to finish."
+
 msgid "Ya se estaban produciendo esas finales."
 msgstr "Those final cuts were already being produced."
+
+msgid "Ya se está analizando — espera a que termine."
+msgstr "It's already being analyzed — wait for it to finish."
 
 msgid "Ya se está armando el zip."
 msgstr "The zip is already being built."
@@ -12040,6 +12240,9 @@ msgstr "attributed by TW"
 msgid "audiencia %(c)s"
 msgstr "%(c)s audience"
 
+msgid "audio"
+msgstr "audio"
+
 msgid "ausente"
 msgstr "missing"
 
@@ -12167,6 +12370,9 @@ msgstr "with the same photo of 3 people, it didn't change anyone's footwear"
 
 msgid "con la misma foto de 3 personas, resultado peor que la versión directa: le puso calzado a la persona que iba DESCALZA y dejó a las dos con calzado puesto sin cambiar. No usar como alternativa cuando falle la versión directa"
 msgstr "with the same photo of 3 people, worse result than the direct version: it put shoes on the person who was BAREFOOT and left the two who already had shoes unchanged. Don't use it as a fallback when the direct version fails"
+
+msgid "con mejora"
+msgstr "with enhancement"
 
 msgid "con música"
 msgstr "with music"
@@ -12617,6 +12823,9 @@ msgstr "fails"
 msgid "falló al ejecutar: %(error)s"
 msgstr "failed to execute: %(error)s"
 
+msgid "falló después de generar; el proveedor ya cobró"
+msgstr "failed after generating; the provider already charged"
+
 #, python-format
 msgid "falló: %(mensaje)s"
 msgstr "failed: %(mensaje)s"
@@ -12642,6 +12851,9 @@ msgstr "missing a video with valid dimensions"
 msgid "faltan las líneas %(lista)s"
 msgstr "missing lines %(lista)s"
 
+msgid "fecha;tipo;proveedor;referencia;detalle;usd"
+msgstr "date;type;provider;reference;detail;usd"
+
 #, python-format
 msgid "ffprobe falló (%(error)s); formato no verificado"
 msgstr "ffprobe failed (%(error)s); format not verified"
@@ -12657,6 +12869,13 @@ msgstr "format"
 
 msgid "formato de la imagen"
 msgstr "the image's format"
+
+msgid "foto"
+msgstr "photo"
+
+#, python-format
+msgid "foto %(n)s de %(total)s"
+msgstr "photo %(n)s of %(total)s"
 
 msgid "francés"
 msgstr "French"
@@ -12703,6 +12922,9 @@ msgstr "generated"
 
 msgid "generando"
 msgstr "generating"
+
+msgid "generando…"
+msgstr "generating…"
 
 msgid "generar"
 msgstr "generate"
@@ -13117,6 +13339,9 @@ msgstr "optional: one per line; if you have its Ad Library link, paste it alongs
 msgid "orgánicas este mes"
 msgstr "organic this month"
 
+msgid "original"
+msgstr "original"
+
 msgid "otra estructura"
 msgstr "another structure"
 
@@ -13250,6 +13475,12 @@ msgstr "deep"
 msgid "profundidad máxima (%(n)s generaciones de derivación); %(motivo)s"
 msgstr "maximum depth (%(n)s derivation generations); %(motivo)s"
 
+#, python-format
+msgid "promedio sobre %(num)s invariantes"
+msgid_plural "promedio sobre %(num)s invariantes"
+msgstr[0] "averaged over %(num)s invariant"
+msgstr[1] "averaged over %(num)s invariants"
+
 msgid "promesa"
 msgstr "promise"
 
@@ -13306,6 +13537,9 @@ msgstr "Meta rejection"
 
 msgid "recolectando…"
 msgstr "collecting…"
+
+msgid "reconstruida"
+msgstr "rebuilt"
 
 msgid "redes"
 msgstr "social"
@@ -13383,6 +13617,9 @@ msgstr "reviews"
 
 msgid "respuesta ilegible"
 msgstr "unreadable response"
+
+msgid "resultado"
+msgstr "result"
 
 #, python-format
 msgid "retención %(r)s"
@@ -13546,6 +13783,9 @@ msgstr "no product"
 msgid "sin respuesta"
 msgstr "no response"
 
+msgid "sin tarifa"
+msgstr "no rate"
+
 msgid "sin tema"
 msgstr "no topic"
 
@@ -13623,6 +13863,10 @@ msgstr "text"
 
 msgid "tienda"
 msgstr "store"
+
+#, python-format
+msgid "tipo de archivo no permitido: %(tipo)s. Acepto video, imagen y audio."
+msgstr "file type not allowed: %(tipo)s. I accept video, image and audio."
 
 msgid "tipo debe ser video o imagen"
 msgstr "type must be video or image"
@@ -13949,6 +14193,9 @@ msgstr "Delete this campaign and its references?"
 
 msgid "¿Eliminar este producto?"
 msgstr "Delete this product?"
+
+msgid "¿Eliminar este resultado?"
+msgstr "Delete this result?"
 
 msgid "¿Eliminar este sprint PERMANENTEMENTE? Se borran sus campañas, ideas y referencias. No se puede deshacer."
 msgstr "Delete this sprint PERMANENTLY? Its campaigns, ideas and references will be deleted. This can't be undone."

@@ -9,6 +9,7 @@ import os
 import uuid
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
 import materiales
@@ -29,7 +30,7 @@ def es_propia(valor):
 
 def como_cancion(m):
     extra = m.get("extra") or {}
-    return {"id": m["id"], "nombre": extra.get("nombre") or f"Canción {m['id']}",
+    return {"id": m["id"], "nombre": extra.get("nombre") or gettext("Canción %(id)s", id=m["id"]),
             "duracion_s": round((m.get("duracion_ms") or 0) / 1000.0, 1), "url": m["url"],
             "fuente": extra.get("fuente") or ("elevenlabs" if m["origen"] == "musica" else "subida")}
 
@@ -75,12 +76,12 @@ def _probar(path):
     try:
         info = cortes.ffprobe_json(path)
     except Exception:
-        raise SubidaInvalida("No pude leer ese archivo de audio.")
+        raise SubidaInvalida(gettext("No pude leer ese archivo de audio."))
     if not any((s or {}).get("codec_type") == "audio" for s in info.get("streams") or []):
-        raise SubidaInvalida("Ese archivo no trae audio.")
+        raise SubidaInvalida(gettext("Ese archivo no trae audio."))
     dur = (info.get("format") or {}).get("duration")
     if dur is None:
-        raise SubidaInvalida("No pude medir la duración de ese audio.")
+        raise SubidaInvalida(gettext("No pude medir la duración de ese audio."))
     return int(round(float(dur) * 1000))
 
 
@@ -92,9 +93,9 @@ def _guardar(cliente, local_path, ext, origen, extra, costo_usd=0.0):
         raise SubidaInvalida(str(e))
     duracion_ms = _probar(local_path)
     if duracion_ms > MAX_DURACION_MS:
-        raise SubidaInvalida("La canción dura más de 10 min.")
+        raise SubidaInvalida(gettext("La canción dura más de 10 min."))
     if materiales.bytes_usados(cliente) + tam > materiales.CUOTA_BYTES:
-        raise SubidaInvalida("El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más.")
+        raise SubidaInvalida(gettext("El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más."))
     key = f"clientes/{cliente}/materiales/{materiales.hash_archivo(local_path)}{ext}"
     m = materiales.subir(cliente, local_path, key, EXTENSIONES[ext], tipo="audio", origen=origen,
                          duracion_ms=duracion_ms, costo_usd=costo_usd, extra=extra)
@@ -106,7 +107,7 @@ def subir(cliente, archivo, carpeta_tmp):
     nombre = os.path.basename(archivo.filename or "")
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in EXTENSIONES:
-        raise SubidaInvalida("Sube un mp3, wav, m4a, aac u ogg.")
+        raise SubidaInvalida(gettext("Sube un mp3, wav, m4a, aac u ogg."))
     os.makedirs(carpeta_tmp, exist_ok=True)
     local = os.path.join(carpeta_tmp, f"subida_{uuid.uuid4().hex}{ext}")
     archivo.save(local)

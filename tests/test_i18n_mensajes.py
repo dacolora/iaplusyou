@@ -30,6 +30,7 @@ WORKER = ["ediciones.py", "final_edition/edicion_clon.py", "final_edition/motor/
 WORKER += ["final_edition/__init__.py", "final_edition/produccion.py", "final_edition/borrador.py",
            "final_edition/insumos.py", "final_edition/voz.py", "final_edition/musica.py", "providers/fal_audio.py",
            "tareas/final_edition.py"]
+WORKER += ["tareas/swap.py", "referencias_link.py", "mi_musica.py", "materiales.py"]   # Fase 6, Task 4
 
 
 def _nombre(llamada):
