@@ -18,7 +18,10 @@ from sprints import datos as sprints_datos
 from sprints.sugerencias import COLORES
 
 ESTADOS_ESTUDIO = ("armando", "generando", "revisando")
-FUENTES = ("texto", "csv", "reddit", "youtube", "apify")
+FUENTES_PLATAFORMA = ("amazon", "meli", "tiktok_shop")   # claves de nicho.fuentes.plataformas (Parte 3)
+FUENTES = ("texto", "csv", "reddit", "youtube", "apify") + FUENTES_PLATAFORMA
+PAISES_ESTUDIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE", "UY", "EC", "SE", "GB", "DE", "FR", "IT", "NL", "CA", "AU", "IN", "JP", "AE")
+MAX_INVESTIGACIONES_PREVIAS = 3
 TIPOS_AVATAR = ("nucleo", "sub")
 BASES = ("emocion", "experiencia_producto")
 ESTADOS_AVATAR = ("propuesto", "aprobado", "descartado")
@@ -30,7 +33,7 @@ NIVELES_CONCIENCIA = ("inconsciente", "consciente_del_problema", "consciente_de_
 CLAVES_IDENTIDAD = ("quiere_que_vean", "cree_de_si", "quiere_lograr")
 MAX_RECOLECCIONES = 20          # registros que se conservan en estudio.extra["recolecciones"]
 
-_ESTUDIO_COLS = ("nombre", "producto", "catalogo_id", "tema", "idioma", "estado", "archivado", "generacion", "extra")
+_ESTUDIO_COLS = ("nombre", "producto", "catalogo_id", "tema", "idioma", "pais", "estado", "archivado", "generacion", "extra")
 _AVATAR_COLS = ("nombre", "deseo", "resumen", "demografia", "edad_rango", "emocion", "identidad", "soluciones_previas",
                 "situaciones", "comportamiento", "conciencia", "encaje_producto", "tono", "palabras_clave", "evidencia",
                 "sin_evidencia", "estado", "persona_id", "orden", "base", "extra")
@@ -54,6 +57,13 @@ def job_id_recolectar(cliente, estudio_id, fuente):
     """Una recolección viva por fuente y estudio (spec §7/§8): la ruta la
     encola con este id y la página muestra su barra mientras vive."""
     return f"nicho:{cliente}:{int(estudio_id)}:recolectar:{fuente}"
+
+
+def job_id_inv(cliente, estudio_id, paso):
+    """Un trabajo vivo por paso de la investigación (spec Parte 3 §1):
+    `consultas`, `buscar:<plataforma>`, `seleccionar`. Las recolecciones y la
+    generación conservan sus propios ids."""
+    return f"nicho:{cliente}:{int(estudio_id)}:inv:{paso}"
 
 
 # ------------------------------------------------------------ helpers ---
@@ -96,9 +106,22 @@ def _idioma(v):
     return v if _RE_IDIOMA.match(v) else "es"
 
 
+def _pais(v, estricto=False):
+    """ISO-3166-1 alfa-2 de PAISES_ESTUDIO o None. Con `estricto`, un valor no
+    vacío fuera de la lista es ErrorDatos (formulario); sin él se ignora."""
+    v = (v or "").strip().upper() if isinstance(v, str) else ""
+    if not v:
+        return None
+    if v not in PAISES_ESTUDIO:
+        if estricto:
+            raise ErrorDatos(gettext("País no soportado: %(pais)s", pais=v))
+        return None
+    return v
+
+
 # ----------------------------------------------------------- estudios ---
 
-def crear_estudio(cliente, nombre, producto="", tema="", idioma="es", catalogo_id=None):
+def crear_estudio(cliente, nombre, producto="", tema="", idioma="es", catalogo_id=None, pais=None):
     nombre = _texto(nombre, 120)
     if not nombre:
         raise ErrorDatos(gettext("El estudio necesita un nombre."))
@@ -106,8 +129,8 @@ def crear_estudio(cliente, nombre, producto="", tema="", idioma="es", catalogo_i
     with db.conectar() as con:
         return con.execute(db.estudio.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, producto=_texto(producto),
-            catalogo_id=_texto(catalogo_id, 80) or None, tema=_texto(tema), idioma=_idioma(idioma), estado="armando",
-            archivado=False, generacion=0, extra={})).inserted_primary_key[0]
+            catalogo_id=_texto(catalogo_id, 80) or None, tema=_texto(tema), idioma=_idioma(idioma), pais=_pais(pais),
+            estado="armando", archivado=False, generacion=0, extra={})).inserted_primary_key[0]
 
 
 def actualizar_estudio(cliente, estudio_id, /, **campos):
@@ -117,6 +140,8 @@ def actualizar_estudio(cliente, estudio_id, /, **campos):
             raise ErrorDatos(gettext("El estudio necesita un nombre."))
     if "idioma" in campos:
         campos["idioma"] = _idioma(campos["idioma"])
+    if "pais" in campos:
+        campos["pais"] = _pais(campos["pais"], estricto=True)
     if "estado" in campos and campos["estado"] not in ESTADOS_ESTUDIO:
         raise ErrorDatos(gettext("Estado de estudio inválido: %(estado)s", estado=campos["estado"]))
     for k in ("producto", "tema"):
@@ -544,117 +569,143 @@ def eliminar_estudio(cliente, estudio_id):
     return True
 
 
-# ------ Investigación (Parte 3) ------
+# ------------------------------------------------------ investigación ---
 
 def actualizar_investigacion(cliente, estudio_id, fn):
-    """RMW con candado para extra.investigacion (Flask + worker escriben simultáneamente).
-    
-    fn recibe el dict investigacion actual y retorna uno actualizado.
-    """
-    with db.conectar() as con:
-        if not _bloquear(con, db.estudio, int(estudio_id), cliente):       # lock de escritura ANTES de leer
-            return
-        est = con.execute(sa.select(db.estudio).where(
-            (db.estudio.c.id == int(estudio_id)) &
-            (db.estudio.c.cliente == cliente)
-        )).first()
-        if not est:
-            return
-        extra = est._mapping["extra"] or {}
-        inv_actual = extra.get("investigacion", {})
-        inv_nueva = fn(inv_actual)
-        extra["investigacion"] = inv_nueva
-        con.execute(
-            db.estudio.update()
-            .where((db.estudio.c.id == int(estudio_id)) & (db.estudio.c.cliente == cliente))
-            .values(extra=extra, actualizado_en=db.ahora())
-        )
-        con.commit()
+    """RMW bajo candado de `extra.investigacion` (Flask y el worker escriben a
+    la vez): `fn(inv) -> inv_nuevo` recibe `{}` cuando no hay investigación.
+    Devuelve lo escrito, o None si el estudio no existe."""
+    salida = {}
+
+    def _fn(extra):
+        actual = extra.get("investigacion")
+        nuevo = fn(dict(actual) if isinstance(actual, dict) else {})
+        salida["inv"] = nuevo
+        return {**extra, "investigacion": nuevo}
+    if actualizar_extra_estudio(cliente, estudio_id, _fn) is None:
+        return None
+    return salida.get("inv")
+
+
+def iniciar_investigacion(cliente, estudio_id, inv):
+    """Deja `inv` como la investigación viva; la anterior (si la hay) pasa a
+    `extra.investigaciones_previas` (últimas MAX_INVESTIGACIONES_PREVIAS)."""
+    nuevo = dict(inv or {})
+
+    def _fn(extra):
+        anterior = extra.get("investigacion")
+        previas = list(extra.get("investigaciones_previas") or [])
+        if anterior:
+            previas = (previas + [anterior])[-MAX_INVESTIGACIONES_PREVIAS:]
+        return {**extra, "investigacion": nuevo, "investigaciones_previas": previas}
+    extra = actualizar_extra_estudio(cliente, estudio_id, _fn)
+    return extra["investigacion"] if extra else None
 
 
 def investigacion(cliente, estudio_id):
-    """Leer el estado actual de la investigación."""
+    """La investigación viva del estudio, o `{}` (la plantilla mira `.estado`)."""
+    e = estudio(cliente, estudio_id)
+    inv = (e["extra"].get("investigacion") if e else None)
+    return inv if isinstance(inv, dict) else {}
+
+
+# ------------------------------------------------------ producto_nicho ---
+
+_PRODUCTO_COLS = ("titulo", "marca", "precio", "moneda", "estrellas", "n_resenas", "url", "imagen", "consulta", "extra")
+
+
+def _producto_limpio(p):
+    p = dict(p or {})
+    fuente_id, titulo = _texto(p.get("fuente_id"), 120), _texto(p.get("titulo"), 300)
+    if not fuente_id or not titulo:
+        return None
+    return {"fuente_id": fuente_id, "titulo": titulo, "marca": _texto(p.get("marca"), 120) or None,
+            "precio": p.get("precio"), "moneda": (_texto(p.get("moneda"), 3) or None), "estrellas": p.get("estrellas"),
+            "n_resenas": p.get("n_resenas"), "url": _texto(p.get("url"), 500) or None, "imagen": _texto(p.get("imagen"), 500) or None,
+            "consulta": _texto(p.get("consulta"), 200),
+            "extra": dict(p.get("extra")) if isinstance(p.get("extra"), dict) else {}}
+
+
+def guardar_productos_nicho(cliente, estudio_id, plataforma, productos):
+    """Upsert por (estudio, plataforma, fuente_id) en UNA transacción: los nuevos
+    se insertan; los existentes actualizan título, precio, estrellas, reseñas,
+    url, imagen, consulta y extra, y CONSERVAN relevante/motivo/resenas_traidas
+    (el juicio de Claude y lo ya pagado no se pisan). Un dict sin id o sin
+    título se salta."""
+    if plataforma not in FUENTES_PLATAFORMA:
+        raise ErrorDatos(gettext("Plataforma desconocida: %(plataforma)s", plataforma=plataforma))
+    t, ahora = db.producto_nicho, db.ahora()
+    nuevos = actualizados = 0
     with db.conectar() as con:
-        est = con.execute(sa.select(db.estudio).where(
-            (db.estudio.c.id == int(estudio_id)) &
-            (db.estudio.c.cliente == cliente)
-        )).first()
-        if est:
-            return (est._mapping["extra"] or {}).get("investigacion", {})
-        return {}
+        if not _fila(con, db.estudio, estudio_id, cliente):
+            raise ErrorDatos(gettext("Ese estudio no existe."))
+        for p in productos or []:
+            limpio = _producto_limpio(p)
+            if not limpio:
+                continue
+            r = con.execute(t.insert().prefix_with("OR IGNORE").values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=estudio_id, plataforma=plataforma,
+                relevante=None, motivo=None, resenas_traidas=0, **limpio))
+            if r.rowcount == 1:
+                nuevos += 1
+                continue
+            con.execute(t.update().where(t.c.estudio_id == estudio_id, t.c.plataforma == plataforma,
+                                         t.c.fuente_id == limpio["fuente_id"], t.c.cliente == cliente)
+                        .values(actualizado_en=ahora, **{k: limpio[k] for k in _PRODUCTO_COLS}))
+            actualizados += 1
+    return {"nuevos": nuevos, "actualizados": actualizados}
 
 
-def guardar_productos_nicho(cliente, estudio_id, plataforma, productos_lista):
-    """Upsert productos (no duplicar si ya existen con mismo estudio+plat+fuente_id).
-    Retorna count de nuevos/actualizados."""
-    ahora = db.ahora()
+def productos_nicho(cliente, estudio_id, plataforma=None, solo_relevantes=False, solo_sin_juzgar=False, fuente_ids=None):
+    """Productos del estudio: por plataforma, más reseñas primero (sin dato al
+    final), id. `solo_relevantes` = juzgados como del nicho; `solo_sin_juzgar`
+    = `relevante IS NULL`; `fuente_ids` acota a esos ids de la plataforma."""
+    t = db.producto_nicho
+    cond = [t.c.cliente == cliente, t.c.estudio_id == estudio_id]
+    if plataforma:
+        cond.append(t.c.plataforma == plataforma)
+    if solo_relevantes:
+        cond.append(t.c.relevante.is_(True))
+    if solo_sin_juzgar:
+        cond.append(t.c.relevante.is_(None))
+    if fuente_ids is not None:
+        cond.append(t.c.fuente_id.in_([str(x) for x in fuente_ids] or ["__ninguno__"]))
     with db.conectar() as con:
-        count = 0
-        for prod in productos_lista:
-            try:
-                r = con.execute(
-                    db.producto_nicho.insert().values(
-                        cliente=cliente,
-                        estudio_id=int(estudio_id),
-                        plataforma=plataforma,
-                        fuente_id=prod["fuente_id"],
-                        titulo=prod["titulo"][:300],
-                        marca=prod.get("marca", "")[:120] if prod.get("marca") else None,
-                        precio=prod.get("precio"),
-                        moneda=prod.get("moneda"),
-                        estrellas=prod.get("estrellas"),
-                        n_resenas=prod.get("n_resenas"),
-                        url=prod.get("url", "")[:500],
-                        imagen=prod.get("imagen", "")[:500],
-                        consulta=prod.get("consulta", "")[:200],
-                        extra=prod.get("extra"),
-                        creado_en=ahora,
-                        actualizado_en=ahora
-                    ).on_conflict_do_update(
-                        index_elements=["estudio_id", "plataforma", "fuente_id"],
-                        set_={"precio": prod.get("precio"), "estrellas": prod.get("estrellas"),
-                              "n_resenas": prod.get("n_resenas"), "actualizado_en": ahora}
-                    )
-                )
-                count += r.rowcount
-            except Exception:
-                pass  # Ignorar conflictos o errores menores
-        con.commit()
-    return count
+        filas = con.execute(sa.select(t).where(*cond).order_by(
+            t.c.plataforma, sa.desc(sa.func.coalesce(t.c.n_resenas, -1)), t.c.id)).all()
+    salida = []
+    for f in filas:
+        d = _a_dict(f)
+        d["resenas_traidas"] = int(d.get("resenas_traidas") or 0)
+        d["extra"] = dict(d.get("extra") or {})
+        salida.append(d)
+    return salida
 
 
-def productos_nicho(cliente, estudio_id, plataforma=None, solo_relevantes=False):
-    """Listar productos del nicho. Filtrar por plataforma y/o relevancia."""
+def marcar_relevancia(cliente, estudio_id, decisiones):
+    """`decisiones = {id: {"relevante": bool, "motivo": str}}` sobre productos
+    del estudio; ids ajenos se ignoran. Devuelve cuántos cambió."""
+    t, n = db.producto_nicho, 0
     with db.conectar() as con:
-        q = sa.select(db.producto_nicho).where(
-            (db.producto_nicho.c.cliente == cliente) &
-            (db.producto_nicho.c.estudio_id == int(estudio_id))
-        )
-        if plataforma:
-            q = q.where(db.producto_nicho.c.plataforma == plataforma)
-        if solo_relevantes:
-            q = q.where(db.producto_nicho.c.relevante == True)
-        q = q.order_by(db.producto_nicho.c.n_resenas.desc())
-        return [dict(r) for r in con.execute(q)]
+        for pid, d in (decisiones or {}).items():
+            r = con.execute(t.update().where(t.c.id == int(pid), t.c.estudio_id == estudio_id, t.c.cliente == cliente)
+                            .values(actualizado_en=db.ahora(), relevante=bool((d or {}).get("relevante")),
+                                    motivo=_texto((d or {}).get("motivo"), 300) or None))
+            n += r.rowcount
+    return n
 
 
-def marcar_relevancia(cliente, estudio_id, producto_id, relevante, motivo):
-    """Marcar un producto como relevante/irrelevante."""
+def sumar_resenas_traidas(cliente, estudio_id, plataforma, conteos):
+    """`conteos = {fuente_id: n}` -> suma n a `resenas_traidas` del producto de esa
+    plataforma. Devuelve cuántos productos tocó (los n = 0 no cuentan)."""
+    t, n = db.producto_nicho, 0
     with db.conectar() as con:
-        con.execute(
-            db.producto_nicho.update()
-            .where((db.producto_nicho.c.id == int(producto_id)) & (db.producto_nicho.c.cliente == cliente))
-            .values(relevante=relevante, motivo=motivo, actualizado_en=db.ahora())
-        )
-        con.commit()
-
-
-def sumar_resenas_traidas(cliente, estudio_id, producto_id, cantidad):
-    """Incrementar resenas_traidas."""
-    with db.conectar() as con:
-        con.execute(
-            sa.update(db.producto_nicho)
-            .where((db.producto_nicho.c.id == int(producto_id)) & (db.producto_nicho.c.cliente == cliente))
-            .values(resenas_traidas=db.producto_nicho.c.resenas_traidas + cantidad)
-        )
-        con.commit()
+        for fuente_id, cuantos in (conteos or {}).items():
+            if not cuantos:
+                continue
+            r = con.execute(t.update().where(t.c.estudio_id == estudio_id, t.c.cliente == cliente, t.c.plataforma == plataforma,
+                                             t.c.fuente_id == str(fuente_id))
+                            .values(actualizado_en=db.ahora(),
+                                    resenas_traidas=sa.func.coalesce(t.c.resenas_traidas, 0) + int(cuantos)))
+            n += r.rowcount
+    return n

@@ -709,6 +709,7 @@ estudio = Table("estudio", metadata,
     Column("catalogo_id", String(80)),
     Column("tema", Text),                                       # qué investigar: nicho, mercado, dolores
     Column("idioma", String(5), nullable=False, default="es"),  # idioma de salida de los avatares
+    Column("pais", String(2)),                                  # ISO-3166-1 alfa-2 (Parte 3, migración 0016); NULL = sin país
     Column("estado", String(12), nullable=False, default="armando"),   # armando|generando|revisando
     Column("archivado", Boolean, default=False),
     Column("generacion", Integer, nullable=False, default=0),   # corridas de Claude
@@ -759,6 +760,30 @@ avatar = Table("avatar", metadata,
     Column("estado", String(12), nullable=False, default="propuesto"),   # propuesto|aprobado|descartado
     Column("persona_id", Integer, sa.ForeignKey("persona.id")),
     Column("extra", JSON, default=dict),
+)
+
+# --- Nicho Parte 3: productos encontrados por la investigación (migración 0016) ---
+
+producto_nicho = Table("producto_nicho", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("estudio_id", Integer, sa.ForeignKey("estudio.id"), nullable=False, index=True),
+    Column("plataforma", String(12), nullable=False),           # amazon|meli|tiktok_shop (clave de nicho.fuentes.plataformas)
+    Column("fuente_id", String(120), nullable=False),           # ASIN, id de MELI, id de TikTok Shop
+    Column("consulta", String(200), nullable=False, default=""),   # la búsqueda que lo encontró
+    Column("titulo", String(300), nullable=False),
+    Column("marca", String(120)),
+    Column("precio", Float),
+    Column("moneda", String(3)),
+    Column("estrellas", Float),
+    Column("n_resenas", Integer),                               # reseñas que la plataforma dice tener
+    Column("url", String(500)),
+    Column("imagen", String(500)),
+    Column("relevante", Boolean, index=True),                   # NULL = Claude no lo ha juzgado
+    Column("motivo", String(300)),
+    Column("resenas_traidas", Integer, default=0),              # cuántas reseñas suyas se guardaron (no se vuelve a pagar)
+    Column("extra", JSON, default=dict),
+    sa.UniqueConstraint("estudio_id", "plataforma", "fuente_id", name="uq_producto_nicho_unico"),
 )
 
 # --- Flow Plus en Crear: prompts que se corrigen conversando con Claude antes de generar (migración 0018) ---

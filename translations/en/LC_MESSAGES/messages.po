@@ -7620,6 +7620,10 @@ msgstr "Country %(pais)s not supported."
 msgid "País de los anuncios"
 msgstr "Ads' country"
 
+#, python-format
+msgid "País no soportado: %(pais)s"
+msgstr "Country not supported: %(pais)s"
+
 msgid "País:"
 msgstr "Country:"
 
