@@ -92,16 +92,35 @@ import { MENSAJE_SESION, sesionTerminada } from "../../static/editor/guardado.js
 const html = { get: (k) => (k.toLowerCase() === "content-type" ? "text/html; charset=utf-8" : null) };
 const json = { get: (k) => (k.toLowerCase() === "content-type" ? "application/json" : null) };
 
-test("sesionTerminada: una redirección o una página HTML son la página de entrar", () => {
-  assert.equal(sesionTerminada({ status: 405, redirected: true, headers: html }), true);
+const LOGIN = "https://app.test/login";
+
+test("sesionTerminada: solo una redirección a /login o una página HTML con 200 son la página de entrar", () => {
+  assert.equal(sesionTerminada({ status: 405, redirected: true, url: LOGIN, headers: html }), true);   // el PUT seguido a /login
   assert.equal(sesionTerminada({ status: 200, redirected: false, headers: html }), true);
   assert.equal(sesionTerminada({ status: 200, redirected: false, headers: json }), false);
   assert.equal(sesionTerminada({ status: 400 }), false);                // sin cabeceras (las pruebas): no se sabe, no se asume
+  // un 5xx con HTML (Flask 500, nginx 502/504 durante un despliegue) NO es la sesión
+  for (const status of [500, 502, 504]) assert.equal(sesionTerminada({ status, redirected: false, headers: html }), false, status);
+  // una redirección que no va a /login tampoco
+  assert.equal(sesionTerminada({ status: 405, redirected: true, url: "https://app.test/cliente/acme", headers: html }), false);
   assert.match(MENSAJE_SESION, /sesión terminó.*recarga la página e inicia sesión/);
 });
 
+test("un 5xx al guardar no dice «sesión terminó»: queda pendiente y se guarda con el próximo cambio", async () => {
+  for (const status of [500, 502]) {
+    const g = new Guardado({ url: "/e/1", versionN: 3, programar: () => 1, cancelar: () => {},
+      enviar: async () => ({ status, redirected: false, headers: html, json: async () => { throw new Error("no es JSON"); } }) });
+    g.pedir({ n: 1 });
+    await g.ahora();
+    assert.equal(g.estado, "error");
+    assert.notEqual(g.mensaje, MENSAJE_SESION);
+    assert.match(g.mensaje, new RegExp(`error ${status}.*se guarda con el próximo cambio`));
+    assert.ok(g.sinGuardar, "el cambio sigue pendiente");
+  }
+});
+
 test("guardar con la sesión vencida dice eso (no «error 405») y no pierde el cambio", async () => {
-  for (const r of [{ status: 405, redirected: true, headers: html }, { status: 200, headers: html }]) {
+  for (const r of [{ status: 405, redirected: true, url: LOGIN, headers: html }, { status: 200, headers: html }]) {
     const enviados = [];
     const g = new Guardado({ url: "/e/1", versionN: 3, programar: () => 1, cancelar: () => {},
       enviar: async (url, cuerpo) => { enviados.push(cuerpo); return { ...r, json: async () => { throw new Error("no es JSON"); } }; } });

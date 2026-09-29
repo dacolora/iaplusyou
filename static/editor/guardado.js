@@ -11,12 +11,14 @@ export const MENSAJE_SESION = "Tu sesión terminó: recarga la página e inicia 
 
 // Capa 4c: ¿la respuesta es la página de entrar? Con la sesión vencida el
 // servidor redirige a /login y `fetch` sigue la redirección: llega marcada
-// `redirected` (un PUT, además, como 405) o como HTML, nunca como el JSON que
-// se pidió. Sin cabeceras (las pruebas) no se asume nada.
+// `redirected` con la URL de /login (un PUT, además, como 405), o como una
+// página HTML con 200. Nada más: un 5xx con HTML (un 500 de Flask, un 502/504
+// de nginx durante un despliegue) NO es la sesión — decir «recarga» ahí haría
+// perder el cambio pendiente. Sin cabeceras (las pruebas) no se asume nada.
 export function sesionTerminada(r) {
-  if (r?.redirected) return true;
+  if (r?.redirected && /\/login(?:[/?#]|$)/.test(String(r.url ?? ""))) return true;
   const tipo = r?.headers?.get?.("content-type") ?? "";
-  return /text\/html/i.test(tipo);
+  return r?.status === 200 && /text\/html/i.test(tipo);
 }
 
 function enviarPorDefecto(url, cuerpo) {
@@ -84,7 +86,10 @@ export class Guardado {
           this._poner("conflicto", cuerpo.error || "La edición cambió en otra pestaña; recarga para seguir.");
         } else {
           this.pendiente = this.pendiente ?? doc;
-          this._poner("error", cuerpo.error || `No se pudo guardar (error ${r.status}).`, cuerpo.detalle || "");
+          const porDefecto = r.status >= 500
+            ? `el servidor falló (error ${r.status}): se guarda con el próximo cambio.`
+            : `No se pudo guardar (error ${r.status}).`;
+          this._poner("error", cuerpo.error || porDefecto, cuerpo.detalle || "");
         }
       } catch {
         this.pendiente = this.pendiente ?? doc;
