@@ -160,7 +160,6 @@ def test_investigacion_en_extra(base_temporal):
     for k in range(4):
         datos.iniciar_investigacion("acme", eid, {"version": 1, "estado": "consultas", "aprobado_usd": 10.0 + k, "pasos": {}})
     assert len(datos.estudio("acme", eid)["extra"]["investigaciones_previas"]) == 3      # se conservan las últimas 3
-    assert "recolecciones" not in datos.estudio("acme", eid)["extra"] or True                # el resto del extra no se toca
 ```
 
 - [ ] **Step 2: Correr y ver que fallan**
@@ -1964,7 +1963,7 @@ def seleccion_con_claude(estudio, productos):
     lista = sorted(productos or [], key=lambda p: (-(p.get("n_resenas") or 0), int(p.get("id") or 0)))[:MAX_FILAS_SELECCION]
     validos = {int(p["id"]) for p in lista}
     prompt = PROMPT_SELECCION.format(tema=(estudio.get("tema") or "").strip(), producto=(estudio.get("producto") or "").strip() or "—",
-                                     pais=lista[0].get("plataforma") and (estudio.get("pais") or "") or (estudio.get("pais") or ""),
+                                     pais=(estudio.get("pais") or ""),
                                      idioma_salida=_idioma_texto((estudio.get("idioma") or "es")[:2]),
                                      lista="\n".join(_fila_producto(p) for p in lista))
     texto, entrada, salida = avatares._llamar(prompt, MAX_TOKENS_SELECCION)
@@ -1985,7 +1984,6 @@ def seleccion_con_claude(estudio, productos):
     return decisiones, entrada, salida
 ```
 
-Nota: en `seleccion_con_claude` el argumento `pais` del prompt es simplemente `estudio.get("pais") or ""` — dejar esa expresión sencilla (la línea del plan está escrita de forma enredada; simplificarla a `pais=(estudio.get("pais") or "")`).
 
 - [ ] **Step 5: Actualizar las pruebas viejas**
 
@@ -3465,7 +3463,7 @@ def test_completar_subs_funde_verifica_y_cuenta(base_temporal, monkeypatch):
     salida, n = avatares.completar_subs({"tema": "t", "producto": "p", "idioma": "es"}, {"nombre": "Sin peso", "deseo": "Quiero"}, coms,
                                         [incompleto, completo], tokens=tokens)
     assert n == 1 and tokens == [400, 90] and len(llamadas) == 1 and llamadas[0][1] == avatares.MAX_TOKENS_COMPLETAR
-    assert avatares.MARCA_COMPLETAR in llamadas[0][0] and "[0]" in llamadas[0][0] and "[1]" not in llamadas[0][0]
+    assert avatares.MARCA_COMPLETAR in llamadas[0][0] and '[0] {' in llamadas[0][0] and '[1] {' not in llamadas[0][0]
     assert salida[0]["demografia"] == "Mujer 30-40 (inferido)" and salida[0]["situaciones"] == ["Cargando garrafas", "En el súper"]
     assert [e["comentario_id"] for e in salida[0]["evidencia"]] == [ids[0], ids[2]] and salida[0]["sin_evidencia"] is False
     assert calidad.faltantes(salida[0]) == [] and salida[1] == completo                                        # el completo ni se toca
@@ -3869,7 +3867,7 @@ def test_lista_y_resumen_de_avatares(base_temporal):
     from nicho import datos
     from sprints import datos as sd
     eid, subs = _estudio_con_subs(datos)
-    manual = datos.crear_avatar_manual("acme", FICHA)
+    manual = datos.crear_avatar_manual("acme", dict(FICHA, nombre="Marta / La escrita a mano"))
     suelta = sd.crear_persona("acme", "Sprint suelta", resumen="r")
     archivada = sd.crear_persona("acme", "Vieja", resumen="r")
     sd.archivar_persona("acme", archivada)
@@ -3878,9 +3876,10 @@ def test_lista_y_resumen_de_avatares(base_temporal):
     assert [x["avatar"]["id"] for x in l["nuevos"]] == [subs[1]["id"]]
     assert l["nuevos"][0]["faltantes"] == ["situaciones", "tono"] and l["nuevos"][0]["estudio"]["nombre"] == "Tofflor" and l["nuevos"][0]["nucleo"] == "Sin dolor"
     nombres = [(x["persona"] or {}).get("nombre") for x in l["aprobados"]]
-    assert nombres == sorted(nombres, key=str.lower) and set(nombres) == {FICHA["nombre"], "Sprint suelta"}
+    assert nombres == sorted(nombres, key=str.lower) and set(nombres) == {"Marta / La escrita a mano", FICHA["nombre"], "Sprint suelta"}
     por_nombre = {x["persona"]["nombre"]: x for x in l["aprobados"]}
-    assert por_nombre[FICHA["nombre"]]["avatar"]["id"] == manual and por_nombre[FICHA["nombre"]]["faltantes"] == []   # sin exigir citas
+    assert por_nombre["Marta / La escrita a mano"]["avatar"]["id"] == manual and por_nombre["Marta / La escrita a mano"]["faltantes"] == []   # sin exigir citas
+    assert por_nombre[FICHA["nombre"]]["avatar"]["id"] == subs[0]["id"] and por_nombre[FICHA["nombre"]]["faltantes"] == []
     assert por_nombre["Sprint suelta"]["avatar"] is None and "demografia" in por_nombre["Sprint suelta"]["faltantes"]
     assert [x["persona"]["nombre"] for x in l["otros"]] == ["Vieja"]
     datos.descartar_avatar("acme", subs[1]["id"])
@@ -3888,7 +3887,7 @@ def test_lista_y_resumen_de_avatares(base_temporal):
     assert l["nuevos"] == [] and {x["clave"] for x in l["otros"]} == {f"a{subs[1]['id']}", f"p{archivada}"}
     r = datos.resumen_avatares("acme")
     assert r["aprobados"] == 3 and r["nuevos"] == 0 and r["incompletos"] == 1
-    assert {m["nombre"] for m in r["muestra"]} == {FICHA["nombre"], "Sprint suelta", subs[0]["nombre"]}
+    assert {m["nombre"] for m in r["muestra"]} == {"Marta / La escrita a mano", FICHA["nombre"], "Sprint suelta"}
     assert datos.urls_de_comentarios("acme", [subs[0]["evidencia"][0]["comentario_id"]]) == {subs[0]["evidencia"][0]["comentario_id"]: None}
 ```
 
