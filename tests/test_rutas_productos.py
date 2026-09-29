@@ -509,7 +509,7 @@ def test_fotos_subir_crea_activo_y_enlaza(app):
     pid = _producto(nombre="Espejo redondo", descripcion="marco dorado")
     r = app["c"].post(f"/cliente/acme/productos/{pid}/fotos",
                       data={"imagenes": [_foto("a.jpg"), _foto("b.png")]}, content_type="multipart/form-data")
-    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo?ficha=producto:espejo_redondo")
     p = tiendas.producto("acme", pid)
     assert p["activo_catalogo_id"] == "espejo_redondo"
     activo = catalogo_productos.encontrar("acme", "espejo_redondo", categoria="producto")
@@ -895,7 +895,7 @@ def test_pruebas_del_producto_desde_catalogo(app):
     _crear_activo(c)
     pid = _fila_por_activo("cojin_azul")["id"]
     r = c.post(f"/cliente/acme/productos/{pid}/pruebas", data={"texto": "Relleno de 1.200 g", "fuente": "ficha"})
-    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo?ficha=producto:cojin_azul")
     prueba = _fila_por_activo("cojin_azul")["extra"]["pruebas"][0]
     assert prueba["texto"] == "Relleno de 1.200 g"
     html = c.get("/cliente/acme").data.decode()

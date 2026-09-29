@@ -1639,7 +1639,9 @@ def ver_cliente(cliente):
     # Catálogo › Productos: cada activo tiene su fila comercial (se crea al
     # vuelo si falta) y la fila se pinta en la tarjeta del activo.
     activos_producto = _productos_con_uso(cliente)
-    _asegurar_filas_producto(cliente, activos_producto)
+    # Una fila comercial por PRODUCTO, nunca por color (spec 2026-09-28 §10):
+    # `activos_producto` es la lista por color que pinta la galería.
+    _asegurar_filas_producto(cliente, catalogo_productos.listar_productos(cliente, "producto"))
     productos_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
     producto_comercial = _producto_comercial_contexto(productos_tienda)
     # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
@@ -2379,11 +2381,15 @@ def _cat(valor):
     return catalogo_productos.categoria_valida(valor or catalogo_productos.CATEGORIA_POR_DEFECTO)
 
 
-@app.route("/cliente/<cliente>/productos/<producto_id>/imagen")
+@app.route("/cliente/<cliente>/productos/<path:producto_id>/imagen")
 def imagen_producto(cliente, producto_id):
-    """Sirve la foto representativa de un producto del catálogo directo del disco
-    (son fijas, no hace falta subirlas a R2)."""
-    producto = catalogo_productos.encontrar(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
+    """Sirve la foto representativa de un activo (`pid` o `pid/color`) directo
+    del disco. `<path:>` porque los ids de color llevan «/» (antes daban 404)."""
+    categoria = _cat(request.args.get("categoria") or request.form.get("categoria"))
+    producto = catalogo_productos.encontrar(cliente, producto_id, categoria=categoria)
+    if not producto and "/" not in producto_id:
+        entrada = catalogo_productos.encontrar_producto(cliente, producto_id, categoria)
+        producto = {"representativa": entrada["representativa"]} if entrada else None
     if not producto:
         flash(gettext("No encontré el producto %(id)s", id=producto_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
@@ -2399,12 +2405,14 @@ def _foto_o_miniatura(ruta):
     return send_file(ruta)
 
 
-@app.route("/cliente/<cliente>/productos/<producto_id>/imagen/<nombre>")
+@app.route("/cliente/<cliente>/productos/<path:producto_id>/imagen/<nombre>")
 def imagen_producto_archivo(cliente, producto_id, nombre):
-    """Sirve UNA foto concreta del producto — la pantalla de gestión muestra
-    todas las referencias, no solo la representativa."""
+    """Sirve UNA foto concreta: del producto (`pid`), de un color (`pid/color`,
+    o `pid` + `?variante=`). 404 ante cualquier id o color inválido."""
     try:
-        carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
+        carpeta = catalogo_productos.carpeta_de(
+            cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")),
+            variante=(request.args.get("variante") or "").strip() or None)
     except ValueError:
         abort(404)
     ruta = os.path.join(carpeta, secure_filename(nombre))
@@ -2631,14 +2639,18 @@ def crear_producto(cliente):
                                _campos_comerciales(request.form), desarchivar=True,
                                sofisticacion=_sofisticacion_form(request.form))
     flash(gettext("Producto creado: %(nombre)s (%(n)s foto(s)).", nombre=nombre, n=guardadas), "ok")
+    if volver == "catalogo":
+        # Desde el catálogo, el alta abre directo la ficha del producto nuevo.
+        return _volver_catalogo(cliente, categoria, producto_id)
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
-def _guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto"):
-    """Guarda las fotos en la carpeta del producto y devuelve cuántas entraron.
-    Quedan SOLO en disco a propósito: catalogo_productos las lee de ahí y el
-    swap las sube a R2 recién cuando se va a generar."""
-    carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria)
+def _guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto", variante=None):
+    """Guarda las fotos en la carpeta del producto (o de uno de sus colores,
+    con `variante`) y devuelve cuántas entraron. Quedan SOLO en disco a
+    propósito: catalogo_productos las lee de ahí y el swap las sube a R2
+    recién cuando se va a generar."""
+    carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria, variante=variante)
     os.makedirs(carpeta, exist_ok=True)
     guardadas = 0
     for archivo in archivos:
@@ -2672,7 +2684,7 @@ def actualizar_producto(cliente, producto_id):
         )
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+        return _volver_catalogo(cliente, categoria, producto_id)
     if categoria == "producto":
         # La fila comercial se crea aquí si el activo es anterior a que
         # existiera (no hay migración: se enlaza al primer uso).
@@ -2680,35 +2692,40 @@ def actualizar_producto(cliente, producto_id):
                                request.form.get("descripcion"), _campos_comerciales(request.form),
                                sofisticacion=_sofisticacion_form(request.form))
     flash(gettext("Producto actualizado."), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    return _volver_catalogo(cliente, categoria, producto_id)
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/imagenes/subir", methods=["POST"])
 def subir_imagen_producto(cliente, producto_id):
+    categoria = _cat(request.form.get("categoria"))
+    variante = (request.form.get("variante") or "").strip() or None
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not archivos:
         flash(gettext("No elegiste ninguna foto."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+        return _volver_catalogo(cliente, categoria, producto_id)
     try:
-        guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=_cat(request.form.get("categoria")))
+        guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=categoria, variante=variante)
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+        return _volver_catalogo(cliente, categoria, producto_id)
     if guardadas:
         flash(gettext("%(n)s foto(s) agregada(s).", n=guardadas), "ok")
     else:
         flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    return _volver_catalogo(cliente, categoria, producto_id)
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/imagenes/<nombre>/eliminar", methods=["POST"])
 def eliminar_imagen_producto(cliente, producto_id, nombre):
+    categoria = _cat(request.form.get("categoria"))
     try:
-        ok, mensaje = catalogo_productos.eliminar_imagen(cliente, producto_id, nombre, categoria=_cat(request.form.get("categoria")))
+        ok, mensaje = catalogo_productos.eliminar_imagen(
+            cliente, producto_id, nombre, categoria=categoria,
+            variante=(request.form.get("variante") or "").strip() or None)
     except ValueError as e:
         ok, mensaje = False, str(e)
     flash(mensaje, "ok" if ok else "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    return _volver_catalogo(cliente, categoria, producto_id)
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/eliminar", methods=["POST"])
@@ -2723,7 +2740,7 @@ def eliminar_producto(cliente, producto_id):
         catalogo_productos.eliminar(cliente, producto_id, categoria=categoria)
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+        return _volver_catalogo(cliente)
     if categoria == "producto":
         # La fila comercial NO se borra: se archiva (a mano, como en
         # prod_archivar) para que un experimento que ya la use no se quede
@@ -2732,7 +2749,65 @@ def eliminar_producto(cliente, producto_id):
         if fila and not fila["archivado"]:
             tiendas.marcar_producto(cliente, fila["id"], archivado=True)
     flash(gettext("Producto eliminado: %(nombre)s", nombre=nombre), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    return _volver_catalogo(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/colores", methods=["POST"])
+def catalogo_color_agregar(cliente, producto_id):
+    """«+ Color» de la ficha (spec §10.3): crea el color y guarda sus fotos;
+    en un producto plano con fotos exige el nombre del color actual."""
+    nombre = (request.form.get("nombre") or "").strip()
+    archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
+    if not nombre:
+        flash(gettext("Ponle un nombre al color."), "error")
+        return _volver_catalogo(cliente, "producto", producto_id)
+    try:
+        color_id = catalogo_productos.agregar_color(
+            cliente, producto_id, nombre, descripcion=request.form.get("descripcion") or "",
+            convertir_actual=(request.form.get("convertir_actual") or "").strip() or None)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_catalogo(cliente, "producto", producto_id)
+    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, variante=color_id) if archivos else 0
+    if archivos and not guardadas:
+        flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
+    flash(gettext("Color «%(nombre)s» agregado (%(n)s foto(s)).", nombre=nombre, n=guardadas), "ok")
+    return _volver_catalogo(cliente, "producto", producto_id)
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/colores/<color_id>/quitar", methods=["POST"])
+def catalogo_color_quitar(cliente, producto_id, color_id):
+    try:
+        catalogo_productos.quitar_color(cliente, producto_id, color_id)
+        flash(gettext("Color quitado."), "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return _volver_catalogo(cliente, "producto", producto_id)
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/fotos/<nombre>/mover", methods=["POST"])
+def catalogo_foto_mover(cliente, producto_id, nombre):
+    """Una foto de ambiente pasa a ser referencia del color `variante`."""
+    try:
+        final = catalogo_productos.mover_foto_a_color(cliente, producto_id, nombre, (request.form.get("variante") or "").strip())
+        flash(gettext("Foto asignada al color (%(nombre)s).", nombre=final), "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return _volver_catalogo(cliente, "producto", producto_id)
+
+
+@app.route("/cliente/<cliente>/catalogo/producto/<producto_id>/crear-con", methods=["POST"])
+def catalogo_crear_con(cliente, producto_id):
+    """«Crear con este producto» (spec §10.5): deja el color elegido (o el
+    primero con fotos) marcado en el diálogo del catálogo de Crear."""
+    variante = (request.form.get("variante") or "").strip()
+    activo_id = f"{producto_id}/{variante}" if variante else producto_id
+    activo = catalogo_productos.encontrar(cliente, activo_id, categoria="producto")
+    if not activo:
+        flash(gettext("Ese producto no tiene fotos de referencia todavía."), "error")
+        return _volver_catalogo(cliente, "producto", producto_id)
+    session["fp_prefill"] = {"productos_catalogo": [f"producto:{activo['id']}"]}
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
 def _swap_items(cliente):
@@ -5300,7 +5375,26 @@ IMPORTAR_MAX_BYTES = 5 * 1024 * 1024
 def _volver_productos(cliente):
     """Las rutas `prod_*` vuelven al Catálogo: la pestaña Productos ya no
     existe (los productos importados viven en Catálogo › Productos)."""
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="catalogo"))
+    return _volver_catalogo(cliente)
+
+
+def _volver_catalogo(cliente, cat=None, activo_id=None):
+    """Volver a la pestaña Catálogo; con `cat` + `activo_id`, con la ficha de
+    ese producto abierta (`#catalogo?ficha=<cat>:<pid>`, spec §10.3)."""
+    ancla = "catalogo"
+    if cat and activo_id:
+        ancla = f"catalogo?ficha={cat}:{catalogo_productos.producto_base(activo_id)}"
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor=ancla))
+
+
+def _volver_fila(cliente, pid):
+    """Las rutas prod_* (fila `producto` por id numérico) vuelven a la ficha
+    del activo de esa fila si lo tiene; si no, a la galería."""
+    fila = tiendas.producto(cliente, pid) if pid else None
+    activo = (fila or {}).get("activo_catalogo_id")
+    if activo and catalogo_productos.existe(cliente, activo, "producto"):
+        return _volver_catalogo(cliente, "producto", activo)
+    return _volver_catalogo(cliente)
 
 
 def _volver_config(cliente):
@@ -5500,7 +5594,7 @@ def prod_prueba_agregar(cliente, pid):
         flash(gettext("Prueba guardada: Claude ya la puede usar con este producto."), "ok")
     except doctrina_producto.ErrorPrueba as e:
         flash(str(e), "error")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/pruebas/<prueba_id>/borrar", methods=["POST"])
@@ -5510,7 +5604,7 @@ def prod_prueba_borrar(cliente, pid, prueba_id):
         flash(gettext("No encontré ese producto."), "error")
     else:
         flash(gettext("Prueba borrada."), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/actualizar", methods=["POST"])
@@ -5527,7 +5621,7 @@ def prod_pedidos_actualizar(cliente, pid):
         flash(gettext("Armando lo que Claude necesita… la lista se actualiza sola."), "ok")
     else:
         flash(gettext("Ya se está armando la lista de este producto."), "error")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/responder", methods=["POST"])
@@ -5542,7 +5636,7 @@ def prod_pedido_responder(cliente, pid, pedido_id):
         flash(gettext("Gracias: quedó como prueba del producto y Claude ya la puede usar."), "ok")
     except doctrina_producto.ErrorPrueba as e:
         flash(str(e), "error")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/descartar", methods=["POST"])
@@ -5552,7 +5646,7 @@ def prod_pedido_descartar(cliente, pid, pedido_id):
         flash(gettext("Ese pedido ya no está abierto."), "error")
     else:
         flash(gettext("Listo: Claude no lo volverá a pedir."), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/marcar", methods=["POST"])
@@ -5579,22 +5673,22 @@ def prod_marcar(cliente, pid):
             campos["precio"] = precio
     except ValueError:
         flash(gettext("Revisa los números: prioridad entre 0 y 100, precio positivo."), "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     if "url_compra" in form:
         url = (form.get("url_compra") or "").strip()
         if url and not url.startswith(("http://", "https://")):
             flash(gettext("La URL de compra tiene que empezar por http:// o https://."), "error")
-            return _volver_productos(cliente)
+            return _volver_fila(cliente, pid)
         campos["url_compra"] = url or None
     if "moneda" in form:
         moneda = (form.get("moneda") or "").strip().upper()
         if moneda and not _MONEDA_RE.match(moneda):
             flash(gettext("La moneda va en código de 3 letras (COP, MXN, USD…)."), "error")
-            return _volver_productos(cliente)
+            return _volver_fila(cliente, pid)
         campos["moneda"] = moneda or None
     tiendas.marcar_producto(cliente, pid, **campos)
     flash(gettext("Producto actualizado."), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/archivar", methods=["POST"])
@@ -5610,7 +5704,7 @@ def prod_archivar(cliente, pid):
     archivar = (request.form.get("archivado") or "1") not in ("0", "false", "off")
     tiendas.marcar_producto(cliente, pid, archivado=archivar)
     flash(gettext("Producto archivado.") if archivar else gettext("Producto recuperado."), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/vincular", methods=["POST"])
@@ -5632,7 +5726,7 @@ def prod_vincular(cliente, pid):
                       nombre=prod.get("nombre") or pid), "ok")
     else:
         flash(gettext("Ya se está creando el activo de ese producto — espera a que termine."), "warn")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/fotos", methods=["POST"])
@@ -5651,7 +5745,7 @@ def prod_fotos_subir(cliente, pid):
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not archivos:
         flash(gettext("No elegiste ninguna foto."), "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     nombre = (prod.get("nombre") or "").strip() or gettext("Producto %(pid)s", pid=pid)
     enlazado = prod.get("activo_catalogo_id")
     if enlazado and catalogo_productos.existe(cliente, enlazado, "producto"):
@@ -5661,7 +5755,7 @@ def prod_fotos_subir(cliente, pid):
         flash(gettext("%(n)s foto(s) añadida(s) a «%(nombre)s».", n=guardadas, nombre=nombre) if guardadas
               else gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."),
               "ok" if guardadas else "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     base = catalogo_productos.id_desde_nombre(nombre)
     activo_id, sufijo = base, 2
     while catalogo_productos.existe(cliente, activo_id, "producto"):
@@ -5672,17 +5766,17 @@ def prod_fotos_subir(cliente, pid):
                                  producto_id=activo_id)
     except ValueError as e:
         flash(str(e), "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     guardadas = _guardar_fotos_producto(cliente, activo_id, archivos)
     if not guardadas:
         # Sin foto válida el activo no aparecería en el catálogo y la fila
         # quedaría enlazada a algo invisible: mejor deshacer.
         catalogo_productos.eliminar(cliente, activo_id, categoria="producto")
         flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     tiendas.marcar_producto(cliente, pid, activo_catalogo_id=activo_id)
     flash(gettext("«%(nombre)s» ya está en el catálogo con %(n)s foto(s).", nombre=nombre, n=guardadas), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/experimento", methods=["POST"])
