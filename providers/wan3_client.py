@@ -50,7 +50,7 @@ COSTO_USD_POR_SEGUNDO = {"480p": 0.05, "720p": 0.10, "1080p": 0.20}
 
 def generar_video(prompt, reference_images, duration=12, resolution="720p",
                    aspect_ratio="9:16", generate_audio=False, on_progreso=None,
-                   reference_videos=None):
+                   reference_videos=None, enable_prompt_expansion=False):
     """reference_images: lista de URLs públicas, en el orden
     personajes -> productos -> escenas (así @Imagen 1, @Imagen 2... del prompt
     final corresponden exactamente al orden que ve el modelo). Devuelve la URL
@@ -66,6 +66,9 @@ def generar_video(prompt, reference_images, duration=12, resolution="720p",
         "aspect_ratio": aspect_ratio,
         "duration": duration,
         "generate_audio": generate_audio,
+        # El mejorador propio de Wan reescribe el prompt: solo si la persona lo
+        # pidió en Crear («Que Wan mejore mi prompt»); siempre explícito.
+        "enable_prompt_expansion": bool(enable_prompt_expansion),
         "reference_images": list(reference_images or [])[:10],
     }
     if reference_videos:

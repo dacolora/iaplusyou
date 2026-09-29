@@ -86,6 +86,10 @@
                 <input type="checkbox" name="calidad" value="borrador" id="fp-calidad">
                 <span><strong>{{ _('Borrador a 480p') }}</strong><small>{{ _('Solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final.') }}</small></span>
               </label>
+              <label class="crear-interruptor" id="fp-mejorar-wrap" data-solo-video>
+                <input type="checkbox" name="mejorar_prompt" value="si" id="fp-mejorar">
+                <span><strong>{{ _('Que Wan mejore mi prompt') }}</strong><small>{{ _('Solo Wan 3.0, sin costo extra: el modelo reescribe tu texto antes de generar, como hacen Higgsfield y la web de Wan. Apagado, va tal cual lo escribiste.') }}</small></span>
+              </label>
               <p class="crear-nota" data-solo-video>{{ _('Precios con el sonido de la escena incluido.') }}</p>
             </div>
           </div>
@@ -368,6 +372,7 @@
       var mu = document.getElementById('fp-musica'); if (mu && typeof prefill.musica_estilo === 'string') mu.value = prefill.musica_estilo;
       if (inicioInput && prefill.musica_inicio_s) inicioInput.value = prefill.musica_inicio_s;
       var ca = document.getElementById('fp-calidad'); if (ca) ca.checked = prefill.calidad === 'borrador';
+      var me = document.getElementById('fp-mejorar'); if (me) me.checked = !!prefill.mejorar_prompt;
       setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
     }
     // Lo que el modelo admite manda: duraciones fuera de su rango y formatos que
@@ -389,6 +394,8 @@
         // Borrador es solo de Wan 3.0 video: no debe sobrevivir a un cambio a Imagen.
         var calidadImagen = document.getElementById('fp-calidad');
         if (calidadImagen) { calidadImagen.checked = false; calidadImagen.disabled = true; }
+        var mejorarImagen = document.getElementById('fp-mejorar');
+        if (mejorarImagen) { mejorarImagen.checked = false; mejorarImagen.disabled = true; }
         return;
       }
       var min = parseInt(m.dataset.minDuracion || '2', 10), max = parseInt(m.dataset.maxDuracion || '30', 10);
@@ -403,6 +410,10 @@
       var calidad = document.getElementById('fp-calidad');
       if (calidad) { calidad.disabled = m.value !== 'wan3'; if (calidad.disabled) calidad.checked = false; }
       if (calidadWrap) calidadWrap.hidden = m.value !== 'wan3';
+      // «Que Wan mejore mi prompt» solo existe en Wan 3.0; con otro modelo se apaga.
+      var mejorar = document.getElementById('fp-mejorar'), mejorarWrap = document.getElementById('fp-mejorar-wrap');
+      if (mejorar) { mejorar.disabled = m.value !== 'wan3'; if (mejorar.disabled) mejorar.checked = false; }
+      if (mejorarWrap) mejorarWrap.hidden = m.value !== 'wan3';
       var larga = document.getElementById('fp-duracion-larga');
       if (larga) larga.hidden = parseInt(duracion.value, 10) <= 15;
     }
@@ -437,7 +448,7 @@
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
     form.addEventListener('change', function (e) { if (e.target.name === 'productos_catalogo') refrescar(); });
-    ['fp-check-sonido', 'fp-musica', 'fp-calidad'].forEach(function (id) {
+    ['fp-check-sonido', 'fp-musica', 'fp-calidad', 'fp-mejorar'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', refrescar);
     });
@@ -523,7 +534,9 @@
       var m = modeloActual();
       var cal = document.getElementById('fp-calidad');
       pill('fp-pill-tipo', esImagen ? {{ _('🖼 Imagen')|tojson }} : {{ _('🎬 Video')|tojson }});
-      pill('fp-pill-modelo', m ? m.dataset.nombre + (!esImagen && cal && cal.checked ? {{ _(' · borrador')|tojson }} : '') : {{ _('Modelo')|tojson }});
+      var mej = document.getElementById('fp-mejorar');
+      pill('fp-pill-modelo', m ? m.dataset.nombre + (!esImagen && cal && cal.checked ? {{ _(' · borrador')|tojson }} : '')
+                               + (!esImagen && mej && mej.checked ? {{ _(' · prompt mejorado')|tojson }} : '') : {{ _('Modelo')|tojson }});
       pill('fp-pill-duracion', '⏱ ' + duracion.value + ' s', parseInt(duracion.value, 10) > 15);
       var selFormato = esImagen ? formatoImagen : formatoVideo;
       pill('fp-pill-formato', (!esImagen && formatoVideo.disabled) ? {{ _('▯ Formato de la imagen')|tojson }} : '▯ ' + selFormato.value);

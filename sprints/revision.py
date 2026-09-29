@@ -56,8 +56,8 @@ def rechazar(cliente, cp_id, motivo):
             titulo=i['titulo'], motivo=motivo)
     else:
         if entry is not None:
-            cola.pop(i["cf_id"], None)
-            estado_videos.guardar(cliente, cola)
+            # Con candado: el worker agrega videos a este mismo archivo.
+            estado_videos.modificar(cliente, lambda e: {k: v for k, v in e.items() if k != i["cf_id"]})
         mensaje = datos.texto_guardado(cliente, N_("Rechazada «%(titulo)s»: %(motivo)s"),
                                        titulo=i['titulo'], motivo=motivo)
     datos.registrar_evento(cliente, i["sprint_id"], "pieza_rechazada", mensaje, evento_datos,

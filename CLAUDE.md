@@ -100,7 +100,21 @@ deterministic per (cliente, prompt_id/brief_id, acción) so a repeat click no-op
 instead of double-launching. Tasks that spend credits are queued with
 `max_intentos=1` — they never auto-retry. A queued task stuck running for more than
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
-(once `max_intentos` is exhausted). **`dashboard.py` runs with `use_reloader=False`
+(once `max_intentos` is exhausted) — never one this worker is running right now
+(`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
+`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has two lanes:
+`CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`)
+runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
+`HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
+runs one at a time in order, as before; the main thread only supervises (`worker.repartir`).
+Code reached from a Crear task must therefore be thread-safe: `_json_store.guardar` uses a
+per-thread tmp, `estado.modificar` (used by the worker AND by Flask's approve/reject/publish and
+`sprints.revision`) and `musica._bloqueo` take `flock`, R2 opens one boto3 session per call, and
+`trabajos.reportar` never raises. A task may return `tareas.Continuar(tipo, payload,
+ejecutar_desde=)`: the worker closes it and queues the follow-up with the SAME job_id in one
+transaction (`cola.terminar_y_encolar`, retried; if it still fails the task goes to `error` and its
+`AL_INTERRUMPIR` hook runs), so the card's bar never sees «nothing alive». A thread that fails to
+start gives its task back (`cola.devolver`). **`dashboard.py` runs with `use_reloader=False`
 on purpose**: Flask's auto-reloader kills the whole process on file changes, which
 would silently abort any in-flight background generation.
 
@@ -376,6 +390,15 @@ p. ej. Kling 1200 «contenido sensible»). El detalle de la pieza ofrece «Recup
 nuevo)» → `cf_recuperar` → tarea `flowplus_recuperar` (`max_intentos=1`, `TIEMPO_RECUPERAR` 10 min):
 vuelve a preguntar por ese id y cierra la pieza con `_terminar_video` (el mismo cierre que la generación
 normal; el gasto se anota ahí, con «recuperado»). Nunca genera de nuevo.
+Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
+`wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
+devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)
+—el hilo queda libre entre vueltas— mientras la predicción tenga menos de `ESPERA_MAXIMA` (2 h); recién después
+queda el botón. El sondeo aguanta hasta `FALLOS_SEGUIDOS` (6) cortes de red o 5xx seguidos, y un error que no sea
+`ErrorProveedor` (estado final fallido) nunca borra el id: se sigue esperando. Un reinicio del worker corta esas esperas enseguida
+(`wavespeed_common.fijar_detener` + `cortable()`, solo en las tareas que saben retomar; un swap o una imagen
+siguen como antes) y el gancho `interrumpida` retoma por la predicción un video que quedó a medias por un
+SIGKILL. Desplegar ya no pierde videos de Crear en curso.
 Los lotes de
 Sprints encolan el director con `auto_lanzar` (el costo ya se aprobó). `calidad`
 `borrador` = Wan a 480p. Duración por defecto 8 s (`preferencias_flowplus`). `VIDEO` /

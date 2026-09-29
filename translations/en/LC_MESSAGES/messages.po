@@ -76,6 +76,9 @@ msgstr " · up to "
 msgid " · mostrar"
 msgstr " · show"
 
+msgid " · prompt mejorado"
+msgstr " · enhanced prompt"
+
 msgid " · tope "
 msgstr " · cap "
 
@@ -8224,6 +8227,9 @@ msgstr "Let Creatv manage it"
 msgid "Que Creatv lo gestione: sigue los pasos de la tarjeta de Meta."
 msgstr "Let Creatv manage it: follow the steps on the Meta card."
 
+msgid "Que Wan mejore mi prompt"
+msgstr "Let Wan enhance my prompt"
+
 msgid "Quitamos la biblioteca de copycoders de este proyecto. Puedes volver a traerla cuando quieras."
 msgstr "We removed the copycoders library from this project. You can bring it back whenever you want."
 
@@ -9186,6 +9192,9 @@ msgstr "Request sent on %(fecha)s: Creatv is reviewing it and will email you."
 
 msgid "Solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final."
 msgstr "Wan 3.0 only, half price: to test the prompt before the final version."
+
+msgid "Solo Wan 3.0, sin costo extra: el modelo reescribe tu texto antes de generar, como hacen Higgsfield y la web de Wan. Apagado, va tal cual lo escribiste."
+msgstr "Wan 3.0 only, no extra cost: the model rewrites your text before generating, like Higgsfield and Wan's website do. Off, it goes exactly as you wrote it."
 
 msgid "Solo acepto archivos .csv o .xlsx."
 msgstr "I only accept .csv or .xlsx files."
@@ -10503,6 +10512,9 @@ msgstr "WaveSpeed was still working on %(modelo)s after %(min)s min (prediction 
 #, python-format
 msgid "WaveSpeed sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos."
 msgstr "WaveSpeed is still working on prediction %(id)s; try again in a few minutes."
+
+msgid "WaveSpeed sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."
+msgstr "WaveSpeed is still working: we keep waiting for the same video, without paying again."
 
 msgid "What are other solutions they have tried and failed at?"
 msgstr "What are other solutions they have tried and failed at?"

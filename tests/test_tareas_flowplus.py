@@ -1,6 +1,13 @@
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _estado_en_tmp(tmp_path, monkeypatch):
+    """estado_videos.json (y su candado) en una carpeta temporal, nunca en clientes/ del repo."""
+    import estado
+    monkeypatch.setattr(estado, "BASE_DIR", str(tmp_path))
+
+
 class _Resp:
     """Respuesta falsa de requests.get."""
     content = b"00"
@@ -170,7 +177,7 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
 
     visto = {}
 
-    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None, con_sonido=True, calidad="final"):
+    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None, con_sonido=True, calidad="final", **_):
         visto.update(refs=referencias, videos=videos, ar=aspect_ratio)
         return "https://prov/v.mp4"
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
@@ -628,7 +635,10 @@ def test_registra_recuperar(base_temporal):
     assert tareas.AL_INTERRUMPIR["flowplus_recuperar"] is tareas.flowplus.interrumpida
 
 
-def test_el_tiempo_agotado_guarda_la_prediccion_y_explica_como_recuperar(base_temporal, monkeypatch, tmp_path):
+def test_el_tiempo_agotado_guarda_la_prediccion_y_sigue_esperando(base_temporal, monkeypatch, tmp_path):
+    """Desde el carril de Crear (spec 2026-09-28-crear-sin-cola) no hay que tocar
+    «Recuperar»: la sesión sigue generando y la retoma flowplus_recuperar."""
+    import tareas
     import creative_flow as cf
     import tareas.flowplus as fp
     from providers import wavespeed_common as wc
@@ -639,13 +649,11 @@ def test_el_tiempo_agotado_guarda_la_prediccion_y_explica_como_recuperar(base_te
         on_progreso({"fase": "processing", "elapsed": 30, "prediction_id": "pred-1"})
         raise wc.EsperaAgotada("Wan 3.0", "pred-1", 1200)
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
-    with pytest.raises(TimeoutError):
-        fp.ejecutar_video({"id": 7, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    r = fp.ejecutar_video({"id": 7, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    assert isinstance(r, tareas.Continuar) and r.tipo == "flowplus_recuperar"
     e = cf.cargar("acme")[cid]
-    assert e["estado"] == "error"
+    assert e["estado"] == "video_generando" and not e.get("error")
     assert e["prediccion"]["id"] == "pred-1" and e["prediccion"]["modelo"] == "wan3" and e["prediccion"]["en"]
-    assert "pred-1" in e["error"] and "20 min" in e["error"] and "Recuperar" in e["error"]
-    assert "Se agotó el tiempo" not in e["error"]
 
 
 def test_un_rechazo_del_proveedor_se_explica_y_no_deja_nada_que_recuperar(base_temporal, monkeypatch, tmp_path):

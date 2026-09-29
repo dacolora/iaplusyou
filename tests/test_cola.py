@@ -161,3 +161,49 @@ def test_trabajos_encolar_pasa_prioridad(base_temporal):
     assert cola.consultar_por_job("j1")["prioridad"] == 3
     assert trabajos.encolar("j2", "prueba", {}) is True
     assert cola.consultar_por_job("j2")["prioridad"] == 5
+
+
+# --- Carril de Crear (spec 2026-09-28-crear-sin-cola) ------------------------------------
+
+def test_reclamar_por_carril_y_prioridad_minima(base_temporal):
+    import cola
+    render = cola.encolar("final_producir", {}, prioridad=5)
+    lote = cola.encolar("flowplus_video", {}, prioridad=3)
+    suelta = cola.encolar("flowplus_video", {}, prioridad=5)
+    crear = ("flowplus_video", "flowplus_imagen")
+    # Con los hilos de lote llenos, solo sale la pieza suelta de Crear.
+    assert cola.reclamar(tipos=crear, prioridad_min=5)["id"] == suelta
+    assert cola.reclamar(tipos=crear, prioridad_min=5) is None
+    assert cola.reclamar(tipos=crear)["id"] == lote
+    # El carril general nunca toma una de Crear.
+    assert cola.reclamar(excluir_tipos=crear)["id"] == render
+    assert cola.reclamar(excluir_tipos=crear) is None
+
+
+def test_recuperar_colgadas_no_toca_lo_que_este_proceso_ejecuta(base_temporal):
+    """Con varios hilos, una espera larga de uno NO es una tarea colgada: el
+    supervisor pasa las que tiene en vuelo y esas no se tocan."""
+    import cola
+    viva = cola.encolar("flowplus_video", {}, max_intentos=1)
+    huerfana = cola.encolar("flowplus_video", {}, max_intentos=1)
+    cola.reclamar(); cola.reclamar()
+    tocadas, interrumpidas = cola.recuperar_colgadas(0, excluir={viva})
+    assert tocadas == 1 and [t["id"] for t in interrumpidas] == [huerfana]
+    assert cola.consultar_por_id(viva)["estado"] == "en_curso"
+
+
+def test_terminar_y_encolar_sigue_con_el_mismo_job_sin_hueco(base_temporal):
+    """La continuación hereda job_id, cliente, etapas y prioridad y nace en la
+    misma transacción en que se cierra la tarea: la barra nunca ve «nada vivo»."""
+    import cola
+    tid = cola.encolar("flowplus_video", {"cf_id": "cf_1"}, cliente="acme", job_id="acme__cf_1__creative_flow",
+                       etapas=[("Generando", 82)], duracion_estimada=180, max_intentos=1, prioridad=3)
+    t = cola.reclamar()
+    nueva = cola.terminar_y_encolar(t["id"], "sigue", {"tipo": "flowplus_recuperar", "payload": {"cf_id": "cf_1"}})
+    vieja = cola.consultar_por_id(tid)
+    assert vieja["estado"] == "hecha" and vieja["mensaje"] == "sigue"
+    n = cola.consultar_por_id(nueva)
+    assert (n["tipo"], n["estado"], n["job_id"], n["cliente"], n["prioridad"], n["max_intentos"]) == \
+        ("flowplus_recuperar", "pendiente", "acme__cf_1__creative_flow", "acme", 3, 1)
+    assert n["etapas"] == [["Generando", 82]] and n["payload"] == {"cf_id": "cf_1"}
+    assert cola.consultar_por_job("acme__cf_1__creative_flow")["id"] == nueva
