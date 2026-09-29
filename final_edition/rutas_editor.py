@@ -52,7 +52,9 @@ def ver(cliente, edicion_id):
             "borrar_material": url_for("editor.borrar_material", cliente=cliente, material_id="__ID__")}
     datos = vista_previa.datos_pagina(cliente, ed, urls)
     vista_previa.encolar_proxies(cliente, datos["pendientes"])
-    return render_template("editor.html", cliente=cliente, edicion=ed, datos=datos)
+    # capa 4c: el borrador de la vía automática se nombra «Borrador automático · …»
+    return render_template("editor.html", cliente=cliente, edicion=ed, datos=datos,
+                           nombre_edicion=ediciones.nombre_visible(ed))
 
 
 @bp.get("/<int:edicion_id>/materiales")

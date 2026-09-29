@@ -6197,13 +6197,15 @@ def _volver_final(cliente):
 
 
 def _ediciones_por_cf(cliente):
-    """{cf_id: [ediciones de esa pieza, la más reciente primero]} para la
-    pestaña Final edition (filas sin el documento)."""
+    """{cf_id: [ediciones de esa pieza]} para la pestaña Final edition (filas
+    sin el documento): las de la persona primero, la más reciente primero, y
+    después los borradores automáticos (`ediciones.para_editar`: la primera es
+    la que abre «Editar», capa 4c), cada una con su `nombre_visible`."""
     out = {}
     for e in ediciones.listar(cliente):
         if e.get("cf_id"):
-            out.setdefault(e["cf_id"], []).append(e)
-    return out
+            out.setdefault(e["cf_id"], []).append({**e, "nombre_visible": ediciones.nombre_visible(e)})
+    return {cf: ediciones.para_editar(eds) for cf, eds in out.items()}
 
 
 def _precio_form(valor):

@@ -15,6 +15,7 @@ from PIL import Image, ImageOps, JpegImagePlugin
 
 import creative_flow
 import db
+import ediciones
 import final_edition
 import materiales
 import trabajos
@@ -71,7 +72,7 @@ def borrar(cliente, material_id):
         raise NoSePuedeBorrar("Ese archivo no se borra desde aquí.", 400)
     ed = materiales.edicion_que_lo_usa(cliente, mat["id"])
     if ed:
-        raise NoSePuedeBorrar(f"Está en uso en la edición «{ed['nombre']}»: quítalo de ahí primero.", 409)
+        raise NoSePuedeBorrar(f"Está en uso en la edición «{ediciones.nombre_visible(ed)}»: quítalo de ahí primero.", 409)
     try:
         materiales.borrar(cliente, mat["id"])
     except materiales.MaterialEnUso:                       # una edición lo tomó recién

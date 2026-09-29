@@ -40,6 +40,37 @@ def cargar(cliente, edicion_id):
     return f
 
 
+# Capa 4c: el borrador de la vía automática (`produccion.armar_borrador`,
+# creada_por «final_edition», nombre «Borrador · …» o «Variante N (…) · …»)
+# se vuelve a guardar con cada país que se produce, así que solía quedar como
+# la edición más reciente. Para la persona se nombra «Borrador automático · …»
+# y «Editar» prefiere siempre una edición suya.
+AUTOMATICA = "final_edition"
+_PREFIJO_BORRADOR = "Borrador · "
+
+
+def es_automatica(edicion):
+    return (edicion or {}).get("creada_por") == AUTOMATICA
+
+
+def nombre_visible(edicion):
+    """El nombre que ve la persona: el de la edición, salvo el borrador
+    automático, que dice que lo es."""
+    nombre = (edicion or {}).get("nombre") or "Sin nombre"
+    if not es_automatica(edicion):
+        return nombre
+    if nombre.startswith(_PREFIJO_BORRADOR):
+        nombre = nombre[len(_PREFIJO_BORRADOR):]
+    return f"Borrador automático · {nombre}"
+
+
+def para_editar(eds):
+    """`eds` (de la más reciente a la más vieja, como `listar`) con las de la
+    persona primero y los borradores automáticos después, cada grupo en el
+    orden en que vino: la primera es la que abre «Editar»."""
+    return sorted(eds, key=es_automatica)
+
+
 def listar(cliente, cf_id=None):
     cols = [c for c in db.edicion.c if c.name != "documento"]
     cond = [db.edicion.c.cliente == cliente]

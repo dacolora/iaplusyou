@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ edicion.nombre }} · Editor</title>
+<title>{{ nombre_edicion }} · Editor</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <style>
   {% for f in datos.config.fuentes %}
@@ -398,7 +398,7 @@
 <body class="editor">
 <header id="ed-barra" class="ed-barra">
   <a class="btn-sm" href="{{ datos.urls.final }}">← Final edition</a>
-  <h1 class="ed-nombre">{{ edicion.nombre }}</h1>
+  <h1 class="ed-nombre">{{ nombre_edicion }}</h1>
   <div class="ed-barra-acciones">
     <div class="ed-destino">
       <label class="campo-label" for="destino">Destino</label>

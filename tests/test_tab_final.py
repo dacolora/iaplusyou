@@ -238,3 +238,41 @@ def test_el_error_tecnico_de_una_final_queda_plegado_bajo_una_frase_llana(app, p
         assert m and "Error applying option" in m.group(1), html[-3000:]
         fuera = html.replace(m.group(0), "")
         assert "Error applying option" not in fuera, "el texto técnico se ve fuera del plegado"
+
+
+def _mas_reciente(edicion_id, cuando="2099-01-01T00:00:00"):
+    import db
+    with db.conectar() as con:
+        con.execute(db.edicion.update().where(db.edicion.c.id == edicion_id).values(actualizado_en=cuando))
+
+
+def test_editar_abre_la_edicion_propia_aunque_el_borrador_automatico_sea_mas_reciente(app, pieza):
+    """Capa 4c (9/10): el borrador de la vía automática se vuelve a guardar
+    cada vez que se produce otro país, así que solía ser «la más reciente» y
+    «Editar» llevaba a él en vez de a la edición de la persona."""
+    import ediciones
+    from final_edition import documento
+    propia = ediciones.crear("acme", "video", "Edición de gira", documento.nuevo_video("9:16"), cf_id=pieza, creada_por="editor")
+    auto = ediciones.crear("acme", "video", "Borrador · gira sobre la mesa", documento.nuevo_video("9:16"), cf_id=pieza,
+                           creada_por="final_edition")
+    _mas_reciente(auto["id"])
+    tarjeta = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    assert f'data-editor-url="/cliente/acme/ediciones/{propia["id"]}"' in tarjeta
+    detalle = _detalle_video(app, pieza)
+    assert f'href="/cliente/acme/ediciones/{propia["id"]}">Editar<' in detalle
+    # en la lista se ve cuál es cuál: la propia primero y el automático nombrado como tal
+    assert detalle.index("Edición de gira") < detalle.index("Borrador automático · gira sobre la mesa")
+    assert "Borrador · gira" not in detalle
+
+
+def test_si_solo_hay_borradores_automaticos_editar_los_abre_y_los_nombra(app, pieza):
+    import ediciones
+    from final_edition import documento
+    auto = ediciones.crear("acme", "video", "Variante 1 (hook) · gira sobre la mesa", documento.nuevo_video("9:16"),
+                           cf_id=pieza, creada_por="final_edition")
+    detalle = _detalle_video(app, pieza)
+    assert f'href="/cliente/acme/ediciones/{auto["id"]}">Editar<' in detalle
+    assert "Borrador automático · Variante 1 (hook) · gira sobre la mesa" in detalle
+    pagina = app["c"].get(f"/cliente/acme/ediciones/{auto['id']}").get_data(as_text=True)
+    assert "<title>Borrador automático · Variante 1 (hook) · gira sobre la mesa · Editor</title>" in pagina
+    assert '<h1 class="ed-nombre">Borrador automático · Variante 1 (hook) · gira sobre la mesa</h1>' in pagina
