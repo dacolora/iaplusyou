@@ -627,6 +627,10 @@ msgid "%(nombre)s limitó las llamadas (429) y no cedió tras %(n)s esperas."
 msgstr "%(nombre)s rate-limited the calls (429) and didn't let up after %(n)s waits."
 
 #, python-format
+msgid "%(nombre)s no entregó nada: %(aviso)s"
+msgstr "%(nombre)s returned nothing: %(aviso)s"
+
+#, python-format
 msgid "%(nombre)s no respondió (%(error)s). Intenta de nuevo en un rato."
 msgstr "%(nombre)s didn't respond (%(error)s). Try again in a while."
 
@@ -1616,6 +1620,10 @@ msgstr "Apify rejected the actor input: %(motivo)s"
 #, python-format
 msgid "Apify: %(estado)s · corrida %(corrida)s"
 msgstr "Apify: %(estado)s · run %(corrida)s"
+
+#, python-format
+msgid "Apify: %(estado)s · corrida %(corrida)s (%(hechas)s/%(total)s)"
+msgstr "Apify: %(estado)s · run %(corrida)s (%(hechas)s/%(total)s)"
 
 msgid "App de Meta del proyecto:"
 msgstr "Project's Meta app:"
@@ -6944,6 +6952,9 @@ msgstr "There are no new candidates in the library for this stage."
 msgid "No hay conexión con el servidor."
 msgstr "No connection to the server."
 
+msgid "No hay corridas que lanzar."
+msgstr "There are no runs to launch."
+
 msgid "No hay familias sin descripción en inglés."
 msgstr "There are no families missing an English description."
 
@@ -11086,6 +11097,14 @@ msgstr "high-contrast, studio"
 msgid "correo"
 msgstr "email"
 
+#, python-format
+msgid "corrida %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s resultado(s)%(motivo)s"
+msgstr "run %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s result(s)%(motivo)s"
+
+#, python-format
+msgid "corrida no lanzada (%(etiqueta)s): %(motivo)s"
+msgstr "run not launched (%(etiqueta)s): %(motivo)s"
+
 msgid "corriendo"
 msgstr "running"
 
@@ -11107,6 +11126,10 @@ msgstr "warm, British"
 
 msgid "cálida, nocturna, luces"
 msgstr "warm, nighttime, lights"
+
+#, python-format
+msgid "dataset %(dataset)s no leído (%(motivo)s)"
+msgstr "dataset %(dataset)s not read (%(motivo)s)"
 
 msgid "dato del producto"
 msgstr "product fact"
@@ -12240,6 +12263,9 @@ msgstr "not counting standalone ads"
 
 msgid "sin correo"
 msgstr "no email"
+
+msgid "sin dataset"
+msgstr "no dataset"
 
 msgid "sin definir"
 msgstr "not set"

@@ -32,6 +32,9 @@ TERMINALES = ("SUCCEEDED", "FAILED", "TIMED-OUT", "ABORTED")
 MAX_FALLOS_SONDEO = 6          # lecturas de estado malas SEGUIDAS antes de rendirse
 INTENTOS_DATASET = 3           # lecturas del dataset antes de caer al itemCount
 ESTADO_SIN_TERMINAR = "sin terminar"   # estado ficticio: venció el reloj local
+MAX_SIMULTANEAS = 5            # corridas de un lote a la vez (Apify limita las concurrentes por cuenta)
+ESTADO_NO_ARRANCO = "no arrancó"     # el POST fue rechazado: no se cobró nada
+ESTADO_SIN_ESTADO = "sin estado"     # el sondeo se rindió: la corrida sigue viva en Apify
 
 
 def cabeceras(token):
@@ -169,3 +172,98 @@ def contar_dataset(sesion, token, dataset_id):
         return max(0, int(((r.json() or {}).get("data") or {}).get("itemCount")))
     except (AttributeError, TypeError, ValueError):
         return None
+
+
+def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simultaneas=MAX_SIMULTANEAS):
+    """Varias corridas del mismo actor, hasta `max_simultaneas` a la vez.
+    `corridas` = [{"entrada", "max_items", "max_usd", "etiqueta"}]. Cada una
+    lleva su propio techo de cobro. Se sondean todas en una misma vuelta (una
+    pausa por vuelta, no por corrida); una lectura mala no tumba a las demás;
+    cuando una termina arranca la siguiente. Al final se lee el dataset de
+    TODAS las que arrancaron, cualquiera sea su estado (una corrida se paga
+    aunque termine mal); si un dataset no se puede leer, `resultados` cae al
+    `itemCount` y en último caso al `max_items` de esa corrida.
+
+    Devuelve {"items": [(indice, item), …] en orden de corrida, "resultados":
+    ítems crudos totales (lo que Apify cobra), "corridas": [{indice, etiqueta,
+    run_id, dataset_id, estado, resultados, motivo}], "aviso": una línea por
+    corrida que no terminó en SUCCEEDED o cuyo dataset no se pudo leer}.
+    Levanta ErrorFuente solo si NINGUNA corrida arrancó (nada se cobró)."""
+    avanzar = avanzar or (lambda etapa, detalle=None: None)
+    registros = [{"indice": i, "etiqueta": c.get("etiqueta"), "run_id": None, "dataset_id": None, "estado": None, "resultados": 0, "motivo": ""}
+                 for i, c in enumerate(corridas)]
+    pendientes = list(range(len(corridas)))
+    vivas = {}                                  # indice -> {"esperado": s, "fallos": n}
+    total = len(corridas)
+
+    def _arrancar_siguientes():
+        while pendientes and len(vivas) < max_simultaneas:
+            i = pendientes.pop(0)
+            reg, c = registros[i], corridas[i]
+
+            def _ids(run_id, dataset_id, reg=reg):
+                reg["run_id"], reg["dataset_id"] = run_id, dataset_id
+            try:
+                _, _, estado = arrancar(sesion, token, actor, c["entrada"], c["max_items"], c["max_usd"], on_ids=_ids)
+            except ErrorFuente as e:
+                if reg["run_id"]:                       # arrancó pero sin dataset: se sondea igual, ya pudo cobrar
+                    reg["estado"], reg["motivo"] = "READY", e.usuario
+                    vivas[i] = {"esperado": 0.0, "fallos": 0}
+                else:
+                    reg["estado"], reg["motivo"] = ESTADO_NO_ARRANCO, e.usuario
+                continue
+            reg["estado"] = estado
+            if estado in TERMINALES:
+                continue
+            vivas[i] = {"esperado": 0.0, "fallos": 0}
+
+    _arrancar_siguientes()
+    if all(r["estado"] == ESTADO_NO_ARRANCO for r in registros):
+        raise ErrorFuente(registros[0]["motivo"] if registros else gettext("No hay corridas que lanzar."))
+    while vivas:
+        _http.dormir(PAUSA_SONDEO)
+        for i in list(vivas):
+            reg, v = registros[i], vivas[i]
+            v["esperado"] += PAUSA_SONDEO
+            if v["esperado"] > MAX_ESPERA_S:
+                reg["estado"] = ESTADO_SIN_TERMINAR
+                del vivas[i]
+                continue
+            try:
+                r = _http.pedir(sesion, "GET", f"{URL_API}/actor-runs/{reg['run_id']}", "Apify", headers=cabeceras(token))
+                malo = "" if r.status_code == 200 else f"HTTP {r.status_code}"
+            except ErrorFuente as e:                            # sin URL ni cabeceras: nunca lleva el token
+                r, malo = None, e.usuario or gettext("sin respuesta")
+            if malo:
+                v["fallos"] += 1
+                if v["fallos"] >= MAX_FALLOS_SONDEO:
+                    reg["estado"], reg["motivo"] = ESTADO_SIN_ESTADO, malo
+                    del vivas[i]
+                continue
+            v["fallos"] = 0
+            reg["estado"] = ((r.json() or {}).get("data") or {}).get("status") or reg["estado"]
+            hechas = total - len(vivas) - len(pendientes)
+            avanzar(etapa, gettext("Apify: %(estado)s · corrida %(corrida)s (%(hechas)s/%(total)s)",
+                                   estado=reg["estado"], corrida=reg["run_id"], hechas=hechas, total=total))
+            if reg["estado"] in TERMINALES:
+                del vivas[i]
+        _arrancar_siguientes()
+    items, avisos = [], []
+    for reg, c in zip(registros, corridas):
+        if not reg["run_id"]:
+            avisos.append(gettext("corrida no lanzada (%(etiqueta)s): %(motivo)s", etiqueta=reg["etiqueta"], motivo=reg["motivo"]))
+            continue
+        crudos, motivo = (None, gettext("sin dataset")) if not reg["dataset_id"] else leer_dataset(sesion, token, reg["dataset_id"], c["max_items"])
+        if crudos is None:
+            contados = contar_dataset(sesion, token, reg["dataset_id"]) if reg["dataset_id"] else None
+            reg["resultados"] = c["max_items"] if contados is None else contados
+            reg["motivo"] = (reg["motivo"] + "; " if reg["motivo"] else "") + gettext("dataset %(dataset)s no leído (%(motivo)s)",
+                                                                                     dataset=reg["dataset_id"] or "?", motivo=motivo)
+        else:
+            reg["resultados"] = len(crudos)
+            items.extend((reg["indice"], it) for it in crudos)
+        if reg["estado"] != "SUCCEEDED" or reg["motivo"]:
+            avisos.append(gettext("corrida %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s resultado(s)%(motivo)s",
+                                  corrida=reg["run_id"], etiqueta=reg["etiqueta"], estado=frase_estado(reg["estado"]),
+                                  n=reg["resultados"], motivo=("; " + reg["motivo"]) if reg["motivo"] else ""))
+    return {"items": items, "resultados": sum(r["resultados"] for r in registros), "corridas": registros, "aviso": " · ".join(avisos)}
