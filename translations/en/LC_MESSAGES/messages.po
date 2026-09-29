@@ -2502,9 +2502,6 @@ msgstr "Connect Notion first."
 msgid "Conecta Triple Whale para evaluar tu contenido"
 msgstr "Connect Triple Whale to evaluate your content"
 
-msgid "Conecta Triple Whale para traer las métricas de todos tus anuncios y de tu tienda (90 días al conectar, y al día cada 2 horas), evaluar tu contenido en la pestaña Triple Whale y, si quieres, decidir los experimentos con sus ventas atribuidas en lugar de Meta Pixel o la tienda."
-msgstr "Connect Triple Whale to pull the metrics of all your ads and your store (90 days when you connect, then kept up to date every 2 hours), evaluate your content in the Triple Whale tab and, if you want, decide experiments with its attributed sales instead of Meta Pixel or the store."
-
 msgid "Conecta tu cuenta de Meta"
 msgstr "Connect your Meta account"
 
@@ -2542,9 +2539,6 @@ msgstr "Connect with MercadoLibre"
 
 msgid "Conectar con Meta"
 msgstr "Connect with Meta"
-
-msgid "Conectar en Configuración →"
-msgstr "Connect in Settings →"
 
 msgid "Conectar la agencia →"
 msgstr "Connect the agency →"
@@ -9624,9 +9618,6 @@ msgstr "We still don't see assets shared from portfolio %(portafolio)s. Meta som
 msgid "Todavía sin copia"
 msgstr "No copy yet"
 
-msgid "Todavía sin copia de métricas."
-msgstr "No metrics copy yet."
-
 msgid "Todavía sin impresiones — dale a «Actualizar métricas» en unas horas."
 msgstr "Still no impressions — hit “Update metrics” in a few hours."
 
@@ -10212,9 +10203,6 @@ msgstr "See the exact instruction the model gets →"
 #, python-format
 msgid "Ver más (quedan %(n)s)"
 msgstr "Show more (%(n)s left)"
-
-msgid "Ver métricas y evaluación →"
-msgstr "See metrics and evaluation →"
 
 msgid "Ver por qué usamos estos modelos (comparación completa) →"
 msgstr "See why we use these models (full comparison) →"
@@ -12475,10 +12463,6 @@ msgstr "Last activity"
 #, python-format
 msgid "Última actualización: %(fecha)s"
 msgstr "Last updated: %(fecha)s"
-
-#, python-format
-msgid "Última copia de métricas: %(fecha)s"
-msgstr "Last metrics copy: %(fecha)s"
 
 #, python-format
 msgid "Última copia: %(fecha)s"
