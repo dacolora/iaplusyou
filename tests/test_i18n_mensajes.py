@@ -25,6 +25,9 @@ CONSTANTE = re.compile(r"^_?(?:ETAPAS?|MENSAJES?|AVISOS?)(?:_|$)|^_FASES_PROVEED
 LETRAS = re.compile(r"[A-Za-zÁÉÍÓÚáéíóúÑñ]{3,}")
 
 RUTAS = ["final_edition/rutas_editor.py"]
+RUTAS += ["dashboard.py", "guiones/rutas.py", "guiones/rutas_pipeline.py", "nicho/rutas.py",
+          "referentes/rutas.py", "sprints/rutas.py"]
+RUTAS += ["triple_whale/rutas.py"]   # Fase 6, Task 6: llegó con una fusión de main (pestaña Triple Whale)
 WORKER = ["ediciones.py", "final_edition/edicion_clon.py", "final_edition/motor/__init__.py", "tareas/edicion.py",
           "final_edition/biblioteca.py"]
 WORKER += ["final_edition/__init__.py", "final_edition/produccion.py", "final_edition/borrador.py",
@@ -150,6 +153,23 @@ def test_la_guardia_de_rutas_no_marca_claves():
         assert [h.split(": ", 1)[1] for h in sueltos(f.name, "rutas")] == ["'sin detalle'", "'Guardado'", "'No existe.'"]
     finally:
         os.unlink(f.name)
+
+
+DEFINE_RUTAS = re.compile(r"Blueprint\(|^\s*@\w+\.(?:route|get|post|put|patch|delete)\(", re.M)
+
+
+def test_todos_los_modulos_de_rutas_estan_en_la_guardia():
+    """Como la guardia de plantillas: un módulo de rutas nuevo (una fusión de
+    main, un Blueprint nuevo) no puede quedar fuera de RUTAS sin que se note."""
+    import catalogo_i18n
+    faltan = []
+    for ruta in catalogo_i18n.archivos_py():
+        with open(ruta, encoding="utf-8") as f:
+            if DEFINE_RUTAS.search(f.read()):
+                relativa = os.path.relpath(ruta, RAIZ)
+                if relativa not in RUTAS:
+                    faltan.append(relativa)
+    assert not faltan, "Módulos de rutas fuera de RUTAS: " + ", ".join(faltan)
 
 
 @pytest.mark.parametrize("ruta", RUTAS)

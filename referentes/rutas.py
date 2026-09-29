@@ -250,9 +250,12 @@ def recrear_adaptar(cliente, rid):
         sal = getattr(e, "tokens_salida", 0) or 0
         if ent or sal:
             usd = costo_real(ent, sal)
+            nombre_producto = producto["nombre"]
+            with idiomas.en_idioma(idioma):     # el detalle se GUARDA: idioma del proyecto
+                detalle = gettext("%(producto)s · %(familia)s · respuesta inválida",
+                                  producto=nombre_producto, familia=r.get("familia") or "")
             gastos.registrar_seguro(cliente, "adaptar_referente", usd, f"referentes:adaptar:{rid}:{uuid4().hex[:12]}",
-                                    detalle=f"{producto['nombre']} · {r.get('familia') or ''} · respuesta inválida",
-                                    proveedor="anthropic",
+                                    detalle=detalle, proveedor="anthropic",
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         return jsonify({"error": str(e)}), 502
     except Exception as e:

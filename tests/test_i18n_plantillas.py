@@ -60,6 +60,10 @@ PLANTILLAS_TRADUCIDAS = [
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
+    # Fase 6, Task 6: llegaron con fusiones de main ya traducidas y solo faltaba
+    # sumarlas a la guardia — Crear › Audios (worktree-crear-audios, 82491a6) y el
+    # formulario de conexión de Triple Whale en su pestaña (4ecd154).
+    "_crear_audios.html", "_audios_lista.html", "_triple_whale_conectar.html",
 ]
 
 
@@ -108,3 +112,33 @@ def test_tojson_no_dentro_de_atributo_con_comillas_dobles():
         "Un `{{ ... | tojson }}` dentro de un atributo HTML con comillas dobles se rompe "
         "(tojson emite \" que cierra el atributo a la mitad) — usa comillas simples en el "
         "atributo:\n" + "\n".join(hallazgos))
+
+
+LEGADO_NUEVA_IDEA = ("_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html",
+                     "_imagen_row.html", "_progreso_row.html", "_seccion_videos.html", "_video_card.html",
+                     "_seccion_bitacora.html")
+EXCLUIDAS = {
+    "mapa_codigo.html": "documentación interna en español, como los textos de la doctrina; su barra de arriba "
+                        "(id mapa-barra) sí está traducida y la cubre test_barra_del_mapa_en_ingles",
+    **{nombre: "flujo viejo sin pantalla viva; destino pendiente de Daniel" for nombre in LEGADO_NUEVA_IDEA},
+}
+
+
+def test_todas_las_plantillas_estan_en_la_guardia():
+    todas = sorted(os.path.basename(p) for p in glob.glob(os.path.join(RAIZ, "templates", "*.html")))
+    faltan = [t for t in todas if t not in PLANTILLAS_TRADUCIDAS and t not in EXCLUIDAS]
+    assert not faltan, ("Plantillas sin guardia de idioma (agregarlas a PLANTILLAS_TRADUCIDAS, o a EXCLUIDAS con "
+                        "su razón): " + ", ".join(faltan))
+    assert not set(EXCLUIDAS) & set(PLANTILLAS_TRADUCIDAS)
+
+
+def test_flujo_viejo_nueva_idea_excluido():
+    """El flujo «Nueva idea» no tiene ningún include vivo
+    (tests/test_configuracion_apartados.py::test_crear_ya_no_muestra_nueva_idea):
+    sus 9 plantillas siguen en disco, sin traducir y fuera de la guardia,
+    hasta que Daniel decida qué pasa con ese flujo. Sus rutas sí pasan sus
+    mensajes por el catálogo (tests/test_i18n_mensajes.py)."""
+    for nombre in LEGADO_NUEVA_IDEA:
+        assert os.path.exists(os.path.join(RAIZ, "templates", nombre)), nombre
+        assert EXCLUIDAS.get(nombre) == "flujo viejo sin pantalla viva; destino pendiente de Daniel", nombre
+        assert nombre not in PLANTILLAS_TRADUCIDAS, nombre

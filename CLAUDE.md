@@ -76,7 +76,10 @@ clobber each other's credentials mid-flight.
 **State machine modules** (`estado.py`, `prompts.py`, `marca.py`) are thin JSON
 read/write wrappers, one file per client, no database. `prompts.py` nests prompts
 under an `idea_id`; each prompt's `estado` field drives which template renders it
-(`pendiente` -> `_prompt_row.html`, `imagen_pendiente` -> `_imagen_row.html`). When a
+(`pendiente` -> `_prompt_row.html`, `imagen_pendiente` -> `_imagen_row.html`). These
+old «Nueva idea» templates are kept on disk but have no live screen, so they are excluded
+from the language guard (`tests/test_i18n_plantillas.py::EXCLUIDAS`) until Daniel decides
+what happens to that flow; their routes' messages do go through the catalog. When a
 video finally generates, its entry is deleted from `prompts_pendientes.json` and
 created fresh in `estado_videos.json` — the two files together are the full pipeline
 state for a client. `creative_flow.py` and `ads.py` present the same read/write API

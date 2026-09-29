@@ -2040,7 +2040,7 @@ def nueva_idea(cliente):
     platforms = request.form.getlist("platforms")
 
     if not idea_texto or not image_url:
-        flash("Escribe la idea y elige un personaje.", "error")
+        flash(gettext("Escribe la idea y elige un personaje."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     guia_estilo = marca_mod.guia_efectiva(cliente)
@@ -2048,7 +2048,7 @@ def nueva_idea(cliente):
         textos = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo,
                                                     idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
-        flash(f"No pude generar los prompts: {e}", "error")
+        flash(gettext("No pude generar los prompts: %(error)s", error=e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     aspect_ratio = _aspect_ratio_para_plataformas(platforms)
@@ -2058,7 +2058,7 @@ def nueva_idea(cliente):
     ]
     prompts_mod.agregar_idea(cliente, idea_texto, items)
 
-    flash(f"Generé {len(items)} prompts para la idea. Revísalos y apruébalos abajo.", "ok")
+    flash(gettext("Generé %(n)s prompts para la idea. Revísalos y apruébalos abajo.", n=len(items)), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2110,7 +2110,7 @@ def _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, prompt
                 campos["credits"] = est.get("credits")
             conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, **campos)
             bitacora.registrar(cliente, video_id, "imagen", "ok", local_path)
-            return "Imagen lista."
+            return idiomas.N_("Imagen lista.")
         except Exception as e:
             conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="error", error=str(e))
             bitacora.registrar(cliente, video_id, "imagen", "error", str(e))
@@ -2133,7 +2133,7 @@ def nueva_idea_visual(cliente):
     platforms = request.form.getlist("platforms")
 
     if not idea_texto or not image_url:
-        flash("Escribe la idea y elige un personaje.", "error")
+        flash(gettext("Escribe la idea y elige un personaje."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     guia_estilo = marca_mod.guia_efectiva(cliente)
@@ -2141,7 +2141,7 @@ def nueva_idea_visual(cliente):
         escenas = generador_prompts.generar_conceptos_imagen(idea_texto, n=5, guia_estilo=guia_estilo,
                                                               idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
-        flash(f"No pude generar las escenas: {e}", "error")
+        flash(gettext("No pude generar las escenas: %(error)s", error=e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     idea_id = conceptos_imagen.crear_idea(cliente, idea_texto, escenas)
@@ -2154,7 +2154,7 @@ def nueva_idea_visual(cliente):
         for proveedor in conceptos_imagen.PROVEEDORES:
             _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, concepto["texto"], image_url)
 
-    flash(f"Generando {len(escenas)} escenas x 2 proveedores (10 imágenes)…", "ok")
+    flash(gettext("Generando %(n)s escenas x 2 proveedores (10 imágenes)…", n=len(escenas)), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2165,7 +2165,7 @@ def aprobar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
     data = conceptos_imagen.cargar(cliente)
     concepto = conceptos_imagen.encontrar_concepto(data, idea_id, concepto_id)
     if not concepto or proveedor not in concepto or not concepto[proveedor].get("url"):
-        flash("No encontré esa imagen para aprobar.", "error")
+        flash(gettext("No encontré esa imagen para aprobar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     guia_estilo = marca_mod.guia_efectiva(cliente)
@@ -2174,20 +2174,20 @@ def aprobar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
         animaciones = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo,
                                                          idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
-        flash(f"No pude generar las propuestas de animación: {e}", "error")
+        flash(gettext("No pude generar las propuestas de animación: %(error)s", error=e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="aprobado")
     conceptos_imagen.agregar_animaciones(cliente, idea_id, concepto_id, proveedor, animaciones)
 
-    flash("Imagen aprobada — elige cómo animarla abajo.", "ok")
+    flash(gettext("Imagen aprobada — elige cómo animarla abajo."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
 @app.route("/cliente/<cliente>/idea/<idea_id>/concepto/<concepto_id>/<proveedor>/descartar", methods=["POST"])
 def descartar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
     conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="descartado")
-    flash("Imagen descartada.", "ok")
+    flash(gettext("Imagen descartada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2202,7 +2202,7 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
     animacion = conceptos_imagen.encontrar_animacion(data, idea_id, concepto_id, proveedor, anim_id)
     concepto = conceptos_imagen.encontrar_concepto(data, idea_id, concepto_id)
     if not animacion or not concepto or not concepto[proveedor].get("url"):
-        flash("No encontré esa animación.", "error")
+        flash(gettext("No encontré esa animación."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     imagen_url = concepto[proveedor]["url"]
@@ -2267,7 +2267,7 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
         if animacion2:
             animacion2["estado"] = "video_generado"
             conceptos_imagen.guardar(cliente, data2)
-        return "Video listo, pendiente de revisión."
+        return idiomas.N_("Video listo, pendiente de revisión.")
 
     # ETAPAS_VIDEO sin ETAPA_DESCARGAR: el provider descarga por su cuenta dentro
     # de generar_video, así que ese paso no se puede anunciar por separado.
@@ -2275,9 +2275,9 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
         job_id, trabajo, duracion_estimada=130,
         etapas=[(ETAPA_MODELO, 90), (ETAPA_GUARDAR_VIDEO, 10)],
     ):
-        flash("Generando video…", "ok")
+        flash(gettext("Generando video…"), "ok")
     else:
-        flash("Ya se está generando ese video — espera a que termine.", "warn")
+        flash(gettext("Ya se está generando ese video — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2322,7 +2322,7 @@ def eliminar_idea_visual(cliente, idea_id):
     if idea_id in data:
         del data[idea_id]
         conceptos_imagen.guardar(cliente, data)
-        flash("Idea eliminada.", "ok")
+        flash(gettext("Idea eliminada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2949,11 +2949,11 @@ NOMBRES_PROVEEDOR_SWAP = {
 # constantes para que no puedan desincronizarse por un typo. Los pesos son
 # "qué fracción del tiempo se lleva más o menos cada paso" — la llamada al
 # modelo es de lejos la más larga.
-ETAPA_MODELO = "Generando con el modelo"
-ETAPA_DESCARGAR = "Descargando el resultado"
-ETAPA_MEZCLA = "Mezclando sonido"
-ETAPA_GUARDAR_VIDEO = "Guardando el video"
-ETAPA_GUARDAR_IMAGEN = "Guardando la imagen"
+ETAPA_MODELO = idiomas.N_("Generando con el modelo")
+ETAPA_DESCARGAR = idiomas.N_("Descargando el resultado")
+ETAPA_MEZCLA = idiomas.N_("Mezclando sonido")
+ETAPA_GUARDAR_VIDEO = idiomas.N_("Guardando el video")
+ETAPA_GUARDAR_IMAGEN = idiomas.N_("Guardando la imagen")
 # Las etapas propias del swap (subir original, preparar foto, mejorar, guardar
 # y evaluar) viven en tareas/swap.py junto con ETAPAS_SWAP_*.
 
@@ -2977,15 +2977,15 @@ ETAPAS_VIDEO = [
 # Los proveedores hablan en sus propios códigos de estado; esto es lo único
 # honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
 _FASES_PROVEEDOR = {
-    "IN_QUEUE": "en cola",
-    "IN_PROGRESS": "el modelo está trabajando",
-    "created": "en cola",
-    "processing": "el modelo está trabajando",
-    "queued": "en cola",
-    "starting": "arrancando",
-    "running": "el modelo está trabajando",
-    "in_progress": "el modelo está trabajando",
-    "pending": "en cola",
+    "IN_QUEUE": idiomas.N_("en cola"),
+    "IN_PROGRESS": idiomas.N_("el modelo está trabajando"),
+    "created": idiomas.N_("en cola"),
+    "processing": idiomas.N_("el modelo está trabajando"),
+    "queued": idiomas.N_("en cola"),
+    "starting": idiomas.N_("arrancando"),
+    "running": idiomas.N_("el modelo está trabajando"),
+    "in_progress": idiomas.N_("el modelo está trabajando"),
+    "pending": idiomas.N_("en cola"),
 }
 
 # Estados terminales: el poll también los emite en su última vuelta, pero mostrar
@@ -5147,9 +5147,11 @@ def _encolar_organico(cliente, pieza_id, pub_ids):
                                 cliente=cliente, duracion_estimada=tareas_org.DURACION_PUBLICAR,
                                 etapas=tareas_org.ETAPAS_PUBLICAR, max_intentos=1)
     if not encolada:
+        # Se GUARDA en la fila: idioma del proyecto, no el de quien mira.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            error = gettext("Ya había una publicación de esta pieza en curso; reintenta cuando termine.")
         for pub_id in pub_ids:
-            organico.actualizar(cliente, pub_id, estado="error",
-                                error="Ya había una publicación de esta pieza en curso; reintenta cuando termine.")
+            organico.actualizar(cliente, pub_id, estado="error", error=error)
     return encolada
 
 
@@ -5229,9 +5231,11 @@ def org_publicar(cliente):
         except ValueError as e:
             # Creación parcial: lo ya creado no puede quedar `en_cola` sin tarea
             # (bloquearía la plataforma por unicidad); en `error` se reintenta.
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):     # se guarda: idioma del proyecto
+                error = gettext("No se creó la publicación en %(plataformas)s: %(error)s",
+                                plataformas=_nombres_org([p]), error=e)
             for pub_id in pub_ids:
-                organico.actualizar(cliente, pub_id, estado="error",
-                                    error=f"No se creó la publicación en {_nombres_org([p])}: {e}")
+                organico.actualizar(cliente, pub_id, estado="error", error=error)
             flash(gettext("%(error)s No se publicó nada.", error=e), "error")
             return _volver_org(cliente)
     if saltadas:
@@ -5906,12 +5910,12 @@ def guardar_prompt(cliente, prompt_id):
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
-        flash(f"No encontré el prompt {prompt_id}", "error")
+        flash(gettext("No encontré el prompt %(prompt)s", prompt=prompt_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
     prompts_mod.guardar(cliente, data)
-    flash(f"Cambios guardados en {prompt_id}.", "ok")
+    flash(gettext("Cambios guardados en %(prompt)s.", prompt=prompt_id), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -5966,7 +5970,7 @@ def _lanzar_generacion_imagen(cliente, prompt_id):
         data = prompts_mod.cargar(cliente)
         _, item = prompts_mod.encontrar_prompt(data, prompt_id)
         if not item:
-            raise RuntimeError("El prompt ya no existe (¿se descartó mientras generaba?).")
+            raise RuntimeError(idiomas.N_("El prompt ya no existe (¿se descartó mientras generaba?)."))
         ok, error = _generar_imagen_candidata(
             cliente, prompt_id, item, job_id=job_id,
             on_progreso=_avisar_fase_de(job_id),
@@ -5974,7 +5978,7 @@ def _lanzar_generacion_imagen(cliente, prompt_id):
         prompts_mod.guardar(cliente, data)
         if not ok:
             raise RuntimeError(error)
-        return "Imagen candidata lista."
+        return idiomas.N_("Imagen candidata lista.")
 
     return trabajos.iniciar(job_id, trabajo, duracion_estimada=45, etapas=ETAPAS_IMAGEN)
 
@@ -5986,16 +5990,16 @@ def aprobar_prompt(cliente, prompt_id):
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
-        flash(f"No encontré el prompt {prompt_id}", "error")
+        flash(gettext("No encontré el prompt %(prompt)s", prompt=prompt_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
     prompts_mod.guardar(cliente, data)
 
     if _lanzar_generacion_imagen(cliente, prompt_id):
-        flash(f"Generando imagen candidata para {prompt_id}…", "ok")
+        flash(gettext("Generando imagen candidata para %(prompt)s…", prompt=prompt_id), "ok")
     else:
-        flash(f"Ya se está generando la imagen de {prompt_id} — espera a que termine.", "warn")
+        flash(gettext("Ya se está generando la imagen de %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6005,16 +6009,16 @@ def regenerar_imagen(cliente, prompt_id):
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
-        flash(f"No encontré el prompt {prompt_id}", "error")
+        flash(gettext("No encontré el prompt %(prompt)s", prompt=prompt_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
     prompts_mod.guardar(cliente, data)
 
     if _lanzar_generacion_imagen(cliente, prompt_id):
-        flash(f"Regenerando imagen candidata para {prompt_id}…", "ok")
+        flash(gettext("Regenerando imagen candidata para %(prompt)s…", prompt=prompt_id), "ok")
     else:
-        flash(f"Ya se está generando una imagen para {prompt_id} — espera a que termine.", "warn")
+        flash(gettext("Ya se está generando una imagen para %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6025,7 +6029,7 @@ def aprobar_imagen(cliente, prompt_id):
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item or not item.get("imagen_url"):
-        flash(f"No encontré una imagen candidata para {prompt_id}", "error")
+        flash(gettext("No encontré una imagen candidata para %(prompt)s", prompt=prompt_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
@@ -6037,7 +6041,7 @@ def aprobar_imagen(cliente, prompt_id):
         data2 = prompts_mod.cargar(cliente)
         idea_id2, item2 = prompts_mod.encontrar_prompt(data2, prompt_id)
         if not item2:
-            raise RuntimeError("El prompt ya no existe (¿se descartó mientras generaba?).")
+            raise RuntimeError(idiomas.N_("El prompt ya no existe (¿se descartó mientras generaba?)."))
 
         out_dir = os.path.join(BASE_DIR, "salidas", cliente)
         os.makedirs(out_dir, exist_ok=True)
@@ -6088,12 +6092,12 @@ def aprobar_imagen(cliente, prompt_id):
 
         del data2[idea_id2]["prompts"][prompt_id]
         prompts_mod.guardar(cliente, data2)
-        return "Video listo, pendiente de revisión."
+        return idiomas.N_("Video listo, pendiente de revisión.")
 
     if trabajos.iniciar(job_id, trabajo, duracion_estimada=130, etapas=ETAPAS_VIDEO):
-        flash(f"Generando el video de {prompt_id}…", "ok")
+        flash(gettext("Generando el video de %(prompt)s…", prompt=prompt_id), "ok")
     else:
-        flash(f"Ya se está generando el video de {prompt_id} — espera a que termine.", "warn")
+        flash(gettext("Ya se está generando el video de %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6104,7 +6108,7 @@ def rechazar_prompt(cliente, prompt_id):
     if item:
         del data[idea_id]["prompts"][prompt_id]
         prompts_mod.guardar(cliente, data)
-        flash(f"Prompt {prompt_id} descartado, no se generó video (no gastó créditos).", "ok")
+        flash(gettext("Prompt %(prompt)s descartado, no se generó video (no gastó créditos).", prompt=prompt_id), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6114,7 +6118,7 @@ def eliminar_idea(cliente, idea_id):
     if idea_id in data:
         del data[idea_id]
         prompts_mod.guardar(cliente, data)
-        flash("Idea eliminada junto con sus prompts.", "ok")
+        flash(gettext("Idea eliminada junto con sus prompts."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6123,7 +6127,7 @@ def aprobar(cliente, brief_id):
     estado = estado_mod.cargar(cliente)
     entry = estado.get(brief_id)
     if not entry:
-        flash(f"No encontré {brief_id}", "error")
+        flash(gettext("No encontré %(video)s", video=brief_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     job_id = _job_id_publicar(cliente, brief_id)
@@ -6143,13 +6147,13 @@ def aprobar(cliente, brief_id):
         estado_mod.modificar(cliente, _publicado)
 
         if not ok:
-            raise RuntimeError("Se publicó, pero alguna plataforma falló — revisa la bitácora.")
-        return "Publicado en todas las plataformas."
+            raise RuntimeError(idiomas.N_("Se publicó, pero alguna plataforma falló — revisa la bitácora."))
+        return idiomas.N_("Publicado en todas las plataformas.")
 
     if trabajos.iniciar(job_id, trabajo, duracion_estimada=90):
-        flash(f"Publicando {brief_id}…", "ok")
+        flash(gettext("Publicando %(video)s…", video=brief_id), "ok")
     else:
-        flash(f"Ya se está publicando {brief_id} — espera a que termine.", "warn")
+        flash(gettext("Ya se está publicando %(video)s — espera a que termine.", video=brief_id), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6161,10 +6165,10 @@ def rechazar(cliente, brief_id):
         estado[brief_id]["estado"] = "rechazado"
         return estado
     if estado_mod.modificar(cliente, _rechazar) is None:
-        flash(f"No encontré {brief_id}", "error")
+        flash(gettext("No encontré %(video)s", video=brief_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
-    flash(f"{brief_id} rechazado, no se publica.", "ok")
+    flash(gettext("%(video)s rechazado, no se publica.", video=brief_id), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -7254,7 +7258,9 @@ def cf_generar_video(cliente, cf_id):
         flash(gettext("Generando %(que)s con %(modelo)s…", que=que, modelo=nombre_modelo), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
-_MENSAJE_INTERRUMPIDO = (
+# Se guarda como `error` de swaps, sesiones de Crear y conceptos de imagen, en
+# el idioma de cada proyecto (_reconciliar_huerfanos corre al arrancar, sin petición).
+_MENSAJE_INTERRUMPIDO = idiomas.N_(
     "La generación se interrumpió porque el servidor se reinició — vuelve a intentarlo."
 )
 
@@ -7281,6 +7287,8 @@ def _reconciliar_huerfanos():
         if not os.path.isdir(os.path.join(clientes_dir, cliente)):
             continue
         try:
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                interrumpido = gettext(_MENSAJE_INTERRUMPIDO)
             swaps_data = swaps_mod.cargar(cliente)
             tocado = False
             for swap_id, entry in swaps_data.items():
@@ -7288,7 +7296,7 @@ def _reconciliar_huerfanos():
                     if trabajos.en_curso(f"{cliente}__{swap_id}__swap"):
                         continue
                     entry["estado"] = "error"
-                    entry["error"] = _MENSAJE_INTERRUMPIDO
+                    entry["error"] = interrumpido
                     tocado = True
             if tocado:
                 swaps_mod.guardar(cliente, swaps_data)
@@ -7300,7 +7308,7 @@ def _reconciliar_huerfanos():
                     if trabajos.en_curso(f"{cliente}__{cf_id}__creative_flow"):
                         continue
                     entry["estado"] = "error"
-                    entry["error"] = _MENSAJE_INTERRUMPIDO
+                    entry["error"] = interrumpido
                     tocado = True
             if tocado:
                 creative_flow.guardar(cliente, cf_data)
@@ -7313,7 +7321,7 @@ def _reconciliar_huerfanos():
                         img = concepto.get(proveedor)
                         if img and img.get("estado") == "generando":
                             img["estado"] = "error"
-                            img["error"] = _MENSAJE_INTERRUMPIDO
+                            img["error"] = interrumpido
                             tocado = True
             if tocado:
                 conceptos_imagen.guardar(cliente, conceptos_data)
@@ -7333,8 +7341,9 @@ def _reconciliar_huerfanos():
         for eid, cliente in filas:
             if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
                 continue
-            experimentos.actualizar(cliente, eid, estado="error",
-                                     error="Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar.")
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                experimentos.actualizar(cliente, eid, estado="error",
+                                         error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))
     except Exception as e:
         print(f"[aviso] No pude reconciliar experimentos lanzando: {e}")
 
