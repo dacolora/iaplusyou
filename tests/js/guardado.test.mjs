@@ -72,3 +72,16 @@ test("400 muestra el motivo del servidor", async () => {
   assert.equal(g.estado, "error");
   assert.match(g.mensaje, /contigua/);
 });
+
+test("capa 4c (5/10): un 400 del validador muestra la frase llana y guarda el detalle aparte", async () => {
+  const vistos = [];
+  const { g } = banco([{ status: 400, cuerpo: { error: "No se pudo guardar este cambio; deshazlo y vuelve a intentar.",
+    detalle: "pistas[p_texto].clips[0]: estilo.tamano fuera de rango." } }]);
+  g.alCambiar = (estado, mensaje, detalle) => vistos.push([estado, mensaje, detalle]);
+  g.pedir({ n: 1 });
+  await g.ahora();
+  assert.equal(g.estado, "error");
+  assert.equal(g.mensaje, "No se pudo guardar este cambio; deshazlo y vuelve a intentar.");
+  assert.equal(g.detalle, "pistas[p_texto].clips[0]: estilo.tamano fuera de rango.");
+  assert.deepEqual(vistos.at(-1), ["error", g.mensaje, g.detalle]);
+});

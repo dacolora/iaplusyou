@@ -218,3 +218,23 @@ def test_en_pantalla_ancha_el_detalle_de_final_edition_se_desplaza_por_dentro():
     assert "#fe-modal .detalle-info { overflow-y: auto; }" in bloque
     assert ".generado-modal-cuerpo { display: grid; grid-template-columns: minmax(260px, 44%) 1fr; max-height: 92vh; }" in css
     assert css.count("grid-template-rows: minmax(0, 1fr)") == 1
+
+
+FRASE_ERROR_FINAL = "No se pudo producir esta final. Vuelve a intentar; si se repite, avísanos."
+
+
+def test_el_error_tecnico_de_una_final_queda_plegado_bajo_una_frase_llana(app, pieza):
+    """Capa 4c (5/10): el error del render (texto de ffmpeg) se guardaba en la
+    final y se mostraba tal cual. Ahora se ve una frase llana y el texto
+    técnico queda dentro de «Detalle técnico», plegado."""
+    import re
+    fid = creative_flow.crear_final("acme", pieza, "es", "CO")
+    tecnico = "render: Error applying option 'st' to filter 'afade': Numerical result out of range"
+    creative_flow.actualizar_final("acme", fid, estado="error", error=tecnico)
+    for html in (_detalle_video(app, pieza),
+                 app["c"].get(f"/cliente/acme/creative_flow/{pieza}/final/{fid}/detalle").get_data(as_text=True)):
+        assert FRASE_ERROR_FINAL in html
+        m = re.search(r'<details class="detalle-tecnico"><summary>Detalle técnico</summary><code>(.*?)</code></details>', html, re.S)
+        assert m and "Error applying option" in m.group(1), html[-3000:]
+        fuera = html.replace(m.group(0), "")
+        assert "Error applying option" not in fuera, "el texto técnico se ve fuera del plegado"

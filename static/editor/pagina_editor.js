@@ -128,11 +128,13 @@ function aviso(texto) {
   n.hidden = !texto;
 }
 
-function pintarGuardado(estado, mensaje) {
+function pintarGuardado(estado, mensaje, detalle = "") {
   const n = $("estado-guardado");
   n.dataset.estado = estado;
   n.textContent = TEXTO_GUARDADO[estado]?.(mensaje) ?? "";
-  n.title = n.textContent;          // en el celular el hueco es fijo: un error largo termina en «…»
+  // en el celular el hueco es fijo: un error largo termina en «…». Lo técnico
+  // (la ruta del validador) no se muestra: queda aquí, para soporte (capa 4c).
+  n.title = detalle ? `${n.textContent}\n${detalle}` : n.textContent;
   $("recargar").hidden = estado !== "conflicto";
   pintarHerramientas();
 }

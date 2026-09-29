@@ -3,7 +3,10 @@
 // versión que devuelve el servidor (CAS). Un cambio que llega mientras se
 // guarda sale en el siguiente PUT. 409 = otra pestaña guardó antes: queda en
 // «conflicto» y no vuelve a guardar hasta recargar. Sin red o con 400 queda
-// en «error» y reintenta con el próximo cambio.
+// en «error» y reintenta con el próximo cambio. El servidor manda en `error`
+// una frase para la persona y, si hay, en `detalle` lo técnico (la ruta del
+// validador): queda en `this.detalle` y le llega a `alCambiar` como tercer
+// argumento (la página lo pone en el `title`, capa 4c).
 function enviarPorDefecto(url, cuerpo) {
   return fetch(url, {
     method: "PUT",
@@ -18,15 +21,17 @@ export class Guardado {
     Object.assign(this, { url, versionN, enviar, programar, cancelar, esperaMs, alCambiar });
     this.estado = "guardado";
     this.mensaje = "";
+    this.detalle = "";
     this.pendiente = null;
     this.enVuelo = null;
     this.timer = null;
   }
 
-  _poner(estado, mensaje = "") {
+  _poner(estado, mensaje = "", detalle = "") {
     this.estado = estado;
     this.mensaje = mensaje;
-    this.alCambiar(estado, mensaje);
+    this.detalle = detalle;
+    this.alCambiar(estado, mensaje, detalle);
   }
 
   get sinGuardar() {
@@ -61,7 +66,7 @@ export class Guardado {
           this._poner("conflicto", cuerpo.error || "La edición cambió en otra pestaña; recarga para seguir.");
         } else {
           this.pendiente = this.pendiente ?? doc;
-          this._poner("error", cuerpo.error || `No se pudo guardar (error ${r.status}).`);
+          this._poner("error", cuerpo.error || `No se pudo guardar (error ${r.status}).`, cuerpo.detalle || "");
         }
       } catch {
         this.pendiente = this.pendiente ?? doc;

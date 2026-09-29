@@ -22,6 +22,7 @@ from tareas import final_edition as tareas_fe
 bp = Blueprint("editor", __name__, url_prefix="/cliente/<cliente>/ediciones")
 
 _DESTINO_RE = re.compile(r"^[a-z]{2}_[A-Z]{2}$")
+ERROR_GUARDAR = "No se pudo guardar este cambio; deshazlo y vuelve a intentar."
 
 
 def _cargar(cliente, edicion_id):
@@ -95,7 +96,10 @@ def guardar(cliente, edicion_id):
             return jsonify({"error": "La edición usa archivos que no son de este proyecto."}), 400
         nuevo = ediciones.guardar(cliente, edicion_id, doc, cuerpo["version_n"])
     except DocumentoInvalido as e:
-        return jsonify({"error": str(e)}), 400
+        # capa 4c: la persona lee una frase llana; la ruta del validador
+        # («pistas[p_texto].clips[0]…») va aparte, para soporte (el editor la
+        # pone en el `title` del estado del guardado)
+        return jsonify({"error": ERROR_GUARDAR, "detalle": str(e)}), 400
     except ediciones.Conflicto as e:
         return jsonify({"error": str(e)}), 409
     return jsonify({"version_n": nuevo})

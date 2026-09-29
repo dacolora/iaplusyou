@@ -5,6 +5,13 @@
    mi_musica, precios, ediciones_por_cf, cliente). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
 {% from "_angulo_editor.html" import editor_angulo %}
+{# Capa 4c (5/10): lo que se guarda en `f.error` es a menudo texto de ffmpeg o
+   del render («Error applying option 'st'…»). La persona lee una frase llana;
+   el texto crudo queda plegado en «Detalle técnico», para soporte. #}
+{% macro error_final(f) %}
+              <span class="fe-error-final"><span class="tag-error" style="font-size:.72rem;">No se pudo producir esta final. Vuelve a intentar; si se repite, avísanos.</span>
+              <details class="detalle-tecnico"><summary>Detalle técnico</summary><code>{{ f.error }}</code></details></span>
+{% endmacro %}
 {% macro detalle_video_fe(item) %}
         <div class="detalle-media"><video src="{{ item.video_url }}" controls autoplay muted loop playsinline></video></div>
         <div class="detalle-info">
@@ -58,7 +65,7 @@
               {% if f.estado == "generando" %}
               <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}produciendo…{% else %}interrumpida{% endif %}</span>
               {% elif f.estado == "error" and f.error %}
-              <span class="tag-error" style="font-size:.72rem;">{{ f.error }}</span>
+              {{ error_final(f) }}
               {% endif %}
               {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>{% endif %}
               <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
@@ -207,7 +214,7 @@
           </ul>
           {% endif %}
           {% if f.estado == "error" and f.error %}
-          <p class="tag-error">{{ f.error }}</p>
+          {{ error_final(f) }}
           {% endif %}
           <div class="detalle-acciones">
             {% if f.video_url %}

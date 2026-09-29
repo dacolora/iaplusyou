@@ -159,7 +159,11 @@ def test_guardar_rechaza_documentos_invalidos_y_materiales_ajenos(dashboard, enc
     malo = _doc_valido(clon["id"])
     malo["pistas"][0]["clips"][0]["inicio_ms"] = 500                     # la principal debe arrancar en 0
     r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": malo, "version_n": ed["version_n"]})
-    assert r.status_code == 400 and "contigua" in r.get_json()["error"]
+    # capa 4c (5/10): la persona lee una frase llana; la ruta del validador va
+    # aparte (`detalle`, el editor la pone en el `title` del estado)
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "No se pudo guardar este cambio; deshazlo y vuelve a intentar."
+    assert "contigua" in r.get_json()["detalle"] and "pistas[" in r.get_json()["detalle"]
     ajeno = materiales.registrar("otro", tipo="video", origen="crear", url="https://r2.test/x.mp4", hash="h-ajeno", bytes=1)
     r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": _doc_valido(ajeno["id"]), "version_n": ed["version_n"]})
     assert r.status_code == 400 and "no son de este proyecto" in r.get_json()["error"]
@@ -592,7 +596,7 @@ def test_el_estado_del_guardado_no_mueve_la_barra_en_el_celular(dashboard, encol
         assert decl in regla.group(1), decl
     assert re.search(r"(?<![-\w])width:\s*[\d.]+(em|rem|px)", regla.group(1)), "el hueco necesita un ancho fijo"
     js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
-    pintar = re.search(r"function pintarGuardado\(estado, mensaje\) \{(.*?)\n\}", js, re.S).group(1)
+    pintar = re.search(r"function pintarGuardado\(estado, mensaje[^)]*\) \{(.*?)\n\}", js, re.S).group(1)
     assert "n.title = " in pintar
 
 
