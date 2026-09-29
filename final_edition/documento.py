@@ -45,6 +45,8 @@ Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
 import copy
 import re
 
+from flask_babel import gettext
+
 from final_edition import tipos
 
 _CLAVE_RE = re.compile(r"^[a-z]{2}(_[A-Z]{2})?$")     # "es" o "es_CO": textos, voz, subtítulos, por_destino
@@ -513,12 +515,12 @@ def resolver(doc, idioma, pais):
                             (res.get("pngs") or {}).pop(c["id"], None)
                             continue
                         if pais not in tipos.PAISES:
-                            raise DocumentoInvalido(f"No sé formatear precios de {pais}.")
+                            raise DocumentoInvalido(gettext("No sé formatear precios de %(pais)s.", pais=pais))
                         c["texto"] = {"literal": tipos.formatear_precio(precio, pais)}
                     else:
                         valor = valor_destino(textos.get(rol), idioma, pais)
                         if valor is None:
-                            raise VariableSinValor(f"El texto '{rol}' no tiene valor en {idioma}.")
+                            raise VariableSinValor(gettext("El texto '%(rol)s' no tiene valor en %(idioma)s.", rol=rol, idioma=idioma))
                         c["texto"] = {"literal": valor}
                 vivos.append(c)
             p["clips"] = vivos

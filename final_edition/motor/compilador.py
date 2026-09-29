@@ -53,6 +53,8 @@ Rutas dentro del filtergraph (`subtitles=`, `fontsdir=`): van citadas con
 import os
 from dataclasses import dataclass, field
 
+from flask_babel import gettext
+
 import final_edition
 from final_edition import geometria, mezcla
 from final_edition.documento import FORMATOS, duracion_ms, pista_principal
@@ -229,8 +231,8 @@ def verificar_recortes(doc, duraciones):
             desde = int((cl.get("recorte") or {}).get("desde_ms", 0))
             fin_fuente = desde + _fuente_ms(cl)
             if fin_fuente > material:
-                raise ValueError(f"El clip '{cl['id']}' pide {fin_fuente} ms de un material de {material} ms; "
-                                 f"acorta el clip o el recorte.")
+                raise ValueError(gettext("El clip '%(clip)s' pide %(pide)s ms de un material de %(hay)s ms; "
+                                         "acorta el clip o el recorte.", clip=cl["id"], pide=fin_fuente, hay=material))
             tr = _transicion_real(cl)
             if p is principal and tr and i + 1 < len(clips):
                 vel = float(cl.get("velocidad") or 1.0)

@@ -5,17 +5,24 @@ pieza de Crear como material bajo pedido — la misma preparación que
 `final_edition.edicion_clon.crear` hace con el clon, sin crear ninguna
 edición. Único módulo que decide esto: la ruta (`final_edition/rutas_editor.py`)
 solo traduce multipart/JSON y el worker (`tareas/edicion.py`) solo valida
-`cf_id` y llama a `materializar_pieza`."""
+`cf_id` y llama a `materializar_pieza`.
+
+Idioma (fase 6): `subir` corre en la ruta, así que sus mensajes salen en el
+idioma de quien sube; `materializar_pieza` corre en el worker, en el del
+proyecto (`worker.ejecutar`). El nombre de respaldo de un archivo sin
+nombre se guarda en el idioma del proyecto."""
 import math
 import os
 import uuid
 
 import sqlalchemy as sa
+from flask_babel import gettext
 from PIL import Image, ImageOps, JpegImagePlugin
 
 import creative_flow
 import db
 import final_edition
+import idiomas
 import materiales
 import trabajos
 from final_edition import cortes, insumos, mezcla, vista_previa
@@ -81,7 +88,7 @@ def _enderezar(local, ext):
             derecha.save(destino, format=formato, **opciones)
         return destino
     except (OSError, ValueError, SyntaxError) as e:
-        raise SubidaInvalida("No pude leer esa imagen.") from e
+        raise SubidaInvalida(gettext("No pude leer esa imagen.")) from e
 
 
 def _medir(tipo, local):
@@ -93,11 +100,11 @@ def _medir(tipo, local):
                 ancho, alto = im.size
                 im.verify()
             if ancho <= 0 or alto <= 0:
-                raise ValueError("dimensiones inválidas")
+                raise ValueError(gettext("dimensiones inválidas"))
         except (OSError, ValueError):
-            raise SubidaInvalida("No pude leer esa imagen.")
+            raise SubidaInvalida(gettext("No pude leer esa imagen."))
         return None, ancho, alto, None
-    mensaje = "No pude leer ese video." if tipo == "video" else "No pude leer ese archivo de audio."
+    mensaje = gettext("No pude leer ese video.") if tipo == "video" else gettext("No pude leer ese archivo de audio.")
     try:
         info = cortes.ffprobe_json(local)
         streams = info.get("streams") or []
@@ -105,12 +112,12 @@ def _medir(tipo, local):
             v = next((s for s in streams if s.get("codec_type") == "video"
                       and not (s.get("disposition") or {}).get("attached_pic")), None)
             if not v or int(v.get("width") or 0) <= 0 or int(v.get("height") or 0) <= 0:
-                raise ValueError("falta video con dimensiones válidas")
+                raise ValueError(gettext("falta video con dimensiones válidas"))
         elif not any(s.get("codec_type") == "audio" for s in streams):
-            raise ValueError("falta audio")
+            raise ValueError(gettext("falta audio"))
         dur_s = cortes.duracion(local)
         if not math.isfinite(dur_s) or dur_s <= 0:
-            raise ValueError("duración inválida")
+            raise ValueError(gettext("duración inválida"))
         dur_ms = int(round(dur_s * 1000))
         if tipo == "video":
             return dur_ms, int(v["width"]), int(v["height"]), mezcla.tiene_audio(local)
@@ -129,7 +136,7 @@ def subir(cliente, archivo):
     ext = os.path.splitext(nombre_archivo)[1].lower()
     info = EXTENSIONES.get(ext)
     if not info:
-        raise SubidaInvalida("Sube un video, una imagen o un audio.")
+        raise SubidaInvalida(gettext("Sube un video, una imagen o un audio."))
     tipo, content_type = info
     carpeta = _carpeta_tmp(cliente)
     local = os.path.join(carpeta, f"subida_{uuid.uuid4().hex}{ext}")
@@ -165,9 +172,11 @@ def _guardar(cliente, local, ext, tipo, content_type, nombre_archivo):
     except materiales.SubidaInvalida as e:
         raise SubidaInvalida(str(e))
     if materiales.bytes_usados(cliente) + tam > materiales.CUOTA_BYTES:
-        raise SubidaInvalida("El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más.")
+        raise SubidaInvalida(gettext("El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más."))
     h = materiales.hash_archivo(local)
-    nombre = os.path.splitext(nombre_archivo)[0].strip()[:80] or "Archivo"
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):      # se guarda: el idioma del proyecto
+        respaldo = gettext("Archivo")
+    nombre = os.path.splitext(nombre_archivo)[0].strip()[:80] or respaldo
     extra = {"nombre": nombre}
     if tipo == "video":
         extra["tiene_audio"] = tiene_audio
@@ -248,7 +257,7 @@ def materializar_pieza(cliente, cf_id, carpeta):
     visible de la pieza."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry or entry.get("estado") != "video_listo" or (entry.get("tipo") or "video") != "video":
-        raise ValueError(f"La pieza {cf_id} no tiene un video listo para el editor.")
+        raise ValueError(gettext("La pieza %(cf)s no tiene un video listo para el editor.", cf=cf_id))
     local = entry.get("video_local_crudo")
     if not (local and os.path.isfile(local)):
         os.makedirs(carpeta, exist_ok=True)

@@ -2,6 +2,7 @@
 El documento se valida al entrar y al salir; el autoguardado es CAS por
 `version_n` (mismo patrón que `pieza_qa`): dos pestañas no se pisan."""
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
 import materiales
@@ -18,7 +19,7 @@ def _dict(f):
 
 def crear(cliente, tipo, nombre, documento, cf_id=None, creada_por=None):
     if tipo not in ("video", "imagen"):
-        raise ValueError("tipo debe ser video o imagen")
+        raise ValueError(gettext("tipo debe ser video o imagen"))
     doc = documento_mod.validar(documento)
     ahora = db.ahora()
     with db.conectar() as con:
@@ -59,7 +60,7 @@ def guardar(cliente, edicion_id, documento, version_n):
             db.edicion.c.version_n == int(version_n)).values(
             documento=doc, version_n=nuevo, actualizado_en=db.ahora()))
         if r.rowcount != 1:
-            raise Conflicto("La edición cambió en otra pestaña; recarga para seguir.")
+            raise Conflicto(gettext("La edición cambió en otra pestaña; recarga para seguir."))
     materiales.marcar_uso(doc.get("materiales") or [])
     return nuevo
 
@@ -93,8 +94,8 @@ def versionar(cliente, edicion_id, motivo, version_n=None):
             existe = con.execute(sa.select(db.edicion.c.id).where(
                 db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id))).first()
             if not existe:
-                raise Conflicto("No existe esa edición.")
-            raise Conflicto("La edición cambió en otra pestaña; recarga para seguir.")
+                raise Conflicto(gettext("No existe esa edición."))
+            raise Conflicto(gettext("La edición cambió en otra pestaña; recarga para seguir."))
         ed = _dict(con.execute(sa.select(db.edicion).where(
             db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id))).first())
         n = int(con.execute(sa.select(sa.func.coalesce(sa.func.max(db.edicion_version.c.n), 0))
@@ -128,7 +129,7 @@ def restaurar(cliente, edicion_id, n):
             .where(db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id),
                    db.edicion_version.c.n == int(n))).first())
         if not v:
-            raise Conflicto("No existe esa versión.")
+            raise Conflicto(gettext("No existe esa versión."))
         actual = int(con.execute(sa.select(db.edicion.c.version_n).where(db.edicion.c.id == int(edicion_id))).scalar())
     return guardar(cliente, edicion_id, documento_mod.migrar(v["documento"]), actual)
 

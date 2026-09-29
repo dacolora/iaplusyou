@@ -1,9 +1,14 @@
 """Motor de render del editor (spec editor §2): compila un documento resuelto
-a un plan de ffmpeg y lo ejecuta, por tramos si hace falta."""
+a un plan de ffmpeg y lo ejecuta, por tramos si hace falta. Las etapas que
+reporta van con N_ (se guardan en español y `estado_trabajo` las traduce
+para quien mira) o con gettext cuando llevan números."""
 import os
+
+from flask_babel import gettext
 
 from final_edition.documento import duracion_ms, pista_principal
 from final_edition.motor import compilador, render as render_mod, tramos
+from idiomas import N_
 
 
 def _fin_pista_principal(doc, total):
@@ -21,7 +26,7 @@ def renderizar(doc, rutas, salida, on_etapa=None, nucleos=1):
     avisar = on_etapa or (lambda _n: None)
     con_ass = render_mod.tiene_libass()
     if not con_ass:
-        avisar("Subtítulos sin libass: omitidos")
+        avisar(N_("Subtítulos sin libass: omitidos"))
     total = duracion_ms(doc)
     if total == 0:
         plan = compilador.compilar(doc, rutas, con_ass=False)
@@ -31,19 +36,19 @@ def renderizar(doc, rutas, salida, on_etapa=None, nucleos=1):
     ventanas = tramos.partir(doc)
     if len(ventanas) == 1:
         plan = compilador.compilar(doc, rutas, con_ass=con_ass)
-        avisar("Renderizando")
+        avisar(N_("Renderizando"))
         render_mod.ejecutar(plan, salida, ass_ruta=rutas.get("ass"))
     else:
         parciales = []
         try:
             for i, v in enumerate(ventanas):
-                avisar(f"Renderizando tramo {i + 1}/{len(ventanas)}")
+                avisar(gettext("Renderizando tramo %(i)s/%(n)s", i=i + 1, n=len(ventanas)))
                 plan_i = compilador.compilar(doc, rutas, ventana=v, con_ass=con_ass)
                 parcial = f"{salida}.tramo{i}.mp4"
                 # compilador hornea `subtitles='{rutas['ass']}'` igual en todos los tramos (no lo varía por ventana), y cada ejecutar() es síncrono, así que reescribir ese mismo archivo en cada vuelta es seguro.
                 render_mod.ejecutar(plan_i, parcial, ass_ruta=rutas.get("ass"))
                 parciales.append(parcial)
-            avisar("Uniendo tramos")
+            avisar(N_("Uniendo tramos"))
             render_mod.concatenar(parciales, salida)
         finally:
             # Si un tramo (o la concatenación) falla a mitad de camino, esto
