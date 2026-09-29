@@ -150,15 +150,45 @@ def _correr(tarea):
     try:
         resultado = ejecutar(tarea)
         if isinstance(resultado, tareas.Continuar):
-            nueva = cola.terminar_y_encolar(tarea["id"], resultado.mensaje, {
-                "tipo": resultado.tipo, "payload": resultado.payload, "ejecutar_desde": resultado.ejecutar_desde})
+            nueva = _terminar_y_encolar(tarea, resultado)
             log.info("tarea %s hecha; sigue en la tarea %s (%s)", tarea["id"], nueva, resultado.tipo)
         else:
             cola.terminar(tarea["id"], resultado)
             log.info("tarea %s hecha", tarea["id"])
+    except ContinuacionPerdida as e:
+        log.error("tarea %s: no se pudo encolar su continuación: %s", tarea["id"], cola.sin_token(e))
     except Exception as e:  # noqa: BLE001 — el worker nunca muere por una tarea
         log.error("tarea %s falló: %s\n%s", tarea["id"], cola.sin_token(e), cola.sin_token(traceback.format_exc()))
         cola.fallar(tarea["id"], f"{type(e).__name__}: {e}")
+
+
+class ContinuacionPerdida(RuntimeError):
+    """No se pudo cerrar la tarea y encolar su continuación (la base seguía
+    ocupada tras varios intentos)."""
+
+
+def _terminar_y_encolar(tarea, siguiente):
+    """cola.terminar_y_encolar con reintentos: con varios hilos y gunicorn
+    escribiendo, «database is locked» puede pasar. Si igual falla, la tarea
+    queda en error y corre su gancho de interrupción — la entidad de atrás
+    (p. ej. una sesión que quedó «generando» esperando la continuación) no
+    queda colgada: el gancho la retoma o la deja con su botón."""
+    ultimo = None
+    for intento in range(4):
+        try:
+            return cola.terminar_y_encolar(tarea["id"], siguiente.mensaje, {
+                "tipo": siguiente.tipo, "payload": siguiente.payload, "ejecutar_desde": siguiente.ejecutar_desde})
+        except Exception as e:  # noqa: BLE001
+            ultimo = e
+            time.sleep(1 + intento)
+    cola.fallar(tarea["id"], f"No se pudo encolar la continuación ({type(ultimo).__name__}: {ultimo})")
+    hook = tareas.AL_INTERRUMPIR.get(tarea["tipo"])
+    if hook is not None:
+        try:
+            hook(tarea, MENSAJE_INTERRUMPIDA)
+        except Exception as e:  # noqa: BLE001 — el gancho nunca tumba al worker
+            log.error("tarea %s: el gancho de %s falló: %s", tarea["id"], tarea["tipo"], cola.sin_token(e))
+    raise ContinuacionPerdida(str(ultimo))
 
 
 def ciclo():
@@ -184,10 +214,21 @@ def _en_hilo(tarea):
 
 
 def _lanzar(tarea, carril):
+    """Arranca la tarea en su hilo. Devuelve False si el hilo no arrancó (poca
+    memoria): la tarea vuelve a pendiente sin gastar un intento, nunca queda
+    tomada por nadie."""
     hilo = threading.Thread(target=_en_hilo, args=(tarea,), name=f"tarea-{tarea['id']}")
     with _LOCK_VUELO:
         _EN_VUELO[tarea["id"]] = {"hilo": hilo, "carril": carril, "prioridad": tarea.get("prioridad") or 0}
-    hilo.start()
+    try:
+        hilo.start()
+    except Exception as e:  # noqa: BLE001
+        with _LOCK_VUELO:
+            _EN_VUELO.pop(tarea["id"], None)
+        cola.devolver(tarea["id"])
+        log.error("tarea %s: no arrancó su hilo (%s); vuelve a pendiente", tarea["id"], e)
+        return False
+    return True
 
 
 def _ocupados():
@@ -214,12 +255,12 @@ def repartir():
         tarea = cola.reclamar(tipos=CARRIL_CREAR, prioridad_min=PRIORIDAD_SUELTA if lotes >= HILOS_LOTE else None)
         if tarea is None:
             break
-        _lanzar(tarea, "crear")
+        if not _lanzar(tarea, "crear"):
+            break
         arrancadas += 1
     if not debe_parar() and _ocupados()[2] == 0:
         tarea = cola.reclamar(excluir_tipos=CARRIL_CREAR)
-        if tarea is not None:
-            _lanzar(tarea, "general")
+        if tarea is not None and _lanzar(tarea, "general"):
             arrancadas += 1
     return arrancadas
 

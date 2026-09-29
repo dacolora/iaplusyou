@@ -133,3 +133,23 @@ def test_una_cancion_propia_se_baja_y_recorta_una_sola_vez(tmp_path, monkeypatch
         musica.pista_propia("acme", "mat:7", 0, carpeta_cache=str(tmp_path))
     assert _en_hilos(4, pedir) == []
     assert len(bajadas) == 1 and len(recortes) == 1
+
+
+def test_rechazar_desde_la_web_usa_el_candado(tmp_path, monkeypatch, base_temporal):
+    """Rechazar en la web y un video del worker terminando a la vez: los dos
+    escriben estado_videos.json; los dos pasan por estado.modificar."""
+    import dashboard
+    import estado
+    monkeypatch.setattr(estado, "BASE_DIR", str(tmp_path))
+    estado.guardar("acme", {"cf_1": {"estado": "pendiente"}})
+    usados = []
+    real = estado.modificar
+    monkeypatch.setattr(estado, "modificar", lambda c, fn: usados.append(c) or real(c, fn))
+    dashboard.app.config["TESTING"] = True
+    c = dashboard.app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "admin"; s["rol"] = "admin"; s["cliente"] = None
+    assert c.post("/cliente/acme/rechazar/cf_1").status_code == 302
+    assert estado.cargar("acme")["cf_1"]["estado"] == "rechazado" and usados == ["acme"]
+    c.post("/cliente/acme/rechazar/no_existe")
+    assert set(estado.cargar("acme")) == {"cf_1"}

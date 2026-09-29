@@ -186,3 +186,69 @@ def test_un_reinicio_pasa_la_posta_sin_esperar_al_proveedor(w, monkeypatch, tmp_
     siguiente = cola.consultar_por_job(job)
     assert siguiente["tipo"] == "flowplus_recuperar" and siguiente["estado"] == "pendiente"
     assert cf.cargar("acme")[cid]["estado"] == "video_generando"
+
+
+def test_cerrar_y_seguir_se_reintenta_si_la_base_esta_ocupada(w, monkeypatch):
+    import cola
+    import tareas
+
+    @tareas.registrar("prueba_sigue")
+    def _t(t):
+        return tareas.Continuar("prueba_sigue_2", {})
+    real = cola.terminar_y_encolar
+    fallas = [1, 1]
+
+    def _tye(*a, **k):
+        if fallas:
+            fallas.pop()
+            raise RuntimeError("database is locked")
+        return real(*a, **k)
+    monkeypatch.setattr(w.cola, "terminar_y_encolar", _tye)
+    monkeypatch.setattr(w.time, "sleep", lambda s: None)
+    tid = cola.encolar("prueba_sigue", {}, job_id="acme__cf__creative_flow")
+    w.ciclo()
+    assert cola.consultar_por_id(tid)["estado"] == "hecha"
+    assert cola.consultar_por_job("acme__cf__creative_flow")["tipo"] == "prueba_sigue_2"
+
+
+def test_si_cerrar_y_seguir_falla_del_todo_corre_el_gancho(w, monkeypatch):
+    """La sesión ya quedó «generando» esperando la continuación: si no se pudo
+    encolar, el gancho de interrupción la deja con su botón (o la retoma)."""
+    import cola
+    import tareas
+    vistas = []
+
+    @tareas.registrar("prueba_sigue_mal")
+    def _t(t):
+        return tareas.Continuar("prueba_sigue_2", {})
+    monkeypatch.setitem(tareas.AL_INTERRUMPIR, "prueba_sigue_mal", lambda t, m: vistas.append(t["id"]))
+    monkeypatch.setattr(w.cola, "terminar_y_encolar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("locked")))
+    monkeypatch.setattr(w.time, "sleep", lambda s: None)
+    tid = cola.encolar("prueba_sigue_mal", {}, max_intentos=1)
+    w.ciclo()
+    assert cola.consultar_por_id(tid)["estado"] == "error" and vistas == [tid]
+
+
+def test_un_hilo_que_no_arranca_devuelve_su_tarea(w, monkeypatch):
+    import cola
+    monkeypatch.setattr(w, "CARRIL_CREAR", ("prueba_crear",))
+    arrancadas, soltar = _bloqueante("prueba_crear")
+    tid = cola.encolar("prueba_crear", {})
+
+    def _start(self):
+        raise RuntimeError("can't start new thread")
+    monkeypatch.setattr(w.threading.Thread, "start", _start)
+    assert w.repartir() == 0
+    assert w.en_vuelo() == set() and cola.consultar_por_id(tid)["estado"] == "pendiente"
+    soltar.set()
+
+
+def test_continuar_acepta_una_fecha_de_verdad(base_temporal):
+    import cola
+    from datetime import datetime, timedelta
+    tid = cola.encolar("x", {}, job_id="j")
+    t = cola.reclamar()
+    nueva = cola.terminar_y_encolar(t["id"], "sigue", {"tipo": "y", "payload": {},
+                                                        "ejecutar_desde": datetime.now() + timedelta(minutes=1)})
+    assert isinstance(cola.consultar_por_id(nueva)["ejecutar_desde"], str)
+    assert cola.reclamar() is None      # todavía no le toca

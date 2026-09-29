@@ -60,3 +60,18 @@ El tercero (menciones pegadas de Higgsfield y aviso antes de cobrar) ya lo subi�
 - Que el carril general también sea paralelo (renders con 1 CPU y 2 GB: mejor en orden).
 - El mejorador de prompt de Wan (`enable_prompt_expansion`): sigue apagado (regla de Daniel del 27-09);
   si se quiere, será una casilla visible que la persona active.
+
+## Después de la revisión independiente (mismo día)
+
+- `meta_ads` había retrocedido por error en el commit (el checkout del worktree estaba viejo): vuelve a `b08fd21`.
+- Un corte de red o un 5xx mientras se espera ya no borra la predicción (solo `ErrorProveedor` lo hace) y el
+  sondeo aguanta 6 fallos seguidos.
+- La primera espera dura 10 min y la recuperación pregunta 45 s cada minuto: un video colgado ya no ocupa un hilo
+  por 20 min + tramos de 10.
+- `cerrar y seguir` se reintenta; si igual falla, corre el gancho de interrupción. Un hilo que no arranca devuelve
+  su tarea. `trabajos.reportar` nunca lanza. El id de la predicción se marca guardado solo si se guardó.
+- El gancho de interrupción solo toca sesiones en `video_generando`. La imagen y el video vuelven a crear su carpeta
+  justo antes de escribir (la limpieza diaria puede correr mientras tanto).
+- Flask (aprobar/rechazar/publicar) y `sprints.revision` también usan `estado.modificar`.
+- Casilla opcional «Que Wan mejore mi prompt» (Daniel eligió la opción opcional): `enable_prompt_expansion`
+  solo si se marca, apagada por defecto.

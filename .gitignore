@@ -64,3 +64,7 @@ clientes/*/sprints/
 
 # Medios sintéticos de sembrar_edicion_demo.py (vista previa local, sin R2)
 static/editor_demo/
+
+# Candado de estado.modificar (flock): varios hilos del worker y Flask escriben estado_videos.json.
+clientes/*/estado_videos.json.lock
+estado_videos.json.lock

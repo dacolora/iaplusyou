@@ -2245,8 +2245,7 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
             video_url = None
             bitacora.registrar(cliente, video_id, "storage", "error", str(e))
 
-        estado = estado_mod.cargar(cliente)
-        estado[video_id] = {
+        registro = {
             "prompt": prompt_texto,
             "image_url": imagen_url,
             "title": video_id,
@@ -2258,7 +2257,8 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
             "generado_en": datetime.now().isoformat(),
             "publicado_en": None,
         }
-        estado_mod.guardar(cliente, estado)
+        # Con candado (estado.modificar): el worker también escribe este archivo.
+        estado_mod.modificar(cliente, lambda estado: {**estado, video_id: registro})
 
         data2 = conceptos_imagen.cargar(cliente)
         animacion2 = conceptos_imagen.encontrar_animacion(data2, idea_id, concepto_id, proveedor, anim_id)
@@ -6021,8 +6021,7 @@ def aprobar_imagen(cliente, prompt_id):
             video_url = higgsfield_url
             bitacora.registrar(cliente, prompt_id, "storage", "error", str(e))
 
-        estado = estado_mod.cargar(cliente)
-        estado[prompt_id] = {
+        registro = {
             "prompt": item2["prompt"],
             "image_url": item2["imagen_url"],
             "title": item2.get("title", prompt_id),
@@ -6034,7 +6033,8 @@ def aprobar_imagen(cliente, prompt_id):
             "generado_en": datetime.now().isoformat(),
             "publicado_en": None,
         }
-        estado_mod.guardar(cliente, estado)
+        # Con candado (estado.modificar): el worker también escribe este archivo.
+        estado_mod.modificar(cliente, lambda estado: {**estado, prompt_id: registro})
 
         del data2[idea_id2]["prompts"][prompt_id]
         prompts_mod.guardar(cliente, data2)
@@ -6086,10 +6086,11 @@ def aprobar(cliente, brief_id):
             _cargar_entorno_cliente(cliente)
             ok = publicar_brief(brief_id, entry, cliente, _token_paths(cliente))
 
-        estado2 = estado_mod.cargar(cliente)
-        estado2[brief_id]["estado"] = "publicado"
-        estado2[brief_id]["publicado_en"] = datetime.now().isoformat()
-        estado_mod.guardar(cliente, estado2)
+        def _publicado(estado2):
+            estado2[brief_id]["estado"] = "publicado"
+            estado2[brief_id]["publicado_en"] = datetime.now().isoformat()
+            return estado2
+        estado_mod.modificar(cliente, _publicado)
 
         if not ok:
             raise RuntimeError("Se publicó, pero alguna plataforma falló — revisa la bitácora.")
@@ -6104,14 +6105,15 @@ def aprobar(cliente, brief_id):
 
 @app.route("/cliente/<cliente>/rechazar/<brief_id>", methods=["POST"])
 def rechazar(cliente, brief_id):
-    estado = estado_mod.cargar(cliente)
-    entry = estado.get(brief_id)
-    if not entry:
+    def _rechazar(estado):
+        if brief_id not in estado:
+            return None
+        estado[brief_id]["estado"] = "rechazado"
+        return estado
+    if estado_mod.modificar(cliente, _rechazar) is None:
         flash(f"No encontré {brief_id}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
-    entry["estado"] = "rechazado"
-    estado_mod.guardar(cliente, estado)
     flash(f"{brief_id} rechazado, no se publica.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 

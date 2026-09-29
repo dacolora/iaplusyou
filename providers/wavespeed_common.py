@@ -73,6 +73,8 @@ class EsperaInterrumpida(EsperaAgotada):
 # predicción por su id. Un swap o una imagen siguen hasta el final como antes.
 _DETENER = None
 _LOCAL = threading.local()
+# Consultas fallidas seguidas (red caída, 5xx) antes de rendirse.
+FALLOS_SEGUIDOS = 6
 
 
 def fijar_detener(fn):
@@ -81,15 +83,18 @@ def fijar_detener(fn):
 
 
 @contextmanager
-def cortable():
+def cortable(plazo_s=None):
     """Dentro de este bloque (del hilo actual), una parada del worker corta la
-    espera con `EsperaInterrumpida` en vez de dejarla hasta el final."""
-    antes = getattr(_LOCAL, "cortable", False)
-    _LOCAL.cortable = True
+    espera con `EsperaInterrumpida` en vez de dejarla hasta el final, y
+    `plazo_s` (opcional) acorta la espera: pasado ese tiempo sale
+    `EsperaAgotada` y quien la pidió la retoma después por el id (el hilo del
+    carril de Crear queda libre para otra pieza)."""
+    antes = (getattr(_LOCAL, "cortable", False), getattr(_LOCAL, "plazo", None))
+    _LOCAL.cortable, _LOCAL.plazo = True, plazo_s
     try:
         yield
     finally:
-        _LOCAL.cortable = antes
+        _LOCAL.cortable, _LOCAL.plazo = antes
 
 
 def en_cortable():
@@ -128,10 +133,24 @@ def poll_hasta_listo(prediction_id, nombre_modelo, interval_seconds=5, timeout_s
     con el id para recuperar el resultado después)."""
     url = f"{BASE_URL}/predictions/{prediction_id}/result"
     inicio = time.time()
-    while time.time() - inicio < timeout_seconds:
-        resp = requests.get(url, headers=headers(), timeout=30)
-        resp.raise_for_status()
-        data = resp.json().get("data") or {}
+    plazo = getattr(_LOCAL, "plazo", None) if en_cortable() else None
+    limite = timeout_seconds if plazo is None else min(timeout_seconds, plazo)
+    fallos = 0
+    while time.time() - inicio < limite:
+        # Un corte suelto de la red (502, timeout, conexión) no tumba la espera
+        # de un video ya pagado; varios seguidos sí (la red está caída de verdad).
+        try:
+            resp = requests.get(url, headers=headers(), timeout=30)
+            resp.raise_for_status()
+            data = resp.json().get("data") or {}
+        except requests.RequestException as e:
+            codigo = getattr(getattr(e, "response", None), "status_code", None)
+            fallos += 1
+            if (codigo is not None and codigo < 500 and codigo != 429) or fallos >= FALLOS_SEGUIDOS:
+                raise
+            time.sleep(interval_seconds)
+            continue
+        fallos = 0
         estado = data.get("status")
         if on_progreso:
             # Un fallo reportando progreso jamás debe tumbar una generación que
@@ -150,4 +169,4 @@ def poll_hasta_listo(prediction_id, nombre_modelo, interval_seconds=5, timeout_s
         if _hay_que_cortar():
             raise EsperaInterrumpida(nombre_modelo, prediction_id, time.time() - inicio)
         time.sleep(interval_seconds)
-    raise EsperaAgotada(nombre_modelo, prediction_id, timeout_seconds)
+    raise EsperaAgotada(nombre_modelo, prediction_id, limite)

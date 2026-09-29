@@ -38,6 +38,13 @@ def recortar(texto, n=500):
     return str(texto or "")[:n]
 
 
+def _fecha_texto(valor):
+    """`ejecutar_desde` se compara como texto ISO: un datetime se pasa a texto."""
+    if isinstance(valor, datetime):
+        return valor.isoformat(timespec="seconds")
+    return valor
+
+
 def _fila(r):
     return dict(r._mapping) if r is not None else None
 
@@ -101,6 +108,14 @@ def terminar(tarea_id, mensaje=None):
             estado="hecha", terminada_en=db.ahora(), mensaje=mensaje or "Listo."))
 
 
+def devolver(tarea_id):
+    """Una tarea reclamada que nunca empezó (su hilo no arrancó) vuelve a
+    pendiente sin gastar el intento."""
+    with db.conectar() as con:
+        con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id, db.tarea.c.estado == "en_curso").values(
+            estado="pendiente", iniciada_en=None, intentos=sa.func.max(db.tarea.c.intentos - 1, 0)))
+
+
 def terminar_y_encolar(tarea_id, mensaje, siguiente):
     """Cierra la tarea y encola su continuación en UNA transacción: `siguiente`
     es `{"tipo", "payload"}` (más `ejecutar_desde`, `max_intentos`) y hereda
@@ -116,7 +131,8 @@ def terminar_y_encolar(tarea_id, mensaje, siguiente):
         r = con.execute(db.tarea.insert().values(
             cliente=vieja.cliente, job_id=vieja.job_id, tipo=siguiente["tipo"], payload=siguiente.get("payload") or {},
             estado="pendiente", intentos=0, max_intentos=int(siguiente.get("max_intentos") or 1),
-            prioridad=vieja.prioridad, ejecutar_desde=siguiente.get("ejecutar_desde") or ahora, creada_en=ahora,
+            prioridad=vieja.prioridad, ejecutar_desde=_fecha_texto(siguiente.get("ejecutar_desde")) or ahora,
+            creada_en=ahora,
             duracion_estimada=vieja.duracion_estimada, etapas=vieja.etapas or [],
         ))
         return int(r.inserted_primary_key[0])
