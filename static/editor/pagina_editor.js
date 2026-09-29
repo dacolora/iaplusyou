@@ -64,9 +64,13 @@ import { InteraccionLienzo } from "./lienzo_interaccion.js";
 import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
 import { Propiedades } from "./propiedades.js";
+import { listaY, ponerTextos, t } from "./textos.js";
 import { infoDe, VistaPrevia } from "./vista.js";
 
 const datos = JSON.parse(document.getElementById("datos-editor").textContent);
+// Los textos en el idioma de quien mira (ruta editor.ver), antes de construir
+// nada: ningún módulo llama a t() al cargarse.
+ponerTextos(datos.textos, datos.idioma_ui);
 const $ = (id) => document.getElementById(id);
 const historial = new Historial(datos.documento);
 let seleccion = null;
@@ -74,8 +78,8 @@ const avisos = new Avisos();
 
 const vista = new VistaPrevia({
   datos,
-  alCambiarTiempo: (t, reproduciendo) => {
-    linea.moverCabezal(t, { seguir: reproduciendo });
+  alCambiarTiempo: (ms, reproduciendo) => {
+    linea.moverCabezal(ms, { seguir: reproduciendo });
     avisos.notificar("tiempo");
   },
   alCambiarMateriales: () => refrescar("materiales"),
@@ -88,18 +92,18 @@ const linea = new LineaTiempo({
   ventanaPicosMs: datos.config?.ventana_picos_ms,
   alSeleccionar: (id) => seleccionar(id),
   alOperar: operar,
-  alIr: (t) => {
-    vista.ir(t);
+  alIr: (ms) => {
+    vista.ir(ms);
     linea.moverCabezal(vista.tiempo());
   },
 });
 const guardado = new Guardado({ url: datos.urls.guardar, versionN: datos.edicion.version_n, alCambiar: pintarGuardado });
 
 const TEXTO_GUARDADO = {
-  guardado: () => "Guardado",
-  pendiente: () => "Cambios sin guardar…",
-  guardando: () => "Guardando…",
-  error: (m) => `No se guardó: ${m}`,
+  guardado: () => t("guardado.ok"),
+  pendiente: () => t("guardado.pendiente"),
+  guardando: () => t("guardado.guardando"),
+  error: (m) => t("guardado.error", { mensaje: m }),
   conflicto: (m) => m,
 };
 
@@ -158,7 +162,7 @@ function seleccionar(id) {
 // En conflicto no se edita: nada de lo que se haga se podría guardar.
 function editable() {
   if (guardado.estado !== "conflicto") return true;
-  aviso("Esta edición cambió en otra pestaña: recarga la página para seguir editando.");
+  aviso(t("editar.conflicto"));
   return false;
 }
 
@@ -181,7 +185,7 @@ function operarCon(opciones, nombre, ...args) {
   } catch (e) {
     const invalida = e.name === "OperacionInvalida";
     if (!invalida) console.error(e);
-    aviso(invalida ? e.message : `No se pudo hacer ese cambio (${e.message}). La edición quedó como estaba.`);
+    aviso(invalida ? e.message : t("editar.fallo", { error: e.message }));
     refrescar(null);
     return false;
   }
@@ -203,7 +207,7 @@ function operarCon(opciones, nombre, ...args) {
 function cortar() {
   const pedido = pedidoCortar(historial.actual, seleccion, vista.tiempo());
   if (pedido) operar(...pedido);
-  else if (editable()) aviso("Pon el cabezal sobre el clip elegido para cortarlo.");
+  else if (editable()) aviso(t("editar.cabezal_elegido"));
 }
 
 function deshacer() {
@@ -286,11 +290,11 @@ function montarProducir() {
   const dialogo = $("producir-dialogo");
   if (!datos.cf_id) {
     boton.disabled = true;
-    boton.title = "Esta edición no está unida a un video de Crear: todavía no se puede producir desde aquí.";
+    boton.title = t("producir.sin_clon");
     return;
   }
   const minutos = Math.max(1, Math.round((Number(datos.estimado_s) || 60) / 60));
-  $("producir-tiempo").textContent = minutos === 1 ? "cerca de un minuto por destino" : `unos ${minutos} minutos por destino`;
+  $("producir-tiempo").textContent = minutos === 1 ? t("producir.un_minuto") : t("producir.minutos", { n: minutos });
   const nombre = (d) => d.replace("_", " · ");
   const lista = $("producir-destinos");
   for (const d of datos.destinos) {
@@ -302,19 +306,17 @@ function montarProducir() {
     l.append(c, ` ${nombre(d)}`);
     lista.append(l);
   }
-  const avisar = (t) => {
-    $("producir-aviso").textContent = t || "";
-    $("producir-aviso").hidden = !t;
+  const avisar = (texto) => {
+    $("producir-aviso").textContent = texto || "";
+    $("producir-aviso").hidden = !texto;
   };
-  const unir = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} y ${xs.at(-1)}` : xs[0]);
   // Ya hay una final de ese destino que no salió de esta edición (la vía
   // automática, con voz, u otra edición): producir la reemplaza, así que se
   // pregunta antes. La confirmación vale para esa selección: cambiarla la quita.
   const pedirReemplazo = (destinos) => {
-    const cuales = unir(destinos.map(nombre));
-    $("producir-reemplazo-texto").textContent = destinos.length === 1
-      ? `Ya hay una final de ${cuales} hecha por otro camino (puede tener voz). Si produces, esta la reemplaza.`
-      : `Ya hay finales de ${cuales} hechas por otro camino (pueden tener voz). Si produces, estas las reemplazan.`;
+    const cuales = listaY(destinos.map(nombre));
+    $("producir-reemplazo-texto").textContent = t(destinos.length === 1 ? "producir.reemplazo_una" : "producir.reemplazo_varias",
+      { destinos: cuales });
     $("producir-reemplazo").hidden = false;
     $("producir-reemplazar").hidden = false;
     $("producir-confirmar").hidden = true;
@@ -339,14 +341,14 @@ function montarProducir() {
 
   async function producir(reemplazar) {
     const destinos = [...lista.querySelectorAll("input:checked")].map((c) => c.value);
-    if (!destinos.length) return avisar("Marca al menos un destino.");
+    if (!destinos.length) return avisar(t("producir.marca_destino"));
     $("producir-confirmar").disabled = true;
     $("producir-reemplazar").disabled = true;
     avisar("");
     try {
       await guardado.ahora();        // se produce lo que se ve: primero se guarda lo pendiente
       if (guardado.estado === "conflicto" || guardado.estado === "error") {
-        return avisar(`Primero hay que guardar: ${guardado.mensaje}`);
+        return avisar(t("producir.guardar_antes", { mensaje: guardado.mensaje }));
       }
       const r = await fetch(datos.urls.producir, {
         method: "POST",
@@ -355,17 +357,17 @@ function montarProducir() {
       });
       const j = await r.json().catch(() => ({}));
       if (r.status === 409 && Array.isArray(j.reemplazos) && j.reemplazos.length) return pedirReemplazo(j.reemplazos);
-      if (!r.ok) return avisar([j.error || `No se pudo producir (error ${r.status}).`, ...(j.problemas ?? [])].join(" "));
+      if (!r.ok) return avisar([j.error || t("producir.error", { status: r.status }), ...(j.problemas ?? [])].join(" "));
       const n = (j.producidas ?? []).filter((p) => p.encolada).length;
       dialogo.close();
       aviso("");
       $("producir-hecho-texto").textContent = n
-        ? `Produciendo ${n} final${n === 1 ? "" : "es"}. Las vas a ver en Final edition cuando terminen.`
-        : "Esos destinos ya se estaban produciendo.";
+        ? t(n === 1 ? "producir.hecha_una" : "producir.hechas", { n })
+        : t("producir.ya_estaban");
       if (j.url) $("producir-hecho-enlace").href = j.url;
       $("producir-hecho").hidden = false;
     } catch {
-      avisar("Sin conexión: no se pudo producir. Vuelve a intentar.");
+      avisar(t("producir.sin_conexion"));
     } finally {
       $("producir-confirmar").disabled = false;
       $("producir-reemplazar").disabled = false;

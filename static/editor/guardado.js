@@ -4,6 +4,8 @@
 // guarda sale en el siguiente PUT. 409 = otra pestaña guardó antes: queda en
 // «conflicto» y no vuelve a guardar hasta recargar. Sin red o con 400 queda
 // en «error» y reintenta con el próximo cambio.
+import { t } from "./textos.js";
+
 function enviarPorDefecto(url, cuerpo) {
   return fetch(url, {
     method: "PUT",
@@ -58,14 +60,14 @@ export class Guardado {
           this.versionN = cuerpo.version_n;
           this._poner(this.pendiente ? "pendiente" : "guardado");
         } else if (r.status === 409) {
-          this._poner("conflicto", cuerpo.error || "La edición cambió en otra pestaña; recarga para seguir.");
+          this._poner("conflicto", cuerpo.error || t("guardado.conflicto"));
         } else {
           this.pendiente = this.pendiente ?? doc;
-          this._poner("error", cuerpo.error || `No se pudo guardar (error ${r.status}).`);
+          this._poner("error", cuerpo.error || t("guardado.fallo", { status: r.status }));
         }
       } catch {
         this.pendiente = this.pendiente ?? doc;
-        this._poner("error", "Sin conexión: se guarda con el próximo cambio.");
+        this._poner("error", t("guardado.sin_conexion"));
       } finally {
         this.enVuelo = null;
       }

@@ -26,12 +26,13 @@
 // Solo toca el DOM de su panel, la línea de tiempo por puntoEn/resaltar y la
 // edición por `editor`. No hace nada al importarse (lo prueba Node).
 import {
-  avisoTransicion, DURACION_TRANSICION_MS, NOMBRES_TRANSICION, pedidoAgregar,
+  avisoTransicion, DURACION_TRANSICION_MS, nombreTransicion, pedidoAgregar,
 } from "./escala.js";
 import * as operaciones from "./operaciones.js";
 import { TRANSICIONES } from "./operaciones.js";
 import { evaluarRespuesta } from "./pendientes.js";
-import { MENSAJE_CONFLICTO } from "./propiedades_modelo.js";
+import { mensajeConflicto } from "./propiedades_modelo.js";
+import { t } from "./textos.js";
 
 // ---- Lo puro (lo prueba tests/js/biblioteca.test.mjs) ---------------------
 
@@ -43,7 +44,8 @@ export const LIMITES_SUBIDA = {"video": 209715200, "imagen": 20971520, "audio": 
 export const INTERVALO_BIBLIOTECA_MS = 3000;
 export const TOPE_ESPERA_MS = 5 * 60 * 1000;
 
-const NOMBRE_TIPO = { video: "El video", imagen: "La imagen", audio: "El audio" };
+// La frase entera por tipo (clave de textos.js): «El video pesa más de…».
+const PESA = { video: "bib.pesa_video", imagen: "bib.pesa_imagen", audio: "bib.pesa_audio" };
 
 export function tipoDeArchivo(nombre) {
   const m = /\.[^./\\]+$/.exec(String(nombre ?? ""));
@@ -58,21 +60,21 @@ export function aceptarPara(tipos) {
 // Lo que el servidor rechazaría igual, dicho antes de mandar el archivo.
 export function revisarArchivo(nombre, bytes) {
   const tipo = tipoDeArchivo(nombre);
-  if (!tipo) return "Sube un video, una imagen o un audio.";
+  if (!tipo) return t("bib.tipo_no");
   const tope = LIMITES_SUBIDA[tipo];
-  if (Number(bytes) > tope) return `${NOMBRE_TIPO[tipo]} pesa más de ${Math.floor(tope / (1024 * 1024))} MB.`;
+  if (Number(bytes) > tope) return t(PESA[tipo], { mb: Math.floor(tope / (1024 * 1024)) });
   return null;
 }
 
 // El error de una subida, en llano: el del servidor si lo dijo; si no, según
 // qué pasó (`red`: no hubo respuesta; `redirigido`: llegó la página de entrar).
 export function mensajeSubida({ status = 0, cuerpo = null, redirigido = false, red = false } = {}) {
-  if (red) return "Sin conexión: no se pudo subir. Vuelve a intentar.";
-  if (redirigido) return "Tu sesión venció: vuelve a entrar y súbelo otra vez.";
+  if (red) return t("bib.sin_conexion_subir");
+  if (redirigido) return t("bib.sesion_subir");
   if (cuerpo && typeof cuerpo === "object" && typeof cuerpo.error === "string" && cuerpo.error) return cuerpo.error;
-  if (status === 413) return "El archivo es demasiado grande.";
-  if (status >= 500) return "El servidor no pudo guardar el archivo. Vuelve a intentar.";
-  return `No se pudo subir (error ${status}).`;
+  if (status === 413) return t("bib.muy_grande");
+  if (status >= 500) return t("bib.servidor");
+  return t("bib.error_subir", { status });
 }
 
 // Qué va en cada lista: Medios (videos e imágenes, sin los que ya son una
@@ -138,25 +140,31 @@ export function urlPieza(plantilla, cfId) {
   return String(plantilla).replace("__CF__", encodeURIComponent(cfId));
 }
 
-// Las muestras de texto: los presets de operaciones.agregarTexto.
-export const TEXTOS_BIBLIOTECA = [
-  { preset: "titulo", nombre: "Título" },
-  { preset: "subtitulo", nombre: "Subtítulo" },
-  { preset: "precio", nombre: "Precio" },
-  { preset: "llamado", nombre: "Llamado" },
-];
+// Las muestras de texto: los presets de operaciones.agregarTexto (con su
+// nombre en el idioma de la página: función, no constante, porque ningún
+// módulo llama a t() al cargarse).
+export function textosBiblioteca() {
+  return [
+    { preset: "titulo", nombre: t("bib.texto_titulo") },
+    { preset: "subtitulo", nombre: t("bib.texto_subtitulo") },
+    { preset: "precio", nombre: t("clip.precio") },
+    { preset: "llamado", nombre: t("bib.texto_llamado") },
+  ];
+}
 
 const DESCRIPCIONES_TRANSICION = {
-  corte: "Sin transición: pasa de golpe.",
-  fundido: "Un video se funde en el otro.",
-  deslizar: "El siguiente entra desde la derecha.",
-  zoom: "Se acerca y pasa al siguiente.",
-  desenfoque: "Baja a negro y aparece el siguiente.",
+  corte: "bib.tr_corte",
+  fundido: "bib.tr_fundido",
+  deslizar: "bib.tr_deslizar",
+  zoom: "bib.tr_zoom",
+  desenfoque: "bib.tr_desenfoque",
 };
 
-export const TRANSICIONES_BIBLIOTECA = TRANSICIONES.map((tipo) => ({
-  tipo, nombre: NOMBRES_TRANSICION[tipo] ?? tipo, descripcion: DESCRIPCIONES_TRANSICION[tipo] ?? "",
-}));
+export function transicionesBiblioteca() {
+  return TRANSICIONES.map((tipo) => ({
+    tipo, nombre: nombreTransicion(tipo), descripcion: DESCRIPCIONES_TRANSICION[tipo] ? t(DESCRIPCIONES_TRANSICION[tipo]) : "",
+  }));
+}
 
 // ---- El panel (DOM) ---------------------------------------------------------
 
@@ -178,11 +186,11 @@ const ICONOS = {
 };
 const ICONO_DE = { video: "video", pieza: "video", imagen: "imagen", audio: "nota", texto: "texto", transicion: "transicion" };
 const ESTADO_SUBIDA = {
-  espera: () => "En espera",
-  subiendo: (s) => `Subiendo ${Math.round(s.progreso * 100)} %`,
-  procesando: () => "Guardando…",
-  lista: () => "Listo",
-  error: () => "No se subió",
+  espera: () => t("bib.en_espera"),
+  subiendo: (s) => t("bib.subiendo", { n: Math.round(s.progreso * 100) }),
+  procesando: () => t("guardado.guardando"),
+  lista: () => t("bib.listo"),
+  error: () => t("bib.no_subio"),
 };
 
 function el(tag, clase, padre, texto) {
@@ -209,9 +217,9 @@ const tieneArchivos = (e) => [...(e.dataTransfer?.types ?? [])].includes("Files"
 // logo del proyecto tiene origen «marca», el de insumos.logo).
 export function nombreDe(m) {
   if (m?.nombre) return String(m.nombre);
-  if (m?.tipo === "imagen") return m.origen === "marca" ? "Logo" : "Imagen";
-  if (m?.tipo === "audio") return m.origen === "musica" ? "Canción" : "Audio";
-  return m?.origen === "crear" ? "Video de Crear" : "Video";
+  if (m?.tipo === "imagen") return t(m.origen === "marca" ? "bib.logo" : "clip.imagen");
+  if (m?.tipo === "audio") return t(m.origen === "musica" ? "bib.cancion" : "fila.audio");
+  return t(m?.origen === "crear" ? "bib.video_crear" : "fila.video");
 }
 
 export class Biblioteca {
@@ -328,61 +336,61 @@ export class Biblioteca {
       entrada.value = "";
       this.subir(archivos, panel);
     });
-    el("span", "ed-bib-ayuda ed-bib-ayuda-arrastre", barra, "o arrastra archivos aquí");
+    el("span", "ed-bib-ayuda ed-bib-ayuda-arrastre", barra, t("bib.arrastra"));
     this.listaSubidas[panel] = el("ul", "ed-bib-subidas", p);
   }
 
   _construirMedios() {
     const p = this.paneles.medios;
-    this._barraSubir("medios", "Subir", ["video", "imagen"]);
-    el("h3", "ed-bib-titulo", p, "Tus archivos");
+    this._barraSubir("medios", t("bib.subir"), ["video", "imagen"]);
+    el("h3", "ed-bib-titulo", p, t("bib.tus_archivos"));
     this.grillaMedios = el("div", "ed-bib-grilla", p);
-    el("h3", "ed-bib-titulo", p, "Videos de Crear");
+    el("h3", "ed-bib-titulo", p, t("bib.videos_crear"));
     this.grillaPiezas = el("div", "ed-bib-grilla", p);
   }
 
   _construirAudio() {
     const p = this.paneles.audio;
-    this._barraSubir("audio", "Subir audio", ["audio"]);
-    el("h3", "ed-bib-titulo", p, "Audios del proyecto");
+    this._barraSubir("audio", t("bib.subir_audio"), ["audio"]);
+    el("h3", "ed-bib-titulo", p, t("bib.audios"));
     this.listaAudios = el("div", "ed-bib-audios", p);
   }
 
   _construirTextos() {
     const p = this.paneles.texto;
-    el("p", "ed-bib-ayuda", p, "Toca uno para ponerlo donde está el cabezal; con el mouse también puedes arrastrarlo a la línea de tiempo.");
+    el("p", "ed-bib-ayuda", p, t("bib.ayuda_textos"));
     const g = el("div", "ed-bib-textos", p);
-    for (const t of TEXTOS_BIBLIOTECA) {
-      const clave = `t:${t.preset}`;
-      this.cosas.set(clave, { tipo: "texto", preset: t.preset, nombre: t.nombre });
-      const b = el("button", `ed-bib-texto ed-bib-texto-${t.preset}`, g);
+    for (const muestra of textosBiblioteca()) {
+      const clave = `t:${muestra.preset}`;
+      this.cosas.set(clave, { tipo: "texto", preset: muestra.preset, nombre: muestra.nombre });
+      const b = el("button", `ed-bib-texto ed-bib-texto-${muestra.preset}`, g);
       b.type = "button";
       b.dataset.clave = clave;
       b.dataset.arrastrable = "";
-      b.setAttribute("aria-label", `Agregar un texto «${t.nombre}»`);
-      el("span", "ed-bib-texto-muestra", b, t.nombre);
+      b.setAttribute("aria-label", t("bib.agregar_texto", { nombre: muestra.nombre }));
+      el("span", "ed-bib-texto-muestra", b, muestra.nombre);
     }
   }
 
   _construirTransiciones() {
     const p = this.paneles.transiciones;
-    el("p", "ed-bib-ayuda", p, "Toca una para ponerla en el video que elegiste o, si no, en el corte más cercano al cabezal. Dura medio segundo; con el mouse también puedes arrastrarla a un corte.");
+    el("p", "ed-bib-ayuda", p, t("bib.ayuda_transiciones"));
     const g = el("div", "ed-bib-transiciones", p);
-    for (const t of TRANSICIONES_BIBLIOTECA) {
-      const clave = `tr:${t.tipo}`;
-      this.cosas.set(clave, { tipo: "transicion", transicion: t.tipo, nombre: t.nombre });
+    for (const tr of transicionesBiblioteca()) {
+      const clave = `tr:${tr.tipo}`;
+      this.cosas.set(clave, { tipo: "transicion", transicion: tr.tipo, nombre: tr.nombre });
       const b = el("button", "ed-bib-transicion", g);
       b.type = "button";
       b.dataset.clave = clave;
       b.dataset.arrastrable = "";
-      b.setAttribute("aria-label", `Transición «${t.nombre}»: ${t.descripcion}`);
-      const muestra = el("span", `ed-bib-tr-muestra ed-bib-tr-${t.tipo}`, b);
+      b.setAttribute("aria-label", t("bib.transicion", { nombre: tr.nombre, descripcion: tr.descripcion }));
+      const muestra = el("span", `ed-bib-tr-muestra ed-bib-tr-${tr.tipo}`, b);
       muestra.setAttribute("aria-hidden", "true");
       el("span", "ed-bib-tr-a", muestra);
       el("span", "ed-bib-tr-b", muestra);
       const txt = el("span", "ed-bib-tr-texto", b);
-      el("span", "ed-bib-tr-nombre", txt, t.nombre);
-      el("span", "ed-bib-tr-desc", txt, t.descripcion);
+      el("span", "ed-bib-tr-nombre", txt, tr.nombre);
+      el("span", "ed-bib-tr-desc", txt, tr.descripcion);
     }
   }
 
@@ -457,7 +465,7 @@ export class Biblioteca {
     for (const k of [...this.cosas.keys()]) if (k.startsWith("m:") || k.startsWith("p:")) this.cosas.delete(k);
     this.observador?.disconnect();
     if (this.carga !== "lista") {
-      const estado = () => (this.carga === "error" ? this._errorCarga() : this._vacio("Cargando…"));
+      const estado = () => (this.carga === "error" ? this._errorCarga() : this._vacio(t("bib.cargando")));
       this.grillaMedios.replaceChildren(estado());
       this.grillaPiezas.replaceChildren();
       this.listaAudios.replaceChildren(estado());
@@ -465,11 +473,11 @@ export class Biblioteca {
     }
     const { medios, audios, piezas } = repartir(this.datos);
     this.grillaMedios.replaceChildren(...(medios.length ? medios.map((m) => this._itemMaterial(m))
-      : [this._vacio("Todavía no hay videos ni imágenes en este proyecto. Súbelos con «Subir» (o arrástralos aquí desde tu computadora).")]));
+      : [this._vacio(t("bib.vacio_medios"))]));
     this.grillaPiezas.replaceChildren(...(piezas.length ? piezas.map((p) => this._itemPieza(p))
-      : [this._vacio("Cuando un video de Crear esté listo, aparece aquí.")]));
+      : [this._vacio(t("bib.vacio_piezas"))]));
     this.listaAudios.replaceChildren(...(audios.length ? audios.map((m) => this._filaAudio(m))
-      : [this._vacio("Todavía no hay audios. Sube uno aquí, o crea canciones en Crear › Mi música.")]));
+      : [this._vacio(t("bib.vacio_audios"))]));
   }
 
   _vacio(texto) {
@@ -478,8 +486,8 @@ export class Biblioteca {
 
   _errorCarga() {
     const n = el("div", "ed-bib-vacio");
-    el("p", "", n, "No se pudo cargar la biblioteca.");
-    const b = el("button", "btn-sm", n, "Reintentar");
+    el("p", "", n, t("bib.error_carga"));
+    const b = el("button", "btn-sm", n, t("bib.reintentar"));
     b.type = "button";
     b.dataset.reintentar = "";
     return n;
@@ -490,7 +498,7 @@ export class Biblioteca {
     b.type = "button";
     b.dataset.agregar = clave;
     b.disabled = desactivado;
-    b.title = "Agregar a la edición";
+    b.title = t("bib.agregar");
     b.setAttribute("aria-label", etiqueta);
     b.append(icono("mas", 16));
     return b;
@@ -556,7 +564,7 @@ export class Biblioteca {
     item.dataset.arrastrable = "";
     item.title = nombre;
     const mini = this._mini(miniatura(m), m.tipo === "video" ? duracionTexto(m.duracion_ms) : "");
-    mini.append(this._botonMas(clave, `Agregar «${nombre}» a la edición`));
+    mini.append(this._botonMas(clave, t("bib.agregar_nombre", { nombre })));
     item.append(mini);
     el("span", "ed-bib-nombre", item, nombre);
     return item;
@@ -565,7 +573,7 @@ export class Biblioteca {
   _itemPieza(p) {
     const clave = `p:${p.cf_id}`;
     const material = this._material(p.material_id);
-    const nombre = p.nombre || "Video de Crear";
+    const nombre = p.nombre || t("bib.video_crear");
     this.cosas.set(clave, { tipo: "pieza", pieza: p, material, nombre });
     const preparando = !material && (this.preparando.has(p.cf_id) || Boolean(p.preparando));
     const item = el("div", `ed-bib-item${preparando ? " ed-bib-preparando" : ""}`);
@@ -574,8 +582,8 @@ export class Biblioteca {
     item.title = nombre;
     const mini = this._mini(material ? miniatura(material) : miniatura({ tipo: "video", url: p.video_url }, { formato: p.formato }),
       material ? duracionTexto(material.duracion_ms) : "");
-    if (preparando) el("span", "ed-bib-estado", mini, "Preparando…");
-    mini.append(this._botonMas(clave, preparando ? `«${nombre}» se está preparando` : `Agregar «${nombre}» a la edición`, preparando));
+    if (preparando) el("span", "ed-bib-estado", mini, t("bib.preparando"));
+    mini.append(this._botonMas(clave, preparando ? t("bib.se_prepara", { nombre }) : t("bib.agregar_nombre", { nombre }), preparando));
     item.append(mini);
     el("span", "ed-bib-nombre", item, nombre);
     return item;
@@ -592,13 +600,13 @@ export class Biblioteca {
     el("span", "ed-bib-audio-icono", fila).append(icono("nota", 18));
     const txt = el("span", "ed-bib-audio-texto", fila);
     el("span", "ed-bib-nombre", txt, nombre);
-    el("span", "ed-bib-audio-detalle", txt, [duracionTexto(m.duracion_ms), m.origen === "musica" ? "Mi música" : "Subido"]
+    el("span", "ed-bib-audio-detalle", txt, [duracionTexto(m.duracion_ms), m.origen === "musica" ? t("bib.mi_musica") : t("bib.subido")]
       .filter(Boolean).join(" · "));
     const oir = el("button", "btn-sm ed-bib-escuchar", fila);
     oir.type = "button";
     oir.dataset.escuchar = clave;
     this._pintarBotonEscucha(oir, nombre);
-    fila.append(this._botonMas(clave, `Agregar «${nombre}» como música desde el cabezal`));
+    fila.append(this._botonMas(clave, t("bib.agregar_musica", { nombre })));
     return fila;
   }
 
@@ -609,17 +617,17 @@ export class Biblioteca {
       this.suprimirClic = false;
       return;
     }
-    const t = e.target;
-    const subir = t.closest?.("[data-subir]");
+    const objetivo = e.target;
+    const subir = objetivo.closest?.("[data-subir]");
     if (subir) return this.contenedor.querySelector(`[data-entrada="${subir.dataset.subir}"]`)?.click();
-    const mas = t.closest?.("[data-agregar]");
+    const mas = objetivo.closest?.("[data-agregar]");
     if (mas) return void this.agregar(mas.dataset.agregar);
-    const oir = t.closest?.("[data-escuchar]");
+    const oir = objetivo.closest?.("[data-escuchar]");
     if (oir) return this._escuchar(oir.dataset.escuchar);
-    const quitar = t.closest?.("[data-quitar-subida]");
+    const quitar = objetivo.closest?.("[data-quitar-subida]");
     if (quitar) return quitar.closest(".ed-bib-subida")?.remove();
-    if (t.closest?.("[data-reintentar]")) return void this.cargar();
-    const tarjeta = t.closest?.("button[data-clave]");          // un texto o una transición
+    if (objetivo.closest?.("[data-reintentar]")) return void this.cargar();
+    const tarjeta = objetivo.closest?.("button[data-clave]");          // un texto o una transición
     if (tarjeta) void this.agregar(tarjeta.dataset.clave);
   }
 
@@ -637,23 +645,23 @@ export class Biblioteca {
     if (cosa.material) ed.agregarMateriales({ [cosa.material.id]: cosa.material });   // antes de operar
     const pedido = pedidoAgregar(ed.doc(), cosa, { punto, cabezalMs: ed.tiempo(), seleccion: ed.seleccion });
     if (!pedido) {
-      this._decir("Una transición va entre dos videos: agrega otro video primero.", true);
+      this._decir(t("bib.sin_videos"), true);
       return false;
     }
     if (!ed.operar(...pedido)) {
-      const motivo = ed.enConflicto?.() ? MENSAJE_CONFLICTO : this._motivo(pedido);
-      this._decir(motivo ?? "No se pudo agregar: el aviso está debajo del video.", true);
+      const motivo = ed.enConflicto?.() ? mensajeConflicto() : this._motivo(pedido);
+      this._decir(motivo ?? t("bib.no_agregado"), true);
       return false;
     }
     if (cosa.tipo === "transicion") {
       const aviso = avisoTransicion(ed.doc(), pedido[1], pedido[2], pedido[3] ?? DURACION_TRANSICION_MS);
-      this._decir(aviso ?? (cosa.transicion === "corte" ? "Esa unión quedó en corte, sin transición." : `«${cosa.nombre}» quedó en la unión.`),
+      this._decir(aviso ?? (cosa.transicion === "corte" ? t("bib.union_corte") : t("bib.en_union", { nombre: cosa.nombre })),
         Boolean(aviso));
     } else if (cosa.tipo === "texto") {
-      this._decir("Texto agregado: escríbelo en «Editar».");
+      this._decir(t("bib.texto_agregado"));
       ed.enfocarTexto();
     } else {
-      this._decir(`Se agregó «${cosa.nombre}».`);
+      this._decir(t("bib.agregado", { nombre: cosa.nombre }));
     }
     if (cosa.material && faltaPreparar(cosa.material)) this._esperar(cosa.material.id);
     return true;
@@ -678,12 +686,12 @@ export class Biblioteca {
     const ya = this.preparando.get(p.cf_id);
     if (ya) {
       ya.pedido = { punto };
-      this._decir(`«${cosa.nombre}» se está preparando: se agrega sola cuando esté.`);
+      this._decir(t("bib.se_agrega_sola", { nombre: cosa.nombre }));
       return false;
     }
     this.preparando.set(p.cf_id, { desde: Date.now(), pedido: { punto } });
     this._pintarListas();
-    this._decir(`Preparando «${cosa.nombre}» para el editor (gratis): se agrega sola cuando esté.`);
+    this._decir(t("bib.preparando_pieza", { nombre: cosa.nombre }));
     let r;
     let j = null;
     try {
@@ -694,14 +702,14 @@ export class Biblioteca {
     } catch {
       this.preparando.delete(p.cf_id);
       this._pintarListas();
-      this._decir("Sin conexión: no se pudo preparar ese video. Vuelve a intentar.", true);
+      this._decir(t("bib.sin_conexion_pieza"), true);
       return false;
     }
     const prep = this.preparando.get(p.cf_id);
     if (r.redirected) {
       this.preparando.delete(p.cf_id);
       this._pintarListas();
-      this._decir("Tu sesión venció: vuelve a entrar para seguir.", true);
+      this._decir(t("bib.sesion"), true);
       return false;
     }
     if (r.status === 202) {
@@ -716,7 +724,7 @@ export class Biblioteca {
       return this._operar({ tipo: "video", material: j.material, nombre: cosa.nombre }, prep?.pedido?.punto ?? punto);
     }
     this._pintarListas();
-    this._decir(j?.error || `No se pudo preparar ese video (error ${r.status}).`, true);
+    this._decir(j?.error || t("bib.error_pieza", { status: r.status }), true);
     return false;
   }
 
@@ -758,19 +766,19 @@ export class Biblioteca {
     }
     for (const [cf, prep] of [...this.preparando]) {
       const p = this.datos.piezas.find((x) => x.cf_id === cf);
-      const nombre = p?.nombre || "ese video";
+      const nombre = p?.nombre || t("bib.ese_video");
       if (p?.material_id) {
         this.preparando.delete(cf);
         let m = this._material(p.material_id);
         if (!m) m = (await this._pedirJSON(`${this.urls.materiales_por_id}?ids=${p.material_id}`)).j?.materiales?.[p.material_id] ?? null;
         if (m) this._ponerMaterial(m);
-        if (prep.pedido && m) this._operar({ tipo: "video", material: m, nombre: p.nombre || "Video de Crear" }, prep.pedido.punto ?? null);
+        if (prep.pedido && m) this._operar({ tipo: "video", material: m, nombre: p.nombre || t("bib.video_crear") }, prep.pedido.punto ?? null);
       } else if (que === "json" && (!p || !p.preparando) && ahora - prep.desde > 2 * INTERVALO_BIBLIOTECA_MS) {
         this.preparando.delete(cf);                     // la preparación terminó sin material: falló
-        if (prep.pedido) this._decir(`No se pudo preparar «${nombre}». Vuelve a intentar.`, true);
+        if (prep.pedido) this._decir(t("bib.no_preparo", { nombre }), true);
       } else if (que === "parar" || ahora - prep.desde > TOPE_ESPERA_MS) {
         this.preparando.delete(cf);
-        if (prep.pedido) this._decir(`«${nombre}» tarda demasiado en prepararse. Vuelve a intentar en un rato.`, true);
+        if (prep.pedido) this._decir(t("bib.tarda", { nombre }), true);
       }
     }
     if (this._firma() !== antes) this._pintarListas();      // sin cambios, nada se repinta
@@ -861,12 +869,12 @@ export class Biblioteca {
     const quitar = el("button", "ed-bib-quitar", cabeza);
     quitar.type = "button";
     quitar.dataset.quitarSubida = "";
-    quitar.title = "Quitar";
-    quitar.setAttribute("aria-label", `Quitar «${s.nombre}» de la lista`);
+    quitar.title = t("bib.quitar");
+    quitar.setAttribute("aria-label", t("bib.quitar_nombre", { nombre: s.nombre }));
     quitar.append(icono("cerrar", 14));
     const barra = el("progress", "", li);
     barra.max = 1;
-    barra.setAttribute("aria-label", `Subida de «${s.nombre}»`);
+    barra.setAttribute("aria-label", t("bib.subida_de", { nombre: s.nombre }));
     el("p", "editor-aviso error ed-bib-subida-error", li);
     this._pintarSubida(s, li);
     return li;
@@ -957,8 +965,8 @@ export class Biblioteca {
   _pintarBotonEscucha(boton, nombre) {
     const sonando = this.escucha?.clave === boton.dataset.escuchar;
     boton.setAttribute("aria-pressed", String(sonando));
-    boton.setAttribute("aria-label", `${sonando ? "Parar" : "Escuchar"} «${nombre}»`);
-    boton.title = sonando ? "Parar" : "Escuchar";
+    boton.setAttribute("aria-label", t(sonando ? "bib.parar_nombre" : "bib.escuchar_nombre", { nombre }));
+    boton.title = t(sonando ? "bib.parar" : "bib.escuchar");
     boton.replaceChildren(icono(sonando ? "pausa" : "play", 14));
   }
 
@@ -974,7 +982,7 @@ export class Biblioteca {
     audio.play().catch(() => {
       if (this.escucha?.audio !== audio) return;
       this._pararEscucha();
-      this._decir("No se pudo escuchar ese audio.", true);
+      this._decir(t("bib.no_escucha"), true);
     });
     this._pintarEscuchas();
   }

@@ -28,6 +28,7 @@
 // un video (`volumenSonido`: ese clip a lo pedido, los demás en silencio).
 import { pistaPrincipal, CAPA_DEFECTO } from "./tiempo.js";
 import { FORMATOS } from "./formatos.js";
+import { t } from "./textos.js";
 
 export const MIN_CLIP_MS = 100;
 export const VELOCIDADES = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -69,7 +70,7 @@ function tieneAudioDe(info, materialId) {
 
 function principalDe(doc) {
   const p = pistaPrincipal(doc);
-  if (!p || p.tipo !== "video") throw new OperacionInvalida("Esta edición no tiene una pista de video principal.");
+  if (!p || p.tipo !== "video") throw new OperacionInvalida(t("op.sin_principal"));
   return p;
 }
 
@@ -78,7 +79,7 @@ function buscar(doc, clipId) {
     const indice = pista.clips.findIndex((c) => c.id === clipId);
     if (indice >= 0) return { pista, clip: pista.clips[indice], indice };
   }
-  throw new OperacionInvalida("Ese clip ya no existe en la edición.");
+  throw new OperacionInvalida(t("op.no_existe"));
 }
 
 // Una voz con `por_destino` (aunque sea `{en_US: null}`) se cambia ENTERA por
@@ -90,16 +91,16 @@ export function cambiaPorDestino(clip) {
 
 function noSonido(pista) {
   if (pista.id === ID_SONIDO) {
-    throw new OperacionInvalida("El sonido de la escena sigue a los clips de video: edita el clip de video.");
+    throw new OperacionInvalida(t("op.sonido_sigue"));
   }
 }
 
 // Los clips de la principal quedan uno tras otro desde 0, en el orden del arreglo.
 function recolocar(p) {
-  let t = 0;
+  let ms = 0;
   for (const c of p.clips) {
-    c.inicio_ms = t;
-    t += c.duracion_ms;
+    c.inicio_ms = ms;
+    ms += c.duracion_ms;
   }
 }
 
@@ -121,7 +122,7 @@ function raizId(id) {
 // (mismo estilo que idNuevo, pero en el espacio de ids de PISTA, separado
 // del de ids de clip).
 function pistaNueva(doc, tipo, base) {
-  if (doc.pistas.length >= MAX_PISTAS) throw new OperacionInvalida("Esta edición ya tiene demasiadas pistas.");
+  if (doc.pistas.length >= MAX_PISTAS) throw new OperacionInvalida(t("op.demasiadas_pistas"));
   const usados = new Set(doc.pistas.map((p) => p.id));
   let id = base;
   for (let n = 2; usados.has(id); n++) id = `${base}_${n}`;
@@ -269,11 +270,11 @@ export function cortarEn(doc, tMs, info = {}) {
   const res = structuredClone(doc);
   const p = principalDe(res);
   const i = p.clips.findIndex((c) => c.inicio_ms < tMs && tMs < c.inicio_ms + c.duracion_ms);
-  if (i < 0) throw new OperacionInvalida("Pon el cabezal dentro de un clip para cortarlo.");
+  if (i < 0) throw new OperacionInvalida(t("op.cabezal_fuera"));
   const a = p.clips[i];
   const antes = Math.round(tMs - a.inicio_ms);
   const despues = a.duracion_ms - antes;
-  if (antes < MIN_CLIP_MS || despues < MIN_CLIP_MS) throw new OperacionInvalida("Muy cerca del borde del clip para cortar ahí.");
+  if (antes < MIN_CLIP_MS || despues < MIN_CLIP_MS) throw new OperacionInvalida(t("op.muy_cerca"));
   const desde = a.recorte?.desde_ms ?? 0;
   const b = structuredClone(a);
   b.id = idNuevo(res, a.id);
@@ -297,11 +298,11 @@ export function cortarClip(doc, clipId, tMs, info = {}) {
   const { pista, clip, indice } = buscar(res, clipId);
   noSonido(pista);
   if (cambiaPorDestino(clip)) {
-    throw new OperacionInvalida("La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla.");
+    throw new OperacionInvalida(t("op.voz_destino"));
   }
   const antes = Math.round(tMs - clip.inicio_ms);
   const despues = clip.duracion_ms - antes;
-  if (antes < MIN_CLIP_MS || despues < MIN_CLIP_MS) throw new OperacionInvalida("Muy cerca del borde del clip para cortarlo.");
+  if (antes < MIN_CLIP_MS || despues < MIN_CLIP_MS) throw new OperacionInvalida(t("op.muy_cerca_clip"));
   const conRecorte = pista.tipo === "video" || pista.tipo === "superpuesto" || pista.tipo === "audio";
   const b = structuredClone(clip);
   b.id = idNuevo(res, clip.id);
@@ -326,7 +327,7 @@ export function borrar(doc, clipId, info = {}) {
   const { pista, indice } = buscar(res, clipId);
   noSonido(pista);
   if (pista === pistaPrincipal(res)) {
-    if (pista.clips.length === 1) throw new OperacionInvalida("La edición necesita al menos un clip de video.");
+    if (pista.clips.length === 1) throw new OperacionInvalida(t("op.un_clip"));
     pista.clips.splice(indice, 1);
     recolocar(pista);
     return terminar(res, pista.clips[Math.min(indice, pista.clips.length - 1)].id, info);
@@ -354,7 +355,7 @@ export function recortar(doc, clipId, lado, deltaMs, info = {}) {
   const { pista, clip } = buscar(res, clipId);
   noSonido(pista);
   if (cambiaPorDestino(clip)) {
-    throw new OperacionInvalida("La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla.");
+    throw new OperacionInvalida(t("op.voz_destino"));
   }
   const esPrincipal = pista === pistaPrincipal(res);
   const conRecorte = pista.tipo === "video" || pista.tipo === "superpuesto" || pista.tipo === "audio";
@@ -390,7 +391,7 @@ export function moverPrincipal(doc, clipId, nuevoIndice, info = {}) {
   const res = structuredClone(doc);
   const p = principalDe(res);
   const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0) throw new OperacionInvalida("Ese clip no está en la pista principal.");
+  if (i < 0) throw new OperacionInvalida(t("op.fuera_principal"));
   const [clip] = p.clips.splice(i, 1);
   p.clips.splice(Math.max(0, Math.min(p.clips.length, Math.round(nuevoIndice))), 0, clip);
   recolocar(p);
@@ -402,7 +403,7 @@ export function moverA(doc, clipId, inicioMs, info = {}) {
   const { pista, clip } = buscar(res, clipId);
   noSonido(pista);
   if (pista === pistaPrincipal(res)) {
-    throw new OperacionInvalida("Los clips de la pista principal se reordenan, no se mueven a un tiempo suelto.");
+    throw new OperacionInvalida(t("op.reordenar"));
   }
   clip.inicio_ms = Math.max(0, Math.round(inicioMs));
   return terminar(res, clip.id, info);
@@ -412,9 +413,9 @@ export function cambiarVelocidad(doc, clipId, velocidad, info = {}) {
   const res = structuredClone(doc);
   const { pista, clip } = buscar(res, clipId);
   if (pista.tipo !== "video" && pista.tipo !== "superpuesto") {
-    throw new OperacionInvalida("La velocidad solo se cambia en clips de video.");
+    throw new OperacionInvalida(t("op.velocidad_video"));
   }
-  if (!VELOCIDADES.includes(velocidad)) throw new OperacionInvalida(`Esa velocidad no está disponible (${velocidad}×).`);
+  if (!VELOCIDADES.includes(velocidad)) throw new OperacionInvalida(t("op.velocidad_no", { v: velocidad }));
   const tramo = fuente(clip);
   const desde = clip.recorte?.desde_ms ?? 0;
   const material = duracionDe(info, clip.material_id);
@@ -425,7 +426,7 @@ export function cambiarVelocidad(doc, clipId, velocidad, info = {}) {
     const maxDuracion = Math.max(0, Math.floor((material - desde) / velocidad));
     nueva = Math.min(nueva, maxDuracion);
   }
-  if (nueva < MIN_CLIP_MS) throw new OperacionInvalida("El clip quedaría demasiado corto a esa velocidad.");
+  if (nueva < MIN_CLIP_MS) throw new OperacionInvalida(t("op.muy_corto"));
   clip.velocidad = velocidad;
   clip.duracion_ms = nueva;
   clip.recorte = { desde_ms: desde, hasta_ms: desde + Math.round(nueva * velocidad) };
@@ -437,18 +438,18 @@ export function cambiarVelocidad(doc, clipId, velocidad, info = {}) {
 
 // Dónde entra una capa nueva (imagen, texto, música, efecto) sin alargar el
 // video: el fin de la edición es el de la principal (más allá, el render
-// congela el último cuadro). La capa dura como mucho lo que queda desde `t`
+// congela el último cuadro). La capa dura como mucho lo que queda desde `tMs`
 // hasta ese fin; con el cabezal al final (a menos de MIN_CLIP_MS), entra
 // entera terminando ahí (desde `fin − dur`, nunca antes de 0).
 function lugarCapa(doc, tMs, dMs) {
-  let t = Math.max(0, Math.round(Number(tMs) || 0));
+  let inicio = Math.max(0, Math.round(Number(tMs) || 0));
   let dur = Math.max(1, Math.round(Number(dMs) || 0));
   const p = pistaPrincipal(doc);
   const fin = p && p.tipo === "video" ? p.clips.reduce((m, c) => Math.max(m, c.inicio_ms + c.duracion_ms), 0) : 0;
-  if (fin <= 0) return { t, dur };
-  if (t >= fin - MIN_CLIP_MS) t = Math.max(0, fin - dur);
-  dur = Math.max(1, Math.min(dur, fin - t));
-  return { t, dur };
+  if (fin <= 0) return { inicio, dur };
+  if (inicio >= fin - MIN_CLIP_MS) inicio = Math.max(0, fin - dur);
+  dur = Math.max(1, Math.min(dur, fin - inicio));
+  return { inicio, dur };
 }
 
 // Inserta un clip del material ENTERO (recorte 0..duración, velocidad 1, sin
@@ -461,11 +462,11 @@ export function agregarVideo(doc, material, { despuesDe = null, indice = null } 
   const res = structuredClone(doc);
   const p = principalDe(res);
   const dur = duracionDe(info, material.id);
-  if (dur === undefined || dur === null) throw new OperacionInvalida("Ese video todavía se está preparando.");
+  if (dur === undefined || dur === null) throw new OperacionInvalida(t("op.video_preparando"));
   let lugar = p.clips.length;
   if (despuesDe !== null && despuesDe !== undefined) {
     const i = p.clips.findIndex((c) => c.id === despuesDe);
-    if (i < 0) throw new OperacionInvalida("Ese clip no está en la pista principal.");
+    if (i < 0) throw new OperacionInvalida(t("op.fuera_principal"));
     lugar = i + 1;
   } else if (indice !== null && indice !== undefined && Number.isFinite(Number(indice))) {
     lugar = Math.max(0, Math.min(p.clips.length, Math.round(Number(indice))));
@@ -493,8 +494,8 @@ export function agregarVideo(doc, material, { despuesDe = null, indice = null } 
 // medidas conocidas.
 export function agregarImagen(doc, material, tMs, { llenar = false, duracionMs = 3000 } = {}, info = {}) {
   const res = structuredClone(doc);
-  const { t, dur } = lugarCapa(res, tMs, Math.max(MIN_CLIP_MS, Math.round(Number(duracionMs) || 3000)));
-  const pista = pistaLibre(res, "imagen", "p_imagen", t, dur);
+  const { inicio, dur } = lugarCapa(res, tMs, Math.max(MIN_CLIP_MS, Math.round(Number(duracionMs) || 3000)));
+  const pista = pistaLibre(res, "imagen", "p_imagen", inicio, dur);
   const [anchoLienzo, altoLienzo] = FORMATOS[res.formato];
   const tieneMedidas = Number(material?.ancho) > 0 && Number(material?.alto) > 0;
   const anchoNatural = tieneMedidas ? Number(material.ancho) : CAPA_DEFECTO[0];
@@ -504,7 +505,7 @@ export function agregarImagen(doc, material, tMs, { llenar = false, duracionMs =
     ? Math.max(anchoLienzo / anchoNatural, altoLienzo / altoNatural)
     : (anchoLienzo * 0.6) / anchoNatural, ESCALA_MIN, ESCALA_MAX);
   const clip = {
-    id: idNuevo(res, "img"), inicio_ms: t, duracion_ms: dur, material_id: material.id,
+    id: idNuevo(res, "img"), inicio_ms: inicio, duracion_ms: dur, material_id: material.id,
     transform: { ...TRANSFORM, escala }, keyframes: [], animacion: null,
     ...(tieneMedidas ? { ancho_px: Math.trunc(anchoNatural), alto_px: Math.trunc(altoNatural) } : {}),
   };
@@ -522,12 +523,12 @@ export function agregarAudio(doc, material, tMs, { rol = "musica" } = {}, info =
   const res = structuredClone(doc);
   if (rol !== "musica" && rol !== "efecto") throw new OperacionInvalida(`Ese rol de audio no se agrega a mano (${rol}).`);
   const entero = duracionDe(info, material.id);
-  if (entero === undefined || entero === null) throw new OperacionInvalida("Ese audio todavía se está preparando.");
-  const { t, dur } = lugarCapa(res, tMs, entero);
+  if (entero === undefined || entero === null) throw new OperacionInvalida(t("op.audio_preparando"));
+  const { inicio, dur } = lugarCapa(res, tMs, entero);
   const mismoRol = (p) => p.clips.every((c) => (c.rol_audio ?? "subida") === rol);
-  const pista = pistaLibre(res, "audio", "p_audio", t, dur, [ID_SONIDO], mismoRol);
+  const pista = pistaLibre(res, "audio", "p_audio", inicio, dur, [ID_SONIDO], mismoRol);
   const clip = {
-    id: idNuevo(res, "audio"), inicio_ms: t, duracion_ms: dur, material_id: material.id, rol_audio: rol,
+    id: idNuevo(res, "audio"), inicio_ms: inicio, duracion_ms: dur, material_id: material.id, rol_audio: rol,
     recorte: { desde_ms: 0, hasta_ms: dur }, velocidad: 1,
     audio: { ...AUDIO, fundido_salida_ms: rol === "musica" ? 1000 : 0 },
   };
@@ -555,9 +556,9 @@ export function agregarTexto(doc, tMs, preset, info = {}) {
   const res = structuredClone(doc);
   const def = PRESETS_TEXTO[preset];
   if (!def) throw new OperacionInvalida(`Ese estilo de texto no existe (${preset}).`);
-  const { t, dur } = lugarCapa(res, tMs, 3000);
+  const { inicio, dur } = lugarCapa(res, tMs, 3000);
   const [, altoLienzo] = FORMATOS[res.formato];
-  const pista = pistaLibre(res, "texto", "p_texto", t, dur);
+  const pista = pistaLibre(res, "texto", "p_texto", inicio, dur);
   const estilo = {
     fuente: def.fuente, tamano: def.px / altoLienzo, color: def.color, alineacion: "centro", ancho_max: null,
     contorno: def.contorno ? { color: def.contorno.color, grosor: def.contorno.grosorPx / altoLienzo } : null,
@@ -569,8 +570,8 @@ export function agregarTexto(doc, tMs, preset, info = {}) {
       : null,
   };
   const clip = {
-    id: idNuevo(res, preset), inicio_ms: t, duracion_ms: dur,
-    texto: { literal: preset === "precio" ? "$ 0" : "Escribe aquí" },
+    id: idNuevo(res, preset), inicio_ms: inicio, duracion_ms: dur,
+    texto: { literal: preset === "precio" ? "$ 0" : t("op.texto_nuevo") },
     estilo, transform: { ...TRANSFORM, y: def.y }, keyframes: [], animacion: null,
   };
   pista.clips.push(clip);
@@ -585,8 +586,8 @@ export function ponerTransicion(doc, clipId, tipo, duracionMs = 500, info = {}) 
   const res = structuredClone(doc);
   const p = principalDe(res);
   const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0) throw new OperacionInvalida("Esa transición solo se pone en un clip de la pista principal.");
-  if (i === p.clips.length - 1) throw new OperacionInvalida("El último clip no tiene transición hacia el siguiente.");
+  if (i < 0) throw new OperacionInvalida(t("op.transicion_principal"));
+  if (i === p.clips.length - 1) throw new OperacionInvalida(t("op.transicion_ultimo"));
   if (!TRANSICIONES.includes(tipo)) throw new OperacionInvalida(`Esa transición no existe (${tipo}).`);
   const clip = p.clips[i];
   clip.transicion = tipo === "corte" ? null : { tipo, duracion_ms: Math.max(0, Math.round(Number(duracionMs) || 0)) };
@@ -604,15 +605,15 @@ const _CLAVE_RE = /^[a-z]{2}(_[A-Z]{2})?$/;   // documento._CLAVE_RE: "es" o "es
 export function editarTexto(doc, clipId, texto, destino, info = {}) {
   const res = structuredClone(doc);
   const { pista, clip } = buscar(res, clipId);
-  if (pista.tipo !== "texto") throw new OperacionInvalida("Eso no es un clip de texto.");
+  if (pista.tipo !== "texto") throw new OperacionInvalida(t("op.no_es_texto"));
   if (typeof destino !== "string" || !_CLAVE_RE.test(destino)) {
     throw new OperacionInvalida(`Ese destino no es válido (${destino}); usa <idioma> o <idioma>_<PAIS>, p. ej. es_CO.`);
   }
   const valor = String(texto ?? "").trim();
-  if (!valor) throw new OperacionInvalida("El texto no puede quedar vacío.");
-  const t = clip.texto || {};
-  if ("variable" in t) {
-    const rol = t.variable;
+  if (!valor) throw new OperacionInvalida(t("op.texto_vacio"));
+  const tx = clip.texto || {};
+  if ("variable" in tx) {
+    const rol = tx.variable;
     res.variables = res.variables || {};
     res.variables.textos = res.variables.textos || {};
     res.variables.textos[rol] = { ...(res.variables.textos[rol] || {}), [destino]: valor };
@@ -689,14 +690,14 @@ export function cambiar(doc, clipId, cambios, info = {}) {
   const res = structuredClone(doc);
   const { pista, clip } = buscar(res, clipId);
   if (!cambios || typeof cambios !== "object" || Array.isArray(cambios)) {
-    throw new OperacionInvalida("No hay cambios que aplicar.");
+    throw new OperacionInvalida(t("op.sin_cambios"));
   }
   for (const clave of Object.keys(cambios)) {
     if (!CAMBIOS_TOP.includes(clave)) throw new OperacionInvalida(`No se puede cambiar «${clave}» aquí.`);
   }
   let tocaEstilo = false;
   if (cambios.estilo !== undefined) {
-    if (pista.tipo !== "texto") throw new OperacionInvalida("El estilo solo se cambia en clips de texto.");
+    if (pista.tipo !== "texto") throw new OperacionInvalida(t("op.estilo_solo_texto"));
     const e = cambios.estilo;
     if (typeof e !== "object" || Array.isArray(e) || e === null) throw new OperacionInvalida("estilo debe ser un objeto.");
     for (const clave of Object.keys(e)) {
@@ -729,20 +730,20 @@ export function cambiar(doc, clipId, cambios, info = {}) {
   }
   if (cambios.transform !== undefined) {
     if (!["video", "superpuesto", "imagen", "texto"].includes(pista.tipo)) {
-      throw new OperacionInvalida("Un clip de audio no tiene posición ni tamaño.");
+      throw new OperacionInvalida(t("op.audio_sin_posicion"));
     }
-    const t = cambios.transform;
-    if (typeof t !== "object" || Array.isArray(t) || t === null) throw new OperacionInvalida("transform debe ser un objeto.");
-    for (const clave of Object.keys(t)) {
+    const tf = cambios.transform;
+    if (typeof tf !== "object" || Array.isArray(tf) || tf === null) throw new OperacionInvalida("transform debe ser un objeto.");
+    for (const clave of Object.keys(tf)) {
       if (!["x", "y", "escala", "opacidad"].includes(clave)) throw new OperacionInvalida(`transform.${clave} no se puede cambiar.`);
     }
-    if (t.x !== undefined) clip.transform.x = acotar(numeroCambio(t.x, "transform.x"), 0, 1);
-    if (t.y !== undefined) clip.transform.y = acotar(numeroCambio(t.y, "transform.y"), 0, 1);
-    if (t.escala !== undefined) clip.transform.escala = acotar(numeroCambio(t.escala, "transform.escala"), ESCALA_MIN, ESCALA_MAX);
-    if (t.opacidad !== undefined) clip.transform.opacidad = acotar(numeroCambio(t.opacidad, "transform.opacidad"), 0, 1);
+    if (tf.x !== undefined) clip.transform.x = acotar(numeroCambio(tf.x, "transform.x"), 0, 1);
+    if (tf.y !== undefined) clip.transform.y = acotar(numeroCambio(tf.y, "transform.y"), 0, 1);
+    if (tf.escala !== undefined) clip.transform.escala = acotar(numeroCambio(tf.escala, "transform.escala"), ESCALA_MIN, ESCALA_MAX);
+    if (tf.opacidad !== undefined) clip.transform.opacidad = acotar(numeroCambio(tf.opacidad, "transform.opacidad"), 0, 1);
   }
   if (cambios.audio !== undefined) {
-    if (pista.tipo !== "audio") throw new OperacionInvalida("El audio solo se cambia en clips de audio.");
+    if (pista.tipo !== "audio") throw new OperacionInvalida(t("op.audio_solo_audio"));
     const a = cambios.audio;
     if (typeof a !== "object" || Array.isArray(a) || a === null) throw new OperacionInvalida("audio debe ser un objeto.");
     for (const clave of Object.keys(a)) {
@@ -791,15 +792,15 @@ export function cambiar(doc, clipId, cambios, info = {}) {
 export function volumenSonido(doc, clipPrincipalId, volumen, info = {}) {
   const res = structuredClone(doc);
   const p = principalDe(res);
-  if (!p.clips.some((c) => c.id === clipPrincipalId)) throw new OperacionInvalida("Ese clip no está en la pista principal.");
+  if (!p.clips.some((c) => c.id === clipPrincipalId)) throw new OperacionInvalida(t("op.fuera_principal"));
   const valor = acotar(numeroCambio(volumen, "volumen"), 0, 1);
   if (!abrirSonido(res, info, (c) => c.id === clipPrincipalId)) {
-    throw new OperacionInvalida("Esta edición ya tiene demasiadas pistas: no cabe el sonido del video.");
+    throw new OperacionInvalida(t("op.sonido_no_cabe"));
   }
   sincronizarSonido(res, info);
   const sonido = res.pistas.find((x) => x.id === ID_SONIDO);
   const mirror = sonido?.clips.find((c) => c.id === `s_${clipPrincipalId}`.slice(0, 40));
-  if (!mirror) throw new OperacionInvalida("Ese clip no tiene sonido de la escena todavía.");
+  if (!mirror) throw new OperacionInvalida(t("op.sin_sonido_escena"));
   mirror.audio.volumen = valor;
   return terminar(res, clipPrincipalId, info);
 }

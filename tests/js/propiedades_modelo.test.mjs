@@ -6,8 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as op from "../../static/editor/operaciones.js";
 import {
-  alternarSilencio, AYUDA_VACIA, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, claveForma,
-  COLORES, escalaDePorcentaje, formaDe, MENSAJE_CONFLICTO, mensajeRechazo, modelo, motivoRechazo, textoPorcentaje,
+  alternarSilencio, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, claveForma,
+  COLORES, escalaDePorcentaje, formaDe, mensajeConflicto, mensajeRechazo, modelo, motivoRechazo, textoPorcentaje,
   textoSegundos, textoVelocidad, TRANSICION_MS,
 } from "../../static/editor/propiedades_modelo.js";
 import { docBase } from "./doc_base.mjs";
@@ -45,7 +45,7 @@ test("modelo sin nada elegido: la mezcla de la edición y qué hacer", () => {
   const d = docBase();
   const m = modelo(d, null);
   assert.equal(m.forma, "documento");
-  assert.equal(m.ayuda, AYUDA_VACIA);
+  assert.equal(m.ayuda, "Elige algo en la línea de tiempo o en el video para cambiarlo.");
   assert.equal(m.mezcla, "equilibrada");
   assert.equal(m.aMedida, false);
   assert.deepEqual(m.opcionesMezcla.map((o) => [o.valor, o.texto]),
@@ -284,16 +284,16 @@ test("un video de una edición sin sonido de la escena muestra el volumen en 0 (
 });
 
 test("mensajeRechazo: con la edición cambiada en otra pestaña lo dice así (no «debajo del video»); si no, el porqué", () => {
-  assert.equal(MENSAJE_CONFLICTO, "La edición cambió en otra pestaña: recarga la página para seguir.");
+  assert.equal(mensajeConflicto(), "La edición cambió en otra pestaña: recarga la página para seguir.");
   // en conflicto la operación en sí se podía: el motivo es el conflicto
-  assert.equal(mensajeRechazo(docBase(), "cambiar", ["t1", { transform: { x: 0.5 } }], INFO, { conflicto: true }), MENSAJE_CONFLICTO);
+  assert.equal(mensajeRechazo(docBase(), "cambiar", ["t1", { transform: { x: 0.5 } }], INFO, { conflicto: true }), mensajeConflicto());
   assert.match(mensajeRechazo(docBase(), "ponerTransicion", ["v1", "fundido", 500], INFO), /último/);
   assert.match(mensajeRechazo(docBase(), "cambiar", ["t1", { transform: { x: 0.5 } }], INFO), /No se pudo hacer ese cambio/);
 });
 
 test("Propiedades: una operación rechazada vuelve a pintar el control con el valor real y dice el porqué", async () => {
   const { Propiedades } = await import("../../static/editor/propiedades.js");
-  for (const [conflicto, esperado] of [[true, MENSAJE_CONFLICTO], [false, /último/]]) {
+  for (const [conflicto, esperado] of [[true, mensajeConflicto()], [false, /último/]]) {
     const dichos = [];
     const falsa = {
       editor: { operar: () => false, operarCon: () => false, doc: () => docBase(), info: () => INFO, enConflicto: () => conflicto },

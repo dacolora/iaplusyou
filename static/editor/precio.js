@@ -2,6 +2,7 @@
 // tests/fixtures/precios_casos.json). El precio de un país es el número
 // escrito para ese país: aquí solo se le da formato, nunca se convierte.
 import { redondearPar } from "./numeros.js";
+import { t } from "./textos.js";
 
 export const SIMBOLOS = { CO: "$", MX: "$", US: "$", ES: "€", BR: "R$", AR: "$", CL: "$", PE: "S/" };
 const SIN_DECIMALES = new Set(["CO", "AR", "CL"]);
@@ -24,7 +25,7 @@ function centavos(valor) {
 
 export function formatearPrecio(valor, pais) {
   const simbolo = SIMBOLOS[pais];
-  if (simbolo === undefined) throw new Error(`No sé formatear precios de ${pais}.`);
+  if (simbolo === undefined) throw new Error(t("precio.sin_formato", { pais }));
   if (SIN_DECIMALES.has(pais)) {
     // El signo sale del entero YA redondeado (como Python: int(round(valor))
     // nunca es "-0"), no del valor original.
