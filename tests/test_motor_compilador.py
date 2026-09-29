@@ -161,6 +161,22 @@ def test_fundidos_de_audio_solo_en_bordes_reales():
     assert "afade=t=out" not in plan.filtergraph
 
 
+def test_fundidos_mas_largos_que_el_clip_nunca_arrancan_antes_de_cero():
+    # Capa 4c (1/10): una música de 400 ms con el fundido de salida de 1 s
+    # pedía `afade=t=out:st=-0.600` y ffmpeg rechazaba el valor (la final
+    # salía en error). Tope de seguridad: el fundido nunca dura más que el
+    # clip y nunca empieza antes de 0.
+    doc = _doc()
+    m1 = doc["pistas"][3]["clips"][0]
+    m1.update(inicio_ms=6600, duracion_ms=400, recorte={"desde_ms": 0, "hasta_ms": 400})
+    m1["audio"].update(fundido_entrada_ms=700, fundido_salida_ms=1000)
+    plan = c.compilar(doc, RUTAS, con_ass=False)
+    linea = next(p for p in plan.filtergraph.split(";") if p.endswith("[au_musica]"))
+    assert "afade=t=out:st=0.000:d=0.400" in linea, linea
+    assert "afade=t=in:st=0:d=0.400" in linea, linea
+    assert "st=-" not in plan.filtergraph
+
+
 def test_ventana_sin_clips_de_audio_emite_silencio_si_el_documento_tiene_audio():
     # La voz y la música terminan con el primer tramo (3500): la ventana
     # (3500, 7000) no tiene ningún clip de audio activo, pero el documento sí

@@ -546,3 +546,51 @@ test("agregarAudio: la música no cae en la pista de la voz; va con otra música
   const pe = efecto.doc.pistas.find((p) => p.clips.some((c) => c.id === efecto.seleccion));
   assert.ok(![pista.id, "p_voz", "p_sonido"].includes(pe.id), pe.id);
 });
+
+// ---- Capa 4c (1/10): los fundidos nunca pasan de la duración del clip ----
+// Un audio de menos de 1 s con el fundido de salida de 1 s de la música hacía
+// que el render pidiera `afade ... st=-0.600` y ffmpeg fallaba.
+const INFO_CORTO = { ...INFO_LARGO, 7: { duracion_ms: 400 } };
+const fundidos = (c) => [c.audio.fundido_entrada_ms, c.audio.fundido_salida_ms];
+const caben = (c, contexto) => assert.ok(c.audio.fundido_entrada_ms + c.audio.fundido_salida_ms <= c.duracion_ms,
+  `${contexto}: fundidos ${fundidos(c)} en un clip de ${c.duracion_ms} ms`);
+
+test("agregar un audio corto (o música cerca del final) deja los fundidos dentro del clip", () => {
+  const corto = puro((d) => op.agregarAudio(d, { id: 7 }, 2000, { rol: "musica" }, INFO_CORTO));
+  const c = clipDe(corto.doc, corto.seleccion);
+  assert.equal(c.duracion_ms, 400);
+  caben(c, "música de 400 ms");
+  assert.deepEqual(fundidos(c), [0, 400]);
+  const alFinal = op.agregarAudio(docBase(), { id: 6 }, 7600, { rol: "musica" }, INFO_CORTO);
+  const f = clipDe(alFinal.doc, alFinal.seleccion);
+  assert.equal(f.duracion_ms, 400);
+  caben(f, "música que entra a 0,4 s del final");
+});
+
+test("cortar música: la mitad izquierda pierde el fundido de salida y la derecha el de entrada (y lo que queda cabe)", () => {
+  const base = docBase();
+  const conMusica = op.agregarAudio(base, { id: 2 }, 0, { rol: "musica" }, INFO);
+  const id = conMusica.seleccion;
+  const conEntrada = op.cambiar(conMusica.doc, id, { audio: { fundido_entrada_ms: 500 } }, INFO).doc;
+  const r = puro((d) => op.cortarClip(d, id, 2600, INFO), conEntrada);
+  const izq = clipDe(r.doc, id);
+  const der = clipDe(r.doc, r.seleccion);
+  assert.deepEqual(fundidos(izq), [500, 0], "la izquierda conserva su entrada y no baja al cortar");
+  assert.equal(der.duracion_ms, 400);
+  assert.equal(der.audio.fundido_entrada_ms, 0, "la derecha no sube de nuevo al cortar");
+  caben(der, "mitad derecha de 400 ms");
+  assert.ok(der.audio.fundido_salida_ms > 0, "la derecha conserva (acotado) el fundido del final");
+});
+
+test("recortar o cambiar los fundidos de un audio nunca los deja más largos que el clip", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "musica" }, INFO);
+  const id = conMusica.seleccion;
+  const corto = op.recortar(conMusica.doc, id, "fin", -2700, INFO).doc;
+  caben(clipDe(corto, id), "música recortada a 300 ms");
+  const desdeInicio = op.recortar(conMusica.doc, id, "inicio", 2800, INFO).doc;
+  caben(clipDe(desdeInicio, id), "música recortada desde el inicio");
+  const pedidos = op.cambiar(corto, id, { audio: { fundido_entrada_ms: 900, fundido_salida_ms: 900 } }, INFO).doc;
+  const c = clipDe(pedidos, id);
+  caben(c, "fundidos pedidos de más");
+  assert.deepEqual(fundidos(c), [150, 150], "se acortan los dos en proporción");
+});

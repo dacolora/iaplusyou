@@ -427,11 +427,18 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             # antes de su borde real, ese borde no está aquí y el fundido no
             # suena (sonaría a mitad de frase y el tramo siguiente perdería
             # el pedazo que ya se "gastó" en el fundido de este).
+            # Tope de seguridad (capa 4c): un fundido nunca dura más que lo
+            # que suena del clip en este tramo ni empieza antes de 0 — un
+            # audio de 400 ms con el fundido de 1 s de la música pedía
+            # `st=-0.600` y ffmpeg rechazaba todo el grafo. El editor ya los
+            # acota (operaciones.normalizar); esto cubre cualquier otro camino.
+            largo_local = corte_fin - corte_ini
             if au.get("fundido_entrada_ms") and corte_ini == 0:
-                filtros.append(f"afade=t=in:st=0:d={_s(au['fundido_entrada_ms'])}")
+                d_in = min(au["fundido_entrada_ms"], largo_local)
+                filtros.append(f"afade=t=in:st=0:d={_s(d_in)}")
             if au.get("fundido_salida_ms") and corte_fin == cl["duracion_ms"]:
-                fin_local = corte_fin - corte_ini
-                filtros.append(f"afade=t=out:st={_s(fin_local - au['fundido_salida_ms'])}:d={_s(au['fundido_salida_ms'])}")
+                d_out = min(au["fundido_salida_ms"], largo_local)
+                filtros.append(f"afade=t=out:st={_s(max(0, largo_local - d_out))}:d={_s(d_out)}")
             # posición del clip dentro del tramo: dos clips del mismo grupo
             # (dos voces que se turnan, por ejemplo) no pueden sonar los dos
             # desde 0 — adelay los deja donde van. Se omite en 0 para que la

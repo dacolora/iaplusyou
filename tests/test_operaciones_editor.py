@@ -40,6 +40,15 @@ def test_las_operaciones_del_navegador_dejan_documentos_validos():
         if caso["nombre"].startswith("agregar_"):
             fin_principal = sum(c["duracion_ms"] for c in doc["pistas"][0]["clips"])
             assert documento.duracion_ms(doc) == fin_principal, f"{caso['nombre']}: el video quedó más largo"
+        # capa 4c: los fundidos de cada audio caben en su clip (si no, el
+        # render pide `afade ... st=<negativo>` y ffmpeg falla)
+        for p in doc["pistas"]:
+            if p["tipo"] != "audio":
+                continue
+            for c in p["clips"]:
+                au = c.get("audio") or {}
+                assert au.get("fundido_entrada_ms", 0) + au.get("fundido_salida_ms", 0) <= c["duracion_ms"], (
+                    f"{caso['nombre']}: los fundidos de {c['id']} no caben en sus {c['duracion_ms']} ms")
         # la mezcla que deja el panel de propiedades es una que el render conoce
         mz = doc.get("mezcla") or {}
         mezcla.volumenes_para(mz.get("preset"), mz.get("volumenes"))

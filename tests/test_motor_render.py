@@ -204,3 +204,17 @@ def test_clips_reordenados_de_la_misma_fuente_renderizan_su_tramo(tmp_path, medi
     streams, dur = _streams(out["archivo"])
     assert abs(dur - 7.0) <= 0.2
     assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+
+
+@pytest.mark.slow
+def test_musica_de_400_ms_con_fundido_de_1_s_renderiza(tmp_path, medios):
+    # Capa 4c (1/10), con ffmpeg real: un audio de menos de 1 s con el
+    # fundido de salida de la música (1 s) hacía `afade=t=out:st=-0.600` y
+    # ffmpeg rechazaba el grafo ("out of range"): la final salía en error.
+    doc = _doc()
+    m1 = doc["pistas"][3]["clips"][0]
+    m1.update(inicio_ms=6600, duracion_ms=400, recorte={"desde_ms": 0, "hasta_ms": 400})
+    m1["audio"].update(fundido_entrada_ms=0, fundido_salida_ms=1000)
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "corto.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert abs(dur - 7.0) <= 0.2 and "audio" in streams

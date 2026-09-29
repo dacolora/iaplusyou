@@ -118,6 +118,20 @@ anotar("agregar_musica_y_efecto_en_sus_pistas", () => {
   return op.agregarAudio(conMusica, { id: 2 }, 0, { rol: "efecto" }, INFO);
 });
 
+// Capa 4c (1/10): un audio corto nunca lleva fundidos más largos que él.
+const INFO_CORTO = { ...INFO_LARGO, 7: { duracion_ms: 400 } };
+anotar("agregar_musica_de_400_ms", () => op.agregarAudio(docBase(), { id: 7 }, 2000, { rol: "musica" }, INFO_CORTO), { ...D, 7: 400 });
+anotar("agregar_efecto_corto_al_final", () => op.agregarAudio(docBase(), { id: 7 }, 7900, { rol: "efecto" }, INFO_CORTO), { ...D, 7: 400 });
+anotar("cortar_musica_deja_un_pedazo_corto", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "musica" }, INFO);
+  return op.cortarClip(conMusica.doc, conMusica.seleccion, 2600, INFO);
+});
+anotar("cambiar_fundidos_de_mas", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "musica" }, INFO);
+  const corto = op.recortar(conMusica.doc, conMusica.seleccion, "fin", -2700, INFO).doc;
+  return op.cambiar(corto, conMusica.seleccion, { audio: { fundido_entrada_ms: 900, fundido_salida_ms: 900 } }, INFO);
+});
+
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {
   const alFinal = op.recortar(op.cambiarVelocidad(docBase(), "v1", v, D9).doc, "v1", "fin", 99999, D9).doc;

@@ -229,15 +229,36 @@ function ajustarAlMaterial(doc, info) {
   if (p && p.tipo === "video") recolocar(p);
 }
 
+// Capa 4c: los fundidos de un clip de audio caben en él — entrada + salida
+// <= duración; si no, los dos se acortan en proporción (hacia abajo: nunca
+// de más). Un audio de 400 ms con el fundido de 1 s de la música hacía que el
+// render pidiera `afade ... st=-0.600` y ffmpeg rechazaba la final entera.
+function acotarFundidos(doc) {
+  for (const pista of doc.pistas) {
+    if (pista.tipo !== "audio") continue;
+    for (const c of pista.clips) {
+      const a = c.audio;
+      if (!a) continue;
+      const entrada = Math.max(0, Number(a.fundido_entrada_ms) || 0);
+      const salida = Math.max(0, Number(a.fundido_salida_ms) || 0);
+      if (entrada + salida <= c.duracion_ms) continue;
+      const k = c.duracion_ms / (entrada + salida);
+      c.audio = { ...a, fundido_entrada_ms: Math.floor(entrada * k), fundido_salida_ms: Math.floor(salida * k) };
+    }
+  }
+}
+
 // Espejo de compilador.verificar_recortes: primero ningún clip pide material
 // de más (`ajustarAlMaterial`, con la principal otra vez contigua desde 0 y
 // el sonido de la escena rehecho); después, en la principal, la cola de A
 // (`d` ms de salida × velocidad) tiene que caber en el material; si no, se
 // acorta a lo que queda o pasa a corte seco. La transición del último clip no
-// se toca (el compilador tampoco).
+// se toca (el compilador tampoco). Además (capa 4c) los fundidos de cada audio
+// caben en su clip (`acotarFundidos`).
 export function normalizar(doc, info = {}) {
   ajustarAlMaterial(doc, info);
   sincronizarSonido(doc, info);
+  acotarFundidos(doc);
   const p = pistaPrincipal(doc);
   if (!p || p.tipo !== "video") return doc;
   p.clips.forEach((c, i) => {
@@ -314,6 +335,13 @@ export function cortarClip(doc, clipId, tMs, info = {}) {
     b.recorte = { desde_ms: clip.recorte.hasta_ms, hasta_ms: clip.recorte.hasta_ms + Math.round(despues * vel(b)) };
   }
   if (pista.tipo === "video" || pista.tipo === "superpuesto") clip.transicion = null;
+  // Un corte no es un borde real del sonido: la mitad izquierda no baja al
+  // final ni la derecha sube al principio (antes cada corte de la música
+  // dejaba un bajón de 1 s). Lo que queda se acota al terminar (normalizar).
+  if (pista.tipo === "audio") {
+    if (clip.audio) clip.audio = { ...clip.audio, fundido_salida_ms: 0 };
+    if (b.audio) b.audio = { ...b.audio, fundido_entrada_ms: 0 };
+  }
   const esPrincipal = pista === pistaPrincipal(res);
   pista.clips.splice(indice + 1, 0, b);
   if (esPrincipal) recolocar(pista);
