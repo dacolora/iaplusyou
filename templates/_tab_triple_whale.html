@@ -3,7 +3,9 @@
    evaluación llega por fetch la primera vez que se abre la pestaña
    (triple_whale.rutas.ver_panel), así la página del proyecto no calcula nada
    de esto al cargar. Todo el JS vive aquí: los <script> de un fragmento que
-   llega por fetch no corren. #}
+   llega por fetch no corren. La conexión (llave, tienda, atribución) es
+   _triple_whale_conectar.html, incluido aquí en los dos estados (desde
+   2026-09-28; antes vivía en Configuración › Conexiones). #}
 <div class="panel-cabecera">
   <div>
     <h2>{{ _('Triple Whale') }}</h2>
@@ -16,10 +18,10 @@
   <p class="estado-vacio-titulo">{{ _('Conecta Triple Whale para evaluar tu contenido') }}</p>
   <p class="estado-vacio-texto">{{ _('Apenas lo conectes traemos los últimos 90 días: gasto, impresiones, clics, vistas de 3 segundos, ThruPlays, pedidos e ingresos atribuidos por el Triple Pixel, por anuncio y por día, más las ventas de la tienda. Con eso cada anuncio recibe un veredicto (ganador, prometedor, perdedor) y un diagnóstico: gancho, retención, clic, conversión o fatiga.') }}</p>
   <p class="estado-vacio-texto">{{ _('Después, un análisis con IA mira tus ganadores y tus perdedores, explica qué patrón se repite y propone anuncios nuevos que puedes llevar a Crear con un clic.') }}</p>
-  <a class="btn-generar btn-sm" href="#settings"
-     onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-triple-whale'); return false; }">{{ _('Conectar en Configuración →') }}</a>
 </div>
+{% include "_triple_whale_conectar.html" %}
 {% else %}
+{% include "_triple_whale_conectar.html" %}
 <div id="tw-panel" data-url="{{ url_for('triple_whale.ver_panel', cliente=cliente) }}">
   <p class="vacio">{{ _('Cargando las métricas de Triple Whale…') }}</p>
 </div>
@@ -67,6 +69,12 @@
     cont.addEventListener('click', function (ev) {
       var chip = ev.target.closest('[data-tw-filtro]');
       if (chip) { aplicarVeredicto(chip.dataset.twFiltro); return; }
+      var aj = ev.target.closest('[data-tw-ajustes]');
+      if (aj) {
+        var det = document.getElementById('tw-ajustes');
+        if (det) { ev.preventDefault(); det.open = true; det.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        return;
+      }
       var ir = ev.target.closest('[data-ir-tab]');
       if (ir) {
         var btn = document.querySelector('.sidebar-item[data-tab="' + ir.dataset.irTab + '"]');

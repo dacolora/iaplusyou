@@ -55,7 +55,9 @@ def test_sin_conectar_la_pestana_invita_a_conectar(app):  # noqa: F811
     assert 'data-tab="triplewhale"' in html and 'id="tab-triplewhale"' in html
     ini = html.index('id="tab-triplewhale"')
     pestana = html[ini:html.index('id="tab-nicho"')]
-    assert "Conecta Triple Whale para evaluar tu contenido" in pestana and "config-triple-whale" in pestana
+    # Desde 2026-09-28 el formulario de conexión vive aquí mismo, no en Configuración.
+    assert "Conecta Triple Whale para evaluar tu contenido" in pestana and 'id="tw-conexion"' in pestana
+    assert "/cliente/acme/cfg_triple_whale/conectar" in pestana and "config-triple-whale" not in pestana
     assert "/triple-whale/panel" not in pestana
     assert "Triple Whale ya no está conectado" in app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
 

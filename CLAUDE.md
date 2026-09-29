@@ -759,7 +759,8 @@ or `prod_vincular` creates their activo. Configuración (`_tab_settings.html`) s
 apartado at a time (pills, last one remembered, `window.irAConfig(id)` opens the apartado
 holding `id`): Puesta a punto (admin only), Conexiones (store, Pixel, organic channels — since
 2026-09-28 the Meta connection card is NOT here: it lives only in Experimentos,
-`_meta_conectar.html`; the Triple Whale form still is), Marca, Generación, Cuenta y avisos,
+`_meta_conectar.html`; the Triple Whale form left the same day for the Triple Whale tab,
+`_triple_whale_conectar.html`), Marca, Generación, Cuenta y avisos,
 Gasto. The key cards (`_llave_tarjeta.html`,
 `dashboard._estado_llaves`) list every
 paid key (Anthropic, fal, Higgsfield, R2, Meta, SMTP, MELI) with configured/missing badges —
@@ -792,7 +793,9 @@ without it). The objective is fixed at creation — Meta doesn't allow changing 
 
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
 `docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023 and 0024): connected from
-Configuración › Conexiones (Fernet-encrypted API key; `cfg_triple_whale_conectar` requires a verified correo,
+the Triple Whale tab itself (`_triple_whale_conectar.html`, included by `_tab_triple_whale.html` in both states;
+until 2026-09-28 the form sat in Configuración › Conexiones, and the `cfg_triple_whale_*` routes now return to
+`#triplewhale`) (Fernet-encrypted API key; `cfg_triple_whale_conectar` requires a verified correo,
 same origin, and tests the key AND a short SQL query before saving; `cfg_triple_whale_ajustes` changes
 currency/model/window). The client (`triple_whale/__init__.py`) follows the documented SQL endpoint:
 `{"shopId", "query", "period": {startDate, endDate}, "currency"}` → `data` (an older version sent an

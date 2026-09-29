@@ -216,21 +216,26 @@ def test_guardar_preferencias_sonido(app, monkeypatch, tmp_path):
     assert 'name="musica_al_crear"' in html and "Sonido al crear" in html
 
 
-def test_triple_whale_formulario_de_conexion_vuelve_a_aparecer(app):
-    """El formulario se quitó de Configuración en 9d3c580 con la intención de
-    moverlo a Experimentos, pero nunca se volvió a agregar en ningún lado —
-    quedó sin ninguna forma de conectar Triple Whale desde la interfaz."""
-    cfg = _config(app["c"].get("/cliente/acme").data.decode())
-    assert 'id="config-triple-whale"' in cfg
-    assert "/cliente/acme/cfg_triple_whale/conectar" in cfg
-    assert 'name="llave_api"' in cfg and 'name="dominio_tienda"' in cfg
-    assert "conectado" not in _tarjeta_id(cfg, "config-triple-whale")
+def _pestana_tw(html):
+    ini = html.index('<section id="tab-triplewhale"')
+    sig = html.find('<section id="tab-', ini + 10)
+    return html[ini:sig if sig > 0 else len(html)]
 
 
-def _tarjeta_id(html, id_):
-    ini = html.index(f'id="{id_}"')
-    fin = html.index('id="config-canales-organicos"', ini)
-    return html[ini:fin]
+def test_triple_whale_formulario_vive_en_su_pestana(app):
+    """Entre 9d3c580 y 05c254d el formulario no estuvo en ningún lado (se quitó
+    de Configuración sin destino). Desde 2026-09-28 vive en la pestaña Triple
+    Whale — movido en un solo commit, con el destino ya existente — y ya no
+    está en Configuración."""
+    html = app["c"].get("/cliente/acme").data.decode()
+    cfg = _config(html)
+    fin = cfg.find('<section id="tab-', 10)
+    cfg = cfg[:fin] if fin > 0 else cfg
+    assert 'id="config-triple-whale"' not in cfg and "cfg_triple_whale" not in cfg
+    tw = _pestana_tw(html)
+    assert 'id="tw-conexion"' in tw and "/cliente/acme/cfg_triple_whale/conectar" in tw
+    assert 'name="llave_api"' in tw and 'name="dominio_tienda"' in tw
+    assert "conectado" not in tw
 
 
 def _tw_acepta(monkeypatch, gasto=12.5):
@@ -255,7 +260,7 @@ def test_triple_whale_conectar_guarda_normaliza_y_encola_la_primera_copia(app, m
                       data={"llave_api": "tw_prueba123", "dominio_tienda": "https://Acme.myshopify.com/admin",
                             "moneda": "cop", "modelo_atribucion": "First Touch", "ventana_atribucion": "30"},
                       follow_redirects=False)
-    assert r.status_code == 302 and r.headers["Location"].endswith("#config-triple-whale")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#triplewhale")
     conectado = triple_whale_tiendas.obtener("acme")
     assert conectado["dominio_tienda"] == "acme.myshopify.com" and conectado["moneda"] == "COP"
     # Los valores viejos del formulario se traducen al vocabulario de Triple Whale.
@@ -264,9 +269,12 @@ def test_triple_whale_conectar_guarda_normaliza_y_encola_la_primera_copia(app, m
     assert _tareas_tw() == [{"tipo": "tw_sincronizar", "job_id": "acme__tw_sync", "payload": {"cliente": "acme"}}]
 
     html = app["c"].get("/cliente/acme").data.decode()
-    cfg = _tarjeta_id(_config(html), "config-triple-whale")
-    assert "acme.myshopify.com" in cfg and "conectado" in cfg
-    assert "/cliente/acme/cfg_triple_whale/desconectar" in cfg and "/cliente/acme/cfg_triple_whale/ajustes" in cfg
+    tw = _pestana_tw(html)
+    assert "acme.myshopify.com" in tw and "conectado" in tw
+    assert "/cliente/acme/cfg_triple_whale/desconectar" in tw and "/cliente/acme/cfg_triple_whale/ajustes" in tw
+    cfg = _config(html)
+    fin = cfg.find('<section id="tab-', 10)
+    assert 'id="tw-ajustes"' in tw and "cfg_triple_whale" not in (cfg[:fin] if fin > 0 else cfg)
     assert "tw_prueba123" not in html
 
 
