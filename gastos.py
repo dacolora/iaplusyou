@@ -34,7 +34,7 @@ from idiomas import N_
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -220,6 +220,15 @@ def _estimar_guion_clips(paso="armar", palabras=0, **_):
     raise ValueError(f"paso desconocido: {paso}")
 
 
+def _estimar_locucion(caracteres=0, **_):
+    """Audios en Crear: ElevenLabs vía fal cobra por carácter; el mismo texto
+    con la misma voz y velocidad no se paga dos veces (caché por hash), pero el
+    estimado no lo sabe y muestra el precio completo."""
+    from providers import fal_audio
+    n = max(1, int(caracteres or 0))
+    return n * fal_audio.COSTO_USD_POR_CARACTER, f"{n} caracteres con ElevenLabs"
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
@@ -237,6 +246,7 @@ _ESTIMADORES = {
         TARIFAS["clasificacion_bilingue" if bilingue else "clasificacion"] * max(1, int(n)),
         f"{max(1, int(n))} anuncio(s) con Claude" + (", en español e inglés" if bilingue else "")),
     "musica_elevenlabs": lambda **_: (TARIFAS["musica_elevenlabs"], "una canción de 60 s con ElevenLabs"),
+    "locucion": _estimar_locucion,
     "guion_clips": _estimar_guion_clips,
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),

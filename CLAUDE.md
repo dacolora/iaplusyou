@@ -447,6 +447,29 @@ at cost 0. IA styles keep going through `obtener_pista` untouched. The panel `_m
 inside the Crear form, so it has no `<form>`: routes `mm_subir/mm_borrar/mm_crear/mm_lista` answer JSON
 with the re-rendered panel and the song list. Voice cloning is NOT here (fal has no ElevenLabs clone).
 
+**Audios en Crear** (`audios.py`, `tareas/audios.py`, spec
+`docs/superpowers/specs/2026-09-28-crear-audios-design.md`): cuarto modo de Crear (`data-modo="audios"`,
+`#audios`), pedido por Daniel al estilo de MoneyPrinterTurbo: un texto (≤ 3 000 caracteres) leído por una
+de las 22 voces verificadas de `fal_audio.VOCES` (botón «Escuchar»: muestra por voz e idioma sintetizada UNA
+vez para toda la plataforma, fila `material` y gasto del cliente interno `_creatv`), idioma es/en/pt,
+velocidad (`speed` del modelo; nunca `language_code`, multilingual-v2 lo rechaza), y opcionalmente una
+canción de Mi música con «empieza en el segundo» y volumen. El resultado es un mp3 (`libmp3lame` 192k):
+la música arranca 0,6 s antes de la voz, se agacha (`mezcla.DUCKING_VOZ_SOBRE_MUSICA`), sigue 1,5 s y se
+funde después del `loudnorm` (`audios.filtro_locucion`, puro). `audios.py` define las filas y sus
+hashes; solo la tarea `audio_generar` y `audios.muestra` las crean (vía `materiales.obtener_o_crear`):
+el audio es un `material` (tipo `audio`, origen `locucion`, `extra.{nombre,texto,voz,idioma,velocidad,volumen,musica}`)
+con `padre_id` a la voz cruda (origen `voz`, hash `locucion_voz` = texto+voz+velocidad, sin el idioma (el modelo lo detecta del texto): el mismo
+texto no se paga dos veces; misma combinación completa → «Ya tenías este audio»). Tarea `audio_generar`
+(`max_intentos=1`, un trabajo por proyecto `<cliente>__audio_generar`): registra el gasto tipo `locucion`
+(`locucion:<hash12>:t<tarea>`) en cuanto fal cobró, ANTES de mezclar; una canción borrada entre el clic y
+el worker deja el audio solo con la voz (`musica.estado="ausente"`). Rutas JSON `au_lista/au_crear/au_borrar/
+au_muestra/au_descargar` (el mp3 se sirve como adjunto desde Flask: `download` no funciona con otro origen).
+La lista `_audios_lista.html` se re-pinta por fetch y su barra NO lleva `data-poll-job` (recargaría la
+página): sondeo propio como `mm-progreso`. Subir una canción aquí usa `mm_subir` y avisa al panel de Mi
+música con el evento `mi-musica:cambio` (y al revés). `fal_audio.COSTO_USD_POR_CARACTER` es 0,0001 desde
+2026-09-28 (precio real de fal; estuvo 3× alto). Fuera: voz clonada, efectos, subtítulos, usar el audio en
+un video o el editor, ElevenLabs v3.
+
 **Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»
 (`_tab_flowplus.html` → `_crear_flowplus.html`, hash `#flowplus`; the package is `guiones`
 because `flowplus_*` already names Crear's own pipeline). This paragraph covers the correction

@@ -2687,3 +2687,30 @@ body.panel-abierto { overflow: hidden; }
 /* Detalle técnico de un error (el texto crudo de Meta, para soporte): plegado y sin salirse. */
 .detalle-tecnico { margin: .2rem 0 .6rem; font-size: .76rem; color: var(--muted); }
 .detalle-tecnico code { display: block; margin-top: .3rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ============================================================
+   Crear › Audios (_crear_audios.html, spec 2026-09-28)
+   Prefijo au-. Formulario (izquierda) + Tus audios (derecha) desde 900px,
+   una sola columna por debajo. Nada pide más ancho que su caja.
+   ============================================================ */
+.au [hidden] { display: none !important; }
+.au { min-width: 0; }
+.au-intro { padding-top: 0; max-width: 72ch; }
+.au-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1.4rem; align-items: start; }
+@media (max-width: 899px) { .au-layout { grid-template-columns: minmax(0, 1fr); } }
+.au-form, .au-lista-col { min-width: 0; }
+.au-form textarea { width: 100%; }
+.au-fila { display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-end; margin: .6rem 0; }
+.au-fila > label { flex: 1 1 10rem; min-width: 0; }
+.au-inicio input { width: 6rem; }
+.au-ayuda { color: var(--muted); font-size: .76rem; line-height: 1.45; margin: .35rem 0 0; overflow-wrap: anywhere; }
+.au-ayuda a { color: var(--accent-texto); }
+.au-musica audio, .au-item audio { width: 100%; height: 32px; }
+.au-subir-btn { cursor: pointer; }
+.au-botones { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .8rem; }
+.au-sub { margin: 0 0 .6rem; }
+.au-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
+.au-item { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .7rem .8rem; display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+.au-item-cab { display: flex; flex-direction: column; gap: .15rem; }
+.au-item-nombre { overflow-wrap: anywhere; }
+.au-item-acciones { display: flex; flex-wrap: wrap; gap: .5rem; }

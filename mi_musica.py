@@ -58,10 +58,13 @@ def resolver(cliente, valor):
 
 
 def inicio_valido(material, inicio_s):
-    """Segundo de inicio entero dentro de la canción; 0 si no aplica."""
+    """Segundo de inicio entero dentro de la canción; 0 si no aplica.
+    `float("inf")` no lanza en el primer `float(...)`, pero `int(inf)` sí
+    (`OverflowError`, no `ValueError`) — revisión final F7: sin capturarlo acá
+    `au_crear` respondía 500 en vez de caer al 0 de siempre."""
     try:
         s = int(float(inicio_s))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
     return s if 0 <= s < (material.get("duracion_ms") or 0) / 1000.0 else 0
 

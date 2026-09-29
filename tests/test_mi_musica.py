@@ -85,6 +85,11 @@ def test_inicio_valido_dentro_de_la_cancion():
     assert mi_musica.inicio_valido(m, "x") == 0 and mi_musica.inicio_valido(m, None) == 0
 
 
+def test_inicio_valido_con_infinito_es_cero():
+    m = {"duracion_ms": 30000}
+    assert mi_musica.inicio_valido(m, "inf") == 0 and mi_musica.inicio_valido(m, float("inf")) == 0
+
+
 def test_borrar_quita_r2_y_la_fila(base_temporal, r2, tmp_path):
     c = mi_musica.subir("acme", _Archivo("a.wav", _wav_bytes(1.0)), str(tmp_path))
     assert mi_musica.borrar("otro", c["id"]) is False

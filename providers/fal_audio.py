@@ -53,9 +53,15 @@ VOCES = {
 }
 
 
-def tts(texto, voz="Rachel", idioma="es", on_progreso=None):
+def tts(texto, voz="Rachel", idioma="es", on_progreso=None, velocidad=None, timeout=180):
     """Sintetiza `texto` con la voz `voz` (ver VOCES). Devuelve
-    {"url": mp3 público, "costo_usd": len(texto) * COSTO_USD_POR_CARACTER}."""
+    {"url": mp3 público, "costo_usd": len(texto) * COSTO_USD_POR_CARACTER}.
+    `velocidad` (0,7–1,2, el `speed` del modelo) solo viaja cuando no es None
+    ni 1,0. `idioma` NO se manda como language_code: ElevenLabs solo lo acepta
+    en Turbo/Flash v2.5 y multilingual-v2 devolvería error; el modelo detecta
+    el idioma solo. `timeout` (s): 180 por defecto para una locución completa;
+    una muestra corta (`audios.muestra`) manda uno más chico para no colgar un
+    clic en línea."""
     if not texto:
         raise ValueError("fal_audio.tts: texto vacío.")
 
@@ -65,7 +71,9 @@ def tts(texto, voz="Rachel", idioma="es", on_progreso=None):
         "stability": 0.5,
         "similarity_boost": 0.75,
     }
-    data = fal_client.llamar(MODELO_TTS, payload, timeout=180, on_progreso=on_progreso)
+    if velocidad is not None and abs(float(velocidad) - 1.0) > 1e-9:
+        payload["speed"] = round(float(velocidad), 2)
+    data = fal_client.llamar(MODELO_TTS, payload, timeout=timeout, on_progreso=on_progreso)
 
     url = (data.get("audio") or {}).get("url")
     if not url:
