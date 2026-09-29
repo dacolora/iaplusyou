@@ -603,3 +603,54 @@ test("cambiar animacion.entrada guarda la duración (400 ms) y «ninguna» la qu
   const quitada = op.cambiar(r.doc, "t1", { animacion: { entrada: "ninguna" } }, INFO).doc;
   assert.equal(clipDe(quitada, "t1").animacion, null);
 });
+
+// ---- Capa 4c (3/10): nada que se mueva, alargue o duplique alarga el video ----
+// El video dura lo que su fila más larga; más allá de la principal el render
+// congela el último cuadro. docBase: la principal termina en 8000.
+const noPisa = (pista, clip) => pista.clips.every((c) => c === clip
+  || c.inicio_ms + c.duracion_ms <= clip.inicio_ms || c.inicio_ms >= clip.inicio_ms + clip.duracion_ms);
+
+test("moverA se detiene en fin − duración (texto y audio)", () => {
+  const movido = puro((d) => op.moverA(d, "t1", 7500, INFO));
+  assert.equal(clipDe(movido.doc, "t1").inicio_ms, 6000);
+  assert.equal(finDoc(movido.doc), 8000);
+  assert.equal(clipDe(op.moverA(docBase(), "a1", 9000, INFO).doc, "a1").inicio_ms, 5000);
+  assert.equal(clipDe(op.moverA(docBase(), "t1", 2500, INFO).doc, "t1").inicio_ms, 2500);   // dentro, igual que antes
+});
+
+test("alargar el borde derecho de un texto, una imagen o la música se topa en el fin", () => {
+  const texto = op.recortar(docBase(), "t1", "fin", 99999, INFO).doc;
+  assert.deepEqual([clipDe(texto, "t1").inicio_ms, clipDe(texto, "t1").duracion_ms], [1000, 7000]);
+  const img = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 1000, { duracionMs: 2000 }, INFO);
+  const imgLarga = op.recortar(img.doc, img.seleccion, "fin", 99999, INFO).doc;
+  assert.equal(finDoc(imgLarga), 8000);
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 1000, { rol: "musica" }, INFO);    // 1000–4000, en bucle
+  const musicaLarga = op.recortar(musica.doc, musica.seleccion, "fin", 99999, INFO).doc;
+  assert.deepEqual([clipDe(musicaLarga, musica.seleccion).duracion_ms, finDoc(musicaLarga)], [7000, 8000]);
+});
+
+test("duplicar una capa que no cabe después la pone terminando en el fin, sin pisar al original", () => {
+  const alFinal = op.moverA(docBase(), "t1", 5000, INFO).doc;                              // t1: 5000–7000
+  const dup = puro((d) => op.duplicar(d, "t1", INFO), alFinal);
+  const copia = clipDe(dup.doc, dup.seleccion);
+  assert.deepEqual([copia.inicio_ms, copia.duracion_ms], [6000, 2000]);
+  assert.equal(finDoc(dup.doc), 8000);
+  const fila = dup.doc.pistas.find((p) => p.clips.includes(copia));
+  assert.ok(noPisa(fila, copia), "la copia no se encima al original en su fila");
+  assert.equal(fila.tipo, "texto");
+  // si cabe justo después, va justo después (como siempre)
+  const cabe = op.duplicar(docBase(), "t1", INFO);
+  assert.deepEqual([clipDe(cabe.doc, cabe.seleccion).inicio_ms], [3000]);
+});
+
+test("una capa que ya pasa del fin (la voz de un borrador) no se corre ni se alarga más allá; hacia atrás sí", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].inicio_ms = 7000;                                                    // t1: 7000–9000
+  assert.equal(clipDe(op.moverA(d, "t1", 7500, INFO).doc, "t1").inicio_ms, 7000);
+  assert.equal(clipDe(op.moverA(d, "t1", 3000, INFO).doc, "t1").inicio_ms, 3000);
+  assert.equal(clipDe(op.recortar(d, "t1", "fin", 500, INFO).doc, "t1").duracion_ms, 2000);
+  assert.equal(clipDe(op.recortar(d, "t1", "fin", -500, INFO).doc, "t1").duracion_ms, 1500);
+  const larga = docBase();
+  larga.pistas[1].clips[0].duracion_ms = 9000;                                              // t1 más larga que el video
+  invalida(() => op.duplicar(larga, "t1", INFO), /no cabe/);
+});

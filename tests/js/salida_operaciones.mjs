@@ -137,6 +137,20 @@ anotar("animacion_ninguna", () => {
   const con = op.cambiar(docBase(), "t1", { animacion: { entrada: "deslizar" } }, INFO).doc;
   return op.cambiar(con, "t1", { animacion: { entrada: "ninguna" } }, INFO);
 });
+// Capa 4c (3/10): mover, alargar o duplicar una capa no alarga el video
+// (Python revisa que termine con la principal: prefijo no_alarga_).
+anotar("no_alarga_mover_texto", () => op.moverA(docBase(), "t1", 7500, INFO));
+anotar("no_alarga_mover_voz", () => op.moverA(docBase(), "a1", 9000, INFO));
+anotar("no_alarga_alargar_texto", () => op.recortar(docBase(), "t1", "fin", 99999, INFO));
+anotar("no_alarga_alargar_musica", () => {
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 1000, { rol: "musica" }, INFO);
+  return op.recortar(musica.doc, musica.seleccion, "fin", 99999, INFO);
+});
+anotar("no_alarga_duplicar_texto_al_final", () => op.duplicar(op.moverA(docBase(), "t1", 5000, INFO).doc, "t1", INFO));
+anotar("no_alarga_duplicar_musica_al_final", () => {
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO);
+  return op.duplicar(musica.doc, musica.seleccion, INFO);
+});
 
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {

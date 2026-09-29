@@ -120,6 +120,19 @@ function raizId(id) {
   return String(id).replace(/_\d+$/, "");
 }
 
+// El fin del video: donde termina la principal (0 si no hay principal de
+// video). Más allá, el render congela el último cuadro, así que nada de lo
+// que se agrega, mueve, alarga o duplica pasa de ahí (capa 4b §2, capa 4c).
+function finPrincipal(doc) {
+  const p = pistaPrincipal(doc);
+  return p && p.tipo === "video" ? p.clips.reduce((m, c) => Math.max(m, c.inicio_ms + c.duracion_ms), 0) : 0;
+}
+
+// La primera pista de cada tipo que crea una capa nueva (agregarImagen/
+// Audio/Texto usan las mismas).
+const BASE_PISTA = { texto: "p_texto", imagen: "p_imagen", audio: "p_audio", superpuesto: "p_superpuesto" };
+const mismoRolQue = (rol) => (p) => p.clips.every((c) => (c.rol_audio ?? "subida") === rol);
+
 // Id de una pista nueva: `base` si está libre, si no `base_2`, `base_3`...
 // (mismo estilo que idNuevo, pero en el espacio de ids de PISTA, separado
 // del de ids de clip).
@@ -367,14 +380,33 @@ export function borrar(doc, clipId, info = {}) {
   return terminar(res, null, info);
 }
 
+// En la principal la copia va justo después (y corre lo que sigue). En otra
+// fila también va justo después si ahí cabe antes del fin del video; si no
+// (capa 4c: nada alarga el video), termina en el fin, en una fila de su tipo
+// donde no pise a nadie (su misma fila si está libre ahí; `pistaLibre`). Una
+// capa más larga que el video no se puede duplicar.
 export function duplicar(doc, clipId, info = {}) {
   const res = structuredClone(doc);
   const { pista, clip, indice } = buscar(res, clipId);
   noSonido(pista);
   const copia = structuredClone(clip);
   copia.id = idNuevo(res, clip.id);
-  if (pista !== pistaPrincipal(res)) copia.inicio_ms = clip.inicio_ms + clip.duracion_ms;
-  pista.clips.splice(indice + 1, 0, copia);
+  let destino = pista;
+  if (pista !== pistaPrincipal(res)) {
+    copia.inicio_ms = clip.inicio_ms + clip.duracion_ms;
+    const fin = finPrincipal(res);
+    if (fin > 0 && copia.inicio_ms + copia.duracion_ms > fin) {
+      if (clip.duracion_ms > fin) {
+        throw new OperacionInvalida("Este clip dura más que el video: no cabe una copia. Acórtalo primero.");
+      }
+      copia.inicio_ms = fin - clip.duracion_ms;
+      const acepta = pista.tipo === "audio" ? mismoRolQue(clip.rol_audio ?? "subida") : () => true;
+      destino = pistaLibre(res, pista.tipo, BASE_PISTA[pista.tipo] ?? pista.id, copia.inicio_ms, copia.duracion_ms,
+        [ID_SONIDO], acepta);
+    }
+  }
+  if (destino === pista) pista.clips.splice(indice + 1, 0, copia);
+  else destino.clips.push(copia);
   if (pista === pistaPrincipal(res)) recolocar(pista);
   if (res.pngs && res.pngs[clip.id] !== undefined) res.pngs[copia.id] = res.pngs[clip.id];
   return terminar(res, copia.id, info);
@@ -405,8 +437,12 @@ export function recortar(doc, clipId, lado, deltaMs, info = {}) {
   } else if (lado === "fin") {
     const material = duracionDe(info, clip.material_id);
     const esMusica = pista.tipo === "audio" && clip.rol_audio === "musica";   // entra en bucle: nunca se acaba
-    const maxAlargar = conRecorte && !esMusica && material !== undefined && material !== null
+    let maxAlargar = conRecorte && !esMusica && material !== undefined && material !== null
       ? Math.max(0, Math.floor((material - desde) / v) - clip.duracion_ms) : Infinity;
+    // una capa (texto, imagen, audio) se topa en el fin del video (capa 4c);
+    // la principal sí lo alarga: es el video
+    const fin = esPrincipal ? 0 : finPrincipal(res);
+    if (fin > 0) maxAlargar = Math.min(maxAlargar, Math.max(0, fin - (clip.inicio_ms + clip.duracion_ms)));
     d = Math.max(-(clip.duracion_ms - MIN_CLIP_MS), Math.min(maxAlargar, d));
     clip.duracion_ms += d;
     if (conRecorte) clip.recorte = { desde_ms: desde, hasta_ms: desde + Math.round(clip.duracion_ms * v) };
@@ -435,7 +471,16 @@ export function moverA(doc, clipId, inicioMs, info = {}) {
   if (pista === pistaPrincipal(res)) {
     throw new OperacionInvalida("Los clips de la pista principal se reordenan, no se mueven a un tiempo suelto.");
   }
-  clip.inicio_ms = Math.max(0, Math.round(inicioMs));
+  // Se detiene en `fin − duración` (capa 4c: mover no alarga el video). Una
+  // capa que ya pasaba del fin (la voz de un borrador) puede ir hacia atrás,
+  // nunca más allá de donde estaba.
+  let t = Math.max(0, Math.round(inicioMs));
+  const fin = finPrincipal(res);
+  if (fin > 0) {
+    const tope = Math.max(0, fin - clip.duracion_ms);
+    if (t > tope) t = Math.max(tope, Math.min(t, clip.inicio_ms));
+  }
+  clip.inicio_ms = t;
   return terminar(res, clip.id, info);
 }
 
@@ -474,8 +519,7 @@ export function cambiarVelocidad(doc, clipId, velocidad, info = {}) {
 function lugarCapa(doc, tMs, dMs) {
   let t = Math.max(0, Math.round(Number(tMs) || 0));
   let dur = Math.max(1, Math.round(Number(dMs) || 0));
-  const p = pistaPrincipal(doc);
-  const fin = p && p.tipo === "video" ? p.clips.reduce((m, c) => Math.max(m, c.inicio_ms + c.duracion_ms), 0) : 0;
+  const fin = finPrincipal(doc);
   if (fin <= 0) return { t, dur };
   if (t >= fin - MIN_CLIP_MS) t = Math.max(0, fin - dur);
   dur = Math.max(1, Math.min(dur, fin - t));
@@ -555,8 +599,7 @@ export function agregarAudio(doc, material, tMs, { rol = "musica" } = {}, info =
   const entero = duracionDe(info, material.id);
   if (entero === undefined || entero === null) throw new OperacionInvalida("Ese audio todavía se está preparando.");
   const { t, dur } = lugarCapa(res, tMs, entero);
-  const mismoRol = (p) => p.clips.every((c) => (c.rol_audio ?? "subida") === rol);
-  const pista = pistaLibre(res, "audio", "p_audio", t, dur, [ID_SONIDO], mismoRol);
+  const pista = pistaLibre(res, "audio", BASE_PISTA.audio, t, dur, [ID_SONIDO], mismoRolQue(rol));
   const clip = {
     id: idNuevo(res, "audio"), inicio_ms: t, duracion_ms: dur, material_id: material.id, rol_audio: rol,
     recorte: { desde_ms: 0, hasta_ms: dur }, velocidad: 1,
