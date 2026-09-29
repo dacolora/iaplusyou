@@ -2728,7 +2728,7 @@ def eliminar_producto(cliente, producto_id):
         # La fila comercial NO se borra: se archiva (a mano, como en
         # prod_archivar) para que un experimento que ya la use no se quede
         # sin producto y para no perder precio/url si se vuelve a crear.
-        fila = tiendas.por_activo(cliente).get(producto_id)
+        fila = tiendas.por_activo(cliente).get(catalogo_productos.producto_base(producto_id))
         if fila and not fila["archivado"]:
             tiendas.marcar_producto(cliente, fila["id"], archivado=True)
     flash(gettext("Producto eliminado: %(nombre)s", nombre=nombre), "ok")
@@ -5308,16 +5308,18 @@ def _volver_config(cliente):
 
 
 def _experimentos_por_activo(cliente, experimentos_exp=None):
-    """{clave: {experimento_id, ...}} donde clave es el NOMBRE visible del
-    activo (lo que Crear guarda en `productos_ids`) o su id. Una pasada por
-    las sesiones de Crear y otra por las piezas de cada experimento — nunca
-    una consulta por producto. La pieza de un experimento apunta a su sesión
-    de Crear por el prefijo de `legado_id` (`<cf_id>` o `<cf_id>__<idioma>_<pais>`)."""
+    """{clave en minúsculas (casefold): {experimento_id, ...}} donde clave es
+    el NOMBRE visible del activo (lo que Crear guarda en `productos_ids`) o
+    su id — en minúsculas para que un color («Original — Pink») case con el
+    nombre de cualquiera de sus claves. Una pasada por las sesiones de Crear y
+    otra por las piezas de cada experimento — nunca una consulta por
+    producto. La pieza de un experimento apunta a su sesión de Crear por el
+    prefijo de `legado_id` (`<cf_id>` o `<cf_id>__<idioma>_<pais>`)."""
     if experimentos_exp is None:
         experimentos_exp = experimentos.cargar(cliente)
     claves_por_cf = {}
     for cf_id, entry in creative_flow.cargar(cliente).items():
-        claves = {str(x) for x in (entry.get("productos_ids") or []) if x}
+        claves = {str(x).casefold() for x in (entry.get("productos_ids") or []) if x}
         if claves:
             claves_por_cf[cf_id] = claves
     por_clave = {}
@@ -5332,21 +5334,21 @@ def _experimentos_por_activo(cliente, experimentos_exp=None):
 
 
 def _productos_tienda_contexto(cliente, experimentos_exp=None):
-    """Productos (con archivados: el filtro «mostrar archivados» es de la
-    plantilla) enriquecidos con `activo_ok` (su activo existe en el
-    catálogo) y `n_experimentos` (cuántos experimentos tienen piezas hechas
-    con ese activo)."""
+    """Productos (con archivados: el filtro es de la galería) enriquecidos
+    con `activo_ok` (su activo existe en el catálogo) y `n_experimentos`
+    (experimentos con piezas hechas con ese producto o cualquiera de sus
+    colores, por id o por nombre)."""
     por_clave = _experimentos_por_activo(cliente, experimentos_exp)
-    nombre_de_activo = {a["id"]: a["nombre"] for a in catalogo_productos.listar(cliente, "producto")}
+    claves_por_pid = {p["id"]: catalogo_productos.claves_de(p)
+                      for p in catalogo_productos.listar_productos(cliente, "producto")}
     lista = tiendas.productos(cliente, incluir_archivados=True)
     for prod in lista:
         activo_id = prod.get("activo_catalogo_id")
         prod["activo_ok"] = bool(activo_id) and catalogo_productos.existe(cliente, activo_id, "producto")
+        claves = claves_por_pid.get(activo_id) or {"ids": {str(activo_id or "").casefold()} - {""}, "nombres": set()}
         ids_exp = set()
-        if activo_id:
-            ids_exp |= por_clave.get(activo_id, set())
-            ids_exp |= por_clave.get(nombre_de_activo.get(activo_id, ""), set())
-        ids_exp |= por_clave.get(prod.get("nombre") or "", set())
+        for k in claves["ids"] | claves["nombres"] | ({str(prod.get("nombre") or "").casefold()} - {""}):
+            ids_exp |= por_clave.get(k, set())
         prod["n_experimentos"] = len(ids_exp)
     return lista
 

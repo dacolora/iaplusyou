@@ -228,7 +228,7 @@ def recrear_adaptar(cliente, rid):
         return jsonify({"error": "Elige un producto primero."}), 400
     # Doctrina, bloque 2: la sofisticación elegida en Catálogo manda en el ángulo.
     # Revisión final #6: descartada si no es 1-5 (dato corrupto), como ideas y el guion.
-    fila = tiendas.por_activo(cliente).get(producto.get("id")) or {}
+    fila = tiendas.por_activo(cliente).get(catalogo_productos.producto_base(producto.get("id"))) or {}
     sof = (fila.get("extra") or {}).get("sofisticacion")
     producto = dict(producto, sofisticacion=sof if sof in doctrina.SOFISTICACIONES else None,
                     pruebas=doctrina_producto.pruebas(fila))

@@ -155,9 +155,10 @@ def _sesion(cliente, cf_id):
 
 
 def _fila_producto(cliente, activo_id):
-    """Fila `producto` del activo (precio, moneda, url_compra); {} si no hay."""
+    """Fila `producto` del producto de `activo_id` (o de uno de sus colores);
+    {} si no hay."""
     try:
-        return tiendas.por_activo(cliente).get(activo_id) or {}
+        return tiendas.por_activo(cliente).get(catalogo_productos.producto_base(activo_id)) or {}
     except Exception:  # noqa: BLE001 — precio y URL son un extra del guion, nunca lo tumban
         return {}
 

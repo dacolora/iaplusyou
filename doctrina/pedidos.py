@@ -41,22 +41,24 @@ def _es_util(linea):
 
 def faltantes_del_producto(cliente, fila):
     """Faltantes útiles (sin repetir) de los ángulos de las ideas cuyo
-    `catalogo_id` es el activo del producto y de las sesiones de Crear cuyo
-    `productos_ids` lo nombra (por id o por nombre)."""
+    `catalogo_id` es el producto o uno de sus colores, y de las sesiones de
+    Crear cuyo `productos_ids` nombra al producto o a un color (id o nombre)."""
     activo = (fila or {}).get("activo_catalogo_id")
     if not activo:
         return []
-    cat = catalogo_productos.encontrar(cliente, activo, "producto") or {}
-    claves = {str(activo).casefold()} | {str(n).casefold() for n in (cat.get("nombre"), fila.get("nombre")) if n}
+    claves = catalogo_productos.claves_de_producto(cliente, activo)
+    ids = set(claves["ids"]) | {str(activo).casefold()}
+    nombres = set(claves["nombres"]) | ({str(fila.get("nombre") or "").casefold()} - {""})
+    todas = ids | nombres
     angulos = []
     with db.conectar() as con:
         filas = con.execute(sa.select(db.campana_pieza.c.extra)
                             .select_from(db.campana_pieza.join(db.campana, db.campana.c.id == db.campana_pieza.c.campana_id))
-                            .where(db.campana.c.cliente == cliente, db.campana.c.catalogo_id == activo))
+                            .where(db.campana.c.cliente == cliente, sa.func.lower(db.campana.c.catalogo_id).in_(sorted(ids))))
         angulos += [(e or {}).get("angulo") for (e,) in filas]
         for (e,) in con.execute(sa.select(db.concepto.c.extra).where(db.concepto.c.cliente == cliente)):
-            ids = [str(x).casefold() for x in ((e or {}).get("productos_ids") or [])]
-            if claves & set(ids):
+            pids = {str(x).casefold() for x in ((e or {}).get("productos_ids") or [])}
+            if todas & pids:
                 angulos.append((e or {}).get("angulo"))
     vistos = []
     for a in angulos:

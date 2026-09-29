@@ -29,6 +29,7 @@ import requests
 import sqlalchemy as sa
 from flask_babel import gettext
 
+import catalogo_productos
 import cola
 import db
 import experimentos
@@ -355,12 +356,14 @@ def contexto_pieza(cliente, pieza_id):
     if activos:
         mapa = tiendas.por_activo(cliente)
         for a in activos:
-            if a in mapa:                                 # sesiones viejas: guardaban el id
-                producto = mapa[a]
+            fila = mapa.get(catalogo_productos.producto_base(a))  # sesiones viejas: guardaban el id
+            if fila:
+                producto = fila
                 break
             act = _activo(cliente, a)                     # hoy se guarda el nombre visible
-            if act and act.get("id") in mapa:
-                producto = mapa[act["id"]]
+            fila = mapa.get(catalogo_productos.producto_base((act or {}).get("id") or ""))
+            if fila:
+                producto = fila
                 break
     if producto is None and ex and ex[1]:
         producto = tiendas.producto(cliente, ex[1])
