@@ -446,12 +446,8 @@ export class VistaPrevia {
     const sel = $("destino");
     for (const d of datos.destinos) sel.append(new Option(d.replace("_", " · "), d));
     sel.addEventListener("change", () => this.elegirDestino(sel.value));
-    if (datos.aviso_recortes) {
-      aviso("aviso-recortes", `Esta edición no se puede producir tal como está: ${datos.aviso_recortes}`, true);
-    }
-    if (datos.faltantes.length) {
-      aviso("aviso-faltan", `Faltan ${datos.faltantes.length} archivo(s) de esta edición (se borraron o no son de este proyecto): esas partes no se verán.`, true);
-    }
+    // «aviso-recortes» y «aviso-faltan» los pinta la página en cada refresco
+    // (capa 4c, avisos_carga.js): con el documento vigente, no el de la carga.
     try {
       await Promise.all(this.cfg.fuentes.map((f) => document.fonts.load(`32px "${f}"`)));
     } catch { /* sigue con la fuente de respaldo */ }

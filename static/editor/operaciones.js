@@ -224,15 +224,30 @@ function abrirSonido(doc, info, suena) {
 // archivo piden 1 ms de más y el render falla. El clip se acorta lo justo (sin
 // bajar de MIN_CLIP_MS); si ni así cabe, su punto de entrada se corre hacia
 // atrás. `p_sonido` no se mira: se rehace desde la principal.
+// El material que un clip mira (su duración conocida) si lo pide de más;
+// null si cabe, si su duración no se conoce todavía o si no aplica (la
+// música entra en bucle, p_sonido se rehace desde la principal).
+function materialQueFalta(pista, c, info) {
+  if (!["video", "superpuesto", "audio"].includes(pista.tipo) || pista.id === ID_SONIDO) return null;
+  if (pista.tipo === "audio" && (c.rol_audio ?? "subida") === "musica") return null;
+  const material = duracionDe(info, c.material_id);
+  if (material === undefined || material === null) return null;
+  return (c.recorte?.desde_ms ?? 0) + fuente(c) <= material ? null : material;
+}
+
+// Capa 4c: los ids de los clips que piden más material del que hay (lo que
+// `normalizar` acorta). La página lo usa para el aviso de carga, que se va
+// en cuanto el documento ya no tiene ninguno (avisos_carga.js).
+export function clipsQuePidenDeMas(doc, info = {}) {
+  return (doc?.pistas ?? []).flatMap((p) => (p.clips ?? []).filter((c) => materialQueFalta(p, c, info) !== null).map((c) => c.id));
+}
+
 function ajustarAlMaterial(doc, info) {
   for (const pista of doc.pistas) {
-    if (!["video", "superpuesto", "audio"].includes(pista.tipo) || pista.id === ID_SONIDO) continue;
     for (const c of pista.clips) {
-      if (pista.tipo === "audio" && (c.rol_audio ?? "subida") === "musica") continue;
-      const material = duracionDe(info, c.material_id);
-      if (material === undefined || material === null) continue;
+      const material = materialQueFalta(pista, c, info);
+      if (material === null) continue;
       let desde = c.recorte?.desde_ms ?? 0;
-      if (desde + fuente(c) <= material) continue;
       const v = vel(c);
       let dur = Math.max(MIN_CLIP_MS, Math.min(c.duracion_ms, Math.floor((material - desde) / v)));
       while (dur > MIN_CLIP_MS && desde + Math.round(dur * v) > material) dur--;

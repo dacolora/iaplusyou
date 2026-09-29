@@ -55,6 +55,7 @@
 //   a que la vuelta en curso termine, en orden y una vez cada aviso; quien lo
 //   recibe ya ve el estado último. Si un oyente provoca un aviso cada vez que
 //   se entera, se corta (y se anota en la consola) en vez de colgar la página.
+import { avisosCarga } from "./avisos_carga.js";
 import { Avisos } from "./avisos_editor.js";
 import { Biblioteca } from "./biblioteca.js";
 import { pedidoCortar } from "./escala.js";
@@ -68,6 +69,18 @@ import { infoDe, VistaPrevia } from "./vista.js";
 
 const datos = JSON.parse(document.getElementById("datos-editor").textContent);
 const $ = (id) => document.getElementById(id);
+// Capa 4c: un clip que pide más material del que hay (el render fallaría) se
+// acorta al abrir con el mismo `normalizar` que usa cada operación — la
+// vista previa muestra lo que se va a producir y se guarda solo (abajo, al
+// crear el guardado). Se dice una vez («se acortó solo») hasta el próximo cambio.
+let acortadoAlAbrir = false;
+{
+  const infoInicial = infoDe(datos.materiales);
+  if (operaciones.clipsQuePidenDeMas(datos.documento, infoInicial).length) {
+    datos.documento = operaciones.normalizar(structuredClone(datos.documento), infoInicial);
+    acortadoAlAbrir = true;
+  }
+}
 const historial = new Historial(datos.documento);
 let seleccion = null;
 const avisos = new Avisos();
@@ -94,6 +107,7 @@ const linea = new LineaTiempo({
   },
 });
 const guardado = new Guardado({ url: datos.urls.guardar, versionN: datos.edicion.version_n, alCambiar: pintarGuardado });
+if (acortadoAlAbrir) guardado.pedir(historial.actual);     // lo acortado al abrir también se guarda
 
 const TEXTO_GUARDADO = {
   guardado: () => "Guardado",
@@ -123,6 +137,21 @@ function pintarGuardado(estado, mensaje) {
   pintarHerramientas();
 }
 
+// Los avisos de carga (capa 4c): se recalculan en cada refresco con el
+// documento vigente, así que se van en cuanto una edición los arregla.
+function pintarAvisoCarga(id, a) {
+  const n = $(id);
+  n.textContent = a?.texto ?? "";
+  n.hidden = !a;
+  n.classList.toggle("error", Boolean(a?.error));
+}
+
+function pintarAvisosCarga() {
+  const a = avisosCarga(historial.actual, info(), vista.materiales, { acortado: acortadoAlAbrir });
+  pintarAvisoCarga("aviso-recortes", a.recortes);
+  pintarAvisoCarga("aviso-faltan", a.faltan);
+}
+
 function buscarClip(id) {
   for (const pista of historial.actual.pistas) for (const clip of pista.clips) if (clip.id === id) return { pista, clip };
   return null;
@@ -143,10 +172,14 @@ function pintarHerramientas() {
 // "materiales", "destino", o null (solo se redibuja; si la selección cambió,
 // eso se avisa igual).
 function refrescar(que = "documento") {
-  if (que === "documento") vista.setDocumento(historial.actual);
+  if (que === "documento") {
+    vista.setDocumento(historial.actual);
+    if (historial.actual !== datos.documento) acortadoAlAbrir = false;   // «se acortó solo» dura hasta el próximo cambio
+  }
   if (seleccion && !buscarClip(seleccion)) seleccion = null;
   linea.dibujar(historial.actual, { seleccion, cabezalMs: vista.tiempo() });
   pintarHerramientas();
+  pintarAvisosCarga();
   avisos.cambio(que, seleccion);
 }
 
