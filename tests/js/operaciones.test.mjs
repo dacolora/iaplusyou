@@ -656,3 +656,16 @@ test("una capa que ya pasa del fin (la voz de un borrador) no se corre ni se ala
   larga.pistas[1].clips[0].duracion_ms = 9000;                                              // t1 más larga que el video
   invalida(() => op.duplicar(larga, "t1", INFO), /no cabe/);
 });
+
+test("arreglo 4: un «deslizar» guardado sin duración (capa 4b) la recibe al normalizar; «ninguna» y otras entradas no se tocan", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].animacion = { entrada: "deslizar" };
+  const r = puro((x) => op.moverA(x, "t1", 2000, INFO), d);
+  assert.deepEqual(clipDe(r.doc, "t1").animacion, { entrada: "deslizar", duracion_ms: op.DURACION_ANIMACION_MS });
+  const con = docBase();
+  con.pistas[1].clips[0].animacion = { entrada: "deslizar", duracion_ms: 250 };
+  assert.equal(clipDe(op.normalizar(con, INFO), "t1").animacion.duracion_ms, 250, "la que ya tenía se respeta");
+  const ninguna = docBase();
+  ninguna.pistas[1].clips[0].animacion = { entrada: "ninguna" };
+  assert.deepEqual(clipDe(op.normalizar(ninguna, INFO), "t1").animacion, { entrada: "ninguna" });
+});

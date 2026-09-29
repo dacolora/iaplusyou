@@ -71,6 +71,26 @@ def test_la_biblioteca_ofrece_borrar_lo_mismo_que_el_servidor_acepta():
     assert _constante_js("biblioteca.js", "ORIGENES_BORRABLES") == list(biblioteca.ORIGENES_BORRABLES)
 
 
+def test_pagina_editor_no_ejecuta_nada_antes_de_declararlo_todo():
+    # Arreglo crítico de la capa 4c: `guardado.pedir` corría al cargar el
+    # módulo ANTES de `const TEXTO_GUARDADO` (pedir → pintarGuardado lo lee):
+    # ReferenceError y el editor no arrancaba justo en las ediciones que el
+    # ítem 4 arregla. El módulo no se puede importar en Node (toca el DOM), así
+    # que se mira el texto: toda sentencia de nivel superior que ejecuta algo
+    # (una llamada, un `if`, un `await`, un `new` suelto) va DESPUÉS de la
+    # última declaración `const`/`let` de nivel superior, y el guardado de lo
+    # arreglado al abrir es una de ellas.
+    with open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8") as f:
+        lineas = f.read().splitlines()
+    declaraciones = [i for i, l in enumerate(lineas) if re.match(r"(const|let) ", l)]
+    ejecuta = [i for i, l in enumerate(lineas) if re.match(r"(if \(|await |new |\{|[A-Za-z_$][\w$.]*\()", l)]
+    assert declaraciones and ejecuta
+    antes = [lineas[i] for i in ejecuta if i < max(declaraciones)]
+    assert not antes, f"se ejecuta antes de declarar todo: {antes}"
+    pedir = [i for i, l in enumerate(lineas) if re.match(r"\S.*guardado\.pedir\(", l)]
+    assert pedir and min(pedir) > max(declaraciones), "el guardado de lo arreglado al abrir va al final del arranque"
+
+
 def test_transiciones_js_iguales_a_python():
     # la biblioteca ofrece solo las transiciones que el render hace
     assert _constante_js("operaciones.js", "TRANSICIONES") == list(documento.TRANSICIONES)

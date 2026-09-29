@@ -55,7 +55,7 @@
 //   a que la vuelta en curso termine, en orden y una vez cada aviso; quien lo
 //   recibe ya ve el estado último. Si un oyente provoca un aviso cada vez que
 //   se entera, se corta (y se anota en la consola) en vez de colgar la página.
-import { avisosCarga } from "./avisos_carga.js";
+import { arreglarAlAbrir, avisosCarga } from "./avisos_carga.js";
 import { Avisos } from "./avisos_editor.js";
 import { Biblioteca } from "./biblioteca.js";
 import { pedidoCortar } from "./escala.js";
@@ -71,17 +71,15 @@ import { infoDe, VistaPrevia } from "./vista.js";
 const datos = JSON.parse(document.getElementById("datos-editor").textContent);
 const $ = (id) => document.getElementById(id);
 // Capa 4c: un clip que pide más material del que hay (el render fallaría) se
-// acorta al abrir con el mismo `normalizar` que usa cada operación — la
-// vista previa muestra lo que se va a producir y se guarda solo (abajo, al
-// crear el guardado). Se dice una vez («se acortó solo») hasta el próximo cambio.
-let acortadoAlAbrir = false;
-{
-  const infoInicial = infoDe(datos.materiales);
-  if (operaciones.clipsQuePidenDeMas(datos.documento, infoInicial).length) {
-    datos.documento = operaciones.normalizar(structuredClone(datos.documento), infoInicial);
-    acortadoAlAbrir = true;
-  }
-}
+// acorta al abrir con el mismo `normalizar` que usa cada operación (y un
+// «deslizar» de la capa 4b recibe su duración) — la vista previa muestra lo
+// que se va a producir. Se guarda solo, AL FINAL del arranque (abajo del
+// todo: `guardado.pedir` pinta el estado con TEXTO_GUARDADO, que tiene que
+// existir ya), y solo si el documento cambió de verdad. «Se acortó solo» se
+// dice una vez, hasta el próximo cambio.
+const alAbrir = arreglarAlAbrir(datos.documento, infoDe(datos.materiales));
+datos.documento = alAbrir.doc;
+let acortadoAlAbrir = alAbrir.acortado;
 const historial = new Historial(datos.documento);
 let seleccion = null;
 const avisos = new Avisos();
@@ -108,7 +106,6 @@ const linea = new LineaTiempo({
   },
 });
 const guardado = new Guardado({ url: datos.urls.guardar, versionN: datos.edicion.version_n, alCambiar: pintarGuardado });
-if (acortadoAlAbrir) guardado.pedir(historial.actual);     // lo acortado al abrir también se guarda
 
 const TEXTO_GUARDADO = {
   guardado: () => "Guardado",
@@ -532,6 +529,9 @@ new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () 
 // la vista previa: el documento que se dibuja y las medidas de los textos)
 new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });
 refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
+// lo arreglado al abrir también se guarda (ya con todo declarado y montado:
+// ver arreglarAlAbrir arriba; tests/test_editor_js.py vigila el orden)
+if (alAbrir.guardar) guardado.pedir(historial.actual);
 await vista.iniciar();
 refrescar(null);           // con el reloj listo: el cabezal donde está
 // otro destino: los textos variables de la línea cambian (vista.js ya escucha

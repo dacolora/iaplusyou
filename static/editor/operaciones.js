@@ -279,17 +279,37 @@ function acotarFundidos(doc) {
   }
 }
 
+// Una entrada animada sin `duracion_ms` no la aplican ni la vista previa ni
+// el render: así quedaban los «deslizar» elegidos en la capa 4b (`cambiar`
+// guardaba solo el nombre). Reciben DURACION_ANIMACION_MS (capa 4c); la que
+// ya tenía una duración la conserva, y «ninguna» no se toca.
+export function faltaDuracionAnimacion(clip) {
+  const an = clip?.animacion;
+  return Boolean(an) && typeof an === "object" && Boolean(an.entrada) && an.entrada !== "ninguna"
+    && !(Number(an.duracion_ms) > 0);
+}
+
+function completarAnimaciones(doc) {
+  for (const pista of doc.pistas) {
+    for (const c of pista.clips) {
+      if (faltaDuracionAnimacion(c)) c.animacion = { ...c.animacion, duracion_ms: DURACION_ANIMACION_MS };
+    }
+  }
+}
+
 // Espejo de compilador.verificar_recortes: primero ningún clip pide material
 // de más (`ajustarAlMaterial`, con la principal otra vez contigua desde 0 y
 // el sonido de la escena rehecho); después, en la principal, la cola de A
 // (`d` ms de salida × velocidad) tiene que caber en el material; si no, se
 // acorta a lo que queda o pasa a corte seco. La transición del último clip no
 // se toca (el compilador tampoco). Además (capa 4c) los fundidos de cada audio
-// caben en su clip (`acotarFundidos`).
+// caben en su clip (`acotarFundidos`) y toda entrada animada lleva su
+// duración (`completarAnimaciones`).
 export function normalizar(doc, info = {}) {
   ajustarAlMaterial(doc, info);
   sincronizarSonido(doc, info);
   acotarFundidos(doc);
+  completarAnimaciones(doc);
   const p = pistaPrincipal(doc);
   if (!p || p.tipo !== "video") return doc;
   p.clips.forEach((c, i) => {

@@ -151,6 +151,12 @@ anotar("no_alarga_duplicar_musica_al_final", () => {
   const musica = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO);
   return op.duplicar(musica.doc, musica.seleccion, INFO);
 });
+// Arreglo 4: un «deslizar» de la capa 4b guardado sin duración la recibe al normalizar.
+anotar("animacion_vieja_sin_duracion", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].animacion = { entrada: "deslizar" };
+  return op.moverA(d, "t1", 2000, INFO);
+});
 
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {

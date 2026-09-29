@@ -50,6 +50,13 @@ def test_las_operaciones_del_navegador_dejan_documentos_validos():
                 au = c.get("audio") or {}
                 assert au.get("fundido_entrada_ms", 0) + au.get("fundido_salida_ms", 0) <= c["duracion_ms"], (
                     f"{caso['nombre']}: los fundidos de {c['id']} no caben en sus {c['duracion_ms']} ms")
+        # arreglo 4: una entrada animada siempre lleva su duración (sin ella ni
+        # la vista previa ni el render la aplican)
+        for p in doc["pistas"]:
+            for c in p["clips"]:
+                an = c.get("animacion") or {}
+                if an.get("entrada") not in (None, "ninguna"):
+                    assert an.get("duracion_ms", 0) > 0, f"{caso['nombre']}: {c['id']} anima sin duración"
         # la mezcla que deja el panel de propiedades es una que el render conoce
         mz = doc.get("mezcla") or {}
         mezcla.volumenes_para(mz.get("preset"), mz.get("volumenes"))

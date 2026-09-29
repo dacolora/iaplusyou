@@ -52,3 +52,43 @@ test("los archivos que faltan se cuentan de lo que la edición usa de verdad, y 
   const sinVoz = op.borrar(doc, "a1", DURACIONES).doc;
   assert.equal(avisosCarga(sinVoz, DURACIONES, { ...MATS, 20: {}, 30: {} }).faltan, null);
 });
+
+// ---- Arreglo 1 (crítico) y borde del ítem 4: lo que la página arregla al abrir ----
+import { arreglarAlAbrir, TEXTO_NO_CABE } from "../../static/editor/avisos_carga.js";
+
+test("arreglarAlAbrir acorta lo que se puede y, ya arreglado, no pide guardar otra vez", () => {
+  const { doc, info } = pideDeMas();
+  const r = arreglarAlAbrir(doc, info);
+  assert.equal(r.guardar, true);
+  assert.equal(r.acortado, true);
+  assert.deepEqual(op.clipsQuePidenDeMas(r.doc, info), []);
+  const otraVez = arreglarAlAbrir(r.doc, info);
+  assert.deepEqual([otraVez.guardar, otraVez.acortado], [false, false]);
+  assert.equal(otraVez.doc, r.doc, "sin cambios: el mismo documento, nada que guardar");
+  const sano = docBase();
+  assert.deepEqual(arreglarAlAbrir(sano, DURACIONES), { doc: sano, guardar: false, acortado: false });
+});
+
+test("un archivo más corto que el mínimo de un clip: no se promete «se acorta solo» ni se guarda en cada carga", () => {
+  const info = { ...DURACIONES, 2: 60 };                   // la voz a1 pide 3000 ms de un audio de 60 ms
+  const doc = docBase();
+  const primera = arreglarAlAbrir(doc, info);
+  assert.deepEqual(op.clipsQuePidenDeMas(primera.doc, info), ["a1"], "ni acortándola al mínimo cabe");
+  const segunda = arreglarAlAbrir(primera.doc, info);
+  assert.equal(segunda.guardar, false, "la segunda carga ya no cambia nada: no se guarda");
+  for (const d of [doc, primera.doc]) {
+    const a = avisosCarga(d, info, MATS, { acortado: primera.acortado });
+    assert.deepEqual(a.recortes, { texto: TEXTO_NO_CABE, error: true });
+    assert.doesNotMatch(a.recortes.texto, /próximo cambio|se acortó/);
+    assert.doesNotMatch(a.recortes.texto, tecnico);
+  }
+});
+
+test("arreglarAlAbrir le pone su duración a un «deslizar» guardado sin ella (ediciones de la capa 4b), sin decir «se acortó»", () => {
+  const doc = docBase();
+  doc.pistas[1].clips[0].animacion = { entrada: "deslizar" };
+  const r = arreglarAlAbrir(doc, DURACIONES);
+  assert.deepEqual([r.guardar, r.acortado], [true, false]);
+  assert.deepEqual(r.doc.pistas[1].clips[0].animacion, { entrada: "deslizar", duracion_ms: op.DURACION_ANIMACION_MS });
+  assert.equal(avisosCarga(r.doc, DURACIONES, MATS, { acortado: r.acortado }).recortes, null);
+});

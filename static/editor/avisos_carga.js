@@ -4,7 +4,7 @@
 // no se iban aunque una edición ya lo hubiera arreglado. Ahora la página los
 // recalcula en cada refresco con `avisosCarga` sobre el documento vigente.
 // Puro, sin DOM: lo prueba Node (tests/js/avisos_carga.test.mjs).
-import { clipsQuePidenDeMas } from "./operaciones.js";
+import { clipsQuePidenDeMas, faltaDuracionAnimacion, normalizar } from "./operaciones.js";
 
 // Los materiales que la edición usa DE VERDAD: los de sus clips (y las voces
 // de cada país), los PNG de textos y el logo de la marca. No la lista
@@ -34,16 +34,38 @@ export function faltantes(doc, materiales) {
 
 export const TEXTO_PIDE_DE_MAS = "Un clip pide más video del que tiene su archivo: se acorta solo con tu próximo cambio.";
 export const TEXTO_SE_ACORTO = "Un clip pedía más video del que tiene su archivo: se acortó solo.";
+export const TEXTO_NO_CABE = "Un clip pide más de lo que tiene su archivo, que es demasiado corto para acortarlo solo: bórralo o cámbialo por otro para poder producir.";
+
+const pideDeMas = (doc, info) => clipsQuePidenDeMas(doc, info).length > 0;
+
+// Lo que la página arregla al abrir (capa 4c), con el mismo `normalizar` que
+// usa cada operación: un clip que pide más material del que hay (el render
+// fallaría) y un «deslizar» guardado sin duración (capa 4b). Devuelve
+// {doc, guardar, acortado}: `guardar` solo si el documento cambió de verdad
+// (un archivo más corto que el mínimo de un clip no se arregla nunca: sin esta
+// comparación se guardaría en cada carga); `acortado` si se acortó un clip.
+export function arreglarAlAbrir(doc, info) {
+  const deMas = pideDeMas(doc, info);
+  const animaciones = (doc?.pistas ?? []).some((p) => (p.clips ?? []).some(faltaDuracionAnimacion));
+  if (!deMas && !animaciones) return { doc, guardar: false, acortado: false };
+  const arreglado = normalizar(structuredClone(doc), info);
+  if (JSON.stringify(arreglado) === JSON.stringify(doc)) return { doc, guardar: false, acortado: false };
+  return { doc: arreglado, guardar: true, acortado: deMas };
+}
 
 // {recortes, faltan}: cada uno `null` (no se muestra) o {texto, error}.
 // `acortado`: la página lo acortó al abrir (normalizar) — se dice una vez,
-// sin rojo, hasta el próximo cambio.
+// sin rojo, hasta el próximo cambio. Un clip que ni acortado al mínimo cabe
+// en su archivo no se promete arreglar: se pide borrarlo o cambiarlo.
 export function avisosCarga(doc, info, materiales, { acortado = false } = {}) {
-  const deMas = clipsQuePidenDeMas(doc, info).length > 0;
+  let recortes = acortado ? { texto: TEXTO_SE_ACORTO, error: false } : null;
+  if (pideDeMas(doc, info)) {
+    const tieneArreglo = !pideDeMas(normalizar(structuredClone(doc), info), info);
+    recortes = { texto: tieneArreglo ? TEXTO_PIDE_DE_MAS : TEXTO_NO_CABE, error: true };
+  }
   const n = faltantes(doc, materiales).length;
   return {
-    recortes: deMas ? { texto: TEXTO_PIDE_DE_MAS, error: true }
-      : acortado ? { texto: TEXTO_SE_ACORTO, error: false } : null,
+    recortes,
     faltan: n === 0 ? null : {
       texto: n === 1
         ? "Falta 1 archivo de esta edición (se borró o no es de este proyecto): esa parte no se verá."
