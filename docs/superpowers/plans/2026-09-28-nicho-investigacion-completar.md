@@ -1,20 +1,20 @@
-# Nicho Parte 3 — Completar la investigación automática — Implementation Plan
+# Nicho Parte 3 — Investigación automática y avatares del proyecto — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Que la cadena de investigación que ya existe en `main` (esqueleto de `docs/superpowers/plans/2026-09-22-nicho-investigacion.md`, arreglado el 2026-09-26) funcione de verdad de punta a punta: texto del nicho → consultas con Claude → productos reales de Amazon, Mercado Libre y TikTok Shop vía Apify → selección con Claude → reseñas de esos productos → Reddit/YouTube → avatares, con UNA cifra aprobada y cada gasto registrado.
+**Goal:** Que la cadena de investigación que ya existe en `main` (esqueleto de `docs/superpowers/plans/2026-09-22-nicho-investigacion.md`, arreglado el 2026-09-26) funcione de verdad de punta a punta: texto del nicho → consultas con Claude → productos reales de Amazon, Mercado Libre y TikTok Shop vía Apify → selección con Claude → reseñas de esos productos → Reddit/YouTube → avatares, con UNA cifra aprobada y cada gasto registrado. Además, Nicho gana la lista única de avatares del proyecto (nuevos sin aprobar / aprobados = lo que usa toda la app), avatares escritos a mano y avatares completos (la generación exige todos los campos y una pasada de completado llena lo que falte).
 
 **Architecture:** Se completa lo que hay, no se reescribe la forma: `nicho/investigacion.py` (máquina de estados pura + Claude), `tareas/investigacion.py` (consultas, buscar, seleccionar, `avanzar`), `tareas/nicho.py` (`nicho_recolectar` y `nicho_generar_avatares` aprenden a ser pasos de la cadena), `nicho/fuentes/plataformas.py` (registro de actores, ahora con lectores tolerantes y entradas por país), una fuente genérica nueva `nicho/fuentes/plataforma.py::FuentePlataforma` sobre un corredor de lotes nuevo en `providers/apify.py::correr_lote` (varias corridas a la vez, sobre las primitivas `arrancar/sondear/leer_dataset/contar_dataset` que ya existen), y `nicho/datos.py` como único escritor (la tabla `producto_nicho` de la migración 0016 por fin entra en `db.py`). Rutas y plantilla se corrigen (chips por `getlist`, el estimado del servidor es la cifra aprobada, país por estudio, barra de progreso con `data-poll-job`).
 
 **Tech Stack:** Python 3.9, Flask + Jinja + Flask-Babel (todo texto visible pasa por el catálogo), SQLAlchemy Core + Alembic (SQLite; sin migración nueva: 0016 ya tiene `estudio.pais` y `producto_nicho`), `requests` vía `nicho/fuentes/_http.py`, Apify API v2 vía `providers/apify.py`, Anthropic vía `nicho/avatares._llamar`, pytest sin red.
 
-**Spec:** `docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md`. Hechos de actores: `docs/nicho/apify-inventario-2026-09-20.md`.
+**Spec:** `docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md`. Hechos de actores: `docs/nicho/apify-inventario-2026-09-20.md`. Avatares del proyecto: `docs/superpowers/specs/2026-09-29-nicho-avatares-proyecto-design.md`.
 
 ## Global Constraints
 
 - Python 3.9 solamente (sin `match`, sin `X | Y` en tipos en tiempo de ejecución). Nombres, docstrings y asuntos de commit en español.
 - **Idioma (CLAUDE.md «Idioma»)**: todo texto nuevo que vea una persona pasa por el catálogo: plantillas `{{ _('…') }}` (variables `%(x)s`; dentro de `<script>` con `|tojson`; nunca `|tojson` dentro de un atributo con comillas dobles), Python `from flask_babel import gettext` (nunca `as _`), constantes de módulo con `idiomas.N_` y `|traducir` al mostrarlas. Al cerrar cada tarea que agregue textos: `venv/bin/python3 catalogo_i18n.py actualizar`, traducir las entradas nuevas al inglés en `translations/en/LC_MESSAGES/messages.po` (glosario en `docs/i18n/glosario.md`), `venv/bin/python3 catalogo_i18n.py compilar` y commitear `.po` y `.mo` (`tests/test_i18n_catalogo.py` falla si falta algo). Los textos que van al worker se arman dentro de `idiomas.en_idioma(idiomas.de_proyecto(cliente))` cuando no hay petición (los hooks `al_interrumpir`).
-- Commits con el trailer exacto `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` (`git commit -m "<asunto>" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"`). `git add` SOLO de los archivos que la tarea nombra (nunca `-A` ni `.`).
+- Commits con el trailer exacto `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` (`git commit -m "<asunto>" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"`). `git add` SOLO de los archivos que la tarea nombra (nunca `-A` ni `.`).
 - Nada gasta sin un clic que mostró el costo: la cadena entera se aprueba con UNA cifra calculada en el servidor (`aprobado_usd`); cada corrida de Apify lleva `maxItems` y `maxTotalChargeUsd`; la generación de avatares no corre si su costo real supera lo que queda del tope.
 - Cada paso que paga registra su gasto real con `gastos.registrar_seguro(cliente, tipo, usd, referencia, detalle=, proveedor=, extra=)` — tipos `recoleccion` (Apify), `investigacion` (Claude: consultas y selección), `avatares` — con referencia única por corrida (`…:t<tarea_id>` vía `tareas.ref_sufijo`), también en el camino de fallo. Redondeo de dinero: `math.ceil(round(x * 100, 6)) / 100`.
 - `APIFY_TOKEN` solo en la cabecera (`providers.apify.cabeceras`); todo error que llega a la fila de la tarea o al `extra` pasa por `cola.sin_token` y `cola.recortar`.
@@ -31,6 +31,12 @@
 - **R5** El corredor de lotes vive en `providers/apify.py` (junto a las primitivas) y `FuenteApify` no cambia.
 - **R6** Redes en la cadena: Reddit recibe `palabras_clave = " OR ".join(consultas)`, YouTube `" | ".join(consultas)` con `idioma`/`region` del país; una red sin llave queda `saltado` («sin llave») y la cadena sigue.
 - **R7** Una plataforma que falla o no encuentra nada queda `error`/`vacio` con aviso y la cadena sigue; la investigación solo se `detiene` cuando no queda nada que buscar/traer o Claude falla dos veces.
+- **R8** Amazon solo en los países con tienda propia (15): Colombia, Argentina, Chile, Perú, etc. usan Mercado Libre y TikTok Shop.
+- **R9** Un intento fallido de Claude registra su gasto con referencia propia (`…:fallido<intento>:t<id>`): el reintento usa la misma tarea y `registrar_seguro` es idempotente por referencia.
+- **R10** Avatares propios sin migración: viven en un estudio oculto por proyecto (`estudio.extra.manual`) y nacen aprobados (persona `manual`); una persona sin avatar se edita creándole su avatar una vez; editar un aprobado actualiza su persona en el mismo clic; al actualizar, la persona conserva su origen y su `extra` se funde.
+- **R11** «Completo» (`nicho/calidad.py`) exige citas solo a los avatares de estudio; demografía y edad inferidas van marcadas «(inferido)»; la pasada de completado nunca pisa un campo lleno y si falla se guarda lo que había.
+- **R12** La palabra de la interfaz es «avatares»: «Personajes» ya nombra otra cosa (Catálogo › Personajes).
+- **R13** Commits con el trailer vigente de esta sesión: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ## File Structure
 
@@ -49,6 +55,9 @@
 | `nicho/rutas.py` | `getlist`, estimado como cifra aprobada, país en crear/editar/contexto, `investigar de nuevo`, cancelar = detenida, contexto de productos |
 | `templates/_nicho_investigacion.html`, `templates/nicho_estudio.html`, `templates/_tab_nicho.html`, `static/style.css` | tarjeta en sus tres estados con la base visual común, país al crear/editar, chip en la pestaña |
 | `translations/en/LC_MESSAGES/messages.po` + `.mo` | textos nuevos en inglés |
+| `nicho/calidad.py` (nuevo) | qué es un avatar completo y cómo se funde lo que completa Claude (puro) |
+| `nicho/avatares.py` | prompt exigente, pasada de completado, estimado con completado, completar avatares guardados |
+| `templates/_avatar_ficha.html` (nuevo), `templates/nicho_avatares_proyecto.html` (nuevo), `templates/_nicho_avatares.html` | ficha compartida, página «Avatares del proyecto», aviso de incompleto y «Completar» en el estudio |
 | `CLAUDE.md`, spec | párrafo de Nicho; §2.2 del spec sin `elegido` (R1) |
 | Tests | `tests/test_nicho_datos_investigacion.py` (nuevo), `tests/test_nicho_plataformas.py` (nuevo), `tests/test_nicho_plataforma.py` (nuevo), `tests/test_apify_lote.py` (nuevo), `tests/test_nicho_investigacion.py`, `tests/test_nicho_investigacion_completo.py`, `tests/test_tareas_investigacion.py` (nuevo), `tests/test_tareas_nicho.py`, `tests/test_rutas_nicho.py`, `tests/test_nicho_cadena.py` (nuevo), fixtures en `tests/fixtures/nicho/plataformas/` |
 
@@ -390,7 +399,7 @@ Expected: PASS. (`test_nicho_investigacion_completo.py` usa `datos.crear_estudio
 ```bash
 python3 -m py_compile db.py nicho/datos.py
 git add db.py nicho/datos.py tests/test_nicho_datos_investigacion.py
-git commit -m "Nicho: producto_nicho entra en db.py (migración 0016), país del estudio editable y datos de la investigación con upsert que no pisa el juicio ni lo pagado" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "Nicho: producto_nicho entra en db.py (migración 0016), país del estudio editable y datos de la investigación con upsert que no pisa el juicio ni lo pagado" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -504,7 +513,8 @@ def test_claves_paises_idioma_y_dominio():
     from nicho.fuentes.base import ErrorFuente
     assert pl.claves() == ("amazon", "meli", "tiktok_shop") and set(pl.claves()) == set(datos.FUENTES_PLATAFORMA)
     assert pl.nombre("meli") == "Mercado Libre"
-    assert pl.disponibles("SE") == ["amazon", "tiktok_shop"] and pl.disponibles("CO") == ["amazon", "meli", "tiktok_shop"]
+    assert pl.disponibles("SE") == ["amazon", "tiktok_shop"] and pl.disponibles("MX") == ["amazon", "meli", "tiktok_shop"]
+    assert pl.disponibles("CO") == ["meli", "tiktok_shop"]                             # Amazon solo donde tiene tienda propia
     assert pl.disponibles("ZZ") == ["tiktok_shop"]
     assert pl.dominio("amazon", "SE") == "se" and pl.dominio("amazon", "MX") == "com.mx" and pl.dominio("amazon", "US") == "com"
     assert pl.dominio("meli", "CO") == "https://listado.mercadolibre.com.co/" and pl.dominio("meli", "BR") == "https://lista.mercadolivre.com.br/"
@@ -981,7 +991,7 @@ Run: `venv/bin/python3 catalogo_i18n.py actualizar`; traducir en `translations/e
 ```bash
 python3 -m py_compile nicho/fuentes/plataformas.py
 git add nicho/fuentes/plataformas.py tests/test_nicho_plataformas.py tests/fixtures/nicho/plataformas/ tests/test_nicho_investigacion.py tests/test_nicho_investigacion_completo.py translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
-git commit -m "Nicho: registro de plataformas con países reales, entradas por corrida con tope y lectores tolerantes (Amazon, Mercado Libre, TikTok Shop)" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "Nicho: registro de plataformas con países reales, entradas por corrida con tope y lectores tolerantes (Amazon, Mercado Libre, TikTok Shop)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1057,7 +1067,7 @@ def test_lote_arranca_de_a_dos_y_lee_todos_los_datasets(esperas, monkeypatch):
     assert [i for i, _ in res["items"]] == [0, 1, 1] and res["resultados"] == 3
     assert [c["estado"] for c in res["corridas"]] == ["SUCCEEDED"] * 3 and [c["run_id"] for c in res["corridas"]] == ["r0", "r1", "r2"]
     assert [c["resultados"] for c in res["corridas"]] == [1, 2, 0] and res["aviso"] == ""
-    assert esperas == [ap.PAUSA_SONDEO] * 3                      # una pausa por vuelta de sondeo, no por corrida
+    assert esperas == [ap.PAUSA_SONDEO] * 2                      # una pausa por vuelta de sondeo (2 vueltas), no por corrida
     assert all("tok" not in u for _, u, _ in s.llamadas) and all(kw["headers"]["Authorization"] == "Bearer tok" for _, _, kw in s.llamadas)
     assert any("r1" in (d or "") for e, d in etapas)
 
@@ -1500,7 +1510,7 @@ Expected: PASS. Si `tests/test_nicho_fuentes.py` asevera las claves exactas de `
 ```bash
 python3 -m py_compile providers/apify.py nicho/fuentes/plataforma.py nicho/fuentes/__init__.py
 git add providers/apify.py nicho/fuentes/plataforma.py nicho/fuentes/__init__.py tests/test_apify_lote.py tests/test_nicho_plataforma.py tests/test_nicho_fuentes.py translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
-git commit -m "Nicho: corridas de Apify en lote (hasta 5 a la vez, dataset leído en cualquier estado) y fuente genérica por plataforma que busca productos y trae sus reseñas" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "Nicho: corridas de Apify en lote (hasta 5 a la vez, dataset leído en cualquier estado) y fuente genérica por plataforma que busca productos y trae sus reseñas" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1993,7 +2003,7 @@ Expected: PASS.
 ```bash
 python3 -m py_compile nicho/investigacion.py nicho/avatares.py
 git add nicho/investigacion.py nicho/avatares.py tests/test_nicho_investigacion.py tests/test_nicho_investigacion_completo.py translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
-git commit -m "Nicho: máquina de estados de la investigación con orden por plataformas y redes, estimado real y consultas/selección con Claude por el modelo del proyecto" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "Nicho: máquina de estados de la investigación con orden por plataformas y redes, estimado real y consultas/selección con Claude por el modelo del proyecto" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2024,7 +2034,7 @@ def _estudio(datos, pais="SE", tema="pantuflas para dolor de pies", n_comentario
 
 def _iniciar(datos, eid, plataformas=("amazon", "meli"), redes=("reddit",)):
     from nicho import investigacion as inv
-    return datos.iniciar_investigacion("acme", eid, inv.crear_inicial("pantuflas", "SE" if "meli" not in plataformas else "CO", list(plataformas), list(redes),
+    return datos.iniciar_investigacion("acme", eid, inv.crear_inicial("pantuflas", "SE" if "meli" not in plataformas else "MX", list(plataformas), list(redes),
                                                                     inv.TOPES_DEFECTO, estimado={"total_usd": 9.0}))
 
 
@@ -2132,8 +2142,9 @@ def test_buscar_guarda_productos_gasto_y_sigue(base_temporal, cola_falsa, monkey
     import gastos
     from nicho import datos
     from tareas import investigacion as ti
-    eid = _estudio(datos)
-    datos.actualizar_investigacion("acme", eid, lambda x: {**_iniciar(datos, eid, plataformas=("amazon", "meli")), "consultas": ["a", "b"]})
+    eid = _estudio(datos, pais="MX")
+    _iniciar(datos, eid, plataformas=("amazon", "meli"))
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a", "b"]})
     F = type("F", (_Plat,), {"programa": _productos(3), "aviso_final": "una corrida FAILED"})
     monkeypatch.setattr(ti.fuentes_registro, "por_tipo", lambda t: (lambda: F(t)))
     msg = ti.ejecutar_buscar(_tarea("acme", eid, "nicho_inv_buscar", {"plataforma": "amazon"}, intentos=1, max_intentos=1))
@@ -2157,8 +2168,9 @@ def test_buscar_falla_guarda_lo_leido_y_la_cadena_sigue(base_temporal, cola_fals
     from nicho import datos
     from nicho.fuentes.base import ErrorFuente
     from tareas import investigacion as ti
-    eid = _estudio(datos, pais="CO")
-    datos.actualizar_investigacion("acme", eid, lambda x: {**_iniciar(datos, eid, plataformas=("amazon", "meli")), "consultas": ["a"]})
+    eid = _estudio(datos, pais="MX")
+    _iniciar(datos, eid, plataformas=("amazon", "meli"))
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a"]})
     F = type("F", (_Plat,), {"programa": _productos(2), "fallo": 1, "fallo_exc": ErrorFuente("Apify se cayó (corrida run_b)"), "resultados_crudos": 5})
     monkeypatch.setattr(ti.fuentes_registro, "por_tipo", lambda t: (lambda: F(t)))
     with pytest.raises(ErrorFuente):
@@ -2172,7 +2184,7 @@ def test_buscar_falla_guarda_lo_leido_y_la_cadena_sigue(base_temporal, cola_fals
 def test_seleccionar_marca_elige_y_encola_resenas(base_temporal, cola_falsa, monkeypatch):
     from nicho import datos
     from tareas import investigacion as ti
-    eid = _estudio(datos, pais="CO")
+    eid = _estudio(datos, pais="MX")
     _iniciar(datos, eid, plataformas=("amazon", "meli"), redes=())
     datos.guardar_productos_nicho("acme", eid, "amazon", _productos(3))
     datos.guardar_productos_nicho("acme", eid, "meli", _productos(1, "meli"))
@@ -2190,7 +2202,7 @@ def test_seleccionar_marca_elige_y_encola_resenas(base_temporal, cola_falsa, mon
     t = cola_falsa[-1]
     assert t["tipo"] == "nicho_recolectar" and t["payload"]["fuente"] == "amazon" and t["payload"]["investigacion"] is True and t["max_intentos"] == 1
     assert [p["fuente_id"] for p in t["payload"]["params"]["productos"]] == ["P2", "P1"] and t["payload"]["params"]["resenas_por_producto"] == 100
-    assert t["payload"]["params"]["pais"] == "CO" and t["payload"]["params"]["productos"][0]["titulo"] == "Producto 2"
+    assert t["payload"]["params"]["pais"] == "MX" and t["payload"]["params"]["productos"][0]["titulo"] == "Producto 2"
     assert i["estado"] == "resenas"
 
 
@@ -2212,7 +2224,7 @@ def test_avanzar_salta_resenas_sin_productos_y_redes_sin_llave_y_para_sin_coment
     from tareas import investigacion as ti
     for v in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT", "YOUTUBE_API_KEY"):
         monkeypatch.delenv(v, raising=False)
-    eid = _estudio(datos, pais="CO")
+    eid = _estudio(datos, pais="MX")
     _iniciar(datos, eid, plataformas=("meli",), redes=("reddit", "youtube"))
     datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a", "b"], "elegidos": {},
                                                          "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}, "buscar:meli": {"estado": "vacio"}, "seleccionar": {"estado": "hecho"}}})
@@ -2221,12 +2233,12 @@ def test_avanzar_salta_resenas_sin_productos_y_redes_sin_llave_y_para_sin_coment
     assert i["pasos"]["resenas:meli"]["estado"] == "vacio" and i["pasos"]["redes:reddit"]["estado"] == "saltado" and i["pasos"]["redes:youtube"]["estado"] == "saltado"
     assert i["estado"] == "detenida" and "20" in i["detenida_por"] and cola_falsa == []
     monkeypatch.setenv("YOUTUBE_API_KEY", "k")
-    eid2 = _estudio(datos, pais="CO", n_comentarios=25)
+    eid2 = _estudio(datos, pais="MX", n_comentarios=25)
     _iniciar(datos, eid2, plataformas=(), redes=("youtube",))
     datos.actualizar_investigacion("acme", eid2, lambda x: {**x, "consultas": ["a", "b"], "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}, "seleccionar": {"estado": "hecho"}}})
     assert ti.avanzar("acme", eid2) == "redes:youtube"
     t = cola_falsa[-1]
-    assert t["tipo"] == "nicho_recolectar" and t["payload"]["fuente"] == "youtube" and t["payload"]["params"]["palabras_clave"] == "a | b" and t["payload"]["params"]["region"] == "CO"
+    assert t["tipo"] == "nicho_recolectar" and t["payload"]["fuente"] == "youtube" and t["payload"]["params"]["palabras_clave"] == "a | b" and t["payload"]["params"]["region"] == "SE"
     datos.actualizar_investigacion("acme", eid2, lambda x: {**x, "pasos": {**x["pasos"], "redes:youtube": {"estado": "hecho", "nuevos": 30}}})
     assert ti.avanzar("acme", eid2) == "generar"
     t = cola_falsa[-1]
@@ -2239,7 +2251,7 @@ def test_avanzar_salta_resenas_sin_productos_y_redes_sin_llave_y_para_sin_coment
 def test_recolectar_como_paso_anota_reseñas_traidas_y_avanza(base_temporal, cola_falsa, monkeypatch):
     from nicho import datos
     from tareas import investigacion as ti, nicho as tn
-    eid = _estudio(datos, pais="CO")
+    eid = _estudio(datos, pais="MX")
     _iniciar(datos, eid, plataformas=("meli",), redes=())
     datos.guardar_productos_nicho("acme", eid, "meli", _productos(2, "meli"))
     datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a"], "elegidos": {"meli": ["P0", "P1"]},
@@ -2282,6 +2294,7 @@ def test_generar_auto_respeta_el_tope_y_cierra(base_temporal, cola_falsa, monkey
     assert i["estado"] == "detenida" and "1" in i["detenida_por"] and "5" in i["detenida_por"] and "US$" in msg
     assert datos.estudio("acme", eid)["generacion"] == 0
     datos.actualizar_investigacion("acme", eid, lambda x: {**x, "estado": "generando", "detenida_por": None, "pasos": {**x["pasos"], "generar": {"estado": "en_curso"}}})
+    monkeypatch.setattr(avatares, "estimar_costo", lambda lista, modelo=None: {"usd": 0.5, "comentarios": 25, "suficientes": True, "referencia": False, "modelo": "m"})
     resultado = {"nucleos": [{"nombre": "Sin dolor", "deseo": "Quiero caminar sin dolor", "resumen": "r", "comentarios": [1], "sub_avatares": [SUB]}],
                  "resumen": {"comentarios": 25, "nucleos": 1, "subs": 1, "con_evidencia": 1, "sin_evidencia": 0, "errores": 0,
                              "tokens_entrada": 3000, "tokens_salida": 900, "usd": 0.015, "modelo": "claude-sonnet-5"}}
@@ -2399,17 +2412,20 @@ def _gasto_apify(cliente, eid, tarea, paso, fuente, tarifa, nota=""):
     return usd
 
 
-def _fallo_claude(cliente, eid, tarea, paso, e, motivo):
+def _fallo_claude(cliente, eid, tarea, paso, e, motivo_de, ref=None):
     """Camino de fallo de consultas/seleccionar: gasto de lo cobrado, paso
     `pendiente` si queda intento, `error` + detenida si no. Devuelve el mensaje."""
     entrada, salida = int(getattr(e, "tokens_entrada", 0) or 0), int(getattr(e, "tokens_salida", 0) or 0)
-    usd = _gasto_claude(cliente, eid, tarea, paso, entrada, salida, gettext("intento fallido"))
+    # Referencia propia por intento: el reintento usa la misma tarea (mismo :t<id>) y registrar_seguro
+    # es idempotente por referencia; sin esto el cobro del intento bueno se perdería.
+    usd = _gasto_claude(cliente, eid, tarea, f"{ref or paso}:fallido{int(tarea.get('intentos') or 1)}", entrada, salida,
+                        gettext("intento fallido"))
     mensaje = cola.recortar(cola.sin_token(e), 300)
 
     def _fn(i):
         previo = float(((i.get("pasos") or {}).get(paso) or {}).get("usd") or 0)
         if _ultimo_intento(tarea):
-            return inv.detener(inv.marcar_paso(i, paso, "error", usd=round(previo + usd, 4), aviso=mensaje), motivo % {"e": mensaje})
+            return inv.detener(inv.marcar_paso(i, paso, "error", usd=round(previo + usd, 4), aviso=mensaje), motivo_de(mensaje))
         return inv.marcar_paso(i, paso, "pendiente", usd=round(previo + usd, 4), aviso=mensaje)
     datos.actualizar_investigacion(cliente, eid, _fn)
     return mensaje
@@ -2491,7 +2507,7 @@ def ejecutar_consultas(tarea):
     try:
         consultas, entrada, salida = inv.consultas_con_claude(est, i.get("pais") or est.get("pais") or "CO")
     except Exception as e:
-        _fallo_claude(cliente, eid, tarea, "consultas", e, N_("Claude no pudo escribir las consultas: %(e)s"))
+        _fallo_claude(cliente, eid, tarea, "consultas", e, lambda m: gettext("Claude no pudo escribir las consultas: %(e)s", e=m))
         raise
     usd = _gasto_claude(cliente, eid, tarea, "consultas", entrada, salida, gettext("%(n)s consultas", n=len(consultas)))
 
@@ -2565,7 +2581,7 @@ def ejecutar_seleccionar(tarea):
         try:
             decisiones, entrada, salida = inv.seleccion_con_claude({**est, "pais": i.get("pais") or est.get("pais") or ""}, pendientes)
         except Exception as e:
-            _fallo_claude(cliente, eid, tarea, "seleccion", e, N_("Claude no pudo elegir los productos: %(e)s"))
+            _fallo_claude(cliente, eid, tarea, "seleccionar", e, lambda m: gettext("Claude no pudo elegir los productos: %(e)s", e=m), ref="seleccion")
             raise
         datos.marcar_relevancia(cliente, eid, decisiones)
     usd = _gasto_claude(cliente, eid, tarea, "seleccion", entrada, salida, gettext("%(n)s productos juzgados", n=len(decisiones)))
@@ -2761,13 +2777,2346 @@ Expected: PASS.
 ```bash
 python3 -m py_compile tareas/investigacion.py tareas/nicho.py
 git add tareas/investigacion.py tareas/nicho.py tests/test_tareas_investigacion.py tests/test_nicho_investigacion_completo.py translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
-git commit -m "Nicho: la cadena de investigación corre de verdad — consultas y selección con Claude, búsqueda por plataforma con Apify, reseñas y redes como pasos, avatares con tope" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "Nicho: la cadena de investigación corre de verdad — consultas y selección con Claude, búsqueda por plataforma con Apify, reseñas y redes como pasos, avatares con tope" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+### Task 6: Rutas y tarjeta de la investigación (país, estimado del servidor, pasos a la vista)
+
+**Files:**
+- Modify: `nicho/investigacion.py` (agregar `reanudar`, `job_de_paso`)
+- Modify: `nicho/datos.py` (agregar `NOMBRES_PAIS`)
+- Modify: `nicho/rutas.py` (sección «Investigación» completa; `crear`, `editar`, `ver`)
+- Modify: `templates/_nicho_investigacion.html` (reemplazo completo), `templates/nicho_estudio.html` (país en «Editar estudio»), `templates/_tab_nicho.html` (país en «+ Nuevo estudio»), `static/style.css` (bloque al final)
+- Test: `tests/test_rutas_nicho.py` (reemplazar `test_ver_pasa_investigacion_real_a_la_plantilla` y `test_investigacion_reanudar_vuelve_a_encolar`; agregar las pruebas de abajo), `tests/test_nicho_investigacion.py` (agregar)
+
+**Interfaces:**
+- Consumes: Tasks 1–5 (`datos.iniciar_investigacion/investigacion/actualizar_investigacion/productos_nicho/PAISES_ESTUDIO/job_id_inv/job_id_recolectar/job_id_generar`, `investigacion.*`, `plataformas.*`, `tareas.investigacion.avanzar`).
+- Produces: `investigacion.reanudar(inv) -> dict`, `investigacion.job_de_paso(cliente, estudio_id, paso) -> str`, `datos.NOMBRES_PAIS`; rutas `nicho.investigacion_estimar` (GET JSON `{filas:[{clave,nombre,busqueda_usd,resenas_usd,busqueda_texto,resenas_texto}], claude_usd, claude_texto, avatares_usd, avatares_texto, total_usd, texto, pais, plataformas, redes, topes}` o 400 `{error}`), `nicho.investigacion_iniciar` (POST: `pais`, `plataformas` (repetido), `redes` (repetido), los 4 topes y `total_visto`), `nicho.investigacion_reanudar`, `nicho.investigacion_cancelar`; contexto de `ver`: `investigacion` (resumen), `trabajo_inv`, `productos_investigados`, `paises_estudio`, `plataformas_inv`, `redes_inv`, `topes_inv`, `limites_inv`, `pais_inv`.
+
+- [ ] **Step 1: Escribir las pruebas que fallan**
+
+Agregar al final de `tests/test_nicho_investigacion.py`:
+
+```python
+def test_reanudar_y_job_de_paso():
+    from nicho import investigacion as inv
+    i = inv.crear_inicial("t", "CO", ["amazon", "meli"], ["reddit"], inv.TOPES_DEFECTO, estimado={"total_usd": 3.0})
+    for paso, estado in (("consultas", "hecho"), ("buscar:amazon", "error"), ("buscar:meli", "en_curso")):
+        i = inv.marcar_paso(i, paso, estado)
+    i = {**inv.detener(i, "x"), "ultimo_error": "boom"}
+    r = inv.reanudar(i)
+    assert r["pasos"]["buscar:meli"]["estado"] == "pendiente" and r["pasos"]["buscar:amazon"]["estado"] == "error"   # lo que cobró no se repite solo
+    assert r["estado"] == "buscando" and r["detenida_por"] is None and r["ultimo_error"] is None and r["terminada_en"] is None
+    j = inv.detener(inv.marcar_paso(inv.marcar_paso(i, "buscar:meli", "hecho"), "seleccionar", "error"), "Claude")
+    assert inv.reanudar(j)["pasos"]["seleccionar"]["estado"] == "pendiente"                                      # Claude sí se reintenta
+    assert inv.job_de_paso("acme", 3, "buscar:meli") == "nicho:acme:3:inv:buscar:meli"
+    assert inv.job_de_paso("acme", 3, "resenas:meli") == "nicho:acme:3:recolectar:meli"
+    assert inv.job_de_paso("acme", 3, "redes:youtube") == "nicho:acme:3:recolectar:youtube"
+    assert inv.job_de_paso("acme", 3, "generar") == "nicho:acme:3:generar"
+```
+
+En `tests/test_rutas_nicho.py`, borrar `test_ver_pasa_investigacion_real_a_la_plantilla` y `test_investigacion_reanudar_vuelve_a_encolar` y agregar al final:
+
+```python
+@pytest.fixture()
+def llaves_inv(monkeypatch):
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("YOUTUBE_API_KEY", "k")
+    for v in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT"):
+        monkeypatch.delenv(v, raising=False)
+
+
+def test_estimar_investigacion_json_y_errores(app, llaves_inv):
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "X", tema="pantuflas", pais="SE")
+    c = app["c"]
+    r = c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=amazon&plataformas=tiktok_shop&redes=youtube&consultas=2")
+    d = r.get_json()
+    assert r.status_code == 200 and [f["clave"] for f in d["filas"]] == ["amazon", "tiktok_shop"] and d["redes"] == ["youtube"]
+    assert d["topes"]["consultas"] == 2 and d["texto"].startswith("US$") and d["filas"][0]["busqueda_texto"].startswith("US$")
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=amazon,tiktok_shop").get_json()["plataformas"] == ["amazon", "tiktok_shop"]
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=meli").status_code == 400      # MELI no cubre Suecia
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=ZZ&plataformas=amazon").status_code == 400
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE").status_code == 400                        # nada elegido
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&redes=reddit").status_code == 400          # red sin llave
+    assert c.get("/cliente/acme/nicho/999/investigacion/estimar?pais=SE&plataformas=amazon").status_code == 404
+
+
+def test_iniciar_investigacion_con_el_costo_visto(app, llaves_inv, monkeypatch):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = datos.crear_estudio("acme", "X", tema="pantuflas para dolor de pies", pais="CO")
+    encolados = []
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload)) or True)
+    estimado = inv.estimar({}, "SE", ["amazon"], ["youtube"], inv.TOPES_DEFECTO)
+    forma = {"pais": "SE", "plataformas": ["amazon"], "redes": ["youtube"], "consultas": "3", "productos_por_consulta": "20",
+             "productos_elegidos": "15", "resenas_por_producto": "100"}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data={**forma, "total_visto": "0.01"}, follow_redirects=True)
+    assert "vuelve a confirmar" in r.data.decode() and encolados == [] and datos.investigacion("acme", eid) == {}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data={**forma, "total_visto": str(estimado["total_usd"])})
+    assert r.status_code == 302
+    i = datos.investigacion("acme", eid)
+    assert i["aprobado_usd"] == estimado["total_usd"] and i["plataformas"] == ["amazon"] and i["redes"] == ["youtube"] and i["pais"] == "SE"
+    assert datos.estudio("acme", eid)["pais"] == "SE"                                                    # el país elegido queda en el estudio
+    assert encolados == [(datos.job_id_inv("acme", eid, "consultas"), "nicho_inv_consultas", {"cliente": "acme", "estudio_id": eid})]
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data={**forma, "total_visto": str(estimado["total_usd"])}, follow_redirects=True)
+    assert "en curso" in r.data.decode() and len(encolados) == 1                                        # una viva a la vez
+    sin_tema = datos.crear_estudio("acme", "Y", pais="SE")
+    r = app["c"].post(f"/cliente/acme/nicho/{sin_tema}/investigacion", data={**forma, "total_visto": "99"}, follow_redirects=True)
+    assert "Qué investigar" in r.data.decode() and datos.investigacion("acme", sin_tema) == {}
+
+
+def test_reanudar_y_cancelar(app, llaves_inv, monkeypatch):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="SE")
+    encolados = []
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload)) or True)
+    i = inv.crear_inicial("t", "SE", ["amazon"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 2.0})
+    i = inv.marcar_paso(inv.marcar_paso({**i, "consultas": ["a", "b"]}, "consultas", "hecho"), "buscar:amazon", "en_curso")
+    datos.iniciar_investigacion("acme", eid, {**i, "estado": "interrumpida"})
+    app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/reanudar")
+    assert encolados[-1][1] == "nicho_inv_buscar" and datos.investigacion("acme", eid)["estado"] == "buscando"
+    app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/cancelar")
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] == "detenida" and i["detenida_por"] == "cancelada"
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/cancelar", follow_redirects=True)
+    assert "No hay investigación en curso" in r.data.decode()
+
+
+def test_pagina_con_la_investigacion(app, llaves_inv, monkeypatch):
+    from nicho import datos, investigacion as inv, rutas
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="CO")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'id="form-investigar"' in html and 'name="plataformas" value="meli"' in html and 'data-paises="*"' in html
+    assert f"/cliente/acme/nicho/{eid}/investigacion/estimar" in html and 'name="total_visto"' in html and '<option value="CO" selected' in html
+    i = inv.crear_inicial("t", "CO", ["meli"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 2.0})
+    i = inv.marcar_paso(inv.marcar_paso({**i, "consultas": ["pantuflas"]}, "consultas", "hecho", usd=0.01), "buscar:meli", "en_curso")
+    datos.iniciar_investigacion("acme", eid, i)
+    monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job: job == datos.job_id_inv("acme", eid, "buscar:meli"))
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert f'data-poll-job="{datos.job_id_inv("acme", eid, "buscar:meli")}"' in html and "<script>iniciarPolling" not in html
+    assert "buscar en Mercado Libre" in html and "pantuflas" in html and "Cancelar" in html and 'id="form-investigar"' not in html
+    datos.guardar_productos_nicho("acme", eid, "meli", [{"fuente_id": "MCO1", "titulo": "Pantuflas ortopédicas", "n_resenas": 40, "url": "https://x/1"}])
+    datos.actualizar_investigacion("acme", eid, lambda x: inv.detener(x, "no se encontraron productos del nicho"))
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "Pantuflas ortopédicas" in html and "no se encontraron productos del nicho" in html and "Reanudar" in html
+    assert 'id="form-investigar"' in html                                                              # «Investigar de nuevo» disponible
+
+
+def test_pais_al_crear_y_editar_estudio(app):
+    from nicho import datos
+    app["c"].post("/cliente/acme/nicho/estudios", data={"nombre": "Con país", "tema": "t", "pais": "MX"})
+    e = [x for x in datos.estudios("acme") if x["nombre"] == "Con país"][0]
+    assert e["pais"] == "MX"
+    app["c"].post(f"/cliente/acme/nicho/{e['id']}/editar", data={"nombre": "Con país", "pais": "SE"})
+    assert datos.estudio("acme", e["id"])["pais"] == "SE"
+    r = app["c"].post(f"/cliente/acme/nicho/{e['id']}/editar", data={"nombre": "Con país", "pais": "ZZ"}, follow_redirects=True)
+    assert "País no soportado" in r.data.decode() and datos.estudio("acme", e["id"])["pais"] == "SE"
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert 'name="pais"' in html
+```
+
+- [ ] **Step 2: Correr y ver que fallan**
+
+Run: `venv/bin/python3 -m pytest tests/test_nicho_investigacion.py tests/test_rutas_nicho.py -q -p no:cacheprovider -k "reanudar or estimar_investigacion or iniciar_investigacion or cancelar or pagina_con_la_investigacion or pais_al_crear"`
+Expected: FAIL.
+
+- [ ] **Step 3: `nicho/investigacion.py` — agregar** (después de `puede_reanudar`), y cambiar el import de arriba a `from nicho import avatares, datos`:
+
+```python
+def reanudar(inv):
+    """Reanudar (spec §7): los pasos `en_curso` (interrumpidos) vuelven a
+    `pendiente`, y también consultas y selección con `error` (Claude,
+    centavos); una búsqueda o unas reseñas con `error` NO se repiten solas
+    porque ya cobraron: para eso está «Investigar de nuevo», que aprueba otra
+    cifra."""
+    nuevo = dict(inv or {})
+    pasos = {}
+    for paso, info in (nuevo.get("pasos") or {}).items():
+        info = dict(info or {})
+        if info.get("estado") == "en_curso" or (paso in ("consultas", "seleccionar") and info.get("estado") == "error"):
+            info["estado"] = "pendiente"
+        pasos[paso] = info
+    nuevo.update(pasos=pasos, detenida_por=None, ultimo_error=None, terminada_en=None)
+    siguiente = siguiente_paso({**nuevo, "estado": "consultas"})
+    nuevo["estado"] = estado_por_paso(siguiente) if siguiente else "lista"
+    return nuevo
+
+
+def job_de_paso(cliente, estudio_id, paso):
+    """El job_id de la tarea que corre ese paso (para la barra de progreso)."""
+    if paso in ("consultas", "seleccionar") or paso.startswith("buscar:"):
+        return datos.job_id_inv(cliente, estudio_id, paso)
+    if paso.startswith("resenas:") or paso.startswith("redes:"):
+        return datos.job_id_recolectar(cliente, estudio_id, paso.split(":", 1)[1])
+    return datos.job_id_generar(cliente, estudio_id)
+```
+
+- [ ] **Step 4: `nicho/datos.py` — nombres de país** (después de `PAISES_ESTUDIO`):
+
+```python
+NOMBRES_PAIS = {"CO": N_("Colombia"), "MX": N_("México"), "US": N_("Estados Unidos"), "ES": N_("España"), "BR": N_("Brasil"),
+                "AR": N_("Argentina"), "CL": N_("Chile"), "PE": N_("Perú"), "UY": N_("Uruguay"), "EC": N_("Ecuador"),
+                "SE": N_("Suecia"), "GB": N_("Reino Unido"), "DE": N_("Alemania"), "FR": N_("Francia"), "IT": N_("Italia"),
+                "NL": N_("Países Bajos"), "CA": N_("Canadá"), "AU": N_("Australia"), "IN": N_("India"), "JP": N_("Japón"),
+                "AE": N_("Emiratos Árabes Unidos")}
+```
+
+(`N_` ya está importado en `nicho/datos.py`; si no, `from idiomas import N_`.)
+
+- [ ] **Step 5: `nicho/rutas.py`**
+
+`crear`: agregar `pais=request.form.get("pais") or proyectos.pais(cliente)` a la llamada a `datos.crear_estudio`. `editar`: la tupla de campos pasa a `("nombre", "producto", "tema", "pais")`. `contexto(cliente)` agrega `"paises_estudio": [(c, datos.NOMBRES_PAIS.get(c, c)) for c in datos.PAISES_ESTUDIO], "pais_proyecto": proyectos.pais(cliente)`.
+
+En `ver`, antes del `render_template`:
+
+```python
+    inv_actual = datos.investigacion(cliente, eid)
+    paso_vivo = investigacion.siguiente_paso(inv_actual)
+    job_inv = investigacion.job_de_paso(cliente, eid, paso_vivo) if paso_vivo else None
+```
+
+y en los argumentos del `render_template`, reemplazar `investigacion=investigacion.resumen(datos.investigacion(cliente, eid)), price_estimate="",` por:
+
+```python
+        investigacion=investigacion.resumen(inv_actual),
+        trabajo_inv=({"job_id": job_inv, "paso": paso_vivo} if job_inv and trabajos.en_curso(job_inv) else None),
+        productos_investigados=(datos.productos_nicho(cliente, eid) if inv_actual else []),
+        paises_estudio=[(c, datos.NOMBRES_PAIS.get(c, c)) for c in datos.PAISES_ESTUDIO],
+        plataformas_inv=_plataformas_visibles(), redes_inv=_redes_visibles(), topes_inv=investigacion.TOPES_DEFECTO,
+        limites_inv=investigacion.LIMITES, pais_inv=est.get("pais") or proyectos.pais(cliente),
+```
+
+Reemplazar TODA la sección `# ------ Investigación (Parte 3) ------` (las cuatro rutas del esqueleto) por:
+
+```python
+# ------ Investigación automática (Parte 3) ------
+
+def _lista_param(fuente, nombre):
+    """Checkboxes repetidos (`getlist`) o una lista con comas (el fetch del estimado)."""
+    salida = []
+    for v in fuente.getlist(nombre):
+        salida.extend(x.strip() for x in (v or "").split(",") if x.strip())
+    return list(dict.fromkeys(salida))
+
+
+def _plataformas_visibles():
+    """Las plataformas del registro; sin APIFY_TOKEN el admin las ve apagadas y el cliente no las ve."""
+    salida = []
+    for clave in plataformas.claves():
+        faltan = fuentes_registro.llaves_faltantes(clave)
+        if faltan and not _es_admin():
+            continue
+        paises = plataformas.PLATAFORMAS[clave]["paises"]
+        salida.append({"clave": clave, "nombre": plataformas.nombre(clave), "faltan": faltan,
+                       "paises": "*" if paises == plataformas.TODOS else " ".join(sorted(paises))})
+    return salida
+
+
+def _redes_visibles():
+    salida = []
+    for red in investigacion.REDES:
+        faltan = fuentes_registro.llaves_faltantes(red)
+        if faltan and not _es_admin():
+            continue
+        salida.append({"clave": red, "nombre": fuentes_registro.NOMBRES[red], "faltan": faltan})
+    return salida
+
+
+def _pedido_investigacion(fuente, est, cliente):
+    """(pais, plataformas, redes, topes) validados. ErrorDatos o ValueError con
+    un mensaje para la persona."""
+    pais = (fuente.get("pais") or est.get("pais") or proyectos.pais(cliente) or "").strip().upper()
+    if pais not in datos.PAISES_ESTUDIO:
+        raise datos.ErrorDatos(gettext("País no soportado: %(pais)s", pais=pais or "—"))
+    plats = [p for p in _lista_param(fuente, "plataformas") if p in plataformas.PLATAFORMAS]
+    redes = [r for r in _lista_param(fuente, "redes") if r in investigacion.REDES]
+    if not plats and not redes:
+        raise datos.ErrorDatos(gettext("Elige al menos una plataforma o una red."))
+    fuera = [p for p in plats if not plataformas.cubre(p, pais)]
+    if fuera:
+        raise datos.ErrorDatos(gettext("%(plataforma)s no cubre el país %(pais)s.", plataforma=plataformas.nombre(fuera[0]), pais=pais))
+    faltan = sorted({v for x in plats + redes for v in fuentes_registro.llaves_faltantes(x)})
+    if faltan:
+        raise datos.ErrorDatos(gettext("Falta %(llaves)s en el .env del servidor (Configuración › Puesta a punto).", llaves=", ".join(faltan))
+                               if _es_admin() else gettext("Esa fuente no está disponible todavía."))
+    topes = investigacion.normalizar_topes({k: fuente.get(k) for k in investigacion.TOPES_DEFECTO})
+    return pais, plats, redes, topes
+
+
+@bp.get("/<int:eid>/investigacion/estimar")
+def investigacion_estimar(cliente, eid):
+    est = _estudio_o_404(cliente, eid)
+    try:
+        pais, plats, redes, topes = _pedido_investigacion(request.args, est, cliente)
+        e = investigacion.estimar(est, pais, plats, redes, topes)
+    except (datos.ErrorDatos, ErrorFuente, ValueError) as ex:
+        return jsonify({"error": str(ex)}), 400
+    filas = [{**f, "busqueda_texto": gastos.formatear(f["busqueda_usd"]), "resenas_texto": gastos.formatear(f["resenas_usd"]),
+              "nombre": f["nombre"]} for f in e["filas"]]
+    return jsonify({**e, "filas": filas, "claude_texto": gastos.formatear(e["claude_usd"]), "avatares_texto": gastos.formatear(e["avatares_usd"]),
+                    "texto": gastos.formatear(e["total_usd"]), "pais": pais, "plataformas": plats, "redes": redes, "topes": topes})
+
+
+@bp.post("/<int:eid>/investigacion")
+def investigacion_iniciar(cliente, eid):
+    """Aprueba la cifra y arranca la cadena. La cifra la recalcula el servidor:
+    si supera lo que la persona vio en el botón (`total_visto`), no arranca."""
+    est = _estudio_o_404(cliente, eid)
+    if est["archivado"]:
+        flash(gettext("El estudio está archivado."), "error")
+        return _volver(cliente, eid)
+    if not (est.get("tema") or "").strip():
+        flash(gettext("Escribe primero qué investigar (Editar estudio › Qué investigar)."), "error")
+        return _volver(cliente, eid)
+    actual = datos.investigacion(cliente, eid)
+    if actual.get("estado") and actual["estado"] not in ("lista", "detenida", "interrumpida"):
+        flash(gettext("Ya hay una investigación en curso."), "error")
+        return _volver(cliente, eid)
+    try:
+        pais, plats, redes, topes = _pedido_investigacion(request.form, est, cliente)
+        estimado = investigacion.estimar(est, pais, plats, redes, topes)
+        visto = float(request.form.get("total_visto") or 0)
+    except (datos.ErrorDatos, ErrorFuente, ValueError) as ex:
+        flash(str(ex), "error")
+        return _volver(cliente, eid)
+    if estimado["total_usd"] > visto + 0.005:
+        flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.",
+                      costo=gastos.formatear(estimado["total_usd"])), "error")
+        return _volver(cliente, eid)
+    if est.get("pais") != pais:
+        datos.actualizar_estudio(cliente, eid, pais=pais)
+    datos.iniciar_investigacion(cliente, eid, investigacion.crear_inicial(est["tema"], pais, plats, redes, topes, estimado=estimado))
+    tareas_investigacion.avanzar(cliente, eid)
+    flash(gettext("Investigación en marcha con un tope de %(tope)s; la página muestra cada paso.",
+                  tope=gastos.formatear(estimado["total_usd"])), "ok")
+    return _volver(cliente, eid)
+
+
+@bp.post("/<int:eid>/investigacion/reanudar")
+def investigacion_reanudar(cliente, eid):
+    est = _estudio_o_404(cliente, eid)
+    actual = datos.investigacion(cliente, eid)
+    if not investigacion.puede_reanudar(actual.get("estado")):
+        flash(gettext("No hay una investigación detenida para reanudar."), "error")
+        return _volver(cliente, eid)
+    if est["archivado"]:
+        flash(gettext("El estudio está archivado."), "error")
+        return _volver(cliente, eid)
+    datos.actualizar_investigacion(cliente, eid, investigacion.reanudar)
+    if tareas_investigacion.avanzar(cliente, eid):
+        flash(gettext("Investigación reanudada."), "ok")
+    else:
+        despues = datos.investigacion(cliente, eid)
+        if despues.get("estado") == "detenida":
+            flash(gettext("La investigación sigue detenida: %(motivo)s", motivo=idiomas.traducir(despues.get("detenida_por") or "")), "error")
+        else:
+            flash(gettext("La investigación terminó."), "ok")
+    return _volver(cliente, eid)
+
+
+@bp.post("/<int:eid>/investigacion/cancelar")
+def investigacion_cancelar(cliente, eid):
+    _estudio_o_404(cliente, eid)
+    actual = datos.investigacion(cliente, eid)
+    if not actual.get("estado") or actual["estado"] in ("lista", "detenida", "interrumpida"):
+        flash(gettext("No hay investigación en curso para cancelar."), "error")
+        return _volver(cliente, eid)
+    datos.actualizar_investigacion(cliente, eid, lambda i: investigacion.detener(i, N_("cancelada")))
+    flash(gettext("Investigación cancelada: el paso que está corriendo termina y no se lanza el siguiente."), "ok")
+    return _volver(cliente, eid)
+```
+
+Verificar que `nicho/rutas.py` importa `N_` (`from idiomas import N_`), `idiomas`, `plataformas` (`from nicho.fuentes import plataformas`), `tareas_investigacion` y `ErrorFuente`; agregar lo que falte.
+
+- [ ] **Step 6: `templates/_nicho_investigacion.html` — reemplazo completo**
+
+```html
+{# Tarjeta «Investigar el nicho» (spec 2026-09-21 Parte 3 §8). Contexto de nicho.rutas.ver:
+   investigacion (resumen), trabajo_inv, productos_investigados, paises_estudio, plataformas_inv,
+   redes_inv, topes_inv, limites_inv, pais_inv, etiquetas_inv, etiquetas_paso, etiquetas_paso_estado.
+   La barra de progreso lleva data-poll-job (base.html la sondea y recarga al terminar cada paso). #}
+{% set inv = investigacion %}
+{% set viva = inv.estado and inv.estado not in ('lista', 'detenida', 'interrumpida') %}
+<section class="swap-card nicho-inv" id="investigacion">
+  <div class="nicho-inv-cabecera">
+    <h3>{{ _('Investigar el nicho') }}</h3>
+    {% if inv.estado %}<span class="tag-estado nicho-inv-estado-{{ inv.estado }}">{{ etiquetas_inv.get(inv.estado, inv.estado)|traducir }}</span>{% endif %}
+  </div>
+  <p class="vacio">{{ _('Apruebas una cifra y el sistema busca productos del nicho en las tiendas del país, elige los que son del nicho, trae sus reseñas y arma los avatares. Nadie marca nada a mano.') }}</p>
+
+  {% if inv.estado %}
+  <p class="nicho-inv-cifras">
+    {{ _('Gastado %(gastado)s de %(aprobado)s aprobados', gastado=inv.gastado|usd, aprobado=inv.aprobado|usd) }}
+    {% if inv.productos %} · {{ _('%(n)s producto(s) encontrados', n=inv.productos) }}{% endif %}
+    {% if inv.relevantes %} · {{ _('%(n)s del nicho', n=inv.relevantes) }}{% endif %}
+    {% if inv.resenas %} · {{ _('%(n)s comentario(s) nuevos', n=inv.resenas) }}{% endif %}
+  </p>
+  {% if inv.consultas %}<p class="vacio">{{ _('Búsquedas:') }} {% for c in inv.consultas %}<span class="tag-estado">{{ c }}</span> {% endfor %}</p>{% endif %}
+  <ol class="nicho-inv-pasos">
+    {% for paso in inv.orden %}
+    {% set info = inv.pasos.get(paso, {}) %}
+    {% set e = info.estado or 'pendiente' %}
+    <li class="nicho-inv-paso paso-{{ e }}">
+      <span class="nicho-inv-paso-nombre">{{ etiquetas_paso.get(paso, paso)|traducir }}</span>
+      <span class="tag-estado">{{ etiquetas_paso_estado.get(e, e)|traducir }}</span>
+      {% if info.productos %}<small>{{ _('%(n)s producto(s)', n=info.productos) }}</small>{% endif %}
+      {% if info.relevantes %}<small>{{ _('%(n)s del nicho', n=info.relevantes) }}</small>{% endif %}
+      {% if info.nuevos %}<small>{{ _('%(n)s comentario(s) nuevos', n=info.nuevos) }}</small>{% endif %}
+      {% if info.usd %}<small>{{ info.usd|usd }}</small>{% endif %}
+      {% if info.aviso %}<small class="nicho-inv-aviso">{{ info.aviso|traducir }}</small>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% if trabajo_inv %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo_inv.job_id }}" data-poll-job="{{ trabajo_inv.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div><span class="progreso-texto">{{ etiquetas_paso.get(trabajo_inv.paso, trabajo_inv.paso)|traducir }}…</span></div>
+  {% endif %}
+  {% if inv.detenida_por %}<p class="tag-estado sprint-aviso">{{ _('Detenida: %(motivo)s', motivo=inv.detenida_por|traducir) }}</p>{% endif %}
+  {% if inv.ultimo_error %}<p class="vacio">{{ _('Último error: %(error)s', error=inv.ultimo_error) }}</p>{% endif %}
+  <div class="acciones">
+    {% if viva %}
+    <form method="post" action="{{ url_for('nicho.investigacion_cancelar', cliente=cliente, eid=estudio.id) }}" class="inline"
+          onsubmit='return confirm({{ _("¿Cancelar la investigación? El paso que está corriendo termina (y se cobra) y no se lanza el siguiente.")|tojson }});'>
+      <button type="submit" class="btn-sm btn-peligro">{{ _('Cancelar') }}</button>
+    </form>
+    {% elif inv.estado in ('detenida', 'interrumpida') and not estudio.archivado %}
+    <form method="post" action="{{ url_for('nicho.investigacion_reanudar', cliente=cliente, eid=estudio.id) }}" class="inline">
+      <button type="submit" class="btn-generar btn-sm">{{ _('Reanudar') }}</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if productos_investigados %}
+  <details class="nicho-inv-productos">
+    <summary>{{ _('Productos encontrados (%(n)s)', n=productos_investigados|length) }}</summary>
+    <table class="tabla-apilada nicho-inv-tabla">
+      <thead><tr><th>{{ _('Plataforma') }}</th><th>{{ _('Producto') }}</th><th>{{ _('Precio') }}</th><th>{{ _('Estrellas') }}</th><th>{{ _('Reseñas') }}</th><th>{{ _('¿Del nicho?') }}</th><th>{{ _('Traídas') }}</th></tr></thead>
+      <tbody>
+      {% for p in productos_investigados %}
+      <tr>
+        <td>{{ p.plataforma }}</td>
+        <td>{% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.titulo }}</a>{% else %}{{ p.titulo }}{% endif %}{% if p.marca %} <small class="vacio">{{ p.marca }}</small>{% endif %}</td>
+        <td>{% if p.precio is not none %}{{ p.precio }} {{ p.moneda or '' }}{% else %}—{% endif %}</td>
+        <td>{{ p.estrellas if p.estrellas is not none else '—' }}</td>
+        <td>{{ p.n_resenas if p.n_resenas is not none else '—' }}</td>
+        <td>{% if p.relevante is none %}—{% elif p.relevante %}✓{% else %}✗{% endif %}{% if p.motivo %} <small class="vacio">{{ p.motivo }}</small>{% endif %}</td>
+        <td>{{ p.resenas_traidas }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endif %}
+  {% endif %}
+
+  {% if not viva %}
+  <details class="nicho-inv-nueva" {% if not inv.estado %}open{% endif %}>
+    <summary>{{ _('Investigar de nuevo') if inv.estado else _('Investigar') }}</summary>
+    {% if not (estudio.tema or '').strip() %}
+    <p class="tag-estado sprint-aviso">{{ _('Escribe primero qué investigar (Editar estudio › Qué investigar).') }}</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('nicho.investigacion_iniciar', cliente=cliente, eid=estudio.id) }}" class="form-experimento" id="form-investigar">
+      <div class="fe-opciones">
+        <label>{{ _('País') }}
+          <select name="pais">{% for codigo, nombre in paises_estudio %}<option value="{{ codigo }}"{% if codigo == pais_inv %} selected{% endif %}>{{ nombre|traducir }}</option>{% endfor %}</select>
+        </label>
+      </div>
+      <fieldset class="nicho-inv-chips">
+        <legend>{{ _('Tiendas') }}</legend>
+        {% for p in plataformas_inv %}
+        <label class="fe-destino"><input type="checkbox" name="plataformas" value="{{ p.clave }}" data-paises="{{ p.paises }}"{% if p.faltan %} disabled data-sin-llave="1"{% else %} checked{% endif %}> {{ p.nombre }}{% if p.faltan %} <small class="vacio">({{ _('falta %(llaves)s', llaves=p.faltan|join(', ')) }})</small>{% endif %}</label>
+        {% else %}
+        <p class="vacio">{{ _('Todavía no hay tiendas disponibles.') }}</p>
+        {% endfor %}
+      </fieldset>
+      <fieldset class="nicho-inv-chips">
+        <legend>{{ _('Redes') }}</legend>
+        {% for r in redes_inv %}
+        <label class="fe-destino"><input type="checkbox" name="redes" value="{{ r.clave }}"{% if r.faltan %} disabled{% else %} checked{% endif %}> {{ r.nombre }}{% if r.faltan %} <small class="vacio">({{ _('falta %(llaves)s', llaves=r.faltan|join(', ')) }})</small>{% endif %}</label>
+        {% endfor %}
+      </fieldset>
+      <details>
+        <summary>{{ _('Ajustes') }}</summary>
+        <div class="fe-opciones">
+          <label>{{ _('Búsquedas') }} <input type="number" name="consultas" value="{{ topes_inv.consultas }}" min="{{ limites_inv.consultas[0] }}" max="{{ limites_inv.consultas[1] }}" class="mini-input"></label>
+          <label>{{ _('Productos por búsqueda') }} <input type="number" name="productos_por_consulta" value="{{ topes_inv.productos_por_consulta }}" min="{{ limites_inv.productos_por_consulta[0] }}" max="{{ limites_inv.productos_por_consulta[1] }}" class="mini-input"></label>
+          <label>{{ _('Productos elegidos por tienda') }} <input type="number" name="productos_elegidos" value="{{ topes_inv.productos_elegidos }}" min="{{ limites_inv.productos_elegidos[0] }}" max="{{ limites_inv.productos_elegidos[1] }}" class="mini-input"></label>
+          <label>{{ _('Reseñas por producto') }} <input type="number" name="resenas_por_producto" value="{{ topes_inv.resenas_por_producto }}" min="{{ limites_inv.resenas_por_producto[0] }}" max="{{ limites_inv.resenas_por_producto[1] }}" class="mini-input"></label>
+        </div>
+      </details>
+      <div class="nicho-inv-estimado" id="inv-estimado" aria-live="polite">≈ …</div>
+      <input type="hidden" name="total_visto" value="">
+      <button type="submit" class="btn-generar btn-sm" id="inv-enviar" disabled>{{ _('Investigar') }}</button>
+      <small class="vacio">{{ _('Es un tope: cada corrida lleva su techo de cobro y el gasto real queda en Configuración › Gasto.') }}</small>
+    </form>
+  </details>
+  <script>
+  (function () {
+    var form = document.getElementById('form-investigar');
+    if (!form) return;
+    var base = {{ url_for('nicho.investigacion_estimar', cliente=cliente, eid=estudio.id)|tojson }};
+    var out = document.getElementById('inv-estimado'), boton = document.getElementById('inv-enviar');
+    var visto = form.querySelector('input[name="total_visto"]');
+    var sinTema = {{ (not (estudio.tema or '').strip())|tojson }};
+    var TXT_BOTON = {{ _('Investigar (≈ %(costo)s)', costo='__C__')|tojson }};
+    var TXT_CONFIRMA = {{ _('La investigación cobra hasta %(costo)s (búsquedas, reseñas y Claude). ¿Seguimos?', costo='__C__')|tojson }};
+    var TXT_SIN = {{ _('Todavía no hay estimado; espera un momento y vuelve a intentar.')|tojson }};
+    var TXT_BUSQUEDA = {{ _('búsqueda')|tojson }}, TXT_RESENAS = {{ _('reseñas')|tojson }};
+    var TXT_AVATARES = {{ _('Avatares')|tojson }}, TXT_TOTAL = {{ _('Total')|tojson }};
+    var pedidas = 0, ultimo = null;
+    function params() {
+      var q = new URLSearchParams();
+      q.set('pais', form.elements.pais.value);
+      form.querySelectorAll('input[name="plataformas"]:checked:not(:disabled)').forEach(function (x) { q.append('plataformas', x.value); });
+      form.querySelectorAll('input[name="redes"]:checked:not(:disabled)').forEach(function (x) { q.append('redes', x.value); });
+      ['consultas', 'productos_por_consulta', 'productos_elegidos', 'resenas_por_producto'].forEach(function (k) { q.set(k, form.elements[k].value); });
+      return q.toString();
+    }
+    function porPais() {
+      var p = form.elements.pais.value;
+      form.querySelectorAll('input[name="plataformas"]').forEach(function (x) {
+        var cubre = x.dataset.paises === '*' || (' ' + x.dataset.paises + ' ').indexOf(' ' + p + ' ') >= 0;
+        x.disabled = !cubre || x.dataset.sinLlave === '1';
+        x.closest('label').classList.toggle('apagado', !cubre);
+      });
+    }
+    function fila(texto) { var d = document.createElement('div'); d.textContent = texto; out.appendChild(d); }
+    function pintar() {
+      var clave = params(), mia = ++pedidas;
+      ultimo = null; boton.disabled = true; visto.value = '';
+      fetch(base + '?' + clave, {headers: {'Accept': 'application/json'}})
+        .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, d: d}; }); })
+        .then(function (res) {
+          if (mia !== pedidas) return;
+          out.textContent = '';
+          if (!res.ok) { fila(res.d.error || '≈ ?'); return; }
+          var d = res.d;
+          d.filas.forEach(function (f) { fila(f.nombre + ': ' + f.busqueda_texto + ' ' + TXT_BUSQUEDA + ' + ' + f.resenas_texto + ' ' + TXT_RESENAS); });
+          fila('Claude: ' + d.claude_texto);
+          fila(TXT_AVATARES + ': ' + d.avatares_texto);
+          fila(TXT_TOTAL + ': ' + d.texto);
+          ultimo = {clave: clave, d: d};
+          visto.value = d.total_usd;
+          boton.textContent = TXT_BOTON.replace('__C__', d.texto);
+          boton.disabled = sinTema;
+        })
+        .catch(function () { if (mia === pedidas) out.textContent = '≈ ?'; });
+    }
+    form.addEventListener('change', function () { porPais(); pintar(); });
+    form.addEventListener('input', function (ev) { if (ev.target.type === 'number') pintar(); });
+    form.addEventListener('submit', function (ev) {
+      if (!ultimo || ultimo.clave !== params()) { ev.preventDefault(); ev.stopPropagation(); alert(TXT_SIN); pintar(); return; }
+      if (!confirm(TXT_CONFIRMA.replace('__C__', ultimo.d.texto))) { ev.preventDefault(); ev.stopPropagation(); }
+    });
+    porPais();
+    pintar();
+  })();
+  </script>
+  {% endif %}
+</section>
+```
+
+- [ ] **Step 7: País en los formularios de estudio**
+
+`templates/nicho_estudio.html`, dentro del `fe-opciones` de «Editar estudio», después del select del catálogo:
+
+```html
+      <label>{{ _('País') }}
+        <select name="pais"><option value="">{{ _('(sin país)') }}</option>
+          {% for codigo, nombre in paises_estudio %}<option value="{{ codigo }}" {% if codigo == estudio.pais %}selected{% endif %}>{{ nombre|traducir }}</option>{% endfor %}
+        </select></label>
+```
+
+`templates/_tab_nicho.html`, dentro del `fe-opciones` de «+ Nuevo estudio», después del select del catálogo:
+
+```html
+      <label>{{ _('País del mercado') }}
+        <select name="pais">{% for codigo, nombre in paises_estudio %}<option value="{{ codigo }}"{% if codigo == pais_proyecto %} selected{% endif %}>{{ nombre|traducir }}</option>{% endfor %}</select>
+      </label>
+```
+
+- [ ] **Step 8: `static/style.css` — al final**
+
+```css
+/* Nicho · investigar el nicho (Parte 3) */
+.nicho-inv-cabecera { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.nicho-inv-cabecera h3 { margin: 0; }
+.nicho-inv-cifras { margin: .4rem 0; font-size: .9rem; }
+.nicho-inv-pasos { list-style: none; padding: 0; margin: .6rem 0; display: flex; flex-direction: column; gap: .3rem; }
+.nicho-inv-paso { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; font-size: .88rem; }
+.nicho-inv-paso-nombre { min-width: 11rem; font-weight: 600; }
+.nicho-inv-paso.paso-pendiente { opacity: .6; }
+.nicho-inv-aviso { color: var(--warn); overflow-wrap: anywhere; }
+.nicho-inv-chips { border: 0; padding: 0; margin: .4rem 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.nicho-inv-chips legend { font-weight: 600; margin-bottom: .2rem; }
+.nicho-inv-chips label.apagado { opacity: .45; }
+.nicho-inv-estimado { margin: .6rem 0; font-size: .9rem; display: flex; flex-direction: column; gap: .15rem; }
+.nicho-inv-tabla td { overflow-wrap: anywhere; }
+```
+
+(`--warn` ya existe en la base visual; si no existiera, usar `var(--text)`.)
+
+- [ ] **Step 9: Correr**
+
+Run: `venv/bin/python3 -m pytest tests/test_rutas_nicho.py tests/test_nicho_investigacion.py tests/test_movil.py tests/test_base_visual.py -q -p no:cacheprovider`
+Expected: PASS (las pruebas de celular/base visual vigilan anchos fijos y tablas: la tabla lleva `tabla-apilada`).
+
+- [ ] **Step 10: Catálogo y commit**
+
+`venv/bin/python3 catalogo_i18n.py actualizar`; traducir al inglés TODAS las entradas nuevas de esta tarea (países, textos de la tarjeta, mensajes de las rutas, «cancelada» → «cancelled»); `compilar`; `pytest tests/test_i18n_catalogo.py -q -p no:cacheprovider`.
+
+```bash
+python3 -m py_compile nicho/rutas.py nicho/investigacion.py nicho/datos.py
+git add nicho/rutas.py nicho/investigacion.py nicho/datos.py templates/_nicho_investigacion.html templates/nicho_estudio.html templates/_tab_nicho.html static/style.css tests/test_rutas_nicho.py tests/test_nicho_investigacion.py translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
+git commit -m "Nicho: tarjeta «Investigar el nicho» con país, tiendas y redes, estimado del servidor como cifra aprobada, pasos a la vista, reanudar y cancelar" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+### Task 7: Avatares completos (`nicho/calidad.py`, prompt exigente y pasada de completado)
+
+**Files:**
+- Create: `nicho/calidad.py`
+- Modify: `nicho/avatares.py` (constantes, `PROMPT_SUBS`, `estimar_costo`, `PROMPT_COMPLETAR`, `armar_prompt_completar`, `completar_subs`, `generar`)
+- Test: `tests/test_nicho_calidad.py` (nuevo), `tests/test_nicho_avatares.py` (actualizar `test_estimar_costo_y_costo_real` y los fakes de `_llamar`; agregar pruebas), `tests/test_tareas_nicho.py` (fake de `_llamar` en `test_cadena_completa_generar_guardar_y_gasto`)
+
+**Interfaces:**
+- Produces: `calidad.MIN_SITUACIONES = 2`, `MIN_SOLUCIONES = 1`, `MIN_PALABRAS = 3`, `MIN_CITAS = 2`, `calidad.ETIQUETAS` (clave → `N_` etiqueta), `calidad.faltantes(avatar, con_evidencia=True) -> list[str]` (claves en orden fijo), `calidad.fundir(sub, nuevos) -> dict` (sin evidencia); `avatares.MARCA_COMPLETAR`, `avatares.MAX_TOKENS_COMPLETAR`, `avatares.TOKENS_SUB_JSON`, `avatares.TOKENS_SALIDA_ESTIMADO_COMPLETAR`, `avatares.ETAPA_COMPLETAR`, `avatares.armar_prompt_completar(estudio, nucleo, comentarios, pendientes, guia="", marca_nombre="")`, `avatares.completar_subs(estudio, nucleo, comentarios, subs, guia="", marca_nombre="", tokens=None, con_evidencia=True) -> (subs, completados)`; `generar(...)["resumen"]` gana `completados` e `incompletos`.
+
+- [ ] **Step 1: Escribir las pruebas que fallan**
+
+Crear `tests/test_nicho_calidad.py`:
+
+```python
+"""Qué es un avatar completo y cómo se funde lo que completa Claude (spec 2026-09-29 §2)."""
+
+COMPLETO = {"nombre": "Ana / La que carga", "deseo": "Quiero lavar sin cargar", "demografia": "Mujer 35-45, ciudad, dos hijos",
+            "edad_rango": "35-45", "emocion": "Cansancio", "identidad": {"quiere_que_vean": "organizada", "cree_de_si": "práctica", "quiere_lograr": "una casa que funcione"},
+            "encaje_producto": "Cápsulas: nada que cargar", "soluciones_previas": [{"que": "Líquido de marca", "por_que_fallo": ["pesa"]}],
+            "situaciones": ["Cargando garrafas", "Limpiando el goteo"], "comportamiento": "Sigue con el líquido",
+            "conciencia": {"nivel": "consciente_del_problema", "detalle": "sabe que pesa"}, "tono": "Directo",
+            "palabras_clave": ["garrafa", "peso", "goteo"], "evidencia": [{"comentario_id": 1, "cita": "pesa demasiado"}, {"comentario_id": 2, "cita": "gotea todo"}]}
+
+
+def test_completo_y_faltantes():
+    from nicho import calidad
+    assert calidad.faltantes(COMPLETO) == []
+    vacio = {"nombre": "X"}
+    assert calidad.faltantes(vacio) == ["deseo", "demografia", "edad_rango", "emocion", "identidad", "encaje_producto", "soluciones_previas",
+                                        "situaciones", "comportamiento", "conciencia", "tono", "palabras_clave", "evidencia"]
+    assert "evidencia" not in calidad.faltantes(vacio, con_evidencia=False)
+    casi = dict(COMPLETO, situaciones=["una"], palabras_clave=["a", "b"], evidencia=COMPLETO["evidencia"][:1],
+                soluciones_previas=[{"que": "Líquido", "por_que_fallo": []}], identidad={**COMPLETO["identidad"], "cree_de_si": " "},
+                conciencia={"nivel": "", "detalle": "x"})
+    assert calidad.faltantes(casi) == ["identidad", "soluciones_previas", "situaciones", "conciencia", "palabras_clave", "evidencia"]
+    assert set(calidad.ETIQUETAS) == set(calidad.faltantes({"nombre": ""})) | {"nombre"}
+
+
+def test_fundir_no_pisa_lo_lleno():
+    from nicho import calidad
+    sub = dict(COMPLETO, demografia="", situaciones=["Cargando garrafas"], palabras_clave=["garrafa"], identidad={"quiere_que_vean": "organizada"},
+               conciencia={"nivel": "", "detalle": ""}, soluciones_previas=[])
+    nuevos = {"demografia": "Mujer 30-40 (inferido)", "emocion": "OTRA", "situaciones": ["cargando garrafas", "En el súper"],
+              "palabras_clave": ["peso", "garrafa", "goteo"], "identidad": {"quiere_que_vean": "OTRA", "cree_de_si": "práctica", "quiere_lograr": "orden"},
+              "conciencia": {"nivel": "consciente_del_problema", "detalle": "sabe"}, "soluciones_previas": [{"que": "Polvo", "por_que_fallo": ["se apelmaza"]}]}
+    f = calidad.fundir(sub, nuevos)
+    assert f["demografia"] == "Mujer 30-40 (inferido)" and f["emocion"] == "Cansancio"                     # lo lleno se queda
+    assert f["situaciones"] == ["Cargando garrafas", "En el súper"] and f["palabras_clave"] == ["garrafa", "peso", "goteo"]
+    assert f["identidad"] == {"quiere_que_vean": "organizada", "cree_de_si": "práctica", "quiere_lograr": "orden"}
+    assert f["conciencia"]["nivel"] == "consciente_del_problema" and f["soluciones_previas"] == [{"que": "Polvo", "por_que_fallo": ["se apelmaza"]}]
+    assert f["evidencia"] == COMPLETO["evidencia"] and sub["demografia"] == ""                             # no toca la evidencia ni el original
+```
+
+Agregar al final de `tests/test_nicho_avatares.py`:
+
+```python
+def _sub_completo(ids):
+    return {"base": "emocion", "nombre": "Ana / La que carga", "deseo": "Quiero lavar sin cargar", "demografia": "Mujer 35-45",
+            "edad_rango": "35-45", "emocion": "Cansancio", "identidad": {"quiere_que_vean": "a", "cree_de_si": "b", "quiere_lograr": "c"},
+            "soluciones_previas": [{"que": "Líquido", "por_que_fallo": ["pesa"]}], "situaciones": ["Cargando garrafas", "En el súper"],
+            "comportamiento": "Sigue igual", "conciencia": {"nivel": "consciente_del_problema", "detalle": "d"}, "encaje_producto": "Cápsulas",
+            "tono": "Directo", "palabras_clave": ["garrafa", "peso", "goteo"],
+            "evidencia": [{"comentario_id": ids[0], "cita": "la garrafa pesa demasiado"}, {"comentario_id": ids[1], "cita": "la garrafa pesa demasiado"}]}
+
+
+def test_prompt_de_subs_exige_todo():
+    from nicho import avatares
+    p = avatares.armar_prompt_subs({"tema": "t", "producto": "p", "idioma": "es"}, {"nombre": "n", "deseo": "d"}, [])
+    assert "(inferido)" in p and "obligatorios" in p and "2 citas" in p
+
+
+def test_completar_subs_funde_verifica_y_cuenta(base_temporal, monkeypatch):
+    from nicho import avatares, calidad, datos
+    eid = _estudio_listo(datos)
+    coms = datos.comentarios_para_generar("acme", eid)
+    ids = [c["id"] for c in coms]
+    incompleto = dict(_sub_completo(ids), demografia="", situaciones=["Cargando garrafas"], evidencia=[{"comentario_id": ids[0], "cita": "la garrafa pesa demasiado"}])
+    completo = _sub_completo(ids)
+    llamadas = []
+    respuesta = {"sub_avatares": [{"indice": 0, "demografia": "Mujer 30-40 (inferido)", "situaciones": ["En el súper"],
+                                   "evidencia": [{"comentario_id": ids[2], "cita": "la garrafa pesa demasiado"}, {"comentario_id": ids[3], "cita": "esto no está"}]},
+                                  {"indice": 1, "demografia": "NO DEBE ENTRAR"}]}
+
+    def _llamar(texto, max_tokens):
+        llamadas.append((texto, max_tokens))
+        return json.dumps(respuesta), 400, 90
+    monkeypatch.setattr(avatares, "_llamar", _llamar)
+    tokens = [0, 0]
+    salida, n = avatares.completar_subs({"tema": "t", "producto": "p", "idioma": "es"}, {"nombre": "Sin peso", "deseo": "Quiero"}, coms,
+                                        [incompleto, completo], tokens=tokens)
+    assert n == 1 and tokens == [400, 90] and len(llamadas) == 1 and llamadas[0][1] == avatares.MAX_TOKENS_COMPLETAR
+    assert avatares.MARCA_COMPLETAR in llamadas[0][0] and "[0]" in llamadas[0][0] and "[1]" not in llamadas[0][0]
+    assert salida[0]["demografia"] == "Mujer 30-40 (inferido)" and salida[0]["situaciones"] == ["Cargando garrafas", "En el súper"]
+    assert [e["comentario_id"] for e in salida[0]["evidencia"]] == [ids[0], ids[2]] and salida[0]["sin_evidencia"] is False
+    assert calidad.faltantes(salida[0]) == [] and salida[1] == completo                                        # el completo ni se toca
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: ("no es json", 50, 5))
+    tokens = [0, 0]
+    salida, n = avatares.completar_subs({"tema": "t"}, {"nombre": "n", "deseo": "d"}, coms, [incompleto], tokens=tokens)
+    assert n == 0 and salida == [incompleto] and tokens == [50, 5]                                             # falló: queda como estaba, lo pagado cuenta
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: (_ for _ in ()).throw(AssertionError("no debía llamar")))
+    assert avatares.completar_subs({"tema": "t"}, {"nombre": "n", "deseo": "d"}, coms, [completo]) == ([completo], 0)
+
+
+def test_generar_completa_lo_que_falta(base_temporal, monkeypatch):
+    from nicho import avatares, calidad, datos
+    import marca, proyectos
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Happy Wash")
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    nucleos = {"nucleos": [{"nombre": "Sin peso", "deseo": "Quiero lavar sin cargar", "resumen": "r", "comentarios": ids[:10]}]}
+    sub = dict(_sub_completo(ids), tono="")
+    respuestas = [(json.dumps(nucleos), 1000, 200), (json.dumps({"sub_avatares": [sub]}), 700, 300),
+                  (json.dumps({"sub_avatares": [{"indice": 0, "tono": "Directo, con humor"}]}), 300, 40)]
+    monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: respuestas.pop(0))
+    r = avatares.generar("acme", eid)
+    s = r["nucleos"][0]["sub_avatares"][0]
+    assert s["tono"] == "Directo, con humor" and calidad.faltantes(s) == []
+    assert r["resumen"]["completados"] == 1 and r["resumen"]["incompletos"] == 0
+    assert r["resumen"]["tokens_entrada"] == 2000 and r["resumen"]["tokens_salida"] == 540
+```
+
+(`json`, `_estudio_listo` y `_c` ya existen en ese archivo; si `_estudio_listo` crea menos de 4 comentarios, usar `ids[:4]` que existan — con 25 comentarios alcanza.)
+
+- [ ] **Step 2: Actualizar las pruebas viejas**
+
+- `tests/test_nicho_avatares.py::test_estimar_costo_y_costo_real`: las dos aserciones de tokens pasan a
+
+```python
+    assert e["tokens_entrada"] == (tokens_texto * 3 + avatares.TOKENS_PROMPT * (1 + 2 * avatares.MAX_NUCLEOS)
+                                   + avatares.TOKENS_SUB_JSON * avatares.MAX_NUCLEOS * avatares.MAX_SUBS_POR_NUCLEO)
+    assert e["tokens_salida"] == (avatares.TOKENS_SALIDA_ESTIMADO_NUCLEOS
+                                  + (avatares.TOKENS_SALIDA_ESTIMADO_SUBS + avatares.TOKENS_SALIDA_ESTIMADO_COMPLETAR) * avatares.MAX_NUCLEOS)
+```
+
+- En TODA prueba que reemplaza `avatares._llamar` con una lista fija de respuestas para `avatares.generar` (en `tests/test_nicho_avatares.py` y `tests/test_tareas_nicho.py::test_cadena_completa_generar_guardar_y_gasto`), envolver el fake para que responda la pasada de completado sin gastar la lista ni sumar tokens:
+
+```python
+    def _llamar_falso(texto, max_tokens):
+        if avatares.MARCA_COMPLETAR in texto:
+            return '{"sub_avatares": []}', 0, 0
+        return respuestas.pop(0)
+```
+
+(Conservar lo que el fake original anotaba —p. ej. `prompts.append(...)`— dentro de la rama normal.) Así los totales de tokens que esas pruebas fijan no cambian.
+
+- [ ] **Step 3: Correr y ver que fallan**
+
+Run: `venv/bin/python3 -m pytest tests/test_nicho_calidad.py tests/test_nicho_avatares.py -q -p no:cacheprovider`
+Expected: FAIL (`nicho.calidad` no existe, `completar_subs` no existe, la fórmula del estimado cambió).
+
+- [ ] **Step 4: Crear `nicho/calidad.py`**
+
+```python
+"""
+Qué es un avatar «completo» (spec 2026-09-29 §2) y cómo se funde lo que
+completa Claude sin pisar lo que ya estaba. Puro: sin base ni red.
+
+Completo = nombre, deseo, demografía, edad, emoción, las tres respuestas de
+identidad, encaje del producto, comportamiento, nivel de conciencia y tono no
+vacíos; al menos MIN_SITUACIONES situaciones, MIN_SOLUCIONES solución probada
+con al menos un motivo de falla, MIN_PALABRAS palabras clave y, solo para
+avatares de estudio, MIN_CITAS citas verificadas.
+"""
+from idiomas import N_
+
+MIN_SITUACIONES = 2
+MIN_SOLUCIONES = 1
+MIN_PALABRAS = 3
+MIN_CITAS = 2
+TEXTOS = ("nombre", "deseo", "demografia", "edad_rango", "emocion", "encaje_producto", "comportamiento", "tono")
+CLAVES_IDENTIDAD = ("quiere_que_vean", "cree_de_si", "quiere_lograr")
+ORDEN = ("nombre", "deseo", "demografia", "edad_rango", "emocion", "identidad", "encaje_producto", "soluciones_previas",
+         "situaciones", "comportamiento", "conciencia", "tono", "palabras_clave", "evidencia")
+ETIQUETAS = {"nombre": N_("nombre"), "deseo": N_("deseo"), "demografia": N_("demografía"), "edad_rango": N_("edad"),
+             "emocion": N_("emoción"), "identidad": N_("identidad"), "encaje_producto": N_("encaje del producto"),
+             "soluciones_previas": N_("soluciones que probó"), "situaciones": N_("situaciones (mínimo 2)"),
+             "comportamiento": N_("comportamiento"), "conciencia": N_("nivel de conciencia"), "tono": N_("tono"),
+             "palabras_clave": N_("palabras clave (mínimo 3)"), "evidencia": N_("citas (mínimo 2)")}
+
+
+def _vacio(v):
+    return not str(v or "").strip()
+
+
+def _dict(v):
+    return v if isinstance(v, dict) else {}
+
+
+def _llenos(lista):
+    return [x for x in (lista or []) if str(x).strip()]
+
+
+def soluciones_validas(a):
+    return [s for s in ((a or {}).get("soluciones_previas") or [])
+            if isinstance(s, dict) and not _vacio(s.get("que")) and _llenos(s.get("por_que_fallo"))]
+
+
+def faltantes(a, con_evidencia=True):
+    """Claves que le faltan al avatar para estar completo, en ORDEN (vacío = completo)."""
+    a = a or {}
+    falta = {k for k in TEXTOS if _vacio(a.get(k))}
+    if any(_vacio(_dict(a.get("identidad")).get(k)) for k in CLAVES_IDENTIDAD):
+        falta.add("identidad")
+    if _vacio(_dict(a.get("conciencia")).get("nivel")):
+        falta.add("conciencia")
+    if len(soluciones_validas(a)) < MIN_SOLUCIONES:
+        falta.add("soluciones_previas")
+    if len(_llenos(a.get("situaciones"))) < MIN_SITUACIONES:
+        falta.add("situaciones")
+    if len(_llenos(a.get("palabras_clave"))) < MIN_PALABRAS:
+        falta.add("palabras_clave")
+    if con_evidencia and len(a.get("evidencia") or []) < MIN_CITAS:
+        falta.add("evidencia")
+    return [k for k in ORDEN if k in falta]
+
+
+def fundir(sub, nuevos):
+    """Copia de `sub` con lo que le faltaba tomado de `nuevos` (ya normalizados
+    por `nicho.datos.validar_campos_avatar`). Nunca pisa un texto lleno ni el
+    nombre; completa las listas cortas sin repetir (sin distinguir mayúsculas);
+    no toca la evidencia (el llamador la verifica y la agrega)."""
+    s, n = dict(sub or {}), dict(nuevos or {})
+    for k in TEXTOS:
+        if k != "nombre" and _vacio(s.get(k)) and not _vacio(n.get(k)):
+            s[k] = n[k]
+    if _dict(n.get("identidad")):
+        ident = dict(_dict(s.get("identidad")))
+        for k in CLAVES_IDENTIDAD:
+            if _vacio(ident.get(k)) and not _vacio(n["identidad"].get(k)):
+                ident[k] = n["identidad"][k]
+        s["identidad"] = ident
+    if _vacio(_dict(s.get("conciencia")).get("nivel")) and not _vacio(_dict(n.get("conciencia")).get("nivel")):
+        s["conciencia"] = dict(n["conciencia"])
+    if len(soluciones_validas(s)) < MIN_SOLUCIONES and n.get("soluciones_previas"):
+        s["soluciones_previas"] = soluciones_validas(s) + [x for x in n["soluciones_previas"] if x not in soluciones_validas(s)]
+    for k, minimo in (("situaciones", MIN_SITUACIONES), ("palabras_clave", MIN_PALABRAS)):
+        actuales = _llenos(s.get(k))
+        if len(actuales) < minimo:
+            vistos = {str(x).strip().lower() for x in actuales}
+            for x in n.get(k) or []:
+                if str(x).strip() and str(x).strip().lower() not in vistos:
+                    actuales.append(x)
+                    vistos.add(str(x).strip().lower())
+            s[k] = actuales[:8]
+    return s
+```
+
+- [ ] **Step 5: `nicho/avatares.py`**
+
+Imports: agregar `from nicho import calidad` junto a `from nicho import datos`.
+
+Constantes (junto a las de tokens):
+
+```python
+TOKENS_SUB_JSON = 900                  # un sub-avatar incompleto dentro del prompt de completado
+TOKENS_SALIDA_ESTIMADO_COMPLETAR = 1500  # por núcleo, pasada de completado
+MAX_TOKENS_COMPLETAR = 6000
+MAX_COMENTARIOS_COMPLETAR = 200        # comentarios que acompañan un completado de avatares ya guardados
+MARCA_COMPLETAR = "Estos sub-avatares quedaron incompletos"
+```
+
+`estimar_costo`: las dos líneas de tokens pasan a (y el docstring agrega «más la pasada de completado en su peor caso»):
+
+```python
+    entrada = (tokens_texto * 3 + TOKENS_PROMPT * (1 + 2 * MAX_NUCLEOS)
+               + TOKENS_SUB_JSON * MAX_NUCLEOS * MAX_SUBS_POR_NUCLEO)
+    salida = TOKENS_SALIDA_ESTIMADO_NUCLEOS + (TOKENS_SALIDA_ESTIMADO_SUBS + TOKENS_SALIDA_ESTIMADO_COMPLETAR) * MAX_NUCLEOS
+```
+
+En `PROMPT_SUBS`, reemplazar las líneas de `demografia` y `edad_rango`:
+
+```
+  "demografia": "Demographics (ASL): edad, género, dónde vive, momento de vida. Si los comentarios no lo dicen, infiere lo más probable por lo que cuentan, el producto y el mercado y termina con «(inferido)»",
+  "edad_rango": "por ejemplo 30-45; si no hay señales, el rango más probable seguido de «(inferido)»",
+```
+
+y la línea `Reglas:` pasa a empezar así (el resto de la línea queda igual):
+
+```
+Reglas: todos los campos son obligatorios y ninguno puede quedar vacío; mínimos: 2 situaciones, 1 solución probada con sus motivos de falla, 3 palabras clave y 2 citas. Escribe en {idioma}, salvo las citas, que se copian tal cual en el idioma en que la gente escribió; no inventes datos ni cifras (lo inferido va marcado «(inferido)»); cada cita debe aparecer palabra por palabra en el comentario indicado. Aplica la doctrina de investigación del principio: …
+```
+
+Después de `armar_prompt_subs`:
+
+```python
+PROMPT_COMPLETAR = """Eres estratega de investigación de clientes para la marca {marca}.
+Producto que vendemos: {producto}
+Guía de la marca: {guia}
+Nicho o tema investigado: {tema}
+
+Avatar núcleo: {nucleo_nombre} — deseo: «{nucleo_deseo}».
+
+""" + MARCA_COMPLETAR + """. Para cada uno, escribe SOLO los campos que se le piden, con lo que dicen los comentarios de abajo; no cambies nada de lo que ya tiene.
+
+{incompletos}
+
+Responde SOLO con un objeto JSON, sin texto antes ni después:
+{{"sub_avatares": [{{"indice": número del sub-avatar, "<campo pedido>": valor}}]}}
+Formas: demografia, edad_rango, emocion, comportamiento, encaje_producto, tono y deseo son texto; identidad es {{"quiere_que_vean": texto, "cree_de_si": texto, "quiere_lograr": texto}}; conciencia es {{"nivel": uno de {niveles}, "detalle": texto}}; soluciones_previas es [{{"que": texto, "por_que_fallo": [textos]}}]; situaciones y palabras_clave son listas de textos; evidencia es [{{"comentario_id": número, "cita": fragmento LITERAL del comentario}}].
+
+Reglas: escribe en {idioma}, salvo las citas, que se copian tal cual; la demografía y la edad, si los comentarios no lo dicen, se infieren de lo que cuentan, el producto y el mercado y terminan con «(inferido)»; no inventes cifras; cada cita debe aparecer palabra por palabra en el comentario indicado.
+
+COMENTARIOS:
+{comentarios}"""
+
+_PEDIDOS = {"identidad": "identidad (las tres respuestas)", "conciencia": "conciencia (nivel y detalle)",
+            "soluciones_previas": "soluciones_previas (al menos 1, con sus motivos de falla)", "situaciones": "situaciones (mínimo 2)",
+            "palabras_clave": "palabras_clave (mínimo 3)", "evidencia": "evidencia (mínimo 2 citas literales)"}
+
+
+def armar_prompt_completar(estudio, nucleo, comentarios, pendientes, guia="", marca_nombre=""):
+    """`pendientes` = [(indice, sub, faltantes)]."""
+    bloques = []
+    for i, sub, falt in pendientes:
+        actual = {k: sub.get(k) for k in datos.AVATAR_EDITABLES}
+        bloques.append(f"[{i}] {json.dumps(actual, ensure_ascii=False)}\nFaltan: {', '.join(_PEDIDOS.get(k, k) for k in falt)}")
+    return PROMPT_COMPLETAR.format(
+        marca=marca_nombre or "este proyecto", producto=(estudio.get("producto") or "").strip() or "(sin describir)",
+        guia=(guia or "").strip() or "(sin guía de estilo todavía)", tema=(estudio.get("tema") or "").strip() or "(sin describir)",
+        nucleo_nombre=nucleo.get("nombre") or "", nucleo_deseo=nucleo.get("deseo") or "", incompletos="\n\n".join(bloques),
+        niveles=", ".join(datos.NIVELES_CONCIENCIA), idioma=nombre_idioma(estudio.get("idioma")), comentarios=lineas_comentarios(comentarios))
+
+
+def completar_subs(estudio, nucleo, comentarios, subs, guia="", marca_nombre="", tokens=None, con_evidencia=True):
+    """Pasada de completado (spec 2026-09-29 §2): UNA llamada con lo que le
+    falta a cada sub-avatar incompleto; funde SOLO lo vacío (`calidad.fundir`)
+    y agrega las citas nuevas que pasen `verificar_evidencia`. Devuelve
+    (subs, cuántos cambiaron). Si la llamada falla, los subs quedan como
+    estaban: la pasada es una mejora y lo pagado antes no se pierde (los tokens
+    que Claude alcanzó a cobrar ya quedaron en `tokens`)."""
+    tokens = tokens if tokens is not None else [0, 0]
+    pendientes = [(i, s, calidad.faltantes(s, con_evidencia=con_evidencia)) for i, s in enumerate(subs)]
+    pendientes = [(i, s, f) for i, s, f in pendientes if f]
+    if not pendientes:
+        return list(subs), 0
+    prompt = armar_prompt_completar(estudio, nucleo, comentarios, pendientes, guia, marca_nombre)
+    try:
+        data = _json_objeto(_llamar_contando(prompt, MAX_TOKENS_COMPLETAR, tokens))
+    except Exception:  # noqa: BLE001 — la pasada es una mejora: si falla, se guarda lo que había
+        log.exception("La pasada de completado falló en el núcleo «%s»", nucleo.get("nombre"))
+        return list(subs), 0
+    por_id = {c["id"]: c for c in comentarios}
+    validos = {i for i, _, _ in pendientes}
+    salida, cambiados = list(subs), 0
+    for item in data.get("sub_avatares") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            i = int(item.get("indice"))
+        except (TypeError, ValueError):
+            continue
+        if i not in validos:
+            continue
+        crudos = {k: item[k] for k in datos.AVATAR_EDITABLES if k in item and k not in ("nombre", "base")}
+        if "evidencia" in item:
+            crudos["evidencia"] = item["evidencia"]
+        try:
+            nuevos = datos.validar_campos_avatar(crudos)
+        except datos.ErrorDatos:
+            continue
+        antes = salida[i]
+        fundido = calidad.fundir(antes, nuevos)
+        citas = list(antes.get("evidencia") or [])
+        vistas = {(e.get("comentario_id"), (e.get("cita") or "").strip().lower()) for e in citas}
+        for e in verificar_evidencia({"evidencia": nuevos.get("evidencia") or []}, por_id)["evidencia"]:
+            clave = (e["comentario_id"], (e["cita"] or "").strip().lower())
+            if clave not in vistas:
+                citas.append(e)
+                vistas.add(clave)
+        fundido["evidencia"] = citas[:8]
+        fundido["sin_evidencia"] = not fundido["evidencia"]
+        if fundido != antes:
+            cambiados += 1
+        salida[i] = fundido
+    return salida, cambiados
+```
+
+En `generar`, dentro del `for i, n in enumerate(nucleos):`, después de `subs = [verificar_evidencia(s, por_id) for s in parsear_subs(t2)]`:
+
+```python
+                subs, n_comp = completar_subs(est, n, propios, subs, guia, marca_nombre, tokens)
+                completados += n_comp
+```
+
+inicializar `completados = 0` junto a `tokens = [0, 0]`, y en el `resumen` agregar:
+
+```python
+        "completados": completados,
+        "incompletos": sum(1 for s in subs_todos if calidad.faltantes(s)),
+```
+
+Agregar `ETAPA_COMPLETAR = N_("Completando avatares")` junto a `ETAPA_SUBS`.
+
+- [ ] **Step 6: Correr**
+
+Run: `venv/bin/python3 -m pytest tests/test_nicho_calidad.py tests/test_nicho_avatares.py tests/test_tareas_nicho.py -q -p no:cacheprovider`
+Expected: PASS.
+
+- [ ] **Step 7: Catálogo y commit**
+
+`venv/bin/python3 catalogo_i18n.py actualizar`; traducir (etiquetas de `calidad.ETIQUETAS`: «demografía» → «demographics», «edad» → «age», «emoción» → «emotion», «identidad» → «identity», «encaje del producto» → «product fit», «soluciones que probó» → «solutions they tried», «situaciones (mínimo 2)» → «situations (at least 2)», «comportamiento» → «behavior», «nivel de conciencia» → «awareness level», «tono» → «tone», «palabras clave (mínimo 3)» → «keywords (at least 3)», «citas (mínimo 2)» → «quotes (at least 2)», «nombre» / «deseo» si no existen → «name» / «desire», «Completando avatares» → «Completing avatars»); `compilar`; `pytest tests/test_i18n_catalogo.py -q -p no:cacheprovider`.
+
+```bash
+python3 -m py_compile nicho/calidad.py nicho/avatares.py
+git add nicho/calidad.py nicho/avatares.py tests/test_nicho_calidad.py tests/test_nicho_avatares.py tests/test_tareas_nicho.py translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
+git commit -m "Nicho: avatares completos — la generación exige todos los campos y una pasada de completado llena solo lo que falta, con citas verificadas" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Tasks 6–8 (pendientes de escribir; el plan se cortó por el límite de uso el 2026-09-28)
+### Task 8: Avatares propios y la lista de avatares del proyecto (datos)
 
-- **Task 6 — Rutas y plantillas**: `nicho/rutas.py` (`request.form.getlist` para plataformas y redes; el estimado del servidor recalculado en el POST es la cifra aprobada, se quita el campo manual de presupuesto; `pais` en crear/editar/contexto con `datos.PAISES_ESTUDIO`; `investigar de nuevo` = `datos.iniciar_investigacion`; cancelar = `inv.detener(…, 'cancelada')`; reanudar = poner `pendiente` los pasos `en_curso`, limpiar detenida_por y llamar `tareas.investigacion.avanzar`; contexto `productos_investigados`, `plataformas_disp`, `redes_disp`, `job_vivo`), `templates/_nicho_investigacion.html` (tres estados con la base visual común; chips por país; barra de progreso `data-poll-job` del paso vivo; lista de productos en `lista`), `_tab_nicho.html` (país + chip), catálogo de idioma, pruebas de rutas.
-- **Task 7 — Cadena de punta a punta y reanudación** (`tests/test_nicho_cadena.py` con todo falso: POST investigar → consultas → buscar → seleccionar → recolectar → generar encolado; reanudar tras una caída no repite lo hecho), párrafo de CLAUDE.md, spec §2.2 sin `elegido` (R1), suite completa.
-- **Task 8 — Despliegue y prueba real de centavos en el VPS** (tiene APIFY_TOKEN): estudio de prueba con topes mínimos (1 consulta, 5 productos, 2 elegidos, 20 reseñas) en Amazon SE, Mercado Libre CO y TikTok Shop; confirmar la forma de salida de cada actor y ajustar los lectores/fixtures; gasto esperado < US$ 0,50.
+**Files:**
+- Modify: `nicho/datos.py` (estudio oculto, avatares escritos a mano, avatar desde persona, lista y resumen, `aprobar_avatar` con origen y extra fundido, `estudios` sin el oculto, `urls_de_comentarios`)
+- Test: `tests/test_nicho_avatares_proyecto.py` (nuevo)
+
+**Interfaces:**
+- Consumes: `nicho.calidad.faltantes` (Task 7), `sprints.datos.crear_persona/actualizar_persona/persona/personas/archivar_persona`.
+- Produces: `datos.NOMBRE_ESTUDIO_MANUAL`, `datos.NOMBRE_NUCLEO_MANUAL`, `datos.es_manual(estudio) -> bool`, `datos.estudio_manual(cliente) -> (estudio_id, nucleo_id)`, `datos.crear_avatar_manual(cliente, campos) -> avatar_id`, `datos.campos_desde_persona(persona) -> dict`, `datos.avatar_desde_persona(cliente, persona_id) -> avatar_id`, `datos.lista_avatares(cliente) -> {"nuevos", "aprobados", "otros"}` (elementos `{clave, avatar, persona, estudio, nucleo, faltantes, grupo}`), `datos.resumen_avatares(cliente, muestra=12) -> {"nuevos", "aprobados", "incompletos", "muestra": [{clave, nombre, grupo, incompleto}]}`, `datos.urls_de_comentarios(cliente, ids) -> {id: url}`; `aprobar_avatar` crea la persona con origen `manual` si el avatar es del estudio oculto y funde el `extra` de una persona existente.
+
+- [ ] **Step 1: Escribir las pruebas que fallan** — crear `tests/test_nicho_avatares_proyecto.py`:
+
+```python
+"""Avatares del proyecto (spec 2026-09-29 §1): estudio oculto, avatares escritos a mano, personas sin avatar y la lista única."""
+import pytest
+
+FICHA = {"nombre": "Carla / La que camina todo el día", "deseo": "Quiero llegar a la noche sin dolor", "demografia": "Mujer 40-50, enfermera",
+         "edad_rango": "40-50", "emocion": "Agotamiento", "identidad": {"quiere_que_vean": "fuerte", "cree_de_si": "aguanta todo", "quiere_lograr": "cuidar sin romperse"},
+         "encaje_producto": "Pantuflas que alivian el talón", "soluciones_previas": [{"que": "Plantillas", "por_que_fallo": ["duras"]}],
+         "situaciones": ["Turno de 12 horas", "Al llegar a casa"], "comportamiento": "Se quita los zapatos en el carro",
+         "conciencia": {"nivel": "consciente_de_la_solucion", "detalle": "busca pantuflas"}, "tono": "Práctico", "palabras_clave": ["talón", "turno", "alivio"]}
+
+
+def _estudio_con_subs(datos):
+    eid = datos.crear_estudio("acme", "Tofflor", tema="t")
+    datos.agregar_comentarios("acme", eid, "texto", [{"fuente_id": f"c{i}", "texto": f"Comentario {i}: me duele el talón al final del turno."} for i in range(25)])
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    sub = dict(FICHA, base="emocion", evidencia=[{"comentario_id": ids[0], "cita": "me duele el talón"}, {"comentario_id": ids[1], "cita": "al final del turno"}])
+    datos.guardar_generacion("acme", eid, [{"nombre": "Sin dolor", "deseo": "Quiero caminar sin dolor", "resumen": "r",
+                                            "sub_avatares": [sub, dict(sub, nombre="Incompleta", tono="", situaciones=["una"])]}])
+    return eid, datos.avatares("acme", eid)[0]["subs"]
+
+
+def test_estudio_oculto_y_avatar_escrito_a_mano(base_temporal):
+    from nicho import datos
+    from sprints import datos as sd
+    eid, nid = datos.estudio_manual("acme")
+    assert datos.estudio_manual("acme") == (eid, nid) and datos.es_manual(datos.estudio("acme", eid))
+    assert datos.estudios("acme") == []                                                  # el oculto no se lista
+    aid = datos.crear_avatar_manual("acme", FICHA)
+    a = datos.avatar("acme", aid)
+    assert a["estado"] == "aprobado" and a["estudio_id"] == eid and a["padre_id"] == nid and a["persona_id"]
+    p = sd.persona("acme", a["persona_id"])
+    assert p["origen"] == "manual" and p["nombre"] == FICHA["nombre"] and p["extra"]["avatar_id"] == aid
+    with pytest.raises(datos.ErrorDatos):
+        datos.crear_avatar_manual("acme", {"nombre": " "})
+    assert len(datos.estudios("acme", incluir_archivados=True)) == 0
+
+
+def test_aprobar_funde_el_extra_de_la_persona(base_temporal):
+    from nicho import datos
+    from sprints import datos as sd
+    eid, subs = _estudio_con_subs(datos)
+    pid = datos.aprobar_avatar("acme", subs[0]["id"])
+    assert sd.persona("acme", pid)["origen"] == "investigada"
+    sd.actualizar_persona("acme", pid, extra={**sd.persona("acme", pid)["extra"], "otra_cosa": 1})
+    datos.actualizar_avatar("acme", subs[0]["id"], tono="Muy práctico")
+    datos.aprobar_avatar("acme", subs[0]["id"])
+    p = sd.persona("acme", pid)
+    assert p["tono"] == "Muy práctico" and p["extra"]["otra_cosa"] == 1 and p["extra"]["avatar_id"] == subs[0]["id"]
+
+
+def test_avatar_desde_persona_sin_avatar(base_temporal):
+    from nicho import datos
+    from sprints import datos as sd
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor", descripcion="Hombre 30-40, ciudad", tono="Seguro",
+                           senales_visuales=["En la oficina"], palabras_clave=["calidad"], origen="sugerida_ia",
+                           extra={"conciencia": {"nivel": "consciente_del_producto", "detalle": "x"}})
+    aid = datos.avatar_desde_persona("acme", pid)
+    a = datos.avatar("acme", aid)
+    assert a["persona_id"] == pid and a["estado"] == "aprobado" and a["deseo"] == "Quiere lo mejor" and a["demografia"] == "Hombre 30-40, ciudad"
+    assert a["situaciones"] == ["En la oficina"] and a["conciencia"]["nivel"] == "consciente_del_producto"
+    assert datos.avatar_desde_persona("acme", pid) == aid                               # una sola vez
+    datos.actualizar_avatar("acme", aid, tono="Muy seguro")
+    datos.aprobar_avatar("acme", aid)
+    assert sd.persona("acme", pid)["origen"] == "sugerida_ia" and sd.persona("acme", pid)["tono"] == "Muy seguro"   # conserva su origen
+    with pytest.raises(datos.ErrorDatos):
+        datos.avatar_desde_persona("acme", 999)
+
+
+def test_lista_y_resumen_de_avatares(base_temporal):
+    from nicho import datos
+    from sprints import datos as sd
+    eid, subs = _estudio_con_subs(datos)
+    manual = datos.crear_avatar_manual("acme", FICHA)
+    suelta = sd.crear_persona("acme", "Sprint suelta", resumen="r")
+    archivada = sd.crear_persona("acme", "Vieja", resumen="r")
+    sd.archivar_persona("acme", archivada)
+    datos.aprobar_avatar("acme", subs[0]["id"])
+    l = datos.lista_avatares("acme")
+    assert [x["avatar"]["id"] for x in l["nuevos"]] == [subs[1]["id"]]
+    assert l["nuevos"][0]["faltantes"] == ["situaciones", "tono"] and l["nuevos"][0]["estudio"]["nombre"] == "Tofflor" and l["nuevos"][0]["nucleo"] == "Sin dolor"
+    nombres = [(x["persona"] or {}).get("nombre") for x in l["aprobados"]]
+    assert nombres == sorted(nombres, key=str.lower) and set(nombres) == {FICHA["nombre"], "Sprint suelta"}
+    por_nombre = {x["persona"]["nombre"]: x for x in l["aprobados"]}
+    assert por_nombre[FICHA["nombre"]]["avatar"]["id"] == manual and por_nombre[FICHA["nombre"]]["faltantes"] == []   # sin exigir citas
+    assert por_nombre["Sprint suelta"]["avatar"] is None and "demografia" in por_nombre["Sprint suelta"]["faltantes"]
+    assert [x["persona"]["nombre"] for x in l["otros"]] == ["Vieja"]
+    datos.descartar_avatar("acme", subs[1]["id"])
+    l = datos.lista_avatares("acme")
+    assert l["nuevos"] == [] and {x["clave"] for x in l["otros"]} == {f"a{subs[1]['id']}", f"p{archivada}"}
+    r = datos.resumen_avatares("acme")
+    assert r["aprobados"] == 3 and r["nuevos"] == 0 and r["incompletos"] == 1
+    assert {m["nombre"] for m in r["muestra"]} == {FICHA["nombre"], "Sprint suelta", subs[0]["nombre"]}
+    assert datos.urls_de_comentarios("acme", [subs[0]["evidencia"][0]["comentario_id"]]) == {subs[0]["evidencia"][0]["comentario_id"]: None}
+```
+
+- [ ] **Step 2: Correr y ver que fallan**
+
+Run: `venv/bin/python3 -m pytest tests/test_nicho_avatares_proyecto.py -q -p no:cacheprovider`
+Expected: FAIL.
+
+- [ ] **Step 3: `nicho/datos.py`**
+
+`estudios(cliente, …)`: después de armar `lista`, filtrar el oculto antes de los conteos:
+
+```python
+        lista = [e for e in lista if not es_manual(e)]
+```
+
+(Poner `es_manual` antes de `estudios` en el archivo o usar `(e.get("extra") or {}).get("manual")` directamente.)
+
+Agregar después de `urls_comentarios`:
+
+```python
+def urls_de_comentarios(cliente, ids):
+    """{id: url} de esos comentarios, de cualquier estudio del proyecto."""
+    ids = [int(i) for i in ids or []]
+    if not ids:
+        return {}
+    c = db.comentario
+    with db.conectar() as con:
+        return {int(f.id): f.url for f in con.execute(sa.select(c.c.id, c.c.url).where(c.c.cliente == cliente, c.c.id.in_(ids)))}
+```
+
+En `aprobar_avatar`, reemplazar desde `extra = {...}` hasta el `else:` de creación por:
+
+```python
+    est = estudio(cliente, a["estudio_id"])
+    extra = {"avatar_id": a["id"], "estudio_id": a["estudio_id"], "identidad": dict(a.get("identidad") or {}),
+             "conciencia": dict(a.get("conciencia") or {}), "encaje_producto": a.get("encaje_producto") or "",
+             "evidencia": list(a.get("evidencia") or [])}
+    pid = a.get("persona_id")
+    existente = sprints_datos.persona(cliente, pid) if pid else None
+    if existente:
+        # Conserva lo que la persona ya traía en extra (p. ej. lo que se eligió en Sprints) y su origen.
+        sprints_datos.actualizar_persona(cliente, pid, archivada=False, extra={**dict(existente.get("extra") or {}), **extra}, **campos)
+    else:
+        n = len(sprints_datos.personas(cliente, incluir_archivadas=True))
+        pid = sprints_datos.crear_persona(cliente, origen="manual" if es_manual(est) else "investigada",
+                                          color=COLORES[n % len(COLORES)], extra=extra, **campos)
+```
+
+Agregar al final del archivo (antes de la sección de investigación o después, da igual):
+
+```python
+# ------------------------------------------------ avatares del proyecto ---
+
+NOMBRE_ESTUDIO_MANUAL = N_("Avatares escritos a mano")
+NOMBRE_NUCLEO_MANUAL = N_("Escritos a mano")
+
+
+def es_manual(e):
+    """True para el estudio oculto de los avatares escritos a mano."""
+    return bool(((e or {}).get("extra") or {}).get("manual"))
+
+
+def estudio_manual(cliente):
+    """(estudio_id, nucleo_id) del estudio oculto (spec 2026-09-29 §1); lo
+    crea la primera vez. Si una carrera dejara dos, se usa el de menor id."""
+    t, a = db.estudio, db.avatar
+    ahora = db.ahora()
+    with db.conectar() as con:
+        ocultos = [f.id for f in con.execute(sa.select(t.c.id, t.c.extra).where(t.c.cliente == cliente).order_by(t.c.id))
+                   if (f.extra or {}).get("manual")]
+        if ocultos:
+            eid = ocultos[0]
+        else:
+            eid = con.execute(t.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=NOMBRE_ESTUDIO_MANUAL, producto="", catalogo_id=None,
+                tema="", idioma=_idioma(idiomas.de_proyecto(cliente)), pais=None, estado="revisando", archivado=False,
+                generacion=0, extra={"manual": True})).inserted_primary_key[0]
+        nid = con.execute(sa.select(a.c.id).where(a.c.estudio_id == eid, a.c.cliente == cliente, a.c.tipo == "nucleo")
+                          .order_by(a.c.id)).scalar()
+        if nid is None:
+            nid = con.execute(a.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=eid, padre_id=None, tipo="nucleo", base=None,
+                orden=0, generacion=0, nombre=NOMBRE_NUCLEO_MANUAL, deseo="", resumen="", estado="propuesto", persona_id=None,
+                extra={}, **_SUB_VACIO)).inserted_primary_key[0]
+    return eid, nid
+
+
+def _insertar_sub_manual(cliente, campos, estado, persona_id=None, extra=None):
+    eid, nid = estudio_manual(cliente)
+    a, ahora = db.avatar, db.ahora()
+    with db.conectar() as con:
+        orden = int(con.execute(sa.select(sa.func.count()).select_from(a).where(a.c.padre_id == nid)).scalar() or 0)
+        return con.execute(a.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=eid, padre_id=nid, tipo="sub", orden=orden,
+            generacion=0, estado=estado, persona_id=persona_id, resumen="", extra=dict(extra or {}),
+            **{**_SUB_VACIO, "base": "emocion", **campos})).inserted_primary_key[0]
+
+
+def crear_avatar_manual(cliente, campos):
+    """Avatar escrito a mano: vive en el estudio oculto y nace aprobado (su
+    persona se crea con origen `manual`). Devuelve el id del avatar."""
+    limpios = validar_campos_avatar({k: v for k, v in dict(campos or {}).items() if k in AVATAR_EDITABLES})
+    if not limpios.get("nombre"):
+        raise ErrorDatos(gettext("El avatar necesita un nombre."))
+    aid = _insertar_sub_manual(cliente, limpios, "propuesto", extra={"manual": True})
+    aprobar_avatar(cliente, aid)
+    return aid
+
+
+def campos_desde_persona(p):
+    """La ficha de avatar que corresponde a una persona sin avatar (mapeo inverso de `persona_desde_avatar`)."""
+    ex = dict((p or {}).get("extra") or {})
+    return validar_campos_avatar({
+        "nombre": p.get("nombre") or "?", "deseo": p.get("resumen") or "", "demografia": p.get("descripcion") or "",
+        "edad_rango": p.get("edad_rango") or "", "tono": p.get("tono") or "", "situaciones": list(p.get("senales_visuales") or []),
+        "palabras_clave": list(p.get("palabras_clave") or []), "identidad": ex.get("identidad") or {},
+        "conciencia": ex.get("conciencia") if isinstance(ex.get("conciencia"), dict) else {"nivel": ex.get("conciencia") or ""},
+        "encaje_producto": ex.get("encaje_producto") or ""})
+
+
+def avatar_desde_persona(cliente, persona_id):
+    """El avatar con el que se edita una persona sin avatar (creada en Sprints o
+    sugerida por IA): se crea UNA vez en el estudio oculto con los campos de la
+    persona y enlazado a ella; si ya existe, se devuelve."""
+    p = sprints_datos.persona(cliente, persona_id)
+    if not p:
+        raise ErrorDatos(gettext("Esa persona no existe."))
+    a = db.avatar
+    with db.conectar() as con:
+        ya = con.execute(sa.select(a.c.id).where(a.c.cliente == cliente, a.c.persona_id == persona_id, a.c.tipo == "sub")
+                         .order_by(a.c.id)).scalar()
+    if ya:
+        return ya
+    aid = _insertar_sub_manual(cliente, campos_desde_persona(p), "descartado" if p.get("archivada") else "aprobado",
+                               persona_id=persona_id, extra={"manual": True, "desde_persona": True})
+    eid, _ = estudio_manual(cliente)
+    sprints_datos.actualizar_persona(cliente, persona_id, extra={**dict(p.get("extra") or {}), "avatar_id": aid, "estudio_id": eid})
+    return aid
+
+
+def lista_avatares(cliente):
+    """Todos los avatares del proyecto (spec 2026-09-29 §1, §3):
+    {"nuevos": sub-avatares propuestos de estudios no archivados (más nuevo primero),
+     "aprobados": personas no archivadas (con su avatar si lo tienen), por nombre,
+     "otros": descartados y personas archivadas}.
+    Cada elemento: {clave ("a<id>" o "p<id>"), avatar, persona, estudio {id, nombre,
+    manual, archivado}, nucleo, faltantes, grupo}."""
+    from nicho import calidad
+    t, a = db.estudio, db.avatar
+    with db.conectar() as con:
+        estudios_ = {f.id: {"id": f.id, "nombre": f.nombre, "manual": bool((f.extra or {}).get("manual")), "archivado": bool(f.archivado)}
+                     for f in con.execute(sa.select(t.c.id, t.c.nombre, t.c.extra, t.c.archivado).where(t.c.cliente == cliente))}
+        filas = [_a_dict(f) for f in con.execute(sa.select(a).where(a.c.cliente == cliente).order_by(a.c.id.desc()))]
+    nucleos = {f["id"]: f["nombre"] for f in filas if f["tipo"] == "nucleo"}
+    subs = [f for f in filas if f["tipo"] == "sub"]
+    personas = {p["id"]: p for p in sprints_datos.personas(cliente, incluir_archivadas=True)}
+    representante = {}
+    for s in subs:
+        if s.get("persona_id") in personas and s["persona_id"] not in representante:
+            representante[s["persona_id"]] = s["id"]
+
+    def item(grupo, avatar=None, persona=None):
+        est = estudios_.get(avatar["estudio_id"]) if avatar else None
+        base = avatar if avatar else campos_desde_persona(persona)
+        return {"clave": f"a{avatar['id']}" if avatar else f"p{persona['id']}", "avatar": avatar, "persona": persona, "estudio": est,
+                "nucleo": nucleos.get(avatar["padre_id"]) if avatar else None, "grupo": grupo,
+                "faltantes": calidad.faltantes(base, con_evidencia=bool(avatar) and not (est or {}).get("manual"))}
+
+    nuevos, aprobados, otros = [], [], []
+    for s in subs:
+        est = estudios_.get(s["estudio_id"]) or {}
+        p = personas.get(s.get("persona_id"))
+        if p and representante.get(p["id"]) != s["id"]:
+            continue                                            # la persona ya está representada por otro avatar
+        if s["estado"] == "propuesto" and not p:
+            if not est.get("archivado"):
+                nuevos.append(item("nuevo", s))
+        elif s["estado"] == "aprobado" and p and not p.get("archivada"):
+            aprobados.append(item("aprobado", s, p))
+        else:
+            otros.append(item("otro", s, p))
+    for pid, p in personas.items():
+        if pid not in representante:
+            (otros if p.get("archivada") else aprobados).append(item("otro" if p.get("archivada") else "aprobado", persona=p))
+    aprobados.sort(key=lambda x: ((x["persona"] or {}).get("nombre") or "").lower())
+    return {"nuevos": nuevos, "aprobados": aprobados, "otros": otros}
+
+
+def resumen_avatares(cliente, muestra=12):
+    """Lo liviano que muestra la pestaña Nicho: conteos y hasta `muestra` nombres."""
+    l = lista_avatares(cliente)
+    vivos = l["nuevos"] + l["aprobados"]
+    return {"nuevos": len(l["nuevos"]), "aprobados": len(l["aprobados"]), "incompletos": sum(1 for x in vivos if x["faltantes"]),
+            "muestra": [{"clave": x["clave"], "nombre": ((x["avatar"] or {}).get("nombre") if x["grupo"] == "nuevo" else (x["persona"] or {}).get("nombre")),
+                         "grupo": x["grupo"], "incompleto": bool(x["faltantes"])} for x in vivos[:muestra]]}
+```
+
+Nota del ruling: un sub propuesto con persona (caso raro: se aprobó, se editó la persona y se «desaprobó» a mano en la base) se trata como su persona dicte; la regla es «la persona manda cuando existe».
+
+- [ ] **Step 4: Correr**
+
+Run: `venv/bin/python3 -m pytest tests/test_nicho_avatares_proyecto.py tests/test_nicho_datos.py tests/test_rutas_nicho.py tests/test_sprints_datos.py -q -p no:cacheprovider`
+Expected: PASS.
+
+- [ ] **Step 5: Catálogo y commit**
+
+`catalogo_i18n.py actualizar`; traducir «Avatares escritos a mano» → «Hand-written avatars», «Escritos a mano» → «Hand-written», «El avatar necesita un nombre.» y «Esa persona no existe.» si no existen; `compilar`; `pytest tests/test_i18n_catalogo.py -q -p no:cacheprovider`.
+
+```bash
+python3 -m py_compile nicho/datos.py
+git add nicho/datos.py tests/test_nicho_avatares_proyecto.py translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
+git commit -m "Nicho: avatares escritos a mano (estudio oculto, nacen aprobados), personas sin avatar editables y la lista única de avatares del proyecto" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 9: Completar los avatares ya guardados (tarea `nicho_completar_avatares`)
+
+**Files:**
+- Modify: `nicho/avatares.py` (`completables`, `estimar_completar`, `completar_existentes`, `completables_por_estudio`)
+- Modify: `nicho/datos.py` (`job_id_completar`, `guardar_completado`)
+- Modify: `tareas/nicho.py` (`ETAPAS_COMPLETAR`, `encolar_completar`, `ejecutar_completar`, `interrumpida_completar`)
+- Modify: `tests/test_tareas_swap.py` (agregar `"nicho_completar_avatares"` a la lista ordenada del registro)
+- Test: `tests/test_tareas_nicho.py` (agregar), `tests/test_nicho_avatares.py` (agregar)
+
+**Interfaces:**
+- Consumes: Task 7 (`completar_subs`, `calidad`), Task 8 (`datos.es_manual`, `aprobar_avatar`).
+- Produces: `avatares.completables(cliente, estudio_id) -> [(nucleo, [subs])]`, `avatares.estimar_completar(cliente, estudio_id, modelo=None) -> {"avatares", "tokens_entrada", "tokens_salida", "usd", "referencia"}`, `avatares.completar_existentes(cliente, estudio_id, avanzar=None) -> {"cambios": {aid: campos}, "resumen": {...}}`, `avatares.completables_por_estudio(cliente) -> [{"estudio_id", "nombre", "avatares", "usd"}]`; `datos.job_id_completar(cliente, estudio_id)`, `datos.guardar_completado(cliente, estudio_id, cambios) -> [aid aprobados]`; `tareas.nicho.encolar_completar(cliente, estudio_id) -> bool`, tarea `nicho_completar_avatares`.
+
+- [ ] **Step 1: Escribir las pruebas que fallan**
+
+Agregar al final de `tests/test_nicho_avatares.py`:
+
+```python
+def test_completables_y_completar_existentes(base_temporal, monkeypatch):
+    from nicho import avatares, calidad, datos
+    import marca, proyectos
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Happy Wash")
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    completo = _sub_completo(ids)
+    datos.guardar_generacion("acme", eid, [{"nombre": "Sin peso", "deseo": "Quiero", "resumen": "r",
+                                            "sub_avatares": [completo, dict(completo, nombre="Sin tono", tono=""), dict(completo, nombre="Descartada", tono="")]}])
+    subs = datos.avatares("acme", eid)[0]["subs"]
+    datos.descartar_avatar("acme", subs[2]["id"])
+    grupos = avatares.completables("acme", eid)
+    assert len(grupos) == 1 and [s["nombre"] for s in grupos[0][1]] == ["Sin tono"]                   # lo descartado y lo completo no cuentan
+    e = avatares.estimar_completar("acme", eid)
+    assert e["avatares"] == 1 and e["usd"] > 0
+    assert avatares.completables_por_estudio("acme") == [{"estudio_id": eid, "nombre": datos.estudio("acme", eid)["nombre"], "avatares": 1, "usd": e["usd"]}]
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: (json.dumps({"sub_avatares": [{"indice": 0, "tono": "Cercano"}]}), 500, 60))
+    r = avatares.completar_existentes("acme", eid)
+    assert r["cambios"] == {subs[1]["id"]: {"tono": "Cercano"}} and r["resumen"]["completados"] == 1
+    assert r["resumen"]["tokens_entrada"] == 500 and r["resumen"]["usd"] == avatares.costo_real(500, 60)
+    manual_eid, _ = datos.estudio_manual("acme")
+    assert avatares.completables("acme", manual_eid) == [] and avatares.estimar_completar("acme", manual_eid)["avatares"] == 0
+```
+
+Agregar al final de `tests/test_tareas_nicho.py`:
+
+```python
+def test_completar_avatares_guarda_gasto_y_actualiza_la_persona(base_temporal, monkeypatch):
+    import gastos
+    from nicho import avatares, datos
+    from sprints import datos as sd
+    from tareas import nicho as tn
+    eid = _estudio(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    sub = dict(SUB, nombre="Ana", tono="", evidencia=[{"comentario_id": ids[0], "cita": "la garrafa pesa demasiado"}, {"comentario_id": ids[1], "cita": "la garrafa pesa demasiado"}],
+               demografia="Mujer", edad_rango="30-40", situaciones=["a", "b"], palabras_clave=["x", "y", "z"],
+               soluciones_previas=[{"que": "Líquido", "por_que_fallo": ["pesa"]}])
+    datos.guardar_generacion("acme", eid, [{"nombre": "N", "deseo": "Quiero", "resumen": "r", "sub_avatares": [sub]}])
+    aid = datos.avatares("acme", eid)[0]["subs"][0]["id"]
+    pid = datos.aprobar_avatar("acme", aid)
+    encolados = []
+    monkeypatch.setattr(tn.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, kw)) or True)
+    assert tn.encolar_completar("acme", eid) is True
+    assert encolados[0][0] == datos.job_id_completar("acme", eid) == f"nicho:acme:{eid}:completar" and encolados[0][2]["max_intentos"] == 1
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: (json.dumps({"sub_avatares": [{"indice": 0, "tono": "Cercano"}]}), 500, 60))
+    msg = tn.ejecutar_completar({"id": 5, "payload": {"cliente": "acme", "estudio_id": eid}, "job_id": datos.job_id_completar("acme", eid)})
+    assert "1" in msg and datos.avatar("acme", aid)["tono"] == "Cercano" and sd.persona("acme", pid)["tono"] == "Cercano"
+    g = gastos.historial("acme")[0]
+    assert g["tipo"] == "avatares" and g["referencia"] == f"avatares:{eid}:completar:t5" and g["usd"] == avatares.costo_real(500, 60)
+    import tareas
+    assert "nicho_completar_avatares" in tareas.REGISTRO and "nicho_completar_avatares" in tareas.AL_INTERRUMPIR
+```
+
+(`json` se importa arriba del archivo si no está; `SUB` y `_estudio` ya existen en `tests/test_tareas_nicho.py`.)
+
+- [ ] **Step 2: Correr y ver que fallan**
+
+Run: `venv/bin/python3 -m pytest tests/test_nicho_avatares.py tests/test_tareas_nicho.py -q -p no:cacheprovider -k "completables or completar"`
+Expected: FAIL.
+
+- [ ] **Step 3: `nicho/datos.py`**
+
+Después de `job_id_recolectar`:
+
+```python
+def job_id_completar(cliente, estudio_id):
+    """Un completado vivo por estudio (spec 2026-09-29 §2)."""
+    return f"nicho:{cliente}:{int(estudio_id)}:completar"
+```
+
+Después de `actualizar_avatar`:
+
+```python
+def guardar_completado(cliente, estudio_id, cambios):
+    """Guarda en UNA transacción lo que completó Claude (`{avatar_id: campos}`,
+    incluida la evidencia verificada). Devuelve los ids aprobados, para que
+    quien llama actualice sus personas."""
+    permitidas = set(AVATAR_EDITABLES) | {"evidencia", "sin_evidencia"}
+    aprobados = []
+    with db.conectar() as con:
+        for aid, campos in (cambios or {}).items():
+            f = _fila(con, db.avatar, int(aid), cliente)
+            if not f or f.estudio_id != int(estudio_id) or f.tipo != "sub":
+                continue
+            limpios = validar_campos_avatar({k: v for k, v in dict(campos).items() if k in permitidas and k != "nombre"})
+            _actualizar(con, db.avatar, int(aid), cliente, _AVATAR_COLS, limpios)
+            if f.estado == "aprobado":
+                aprobados.append(int(aid))
+    return aprobados
+```
+
+- [ ] **Step 4: `nicho/avatares.py`** — agregar después de `generar`:
+
+```python
+def _sub_de_fila(f):
+    return {**{k: f.get(k) for k in datos.AVATAR_EDITABLES}, "evidencia": list(f.get("evidencia") or []), "sin_evidencia": bool(f.get("sin_evidencia"))}
+
+
+def completables(cliente, estudio_id):
+    """[(núcleo, [subs incompletos no descartados])] de un estudio de verdad
+    (el oculto de los avatares escritos a mano no tiene comentarios)."""
+    est = datos.estudio(cliente, estudio_id)
+    if not est or datos.es_manual(est):
+        return []
+    grupos = []
+    for n in datos.avatares(cliente, estudio_id):
+        subs = [s for s in n["subs"] if s["estado"] != "descartado" and calidad.faltantes(s)]
+        if subs:
+            grupos.append((n, subs))
+    return grupos
+
+
+def _comentarios_para_completar(cliente, estudio_id, subs):
+    todos = datos.comentarios_para_generar(cliente, estudio_id)
+    citados = {e.get("comentario_id") for s in subs for e in (s.get("evidencia") or [])}
+    primero = [c for c in todos if c["id"] in citados]
+    resto = seleccionar([c for c in todos if c["id"] not in citados], max_n=max(0, MAX_COMENTARIOS_COMPLETAR - len(primero)))
+    return primero + resto
+
+
+def estimar_completar(cliente, estudio_id, modelo=None):
+    """Precio ANTES de completar los avatares guardados de un estudio (una
+    llamada por núcleo con incompletos)."""
+    modelo = modelo or modelo_actual()
+    grupos = completables(cliente, estudio_id)
+    entrada = salida = 0
+    for _, subs in grupos:
+        coms = _comentarios_para_completar(cliente, estudio_id, subs)
+        entrada += int(sum(len(c.get("texto") or "") for c in coms) * TOKENS_POR_CARACTER) + TOKENS_PROMPT + TOKENS_SUB_JSON * len(subs)
+        salida += TOKENS_SALIDA_ESTIMADO_COMPLETAR
+    precios, referencia = _precios(modelo)
+    usd = math.ceil((entrada * precios["entrada"] + salida * precios["salida"]) / 1e6 * 100) / 100 if grupos else 0.0
+    return {"avatares": sum(len(s) for _, s in grupos), "tokens_entrada": entrada, "tokens_salida": salida, "usd": usd, "referencia": referencia}
+
+
+def completables_por_estudio(cliente):
+    """Para la página de avatares: por estudio no archivado, cuántos avatares se pueden completar y a qué precio."""
+    salida = []
+    for e in datos.estudios(cliente):
+        est = estimar_completar(cliente, e["id"])
+        if est["avatares"]:
+            salida.append({"estudio_id": e["id"], "nombre": e["nombre"], "avatares": est["avatares"], "usd": est["usd"]})
+    return salida
+
+
+def completar_existentes(cliente, estudio_id, avanzar=None):
+    """La pasada de completado sobre los avatares ya guardados de un estudio.
+    No escribe: devuelve {"cambios": {avatar_id: campos que cambiaron},
+    "resumen": {avatares, completados, tokens_entrada, tokens_salida, usd, modelo}}."""
+    avanzar = avanzar or (lambda etapa, detalle=None: None)
+    est = datos.estudio(cliente, estudio_id)
+    if not est:
+        raise datos.ErrorDatos(gettext("Ese estudio no existe."))
+    grupos = completables(cliente, estudio_id)
+    guia, marca_nombre = marca.guia_efectiva(cliente) or "", proyectos.nombre_visible(cliente)
+    tokens, cambios = [0, 0], {}
+    for i, (n, filas) in enumerate(grupos):
+        avanzar(ETAPA_COMPLETAR, f"{i + 1}/{len(grupos)}: {n['nombre']}")
+        coms = _comentarios_para_completar(cliente, estudio_id, filas)
+        antes = [_sub_de_fila(f) for f in filas]
+        despues, _ = completar_subs(est, n, coms, antes, guia, marca_nombre, tokens)
+        for fila, a, d in zip(filas, antes, despues):
+            difiere = {k: d[k] for k in d if d.get(k) != a.get(k)}
+            if difiere:
+                cambios[fila["id"]] = difiere
+    return {"cambios": cambios, "resumen": {"avatares": sum(len(f) for _, f in grupos), "completados": len(cambios),
+                                           "tokens_entrada": tokens[0], "tokens_salida": tokens[1],
+                                           "usd": costo_real(tokens[0], tokens[1]), "modelo": modelo_actual()}}
+```
+
+- [ ] **Step 5: `tareas/nicho.py`** — agregar al final:
+
+```python
+# ------------------------------------------------ nicho_completar_avatares ---
+
+ETAPAS_COMPLETAR = [(avatares.ETAPA_COMPLETAR, 60), (ETAPA_GUARDAR, 5)]
+
+
+def encolar_completar(cliente, estudio_id):
+    """False si ya hay un completado vivo para ese estudio. Gasta: max_intentos=1."""
+    return trabajos.encolar(datos.job_id_completar(cliente, estudio_id), "nicho_completar_avatares",
+                            {"cliente": cliente, "estudio_id": int(estudio_id)}, cliente=cliente,
+                            duracion_estimada=90, etapas=ETAPAS_COMPLETAR, max_intentos=1)
+
+
+@registrar("nicho_completar_avatares")
+def ejecutar_completar(tarea):
+    p = tarea["payload"]
+    cliente, eid = p["cliente"], int(p["estudio_id"])
+    if not datos.estudio(cliente, eid):
+        return gettext("El estudio ya no existe.")
+    job = tarea.get("job_id") or datos.job_id_completar(cliente, eid)
+
+    def avanzar(etapa, detalle=None):
+        cola.reportar(job, etapa=etapa, detalle=detalle)
+
+    r = None
+    try:
+        r = avatares.completar_existentes(cliente, eid, avanzar)
+        avanzar(ETAPA_GUARDAR)
+        aprobados = datos.guardar_completado(cliente, eid, r["cambios"])
+    except Exception as e:
+        if r is not None and r["resumen"]["tokens_entrada"] + r["resumen"]["tokens_salida"] > 0:
+            res = r["resumen"]
+            gastos.registrar_seguro(cliente, "avatares", res["usd"], f"avatares:{eid}:completar:fallido{ref_sufijo(tarea)}",
+                                    detalle=f"intento fallido: {cola.recortar(cola.sin_token(e), 200)}", proveedor="anthropic",
+                                    extra={"tokens_entrada": res["tokens_entrada"], "tokens_salida": res["tokens_salida"], "modelo": res["modelo"]})
+        _anotar_error(cliente, eid, gettext("%(error)s (si Claude alcanzó a responder, este intento sí se cobró)", error=cola.sin_token(e)))
+        raise
+    res = r["resumen"]
+    if res["tokens_entrada"] + res["tokens_salida"] > 0:
+        gastos.registrar_seguro(cliente, "avatares", res["usd"], f"avatares:{eid}:completar{ref_sufijo(tarea)}",
+                                detalle=f"completado: {res['completados']} de {res['avatares']} avatar(es)", proveedor="anthropic",
+                                extra={"tokens_entrada": res["tokens_entrada"], "tokens_salida": res["tokens_salida"], "modelo": res["modelo"]})
+    for aid in aprobados:
+        datos.aprobar_avatar(cliente, aid)                    # la persona que usa la app queda al día
+    datos.recalcular(cliente, eid)
+    return gettext("%(n)s de %(t)s avatar(es) completados.", n=res["completados"], t=res["avatares"])
+
+
+@al_interrumpir("nicho_completar_avatares")
+def interrumpida_completar(tarea, mensaje):
+    p = tarea["payload"]
+    _anotar_error(p["cliente"], int(p["estudio_id"]), mensaje)
+```
+
+`tests/test_tareas_swap.py`: agregar `"nicho_completar_avatares"` en su lugar alfabético (entre `"musica_generar"` y `"nicho_generar_avatares"`).
+
+- [ ] **Step 6: Correr**
+
+Run: `venv/bin/python3 -m pytest tests/test_nicho_avatares.py tests/test_tareas_nicho.py tests/test_tareas_swap.py -q -p no:cacheprovider`
+Expected: PASS.
+
+- [ ] **Step 7: Catálogo y commit**
+
+`catalogo_i18n.py actualizar`; traducir «%(n)s de %(t)s avatar(es) completados.» → «%(n)s of %(t)s avatar(s) completed.»; `compilar`; `pytest tests/test_i18n_catalogo.py -q -p no:cacheprovider`.
+
+```bash
+python3 -m py_compile nicho/avatares.py nicho/datos.py tareas/nicho.py
+git add nicho/avatares.py nicho/datos.py tareas/nicho.py tests/test_nicho_avatares.py tests/test_tareas_nicho.py tests/test_tareas_swap.py translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
+git commit -m "Nicho: completar los avatares ya guardados (una llamada por núcleo, costo a la vista, gasto real y persona al día)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+### Task 10: Pantallas de los avatares (lista del proyecto, ficha compartida, bloque en la pestaña, completar)
+
+**Files:**
+- Create: `templates/_avatar_ficha.html` (macros), `templates/nicho_avatares_proyecto.html` (página)
+- Modify: `templates/_nicho_avatares.html` (usar las macros, aviso de incompleto, botón «Completar», barras con `data-poll-job`), `templates/_tab_nicho.html` (bloque «Avatares»), `static/style.css` (bloque al final)
+- Modify: `nicho/rutas.py` (filtro `faltantes_texto`, `_destino_avatar`, `avatar_editar` sincroniza, `avatar_aprobar` avisa lo que falta, `avatar_descartar`, rutas nuevas `avatares_proyecto`, `avatar_crear`, `persona_ficha`, `persona_archivar`, `completar`; `ver` y `contexto`)
+- Test: `tests/test_rutas_nicho.py` (agregar)
+
+**Interfaces:**
+- Consumes: Tasks 7–9 (`calidad`, `datos.lista_avatares/resumen_avatares/crear_avatar_manual/avatar_desde_persona/es_manual/urls_de_comentarios/job_id_completar`, `avatares.estimar_completar/completables_por_estudio`, `tareas.nicho.encolar_completar`).
+- Produces: `GET /cliente/<c>/nicho/avatares` (`nicho.avatares_proyecto`, `?nuevo=1`, `?abrir=a<id>|p<id>`), `POST /cliente/<c>/nicho/avatares/nuevo` (`nicho.avatar_crear`), `POST /cliente/<c>/nicho/persona/<pid>/ficha` (`nicho.persona_ficha`), `POST /cliente/<c>/nicho/persona/<pid>/archivar` (`nicho.persona_archivar`), `POST /cliente/<c>/nicho/<eid>/completar` (`nicho.completar`, campos `total_visto` y `volver`); filtro Jinja `faltantes_texto`; macros `ficha_avatar(s, volver='')`, `evidencia_avatar(s)`, `acciones_avatar(s, volver='')`, `chip_faltantes(faltantes)`, `tarjeta_avatar(x)`.
+
+- [ ] **Step 1: Escribir las pruebas que fallan** (agregar al final de `tests/test_rutas_nicho.py`)
+
+```python
+def test_avatares_del_proyecto_pagina_y_pestana(app):
+    from nicho import datos
+    from sprints import datos as sd
+    eid, sid = _con_avatares(datos)
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    c = app["c"]
+    html = c.get("/cliente/acme/nicho/avatares").data.decode()
+    assert "Nuevos (sin aprobar)" in html and "Aprobados" in html and "Premium" in html and SUB["nombre"] in html
+    assert f'id="avatar-a{sid}"' in html and f'id="avatar-p{pid}"' in html and "incompleto: falta" in html
+    assert f"/cliente/acme/nicho/persona/{pid}/ficha" in html and 'id="nuevo-avatar"' in html
+    assert 'action="/cliente/acme/nicho/avatares/nuevo"' in html and 'name="volver" value="lista"' in html
+    tab = c.get("/cliente/acme").data.decode()
+    assert "/cliente/acme/nicho/avatares" in tab and "Aprobados: 1" in tab and "Nuevos por revisar: 1" in tab
+    assert "Citas textuales" not in tab                                         # nada de fichas en la página del proyecto
+
+
+def test_crear_avatar_a_mano_y_editar_sincroniza(app):
+    from nicho import datos
+    from sprints import datos as sd
+    c = app["c"]
+    r = c.post("/cliente/acme/nicho/avatares/nuevo", data={"nombre": "Marta / La que camina", "deseo": "Quiero caminar sin dolor", "base": "emocion"})
+    assert r.status_code == 302 and "/cliente/acme/nicho/avatares" in r.headers["Location"] and "#avatar-a" in r.headers["Location"]
+    aid = int(r.headers["Location"].split("#avatar-a")[1])
+    a = datos.avatar("acme", aid)
+    p = sd.persona("acme", a["persona_id"])
+    assert a["estado"] == "aprobado" and p["origen"] == "manual" and p["nombre"] == "Marta / La que camina"
+    r = c.post(f"/cliente/acme/nicho/avatar/{aid}/editar", data={"nombre": "Marta / La que camina", "tono": "Cálido", "volver": "lista"},
+               follow_redirects=True)
+    assert "la persona que usa la app se actualizó" in r.data.decode() and sd.persona("acme", a["persona_id"])["tono"] == "Cálido"
+    r = c.post("/cliente/acme/nicho/avatares/nuevo", data={"nombre": " "}, follow_redirects=True)
+    assert "necesita un nombre" in r.data.decode()
+
+
+def test_aprobar_incompleto_avisa_y_vuelve_al_estudio(app):
+    from nicho import datos
+    eid, sid = _con_avatares(datos)
+    r = app["c"].post(f"/cliente/acme/nicho/avatar/{sid}/aprobar")
+    assert r.headers["Location"].endswith(f"/nicho/{eid}")
+    r = app["c"].get(f"/cliente/acme/nicho/{eid}")
+    assert datos.avatar("acme", sid)["estado"] == "aprobado"
+    r = app["c"].post(f"/cliente/acme/nicho/avatar/{sid}/descartar", data={"volver": "lista"})
+    assert "/cliente/acme/nicho/avatares" in r.headers["Location"]
+
+
+def test_persona_sin_avatar_ficha_y_archivar(app):
+    from nicho import datos
+    from sprints import datos as sd
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    c = app["c"]
+    r = c.post(f"/cliente/acme/nicho/persona/{pid}/ficha")
+    aid = int(r.headers["Location"].split("#avatar-a")[1])
+    assert datos.avatar("acme", aid)["persona_id"] == pid and "abrir=a" in r.headers["Location"]
+    c.post(f"/cliente/acme/nicho/persona/{pid}/archivar")
+    assert sd.persona("acme", pid)["archivada"] is True
+    c.post(f"/cliente/acme/nicho/persona/{pid}/archivar", data={"desarchivar": "1"})
+    assert sd.persona("acme", pid)["archivada"] is False
+    assert c.post("/cliente/acme/nicho/persona/999/ficha", follow_redirects=True).status_code == 200
+    assert c.post("/cliente/acme/nicho/persona/999/archivar").status_code == 404
+
+
+def test_completar_desde_el_estudio_con_el_costo_visto(app):
+    import gastos
+    from nicho import avatares, datos
+    eid, sid = _con_avatares(datos)
+    e = avatares.estimar_completar("acme", eid)
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "incompleto: falta" in html and f"/cliente/acme/nicho/{eid}/completar" in html and gastos.formatear(e["usd"]) in html
+    assert "<script>iniciarPolling" not in html
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": "0"}, follow_redirects=True)
+    assert "vuelve a confirmar" in r.data.decode() and app["encolados"] == []
+    app["c"].post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": str(e["usd"])})
+    assert app["encolados"][-1]["tipo"] == "nicho_completar_avatares" and app["encolados"][-1]["max_intentos"] == 1
+```
+
+(`_con_avatares` y `SUB` ya existen en ese archivo: `SUB` es incompleto —demografía y edad vacías—, así que su avatar aparece con «incompleto: falta».)
+
+- [ ] **Step 2: Correr y ver que fallan**
+
+Run: `venv/bin/python3 -m pytest tests/test_rutas_nicho.py -q -p no:cacheprovider -k "avatares_del_proyecto or crear_avatar_a_mano or aprobar_incompleto or persona_sin_avatar or completar_desde"`
+Expected: FAIL.
+
+- [ ] **Step 3: `templates/_avatar_ficha.html`** (nuevo)
+
+```html
+{# Ficha de un avatar: la misma en el estudio y en «Avatares del proyecto».
+   Importar con {% from "_avatar_ficha.html" import ficha_avatar, evidencia_avatar, acciones_avatar, chip_faltantes, tarjeta_avatar with context %}:
+   usan cliente, niveles_conciencia, bases, consciencias_nombre, urls_comentarios y `abrir` del contexto.
+   `s` = None dibuja la ficha vacía de «+ Nuevo avatar». `volver` = "lista" hace que cada acción
+   vuelva a la lista del proyecto en vez de al estudio. #}
+
+{% macro chip_faltantes(faltantes) %}{% if faltantes %}<span class="tag-estado sprint-aviso">{{ _('incompleto: falta %(faltan)s', faltan=faltantes|faltantes_texto) }}</span>{% endif %}{% endmacro %}
+
+{% macro ficha_avatar(s, volver='') %}
+{% set ident = (s.identidad if s else {}) or {} %}
+{% set conc = (s.conciencia if s else {}) or {} %}
+<form method="post" action="{{ url_for('nicho.avatar_editar', cliente=cliente, aid=s.id) if s else url_for('nicho.avatar_crear', cliente=cliente) }}" class="form-experimento">
+  {% if volver %}<input type="hidden" name="volver" value="{{ volver }}">{% endif %}
+  <div class="fe-opciones">
+    <label>{{ _('Nombre / arquetipo') }} <input name="nombre" value="{{ s.nombre if s else '' }}" required maxlength="120"></label>
+    <label>{{ _('Base') }} <select name="base">{% for b in bases %}<option value="{{ b }}" {% if s and b == s.base %}selected{% endif %}>{{ _('emoción') if b == 'emocion' else _('experiencia con el producto') }}</option>{% endfor %}</select></label>
+    <label>{{ _('Edad') }} <input name="edad_rango" value="{{ (s.edad_rango if s else '') or '' }}" placeholder="30-45" class="mini-input"></label>
+  </div>
+  <label>{{ _('Deseo (frase de cabecera)') }} <input name="deseo" value="{{ (s.deseo if s else '') or '' }}" maxlength="300"></label>
+  <label>Demographics (ASL) <textarea name="demografia" rows="2">{{ (s.demografia if s else '') or '' }}</textarea></label>
+  <label>{{ _('Emoción') }} <input name="emocion" value="{{ (s.emocion if s else '') or '' }}"></label>
+  <label>{{ _('Qué quiere que los demás vean en ella') }} <textarea name="identidad_quiere_que_vean" rows="2">{{ ident.quiere_que_vean or '' }}</textarea></label>
+  <label>Beliefs about self <textarea name="identidad_cree_de_si" rows="2">{{ ident.cree_de_si or '' }}</textarea></label>
+  <label>{{ _('Qué quiere lograr en la sociedad') }} <textarea name="identidad_quiere_lograr" rows="2">{{ ident.quiere_lograr or '' }}</textarea></label>
+  <label>{{ _('Cómo nuestro producto la ayuda a lograrlo') }} <textarea name="encaje_producto" rows="2">{{ (s.encaje_producto if s else '') or '' }}</textarea></label>
+  <label>{{ _('Soluciones que probó y por qué fallaron (una por línea: «qué usó :: problema; problema»)') }} <textarea name="soluciones_previas" rows="3">{{ ((s.soluciones_previas if s else []) or []) | soluciones_texto }}</textarea></label>
+  <label>{{ _('Su día a día (una situación por línea)') }} <textarea name="situaciones" rows="3">{{ ((s.situaciones if s else []) or []) | join('\n') }}</textarea></label>
+  <label>{{ _('Comportamiento') }} <textarea name="comportamiento" rows="2">{{ (s.comportamiento if s else '') or '' }}</textarea></label>
+  <div class="fe-opciones">
+    <label>{{ _('Nivel de conciencia') }} <select name="conciencia_nivel"><option value="">{{ _('(sin señales)') }}</option>{% for niv in niveles_conciencia %}<option value="{{ niv }}" {% if niv == conc.nivel %}selected{% endif %}>{{ consciencias_nombre.get(niv, niv | replace('_', ' '))|traducir }}</option>{% endfor %}</select></label>
+    <label>{{ _('Por qué') }} <input name="conciencia_detalle" value="{{ conc.detalle or '' }}"></label>
+  </div>
+  <label>{{ _('Tono de voz') }} <input name="tono" value="{{ (s.tono if s else '') or '' }}"></label>
+  <label>{{ _('Palabras clave (coma)') }} <input name="palabras_clave" value="{{ ((s.palabras_clave if s else []) or []) | join(', ') }}"></label>
+  <div class="acciones"><button type="submit" class="btn-generar btn-sm">{{ _('Guardar') if s else _('Crear avatar') }}</button></div>
+</form>
+{% endmacro %}
+
+{% macro evidencia_avatar(s) %}
+<div class="nicho-evidencia">
+  <strong>{{ _('Citas textuales') }}</strong>
+  {% for e in s.evidencia %}
+  <blockquote class="nicho-cita">«{{ e.cita }}»{% if urls_comentarios.get(e.comentario_id) %} <a href="{{ urls_comentarios.get(e.comentario_id) }}" target="_blank" rel="noopener">{{ _('ver original') }}</a>{% endif %}</blockquote>
+  {% else %}
+  <p class="vacio">{{ _('Ninguna cita sobrevivió a la verificación: decide tú si este avatar vale.') }}</p>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro acciones_avatar(s, volver='') %}
+<div class="acciones">
+  {% if s.estado != 'aprobado' %}
+  <form method="post" action="{{ url_for('nicho.avatar_aprobar', cliente=cliente, aid=s.id) }}" class="inline">{% if volver %}<input type="hidden" name="volver" value="{{ volver }}">{% endif %}<button type="submit" class="btn-generar btn-sm">{{ _('Aprobar → persona') }}</button></form>
+  {% endif %}
+  {% if s.estado != 'descartado' %}
+  <form method="post" action="{{ url_for('nicho.avatar_descartar', cliente=cliente, aid=s.id) }}" class="inline">{% if volver %}<input type="hidden" name="volver" value="{{ volver }}">{% endif %}<button type="submit" class="btn-sm btn-peligro">{{ _('Descartar') }}</button></form>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro tarjeta_avatar(x) %}
+{% set a = x.avatar %}{% set p = x.persona %}
+{% set nombre = p.nombre if p else a.nombre %}
+<details class="nicho-sub estado-{{ a.estado if a else ('descartado' if p.archivada else 'aprobado') }}" id="avatar-{{ x.clave }}" {% if abrir == x.clave %}open{% endif %}>
+  <summary>
+    <strong>{{ nombre }}</strong>
+    <span class="tag-estado">{% if x.grupo == 'nuevo' %}{{ _('Nuevo') }}{% elif x.grupo == 'aprobado' %}{{ _('Aprobado') }}{% elif p and p.archivada %}{{ _('Archivado') }}{% else %}{{ _('Descartado') }}{% endif %}</span>
+    <small class="vacio">{% if x.estudio and not x.estudio.manual %}{{ _('de «%(estudio)s»', estudio=x.estudio.nombre) }}{% if x.nucleo %} · {{ x.nucleo }}{% endif %}{% elif x.estudio %}{{ _('escrito a mano') }}{% else %}{{ _('creado en Sprints') }}{% endif %}</small>
+    {{ chip_faltantes(x.faltantes) }}
+    {% if (a and a.deseo) or (p and p.resumen) %}<br><small class="vacio">{{ a.deseo if a else p.resumen }}</small>{% endif %}
+  </summary>
+  {% if a %}
+  {{ ficha_avatar(a, 'lista') }}
+  {% if x.estudio and not x.estudio.manual %}{{ evidencia_avatar(a) }}{% endif %}
+  {{ acciones_avatar(a, 'lista') }}
+  {% else %}
+  {% if p.descripcion %}<p>{{ p.descripcion }}</p>{% endif %}
+  <div class="acciones">
+    <form method="post" action="{{ url_for('nicho.persona_ficha', cliente=cliente, pid=p.id) }}" class="inline"><button type="submit" class="btn-generar btn-sm">{{ _('Editar ficha') }}</button></form>
+    <form method="post" action="{{ url_for('nicho.persona_archivar', cliente=cliente, pid=p.id) }}" class="inline">
+      {% if p.archivada %}<input type="hidden" name="desarchivar" value="1">{% endif %}
+      <button type="submit" class="btn-sm">{{ _('Desarchivar') if p.archivada else _('Archivar') }}</button>
+    </form>
+  </div>
+  {% endif %}
+</details>
+{% endmacro %}
+```
+
+- [ ] **Step 4: `templates/nicho_avatares_proyecto.html`** (nuevo)
+
+```html
+{% extends "base.html" %}
+{% from "_avatar_ficha.html" import ficha_avatar, tarjeta_avatar with context %}
+{% block title %}{{ _('Avatares') }} · {{ _('Nicho') }}{% endblock %}
+{% block content %}
+{% include "_nicho_nav.html" %}
+<div class="pagina-cabecera">
+  <div>
+    <h1>{{ _('Avatares del proyecto') }}</h1>
+    <p class="vacio">{{ _('Los nuevos vienen de tus estudios y esperan tu aprobación. Los aprobados son las personas que usa toda la app: Sprints, ideas y guiones.') }}</p>
+  </div>
+</div>
+
+{% for c in completables %}
+<div class="swap-card nicho-completar">
+  {% if c.en_curso %}
+  <div class="barra-progreso" id="trabajo-{{ c.job_id }}" data-poll-job="{{ c.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div><span class="progreso-texto">{{ _('Completando avatares') }}…</span></div>
+  {% else %}
+  <form method="post" action="{{ url_for('nicho.completar', cliente=cliente, eid=c.estudio_id) }}" class="inline" data-costo="{{ c.texto }}"
+        onsubmit='return confirm({{ _("Completar con Claude lo que les falta a estos avatares cuesta aprox. %(costo)s. ¿Seguimos?", costo="__C__")|tojson }}.replace("__C__", this.dataset.costo));'>
+    <input type="hidden" name="volver" value="lista"><input type="hidden" name="total_visto" value="{{ c.usd }}">
+    <button type="submit" class="btn-generar btn-sm">{{ _('Completar %(n)s incompletos de «%(estudio)s» · ≈ %(costo)s', n=c.avatares, estudio=c.nombre, costo=c.texto) }}</button>
+  </form>
+  {% endif %}
+</div>
+{% endfor %}
+
+<details class="swap-card" id="nuevo-avatar" {% if nuevo %}open{% endif %}>
+  <summary class="swap-card-resumen">{{ _('+ Nuevo avatar') }}</summary>
+  <p class="vacio">{{ _('Un avatar escrito a mano nace aprobado: toda la app lo usa en cuanto lo guardas.') }}</p>
+  {{ ficha_avatar(None, 'lista') }}
+</details>
+
+<h3 class="sprint-subtitulo">{{ _('Nuevos (sin aprobar)') }} · {{ grupos.nuevos|length }}</h3>
+{% for x in grupos.nuevos %}{{ tarjeta_avatar(x) }}{% else %}<p class="vacio">{{ _('No hay avatares nuevos: cuando un estudio genere avatares, aparecen aquí para que los apruebes.') }}</p>{% endfor %}
+
+<h3 class="sprint-subtitulo">{{ _('Aprobados') }} · {{ grupos.aprobados|length }}</h3>
+{% for x in grupos.aprobados %}{{ tarjeta_avatar(x) }}{% else %}<p class="vacio">{{ _('Todavía no hay avatares aprobados.') }}</p>{% endfor %}
+
+{% if grupos.otros %}
+<details class="nicho-otros">
+  <summary>{{ _('Descartados y archivados') }} · {{ grupos.otros|length }}</summary>
+  {% for x in grupos.otros %}{{ tarjeta_avatar(x) }}{% endfor %}
+</details>
+{% endif %}
+{% endblock %}
+```
+
+- [ ] **Step 5: `templates/_nicho_avatares.html`**
+
+1. Primera línea después del comentario de cabecera:
+```html
+{% from "_avatar_ficha.html" import ficha_avatar, evidencia_avatar, acciones_avatar, chip_faltantes with context %}
+```
+2. En la barra de acciones de arriba (después del form de «Generar avatares»), agregar:
+```html
+  {% if completar_estimado.avatares and not trabajo_completar and not estudio.archivado %}
+  <form method="post" action="{{ url_for('nicho.completar', cliente=cliente, eid=estudio.id) }}" class="inline" data-costo="{{ completar_estimado.texto }}"
+        onsubmit='return confirm({{ _("Completar con Claude lo que les falta a estos avatares cuesta aprox. %(costo)s. ¿Seguimos?", costo="__C__")|tojson }}.replace("__C__", this.dataset.costo));'>
+    <input type="hidden" name="total_visto" value="{{ completar_estimado.usd }}">
+    <button type="submit" class="btn-sm">{{ _('Completar %(n)s incompletos · ≈ %(costo)s', n=completar_estimado.avatares, costo=completar_estimado.texto) }}</button>
+  </form>
+  {% endif %}
+  <a class="btn-sm" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente) }}">{{ _('Todos los avatares del proyecto') }}</a>
+```
+3. Reemplazar la barra de `trabajo_generar` (el `<div class="barra-progreso">` + `<script>iniciarPolling(...)</script>`) por:
+```html
+{% if trabajo_generar %}
+<div class="barra-progreso" id="trabajo-{{ trabajo_generar.job_id }}" data-poll-job="{{ trabajo_generar.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div><span class="progreso-texto">{{ _('Agrupando deseos') }}… 0% · 0s</span></div>
+{% endif %}
+{% if trabajo_completar %}
+<div class="barra-progreso" id="trabajo-{{ trabajo_completar.job_id }}" data-poll-job="{{ trabajo_completar.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div><span class="progreso-texto">{{ _('Completando avatares') }}…</span></div>
+{% endif %}
+```
+4. En el `<summary>` de cada sub, después del chip de «sin evidencia», agregar `{{ chip_faltantes(s.faltantes) }}`.
+5. Reemplazar todo el bloque desde `<form method="post" action="{{ url_for('nicho.avatar_editar', …` hasta el cierre del `<div class="acciones">` de aprobar/descartar (incluidas las citas) por:
+```html
+    {{ ficha_avatar(s) }}
+    {{ evidencia_avatar(s) }}
+    {{ acciones_avatar(s) }}
+```
+
+- [ ] **Step 6: `templates/_tab_nicho.html`** — después del `</div>` que cierra `.panel-cabecera` y antes de `<div class="sprints-lista">`:
+
+```html
+{% set ra = avatares_resumen %}
+<section class="swap-card nicho-avatares-resumen">
+  <div class="nicho-inv-cabecera">
+    <h3>{{ _('Avatares') }}</h3>
+    <span class="tag-estado">{{ _('Aprobados: %(n)s', n=ra.aprobados) }}</span>
+    {% if ra.nuevos %}<span class="tag-estado sprint-aviso">{{ _('Nuevos por revisar: %(n)s', n=ra.nuevos) }}</span>{% endif %}
+    {% if ra.incompletos %}<span class="tag-estado">{{ _('Incompletos: %(n)s', n=ra.incompletos) }}</span>{% endif %}
+  </div>
+  <p class="vacio">{{ _('Los aprobados son las personas que usa toda la app. Los nuevos vienen de tus estudios y esperan tu aprobación.') }}</p>
+  {% if ra.muestra %}
+  <p class="nicho-avatares-muestra">{% for m in ra.muestra %}<a class="tag-estado estado-nicho-{{ 'propuesto' if m.grupo == 'nuevo' else 'aprobado' }}" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente, abrir=m.clave, _anchor='avatar-' ~ m.clave) }}">{{ m.nombre }}{% if m.incompleto %} ⚠{% endif %}</a> {% endfor %}</p>
+  {% endif %}
+  <div class="acciones">
+    <a class="btn-sm" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente) }}">{{ _('Ver todos los avatares') }}</a>
+    <a class="btn-generar btn-sm" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente, nuevo=1, _anchor='nuevo-avatar') }}">{{ _('+ Nuevo avatar') }}</a>
+  </div>
+</section>
+```
+
+Actualizar el comentario de cabecera de `_tab_nicho.html` con `avatares_resumen`, `paises_estudio`, `pais_proyecto`.
+
+- [ ] **Step 7: `nicho/rutas.py`**
+
+Imports: `from nicho import calidad` y `from sprints import datos as sprints_datos` (si no están).
+
+Filtro (junto a `soluciones_texto`):
+
+```python
+@bp.app_template_filter("faltantes_texto")
+def faltantes_texto(faltantes):
+    """['demografia', 'tono'] -> «demografía, tono» en el idioma de quien mira."""
+    return ", ".join(idiomas.traducir(calidad.ETIQUETAS.get(k, k)) for k in faltantes or [])
+```
+
+Helper (después de `_avatar_o_404`):
+
+```python
+def _destino_avatar(cliente, a):
+    """Tras una acción sobre un avatar: a la lista del proyecto si se pidió
+    (`volver=lista`) o si es escrito a mano; si no, a su estudio."""
+    if request.form.get("volver") == "lista" or datos.es_manual(datos.estudio(cliente, a["estudio_id"])):
+        return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, _anchor=f"avatar-a{a['id']}"))
+    return _volver(cliente, a["estudio_id"])
+
+
+def _faltantes_de(cliente, a):
+    return calidad.faltantes(a, con_evidencia=not datos.es_manual(datos.estudio(cliente, a["estudio_id"])))
+```
+
+`avatar_editar`, `avatar_aprobar`, `avatar_descartar` pasan a:
+
+```python
+@bp.post("/avatar/<int:aid>/editar")
+def avatar_editar(cliente, aid):
+    a = _avatar_o_404(cliente, aid)
+    try:
+        datos.actualizar_avatar(cliente, aid, **_campos_avatar_desde_form())
+        if datos.avatar(cliente, aid)["estado"] == "aprobado":
+            datos.aprobar_avatar(cliente, aid)                          # la persona que usa la app queda igual que la ficha
+            flash(gettext("Avatar guardado; la persona que usa la app se actualizó."), "ok")
+        else:
+            flash(gettext("Avatar guardado."), "ok")
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+    return _destino_avatar(cliente, a)
+
+
+@bp.post("/avatar/<int:aid>/aprobar")
+def avatar_aprobar(cliente, aid):
+    a = _avatar_o_404(cliente, aid)
+    try:
+        datos.aprobar_avatar(cliente, aid)
+        falta = _faltantes_de(cliente, datos.avatar(cliente, aid))
+        if falta:
+            flash(gettext("Avatar aprobado: ya es una persona de Sprints. Ojo, le falta: %(faltan)s.", faltan=faltantes_texto(falta)), "error")
+        else:
+            flash(gettext("Avatar aprobado: ya es una persona de Sprints."), "ok")
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+    return _destino_avatar(cliente, a)
+
+
+@bp.post("/avatar/<int:aid>/descartar")
+def avatar_descartar(cliente, aid):
+    a = _avatar_o_404(cliente, aid)
+    if datos.descartar_avatar(cliente, aid):
+        flash(gettext("Avatar descartado."), "ok")
+    else:
+        flash(gettext("Solo se descartan los sub-avatares; el núcleo es una agrupación."), "error")
+    return _destino_avatar(cliente, a)
+```
+
+Rutas nuevas (después de `avatar_descartar`):
+
+```python
+@bp.get("/avatares")
+def avatares_proyecto(cliente):
+    """Todos los avatares del proyecto (spec 2026-09-29 §3)."""
+    grupos = datos.lista_avatares(cliente)
+    ids = [e.get("comentario_id") for g in grupos.values() for x in g if x["avatar"] for e in (x["avatar"].get("evidencia") or [])]
+    completables = avatares.completables_por_estudio(cliente)
+    for c in completables:
+        job = datos.job_id_completar(cliente, c["estudio_id"])
+        c.update(texto=gastos.formatear(c["usd"]), job_id=job, en_curso=trabajos.en_curso(job))
+    return render_template("nicho_avatares_proyecto.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           estudio=None, grupos=grupos, completables=completables, nuevo=request.args.get("nuevo") == "1",
+                           abrir=request.args.get("abrir") or "", urls_comentarios=datos.urls_de_comentarios(cliente, ids),
+                           niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES, consciencias_nombre=doctrina.CONSCIENCIAS_NOMBRE)
+
+
+@bp.post("/avatares/nuevo")
+def avatar_crear(cliente):
+    try:
+        aid = datos.crear_avatar_manual(cliente, _campos_avatar_desde_form())
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, nuevo=1, _anchor="nuevo-avatar"))
+    falta = calidad.faltantes(datos.avatar(cliente, aid), con_evidencia=False)
+    if falta:
+        flash(gettext("Avatar creado y aprobado: ya lo usa toda la app. Ojo, le falta: %(faltan)s.", faltan=faltantes_texto(falta)), "error")
+    else:
+        flash(gettext("Avatar creado y aprobado: ya lo usa toda la app."), "ok")
+    return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, abrir=f"a{aid}", _anchor=f"avatar-a{aid}"))
+
+
+@bp.post("/persona/<int:pid>/ficha")
+def persona_ficha(cliente, pid):
+    """«Editar ficha» de una persona sin avatar: le crea (una vez) su avatar y lo abre."""
+    try:
+        aid = datos.avatar_desde_persona(cliente, pid)
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return redirect(url_for("nicho.avatares_proyecto", cliente=cliente))
+    return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, abrir=f"a{aid}", _anchor=f"avatar-a{aid}"))
+
+
+@bp.post("/persona/<int:pid>/archivar")
+def persona_archivar(cliente, pid):
+    if not sprints_datos.persona(cliente, pid):
+        abort(404)
+    sprints_datos.archivar_persona(cliente, pid, archivada=request.form.get("desarchivar") is None)
+    return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, _anchor=f"avatar-p{pid}"))
+
+
+@bp.post("/<int:eid>/completar")
+def completar(cliente, eid):
+    """«Completar N incompletos» con la cifra que la persona vio (la recalcula el servidor)."""
+    est = _estudio_o_404(cliente, eid)
+    volver = (redirect(url_for("nicho.avatares_proyecto", cliente=cliente)) if request.form.get("volver") == "lista"
+              else _volver(cliente, eid))
+    if est["archivado"] or datos.es_manual(est):
+        flash(gettext("Ese estudio no se puede completar."), "error")
+        return volver
+    e = avatares.estimar_completar(cliente, eid)
+    if not e["avatares"]:
+        flash(gettext("No hay avatares incompletos que completar."), "ok")
+        return volver
+    try:
+        visto = float(request.form.get("total_visto") or 0)
+    except ValueError:
+        visto = 0.0
+    if e["usd"] > visto + 0.005:
+        flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.", costo=gastos.formatear(e["usd"])), "error")
+        return volver
+    if tareas_nicho.encolar_completar(cliente, eid):
+        flash(gettext("Completando %(n)s avatar(es); la página se recarga sola al terminar.", n=e["avatares"]), "ok")
+    else:
+        flash(gettext("Ya se están completando los avatares de este estudio."), "error")
+    return volver
+```
+
+En `ver`: reemplazar `nucleos=datos.avatares(cliente, eid)` por una variable decorada y agregar lo del completado:
+
+```python
+    nucleos = datos.avatares(cliente, eid)
+    for n in nucleos:
+        for s in n["subs"]:
+            s["faltantes"] = calidad.faltantes(s, con_evidencia=not datos.es_manual(est))
+    completar_e = avatares.estimar_completar(cliente, eid)
+    job_comp = datos.job_id_completar(cliente, eid)
+```
+
+y en el `render_template`: `nucleos=nucleos,` y agregar
+`completar_estimado={**completar_e, "texto": gastos.formatear(completar_e["usd"])}, trabajo_completar=({"job_id": job_comp} if trabajos.en_curso(job_comp) else None),`.
+
+`contexto(cliente)`: agregar `"avatares_resumen": datos.resumen_avatares(cliente)`.
+
+- [ ] **Step 8: `static/style.css`** — al final:
+
+```css
+/* Nicho · avatares del proyecto (spec 2026-09-29) */
+.nicho-avatares-resumen { margin-bottom: 1rem; }
+.nicho-avatares-muestra { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0; }
+.nicho-avatares-muestra a { text-decoration: none; }
+.nicho-completar { margin-bottom: .6rem; }
+.nicho-otros { margin-top: 1rem; }
+```
+
+- [ ] **Step 9: Correr**
+
+Run: `venv/bin/python3 -m pytest tests/test_rutas_nicho.py tests/test_movil.py tests/test_base_visual.py tests/test_perf_pagina_proyecto.py tests/test_tarjetas_ligeras.py -q -p no:cacheprovider`
+Expected: PASS. `test_perf_pagina_proyecto.py` vigila el número de consultas de `/cliente/<c>`: el bloque suma 3 lecturas fijas (estudios, avatares, personas) — si la prueba falla por un tope exacto, subir ese tope en la prueba en 3 y anotarlo en el reporte (no depende del número de avatares).
+
+- [ ] **Step 10: Anidamiento y captura** (regla del proyecto tras mover plantillas a macros)
+
+Renderizar la página del estudio y la lista con el cliente de pruebas y verificar que cada `<details class="nicho-sub">` es hijo directo de su contenedor (no hay `</div>` o `</form>` sueltos): un script corto con `html.parser` que cuente aperturas/cierres por etiqueta en el HTML de `/cliente/acme/nicho/<eid>` y de `/cliente/acme/nicho/avatares` (todas deben cuadrar). El controlador hace además la captura visual (Task 12).
+
+- [ ] **Step 11: Catálogo y commit**
+
+`catalogo_i18n.py actualizar`; traducir TODAS las entradas nuevas (títulos, grupos, botones, mensajes de las rutas, «⚠» no se traduce); `compilar`; `pytest tests/test_i18n_catalogo.py -q -p no:cacheprovider`.
+
+```bash
+python3 -m py_compile nicho/rutas.py
+git add nicho/rutas.py templates/_avatar_ficha.html templates/nicho_avatares_proyecto.html templates/_nicho_avatares.html templates/_tab_nicho.html static/style.css tests/test_rutas_nicho.py tests/test_perf_pagina_proyecto.py translations/en/LC_MESSAGES/messages.po translations/en/LC_MESSAGES/messages.mo
+git commit -m "Nicho: página «Avatares del proyecto» (nuevos, aprobados, descartados), avatar nuevo a mano, ficha compartida, editar actualiza la persona y completar incompletos con su costo" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+(Si `tests/test_perf_pagina_proyecto.py` no cambió, sacarlo del `git add`.)
+
+---
+
+### Task 11: La cadena de punta a punta, reanudación y documentación
+
+**Files:**
+- Create: `tests/test_nicho_cadena.py`
+- Modify: `CLAUDE.md` (párrafo **Nicho y avatares**), `docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md` (§2.2 y §7)
+
+**Interfaces:**
+- Consumes: todo lo anterior. No produce código de producción: si la prueba de punta a punta descubre un defecto, se arregla en el módulo que corresponda y se anota en el reporte.
+
+- [ ] **Step 1: La prueba** — crear `tests/test_nicho_cadena.py`:
+
+```python
+"""La investigación de punta a punta con todo falso (spec Parte 3): consultas → buscar → seleccionar →
+reseñas → redes → avatares, corriendo las tareas encoladas en orden como lo haría el worker."""
+import json
+import re
+
+import pytest
+
+FRASE = "las pantuflas me quitaron el dolor del talón"
+
+
+class PlatFalsa:
+    """Fuente de plataforma falsa: 3 productos por búsqueda y 10 reseñas por producto."""
+    de_pago = True
+    fallar_busqueda = set()
+    llamadas = []
+
+    def __init__(self, clave):
+        self.tipo = self.clave = clave
+        self.resultados, self.aviso, self.run_id, self.corridas, self.conteo_por_producto = 0, "", None, [], {}
+
+    def tarifa_busqueda(self):
+        return {"actor": f"x~{self.clave}-buscar", "nombre": f"Búsqueda {self.clave}", "usd_por_resultado": 0.003}
+
+    def tarifa(self, params=None):
+        return {"actor": f"x~{self.clave}-resenas", "nombre": f"Reseñas {self.clave}", "usd_por_resultado": 0.001}
+
+    def buscar(self, consultas, pais, n, avanzar=None):
+        PlatFalsa.llamadas.append(("buscar", self.clave))
+        from nicho.fuentes.base import ErrorFuente
+        if self.clave in PlatFalsa.fallar_busqueda:
+            raise ErrorFuente(f"{self.clave} se cayó")
+        self.run_id, self.corridas = f"rb-{self.clave}", [{"run_id": f"rb-{self.clave}"}]
+        for k in range(3):
+            self.resultados += 1
+            yield {"fuente_id": f"{self.clave}-{k}", "titulo": f"Pantufla {self.clave} {k}", "marca": None, "precio": 10.0, "moneda": "MXN",
+                   "estrellas": 4.5, "n_resenas": 100 - k, "url": f"https://x/{self.clave}/{k}", "imagen": None, "consulta": consultas[0], "extra": {}}
+
+    def recolectar(self, params, avanzar=None):
+        PlatFalsa.llamadas.append(("resenas", self.clave))
+        self.run_id, self.corridas = f"rr-{self.clave}", [{"run_id": f"rr-{self.clave}"}]
+        for p in params["productos"]:
+            for k in range(10):
+                self.resultados += 1
+                self.conteo_por_producto[p["fuente_id"]] = self.conteo_por_producto.get(p["fuente_id"], 0) + 1
+                yield {"fuente_id": f"{p['fuente_id']}-r{k}", "texto": f"Reseña {k} de {p['fuente_id']}: {FRASE}.", "url": p["url"],
+                       "contexto": p["titulo"], "puntuacion": 5, "fecha": None, "extra": {"producto": p["fuente_id"], "plataforma": self.clave}}
+
+
+class RedFalsa:
+    tipo = "youtube"
+    de_pago = False
+
+    def __init__(self):
+        self.resultados, self.aviso, self.run_id = 0, "", None
+
+    def recolectar(self, params, avanzar=None):
+        for k in range(10):
+            yield {"fuente_id": f"yt{k}", "texto": f"Video {k}: {FRASE}, lo recomiendo.", "url": None, "contexto": "Review", "puntuacion": 3,
+                   "fecha": None, "extra": {}}
+
+
+def _claude(texto, max_tokens):
+    """Claude falso: responde según qué prompt le llega."""
+    from nicho import avatares
+    if avatares.MARCA_COMPLETAR in texto:
+        return '{"sub_avatares": []}', 10, 2
+    if "búsquedas cortas" in texto:
+        return '{"consultas": ["pantuflas dolor talón", "pantuflas ortopédicas"]}', 300, 30
+    if "de verdad del nicho" in texto:
+        ids = [int(x) for x in re.findall(r"(?m)^(\d+) · ", texto)]
+        return json.dumps({"productos": [{"id": i, "relevante": True, "motivo": "del nicho"} for i in ids]}), 900, 80
+    ids = [int(x) for x in re.findall(r"\[(\d+)\]", texto)]
+    if "Agrúpalos por el DESEO" in texto:
+        return json.dumps({"nucleos": [{"nombre": "Sin dolor", "deseo": "Quiero caminar sin dolor", "resumen": "r", "comentarios": ids}]}), 2000, 200
+    sub = {"base": "emocion", "nombre": "Carla / La del turno largo", "deseo": "Quiero llegar a la noche sin dolor", "demografia": "Mujer 40-50 (inferido)",
+           "edad_rango": "40-50", "emocion": "Agotamiento", "identidad": {"quiere_que_vean": "fuerte", "cree_de_si": "aguanta", "quiere_lograr": "cuidar"},
+           "soluciones_previas": [{"que": "Plantillas", "por_que_fallo": ["duras"]}], "situaciones": ["Turno largo", "Al llegar a casa"],
+           "comportamiento": "Se quita los zapatos", "conciencia": {"nivel": "consciente_de_la_solucion", "detalle": "busca"},
+           "encaje_producto": "Alivio del talón", "tono": "Práctico", "palabras_clave": ["talón", "turno", "alivio"],
+           "evidencia": [{"comentario_id": ids[0], "cita": FRASE}, {"comentario_id": ids[1], "cita": FRASE}]}
+    return json.dumps({"sub_avatares": [sub]}), 1500, 600
+
+
+@pytest.fixture()
+def mundo(base_temporal, monkeypatch):
+    import tareas
+    import trabajos
+    from nicho import avatares, fuentes
+    from tareas import investigacion, nicho  # noqa: F401  (registra las tareas)
+    cola_mem = []
+
+    def _encolar(job_id, tipo, payload, **kw):
+        if any(t["job_id"] == job_id and not t.get("hecha") for t in cola_mem):
+            return False
+        cola_mem.append({"id": len(cola_mem) + 1, "job_id": job_id, "tipo": tipo, "payload": payload, "intentos": 1,
+                         "max_intentos": kw.get("max_intentos", 1)})
+        return True
+
+    def _por_tipo(tipo):
+        if tipo in ("amazon", "meli", "tiktok_shop"):
+            return lambda: PlatFalsa(tipo)
+        if tipo == "youtube":
+            return RedFalsa
+        raise KeyError(tipo)
+
+    monkeypatch.setattr(trabajos, "encolar", _encolar)
+    monkeypatch.setattr(fuentes, "por_tipo", _por_tipo)
+    monkeypatch.setattr(avatares, "_llamar", _claude)
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("YOUTUBE_API_KEY", "k")
+    PlatFalsa.fallar_busqueda, PlatFalsa.llamadas = set(), []
+
+    def correr(detener_en=None):
+        corridas = []
+        while True:
+            pendientes = [t for t in cola_mem if not t.get("hecha")]
+            if not pendientes:
+                return corridas
+            t = pendientes[0]
+            etiqueta = t["tipo"] + ":" + str(t["payload"].get("plataforma") or t["payload"].get("fuente") or "")
+            if detener_en and etiqueta == detener_en:
+                return corridas
+            t["hecha"] = True
+            corridas.append(etiqueta)
+            try:
+                tareas.REGISTRO[t["tipo"]](t)
+            except Exception as e:  # noqa: BLE001 — como el worker: la tarea falla y la cola sigue
+                t["error"] = str(e)
+
+    return {"cola": cola_mem, "correr": correr}
+
+
+def _arrancar(plataformas=("amazon", "meli"), redes=("youtube",)):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = datos.crear_estudio("acme", "Pantuflas", producto="HappyFlops", tema="pantuflas para dolor de pies", pais="MX")
+    est = inv.estimar({}, "MX", list(plataformas), list(redes), inv.TOPES_DEFECTO)
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("pantuflas para dolor de pies", "MX", list(plataformas), list(redes),
+                                                               inv.TOPES_DEFECTO, estimado=est))
+    ti.avanzar("acme", eid)
+    return eid
+
+
+def test_investigacion_de_punta_a_punta(mundo):
+    import gastos
+    from nicho import calidad, datos
+    eid = _arrancar()
+    assert mundo["correr"]() == ["nicho_inv_consultas:", "nicho_inv_buscar:amazon", "nicho_inv_buscar:meli", "nicho_inv_seleccionar:",
+                                 "nicho_recolectar:amazon", "nicho_recolectar:meli", "nicho_recolectar:youtube", "nicho_generar_avatares:"]
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] == "lista" and all(i["pasos"][p]["estado"] == "hecho" for p in i["orden"]), i
+    assert i["consultas"] == ["pantuflas dolor talón", "pantuflas ortopédicas"] and i["elegidos"] == {"amazon": ["amazon-0", "amazon-1", "amazon-2"], "meli": ["meli-0", "meli-1", "meli-2"]}
+    conteos = datos.contar_por_fuente("acme", eid)
+    assert conteos["amazon"]["total"] == 30 and conteos["meli"]["total"] == 30 and conteos["youtube"]["total"] == 10
+    assert all(p["resenas_traidas"] == 10 for p in datos.productos_nicho("acme", eid))
+    nuevos = datos.lista_avatares("acme")["nuevos"]
+    assert [x["avatar"]["nombre"] for x in nuevos] == ["Carla / La del turno largo"] and calidad.faltantes(nuevos[0]["avatar"]) == []
+    total_gasto = round(sum(g["usd"] for g in gastos.historial("acme")), 4)
+    assert total_gasto == round(i["gastado_usd"], 4) and 0 < i["gastado_usd"] <= i["aprobado_usd"]
+
+
+def test_una_tienda_caida_no_frena_la_investigacion(mundo):
+    from nicho import datos
+    PlatFalsa.fallar_busqueda = {"meli"}
+    eid = _arrancar()
+    corridas = mundo["correr"]()
+    assert "nicho_recolectar:meli" not in corridas and corridas[-1] == "nicho_generar_avatares:"
+    i = datos.investigacion("acme", eid)
+    assert i["pasos"]["buscar:meli"]["estado"] == "error" and "se cayó" in i["pasos"]["buscar:meli"]["aviso"]
+    assert i["pasos"]["resenas:meli"]["estado"] == "vacio" and i["estado"] == "lista"
+
+
+def test_reanudar_despues_de_un_reinicio_no_repite_lo_pagado(mundo):
+    import tareas
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = _arrancar()
+    antes = mundo["correr"](detener_en="nicho_recolectar:meli")
+    assert antes[-1] == "nicho_recolectar:amazon"
+    viva = [t for t in mundo["cola"] if not t.get("hecha")][0]
+    viva["hecha"] = True                                              # el worker se reinició con esta tarea en curso
+    tareas.AL_INTERRUMPIR["nicho_recolectar"](viva, "reinicio del worker")
+    assert datos.investigacion("acme", eid)["estado"] == "interrumpida"
+    datos.actualizar_investigacion("acme", eid, inv.reanudar)
+    assert ti.avanzar("acme", eid) == "resenas:meli"
+    despues = mundo["correr"]()
+    assert despues == ["nicho_recolectar:meli", "nicho_recolectar:youtube", "nicho_generar_avatares:"]
+    assert PlatFalsa.llamadas.count(("buscar", "amazon")) == 1 and PlatFalsa.llamadas.count(("resenas", "amazon")) == 1
+    assert datos.investigacion("acme", eid)["estado"] == "lista"
+```
+
+- [ ] **Step 2: Correr y arreglar lo que salga**
+
+Run: `venv/bin/python3 -m pytest tests/test_nicho_cadena.py -q -p no:cacheprovider`
+Expected: PASS. Si falla por un defecto real de las Tasks 1–10 (no de la prueba), arreglarlo en su módulo con su prueba unitaria y anotarlo en el reporte.
+
+- [ ] **Step 3: `CLAUDE.md`** — en el párrafo **Nicho y avatares**, después de la frase que termina en «…muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada — y solo la ve el admin: … (2026-09-27).», agregar:
+
+```
+**Investigación automática** (spec `docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md`,
+plan `docs/superpowers/plans/2026-09-28-nicho-investigacion-completar.md`): con el tema del estudio y UNA
+cifra aprobada (el estimado lo calcula el servidor y el POST exige `total_visto`), la cadena de tareas
+`nicho_inv_consultas` (Claude, 2–4 búsquedas en el idioma del país) → `nicho_inv_buscar` por tienda
+(`nicho/fuentes/plataformas.py`: Amazon con tienda propia, Mercado Libre en 18 países, TikTok Shop; actores
+de Apify con precio por resultado, `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de
+cobro cada una) → `nicho_inv_seleccionar` (Claude marca lo del nicho; se eligen los de más reseñas) →
+`nicho_recolectar` por tienda y por red (Reddit/YouTube con las mismas búsquedas) → `nicho_generar_avatares`
+con `auto` y el tope restante. El estado vive en `estudio.extra.investigacion` (`nicho/investigacion.py`,
+puro; RMW con candado en `datos.actualizar_investigacion`); cada tarea llama `tareas.investigacion.avanzar`,
+una tienda caída no frena a las demás, «Reanudar» no repite lo que cobró y los productos van a
+`producto_nicho` (migración 0016; `resenas_traidas` evita pagar dos veces). Gasto: Apify como
+`recoleccion`, Claude de la investigación como `investigacion`.
+**Avatares del proyecto** (spec `docs/superpowers/specs/2026-09-29-nicho-avatares-proyecto-design.md`):
+página `/cliente/<c>/nicho/avatares` y bloque en la pestaña. Nuevos = sub-avatares propuestos; aprobados =
+personas no archivadas (lo que ve toda la app). Los avatares escritos a mano viven en un estudio oculto
+(`extra.manual`) y nacen aprobados (persona `manual`); una persona sin avatar se edita creándole uno
+(`avatar_desde_persona`); editar un aprobado actualiza su persona. `nicho/calidad.py` define «completo»;
+la generación lo exige y una pasada de completado llena solo lo vacío (citas verificadas); «Completar
+incompletos» (`nicho_completar_avatares`, `max_intentos=1`, gasto `avatares`) lo hace con lo ya guardado.
+```
+
+- [ ] **Step 4: Spec** — en `docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md`: en §2.2 aclarar que la tabla NO tiene columna `elegido` (los elegidos viven en `extra.investigacion.elegidos = {plataforma: [fuente_id]}`) y que la migración es la 0016; en §7 «Reanudar» cambiar la frase de reintento por: «los pasos en curso vuelven a pendiente y consultas/selección con error también (Claude, centavos); una búsqueda o reseñas con error no se repiten solas porque ya cobraron: para eso está «Investigar de nuevo»».
+
+- [ ] **Step 5: Suite completa**
+
+Run: `venv/bin/python3 -m pytest -q -p no:cacheprovider` (EN PRIMER PLANO, timeout 600000 ms)
+Expected: todo verde (salvo los skips/warnings preexistentes, que el reporte nombra).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add tests/test_nicho_cadena.py CLAUDE.md docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md
+git commit -m "Nicho: prueba de punta a punta de la investigación (tienda caída, reanudar sin repetir lo pagado) y documentación" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 12 (controlador, no subagente): verificación visual, mezcla, despliegue y prueba real de centavos
+
+1. **Captura**: con la receta de `memory/verificar-ui-sin-contrasena.md` (cliente de pruebas de Flask con sesión admin, servidor temporal, entrada temporal en el `launch.json` de la carpeta PRINCIPAL) mirar en el navegador del panel, en escritorio y a 375 px: la pestaña Nicho (bloque «Avatares»), la página de un estudio con la tarjeta «Investigar el nicho» en sus tres estados y la página «Avatares del proyecto». Sin escaleras de anidamiento, sin scroll horizontal. Borrar la entrada temporal al terminar.
+2. **Revisión final** de toda la rama (subagente, el modelo más capaz), una ola de arreglos y su re-revisión.
+3. **Mezcla local a `main`** (suite completa sobre el resultado) y **despliegue** siguiendo `memory/produccion-vps-creatvmachine.md` y `memory/feedback-cadena-de-despliegue.md` (comandos separados, guarda de la cola en su propio ssh, reiniciar los dos servicios porque el diff toca el worker; `alembic upgrade head` no cambia nada: 0016 ya estaba).
+4. **Prueba real de centavos en el VPS** (tiene `APIFY_TOKEN` y `YOUTUBE_API_KEY`): un estudio de prueba en un proyecto de Creatv con topes mínimos (1 búsqueda, 5 productos por búsqueda, 2 elegidos, 20 reseñas por producto) en MX con Amazon y Mercado Libre y en US con TikTok Shop; mirar la salida real de cada actor y, si un lector no toma algún campo, ajustar `nicho/fuentes/plataformas.py` y sus fixtures con una prueba, y volver a desplegar. Gasto esperado: menos de US$ 0,50.
