@@ -132,3 +132,83 @@ def test_prod_rutas_vuelven_a_la_ficha_si_la_fila_tiene_activo(app):
     tiendas.marcar_producto("acme", pid, activo_catalogo_id="cojin_azul")
     r = app["c"].post(f"/cliente/acme/productos/{pid}/pruebas", data={"texto": "Dura 3 inviernos", "fuente": "ficha"})
     assert r.headers["Location"].endswith("#catalogo?ficha=producto:cojin_azul")
+
+
+def test_grid_de_productos_con_tarjetas_filtros_y_filas_sin_fotos(app):
+    import tiendas
+    _con_colores(app)                                                       # Original: 2 colores
+    pid_ok = _producto(nombre="Cojín Azul")                                  # importada con activo
+    _activo_con_foto("acme", "Cojín Azul", "cojin_azul")
+    tiendas.marcar_producto("acme", pid_ok, activo_catalogo_id="cojin_azul", en_prueba=True, prioridad=40)
+    _producto(nombre="Espejo redondo")                                      # importada sin activo
+    pid_arch = _producto(nombre="Lámpara")
+    tiendas.marcar_producto("acme", pid_arch, archivado=True)
+    c = app["c"]
+    r = c.get("/cliente/acme/catalogo/grid?cat=producto")
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'data-n-todos="3"' in html and 'data-n-en_prueba="1"' in html and 'data-n-sin_fotos="1"' in html and 'data-n-archivados="1"' in html
+    assert html.index('id="producto-cojin_azul"') < html.index('id="producto-original"') < html.index('id="producto-fila-')
+    cojin = html.split('id="producto-cojin_azul"', 1)[1].split("</article>", 1)[0]
+    assert "89.900 COP" in cojin and "en prueba" in cojin and "CSV/Excel" in cojin and 'data-abrir-ficha="producto:cojin_azul"' in cojin
+    orig = html.split('id="producto-original"', 1)[1].split("</article>", 1)[0]
+    assert "2 colores" in orig and "sin precio" in orig and "sin URL" in orig and orig.count("cat-color-punto") == 2
+    assert "/productos/original/pink/imagen?" in orig
+    espejo = html.split('id="producto-fila-', 1)[1].split("</article>", 1)[0]
+    assert "Sin fotos" in espejo and "Subir fotos" in espejo and "Crear activo desde las fotos de la tienda" in espejo and "Archivar" in espejo
+    assert "Lámpara" not in html
+    html = c.get("/cliente/acme/catalogo/grid?cat=producto&filtro=archivados").data.decode()
+    assert "Lámpara" in html and "Recuperar" in html and 'data-archivado="1"' in html and "Cojín" not in html
+    html = c.get("/cliente/acme/catalogo/grid?cat=producto&filtro=en_prueba").data.decode()
+    assert "cojin_azul" in html and "producto-original" not in html
+    html = c.get("/cliente/acme/catalogo/grid?cat=producto&q=beige").data.decode()
+    assert "producto-original" in html and "cojin_azul" not in html          # busca también por color
+    html = c.get("/cliente/acme/catalogo/grid?cat=producto&q=zzz").data.decode()
+    assert "Nada coincide" in html
+    assert 'data-abrir-detalle="cat-traer"' in c.get("/cliente/acme/catalogo/grid?cat=entorno").data.decode() or "Todavía no hay entornos" in c.get("/cliente/acme/catalogo/grid?cat=entorno").data.decode()
+
+
+def test_grid_pagina_de_60_en_60(app, monkeypatch):
+    import catalogo_vista
+    monkeypatch.setattr(catalogo_vista, "POR_PAGINA", 2)
+    for n in ("A", "B", "C"):
+        _activo_con_foto("acme", f"Prod {n}")
+    html = app["c"].get("/cliente/acme/catalogo/grid?cat=producto&orden=nombre").data.decode()
+    assert 'id="producto-prod_a"' in html and 'id="producto-prod_c"' not in html and 'data-cat-mas="2"' in html
+    html = app["c"].get("/cliente/acme/catalogo/grid?cat=producto&orden=nombre&pagina=2").data.decode()
+    assert 'id="producto-prod_c"' in html and "data-cat-mas" not in html
+
+
+def test_ficha_de_producto_con_colores(app):
+    import tiendas
+    _con_colores(app, generales=1)
+    c = app["c"]
+    r = c.get("/cliente/acme/catalogo/producto/original/beige/ficha")
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'data-color="pink"' in html and 'data-color="beige"' in html and 'aria-selected="true"' in html.split('data-color="beige"', 1)[1][:80]
+    assert 'data-color-fotos="pink" hidden' in html and 'data-color-fotos="beige"' in html
+    assert "Subir fotos a este color" in html and "Quitar color" in html and "+ Color" in html and "¿De qué color son" not in html
+    assert "Fotos de ambiente" in html and "Asignar a color" in html and "/fotos/01.jpg/mover" in html
+    assert 'name="precio"' in html and 'name="url_compra"' in html and "Cuántas promesas parecidas vio ya tu cliente" in html
+    assert "Lo que Claude necesita" in html and "Pruebas del producto" in html
+    assert "Crear con este producto" in html and '<option value="beige" selected' in html and "Crear experimento" in html
+    assert "Dónde se usó" in html and 'data-accion="/cliente/acme/productos/original/eliminar"' in html
+    assert tiendas.por_activo("acme")["original"]["fuente"] == "manual"          # la ficha asegura la fila
+    assert "&lt;script&gt;" not in html and "<script" not in html                  # el fragmento no trae scripts
+
+
+def test_ficha_de_producto_plano_personaje_y_404(app):
+    _activo_con_foto("acme", "Cojín")
+    c = app["c"]
+    html = c.get("/cliente/acme/catalogo/producto/cojin/ficha").data.decode()
+    assert "Fotos de referencia" in html and "¿De qué color son las fotos actuales?" in html and 'value="Cojín"' in html
+    assert "Fotos de ambiente" not in html
+    import catalogo_productos as cp
+    aid = cp.crear("acme", "Ana", categoria="personaje")
+    with open(os.path.join(cp.carpeta_de("acme", aid, "personaje"), "cara.jpg"), "wb") as f:
+        f.write(JPG)
+    html = c.get("/cliente/acme/catalogo/personaje/ana/ficha").data.decode()
+    assert "cara.jpg" in html and 'name="precio"' not in html and "+ Color" not in html and "Eliminar" in html
+    assert c.get("/cliente/acme/catalogo/producto/nada/ficha").status_code == 404
+    assert c.get("/cliente/acme/catalogo/producto/../etc/ficha").status_code == 404

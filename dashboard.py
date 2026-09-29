@@ -36,6 +36,7 @@ import prompts as prompts_mod
 import marca as marca_mod
 import conceptos_imagen
 import catalogo_productos
+import catalogo_vista
 import swaps as swaps_mod
 import bitacora
 import informe
@@ -2808,6 +2809,92 @@ def catalogo_crear_con(cliente, producto_id):
         return _volver_catalogo(cliente, "producto", producto_id)
     session["fp_prefill"] = {"productos_catalogo": [f"producto:{activo['id']}"]}
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+def _pagina(valor):
+    try:
+        return max(1, int(valor or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _usos_por_producto(cliente, productos, experimentos_exp=None):
+    """{pid: catalogo_vista.contar_usos(...)} en UNA pasada por las sesiones
+    de Crear, una por los experimentos y una consulta a `campana`."""
+    sesiones = [{str(x).casefold() for x in (e.get("productos_ids") or []) if x}
+                for e in creative_flow.cargar(cliente).values()]
+    por_clave = _experimentos_por_activo(cliente, experimentos_exp)
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.campana.c.catalogo_id, sa.func.count())
+                            .where(db.campana.c.cliente == cliente).group_by(db.campana.c.catalogo_id)).all()
+    campanas = {str(k or "").casefold(): int(n) for k, n in filas}
+    return {p["id"]: catalogo_vista.contar_usos(catalogo_productos.claves_de(p), sesiones, por_clave, campanas)
+            for p in productos}
+
+
+_TRABAJOS_VACIOS = {"vincular": {}, "pedidos": {}, "tiendas": {}, "importar": None}
+
+
+@app.route("/cliente/<cliente>/catalogo/grid")
+def catalogo_grid(cliente):
+    """Galería del catálogo (spec §10.2): fragmento con filtros, orden y páginas de 60."""
+    cat = _cat(request.args.get("cat"))
+    q = (request.args.get("q") or "").strip()
+    filtro = request.args.get("filtro") or "todos"
+    orden = request.args.get("orden") if request.args.get("orden") in catalogo_vista.ORDENES else "prioridad"
+    pagina = _pagina(request.args.get("pagina"))
+    productos = catalogo_productos.listar_productos(cliente, cat)
+    filas, sin_activo, usos, trabajos_grid = {}, [], {}, dict(_TRABAJOS_VACIOS)
+    if cat == "producto":
+        _asegurar_filas_producto(cliente, productos)
+        experimentos_exp = experimentos.cargar(cliente)
+        filas_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
+        filas = _producto_comercial_contexto(filas_tienda)
+        sin_activo = [f for f in filas_tienda if not f["activo_ok"]]
+        usos = _usos_por_producto(cliente, productos, experimentos_exp)
+        trabajos_grid = _trabajos_productos(cliente, [], sin_activo)
+    todas = catalogo_vista.tarjetas(productos, filas, usos, sin_activo)
+    lista = catalogo_vista.ordenar(catalogo_vista.filtrar(todas, q, filtro), orden)
+    trozo, hay_mas = catalogo_vista.paginar(lista, pagina, catalogo_vista.POR_PAGINA)
+    return render_template("_catalogo_grid.html", cliente=cliente, cat=cat, tarjetas=trozo, hay_mas=hay_mas,
+                           pagina=pagina, contadores=catalogo_vista.contadores(todas), filtro=filtro, q=q, orden=orden,
+                           etiquetas_fuente=ETIQUETAS_FUENTE, trabajos_prod=trabajos_grid,
+                           categorias=catalogo_productos.CATEGORIAS)
+
+
+@app.route("/cliente/<cliente>/catalogo/<cat>/<path:activo_id>/ficha")
+def catalogo_ficha(cliente, cat, activo_id):
+    """Ficha de un activo (spec §10.3): fragmento para el panel lateral. Un id
+    de color abre la ficha de su producto con ese color elegido."""
+    cat = _cat(cat)
+    pid = catalogo_productos.producto_base(activo_id)
+    p = catalogo_productos.encontrar_producto(cliente, pid, cat)
+    if not p:
+        abort(404)
+    comercial = usos = None
+    trabajos_ficha = dict(_TRABAJOS_VACIOS)
+    swaps_usos = 0
+    if cat == "producto":
+        tiendas.asegurar_manual(cliente, pid, p["nombre"], p.get("descripcion") or "")
+        comercial = tiendas.por_activo(cliente).get(pid)
+        usos = _usos_por_producto(cliente, [p]).get(pid)
+        if comercial:
+            trabajos_ficha = _trabajos_productos(cliente, [], [comercial])
+        swaps_usos = sum(1 for e in swaps_mod.cargar(cliente).values()
+                         if catalogo_productos.producto_base(e.get("producto_id")) == pid)
+    variante = activo_id.split("/", 1)[1] if "/" in activo_id else ""
+    ids_colores = [c["color_id"] for c in p["colores"]]
+    color_inicial = variante if variante in ids_colores else next(
+        (c["color_id"] for c in p["colores"] if not c["sin_fotos"]), ids_colores[0] if ids_colores else None)
+    return render_template(
+        "_catalogo_ficha.html", cliente=cliente, cat=cat, p=p, comercial=comercial, usos=usos,
+        color_inicial=color_inicial, trabajos_prod=trabajos_ficha,
+        precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
+        monedas_catalogo=sorted(PRESUPUESTO_MINIMO_DIARIO), moneda_catalogo=_moneda_por_defecto(cliente),
+        etiquetas_fuente=ETIQUETAS_FUENTE, tipos_producto=prompt_swap.TIPOS,
+        zonas_cuerpo=mapa_corporal.ZONAS, presets_cuerpo=mapa_corporal.PRESETS,
+        etiquetas_presets=mapa_corporal.ETIQUETAS_PRESETS, categorias=catalogo_productos.CATEGORIAS,
+        con_mapa=catalogo_productos.CATEGORIAS[cat]["con_mapa"], swaps_usos=swaps_usos)
 
 
 def _swap_items(cliente):
