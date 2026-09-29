@@ -57,6 +57,7 @@ PLANTILLAS_TRADUCIDAS = [
     # Merge de main (2026-09-28, PR #1 Triple Whale): la pestaña y su panel ya
     # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
     "_tab_triple_whale.html", "_tw_panel.html",
+    "editor.html",   # Fase 6, Task 2: la página del editor
 ]
 
 

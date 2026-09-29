@@ -683,8 +683,7 @@ slider's value, the rest at 0) create it, and with nothing to mirror it stays em
 that is added lengthens the video (image/text layers and música/efecto end at the principal's end — music loops in
 the render — and with the playhead at the end they enter whole, ending there); audio added by hand only reuses a
 track whose clips share its `rol_audio` (music never lands in the voice's gap). Still out: PIP (video over video),
-color filters, rotation, a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla») and the
-editor's i18n (phase 6).
+color filters, rotation and a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla»).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios

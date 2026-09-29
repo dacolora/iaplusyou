@@ -69,6 +69,21 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 | Tramo (del render) | Segment |
 | Copia liviana (proxy) | Lightweight copy |
 | Producir | Produce |
+| Biblioteca (del editor) | Library |
+| Medios | Media |
+| Transición | Transition |
+| Corte (transición) | Cut |
+| Fundido | Fade |
+| Fundido a negro | Fade to black |
+| Deslizar | Slide |
+| Zoom lento | Slow zoom |
+| Llamado (texto de muestra) | Call to action |
+| Contorno | Outline |
+| Sombra | Shadow |
+| Fondo (de un texto) | Background |
+| Subir (un archivo) | Upload |
+| Editar (el panel) | Edit |
+| Fuente (tipografía del editor, `msgctxt "editor"`) | Font |
 
 ## Reglas de estilo
 

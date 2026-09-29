@@ -447,6 +447,10 @@ msgid "%(n)s líneas sin cambios"
 msgstr "%(n)s unchanged lines"
 
 #, python-format
+msgid "%(n)s materiales efímeros borrados."
+msgstr "%(n)s temporary files deleted."
+
+#, python-format
 msgid "%(n)s mensajes"
 msgstr "%(n)s messages"
 
@@ -645,6 +649,10 @@ msgstr "%(nombre)s already derived: it will not be produced again."
 #, python-format
 msgid "%(nombre)s ya rescatada (escalón %(escalon)s); pieza pausada."
 msgstr "%(nombre)s already rescued (step %(escalon)s); piece paused."
+
+#, python-format
+msgid "%(nombre)s · Editor"
+msgstr "%(nombre)s · Editor"
 
 #, python-format
 msgid "%(nombre)s · derivado de %(pieza)s"
@@ -1234,6 +1242,9 @@ msgstr ""
 msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Experimentos aceptando todos los permisos que pide, y reintenta."
 msgstr "The Meta connection is missing a permission for this: reconnect Meta in Experiments, accepting every permission it asks for, and try again."
 
+msgid "A otra velocidad el video va sin su sonido."
+msgstr "At another speed the video plays without its sound."
+
 msgid "A quién le habla"
 msgstr "Who it speaks to"
 
@@ -1296,6 +1307,9 @@ msgstr "Unknown action."
 #, python-format
 msgid "Acción desconocida: %(accion)s."
 msgstr "Unknown action: %(accion)s."
+
+msgid "Acercar"
+msgstr "Zoom in"
 
 #, python-format
 msgid "Activadas %(n)s pieza(s)."
@@ -1390,6 +1404,9 @@ msgstr "Add"
 msgid "Agregar a la campaña"
 msgstr "Add to the campaign"
 
+msgid "Agregar a la edición"
+msgstr "Add to the edit"
+
 msgid "Agregar comentarios"
 msgstr "Add comments"
 
@@ -1408,11 +1425,26 @@ msgstr "Add proof"
 msgid "Agregar referencias"
 msgstr "Add references"
 
+#, python-brace-format
+msgid "Agregar un texto «{nombre}»"
+msgstr "Add a “{nombre}” text"
+
 msgid "Agregar una familia de formato"
 msgstr "Add a format family"
 
 msgid "Agregar uno a mano"
 msgstr "Add one by hand"
+
+msgid "Agregar y editar"
+msgstr "Add and edit"
+
+#, python-brace-format
+msgid "Agregar «{nombre}» a la edición"
+msgstr "Add “{nombre}” to the edit"
+
+#, python-brace-format
+msgid "Agregar «{nombre}» como música desde el cabezal"
+msgstr "Add “{nombre}” as music from the playhead"
 
 msgid "Agrupando deseos"
 msgstr "Grouping desires"
@@ -1457,6 +1489,9 @@ msgstr "Cheap reach"
 msgid "Alcance caro"
 msgstr "Expensive reach"
 
+msgid "Alejar"
+msgstr "Zoom out"
+
 msgid "Alertas"
 msgstr "Alerts"
 
@@ -1477,8 +1512,17 @@ msgstr "Someone changed this prompt; reload the page."
 msgid "Alguien recibe la compra y abre la caja o bolsa hasta descubrir el producto, con la emoción de estrenarlo."
 msgstr "Someone receives their purchase and opens the box or bag until they discover the product, with the thrill of trying it for the first time."
 
+msgid "Alineación"
+msgstr "Alignment"
+
 msgid "Alta"
 msgstr "High"
+
+msgid "Amarillo"
+msgstr "Yellow"
+
+msgid "Ambiente primero"
+msgstr "Ambience first"
 
 msgid "Amor y amistad"
 msgstr "Love and Friendship"
@@ -1494,6 +1538,9 @@ msgstr "Analyzing references…"
 
 msgid "Analizar referencias y generar guía de estilo"
 msgstr "Analyze references and generate style guide"
+
+msgid "Animación de entrada"
+msgstr "Entrance animation"
 
 msgid "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS)."
 msgstr "Note the server and the port (Gmail: smtp.gmail.com and 587, STARTTLS)."
@@ -1675,12 +1722,18 @@ msgstr "Approximately %(precio)s"
 msgid "Aprueba ideas y genéralas desde la pestaña Ideas."
 msgstr "Approve ideas and generate them from the Ideas tab."
 
+msgid "Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición."
+msgstr "Here are the videos, images, audio, texts and transitions to add to the edit."
+
 #, python-format
 msgid "Archivado el concepto de %(nombre)s: %(motivo)s."
 msgstr "Archived the concept of %(nombre)s: %(motivo)s."
 
 msgid "Archivar"
 msgstr "Archive"
+
+msgid "Archivo"
+msgstr "File"
 
 msgid "Archivo .csv o .xlsx (primera fila con encabezados; columna «texto» o «comentario»; opcionales «url», «likes», «fecha»)"
 msgstr ".csv or .xlsx file (first row with headers; a “text” or “comment” column; optional “url”, “likes”, “date”)"
@@ -1769,6 +1822,9 @@ msgstr "Invalid attribution: %(atribucion)s (use pixel, store or none)."
 msgid "Audiencia y producto"
 msgstr "Audience and product"
 
+msgid "Audio"
+msgstr "Audio"
+
 msgid "Audio listo solo con la voz: la canción ya no estaba en Mi música."
 msgstr "Audio ready with the voice only: the song was no longer in My music."
 
@@ -1780,6 +1836,9 @@ msgstr "The model's native audio, no dialogue or music."
 
 msgid "Audios"
 msgstr "Audios"
+
+msgid "Audios del proyecto"
+msgstr "Project audio"
 
 msgid "Audios: tu texto con la voz que elijas"
 msgstr "Audios: your text in the voice you choose"
@@ -1829,6 +1888,9 @@ msgstr "Email notifications turned off."
 msgid "Baja"
 msgstr "Low"
 
+msgid "Baja a negro y aparece el siguiente."
+msgstr "It fades to black and the next one appears."
+
 #, python-format
 msgid "Barrido terminado: %(n)s referentes clasificados."
 msgstr "Sweep finished: %(n)s references classified."
@@ -1842,6 +1904,9 @@ msgstr "Base"
 
 msgid "Beliefs about self"
 msgstr "Beliefs about self"
+
+msgid "Biblioteca"
+msgstr "Library"
 
 msgid "Biblioteca de copycoders"
 msgstr "Copycoders library"
@@ -1857,6 +1922,9 @@ msgstr "Log (%(n)s)"
 msgid "Black Friday"
 msgstr "Black Friday"
 
+msgid "Blanco"
+msgstr "White"
+
 msgid "Bloque del video (se repite en cada clip)"
 msgstr "Video block (repeats in every clip)"
 
@@ -1868,6 +1936,9 @@ msgstr "Draft at 480p"
 
 msgid "Borrar"
 msgstr "Delete"
+
+msgid "Borrar el clip elegido (Supr)"
+msgstr "Delete the selected clip (Delete)"
 
 msgid "Borrar esta prueba"
 msgstr "Delete this proof"
@@ -2009,6 +2080,9 @@ msgstr "Each card shows the QA: ✓ passes, ✗ fails; tap the QA row to read wh
 msgid "Cadera / entrepierna"
 msgstr "Hips / groin"
 
+msgid "Caja"
+msgstr "Box"
+
 msgid "Calculando el costo…"
 msgstr "Calculating the cost…"
 
@@ -2068,6 +2142,9 @@ msgstr "Changing it creates a new version with the same clips, without calling C
 
 msgid "Cambios de producto"
 msgstr "Product swaps"
+
+msgid "Cambios sin guardar…"
+msgstr "Unsaved changes…"
 
 msgid "Camisa manga corta"
 msgstr "Short-sleeve shirt"
@@ -2182,6 +2259,9 @@ msgstr "Upload your catalog"
 msgid "Cargando el prompt…"
 msgstr "Loading the prompt…"
 
+msgid "Cargando el sonido…"
+msgstr "Loading the sound…"
+
 msgid "Cargando la campaña…"
 msgstr "Loading the campaign…"
 
@@ -2214,6 +2294,18 @@ msgstr "Catalog"
 
 msgid "Catálogo universal"
 msgstr "Universal catalog"
+
+msgid "Centrar"
+msgstr "Center"
+
+msgid "Centrar a lo alto"
+msgstr "Center vertically"
+
+msgid "Centrar a lo ancho"
+msgstr "Center horizontally"
+
+msgid "Centro"
+msgstr "Center"
 
 msgid "Cerrar"
 msgstr "Close"
@@ -2428,6 +2520,18 @@ msgstr "Cloudflare R2 (storage)"
 
 msgid "Colombia"
 msgstr "Colombia"
+
+msgid "Color"
+msgstr "Color"
+
+msgid "Color de marca"
+msgstr "Brand color"
+
+msgid "Color del contorno"
+msgstr "Outline color"
+
+msgid "Color del fondo"
+msgstr "Background color"
 
 msgid "Comentario real de un comprador"
 msgstr "Real buyer comment"
@@ -2687,6 +2791,9 @@ msgstr "Context (optional)"
 msgid "Continuidad: el clip %(a)s termina «%(fin)s» y el %(b)s empieza «%(inicio)s»."
 msgstr "Continuity: clip %(a)s ends “%(fin)s” and %(b)s starts “%(inicio)s”."
 
+msgid "Contorno"
+msgstr "Outline"
+
 msgid "Contraseña"
 msgstr "Password"
 
@@ -2808,6 +2915,12 @@ msgstr "Email saved: %(correo)s. Wait a moment before requesting the confirmatio
 
 msgid "Correo nuevo"
 msgstr "New email"
+
+msgid "Cortar donde está el cabezal: el clip elegido o, si no eliges ninguno, el video (S)"
+msgstr "Split at the playhead: the selected clip or, if you select none, the video (S)"
+
+msgid "Corte"
+msgstr "Cut"
 
 msgid "Costo"
 msgstr "Cost"
@@ -2941,6 +3054,9 @@ msgstr "Once the variables are set, the <em>Connect with MercadoLibre</em> butto
 msgid "Cuando pierde"
 msgstr "When it loses"
 
+msgid "Cuando un video de Crear esté listo, aparece aquí."
+msgstr "When a Create video is ready, it shows up here."
+
 msgid "Cuello"
 msgstr "Neck"
 
@@ -3066,6 +3182,9 @@ msgstr "Demographics (ASL)"
 
 msgid "Depende del proveedor de correo; con una cuenta normal no cuesta."
 msgstr "Depends on the email provider; with a normal account it costs nothing."
+
+msgid "Derecha"
+msgstr "Right"
 
 msgid "Derivaciones en curso"
 msgstr "Derivations in progress"
@@ -3208,8 +3327,20 @@ msgstr "Desire:"
 msgid "Desglose"
 msgstr "Breakdown"
 
+msgid "Deshacer"
+msgstr "Undo"
+
+msgid "Deshacer (Ctrl/Cmd+Z)"
+msgstr "Undo (Ctrl/Cmd+Z)"
+
+msgid "Deslizar"
+msgstr "Slide"
+
 msgid "Después, un análisis con IA mira tus ganadores y tus perdedores, explica qué patrón se repite y propone anuncios nuevos que puedes llevar a Crear con un clic."
 msgstr "Then an AI analysis looks at your winners and your losers, explains which pattern repeats and suggests new ads you can take to Create with one click."
+
+msgid "Destino"
+msgstr "Market"
 
 msgid "Detalle"
 msgstr "Detail"
@@ -3271,6 +3402,12 @@ msgstr "Store domain"
 msgid "Dominio de la tienda (el shop-id de Triple Whale)"
 msgstr "Store domain (the Triple Whale shop-id)"
 
+msgid "Duplicar"
+msgstr "Duplicate"
+
+msgid "Duplicar el clip elegido"
+msgstr "Duplicate the selected clip"
+
 msgid "Duplicar guion"
 msgstr "Duplicate script"
 
@@ -3324,6 +3461,14 @@ msgstr "E4 alternate hooks"
 msgid "Edad"
 msgstr "Age"
 
+#, python-format
+msgid "Edición %(id)s lista para editar."
+msgstr "Edit %(id)s ready to edit."
+
+#, python-format
+msgid "Edición de %(pieza)s"
+msgstr "Edit of %(pieza)s"
+
 msgid "Edita el prompt"
 msgstr "Edit the prompt"
 
@@ -3344,6 +3489,9 @@ msgstr "Edit and create another one from this"
 
 msgid "Editor"
 msgstr "Editor"
+
+msgid "Efecto"
+msgstr "Effect"
 
 msgid "Ej.: crema antiarrugas, sandalias, proteína"
 msgstr "E.g.: anti-wrinkle cream, sandals, protein"
@@ -3414,6 +3562,9 @@ msgstr "The ad needs an anuncio_id."
 msgid "El anuncio necesita imagen_origen."
 msgstr "The ad needs an imagen_origen."
 
+msgid "El archivo es demasiado grande."
+msgstr "The file is too large."
+
 msgid "El archivo está vacío."
 msgstr "The file is empty."
 
@@ -3433,6 +3584,13 @@ msgstr "The file has more than %(max)s rows; split it."
 #, python-format
 msgid "El arranque «%(lead)s» no es de los recomendados para una audiencia %(consciencia)s: mejor %(opciones)s."
 msgstr "The opener “%(lead)s” isn't one of the recommended ones for a %(consciencia)s audience: better %(opciones)s."
+
+#, python-brace-format
+msgid "El audio pesa más de {mb} MB."
+msgstr "The audio is larger than {mb} MB."
+
+msgid "El audio solo se cambia en clips de audio."
+msgstr "Audio can only be changed on audio clips."
 
 msgid "El avatar necesita un nombre."
 msgstr "The avatar needs a name."
@@ -3455,6 +3613,10 @@ msgstr "Clip %(n)s lasts %(segundos)s s; every clip has to last between %(minimo
 msgid "El clip %(n)s no dice cómo empieza o cómo termina."
 msgstr "Clip %(n)s doesn't say how it starts or ends."
 
+#, python-format
+msgid "El clip '%(clip)s' pide %(pide)s ms de un material de %(hay)s ms; acorta el clip o el recorte."
+msgstr "Clip “%(clip)s” asks for %(pide)s ms of a %(hay)s ms file; shorten the clip or the trim."
+
 msgid "El clip 1 tiene que empezar con la línea 1 (el hook)."
 msgstr "Clip 1 has to start with line 1 (the hook)."
 
@@ -3462,8 +3624,15 @@ msgstr "Clip 1 has to start with line 1 (the hook)."
 msgid "El clip anterior termina así: %(estado)s"
 msgstr "The previous clip ends like this: %(estado)s"
 
+#, python-format
+msgid "El clip de texto %(clip)s no está resuelto (¿falta documento.resolver?)."
+msgstr "Text clip %(clip)s isn't resolved (is documento.resolver missing?)."
+
 msgid "El clip final tiene que terminar con HARD CUT sobre un cuadro sostenido."
 msgstr "The final clip has to end with a HARD CUT on a held frame."
+
+msgid "El clip quedaría demasiado corto a esa velocidad."
+msgstr "The clip would be too short at that speed."
 
 #, python-format
 msgid "El clip siguiente empieza así: %(estado)s"
@@ -3509,6 +3678,9 @@ msgstr ""
 msgid "El diagnóstico no se pudo hacer: %(error)s"
 msgstr "The diagnosis couldn't be made: %(error)s"
 
+msgid "El documento no tiene la forma esperada."
+msgstr "The document doesn't have the expected shape."
+
 msgid "El documento sale cuando la versión está armada."
 msgstr "The document is available once the version is assembled."
 
@@ -3526,6 +3698,9 @@ msgstr "The link expires in %(vence)s and works only once. If you didn't ask to 
 #, python-format
 msgid "El enlace vence en %(vence)s. Si no creaste una cuenta en %(plataforma)s, ignora este correo."
 msgstr "The link expires in %(vence)s. If you didn't create an account at %(plataforma)s, ignore this email."
+
+msgid "El estilo solo se cambia en clips de texto."
+msgstr "The style can only be changed on text clips."
 
 msgid "El estudio está archivado."
 msgstr "The study is archived."
@@ -3715,6 +3890,9 @@ msgstr "The current prompt is the same as the original."
 msgid "El proveedor entregó el video sin pista de audio"
 msgstr "The provider delivered the video without an audio track"
 
+msgid "El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más."
+msgstr "The project reached its storage limit (2 GB): delete something before uploading more."
+
 #, python-format
 msgid "El punto %(n)s dice «mejorar» sin decir qué."
 msgstr "Point %(n)s says “mejorar” without saying what."
@@ -3730,11 +3908,26 @@ msgstr "Point %(n)s comes up twice."
 msgid "El ritmo va entre 1,5 y 4 palabras por segundo."
 msgstr "The pace is between 1.5 and 4 words per second."
 
+msgid "El servidor no pudo guardar el archivo. Vuelve a intentar."
+msgstr "The server couldn't save the file. Try again."
+
 msgid "El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta."
 msgstr "The server doesn't have email configured; let the administrator know so they can confirm your account."
 
 msgid "El servidor respondió algo inesperado. Si se cerró tu sesión, recarga la página."
 msgstr "The server returned something unexpected. If your session ended, reload the page."
+
+msgid "El siguiente entra desde la derecha."
+msgstr "The next one slides in from the right."
+
+msgid "El sonido de la escena sigue a los clips de video: edita el clip de video."
+msgstr "The scene sound follows the video clips: edit the video clip."
+
+msgid "El sonido del video se oye entero y la música queda baja."
+msgstr "The video sound is heard in full and the music stays low."
+
+msgid "El sonido del video y la música bajan para que la voz se entienda."
+msgstr "The video sound and the music go down so the voice is clear."
 
 msgid "El sprint necesita un nombre."
 msgstr "The sprint needs a name."
@@ -3745,8 +3938,19 @@ msgstr "The sprint is already past planning."
 msgid "El tablero se llena solo cuando hay experimentos corriendo: crea uno en <a href=\"#experimentos\" data-ir-tab=\"experimentos\">Experimentos</a>, mete piezas desde Crear y lánzalo. Desde ahí verás aquí gasto, ventas, ganadoras y alertas."
 msgstr "The dashboard only fills up once experiments are running: create one in <a href=\"#experimentos\" data-ir-tab=\"experimentos\">Experiments</a>, add pieces from Create and launch it. From there you'll see spend, sales, winners and alerts here."
 
+#, python-format
+msgid "El texto '%(rol)s' no tiene valor en %(idioma)s."
+msgstr "The text “%(rol)s” has no value in %(idioma)s."
+
+#, python-brace-format
+msgid "El texto '{rol}' no tiene valor en {idioma}."
+msgstr "The text “{rol}” has no value in {idioma}."
+
 msgid "El texto de la publicación no puede estar vacío."
 msgstr "The post's text can't be empty."
+
+msgid "El texto no puede quedar vacío."
+msgstr "The text can't be empty."
 
 msgid "El texto pasa de 3 000 caracteres."
 msgstr "The text is over 3,000 characters."
@@ -3768,11 +3972,21 @@ msgstr "The video %(nombre)s was uploaded, but I couldn't extract its reference 
 msgid "El video dura %(total)s s y el objetivo es %(objetivo)s s."
 msgstr "The video is %(total)s s long and the target is %(objetivo)s s."
 
+msgid "El video final no muestra este clip: aquí solo se puede borrar."
+msgstr "The final video doesn't show this clip: here you can only delete it."
+
+#, python-brace-format
+msgid "El video pesa más de {mb} MB."
+msgstr "The video is larger than {mb} MB."
+
 msgid "El video trae el sonido de la escena"
 msgstr "The video comes with the scene's sound"
 
 msgid "El ángulo"
 msgstr "The angle"
+
+msgid "El último clip no tiene transición hacia el siguiente."
+msgstr "The last clip has no transition to the next one."
 
 msgid "El último clip tiene que terminar en un cuadro sostenido sin diálogo. "
 msgstr "The last clip has to end on a held frame with no dialogue. "
@@ -3794,6 +4008,9 @@ msgstr "Choose"
 msgid "Elegir de la biblioteca"
 msgstr "Choose from the library"
 
+msgid "Elegir el video"
+msgstr "Select the video"
+
 msgid "Elegir nueva contraseña"
 msgstr "Choose new password"
 
@@ -3804,8 +4021,14 @@ msgstr "Choose product (%(n)s) →"
 msgid "Elementos"
 msgstr "Elements"
 
+msgid "Elige al menos un destino de esta edición."
+msgstr "Choose at least one market of this edit."
+
 msgid "Elige al menos una plataforma."
 msgstr "Choose at least one platform."
+
+msgid "Elige algo en la línea de tiempo o en el video para cambiarlo."
+msgstr "Select something on the timeline or in the video to change it."
 
 msgid "Elige el modo del video: diálogo a cámara o voz en off."
 msgstr "Choose the video mode: on-camera dialogue or voice-over."
@@ -3819,6 +4042,9 @@ msgstr "Choose the piece and at least one platform."
 msgid "Elige las fotos desde tu computador: se crea el producto en el catálogo con ellas."
 msgstr "Choose the photos from your computer: the product gets created in the catalog with them."
 
+msgid "Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id=\"producir-tiempo\"></span>."
+msgstr "Choose the markets. It's free: it's produced with what's in this edit, without paying for anything new. It takes <span id=\"producir-tiempo\"></span>."
+
 msgid "Elige tu nueva contraseña"
 msgstr "Choose your new password"
 
@@ -3827,6 +4053,9 @@ msgstr "Choose a .csv or .xlsx file."
 
 msgid "Elige un archivo de audio."
 msgstr "Choose an audio file."
+
+msgid "Elige un archivo."
+msgstr "Choose a file."
 
 msgid "Elige un idioma de la lista."
 msgstr "Pick a language from the list."
@@ -3988,6 +4217,9 @@ msgstr "In the sprint, the start date must be before the end date."
 msgid "En error"
 msgstr "Failed"
 
+msgid "En espera"
+msgstr "Waiting"
+
 msgid "En la página del guion: ··· › Conexiones › elige tu integración."
 msgstr "On the script's page: ··· › Connections › choose your integration."
 
@@ -4102,6 +4334,9 @@ msgstr "Send"
 msgid "Enviarme el enlace"
 msgstr "Send me the link"
 
+msgid "Equilibrada"
+msgstr "Balanced"
+
 msgid "Error"
 msgstr "Error"
 
@@ -4128,6 +4363,15 @@ msgstr "Error: %(detalle)s"
 #, python-format
 msgid "Error: %(error)s"
 msgstr "Error: %(error)s"
+
+msgid "Es el precio de cada país: sale de los precios de la edición y no se escribe aquí."
+msgstr "It's each country's price: it comes from the edit's prices and isn't typed here."
+
+msgid "Es el sonido del video: su volumen se cambia desde el clip de video."
+msgstr "It's the video's sound: its volume is changed from the video clip."
+
+msgid "Es el último video: no tiene transición hacia el siguiente."
+msgstr "It's the last video: it has no transition to the next one."
 
 msgid "Es idéntica al prompt vigente."
 msgstr "It is identical to the current prompt."
@@ -4171,6 +4415,9 @@ msgstr "That evaluation no longer exists."
 #, python-format
 msgid "Esa final es de %(pais)s; no se puede meter a otro país."
 msgstr "That final is for %(pais)s; it can't be put into another country."
+
+msgid "Esa final se está produciendo con voz; espera a que termine."
+msgstr "That final cut is being produced with voice; wait for it to finish."
 
 msgid "Esa final se está produciendo; espera a que termine."
 msgstr "That final cut is being produced; wait for it to finish."
@@ -4228,6 +4475,9 @@ msgstr "That piece does not exist."
 
 msgid "Esa pieza no tiene nada que recuperar."
 msgstr "That piece has nothing to recover."
+
+msgid "Esa pieza no tiene un video listo para editar."
+msgstr "That piece doesn't have a video ready to edit."
 
 msgid "Esa pieza no tiene una sesión generada."
 msgstr "That piece doesn't have a generated session."
@@ -4294,6 +4544,19 @@ msgstr "That season doesn't exist."
 msgid "Esa tienda no existe."
 msgstr "That store doesn't exist."
 
+msgid "Esa transición solo se pone en un clip de la pista principal."
+msgstr "That transition only goes on a clip of the main track."
+
+msgid "Esa unión quedó en corte, sin transición."
+msgstr "That join stayed as a cut, with no transition."
+
+msgid "Esa unión quedó en corte: el primer clip no tiene video de sobra al final para la transición. Recorta un poco su final y vuelve a ponerla."
+msgstr "That join stayed as a cut: the first clip has no spare video at the end for the transition. Trim its end a little and add it again."
+
+#, python-brace-format
+msgid "Esa velocidad no está disponible ({v}×)."
+msgstr "That speed isn't available ({v}×)."
+
 msgid "Esa versión no existe."
 msgstr "That version doesn't exist."
 
@@ -4312,6 +4575,12 @@ msgstr "Step %(n)s/3"
 
 msgid "Escena"
 msgstr "Scene"
+
+msgid "Escribe algo: un texto no puede quedar vacío."
+msgstr "Type something: a text can't be empty."
+
+msgid "Escribe aquí"
+msgstr "Type here"
 
 msgid "Escribe el aprendizaje."
 msgstr "Write the learning."
@@ -4409,6 +4678,10 @@ msgstr "Write it in Spanish or English: it's translated into English and ads in 
 msgid "Escuchar"
 msgstr "Listen"
 
+#, python-brace-format
+msgid "Escuchar «{nombre}»"
+msgstr "Listen to “{nombre}”"
+
 msgid "Ese anuncio no está en error."
 msgstr "That ad isn't in an error state."
 
@@ -4424,8 +4697,20 @@ msgstr "That ad was already in the Swipe file."
 msgid "Ese aprendizaje ya no existe."
 msgstr "That learning no longer exists."
 
+msgid "Ese audio todavía se está preparando."
+msgstr "That audio is still being prepared."
+
 msgid "Ese avatar no existe."
 msgstr "That avatar doesn't exist."
+
+msgid "Ese clip no está en la pista principal."
+msgstr "That clip isn't on the main track."
+
+msgid "Ese clip no tiene sonido de la escena todavía."
+msgstr "That clip doesn't have scene sound yet."
+
+msgid "Ese clip ya no existe en la edición."
+msgstr "That clip no longer exists in the edit."
 
 msgid "Ese correo no parece válido."
 msgstr "That email doesn't look valid."
@@ -4539,8 +4824,17 @@ msgstr "That sprint doesn't exist."
 msgid "Ese tipo de tienda no se conecta desde aquí (Shopify o WooCommerce; MercadoLibre va por su botón)."
 msgstr "That store type doesn't connect from here (Shopify or WooCommerce; MercadoLibre has its own button)."
 
+msgid "Ese video todavía se está preparando."
+msgstr "That video is still being prepared."
+
 msgid "Ese ya es tu correo y está confirmado."
 msgstr "That's already your email and it's confirmed."
+
+msgid "Eso no es un clip de texto."
+msgstr "That isn't a text clip."
+
+msgid "Esos destinos ya se estaban produciendo."
+msgstr "Those markets were already being produced."
 
 msgid "España"
 msgstr "Spain"
@@ -4559,6 +4853,31 @@ msgstr "Wait a moment before requesting another verification email."
 
 msgid "Esta campaña ya no existe"
 msgstr "This campaign no longer exists"
+
+msgid "Esta edición cambió en otra pestaña: recarga la página para seguir editando."
+msgstr "This edit changed in another tab: reload the page to keep editing."
+
+msgid "Esta edición no está unida a un video de Crear: todavía no se puede producir desde aquí."
+msgstr "This edit isn't linked to a Create video: it can't be produced from here yet."
+
+msgid "Esta edición no se puede producir así:"
+msgstr "This edit can't be produced like this:"
+
+#, python-brace-format
+msgid "Esta edición no se puede producir tal como está: {aviso}"
+msgstr "This edit can't be produced as it is: {aviso}"
+
+msgid "Esta edición no tiene una pista de video principal."
+msgstr "This edit doesn't have a main video track."
+
+msgid "Esta edición trae volúmenes a medida: elegir una mezcla los reemplaza."
+msgstr "This edit has custom volumes: choosing a mix replaces them."
+
+msgid "Esta edición ya tiene demasiadas pistas."
+msgstr "This edit already has too many tracks."
+
+msgid "Esta edición ya tiene demasiadas pistas: no cabe el sonido del video."
+msgstr "This edit already has too many tracks: the video's sound doesn't fit."
 
 msgid "Esta idea todavía no tiene un ángulo con promesa."
 msgstr "This idea doesn't have an angle with a promise yet."
@@ -4681,6 +5000,13 @@ msgstr "This project uses Creatv's agency connection: you don't have to register
 
 msgid "Este sprint todavía no tiene campañas"
 msgstr "This sprint doesn't have campaigns yet"
+
+#, python-brace-format
+msgid "Este texto cambia según el país: lo que escribas aquí vale para {destino}."
+msgstr "This text changes by country: what you type here applies to {destino}."
+
+msgid "Este video no trae sonido."
+msgstr "This video has no sound."
 
 msgid "Este video ya se generó o se está generando — no se puede volver a disparar."
 msgstr "This video was already generated or is being generated — it can't be triggered again."
@@ -4887,6 +5213,10 @@ msgid "Falta el id de tu portafolio o la cuenta publicitaria."
 msgstr "Missing your portfolio's id or the ad account."
 
 #, python-format
+msgid "Falta el material %(mid)s de este proyecto."
+msgstr "File %(mid)s of this project is missing."
+
+#, python-format
 msgid "Falta el texto fijo «%(fragmento)s»: tiene que ir tal cual."
 msgstr "Missing the fixed text “%(fragmento)s”: it has to stay exactly as is."
 
@@ -4941,6 +5271,10 @@ msgstr "%(cantidad)s to approve for the clip in chat."
 msgid "Faltan por aprobar %(cantidad)s de imagen en el chat."
 msgstr "%(cantidad)s to approve for the image in chat."
 
+#, python-brace-format
+msgid "Faltan {n} archivo(s) de esta edición (se borraron o no son de este proyecto): esas partes no se verán."
+msgstr "{n} file(s) of this edit are missing (they were deleted or aren't from this project): those parts won't show."
+
 msgid "Faltan:"
 msgstr "Missing:"
 
@@ -4955,6 +5289,10 @@ msgstr "Filters"
 
 msgid "Fin"
 msgstr "End"
+
+#, python-format
+msgid "Final %(destino)s lista."
+msgstr "Final cut %(destino)s ready."
 
 #, python-format
 msgid "Final %(id)s"
@@ -4996,6 +5334,9 @@ msgstr "Empty “why it works”."
 
 msgid "Flux Kontext Pro"
 msgstr "Flux Kontext Pro"
+
+msgid "Fondo"
+msgstr "Background"
 
 msgid "Formato"
 msgstr "Format"
@@ -5045,6 +5386,10 @@ msgstr "Phrases that can't be changed (optional)"
 msgid "Fuente"
 msgstr "Source"
 
+msgctxt "editor"
+msgid "Fuente"
+msgstr "Font"
+
 #, python-format
 msgid "Fuente desconocida: %(fuente)s"
 msgstr "Unknown source: %(fuente)s"
@@ -5058,6 +5403,18 @@ msgstr "Outside 5–15 s: %(lista)s."
 
 msgid "Fuerza del estilo (0-1)"
 msgstr "Style strength (0-1)"
+
+msgid "Fundido"
+msgstr "Fade"
+
+msgid "Fundido a negro"
+msgstr "Fade to black"
+
+msgid "Fundido de entrada"
+msgstr "Fade in"
+
+msgid "Fundido de salida"
+msgstr "Fade out"
 
 #, python-format
 msgid "Funnel inválido: %(funnel)s. Opciones: %(opciones)s"
@@ -5269,6 +5626,9 @@ msgstr "Google › App passwords"
 msgid "Gorra / sombrero"
 msgstr "Cap / hat"
 
+msgid "Grabación"
+msgstr "Recording"
+
 msgid "Gracias: quedó como prueba del producto y Claude ya la puede usar."
 msgstr "Thanks: it's saved as product proof and Claude can now use it."
 
@@ -5283,6 +5643,9 @@ msgstr "Free: split, trim, reorder, add text and music in the editor."
 
 msgid "Gratis: solo lectura de tus publicaciones."
 msgstr "Free: read-only access to your listings."
+
+msgid "Grosor"
+msgstr "Thickness"
 
 msgid "Guarda cada imagen y video generado y les da una URL pública permanente."
 msgstr "Stores every generated image and video and gives them a permanent public URL."
@@ -5442,6 +5805,9 @@ msgstr "Up to 7 images. From a video it only uses one frame. Very good movement 
 msgid "Hay %(usos)s resultado(s) ya generado(s) con este producto: no se borran, pero dejarán de mostrar su nombre y su foto."
 msgstr "There are %(usos)s result(s) already generated with this product: they won't be deleted, but they'll stop showing its name and photo."
 
+msgid "Hay textos sin traducir para algún destino."
+msgstr "Some texts aren't translated for a market."
+
 msgid "Hecho con Creatv Machine"
 msgstr "Made with Creatv Machine"
 
@@ -5451,6 +5817,9 @@ msgstr "Made in Creatv · %(exp)s"
 
 msgid "Hechos reales que Claude puede decir en ideas, guiones y captions de este producto, cifras incluidas."
 msgstr "Real facts Claude can state in this product's ideas, scripts and captions, figures included."
+
+msgid "Herramientas de edición"
+msgstr "Editing tools"
 
 msgid "Higgsfield"
 msgstr "Higgsfield"
@@ -5747,6 +6116,12 @@ msgstr "Unknown intent: %(malas)s"
 msgid "Intención inicial (se puede cambiar por referencia):"
 msgstr "Initial intent (can be changed per reference):"
 
+msgid "Inter gruesa"
+msgstr "Inter bold"
+
+msgid "Inter media"
+msgstr "Inter semibold"
+
 msgid "Interacción"
 msgstr "Engagement"
 
@@ -5806,8 +6181,17 @@ msgstr "Go to Create"
 msgid "Ir a Desde referencias"
 msgstr "Go to From references"
 
+msgid "Ir a Final edition"
+msgstr "Go to Final edition"
+
 msgid "Ir a Ideas"
 msgstr "Go to Ideas"
+
+msgid "Ir al inicio"
+msgstr "Go to start"
+
+msgid "Izquierda"
+msgstr "Left"
 
 msgid "JPG, PNG, WEBP, MP4 o MOV; también puedes arrastrarlos a la caja. Cada uno queda como @Imagen N / @Video N para nombrarlo en el texto."
 msgstr "JPG, PNG, WEBP, MP4 or MOV; you can also drag them into the box. Each one becomes @Imagen N / @Video N so you can name it in the text."
@@ -5922,6 +6306,21 @@ msgstr "Duration must be a number."
 msgid "La duración objetivo va en segundos (5 o más)."
 msgstr "The target duration is in seconds (5 or more)."
 
+msgid "La edición cambió en otra pestaña: recarga la página para seguir."
+msgstr "This edit changed in another tab: reload the page to keep going."
+
+msgid "La edición cambió en otra pestaña; recarga para seguir."
+msgstr "This edit changed in another tab; reload to keep going."
+
+msgid "La edición cambió: espera a que termine de guardarse y vuelve a intentar."
+msgstr "The edit changed: wait for it to finish saving and try again."
+
+msgid "La edición necesita al menos un clip de video."
+msgstr "The edit needs at least one video clip."
+
+msgid "La edición usa archivos que no son de este proyecto."
+msgstr "The edit uses files that aren't from this project."
+
 msgid "La encoló el motor al declararla ganadora"
 msgstr "The engine queued it when it declared it the winner"
 
@@ -5943,6 +6342,14 @@ msgstr "The end date isn't valid (use YYYY-MM-DD)."
 msgid "La fecha de inicio no es válida (usa AAAA-MM-DD)."
 msgstr "The start date isn't valid (use YYYY-MM-DD)."
 
+#, python-format
+msgid "La final %(final)s no existe en pieza; la ruta debe crearla con creative_flow.crear_final antes de encolar."
+msgstr "Final cut %(final)s doesn't exist in pieza; the route must create it with creative_flow.crear_final before queuing."
+
+#, python-format
+msgid "La final %(final)s no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar."
+msgstr "Final cut %(final)s doesn't exist; the route must create it with creative_flow.crear_final before queuing."
+
 msgid "La gente se va antes del final: acorta el video o sube el ritmo del cuerpo."
 msgstr "People leave before the end: shorten the video or speed up the body."
 
@@ -5951,6 +6358,13 @@ msgstr "The idea doesn't have an angle with a promise yet."
 
 msgid "La idea ya tiene una pieza generada; no se reescribió."
 msgstr "The idea already has a generated piece; it wasn't rewritten."
+
+msgid "La imagen es chica: quedó lo más grande posible, pero no llega a llenar toda la pantalla."
+msgstr "The image is small: it's as large as possible, but it doesn't fill the whole screen."
+
+#, python-brace-format
+msgid "La imagen pesa más de {mb} MB."
+msgstr "The image is larger than {mb} MB."
 
 msgid "La importación no trae archivo ni URL."
 msgstr "The import has no file or URL."
@@ -5982,6 +6396,10 @@ msgstr "Currency goes as a 3-letter code (COP, MXN, USD…); I didn't save it."
 
 msgid "La persona necesita un nombre."
 msgstr "The persona needs a name."
+
+#, python-format
+msgid "La pieza %(cf)s no tiene un video listo para el editor."
+msgstr "Piece %(cf)s doesn't have a video ready for the editor."
 
 msgid "La pieza no tiene imagen ni fotograma que evaluar."
 msgstr "The piece has no image or frame to evaluate."
@@ -6080,6 +6498,27 @@ msgstr "The %(tipo)s store “%(nombre)s” stopped syncing%(detalle)s. Reconnec
 #, python-format
 msgid "La tienda «%(nombre)s» dejó de sincronizar"
 msgstr "The store “%(nombre)s” stopped syncing"
+
+#, python-brace-format
+msgid "La transición quedó de {duracion}: no hay más video al final del primer clip."
+msgstr "The transition ended up at {duracion}: there's no more video at the end of the first clip."
+
+msgid "La velocidad solo se cambia en clips de video."
+msgstr "Speed can only be changed on video clips."
+
+#, python-brace-format
+msgid "La vista previa tuvo un problema al dibujar ({mensaje}). Recarga la página; si se repite, avísanos."
+msgstr "The preview had a problem drawing ({mensaje}). Reload the page; if it happens again, let us know."
+
+#, python-brace-format
+msgid "La vista previa va sin sonido: {mensaje}"
+msgstr "The preview has no sound: {mensaje}"
+
+msgid "La voz se ajusta sola a cada país."
+msgstr "The voice adjusts itself to each country."
+
+msgid "La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla."
+msgstr "The voice adjusts itself to each country: you can move it or delete it, but not trim it."
 
 #, python-format
 msgid "La última copia falló: %(error)s"
@@ -6268,6 +6707,9 @@ msgstr "Done: Claude's version is now the current prompt."
 msgid "Listo: volviste al prompt original."
 msgstr "Done: you reverted to the original prompt."
 
+msgid "Llamado"
+msgstr "Call to action"
+
 msgid "Llave API de Triple Whale"
 msgstr "Triple Whale API key"
 
@@ -6282,6 +6724,9 @@ msgstr "Reaching people is expensive (high CPM): the audience is saturated or th
 
 msgid "Llegaron de un archivo, una URL o tu tienda pero todavía no tienen fotos en el catálogo, así que Crear no puede usarlos. Súbeles fotos (o créalos con las fotos de la tienda) y pasan a la lista de productos."
 msgstr "They came from a file, a URL or your store but don't have photos in the catalog yet, so Create can't use them. Upload photos for them (or create them with the store's photos) and they move to the product list."
+
+msgid "Llenar la pantalla"
+msgstr "Fill the screen"
 
 msgid "Llevar a Crear →"
 msgstr "Take to Create →"
@@ -6353,11 +6798,17 @@ msgstr "What you sell: shoes, clothes, home decor, food, anything."
 msgid "Locuciones (audios)"
 msgstr "Voice-overs (audios)"
 
+msgid "Logo"
+msgstr "Logo"
+
 msgid "Logos"
 msgstr "Logos"
 
 msgid "Logos oficiales"
 msgstr "Official logos"
+
+msgid "Los clips de la pista principal se reordenan, no se mueven a un tiempo suelto."
+msgstr "Clips on the main track get reordered, not moved to a free time."
 
 msgid "Los clips quedaron armados pero no se pudieron pasar al chat. Crea una versión nueva."
 msgstr "The clips were assembled but couldn't be sent to chat. Create a new version."
@@ -6410,6 +6861,9 @@ msgstr "Luma Ray3 Modify"
 
 msgid "Línea 1 del guion"
 msgstr "Script line 1"
+
+msgid "Línea de tiempo"
+msgstr "Timeline"
 
 msgid "Líneas"
 msgstr "Lines"
@@ -6493,6 +6947,13 @@ msgid "Marcas a imitar"
 msgstr "Brands to imitate"
 
 #, python-format
+msgid "Material %(id)s listo."
+msgstr "File %(id)s ready."
+
+msgid "Material inexistente."
+msgstr "File doesn't exist."
+
+#, python-format
 msgid "Me detuve en la propuesta #%(id)s (%(accion)s): %(error)s"
 msgstr "I stopped at proposal #%(id)s (%(accion)s): %(error)s"
 
@@ -6504,6 +6965,9 @@ msgstr "Mechanism: how the product delivers it"
 
 msgid "Media"
 msgstr "Medium"
+
+msgid "Medios"
+msgstr "Media"
 
 msgid "Mejorar la calidad al final (+$0.04, solo aplica a fotos)"
 msgstr "Improve quality at the end (+$0.04, photos only)"
@@ -6624,6 +7088,9 @@ msgstr "Add to experiment"
 
 msgid "Mezcla"
 msgstr "Mix"
+
+msgid "Mezcla del sonido"
+msgstr "Sound mix"
 
 msgid "Mezclando con la música"
 msgstr "Mixing with the music"
@@ -6765,6 +7232,12 @@ msgstr "Lots of clicks"
 msgid "Muslos"
 msgstr "Thighs"
 
+msgid "Muy cerca del borde del clip para cortar ahí."
+msgstr "Too close to the edge of the clip to split there."
+
+msgid "Muy cerca del borde del clip para cortarlo."
+msgstr "Too close to the edge of the clip to split it."
+
 msgid "Más"
 msgstr "More"
 
@@ -6843,8 +7316,14 @@ msgstr "Nano Banana Pro Ultra (4k)"
 msgid "Navidad"
 msgstr "Christmas"
 
+msgid "Negro"
+msgstr "Black"
+
 msgid "Nicho"
 msgstr "Niche"
+
+msgid "Ninguna"
+msgstr "None"
 
 msgid "Ninguna (objeto)"
 msgstr "None (object)"
@@ -6956,6 +7435,18 @@ msgstr "Not thoroughly evaluated"
 msgid "No existe el usuario '%(usuario)s'."
 msgstr "User '%(usuario)s' doesn't exist."
 
+msgid "No existe esa edición."
+msgstr "That edit doesn't exist."
+
+msgid "No existe esa pieza."
+msgstr "That piece doesn't exist."
+
+msgid "No existe esa versión de la edición."
+msgstr "That version of the edit doesn't exist."
+
+msgid "No existe esa versión."
+msgstr "That version doesn't exist."
+
 msgid "No había cambios que guardar."
 msgstr "There were no changes to save."
 
@@ -6973,6 +7464,9 @@ msgstr "There were no pending posts."
 
 msgid "No hace falta generar imágenes: todas las referencias vienen del Catálogo."
 msgstr "No need to generate images: all the references come from the Catalog."
+
+msgid "No hay cambios que aplicar."
+msgstr "There are no changes to apply."
 
 msgid "No hay campañas en «Planeando referencias» ahora mismo."
 msgstr "There are no campaigns in “Planning references” right now."
@@ -7110,6 +7604,15 @@ msgstr "I couldn't reach Triple Whale (%(tipo)s)."
 msgid "No pude leer el archivo como texto (¿es un CSV?)."
 msgstr "I couldn't read the file as text (is it a CSV?)."
 
+msgid "No pude leer esa imagen."
+msgstr "I couldn't read that image."
+
+msgid "No pude leer ese archivo de audio."
+msgstr "I couldn't read that audio file."
+
+msgid "No pude leer ese video."
+msgstr "I couldn't read that video."
+
 msgid "No pude leer tus activos:"
 msgstr "Couldn't read your assets:"
 
@@ -7161,14 +7664,26 @@ msgstr "Not found. It may no longer exist."
 msgid "No se guardó el guion: %(errores)s"
 msgstr "The script wasn't saved: %(errores)s"
 
+#, python-brace-format
+msgid "No se guardó: {mensaje}"
+msgstr "Not saved: {mensaje}"
+
 msgid "No se pudieron armar los clips. Vuelve a intentarlo."
 msgstr "Couldn't assemble the clips. Try again."
 
 msgid "No se pudieron cargar los sugeridos."
 msgstr "Couldn't load the suggestions."
 
+#, python-brace-format
+msgid "No se pudieron cargar {lista} (el enlace no respondió o el archivo ya no está): esas partes quedan vacías en la vista previa."
+msgstr "Couldn't load {lista} (the link didn't respond or the files are gone): those parts stay empty in the preview."
+
 msgid "No se pudieron escribir los prompts de imágenes. Vuelve a intentarlo."
 msgstr "Couldn't write the image prompts. Try again."
+
+#, python-brace-format
+msgid "No se pudieron preparar las copias livianas de {n} archivo(s): la vista previa sigue con los originales (se ve igual, solo tarda más en cargar)."
+msgstr "Couldn't prepare the lightweight copies of {n} file(s): the preview keeps using the originals (it looks the same, it just takes longer to load)."
 
 #, python-format
 msgid "No se pudieron preparar las referencias (%(tipo)s)."
@@ -7200,6 +7715,9 @@ msgstr "Couldn't adapt it."
 
 msgid "No se pudo agregar ese referente."
 msgstr "Couldn't add that reference."
+
+msgid "No se pudo agregar: el aviso está debajo del video."
+msgstr "Couldn't add it: the notice is below the video."
 
 msgid "No se pudo analizar"
 msgstr "Couldn't analyze it"
@@ -7238,11 +7756,22 @@ msgstr "Couldn't load the scripts panel. Reload the page."
 msgid "No se pudo cargar el prompt."
 msgstr "Couldn't load the prompt."
 
+#, python-brace-format
+msgid "No se pudo cargar el sonido de {n} archivo(s) (puede ser la conexión o que el almacenamiento no dé permiso de lectura): la vista previa sigue sin ese sonido."
+msgstr "Couldn't load the sound of {n} file(s) (it may be the connection or the storage not allowing reads): the preview goes on without that sound."
+
+msgid "No se pudo cargar la biblioteca."
+msgstr "Couldn't load the library."
+
 msgid "No se pudo cargar la biblioteca. Recarga la página."
 msgstr "The library couldn't load. Reload the page."
 
 msgid "No se pudo cargar más referentes."
 msgstr "Couldn't load more references."
+
+#, python-brace-format
+msgid "No se pudo cargar {lista} (el enlace no respondió o el archivo ya no está): esa parte queda vacía en la vista previa."
+msgstr "Couldn't load {lista} (the link didn't respond or the file is gone): that part stays empty in the preview."
 
 msgid "No se pudo cargar."
 msgstr "Couldn't load."
@@ -7302,6 +7831,13 @@ msgstr "Couldn't describe it."
 msgid "No se pudo encolar la regeneración."
 msgstr "Couldn't queue the regeneration."
 
+msgid "No se pudo escuchar ese audio."
+msgstr "Couldn't play that audio."
+
+#, python-brace-format
+msgid "No se pudo guardar (error {status})."
+msgstr "Couldn't save (error {status})."
+
 msgid "No se pudo guardar la revisión."
 msgstr "Couldn't save the review."
 
@@ -7318,6 +7854,13 @@ msgstr "Couldn't reach Notion; try again in a moment."
 msgid "No se pudo hacer el análisis: %(error)s"
 msgstr "The analysis couldn't be done: %(error)s"
 
+#, python-brace-format
+msgid "No se pudo hacer ese cambio ({error}). La edición quedó como estaba."
+msgstr "Couldn't make that change ({error}). The edit stayed as it was."
+
+msgid "No se pudo hacer ese cambio: el aviso está debajo del video."
+msgstr "Couldn't make that change: the notice is below the video."
+
 msgid "No se pudo leer el guion. Vuelve a intentarlo."
 msgstr "Couldn't read the script. Try again."
 
@@ -7330,6 +7873,26 @@ msgstr "The saved key couldn't be read: connect Triple Whale again."
 #, python-format
 msgid "No se pudo pausar por tope: %(error)s"
 msgstr "Could not pause for reaching the cap: %(error)s"
+
+#, python-brace-format
+msgid "No se pudo preparar ese video (error {status})."
+msgstr "Couldn't prepare that video (error {status})."
+
+#, python-brace-format
+msgid "No se pudo preparar este destino: {mensaje}"
+msgstr "Couldn't prepare this market: {mensaje}"
+
+#, python-brace-format
+msgid "No se pudo preparar las copias livianas de {n} archivo(s): la vista previa sigue con los originales (se ve igual, solo tarda más en cargar)."
+msgstr "Couldn't prepare the lightweight copy of {n} file(s): the preview keeps using the originals (it looks the same, it just takes longer to load)."
+
+#, python-brace-format
+msgid "No se pudo preparar «{nombre}». Vuelve a intentar."
+msgstr "Couldn't prepare “{nombre}”. Try again."
+
+#, python-brace-format
+msgid "No se pudo producir (error {status})."
+msgstr "Couldn't produce (error {status})."
 
 msgid "No se pudo proponer qué quitar. Vuelve a intentarlo."
 msgstr "Couldn't propose what to cut. Try again."
@@ -7355,6 +7918,10 @@ msgstr "Could not refresh %(nombre)s (%(pais)s): %(error)s"
 msgid "No se pudo sacar ningún fotograma del video."
 msgstr "Couldn't get a single frame from the video."
 
+#, python-brace-format
+msgid "No se pudo subir (error {status})."
+msgstr "Couldn't upload (error {status})."
+
 #, python-format
 msgid "No se pudo subir la foto del producto: %(error)s"
 msgstr "Couldn't upload the product photo: %(error)s"
@@ -7369,6 +7936,17 @@ msgstr "Couldn't suggest anything."
 #, python-format
 msgid "No se puede reanudar un estudio con estado '%(estado)s'."
 msgstr "A study with state “%(estado)s” can't be resumed."
+
+msgid "No se subió"
+msgstr "Not uploaded"
+
+#, python-format
+msgid "No sé formatear precios de %(pais)s."
+msgstr "I don't know how to format prices for %(pais)s."
+
+#, python-brace-format
+msgid "No sé formatear precios de {pais}."
+msgstr "I don't know how to format prices for {pais}."
 
 msgid "No tienes acceso a ese proyecto."
 msgstr "You don't have access to that project."
@@ -7496,6 +8074,12 @@ msgstr "Heads up: campaign %(numeros)s has the same persona, product, stage, awa
 msgid "Ojos / rostro"
 msgstr "Eyes / face"
 
+msgid "Opacidad"
+msgstr "Opacity"
+
+msgid "Opacidad del fondo"
+msgstr "Background opacity"
+
 msgid "Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en Configuración, o elige el objetivo de tráfico."
 msgstr "Optimizing for purchases requires an active Pixel and pixel attribution: press “Check Pixel” in Settings, or choose the traffic objective."
 
@@ -7605,6 +8189,13 @@ msgstr "For whom"
 msgid "Para volver a tu propia app,"
 msgstr "To go back to your own app,"
 
+msgid "Parar"
+msgstr "Stop"
+
+#, python-brace-format
+msgid "Parar «{nombre}»"
+msgstr "Stop “{nombre}”"
+
 #, python-format
 msgid "Pasa (%(n)s)"
 msgstr "Passes (%(n)s)"
@@ -7684,6 +8275,14 @@ msgstr "Ads' country"
 
 msgid "País:"
 msgstr "Country:"
+
+#, python-brace-format
+msgid "Pedido inválido: se esperaba {documento, version_n}."
+msgstr "Invalid request: expected {documento, version_n}."
+
+#, python-brace-format
+msgid "Pedido inválido: se esperaba {version_n, destinos}."
+msgstr "Invalid request: expected {version_n, destinos}."
 
 msgid "Pedido rechazado: no viene de esta página."
 msgstr "Request rejected: it doesn't come from this page."
@@ -7842,6 +8441,9 @@ msgstr "Pieces that were ready to publish (%(n)s)"
 msgid "Pipeline"
 msgstr "Pipeline"
 
+msgid "Pista"
+msgstr "Track"
+
 msgid "Pixel activo"
 msgstr "Pixel active"
 
@@ -7873,6 +8475,12 @@ msgstr "Privacy policy"
 
 msgid "Pon REDDIT_USER_AGENT con la forma «creatv-machine/1.0 (by u/tu_usuario)» y reinicia los dos servicios."
 msgstr "Set REDDIT_USER_AGENT to the form “creatv-machine/1.0 (by u/your_username)” and restart both services."
+
+msgid "Pon el cabezal dentro de un clip para cortarlo."
+msgstr "Put the playhead inside a clip to split it."
+
+msgid "Pon el cabezal sobre el clip elegido para cortarlo."
+msgstr "Put the playhead over the selected clip to split it."
 
 msgid "Pon una duración objetivo para poder recortar."
 msgstr "Set a target duration to be able to trim."
@@ -7910,6 +8518,12 @@ msgstr "To review"
 msgid "Por tipo"
 msgstr "By type"
 
+msgid "Posición"
+msgstr "Position"
+
+msgid "Posición en el video"
+msgstr "Position in the video"
+
 msgid "Posts"
 msgstr "Posts"
 
@@ -7938,11 +8552,31 @@ msgstr "Asking WaveSpeed for the video… if it already finished, it shows up he
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
 
+msgid "Preparando el video"
+msgstr "Preparing the video"
+
 msgid "Preparando el video para el editor… la página se recarga y entra sola."
 msgstr "Preparing the video for the editor… the page reloads and opens it on its own."
 
+msgid "Preparando el video para el editor… se abre solo en cuanto esté listo."
+msgstr "Preparing the video for the editor… it opens on its own as soon as it's ready."
+
+msgid "Preparando materiales"
+msgstr "Preparing files"
+
 msgid "Preparando para el editor…"
 msgstr "Preparing for the editor…"
+
+#, python-brace-format
+msgid "Preparando {n} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales."
+msgstr "Preparing {n} file(s) so the preview is lighter. It's free; meanwhile the originals are used."
+
+#, python-brace-format
+msgid "Preparando «{nombre}» para el editor (gratis): se agrega sola cuando esté."
+msgstr "Preparing “{nombre}” for the editor (free): it's added on its own when it's ready."
+
+msgid "Preparando…"
+msgstr "Preparing…"
 
 msgid "Preparar guion con IA"
 msgstr "Prepare script with AI"
@@ -7984,6 +8618,10 @@ msgstr "First write the image prompts."
 msgid "Primero escribe tu correo en Configuración › Cuenta."
 msgstr "First enter your email in Settings › Account."
 
+#, python-brace-format
+msgid "Primero hay que guardar: {mensaje}"
+msgstr "It has to save first: {mensaje}"
+
 msgid "Primero la persona y el producto; lo demás lo ajustas después."
 msgstr "First the persona and the product; you adjust everything else afterward."
 
@@ -8021,9 +8659,20 @@ msgstr "Processing…"
 msgid "Produciendo %(n)s finales… cada una aparece aquí, en Finales, cuando termina."
 msgstr "Producing %(n)s final cuts… each one appears here, in Final cuts, when it's done."
 
+#, python-brace-format
+msgid "Produciendo {n} final. Las vas a ver en Final edition cuando terminen."
+msgstr "Producing {n} final cut. You'll see it in Final edition when it's done."
+
+#, python-brace-format
+msgid "Produciendo {n} finales. Las vas a ver en Final edition cuando terminen."
+msgstr "Producing {n} final cuts. You'll see them in Final edition when they're done."
+
 #, python-format
 msgid "Produciendo… 0%% · 0s"
 msgstr "Producing… 0%% · 0s"
+
+msgid "Producir"
+msgstr "Produce"
 
 msgid "Producir 1 final"
 msgstr "Produce 1 final cut"
@@ -8157,6 +8806,9 @@ msgstr "Pending proposals"
 msgid "Propuestas pendientes (%(n)s)"
 msgstr "Pending proposals (%(n)s)"
 
+msgid "Proxy listo."
+msgstr "Lightweight copy ready."
+
 msgid "Proyecto"
 msgstr "Project"
 
@@ -8289,6 +8941,9 @@ msgstr "Paste them as HF_API_KEY_ID and HF_API_KEY_SECRET in the server's .env a
 msgid "Pídele a Claude que la corrija antes de usarla."
 msgstr "Ask Claude to fix it before using it."
 
+msgid "Píldora"
+msgstr "Pill"
+
 msgid "Público e irreversible."
 msgstr "Public and irreversible."
 
@@ -8366,8 +9021,15 @@ msgstr "Remove all"
 msgid "Quitar todos los de esta fuente"
 msgstr "Remove all from this source"
 
+#, python-brace-format
+msgid "Quitar «{nombre}» de la lista"
+msgstr "Remove “{nombre}” from the list"
+
 msgid "Quién sostiene qué"
 msgstr "Who holds what"
+
+msgid "Qué agregar"
+msgstr "What to add"
 
 msgid "Qué desea"
 msgstr "What they want"
@@ -8488,6 +9150,9 @@ msgstr "Reload this page: the channel becomes “connected”. Shorts go out wit
 msgid "Recarga para ver el análisis completo."
 msgstr "Reload to see the full analysis."
 
+msgid "Recargar"
+msgstr "Reload"
+
 msgid "Recargar ahora"
 msgstr "Reload now"
 
@@ -8580,6 +9245,9 @@ msgstr "Social networks:"
 
 msgid "Redundante"
 msgstr "Redundant"
+
+msgid "Reemplazar y producir"
+msgstr "Replace and produce"
 
 msgid "Reenviar"
 msgstr "Resend"
@@ -8710,6 +9378,12 @@ msgstr "Back to school"
 msgid "Regístrate en fal.ai (con Google o GitHub; no pide verificación de negocio)."
 msgstr "Sign up at fal.ai (with Google or GitHub; no business verification required)."
 
+msgid "Rehacer"
+msgstr "Redo"
+
+msgid "Rehacer (Ctrl/Cmd+Shift+Z)"
+msgstr "Redo (Ctrl/Cmd+Shift+Z)"
+
 #, python-format
 msgid "Reintentando en %(plataforma)s."
 msgstr "Retrying on %(plataforma)s."
@@ -8744,11 +9418,24 @@ msgstr "Retry of “%(titulo)s”"
 msgid "Relevantes:"
 msgstr "Relevant:"
 
+msgid "Renderizando"
+msgstr "Rendering"
+
+#, python-format
+msgid "Renderizando tramo %(i)s/%(n)s"
+msgstr "Rendering segment %(i)s/%(n)s"
+
 msgid "Repetir QA"
 msgstr "Repeat QA"
 
 msgid "Repitiendo el QA de la pieza; el resultado aparecerá aquí en unos segundos."
 msgstr "Repeating the piece's QA; the result will appear here in a few seconds."
+
+msgid "Reproducir"
+msgstr "Play"
+
+msgid "Reproductor"
+msgstr "Player"
 
 msgid "Reprodúcelo idéntico a su referencia: misma forma, mismo color, misma textura y el mismo logotipo o marca tal como aparece, en el mismo lugar. No inventes ni cambies letras, logos ni etiquetas."
 msgstr "Reproduce it identical to its reference: same shape, same color, same texture and the same logo or brand exactly as it appears, in the same place. Do not invent or change letters, logos or labels."
@@ -8890,6 +9577,9 @@ msgstr "Reading pace (words per second; 2.4 is natural)"
 msgid "Rodilla y pantorrilla"
 msgstr "Knee and calf"
 
+msgid "Rojo"
+msgstr "Red"
+
 msgid "Rol"
 msgstr "Role"
 
@@ -8922,8 +9612,15 @@ msgstr "System health"
 msgid "San Valentín"
 msgstr "Valentine's Day"
 
+msgid "Se acerca y pasa al siguiente."
+msgstr "It zooms in and moves to the next one."
+
 msgid "Se agrega: "
 msgstr "Added: "
+
+#, python-brace-format
+msgid "Se agregó «{nombre}»."
+msgstr "“{nombre}” was added."
 
 msgid "Se analizan dos veces (núcleos, luego subs)"
 msgstr "Analyzed twice (cores, then subs)"
@@ -9128,6 +9825,9 @@ msgstr "Next: %(paso)s"
 msgid "Siguiente: %(texto)s →"
 msgstr "Next: %(texto)s →"
 
+msgid "Silenciar"
+msgstr "Mute"
+
 #, python-format
 msgid "Sin %(partes)s: Triple Whale no aceptó esa consulta."
 msgstr "Without %(partes)s: Triple Whale didn't accept that query."
@@ -9159,6 +9859,18 @@ msgstr "No channels to publish to:"
 
 msgid "Sin conexión: no se guardó. Intenta de nuevo."
 msgstr "No connection: it wasn't saved. Try again."
+
+msgid "Sin conexión: no se pudo preparar ese video. Vuelve a intentar."
+msgstr "No connection: couldn't prepare that video. Try again."
+
+msgid "Sin conexión: no se pudo producir. Vuelve a intentar."
+msgstr "No connection: couldn't produce. Try again."
+
+msgid "Sin conexión: no se pudo subir. Vuelve a intentar."
+msgstr "No connection: couldn't upload. Try again."
+
+msgid "Sin conexión: se guarda con el próximo cambio."
+msgstr "No connection: it saves with the next change."
 
 msgid "Sin datos suficientes"
 msgstr "Not enough data"
@@ -9235,6 +9947,9 @@ msgstr "No pieces for: %(paises)s. Add one piece per country or remove the count
 msgid "Sin precio: escríbelo abajo para que el anuncio lo muestre"
 msgstr "No price: write it below so the ad can show it"
 
+msgid "Sin proxy para este tipo."
+msgstr "No lightweight copy for this type."
+
 msgid "Sin rastreo de Triple Whale"
 msgstr "No Triple Whale tracking"
 
@@ -9244,11 +9959,17 @@ msgstr "No brand references yet."
 msgid "Sin referencias ni producto: el modelo recibe el texto tal cual, sin marca ni logos."
 msgstr "No references or product: the model gets the text as-is, with no brand or logos."
 
+msgid "Sin sonido: súbelo para oír el sonido de este video."
+msgstr "No sound: turn it up to hear this video's sound."
+
 msgid "Sin sub-avatares en este núcleo."
 msgstr "No sub-avatars in this core."
 
 msgid "Sin texto: se redacta con IA al aprobar (o escríbelo aquí)"
 msgstr "No text: it's written with AI on approval (or write it here)"
+
+msgid "Sin transición: pasa de golpe."
+msgstr "No transition: it switches at once."
 
 msgid "Sin título"
 msgstr "Untitled"
@@ -9369,6 +10090,9 @@ msgstr "Only you see this screen — each project has its own username and passw
 msgid "Soluciones que probó y por qué fallaron (una por línea: «qué usó :: problema; problema»)"
 msgstr "Solutions they tried and why they failed (one per line: “what they used :: problem; problem”)"
 
+msgid "Sombra"
+msgstr "Shadow"
+
 msgid ""
 "Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta\n"
 "  y no entra en este total. Ningún gasto bloquea una acción: solo se informa."
@@ -9387,6 +10111,9 @@ msgstr "Scene sound"
 
 msgid "Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)"
 msgstr "Scene sound (the model's native audio; Kling charges USD 0.028/s more)"
+
+msgid "Space Grotesk"
+msgstr "Space Grotesk"
 
 #, python-format
 msgid "Sprint %(nombre)s · Campaña %(n)s"
@@ -9467,12 +10194,26 @@ msgstr ""
 "      best models on the market, swap the product in real photos and videos, and launch campaigns on\n"
 "      Meta from the same place — no agency, no editor, no waiting."
 
+msgid "Sube un video, una imagen o un audio."
+msgstr "Upload a video, an image or an audio file."
+
+#, python-brace-format
+msgid "Subida de «{nombre}»"
+msgstr "Upload of “{nombre}”"
+
+msgid "Subido"
+msgstr "Uploaded"
+
 #, python-format
 msgid "Subido: %(nombre)s"
 msgstr "Uploaded: %(nombre)s"
 
 msgid "Subiendo"
 msgstr "Uploading"
+
+#, python-brace-format
+msgid "Subiendo {n} %"
+msgstr "Uploading {n}%"
 
 msgid "Subiendo…"
 msgstr "Uploading…"
@@ -9486,6 +10227,9 @@ msgstr "Upload"
 
 msgid "Subir CSV o Excel"
 msgstr "Upload CSV or Excel"
+
+msgid "Subir audio"
+msgstr "Upload audio"
 
 msgid "Subir canción"
 msgstr "Upload song"
@@ -9507,6 +10251,12 @@ msgstr "Upload · link · product photos"
 
 msgid "Subreddits (separados por coma; vacío = toda Reddit)"
 msgstr "Subreddits (comma-separated; empty = all of Reddit)"
+
+msgid "Subtítulo"
+msgstr "Subtitle"
+
+msgid "Subtítulos sin libass: omitidos"
+msgstr "Subtitles without libass: skipped"
 
 msgid "Suecia"
 msgstr "Sweden"
@@ -9571,6 +10321,12 @@ msgstr "Dashboard"
 msgid "Tablero · %(mes)s %(anio)s"
 msgstr "Dashboard · %(mes)s %(anio)s"
 
+msgid "Tamaño"
+msgstr "Size"
+
+msgid "Tamaño (del ancho de la pantalla)"
+msgstr "Size (of the screen width)"
+
 msgid "Tarea"
 msgstr "Task"
 
@@ -9607,8 +10363,14 @@ msgstr "Finished with an error."
 msgid "Textil de hogar (cobija, manta, cojín)"
 msgstr "Home textile (blanket, throw, cushion)"
 
+msgid "Texto"
+msgstr "Text"
+
 msgid "Texto a leer"
 msgstr "Text to read"
+
+msgid "Texto agregado: escríbelo en «Editar»."
+msgstr "Text added: type it in “Edit”."
 
 msgid "Texto de la publicación"
 msgstr "Post text"
@@ -9630,6 +10392,13 @@ msgstr "Text is ready: review it and edit it if you like."
 
 msgid "Texto pegado"
 msgstr "Pasted text"
+
+#, python-brace-format
+msgid "Texto «{rol}»"
+msgstr "Text “{rol}”"
+
+msgid "Textos"
+msgstr "Texts"
 
 msgid "Textos orgánicos (IA)"
 msgstr "Organic captions (AI)"
@@ -9690,6 +10459,10 @@ msgid "Tipo de derivación desconocido: %(tipo)s."
 msgstr "Unknown derivation type: %(tipo)s."
 
 #, python-format
+msgid "Tipo de material sin extensión conocida: %(tipo)s"
+msgstr "File type with no known extension: %(tipo)s"
+
+#, python-format
 msgid "Tipo de pieza inválido: %(tipo)s"
 msgstr "Invalid piece type: %(tipo)s"
 
@@ -9724,8 +10497,17 @@ msgstr "Headline"
 msgid "Toca dónde va el producto"
 msgstr "Tap where the product goes"
 
+msgid "Toca una para ponerla en el video que elegiste o, si no, en el corte más cercano al cabezal. Dura medio segundo; con el mouse también puedes arrastrarla a un corte."
+msgstr "Tap one to put it on the video you selected or, if none, on the cut closest to the playhead. It lasts half a second; with the mouse you can also drag it to a cut."
+
 msgid "Toca una pieza para ver el detalle, descargarla o crear otra a partir de ella."
 msgstr "Tap a piece to see the detail, download it, or create another one from it."
+
+msgid "Toca uno para ponerlo donde está el cabezal; con el mouse también puedes arrastrarlo a la línea de tiempo."
+msgstr "Tap one to place it at the playhead; with the mouse you can also drag it to the timeline."
+
+msgid "Toda la edición"
+msgstr "The whole edit"
 
 msgid "Toda la vida del cliente (lifetime)"
 msgstr "Customer lifetime"
@@ -9763,6 +10545,9 @@ msgstr "There are no ads with enough data to evaluate with AI yet."
 
 msgid "Todavía no hay aprendizajes: aparecen solos cuando una prueba decide una ganadora o una perdedora."
 msgstr "No learnings yet: they appear on their own when a test decides a winner or a loser."
+
+msgid "Todavía no hay audios. Sube uno aquí, o crea canciones en Crear › Mi música."
+msgstr "There's no audio yet. Upload one here, or create songs in Create › My music."
 
 #, python-format
 msgid "Todavía no hay avatares. Con %(n)s comentarios o más, el botón de arriba los genera."
@@ -9836,6 +10621,9 @@ msgstr "No users yet."
 
 msgid "Todavía no hay videos listos. Genera uno en <a href=\"#creativeflowplus\">Crear</a> y vuelve aquí para terminarlo."
 msgstr "No ready videos yet. Generate one in <a href=\"#creativeflowplus\">Create</a> and come back here to finish it."
+
+msgid "Todavía no hay videos ni imágenes en este proyecto. Súbelos con «Subir» (o arrástralos aquí desde tu computadora)."
+msgstr "There are no videos or images in this project yet. Upload them with “Upload” (or drag them here from your computer)."
 
 msgid "Todavía no hay videos. Crea el primero: eliges duración, modo, hook y referencias."
 msgstr "No videos yet. Create the first one: choose duration, mode, hook and references."
@@ -10010,6 +10798,20 @@ msgstr "Fetch and read"
 msgid "Transiciones"
 msgstr "Transitions"
 
+msgid "Transición al siguiente"
+msgstr "Transition to the next one"
+
+msgid "Transición vista de forma aproximada: el video final la hace completa."
+msgstr "Transition shown approximately: the final video renders it in full."
+
+#, python-brace-format
+msgid "Transición «{nombre}»: {descripcion}"
+msgstr "“{nombre}” transition: {descripcion}"
+
+#, python-brace-format
+msgid "Transición: {nombre}"
+msgstr "Transition: {nombre}"
+
 msgid "Trayendo anuncios"
 msgstr "Getting ads"
 
@@ -10149,6 +10951,12 @@ msgstr "Your answer"
 msgid "Tu sesión se cerró; entra de nuevo."
 msgstr "Your session closed; log in again."
 
+msgid "Tu sesión venció: vuelve a entrar para seguir."
+msgstr "Your session expired: sign in again to keep going."
+
+msgid "Tu sesión venció: vuelve a entrar y súbelo otra vez."
+msgstr "Your session expired: sign in again and upload it again."
+
 #, python-format
 msgid "Tu texto menciona %(menciones)s, pero en la bandeja solo hay: %(disponibles)s. Sube lo que falta o quita esas menciones y vuelve a generar — no se cobró nada."
 msgstr "Your text mentions %(menciones)s, but the tray only has: %(disponibles)s. Upload what is missing or remove those mentions and generate again — nothing was charged."
@@ -10167,6 +10975,9 @@ msgstr "Your store according to Triple Whale"
 
 msgid "Tus anuncios"
 msgstr "Your ads"
+
+msgid "Tus archivos"
+msgstr "Your files"
 
 msgid "Tus audios"
 msgstr "Your audios"
@@ -10216,6 +11027,9 @@ msgstr "USD 0.02 only the first time per style and duration (after that it comes
 msgid "Un anuncio que lleva semanas al aire, o que la marca duplicó en muchas variantes, casi siempre es uno que está vendiendo. Déjalos vacíos para no filtrar."
 msgstr "An ad that has been running for weeks, or that the brand duplicated into many variants, is almost always one that's selling. Leave them empty to not filter."
 
+msgid "Un clip de audio no tiene posición ni tamaño."
+msgstr "An audio clip has no position or size."
+
 msgid "Un dibujo, una foto o una pantalla que sale en la escena, descríbelo con palabras y sin @Imagen: con @Imagen el modelo lo convierte en personajes reales."
 msgstr "A drawing, photo or screen that shows up in the scene: describe it in words, without @Imagen. With @Imagen the model turns it into real characters."
 
@@ -10239,6 +11053,9 @@ msgstr "A sprint is the content plan for one month across all your countries: yo
 
 msgid "Un usuario con rol 'cliente' necesita un proyecto asignado."
 msgstr "A user with the 'cliente' role needs an assigned project."
+
+msgid "Un video se funde en el otro."
+msgstr "One video fades into the other."
 
 msgid "Una campaña necesita al menos un video o una imagen."
 msgstr "A campaign needs at least one video or image."
@@ -10288,11 +11105,17 @@ msgstr "A reference counts once it has a description. Tell us what you want to r
 msgid "Una sola idea"
 msgstr "One single idea"
 
+msgid "Una transición va entre dos videos: agrega otro video primero."
+msgstr "A transition goes between two videos: add another video first."
+
 msgid "Unboxing"
 msgstr "Unboxing"
 
 msgid "Unidades"
 msgstr "Units"
+
+msgid "Uniendo tramos"
+msgstr "Joining segments"
 
 msgid "Urbano"
 msgstr "Urban"
@@ -10511,6 +11334,9 @@ msgstr "Video"
 msgid "Video completo"
 msgstr "Full video"
 
+msgid "Video de Crear"
+msgstr "Create video"
+
 msgid "Video de FlowPlus listo, pendiente de revisión."
 msgstr "FlowPlus video ready, pending review."
 
@@ -10519,6 +11345,9 @@ msgstr "The link's video was added to the references."
 
 msgid "Video desde tus referencias"
 msgstr "Video from your references"
+
+msgid "Video encima"
+msgstr "Overlay video"
 
 msgid "Video sin fotograma —"
 msgstr "Video without a frame —"
@@ -10539,6 +11368,9 @@ msgstr "Video · 8s"
 msgid "Videos"
 msgstr "Videos"
 
+msgid "Videos de Crear"
+msgstr "Create videos"
+
 msgid "Videos de este guion"
 msgstr "This script's videos"
 
@@ -10552,11 +11384,20 @@ msgstr "Videos, images and audios from your references, or swap the product in a
 msgid "Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto"
 msgstr "Videos, images, scripts, final cuts and AI text paid for this month; detail in Settings › Spend"
 
+msgid "Vista previa del video"
+msgstr "Video preview"
+
 msgid "Visuales"
 msgstr "Visuals"
 
+msgid "Volumen"
+msgstr "Volume"
+
 msgid "Volumen de la música"
 msgstr "Music volume"
+
+msgid "Volumen del sonido"
+msgstr "Sound volume"
 
 msgid "Volver a aprobar (actualiza la persona)"
 msgstr "Approve again (updates the persona)"
@@ -10582,6 +11423,9 @@ msgstr "Back to log in"
 msgid "Volver a intentar"
 msgstr "Try again"
 
+msgid "Volver a oír"
+msgstr "Unmute"
+
 msgid "Volver al original"
 msgstr "Revert to the original"
 
@@ -10603,8 +11447,14 @@ msgstr "Voice-over (ElevenLabs), word-level subtitles (Whisper) and music (Stabl
 msgid "Voz en off: la voz se agrega después"
 msgstr "Voice-over: the voice is added afterward"
 
+msgid "Voz primero"
+msgstr "Voice first"
+
 msgid "Voz, en inglés (opcional: si la dejas vacía sale de la descripción del personaje)"
 msgstr "Voice, in English (optional: leave it empty and it's drawn from the character's description)"
+
+msgid "Voz, sonido del video y música, cada uno en su punto."
+msgstr "Voice, video sound and music, each at its right level."
 
 msgid "Vuelve a R2 › «Manage R2 API tokens» › «Create API token» con permiso «Object Read & Write»."
 msgstr "Go back to R2 › “Manage R2 API tokens” › “Create API token” with “Object Read & Write” permission."
@@ -10664,6 +11514,12 @@ msgstr "And %(n)s more ad(s) with little spend that aren't shown."
 msgid "Ya estaba publicada (o en cola) en %(plataformas)s: no se publica dos veces."
 msgstr "It was already published (or queued) on %(plataformas)s: it doesn't get published twice."
 
+msgid "Ya está centrado a lo alto."
+msgstr "It's already centered vertically."
+
+msgid "Ya está centrado a lo ancho."
+msgstr "It's already centered horizontally."
+
 #, python-format
 msgid "Ya existe un %(tipo)s con ese nombre (%(id)s)."
 msgstr "There's already a %(tipo)s with that name (%(id)s)."
@@ -10698,6 +11554,13 @@ msgstr "A sync was already running."
 msgid "Ya hay algo en curso para este barrido."
 msgstr "Something is already running for this sweep."
 
+msgid "Ya hay finales de esos destinos hechas por otro camino (pueden tener voz); si produces, estas las reemplazan."
+msgstr "There are already final cuts for those markets made another way (they may have voice); if you produce, these replace them."
+
+#, python-brace-format
+msgid "Ya hay finales de {destinos} hechas por otro camino (pueden tener voz). Si produces, estas las reemplazan."
+msgstr "There are already final cuts for {destinos} made another way (they may have voice). If you produce, these replace them."
+
 msgid "Ya hay un QA en curso para esa pieza."
 msgstr "A QA is already in progress for that piece."
 
@@ -10706,6 +11569,13 @@ msgstr "A link is already downloading for this campaign."
 
 msgid "Ya hay una evaluación con IA en curso."
 msgstr "There's already an AI evaluation running."
+
+msgid "Ya hay una final de ese destino hecha por otro camino (puede tener voz); si produces, esta la reemplaza."
+msgstr "There's already a final cut for that market made another way (it may have voice); if you produce, this one replaces it."
+
+#, python-brace-format
+msgid "Ya hay una final de {destinos} hecha por otro camino (puede tener voz). Si produces, esta la reemplaza."
+msgstr "There's already a final cut for {destinos} made another way (it may have voice). If you produce, this one replaces it."
 
 msgid "Ya hay una generación en curso para este estudio."
 msgstr "There's already a generation in progress for this study."
@@ -10770,6 +11640,9 @@ msgstr "This piece's script was already being written."
 
 msgid "Ya se estaba generando eso — espera a que termine."
 msgstr "That was already being generated — wait for it to finish."
+
+msgid "Ya se estaba preparando ese video."
+msgstr "That video was already being prepared."
 
 msgid "Ya se estaba rearmando."
 msgstr "It was already being rebuilt."
@@ -10868,6 +11741,12 @@ msgstr "Zip from %(fecha)s (%(n)s pieces)"
 #, python-format
 msgid "Zip listo con %(n)s pieza(s)."
 msgstr "Zip ready with %(n)s piece(s)."
+
+msgid "Zoom"
+msgstr "Zoom"
+
+msgid "Zoom lento"
+msgstr "Slow zoom"
 
 msgid "a quién le habla"
 msgstr "who it speaks to"
@@ -11042,8 +11921,15 @@ msgstr "catalog"
 msgid "cena"
 msgstr "dinner"
 
+msgid "cerca de un minuto por destino"
+msgstr "about a minute per market"
+
 msgid "cerrado"
 msgstr "closed"
+
+#, python-format
+msgid "cf_id inválido: %(cf)s"
+msgstr "invalid cf_id: %(cf)s"
 
 msgid "clics"
 msgstr "clicks"
@@ -11256,6 +12142,9 @@ msgstr "since %(mes)s 1"
 msgid "detenida"
 msgstr "stopped"
 
+msgid "dimensiones inválidas"
+msgstr "invalid dimensions"
+
 msgid "disfraz"
 msgstr "costume"
 
@@ -11272,6 +12161,9 @@ msgstr "owner@yourproject.com"
 #, python-format
 msgid "duración %(dur)s s, se pedían %(obj)s s"
 msgstr "duration %(dur)s s, %(obj)s s was requested"
+
+msgid "duración inválida"
+msgstr "invalid duration"
 
 msgid "días"
 msgstr "days"
@@ -11323,6 +12215,9 @@ msgstr "e.g. always wears the red cap and never smiles with teeth"
 
 msgid "ej. ¿Cansada de que tus zapatos te maten los pies? Esta semana, envío gratis en toda la tienda."
 msgstr "e.g. Tired of shoes that kill your feet? This week, free shipping storewide."
+
+msgid "el archivo"
+msgstr "the file"
 
 msgid "el arranque"
 msgstr "the lead"
@@ -11452,6 +12347,9 @@ msgstr "scale"
 msgid "escritorio"
 msgstr "desk"
 
+msgid "ese video"
+msgstr "that video"
+
 msgid "español"
 msgstr "Spanish"
 
@@ -11521,9 +12419,15 @@ msgstr "missing"
 msgid "falta %(llaves)s"
 msgstr "missing %(llaves)s"
 
+msgid "falta audio"
+msgstr "missing audio"
+
 #, python-format
 msgid "falta el clip 1 con %(hid)s"
 msgstr "missing clip 1 with %(hid)s"
+
+msgid "falta video con dimensiones válidas"
+msgstr "missing a video with valid dimensions"
 
 #, python-format
 msgid "faltan las líneas %(lista)s"
@@ -11647,6 +12551,10 @@ msgstr "ideas approved"
 
 msgid "ideas propuestas"
 msgstr "ideas proposed"
+
+#, python-format
+msgid "idioma inválido: %(idioma)s (se esperan dos letras minúsculas)."
+msgstr "invalid language: %(idioma)s (two lowercase letters expected)."
 
 msgid "imagen"
 msgstr "image"
@@ -11936,6 +12844,9 @@ msgstr "note"
 msgid "o"
 msgstr "or"
 
+msgid "o arrastra archivos aquí"
+msgstr "or drag files here"
+
 msgid "o haz clic para elegir (jpg, png, webp, mp4, mov, webm)."
 msgstr "or click to choose (jpg, png, webp, mp4, mov, webm)."
 
@@ -11999,6 +12910,10 @@ msgstr "paused"
 
 msgid "pausar"
 msgstr "pause"
+
+#, python-format
+msgid "país inválido: %(pais)s (se esperan dos letras mayúsculas)."
+msgstr "invalid country: %(pais)s (two uppercase letters expected)."
 
 msgid "pedidos"
 msgstr "orders"
@@ -12451,6 +13366,9 @@ msgstr "text"
 msgid "tienda"
 msgstr "store"
 
+msgid "tipo debe ser video o imagen"
+msgstr "type must be video or image"
+
 msgid "todas"
 msgstr "all"
 
@@ -12482,6 +13400,10 @@ msgstr "a beat in clip %(i)s doesn't describe what's shown"
 
 msgid "una por línea; con el link de su Ad Library si lo tienes"
 msgstr "one per line; with its Ad Library link if you have it"
+
+#, python-brace-format
+msgid "unos {n} minutos por destino"
+msgstr "about {n} minutes per market"
 
 msgid "urbano"
 msgstr "Urban"
@@ -12591,6 +13513,14 @@ msgstr "already published"
 msgid "ya usamos Kling O1 (vía fal.ai) y Kling O3 Pro (más nuevo, vía WaveSpeed); no suma nada nuevo probar las versiones intermedias"
 msgstr "we already use Kling O1 (via fal.ai) and Kling O3 Pro (newer, via WaveSpeed); testing the intermediate versions doesn't add anything new"
 
+#, python-brace-format
+msgid "{mensaje} Elige otro destino."
+msgstr "{mensaje} Choose another market."
+
+#, python-brace-format
+msgid "{n} %"
+msgstr "{n}%"
+
 msgid "¡Listo! Tienes cambios sin guardar en esta página."
 msgstr "Done! You have unsaved changes on this page."
 
@@ -12664,6 +13594,22 @@ msgstr "“Create credentials” › “API key”; in “API restrictions” li
 #, python-format
 msgid "«siguiente» trae un paso que no existe: %(que)s."
 msgstr "“siguiente” has a step that doesn't exist: %(que)s."
+
+#, python-brace-format
+msgid "«{nombre}» quedó en la unión."
+msgstr "“{nombre}” was placed on the join."
+
+#, python-brace-format
+msgid "«{nombre}» se está preparando"
+msgstr "“{nombre}” is being prepared"
+
+#, python-brace-format
+msgid "«{nombre}» se está preparando: se agrega sola cuando esté."
+msgstr "“{nombre}” is being prepared: it's added on its own when it's ready."
+
+#, python-brace-format
+msgid "«{nombre}» tarda demasiado en prepararse. Vuelve a intentar en un rato."
+msgstr "“{nombre}” is taking too long to prepare. Try again in a while."
 
 #, python-format
 msgid "¿Activar «%(nombre)s» en Meta? Vuelve a gastar presupuesto."
@@ -12890,6 +13836,9 @@ msgstr "← Back"
 msgid "← Como imagen"
 msgstr "← As an image"
 
+msgid "← Final edition"
+msgstr "← Final edition"
+
 #, python-format
 msgid "← padre: %(nombre)s"
 msgstr "← parent: %(nombre)s"
@@ -12941,6 +13890,9 @@ msgstr "⚠️ The AI couldn't build the shots (%(aviso)s). Here's the basic pro
 
 msgid "⚠️ ¿Eliminar este estudio PERMANENTEMENTE? Se borran todos los comentarios y avatares. No se puede deshacer."
 msgstr "⚠️ Delete this study PERMANENTLY? All comments and avatars are deleted. This can't be undone."
+
+msgid "✂ Cortar"
+msgstr "✂ Split"
 
 msgid "✏️ Super prompt (editable)"
 msgstr "✏️ Super prompt (editable)"

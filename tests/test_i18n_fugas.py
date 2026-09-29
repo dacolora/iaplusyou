@@ -709,3 +709,30 @@ def test_tarjetas_y_detalle_por_fetch_en_ingles(admin_en, url):
     cf_id, _fid = _final_sembrado()
     fugas = espanol_visible(html_de(admin_en, url.format(cf=cf_id)))
     assert not fugas, (url, fugas[:15])
+
+
+# ---- Fase 6, Task 2: el editor ------------------------------------------------
+
+def test_editor_en_ingles(admin_en):
+    from tests.test_rutas_editor import _datos, _edicion
+    ed, _clon, _voz = _edicion()
+    html = html_de(admin_en, f"/cliente/acme/ediciones/{ed['id']}")
+    assert '<html lang="en">' in html
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]
+    datos = _datos(html)
+    assert datos["idioma_ui"] == "en"
+    assert datos["textos"]["guardado.ok"] == "Saved"
+
+
+def test_mensajes_del_editor_en_ingles(admin_en):
+    """`_edicion()` no está unida a un video de Crear: producir responde 400
+    con su mensaje, en el idioma de quien mira. La subida de la biblioteca
+    (capa 4b) sin archivo, igual."""
+    from tests.test_rutas_editor import _edicion
+    ed, _clon, _voz = _edicion()
+    r = admin_en.post(f"/cliente/acme/ediciones/{ed['id']}/producir", json={"version_n": 1, "destinos": ["es_CO"]})
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "This edit isn't linked to a Create video: it can't be produced from here yet."
+    r = admin_en.post("/cliente/acme/ediciones/materiales/subir", data={})
+    assert r.status_code == 400 and r.get_json()["error"] == "Choose a file."
