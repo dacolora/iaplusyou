@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ _('Pipeline') }}{% endblock %} · Creatv Flow</title>
+  <title>{% block title %}{{ _('Pipeline') }}{% endblock %}{% if self.title()|trim != 'Creatv Adstra' %} · Creatv Adstra{% endif %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/adstra-icono.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -424,9 +425,9 @@
       <span aria-hidden="true">☰</span> {{ _('Menú') }}
     </button>
     {% endif %}
-    <a class="marca-header" href="{{ url_for('index') }}">
-      <span class="marca-mark"></span>
-      <span class="marca-texto">Creatv<span class="marca-punto">Flow</span></span>
+    <a class="marca-header" href="{{ url_for('index') }}" aria-label="Creatv Adstra">
+      <span class="marca-mark" aria-hidden="true"></span>
+      <span class="marca-texto" aria-hidden="true"></span>
     </a>
     {% if request.view_args and request.view_args.cliente %}
     <nav class="header-nav">

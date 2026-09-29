@@ -3,7 +3,7 @@
 <div class="idea-block" style="border-left:3px solid var(--accent);">
   <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">{{ _('Registra tu app de Meta') }}</div></div></div>
   <p class="vacio" style="padding-top:0;">
-    {{ _('Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena.') }}
+    {{ _('Tu proyecto usa su propia app de Meta: Creatv Adstra opera solo con tus credenciales y tus datos no pasan por ninguna app ajena.') }}
     {{ _('Se crea una sola vez en <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noopener">developers.facebook.com</a>.') }}
     {% if agencia_disponible %}<form method="post" action="{{ url_for('meta_forma', cliente=cliente) }}" style="display:inline;"><input type="hidden" name="forma" value="agencia"><button type="submit" class="btn-sm">{{ _('¿Prefieres que Creatv lo gestione? Cambiar') }}</button></form>{% endif %}
   </p>

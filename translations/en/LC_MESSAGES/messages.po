@@ -5383,8 +5383,8 @@ msgstr "Up to 7 images. From a video it only uses one frame. Very good movement 
 msgid "Hay %(usos)s resultado(s) ya generado(s) con este producto: no se borran, pero dejarán de mostrar su nombre y su foto."
 msgstr "There are %(usos)s result(s) already generated with this product: they won't be deleted, but they'll stop showing its name and photo."
 
-msgid "Hecho con Creatv Machine"
-msgstr "Made with Creatv Machine"
+msgid "Hecho con Creatv Adstra"
+msgstr "Made with Creatv Adstra"
 
 #, python-format
 msgid "Hecho en Creatv · %(exp)s"
@@ -10043,8 +10043,8 @@ msgstr "Your moment"
 msgid "Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado."
 msgstr "Your AI content machine.<br>From the product photo to the published ad."
 
-msgid "Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
-msgstr "Your project uses its own Meta app: CreatvMachine operates only with your credentials and your data doesn't pass through any third-party app."
+msgid "Tu proyecto usa su propia app de Meta: Creatv Adstra opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
+msgstr "Your project uses its own Meta app: Creatv Adstra operates only with your credentials and your data doesn't pass through any third-party app."
 
 msgid "Tu respuesta"
 msgstr "Your answer"

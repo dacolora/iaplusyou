@@ -109,21 +109,43 @@ body > header {
   text-decoration: none;
   color: var(--text);
 }
+/* Marca Creatv Adstra: el símbolo y el nombre son máscaras (PNG con alfa en
+   static/img/) pintadas con el color del texto, así siguen al tema claro y al
+   oscuro sin dos juegos de archivos. */
+.marca-mark,
+.marca-texto,
+.marca-logo {
+  display: inline-block;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: left center;
+  mask-position: left center;
+}
 .marca-mark {
   width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--accent-grad);
-  box-shadow: 0 0 16px rgba(77, 141, 255, 0.4);
-  flex: 0 0 auto;
+  height: 28px;
+  -webkit-mask-image: url("img/adstra-simbolo.png");
+  mask-image: url("img/adstra-simbolo.png");
 }
 .marca-texto {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.15rem;
-  letter-spacing: -0.02em;
+  width: 82px;
+  height: 27px;
+  -webkit-mask-image: url("img/adstra-nombre.png");
+  mask-image: url("img/adstra-nombre.png");
 }
-.marca-punto { color: var(--accent-texto); }
+/* Logo completo (símbolo + nombre) de las páginas principales. */
+.marca-logo {
+  width: 220px;
+  height: 86px;
+  max-width: 100%;
+  margin-bottom: 1rem;
+  -webkit-mask-image: url("img/adstra-logo.png");
+  mask-image: url("img/adstra-logo.png");
+}
 
 .header-nav {
   display: flex;
