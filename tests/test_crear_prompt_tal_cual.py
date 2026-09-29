@@ -99,3 +99,24 @@ def test_una_mencion_sin_referencia_no_genera_ni_cobra(app):
 def test_las_menciones_pegadas_de_otra_herramienta_se_traducen(app):
     e = _crear(app, accion_central="@Image1 walks into the kitchen from @[Image 2](image_2). Use @image_1 for identity.")
     assert e["prompt_relleno"] == "Image 1 walks into the kitchen from Image 2. Use Image 1 for identity."
+
+
+# --- Incidente 2026-09-28 («mira lo que sacó»): referencias que el modelo no usa --
+
+def test_un_modelo_que_no_usa_todas_las_referencias_avisa_y_no_cobra(app):
+    """Seedance 2.5 recibe solo @Imagen 1: con dos en la bandeja se generaba
+    igual (la tarjeta mostraba las dos como usadas) y se cobraba el modelo
+    más caro. Ahora se avisa antes y no se crea la sesión."""
+    import creative_flow as cf
+    antes = set(cf.cargar("acme"))
+    r = app["c"].post("/cliente/acme/creative_flow/crear", data={
+        "accion_central": "transición suave entre las dos imágenes", "duracion_objetivo": "8",
+        "aspect_ratio": "9:16", "tipo": "video", "modelo": "seedance25", "n_versiones": "1", "con_sonido": "si"})
+    assert r.status_code == 302
+    assert set(cf.cargar("acme")) == antes and app["lanzadas"] == []
+    with app["c"].session_transaction() as s:
+        mensajes = " ".join(m for _, m in s.get("_flashes", []))
+    assert "Seedance 2.5" in mensajes and "@Imagen 2" in mensajes and "no se cobró" in mensajes.lower()
+    # Wan 3.0 sí usa las dos: genera como siempre
+    e = _crear(app, modelo="wan3")
+    assert e["modelo"] == "wan3" and len(e["referencias"]) == 2

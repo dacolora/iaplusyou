@@ -33,6 +33,8 @@
       <label class="crear-oculto-lector" for="fp-texto">{{ _('Qué tiene que pasar') }}</label>
       <textarea name="accion_central" id="fp-texto" rows="4" placeholder="{{ _('Describe qué tiene que pasar. Ej.: @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1') }}"></textarea>
       <p class="campo-error" id="fp-texto-error" hidden>{{ _('Escribe qué tiene que pasar en el video.') }}</p>
+    {# Incidente 2026-09-28: el modelo elegido no usa todas las referencias de la bandeja (Seedance usa una). #}
+    <p class="campo-error" id="fp-aviso-refs" hidden></p>
 
       <div class="crear-barra">
         <div class="crear-pills">
@@ -74,7 +76,7 @@
             <div class="crear-menu crear-menu-ancho" id="fp-menu-modelo" hidden>
               <div class="crear-opciones" data-solo-video>
                 {% for id, m in modelos_flowplus_video.items() %}
-                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
+                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-max-videos="{{ m.max_videos }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
                 {% endfor %}
               </div>
               <div class="crear-opciones" data-solo-imagen hidden>
@@ -188,6 +190,8 @@
          cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
          quien tiene una idea pero quiere que la IA arme los planos. Nunca obligatorio. #}
       <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('¿No sabes qué escribir?') }} <strong>{{ _('Crear super prompt con IA (gratis)') }}</strong></button>
+      {# Sin variables quemadas (2026-09-28): todo vuelve a los valores del proyecto y la bandeja se vacía. #}
+      <button type="button" class="crear-enlace crear-enlace-gris" id="fp-empezar" title="{{ _('Vacía el texto, el sonido, la música, la bandeja y el catálogo; la duración, el modelo y el formato vuelven a los del proyecto.') }}">{{ _('Empezar de cero') }}</button>
     </div>
 
     <dialog class="generado-modal crear-catalogo" id="fp-catalogo">
@@ -444,6 +448,7 @@
       precio.textContent = usd ? '≈ ' + formatearUSD(usd) : '';
       if (pieLogos) pieLogos.hidden = sinAdjuntos();
       pintarFichas(); pintarMusica(); pintarPastillas();
+      avisarRefs(m, esImagen);
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
@@ -923,6 +928,75 @@
     });
     texto.addEventListener('input', function () {
       if (texto.value.trim()) { texto.classList.remove('co' + 'n-error'); textoError.hidden = true; }
+    });
+
+    // --- Referencias que el modelo elegido no usa (incidente 2026-09-28) ---
+    // Misma cuenta que providers/flowplus_modelos.referencias_de_mas: Wan
+    // recibe imágenes y videos aparte; en los demás el video entra por su
+    // fotograma; Seedance usa solo la primera. El servidor vuelve a comprobarlo
+    // antes de cobrar; esto solo evita el viaje.
+    var avisoRefs = document.getElementById('fp-aviso-refs');
+    var AVISO_REFS = {{ _('__MODELO__ usa hasta __N__ referencias: no usaría __SOBRAN__. Quita las que sobran o cambia de modelo.')|tojson }};
+    var AVISO_REFS_UNA = {{ _('__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una.')|tojson }};
+    var refsSobrantes = [];
+    function etiquetaDe(fig) {
+      var cap = fig.querySelector('figcaption');
+      return cap ? cap.textContent.split(' · ')[0].trim() : '';
+    }
+    function refsDeMas(m, esImagen) {
+      var maxImg = parseInt(m.dataset.max || '0', 10);
+      var maxVid = esImagen ? 0 : parseInt(m.dataset.maxVideos || '0', 10);
+      var nImg = 0, nVid = 0, sobran = [], primera = '';
+      Array.prototype.forEach.call(document.querySelectorAll('#fp-bandeja-wrap #fp-bandeja figure.crear-ref'), function (fig) {
+        var esVideo = fig.classList.contains('es-video') && maxVid > 0;
+        var cabe;
+        if (esVideo) { nVid++; cabe = nVid <= maxVid; } else { nImg++; cabe = nImg <= maxImg; }
+        if (!cabe) sobran.push(etiquetaDe(fig)); else if (!primera) primera = etiquetaDe(fig);
+      });
+      form.querySelectorAll('input[name=productos_catalogo]:checked').forEach(function (cb) {
+        var fotos = /^personaje:/.test(cb.value) ? 3 : 1;   // un personaje entra con hasta 3 fotos
+        for (var i = 0; i < fotos; i++) {
+          nImg++;
+          if (nImg > maxImg) { sobran.push(cb.dataset.nombre || cb.value); break; }
+          if (!primera) primera = cb.dataset.nombre || cb.value;
+        }
+      });
+      return { sobran: sobran, primera: primera, maxImg: maxImg };
+    }
+    function avisarRefs(m, esImagen) {
+      refsSobrantes = [];
+      if (!avisoRefs) return;
+      var pillModelo = document.getElementById('fp-pill-modelo');
+      if (!m) { avisoRefs.hidden = true; return; }
+      var r = refsDeMas(m, esImagen);
+      refsSobrantes = r.sobran;
+      if (!r.sobran.length) { avisoRefs.hidden = true; return; }
+      var plantilla = r.maxImg === 1 ? AVISO_REFS_UNA : AVISO_REFS;
+      avisoRefs.textContent = plantilla.replace('__MODELO__', m.dataset.nombre).replace('__N__', String(r.maxImg))
+        .replace('__PRIMERA__', r.primera).replace('__SOBRAN__', r.sobran.join(', '));
+      avisoRefs.hidden = false;
+      if (pillModelo) pillModelo.classList.add('co' + 'n-aviso');
+    }
+    form.addEventListener('submit', function (e) {
+      if (refsSobrantes.length) { e.preventDefault(); avisoRefs.hidden = false; avisoRefs.scrollIntoView({block: 'center'}); }
+    });
+    avisarRefs(modeloActual(), tipoActual() === 'imagen');
+
+    // --- «Empezar de cero» (sin variables quemadas, 2026-09-28) ---
+    // form.reset() vuelve a lo que pintó el servidor (los valores del
+    // proyecto), no a lo que dejó la precarga de «Editar y crear otra».
+    var btnEmpezar = document.getElementById('fp-empezar');
+    if (btnEmpezar) btnEmpezar.addEventListener('click', function () {
+      var hayRefs = !!document.querySelector('#fp-bandeja-wrap #fp-bandeja');
+      var hayAlgo = hayRefs || !!texto.value.trim() || !!form.querySelector('input[name=productos_catalogo]:checked');
+      if (hayAlgo && !confirm({{ _('¿Empezar de cero? Se vacían el texto, los ajustes y la bandeja de referencias.')|tojson }})) return;
+      form.reset();
+      form.querySelectorAll('input[name=productos_catalogo]:checked').forEach(function (cb) { cb.checked = false; });
+      form.querySelectorAll('[data-sucio]').forEach(function (el) { delete el.dataset.sucio; });
+      texto.classList.remove('co' + 'n-error'); textoError.hidden = true;
+      pintarCatalogo(); refrescar();
+      if (hayRefs) enviar({{ url_for('fp_vaciar_referencias', cliente=cliente)|tojson }}, new FormData());
+      texto.focus();
     });
   })();
 </script>

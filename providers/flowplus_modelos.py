@@ -145,6 +145,31 @@ def ajustar_formato(modelo_id, formato, tipo="video", solo_texto=False):
         return formato
     return FORMATO_DEFECTO if FORMATO_DEFECTO in formatos else formatos[0]
 
+def referencias_de_mas(modelo_id, referencias, tipo="video"):
+    """Etiquetas de las referencias que NO llegarían al modelo elegido, en el
+    orden de la bandeja, con la misma cuenta que hacen `_preparar` y
+    `generar_video`: Wan 3.0 recibe hasta `max_referencias` imágenes y aparte
+    hasta `max_videos` videos; con los demás modelos el video entra por su
+    fotograma y cuenta como una imagen más; Seedance 2.5 usa solo la primera
+    (`max_referencias` 1). Incidente 2026-09-28 («mira lo que sacó»): cuatro
+    referencias con Seedance, tres descartadas en silencio y el modelo más
+    caro cobrado — la ruta de Crear avisa y no genera."""
+    info = (IMAGEN if tipo == "imagen" else VIDEO)[modelo_id]
+    max_img = int(info.get("max_referencias") or 0)
+    max_vid = int(info.get("max_videos") or 0)
+    sobran, n_img, n_vid = [], 0, 0
+    for i, r in enumerate(referencias or []):
+        if r.get("tipo") == "video" and max_vid > 0:
+            n_vid += 1
+            cabe = n_vid <= max_vid
+        else:
+            n_img += 1
+            cabe = n_img <= max_img
+        if not cabe:
+            sobran.append(r.get("etiqueta") or f"#{i + 1}")
+    return sobran
+
+
 # Tarifa que ve la persona antes del clic: la del modelo más el recargo del
 # sonido (siempre se pide). Las plantillas la muestran y el estimado en vivo
 # de Crear la multiplica por la duración.

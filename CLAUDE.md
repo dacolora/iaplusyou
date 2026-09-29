@@ -390,6 +390,18 @@ p. ej. Kling 1200 «contenido sensible»). El detalle de la pieza ofrece «Recup
 nuevo)» → `cf_recuperar` → tarea `flowplus_recuperar` (`max_intentos=1`, `TIEMPO_RECUPERAR` 10 min):
 vuelve a preguntar por ese id y cierra la pieza con `_terminar_video` (el mismo cierre que la generación
 normal; el gasto se anota ahí, con «recuperado»). Nunca genera de nuevo.
+**Sin variables quemadas (pedido de Daniel, 2026-09-28):** cada creación nueva arranca limpia. «Empezar de cero»
+(`#fp-empezar`, solo JS: `form.reset()` a lo que pintó el servidor + vaciar la bandeja por `fp_vaciar_referencias`)
+deja el texto, el sonido, la música y el catálogo en blanco y la duración/modelo/formato en los del proyecto.
+«Editar y crear otra a partir de esta» (`fp_reusar`) REEMPLAZA la bandeja con las referencias de esa pieza (antes
+se sumaban a lo que hubiera y las referencias «del pasado» se colaban), su precarga (`session["fp_prefill"]`) lleva
+`cliente` y `_prefill_para` la descarta en otro proyecto, y la casilla `solo_referencias` trae solo las imágenes con
+el texto y los ajustes en blanco (para el clip siguiente con los mismos personajes). Y **ningún modelo recibe menos
+referencias de las que la persona ve**: `flowplus_modelos.referencias_de_mas(modelo, referencias, tipo)` cuenta como
+`_preparar`/`generar_video` (Wan: imágenes y videos aparte; Kling: el fotograma del video cuenta como imagen;
+Seedance 2.5: SOLO la primera; Seedream: 10) y `cf_crear_video` avisa y no genera si sobra alguna (incidente «mira lo
+que sacó»: cuatro referencias con Seedance, tres descartadas en silencio, US$ 3,6 cobrados); el compositor muestra el
+mismo aviso en vivo (`#fp-aviso-refs`, `data-max`/`data-max-videos` de los radios de modelo) y frena el envío.
 Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
 `wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
 devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)
