@@ -1,0 +1,16 @@
+{
+  "_nota": "Forma SUPUESTA de GET /v1/ads: el sobre {data, requestId, pagination} sale de la documentacion publica de TrendTrack, pero los campos de cada anuncio no se verificaron contra una respuesta real (docs.trendtrack.io estaba bloqueado el 2026-09-30). Reemplazar por una respuesta real cuando haya llave.",
+  "data": [
+    {"adArchiveId": "1100000000000001", "pageId": "555001", "pageName": "Calzado Sano", "title": "Adios al dolor de pies",
+     "body": "Plantillas ortopedicas con 30 dias de garantia.", "mediaType": "IMAGE", "imageUrl": "https://medias.trendtrack.io/ads/1100000000000001.jpg",
+     "startDate": "2026-09-01T10:00:00Z", "lastSeen": "2026-09-29", "status": "ACTIVE", "daysRunning": 28, "creativeDuplicates": 6, "language": "en"},
+    {"id": "tt_789", "pageId": 555002, "pageName": "Pies Felices", "title": "Mira el antes y despues", "body": "Resultados reales.",
+     "mediaType": "VIDEO", "videoUrl": "https://medias.trendtrack.io/ads/tt_789.mp4", "thumbnailUrl": "https://medias.trendtrack.io/ads/tt_789.jpg",
+     "startDate": "2026-09-10", "status": "ACTIVE", "daysRunning": 19},
+    {"adArchiveId": "1100000000000003", "pageName": "Marca Vieja", "title": "Oferta pasada", "mediaType": "IMAGE",
+     "imageUrl": "https://medias.trendtrack.io/ads/1100000000000003.jpg", "startDate": "2026-05-01", "status": "INACTIVE"},
+    {"adArchiveId": "1100000000000004", "pageName": "Sin Imagen", "title": "Sin medios", "mediaType": "IMAGE", "status": "ACTIVE"}
+  ],
+  "pagination": {"limit": 10, "offset": 0, "total": 120},
+  "requestId": "req_test_1"
+}
