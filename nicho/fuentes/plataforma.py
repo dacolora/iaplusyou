@@ -76,7 +76,7 @@ class FuentePlataforma(Fuente):
         conjunta = " | ".join(c for c in consultas if c)[:200]
         vistos = set()
         for indice, item in res["items"]:
-            p = plataformas.leer_producto(self.clave, item)
+            p = plataformas.leer_producto(self.clave, item, (pais or "").upper() or None)
             if not p or p["fuente_id"] in vistos:
                 continue
             vistos.add(p["fuente_id"])

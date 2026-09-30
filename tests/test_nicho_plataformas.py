@@ -136,6 +136,31 @@ def test_resenas_por_link_saltan_productos_sin_link():
     assert e[0]["entrada"]["productUrls"] == ["https://articulo.mercadolibre.com.co/MCO-2"] and e[0]["max_items"] == 20
 
 
+def test_lectores_con_la_forma_real_de_los_actores():
+    """Ítems tal cual los devolvieron los actores en la prueba de centavos del
+    2026-09-30 (México): Mercado Libre trae productUrl/currentPrice/thumbnailUrl y
+    Amazon el precio con un «$» a secas que en México son pesos."""
+    from nicho.fuentes import plataformas as pl
+    meli = {"publicationId": "MLM2434546658", "sku": "MLM2434546658", "title": "Botella De Agua Motivacional Deportiva Azul Con Rosa 1 Lt",
+            "brand": "", "currency": "MXN", "currentPrice": 185, "productUrl": "https://www.mercadolibre.com.mx/botella/up/MLMU491158340",
+            "thumbnailUrl": "https://http2.mlstatic.com/D_NQ_NP_886325-O.webp", "rating": "", "reviewCount": "", "soldQuantity": None,
+            "sellerName": "", "searchKeyword": "botella de agua con marcador de tiempo"}
+    p = pl.leer_producto("meli", meli, "MX")
+    assert p["fuente_id"] == "MLM2434546658" and p["precio"] == 185.0 and p["moneda"] == "MXN"
+    assert p["url"] == "https://www.mercadolibre.com.mx/botella/up/MLMU491158340" and p["imagen"].startswith("https://http2.mlstatic.com/")
+    assert p["estrellas"] is None and p["n_resenas"] is None and p["marca"] is None
+    amazon = {"asin": "B0CQRG7MDY", "title": "Botella de agua Deportiva 1 litro motivacional", "brand": "COREROSE",
+              "price": {"value": 149.99, "currency": "$"}, "stars": 4.2, "reviewsCount": 106, "loadedCountryCode": "MX",
+              "url": "https://www.amazon.com.mx/dp/B0CQRG7MDY", "thumbnailImage": "https://m.media-amazon.com/images/I/41.jpg",
+              "seller": {"name": "lanxiwl", "id": "A3TWSLEF4CDSQQ"}, "inStock": True}
+    a = pl.leer_producto("amazon", amazon)
+    assert a["precio"] == 149.99 and a["moneda"] == "MXN" and a["extra"] == {"vendedor": "lanxiwl", "en_stock": True}
+    sin_pais = {k: v for k, v in amazon.items() if k != "loadedCountryCode"}
+    assert pl.leer_producto("amazon", sin_pais, "CO")["moneda"] == "COP"          # el país de la búsqueda resuelve el «$»
+    assert pl.leer_producto("amazon", sin_pais)["moneda"] == "USD"                  # sin país, «$» sigue siendo dólar
+    assert pl.leer_producto("amazon", {**sin_pais, "price": {"value": 20, "currency": "US$"}}, "MX")["moneda"] == "USD"
+
+
 @pytest.mark.parametrize("texto,esperado", [("1.234,56", 1234.56), ("1,234.56", 1234.56), ("12,99", 12.99), ("4,5", 4.5),
                                             ("1.234", 1234.0), ("59.900", 59900.0), ("1.234.567,89", 1234567.89), ("1,234", 1234.0),
                                             ("12.5", 12.5), ("€ 1.299,00", 1299.0), ("US$ 19.99", 19.99), ("349 kr", 349.0), ("abc", None)])

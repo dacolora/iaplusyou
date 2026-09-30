@@ -54,6 +54,10 @@ MAX_PAGINAS_AMAZON = 10
 _MONEDA_POR_SIMBOLO = {"$": "USD", "US$": "USD", "€": "EUR", "£": "GBP", "kr": "SEK", "R$": "BRL", "¥": "JPY", "₹": "INR", "C$": "CAD",
                        "A$": "AUD", "MX$": "MXN"}
 _RE_HTTP = re.compile(r"^https?://", re.IGNORECASE)      # la misma regla que base.normalizar_comentario
+# «$» a secas en la tienda de estos países es la moneda local (prueba real 2026-09-30:
+# Amazon México devuelve {"value": 149.99, "currency": "$"} y son pesos)
+_DOLAR_LOCAL = {"MX": "MXN", "CO": "COP", "AR": "ARS", "CL": "CLP", "UY": "UYU", "DO": "DOP", "CA": "CAD", "AU": "AUD",
+                "US": "USD", "EC": "USD", "SV": "USD", "PA": "USD"}
 
 
 # ------------------------------------------------------------ helpers ---
@@ -95,26 +99,31 @@ def _entero(v):
     return int(f) if f is not None else None
 
 
-def _moneda(v):
+def _moneda(v, pais=None):
     if not v:
         return None
     s = str(v).strip()
     if len(s) == 3 and s.isalpha():
         return s.upper()
+    if s == "$" and pais:
+        return _DOLAR_LOCAL.get(str(pais).upper(), "USD")
     return _MONEDA_POR_SIMBOLO.get(s)
 
 
 def _precio_moneda(item):
-    """`price` como objeto {value, currency}, número o texto con símbolo, más
-    `currency` suelto. -> (precio, moneda)."""
-    p = _primero(item, "price", "precio")
+    """`price`/`currentPrice` como objeto {value, currency}, número o texto con
+    símbolo, más `currency` suelto. Un «$» a secas se lee con la moneda del país
+    (`loadedCountryCode`; `leer_producto` lo pone con el país de la búsqueda si
+    el actor no lo trae): en Amazon México son pesos, no dólares. -> (precio, moneda)."""
+    pais = item.get("loadedCountryCode") or None
+    p = _primero(item, "price", "currentPrice", "precio")
     if isinstance(p, dict):
-        return _flotante(p.get("value")), (_moneda(p.get("currency")) or _moneda(item.get("currency")))
-    moneda = _moneda(item.get("currency"))
+        return _flotante(p.get("value")), (_moneda(p.get("currency"), pais) or _moneda(item.get("currency"), pais))
+    moneda = _moneda(item.get("currency"), pais)
     if moneda is None and isinstance(p, str):
         for simbolo in sorted(_MONEDA_POR_SIMBOLO, key=len, reverse=True):
             if simbolo in p:
-                moneda = _MONEDA_POR_SIMBOLO[simbolo]
+                moneda = _moneda(simbolo, pais) if simbolo == "$" else _MONEDA_POR_SIMBOLO[simbolo]
                 break
     return _flotante(p), moneda
 
@@ -155,8 +164,11 @@ def _busqueda_amazon(consultas, pais, productos_por_consulta):
 def _producto_amazon(item):
     precio, moneda = _precio_moneda(item)
     extra = {}
-    if _primero(item, "seller"):
-        extra["vendedor"] = _texto(_primero(item, "seller"), 120)
+    vendedor = _primero(item, "seller")
+    if isinstance(vendedor, dict):                       # el actor real lo manda como {name, id, url, …}
+        vendedor = vendedor.get("name")
+    if vendedor:
+        extra["vendedor"] = _texto(vendedor, 120)
     if item.get("inStock") is not None:
         extra["en_stock"] = bool(item.get("inStock"))
     return {"fuente_id": _texto(_primero(item, "asin"), 120), "titulo": _texto(_primero(item, "title"), 300),
@@ -196,11 +208,14 @@ def _producto_meli(item):
     vendidos = _entero(_primero(item, "sold", "soldQuantity"))
     if vendidos is not None:
         extra["vendidos"] = vendidos
-    return {"fuente_id": _sin_guion(_primero(item, "id", "productId", "itemId", "sku"))[:120], "titulo": _texto(_primero(item, "title", "name"), 300),
+    # Claves del actor real (prueba de centavos 2026-09-30): publicationId, productUrl,
+    # currentPrice + currency, thumbnailUrl, reviewCount, rating, soldQuantity, sellerName.
+    return {"fuente_id": _sin_guion(_primero(item, "id", "productId", "itemId", "publicationId", "sku"))[:120],
+            "titulo": _texto(_primero(item, "title", "name"), 300),
             "marca": _texto(_primero(item, "brand"), 120) or None, "precio": precio, "moneda": moneda,
             "estrellas": _flotante(_primero(item, "rating")), "n_resenas": _entero(_primero(item, "reviews", "reviewsCount", "reviewCount")),
-            "url": _url(_primero(item, "url", "link", "permalink")),
-            "imagen": _url(_primero(item, "thumbnail", "image")), "extra": extra}
+            "url": _url(_primero(item, "productUrl", "url", "link", "permalink")),
+            "imagen": _url(_primero(item, "thumbnailUrl", "thumbnail", "image")), "extra": extra}
 
 
 def _resenas_meli(productos, pais, resenas_por_producto):
@@ -342,10 +357,14 @@ def entradas_busqueda(clave, consultas, pais, productos_por_consulta):
                      p["busqueda"]["usd_por_resultado"])
 
 
-def leer_producto(clave, item):
+def leer_producto(clave, item, pais=None):
     """Producto normalizado (fuente_id, titulo, marca, precio, moneda, estrellas,
-    n_resenas, url, imagen, extra) o None si no trae id o título."""
-    d = _plataforma(clave)["busqueda"]["leer_producto"](item if isinstance(item, dict) else {})
+    n_resenas, url, imagen, extra) o None si no trae id o título. `pais` (el de
+    la búsqueda) resuelve un «$» a secas cuando el actor no dice su país."""
+    item = item if isinstance(item, dict) else {}
+    if pais and not item.get("loadedCountryCode"):
+        item = {**item, "loadedCountryCode": pais}
+    d = _plataforma(clave)["busqueda"]["leer_producto"](item)
     return d if d["fuente_id"] and d["titulo"] else None
 
 
