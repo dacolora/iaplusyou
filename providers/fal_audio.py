@@ -1,13 +1,15 @@
-"""Proveedores de audio de Final Edition, todos vía fal.ai (providers/fal_client.py):
-voz (ElevenLabs TTS multilingüe), transcripción con marcas por palabra (Whisper) y
-música de fondo (Stable Audio). Cada función lanza+poll con fal_client.llamar y
-devuelve un dict con la URL pública del resultado y el costo estimado en USD.
+"""Proveedores de audio de Final Edition y de Audios en Crear, todos vía fal.ai (providers/fal_client.py):
+voz (ElevenLabs TTS multilingüe, Turbo v2.5, y MiniMax), transcripción con marcas por palabra (Whisper),
+música de fondo (Stable Audio) y voces propias (MiniMax clonar y diseñar). Cada función lanza+poll
+con fal_client.llamar y devuelve un dict con la URL pública del resultado y el costo estimado en USD.
 
 Formas de respuesta verificadas contra fal.ai el 2026-09-15 (ver plan
 docs/superpowers/plans/2026-09-15-motor-bloque2-final-edition.md > Global Constraints):
   TTS       -> {"audio": {"url": ...}}
   Whisper   -> {"text": ..., "chunks": [{"timestamp": [ini, fin], "text": ...}]}
   Stable Audio -> {"audio_file": {"url": ...}}
+  MiniMax TTS -> {"audio": {"url": ...}, "duration_ms": ...}
+  MiniMax clonar/diseñar -> {"custom_voice_id": ..., "audio": {"url": ...}}
 `fal-ai/wizper` NO acepta chunk_level="word" — por eso se usa fal-ai/whisper.
 """
 import math
@@ -24,6 +26,31 @@ MODELO_MUSICA = "fal-ai/stable-audio"
 COSTO_USD_POR_CARACTER = 0.0001
 COSTO_USD_POR_MINUTO_AUDIO = 0.002
 COSTO_USD_POR_PISTA_MUSICA = 0.02
+
+# ElevenLabs Turbo v2.5 vía fal: habla noruego (Multilingual v2 no) y acepta
+# `language_code` para forzar el idioma. US$ 0,05 por 1 000 caracteres
+# (fal.ai/elevenlabs, verificado el 2026-09-30 con «Adam» en noruego).
+MODELO_TTS_TURBO = "fal-ai/elevenlabs/tts/turbo-v2.5"
+COSTO_TURBO_POR_CARACTER = 0.00005
+COSTOS_TTS = {MODELO_TTS: COSTO_USD_POR_CARACTER, MODELO_TTS_TURBO: COSTO_TURBO_POR_CARACTER}
+
+# MiniMax vía fal (voces propias de Audios, spec 2026-09-30): TTS Speech 2.8 HD
+# (responde {"audio": {"url"}, "duration_ms"}, verificado el 2026-09-30),
+# clonar desde una grabación y diseñar desde una descripción (ambos responden
+# `custom_voice_id` + `audio.url` de vista previa). MiniMax borra una voz que
+# no se usa en una síntesis real dentro de 7 días.
+MODELO_MINIMAX_TTS = "fal-ai/minimax/speech-2.8-hd"
+COSTO_MINIMAX_POR_CARACTER = 0.0001
+MODELO_MINIMAX_CLONAR = "fal-ai/minimax/voice-clone"
+COSTO_CLONAR_VOZ = 1.50
+COSTO_VISTA_PREVIA_CLON_POR_CARACTER = 0.0003
+MODELO_MINIMAX_DISENAR = "fal-ai/minimax/voice-design"
+COSTO_DISENAR_VOZ = 3.00
+COSTO_VISTA_PREVIA_DISENO_POR_CARACTER = 0.00003
+IDIOMAS_MINIMAX = {
+    "es": "Spanish", "en": "English", "pt": "Portuguese", "de": "German", "fr": "French",
+    "it": "Italian", "fi": "Finnish", "sv": "Swedish", "no": "Norwegian", "cs": "Czech",
+}
 
 # Eleven Music vía fal (verificado en fal.ai/models/fal-ai/elevenlabs/music el
 # 2026-09-25): prompt + music_length_ms (3 000–600 000) + force_instrumental;
@@ -53,15 +80,15 @@ VOCES = {
 }
 
 
-def tts(texto, voz="Rachel", idioma="es", on_progreso=None, velocidad=None, timeout=180):
-    """Sintetiza `texto` con la voz `voz` (ver VOCES). Devuelve
-    {"url": mp3 público, "costo_usd": len(texto) * COSTO_USD_POR_CARACTER}.
-    `velocidad` (0,7–1,2, el `speed` del modelo) solo viaja cuando no es None
-    ni 1,0. `idioma` NO se manda como language_code: ElevenLabs solo lo acepta
-    en Turbo/Flash v2.5 y multilingual-v2 devolvería error; el modelo detecta
-    el idioma solo. `timeout` (s): 180 por defecto para una locución completa;
-    una muestra corta (`audios.muestra`) manda uno más chico para no colgar un
-    clic en línea."""
+def tts(texto, voz="Rachel", idioma="es", on_progreso=None, velocidad=None, timeout=180,
+        modelo=MODELO_TTS, language_code=None):
+    """Sintetiza `texto` con la voz `voz` (ver VOCES) con un TTS de ElevenLabs
+    vía fal. Devuelve {"url": mp3 público, "costo_usd": len(texto) × tarifa del
+    modelo}. `velocidad` (0,7–1,2, el `speed` del modelo) solo viaja cuando no
+    es None ni 1,0. `language_code` solo viaja si se pide: Multilingual v2 NO lo
+    acepta (devuelve error) y detecta el idioma del texto; Turbo v2.5 sí, y así
+    se usa para el noruego (audios.motor_de). `timeout` (s): 180 por defecto
+    para una locución completa; una muestra corta manda uno más chico."""
     if not texto:
         raise ValueError("fal_audio.tts: texto vacío.")
 
@@ -73,14 +100,68 @@ def tts(texto, voz="Rachel", idioma="es", on_progreso=None, velocidad=None, time
     }
     if velocidad is not None and abs(float(velocidad) - 1.0) > 1e-9:
         payload["speed"] = round(float(velocidad), 2)
-    data = fal_client.llamar(MODELO_TTS, payload, timeout=timeout, on_progreso=on_progreso)
+    if language_code:
+        payload["language_code"] = language_code
+    data = fal_client.llamar(modelo, payload, timeout=timeout, on_progreso=on_progreso)
 
     url = (data.get("audio") or {}).get("url")
     if not url:
-        raise RuntimeError(f"fal.ai ({MODELO_TTS}) no devolvió una URL de audio: {data}")
+        raise RuntimeError(f"fal.ai ({modelo}) no devolvió una URL de audio: {data}")
 
-    costo = round(len(texto) * COSTO_USD_POR_CARACTER, 4)
+    costo = round(len(texto) * COSTOS_TTS.get(modelo, COSTO_USD_POR_CARACTER), 4)
     return {"url": url, "costo_usd": costo}
+
+
+def tts_minimax(texto, voice_id, idioma, velocidad=None, timeout=180):
+    """Lee `texto` con una voz de MiniMax (una voz propia: `voice_id` de
+    clonar/diseñar) forzando el idioma con `language_boost`. Devuelve
+    {"url", "costo_usd", "duracion_ms"}."""
+    if not texto:
+        raise ValueError("fal_audio.tts_minimax: texto vacío.")
+    if idioma not in IDIOMAS_MINIMAX:
+        raise ValueError(f"fal_audio.tts_minimax: idioma sin MiniMax: {idioma!r}")
+    voice_setting = {"voice_id": voice_id}
+    if velocidad is not None:
+        voice_setting["speed"] = round(float(velocidad), 2)
+    payload = {
+        "prompt": texto,
+        "voice_setting": voice_setting,
+        "language_boost": IDIOMAS_MINIMAX[idioma],
+        "output_format": "url",
+        "audio_setting": {"format": "mp3", "sample_rate": 44100, "bitrate": 128000, "channel": 1},
+    }
+    data = fal_client.llamar(MODELO_MINIMAX_TTS, payload, timeout=timeout)
+    url = (data.get("audio") or {}).get("url")
+    if not url:
+        raise RuntimeError(f"fal.ai ({MODELO_MINIMAX_TTS}) no devolvió una URL de audio: {data}")
+    return {"url": url, "costo_usd": round(len(texto) * COSTO_MINIMAX_POR_CARACTER, 4),
+            "duracion_ms": int(data.get("duration_ms") or 0)}
+
+
+def clonar_voz_minimax(audio_url, preview_text, timeout=300):
+    """Clona la voz de `audio_url` (≥ 10 s, con permiso de la persona). La
+    vista previa lee `preview_text` y NO estrena la voz (voces_propias.crear la
+    estrena aparte). Devuelve {"voice_id", "url_vista_previa", "costo_usd"}."""
+    payload = {"audio_url": audio_url, "noise_reduction": True, "need_volume_normalization": True,
+               "text": preview_text}
+    data = fal_client.llamar(MODELO_MINIMAX_CLONAR, payload, timeout=timeout)
+    voice_id = data.get("custom_voice_id")
+    if not voice_id:
+        raise RuntimeError(f"fal.ai ({MODELO_MINIMAX_CLONAR}) no devolvió custom_voice_id: {data}")
+    costo = round(COSTO_CLONAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_CLON_POR_CARACTER, 4)
+    return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
+
+
+def disenar_voz_minimax(prompt, preview_text, timeout=300):
+    """Diseña una voz nueva desde la descripción `prompt`; la vista previa lee
+    `preview_text`. Devuelve {"voice_id", "url_vista_previa", "costo_usd"}."""
+    payload = {"prompt": prompt, "preview_text": preview_text}
+    data = fal_client.llamar(MODELO_MINIMAX_DISENAR, payload, timeout=timeout)
+    voice_id = data.get("custom_voice_id")
+    if not voice_id:
+        raise RuntimeError(f"fal.ai ({MODELO_MINIMAX_DISENAR}) no devolvió custom_voice_id: {data}")
+    costo = round(COSTO_DISENAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
+    return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 
 def transcribir_palabras(audio_url, idioma, on_progreso=None):
