@@ -101,7 +101,7 @@
         <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=cat, w=320) }}" alt="{{ img }}" loading="lazy">
         <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ cat }}"><button type="submit" title="{{ _('Quitar esta foto') }}">✕</button></form>
         <form method="post" action="{{ url_for('catalogo_foto_mover', cliente=cliente, producto_id=p.id, nombre=img) }}" class="cat-form-mover">
-          <select name="variante" onchange="this.form.submit()" aria-label="{{ _('Asignar a color') }}">
+          <select name="variante" data-busqueda onchange="this.form.submit()" aria-label="{{ _('Asignar a color') }}">
             <option value="">{{ _('Asignar a color…') }}</option>
             {% for c in p.colores %}<option value="{{ c.color_id }}">{{ c.nombre | replace(prefijo_color, '') }}</option>{% endfor %}
           </select>
@@ -157,7 +157,7 @@
     <div class="panel-acciones">
       {% if cat == 'producto' %}
       <form method="post" action="{{ url_for('catalogo_crear_con', cliente=cliente, producto_id=p.id) }}" class="inline cat-crear-con">
-        {% if p.tiene_colores %}<select name="variante" aria-label="{{ _('Color') }}">{% for c in p.colores if not c.sin_fotos %}<option value="{{ c.color_id }}" {% if c.color_id == color_inicial %}selected{% endif %}>{{ c.nombre | replace(prefijo_color, '') }}</option>{% endfor %}</select>{% endif %}
+        {% if p.tiene_colores %}<select name="variante" data-busqueda aria-label="{{ _('Color') }}">{% for c in p.colores if not c.sin_fotos %}<option value="{{ c.color_id }}" {% if c.color_id == color_inicial %}selected{% endif %}>{{ c.nombre | replace(prefijo_color, '') }}</option>{% endfor %}</select>{% endif %}
         <button type="submit" class="btn-generar btn-sm">{{ _('Crear con este producto') }}</button>
       </form>
       {% if comercial %}

@@ -342,3 +342,42 @@ def test_catalogo_ofrece_traer_de_mi_tienda_y_configuracion_el_tipo_sin_llaves(a
     settings = html.split('id="tab-settings"', 1)[1]
     assert 'data-tienda-tipo="shopify_publico"' in settings and "Conectar Shopify (sin llaves)" in settings
     assert settings.index('data-tienda-tipo="shopify_publico"') < settings.index('data-tienda-tipo="shopify"')
+
+
+# --- Tarea 15b: el buscador, el orden y los <select> de una sola acción no dejan "sin guardar" ---
+
+def test_buscador_orden_y_selects_de_accion_no_quedan_sin_guardar(app):
+    """base.html (marcarSucio, desde 6b76376) nunca marca "sucio" un buscador
+    (type="search" o data-busqueda): perder lo escrito o elegido ahí no cuesta
+    nada, así que no debe frenar una recarga automática al terminar un trabajo
+    en segundo plano (recargarOAvisar). En el Catálogo eso aplica también al
+    orden de la grilla (solo la reordena, ya cargada) y a los <select> que
+    disparan una acción de un clic en vez de guardar una edición: "Asignar a
+    color" (autoenvía con onchange="this.form.submit()") y el color de "Crear
+    con este producto" (el clic solo abre Crear con ese color prellenado, no
+    guarda nada aquí). Los <input type="file"> que autoenvían ya estaban
+    exentos antes de esta tarea (base.html los descarta por type="file" antes
+    de mirar data-busqueda), así que no necesitaron el atributo. El formulario
+    "Datos" y "+ Color" sí editan de verdad — sus campos deben seguir
+    marcando sucio, por eso no llevan data-busqueda."""
+    _con_colores(app)                        # original: 2 colores con fotos + 1 foto general
+    _producto(nombre="Espejo redondo")       # fila sin activo -> tarjeta "sin fotos" en la grilla
+    c = app["c"]
+
+    html = c.get("/cliente/acme").data.decode()
+    tab = html.split('id="tab-catalogo"', 1)[1].split('id="tab-settings"', 1)[0]
+    # El buscador ya queda exento por type="search" (no hace falta data-busqueda además).
+    assert '<input type="search" class="cat-buscador"' in tab
+    # El orden no guarda nada: solo reordena la grilla ya cargada.
+    assert '<select class="cat-orden" data-cat-orden data-busqueda aria-label="Orden">' in tab
+
+    grid = c.get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    # El <input type="file"> que autoenvía la fila "sin fotos" sigue tal cual: type="file" ya lo exime.
+    assert '<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden>' in grid
+
+    ficha = c.get("/cliente/acme/catalogo/producto/original/ficha").data.decode()
+    assert '<select name="variante" data-busqueda onchange="this.form.submit()" aria-label="Asignar a color">' in ficha
+    assert '<select name="variante" data-busqueda aria-label="Color">' in ficha
+    # "Datos" y "+ Color" son ediciones de verdad: sin data-busqueda, siguen marcando sucio.
+    assert '<input type="text" name="nombre" value="Original" required>' in ficha
+    assert 'Nombre del color<input type="text" name="nombre" placeholder="ej. Rosa" required>' in ficha
