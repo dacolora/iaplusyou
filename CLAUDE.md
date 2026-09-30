@@ -566,6 +566,19 @@ Todo prompt de fábrica pasa `refinador.validar`. Una llamada por paso vía `gui
 video, `clips.version_con_bloque` no llama a Claude). Notion: llave de integración cifrada en `kv`
 (`notion:<cliente>`), solo `api.notion.com`, exige correo verificado. UI: `/panel` como fragmento
 (`_gpg_*.html`) + `_crear_flowplus_guiones.html`; «Abrir en el chat» emite `gp:abrir-prompt`.
+**Imágenes de cada escena** (spec `docs/superpowers/specs/2026-09-30-flowplus-imagenes-por-escena-design.md`,
+pedido de Daniel; reemplazó la maqueta 555eb2b/b69620c que nunca llegó a `main`): en una versión `armado`,
+`_gpg_escenas.html` (incluido en `_gpg_clips.html`) muestra Image 1…N (las referencias del REFERENCE MAP; las
+«por crear» se completan con «Subir la imagen») más las extra (subidas o del Catálogo, numeradas después; el
+prompt no las nombra) y, por escena, fichas que se prenden y apagan (sin tocar, lo sugerido = la regla de la
+tabla imagen↔clip). `guiones/escenas.py` es puro (claves `r<n>`/`x<k>`, `pool`, `por_escena`, `usar`,
+`poner_ref`, `agregar_extra`, `quitar`, `heredar`, `texto_por_clip`); el único escritor es
+`datos.modificar_imagenes_escenas` (lock antes de leer; guarda en `guion_video.extra["imagenes_escenas"]`, sin
+migración). Rutas JSON `/videos/<id>/escenas/<n>`, `/imagenes/subir` (multipart, `final_edition.biblioteca.subir`:
+gratis; prueba antes de subir que se podrá guardar), `/imagenes/catalogo`, `/imagenes/quitar`; el JS del panel
+manda `data-gpg-cuerpo` con `data-gpg-accion` y sube con `input[type=file][data-gpg-subir]`. Lo elegido va a los
+dos `.md` y a «Antes de generar». `nueva_version` hereda las imágenes subidas de referencias iguales y las extra
+(y lo elegido por escena solo con los mismos clips).
 
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,

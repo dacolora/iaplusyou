@@ -5,7 +5,9 @@ acciones como POST JSON. Mismo prefijo y mismas reglas que guiones/rutas.py
 (el chat): mismo origen en todo POST, cuerpo JSON obligatorio, errores en
 español, 404 para lo de otro proyecto.
 """
-from flask import Blueprint, Response, jsonify, render_template, request, session
+import os
+
+from flask import Blueprint, Response, jsonify, render_template, request, session, url_for
 from flask_babel import gettext
 
 import catalogo_productos
@@ -13,7 +15,8 @@ import gastos
 import proyectos
 import trabajos
 import usuarios
-from guiones import clips, config, datos, duracion, imagenes, lectura, notion, plantillas, recorte, refinador
+from final_edition import biblioteca
+from guiones import clips, config, datos, duracion, escenas, imagenes, lectura, notion, plantillas, recorte, refinador
 from guiones.refinador import Conflicto, DatoInvalido, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
 from providers import flowplus_modelos
@@ -42,9 +45,10 @@ def _contexto(cliente, guion_id=None, video_id=None):
     ctx = {"cliente": cliente, "lotes": datos.lotes(cliente), "guion": g, "video": v,
            "notion_conectado": notion.conectado(cliente),
            "costos": {"leer": _costo("leer", 750), "recorte": _costo("recorte")}}
+    catalogo = {}
     if g and g["estado"] == "confirmado":
-        ctx["activos"] = {t: [{"id": a["id"], "nombre": a["nombre"]} for a in catalogo_productos.listar(cliente, t)]
-                          for t in config.TIPOS_REF}
+        catalogo = {t: catalogo_productos.listar(cliente, t) for t in config.TIPOS_REF}
+        ctx["activos"] = {t: [{"id": a["id"], "nombre": a["nombre"]} for a in lista] for t, lista in catalogo.items()}
         ctx["formatos"] = flowplus_modelos.FORMATOS_NOMBRES
         ctx["config_defecto"] = config.defecto(cliente)
     if v is not None:
@@ -63,8 +67,42 @@ def _contexto(cliente, guion_id=None, video_id=None):
         todos = datos.prompts_de_video(v["id"])
         ctx["prompts_img"] = {(p["extra"] or {}).get("imagen_id"): {"id": p["id"], "estado": p["estado"]}
                               for p in todos if p["tipo"] == "imagen"}
-        ctx["checklist"] = imagenes.checklist(v["config"], (v["imagenes"] or {}).get("lista", []), todos)
+        ctx["checklist"] = imagenes.checklist(v["config"], (v["imagenes"] or {}).get("lista", []), todos,
+                                              escenas.refs_con_imagen(v))
+        if v["estado"] == "armado":
+            ctx["escenas"] = _vista_escenas(cliente, v, catalogo)
     return ctx
+
+
+def _src(cliente, img):
+    """Miniatura de una imagen de escena: la foto del Catálogo por la ruta de
+    siempre (?w=320) o la URL pública de lo subido."""
+    if not img:
+        return None
+    if img.get("activo_id"):
+        return url_for("imagen_producto", cliente=cliente, producto_id=img["activo_id"],
+                       categoria=img["categoria"], w=320)
+    return img.get("url")
+
+
+def _vista_escenas(cliente, v, catalogo):
+    pool = [dict(x, src=_src(cliente, x["imagen"])) for x in escenas.pool(v)]
+    fotos = [{"id": a["id"], "nombre": a["nombre"], "categoria": t,
+              "src": _src(cliente, {"activo_id": a["id"], "categoria": t})}
+             for t, lista in catalogo.items() for a in lista]
+    falta = {x["clave"]: f"Image {x['numero']}" for x in pool if x["origen"] == "falta"}
+    etiqueta = {x["clave"]: f"Image {x['numero']}" + (f" · {x['nombre']}" if x["nombre"] else "") for x in pool}
+    filas = [dict(f, faltan=[falta[c] for c in f["claves"] if c in falta], etiquetas=[etiqueta[c] for c in f["claves"]])
+             for f in escenas.por_escena(v)]
+    return {"pool": pool, "filas": filas, "catalogo": fotos}
+
+
+def _url_publica(cliente, img):
+    """Para los documentos .md: la URL que se abre fuera de Creatv (R2), o None."""
+    if img.get("activo_id"):
+        a = catalogo_productos.encontrar(cliente, img["activo_id"], categoria=img["categoria"])
+        return (a or {}).get("representativa_url")
+    return img.get("url")
 
 
 @bp.get("/panel")
@@ -310,7 +348,8 @@ def video_documento(cliente, vid):
         return jsonify({"error": gettext("Esa versión no existe.")}), 404
     if v["estado"] != "armado":
         return jsonify({"error": gettext("El documento sale cuando la versión está armada.")}), 409
-    md = plantillas.documento_md(v, datos.prompts_de_video(vid))
+    md = plantillas.documento_md(v, datos.prompts_de_video(vid),
+                                 escenas.texto_por_clip(v, lambda img: _url_publica(cliente, img)))
     return Response(md, mimetype="text/markdown; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{plantillas.nombre_documento(v)}"'})
 
@@ -334,9 +373,103 @@ def video_imagenes_md(cliente, vid):
         return jsonify({"error": gettext("Esa versión no existe.")}), 404
     if v["estado_imagenes"] != "listo":
         return jsonify({"error": gettext("Primero escribe los prompts de imágenes.")}), 409
-    md = imagenes.documento_md(v, datos.prompts_de_video(vid))
+    md = imagenes.documento_md(v, datos.prompts_de_video(vid),
+                               escenas.texto_por_clip(v, lambda img: _url_publica(cliente, img)))
     return Response(md, mimetype="text/markdown; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{imagenes.nombre_documento(v)}"'})
+
+
+# ------------------------------------------------ imágenes de cada escena ---
+# (spec 2026-09-30) Gratis: subir usa la biblioteca del editor (material
+# `subida` en R2) y nada llama a Claude. Todo exige la versión armada.
+
+EXT_IMAGEN = (".jpg", ".jpeg", ".png", ".webp")
+
+
+@bp.post("/videos/<int:vid>/escenas/<int:indice>")
+def escena_imagenes(cliente, vid, indice):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    clave, usar = str(cuerpo.get("clave") or ""), bool(cuerpo.get("usar"))
+    try:
+        if cuerpo.get("sugeridas"):
+            datos.modificar_imagenes_escenas(cliente, vid, lambda est, v: escenas.sugeridas_de_nuevo(est, indice))
+        else:
+            datos.modificar_imagenes_escenas(cliente, vid, lambda est, v: escenas.usar(est, v, indice, clave, usar))
+    except ErrorRefinador as e:
+        return _error(e)
+    return jsonify({"video_id": vid})
+
+
+@bp.post("/videos/<int:vid>/imagenes/subir")
+def escena_subir(cliente, vid):
+    """Multipart: `archivo` + `ref` (la imagen de Image n, por crear) o `escena`
+    (una extra que entra en esa escena), o ninguno (extra del video)."""
+    archivo = request.files.get("archivo")
+    if archivo is None or not archivo.filename:
+        return jsonify({"error": gettext("Elige una imagen.")}), 400
+    if os.path.splitext(archivo.filename)[1].lower() not in EXT_IMAGEN:
+        return jsonify({"error": gettext("Sube una imagen JPG, PNG o WEBP.")}), 400
+    ref, escena = _entero(request.form.get("ref") or ""), _entero(request.form.get("escena") or "")
+    if ref is not None:
+        def aplicar(est, v, img):
+            return escenas.poner_ref(est, v, ref, img)
+    else:
+        def aplicar(est, v, img):
+            return escenas.agregar_extra(est, v, img, escena)
+    try:
+        # Primero se prueba con una imagen de mentira (sin guardar): si no se
+        # podría guardar, no se sube nada a R2.
+        v = _video_o_404(cliente, vid)
+        if v["estado"] != "armado":
+            raise Conflicto(gettext("Primero arma los clips de esta versión."))
+        aplicar(escenas.estado(v), v, {"url": "https://prueba.invalid/x.jpg", "material_id": -1})
+    except ErrorRefinador as e:
+        return _error(e)
+    try:
+        m = biblioteca.subir(cliente, archivo)
+    except biblioteca.SubidaInvalida as e:
+        return jsonify({"error": str(e)}), 400
+    img = {"url": m["url"], "material_id": m["id"], "nombre": m.get("nombre") or ""}
+    try:
+        datos.modificar_imagenes_escenas(cliente, vid, lambda est, v: aplicar(est, v, img))
+    except ErrorRefinador as e:
+        return _error(e)
+    return jsonify({"video_id": vid}), 201
+
+
+@bp.post("/videos/<int:vid>/imagenes/catalogo")
+def escena_catalogo(cliente, vid):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    categoria, activo_id = str(cuerpo.get("categoria") or ""), str(cuerpo.get("activo_id") or "")
+    escena = _entero(cuerpo.get("escena"))
+    if categoria not in config.TIPOS_REF:
+        return jsonify({"error": gettext("Elige una foto del Catálogo.")}), 400
+    activo = catalogo_productos.encontrar(cliente, activo_id, categoria=categoria) if activo_id else None
+    if activo is None:
+        return jsonify({"error": gettext("Esa foto ya no está en el Catálogo.")}), 400
+    img = {"activo_id": activo["id"], "categoria": categoria, "nombre": activo.get("nombre") or activo["id"]}
+    try:
+        datos.modificar_imagenes_escenas(cliente, vid, lambda est, v: escenas.agregar_extra(est, v, img, escena))
+    except ErrorRefinador as e:
+        return _error(e)
+    return jsonify({"video_id": vid})
+
+
+@bp.post("/videos/<int:vid>/imagenes/quitar")
+def escena_quitar(cliente, vid):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    clave = str(cuerpo.get("clave") or "")
+    try:
+        datos.modificar_imagenes_escenas(cliente, vid, lambda est, v: escenas.quitar(est, v, clave))
+    except ErrorRefinador as e:
+        return _error(e)
+    return jsonify({"video_id": vid})
 
 
 @bp.get("/bloque-global")
