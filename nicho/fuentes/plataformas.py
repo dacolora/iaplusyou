@@ -30,6 +30,7 @@ from urllib.parse import quote_plus
 
 from flask_babel import gettext
 
+from idiomas import N_
 from nicho.fuentes.base import ErrorFuente
 
 TODOS = "*"
@@ -265,23 +266,23 @@ def _resena_tiktok_shop(item):
 PLATAFORMAS = {
     "amazon": {
         "nombre": "Amazon", "paises": PAISES_AMAZON,
-        "busqueda": {"actor": "junglee~amazon-crawler", "nombre": "Búsqueda en Amazon", "usd_por_resultado": 0.003,
+        "busqueda": {"actor": "junglee~amazon-crawler", "nombre": N_("Búsqueda en Amazon"), "usd_por_resultado": 0.003,
                      "armar_entradas": _busqueda_amazon, "leer_producto": _producto_amazon},
-        "resenas": {"actor": "axesso_data~amazon-reviews-scraper", "nombre": "Reseñas de Amazon", "usd_por_resultado": 0.0009,
+        "resenas": {"actor": "axesso_data~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.0009,
                     "por_producto": True, "armar_entradas": _resenas_amazon, "leer_resena": _resena_amazon},
     },
     "meli": {
         "nombre": "Mercado Libre", "paises": PAISES_MELI,
-        "busqueda": {"actor": "karamelo~mercado-libre-listings-scraper", "nombre": "Búsqueda en Mercado Libre", "usd_por_resultado": 0.002,
+        "busqueda": {"actor": "karamelo~mercado-libre-listings-scraper", "nombre": N_("Búsqueda en Mercado Libre"), "usd_por_resultado": 0.002,
                      "armar_entradas": _busqueda_meli, "leer_producto": _producto_meli},
-        "resenas": {"actor": "karamelo~mercadolibre-review-scraper", "nombre": "Opiniones de Mercado Libre", "usd_por_resultado": 0.0007,
+        "resenas": {"actor": "karamelo~mercadolibre-review-scraper", "nombre": N_("Opiniones de Mercado Libre"), "usd_por_resultado": 0.0007,
                     "por_producto": False, "armar_entradas": _resenas_meli, "leer_resena": _resena_meli},
     },
     "tiktok_shop": {
         "nombre": "TikTok Shop", "paises": TODOS,
-        "busqueda": {"actor": "unseenuser~tiktok-shop-scraper", "nombre": "Búsqueda en TikTok Shop", "usd_por_resultado": 0.0045,
+        "busqueda": {"actor": "unseenuser~tiktok-shop-scraper", "nombre": N_("Búsqueda en TikTok Shop"), "usd_por_resultado": 0.0045,
                      "armar_entradas": _busqueda_tiktok_shop, "leer_producto": _producto_tiktok_shop},
-        "resenas": {"actor": "unseenuser~tiktok-shop-scraper", "nombre": "Reseñas de TikTok Shop", "usd_por_resultado": 0.0045,
+        "resenas": {"actor": "unseenuser~tiktok-shop-scraper", "nombre": N_("Reseñas de TikTok Shop"), "usd_por_resultado": 0.0045,
                     "por_producto": False, "armar_entradas": _resenas_tiktok_shop, "leer_resena": _resena_tiktok_shop},
     },
 }

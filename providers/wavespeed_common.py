@@ -10,6 +10,7 @@ import time
 from contextlib import contextmanager
 
 import requests
+from flask_babel import gettext
 
 BASE_URL = "https://api.wavespeed.ai/api/v3"
 
@@ -18,7 +19,7 @@ def api_key():
     key = os.environ.get("WAVESPEED_API_KEY")
     if not key:
         raise RuntimeError(
-            "Falta WAVESPEED_API_KEY en tu .env. Consíguela en wavespeed.ai (API Keys)."
+            gettext("Falta WAVESPEED_API_KEY en tu .env. Consíguela en wavespeed.ai (API Keys).")
         )
     return key
 
@@ -37,11 +38,13 @@ class ErrorProveedor(RuntimeError):
     def __init__(self, nombre_modelo, estado, detalle=None, codigo=None, prediction_id=None, datos=None):
         self.nombre_modelo, self.estado, self.detalle = nombre_modelo, estado, detalle
         self.codigo, self.prediction_id, self.datos = codigo, prediction_id, datos
-        partes = [f"{nombre_modelo} no pudo generar: {detalle or estado}"]
+        # El texto se guarda (tarjeta de Crear, mensaje de la tarea): gettext en el
+        # idioma ambiente, que en el worker es el del proyecto.
+        partes = [gettext("%(modelo)s no pudo generar: %(detalle)s", modelo=nombre_modelo, detalle=detalle or estado)]
         if codigo is not None:
-            partes.append(f"(código {codigo})")
+            partes.append(gettext("(código %(codigo)s)", codigo=codigo))
         if prediction_id:
-            partes.append(f"· predicción {prediction_id}")
+            partes.append(gettext("· predicción %(id)s", id=prediction_id))
         super().__init__(" ".join(partes))
 
 
@@ -53,8 +56,9 @@ class EsperaAgotada(TimeoutError):
 
     def __init__(self, nombre_modelo, prediction_id, timeout_seconds):
         self.nombre_modelo, self.prediction_id, self.timeout_seconds = nombre_modelo, prediction_id, timeout_seconds
-        super().__init__(f"Se agotó el tiempo esperando el resultado de {nombre_modelo} "
-                         f"({int(timeout_seconds // 60)} min; predicción {prediction_id}).")
+        super().__init__(gettext("Se agotó el tiempo esperando el resultado de %(modelo)s (%(min)s min; "
+                                 "predicción %(id)s).", modelo=nombre_modelo, min=int(timeout_seconds // 60),
+                                 id=prediction_id))
 
 
 class EsperaInterrumpida(EsperaAgotada):
@@ -64,8 +68,9 @@ class EsperaInterrumpida(EsperaAgotada):
 
     def __init__(self, nombre_modelo, prediction_id, esperado_s):
         self.nombre_modelo, self.prediction_id, self.timeout_seconds = nombre_modelo, prediction_id, esperado_s
-        TimeoutError.__init__(self, f"Se cortó la espera de {nombre_modelo} porque el worker se está reiniciando "
-                                    f"(predicción {prediction_id}); se retoma sola.")
+        TimeoutError.__init__(self, gettext("Se cortó la espera de %(modelo)s porque el worker se está reiniciando "
+                                            "(predicción %(id)s); se retoma sola.",
+                                            modelo=nombre_modelo, id=prediction_id))
 
 
 # Parada del worker (`worker.main` la fija con `debe_parar`). Solo corta las

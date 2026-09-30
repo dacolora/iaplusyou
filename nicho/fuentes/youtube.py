@@ -174,7 +174,7 @@ class FuenteYouTube(Fuente):
             return {"ok": False, "detalle": e.usuario}
         except HttpError as e:
             return {"ok": False, "detalle": _error_llave(e).usuario}
-        return {"ok": True, "detalle": "YouTube aceptó la llave."}
+        return {"ok": True, "detalle": gettext("YouTube aceptó la llave.")}
 
     def recolectar(self, params, avanzar=None):
         p = normalizar_params(params)

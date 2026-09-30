@@ -331,9 +331,11 @@ def ejecutar_imagen(tarea):
         if costo is not None:
             # El modelo ya cobró aunque la descarga fallara: queda registrado.
             _registrar_gasto(cliente, "imagen", costo, ref, modelo,
-                             f"{modelo} · {len(referencias)} referencia(s) · falló al descargar; el modelo ya cobró")
+                             gettext("%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró",
+                                     modelo=modelo, n=len(referencias)))
         raise
-    _registrar_gasto(cliente, "imagen", costo, ref, modelo, f"{modelo} · {len(referencias)} referencia(s)")
+    _registrar_gasto(cliente, "imagen", costo, ref, modelo,
+                     gettext("%(modelo)s · %(n)s referencia(s)", modelo=modelo, n=len(referencias)))
     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
     try:
         imagen_url = r2_uploader.upload_image(out_path, f"clientes/{cliente}/flowplus/{cf_id}.png")
@@ -474,8 +476,16 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     out_path = os.path.join(out_dir, f"{cf_id}.mp4")
 
     costo = None
-    detalle_gasto = (f"{modelo} · {int(duracion)} s" + ("" if con_sonido else " · sin sonido")
-                     + (" · borrador 480p" if calidad == "borrador" else "") + (" · recuperado" if recuperado else ""))
+    # El `detalle` del gasto se guarda (Configuración › Gasto): en el idioma del
+    # proyecto, que ya puso worker.ejecutar.
+    partes = [f"{modelo} · {int(duracion)} s"]
+    if not con_sonido:
+        partes.append(gettext("sin sonido"))
+    if calidad == "borrador":
+        partes.append(gettext("borrador 480p"))
+    if recuperado:
+        partes.append(gettext("recuperado"))
+    detalle_gasto = " · ".join(partes)
 
     try:
         costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=con_sonido, calidad=calidad)
@@ -494,7 +504,7 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         if costo is not None:
             # El modelo ya cobró aunque la descarga fallara: queda registrado.
             _registrar_gasto(cliente, "video", costo, ref, modelo,
-                             detalle_gasto + " · falló al descargar; el modelo ya cobró")
+                             detalle_gasto + " · " + gettext("falló al descargar; el modelo ya cobró"))
         raise
 
     # --- Mezcla: ¿trajo sonido? ¿pidió música? (degradable: el video ya está pagado) ---
@@ -565,8 +575,8 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     )
     if estilo_musica and not musica.es_propia(estilo_musica):
         estado_musica = (capas.get("musica") or {}).get("estado")
-        detalle_gasto += f" + música {estilo_musica}" + (" (falló la mezcla; la pista ya se cobró)"
-                                                          if estado_musica == "error" else "")
+        detalle_gasto += " + " + gettext("música %(estilo)s", estilo=estilo_musica) + (
+            (" (" + gettext("falló la mezcla; la pista ya se cobró") + ")") if estado_musica == "error" else "")
     _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
 
     registro = {

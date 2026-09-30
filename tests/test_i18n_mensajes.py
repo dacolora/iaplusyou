@@ -41,6 +41,7 @@ WORKER += sorted({os.path.relpath(p, RAIZ) for p in glob.glob(os.path.join(RAIZ,
 WORKER += ["worker.py", "cola.py", "organico.py", "experimentos.py", "derivaciones.py", "lanzador.py", "acciones.py",
            "importador.py", "nicho/fuentes/reddit.py", "nicho/fuentes/youtube.py", "nicho/fuentes/apify.py",
            "providers/apify.py"]
+WORKER += ["providers/wavespeed_common.py", "nicho/fuentes/plataformas.py", "nicho/fuentes/plataforma.py"]   # Task 7, fix 1
 
 
 def _nombre(llamada):

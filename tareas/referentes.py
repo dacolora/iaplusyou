@@ -142,7 +142,7 @@ def _pagada_aunque_falle(tarea, bid, lote, detalle, llamada, *args):
     except copycoders.FormatoInvalido as e:
         if e.tokens_entrada or e.tokens_salida:
             _registrar_traduccion(tarea, bid, f"{lote}:fallida", e.tokens_entrada, e.tokens_salida,
-                                  f"{detalle} (respuesta inutilizable: {e})")
+                                  gettext("%(detalle)s (respuesta inutilizable: %(error)s)", detalle=detalle, error=e))
         raise
 
 
@@ -153,11 +153,11 @@ def _fase_traducir(tarea, p, bid, avanzar):
         pendientes = datos.sin_traducir(limite=TRAMO)
         if not pendientes:
             break
-        trad, ent, sal = _pagada_aunque_falle(tarea, bid, f"firmas{lote}", "traducción de firmas copycoders",
+        trad, ent, sal = _pagada_aunque_falle(tarea, bid, f"firmas{lote}", gettext("traducción de firmas copycoders"),
                                               copycoders.traducir_firmas, [(r["id"], r["firma"]) for r in pendientes])
         if datos.marcar_traducidas(list(trad.items())):
             progreso = True
-        _registrar_traduccion(tarea, bid, f"firmas{lote}", ent, sal, "traducción de firmas copycoders")
+        _registrar_traduccion(tarea, bid, f"firmas{lote}", ent, sal, gettext("traducción de firmas copycoders"))
         if not trad:
             break
     familias = [f for f in datos.familias() if not (f["descripcion"] or "").strip()]
@@ -166,12 +166,13 @@ def _fase_traducir(tarea, p, bid, avanzar):
         for f in familias[:FAMILIAS_POR_LLAMADA]:
             ejemplos[f["nombre"]] = [r["firma"] for r in datos.listar_por_familia(f["nombre"], limite=3) if r.get("firma")]
         desc, ent, sal = _pagada_aunque_falle(tarea, bid, f"familias{len(familias)}",
-                                              "descripción de familias copycoders",
+                                              gettext("descripción de familias copycoders"),
                                               copycoders.describir_familias, list(ejemplos.items()))
         for f in familias:
             if f["nombre"] in desc:
                 datos.familia_actualizar(f["id"], desc[f["nombre"]])
-        _registrar_traduccion(tarea, bid, f"familias{len(familias)}", ent, sal, "descripción de familias copycoders")
+        _registrar_traduccion(tarea, bid, f"familias{len(familias)}", ent, sal,
+                              gettext("descripción de familias copycoders"))
     quedan = bool(datos.sin_traducir(limite=1))
     # Solo re-encolar por firmas si esta pasada avanzó algo: si una pasada
     # completa no tradujo ni una fila (Claude omitió las mismas otra vez), la
@@ -259,13 +260,13 @@ def ejecutar_familias_en(tarea):
         except copycoders.FormatoInvalido as e:
             if e.tokens_entrada or e.tokens_salida:
                 _registrar_familias_en(tarea, n, e.tokens_entrada, e.tokens_salida,
-                                       f"familias en inglés (respuesta inutilizable: {e})")
+                                       gettext("familias en inglés (respuesta inutilizable: %(error)s)", error=e))
             raise
         for f in tanda:
             if f["nombre"] in desc:
                 datos.familia_actualizar(f["id"], descripcion_en=desc[f["nombre"]])
                 escritas += 1
-        _registrar_familias_en(tarea, n, ent, sal, "familias en inglés")
+        _registrar_familias_en(tarea, n, ent, sal, gettext("familias en inglés"))
     return gettext("Descripciones en inglés: %(n)s de %(total)s.", n=escritas, total=len(pendientes))
 
 

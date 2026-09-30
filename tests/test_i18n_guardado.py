@@ -253,3 +253,111 @@ def test_error_del_hilo_de_pegar_link_en_el_idioma_del_proyecto(app, monkeypatch
 def test_error_del_hilo_de_pegar_link_en_espanol(app, monkeypatch):
     assert _error_del_hilo_de_pegar_link(app, monkeypatch, "es") == (
         "Eso no parece un link (tiene que empezar por http:// o https://).")
+
+
+# --- Fase 6, Task 7, fix round 1 --------------------------------------------
+
+def test_interrumpidas_de_dos_proyectos_cada_una_en_su_idioma(base_temporal, monkeypatch):
+    """Una misma pasada de recuperar_interrumpidas con una tarea de un proyecto
+    en inglés y otra de uno en español: el error de cada tarea y lo que guarda
+    su gancho van cada uno en el idioma de SU proyecto."""
+    from datetime import datetime, timedelta
+
+    import cola
+    import db
+    import tareas
+    import worker
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: {"acme": "en", "otro": "es"}[c])
+    vistos = {}
+    monkeypatch.setitem(tareas.AL_INTERRUMPIR, "prueba_idioma",
+                        lambda t, mensaje: vistos.__setitem__(t["cliente"], mensaje))
+    ids = {c: cola.encolar("prueba_idioma", {"cliente": c}, cliente=c, max_intentos=1) for c in ("acme", "otro")}
+    cola.reclamar()
+    cola.reclamar()
+    vieja = (datetime.now() - timedelta(minutes=45)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.tarea.update().where(db.tarea.c.id.in_(list(ids.values()))).values(iniciada_en=vieja))
+    worker.recuperar_interrumpidas(30)
+    assert vistos == {"acme": "Interrupted by a server restart. Try again.",
+                      "otro": "Se interrumpió por un reinicio del servidor. Vuelve a intentar."}
+    assert cola.consultar_por_id(ids["acme"])["error"] == (
+        "Interrupted (it had been running for more than 30 min). Check the result and try again.")
+    assert cola.consultar_por_id(ids["otro"])["error"] == (
+        "Se interrumpió (llevaba más de 30 min en curso). Revisa el resultado y vuelve a intentar.")
+
+
+def _gasto_de_crear_video(base_temporal, monkeypatch, tmp_path, idioma_proyecto):
+    """Crear (video) por worker.ejecutar, como en producción: sin sonido y con
+    una música cuya mezcla falla, para que el `detalle` lleve todas sus partes."""
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    import worker
+    from tests.test_tareas_flowplus import _sesion_lista_para_generar
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: idioma_proyecto)
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=False, musica_estilo="lujo")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.musica, "obtener_pista",
+                        lambda estilo, segundos, carpeta_cache=None, on_progreso=None:
+                            ({"archivo": "/tmp/p.wav", "url": "https://r2/musica/lujo_15.wav", "estilo": estilo,
+                              "generada": True}, 0.02))
+    monkeypatch.setattr(fp.cortes, "duracion", lambda p: 5.0)
+
+    def _mezclar_roto(video_in, pista, salida, duracion_s, volumenes=None):
+        raise RuntimeError("ffmpeg murió")
+    monkeypatch.setattr(fp.mezcla, "mezclar_musica", _mezclar_roto)
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+    worker.ejecutar({"id": 5, "tipo": "flowplus_video", "cliente": "acme", "job_id": "j1",
+                     "payload": {"cliente": "acme", "cf_id": cid}})
+    return gastos.historial("acme")[0]["detalle"]
+
+
+def test_gasto_de_un_video_de_crear_en_el_idioma_del_proyecto(base_temporal, monkeypatch, tmp_path):
+    assert _gasto_de_crear_video(base_temporal, monkeypatch, tmp_path, "en") == (
+        "kling_o3_pro · 5 s · no sound + music lujo (mix failed; the track was already charged)")
+
+
+def test_gasto_de_un_video_de_crear_en_espanol_no_cambia(base_temporal, monkeypatch, tmp_path):
+    assert _gasto_de_crear_video(base_temporal, monkeypatch, tmp_path, "es") == (
+        "kling_o3_pro · 5 s · sin sonido + música lujo (falló la mezcla; la pista ya se cobró)")
+
+
+def _gasto_de_crear_imagen(base_temporal, monkeypatch, tmp_path, idioma_proyecto):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    import worker
+    from tests.test_tareas_flowplus import _Resp
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: idioma_proyecto)
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "posa", 5, "", "A", referencias_urls=["https://x/1.png", "https://x/2.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", lambda *a, **k: "https://prov/i.png")
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_imagen", lambda m, n_referencias=1: {"credits": 2, "usd": 0.093})
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    worker.ejecutar({"id": 3, "tipo": "flowplus_imagen", "cliente": "acme", "job_id": "j",
+                     "payload": {"cliente": "acme", "cf_id": cid}})
+    return gastos.historial("acme")[0]["detalle"]
+
+
+def test_gasto_de_una_imagen_de_crear_en_el_idioma_del_proyecto(base_temporal, monkeypatch, tmp_path):
+    assert _gasto_de_crear_imagen(base_temporal, monkeypatch, tmp_path, "en") == "seedream_v5_pro · 2 reference(s)"
+    assert _gasto_de_crear_imagen(base_temporal, monkeypatch, tmp_path, "es") == "seedream_v5_pro · 2 referencia(s)"
+
+
+def test_error_del_proveedor_en_el_idioma_ambiente():
+    """wavespeed_common: el texto de la excepción se guarda (tarjeta de Crear,
+    mensaje de la tarea); en el worker sale en el idioma del proyecto y, fuera
+    de toda app, idéntico al español de siempre."""
+    from providers import wavespeed_common as ws
+    error = ws.ErrorProveedor("Kling O3 Pro", "failed", detalle="boom", codigo=500, prediction_id="p1")
+    assert str(error) == "Kling O3 Pro no pudo generar: boom (código 500) · predicción p1"
+    assert str(ws.EsperaAgotada("Wan 3.0", "p2", 1200)) == (
+        "Se agotó el tiempo esperando el resultado de Wan 3.0 (20 min; predicción p2).")
+    with idiomas.en_idioma("en"):
+        assert str(ws.ErrorProveedor("Kling O3 Pro", "failed", detalle="boom", codigo=500, prediction_id="p1")) == (
+            "Kling O3 Pro couldn't generate: boom (code 500) · prediction p1")
+        assert str(ws.EsperaInterrumpida("Wan 3.0", "p3", 60)) == (
+            "Stopped waiting for Wan 3.0 because the worker is restarting (prediction p3); it resumes on its own.")

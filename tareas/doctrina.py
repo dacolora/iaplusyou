@@ -52,9 +52,9 @@ def ejecutar_pedidos(tarea):
         n, ent, sal = pedidos.resumir(cliente, producto_id)
     except pedidos.ErrorPedidos as e:
         _gasto(cliente, referencia, getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0,
-               "pedidos al cliente · respuesta inválida")
+               gettext("pedidos al cliente · respuesta inválida"))
         raise
-    _gasto(cliente, referencia, ent, sal, "pedidos al cliente")
+    _gasto(cliente, referencia, ent, sal, gettext("pedidos al cliente"))
     return (gettext("%(n)s pedido(s) listos para el cliente.", n=n) if n
             else gettext("Claude no ha pedido nada para este producto."))
 
@@ -76,10 +76,10 @@ def ejecutar_revisar(tarea):
     try:
         rev, ent, sal = revisor.revisar(cliente, cf_id)
     except revisor.ErrorRevision as e:
-        _gasto(cliente, referencia, e.tokens_entrada, e.tokens_salida, "revisión de la doctrina · respuesta inválida",
-               tipo="revision")
+        _gasto(cliente, referencia, e.tokens_entrada, e.tokens_salida,
+               gettext("revisión de la doctrina · respuesta inválida"), tipo="revision")
         raise
-    _gasto(cliente, referencia, ent, sal, "revisión de la doctrina", tipo="revision")
+    _gasto(cliente, referencia, ent, sal, gettext("revisión de la doctrina"), tipo="revision")
     n = revisor.contar(rev)
     return (gettext("Revisión lista: %(n)s punto(s) para mejorar.", n=n) if n
             else gettext("Revisión lista: la pieza pasa todo."))

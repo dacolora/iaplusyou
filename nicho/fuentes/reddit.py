@@ -193,7 +193,7 @@ class FuenteReddit(Fuente):
             _token(_http.sesion(), _llaves())
         except ErrorFuente as e:
             return {"ok": False, "detalle": e.usuario}
-        return {"ok": True, "detalle": "Reddit aceptó las llaves (solo lectura)."}
+        return {"ok": True, "detalle": gettext("Reddit aceptó las llaves (solo lectura).")}
 
     def recolectar(self, params, avanzar=None):
         p = normalizar_params(params)

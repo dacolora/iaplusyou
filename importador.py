@@ -323,7 +323,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         errores = []
     prod = tiendas.producto(cliente, producto_id)
     if prod is None:
-        errores.append(f"producto {producto_id}: no existe.")
+        errores.append(gettext("producto %(id)s: no existe.", id=producto_id))
         return None
     nombre = (prod.get("nombre") or "").strip()
     descripcion = (prod.get("descripcion") or "").strip()

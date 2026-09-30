@@ -199,6 +199,10 @@ msgid "%(destino)s · sin cobros (todo cacheado u omitido)"
 msgstr "%(destino)s · no charges (all cached or skipped)"
 
 #, python-format
+msgid "%(detalle)s (respuesta inutilizable: %(error)s)"
+msgstr "%(detalle)s (unusable response: %(error)s)"
+
+#, python-format
 msgid "%(detalle)s · falló al guardar; fal ya cobró"
 msgstr "%(detalle)s · saving failed; fal already charged"
 
@@ -295,6 +299,10 @@ msgid "%(modelo)s llega a %(aviso)s s: se generará de %(aviso)s s."
 msgstr "%(modelo)s tops out at %(aviso)s s: it'll be generated at %(aviso)s s."
 
 #, python-format
+msgid "%(modelo)s no pudo generar: %(detalle)s"
+msgstr "%(modelo)s couldn't generate: %(detalle)s"
+
+#, python-format
 msgid "%(modelo)s no pudo generar: %(detalle)s (código %(codigo)s). Un intento fallido normalmente no se cobra."
 msgstr "%(modelo)s could not generate: %(detalle)s (code %(codigo)s). A failed attempt is normally not charged."
 
@@ -313,6 +321,14 @@ msgstr "%(modelo)s only uses the first reference (%(primera)s): it would not use
 #, python-format
 msgid "%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. Quita las que sobran o cambia de modelo — no se cobró nada."
 msgstr "%(modelo)s uses up to %(n)s references: it would not use %(sobran)s. Remove the extra ones or change the model — nothing was charged."
+
+#, python-format
+msgid "%(modelo)s · %(n)s referencia(s)"
+msgstr "%(modelo)s · %(n)s reference(s)"
+
+#, python-format
+msgid "%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró"
+msgstr "%(modelo)s · %(n)s reference(s) · download failed; the model already charged"
 
 #, python-format
 msgid "%(monto)s generación"
@@ -1161,6 +1177,10 @@ msgstr "(when importing, ≈ %(usd)s for the AI rule)"
 
 msgid "(cerrado)"
 msgstr "(closed)"
+
+#, python-format
+msgid "(código %(codigo)s)"
+msgstr "(code %(codigo)s)"
 
 msgid "(el CSV trae todos los del mes)"
 msgstr "(the CSV includes all of this month's)"
@@ -2287,6 +2307,15 @@ msgstr "Search"
 
 msgid "Búsqueda + reseñas"
 msgstr "Search + reviews"
+
+msgid "Búsqueda en Amazon"
+msgstr "Amazon search"
+
+msgid "Búsqueda en Mercado Libre"
+msgstr "Mercado Libre search"
+
+msgid "Búsqueda en TikTok Shop"
+msgstr "TikTok Shop search"
 
 msgid "Búsquedas"
 msgstr "Searches"
@@ -5836,6 +5865,9 @@ msgstr "Missing FLASK_SECRET_KEY in the server's .env: without it a store's cred
 msgid "Falta FLASK_SECRET_KEY en el .env: sin ella no se puede guardar el token de la agencia."
 msgstr "FLASK_SECRET_KEY is missing from the .env: without it the agency token can't be saved."
 
+msgid "Falta WAVESPEED_API_KEY en tu .env. Consíguela en wavespeed.ai (API Keys)."
+msgstr "WAVESPEED_API_KEY is missing from your .env. Get it at wavespeed.ai (API Keys)."
+
 msgid "Falta YOUTUBE_API_KEY en el .env del servidor."
 msgstr "YOUTUBE_API_KEY is missing from the server's .env."
 
@@ -9167,6 +9199,9 @@ msgstr "Opacity"
 msgid "Opacidad del fondo"
 msgstr "Background opacity"
 
+msgid "Opiniones de Mercado Libre"
+msgstr "Mercado Libre reviews"
+
 msgid "Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en Configuración, o elige el objetivo de tráfico."
 msgstr "Optimizing for purchases requires an active Pixel and pixel attribution: press “Check Pixel” in Settings, or choose the traffic objective."
 
@@ -10354,6 +10389,9 @@ msgstr "Reddit"
 msgid "Reddit (Nicho: comentarios reales)"
 msgstr "Reddit (Niche: real comments)"
 
+msgid "Reddit aceptó las llaves (solo lectura)."
+msgstr "Reddit accepted the keys (read-only)."
+
 #, python-format
 msgid "Reddit limitó las llamadas al pedir el token; intenta en unos minutos. (%(detalle)s)"
 msgstr "Reddit rate-limited the calls when requesting the token; try again in a few minutes. (%(detalle)s)"
@@ -10622,6 +10660,9 @@ msgstr "Reviews"
 msgid "Reseñas de Amazon"
 msgstr "Amazon reviews"
 
+msgid "Reseñas de TikTok Shop"
+msgstr "TikTok Shop reviews"
+
 msgid "Reseñas por producto"
 msgstr "Reviews per product"
 
@@ -10797,6 +10838,10 @@ msgstr "Valentine's Day"
 msgid "Se acerca y pasa al siguiente."
 msgstr "It zooms in and moves to the next one."
 
+#, python-format
+msgid "Se agotó el tiempo esperando el resultado de %(modelo)s (%(min)s min; predicción %(id)s)."
+msgstr "Timed out waiting for the result from %(modelo)s (%(min)s min; prediction %(id)s)."
+
 msgid "Se agrega: "
 msgstr "Added: "
 
@@ -10809,6 +10854,10 @@ msgstr "Analyzed twice (cores, then subs)"
 
 msgid "Se cobra por resultado (aprox.: Apify suma cómputo). Cada clic es una corrida y no se reintenta sola. Usar estos datos es responsabilidad de quien pone el token."
 msgstr "Charged per result (approx.: Apify adds compute). Each click is one run and doesn't retry on its own. Using this data is the responsibility of whoever provides the token."
+
+#, python-format
+msgid "Se cortó la espera de %(modelo)s porque el worker se está reiniciando (predicción %(id)s); se retoma sola."
+msgstr "Stopped waiting for %(modelo)s because the worker is restarting (prediction %(id)s); it resumes on its own."
 
 msgid "Se crea una pieza de Crear por idea aprobada. Ninguna se reintenta sola si falla."
 msgstr "A Create piece is made per approved idea. None retries on its own if it fails."
@@ -10868,6 +10917,9 @@ msgstr "Interrupted (it had been running for more than %(min)s min). Check the r
 
 msgid "Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."
 msgstr "The launch was interrupted; check Ads Manager and try again."
+
+msgid "Se interrumpió la publicación; revisa Ads Manager antes de volver a intentar."
+msgstr "Publishing was interrupted; check Ads Manager before trying again."
 
 msgid "Se interrumpió la respuesta. Vuelve a enviar tu mensaje."
 msgstr "The answer was interrupted. Send your message again."
@@ -13127,6 +13179,9 @@ msgstr "YouTube"
 msgid "YouTube Data API (Nicho: comentarios de videos)"
 msgstr "YouTube Data API (Niche: video comments)"
 
+msgid "YouTube aceptó la llave."
+msgstr "YouTube accepted the key."
+
 msgid "YouTube agotó la cuota diaria del proyecto de Google; vuelve a intentar mañana."
 msgstr "YouTube used up the Google project's daily quota; try again tomorrow."
 
@@ -13333,6 +13388,9 @@ msgstr "good"
 
 msgid "borrador"
 msgstr "draft"
+
+msgid "borrador 480p"
+msgstr "480p draft"
 
 msgid "buscando"
 msgstr "searching"
@@ -13669,6 +13727,9 @@ msgstr "discarded"
 msgid "desconocido"
 msgstr "unknown"
 
+msgid "descripción de familias copycoders"
+msgstr "copycoders format family descriptions"
+
 msgid "desde"
 msgstr "since"
 
@@ -13989,12 +14050,18 @@ msgstr "fal_audio.tts: empty text."
 msgid "falla"
 msgstr "fails"
 
+msgid "falló al descargar; el modelo ya cobró"
+msgstr "download failed; the model already charged"
+
 #, python-format
 msgid "falló al ejecutar: %(error)s"
 msgstr "failed to execute: %(error)s"
 
 msgid "falló después de generar; el proveedor ya cobró"
 msgstr "failed after generating; the provider already charged"
+
+msgid "falló la mezcla; la pista ya se cobró"
+msgstr "mix failed; the track was already charged"
 
 #, python-format
 msgid "falló: %(mensaje)s"
@@ -14025,6 +14092,13 @@ msgid "familia"
 msgid_plural "familias"
 msgstr[0] "family"
 msgstr[1] "families"
+
+msgid "familias en inglés"
+msgstr "families in English"
+
+#, python-format
+msgid "familias en inglés (respuesta inutilizable: %(error)s)"
+msgstr "families in English (unusable response: %(error)s)"
 
 msgid "fecha;tipo;proveedor;referencia;detalle;usd"
 msgstr "date;type;provider;reference;detail;usd"
@@ -14453,6 +14527,10 @@ msgstr "most aware"
 msgid "muy nuevo en el catálogo, sin datos de calidad/fidelidad todavía"
 msgstr "very new in the catalog, no quality/fidelity data yet"
 
+#, python-format
+msgid "música %(estilo)s"
+msgstr "music %(estilo)s"
+
 msgid "nada"
 msgstr "nothing"
 
@@ -14644,6 +14722,12 @@ msgstr "invalid country: %(pais)s (two uppercase letters expected)."
 msgid "pedidos"
 msgstr "orders"
 
+msgid "pedidos al cliente"
+msgstr "requests to the client"
+
+msgid "pedidos al cliente · respuesta inválida"
+msgstr "requests to the client · invalid response"
+
 msgid "pedidos:"
 msgstr "orders:"
 
@@ -14727,6 +14811,10 @@ msgstr "product"
 #, python-format
 msgid "producto %(id)s"
 msgstr "product %(id)s"
+
+#, python-format
+msgid "producto %(id)s: no existe."
+msgstr "product %(id)s: doesn't exist."
 
 msgid "productos"
 msgstr "products"
@@ -14831,6 +14919,9 @@ msgstr "rebuilt"
 #, python-format
 msgid "recuperada: llevaba más de %(min)s min en curso"
 msgstr "recovered: it had been running for more than %(min)s min"
+
+msgid "recuperado"
+msgstr "recovered"
 
 msgid "redes"
 msgstr "social"
@@ -14954,6 +15045,12 @@ msgstr "review the offer"
 
 msgid "revisión"
 msgstr "in review"
+
+msgid "revisión de la doctrina"
+msgstr "doctrine review"
+
+msgid "revisión de la doctrina · respuesta inválida"
+msgstr "doctrine review · invalid response"
 
 msgid "roas"
 msgstr "roas"
@@ -15128,6 +15225,9 @@ msgstr "no usable result"
 msgid "sin resultados"
 msgstr "no results"
 
+msgid "sin sonido"
+msgstr "no sound"
+
 msgid "sin tarifa"
 msgstr "no rate"
 
@@ -15268,6 +15368,9 @@ msgstr "cap"
 #, python-format
 msgid "tope alcanzado (%(gasto)s de %(tope)s %(moneda)s); %(motivo)s"
 msgstr "cap reached (%(gasto)s of %(tope)s %(moneda)s); %(motivo)s"
+
+msgid "traducción de firmas copycoders"
+msgstr "copycoders “why it works” translation"
 
 msgid "trae demasiados clips"
 msgstr "has too many clips"
@@ -15508,6 +15611,10 @@ msgstr "“{nombre}” is being prepared: it's added on its own when it's ready.
 #, python-brace-format
 msgid "«{nombre}» tarda demasiado en prepararse. Vuelve a intentar en un rato."
 msgstr "“{nombre}” is taking too long to prepare. Try again in a while."
+
+#, python-format
+msgid "· predicción %(id)s"
+msgstr "· prediction %(id)s"
 
 #, python-format
 msgid "¿Activar «%(nombre)s» en Meta? Vuelve a gastar presupuesto."

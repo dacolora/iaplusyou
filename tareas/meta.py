@@ -103,7 +103,7 @@ def publicar(tarea):
     # Meta. Si ya no está "publicando" o si ya alcanzó a crear una campaña,
     # paramos sin llamar a Meta; la persona revisa y reintenta a mano.
     if entry.get("estado") != "publicando" or (entry.get("meta_ids") or {}).get("campaign_id"):
-        msg = "Se interrumpió la publicación; revisa Ads Manager antes de volver a intentar."
+        msg = gettext("Se interrumpió la publicación; revisa Ads Manager antes de volver a intentar.")
         ads.actualizar(cliente, ad_id, estado="error", error=msg)
         return msg
 
