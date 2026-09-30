@@ -55,23 +55,42 @@
 //   a que la vuelta en curso termine, en orden y una vez cada aviso; quien lo
 //   recibe ya ve el estado último. Si un oyente provoca un aviso cada vez que
 //   se entera, se corta (y se anota en la consola) en vez de colgar la página.
+import { arreglarAlAbrir, avisosCarga } from "./avisos_carga.js";
 import { Avisos } from "./avisos_editor.js";
 import { Biblioteca } from "./biblioteca.js";
 import { pedidoCortar } from "./escala.js";
-import { Guardado } from "./guardado.js";
+import { Guardado, sesionTerminada } from "./guardado.js";
 import { Historial } from "./historial.js";
 import { InteraccionLienzo } from "./lienzo_interaccion.js";
 import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
+import { respuestaProducir } from "./producir.js";
 import { Propiedades } from "./propiedades.js";
 import { listaY, ponerTextos, t } from "./textos.js";
 import { infoDe, VistaPrevia } from "./vista.js";
 
-const datos = JSON.parse(document.getElementById("datos-editor").textContent);
 // Los textos en el idioma de quien mira (ruta editor.ver), antes de construir
-// nada: ningún módulo llama a t() al cargarse.
-ponerTextos(datos.textos, datos.idioma_ui);
+// nada: ningún módulo llama a t() al cargarse. Se ponen al leer `datos`, dentro
+// de su declaración: nada de nivel superior se ejecuta suelto antes de
+// declararlo todo (capa 4c, lo vigila tests/test_editor_js.py).
+function leerDatos() {
+  const d = JSON.parse(document.getElementById("datos-editor").textContent);
+  ponerTextos(d.textos, d.idioma_ui);
+  return d;
+}
+
+const datos = leerDatos();
 const $ = (id) => document.getElementById(id);
+// Capa 4c: un clip que pide más material del que hay (el render fallaría) se
+// acorta al abrir con el mismo `normalizar` que usa cada operación (y un
+// «deslizar» de la capa 4b recibe su duración) — la vista previa muestra lo
+// que se va a producir. Se guarda solo, AL FINAL del arranque (abajo del
+// todo: `guardado.pedir` pinta el estado con TEXTO_GUARDADO, que tiene que
+// existir ya), y solo si el documento cambió de verdad. «Se acortó solo» se
+// dice una vez, hasta el próximo cambio.
+const alAbrir = arreglarAlAbrir(datos.documento, infoDe(datos.materiales));
+datos.documento = alAbrir.doc;
+let acortadoAlAbrir = alAbrir.acortado;
 const historial = new Historial(datos.documento);
 let seleccion = null;
 const avisos = new Avisos();
@@ -118,13 +137,30 @@ function aviso(texto) {
   n.hidden = !texto;
 }
 
-function pintarGuardado(estado, mensaje) {
+function pintarGuardado(estado, mensaje, detalle = "") {
   const n = $("estado-guardado");
   n.dataset.estado = estado;
   n.textContent = TEXTO_GUARDADO[estado]?.(mensaje) ?? "";
-  n.title = n.textContent;          // en el celular el hueco es fijo: un error largo termina en «…»
+  // en el celular el hueco es fijo: un error largo termina en «…». Lo técnico
+  // (la ruta del validador) no se muestra: queda aquí, para soporte (capa 4c).
+  n.title = detalle ? `${n.textContent}\n${detalle}` : n.textContent;
   $("recargar").hidden = estado !== "conflicto";
   pintarHerramientas();
+}
+
+// Los avisos de carga (capa 4c): se recalculan en cada refresco con el
+// documento vigente, así que se van en cuanto una edición los arregla.
+function pintarAvisoCarga(id, a) {
+  const n = $(id);
+  n.textContent = a?.texto ?? "";
+  n.hidden = !a;
+  n.classList.toggle("error", Boolean(a?.error));
+}
+
+function pintarAvisosCarga() {
+  const a = avisosCarga(historial.actual, info(), vista.materiales, { acortado: acortadoAlAbrir });
+  pintarAvisoCarga("aviso-recortes", a.recortes);
+  pintarAvisoCarga("aviso-faltan", a.faltan);
 }
 
 function buscarClip(id) {
@@ -147,10 +183,14 @@ function pintarHerramientas() {
 // "materiales", "destino", o null (solo se redibuja; si la selección cambió,
 // eso se avisa igual).
 function refrescar(que = "documento") {
-  if (que === "documento") vista.setDocumento(historial.actual);
+  if (que === "documento") {
+    vista.setDocumento(historial.actual);
+    if (historial.actual !== datos.documento) acortadoAlAbrir = false;   // «se acortó solo» dura hasta el próximo cambio
+  }
   if (seleccion && !buscarClip(seleccion)) seleccion = null;
   linea.dibujar(historial.actual, { seleccion, cabezalMs: vista.tiempo() });
   pintarHerramientas();
+  pintarAvisosCarga();
   avisos.cambio(que, seleccion);
 }
 
@@ -355,16 +395,15 @@ function montarProducir() {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ version_n: guardado.versionN, destinos, ...(reemplazar ? { reemplazar: true } : {}) }),
       });
-      const j = await r.json().catch(() => ({}));
-      if (r.status === 409 && Array.isArray(j.reemplazos) && j.reemplazos.length) return pedirReemplazo(j.reemplazos);
-      if (!r.ok) return avisar([j.error || t("producir.error", { status: r.status }), ...(j.problemas ?? [])].join(" "));
-      const n = (j.producidas ?? []).filter((p) => p.encolada).length;
+      // la página de entrar (sesión vencida) no es JSON: ni se intenta leer
+      const j = sesionTerminada(r) ? null : await r.json().catch(() => null);
+      const res = respuestaProducir(r, j);             // producir.js (puro, probado en Node)
+      if (res.que === "reemplazo") return pedirReemplazo(res.destinos);
+      if (res.que === "error") return avisar(res.texto);
       dialogo.close();
       aviso("");
-      $("producir-hecho-texto").textContent = n
-        ? t(n === 1 ? "producir.hecha_una" : "producir.hechas", { n })
-        : t("producir.ya_estaban");
-      if (j.url) $("producir-hecho-enlace").href = j.url;
+      $("producir-hecho-texto").textContent = res.texto;
+      if (res.url) $("producir-hecho-enlace").href = res.url;
       $("producir-hecho").hidden = false;
     } catch {
       avisar(t("producir.sin_conexion"));
@@ -499,6 +538,9 @@ new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () 
 // la vista previa: el documento que se dibuja y las medidas de los textos)
 new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });
 refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
+// lo arreglado al abrir también se guarda (ya con todo declarado y montado:
+// ver arreglarAlAbrir arriba; tests/test_editor_js.py vigila el orden)
+if (alAbrir.guardar) guardado.pedir(historial.actual);
 await vista.iniciar();
 refrescar(null);           // con el reloj listo: el cabezal donde está
 // otro destino: los textos variables de la línea cambian (vista.js ya escucha

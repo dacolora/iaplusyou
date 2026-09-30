@@ -28,6 +28,41 @@ def headers():
     return {"Authorization": f"Bearer {api_key()}", "Content-Type": "application/json"}
 
 
+class SinSaldo(RuntimeError):
+    """WaveSpeed rechazó el pedido porque la cuenta de Creatv no tiene saldo
+    (incidente 2026-09-30: «Insufficient credits. Please top up your account
+    to continue.» salía crudo en la tarjeta). Es un RuntimeError para que todo
+    el manejo de errores de siempre lo siga atrapando; quien lo atrape lo
+    cuenta en palabras y avisa al administrador (saldo.marcar). Nada se lanzó,
+    así que nada se cobró."""
+
+    proveedor = "wavespeed"
+
+    def __init__(self, path, status, detalle):
+        self.path, self.status, self.detalle = path, status, detalle
+        super().__init__(f"WaveSpeed ({path}) respondió {status}: sin saldo en la cuenta ({detalle})")
+
+
+def error_de_respuesta(resp, path):
+    """La excepción para una respuesta no-ok al lanzar una predicción:
+    `SinSaldo` si WaveSpeed dice que la cuenta no tiene saldo (402, o su
+    mensaje de «insufficient credits» / «top up»), y el RuntimeError de
+    siempre — mismo texto — en cualquier otro caso."""
+    texto = resp.text or ""
+    mensaje = ""
+    try:
+        cuerpo = resp.json()
+        if isinstance(cuerpo, dict):
+            mensaje = str(cuerpo.get("message") or cuerpo.get("error") or "")
+    except ValueError:
+        pass
+    minusculas = (mensaje or texto).lower()
+    if (resp.status_code == 402 or ("insufficient" in minusculas and ("credit" in minusculas or "balance" in minusculas))
+            or "top up" in minusculas):
+        return SinSaldo(path, resp.status_code, (mensaje or texto)[:300])
+    return RuntimeError(f"WaveSpeed ({path}) respondió {resp.status_code}: {texto[:500]}")
+
+
 class ErrorProveedor(RuntimeError):
     """WaveSpeed dio por terminada la predicción sin resultado (failed,
     cancelled, timeout, deleted). Lleva lo que la persona necesita leer — el

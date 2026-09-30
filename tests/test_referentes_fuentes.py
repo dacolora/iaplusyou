@@ -35,3 +35,28 @@ def test_apify_llaves_faltantes(monkeypatch):
     assert fuentes.llaves_faltantes("apify") == ["APIFY_TOKEN"]
     monkeypatch.setenv("APIFY_TOKEN", "tok")
     assert fuentes.llaves_faltantes("apify") == []
+
+
+def test_trendtrack_registrado():
+    assert "trendtrack" in fuentes.tipos()
+    assert fuentes.por_tipo("trendtrack").__name__ == "referentes.fuentes.trendtrack"
+    assert "TrendTrack" in fuentes.NOMBRES["trendtrack"]
+
+
+def test_trendtrack_llaves_faltantes(monkeypatch):
+    monkeypatch.delenv("TRENDTRACK_API_KEY", raising=False)
+    assert fuentes.llaves_faltantes("trendtrack") == ["TRENDTRACK_API_KEY"]
+    monkeypatch.setenv("TRENDTRACK_API_KEY", "tt_test")
+    assert fuentes.llaves_faltantes("trendtrack") == []
+
+
+def test_modos_de_busqueda_por_fuente():
+    assert fuentes.modos("trendtrack") == ("palabra",)
+    assert fuentes.modos("atria") == fuentes.modos("apify") == ("palabra", "marca")
+
+
+def test_trendtrack_cabe_en_la_columna_de_fuente():
+    import db
+    from referentes import datos
+    assert "trendtrack" in datos.FUENTES
+    assert len("trendtrack") <= db.referente.c.fuente.type.length

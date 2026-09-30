@@ -93,7 +93,9 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
                              "biblioteca": "/cliente/acme/ediciones/biblioteca",
                              "subir": "/cliente/acme/ediciones/materiales/subir",
                              "agregar_pieza": "/cliente/acme/ediciones/biblioteca/pieza/__CF__",
-                             "materiales_por_id": "/cliente/acme/ediciones/materiales"}
+                             "materiales_por_id": "/cliente/acme/ediciones/materiales",
+                             # capa 4c (8/10): «Borrar» en la biblioteca (`__ID__` = el material)
+                             "borrar_material": "/cliente/acme/ediciones/materiales/__ID__/borrar"}
     assert datos["estimado_s"] >= 20 and datos["cf_id"] is None
     assert [a[1] for a, _k in encolados] == ["edicion_proxy"]
     assert encolados[0][0][2] == {"cliente": "acme", "material_id": clon["id"]}
@@ -159,7 +161,11 @@ def test_guardar_rechaza_documentos_invalidos_y_materiales_ajenos(dashboard, enc
     malo = _doc_valido(clon["id"])
     malo["pistas"][0]["clips"][0]["inicio_ms"] = 500                     # la principal debe arrancar en 0
     r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": malo, "version_n": ed["version_n"]})
-    assert r.status_code == 400 and "contigua" in r.get_json()["error"]
+    # capa 4c (5/10): la persona lee una frase llana; la ruta del validador va
+    # aparte (`detalle`, el editor la pone en el `title` del estado)
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "No se pudo guardar este cambio; deshazlo y vuelve a intentar."
+    assert "contigua" in r.get_json()["detalle"] and "pistas[" in r.get_json()["detalle"]
     ajeno = materiales.registrar("otro", tipo="video", origen="crear", url="https://r2.test/x.mp4", hash="h-ajeno", bytes=1)
     r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": _doc_valido(ajeno["id"]), "version_n": ed["version_n"]})
     assert r.status_code == 400 and "no son de este proyecto" in r.get_json()["error"]
@@ -592,7 +598,7 @@ def test_el_estado_del_guardado_no_mueve_la_barra_en_el_celular(dashboard, encol
         assert decl in regla.group(1), decl
     assert re.search(r"(?<![-\w])width:\s*[\d.]+(em|rem|px)", regla.group(1)), "el hueco necesita un ancho fijo"
     js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
-    pintar = re.search(r"function pintarGuardado\(estado, mensaje\) \{(.*?)\n\}", js, re.S).group(1)
+    pintar = re.search(r"function pintarGuardado\(estado, mensaje[^)]*\) \{(.*?)\n\}", js, re.S).group(1)
     assert "n.title = " in pintar
 
 
@@ -840,3 +846,91 @@ def test_la_capa_para_tocar_el_video_cubre_el_lienzo(dashboard, encolados):
     js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
     assert 'import { InteraccionLienzo } from "./lienzo_interaccion.js";' in js
     assert 'new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });' in js
+
+
+# ---- Capa 4c (8/10): borrar de la biblioteca ----
+
+@pytest.fixture()
+def r2_borrados(monkeypatch):
+    import materiales
+    borrados = []
+    monkeypatch.setattr(materiales.r2_uploader, "delete_file", lambda key: borrados.append(key))
+    return borrados
+
+
+def _subida(nombre="foto", bytes_=1000, **campos):
+    import materiales
+    return materiales.registrar("acme", tipo="imagen", origen=campos.pop("origen", "subida"),
+                                url=f"https://r2.test/clientes/acme/materiales/{nombre}.png", hash=f"h-{nombre}",
+                                bytes=bytes_, ancho=10, alto=10, extra={"nombre": nombre}, **campos)
+
+
+def test_borrar_de_la_biblioteca_un_archivo_sin_uso_libera_la_cuota(dashboard, encolados, r2_borrados):
+    import materiales
+    _edicion()
+    foto = _subida(bytes_=5000)
+    antes = materiales.bytes_usados("acme")
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/materiales/{foto['id']}/borrar")
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    assert materiales.obtener("acme", foto["id"]) is None
+    assert materiales.bytes_usados("acme") == antes - 5000                    # la cuota descuenta
+    assert r2_borrados == ["clientes/acme/materiales/foto.png"]
+
+
+def test_borrar_un_video_de_crear_preparado_solo_quita_su_fila(dashboard, encolados, r2_borrados):
+    import materiales
+    _edicion()
+    clon = materiales.registrar("acme", tipo="video", origen="crear", url="https://r2.test/crear/pieza.mp4", hash="h-otro-clon",
+                                bytes=10, duracion_ms=3000, extra={"cf_id": "cf1"})
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/materiales/{clon['id']}/borrar")
+    assert r.status_code == 200 and materiales.obtener("acme", clon["id"]) is None
+    assert r2_borrados == []                                                  # el video de la pieza no es suyo
+
+
+def test_borrar_un_archivo_en_uso_dice_en_que_edicion(dashboard, encolados, r2_borrados):
+    import materiales
+    ed, clon, voz = _edicion()                                                # «Demo <editor>» usa el clon y la voz
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/materiales/{clon['id']}/borrar")
+    assert r.status_code == 409
+    assert r.get_json()["error"] == "Está en uso en la edición «Demo <editor>»: quítalo de ahí primero."
+    assert materiales.obtener("acme", clon["id"]) and r2_borrados == []
+
+
+def test_borrar_solo_lo_subido_o_lo_de_crear_de_este_proyecto(dashboard, encolados, r2_borrados):
+    import materiales
+    _edicion()
+    c = _cliente_admin(dashboard)
+    for origen in ("voz", "marca", "musica"):
+        m = _subida(nombre=f"x-{origen}", origen=origen)
+        r = c.post(f"/cliente/acme/ediciones/materiales/{m['id']}/borrar")
+        assert r.status_code == 400 and "no se borra desde aquí" in r.get_json()["error"], origen
+        assert materiales.obtener("acme", m["id"])
+    ajeno = materiales.registrar("otro", tipo="imagen", origen="subida", url="https://r2.test/y.png", hash="h-y", bytes=1)
+    assert c.post(f"/cliente/acme/ediciones/materiales/{ajeno['id']}/borrar").status_code == 404
+    assert c.post("/cliente/acme/ediciones/materiales/abc/borrar").status_code == 404
+    foto = _subida(nombre="lejos")
+    assert c.post(f"/cliente/acme/ediciones/materiales/{foto['id']}/borrar",
+                  headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert materiales.obtener("acme", foto["id"])
+    assert _cliente(dashboard, "otro", "otro").post(f"/cliente/acme/ediciones/materiales/{foto['id']}/borrar").status_code == 302
+
+
+def test_una_cancion_de_mi_musica_no_se_borra_desde_el_editor(dashboard, encolados, r2_borrados):
+    """Arreglo 3: las canciones de Mi música (subidas o creadas) también
+    tienen origen «subida»; se reconocen por `extra.fuente` (mi_musica.py) y
+    se borran solo en Crear › Mi música. La biblioteca lo sabe por
+    `material_para(...)["mi_musica"]`."""
+    import materiales
+    from final_edition import vista_previa
+    _edicion()
+    cancion = materiales.registrar("acme", tipo="audio", origen="subida", url="https://r2.test/clientes/acme/materiales/c.mp3",
+                                   hash="h-cancion", bytes=10, duracion_ms=60000, extra={"nombre": "Mi canción", "fuente": "subida"})
+    audio = materiales.registrar("acme", tipo="audio", origen="subida", url="https://r2.test/clientes/acme/materiales/a.mp3",
+                                 hash="h-audio", bytes=10, duracion_ms=2000, extra={"nombre": "whoosh"})
+    assert vista_previa.material_para(cancion)["mi_musica"] is True
+    assert vista_previa.material_para(audio)["mi_musica"] is False
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/materiales/{cancion['id']}/borrar")
+    assert r.status_code == 400 and "Mi música" in r.get_json()["error"]
+    assert materiales.obtener("acme", cancion["id"]) and r2_borrados == []
+    assert c.post(f"/cliente/acme/ediciones/materiales/{audio['id']}/borrar").status_code == 200

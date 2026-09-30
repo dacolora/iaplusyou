@@ -177,3 +177,18 @@ def test_buscar_origen_encuentra_la_receta_y_salta_las_degradadas(base_temporal)
     assert ediciones.buscar_origen("acme", "cf_1", "r2") is None                # degradada: no se reutiliza
     assert ediciones.buscar_origen("otro", "cf_1", "r1") is None
     assert a["id"] < b["id"]
+
+
+def test_nombre_visible_y_orden_para_editar():
+    """Capa 4c (9/10): el borrador de la vía automática se nombra como tal y
+    nunca le gana a una edición de la persona al elegir qué abre «Editar»."""
+    import ediciones
+    auto = {"id": 1, "nombre": "Borrador · gira", "creada_por": "final_edition"}
+    variante = {"id": 2, "nombre": "Variante 2 (estructura) · gira", "creada_por": "final_edition"}
+    propia = {"id": 3, "nombre": "Edición de gira", "creada_por": "editor"}
+    vieja = {"id": 4, "nombre": "Borrador es_CO", "creada_por": None}
+    assert ediciones.nombre_visible(auto) == "Borrador automático · gira"
+    assert ediciones.nombre_visible(variante) == "Borrador automático · Variante 2 (estructura) · gira"
+    assert ediciones.nombre_visible(propia) == "Edición de gira" and ediciones.nombre_visible(vieja) == "Borrador es_CO"
+    # entran de la más reciente a la más vieja (ediciones.listar): las de la persona primero, en ese orden
+    assert [e["id"] for e in ediciones.para_editar([auto, propia, variante, vieja])] == [3, 4, 1, 2]

@@ -225,3 +225,31 @@ def test_descargar_copia_el_archivo_local_si_sigue_ahi(base_temporal, tmp_path, 
     monkeypatch.setattr("requests.get", lambda url, stream=True, timeout=120: visto.update(url=url) or R())
     materiales.descargar(mat, destino)
     assert visto["url"] == "https://r2/no-se-usa" and open(destino, "rb").read() == b"r2"
+
+
+def test_edicion_que_lo_usa_nombra_la_edicion_viva_o_la_de_la_version_congelada(base_temporal, monkeypatch):
+    """Capa 4c (8/10): para decir «Está en uso en la edición X» hay que saber
+    cuál; en_uso sigue siendo un sí/no sobre lo mismo."""
+    import json
+    import os
+    import ediciones
+    monkeypatch.setattr(m, "marcar_uso", lambda ids: None)
+    with open(os.path.join(os.path.dirname(__file__), "fixtures", "documentos", "video_basico.json"), encoding="utf-8") as f:
+        doc = json.load(f)
+    ed = ediciones.crear("acme", "video", "Mi edición", doc, creada_por="editor")
+    ediciones.versionar("acme", ed["id"], "manual")
+    doc["pistas"] = doc["pistas"][:3]; doc["materiales"] = []
+    ediciones.guardar("acme", ed["id"], doc, version_n=0)
+    assert m.edicion_que_lo_usa("acme", 2)["nombre"] == "Mi edición"
+    usa_3 = m.edicion_que_lo_usa("acme", 3)                      # solo en la versión congelada
+    assert usa_3["id"] == ed["id"] and usa_3["nombre"] == "Mi edición" and usa_3["creada_por"] == "editor"
+    assert m.edicion_que_lo_usa("acme", 4) is None and m.edicion_que_lo_usa("otro", 3) is None
+
+
+def test_borrar_tambien_quita_la_tira_propia_de_r2(base_temporal, r2_falso):
+    mat = m.registrar("acme", tipo="video", origen="subida", url="https://r2/clientes/acme/materiales/v.mp4", hash="h-tira",
+                      bytes=5, url_proxy="https://r2/clientes/acme/materiales/9_proxy.mp4",
+                      extra={"tira_url": "https://r2/clientes/acme/materiales/9_tira.jpg"})
+    m.borrar("acme", mat["id"])
+    assert sorted(r2_falso["borrados"]) == ["clientes/acme/materiales/9_proxy.mp4", "clientes/acme/materiales/9_tira.jpg",
+                                            "clientes/acme/materiales/v.mp4"]

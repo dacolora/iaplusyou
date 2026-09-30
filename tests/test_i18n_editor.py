@@ -185,3 +185,18 @@ def test_la_biblioteca_rechaza_en_el_idioma_activo():
         with pytest.raises(biblioteca.SubidaInvalida) as e:
             biblioteca.subir("acme", _Archivo())
     assert str(e.value) == "Upload a video, an image or an audio file."
+
+
+def test_capa_4c_en_el_idioma_de_quien_mira():
+    """Lo que la capa 4c (merge de main) le muestra a la persona desde Python:
+    el nombre del borrador automático y el error llano del guardado, en el
+    idioma activo; en español, byte a byte como main."""
+    import ediciones
+    from final_edition import rutas_editor
+    auto = {"nombre": "Borrador · gira", "creada_por": ediciones.AUTOMATICA}
+    with idiomas.en_idioma("en"):
+        assert ediciones.nombre_visible(auto) == "Automatic draft · gira"
+        assert ediciones.nombre_visible({}) == "Untitled"
+        assert idiomas.traducir(rutas_editor.ERROR_GUARDAR) == "Couldn't save this change; undo it and try again."
+    assert ediciones.nombre_visible(auto) == "Borrador automático · gira"
+    assert rutas_editor.ERROR_GUARDAR == "No se pudo guardar este cambio; deshazlo y vuelve a intentar."

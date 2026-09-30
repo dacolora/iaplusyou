@@ -47,13 +47,22 @@ def material_para(m):
     """La forma que el navegador necesita de UN material: original + proxy +
     lo medido + lo derivado del proxy (picos, tira), más lo que la
     biblioteca (spec editor capa 4b, Task 1) necesita para mostrarlo sin
-    volver a tocar la base: `tiene_audio`, `nombre` y `origen`."""
+    volver a tocar la base: `tiene_audio`, `nombre` y `origen`; y
+    `mi_musica` (capa 4c): una canción de Mi música — también con origen
+    `subida` si se subió — que se borra solo en Crear, nunca desde el editor
+    (`mi_musica.py` le pone `extra.fuente`)."""
     extra = m.get("extra") or {}
     return {"id": m["id"], "tipo": m["tipo"], "url": m["url"], "url_proxy": m.get("url_proxy"),
             "duracion_ms": m.get("duracion_ms"), "ancho": m.get("ancho"), "alto": m.get("alto"),
             "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
             "tira_url": extra.get("tira_url"), "tiene_audio": extra.get("tiene_audio"),
-            "nombre": extra.get("nombre"), "origen": m["origen"]}
+            "nombre": extra.get("nombre"), "origen": m["origen"], "mi_musica": es_de_mi_musica(m)}
+
+
+def es_de_mi_musica(m):
+    """Una canción de Mi música (subida o creada con ElevenLabs): `mi_musica.py`
+    guarda `extra.fuente` en todas; ninguna otra subida lo lleva."""
+    return bool((m.get("extra") or {}).get("fuente"))
 
 
 def materiales_para(cliente, doc):

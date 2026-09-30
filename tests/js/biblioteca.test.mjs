@@ -250,3 +250,31 @@ test("_revisarMateriales: la primera pregunta por un material pide prepararlo (u
   await Biblioteca.prototype._revisarMateriales.call(falsa);
   assert.deepEqual(urls, ["/m?ids=7&preparar=7", "/m?ids=7", "/m?ids=7,8&preparar=8"]);
 });
+
+// ---- Capa 4c (8/10): «Borrar» en la biblioteca ----
+import { motivoNoBorrar, puedeBorrarse, quitarMaterial, urlBorrar } from "../../static/editor/biblioteca.js";
+
+test("se borra lo subido y un video de Crear preparado; el logo, una voz o Mi música no", () => {
+  assert.equal(puedeBorrarse(video(1)), true);
+  assert.equal(puedeBorrarse(video(2, { origen: "crear" })), true);
+  assert.equal(puedeBorrarse({ id: 3, tipo: "audio", origen: "subida" }), true);
+  for (const origen of ["marca", "voz", "musica"]) assert.equal(puedeBorrarse({ id: 4, tipo: "imagen", origen }), false, origen);
+  // arreglo 3: una canción subida a Mi música también es origen «subida», pero se borra solo en Crear
+  assert.equal(puedeBorrarse({ id: 5, tipo: "audio", origen: "subida", mi_musica: true }), false);
+  assert.equal(urlBorrar("/cliente/acme/ediciones/materiales/__ID__/borrar", 12), "/cliente/acme/ediciones/materiales/12/borrar");
+});
+
+test("lo que usa la edición abierta no se borra (aunque todavía no se haya guardado)", () => {
+  const doc = docBase();                                   // usa los materiales 1 (clon) y 2 (voz)
+  assert.match(motivoNoBorrar(video(1), doc), /en uso en esta edición/);
+  assert.equal(motivoNoBorrar(video(7), doc), null);
+  assert.match(motivoNoBorrar({ id: 8, tipo: "imagen", origen: "marca" }, doc), /no se borra desde aquí/);
+});
+
+test("quitarMaterial lo saca de la lista y suelta la pieza de Crear que lo tenía (se puede volver a preparar)", () => {
+  const datos = { materiales: [video(1), video(2, { origen: "crear" })], piezas: [{ cf_id: "cf1", material_id: 2 }, { cf_id: "cf2", material_id: null }] };
+  const out = quitarMaterial(datos, 2);
+  assert.deepEqual(out.materiales.map((m) => m.id), [1]);
+  assert.deepEqual(out.piezas, [{ cf_id: "cf1", material_id: null }, { cf_id: "cf2", material_id: null }]);
+  assert.equal(datos.materiales.length, 2, "no toca lo de entrada");
+});

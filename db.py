@@ -495,7 +495,7 @@ barrido = Table("barrido", metadata,
     Column("cliente", String(80), index=True),                              # NULL = global (admin)
     Column("creado_en", String(19), nullable=False),
     Column("actualizado_en", String(19), nullable=False),
-    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify
+    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify|trendtrack|triple_whale
     Column("consulta", JSON, default=dict),
     Column("tope", Integer, default=0),
     Column("estado", String(12), nullable=False, default="en_cola"),        # en_cola|trayendo|guardando|clasificando|listo|parcial|error
@@ -520,7 +520,7 @@ referente = Table("referente", metadata,
     Column("actualizado_en", String(19), nullable=False),
     Column("anuncio_id", String(40), nullable=False, unique=True),          # id del Ad Library de Meta
     Column("pagina_id", String(40), index=True),                            # id de página de Meta (marca)
-    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify
+    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify|trendtrack|triple_whale
     Column("marca", String(160)),
     Column("url_anuncio", Text),
     Column("url_marca", Text),

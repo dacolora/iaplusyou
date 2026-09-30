@@ -16,7 +16,9 @@ import idiomas
 from guiones import escenas
 from guiones.refinador import Conflicto, DatoInvalido, NoExiste
 
-MINUTOS_TRABAJO = 6
+# 48 000 fragmentos de salida (armar clips) a ~110 por segundo son ~7 min
+# (medido el 2026-09-28): el límite deja margen para eso.
+MINUTOS_TRABAJO = 12
 # N_: se traduce donde se usa (gettext(INTERRUMPIDO) en _vencer_lotes/_vencer_video)
 # — mismo patrón que refinador.MENSAJE_INTERRUMPIDO. Casi siempre corre dentro de
 # una petición (quien mira el panel); en el raro caso de detectarse desde el

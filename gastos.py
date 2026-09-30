@@ -66,6 +66,10 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    sale el prompt completo revisado más el razonamiento (~4k, US$ 0,04).
 #  - guion_clips (pipeline de Flow Plus): leer/recorte/armar/imágenes; el
 #    estimado redondea hacia arriba y se revisa contra `gasto` con uso real.
+#    Armar, medido el 2026-09-30 con un guion real de 34 líneas / 266 palabras:
+#    8 157 tokens de entrada y 19 809 de salida (casi todo pensamiento) =
+#    US$ 0,21; con el tope viejo de 16 000 no terminaba. Se estima 0,07 por
+#    cada 100 palabras sobre 0,06, sin pasar del peor caso del tope (48 000).
 TARIFAS = {
     "guion": 0.02,
     "regla_producto": 0.01,
@@ -212,11 +216,11 @@ def _estimar_guion_clips(paso="armar", palabras=0, **_):
     if paso == "leer":
         return 0.02 + 0.01 * math.ceil(p / 500), "leer el guion con Claude"
     if paso == "recorte":
-        return 0.02, "proponer qué quitar con Claude"
+        return 0.05, "proponer qué quitar con Claude"
     if paso == "armar":
-        return 0.06 + 0.02 * math.ceil(p / 100), "planear los clips con Claude"
+        return min(0.50, 0.06 + 0.07 * math.ceil(p / 100)), "planear los clips con Claude"
     if paso == "imagenes":
-        return 0.04, "escribir los prompts de imágenes con Claude"
+        return 0.08, "escribir los prompts de imágenes con Claude"
     raise ValueError(f"paso desconocido: {paso}")
 
 

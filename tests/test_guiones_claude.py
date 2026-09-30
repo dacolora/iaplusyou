@@ -2,6 +2,7 @@
 import sqlalchemy as sa
 
 import gastos
+from guiones import claude
 
 
 def _gastos(db):
@@ -62,7 +63,84 @@ def test_limpio_quita_el_cierre_del_bloque():
 
 def test_estimar_guion_clips():
     assert gastos.estimar("guion_clips", paso="leer", palabras=750)["usd"] == 0.04
-    assert gastos.estimar("guion_clips", paso="armar", palabras=250)["usd"] == 0.12
-    assert gastos.estimar("guion_clips", paso="recorte")["usd"] == 0.02
-    assert gastos.estimar("guion_clips", paso="imagenes")["usd"] == 0.04
+    assert gastos.estimar("guion_clips", paso="armar", palabras=250)["usd"] == 0.27
+    # Medido: 266 palabras costaron US$ 0,21 (2026-09-30); el estimado nunca queda por debajo.
+    assert gastos.estimar("guion_clips", paso="armar", palabras=266)["usd"] >= 0.21
+    assert gastos.estimar("guion_clips", paso="armar", palabras=5000)["usd"] == 0.50
+    assert gastos.estimar("guion_clips", paso="recorte")["usd"] == 0.05
+    assert gastos.estimar("guion_clips", paso="imagenes")["usd"] == 0.08
     assert gastos.estimar("guion_clips", paso="otro")["usd"] is None
+
+
+class _Bloque:
+    def __init__(self, tipo, texto=""):
+        self.type, self.text = tipo, texto
+
+
+class _Uso:
+    input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens = 900, 1200, 0, 0
+
+
+class _Respuesta:
+    def __init__(self, stop_reason, contenido):
+        self.stop_reason, self.content, self.usage = stop_reason, contenido, _Uso()
+
+
+def _anthropic_falso(monkeypatch, respuesta, pedidos):
+    """anthropic.Anthropic cuyo messages.stream(...) devuelve `respuesta` y anota lo pedido."""
+    import anthropic
+
+    class _Stream:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get_final_message(self):
+            return respuesta
+
+    class _Mensajes:
+        def stream(self, **kw):
+            pedidos.append(kw)
+            return _Stream()
+
+        def create(self, **kw):  # pragma: no cover — si se usa, la prueba falla
+            raise AssertionError("Flow Plus debe pedir con streaming: los topes grandes no caben sin stream")
+
+    class _Cliente:
+        def __init__(self, **kw):
+            self.messages = _Mensajes()
+
+    monkeypatch.setattr(anthropic, "Anthropic", _Cliente)
+    import generador_prompts
+    monkeypatch.setattr(generador_prompts, "_api_key", lambda: "sk-prueba")
+
+
+def test_llamar_pide_con_streaming_y_el_tope_que_se_le_da(monkeypatch):
+    pedidos = []
+    _anthropic_falso(monkeypatch, _Respuesta("end_turn", [_Bloque("thinking"), _Bloque("text", '{"ok": 1}')]), pedidos)
+    texto, ent, sal = claude.llamar("sys", [{"role": "user", "content": "x"}], max_tokens=48000, timeout=240)
+    assert (texto, ent, sal) == ('{"ok": 1}', 900, 1200)
+    assert pedidos[0]["max_tokens"] == 48000 and pedidos[0]["system"] == "sys"
+
+
+def test_llamar_cortada_por_el_tope_lleva_lo_cobrado(monkeypatch):
+    import pytest
+    _anthropic_falso(monkeypatch, _Respuesta("max_tokens", [_Bloque("text", '{"a"')]), [])
+    with pytest.raises(claude.RespuestaFallida) as e:
+        claude.llamar("sys", [{"role": "user", "content": "x"}])
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (900, 1200)
+
+
+def test_topes_de_salida_con_espacio_para_pensar():
+    """El pensamiento adaptativo de claude-sonnet-5 gasta del mismo tope: con 16 000 un guion de 34
+    líneas (266 palabras) nunca terminó de armarse (2026-09-28, dos intentos cobrados)."""
+    import inspect
+    from guiones import clips, datos, imagenes, lectura, recorte
+    assert "max_tokens=48000" in inspect.getsource(clips.armar)
+    assert "max_tokens=32000" in inspect.getsource(lectura)
+    assert "max_tokens=16000" in inspect.getsource(imagenes.escribir)
+    assert "max_tokens=12000" in inspect.getsource(recorte)
+    # 48 000 fragmentos a ~110 por segundo son ~7 min: el trabajo no puede darse por interrumpido antes.
+    assert datos.MINUTOS_TRABAJO >= 12

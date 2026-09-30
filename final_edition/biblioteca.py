@@ -21,6 +21,7 @@ from PIL import Image, ImageOps, JpegImagePlugin
 
 import creative_flow
 import db
+import ediciones
 import final_edition
 import idiomas
 import materiales
@@ -48,6 +49,47 @@ TOPE_MATERIALES = 200
 
 class SubidaInvalida(ValueError):
     """El mensaje va tal cual a la persona."""
+
+
+# Lo que «Borrar» de la biblioteca puede quitar (capa 4c): lo que la persona
+# subió y los videos de Crear ya preparados como material. Nunca una voz de
+# guion, el logo (marca) ni una canción de Mi música — creada (origen musica)
+# o subida (origen subida con `extra.fuente`, `vista_previa.es_de_mi_musica`):
+# esas se borran en Crear › Mi música.
+ORIGENES_BORRABLES = ("subida", "crear")
+
+
+class NoSePuedeBorrar(ValueError):
+    """El mensaje va tal cual a la persona; `codigo` es el HTTP de la ruta."""
+
+    def __init__(self, mensaje, codigo):
+        super().__init__(mensaje)
+        self.codigo = codigo
+
+
+def borrar(cliente, material_id):
+    """Borra un material de la biblioteca (gratis): su fila y, si son de este
+    proyecto (`materiales.borrar` solo toca claves bajo
+    clientes/<c>/materiales/), su archivo, su copia liviana y su tira en R2
+    — la fila deja de contar para la cuota. Solo `ORIGENES_BORRABLES`, y solo
+    si ninguna edición (viva o congelada) lo usa; si una lo usa, se dice
+    cuál. Un fallo de R2 se propaga (la fila queda, para reintentar)."""
+    mat = materiales.obtener(cliente, int(material_id))
+    if not mat:
+        raise NoSePuedeBorrar(gettext("Ese archivo ya no existe."), 404)
+    if vista_previa.es_de_mi_musica(mat):
+        raise NoSePuedeBorrar(gettext("Esa canción es de Mi música: bórrala en Crear › Mi música."), 400)
+    if mat["origen"] not in ORIGENES_BORRABLES:
+        raise NoSePuedeBorrar(gettext("Ese archivo no se borra desde aquí."), 400)
+    ed = materiales.edicion_que_lo_usa(cliente, mat["id"])
+    if ed:
+        raise NoSePuedeBorrar(gettext("Está en uso en la edición «%(nombre)s»: quítalo de ahí primero.",
+                                      nombre=ediciones.nombre_visible(ed)), 409)
+    try:
+        materiales.borrar(cliente, mat["id"])
+    except materiales.MaterialEnUso:                       # una edición lo tomó recién
+        raise NoSePuedeBorrar(gettext("Está en uso en una edición: quítalo de ahí primero."), 409)
+    return {"id": mat["id"], "bytes": int(mat.get("bytes") or 0)}
 
 
 def _carpeta_tmp(cliente):
@@ -172,7 +214,7 @@ def _guardar(cliente, local, ext, tipo, content_type, nombre_archivo):
     except materiales.SubidaInvalida as e:
         raise SubidaInvalida(str(e))
     if materiales.bytes_usados(cliente) + tam > materiales.CUOTA_BYTES:
-        raise SubidaInvalida(gettext("El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más."))
+        raise SubidaInvalida(gettext("El proyecto llegó a su límite de espacio (2 GB): borra en «Tus archivos» lo que ya no uses antes de subir más."))
     h = materiales.hash_archivo(local)
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):      # se guarda: el idioma del proyecto
         respaldo = gettext("Archivo")

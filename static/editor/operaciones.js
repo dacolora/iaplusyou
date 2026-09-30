@@ -35,6 +35,9 @@ export const VELOCIDADES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 export const ID_SONIDO = "p_sonido";
 export const TRANSICIONES = ["corte", "fundido", "deslizar", "zoom", "desenfoque"];
 export const FUENTES = ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"];
+// Cuánto dura la entrada «deslizar» elegida en el panel (capa 4c): sin
+// `duracion_ms` ni la vista previa ni el render la aplican.
+export const DURACION_ANIMACION_MS = 400;
 const MAX_PISTAS = 8;   // documento.MAX_PISTAS
 const ESCALA_MIN = 0.05;  // transform.escala: lo que acepta cambiar
 const ESCALA_MAX = 5;
@@ -117,6 +120,19 @@ export function idNuevo(doc, base) {
 function raizId(id) {
   return String(id).replace(/_\d+$/, "");
 }
+
+// El fin del video: donde termina la principal (0 si no hay principal de
+// video). Más allá, el render congela el último cuadro, así que nada de lo
+// que se agrega, mueve, alarga o duplica pasa de ahí (capa 4b §2, capa 4c).
+function finPrincipal(doc) {
+  const p = pistaPrincipal(doc);
+  return p && p.tipo === "video" ? p.clips.reduce((m, c) => Math.max(m, c.inicio_ms + c.duracion_ms), 0) : 0;
+}
+
+// La primera pista de cada tipo que crea una capa nueva (agregarImagen/
+// Audio/Texto usan las mismas).
+const BASE_PISTA = { texto: "p_texto", imagen: "p_imagen", audio: "p_audio", superpuesto: "p_superpuesto" };
+const mismoRolQue = (rol) => (p) => p.clips.every((c) => (c.rol_audio ?? "subida") === rol);
 
 // Id de una pista nueva: `base` si está libre, si no `base_2`, `base_3`...
 // (mismo estilo que idNuevo, pero en el espacio de ids de PISTA, separado
@@ -209,15 +225,30 @@ function abrirSonido(doc, info, suena) {
 // archivo piden 1 ms de más y el render falla. El clip se acorta lo justo (sin
 // bajar de MIN_CLIP_MS); si ni así cabe, su punto de entrada se corre hacia
 // atrás. `p_sonido` no se mira: se rehace desde la principal.
+// El material que un clip mira (su duración conocida) si lo pide de más;
+// null si cabe, si su duración no se conoce todavía o si no aplica (la
+// música entra en bucle, p_sonido se rehace desde la principal).
+function materialQueFalta(pista, c, info) {
+  if (!["video", "superpuesto", "audio"].includes(pista.tipo) || pista.id === ID_SONIDO) return null;
+  if (pista.tipo === "audio" && (c.rol_audio ?? "subida") === "musica") return null;
+  const material = duracionDe(info, c.material_id);
+  if (material === undefined || material === null) return null;
+  return (c.recorte?.desde_ms ?? 0) + fuente(c) <= material ? null : material;
+}
+
+// Capa 4c: los ids de los clips que piden más material del que hay (lo que
+// `normalizar` acorta). La página lo usa para el aviso de carga, que se va
+// en cuanto el documento ya no tiene ninguno (avisos_carga.js).
+export function clipsQuePidenDeMas(doc, info = {}) {
+  return (doc?.pistas ?? []).flatMap((p) => (p.clips ?? []).filter((c) => materialQueFalta(p, c, info) !== null).map((c) => c.id));
+}
+
 function ajustarAlMaterial(doc, info) {
   for (const pista of doc.pistas) {
-    if (!["video", "superpuesto", "audio"].includes(pista.tipo) || pista.id === ID_SONIDO) continue;
     for (const c of pista.clips) {
-      if (pista.tipo === "audio" && (c.rol_audio ?? "subida") === "musica") continue;
-      const material = duracionDe(info, c.material_id);
-      if (material === undefined || material === null) continue;
+      const material = materialQueFalta(pista, c, info);
+      if (material === null) continue;
       let desde = c.recorte?.desde_ms ?? 0;
-      if (desde + fuente(c) <= material) continue;
       const v = vel(c);
       let dur = Math.max(MIN_CLIP_MS, Math.min(c.duracion_ms, Math.floor((material - desde) / v)));
       while (dur > MIN_CLIP_MS && desde + Math.round(dur * v) > material) dur--;
@@ -230,15 +261,56 @@ function ajustarAlMaterial(doc, info) {
   if (p && p.tipo === "video") recolocar(p);
 }
 
+// Capa 4c: los fundidos de un clip de audio caben en él — entrada + salida
+// <= duración; si no, los dos se acortan en proporción (hacia abajo: nunca
+// de más). Un audio de 400 ms con el fundido de 1 s de la música hacía que el
+// render pidiera `afade ... st=-0.600` y ffmpeg rechazaba la final entera.
+function acotarFundidos(doc) {
+  for (const pista of doc.pistas) {
+    if (pista.tipo !== "audio") continue;
+    for (const c of pista.clips) {
+      const a = c.audio;
+      if (!a) continue;
+      const entrada = Math.max(0, Number(a.fundido_entrada_ms) || 0);
+      const salida = Math.max(0, Number(a.fundido_salida_ms) || 0);
+      if (entrada + salida <= c.duracion_ms) continue;
+      const k = c.duracion_ms / (entrada + salida);
+      c.audio = { ...a, fundido_entrada_ms: Math.floor(entrada * k), fundido_salida_ms: Math.floor(salida * k) };
+    }
+  }
+}
+
+// Una entrada animada sin `duracion_ms` no la aplican ni la vista previa ni
+// el render: así quedaban los «deslizar» elegidos en la capa 4b (`cambiar`
+// guardaba solo el nombre). Reciben DURACION_ANIMACION_MS (capa 4c); la que
+// ya tenía una duración la conserva, y «ninguna» no se toca.
+export function faltaDuracionAnimacion(clip) {
+  const an = clip?.animacion;
+  return Boolean(an) && typeof an === "object" && Boolean(an.entrada) && an.entrada !== "ninguna"
+    && !(Number(an.duracion_ms) > 0);
+}
+
+function completarAnimaciones(doc) {
+  for (const pista of doc.pistas) {
+    for (const c of pista.clips) {
+      if (faltaDuracionAnimacion(c)) c.animacion = { ...c.animacion, duracion_ms: DURACION_ANIMACION_MS };
+    }
+  }
+}
+
 // Espejo de compilador.verificar_recortes: primero ningún clip pide material
 // de más (`ajustarAlMaterial`, con la principal otra vez contigua desde 0 y
 // el sonido de la escena rehecho); después, en la principal, la cola de A
 // (`d` ms de salida × velocidad) tiene que caber en el material; si no, se
 // acorta a lo que queda o pasa a corte seco. La transición del último clip no
-// se toca (el compilador tampoco).
+// se toca (el compilador tampoco). Además (capa 4c) los fundidos de cada audio
+// caben en su clip (`acotarFundidos`) y toda entrada animada lleva su
+// duración (`completarAnimaciones`).
 export function normalizar(doc, info = {}) {
   ajustarAlMaterial(doc, info);
   sincronizarSonido(doc, info);
+  acotarFundidos(doc);
+  completarAnimaciones(doc);
   const p = pistaPrincipal(doc);
   if (!p || p.tipo !== "video") return doc;
   p.clips.forEach((c, i) => {
@@ -315,6 +387,13 @@ export function cortarClip(doc, clipId, tMs, info = {}) {
     b.recorte = { desde_ms: clip.recorte.hasta_ms, hasta_ms: clip.recorte.hasta_ms + Math.round(despues * vel(b)) };
   }
   if (pista.tipo === "video" || pista.tipo === "superpuesto") clip.transicion = null;
+  // Un corte no es un borde real del sonido: la mitad izquierda no baja al
+  // final ni la derecha sube al principio (antes cada corte de la música
+  // dejaba un bajón de 1 s). Lo que queda se acota al terminar (normalizar).
+  if (pista.tipo === "audio") {
+    if (clip.audio) clip.audio = { ...clip.audio, fundido_salida_ms: 0 };
+    if (b.audio) b.audio = { ...b.audio, fundido_entrada_ms: 0 };
+  }
   const esPrincipal = pista === pistaPrincipal(res);
   pista.clips.splice(indice + 1, 0, b);
   if (esPrincipal) recolocar(pista);
@@ -337,14 +416,33 @@ export function borrar(doc, clipId, info = {}) {
   return terminar(res, null, info);
 }
 
+// En la principal la copia va justo después (y corre lo que sigue). En otra
+// fila también va justo después si ahí cabe antes del fin del video; si no
+// (capa 4c: nada alarga el video), termina en el fin, en una fila de su tipo
+// donde no pise a nadie (su misma fila si está libre ahí; `pistaLibre`). Una
+// capa más larga que el video no se puede duplicar.
 export function duplicar(doc, clipId, info = {}) {
   const res = structuredClone(doc);
   const { pista, clip, indice } = buscar(res, clipId);
   noSonido(pista);
   const copia = structuredClone(clip);
   copia.id = idNuevo(res, clip.id);
-  if (pista !== pistaPrincipal(res)) copia.inicio_ms = clip.inicio_ms + clip.duracion_ms;
-  pista.clips.splice(indice + 1, 0, copia);
+  let destino = pista;
+  if (pista !== pistaPrincipal(res)) {
+    copia.inicio_ms = clip.inicio_ms + clip.duracion_ms;
+    const fin = finPrincipal(res);
+    if (fin > 0 && copia.inicio_ms + copia.duracion_ms > fin) {
+      if (clip.duracion_ms > fin) {
+        throw new OperacionInvalida(t("op.copia_no_cabe"));
+      }
+      copia.inicio_ms = fin - clip.duracion_ms;
+      const acepta = pista.tipo === "audio" ? mismoRolQue(clip.rol_audio ?? "subida") : () => true;
+      destino = pistaLibre(res, pista.tipo, BASE_PISTA[pista.tipo] ?? pista.id, copia.inicio_ms, copia.duracion_ms,
+        [ID_SONIDO], acepta);
+    }
+  }
+  if (destino === pista) pista.clips.splice(indice + 1, 0, copia);
+  else destino.clips.push(copia);
   if (pista === pistaPrincipal(res)) recolocar(pista);
   if (res.pngs && res.pngs[clip.id] !== undefined) res.pngs[copia.id] = res.pngs[clip.id];
   return terminar(res, copia.id, info);
@@ -375,8 +473,12 @@ export function recortar(doc, clipId, lado, deltaMs, info = {}) {
   } else if (lado === "fin") {
     const material = duracionDe(info, clip.material_id);
     const esMusica = pista.tipo === "audio" && clip.rol_audio === "musica";   // entra en bucle: nunca se acaba
-    const maxAlargar = conRecorte && !esMusica && material !== undefined && material !== null
+    let maxAlargar = conRecorte && !esMusica && material !== undefined && material !== null
       ? Math.max(0, Math.floor((material - desde) / v) - clip.duracion_ms) : Infinity;
+    // una capa (texto, imagen, audio) se topa en el fin del video (capa 4c);
+    // la principal sí lo alarga: es el video
+    const fin = esPrincipal ? 0 : finPrincipal(res);
+    if (fin > 0) maxAlargar = Math.min(maxAlargar, Math.max(0, fin - (clip.inicio_ms + clip.duracion_ms)));
     d = Math.max(-(clip.duracion_ms - MIN_CLIP_MS), Math.min(maxAlargar, d));
     clip.duracion_ms += d;
     if (conRecorte) clip.recorte = { desde_ms: desde, hasta_ms: desde + Math.round(clip.duracion_ms * v) };
@@ -405,7 +507,16 @@ export function moverA(doc, clipId, inicioMs, info = {}) {
   if (pista === pistaPrincipal(res)) {
     throw new OperacionInvalida(t("op.reordenar"));
   }
-  clip.inicio_ms = Math.max(0, Math.round(inicioMs));
+  // Se detiene en `fin − duración` (capa 4c: mover no alarga el video). Una
+  // capa que ya pasaba del fin (la voz de un borrador) puede ir hacia atrás,
+  // nunca más allá de donde estaba.
+  let inicio = Math.max(0, Math.round(inicioMs));
+  const fin = finPrincipal(res);
+  if (fin > 0) {
+    const tope = Math.max(0, fin - clip.duracion_ms);
+    if (inicio > tope) inicio = Math.max(tope, Math.min(inicio, clip.inicio_ms));
+  }
+  clip.inicio_ms = inicio;
   return terminar(res, clip.id, info);
 }
 
@@ -444,8 +555,7 @@ export function cambiarVelocidad(doc, clipId, velocidad, info = {}) {
 function lugarCapa(doc, tMs, dMs) {
   let inicio = Math.max(0, Math.round(Number(tMs) || 0));
   let dur = Math.max(1, Math.round(Number(dMs) || 0));
-  const p = pistaPrincipal(doc);
-  const fin = p && p.tipo === "video" ? p.clips.reduce((m, c) => Math.max(m, c.inicio_ms + c.duracion_ms), 0) : 0;
+  const fin = finPrincipal(doc);
   if (fin <= 0) return { inicio, dur };
   if (inicio >= fin - MIN_CLIP_MS) inicio = Math.max(0, fin - dur);
   dur = Math.max(1, Math.min(dur, fin - inicio));
@@ -525,8 +635,7 @@ export function agregarAudio(doc, material, tMs, { rol = "musica" } = {}, info =
   const entero = duracionDe(info, material.id);
   if (entero === undefined || entero === null) throw new OperacionInvalida(t("op.audio_preparando"));
   const { inicio, dur } = lugarCapa(res, tMs, entero);
-  const mismoRol = (p) => p.clips.every((c) => (c.rol_audio ?? "subida") === rol);
-  const pista = pistaLibre(res, "audio", "p_audio", inicio, dur, [ID_SONIDO], mismoRol);
+  const pista = pistaLibre(res, "audio", BASE_PISTA.audio, inicio, dur, [ID_SONIDO], mismoRolQue(rol));
   const clip = {
     id: idNuevo(res, "audio"), inicio_ms: inicio, duracion_ms: dur, material_id: material.id, rol_audio: rol,
     recorte: { desde_ms: 0, hasta_ms: dur }, velocidad: 1,
@@ -548,10 +657,13 @@ const PRESETS_TEXTO = {
   llamado: { fuente: "Inter-Bold", px: 52, color: "#000000", y: 0.85, fondo: "blanco" },
 };
 
-// Un texto nuevo, literal («Escribe aquí», o «$ 0» para el preset precio),
-// de 3 s (sin pasar del fin del video: `lugarCapa`), en una pista de texto
-// libre. `estilo.tamano` es px/altura del
-// lienzo, como pide documento.py (fracción de la altura).
+// Un texto nuevo, literal («Escribe aquí», o «Escribe el precio» para el
+// preset precio — antes «$ 0», que salía así en la final si se olvidaba
+// cambiarlo; el precio del producto no se inventa aquí: lo escribe la
+// persona, que tiene el campo enfocado con todo seleccionado), de 3 s (sin
+// pasar del fin del video: `lugarCapa`), en una pista de texto libre.
+// `estilo.tamano` es px/altura del lienzo, como pide documento.py (fracción
+// de la altura).
 export function agregarTexto(doc, tMs, preset, info = {}) {
   const res = structuredClone(doc);
   const def = PRESETS_TEXTO[preset];
@@ -571,7 +683,7 @@ export function agregarTexto(doc, tMs, preset, info = {}) {
   };
   const clip = {
     id: idNuevo(res, preset), inicio_ms: inicio, duracion_ms: dur,
-    texto: { literal: preset === "precio" ? "$ 0" : t("op.texto_nuevo") },
+    texto: { literal: preset === "precio" ? t("op.texto_precio") : t("op.texto_nuevo") },
     estilo, transform: { ...TRANSFORM, y: def.y }, keyframes: [], animacion: null,
   };
   pista.clips.push(clip);
@@ -682,7 +794,8 @@ const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion"];
 // clip de audio no tiene posición ni tamaño), audio.{volumen,
 // fundido_entrada_ms, fundido_salida_ms} (solo audio, incluido el espejo
 // p_sonido), ken_burns (solo video/superpuesto), animacion.entrada
-// (ninguna|deslizar). Los valores fuera de rango se
+// (ninguna|deslizar: con su duración, DURACION_ANIMACION_MS; «ninguna» deja
+// `animacion: null`). Los valores fuera de rango se
 // acotan en vez de rechazarse; `estilo.tamano` llega en PÍXELES (12–200,
 // como los presets de agregarTexto) y se guarda como fracción de la altura
 // del lienzo. Cambiar el estilo de un texto invalida su png en caché.
@@ -774,7 +887,11 @@ export function cambiar(doc, clipId, cambios, info = {}) {
     }
     if (an.entrada !== undefined) {
       if (!["ninguna", "deslizar"].includes(an.entrada)) throw new OperacionInvalida(`animacion.entrada inválida (${an.entrada}).`);
-      clip.animacion = { ...(clip.animacion || {}), entrada: an.entrada };
+      // «ninguna» = sin animación (null, como nace todo clip); una entrada
+      // lleva su duración — la que ya tenía, o DURACION_ANIMACION_MS.
+      const previa = Number(clip.animacion?.duracion_ms) || 0;
+      clip.animacion = an.entrada === "ninguna" ? null
+        : { ...(clip.animacion || {}), entrada: an.entrada, duracion_ms: previa > 0 ? previa : DURACION_ANIMACION_MS };
     }
   }
   if (tocaEstilo && pista.tipo === "texto" && res.pngs) delete res.pngs[clipId];

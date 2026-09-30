@@ -116,10 +116,13 @@
     {% endfor %}
   </div>
   <p class="vacio">{{ _('Atria: %(llamadas)s/%(limite)s llamadas este mes.', llamadas=atria_llamadas, limite=atria_limite) }}</p>
+  {% if 'trendtrack' in fuentes_tipos and not fuente_llaves_faltantes.get('trendtrack') %}
+  <p class="vacio">{% if trendtrack_saldo %}{{ _('TrendTrack: %(creditos)s créditos gastados desde aquí este mes · le quedaban %(restantes)s créditos al %(fecha)s.', creditos=trendtrack_creditos, restantes=trendtrack_saldo.restantes, fecha=trendtrack_saldo.fecha) }}{% else %}{{ _('TrendTrack: %(creditos)s créditos gastados desde aquí este mes.', creditos=trendtrack_creditos) }}{% endif %}</p>
+  {% endif %}
 </section>
 
 <section class="admin-bloque">
-  <div class="admin-cabecera"><h2>{{ _('Barridos globales (Atria, Apify)') }}</h2></div>
+  <div class="admin-cabecera"><h2>{{ _('Barridos globales (Atria, Apify, TrendTrack)') }}</h2></div>
   {% if not barridos_otras_fuentes %}
   <p class="vacio">{{ _('Todavía no se ha traído ningún barrido global fuera de copycoders.') }}</p>
   {% else %}

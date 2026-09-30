@@ -439,12 +439,8 @@ export class VistaPrevia {
     const sel = $("destino");
     for (const d of datos.destinos) sel.append(new Option(d.replace("_", " · "), d));
     sel.addEventListener("change", () => this.elegirDestino(sel.value));
-    if (datos.aviso_recortes) {
-      aviso("aviso-recortes", t("vista.no_producible", { aviso: datos.aviso_recortes }), true);
-    }
-    if (datos.faltantes.length) {
-      aviso("aviso-faltan", t("vista.faltan", { n: datos.faltantes.length }), true);
-    }
+    // «aviso-recortes» y «aviso-faltan» los pinta la página en cada refresco
+    // (capa 4c, avisos_carga.js): con el documento vigente, no el de la carga.
     try {
       await Promise.all(this.cfg.fuentes.map((f) => document.fonts.load(`32px "${f}"`)));
     } catch { /* sigue con la fuente de respaldo */ }

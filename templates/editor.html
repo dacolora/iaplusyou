@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ _('%(nombre)s · Editor', nombre=edicion.nombre) }}</title>
+<title>{{ _('%(nombre)s · Editor', nombre=nombre_edicion) }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <style>
   {% for f in datos.config.fuentes %}
@@ -196,6 +196,13 @@
     color: #fff; background: var(--accent); border: 1px solid transparent; border-radius: 50%; box-shadow: var(--shadow-soft); }
   .ed-bib-mas:hover:not(:disabled) { filter: brightness(1.15); }
   .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  /* «Borrar» (capa 4c): el tacho arriba a la derecha de la miniatura; siempre visible (con el dedo no hay hover) */
+  .ed-bib-borrar { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+    color: #fff; background: rgba(0, 0, 0, .6); border: 1px solid transparent; border-radius: 50%; }
+  .ed-bib-borrar:hover { color: var(--error); background: rgba(0, 0, 0, .8); }
+  .ed-bib-borrar:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-bib-audio .ed-bib-borrar { position: static; flex: none; color: var(--muted); background: transparent; border-color: var(--border); }
+  .ed-bib-audio .ed-bib-borrar:hover { color: var(--error); border-color: var(--error); }
   .ed-bib-preparando { cursor: default; }
   .ed-bib-origen { opacity: .45; }
   /* audios: una fila con icono, nombre y duración, «Escuchar» y «+» */
@@ -280,6 +287,7 @@
   .ed-prop textarea[readonly] { color: var(--muted); }
   .ed-prop-nota { margin: 0; font-size: .76rem; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
   .ed-prop-error { color: var(--error); }
+  .ed-prop-aviso { color: var(--warn); }
   /* opciones excluyentes: el .segmentado de style.css, a lo ancho y envolviéndose */
   .ed-prop .ed-prop-segmentado { display: flex; width: 100%; border-radius: var(--radius-sm); }
   .ed-prop .ed-prop-segmentado label { flex: 1 1 auto; min-width: 0; }
@@ -391,7 +399,7 @@
 <body class="editor">
 <header id="ed-barra" class="ed-barra">
   <a class="btn-sm" href="{{ datos.urls.final }}">{{ _('← Final edition') }}</a>
-  <h1 class="ed-nombre">{{ edicion.nombre }}</h1>
+  <h1 class="ed-nombre">{{ nombre_edicion }}</h1>
   <div class="ed-barra-acciones">
     <div class="ed-destino">
       <label class="campo-label" for="destino">{{ _('Destino') }}</label>

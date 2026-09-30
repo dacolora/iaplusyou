@@ -27,7 +27,7 @@ TODAS = [
     "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL",
     "META_APP_ID", "META_APP_SECRET",
     "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "PLATAFORMA_URL",
-    "MELI_APP_ID", "MELI_SECRET",
+    "MELI_APP_ID", "MELI_SECRET", "TRENDTRACK_API_KEY",
 ]
 
 
@@ -75,7 +75,7 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
     monkeypatch.setenv("HF_API_KEY_ID", "solo-el-id")          # secreto ausente → parcial
     monkeypatch.setenv("R2_ACCOUNT_ID", "   ")                  # solo espacios = ausente
     llaves = d._estado_llaves()
-    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria"]
+    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria", "trendtrack"]
     por_id = {l["id"]: l for l in llaves}
     assert por_id["anthropic"]["estado"] == "configurada" and por_id["anthropic"]["faltan"] == []
     assert por_id["higgsfield"]["estado"] == "parcial" and por_id["higgsfield"]["faltan"] == ["HF_API_KEY_SECRET"]
@@ -112,7 +112,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
         assert 'target="_blank" rel="noopener"' in t
         assert "Cómo conseguirla" in t
         assert "no se escriben desde aquí" in t
-    assert cfg.count('class="llave-tarjeta') == 10
+    assert cfg.count('class="llave-tarjeta') == 11
     # Orden de las tarjetas: todas las del servidor en «Puesta a punto»;
     # ninguna en «Conexiones».
     pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli")]
@@ -597,10 +597,10 @@ def test_cliente_no_ve_llaves_ni_variables_del_servidor(app, monkeypatch):
 
 
 def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
-    # Desde 2026-09-28 las 10 tarjetas del servidor van en «Puesta a punto»
+    # Desde 2026-09-28 las 11 tarjetas del servidor van en «Puesta a punto»
     # (solo admin); la de Meta ya no se pinta: la conexión vive en Experimentos.
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
     puesta = cfg[cfg.index('id="config-ap-puesta"'):cfg.index('id="config-ap-conexiones"')]
-    assert puesta.count('class="llave-tarjeta') == 10
+    assert puesta.count('class="llave-tarjeta') == 11
     assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 0
     assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")

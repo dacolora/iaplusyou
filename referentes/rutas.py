@@ -139,7 +139,8 @@ def traer_form(cliente):
     consulta = _consulta_desde(request.args)
     precio = None
     llaves_faltantes = fuentes.llaves_faltantes(fuente) if fuente else []
-    if fuente and not llaves_faltantes and (consulta.get("pagina_id") or consulta.get("palabra")):
+    modo_no_admitido = bool(fuente) and consulta["modo"] not in fuentes.modos(fuente)
+    if fuente and not llaves_faltantes and not modo_no_admitido and (consulta.get("pagina_id") or consulta.get("palabra")):
         modulo = fuentes.por_tipo(fuente)
         est_fuente = modulo.estimar(consulta, tope)
         est_clasificacion = gastos.estimar("clasificacion", n=tope)
@@ -147,7 +148,7 @@ def traer_form(cliente):
                   "total_usd": est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)}
     return render_template("_referentes_traer.html", cliente=cliente, fuentes_tipos=fuentes.tipos(),
                            fuentes_nombres=fuentes.NOMBRES, fuente=fuente, consulta=consulta, tope=tope,
-                           precio=precio, llaves_faltantes=llaves_faltantes,
+                           precio=precio, llaves_faltantes=llaves_faltantes, modo_no_admitido=modo_no_admitido,
                            fuente_llaves_faltantes={t: fuentes.llaves_faltantes(t) for t in fuentes.tipos()})
 
 
@@ -161,6 +162,9 @@ def traer_post(cliente):
         flash(gettext("Esa fuente no está configurada."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     consulta = _consulta_desde(request.form)
+    if consulta["modo"] not in fuentes.modos(fuente):
+        flash(gettext("Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     if consulta["modo"] == "marca" and not consulta["pagina_id"]:
         flash(gettext("Pega un link del Ad Library o el id de la página."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))

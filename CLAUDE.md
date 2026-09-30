@@ -358,6 +358,16 @@ dataset/contarlo, compartido con `nicho/fuentes/apify.py`;
 la URL de la Ad Library con país real (a diferencia de Atria, que es solo
 UE) e idioma, una sola corrida por barrido sin cursor que retomar, reporta
 su costo real por resultado a `gastos` bajo el tipo `recoleccion`).
+TrendTrack (2026-09-30, spec `2026-09-30-fuente-trendtrack-design.md`): tercera fuente de barrido,
+`referentes/fuentes/trendtrack.py` (`TRENDTRACK_API_KEY`, plan Pro). Solo busca por palabra clave
+(`MODOS = ("palabra",)`, `fuentes.modos(tipo)`: el formulario esconde «De una marca» y las rutas lo rechazan),
+pide `GET /v1/ads?search&limit&offset` con `Authorization: Bearer`, prueba la llave con `GET /v1/me` (gratis) y
+cobra 1 crédito por fila devuelta: el formato y «solo activos» se filtran AQUÍ, después de pagar, así que se
+miran hasta 3× los anuncios pedidos. Como Atria, `usd_fuente` es 0 y el uso se cuenta en `kv`
+(`creditos_este_mes`, `creditos_restantes` desde `X-Credits-Remaining`, visibles en `/admin/referentes`). **Los
+nombres de los campos de cada anuncio NO están verificados** (la documentación estaba bloqueada): `_normalizar`
+los lee con la tabla `_CLAVES`, la primera página es de 10 filas y, si ninguna se reconoce, el barrido se
+detiene con un error que lista los campos recibidos.
 Barridos por palabra (2026-09-27, tras «dolor de pies» que trajo ruido pagado): SIEMPRE en inglés
 — `referentes/traducir.preparar_consulta` traduce lo escrito con Claude (≈ US$ 0,0002, gasto tipo
 `otro`, bajo `_creatv` si es global), guarda `consulta.palabra_original`, fuerza `idioma=en` (no hay
@@ -447,6 +457,23 @@ referencias de las que la persona ve**: `flowplus_modelos.referencias_de_mas(mod
 Seedance 2.5: SOLO la primera; Seedream: 10) y `cf_crear_video` avisa y no genera si sobra alguna (incidente «mira lo
 que sacó»: cuatro referencias con Seedance, tres descartadas en silencio, US$ 3,6 cobrados); el compositor muestra el
 mismo aviso en vivo (`#fp-aviso-refs`, `data-max`/`data-max-videos` de los radios de modelo) y frena el envío.
+**Sin saldo y Wan con videos de referencia (incidente 2026-09-30):** WaveSpeed se quedó sin saldo y los videos
+fallaban con su JSON crudo en la tarjeta. `wavespeed_common.error_de_respuesta(resp, path)` es lo que lanzan los cinco
+lanzadores de WaveSpeed ante una respuesta no-ok: `SinSaldo` (RuntimeError; 402 o «insufficient credits» / «top up»)
+o el RuntimeError de siempre. `saldo.py` recuerda la falta en `kv` (`sin_saldo:<proveedor>`), avisa al administrador
+por `notificaciones.avisar_admin` (tipo `sin_saldo`) UNA vez cada `REAVISO_S`, `vigente()` pinta
+`_aviso_sin_saldo.html` en Crear y en Cambiar producto (el admin ve desde cuándo y el enlace de recarga; el cliente,
+un aviso neutro) y la próxima generación nueva que sale bien lo `limpia` (vence solo a las `VIGENCIA_S` sin fallos).
+La tarjeta dice `saldo.mensaje_tarjeta` en el idioma del proyecto, en Crear (video e imagen, que ahora también pasa
+por `_mensaje_error`) y en swap; un video sin saldo nunca persigue una predicción vieja. OJO: el VPS no tiene SMTP_* ni
+un admin con correo verificado, así que hoy el aviso que llega es el de la app. Y Wan 3.0 con videos de referencia:
+los videos juntos hasta 15 s y entrada + salida hasta 30 s (`max_videos_s`, `max_total_con_videos`; 1405 si no).
+La bandeja guarda `duracion_s` de cada video (ffprobe al subirlo o bajar el link, `dashboard._duracion_video`;
+`fp_reusar` la conserva), `cf_crear_video` avisa y no genera con `flowplus_modelos.problema_duracion`, el compositor
+lo avisa en vivo (`data-duracion` en la bandeja, `data-max-total`/`data-max-videos-s` en los radios), el worker recorta
+la salida como última barrera (`duracion_con_videos`, midiendo por URL lo que la sesión no traía) y el precio incluye
+los segundos de entrada que WaveSpeed factura en Wan (`segundos_facturables_referencia`: cada video 1–15 s, el total
+hasta 15 s, hacia arriba; `estimate_video(..., videos_ref_s=)` en el botón, al reintentar y en el gasto real).
 Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
 `wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
 devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)
@@ -557,7 +584,7 @@ página de Notion, `leyendo|leido|error`), `guion` (un script: `lectura` con lí
 `literal`, `leido|confirmado`) y `guion_video` (una versión: `config`, `recorte`, `plan`, `clips`,
 `hooks_alt`, `validaciones`, `avisos`, `imagenes`; `configurando|recortando|armando|armado|invalido|error`
 y `estado_imagenes`). `guiones/datos.py` es el único escritor; un trabajo con `iniciado_en` de más de
-6 min se da por interrumpido: un lote `leyendo` y un video `armando` o con imágenes `escribiendo`
+12 min se da por interrumpido: un lote `leyendo` y un video `armando` o con imágenes `escribiendo`
 pasan a `error`, y un video `recortando` vuelve a `configurando`. Claude planea y el código escribe: `lectura.py` (copia literal verificada),
 `recorte.py` (orden de prescindibles; nunca la línea 1), `clips.py` (plan por números de línea →
 `duracion.calcular_clip` → `plantillas.prompt_clip` → validaciones V1-V6/E1-E4 que bloquean; los
@@ -565,7 +592,9 @@ prompts entran al chat con `refinador.crear(origen="pipeline", texto_fijo=línea
 `imagenes.py` (hojas de personaje, entornos, producto con sus fotos; tabla imagen↔clip; checklist).
 Todo prompt de fábrica pasa `refinador.validar`. Una llamada por paso vía `guiones/claude.py`
 (`pedir_json`, gasto `guion_clips` también si la respuesta no sirvió), en un hilo
-(`trabajos.iniciar`). Cambiar una versión armada crea otra (`nueva_version`; con solo el bloque del
+(`trabajos.iniciar`), siempre con streaming y topes amplios (armar 48 000, leer 32 000, imágenes 16 000, recorte
+12 000): el pensamiento adaptativo gasta del mismo tope, y con 16 000 un guion real de 34 líneas nunca se armó
+(2026-09-28; medido 2026-09-30: 19 809 de salida, US$ 0,21). Cambiar una versión armada crea otra (`nueva_version`; con solo el bloque del
 video, `clips.version_con_bloque` no llama a Claude). Notion: llave de integración cifrada en `kv`
 (`notion:<cliente>`), solo `api.notion.com`, exige correo verificado. UI: `/panel` como fragmento
 (`_gpg_*.html`) + `_crear_flowplus_guiones.html`; «Abrir en el chat» emite `gp:abrir-prompt`.
@@ -634,7 +663,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
 
-**Editor (capas 1–4b, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–4c, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -673,9 +702,13 @@ through `_ruta_filtro` (two-level ffmpeg escaping — `'` becomes `\'\''`). NOT 
 capa 1: `superpuesto` (PIP — `compilar` raises if it has clips), `rotacion` and
 `marca.marca_de_agua`; each principal clip is its own `-ss/-t` input (capa 3: a reordered clip
 decodes only its span; the principal may mix sources). `motor/tramos.py` splits into windows past
-`PRESUPUESTO_OVERLAYS=60`, never cutting inside a transition's `[fin_A, fin_A+d)` —
-exceeding budget at one instant is the only hard error — and `motor.renderizar` cleans
-partial `.tramoN.mp4` files in a `finally`. Subtitles are one `.ass`
+`PRESUPUESTO_OVERLAYS=60` or past `PRESUPUESTO_VIDEOS=6` principal clips (each input costs ~85 MB
+with ffmpeg 8 on the 1-CPU VPS: a 32-cut edit asked ~3 GB and the kernel killed it, 2026-09-30),
+filling each window greedily from safe frontier to safe frontier and never cutting inside a
+transition's `[fin_A, fin_A+d)` — exceeding the overlay budget at one instant is the only hard
+error. Windows are `.tramoN.mov` with PCM audio (`render.OPCIONES_AUDIO_TRAMO`: per-window AAC
+left a ~21 ms gap at every join) and `render.concatenar` copies the video and encodes the AAC
+once; `motor.renderizar` cleans the partial files in a `finally`. Subtitles are one `.ass`
 (`motor/subtitulos.py`) only when the host ffmpeg has libass (`render.tiene_libass()`,
 cached: the VPS does, the dev Mac doesn't — `renderizar` reports the omission via
 `on_etapa`). Worker tasks in `tareas/edicion.py`: `edicion_producir` renders the FROZEN
@@ -759,6 +792,14 @@ that is added lengthens the video (image/text layers and música/efecto end at t
 the render — and with the playhead at the end they enter whole, ending there); audio added by hand only reuses a
 track whose clips share its `rol_audio` (music never lands in the voice's gap). Still out: PIP (video over video),
 color filters, rotation and a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla»).
+Capa 4c (2026-09-29, trust fixes, spec §2): audio fades never exceed their clip (`normalizar`
++ a compiler `st >= 0` cap), «deslizar» stores 400 ms and drops 8 % of the canvas height in both engines, moving,
+stretching or duplicating a layer stops at the principal's end, load warnings are recomputed per change
+(`avisos_carga.js`), technical errors fold into «Detalle técnico»/`title`, an expired session says so
+(`guardado.sesionTerminada`, `producir.js`), the library deletes unused `subida`/`crear` materials
+(`editor.borrar_material` → `biblioteca.borrar`, 409 names the edición), «Editar» prefers the person's edición over
+the «Borrador automático» (`ediciones.para_editar`/`nombre_visible`), and `rasterizar.sin_glifos_faltantes` strips
+glyphs the font lacks (emojis) while the panel warns.
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
@@ -1048,8 +1089,8 @@ Desde la fase 6 (2026-09) toda la app pasa por el catálogo (excepciones a prop�
 `final_edition/documento.validar` y los de `static/editor/operaciones.js` (`INTERNOS` en `tests/test_i18n_editor.py`);
 los prompts para los modelos de video e imagen y sus tokens `Image N`/`Video N`/`@Imagen N` (`prompt_swap.py`,
 `flowplus_prompt`); y las 9 plantillas del flujo viejo «Nueva idea», en `EXCLUIDAS` hasta que Daniel decida qué pasa
-con ese flujo. Una excepción a §B8: «Escribe aquí», el texto inicial editable de un clip de texto nuevo del editor,
-sale en el idioma de quien mira). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
+con ese flujo. Una excepción a §B8: «Escribe aquí» y «Escribe el precio» (capa 4c), el texto inicial editable de un
+clip de texto nuevo del editor, salen en el idioma de quien mira). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
 del spec): cada final sale en el idioma de su país destino (`<idioma>_<PAIS>`); el guion base, que no es por destino,
 en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. El editor
 no es Jinja: sus textos viven en `static/editor/textos.js` (`ES`, la fuente) y la ruta `editor.ver` manda los

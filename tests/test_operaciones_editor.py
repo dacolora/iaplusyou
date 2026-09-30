@@ -36,10 +36,27 @@ def test_las_operaciones_del_navegador_dejan_documentos_validos():
             pytest.fail(f"{caso['nombre']}: {e}")
         assert json.dumps(normal["pistas"][0]["clips"], sort_keys=True) == antes, (
             f"{caso['nombre']}: el navegador no normalizó las transiciones como el compilador")
-        # lo que se agrega nunca alarga el video: termina con la principal
-        if caso["nombre"].startswith("agregar_"):
+        # lo que se agrega (y, capa 4c, lo que se mueve, alarga o duplica)
+        # nunca alarga el video: termina con la principal
+        if caso["nombre"].startswith(("agregar_", "no_alarga_")):
             fin_principal = sum(c["duracion_ms"] for c in doc["pistas"][0]["clips"])
             assert documento.duracion_ms(doc) == fin_principal, f"{caso['nombre']}: el video quedó más largo"
+        # capa 4c: los fundidos de cada audio caben en su clip (si no, el
+        # render pide `afade ... st=<negativo>` y ffmpeg falla)
+        for p in doc["pistas"]:
+            if p["tipo"] != "audio":
+                continue
+            for c in p["clips"]:
+                au = c.get("audio") or {}
+                assert au.get("fundido_entrada_ms", 0) + au.get("fundido_salida_ms", 0) <= c["duracion_ms"], (
+                    f"{caso['nombre']}: los fundidos de {c['id']} no caben en sus {c['duracion_ms']} ms")
+        # arreglo 4: una entrada animada siempre lleva su duración (sin ella ni
+        # la vista previa ni el render la aplican)
+        for p in doc["pistas"]:
+            for c in p["clips"]:
+                an = c.get("animacion") or {}
+                if an.get("entrada") not in (None, "ninguna"):
+                    assert an.get("duracion_ms", 0) > 0, f"{caso['nombre']}: {c['id']} anima sin duración"
         # la mezcla que deja el panel de propiedades es una que el render conoce
         mz = doc.get("mezcla") or {}
         mezcla.volumenes_para(mz.get("preset"), mz.get("volumenes"))

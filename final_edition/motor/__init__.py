@@ -44,9 +44,9 @@ def renderizar(doc, rutas, salida, on_etapa=None, nucleos=1):
             for i, v in enumerate(ventanas):
                 avisar(gettext("Renderizando tramo %(i)s/%(n)s", i=i + 1, n=len(ventanas)))
                 plan_i = compilador.compilar(doc, rutas, ventana=v, con_ass=con_ass)
-                parcial = f"{salida}.tramo{i}.mp4"
+                parcial = f"{salida}.tramo{i}.mov"
                 # compilador hornea `subtitles='{rutas['ass']}'` igual en todos los tramos (no lo varía por ventana), y cada ejecutar() es síncrono, así que reescribir ese mismo archivo en cada vuelta es seguro.
-                render_mod.ejecutar(plan_i, parcial, ass_ruta=rutas.get("ass"))
+                render_mod.ejecutar(plan_i, parcial, ass_ruta=rutas.get("ass"), opciones_audio=render_mod.OPCIONES_AUDIO_TRAMO)
                 parciales.append(parcial)
             avisar(N_("Uniendo tramos"))
             render_mod.concatenar(parciales, salida)
@@ -59,7 +59,7 @@ def renderizar(doc, rutas, salida, on_etapa=None, nucleos=1):
             # falló NO se toca aquí: `ejecutar` lo conserva a propósito para
             # depurar.
             for i in range(len(ventanas)):
-                p = f"{salida}.tramo{i}.mp4"
+                p = f"{salida}.tramo{i}.mov"
                 if os.path.exists(p):
                     os.remove(p)
         plan = compilador.compilar(doc, rutas, con_ass=con_ass)

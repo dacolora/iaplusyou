@@ -41,14 +41,20 @@ def _guardar(cliente, items):
     _json_store.guardar(_path(cliente), _renumerar(items))
 
 
-def agregar(cliente, tipo, url, frame_url=None, origen="archivo", ruta_local=None, titulo=None, producto=None):
+def agregar(cliente, tipo, url, frame_url=None, origen="archivo", ruta_local=None, titulo=None, producto=None,
+            duracion_s=None):
+    """`duracion_s`: segundos de un video (2026-09-30), para que Crear sepa
+    antes de cobrar si Wan 3.0 lo admite y cuánto cuesta."""
     items = listar(cliente)
     rid = "ref_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    items.append({
+    item = {
         "id": rid, "tipo": tipo, "url": url, "frame_url": frame_url or url, "origen": origen,
         "ruta_local": ruta_local, "titulo": titulo, "producto": producto,
         "agregado_en": datetime.now().isoformat(timespec="seconds"),
-    })
+    }
+    if duracion_s is not None:
+        item["duracion_s"] = duracion_s
+    items.append(item)
     _guardar(cliente, items)
     return rid
 

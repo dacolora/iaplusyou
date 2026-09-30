@@ -39,3 +39,25 @@ test("capa 4b: cabeceras, transiciones, biblioteca y panel en el idioma de la p�
   assert.equal(textoSegundos(500), "0.5 s");            // el separador decimal del idioma de la página
   assert.equal(textoVelocidad(0.75), "0.75×");
 });
+
+test("capa 4c: sesión vencida, «Producir», avisos de carga, borrar y emojis en el idioma de la página", async () => {
+  const { mensajeSesion } = await import("../../static/editor/guardado.js");
+  const { respuestaProducir } = await import("../../static/editor/producir.js");
+  const { avisosCarga } = await import("../../static/editor/avisos_carga.js");
+  const { motivoNoBorrar } = await import("../../static/editor/biblioteca.js");
+  const { avisoEmoji } = await import("../../static/editor/propiedades_modelo.js");
+  ponerTextos({
+    "guardado.sesion": "Your session ended: reload the page and log in.",
+    "producir.fallo_servidor": "Couldn't produce: the server failed (error {status}). Try again in a moment.",
+    "vista.carga_faltan": "{n} files of this edit are missing (they were deleted or aren't from this project): those parts won't show.",
+    "bib.no_se_borra": "That file can't be deleted from here.",
+    "prop.aviso_emoji": "Emojis don't show in the final video: they're removed when it's produced.",
+  }, "en");
+  assert.equal(mensajeSesion(), "Your session ended: reload the page and log in.");
+  assert.equal(respuestaProducir({ ok: false, status: 502, headers: { get: () => "text/html" } }, null).texto,
+    "Couldn't produce: the server failed (error 502). Try again in a moment.");
+  const doc = { pistas: [{ id: "p_video", tipo: "video", clips: [{ id: "a", material_id: 7 }, { id: "b", material_id: 8 }] }] };
+  assert.match(avisosCarga(doc, {}, {}).faltan.texto, /^2 files of this edit are missing/);
+  assert.equal(motivoNoBorrar({ id: 1, origen: "musica" }, doc), "That file can't be deleted from here.");
+  assert.equal(avisoEmoji(), "Emojis don't show in the final video: they're removed when it's produced.");
+});

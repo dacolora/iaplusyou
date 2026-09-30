@@ -104,7 +104,7 @@ export class Propiedades {
 
   // Agregar un texto lo deja elegido y pide escribirlo (editor.enfocarTexto,
   // que en el celular ya subió esta hoja): el campo, con todo seleccionado
-  // para que lo que se escriba reemplace «Escribe aquí».
+  // para que lo que se escriba reemplace «Escribe aquí» (o «Escribe el precio»).
   enfocarTexto() {
     this.pintar();
     const area = this.textarea;
@@ -424,6 +424,7 @@ export class Propiedades {
       if (document.activeElement !== area && area.value !== x.texto.valor) area.value = x.texto.valor;
     });
     this._nota(campo, (x) => x.texto.nota);
+    this._nota(campo, (x) => x.avisoEmoji, "ed-prop-aviso");     // capa 4c: se ve mientras se escribe
     this._opciones(this.cuerpo, {
       nombre: "ed-prop-fuente", etiqueta: t("prop.fuente"), lista: true,
       opciones: m.fuentes.map((f) => ({ ...f, fuente: f.valor })),

@@ -298,7 +298,9 @@ test("agregarTexto usa tamaños fraccionarios del lienzo y el fondo de marca en 
     const c = clipDe(r.doc, r.seleccion);
     assert.equal(c.estilo.tamano, px / 1920);
     assert.equal(c.transform.y, y);
-    assert.equal(c.texto.literal, preset === "precio" ? "$ 0" : "Escribe aquí");
+    // capa 4c (7/10): el precio entra como un pedido de escribirlo, nunca como «$ 0» (que salía así si se olvidaba)
+    assert.equal(c.texto.literal, preset === "precio" ? "Escribe el precio" : "Escribe aquí");
+    assert.doesNotMatch(c.texto.literal, /\d|\$/);
     if (preset === "precio") assert.equal(c.estilo.fondo.color, "#7c3aed");
   }
   invalida(() => op.agregarTexto(docBase(), 0, "otro", INFO), /texto/i);
@@ -545,4 +547,125 @@ test("agregarAudio: la música no cae en la pista de la voz; va con otra música
   const efecto = op.agregarAudio(r.doc, { id: 2 }, 0, { rol: "efecto" }, INFO);
   const pe = efecto.doc.pistas.find((p) => p.clips.some((c) => c.id === efecto.seleccion));
   assert.ok(![pista.id, "p_voz", "p_sonido"].includes(pe.id), pe.id);
+});
+
+// ---- Capa 4c (1/10): los fundidos nunca pasan de la duración del clip ----
+// Un audio de menos de 1 s con el fundido de salida de 1 s de la música hacía
+// que el render pidiera `afade ... st=-0.600` y ffmpeg fallaba.
+const INFO_CORTO = { ...INFO_LARGO, 7: { duracion_ms: 400 } };
+const fundidos = (c) => [c.audio.fundido_entrada_ms, c.audio.fundido_salida_ms];
+const caben = (c, contexto) => assert.ok(c.audio.fundido_entrada_ms + c.audio.fundido_salida_ms <= c.duracion_ms,
+  `${contexto}: fundidos ${fundidos(c)} en un clip de ${c.duracion_ms} ms`);
+
+test("agregar un audio corto (o música cerca del final) deja los fundidos dentro del clip", () => {
+  const corto = puro((d) => op.agregarAudio(d, { id: 7 }, 2000, { rol: "musica" }, INFO_CORTO));
+  const c = clipDe(corto.doc, corto.seleccion);
+  assert.equal(c.duracion_ms, 400);
+  caben(c, "música de 400 ms");
+  assert.deepEqual(fundidos(c), [0, 400]);
+  const alFinal = op.agregarAudio(docBase(), { id: 6 }, 7600, { rol: "musica" }, INFO_CORTO);
+  const f = clipDe(alFinal.doc, alFinal.seleccion);
+  assert.equal(f.duracion_ms, 400);
+  caben(f, "música que entra a 0,4 s del final");
+});
+
+test("cortar música: la mitad izquierda pierde el fundido de salida y la derecha el de entrada (y lo que queda cabe)", () => {
+  const base = docBase();
+  const conMusica = op.agregarAudio(base, { id: 2 }, 0, { rol: "musica" }, INFO);
+  const id = conMusica.seleccion;
+  const conEntrada = op.cambiar(conMusica.doc, id, { audio: { fundido_entrada_ms: 500 } }, INFO).doc;
+  const r = puro((d) => op.cortarClip(d, id, 2600, INFO), conEntrada);
+  const izq = clipDe(r.doc, id);
+  const der = clipDe(r.doc, r.seleccion);
+  assert.deepEqual(fundidos(izq), [500, 0], "la izquierda conserva su entrada y no baja al cortar");
+  assert.equal(der.duracion_ms, 400);
+  assert.equal(der.audio.fundido_entrada_ms, 0, "la derecha no sube de nuevo al cortar");
+  caben(der, "mitad derecha de 400 ms");
+  assert.ok(der.audio.fundido_salida_ms > 0, "la derecha conserva (acotado) el fundido del final");
+});
+
+test("recortar o cambiar los fundidos de un audio nunca los deja más largos que el clip", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "musica" }, INFO);
+  const id = conMusica.seleccion;
+  const corto = op.recortar(conMusica.doc, id, "fin", -2700, INFO).doc;
+  caben(clipDe(corto, id), "música recortada a 300 ms");
+  const desdeInicio = op.recortar(conMusica.doc, id, "inicio", 2800, INFO).doc;
+  caben(clipDe(desdeInicio, id), "música recortada desde el inicio");
+  const pedidos = op.cambiar(corto, id, { audio: { fundido_entrada_ms: 900, fundido_salida_ms: 900 } }, INFO).doc;
+  const c = clipDe(pedidos, id);
+  caben(c, "fundidos pedidos de más");
+  assert.deepEqual(fundidos(c), [150, 150], "se acortan los dos en proporción");
+});
+
+// ---- Capa 4c (2/10): «Animación de entrada: Deslizar» de verdad ----
+test("cambiar animacion.entrada guarda la duración (400 ms) y «ninguna» la quita", () => {
+  const r = puro((d) => op.cambiar(d, "t1", { animacion: { entrada: "deslizar" } }, INFO));
+  assert.deepEqual(clipDe(r.doc, "t1").animacion, { entrada: "deslizar", duracion_ms: op.DURACION_ANIMACION_MS });
+  assert.equal(op.DURACION_ANIMACION_MS, 400);
+  const quitada = op.cambiar(r.doc, "t1", { animacion: { entrada: "ninguna" } }, INFO).doc;
+  assert.equal(clipDe(quitada, "t1").animacion, null);
+});
+
+// ---- Capa 4c (3/10): nada que se mueva, alargue o duplique alarga el video ----
+// El video dura lo que su fila más larga; más allá de la principal el render
+// congela el último cuadro. docBase: la principal termina en 8000.
+const noPisa = (pista, clip) => pista.clips.every((c) => c === clip
+  || c.inicio_ms + c.duracion_ms <= clip.inicio_ms || c.inicio_ms >= clip.inicio_ms + clip.duracion_ms);
+
+test("moverA se detiene en fin − duración (texto y audio)", () => {
+  const movido = puro((d) => op.moverA(d, "t1", 7500, INFO));
+  assert.equal(clipDe(movido.doc, "t1").inicio_ms, 6000);
+  assert.equal(finDoc(movido.doc), 8000);
+  assert.equal(clipDe(op.moverA(docBase(), "a1", 9000, INFO).doc, "a1").inicio_ms, 5000);
+  assert.equal(clipDe(op.moverA(docBase(), "t1", 2500, INFO).doc, "t1").inicio_ms, 2500);   // dentro, igual que antes
+});
+
+test("alargar el borde derecho de un texto, una imagen o la música se topa en el fin", () => {
+  const texto = op.recortar(docBase(), "t1", "fin", 99999, INFO).doc;
+  assert.deepEqual([clipDe(texto, "t1").inicio_ms, clipDe(texto, "t1").duracion_ms], [1000, 7000]);
+  const img = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 1000, { duracionMs: 2000 }, INFO);
+  const imgLarga = op.recortar(img.doc, img.seleccion, "fin", 99999, INFO).doc;
+  assert.equal(finDoc(imgLarga), 8000);
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 1000, { rol: "musica" }, INFO);    // 1000–4000, en bucle
+  const musicaLarga = op.recortar(musica.doc, musica.seleccion, "fin", 99999, INFO).doc;
+  assert.deepEqual([clipDe(musicaLarga, musica.seleccion).duracion_ms, finDoc(musicaLarga)], [7000, 8000]);
+});
+
+test("duplicar una capa que no cabe después la pone terminando en el fin, sin pisar al original", () => {
+  const alFinal = op.moverA(docBase(), "t1", 5000, INFO).doc;                              // t1: 5000–7000
+  const dup = puro((d) => op.duplicar(d, "t1", INFO), alFinal);
+  const copia = clipDe(dup.doc, dup.seleccion);
+  assert.deepEqual([copia.inicio_ms, copia.duracion_ms], [6000, 2000]);
+  assert.equal(finDoc(dup.doc), 8000);
+  const fila = dup.doc.pistas.find((p) => p.clips.includes(copia));
+  assert.ok(noPisa(fila, copia), "la copia no se encima al original en su fila");
+  assert.equal(fila.tipo, "texto");
+  // si cabe justo después, va justo después (como siempre)
+  const cabe = op.duplicar(docBase(), "t1", INFO);
+  assert.deepEqual([clipDe(cabe.doc, cabe.seleccion).inicio_ms], [3000]);
+});
+
+test("una capa que ya pasa del fin (la voz de un borrador) no se corre ni se alarga más allá; hacia atrás sí", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].inicio_ms = 7000;                                                    // t1: 7000–9000
+  assert.equal(clipDe(op.moverA(d, "t1", 7500, INFO).doc, "t1").inicio_ms, 7000);
+  assert.equal(clipDe(op.moverA(d, "t1", 3000, INFO).doc, "t1").inicio_ms, 3000);
+  assert.equal(clipDe(op.recortar(d, "t1", "fin", 500, INFO).doc, "t1").duracion_ms, 2000);
+  assert.equal(clipDe(op.recortar(d, "t1", "fin", -500, INFO).doc, "t1").duracion_ms, 1500);
+  const larga = docBase();
+  larga.pistas[1].clips[0].duracion_ms = 9000;                                              // t1 más larga que el video
+  invalida(() => op.duplicar(larga, "t1", INFO), /no cabe/);
+});
+
+test("arreglo 4: un «deslizar» guardado sin duración (capa 4b) la recibe al normalizar; «ninguna» y otras entradas no se tocan", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].animacion = { entrada: "deslizar" };
+  const r = puro((x) => op.moverA(x, "t1", 2000, INFO), d);
+  assert.deepEqual(clipDe(r.doc, "t1").animacion, { entrada: "deslizar", duracion_ms: op.DURACION_ANIMACION_MS });
+  const con = docBase();
+  con.pistas[1].clips[0].animacion = { entrada: "deslizar", duracion_ms: 250 };
+  assert.equal(clipDe(op.normalizar(con, INFO), "t1").animacion.duracion_ms, 250, "la que ya tenía se respeta");
+  const ninguna = docBase();
+  ninguna.pistas[1].clips[0].animacion = { entrada: "ninguna" };
+  assert.deepEqual(clipDe(op.normalizar(ninguna, INFO), "t1").animacion, { entrada: "ninguna" });
 });

@@ -310,3 +310,20 @@ test("Propiedades: una operación rechazada vuelve a pintar el control con el va
     else assert.match(dichos[0][0], esperado);
   }
 });
+
+// ---- Capa 4c (10/10): emojis ----
+import { avisoEmoji, tieneEmoji } from "../../static/editor/propiedades_modelo.js";
+
+test("tieneEmoji: los emojis sí; letras, acentos y ® ™ © no", () => {
+  for (const t of ["🔥 50% OFF", "✅ Envío gratis", "⭐⭐⭐⭐⭐", "Hecho en 🇨🇴", "Te ❤️", "👨‍👩‍👧 en familia"]) assert.equal(tieneEmoji(t), true, t);
+  for (const t of ["¡Envío gratis! ñ á é ü", "Marca® ™ ©", "$ 89.900 – 50 %", "", null]) assert.equal(tieneEmoji(t), false, String(t));
+});
+
+test("el panel del texto avisa en llano cuando el texto tiene emojis", () => {
+  const r = op.agregarTexto(docBase(), 500, "titulo", {});
+  assert.equal(modelo(r.doc, r.seleccion, { destino: "es_CO" }).avisoEmoji, null);
+  const conEmoji = op.editarTexto(r.doc, r.seleccion, "🔥 50% OFF", "es_CO", {}).doc;
+  const m = modelo(conEmoji, r.seleccion, { destino: "es_CO" });
+  assert.equal(m.avisoEmoji, avisoEmoji());
+  assert.match(avisoEmoji(), /^Los emojis no salen en el video final/);
+});

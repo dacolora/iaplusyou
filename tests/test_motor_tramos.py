@@ -128,3 +128,92 @@ def test_fronteras_usan_la_misma_pista_principal_que_el_compilador():
         {"id": "x1", "inicio_ms": 0, "duracion_ms": 1000, "material_id": 1, "transicion": None}]})
     assert tr._fronteras_seguras(doc, 7000) == [4000]
     assert tr._intervalos_transicion(doc) == [(3500, 4000)]
+
+
+# ---- presupuesto de cortes de video (incidente 2026-09-30) ----------------
+# Cada clip de la principal es su propia entrada de ffmpeg y cada una cuesta
+# ~85 MB con ffmpeg 8 en el VPS (1 CPU): 32 cortes pidieron ~3 GB y el
+# kernel mató el render. Por encima de PRESUPUESTO_VIDEOS se parte en tramos.
+
+def _con_cortes(n, dur_ms=1000, d_tr=0):
+    """Solo la principal, partida en `n` clips seguidos de `dur_ms`; con
+    `d_tr` > 0 cada clip (menos el último) lleva un fundido de `d_tr`."""
+    doc = _doc()
+    base = doc["pistas"][0]["clips"][0]
+    clips = []
+    for i in range(n):
+        c = copy.deepcopy(base)
+        c.update(id=f"v{i}", inicio_ms=i * dur_ms, duracion_ms=dur_ms, recorte={"desde_ms": 0, "hasta_ms": dur_ms},
+                 transicion={"tipo": "fundido", "duracion_ms": d_tr} if d_tr and i < n - 1 else None)
+        clips.append(c)
+    doc["pistas"] = [{**doc["pistas"][0], "clips": clips}]
+    return doc
+
+
+def _cubre_todo_seguido(cortes, total):
+    assert cortes[0][0] == 0 and cortes[-1][1] == total
+    assert all(b == c for (_a, b), (c, _d) in zip(cortes, cortes[1:]))
+
+
+def test_pocos_cortes_van_en_un_solo_tramo():
+    n = tr.PRESUPUESTO_VIDEOS
+    assert tr.partir(_con_cortes(n)) == [(0, n * 1000)]
+
+
+def test_muchos_cortes_se_parten_sin_pasar_el_presupuesto_de_videos():
+    doc = _con_cortes(20)
+    cortes = tr.partir(doc)
+    assert len(cortes) > 1
+    _cubre_todo_seguido(cortes, 20000)
+    for a, b in cortes:
+        assert tr.videos(doc, a, b) <= tr.PRESUPUESTO_VIDEOS
+
+
+def test_agrupa_cortes_seguidos_hasta_llenar_el_presupuesto():
+    # Pocos tramos: cada frontera de más es un proceso de ffmpeg y una unión
+    # más; se llena cada tramo antes de abrir el siguiente.
+    assert tr.partir(_con_cortes(12), presupuesto_videos=6) == [(0, 6000), (6000, 12000)]
+
+
+def test_con_transiciones_no_corta_dentro_y_respeta_el_presupuesto():
+    doc = _con_cortes(20, d_tr=300)
+    cortes = tr.partir(doc)
+    _cubre_todo_seguido(cortes, 20000)
+    for a, b in cortes:
+        assert tr.videos(doc, a, b) <= tr.PRESUPUESTO_VIDEOS
+    for ini, fin in tr._intervalos_transicion(doc):
+        assert not any(ini <= b < fin for _a, b in cortes[:-1])
+
+
+# Inicio, duración y fundido (ms) de los 32 cortes de la edición de happyflops
+# que el kernel mató tres veces el 2026-09-30 (la música seguía hasta 225 383).
+_EDICION_HAPPYFLOPS = [
+    (0, 5100, 500), (5100, 3896, 264), (8996, 3792, 500), (12788, 7902, 162), (20690, 990, 500),
+    (21680, 7433, 0), (29113, 2721, 0), (31834, 2615, 0), (34449, 3719, 500), (38168, 4001, 118),
+    (42169, 3477, 300), (45646, 3133, 500), (48779, 5089, 0), (53868, 1341, 500), (55209, 5787, 500),
+    (60996, 3942, 0), (64938, 2076, 0), (67014, 1937, 0), (68951, 13314, 140), (82265, 7474, 218),
+    (89739, 4899, 0), (94638, 6000, 500), (100638, 3355, 309), (103993, 7666, 0), (111659, 1950, 500),
+    (113609, 2243, 500), (115852, 4204, 0), (120056, 8141, 0), (128197, 4211, 358), (132408, 12667, 500),
+    (145075, 9805, 200), (154880, 13214, 0)]
+
+
+def test_la_edicion_de_32_cortes_que_se_quedo_sin_memoria():
+    doc = _con_cortes(1)
+    base = doc["pistas"][0]["clips"][0]
+    clips = []
+    for i, (ini, dur, d_tr) in enumerate(_EDICION_HAPPYFLOPS):
+        c = copy.deepcopy(base)
+        c.update(id=f"v{i}", inicio_ms=ini, duracion_ms=dur, recorte={"desde_ms": 0, "hasta_ms": dur},
+                 transicion={"tipo": "fundido", "duracion_ms": d_tr} if d_tr else None)
+        clips.append(c)
+    doc["pistas"][0]["clips"] = clips
+    doc["pistas"].append({"id": "p_audio", "tipo": "audio", "oculta": False, "silenciada": False, "clips": [
+        {"id": "m", "inicio_ms": 0, "duracion_ms": 225383, "material_id": 15, "rol_audio": "musica",
+         "recorte": {"desde_ms": 0, "hasta_ms": 225383}, "velocidad": 1.0}]})
+    cortes = tr.partir(doc)
+    _cubre_todo_seguido(cortes, 225383)
+    assert len(cortes) <= 8
+    for a, b in cortes:
+        assert tr.videos(doc, a, b) <= tr.PRESUPUESTO_VIDEOS
+    for ini, fin in tr._intervalos_transicion(doc):
+        assert not any(ini <= b < fin for _a, b in cortes[:-1])

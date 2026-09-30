@@ -118,6 +118,46 @@ anotar("agregar_musica_y_efecto_en_sus_pistas", () => {
   return op.agregarAudio(conMusica, { id: 2 }, 0, { rol: "efecto" }, INFO);
 });
 
+// Capa 4c (1/10): un audio corto nunca lleva fundidos más largos que él.
+const INFO_CORTO = { ...INFO_LARGO, 7: { duracion_ms: 400 } };
+anotar("agregar_musica_de_400_ms", () => op.agregarAudio(docBase(), { id: 7 }, 2000, { rol: "musica" }, INFO_CORTO), { ...D, 7: 400 });
+anotar("agregar_efecto_corto_al_final", () => op.agregarAudio(docBase(), { id: 7 }, 7900, { rol: "efecto" }, INFO_CORTO), { ...D, 7: 400 });
+anotar("cortar_musica_deja_un_pedazo_corto", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "musica" }, INFO);
+  return op.cortarClip(conMusica.doc, conMusica.seleccion, 2600, INFO);
+});
+anotar("cambiar_fundidos_de_mas", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "musica" }, INFO);
+  const corto = op.recortar(conMusica.doc, conMusica.seleccion, "fin", -2700, INFO).doc;
+  return op.cambiar(corto, conMusica.seleccion, { audio: { fundido_entrada_ms: 900, fundido_salida_ms: 900 } }, INFO);
+});
+// Capa 4c (2/10): la entrada «deslizar» lleva su duración; «ninguna» la quita.
+anotar("animacion_deslizar", () => op.cambiar(docBase(), "t1", { animacion: { entrada: "deslizar" } }, INFO));
+anotar("animacion_ninguna", () => {
+  const con = op.cambiar(docBase(), "t1", { animacion: { entrada: "deslizar" } }, INFO).doc;
+  return op.cambiar(con, "t1", { animacion: { entrada: "ninguna" } }, INFO);
+});
+// Capa 4c (3/10): mover, alargar o duplicar una capa no alarga el video
+// (Python revisa que termine con la principal: prefijo no_alarga_).
+anotar("no_alarga_mover_texto", () => op.moverA(docBase(), "t1", 7500, INFO));
+anotar("no_alarga_mover_voz", () => op.moverA(docBase(), "a1", 9000, INFO));
+anotar("no_alarga_alargar_texto", () => op.recortar(docBase(), "t1", "fin", 99999, INFO));
+anotar("no_alarga_alargar_musica", () => {
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 1000, { rol: "musica" }, INFO);
+  return op.recortar(musica.doc, musica.seleccion, "fin", 99999, INFO);
+});
+anotar("no_alarga_duplicar_texto_al_final", () => op.duplicar(op.moverA(docBase(), "t1", 5000, INFO).doc, "t1", INFO));
+anotar("no_alarga_duplicar_musica_al_final", () => {
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO);
+  return op.duplicar(musica.doc, musica.seleccion, INFO);
+});
+// Arreglo 4: un «deslizar» de la capa 4b guardado sin duración la recibe al normalizar.
+anotar("animacion_vieja_sin_duracion", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].animacion = { entrada: "deslizar" };
+  return op.moverA(d, "t1", 2000, INFO);
+});
+
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {
   const alFinal = op.recortar(op.cambiarVelocidad(docBase(), "v1", v, D9).doc, "v1", "fin", 99999, D9).doc;

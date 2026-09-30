@@ -223,6 +223,10 @@ msgid "%(fecha)s · estado <strong>%(estado)s</strong> · %(leidos)s leídos · 
 msgstr "%(fecha)s · status <strong>%(estado)s</strong> · %(leidos)s read · %(nuevos)s new · %(con_imagen)s with an image"
 
 #, python-format
+msgid "%(fuente)s solo busca por palabra clave: elige «Por palabra clave» o cambia de fuente."
+msgstr "%(fuente)s only searches by keyword: choose “By keyword” or switch source."
+
+#, python-format
 msgid "%(fuente)s todavía no está configurada. Avísale al equipo de Creatv para activarla."
 msgstr "%(fuente)s isn't set up yet. Ask the Creatv team to turn it on."
 
@@ -297,6 +301,10 @@ msgstr "%(modelo)s tops out at %(aviso)s s: it'll be built for %(aviso)s s."
 #, python-format
 msgid "%(modelo)s llega a %(aviso)s s: se generará de %(aviso)s s."
 msgstr "%(modelo)s tops out at %(aviso)s s: it'll be generated at %(aviso)s s."
+
+#, python-format
+msgid "%(modelo)s no pasa de %(total)s s sumando tus videos de referencia (%(s)s s): el resultado puede durar hasta %(max)s s. Baja la duración o usa un video más corto — no se cobró nada."
+msgstr "%(modelo)s can't go past %(total)s s counting your reference videos (%(s)s s): the result can last up to %(max)s s. Lower the duration or use a shorter video — nothing was charged."
 
 #, python-format
 msgid "%(modelo)s no pudo generar: %(detalle)s"
@@ -1083,6 +1091,18 @@ msgstr "%(presupuesto)s %(moneda)s/day"
 #, python-format
 msgid "%(producto)s · %(familia)s · respuesta inválida"
 msgstr "%(producto)s · %(familia)s · invalid response"
+
+#, python-format
+msgid "%(proveedor)s se quedó sin saldo"
+msgstr "%(proveedor)s ran out of credit"
+
+#, python-format
+msgid "%(proveedor)s se quedó sin saldo."
+msgstr "%(proveedor)s ran out of credit."
+
+#, python-format
+msgid "%(proveedor)s, el proveedor de videos e imágenes, se quedó sin saldo: no se generó ni se cobró nada. Ya se avisó a Creatv; vuelve a intentarlo cuando lo recargue."
+msgstr "%(proveedor)s, the video and image provider, ran out of credit: nothing was generated or charged. Creatv has been notified; try again once it is topped up."
 
 #, python-format
 msgid "%(proyecto)s ahora lo gestiona Creatv en Meta: %(cuenta)s · %(pagina)s%(ig)s."
@@ -2206,8 +2226,8 @@ msgstr "Downloading photos"
 msgid "Barrido terminado: %(n)s referentes clasificados."
 msgstr "Sweep finished: %(n)s references classified."
 
-msgid "Barridos globales (Atria, Apify)"
-msgstr "Global sweeps (Atria, Apify)"
+msgid "Barridos globales (Atria, Apify, TrendTrack)"
+msgstr "Global sweeps (Atria, Apify, TrendTrack)"
 
 #, python-format
 msgid "Basada en: %(anuncios)s"
@@ -2256,14 +2276,25 @@ msgstr "Draft"
 msgid "Borrador a 480p"
 msgstr "Draft at 480p"
 
+#, python-format
+msgid "Borrador automático · %(nombre)s"
+msgstr "Automatic draft · %(nombre)s"
+
 msgid "Borrar"
 msgstr "Delete"
+
+msgid "Borrar de tus archivos"
+msgstr "Delete from your files"
 
 msgid "Borrar el clip elegido (Supr)"
 msgstr "Delete the selected clip (Delete)"
 
 msgid "Borrar esta prueba"
 msgstr "Delete this proof"
+
+#, python-brace-format
+msgid "Borrar «{nombre}» de tus archivos"
+msgstr "Delete “{nombre}” from your files"
 
 msgid "Boxer"
 msgstr "Boxers"
@@ -3384,6 +3415,9 @@ msgstr "Create your first experiment"
 msgid "Crea tu proyecto en un minuto. Sin tarjeta: pagas solo lo que generas."
 msgstr "Create your project in a minute. No card: you only pay for what you generate."
 
+msgid "Crea una API key en tu workspace de TrendTrack (guía: docs.trendtrack.io › Getting Started)."
+msgstr "Create an API key in your TrendTrack workspace (guide: docs.trendtrack.io › Getting Started)."
+
 msgid "Creando activos"
 msgstr "Creating assets"
 
@@ -3770,6 +3804,10 @@ msgstr "From"
 msgid "Desde Notion"
 msgstr "From Notion"
 
+#, python-format
+msgid "Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). Recarga la cuenta; este aviso se quita solo con la próxima generación que salga bien."
+msgstr "Since %(desde)s, generations in Create and Change product fail (without charging). Top up the account; this notice goes away on its own with the next generation that works."
+
 msgid "Desde que lo conectes, los anuncios que Creatv lance en Meta llevan solos los parámetros de rastreo de Triple Whale. A los que ya estaban, o a los que crees fuera de Creatv, ponles en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
 msgstr "Once you connect it, the ads Creatv launches on Meta carry Triple Whale's tracking parameters on their own. For ads that already existed, or that you create outside Creatv, add under “URL parameters”: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
 
@@ -3799,6 +3837,9 @@ msgstr "Market"
 
 msgid "Detalle"
 msgstr "Detail"
+
+msgid "Detalle técnico"
+msgstr "Technical detail"
 
 msgid "Detalle técnico (para soporte)"
 msgstr "Technical detail (for support)"
@@ -4438,6 +4479,9 @@ msgstr "The project %(nombre)s (%(cliente)s) went back to using its own Meta app
 msgid "El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más."
 msgstr "The project reached its storage limit (2 GB): delete something before uploading more."
 
+msgid "El proyecto llegó a su límite de espacio (2 GB): borra en «Tus archivos» lo que ya no uses antes de subir más."
+msgstr "The project reached its storage limit (2 GB): delete what you no longer use in “Your files” before uploading more."
+
 #, python-format
 msgid "El punto %(n)s dice «mejorar» sin decir qué."
 msgstr "Point %(n)s says “mejorar” without saying what."
@@ -4829,6 +4873,9 @@ msgstr "At notion.so/profile/integrations create an internal integration (conten
 msgid "En prueba"
 msgstr "In testing"
 
+msgid "En trendtrack.io elige el plan Pro o superior (incluye la API y 20 000 créditos al mes)."
+msgstr "At trendtrack.io choose the Pro plan or higher (it includes the API and 20,000 credits a month)."
+
 #, python-format
 msgid "En tu catálogo: %(nombre)s"
 msgstr "In your catalog: %(nombre)s"
@@ -4998,6 +5045,9 @@ msgstr "That campaign doesn't exist."
 msgid "Esa campaña ya no existe."
 msgstr "That campaign no longer exists."
 
+msgid "Esa canción es de Mi música: bórrala en Crear › Mi música."
+msgstr "That song belongs to My music: delete it in Create › My music."
+
 msgid "Esa canción ya no está en Mi música."
 msgstr "That song is no longer in My music."
 
@@ -5028,6 +5078,9 @@ msgstr "That final cut no longer exists."
 
 msgid "Esa foto ya no está en el Catálogo."
 msgstr "That photo is no longer in the Catalog."
+
+msgid "Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente."
+msgstr "That source doesn't support this kind of search; search by keyword or switch source."
 
 msgid "Esa fuente no está configurada."
 msgstr "That source isn't set up."
@@ -5211,6 +5264,9 @@ msgstr "Write your business portfolio's id (numbers only)."
 msgid "Escribe el motivo del rechazo."
 msgstr "Write the reason for rejecting it."
 
+msgid "Escribe el precio"
+msgstr "Type the price"
+
 msgid "Escribe el texto que quieres que lea la voz."
 msgstr "Write the text you want the voice to read."
 
@@ -5329,8 +5385,14 @@ msgstr "That ad no longer exists."
 msgid "Ese aprendizaje ya no existe."
 msgstr "That learning no longer exists."
 
+msgid "Ese archivo no se borra desde aquí."
+msgstr "That file can't be deleted from here."
+
 msgid "Ese archivo no trae audio."
 msgstr "That file has no audio."
+
+msgid "Ese archivo ya no existe."
+msgstr "That file no longer exists."
 
 msgid "Ese audio todavía se está preparando."
 msgstr "That audio is still being prepared."
@@ -5516,10 +5578,6 @@ msgstr "This edit isn't linked to a Create video: it can't be produced from here
 msgid "Esta edición no se puede producir así:"
 msgstr "This edit can't be produced like this:"
 
-#, python-brace-format
-msgid "Esta edición no se puede producir tal como está: {aviso}"
-msgstr "This edit can't be produced as it is: {aviso}"
-
 msgid "Esta edición no tiene una pista de video principal."
 msgstr "This edit doesn't have a main video track."
 
@@ -5612,6 +5670,9 @@ msgstr "Status not allowed."
 
 msgid "Estados Unidos"
 msgstr "United States"
+
+msgid "Este clip dura más que el video: no cabe una copia. Acórtalo primero."
+msgstr "This clip is longer than the video: a copy doesn't fit. Shorten it first."
 
 #, python-format
 msgid "Este experimento optimiza por compras y el Pixel no está activo%(detalle)s. Comprueba el Pixel en Configuración o crea el experimento con objetivo de tráfico."
@@ -5749,6 +5810,16 @@ msgstr "Study saved."
 
 msgid "Está en disco:"
 msgstr "It's on disk:"
+
+msgid "Está en uso en esta edición: quítalo de la línea de tiempo primero."
+msgstr "It's in use in this edit: remove it from the timeline first."
+
+#, python-format
+msgid "Está en uso en la edición «%(nombre)s»: quítalo de ahí primero."
+msgstr "It's in use in the edit “%(nombre)s”: remove it from there first."
+
+msgid "Está en uso en una edición: quítalo de ahí primero."
+msgstr "It's in use in an edit: remove it from there first."
 
 msgid "Está tardando más de lo normal. Puede que siga trabajando: revisa otra vez en un momento."
 msgstr "This is taking longer than usual. It may still be working: check again in a moment."
@@ -5888,6 +5959,9 @@ msgstr "%(llaves)s is missing from the server's .env (Settings › Setup)."
 msgid "Falta %(llaves)s en el .env del servidor."
 msgstr "%(llaves)s is missing from the server's .env."
 
+msgid "Falta 1 archivo de esta edición (se borró o no es de este proyecto): esa parte no se verá."
+msgstr "1 file of this edit is missing (it was deleted or isn't from this project): that part won't show."
+
 msgid "Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se puede guardar el token cifrado. Ponla y reinicia la app."
 msgstr "<code>FLASK_SECRET_KEY</code> is missing from the server's <code>.env</code>: without it the encrypted token can't be saved. Set it and restart the app."
 
@@ -6007,8 +6081,8 @@ msgid "Faltan por aprobar %(cantidad)s de imagen en el chat."
 msgstr "%(cantidad)s to approve for the image in chat."
 
 #, python-brace-format
-msgid "Faltan {n} archivo(s) de esta edición (se borraron o no son de este proyecto): esas partes no se verán."
-msgstr "{n} file(s) of this edit are missing (they were deleted or aren't from this project): those parts won't show."
+msgid "Faltan {n} archivos de esta edición (se borraron o no son de este proyecto): esas partes no se verán."
+msgstr "{n} files of this edit are missing (they were deleted or aren't from this project): those parts won't show."
 
 msgid "Faltan:"
 msgstr "Missing:"
@@ -6620,6 +6694,9 @@ msgstr "There are more than %(n)s layers at the same moment; remove some."
 
 msgid "Hay textos sin traducir para algún destino."
 msgstr "Some texts aren't translated for a market."
+
+msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Vuelve a intentarlo en un rato: los intentos fallidos no se cobran."
+msgstr "There is a problem with the provider and Creatv has already been notified. Try again in a while: failed attempts are not charged."
 
 msgid "Hay una conexión guardada pero no se puede leer (¿cambió FLASK_SECRET_KEY?). Vuelve a conectar con un token nuevo: la anterior se reemplaza."
 msgstr "There's a saved connection but it can't be read (did FLASK_SECRET_KEY change?). Connect again with a new token: the previous one gets replaced."
@@ -7295,6 +7372,9 @@ msgstr "Final cut %(final_id)s does not exist in pieza; the route must create it
 msgid "La final %(final_id)s no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar."
 msgstr "Final cut %(final_id)s does not exist; the route must create it with creative_flow.crear_final before queuing."
 
+msgid "La generación de videos e imágenes está en pausa."
+msgstr "Video and image generation is paused."
+
 msgid "La generación se interrumpió (el servidor se reinició). Elimínala y vuelve a intentarlo."
 msgstr "The generation was interrupted (the server restarted). Delete it and try again."
 
@@ -7803,6 +7883,9 @@ msgstr "The clips were assembled but couldn't be sent to chat. Create a new vers
 
 msgid "Los de mayor prioridad van primero al loop de prueba"
 msgstr "The ones with higher priority go first in the test loop"
+
+msgid "Los emojis no salen en el video final: se quitan al producirlo."
+msgstr "Emojis don't show in the final video: they're removed when it's produced."
 
 msgid "Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final."
 msgstr "Models perform best up to 15 s; for something longer, generate two pieces and join them later in the final edition."
@@ -8896,6 +8979,13 @@ msgstr "Couldn't analyze it."
 msgid "No se pudo avanzar la derivación: %(error)s"
 msgstr "Could not advance the derivation: %(error)s"
 
+#, python-brace-format
+msgid "No se pudo borrar (error {status})."
+msgstr "Couldn't delete (error {status})."
+
+msgid "No se pudo borrar el archivo. Vuelve a intentar."
+msgstr "Couldn't delete the file. Try again."
+
 msgid "No se pudo calcular el costo."
 msgstr "Couldn't calculate the cost."
 
@@ -8961,6 +9051,10 @@ msgid "No se pudo conectar con Atria: %(tipo)s."
 msgstr "Couldn't connect to Atria: %(tipo)s."
 
 #, python-format
+msgid "No se pudo conectar con TrendTrack: %(tipo)s."
+msgstr "Couldn't connect to TrendTrack: %(tipo)s."
+
+#, python-format
 msgid "No se pudo consultar a Claude (%(tipo)s). Vuelve a enviar tu mensaje."
 msgstr "Couldn't reach Claude (%(tipo)s). Send your message again."
 
@@ -9023,6 +9117,9 @@ msgstr "Couldn't save (error {status})."
 msgid "No se pudo guardar esa imagen."
 msgstr "That image couldn't be saved."
 
+msgid "No se pudo guardar este cambio; deshazlo y vuelve a intentar."
+msgstr "Couldn't save this change; undo it and try again."
+
 msgid "No se pudo guardar la revisión."
 msgstr "Couldn't save the review."
 
@@ -9078,6 +9175,16 @@ msgstr "Couldn't prepare “{nombre}”. Try again."
 #, python-brace-format
 msgid "No se pudo producir (error {status})."
 msgstr "Couldn't produce (error {status})."
+
+msgid "No se pudo producir esta final. Vuelve a intentar; si se repite, avísanos."
+msgstr "Couldn't produce this final cut. Try again; if it happens again, let us know."
+
+#, python-brace-format
+msgid "No se pudo producir: el servidor falló (error {status}). Vuelve a intentar en un momento."
+msgstr "Couldn't produce: the server failed (error {status}). Try again in a moment."
+
+msgid "No se pudo producir: el servidor no respondió como se esperaba. Vuelve a intentar."
+msgstr "Couldn't produce: the server didn't respond as expected. Try again."
 
 msgid "No se pudo proponer qué quitar. Vuelve a intentarlo."
 msgstr "Couldn't propose what to cut. Try again."
@@ -10189,6 +10296,9 @@ msgstr "Paste it as ATRIA_API_KEY in the server's .env and restart both services
 msgid "Pégala como FAL_KEY en el .env del servidor y reinicia."
 msgstr "Paste it as FAL_KEY in the server's .env and restart."
 
+msgid "Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."
+msgstr "Paste it as TRENDTRACK_API_KEY in the server's .env and restart both services."
+
 msgid "Pégalo aquí y pulsa <strong>Buscar mis activos</strong>."
 msgstr "Paste it here and press <strong>Search my assets</strong>."
 
@@ -10411,6 +10521,10 @@ msgstr "Reload to see the full analysis."
 
 msgid "Recargar"
 msgstr "Reload"
+
+#, python-format
+msgid "Recargar %(proveedor)s"
+msgstr "Top up %(proveedor)s"
 
 msgid "Recargar ahora"
 msgstr "Reload now"
@@ -10937,6 +11051,10 @@ msgstr "“{nombre}” was added."
 msgid "Se analizan dos veces (núcleos, luego subs)"
 msgstr "Analyzed twice (cores, then subs)"
 
+#, python-brace-format
+msgid "Se borró «{nombre}»."
+msgstr "“{nombre}” was deleted."
+
 msgid "Se cobra por resultado (aprox.: Apify suma cómputo). Cada clic es una corrida y no se reintenta sola. Usar estos datos es responsabilidad de quien pone el token."
 msgstr "Charged per result (approx.: Apify adds compute). Each click is one run and doesn't retry on its own. Using this data is the responsibility of whoever provides the token."
 
@@ -11211,6 +11329,9 @@ msgstr "No connection with Meta"
 msgid "Sin conexión: no se guardó. Intenta de nuevo."
 msgstr "No connection: it wasn't saved. Try again."
 
+msgid "Sin conexión: no se pudo borrar. Vuelve a intentar."
+msgstr "No connection: couldn't delete. Try again."
+
 msgid "Sin conexión: no se pudo preparar ese video. Vuelve a intentar."
 msgstr "No connection: couldn't prepare that video. Try again."
 
@@ -11228,6 +11349,9 @@ msgstr "Not enough data"
 
 msgid "Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token."
 msgstr "Without it the Atria source stays off in “Fetch references” (per project and in the admin panel); Apify is still available if it has its own token."
+
+msgid "Sin ella la fuente TrendTrack queda apagada en «Traer referentes». La API pide el plan Pro o superior: el Starter no la incluye."
+msgstr "Without it the TrendTrack source stays off in “Bring in references”. The API needs the Pro plan or higher: Starter doesn't include it."
 
 msgid "Sin ella la tarjeta YouTube de cada estudio queda apagada."
 msgstr "Without it the YouTube card of each study stays off."
@@ -12212,6 +12336,9 @@ msgstr "Translating"
 msgid "Traduciendo firmas…"
 msgstr "Translating “why it works” notes…"
 
+msgid "Trae anuncios reales de Meta que TrendTrack ha registrado para la biblioteca de referentes; busca por palabra clave."
+msgstr "Brings in real Meta ads that TrendTrack has recorded, for the Swipe file; it searches by keyword."
+
 msgid "Trae anuncios reales de la Ad Library de Meta para la biblioteca de referentes -- la fuente cubre la Unión Europea."
 msgstr "Brings real ads from Meta's Ad Library into the swipe file -- this source covers the European Union."
 
@@ -12313,9 +12440,56 @@ msgstr "Fetched"
 msgid "Traídos"
 msgstr "Brought in"
 
+msgid "TrendTrack (anuncios de Meta)"
+msgstr "TrendTrack (Meta ads)"
+
+msgid "TrendTrack (biblioteca de referentes: anuncios de Meta)"
+msgstr "TrendTrack (Swipe file: Meta ads)"
+
+#, python-format
+msgid "TrendTrack devolvió anuncios con campos que Creatv no reconoce todavía (recibidos: %(campos)s). Avisa al equipo para ajustar el conector; se detuvo para no gastar más créditos."
+msgstr "TrendTrack returned ads with fields Creatv doesn't recognize yet (received: %(campos)s). Let the team know so they can adjust the connector; it stopped to avoid spending more credits."
+
+msgid "TrendTrack devolvió la lista de anuncios en una forma que Creatv no reconoce todavía."
+msgstr "TrendTrack returned the list of ads in a shape Creatv doesn't recognize yet."
+
+msgid "TrendTrack mira los anuncios de Meta que ha registrado y se cobra en créditos de tu plan (un crédito por anuncio revisado). No filtra por formato: los anuncios que no son del formato elegido también gastan crédito, por eso se revisan hasta tres veces el máximo que pidas."
+msgstr "TrendTrack looks at the Meta ads it has recorded and is billed in credits from your plan (one credit per ad checked). It can't filter by format: ads that aren't in the chosen format also use a credit, so up to three times the maximum you ask for are checked."
+
+msgid "TrendTrack no aceptó la llave (TRENDTRACK_API_KEY): revísala o genera otra."
+msgstr "TrendTrack didn't accept the key (TRENDTRACK_API_KEY): check it or generate another one."
+
 #, python-format
 msgid "TrendTrack no dejó descargar el video (%(codigo)s)."
 msgstr "TrendTrack didn't allow downloading the video (%(codigo)s)."
+
+msgid "TrendTrack no está configurado (falta TRENDTRACK_API_KEY)."
+msgstr "TrendTrack isn't configured (TRENDTRACK_API_KEY is missing)."
+
+#, python-format
+msgid "TrendTrack respondió algo inesperado (HTTP %(codigo)s)."
+msgstr "TrendTrack responded with something unexpected (HTTP %(codigo)s)."
+
+#, python-format
+msgid "TrendTrack respondió con un error (HTTP %(codigo)s)."
+msgstr "TrendTrack responded with an error (HTTP %(codigo)s)."
+
+msgid "TrendTrack solo busca por palabra clave; para los anuncios de una marca usa Atria o Apify."
+msgstr "TrendTrack only searches by keyword; for a brand's ads use Atria or Apify."
+
+#, python-format
+msgid "TrendTrack: %(creditos)s créditos gastados desde aquí este mes · le quedaban %(restantes)s créditos al %(fecha)s."
+msgstr "TrendTrack: %(creditos)s credits spent from here this month · %(restantes)s credits were left as of %(fecha)s."
+
+#, python-format
+msgid "TrendTrack: %(creditos)s créditos gastados desde aquí este mes."
+msgstr "TrendTrack: %(creditos)s credits spent from here this month."
+
+msgid "TrendTrack: se acabaron los créditos del plan."
+msgstr "TrendTrack: the plan's credits have run out."
+
+msgid "TrendTrack: se alcanzó el límite de peticiones del plan; intenta en un rato."
+msgstr "TrendTrack: the plan's request limit was reached; try again in a while."
 
 msgid "Triple Whale"
 msgstr "Triple Whale"
@@ -12431,6 +12605,9 @@ msgstr "Your moment"
 msgid "Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado."
 msgstr "Your AI content machine.<br>From the product photo to the published ad."
 
+msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
+msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
+
 #, python-format
 msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar piezas en Experimentos y publicar contenido."
 msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · Page %(pagina)s. You can now test pieces in Experiments and publish content."
@@ -12443,6 +12620,9 @@ msgstr "Your answer"
 
 msgid "Tu sesión se cerró; entra de nuevo."
 msgstr "Your session closed; log in again."
+
+msgid "Tu sesión terminó: recarga la página e inicia sesión."
+msgstr "Your session ended: reload the page and log in."
 
 msgid "Tu sesión venció: vuelve a entrar para seguir."
 msgstr "Your session expired: sign in again to keep going."
@@ -12483,6 +12663,13 @@ msgstr "Your audios"
 
 msgid "Tus prompts"
 msgstr "Your prompts"
+
+#, python-format
+msgid "Tus videos de referencia duran %(s)s s en total y %(modelo)s admite hasta %(max)s s. Recórtalos o quita alguno — no se cobró nada."
+msgstr "Your reference videos last %(s)s s in total and %(modelo)s accepts up to %(max)s s. Trim them or remove one — nothing was charged."
+
+msgid "Tus videos de referencia duran __S__ s en total y __MODELO__ admite hasta __MAX__ s. Recórtalos o quita alguno."
+msgstr "Your reference videos last __S__ s in total and __MODELO__ accepts up to __MAX__ s. Trim them or remove one."
 
 msgid "Términos"
 msgstr "Terms"
@@ -12532,6 +12719,18 @@ msgstr "A hand-written avatar is born approved: the whole app uses it as soon as
 msgid "Un clip de audio no tiene posición ni tamaño."
 msgstr "An audio clip has no position or size."
 
+msgid "Un clip pedía más video del que tiene su archivo: se acortó solo."
+msgstr "A clip asked for more video than its file has: it was shortened automatically."
+
+msgid "Un clip pide más de lo que tiene su archivo, que es demasiado corto para acortarlo solo: bórralo o cámbialo por otro para poder producir."
+msgstr "A clip asks for more than its file has, and the file is too short to shorten it automatically: delete it or replace it with another one to be able to produce."
+
+msgid "Un clip pide más video del que tiene su archivo: se acorta solo con tu próximo cambio."
+msgstr "A clip asks for more video than its file has: it's shortened automatically with your next change."
+
+msgid "Un crédito de TrendTrack por anuncio revisado (US$ 1 = 1 000 créditos); el plan Pro incluye 20 000 créditos al mes. El uso está en Referentes (admin)."
+msgstr "One TrendTrack credit per ad checked (US$ 1 = 1,000 credits); the Pro plan includes 20,000 credits a month. Usage is shown in Swipe file (admin)."
+
 msgid "Un dibujo, una foto o una pantalla que sale en la escena, descríbelo con palabras y sin @Imagen: con @Imagen el modelo lo convierte en personajes reales."
 msgstr "A drawing, photo or screen that shows up in the scene: describe it in words, without @Imagen. With @Imagen the model turns it into real characters."
 
@@ -12571,6 +12770,10 @@ msgstr "A scene can have up to %(n)s images."
 
 msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde."
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
+
+#, python-format
+msgid "Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no tiene saldo. Mientras no se recargue en %(recarga)s, Crear y Cambiar producto no pueden generar; los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s"
+msgstr "A generation in project %(cliente)s failed because Creatv's %(proveedor)s account has no credit. Until it is topped up at %(recarga)s, Create and Change product cannot generate; failed attempts are not charged. Provider response: %(detalle)s"
 
 msgid "Una idea necesita escena."
 msgstr "An idea needs a scene."
@@ -13320,6 +13523,9 @@ msgstr "Zoom"
 msgid "Zoom lento"
 msgstr "Slow zoom"
 
+msgid "__MODELO__ no pasa de __TOTAL__ s sumando tus videos de referencia (__S__ s): el resultado puede durar hasta __MAX__ s. Baja la duración o usa un video más corto."
+msgstr "__MODELO__ can't go past __TOTAL__ s counting your reference videos (__S__ s): the result can last up to __MAX__ s. Lower the duration or use a shorter video."
+
 msgid "__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una."
 msgstr "__MODELO__ only uses the first reference (__PRIMERA__): it would not use __SOBRAN__. Choose Wan 3.0 or Kling O3 Pro to use them all, or keep just one."
 
@@ -14003,6 +14209,10 @@ msgstr "the product has no downloadable photos."
 msgid "el producto solo se le puede describir en texto, no mostrárselo"
 msgstr "the product can only be described to it in text, not shown to it"
 
+#, python-brace-format
+msgid "el servidor falló (error {status}): se guarda con el próximo cambio."
+msgstr "the server failed (error {status}): it saves with the next change."
+
 msgid "el video"
 msgstr "the video"
 
@@ -14322,6 +14532,12 @@ msgstr "just now"
 #, python-format
 msgid "hasta %(n)s referencias · 2k"
 msgstr "up to %(n)s references · 2k"
+
+#, python-format
+msgid "hasta %(num)d crédito de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
+msgid_plural "hasta %(num)d créditos de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
+msgstr[0] "up to %(num)d TrendTrack credit (from the plan; US$ %(usd)s if they were top-up credits)"
+msgstr[1] "up to %(num)d TrendTrack credits (from the plan; US$ %(usd)s if they were top-up credits)"
 
 #, python-format
 msgid "hasta %(num)s referencia"
@@ -15743,6 +15959,10 @@ msgstr "Delete this audio?"
 #, python-format
 msgid "¿Borrar «%(nombre)s» de Mi música? Los videos ya hechos conservan su audio."
 msgstr "Delete “%(nombre)s” from My music? Videos already made keep their audio."
+
+#, python-brace-format
+msgid "¿Borrar «{nombre}»? Sale de tus archivos y no se puede deshacer."
+msgstr "Delete “{nombre}”? It leaves your files and can't be undone."
 
 msgid "¿Cambiar de forma? Tu conexión actual sigue viva hasta que conectes por la agencia; ahí queda guardada como respaldo."
 msgstr "Change form? Your current connection stays alive until you connect through the agency; then it's kept as a backup."

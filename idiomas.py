@@ -22,9 +22,10 @@ contrato de `final_edition/documento.validar` y los de
 prompts para los modelos de video e imagen con sus tokens `Image N` /
 `Video N` / `@Imagen N` (`prompt_swap.py`, `flowplus_prompt`), y las 9
 plantillas del flujo viejo «Nueva idea» (excluidas hasta que Daniel decida
-qué pasa con ese flujo). Una excepción a §B8: «Escribe aquí», el texto
-inicial editable de un clip de texto nuevo del editor, sale en el idioma de
-quien mira (el navegador solo tiene su diccionario). Los tests fijan
+qué pasa con ese flujo). Una excepción a §B8: «Escribe aquí» y «Escribe el
+precio» (capa 4c), el texto inicial editable de un clip de texto nuevo del
+editor, salen en el idioma de quien mira (el navegador solo tiene su
+diccionario). Los tests fijan
 "es"/False (tests/conftest.py) porque comparan textos en español;
 tests/test_i18n_app_entera.py prueba los valores de producción. Cualquiera
 puede volver a español desde Configuración › Cuenta y avisos.
