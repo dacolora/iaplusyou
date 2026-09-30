@@ -6,7 +6,11 @@ sobre una canción de Mi música, como mp3 para escuchar y descargar.
 de las voces crudas con hash `locucion_voz` (origen `voz`, como las de las
 finales pero con su propio hash, que incluye la velocidad). Las muestras de
 voz viven en el cliente interno `_creatv` y las paga Creatv. No importa
-final_edition.musica al cargar (esa importa mi_musica; la tarea la usa)."""
+final_edition.musica al cargar (esa importa mi_musica; la tarea la usa).
+
+Desde el 2026-09-30 habla diez idiomas y decide el motor por voz e idioma
+(`motor_de`): ElevenLabs Multilingual v2, Turbo v2.5 para el noruego y
+MiniMax para las voces propias (`voces_propias.py`)."""
 import os
 import tempfile
 import time
@@ -26,8 +30,18 @@ ORIGEN = "locucion"
 ORIGEN_VOZ = "voz"
 CLIENTE_MUESTRAS = "_creatv"
 VERSION_MUESTRA = 1
-IDIOMAS = ("es", "en", "pt")
-NOMBRES_IDIOMA = {"es": "Español", "en": "English", "pt": "Português"}
+IDIOMAS = ("es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs")
+# Cada idioma en su propia lengua (así lo reconoce quien lo habla).
+NOMBRES_IDIOMA = {"es": "Español", "en": "English", "pt": "Português", "de": "Deutsch", "fr": "Français",
+                  "it": "Italiano", "fi": "Suomi", "sv": "Svenska", "no": "Norsk", "cs": "Čeština"}
+# Idiomas que Multilingual v2 no habla: la galería los lee con Turbo v2.5 y
+# el idioma forzado (spec 2026-09-30 §2).
+IDIOMAS_TURBO = ("no",)
+PREFIJO_VOZ_PROPIA = "vp:"
+MOTOR_ELEVENLABS = "elevenlabs"
+MOTOR_TURBO = "elevenlabs_turbo"
+MOTOR_MINIMAX = "minimax"
+ETIQUETAS_MOTOR = {MOTOR_ELEVENLABS: "ElevenLabs", MOTOR_TURBO: "ElevenLabs Turbo", MOTOR_MINIMAX: "MiniMax"}
 VELOCIDADES = {"lenta": 0.85, "normal": 1.0, "rapida": 1.15}
 NOMBRES_VELOCIDAD = {"lenta": idiomas.N_("Lenta"), "normal": idiomas.N_("Normal"), "rapida": idiomas.N_("Rápida")}
 VOLUMENES = {"baja": 0.2, "media": 0.35, "alta": 0.5}
@@ -43,6 +57,13 @@ FRASES_MUESTRA = {
     "es": "Hola, soy {voz}. Así suena mi voz en tu anuncio.",
     "en": "Hi, I'm {voz}. This is how my voice sounds in your ad.",
     "pt": "Olá, eu sou {voz}. É assim que a minha voz soa no seu anúncio.",
+    "de": "Hallo, ich bin {voz}. So klingt meine Stimme in deiner Anzeige.",
+    "fr": "Bonjour, je suis {voz}. Voici comment sonne ma voix dans votre publicité.",
+    "it": "Ciao, sono {voz}. Ecco come suona la mia voce nel tuo annuncio.",
+    "fi": "Hei, olen {voz}. Tältä ääneni kuulostaa mainoksessasi.",
+    "sv": "Hej, jag heter {voz}. Så här låter min röst i din annons.",
+    "no": "Hei, jeg heter {voz}. Slik høres stemmen min ut i annonsen din.",
+    "cs": "Dobrý den, jsem {voz}. Takhle zní můj hlas ve vaší reklamě.",
 }
 # msgids: la ruta los traduce con idiomas.traducir al responder.
 MENSAJES = {
@@ -54,6 +75,7 @@ MENSAJES = {
     "volumen": idiomas.N_("Elige un volumen de la lista."),
     "musica": idiomas.N_("Esa canción ya no está en Mi música."),
     "en_curso": idiomas.N_("Ya se está creando un audio — espera a que termine."),
+    "voz_borrada": idiomas.N_("Esa voz ya no está en Mis voces."),
 }
 
 
@@ -63,6 +85,21 @@ class EntradaInvalida(ValueError):
 
 def voces():
     return list(fal_audio.VOCES["es"])
+
+
+def es_propia(voz):
+    return isinstance(voz, str) and voz.startswith(PREFIJO_VOZ_PROPIA)
+
+
+def motor_de(voz, idioma):
+    """Qué motor lee esa voz en ese idioma (spec 2026-09-30 §2): las voces
+    propias van por MiniMax; las de la galería por Multilingual v2, salvo en
+    los idiomas que v2 no habla (IDIOMAS_TURBO), que van por Turbo v2.5."""
+    if es_propia(voz):
+        return MOTOR_MINIMAX
+    if idioma in IDIOMAS_TURBO:
+        return MOTOR_TURBO
+    return MOTOR_ELEVENLABS
 
 
 # Género y tono de cada voz premade de ElevenLabs según su biblioteca por defecto
@@ -151,11 +188,16 @@ def validar(cliente, form):
 # ------------------------------------------------------------- hashes ---
 
 def hash_voz(texto, voz, idioma, velocidad):
-    """Mismo texto + voz + velocidad → la voz cruda no se paga dos veces; el
-    idioma no entra en la clave: el modelo lo detecta del texto (`fal_audio.tts`
-    nunca manda `language_code`), así que cambiar el selector de idioma no debe
-    volver a cobrar la misma voz (revisión final F2)."""
-    return materiales.hash_clave("locucion_voz", texto, voz, f"{VELOCIDADES[velocidad]:.2f}")
+    """Mismo texto + voz + velocidad → la voz cruda no se paga dos veces. Con
+    Multilingual v2 el idioma no entra (el modelo lo detecta del texto) y la
+    fórmula es la de siempre, para no invalidar lo ya cacheado; con Turbo y
+    MiniMax el idioma sí cambia lo que suena, así que entran el motor y el
+    idioma."""
+    motor = motor_de(voz, idioma)
+    vel = f"{VELOCIDADES[velocidad]:.2f}"
+    if motor == MOTOR_ELEVENLABS:
+        return materiales.hash_clave("locucion_voz", texto, voz, vel)
+    return materiales.hash_clave("locucion_voz", motor, texto, voz, idioma, vel)
 
 
 def hash_audio(h_voz, musica_id, inicio_s, volumen):
@@ -164,6 +206,22 @@ def hash_audio(h_voz, musica_id, inicio_s, volumen):
     if not musica_id:
         return materiales.hash_clave("locucion", h_voz, "", 0, "")
     return materiales.hash_clave("locucion", h_voz, int(musica_id), int(inicio_s or 0), volumen)
+
+
+# ---------------------------------------------------------- sintetizar ---
+
+def sintetizar(cliente, voz, texto, idioma, velocidad):
+    """Lee `texto` con `voz` en `idioma` por el motor que toca (motor_de).
+    Devuelve {"url", "costo_usd", "proveedor", "etiqueta", "voz_nombre"}. No
+    registra gasto: lo hace quien llama, apenas vuelve (ya pagado)."""
+    v = VELOCIDADES[velocidad]
+    motor = motor_de(voz, idioma)
+    if motor == MOTOR_TURBO:
+        r = fal_audio.tts(texto, voz, idioma, velocidad=v, modelo=fal_audio.MODELO_TTS_TURBO, language_code=idioma)
+    else:
+        r = fal_audio.tts(texto, voz, idioma, velocidad=v)
+    return {"url": r["url"], "costo_usd": r["costo_usd"], "proveedor": "fal/elevenlabs",
+            "etiqueta": ETIQUETAS_MOTOR[motor], "voz_nombre": voz}
 
 
 # ------------------------------------------------------------- mezcla ---
@@ -275,7 +333,10 @@ def muestra(voz, idioma):
     frase = FRASES_MUESTRA[idioma].format(voz=voz)
 
     def _producir():
-        r = fal_audio.tts(frase, voz, idioma, timeout=45)
+        if idioma in IDIOMAS_TURBO:
+            r = fal_audio.tts(frase, voz, idioma, timeout=45, modelo=fal_audio.MODELO_TTS_TURBO, language_code=idioma)
+        else:
+            r = fal_audio.tts(frase, voz, idioma, timeout=45)
         usd = float(r.get("costo_usd") or 0.0)
         # fal ya cobró: el gasto queda aunque lo que sigue falle. El sello de
         # tiempo hace la referencia única por llamada: sin él, dos intentos

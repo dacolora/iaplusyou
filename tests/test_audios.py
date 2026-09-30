@@ -51,7 +51,7 @@ def test_validar_devuelve_el_payload_limpio(base_temporal):
 
 def test_validar_rechaza_lo_que_no_esta_en_las_listas(base_temporal):
     for campo, valor, clave in [("texto", "   ", "texto"), ("texto", "x" * 3001, "largo"), ("voz", "Nadie", "voz"),
-                                ("idioma", "fr", "idioma"), ("velocidad", "turbo", "velocidad"), ("volumen", "mucho", "volumen"),
+                                ("idioma", "xx", "idioma"), ("velocidad", "turbo", "velocidad"), ("volumen", "mucho", "volumen"),
                                 ("musica", "mat:999", "musica"), ("musica", "basura", "musica")]:
         with pytest.raises(audios.EntradaInvalida) as e:
             audios.validar("acme", _form(**{campo: valor}))
@@ -195,3 +195,56 @@ def test_fichas_de_voces_para_la_galeria():
     rachel = fichas[0]
     assert rachel["nombre"] == "Rachel" and rachel["genero"] == "mujer"
     assert {f["genero"] for f in fichas} >= {"mujer", "hombre"}
+
+
+def test_diez_idiomas_con_nombre_y_frase():
+    from providers import fal_audio
+    assert audios.IDIOMAS == ("es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs")
+    assert set(audios.NOMBRES_IDIOMA) == set(audios.IDIOMAS) == set(audios.FRASES_MUESTRA) == set(fal_audio.IDIOMAS_MINIMAX)
+    assert audios.NOMBRES_IDIOMA["no"] == "Norsk" and audios.NOMBRES_IDIOMA["cs"] == "Čeština"
+    assert all("{voz}" in audios.FRASES_MUESTRA[i] for i in audios.IDIOMAS)
+
+
+def test_motor_de_cada_voz_e_idioma():
+    assert audios.motor_de("Rachel", "es") == audios.MOTOR_ELEVENLABS
+    assert audios.motor_de("Rachel", "cs") == audios.MOTOR_ELEVENLABS
+    assert audios.motor_de("Rachel", "no") == audios.MOTOR_TURBO
+    assert audios.motor_de("vp:7", "no") == audios.MOTOR_MINIMAX
+    assert audios.motor_de("vp:7", "es") == audios.MOTOR_MINIMAX
+    assert audios.es_propia("vp:7") and not audios.es_propia("Rachel") and not audios.es_propia(None)
+
+
+def test_hash_de_la_voz_por_motor():
+    # Multilingual v2: la fórmula de siempre (lo ya cacheado sigue valiendo).
+    assert audios.hash_voz("Hola", "Rachel", "es", "normal") == materiales.hash_clave("locucion_voz", "Hola", "Rachel", "1.00")
+    # Turbo y MiniMax: el motor y el idioma entran en la clave.
+    assert audios.hash_voz("Hei", "Rachel", "no", "normal") == materiales.hash_clave(
+        "locucion_voz", "elevenlabs_turbo", "Hei", "Rachel", "no", "1.00")
+    assert audios.hash_voz("Hei", "vp:7", "fi", "normal") != audios.hash_voz("Hei", "vp:7", "sv", "normal")
+
+
+def test_sintetizar_por_motor_de_la_galeria(monkeypatch):
+    llamadas = []
+    monkeypatch.setattr(audios.fal_audio, "tts", lambda texto, voz, idioma="es", **kw:
+                        llamadas.append((texto, voz, idioma, kw)) or {"url": "https://fal/v.mp3", "costo_usd": 0.001})
+    r = audios.sintetizar("acme", "Rachel", "Hallo", "de", "rapida")
+    assert r == {"url": "https://fal/v.mp3", "costo_usd": 0.001, "proveedor": "fal/elevenlabs",
+                 "etiqueta": "ElevenLabs", "voz_nombre": "Rachel"}
+    assert llamadas[-1] == ("Hallo", "Rachel", "de", {"velocidad": 1.15})
+    r = audios.sintetizar("acme", "Adam", "Hei", "no", "normal")
+    assert r["etiqueta"] == "ElevenLabs Turbo" and r["proveedor"] == "fal/elevenlabs"
+    assert llamadas[-1] == ("Hei", "Adam", "no", {"velocidad": 1.0, "modelo": audios.fal_audio.MODELO_TTS_TURBO,
+                                                  "language_code": "no"})
+
+
+def test_muestra_en_noruego_va_por_turbo(base_temporal, r2, monkeypatch):
+    llamadas = []
+    monkeypatch.setattr(audios.fal_audio, "tts", lambda texto, voz, idioma="es", **kw:
+                        llamadas.append((texto, kw)) or {"url": "https://fal/m.mp3", "costo_usd": 0.0026})
+    monkeypatch.setattr(audios, "descargar_url", lambda url, destino: open(destino, "wb").write(b"MP3") and destino)
+    monkeypatch.setattr(audios.cortes, "duracion", lambda path: 2.5)
+    audios.muestra("Adam", "no")
+    assert llamadas == [("Hei, jeg heter Adam. Slik høres stemmen min ut i annonsen din.",
+                         {"timeout": 45, "modelo": audios.fal_audio.MODELO_TTS_TURBO, "language_code": "no"})]
+    audios.muestra("Adam", "de")
+    assert llamadas[1] == ("Hallo, ich bin Adam. So klingt meine Stimme in deiner Anzeige.", {"timeout": 45})
