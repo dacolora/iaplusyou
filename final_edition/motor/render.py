@@ -10,6 +10,10 @@ from final_edition import cortes
 
 OPCIONES_VIDEO = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
 OPCIONES_AUDIO = ["-c:a", "aac", "-b:a", "128k", "-ar", "48000"]
+# Audio de cada tramo sin comprimir: el AAC de cada tramo trae ~21 ms de
+# relleno al principio y, unido con `-c copy`, sonaba como un corte en cada
+# frontera. El PCM se une sin costuras y `concatenar` lo pasa a AAC una vez.
+OPCIONES_AUDIO_TRAMO = ["-c:a", "pcm_s16le", "-ar", "48000"]
 TOLERANCIA_S = 0.2
 
 
@@ -29,7 +33,7 @@ def _escribir_filtergraph(plan, salida):
     return ruta
 
 
-def ejecutar(plan, salida, ass_ruta=None, timeout=None):
+def ejecutar(plan, salida, ass_ruta=None, timeout=None, opciones_audio=None):
     if plan.ass_texto and ass_ruta:
         from final_edition.motor import subtitulos
         subtitulos.escribir_ass(plan.ass_texto, ass_ruta)
@@ -45,7 +49,7 @@ def ejecutar(plan, salida, ass_ruta=None, timeout=None):
     else:
         args += ["-r", "30"] + OPCIONES_VIDEO
         if plan.salida_audio:
-            args += ["-map", "[aout]"] + OPCIONES_AUDIO
+            args += ["-map", "[aout]"] + (opciones_audio or OPCIONES_AUDIO)
         args += ["-t", f"{plan.duracion_ms / 1000.0:.3f}", salida]
         t = timeout or max(600, int(plan.duracion_ms / 1000.0 * 40))
     cortes.ffmpeg(args, timeout=t)
@@ -59,7 +63,9 @@ def concatenar(rutas_tramos, salida):
     with open(lista, "w", encoding="utf-8") as f:
         for ruta in rutas_tramos:
             f.write(f"file '{ruta}'\n")
-    cortes.ffmpeg(["-f", "concat", "-safe", "0", "-i", lista, "-c", "copy", "-movflags", "+faststart", salida], timeout=600)
+    # video tal cual; el audio (PCM de los tramos) se comprime aquí, una vez.
+    cortes.ffmpeg(["-f", "concat", "-safe", "0", "-i", lista, "-c:v", "copy"] + OPCIONES_AUDIO
+                  + ["-movflags", "+faststart", salida], timeout=600)
     os.remove(lista)
     return salida
 

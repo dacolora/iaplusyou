@@ -678,9 +678,13 @@ through `_ruta_filtro` (two-level ffmpeg escaping — `'` becomes `\'\''`). NOT 
 capa 1: `superpuesto` (PIP — `compilar` raises if it has clips), `rotacion` and
 `marca.marca_de_agua`; each principal clip is its own `-ss/-t` input (capa 3: a reordered clip
 decodes only its span; the principal may mix sources). `motor/tramos.py` splits into windows past
-`PRESUPUESTO_OVERLAYS=60`, never cutting inside a transition's `[fin_A, fin_A+d)` —
-exceeding budget at one instant is the only hard error — and `motor.renderizar` cleans
-partial `.tramoN.mp4` files in a `finally`. Subtitles are one `.ass`
+`PRESUPUESTO_OVERLAYS=60` or past `PRESUPUESTO_VIDEOS=6` principal clips (each input costs ~85 MB
+with ffmpeg 8 on the 1-CPU VPS: a 32-cut edit asked ~3 GB and the kernel killed it, 2026-09-30),
+filling each window greedily from safe frontier to safe frontier and never cutting inside a
+transition's `[fin_A, fin_A+d)` — exceeding the overlay budget at one instant is the only hard
+error. Windows are `.tramoN.mov` with PCM audio (`render.OPCIONES_AUDIO_TRAMO`: per-window AAC
+left a ~21 ms gap at every join) and `render.concatenar` copies the video and encodes the AAC
+once; `motor.renderizar` cleans the partial files in a `finally`. Subtitles are one `.ass`
 (`motor/subtitulos.py`) only when the host ffmpeg has libass (`render.tiene_libass()`,
 cached: the VPS does, the dev Mac doesn't — `renderizar` reports the omission via
 `on_etapa`). Worker tasks in `tareas/edicion.py`: `edicion_producir` renders the FROZEN
