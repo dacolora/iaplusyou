@@ -4,14 +4,16 @@ lateral, el encabezado, las páginas públicas y las de admin (cierre de la
 fase 6, spec 2026-09-26 §Pruebas). Excepciones a propósito, con su guardia:
 el contenido del mapa del código y los textos de la doctrina (documentación
 interna en español)."""
+import re
+
 import pytest
 
 import idiomas
 from tests.i18n_util import espanol_visible
 from tests.test_i18n_fugas import app_i18n, html_de  # noqa: F401  (fixture)
 
-PESTANAS = ("tab-tablero", "tab-nicho", "tab-referentes", "tab-creativeflowplus", "tab-final", "tab-experimentos",
-            "tab-sprints", "tab-catalogo", "tab-settings", "sidebar", "barra-superior")
+PESTANAS = ("tab-tablero", "tab-triplewhale", "tab-nicho", "tab-referentes", "tab-creativeflowplus", "tab-final",
+            "tab-experimentos", "tab-sprints", "tab-catalogo", "tab-settings", "sidebar", "barra-superior")
 
 
 @pytest.fixture()
@@ -34,6 +36,11 @@ def test_proyecto_entero_en_ingles_sin_idioma_guardado(produccion, usuario, rol,
     assert '<html lang="en">' in html
     ids = tuple(i for i in PESTANAS if f'id="{i}"' in html)
     assert {"tab-creativeflowplus", "tab-final", "tab-settings", "sidebar"} <= set(ids)
+    # Una pestaña nueva (como la de Triple Whale, que llegó con una fusión de
+    # main) entra a la barrida por construcción: si la página trae un
+    # id="tab-…" que PESTANAS no conoce, se avisa en vez de dejarlo sin mirar.
+    pestanas_de_la_pagina = set(re.findall(r'<section id="(tab-[a-z0-9_-]+)"', html))
+    assert pestanas_de_la_pagina <= set(PESTANAS), sorted(pestanas_de_la_pagina - set(PESTANAS))
     fugas = espanol_visible(html, ids)
     assert not fugas, fugas[:20]
 
