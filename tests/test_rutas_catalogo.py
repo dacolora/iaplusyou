@@ -212,3 +212,38 @@ def test_ficha_de_producto_plano_personaje_y_404(app):
     assert "cara.jpg" in html and 'name="precio"' not in html and "+ Color" not in html and "Eliminar" in html
     assert c.get("/cliente/acme/catalogo/producto/nada/ficha").status_code == 404
     assert c.get("/cliente/acme/catalogo/producto/../etc/ficha").status_code == 404
+
+
+def test_grid_y_ficha_leen_crear_y_experimentos_una_vez(app, monkeypatch):
+    """Fix round 1 (revisión de Task 11): _usos_por_producto y
+    _experimentos_por_activo no deben releer creative_flow.cargar/
+    experimentos.cargar por cada helper — una sola lectura de cada una por
+    request, aunque el request pida galería + usos + experimentos."""
+    import dashboard
+    _con_colores(app)
+    contadores = {"cf": 0, "exp": 0}
+    cf_real = dashboard.creative_flow.cargar
+    exp_real = dashboard.experimentos.cargar
+
+    def cf_contado(cliente):
+        contadores["cf"] += 1
+        return cf_real(cliente)
+
+    def exp_contado(cliente):
+        contadores["exp"] += 1
+        return exp_real(cliente)
+
+    monkeypatch.setattr(dashboard.creative_flow, "cargar", cf_contado)
+    monkeypatch.setattr(dashboard.experimentos, "cargar", exp_contado)
+    c = app["c"]
+    # Como cualquier otro fragmento por fetch (tests/test_rutas_referentes.py):
+    # X-Requested-With hace que _quiere_json() sea True y el chip de gasto del
+    # sidebar (context processor global, ajeno a este fix) no recalcule el
+    # tablero — si no, contaría una lectura de experimentos.cargar de más que
+    # nada tiene que ver con _usos_por_producto/_experimentos_por_activo.
+    fetch = {"X-Requested-With": "fetch"}
+    assert c.get("/cliente/acme/catalogo/grid?cat=producto", headers=fetch).status_code == 200
+    assert contadores == {"cf": 1, "exp": 1}
+    contadores["cf"] = contadores["exp"] = 0
+    assert c.get("/cliente/acme/catalogo/producto/original/ficha", headers=fetch).status_code == 200
+    assert contadores == {"cf": 1, "exp": 1}

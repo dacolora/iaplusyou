@@ -2818,12 +2818,19 @@ def _pagina(valor):
         return 1
 
 
-def _usos_por_producto(cliente, productos, experimentos_exp=None):
+def _usos_por_producto(cliente, productos, experimentos_exp=None, sesiones_cf=None, por_clave=None):
     """{pid: catalogo_vista.contar_usos(...)} en UNA pasada por las sesiones
-    de Crear, una por los experimentos y una consulta a `campana`."""
+    de Crear, una por los experimentos y una consulta a `campana`.
+    `sesiones_cf` (`creative_flow.cargar(cliente)`) y `por_clave`
+    (`_experimentos_por_activo(...)`) se leen aquí solo si el llamador no los
+    trae ya calculados — así un request que pide galería + usos no repite la
+    misma lectura de Crear/experimentos por cada helper (auditoría 2026-09-28)."""
+    if sesiones_cf is None:
+        sesiones_cf = creative_flow.cargar(cliente)
     sesiones = [{str(x).casefold() for x in (e.get("productos_ids") or []) if x}
-                for e in creative_flow.cargar(cliente).values()]
-    por_clave = _experimentos_por_activo(cliente, experimentos_exp)
+                for e in sesiones_cf.values()]
+    if por_clave is None:
+        por_clave = _experimentos_por_activo(cliente, experimentos_exp, sesiones_cf)
     with db.conectar() as con:
         filas = con.execute(sa.select(db.campana.c.catalogo_id, sa.func.count())
                             .where(db.campana.c.cliente == cliente).group_by(db.campana.c.catalogo_id)).all()
@@ -2847,11 +2854,17 @@ def catalogo_grid(cliente):
     filas, sin_activo, usos, trabajos_grid = {}, [], {}, dict(_TRABAJOS_VACIOS)
     if cat == "producto":
         _asegurar_filas_producto(cliente, productos)
+        # Una sola lectura de Crear y de experimentos para todo el request
+        # (auditoría 2026-09-28): _productos_tienda_contexto y
+        # _usos_por_producto reciben por_clave/sesiones_cf ya calculados en
+        # vez de volver a pedirlos cada uno.
         experimentos_exp = experimentos.cargar(cliente)
-        filas_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
+        sesiones_cf = creative_flow.cargar(cliente)
+        por_clave = _experimentos_por_activo(cliente, experimentos_exp, sesiones_cf)
+        filas_tienda = _productos_tienda_contexto(cliente, experimentos_exp, por_clave)
         filas = _producto_comercial_contexto(filas_tienda)
         sin_activo = [f for f in filas_tienda if not f["activo_ok"]]
-        usos = _usos_por_producto(cliente, productos, experimentos_exp)
+        usos = _usos_por_producto(cliente, productos, experimentos_exp, sesiones_cf, por_clave)
         trabajos_grid = _trabajos_productos(cliente, [], sin_activo)
     todas = catalogo_vista.tarjetas(productos, filas, usos, sin_activo)
     lista = catalogo_vista.ordenar(catalogo_vista.filtrar(todas, q, filtro), orden)
@@ -2877,7 +2890,11 @@ def catalogo_ficha(cliente, cat, activo_id):
     if cat == "producto":
         tiendas.asegurar_manual(cliente, pid, p["nombre"], p.get("descripcion") or "")
         comercial = tiendas.por_activo(cliente).get(pid)
-        usos = _usos_por_producto(cliente, [p]).get(pid)
+        # Una sola lectura de Crear y de experimentos para este request
+        # (auditoría 2026-09-28), igual que en catalogo_grid.
+        experimentos_exp = experimentos.cargar(cliente)
+        sesiones_cf = creative_flow.cargar(cliente)
+        usos = _usos_por_producto(cliente, [p], experimentos_exp, sesiones_cf).get(pid)
         if comercial:
             trabajos_ficha = _trabajos_productos(cliente, [], [comercial])
         swaps_usos = sum(1 for e in swaps_mod.cargar(cliente).values()
@@ -5488,18 +5505,24 @@ def _volver_config(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
-def _experimentos_por_activo(cliente, experimentos_exp=None):
+def _experimentos_por_activo(cliente, experimentos_exp=None, sesiones_cf=None):
     """{clave en minúsculas (casefold): {experimento_id, ...}} donde clave es
     el NOMBRE visible del activo (lo que Crear guarda en `productos_ids`) o
     su id — en minúsculas para que un color («Original — Pink») case con el
     nombre de cualquiera de sus claves. Una pasada por las sesiones de Crear y
     otra por las piezas de cada experimento — nunca una consulta por
     producto. La pieza de un experimento apunta a su sesión de Crear por el
-    prefijo de `legado_id` (`<cf_id>` o `<cf_id>__<idioma>_<pais>`)."""
+    prefijo de `legado_id` (`<cf_id>` o `<cf_id>__<idioma>_<pais>`).
+    `experimentos_exp`/`sesiones_cf` (`creative_flow.cargar(cliente)`, ya con
+    su cf_id) se leen aquí solo si el llamador no los trae: quien ya cargó
+    esas dos fuentes para otra cosa en el mismo request las pasa y esta
+    función no vuelve a pedirlas (auditoría 2026-09-28)."""
     if experimentos_exp is None:
         experimentos_exp = experimentos.cargar(cliente)
+    if sesiones_cf is None:
+        sesiones_cf = creative_flow.cargar(cliente)
     claves_por_cf = {}
-    for cf_id, entry in creative_flow.cargar(cliente).items():
+    for cf_id, entry in sesiones_cf.items():
         claves = {str(x).casefold() for x in (entry.get("productos_ids") or []) if x}
         if claves:
             claves_por_cf[cf_id] = claves
@@ -5514,12 +5537,14 @@ def _experimentos_por_activo(cliente, experimentos_exp=None):
     return por_clave
 
 
-def _productos_tienda_contexto(cliente, experimentos_exp=None):
+def _productos_tienda_contexto(cliente, experimentos_exp=None, por_clave=None):
     """Productos (con archivados: el filtro es de la galería) enriquecidos
     con `activo_ok` (su activo existe en el catálogo) y `n_experimentos`
     (experimentos con piezas hechas con ese producto o cualquiera de sus
-    colores, por id o por nombre)."""
-    por_clave = _experimentos_por_activo(cliente, experimentos_exp)
+    colores, por id o por nombre). `por_clave` (_experimentos_por_activo(...))
+    se calcula aquí solo si no lo trae ya el llamador."""
+    if por_clave is None:
+        por_clave = _experimentos_por_activo(cliente, experimentos_exp)
     claves_por_pid = {p["id"]: catalogo_productos.claves_de(p)
                       for p in catalogo_productos.listar_productos(cliente, "producto")}
     lista = tiendas.productos(cliente, incluir_archivados=True)
