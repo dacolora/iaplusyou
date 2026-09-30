@@ -5,7 +5,8 @@
    Contexto: url_swipe, trabajo ({job_id}|None), ultimo (barrido|None),
    historial, imagenes ({ok,pendiente,error}), total (referentes globales con
    imagen), familias, familias_en_error (texto del último error de la tanda de
-   descripciones en inglés, o None). fuentes_nombres son N_: se muestran con
+   descripciones en inglés, o None), etiquetas_barrido (clave de estado ->
+   (etiqueta N_, tono), la misma de «Mis barridos»). fuentes_nombres son N_: se muestran con
    |traducir. Los montos siguen con '%.2f' (punto decimal), como antes: el
    español que se ve no cambia. #}
 <section class="hero aparece">
@@ -30,7 +31,7 @@
     <button type="submit" class="btn-generar btn-sm" {% if trabajo %}disabled{% endif %}>{{ _('Importar') }}</button>
   </form>
   <p class="vacio">{{ _('Última importación:') }}
-    {% if ultimo %}{{ _('%(fecha)s · estado <strong>%(estado)s</strong> · %(leidos)s leídos · %(nuevos)s nuevos · %(con_imagen)s con imagen', fecha=ultimo.creado_en, estado=ultimo.estado, leidos=ultimo.traidos, nuevos=ultimo.nuevos, con_imagen=ultimo.con_imagen) }}{% if ultimo.usd_real %} · US$ {{ '%.2f' | format(ultimo.usd_real) }}{% endif %}{% if ultimo.aviso %} · {{ ultimo.aviso }}{% endif %}
+    {% if ultimo %}{{ _('%(fecha)s · estado <strong>%(estado)s</strong> · %(leidos)s leídos · %(nuevos)s nuevos · %(con_imagen)s con imagen', fecha=ultimo.creado_en, estado=(etiquetas_barrido.get(ultimo.estado) or (ultimo.estado,))[0]|traducir, leidos=ultimo.traidos, nuevos=ultimo.nuevos, con_imagen=ultimo.con_imagen) }}{% if ultimo.usd_real %} · US$ {{ '%.2f' | format(ultimo.usd_real) }}{% endif %}{% if ultimo.aviso %} · {{ ultimo.aviso }}{% endif %}
     {% else %}{{ _('nunca') }}{% endif %}</p>
   {% if trabajo %}
   <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}"><div class="barra-progreso-fill"></div></div>
@@ -41,7 +42,7 @@
   <details><summary>{{ _('Importaciones anteriores') }}</summary>
     <div class="admin-scroll"><table class="tabla-admin">
       <tr><th>{{ _('Fecha') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Leídos') }}</th><th>{{ _('Nuevos') }}</th><th>{{ _('Con imagen') }}</th><th>{{ _('Aviso') }}</th></tr>
-      {% for b in historial[1:] %}<tr><td>{{ b.creado_en }}</td><td>{{ b.estado }}</td><td>{{ b.traidos }}</td><td>{{ b.nuevos }}</td><td>{{ b.con_imagen }}</td><td>{{ b.aviso or '' }}</td></tr>{% endfor %}
+      {% for b in historial[1:] %}<tr><td>{{ b.creado_en }}</td><td>{{ (etiquetas_barrido.get(b.estado) or (b.estado,))[0]|traducir }}</td><td>{{ b.traidos }}</td><td>{{ b.nuevos }}</td><td>{{ b.con_imagen }}</td><td>{{ b.aviso or '' }}</td></tr>{% endfor %}
     </table></div>
   </details>
   {% endif %}
@@ -129,7 +130,7 @@
       <td>{{ b.creado_en }}</td>
       <td>{{ fuentes_nombres.get(b.fuente, b.fuente) | traducir }}</td>
       <td>{{ b.consulta.palabra or b.consulta.pagina_id or '' }}</td>
-      <td>{{ b.estado }}{% if b.aviso %} · {{ b.aviso }}{% endif %}</td>
+      <td>{{ (etiquetas_barrido.get(b.estado) or (b.estado,))[0]|traducir }}{% if b.aviso %} · {{ b.aviso }}{% endif %}</td>
       <td>{{ b.traidos }}/{{ b.tope }}</td>
       <td>{{ b.clasificados }}</td>
       <td>{% if b.usd_real %}US$ {{ '%.2f' | format(b.usd_real) }}{% else %}—{% endif %}</td>

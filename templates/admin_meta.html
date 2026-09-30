@@ -234,7 +234,7 @@
           {% if f.modo == "agencia" %}
           <form method="post" action="{{ url_for('admin_meta_desasignar', cliente=f.id) }}" style="display:inline;margin-top:.4rem;"
                 data-nombre="{{ f.nombre }}"
-                onsubmit='return confirm({{ _("¿Volver %(nombre)s a modo propia? Si tenía su propia conexión se restaura; si no, queda sin conexión con Meta hasta que registre su app y conecte.", nombre="{nombre}")|tojson }}.replace("{nombre}", this.dataset.nombre));'>
+                onsubmit='return confirm({{ _("¿Volver %(nombre)s a modo propia? Si tenía su propia conexión se restaura; si no, queda sin conexión con Meta hasta que registre su app y conecte.", nombre="{nombre}")|tojson }}.replace("{nombre}", () => this.dataset.nombre));'>
             <button type="submit" class="btn-rechazar btn-sm">{{ _('Volver a propia') }}</button>
           </form>
           {% endif %}

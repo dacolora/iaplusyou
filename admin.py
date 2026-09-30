@@ -25,6 +25,7 @@ import io
 from datetime import datetime
 
 import sqlalchemy as sa
+from flask_babel import gettext, ngettext
 
 import cola
 import db
@@ -55,7 +56,8 @@ def _inicio_mes(iso):
 
 
 def hace(iso, ahora_iso=None):
-    """«hace 5 min» / «hace 3 h» / «hace 2 días»; None sin fecha."""
+    """«hace 5 min» / «hace 3 h» / «hace 2 días»; None sin fecha. En el idioma
+    activo (el panel lo calcula en cada petición, para quien mira)."""
     if not iso:
         return None
     try:
@@ -65,13 +67,12 @@ def hace(iso, ahora_iso=None):
         return None
     seg = max(0, int((ahora - t).total_seconds()))
     if seg < 60:
-        return "hace un momento"
+        return gettext("hace un momento")
     if seg < 3600:
-        return f"hace {seg // 60} min"
+        return gettext("hace %(n)s min", n=seg // 60)
     if seg < 86400:
-        return f"hace {seg // 3600} h"
-    dias = seg // 86400
-    return f"hace {dias} día" + ("s" if dias != 1 else "")
+        return gettext("hace %(n)s h", n=seg // 3600)
+    return ngettext("hace %(num)s día", "hace %(num)s días", seg // 86400)
 
 
 # ------------------------------------------------- generación (tabla gasto) ---

@@ -13944,6 +13944,23 @@ msgid "guion base %(idioma)s + transcripción de la referencia"
 msgstr "base script %(idioma)s + reference transcription"
 
 #, python-format
+msgid "hace %(n)s h"
+msgstr "%(n)s h ago"
+
+#, python-format
+msgid "hace %(n)s min"
+msgstr "%(n)s min ago"
+
+#, python-format
+msgid "hace %(num)s día"
+msgid_plural "hace %(num)s días"
+msgstr[0] "%(num)s day ago"
+msgstr[1] "%(num)s days ago"
+
+msgid "hace un momento"
+msgstr "just now"
+
+#, python-format
 msgid "hasta %(n)s referencias · 2k"
 msgstr "up to %(n)s references · 2k"
 

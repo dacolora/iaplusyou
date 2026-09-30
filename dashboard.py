@@ -3909,7 +3909,8 @@ def admin_referentes():
                            barridos_otras_fuentes=barridos_otras_fuentes,
                            familias_sin_en=familias_sin_en, precio_familias_en=precio_familias_en,
                            familias_en_en_curso=trabajos.en_curso(tareas_ref.JOB_FAMILIAS_EN),
-                           familias_en_error=familias_en_error)
+                           familias_en_error=familias_en_error,
+                           etiquetas_barrido=ref_datos.ETIQUETAS_ESTADO_BARRIDO)
 
 
 @app.route("/admin/referentes/importar", methods=["POST"])

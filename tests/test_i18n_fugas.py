@@ -858,3 +858,18 @@ def test_barra_del_mapa_en_ingles(admin_en):
 def test_csv_del_panel_con_encabezados_en_ingles(admin_en):
     texto = admin_en.get("/panel/gasto.csv").get_data(as_text=True)
     assert texto.lstrip("﻿").splitlines()[0] == "project;date;type;provider;reference;detail;usd"
+
+
+def test_estados_de_barrido_del_admin_con_etiqueta(admin_en):
+    """Fix round 1 (F6-17): los estados de barrido de /admin/referentes se ven
+    con su etiqueta (la de «Mis barridos»), no con la clave cruda."""
+    from referentes import datos
+    for _ in range(2):   # dos importaciones: la última va en la frase, la otra en el historial
+        bid = datos.crear_barrido(None, "copycoders", {"url": "https://go.copycoders.ai/x"}, 100)
+        datos.actualizar_barrido(bid, estado="parcial", traidos=3, nuevos=2, con_imagen=1)
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "shoes", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, estado="parcial", traidos=5)
+    html = html_de(admin_en, "/admin/referentes")
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]
+    assert ">parcial<" not in html and html.count("Incomplete") == 3   # frase, historial y barridos globales
