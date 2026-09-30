@@ -339,45 +339,100 @@ def test_pagina_tarjetas_con_llaves(app, llaves):
     assert "(falta " not in html
 
 
-def test_ver_pasa_investigacion_real_a_la_plantilla(app):
-    """Regresión: `ver()` nunca pasaba `investigacion=` al render -- la
-    tarjeta de investigación automática mostraba "Sin iniciar" sin importar
-    el estado real (corriendo, detenida, terminada)."""
+@pytest.fixture()
+def llaves_inv(monkeypatch):
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("YOUTUBE_API_KEY", "k")
+    for v in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT"):
+        monkeypatch.delenv(v, raising=False)
+
+
+def test_estimar_investigacion_json_y_errores(app, llaves_inv):
     from nicho import datos
-    eid = datos.crear_estudio("acme", "X")
+    eid = datos.crear_estudio("acme", "X", tema="pantuflas", pais="SE")
+    c = app["c"]
+    r = c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=amazon&plataformas=tiktok_shop&redes=youtube&consultas=2")
+    d = r.get_json()
+    assert r.status_code == 200 and [f["clave"] for f in d["filas"]] == ["amazon", "tiktok_shop"] and d["redes"] == ["youtube"]
+    assert d["topes"]["consultas"] == 2 and d["texto"].startswith("US$") and d["filas"][0]["busqueda_texto"].startswith("US$")
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=amazon,tiktok_shop").get_json()["plataformas"] == ["amazon", "tiktok_shop"]
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=meli").status_code == 400      # MELI no cubre Suecia
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=ZZ&plataformas=amazon").status_code == 400
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE").status_code == 400                        # nada elegido
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&redes=reddit").status_code == 400          # red sin llave
+    assert c.get("/cliente/acme/nicho/999/investigacion/estimar?pais=SE&plataformas=amazon").status_code == 404
 
-    html_vacio = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
-    assert 'badge-neutral">Sin iniciar' in html_vacio
 
-    datos.actualizar_investigacion("acme", eid, lambda inv: {
-        "estado": "detenida", "detenida_por": "Búsqueda automática en amazon todavía no está implementada.",
-        "consultas": ["mejor termo"], "pasos": {"consultas": {"estado": "hecho"}}, "gastado_usd": 0.01, "aprobado_usd": 5.0,
-    })
-    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
-    assert 'badge-detenida">DETENIDA' in html
-    assert "Búsqueda automática en amazon todavía no está implementada." in html
-    assert 'badge-neutral">Sin iniciar' not in html
-
-
-def test_investigacion_reanudar_vuelve_a_encolar(app, monkeypatch):
-    """Regresión: `investigacion_reanudar` cambiaba el estado a "consultas"
-    pero nunca encolaba nada -- "Reanudar" no hacía absolutamente nada."""
-    from nicho import datos
-    from tareas import investigacion as tareas_investigacion
-    eid = datos.crear_estudio("acme", "X")
-    datos.actualizar_investigacion("acme", eid, lambda inv: {
-        "estado": "detenida", "detenida_por": "Búsqueda automática en amazon todavía no está implementada.",
-        "consultas": ["mejor termo"], "pasos": {"consultas": {"estado": "hecho"}}, "gastado_usd": 0.01, "aprobado_usd": 5.0,
-    })
+def test_iniciar_investigacion_con_el_costo_visto(app, llaves_inv, monkeypatch):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = datos.crear_estudio("acme", "X", tema="pantuflas para dolor de pies", pais="CO")
     encolados = []
-    monkeypatch.setattr(tareas_investigacion.trabajos, "encolar",
-                         lambda job_id, tarea, payload, **kw: encolados.append((job_id, tarea, payload)) or True)
-
-    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/reanudar", follow_redirects=False)
-
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload)) or True)
+    estimado = inv.estimar({}, "SE", ["amazon"], ["youtube"], inv.TOPES_DEFECTO)
+    forma = {"pais": "SE", "plataformas": ["amazon"], "redes": ["youtube"], "consultas": "3", "productos_por_consulta": "20",
+             "productos_elegidos": "15", "resenas_por_producto": "100"}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data={**forma, "total_visto": "0.01"}, follow_redirects=True)
+    assert "vuelve a confirmar" in r.data.decode() and encolados == [] and datos.investigacion("acme", eid) == {}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data={**forma, "total_visto": str(estimado["total_usd"])})
     assert r.status_code == 302
-    assert len(encolados) == 1
-    job_id, tarea, payload = encolados[0]
-    assert tarea == "nicho_inv_buscar" and payload["plataforma"] == "amazon"
-    inv = datos.investigacion("acme", eid)
-    assert inv["estado"] == "consultas" and inv["detenida_por"] is None
+    i = datos.investigacion("acme", eid)
+    assert i["aprobado_usd"] == estimado["total_usd"] and i["plataformas"] == ["amazon"] and i["redes"] == ["youtube"] and i["pais"] == "SE"
+    assert datos.estudio("acme", eid)["pais"] == "SE"                                                    # el país elegido queda en el estudio
+    assert encolados == [(datos.job_id_inv("acme", eid, "consultas"), "nicho_inv_consultas", {"cliente": "acme", "estudio_id": eid})]
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data={**forma, "total_visto": str(estimado["total_usd"])}, follow_redirects=True)
+    assert "en curso" in r.data.decode() and len(encolados) == 1                                        # una viva a la vez
+    sin_tema = datos.crear_estudio("acme", "Y", pais="SE")
+    r = app["c"].post(f"/cliente/acme/nicho/{sin_tema}/investigacion", data={**forma, "total_visto": "99"}, follow_redirects=True)
+    assert "Qué investigar" in r.data.decode() and datos.investigacion("acme", sin_tema) == {}
+
+
+def test_reanudar_y_cancelar(app, llaves_inv, monkeypatch):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="SE")
+    encolados = []
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload)) or True)
+    i = inv.crear_inicial("t", "SE", ["amazon"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 2.0})
+    i = inv.marcar_paso(inv.marcar_paso({**i, "consultas": ["a", "b"]}, "consultas", "hecho"), "buscar:amazon", "en_curso")
+    datos.iniciar_investigacion("acme", eid, {**i, "estado": "interrumpida"})
+    app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/reanudar")
+    assert encolados[-1][1] == "nicho_inv_buscar" and datos.investigacion("acme", eid)["estado"] == "buscando"
+    app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/cancelar")
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] == "detenida" and i["detenida_por"] == "cancelada"
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/cancelar", follow_redirects=True)
+    assert "No hay investigación en curso" in r.data.decode()
+
+
+def test_pagina_con_la_investigacion(app, llaves_inv, monkeypatch):
+    from nicho import datos, investigacion as inv, rutas
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="CO")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'id="form-investigar"' in html and 'name="plataformas" value="meli"' in html and 'data-paises="*"' in html
+    assert f"/cliente/acme/nicho/{eid}/investigacion/estimar" in html and 'name="total_visto"' in html and '<option value="CO" selected' in html
+    i = inv.crear_inicial("t", "CO", ["meli"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 2.0})
+    i = inv.marcar_paso(inv.marcar_paso({**i, "consultas": ["pantuflas"]}, "consultas", "hecho", usd=0.01), "buscar:meli", "en_curso")
+    datos.iniciar_investigacion("acme", eid, i)
+    monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job: job == datos.job_id_inv("acme", eid, "buscar:meli"))
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert f'data-poll-job="{datos.job_id_inv("acme", eid, "buscar:meli")}"' in html and "<script>iniciarPolling" not in html
+    assert "buscar en Mercado Libre" in html and "pantuflas" in html and "Cancelar" in html and 'id="form-investigar"' not in html
+    datos.guardar_productos_nicho("acme", eid, "meli", [{"fuente_id": "MCO1", "titulo": "Pantuflas ortopédicas", "n_resenas": 40, "url": "https://x/1"}])
+    datos.actualizar_investigacion("acme", eid, lambda x: inv.detener(x, "no se encontraron productos del nicho"))
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "Pantuflas ortopédicas" in html and "no se encontraron productos del nicho" in html and "Reanudar" in html
+    assert 'id="form-investigar"' in html                                                              # «Investigar de nuevo» disponible
+
+
+def test_pais_al_crear_y_editar_estudio(app):
+    from nicho import datos
+    app["c"].post("/cliente/acme/nicho/estudios", data={"nombre": "Con país", "tema": "t", "pais": "MX"})
+    e = [x for x in datos.estudios("acme") if x["nombre"] == "Con país"][0]
+    assert e["pais"] == "MX"
+    app["c"].post(f"/cliente/acme/nicho/{e['id']}/editar", data={"nombre": "Con país", "pais": "SE"})
+    assert datos.estudio("acme", e["id"])["pais"] == "SE"
+    r = app["c"].post(f"/cliente/acme/nicho/{e['id']}/editar", data={"nombre": "Con país", "pais": "ZZ"}, follow_redirects=True)
+    assert "País no soportado" in r.data.decode() and datos.estudio("acme", e["id"])["pais"] == "SE"
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert 'name="pais"' in html

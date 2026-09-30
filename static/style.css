@@ -2730,3 +2730,18 @@ body.panel-abierto { overflow: hidden; }
 .au-voz-play:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-texto); }
 .au-voz-play.sonando { background: var(--accent); border-color: var(--accent); color: #fff; }
 @media (max-width: 760px) { .au-voces { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Nicho · investigar el nicho (Parte 3) */
+.nicho-inv-cabecera { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.nicho-inv-cabecera h3 { margin: 0; }
+.nicho-inv-cifras { margin: .4rem 0; font-size: .9rem; }
+.nicho-inv-pasos { list-style: none; padding: 0; margin: .6rem 0; display: flex; flex-direction: column; gap: .3rem; }
+.nicho-inv-paso { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; font-size: .88rem; }
+.nicho-inv-paso-nombre { min-width: 11rem; font-weight: 600; }
+.nicho-inv-paso.paso-pendiente { opacity: .6; }
+.nicho-inv-aviso { color: var(--warn); overflow-wrap: anywhere; }
+.nicho-inv-chips { border: 0; padding: 0; margin: .4rem 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.nicho-inv-chips legend { font-weight: 600; margin-bottom: .2rem; }
+.nicho-inv-chips label.apagado { opacity: .45; }
+.nicho-inv-estimado { margin: .6rem 0; font-size: .9rem; display: flex; flex-direction: column; gap: .15rem; }
+.nicho-inv-tabla td { overflow-wrap: anywhere; }

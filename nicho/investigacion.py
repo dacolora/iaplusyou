@@ -22,7 +22,7 @@ from datetime import datetime
 from flask_babel import gettext
 
 from idiomas import N_
-from nicho import avatares
+from nicho import avatares, datos
 from nicho.fuentes import plataformas
 
 ESTADOS_CADENA = ("consultas", "buscando", "seleccionando", "resenas", "redes", "generando", "lista", "detenida", "interrumpida")
@@ -156,6 +156,34 @@ def detener(inv, motivo):
 
 def puede_reanudar(estado):
     return estado in ("detenida", "interrumpida")
+
+
+def reanudar(inv):
+    """Reanudar (spec §7): los pasos `en_curso` (interrumpidos) vuelven a
+    `pendiente`, y también consultas y selección con `error` (Claude,
+    centavos); una búsqueda o unas reseñas con `error` NO se repiten solas
+    porque ya cobraron: para eso está «Investigar de nuevo», que aprueba otra
+    cifra."""
+    nuevo = dict(inv or {})
+    pasos = {}
+    for paso, info in (nuevo.get("pasos") or {}).items():
+        info = dict(info or {})
+        if info.get("estado") == "en_curso" or (paso in ("consultas", "seleccionar") and info.get("estado") == "error"):
+            info["estado"] = "pendiente"
+        pasos[paso] = info
+    nuevo.update(pasos=pasos, detenida_por=None, ultimo_error=None, terminada_en=None)
+    siguiente = siguiente_paso({**nuevo, "estado": "consultas"})
+    nuevo["estado"] = estado_por_paso(siguiente) if siguiente else "lista"
+    return nuevo
+
+
+def job_de_paso(cliente, estudio_id, paso):
+    """El job_id de la tarea que corre ese paso (para la barra de progreso)."""
+    if paso in ("consultas", "seleccionar") or paso.startswith("buscar:"):
+        return datos.job_id_inv(cliente, estudio_id, paso)
+    if paso.startswith("resenas:") or paso.startswith("redes:"):
+        return datos.job_id_recolectar(cliente, estudio_id, paso.split(":", 1)[1])
+    return datos.job_id_generar(cliente, estudio_id)
 
 
 def resumen(inv):

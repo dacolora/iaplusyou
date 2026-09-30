@@ -13015,3 +13015,165 @@ msgstr "🔊 Sound"
 msgid "🖼 Imagen"
 msgstr "🖼 Image"
 
+msgid "Uruguay"
+msgstr "Uruguay"
+
+msgid "Ecuador"
+msgstr "Ecuador"
+
+msgid "Reino Unido"
+msgstr "United Kingdom"
+
+msgid "Alemania"
+msgstr "Germany"
+
+msgid "Francia"
+msgstr "France"
+
+msgid "Italia"
+msgstr "Italy"
+
+msgid "Países Bajos"
+msgstr "Netherlands"
+
+msgid "Canadá"
+msgstr "Canada"
+
+msgid "Australia"
+msgstr "Australia"
+
+msgid "India"
+msgstr "India"
+
+msgid "Japón"
+msgstr "Japan"
+
+msgid "Emiratos Árabes Unidos"
+msgstr "United Arab Emirates"
+
+msgid "Elige al menos una plataforma o una red."
+msgstr "Choose at least one platform or network."
+
+msgid "Escribe primero qué investigar (Editar estudio › Qué investigar)."
+msgstr "Write down what to research first (Edit study › What to research)."
+
+#, python-format
+msgid "El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar."
+msgstr "The cost is %(costo)s and that's not what you saw: check it and confirm again."
+
+#, python-format
+msgid "Investigación en marcha con un tope de %(tope)s; la página muestra cada paso."
+msgstr "Research underway with a cap of %(tope)s; the page shows each step."
+
+msgid "No hay una investigación detenida para reanudar."
+msgstr "There's no stopped research to resume."
+
+#, python-format
+msgid "La investigación sigue detenida: %(motivo)s"
+msgstr "The research is still stopped: %(motivo)s"
+
+msgid "La investigación terminó."
+msgstr "The research finished."
+
+msgid "cancelada"
+msgstr "cancelled"
+
+msgid "Investigación cancelada: el paso que está corriendo termina y no se lanza el siguiente."
+msgstr "Research cancelled: the step that's running finishes and the next one isn't launched."
+
+msgid "Investigar el nicho"
+msgstr "Research the niche"
+
+msgid "Apruebas una cifra y el sistema busca productos del nicho en las tiendas del país, elige los que son del nicho, trae sus reseñas y arma los avatares. Nadie marca nada a mano."
+msgstr "You approve a figure and the system searches for niche products in the country's stores, picks out the ones that are really in the niche, pulls their reviews and builds the avatars. Nobody marks anything by hand."
+
+#, python-format
+msgid "Gastado %(gastado)s de %(aprobado)s aprobados"
+msgstr "Spent %(gastado)s of %(aprobado)s approved"
+
+#, python-format
+msgid "%(n)s producto(s) encontrados"
+msgstr "%(n)s product(s) found"
+
+#, python-format
+msgid "%(n)s del nicho"
+msgstr "%(n)s in the niche"
+
+#, python-format
+msgid "%(n)s comentario(s) nuevos"
+msgstr "%(n)s new comment(s)"
+
+msgid "Búsquedas:"
+msgstr "Searches:"
+
+#, python-format
+msgid "%(n)s producto(s)"
+msgstr "%(n)s product(s)"
+
+#, python-format
+msgid "Detenida: %(motivo)s"
+msgstr "Stopped: %(motivo)s"
+
+msgid "¿Cancelar la investigación? El paso que está corriendo termina (y se cobra) y no se lanza el siguiente."
+msgstr "Cancel the research? The step that's running finishes (and gets charged) and the next one isn't launched."
+
+msgid "Reanudar"
+msgstr "Resume"
+
+#, python-format
+msgid "Productos encontrados (%(n)s)"
+msgstr "Products found (%(n)s)"
+
+msgid "Plataforma"
+msgstr "Platform"
+
+msgid "Estrellas"
+msgstr "Stars"
+
+msgid "Reseñas"
+msgstr "Reviews"
+
+msgid "¿Del nicho?"
+msgstr "In the niche?"
+
+msgid "Traídas"
+msgstr "Fetched"
+
+msgid "Todavía no hay tiendas disponibles."
+msgstr "No stores available yet."
+
+msgid "Redes"
+msgstr "Networks"
+
+msgid "Búsquedas"
+msgstr "Searches"
+
+msgid "Productos por búsqueda"
+msgstr "Products per search"
+
+msgid "Productos elegidos por tienda"
+msgstr "Products picked per store"
+
+msgid "Reseñas por producto"
+msgstr "Reviews per product"
+
+msgid "Es un tope: cada corrida lleva su techo de cobro y el gasto real queda en Configuración › Gasto."
+msgstr "It's a cap: each run carries its own charge ceiling and the real spend shows up in Settings › Spend."
+
+#, python-format
+msgid "Investigar (≈ %(costo)s)"
+msgstr "Research (≈ %(costo)s)"
+
+#, python-format
+msgid "La investigación cobra hasta %(costo)s (búsquedas, reseñas y Claude). ¿Seguimos?"
+msgstr "The research charges up to %(costo)s (searches, reviews and Claude). Shall we continue?"
+
+msgid "Todavía no hay estimado; espera un momento y vuelve a intentar."
+msgstr "There's no estimate yet; wait a moment and try again."
+
+msgid "País del mercado"
+msgstr "Market country"
+
+msgid "(sin país)"
+msgstr "(no country)"
+

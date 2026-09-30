@@ -121,7 +121,9 @@ def contexto(cliente):
     """Lo que necesita _tab_nicho.html. Se llama desde dashboard.ver_cliente."""
     return {"estudios_nicho": datos.estudios(cliente), "productos_nicho": _productos(cliente),
             "min_comentarios_nicho": avatares.MIN_COMENTARIOS,
-            "etiquetas_estudio": datos.ETIQUETAS_ESTADO_ESTUDIO, "etiquetas_inv": investigacion.ETIQUETAS_ESTADO}
+            "etiquetas_estudio": datos.ETIQUETAS_ESTADO_ESTUDIO, "etiquetas_inv": investigacion.ETIQUETAS_ESTADO,
+            "paises_estudio": [(c, datos.NOMBRES_PAIS.get(c, c)) for c in datos.PAISES_ESTUDIO],
+            "pais_proyecto": proyectos.pais(cliente)}
 
 
 # ----------------------------------------------------------- estudios ---
@@ -131,7 +133,8 @@ def crear(cliente):
     try:
         eid = datos.crear_estudio(cliente, request.form.get("nombre"), producto=request.form.get("producto"),
                                   tema=request.form.get("tema"), idioma=idiomas.de_proyecto(cliente),
-                                  catalogo_id=request.form.get("catalogo_id") or None)
+                                  catalogo_id=request.form.get("catalogo_id") or None,
+                                  pais=request.form.get("pais") or proyectos.pais(cliente))
     except datos.ErrorDatos as e:
         flash(str(e), "error")
         return _volver(cliente)
@@ -151,6 +154,9 @@ def ver(cliente, eid):
     lista = datos.comentarios_para_generar(cliente, eid)
     estimado = avatares.estimar_costo(lista)
     job = datos.job_id_generar(cliente, eid)
+    inv_actual = datos.investigacion(cliente, eid)
+    paso_vivo = investigacion.siguiente_paso(inv_actual)
+    job_inv = investigacion.job_de_paso(cliente, eid, paso_vivo) if paso_vivo else None
     return render_template(
         "nicho_estudio.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente), estudio=est,
         conteos=datos.contar_por_fuente(cliente, eid), fuente_filtro=fuente,
@@ -168,7 +174,12 @@ def ver(cliente, eid):
         # El idioma de BÚSQUEDA de YouTube sale del país del proyecto (spec §B5: no es el idioma
         # de salida; con inglés por defecto, `estudio.idioma` haría buscar en inglés a un cliente LatAm).
         idioma_busqueda=plataformas.idioma(proyectos.pais(cliente) or ""),
-        investigacion=investigacion.resumen(datos.investigacion(cliente, eid)), price_estimate="",
+        investigacion=investigacion.resumen(inv_actual),
+        trabajo_inv=({"job_id": job_inv, "paso": paso_vivo} if job_inv and trabajos.en_curso(job_inv) else None),
+        productos_investigados=(datos.productos_nicho(cliente, eid) if inv_actual else []),
+        paises_estudio=[(c, datos.NOMBRES_PAIS.get(c, c)) for c in datos.PAISES_ESTUDIO],
+        plataformas_inv=_plataformas_visibles(), redes_inv=_redes_visibles(), topes_inv=investigacion.TOPES_DEFECTO,
+        limites_inv=investigacion.LIMITES, pais_inv=est.get("pais") or proyectos.pais(cliente),
         etiquetas_estudio=datos.ETIQUETAS_ESTADO_ESTUDIO, etiquetas_avatar=datos.ETIQUETAS_ESTADO_AVATAR,
         etiquetas_inv=investigacion.ETIQUETAS_ESTADO, etiquetas_paso_estado=investigacion.ETIQUETAS_ESTADO_PASO,
         etiquetas_paso=investigacion.ETIQUETAS_PASO, consciencias_nombre=doctrina.CONSCIENCIAS_NOMBRE)
@@ -178,7 +189,7 @@ def ver(cliente, eid):
 def editar(cliente, eid):
     _estudio_o_404(cliente, eid)
     try:
-        campos = {k: request.form.get(k) for k in ("nombre", "producto", "tema") if request.form.get(k) is not None}
+        campos = {k: request.form.get(k) for k in ("nombre", "producto", "tema", "pais") if request.form.get(k) is not None}
         if request.form.get("catalogo_id") is not None:
             campos["catalogo_id"] = request.form.get("catalogo_id") or None
         datos.actualizar_estudio(cliente, eid, **campos)
@@ -415,132 +426,138 @@ def exportar_xlsx(cliente, eid):
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
-# ------ Investigación (Parte 3) ------
+# ------ Investigación automática (Parte 3) ------
+
+def _lista_param(fuente, nombre):
+    """Checkboxes repetidos (`getlist`) o una lista con comas (el fetch del estimado)."""
+    salida = []
+    for v in fuente.getlist(nombre):
+        salida.extend(x.strip() for x in (v or "").split(",") if x.strip())
+    return list(dict.fromkeys(salida))
+
+
+def _plataformas_visibles():
+    """Las plataformas del registro; sin APIFY_TOKEN el admin las ve apagadas y el cliente no las ve."""
+    salida = []
+    for clave in plataformas.claves():
+        faltan = fuentes_registro.llaves_faltantes(clave)
+        if faltan and not _es_admin():
+            continue
+        paises = plataformas.PLATAFORMAS[clave]["paises"]
+        salida.append({"clave": clave, "nombre": plataformas.nombre(clave), "faltan": faltan,
+                       "paises": "*" if paises == plataformas.TODOS else " ".join(sorted(paises))})
+    return salida
+
+
+def _redes_visibles():
+    salida = []
+    for red in investigacion.REDES:
+        faltan = fuentes_registro.llaves_faltantes(red)
+        if faltan and not _es_admin():
+            continue
+        salida.append({"clave": red, "nombre": fuentes_registro.NOMBRES[red], "faltan": faltan})
+    return salida
+
+
+def _pedido_investigacion(fuente, est, cliente):
+    """(pais, plataformas, redes, topes) validados. ErrorDatos o ValueError con
+    un mensaje para la persona."""
+    pais = (fuente.get("pais") or est.get("pais") or proyectos.pais(cliente) or "").strip().upper()
+    if pais not in datos.PAISES_ESTUDIO:
+        raise datos.ErrorDatos(gettext("País no soportado: %(pais)s", pais=pais or "—"))
+    plats = [p for p in _lista_param(fuente, "plataformas") if p in plataformas.PLATAFORMAS]
+    redes = [r for r in _lista_param(fuente, "redes") if r in investigacion.REDES]
+    if not plats and not redes:
+        raise datos.ErrorDatos(gettext("Elige al menos una plataforma o una red."))
+    fuera = [p for p in plats if not plataformas.cubre(p, pais)]
+    if fuera:
+        raise datos.ErrorDatos(gettext("%(plataforma)s no cubre el país %(pais)s.", plataforma=plataformas.nombre(fuera[0]), pais=pais))
+    faltan = sorted({v for x in plats + redes for v in fuentes_registro.llaves_faltantes(x)})
+    if faltan:
+        raise datos.ErrorDatos(gettext("Falta %(llaves)s en el .env del servidor (Configuración › Puesta a punto).", llaves=", ".join(faltan))
+                               if _es_admin() else gettext("Esa fuente no está disponible todavía."))
+    topes = investigacion.normalizar_topes({k: fuente.get(k) for k in investigacion.TOPES_DEFECTO})
+    return pais, plats, redes, topes
+
 
 @bp.get("/<int:eid>/investigacion/estimar")
 def investigacion_estimar(cliente, eid):
-    """Estimar el costo de una investigación (GET con parámetros)."""
     est = _estudio_o_404(cliente, eid)
-    
     try:
-        pais = request.args.get("pais") or est.get("pais") or "CO"
-        plataformas = [p.strip() for p in (request.args.get("plataformas") or "").split(",") if p.strip()]
-        redes = [r.strip() for r in (request.args.get("redes") or "").split(",") if r.strip()]
-        
-        estimado = investigacion.estimar(est, pais, plataformas, redes, investigacion.TOPES_DEFECTO)
-        return jsonify({
-            **estimado,
-            "texto": gastos.formatear(estimado["total_usd"])
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        pais, plats, redes, topes = _pedido_investigacion(request.args, est, cliente)
+        e = investigacion.estimar(est, pais, plats, redes, topes)
+    except (datos.ErrorDatos, ErrorFuente, ValueError) as ex:
+        return jsonify({"error": str(ex)}), 400
+    filas = [{**f, "busqueda_texto": gastos.formatear(f["busqueda_usd"]), "resenas_texto": gastos.formatear(f["resenas_usd"]),
+              "nombre": f["nombre"]} for f in e["filas"]]
+    return jsonify({**e, "filas": filas, "claude_texto": gastos.formatear(e["claude_usd"]), "avatares_texto": gastos.formatear(e["avatares_usd"]),
+                    "texto": gastos.formatear(e["total_usd"]), "pais": pais, "plataformas": plats, "redes": redes, "topes": topes})
 
 
 @bp.post("/<int:eid>/investigacion")
 def investigacion_iniciar(cliente, eid):
-    """Iniciar una investigación nueva (aprobando el presupuesto)."""
+    """Aprueba la cifra y arranca la cadena. La cifra la recalcula el servidor:
+    si supera lo que la persona vio en el botón (`total_visto`), no arranca."""
     est = _estudio_o_404(cliente, eid)
     if est["archivado"]:
         flash(gettext("El estudio está archivado."), "error")
         return _volver(cliente, eid)
-    
-    inv_actual = datos.investigacion(cliente, eid)
-    if inv_actual.get("estado") and inv_actual["estado"] not in ("lista", "detenida", "interrumpida"):
+    if not (est.get("tema") or "").strip():
+        flash(gettext("Escribe primero qué investigar (Editar estudio › Qué investigar)."), "error")
+        return _volver(cliente, eid)
+    actual = datos.investigacion(cliente, eid)
+    if actual.get("estado") and actual["estado"] not in ("lista", "detenida", "interrumpida"):
         flash(gettext("Ya hay una investigación en curso."), "error")
         return _volver(cliente, eid)
-    
     try:
-        pais = request.form.get("pais") or est.get("pais") or "CO"
-        plataformas = [p.strip() for p in (request.form.get("plataformas") or "").split(",") if p.strip()]
-        redes = [r.strip() for r in (request.form.get("redes") or "").split(",") if r.strip()]
-        presupuesto_usd = float(request.form.get("presupuesto_usd") or 0)
-        
-        if presupuesto_usd <= 0:
-            flash(gettext("El presupuesto debe ser mayor a 0."), "error")
-            return _volver(cliente, eid)
-        
-        # Validar país
-        if pais not in investigacion.IDIOMAS:
-            flash(gettext("País %(pais)s no soportado.", pais=pais), "error")
-            return _volver(cliente, eid)
-        
-        # Actualizar estudio con país si no lo tiene
-        if not est.get("pais"):
-            datos.actualizar_estudio(cliente, eid, pais=pais)
-        
-        # Inicializar investigación
-        inv_nueva = investigacion.crear_inicial(est.get("tema", ""), pais, plataformas, redes,
-                                               investigacion.TOPES_DEFECTO)
-        inv_nueva["aprobado_usd"] = presupuesto_usd
-        
-        # Guardar en BD
-        datos.actualizar_investigacion(cliente, eid, lambda x: inv_nueva)
-        
-        # Encolatr tarea: nicho_inv_consultas
-        job_id = f"nicho:{cliente}:{int(eid)}:inv:consultas"
-        trabajos.encolar(job_id, "nicho_inv_consultas",
-                        {"cliente": cliente, "estudio_id": int(eid)},
-                        cliente=cliente, duracion_estimada=60, max_intentos=2)
-        
-        flash(gettext("Investigación iniciada; Claude está generando consultas."), "ok")
-    except (ValueError, datos.ErrorDatos) as e:
-        flash(gettext("Error: %(error)s", error=str(e)), "error")
-    
+        pais, plats, redes, topes = _pedido_investigacion(request.form, est, cliente)
+        estimado = investigacion.estimar(est, pais, plats, redes, topes)
+        visto = float(request.form.get("total_visto") or 0)
+    except (datos.ErrorDatos, ErrorFuente, ValueError) as ex:
+        flash(str(ex), "error")
+        return _volver(cliente, eid)
+    if estimado["total_usd"] > visto + 0.005:
+        flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.",
+                      costo=gastos.formatear(estimado["total_usd"])), "error")
+        return _volver(cliente, eid)
+    if est.get("pais") != pais:
+        datos.actualizar_estudio(cliente, eid, pais=pais)
+    datos.iniciar_investigacion(cliente, eid, investigacion.crear_inicial(est["tema"], pais, plats, redes, topes, estimado=estimado))
+    tareas_investigacion.avanzar(cliente, eid)
+    flash(gettext("Investigación en marcha con un tope de %(tope)s; la página muestra cada paso.",
+                  tope=gastos.formatear(estimado["total_usd"])), "ok")
     return _volver(cliente, eid)
 
 
 @bp.post("/<int:eid>/investigacion/reanudar")
 def investigacion_reanudar(cliente, eid):
-    """Reanudar una investigación detenida o interrumpida."""
     est = _estudio_o_404(cliente, eid)
-    inv_actual = datos.investigacion(cliente, eid)
-    
-    estado = inv_actual.get("estado", "")
-    if not investigacion.puede_reanudar(estado):
-        etiqueta = idiomas.traducir(investigacion.ETIQUETAS_ESTADO.get(estado, estado))
-        flash(gettext("No se puede reanudar un estudio con estado '%(estado)s'.", estado=etiqueta), "error")
+    actual = datos.investigacion(cliente, eid)
+    if not investigacion.puede_reanudar(actual.get("estado")):
+        flash(gettext("No hay una investigación detenida para reanudar."), "error")
         return _volver(cliente, eid)
-    
-    try:
-        # ¿Queda algún paso pendiente? Hay que preguntarlo con un estado ya
-        # no terminal -- si no, siguiente_paso() siempre devuelve None por
-        # seguir viendo "detenida"/"interrumpida" en inv_actual, así que
-        # "Reanudar" nunca pasaba de "la investigación ya está completa".
-        paso = investigacion.siguiente_paso({**inv_actual, "estado": "consultas"})
-        if paso is None:
-            flash(gettext("La investigación ya está completa."), "ok")
-            return _volver(cliente, eid)
-
-        # Cambiar estado a activo y encolar el paso pendiente -- antes solo
-        # cambiaba el campo estado sin encolar nada, así que "Reanudar" no
-        # volvía a arrancar la cadena.
-        datos.actualizar_investigacion(cliente, eid, lambda inv: {
-            **inv, "estado": "consultas", "ultimo_error": None, "detenida_por": None
-        })
-        tareas_investigacion.avanzar(cliente, eid)
-
+    if est["archivado"]:
+        flash(gettext("El estudio está archivado."), "error")
+        return _volver(cliente, eid)
+    datos.actualizar_investigacion(cliente, eid, investigacion.reanudar)
+    if tareas_investigacion.avanzar(cliente, eid):
         flash(gettext("Investigación reanudada."), "ok")
-    except datos.ErrorDatos as e:
-        flash(str(e), "error")
-    
+    else:
+        despues = datos.investigacion(cliente, eid)
+        if despues.get("estado") == "detenida":
+            flash(gettext("La investigación sigue detenida: %(motivo)s", motivo=idiomas.traducir(despues.get("detenida_por") or "")), "error")
+        else:
+            flash(gettext("La investigación terminó."), "ok")
     return _volver(cliente, eid)
 
 
 @bp.post("/<int:eid>/investigacion/cancelar")
 def investigacion_cancelar(cliente, eid):
-    """Marcar una investigación como interrumpida (cancelar)."""
-    est = _estudio_o_404(cliente, eid)
-    inv_actual = datos.investigacion(cliente, eid)
-    
-    estado = inv_actual.get("estado", "")
-    if not estado or estado in ("lista", "interrumpida"):
+    _estudio_o_404(cliente, eid)
+    actual = datos.investigacion(cliente, eid)
+    if not actual.get("estado") or actual["estado"] in ("lista", "detenida", "interrumpida"):
         flash(gettext("No hay investigación en curso para cancelar."), "error")
         return _volver(cliente, eid)
-    
-    # Marcar como interrumpida
-    datos.actualizar_investigacion(cliente, eid, lambda inv: {
-        **inv, "estado": "interrumpida", "detenida_por": N_("usuario")
-    })
-    
-    flash(gettext("Investigación cancelada."), "ok")
+    datos.actualizar_investigacion(cliente, eid, lambda i: investigacion.detener(i, N_("cancelada")))
+    flash(gettext("Investigación cancelada: el paso que está corriendo termina y no se lanza el siguiente."), "ok")
     return _volver(cliente, eid)

@@ -39,6 +39,9 @@
           {% for p in productos_nicho %}<option value="{{ p.id }}" data-descripcion="{{ p.nombre }}{% if p.descripcion %}: {{ p.descripcion }}{% endif %}">{{ p.nombre }}</option>{% endfor %}
         </select>
       </label>
+      <label>{{ _('País del mercado') }}
+        <select name="pais">{% for codigo, nombre in paises_estudio %}<option value="{{ codigo }}"{% if codigo == pais_proyecto %} selected{% endif %}>{{ nombre|traducir }}</option>{% endfor %}</select>
+      </label>
     </div>
     <label>{{ _('Qué vendemos') }} <textarea name="producto" id="estudio-producto" rows="2" placeholder="{{ _('Cápsulas de detergente sin plástico, dosis exacta, olor suave') }}"></textarea></label>
     <label>{{ _('Qué investigar (nicho, mercado, dolores, palabras clave)') }} <textarea name="tema" rows="3" placeholder="{{ _('Gente que lava en casa y odia cargar garrafas; mercado sueco; reseñas de Via, Ariel y pods') }}"></textarea></label>

@@ -466,5 +466,22 @@ def test_estimar_costo_maximo():
     assert e["tokens_entrada"] == int(avatares.MAX_CARACTERES * avatares.TOKENS_POR_CARACTER) * 2 + avatares.TOKENS_PROMPT * (1 + avatares.MAX_NUCLEOS)
 
 
+def test_reanudar_y_job_de_paso():
+    from nicho import investigacion as inv
+    i = inv.crear_inicial("t", "CO", ["amazon", "meli"], ["reddit"], inv.TOPES_DEFECTO, estimado={"total_usd": 3.0})
+    for paso, estado in (("consultas", "hecho"), ("buscar:amazon", "error"), ("buscar:meli", "en_curso")):
+        i = inv.marcar_paso(i, paso, estado)
+    i = {**inv.detener(i, "x"), "ultimo_error": "boom"}
+    r = inv.reanudar(i)
+    assert r["pasos"]["buscar:meli"]["estado"] == "pendiente" and r["pasos"]["buscar:amazon"]["estado"] == "error"   # lo que cobró no se repite solo
+    assert r["estado"] == "buscando" and r["detenida_por"] is None and r["ultimo_error"] is None and r["terminada_en"] is None
+    j = inv.detener(inv.marcar_paso(inv.marcar_paso(i, "buscar:meli", "hecho"), "seleccionar", "error"), "Claude")
+    assert inv.reanudar(j)["pasos"]["seleccionar"]["estado"] == "pendiente"                                      # Claude sí se reintenta
+    assert inv.job_de_paso("acme", 3, "buscar:meli") == "nicho:acme:3:inv:buscar:meli"
+    assert inv.job_de_paso("acme", 3, "resenas:meli") == "nicho:acme:3:recolectar:meli"
+    assert inv.job_de_paso("acme", 3, "redes:youtube") == "nicho:acme:3:recolectar:youtube"
+    assert inv.job_de_paso("acme", 3, "generar") == "nicho:acme:3:generar"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
