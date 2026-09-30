@@ -67,6 +67,9 @@ PLANTILLAS_TRADUCIDAS = [
     # Merge de main (2026-09-30, Nicho: avatares del proyecto): la ficha compartida
     # y la página «Avatares del proyecto» ya vienen con _() (0 hallazgos del detector).
     "_avatar_ficha.html", "nicho_avatares_proyecto.html",
+    # Merge de main (2026-09-30, Flow Plus: imágenes por escena): ya viene con _()
+    # (0 hallazgos del detector), como el resto de los _gpg_*.
+    "_gpg_escenas.html",
 ]
 
 

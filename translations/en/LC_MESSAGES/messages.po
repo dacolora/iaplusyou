@@ -1243,6 +1243,9 @@ msgstr "(suggested)"
 msgid "(ya producida — se reemplaza)"
 msgstr "(already produced — will be replaced)"
 
+msgid "+ Del Catálogo"
+msgstr "+ From the Catalog"
+
 #, python-format
 msgid "+ Nuevo %(nombre)s"
 msgstr "+ New %(nombre)s"
@@ -1264,6 +1267,9 @@ msgstr "+ New prompt"
 
 msgid "+ Nuevo video"
 msgstr "+ New video"
+
+msgid "+ Subir imagen"
+msgstr "+ Upload image"
 
 #, python-format
 msgid "+ familia (busca entre %(n)s)"
@@ -2434,6 +2440,9 @@ msgstr "Changes the language of the screens and of everything generated in your 
 msgid "Cambia solo tu idioma. El del proyecto está en Generación."
 msgstr "Changes only your language. The project's is under Generation."
 
+msgid "Cambiar"
+msgstr "Change"
+
 msgid "Cambiar contraseña"
 msgstr "Change password"
 
@@ -3600,6 +3609,9 @@ msgstr "Leave at least one checkbox selected in the grid."
 msgid "Del %(desde)s al %(hasta)s, contra los %(n)s días anteriores"
 msgstr "From %(desde)s to %(hasta)s, against the previous %(n)s days"
 
+msgid "Del Catálogo"
+msgstr "From the Catalog"
+
 msgid "Del catálogo"
 msgstr "From the catalog"
 
@@ -3968,6 +3980,9 @@ msgstr "The Business can't see any Page. Without a Page a project can only run a
 
 msgid "El Business no ve ninguna cuenta publicitaria. Asígnaselas al usuario del sistema en Business Manager y pulsa «Actualizar desde Meta»."
 msgstr "The Business can't see any ad account. Assign them to the system user in Business Manager and press “Refresh from Meta”."
+
+msgid "El Catálogo todavía no tiene fotos."
+msgstr "The Catalog has no photos yet."
 
 msgid "El Excel está vacío."
 msgstr "The Excel file is empty."
@@ -4644,8 +4659,14 @@ msgstr "Choose one of the two ways to connect."
 msgid "Elige una familia de la lista."
 msgstr "Choose a family from the list."
 
+msgid "Elige una foto del Catálogo."
+msgstr "Pick a photo from the Catalog."
+
 msgid "Elige una fuente."
 msgstr "Pick a source."
+
+msgid "Elige una imagen."
+msgstr "Choose an image."
 
 msgid "Elige una persona"
 msgstr "Choose a persona"
@@ -4986,6 +5007,9 @@ msgstr "That ad account doesn't show up among your portfolio's; search again."
 msgid "Esa cuenta publicitaria ya está conectada a otro proyecto; avísale a Creatv."
 msgstr "That ad account is already connected to another project; let Creatv know."
 
+msgid "Esa escena no existe en esta versión."
+msgstr "That scene doesn't exist in this version."
+
 msgid "Esa evaluación ya no existe."
 msgstr "That evaluation no longer exists."
 
@@ -5001,6 +5025,9 @@ msgstr "That final cut is being produced; wait for it to finish."
 
 msgid "Esa final ya no existe."
 msgstr "That final cut no longer exists."
+
+msgid "Esa foto ya no está en el Catálogo."
+msgstr "That photo is no longer in the Catalog."
 
 msgid "Esa fuente no está configurada."
 msgstr "That source isn't set up."
@@ -5022,6 +5049,9 @@ msgstr "That idea already has a generated piece; discard it instead of deleting 
 
 msgid "Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión."
 msgstr "That idea already has a generated piece; use Regenerate from the review."
+
+msgid "Esa imagen no está en esta versión."
+msgstr "That image isn't in this version."
 
 msgid "Esa marca no existe en Atria."
 msgstr "That brand doesn't exist in Atria."
@@ -5100,6 +5130,9 @@ msgstr "That page is only for the administrator."
 msgid "Esa página no está compartida con tu integración de Notion (en la página: ··· › Conexiones › tu integración)."
 msgstr "That page isn't shared with your Notion integration (on the page: ··· › Connections › your integration)."
 
+msgid "Esa referencia no existe en esta versión."
+msgstr "That reference doesn't exist in this version."
+
 msgid "Esa referencia no existe."
 msgstr "That reference doesn't exist."
 
@@ -5152,6 +5185,13 @@ msgstr "Step %(n)s/3"
 
 msgid "Escena"
 msgstr "Scene"
+
+#, python-format
+msgid "Escena %(n)s"
+msgstr "Scene %(n)s"
+
+msgid "Escenas"
+msgstr "Scenes"
 
 msgid "Escribe algo: un texto no puede quedar vacío."
 msgstr "Type something: a text can't be empty."
@@ -5521,6 +5561,10 @@ msgstr "This version is already assembled; create a new version to change it."
 
 msgid "Esta versión ya no se puede cambiar; crea una versión nueva."
 msgstr "This version can't be changed anymore; create a new version."
+
+#, python-format
+msgid "Esta versión ya tiene %(n)s imágenes extra; quita alguna antes."
+msgstr "This version already has %(n)s extra images; remove one first."
 
 msgid "Estado"
 msgstr "Status"
@@ -5909,6 +5953,9 @@ msgstr "Text is missing for %(plataformas)s: write it or press “Write text wit
 #, python-format
 msgid "Falta el texto para: %(nombres)s. Escríbelo o pulsa «Escribir texto con IA»."
 msgstr "Text is missing for: %(nombres)s. Write it or press “Write text with AI”."
+
+msgid "Falta la imagen"
+msgstr "Image missing"
 
 msgid "Falta la página de Notion."
 msgstr "Missing the Notion page."
@@ -6750,6 +6797,13 @@ msgstr "Image %(i)s: generate the image “%(nombre)s”, which is still to be c
 msgid "Image %(i)s: «%(nombre)s» no tiene fotos en el Catálogo."
 msgstr "Image %(i)s: “%(nombre)s” has no photos in the Catalog."
 
+#, python-format
+msgid "Image %(n)s viene del Catálogo y ya tiene su foto."
+msgstr "Image %(n)s comes from the Catalog and already has its photo."
+
+msgid "Image 1, Image 2… son las referencias de este video: el prompt de cada clip ya las nombra. Toca una imagen para ponerla o quitarla de una escena. Subir imágenes es gratis."
+msgstr "Image 1, Image 2… are this video's references: each clip's prompt already names them. Tap an image to add it to a scene or take it out. Uploading images is free."
+
 msgid "Imagen"
 msgstr "Image"
 
@@ -6837,6 +6891,16 @@ msgstr "Minimum impressions"
 
 msgid "Imágenes"
 msgstr "Images"
+
+msgid "Imágenes de cada escena"
+msgstr "Images for each scene"
+
+msgid "Imágenes de este video"
+msgstr "Images in this video"
+
+#, python-format
+msgid "Imágenes de la escena %(n)s"
+msgstr "Images for scene %(n)s"
 
 msgid "Imágenes de referencia"
 msgstr "Reference images"
@@ -8941,6 +9005,9 @@ msgstr "Couldn't generate the voice (check the chosen voice, '%(voz)s'): %(error
 msgid "No se pudo guardar (error {status})."
 msgstr "Couldn't save (error {status})."
 
+msgid "No se pudo guardar esa imagen."
+msgstr "That image couldn't be saved."
+
 msgid "No se pudo guardar la revisión."
 msgstr "Couldn't save the review."
 
@@ -10816,6 +10883,9 @@ msgstr "Knows they have the problem, but doesn't know of solutions"
 msgid "Sacando fotogramas"
 msgstr "Extracting frames"
 
+msgid "Sale de lo que elegiste en «Imágenes de cada escena»."
+msgstr "Comes from what you chose in “Images for each scene”."
+
 msgid ""
 "Salen los prompts de lo que está «por crear» (personajes y entornos), del producto en el estilo\n"
 "    del video y la tabla de qué imagen va en cada clip."
@@ -11497,6 +11567,9 @@ msgstr "Upload an mp3, wav, m4a, aac or ogg."
 msgid "Sube un video, una imagen o un audio."
 msgstr "Upload a video, an image or an audio file."
 
+msgid "Sube una imagen JPG, PNG o WEBP."
+msgstr "Upload a JPG, PNG or WEBP image."
+
 msgid "Sube una o varias fotos y/o videos reales (3-10s) y elige el producto — puedes mezclar fotos y videos en la misma subida. El resultado es lo mismo que subiste — misma pose, mismo rostro, mismo fondo, mismo movimiento si es video — con el calzado reemplazado por el que elegiste, uno por cada archivo. Nada más cambia."
 msgstr "Upload one or more real photos and/or videos (3-10s) and choose the product — you can mix photos and videos in the same upload. The result is exactly what you uploaded — same pose, same face, same background, same movement if it's a video — with the footwear replaced by the one you chose, one per file. Nothing else changes."
 
@@ -11537,6 +11610,9 @@ msgstr "Upload"
 msgid "Subir CSV o Excel"
 msgstr "Upload CSV or Excel"
 
+msgid "Subir aquí"
+msgstr "Upload here"
+
 msgid "Subir audio"
 msgstr "Upload audio"
 
@@ -11548,6 +11624,9 @@ msgstr "Upload photos"
 
 msgid "Subir imágenes o videos"
 msgstr "Upload images or videos"
+
+msgid "Subir la imagen"
+msgstr "Upload the image"
 
 msgid "Subir personaje (imagen o video)"
 msgstr "Upload character (image or video)"
@@ -12000,6 +12079,12 @@ msgstr "We still don't see assets shared from portfolio %(portafolio)s. Meta som
 
 msgid "Todavía sin copia"
 msgstr "No copy yet"
+
+#, python-format
+msgid "Todavía sin imagen: %(lista)s. Súbela arriba, en «Imágenes de este video»."
+msgid_plural "Todavía sin imagen: %(lista)s. Súbelas arriba, en «Imágenes de este video»."
+msgstr[0] "Still without an image: %(lista)s. Upload it above, in “Images in this video”."
+msgstr[1] "Still without an image: %(lista)s. Upload them above, in “Images in this video”."
 
 msgid "Todavía sin impresiones — dale a «Actualizar métricas» en unas horas."
 msgstr "Still no impressions — hit “Update metrics” in a few hours."
@@ -12465,6 +12550,10 @@ msgstr "A campaign needs at least one video or image."
 msgid "Una de las piezas no está disponible (o no está lista)."
 msgstr "One of the pieces is not available (or not ready)."
 
+#, python-format
+msgid "Una escena puede llevar hasta %(n)s imágenes."
+msgstr "A scene can have up to %(n)s images."
+
 msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde."
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
 
@@ -12844,6 +12933,9 @@ msgstr "Back to log in"
 
 msgid "Volver a intentar"
 msgstr "Try again"
+
+msgid "Volver a lo sugerido"
+msgstr "Back to the suggestion"
 
 msgid "Volver a oír"
 msgstr "Unmute"
