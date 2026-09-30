@@ -365,8 +365,8 @@ def _publicar_organico(cliente, ex, payload, propuesta_id=None, ep_id_evento=Non
                 with _del_proyecto(cliente):             # se guarda: idioma del proyecto (I2)
                     for pub_id in pub_ids:
                         organico.actualizar(cliente, pub_id, estado="error",
-                                            error=gettext("No se creó la publicación en %(nombre)s: %(error)s",
-                                                          nombre=_nombres([p]), error=error))
+                                            error=gettext("No se creó la publicación en %(plataformas)s: %(error)s",
+                                                          plataformas=_nombres([p]), error=error))
                 raise
     aviso_saltadas = (gettext(" Ya estaba publicada (o en cola) en %(nombres)s.", nombres=_nombres(saltadas))
                       if saltadas else "")

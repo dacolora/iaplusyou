@@ -2994,10 +2994,13 @@ _FASES_PROVEEDOR = {
 _FASES_TERMINALES = ("COMPLETED", "completed", "succeeded", "success", "done")
 
 
-def _texto_fase(info):
-    """Traduce a español el estado crudo que reporta un proveedor durante el poll.
-    Con fallback: si aparece una fase que no conocemos se muestra tal cual en vez
-    de tragarse la información (los proveedores agregan estados sin avisar)."""
+def _texto_fase(info, cliente):
+    """Traduce el estado crudo que reporta un proveedor durante el poll, en el
+    idioma del PROYECTO (mensaje de fondo, spec §B8; mismo patrón que
+    tareas/flowplus.py): con el puesto en cola compuesto, estado_trabajo ya no
+    podría traducirlo al responder. Con fallback: si aparece una fase que no
+    conocemos se muestra tal cual en vez de tragarse la información (los
+    proveedores agregan estados sin avisar)."""
     if not info:
         return None
     fase = info.get("fase")
@@ -3007,19 +3010,21 @@ def _texto_fase(info):
     if not texto:
         return None
     posicion = info.get("queue_position")
-    if posicion is not None:
-        texto = f"{texto} (puesto {posicion})"
-    return texto
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        fase_traducida = gettext(texto)
+        if posicion is not None:
+            return gettext("%(fase)s (puesto %(n)s)", fase=fase_traducida, n=posicion)
+        return fase_traducida
 
 
-def _avisar_fase_de(job_id):
+def _avisar_fase_de(job_id, cliente):
     """Devuelve el callback on_progreso que esperan los clientes de proveedores
     (Higgsfield, fal.ai, WaveSpeed): traduce la fase cruda del poll y la publica
     como detalle del trabajo. Envuelto en try/except porque un fallo REPORTANDO
     jamás puede tumbar una generación que ya gastó créditos."""
     def avisar_fase(info):
         try:
-            texto = _texto_fase(info)
+            texto = _texto_fase(info, cliente)
             if texto:
                 trabajos.reportar(job_id, detalle=texto)
         except Exception:
@@ -5974,7 +5979,7 @@ def _lanzar_generacion_imagen(cliente, prompt_id):
             raise RuntimeError(idiomas.N_("El prompt ya no existe (¿se descartó mientras generaba?)."))
         ok, error = _generar_imagen_candidata(
             cliente, prompt_id, item, job_id=job_id,
-            on_progreso=_avisar_fase_de(job_id),
+            on_progreso=_avisar_fase_de(job_id, cliente),
         )
         prompts_mod.guardar(cliente, data)
         if not ok:
@@ -6058,7 +6063,7 @@ def aprobar_imagen(cliente, prompt_id):
         # on_progreso: el poll de Higgsfield ya sabía contar su fase cruda, pero
         # ningún llamador se la pedía — la barra se quedaba sin el "en cola / el
         # modelo está trabajando" durante los ~2 minutos que dura esto.
-        result = poll_until_done(launch["status_url"], on_progreso=_avisar_fase_de(job_id))
+        result = poll_until_done(launch["status_url"], on_progreso=_avisar_fase_de(job_id, cliente))
         higgsfield_url = extract_video_url(result)
         trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
         try:
@@ -7396,9 +7401,12 @@ def _volver_tw(cliente):
 
 def _probar_triple_whale(llave, dominio, moneda):
     """None si la llave ve la tienda y puede consultar; si no, el motivo para
-    la persona (sin la llave)."""
+    la persona (sin la llave) SIN traducir: un msgid (N_) o el texto del
+    proveedor. Quien lo muestra o lo guarda lo pasa por idiomas.traducir en su
+    idioma (la respuesta, quien mira; el `error` guardado, el proyecto) sin
+    volver a llamar a Triple Whale."""
     if not triple_whale.validar_llave(llave):
-        return gettext("Triple Whale no reconoce esa llave (revocada o mal copiada).")
+        return idiomas.N_("Triple Whale no reconoce esa llave (revocada o mal copiada).")
     try:
         triple_whale.probar(llave, dominio, moneda)
     except triple_whale.ErrorTripleWhale as e:
@@ -7427,7 +7435,7 @@ def cfg_triple_whale_conectar(cliente):
     moneda = triple_whale.normalizar_moneda(request.form.get("moneda"))
     problema = _probar_triple_whale(llave, dominio, moneda)
     if problema:
-        flash(gettext("No pude conectar Triple Whale: %(error)s", error=problema), "error")
+        flash(gettext("No pude conectar Triple Whale: %(error)s", error=idiomas.traducir(problema)), "error")
         return _volver_tw(cliente)
     triple_whale_tiendas.conectar(cliente, llave, dominio, moneda=moneda,
                                   modelo_atribucion=request.form.get("modelo_atribucion"),
@@ -7453,10 +7461,14 @@ def cfg_triple_whale_probar(cliente):
     except cifrado.ErrorCifrado:
         llave = None
     problema = (_probar_triple_whale(llave, config["dominio_tienda"], config["moneda"]) if llave
-                else gettext("No se pudo leer la llave guardada: vuelve a conectar Triple Whale."))
+                else idiomas.N_("No se pudo leer la llave guardada: vuelve a conectar Triple Whale."))
     if problema:
-        triple_whale_tiendas.actualizar(cliente, estado="error", error=problema)
-        flash(gettext("La conexión con Triple Whale falló: %(error)s", error=problema), "error")
+        # El `error` guardado lo ve cualquiera que abra la pestaña después: idioma
+        # del proyecto. El flash es para quien tocó el botón: su idioma.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            guardado = idiomas.traducir(problema)
+        triple_whale_tiendas.actualizar(cliente, estado="error", error=guardado)
+        flash(gettext("La conexión con Triple Whale falló: %(error)s", error=idiomas.traducir(problema)), "error")
     else:
         triple_whale_tiendas.actualizar(cliente, estado="conectada", error=None)
         flash(gettext("Conexión con Triple Whale correcta."), "ok")

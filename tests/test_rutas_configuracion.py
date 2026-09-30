@@ -301,6 +301,29 @@ def test_triple_whale_conectar_con_tienda_que_la_llave_no_ve_no_guarda(app, monk
     assert "no reconoce la tienda" in r.data.decode()
 
 
+def test_triple_whale_probar_guarda_el_error_en_el_idioma_del_proyecto(app, monkeypatch):
+    """Fase 6, Task 6, fix round 1: el `error` guardado de la conexión lo ve
+    cualquiera que abra la pestaña después (idioma del proyecto); el flash es
+    para quien tocó «Probar conexión» (su idioma). Triple Whale se consulta una
+    sola vez."""
+    import idiomas
+    import triple_whale
+    import triple_whale_tiendas
+    from tests.test_rutas_bloque4 import _flashes
+    triple_whale_tiendas.conectar("acme", "tw_secreto_123", "acme.myshopify.com", moneda="USD")
+    llamadas = []
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: llamadas.append(llave) or False)
+    monkeypatch.setattr(idiomas, "de_usuario", lambda usuario: "en")     # quien mira, en inglés
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda cliente: "es")    # el proyecto, en español
+    app["c"].post("/cliente/acme/cfg_triple_whale/probar")
+    assert llamadas == ["tw_secreto_123"]
+    config = triple_whale_tiendas.obtener("acme")
+    assert config["estado"] == "error"
+    assert config["error"] == "Triple Whale no reconoce esa llave (revocada o mal copiada)."
+    assert _flashes(app["c"]) == ["The Triple Whale connection failed: Triple Whale doesn't recognize that key "
+                                  "(revoked or mistyped)."]
+
+
 def test_triple_whale_conectar_con_dominio_invalido_no_llama_a_triple_whale(app, monkeypatch):
     import triple_whale
     import triple_whale_tiendas

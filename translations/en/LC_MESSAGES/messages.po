@@ -8710,10 +8710,6 @@ msgid "No se conserva la foto original de esta generación."
 msgstr "The original photo of this generation wasn't kept."
 
 #, python-format
-msgid "No se creó la publicación en %(nombre)s: %(error)s"
-msgstr "The post on %(nombre)s was not created: %(error)s"
-
-#, python-format
 msgid "No se creó la publicación en %(plataformas)s: %(error)s"
 msgstr "The post on %(plataformas)s was not created: %(error)s"
 
@@ -12923,7 +12919,7 @@ msgid "Ya había una publicación de esta pieza en curso; las nuevas quedaron pa
 msgstr "There was already a post of this piece in progress; the new ones were left to retry."
 
 msgid "Ya había una publicación de esta pieza en curso; reintenta cuando termine."
-msgstr "This piece already had a publication in progress; retry when it finishes."
+msgstr "There was already a post of this piece in progress; retry once it finishes."
 
 msgid "Ya había una publicación de esta pieza en curso; vuelve a intentarlo cuando termine."
 msgstr "There was already a post of this piece in progress; try again when it's done."
