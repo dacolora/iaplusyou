@@ -1904,7 +1904,11 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .ref-traer form:has(input[name="modo"][value="palabra"]:checked) [data-solo="marca"] { display: none; }
 .ref-traer [data-solo="marca"] { display: flex; flex-direction: column; gap: .4rem; }
 .ref-traer form:has(input[name="fuente"][value="apify"]:checked) [data-solo-fuente="atria"],
+.ref-traer form:has(input[name="fuente"][value="trendtrack"]:checked) [data-solo-fuente="atria"],
 .ref-traer form:not(:has(input[name="fuente"][value="apify"]:checked)) [data-solo-fuente="apify"] { display: none; }
+.ref-traer form:not(:has(input[name="fuente"][value="trendtrack"]:checked)) [data-solo-fuente="trendtrack"] { display: none; }
+/* TrendTrack solo busca por palabra clave: no ofrece la tarjeta «De una marca». */
+.ref-traer form:has(input[name="fuente"][value="trendtrack"]:checked) [data-no-fuente="trendtrack"] { display: none; }
 @media (max-width: 520px) {
   .modal-form { padding: 1.2rem 1rem 0; }
   .modal-form-pie { margin: 0 -1rem; padding: .9rem 1rem 1rem; }

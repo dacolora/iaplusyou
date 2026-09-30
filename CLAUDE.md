@@ -355,6 +355,16 @@ dataset/contarlo, compartido con `nicho/fuentes/apify.py`;
 la URL de la Ad Library con país real (a diferencia de Atria, que es solo
 UE) e idioma, una sola corrida por barrido sin cursor que retomar, reporta
 su costo real por resultado a `gastos` bajo el tipo `recoleccion`).
+TrendTrack (2026-09-30, spec `2026-09-30-fuente-trendtrack-design.md`): tercera fuente de barrido,
+`referentes/fuentes/trendtrack.py` (`TRENDTRACK_API_KEY`, plan Pro). Solo busca por palabra clave
+(`MODOS = ("palabra",)`, `fuentes.modos(tipo)`: el formulario esconde «De una marca» y las rutas lo rechazan),
+pide `GET /v1/ads?search&limit&offset` con `Authorization: Bearer`, prueba la llave con `GET /v1/me` (gratis) y
+cobra 1 crédito por fila devuelta: el formato y «solo activos» se filtran AQUÍ, después de pagar, así que se
+miran hasta 3× los anuncios pedidos. Como Atria, `usd_fuente` es 0 y el uso se cuenta en `kv`
+(`creditos_este_mes`, `creditos_restantes` desde `X-Credits-Remaining`, visibles en `/admin/referentes`). **Los
+nombres de los campos de cada anuncio NO están verificados** (la documentación estaba bloqueada): `_normalizar`
+los lee con la tabla `_CLAVES`, la primera página es de 10 filas y, si ninguna se reconoce, el barrido se
+detiene con un error que lista los campos recibidos.
 Barridos por palabra (2026-09-27, tras «dolor de pies» que trajo ruido pagado): SIEMPRE en inglés
 — `referentes/traducir.preparar_consulta` traduce lo escrito con Claude (≈ US$ 0,0002, gasto tipo
 `otro`, bajo `_creatv` si es global), guarda `consulta.palabra_original`, fuerza `idioma=en` (no hay
