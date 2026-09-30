@@ -138,6 +138,10 @@ app.jinja_env.filters["traducir"] = idiomas.traducir
 # Errores de Meta: el JSON crudo de la Graph API se muestra en palabras de persona
 # (`{{ e.error|error_meta(modo_meta) }}`); el crudo sigue en el detalle técnico.
 app.jinja_env.filters["error_meta"] = meta_errores.explicar
+# Selector de Crear y panel de Sprints agrupan los colores de un producto
+# (spec 2026-09-28 §10.5) con esto en vez de `|groupby('producto_id')`: ver
+# el docstring de la función para por qué.
+app.jinja_env.filters["agrupar_por_producto"] = catalogo_productos.agrupar_por_producto
 
 
 @app.url_defaults

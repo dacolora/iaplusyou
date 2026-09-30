@@ -14,7 +14,15 @@
       <label>Producto
         <select data-campo="catalogo_id">
           {% if not c.producto %}<option value="{{ c.catalogo_id }}" selected>{{ c.catalogo_id }} (ya no está en el catálogo)</option>{% endif %}
-          {% for p in productos %}<option value="{{ p.id }}" {% if p.id == c.catalogo_id %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
+          {% for grupo in productos | agrupar_por_producto %}
+          {% if grupo | length > 1 or grupo[0].variante %}
+          <optgroup label="{{ grupo[0].nombre_producto }}">
+            {% for p in grupo %}<option value="{{ p.id }}" {% if p.id == c.catalogo_id %}selected{% endif %}>{{ p.nombre | replace(p.nombre_producto ~ ' — ', '') }}</option>{% endfor %}
+          </optgroup>
+          {% else %}
+          <option value="{{ grupo[0].id }}" {% if grupo[0].id == c.catalogo_id %}selected{% endif %}>{{ grupo[0].nombre }}</option>
+          {% endif %}
+          {% endfor %}
         </select>
         <small class="campo-error" hidden></small></label>
     </div>

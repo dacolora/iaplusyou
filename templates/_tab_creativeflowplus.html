@@ -360,7 +360,7 @@
       var st = document.getElementById('fp-sonido'); if (st && prefill.sonido_texto) st.value = prefill.sonido_texto;
       var mu = document.getElementById('fp-musica'); if (mu && typeof prefill.musica_estilo === 'string') mu.value = prefill.musica_estilo;
       if (inicioInput && prefill.musica_inicio_s) inicioInput.value = prefill.musica_inicio_s;
-      var ca = document.getElementById('fp-calidad'); if (ca) ca.checked = prefill.calidad === 'borrador';
+      var ca = document.getElementById('fp-calidad'); if (ca && prefill.calidad) ca.checked = prefill.calidad === 'borrador';
       setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
     }
     // Lo que el modelo admite manda: duraciones fuera de su rango y formatos que
@@ -604,6 +604,17 @@
     }
     pintarCatalogo();
     refrescar();
+
+    // «Crear con este producto» desde el Catálogo: llega el color marcado.
+    var prefillCat = {{ fp_prefill | tojson }};
+    if (prefillCat && prefillCat.productos_catalogo) {
+      prefillCat.productos_catalogo.forEach(function (v) {
+        var cb = form.querySelector('input[name=productos_catalogo][value="' + String(v).replace(/"/g, '') + '"]');
+        if (cb) { cb.checked = true; cb.dispatchEvent(new Event('change', {bubbles: true})); }
+      });
+      pintarCatalogo();
+      refrescar();
+    }
 
     // Chips @Imagen N / @Video N de la bandeja: insertan la etiqueta en el texto.
     var chips = document.getElementById('fp-etiquetas');

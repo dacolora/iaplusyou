@@ -2666,6 +2666,12 @@ body.panel-abierto { overflow: hidden; }
 .cat-nuevo-color form { display: grid; gap: .5rem; margin-top: .5rem; }
 .cat-crear-con { display: inline-flex; gap: .4rem; align-items: center; margin: 0; }
 .cat-crear-con select { width: auto; margin: 0; }
+/* Selector de Crear/Sprints: un producto con colores agrupa sus tiles bajo un
+   encabezado en vez de listarlos sueltos (spec 2026-09-28 §10.5). */
+.producto-grupo { flex: 1 1 100%; }
+.producto-grupo-nombre { margin: .4rem 0 .2rem; font-size: .8rem; color: var(--muted); }
+.producto-grupo-nombre small { margin-left: .3rem; }
+.producto-grupo-tiles { display: flex; flex-wrap: wrap; gap: .5rem; }
 @media (max-width: 640px) {
   .cat-tarjetas { grid-template-columns: repeat(2, 1fr); }
   .cat-toolbar .cat-buscador { max-width: 100%; }

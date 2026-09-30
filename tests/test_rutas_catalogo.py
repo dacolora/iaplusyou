@@ -122,6 +122,25 @@ def test_crear_con_deja_el_color_marcado_para_crear(app):
     assert any("no tiene fotos" in m for m in _flashes(c))
 
 
+def test_selector_de_crear_agrupa_los_colores_por_producto(app):
+    """El selector de Crear (diálogo «Del catálogo») agrupa los colores de un
+    mismo producto bajo un encabezado en vez de listarlos sueltos (spec
+    2026-09-28 §10.5); un producto plano sigue con su tile de siempre."""
+    _con_colores(app)
+    _activo_con_foto("acme", "Cojín")
+    html = app["c"].get("/cliente/acme").data.decode()
+    dialogo = html.split('id="fp-catalogo"', 1)[1].split("</dialog>", 1)[0]
+    # La franja entre el primer "producto-grupo" y el siguiente (o el fin del
+    # diálogo si no hay otro): más robusto que depender de la indentación exacta.
+    resto = dialogo.split('class="producto-grupo"', 1)[1]
+    grupo = resto.split('class="producto-grupo"', 1)[0]
+    assert "Original" in grupo and "2 colores" in grupo
+    assert 'value="producto:original/pink"' in grupo and 'value="producto:original/beige"' in grupo
+    assert 'data-nombre="original original — pink"' in grupo and "<span>Pink</span>" in grupo
+    assert 'value="producto:cojin"' in dialogo and 'class="producto-grupo"' not in dialogo.split('value="producto:cojin"', 1)[0].rsplit("<label", 1)[1]
+    assert "var prefillCat = " in html and "input[name=productos_catalogo][value=" in html
+
+
 def test_prod_rutas_vuelven_a_la_ficha_si_la_fila_tiene_activo(app):
     import tiendas
     pid = _producto(nombre="Cojín Azul")

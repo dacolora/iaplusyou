@@ -254,6 +254,26 @@ def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
     return productos
 
 
+def agrupar_por_producto(lista):
+    """Agrupa una lista de `listar()` por producto (spec 2026-09-28 §10.5): un
+    producto con colores queda con todas sus entradas juntas, en el orden en
+    que aparecieron. Filtro de plantilla (`_selector_productos.html`,
+    `_sprint_panel_armar.html`) en vez de `|groupby('producto_id')` porque ese
+    filtro de Jinja ORDENA por la clave antes de agrupar, y una entrada sin
+    `producto_id` (catálogos falsos de tests viejos, previos a los colores)
+    vuelve esa clave `Undefined` — comparar dos `Undefined` para ordenar
+    revienta con `UndefinedError` apenas hay 2 o más entradas así. Acá cada
+    entrada sin `producto_id` cae sola en su propio grupo, por su `id`."""
+    grupos, indice = [], {}
+    for p in lista:
+        clave = p.get("producto_id") or p["id"]
+        if clave not in indice:
+            indice[clave] = []
+            grupos.append(indice[clave])
+        indice[clave].append(p)
+    return grupos
+
+
 def listar_productos(cliente, categoria=CATEGORIA_POR_DEFECTO):
     """Una entrada por PRODUCTO (§5.2 del spec): sus colores (con o sin fotos),
     sus fotos generales y la representativa. Un producto sin ninguna foto en
