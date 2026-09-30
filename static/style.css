@@ -2730,3 +2730,66 @@ body.panel-abierto { overflow: hidden; }
 .au-voz-play:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-texto); }
 .au-voz-play.sonando { background: var(--accent); border-color: var(--accent); color: #fff; }
 @media (max-width: 760px) { .au-voces { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Nicho · investigar el nicho (Parte 3) */
+.nicho-inv-cabecera { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.nicho-inv-cabecera h3 { margin: 0; }
+.nicho-inv-cifras { margin: .4rem 0; font-size: .9rem; }
+.nicho-inv-pasos { list-style: none; padding: 0; margin: .6rem 0; display: flex; flex-direction: column; gap: .3rem; }
+.nicho-inv-paso { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; font-size: .88rem; }
+.nicho-inv-paso-nombre { min-width: 11rem; font-weight: 600; }
+.nicho-inv-paso.paso-pendiente { opacity: .6; }
+.nicho-inv-aviso { color: var(--warn); overflow-wrap: anywhere; }
+.nicho-inv-chips { border: 0; padding: 0; margin: .4rem 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.nicho-inv-chips legend { font-weight: 600; margin-bottom: .2rem; }
+.nicho-inv-chips label.apagado { opacity: .45; }
+.nicho-inv-estimado { margin: .6rem 0; font-size: .9rem; display: flex; flex-direction: column; gap: .15rem; }
+.nicho-inv-tabla td { overflow-wrap: anywhere; }
+
+/* Nicho · avatares del proyecto (spec 2026-09-29) */
+.nicho-avatares-resumen { margin-bottom: 1rem; }
+.nicho-avatares-muestra { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0; }
+.nicho-avatares-muestra a { text-decoration: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.nicho-completar { margin-bottom: .6rem; }
+.nicho-otros { margin-top: 1rem; }
+/* Fix round 1 (Ruling 25): estas dos son las primeras en meter texto libre y
+   largo dentro de un .tag-estado, que es white-space: nowrap -- sin esto se
+   corta en silencio contra el borde del celular (body ya tiene overflow-x:
+   hidden). No se toca .tag-estado global: el resto de sus usos son etiquetas
+   cortas que SÍ deben quedar en una sola línea. */
+.nicho-faltantes { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+
+/* ── Flow Plus: imágenes de cada escena (2026-09-30) ───────────────────────
+   _gpg_escenas.html: las imágenes del video (Image 1…N + extra) y, por escena,
+   fichas que se prenden y apagan. Filas flexibles que se envuelven: en el
+   celular nada empuja la página hacia el costado. */
+.gpg-escenas { margin: 1rem 0; }
+.gpg-escenas h6 { margin: .9rem 0 .4rem; font-size: .82rem; color: var(--muted); font-weight: 600; }
+.gpg-pool { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.gpg-img { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; width: 132px; max-width: 100%;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); padding: .4rem; }
+.gpg-img.falta { border-style: dashed; }
+.gpg-img img, .gpg-img .gpg-img-vacia { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: var(--panel-2); }
+.gpg-img-vacia { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.1rem; }
+.gpg-img-nombre { font-size: .75rem; line-height: 1.3; overflow-wrap: anywhere; }
+.gpg-img-estado { font-size: .72rem; color: var(--muted); }
+.gpg-img.falta .gpg-img-estado { color: var(--warn); }
+.gpg-img-acciones { display: flex; flex-wrap: wrap; gap: .3rem; }
+.gpg-img-btn { font: inherit; color: var(--text); cursor: pointer; text-align: left; }
+.gpg-img-btn:hover { border-color: var(--accent); }
+.gpg-subir { cursor: pointer; }
+.gpg-subir.subiendo { opacity: .55; pointer-events: none; }
+.gpg-del-catalogo { width: 100%; }
+.gpg-del-catalogo .gpg-pool { margin-top: .5rem; max-height: 22rem; overflow-y: auto; }
+.gpg-escena { border-top: 1px solid var(--border); padding: .6rem 0; }
+.gpg-escena-cab { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; margin-bottom: .4rem; }
+.gpg-escena-cab span { color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
+.gpg-fichas { display: flex; flex-wrap: wrap; gap: .4rem; }
+.gpg-ficha { display: flex; flex-direction: column; align-items: center; gap: .2rem; width: 68px; padding: .25rem;
+  border: 2px solid var(--border); border-radius: var(--radius-sm); background: transparent; color: var(--muted);
+  font: inherit; font-size: .7rem; cursor: pointer; opacity: .55; }
+.gpg-ficha img, .gpg-ficha .gpg-img-vacia { width: 56px; height: 56px; object-fit: cover; border-radius: 5px; background: var(--panel-2); }
+.gpg-ficha.activa { opacity: 1; border-color: var(--accent); color: var(--text); }
+.gpg-ficha:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gpg-ficha-mas { opacity: 1; border-style: dashed; text-align: center; }
+@media (max-width: 760px) { .gpg-img { width: calc(50% - .25rem); } }

@@ -165,11 +165,12 @@ class TestStateMachine:
 
     def test_crear_inicial_estructura_completa(self, investigacion_mod):
         """crear_inicial builds proper structure."""
+        # Solo meli: Amazon no tiene tienda propia en Colombia (R8).
         inv = investigacion_mod.crear_inicial(
             tema="phones",
             pais="CO",
-            plataformas=["amazon", "meli"],
-            redes=["reddit"],
+            plataformas_elegidas=["meli"],
+            redes_elegidas=["reddit"],
             topes={"consultas": 3, "productos_por_consulta": 20}
         )
         assert inv["version"] == 1
@@ -177,15 +178,18 @@ class TestStateMachine:
         assert inv["tema"] == "phones"
         assert inv["pais"] == "CO"
         assert inv["consultas"] == []
-        assert inv["pasos"] == {}
+        # pasos ya no nace vacío: viene prellenado "pendiente" para cada paso del orden.
+        assert set(inv["pasos"]) == set(inv["orden"])
+        assert all(p["estado"] == "pendiente" for p in inv["pasos"].values())
         assert inv["aprobado_usd"] > 0
 
     def test_estimar_devuelve_costos_positivos(self, investigacion_mod):
         """estimar returns breakdown with positive total."""
+        # meli (no amazon): Amazon no tiene tienda propia en Colombia (R8).
         est = investigacion_mod.estimar(
             {},
             "CO",
-            ["amazon"],
+            ["meli"],
             ["reddit"],
             {"consultas": 2, "productos_por_consulta": 20,
              "productos_elegidos": 15, "resenas_por_producto": 100}
@@ -229,9 +233,9 @@ class TestPlataformas:
         """Amazon domain for US is .com."""
         assert plataformas_mod.dominio("amazon", "US") == "com"
 
-    def test_dominio_meli_vacío(self, plataformas_mod):
-        """MELI returns empty (no .com domain)."""
-        assert plataformas_mod.dominio("meli", "AR") == ""
+    def test_dominio_meli_url_del_sitio(self, plataformas_mod):
+        """MELI's dominio is the site's listing URL, not a bare TLD."""
+        assert plataformas_mod.dominio("meli", "AR") == "https://listado.mercadolibre.com.ar/"
 
     def test_estimar_busqueda_positivo(self, plataformas_mod):
         """Search pricing is positive."""
@@ -239,8 +243,10 @@ class TestPlataformas:
         assert usd > 0
 
     def test_estimar_busqueda_desconocido(self, plataformas_mod):
-        """Unknown platform returns 0."""
-        assert plataformas_mod.estimar_busqueda("unkn", 3, 20) == 0.0
+        """Unknown platform raises ErrorFuente."""
+        from nicho.fuentes.base import ErrorFuente
+        with pytest.raises(ErrorFuente):
+            plataformas_mod.estimar_busqueda("unkn", 3, 20)
 
     def test_estimar_resenas_positivo(self, plataformas_mod):
         """Review pricing is positive."""
@@ -253,7 +259,7 @@ class TestPlataformas:
             "amazon", ["phones", "tablets"], "US", 20
         )
         assert len(entradas) == 1
-        assert "categoryOrProductUrls" in entradas[0]
+        assert "categoryOrProductUrls" in entradas[0]["entrada"]
 
     def test_entradas_busqueda_meli_por_query(self, plataformas_mod):
         """MELI: one entry per query."""
@@ -261,14 +267,14 @@ class TestPlataformas:
             "meli", ["phones", "tablets"], "CO", 20
         )
         assert len(entradas) == 2
-        assert all("keyword" in e for e in entradas)
+        assert all("keyword" in e["entrada"] for e in entradas)
 
     def test_leer_producto_amazon_valido(self, plataformas_mod):
         """Read Amazon product."""
         item = {
             "asin": "B001",
             "title": "iPhone",
-            "price": "USD 999.99",
+            "price": 999.99,
             "brand": "Apple",
             "stars": 4.5,
             "reviewsCount": 100,
@@ -306,7 +312,7 @@ class TestPlataformas:
 class TestTareasWorker:
     """Test worker task logic."""
 
-    def test_avanzar_genera_job_id_deterministico(self, tareas_inv, monkeypatch):
+    def test_avanzar_genera_job_id_deterministico(self, tareas_inv, datos_nicho, investigacion_mod, monkeypatch):
         """avanzar creates deterministic job_id."""
         encolados = []
 
@@ -314,22 +320,18 @@ class TestTareasWorker:
             encolados.append((job_id, tarea))
             return True
 
-        def mock_siguiente(inv):
-            return "consultas"
-
-        def mock_investigacion(c, e):
-            return {"estado": "consultas"}
-
         monkeypatch.setattr("tareas.investigacion.trabajos.encolar", mock_encolar)
-        monkeypatch.setattr("tareas.investigacion.inv.siguiente_paso", mock_siguiente)
-        monkeypatch.setattr("tareas.investigacion.datos.investigacion", mock_investigacion)
 
-        tareas_inv.avanzar("cliente1", 123)
+        eid = datos_nicho.crear_estudio("cliente1", "Estudio", tema="phones", pais="US")
+        datos_nicho.iniciar_investigacion("cliente1", eid, investigacion_mod.crear_inicial(
+            "phones", "US", ["amazon"], [], investigacion_mod.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+
+        tareas_inv.avanzar("cliente1", eid)
 
         assert len(encolados) == 1
-        assert encolados[0][0] == "nicho:cliente1:123:inv:consultas"
+        assert encolados[0][0] == f"nicho:cliente1:{eid}:inv:consultas"
 
-    def test_avanzar_diferencia_plataformas(self, tareas_inv, monkeypatch):
+    def test_avanzar_diferencia_plataformas(self, tareas_inv, datos_nicho, investigacion_mod, monkeypatch):
         """avanzar distinguishes buscar:amazon vs buscar:meli."""
         encolados = []
 
@@ -337,21 +339,19 @@ class TestTareasWorker:
             encolados.append(payload)
             return True
 
-        def mock_siguiente(inv):
-            return "buscar:amazon"
-
-        def mock_investigacion(c, e):
-            return {"estado": "buscando"}
-
         monkeypatch.setattr("tareas.investigacion.trabajos.encolar", mock_encolar)
-        monkeypatch.setattr("tareas.investigacion.inv.siguiente_paso", mock_siguiente)
-        monkeypatch.setattr("tareas.investigacion.datos.investigacion", mock_investigacion)
 
-        tareas_inv.avanzar("c1", 1)
+        eid = datos_nicho.crear_estudio("cliente1", "Estudio", tema="phones", pais="US")
+        inicial = investigacion_mod.crear_inicial("phones", "US", ["amazon", "meli"], [], investigacion_mod.TOPES_DEFECTO,
+                                                  estimado={"total_usd": 1.0})
+        inicial = investigacion_mod.marcar_paso(inicial, "consultas", "hecho")        # el siguiente paso pendiente es buscar:amazon
+        datos_nicho.iniciar_investigacion("cliente1", eid, inicial)
+
+        tareas_inv.avanzar("cliente1", eid)
 
         assert encolados[0]["plataforma"] == "amazon"
 
-    def test_avanzar_sin_siguiente_paso(self, tareas_inv, monkeypatch):
+    def test_avanzar_sin_siguiente_paso(self, tareas_inv, datos_nicho, investigacion_mod, monkeypatch):
         """avanzar does nothing if no next step."""
         encolados = []
 
@@ -359,17 +359,15 @@ class TestTareasWorker:
             encolados.append(1)
             return True
 
-        def mock_siguiente(inv):
-            return None  # Cadena terminada
-
-        def mock_investigacion(c, e):
-            return {"estado": "lista"}
-
         monkeypatch.setattr("tareas.investigacion.trabajos.encolar", mock_encolar)
-        monkeypatch.setattr("tareas.investigacion.inv.siguiente_paso", mock_siguiente)
-        monkeypatch.setattr("tareas.investigacion.datos.investigacion", mock_investigacion)
 
-        tareas_inv.avanzar("c1", 1)
+        eid = datos_nicho.crear_estudio("cliente1", "Estudio", tema="phones", pais="US")
+        inicial = investigacion_mod.crear_inicial("phones", "US", [], [], investigacion_mod.TOPES_DEFECTO, estimado={"total_usd": 1.0})
+        for paso in inicial["orden"]:                                                 # todo hecho -> "lista", sin próximo paso
+            inicial = investigacion_mod.marcar_paso(inicial, paso, "hecho")
+        datos_nicho.iniciar_investigacion("cliente1", eid, inicial)
+
+        tareas_inv.avanzar("cliente1", eid)
 
         assert len(encolados) == 0
 
@@ -391,20 +389,8 @@ class TestTareasWorker:
             "gastado_usd": 0.0, "aprobado_usd": 5.0,
         })
 
-        class _Bloque:
-            text = '{"consultas": ["mejor termo", "termo acero"]}'
-
-        class _Respuesta:
-            content = [_Bloque()]
-
-        class _Mensajes:
-            def create(self, **kw):
-                return _Respuesta()
-
-        class _ClienteFalso:
-            messages = _Mensajes()
-
-        monkeypatch.setattr("tareas.investigacion.anthropic.Anthropic", lambda: _ClienteFalso())
+        from nicho import avatares
+        monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: ('{"consultas": ["a b", "c d"]}', 100, 10))
         monkeypatch.setattr("tareas.investigacion.gastos.registrar_seguro", lambda *a, **k: None)
         encolados = []
         monkeypatch.setattr("tareas.investigacion.trabajos.encolar",
@@ -420,35 +406,6 @@ class TestTareasWorker:
 
         inv = datos_nicho.investigacion(cliente, eid)
         assert inv["pasos"]["consultas"]["estado"] == "hecho"
-
-    def test_ejecutar_buscar_detiene_la_cadena_en_vez_de_fingir(self, tareas_inv, datos_nicho, estudio_test):
-        """`nicho_inv_buscar` todavía no tiene la búsqueda real de Apify: debe
-        detener la investigación con un motivo claro, nunca quedar "en curso"
-        para siempre sin ningún aviso (antes no tocaba el estado en absoluto)."""
-        cliente, eid = "test_cliente", estudio_test
-        datos_nicho.actualizar_investigacion(cliente, eid, lambda inv: {
-            "estado": "buscando", "consultas": ["termo"],
-            "pasos": {"consultas": {"estado": "hecho"}}, "gastado_usd": 0.0, "aprobado_usd": 5.0,
-        })
-
-        tareas_inv.ejecutar_buscar({"payload": {"cliente": cliente, "estudio_id": eid, "plataforma": "amazon"},
-                                    "job_id": f"nicho:{cliente}:{eid}:inv:buscar:amazon"})
-
-        inv = datos_nicho.investigacion(cliente, eid)
-        assert inv["estado"] == "detenida"
-        assert "amazon" in inv["detenida_por"] and "no está implementada" in inv["detenida_por"]
-
-    def test_ejecutar_seleccionar_detiene_la_cadena_en_vez_de_fingir(self, tareas_inv, datos_nicho, estudio_test):
-        cliente, eid = "test_cliente", estudio_test
-        datos_nicho.actualizar_investigacion(cliente, eid, lambda inv: {
-            "estado": "seleccionando", "consultas": ["termo"], "pasos": {}, "gastado_usd": 0.0, "aprobado_usd": 5.0,
-        })
-
-        tareas_inv.ejecutar_seleccionar({"payload": {"cliente": cliente, "estudio_id": eid},
-                                        "job_id": f"nicho:{cliente}:{eid}:inv:seleccionar"})
-
-        inv = datos_nicho.investigacion(cliente, eid)
-        assert inv["estado"] == "detenida" and "no está implementada" in inv["detenida_por"]
 
 
 # ========== DATA LAYER TESTS (nicho/datos.py) ==========
@@ -507,30 +464,32 @@ class TestIntegracion:
 
     def test_flujo_tema_a_estado_consultas(self, investigacion_mod):
         """Theme → estado consultas."""
+        # Solo meli: Amazon no tiene tienda propia en Colombia (R8).
         inv = investigacion_mod.crear_inicial(
             tema="smart home",
             pais="CO",
-            plataformas=["amazon", "meli"],
-            redes=["reddit"],
+            plataformas_elegidas=["meli"],
+            redes_elegidas=["reddit"],
             topes={"consultas": 3}
         )
         assert inv["estado"] == "consultas"
         assert inv["tema"] == "smart home"
 
     def test_transicion_consultas_a_buscando(self, investigacion_mod):
-        """Transition: consultas → buscando (when consultas marked done)."""
+        """Transition: consultas -> seleccionar directamente cuando no se elige
+        ninguna plataforma (el `orden` que arma crear_inicial no tiene ningún
+        paso "buscar:" que saltar)."""
         inv = investigacion_mod.crear_inicial(
-            tema="test", pais="CO", plataformas=[], redes=[], topes={}
+            tema="test", pais="CO", plataformas_elegidas=[], redes_elegidas=[], topes={}
         )
         # Mark consultas as done
         inv = investigacion_mod.marcar_paso(
             inv, "consultas", "hecho",
             usd=0.01, productos=0
         )
-        # Next step should be first buscar (if plataforma available)
+        # Sin ninguna plataforma elegida, el siguiente paso real es "seleccionar".
         paso = investigacion_mod.siguiente_paso(inv)
-        # Should advance or be None if no pasos defined
-        assert paso in (None,) or paso.startswith("buscar:")
+        assert paso == "seleccionar"
 
     def test_resumen_incluye_todo(self, investigacion_mod):
         """resumen aggregates all info."""
@@ -558,8 +517,12 @@ class TestEdgeCases:
     """Edge cases and error conditions."""
 
     def test_siguiente_paso_vacio(self, investigacion_mod):
-        """siguiente_paso with minimal dict."""
-        assert investigacion_mod.siguiente_paso({}) == "consultas"
+        """`{}` means no investigación was ever created for the estudio
+        (R2: `datos.investigacion` returns `{}` in that case) -- there is
+        nothing to advance, unlike a real investigación whose `pasos` come
+        prefilled "pendiente" by `crear_inicial` (see test_orden_y_crear_inicial_prellenado
+        in test_nicho_investigacion.py)."""
+        assert investigacion_mod.siguiente_paso({}) is None
 
     def test_siguiente_paso_estado_desconocido(self, investigacion_mod):
         """Unknown estado treated as in progress."""
@@ -570,7 +533,7 @@ class TestEdgeCases:
     def test_crear_inicial_sin_plataformas(self, investigacion_mod):
         """crear_inicial works with empty platforms."""
         inv = investigacion_mod.crear_inicial(
-            tema="test", pais="CO", plataformas=[], redes=[], topes={}
+            tema="test", pais="CO", plataformas_elegidas=[], redes_elegidas=[], topes={}
         )
         assert inv["estado"] == "consultas"
 
@@ -589,7 +552,8 @@ class TestEdgeCases:
         assert paso["extra_data"] == {"key": "val"}
 
     def test_leer_producto_precio_fallback(self, plataformas_mod):
-        """leer_producto handles bad prices gracefully."""
+        """leer_producto handles bad prices gracefully: unparseable price is
+        None, never a fake 0 that would corrupt downstream numbers."""
         item = {
             "asin": "B1",
             "title": "X",
@@ -598,7 +562,7 @@ class TestEdgeCases:
         }
         prod = plataformas_mod.leer_producto("amazon", item)
         assert prod is not None
-        assert prod["precio"] == 0
+        assert prod["precio"] is None
 
     def test_estimar_plataformas_vacio(self, investigacion_mod):
         """estimar with no platforms still has Claude + avatares cost."""

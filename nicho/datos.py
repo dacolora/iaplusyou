@@ -14,11 +14,20 @@ import cola
 import db
 import idiomas
 from idiomas import N_
+from nicho import calidad
 from sprints import datos as sprints_datos
 from sprints.sugerencias import COLORES
 
 ESTADOS_ESTUDIO = ("armando", "generando", "revisando")
-FUENTES = ("texto", "csv", "reddit", "youtube", "apify")
+FUENTES_PLATAFORMA = ("amazon", "meli", "tiktok_shop")   # claves de nicho.fuentes.plataformas (Parte 3)
+FUENTES = ("texto", "csv", "reddit", "youtube", "apify") + FUENTES_PLATAFORMA
+PAISES_ESTUDIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE", "UY", "EC", "SE", "GB", "DE", "FR", "IT", "NL", "CA", "AU", "IN", "JP", "AE")
+NOMBRES_PAIS = {"CO": N_("Colombia"), "MX": N_("México"), "US": N_("Estados Unidos"), "ES": N_("España"), "BR": N_("Brasil"),
+                "AR": N_("Argentina"), "CL": N_("Chile"), "PE": N_("Perú"), "UY": N_("Uruguay"), "EC": N_("Ecuador"),
+                "SE": N_("Suecia"), "GB": N_("Reino Unido"), "DE": N_("Alemania"), "FR": N_("Francia"), "IT": N_("Italia"),
+                "NL": N_("Países Bajos"), "CA": N_("Canadá"), "AU": N_("Australia"), "IN": N_("India"), "JP": N_("Japón"),
+                "AE": N_("Emiratos Árabes Unidos")}
+MAX_INVESTIGACIONES_PREVIAS = 3
 TIPOS_AVATAR = ("nucleo", "sub")
 BASES = ("emocion", "experiencia_producto")
 ESTADOS_AVATAR = ("propuesto", "aprobado", "descartado")
@@ -30,7 +39,7 @@ NIVELES_CONCIENCIA = ("inconsciente", "consciente_del_problema", "consciente_de_
 CLAVES_IDENTIDAD = ("quiere_que_vean", "cree_de_si", "quiere_lograr")
 MAX_RECOLECCIONES = 20          # registros que se conservan en estudio.extra["recolecciones"]
 
-_ESTUDIO_COLS = ("nombre", "producto", "catalogo_id", "tema", "idioma", "estado", "archivado", "generacion", "extra")
+_ESTUDIO_COLS = ("nombre", "producto", "catalogo_id", "tema", "idioma", "pais", "estado", "archivado", "generacion", "extra")
 _AVATAR_COLS = ("nombre", "deseo", "resumen", "demografia", "edad_rango", "emocion", "identidad", "soluciones_previas",
                 "situaciones", "comportamiento", "conciencia", "encaje_producto", "tono", "palabras_clave", "evidencia",
                 "sin_evidencia", "estado", "persona_id", "orden", "base", "extra")
@@ -54,6 +63,18 @@ def job_id_recolectar(cliente, estudio_id, fuente):
     """Una recolección viva por fuente y estudio (spec §7/§8): la ruta la
     encola con este id y la página muestra su barra mientras vive."""
     return f"nicho:{cliente}:{int(estudio_id)}:recolectar:{fuente}"
+
+
+def job_id_completar(cliente, estudio_id):
+    """Un completado vivo por estudio (spec 2026-09-29 §2)."""
+    return f"nicho:{cliente}:{int(estudio_id)}:completar"
+
+
+def job_id_inv(cliente, estudio_id, paso):
+    """Un trabajo vivo por paso de la investigación (spec Parte 3 §1):
+    `consultas`, `buscar:<plataforma>`, `seleccionar`. Las recolecciones y la
+    generación conservan sus propios ids."""
+    return f"nicho:{cliente}:{int(estudio_id)}:inv:{paso}"
 
 
 # ------------------------------------------------------------ helpers ---
@@ -96,9 +117,22 @@ def _idioma(v):
     return v if _RE_IDIOMA.match(v) else "es"
 
 
+def _pais(v, estricto=False):
+    """ISO-3166-1 alfa-2 de PAISES_ESTUDIO o None. Con `estricto`, un valor no
+    vacío fuera de la lista es ErrorDatos (formulario); sin él se ignora."""
+    v = (v or "").strip().upper() if isinstance(v, str) else ""
+    if not v:
+        return None
+    if v not in PAISES_ESTUDIO:
+        if estricto:
+            raise ErrorDatos(gettext("País no soportado: %(pais)s", pais=v))
+        return None
+    return v
+
+
 # ----------------------------------------------------------- estudios ---
 
-def crear_estudio(cliente, nombre, producto="", tema="", idioma="es", catalogo_id=None):
+def crear_estudio(cliente, nombre, producto="", tema="", idioma="es", catalogo_id=None, pais=None):
     nombre = _texto(nombre, 120)
     if not nombre:
         raise ErrorDatos(gettext("El estudio necesita un nombre."))
@@ -106,8 +140,8 @@ def crear_estudio(cliente, nombre, producto="", tema="", idioma="es", catalogo_i
     with db.conectar() as con:
         return con.execute(db.estudio.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, producto=_texto(producto),
-            catalogo_id=_texto(catalogo_id, 80) or None, tema=_texto(tema), idioma=_idioma(idioma), estado="armando",
-            archivado=False, generacion=0, extra={})).inserted_primary_key[0]
+            catalogo_id=_texto(catalogo_id, 80) or None, tema=_texto(tema), idioma=_idioma(idioma), pais=_pais(pais),
+            estado="armando", archivado=False, generacion=0, extra={})).inserted_primary_key[0]
 
 
 def actualizar_estudio(cliente, estudio_id, /, **campos):
@@ -117,6 +151,8 @@ def actualizar_estudio(cliente, estudio_id, /, **campos):
             raise ErrorDatos(gettext("El estudio necesita un nombre."))
     if "idioma" in campos:
         campos["idioma"] = _idioma(campos["idioma"])
+    if "pais" in campos:
+        campos["pais"] = _pais(campos["pais"], estricto=True)
     if "estado" in campos and campos["estado"] not in ESTADOS_ESTUDIO:
         raise ErrorDatos(gettext("Estado de estudio inválido: %(estado)s", estado=campos["estado"]))
     for k in ("producto", "tema"):
@@ -198,6 +234,7 @@ def estudios(cliente, incluir_archivados=False):
         q = q.where(t.c.archivado.is_(False))
     with db.conectar() as con:
         lista = [_a_dict(f) for f in con.execute(q.order_by(t.c.id.desc()))]
+        lista = [e for e in lista if not es_manual(e)]
         fuentes, aprobados, subs = _conteos(con, cliente, [e["id"] for e in lista])
     return [_decorar(e, fuentes, aprobados, subs) for e in lista]
 
@@ -323,6 +360,16 @@ def urls_comentarios(cliente, estudio_id):
     with db.conectar() as con:
         return {int(f.id): f.url for f in con.execute(sa.select(c.c.id, c.c.url).where(
             c.c.cliente == cliente, c.c.estudio_id == estudio_id))}
+
+
+def urls_de_comentarios(cliente, ids):
+    """{id: url} de esos comentarios, de cualquier estudio del proyecto."""
+    ids = [int(i) for i in ids or []]
+    if not ids:
+        return {}
+    c = db.comentario
+    with db.conectar() as con:
+        return {int(f.id): f.url for f in con.execute(sa.select(c.c.id, c.c.url).where(c.c.cliente == cliente, c.c.id.in_(ids)))}
 
 
 # ----------------------------------------------------------- avatares ---
@@ -461,6 +508,73 @@ def actualizar_avatar(cliente, avatar_id, /, **campos):
         return _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, campos)
 
 
+def _fusionar(vivos, nuevos, clave):
+    """Listas: conserva cada entrada VIVA tal cual (nunca se descarta ni se
+    reescribe) y agrega, al final, las de `nuevos` cuya `clave(item)` no
+    repite la de una ya presente (sin distinguir mayúsculas)."""
+    vivos = list(vivos or [])
+    vistas = {clave(x) for x in vivos}
+    fusion = list(vivos)
+    for x in (nuevos or []):
+        k = clave(x)
+        if k not in vistas:
+            vistas.add(k)
+            fusion.append(x)
+    return fusion
+
+
+def guardar_completado(cliente, estudio_id, cambios):
+    """Guarda en UNA transacción lo que completó Claude (`{avatar_id: campos}`,
+    incluida la evidencia verificada). Ruling 23 (2026-09-29): decide contra
+    la fila VIVA en el momento de escribir, no contra la foto de antes de
+    llamar a Claude -- entre una y otra una persona pudo editar el avatar a
+    mano. Los campos de texto y los fijos (identidad, conciencia) se funden
+    con `calidad.fundir` (nunca pisa lo lleno de la fila viva); las listas
+    (situaciones, palabras_clave, soluciones_previas, evidencia) se fusionan
+    aparte SIEMPRE contra la fila viva -- conservan cada entrada que ya había
+    (válida o no) y solo agregan las nuevas que no repiten, sin importar si la
+    fila viva ya alcanzaba el mínimo (si no, un mínimo cumplido a mano
+    descartaría en silencio lo nuevo que Claude sí encontró). Solo escribe las
+    claves cuyo valor fundido difiere del que ya estaba. Devuelve los ids
+    aprobados, para que quien llama actualice sus personas."""
+    permitidas = set(AVATAR_EDITABLES) | {"evidencia", "sin_evidencia"}
+    listas = ("situaciones", "palabras_clave", "soluciones_previas", "evidencia")
+    aprobados = []
+    with db.conectar() as con:
+        for aid, campos in (cambios or {}).items():
+            f = _fila(con, db.avatar, int(aid), cliente)
+            if not f or f.estudio_id != int(estudio_id) or f.tipo != "sub":
+                continue
+            vivo = _a_dict(f)
+            nuevos = validar_campos_avatar({k: v for k, v in dict(campos).items() if k in permitidas and k != "nombre"})
+            fundido = calidad.fundir(vivo, nuevos)
+            limpios = {k: fundido[k] for k in nuevos if k not in listas and fundido.get(k) != vivo.get(k)}
+            if "situaciones" in nuevos:
+                nueva = _fusionar(vivo.get("situaciones"), nuevos.get("situaciones"), lambda x: str(x).strip().lower())
+                if nueva != (vivo.get("situaciones") or []):
+                    limpios["situaciones"] = nueva
+            if "palabras_clave" in nuevos:
+                nueva = _fusionar(vivo.get("palabras_clave"), nuevos.get("palabras_clave"), lambda x: str(x).strip().lower())
+                if nueva != (vivo.get("palabras_clave") or []):
+                    limpios["palabras_clave"] = nueva
+            if "soluciones_previas" in nuevos:
+                validas = calidad.soluciones_validas(nuevos)
+                nueva = _fusionar(vivo.get("soluciones_previas"), validas, lambda x: str((x or {}).get("que") or "").strip().lower())
+                if nueva != (vivo.get("soluciones_previas") or []):
+                    limpios["soluciones_previas"] = nueva
+            if "evidencia" in nuevos:
+                nueva = _fusionar(vivo.get("evidencia"), nuevos.get("evidencia"),
+                                  lambda e: ((e or {}).get("comentario_id"), str((e or {}).get("cita") or "").strip().lower()))[:8]
+                if nueva != (vivo.get("evidencia") or []):
+                    limpios["evidencia"] = nueva
+                    limpios["sin_evidencia"] = not nueva
+            if limpios:
+                _actualizar(con, db.avatar, int(aid), cliente, _AVATAR_COLS, limpios)
+            if f.estado == "aprobado":
+                aprobados.append(int(aid))
+    return aprobados
+
+
 def persona_desde_avatar(a):
     """Mapeo del spec §5: nombre, resumen ← deseo, descripción ← demografía +
     emoción + comportamiento + soluciones previas, edad, tono, señales
@@ -490,15 +604,19 @@ def aprobar_avatar(cliente, avatar_id):
         raise ErrorDatos(gettext("Solo se aprueban los sub-avatares; el núcleo es una agrupación."))
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):    # la persona se guarda: idioma del proyecto
         campos = persona_desde_avatar(a)
+    est = estudio(cliente, a["estudio_id"])
     extra = {"avatar_id": a["id"], "estudio_id": a["estudio_id"], "identidad": dict(a.get("identidad") or {}),
              "conciencia": dict(a.get("conciencia") or {}), "encaje_producto": a.get("encaje_producto") or "",
              "evidencia": list(a.get("evidencia") or [])}
     pid = a.get("persona_id")
-    if pid and sprints_datos.persona(cliente, pid):
-        sprints_datos.actualizar_persona(cliente, pid, archivada=False, extra=extra, **campos)
+    existente = sprints_datos.persona(cliente, pid) if pid else None
+    if existente:
+        # Conserva lo que la persona ya traía en extra (p. ej. lo que se eligió en Sprints) y su origen.
+        sprints_datos.actualizar_persona(cliente, pid, archivada=False, extra={**dict(existente.get("extra") or {}), **extra}, **campos)
     else:
         n = len(sprints_datos.personas(cliente, incluir_archivadas=True))
-        pid = sprints_datos.crear_persona(cliente, origen="investigada", color=COLORES[n % len(COLORES)], extra=extra, **campos)
+        pid = sprints_datos.crear_persona(cliente, origen="manual" if es_manual(est) else "investigada",
+                                          color=COLORES[n % len(COLORES)], extra=extra, **campos)
     with db.conectar() as con:
         _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, {"estado": "aprobado", "persona_id": pid})
     return pid
@@ -544,117 +662,289 @@ def eliminar_estudio(cliente, estudio_id):
     return True
 
 
-# ------ Investigación (Parte 3) ------
+# ------------------------------------------------------ investigación ---
 
 def actualizar_investigacion(cliente, estudio_id, fn):
-    """RMW con candado para extra.investigacion (Flask + worker escriben simultáneamente).
-    
-    fn recibe el dict investigacion actual y retorna uno actualizado.
-    """
-    with db.conectar() as con:
-        if not _bloquear(con, db.estudio, int(estudio_id), cliente):       # lock de escritura ANTES de leer
-            return
-        est = con.execute(sa.select(db.estudio).where(
-            (db.estudio.c.id == int(estudio_id)) &
-            (db.estudio.c.cliente == cliente)
-        )).first()
-        if not est:
-            return
-        extra = est._mapping["extra"] or {}
-        inv_actual = extra.get("investigacion", {})
-        inv_nueva = fn(inv_actual)
-        extra["investigacion"] = inv_nueva
-        con.execute(
-            db.estudio.update()
-            .where((db.estudio.c.id == int(estudio_id)) & (db.estudio.c.cliente == cliente))
-            .values(extra=extra, actualizado_en=db.ahora())
-        )
-        con.commit()
+    """RMW bajo candado de `extra.investigacion` (Flask y el worker escriben a
+    la vez): `fn(inv) -> inv_nuevo` recibe `{}` cuando no hay investigación.
+    Devuelve lo escrito, o None si el estudio no existe."""
+    salida = {}
+
+    def _fn(extra):
+        actual = extra.get("investigacion")
+        nuevo = fn(dict(actual) if isinstance(actual, dict) else {})
+        salida["inv"] = nuevo
+        return {**extra, "investigacion": nuevo}
+    if actualizar_extra_estudio(cliente, estudio_id, _fn) is None:
+        return None
+    return salida.get("inv")
+
+
+def iniciar_investigacion(cliente, estudio_id, inv):
+    """Deja `inv` como la investigación viva; la anterior (si la hay) pasa a
+    `extra.investigaciones_previas` (últimas MAX_INVESTIGACIONES_PREVIAS)."""
+    nuevo = dict(inv or {})
+
+    def _fn(extra):
+        anterior = extra.get("investigacion")
+        previas = list(extra.get("investigaciones_previas") or [])
+        if anterior:
+            previas = (previas + [anterior])[-MAX_INVESTIGACIONES_PREVIAS:]
+        return {**extra, "investigacion": nuevo, "investigaciones_previas": previas}
+    extra = actualizar_extra_estudio(cliente, estudio_id, _fn)
+    return extra["investigacion"] if extra else None
 
 
 def investigacion(cliente, estudio_id):
-    """Leer el estado actual de la investigación."""
+    """La investigación viva del estudio, o `{}` (la plantilla mira `.estado`)."""
+    e = estudio(cliente, estudio_id)
+    inv = (e["extra"].get("investigacion") if e else None)
+    return inv if isinstance(inv, dict) else {}
+
+
+# ------------------------------------------------------ producto_nicho ---
+
+_PRODUCTO_COLS = ("titulo", "marca", "precio", "moneda", "estrellas", "n_resenas", "url", "imagen", "consulta", "extra")
+
+
+def _producto_limpio(p):
+    p = dict(p or {})
+    fuente_id, titulo = _texto(p.get("fuente_id"), 120), _texto(p.get("titulo"), 300)
+    if not fuente_id or not titulo:
+        return None
+    return {"fuente_id": fuente_id, "titulo": titulo, "marca": _texto(p.get("marca"), 120) or None,
+            "precio": p.get("precio"), "moneda": (_texto(p.get("moneda"), 3) or None), "estrellas": p.get("estrellas"),
+            "n_resenas": p.get("n_resenas"), "url": _texto(p.get("url"), 500) or None, "imagen": _texto(p.get("imagen"), 500) or None,
+            "consulta": _texto(p.get("consulta"), 200),
+            "extra": dict(p.get("extra")) if isinstance(p.get("extra"), dict) else {}}
+
+
+def guardar_productos_nicho(cliente, estudio_id, plataforma, productos):
+    """Upsert por (estudio, plataforma, fuente_id) en UNA transacción: los nuevos
+    se insertan; los existentes actualizan título, precio, estrellas, reseñas,
+    url, imagen, consulta y extra, y CONSERVAN relevante/motivo/resenas_traidas
+    (el juicio de Claude y lo ya pagado no se pisan). Un dict sin id o sin
+    título se salta."""
+    if plataforma not in FUENTES_PLATAFORMA:
+        raise ErrorDatos(gettext("Plataforma desconocida: %(plataforma)s", plataforma=plataforma))
+    t, ahora = db.producto_nicho, db.ahora()
+    nuevos = actualizados = 0
     with db.conectar() as con:
-        est = con.execute(sa.select(db.estudio).where(
-            (db.estudio.c.id == int(estudio_id)) &
-            (db.estudio.c.cliente == cliente)
-        )).first()
-        if est:
-            return (est._mapping["extra"] or {}).get("investigacion", {})
-        return {}
+        if not _fila(con, db.estudio, estudio_id, cliente):
+            raise ErrorDatos(gettext("Ese estudio no existe."))
+        for p in productos or []:
+            limpio = _producto_limpio(p)
+            if not limpio:
+                continue
+            r = con.execute(t.insert().prefix_with("OR IGNORE").values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=estudio_id, plataforma=plataforma,
+                relevante=None, motivo=None, resenas_traidas=0, **limpio))
+            if r.rowcount == 1:
+                nuevos += 1
+                continue
+            con.execute(t.update().where(t.c.estudio_id == estudio_id, t.c.plataforma == plataforma,
+                                         t.c.fuente_id == limpio["fuente_id"], t.c.cliente == cliente)
+                        .values(actualizado_en=ahora, **{k: limpio[k] for k in _PRODUCTO_COLS}))
+            actualizados += 1
+    return {"nuevos": nuevos, "actualizados": actualizados}
 
 
-def guardar_productos_nicho(cliente, estudio_id, plataforma, productos_lista):
-    """Upsert productos (no duplicar si ya existen con mismo estudio+plat+fuente_id).
-    Retorna count de nuevos/actualizados."""
+def productos_nicho(cliente, estudio_id, plataforma=None, solo_relevantes=False, solo_sin_juzgar=False, fuente_ids=None):
+    """Productos del estudio: por plataforma, más reseñas primero (sin dato al
+    final), id. `solo_relevantes` = juzgados como del nicho; `solo_sin_juzgar`
+    = `relevante IS NULL`; `fuente_ids` acota a esos ids de la plataforma."""
+    t = db.producto_nicho
+    cond = [t.c.cliente == cliente, t.c.estudio_id == estudio_id]
+    if plataforma:
+        cond.append(t.c.plataforma == plataforma)
+    if solo_relevantes:
+        cond.append(t.c.relevante.is_(True))
+    if solo_sin_juzgar:
+        cond.append(t.c.relevante.is_(None))
+    if fuente_ids is not None:
+        cond.append(t.c.fuente_id.in_([str(x) for x in fuente_ids] or ["__ninguno__"]))
+    with db.conectar() as con:
+        filas = con.execute(sa.select(t).where(*cond).order_by(
+            t.c.plataforma, sa.desc(sa.func.coalesce(t.c.n_resenas, -1)), t.c.id)).all()
+    salida = []
+    for f in filas:
+        d = _a_dict(f)
+        d["resenas_traidas"] = int(d.get("resenas_traidas") or 0)
+        d["extra"] = dict(d.get("extra") or {})
+        salida.append(d)
+    return salida
+
+
+def marcar_relevancia(cliente, estudio_id, decisiones):
+    """`decisiones = {id: {"relevante": bool, "motivo": str}}` sobre productos
+    del estudio; ids ajenos se ignoran. Devuelve cuántos cambió."""
+    t, n = db.producto_nicho, 0
+    with db.conectar() as con:
+        for pid, d in (decisiones or {}).items():
+            r = con.execute(t.update().where(t.c.id == int(pid), t.c.estudio_id == estudio_id, t.c.cliente == cliente)
+                            .values(actualizado_en=db.ahora(), relevante=bool((d or {}).get("relevante")),
+                                    motivo=_texto((d or {}).get("motivo"), 300) or None))
+            n += r.rowcount
+    return n
+
+
+def sumar_resenas_traidas(cliente, estudio_id, plataforma, conteos):
+    """`conteos = {fuente_id: n}` -> suma n a `resenas_traidas` del producto de esa
+    plataforma. Devuelve cuántos productos tocó (los n = 0 no cuentan)."""
+    t, n = db.producto_nicho, 0
+    with db.conectar() as con:
+        for fuente_id, cuantos in (conteos or {}).items():
+            if not cuantos:
+                continue
+            r = con.execute(t.update().where(t.c.estudio_id == estudio_id, t.c.cliente == cliente, t.c.plataforma == plataforma,
+                                             t.c.fuente_id == str(fuente_id))
+                            .values(actualizado_en=db.ahora(),
+                                    resenas_traidas=sa.func.coalesce(t.c.resenas_traidas, 0) + int(cuantos)))
+            n += r.rowcount
+    return n
+
+
+# ------------------------------------------------ avatares del proyecto ---
+
+NOMBRE_ESTUDIO_MANUAL = N_("Avatares escritos a mano")
+NOMBRE_NUCLEO_MANUAL = N_("Escritos a mano")
+
+
+def es_manual(e):
+    """True para el estudio oculto de los avatares escritos a mano."""
+    return bool(((e or {}).get("extra") or {}).get("manual"))
+
+
+def estudio_manual(cliente):
+    """(estudio_id, nucleo_id) del estudio oculto (spec 2026-09-29 §1); lo
+    crea la primera vez. Si una carrera dejara dos, se usa el de menor id."""
+    t, a = db.estudio, db.avatar
     ahora = db.ahora()
     with db.conectar() as con:
-        count = 0
-        for prod in productos_lista:
-            try:
-                r = con.execute(
-                    db.producto_nicho.insert().values(
-                        cliente=cliente,
-                        estudio_id=int(estudio_id),
-                        plataforma=plataforma,
-                        fuente_id=prod["fuente_id"],
-                        titulo=prod["titulo"][:300],
-                        marca=prod.get("marca", "")[:120] if prod.get("marca") else None,
-                        precio=prod.get("precio"),
-                        moneda=prod.get("moneda"),
-                        estrellas=prod.get("estrellas"),
-                        n_resenas=prod.get("n_resenas"),
-                        url=prod.get("url", "")[:500],
-                        imagen=prod.get("imagen", "")[:500],
-                        consulta=prod.get("consulta", "")[:200],
-                        extra=prod.get("extra"),
-                        creado_en=ahora,
-                        actualizado_en=ahora
-                    ).on_conflict_do_update(
-                        index_elements=["estudio_id", "plataforma", "fuente_id"],
-                        set_={"precio": prod.get("precio"), "estrellas": prod.get("estrellas"),
-                              "n_resenas": prod.get("n_resenas"), "actualizado_en": ahora}
-                    )
-                )
-                count += r.rowcount
-            except Exception:
-                pass  # Ignorar conflictos o errores menores
-        con.commit()
-    return count
+        ocultos = [f.id for f in con.execute(sa.select(t.c.id, t.c.extra).where(t.c.cliente == cliente).order_by(t.c.id))
+                   if (f.extra or {}).get("manual")]
+        if ocultos:
+            eid = ocultos[0]
+        else:
+            eid = con.execute(t.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=NOMBRE_ESTUDIO_MANUAL, producto="", catalogo_id=None,
+                tema="", idioma=_idioma(idiomas.de_proyecto(cliente)), pais=None, estado="revisando", archivado=False,
+                generacion=0, extra={"manual": True})).inserted_primary_key[0]
+        nid = con.execute(sa.select(a.c.id).where(a.c.estudio_id == eid, a.c.cliente == cliente, a.c.tipo == "nucleo")
+                          .order_by(a.c.id)).scalar()
+        if nid is None:
+            nid = con.execute(a.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=eid, padre_id=None, tipo="nucleo", base=None,
+                orden=0, generacion=0, nombre=NOMBRE_NUCLEO_MANUAL, deseo="", resumen="", estado="propuesto", persona_id=None,
+                extra={}, **_SUB_VACIO)).inserted_primary_key[0]
+    return eid, nid
 
 
-def productos_nicho(cliente, estudio_id, plataforma=None, solo_relevantes=False):
-    """Listar productos del nicho. Filtrar por plataforma y/o relevancia."""
+def _insertar_sub_manual(cliente, campos, estado, persona_id=None, extra=None):
+    eid, nid = estudio_manual(cliente)
+    a, ahora = db.avatar, db.ahora()
     with db.conectar() as con:
-        q = sa.select(db.producto_nicho).where(
-            (db.producto_nicho.c.cliente == cliente) &
-            (db.producto_nicho.c.estudio_id == int(estudio_id))
-        )
-        if plataforma:
-            q = q.where(db.producto_nicho.c.plataforma == plataforma)
-        if solo_relevantes:
-            q = q.where(db.producto_nicho.c.relevante == True)
-        q = q.order_by(db.producto_nicho.c.n_resenas.desc())
-        return [dict(r) for r in con.execute(q)]
+        orden = int(con.execute(sa.select(sa.func.count()).select_from(a).where(a.c.padre_id == nid)).scalar() or 0)
+        return con.execute(a.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=eid, padre_id=nid, tipo="sub", orden=orden,
+            generacion=0, estado=estado, persona_id=persona_id, resumen="", extra=dict(extra or {}),
+            **{**_SUB_VACIO, "base": "emocion", **campos})).inserted_primary_key[0]
 
 
-def marcar_relevancia(cliente, estudio_id, producto_id, relevante, motivo):
-    """Marcar un producto como relevante/irrelevante."""
+def crear_avatar_manual(cliente, campos):
+    """Avatar escrito a mano: vive en el estudio oculto y nace aprobado (su
+    persona se crea con origen `manual`). Devuelve el id del avatar."""
+    limpios = validar_campos_avatar({k: v for k, v in dict(campos or {}).items() if k in AVATAR_EDITABLES})
+    if not limpios.get("nombre"):
+        raise ErrorDatos(gettext("El avatar necesita un nombre."))
+    aid = _insertar_sub_manual(cliente, limpios, "propuesto", extra={"manual": True})
+    aprobar_avatar(cliente, aid)
+    return aid
+
+
+def campos_desde_persona(p):
+    """La ficha de avatar que corresponde a una persona sin avatar (mapeo inverso de `persona_desde_avatar`)."""
+    ex = dict((p or {}).get("extra") or {})
+    return validar_campos_avatar({
+        "nombre": p.get("nombre") or "?", "deseo": p.get("resumen") or "", "demografia": p.get("descripcion") or "",
+        "edad_rango": p.get("edad_rango") or "", "tono": p.get("tono") or "", "situaciones": list(p.get("senales_visuales") or []),
+        "palabras_clave": list(p.get("palabras_clave") or []), "identidad": ex.get("identidad") or {},
+        "conciencia": ex.get("conciencia") if isinstance(ex.get("conciencia"), dict) else {"nivel": ex.get("conciencia") or ""},
+        "encaje_producto": ex.get("encaje_producto") or ""})
+
+
+def avatar_desde_persona(cliente, persona_id):
+    """El avatar con el que se edita una persona sin avatar (creada en Sprints o
+    sugerida por IA): se crea UNA vez en el estudio oculto con los campos de la
+    persona y enlazado a ella; si ya existe, se devuelve."""
+    p = sprints_datos.persona(cliente, persona_id)
+    if not p:
+        raise ErrorDatos(gettext("Esa persona no existe."))
+    a = db.avatar
     with db.conectar() as con:
-        con.execute(
-            db.producto_nicho.update()
-            .where((db.producto_nicho.c.id == int(producto_id)) & (db.producto_nicho.c.cliente == cliente))
-            .values(relevante=relevante, motivo=motivo, actualizado_en=db.ahora())
-        )
-        con.commit()
+        ya = con.execute(sa.select(a.c.id).where(a.c.cliente == cliente, a.c.persona_id == persona_id, a.c.tipo == "sub")
+                         .order_by(a.c.id)).scalar()
+    if ya:
+        return ya
+    aid = _insertar_sub_manual(cliente, campos_desde_persona(p), "descartado" if p.get("archivada") else "aprobado",
+                               persona_id=persona_id, extra={"manual": True, "desde_persona": True})
+    eid, _ = estudio_manual(cliente)
+    sprints_datos.actualizar_persona(cliente, persona_id, extra={**dict(p.get("extra") or {}), "avatar_id": aid, "estudio_id": eid})
+    return aid
 
 
-def sumar_resenas_traidas(cliente, estudio_id, producto_id, cantidad):
-    """Incrementar resenas_traidas."""
+def lista_avatares(cliente):
+    """Todos los avatares del proyecto (spec 2026-09-29 §1, §3):
+    {"nuevos": sub-avatares propuestos de estudios no archivados (más nuevo primero),
+     "aprobados": personas no archivadas (con su avatar si lo tienen), por nombre,
+     "otros": descartados y personas archivadas}.
+    Cada elemento: {clave ("a<id>" o "p<id>"), avatar, persona, estudio {id, nombre,
+    manual, archivado}, nucleo, faltantes, grupo}."""
+    from nicho import calidad
+    t, a = db.estudio, db.avatar
     with db.conectar() as con:
-        con.execute(
-            sa.update(db.producto_nicho)
-            .where((db.producto_nicho.c.id == int(producto_id)) & (db.producto_nicho.c.cliente == cliente))
-            .values(resenas_traidas=db.producto_nicho.c.resenas_traidas + cantidad)
-        )
-        con.commit()
+        estudios_ = {f.id: {"id": f.id, "nombre": f.nombre, "manual": bool((f.extra or {}).get("manual")), "archivado": bool(f.archivado)}
+                     for f in con.execute(sa.select(t.c.id, t.c.nombre, t.c.extra, t.c.archivado).where(t.c.cliente == cliente))}
+        filas = [_a_dict(f) for f in con.execute(sa.select(a).where(a.c.cliente == cliente).order_by(a.c.id.desc()))]
+    nucleos = {f["id"]: f["nombre"] for f in filas if f["tipo"] == "nucleo"}
+    subs = [f for f in filas if f["tipo"] == "sub"]
+    personas = {p["id"]: p for p in sprints_datos.personas(cliente, incluir_archivadas=True)}
+    representante = {}
+    for s in subs:
+        if s.get("persona_id") in personas and s["persona_id"] not in representante:
+            representante[s["persona_id"]] = s["id"]
+
+    def item(grupo, avatar=None, persona=None):
+        est = estudios_.get(avatar["estudio_id"]) if avatar else None
+        base = avatar if avatar else campos_desde_persona(persona)
+        return {"clave": f"a{avatar['id']}" if avatar else f"p{persona['id']}", "avatar": avatar, "persona": persona, "estudio": est,
+                "nucleo": nucleos.get(avatar["padre_id"]) if avatar else None, "grupo": grupo,
+                "faltantes": calidad.faltantes(base, con_evidencia=bool(avatar) and not (est or {}).get("manual"))}
+
+    nuevos, aprobados, otros = [], [], []
+    for s in subs:
+        est = estudios_.get(s["estudio_id"]) or {}
+        p = personas.get(s.get("persona_id"))
+        if p and representante.get(p["id"]) != s["id"]:
+            continue                                            # la persona ya está representada por otro avatar
+        if s["estado"] == "propuesto" and not p:
+            if not est.get("archivado"):
+                nuevos.append(item("nuevo", s))
+        elif s["estado"] == "aprobado" and p and not p.get("archivada"):
+            aprobados.append(item("aprobado", s, p))
+        else:
+            otros.append(item("otro", s, p))
+    for pid, p in personas.items():
+        if pid not in representante:
+            (otros if p.get("archivada") else aprobados).append(item("otro" if p.get("archivada") else "aprobado", persona=p))
+    aprobados.sort(key=lambda x: ((x["persona"] or {}).get("nombre") or "").lower())
+    return {"nuevos": nuevos, "aprobados": aprobados, "otros": otros}
+
+
+def resumen_avatares(cliente, muestra=12):
+    """Lo liviano que muestra la pestaña Nicho: conteos y hasta `muestra` nombres."""
+    l = lista_avatares(cliente)
+    vivos = l["nuevos"] + l["aprobados"]
+    return {"nuevos": len(l["nuevos"]), "aprobados": len(l["aprobados"]), "incompletos": sum(1 for x in vivos if x["faltantes"]),
+            "muestra": [{"clave": x["clave"], "nombre": ((x["avatar"] or {}).get("nombre") if x["grupo"] == "nuevo" else (x["persona"] or {}).get("nombre")),
+                         "grupo": x["grupo"], "incompleto": bool(x["faltantes"])} for x in vivos[:muestra]]}

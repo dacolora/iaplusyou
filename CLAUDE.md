@@ -277,6 +277,48 @@ muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada —
 la ve el admin: al cliente no se le muestra una fuente sin llave ni instrucciones del `.env`
 (`nicho/rutas._fuentes_conectadas`; si igual la pide, aviso neutro), porque las llaves son de
 Creatv, no suyas (2026-09-27).
+**Investigación automática** (spec `docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md`,
+plan `docs/superpowers/plans/2026-09-28-nicho-investigacion-completar.md`): con el tema del estudio y UNA
+cifra aprobada (el estimado lo calcula el servidor y el POST exige `total_visto`), la cadena de tareas
+`nicho_inv_consultas` (Claude, hasta el tope aprobado de búsquedas — 1 a 4 — en el idioma del país; la
+búsqueda nunca usa más que ese tope) → `nicho_inv_buscar` por tienda
+(`nicho/fuentes/plataformas.py`: Amazon con tienda propia, Mercado Libre en 18 países, TikTok Shop; actores
+de Apify con precio por resultado, `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de
+cobro cada una) → `nicho_inv_seleccionar` (Claude marca lo del nicho; se eligen los de más reseñas) →
+`nicho_recolectar` por tienda y por red (Reddit/YouTube con las mismas búsquedas) → `nicho_generar_avatares`
+con `auto` y el tope restante; una investigación solo con redes, sin ninguna tienda, salta `seleccionar`
+(no hay productos que juzgar). El estado vive en `estudio.extra.investigacion` (`nicho/investigacion.py`,
+puro; RMW con candado en `datos.actualizar_investigacion`) y es el del primer paso pendiente o en curso
+(`marcar_paso`), porque `avanzar` encola el siguiente paso sin marcarlo todavía; cada tarea llama
+`tareas.investigacion.avanzar`, una tienda caída no frena a las demás, «Reanudar» no repite lo que cobró y
+los productos van a `producto_nicho` (migración 0016; `resenas_traidas` evita pagar dos veces). La cifra
+aprobada cubre el peor caso de cada paso pagado, incluida la línea de avatares
+(`avatares.estimar_costo_maximo()`: los dos topes de `seleccionar` llenos a la vez — 600 comentarios que
+suman 250 000 caracteres — más la pasada de completado). Gasto: Apify como `recoleccion`, Claude de la
+investigación como `investigacion`; cada llamada a Claude de la cadena registra su gasto apenas responde,
+con la referencia del spec en el primer intento, `:i<intento>` desde el segundo y `:fallido<intento>`
+cuando el intento no sirvió (un reintento no vuelve a llamar a Claude si el paso ya quedó hecho). Los pasos
+de red corren con `max_intentos=1`; un paso de la cadena de una investigación ya cancelada no hace nada ni
+cobra. Si falla una tienda o una red, solo ese paso queda `error` y la cadena sigue; si Claude falla en el
+último intento de consultas o selección, o fallan los avatares, la investigación queda `detenida`
+(reanudable); y si una tarea no alcanza a cerrar su paso o a encolar el siguiente (`tareas.investigacion.
+red_de_la_cadena`, `_avanzar_seguro`), queda `interrumpida` con el error: nunca colgada con un estado vivo y
+nada en la cola. El `url` y la `imagen` de un producto solo se guardan si son `http(s)://` (van a un enlace).
+Mientras la investigación está viva, la recolección manual del estudio y «Generar avatares»
+esperan (las rutas los rechazan); si un trabajo manual con el mismo job_id sigue bloqueando un paso de la
+cadena, `avanzar` deja la investigación `interrumpida` para que «Reanudar» funcione en cuanto termine. El
+Blueprint de Nicho rechaza los POST que el navegador marca cross-site (`Sec-Fetch-Site`), como Sprints y
+Flow Plus.
+**Avatares del proyecto** (spec `docs/superpowers/specs/2026-09-29-nicho-avatares-proyecto-design.md`):
+página `/cliente/<c>/nicho/avatares` y bloque en la pestaña. Nuevos = sub-avatares propuestos; aprobados =
+personas no archivadas (lo que ve toda la app). Los avatares escritos a mano viven en un estudio oculto
+(`extra.manual`) y nacen aprobados (persona `manual`); nunca se completan con IA porque no tienen
+comentarios. Una persona sin avatar se edita creándole uno (`avatar_desde_persona`); editar un aprobado
+actualiza su persona. Archivar/Desarchivar es solo para personas sin avatar; las que sí tienen uno usan el
+Aprobar/Descartar del avatar. `nicho/calidad.py` define «completo»; la generación lo exige y una pasada de
+completado llena solo lo vacío (citas verificadas); «Completar incompletos» (`nicho_completar_avatares`,
+`max_intentos=1`, gasto `avatares`) lo hace con lo ya guardado, decidiendo contra la fila VIVA al guardar
+— una edición hecha mientras corre nunca se pierde.
 `nicho/avatares.py` hace dos pasadas con Claude (`generador_prompts.MODEL`):
 núcleos, luego sub-avatares por núcleo; cada cita se verifica literal contra el
 comentario (`verificar_evidencia`) y la que no aparece se descarta — un
@@ -524,6 +566,19 @@ Todo prompt de fábrica pasa `refinador.validar`. Una llamada por paso vía `gui
 video, `clips.version_con_bloque` no llama a Claude). Notion: llave de integración cifrada en `kv`
 (`notion:<cliente>`), solo `api.notion.com`, exige correo verificado. UI: `/panel` como fragmento
 (`_gpg_*.html`) + `_crear_flowplus_guiones.html`; «Abrir en el chat» emite `gp:abrir-prompt`.
+**Imágenes de cada escena** (spec `docs/superpowers/specs/2026-09-30-flowplus-imagenes-por-escena-design.md`,
+pedido de Daniel; reemplazó la maqueta 555eb2b/b69620c que nunca llegó a `main`): en una versión `armado`,
+`_gpg_escenas.html` (incluido en `_gpg_clips.html`) muestra Image 1…N (las referencias del REFERENCE MAP; las
+«por crear» se completan con «Subir la imagen») más las extra (subidas o del Catálogo, numeradas después; el
+prompt no las nombra) y, por escena, fichas que se prenden y apagan (sin tocar, lo sugerido = la regla de la
+tabla imagen↔clip). `guiones/escenas.py` es puro (claves `r<n>`/`x<k>`, `pool`, `por_escena`, `usar`,
+`poner_ref`, `agregar_extra`, `quitar`, `heredar`, `texto_por_clip`); el único escritor es
+`datos.modificar_imagenes_escenas` (lock antes de leer; guarda en `guion_video.extra["imagenes_escenas"]`, sin
+migración). Rutas JSON `/videos/<id>/escenas/<n>`, `/imagenes/subir` (multipart, `final_edition.biblioteca.subir`:
+gratis; prueba antes de subir que se podrá guardar), `/imagenes/catalogo`, `/imagenes/quitar`; el JS del panel
+manda `data-gpg-cuerpo` con `data-gpg-accion` y sube con `input[type=file][data-gpg-subir]`. Lo elegido va a los
+dos `.md` y a «Antes de generar». `nueva_version` hereda las imágenes subidas de referencias iguales y las extra
+(y lo elegido por escena solo con los mismos clips).
 
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
