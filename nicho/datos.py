@@ -14,6 +14,7 @@ import cola
 import db
 import idiomas
 from idiomas import N_
+from nicho import calidad
 from sprints import datos as sprints_datos
 from sprints.sugerencias import COLORES
 
@@ -507,19 +508,68 @@ def actualizar_avatar(cliente, avatar_id, /, **campos):
         return _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, campos)
 
 
+def _fusionar(vivos, nuevos, clave):
+    """Listas: conserva cada entrada VIVA tal cual (nunca se descarta ni se
+    reescribe) y agrega, al final, las de `nuevos` cuya `clave(item)` no
+    repite la de una ya presente (sin distinguir mayúsculas)."""
+    vivos = list(vivos or [])
+    vistas = {clave(x) for x in vivos}
+    fusion = list(vivos)
+    for x in (nuevos or []):
+        k = clave(x)
+        if k not in vistas:
+            vistas.add(k)
+            fusion.append(x)
+    return fusion
+
+
 def guardar_completado(cliente, estudio_id, cambios):
     """Guarda en UNA transacción lo que completó Claude (`{avatar_id: campos}`,
-    incluida la evidencia verificada). Devuelve los ids aprobados, para que
-    quien llama actualice sus personas."""
+    incluida la evidencia verificada). Ruling 23 (2026-09-29): decide contra
+    la fila VIVA en el momento de escribir, no contra la foto de antes de
+    llamar a Claude -- entre una y otra una persona pudo editar el avatar a
+    mano. Los campos de texto y los fijos (identidad, conciencia) se funden
+    con `calidad.fundir` (nunca pisa lo lleno de la fila viva); las listas
+    (situaciones, palabras_clave, soluciones_previas, evidencia) se fusionan
+    aparte SIEMPRE contra la fila viva -- conservan cada entrada que ya había
+    (válida o no) y solo agregan las nuevas que no repiten, sin importar si la
+    fila viva ya alcanzaba el mínimo (si no, un mínimo cumplido a mano
+    descartaría en silencio lo nuevo que Claude sí encontró). Solo escribe las
+    claves cuyo valor fundido difiere del que ya estaba. Devuelve los ids
+    aprobados, para que quien llama actualice sus personas."""
     permitidas = set(AVATAR_EDITABLES) | {"evidencia", "sin_evidencia"}
+    listas = ("situaciones", "palabras_clave", "soluciones_previas", "evidencia")
     aprobados = []
     with db.conectar() as con:
         for aid, campos in (cambios or {}).items():
             f = _fila(con, db.avatar, int(aid), cliente)
             if not f or f.estudio_id != int(estudio_id) or f.tipo != "sub":
                 continue
-            limpios = validar_campos_avatar({k: v for k, v in dict(campos).items() if k in permitidas and k != "nombre"})
-            _actualizar(con, db.avatar, int(aid), cliente, _AVATAR_COLS, limpios)
+            vivo = _a_dict(f)
+            nuevos = validar_campos_avatar({k: v for k, v in dict(campos).items() if k in permitidas and k != "nombre"})
+            fundido = calidad.fundir(vivo, nuevos)
+            limpios = {k: fundido[k] for k in nuevos if k not in listas and fundido.get(k) != vivo.get(k)}
+            if "situaciones" in nuevos:
+                nueva = _fusionar(vivo.get("situaciones"), nuevos.get("situaciones"), lambda x: str(x).strip().lower())
+                if nueva != (vivo.get("situaciones") or []):
+                    limpios["situaciones"] = nueva
+            if "palabras_clave" in nuevos:
+                nueva = _fusionar(vivo.get("palabras_clave"), nuevos.get("palabras_clave"), lambda x: str(x).strip().lower())
+                if nueva != (vivo.get("palabras_clave") or []):
+                    limpios["palabras_clave"] = nueva
+            if "soluciones_previas" in nuevos:
+                validas = calidad.soluciones_validas(nuevos)
+                nueva = _fusionar(vivo.get("soluciones_previas"), validas, lambda x: str((x or {}).get("que") or "").strip().lower())
+                if nueva != (vivo.get("soluciones_previas") or []):
+                    limpios["soluciones_previas"] = nueva
+            if "evidencia" in nuevos:
+                nueva = _fusionar(vivo.get("evidencia"), nuevos.get("evidencia"),
+                                  lambda e: ((e or {}).get("comentario_id"), str((e or {}).get("cita") or "").strip().lower()))[:8]
+                if nueva != (vivo.get("evidencia") or []):
+                    limpios["evidencia"] = nueva
+                    limpios["sin_evidencia"] = not nueva
+            if limpios:
+                _actualizar(con, db.avatar, int(aid), cliente, _AVATAR_COLS, limpios)
             if f.estado == "aprobado":
                 aprobados.append(int(aid))
     return aprobados

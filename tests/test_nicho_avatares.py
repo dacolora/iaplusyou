@@ -359,3 +359,42 @@ def test_completar_subs_no_revienta_con_sub_malformado(monkeypatch):
     subs = ["no soy un dict"]
     salida, n = avatares.completar_subs({"tema": "t", "producto": "p", "idioma": "es"}, {"nombre": "n", "deseo": "d"}, [], subs)
     assert salida == subs and n == 0
+
+
+# ------------------------------------------- guardar_completado (Ruling 23) ---
+
+def test_guardar_completado_decide_contra_la_fila_viva(base_temporal):
+    """Ruling 23: entre la foto que tomó `completar_existentes` (antes de
+    llamar a Claude) y el guardado de `guardar_completado` una persona pudo
+    editar el avatar a mano -- la escritura decide contra la fila VIVA, no
+    contra esa foto: un texto que la persona ya llenó no se pisa, y una lista
+    que ya cumplía el mínimo a mano igual recibe lo nuevo que Claude sí
+    encontró (nunca se descarta en silencio)."""
+    from nicho import datos
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    sub = dict(_sub_completo(ids), tono="", soluciones_previas=[])
+    datos.guardar_generacion("acme", eid, [{"nombre": "N", "deseo": "Quiero", "resumen": "r", "sub_avatares": [sub]}])
+    aid = datos.avatares("acme", eid)[0]["subs"][0]["id"]
+    # Lo que Claude habría llenado, calculado sobre la foto de antes (tono y soluciones vacíos):
+    cambios = {aid: {"tono": "Directo, con humor", "soluciones_previas": [{"que": "Otra", "por_que_fallo": ["motivo"]}]}}
+    # Mientras tanto la persona ya editó el avatar a mano:
+    datos.actualizar_avatar("acme", aid, tono="Cercano a mano", soluciones_previas=[{"que": "Manual", "por_que_fallo": ["algo"]}])
+    datos.guardar_completado("acme", eid, cambios)
+    a = datos.avatar("acme", aid)
+    assert a["tono"] == "Cercano a mano"                                              # la edición a mano gana
+    assert a["soluciones_previas"] == [{"que": "Manual", "por_que_fallo": ["algo"]},
+                                       {"que": "Otra", "por_que_fallo": ["motivo"]}]    # la suya sigue primera e intacta; la nueva se agrega
+
+
+def test_guardar_completado_llena_lo_que_seguia_vacio(base_temporal):
+    """Sin edición de por medio, `guardar_completado` sigue llenando lo que
+    seguía vacío, como antes de la Ruling 23."""
+    from nicho import datos
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    sub = dict(_sub_completo(ids), tono="")
+    datos.guardar_generacion("acme", eid, [{"nombre": "N", "deseo": "Quiero", "resumen": "r", "sub_avatares": [sub]}])
+    aid = datos.avatares("acme", eid)[0]["subs"][0]["id"]
+    aprobados = datos.guardar_completado("acme", eid, {aid: {"tono": "Directo, con humor"}})
+    assert datos.avatar("acme", aid)["tono"] == "Directo, con humor" and aprobados == []
