@@ -362,6 +362,7 @@ msgstr "%(n)s comment(s) from %(f)s source(s)"
 msgid "%(n)s con activo en el catálogo"
 msgstr "%(n)s with an asset in the catalog"
 
+#, python-format
 msgid "%(n)s consultas"
 msgstr "%(n)s queries"
 
@@ -513,6 +514,7 @@ msgstr "%(n)s piece(s) approved for passing QA."
 msgid "%(n)s piezas elegidas tienen puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual."
 msgstr "%(n)s chosen pieces have points to improve according to the doctrine (shown in Create). You can launch anyway."
 
+#, python-format
 msgid "%(n)s producto(s) de %(plataforma)s (%(nuevos)s nuevos)"
 msgstr "%(n)s product(s) from %(plataforma)s (%(nuevos)s new)"
 
@@ -528,6 +530,7 @@ msgstr "%(n)s new product(s)"
 msgid "%(n)s productos"
 msgstr "%(n)s products"
 
+#, python-format
 msgid "%(n)s productos juzgados"
 msgstr "%(n)s products judged"
 
@@ -945,6 +948,7 @@ msgstr "%(precio)s approx."
 msgid "%(presupuesto)s %(moneda)s/día"
 msgstr "%(presupuesto)s %(moneda)s/day"
 
+#, python-format
 msgid "%(r)s producto(s) del nicho; %(e)s elegido(s) para traer reseñas"
 msgstr "%(r)s niche product(s); %(e)s chosen to fetch reviews"
 
@@ -1832,6 +1836,7 @@ msgstr "Avatars"
 msgid "Avatares escritos a mano"
 msgstr "Hand-written avatars"
 
+#, python-format
 msgid "Avatares no generados: %(motivo)s"
 msgstr "Avatars not generated: %(motivo)s"
 
@@ -2394,9 +2399,11 @@ msgstr "Claude did not judge any product."
 msgid "Claude no nombró ninguna causa conocida."
 msgstr "Claude didn't name any known cause."
 
+#, python-format
 msgid "Claude no pudo elegir los productos: %(e)s"
 msgstr "Claude could not choose the products: %(e)s"
 
+#, python-format
 msgid "Claude no pudo escribir las consultas: %(e)s"
 msgstr "Claude could not write the queries: %(e)s"
 
@@ -2719,6 +2726,7 @@ msgstr "Queries used:"
 msgid "Consultas:"
 msgstr "Queries:"
 
+#, python-format
 msgid "Consultas: %(consultas)s"
 msgstr "Queries: %(consultas)s"
 
@@ -11771,6 +11779,7 @@ msgstr "final %(legado)s no longer exists"
 msgid "la ganadora «%(nombre)s»"
 msgstr "the winner “%(nombre)s”"
 
+#, python-format
 msgid "la generación de avatares falló: %(e)s"
 msgstr "avatar generation failed: %(e)s"
 
@@ -11830,6 +11839,7 @@ msgstr "the next version uses it"
 msgid "lo visual no da creencia"
 msgstr "the visuals don't build belief"
 
+#, python-format
 msgid "los avatares costarían %(costo)s y quedan %(tope)s aprobados: genera con el botón cuando quieras"
 msgstr "the avatars would cost %(costo)s and %(tope)s of the approved cap remains: generate with the button whenever you want"
 
@@ -12500,6 +12510,7 @@ msgstr "extra %(lista)s (removed or nonexistent)"
 msgid "sol directo, exteriores"
 msgstr "direct sun, outdoors"
 
+#, python-format
 msgid "solo hay %(n)s comentarios; hacen falta %(min)s para los avatares"
 msgstr "there are only %(n)s comments; %(min)s are needed for the avatars"
 
@@ -13237,4 +13248,123 @@ msgstr "(no country)"
 
 msgid "Hay una investigación en curso en este estudio: espera a que termine o cancélala."
 msgstr "There's research in progress on this study: wait for it to finish or cancel it."
+
+msgid "Avatar guardado; la persona que usa la app se actualizó."
+msgstr "Avatar saved; the persona the app uses was updated."
+
+msgid "Avatar guardado."
+msgstr "Avatar saved."
+
+#, python-format
+msgid "Avatar aprobado: ya es una persona de Sprints. Ojo, le falta: %(faltan)s."
+msgstr "Avatar approved: it's now a Sprints persona. Heads up, it's missing: %(faltan)s."
+
+#, python-format
+msgid "Avatar creado y aprobado: ya lo usa toda la app. Ojo, le falta: %(faltan)s."
+msgstr "Avatar created and approved: the whole app already uses it. Heads up, it's missing: %(faltan)s."
+
+msgid "Avatar creado y aprobado: ya lo usa toda la app."
+msgstr "Avatar created and approved: the whole app already uses it."
+
+msgid "Esta persona ya tiene un avatar: apruébalo o descártalo desde su ficha."
+msgstr "This persona already has an avatar: approve or discard it from its profile."
+
+msgid "Ese estudio no se puede completar."
+msgstr "That study can't be completed."
+
+msgid "No hay avatares incompletos que completar."
+msgstr "There are no incomplete avatars to complete."
+
+#, python-format
+msgid "Completando %(n)s avatar(es); la página se recarga sola al terminar."
+msgstr "Completing %(n)s avatar(s); the page reloads by itself when it finishes."
+
+msgid "Ya se están completando los avatares de este estudio."
+msgstr "This study's avatars are already being completed."
+
+#, python-format
+msgid "incompleto: falta %(faltan)s"
+msgstr "incomplete: missing %(faltan)s"
+
+msgid "Crear avatar"
+msgstr "Create avatar"
+
+msgid "Nuevo"
+msgstr "New"
+
+msgid "Archivado"
+msgstr "Archived"
+
+#, python-format
+msgid "de «%(estudio)s»"
+msgstr "from “%(estudio)s”"
+
+msgid "escrito a mano"
+msgstr "Hand-written"
+
+msgid "creado en Sprints"
+msgstr "created in Sprints"
+
+msgid "Editar ficha"
+msgstr "Edit profile"
+
+#, python-format
+msgid "Completar con Claude lo que les falta a estos avatares cuesta aprox. %(costo)s. ¿Seguimos?"
+msgstr "Completing with Claude what's missing from these avatars costs approx. %(costo)s. Shall we continue?"
+
+#, python-format
+msgid "Completar %(n)s incompletos · ≈ %(costo)s"
+msgstr "Complete %(n)s incomplete · ≈ %(costo)s"
+
+msgid "Todos los avatares del proyecto"
+msgstr "All the project's avatars"
+
+#, python-format
+msgid "Aprobados: %(n)s"
+msgstr "Approved: %(n)s"
+
+#, python-format
+msgid "Nuevos por revisar: %(n)s"
+msgstr "New to review: %(n)s"
+
+#, python-format
+msgid "Incompletos: %(n)s"
+msgstr "Incomplete: %(n)s"
+
+msgid "Los aprobados son las personas que usa toda la app. Los nuevos vienen de tus estudios y esperan tu aprobación."
+msgstr "Approved ones are the personas the whole app uses. New ones come from your studies and wait for your approval."
+
+msgid "Ver todos los avatares"
+msgstr "View all avatars"
+
+msgid "+ Nuevo avatar"
+msgstr "+ New avatar"
+
+msgid "Avatares del proyecto"
+msgstr "Project avatars"
+
+msgid "Los nuevos vienen de tus estudios y esperan tu aprobación. Los aprobados son las personas que usa toda la app: Sprints, ideas y guiones."
+msgstr "New ones come from your studies and wait for your approval. Approved ones are the personas the whole app uses: Sprints, ideas and scripts."
+
+#, python-format
+msgid "Completar %(n)s incompletos de «%(estudio)s» · ≈ %(costo)s"
+msgstr "Complete %(n)s incomplete from “%(estudio)s” · ≈ %(costo)s"
+
+msgid "Un avatar escrito a mano nace aprobado: toda la app lo usa en cuanto lo guardas."
+msgstr "A hand-written avatar is born approved: the whole app uses it as soon as you save it."
+
+msgid "Nuevos (sin aprobar)"
+msgstr "New (unapproved)"
+
+msgid "No hay avatares nuevos: cuando un estudio genere avatares, aparecen aquí para que los apruebes."
+msgstr "There are no new avatars: once a study generates avatars, they'll show up here for you to approve."
+
+msgid "Aprobados"
+msgstr "Approved"
+
+msgid "Todavía no hay avatares aprobados."
+msgstr "There aren't any approved avatars yet."
+
+msgid "Descartados y archivados"
+msgstr "Discarded and archived"
 

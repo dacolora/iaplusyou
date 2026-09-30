@@ -485,6 +485,106 @@ def test_solo_mismo_origen_bloquea_post_de_otro_sitio(app, llaves_inv, monkeypat
     assert r.status_code == 302
 
 
+def test_avatares_del_proyecto_pagina_y_pestana(app):
+    from nicho import datos
+    from sprints import datos as sd
+    eid, sid = _con_avatares(datos)
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    c = app["c"]
+    html = c.get("/cliente/acme/nicho/avatares").data.decode()
+    assert "Nuevos (sin aprobar)" in html and "Aprobados" in html and "Premium" in html and SUB["nombre"] in html
+    assert f'id="avatar-a{sid}"' in html and f'id="avatar-p{pid}"' in html and "incompleto: falta" in html
+    assert f"/cliente/acme/nicho/persona/{pid}/ficha" in html and 'id="nuevo-avatar"' in html
+    assert 'action="/cliente/acme/nicho/avatares/nuevo"' in html and 'name="volver" value="lista"' in html
+    tab = c.get("/cliente/acme").data.decode()
+    assert "/cliente/acme/nicho/avatares" in tab and "Aprobados: 1" in tab and "Nuevos por revisar: 1" in tab
+    assert "Citas textuales" not in tab                                         # nada de fichas en la página del proyecto
+
+
+def test_crear_avatar_a_mano_y_editar_sincroniza(app):
+    from nicho import datos
+    from sprints import datos as sd
+    c = app["c"]
+    r = c.post("/cliente/acme/nicho/avatares/nuevo", data={"nombre": "Marta / La que camina", "deseo": "Quiero caminar sin dolor", "base": "emocion"})
+    assert r.status_code == 302 and "/cliente/acme/nicho/avatares" in r.headers["Location"] and "#avatar-a" in r.headers["Location"]
+    aid = int(r.headers["Location"].split("#avatar-a")[1])
+    a = datos.avatar("acme", aid)
+    p = sd.persona("acme", a["persona_id"])
+    assert a["estado"] == "aprobado" and p["origen"] == "manual" and p["nombre"] == "Marta / La que camina"
+    r = c.post(f"/cliente/acme/nicho/avatar/{aid}/editar", data={"nombre": "Marta / La que camina", "tono": "Cálido", "volver": "lista"},
+               follow_redirects=True)
+    assert "la persona que usa la app se actualizó" in r.data.decode() and sd.persona("acme", a["persona_id"])["tono"] == "Cálido"
+    r = c.post("/cliente/acme/nicho/avatares/nuevo", data={"nombre": " "}, follow_redirects=True)
+    assert "necesita un nombre" in r.data.decode()
+
+
+def test_aprobar_incompleto_avisa_y_vuelve_al_estudio(app):
+    from nicho import datos
+    eid, sid = _con_avatares(datos)
+    r = app["c"].post(f"/cliente/acme/nicho/avatar/{sid}/aprobar")
+    assert r.headers["Location"].endswith(f"/nicho/{eid}")
+    r = app["c"].get(f"/cliente/acme/nicho/{eid}")
+    assert datos.avatar("acme", sid)["estado"] == "aprobado"
+    r = app["c"].post(f"/cliente/acme/nicho/avatar/{sid}/descartar", data={"volver": "lista"})
+    assert "/cliente/acme/nicho/avatares" in r.headers["Location"]
+
+
+def test_persona_sin_avatar_ficha_y_archivar(app):
+    """Ruling 21 (nicho.persona_archivar): con un avatar detrás -- aquí, el
+    que «Editar ficha» le acaba de crear -- esta ruta ya no archiva a `pid`
+    (se usa el Aprobar/Descartar de su ficha); una persona genuinamente sin
+    avatar (`pid_sola`) se archiva/desarchiva como siempre."""
+    from nicho import datos
+    from sprints import datos as sd
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    pid_sola = sd.crear_persona("acme", "Básica", resumen="Solo lo esencial")
+    c = app["c"]
+    r = c.post(f"/cliente/acme/nicho/persona/{pid}/ficha")
+    aid = int(r.headers["Location"].split("#avatar-a")[1])
+    assert datos.avatar("acme", aid)["persona_id"] == pid and "abrir=a" in r.headers["Location"]
+    c.post(f"/cliente/acme/nicho/persona/{pid_sola}/archivar")
+    assert sd.persona("acme", pid_sola)["archivada"] is True
+    c.post(f"/cliente/acme/nicho/persona/{pid_sola}/archivar", data={"desarchivar": "1"})
+    assert sd.persona("acme", pid_sola)["archivada"] is False
+    assert c.post("/cliente/acme/nicho/persona/999/ficha", follow_redirects=True).status_code == 200
+    assert c.post("/cliente/acme/nicho/persona/999/archivar").status_code == 404
+
+
+def test_persona_archivar_rechaza_si_tiene_avatar(app):
+    """Ruling 21: cualquier avatar de este cliente enlazado a la persona
+    (incluido el que crea «Editar ficha», y el de una aprobada de verdad)
+    bloquea esta ruta con un aviso -- nada cambia -- porque la plantilla solo
+    ofrece Archivar/Desarchivar cuando la persona no tiene avatar (para las
+    que sí, `acciones_avatar` ya trae Aprobar/Descartar)."""
+    from nicho import datos
+    from sprints import datos as sd
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    c = app["c"]
+    c.post(f"/cliente/acme/nicho/persona/{pid}/ficha")
+    r = c.post(f"/cliente/acme/nicho/persona/{pid}/archivar", follow_redirects=True)
+    assert "descártalo desde su ficha" in r.data.decode() and sd.persona("acme", pid)["archivada"] is False
+    eid, sid = _con_avatares(datos)
+    datos.aprobar_avatar("acme", sid)
+    pid2 = datos.avatar("acme", sid)["persona_id"]
+    c.post(f"/cliente/acme/nicho/persona/{pid2}/archivar")
+    assert sd.persona("acme", pid2)["archivada"] is False
+    assert c.post("/cliente/acme/nicho/persona/999/archivar").status_code == 404
+
+
+def test_completar_desde_el_estudio_con_el_costo_visto(app):
+    import gastos
+    from nicho import avatares, datos
+    eid, sid = _con_avatares(datos)
+    e = avatares.estimar_completar("acme", eid)
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "incompleto: falta" in html and f"/cliente/acme/nicho/{eid}/completar" in html and gastos.formatear(e["usd"]) in html
+    assert "<script>iniciarPolling" not in html
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": "0"}, follow_redirects=True)
+    assert "vuelve a confirmar" in r.data.decode() and app["encolados"] == []
+    app["c"].post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": str(e["usd"])})
+    assert app["encolados"][-1]["tipo"] == "nicho_completar_avatares" and app["encolados"][-1]["max_intentos"] == 1
+
+
 def test_cliente_sin_apify_no_ve_plataformas_ni_variables_del_env(app, monkeypatch):
     """Ruling 19: sin APIFY_TOKEN, un cliente no ve en la tarjeta las
     plataformas que lo necesitan (amazon/meli/tiktok_shop) ni el nombre de la

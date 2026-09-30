@@ -2745,3 +2745,10 @@ body.panel-abierto { overflow: hidden; }
 .nicho-inv-chips label.apagado { opacity: .45; }
 .nicho-inv-estimado { margin: .6rem 0; font-size: .9rem; display: flex; flex-direction: column; gap: .15rem; }
 .nicho-inv-tabla td { overflow-wrap: anywhere; }
+
+/* Nicho · avatares del proyecto (spec 2026-09-29) */
+.nicho-avatares-resumen { margin-bottom: 1rem; }
+.nicho-avatares-muestra { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0; }
+.nicho-avatares-muestra a { text-decoration: none; }
+.nicho-completar { margin-bottom: .6rem; }
+.nicho-otros { margin-top: 1rem; }

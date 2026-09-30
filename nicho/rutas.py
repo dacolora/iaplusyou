@@ -19,7 +19,7 @@ import gastos
 import idiomas
 import proyectos
 import trabajos
-from nicho import avatares, datos, exportar, investigacion
+from nicho import avatares, calidad, datos, exportar, investigacion
 from nicho import fuentes as fuentes_registro
 from nicho.fuentes import apify as fuente_apify
 from nicho.fuentes import apify_actores
@@ -30,6 +30,7 @@ from nicho.fuentes import texto as fuente_texto
 from nicho.fuentes import youtube as fuente_youtube
 from nicho.fuentes.base import ErrorFuente
 from idiomas import N_
+from sprints import datos as sprints_datos
 from tareas import investigacion as tareas_investigacion
 from tareas import nicho as tareas_nicho
 
@@ -75,6 +76,18 @@ def _avatar_o_404(cliente, aid):
     if not a:
         abort(404)
     return a
+
+
+def _destino_avatar(cliente, a):
+    """Tras una acción sobre un avatar: a la lista del proyecto si se pidió
+    (`volver=lista`) o si es escrito a mano; si no, a su estudio."""
+    if request.form.get("volver") == "lista" or datos.es_manual(datos.estudio(cliente, a["estudio_id"])):
+        return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, _anchor=f"avatar-a{a['id']}"))
+    return _volver(cliente, a["estudio_id"])
+
+
+def _faltantes_de(cliente, a):
+    return calidad.faltantes(a, con_evidencia=not datos.es_manual(datos.estudio(cliente, a["estudio_id"])))
 
 
 def _partir(texto):
@@ -152,7 +165,7 @@ def contexto(cliente):
             "min_comentarios_nicho": avatares.MIN_COMENTARIOS,
             "etiquetas_estudio": datos.ETIQUETAS_ESTADO_ESTUDIO, "etiquetas_inv": investigacion.ETIQUETAS_ESTADO,
             "paises_estudio": [(c, datos.NOMBRES_PAIS.get(c, c)) for c in datos.PAISES_ESTUDIO],
-            "pais_proyecto": proyectos.pais(cliente)}
+            "pais_proyecto": proyectos.pais(cliente), "avatares_resumen": datos.resumen_avatares(cliente)}
 
 
 # ----------------------------------------------------------- estudios ---
@@ -186,13 +199,21 @@ def ver(cliente, eid):
     inv_actual = datos.investigacion(cliente, eid)
     paso_vivo = investigacion.siguiente_paso(inv_actual)
     job_inv = investigacion.job_de_paso(cliente, eid, paso_vivo) if paso_vivo else None
+    nucleos = datos.avatares(cliente, eid)
+    for n in nucleos:
+        for s in n["subs"]:
+            s["faltantes"] = calidad.faltantes(s, con_evidencia=not datos.es_manual(est))
+    completar_e = avatares.estimar_completar(cliente, eid)
+    job_comp = datos.job_id_completar(cliente, eid)
     return render_template(
         "nicho_estudio.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente), estudio=est,
         conteos=datos.contar_por_fuente(cliente, eid), fuente_filtro=fuente,
         pagina_comentarios=datos.comentarios(cliente, eid, fuente=fuente, pagina=pagina, por_pagina=POR_PAGINA),
-        nucleos=datos.avatares(cliente, eid), urls_comentarios=datos.urls_comentarios(cliente, eid),
+        nucleos=nucleos, urls_comentarios=datos.urls_comentarios(cliente, eid),
         estimado=estimado, precio_texto=gastos.formatear(estimado["usd"]), min_comentarios=avatares.MIN_COMENTARIOS,
         trabajo_generar=({"job_id": job} if trabajos.en_curso(job) else None),
+        completar_estimado={**completar_e, "texto": gastos.formatear(completar_e["usd"])},
+        trabajo_completar=({"job_id": job_comp} if trabajos.en_curso(job_comp) else None),
         modos_texto=fuente_texto.NOMBRES_MODO, fuentes_nombre=fuentes_registro.NOMBRES, idiomas=avatares.IDIOMAS,
         niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES, productos_nicho=_productos(cliente),
         fuentes_conectadas=_fuentes_conectadas(cliente, eid),
@@ -393,6 +414,12 @@ def soluciones_texto(soluciones):
     return "\n".join(f"{s.get('que', '')} :: " + "; ".join(s.get("por_que_fallo") or []) for s in (soluciones or []))
 
 
+@bp.app_template_filter("faltantes_texto")
+def faltantes_texto(faltantes):
+    """['demografia', 'tono'] -> «demografía, tono» en el idioma de quien mira."""
+    return ", ".join(idiomas.traducir(calidad.ETIQUETAS.get(k, k)) for k in faltantes or [])
+
+
 def _campos_avatar_desde_form():
     f = request.form
     campos = {}
@@ -417,10 +444,14 @@ def avatar_editar(cliente, aid):
     a = _avatar_o_404(cliente, aid)
     try:
         datos.actualizar_avatar(cliente, aid, **_campos_avatar_desde_form())
-        flash(gettext("Avatar guardado. Si ya estaba aprobado, vuelve a aprobarlo para actualizar la persona."), "ok")
+        if datos.avatar(cliente, aid)["estado"] == "aprobado":
+            datos.aprobar_avatar(cliente, aid)                          # la persona que usa la app queda igual que la ficha
+            flash(gettext("Avatar guardado; la persona que usa la app se actualizó."), "ok")
+        else:
+            flash(gettext("Avatar guardado."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
-    return _volver(cliente, a["estudio_id"])
+    return _destino_avatar(cliente, a)
 
 
 @bp.post("/avatar/<int:aid>/aprobar")
@@ -428,10 +459,14 @@ def avatar_aprobar(cliente, aid):
     a = _avatar_o_404(cliente, aid)
     try:
         datos.aprobar_avatar(cliente, aid)
-        flash(gettext("Avatar aprobado: ya es una persona de Sprints."), "ok")
+        falta = _faltantes_de(cliente, datos.avatar(cliente, aid))
+        if falta:
+            flash(gettext("Avatar aprobado: ya es una persona de Sprints. Ojo, le falta: %(faltan)s.", faltan=faltantes_texto(falta)), "error")
+        else:
+            flash(gettext("Avatar aprobado: ya es una persona de Sprints."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
-    return _volver(cliente, a["estudio_id"])
+    return _destino_avatar(cliente, a)
 
 
 @bp.post("/avatar/<int:aid>/descartar")
@@ -441,7 +476,96 @@ def avatar_descartar(cliente, aid):
         flash(gettext("Avatar descartado."), "ok")
     else:
         flash(gettext("Solo se descartan los sub-avatares; el núcleo es una agrupación."), "error")
-    return _volver(cliente, a["estudio_id"])
+    return _destino_avatar(cliente, a)
+
+
+# ---------------------------------------------- avatares del proyecto ---
+
+@bp.get("/avatares")
+def avatares_proyecto(cliente):
+    """Todos los avatares del proyecto (spec 2026-09-29 §3)."""
+    grupos = datos.lista_avatares(cliente)
+    ids = [e.get("comentario_id") for g in grupos.values() for x in g if x["avatar"] for e in (x["avatar"].get("evidencia") or [])]
+    completables = avatares.completables_por_estudio(cliente)
+    for c in completables:
+        job = datos.job_id_completar(cliente, c["estudio_id"])
+        c.update(texto=gastos.formatear(c["usd"]), job_id=job, en_curso=trabajos.en_curso(job))
+    return render_template("nicho_avatares_proyecto.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           estudio=None, grupos=grupos, completables=completables, nuevo=request.args.get("nuevo") == "1",
+                           abrir=request.args.get("abrir") or "", urls_comentarios=datos.urls_de_comentarios(cliente, ids),
+                           niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES, consciencias_nombre=doctrina.CONSCIENCIAS_NOMBRE)
+
+
+@bp.post("/avatares/nuevo")
+def avatar_crear(cliente):
+    try:
+        aid = datos.crear_avatar_manual(cliente, _campos_avatar_desde_form())
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, nuevo=1, _anchor="nuevo-avatar"))
+    falta = calidad.faltantes(datos.avatar(cliente, aid), con_evidencia=False)
+    if falta:
+        flash(gettext("Avatar creado y aprobado: ya lo usa toda la app. Ojo, le falta: %(faltan)s.", faltan=faltantes_texto(falta)), "error")
+    else:
+        flash(gettext("Avatar creado y aprobado: ya lo usa toda la app."), "ok")
+    return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, abrir=f"a{aid}", _anchor=f"avatar-a{aid}"))
+
+
+@bp.post("/persona/<int:pid>/ficha")
+def persona_ficha(cliente, pid):
+    """«Editar ficha» de una persona sin avatar: le crea (una vez) su avatar y lo abre."""
+    try:
+        aid = datos.avatar_desde_persona(cliente, pid)
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return redirect(url_for("nicho.avatares_proyecto", cliente=cliente))
+    return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, abrir=f"a{aid}", _anchor=f"avatar-a{aid}"))
+
+
+@bp.post("/persona/<int:pid>/archivar")
+def persona_archivar(cliente, pid):
+    p = sprints_datos.persona(cliente, pid)
+    if not p:
+        abort(404)
+    if (p.get("extra") or {}).get("avatar_id"):
+        # Ruling 21: con un avatar detrás (cualquiera -- incluido el que crea
+        # «Editar ficha»), esta persona ya no se archiva por esta ruta: se
+        # aprueba/descarta desde SU ficha (acciones_avatar), que es lo único
+        # que la plantilla ofrece para ella (tarjeta_avatar solo muestra
+        # Archivar/Desarchivar cuando no hay avatar). Sin este candado, un
+        # POST directo dejaría el avatar aprobado y la persona archivada a la
+        # vez -- un estado que la UI no sabe mostrar de forma consistente.
+        flash(gettext("Esta persona ya tiene un avatar: apruébalo o descártalo desde su ficha."), "error")
+        return redirect(url_for("nicho.avatares_proyecto", cliente=cliente))
+    sprints_datos.archivar_persona(cliente, pid, archivada=request.form.get("desarchivar") is None)
+    return redirect(url_for("nicho.avatares_proyecto", cliente=cliente, _anchor=f"avatar-p{pid}"))
+
+
+@bp.post("/<int:eid>/completar")
+def completar(cliente, eid):
+    """«Completar N incompletos» con la cifra que la persona vio (la recalcula el servidor)."""
+    est = _estudio_o_404(cliente, eid)
+    volver = (redirect(url_for("nicho.avatares_proyecto", cliente=cliente)) if request.form.get("volver") == "lista"
+              else _volver(cliente, eid))
+    if est["archivado"] or datos.es_manual(est):
+        flash(gettext("Ese estudio no se puede completar."), "error")
+        return volver
+    e = avatares.estimar_completar(cliente, eid)
+    if not e["avatares"]:
+        flash(gettext("No hay avatares incompletos que completar."), "ok")
+        return volver
+    try:
+        visto = float(request.form.get("total_visto") or 0)
+    except ValueError:
+        visto = 0.0
+    if e["usd"] > visto + 0.005:
+        flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.", costo=gastos.formatear(e["usd"])), "error")
+        return volver
+    if tareas_nicho.encolar_completar(cliente, eid):
+        flash(gettext("Completando %(n)s avatar(es); la página se recarga sola al terminar.", n=e["avatares"]), "ok")
+    else:
+        flash(gettext("Ya se están completando los avatares de este estudio."), "error")
+    return volver
 
 
 # ----------------------------------------------------------- exportar ---

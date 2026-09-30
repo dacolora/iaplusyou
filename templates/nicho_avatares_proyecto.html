@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_avatar_ficha.html" import ficha_avatar, tarjeta_avatar with context %}
+{% block title %}{{ _('Avatares') }} · {{ _('Nicho') }}{% endblock %}
+{% block content %}
+{% include "_nicho_nav.html" %}
+<div class="pagina-cabecera">
+  <div>
+    <h1>{{ _('Avatares del proyecto') }}</h1>
+    <p class="vacio">{{ _('Los nuevos vienen de tus estudios y esperan tu aprobación. Los aprobados son las personas que usa toda la app: Sprints, ideas y guiones.') }}</p>
+  </div>
+</div>
+
+{% for c in completables %}
+<div class="swap-card nicho-completar">
+  {% if c.en_curso %}
+  <div class="barra-progreso" id="trabajo-{{ c.job_id }}" data-poll-job="{{ c.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div><span class="progreso-texto">{{ _('Completando avatares') }}…</span></div>
+  {% else %}
+  <form method="post" action="{{ url_for('nicho.completar', cliente=cliente, eid=c.estudio_id) }}" class="inline" data-costo="{{ c.texto }}"
+        onsubmit='return confirm({{ _("Completar con Claude lo que les falta a estos avatares cuesta aprox. %(costo)s. ¿Seguimos?", costo="__C__")|tojson }}.replace("__C__", this.dataset.costo));'>
+    <input type="hidden" name="volver" value="lista"><input type="hidden" name="total_visto" value="{{ c.usd }}">
+    <button type="submit" class="btn-generar btn-sm">{{ _('Completar %(n)s incompletos de «%(estudio)s» · ≈ %(costo)s', n=c.avatares, estudio=c.nombre, costo=c.texto) }}</button>
+  </form>
+  {% endif %}
+</div>
+{% endfor %}
+
+<details class="swap-card" id="nuevo-avatar" {% if nuevo %}open{% endif %}>
+  <summary class="swap-card-resumen">{{ _('+ Nuevo avatar') }}</summary>
+  <p class="vacio">{{ _('Un avatar escrito a mano nace aprobado: toda la app lo usa en cuanto lo guardas.') }}</p>
+  {{ ficha_avatar(None, 'lista') }}
+</details>
+
+<h3 class="sprint-subtitulo">{{ _('Nuevos (sin aprobar)') }} · {{ grupos.nuevos|length }}</h3>
+{% for x in grupos.nuevos %}{{ tarjeta_avatar(x) }}{% else %}<p class="vacio">{{ _('No hay avatares nuevos: cuando un estudio genere avatares, aparecen aquí para que los apruebes.') }}</p>{% endfor %}
+
+<h3 class="sprint-subtitulo">{{ _('Aprobados') }} · {{ grupos.aprobados|length }}</h3>
+{% for x in grupos.aprobados %}{{ tarjeta_avatar(x) }}{% else %}<p class="vacio">{{ _('Todavía no hay avatares aprobados.') }}</p>{% endfor %}
+
+{% if grupos.otros %}
+<details class="nicho-otros">
+  <summary>{{ _('Descartados y archivados') }} · {{ grupos.otros|length }}</summary>
+  {% for x in grupos.otros %}{{ tarjeta_avatar(x) }}{% endfor %}
+</details>
+{% endif %}
+{% endblock %}
