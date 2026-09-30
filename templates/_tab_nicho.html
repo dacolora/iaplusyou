@@ -21,7 +21,7 @@
   </div>
   <p class="vacio">{{ _('Los aprobados son las personas que usa toda la app. Los nuevos vienen de tus estudios y esperan tu aprobación.') }}</p>
   {% if ra.muestra %}
-  <p class="nicho-avatares-muestra">{% for m in ra.muestra %}<a class="tag-estado estado-nicho-{{ 'propuesto' if m.grupo == 'nuevo' else 'aprobado' }}" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente, abrir=m.clave, _anchor='avatar-' ~ m.clave) }}">{{ m.nombre }}{% if m.incompleto %} ⚠{% endif %}</a> {% endfor %}</p>
+  <p class="nicho-avatares-muestra">{% for m in ra.muestra %}<a class="tag-estado estado-nicho-{{ 'propuesto' if m.grupo == 'nuevo' else 'aprobado' }}" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente, abrir=m.clave, _anchor='avatar-' ~ m.clave) }}" title="{{ m.nombre }}">{{ m.nombre }}{% if m.incompleto %} ⚠{% endif %}</a> {% endfor %}</p>
   {% endif %}
   <div class="acciones">
     <a class="btn-sm" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente) }}">{{ _('Ver todos los avatares') }}</a>

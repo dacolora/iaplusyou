@@ -187,6 +187,12 @@ def crear(cliente):
 @bp.get("/<int:eid>")
 def ver(cliente, eid):
     est = _estudio_o_404(cliente, eid)
+    if datos.es_manual(est):
+        # Ruling 26: el estudio oculto de los avatares escritos a mano nunca
+        # se abre como estudio (no tiene comentarios que revisar ni acciones
+        # de estudio que apliquen) -- a la lista del proyecto, que es donde
+        # esos avatares sí se ven y se editan.
+        return redirect(url_for("nicho.avatares_proyecto", cliente=cliente))
     est["estado"] = datos.recalcular(cliente, eid) or est["estado"]
     fuente = request.args.get("fuente") or None
     try:

@@ -2749,6 +2749,12 @@ body.panel-abierto { overflow: hidden; }
 /* Nicho · avatares del proyecto (spec 2026-09-29) */
 .nicho-avatares-resumen { margin-bottom: 1rem; }
 .nicho-avatares-muestra { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0; }
-.nicho-avatares-muestra a { text-decoration: none; }
+.nicho-avatares-muestra a { text-decoration: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .nicho-completar { margin-bottom: .6rem; }
 .nicho-otros { margin-top: 1rem; }
+/* Fix round 1 (Ruling 25): estas dos son las primeras en meter texto libre y
+   largo dentro de un .tag-estado, que es white-space: nowrap -- sin esto se
+   corta en silencio contra el borde del celular (body ya tiene overflow-x:
+   hidden). No se toca .tag-estado global: el resto de sus usos son etiquetas
+   cortas que SÍ deben quedar en una sola línea. */
+.nicho-faltantes { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }

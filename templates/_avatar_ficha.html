@@ -4,7 +4,7 @@
    `s` = None dibuja la ficha vacía de «+ Nuevo avatar». `volver` = "lista" hace que cada acción
    vuelva a la lista del proyecto en vez de al estudio. #}
 
-{% macro chip_faltantes(faltantes) %}{% if faltantes %}<span class="tag-estado sprint-aviso">{{ _('incompleto: falta %(faltan)s', faltan=faltantes|faltantes_texto) }}</span>{% endif %}{% endmacro %}
+{% macro chip_faltantes(faltantes) %}{% if faltantes %}<span class="tag-estado sprint-aviso nicho-faltantes">{{ _('incompleto: falta %(faltan)s', faltan=faltantes|faltantes_texto) }}</span>{% endif %}{% endmacro %}
 
 {% macro ficha_avatar(s, volver='') %}
 {% set ident = (s.identidad if s else {}) or {} %}

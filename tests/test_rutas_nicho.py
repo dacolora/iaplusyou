@@ -585,6 +585,42 @@ def test_completar_desde_el_estudio_con_el_costo_visto(app):
     assert app["encolados"][-1]["tipo"] == "nicho_completar_avatares" and app["encolados"][-1]["max_intentos"] == 1
 
 
+def test_chips_de_avatares_no_se_cortan_en_el_celular(app):
+    """Ruling 25 (fix round 1): `.tag-estado` es `white-space: nowrap` y este
+    task es el primero en meterle texto libre y largo -- sin overrides scoped
+    se corta en silencio contra el borde del celular (`body` ya tiene
+    `overflow-x: hidden`). No se toca `.tag-estado` global: sus otros usos
+    son etiquetas cortas que sí deben quedar en una sola línea."""
+    import re
+    from nicho import datos
+    from sprints import datos as sd
+    css = open("static/style.css", encoding="utf-8").read()
+    faltantes = re.search(r"\.nicho-faltantes \{[^}]*\}", css)
+    assert faltantes, "falta la regla .nicho-faltantes en static/style.css"
+    assert "white-space: normal" in faltantes.group(0) and "overflow-wrap: anywhere" in faltantes.group(0) and "max-width: 100%" in faltantes.group(0)
+    muestra = re.search(r"\.nicho-avatares-muestra a \{[^}]*\}", css)
+    assert muestra, "falta la regla .nicho-avatares-muestra a en static/style.css"
+    assert "max-width: 100%" in muestra.group(0) and "overflow: hidden" in muestra.group(0) and "text-overflow: ellipsis" in muestra.group(0)
+    eid, sid = _con_avatares(datos)
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    tab = app["c"].get("/cliente/acme").data.decode()
+    assert f'title="{SUB["nombre"]}"' in tab and 'title="Premium"' in tab
+    lista = app["c"].get("/cliente/acme/nicho/avatares").data.decode()
+    assert 'class="tag-estado sprint-aviso nicho-faltantes"' in lista
+
+
+def test_estudio_oculto_no_se_abre_como_estudio(app):
+    """Ruling 26 (fix round 1): el estudio oculto de los avatares escritos a
+    mano no tiene comentarios que revisar ni acciones de estudio que
+    apliquen -- typear su URL manda a la lista del proyecto, no a su
+    página."""
+    from nicho import datos
+    eid, _nid = datos.estudio_manual("acme")
+    r = app["c"].get(f"/cliente/acme/nicho/{eid}")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme/nicho/avatares")
+    assert app["c"].get("/cliente/acme/nicho/999999").status_code == 404
+
+
 def test_cliente_sin_apify_no_ve_plataformas_ni_variables_del_env(app, monkeypatch):
     """Ruling 19: sin APIFY_TOKEN, un cliente no ve en la tarjeta las
     plataformas que lo necesitan (amazon/meli/tiktok_shop) ni el nombre de la
