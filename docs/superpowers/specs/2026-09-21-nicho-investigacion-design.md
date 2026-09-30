@@ -101,6 +101,11 @@ sitio de Mercado Libre y el idioma de las consultas.
 (actualiza precio, estrellas, `n_resenas`) y no duplica. Los productos con
 `resenas_traidas > 0` no vuelven a pedirse.
 
+Nota (cerrado 2026-09-29): la tabla NO tiene columna `elegido`; los productos elegidos
+para pedir reseñas viven en `estudio.extra.investigacion.pasos.seleccionar.elegidos =
+{plataforma: [fuente_id, …]}` (§2.4), no en `producto_nicho`. La migración que creó la
+tabla tal cual queda arriba es la 0016.
+
 ### 2.3 Comentarios de las plataformas
 
 Van a `comentario` con `fuente` = la clave de la plataforma (`amazon`, `meli`,
@@ -313,19 +318,28 @@ igual (Parte 2). `gastos.TIPOS` gana `investigacion`.
   sigue con la siguiente plataforma. Al llegar a `generar`, si
   `datos.comentarios_para_generar` trae menos de `avatares.MIN_COMENTARIOS` (20) →
   `detenida` ("solo hay N comentarios; hacen falta 20").
+- **Investigación solo con redes** (ninguna tienda elegida): `seleccionar` se salta
+  (`vacio`, "sin plataformas") porque no hay ningún producto que juzgar.
 - **Claude falla dos veces** en consultas o selección → `detenida` con el error
   (`cola.sin_token`).
 - **El worker se reinicia** → `al_interrumpir` de cada tarea marca su paso `pendiente`
   y el estado `interrumpida`.
 - **Reanudar** (`POST .../investigar/reanudar`): valida que el estado sea `detenida` o
-  `interrumpida`, pone `estado` según el primer paso pendiente y llama `avanzar`. Nada
-  hecho se repite: consultas guardadas se reutilizan, `buscar:<p>` hecho se salta,
-  `seleccionar` solo juzga productos con `relevante IS NULL`, `resenas:<p>` solo pide
-  productos elegidos con `resenas_traidas == 0`. Si la parada fue por el tope de
-  avatares, Reanudar no aplica: se usa el botón de generar con su costo.
+  `interrumpida`, pone `estado` según el primer paso pendiente y llama `avanzar`. Los
+  pasos en curso vuelven a pendiente y consultas/selección con error también (Claude,
+  centavos); una búsqueda o reseñas con error no se repiten solas porque ya cobraron:
+  para eso está «Investigar de nuevo». Si la parada fue por el tope de avatares,
+  Reanudar no aplica: se usa el botón de generar con su costo.
 - **Cancelar** (`POST .../investigar/cancelar`): `estado = detenida`, `detenida_por =
   "cancelada"`. `avanzar` no encola nada más; la tarea viva termina su paso (una corrida
   de Apify ya arrancada se cobra igual y su resultado se guarda).
+- **Un paso encolado de una investigación ya cancelada** (la fila ya está `lista`,
+  `detenida` o `interrumpida`, o el estudio quedó archivado, antes de que el worker
+  arrancara esa tarea): no llama a ningún proveedor ni cobra nada.
+- **Recolección manual y «Generar avatares»** esperan mientras la investigación está
+  viva: las rutas los rechazan. Si un trabajo manual con el mismo job_id sigue
+  bloqueando un paso de la cadena, `avanzar` deja la investigación `interrumpida` para
+  que Reanudar funcione en cuanto ese trabajo termine.
 - **Investigar de nuevo** con una investigación `lista` o `detenida`: nuevo
   `extra.investigacion` (el anterior se guarda en `extra.investigaciones_previas`, últimas
   3), mismas reglas de no repetir pago sobre `producto_nicho`.
