@@ -436,6 +436,16 @@ Cuota: la búsqueda (`search.list`) tiene un cupo de **100 llamadas por día** p
 
 El dashboard usa dos actores de la tienda, ambos con precio por resultado: `junglee~amazon-reviews-scraper` (≈ US$ 3 por 1 000 reseñas) y `clockworks~tiktok-comments-scraper` (≈ US$ 0,50 por 1 000 comentarios). Antes de cada clic se muestra el estimado y la corrida nunca se reintenta sola; el gasto real queda en Configuración › Gasto como tipo `recoleccion`. Traer datos de Amazon o TikTok por scraping es una zona gris de sus términos de uso: es responsabilidad de quien pone el token.
 
+### 7.4 TrendTrack (biblioteca de referentes, por créditos del plan)
+
+1. En [trendtrack.io](https://www.trendtrack.io) elige el plan **Pro o superior** (el Starter no incluye la API).
+2. Crea una API key en tu workspace (guía: [docs.trendtrack.io](https://docs.trendtrack.io) › Getting Started) y cópiala como `TRENDTRACK_API_KEY`.
+3. Reinicia el dashboard y el worker. La fuente aparece en «Traer referentes» (por proyecto y en `/admin/referentes`).
+
+Solo busca por palabra clave y trae anuncios de Meta. Cada anuncio revisado cuesta **1 crédito** (US$ 1 = 1 000 créditos; el Pro incluye 20 000 al mes). Como TrendTrack no recibe el filtro de formato ni el de «solo activos» desde aquí, esos se aplican después de recibir las filas: se revisan hasta tres veces los anuncios que pidas. El uso del mes y el saldo que informa TrendTrack se ven en `/admin/referentes`. Límites del plan Pro: 20 peticiones por segundo y 1 200 por hora.
+
+**Sin verificar contra una respuesta real** (el dominio de la documentación estaba bloqueado al escribir el conector): los nombres de los campos de cada anuncio. La primera página es de solo 10 filas; si ninguna se reconoce, el barrido se detiene con un error que lista los campos recibidos y se corrige la tabla `_CLAVES` de `referentes/fuentes/trendtrack.py`.
+
 ## Resumen de limitaciones a tener en cuenta
 
 - **Instagram** usa la URL pública de tu bucket R2 (no la de Higgsfield), así que no depende

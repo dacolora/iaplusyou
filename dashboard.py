@@ -1963,6 +1963,22 @@ SERVICIOS_LLAVES = (
             idiomas.N_("Pégala como ATRIA_API_KEY en el .env del servidor y reinicia los dos servicios."),
         ],
     },
+    {
+        "id": "trendtrack",
+        "nombre": idiomas.N_("TrendTrack (biblioteca de referentes: anuncios de Meta)"),
+        "para_que": idiomas.N_("Trae anuncios reales de Meta que TrendTrack ha registrado para la biblioteca de referentes; busca por palabra clave."),
+        "costo": idiomas.N_("Un crédito de TrendTrack por anuncio revisado (US$ 1 = 1 000 créditos); el plan Pro incluye 20 000 créditos al mes. El uso está en Referentes (admin)."),
+        "url": "https://www.trendtrack.io",
+        "url_texto": "trendtrack.io",
+        "variables": ["TRENDTRACK_API_KEY"],
+        "nota": idiomas.N_("Sin ella la fuente TrendTrack queda apagada en «Traer referentes». La API pide el plan Pro o superior: el Starter no la incluye."),
+        "opcional": True,
+        "pasos": [
+            idiomas.N_("En trendtrack.io elige el plan Pro o superior (incluye la API y 20 000 créditos al mes)."),
+            idiomas.N_("Crea una API key en tu workspace de TrendTrack (guía: docs.trendtrack.io › Getting Started)."),
+            idiomas.N_("Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."),
+        ],
+    },
 )
 
 
@@ -3811,6 +3827,7 @@ def admin_referentes():
     traer un barrido global (cliente=NULL) de Atria/Apify, y ver totales."""
     from referentes import datos as ref_datos, fuentes
     from referentes.fuentes.atria import limite_mensual, llamadas_este_mes
+    from referentes.fuentes import trendtrack
     from referentes.rutas import _consulta_desde, _entero
     import gastos
     from tareas import referentes as tareas_ref
@@ -3823,7 +3840,8 @@ def admin_referentes():
     fuente_llaves_faltantes = {t: fuentes.llaves_faltantes(t) for t in fuentes.tipos()}
     llaves_faltantes = fuentes.llaves_faltantes(fuente) if fuente else []
     precio_traer = None
-    if fuente and not llaves_faltantes and (consulta_traer.get("pagina_id") or consulta_traer.get("palabra")):
+    if (fuente and not llaves_faltantes and consulta_traer["modo"] in fuentes.modos(fuente)
+            and (consulta_traer.get("pagina_id") or consulta_traer.get("palabra"))):
         modulo = fuentes.por_tipo(fuente)
         try:
             est_fuente = modulo.estimar(consulta_traer, tope_traer)
@@ -3859,6 +3877,8 @@ def admin_referentes():
                            fuente=fuente, consulta_traer=consulta_traer, tope_traer=tope_traer,
                            precio_traer=precio_traer, fuente_llaves_faltantes=fuente_llaves_faltantes,
                            atria_llamadas=llamadas_este_mes(), atria_limite=limite_mensual(),
+                           trendtrack_creditos=trendtrack.creditos_este_mes(),
+                           trendtrack_saldo=trendtrack.creditos_restantes(),
                            fuentes_totales=ref_datos.opciones(None)["fuentes"],
                            barridos_otras_fuentes=barridos_otras_fuentes,
                            familias_sin_en=familias_sin_en, precio_familias_en=precio_familias_en,
@@ -3901,6 +3921,9 @@ def admin_referentes_traer():
         flash("Esa fuente no está configurada.", "error")
         return redirect(url_for("admin_referentes"))
     consulta = _consulta_desde(request.form)
+    if consulta["modo"] not in fuentes.modos(fuente):
+        flash("Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente.", "error")
+        return redirect(url_for("admin_referentes"))
     if consulta["modo"] == "marca" and not consulta["pagina_id"]:
         flash("Pega un link del Ad Library o el id de la página.", "error")
         return redirect(url_for("admin_referentes"))

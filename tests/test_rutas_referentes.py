@@ -1146,3 +1146,84 @@ def test_filtros_plegables_en_el_celular(app):
     css = open("static/style.css", encoding="utf-8").read()
     assert ".ref-filtros { display: contents; }" in css
     assert ".ref-filtros:not(.abierto) { display: none; }" in css
+
+
+# ------------------------------------------------------------- TrendTrack ---
+
+def _estimar_trendtrack(monkeypatch):
+    from referentes.fuentes import trendtrack
+    monkeypatch.setenv("TRENDTRACK_API_KEY", "tt_test")
+    monkeypatch.setattr(trendtrack, "estimar", lambda consulta, tope: {
+        "usd_fuente": 0.0, "llamadas": 6, "detalle": "hasta 300 créditos de TrendTrack"})
+
+
+def test_traer_form_trendtrack_por_palabra_muestra_precio_y_oculta_lo_de_atria(app, monkeypatch):
+    _estimar_trendtrack(monkeypatch)
+    html = app["c"].get("/cliente/acme/referentes/traer?fuente=trendtrack&modo=palabra&palabra=foot+pain&tope=100",
+                        headers={"X-Requested-With": "fetch"}).data.decode()
+    assert "hasta 300 créditos de TrendTrack" in html
+    assert 'value="trendtrack"' in html and 'data-no-fuente="trendtrack"' in html
+    assert "solo busca por palabra clave" not in html                  # el aviso es solo para el modo marca
+    assert "disabled" not in html[html.index('id="traer-enviar"'):html.index('id="traer-enviar"') + 80]
+
+
+def test_traer_form_trendtrack_en_modo_marca_avisa_y_no_deja_enviar(app, monkeypatch):
+    _estimar_trendtrack(monkeypatch)
+    llamadas = []
+    monkeypatch.setattr("referentes.fuentes.trendtrack.estimar", lambda c, t: llamadas.append(c) or {})
+    html = app["c"].get("/cliente/acme/referentes/traer?fuente=trendtrack&modo=marca&pagina_id=123",
+                        headers={"X-Requested-With": "fetch"}).data.decode()
+    assert "solo busca por palabra clave" in html and llamadas == []   # ni siquiera estima
+    boton = html[html.index('id="traer-enviar"'):]
+    assert "disabled" in boton[:boton.index(">")]
+
+
+def test_traer_post_trendtrack_en_modo_marca_no_lanza(app, monkeypatch):
+    from tareas import referentes as tr
+    _estimar_trendtrack(monkeypatch)
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    r = app["c"].post("/cliente/acme/referentes/traer", headers={"Sec-Fetch-Site": "same-origin"},
+                      data={"fuente": "trendtrack", "modo": "marca", "pagina_id": "123", "tope": "50"}, follow_redirects=True)
+    assert "no admite este tipo de búsqueda" in r.data.decode() and llamadas == []
+
+
+def test_traer_post_trendtrack_por_palabra_lanza_el_barrido(app, monkeypatch):
+    from tareas import referentes as tr
+    _estimar_trendtrack(monkeypatch)
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    r = app["c"].post("/cliente/acme/referentes/traer", headers={"Sec-Fetch-Site": "same-origin"},
+                      data={"fuente": "trendtrack", "modo": "palabra", "palabra": "foot pain", "tope": "50"})
+    assert r.status_code == 302 and len(llamadas) == 1
+    assert llamadas[0][1] == "trendtrack" and llamadas[0][2]["palabra"] and llamadas[0][3] == 50
+
+
+def test_traer_post_trendtrack_sin_llave_no_lanza(app, monkeypatch):
+    from tareas import referentes as tr
+    monkeypatch.delenv("TRENDTRACK_API_KEY", raising=False)
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    r = app["c"].post("/cliente/acme/referentes/traer", headers={"Sec-Fetch-Site": "same-origin"},
+                      data={"fuente": "trendtrack", "modo": "palabra", "palabra": "foot pain"}, follow_redirects=True)
+    assert "no está configurada" in r.data.decode() and llamadas == []
+
+
+def test_admin_trendtrack_modo_marca_no_lanza_y_el_panel_muestra_los_creditos(app, monkeypatch):
+    from referentes.fuentes import trendtrack
+    from tareas import referentes as tr
+    _estimar_trendtrack(monkeypatch)
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    c = app["c"]
+    r = c.post("/admin/referentes/traer", headers={"Sec-Fetch-Site": "same-origin"},
+               data={"fuente": "trendtrack", "modo": "marca", "pagina_id": "123"}, follow_redirects=True)
+    assert "no admite este tipo de búsqueda" in r.data.decode() and llamadas == []
+    trendtrack._sumar_creditos(42)
+    trendtrack._guardar_saldo({"X-Credits-Remaining": "19958"})
+    html = c.get("/admin/referentes?fuente=trendtrack&modo=palabra&palabra=foot+pain").data.decode()
+    assert "TrendTrack: 42 créditos gastados" in html and "le quedaban 19958 créditos" in html
+    assert "Traer y clasificar ≈ US$" in html
+    # sin llave, el contador no se muestra
+    monkeypatch.delenv("TRENDTRACK_API_KEY")
+    assert "TrendTrack: 42 créditos" not in c.get("/admin/referentes").data.decode()

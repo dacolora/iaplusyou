@@ -13288,3 +13288,79 @@ msgstr "🔊 Sound"
 msgid "🖼 Imagen"
 msgstr "🖼 Image"
 
+#, python-format
+msgid "%(fuente)s solo busca por palabra clave: elige «Por palabra clave» o cambia de fuente."
+msgstr "%(fuente)s only searches by keyword: choose “By keyword” or switch source."
+
+msgid "Crea una API key en tu workspace de TrendTrack (guía: docs.trendtrack.io › Getting Started)."
+msgstr "Create an API key in your TrendTrack workspace (guide: docs.trendtrack.io › Getting Started)."
+
+msgid "En trendtrack.io elige el plan Pro o superior (incluye la API y 20 000 créditos al mes)."
+msgstr "At trendtrack.io choose the Pro plan or higher (it includes the API and 20,000 credits a month)."
+
+msgid "Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente."
+msgstr "That source doesn't support this kind of search; search by keyword or switch source."
+
+#, python-format
+msgid "No se pudo conectar con TrendTrack: %(tipo)s."
+msgstr "Couldn't connect to TrendTrack: %(tipo)s."
+
+msgid "Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."
+msgstr "Paste it as TRENDTRACK_API_KEY in the server's .env and restart both services."
+
+msgid "Sin ella la fuente TrendTrack queda apagada en «Traer referentes». La API pide el plan Pro o superior: el Starter no la incluye."
+msgstr "Without it the TrendTrack source stays off in “Bring in references”. The API needs the Pro plan or higher: Starter doesn't include it."
+
+msgid "Trae anuncios reales de Meta que TrendTrack ha registrado para la biblioteca de referentes; busca por palabra clave."
+msgstr "Brings in real Meta ads that TrendTrack has recorded, for the Swipe file; it searches by keyword."
+
+msgid "TrendTrack (anuncios de Meta)"
+msgstr "TrendTrack (Meta ads)"
+
+msgid "TrendTrack (biblioteca de referentes: anuncios de Meta)"
+msgstr "TrendTrack (Swipe file: Meta ads)"
+
+#, python-format
+msgid "TrendTrack devolvió anuncios con campos que Creatv no reconoce todavía (recibidos: %(campos)s). Avisa al equipo para ajustar el conector; se detuvo para no gastar más créditos."
+msgstr "TrendTrack returned ads with fields Creatv doesn't recognize yet (received: %(campos)s). Let the team know so they can adjust the connector; it stopped to avoid spending more credits."
+
+msgid "TrendTrack devolvió la lista de anuncios en una forma que Creatv no reconoce todavía."
+msgstr "TrendTrack returned the list of ads in a shape Creatv doesn't recognize yet."
+
+msgid "TrendTrack mira los anuncios de Meta que ha registrado y se cobra en créditos de tu plan (un crédito por anuncio revisado). No filtra por formato: los anuncios que no son del formato elegido también gastan crédito, por eso se revisan hasta tres veces el máximo que pidas."
+msgstr "TrendTrack looks at the Meta ads it has recorded and is billed in credits from your plan (one credit per ad checked). It can't filter by format: ads that aren't in the chosen format also use a credit, so up to three times the maximum you ask for are checked."
+
+msgid "TrendTrack no aceptó la llave (TRENDTRACK_API_KEY): revísala o genera otra."
+msgstr "TrendTrack didn't accept the key (TRENDTRACK_API_KEY): check it or generate another one."
+
+msgid "TrendTrack no está configurado (falta TRENDTRACK_API_KEY)."
+msgstr "TrendTrack isn't configured (TRENDTRACK_API_KEY is missing)."
+
+#, python-format
+msgid "TrendTrack respondió algo inesperado (HTTP %(codigo)s)."
+msgstr "TrendTrack responded with something unexpected (HTTP %(codigo)s)."
+
+#, python-format
+msgid "TrendTrack respondió con un error (HTTP %(codigo)s)."
+msgstr "TrendTrack responded with an error (HTTP %(codigo)s)."
+
+msgid "TrendTrack solo busca por palabra clave; para los anuncios de una marca usa Atria o Apify."
+msgstr "TrendTrack only searches by keyword; for a brand's ads use Atria or Apify."
+
+msgid "TrendTrack: se acabaron los créditos del plan."
+msgstr "TrendTrack: the plan's credits have run out."
+
+msgid "TrendTrack: se alcanzó el límite de peticiones del plan; intenta en un rato."
+msgstr "TrendTrack: the plan's request limit was reached; try again in a while."
+
+msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
+msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
+
+msgid "Un crédito de TrendTrack por anuncio revisado (US$ 1 = 1 000 créditos); el plan Pro incluye 20 000 créditos al mes. El uso está en Referentes (admin)."
+msgstr "One TrendTrack credit per ad checked (US$ 1 = 1,000 credits); the Pro plan includes 20,000 credits a month. Usage is shown in Swipe file (admin)."
+
+#, python-format
+msgid "hasta %(num)d crédito de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
+msgid_plural "hasta %(num)d créditos de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
+msgstr[0] "up to %(num)d TrendTrack credit (from the plan; US$ %(usd)s if they were top-up credits)"
+msgstr[1] "up to %(num)d TrendTrack credits (from the plan; US$ %(usd)s if they were top-up credits)"

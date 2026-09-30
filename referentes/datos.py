@@ -22,7 +22,7 @@ ETAPAS = ("TOF", "MOF", "BOF")
 CONSCIENCIAS = ("unaware", "problem-aware", "solution-aware", "product-aware", "most-aware")
 # `triple_whale`: un anuncio PROPIO del proyecto que ganó en Triple Whale
 # (spec 2026-09-28 §6.3), guardado con sus métricas en `extra.triple_whale`.
-FUENTES = ("copycoders", "atria", "apify", "triple_whale")
+FUENTES = ("copycoders", "atria", "apify", "trendtrack", "triple_whale")
 CLASIFICACIONES = ("fuente", "claude", "pendiente", "error")
 ESTADOS_IMAGEN = ("ok", "pendiente", "error")
 TIPOS = ("imagen", "video", "carrusel")
