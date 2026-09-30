@@ -5,6 +5,8 @@ fal cobró, ANTES de mezclar, para que un ffmpeg roto no lo pierda."""
 import os
 import shutil
 
+from flask_babel import gettext
+
 import audios
 import gastos
 import idiomas
@@ -66,7 +68,8 @@ def ejecutar(tarea):
         usd = float(r.get("costo_usd") or 0.0)
         # fal ya cobró: el gasto queda aunque lo que sigue falle.
         gastos.registrar_seguro(cliente, "locucion", usd, ref,
-                                detalle=f"ElevenLabs · {len(texto)} caracteres · {voz}", proveedor="fal/elevenlabs")
+                                detalle=gettext("ElevenLabs · %(n)s caracteres · %(voz)s", n=len(texto), voz=voz),
+                                proveedor="fal/elevenlabs")
         local = audios.descargar_url(r["url"], os.path.join(carpeta, f"voz_{h_voz[:16]}.mp3"))
         url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h_voz[:16]}.mp3", "audio/mpeg")
         return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": os.path.getsize(local),

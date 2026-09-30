@@ -206,7 +206,7 @@ class FuenteYouTube(Fuente):
                 pendientes.append(v)
         pendientes = pendientes[:MAX_VIDEOS]
         for n, video in enumerate(pendientes, start=1):
-            avanzar(N_("Leyendo comentarios"), f"video {n} de {len(pendientes)}")
+            avanzar(N_("Leyendo comentarios"), gettext("video %(n)s de %(total)s", n=n, total=len(pendientes)))
             hilos, error = comentarios_video(yt, video, p["max_comentarios_por_video"])
             for crudo in hilos:                        # primero lo leído: esas páginas ya gastaron cuota
                 c = normalizar_comentario(crudo)

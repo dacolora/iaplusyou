@@ -9,6 +9,7 @@ del proveedor. Estático con ast. Cada tarea de la fase
 6 suma archivos a RUTAS y WORKER; en RUTAS todo literal con letras es sospechoso
 (una ruta solo responde mensajes), en WORKER solo el que parece español."""
 import ast
+import glob
 import os
 import re
 import tempfile
@@ -35,6 +36,11 @@ WORKER += ["final_edition/__init__.py", "final_edition/produccion.py", "final_ed
            "tareas/final_edition.py"]
 WORKER += ["tareas/swap.py", "referencias_link.py", "mi_musica.py", "materiales.py"]   # Fase 6, Task 4
 WORKER += ["meta_conexion.py", "meta_agencia.py", "notificaciones.py"]   # Fase 6, Task 5
+# Fase 6, Task 7: todo el worker (cada tareas/*.py, también los que lleguen con una fusión) y lo que guarda.
+WORKER += sorted({os.path.relpath(p, RAIZ) for p in glob.glob(os.path.join(RAIZ, "tareas", "*.py"))} - set(WORKER))
+WORKER += ["worker.py", "cola.py", "organico.py", "experimentos.py", "derivaciones.py", "lanzador.py", "acciones.py",
+           "importador.py", "nicho/fuentes/reddit.py", "nicho/fuentes/youtube.py", "nicho/fuentes/apify.py",
+           "providers/apify.py"]
 
 
 def _nombre(llamada):

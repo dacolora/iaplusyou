@@ -22,11 +22,12 @@ from flask_babel import gettext
 import notificaciones
 import organico
 import trabajos
+from idiomas import N_
 from tareas import al_interrumpir, registrar
 
 log = logging.getLogger("creatv.tareas.organico")
 
-ETAPAS_PUBLICAR = [("Descargando", 15), ("Publicando", 85)]
+ETAPAS_PUBLICAR = [(N_("Descargando"), 15), (N_("Publicando"), 85)]
 DURACION_PUBLICAR = 180
 
 

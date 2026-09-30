@@ -12,6 +12,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import db
+import idiomas
 import materiales
 
 PREFIJO = "mat:"
@@ -112,7 +113,11 @@ def subir(cliente, archivo, carpeta_tmp):
     local = os.path.join(carpeta_tmp, f"subida_{uuid.uuid4().hex}{ext}")
     archivo.save(local)
     try:
-        titulo = os.path.splitext(nombre)[0].strip()[:80] or "Canción"
+        titulo = os.path.splitext(nombre)[0].strip()[:80]
+        if not titulo:
+            # El nombre por defecto se GUARDA: en el idioma del proyecto, no en el de quien sube.
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                titulo = gettext("Canción")
         return _guardar(cliente, local, ext, "subida", {"nombre": titulo, "fuente": "subida"})
     finally:
         try:
@@ -125,8 +130,12 @@ def registrar_generada(cliente, local_path, prompt, instrumental, costo_usd):
     texto = " ".join((prompt or "").split())
     ext = os.path.splitext(local_path)[1].lower()
     ext = ext if ext in EXTENSIONES else ".mp3"
+    nombre = texto[:80]
+    if not nombre:
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):     # se guarda: idioma del proyecto
+            nombre = gettext("Canción ElevenLabs")
     return _guardar(cliente, local_path, ext, "musica",
-                    {"nombre": texto[:80] or "Canción ElevenLabs", "fuente": "elevenlabs",
+                    {"nombre": nombre, "fuente": "elevenlabs",
                      "prompt": texto, "instrumental": bool(instrumental)}, costo_usd)
 
 

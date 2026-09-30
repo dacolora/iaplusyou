@@ -432,7 +432,7 @@ def recuperar_video(tarea):
         outputs = resultado.get("outputs") or []
         if not outputs:
             raise wavespeed_common.ErrorProveedor(nombre, resultado.get("status") or "completed",
-                                                  detalle="terminó sin ninguna salida", prediction_id=pred["id"],
+                                                  detalle=gettext("terminó sin ninguna salida"), prediction_id=pred["id"],
                                                   datos=resultado)
     except wavespeed_common.EsperaAgotada:
         edad = _edad_s(pred)

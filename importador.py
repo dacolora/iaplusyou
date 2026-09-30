@@ -339,7 +339,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         return activo_id
 
     if not fotos:
-        errores.append(_aviso(prod, "sin fotos: no se creó el activo del catálogo."))
+        errores.append(_aviso(prod, gettext("sin fotos: no se creó el activo del catálogo.")))
         return None
 
     activo_id = _id_activo_disponible(cliente, nombre, prod.get("fuente_id"), producto_id)
@@ -353,7 +353,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
             # sync anterior que falló al bajarlas): se intenta igual, como si
             # forzar_fotos estuviera activo.
             if not _bajar_y_colocar(cliente, activo_id, fotos, prod, errores) and not _tiene_imagenes(carpeta):
-                errores.append(_aviso(prod, "sin fotos: no se enlazó al activo del catálogo."))
+                errores.append(_aviso(prod, gettext("sin fotos: no se enlazó al activo del catálogo.")))
                 return None
         tiendas.marcar_producto(cliente, producto_id, activo_catalogo_id=activo_id)
         return activo_id
@@ -363,19 +363,22 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
     try:
         rutas, fallidas = descargar_fotos(fotos, temporal)
         if not rutas:
-            errores.append(_aviso(prod, "no se pudo descargar ninguna foto: no se creó el activo del catálogo."))
+            errores.append(_aviso(prod, gettext(
+                "no se pudo descargar ninguna foto: no se creó el activo del catálogo.")))
             return None
         if fallidas:
-            errores.append(_aviso(prod, f"{fallidas} foto(s) no se pudieron descargar."))
+            errores.append(_aviso(prod, gettext("%(n)s foto(s) no se pudieron descargar.", n=fallidas)))
         regla = generador_prompts.regla_fidelidad(nombre, descripcion, prod.get("categoria") or "",
                                                    idiomas.de_proyecto(cliente))
         if regla:
             # Claude respondió (una regla vacía es el fallback sin llamada o
             # con error, que no cobra). Tarifa fija: el SDK no devuelve el
             # precio y una llamada de ~600 tokens cuesta menos que ese tope.
+            # Se guarda: en el idioma del proyecto aunque algún día la llame una ruta.
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                detalle = gettext("regla de fidelidad de «%(nombre)s»", nombre=nombre)[:300]
             gastos.registrar_seguro(cliente, "regla_producto", gastos.TARIFAS["regla_producto"],
-                                    f"regla_producto:{producto_id}", proveedor="anthropic",
-                                    detalle=f"regla de fidelidad de «{nombre}»"[:300])
+                                    f"regla_producto:{producto_id}", proveedor="anthropic", detalle=detalle)
         tipo = inferir_tipo(nombre, descripcion, prod.get("categoria") or "")
         try:
             activo_id = catalogo_productos.crear(cliente, nombre, descripcion, tipo=tipo,
@@ -393,7 +396,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
             # creó esta misma llamada (no la de otro producto en una carrera).
             if creado_ahora:
                 catalogo_productos.eliminar(cliente, activo_id, CATEGORIA_ACTIVO)
-            errores.append(_aviso(prod, "sin fotos: no se creó el activo del catálogo."))
+            errores.append(_aviso(prod, gettext("sin fotos: no se creó el activo del catálogo.")))
             return None
     finally:
         shutil.rmtree(temporal, ignore_errors=True)
@@ -410,7 +413,7 @@ def _bajar_y_colocar(cliente, activo_id, fotos, prod, errores):
         if not rutas:
             return False
         if fallidas:
-            errores.append(_aviso(prod, f"{fallidas} foto(s) no se pudieron descargar."))
+            errores.append(_aviso(prod, gettext("%(n)s foto(s) no se pudieron descargar.", n=fallidas)))
         _reemplazar_fotos(catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO), temporal)
         return True
     finally:
@@ -465,13 +468,13 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
     Devuelve {"nuevos", "actualizados", "activos", "pendientes", "errores": [str]}."""
     resumen = {"nuevos": 0, "actualizados": 0, "activos": 0, "pendientes": 0, "errores": []}
     lista = list(productos_normalizados or [])
-    _progreso(on_progreso, "Guardando productos", f"{len(lista)} producto(s)")
+    _progreso(on_progreso, idiomas.N_("Guardando productos"), gettext("%(n)s producto(s)", n=len(lista)))
     ids = []
     for prod in lista:
         try:
             fuente_id = str(prod.get("fuente_id") or "").strip()
             if not fuente_id or not (prod.get("nombre") or "").strip():
-                resumen["errores"].append(_aviso(prod, "sin nombre o sin identificador; se omitió."))
+                resumen["errores"].append(_aviso(prod, gettext("sin nombre o sin identificador; se omitió.")))
                 continue
             existia = tiendas.producto_por_fuente(cliente, fuente, fuente_id) is not None
             if existia and (prod.get("extra") or {}).get("descripcion_cargada") is False:
@@ -483,7 +486,8 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
             ids.append(pid)
         except Exception as error:  # noqa: BLE001 — un producto malo no frena la lista
             log.warning("importar %s/%s: %s", cliente, fuente, error, exc_info=True)
-            resumen["errores"].append(_aviso(prod, f"no se pudo guardar ({type(error).__name__})."))
+            resumen["errores"].append(_aviso(prod, gettext("no se pudo guardar (%(tipo)s).",
+                                                           tipo=type(error).__name__)))
 
     ids_set = set(ids)
     guardados = {p["id"]: p for p in tiendas.productos(cliente, incluir_archivados=True) if p["id"] in ids_set}
@@ -498,7 +502,7 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
     a_ligar = {p["id"] for p in pendientes}
     orden = [p["id"] for p in pendientes] + completos
     for i, pid in enumerate(orden, start=1):
-        _progreso(on_progreso, "Creando activos", f"{i} de {len(orden)}")
+        _progreso(on_progreso, idiomas.N_("Creando activos"), gettext("%(i)s de %(n)s", i=i, n=len(orden)))
         try:
             if vincular_activo(cliente, pid, errores=resumen["errores"]):
                 resumen["activos"] += 1
@@ -507,7 +511,8 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
         except Exception as error:  # noqa: BLE001
             log.warning("vincular activo %s/%s: %s", cliente, pid, error, exc_info=True)
             prod = tiendas.producto(cliente, pid) or {}
-            resumen["errores"].append(_aviso(prod, f"no se pudo crear el activo ({type(error).__name__})."))
+            resumen["errores"].append(_aviso(prod, gettext("no se pudo crear el activo (%(tipo)s).",
+                                                           tipo=type(error).__name__)))
             if pid in a_ligar:
                 tiendas.anotar_extra(cliente, pid, vinculo_intentado_en=db.ahora())
     return resumen
@@ -518,7 +523,7 @@ def desde_archivo(cliente, ruta, nombre_archivo, on_progreso=None, max_activos=N
     ErrorConector si el archivo no se puede leer (la tarea lo muestra tal
     cual). Un archivo con más filas que el tope del lector deja el aviso
     en `errores` (la persona tiene que saber que se recortó)."""
-    _progreso(on_progreso, "Leyendo", os.path.basename(str(nombre_archivo or "")))
+    _progreso(on_progreso, idiomas.N_("Leyendo"), os.path.basename(str(nombre_archivo or "")))
     avisos = []
     lista = csv_excel.leer(ruta, nombre_archivo, avisos=avisos)
     resumen = importar_lista(cliente, "csv", lista, on_progreso=on_progreso, max_activos=max_activos)
@@ -528,7 +533,7 @@ def desde_archivo(cliente, ruta, nombre_archivo, on_progreso=None, max_activos=N
 
 def desde_url(cliente, url, on_progreso=None, max_activos=None):
     """Página de producto (conectores.url) → importar_lista(fuente="url")."""
-    _progreso(on_progreso, "Leyendo", None)
+    _progreso(on_progreso, idiomas.N_("Leyendo"), None)
     prod = conector_url.leer(url)
     return importar_lista(cliente, "url", [prod], on_progreso=on_progreso, max_activos=max_activos)
 

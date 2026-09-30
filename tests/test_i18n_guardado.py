@@ -72,3 +72,165 @@ def test_lanzamiento_interrumpido_se_guarda_en_el_idioma_del_proyecto(base_tempo
     exp = ex.obtener("acme", eid)
     assert exp["estado"] == "error"
     assert exp["error"] == "The launch was interrupted; check Ads Manager and try again."
+
+
+# --- Fase 6, Task 7: el worker y lo que se guarda ---------------------------
+
+def test_hook_de_tarea_interrumpida_en_el_idioma_del_proyecto(tmp_path, monkeypatch):
+    import cola
+    import proyectos
+    import tareas
+    import worker
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
+    idiomas.guardar_de_proyecto("acme", "en")
+    vistos = []
+    monkeypatch.setitem(tareas.AL_INTERRUMPIR, "prueba_idioma", lambda t, mensaje: vistos.append(mensaje))
+    # `excluir` llegó con el carril de Crear (main): recuperar_interrumpidas le pasa lo que está en vuelo.
+    monkeypatch.setattr(cola, "recuperar_colgadas",
+                        lambda minutos, excluir=(): (1, [{"id": 1, "tipo": "prueba_idioma", "cliente": "acme",
+                                                          "payload": {}}]))
+    worker.recuperar_interrumpidas(30)
+    assert vistos == ["Interrupted by a server restart. Try again."]
+
+
+def test_colgada_sin_reintentos_queda_en_el_idioma_del_proyecto(base_temporal, monkeypatch):
+    from datetime import datetime, timedelta
+
+    import cola
+    import db
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    tid = cola.encolar("prueba", {"cliente": "acme"}, cliente="acme", max_intentos=1)
+    cola.reclamar()
+    vieja = (datetime.now() - timedelta(minutes=45)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.tarea.update().where(db.tarea.c.id == tid).values(iniciada_en=vieja))
+    cola.recuperar_colgadas(30)
+    assert cola.consultar_por_id(tid)["error"] == (
+        "Interrupted (it had been running for more than 30 min). Check the result and try again.")
+
+
+def test_colgada_con_reintentos_y_proyecto_en_espanol_no_cambia(base_temporal, monkeypatch):
+    from datetime import datetime, timedelta
+
+    import cola
+    import db
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "es")
+    tid = cola.encolar("prueba", {"cliente": "acme"}, cliente="acme", max_intentos=2)
+    cola.reclamar()
+    vieja = (datetime.now() - timedelta(minutes=45)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.tarea.update().where(db.tarea.c.id == tid).values(iniciada_en=vieja))
+    with idiomas.en_idioma("en"):                     # el idioma ambiente no manda: manda el proyecto
+        cola.recuperar_colgadas(30)
+    assert cola.consultar_por_id(tid)["error"] == "recuperada: llevaba más de 30 min en curso"
+
+
+def test_continuacion_perdida_se_guarda_en_el_idioma_del_proyecto(monkeypatch):
+    """worker._terminar_y_encolar (carril de Crear): si no logra encolar la
+    continuación, el error de la tarea y el gancho de interrupción van en el
+    idioma del proyecto, no en el del hilo (que no tiene ninguno)."""
+    import pytest
+
+    import cola
+    import tareas
+    import worker
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    monkeypatch.setattr(worker.time, "sleep", lambda s: None)
+
+    def _falla(*a, **k):
+        raise RuntimeError("database is locked")
+    monkeypatch.setattr(cola, "terminar_y_encolar", _falla)
+    errores, vistos = [], []
+    monkeypatch.setattr(cola, "fallar", lambda tid, error: errores.append(error))
+    monkeypatch.setitem(tareas.AL_INTERRUMPIR, "prueba_idioma", lambda t, mensaje: vistos.append(mensaje))
+    tarea = {"id": 7, "tipo": "prueba_idioma", "cliente": "acme", "payload": {}}
+    with pytest.raises(worker.ContinuacionPerdida):
+        worker._terminar_y_encolar(tarea, tareas.Continuar("prueba_idioma", {}))
+    assert errores == ["Couldn't queue the follow-up task (RuntimeError: database is locked)"]
+    assert vistos == ["Interrupted by a server restart. Try again."]
+
+
+def test_evento_de_creacion_desde_la_galeria_en_el_idioma_del_proyecto(base_temporal, monkeypatch):
+    import experimentos as ex
+    from tests.test_experimentos_db import PAISES, _pieza
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    f_co = _pieza(base_temporal)
+    # Solo CO: con MX sin pieza, crear_con_piezas rechaza («Sin piezas para: MX») antes de crear nada.
+    datos = dict(nombre="Test", paises=[PAISES[0]], objetivo_meta="OUTCOME_TRAFFIC", dias=7, tope_total=100.0,
+                 destino_url="https://t", moneda="COP", edad_min=18, edad_max=65, modo="manual", atribucion="ninguna")
+    eid = ex.crear_con_piezas("acme", datos, [(f_co, "CO")])
+    creado = next(e for e in ex.obtener("acme", eid)["eventos"] if e["tipo"] == "creado")
+    assert creado["mensaje"].startswith("Experiment created from the gallery with 1 ad(s) in ")
+
+
+def test_detalle_del_pixel_en_el_error_de_lanzamiento_va_traducido(monkeypatch):
+    """Desde la Task 5 el `detalle` del Pixel es un msgid (N_); el error de
+    lanzamiento que lo incluye (worker → idioma del proyecto) lo traduce."""
+    import pytest
+
+    import lanzador
+    monkeypatch.setattr(lanzador.meta_conexion, "estado_pixel", lambda c, solo_cache=False: {
+        "estado": "sin_pixel", "pixel_id": None, "detalle": "La cuenta publicitaria no tiene ningún Pixel."})
+    with idiomas.en_idioma("en"), pytest.raises(ValueError) as e:
+        lanzador._promoted_object_para("acme", {"objetivo_meta": "OUTCOME_SALES"})
+    assert "(The ad account has no Pixel)" in str(e.value)
+
+
+def test_nombre_por_defecto_de_una_cancion_en_el_idioma_del_proyecto(base_temporal, monkeypatch, tmp_path):
+    """Mi música: el nombre que se GUARDA cuando el archivo no trae nombre (o
+    ElevenLabs no recibió texto) sigue al proyecto, no a quien sube."""
+    import materiales
+    import mi_musica
+    from tests.test_mi_musica import _Archivo, _wav_bytes
+    monkeypatch.setattr(materiales.r2_uploader, "upload_file", lambda local, key, ct: f"https://r2/{key}")
+    proyecto = {"idioma": "en"}
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: proyecto["idioma"])
+    with idiomas.en_idioma("es"):                     # quien sube mira en español
+        subida = mi_musica.subir("acme", _Archivo(" .wav", _wav_bytes(2.0)), str(tmp_path / "subidas"))
+        p = tmp_path / "generada.wav"
+        p.write_bytes(_wav_bytes(3.0))
+        generada = mi_musica.registrar_generada("acme", str(p), "   ", True, 0.6)
+    assert (subida["nombre"], generada["nombre"]) == ("Song", "ElevenLabs song")
+    proyecto["idioma"] = "es"
+    with idiomas.en_idioma("en"):
+        q = tmp_path / "otra.wav"
+        q.write_bytes(_wav_bytes(4.0))
+        assert mi_musica.registrar_generada("acme", str(q), "", False, 0.6)["nombre"] == "Canción ElevenLabs"
+
+
+def _error_del_hilo_de_pegar_link(app, monkeypatch, idioma_proyecto):
+    """Corre el trabajo de «Pegar link» (dashboard.fp_agregar_link) en un hilo
+    aparte, sin petición ni app, como lo corre trabajos.iniciar."""
+    import threading
+    dashboard = app["dashboard"]
+    capturado = {}
+
+    def _iniciar(job_id, fn, duracion_estimada=None, **k):
+        capturado["fn"] = fn
+        return True
+    monkeypatch.setattr(dashboard.trabajos, "iniciar", _iniciar)
+    monkeypatch.setattr(dashboard.bitacora, "registrar", lambda *a, **k: None)
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: idioma_proyecto)
+    r = app["c"].post("/cliente/acme/flowplus/referencias/link", data={"link": "esto-no-es-un-link"})
+    assert r.status_code in (200, 302)
+    resultado = {}
+
+    def _correr():
+        try:
+            capturado["fn"]()
+        except Exception as e:  # noqa: BLE001
+            resultado["error"] = str(e)
+    hilo = threading.Thread(target=_correr)
+    hilo.start()
+    hilo.join(10)
+    return resultado.get("error")
+
+
+def test_error_del_hilo_de_pegar_link_en_el_idioma_del_proyecto(app, monkeypatch):
+    assert _error_del_hilo_de_pegar_link(app, monkeypatch, "en") == (
+        "That doesn't look like a link (it must start with http:// or https://).")
+
+
+def test_error_del_hilo_de_pegar_link_en_espanol(app, monkeypatch):
+    assert _error_del_hilo_de_pegar_link(app, monkeypatch, "es") == (
+        "Eso no parece un link (tiene que empezar por http:// o https://).")

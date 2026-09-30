@@ -408,7 +408,8 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             if costo_real:
                 gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                         f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
-                                        detalle=f"{consulta['fuente']}: {len(pagina)} anuncio(s) reales")
+                                        detalle=gettext("%(fuente)s: %(n)s anuncio(s) reales", fuente=consulta["fuente"],
+                                                        n=len(pagina)))
                 # Mismo mecanismo que `_fase_clasificando` con su gasto de
                 # Claude (Important 1 del review final): sin esto, el costo
                 # real de Apify queda solo en `gastos` y "Mis barridos"
@@ -427,7 +428,8 @@ def _fase_trayendo(tarea, p, bid, avanzar):
         if costo_real:
             gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                     f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
-                                    detalle=f"{consulta['fuente']}: corrida cobrada pero no se pudo leer del todo")
+                                    detalle=gettext("%(fuente)s: corrida cobrada pero no se pudo leer del todo",
+                                                    fuente=consulta["fuente"]))
             # Mismo motivo que en el bucle de arriba: esto también es plata
             # ya pagada y debe verse en "Mis barridos", aunque la corrida
             # haya terminado en error total.
