@@ -2494,6 +2494,9 @@ msgstr "As a video ▸"
 msgid "Comparte tu cuenta publicitaria y tu Página con Creatv desde tu Business Suite, como con cualquier agencia. Creatv solo ve lo que compartas y lo puedes revocar cuando quieras."
 msgstr "Share your ad account and your Page with Creatv from your Business Suite, just like with any agency. Creatv only sees what you share and you can revoke it whenever you want."
 
+msgid "Completando avatares"
+msgstr "Completing avatars"
+
 msgid "Completo"
 msgstr "Full"
 
@@ -11056,6 +11059,9 @@ msgstr "dinner"
 msgid "cerrado"
 msgstr "closed"
 
+msgid "citas (mínimo 2)"
+msgstr "quotes (at least 2)"
+
 msgid "clics"
 msgstr "clicks"
 
@@ -11077,6 +11083,9 @@ msgstr "completed"
 
 msgid "completado"
 msgstr "completed"
+
+msgid "comportamiento"
+msgstr "behavior"
 
 msgid "compras"
 msgstr "purchases"
@@ -11224,6 +11233,9 @@ msgstr "from Niche"
 msgid "demasiado educativo"
 msgstr "too educational"
 
+msgid "demografía"
+msgstr "demographics"
+
 msgid "derivación"
 msgstr "derivation"
 
@@ -11264,6 +11276,9 @@ msgstr "from %(nombre)s"
 msgid "desde el 1 de %(mes)s"
 msgstr "since %(mes)s 1"
 
+msgid "deseo"
+msgstr "desire"
+
 msgid "detenida"
 msgstr "stopped"
 
@@ -11286,6 +11301,9 @@ msgstr "duration %(dur)s s, %(obj)s s was requested"
 
 msgid "días"
 msgstr "days"
+
+msgid "edad"
+msgstr "age"
 
 msgid "editor real: preserva movimiento y escena, el más barato de los que sí editan de verdad"
 msgstr "real editor: preserves movement and scene, the cheapest of the ones that actually edit"
@@ -11438,6 +11456,9 @@ msgstr "in progress"
 
 msgid "en curso"
 msgstr "in progress"
+
+msgid "encaje del producto"
+msgstr "product fit"
 
 msgid "energetico"
 msgstr "Energetic"
@@ -11664,6 +11685,9 @@ msgstr "ideas approved"
 
 msgid "ideas propuestas"
 msgstr "ideas proposed"
+
+msgid "identidad"
+msgstr "identity"
 
 msgid "imagen"
 msgstr "image"
@@ -11910,6 +11934,9 @@ msgstr "none (brand)"
 msgid "ninguno-oferta"
 msgstr "none (offer)"
 
+msgid "nivel de conciencia"
+msgstr "awareness level"
+
 msgid "no"
 msgstr "no"
 
@@ -12003,6 +12030,9 @@ msgstr "e.g. In MX, the price in pesos in the hook lowers the CTR"
 
 msgid "pais"
 msgstr "country"
+
+msgid "palabras clave (mínimo 3)"
+msgstr "keywords (at least 3)"
 
 #, python-format
 msgid "para %(producto)s"
@@ -12450,6 +12480,9 @@ msgstr "no measurable sales"
 msgid "sin verificar ahora (Meta no respondió)"
 msgstr "not verified right now (Meta didn't respond)"
 
+msgid "situaciones (mínimo 2)"
+msgstr "situations (at least 2)"
+
 #, python-format
 msgid "sobran %(lista)s (quitadas o inexistentes)"
 msgstr "extra %(lista)s (removed or nonexistent)"
@@ -12465,6 +12498,9 @@ msgstr "measurable sales only"
 
 msgid "solo voz"
 msgstr "voice only"
+
+msgid "soluciones que probó"
+msgstr "solutions they tried"
 
 msgid "style_id de Higgsfield (opcional, avanzado)"
 msgstr "Higgsfield style_id (optional, advanced)"
@@ -12515,6 +12551,9 @@ msgstr "the whole experiment"
 
 msgid "todos"
 msgstr "all"
+
+msgid "tono"
+msgstr "tone"
 
 msgid "tope"
 msgstr "cap"

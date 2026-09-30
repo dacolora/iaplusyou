@@ -26,8 +26,10 @@ def test_estimar_costo_y_costo_real(monkeypatch):
     e = avatares.estimar_costo(lista, modelo="claude-sonnet-5")
     tokens_texto = int(7000 * avatares.TOKENS_POR_CARACTER)
     assert e["comentarios"] == 20 and e["suficientes"] is True and e["referencia"] is False and e["modelo"] == "claude-sonnet-5"
-    assert e["tokens_entrada"] == tokens_texto * 2 + avatares.TOKENS_PROMPT * (1 + avatares.MAX_NUCLEOS)
-    assert e["tokens_salida"] == avatares.TOKENS_SALIDA_ESTIMADO_NUCLEOS + avatares.TOKENS_SALIDA_ESTIMADO_SUBS * avatares.MAX_NUCLEOS
+    assert e["tokens_entrada"] == (tokens_texto * 3 + avatares.TOKENS_PROMPT * (1 + 2 * avatares.MAX_NUCLEOS)
+                                   + avatares.TOKENS_SUB_JSON * avatares.MAX_NUCLEOS * avatares.MAX_SUBS_POR_NUCLEO)
+    assert e["tokens_salida"] == (avatares.TOKENS_SALIDA_ESTIMADO_NUCLEOS
+                                  + (avatares.TOKENS_SALIDA_ESTIMADO_SUBS + avatares.TOKENS_SALIDA_ESTIMADO_COMPLETAR) * avatares.MAX_NUCLEOS)
     esperado = (e["tokens_entrada"] * 2.0 + e["tokens_salida"] * 10.0) / 1e6
     assert e["usd"] >= esperado and e["usd"] - esperado < 0.01           # redondeado hacia arriba al centavo
     assert avatares.estimar_costo(lista[:5], modelo="claude-sonnet-5")["suficientes"] is False
@@ -141,6 +143,8 @@ def test_generar_dos_pasadas_con_fallo_parcial(base_temporal, monkeypatch):
     respuestas = [(json.dumps(nucleos), 1000, 200), (json.dumps({"sub_avatares": [sub]}), 700, 300), ("esto no es json", 500, 10)]
     prompts, etapas = [], []
     def _llamar_falso(texto, max_tokens):
+        if avatares.MARCA_COMPLETAR in texto:
+            return '{"sub_avatares": []}', 0, 0
         prompts.append((texto, max_tokens))
         return respuestas.pop(0)
     monkeypatch.setattr(avatares, "_llamar", _llamar_falso)
@@ -200,6 +204,8 @@ def test_generar_nucleo_cortado_por_llamar_cuenta_sus_tokens(base_temporal, monk
     llamadas = []
 
     def _llamar_falso(texto, max_tokens):
+        if avatares.MARCA_COMPLETAR in texto:
+            return '{"sub_avatares": []}', 0, 0
         llamadas.append(texto)
         if len(llamadas) == 1:
             return json.dumps(nucleos), 1000, 200
@@ -248,3 +254,69 @@ def test_el_estimado_de_costo_incluye_la_doctrina():
     import doctrina
     from nicho import avatares
     assert avatares.TOKENS_PROMPT > 800 + len(doctrina.texto("investigar").split())
+
+
+def _sub_completo(ids):
+    return {"base": "emocion", "nombre": "Ana / La que carga", "deseo": "Quiero lavar sin cargar", "demografia": "Mujer 35-45",
+            "edad_rango": "35-45", "emocion": "Cansancio", "identidad": {"quiere_que_vean": "a", "cree_de_si": "b", "quiere_lograr": "c"},
+            "soluciones_previas": [{"que": "Líquido", "por_que_fallo": ["pesa"]}], "situaciones": ["Cargando garrafas", "En el súper"],
+            "comportamiento": "Sigue igual", "conciencia": {"nivel": "consciente_del_problema", "detalle": "d"}, "encaje_producto": "Cápsulas",
+            "tono": "Directo", "palabras_clave": ["garrafa", "peso", "goteo"],
+            "evidencia": [{"comentario_id": ids[0], "cita": "la garrafa pesa demasiado"}, {"comentario_id": ids[1], "cita": "la garrafa pesa demasiado"}]}
+
+
+def test_prompt_de_subs_exige_todo():
+    from nicho import avatares
+    p = avatares.armar_prompt_subs({"tema": "t", "producto": "p", "idioma": "es"}, {"nombre": "n", "deseo": "d"}, [])
+    assert "(inferido)" in p and "obligatorios" in p and "2 citas" in p
+
+
+def test_completar_subs_funde_verifica_y_cuenta(base_temporal, monkeypatch):
+    from nicho import avatares, calidad, datos
+    eid = _estudio_listo(datos)
+    coms = datos.comentarios_para_generar("acme", eid)
+    ids = [c["id"] for c in coms]
+    incompleto = dict(_sub_completo(ids), demografia="", situaciones=["Cargando garrafas"], evidencia=[{"comentario_id": ids[0], "cita": "la garrafa pesa demasiado"}])
+    completo = _sub_completo(ids)
+    llamadas = []
+    respuesta = {"sub_avatares": [{"indice": 0, "demografia": "Mujer 30-40 (inferido)", "situaciones": ["En el súper"],
+                                   "evidencia": [{"comentario_id": ids[2], "cita": "la garrafa pesa demasiado"}, {"comentario_id": ids[3], "cita": "esto no está"}]},
+                                  {"indice": 1, "demografia": "NO DEBE ENTRAR"}]}
+
+    def _llamar(texto, max_tokens):
+        llamadas.append((texto, max_tokens))
+        return json.dumps(respuesta), 400, 90
+    monkeypatch.setattr(avatares, "_llamar", _llamar)
+    tokens = [0, 0]
+    salida, n = avatares.completar_subs({"tema": "t", "producto": "p", "idioma": "es"}, {"nombre": "Sin peso", "deseo": "Quiero"}, coms,
+                                        [incompleto, completo], tokens=tokens)
+    assert n == 1 and tokens == [400, 90] and len(llamadas) == 1 and llamadas[0][1] == avatares.MAX_TOKENS_COMPLETAR
+    assert avatares.MARCA_COMPLETAR in llamadas[0][0] and '[0] {' in llamadas[0][0] and '[1] {' not in llamadas[0][0]
+    assert salida[0]["demografia"] == "Mujer 30-40 (inferido)" and salida[0]["situaciones"] == ["Cargando garrafas", "En el súper"]
+    assert [e["comentario_id"] for e in salida[0]["evidencia"]] == [ids[0], ids[2]] and salida[0]["sin_evidencia"] is False
+    assert calidad.faltantes(salida[0]) == [] and salida[1] == completo                                        # el completo ni se toca
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: ("no es json", 50, 5))
+    tokens = [0, 0]
+    salida, n = avatares.completar_subs({"tema": "t"}, {"nombre": "n", "deseo": "d"}, coms, [incompleto], tokens=tokens)
+    assert n == 0 and salida == [incompleto] and tokens == [50, 5]                                             # falló: queda como estaba, lo pagado cuenta
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: (_ for _ in ()).throw(AssertionError("no debía llamar")))
+    assert avatares.completar_subs({"tema": "t"}, {"nombre": "n", "deseo": "d"}, coms, [completo]) == ([completo], 0)
+
+
+def test_generar_completa_lo_que_falta(base_temporal, monkeypatch):
+    from nicho import avatares, calidad, datos
+    import marca, proyectos
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Happy Wash")
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    nucleos = {"nucleos": [{"nombre": "Sin peso", "deseo": "Quiero lavar sin cargar", "resumen": "r", "comentarios": ids[:10]}]}
+    sub = dict(_sub_completo(ids), tono="")
+    respuestas = [(json.dumps(nucleos), 1000, 200), (json.dumps({"sub_avatares": [sub]}), 700, 300),
+                  (json.dumps({"sub_avatares": [{"indice": 0, "tono": "Directo, con humor"}]}), 300, 40)]
+    monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: respuestas.pop(0))
+    r = avatares.generar("acme", eid)
+    s = r["nucleos"][0]["sub_avatares"][0]
+    assert s["tono"] == "Directo, con humor" and calidad.faltantes(s) == []
+    assert r["resumen"]["completados"] == 1 and r["resumen"]["incompletos"] == 0
+    assert r["resumen"]["tokens_entrada"] == 2000 and r["resumen"]["tokens_salida"] == 540

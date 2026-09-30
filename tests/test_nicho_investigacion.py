@@ -463,7 +463,9 @@ def test_estimar_costo_maximo():
     # Peor caso real: los DOS topes de seleccionar() llenos a la vez (una reseña
     # real llega a 2 000 caracteres, así que MAX_COMENTARIOS puede sumar
     # MAX_CARACTERES completo) -- no solo MAX_COMENTARIOS × 250.
-    assert e["tokens_entrada"] == int(avatares.MAX_CARACTERES * avatares.TOKENS_POR_CARACTER) * 2 + avatares.TOKENS_PROMPT * (1 + avatares.MAX_NUCLEOS)
+    tokens_texto = int(avatares.MAX_CARACTERES * avatares.TOKENS_POR_CARACTER)
+    assert e["tokens_entrada"] == (tokens_texto * 3 + avatares.TOKENS_PROMPT * (1 + 2 * avatares.MAX_NUCLEOS)
+                                   + avatares.TOKENS_SUB_JSON * avatares.MAX_NUCLEOS * avatares.MAX_SUBS_POR_NUCLEO)
 
 
 def test_reanudar_y_job_de_paso():

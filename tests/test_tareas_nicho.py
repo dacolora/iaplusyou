@@ -119,7 +119,12 @@ def test_cadena_completa_generar_guardar_y_gasto(base_temporal, monkeypatch):
               evidencia=[{"comentario_id": ids[0], "cita": "la garrafa pesa demasiado"},
                          {"comentario_id": ids[0], "cita": "esto no lo dijo nadie en este comentario"}])
     respuestas = [(json.dumps(nucleos), 1000, 200), (json.dumps({"sub_avatares": [sub]}), 700, 300), ("no es json", 500, 10)]
-    monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: respuestas.pop(0))
+
+    def _llamar_falso(texto, max_tokens):
+        if avatares.MARCA_COMPLETAR in texto:
+            return '{"sub_avatares": []}', 0, 0
+        return respuestas.pop(0)
+    monkeypatch.setattr(avatares, "_llamar", _llamar_falso)
     tarea = {"payload": {"cliente": "acme", "estudio_id": eid}, "job_id": datos.job_id_generar("acme", eid)}
     tareas_nicho.ejecutar_generar(tarea)
 
