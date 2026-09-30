@@ -498,6 +498,21 @@ def test_render_importado_archivado_solo_en_su_filtro(app):
     assert "Lámpara" in grid and 'data-archivado="1"' in grid and "Recuperar" in grid
 
 
+def test_render_banner_sincronizando_no_choca_con_la_barra_de_configuracion(app, monkeypatch):
+    """Config › Conexiones pinta su propia barra para el mismo job_id
+    (id="trabajo-<job>"); el aviso «Sincronizando» de Catálogo necesita un id
+    propio (id="cat-sync-<job>", fix ronda 1 hallazgo 2) o getElementById solo
+    encuentra la primera y la otra barra se queda sin sondeo (0% sin texto)."""
+    import tiendas
+    d = app["dashboard"]
+    tid = tiendas.conectar("acme", "shopify", {"dominio": "acme.myshopify.com", "token": "t"})
+    job = d.tareas_tiendas.job_id_sync_productos("acme", tid)
+    monkeypatch.setattr(d.trabajos, "en_curso", lambda jid: jid == job)
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert html.count(f'id="cat-sync-{job}"') == 1
+    assert html.count(f'id="trabajo-{job}"') == 1
+
+
 # --- subir fotos a un importado -----------------------------------------------
 
 def test_fotos_subir_crea_activo_y_enlaza(app):
@@ -585,6 +600,10 @@ def test_render_productos_confirm_y_url_seguros(app):
     grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
     assert 'data-nombre="Cojín d&#39;Or"' in grid
     assert 'href="javascript:' not in grid
+    # El fragmento del grid no trae <script>: el nombre nunca puede acabar
+    # dentro de un confirm(), esté o no escapado bien (fix ronda 1 hallazgo 3
+    # — la comprobación en /cliente/acme ya no dice nada: ahí no hay tarjetas).
+    assert "confirm(" not in grid
     ficha = app["c"].get("/cliente/acme/catalogo/producto/raro/ficha").data.decode()
     assert 'href="javascript:' not in ficha and "javascript:alert(1)" in ficha
 
@@ -651,20 +670,22 @@ def test_render_meli_configurado_sin_cifrado_avisa(app, monkeypatch):
 
 
 def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
-    """Desde la Tarea 12 `productos_tienda` (y con él activo_ok/n_experimentos
-    por producto) ya no llega al contexto de la página: la galería los calcula
-    ella misma (ver tests/test_rutas_catalogo.py, catalogo_grid). Lo que sigue
-    en el contexto de ver_cliente (trabajos_prod, atribución sugerida, cifrado,
-    Pixel solo-caché) se comprueba aquí, por el contexto que llega a la
-    plantilla."""
-    import catalogo_productos
+    """Desde la Tarea 12 `productos_tienda` ya no llega al contexto de la
+    página: activo_ok y n_experimentos por producto se comprueban aquí mismo
+    a través de la galería y la ficha (siguen siendo _productos_tienda_contexto
+    por debajo, dashboard.py:2861-2863 — el huérfano con activo_catalogo_id
+    colgado se ve como tarjeta "fila", Cojín Azul cuenta sus 2 experimentos).
+    Lo que sigue en el contexto de ver_cliente (trabajos_prod, atribución
+    sugerida, cifrado, Pixel solo-caché) se comprueba por el contexto que
+    llega a la plantilla."""
     import creative_flow
     import experimentos as ex
     import tiendas
     d = app["dashboard"]
+    c = app["c"]
     pid = _producto(nombre="Cojín Azul")
     tiendas.marcar_producto("acme", pid, activo_catalogo_id="cojin_azul")
-    catalogo_productos.crear("acme", "Cojín Azul", categoria="producto", producto_id="cojin_azul")
+    _activo_con_foto("acme", "Cojín Azul", "cojin_azul")  # con foto: se ve en la galería y en la ficha
     pid_sin = _producto(nombre="Huérfano")
     tiendas.marcar_producto("acme", pid_sin, activo_catalogo_id="no_existe")
     cf = creative_flow.crear("acme", [], ["Cojín Azul"], [], "camina", 8, "alegre", "A")
@@ -675,6 +696,13 @@ def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
     ex.crear("acme", "Vacío", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
     ex.agregar_pieza("acme", e1, pieza, "CO")
     ex.agregar_pieza("acme", e2, pieza, "CO")
+    # activo_ok=False (huérfano, sin carpeta real en el catálogo): tarjeta
+    # "fila", no la de un activo. activo_ok=True + 2 experimentos: la ficha
+    # de Cojín Azul los cuenta (misma _experimentos_por_activo por debajo).
+    grid = c.get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    assert f'id="producto-fila-{pid_sin}"' in grid and 'id="producto-cojin_azul"' in grid
+    ficha = c.get("/cliente/acme/catalogo/producto/cojin_azul/ficha").data.decode()
+    assert "Experimentos: 2" in ficha
     tiendas.conectar("acme", "shopify", {"dominio": "d", "token": "t"})
     job_sync = d.tareas_tiendas.job_id_sync_productos("acme", tiendas.listar("acme")[0]["id"])
     monkeypatch.setattr(d.trabajos, "en_curso", lambda jid: jid in (job_sync, "acme__importar_url"))

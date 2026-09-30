@@ -29,7 +29,10 @@
   {% for t in tiendas_cliente %}{% set trabajo_t = trabajos_prod.tiendas.get(t.id) %}{% if trabajo_t %}
   <div class="idea-block cat-sync">
     <div class="idea-header"><div><span class="idea-label">{{ _('Sincronizando') }}</span><div class="idea-texto">{{ _('Leyendo %(nombre)s y creando los productos…', nombre=(t.nombre or t.dominio or t.tipo)) }}</div></div></div>
-    <div class="barra-progreso" id="trabajo-{{ trabajo_t.job_id }}" data-poll-job="{{ trabajo_t.job_id }}"><div class="barra-progreso-fill"></div></div>
+    {# id propio (no "trabajo-<job_id>"): Configuración › Conexiones pinta su
+       propia barra para el mismo job_id, y getElementById solo encuentra la
+       primera — con el mismo id, la de Configuración se queda sin dueño. #}
+    <div class="barra-progreso" id="cat-sync-{{ trabajo_t.job_id }}" data-poll-job="{{ trabajo_t.job_id }}"><div class="barra-progreso-fill"></div></div>
     <div class="progreso-texto"></div>
   </div>
   {% endif %}{% endfor %}
@@ -399,8 +402,22 @@
     }
     if (enCatalogo()) arrancar();
     document.querySelectorAll('.sidebar-item[data-tab="catalogo"]').forEach(function (b) { b.addEventListener('click', arrancar); });
+    // Un enlace de la ficha a otra pestaña («Dónde se usó») cambia el hash a
+    // algo que no es #catalogo: hay que cerrar el panel (si no, el bloqueo de
+    // scroll del body — panel-abierto — se queda puesto en la pestaña nueva
+    // hasta que alguien presione Escape). Un clic en la barra lateral cambia
+    // de pestaña con history.replaceState, que no dispara hashchange, así que
+    // se cierra también ahí.
+    document.querySelectorAll('.sidebar-item[data-tab]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.dataset.tab !== 'catalogo' && !panel.hidden) cerrar();
+      });
+    });
     window.addEventListener('hashchange', function () {
-      if ((location.hash || '').indexOf('#catalogo') !== 0) return;
+      if ((location.hash || '').indexOf('#catalogo') !== 0) {
+        if (!panel.hidden) cerrar();
+        return;
+      }
       if (!arrancado) { arrancar(); return; }
       var h = leerHash();
       if (h.ficha && h.ficha !== fichaActual) abrirFicha(h.ficha);
