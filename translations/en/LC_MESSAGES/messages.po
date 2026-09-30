@@ -193,6 +193,10 @@ msgid "%(fase)s (puesto %(n)s)"
 msgstr "%(fase)s (position %(n)s)"
 
 #, python-format
+msgid "%(fuente)s solo busca por palabra clave: elige «Por palabra clave» o cambia de fuente."
+msgstr "%(fuente)s only searches by keyword: choose “By keyword” or switch source."
+
+#, python-format
 msgid "%(fuente)s todavía no está configurada. Avísale al equipo de Creatv para activarla."
 msgstr "%(fuente)s isn't set up yet. Ask the Creatv team to turn it on."
 
@@ -255,6 +259,10 @@ msgstr "%(modelo)s tops out at %(aviso)s s: it'll be built for %(aviso)s s."
 #, python-format
 msgid "%(modelo)s llega a %(aviso)s s: se generará de %(aviso)s s."
 msgstr "%(modelo)s tops out at %(aviso)s s: it'll be generated at %(aviso)s s."
+
+#, python-format
+msgid "%(modelo)s no pasa de %(total)s s sumando tus videos de referencia (%(s)s s): el resultado puede durar hasta %(max)s s. Baja la duración o usa un video más corto — no se cobró nada."
+msgstr "%(modelo)s can't go past %(total)s s counting your reference videos (%(s)s s): the result can last up to %(max)s s. Lower the duration or use a shorter video — nothing was charged."
 
 #, python-format
 msgid "%(modelo)s no pudo generar: %(detalle)s (código %(codigo)s). Un intento fallido normalmente no se cobra."
@@ -959,6 +967,18 @@ msgstr "%(precio)s approx."
 #, python-format
 msgid "%(presupuesto)s %(moneda)s/día"
 msgstr "%(presupuesto)s %(moneda)s/day"
+
+#, python-format
+msgid "%(proveedor)s se quedó sin saldo"
+msgstr "%(proveedor)s ran out of credit"
+
+#, python-format
+msgid "%(proveedor)s se quedó sin saldo."
+msgstr "%(proveedor)s ran out of credit."
+
+#, python-format
+msgid "%(proveedor)s, el proveedor de videos e imágenes, se quedó sin saldo: no se generó ni se cobró nada. Ya se avisó a Creatv; vuelve a intentarlo cuando lo recargue."
+msgstr "%(proveedor)s, the video and image provider, ran out of credit: nothing was generated or charged. Creatv has been notified; try again once it is topped up."
 
 #, python-format
 msgid "%(r)s producto(s) del nicho; %(e)s elegido(s) para traer reseñas"
@@ -2951,6 +2971,9 @@ msgstr "Create your first experiment"
 msgid "Crea tu proyecto en un minuto. Sin tarjeta: pagas solo lo que generas."
 msgstr "Create your project in a minute. No card: you only pay for what you generate."
 
+msgid "Crea una API key en tu workspace de TrendTrack (guía: docs.trendtrack.io › Getting Started)."
+msgstr "Create an API key in your TrendTrack workspace (guide: docs.trendtrack.io › Getting Started)."
+
 msgid "Creando activo…"
 msgstr "Creating asset…"
 
@@ -3312,6 +3335,10 @@ msgstr "From"
 
 msgid "Desde Notion"
 msgstr "From Notion"
+
+#, python-format
+msgid "Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). Recarga la cuenta; este aviso se quita solo con la próxima generación que salga bien."
+msgstr "Since %(desde)s, generations in Create and Change product fail (without charging). Top up the account; this notice goes away on its own with the next generation that works."
 
 msgid "Desde que lo conectes, los anuncios que Creatv lance en Meta llevan solos los parámetros de rastreo de Triple Whale. A los que ya estaban, o a los que crees fuera de Creatv, ponles en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
 msgstr "Once you connect it, the ads Creatv launches on Meta carry Triple Whale's tracking parameters on their own. For ads that already existed, or that you create outside Creatv, add under “URL parameters”: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
@@ -4134,6 +4161,9 @@ msgstr "At notion.so/profile/integrations create an internal integration (conten
 msgid "En prueba"
 msgstr "In testing"
 
+msgid "En trendtrack.io elige el plan Pro o superior (incluye la API y 20 000 créditos al mes)."
+msgstr "At trendtrack.io choose the Pro plan or higher (it includes the API and 20,000 credits a month)."
+
 #, python-format
 msgid "En tu catálogo: %(nombre)s"
 msgstr "In your catalog: %(nombre)s"
@@ -4309,6 +4339,9 @@ msgstr "That final cut no longer exists."
 
 msgid "Esa foto ya no está en el Catálogo."
 msgstr "That photo is no longer in the Catalog."
+
+msgid "Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente."
+msgstr "That source doesn't support this kind of search; search by keyword or switch source."
 
 msgid "Esa fuente no está configurada."
 msgstr "That source isn't set up."
@@ -5581,6 +5614,9 @@ msgstr "Up to 7 images. From a video it only uses one frame. Very good movement 
 msgid "Hay %(usos)s resultado(s) ya generado(s) con este producto: no se borran, pero dejarán de mostrar su nombre y su foto."
 msgstr "There are %(usos)s result(s) already generated with this product: they won't be deleted, but they'll stop showing its name and photo."
 
+msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Vuelve a intentarlo en un rato: los intentos fallidos no se cobran."
+msgstr "There is a problem with the provider and Creatv has already been notified. Try again in a while: failed attempts are not charged."
+
 msgid "Hay una investigación en curso en este estudio: espera a que termine o cancélala."
 msgstr "There's research in progress on this study: wait for it to finish or cancel it."
 
@@ -6107,6 +6143,9 @@ msgstr "The end date isn't valid (use YYYY-MM-DD)."
 
 msgid "La fecha de inicio no es válida (usa AAAA-MM-DD)."
 msgstr "The start date isn't valid (use YYYY-MM-DD)."
+
+msgid "La generación de videos e imágenes está en pausa."
+msgstr "Video and image generation is paused."
 
 msgid "La gente se va antes del final: acorta el video o sube el ritmo del cuerpo."
 msgstr "People leave before the end: shorten the video or speed up the body."
@@ -7462,6 +7501,10 @@ msgid "No se pudo conectar con Atria: %(tipo)s."
 msgstr "Couldn't connect to Atria: %(tipo)s."
 
 #, python-format
+msgid "No se pudo conectar con TrendTrack: %(tipo)s."
+msgstr "Couldn't connect to TrendTrack: %(tipo)s."
+
+#, python-format
 msgid "No se pudo consultar a Claude (%(tipo)s). Vuelve a enviar tu mensaje."
 msgstr "Couldn't reach Claude (%(tipo)s). Send your message again."
 
@@ -8461,6 +8504,9 @@ msgstr "Paste it as ATRIA_API_KEY in the server's .env and restart both services
 msgid "Pégala como FAL_KEY en el .env del servidor y reinicia."
 msgstr "Paste it as FAL_KEY in the server's .env and restart."
 
+msgid "Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."
+msgstr "Paste it as TRENDTRACK_API_KEY in the server's .env and restart both services."
+
 msgid "Pégalo aquí y pulsa <strong>Buscar mis activos</strong>."
 msgstr "Paste it here and press <strong>Search my assets</strong>."
 
@@ -8667,6 +8713,10 @@ msgstr "Reload this page: the channel becomes “connected”. Shorts go out wit
 
 msgid "Recarga para ver el análisis completo."
 msgstr "Reload to see the full analysis."
+
+#, python-format
+msgid "Recargar %(proveedor)s"
+msgstr "Top up %(proveedor)s"
 
 msgid "Recargar ahora"
 msgstr "Reload now"
@@ -9357,6 +9407,9 @@ msgstr "Not enough data"
 
 msgid "Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token."
 msgstr "Without it the Atria source stays off in “Fetch references” (per project and in the admin panel); Apify is still available if it has its own token."
+
+msgid "Sin ella la fuente TrendTrack queda apagada en «Traer referentes». La API pide el plan Pro o superior: el Starter no la incluye."
+msgstr "Without it the TrendTrack source stays off in “Bring in references”. The API needs the Pro plan or higher: Starter doesn't include it."
 
 msgid "Sin ella la tarjeta YouTube de cada estudio queda apagada."
 msgstr "Without it the YouTube card of each study stays off."
@@ -10171,6 +10224,9 @@ msgstr "Translating"
 msgid "Traduciendo firmas…"
 msgstr "Translating “why it works” notes…"
 
+msgid "Trae anuncios reales de Meta que TrendTrack ha registrado para la biblioteca de referentes; busca por palabra clave."
+msgstr "Brings in real Meta ads that TrendTrack has recorded, for the Swipe file; it searches by keyword."
+
 msgid "Trae anuncios reales de la Ad Library de Meta para la biblioteca de referentes -- la fuente cubre la Unión Europea."
 msgstr "Brings real ads from Meta's Ad Library into the swipe file -- this source covers the European Union."
 
@@ -10241,6 +10297,45 @@ msgstr "Getting… %(traidos)s/%(tope)s."
 
 msgid "Traídas"
 msgstr "Fetched"
+
+msgid "TrendTrack (anuncios de Meta)"
+msgstr "TrendTrack (Meta ads)"
+
+msgid "TrendTrack (biblioteca de referentes: anuncios de Meta)"
+msgstr "TrendTrack (Swipe file: Meta ads)"
+
+#, python-format
+msgid "TrendTrack devolvió anuncios con campos que Creatv no reconoce todavía (recibidos: %(campos)s). Avisa al equipo para ajustar el conector; se detuvo para no gastar más créditos."
+msgstr "TrendTrack returned ads with fields Creatv doesn't recognize yet (received: %(campos)s). Let the team know so they can adjust the connector; it stopped to avoid spending more credits."
+
+msgid "TrendTrack devolvió la lista de anuncios en una forma que Creatv no reconoce todavía."
+msgstr "TrendTrack returned the list of ads in a shape Creatv doesn't recognize yet."
+
+msgid "TrendTrack mira los anuncios de Meta que ha registrado y se cobra en créditos de tu plan (un crédito por anuncio revisado). No filtra por formato: los anuncios que no son del formato elegido también gastan crédito, por eso se revisan hasta tres veces el máximo que pidas."
+msgstr "TrendTrack looks at the Meta ads it has recorded and is billed in credits from your plan (one credit per ad checked). It can't filter by format: ads that aren't in the chosen format also use a credit, so up to three times the maximum you ask for are checked."
+
+msgid "TrendTrack no aceptó la llave (TRENDTRACK_API_KEY): revísala o genera otra."
+msgstr "TrendTrack didn't accept the key (TRENDTRACK_API_KEY): check it or generate another one."
+
+msgid "TrendTrack no está configurado (falta TRENDTRACK_API_KEY)."
+msgstr "TrendTrack isn't configured (TRENDTRACK_API_KEY is missing)."
+
+#, python-format
+msgid "TrendTrack respondió algo inesperado (HTTP %(codigo)s)."
+msgstr "TrendTrack responded with something unexpected (HTTP %(codigo)s)."
+
+#, python-format
+msgid "TrendTrack respondió con un error (HTTP %(codigo)s)."
+msgstr "TrendTrack responded with an error (HTTP %(codigo)s)."
+
+msgid "TrendTrack solo busca por palabra clave; para los anuncios de una marca usa Atria o Apify."
+msgstr "TrendTrack only searches by keyword; for a brand's ads use Atria or Apify."
+
+msgid "TrendTrack: se acabaron los créditos del plan."
+msgstr "TrendTrack: the plan's credits have run out."
+
+msgid "TrendTrack: se alcanzó el límite de peticiones del plan; intenta en un rato."
+msgstr "TrendTrack: the plan's request limit was reached; try again in a while."
 
 msgid "Triple Whale"
 msgstr "Triple Whale"
@@ -10353,6 +10448,9 @@ msgstr "Your moment"
 msgid "Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado."
 msgstr "Your AI content machine.<br>From the product photo to the published ad."
 
+msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
+msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
+
 msgid "Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
 msgstr "Your project uses its own Meta app: CreatvMachine operates only with your credentials and your data doesn't pass through any third-party app."
 
@@ -10386,6 +10484,13 @@ msgstr "Your audios"
 
 msgid "Tus prompts"
 msgstr "Your prompts"
+
+#, python-format
+msgid "Tus videos de referencia duran %(s)s s en total y %(modelo)s admite hasta %(max)s s. Recórtalos o quita alguno — no se cobró nada."
+msgstr "Your reference videos last %(s)s s in total and %(modelo)s accepts up to %(max)s s. Trim them or remove one — nothing was charged."
+
+msgid "Tus videos de referencia duran __S__ s en total y __MODELO__ admite hasta __MAX__ s. Recórtalos o quita alguno."
+msgstr "Your reference videos last __S__ s in total and __MODELO__ accepts up to __MAX__ s. Trim them or remove one."
 
 msgid "Términos"
 msgstr "Terms"
@@ -10432,6 +10537,9 @@ msgstr "An ad that has been running for weeks, or that the brand duplicated into
 msgid "Un avatar escrito a mano nace aprobado: toda la app lo usa en cuanto lo guardas."
 msgstr "A hand-written avatar is born approved: the whole app uses it as soon as you save it."
 
+msgid "Un crédito de TrendTrack por anuncio revisado (US$ 1 = 1 000 créditos); el plan Pro incluye 20 000 créditos al mes. El uso está en Referentes (admin)."
+msgstr "One TrendTrack credit per ad checked (US$ 1 = 1,000 credits); the Pro plan includes 20,000 credits a month. Usage is shown in Swipe file (admin)."
+
 msgid "Un dibujo, una foto o una pantalla que sale en la escena, descríbelo con palabras y sin @Imagen: con @Imagen el modelo lo convierte en personajes reales."
 msgstr "A drawing, photo or screen that shows up in the scene: describe it in words, without @Imagen. With @Imagen the model turns it into real characters."
 
@@ -10468,6 +10576,10 @@ msgstr "A scene can have up to %(n)s images."
 
 msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde."
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
+
+#, python-format
+msgid "Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no tiene saldo. Mientras no se recargue en %(recarga)s, Crear y Cambiar producto no pueden generar; los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s"
+msgstr "A generation in project %(cliente)s failed because Creatv's %(proveedor)s account has no credit. Until it is topped up at %(recarga)s, Create and Change product cannot generate; failed attempts are not charged. Provider response: %(detalle)s"
 
 msgid "Una idea necesita escena."
 msgstr "An idea needs a scene."
@@ -11096,6 +11208,9 @@ msgstr "Zip from %(fecha)s (%(n)s pieces)"
 #, python-format
 msgid "Zip listo con %(n)s pieza(s)."
 msgstr "Zip ready with %(n)s piece(s)."
+
+msgid "__MODELO__ no pasa de __TOTAL__ s sumando tus videos de referencia (__S__ s): el resultado puede durar hasta __MAX__ s. Baja la duración o usa un video más corto."
+msgstr "__MODELO__ can't go past __TOTAL__ s counting your reference videos (__S__ s): the result can last up to __MAX__ s. Lower the duration or use a shorter video."
 
 msgid "__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una."
 msgstr "__MODELO__ only uses the first reference (__PRIMERA__): it would not use __SOBRAN__. Choose Wan 3.0 or Kling O3 Pro to use them all, or keep just one."
@@ -11889,6 +12004,12 @@ msgstr "deep"
 #, python-format
 msgid "hasta %(n)s referencias · 2k"
 msgstr "up to %(n)s references · 2k"
+
+#, python-format
+msgid "hasta %(num)d crédito de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
+msgid_plural "hasta %(num)d créditos de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
+msgstr[0] "up to %(num)d TrendTrack credit (from the plan; US$ %(usd)s if they were top-up credits)"
+msgstr[1] "up to %(num)d TrendTrack credits (from the plan; US$ %(usd)s if they were top-up credits)"
 
 #, python-format
 msgid "hasta %(num)s referencia"
@@ -13288,79 +13409,3 @@ msgstr "🔊 Sound"
 msgid "🖼 Imagen"
 msgstr "🖼 Image"
 
-#, python-format
-msgid "%(fuente)s solo busca por palabra clave: elige «Por palabra clave» o cambia de fuente."
-msgstr "%(fuente)s only searches by keyword: choose “By keyword” or switch source."
-
-msgid "Crea una API key en tu workspace de TrendTrack (guía: docs.trendtrack.io › Getting Started)."
-msgstr "Create an API key in your TrendTrack workspace (guide: docs.trendtrack.io › Getting Started)."
-
-msgid "En trendtrack.io elige el plan Pro o superior (incluye la API y 20 000 créditos al mes)."
-msgstr "At trendtrack.io choose the Pro plan or higher (it includes the API and 20,000 credits a month)."
-
-msgid "Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente."
-msgstr "That source doesn't support this kind of search; search by keyword or switch source."
-
-#, python-format
-msgid "No se pudo conectar con TrendTrack: %(tipo)s."
-msgstr "Couldn't connect to TrendTrack: %(tipo)s."
-
-msgid "Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."
-msgstr "Paste it as TRENDTRACK_API_KEY in the server's .env and restart both services."
-
-msgid "Sin ella la fuente TrendTrack queda apagada en «Traer referentes». La API pide el plan Pro o superior: el Starter no la incluye."
-msgstr "Without it the TrendTrack source stays off in “Bring in references”. The API needs the Pro plan or higher: Starter doesn't include it."
-
-msgid "Trae anuncios reales de Meta que TrendTrack ha registrado para la biblioteca de referentes; busca por palabra clave."
-msgstr "Brings in real Meta ads that TrendTrack has recorded, for the Swipe file; it searches by keyword."
-
-msgid "TrendTrack (anuncios de Meta)"
-msgstr "TrendTrack (Meta ads)"
-
-msgid "TrendTrack (biblioteca de referentes: anuncios de Meta)"
-msgstr "TrendTrack (Swipe file: Meta ads)"
-
-#, python-format
-msgid "TrendTrack devolvió anuncios con campos que Creatv no reconoce todavía (recibidos: %(campos)s). Avisa al equipo para ajustar el conector; se detuvo para no gastar más créditos."
-msgstr "TrendTrack returned ads with fields Creatv doesn't recognize yet (received: %(campos)s). Let the team know so they can adjust the connector; it stopped to avoid spending more credits."
-
-msgid "TrendTrack devolvió la lista de anuncios en una forma que Creatv no reconoce todavía."
-msgstr "TrendTrack returned the list of ads in a shape Creatv doesn't recognize yet."
-
-msgid "TrendTrack mira los anuncios de Meta que ha registrado y se cobra en créditos de tu plan (un crédito por anuncio revisado). No filtra por formato: los anuncios que no son del formato elegido también gastan crédito, por eso se revisan hasta tres veces el máximo que pidas."
-msgstr "TrendTrack looks at the Meta ads it has recorded and is billed in credits from your plan (one credit per ad checked). It can't filter by format: ads that aren't in the chosen format also use a credit, so up to three times the maximum you ask for are checked."
-
-msgid "TrendTrack no aceptó la llave (TRENDTRACK_API_KEY): revísala o genera otra."
-msgstr "TrendTrack didn't accept the key (TRENDTRACK_API_KEY): check it or generate another one."
-
-msgid "TrendTrack no está configurado (falta TRENDTRACK_API_KEY)."
-msgstr "TrendTrack isn't configured (TRENDTRACK_API_KEY is missing)."
-
-#, python-format
-msgid "TrendTrack respondió algo inesperado (HTTP %(codigo)s)."
-msgstr "TrendTrack responded with something unexpected (HTTP %(codigo)s)."
-
-#, python-format
-msgid "TrendTrack respondió con un error (HTTP %(codigo)s)."
-msgstr "TrendTrack responded with an error (HTTP %(codigo)s)."
-
-msgid "TrendTrack solo busca por palabra clave; para los anuncios de una marca usa Atria o Apify."
-msgstr "TrendTrack only searches by keyword; for a brand's ads use Atria or Apify."
-
-msgid "TrendTrack: se acabaron los créditos del plan."
-msgstr "TrendTrack: the plan's credits have run out."
-
-msgid "TrendTrack: se alcanzó el límite de peticiones del plan; intenta en un rato."
-msgstr "TrendTrack: the plan's request limit was reached; try again in a while."
-
-msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
-msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
-
-msgid "Un crédito de TrendTrack por anuncio revisado (US$ 1 = 1 000 créditos); el plan Pro incluye 20 000 créditos al mes. El uso está en Referentes (admin)."
-msgstr "One TrendTrack credit per ad checked (US$ 1 = 1,000 credits); the Pro plan includes 20,000 credits a month. Usage is shown in Swipe file (admin)."
-
-#, python-format
-msgid "hasta %(num)d crédito de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
-msgid_plural "hasta %(num)d créditos de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
-msgstr[0] "up to %(num)d TrendTrack credit (from the plan; US$ %(usd)s if they were top-up credits)"
-msgstr[1] "up to %(num)d TrendTrack credits (from the plan; US$ %(usd)s if they were top-up credits)"

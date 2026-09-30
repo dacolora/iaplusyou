@@ -65,7 +65,7 @@ def editar_video(modelo_id, video_url, prompt, referencias_urls=None, on_progres
         headers=wavespeed_common.headers(), timeout=60,
     )
     if not resp.ok:
-        raise RuntimeError(f"WaveSpeed ({info['path']}) respondió {resp.status_code}: {resp.text[:500]}")
+        raise wavespeed_common.error_de_respuesta(resp, info["path"])
     prediction_id = (resp.json().get("data") or {}).get("id")
     if not prediction_id:
         raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")

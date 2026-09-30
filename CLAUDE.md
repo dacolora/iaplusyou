@@ -454,6 +454,23 @@ referencias de las que la persona ve**: `flowplus_modelos.referencias_de_mas(mod
 Seedance 2.5: SOLO la primera; Seedream: 10) y `cf_crear_video` avisa y no genera si sobra alguna (incidente «mira lo
 que sacó»: cuatro referencias con Seedance, tres descartadas en silencio, US$ 3,6 cobrados); el compositor muestra el
 mismo aviso en vivo (`#fp-aviso-refs`, `data-max`/`data-max-videos` de los radios de modelo) y frena el envío.
+**Sin saldo y Wan con videos de referencia (incidente 2026-09-30):** WaveSpeed se quedó sin saldo y los videos
+fallaban con su JSON crudo en la tarjeta. `wavespeed_common.error_de_respuesta(resp, path)` es lo que lanzan los cinco
+lanzadores de WaveSpeed ante una respuesta no-ok: `SinSaldo` (RuntimeError; 402 o «insufficient credits» / «top up»)
+o el RuntimeError de siempre. `saldo.py` recuerda la falta en `kv` (`sin_saldo:<proveedor>`), avisa al administrador
+por `notificaciones.avisar_admin` (tipo `sin_saldo`) UNA vez cada `REAVISO_S`, `vigente()` pinta
+`_aviso_sin_saldo.html` en Crear y en Cambiar producto (el admin ve desde cuándo y el enlace de recarga; el cliente,
+un aviso neutro) y la próxima generación nueva que sale bien lo `limpia` (vence solo a las `VIGENCIA_S` sin fallos).
+La tarjeta dice `saldo.mensaje_tarjeta` en el idioma del proyecto, en Crear (video e imagen, que ahora también pasa
+por `_mensaje_error`) y en swap; un video sin saldo nunca persigue una predicción vieja. OJO: el VPS no tiene SMTP_* ni
+un admin con correo verificado, así que hoy el aviso que llega es el de la app. Y Wan 3.0 con videos de referencia:
+los videos juntos hasta 15 s y entrada + salida hasta 30 s (`max_videos_s`, `max_total_con_videos`; 1405 si no).
+La bandeja guarda `duracion_s` de cada video (ffprobe al subirlo o bajar el link, `dashboard._duracion_video`;
+`fp_reusar` la conserva), `cf_crear_video` avisa y no genera con `flowplus_modelos.problema_duracion`, el compositor
+lo avisa en vivo (`data-duracion` en la bandeja, `data-max-total`/`data-max-videos-s` en los radios), el worker recorta
+la salida como última barrera (`duracion_con_videos`, midiendo por URL lo que la sesión no traía) y el precio incluye
+los segundos de entrada que WaveSpeed factura en Wan (`segundos_facturables_referencia`: cada video 1–15 s, el total
+hasta 15 s, hacia arriba; `estimate_video(..., videos_ref_s=)` en el botón, al reintentar y en el gasto real).
 Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
 `wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
 devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)

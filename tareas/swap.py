@@ -22,12 +22,14 @@ import catalogo_productos
 import gastos
 import generador_prompts
 import marca as marca_mod
+import idiomas
 import prompt_swap
+import saldo
 import swaps as swaps_mod
 import trabajos
 from providers import aspect_ratio as aspect_ratio_mod
 from providers import nano_banana_client, kling_o1_client, comparador_modelos, wavespeed_client
-from providers import wavespeed_video_edit, wavespeed_imagen
+from providers import wavespeed_common, wavespeed_video_edit, wavespeed_imagen
 from storage import r2_uploader
 from tareas import al_interrumpir, ref_sufijo, registrar
 
@@ -407,7 +409,13 @@ def ejecutar(tarea):
 
         return "Swap listo."
     except Exception as e:
-        swaps_mod.actualizar(cliente, swap_id, estado="error", error=str(e))
+        mensaje_error = str(e)
+        if isinstance(e, wavespeed_common.SinSaldo):
+            # Incidente 2026-09-30: en palabras, y el administrador se entera.
+            saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                mensaje_error = saldo.mensaje_tarjeta(e.proveedor)
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje_error)
         bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
         if costo is not None:
             _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok,

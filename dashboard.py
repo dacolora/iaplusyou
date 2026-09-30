@@ -27,7 +27,7 @@ import sqlalchemy as sa
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context
-from flask_babel import Babel, get_locale, gettext, ngettext
+from flask_babel import Babel, format_decimal, get_locale, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from datetime import date, datetime
@@ -53,6 +53,7 @@ import meta_agencia
 import meta_errores
 import flowplus_prompt
 import referencias_flowplus
+import saldo
 import materiales
 import ediciones
 import mi_musica
@@ -103,7 +104,7 @@ from tareas import musica as tareas_musica
 from tareas import audios as tareas_audios
 from tareas import edicion as tareas_edicion
 from tareas import triple_whale as tareas_tw
-from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
+from final_edition import ETAPAS_FINAL, cortes as fe_cortes, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
 from publicador import publicar_brief
@@ -1704,6 +1705,7 @@ def ver_cliente(cliente):
         **_listas_crear_final(cf_items),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
+        aviso_saldo=saldo.vigente("wavespeed"),
         fp_prefill=_prefill_para(cliente),
         logos=_logos(cliente),
         referencias_bandeja=referencias_flowplus.listar(cliente),
@@ -2973,9 +2975,14 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx):
                 n_referencias=len(entry.get("referencias_urls") or []))
         else:
             mid = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
+            # Con videos de referencia (Wan 3.0, 2026-09-30): la duración que de
+            # verdad se pedirá y los segundos de entrada que WaveSpeed factura.
+            refs_sesion = entry.get("referencias") or []
+            segundos_ref = flowplus_modelos.segundos_videos(mid, refs_sesion)
             item["costo_estimado"] = flowplus_modelos.estimate_video(
-                mid, entry["duracion_objetivo"], con_sonido=entry.get("con_sonido", True) is not False,
-                calidad=entry.get("calidad") or "final")
+                mid, flowplus_modelos.duracion_con_videos(mid, refs_sesion, entry["duracion_objetivo"]),
+                con_sonido=entry.get("con_sonido", True) is not False,
+                calidad=entry.get("calidad") or "final", **({"videos_ref_s": segundos_ref} if segundos_ref else {}))
     item["modelo_nombre"] = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "Wan 3.0")
     # Final edition: solo tiene sentido sobre un video ya listo. Cada final
     # y el guion llevan su propio trabajo del worker para la barra de la UI.
@@ -6733,11 +6740,22 @@ def _guardar_referencia_archivo(cliente, archivo, i):
         frame_path = local_path + FRAME_SUFFIX
         _extraer_frame(local_path, frame_path)
         frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/referencias_flowplus/{unico}{FRAME_SUFFIX}")
-        referencias_flowplus.agregar(cliente, "video", url, frame_url=frame_url, origen="archivo", ruta_local=local_path, titulo=nombre)
+        referencias_flowplus.agregar(cliente, "video", url, frame_url=frame_url, origen="archivo", ruta_local=local_path,
+                                     titulo=nombre, duracion_s=_duracion_video(local_path))
     else:
         url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}")
         referencias_flowplus.agregar(cliente, "imagen", url, origen="archivo", ruta_local=local_path, titulo=nombre)
     return True
+
+
+def _duracion_video(ruta):
+    """Segundos de un video de referencia (ffprobe), a centésimas; None si no
+    se pudo medir. Nunca lanza: una medida que falla no frena la subida
+    (2026-09-30: Crear la usa para el límite de Wan 3.0 y su precio)."""
+    try:
+        return round(fe_cortes.duracion(ruta), 2) if ruta else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _quiere_json():
@@ -6802,7 +6820,8 @@ def fp_agregar_link(cliente):
             _extraer_frame(local_path, frame_path)
             frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/referencias_flowplus/{base}{FRAME_SUFFIX}")
             referencias_flowplus.agregar(cliente, "video", r2_url, frame_url=frame_url, origen=meta.get("fuente", "link"),
-                                         ruta_local=local_path, titulo=meta.get("titulo") or url)
+                                         ruta_local=local_path, titulo=meta.get("titulo") or url,
+                                         duracion_s=_duracion_video(local_path))
             bitacora.registrar(cliente, base, "flowplus_link", "ok", url)
         except Exception as e:
             bitacora.registrar(cliente, base, "flowplus_link", "error", str(e))
@@ -7016,6 +7035,7 @@ def fp_reusar(cliente, cf_id):
         referencias_flowplus.agregar(
             cliente, r.get("tipo") or "imagen", r["url"], frame_url=r.get("frame_url"),
             origen="reutilizada", titulo=r.get("activo") or r.get("etiqueta"), producto=r.get("producto"),
+            duracion_s=r.get("duracion_s"),
         )
         ya.add(r["url"])
     if request.form.get("incluir_resultado") == "si" and entry.get("tipo") == "imagen" and entry.get("video_url") not in ya:
@@ -7152,8 +7172,17 @@ def cf_crear_video(cliente):
         bandeja = [r for r in bandeja if r["id"] in set(usadas)]
     referencias = []
     for r in bandeja:
-        referencias.append({"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
-                            "etiqueta": r["etiqueta"], "origen": r.get("origen")})
+        ref = {"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
+               "etiqueta": r["etiqueta"], "origen": r.get("origen")}
+        if r["tipo"] == "video":
+            # Lo que dura el video (2026-09-30): lo medido al subirlo; las
+            # referencias anteriores se miden acá si el archivo sigue en disco
+            # (sin tocar la red en la petición: si no, lo mide el worker).
+            dur = r.get("duracion_s")
+            if dur is None and r.get("ruta_local") and os.path.exists(r["ruta_local"]):
+                dur = _duracion_video(r["ruta_local"])
+            ref["duracion_s"] = dur
+        referencias.append(ref)
     n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
 
     # Activos del catálogo (productos, personajes, entornos). El valor del
@@ -7231,6 +7260,24 @@ def cf_crear_video(cliente):
             flash(gettext("%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. "
                           "Quita las que sobran o cambia de modelo — no se cobró nada.",
                           modelo=nombre_modelo, n=info_modelo.get("max_referencias"), sobran=", ".join(sobran)), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # Incidente 2026-09-30 (Forja): un video de referencia de 14,9 s y 20 s
+    # pedidos → WaveSpeed 1405 «exceeds 30s limit». Wan 3.0 no admite más de
+    # 15 s de videos de referencia ni más de 30 s entre entrada y salida: se
+    # avisa y no se genera. Nada se cobra.
+    problema = flowplus_modelos.problema_duracion(modelo, referencias, duracion_objetivo) if tipo == "video" else None
+    if problema:
+        info_modelo = flowplus_modelos.VIDEO[modelo]
+        segundos = format_decimal(problema["videos_s"], format="#,##0.#")
+        if problema["motivo"] == "videos_largos":
+            flash(gettext("Tus videos de referencia duran %(s)s s en total y %(modelo)s admite hasta %(max)s s. "
+                          "Recórtalos o quita alguno — no se cobró nada.",
+                          s=segundos, modelo=gettext(info_modelo["nombre"]), max=problema["maxima_videos"]), "error")
+        else:
+            flash(gettext("%(modelo)s no pasa de %(total)s s sumando tus videos de referencia (%(s)s s): el resultado "
+                          "puede durar hasta %(max)s s. Baja la duración o usa un video más corto — no se cobró nada.",
+                          modelo=gettext(info_modelo["nombre"]), total=info_modelo["max_total_con_videos"], s=segundos,
+                          max=problema["maxima"]), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     if solo_texto:
