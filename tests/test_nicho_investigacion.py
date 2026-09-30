@@ -460,6 +460,10 @@ def test_estimar_costo_maximo():
     from nicho import avatares
     e = avatares.estimar_costo_maximo()
     assert e["comentarios"] == avatares.MAX_COMENTARIOS and e["usd"] > 0 and e["suficientes"]
+    # Peor caso real: los DOS topes de seleccionar() llenos a la vez (una reseña
+    # real llega a 2 000 caracteres, así que MAX_COMENTARIOS puede sumar
+    # MAX_CARACTERES completo) -- no solo MAX_COMENTARIOS × 250.
+    assert e["tokens_entrada"] == int(avatares.MAX_CARACTERES * avatares.TOKENS_POR_CARACTER) * 2 + avatares.TOKENS_PROMPT * (1 + avatares.MAX_NUCLEOS)
 
 
 if __name__ == "__main__":

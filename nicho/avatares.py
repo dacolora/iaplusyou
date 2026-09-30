@@ -136,8 +136,16 @@ def estimar_costo(comentarios, modelo=None):
 
 def estimar_costo_maximo(modelo=None):
     """Peor caso de una generación (lo que la investigación aprueba antes de
-    tener comentarios): MAX_COMENTARIOS comentarios de 250 caracteres."""
-    falsos = [{"id": i, "texto": "x" * 250, "fuente": "amazon", "puntuacion": 0, "fecha": None} for i in range(MAX_COMENTARIOS)]
+    tener comentarios): los DOS topes de `seleccionar` llenos a la vez, no
+    solo el de cantidad -- una reseña real puede llegar a 2 000 caracteres,
+    así que un lote de MAX_COMENTARIOS puede alcanzar también MAX_CARACTERES.
+    Cada comentario falso recibe MAX_CARACTERES // MAX_COMENTARIOS caracteres
+    y los primeros MAX_CARACTERES % MAX_COMENTARIOS reciben uno más, para que
+    la suma dé MAX_CARACTERES exacto y `seleccionar` los conserve a todos
+    (la suma corrida nunca pasa el tope)."""
+    base, resto = divmod(MAX_CARACTERES, MAX_COMENTARIOS)
+    falsos = [{"id": i, "texto": "x" * (base + 1 if i < resto else base), "fuente": "amazon", "puntuacion": 0, "fecha": None}
+              for i in range(MAX_COMENTARIOS)]
     return estimar_costo(falsos, modelo)
 
 
