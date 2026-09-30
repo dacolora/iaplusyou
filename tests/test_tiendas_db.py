@@ -175,6 +175,26 @@ def test_desconectar_archiva_por_sync_y_reconectar_desarchiva(base_temporal):
     assert tiendas.producto("acme", pid)["archivado"] is False
 
 
+def test_desconectar_tienda_publica_archiva_sus_productos_shopify(base_temporal):
+    """Fix ronda 1 (revisión de Tarea 13): `ShopifyPublico.fuente == "shopify"`
+    aunque su `tipo == "shopify_publico"` — el archivado al desconectar tiene
+    que mirar el `fuente` del CONECTOR, no el `tipo` de la fila `tienda`."""
+    import tiendas
+    tid = tiendas.conectar("acme", "shopify_publico", {"dominio": "www.acme.com"}, nombre="Acme", dominio="www.acme.com")
+    pid = tiendas.upsert_producto("acme", "shopify", "p1", {"nombre": "Cojín"})
+    assert tiendas.desconectar("acme", tid) is True
+    assert tiendas.producto("acme", pid)["archivado"] is True
+    assert tiendas.producto("acme", pid)["extra"]["archivado_por"] == "sync"
+
+
+def test_desconectar_sin_archivar_deja_los_productos(base_temporal):
+    import tiendas
+    tid = tiendas.conectar("acme", "shopify_publico", {"dominio": "www.acme.com"}, nombre="Acme", dominio="www.acme.com")
+    pid = tiendas.upsert_producto("acme", "shopify", "p1", {"nombre": "Cojín"})
+    assert tiendas.desconectar("acme", tid, archivar=False) is True
+    assert tiendas.producto("acme", pid)["archivado"] is False
+
+
 # --- activo del catálogo ⇄ fila producto (fuente manual) --------------------
 
 def test_asegurar_manual_crea_una_sola_fila(base_temporal):

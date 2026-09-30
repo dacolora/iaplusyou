@@ -287,13 +287,32 @@ def test_traer_de_mi_tienda_conecta_shopify_publico_y_vuelve_al_catalogo(app):
 
 
 def test_conectar_shopify_con_api_desconecta_la_publica_del_mismo_dominio(app):
+    """Fix ronda 1 (revisión de Tarea 13): «una sola Shopify por proyecto» —
+    la Admin API reemplaza CUALQUIER conexión sin llaves del proyecto sin
+    comparar dominios (el formulario de la Admin API pide el dominio
+    `.myshopify.com`, distinto del dominio público real, así que compararlos
+    nunca habría coincidido en la práctica) y, como comparten `fuente`, los
+    productos que ya trajo la pública NO se archivan — la sync de la Admin
+    API los vuelve a traer."""
     import tiendas
     from tests.test_rutas_productos import FalsoConector
-    tiendas.conectar("acme", "shopify_publico", {"dominio": "acme.myshopify.com"}, nombre="Acme", dominio="acme.myshopify.com")
+    tiendas.conectar("acme", "shopify_publico", {"dominio": "www.acme.com"}, nombre="Acme", dominio="www.acme.com")
+    pid = tiendas.upsert_producto("acme", "shopify", "p1", {"nombre": "Cojín"})
     FalsoConector.resultado = {"ok": True, "nombre": "Acme Store", "detalle": "ok"}
     app["c"].post("/cliente/acme/config/tienda/conectar", data={"tipo": "shopify", "dominio": "acme.myshopify.com", "token": "shpat_x"})
     tipos = sorted(t["tipo"] for t in tiendas.listar("acme"))
     assert tipos == ["shopify"]
+    assert tiendas.producto("acme", pid)["archivado"] is False
+
+
+def test_no_se_conecta_la_publica_si_ya_hay_admin_api(app):
+    import tiendas
+    tiendas.conectar("acme", "shopify", {"dominio": "acme.myshopify.com", "token": "t"}, nombre="Acme Store", dominio="acme.myshopify.com")
+    app["c"].post("/cliente/acme/config/tienda/conectar", data={"tipo": "shopify_publico", "dominio": "www.acme.com"})
+    tipos = sorted(t["tipo"] for t in tiendas.listar("acme"))
+    assert tipos == ["shopify"]
+    assert app["encolados"] == []
+    assert any("ya está conectada con la Admin API" in m for m in _flashes(app["c"]))
 
 
 def test_catalogo_ofrece_traer_de_mi_tienda_y_configuracion_el_tipo_sin_llaves(app):

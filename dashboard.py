@@ -5945,6 +5945,10 @@ def tienda_conectar(cliente):
     def _volver():
         return _volver_catalogo(cliente) if volver == "catalogo" else _volver_config(cliente)
 
+    if tipo == "shopify_publico" and any(t["tipo"] == "shopify" for t in tiendas.listar(cliente)):
+        flash(gettext("Tu tienda Shopify ya está conectada con la Admin API: el catálogo ya se sincroniza desde ahí."), "warn")
+        return _volver()
+
     if tipo == "shopify_publico":
         dominio = (request.form.get("dominio") or "").strip()
         creds = {"dominio": dominio}
@@ -5971,21 +5975,21 @@ def tienda_conectar(cliente):
     dominio = str((resultado or {}).get("dominio") or dominio or "").strip() or None
     if tipo == "shopify_publico":
         creds = {"dominio": dominio}
-    elif tipo == "shopify" and dominio:
-        # La misma tienda ya estaba conectada sin llaves: la Admin API la reemplaza
-        # (misma `fuente`: las filas no se tocan y la primera sync las refresca).
-        from conectores.shopify_publico import normalizar_dominio
+    reemplazo = False
+    if tipo == "shopify":
+        # Una sola Shopify por proyecto: la Admin API reemplaza cualquier conexión
+        # sin llaves que hubiera (misma `fuente`: los productos no se tocan,
+        # archivar=False — la sync de la Admin API los vuelve a traer).
         for t in tiendas.listar(cliente):
-            if t["tipo"] == "shopify_publico" and t.get("dominio"):
-                try:
-                    if normalizar_dominio(t["dominio"]) == normalizar_dominio(dominio):
-                        tiendas.desconectar(cliente, t["id"])
-                except ErrorConector:
-                    continue
+            if t["tipo"] == "shopify_publico":
+                tiendas.desconectar(cliente, t["id"], archivar=False)
+                reemplazo = True
     tid = tiendas.conectar(cliente, tipo, creds, nombre=nombre, dominio=dominio)
     n = _encolar_sync_tienda(cliente, tid, tipo, con_pedidos=bool(getattr(cls, "tiene_pedidos", True)))
     detalle = str((resultado or {}).get("detalle") or "").strip()
     extra = gettext("Sincronizando el catálogo…") if n else gettext("Ya había una sincronización en curso.")
+    if reemplazo:
+        extra = extra + " " + gettext("Reemplaza la conexión sin llaves: el catálogo ahora se sincroniza con la Admin API.")
     flash(gettext("Tienda %(nombre)s conectada. %(detalle)s %(extra)s", nombre=(nombre or dominio), detalle=detalle, extra=extra), "ok")
     return _volver()
 
