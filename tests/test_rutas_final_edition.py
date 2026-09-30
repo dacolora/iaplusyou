@@ -814,3 +814,29 @@ def test_preparar_idioma_base_elegido_o_el_del_proyecto(base_temporal, monkeypat
     datos = {"precio": "24.99", **({"idioma_base": enviado} if enviado else {})}
     _cliente_admin(dashboard).post(f"/cliente/acme/creative_flow/{cf_id}/final/preparar", data=datos)
     assert llamadas[0]["payload"]["opciones"] == {"precio": 24.99, "idioma_base": esperado}
+
+
+def test_decision_b_un_proyecto_en_ingles_produce_co_en_espanol(base_temporal, monkeypatch):
+    """Decisión B (Daniel, 2026-09-28; reemplaza §B5 y el «Final edition» de
+    §Pruebas del spec): en un proyecto en inglés el destino CO sigue siendo
+    `es_CO` — la final se localiza en español con precio en COP — y la clave
+    queda `<cf_id>__es_CO`."""
+    import creative_flow as cf
+    import dashboard
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    base_en = dict(GUION_BASE, idioma="en", pais="US")
+    item = _item_video_listo(guion_base=base_en)
+    html = _entorno_plantilla().get_template("_final_detalle_respuesta.html").render(
+        **_contexto_minimo([item]), item=item, f=None, idioma_proyecto="en")
+    assert 'name="destinos" value="es_CO"' in html
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, base_en)
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    _cliente_admin(dashboard).post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={
+        "destinos": ["es_CO"], "voz": "Rachel", "estilo_musica": "energetico", "precio_es_CO": "89900"})
+    (t,) = llamadas
+    assert t["job_id"] == f"acme__{cf_id}__es_CO__final"
+    assert (t["payload"]["idioma"], t["payload"]["pais"]) == ("es", "CO")
+    assert t["payload"]["opciones"]["precios"] == {"es_CO": 89900.0}
+    assert cf.final_por_legado("acme", f"{cf_id}__es_CO")["estado"] == "generando"

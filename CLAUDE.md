@@ -587,7 +587,9 @@ dos `.md` y a «Antes de generar». `nueva_version` hereda las imágenes subidas
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
 subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with
 Anthropic; `fe_producir` queues one `final_producir` task per destino ticked, each
-worth its own approval). `final_edition/__init__.py::producir` (the worker task `final_producir`, one per destino,
+worth its own approval) — the base guion is written in the language picked in «Idioma base», which defaults to the
+project's language (`idiomas.de_proyecto`), and each destino localizes it to its country's language (decisión B,
+2026-09-28). `final_edition/__init__.py::producir` (the worker task `final_producir`, one per destino,
 `max_intentos=1`) now runs through the editor (capa 2, 2026-09): `final_edition/produccion.py`
 turns the guion into an **edición** (a capa-1 document built by `final_edition/borrador.py`
 from materials cached by hash in `final_edition/insumos.py`: the raw clon, the voice per
@@ -1038,9 +1040,34 @@ no del idioma del estudio. La biblioteca global de referentes es bilingüe (§B7
 a la vista, gasto `otro` bajo `_creatv`), `referentes.datos.rellenar_i18n_copycoders()` (idempotente, sin Claude:
 correr una vez al desplegar), y los barridos globales clasifican en español e inglés en UNA llamada
 (`clasificar.salida_para`, tarifa `clasificacion_bilingue`); la ficha sale en el idioma de quien mira y
-Recrear/Adaptar/las referencias de un sprint en el del proyecto. Final edition/editor, las páginas de admin y el
-mapa del código siguen solo en español hasta la fase 6 (plan `docs/superpowers/plans/2026-09-28-fase6-*.md`;
-las finales van en el idioma de cada país — decisión B de Daniel, 2026-09-28).
+Recrear/Adaptar/las referencias de un sprint en el del proyecto.
+Desde la fase 6 (2026-09) toda la app pasa por el catálogo (excepciones a propósito: el contenido de
+`mapa_codigo.html` — `<html lang="es">`, solo su barra `#mapa-barra` se traduce — y de la doctrina
+(`doctrina/textos/*.md`), documentación interna en español; los mensajes de contrato de
+`final_edition/documento.validar` y los de `static/editor/operaciones.js` (`INTERNOS` en `tests/test_i18n_editor.py`);
+los prompts para los modelos de video e imagen y sus tokens `Image N`/`Video N`/`@Imagen N` (`prompt_swap.py`,
+`flowplus_prompt`); y las 9 plantillas del flujo viejo «Nueva idea», en `EXCLUIDAS` hasta que Daniel decida qué pasa
+con ese flujo. Una excepción a §B8: «Escribe aquí», el texto inicial editable de un clip de texto nuevo del editor,
+sale en el idioma de quien mira). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
+del spec): cada final sale en el idioma de su país destino (`<idioma>_<PAIS>`); el guion base, que no es por destino,
+en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. El editor
+no es Jinja: sus textos viven en `static/editor/textos.js` (`ES`, la fuente) y la ruta `editor.ver` manda los
+traducidos en `datos-editor.textos` (`final_edition/textos_editor.py::TEXTOS`, mismas claves con `N_`; un test de
+paridad compara los dos); `pagina_editor.js` llama a `ponerTextos`, cada módulo usa `t("clave", {x})` (ninguna
+variable local se llama `t`: `TAPA_T`) y `separadorDecimal()` para los números; todo texto nuevo de un módulo del
+editor va con `t("clave")` en los dos. `pgettext` es palabra clave del extractor (`catalogo_i18n.PALABRAS`) para un
+mismo español con dos inglés: «Fuente» del editor → Font (`msgctxt "editor"`), la columna «Referentes» de
+`/admin/referentes` → References. Quién decide: lo que responde una ruta = quien mira; lo que se guarda o se manda
+(errores de finales y publicaciones, `detalle` de gastos, eventos, mensajes y `return` de tareas, correos del
+proyecto) = el proyecto (`worker.ejecutar` ya lo pone; en una ruta,
+`with idiomas.en_idioma(idiomas.de_proyecto(cliente)):` alrededor de lo que se guarda, no de lo que se responde);
+los correos a admins = el idioma de cada admin. Guardias: `tests/test_i18n_plantillas.py` (toda plantilla
+traducida o en `EXCLUIDAS` con su motivo), `test_i18n_mensajes.py` (`RUTAS`/`WORKER`: ninguna ruta ni tarea con un texto fijo fuera de gettext/N_; las claves
+quedan eximidas), `test_i18n_editor.py` (JS del editor), `test_i18n_guardado.py` (lo guardado, en el idioma del
+proyecto), `test_i18n_fugas.py` (render en inglés), `test_i18n_app_entera.py` (toda la app en inglés con los
+valores de producción). Trampas: Babel 2.18 no extrae un `gettext(...)` anidado en los argumentos de
+`ngettext(...)` (sácalo antes a una variable local); `actualizar` puede marcar una entrada `fuzzy`, que no se usa en
+tiempo de ejecución — corrígela y quita la marca.
 Fase 3 (Crear en el idioma del proyecto): las llamadas a Claude reciben el idioma con
 `idiomas.de_proyecto(cliente)`, pasado a `doctrina.bloque_system(..., idioma=)` o envuelto a mano con
 `idiomas.orden_idioma` (va al inicio Y al final de las instrucciones del sitio; el prompt para el modelo de
