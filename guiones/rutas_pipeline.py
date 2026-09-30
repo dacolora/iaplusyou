@@ -311,7 +311,7 @@ def video_armar(cliente, vid):
         datos.empezar(cliente, vid, "armando", ("configurando", "invalido", "error"))
     except ErrorRefinador as e:
         return _error(e)
-    trabajos.iniciar(f"guion_armar_{vid}", lambda: clips.armar(vid), duracion_estimada=120)
+    trabajos.iniciar(f"guion_armar_{vid}", lambda: clips.armar(vid), duracion_estimada=300)
     return jsonify({"video_id": vid}), 202
 
 

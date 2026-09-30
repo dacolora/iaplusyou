@@ -564,7 +564,7 @@ página de Notion, `leyendo|leido|error`), `guion` (un script: `lectura` con lí
 `literal`, `leido|confirmado`) y `guion_video` (una versión: `config`, `recorte`, `plan`, `clips`,
 `hooks_alt`, `validaciones`, `avisos`, `imagenes`; `configurando|recortando|armando|armado|invalido|error`
 y `estado_imagenes`). `guiones/datos.py` es el único escritor; un trabajo con `iniciado_en` de más de
-6 min se da por interrumpido: un lote `leyendo` y un video `armando` o con imágenes `escribiendo`
+12 min se da por interrumpido: un lote `leyendo` y un video `armando` o con imágenes `escribiendo`
 pasan a `error`, y un video `recortando` vuelve a `configurando`. Claude planea y el código escribe: `lectura.py` (copia literal verificada),
 `recorte.py` (orden de prescindibles; nunca la línea 1), `clips.py` (plan por números de línea →
 `duracion.calcular_clip` → `plantillas.prompt_clip` → validaciones V1-V6/E1-E4 que bloquean; los
@@ -572,7 +572,9 @@ prompts entran al chat con `refinador.crear(origen="pipeline", texto_fijo=línea
 `imagenes.py` (hojas de personaje, entornos, producto con sus fotos; tabla imagen↔clip; checklist).
 Todo prompt de fábrica pasa `refinador.validar`. Una llamada por paso vía `guiones/claude.py`
 (`pedir_json`, gasto `guion_clips` también si la respuesta no sirvió), en un hilo
-(`trabajos.iniciar`). Cambiar una versión armada crea otra (`nueva_version`; con solo el bloque del
+(`trabajos.iniciar`), siempre con streaming y topes amplios (armar 48 000, leer 32 000, imágenes 16 000, recorte
+12 000): el pensamiento adaptativo gasta del mismo tope, y con 16 000 un guion real de 34 líneas nunca se armó
+(2026-09-28; medido 2026-09-30: 19 809 de salida, US$ 0,21). Cambiar una versión armada crea otra (`nueva_version`; con solo el bloque del
 video, `clips.version_con_bloque` no llama a Claude). Notion: llave de integración cifrada en `kv`
 (`notion:<cliente>`), solo `api.notion.com`, exige correo verificado. UI: `/panel` como fragmento
 (`_gpg_*.html`) + `_crear_flowplus_guiones.html`; «Abrir en el chat» emite `gp:abrir-prompt`.

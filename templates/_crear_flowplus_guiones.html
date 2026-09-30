@@ -14,7 +14,7 @@
     var CLIENTE = {{ cliente | tojson }};
     var BASE = '/cliente/' + encodeURIComponent(CLIENTE) + '/guiones';
     var CLAVE = 'gpg-sel-' + CLIENTE;
-    var SONDEO_MS = 2000, SONDEO_MAX_MS = 6 * 60 * 1000;
+    var SONDEO_MS = 2000, SONDEO_MAX_MS = 12 * 60 * 1000;
     var sel = leerSel(), timer = null, inicioSondeo = 0, activo = false;
     var ultimoHTML = null, peticionN = 0, revelados = {}, sucios = {};
 
