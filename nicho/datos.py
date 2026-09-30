@@ -228,6 +228,7 @@ def estudios(cliente, incluir_archivados=False):
         q = q.where(t.c.archivado.is_(False))
     with db.conectar() as con:
         lista = [_a_dict(f) for f in con.execute(q.order_by(t.c.id.desc()))]
+        lista = [e for e in lista if not es_manual(e)]
         fuentes, aprobados, subs = _conteos(con, cliente, [e["id"] for e in lista])
     return [_decorar(e, fuentes, aprobados, subs) for e in lista]
 
@@ -353,6 +354,16 @@ def urls_comentarios(cliente, estudio_id):
     with db.conectar() as con:
         return {int(f.id): f.url for f in con.execute(sa.select(c.c.id, c.c.url).where(
             c.c.cliente == cliente, c.c.estudio_id == estudio_id))}
+
+
+def urls_de_comentarios(cliente, ids):
+    """{id: url} de esos comentarios, de cualquier estudio del proyecto."""
+    ids = [int(i) for i in ids or []]
+    if not ids:
+        return {}
+    c = db.comentario
+    with db.conectar() as con:
+        return {int(f.id): f.url for f in con.execute(sa.select(c.c.id, c.c.url).where(c.c.cliente == cliente, c.c.id.in_(ids)))}
 
 
 # ----------------------------------------------------------- avatares ---
@@ -520,15 +531,19 @@ def aprobar_avatar(cliente, avatar_id):
         raise ErrorDatos(gettext("Solo se aprueban los sub-avatares; el núcleo es una agrupación."))
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):    # la persona se guarda: idioma del proyecto
         campos = persona_desde_avatar(a)
+    est = estudio(cliente, a["estudio_id"])
     extra = {"avatar_id": a["id"], "estudio_id": a["estudio_id"], "identidad": dict(a.get("identidad") or {}),
              "conciencia": dict(a.get("conciencia") or {}), "encaje_producto": a.get("encaje_producto") or "",
              "evidencia": list(a.get("evidencia") or [])}
     pid = a.get("persona_id")
-    if pid and sprints_datos.persona(cliente, pid):
-        sprints_datos.actualizar_persona(cliente, pid, archivada=False, extra=extra, **campos)
+    existente = sprints_datos.persona(cliente, pid) if pid else None
+    if existente:
+        # Conserva lo que la persona ya traía en extra (p. ej. lo que se eligió en Sprints) y su origen.
+        sprints_datos.actualizar_persona(cliente, pid, archivada=False, extra={**dict(existente.get("extra") or {}), **extra}, **campos)
     else:
         n = len(sprints_datos.personas(cliente, incluir_archivadas=True))
-        pid = sprints_datos.crear_persona(cliente, origen="investigada", color=COLORES[n % len(COLORES)], extra=extra, **campos)
+        pid = sprints_datos.crear_persona(cliente, origen="manual" if es_manual(est) else "investigada",
+                                          color=COLORES[n % len(COLORES)], extra=extra, **campos)
     with db.conectar() as con:
         _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, {"estado": "aprobado", "persona_id": pid})
     return pid
@@ -714,3 +729,149 @@ def sumar_resenas_traidas(cliente, estudio_id, plataforma, conteos):
                                     resenas_traidas=sa.func.coalesce(t.c.resenas_traidas, 0) + int(cuantos)))
             n += r.rowcount
     return n
+
+
+# ------------------------------------------------ avatares del proyecto ---
+
+NOMBRE_ESTUDIO_MANUAL = N_("Avatares escritos a mano")
+NOMBRE_NUCLEO_MANUAL = N_("Escritos a mano")
+
+
+def es_manual(e):
+    """True para el estudio oculto de los avatares escritos a mano."""
+    return bool(((e or {}).get("extra") or {}).get("manual"))
+
+
+def estudio_manual(cliente):
+    """(estudio_id, nucleo_id) del estudio oculto (spec 2026-09-29 §1); lo
+    crea la primera vez. Si una carrera dejara dos, se usa el de menor id."""
+    t, a = db.estudio, db.avatar
+    ahora = db.ahora()
+    with db.conectar() as con:
+        ocultos = [f.id for f in con.execute(sa.select(t.c.id, t.c.extra).where(t.c.cliente == cliente).order_by(t.c.id))
+                   if (f.extra or {}).get("manual")]
+        if ocultos:
+            eid = ocultos[0]
+        else:
+            eid = con.execute(t.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=NOMBRE_ESTUDIO_MANUAL, producto="", catalogo_id=None,
+                tema="", idioma=_idioma(idiomas.de_proyecto(cliente)), pais=None, estado="revisando", archivado=False,
+                generacion=0, extra={"manual": True})).inserted_primary_key[0]
+        nid = con.execute(sa.select(a.c.id).where(a.c.estudio_id == eid, a.c.cliente == cliente, a.c.tipo == "nucleo")
+                          .order_by(a.c.id)).scalar()
+        if nid is None:
+            nid = con.execute(a.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=eid, padre_id=None, tipo="nucleo", base=None,
+                orden=0, generacion=0, nombre=NOMBRE_NUCLEO_MANUAL, deseo="", resumen="", estado="propuesto", persona_id=None,
+                extra={}, **_SUB_VACIO)).inserted_primary_key[0]
+    return eid, nid
+
+
+def _insertar_sub_manual(cliente, campos, estado, persona_id=None, extra=None):
+    eid, nid = estudio_manual(cliente)
+    a, ahora = db.avatar, db.ahora()
+    with db.conectar() as con:
+        orden = int(con.execute(sa.select(sa.func.count()).select_from(a).where(a.c.padre_id == nid)).scalar() or 0)
+        return con.execute(a.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=eid, padre_id=nid, tipo="sub", orden=orden,
+            generacion=0, estado=estado, persona_id=persona_id, resumen="", extra=dict(extra or {}),
+            **{**_SUB_VACIO, "base": "emocion", **campos})).inserted_primary_key[0]
+
+
+def crear_avatar_manual(cliente, campos):
+    """Avatar escrito a mano: vive en el estudio oculto y nace aprobado (su
+    persona se crea con origen `manual`). Devuelve el id del avatar."""
+    limpios = validar_campos_avatar({k: v for k, v in dict(campos or {}).items() if k in AVATAR_EDITABLES})
+    if not limpios.get("nombre"):
+        raise ErrorDatos(gettext("El avatar necesita un nombre."))
+    aid = _insertar_sub_manual(cliente, limpios, "propuesto", extra={"manual": True})
+    aprobar_avatar(cliente, aid)
+    return aid
+
+
+def campos_desde_persona(p):
+    """La ficha de avatar que corresponde a una persona sin avatar (mapeo inverso de `persona_desde_avatar`)."""
+    ex = dict((p or {}).get("extra") or {})
+    return validar_campos_avatar({
+        "nombre": p.get("nombre") or "?", "deseo": p.get("resumen") or "", "demografia": p.get("descripcion") or "",
+        "edad_rango": p.get("edad_rango") or "", "tono": p.get("tono") or "", "situaciones": list(p.get("senales_visuales") or []),
+        "palabras_clave": list(p.get("palabras_clave") or []), "identidad": ex.get("identidad") or {},
+        "conciencia": ex.get("conciencia") if isinstance(ex.get("conciencia"), dict) else {"nivel": ex.get("conciencia") or ""},
+        "encaje_producto": ex.get("encaje_producto") or ""})
+
+
+def avatar_desde_persona(cliente, persona_id):
+    """El avatar con el que se edita una persona sin avatar (creada en Sprints o
+    sugerida por IA): se crea UNA vez en el estudio oculto con los campos de la
+    persona y enlazado a ella; si ya existe, se devuelve."""
+    p = sprints_datos.persona(cliente, persona_id)
+    if not p:
+        raise ErrorDatos(gettext("Esa persona no existe."))
+    a = db.avatar
+    with db.conectar() as con:
+        ya = con.execute(sa.select(a.c.id).where(a.c.cliente == cliente, a.c.persona_id == persona_id, a.c.tipo == "sub")
+                         .order_by(a.c.id)).scalar()
+    if ya:
+        return ya
+    aid = _insertar_sub_manual(cliente, campos_desde_persona(p), "descartado" if p.get("archivada") else "aprobado",
+                               persona_id=persona_id, extra={"manual": True, "desde_persona": True})
+    eid, _ = estudio_manual(cliente)
+    sprints_datos.actualizar_persona(cliente, persona_id, extra={**dict(p.get("extra") or {}), "avatar_id": aid, "estudio_id": eid})
+    return aid
+
+
+def lista_avatares(cliente):
+    """Todos los avatares del proyecto (spec 2026-09-29 §1, §3):
+    {"nuevos": sub-avatares propuestos de estudios no archivados (más nuevo primero),
+     "aprobados": personas no archivadas (con su avatar si lo tienen), por nombre,
+     "otros": descartados y personas archivadas}.
+    Cada elemento: {clave ("a<id>" o "p<id>"), avatar, persona, estudio {id, nombre,
+    manual, archivado}, nucleo, faltantes, grupo}."""
+    from nicho import calidad
+    t, a = db.estudio, db.avatar
+    with db.conectar() as con:
+        estudios_ = {f.id: {"id": f.id, "nombre": f.nombre, "manual": bool((f.extra or {}).get("manual")), "archivado": bool(f.archivado)}
+                     for f in con.execute(sa.select(t.c.id, t.c.nombre, t.c.extra, t.c.archivado).where(t.c.cliente == cliente))}
+        filas = [_a_dict(f) for f in con.execute(sa.select(a).where(a.c.cliente == cliente).order_by(a.c.id.desc()))]
+    nucleos = {f["id"]: f["nombre"] for f in filas if f["tipo"] == "nucleo"}
+    subs = [f for f in filas if f["tipo"] == "sub"]
+    personas = {p["id"]: p for p in sprints_datos.personas(cliente, incluir_archivadas=True)}
+    representante = {}
+    for s in subs:
+        if s.get("persona_id") in personas and s["persona_id"] not in representante:
+            representante[s["persona_id"]] = s["id"]
+
+    def item(grupo, avatar=None, persona=None):
+        est = estudios_.get(avatar["estudio_id"]) if avatar else None
+        base = avatar if avatar else campos_desde_persona(persona)
+        return {"clave": f"a{avatar['id']}" if avatar else f"p{persona['id']}", "avatar": avatar, "persona": persona, "estudio": est,
+                "nucleo": nucleos.get(avatar["padre_id"]) if avatar else None, "grupo": grupo,
+                "faltantes": calidad.faltantes(base, con_evidencia=bool(avatar) and not (est or {}).get("manual"))}
+
+    nuevos, aprobados, otros = [], [], []
+    for s in subs:
+        est = estudios_.get(s["estudio_id"]) or {}
+        p = personas.get(s.get("persona_id"))
+        if p and representante.get(p["id"]) != s["id"]:
+            continue                                            # la persona ya está representada por otro avatar
+        if s["estado"] == "propuesto" and not p:
+            if not est.get("archivado"):
+                nuevos.append(item("nuevo", s))
+        elif s["estado"] == "aprobado" and p and not p.get("archivada"):
+            aprobados.append(item("aprobado", s, p))
+        else:
+            otros.append(item("otro", s, p))
+    for pid, p in personas.items():
+        if pid not in representante:
+            (otros if p.get("archivada") else aprobados).append(item("otro" if p.get("archivada") else "aprobado", persona=p))
+    aprobados.sort(key=lambda x: ((x["persona"] or {}).get("nombre") or "").lower())
+    return {"nuevos": nuevos, "aprobados": aprobados, "otros": otros}
+
+
+def resumen_avatares(cliente, muestra=12):
+    """Lo liviano que muestra la pestaña Nicho: conteos y hasta `muestra` nombres."""
+    l = lista_avatares(cliente)
+    vivos = l["nuevos"] + l["aprobados"]
+    return {"nuevos": len(l["nuevos"]), "aprobados": len(l["aprobados"]), "incompletos": sum(1 for x in vivos if x["faltantes"]),
+            "muestra": [{"clave": x["clave"], "nombre": ((x["avatar"] or {}).get("nombre") if x["grupo"] == "nuevo" else (x["persona"] or {}).get("nombre")),
+                         "grupo": x["grupo"], "incompleto": bool(x["faltantes"])} for x in vivos[:muestra]]}

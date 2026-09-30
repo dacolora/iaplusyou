@@ -1825,6 +1825,9 @@ msgstr "Avatar saved. If it was already approved, approve it again to update the
 msgid "Avatares"
 msgstr "Avatars"
 
+msgid "Avatares escritos a mano"
+msgstr "Hand-written avatars"
+
 msgid "Avatares no generados: %(motivo)s"
 msgstr "Avatars not generated: %(motivo)s"
 
@@ -4431,6 +4434,9 @@ msgstr "Write image prompts"
 
 msgid "Escribir texto con IA"
 msgstr "Write text with AI"
+
+msgid "Escritos a mano"
+msgstr "Hand-written"
 
 msgid "Escríbela en español o en inglés: se traduce al inglés y se buscan anuncios en inglés, el mercado más grande (la traducción cuesta centavos)."
 msgstr "Write it in Spanish or English: it's translated into English and ads in English are searched, the biggest market (the translation costs cents)."
