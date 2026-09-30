@@ -438,8 +438,10 @@ def test_landing_en_el_idioma_del_proyecto(app_i18n, tmp_path, monkeypatch):
 def test_catalogo_producto_con_doctrina_en_ingles(admin_en):
     """Merge de main (doctrina, bloque 2): la ficha de un producto trae el
     selector de sofisticación, «Lo que Claude necesita» y las pruebas del
-    producto (_catalogo_campos_comerciales.html, _producto_doctrina.html,
-    _catalogo_lista.html). Datos sembrados en inglés."""
+    producto (_catalogo_campos_comerciales.html, _producto_doctrina.html).
+    Desde la Tarea 12 la ficha es un fragmento propio (catalogo_ficha), no
+    parte de la página — el flash de «Prueba guardada» sí sigue viéndose ahí.
+    Datos sembrados en inglés."""
     import io
 
     import tiendas
@@ -455,8 +457,11 @@ def test_catalogo_producto_con_doctrina_en_ingles(admin_en):
                                                          {"texto": "Tell us the warranty", "para_que": "figure"}])
     html = html_de(admin_en, "/cliente/acme")
     assert "Proof saved: Claude can now use it with this product." in html
-    assert "What Claude needs" in html and "2 requests from Claude" in html and "Let Claude decide" in html
     fugas = espanol_visible(html, ("tab-catalogo",))
+    assert not fugas, fugas[:15]
+    ficha = html_de(admin_en, "/cliente/acme/catalogo/producto/blue_cushion/ficha")
+    assert "What Claude needs" in ficha and "Paste a buyer review" in ficha and "Let Claude decide" in ficha
+    fugas = espanol_visible(ficha)
     assert not fugas, fugas[:15]
 
 

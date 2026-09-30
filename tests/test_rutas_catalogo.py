@@ -214,6 +214,21 @@ def test_ficha_de_producto_plano_personaje_y_404(app):
     assert c.get("/cliente/acme/catalogo/producto/../etc/ficha").status_code == 404
 
 
+def test_la_pestana_trae_el_js_del_panel_y_el_css(app):
+    html = app["c"].get("/cliente/acme").data.decode()
+    for pieza in ("function abrirFicha(", "function cargarGrid(", "[data-poll-job]", "window.iniciarManiquis",
+                  "history.replaceState(null, '', '#catalogo'", "addEventListener('hashchange'"):
+        assert pieza in html, pieza
+    import os
+    css = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "style.css"), encoding="utf-8").read()
+    i = css.index("Catálogo: galería y ficha")
+    assert i > css.index("Base visual común")
+    bloque = css[i:]
+    for clase in (".cat-tarjetas", ".cat-tarjeta", ".cat-color-punto", ".cat-colores-tira", ".cat-color-ficha", ".cat-panel-lateral",
+                  "@media (max-width: 640px)"):
+        assert clase in bloque, clase
+
+
 def test_grid_y_ficha_leen_crear_y_experimentos_una_vez(app, monkeypatch):
     """Fix round 1 (revisión de Task 11): _usos_por_producto y
     _experimentos_por_activo no deben releer creative_flow.cargar/

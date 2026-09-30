@@ -233,7 +233,9 @@ def test_vincular_encola_la_tarea_y_no_llama_al_importador(app, monkeypatch):
 
 def test_render_fila_con_vincular_en_curso_pinta_barra(app, monkeypatch):
     """Con una tarea producto_vincular viva para esa fila, «Crear activo»
-    queda deshabilitado y sale la barra con su job_id (una consulta a la cola)."""
+    queda deshabilitado y sale la barra con su job_id (una consulta a la cola).
+    Desde la Tarea 12 la tarjeta de la fila vive en el fragmento del grid, no
+    en la página."""
     import cola
     pid = _producto(nombre="Cojín Azul")
     pid_otro = _producto(nombre="Espejo redondo")
@@ -243,10 +245,10 @@ def test_render_fila_con_vincular_en_curso_pinta_barra(app, monkeypatch):
     tid = cola.encolar("producto_vincular", {"cliente": "acme", "producto_id": pid_otro}, cliente="acme",
                        job_id=f"acme__producto{pid_otro}__vincular", max_intentos=1)
     cola.terminar(tid, "listo")
-    html = app["c"].get("/cliente/acme").data.decode()
-    assert f'id="trabajo-acme__producto{pid}__vincular"' in html and "Creando activo…" in html
-    assert f"trabajo-acme__producto{pid_otro}__vincular" not in html
-    assert html.count("Crear activo") == 1
+    grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    assert f'id="trabajo-acme__producto{pid}__vincular"' in grid and "Creando activo…" in grid
+    assert f"trabajo-acme__producto{pid_otro}__vincular" not in grid
+    assert grid.count("Crear activo") == 1
 
 
 def test_experimento_desde_producto_redirige_con_query(app):
@@ -435,9 +437,9 @@ def _activo_con_foto(cliente, nombre, producto_id=None):
     return aid
 
 
-def test_render_productos_dentro_de_catalogo(app, tmp_path):
-    """La pestaña Productos ya no existe: importar, los importados sin fotos y
-    lo comercial de cada activo se pintan dentro de Catálogo › Productos."""
+def test_render_catalogo_en_la_pagina_y_lo_demas_en_el_grid(app):
+    """La página trae la pestaña, sus filtros y los formularios; las tarjetas
+    y los importados sin fotos llegan por el fragmento del grid."""
     import tiendas
     pid_ok = _producto(nombre="Cojín Azul")
     _producto(nombre="Espejo redondo", en_prueba=True)
@@ -446,59 +448,54 @@ def test_render_productos_dentro_de_catalogo(app, tmp_path):
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
     html = r.data.decode()
-    # sidebar y secciones: sin Productos; Catálogo sigue
     assert 'data-tab="productos"' not in html and 'id="tab-productos"' not in html
     assert 'data-tab="catalogo"' in html and 'id="tab-catalogo"' in html
-    # importar como opción secundaria, dentro de Catálogo
-    assert "Traer productos de" in html
-    assert "Importar CSV/Excel" in html and "Importar desde URL" in html and "Conectar tienda" in html
-    # el importado sin activo va en su bloque; el enlazado va como tarjeta
-    assert "Importados sin fotos (1)" in html and "Espejo redondo" in html
-    assert "Subir fotos" in html and "Crear activo desde las fotos de la tienda" in html
-    assert "Mostrar archivados" in html
-    assert 'id="producto-cojin_azul"' in html
-    tarjeta = html.split('id="producto-cojin_azul"', 1)[1].split("</details>", 1)[0]
-    assert "89.900 COP" in tarjeta and 'href="https://tienda.test/cojin"' in tarjeta
-    assert "en prueba" in tarjeta and "prioridad 40" in tarjeta and "CSV/Excel" in tarjeta
-    assert "Crear experimento" in tarjeta and f"/productos/{pid_ok}/experimento" in tarjeta
-    assert "Sincronizado de CSV/Excel" in tarjeta
-    assert 'name="en_prueba"' in tarjeta and 'name="url_compra"' in tarjeta and 'name="precio"' in tarjeta
-    # el formulario «+ Nuevo producto» trae los campos comerciales con la moneda de la cuenta
-    nuevo = html.split('id="nuevo-moneda"', 1)[1].split("</select>", 1)[0]
+    pestana = html.split('id="tab-catalogo"', 1)[1].split('id="tab-settings"', 1)[0]
+    assert "Traer productos de" in pestana and "Importar CSV/Excel" in pestana and "Importar desde URL" in pestana
+    assert 'data-cat-grid="producto"' in pestana and 'data-cat-filtro="sin_fotos"' in pestana and 'data-cat-filtro="archivados"' in pestana
+    assert 'id="catalogo-panel"' in pestana and 'id="nuevo-producto"' in pestana and 'data-n-cat="producto">1<' in pestana
+    assert 'id="producto-cojin_azul"' not in pestana                    # las tarjetas no van en la página
+    nuevo = pestana.split('id="nuevo-moneda"', 1)[1].split("</select>", 1)[0]
     assert 'value="COP" selected' in nuevo and 'value="USD"' in nuevo
-    assert "Adonde llega el anuncio" in html
+    assert "Adonde llega el anuncio" in pestana
+    grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    assert 'id="producto-cojin_azul"' in grid and "Espejo redondo" in grid and "Subir fotos" in grid
+    tarjeta = grid.split('id="producto-cojin_azul"', 1)[1].split("</article>", 1)[0]
+    assert "89.900 COP" in tarjeta and "en prueba" in tarjeta and "CSV/Excel" in tarjeta
+    ficha = app["c"].get("/cliente/acme/catalogo/producto/cojin_azul/ficha").data.decode()
+    assert 'href="https://tienda.test/cojin"' in ficha and "prioridad 40" in ficha and "Sincronizado de CSV/Excel" in ficha
+    assert "Crear experimento" in ficha and f"/productos/{pid_ok}/experimento" in ficha
+    assert 'name="en_prueba"' in ficha and 'name="url_compra"' in ficha and 'name="precio"' in ficha
 
 
 def test_render_activo_manual_recibe_fila_y_muestra_precio(app):
-    """Un activo creado desde Catálogo con precio/URL muestra ambos en su
-    tarjeta; un activo anterior sin fila la recibe al listar (manual)."""
     import tiendas
     c = app["c"]
     _crear_activo(c, precio="25000", moneda="COP", url_compra="wa.me/573001234567", prioridad="5")
     _activo_con_foto("acme", "Viejo")
     assert tiendas.por_activo("acme").get("viejo") is None
-    html = c.get("/cliente/acme").data.decode()
+    assert c.get("/cliente/acme").status_code == 200
     fila_vieja = tiendas.por_activo("acme")["viejo"]
     assert fila_vieja["fuente"] == "manual" and fila_vieja["nombre"] == "Viejo"
-    tarjeta = html.split('id="producto-cojin_azul"', 1)[1].split("</details>", 1)[0]
-    assert "25.000 COP" in tarjeta and 'href="https://wa.me/573001234567"' in tarjeta and "prioridad 5" in tarjeta
-    assert "Sincronizado de" not in tarjeta
-    vieja = html.split('id="producto-viejo"', 1)[1].split("</details>", 1)[0]
-    assert "sin precio" in vieja and "sin URL de compra" in vieja
-    # Nada quedó en «Importados sin fotos»
-    assert 'id="cat-sinfotos"' not in html
-    # Listar dos veces no duplica filas
+    grid = c.get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    tarjeta = grid.split('id="producto-cojin_azul"', 1)[1].split("</article>", 1)[0]
+    assert "25.000 COP" in tarjeta and "sin URL" not in tarjeta and 'data-n-sin_fotos="0"' in grid
+    vieja = grid.split('id="producto-viejo"', 1)[1].split("</article>", 1)[0]
+    assert "sin precio" in vieja and "sin URL" in vieja
+    ficha = c.get("/cliente/acme/catalogo/producto/cojin_azul/ficha").data.decode()
+    assert 'href="https://wa.me/573001234567"' in ficha and "prioridad 5" in ficha and "Sincronizado de" not in ficha
     c.get("/cliente/acme")
     assert len(tiendas.productos("acme", incluir_archivados=True)) == 2
 
 
-def test_render_importado_archivado_solo_con_mostrar_archivados(app):
+def test_render_importado_archivado_solo_en_su_filtro(app):
     import tiendas
     pid = _producto(nombre="Lámpara")
     tiendas.marcar_producto("acme", pid, archivado=True)
-    html = app["c"].get("/cliente/acme").data.decode()
-    assert "Importados sin fotos (0)" in html and "Mostrar archivados (1)" in html
-    assert 'data-archivado="1"' in html and "Recuperar" in html
+    grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    assert "Lámpara" not in grid and 'data-n-archivados="1"' in grid
+    grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto&filtro=archivados").data.decode()
+    assert "Lámpara" in grid and 'data-archivado="1"' in grid and "Recuperar" in grid
 
 
 # --- subir fotos a un importado -----------------------------------------------
@@ -516,10 +513,11 @@ def test_fotos_subir_crea_activo_y_enlaza(app):
     assert activo and activo["nombre"] == "Espejo redondo" and activo["descripcion"] == "marco dorado"
     assert sorted(activo["imagenes"]) == ["a.jpg", "b.png"]
     assert any("2 foto(s)" in m for m in _flashes(app["c"]))
-    # ya no está en el bloque de sin fotos; su tarjeta muestra lo comercial de la fila importada
-    html = app["c"].get("/cliente/acme").data.decode()
-    assert 'id="cat-sinfotos"' not in html
-    tarjeta = html.split('id="producto-espejo_redondo"', 1)[1].split("</details>", 1)[0]
+    # ya no aparece como fila sin fotos (tarjeta "producto-fila-..."); su
+    # tarjeta de activo muestra lo comercial de la fila importada.
+    grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    assert 'id="producto-fila-' not in grid
+    tarjeta = grid.split('id="producto-espejo_redondo"', 1)[1].split("</article>", 1)[0]
     assert "89.900 COP" in tarjeta and "CSV/Excel" in tarjeta
     assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
 
@@ -571,16 +569,24 @@ def test_fotos_subir_valida(app):
 
 
 def test_render_productos_confirm_y_url_seguros(app):
-    """El nombre con apóstrofo va en data-nombre (escapado como atributo), no
-    dentro de un literal JS; y una url_compra que no es http(s) (CSV) no se
-    vuelve enlace."""
+    """El nombre con apóstrofo va en data-nombre (escapado como atributo, en
+    la tarjeta del grid), no dentro de un literal JS — el mensaje se arma en
+    el script de _tab_catalogo.html a partir de data-nombre, nunca con el
+    nombre embebido; y una url_compra que no es http(s) nunca se vuelve href,
+    ni en la tarjeta sin activo (el grid no la muestra) ni en el campo de la
+    ficha de un activo (que sí la muestra, como valor, nunca como enlace)."""
+    import tiendas
     _producto(nombre="Cojín d'Or")
-    _producto(nombre="Raro", url_compra="javascript:alert(1)")
+    pid_raro = _producto(nombre="Raro", url_compra="javascript:alert(1)")
+    tiendas.marcar_producto("acme", pid_raro, activo_catalogo_id="raro")
+    _activo_con_foto("acme", "Raro", "raro")
     html = app["c"].get("/cliente/acme").data.decode()
-    assert 'data-nombre="Cojín d&#39;Or"' in html
     assert "confirm('¿Archivar «Cojín" not in html and "confirm(\"¿Archivar" not in html
-    assert 'href="javascript:' not in html and "javascript:alert(1)" in html
-    assert 'href="https://tienda.test/cojin"' in html
+    grid = app["c"].get("/cliente/acme/catalogo/grid?cat=producto").data.decode()
+    assert 'data-nombre="Cojín d&#39;Or"' in grid
+    assert 'href="javascript:' not in grid
+    ficha = app["c"].get("/cliente/acme/catalogo/producto/raro/ficha").data.decode()
+    assert 'href="javascript:' not in ficha and "javascript:alert(1)" in ficha
 
 
 def test_render_configuracion_tienda_y_pixel(app, monkeypatch):
@@ -645,9 +651,12 @@ def test_render_meli_configurado_sin_cifrado_avisa(app, monkeypatch):
 
 
 def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
-    """Estado en el loop: activo_ok por producto y «en N experimentos» contando
-    experimentos con piezas hechas desde ese activo (productos_ids de Crear
-    guarda NOMBRES). Se comprueba por el contexto que llega a la plantilla."""
+    """Desde la Tarea 12 `productos_tienda` (y con él activo_ok/n_experimentos
+    por producto) ya no llega al contexto de la página: la galería los calcula
+    ella misma (ver tests/test_rutas_catalogo.py, catalogo_grid). Lo que sigue
+    en el contexto de ver_cliente (trabajos_prod, atribución sugerida, cifrado,
+    Pixel solo-caché) se comprueba aquí, por el contexto que llega a la
+    plantilla."""
     import catalogo_productos
     import creative_flow
     import experimentos as ex
@@ -679,9 +688,6 @@ def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
         return "ok"
     monkeypatch.setattr(d, "render_template", _render)
     assert app["c"].get("/cliente/acme").status_code == 200
-    por_id = {p["id"]: p for p in capturado["productos_tienda"]}
-    assert por_id[pid]["activo_ok"] is True and por_id[pid]["n_experimentos"] == 2
-    assert por_id[pid_sin]["activo_ok"] is False and por_id[pid_sin]["n_experimentos"] == 0
     assert capturado["trabajos_prod"] == {"importar": {"job_id": "acme__importar_url"},
                                           "tiendas": {tiendas.listar("acme")[0]["id"]: {"job_id": job_sync}},
                                           "vincular": {}, "pedidos": {}}
@@ -882,15 +888,17 @@ def test_actualizar_producto_guarda_la_sofisticacion_del_mercado(app):
 
 
 def test_catalogo_muestra_el_selector_de_sofisticacion(app):
+    """Desde la Tarea 12 la ficha es un fragmento propio (catalogo_ficha)."""
     c = app["c"]
     _crear_activo(c, sofisticacion="4")
-    html = c.get("/cliente/acme").data.decode()
-    assert "Cuántas promesas parecidas vio ya tu cliente" in html
-    assert 'value="4" selected' in html and "Que Claude lo decida" in html
+    ficha = c.get("/cliente/acme/catalogo/producto/cojin_azul/ficha").data.decode()
+    assert "Cuántas promesas parecidas vio ya tu cliente" in ficha
+    assert 'value="4" selected' in ficha and "Que Claude lo decida" in ficha
 
 
 def test_pruebas_del_producto_desde_catalogo(app):
-    """Doctrina, bloque 2 (§5.4): agregar y borrar pruebas en la ficha del producto."""
+    """Doctrina, bloque 2 (§5.4): agregar y borrar pruebas en la ficha del
+    producto (fragmento propio desde la Tarea 12)."""
     c = app["c"]
     _crear_activo(c)
     pid = _fila_por_activo("cojin_azul")["id"]
@@ -898,9 +906,8 @@ def test_pruebas_del_producto_desde_catalogo(app):
     assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo?ficha=producto:cojin_azul")
     prueba = _fila_por_activo("cojin_azul")["extra"]["pruebas"][0]
     assert prueba["texto"] == "Relleno de 1.200 g"
-    html = c.get("/cliente/acme").data.decode()
-    tarjeta = html.split('id="producto-cojin_azul"', 1)[1].split("</details>", 1)[0]
-    assert "Pruebas del producto" in tarjeta and "Relleno de 1.200 g" in tarjeta
+    ficha = c.get("/cliente/acme/catalogo/producto/cojin_azul/ficha").data.decode()
+    assert "Pruebas del producto" in ficha and "Relleno de 1.200 g" in ficha
     c.post(f"/cliente/acme/productos/{pid}/pruebas", data={"texto": "", "fuente": "ficha"})
     assert any("Escribe la prueba" in m for m in _flashes(c))
     c.post(f"/cliente/acme/productos/{pid}/pruebas/{prueba['id']}/borrar")
@@ -910,7 +917,8 @@ def test_pruebas_del_producto_desde_catalogo(app):
 
 def test_lo_que_claude_necesita_en_catalogo(app, monkeypatch):
     """Doctrina, bloque 2 (§5.3–5.4): actualizar encola con precio (solo si hay
-    faltantes), responder deja una prueba, «No aplica» cierra el pedido."""
+    faltantes), responder deja una prueba, «No aplica» cierra el pedido. La
+    ficha es un fragmento propio desde la Tarea 12."""
     from doctrina import pedidos, producto as dp
     c = app["c"]
     _crear_activo(c)
@@ -924,10 +932,12 @@ def test_lo_que_claude_necesita_en_catalogo(app, monkeypatch):
     assert t["tipo"] == "producto_pedidos" and t["payload"] == {"cliente": "acme", "producto_id": pid} and t["max_intentos"] == 1
     k1, k2 = [p["id"] for p in dp.reemplazar_abiertos("acme", pid, [{"texto": "Pega un comentario", "para_que": "prueba"},
                                                                      {"texto": "Dinos la garantía", "para_que": "cifra"}])]
-    html = c.get("/cliente/acme").data.decode()
-    tarjeta = html.split('id="producto-cojin_azul"', 1)[1].split("</details>", 1)[0]
-    assert "Lo que Claude necesita" in tarjeta and "Pega un comentario" in tarjeta and "2 pedidos de Claude" in tarjeta
-    assert "Actualizar lo que Claude necesita (US$ 0,01 aprox.)" in tarjeta
+    ficha = c.get("/cliente/acme/catalogo/producto/cojin_azul/ficha").data.decode()
+    # El badge «N pedidos de Claude» era del resumen de _catalogo_lista.html
+    # (Tarea 11 ya no lo trae en la tarjeta ni en la ficha nueva); el contenido
+    # sigue: los dos pedidos abiertos se listan enteros dentro de la sección.
+    assert "Lo que Claude necesita" in ficha and "Pega un comentario" in ficha and "Dinos la garantía" in ficha
+    assert "Actualizar lo que Claude necesita (US$ 0,01 aprox.)" in ficha
     c.post(f"/cliente/acme/productos/{pid}/pedidos/{k1}/responder", data={"texto": "Súper suaves", "fuente": "comentarios"})
     assert _fila_por_activo("cojin_azul")["extra"]["pruebas"][0]["pedido_id"] == k1
     c.post(f"/cliente/acme/productos/{pid}/pedidos/{k2}/descartar")

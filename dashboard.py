@@ -1637,14 +1637,13 @@ def ver_cliente(cliente):
     estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
-    # Catálogo › Productos: cada activo tiene su fila comercial (se crea al
-    # vuelo si falta) y la fila se pinta en la tarjeta del activo.
+    # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
+    # la página solo trae contadores por categoría y lo que Crear necesita.
     activos_producto = _productos_con_uso(cliente)
-    # Una fila comercial por PRODUCTO, nunca por color (spec 2026-09-28 §10):
-    # `activos_producto` es la lista por color que pinta la galería.
-    _asegurar_filas_producto(cliente, catalogo_productos.listar_productos(cliente, "producto"))
-    productos_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
-    producto_comercial = _producto_comercial_contexto(productos_tienda)
+    productos_catalogo = catalogo_productos.listar_productos(cliente, "producto")
+    _asegurar_filas_producto(cliente, productos_catalogo)
+    n_por_categoria = {cid: (len(productos_catalogo) if cid == "producto" else len(catalogo_productos.listar_productos(cliente, cid)))
+                       for cid in catalogo_productos.CATEGORIAS}
     # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
     atribucion_sug = experimentos.atribucion_sugerida(cliente)
     # Bloque 7: canales orgánicos del proyecto, publicaciones por pieza (UNA
@@ -1677,8 +1676,7 @@ def ver_cliente(cliente):
         productos=activos_producto,
         categorias=catalogo_productos.CATEGORIAS,
         activos_por_categoria={cid: (activos_producto if cid == "producto" else catalogo_productos.listar(cliente, cid)) for cid in catalogo_productos.CATEGORIAS},
-        producto_comercial=producto_comercial,
-        productos_sin_activo=[p for p in productos_tienda if not p["activo_ok"]],
+        n_por_categoria=n_por_categoria,
         monedas_catalogo=sorted(PRESUPUESTO_MINIMO_DIARIO),
         moneda_catalogo=_moneda_por_defecto(cliente),
         etiquetas_fuente=ETIQUETAS_FUENTE,
@@ -1752,10 +1750,9 @@ def ver_cliente(cliente):
             "evento": experimentos.ETIQUETAS_EVENTO,
         },
         meses_cortos=idiomas.meses_cortos(),
-        productos_tienda=productos_tienda,
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
-        trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
+        trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         estado_pixel=estado_pixel,
         meta_conectado=meta_conectado,

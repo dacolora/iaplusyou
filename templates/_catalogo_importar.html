@@ -4,7 +4,7 @@
    Contexto de ver_cliente: trabajos_prod.importar ({"job_id"}|None),
    columnas_csv. Importar corre en el worker; acá solo se encola. #}
 {% set trabajo_imp = trabajos_prod.importar %}
-<details class="comparacion-modelos cat-importar" style="margin-top:.6rem;">
+<details class="comparacion-modelos cat-importar" id="cat-traer" style="margin-top:.6rem;">
   <summary class="btn-guardar btn-sm">{{ _('Traer productos de… (CSV/Excel, URL o tu tienda)') }}</summary>
   <div class="comparacion-contenido">
     <p class="vacio" style="padding-top:0;font-size:.78rem;">{{ _('Si ya tienes los productos en un archivo o en tu tienda, no los escribas de nuevo: cada uno llega con nombre, precio, URL de compra y fotos, y aparece aquí como un producto más del catálogo. Los que vengan sin fotos quedan en «Importados sin fotos» hasta que se las subas.') }}</p>

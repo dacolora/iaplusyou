@@ -22,7 +22,7 @@ PLANTILLAS_TRADUCIDAS = [
     "_crear_flowplus.html", "_crear_flowplus_guiones.html", "_gpg_panel.html", "_gpg_notion.html",
     "_gpg_guion.html", "_gpg_video.html", "_gpg_clips.html", "_gpg_imagenes.html", "_gpg_macros.html",
     "_tab_catalogo.html", "_catalogo_campos_comerciales.html", "_catalogo_importar.html",
-    "_catalogo_lista.html", "_catalogo_sin_fotos.html", "_maniqui.html", "_seccion_personajes.html",
+    "_maniqui.html", "_seccion_personajes.html",
     "_tab_experimentos.html", "_form_reglas.html", "_anuncios_sueltos.html", "_organico_publicar.html",
     "_tab_tablero.html", "landing_cliente.html",
     # Merge de main (2026-09-27): parciales nuevos dentro de pantallas ya traducidas
