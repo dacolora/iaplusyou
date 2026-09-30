@@ -1761,7 +1761,7 @@ def ver_cliente(cliente):
         pedidos_por_exp=tiendas.pedidos_por_experimento(cliente),
         cifrado_ok=cifrado.disponible(),
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
-        tipos_tienda=conectores.TIPOS_API,
+        tipos_tienda=conectores.TIPOS_CONECTABLES,
         llaves=_llaves_visibles(
             _estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app),
                            modo_meta=modo_meta, agencia_conectada=agencia_conectada, meta_forma=meta_forma),
@@ -5929,8 +5929,10 @@ def _flash_sin_cifrado():
 
 @app.route("/cliente/<cliente>/config/tienda/conectar", methods=["POST"])
 def tienda_conectar(cliente):
-    """Shopify/WooCommerce: prueba las credenciales contra la tienda (inline,
-    una llamada corta), las guarda cifradas y encola la primera sync."""
+    """Shopify (con o sin llaves)/WooCommerce: prueba las credenciales contra
+    la tienda (inline, una llamada corta), las guarda cifradas y encola la
+    primera sync. `volver=catalogo` regresa a la pestaña Catálogo (el botón
+    «Traer de mi tienda» vive ahí); cualquier otro valor va a Configuración."""
     bloqueo = _requiere_correo_verificado()
     if bloqueo:
         return bloqueo
@@ -5938,7 +5940,15 @@ def tienda_conectar(cliente):
         _flash_sin_cifrado()
         return _volver_config(cliente)
     tipo = (request.form.get("tipo") or "").strip()
-    if tipo == "shopify":
+    volver = request.form.get("volver") or "config"
+
+    def _volver():
+        return _volver_catalogo(cliente) if volver == "catalogo" else _volver_config(cliente)
+
+    if tipo == "shopify_publico":
+        dominio = (request.form.get("dominio") or "").strip()
+        creds = {"dominio": dominio}
+    elif tipo == "shopify":
         dominio = (request.form.get("dominio") or "").strip()
         creds = {"dominio": dominio, "token": (request.form.get("token") or "").strip()}
     elif tipo == "woo":
@@ -5946,23 +5956,38 @@ def tienda_conectar(cliente):
         dominio = re.sub(r"^https?://", "", url).strip("/").split("/")[0]
         creds = {"url": url, "ck": (request.form.get("ck") or "").strip(), "cs": (request.form.get("cs") or "").strip()}
     else:
-        flash(gettext("Ese tipo de tienda no se conecta desde aquí (Shopify o WooCommerce; MercadoLibre va por su botón)."), "error")
-        return _volver_config(cliente)
+        flash(gettext("Ese tipo de tienda no se conecta desde aquí (Shopify, Shopify sin llaves o WooCommerce; MercadoLibre va por su botón)."), "error")
+        return _volver()
     try:
-        resultado = conectores.por_tipo(tipo)(creds).probar()
+        cls = conectores.por_tipo(tipo)
+        resultado = cls(creds).probar()
     except (ErrorConector, ValueError) as e:
         flash(gettext("No pude conectar la tienda: %(error)s", error=cola.sin_token(str(e))), "error")
-        return _volver_config(cliente)
+        return _volver()
     except Exception as e:  # noqa: BLE001 — un fallo de red/parseo también se muestra, nunca se guarda a ciegas
         flash(gettext("No pude conectar la tienda: %(error)s", error=cola.sin_token(str(e) or type(e).__name__)), "error")
-        return _volver_config(cliente)
+        return _volver()
     nombre = str((resultado or {}).get("nombre") or "").strip() or None
-    tid = tiendas.conectar(cliente, tipo, creds, nombre=nombre, dominio=dominio or None)
-    n = _encolar_sync_tienda(cliente, tid, tipo)
+    dominio = str((resultado or {}).get("dominio") or dominio or "").strip() or None
+    if tipo == "shopify_publico":
+        creds = {"dominio": dominio}
+    elif tipo == "shopify" and dominio:
+        # La misma tienda ya estaba conectada sin llaves: la Admin API la reemplaza
+        # (misma `fuente`: las filas no se tocan y la primera sync las refresca).
+        from conectores.shopify_publico import normalizar_dominio
+        for t in tiendas.listar(cliente):
+            if t["tipo"] == "shopify_publico" and t.get("dominio"):
+                try:
+                    if normalizar_dominio(t["dominio"]) == normalizar_dominio(dominio):
+                        tiendas.desconectar(cliente, t["id"])
+                except ErrorConector:
+                    continue
+    tid = tiendas.conectar(cliente, tipo, creds, nombre=nombre, dominio=dominio)
+    n = _encolar_sync_tienda(cliente, tid, tipo, con_pedidos=bool(getattr(cls, "tiene_pedidos", True)))
     detalle = str((resultado or {}).get("detalle") or "").strip()
     extra = gettext("Sincronizando el catálogo…") if n else gettext("Ya había una sincronización en curso.")
     flash(gettext("Tienda %(nombre)s conectada. %(detalle)s %(extra)s", nombre=(nombre or dominio), detalle=detalle, extra=extra), "ok")
-    return _volver_config(cliente)
+    return _volver()
 
 
 @app.route("/cliente/<cliente>/config/tienda/meli/iniciar")
@@ -6028,14 +6053,16 @@ def meli_callback():
 @app.route("/cliente/<cliente>/config/tienda/<int:tid>/sincronizar", methods=["POST"])
 def tienda_sync(cliente, tid):
     """Encola productos + pedidos. También para una tienda `rota`: volver a
-    sincronizar es como la persona comprueba que ya se arregló."""
+    sincronizar es como la persona comprueba que ya se arregló. `volver=catalogo`
+    regresa a la pestaña Catálogo (el botón «Sincronizar ahora» vive ahí)."""
+    volver = request.form.get("volver")
     t = tiendas.obtener(cliente, tid)
     if not t:
         flash(gettext("Esa tienda no existe."), "error")
         return _volver_config(cliente)
     n = _encolar_sync_tienda(cliente, tid, t["tipo"])
     flash(gettext("Sincronizando…") if n else gettext("Ya se está sincronizando esa tienda."), "ok" if n else "warn")
-    return _volver_config(cliente)
+    return _volver_catalogo(cliente) if volver == "catalogo" else _volver_config(cliente)
 
 
 @app.route("/cliente/<cliente>/config/tienda/<int:tid>/desconectar", methods=["POST"])

@@ -129,7 +129,7 @@
   <tbody>
     {% for t in tiendas_cliente %}
     <tr>
-      <td><span class="tag-estado badge-fuente badge-fuente-{{ t.tipo }}">{{ t.tipo }}</span></td>
+      <td><span class="tag-estado badge-fuente badge-fuente-{{ t.tipo }}">{{ {"shopify_publico": _("Shopify (sin llaves)")}.get(t.tipo, t.tipo) }}</span></td>
       <td><strong>{{ t.nombre or t.dominio or "—" }}</strong>{% if t.nombre and t.dominio %}<br><small class="vacio" style="padding:0;">{{ t.dominio }}</small>{% endif %}</td>
       <td>
         {% if t.estado == "rota" %}<span class="tag-estado tag-descartado">{{ _('rota') }}</span>{% if t.error %}<br><small class="tag-error">{{ t.error }}</small>{% endif %}
@@ -160,11 +160,21 @@
   <summary class="swap-card-resumen">+ {{ _('Conectar tienda') }}</summary>
   <div class="cat-tabs tienda-tipos" role="tablist">
     {% for tipo in tipos_tienda %}
-    <button type="button" class="cat-tab tienda-tipo-btn{% if loop.first %} activo{% endif %}" data-tienda-tipo="{{ tipo }}">{{ {"shopify": "Shopify", "woo": "WooCommerce", "meli": "MercadoLibre"}.get(tipo, tipo) }}</button>
+    <button type="button" class="cat-tab tienda-tipo-btn{% if loop.first %} activo{% endif %}" data-tienda-tipo="{{ tipo }}">{{ {"shopify_publico": _("Shopify (sin llaves)"), "shopify": "Shopify", "woo": "WooCommerce", "meli": "MercadoLibre"}.get(tipo, tipo) }}</button>
     {% endfor %}
   </div>
 
-  <div class="tienda-tipo-panel" data-tienda-panel="shopify">
+  <div class="tienda-tipo-panel" data-tienda-panel="shopify_publico">
+    <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
+      <input type="hidden" name="tipo" value="shopify_publico">
+      <label class="campo-label">{{ _('Dominio de la tienda') }}</label>
+      <input type="text" name="dominio" placeholder="mitienda.com" required {% if not cifrado_ok %}disabled{% endif %}>
+      <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('Solo el catálogo público: productos, colores con su foto, precios y URL de compra, sin ninguna llave. Los pedidos y la atribución necesitan la Admin API (pestaña Shopify).') }}</p>
+      <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Conectar Shopify (sin llaves)') }}</button>
+    </form>
+  </div>
+
+  <div class="tienda-tipo-panel" data-tienda-panel="shopify" hidden>
     <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
       <input type="hidden" name="tipo" value="shopify">
       <label class="campo-label">{{ _('Dominio de la tienda') }}</label>

@@ -262,3 +262,45 @@ def test_grid_y_ficha_leen_crear_y_experimentos_una_vez(app, monkeypatch):
     contadores["cf"] = contadores["exp"] = 0
     assert c.get("/cliente/acme/catalogo/producto/original/ficha", headers=fetch).status_code == 200
     assert contadores == {"cf": 1, "exp": 1}
+
+
+# --- «Traer de mi tienda»: Shopify sin llaves (Tarea 13) ---------------------
+
+def test_traer_de_mi_tienda_conecta_shopify_publico_y_vuelve_al_catalogo(app):
+    import tiendas
+    from tests.test_rutas_productos import FalsoConector
+    FalsoConector.resultado = {"ok": True, "nombre": "HappyFlops WW", "detalle": "Tienda pública leída: 19 productos, moneda EUR.",
+                               "dominio": "www.happyflops.com"}
+    r = app["c"].post("/cliente/acme/config/tienda/conectar",
+                      data={"tipo": "shopify_publico", "dominio": "https://happyflops.com/es", "volver": "catalogo"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo")
+    (t,) = tiendas.listar("acme")
+    assert t["tipo"] == "shopify_publico" and t["dominio"] == "www.happyflops.com" and t["nombre"] == "HappyFlops WW"
+    assert FalsoConector.credenciales_vistas[-1] == {"dominio": "https://happyflops.com/es"}
+    assert any(e["tipo"] == "tienda_sync_productos" for e in app["encolados"])
+    assert any("HappyFlops WW" in m for m in _flashes(app["c"]))
+    html = app["c"].get("/cliente/acme").data.decode()
+    pestana = html.split('id="tab-catalogo"', 1)[1].split('id="tab-settings"', 1)[0]
+    assert "Sincronizar ahora" in pestana and "HappyFlops WW" in pestana and 'name="dominio"' not in pestana
+    r = app["c"].post("/cliente/acme/config/tienda/1/sincronizar", data={"volver": "catalogo"})
+    assert r.headers["Location"].endswith("#catalogo")
+
+
+def test_conectar_shopify_con_api_desconecta_la_publica_del_mismo_dominio(app):
+    import tiendas
+    from tests.test_rutas_productos import FalsoConector
+    tiendas.conectar("acme", "shopify_publico", {"dominio": "acme.myshopify.com"}, nombre="Acme", dominio="acme.myshopify.com")
+    FalsoConector.resultado = {"ok": True, "nombre": "Acme Store", "detalle": "ok"}
+    app["c"].post("/cliente/acme/config/tienda/conectar", data={"tipo": "shopify", "dominio": "acme.myshopify.com", "token": "shpat_x"})
+    tipos = sorted(t["tipo"] for t in tiendas.listar("acme"))
+    assert tipos == ["shopify"]
+
+
+def test_catalogo_ofrece_traer_de_mi_tienda_y_configuracion_el_tipo_sin_llaves(app):
+    html = app["c"].get("/cliente/acme").data.decode()
+    pestana = html.split('id="tab-catalogo"', 1)[1].split('id="tab-settings"', 1)[0]
+    assert 'id="cat-traer"' in pestana and "Tu tienda Shopify (sin llaves)" in pestana and 'value="shopify_publico"' in pestana
+    assert "Traer catálogo" in pestana and "Importar CSV/Excel" in pestana and "Importar desde URL" in pestana
+    settings = html.split('id="tab-settings"', 1)[1]
+    assert 'data-tienda-tipo="shopify_publico"' in settings and "Conectar Shopify (sin llaves)" in settings
+    assert settings.index('data-tienda-tipo="shopify_publico"') < settings.index('data-tienda-tipo="shopify"')

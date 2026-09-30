@@ -724,7 +724,7 @@ def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
     assert capturado["meta_conectado"] is True
     assert llamadas_pixel == [True, True]   # ver_cliente y atribucion_sugerida: nunca a Graph
     assert capturado["pedidos_por_exp"] == {}
-    assert "nombre" in capturado["columnas_csv"] and capturado["tipos_tienda"] == ("shopify", "woo", "meli")
+    assert "nombre" in capturado["columnas_csv"] and capturado["tipos_tienda"] == ("shopify_publico", "shopify", "woo", "meli")
 
 
 def test_pedidos_por_experimento(app, base_temporal):

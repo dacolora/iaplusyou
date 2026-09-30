@@ -1440,6 +1440,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 
 .badge-fuente { text-transform: lowercase; }
 .badge-fuente-shopify { color: #8bc36a; background: rgba(94, 142, 62, .12); }
+.badge-fuente-shopify_publico { color: #8bc36a; background: rgba(94, 142, 62, .12); }
 .badge-fuente-woo { color: #b48be0; background: rgba(127, 84, 179, .12); }
 .badge-fuente-meli { color: #e0b33a; background: rgba(255, 230, 0, .22); }
 .badge-fuente-csv { color: var(--muted); background: rgba(120, 120, 120, .12); }

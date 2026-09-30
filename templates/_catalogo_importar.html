@@ -1,14 +1,32 @@
-{# Catálogo › Productos › «Traer productos de…»: importar CSV/Excel, la URL
-   de un producto, o conectar la tienda (Configuración). Es la opción
-   SECUNDARIA: lo normal es crear el producto con «+ Nuevo producto».
-   Contexto de ver_cliente: trabajos_prod.importar ({"job_id"}|None),
-   columnas_csv. Importar corre en el worker; acá solo se encola. #}
+{# Catálogo › Productos › «Traer productos de…» (spec 2026-09-28 §10.4):
+   primero la tienda Shopify sin llaves (solo el dominio), luego CSV/Excel,
+   la URL de un producto y el enlace a Configuración para las demás tiendas.
+   Contexto de ver_cliente: trabajos_prod (importar, tiendas), tiendas_cliente,
+   columnas_csv, precios, cifrado_ok. Importar corre en el worker; acá solo se
+   encola. #}
 {% set trabajo_imp = trabajos_prod.importar %}
+{% set tienda_pub = (tiendas_cliente | selectattr('tipo', 'equalto', 'shopify_publico') | list | first) %}
 <details class="comparacion-modelos cat-importar" id="cat-traer" style="margin-top:.6rem;">
-  <summary class="btn-guardar btn-sm">{{ _('Traer productos de… (CSV/Excel, URL o tu tienda)') }}</summary>
+  <summary class="btn-guardar btn-sm">{{ _('Traer productos de… (tu tienda Shopify, CSV/Excel o URL)') }}</summary>
   <div class="comparacion-contenido">
-    <p class="vacio" style="padding-top:0;font-size:.78rem;">{{ _('Si ya tienes los productos en un archivo o en tu tienda, no los escribas de nuevo: cada uno llega con nombre, precio, URL de compra y fotos, y aparece aquí como un producto más del catálogo. Los que vengan sin fotos quedan en «Importados sin fotos» hasta que se las subas.') }}</p>
     <div class="prod-acciones">
+      <details class="swap-card prod-importar" open>
+        <summary class="swap-card-resumen">{{ _('Tu tienda Shopify (sin llaves)') }}</summary>
+        {% if tienda_pub %}
+        {% set trabajo_t = trabajos_prod.tiendas.get(tienda_pub.id) %}
+        <p class="vacio" style="padding-top:.3rem;font-size:.8rem;">{{ _('Conectada: %(nombre)s · última sincronización: %(cuando)s. Se actualiza sola cada 6 h.', nombre=(tienda_pub.nombre or tienda_pub.dominio), cuando=((tienda_pub.ultima_sync_productos or _('nunca'))[:16])) }}</p>
+        <form method="post" action="{{ url_for('tienda_sync', cliente=cliente, tid=tienda_pub.id) }}" class="inline"><input type="hidden" name="volver" value="catalogo"><button class="btn-generar btn-sm" {% if trabajo_t %}disabled{% endif %}>{{ _('Sincronizar ahora') }}</button></form>
+        {% else %}
+        <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea prod-form-importar">
+          <input type="hidden" name="tipo" value="shopify_publico"><input type="hidden" name="volver" value="catalogo">
+          <input type="text" name="dominio" placeholder="mitienda.com" required {% if not cifrado_ok %}disabled{% endif %}>
+          <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('Leo el catálogo público de tu tienda: productos, colores con su foto de estudio, precio y URL de compra. No necesita ninguna llave y se actualiza solo cada 6 h. Para pedidos y atribución conecta después con la Admin API en Configuración.') }}</p>
+          <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Traer catálogo') }}</button>
+          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA por producto', usd=(precios.regla_producto.usd | usd)) }}</small>{% endif %}
+        </form>
+        {% if not cifrado_ok %}<p class="tag-error">{{ _('Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar tiendas.') }}</p>{% endif %}
+        {% endif %}
+      </details>
       <details class="swap-card prod-importar">
         <summary class="swap-card-resumen">{{ _('Importar CSV/Excel') }}</summary>
         <form method="post" action="{{ url_for('prod_importar_archivo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea prod-form-importar">
@@ -27,7 +45,7 @@
           {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA', usd=(precios.regla_producto.usd | usd)) }}</small>{% endif %}
         </form>
       </details>
-      <a class="btn-guardar btn-sm prod-link-config" href="#settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">{{ _('Conectar tienda (Configuración › Tienda)') }}</a>
+      <a class="btn-guardar btn-sm prod-link-config" href="#settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); if (window.irAConfig) irAConfig('config-tienda'); return false;">{{ _('Otras tiendas (Configuración › Conexiones)') }}</a>
     </div>
   </div>
 </details>
@@ -35,8 +53,7 @@
 {% if trabajo_imp %}
 <div class="idea-block prod-importando" style="margin-top:.8rem;">
   <div class="idea-header"><div><span class="idea-label">{{ _('Importando') }}</span><div class="idea-texto">{{ _('Leyendo el catálogo y creando los productos…') }}</div></div></div>
-  <div class="barra-progreso" id="trabajo-{{ trabajo_imp.job_id }}"><div class="barra-progreso-fill"></div></div>
+  <div class="barra-progreso" id="trabajo-{{ trabajo_imp.job_id }}" data-poll-job="{{ trabajo_imp.job_id }}"><div class="barra-progreso-fill"></div></div>
   <div class="progreso-texto"></div>
-  <script>iniciarPolling({{ trabajo_imp.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_imp.job_id) | tojson }});</script>
 </div>
 {% endif %}
