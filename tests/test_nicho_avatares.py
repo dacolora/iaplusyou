@@ -320,3 +320,42 @@ def test_generar_completa_lo_que_falta(base_temporal, monkeypatch):
     assert s["tono"] == "Directo, con humor" and calidad.faltantes(s) == []
     assert r["resumen"]["completados"] == 1 and r["resumen"]["incompletos"] == 0
     assert r["resumen"]["tokens_entrada"] == 2000 and r["resumen"]["tokens_salida"] == 540
+
+
+# ------------------------------------------------- completar_existentes ---
+
+def test_completables_y_completar_existentes(base_temporal, monkeypatch):
+    from nicho import avatares, calidad, datos
+    import marca, proyectos
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Happy Wash")
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    completo = _sub_completo(ids)
+    datos.guardar_generacion("acme", eid, [{"nombre": "Sin peso", "deseo": "Quiero", "resumen": "r",
+                                            "sub_avatares": [completo, dict(completo, nombre="Sin tono", tono=""), dict(completo, nombre="Descartada", tono="")]}])
+    subs = datos.avatares("acme", eid)[0]["subs"]
+    datos.descartar_avatar("acme", subs[2]["id"])
+    grupos = avatares.completables("acme", eid)
+    assert len(grupos) == 1 and [s["nombre"] for s in grupos[0][1]] == ["Sin tono"]                   # lo descartado y lo completo no cuentan
+    e = avatares.estimar_completar("acme", eid)
+    assert e["avatares"] == 1 and e["usd"] > 0
+    assert avatares.completables_por_estudio("acme") == [{"estudio_id": eid, "nombre": datos.estudio("acme", eid)["nombre"], "avatares": 1, "usd": e["usd"]}]
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: (json.dumps({"sub_avatares": [{"indice": 0, "tono": "Cercano"}]}), 500, 60))
+    r = avatares.completar_existentes("acme", eid)
+    assert r["cambios"] == {subs[1]["id"]: {"tono": "Cercano"}} and r["resumen"]["completados"] == 1
+    assert r["resumen"]["tokens_entrada"] == 500 and r["resumen"]["usd"] == avatares.costo_real(500, 60)
+    manual_eid, _ = datos.estudio_manual("acme")
+    assert avatares.completables("acme", manual_eid) == [] and avatares.estimar_completar("acme", manual_eid)["avatares"] == 0
+
+
+def test_completar_subs_no_revienta_con_sub_malformado(monkeypatch):
+    """Ruling 20 (2): `calidad.faltantes` corre DENTRO del try/except de
+    `completar_subs` -- un ítem no-dict en `subs` (dato corrupto, por ejemplo
+    de una edición a mano) solo hace que la pasada se salte, nunca sube al
+    llamador y nunca llega a llamar a Claude."""
+    from nicho import avatares
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: (_ for _ in ()).throw(AssertionError("no debía llamar")))
+    subs = ["no soy un dict"]
+    salida, n = avatares.completar_subs({"tema": "t", "producto": "p", "idioma": "es"}, {"nombre": "n", "deseo": "d"}, [], subs)
+    assert salida == subs and n == 0

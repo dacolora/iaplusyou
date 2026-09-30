@@ -64,6 +64,11 @@ def job_id_recolectar(cliente, estudio_id, fuente):
     return f"nicho:{cliente}:{int(estudio_id)}:recolectar:{fuente}"
 
 
+def job_id_completar(cliente, estudio_id):
+    """Un completado vivo por estudio (spec 2026-09-29 §2)."""
+    return f"nicho:{cliente}:{int(estudio_id)}:completar"
+
+
 def job_id_inv(cliente, estudio_id, paso):
     """Un trabajo vivo por paso de la investigación (spec Parte 3 §1):
     `consultas`, `buscar:<plataforma>`, `seleccionar`. Las recolecciones y la
@@ -500,6 +505,24 @@ def actualizar_avatar(cliente, avatar_id, /, **campos):
         raise ErrorDatos(gettext("La evidencia no se edita a mano."))
     with db.conectar() as con:
         return _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, campos)
+
+
+def guardar_completado(cliente, estudio_id, cambios):
+    """Guarda en UNA transacción lo que completó Claude (`{avatar_id: campos}`,
+    incluida la evidencia verificada). Devuelve los ids aprobados, para que
+    quien llama actualice sus personas."""
+    permitidas = set(AVATAR_EDITABLES) | {"evidencia", "sin_evidencia"}
+    aprobados = []
+    with db.conectar() as con:
+        for aid, campos in (cambios or {}).items():
+            f = _fila(con, db.avatar, int(aid), cliente)
+            if not f or f.estudio_id != int(estudio_id) or f.tipo != "sub":
+                continue
+            limpios = validar_campos_avatar({k: v for k, v in dict(campos).items() if k in permitidas and k != "nombre"})
+            _actualizar(con, db.avatar, int(aid), cliente, _AVATAR_COLS, limpios)
+            if f.estado == "aprobado":
+                aprobados.append(int(aid))
+    return aprobados
 
 
 def persona_desde_avatar(a):

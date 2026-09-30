@@ -35,3 +35,15 @@ def test_fundir_no_pisa_lo_lleno():
     assert f["identidad"] == {"quiere_que_vean": "organizada", "cree_de_si": "práctica", "quiere_lograr": "orden"}
     assert f["conciencia"]["nivel"] == "consciente_del_problema" and f["soluciones_previas"] == [{"que": "Polvo", "por_que_fallo": ["se apelmaza"]}]
     assert f["evidencia"] == COMPLETO["evidencia"] and sub["demografia"] == ""                             # no toca la evidencia ni el original
+
+
+def test_fundir_conserva_las_soluciones_que_ya_tenia():
+    """Ruling 20 (1): `fundir` nunca descarta ni reescribe lo que el avatar ya
+    tenía en `soluciones_previas` -- válida o no (una persona pudo escribir
+    una solución sin "por qué falló"); solo agrega las nuevas válidas cuyo
+    "que" no repite una ya existente (sin distinguir mayúsculas ni espacios)."""
+    from nicho import calidad
+    sub = {"soluciones_previas": [{"que": "Plantillas", "por_que_fallo": []}]}
+    nuevos = {"soluciones_previas": [{"que": "plantillas", "por_que_fallo": ["x"]}, {"que": "Crema", "por_que_fallo": ["y"]}]}
+    f = calidad.fundir(sub, nuevos)
+    assert f["soluciones_previas"] == [{"que": "Plantillas", "por_que_fallo": []}, {"que": "Crema", "por_que_fallo": ["y"]}]

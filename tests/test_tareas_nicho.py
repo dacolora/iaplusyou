@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 SUB = {"base": "emocion", "nombre": "Ana / La que carga", "deseo": "Quiero lavar sin cargar", "demografia": "", "edad_rango": "",
@@ -463,3 +465,31 @@ def test_ejecutar_generar_auto_comentarios_para_generar_revienta_detiene_sin_gas
     assert i["pasos"]["generar"]["estado"] == "error" and i["estado"] == "detenida" and inv.puede_reanudar(i["estado"])
     assert gastos.historial("acme") == []
     assert "Avatares no generados" in msg
+
+
+# ------------------------------------------------- nicho_completar_avatares ---
+
+def test_completar_avatares_guarda_gasto_y_actualiza_la_persona(base_temporal, monkeypatch):
+    import gastos
+    from nicho import avatares, datos
+    from sprints import datos as sd
+    from tareas import nicho as tn
+    eid = _estudio(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    sub = dict(SUB, nombre="Ana", tono="", evidencia=[{"comentario_id": ids[0], "cita": "la garrafa pesa demasiado"}, {"comentario_id": ids[1], "cita": "la garrafa pesa demasiado"}],
+               demografia="Mujer", edad_rango="30-40", situaciones=["a", "b"], palabras_clave=["x", "y", "z"],
+               soluciones_previas=[{"que": "Líquido", "por_que_fallo": ["pesa"]}])
+    datos.guardar_generacion("acme", eid, [{"nombre": "N", "deseo": "Quiero", "resumen": "r", "sub_avatares": [sub]}])
+    aid = datos.avatares("acme", eid)[0]["subs"][0]["id"]
+    pid = datos.aprobar_avatar("acme", aid)
+    encolados = []
+    monkeypatch.setattr(tn.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, kw)) or True)
+    assert tn.encolar_completar("acme", eid) is True
+    assert encolados[0][0] == datos.job_id_completar("acme", eid) == f"nicho:acme:{eid}:completar" and encolados[0][2]["max_intentos"] == 1
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: (json.dumps({"sub_avatares": [{"indice": 0, "tono": "Cercano"}]}), 500, 60))
+    msg = tn.ejecutar_completar({"id": 5, "payload": {"cliente": "acme", "estudio_id": eid}, "job_id": datos.job_id_completar("acme", eid)})
+    assert "1" in msg and datos.avatar("acme", aid)["tono"] == "Cercano" and sd.persona("acme", pid)["tono"] == "Cercano"
+    g = gastos.historial("acme")[0]
+    assert g["tipo"] == "avatares" and g["referencia"] == f"avatares:{eid}:completar:t5" and g["usd"] == avatares.costo_real(500, 60)
+    import tareas
+    assert "nicho_completar_avatares" in tareas.REGISTRO and "nicho_completar_avatares" in tareas.AL_INTERRUMPIR

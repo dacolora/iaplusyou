@@ -366,6 +366,10 @@ msgid "%(n)s consultas"
 msgstr "%(n)s queries"
 
 #, python-format
+msgid "%(n)s de %(t)s avatar(es) completados."
+msgstr "%(n)s of %(t)s avatar(s) completed."
+
+#, python-format
 msgid "%(n)s descartada(s)"
 msgstr "%(n)s discarded"
 

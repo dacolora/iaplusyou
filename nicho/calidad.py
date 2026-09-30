@@ -79,7 +79,21 @@ def fundir(sub, nuevos):
     if _vacio(_dict(s.get("conciencia")).get("nivel")) and not _vacio(_dict(n.get("conciencia")).get("nivel")):
         s["conciencia"] = dict(n["conciencia"])
     if len(soluciones_validas(s)) < MIN_SOLUCIONES and n.get("soluciones_previas"):
-        s["soluciones_previas"] = soluciones_validas(s) + [x for x in n["soluciones_previas"] if x not in soluciones_validas(s)]
+        # Ruling 20 (1): conserva TODO lo que ya había (válido o no -- una
+        # persona pudo escribir una solución sin "por qué falló") y solo
+        # agrega las nuevas válidas cuyo "que" no repite una ya existente.
+        existentes = list(s.get("soluciones_previas") or [])
+        vistos = {str(x.get("que") or "").strip().lower() for x in existentes if isinstance(x, dict)}
+        nuevas = []
+        for x in n["soluciones_previas"]:
+            if not isinstance(x, dict) or _vacio(x.get("que")) or not _llenos(x.get("por_que_fallo")):
+                continue
+            clave = str(x.get("que") or "").strip().lower()
+            if clave in vistos:
+                continue
+            vistos.add(clave)
+            nuevas.append(x)
+        s["soluciones_previas"] = existentes + nuevas
     for k, minimo in (("situaciones", MIN_SITUACIONES), ("palabras_clave", MIN_PALABRAS)):
         actuales = _llenos(s.get(k))
         if len(actuales) < minimo:

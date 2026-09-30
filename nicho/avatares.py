@@ -286,14 +286,18 @@ def completar_subs(estudio, nucleo, comentarios, subs, guia="", marca_nombre="",
     estaban: la pasada es una mejora y lo pagado antes no se pierde (los tokens
     que Claude alcanzó a cobrar ya quedaron en `tokens`)."""
     tokens = tokens if tokens is not None else [0, 0]
-    pendientes = [(i, s, calidad.faltantes(s, con_evidencia=con_evidencia)) for i, s in enumerate(subs)]
-    pendientes = [(i, s, f) for i, s, f in pendientes if f]
-    if not pendientes:
-        return list(subs), 0
-    prompt = armar_prompt_completar(estudio, nucleo, comentarios, pendientes, guia, marca_nombre)
     try:
+        # Ruling 20 (2): `calidad.faltantes` también corre acá adentro -- un
+        # sub-avatar malformado (dato corrupto, quizás de una edición a mano)
+        # solo hace que esta pasada se salte, nunca sube al llamador y le hace
+        # perder lo que ya generó/pagó en la misma corrida.
+        pendientes = [(i, s, calidad.faltantes(s, con_evidencia=con_evidencia)) for i, s in enumerate(subs)]
+        pendientes = [(i, s, f) for i, s, f in pendientes if f]
+        if not pendientes:
+            return list(subs), 0
+        prompt = armar_prompt_completar(estudio, nucleo, comentarios, pendientes, guia, marca_nombre)
         data = _json_objeto(_llamar_contando(prompt, MAX_TOKENS_COMPLETAR, tokens))
-    except Exception:  # noqa: BLE001 — la pasada es una mejora: si falla, se guarda lo que había
+    except Exception:  # noqa: BLE001 — la pasada es una mejora: si falla (incluido un sub malformado), se guarda lo que había
         log.exception("La pasada de completado falló en el núcleo «%s»", nucleo.get("nombre"))
         return list(subs), 0
     por_id = {c["id"]: c for c in comentarios}
@@ -551,3 +555,81 @@ def generar(cliente, estudio_id, avanzar=None):
         "incompletos": sum(1 for s in subs_todos if calidad.faltantes(s)),
     }
     return {"nucleos": resultado, "resumen": resumen}
+
+
+# ------------------------------------------------- completar lo guardado ---
+
+def _sub_de_fila(f):
+    return {**{k: f.get(k) for k in datos.AVATAR_EDITABLES}, "evidencia": list(f.get("evidencia") or []), "sin_evidencia": bool(f.get("sin_evidencia"))}
+
+
+def completables(cliente, estudio_id):
+    """[(núcleo, [subs incompletos no descartados])] de un estudio de verdad
+    (el oculto de los avatares escritos a mano no tiene comentarios)."""
+    est = datos.estudio(cliente, estudio_id)
+    if not est or datos.es_manual(est):
+        return []
+    grupos = []
+    for n in datos.avatares(cliente, estudio_id):
+        subs = [s for s in n["subs"] if s["estado"] != "descartado" and calidad.faltantes(s)]
+        if subs:
+            grupos.append((n, subs))
+    return grupos
+
+
+def _comentarios_para_completar(cliente, estudio_id, subs):
+    todos = datos.comentarios_para_generar(cliente, estudio_id)
+    citados = {e.get("comentario_id") for s in subs for e in (s.get("evidencia") or [])}
+    primero = [c for c in todos if c["id"] in citados]
+    resto = seleccionar([c for c in todos if c["id"] not in citados], max_n=max(0, MAX_COMENTARIOS_COMPLETAR - len(primero)))
+    return primero + resto
+
+
+def estimar_completar(cliente, estudio_id, modelo=None):
+    """Precio ANTES de completar los avatares guardados de un estudio (una
+    llamada por núcleo con incompletos)."""
+    modelo = modelo or modelo_actual()
+    grupos = completables(cliente, estudio_id)
+    entrada = salida = 0
+    for _, subs in grupos:
+        coms = _comentarios_para_completar(cliente, estudio_id, subs)
+        entrada += int(sum(len(c.get("texto") or "") for c in coms) * TOKENS_POR_CARACTER) + TOKENS_PROMPT + TOKENS_SUB_JSON * len(subs)
+        salida += TOKENS_SALIDA_ESTIMADO_COMPLETAR
+    precios, referencia = _precios(modelo)
+    usd = math.ceil((entrada * precios["entrada"] + salida * precios["salida"]) / 1e6 * 100) / 100 if grupos else 0.0
+    return {"avatares": sum(len(s) for _, s in grupos), "tokens_entrada": entrada, "tokens_salida": salida, "usd": usd, "referencia": referencia}
+
+
+def completables_por_estudio(cliente):
+    """Para la página de avatares: por estudio no archivado, cuántos avatares se pueden completar y a qué precio."""
+    salida = []
+    for e in datos.estudios(cliente):
+        est = estimar_completar(cliente, e["id"])
+        if est["avatares"]:
+            salida.append({"estudio_id": e["id"], "nombre": e["nombre"], "avatares": est["avatares"], "usd": est["usd"]})
+    return salida
+
+
+def completar_existentes(cliente, estudio_id, avanzar=None):
+    """La pasada de completado sobre los avatares ya guardados de un estudio.
+    No escribe: devuelve {"cambios": {avatar_id: campos que cambiaron},
+    "resumen": {avatares, completados, tokens_entrada, tokens_salida, usd, modelo}}."""
+    avanzar = avanzar or (lambda etapa, detalle=None: None)
+    est = datos.estudio(cliente, estudio_id)
+    if not est:
+        raise datos.ErrorDatos(gettext("Ese estudio no existe."))
+    grupos = completables(cliente, estudio_id)
+    guia, marca_nombre = marca.guia_efectiva(cliente) or "", proyectos.nombre_visible(cliente)
+    tokens, cambios = [0, 0], {}
+    for i, (n, filas) in enumerate(grupos):
+        avanzar(ETAPA_COMPLETAR, f"{i + 1}/{len(grupos)}: {n['nombre']}")
+        coms = _comentarios_para_completar(cliente, estudio_id, filas)
+        antes = [_sub_de_fila(f) for f in filas]
+        despues, _ = completar_subs(est, n, coms, antes, guia, marca_nombre, tokens)
+        for fila, a, d in zip(filas, antes, despues):
+            difiere = {k: d[k] for k in d if d.get(k) != a.get(k)}
+            if difiere:
+                cambios[fila["id"]] = difiere
+    return {"cambios": cambios, "resumen": {"avatares": sum(len(f) for _, f in grupos), "completados": len(cambios),
+                                           "tokens_entrada": tokens[0], "tokens_salida": tokens[1],
+                                           "usd": costo_real(tokens[0], tokens[1]), "modelo": modelo_actual()}}

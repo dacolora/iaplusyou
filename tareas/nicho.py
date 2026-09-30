@@ -353,3 +353,56 @@ def interrumpida_recolectar(tarea, mensaje):
         from nicho import investigacion as inv
         paso = ("resenas:" if p.get("fuente") in fuentes_registro.PLATAFORMAS else "redes:") + str(p.get("fuente"))
         datos.actualizar_investigacion(cliente, eid, lambda i: {**inv.marcar_paso(i, paso, "pendiente"), "estado": "interrumpida", "ultimo_error": aviso})
+
+
+# ------------------------------------------------ nicho_completar_avatares ---
+
+ETAPAS_COMPLETAR = [(avatares.ETAPA_COMPLETAR, 60), (ETAPA_GUARDAR, 5)]
+
+
+def encolar_completar(cliente, estudio_id):
+    """False si ya hay un completado vivo para ese estudio. Gasta: max_intentos=1."""
+    return trabajos.encolar(datos.job_id_completar(cliente, estudio_id), "nicho_completar_avatares",
+                            {"cliente": cliente, "estudio_id": int(estudio_id)}, cliente=cliente,
+                            duracion_estimada=90, etapas=ETAPAS_COMPLETAR, max_intentos=1)
+
+
+@registrar("nicho_completar_avatares")
+def ejecutar_completar(tarea):
+    p = tarea["payload"]
+    cliente, eid = p["cliente"], int(p["estudio_id"])
+    if not datos.estudio(cliente, eid):
+        return gettext("El estudio ya no existe.")
+    job = tarea.get("job_id") or datos.job_id_completar(cliente, eid)
+
+    def avanzar(etapa, detalle=None):
+        cola.reportar(job, etapa=etapa, detalle=detalle)
+
+    r = None
+    try:
+        r = avatares.completar_existentes(cliente, eid, avanzar)
+        avanzar(ETAPA_GUARDAR)
+        aprobados = datos.guardar_completado(cliente, eid, r["cambios"])
+    except Exception as e:
+        if r is not None and r["resumen"]["tokens_entrada"] + r["resumen"]["tokens_salida"] > 0:
+            res = r["resumen"]
+            gastos.registrar_seguro(cliente, "avatares", res["usd"], f"avatares:{eid}:completar:fallido{ref_sufijo(tarea)}",
+                                    detalle=f"intento fallido: {cola.recortar(cola.sin_token(e), 200)}", proveedor="anthropic",
+                                    extra={"tokens_entrada": res["tokens_entrada"], "tokens_salida": res["tokens_salida"], "modelo": res["modelo"]})
+        _anotar_error(cliente, eid, gettext("%(error)s (si Claude alcanzó a responder, este intento sí se cobró)", error=cola.sin_token(e)))
+        raise
+    res = r["resumen"]
+    if res["tokens_entrada"] + res["tokens_salida"] > 0:
+        gastos.registrar_seguro(cliente, "avatares", res["usd"], f"avatares:{eid}:completar{ref_sufijo(tarea)}",
+                                detalle=f"completado: {res['completados']} de {res['avatares']} avatar(es)", proveedor="anthropic",
+                                extra={"tokens_entrada": res["tokens_entrada"], "tokens_salida": res["tokens_salida"], "modelo": res["modelo"]})
+    for aid in aprobados:
+        datos.aprobar_avatar(cliente, aid)                    # la persona que usa la app queda al día
+    datos.recalcular(cliente, eid)
+    return gettext("%(n)s de %(t)s avatar(es) completados.", n=res["completados"], t=res["avatares"])
+
+
+@al_interrumpir("nicho_completar_avatares")
+def interrumpida_completar(tarea, mensaje):
+    p = tarea["payload"]
+    _anotar_error(p["cliente"], int(p["estudio_id"]), mensaje)
