@@ -270,3 +270,134 @@ def test_notion_exige_correo_verificado(app, secreto, monkeypatch):
     monkeypatch.setattr(usuarios, "obtener", lambda u: dict(real(u) or {}, correo_verificado=False))
     r = app["c"].post(f"{BASE}/notion", json={"llave": "ntn_abc"})
     assert r.status_code == 403 and "correo" in r.get_json()["error"]
+
+
+# ------------------------------------------------ imágenes de cada escena ---
+
+@pytest.fixture()
+def subidas(monkeypatch):
+    """biblioteca.subir sin R2: cada llamada devuelve un material nuevo."""
+    from final_edition import biblioteca
+    hechas = []
+
+    def subir(cliente, archivo):
+        hechas.append((cliente, archivo.filename))
+        n = len(hechas)
+        return {"id": 100 + n, "url": f"https://r2.test/m{n}.jpg", "nombre": archivo.filename.rsplit(".", 1)[0],
+                "tipo": "imagen", "origen": "subida"}
+    monkeypatch.setattr(biblioteca, "subir", subir)
+    return hechas
+
+
+def _foto(nombre="foto.jpg", **campos):
+    import io
+    return dict({"archivo": (io.BytesIO(b"\xff\xd8\xff fake"), nombre)}, **campos)
+
+
+def test_panel_muestra_las_imagenes_de_cada_escena(app, catalogo_vacio):
+    gid, vid = _video_armado(app)
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "Imágenes de cada escena" in html
+    assert f'data-gpg-accion="/videos/{vid}/escenas/1"' in html and f'data-gpg-subir="/videos/{vid}/imagenes/subir"' in html
+    assert html.count('aria-pressed="true"') == 4  # 2 escenas × (personaje + entorno) sugeridos
+
+
+def test_poner_y_quitar_una_imagen_de_una_escena(app, catalogo_vacio):
+    from guiones import datos, escenas
+    gid, vid = _video_armado(app)
+    r = app["c"].post(f"{BASE}/videos/{vid}/escenas/1", json={"clave": "r2", "usar": False})
+    assert r.status_code == 200 and r.get_json() == {"video_id": vid}
+    assert escenas.por_escena(datos.video("acme", vid))[0]["claves"] == ["r1"]
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "Volver a lo sugerido" in html
+    assert app["c"].post(f"{BASE}/videos/{vid}/escenas/1", json={"sugeridas": True}).status_code == 200
+    assert escenas.por_escena(datos.video("acme", vid))[0]["claves"] == ["r1", "r2"]
+    assert app["c"].post(f"{BASE}/videos/{vid}/escenas/1", json={"clave": "r7", "usar": True}).status_code == 400
+    assert app["c"].post(f"{BASE}/videos/{vid}/escenas/9", json={"clave": "r1", "usar": True}).status_code == 400
+    assert app["c"].post(f"/cliente/otro/guiones/videos/{vid}/escenas/1", json={"clave": "r1", "usar": True}).status_code == 404
+
+
+def test_imagenes_solo_con_la_version_armada(app, catalogo_vacio, subidas):
+    gid = _confirmado(app)
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=FORM_VIDEO).get_json()["video_id"]
+    assert app["c"].post(f"{BASE}/videos/{vid}/escenas/1", json={"clave": "r1", "usar": True}).status_code == 409
+    r = app["c"].post(f"{BASE}/videos/{vid}/imagenes/subir", data=_foto(ref="1"), content_type="multipart/form-data")
+    assert r.status_code == 409 and subidas == []  # nada se sube si no se puede guardar
+
+
+def test_subir_la_imagen_de_una_referencia_y_una_para_una_escena(app, catalogo_vacio, subidas):
+    from guiones import datos, escenas
+    gid, vid = _video_armado(app)
+    r = app["c"].post(f"{BASE}/videos/{vid}/imagenes/subir", data=_foto("doctor.jpg", ref="1"),
+                      content_type="multipart/form-data")
+    assert r.status_code == 201, r.get_json()
+    v = datos.video("acme", vid)
+    assert escenas.pool(v)[0]["origen"] == "subida" and escenas.pool(v)[0]["imagen"]["url"] == "https://r2.test/m1.jpg"
+    r = app["c"].post(f"{BASE}/videos/{vid}/imagenes/subir", data=_foto("calle.png", escena="2"),
+                      content_type="multipart/form-data")
+    assert r.status_code == 201
+    v = datos.video("acme", vid)
+    assert escenas.por_escena(v)[1]["claves"] == ["r1", "r2", "x1"] and not escenas.por_escena(v)[0]["propia"]
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert 'src="https://r2.test/m1.jpg"' in html and "Image 3" in html
+    assert app["c"].post(f"{BASE}/videos/{vid}/imagenes/quitar", json={"clave": "x1"}).status_code == 200
+    assert escenas.por_escena(datos.video("acme", vid))[1]["claves"] == ["r1", "r2"]
+
+
+def test_subir_rechaza_lo_que_no_es_imagen(app, catalogo_vacio, subidas):
+    from final_edition import biblioteca
+    _, vid = _video_armado(app)
+    ruta = f"{BASE}/videos/{vid}/imagenes/subir"
+    assert app["c"].post(ruta, data=_foto("clip.mp4", escena="1"), content_type="multipart/form-data").status_code == 400
+    assert app["c"].post(ruta, data={"escena": "1"}, content_type="multipart/form-data").status_code == 400
+    assert app["c"].post(ruta, data=_foto(escena="7"), content_type="multipart/form-data").status_code == 400
+    assert subidas == []
+
+    def llena(cliente, archivo):
+        raise biblioteca.SubidaInvalida("El proyecto llegó a su límite de espacio (2 GB).")
+    import pytest as _pytest  # noqa: F401
+    biblioteca.subir, antes = llena, biblioteca.subir
+    try:
+        r = app["c"].post(ruta, data=_foto(escena="1"), content_type="multipart/form-data")
+    finally:
+        biblioteca.subir = antes
+    assert r.status_code == 400 and "límite" in r.get_json()["error"]
+
+
+def test_imagen_del_catalogo_para_una_escena(app, catalogo_vacio, monkeypatch):
+    import catalogo_productos
+    from guiones import datos, escenas
+    _, vid = _video_armado(app)
+    monkeypatch.setattr(catalogo_productos, "encontrar",
+                        lambda c, pid, categoria=None: {"id": pid, "nombre": "Sala azul"} if pid == "sala" else None)
+    r = app["c"].post(f"{BASE}/videos/{vid}/imagenes/catalogo",
+                      json={"activo_id": "sala", "categoria": "entorno", "escena": 1})
+    assert r.status_code == 200
+    pool = escenas.pool(datos.video("acme", vid))
+    assert pool[-1]["imagen"] == {"activo_id": "sala", "categoria": "entorno", "nombre": "Sala azul"}
+    assert escenas.por_escena(datos.video("acme", vid))[0]["claves"] == ["r1", "r2", "x1"]
+    assert app["c"].post(f"{BASE}/videos/{vid}/imagenes/catalogo",
+                         json={"activo_id": "nada", "categoria": "entorno"}).status_code == 400
+    assert app["c"].post(f"{BASE}/videos/{vid}/imagenes/catalogo",
+                         json={"activo_id": "sala", "categoria": "logo"}).status_code == 400
+
+
+def test_documentos_llevan_las_imagenes_de_cada_escena(app, catalogo_vacio, subidas):
+    from guiones import imagenes
+    _, vid = _video_armado(app)
+    app["c"].post(f"{BASE}/videos/{vid}/imagenes/subir", data=_foto(ref="1"), content_type="multipart/form-data")
+    md = app["c"].get(f"{BASE}/videos/{vid}/documento.md").get_data(as_text=True)
+    assert "Imágenes de esta escena:" in md and "https://r2.test/m1.jpg" in md and "falta la imagen" in md
+    app["c"].post(f"{BASE}/videos/{vid}/imagenes", json={})
+    imagenes.escribir(vid, llamar=fake({"imagenes": [{"id": "img_1", "prompt": "A man."}, {"id": "img_2", "prompt": "A room."}]}))
+    md = app["c"].get(f"{BASE}/videos/{vid}/imagenes.md").get_data(as_text=True)
+    assert "https://r2.test/m1.jpg" in md
+    assert "Image 1: genera la imagen" not in md and "Image 2: genera la imagen" in md
+
+
+def test_nombre_de_la_imagen_va_escapado(app, catalogo_vacio, subidas):
+    gid, vid = _video_armado(app)
+    app["c"].post(f"{BASE}/videos/{vid}/imagenes/subir", data=_foto("<b>x</b>.jpg", escena="1"),
+                  content_type="multipart/form-data")
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "<b>x</b>" not in html

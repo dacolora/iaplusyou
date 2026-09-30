@@ -101,8 +101,9 @@ def nombre_documento(video):
     return f"batch-{video['guion']['lote_id']}-videos-prompts-{f'{dur}s' if dur else 'completo'}-v{video['version_n']}.md"
 
 
-def documento_md(video, prompts):
-    """Documento del spec del cliente §2.7 con el texto VIGENTE de cada prompt del chat."""
+def documento_md(video, prompts, imagenes_por_clip=None):
+    """Documento del spec del cliente §2.7 con el texto VIGENTE de cada prompt del chat.
+    `imagenes_por_clip` (`escenas.texto_por_clip`): las imágenes de cada escena."""
     vigente = {}
     for p in prompts:
         ex = p.get("extra") or {}
@@ -137,6 +138,8 @@ def documento_md(video, prompts):
     for c in cs:
         L += [f"### Clip {c['indice']} de {c['total']} — {c['duracion']} s — {c['titulo']}", "", "````text",
               vigente.get(("principal", c["indice"]), "(sin prompt)"), "````", ""]
+        if imagenes_por_clip and imagenes_por_clip.get(c["indice"]):
+            L += ["Imágenes de esta escena:", ""] + [f"- {x}" for x in imagenes_por_clip[c["indice"]]] + [""]
     L += ["## Resumen de clips", "", "| Clip | Duración | Palabras | Título |", "|---|---|---|---|"]
     L += [f"| {c['indice']} | {c['duracion']} s | {c['palabras']} | {_celda(c['titulo'])} |" for c in cs]
     return "\n".join(L) + "\n"

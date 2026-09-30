@@ -1,0 +1,87 @@
+{# Imágenes de cada escena (spec 2026-09-30; fragmento dentro de _gpg_clips.html, versión armada).
+   Image 1…N son las referencias del video (el prompt de cada clip ya las nombra); las extra se
+   numeran después. Tocar una ficha la pone o la quita de esa escena. Todo es gratis: subir usa la
+   biblioteca del editor y nada llama a Claude. Las acciones van por data-gpg-accion (+ data-gpg-cuerpo)
+   y data-gpg-subir, que maneja _crear_flowplus_guiones.html. #}
+{% set E = escenas %}
+{% macro miniatura(x) %}{% if x.src %}<img src="{{ x.src }}" alt="" loading="lazy">{% else %}<span class="gpg-img-vacia" aria-hidden="true">?</span>{% endif %}{% endmacro %}
+<section class="gpg-escenas" data-gpg-caja aria-label="{{ _('Imágenes de cada escena') }}">
+  <h5>{{ _('Imágenes de cada escena') }}</h5>
+  <p class="gp-ayuda">{{ _('Image 1, Image 2… son las referencias de este video: el prompt de cada clip ya las nombra. Toca una imagen para ponerla o quitarla de una escena. Subir imágenes es gratis.') }}</p>
+  <div class="gpg-error flash error" hidden></div>
+
+  <h6>{{ _('Imágenes de este video') }}</h6>
+  <ul class="gpg-pool">
+    {% for x in E.pool %}
+    <li class="gpg-img{% if x.origen == 'falta' %} falta{% endif %}">
+      {{ miniatura(x) }}
+      <span class="gpg-img-nombre"><strong>Image {{ x.numero }}</strong>{% if x.nombre %} · {{ x.nombre }}{% endif %}</span>
+      {% if x.origen == 'falta' %}
+        <span class="gpg-img-estado">{{ _('Falta la imagen') }}</span>
+        <label class="btn-guardar btn-xs gpg-subir">{{ _('Subir la imagen') }}
+          <input type="file" accept="image/jpeg,image/png,image/webp" hidden
+                 data-gpg-subir="/videos/{{ video.id }}/imagenes/subir" data-ref="{{ x.numero }}"></label>
+      {% elif x.por_crear %}
+        <span class="gpg-img-acciones">
+          <label class="btn-xs gpg-subir">{{ _('Cambiar') }}
+            <input type="file" accept="image/jpeg,image/png,image/webp" hidden
+                   data-gpg-subir="/videos/{{ video.id }}/imagenes/subir" data-ref="{{ x.numero }}"></label>
+          <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/imagenes/quitar"
+                  data-gpg-cuerpo='{{ {"clave": x.clave}|tojson }}'>{{ _('Quitar') }}</button>
+        </span>
+      {% elif x.tipo == 'extra' %}
+        <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/imagenes/quitar"
+                data-gpg-cuerpo='{{ {"clave": x.clave}|tojson }}'>{{ _('Quitar') }}</button>
+      {% else %}
+        <span class="gpg-img-estado">{{ _('Del Catálogo') }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="gp-botones">
+    <label class="btn-guardar btn-sm gpg-subir">{{ _('+ Subir imagen') }}
+      <input type="file" accept="image/jpeg,image/png,image/webp" hidden data-gpg-subir="/videos/{{ video.id }}/imagenes/subir"></label>
+    <details class="gpg-del-catalogo" id="gpg-det-catalogo-{{ video.id }}">
+      <summary>{{ _('+ Del Catálogo') }}</summary>
+      <ul class="gpg-pool">
+        {% for a in E.catalogo %}
+        <li><button type="button" class="gpg-img gpg-img-btn" data-gpg-accion="/videos/{{ video.id }}/imagenes/catalogo"
+                    data-gpg-cuerpo='{{ {"activo_id": a.id, "categoria": a.categoria}|tojson }}'>
+          {{ miniatura(a) }}<span class="gpg-img-nombre">{{ a.nombre }}</span></button></li>
+        {% else %}
+        <li class="vacio">{{ _('El Catálogo todavía no tiene fotos.') }}</li>
+        {% endfor %}
+      </ul>
+    </details>
+  </div>
+
+  <h6>{{ _('Escenas') }}</h6>
+  {% for f in E.filas %}
+  <div class="gpg-escena">
+    <div class="gpg-escena-cab">
+      <strong>{{ _('Escena %(n)s', n=f.indice) }}</strong><span>{{ f.titulo }} · {{ f.duracion }} s</span>
+      {% if f.propia %}
+      <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/escenas/{{ f.indice }}"
+              data-gpg-cuerpo='{"sugeridas": true}'>{{ _('Volver a lo sugerido') }}</button>
+      {% endif %}
+    </div>
+    <div class="gpg-fichas" role="group" aria-label="{{ _('Imágenes de la escena %(n)s', n=f.indice) }}">
+      {% for x in E.pool %}{% set en = x.clave in f.claves %}
+      <button type="button" class="gpg-ficha{% if en %} activa{% endif %}" aria-pressed="{{ 'true' if en else 'false' }}"
+              title="{{ x.nombre }}" data-gpg-accion="/videos/{{ video.id }}/escenas/{{ f.indice }}"
+              data-gpg-cuerpo='{{ {"clave": x.clave, "usar": not en}|tojson }}'>
+        {{ miniatura(x) }}<span>Image {{ x.numero }}</span></button>
+      {% endfor %}
+      <label class="gpg-ficha gpg-ficha-mas gpg-subir">
+        <span class="gpg-img-vacia" aria-hidden="true">+</span><span>{{ _('Subir aquí') }}</span>
+        <input type="file" accept="image/jpeg,image/png,image/webp" hidden
+               data-gpg-subir="/videos/{{ video.id }}/imagenes/subir" data-escena="{{ f.indice }}"></label>
+    </div>
+    {% if f.faltan %}
+    <p class="gp-ayuda">{{ ngettext('Todavía sin imagen: %(lista)s. Súbela arriba, en «Imágenes de este video».',
+                                   'Todavía sin imagen: %(lista)s. Súbelas arriba, en «Imágenes de este video».',
+                                   f.faltan | length, lista=f.faltan | join(', ')) }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>

@@ -30,9 +30,10 @@
   {% endif %}
 
   <h5>{{ _('Qué imagen va en cada clip') }}</h5>
+  <p class="gp-ayuda">{{ _('Sale de lo que elegiste en «Imágenes de cada escena».') }}</p>
   <table class="gpg-tabla">
     <thead><tr><th>{{ _('Clip') }}</th><th>{{ _('Imágenes') }}</th></tr></thead>
-    <tbody>{% for f in im['tabla'] or [] %}<tr><td>{{ f.clip }} · {{ f.titulo }}</td><td>{{ f.imagenes | join(', ') }}</td></tr>{% endfor %}</tbody>
+    <tbody>{% for f in escenas.filas %}<tr><td>{{ f.indice }} · {{ f.titulo }}</td><td>{{ f.etiquetas | join(', ') }}</td></tr>{% endfor %}</tbody>
   </table>
 
   <h5>{{ _('Antes de generar') }}</h5>
