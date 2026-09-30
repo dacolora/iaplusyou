@@ -35,11 +35,12 @@
 <div class="acciones sprint-acciones">
   <form method="post" action="{{ url_for('nicho.generar', cliente=cliente, eid=estudio.id) }}" class="inline"
         onsubmit='return confirm({{ _("Esto va a:\n1. Agrupar %(n)s comentarios en núcleos de deseos\n2. Crear sub-avatares por núcleo\n3. Cobrar aprox. %(precio)s de Claude\n\n¿Seguimos?", n=estimado.comentarios, precio=precio_texto)|tojson }});'>
-    <button type="submit" class="btn-generar btn-sm" {% if not estimado.suficientes or trabajo_generar or estudio.archivado %}disabled{% endif %}>
+    <button type="submit" class="btn-generar btn-sm" {% if not estimado.suficientes or trabajo_generar or estudio.archivado or investigacion_viva %}disabled{% endif %}>
       {{ _('Regenerar avatares') if nucleos else _('Generar avatares') }} · ≈ {{ precio_texto }}
     </button>
   </form>
   {% if not estimado.suficientes %}<small class="vacio">{{ _('Hacen falta al menos %(n)s comentarios no excluidos.', n=min_comentarios) }}</small>{% endif %}
+  {% if investigacion_viva %}<small class="vacio">{{ _('Hay una investigación en curso en este estudio: espera a que termine o cancélala.') }}</small>{% endif %}
   {% if nucleos %}
   <a class="btn-sm" href="{{ url_for('nicho.exportar_md', cliente=cliente, eid=estudio.id) }}">{{ _('Exportar .md') }}</a>
   <a class="btn-sm" href="{{ url_for('nicho.exportar_xlsx', cliente=cliente, eid=estudio.id) }}">{{ _('Exportar Excel') }}</a>

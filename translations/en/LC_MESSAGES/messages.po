@@ -13186,3 +13186,6 @@ msgstr "Market country"
 msgid "(sin país)"
 msgstr "(no country)"
 
+msgid "Hay una investigación en curso en este estudio: espera a que termine o cancélala."
+msgstr "There's research in progress on this study: wait for it to finish or cancel it."
+

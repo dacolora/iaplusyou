@@ -436,3 +436,72 @@ def test_pais_al_crear_y_editar_estudio(app):
     assert "País no soportado" in r.data.decode() and datos.estudio("acme", e["id"])["pais"] == "SE"
     html = app["c"].get("/cliente/acme").data.decode()
     assert 'name="pais"' in html
+
+
+def test_manual_espera_mientras_la_investigacion_esta_viva(app, llaves):
+    """Ruling 13 (lado rutas): los botones manuales de recolección/generación
+    encolan con el MISMO job_id que un paso de la cadena (`resenas:*`,
+    `redes:*`, `generar`) -- si se dejaran encolar mientras la investigación
+    corre, el paso de la cadena no podría encolarse y quedaría `interrumpida`
+    (Task 5). Las rutas deben rehusarse ANTES de intentarlo."""
+    from nicho import datos, investigacion as inv
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="SE")
+    datos.agregar_comentarios("acme", eid, "texto", [{"fuente_id": f"c{i}", "texto": f"Comentario {i}: pesa mucho"} for i in range(25)])
+    i = inv.crear_inicial("t", "SE", ["amazon"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 2.0})
+    datos.iniciar_investigacion("acme", eid, i)
+    c = app["c"]
+    for fuente, datos_forma in (("reddit", {"palabras_clave": "x"}), ("youtube", {"palabras_clave": "x"}), ("apify", {})):
+        r = c.post(f"/cliente/acme/nicho/{eid}/recolectar/{fuente}", data=datos_forma, follow_redirects=True)
+        assert "espera a que termine o cancélala" in r.data.decode(), fuente
+    assert app["encolados"] == []
+    r = c.post(f"/cliente/acme/nicho/{eid}/generar", follow_redirects=True)
+    assert "espera a que termine o cancélala" in r.data.decode() and app["encolados"] == []
+    c.post(f"/cliente/acme/nicho/{eid}/comentarios/texto", data={"texto": "Gotea mucho el envase", "modo": "lineas"})
+    assert datos.estudio("acme", eid)["comentarios_total"] == 26                     # texto sigue funcionando
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "estado": "lista"})  # como antes, en cuanto termina
+    r = c.post(f"/cliente/acme/nicho/{eid}/recolectar/reddit", data={"palabras_clave": "x"}, follow_redirects=True)
+    assert "espera a que termine o cancélala" not in r.data.decode() and app["encolados"]
+    r = c.post(f"/cliente/acme/nicho/{eid}/generar", follow_redirects=True)
+    assert "espera a que termine o cancélala" not in r.data.decode()
+
+
+def test_solo_mismo_origen_bloquea_post_de_otro_sitio(app, llaves_inv, monkeypatch):
+    """Ruling 18: el Blueprint nicho también gasta dinero por POST y le
+    faltaba la barrera CSRF que ya tienen Flow Plus/Sprints/Triple Whale/el
+    editor."""
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="SE")
+    encolados = []
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload)) or True)
+    estimado = inv.estimar({}, "SE", ["amazon"], [], inv.TOPES_DEFECTO)
+    forma = {"pais": "SE", "plataformas": ["amazon"], "total_visto": str(estimado["total_usd"])}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data=forma, headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403 and encolados == [] and datos.investigacion("acme", eid) == {}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data=forma, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302 and encolados
+    eid2 = datos.crear_estudio("acme", "Y", tema="t", pais="SE")
+    r = app["c"].post(f"/cliente/acme/nicho/{eid2}/investigacion", data=forma)      # sin cabecera, como manda el test client
+    assert r.status_code == 302
+
+
+def test_cliente_sin_apify_no_ve_plataformas_ni_variables_del_env(app, monkeypatch):
+    """Ruling 19: sin APIFY_TOKEN, un cliente no ve en la tarjeta las
+    plataformas que lo necesitan (amazon/meli/tiktok_shop) ni el nombre de la
+    variable ni «Falta …»; un pedido a mano para esa plataforma responde el
+    mensaje neutro, tanto en el estimado como al intentar iniciar."""
+    from nicho import datos
+    monkeypatch.delenv("APIFY_TOKEN", raising=False)
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="US")
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    html = c.get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'name="plataformas" value="amazon"' not in html and 'name="plataformas" value="meli"' not in html
+    assert 'name="plataformas" value="tiktok_shop"' not in html
+    assert "APIFY_TOKEN" not in html and "(falta " not in html
+    r = c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?plataformas=amazon")
+    assert r.status_code == 400 and r.get_json()["error"] == "Esa fuente no está disponible todavía."
+    r = c.post(f"/cliente/acme/nicho/{eid}/investigacion", data={"plataformas": "amazon", "total_visto": "99"}, follow_redirects=True)
+    assert "Esa fuente no está disponible todavía." in r.data.decode()
+    assert datos.investigacion("acme", eid) == {}

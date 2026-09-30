@@ -37,6 +37,24 @@ bp = Blueprint("nicho", __name__, url_prefix="/cliente/<cliente>/nicho")
 POR_PAGINA = 50
 
 
+def _mismo_origen():
+    """Mismo criterio que `dashboard._mismo_origen`. No se importa de ahí
+    porque con `python dashboard.py` ese módulo es __main__ y se cargaría dos veces."""
+    sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
+    return not sitio or sitio in ("same-origin", "none")
+
+
+@bp.before_request
+def _solo_mismo_origen():
+    """Barrera CSRF (como Flow Plus, Sprints, Triple Whale y el editor): este
+    Blueprint también gasta dinero por POST y no la tenía (Ruling 18)."""
+    if request.method == "POST" and not _mismo_origen():
+        if request.is_json or request.headers.get("Accept") == "application/json":
+            return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
+        abort(403)
+    return None
+
+
 # ------------------------------------------------------------ helpers ---
 
 def _volver(cliente, eid=None):
@@ -86,6 +104,17 @@ def _entero(campo, defecto):
 
 def _es_admin():
     return session.get("rol") == "admin"
+
+
+def _investigacion_viva(cliente, eid):
+    """True mientras la investigación automática del estudio está corriendo
+    (Ruling 13, lado rutas): con esto vivo, los botones manuales que
+    encolarían con el MISMO job_id que un paso de la cadena (`resenas:*`,
+    `redes:*`, `generar`) deben esperar -- si se dejaran encolar, el paso de
+    la cadena no podría encolarse y la cadena quedaría `interrumpida`
+    (arreglo del lado worker en Task 5)."""
+    estado = datos.investigacion(cliente, eid).get("estado")
+    return bool(estado) and estado not in ("lista", "detenida", "interrumpida")
 
 
 def _fuentes_conectadas(cliente, eid):
@@ -182,7 +211,8 @@ def ver(cliente, eid):
         limites_inv=investigacion.LIMITES, pais_inv=est.get("pais") or proyectos.pais(cliente),
         etiquetas_estudio=datos.ETIQUETAS_ESTADO_ESTUDIO, etiquetas_avatar=datos.ETIQUETAS_ESTADO_AVATAR,
         etiquetas_inv=investigacion.ETIQUETAS_ESTADO, etiquetas_paso_estado=investigacion.ETIQUETAS_ESTADO_PASO,
-        etiquetas_paso=investigacion.ETIQUETAS_PASO, consciencias_nombre=doctrina.CONSCIENCIAS_NOMBRE)
+        etiquetas_paso=investigacion.ETIQUETAS_PASO, consciencias_nombre=doctrina.CONSCIENCIAS_NOMBRE,
+        investigacion_viva=_investigacion_viva(cliente, eid))
 
 
 @bp.post("/<int:eid>/editar")
@@ -293,6 +323,9 @@ def recolectar(cliente, eid, fuente):
     if est["archivado"]:
         flash(gettext("El estudio está archivado."), "error")
         return _volver(cliente, eid)
+    if fuente in fuentes_registro.EN_WORKER and _investigacion_viva(cliente, eid):
+        flash(gettext("Hay una investigación en curso en este estudio: espera a que termine o cancélala."), "error")
+        return _volver(cliente, eid)
     faltan = fuentes_registro.llaves_faltantes(fuente)
     if faltan:
         flash(gettext("Falta %(llaves)s en el .env del servidor (Configuración › Puesta a punto).", llaves=", ".join(faltan))
@@ -329,6 +362,9 @@ def generar(cliente, eid):
     est = _estudio_o_404(cliente, eid)
     if est["archivado"]:
         flash(gettext("El estudio está archivado."), "error")
+        return _volver(cliente, eid)
+    if _investigacion_viva(cliente, eid):
+        flash(gettext("Hay una investigación en curso en este estudio: espera a que termine o cancélala."), "error")
         return _volver(cliente, eid)
     lista = datos.comentarios_para_generar(cliente, eid)
     if len(lista) < avatares.MIN_COMENTARIOS:
