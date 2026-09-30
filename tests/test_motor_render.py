@@ -111,6 +111,8 @@ def test_muchos_cortes_se_renderizan_por_tramos_con_su_audio(tmp_path, medios, m
     assert out["tramos"] >= 3
     assert abs(dur - 7.0) <= 0.3 and "audio" in streams
     assert abs(float(streams["audio"]["duration"]) - 7.0) <= 0.3
+    # la voz y la música cruzan todas las uniones sin un solo hueco
+    assert [t for t in _silencios(out["archivo"]) if t < 6.9] == []
 
 
 def _silencios(ruta, umbral_db=-45, minimo_s=0.005):
