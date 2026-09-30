@@ -248,3 +248,35 @@ def test_muestra_en_noruego_va_por_turbo(base_temporal, r2, monkeypatch):
                          {"timeout": 45, "modelo": audios.fal_audio.MODELO_TTS_TURBO, "language_code": "no"})]
     audios.muestra("Adam", "de")
     assert llamadas[1] == ("Hallo, ich bin Adam. So klingt meine Stimme in deiner Anzeige.", {"timeout": 45})
+
+
+def _voz_propia(cliente="acme", voice_id="mmx_1", nombre="Ana", estrenada=True):
+    return materiales.registrar(cliente, tipo="audio", origen="voz_propia", url="https://r2/v.mp3",
+                                hash=materiales.hash_clave("voz_propia", "minimax", voice_id), bytes=1,
+                                extra={"nombre": nombre, "voice_id": voice_id, "forma": "disenada",
+                                       "idioma_muestra": "es", "estrenada": estrenada})
+
+
+def test_validar_acepta_una_voz_propia_del_proyecto(base_temporal):
+    v = _voz_propia()
+    ajena = _voz_propia(cliente="otro", voice_id="mmx_2")
+    assert audios.validar("acme", _form(voz=f"vp:{v['id']}"))["voz"] == f"vp:{v['id']}"
+    with pytest.raises(audios.EntradaInvalida):
+        audios.validar("acme", _form(voz=f"vp:{ajena['id']}"))
+
+
+def test_sintetizar_con_voz_propia_va_por_minimax(base_temporal, monkeypatch):
+    import voces_propias
+    v = _voz_propia(estrenada=False)
+    llamadas = []
+    monkeypatch.setattr(audios.fal_audio, "tts_minimax", lambda texto, voice_id, idioma, velocidad=None, timeout=180:
+                        llamadas.append((texto, voice_id, idioma, velocidad)) or
+                        {"url": "https://fal/m.mp3", "costo_usd": 0.002, "duracion_ms": 2000})
+    r = audios.sintetizar("acme", f"vp:{v['id']}", "Hei", "no", "lenta")
+    assert llamadas == [("Hei", "mmx_1", "no", 0.85)]
+    assert r == {"url": "https://fal/m.mp3", "costo_usd": 0.002, "proveedor": "fal/minimax",
+                 "etiqueta": "MiniMax", "voz_nombre": "Ana"}
+    assert materiales.obtener("acme", v["id"])["extra"]["estrenada"] is True
+    voces_propias.borrar("acme", v["id"])
+    with pytest.raises(ValueError):
+        audios.sintetizar("acme", f"vp:{v['id']}", "Hei", "no", "normal")

@@ -162,7 +162,11 @@ def validar(cliente, form):
     if len(texto) > MAX_CARACTERES:
         raise EntradaInvalida(MENSAJES["largo"])
     voz = (form.get("voz") or "").strip()
-    if voz not in voces():
+    if es_propia(voz):
+        import voces_propias   # importa este módulo: se importa aquí, no arriba
+        if not voces_propias.resolver(cliente, voz):
+            raise EntradaInvalida(MENSAJES["voz"])
+    elif voz not in voces():
         raise EntradaInvalida(MENSAJES["voz"])
     idioma = (form.get("idioma") or "").strip()
     if idioma not in IDIOMAS:
@@ -216,6 +220,16 @@ def sintetizar(cliente, voz, texto, idioma, velocidad):
     registra gasto: lo hace quien llama, apenas vuelve (ya pagado)."""
     v = VELOCIDADES[velocidad]
     motor = motor_de(voz, idioma)
+    if motor == MOTOR_MINIMAX:
+        import voces_propias
+        vp = voces_propias.resolver(cliente, voz)
+        if not vp:
+            raise ValueError(MENSAJES["voz_borrada"])
+        r = fal_audio.tts_minimax(texto, vp["voice_id"], idioma, velocidad=v)
+        if not vp["estrenada"]:
+            voces_propias.marcar_estrenada(cliente, vp["id"])
+        return {"url": r["url"], "costo_usd": r["costo_usd"], "proveedor": "fal/minimax",
+                "etiqueta": ETIQUETAS_MOTOR[motor], "voz_nombre": vp["nombre"]}
     if motor == MOTOR_TURBO:
         r = fal_audio.tts(texto, voz, idioma, velocidad=v, modelo=fal_audio.MODELO_TTS_TURBO, language_code=idioma)
     else:
