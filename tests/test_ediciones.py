@@ -21,6 +21,17 @@ def test_crear_y_cargar_valida_y_normaliza(base_temporal):
     assert d.duracion_ms(cargada["documento"]) == 7000
 
 
+def test_crear_sin_nombre_lo_guarda_en_el_idioma_del_proyecto(base_temporal):
+    """El nombre por defecto se guarda y se ve tal cual en la biblioteca:
+    se arma con gettext donde se guarda; en español, el de siempre."""
+    import idiomas
+    with idiomas.en_idioma("en"):
+        en = e.crear("acme", "video", "", _doc())
+    with idiomas.en_idioma("es"):
+        es = e.crear("acme", "video", None, _doc())
+    assert en["nombre"] == "Untitled" and es["nombre"] == "Sin nombre"
+
+
 def test_crear_rechaza_documento_invalido(base_temporal):
     doc = _doc(); doc["formato"] = "x"
     with pytest.raises(d.DocumentoInvalido):

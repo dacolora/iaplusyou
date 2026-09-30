@@ -592,3 +592,34 @@ def test_un_guion_base_en_portugues_no_recibe_orden(monkeypatch):
     guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "pt", "", "", angulo=ANG)
     texto = _sys(reg.kwargs[0])
     assert idiomas.orden_idioma("en") not in texto and idiomas.orden_idioma("es") not in texto
+
+
+def test_guion_invalido_en_el_idioma_de_quien_lo_ve(monkeypatch):
+    """Revisión final de la fase 6: el error guardado de una final cuyo guion
+    falla dos veces empezaba con «Guion inválido:» también en inglés. Se arma
+    con gettext (el worker corre en el idioma del proyecto); en español, el
+    texto de siempre, byte a byte."""
+    import idiomas
+    from final_edition import guion
+    inventado = _guion_valido()
+    inventado["bloques"][0]["texto_pantalla"] = "3x más duración"
+    with idiomas.en_idioma("en"):
+        _instalar_fake(monkeypatch, ["esto no es json", "tampoco"])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value) == "Invalid script: Invalid JSON"
+        _instalar_fake(monkeypatch, [json.dumps(inventado), json.dumps(inventado)])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value).startswith("Invalid script: The figure “3x” in the hook block")
+        assert "inválido" not in str(e.value) and "cifra" not in str(e.value)
+    with idiomas.en_idioma("es"):
+        _instalar_fake(monkeypatch, ["esto no es json", "tampoco"])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value) == "Guion inválido: JSON inválido"
+        _instalar_fake(monkeypatch, [json.dumps(inventado), json.dumps(inventado)])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value) == ("Guion inválido: La cifra «3x» del bloque hook no está en los datos: reescríbelo "
+                                "sin ella o con el dato real.")

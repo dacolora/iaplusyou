@@ -106,6 +106,18 @@ def test_instante_imposible_lanza_error():
         tr.partir(_con_textos(61, 0, 7000))
 
 
+def test_instante_imposible_en_el_idioma_del_proyecto():
+    """El mensaje llega al `error` de la final y la persona puede actuar
+    (quitar capas): en su idioma; en español, el de siempre."""
+    import idiomas
+    with idiomas.en_idioma("en"), pytest.raises(ValueError) as e:
+        tr.partir(_con_textos(61, 0, 7000))
+    assert str(e.value) == "There are more than 60 layers at the same moment; remove some."
+    with idiomas.en_idioma("es"), pytest.raises(ValueError) as e:
+        tr.partir(_con_textos(61, 0, 7000))
+    assert str(e.value) == "Hay más de 60 capas en el mismo instante; quita algunas."
+
+
 def test_fronteras_usan_la_misma_pista_principal_que_el_compilador():
     # documento.pista_principal: la primera pista `video` NO oculta (una
     # imagen listada antes es una capa). Una pista de video oculta que va

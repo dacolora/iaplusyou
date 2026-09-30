@@ -1,6 +1,8 @@
 """Partición del render por tramos (spec §2.2): cada `overlay` de ffmpeg
 cuesta ~8 MB de RSS; por encima de PRESUPUESTO_OVERLAYS el documento se
 renderiza por ventanas de tiempo y se concatena sin recodificar. Puro."""
+from flask_babel import gettext
+
 from final_edition.documento import duracion_ms, pista_principal
 
 PRESUPUESTO_OVERLAYS = 60
@@ -86,7 +88,7 @@ def partir(doc, presupuesto=None):
     if total <= 0 or contar(doc, 0, total) <= presupuesto:
         return [(0, max(total, 0))]
     if _max_simultaneas(doc, 0, total) > presupuesto:
-        raise ValueError(f"Hay más de {presupuesto} capas en el mismo instante; quita algunas.")
+        raise ValueError(gettext("Hay más de %(n)s capas en el mismo instante; quita algunas.", n=presupuesto))
     fronteras = _fronteras_seguras(doc, total)
     tramos, inicio = [], 0
     for f in fronteras + [total]:

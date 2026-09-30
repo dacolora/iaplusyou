@@ -3926,7 +3926,7 @@ msgstr "Edit %(id)s ready to edit."
 
 #, python-format
 msgid "Edición de %(pieza)s"
-msgstr "Edit of %(pieza)s"
+msgstr "%(pieza)s edit"
 
 msgid "Edita el prompt"
 msgstr "Edit the prompt"
@@ -4718,7 +4718,7 @@ msgid "Emoción"
 msgstr "Emotion"
 
 msgid "Empezar de cero"
-msgstr "Check at least one valid destination (language and country) to produce."
+msgstr "Start from scratch"
 
 msgid "Empezar otra edición desde el video"
 msgstr "Start another edit from the video"
@@ -6554,6 +6554,10 @@ msgstr "Chosen script"
 msgid "Guion guardado. Ahora elige los destinos y produce las finales."
 msgstr "Script saved. Now pick the markets and produce the final cuts."
 
+#, python-format
+msgid "Guion inválido: %(errores)s"
+msgstr "Invalid script: %(errores)s"
+
 msgid "Guion listo — revísalo y produce las finales."
 msgstr "Script ready — review it and produce the final cuts."
 
@@ -6609,6 +6613,10 @@ msgstr "Up to 7 images. From a video it only uses one frame. Very good movement 
 #, python-format
 msgid "Hay %(usos)s resultado(s) ya generado(s) con este producto: no se borran, pero dejarán de mostrar su nombre y su foto."
 msgstr "There are %(usos)s result(s) already generated with this product: they won't be deleted, but they'll stop showing its name and photo."
+
+#, python-format
+msgid "Hay más de %(n)s capas en el mismo instante; quita algunas."
+msgstr "There are more than %(n)s layers at the same moment; remove some."
 
 msgid "Hay textos sin traducir para algún destino."
 msgstr "Some texts aren't translated for a market."
@@ -7073,6 +7081,9 @@ msgstr "Left"
 msgid "JPG, PNG, WEBP, MP4 o MOV; también puedes arrastrarlos a la caja. Cada uno queda como @Imagen N / @Video N para nombrarlo en el texto."
 msgstr "JPG, PNG, WEBP, MP4 or MOV; you can also drag them into the box. Each one becomes @Imagen N / @Video N so you can name it in the text."
 
+msgid "JSON inválido"
+msgstr "Invalid JSON"
+
 #, python-format
 msgid "JSON inválido: %(error)s"
 msgstr "Invalid JSON: %(error)s"
@@ -7153,6 +7164,10 @@ msgstr "The song is longer than 10 min."
 
 msgid "La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre."
 msgstr "The face of the brand: a real person, an ambassador or a created character that has to look the same every time."
+
+#, python-format
+msgid "La cifra «%(cifra)s» del bloque %(rol)s no está en los datos: reescríbelo sin ella o con el dato real."
+msgstr "The figure “%(cifra)s” in the %(rol)s block isn't in the data: rewrite the block without it or with the real figure."
 
 #, python-format
 msgid "La cifra «%(cifra)s» del caption no está en los datos del producto ni en sus pruebas: si es real, agrégala como prueba del producto."
@@ -12843,7 +12858,7 @@ msgid "Video completo"
 msgstr "Full video"
 
 msgid "Video de Crear"
-msgstr "Create video"
+msgstr "Video from Create"
 
 msgid "Video de FlowPlus listo, pendiente de revisión."
 msgstr "FlowPlus video ready, pending review."
@@ -12880,7 +12895,7 @@ msgid "Videos"
 msgstr "Videos"
 
 msgid "Videos de Crear"
-msgstr "Create videos"
+msgstr "Videos from Create"
 
 msgid "Videos de este guion"
 msgstr "This script's videos"

@@ -727,7 +727,8 @@ round-half-to-even, so what fits in the browser fits in the render — and then 
 `version_n`, 409 → «Recargar»; the route refuses materials from another project), a DOM timeline
 (`escala.js` pure + `linea_tiempo.js`) and `pagina_editor.js`; «Editar este video» in the Final edition
 tab (`editor.desde_clon` → free worker task `edicion_desde_clon`, `final_edition/edicion_clon.py`: the
-raw clon as one clip + mirrored scene sound, destino `es_<proyectos.pais>` via `origen.pais`) and «Producir»
+raw clon as one clip + mirrored scene sound, destino `<idioma del país>_<proyectos.pais>` via `origen.pais` — `en_US`
+for a US project, decisión B; "es" without a country) and «Producir»
 from the editor (`editor.producir`: `versionar` → `crear_final` → `edicion_producir` per destino, free; each
 destino is first resolved and checked with `verificar_recortes`, a destino whose paid `final_producir` is running
 is refused, and a final with video NOT made from this edición — `ediciones.edicion_de_final` — needs

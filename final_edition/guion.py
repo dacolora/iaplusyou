@@ -20,6 +20,7 @@ import math
 import os
 
 import anthropic
+from flask_babel import gettext
 
 import doctrina
 import idiomas
@@ -38,10 +39,12 @@ MAX_PALABRAS_PANTALLA = 6
 
 
 class GuionInvalido(Exception):
-    """El guion sigue inválido después de pedir corrección a Claude."""
+    """El guion sigue inválido después de pedir corrección a Claude. Su texto
+    es el `error` que ve la persona en la final: se arma con gettext (el
+    worker corre en el idioma del proyecto)."""
     def __init__(self, errores):
         self.errores = list(errores)
-        super().__init__("Guion inválido: " + "; ".join(self.errores))
+        super().__init__(gettext("Guion inválido: %(errores)s", errores="; ".join(self.errores)))
 
 
 def _api_key():
@@ -370,8 +373,8 @@ def _errores_de_cifras(guion, datos_texto):
     for b in guion.get("bloques") or []:
         texto = f"{b.get('texto_pantalla') or ''} {b.get('texto_voz') or ''}"
         for cifra in doctrina.verificar_cifras(texto, datos_texto):
-            errores.append(f"La cifra «{cifra}» del bloque {b.get('rol')} no está en los datos: reescríbelo sin ella "
-                           "o con el dato real.")
+            errores.append(gettext("La cifra «%(cifra)s» del bloque %(rol)s no está en los datos: reescríbelo "
+                                   "sin ella o con el dato real.", cifra=cifra, rol=b.get("rol")))
     return errores
 
 
@@ -398,7 +401,7 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
         guion = _parsear(texto)
         extra = []
         if guion is None:
-            errores = ["JSON inválido"]
+            errores = [gettext("JSON inválido")]
         else:
             guion = ajustar(guion)
             errores = tipos.validar_guion(guion, duracion_s)

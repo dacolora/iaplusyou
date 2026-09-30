@@ -25,7 +25,7 @@ def crear(cliente, tipo, nombre, documento, cf_id=None, creada_por=None):
     with db.conectar() as con:
         r = con.execute(db.edicion.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, cf_id=cf_id, tipo=tipo,
-            nombre=(nombre or "Sin nombre")[:120], documento=doc, version_n=0, estado="borrador", creada_por=creada_por))
+            nombre=(nombre or gettext("Sin nombre"))[:120], documento=doc, version_n=0, estado="borrador", creada_por=creada_por))
         eid = r.inserted_primary_key[0]
     materiales.marcar_uso(doc.get("materiales") or [])
     return cargar(cliente, eid)
