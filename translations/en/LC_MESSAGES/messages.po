@@ -5959,6 +5959,9 @@ msgstr "The investigation is not active."
 msgid "La investigación ya está completa."
 msgstr "The research is already complete."
 
+msgid "La investigación ya no está activa."
+msgstr "The investigation is no longer active."
+
 msgid "La lectura está confirmada. Para cambiarla, duplica el guion: la copia se puede editar."
 msgstr "The reading is confirmed. To change it, duplicate the script: the copy can be edited."
 
@@ -7532,6 +7535,9 @@ msgstr "Unknown origin: %(origen)s"
 #, python-format
 msgid "Otra idea (%(precio)s)"
 msgstr "Another idea (%(precio)s)"
+
+msgid "Otra tarea de este estudio está corriendo; reanuda la investigación cuando termine."
+msgstr "Another task for this study is running; resume the investigation once it finishes."
 
 msgid "Otro"
 msgstr "Other"
@@ -12407,6 +12413,9 @@ msgstr "no pieces"
 
 msgid "sin piezas planeadas"
 msgstr "no pieces planned"
+
+msgid "sin plataformas"
+msgstr "no platforms"
 
 msgid "sin precio"
 msgstr "no price"

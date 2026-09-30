@@ -292,6 +292,135 @@ def test_hooks_de_interrupcion(base_temporal):
     ti.interrumpida_buscar(_tarea("acme", eid, "nicho_inv_buscar", {"plataforma": "amazon"}), "reinicio del worker (access_token=abc)")
     i = datos.investigacion("acme", eid)
     assert i["estado"] == "interrumpida" and i["pasos"]["buscar:amazon"]["estado"] == "pendiente" and "abc" not in i["ultimo_error"]
+
+
+# ------------------------------------------------------- fix round 1 (I2) ---
+
+def test_avanzar_se_interrumpe_si_un_manual_choca_con_la_cadena(base_temporal):
+    """Ruling 13: el job_id de una recolección se comparte con el botón manual
+    "recolectar esta fuente". Si ya hay uno vivo SIN la bandera de la cadena,
+    avanzar() no puede seguir por encima de él: se interrumpe con un aviso."""
+    import cola as cola_mod
+    from nicho import datos
+    from tareas import investigacion as ti
+    eid = _estudio(datos, pais="MX")
+    _iniciar(datos, eid, plataformas=("meli",), redes=())
+    datos.guardar_productos_nicho("acme", eid, "meli", _productos(1, "meli"))
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a"], "elegidos": {"meli": ["P0"]},
+                                                          "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}, "buscar:meli": {"estado": "hecho"},
+                                                                    "seleccionar": {"estado": "hecho"}}})
+    job_id = datos.job_id_recolectar("acme", eid, "meli")
+    cola_mod.encolar("nicho_recolectar", {"cliente": "acme", "estudio_id": eid, "fuente": "meli", "params": {}}, cliente="acme", job_id=job_id)
+    assert ti.avanzar("acme", eid) is None
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] == "interrumpida" and "reanuda" in i["ultimo_error"]
+
+
+def test_avanzar_no_choca_con_su_propio_job_vivo(base_temporal):
+    """El mismo job_id, pero con la bandera `investigacion`: es la cadena
+    misma (encolar_recolectar ya lo puso vivo en otra vuelta) -- idempotente,
+    la investigación sigue viva y avanzar() devuelve el paso tal cual."""
+    import cola as cola_mod
+    from nicho import datos
+    from tareas import investigacion as ti
+    eid = _estudio(datos, pais="MX")
+    _iniciar(datos, eid, plataformas=("meli",), redes=())
+    datos.guardar_productos_nicho("acme", eid, "meli", _productos(1, "meli"))
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a"], "elegidos": {"meli": ["P0"]},
+                                                          "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}, "buscar:meli": {"estado": "hecho"},
+                                                                    "seleccionar": {"estado": "hecho"}}})
+    job_id = datos.job_id_recolectar("acme", eid, "meli")
+    cola_mod.encolar("nicho_recolectar", {"cliente": "acme", "estudio_id": eid, "fuente": "meli", "params": {}, "investigacion": True},
+                     cliente="acme", job_id=job_id)
+    assert ti.avanzar("acme", eid) == "resenas:meli"
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] not in ("interrumpida", "detenida")
+
+
+# ------------------------------------------------------- fix round 1 (I3) ---
+
+def test_consultas_falla_y_luego_paga_con_referencia_de_intento(base_temporal, cola_falsa, monkeypatch):
+    """Ruling 14: dos intentos de la MISMA tarea -- el primero falla (se
+    cobra igual, con su propia referencia), el segundo paga y avanza; las dos
+    referencias son distintas y el `usd` del paso es la suma de ambas."""
+    import gastos
+    from nicho import avatares, datos
+    from tareas import investigacion as ti
+    eid = _estudio(datos)
+    _iniciar(datos, eid, plataformas=("amazon",))
+    _claude(monkeypatch, [("no es json", 10, 5)])
+    with pytest.raises(avatares.AnalisisInvalido):
+        ti.ejecutar_consultas(_tarea("acme", eid, "nicho_inv_consultas", intentos=1, max_intentos=2))
+    _claude(monkeypatch, [('{"consultas": ["a b", "c d"]}', 200, 20)])
+    ti.ejecutar_consultas(_tarea("acme", eid, "nicho_inv_consultas", intentos=2, max_intentos=2))
+    i = datos.investigacion("acme", eid)
+    assert i["pasos"]["consultas"]["estado"] == "hecho"
+    refs = {g["referencia"]: g["usd"] for g in gastos.historial("acme")}
+    ref_fallido, ref_ok = f"investigacion:{eid}:consultas:fallido1:t7", f"investigacion:{eid}:consultas:i2:t7"
+    assert ref_fallido in refs and ref_ok in refs
+    suma = round(refs[ref_fallido] + refs[ref_ok], 4)
+    assert i["pasos"]["consultas"]["usd"] == suma == i["gastado_usd"]
+    assert cola_falsa[-1]["tipo"] == "nicho_inv_buscar"
+
+
+def test_consultas_ya_hecho_no_llama_a_claude_de_nuevo(base_temporal, cola_falsa, monkeypatch):
+    """Un reintento de la tarea (p. ej. avanzar() reventó DESPUÉS de guardar
+    las consultas) con el paso ya `hecho`: no se paga otra vez, solo sigue."""
+    import gastos
+    from nicho import avatares, datos
+    from tareas import investigacion as ti
+    eid = _estudio(datos)
+    _iniciar(datos, eid, plataformas=("amazon",))
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a b", "c d"],
+                                                          "pasos": {**x["pasos"], "consultas": {"estado": "hecho", "usd": 0.01}}})
+    llamado = []
+    monkeypatch.setattr(avatares, "_llamar", lambda *a, **k: llamado.append(1))
+    msg = ti.ejecutar_consultas(_tarea("acme", eid, "nicho_inv_consultas", intentos=2, max_intentos=2))
+    assert llamado == [] and gastos.historial("acme") == [] and "a b" in msg
+    assert cola_falsa[-1]["tipo"] == "nicho_inv_buscar"
+
+
+# --------------------------------------------------- fix round 1 (Ruling 16) ---
+
+def test_avanzar_sin_plataformas_salta_seleccionar(base_temporal, cola_falsa, monkeypatch):
+    """Sin ninguna plataforma buscada no hay productos que juzgar: seleccionar
+    queda `vacio` sin llamar a Claude, y la cadena sigue con las redes."""
+    from nicho import datos
+    from tareas import investigacion as ti
+    monkeypatch.setenv("YOUTUBE_API_KEY", "k")
+    eid = _estudio(datos, pais="MX")
+    _iniciar(datos, eid, plataformas=(), redes=("youtube",))
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a", "b"], "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}}})
+    assert ti.avanzar("acme", eid) == "redes:youtube"
+    i = datos.investigacion("acme", eid)
+    assert i["pasos"]["seleccionar"]["estado"] == "vacio" and i["pasos"]["seleccionar"]["aviso"] == "sin plataformas"
+    assert cola_falsa[-1]["tipo"] == "nicho_recolectar" and cola_falsa[-1]["payload"]["fuente"] == "youtube"
+
+
+# --------------------------------------------------- fix round 1 (Ruling 17) ---
+
+def test_buscar_fuente_no_construye_deja_error_y_sigue(base_temporal, cola_falsa, monkeypatch):
+    """Si ni siquiera se puede construir la fuente (adentro del try, R17), el
+    paso igual cierra `error` -- nada que cobrar -- y la cadena sigue con la
+    siguiente plataforma."""
+    import gastos
+    from nicho import datos
+    from tareas import investigacion as ti
+    eid = _estudio(datos, pais="MX")
+    _iniciar(datos, eid, plataformas=("amazon", "meli"))
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a"], "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}}})
+
+    def _fabrica(t):
+        def _revienta():
+            raise RuntimeError("no se pudo crear la fuente")
+        return _revienta
+    monkeypatch.setattr(ti.fuentes_registro, "por_tipo", _fabrica)
+    with pytest.raises(RuntimeError):
+        ti.ejecutar_buscar(_tarea("acme", eid, "nicho_inv_buscar", {"plataforma": "amazon"}, intentos=1, max_intentos=1))
+    i = datos.investigacion("acme", eid)
+    assert i["pasos"]["buscar:amazon"]["estado"] == "error"
+    assert gastos.historial("acme") == []
+    assert cola_falsa[-1]["tipo"] == "nicho_inv_buscar" and cola_falsa[-1]["payload"]["plataforma"] == "meli"
     import tareas
     from tareas import investigacion  # noqa: F401
     for t in ("nicho_inv_consultas", "nicho_inv_buscar", "nicho_inv_seleccionar"):

@@ -61,6 +61,27 @@ def _anotar_error(cliente, estudio_id, mensaje):
     datos.recalcular(cliente, estudio_id, tarea_viva=False)
 
 
+def _investigacion_viva(cliente, estudio_id):
+    """(estudio, investigación) si la investigación de ese estudio sigue viva
+    (ni `lista`/`detenida`/`interrumpida`, ni el estudio archivado); (None, None)
+    si no. Ningún paso de la cadena que pasa por `tareas/nicho.py` (resenas,
+    redes, generar) debe llamar al proveedor ni gastar un centavo si esto
+    devuelve None -- una investigación cancelada antes de que el worker
+    arrancara la tarea no debe cobrar nada (R17)."""
+    est = datos.estudio(cliente, estudio_id)
+    if not est or est.get("archivado"):
+        return None, None
+    i = datos.investigacion(cliente, estudio_id)
+    if not i or i.get("estado") in ("lista", "detenida", "interrumpida"):
+        return None, None
+    return est, i
+
+
+def _paso_investigacion(tipo):
+    """`resenas:<plataforma>` o `redes:<red>` según de qué familia es `tipo`."""
+    return ("resenas:" if tipo in fuentes_registro.PLATAFORMAS else "redes:") + tipo
+
+
 @registrar("nicho_generar_avatares")
 def ejecutar_generar(tarea):
     p = tarea["payload"]
@@ -78,8 +99,22 @@ def ejecutar_generar(tarea):
     if auto:
         from nicho import investigacion as inv
         from tareas import investigacion as tareas_inv
+        est_i, _ = _investigacion_viva(cliente, eid)
+        if est_i is None:            # cancelada/archivada antes de que esta tarea arrancara: nada que hacer, nada que pagar
+            datos.recalcular(cliente, eid, tarea_viva=False)
+            return gettext("La investigación ya no está activa.")
+        datos.actualizar_investigacion(cliente, eid, lambda i: inv.marcar_paso(i, "generar", "en_curso"))
         tope = p.get("tope_usd")
-        est_costo = avatares.estimar_costo(datos.comentarios_para_generar(cliente, eid))
+        try:
+            est_costo = avatares.estimar_costo(datos.comentarios_para_generar(cliente, eid))
+        except Exception as e:
+            # Nada pagado todavía (estimar_costo no llama a Claude): el paso queda
+            # `error` y la investigación `detenida` (reanudable), sin gasto (R17).
+            mensaje = cola.recortar(cola.sin_token(e), 300)
+            datos.actualizar_investigacion(cliente, eid, lambda i: inv.detener(
+                inv.marcar_paso(i, "generar", "error", aviso=mensaje), mensaje))
+            datos.recalcular(cliente, eid, tarea_viva=False)
+            return gettext("Avatares no generados: %(motivo)s", motivo=mensaje)
         if tope is not None and est_costo["usd"] > float(tope):
             motivo = gettext("los avatares costarían %(costo)s y quedan %(tope)s aprobados: genera con el botón cuando quieras",
                              costo=gastos.formatear(est_costo["usd"]), tope=gastos.formatear(max(0.0, float(tope))))
@@ -116,9 +151,13 @@ def ejecutar_generar(tarea):
                                             error=cola.sin_token(e)))
         if auto:
             from nicho import investigacion as inv
-            datos.actualizar_investigacion(cliente, eid, lambda i: inv.detener(
-                inv.marcar_paso(i, "generar", "error", usd=usd if entrada + salida > 0 else 0, aviso=cola.recortar(cola.sin_token(e), 300)),
-                gettext("la generación de avatares falló: %(e)s", e=cola.recortar(cola.sin_token(e), 200))))
+            cargo = usd if entrada + salida > 0 else 0
+
+            def _fn(i):
+                previo = float(((i.get("pasos") or {}).get("generar") or {}).get("usd") or 0)
+                return inv.detener(inv.marcar_paso(i, "generar", "error", usd=round(previo + cargo, 4), aviso=cola.recortar(cola.sin_token(e), 300)),
+                                   gettext("la generación de avatares falló: %(e)s", e=cola.recortar(cola.sin_token(e), 200)))
+            datos.actualizar_investigacion(cliente, eid, _fn)
         raise
     resumen = r["resumen"]
     gastos.registrar_seguro(cliente, "avatares", resumen.get("usd"), f"avatares:{eid}:{res['generacion']}",
@@ -128,8 +167,11 @@ def ejecutar_generar(tarea):
                                    "modelo": resumen.get("modelo")})
     datos.recalcular(cliente, eid, tarea_viva=False)
     if auto:
-        datos.actualizar_investigacion(cliente, eid, lambda i: inv.marcar_paso(i, "generar", "hecho", usd=float(resumen.get("usd") or 0),
-                                                                              nucleos=res["nucleos"], subs=res["subs"]))
+        def _fn(i):
+            previo = float(((i.get("pasos") or {}).get("generar") or {}).get("usd") or 0)
+            return inv.marcar_paso(i, "generar", "hecho", usd=round(previo + float(resumen.get("usd") or 0), 4),
+                                   nucleos=res["nucleos"], subs=res["subs"])
+        datos.actualizar_investigacion(cliente, eid, _fn)
         tareas_inv.avanzar(cliente, eid)
     aviso = (" · " + gettext("%(n)s núcleo(s) sin sub-avatares", n=resumen["errores"])) if resumen.get("errores") else ""
     return gettext("%(nucleos)s núcleo(s) y %(subs)s sub-avatar(es) propuestos — revísalos y aprueba los que sirvan%(aviso)s.",
@@ -139,7 +181,17 @@ def ejecutar_generar(tarea):
 @al_interrumpir("nicho_generar_avatares")
 def interrumpida_generar(tarea, mensaje):
     p = tarea["payload"]
-    _anotar_error(p["cliente"], int(p["estudio_id"]), mensaje)
+    cliente, eid = p["cliente"], int(p["estudio_id"])
+    if p.get("auto"):
+        # Paso de la investigación (spec Parte 3): igual que interrumpida_recolectar
+        # para un paso de la cadena -- vuelve a `pendiente` (reanudable) en vez del
+        # `estudio.extra.ultimo_error` genérico que usa el botón manual.
+        from nicho import investigacion as inv
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):    # el hook no pasa por worker.ejecutar
+            error = cola.recortar(cola.sin_token(mensaje), 300)
+        datos.actualizar_investigacion(cliente, eid, lambda i: {**inv.marcar_paso(i, "generar", "pendiente"), "estado": "interrumpida", "ultimo_error": error})
+        return
+    _anotar_error(cliente, eid, mensaje)
 
 
 # ------------------------------------------------------- nicho_recolectar ---
@@ -154,9 +206,14 @@ def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False)
     payload = {"cliente": cliente, "estudio_id": int(estudio_id), "fuente": fuente, "params": dict(params or {})}
     if investigacion:
         payload["investigacion"] = True
+    # Reddit/YouTube gratis reintentan solos FUERA de la cadena (la dedup hace
+    # seguro el reintento); DENTRO de la cadena un reintento libre cambiaría un
+    # paso que `avanzar()` ya dio por cerrado y podría duplicar comentarios ya
+    # contados en otro paso -- un solo intento, como las fuentes de pago (I4).
+    max_intentos = 1 if (de_pago or investigacion) else 2
     return trabajos.encolar(datos.job_id_recolectar(cliente, estudio_id, fuente), "nicho_recolectar", payload,
                             cliente=cliente, duracion_estimada=300 if de_pago else 120, etapas=ETAPAS_RECOLECTAR,
-                            max_intentos=1 if de_pago else 2)
+                            max_intentos=max_intentos)
 
 
 def _corrida(fuente):
@@ -196,15 +253,23 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
 
 def _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, error=None):
     """Paso de la cadena (`resenas:<plataforma>` o `redes:<red>`): suma las
-    reseñas traídas por producto, anota el paso y sigue la cadena."""
+    reseñas traídas por producto, anota el paso (el `usd` dado se SUMA al que
+    ya tenía -- un paso retomado no pierde lo que ya había cobrado) y sigue la
+    cadena. Se llama ANTES de cualquier otra escritura que pueda fallar
+    (registrar_recoleccion/recalcular): así una falla ahí no deja el paso
+    `en_curso` con nada corriendo (R17)."""
     from nicho import investigacion as inv
     from tareas import investigacion as tareas_inv
-    paso = ("resenas:" if tipo in fuentes_registro.PLATAFORMAS else "redes:") + tipo
+    paso = _paso_investigacion(tipo)
     if tipo in fuentes_registro.PLATAFORMAS and getattr(fuente, "conteo_por_producto", None):
         datos.sumar_resenas_traidas(cliente, eid, tipo, fuente.conteo_por_producto)
     estado = "error" if error else ("hecho" if (totales["nuevos"] + totales["repetidos"]) else "vacio")
-    datos.actualizar_investigacion(cliente, eid, lambda i: inv.marcar_paso(i, paso, estado, usd=usd, nuevos=totales["nuevos"],
-                                                                          repetidos=totales["repetidos"], aviso=(error or aviso or "")))
+
+    def _fn(i):
+        previo = float(((i.get("pasos") or {}).get(paso) or {}).get("usd") or 0)
+        return inv.marcar_paso(i, paso, estado, usd=round(previo + usd, 4), nuevos=totales["nuevos"],
+                               repetidos=totales["repetidos"], aviso=(error or aviso or ""))
+    datos.actualizar_investigacion(cliente, eid, _fn)
     tareas_inv.avanzar(cliente, eid)
 
 
@@ -216,13 +281,20 @@ def ejecutar_recolectar(tarea):
         return gettext("El estudio ya no existe.")
     if tipo not in fuentes_registro.EN_WORKER:
         raise datos.ErrorDatos(gettext("Fuente desconocida: %(fuente)s", fuente=tipo))
+    if p.get("investigacion"):
+        est_i, _ = _investigacion_viva(cliente, eid)
+        if est_i is None:          # cancelada/archivada antes de que esta tarea arrancara: nunca se llama al proveedor (R17)
+            return gettext("La investigación ya no está activa.")
+        from nicho import investigacion as inv
+        paso_inv = _paso_investigacion(tipo)
+        datos.actualizar_investigacion(cliente, eid, lambda i: inv.marcar_paso(i, paso_inv, "en_curso"))
     job = tarea.get("job_id") or datos.job_id_recolectar(cliente, eid, tipo)
     params = p.get("params") or {}
 
     def avanzar(etapa, detalle=None):
         cola.reportar(job, etapa=etapa, detalle=detalle)
 
-    fuente = fuentes_registro.por_tipo(tipo)()
+    fuente = None
     totales = {"nuevos": 0, "repetidos": 0}
     lote = []
 
@@ -234,6 +306,7 @@ def ejecutar_recolectar(tarea):
             del lote[:]
 
     try:
+        fuente = fuentes_registro.por_tipo(tipo)()          # adentro del try: si esto revienta, el paso igual cierra (R17)
         for c in fuente.recolectar(params, avanzar):
             lote.append(c)
             if len(lote) >= LOTE:
@@ -246,19 +319,22 @@ def ejecutar_recolectar(tarea):
         except Exception:  # noqa: BLE001 — si la base también falla, manda el error original
             log.exception("No se pudo guardar el lote pendiente de %s", tipo)
         mensaje = cola.recortar(cola.sin_token(e), 300)
-        datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": gettext("falló: %(mensaje)s", mensaje=mensaje),
-                                            **_corrida(fuente)})
-        usd = _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota="intento fallido")
-        datos.recalcular(cliente, eid)
+        usd = _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota="intento fallido") if fuente is not None else 0.0
+        # Cierra el paso de la cadena ANTES de las escrituras genéricas que siguen: si
+        # `registrar_recoleccion`/`recalcular` revientan, el paso igual queda cerrado
+        # (nunca `en_curso` con nada vivo detrás) -- R17.
         if p.get("investigacion"):
             _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, "", usd, error=mensaje)
+        datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": gettext("falló: %(mensaje)s", mensaje=mensaje),
+                                            **_corrida(fuente)})
+        datos.recalcular(cliente, eid)
         raise
     aviso = getattr(fuente, "aviso", "") or ""
-    datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": aviso, **_corrida(fuente)})
     usd = _gasto_recoleccion(cliente, eid, tarea, fuente, params)
-    datos.recalcular(cliente, eid)
     if p.get("investigacion"):
         _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd)
+    datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": aviso, **_corrida(fuente)})
+    datos.recalcular(cliente, eid)
     nombre_fuente = idiomas.traducir(fuentes_registro.NOMBRES.get(tipo, tipo))
     texto = gettext("%(nuevos)s comentario(s) nuevo(s) de %(fuente)s; %(repetidos)s repetido(s).",
                     nuevos=totales["nuevos"], fuente=nombre_fuente, repetidos=totales["repetidos"])

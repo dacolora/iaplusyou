@@ -357,3 +357,104 @@ def test_interrumpida_recolectar_investigacion_marca_el_paso_pendiente(base_temp
                                          "reinicio del worker.")
     i = datos.investigacion("acme", eid)
     assert i["estado"] == "interrumpida" and i["pasos"]["resenas:meli"]["estado"] == "pendiente" and i["ultimo_error"]
+
+
+# ------------------------------------------------------- fix round 1 (I1) ---
+
+def test_interrumpida_generar_auto_marca_pendiente_e_interrumpida(base_temporal):
+    """Ruling 12: `interrumpida_generar` con `payload["auto"]` hace lo mismo
+    que `interrumpida_recolectar` para un paso de la cadena -- no el
+    `estudio.extra.ultimo_error` genérico del botón manual."""
+    from nicho import datos
+    from nicho import investigacion as inv
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X", pais="MX")
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("x", "MX", [], [], inv.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+    datos.actualizar_investigacion("acme", eid, lambda i: {**i, "estado": "generando", "pasos": {**i["pasos"], "generar": {"estado": "en_curso"}}})
+    tareas_nicho.interrumpida_generar({"payload": {"cliente": "acme", "estudio_id": eid, "auto": True}}, "reinicio del worker.")
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] == "interrumpida" and i["pasos"]["generar"]["estado"] == "pendiente" and i["ultimo_error"]
+    assert inv.puede_reanudar(i["estado"])
+
+
+# ------------------------------------------------------- fix round 1 (I4) ---
+
+def test_encolar_recolectar_investigacion_redes_max_intentos_1(base_temporal, monkeypatch):
+    """Ruling 15: reddit/youtube reintentan solos FUERA de la cadena, pero
+    DENTRO (`investigacion=True`) un solo intento -- un reintento libre
+    cambiaría un paso que avanzar() ya dio por cerrado."""
+    from nicho import datos
+    from tareas import nicho as tareas_nicho
+    encolados = []
+    monkeypatch.setattr(tareas_nicho.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append({"payload": payload, **kw}) or True)
+    eid = datos.crear_estudio("acme", "X")
+    tareas_nicho.encolar_recolectar("acme", eid, "reddit", {"palabras_clave": "x"}, investigacion=True)
+    assert encolados[0]["max_intentos"] == 1 and encolados[0]["payload"]["investigacion"] is True
+    tareas_nicho.encolar_recolectar("acme", eid, "reddit", {"palabras_clave": "x"})
+    assert encolados[1]["max_intentos"] == 2
+
+
+# --------------------------------------------------- fix round 1 (Ruling 17) ---
+
+def test_ejecutar_recolectar_investigacion_cancelada_no_llama_a_la_fuente(base_temporal, monkeypatch):
+    """Una investigación ya `detenida` (cancelada) antes de que el worker
+    arrancara esta tarea: ni se construye la fuente ni se cobra nada."""
+    import gastos
+    from nicho import datos
+    from nicho import investigacion as inv
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X", pais="MX")
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("x", "MX", ["meli"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+    datos.actualizar_investigacion("acme", eid, lambda i: {**i, "estado": "detenida", "detenida_por": "cancelada"})
+    llamada = []
+    monkeypatch.setattr(tareas_nicho.fuentes_registro, "por_tipo", lambda t: (lambda: llamada.append(1)))
+    msg = tareas_nicho.ejecutar_recolectar({"id": 1, "payload": {"cliente": "acme", "estudio_id": eid, "fuente": "meli", "params": {}, "investigacion": True},
+                                            "job_id": datos.job_id_recolectar("acme", eid, "meli"), "intentos": 1, "max_intentos": 1})
+    assert llamada == [] and gastos.historial("acme") == []
+    assert "activa" in msg.lower()
+
+
+def test_ejecutar_recolectar_investigacion_fuente_no_construye_cierra_error(base_temporal, monkeypatch):
+    """Mismo principio de R17 aplicado al lugar que ya se tocó para marcar
+    `en_curso` al empezar: si ni siquiera se puede construir la fuente, el
+    paso igual cierra `error` -- nunca queda `en_curso` sin nada corriendo."""
+    from nicho import datos
+    from nicho import investigacion as inv
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X", pais="MX")
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("x", "MX", ["meli"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+    datos.actualizar_investigacion("acme", eid, lambda i: {**i, "pasos": {**i["pasos"], "consultas": {"estado": "hecho"},
+                                                                          "buscar:meli": {"estado": "hecho"}, "seleccionar": {"estado": "hecho"}}})
+
+    def _fabrica(t):
+        def _revienta():
+            raise RuntimeError("no se pudo crear la fuente")
+        return _revienta
+    monkeypatch.setattr(tareas_nicho.fuentes_registro, "por_tipo", _fabrica)
+    with pytest.raises(RuntimeError):
+        tareas_nicho.ejecutar_recolectar({"id": 5, "payload": {"cliente": "acme", "estudio_id": eid, "fuente": "meli", "params": {}, "investigacion": True},
+                                          "job_id": datos.job_id_recolectar("acme", eid, "meli"), "intentos": 1, "max_intentos": 1})
+    i = datos.investigacion("acme", eid)
+    assert i["pasos"]["resenas:meli"]["estado"] == "error"
+
+
+def test_ejecutar_generar_auto_comentarios_para_generar_revienta_detiene_sin_gasto(base_temporal, monkeypatch):
+    """Ruling 17: nada se pagó todavía cuando `comentarios_para_generar`
+    revienta -- el paso queda `error`, la investigación `detenida`
+    (reanudable) y no hay ningún gasto registrado."""
+    import gastos
+    from nicho import datos
+    from nicho import investigacion as inv
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X", pais="MX")
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("x", "MX", [], [], inv.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+    datos.actualizar_investigacion("acme", eid, lambda i: {**i, "estado": "generando",
+                                                          "pasos": {**i["pasos"], "consultas": {"estado": "hecho"}, "seleccionar": {"estado": "hecho"},
+                                                                    "generar": {"estado": "pendiente"}}})
+    monkeypatch.setattr(datos, "comentarios_para_generar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("la base no respondió")))
+    msg = tareas_nicho.ejecutar_generar({"id": 1, "payload": {"cliente": "acme", "estudio_id": eid, "auto": True, "tope_usd": 1.0},
+                                         "job_id": datos.job_id_generar("acme", eid), "intentos": 1, "max_intentos": 1})
+    i = datos.investigacion("acme", eid)
+    assert i["pasos"]["generar"]["estado"] == "error" and i["estado"] == "detenida" and inv.puede_reanudar(i["estado"])
+    assert gastos.historial("acme") == []
+    assert "Avatares no generados" in msg

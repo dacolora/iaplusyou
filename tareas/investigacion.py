@@ -82,6 +82,44 @@ def _gasto_apify(cliente, eid, tarea, paso, fuente, tarifa, nota=""):
     return usd
 
 
+def _ref_intento(paso, tarea):
+    """Referencia del intento que sí pagó Claude: el primero usa `paso` tal
+    cual (spec); del segundo en adelante, `paso:i<intento>` -- dos intentos de
+    la MISMA tarea (uno falló, el otro pagó) no se pisan entre sí."""
+    intentos = int(tarea.get("intentos") or 1)
+    return paso if intentos <= 1 else f"{paso}:i{intentos}"
+
+
+def _marcar_acumulando(cliente, eid, paso, estado, usd, **kw):
+    """Como `_marcar`, pero el `usd` dado se SUMA al que ya tenía el paso: un
+    paso que se retoma (interrumpido, reanudado) no pierde lo que ya había
+    cobrado un intento anterior."""
+    def _fn(i):
+        previo = float(((i.get("pasos") or {}).get(paso) or {}).get("usd") or 0)
+        return inv.marcar_paso(i, paso, estado, usd=round(previo + usd, 4), **kw)
+    return datos.actualizar_investigacion(cliente, eid, _fn)
+
+
+def _propio_o_choque(cliente, estudio_id, job_id, ok, bandera):
+    """`encolar_recolectar`/`encolar_generar` devolvieron `ok`. Esos job_id se
+    comparten con los botones manuales del panel ("recolectar esta fuente",
+    "generar avatares"): si `ok` es False, el trabajo vivo con ese id puede
+    ser el mismo paso de la cadena (su payload trae `bandera`: idempotente,
+    la cadena sigue como si hubiera encolado) o un botón manual corriendo (la
+    cadena no puede avanzar por encima de él: se interrumpe con un aviso
+    claro en vez de fingir que encoló). Devuelve True si el llamador debe
+    tratarlo como encolado con éxito."""
+    if ok:
+        return True
+    fila = cola.consultar_por_job(job_id)
+    if ((fila or {}).get("payload") or {}).get(bandera):
+        return True
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):        # el hook no pasa por worker.ejecutar
+        motivo = gettext("Otra tarea de este estudio está corriendo; reanuda la investigación cuando termine.")
+    datos.actualizar_investigacion(cliente, estudio_id, lambda i: {**i, "estado": "interrumpida", "ultimo_error": motivo})
+    return False
+
+
 def _fallo_claude(cliente, eid, tarea, paso, e, motivo_de, ref=None):
     """Camino de fallo de consultas/seleccionar: gasto de lo cobrado, paso
     `pendiente` si queda intento, `error` + detenida si no. Devuelve el mensaje."""
@@ -126,6 +164,11 @@ def avanzar(cliente, estudio_id):
                              cliente=cliente, duracion_estimada=300, etapas=ETAPAS_BUSCAR, max_intentos=1)
             return paso
         if paso == "seleccionar":
+            if not (i.get("plataformas") or []):
+                # Solo redes, sin ninguna plataforma buscada: no hay productos que
+                # juzgar -- ni un solo dato pagado a Claude por nada (Ruling 16).
+                _marcar(cliente, estudio_id, paso, "vacio", aviso=N_("sin plataformas"))
+                continue
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_seleccionar", base, cliente=cliente,
                              duracion_estimada=60, etapas=ETAPAS_SELECCION, max_intentos=2)
             return paso
@@ -139,23 +182,32 @@ def avanzar(cliente, estudio_id):
             params = {"productos": [{"fuente_id": p["fuente_id"], "url": p["url"], "titulo": p["titulo"]} for p in productos],
                       "resenas_por_producto": int((i.get("topes") or {}).get("resenas_por_producto") or inv.TOPES_DEFECTO["resenas_por_producto"]),
                       "pais": i.get("pais") or est.get("pais") or ""}
-            tareas_nicho.encolar_recolectar(cliente, estudio_id, plat, params, investigacion=True)
-            return paso
+            job_id = datos.job_id_recolectar(cliente, estudio_id, plat)
+            ok = tareas_nicho.encolar_recolectar(cliente, estudio_id, plat, params, investigacion=True)
+            if _propio_o_choque(cliente, estudio_id, job_id, ok, "investigacion"):
+                return paso
+            return None
         if paso.startswith("redes:"):
             red = paso.split(":", 1)[1]
             if fuentes_registro.llaves_faltantes(red):
                 _marcar(cliente, estudio_id, paso, "saltado", nuevos=0, aviso=N_("sin llave"))
                 continue
-            tareas_nicho.encolar_recolectar(cliente, estudio_id, red, inv.params_redes(red, i), investigacion=True)
-            return paso
+            job_id = datos.job_id_recolectar(cliente, estudio_id, red)
+            ok = tareas_nicho.encolar_recolectar(cliente, estudio_id, red, inv.params_redes(red, i), investigacion=True)
+            if _propio_o_choque(cliente, estudio_id, job_id, ok, "investigacion"):
+                return paso
+            return None
         # generar
         n = len(datos.comentarios_para_generar(cliente, estudio_id))
         if n < avatares.MIN_COMENTARIOS:
             _detener(cliente, estudio_id, gettext("solo hay %(n)s comentarios; hacen falta %(min)s para los avatares", n=n, min=avatares.MIN_COMENTARIOS))
             return None
         tope = round(float(i.get("aprobado_usd") or 0) - float(i.get("gastado_usd") or 0), 4)
-        tareas_nicho.encolar_generar(cliente, estudio_id, auto=True, tope_usd=tope)
-        return paso
+        job_id = datos.job_id_generar(cliente, estudio_id)
+        ok = tareas_nicho.encolar_generar(cliente, estudio_id, auto=True, tope_usd=tope)
+        if _propio_o_choque(cliente, estudio_id, job_id, ok, "auto"):
+            return paso
+        return None
     return None
 
 
@@ -168,6 +220,11 @@ def ejecutar_consultas(tarea):
     est, i = _activa(cliente, eid)
     if est is None:
         return gettext("La investigación no está activa.")
+    if ((i.get("pasos") or {}).get("consultas") or {}).get("estado") == "hecho":
+        # Reintento (p. ej. avanzar() reventó DESPUÉS de guardar las consultas):
+        # ya están pagadas y guardadas -- no se vuelve a llamar a Claude (I3).
+        avanzar(cliente, eid)
+        return gettext("Consultas: %(consultas)s", consultas=", ".join(i.get("consultas") or []))
     if not (est.get("tema") or "").strip():
         _detener(cliente, eid, N_("sin tema"))
         return gettext("El estudio no tiene tema.")
@@ -179,7 +236,7 @@ def ejecutar_consultas(tarea):
     except Exception as e:
         _fallo_claude(cliente, eid, tarea, "consultas", e, lambda m: gettext("Claude no pudo escribir las consultas: %(e)s", e=m))
         raise
-    usd = _gasto_claude(cliente, eid, tarea, "consultas", entrada, salida, gettext("%(n)s consultas", n=len(consultas)))
+    usd = _gasto_claude(cliente, eid, tarea, _ref_intento("consultas", tarea), entrada, salida, gettext("%(n)s consultas", n=len(consultas)))
 
     def _fn(x):
         previo = float(((x.get("pasos") or {}).get("consultas") or {}).get("usd") or 0)
@@ -209,9 +266,10 @@ def ejecutar_buscar(tarea):
         cola.reportar(job, etapa=etapa, detalle=detalle)
 
     _marcar(cliente, eid, paso, "en_curso")
-    fuente = fuentes_registro.por_tipo(plat)()
+    fuente = None
     productos, guardado = [], {"nuevos": 0, "actualizados": 0}
     try:
+        fuente = fuentes_registro.por_tipo(plat)()               # adentro del try: si esto revienta, el paso igual cierra (R17)
         for prod in fuente.buscar(consultas, pais, topes["productos_por_consulta"], reportar):
             productos.append(prod)
         reportar(N_("Guardando"))
@@ -222,14 +280,15 @@ def ejecutar_buscar(tarea):
                 guardado = datos.guardar_productos_nicho(cliente, eid, plat, productos)      # lo leído nunca se pierde
         except Exception:  # noqa: BLE001 — si la base también falla, manda el error original
             log.exception("No se pudieron guardar los productos de %s", plat)
-        usd = _gasto_apify(cliente, eid, tarea, paso, fuente, fuente.tarifa_busqueda(), nota=gettext("intento fallido"))
+        usd = (_gasto_apify(cliente, eid, tarea, paso, fuente, fuente.tarifa_busqueda(), nota=gettext("intento fallido"))
+               if fuente is not None else 0.0)                   # la fuente ni se construyó: nada que cobrar
         mensaje = cola.recortar(cola.sin_token(e), 300)
-        _marcar(cliente, eid, paso, "error", usd=usd, productos=len(productos), nuevos=guardado["nuevos"], aviso=mensaje)
+        _marcar_acumulando(cliente, eid, paso, "error", usd, productos=len(productos), nuevos=guardado["nuevos"], aviso=mensaje)
         avanzar(cliente, eid)                                   # una plataforma caída no frena a las demás
         raise
     usd = _gasto_apify(cliente, eid, tarea, paso, fuente, fuente.tarifa_busqueda())
-    _marcar(cliente, eid, paso, "hecho" if productos else "vacio", usd=usd, productos=len(productos), nuevos=guardado["nuevos"],
-            aviso=getattr(fuente, "aviso", "") or "")
+    _marcar_acumulando(cliente, eid, paso, "hecho" if productos else "vacio", usd, productos=len(productos), nuevos=guardado["nuevos"],
+                       aviso=getattr(fuente, "aviso", "") or "")
     avanzar(cliente, eid)
     return gettext("%(n)s producto(s) de %(plataforma)s (%(nuevos)s nuevos)", n=len(productos), plataforma=plataformas.nombre(plat), nuevos=guardado["nuevos"])
 
@@ -253,8 +312,14 @@ def ejecutar_seleccionar(tarea):
         except Exception as e:
             _fallo_claude(cliente, eid, tarea, "seleccionar", e, lambda m: gettext("Claude no pudo elegir los productos: %(e)s", e=m), ref="seleccion")
             raise
+        # Se registra el gasto YA, apenas Claude respondió -- antes de cualquier otra
+        # escritura (I3): si `marcar_relevancia` o lo que sigue revienta, lo pagado
+        # igual quedó anotado.
+        usd = _gasto_claude(cliente, eid, tarea, _ref_intento("seleccion", tarea), entrada, salida,
+                            gettext("%(n)s productos juzgados", n=len(decisiones)))
         datos.marcar_relevancia(cliente, eid, decisiones)
-    usd = _gasto_claude(cliente, eid, tarea, "seleccion", entrada, salida, gettext("%(n)s productos juzgados", n=len(decisiones)))
+    else:
+        usd = 0.0                                                # nada sin juzgar: no se llama a Claude (I3)
     todos = datos.productos_nicho(cliente, eid)
     relevantes = [x for x in todos if x.get("relevante")]
     elegidos = inv.elegir(todos, {x["id"]: {"relevante": True} for x in relevantes}, topes["productos_elegidos"])
