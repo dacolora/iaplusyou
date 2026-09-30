@@ -362,6 +362,9 @@ msgstr "%(n)s comment(s) from %(f)s source(s)"
 msgid "%(n)s con activo en el catálogo"
 msgstr "%(n)s with an asset in the catalog"
 
+msgid "%(n)s consultas"
+msgstr "%(n)s queries"
+
 #, python-format
 msgid "%(n)s descartada(s)"
 msgstr "%(n)s discarded"
@@ -506,6 +509,9 @@ msgstr "%(n)s piece(s) approved for passing QA."
 msgid "%(n)s piezas elegidas tienen puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual."
 msgstr "%(n)s chosen pieces have points to improve according to the doctrine (shown in Create). You can launch anyway."
 
+msgid "%(n)s producto(s) de %(plataforma)s (%(nuevos)s nuevos)"
+msgstr "%(n)s product(s) from %(plataforma)s (%(nuevos)s new)"
+
 #, python-format
 msgid "%(n)s producto(s) guardado(s) sin activo todavía: el resto se completa solo en las próximas corridas."
 msgstr "%(n)s product(s) saved without an asset yet: the rest complete on their own in the next runs."
@@ -517,6 +523,9 @@ msgstr "%(n)s new product(s)"
 #, python-format
 msgid "%(n)s productos"
 msgstr "%(n)s products"
+
+msgid "%(n)s productos juzgados"
+msgstr "%(n)s products judged"
 
 #, python-format
 msgid "%(n)s productos, personajes y entornos, con buscador."
@@ -931,6 +940,9 @@ msgstr "%(precio)s approx."
 #, python-format
 msgid "%(presupuesto)s %(moneda)s/día"
 msgstr "%(presupuesto)s %(moneda)s/day"
+
+msgid "%(r)s producto(s) del nicho; %(e)s elegido(s) para traer reseñas"
+msgstr "%(r)s niche product(s); %(e)s chosen to fetch reviews"
 
 #, python-format
 msgid "%(sin_revisar)s sin revisar · %(error)s con error · USD %(usd)s"
@@ -1813,6 +1825,9 @@ msgstr "Avatar saved. If it was already approved, approve it again to update the
 msgid "Avatares"
 msgstr "Avatars"
 
+msgid "Avatares no generados: %(motivo)s"
+msgstr "Avatars not generated: %(motivo)s"
+
 #, python-format
 msgid "Avatares: %(nombre)s"
 msgstr "Avatars: %(nombre)s"
@@ -2372,6 +2387,12 @@ msgstr "Claude did not judge any product."
 msgid "Claude no nombró ninguna causa conocida."
 msgstr "Claude didn't name any known cause."
 
+msgid "Claude no pudo elegir los productos: %(e)s"
+msgstr "Claude could not choose the products: %(e)s"
+
+msgid "Claude no pudo escribir las consultas: %(e)s"
+msgstr "Claude could not write the queries: %(e)s"
+
 msgid "Claude no pudo responder esta vez."
 msgstr "Claude couldn't respond this time."
 
@@ -2679,11 +2700,17 @@ msgstr "Invalid awareness: %(consciencia)s"
 msgid "Consistencia visual"
 msgstr "Visual consistency"
 
+msgid "Consultas"
+msgstr "Queries"
+
 msgid "Consultas usadas:"
 msgstr "Queries used:"
 
 msgid "Consultas:"
 msgstr "Queries:"
+
+msgid "Consultas: %(consultas)s"
+msgstr "Queries: %(consultas)s"
 
 msgid "Conteo exacto de personajes y objetos"
 msgstr "Exact count of characters and objects"
@@ -3880,6 +3907,9 @@ msgstr "Pick a voice from the list."
 
 msgid "Elige una voz y un idioma de la lista."
 msgstr "Pick a voice and a language from the list."
+
+msgid "Eligiendo productos"
+msgstr "Choosing products"
 
 msgid "Eligiendo qué quitar…"
 msgstr "Choosing what to cut…"
@@ -5923,6 +5953,9 @@ msgstr "The idea already has a generated piece; it wasn't rewritten."
 msgid "La importación no trae archivo ni URL."
 msgstr "The import has no file or URL."
 
+msgid "La investigación no está activa."
+msgstr "The investigation is not active."
+
 msgid "La investigación ya está completa."
 msgstr "The research is already complete."
 
@@ -6854,6 +6887,9 @@ msgstr "No core came complete."
 msgid "Ningún producto coincide con esa búsqueda."
 msgstr "No product matches that search."
 
+msgid "Ningún producto encontrado es del nicho."
+msgstr "None of the products found belongs to the niche."
+
 msgid "Ningún referente coincide con esos filtros."
 msgstr "No reference matches those filters."
 
@@ -6957,6 +6993,9 @@ msgstr "There are no new candidates in the library for this stage."
 
 msgid "No hay conexión con el servidor."
 msgstr "No connection to the server."
+
+msgid "No hay consultas para buscar."
+msgstr "There are no queries to search."
 
 msgid "No hay corridas que lanzar."
 msgstr "There are no runs to launch."
@@ -11445,6 +11484,9 @@ msgstr "this product"
 msgid "estructura"
 msgstr "structure"
 
+msgid "estudio archivado"
+msgstr "study archived"
+
 msgid "etiquetas"
 msgstr "tags"
 
@@ -11654,6 +11696,9 @@ msgstr "revenue / orders"
 msgid "intensa"
 msgstr "intense"
 
+msgid "intento fallido"
+msgstr "failed attempt"
+
 msgid "interrumpida"
 msgstr "interrupted"
 
@@ -11685,6 +11730,9 @@ msgstr "final %(legado)s no longer exists"
 #, python-format
 msgid "la ganadora «%(nombre)s»"
 msgstr "the winner “%(nombre)s”"
+
+msgid "la generación de avatares falló: %(e)s"
+msgstr "avatar generation failed: %(e)s"
 
 msgid "la generación del clon falló"
 msgstr "the clone generation failed"
@@ -11741,6 +11789,9 @@ msgstr "the next version uses it"
 
 msgid "lo visual no da creencia"
 msgstr "the visuals don't build belief"
+
+msgid "los avatares costarían %(costo)s y quedan %(tope)s aprobados: genera con el botón cuando quieras"
+msgstr "the avatars would cost %(costo)s and %(tope)s of the approved cap remains: generate with the button whenever you want"
 
 msgid "los entornos"
 msgstr "environments"
@@ -11876,6 +11927,9 @@ msgstr "aren't"
 
 msgid "no gasta: la regla la escribes tú"
 msgstr "costs nothing: you write the rule"
+
+msgid "no se encontraron productos del nicho"
+msgstr "no niche products were found"
 
 msgid "no se puede usar aún"
 msgstr "can't be used yet"
@@ -12183,6 +12237,9 @@ msgstr "Amazon reviews"
 msgid "reseñas de TikTok Shop"
 msgstr "TikTok Shop reviews"
 
+msgid "reseñas ya traídas"
+msgstr "reviews already fetched"
+
 msgid "respuesta ilegible"
 msgstr "unreadable response"
 
@@ -12297,6 +12354,9 @@ msgstr "not connected"
 msgid "sin confirmar"
 msgstr "unconfirmed"
 
+msgid "sin consultas"
+msgstr "no queries"
+
 msgid "sin contar anuncios sueltos"
 msgstr "not counting standalone ads"
 
@@ -12327,6 +12387,9 @@ msgstr "no spend measured this month"
 msgid "sin generación pagada"
 msgstr "no paid generation"
 
+msgid "sin llave"
+msgstr "no key"
+
 msgid "sin logo oficial: súbelo en FlowSettings › Logos"
 msgstr "no official logo: upload it in FlowSettings › Logos"
 
@@ -12350,6 +12413,9 @@ msgstr "no price"
 
 msgid "sin producto"
 msgstr "no product"
+
+msgid "sin productos elegidos"
+msgstr "no chosen products"
 
 msgid "sin respuesta"
 msgstr "no response"
@@ -12381,6 +12447,9 @@ msgstr "extra %(lista)s (removed or nonexistent)"
 
 msgid "sol directo, exteriores"
 msgstr "direct sun, outdoors"
+
+msgid "solo hay %(n)s comentarios; hacen falta %(min)s para los avatares"
+msgstr "there are only %(n)s comments; %(min)s are needed for the avatars"
 
 msgid "solo ventas medibles"
 msgstr "measurable sales only"

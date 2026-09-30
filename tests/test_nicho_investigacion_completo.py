@@ -312,7 +312,7 @@ class TestPlataformas:
 class TestTareasWorker:
     """Test worker task logic."""
 
-    def test_avanzar_genera_job_id_deterministico(self, tareas_inv, monkeypatch):
+    def test_avanzar_genera_job_id_deterministico(self, tareas_inv, datos_nicho, investigacion_mod, monkeypatch):
         """avanzar creates deterministic job_id."""
         encolados = []
 
@@ -320,22 +320,18 @@ class TestTareasWorker:
             encolados.append((job_id, tarea))
             return True
 
-        def mock_siguiente(inv):
-            return "consultas"
-
-        def mock_investigacion(c, e):
-            return {"estado": "consultas"}
-
         monkeypatch.setattr("tareas.investigacion.trabajos.encolar", mock_encolar)
-        monkeypatch.setattr("tareas.investigacion.inv.siguiente_paso", mock_siguiente)
-        monkeypatch.setattr("tareas.investigacion.datos.investigacion", mock_investigacion)
 
-        tareas_inv.avanzar("cliente1", 123)
+        eid = datos_nicho.crear_estudio("cliente1", "Estudio", tema="phones", pais="US")
+        datos_nicho.iniciar_investigacion("cliente1", eid, investigacion_mod.crear_inicial(
+            "phones", "US", ["amazon"], [], investigacion_mod.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+
+        tareas_inv.avanzar("cliente1", eid)
 
         assert len(encolados) == 1
-        assert encolados[0][0] == "nicho:cliente1:123:inv:consultas"
+        assert encolados[0][0] == f"nicho:cliente1:{eid}:inv:consultas"
 
-    def test_avanzar_diferencia_plataformas(self, tareas_inv, monkeypatch):
+    def test_avanzar_diferencia_plataformas(self, tareas_inv, datos_nicho, investigacion_mod, monkeypatch):
         """avanzar distinguishes buscar:amazon vs buscar:meli."""
         encolados = []
 
@@ -343,21 +339,19 @@ class TestTareasWorker:
             encolados.append(payload)
             return True
 
-        def mock_siguiente(inv):
-            return "buscar:amazon"
-
-        def mock_investigacion(c, e):
-            return {"estado": "buscando"}
-
         monkeypatch.setattr("tareas.investigacion.trabajos.encolar", mock_encolar)
-        monkeypatch.setattr("tareas.investigacion.inv.siguiente_paso", mock_siguiente)
-        monkeypatch.setattr("tareas.investigacion.datos.investigacion", mock_investigacion)
 
-        tareas_inv.avanzar("c1", 1)
+        eid = datos_nicho.crear_estudio("cliente1", "Estudio", tema="phones", pais="US")
+        inicial = investigacion_mod.crear_inicial("phones", "US", ["amazon", "meli"], [], investigacion_mod.TOPES_DEFECTO,
+                                                  estimado={"total_usd": 1.0})
+        inicial = investigacion_mod.marcar_paso(inicial, "consultas", "hecho")        # el siguiente paso pendiente es buscar:amazon
+        datos_nicho.iniciar_investigacion("cliente1", eid, inicial)
+
+        tareas_inv.avanzar("cliente1", eid)
 
         assert encolados[0]["plataforma"] == "amazon"
 
-    def test_avanzar_sin_siguiente_paso(self, tareas_inv, monkeypatch):
+    def test_avanzar_sin_siguiente_paso(self, tareas_inv, datos_nicho, investigacion_mod, monkeypatch):
         """avanzar does nothing if no next step."""
         encolados = []
 
@@ -365,17 +359,15 @@ class TestTareasWorker:
             encolados.append(1)
             return True
 
-        def mock_siguiente(inv):
-            return None  # Cadena terminada
-
-        def mock_investigacion(c, e):
-            return {"estado": "lista"}
-
         monkeypatch.setattr("tareas.investigacion.trabajos.encolar", mock_encolar)
-        monkeypatch.setattr("tareas.investigacion.inv.siguiente_paso", mock_siguiente)
-        monkeypatch.setattr("tareas.investigacion.datos.investigacion", mock_investigacion)
 
-        tareas_inv.avanzar("c1", 1)
+        eid = datos_nicho.crear_estudio("cliente1", "Estudio", tema="phones", pais="US")
+        inicial = investigacion_mod.crear_inicial("phones", "US", [], [], investigacion_mod.TOPES_DEFECTO, estimado={"total_usd": 1.0})
+        for paso in inicial["orden"]:                                                 # todo hecho -> "lista", sin próximo paso
+            inicial = investigacion_mod.marcar_paso(inicial, paso, "hecho")
+        datos_nicho.iniciar_investigacion("cliente1", eid, inicial)
+
+        tareas_inv.avanzar("cliente1", eid)
 
         assert len(encolados) == 0
 
@@ -397,20 +389,8 @@ class TestTareasWorker:
             "gastado_usd": 0.0, "aprobado_usd": 5.0,
         })
 
-        class _Bloque:
-            text = '{"consultas": ["mejor termo", "termo acero"]}'
-
-        class _Respuesta:
-            content = [_Bloque()]
-
-        class _Mensajes:
-            def create(self, **kw):
-                return _Respuesta()
-
-        class _ClienteFalso:
-            messages = _Mensajes()
-
-        monkeypatch.setattr("tareas.investigacion.anthropic.Anthropic", lambda: _ClienteFalso())
+        from nicho import avatares
+        monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: ('{"consultas": ["a b", "c d"]}', 100, 10))
         monkeypatch.setattr("tareas.investigacion.gastos.registrar_seguro", lambda *a, **k: None)
         encolados = []
         monkeypatch.setattr("tareas.investigacion.trabajos.encolar",
@@ -426,35 +406,6 @@ class TestTareasWorker:
 
         inv = datos_nicho.investigacion(cliente, eid)
         assert inv["pasos"]["consultas"]["estado"] == "hecho"
-
-    def test_ejecutar_buscar_detiene_la_cadena_en_vez_de_fingir(self, tareas_inv, datos_nicho, estudio_test):
-        """`nicho_inv_buscar` todavía no tiene la búsqueda real de Apify: debe
-        detener la investigación con un motivo claro, nunca quedar "en curso"
-        para siempre sin ningún aviso (antes no tocaba el estado en absoluto)."""
-        cliente, eid = "test_cliente", estudio_test
-        datos_nicho.actualizar_investigacion(cliente, eid, lambda inv: {
-            "estado": "buscando", "consultas": ["termo"],
-            "pasos": {"consultas": {"estado": "hecho"}}, "gastado_usd": 0.0, "aprobado_usd": 5.0,
-        })
-
-        tareas_inv.ejecutar_buscar({"payload": {"cliente": cliente, "estudio_id": eid, "plataforma": "amazon"},
-                                    "job_id": f"nicho:{cliente}:{eid}:inv:buscar:amazon"})
-
-        inv = datos_nicho.investigacion(cliente, eid)
-        assert inv["estado"] == "detenida"
-        assert "amazon" in inv["detenida_por"] and "no está implementada" in inv["detenida_por"]
-
-    def test_ejecutar_seleccionar_detiene_la_cadena_en_vez_de_fingir(self, tareas_inv, datos_nicho, estudio_test):
-        cliente, eid = "test_cliente", estudio_test
-        datos_nicho.actualizar_investigacion(cliente, eid, lambda inv: {
-            "estado": "seleccionando", "consultas": ["termo"], "pasos": {}, "gastado_usd": 0.0, "aprobado_usd": 5.0,
-        })
-
-        tareas_inv.ejecutar_seleccionar({"payload": {"cliente": cliente, "estudio_id": eid},
-                                        "job_id": f"nicho:{cliente}:{eid}:inv:seleccionar"})
-
-        inv = datos_nicho.investigacion(cliente, eid)
-        assert inv["estado"] == "detenida" and "no está implementada" in inv["detenida_por"]
 
 
 # ========== DATA LAYER TESTS (nicho/datos.py) ==========

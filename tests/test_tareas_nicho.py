@@ -306,3 +306,54 @@ def test_worker_registra_recolectar():
     import tareas
     from tareas import nicho  # noqa: F401
     assert "nicho_recolectar" in tareas.REGISTRO and "nicho_recolectar" in tareas.AL_INTERRUMPIR
+
+
+# ------------------------------------------- nicho_recolectar: paso de la investigación ---
+
+def test_encolar_recolectar_investigacion_marca_el_payload(base_temporal, monkeypatch):
+    """`investigacion=True` (spec Parte 3) agrega la bandera al payload; sin
+    ella (el uso manual de siempre) el payload no la lleva."""
+    from nicho import datos
+    from tareas import nicho as tareas_nicho
+    encolados = []
+    monkeypatch.setattr(tareas_nicho.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append({"job_id": job_id, "tipo": tipo, "payload": payload, **kw}) or True)
+    eid = datos.crear_estudio("acme", "X")
+    assert tareas_nicho.encolar_recolectar("acme", eid, "meli", {"pais": "MX"}, investigacion=True) is True
+    assert encolados[0]["payload"]["investigacion"] is True and encolados[0]["max_intentos"] == 1 and encolados[0]["duracion_estimada"] == 300
+    tareas_nicho.encolar_recolectar("acme", eid, "reddit", {"palabras_clave": "x"})
+    assert "investigacion" not in encolados[1]["payload"]
+
+
+def test_ejecutar_recolectar_investigacion_falla_cierra_el_paso_con_error(base_temporal, monkeypatch):
+    """La cadena (spec Parte 3): una red que falla dentro de la investigación
+    queda `error` en su paso, cuenta lo leído antes del fallo, y `avanzar()`
+    sigue solo (aquí no queda nada más que hacer: pocos comentarios detienen
+    la cadena) -- nunca queda "en curso" para siempre."""
+    from nicho import datos
+    from nicho import investigacion as inv
+    from nicho.fuentes.base import ErrorFuente
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X", pais="MX")
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("x", "MX", [], ["reddit"], inv.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+    datos.actualizar_investigacion("acme", eid, lambda i: {**i, "pasos": {**i["pasos"], "consultas": {"estado": "hecho"}, "seleccionar": {"estado": "hecho"}}})
+    _fuente_falsa(monkeypatch, tipo="reddit", programa=_comentarios_falsos(3), fallo_en=1, fallo_exc=ErrorFuente("Reddit rechazó la llamada."))
+    with pytest.raises(ErrorFuente):
+        tareas_nicho.ejecutar_recolectar({"id": 20, "payload": {"cliente": "acme", "estudio_id": eid, "fuente": "reddit", "params": {}, "investigacion": True},
+                                          "job_id": datos.job_id_recolectar("acme", eid, "reddit"), "intentos": 1, "max_intentos": 1})
+    i = datos.investigacion("acme", eid)
+    assert i["pasos"]["redes:reddit"]["estado"] == "error" and "Reddit rechazó" in i["pasos"]["redes:reddit"]["aviso"]
+    assert i["pasos"]["redes:reddit"]["nuevos"] == 1                                  # lo leído antes del fallo cuenta
+    assert i["estado"] == "detenida" and "20" in i["detenida_por"]                    # avanzar() siguió solo, sin encolar nada
+
+
+def test_interrumpida_recolectar_investigacion_marca_el_paso_pendiente(base_temporal):
+    from nicho import datos
+    from nicho import investigacion as inv
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X", pais="MX")
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("x", "MX", ["meli"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+    datos.actualizar_investigacion("acme", eid, lambda i: {**i, "pasos": {**i["pasos"], "resenas:meli": {"estado": "en_curso"}}})
+    tareas_nicho.interrumpida_recolectar({"payload": {"cliente": "acme", "estudio_id": eid, "fuente": "meli", "investigacion": True}},
+                                         "reinicio del worker.")
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] == "interrumpida" and i["pasos"]["resenas:meli"]["estado"] == "pendiente" and i["ultimo_error"]
