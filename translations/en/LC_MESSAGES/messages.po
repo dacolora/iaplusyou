@@ -4925,7 +4925,7 @@ msgid "Enviar"
 msgstr "Send"
 
 msgid "Enviar a Publicidad"
-msgstr "Send to Advertising"
+msgstr "Send to Standalone ads"
 
 msgid "Enviarme el enlace"
 msgstr "Send me the link"
@@ -15321,7 +15321,7 @@ msgid "sin sonido"
 msgstr "no sound"
 
 msgid "sin tarifa"
-msgstr "no rate"
+msgstr "no price"
 
 msgid "sin tema"
 msgstr "no topic"
