@@ -22,6 +22,10 @@
         <select name="catalogo_id"><option value="">{{ _('(escribir a mano)') }}</option>
           {% for p in productos_nicho %}<option value="{{ p.id }}" {% if p.id == estudio.catalogo_id %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
         </select></label>
+      <label>{{ _('País') }}
+        <select name="pais"><option value="">{{ _('(sin país)') }}</option>
+          {% for codigo, nombre in paises_estudio %}<option value="{{ codigo }}" {% if codigo == estudio.pais %}selected{% endif %}>{{ nombre|traducir }}</option>{% endfor %}
+        </select></label>
     </div>
     <label>{{ _('Qué vendemos') }} <textarea name="producto" rows="2">{{ estudio.producto or '' }}</textarea></label>
     <label>{{ _('Qué investigar') }} <textarea name="tema" rows="3">{{ estudio.tema or '' }}</textarea></label>

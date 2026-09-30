@@ -339,45 +339,307 @@ def test_pagina_tarjetas_con_llaves(app, llaves):
     assert "(falta " not in html
 
 
-def test_ver_pasa_investigacion_real_a_la_plantilla(app):
-    """Regresión: `ver()` nunca pasaba `investigacion=` al render -- la
-    tarjeta de investigación automática mostraba "Sin iniciar" sin importar
-    el estado real (corriendo, detenida, terminada)."""
+@pytest.fixture()
+def llaves_inv(monkeypatch):
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("YOUTUBE_API_KEY", "k")
+    for v in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT"):
+        monkeypatch.delenv(v, raising=False)
+
+
+def test_estimar_investigacion_json_y_errores(app, llaves_inv):
     from nicho import datos
-    eid = datos.crear_estudio("acme", "X")
+    eid = datos.crear_estudio("acme", "X", tema="pantuflas", pais="SE")
+    c = app["c"]
+    r = c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=amazon&plataformas=tiktok_shop&redes=youtube&consultas=2")
+    d = r.get_json()
+    assert r.status_code == 200 and [f["clave"] for f in d["filas"]] == ["amazon", "tiktok_shop"] and d["redes"] == ["youtube"]
+    assert d["topes"]["consultas"] == 2 and d["texto"].startswith("US$") and d["filas"][0]["busqueda_texto"].startswith("US$")
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=amazon,tiktok_shop").get_json()["plataformas"] == ["amazon", "tiktok_shop"]
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=meli").status_code == 400      # MELI no cubre Suecia
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=ZZ&plataformas=amazon").status_code == 400
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE").status_code == 400                        # nada elegido
+    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&redes=reddit").status_code == 400          # red sin llave
+    assert c.get("/cliente/acme/nicho/999/investigacion/estimar?pais=SE&plataformas=amazon").status_code == 404
 
-    html_vacio = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
-    assert 'badge-neutral">Sin iniciar' in html_vacio
 
-    datos.actualizar_investigacion("acme", eid, lambda inv: {
-        "estado": "detenida", "detenida_por": "Búsqueda automática en amazon todavía no está implementada.",
-        "consultas": ["mejor termo"], "pasos": {"consultas": {"estado": "hecho"}}, "gastado_usd": 0.01, "aprobado_usd": 5.0,
-    })
-    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
-    assert 'badge-detenida">DETENIDA' in html
-    assert "Búsqueda automática en amazon todavía no está implementada." in html
-    assert 'badge-neutral">Sin iniciar' not in html
-
-
-def test_investigacion_reanudar_vuelve_a_encolar(app, monkeypatch):
-    """Regresión: `investigacion_reanudar` cambiaba el estado a "consultas"
-    pero nunca encolaba nada -- "Reanudar" no hacía absolutamente nada."""
-    from nicho import datos
-    from tareas import investigacion as tareas_investigacion
-    eid = datos.crear_estudio("acme", "X")
-    datos.actualizar_investigacion("acme", eid, lambda inv: {
-        "estado": "detenida", "detenida_por": "Búsqueda automática en amazon todavía no está implementada.",
-        "consultas": ["mejor termo"], "pasos": {"consultas": {"estado": "hecho"}}, "gastado_usd": 0.01, "aprobado_usd": 5.0,
-    })
+def test_iniciar_investigacion_con_el_costo_visto(app, llaves_inv, monkeypatch):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = datos.crear_estudio("acme", "X", tema="pantuflas para dolor de pies", pais="CO")
     encolados = []
-    monkeypatch.setattr(tareas_investigacion.trabajos, "encolar",
-                         lambda job_id, tarea, payload, **kw: encolados.append((job_id, tarea, payload)) or True)
-
-    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/reanudar", follow_redirects=False)
-
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload)) or True)
+    estimado = inv.estimar({}, "SE", ["amazon"], ["youtube"], inv.TOPES_DEFECTO)
+    forma = {"pais": "SE", "plataformas": ["amazon"], "redes": ["youtube"], "consultas": "3", "productos_por_consulta": "20",
+             "productos_elegidos": "15", "resenas_por_producto": "100"}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data={**forma, "total_visto": "0.01"}, follow_redirects=True)
+    assert "vuelve a confirmar" in r.data.decode() and encolados == [] and datos.investigacion("acme", eid) == {}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data={**forma, "total_visto": str(estimado["total_usd"])})
     assert r.status_code == 302
-    assert len(encolados) == 1
-    job_id, tarea, payload = encolados[0]
-    assert tarea == "nicho_inv_buscar" and payload["plataforma"] == "amazon"
-    inv = datos.investigacion("acme", eid)
-    assert inv["estado"] == "consultas" and inv["detenida_por"] is None
+    i = datos.investigacion("acme", eid)
+    assert i["aprobado_usd"] == estimado["total_usd"] and i["plataformas"] == ["amazon"] and i["redes"] == ["youtube"] and i["pais"] == "SE"
+    assert datos.estudio("acme", eid)["pais"] == "SE"                                                    # el país elegido queda en el estudio
+    assert encolados == [(datos.job_id_inv("acme", eid, "consultas"), "nicho_inv_consultas", {"cliente": "acme", "estudio_id": eid})]
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data={**forma, "total_visto": str(estimado["total_usd"])}, follow_redirects=True)
+    assert "en curso" in r.data.decode() and len(encolados) == 1                                        # una viva a la vez
+    sin_tema = datos.crear_estudio("acme", "Y", pais="SE")
+    r = app["c"].post(f"/cliente/acme/nicho/{sin_tema}/investigacion", data={**forma, "total_visto": "99"}, follow_redirects=True)
+    assert "Qué investigar" in r.data.decode() and datos.investigacion("acme", sin_tema) == {}
+
+
+def test_reanudar_y_cancelar(app, llaves_inv, monkeypatch):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="SE")
+    encolados = []
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload)) or True)
+    i = inv.crear_inicial("t", "SE", ["amazon"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 2.0})
+    i = inv.marcar_paso(inv.marcar_paso({**i, "consultas": ["a", "b"]}, "consultas", "hecho"), "buscar:amazon", "en_curso")
+    datos.iniciar_investigacion("acme", eid, {**i, "estado": "interrumpida"})
+    app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/reanudar")
+    assert encolados[-1][1] == "nicho_inv_buscar" and datos.investigacion("acme", eid)["estado"] == "buscando"
+    app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/cancelar")
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] == "detenida" and i["detenida_por"] == "cancelada"
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/cancelar", follow_redirects=True)
+    assert "No hay investigación en curso" in r.data.decode()
+
+
+def test_pagina_con_la_investigacion(app, llaves_inv, monkeypatch):
+    from nicho import datos, investigacion as inv, rutas
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="CO")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'id="form-investigar"' in html and 'name="plataformas" value="meli"' in html and 'data-paises="*"' in html
+    assert f"/cliente/acme/nicho/{eid}/investigacion/estimar" in html and 'name="total_visto"' in html and '<option value="CO" selected' in html
+    i = inv.crear_inicial("t", "CO", ["meli"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 2.0})
+    i = inv.marcar_paso(inv.marcar_paso({**i, "consultas": ["pantuflas"]}, "consultas", "hecho", usd=0.01), "buscar:meli", "en_curso")
+    datos.iniciar_investigacion("acme", eid, i)
+    monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job: job == datos.job_id_inv("acme", eid, "buscar:meli"))
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert f'data-poll-job="{datos.job_id_inv("acme", eid, "buscar:meli")}"' in html and "<script>iniciarPolling" not in html
+    assert "buscar en Mercado Libre" in html and "pantuflas" in html and "Cancelar" in html and 'id="form-investigar"' not in html
+    datos.guardar_productos_nicho("acme", eid, "meli", [{"fuente_id": "MCO1", "titulo": "Pantuflas ortopédicas", "n_resenas": 40, "url": "https://x/1"}])
+    datos.actualizar_investigacion("acme", eid, lambda x: inv.detener(x, "no se encontraron productos del nicho"))
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "Pantuflas ortopédicas" in html and "no se encontraron productos del nicho" in html and "Reanudar" in html
+    assert 'id="form-investigar"' in html                                                              # «Investigar de nuevo» disponible
+
+
+def test_pais_al_crear_y_editar_estudio(app):
+    from nicho import datos
+    app["c"].post("/cliente/acme/nicho/estudios", data={"nombre": "Con país", "tema": "t", "pais": "MX"})
+    e = [x for x in datos.estudios("acme") if x["nombre"] == "Con país"][0]
+    assert e["pais"] == "MX"
+    app["c"].post(f"/cliente/acme/nicho/{e['id']}/editar", data={"nombre": "Con país", "pais": "SE"})
+    assert datos.estudio("acme", e["id"])["pais"] == "SE"
+    r = app["c"].post(f"/cliente/acme/nicho/{e['id']}/editar", data={"nombre": "Con país", "pais": "ZZ"}, follow_redirects=True)
+    assert "País no soportado" in r.data.decode() and datos.estudio("acme", e["id"])["pais"] == "SE"
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert 'name="pais"' in html
+
+
+def test_manual_espera_mientras_la_investigacion_esta_viva(app, llaves):
+    """Ruling 13 (lado rutas): los botones manuales de recolección/generación
+    encolan con el MISMO job_id que un paso de la cadena (`resenas:*`,
+    `redes:*`, `generar`) -- si se dejaran encolar mientras la investigación
+    corre, el paso de la cadena no podría encolarse y quedaría `interrumpida`
+    (Task 5). Las rutas deben rehusarse ANTES de intentarlo."""
+    from nicho import datos, investigacion as inv
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="SE")
+    datos.agregar_comentarios("acme", eid, "texto", [{"fuente_id": f"c{i}", "texto": f"Comentario {i}: pesa mucho"} for i in range(25)])
+    i = inv.crear_inicial("t", "SE", ["amazon"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 2.0})
+    datos.iniciar_investigacion("acme", eid, i)
+    c = app["c"]
+    for fuente, datos_forma in (("reddit", {"palabras_clave": "x"}), ("youtube", {"palabras_clave": "x"}), ("apify", {})):
+        r = c.post(f"/cliente/acme/nicho/{eid}/recolectar/{fuente}", data=datos_forma, follow_redirects=True)
+        assert "espera a que termine o cancélala" in r.data.decode(), fuente
+    assert app["encolados"] == []
+    r = c.post(f"/cliente/acme/nicho/{eid}/generar", follow_redirects=True)
+    assert "espera a que termine o cancélala" in r.data.decode() and app["encolados"] == []
+    c.post(f"/cliente/acme/nicho/{eid}/comentarios/texto", data={"texto": "Gotea mucho el envase", "modo": "lineas"})
+    assert datos.estudio("acme", eid)["comentarios_total"] == 26                     # texto sigue funcionando
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "estado": "lista"})  # como antes, en cuanto termina
+    r = c.post(f"/cliente/acme/nicho/{eid}/recolectar/reddit", data={"palabras_clave": "x"}, follow_redirects=True)
+    assert "espera a que termine o cancélala" not in r.data.decode() and app["encolados"]
+    r = c.post(f"/cliente/acme/nicho/{eid}/generar", follow_redirects=True)
+    assert "espera a que termine o cancélala" not in r.data.decode()
+
+
+def test_solo_mismo_origen_bloquea_post_de_otro_sitio(app, llaves_inv, monkeypatch):
+    """Ruling 18: el Blueprint nicho también gasta dinero por POST y le
+    faltaba la barrera CSRF que ya tienen Flow Plus/Sprints/Triple Whale/el
+    editor."""
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="SE")
+    encolados = []
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload)) or True)
+    estimado = inv.estimar({}, "SE", ["amazon"], [], inv.TOPES_DEFECTO)
+    forma = {"pais": "SE", "plataformas": ["amazon"], "total_visto": str(estimado["total_usd"])}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data=forma, headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403 and encolados == [] and datos.investigacion("acme", eid) == {}
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion", data=forma, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302 and encolados
+    eid2 = datos.crear_estudio("acme", "Y", tema="t", pais="SE")
+    r = app["c"].post(f"/cliente/acme/nicho/{eid2}/investigacion", data=forma)      # sin cabecera, como manda el test client
+    assert r.status_code == 302
+
+
+def test_avatares_del_proyecto_pagina_y_pestana(app):
+    from nicho import datos
+    from sprints import datos as sd
+    eid, sid = _con_avatares(datos)
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    c = app["c"]
+    html = c.get("/cliente/acme/nicho/avatares").data.decode()
+    assert "Nuevos (sin aprobar)" in html and "Aprobados" in html and "Premium" in html and SUB["nombre"] in html
+    assert f'id="avatar-a{sid}"' in html and f'id="avatar-p{pid}"' in html and "incompleto: falta" in html
+    assert f"/cliente/acme/nicho/persona/{pid}/ficha" in html and 'id="nuevo-avatar"' in html
+    assert 'action="/cliente/acme/nicho/avatares/nuevo"' in html and 'name="volver" value="lista"' in html
+    tab = c.get("/cliente/acme").data.decode()
+    assert "/cliente/acme/nicho/avatares" in tab and "Aprobados: 1" in tab and "Nuevos por revisar: 1" in tab
+    assert "Citas textuales" not in tab                                         # nada de fichas en la página del proyecto
+
+
+def test_crear_avatar_a_mano_y_editar_sincroniza(app):
+    from nicho import datos
+    from sprints import datos as sd
+    c = app["c"]
+    r = c.post("/cliente/acme/nicho/avatares/nuevo", data={"nombre": "Marta / La que camina", "deseo": "Quiero caminar sin dolor", "base": "emocion"})
+    assert r.status_code == 302 and "/cliente/acme/nicho/avatares" in r.headers["Location"] and "#avatar-a" in r.headers["Location"]
+    aid = int(r.headers["Location"].split("#avatar-a")[1])
+    a = datos.avatar("acme", aid)
+    p = sd.persona("acme", a["persona_id"])
+    assert a["estado"] == "aprobado" and p["origen"] == "manual" and p["nombre"] == "Marta / La que camina"
+    r = c.post(f"/cliente/acme/nicho/avatar/{aid}/editar", data={"nombre": "Marta / La que camina", "tono": "Cálido", "volver": "lista"},
+               follow_redirects=True)
+    assert "la persona que usa la app se actualizó" in r.data.decode() and sd.persona("acme", a["persona_id"])["tono"] == "Cálido"
+    r = c.post("/cliente/acme/nicho/avatares/nuevo", data={"nombre": " "}, follow_redirects=True)
+    assert "necesita un nombre" in r.data.decode()
+
+
+def test_aprobar_incompleto_avisa_y_vuelve_al_estudio(app):
+    from nicho import datos
+    eid, sid = _con_avatares(datos)
+    r = app["c"].post(f"/cliente/acme/nicho/avatar/{sid}/aprobar")
+    assert r.headers["Location"].endswith(f"/nicho/{eid}")
+    r = app["c"].get(f"/cliente/acme/nicho/{eid}")
+    assert datos.avatar("acme", sid)["estado"] == "aprobado"
+    r = app["c"].post(f"/cliente/acme/nicho/avatar/{sid}/descartar", data={"volver": "lista"})
+    assert "/cliente/acme/nicho/avatares" in r.headers["Location"]
+
+
+def test_persona_sin_avatar_ficha_y_archivar(app):
+    """Ruling 21 (nicho.persona_archivar): con un avatar detrás -- aquí, el
+    que «Editar ficha» le acaba de crear -- esta ruta ya no archiva a `pid`
+    (se usa el Aprobar/Descartar de su ficha); una persona genuinamente sin
+    avatar (`pid_sola`) se archiva/desarchiva como siempre."""
+    from nicho import datos
+    from sprints import datos as sd
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    pid_sola = sd.crear_persona("acme", "Básica", resumen="Solo lo esencial")
+    c = app["c"]
+    r = c.post(f"/cliente/acme/nicho/persona/{pid}/ficha")
+    aid = int(r.headers["Location"].split("#avatar-a")[1])
+    assert datos.avatar("acme", aid)["persona_id"] == pid and "abrir=a" in r.headers["Location"]
+    c.post(f"/cliente/acme/nicho/persona/{pid_sola}/archivar")
+    assert sd.persona("acme", pid_sola)["archivada"] is True
+    c.post(f"/cliente/acme/nicho/persona/{pid_sola}/archivar", data={"desarchivar": "1"})
+    assert sd.persona("acme", pid_sola)["archivada"] is False
+    assert c.post("/cliente/acme/nicho/persona/999/ficha", follow_redirects=True).status_code == 200
+    assert c.post("/cliente/acme/nicho/persona/999/archivar").status_code == 404
+
+
+def test_persona_archivar_rechaza_si_tiene_avatar(app):
+    """Ruling 21: cualquier avatar de este cliente enlazado a la persona
+    (incluido el que crea «Editar ficha», y el de una aprobada de verdad)
+    bloquea esta ruta con un aviso -- nada cambia -- porque la plantilla solo
+    ofrece Archivar/Desarchivar cuando la persona no tiene avatar (para las
+    que sí, `acciones_avatar` ya trae Aprobar/Descartar)."""
+    from nicho import datos
+    from sprints import datos as sd
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    c = app["c"]
+    c.post(f"/cliente/acme/nicho/persona/{pid}/ficha")
+    r = c.post(f"/cliente/acme/nicho/persona/{pid}/archivar", follow_redirects=True)
+    assert "descártalo desde su ficha" in r.data.decode() and sd.persona("acme", pid)["archivada"] is False
+    eid, sid = _con_avatares(datos)
+    datos.aprobar_avatar("acme", sid)
+    pid2 = datos.avatar("acme", sid)["persona_id"]
+    c.post(f"/cliente/acme/nicho/persona/{pid2}/archivar")
+    assert sd.persona("acme", pid2)["archivada"] is False
+    assert c.post("/cliente/acme/nicho/persona/999/archivar").status_code == 404
+
+
+def test_completar_desde_el_estudio_con_el_costo_visto(app):
+    import gastos
+    from nicho import avatares, datos
+    eid, sid = _con_avatares(datos)
+    e = avatares.estimar_completar("acme", eid)
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "incompleto: falta" in html and f"/cliente/acme/nicho/{eid}/completar" in html and gastos.formatear(e["usd"]) in html
+    assert "<script>iniciarPolling" not in html
+    n = e["avatares"]
+    assert (f"Completar {n} incompleto ·" if n == 1 else f"Completar {n} incompletos ·") in html               # plural bien puesto (ola final)
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": "0"}, follow_redirects=True)
+    assert "vuelve a confirmar" in r.data.decode() and app["encolados"] == []
+    app["c"].post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": str(e["usd"])})
+    assert app["encolados"][-1]["tipo"] == "nicho_completar_avatares" and app["encolados"][-1]["max_intentos"] == 1
+
+
+def test_chips_de_avatares_no_se_cortan_en_el_celular(app):
+    """Ruling 25 (fix round 1): `.tag-estado` es `white-space: nowrap` y este
+    task es el primero en meterle texto libre y largo -- sin overrides scoped
+    se corta en silencio contra el borde del celular (`body` ya tiene
+    `overflow-x: hidden`). No se toca `.tag-estado` global: sus otros usos
+    son etiquetas cortas que sí deben quedar en una sola línea."""
+    import re
+    from nicho import datos
+    from sprints import datos as sd
+    css = open("static/style.css", encoding="utf-8").read()
+    faltantes = re.search(r"\.nicho-faltantes \{[^}]*\}", css)
+    assert faltantes, "falta la regla .nicho-faltantes en static/style.css"
+    assert "white-space: normal" in faltantes.group(0) and "overflow-wrap: anywhere" in faltantes.group(0) and "max-width: 100%" in faltantes.group(0)
+    muestra = re.search(r"\.nicho-avatares-muestra a \{[^}]*\}", css)
+    assert muestra, "falta la regla .nicho-avatares-muestra a en static/style.css"
+    assert "max-width: 100%" in muestra.group(0) and "overflow: hidden" in muestra.group(0) and "text-overflow: ellipsis" in muestra.group(0)
+    eid, sid = _con_avatares(datos)
+    pid = sd.crear_persona("acme", "Premium", resumen="Quiere lo mejor")
+    tab = app["c"].get("/cliente/acme").data.decode()
+    assert f'title="{SUB["nombre"]}"' in tab and 'title="Premium"' in tab
+    lista = app["c"].get("/cliente/acme/nicho/avatares").data.decode()
+    assert 'class="tag-estado sprint-aviso nicho-faltantes"' in lista
+
+
+def test_estudio_oculto_no_se_abre_como_estudio(app):
+    """Ruling 26 (fix round 1): el estudio oculto de los avatares escritos a
+    mano no tiene comentarios que revisar ni acciones de estudio que
+    apliquen -- typear su URL manda a la lista del proyecto, no a su
+    página."""
+    from nicho import datos
+    eid, _nid = datos.estudio_manual("acme")
+    r = app["c"].get(f"/cliente/acme/nicho/{eid}")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme/nicho/avatares")
+    assert app["c"].get("/cliente/acme/nicho/999999").status_code == 404
+
+
+def test_cliente_sin_apify_no_ve_plataformas_ni_variables_del_env(app, monkeypatch):
+    """Ruling 19: sin APIFY_TOKEN, un cliente no ve en la tarjeta las
+    plataformas que lo necesitan (amazon/meli/tiktok_shop) ni el nombre de la
+    variable ni «Falta …»; un pedido a mano para esa plataforma responde el
+    mensaje neutro, tanto en el estimado como al intentar iniciar."""
+    from nicho import datos
+    monkeypatch.delenv("APIFY_TOKEN", raising=False)
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="US")
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    html = c.get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'name="plataformas" value="amazon"' not in html and 'name="plataformas" value="meli"' not in html
+    assert 'name="plataformas" value="tiktok_shop"' not in html
+    assert "APIFY_TOKEN" not in html and "(falta " not in html
+    r = c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?plataformas=amazon")
+    assert r.status_code == 400 and r.get_json()["error"] == "Esa fuente no está disponible todavía."
+    r = c.post(f"/cliente/acme/nicho/{eid}/investigacion", data={"plataformas": "amazon", "total_visto": "99"}, follow_redirects=True)
+    assert "Esa fuente no está disponible todavía." in r.data.decode()
+    assert datos.investigacion("acme", eid) == {}

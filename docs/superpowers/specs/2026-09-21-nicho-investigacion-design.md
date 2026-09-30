@@ -35,7 +35,7 @@ Pasos, en orden:
 
 | Paso | Tarea del worker | Qué hace | Paga |
 |---|---|---|---|
-| `consultas` | `nicho_inv_consultas` | Claude convierte `tema` (+ `producto` opcional) en 2–4 búsquedas en el idioma del país | centavos (Claude) |
+| `consultas` | `nicho_inv_consultas` | Claude convierte `tema` (+ `producto` opcional) en hasta `topes.consultas` búsquedas (1–4, el tope aprobado) en el idioma del país | centavos (Claude) |
 | `buscar:<plataforma>` (una por plataforma, en serie) | `nicho_inv_buscar` | El actor de búsqueda de la plataforma trae hasta `productos_por_consulta` productos por consulta; se guardan en `producto_nicho` | centavos (Apify) |
 | `seleccionar` | `nicho_inv_seleccionar` | Claude marca cuáles productos son del nicho y por qué; de los relevantes quedan los `productos_elegidos` con más reseñas por plataforma | centavos (Claude) |
 | `resenas:<plataforma>` (una por plataforma, en serie) | `nicho_recolectar` (la de la Parte 2, con `fuente` = la plataforma y `investigacion: true`) | El actor de reseñas trae hasta `resenas_por_producto` por producto elegido | el gasto real (Apify) |
@@ -100,6 +100,13 @@ sitio de Mercado Libre y el idioma de las consultas.
 `UNIQUE (estudio_id, plataforma, fuente_id)`: una búsqueda repetida hace upsert
 (actualiza precio, estrellas, `n_resenas`) y no duplica. Los productos con
 `resenas_traidas > 0` no vuelven a pedirse.
+
+Nota (cerrado 2026-09-29): la tabla NO tiene columna `elegido`; los productos elegidos
+para pedir reseñas viven en `estudio.extra.investigacion.elegidos = {plataforma:
+[fuente_id, …]}` (arriba del todo del diccionario de la investigación, §2.4; el paso
+`pasos.seleccionar` solo guarda `elegidos_n`), no en `producto_nicho`. La migración que creó
+la tabla tal cual queda arriba es la 0016. El `url` y la `imagen` de un producto solo se
+guardan si empiezan por `http(s)://` (van a un enlace de la pantalla).
 
 ### 2.3 Comentarios de las plataformas
 
@@ -182,7 +189,7 @@ url, imagen, extra}`; sin `fuente_id` o sin `titulo` se descarta.
 usuarios, US$ 3 por 1 000 resultados): no acepta palabras sueltas, así que la entrada es
 `{"categoryOrProductUrls": [{"url": "https://www.amazon.<dominio>/s?k=<consulta
 codificada>"}], "maxItemsPerStartUrl": productos_por_consulta,
-"maxSearchPagesPerStartUrl": 2, "proxyCountry": <país>}`, una corrida con las 2–4 URLs.
+"maxSearchPagesPerStartUrl": 2, "proxyCountry": <país>}`, una corrida con una URL por búsqueda (como máximo `topes.consultas`).
 Producto: `asin`, `title`, `brand`, `price` (valor y moneda), `stars`, `reviewsCount`,
 `url`, imagen. Reseñas con `axesso_data~amazon-reviews-scraper` (US$ 0,90 por 1 000, 15
 marketplaces incluidos SE, ES, MX, BR): recibe UN `asin` + `domainCode` + `maxPages`
@@ -252,7 +259,8 @@ tarea; si vuelve a fallar, la tarea falla y con `max_intentos=2` la investigaci�
 `detenida` ("Claude no pudo …"), reanudable.
 
 **Consultas.** Entrada: `tema`, `producto` (si hay), `pais`, `idioma(pais)`. Salida:
-`{"consultas": ["...", "..."]}`, de 2 a 4, cada una de 2 a 6 palabras en ese idioma,
+`{"consultas": ["...", "..."]}`, de min(2, n) a n con n = `topes.consultas` (el tope aprobado, 1–4; lo
+que sobre se recorta y la búsqueda nunca usa más), cada una de 2 a 6 palabras en ese idioma,
 como las escribiría un comprador en el buscador de la tienda; sin marcas propias del
 cliente (para ver competencia, no a uno mismo). Se guardan en
 `extra.investigacion.consultas`.
@@ -313,19 +321,28 @@ igual (Parte 2). `gastos.TIPOS` gana `investigacion`.
   sigue con la siguiente plataforma. Al llegar a `generar`, si
   `datos.comentarios_para_generar` trae menos de `avatares.MIN_COMENTARIOS` (20) →
   `detenida` ("solo hay N comentarios; hacen falta 20").
+- **Investigación solo con redes** (ninguna tienda elegida): `seleccionar` se salta
+  (`vacio`, "sin plataformas") porque no hay ningún producto que juzgar.
 - **Claude falla dos veces** en consultas o selección → `detenida` con el error
   (`cola.sin_token`).
 - **El worker se reinicia** → `al_interrumpir` de cada tarea marca su paso `pendiente`
   y el estado `interrumpida`.
 - **Reanudar** (`POST .../investigar/reanudar`): valida que el estado sea `detenida` o
-  `interrumpida`, pone `estado` según el primer paso pendiente y llama `avanzar`. Nada
-  hecho se repite: consultas guardadas se reutilizan, `buscar:<p>` hecho se salta,
-  `seleccionar` solo juzga productos con `relevante IS NULL`, `resenas:<p>` solo pide
-  productos elegidos con `resenas_traidas == 0`. Si la parada fue por el tope de
-  avatares, Reanudar no aplica: se usa el botón de generar con su costo.
+  `interrumpida`, pone `estado` según el primer paso pendiente y llama `avanzar`. Los
+  pasos en curso vuelven a pendiente y consultas/selección con error también (Claude,
+  centavos); una búsqueda o reseñas con error no se repiten solas porque ya cobraron:
+  para eso está «Investigar de nuevo». Si la parada fue por el tope de avatares,
+  Reanudar no aplica: se usa el botón de generar con su costo.
 - **Cancelar** (`POST .../investigar/cancelar`): `estado = detenida`, `detenida_por =
   "cancelada"`. `avanzar` no encola nada más; la tarea viva termina su paso (una corrida
   de Apify ya arrancada se cobra igual y su resultado se guarda).
+- **Un paso encolado de una investigación ya cancelada** (la fila ya está `lista`,
+  `detenida` o `interrumpida`, o el estudio quedó archivado, antes de que el worker
+  arrancara esa tarea): no llama a ningún proveedor ni cobra nada.
+- **Recolección manual y «Generar avatares»** esperan mientras la investigación está
+  viva: las rutas los rechazan. Si un trabajo manual con el mismo job_id sigue
+  bloqueando un paso de la cadena, `avanzar` deja la investigación `interrumpida` para
+  que Reanudar funcione en cuanto ese trabajo termine.
 - **Investigar de nuevo** con una investigación `lista` o `detenida`: nuevo
   `extra.investigacion` (el anterior se guarda en `extra.investigaciones_previas`, últimas
   3), mismas reglas de no repetir pago sobre `producto_nicho`.

@@ -1,0 +1,7 @@
+[
+  {"reviewId": "R1AMZ", "title": "Äntligen smärtfri", "text": "Skönt stöd under hälen, går att ha hela dagen.", "rating": 5,
+   "date": "2025-03-01", "verified": true, "userName": "Anna", "numberOfHelpful": 3, "asin": "B0AMZ00001"},
+  {"reviewId": "R2AMZ", "title": "", "text": "För smala för mig, skickade tillbaka.", "rating": 2, "date": "March 5, 2025",
+   "verified": false, "userName": "Bo", "asin": "B0AMZ00001"},
+  {"reviewId": "R3AMZ", "title": "", "text": "", "rating": 1, "asin": "B0AMZ00001"}
+]

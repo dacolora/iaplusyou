@@ -1,0 +1,6 @@
+[
+  {"reviewId": "rv1", "reviewText": "Muy cómodas, se me quitó el dolor en los talones.", "reviewRating": 5, "reviewDate": "2025-02-10",
+   "productId": "MCO-123456789", "catalogProductId": null, "reviewerName": "Carla", "reviewLikes": 2},
+  {"reviewId": "rv2", "reviewText": "La talla viene pequeña.", "reviewRating": 3, "reviewDate": "2025-01-22", "productId": "MCO123456789"},
+  {"reviewId": "rv3", "reviewText": "  ", "reviewRating": 4, "productId": "MCO123456789"}
+]

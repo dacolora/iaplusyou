@@ -64,6 +64,9 @@ PLANTILLAS_TRADUCIDAS = [
     # sumarlas a la guardia — Crear › Audios (worktree-crear-audios, 82491a6) y el
     # formulario de conexión de Triple Whale en su pestaña (4ecd154).
     "_crear_audios.html", "_audios_lista.html", "_triple_whale_conectar.html",
+    # Merge de main (2026-09-30, Nicho: avatares del proyecto): la ficha compartida
+    # y la página «Avatares del proyecto» ya vienen con _() (0 hallazgos del detector).
+    "_avatar_ficha.html", "nicho_avatares_proyecto.html",
 ]
 
 

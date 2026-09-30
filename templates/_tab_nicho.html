@@ -1,5 +1,6 @@
 {# Pestaña Nicho. Contexto de nicho.rutas.contexto(cliente): estudios_nicho,
-   productos_nicho, min_comentarios_nicho, etiquetas_estudio, etiquetas_inv. #}
+   productos_nicho, min_comentarios_nicho, etiquetas_estudio, etiquetas_inv,
+   avatares_resumen, paises_estudio, pais_proyecto. #}
 <div class="panel-cabecera">
   <div>
     <h2>{{ _('Nicho') }}</h2>
@@ -9,6 +10,24 @@
     <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-estudio">{{ _('+ Nuevo estudio') }}</button>
   </div>
 </div>
+
+{% set ra = avatares_resumen %}
+<section class="swap-card nicho-avatares-resumen">
+  <div class="nicho-inv-cabecera">
+    <h3>{{ _('Avatares') }}</h3>
+    <span class="tag-estado">{{ _('Aprobados: %(n)s', n=ra.aprobados) }}</span>
+    {% if ra.nuevos %}<span class="tag-estado sprint-aviso">{{ _('Nuevos por revisar: %(n)s', n=ra.nuevos) }}</span>{% endif %}
+    {% if ra.incompletos %}<span class="tag-estado">{{ _('Incompletos: %(n)s', n=ra.incompletos) }}</span>{% endif %}
+  </div>
+  <p class="vacio">{{ _('Los aprobados son las personas que usa toda la app. Los nuevos vienen de tus estudios y esperan tu aprobación.') }}</p>
+  {% if ra.muestra %}
+  <p class="nicho-avatares-muestra">{% for m in ra.muestra %}<a class="tag-estado estado-nicho-{{ 'propuesto' if m.grupo == 'nuevo' else 'aprobado' }}" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente, abrir=m.clave, _anchor='avatar-' ~ m.clave) }}" title="{{ m.nombre }}">{{ m.nombre }}{% if m.incompleto %} ⚠{% endif %}</a> {% endfor %}</p>
+  {% endif %}
+  <div class="acciones">
+    <a class="btn-sm" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente) }}">{{ _('Ver todos los avatares') }}</a>
+    <a class="btn-generar btn-sm" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente, nuevo=1, _anchor='nuevo-avatar') }}">{{ _('+ Nuevo avatar') }}</a>
+  </div>
+</section>
 
 <div class="sprints-lista">
   {% for e in estudios_nicho %}
@@ -38,6 +57,9 @@
           <option value="">{{ _('(escribir a mano)') }}</option>
           {% for p in productos_nicho %}<option value="{{ p.id }}" data-descripcion="{{ p.nombre }}{% if p.descripcion %}: {{ p.descripcion }}{% endif %}">{{ p.nombre }}</option>{% endfor %}
         </select>
+      </label>
+      <label>{{ _('País del mercado') }}
+        <select name="pais">{% for codigo, nombre in paises_estudio %}<option value="{{ codigo }}"{% if codigo == pais_proyecto %} selected{% endif %}>{{ nombre|traducir }}</option>{% endfor %}</select>
       </label>
     </div>
     <label>{{ _('Qué vendemos') }} <textarea name="producto" id="estudio-producto" rows="2" placeholder="{{ _('Cápsulas de detergente sin plástico, dosis exacta, olor suave') }}"></textarea></label>
