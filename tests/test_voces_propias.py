@@ -152,6 +152,55 @@ def test_crear_clonada_guarda_el_consentimiento_y_la_grabacion(base_temporal, r2
     fila = materiales.obtener("acme", voz["id"])
     assert fila["extra"]["consentimiento"] == consentimiento and fila["extra"]["grabacion_id"] == g["id"]
     assert voz["forma"] == "clonada"
+    (gasto_clon,) = [x for x in _gastos("acme") if x["tipo"] == "voz_propia"]
+    assert (gasto_clon["usd"], gasto_clon["referencia"]) == (1.5042, "voz_propia:clonar:t3")
+
+
+def test_crear_clon_sin_consentimiento_no_paga(base_temporal, r2, fal):
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/clientes/acme/materiales/grabacion_x.wav",
+                             hash="h_grab_sc", bytes=10, duracion_ms=15000, extra={"nombre": "Mi voz"})
+    with pytest.raises(ValueError) as e:
+        voces_propias.crear("acme", {"forma": "clonar", "nombre": "Daniel", "idioma": "cs", "grabacion_id": g["id"],
+                                     "consentimiento": {}}, ref_sufijo=":t7")
+    assert str(e.value) == voces_propias.MENSAJES["permiso"]
+    assert fal == [] and _gastos("acme") == [] and voces_propias.listar("acme") == []
+
+
+def test_crear_registra_el_gasto_antes_de_estrenar(base_temporal, r2, fal, monkeypatch):
+    vistos = []
+
+    def _tts(texto, voice_id, idioma, velocidad=None, timeout=180):
+        vistos.append([x["tipo"] for x in _gastos("acme")])
+        return {"url": "https://fal/estreno.mp3", "costo_usd": 0.0045, "duracion_ms": 4000}
+    monkeypatch.setattr(voces_propias.fal_audio, "tts_minimax", _tts)
+    voces_propias.crear("acme", {"forma": "disenar", "nombre": "Ana", "descripcion": "Mujer cálida", "idioma": "es"},
+                        ref_sufijo=":t6")
+    assert vistos == [["voz_propia"]]
+
+
+def test_crear_sin_sufijo_no_pisa_gastos(base_temporal, r2, fal, monkeypatch):
+    ids = iter(["mmx_s1", "mmx_s2"])
+
+    def _disenar(prompt, preview_text, timeout=300):
+        return {"voice_id": next(ids), "url_vista_previa": "https://fal/dprev.mp3", "costo_usd": 3.0004}
+    monkeypatch.setattr(voces_propias.fal_audio, "disenar_voz_minimax", _disenar)
+    tiempos = iter([1_000_000.0, 2_000_000.0])
+    monkeypatch.setattr(voces_propias.time, "time", lambda: next(tiempos))
+    payload = {"forma": "disenar", "nombre": "Ana", "descripcion": "Mujer cálida", "idioma": "es"}
+    voces_propias.crear("acme", dict(payload))
+    voces_propias.crear("acme", dict(payload, nombre="Eva"))
+    filas = [x for x in _gastos("acme") if x["tipo"] == "voz_propia"]
+    assert len(filas) == 2 and len({x["referencia"] for x in filas}) == 2
+
+
+def test_si_falla_subir_la_muestra_la_voz_pagada_se_guarda_igual(base_temporal, r2, fal, monkeypatch):
+    def _falla(url, destino):
+        raise RuntimeError("red caída")
+    monkeypatch.setattr(voces_propias.audios, "descargar_url", _falla)
+    voz, estrenada = voces_propias.crear("acme", {"forma": "disenar", "nombre": "Ana", "descripcion": "Mujer cálida",
+                                                  "idioma": "es"}, ref_sufijo=":t5")
+    assert estrenada is True and voz["url"] == ""
+    assert sorted(x["tipo"] for x in _gastos("acme")) == ["locucion", "voz_propia"]
 
 
 def test_si_el_estreno_falla_la_voz_pagada_se_guarda_sin_estrenar(base_temporal, r2, fal, monkeypatch):
@@ -182,6 +231,12 @@ def test_resolver_solo_del_proyecto(base_temporal):
     assert voces_propias.resolver("acme", "vp:abc") is None and voces_propias.resolver("acme", "Rachel") is None
 
 
+def test_resolver_con_un_id_enorme_es_none(base_temporal):
+    # int() lo acepta (Python no tiene límite), pero SQLite sí: liga con
+    # OverflowError, no ValueError.
+    assert voces_propias.resolver("acme", "vp:" + "9" * 30) is None
+
+
 def test_muestra_propia_en_otro_idioma_se_cobra_al_proyecto_una_vez(base_temporal, r2, fal):
     v = _voz(idioma="es", estrenada=True)
     assert voces_propias.muestra("acme", f"vp:{v['id']}", "es") == v["url"] and fal == []
@@ -210,7 +265,23 @@ def test_borrar_quita_voz_grabacion_y_muestras(base_temporal, r2, fal):
     assert voces_propias.listar("acme") == [] and materiales.obtener("acme", g["id"]) is None
     assert any(k.startswith("clientes/acme/materiales/muestra_propia_") for k in r2["borrados"])
     assert "clientes/acme/materiales/grabacion_x.wav" in r2["borrados"]
+    assert "clientes/acme/materiales/voz_propia_mmx_1.mp3" in r2["borrados"]
     assert voces_propias.borrar("acme", v["id"]) is False
+
+
+def test_borrar_no_toca_una_grabacion_que_usa_otra_voz(base_temporal, r2, fal):
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/clientes/acme/materiales/grabacion_y.wav",
+                             hash="h_grab_compartida", bytes=10, extra={})
+    v1 = _voz(voice_id="mmx_a")
+    v2 = _voz(voice_id="mmx_b")
+    materiales.actualizar_extra("acme", v1["id"], grabacion_id=g["id"])
+    materiales.actualizar_extra("acme", v2["id"], grabacion_id=g["id"])
+    assert voces_propias.borrar("acme", v1["id"]) is True
+    assert materiales.obtener("acme", g["id"]) is not None
+    assert "clientes/acme/materiales/grabacion_y.wav" not in r2["borrados"]
+    assert voces_propias.borrar("acme", v2["id"]) is True
+    assert materiales.obtener("acme", g["id"]) is None
+    assert "clientes/acme/materiales/grabacion_y.wav" in r2["borrados"]
 
 
 def test_tipo_de_gasto_y_estimados():

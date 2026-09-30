@@ -9,6 +9,7 @@ origen `voz` con hash `muestra_propia`. Este módulo es el único escritor de la
 tres. MiniMax borra una voz que no se usa en una síntesis real dentro de 7 días
 (la vista previa no cuenta): `crear` la estrena en el mismo paso y cualquier
 síntesis posterior la marca `estrenada`."""
+import logging
 import os
 import tempfile
 import time
@@ -25,6 +26,8 @@ import mi_musica
 from final_edition import cortes
 from providers import fal_audio
 from storage import r2_uploader
+
+log = logging.getLogger(__name__)
 
 PREFIJO = audios.PREFIJO_VOZ_PROPIA
 ORIGEN = "voz_propia"
@@ -51,6 +54,7 @@ MENSAJES = {
     "descripcion": idiomas.N_("Describe la voz en 10 a 500 caracteres."),
     "idioma": idiomas.N_("Elige un idioma de la lista."),
     "en_curso": idiomas.N_("Ya se está creando una voz — espera a que termine."),
+    "grabacion_borrada": idiomas.N_("La grabación de esa voz ya no está."),
 }
 
 
@@ -85,14 +89,16 @@ def obtener(cliente, voz_id):
 
 
 def resolver(cliente, valor):
-    """La voz si `valor` es `vp:<id>` de una voz propia de este proyecto; si no, None."""
+    """La voz si `valor` es `vp:<id>` de una voz propia de este proyecto; si no,
+    None. Un id descomunal (más de 64 bits) hace que SQLite lance
+    `OverflowError` al ligarlo, no `ValueError`: se cubren los dos."""
     if not audios.es_propia(valor):
         return None
     try:
         vid = int(valor[len(PREFIJO):])
-    except ValueError:
+        return obtener(cliente, vid)
+    except (ValueError, OverflowError):
         return None
-    return obtener(cliente, vid)
 
 
 def marcar_estrenada(cliente, voz_id):
@@ -203,15 +209,23 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
     diseñar), registra ese gasto apenas fal responde, la estrena leyendo su
     frase de muestra en `payload["idioma"]` y la guarda. Si el estreno falla, la
     voz pagada se guarda igual con `estrenada = False` y la vista previa como
-    muestra. `reportar(i)` avisa el paso (1 = estrenando, 2 = guardando).
-    Devuelve (voz, estrenada)."""
+    muestra; si además falla subir esa muestra a R2, se guarda igual con
+    `url=""` (`muestra()` la vuelve a sintetizar la próxima vez que se pida).
+    `reportar(i)` avisa el paso (1 = estrenando, 2 = guardando). Devuelve
+    (voz, estrenada). Sin `ref_sufijo` (dos creaciones sin tarea detrás) cada
+    llamada arma el suyo con la hora, para no pisar el gasto de la otra."""
+    if not ref_sufijo:
+        ref_sufijo = f":{int(time.time() * 1000)}"
     forma, nombre, idioma = payload["forma"], payload["nombre"], payload["idioma"]
     frase = frase_muestra(nombre, idioma)
     grabacion = None
     if forma == "clonar":
+        # Nada se paga sin el permiso: ni siquiera se llega a fal.
+        if (payload.get("consentimiento") or {}).get("texto") != TEXTO_CONSENTIMIENTO:
+            raise ValueError(MENSAJES["permiso"])
         grabacion = materiales.obtener(cliente, payload["grabacion_id"])
         if not grabacion or grabacion["origen"] != ORIGEN_GRABACION:
-            raise ValueError("La grabación ya no está.")
+            raise ValueError(MENSAJES["grabacion_borrada"])
         r = fal_audio.clonar_voz_minimax(grabacion["url"], frase)
     else:
         r = fal_audio.disenar_voz_minimax(payload["descripcion"], frase)
@@ -230,12 +244,19 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
                                 detalle=f"MiniMax · estreno · {nombre}", proveedor=PROVEEDOR)
         fuente, estrenada = t["url"], True
     except Exception:
+        log.warning("voz propia %s: no pude estrenarla", r["voice_id"], exc_info=True)
         fuente = r.get("url_vista_previa")
     if reportar:
         reportar(2)
     url, bytes_, dur = "", 0, None
     if fuente:
-        url, bytes_, dur = _subir_mp3(cliente, fuente, f"clientes/{cliente}/materiales/voz_propia_{h[:16]}.mp3")
+        # La voz ya está pagada (y, si se estrenó, ya está en la cuenta de
+        # MiniMax): que R2/la descarga fallen no puede perderla.
+        try:
+            url, bytes_, dur = _subir_mp3(cliente, fuente, f"clientes/{cliente}/materiales/voz_propia_{h[:16]}.mp3")
+        except Exception:
+            log.warning("voz propia %s: no pude subir su muestra", r["voice_id"], exc_info=True)
+            url, bytes_, dur = "", 0, None
     extra = {"nombre": nombre, "forma": "clonada" if forma == "clonar" else "disenada", "proveedor": "minimax",
              "voice_id": r["voice_id"], "idioma_muestra": idioma, "estrenada": estrenada}
     if forma == "clonar":
@@ -283,10 +304,22 @@ def muestra(cliente, valor, idioma):
 
 # ------------------------------------------------------------- borrar ---
 
+def _grabacion_en_uso_por_otra_voz(cliente, voz_id, gid):
+    """True si OTRA voz propia del proyecto también apunta a la grabación
+    `gid` (dos clones desde el mismo archivo comparten una sola fila
+    `grabacion`, deduplicada por hash) — pocas filas, se compara en Python."""
+    with db.conectar() as con:
+        extras = con.execute(sa.select(db.material.c.extra).where(
+            db.material.c.cliente == cliente, db.material.c.origen == ORIGEN,
+            db.material.c.id != voz_id)).scalars().all()
+    return any((e or {}).get("grabacion_id") == gid for e in extras)
+
+
 def borrar(cliente, voz_id):
-    """Quita la voz, su grabación (si es un clon) y sus muestras por idioma, con
-    sus objetos en R2. La voz en la cuenta de MiniMax de fal no se puede borrar
-    desde fal. `materiales.MaterialEnUso` se propaga."""
+    """Quita la voz, sus muestras por idioma y su grabación (si es un clon y
+    ninguna OTRA voz propia la sigue usando), con sus objetos en R2. La voz en
+    la cuenta de MiniMax de fal no se puede borrar desde fal.
+    `materiales.MaterialEnUso` se propaga."""
     vp = obtener(cliente, voz_id)
     if not vp:
         return False
@@ -296,7 +329,7 @@ def borrar(cliente, voz_id):
         if mm:
             materiales.borrar(cliente, mm["id"])
     gid = (fila.get("extra") or {}).get("grabacion_id")
-    if gid:
+    if gid and not _grabacion_en_uso_por_otra_voz(cliente, voz_id, gid):
         g = materiales.obtener(cliente, gid)
         if g and g["origen"] == ORIGEN_GRABACION:
             materiales.borrar(cliente, gid)

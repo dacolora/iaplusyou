@@ -230,8 +230,9 @@ def _estimar_locucion(caracteres=0, **_):
 
 
 def _estimar_voz_clonada(**_):
-    """Voces propias de Audios: clonar una voz con MiniMax vía fal (la vista
-    previa de una frase suma menos de un centavo)."""
+    """Voces propias de Audios: clonar una voz con MiniMax vía fal. La vista
+    previa de la frase de muestra se cobra aparte (US$ 0,0003 por carácter:
+    1-3 ¢ para una frase típica) y no entra en este estimado."""
     from providers import fal_audio
     return fal_audio.COSTO_CLONAR_VOZ, "una voz clonada con MiniMax"
 
