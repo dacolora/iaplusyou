@@ -35,7 +35,7 @@ Pasos, en orden:
 
 | Paso | Tarea del worker | Qué hace | Paga |
 |---|---|---|---|
-| `consultas` | `nicho_inv_consultas` | Claude convierte `tema` (+ `producto` opcional) en 2–4 búsquedas en el idioma del país | centavos (Claude) |
+| `consultas` | `nicho_inv_consultas` | Claude convierte `tema` (+ `producto` opcional) en hasta `topes.consultas` búsquedas (1–4, el tope aprobado) en el idioma del país | centavos (Claude) |
 | `buscar:<plataforma>` (una por plataforma, en serie) | `nicho_inv_buscar` | El actor de búsqueda de la plataforma trae hasta `productos_por_consulta` productos por consulta; se guardan en `producto_nicho` | centavos (Apify) |
 | `seleccionar` | `nicho_inv_seleccionar` | Claude marca cuáles productos son del nicho y por qué; de los relevantes quedan los `productos_elegidos` con más reseñas por plataforma | centavos (Claude) |
 | `resenas:<plataforma>` (una por plataforma, en serie) | `nicho_recolectar` (la de la Parte 2, con `fuente` = la plataforma y `investigacion: true`) | El actor de reseñas trae hasta `resenas_por_producto` por producto elegido | el gasto real (Apify) |
@@ -189,7 +189,7 @@ url, imagen, extra}`; sin `fuente_id` o sin `titulo` se descarta.
 usuarios, US$ 3 por 1 000 resultados): no acepta palabras sueltas, así que la entrada es
 `{"categoryOrProductUrls": [{"url": "https://www.amazon.<dominio>/s?k=<consulta
 codificada>"}], "maxItemsPerStartUrl": productos_por_consulta,
-"maxSearchPagesPerStartUrl": 2, "proxyCountry": <país>}`, una corrida con las 2–4 URLs.
+"maxSearchPagesPerStartUrl": 2, "proxyCountry": <país>}`, una corrida con una URL por búsqueda (como máximo `topes.consultas`).
 Producto: `asin`, `title`, `brand`, `price` (valor y moneda), `stars`, `reviewsCount`,
 `url`, imagen. Reseñas con `axesso_data~amazon-reviews-scraper` (US$ 0,90 por 1 000, 15
 marketplaces incluidos SE, ES, MX, BR): recibe UN `asin` + `domainCode` + `maxPages`
@@ -259,7 +259,8 @@ tarea; si vuelve a fallar, la tarea falla y con `max_intentos=2` la investigaci�
 `detenida` ("Claude no pudo …"), reanudable.
 
 **Consultas.** Entrada: `tema`, `producto` (si hay), `pais`, `idioma(pais)`. Salida:
-`{"consultas": ["...", "..."]}`, de 2 a 4, cada una de 2 a 6 palabras en ese idioma,
+`{"consultas": ["...", "..."]}`, de min(2, n) a n con n = `topes.consultas` (el tope aprobado, 1–4; lo
+que sobre se recorta y la búsqueda nunca usa más), cada una de 2 a 6 palabras en ese idioma,
 como las escribiría un comprador en el buscador de la tienda; sin marcas propias del
 cliente (para ver competencia, no a uno mismo). Se guardan en
 `extra.investigacion.consultas`.
