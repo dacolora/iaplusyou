@@ -25,6 +25,7 @@ sin texto se descarta (None). Nunca se lee el nombre del autor.
               `shop_search` y `product_reviews`; sin lista de países.
 """
 import math
+import re
 from urllib.parse import quote_plus
 
 from flask_babel import gettext
@@ -52,6 +53,7 @@ RESENAS_POR_PAGINA_AMAZON = 10
 MAX_PAGINAS_AMAZON = 10
 _MONEDA_POR_SIMBOLO = {"$": "USD", "US$": "USD", "€": "EUR", "£": "GBP", "kr": "SEK", "R$": "BRL", "¥": "JPY", "₹": "INR", "C$": "CAD",
                        "A$": "AUD", "MX$": "MXN"}
+_RE_HTTP = re.compile(r"^https?://", re.IGNORECASE)      # la misma regla que base.normalizar_comentario
 
 
 # ------------------------------------------------------------ helpers ---
@@ -69,16 +71,19 @@ def _flotante(v):
         return None
     if isinstance(v, (int, float)):
         return float(v)
-    s = str(v).strip().replace(" ", "")
+    s = str(v).strip().replace(" ", "").replace(" ", "")
     for simbolo in sorted(_MONEDA_POR_SIMBOLO, key=len, reverse=True):
         s = s.replace(simbolo, "")
-    if s.count(",") == 1 and s.count(".") == 0:
-        s = s.replace(",", ".")
-    elif s.count(".") == 1 and s.count(",") == 0 and len(s.split(".")[-1]) == 3:
-        s = s.replace(".", "")             # "59.900" (miles a la latina) -> 59900
-    elif s.count(".") > 1:
-        s = s.replace(".", "")
-    s = s.replace(",", "")
+    if "," in s and "." in s:
+        # los dos: el que va de último es el decimal ("1.234,56" europeo / "1,234.56" gringo)
+        decimal, miles = (",", ".") if s.rfind(",") > s.rfind(".") else (".", ",")
+        s = s.replace(miles, "").replace(decimal, ".")
+    elif "," in s:
+        partes = s.split(",")
+        # "12,99" o "4,5" es coma decimal; "1,234" o "1,234,567" son comas de miles
+        s = s.replace(",", ".") if len(partes) == 2 and 1 <= len(partes[1]) <= 2 else s.replace(",", "")
+    elif s.count(".") > 1 or (s.count(".") == 1 and len(s.split(".")[-1]) == 3):
+        s = s.replace(".", "")             # "59.900" / "1.234.567" (miles a la latina) -> 59900 / 1234567
     try:
         return float(s)
     except ValueError:
@@ -124,6 +129,16 @@ def _texto(v, largo):
     return ("" if v is None else str(v)).strip()[:largo]
 
 
+def _url(v):
+    """Un link que viene del dataset y termina en un `href`: solo http(s).
+    `//host/…` se lee como https; cualquier otro esquema (javascript:, data:…)
+    o una ruta relativa -> None."""
+    s = _texto(v, 500)
+    if s.startswith("//"):
+        s = "https:" + s
+    return s if _RE_HTTP.match(s) else None
+
+
 def _sin_guion(v):
     return str(v or "").replace("-", "").strip()
 
@@ -147,7 +162,7 @@ def _producto_amazon(item):
     return {"fuente_id": _texto(_primero(item, "asin"), 120), "titulo": _texto(_primero(item, "title"), 300),
             "marca": _texto(_primero(item, "brand"), 120) or None, "precio": precio, "moneda": moneda,
             "estrellas": _flotante(_primero(item, "stars", "rating")), "n_resenas": _entero(_primero(item, "reviewsCount", "reviewCount")),
-            "url": _texto(_primero(item, "url"), 500) or None, "imagen": _texto(_primero(item, "thumbnailImage", "image"), 500) or None,
+            "url": _url(_primero(item, "url")), "imagen": _url(_primero(item, "thumbnailImage", "image")),
             "extra": extra}
 
 
@@ -184,8 +199,8 @@ def _producto_meli(item):
     return {"fuente_id": _sin_guion(_primero(item, "id", "productId", "itemId", "sku"))[:120], "titulo": _texto(_primero(item, "title", "name"), 300),
             "marca": _texto(_primero(item, "brand"), 120) or None, "precio": precio, "moneda": moneda,
             "estrellas": _flotante(_primero(item, "rating")), "n_resenas": _entero(_primero(item, "reviews", "reviewsCount", "reviewCount")),
-            "url": _texto(_primero(item, "url", "link", "permalink"), 500) or None,
-            "imagen": _texto(_primero(item, "thumbnail", "image"), 500) or None, "extra": extra}
+            "url": _url(_primero(item, "url", "link", "permalink")),
+            "imagen": _url(_primero(item, "thumbnail", "image")), "extra": extra}
 
 
 def _resenas_meli(productos, pais, resenas_por_producto):
@@ -215,7 +230,7 @@ def _producto_tiktok_shop(item):
     return {"fuente_id": _texto(_primero(item, "productId", "id"), 120), "titulo": _texto(_primero(item, "title", "name"), 300),
             "marca": _texto(_primero(item, "brand", "shopName"), 120) or None, "precio": precio, "moneda": moneda or ("USD" if precio is not None else None),
             "estrellas": _flotante(_primero(item, "rating")), "n_resenas": _entero(_primero(item, "reviewCount", "reviewsCount")),
-            "url": _texto(_primero(item, "productUrl", "url"), 500) or None, "imagen": _texto(_primero(item, "image", "thumbnail"), 500) or None,
+            "url": _url(_primero(item, "productUrl", "url")), "imagen": _url(_primero(item, "image", "thumbnail")),
             "extra": extra}
 
 
@@ -339,8 +354,12 @@ def entradas_resenas(clave, productos, pais, resenas_por_producto):
     productos = [x for x in (productos or []) if (x or {}).get("fuente_id")]
     if not productos:
         raise ErrorFuente(gettext("%(plataforma)s: no hay productos de los que traer reseñas.", plataforma=p["nombre"]))
-    if not p["resenas"]["por_producto"] and any(not x.get("url") for x in productos):
-        raise ErrorFuente(gettext("%(plataforma)s: un producto elegido no tiene link.", plataforma=p["nombre"]))
+    if not p["resenas"]["por_producto"]:
+        # Estas tiendas piden las reseñas por link: un producto sin link (o con uno
+        # que no es http(s)) se salta; solo se para si ninguno lo tiene.
+        productos = [x for x in productos if x.get("url")]
+        if not productos:
+            raise ErrorFuente(gettext("%(plataforma)s: un producto elegido no tiene link.", plataforma=p["nombre"]))
     if not cubre(clave, pais):
         raise ErrorFuente(gettext("%(plataforma)s no cubre el país %(pais)s.", plataforma=p["nombre"], pais=pais))
     return _con_tope(p["resenas"]["armar_entradas"](productos, (pais or "").upper(), max(1, int(resenas_por_producto))),

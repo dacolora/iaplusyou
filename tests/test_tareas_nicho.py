@@ -467,6 +467,21 @@ def test_ejecutar_generar_auto_comentarios_para_generar_revienta_detiene_sin_gas
     assert "Avatares no generados" in msg
 
 
+def test_ejecutar_generar_auto_con_la_investigacion_ya_muerta_no_paga(base_temporal, monkeypatch):
+    """Cancelada antes de que la tarea arrancara: ni Claude ni gasto (ola final, M-f)."""
+    import gastos
+    from nicho import avatares, datos
+    from nicho import investigacion as inv
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X", pais="MX")
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("x", "MX", [], [], inv.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+    datos.actualizar_investigacion("acme", eid, lambda i: inv.detener(i, "cancelada"))
+    monkeypatch.setattr(avatares, "_llamar", lambda *a, **k: pytest.fail("no debía llamar a Claude"))
+    msg = tareas_nicho.ejecutar_generar({"id": 2, "payload": {"cliente": "acme", "estudio_id": eid, "auto": True, "tope_usd": 1.0},
+                                         "job_id": datos.job_id_generar("acme", eid), "intentos": 1, "max_intentos": 1})
+    assert gastos.historial("acme") == [] and datos.investigacion("acme", eid)["estado"] == "detenida" and msg
+
+
 # ------------------------------------------------- nicho_completar_avatares ---
 
 def test_completar_avatares_guarda_gasto_y_actualiza_la_persona(base_temporal, monkeypatch):

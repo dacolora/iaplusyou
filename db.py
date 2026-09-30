@@ -709,7 +709,7 @@ estudio = Table("estudio", metadata,
     Column("catalogo_id", String(80)),
     Column("tema", Text),                                       # qué investigar: nicho, mercado, dolores
     Column("idioma", String(5), nullable=False, default="es"),  # idioma de salida de los avatares
-    Column("pais", String(2)),                                  # ISO-3166-1 alfa-2 (Parte 3, migración 0016); NULL = sin país
+    Column("pais", String(2), index=True),                      # ISO-3166-1 alfa-2 (Parte 3, migración 0016 con ix_estudio_pais); NULL = sin país
     Column("estado", String(12), nullable=False, default="armando"),   # armando|generando|revisando
     Column("archivado", Boolean, default=False),
     Column("generacion", Integer, nullable=False, default=0),   # corridas de Claude

@@ -485,5 +485,25 @@ def test_reanudar_y_job_de_paso():
     assert inv.job_de_paso("acme", 3, "generar") == "nicho:acme:3:generar"
 
 
+def test_consultas_respetan_el_tope_aprobado(monkeypatch):
+    """La búsqueda nunca gasta más que su línea del estimado: Claude recibe el
+    tope aprobado y lo que sobra se recorta (ola final, F3)."""
+    from nicho import avatares
+    llamadas = []
+
+    def _llamar(texto, max_tokens):
+        llamadas.append(texto)
+        return '{"consultas": ["a uno", "b dos", "c tres", "d cuatro"]}', 50, 10
+    monkeypatch.setattr(avatares, "_llamar", _llamar)
+    est = {"tema": "pantuflas", "producto": ""}
+    consultas, _, _ = inv.consultas_con_claude(est, "SE", 1)
+    assert consultas == ["a uno"] and "de 1 a 1" in llamadas[-1]
+    consultas, _, _ = inv.consultas_con_claude(est, "SE", 3)
+    assert consultas == ["a uno", "b dos", "c tres"] and "de 2 a 3" in llamadas[-1]
+    assert len(inv.consultas_con_claude(est, "SE", 99)[0]) == inv.LIMITES["consultas"][1]          # nunca más que el límite
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: ('{"consultas": ["sola"]}', 10, 5))
+    assert inv.consultas_con_claude(est, "SE", 1)[0] == ["sola"]                                   # con tope 1, una sirve
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

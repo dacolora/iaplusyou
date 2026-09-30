@@ -99,3 +99,11 @@ def test_lote_sondeo_tolera_fallos_y_se_rinde_por_corrida(esperas):
                  "/datasets/d0/items": _Resp(200, [{"t": "a"}])})
     res = ap.correr_lote(s, "tok", "x~y", _pedidas(1), "Leyendo")
     assert res["corridas"][0]["estado"] == ap.ESTADO_SIN_ESTADO and res["corridas"][0]["resultados"] == 1 and "r0" in res["aviso"]
+    assert "sin estado" not in res["aviso"] and "no se pudo saber cómo terminó" in res["aviso"]
+
+
+def test_frase_estado_de_los_estados_ficticios():
+    from providers import apify as ap
+    assert ap.frase_estado(ap.ESTADO_NO_ARRANCO) == "no arrancó"
+    assert ap.frase_estado(ap.ESTADO_SIN_ESTADO) == "no se pudo saber cómo terminó"
+    assert ap.frase_estado("FAILED") == "terminó en FAILED"

@@ -18,7 +18,7 @@
   <form method="post" action="{{ url_for('nicho.completar', cliente=cliente, eid=c.estudio_id) }}" class="inline" data-costo="{{ c.texto }}"
         onsubmit='return confirm({{ _("Completar con Claude lo que les falta a estos avatares cuesta aprox. %(costo)s. ¿Seguimos?", costo="__C__")|tojson }}.replace("__C__", this.dataset.costo));'>
     <input type="hidden" name="volver" value="lista"><input type="hidden" name="total_visto" value="{{ c.usd }}">
-    <button type="submit" class="btn-generar btn-sm">{{ _('Completar %(n)s incompletos de «%(estudio)s» · ≈ %(costo)s', n=c.avatares, estudio=c.nombre, costo=c.texto) }}</button>
+    <button type="submit" class="btn-generar btn-sm">{{ ngettext('Completar %(num)s incompleto de «%(estudio)s» · ≈ %(costo)s', 'Completar %(num)s incompletos de «%(estudio)s» · ≈ %(costo)s', c.avatares, estudio=c.nombre, costo=c.texto) }}</button>
   </form>
   {% endif %}
 </div>

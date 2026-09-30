@@ -2,7 +2,7 @@
 Tareas de la investigación automática del nicho (spec Parte 3 §1, §9) y el
 motor que encadena los pasos.
 
-  nicho_inv_consultas   -> Claude convierte el tema en 2–4 búsquedas (max_intentos=2)
+  nicho_inv_consultas   -> Claude convierte el tema en búsquedas, hasta el tope aprobado (max_intentos=2)
   nicho_inv_buscar      -> el actor de búsqueda de UNA plataforma trae productos (max_intentos=1: cobra)
   nicho_inv_seleccionar -> Claude marca cuáles son del nicho y elige los de más reseñas (max_intentos=2)
   resenas:<plataforma>, redes:<red> y generar corren en tareas/nicho.py
@@ -15,6 +15,7 @@ y se sigue en el mismo llamado. Cada tarea termina llamando a `avanzar`.
 Todo gasto se registra con el id de la tarea; Claude va por
 `nicho.avatares._llamar` (modelo del proyecto).
 """
+import functools
 import logging
 
 from flask_babel import gettext
@@ -56,6 +57,73 @@ def _activa(cliente, eid):
     if not est or not i or i.get("estado") in ("lista", "detenida", "interrumpida"):
         return None, None
     return est, i
+
+
+def _interrumpir(cliente, eid, e):
+    """La cadena no puede seguir sola (no se encoló el siguiente paso, o una
+    escritura se cayó después de pagar en el último intento): la investigación
+    queda `interrumpida` con el error y «Reanudar» la retoma, en vez de quedar
+    con un estado vivo y nada en la cola. Nunca lanza."""
+    try:
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            error = cola.recortar(cola.sin_token(e), 300)
+        datos.actualizar_investigacion(
+            cliente, eid, lambda i: i if (not i or i.get("estado") in ("lista", "detenida", "interrumpida"))
+            else {**i, "estado": "interrumpida", "ultimo_error": error})
+    except Exception:  # noqa: BLE001 — si hasta esto falla, queda en el log
+        log.exception("No se pudo dejar interrumpida la investigación %s de %s", eid, cliente)
+
+
+def _avanzar_seguro(cliente, eid):
+    """`avanzar` después de cerrar un paso. Si revienta, la investigación queda
+    interrumpida (con Reanudar) y la tarea que ya hizo su parte termina bien."""
+    try:
+        return avanzar(cliente, eid)
+    except Exception as e:  # noqa: BLE001
+        log.exception("avanzar falló en la investigación %s de %s", eid, cliente)
+        _interrumpir(cliente, eid, e)
+        return None
+
+
+def red_de_la_cadena(paso_de):
+    """Decorador de las tareas de la cadena. Si la tarea sale con error en su
+    ÚLTIMO intento sin haber cerrado su paso (quedó pendiente o en curso), la
+    investigación queda interrumpida (Reanudar) en vez de trabada con un estado
+    vivo y nada en la cola (F2). Un paso que la tarea sí cerró (p. ej. `error`
+    de una tienda caída, que ya siguió la cadena) no se toca. `paso_de(payload)`
+    -> el paso de la cadena, o None si la tarea no es de la cadena."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def envuelta(tarea):
+            try:
+                return fn(tarea)
+            except Exception as e:
+                if _ultimo_intento(tarea):
+                    try:
+                        p = tarea.get("payload") or {}
+                        paso = paso_de(p)
+                        if paso:
+                            cliente, eid = p["cliente"], int(p["estudio_id"])
+                            estado_paso = (((datos.investigacion(cliente, eid).get("pasos") or {}).get(paso)) or {}).get("estado")
+                            if estado_paso in (None, "pendiente", "en_curso"):
+                                _interrumpir(cliente, eid, e)
+                    except Exception:  # noqa: BLE001 — la red nunca tapa el error original
+                        log.exception("La red de la cadena no pudo revisar la tarea %s", tarea.get("id"))
+                raise
+        return envuelta
+    return deco
+
+
+def _o_interrumpir(tarea, cliente, eid, fn):
+    """Corre `fn` (las escrituras que siguen a un pago). Si revienta en el
+    último intento, la investigación queda interrumpida antes de relanzar; con
+    intentos por delante, el reintento del worker la retoma."""
+    try:
+        return fn()
+    except Exception as e:
+        if _ultimo_intento(tarea):
+            _interrumpir(cliente, eid, e)
+        raise
 
 
 def _gasto_claude(cliente, eid, tarea, paso, entrada, salida, detalle):
@@ -214,6 +282,7 @@ def avanzar(cliente, estudio_id):
 # ------------------------------------------------------------- tareas ---
 
 @registrar("nicho_inv_consultas")
+@red_de_la_cadena(lambda p: "consultas")
 def ejecutar_consultas(tarea):
     p = tarea["payload"]
     cliente, eid = p["cliente"], int(p["estudio_id"])
@@ -223,16 +292,18 @@ def ejecutar_consultas(tarea):
     if ((i.get("pasos") or {}).get("consultas") or {}).get("estado") == "hecho":
         # Reintento (p. ej. avanzar() reventó DESPUÉS de guardar las consultas):
         # ya están pagadas y guardadas -- no se vuelve a llamar a Claude (I3).
-        avanzar(cliente, eid)
+        _avanzar_seguro(cliente, eid)
         return gettext("Consultas: %(consultas)s", consultas=", ".join(i.get("consultas") or []))
     if not (est.get("tema") or "").strip():
         _detener(cliente, eid, N_("sin tema"))
         return gettext("El estudio no tiene tema.")
+    topes = {**inv.TOPES_DEFECTO, **(i.get("topes") or {})}
     job = tarea.get("job_id") or datos.job_id_inv(cliente, eid, "consultas")
     cola.reportar(job, etapa=N_("Consultas"))
     _marcar(cliente, eid, "consultas", "en_curso")
     try:
-        consultas, entrada, salida = inv.consultas_con_claude(est, i.get("pais") or est.get("pais") or "CO")
+        # el tope aprobado viaja a Claude: la búsqueda nunca gasta más que su línea (F3)
+        consultas, entrada, salida = inv.consultas_con_claude(est, i.get("pais") or est.get("pais") or "CO", topes["consultas"])
     except Exception as e:
         _fallo_claude(cliente, eid, tarea, "consultas", e, lambda m: gettext("Claude no pudo escribir las consultas: %(e)s", e=m))
         raise
@@ -241,12 +312,13 @@ def ejecutar_consultas(tarea):
     def _fn(x):
         previo = float(((x.get("pasos") or {}).get("consultas") or {}).get("usd") or 0)
         return inv.marcar_paso({**x, "consultas": consultas}, "consultas", "hecho", usd=round(previo + usd, 4), aviso="")
-    datos.actualizar_investigacion(cliente, eid, _fn)
-    avanzar(cliente, eid)
+    _o_interrumpir(tarea, cliente, eid, lambda: datos.actualizar_investigacion(cliente, eid, _fn))
+    _avanzar_seguro(cliente, eid)
     return gettext("Consultas: %(consultas)s", consultas=", ".join(consultas))
 
 
 @registrar("nicho_inv_buscar")
+@red_de_la_cadena(lambda p: f"buscar:{p.get('plataforma')}")
 def ejecutar_buscar(tarea):
     p = tarea["payload"]
     cliente, eid, plat = p["cliente"], int(p["estudio_id"]), p["plataforma"]
@@ -254,11 +326,12 @@ def ejecutar_buscar(tarea):
     if est is None:
         return gettext("La investigación no está activa.")
     paso = f"buscar:{plat}"
-    consultas = [c for c in (i.get("consultas") or []) if c]
+    topes = {**inv.TOPES_DEFECTO, **(i.get("topes") or {})}
+    # como máximo el tope aprobado: lo que el estimado cobró por esta búsqueda (F3)
+    consultas = [c for c in (i.get("consultas") or []) if c][:max(1, int(topes["consultas"]))]
     if not consultas:
         _detener(cliente, eid, N_("sin consultas"))
         return gettext("No hay consultas para buscar.")
-    topes = {**inv.TOPES_DEFECTO, **(i.get("topes") or {})}
     pais = i.get("pais") or est.get("pais") or ""
     job = tarea.get("job_id") or datos.job_id_inv(cliente, eid, paso)
 
@@ -283,17 +356,24 @@ def ejecutar_buscar(tarea):
         usd = (_gasto_apify(cliente, eid, tarea, paso, fuente, fuente.tarifa_busqueda(), nota=gettext("intento fallido"))
                if fuente is not None else 0.0)                   # la fuente ni se construyó: nada que cobrar
         mensaje = cola.recortar(cola.sin_token(e), 300)
-        _marcar_acumulando(cliente, eid, paso, "error", usd, productos=len(productos), nuevos=guardado["nuevos"], aviso=mensaje)
-        avanzar(cliente, eid)                                   # una plataforma caída no frena a las demás
+        try:
+            _marcar_acumulando(cliente, eid, paso, "error", usd, productos=len(productos), nuevos=guardado["nuevos"], aviso=mensaje)
+        except Exception:  # noqa: BLE001 — sin poder cerrar el paso, la cadena queda interrumpida (F2)
+            log.exception("No se pudo cerrar el paso %s", paso)
+            _interrumpir(cliente, eid, e)
+            raise e
+        _avanzar_seguro(cliente, eid)                           # una plataforma caída no frena a las demás
         raise
     usd = _gasto_apify(cliente, eid, tarea, paso, fuente, fuente.tarifa_busqueda())
-    _marcar_acumulando(cliente, eid, paso, "hecho" if productos else "vacio", usd, productos=len(productos), nuevos=guardado["nuevos"],
-                       aviso=getattr(fuente, "aviso", "") or "")
-    avanzar(cliente, eid)
+    _o_interrumpir(tarea, cliente, eid, lambda: _marcar_acumulando(cliente, eid, paso, "hecho" if productos else "vacio", usd,
+                                                                   productos=len(productos), nuevos=guardado["nuevos"],
+                                                                   aviso=getattr(fuente, "aviso", "") or ""))
+    _avanzar_seguro(cliente, eid)
     return gettext("%(n)s producto(s) de %(plataforma)s (%(nuevos)s nuevos)", n=len(productos), plataforma=plataformas.nombre(plat), nuevos=guardado["nuevos"])
 
 
 @registrar("nicho_inv_seleccionar")
+@red_de_la_cadena(lambda p: "seleccionar")
 def ejecutar_seleccionar(tarea):
     p = tarea["payload"]
     cliente, eid = p["cliente"], int(p["estudio_id"])
@@ -317,22 +397,29 @@ def ejecutar_seleccionar(tarea):
         # igual quedó anotado.
         usd = _gasto_claude(cliente, eid, tarea, _ref_intento("seleccion", tarea), entrada, salida,
                             gettext("%(n)s productos juzgados", n=len(decisiones)))
-        datos.marcar_relevancia(cliente, eid, decisiones)
     else:
         usd = 0.0                                                # nada sin juzgar: no se llama a Claude (I3)
-    todos = datos.productos_nicho(cliente, eid)
-    relevantes = [x for x in todos if x.get("relevante")]
-    elegidos = inv.elegir(todos, {x["id"]: {"relevante": True} for x in relevantes}, topes["productos_elegidos"])
 
-    def _fn(x):
-        previo = float(((x.get("pasos") or {}).get("seleccionar") or {}).get("usd") or 0)
-        nuevo = inv.marcar_paso({**x, "elegidos": elegidos}, "seleccionar", "hecho", usd=round(previo + usd, 4), relevantes=len(relevantes),
-                                elegidos_n=sum(len(v) for v in elegidos.values()), aviso="")
-        return inv.detener(nuevo, N_("no se encontraron productos del nicho")) if not elegidos else nuevo
-    datos.actualizar_investigacion(cliente, eid, _fn)
+    def _guardar():
+        # Lo que sigue al pago: si revienta en el último intento, la cadena queda
+        # interrumpida (Reanudar) en vez de trabada con el paso en curso (F2).
+        if pendientes:
+            datos.marcar_relevancia(cliente, eid, decisiones)
+        todos = datos.productos_nicho(cliente, eid)
+        relevantes = [x for x in todos if x.get("relevante")]
+        elegidos = inv.elegir(todos, {x["id"]: {"relevante": True} for x in relevantes}, topes["productos_elegidos"])
+
+        def _fn(x):
+            previo = float(((x.get("pasos") or {}).get("seleccionar") or {}).get("usd") or 0)
+            nuevo = inv.marcar_paso({**x, "elegidos": elegidos}, "seleccionar", "hecho", usd=round(previo + usd, 4), relevantes=len(relevantes),
+                                    elegidos_n=sum(len(v) for v in elegidos.values()), aviso="")
+            return inv.detener(nuevo, N_("no se encontraron productos del nicho")) if not elegidos else nuevo
+        datos.actualizar_investigacion(cliente, eid, _fn)
+        return relevantes, elegidos
+    relevantes, elegidos = _o_interrumpir(tarea, cliente, eid, _guardar)
     if not elegidos:
         return gettext("Ningún producto encontrado es del nicho.")
-    avanzar(cliente, eid)
+    _avanzar_seguro(cliente, eid)
     return gettext("%(r)s producto(s) del nicho; %(e)s elegido(s) para traer reseñas", r=len(relevantes), e=sum(len(v) for v in elegidos.values()))
 
 

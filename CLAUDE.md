@@ -280,7 +280,8 @@ Creatv, no suyas (2026-09-27).
 **Investigación automática** (spec `docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md`,
 plan `docs/superpowers/plans/2026-09-28-nicho-investigacion-completar.md`): con el tema del estudio y UNA
 cifra aprobada (el estimado lo calcula el servidor y el POST exige `total_visto`), la cadena de tareas
-`nicho_inv_consultas` (Claude, 2–4 búsquedas en el idioma del país) → `nicho_inv_buscar` por tienda
+`nicho_inv_consultas` (Claude, hasta el tope aprobado de búsquedas — 1 a 4 — en el idioma del país; la
+búsqueda nunca usa más que ese tope) → `nicho_inv_buscar` por tienda
 (`nicho/fuentes/plataformas.py`: Amazon con tienda propia, Mercado Libre en 18 países, TikTok Shop; actores
 de Apify con precio por resultado, `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de
 cobro cada una) → `nicho_inv_seleccionar` (Claude marca lo del nicho; se eligen los de más reseñas) →
@@ -298,8 +299,12 @@ investigación como `investigacion`; cada llamada a Claude de la cadena registra
 con la referencia del spec en el primer intento, `:i<intento>` desde el segundo y `:fallido<intento>`
 cuando el intento no sirvió (un reintento no vuelve a llamar a Claude si el paso ya quedó hecho). Los pasos
 de red corren con `max_intentos=1`; un paso de la cadena de una investigación ya cancelada no hace nada ni
-cobra, y un error inesperado cierra el paso y detiene la investigación (reanudable) en vez de dejarla
-colgada. Mientras la investigación está viva, la recolección manual del estudio y «Generar avatares»
+cobra. Si falla una tienda o una red, solo ese paso queda `error` y la cadena sigue; si Claude falla en el
+último intento de consultas o selección, o fallan los avatares, la investigación queda `detenida`
+(reanudable); y si una tarea no alcanza a cerrar su paso o a encolar el siguiente (`tareas.investigacion.
+red_de_la_cadena`, `_avanzar_seguro`), queda `interrumpida` con el error: nunca colgada con un estado vivo y
+nada en la cola. El `url` y la `imagen` de un producto solo se guardan si son `http(s)://` (van a un enlace).
+Mientras la investigación está viva, la recolección manual del estudio y «Generar avatares»
 esperan (las rutas los rechazan); si un trabajo manual con el mismo job_id sigue bloqueando un paso de la
 cadena, `avanzar` deja la investigación `interrumpida` para que «Reanudar» funcione en cuanto termine. El
 Blueprint de Nicho rechaza los POST que el navegador marca cross-site (`Sec-Fetch-Site`), como Sprints y

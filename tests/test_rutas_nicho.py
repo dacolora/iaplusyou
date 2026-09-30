@@ -579,6 +579,8 @@ def test_completar_desde_el_estudio_con_el_costo_visto(app):
     html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
     assert "incompleto: falta" in html and f"/cliente/acme/nicho/{eid}/completar" in html and gastos.formatear(e["usd"]) in html
     assert "<script>iniciarPolling" not in html
+    n = e["avatares"]
+    assert (f"Completar {n} incompleto ·" if n == 1 else f"Completar {n} incompletos ·") in html               # plural bien puesto (ola final)
     r = app["c"].post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": "0"}, follow_redirects=True)
     assert "vuelve a confirmar" in r.data.decode() and app["encolados"] == []
     app["c"].post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": str(e["usd"])})

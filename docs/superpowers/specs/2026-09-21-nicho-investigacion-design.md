@@ -102,9 +102,11 @@ sitio de Mercado Libre y el idioma de las consultas.
 `resenas_traidas > 0` no vuelven a pedirse.
 
 Nota (cerrado 2026-09-29): la tabla NO tiene columna `elegido`; los productos elegidos
-para pedir reseñas viven en `estudio.extra.investigacion.pasos.seleccionar.elegidos =
-{plataforma: [fuente_id, …]}` (§2.4), no en `producto_nicho`. La migración que creó la
-tabla tal cual queda arriba es la 0016.
+para pedir reseñas viven en `estudio.extra.investigacion.elegidos = {plataforma:
+[fuente_id, …]}` (arriba del todo del diccionario de la investigación, §2.4; el paso
+`pasos.seleccionar` solo guarda `elegidos_n`), no en `producto_nicho`. La migración que creó
+la tabla tal cual queda arriba es la 0016. El `url` y la `imagen` de un producto solo se
+guardan si empiezan por `http(s)://` (van a un enlace de la pantalla).
 
 ### 2.3 Comentarios de las plataformas
 

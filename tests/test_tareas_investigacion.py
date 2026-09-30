@@ -425,3 +425,127 @@ def test_buscar_fuente_no_construye_deja_error_y_sigue(base_temporal, cola_falsa
     from tareas import investigacion  # noqa: F401
     for t in ("nicho_inv_consultas", "nicho_inv_buscar", "nicho_inv_seleccionar"):
         assert t in tareas.REGISTRO and t in tareas.AL_INTERRUMPIR
+
+
+# ---------------------------------------------------------------- ola final ---
+
+def test_si_avanzar_revienta_la_cadena_queda_interrumpida(base_temporal, cola_falsa, monkeypatch):
+    """F2: el paso ya se cerró pero no se pudo encolar el siguiente -> interrumpida
+    (con Reanudar) y la tarea que hizo su parte termina bien."""
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = _estudio(datos)
+    _iniciar(datos, eid, plataformas=("amazon",))
+    _claude(monkeypatch, [('{"consultas": ["tofflor", "mjuka tofflor"]}', 700, 40)])
+
+    def _revienta(cliente, estudio_id):
+        raise RuntimeError("database is locked")
+    monkeypatch.setattr(ti, "avanzar", _revienta)
+    assert ti.ejecutar_consultas(_tarea("acme", eid, "nicho_inv_consultas"))                  # no lanza
+    i = datos.investigacion("acme", eid)
+    assert i["pasos"]["consultas"]["estado"] == "hecho" and i["estado"] == "interrumpida" and "locked" in i["ultimo_error"]
+    assert inv.puede_reanudar(i["estado"])
+
+
+def test_seleccion_revienta_despues_de_pagar(base_temporal, cola_falsa, monkeypatch):
+    """F2: una escritura que revienta después de pagar Claude en el último intento
+    deja la cadena interrumpida; con intentos por delante, el reintento la retoma."""
+    import gastos
+    from nicho import datos
+    from tareas import investigacion as ti
+    for ultimo in (False, True):
+        eid = _estudio(datos)
+        _iniciar(datos, eid, plataformas=("amazon",), redes=())
+        datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a", "b"],
+                                                                "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}, "buscar:amazon": {"estado": "hecho"}}})
+        datos.guardar_productos_nicho("acme", eid, "amazon", _productos(2))
+        ids = [p["id"] for p in datos.productos_nicho("acme", eid)]
+        _claude(monkeypatch, [('{"productos": [' + ", ".join(f'{{"id": {x}, "relevante": true, "motivo": "m"}}' for x in ids) + ']}', 900, 60)])
+
+        def _revienta(*a, **k):
+            raise RuntimeError("database is locked")
+        monkeypatch.setattr(ti.datos, "marcar_relevancia", _revienta)
+        antes = len(gastos.historial("acme"))
+        with pytest.raises(RuntimeError):
+            ti.ejecutar_seleccionar(_tarea("acme", eid, "nicho_inv_seleccionar", intentos=2 if ultimo else 1, max_intentos=2))
+        monkeypatch.undo()
+        i = datos.investigacion("acme", eid)
+        assert len(gastos.historial("acme")) == antes + 1                                          # lo pagado quedó anotado una vez
+        assert (i["estado"] == "interrumpida") is ultimo and i["pasos"]["seleccionar"]["estado"] == "en_curso"
+
+
+def test_red_de_la_cadena_solo_si_el_paso_quedo_abierto(base_temporal):
+    """F2: si la tarea sale con error en su último intento sin cerrar su paso, la
+    investigación queda interrumpida; si el paso ya se cerró (tienda caída que
+    siguió la cadena), no se toca."""
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = _estudio(datos)
+    _iniciar(datos, eid, plataformas=("amazon",))
+
+    @ti.red_de_la_cadena(lambda p: "consultas")
+    def _falla(tarea):
+        raise RuntimeError("se cayó al empezar")
+    with pytest.raises(RuntimeError):
+        _falla(_tarea("acme", eid, "x", intentos=1, max_intentos=2))                             # con intentos por delante: nada
+    assert datos.investigacion("acme", eid)["estado"] == "consultas"
+    with pytest.raises(RuntimeError):
+        _falla(_tarea("acme", eid, "x", intentos=2, max_intentos=2))
+    assert datos.investigacion("acme", eid)["estado"] == "interrumpida"
+    eid2 = _estudio(datos)
+    _iniciar(datos, eid2, plataformas=("amazon",))
+    datos.actualizar_investigacion("acme", eid2, lambda x: inv.marcar_paso(inv.marcar_paso(x, "consultas", "hecho"), "buscar:amazon", "error"))
+
+    @ti.red_de_la_cadena(lambda p: "buscar:amazon")
+    def _tienda_caida(tarea):
+        raise RuntimeError("actor caído")
+    with pytest.raises(RuntimeError):
+        _tienda_caida(_tarea("acme", eid2, "x", intentos=1, max_intentos=1))
+    assert datos.investigacion("acme", eid2)["estado"] != "interrumpida"
+
+
+def test_consultas_y_busqueda_dentro_del_tope_aprobado(base_temporal, cola_falsa, monkeypatch):
+    """F3: Claude recibe el tope aprobado y la búsqueda nunca usa más consultas."""
+    from nicho import avatares, datos
+    from tareas import investigacion as ti
+    eid = _estudio(datos)
+    _iniciar(datos, eid, plataformas=("amazon",))
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "topes": {**x["topes"], "consultas": 1}})
+    prompts = []
+
+    def _llamar(texto, max_tokens):
+        prompts.append(texto)
+        return '{"consultas": ["uno", "dos", "tres"]}', 100, 10
+    monkeypatch.setattr(avatares, "_llamar", _llamar)
+    ti.ejecutar_consultas(_tarea("acme", eid, "nicho_inv_consultas"))
+    assert datos.investigacion("acme", eid)["consultas"] == ["uno"] and "de 1 a 1" in prompts[-1]
+    eid2 = _estudio(datos, pais="MX")
+    _iniciar(datos, eid2, plataformas=("amazon",))
+    datos.actualizar_investigacion("acme", eid2, lambda x: {**x, "consultas": ["a", "b", "c", "d"], "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}}})
+    vistas = []
+
+    class F(_Plat):
+        def buscar(self, consultas, pais, n, avanzar=None):
+            vistas.append(list(consultas))
+            return iter(())
+    monkeypatch.setattr(ti.fuentes_registro, "por_tipo", lambda t: (lambda: F(t)))
+    ti.ejecutar_buscar(_tarea("acme", eid2, "nicho_inv_buscar", {"plataforma": "amazon"}, intentos=1, max_intentos=1))
+    assert vistas == [["a", "b", "c"]]                                                            # tope por defecto: 3
+
+
+def test_seleccion_sin_nada_por_juzgar_no_paga(base_temporal, cola_falsa, monkeypatch):
+    """Reintento con todo ya juzgado: no se llama a Claude ni se anota gasto."""
+    import gastos
+    from nicho import avatares, datos
+    from tareas import investigacion as ti
+    eid = _estudio(datos)
+    _iniciar(datos, eid, plataformas=("amazon",), redes=())
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas": ["a", "b"],
+                                                            "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}, "buscar:amazon": {"estado": "hecho"}}})
+    datos.guardar_productos_nicho("acme", eid, "amazon", _productos(2))
+    datos.marcar_relevancia("acme", eid, {p["id"]: {"relevante": True, "motivo": "m"} for p in datos.productos_nicho("acme", eid)})
+    monkeypatch.setattr(avatares, "_llamar", lambda *a, **k: pytest.fail("no debía llamar a Claude"))
+    antes = len(gastos.historial("acme"))
+    ti.ejecutar_seleccionar(_tarea("acme", eid, "nicho_inv_seleccionar"))
+    i = datos.investigacion("acme", eid)
+    assert len(gastos.historial("acme")) == antes and i["pasos"]["seleccionar"]["estado"] == "hecho" and i["elegidos"]["amazon"]

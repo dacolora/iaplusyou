@@ -113,3 +113,32 @@ def test_entradas_y_lectura_de_resenas():
         pl.entradas_resenas("amazon", [], "SE", 10)
     with pytest.raises(ErrorFuente):
         pl.entradas_resenas("meli", [{"fuente_id": "x", "url": None, "titulo": "sin url"}], "CO", 10)
+
+
+def test_links_de_productos_solo_http():
+    """El link del producto va a un href: nada que no sea http(s) (ola final, F1)."""
+    from nicho.fuentes import plataformas as pl
+    base = {"asin": "B0X", "title": "Tofflor"}
+    for malo in ("javascript:alert(1)", " JAVASCRIPT:alert(1)", "data:text/html,<b>x</b>", "/dp/B0X", "vbscript:x"):
+        p = pl.leer_producto("amazon", {**base, "url": malo, "thumbnailImage": malo})
+        assert p["url"] is None and p["imagen"] is None, malo
+    p = pl.leer_producto("amazon", {**base, "url": "https://www.amazon.se/dp/B0X", "thumbnailImage": "HTTP://img.example/x.jpg"})
+    assert p["url"] == "https://www.amazon.se/dp/B0X" and p["imagen"] == "HTTP://img.example/x.jpg"
+    assert pl.leer_producto("meli", {"id": "MCO1", "title": "P", "permalink": "//articulo.mercadolibre.com.co/MCO-1"})["url"] == \
+        "https://articulo.mercadolibre.com.co/MCO-1"
+    assert pl.leer_producto("tiktok_shop", {"productId": "1", "title": "P", "productUrl": "javascript:x"})["url"] is None
+
+
+def test_resenas_por_link_saltan_productos_sin_link():
+    from nicho.fuentes import plataformas as pl
+    e = pl.entradas_resenas("meli", [{"fuente_id": "a", "url": None, "titulo": "sin"},
+                                     {"fuente_id": "b", "url": "https://articulo.mercadolibre.com.co/MCO-2", "titulo": "con"}], "CO", 20)
+    assert e[0]["entrada"]["productUrls"] == ["https://articulo.mercadolibre.com.co/MCO-2"] and e[0]["max_items"] == 20
+
+
+@pytest.mark.parametrize("texto,esperado", [("1.234,56", 1234.56), ("1,234.56", 1234.56), ("12,99", 12.99), ("4,5", 4.5),
+                                            ("1.234", 1234.0), ("59.900", 59900.0), ("1.234.567,89", 1234567.89), ("1,234", 1234.0),
+                                            ("12.5", 12.5), ("€ 1.299,00", 1299.0), ("US$ 19.99", 19.99), ("349 kr", 349.0), ("abc", None)])
+def test_precios_con_coma_o_punto(texto, esperado):
+    from nicho.fuentes import plataformas as pl
+    assert pl._flotante(texto) == esperado

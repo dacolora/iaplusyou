@@ -287,7 +287,7 @@ Nicho o tema a investigar: {tema}
 Producto que vendemos (solo como referencia; NO busques nuestra marca): {producto}
 Mercado: {pais}. Idioma de las búsquedas: {idioma}.
 
-Escribe de 2 a 4 búsquedas cortas (2 a 6 palabras cada una), en {idioma}, tal como las escribiría un comprador en el buscador de una tienda para encontrar los productos de ese nicho y de su competencia. Sin marcas nuestras, sin comillas, sin explicaciones.
+Escribe de {minimo} a {maximo} búsquedas cortas (2 a 6 palabras cada una), en {idioma}, tal como las escribiría un comprador en el buscador de una tienda para encontrar los productos de ese nicho y de su competencia. Sin marcas nuestras, sin comillas, sin explicaciones.
 Responde SOLO con JSON: {{"consultas": ["...", "..."]}}"""
 
 PROMPT_SELECCION = """Eres un analista de mercado. Tema del nicho: {tema}
@@ -313,12 +313,17 @@ def _con_tokens(e, entrada, salida):
     return e
 
 
-def consultas_con_claude(estudio, pais):
-    """-> (consultas, tokens_entrada, tokens_salida). 2 a 4 consultas limpias y
-    sin repetir; AnalisisInvalido (con tokens) si Claude no devuelve eso."""
+def consultas_con_claude(estudio, pais, n=None):
+    """-> (consultas, tokens_entrada, tokens_salida). Entre min(2, n) y n
+    consultas limpias y sin repetir, con n = el tope aprobado (la búsqueda nunca
+    gasta más que su línea del estimado); AnalisisInvalido (con tokens) si Claude
+    no devuelve eso."""
+    minimo_tope, maximo_tope = LIMITES["consultas"]
+    n = max(minimo_tope, min(int(n or TOPES_DEFECTO["consultas"]), maximo_tope))
+    minimo = min(2, n)
     idioma = plataformas.idioma(pais)
     prompt = PROMPT_CONSULTAS.format(tema=(estudio.get("tema") or "").strip(), producto=(estudio.get("producto") or "").strip() or "—",
-                                     pais=pais, idioma=_idioma_texto(idioma))
+                                     pais=pais, idioma=_idioma_texto(idioma), minimo=minimo, maximo=n)
     texto, entrada, salida = avatares._llamar(prompt, MAX_TOKENS_CONSULTAS)
     try:
         data = avatares._json_objeto(texto)
@@ -330,9 +335,9 @@ def consultas_con_claude(estudio, pais):
         if c and c.lower() not in vistas:
             vistas.add(c.lower())
             consultas.append(c)
-    consultas = consultas[:4]
-    if len(consultas) < 2:
-        raise _con_tokens(avatares.AnalisisInvalido(gettext("Claude devolvió menos de 2 consultas.")), entrada, salida)
+    consultas = consultas[:n]
+    if len(consultas) < minimo:
+        raise _con_tokens(avatares.AnalisisInvalido(gettext("Claude devolvió menos de %(n)s consultas.", n=minimo)), entrada, salida)
     return consultas, entrada, salida
 
 

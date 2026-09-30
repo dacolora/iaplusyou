@@ -53,6 +53,10 @@ def frase_estado(estado):
     del final, con el estado terminal real o el reloj local vencido."""
     if estado == ESTADO_SIN_TERMINAR:
         return gettext("no terminó en %(minutos)s min", minutos=int(MAX_ESPERA_S / 60))
+    if estado == ESTADO_NO_ARRANCO:
+        return gettext("no arrancó")
+    if estado == ESTADO_SIN_ESTADO:
+        return gettext("no se pudo saber cómo terminó")
     return gettext("terminó en %(estado)s", estado=estado)
 
 

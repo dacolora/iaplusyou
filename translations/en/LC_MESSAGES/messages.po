@@ -13368,3 +13368,25 @@ msgstr "There aren't any approved avatars yet."
 msgid "Descartados y archivados"
 msgstr "Discarded and archived"
 
+#, python-format
+msgid "Claude devolvió menos de %(n)s consultas."
+msgstr "Claude returned fewer than %(n)s searches."
+
+msgid "no arrancó"
+msgstr "didn't start"
+
+msgid "no se pudo saber cómo terminó"
+msgstr "its outcome couldn't be confirmed"
+
+#, python-format
+msgid "Completar %(num)s incompleto · ≈ %(costo)s"
+msgid_plural "Completar %(num)s incompletos · ≈ %(costo)s"
+msgstr[0] "Complete %(num)s incomplete avatar · ≈ %(costo)s"
+msgstr[1] "Complete %(num)s incomplete avatars · ≈ %(costo)s"
+
+#, python-format
+msgid "Completar %(num)s incompleto de «%(estudio)s» · ≈ %(costo)s"
+msgid_plural "Completar %(num)s incompletos de «%(estudio)s» · ≈ %(costo)s"
+msgstr[0] "Complete %(num)s incomplete avatar from «%(estudio)s» · ≈ %(costo)s"
+msgstr[1] "Complete %(num)s incomplete avatars from «%(estudio)s» · ≈ %(costo)s"
+

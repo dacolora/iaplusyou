@@ -33,6 +33,7 @@ from nicho import fuentes as fuentes_registro
 from nicho.fuentes import apify_actores
 from idiomas import N_
 from tareas import al_interrumpir, ref_sufijo, registrar
+from tareas.investigacion import red_de_la_cadena
 
 ETAPA_GUARDAR = N_("Guardando")
 ETAPAS_GENERAR = [(avatares.ETAPA_NUCLEOS, 45), (avatares.ETAPA_SUBS, 150), (ETAPA_GUARDAR, 5)]
@@ -83,6 +84,7 @@ def _paso_investigacion(tipo):
 
 
 @registrar("nicho_generar_avatares")
+@red_de_la_cadena(lambda p: "generar" if p.get("auto") else None)
 def ejecutar_generar(tarea):
     p = tarea["payload"]
     cliente, eid = p["cliente"], int(p["estudio_id"])
@@ -165,14 +167,17 @@ def ejecutar_generar(tarea):
                             proveedor="anthropic",
                             extra={"tokens_entrada": resumen.get("tokens_entrada"), "tokens_salida": resumen.get("tokens_salida"),
                                    "modelo": resumen.get("modelo")})
-    datos.recalcular(cliente, eid, tarea_viva=False)
     if auto:
+        # El paso se cierra ANTES de recalcular: si algo revienta después, lo pagado
+        # ya consta como hecho y «Reanudar» no vuelve a generar (ni a cobrar).
         def _fn(i):
             previo = float(((i.get("pasos") or {}).get("generar") or {}).get("usd") or 0)
             return inv.marcar_paso(i, "generar", "hecho", usd=round(previo + float(resumen.get("usd") or 0), 4),
                                    nucleos=res["nucleos"], subs=res["subs"])
         datos.actualizar_investigacion(cliente, eid, _fn)
-        tareas_inv.avanzar(cliente, eid)
+    datos.recalcular(cliente, eid, tarea_viva=False)
+    if auto:
+        tareas_inv._avanzar_seguro(cliente, eid)
     aviso = (" · " + gettext("%(n)s núcleo(s) sin sub-avatares", n=resumen["errores"])) if resumen.get("errores") else ""
     return gettext("%(nucleos)s núcleo(s) y %(subs)s sub-avatar(es) propuestos — revísalos y aprueba los que sirvan%(aviso)s.",
                    nucleos=res["nucleos"], subs=res["subs"], aviso=aviso)
@@ -270,10 +275,11 @@ def _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, 
         return inv.marcar_paso(i, paso, estado, usd=round(previo + usd, 4), nuevos=totales["nuevos"],
                                repetidos=totales["repetidos"], aviso=(error or aviso or ""))
     datos.actualizar_investigacion(cliente, eid, _fn)
-    tareas_inv.avanzar(cliente, eid)
+    tareas_inv._avanzar_seguro(cliente, eid)          # si no puede encolar, la cadena queda interrumpida (F2)
 
 
 @registrar("nicho_recolectar")
+@red_de_la_cadena(lambda p: _paso_investigacion(p.get("fuente")) if p.get("investigacion") else None)
 def ejecutar_recolectar(tarea):
     p = tarea["payload"]
     cliente, eid, tipo = p["cliente"], int(p["estudio_id"]), p["fuente"]
