@@ -13,6 +13,7 @@ import logging
 import math
 import os
 import re
+import unicodedata
 import secrets
 import socket
 import subprocess
@@ -25,7 +26,7 @@ import requests
 import sqlalchemy as sa
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context
 from flask_babel import Babel, get_locale, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
@@ -55,6 +56,7 @@ import referencias_flowplus
 import materiales
 import ediciones
 import mi_musica
+import audios
 import referencias_link
 import generador_prompts
 from providers import image_provider
@@ -98,7 +100,9 @@ from tareas import organico as tareas_org
 from tareas import tiendas as tareas_tiendas
 from tareas import doctrina as tareas_doctrina
 from tareas import musica as tareas_musica
+from tareas import audios as tareas_audios
 from tareas import edicion as tareas_edicion
+from tareas import triple_whale as tareas_tw
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
@@ -210,6 +214,11 @@ app.register_blueprint(nicho_rutas.bp)
 
 from referentes import rutas as referentes_rutas  # noqa: E402  (Blueprint de la pestaña Referentes)
 app.register_blueprint(referentes_rutas.bp)
+
+from triple_whale import rutas as triple_whale_rutas  # noqa: E402  (Blueprint de la pestaña Triple Whale)
+from triple_whale import panel as triple_whale_panel  # noqa: E402  (la tienda según Triple Whale, en el Tablero)
+from triple_whale import puente as triple_whale_puente  # noqa: E402  (una pieza de Crear nacida de una idea)
+app.register_blueprint(triple_whale_rutas.bp)
 
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
 app.register_blueprint(guiones_rutas.bp)
@@ -1608,8 +1617,8 @@ def ver_cliente(cliente):
     meta_app = meta_conexion.app_publica(cliente)
     meta_conectado = capacidades_meta.get("estado") == "conectado"
     # Modo de la conexión con Meta (propia / agencia): en agencia la tarjeta
-    # de _meta_conectar.html es «Gestionado por Creatv» (sin app ni botón de
-    # conectar) y Puesta a punto mira que la agencia esté conectada, no la app.
+    # de _meta_conectar.html (en Experimentos) es «Gestionado por Creatv», sin
+    # app ni botón de conectar.
     datos_meta = meta_conexion.cargar(cliente) or {}
     modo_meta = meta_conexion.MODO_AGENCIA if datos_meta.get("modo") == meta_conexion.MODO_AGENCIA else "propia"
     agencia_conectada = meta_agencia.conectada() if modo_meta == meta_conexion.MODO_AGENCIA else False
@@ -1695,7 +1704,7 @@ def ver_cliente(cliente):
         **_listas_crear_final(cf_items),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
-        fp_prefill=session.pop("fp_prefill", None),
+        fp_prefill=_prefill_para(cliente),
         logos=_logos(cliente),
         referencias_bandeja=referencias_flowplus.listar(cliente),
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
@@ -1724,6 +1733,7 @@ def ver_cliente(cliente):
         motivo_bloqueo_forma=motivo_bloqueo_forma,
         meta_redirect_uri=os.environ.get("META_REDIRECT_URI", ""),
         **fe_ctx,
+        **_contexto_audios(cliente),
         experimentos=experimentos_exp,
         experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],
         elegibles_exp=experimentos.elegibles(cliente),
@@ -1756,6 +1766,7 @@ def ver_cliente(cliente):
         meses_cortos=idiomas.meses_cortos(),
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
+        tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         estado_pixel=estado_pixel,
@@ -1766,10 +1777,7 @@ def ver_cliente(cliente):
         cifrado_ok=cifrado.disponible(),
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
         tipos_tienda=conectores.TIPOS_CONECTABLES,
-        llaves=_llaves_visibles(
-            _estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app),
-                           modo_meta=modo_meta, agencia_conectada=agencia_conectada, meta_forma=meta_forma),
-            session.get("rol")),
+        llaves=_llaves_visibles(_estado_llaves(url_for("meli_callback", _external=True)), session.get("rol")),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=tablero_ctx,
         **gasto_ctx,
@@ -1849,27 +1857,6 @@ SERVICIOS_LLAVES = (
             idiomas.N_("Vuelve a R2 › «Manage R2 API tokens» › «Create API token» con permiso «Object Read & Write»."),
             idiomas.N_("Copia el Access Key ID y el Secret Access Key; el Account ID está en la barra lateral de R2."),
             idiomas.N_("Pega las cinco variables en el .env del servidor y reinicia."),
-        ],
-    },
-    {
-        "id": "meta",
-        "nombre": idiomas.N_("Meta (anuncios)"),
-        "para_que": idiomas.N_("Crea las campañas, conjuntos y anuncios de cada experimento y lee sus métricas."),
-        "costo": idiomas.N_("La pauta se cobra en tu cuenta publicitaria; la API no cuesta."),
-        "url": "https://business.facebook.com/settings/payment-methods",
-        "url_texto": idiomas.N_("business.facebook.com › Facturación"),
-        "variables": [],
-        "por_proyecto": True,
-        # Lo único de esta tarjeta que le toca al cliente (el resto es del admin).
-        "cliente_hace": idiomas.N_("Agrega un método de pago a tu cuenta publicitaria (enlace de abajo): sin él Meta no "
-                        "activa ningún anuncio. La conexión se hace en el bloque «¿Cómo quieres conectar Meta?»."),
-        "nota": idiomas.N_("No va en el .env: cada proyecto registra su propia app de Meta (id, secret y configuración de Facebook Login) en el bloque «Conecta tu cuenta de Meta» de abajo, y ahí mismo pulsa «Conectar con Meta»."),
-        "pasos": [
-            idiomas.N_("En developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; anota el App ID, el App Secret y el id de la configuración de Login."),
-            idiomas.N_("Pégalos en «Conecta tu cuenta de Meta» (abajo, o en Experimentos): el secret se guarda en el servidor y nunca vuelve a pantalla."),
-            idiomas.N_("En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio."),
-            idiomas.N_("Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página."),
-            idiomas.N_("Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app."),
         ],
     },
     {
@@ -1980,52 +1967,41 @@ SERVICIOS_LLAVES = (
             idiomas.N_("Pégala como ATRIA_API_KEY en el .env del servidor y reinicia los dos servicios."),
         ],
     },
+    {
+        "id": "trendtrack",
+        "nombre": idiomas.N_("TrendTrack (biblioteca de referentes: anuncios de Meta)"),
+        "para_que": idiomas.N_("Trae anuncios reales de Meta que TrendTrack ha registrado para la biblioteca de referentes; busca por palabra clave."),
+        "costo": idiomas.N_("Un crédito de TrendTrack por anuncio revisado (US$ 1 = 1 000 créditos); el plan Pro incluye 20 000 créditos al mes. El uso está en Referentes (admin)."),
+        "url": "https://www.trendtrack.io",
+        "url_texto": "trendtrack.io",
+        "variables": ["TRENDTRACK_API_KEY"],
+        "nota": idiomas.N_("Sin ella la fuente TrendTrack queda apagada en «Traer referentes». La API pide el plan Pro o superior: el Starter no la incluye."),
+        "opcional": True,
+        "pasos": [
+            idiomas.N_("En trendtrack.io elige el plan Pro o superior (incluye la API y 20 000 créditos al mes)."),
+            idiomas.N_("Crea una API key en tu workspace de TrendTrack (guía: docs.trendtrack.io › Getting Started)."),
+            idiomas.N_("Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."),
+        ],
+    },
 )
 
 
-# Tarjeta Meta cuando el proyecto está en modo agencia: no hay app ni llave
-# que conseguir; lo único que cuenta es que la agencia esté conectada.
-NOTA_META_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta "
-                     "nada aquí. La cuenta publicitaria y la Página se las asigna el administrador desde el "
-                     "panel; pídele a él cualquier cambio.")
-PASOS_META_AGENCIA = [
-    idiomas.N_("No tienes que conseguir ninguna llave: Creatv conecta su Business Manager una sola vez y te asigna la cuenta y la Página."),
-    idiomas.N_("Si quieres cambiar de cuenta publicitaria o de Página, o volver a usar tu propia app de Meta, pídeselo al administrador."),
-    idiomas.N_("Agrega un método de pago a la cuenta publicitaria en business.facebook.com › Configuración › Facturación: sin él Meta no activa ningún anuncio."),
-]
-
-
-def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="propia", agencia_conectada=False, meta_forma=None):
-    """Tarjetas de Configuración › Puesta a punto. Devuelve una lista de dicts
-    {id, nombre, para_que, costo, estado, url, url_texto, variables, faltan,
-    nota, pasos, opcional} donde `estado` es «configurada» (todas las
-    variables presentes), «falta» (ninguna) o «parcial» (algunas). Solo mira
-    bool(os.environ.get(var)): ningún valor sale de aquí. `callback_meli` es
-    la URL real del callback de MercadoLibre para el paso de la app (fuera de
-    un request se deja el texto genérico). La tarjeta Meta depende del modo
-    del proyecto: en «propia» cuenta la app registrada; en «agencia» cuenta
-    que la agencia esté conectada (`agencia_conectada`), y nota/pasos cambian."""
+def _estado_llaves(callback_meli=None):
+    """Tarjetas de Configuración › Puesta a punto (solo admin). Devuelve una
+    lista de dicts {id, nombre, para_que, costo, estado, url, url_texto,
+    variables, faltan, nota, pasos, opcional} donde `estado` es «configurada»
+    (todas las variables presentes), «falta» (ninguna) o «parcial» (algunas).
+    Solo mira bool(os.environ.get(var)): ningún valor sale de aquí.
+    `callback_meli` es la URL real del callback de MercadoLibre para el paso
+    de la app (fuera de un request se deja el texto genérico). La conexión
+    con Meta no es una llave del servidor: vive en Experimentos
+    (_meta_conectar.html)."""
     callback = callback_meli or "<url del sitio>/meli/callback"
     tarjetas = []
     for s in SERVICIOS_LLAVES:
         nota, pasos = s["nota"], s["pasos"]
-        if s.get("por_proyecto") and modo_meta == meta_conexion.MODO_AGENCIA:
-            # Meta en modo agencia: la conexión es de Creatv, no del proyecto.
-            presentes = ["conexión de agencia de Creatv"] if agencia_conectada else []
-            faltan = [] if agencia_conectada else ["conexión de agencia de Creatv (la conecta el administrador)"]
-            nota, pasos = NOTA_META_AGENCIA, PASOS_META_AGENCIA
-        elif s.get("por_proyecto") and meta_forma == "agencia":
-            # Eligió que Creatv lo gestione pero aún no compartió/conectó.
-            presentes = []
-            faltan = ["conexión de agencia: pendiente de que compartas tus activos con Creatv (Configuración › Meta)"]
-            nota, pasos = NOTA_META_AGENCIA, PASOS_META_AGENCIA
-        elif s.get("por_proyecto"):
-            # Meta: la app es del proyecto (clientes/<c>/meta_app.json), no del .env.
-            presentes = ["app de Meta del proyecto"] if meta_app_registrada else []
-            faltan = [] if meta_app_registrada else ["app de Meta del proyecto"]
-        else:
-            presentes = [v for v in s["variables"] if bool((os.environ.get(v) or "").strip())]
-            faltan = [v for v in s["variables"] if v not in presentes]
+        presentes = [v for v in s["variables"] if bool((os.environ.get(v) or "").strip())]
+        faltan = [v for v in s["variables"] if v not in presentes]
         if not faltan:
             estado = "configurada"
         elif not presentes:
@@ -2036,7 +2012,7 @@ def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="pro
         # literal "nombre" del subíndice como si fuera el mensaje) — por eso
         # cada valor pasa primero por una variable antes de traducirse.
         nombre_valor, para_que_valor, costo_valor = s["nombre"], s["para_que"], s["costo"]
-        url_texto_valor, cliente_hace_valor = s["url_texto"], s.get("cliente_hace", "")
+        url_texto_valor = s["url_texto"]
         tarjetas.append({
             "id": s["id"],
             "nombre": gettext(nombre_valor),
@@ -2049,21 +2025,16 @@ def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="pro
             "faltan": faltan,
             "nota": gettext(nota),
             "opcional": bool(s.get("opcional")),
-            "por_proyecto": bool(s.get("por_proyecto")),
-            "cliente_hace": gettext(cliente_hace_valor) if cliente_hace_valor else "",
             "pasos": [gettext(p).replace("{callback_meli}", callback) for p in pasos],
         })
     return tarjetas
 
 
 def _llaves_visibles(tarjetas, rol):
-    """Un cliente no administra el servidor: en Puesta a punto ve solo las
-    tarjetas que se configuran por proyecto (Meta), y de ellas solo su parte
-    (la plantilla esconde variables, nota y pasos si no es admin). El admin
-    las ve todas."""
-    if rol == "admin":
-        return tarjetas
-    return [t for t in tarjetas if t["por_proyecto"]]
+    """Las llaves son del servidor: solo el admin ve las tarjetas. Un cliente
+    no ve ninguna (la conexión con Meta, que era la única por proyecto, vive
+    en Experimentos)."""
+    return tarjetas if rol == "admin" else []
 
 
 PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
@@ -2296,8 +2267,7 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
             video_url = None
             bitacora.registrar(cliente, video_id, "storage", "error", str(e))
 
-        estado = estado_mod.cargar(cliente)
-        estado[video_id] = {
+        registro = {
             "prompt": prompt_texto,
             "image_url": imagen_url,
             "title": video_id,
@@ -2309,7 +2279,8 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
             "generado_en": datetime.now().isoformat(),
             "publicado_en": None,
         }
-        estado_mod.guardar(cliente, estado)
+        # Con candado (estado.modificar): el worker también escribe este archivo.
+        estado_mod.modificar(cliente, lambda estado: {**estado, video_id: registro})
 
         data2 = conceptos_imagen.cargar(cliente)
         animacion2 = conceptos_imagen.encontrar_animacion(data2, idea_id, concepto_id, proveedor, anim_id)
@@ -3417,7 +3388,7 @@ def _ir_a_flowmarketing(cliente):
 
 
 MENSAJE_MODO_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» "
-                        "en Configuración › Meta (con nada en marcha).")
+                        "en Experimentos › Meta (con nada en marcha).")
 
 
 def _bloqueo_modo_agencia(cliente):
@@ -3634,7 +3605,7 @@ _RE_PORTAFOLIO = re.compile(r"^\d{5,20}$")
 
 
 def _ir_a_meta(cliente):
-    # La elección de forma y las guías viven en Configuración › Meta.
+    # La elección de forma y las guías viven en Experimentos (_meta_conectar.html).
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -4036,6 +4007,7 @@ def admin_referentes():
     traer un barrido global (cliente=NULL) de Atria/Apify, y ver totales."""
     from referentes import datos as ref_datos, fuentes
     from referentes.fuentes.atria import limite_mensual, llamadas_este_mes
+    from referentes.fuentes import trendtrack
     from referentes.rutas import _consulta_desde, _entero
     import gastos
     from tareas import referentes as tareas_ref
@@ -4048,14 +4020,15 @@ def admin_referentes():
     fuente_llaves_faltantes = {t: fuentes.llaves_faltantes(t) for t in fuentes.tipos()}
     llaves_faltantes = fuentes.llaves_faltantes(fuente) if fuente else []
     precio_traer = None
-    if fuente and not llaves_faltantes and (consulta_traer.get("pagina_id") or consulta_traer.get("palabra")):
+    if (fuente and not llaves_faltantes and consulta_traer["modo"] in fuentes.modos(fuente)
+            and (consulta_traer.get("pagina_id") or consulta_traer.get("palabra"))):
         modulo = fuentes.por_tipo(fuente)
         try:
             est_fuente = modulo.estimar(consulta_traer, tope_traer)
         except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la página
             est_fuente = None
         if est_fuente:
-            est_clasificacion = gastos.estimar("clasificacion", n=tope_traer)
+            est_clasificacion = gastos.estimar("clasificacion", n=tope_traer, bilingue=True)
             precio_traer = {"fuente": est_fuente, "clasificacion": est_clasificacion,
                             "total_usd": est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)}
 
@@ -4068,7 +4041,12 @@ def admin_referentes():
     for b in barridos_otras_fuentes:
         b["trabajo"] = tareas_ref.trabajo_barrer(b["id"])
         b["imagenes_error"] = ref_datos.contar_imagenes_de_barrido(b["id"])[2]
-        b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"])["texto"] if b["pendientes"] else None
+        b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"], bilingue=True)["texto"] if b["pendientes"] else None
+
+    familias_sin_en = ref_datos.familias_sin_descripcion_en()
+    precio_familias_en = (gastos.formatear(tareas_ref.copycoders.estimar_describir_familias(
+        [(f["nombre"], [f["descripcion"]]) for f in familias_sin_en], por_llamada=tareas_ref.FAMILIAS_POR_LLAMADA))
+        if familias_sin_en else None)
 
     return render_template("admin_referentes.html", url_swipe=tareas_ref.copycoders.URL_SWIPE,
                            trabajo=({"job_id": tareas_ref.trabajo_importacion()} if tareas_ref.trabajo_importacion() else None),
@@ -4079,8 +4057,12 @@ def admin_referentes():
                            fuente=fuente, consulta_traer=consulta_traer, tope_traer=tope_traer,
                            precio_traer=precio_traer, fuente_llaves_faltantes=fuente_llaves_faltantes,
                            atria_llamadas=llamadas_este_mes(), atria_limite=limite_mensual(),
+                           trendtrack_creditos=trendtrack.creditos_este_mes(),
+                           trendtrack_saldo=trendtrack.creditos_restantes(),
                            fuentes_totales=ref_datos.opciones(None)["fuentes"],
-                           barridos_otras_fuentes=barridos_otras_fuentes)
+                           barridos_otras_fuentes=barridos_otras_fuentes,
+                           familias_sin_en=familias_sin_en, precio_familias_en=precio_familias_en,
+                           familias_en_en_curso=trabajos.en_curso(tareas_ref.JOB_FAMILIAS_EN))
 
 
 @app.route("/admin/referentes/importar", methods=["POST"])
@@ -4119,6 +4101,9 @@ def admin_referentes_traer():
         flash("Esa fuente no está configurada.", "error")
         return redirect(url_for("admin_referentes"))
     consulta = _consulta_desde(request.form)
+    if consulta["modo"] not in fuentes.modos(fuente):
+        flash("Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente.", "error")
+        return redirect(url_for("admin_referentes"))
     if consulta["modo"] == "marca" and not consulta["pagina_id"]:
         flash("Pega un link del Ad Library o el id de la página.", "error")
         return redirect(url_for("admin_referentes"))
@@ -4138,7 +4123,7 @@ def admin_referentes_traer():
     except ErrorFuente as e:
         flash(e.usuario, "error")
         return redirect(url_for("admin_referentes"))
-    est_clasificacion = gastos.estimar("clasificacion", n=tope)
+    est_clasificacion = gastos.estimar("clasificacion", n=tope, bilingue=True)
     usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
     tareas_ref.encolar_barrer(None, fuente, consulta, tope, usd_estimado, pedido_por=_sesion().get("usuario"))
     flash("Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza.", "ok")
@@ -4151,7 +4136,24 @@ def admin_referentes_familia(familia_id):
     if not _mismo_origen():
         abort(403)
     from referentes import datos as ref_datos
-    ref_datos.familia_actualizar(familia_id, request.form.get("descripcion") or "")
+    ref_datos.familia_actualizar(familia_id, request.form.get("descripcion") or "",
+                                 descripcion_en=request.form.get("descripcion_en"))
+    return redirect(url_for("admin_referentes"))
+
+
+@app.route("/admin/referentes/familias/ingles", methods=["POST"])
+@requiere_admin
+def admin_referentes_familias_en():
+    """Descripciones en inglés de las familias que faltan (spec 2026-09-26 §B7):
+    una llamada a Claude por tanda de 40, precio junto al botón, gasto `otro`
+    bajo `_creatv`."""
+    if not _mismo_origen():
+        abort(403)
+    from tareas import referentes as tareas_ref
+    if tareas_ref.encolar_familias_en(pedido_por=_sesion().get("usuario")):
+        flash(gettext("Escribiendo en inglés las descripciones de las familias; recarga en un minuto."), "ok")
+    else:
+        flash(gettext("Ya se están escribiendo las descripciones en inglés."), "warn")
     return redirect(url_for("admin_referentes"))
 
 
@@ -4379,6 +4381,10 @@ def _grafico_tablero(serie):
             "marcas": marcas, "dias": salida, "puntos_linea": puntos}
 
 
+# La pestaña Triple Whale (Blueprint) pinta el mismo gráfico que el Tablero.
+app.extensions["grafico_tablero"] = _grafico_tablero
+
+
 @app.template_filter("dinero")
 def _filtro_dinero(valor, moneda):
     """«1.250.000 COP» / «12,50 USD» (la misma regla que las alertas)."""
@@ -4410,6 +4416,8 @@ def _calcular_tablero(cliente):
     partes = {
         "resumen": lambda: tablero.resumen_mes(cliente, ahora, datos=datos),
         "resumen_triple_whale": lambda: tablero.resumen_mes_triple_whale(cliente, ahora, datos=datos),
+        # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
+        "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
         "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
         "serie_triple_whale": lambda: tablero.serie_diaria_triple_whale(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
         "top": lambda: tablero.top_ganadoras(cliente, datos=datos),
@@ -4456,6 +4464,7 @@ def _clave_tablero(cliente):
     el tablero pinte (snapshot del worker, propuesta del motor, estado o
     veredicto tocado por el dueño, publicación orgánica) mueve la clave."""
     ms, ep, pr, ex, pub = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento, db.publicacion
+    tw = db.triple_whale
     with db.conectar() as con:
         ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
             ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
@@ -4467,7 +4476,10 @@ def _clave_tablero(cliente):
         # Bloque 7: una publicación orgánica nueva o que cambió de estado
         # mueve el tile «Ganadoras publicadas» y la alerta de ganadora sin publicar.
         publicaciones = con.execute(sa.select(sa.func.count(), sa.func.max(pub.c.actualizado_en)).where(pub.c.cliente == cliente)).first()
-    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1])
+        # La tienda según Triple Whale (spec 2026-09-28 §13): conectar,
+        # desconectar o una copia nueva mueven sus tiles.
+        triple = con.execute(sa.select(sa.func.max(tw.c.actualizado_en)).where(tw.c.cliente == cliente)).scalar()
+    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple)
 
 
 def invalidar_tablero(cliente=None):
@@ -4527,9 +4539,11 @@ NOMBRES_TIPO_GASTO = {
     "video": idiomas.N_("Videos"), "imagen": idiomas.N_("Imágenes"), "swap": idiomas.N_("Cambios de producto"),
     "guion": idiomas.N_("Guiones"), "final": idiomas.N_("Finales"), "regla_producto": idiomas.N_("Reglas de producto (IA)"),
     "caption_organico": idiomas.N_("Textos orgánicos (IA)"), "musica": idiomas.N_("Música"),
+    "locucion": idiomas.N_("Locuciones (audios)"),
     "refinar_prompt": idiomas.N_("Correcciones de prompt (Flow Plus)"), "guion_clips": idiomas.N_("Guiones a clips (Flow Plus)"),
     "ideas": idiomas.N_("Ideas de sprint (IA)"), "pedidos": idiomas.N_("Pedidos al cliente (IA)"),
-    "revision": idiomas.N_("Revisión de la doctrina (IA)"), "otro": idiomas.N_("Otros"),
+    "revision": idiomas.N_("Revisión de la doctrina (IA)"),
+    "evaluacion": idiomas.N_("Evaluación de anuncios (IA)"), "otro": idiomas.N_("Otros"),
 }
 
 
@@ -4641,7 +4655,7 @@ def exp_crear(cliente):
     lo pide."""
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Configuración antes de crear un experimento."), "error")
+        flash(gettext("Conecta Meta en Experimentos antes de crear un experimento."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     nombre = (request.form.get("nombre") or "").strip()[:200]
@@ -4730,7 +4744,7 @@ def exp_probar(cliente):
     siendo un clic aparte."""
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Configuración antes de probar piezas."), "error")
+        flash(gettext("Conecta Meta en Experimentos antes de probar piezas."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
@@ -6273,8 +6287,7 @@ def aprobar_imagen(cliente, prompt_id):
             video_url = higgsfield_url
             bitacora.registrar(cliente, prompt_id, "storage", "error", str(e))
 
-        estado = estado_mod.cargar(cliente)
-        estado[prompt_id] = {
+        registro = {
             "prompt": item2["prompt"],
             "image_url": item2["imagen_url"],
             "title": item2.get("title", prompt_id),
@@ -6286,7 +6299,8 @@ def aprobar_imagen(cliente, prompt_id):
             "generado_en": datetime.now().isoformat(),
             "publicado_en": None,
         }
-        estado_mod.guardar(cliente, estado)
+        # Con candado (estado.modificar): el worker también escribe este archivo.
+        estado_mod.modificar(cliente, lambda estado: {**estado, prompt_id: registro})
 
         del data2[idea_id2]["prompts"][prompt_id]
         prompts_mod.guardar(cliente, data2)
@@ -6338,10 +6352,11 @@ def aprobar(cliente, brief_id):
             _cargar_entorno_cliente(cliente)
             ok = publicar_brief(brief_id, entry, cliente, _token_paths(cliente))
 
-        estado2 = estado_mod.cargar(cliente)
-        estado2[brief_id]["estado"] = "publicado"
-        estado2[brief_id]["publicado_en"] = datetime.now().isoformat()
-        estado_mod.guardar(cliente, estado2)
+        def _publicado(estado2):
+            estado2[brief_id]["estado"] = "publicado"
+            estado2[brief_id]["publicado_en"] = datetime.now().isoformat()
+            return estado2
+        estado_mod.modificar(cliente, _publicado)
 
         if not ok:
             raise RuntimeError("Se publicó, pero alguna plataforma falló — revisa la bitácora.")
@@ -6356,14 +6371,15 @@ def aprobar(cliente, brief_id):
 
 @app.route("/cliente/<cliente>/rechazar/<brief_id>", methods=["POST"])
 def rechazar(cliente, brief_id):
-    estado = estado_mod.cargar(cliente)
-    entry = estado.get(brief_id)
-    if not entry:
+    def _rechazar(estado):
+        if brief_id not in estado:
+            return None
+        estado[brief_id]["estado"] = "rechazado"
+        return estado
+    if estado_mod.modificar(cliente, _rechazar) is None:
         flash(f"No encontré {brief_id}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
-    entry["estado"] = "rechazado"
-    estado_mod.guardar(cliente, estado)
     flash(f"{brief_id} rechazado, no se publica.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
@@ -6444,13 +6460,15 @@ def _volver_final(cliente):
 
 
 def _ediciones_por_cf(cliente):
-    """{cf_id: [ediciones de esa pieza, la más reciente primero]} para la
-    pestaña Final edition (filas sin el documento)."""
+    """{cf_id: [ediciones de esa pieza]} para la pestaña Final edition (filas
+    sin el documento): las de la persona primero, la más reciente primero, y
+    después los borradores automáticos (`ediciones.para_editar`: la primera es
+    la que abre «Editar», capa 4c), cada una con su `nombre_visible`."""
     out = {}
     for e in ediciones.listar(cliente):
         if e.get("cf_id"):
-            out.setdefault(e["cf_id"], []).append(e)
-    return out
+            out.setdefault(e["cf_id"], []).append({**e, "nombre_visible": ediciones.nombre_visible(e)})
+    return {cf: ediciones.para_editar(eds) for cf, eds in out.items()}
 
 
 def _precio_form(valor):
@@ -6880,6 +6898,102 @@ def mm_lista(cliente):
     return _respuesta_mi_musica(cliente)
 
 
+# ---------------------------------------------------------- Audios en Crear ---
+# (spec 2026-09-28) Mismo patrón que Mi música: JSON con la lista ya pintada.
+
+def _contexto_audios(cliente):
+    jid = tareas_audios.job_id(cliente)
+    return {"audios": audios.listar(cliente),
+            "trabajo_audio": {"job_id": jid} if trabajos.en_curso(jid) else None,
+            "voces_audio": audios.voces(), "fichas_voces": audios.fichas_voces(),
+            "idiomas_audio": audios.IDIOMAS, "nombres_idioma_audio": audios.NOMBRES_IDIOMA,
+            "velocidades_audio": audios.NOMBRES_VELOCIDAD, "volumenes_audio": audios.NOMBRES_VOLUMEN,
+            "volumen_audio_defecto": audios.VOLUMEN_DEFECTO, "idioma_audio_defecto": audios.idioma_defecto(cliente),
+            "max_caracteres_audio": audios.MAX_CARACTERES, "usd_por_caracter": fal_audio.COSTO_USD_POR_CARACTER}
+
+
+def _respuesta_audios(cliente, error=None, mensaje=None, job_id=None):
+    ctx = _contexto_audios(cliente)
+    html = render_template("_audios_lista.html", cliente=cliente, **ctx)
+    return jsonify({"ok": error is None, "html": html, "audios": ctx["audios"], "trabajo": ctx["trabajo_audio"],
+                    "error": error, "mensaje": mensaje, "job_id": job_id}), (400 if error else 200)
+
+
+@app.route("/cliente/<cliente>/audios/lista")
+def au_lista(cliente):
+    return _respuesta_audios(cliente)
+
+
+@app.route("/cliente/<cliente>/audios/crear", methods=["POST"])
+def au_crear(cliente):
+    if not _mismo_origen():
+        abort(403)
+    try:
+        payload = audios.validar(cliente, request.form)
+    except audios.EntradaInvalida as e:
+        return _respuesta_audios(cliente, error=idiomas.traducir(str(e)))
+    jid = tareas_audios.job_id(cliente)
+    encolado = trabajos.encolar(jid, "audio_generar", {"cliente": cliente, **payload}, duracion_estimada=60,
+                                etapas=list(tareas_audios.ETAPAS), cliente=cliente, max_intentos=1)
+    if not encolado:
+        return _respuesta_audios(cliente, error=idiomas.traducir(audios.MENSAJES["en_curso"]))
+    return _respuesta_audios(cliente, mensaje=gettext("Creando el audio…"), job_id=jid)
+
+
+@app.route("/cliente/<cliente>/audios/<int:aid>/borrar", methods=["POST"])
+def au_borrar(cliente, aid):
+    if not _mismo_origen():
+        abort(403)
+    try:
+        audios.borrar(cliente, aid)
+    except materiales.MaterialEnUso as e:
+        return _respuesta_audios(cliente, error=str(e))
+    except Exception as e:
+        bitacora.registrar(cliente, str(aid), "audios", "error", str(e))
+        return _respuesta_audios(cliente, error=gettext("No pude borrarlo (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__))
+    return _respuesta_audios(cliente)
+
+
+@app.route("/cliente/<cliente>/audios/muestra", methods=["POST"])
+def au_muestra(cliente):
+    """Muestra corta de una voz (se sintetiza una vez para toda la plataforma,
+    la paga Creatv). En línea: fal tarda 2–4 s."""
+    if not _mismo_origen():
+        abort(403)
+    voz, idioma = (request.form.get("voz") or "").strip(), (request.form.get("idioma") or "").strip()
+    if voz not in audios.voces() or idioma not in audios.IDIOMAS:
+        return jsonify({"ok": False, "error": gettext("Elige una voz y un idioma de la lista.")}), 400
+    try:
+        url = audios.muestra(voz, idioma)
+    except Exception as e:
+        bitacora.registrar(cliente, voz, "audios", "muestra_error", str(e))
+        return jsonify({"ok": False, "error": gettext("No pude generar la muestra (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__)}), 502
+    return jsonify({"ok": True, "url": url})
+
+
+@app.route("/cliente/<cliente>/audios/<int:aid>/descargar")
+def au_descargar(cliente, aid):
+    """El mp3 como adjunto con nombre legible: el atributo `download` no
+    funciona con otro origen y R2 no tiene CORS."""
+    a = audios.obtener(cliente, aid)
+    if not a:
+        abort(404)
+    try:
+        r = requests.get(a["url"], stream=True, timeout=120)
+    except requests.RequestException:
+        abort(502)
+    if r.status_code != 200:
+        r.close()
+        abort(502)
+    base = unicodedata.normalize("NFKD", a["nombre"].replace("…", "")).encode("ascii", "ignore").decode()
+    nombre = re.sub(r"[^A-Za-z0-9 _-]+", "", base).strip()[:60] or f"audio-{aid}"
+    resp = Response(stream_with_context(r.iter_content(1 << 16)), mimetype="audio/mpeg")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}.mp3"'
+    if r.headers.get("Content-Length"):
+        resp.headers["Content-Length"] = r.headers["Content-Length"]
+    return resp
+
+
 @app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
 def fp_reusar(cliente, cf_id):
     """"Editar y crear otra a partir de esta": las referencias de esa pieza (sin
@@ -6891,7 +7005,11 @@ def fp_reusar(cliente, cf_id):
     if not entry:
         flash(gettext("No encontré esa pieza."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    ya = {r["url"] for r in referencias_flowplus.listar(cliente)}
+    # Sin variables quemadas (pedido de Daniel, 2026-09-28): la bandeja queda
+    # SOLO con las referencias de esta pieza — antes se sumaban a lo que
+    # hubiera y las referencias «del pasado» se colaban en la pieza nueva.
+    referencias_flowplus.vaciar(cliente)
+    ya = set()
     for r in entry.get("referencias") or []:
         if r.get("logo") or r.get("url") in ya:
             continue
@@ -6902,7 +7020,15 @@ def fp_reusar(cliente, cf_id):
         ya.add(r["url"])
     if request.form.get("incluir_resultado") == "si" and entry.get("tipo") == "imagen" and entry.get("video_url") not in ya:
         referencias_flowplus.agregar(cliente, "imagen", entry["video_url"], origen="generada", titulo=gettext("Imagen generada"))
+    if request.form.get("solo_referencias") == "si":
+        # Para pasar al clip siguiente con los mismos personajes: solo las
+        # imágenes; el texto y los ajustes arrancan en blanco.
+        session.pop("fp_prefill", None)
+        flash(gettext("Referencias cargadas; el texto y los ajustes quedan en blanco."), "ok")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     session["fp_prefill"] = {
+        # La precarga vale una vez y solo en este proyecto (_prefill_para).
+        "cliente": cliente,
         "texto": entry.get("prompt_fuente") or entry.get("accion_central") or "",
         "tipo": entry.get("tipo") or "video",
         "modelo": entry.get("modelo") or "",
@@ -6914,11 +7040,23 @@ def fp_reusar(cliente, cf_id):
         "musica_estilo": entry.get("musica_estilo") or "",
         "musica_inicio_s": entry.get("musica_inicio_s") or 0,
         "calidad": entry.get("calidad") or "final",
+        "mejorar_prompt": bool(entry.get("mejorar_prompt")),
         "preset_camara": entry.get("preset_camara"),
         "plantilla": entry.get("plantilla"),
     }
     flash(gettext("Referencias y texto cargados — ajusta lo que quieras y genera."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+def _prefill_para(cliente):
+    """La precarga de «Editar y crear otra a partir de esta» vale UNA vez y
+    solo en el proyecto donde se pidió (sin variables quemadas, 2026-09-28):
+    pedida en un proyecto y abierto otro, se descarta. Las precargas viejas
+    (sin `cliente`) siguen valiendo una vez."""
+    pre = session.pop("fp_prefill", None)
+    if pre and pre.get("cliente") not in (None, cliente):
+        return None
+    return pre
 
 
 @app.route("/cliente/<cliente>/flowplus/describir", methods=["POST"])
@@ -6992,6 +7130,9 @@ def cf_crear_video(cliente):
     calidad = (request.form.get("calidad") or "final").strip()
     if calidad not in flowplus_modelos.CALIDADES or modelo != "wan3" or tipo == "imagen":
         calidad = "final"
+    # «Que Wan mejore mi prompt»: opcional y apagado por defecto (el prompt va tal
+    # cual salvo que la persona lo pida); solo existe en Wan 3.0 para video.
+    mejorar_prompt = request.form.get("mejorar_prompt") == "si" and modelo == "wan3" and tipo == "video"
 
     # Las referencias vienen de la bandeja (archivos subidos y links ya
     # descargados), en el orden en que se agregaron, con sus etiquetas.
@@ -7063,6 +7204,34 @@ def cf_crear_video(cliente):
     if not accion_central:
         flash(gettext("Escribe qué tiene que pasar en el video."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # Incidente 2026-09-28: una mención sin referencia (un mapa de cuatro
+    # imágenes pegado con dos en la bandeja) llegaba al modelo, que inventaba o
+    # duplicaba personajes. Se avisa antes de crear la sesión: no se cobra nada.
+    faltan = flowplus_prompt.menciones_sin_referencia(accion_central, referencias)
+    if faltan:
+        disponibles = ", ".join(r["etiqueta"] for r in referencias if str(r.get("etiqueta") or "").startswith("@"))
+        flash(gettext("Tu texto menciona %(menciones)s, pero en la bandeja solo hay: %(disponibles)s. "
+                      "Sube lo que falta o quita esas menciones y vuelve a generar — no se cobró nada.",
+                      menciones=", ".join(faltan), disponibles=disponibles or gettext("nada")), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # Incidente 2026-09-28 («mira lo que sacó»): Seedance 2.5 recibe UNA imagen
+    # y las otras referencias se descartaban en silencio mientras la tarjeta las
+    # mostraba como usadas y se cobraba el modelo más caro. Si el modelo elegido
+    # no usa todas las referencias, se avisa y no se genera: nada se cobra.
+    sobran = flowplus_modelos.referencias_de_mas(modelo, referencias, tipo=tipo)
+    if sobran:
+        info_modelo = (flowplus_modelos.IMAGEN if tipo == "imagen" else flowplus_modelos.VIDEO)[modelo]
+        nombre_modelo = gettext(info_modelo["nombre"])
+        if int(info_modelo.get("max_referencias") or 0) == 1:
+            primera = next((r["etiqueta"] for r in referencias if r["etiqueta"] not in sobran), "")
+            flash(gettext("%(modelo)s solo usa la primera referencia (%(primera)s): no usaría %(sobran)s. "
+                          "Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una — no se cobró nada.",
+                          modelo=nombre_modelo, primera=primera, sobran=", ".join(sobran)), "error")
+        else:
+            flash(gettext("%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. "
+                          "Quita las que sobran o cambia de modelo — no se cobró nada.",
+                          modelo=nombre_modelo, n=info_modelo.get("max_referencias"), sobran=", ".join(sobran)), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     if solo_texto:
         enfoque = "libre"
@@ -7078,9 +7247,15 @@ def cf_crear_video(cliente):
         aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo, referencias=referencias,
         con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
         con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo, musica_inicio_s=musica_inicio_s,
-        prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma,
+        prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma, mejorar_prompt=mejorar_prompt,
         preset_camara=None, plantilla=None,
     )
+    # Triple Whale: si el texto vino de «Llevar a Crear», la sesión recuerda de
+    # qué idea salió (la pestaña enlaza idea → pieza → anuncio). Un valor raro
+    # se ignora y la pieza se crea igual.
+    origen_tw = triple_whale_puente.origen_desde_formulario(cliente, request.form.get("origen_tw"))
+    if origen_tw:
+        campos["tw_idea"] = origen_tw
     directo = dict(campos, enfoque_nombre=info["nombre"] if solo_texto else idiomas.N_("Tu texto, tal cual"))
     if tipo == "imagen":
         # La imagen no pasa por el director (spec §2.2): va el texto tal cual.
@@ -7190,6 +7365,31 @@ def cf_rearmar(cliente, cf_id):
         flash(gettext("Rearmando el prompt con IA…"), "ok")
     else:
         flash(gettext("Ya se estaba rearmando."), "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/recuperar", methods=["POST"])
+def cf_recuperar(cliente, cf_id):
+    """«Recuperar el video» (incidente 2026-09-28): la sesión quedó en error
+    porque el worker dejó de esperar a WaveSpeed, pero guardó el id de la
+    predicción (`prediccion`); el worker vuelve a preguntar por ese id y, si
+    terminó, cierra la pieza. No genera ni paga de nuevo (max_intentos=1)."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    pred = (entry or {}).get("prediccion") or {}
+    if not entry or entry.get("estado") != "error" or not pred.get("id") or (entry.get("tipo") or "video") == "imagen":
+        flash(gettext("Esa pieza no tiene nada que recuperar."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # Mismo orden que flowplus_lanzar.lanzar: el estado va ANTES de encolar.
+    creative_flow.actualizar(cliente, cf_id, estado="video_generando")
+    encolado = trabajos.encolar(
+        _job_id_creative_flow(cliente, cf_id), "flowplus_recuperar", {"cliente": cliente, "cf_id": cf_id},
+        cliente=cliente, duracion_estimada=120, etapas=flowplus_lanzar.ETAPAS_CREATIVE_FLOW,
+        max_intentos=1, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL,
+    )
+    if encolado:
+        flash(gettext("Preguntando a WaveSpeed por el video… si ya terminó, aparece aquí sin pagar de nuevo."), "ok")
+    else:
+        flash(gettext("Ya se estaba recuperando — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
@@ -7385,72 +7585,112 @@ def _tomar_puerto_o_none(host, puerto):
 
 
 
-# ---- Triple Whale (atribución alternativa de Meta) ----
+# ---- Triple Whale (atribución y rendimiento; spec 2026-09-28) ----
+
+def _volver_tw(cliente):
+    # La conexión vive en la pestaña Triple Whale (2026-09-28), ya no en Configuración.
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="triplewhale"))
+
+
+def _probar_triple_whale(llave, dominio, moneda):
+    """None si la llave ve la tienda y puede consultar; si no, el motivo para
+    la persona (sin la llave)."""
+    if not triple_whale.validar_llave(llave):
+        return gettext("Triple Whale no reconoce esa llave (revocada o mal copiada).")
+    try:
+        triple_whale.probar(llave, dominio, moneda)
+    except triple_whale.ErrorTripleWhale as e:
+        return cola.sin_token(str(e))
+    return None
+
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/conectar", methods=["POST"])
 def cfg_triple_whale_conectar(cliente):
-    """Conecta o reemplaza la configuración Triple Whale del proyecto."""
-    import triple_whale
-    import triple_whale_tiendas
-    from flask import flash, redirect, url_for, request
-
-    llave = request.form.get("llave_api", "").strip()
-    dominio = request.form.get("dominio_tienda", "").strip()
+    """Prueba la llave contra la tienda (una consulta corta), la guarda
+    cifrada y encola la primera copia: los últimos 90 días de métricas."""
+    if not _mismo_origen():
+        abort(403)
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
+    if not cifrado.disponible():
+        flash(gettext("Falta FLASK_SECRET_KEY en el .env del servidor: sin ella no se pueden guardar credenciales "
+                      "de Triple Whale."), "error")
+        return _volver_tw(cliente)
+    llave = (request.form.get("llave_api") or "").strip()
+    dominio = triple_whale.normalizar_dominio(request.form.get("dominio_tienda"))
     if not llave or not dominio:
-        flash(gettext("Llave y dominio de tienda son requeridos."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
-
-    # Validar llave
-    if not triple_whale.validar_llave(llave):
-        flash(gettext("Llave inválida, revocada o sin scope 'Data Out'."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
-
-    moneda = request.form.get("moneda", "USD").strip().upper()
-    modelo = request.form.get("modelo_atribucion", "Triple Attribution").strip()
-    ventana = request.form.get("ventana_atribucion", "lifetime").strip()
-
-    try:
-        triple_whale_tiendas.conectar(
-            cliente, llave, dominio, moneda=moneda,
-            modelo_atribucion=modelo, ventana_atribucion=ventana
-        )
-        flash(gettext("Triple Whale conectado correctamente."), "ok")
-    except Exception as e:
-        flash(gettext("Error al conectar: %(error)s", error=str(e)), "error")
-
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
+        flash(gettext("Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."), "error")
+        return _volver_tw(cliente)
+    moneda = triple_whale.normalizar_moneda(request.form.get("moneda"))
+    problema = _probar_triple_whale(llave, dominio, moneda)
+    if problema:
+        flash(gettext("No pude conectar Triple Whale: %(error)s", error=problema), "error")
+        return _volver_tw(cliente)
+    triple_whale_tiendas.conectar(cliente, llave, dominio, moneda=moneda,
+                                  modelo_atribucion=request.form.get("modelo_atribucion"),
+                                  ventana_atribucion=request.form.get("ventana_atribucion"))
+    tareas_tw.encolar_sync(cliente)
+    flash(gettext("Triple Whale conectado. Estamos trayendo los últimos 90 días de métricas; mira la pestaña "
+                  "Triple Whale en unos minutos."), "ok")
+    return _volver_tw(cliente)
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/probar", methods=["POST"])
 def cfg_triple_whale_probar(cliente):
-    """Prueba la conexión y lista las tiendas accesibles."""
-    import triple_whale
-    import triple_whale_tiendas
-    from flask import jsonify
-    
+    """Vuelve a probar la llave guardada contra la tienda y deja el resultado
+    en el estado de la conexión."""
+    if not _mismo_origen():
+        abort(403)
     config = triple_whale_tiendas.obtener(cliente)
     if not config:
-        return jsonify({"error": gettext("Triple Whale no configurado")}), 404
+        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
+        return _volver_tw(cliente)
+    try:
+        llave = triple_whale_tiendas.obtener_llave(cliente)
+    except cifrado.ErrorCifrado:
+        llave = None
+    problema = (_probar_triple_whale(llave, config["dominio_tienda"], config["moneda"]) if llave
+                else gettext("No se pudo leer la llave guardada: vuelve a conectar Triple Whale."))
+    if problema:
+        triple_whale_tiendas.actualizar(cliente, estado="error", error=problema)
+        flash(gettext("La conexión con Triple Whale falló: %(error)s", error=problema), "error")
+    else:
+        triple_whale_tiendas.actualizar(cliente, estado="conectada", error=None)
+        flash(gettext("Conexión con Triple Whale correcta."), "ok")
+    return _volver_tw(cliente)
 
-    llave = triple_whale_tiendas.obtener_llave(cliente)
-    if not llave:
-        return jsonify({"error": gettext("No se puede recuperar la llave (descifrado falló)")}), 500
 
-    if not triple_whale.validar_llave(llave):
-        return jsonify({"error": gettext("Llave inválida o revocada")}), 401
-    
-    return jsonify({"ok": True, "dominio": config["dominio_tienda"], "moneda": config["moneda"]})
+@app.route("/cliente/<cliente>/cfg_triple_whale/ajustes", methods=["POST"])
+def cfg_triple_whale_ajustes(cliente):
+    """Cambia moneda, modelo o ventana de atribución sin volver a pegar la
+    llave. Si algo cambió, lo copiado se borra y se vuelve a traer."""
+    if not _mismo_origen():
+        abort(403)
+    if not triple_whale_tiendas.obtener(cliente):
+        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
+        return _volver_tw(cliente)
+    if triple_whale_tiendas.cambiar_ajustes(cliente, moneda=request.form.get("moneda"),
+                                            modelo_atribucion=request.form.get("modelo_atribucion"),
+                                            ventana_atribucion=request.form.get("ventana_atribucion")):
+        tareas_tw.encolar_sync(cliente)
+        flash(gettext("Ajustes guardados. Volvemos a traer las métricas con la nueva atribución."), "ok")
+    else:
+        flash(gettext("No cambiaste nada."), "ok")
+    return _volver_tw(cliente)
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/desconectar", methods=["POST"])
 def cfg_triple_whale_desconectar(cliente):
-    """Desconecta Triple Whale del proyecto."""
-    import triple_whale_tiendas
-    from flask import flash, redirect, url_for
-
+    """Quita la conexión y las métricas copiadas (las evaluaciones con IA ya
+    pagadas se conservan)."""
+    if not _mismo_origen():
+        abort(403)
     triple_whale_tiendas.desconectar(cliente)
-    flash(gettext("Triple Whale desconectado."), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
+    flash(gettext("Triple Whale desconectado. Se borraron las métricas copiadas; las evaluaciones con IA se "
+                  "conservan."), "ok")
+    return _volver_tw(cliente)
+
 
 if __name__ == "__main__":
     _candado = _tomar_puerto_o_none(HOST, PUERTO)

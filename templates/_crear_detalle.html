@@ -1,3 +1,4 @@
+{% from "_etiquetas_estado.html" import etiqueta_estado with context %}
 {% from "_revision_doctrina.html" import revision_doctrina %}
 {# Detalle de una pieza de Crear: lo que antes iba en el <template> de la
    tarjeta. Lo pide el modal por fetch (/creative_flow/<id>/detalle). #}
@@ -19,7 +20,7 @@
             · {{ item.modelo_nombre|traducir }}
             {% if item.enfoque_nombre %} · {{ item.enfoque_nombre|traducir }}{% endif %}
             {% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}
-            · <span class="tag-estado">{{ item.estado }}</span>
+            · <span class="tag-estado">{{ etiqueta_estado(item.estado) }}</span>
           </p>
           {% if item.referencias %}
           <p class="campo-label" style="margin-top:.8rem;">{{ _('Referencias') }}</p>
@@ -73,7 +74,15 @@
               {% if item.estado == "video_listo" and item.tipo == "imagen" %}
               <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="incluir_resultado" value="si" checked> {{ _('Usar esta imagen como referencia') }}</label>
               {% endif %}
+              {# Sin variables quemadas (2026-09-28): para el clip siguiente con los mismos personajes. #}
+              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="solo_referencias" value="si"> {{ _('Solo las referencias (el texto y los ajustes quedan en blanco)') }}</label>
               <button type="submit" class="btn-guardar btn-sm">{{ _('Editar y crear otra a partir de esta') }}</button>
+            </form>
+            {% endif %}
+            {% if item.estado == "error" and item.prediccion and item.prediccion.id and item.tipo != "imagen" %}
+            {# Incidente 2026-09-28: el worker dejó de esperar pero WaveSpeed sigue con la predicción; se recupera sin pagar. #}
+            <form method="post" action="{{ url_for('cf_recuperar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+              <button type="submit" class="btn-generar btn-sm">{{ _('Recuperar el video (sin pagar de nuevo)') }}</button>
             </form>
             {% endif %}
             {% if item.estado in ("prompt_listo", "error") %}

@@ -1,0 +1,8 @@
+[
+  {"title": "Ortopediska tofflor med fotbädd", "asin": "B0AMZ00001", "brand": "Fotvän", "price": {"value": 349.0, "currency": "kr"},
+   "stars": 4.4, "reviewsCount": 1287, "url": "https://www.amazon.se/dp/B0AMZ00001", "thumbnailImage": "https://m.media-amazon.com/images/I/1.jpg",
+   "inStock": true, "seller": "Fotvän AB"},
+  {"title": "Mjuka tofflor mot fotsmärta", "asin": "B0AMZ00002", "brand": null, "price": 199.5, "currency": "SEK",
+   "stars": "4.1", "reviewsCount": "58", "url": "https://www.amazon.se/dp/B0AMZ00002", "thumbnailImage": null},
+  {"title": "Sin ASIN", "price": 1.0}
+]

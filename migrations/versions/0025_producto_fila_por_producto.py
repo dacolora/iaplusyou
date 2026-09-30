@@ -1,7 +1,7 @@
 """producto: una fila comercial por producto (spec 2026-09-28 §8)
 
-Revision ID: 0022
-Revises: 0021
+Revision ID: 0025
+Revises: 0024
 Create Date: 2026-09-28 00:00:00.000000
 
 Los ids de activo con `/` (`horiginal/beige`) eran colores del catálogo con
@@ -21,8 +21,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '0022'
-down_revision: Union[str, Sequence[str], None] = '0021'
+revision: str = '0025'
+down_revision: Union[str, Sequence[str], None] = '0024'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

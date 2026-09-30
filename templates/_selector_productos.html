@@ -25,7 +25,7 @@
 {% endif %}
   <div class="comparacion-contenido">
     <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;">
-      <input type="text" id="sel-{{ sel_id }}-buscador" placeholder="{{ _('Buscar por nombre…') }}" style="flex:1;min-width:180px;margin:0;">
+      <input type="text" id="sel-{{ sel_id }}-buscador" data-busqueda placeholder="{{ _('Buscar por nombre…') }}" style="flex:1;min-width:180px;margin:0;">
       <button type="button" class="btn-guardar btn-sm" id="sel-{{ sel_id }}-add-btn">{{ _('+ Nuevo producto') }}</button>
     </div>
     <p class="vacio" id="sel-{{ sel_id }}-vacio" style="display:none;">{{ _('Ningún producto coincide con esa búsqueda.') }}</p>

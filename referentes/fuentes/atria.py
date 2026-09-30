@@ -13,6 +13,7 @@ from datetime import date
 
 import requests
 import sqlalchemy as sa
+from flask_babel import gettext, ngettext
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import db
@@ -83,7 +84,7 @@ def _get(sesion, ruta, params, llave):
     try:
         return sesion.get(f"{BASE_URL}{ruta}", params=params, headers={"X-API-Key": llave}, timeout=TIMEOUT)
     except requests.RequestException as e:
-        raise ErrorFuente(f"No se pudo conectar con Atria: {type(e).__name__}.") from e
+        raise ErrorFuente(gettext("No se pudo conectar con Atria: %(tipo)s.", tipo=type(e).__name__)) from e
 
 
 def _pedir(sesion, ruta, params):
@@ -93,16 +94,16 @@ def _pedir(sesion, ruta, params):
     ErrorFuente según cuánto se haya traído ya)."""
     llave = _api_key()
     if not llave:
-        raise ErrorFuente("Atria no está configurado (falta ATRIA_API_KEY).")
+        raise ErrorFuente(gettext("Atria no está configurado (falta ATRIA_API_KEY)."))
     time.sleep(ESPERA_ENTRE_LLAMADAS)
     r = _get(sesion, ruta, params, llave)
     if r.status_code == 401:
-        raise ErrorFuente("Atria no aceptó la llave (ATRIA_API_KEY).")
+        raise ErrorFuente(gettext("Atria no aceptó la llave (ATRIA_API_KEY)."))
     _incrementar_contador()
     try:
         sobre = r.json()
     except ValueError:
-        raise ErrorFuente(f"Atria respondió algo inesperado (HTTP {r.status_code}).")
+        raise ErrorFuente(gettext("Atria respondió algo inesperado (HTTP %(codigo)s).", codigo=r.status_code))
     codigo = sobre.get("code")
     if codigo == 42901:
         time.sleep(ESPERA_LIMITE)
@@ -114,9 +115,9 @@ def _pedir(sesion, ruta, params):
         if codigo == 42901:
             raise _LimiteExcedido()
     if codigo == 40401:
-        raise ErrorFuente("Esa marca no existe en Atria.")
+        raise ErrorFuente(gettext("Esa marca no existe en Atria."))
     if codigo not in (0, None):
-        raise ErrorFuente(sobre.get("message") or f"Atria devolvió un error ({codigo}).")
+        raise ErrorFuente(sobre.get("message") or gettext("Atria devolvió un error (%(codigo)s).", codigo=codigo))
     return sobre.get("data") or {}
 
 
@@ -128,7 +129,7 @@ def probar():
 def estimar(consulta, tope):
     llamadas = max(1, math.ceil(int(tope or 0) / PAGE_SIZE))
     return {"usd_fuente": 0.0, "llamadas": llamadas,
-            "detalle": f"{llamadas} llamada{'s' if llamadas != 1 else ''} del plan de Atria"}
+            "detalle": ngettext("%(num)d llamada del plan de Atria", "%(num)d llamadas del plan de Atria", llamadas)}
 
 
 def _normalizar(item):
@@ -212,7 +213,7 @@ def traer(consulta, tope, avanzar, cursor=None):
             data = _pedir(sesion, ruta, params)
         except _LimiteExcedido:
             if traidos == 0:
-                raise ErrorFuente("Atria: se acabaron las llamadas del plan este mes.")
+                raise ErrorFuente(gettext("Atria: se acabaron las llamadas del plan este mes."))
             # Entrega parcial "graciosa" (spec §12): no se lanza porque ya se
             # trajo algo en ESTA llamada, pero `traer()` no tiene forma de
             # decirle al llamador POR QUÉ dejó de traer -- `([], None)` es la

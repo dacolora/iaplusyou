@@ -1,5 +1,6 @@
-# tests/test_migracion_0022.py
-"""Migración 0022 (spec 2026-09-28 §8): las filas `producto` de colores
+# tests/test_migracion_0025.py
+"""Migración 0025 (spec 2026-09-28 §8; nació como 0022 y se renumeró al
+traer main, que ya tenía 0022–0024): las filas `producto` de colores
 (`activo_catalogo_id` con `/`) pasan a ser del producto."""
 import json
 import os
@@ -7,15 +8,15 @@ import os
 import sqlalchemy as sa
 
 
-def test_migracion_0022_reparte_las_filas_por_producto(tmp_path, monkeypatch):
+def test_migracion_0025_reparte_las_filas_por_producto(tmp_path, monkeypatch):
     from alembic import command
     from alembic.config import Config
     import db
-    monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{tmp_path / 'mig22.db'}")
+    monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{tmp_path / 'mig25.db'}")
     db._reset_para_tests()
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     cfg = Config(os.path.join(raiz, "alembic.ini"))
-    command.upgrade(cfg, "0021")
+    command.upgrade(cfg, "0024")
     ahora = "2026-09-28T10:00:00"
     with db.engine().begin() as con:
         def fila(**kw):

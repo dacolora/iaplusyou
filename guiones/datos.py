@@ -13,9 +13,12 @@ from flask_babel import gettext
 
 import db
 import idiomas
+from guiones import escenas
 from guiones.refinador import Conflicto, DatoInvalido, NoExiste
 
-MINUTOS_TRABAJO = 6
+# 48 000 fragmentos de salida (armar clips) a ~110 por segundo son ~7 min
+# (medido el 2026-09-28): el límite deja margen para eso.
+MINUTOS_TRABAJO = 12
 # N_: se traduce donde se usa (gettext(INTERRUMPIDO) en _vencer_lotes/_vencer_video)
 # — mismo patrón que refinador.MENSAJE_INTERRUMPIDO. Casi siempre corre dentro de
 # una petición (quien mira el panel); en el raro caso de detectarse desde el
@@ -254,7 +257,7 @@ def _bloquear_video(con, cliente, video_id):
     return con.execute(sa.select(v).where(v.c.id == video_id)).first()
 
 
-def crear_video(cliente, guion_id, config, recorte=None, plan=None, estado="configurando"):
+def crear_video(cliente, guion_id, config, recorte=None, plan=None, estado="configurando", extra=None):
     g, v = db.guion, db.guion_video
     with db.conectar() as con:
         r = con.execute(g.update().where(g.c.id == guion_id, g.c.cliente == cliente)
@@ -268,7 +271,8 @@ def crear_video(cliente, guion_id, config, recorte=None, plan=None, estado="conf
         r = con.execute(sa.insert(v).values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, guion_id=guion_id, version_n=n,
             nombre=nombre_version(config, n), config=config, recorte=recorte or {}, plan=plan, estado=estado,
-            estado_imagenes="ninguno", iniciado_en=ahora if estado == "armando" else None, usd=0.0, extra={}))
+            estado_imagenes="ninguno", iniciado_en=ahora if estado == "armando" else None, usd=0.0,
+            extra=extra or {}))
         return int(r.inserted_primary_key[0])
 
 
@@ -359,15 +363,19 @@ def avisar(video_id, aviso):
 
 def nueva_version(cliente, video_id, config=None, plan=None):
     """Versión nueva del mismo guion; la anterior y sus prompts no se tocan. El
-    recorte se copia si no cambian la duración objetivo ni el hook."""
+    recorte se copia si no cambian la duración objetivo ni el hook; las
+    imágenes subidas, según `escenas.heredar`."""
     base = video(cliente, video_id)
     if base is None:
         raise NoExiste(gettext("Esa versión no existe."))
     cfg = config or base["config"]
     mismo = (cfg.get("duracion_objetivo") == base["config"].get("duracion_objetivo")
              and cfg.get("hook") == base["config"].get("hook"))
+    mismos_clips = bool(plan) and plan.get("clips") == (base.get("plan") or {}).get("clips")
+    heredadas = escenas.heredar(escenas.estado(base), base["config"], cfg, mismos_clips=mismos_clips)
+    extra = {escenas.CLAVE: heredadas} if any(heredadas.values()) else {}
     return crear_video(cliente, base["guion_id"], cfg, recorte=dict(base["recorte"]) if mismo else {},
-                       plan=plan, estado="armando" if plan else "configurando")
+                       plan=plan, estado="armando" if plan else "configurando", extra=extra)
 
 
 def prompts_de_video(video_id):
@@ -428,3 +436,19 @@ def guardar_quitadas(cliente, video_id, quitadas):
             raise Conflicto(gettext("Esta versión ya no se puede cambiar; crea una versión nueva."))
         recorte = dict(fila.recorte or {}, quitadas=ns)
         con.execute(v.update().where(v.c.id == video_id).values(recorte=recorte, actualizado_en=db.ahora()))
+
+
+def modificar_imagenes_escenas(cliente, video_id, fn):
+    """Imágenes de cada escena (`guiones.escenas`): `fn(estado, video)` devuelve
+    el estado nuevo; se lee y se escribe con el lock de SQLite tomado, así dos
+    clics seguidos no se pisan. Solo con la versión armada (hay escenas)."""
+    v = db.guion_video
+    with db.conectar() as con:
+        fila = _bloquear_video(con, cliente, video_id)
+        if fila.estado != "armado":
+            raise Conflicto(gettext("Primero arma los clips de esta versión."))
+        video = {"config": fila.config or {}, "clips": fila.clips or [], "extra": fila.extra or {}}
+        nuevo = fn(escenas.estado(video), video)
+        con.execute(v.update().where(v.c.id == video_id).values(
+            extra=dict(fila.extra or {}, **{escenas.CLAVE: nuevo}), actualizado_en=db.ahora()))
+        return nuevo

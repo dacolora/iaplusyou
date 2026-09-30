@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  activo, capasEn, cuadroVecino, duracionMs, tamanoCapaImagen, fuenteMs, pistaPrincipal, posicionCapa, principalEn,
+  activo, capasEn, cuadroVecino, desplazAnimPx, duracionMs, tamanoCapaImagen, fuenteMs, pistaPrincipal, posicionCapa, principalEn,
   siguienteClip, transicionReal, zoomKenBurns,
 } from "../../static/editor/tiempo.js";
 
@@ -137,12 +137,15 @@ test("capasEn: solo imagen/texto no principales, activas y visibles, en orden de
   assert.deepEqual(capasEn(oculto, 1000), []);
 });
 
-test("posicionCapa: caja del transform y animación deslizar de 60 px", () => {
+test("posicionCapa: caja del transform y animación deslizar del 8 % de la altura del lienzo", () => {
   const t1 = DOC.pistas[1].clips[0];
   const quieto = posicionCapa(t1, 2000, 400, 200, "9:16");
   assert.deepEqual([quieto.x, quieto.y, quieto.w, quieto.h], [340, 226, 400, 200]);
   const entrando = posicionCapa(t1, 350, 400, 200, "9:16");
-  cerca(entrando.y, 226 - 0.5 * 60, "a mitad de la entrada");
+  // 8 % de 1920 = 153,6 → 154 px (redondeo: el mismo número que usa el compilador)
+  assert.equal(desplazAnimPx("9:16"), 154);
+  cerca(entrando.y, 226 - 0.5 * 154, "a mitad de la entrada");
+  assert.deepEqual(["4:5", "1:1", "16:9"].map(desplazAnimPx), [108, 86, 86]);
 });
 
 test("posicionCapa: con dos keyframes x/y van por tramos y el tamaño es el de t=0", () => {

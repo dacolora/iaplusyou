@@ -9,6 +9,7 @@ manteniendo la misma API de dicts.
 """
 import contextlib
 import os
+import unicodedata
 from datetime import datetime
 
 import sqlalchemy as sa
@@ -32,6 +33,16 @@ def asegurar_carpeta():
         os.makedirs(os.path.dirname(u.replace("sqlite:///", "")) or ".", exist_ok=True)
 
 
+def pliegue(texto):
+    """Texto para comparar sin tildes ni mayúsculas: «ÉLITE Cröcs» -> «elite crocs».
+    También es la función SQL `pliegue(col)` de cada conexión (el lower() de SQLite
+    solo baja ASCII y no quita tildes)."""
+    if texto is None:
+        return ""
+    sin_marcas = "".join(ch for ch in unicodedata.normalize("NFKD", str(texto)) if not unicodedata.combining(ch))
+    return sin_marcas.casefold().strip()
+
+
 def engine():
     """Engine singleton del proceso. SQLite con WAL para que gunicorn (hilos) y
     el worker (otro proceso) lean y escriban a la vez sin 'database is locked'."""
@@ -48,6 +59,7 @@ def engine():
             cur.execute("PRAGMA busy_timeout=5000")
             cur.execute("PRAGMA foreign_keys=ON")
             cur.close()
+            dbapi_con.create_function("pliegue", 1, pliegue, deterministic=True)
     return _ENGINE
 
 
@@ -325,6 +337,88 @@ triple_whale = Table("triple_whale", metadata,
     Column("ultima_sincronizacion", String(19)),             # ISO 8601
     Column("estado", String(20), default="conectada"),       # conectada / error
     Column("error", Text),
+    Column("extra", JSON, default=dict),                     # backfill_desde, ultimo_resumen, gasto_7d (0023)
+)
+
+# --- Triple Whale: métricas copiadas y evaluación (spec 2026-09-28, migraciones 0023 y 0024) ---
+# Una fila por (proyecto, canal, anuncio, día): lo que reporta la plataforma
+# (ads_table) más lo que atribuye el Triple Pixel con el modelo y la ventana
+# del proyecto (pixel_joined_tvf). Es una copia: Triple Whale reatribuye días
+# viejos, así que cada sync vuelve a pedir los últimos días y hace upsert.
+# Pedidos en Float: los modelos lineales reparten un pedido entre anuncios.
+tw_anuncio_dia = Table("tw_anuncio_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("canal", String(40), nullable=False),
+    Column("ad_id", String(64), nullable=False),
+    Column("cuenta_id", String(64)),
+    Column("campana_id", String(64)), Column("campana", Text),
+    Column("conjunto_id", String(64)), Column("conjunto", Text),
+    Column("anuncio", Text), Column("estado_anuncio", String(30)),
+    Column("creative_id", String(64)),
+    Column("video_url", Text), Column("destino_url", Text),
+    Column("utm_ok", Boolean),                               # is_utm_valid (None = TW no lo dijo)
+    Column("gasto", Float, default=0.0), Column("impresiones", Integer, default=0),
+    Column("clics", Integer, default=0), Column("clics_salida", Integer, default=0),
+    Column("compras_canal", Float, default=0.0), Column("valor_canal", Float, default=0.0),
+    Column("thruplays", Integer, default=0), Column("vistas_3s", Integer, default=0),
+    Column("p25", Integer, default=0), Column("p50", Integer, default=0),
+    Column("p75", Integer, default=0), Column("p100", Integer, default=0),
+    Column("pedidos", Float, default=0.0), Column("ingresos", Float, default=0.0),
+    Column("nc_pedidos", Float, default=0.0), Column("nc_ingresos", Float, default=0.0),
+    Column("sesiones", Integer, default=0), Column("carritos", Integer, default=0),
+    Column("checkouts", Integer, default=0),
+    Column("con_pixel", Boolean, default=False),            # el Pixel respondió para ese día (aunque sin pedidos)
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "canal", "ad_id", "fecha", name="uq_tw_anuncio_dia"),
+    sa.Index("ix_tw_anuncio_dia_cliente_fecha", "cliente", "fecha"),
+)
+
+# La tienda por día (blended_stats_tvf): ingresos y pedidos reales, gasto total.
+tw_tienda_dia = Table("tw_tienda_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("gasto", Float, default=0.0), Column("ingresos", Float, default=0.0),
+    Column("pedidos", Float, default=0.0), Column("nc_pedidos", Float, default=0.0),
+    Column("nc_ingresos", Float, default=0.0), Column("reembolsos", Float, default=0.0),
+    Column("cogs", Float, default=0.0), Column("utilidad_neta", Float, default=0.0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "fecha", name="uq_tw_tienda_dia"),
+)
+
+# Una evaluación con IA de los anuncios (pagada, max_intentos=1): la muestra
+# que se le mostró a Claude (`anuncios`) y lo que devolvió (`resultado`:
+# patrones, por qué funciona cada anuncio e ideas de anuncios nuevos).
+tw_evaluacion = Table("tw_evaluacion", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("estado", String(12), nullable=False, default="en_cola"),   # en_cola|analizando|lista|error
+    Column("desde", String(10)), Column("hasta", String(10)),
+    Column("moneda", String(3)),
+    Column("anuncios", JSON, default=list),
+    Column("resultado", JSON, default=dict),
+    Column("usd", Float, default=0.0),
+    Column("error", Text),
+    Column("tarea_id", Integer),
+    Column("pedido_por", String(80)),
+    Column("extra", JSON, default=dict),
+)
+
+# Ventas por producto y día (orders_table.products_info): qué se vende de
+# verdad, para saber qué producto empujar en los anuncios nuevos.
+tw_producto_dia = Table("tw_producto_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("producto_id", String(120), nullable=False),
+    Column("nombre", Text), Column("sku", String(120)),
+    Column("unidades", Float, default=0.0), Column("ingresos", Float, default=0.0),
+    Column("pedidos", Float, default=0.0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "producto_id", "fecha", name="uq_tw_producto_dia"),
+    sa.Index("ix_tw_producto_dia_cliente_fecha", "cliente", "fecha"),
 )
 
 pedido = Table("pedido", metadata,
@@ -391,6 +485,7 @@ referente_familia = Table("referente_familia", metadata,
     Column("id", Integer, primary_key=True),
     Column("nombre", String(120), nullable=False, unique=True),
     Column("descripcion", Text),
+    Column("descripcion_en", Text),                                   # §B7 (migración 0022)
     Column("origen", String(12), nullable=False, default="copycoders"),     # copycoders|claude|admin
     Column("creado_en", String(19), nullable=False),
 )
@@ -400,7 +495,7 @@ barrido = Table("barrido", metadata,
     Column("cliente", String(80), index=True),                              # NULL = global (admin)
     Column("creado_en", String(19), nullable=False),
     Column("actualizado_en", String(19), nullable=False),
-    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify
+    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify|trendtrack|triple_whale
     Column("consulta", JSON, default=dict),
     Column("tope", Integer, default=0),
     Column("estado", String(12), nullable=False, default="en_cola"),        # en_cola|trayendo|guardando|clasificando|listo|parcial|error
@@ -425,7 +520,7 @@ referente = Table("referente", metadata,
     Column("actualizado_en", String(19), nullable=False),
     Column("anuncio_id", String(40), nullable=False, unique=True),          # id del Ad Library de Meta
     Column("pagina_id", String(40), index=True),                            # id de página de Meta (marca)
-    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify
+    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify|trendtrack|triple_whale
     Column("marca", String(160)),
     Column("url_anuncio", Text),
     Column("url_marca", Text),
@@ -614,6 +709,7 @@ estudio = Table("estudio", metadata,
     Column("catalogo_id", String(80)),
     Column("tema", Text),                                       # qué investigar: nicho, mercado, dolores
     Column("idioma", String(5), nullable=False, default="es"),  # idioma de salida de los avatares
+    Column("pais", String(2), index=True),                      # ISO-3166-1 alfa-2 (Parte 3, migración 0016 con ix_estudio_pais); NULL = sin país
     Column("estado", String(12), nullable=False, default="armando"),   # armando|generando|revisando
     Column("archivado", Boolean, default=False),
     Column("generacion", Integer, nullable=False, default=0),   # corridas de Claude
@@ -664,6 +760,30 @@ avatar = Table("avatar", metadata,
     Column("estado", String(12), nullable=False, default="propuesto"),   # propuesto|aprobado|descartado
     Column("persona_id", Integer, sa.ForeignKey("persona.id")),
     Column("extra", JSON, default=dict),
+)
+
+# --- Nicho Parte 3: productos encontrados por la investigación (migración 0016) ---
+
+producto_nicho = Table("producto_nicho", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("estudio_id", Integer, sa.ForeignKey("estudio.id"), nullable=False, index=True),
+    Column("plataforma", String(12), nullable=False),           # amazon|meli|tiktok_shop (clave de nicho.fuentes.plataformas)
+    Column("fuente_id", String(120), nullable=False),           # ASIN, id de MELI, id de TikTok Shop
+    Column("consulta", String(200), nullable=False, default=""),   # la búsqueda que lo encontró
+    Column("titulo", String(300), nullable=False),
+    Column("marca", String(120)),
+    Column("precio", Float),
+    Column("moneda", String(3)),
+    Column("estrellas", Float),
+    Column("n_resenas", Integer),                               # reseñas que la plataforma dice tener
+    Column("url", String(500)),
+    Column("imagen", String(500)),
+    Column("relevante", Boolean, index=True),                   # NULL = Claude no lo ha juzgado
+    Column("motivo", String(300)),
+    Column("resenas_traidas", Integer, default=0),              # cuántas reseñas suyas se guardaron (no se vuelve a pagar)
+    Column("extra", JSON, default=dict),
+    sa.UniqueConstraint("estudio_id", "plataforma", "fuente_id", name="uq_producto_nicho_unico"),
 )
 
 # --- Flow Plus en Crear: prompts que se corrigen conversando con Claude antes de generar (migración 0018) ---

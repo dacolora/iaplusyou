@@ -34,7 +34,7 @@ from idiomas import N_
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -66,6 +66,10 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    sale el prompt completo revisado más el razonamiento (~4k, US$ 0,04).
 #  - guion_clips (pipeline de Flow Plus): leer/recorte/armar/imágenes; el
 #    estimado redondea hacia arriba y se revisa contra `gasto` con uso real.
+#    Armar, medido el 2026-09-30 con un guion real de 34 líneas / 266 palabras:
+#    8 157 tokens de entrada y 19 809 de salida (casi todo pensamiento) =
+#    US$ 0,21; con el tope viejo de 16 000 no terminaba. Se estima 0,07 por
+#    cada 100 palabras sobre 0,06, sin pasar del peor caso del tope (48 000).
 TARIFAS = {
     "guion": 0.02,
     "regla_producto": 0.01,
@@ -73,6 +77,10 @@ TARIFAS = {
     "adaptar_referente": 0.01,
     "sugerir_ia": 0.04,
     "clasificacion": 0.012,
+    # La de siempre + la salida del segundo idioma (~60 tokens más por anuncio,
+    # redondeado hacia arriba): un referente global sale en español e inglés
+    # en la misma llamada (spec §B7).
+    "clasificacion_bilingue": 0.014,
     "refinar_prompt": 0.05,
     "voz": 0.05,
     "musica": 0.02,
@@ -92,6 +100,15 @@ TARIFAS = {
     # Inicial; se ajusta con lo medido en la prueba real.
     "diagnostico_pieza": 0.03,
 }
+
+# Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
+# llamada con visión (una miniatura por anuncio), la doctrina de clasificar,
+# ángulo, gancho y video en el system (caché) y hasta ~10k tokens de salida con
+# pensamiento. Cálculo a la tarifa de claude-sonnet-5: entrada ~6k de doctrina +
+# ~900 por anuncio (datos + miniatura) ≈ US$ 0,03 con 10 anuncios; salida ≈
+# US$ 0,10. Redondeado hacia arriba; el real se registra con los tokens medidos.
+EVALUACION_TW_BASE_USD = 0.08
+EVALUACION_TW_POR_ANUNCIO_USD = 0.012
 
 # «Proponer ideas» de Sprints (entrega 2 del tablero): una llamada a Claude con
 # la doctrina en el system (caché) y hasta ~1 200 tokens de salida por idea
@@ -199,12 +216,21 @@ def _estimar_guion_clips(paso="armar", palabras=0, **_):
     if paso == "leer":
         return 0.02 + 0.01 * math.ceil(p / 500), "leer el guion con Claude"
     if paso == "recorte":
-        return 0.02, "proponer qué quitar con Claude"
+        return 0.05, "proponer qué quitar con Claude"
     if paso == "armar":
-        return 0.06 + 0.02 * math.ceil(p / 100), "planear los clips con Claude"
+        return min(0.50, 0.06 + 0.07 * math.ceil(p / 100)), "planear los clips con Claude"
     if paso == "imagenes":
-        return 0.04, "escribir los prompts de imágenes con Claude"
+        return 0.08, "escribir los prompts de imágenes con Claude"
     raise ValueError(f"paso desconocido: {paso}")
+
+
+def _estimar_locucion(caracteres=0, **_):
+    """Audios en Crear: ElevenLabs vía fal cobra por carácter; el mismo texto
+    con la misma voz y velocidad no se paga dos veces (caché por hash), pero el
+    estimado no lo sabe y muestra el precio completo."""
+    from providers import fal_audio
+    n = max(1, int(caracteres or 0))
+    return n * fal_audio.COSTO_USD_POR_CARACTER, f"{n} caracteres con ElevenLabs"
 
 
 _ESTIMADORES = {
@@ -220,12 +246,17 @@ _ESTIMADORES = {
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
     "refinar_prompt": lambda **_: (TARIFAS["refinar_prompt"], "un mensaje a Claude"),
-    "clasificacion": lambda n=1, **_: (TARIFAS["clasificacion"] * max(1, int(n)), f"{max(1, int(n))} anuncio(s) con Claude"),
+    "clasificacion": lambda n=1, bilingue=False, **_: (
+        TARIFAS["clasificacion_bilingue" if bilingue else "clasificacion"] * max(1, int(n)),
+        f"{max(1, int(n))} anuncio(s) con Claude" + (", en español e inglés" if bilingue else "")),
     "musica_elevenlabs": lambda **_: (TARIFAS["musica_elevenlabs"], "una canción de 60 s con ElevenLabs"),
+    "locucion": _estimar_locucion,
     "guion_clips": _estimar_guion_clips,
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),
     "revision_pieza": lambda **_: (TARIFAS["revision_pieza"], "una llamada a Claude con visión"),
+    "evaluacion_tw": lambda n=1, **_: (EVALUACION_TW_BASE_USD + EVALUACION_TW_POR_ANUNCIO_USD * max(1, int(n or 0)),
+                                       f"{max(1, int(n or 0))} anuncio(s) con Claude"),
     "diagnostico_pieza": lambda **_: (TARIFAS["diagnostico_pieza"], "una llamada a Claude"),
     "proponer_ideas": lambda n=1, **_: (IDEAS_BASE_USD + IDEAS_POR_IDEA_USD * max(1, int(n or 0)),
                                         f"{max(1, int(n or 0))} idea(s) con Claude"),

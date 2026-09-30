@@ -33,7 +33,8 @@ def test_sin_imagenes_cada_modelo_de_video_va_a_su_ruta_de_texto(monkeypatch):
                                         "kwaivgi/kling-video-o3-pro/text-to-video",
                                         "bytedance/seedance-2.5/text-to-video"]
     wan, kling, seedance = (pl for _, pl in llamadas)
-    assert wan == {"prompt": "una mujer camina", "duration": 8, "resolution": "720p", "aspect_ratio": "9:16", "enable_audio": True}
+    assert wan == {"prompt": "una mujer camina", "duration": 8, "resolution": "720p", "aspect_ratio": "9:16", "generate_audio": True,
+                   "enable_prompt_expansion": False}   # el mejorador de Wan solo si se marca la casilla
     assert kling == {"prompt": "una mujer camina", "duration": 8, "aspect_ratio": "9:16", "sound": True}
     assert seedance == {"prompt": "una mujer camina", "duration": 8, "resolution": "720p", "aspect_ratio": "9:16",
                         "generate_audio": True}
@@ -44,7 +45,7 @@ def test_solo_texto_respeta_el_sonido_y_el_borrador(monkeypatch):
     fm.generar_video("wan3", "p", [], 5, calidad="borrador", con_sonido=False)
     fm.generar_video("kling_o3_pro", "p", [], 5, con_sonido=False)
     fm.generar_video("seedance25", "p", [], 5, aspect_ratio=None, con_sonido=False)
-    assert llamadas[0][1]["resolution"] == "480p" and llamadas[0][1]["enable_audio"] is False
+    assert llamadas[0][1]["resolution"] == "480p" and llamadas[0][1]["generate_audio"] is False
     assert llamadas[1][1]["sound"] is False
     assert llamadas[2][1]["generate_audio"] is False and "aspect_ratio" not in llamadas[2][1]
 

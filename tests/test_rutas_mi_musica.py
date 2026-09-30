@@ -143,7 +143,9 @@ def test_la_pagina_lista_mi_musica_en_crear_y_en_la_final(app):
     # «Producir finales» va en el detalle de Final edition, que llega por
     # fetch (tarjetas ligeras, 2026-09-28): una lista en la página y otra ahí.
     detalle = app["c"].get(f"/cliente/acme/creative_flow/{cf_id}/final/detalle").get_data(as_text=True)
-    assert html.count(f'value="mat:{mid}"') == 1                 # «Música al crear»
+    # Desde Crear › Audios (2026-09-28) la misma canción también aparece en el
+    # selector «Canción» de ese modo, así que la página trae DOS opciones.
+    assert html.count(f'value="mat:{mid}"') == 2                 # «Música al crear» + Audios
     assert detalle.count(f'value="mat:{mid}"') == 1              # «Producir finales»
     assert html.count('class="mm-opciones"') == 1 and detalle.count('class="mm-opciones"') == 1
     assert 'id="mm-panel"' in html and 'id="fp-musica-inicio"' in html and 'name="musica_inicio_s"' in html

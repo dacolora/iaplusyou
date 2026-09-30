@@ -129,6 +129,36 @@
 {% endif %}
 {% endif %}
 
+{# La tienda según Triple Whale (copia local): ingresos y MER reales del mes,
+   con la variación contra los mismos días del mes anterior. Solo con
+   Triple Whale conectado y datos de tienda; el detalle vive en su pestaña. #}
+{% if tb.tienda_tw %}
+{% set t = tb.tienda_tw %}
+<div class="tb-tiles" aria-label="{{ _('Tu tienda según Triple Whale') }}">
+  <div class="tb-tiles-moneda" style="color: var(--muted);">{{ _('Tu tienda según Triple Whale') }} · {{ t.moneda }}</div>
+  <div class="kpi-tile">
+    <span>{{ _('Ingresos del mes') }}</span>
+    <strong>{{ t.ingresos | dinero(t.moneda) }}</strong>
+    <small>{% if t.variacion.get('ingresos') is not none %}{{ t.variacion.get('ingresos') | tw_var }} {{ _('vs. mes anterior') }}{% else %}{{ _('desde el 1 de %(mes)s', mes=tb.mes) }}{% endif %}</small>
+  </div>
+  <div class="kpi-tile">
+    <span>{{ _('Pedidos') }}</span>
+    <strong>{{ t.pedidos | tw_num }}</strong>
+    <small>{{ _('%(pct)s de clientes nuevos', pct=t.pct_nuevos | tw_pct(0)) }}</small>
+  </div>
+  <div class="kpi-tile" title="{{ _('MER: ingresos de la tienda / todo el gasto en publicidad') }}">
+    <span>MER</span>
+    {% if t.mer %}<strong>{{ t.mer | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}
+    <small>{{ _('gasto %(gasto)s', gasto=t.gasto | dinero(t.moneda)) }}</small>
+  </div>
+  <a class="kpi-tile kpi-tile-enlace" href="#triplewhale" data-ir-tab="triplewhale">
+    <span>{{ _('Triple Whale') }}</span>
+    <strong>→</strong>
+    <small>{{ _('anuncio por anuncio, ganadores y evaluación con IA') }}</small>
+  </a>
+</div>
+{% endif %}
+
 {% if not experimentos %}
 <div class="tb-vacio">
   <h3>{{ _('Crea tu primer experimento') }}</h3>

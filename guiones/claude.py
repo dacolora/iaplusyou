@@ -43,7 +43,12 @@ def llamar(system, messages, max_tokens=8000, timeout=150):
     import anthropic
     from generador_prompts import MODEL, _api_key
     api = anthropic.Anthropic(api_key=_api_key(), timeout=timeout, max_retries=0)
-    resp = api.messages.create(model=MODEL, max_tokens=max_tokens, system=system, messages=messages)
+    # Con streaming: el pensamiento adaptativo de claude-sonnet-5 gasta del mismo
+    # tope que la respuesta, así que armar clips necesita topes grandes (48 000),
+    # y el SDK no acepta topes así sin stream; además `timeout` pasa a contar
+    # entre fragmentos y no para la respuesta entera.
+    with api.messages.stream(model=MODEL, max_tokens=max_tokens, system=system, messages=messages) as s:
+        resp = s.get_final_message()
     uso = getattr(resp, "usage", None)
     entrada = tokens_entrada_equivalentes(uso)
     salida = int(getattr(uso, "output_tokens", 0) or 0)

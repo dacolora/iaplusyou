@@ -362,7 +362,7 @@ def armar(video_id, llamar=None):
             data, usd, error = claude.pedir_json(
                 v["cliente"], "armar", video_id, _sistema(idiomas.de_proyecto(v["cliente"])), mensajes(v, esperados, fallas),
                 f"Armar clips · {(v['guion']['titulo'] or '')[:50]} · v{v['version_n']}",
-                llamar_fn=llamar, max_tokens=16000, timeout=240)
+                llamar_fn=llamar, max_tokens=48000, timeout=240)
             if error:
                 datos.fallar(video_id, error, usd)
                 return

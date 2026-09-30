@@ -3,38 +3,116 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ edicion.nombre }} · Vista previa</title>
+<title>{{ nombre_edicion }} · Editor</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <style>
   {% for f in datos.config.fuentes %}
   @font-face { font-family: "{{ f }}"; src: url("{{ url_for('static', filename='fonts/' ~ f ~ '.ttf') }}") format("truetype"); font-display: block; }
   {% endfor %}
-  body.editor { margin: 0; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
-  .editor-barra { display: flex; align-items: center; gap: .6rem 1rem; flex-wrap: wrap; padding: .7rem 1rem; border-bottom: 1px solid var(--border); }
-  .editor-barra h1 { flex: 1 1 12rem; min-width: 0; margin: 0; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .editor-destino { display: flex; align-items: center; gap: .4rem; }
-  .editor-escena { flex: 1; display: flex; align-items: center; justify-content: center; padding: 1rem; min-height: 0; }
-  /* El lienzo deja lugar a la línea de tiempo: en pantalla grande se ven los
-     dos sin bajar (≈ 520 px de barra, transporte, herramientas y línea). */
-  #lienzo { display: block; width: auto; height: auto; max-width: 100%; max-height: max(220px, min(900px, calc(100vh - 520px))); background: #000; border-radius: var(--radius-sm); }
+  /* Disposición tipo CapCut (capa 4b): barra arriba; biblioteca | reproductor
+     | propiedades en el medio; herramientas y línea de tiempo abajo, a todo
+     el ancho. En el celular: reproductor, herramientas y línea de tiempo, y
+     la biblioteca y las propiedades como hojas que suben desde abajo. Nada
+     corre la página de lado: cada fila se envuelve o se achica. */
+  body.editor { margin: 0; padding: 0; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
+    background: var(--bg); color: var(--text); }
+
+  /* Barra de arriba */
+  .ed-barra { position: relative; top: auto; z-index: 5; display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 1rem;
+    padding: .55rem 1rem; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .ed-nombre { flex: 1 1 10rem; min-width: 0; margin: 0; font-size: 1rem; line-height: 1.3; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .ed-barra-acciones { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .8rem; margin-left: auto;
+    min-width: 0; max-width: 100%; }
+  .ed-destino { display: flex; align-items: center; gap: .4rem; }
+  .ed-destino select { width: auto; padding: .35rem .5rem; }
+  .ed-guardado { min-width: 0; max-width: 100%; font-size: .82rem; color: var(--muted); overflow-wrap: anywhere; }
+  .ed-guardado[data-estado="error"], .ed-guardado[data-estado="conflicto"] { color: var(--error); }
+
+  /* Fila del medio (un <main>: sin el ancho máximo ni el relleno de las demás páginas) */
+  .ed-cuerpo { max-width: none; margin: 0; padding: 0; min-width: 0; min-height: 0; }
+  .ed-centro { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .ed-escena { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; padding: .75rem; }
+  /* #ed-escenario mide exactamente lo que se ve del lienzo (la proporción del
+     formato): la capa para tocar y arrastrar sobre el video va encima, del
+     mismo tamaño. Su ancho de base (el del celular: como mucho 42vh de alto)
+     vale en cualquier ancho; el escritorio lo agranda. Sin él, un ancho que
+     ninguna media query cubriera dejaría el reproductor en 0×0. */
+  .ed-escenario { position: relative; flex: none; max-width: 100%; aspect-ratio: var(--ed-ancho) / var(--ed-alto);
+    width: min(100%, calc(42vh * var(--ed-ancho) / var(--ed-alto))); }
+  #lienzo { position: absolute; inset: 0; display: block; width: 100%; height: 100%; background: #000; border-radius: var(--radius-sm); }
+  /* Tocar, mover y agrandar sobre el video (lienzo_interaccion.js): la capa
+     transparente cubre exactamente el lienzo y escucha el puntero (el dedo no
+     mueve la página ahí); la caja de lo elegido, su asa y las guías del
+     centro son solo dibujo. Lo que pasa del borde (una foto más grande que el
+     video) se corta: nada empuja la página de lado. El asa mide 16 px
+     (seleccion.MARGEN_ASA_PX es su radio). */
+  .ed-interaccion { position: absolute; inset: 0; z-index: 1; overflow: hidden; touch-action: none; border-radius: var(--radius-sm);
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .ed-interaccion [hidden] { display: none; }
+  .ed-caja { position: absolute; box-sizing: border-box; border: 2px solid var(--text); border-radius: 2px; pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .45); }
+  .ed-asa { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; box-sizing: border-box; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--text); box-shadow: 0 1px 4px rgba(0, 0, 0, .5); pointer-events: none; }
+  .ed-guia { position: absolute; pointer-events: none; }
+  .ed-guia-v { top: 0; bottom: 0; left: 50%; border-left: 1px dashed var(--accent-texto); }
+  .ed-guia-h { left: 0; right: 0; top: 50%; border-top: 1px dashed var(--accent-texto); }
   .editor-avisos { display: grid; gap: .3rem; justify-items: center; padding: 0 1rem; }
-  .editor-aviso { margin: 0; font-size: .88rem; color: var(--muted); text-align: center; }
+  .editor-aviso { margin: 0; font-size: .88rem; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
   .editor-aviso.error { color: var(--error); }
-  .editor-transporte { display: flex; align-items: center; gap: .8rem; padding: .8rem 1rem calc(.8rem + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); }
-  .editor-transporte input[type="range"] { flex: 1; min-width: 0; }
+  .ed-transporte { display: flex; align-items: center; gap: .8rem; padding: .5rem 1rem .7rem; }
+  .ed-transporte input[type="range"] { flex: 1; min-width: 0; }
   #tiempo { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .88rem; white-space: nowrap; }
-  /* Edición (capa 4a): herramientas, línea de tiempo y «Producir». La línea
-     corre de lado DENTRO de su caja; la página nunca. */
-  .editor-herramientas { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; padding: .6rem 1rem; border-top: 1px solid var(--border); }
-  .editor-velocidad, .editor-zoom { display: inline-flex; flex-direction: row; align-items: center; gap: .35rem; font-size: .85rem; color: var(--muted); }
-  .editor-velocidad select { width: auto; padding: .35rem .5rem; }
-  .editor-guardado { margin-left: auto; font-size: .82rem; color: var(--muted); }
-  .editor-guardado[data-estado="error"], .editor-guardado[data-estado="conflicto"] { color: var(--error); }
-  .editor-zoom { padding: 0 1rem calc(.8rem + env(safe-area-inset-bottom, 0px)); }
+
+  /* Biblioteca y propiedades */
+  .ed-lateral { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); }
+  .ed-lateral:focus { outline: none; }
+  .ed-lateral-cabecera { display: flex; align-items: center; gap: .5rem; padding: .5rem .6rem; border-bottom: 1px solid var(--border); }
+  .ed-lateral-cuerpo { flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto; }
+  .ed-titulo { display: block; flex: 1 1 auto; min-width: 0; margin: 0; padding: .3rem .2rem; font-size: .95rem; color: var(--text);
+    text-transform: none; letter-spacing: 0; }
+  .ed-titulo::before { display: none; }
+  /* Pestañas de la biblioteca: solo el icono en la columna (220–300 px:
+     «Transiciones» no cabe ni sola al lado de su icono); el nombre sigue ahí
+     para el lector de pantalla y en el cartelito, y el panel abierto lo dice
+     en su título. Con lugar (la hoja ancha del celular) se ven los nombres. */
+  .ed-pestanas { display: flex; flex: 1 1 auto; gap: .2rem; min-width: 0; container: ed-pestanas / inline-size; }
+  .ed-pestana { position: relative; display: flex; flex: 1 1 0; flex-direction: row; align-items: center; justify-content: center;
+    gap: .35rem; min-width: 0; padding: .45rem .3rem; background: transparent; color: var(--muted); border: 1px solid transparent;
+    border-radius: var(--radius-sm); font-size: .76rem; }
+  .ed-pestanas .ed-pestana span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @container ed-pestanas (min-width: 400px) {
+    .ed-pestanas .ed-pestana span { position: static; width: auto; height: auto; clip-path: none; }
+  }
+  .ed-pestana:hover { color: var(--text); background: var(--panel-hover); }
+  .ed-pestana[aria-selected="true"] { color: var(--accent-texto); background: var(--panel-2); border-color: var(--border); }
+  .ed-pestana span, .ed-accion span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-icono { display: block; flex: none; }
+  .ed-vacio { margin: .8rem; padding: 1.4rem 1rem; }
+
+  /* Herramientas (a todo el ancho) */
+  .ed-herramientas { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .6rem; padding: .5rem 1rem;
+    border-top: 1px solid var(--border); }
+  .ed-grupo { display: inline-flex; flex-wrap: wrap; gap: .3rem; }
+  .ed-zoom { display: inline-flex; flex-direction: row; align-items: center; gap: .35rem; font-size: .82rem; color: var(--muted); }
+  .ed-zoom { margin-left: auto; }
+  .ed-zoom input[type="range"] { width: 9rem; max-width: 36vw; min-width: 0; }
+
+  /* Línea de tiempo (capas 4a y 4b): corre DENTRO de su caja, de lado y hacia
+     abajo; la página nunca de lado. La columna de cabeceras queda fija a la
+     izquierda y la regla arriba mientras la línea corre (sticky en la caja). */
   .linea { padding: 0 1rem .5rem; min-width: 0; }
-  .linea-scroll { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); touch-action: pan-x pan-y; }
-  .linea-lienzo { position: relative; min-height: 120px; user-select: none; -webkit-user-select: none; }
-  .linea-regla { position: relative; height: 20px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .linea-scroll { overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); touch-action: pan-x pan-y; }
+  .ed-linea-marco { display: flex; align-items: stretch; width: max-content; min-width: 100%; }
+  .ed-cabeceras { position: sticky; left: 0; z-index: 6; flex: none; width: 92px; background: var(--panel); border-right: 1px solid var(--border); }
+  .ed-cabeceras-esquina { position: sticky; top: 0; z-index: 1; height: 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .ed-cabeceras-filas { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
+  .ed-cabecera { display: flex; align-items: center; gap: .35rem; min-width: 0; padding: 0 .45rem; color: var(--muted); font-size: .72rem; }
+  .ed-cabecera-icono { flex: none; }
+  .ed-cabecera-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-cabecera-elegida { color: var(--text); }
+  .linea-lienzo { position: relative; flex: none; min-height: 120px; user-select: none; -webkit-user-select: none; }
+  .linea-regla { position: sticky; top: 0; z-index: 4; height: 20px; background: var(--panel); border-bottom: 1px solid var(--border); cursor: pointer; }
   .linea-marca { position: absolute; top: 3px; font-size: .68rem; color: var(--muted); transform: translateX(2px); white-space: nowrap; }
   .linea-filas { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
   .linea-fila { position: relative; }
@@ -46,13 +124,193 @@
   .linea-espejo { opacity: .55; cursor: default; }
   .linea-seleccion { outline: 2px solid var(--accent-texto); outline-offset: 0; z-index: 2; touch-action: none; }
   .linea-arrastrando { opacity: .8; z-index: 3; cursor: grabbing; }
-  .linea-etiqueta { display: block; padding: 0 .45rem; font-size: .72rem; line-height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .linea-etiqueta { position: relative; display: block; padding: 0 .45rem; font-size: .72rem; line-height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Audio con onda: el nombre arriba, chico; la onda debajo (canvas, escala.barrasOnda) */
+  .ed-con-onda .linea-etiqueta { font-size: .66rem; line-height: 13px; }
+  .ed-onda { position: absolute; left: 0; bottom: 0; width: 100%; pointer-events: none; color: var(--ok); opacity: .85; }
   .linea-insignia { position: absolute; right: 12px; top: 4px; font-size: .7rem; color: var(--text); background: color-mix(in srgb, var(--bg) 75%, transparent); padding: 0 .3rem; border-radius: 4px; }
   .linea-asa { position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize; background: var(--border-soft); }
   .linea-asa[data-lado="inicio"] { left: 0; }
   .linea-asa[data-lado="fin"] { right: 0; }
   .linea-seleccion .linea-asa { background: var(--accent-texto); }
-  .linea-cabezal { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--error); pointer-events: none; z-index: 4; }
+  .linea-cabezal { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--error); pointer-events: none; z-index: 5; }
+  /* Soltar desde la biblioteca: la fila bajo el dedo y la raya donde entraría */
+  .linea-fila.ed-fila-destino { background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 6px; }
+  .ed-cabecera.ed-fila-destino { color: var(--accent-texto); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .ed-marca-soltar { position: absolute; width: 3px; margin-left: -1px; border-radius: 2px; background: var(--accent-texto); pointer-events: none; z-index: 5; }
+  /* Una unión con transición (escala.unionesConTransicion): tocarla elige el clip que la tiene */
+  .ed-union { position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 18px; height: 18px;
+    margin: -9px 0 0 -9px; border-radius: 5px; background: var(--panel); color: var(--accent-texto); border: 1px solid var(--accent-texto); cursor: pointer; }
+  .ed-union-elegida { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* Biblioteca (capa 4b): biblioteca.js arma lo de adentro de #ed-panel-biblioteca. */
+  #ed-panel-biblioteca [hidden] { display: none !important; }
+  .ed-bib { padding: .6rem .7rem 1rem; }
+  .ed-bib.ed-bib-soltando { outline: 2px dashed var(--accent-texto); outline-offset: -4px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+  /* arriba de la caja aunque se haya bajado (en el celular la hoja tapa el aviso de debajo del video) */
+  .ed-bib-mensaje { position: sticky; top: 0; z-index: 3; margin: -.6rem -.7rem .5rem; padding: .45rem .7rem; text-align: left;
+    background: var(--panel); border-bottom: 1px solid var(--border); }
+  .ed-bib-cabeza { padding: 0 0 .1rem; }
+  .ed-bib-panel { display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
+  .ed-bib-barra { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .6rem; }
+  .ed-bib-subir { display: inline-flex; align-items: center; gap: .35rem; }
+  .ed-bib-ayuda { margin: 0; font-size: .78rem; line-height: 1.45; color: var(--muted); }
+  .ed-bib-titulo { margin: .45rem 0 0; font-family: var(--font-display); font-size: .8rem; font-weight: 600; color: var(--muted);
+    text-transform: none; letter-spacing: 0; }
+  .ed-bib-vacio { grid-column: 1 / -1; margin: 0; padding: .7rem; font-size: .8rem; line-height: 1.45; color: var(--muted);
+    border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+  .ed-bib-vacio p { margin: 0 0 .45rem; }
+  .ed-bib-nombre { min-width: 0; font-size: .74rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* una fila por archivo que se sube: nombre, estado, barra y, si falla, el error debajo */
+  .ed-bib-subidas { display: grid; gap: .35rem; margin: 0; padding: 0; list-style: none; }
+  .ed-bib-subidas:empty { display: none; }
+  .ed-bib-subida { min-width: 0; padding: .45rem .55rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-2); }
+  .ed-bib-subida-cabeza { display: flex; align-items: center; gap: .4rem; min-width: 0; font-size: .78rem; }
+  .ed-bib-subida-cabeza .ed-bib-nombre { flex: 1 1 auto; }
+  .ed-bib-subida-estado { flex: none; color: var(--muted); font-size: .74rem; font-variant-numeric: tabular-nums; }
+  .ed-bib-subida[data-estado="error"] .ed-bib-subida-estado { color: var(--error); }
+  .ed-bib-subida[data-estado="lista"] .ed-bib-subida-estado { color: var(--ok); }
+  .ed-bib-subida progress { display: block; width: 100%; height: 6px; margin-top: .35rem; accent-color: var(--accent); }
+  .ed-bib-subida-error { margin: .3rem 0 0; font-size: .8rem; text-align: left; }
+  .ed-bib-quitar { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; background: transparent;
+    color: var(--muted); border: 1px solid transparent; border-radius: 6px; }
+  .ed-bib-quitar:hover { color: var(--text); border-color: var(--border); }
+  /* videos e imágenes: cuadrícula de miniaturas cuadradas (sin deformar), «+» en la esquina */
+  .ed-bib-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: .55rem .5rem; }
+  .ed-bib-item { display: flex; flex-direction: column; gap: .25rem; min-width: 0; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .ed-bib-mini { position: relative; aspect-ratio: 1; overflow: hidden; background: #000;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .ed-bib-item:hover .ed-bib-mini { border-color: var(--muted-2); }
+  .ed-bib-mini-medio { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain;
+    pointer-events: none; -webkit-user-drag: none; }
+  /* la tira (una celda por segundo): la primera celda en una caja con la forma del video, centrada */
+  .ed-bib-mini-medio.ed-bib-mini-tira { inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    background-repeat: no-repeat; background-position: 0 0; }
+  .ed-bib-mini-tira.ed-bib-horizontal { width: 100%; height: auto; }
+  .ed-bib-mini-tira.ed-bib-vertical { width: auto; height: 100%; }
+  .ed-bib-duracion { position: absolute; left: 4px; bottom: 4px; padding: 0 .3rem; border-radius: 4px; font-size: .68rem; line-height: 1.5;
+    color: #fff; background: rgba(0, 0, 0, .65); font-variant-numeric: tabular-nums; pointer-events: none; }
+  .ed-bib-estado { position: absolute; inset: 0; display: grid; place-items: center; padding: .3rem; font-size: .74rem; text-align: center;
+    color: #fff; background: rgba(0, 0, 0, .6); }
+  .ed-bib-mas { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
+    color: #fff; background: var(--accent); border: 1px solid transparent; border-radius: 50%; box-shadow: var(--shadow-soft); }
+  .ed-bib-mas:hover:not(:disabled) { filter: brightness(1.15); }
+  .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  /* «Borrar» (capa 4c): el tacho arriba a la derecha de la miniatura; siempre visible (con el dedo no hay hover) */
+  .ed-bib-borrar { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+    color: #fff; background: rgba(0, 0, 0, .6); border: 1px solid transparent; border-radius: 50%; }
+  .ed-bib-borrar:hover { color: var(--error); background: rgba(0, 0, 0, .8); }
+  .ed-bib-borrar:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-bib-audio .ed-bib-borrar { position: static; flex: none; color: var(--muted); background: transparent; border-color: var(--border); }
+  .ed-bib-audio .ed-bib-borrar:hover { color: var(--error); border-color: var(--error); }
+  .ed-bib-preparando { cursor: default; }
+  .ed-bib-origen { opacity: .45; }
+  /* audios: una fila con icono, nombre y duración, «Escuchar» y «+» */
+  .ed-bib-audios { display: grid; gap: .35rem; }
+  .ed-bib-audio { display: flex; align-items: center; gap: .5rem; min-width: 0; padding: .4rem .45rem; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; user-select: none; -webkit-user-select: none; }
+  .ed-bib-audio:hover { border-color: var(--muted-2); }
+  .ed-bib-audio-icono { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 6px; color: var(--ok);
+    background: color-mix(in srgb, var(--ok) 16%, transparent); }
+  .ed-bib-audio-texto { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; }
+  .ed-bib-audio-detalle { font-size: .7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ed-bib-escuchar { flex: none; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; }
+  .ed-bib-escuchar[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto); }
+  .ed-bib-audio .ed-bib-mas { position: static; flex: none; }
+  /* textos de muestra: cada uno escrito con el estilo con que entra */
+  .ed-bib-textos { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: .5rem; }
+  .ed-bib-texto { display: grid; place-items: center; min-width: 0; min-height: 64px; padding: .5rem; color: #fff; font-weight: 400;
+    background: linear-gradient(160deg, var(--panel-hover), var(--bg)); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }
+  .ed-bib-texto:hover { border-color: var(--muted-2); }
+  .ed-bib-texto-muestra { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25; }
+  .ed-bib-texto-titulo .ed-bib-texto-muestra { font-family: "Inter-Bold", var(--font-body); font-size: 1.15rem; -webkit-text-stroke: 3px #000; paint-order: stroke fill; }
+  .ed-bib-texto-subtitulo .ed-bib-texto-muestra { font-family: "Inter-SemiBold", var(--font-body); font-size: .98rem; text-shadow: 2px 2px 0 #000; }
+  .ed-bib-texto-precio .ed-bib-texto-muestra { padding: .2rem .75rem; font-family: "SpaceGrotesk-Bold", var(--font-display); font-size: 1rem;
+    background: var(--ed-marca, var(--accent)); border-radius: 999px; }
+  /* «Llamado» entra en el video como texto negro en una caja blanca: la muestra lo imita con los tokens (claro/oscuro) */
+  .ed-bib-texto-llamado .ed-bib-texto-muestra { padding: .25rem .6rem; font-family: "Inter-Bold", var(--font-body); font-size: .95rem;
+    color: var(--bg); background: var(--text); border-radius: 4px; }
+  /* transiciones: una muestra quieta de cada una (A violeta, B verde) con su nombre y qué hace */
+  .ed-bib-transiciones { display: grid; gap: .4rem; }
+  .ed-bib-transicion { display: flex; align-items: center; gap: .6rem; min-width: 0; padding: .45rem .55rem; text-align: left; color: var(--text);
+    font-family: var(--font-body); font-weight: 400; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }
+  .ed-bib-transicion:hover { border-color: var(--muted-2); }
+  .ed-bib-tr-texto { display: flex; flex-direction: column; min-width: 0; }
+  .ed-bib-tr-nombre { font-family: var(--font-display); font-size: .82rem; font-weight: 600; }
+  .ed-bib-tr-desc { font-size: .72rem; line-height: 1.35; color: var(--muted); }
+  .ed-bib-tr-muestra { position: relative; flex: none; width: 52px; height: 34px; overflow: hidden; background: #000; border-radius: 5px; }
+  .ed-bib-tr-a, .ed-bib-tr-b { position: absolute; inset: 0; }
+  .ed-bib-tr-a { background: var(--accent-grad); }
+  .ed-bib-tr-b { background: linear-gradient(135deg, var(--ok), color-mix(in srgb, var(--ok) 50%, #000)); }
+  .ed-bib-tr-corte .ed-bib-tr-b { left: 50%; }
+  .ed-bib-tr-fundido .ed-bib-tr-b { -webkit-mask-image: linear-gradient(90deg, transparent 15%, #000 85%); mask-image: linear-gradient(90deg, transparent 15%, #000 85%); }
+  .ed-bib-tr-deslizar .ed-bib-tr-b { left: 42%; box-shadow: -3px 0 6px rgba(0, 0, 0, .55); }
+  .ed-bib-tr-zoom .ed-bib-tr-b { inset: 26% 30%; border-radius: 3px; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); }
+  .ed-bib-tr-desenfoque .ed-bib-tr-a { -webkit-mask-image: linear-gradient(90deg, #000 15%, transparent 45%); mask-image: linear-gradient(90deg, #000 15%, transparent 45%); }
+  .ed-bib-tr-desenfoque .ed-bib-tr-b { -webkit-mask-image: linear-gradient(90deg, transparent 55%, #000 85%); mask-image: linear-gradient(90deg, transparent 55%, #000 85%); }
+  /* lo que sigue al mouse mientras se arrastra algo de la biblioteca */
+  .ed-bib-fantasma { position: fixed; left: 0; top: 0; z-index: 60; display: flex; align-items: center; gap: .35rem; max-width: 220px;
+    padding: .3rem .55rem; font-size: .78rem; color: var(--text); white-space: nowrap; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow); opacity: .75; pointer-events: none; }
+  .ed-bib-fantasma span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .ed-bib-fantasma-dentro { opacity: 1; border-color: var(--accent-texto); }
+  body.ed-bib-arrastrando, body.ed-bib-arrastrando * { cursor: grabbing !important; }
+  @media (pointer: coarse) {
+    /* con el dedo no se arrastra desde la biblioteca: se toca «+» */
+    .ed-bib-ayuda-arrastre { display: none; }
+    .ed-bib-item, .ed-bib-audio, .ed-bib-texto, .ed-bib-transicion { cursor: default; }
+  }
+
+  /* Propiedades (capa 4b): propiedades.js arma lo de adentro de #ed-panel-propiedades,
+     un formulario por clase de clip. Todo cabe en la columna (220–300 px) y en
+     la hoja del celular: los grupos de opciones se envuelven, nada empuja de lado. */
+  #ed-panel-propiedades [hidden] { display: none !important; }
+  .ed-prop { display: flex; flex-direction: column; gap: .9rem; min-width: 0; padding: .7rem .8rem 1.2rem; }
+  /* arriba de la caja aunque se haya bajado (en el celular la hoja tapa el aviso de debajo del video) */
+  .ed-prop-mensaje { position: sticky; top: 0; z-index: 3; margin: 0; padding: .45rem .8rem; text-align: left;
+    background: var(--panel); border-bottom: 1px solid var(--border); }
+  .ed-prop-vacio { margin: 0; padding: 1rem .8rem; }
+  .ed-prop-nombre { margin: 0; font-family: var(--font-display); font-size: .95rem; font-weight: 600; color: var(--text);
+    text-transform: none; letter-spacing: 0; }
+  .ed-prop-campo { display: flex; flex-direction: column; gap: .4rem; min-width: 0; margin: 0; padding: 0; border: 0; }
+  /* flotada, la leyenda deja de ir en el borde del fieldset y es una fila más de la columna */
+  .ed-prop-campo > legend { float: left; width: 100%; margin: 0; padding: 0; }
+  .ed-prop-fila { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-width: 0; }
+  .ed-prop-etiqueta { min-width: 0; font-family: var(--font-body); font-size: .8rem; font-weight: 600; color: var(--text);
+    text-transform: none; letter-spacing: 0; }
+  .ed-prop-etiqueta-sub { font-weight: 400; color: var(--muted); }
+  .ed-prop-valor { flex: none; font-size: .76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ed-prop input[type="range"] { display: block; width: 100%; min-width: 0; margin: 0; accent-color: var(--accent); }
+  .ed-prop input[type="range"]:disabled { opacity: .45; }
+  .ed-prop select { width: 100%; padding: .45rem .6rem; }
+  .ed-prop textarea { min-height: 4.2rem; }
+  .ed-prop textarea[readonly] { color: var(--muted); }
+  .ed-prop-nota { margin: 0; font-size: .76rem; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+  .ed-prop-error { color: var(--error); }
+  .ed-prop-aviso { color: var(--warn); }
+  /* opciones excluyentes: el .segmentado de style.css, a lo ancho y envolviéndose */
+  .ed-prop .ed-prop-segmentado { display: flex; width: 100%; border-radius: var(--radius-sm); }
+  .ed-prop .ed-prop-segmentado label { flex: 1 1 auto; min-width: 0; }
+  .ed-prop .ed-prop-segmentado span { padding: .38rem .5rem; border-radius: 6px; font-size: .76rem; text-align: center; }
+  .ed-prop .ed-prop-lista { flex-direction: column; }
+  .ed-prop .ed-prop-lista span { padding: .45rem .6rem; font-size: .92rem; font-weight: 400; text-align: left; }
+  .ed-prop-mezclas { display: grid; gap: .45rem; }
+  .ed-prop-mezclas .opcion-tarjeta { padding: .6rem .7rem; }
+  .ed-prop-casilla { display: flex; align-items: center; gap: .45rem; font-size: .8rem; font-weight: 600; color: var(--text); cursor: pointer; }
+  .ed-prop-sub { display: flex; flex-direction: column; gap: .6rem; margin-top: -.3rem; padding-left: .7rem; border-left: 2px solid var(--border); }
+  /* el color: muestras redondas y uno libre */
+  .ed-prop-colores { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+  .ed-prop-muestra { flex: none; width: 28px; height: 28px; padding: 0; border: 2px solid var(--border); border-radius: 50%; }
+  .ed-prop-muestra[aria-pressed="true"] { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-prop-muestra:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ed-prop-otro { display: inline-flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--muted); cursor: pointer; }
+  .ed-prop-color { flex: none; width: 36px; height: 28px; padding: 0 2px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; cursor: pointer; }
+  .ed-prop-acciones { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .ed-prop-acciones .btn-sm[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto); }
+  .ed-prop-pie { padding-top: .4rem; border-top: 1px solid var(--border); }
+
+  /* «Producir» */
   .editor-dialogo { max-width: min(92vw, 420px); padding: 1.2rem; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); }
   .editor-dialogo::backdrop { background: color-mix(in srgb, var(--bg) 70%, transparent); }
   .editor-dialogo h2 { margin: 0 0 .6rem; font-size: 1.05rem; color: var(--text); text-transform: none; letter-spacing: 0; }
@@ -63,57 +321,169 @@
   .editor-reemplazo { margin-top: .8rem; padding: .6rem .8rem; border: 1px solid var(--warn); border-radius: var(--radius-sm);
     background: var(--warn-fondo); }
   .editor-reemplazo p { margin: 0; overflow-wrap: anywhere; }
+
+  /* Botones de abajo del celular: solo existen en el celular. */
+  .ed-acciones-movil, .ed-listo { display: none; }
+
   @media (pointer: coarse) {
     .linea-asa { width: 18px; }
   }
+
+  /* Escritorio y tableta: todo cabe en la pantalla sin bajar; la columna del
+     centro es la única flexible y puede achicarse (minmax(0, 1fr)). Es el
+     complemento EXACTO del celular (con el zoom del navegador el ancho puede
+     ser 760,5 px: «min-width: 761px» lo dejaba sin disposición). */
+  @media not all and (max-width: 760px) {
+    body.editor { height: 100vh; height: 100dvh; min-height: 540px; }
+    .ed-cuerpo { flex: 1 1 0; min-height: 260px; display: grid;
+      grid-template-columns: clamp(220px, 22vw, 300px) minmax(0, 1fr) clamp(220px, 22vw, 300px);
+      grid-template-rows: minmax(0, 1fr); }
+    #ed-biblioteca { border-right: 1px solid var(--border); }
+    #ed-propiedades { border-left: 1px solid var(--border); }
+    .ed-escena { flex: 1 1 0; container-type: size; }
+    /* El reproductor llena lo que queda sin deformarse: lo más ancho que
+       quepa a lo alto (cqh) y a lo ancho (cqw). La primera línea es para un
+       navegador sin cq. */
+    .ed-escenario { width: min(100%, calc((100vh - 420px) * var(--ed-ancho) / var(--ed-alto)));
+      width: min(100cqw, calc(100cqh * var(--ed-ancho) / var(--ed-alto))); }
+    /* la caja de la línea corre sola hacia abajo: la regla y la barra de lado siempre a la vista */
+    #linea { flex: 0 0 auto; display: flex; flex-direction: column; max-height: 38vh; min-height: 0; }
+    #linea .linea-scroll { min-height: 0; }
+  }
+
+  /* Celular: el reproductor ocupa como mucho 42vh (el ancho de base del
+     escenario); la biblioteca y las propiedades suben desde abajo (y se
+     cierran con «Listo»). */
   @media (max-width: 760px) {
-    #lienzo { max-height: 40vh; }
-    .editor-herramientas { gap: .35rem; }
+    /* El estado del guardado en un hueco fijo, en una línea: «Guardado» →
+       «Cambios sin guardar…» no vuelve a acomodar la barra (y el reproductor
+       no salta). Lo que no cabe termina en «…»; el texto entero va en su
+       `title` (pagina_editor.js). */
+    .ed-guardado { flex: none; width: 10.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ed-escena { padding: .5rem; }
+    .ed-herramientas { gap: .35rem; }
+    /* cabeceras angostas: solo el icono (el nombre sigue ahí para quien lee con lector de pantalla) */
+    .ed-cabeceras { width: 36px; }
+    .ed-cabecera { justify-content: center; padding: 0; }
+    .ed-cabecera-nombre { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .ed-hoja { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-height: 62vh;
+      border-top: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; box-shadow: var(--shadow);
+      padding-bottom: env(safe-area-inset-bottom, 0px); transform: translateY(100%); visibility: hidden;
+      transition: transform .2s ease, visibility 0s linear .2s; }
+    .ed-hoja.ed-hoja-abierta { transform: none; visibility: visible; transition: transform .2s ease; }
+    .ed-listo { display: inline-flex; flex: none; }
+    .ed-acciones-movil { position: sticky; bottom: 0; z-index: 20; display: flex; gap: 2px;
+      padding: .3rem .5rem calc(.3rem + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--border); }
+    .ed-accion { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; gap: .15rem; min-width: 0;
+      padding: .35rem .2rem; background: transparent; color: var(--muted); border: 1px solid transparent;
+      border-radius: var(--radius-sm); font-size: .7rem; }
+    .ed-accion.ed-activa { color: var(--accent-texto); background: var(--panel-2); border-color: var(--border); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ed-hoja, .ed-hoja.ed-hoja-abierta { transition: none; }
   }
 </style>
 </head>
+{% set fmt = datos.config.formatos.get(datos.documento.formato) or [1080, 1920] %}
+{% set ICONOS = {
+  "medios": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>',
+  "audio": '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  "texto": '<path d="M5 7V5h14v2M12 5v14M9 19h6"/>',
+  "transiciones": '<path d="M4 6l8 6-8 6zM20 6l-8 6 8 6z"/>',
+  "editar": '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+} %}
+{% macro icono(nombre) -%}
+<svg class="ed-icono" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{{ ICONOS[nombre]|safe }}</svg>
+{%- endmacro %}
+{% set PANELES = [("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("transiciones", "Transiciones")] %}
 <body class="editor">
-<header class="editor-barra">
+<header id="ed-barra" class="ed-barra">
   <a class="btn-sm" href="{{ datos.urls.final }}">← Final edition</a>
-  <h1>{{ edicion.nombre }}</h1>
-  <div class="editor-destino">
-    <label class="campo-label" for="destino">Destino</label>
-    <select id="destino"></select>
+  <h1 class="ed-nombre">{{ nombre_edicion }}</h1>
+  <div class="ed-barra-acciones">
+    <div class="ed-destino">
+      <label class="campo-label" for="destino">Destino</label>
+      <select id="destino"></select>
+    </div>
+    <span id="estado-guardado" class="ed-guardado" data-estado="guardado" aria-live="polite">Guardado</span>
+    <button id="recargar" type="button" class="btn-sm" hidden>Recargar</button>
+    <button id="producir" type="button" class="btn-generar btn-sm">Producir</button>
   </div>
-  <span class="badge">Vista previa</span>
-  <button id="producir" type="button" class="btn-generar btn-sm">Producir</button>
 </header>
-<main class="editor-escena">
-  <canvas id="lienzo" aria-label="Vista previa del video"></canvas>
+<main id="ed-cuerpo" class="ed-cuerpo">
+  <aside id="ed-biblioteca" class="ed-lateral ed-hoja" aria-label="Biblioteca" tabindex="-1" data-panel-activo="medios">
+    <div class="ed-lateral-cabecera">
+      <div id="ed-pestanas-biblioteca" class="ed-pestanas" role="tablist" aria-label="Qué agregar">
+        {% for panel, nombre in PANELES %}
+        <button type="button" role="tab" class="ed-pestana" data-panel="{{ panel }}" aria-controls="ed-panel-biblioteca" title="{{ nombre }}"
+                aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}">{{ icono(panel) }}<span>{{ nombre }}</span></button>
+        {% endfor %}
+      </div>
+      <button id="ed-cerrar-biblioteca" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-biblioteca">Listo</button>
+    </div>
+    <div id="ed-panel-biblioteca" class="ed-lateral-cuerpo" role="tabpanel" aria-label="Biblioteca">
+      <div class="estado-vacio ed-vacio">
+        <p class="estado-vacio-texto">Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición.</p>
+      </div>
+    </div>
+  </aside>
+  <section id="ed-centro" class="ed-centro" aria-label="Reproductor">
+    <div class="ed-escena">
+      <div id="ed-escenario" class="ed-escenario" style="--ed-ancho: {{ fmt[0] }}; --ed-alto: {{ fmt[1] }}">
+        <canvas id="lienzo" aria-label="Vista previa del video"></canvas>
+        <div id="ed-interaccion" class="ed-interaccion" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="editor-avisos" aria-live="polite">
+      <p id="aviso-destino" class="editor-aviso" hidden></p>
+      <p id="aviso-faltan" class="editor-aviso" hidden></p>
+      <p id="aviso-recortes" class="editor-aviso" hidden></p>
+      <p id="aviso-preparando" class="editor-aviso" hidden></p>
+      <p id="aviso-audio" class="editor-aviso" hidden></p>
+      <p id="aproximada" class="editor-aviso" hidden>Transición vista de forma aproximada: el video final la hace completa.</p>
+      <p id="aviso-edicion" class="editor-aviso error" hidden></p>
+      <p id="producir-hecho" class="editor-aviso" hidden><span id="producir-hecho-texto"></span> <a id="producir-hecho-enlace" href="{{ datos.urls.final }}">Ir a Final edition</a></p>
+    </div>
+    <div class="ed-transporte">
+      <button id="inicio" class="btn-sm" type="button" aria-label="Ir al inicio">⏮</button>
+      <button id="reproducir" class="btn-generar" type="button" aria-label="Reproducir">▶</button>
+      <span id="tiempo">0:00.0 / 0:00.0</span>
+      <input id="barra" type="range" min="0" max="0" step="1" value="0" aria-label="Posición en el video">
+    </div>
+  </section>
+  <aside id="ed-propiedades" class="ed-lateral ed-hoja" aria-labelledby="ed-titulo-propiedades" tabindex="-1">
+    <div class="ed-lateral-cabecera">
+      <h2 id="ed-titulo-propiedades" class="ed-titulo">Editar</h2>
+      <button id="ed-cerrar-propiedades" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-propiedades">Listo</button>
+    </div>
+    <div id="ed-panel-propiedades" class="ed-lateral-cuerpo">
+      <div class="estado-vacio ed-vacio">
+        <p class="estado-vacio-texto">Elige algo en la línea de tiempo o en el video para cambiarlo.</p>
+      </div>
+    </div>
+  </aside>
 </main>
-<section class="editor-avisos" aria-live="polite">
-  <p id="aviso-destino" class="editor-aviso" hidden></p>
-  <p id="aviso-faltan" class="editor-aviso" hidden></p>
-  <p id="aviso-recortes" class="editor-aviso" hidden></p>
-  <p id="aviso-preparando" class="editor-aviso" hidden></p>
-  <p id="aviso-audio" class="editor-aviso" hidden></p>
-  <p id="aproximada" class="editor-aviso" hidden>Transición vista de forma aproximada: el video final la hace completa.</p>
-  <p id="aviso-edicion" class="editor-aviso error" hidden></p>
-  <p id="producir-hecho" class="editor-aviso" hidden><span id="producir-hecho-texto"></span> <a id="producir-hecho-enlace" href="{{ datos.urls.final }}">Ir a Final edition</a></p>
-</section>
-<footer class="editor-transporte">
-  <button id="inicio" class="btn-sm" type="button" aria-label="Ir al inicio">⏮</button>
-  <button id="reproducir" class="btn-generar" type="button" aria-label="Reproducir">▶</button>
-  <span id="tiempo">0:00.0 / 0:00.0</span>
-  <input id="barra" type="range" min="0" max="0" step="1" value="0" aria-label="Posición en el video">
-</footer>
-<section class="editor-herramientas" aria-label="Herramientas de edición">
-  <button id="h-deshacer" type="button" class="btn-sm" aria-label="Deshacer" title="Deshacer (Ctrl/Cmd+Z)">↶</button>
-  <button id="h-rehacer" type="button" class="btn-sm" aria-label="Rehacer" title="Rehacer (Ctrl/Cmd+Shift+Z)">↷</button>
-  <button id="h-cortar" type="button" class="btn-sm" title="Cortar el video donde está el cabezal (S)">✂ Cortar</button>
-  <button id="h-duplicar" type="button" class="btn-sm" title="Duplicar el clip elegido">Duplicar</button>
-  <button id="h-borrar" type="button" class="btn-sm" title="Borrar el clip elegido (Supr)">Borrar</button>
-  <label class="editor-velocidad">Velocidad <select id="h-velocidad"></select></label>
-  <span id="estado-guardado" class="editor-guardado" data-estado="guardado" aria-live="polite">Guardado</span>
-  <button id="recargar" type="button" class="btn-sm" hidden>Recargar</button>
+<section id="ed-herramientas" class="ed-herramientas" aria-label="Herramientas de edición">
+  <div class="ed-grupo">
+    <button id="h-deshacer" type="button" class="btn-sm" aria-label="Deshacer" title="Deshacer (Ctrl/Cmd+Z)">↶</button>
+    <button id="h-rehacer" type="button" class="btn-sm" aria-label="Rehacer" title="Rehacer (Ctrl/Cmd+Shift+Z)">↷</button>
+  </div>
+  <div class="ed-grupo">
+    <button id="h-cortar" type="button" class="btn-sm" title="Cortar donde está el cabezal: el clip elegido o, si no eliges ninguno, el video (S)">✂ Cortar</button>
+    <button id="h-duplicar" type="button" class="btn-sm" title="Duplicar el clip elegido">Duplicar</button>
+    <button id="h-borrar" type="button" class="btn-sm" title="Borrar el clip elegido (Supr)">Borrar</button>
+  </div>
+  <label class="ed-zoom">Zoom <input id="linea-zoom" type="range"></label>
 </section>
 <section id="linea" class="linea" aria-label="Línea de tiempo"></section>
-<label class="editor-zoom">Zoom <input id="linea-zoom" type="range"></label>
+<nav id="ed-acciones-movil" class="ed-acciones-movil" aria-label="Agregar y editar">
+  {% for panel, nombre in PANELES %}
+  <button id="ed-abrir-{{ panel }}" type="button" class="ed-accion" data-abrir-hoja="ed-biblioteca" data-abrir-panel="{{ panel }}"
+          aria-controls="ed-biblioteca" aria-expanded="false">{{ icono(panel) }}<span>{{ nombre }}</span></button>
+  {% endfor %}
+  <button id="ed-abrir-propiedades" type="button" class="ed-accion" data-abrir-hoja="ed-propiedades"
+          aria-controls="ed-propiedades" aria-expanded="false">{{ icono("editar") }}<span>Editar</span></button>
+</nav>
 <dialog id="producir-dialogo" class="editor-dialogo" aria-labelledby="producir-titulo">
   <h2 id="producir-titulo">Producir</h2>
   <p>Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id="producir-tiempo"></span>.</p>

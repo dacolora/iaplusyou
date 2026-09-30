@@ -1,0 +1,6 @@
+[
+  {"reviewId": "tr1", "text": "So soft, my plantar fasciitis pain is gone in the mornings.", "rating": 5, "postedAt": "2025-01-01T10:00:00Z",
+   "productId": "1729000000000000001", "verifiedPurchase": true},
+  {"reviewId": "tr2", "text": "Runs small.", "ratingStars": 3, "postedAt": "2025-01-03T00:00:00Z", "productId": "1729000000000000001"},
+  {"reviewId": "tr3", "text": "", "rating": 4, "productId": "1729000000000000001"}
+]

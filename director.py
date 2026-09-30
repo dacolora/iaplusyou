@@ -116,6 +116,18 @@ def _system(familia, cierre, n, duracion, idioma):
         max_chars=MAX_CARACTERES_PROMPT)
 
 
+# Qué significa cada enfoque para Claude. «producto» NO es «solo y sin nadie»
+# (2026-09-28, pedido de la persona): el producto es el protagonista y las
+# escenas muestran lo que hace o cambia; manos o personas solo si hacen falta.
+_ENFOQUES_DIRECTOR = {
+    "producto": ("el producto es el protagonista y las escenas muestran lo que hace o cambia — en uso, antes/después, "
+                 "el resultado a la vista —, nunca el producto quieto; manos o personas solo si la escena lo pide"),
+    "persona": ("una persona real usa el producto y las escenas muestran el resultado que consigue; el producto sigue "
+                "siendo el protagonista"),
+    "unboxing": "alguien recibe la compra y la abre hasta descubrir el producto (el sistema añade el bloque UNBOXING)",
+}
+
+
 def _mensaje(sesion, idioma):
     refs = list(sesion.get("referencias") or [])
     idea = flowplus_prompt.sustituir_tokens(sesion.get("accion_central") or "", refs)
@@ -133,10 +145,11 @@ def _mensaje(sesion, idioma):
         rol = "logo oficial" if r.get("logo") else (r.get("categoria") or ("video de referencia" if r.get("tipo") == "video" else "imagen de referencia"))
         nombre = r.get("activo") or r.get("etiqueta") or ""
         lineas.append(f"- {r['token']} → {rol} → {nombre} → {r.get('regla') or ''}".rstrip(" →"))
-    if sesion.get("enfoque") == "libre":
+    enfoque = sesion.get("enfoque") or "producto"
+    if enfoque == "libre":
         lineas.append("ENFOQUE: libre — sin producto ni activos; la escena sale solo de la IDEA")
     else:
-        lineas.append(f"ENFOQUE: {sesion.get('enfoque') or 'producto'}")
+        lineas.append(f"ENFOQUE: {enfoque} — {_ENFOQUES_DIRECTOR.get(enfoque, _ENFOQUES_DIRECTOR['producto'])}")
     if sesion.get("guia_marca"):
         lineas.append(f"MARCA: {sesion['guia_marca']}")
     con_sonido = bool(sesion.get("con_sonido"))

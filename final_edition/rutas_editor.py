@@ -11,6 +11,7 @@ import creative_flow
 import ediciones
 import materiales
 import trabajos
+from final_edition import biblioteca
 from final_edition import documento as documento_mod
 from final_edition import estimar, vista_previa
 from final_edition.documento import DocumentoInvalido
@@ -21,6 +22,7 @@ from tareas import final_edition as tareas_fe
 bp = Blueprint("editor", __name__, url_prefix="/cliente/<cliente>/ediciones")
 
 _DESTINO_RE = re.compile(r"^[a-z]{2}_[A-Z]{2}$")
+ERROR_GUARDAR = "No se pudo guardar este cambio; deshazlo y vuelve a intentar."
 
 
 def _cargar(cliente, edicion_id):
@@ -39,10 +41,20 @@ def ver(cliente, edicion_id):
     urls = {"materiales": url_for("editor.materiales_json", cliente=cliente, edicion_id=edicion_id),
             "guardar": url_for("editor.guardar", cliente=cliente, edicion_id=edicion_id),
             "producir": url_for("editor.producir", cliente=cliente, edicion_id=edicion_id),
-            "final": base + "#final" + (f"?cf={ed['cf_id']}" if ed.get("cf_id") else "")}
+            "final": base + "#final" + (f"?cf={ed['cf_id']}" if ed.get("cf_id") else ""),
+            # capa 4b: la biblioteca del proyecto; `agregar_pieza` lleva `__CF__`
+            # donde el navegador pone el id de la pieza de Crear
+            "biblioteca": url_for("editor.biblioteca", cliente=cliente),
+            "subir": url_for("editor.subir", cliente=cliente),
+            "agregar_pieza": url_for("editor.agregar_pieza", cliente=cliente, cf_id="__CF__"),
+            "materiales_por_id": url_for("editor.materiales_por_id", cliente=cliente),
+            # capa 4c: «Borrar» en la biblioteca; el navegador pone el id en `__ID__`
+            "borrar_material": url_for("editor.borrar_material", cliente=cliente, material_id="__ID__")}
     datos = vista_previa.datos_pagina(cliente, ed, urls)
     vista_previa.encolar_proxies(cliente, datos["pendientes"])
-    return render_template("editor.html", cliente=cliente, edicion=ed, datos=datos)
+    # capa 4c: el borrador de la vía automática se nombra «Borrador automático · …»
+    return render_template("editor.html", cliente=cliente, edicion=ed, datos=datos,
+                           nombre_edicion=ediciones.nombre_visible(ed))
 
 
 @bp.get("/<int:edicion_id>/materiales")
@@ -88,7 +100,10 @@ def guardar(cliente, edicion_id):
             return jsonify({"error": "La edición usa archivos que no son de este proyecto."}), 400
         nuevo = ediciones.guardar(cliente, edicion_id, doc, cuerpo["version_n"])
     except DocumentoInvalido as e:
-        return jsonify({"error": str(e)}), 400
+        # capa 4c: la persona lee una frase llana; la ruta del validador
+        # («pistas[p_texto].clips[0]…») va aparte, para soporte (el editor la
+        # pone en el `title` del estado del guardado)
+        return jsonify({"error": ERROR_GUARDAR, "detalle": str(e)}), 400
     except ediciones.Conflicto as e:
         return jsonify({"error": str(e)}), 409
     return jsonify({"version_n": nuevo})
@@ -199,8 +214,11 @@ def producir(cliente, edicion_id):
 
 @bp.post("/desde/<cf_id>")
 def desde_clon(cliente, cf_id):
-    """«Editar este video» (gratis): encola la preparación y vuelve a la pieza
-    en Final edition, donde la barra muestra el avance."""
+    """«Editar» (gratis): encola la preparación y vuelve a la pieza en Final
+    edition, donde la barra muestra el avance. El `&abrir=editor` del destino
+    es lo que le dice al script de la pestaña que, cuando la recarga
+    automática de iniciarPolling() vea la edición lista, entre directo al
+    editor en vez de quedarse en el detalle (Editor capa 4b, tarea 9)."""
     if not _mismo_origen():
         return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
     entry = creative_flow.cargar(cliente).get(cf_id)
@@ -211,6 +229,93 @@ def desde_clon(cliente, cf_id):
     encolado = trabajos.encolar(tareas_edicion.job_id_desde_clon(cliente, cf_id), "edicion_desde_clon",
                                 {"cliente": cliente, "cf_id": cf_id}, duracion_estimada=40,
                                 etapas=[("Preparando el video", 100)], cliente=cliente, max_intentos=2)
-    flash("Preparando el video para el editor… en unos segundos aparece «Abrir en el editor»." if encolado
+    flash("Preparando el video para el editor… se abre solo en cuanto esté listo." if encolado
           else "Ya se estaba preparando ese video.", "ok")
-    return redirect(volver + f"#final?cf={cf_id}")
+    return redirect(volver + f"#final?cf={cf_id}&abrir=editor")
+
+
+# --- Biblioteca del editor (capa 4b, Task 1): subir, listar y preparar piezas ---
+
+@bp.post("/materiales/subir", endpoint="subir")
+def subir_material(cliente):
+    if not _mismo_origen():
+        return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return jsonify({"error": "Elige un archivo."}), 400
+    try:
+        material = biblioteca.subir(cliente, archivo)
+    except biblioteca.SubidaInvalida as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"material": material})
+
+
+@bp.post("/materiales/<material_id>/borrar", endpoint="borrar_material")
+def borrar_material(cliente, material_id):
+    """«Borrar» en la biblioteca (capa 4c, gratis): lo que la persona subió o
+    un video de Crear preparado, solo si ninguna edición ni versión lo usa
+    (409 con el nombre de la que lo usa). La decisión es de
+    `biblioteca.borrar`; aquí solo se traduce a HTTP."""
+    if not _mismo_origen():
+        return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
+    if not str(material_id).isdigit():
+        return jsonify({"error": "Ese archivo ya no existe."}), 404
+    try:
+        borrado = biblioteca.borrar(cliente, int(material_id))
+    except biblioteca.NoSePuedeBorrar as e:
+        return jsonify({"error": str(e)}), e.codigo
+    except Exception:
+        return jsonify({"error": "No se pudo borrar el archivo. Vuelve a intentar."}), 502
+    return jsonify({"ok": True, "material_id": borrado["id"]})
+
+
+@bp.get("/biblioteca", endpoint="biblioteca")
+def ver_biblioteca(cliente):
+    return jsonify(biblioteca.listar(cliente))
+
+
+@bp.post("/biblioteca/pieza/<cf_id>", endpoint="agregar_pieza")
+def agregar_pieza(cliente, cf_id):
+    """Añade una pieza de Crear a la biblioteca (gratis): si ya es un
+    material, lo devuelve tal cual; si no, encola su preparación
+    (`material_de_pieza`) y responde 202 mientras tanto."""
+    if not _mismo_origen():
+        return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
+    if not tareas_edicion._CF_RE.fullmatch(cf_id or ""):
+        return jsonify({"error": "No existe esa pieza."}), 404
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry or entry.get("estado") != "video_listo" or (entry.get("tipo") or "video") != "video":
+        return jsonify({"error": "No existe esa pieza."}), 404
+    existente = biblioteca.material_de_pieza(cliente, cf_id)
+    if existente:
+        return jsonify({"material": vista_previa.material_para(existente)})
+    trabajos.encolar(tareas_edicion.job_id_material_de_pieza(cliente, cf_id), "material_de_pieza",
+                     {"cliente": cliente, "cf_id": cf_id}, duracion_estimada=30, cliente=cliente, max_intentos=2)
+    return jsonify({"preparando": True}), 202
+
+
+def _ids_de(texto):
+    return [int(p.strip()) for p in (texto or "").split(",") if p.strip().isdigit()]
+
+
+@bp.get("/materiales", endpoint="materiales_por_id")
+def materiales_por_id(cliente):
+    """`?ids=1,2,3` -> {materiales: {id: material_para(m)}} solo de este
+    proyecto (un id ajeno o inexistente simplemente no aparece).
+
+    `&preparar=1,2`: de esos ids (de este proyecto), encola lo que todavía
+    falta — la copia liviana de un video, los picos de un audio (una canción
+    de Mi música nunca los tuvo) — con la misma tarea gratis e idempotente que
+    `ver` (`vista_previa.encolar_proxies`). La biblioteca lo pide UNA vez por
+    material, al empezar a esperarlo; las preguntas siguientes solo leen (un
+    archivo que falla no se vuelve a encolar cada 3 s)."""
+    out = {}
+    for mid in _ids_de(request.args.get("ids")):
+        m = materiales.obtener(cliente, mid)
+        if m:
+            out[str(mid)] = vista_previa.material_para(m)
+    preparar = {str(mid) for mid in _ids_de(request.args.get("preparar"))}
+    if preparar:
+        vista_previa.encolar_proxies(cliente, vista_previa.pendientes(
+            {int(k): v for k, v in out.items() if k in preparar}))
+    return jsonify({"materiales": out})

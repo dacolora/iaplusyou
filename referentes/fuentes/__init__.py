@@ -9,15 +9,22 @@ mismo, no una instancia. `llaves_faltantes` solo mira
 import importlib
 import os
 
+from idiomas import N_
+
 REGISTRO = {
     "atria": "referentes.fuentes.atria",
     "apify": "referentes.fuentes.apify_adlibrary",
+    "trendtrack": "referentes.fuentes.trendtrack",
 }
-NOMBRES = {"atria": "Atria (Ad Library de Meta)", "apify": "Apify (Ad Library de Meta)"}
+# Se muestran con |traducir / idiomas.traducir (la clave no cambia).
+NOMBRES = {"atria": N_("Atria (Ad Library de Meta)"), "apify": N_("Apify (Ad Library de Meta)"),
+           "trendtrack": N_("TrendTrack (anuncios de Meta)")}
 LLAVES = {
     "atria": ("ATRIA_API_KEY",),
     "apify": ("APIFY_TOKEN",),
+    "trendtrack": ("TRENDTRACK_API_KEY",),
 }
+MODOS_POR_DEFECTO = ("palabra", "marca")
 
 
 def tipos():
@@ -27,6 +34,12 @@ def tipos():
 def por_tipo(tipo):
     """-> el módulo de la fuente. KeyError si el tipo no está registrado."""
     return importlib.import_module(REGISTRO[tipo])
+
+
+def modos(tipo):
+    """Modos de búsqueda que admite la fuente: `("palabra", "marca")` salvo que el
+    módulo declare `MODOS` (TrendTrack solo busca por palabra clave)."""
+    return tuple(getattr(por_tipo(tipo), "MODOS", MODOS_POR_DEFECTO))
 
 
 def llaves_faltantes(tipo):

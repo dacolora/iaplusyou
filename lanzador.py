@@ -17,6 +17,7 @@ import meta_errores
 import notificaciones
 import triple_whale
 import triple_whale_tiendas
+from triple_whale import datos as tw_datos, sync as tw_sync
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
 from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
@@ -129,6 +130,10 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
         if video_guardado:
             videos_por_pieza.setdefault(pz["pieza_id"], video_guardado)
     creadas = 0
+    # Triple Whale conectado: cada creative lleva sus parámetros de rastreo
+    # (tw_source / tw_adid). Se fijan al crear: cambiarlos después manda el
+    # anuncio otra vez a revisión.
+    kw_tags = triple_whale_tiendas.kw_url_tags(cliente)
     for pz in ex["piezas"]:
         if pz["meta_ad_id"]:
             continue
@@ -139,7 +144,8 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
                 # Imagen: ni subida de video ni miniatura; el creative lleva la URL pública.
                 creative_id = meta_creative.crear_creative_imagen(
                     f"{pz['nombre']} — {pz['pais']}", pz["url_imagen"], ex["nombre"],
-                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
+                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"),
+                    **kw_tags)["id"]
             else:
                 video_id = (pz.get("extra") or {}).get("meta_video_id")
                 if not video_id:
@@ -151,7 +157,8 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
                 mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
                 creative_id = meta_creative.crear_creative_video(
                     f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
-                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
+                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"),
+                    **kw_tags)["id"]
             experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
         ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adsets[pz["pais"]], creative_id)["id"]
         experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",
@@ -540,57 +547,47 @@ def _avisar_moneda_no_comparable(cliente, ex, ajenas):
     experimentos.actualizar_extra(cliente, ex["id"], lambda extra: {**extra, "aviso_moneda": monedas})
 
 
-def _obtener_metricas_triple_whale(cliente, ex, pz):
-    """Obtiene métricas de Triple Whale para una pieza y arma un snapshot
-    ACUMULADO (mismo contrato que el resto del pipeline: metrica_snapshot
-    guarda totales de por vida, tablero.py calcula deltas restando dos
-    snapshots). `triple_whale.metricas_por_anuncio` entrega una fila por día
-    para el rango pedido, así que se suman desde que se creó la pieza hasta
-    hoy, filtrando por el `ad_id` de esta pieza -- ctr/cpc/cpm/thruplay_rate/
-    roas/cpa se calculan sobre esos totales (nunca promediando los
-    pixel_roas/pixel_cpa por día que devuelve la API, que son proporciones,
-    no sumables), con la misma fórmula que ya usa el camino de Meta
-    (meta_ads/insights.py: ctr en %, thruplay_rate en fracción 0-1)."""
-    config_tw = triple_whale_tiendas.obtener(cliente)
-    if not config_tw or not pz.get("meta_ad_id"):
-        return None
-
+def _sincronizar_triple_whale(cliente, ex):
+    """Antes de leer ventas de Triple Whale, pone al día su copia
+    (`triple_whale.sync`, solo si tiene más de 30 min). Si Triple Whale
+    falla, queda un evento y se usa lo que ya estaba copiado."""
     try:
-        llave = triple_whale_tiendas.obtener_llave(cliente)
-        if not llave:
-            return None
-
-        filas = triple_whale.metricas_por_anuncio(
-            llave_api=llave, shop_id=config_tw["dominio_tienda"],
-            fecha_desde=(pz.get("creado_en") or db.ahora())[:10], fecha_hasta=db.ahora()[:10],
-            modelo=config_tw["modelo_atribucion"], ventana=config_tw["ventana_atribucion"])
-
-        propias = [f for f in (filas or []) if str(f.get("ad_id")) == str(pz["meta_ad_id"])]
-        if not propias:
-            return None
-
-        impresiones = sum(int(f.get("impressions") or 0) for f in propias)
-        clics = sum(int(f.get("clicks") or 0) for f in propias)
-        thruplay = sum(int(f.get("thruplays") or 0) for f in propias)
-        gasto = sum(float(f.get("spend") or 0) for f in propias)
-        compras = sum(int(f.get("conversions") or 0) for f in propias)
-        ingresos = sum(float(f.get("conversion_value") or 0) for f in propias)
-        return {
-            "impresiones": impresiones, "clics": clics, "thruplay": thruplay,
-            "ctr": round(clics / impresiones * 100, 4) if impresiones else 0.0,
-            "cpc": round(gasto / clics, 4) if clics else 0.0,
-            "cpm": round(gasto / impresiones * 1000, 4) if impresiones else 0.0,
-            "thruplay_rate": round(thruplay / impresiones, 4) if impresiones else 0.0,
-            "gasto": round(gasto, 2), "compras": compras, "ingresos": round(ingresos, 2),
-            "roas": round(ingresos / gasto, 4) if gasto else 0.0,
-            "cpa": round(gasto / compras, 2) if compras else 0.0,
-            "fuente_ventas": "triple_whale" if compras > 0 else "ninguna",
-        }
-    except Exception as e:
+        tw_sync.sincronizar_si_hace_falta(cliente)
+    except Exception as e:  # noqa: BLE001 — la copia vieja sigue sirviendo
         experimentos.registrar_evento(
             cliente, ex["id"], "error",
-            gettext("Error al traer métricas de Triple Whale: %(error)s", error=cola.sin_token(str(e))), ep_id=pz["id"])
-        return None
+            gettext("Error al traer métricas de Triple Whale: %(error)s", error=cola.sin_token(str(e))))
+
+
+def _mezclar_ventas_triple_whale(cliente, ex, pz, snap, config_tw):
+    """Atribución por Triple Whale (spec 2026-09-28 §7): el tráfico, el gasto
+    y el estado del anuncio siguen saliendo de Meta (como `tienda`); las
+    compras y los ingresos, de lo que atribuyó el Triple Pixel a ese anuncio
+    desde que se creó la pieza, con el modelo y la ventana del proyecto
+    (`tw_anuncio_dia`, sumado: snapshot ACUMULADO, igual que Meta). Antes se
+    tomaban las `conversions` de ads_table, que son las que reporta Meta, no
+    las del Pixel. Si Triple Whale no tiene ese anuncio o su Pixel no
+    respondió para esos días, el snapshot queda con lo de Meta; si respondió
+    sin pedidos para él, las compras son 0 (eso también es un dato). Los
+    ingresos vienen en la moneda de la conexión: si no es la de la cuenta
+    publicitaria, el ROAS se deja en 0 y queda el CPA (misma regla que la
+    tienda). Devuelve el set de monedas ajenas."""
+    if not config_tw or not pz.get("meta_ad_id"):
+        return set()
+    tot = tw_datos.totales_anuncio(cliente, triple_whale.CANAL_META, pz["meta_ad_id"],
+                                   (pz.get("creado_en") or db.ahora())[:10])
+    if not tot or not tot["con_pixel"]:
+        return set()
+    gasto = float(snap.get("gasto") or 0)
+    compras, ingresos = int(round(tot["pedidos"])), round(float(tot["ingresos"]), 2)
+    moneda_tw = config_tw.get("moneda")
+    ajenas = {moneda_tw} if moneda_tw and ex.get("moneda") and moneda_tw != ex["moneda"] else set()
+    snap["compras"] = compras
+    snap["ingresos"] = ingresos
+    snap["roas"] = round(ingresos / gasto, 4) if gasto and not ajenas else 0.0
+    snap["cpa"] = round(gasto / compras, 2) if compras else 0.0
+    snap["fuente_ventas"] = "triple_whale" if compras > 0 else "ninguna"
+    return ajenas
 
 
 def refrescar(cliente, experimento_id):
@@ -601,29 +598,23 @@ def refrescar(cliente, experimento_id):
 
     rechazados = []
     monedas_ajenas = set()
+    # Triple Whale: la copia se pone al día FUERA del lock de Meta (son
+    # llamadas a otra API) y una sola vez por experimento, no por pieza.
+    config_tw = triple_whale_tiendas.obtener(cliente) if ex.get("atribucion") == "triple_whale" else None
+    if config_tw:
+        _sincronizar_triple_whale(cliente, ex)
 
     def _correr(_creds):
         n = 0
         for pz in piezas:
             try:
-                # Usar Triple Whale si está configurado como atribución
-                if ex.get("atribucion") == "triple_whale":
-                    snap = _obtener_metricas_triple_whale(cliente, ex, pz)
-                    if snap:
-                        # Triple Whale ya trae venta atribuida real -- a diferencia
-                        # del camino de abajo, nunca necesita mezclarse con la
-                        # tienda (esa comparación con "tienda" era código muerto:
-                        # esta rama solo corre cuando atribucion == "triple_whale").
-                        experimentos.snapshot(pz["id"], snap)
-                        n += 1
-                        continue
-
-                # Fallback: usar Meta Pixel (comportamiento actual)
                 r = meta_insights.obtener_resultados(pz["meta_ad_id"], objetivo=ex["objetivo_meta"])
                 snap = {dest: r.get(src) for src, dest in _SNAP_DESDE_INSIGHTS.items() if src in r}
                 snap["fuente_ventas"] = "meta" if (r.get("compras") or 0) > 0 else "ninguna"
                 if ex["atribucion"] == "tienda":
                     monedas_ajenas.update(_mezclar_ventas_tienda(cliente, ex, pz, snap))
+                elif ex["atribucion"] == "triple_whale":
+                    monedas_ajenas.update(_mezclar_ventas_triple_whale(cliente, ex, pz, snap, config_tw))
                 for k in ("resultado_nombre", "resultado", "estado_meta_texto", "motivo_rechazo"):
                     snap[k] = r.get(k)
                 experimentos.snapshot(pz["id"], snap)

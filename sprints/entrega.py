@@ -9,7 +9,9 @@ import zipfile
 from datetime import datetime
 
 import requests
+from flask_babel import gettext
 
+from idiomas import N_
 from sprints import datos
 from storage import r2_uploader
 
@@ -19,7 +21,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def enlaces(cliente, sprint_id):
     sp = datos.sprint(cliente, sprint_id, con_eventos=False)
     if not sp:
-        raise datos.ErrorDatos("Ese sprint no existe.")
+        raise datos.ErrorDatos(gettext("Ese sprint no existe."))
     salida = []
     for c in sp["campanas"]:
         for p in c["piezas"]:
@@ -70,6 +72,7 @@ def empaquetar(cliente, sprint_id, descargar=None):
     info = {"url": url, "n": len(lista), "creado_en": datetime.now().isoformat(timespec="seconds")}
     extra = datos.actualizar_extra_sprint(cliente, sprint_id, lambda e: {**e, "zip": info})
     if extra is None:
-        raise datos.ErrorDatos("Ese sprint no existe.")
-    datos.registrar_evento(cliente, sprint_id, "zip_listo", f"Zip de entrega con {len(lista)} pieza(s)", info)
+        raise datos.ErrorDatos(gettext("Ese sprint no existe."))
+    mensaje = datos.texto_guardado(cliente, N_("Zip de entrega con %(n)s pieza(s)"), n=len(lista))
+    datos.registrar_evento(cliente, sprint_id, "zip_listo", mensaje, info)
     return info

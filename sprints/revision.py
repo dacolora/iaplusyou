@@ -6,7 +6,10 @@ sesión de la cola de publicación (estado_videos.json). Cerrar deja el sprint
 """
 from datetime import date
 
+from flask_babel import gettext
+
 import estado as estado_videos
+from idiomas import N_
 from sprints import datos, estado
 
 TERMINADAS = ("listo", "degradada")
@@ -15,7 +18,7 @@ TERMINADAS = ("listo", "degradada")
 def _pieza(cliente, cp_id):
     i = datos.idea(cliente, cp_id)
     if not i or not i.get("cf_id"):
-        raise datos.ErrorDatos("Esa pieza no tiene una sesión generada.")
+        raise datos.ErrorDatos(gettext("Esa pieza no tiene una sesión generada."))
     return i
 
 
@@ -24,7 +27,8 @@ def aprobar(cliente, cp_id):
     if i.get("estado") not in TERMINADAS:
         return False
     datos.actualizar_idea(cliente, cp_id, revision="aprobada", revision_motivo=None)
-    datos.registrar_evento(cliente, i["sprint_id"], "pieza_aprobada", f"Aprobada «{i['titulo']}»", {"cp_id": cp_id},
+    mensaje = datos.texto_guardado(cliente, N_("Aprobada «%(titulo)s»"), titulo=i['titulo'])
+    datos.registrar_evento(cliente, i["sprint_id"], "pieza_aprobada", mensaje, {"cp_id": cp_id},
                            campana_id=i["campana_id"])
     estado.recalcular(cliente, i["sprint_id"])
     return True
@@ -33,7 +37,7 @@ def aprobar(cliente, cp_id):
 def rechazar(cliente, cp_id, motivo):
     motivo = (motivo or "").strip()
     if not motivo:
-        raise datos.ErrorDatos("Escribe el motivo del rechazo.")
+        raise datos.ErrorDatos(gettext("Escribe el motivo del rechazo."))
     i = _pieza(cliente, cp_id)
     if i.get("estado") not in TERMINADAS:
         return False
@@ -44,15 +48,18 @@ def rechazar(cliente, cp_id, motivo):
     # plataforma) y solo se marca en el evento.
     cola = estado_videos.cargar(cliente)
     entry = cola.get(i["cf_id"])
-    mensaje = f"Rechazada «{i['titulo']}»: {motivo}"
     evento_datos = {"cp_id": cp_id, "motivo": motivo}
-    if entry is not None:
-        if entry.get("estado") == "pendiente":
-            cola.pop(i["cf_id"], None)
-            estado_videos.guardar(cliente, cola)
-        else:
-            evento_datos["ya_publicada"] = True
-            mensaje += " (ya estaba publicada; se conserva el registro)"
+    if entry is not None and entry.get("estado") != "pendiente":
+        evento_datos["ya_publicada"] = True
+        mensaje = datos.texto_guardado(
+            cliente, N_("Rechazada «%(titulo)s»: %(motivo)s (ya estaba publicada; se conserva el registro)"),
+            titulo=i['titulo'], motivo=motivo)
+    else:
+        if entry is not None:
+            # Con candado: el worker agrega videos a este mismo archivo.
+            estado_videos.modificar(cliente, lambda e: {k: v for k, v in e.items() if k != i["cf_id"]})
+        mensaje = datos.texto_guardado(cliente, N_("Rechazada «%(titulo)s»: %(motivo)s"),
+                                       titulo=i['titulo'], motivo=motivo)
     datos.registrar_evento(cliente, i["sprint_id"], "pieza_rechazada", mensaje, evento_datos,
                            campana_id=i["campana_id"])
     estado.recalcular(cliente, i["sprint_id"])
@@ -64,7 +71,7 @@ def aprobar_pasaron_qa(cliente, sprint_id, campana_id=None):
     `campana_id`, solo las de esa campaña (pestaña Piezas del panel)."""
     sp = datos.sprint(cliente, sprint_id, con_eventos=False)
     if not sp:
-        raise datos.ErrorDatos("Ese sprint no existe.")
+        raise datos.ErrorDatos(gettext("Ese sprint no existe."))
     n = 0
     for c in sp["campanas"]:
         if campana_id is not None and c["id"] != campana_id:
@@ -79,7 +86,7 @@ def aprobar_pasaron_qa(cliente, sprint_id, campana_id=None):
 def resumen(cliente, sprint_id):
     sp = datos.sprint(cliente, sprint_id, con_eventos=False)
     if not sp:
-        raise datos.ErrorDatos("Ese sprint no existe.")
+        raise datos.ErrorDatos(gettext("Ese sprint no existe."))
     piezas = [p for c in sp["campanas"] for p in c["piezas"]]
     terminadas = [p for p in piezas if p.get("estado") in TERMINADAS]
     try:
@@ -101,13 +108,15 @@ def resumen(cliente, sprint_id):
 def cerrar(cliente, sprint_id):
     sp = estado.recalcular(cliente, sprint_id)
     if not sp:
-        raise datos.ErrorDatos("Ese sprint no existe.")
+        raise datos.ErrorDatos(gettext("Ese sprint no existe."))
     if sp["estado"] != "revision":
-        raise datos.ErrorDatos("Solo se cierra un sprint que está en revisión.")
+        raise datos.ErrorDatos(gettext("Solo se cierra un sprint que está en revisión."))
     r = resumen(cliente, sprint_id)
     datos.actualizar_sprint(cliente, sprint_id, estado="completado")
-    datos.registrar_evento(cliente, sprint_id, "sprint_cerrado",
-                           f"Sprint cerrado: {r['aprobadas']} aprobadas, {r['rechazadas']} rechazadas, USD {r['costo_usd']:.2f}", r)
+    mensaje = datos.texto_guardado(
+        cliente, N_("Sprint cerrado: %(aprobadas)s aprobadas, %(rechazadas)s rechazadas, USD %(usd)s"),
+        aprobadas=r['aprobadas'], rechazadas=r['rechazadas'], usd=f"{r['costo_usd']:.2f}")
+    datos.registrar_evento(cliente, sprint_id, "sprint_cerrado", mensaje, r)
     return r
 
 
@@ -116,6 +125,7 @@ def reabrir(cliente, sprint_id):
     if not sp or sp["estado"] != "completado":
         return False
     datos.actualizar_sprint(cliente, sprint_id, estado="revision")
-    datos.registrar_evento(cliente, sprint_id, "sprint_reabierto", "Sprint reabierto a revisión", {})
+    mensaje = datos.texto_guardado(cliente, N_("Sprint reabierto a revisión"))
+    datos.registrar_evento(cliente, sprint_id, "sprint_reabierto", mensaje, {})
     estado.recalcular(cliente, sprint_id)
     return True

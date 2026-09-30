@@ -8,8 +8,9 @@ MIN_TEXTO caracteres, cae al hash del texto como `fuente_id`, valida la url,
 castea puntuación y fecha. Nunca guarda el autor.
 
 `ErrorFuente` es el único error que una fuente deja escapar hacia el
-dashboard o el worker: `.usuario` (== `str(e)`) es un mensaje en español
-apto para mostrar tal cual y NUNCA lleva llaves ni HTML ajeno.
+dashboard o el worker: `.usuario` (== `str(e)`) es un mensaje apto para
+mostrar tal cual (armado con gettext: idioma de la persona en una ruta, del
+proyecto en el worker) y NUNCA lleva llaves ni HTML ajeno.
 """
 import hashlib
 import re
@@ -26,7 +27,7 @@ _RE_URL_HTTP = re.compile(r"^https?://", re.IGNORECASE)
 
 
 class ErrorFuente(Exception):
-    """Error mostrable al usuario. `usuario` es el mensaje en español (sin
+    """Error mostrable al usuario. `usuario` es el mensaje ya traducido (sin
     llaves, sin HTML) y `str(e)` devuelve exactamente lo mismo."""
 
     def __init__(self, usuario):

@@ -17,7 +17,9 @@ ARCHIVOS_FASE3 = [
 ]
 ARCHIVOS_FASE4 = ["generador_prompts.py", "importador.py", "organico.py", "mapa_corporal.py"]
 ARCHIVOS_FASE5 = ["sprints/analisis.py", "sprints/ideas.py", "sprints/qa.py", "sprints/sugerencias.py",
-                  "doctrina/revisor.py", "doctrina/pedidos.py", "doctrina/diagnostico.py"]
+                  "doctrina/revisor.py", "doctrina/pedidos.py", "doctrina/diagnostico.py",
+                  "referentes/sugerir.py", "referentes/recrear.py", "nicho/avatares.py",
+                  "referentes/clasificar.py", "referentes/copycoders.py"]
 
 
 def _offsets_de_linea(texto):

@@ -3,7 +3,24 @@
 // versión que devuelve el servidor (CAS). Un cambio que llega mientras se
 // guarda sale en el siguiente PUT. 409 = otra pestaña guardó antes: queda en
 // «conflicto» y no vuelve a guardar hasta recargar. Sin red o con 400 queda
-// en «error» y reintenta con el próximo cambio.
+// en «error» y reintenta con el próximo cambio. El servidor manda en `error`
+// una frase para la persona y, si hay, en `detalle` lo técnico (la ruta del
+// validador): queda en `this.detalle` y le llega a `alCambiar` como tercer
+// argumento (la página lo pone en el `title`, capa 4c).
+export const MENSAJE_SESION = "Tu sesión terminó: recarga la página e inicia sesión.";
+
+// Capa 4c: ¿la respuesta es la página de entrar? Con la sesión vencida el
+// servidor redirige a /login y `fetch` sigue la redirección: llega marcada
+// `redirected` con la URL de /login (un PUT, además, como 405), o como una
+// página HTML con 200. Nada más: un 5xx con HTML (un 500 de Flask, un 502/504
+// de nginx durante un despliegue) NO es la sesión — decir «recarga» ahí haría
+// perder el cambio pendiente. Sin cabeceras (las pruebas) no se asume nada.
+export function sesionTerminada(r) {
+  if (r?.redirected && /\/login(?:[/?#]|$)/.test(String(r.url ?? ""))) return true;
+  const tipo = r?.headers?.get?.("content-type") ?? "";
+  return r?.status === 200 && /text\/html/i.test(tipo);
+}
+
 function enviarPorDefecto(url, cuerpo) {
   return fetch(url, {
     method: "PUT",
@@ -18,15 +35,17 @@ export class Guardado {
     Object.assign(this, { url, versionN, enviar, programar, cancelar, esperaMs, alCambiar });
     this.estado = "guardado";
     this.mensaje = "";
+    this.detalle = "";
     this.pendiente = null;
     this.enVuelo = null;
     this.timer = null;
   }
 
-  _poner(estado, mensaje = "") {
+  _poner(estado, mensaje = "", detalle = "") {
     this.estado = estado;
     this.mensaje = mensaje;
-    this.alCambiar(estado, mensaje);
+    this.detalle = detalle;
+    this.alCambiar(estado, mensaje, detalle);
   }
 
   get sinGuardar() {
@@ -53,6 +72,12 @@ export class Guardado {
     this.enVuelo = (async () => {
       try {
         const r = await this.enviar(this.url, { documento: doc, version_n: this.versionN });
+        if (sesionTerminada(r)) {
+          // nada se guardó: el cambio sigue pendiente (y el aviso al salir lo protege)
+          this.pendiente = this.pendiente ?? doc;
+          this._poner("error", MENSAJE_SESION);
+          return;
+        }
         const cuerpo = await r.json().catch(() => ({}));
         if (r.status === 200) {
           this.versionN = cuerpo.version_n;
@@ -61,7 +86,10 @@ export class Guardado {
           this._poner("conflicto", cuerpo.error || "La edición cambió en otra pestaña; recarga para seguir.");
         } else {
           this.pendiente = this.pendiente ?? doc;
-          this._poner("error", cuerpo.error || `No se pudo guardar (error ${r.status}).`);
+          const porDefecto = r.status >= 500
+            ? `el servidor falló (error ${r.status}): se guarda con el próximo cambio.`
+            : `No se pudo guardar (error ${r.status}).`;
+          this._poner("error", cuerpo.error || porDefecto, cuerpo.detalle || "");
         }
       } catch {
         this.pendiente = this.pendiente ?? doc;

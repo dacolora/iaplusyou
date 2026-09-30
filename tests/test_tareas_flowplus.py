@@ -1,6 +1,13 @@
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _estado_en_tmp(tmp_path, monkeypatch):
+    """estado_videos.json (y su candado) en una carpeta temporal, nunca en clientes/ del repo."""
+    import estado
+    monkeypatch.setattr(estado, "BASE_DIR", str(tmp_path))
+
+
 class _Resp:
     """Respuesta falsa de requests.get."""
     content = b"00"
@@ -170,7 +177,7 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
 
     visto = {}
 
-    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None, con_sonido=True, calidad="final"):
+    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None, con_sonido=True, calidad="final", **_):
         visto.update(refs=referencias, videos=videos, ar=aspect_ratio)
         return "https://prov/v.mp4"
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
@@ -597,3 +604,122 @@ def test_avisar_fase_reporta_el_puesto_en_cola_en_el_idioma_del_proyecto(monkeyp
     idiomas.guardar_de_proyecto("acme", "es")
     avisar({"fase": "IN_QUEUE", "queue_position": 3})
     assert reportado["detalle"] == "en cola (puesto 3)"
+
+
+# --- Incidente 2026-09-28: tiempo agotado, errores en palabras y recuperar ---
+
+def _sesion_video(cf, monkeypatch, tmp_path, **campos):
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "camina", 8, "", "A", referencias_urls=["https://x/1.png"])
+    base = dict(estado="video_generando", tipo="video", modelo="wan3", prompt_relleno="P", aspect_ratio="9:16")
+    base.update(campos)
+    cf.actualizar("acme", cid, **base)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    return cid
+
+
+def _fakes_de_cierre(monkeypatch):
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final": {"credits": None, "usd": 0.8})
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.estado_mod, "cargar", lambda c: {})
+    monkeypatch.setattr(fp.estado_mod, "guardar", lambda c, d: None)
+
+
+def test_registra_recuperar(base_temporal):
+    import tareas
+    import tareas.flowplus  # noqa: F401
+    assert tareas.REGISTRO["flowplus_recuperar"] is tareas.flowplus.recuperar_video
+    assert tareas.AL_INTERRUMPIR["flowplus_recuperar"] is tareas.flowplus.interrumpida
+
+
+def test_el_tiempo_agotado_guarda_la_prediccion_y_sigue_esperando(base_temporal, monkeypatch, tmp_path):
+    """Desde el carril de Crear (spec 2026-09-28-crear-sin-cola) no hay que tocar
+    «Recuperar»: la sesión sigue generando y la retoma flowplus_recuperar."""
+    import tareas
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path)
+
+    def _gen(modelo, prompt, refs, duracion, aspect_ratio=None, on_progreso=None, **kw):
+        on_progreso({"fase": "created", "elapsed": 0, "prediction_id": "pred-1"})
+        on_progreso({"fase": "processing", "elapsed": 30, "prediction_id": "pred-1"})
+        raise wc.EsperaAgotada("Wan 3.0", "pred-1", 1200)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    r = fp.ejecutar_video({"id": 7, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    assert isinstance(r, tareas.Continuar) and r.tipo == "flowplus_recuperar"
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "video_generando" and not e.get("error")
+    assert e["prediccion"]["id"] == "pred-1" and e["prediccion"]["modelo"] == "wan3" and e["prediccion"]["en"]
+
+
+def test_un_rechazo_del_proveedor_se_explica_y_no_deja_nada_que_recuperar(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path, prediccion={"id": "vieja", "modelo": "wan3", "en": "2026-09-28T10:00:00"})
+
+    def _gen(modelo, prompt, refs, duracion, aspect_ratio=None, on_progreso=None, **kw):
+        on_progreso({"fase": "created", "elapsed": 0, "prediction_id": "pred-2"})
+        raise wc.ErrorProveedor("Kling O3 Pro", "failed", "Content flagged as potentially sensitive. Please try different prompts or images.",
+                                codigo=1200, prediction_id="pred-2")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 8, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "error" and e["prediccion"] is None
+    assert "sensible" in e["error"] and "Content flagged" in e["error"] and "no se cobr" in e["error"].lower()
+    assert "{'id'" not in e["error"]
+
+
+def test_recuperar_video_termina_la_pieza_sin_pagar_de_nuevo(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path, estado="error", error="se agotó",
+                        prediccion={"id": "pred-3", "modelo": "wan3", "en": "2026-09-28T10:00:00"})
+    _fakes_de_cierre(monkeypatch)
+    consultas = []
+    monkeypatch.setattr(wc, "poll_hasta_listo", lambda pid, nombre, **kw: consultas.append((pid, nombre, kw)) or
+                        {"id": pid, "status": "completed", "outputs": ["https://prov/v.mp4"]})
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: pytest.fail("recuperar no genera de nuevo"))
+
+    msg = fp.recuperar_video({"id": 9, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "video_listo" and e["video_url"] == f"https://r2/clientes/acme/videos/{cid}.mp4"
+    assert e["usd"] == 0.8 and e["prediccion"] is None and e["error"] is None
+    assert consultas[0][0] == "pred-3" and consultas[0][2]["timeout_seconds"] == fp.TIEMPO_RECUPERAR
+    assert "listo" in msg
+    filas = [g for g in gastos.historial("acme") if g["referencia"] == f"video:{cid}:t9"]
+    assert len(filas) == 1 and filas[0]["usd"] == 0.8 and "recuperado" in (filas[0]["detalle"] or "")
+
+
+def test_recuperar_video_si_el_proveedor_sigue_trabajando_deja_el_boton(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path, estado="error", error="se agotó",
+                        prediccion={"id": "pred-4", "modelo": "wan3", "en": "2026-09-28T10:00:00"})
+
+    def _poll(pid, nombre, **kw):
+        raise wc.EsperaAgotada(nombre, pid, kw.get("timeout_seconds"))
+    monkeypatch.setattr(wc, "poll_hasta_listo", _poll)
+    msg = fp.recuperar_video({"id": 10, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "error" and e["prediccion"]["id"] == "pred-4"
+    assert "pred-4" in e["error"] and "Recuperar" in e["error"]
+    assert "sigue trabajando" in msg
+
+
+def test_recuperar_video_sin_prediccion_o_descartada_termina_limpio(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path, estado="error", error="x")
+    msg = fp.recuperar_video({"id": 11, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    assert "nada que recuperar" in msg.lower() and cf.cargar("acme")[cid]["estado"] == "error"
+    msg = fp.recuperar_video({"id": 12, "payload": {"cliente": "acme", "cf_id": "cf_no_existe"}, "job_id": "j"})
+    assert "descart" in msg.lower()

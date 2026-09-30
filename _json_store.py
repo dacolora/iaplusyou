@@ -6,6 +6,7 @@ con indent=2, ensure_ascii=False, creando el directorio si hace falta).
 """
 import json
 import os
+import threading
 
 
 def cargar(path, default=None):
@@ -25,7 +26,9 @@ def guardar(path, data):
     lector ve nunca un archivo vacío o cortado, aunque haya varios hilos
     (trabajos en segundo plano) guardando el mismo estado."""
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    tmp = f"{path}.{os.getpid()}.tmp"
+    # Un temporal por proceso Y por hilo: el worker corre varias generaciones a la vez
+    # (carril de Crear) y dos hilos con el mismo .tmp se pisaban.
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     os.replace(tmp, path)

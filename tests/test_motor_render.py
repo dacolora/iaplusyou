@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import subprocess
@@ -86,13 +87,64 @@ def test_render_por_tramos_concatena_sin_recodificar(tmp_path, medios, monkeypat
     assert abs(float(streams["audio"]["duration"]) - 7.0) <= 0.3
 
 
+@pytest.mark.slow
+def test_muchos_cortes_se_renderizan_por_tramos_con_su_audio(tmp_path, medios, monkeypatch):
+    # Incidente 2026-09-30: 32 cortes = 32 entradas de ffmpeg y ~3 GB de RAM.
+    # Con el presupuesto de videos, 10 cortes (fundidos y cámara lenta
+    # incluidos) salen por tramos y la unión conserva duración y audio.
+    from final_edition.motor import tramos
+    monkeypatch.setattr(tramos, "PRESUPUESTO_VIDEOS", 4)
+    doc = _doc()
+    base = doc["pistas"][0]["clips"][0]
+    clips = []
+    for i in range(10):
+        c = copy.deepcopy(base)
+        vel = 0.75 if i % 3 == 1 else 1.0
+        desde = 500 * (i % 6)
+        c.update(id=f"v{i}", inicio_ms=i * 700, duracion_ms=700, velocidad=vel,
+                 recorte={"desde_ms": desde, "hasta_ms": desde + round(700 * vel)},
+                 transicion={"tipo": "fundido", "duracion_ms": 200} if i % 2 == 0 and i < 9 else None)
+        clips.append(c)
+    doc["pistas"][0]["clips"] = clips
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert out["tramos"] >= 3
+    assert abs(dur - 7.0) <= 0.3 and "audio" in streams
+    assert abs(float(streams["audio"]["duration"]) - 7.0) <= 0.3
+    # la voz y la música cruzan todas las uniones sin un solo hueco
+    assert [t for t in _silencios(out["archivo"]) if t < 6.9] == []
+
+
+def _silencios(ruta, umbral_db=-45, minimo_s=0.005):
+    """Inicios (s) de los silencios de al menos `minimo_s` en el audio."""
+    err = subprocess.run([cortes.FFMPEG, "-hide_banner", "-nostats", "-i", ruta, "-af",
+                          f"silencedetect=noise={umbral_db}dB:d={minimo_s}", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    return [float(l.split("silence_start:")[1]) for l in err.splitlines() if "silence_start:" in l]
+
+
+@pytest.mark.slow
+def test_la_union_de_tramos_no_deja_huecos_en_el_audio(tmp_path, medios, monkeypatch):
+    # El AAC de cada tramo trae ~21 ms de relleno al principio; unido con
+    # `-c copy` sonaba como un corte en cada frontera. La voz y la música
+    # suenan de punta a punta (el final se apaga con su fundido de salida,
+    # por eso no cuenta): no debe haber ni un silencio antes.
+    from final_edition.motor import tramos
+    monkeypatch.setattr(tramos, "partir", lambda doc, presupuesto=None: [(0, 3500), (3500, 7000)])
+    doc = _doc()
+    doc["pistas"][0]["clips"][0]["transicion"] = None
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"))
+    assert out["tramos"] == 2
+    assert [t for t in _silencios(out["archivo"]) if t < 6.9] == []
+
+
 def test_fallo_a_mitad_de_tramos_no_deja_parciales(tmp_path, monkeypatch):
     from final_edition.motor import tramos
     monkeypatch.setattr(tramos, "partir", lambda doc, presupuesto=None: [(0, 3500), (3500, 7000)])
 
     llamadas = []
 
-    def _ejecutar_falso(plan, salida, ass_ruta=None, timeout=None):
+    def _ejecutar_falso(plan, salida, ass_ruta=None, timeout=None, opciones_audio=None):
         llamadas.append(salida)
         if len(llamadas) == 1:
             with open(salida, "w", encoding="utf-8") as f:
@@ -107,7 +159,7 @@ def test_fallo_a_mitad_de_tramos_no_deja_parciales(tmp_path, monkeypatch):
     salida = str(tmp_path / "f.mp4")
     with pytest.raises(RuntimeError, match="ffmpeg murió"):
         motor.renderizar(_doc(), rutas, salida)
-    assert not list(tmp_path.glob("f.mp4.tramo*.mp4"))
+    assert not list(tmp_path.glob("f.mp4.tramo*"))
     assert not os.path.exists(salida)
 
 
@@ -204,3 +256,17 @@ def test_clips_reordenados_de_la_misma_fuente_renderizan_su_tramo(tmp_path, medi
     streams, dur = _streams(out["archivo"])
     assert abs(dur - 7.0) <= 0.2
     assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+
+
+@pytest.mark.slow
+def test_musica_de_400_ms_con_fundido_de_1_s_renderiza(tmp_path, medios):
+    # Capa 4c (1/10), con ffmpeg real: un audio de menos de 1 s con el
+    # fundido de salida de la música (1 s) hacía `afade=t=out:st=-0.600` y
+    # ffmpeg rechazaba el grafo ("out of range"): la final salía en error.
+    doc = _doc()
+    m1 = doc["pistas"][3]["clips"][0]
+    m1.update(inicio_ms=6600, duracion_ms=400, recorte={"desde_ms": 0, "hasta_ms": 400})
+    m1["audio"].update(fundido_entrada_ms=0, fundido_salida_ms=1000)
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "corto.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert abs(dur - 7.0) <= 0.2 and "audio" in streams

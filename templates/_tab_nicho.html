@@ -1,51 +1,70 @@
 {# Pestaña Nicho. Contexto de nicho.rutas.contexto(cliente): estudios_nicho,
-   productos_nicho, idiomas_nicho, min_comentarios_nicho. #}
+   productos_nicho, min_comentarios_nicho, etiquetas_estudio, etiquetas_inv,
+   avatares_resumen, paises_estudio, pais_proyecto. #}
 <div class="panel-cabecera">
   <div>
-    <h2>Nicho</h2>
-    <p class="panel-cabecera-desc">Un estudio recoge comentarios reales de la gente sobre un producto o nicho y Claude los convierte en avatares con evidencia. Aprobar un sub-avatar crea una persona para Sprints y Crear. Nada se genera sin ver el costo antes.</p>
+    <h2>{{ _('Nicho') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Un estudio recoge comentarios reales de la gente sobre un producto o nicho y Claude los convierte en avatares con evidencia. Aprobar un sub-avatar crea una persona para Sprints y Crear. Nada se genera sin ver el costo antes.') }}</p>
   </div>
   <div class="panel-cabecera-acciones">
-    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-estudio">+ Nuevo estudio</button>
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-estudio">{{ _('+ Nuevo estudio') }}</button>
   </div>
 </div>
+
+{% set ra = avatares_resumen %}
+<section class="swap-card nicho-avatares-resumen">
+  <div class="nicho-inv-cabecera">
+    <h3>{{ _('Avatares') }}</h3>
+    <span class="tag-estado">{{ _('Aprobados: %(n)s', n=ra.aprobados) }}</span>
+    {% if ra.nuevos %}<span class="tag-estado sprint-aviso">{{ _('Nuevos por revisar: %(n)s', n=ra.nuevos) }}</span>{% endif %}
+    {% if ra.incompletos %}<span class="tag-estado">{{ _('Incompletos: %(n)s', n=ra.incompletos) }}</span>{% endif %}
+  </div>
+  <p class="vacio">{{ _('Los aprobados son las personas que usa toda la app. Los nuevos vienen de tus estudios y esperan tu aprobación.') }}</p>
+  {% if ra.muestra %}
+  <p class="nicho-avatares-muestra">{% for m in ra.muestra %}<a class="tag-estado estado-nicho-{{ 'propuesto' if m.grupo == 'nuevo' else 'aprobado' }}" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente, abrir=m.clave, _anchor='avatar-' ~ m.clave) }}" title="{{ m.nombre }}">{{ m.nombre }}{% if m.incompleto %} ⚠{% endif %}</a> {% endfor %}</p>
+  {% endif %}
+  <div class="acciones">
+    <a class="btn-sm" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente) }}">{{ _('Ver todos los avatares') }}</a>
+    <a class="btn-generar btn-sm" href="{{ url_for('nicho.avatares_proyecto', cliente=cliente, nuevo=1, _anchor='nuevo-avatar') }}">{{ _('+ Nuevo avatar') }}</a>
+  </div>
+</section>
 
 <div class="sprints-lista">
   {% for e in estudios_nicho %}
   <a class="swap-card sprint-card" href="{{ url_for('nicho.ver', cliente=cliente, eid=e.id) }}">
     <div>
-      <strong>{{ e.nombre }}</strong> <span class="tag-estado estado-nicho estado-nicho-{{ e.estado }}">{{ e.estado }}</span>
+      <strong>{{ e.nombre }}</strong> <span class="tag-estado estado-nicho estado-nicho-{{ e.estado }}">{{ etiquetas_estudio.get(e.estado, e.estado)|traducir }}</span>
       {% set inv = (e.extra or {}).get('investigacion', {}) %}
-      {% if inv.estado %}<span class="tag-estado badge-{{ inv.estado }}">inv: {{ inv.estado }}</span>{% endif %}
-      <br><small class="vacio">{{ e.producto or 'sin producto' }} · {{ e.comentarios_total }} comentario(s) de {{ e.fuentes | length }} fuente(s) · {{ e.avatares_aprobados }} de {{ e.avatares_total }} avatar(es) aprobado(s)</small>
+      {% if inv.estado %}<span class="tag-estado badge-{{ inv.estado }}">{{ _('inv: %(estado)s', estado=etiquetas_inv.get(inv.estado, inv.estado)|traducir) }}</span>{% endif %}
+      <br><small class="vacio">{{ e.producto or _('sin producto') }} · {{ _('%(n)s comentario(s) de %(f)s fuente(s)', n=e.comentarios_total, f=e.fuentes | length) }} · {{ _('%(a)s de %(t)s avatar(es) aprobado(s)', a=e.avatares_aprobados, t=e.avatares_total) }}</small>
     </div>
   </a>
   {% else %}
   <div class="estado-vacio">
-    <p class="estado-vacio-titulo">Todavía no hay estudios</p>
-    <p class="estado-vacio-texto">Con {{ min_comentarios_nicho }} comentarios pegados a mano ya salen avatares: el formulario está justo abajo.</p>
+    <p class="estado-vacio-titulo">{{ _('Todavía no hay estudios') }}</p>
+    <p class="estado-vacio-texto">{{ _('Con %(n)s comentarios pegados a mano ya salen avatares: el formulario está justo abajo.', n=min_comentarios_nicho) }}</p>
   </div>
   {% endfor %}
 </div>
 
 <details class="swap-card" id="nuevo-estudio" {% if not estudios_nicho %}open{% endif %}>
-  <summary class="swap-card-resumen">+ Nuevo estudio</summary>
+  <summary class="swap-card-resumen">{{ _('+ Nuevo estudio') }}</summary>
   <form method="post" action="{{ url_for('nicho.crear', cliente=cliente) }}" class="form-experimento" id="form-estudio">
     <div class="fe-opciones">
-      <label>Nombre <input name="nombre" required maxlength="120" placeholder="Detergente en cápsulas · Suecia"></label>
-      <label>Producto del catálogo
+      <label>{{ _('Nombre') }} <input name="nombre" required maxlength="120" placeholder="{{ _('Detergente en cápsulas · Suecia') }}"></label>
+      <label>{{ _('Producto del catálogo') }}
         <select name="catalogo_id" id="estudio-catalogo">
-          <option value="">(escribir a mano)</option>
+          <option value="">{{ _('(escribir a mano)') }}</option>
           {% for p in productos_nicho %}<option value="{{ p.id }}" data-descripcion="{{ p.nombre }}{% if p.descripcion %}: {{ p.descripcion }}{% endif %}">{{ p.nombre }}</option>{% endfor %}
         </select>
       </label>
-      <label>Idioma de los avatares
-        <select name="idioma">{% for codigo, nombre in idiomas_nicho.items() %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}</select>
+      <label>{{ _('País del mercado') }}
+        <select name="pais">{% for codigo, nombre in paises_estudio %}<option value="{{ codigo }}"{% if codigo == pais_proyecto %} selected{% endif %}>{{ nombre|traducir }}</option>{% endfor %}</select>
       </label>
     </div>
-    <label>Qué vendemos <textarea name="producto" id="estudio-producto" rows="2" placeholder="Cápsulas de detergente sin plástico, dosis exacta, olor suave"></textarea></label>
-    <label>Qué investigar (nicho, mercado, dolores, palabras clave) <textarea name="tema" rows="3" placeholder="Gente que lava en casa y odia cargar garrafas; mercado sueco; reseñas de Via, Ariel y pods"></textarea></label>
-    <button type="submit" class="btn-generar btn-sm">Crear estudio</button>
+    <label>{{ _('Qué vendemos') }} <textarea name="producto" id="estudio-producto" rows="2" placeholder="{{ _('Cápsulas de detergente sin plástico, dosis exacta, olor suave') }}"></textarea></label>
+    <label>{{ _('Qué investigar (nicho, mercado, dolores, palabras clave)') }} <textarea name="tema" rows="3" placeholder="{{ _('Gente que lava en casa y odia cargar garrafas; mercado sueco; reseñas de Via, Ariel y pods') }}"></textarea></label>
+    <button type="submit" class="btn-generar btn-sm">{{ _('Crear estudio') }}</button>
   </form>
 </details>
 <script>

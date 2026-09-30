@@ -179,6 +179,41 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   producir ya se puede hacer desde el editor en esta capa (`editor.producir`: congela la
 >   versión por CAS, un `edicion_producir` gratis por destino) — la pantalla completa de
 >   destinos y traducciones (§4, "Producir") sigue en la capa 5.
+> - **Capa 4b implementada** (plan `docs/superpowers/plans/2026-09-28-editor-capa4b-capcut.md`,
+>   pedido de Daniel del 2026-09-28: «algo tipo así», CapCut de escritorio): biblioteca |
+>   reproductor | propiedades, y abajo las herramientas y la línea de tiempo de varias pistas; en el
+>   celular la biblioteca y las propiedades son hojas que suben desde abajo. «Editar» es la acción
+>   principal de cada video en Final edition; lo automático con IA queda aparte y opcional.
+>   Biblioteca en el servidor (`final_edition/biblioteca.py`: subir video/imagen/audio gratis —
+>   una foto de celular entra ya girada según su EXIF —, listar los materiales del proyecto, el
+>   logo incluido (origen `marca`), y las piezas de Crear, y convertir una pieza en material con la
+>   tarea gratis `material_de_pieza`; `materiales_por_id?preparar=` encola una sola vez el
+>   `edicion_proxy` gratis de lo que aún no tiene copia liviana o picos). Operaciones puras nuevas
+>   (`agregar*`, `cortarClip`, `ponerTransicion`, `editarTexto`, `cambiar`, `volumenSonido`,
+>   `cambiarMezcla`), cada una validada por Python con `documento.validar` y
+>   `verificar_recortes`. Decisiones: `normalizar` **nunca crea** `p_sonido` (un borrador sin
+>   sonido de la escena lo deja fuera a propósito y la vía automática lo reusa): solo lo crean
+>   agregar un video con sonido (suena ese clip; los de antes entran en silencio) y mover el
+>   volumen del sonido de un video (ese clip a lo pedido, los demás en 0); sin nada que espejar
+>   queda vacía, no se borra. **Nada de lo que se agrega alarga el video**: capas y
+>   música/efectos terminan con la principal y, con el cabezal al final, entran enteras
+>   terminando ahí. El audio agregado a mano solo comparte pista con clips de su mismo rol.
+>   Siguen fuera: video sobre video (PIP), filtros de color, rotación, foto como clip de la
+>   principal (entra como capa de imagen con «Llenar la pantalla») y la traducción del editor
+>   (fase 6 de idioma).
+> - **Capa 4c** (2026-09-29, diez arreglos de confianza tras la auditoría
+>   `.superpowers/sdd/capa4c/auditoria-capcut-4b.md`, sin pagar nada): los fundidos de un audio
+>   nunca pasan de su duración (`normalizar` los acota en proporción; cortar un audio no deja
+>   bajón en el corte; el compilador tiene su tope: `st >= 0`); «deslizar» guarda su duración
+>   (400 ms) y baja el 8 % de la altura del lienzo en los dos motores; **nada alarga el video**
+>   tampoco al mover, alargar por la derecha o duplicar una capa (se topa en el fin de la
+>   principal); los avisos de carga se recalculan tras cada cambio y un clip que pide material
+>   de más se acorta al abrir; los errores técnicos (render, validador) quedan en «Detalle
+>   técnico» / `title`; con la sesión vencida el editor lo dice; «Precio» entra como «Escribe
+>   el precio»; «Borrar» en la biblioteca (solo lo subido o un video de Crear preparado, nunca
+>   algo que use una edición viva o congelada); «Editar» abre la edición de la persona antes que
+>   el «Borrador automático · …»; y el rasterizador quita los caracteres que la fuente no
+>   dibuja (emojis) en vez de cajas, con aviso en el panel.
 >
 > Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
 > - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,

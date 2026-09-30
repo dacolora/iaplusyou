@@ -6,6 +6,8 @@ Claude devuelve N ideas de video y M de imagen que se guardan como
 """
 import json
 
+from flask_babel import gettext
+
 import banco_prompts
 import catalogo_productos
 import doctrina
@@ -17,6 +19,7 @@ import marca
 import proyectos
 import tiendas
 from final_edition import tipos as fe_tipos
+from idiomas import N_
 from providers import flowplus_modelos
 from referentes import datos as referentes_datos
 from sprints import analisis, datos
@@ -251,7 +254,8 @@ def contexto_campana(cliente, campana):
     vivas = [i for i in (campana.get("ideas") or []) if i.get("estado_idea") != "descartada"]
     ef = datos.efectivos_de(cliente, campana)
     nombres_familias = campana.get("familias") or []
-    descripciones = ({f["nombre"]: f.get("descripcion") or "" for f in referentes_datos.familias(cliente)}
+    idioma = idiomas.de_proyecto(cliente) if nombres_familias else "es"
+    descripciones = ({f["nombre"]: referentes_datos.descripcion_familia(f, idioma) or "" for f in referentes_datos.familias(cliente)}
                      if nombres_familias else {})
     return {
         "marca": proyectos.nombre_visible(cliente),
@@ -362,14 +366,14 @@ def parsear(texto, referencias_ids_validos, duraciones, datos_texto=None, fijos=
     t = (texto or "").strip()
     ini, fin = t.find("{"), t.rfind("}")
     if ini < 0 or fin <= ini:
-        raise AnalisisInvalido("Claude no devolvió JSON.")
+        raise AnalisisInvalido(gettext("Claude no devolvió JSON."))
     try:
         data = json.loads(t[ini:fin + 1])
     except ValueError as e:
-        raise AnalisisInvalido(f"JSON inválido: {e}")
+        raise AnalisisInvalido(gettext("JSON inválido: %(error)s", error=e))
     crudas = data.get("ideas") if isinstance(data, dict) else None
     if not isinstance(crudas, list):
-        raise AnalisisInvalido("El JSON no trae la lista «ideas».")
+        raise AnalisisInvalido(gettext("El JSON no trae la lista «ideas»."))
     limpias = []
     for c in crudas:
         if not isinstance(c, dict):
@@ -394,7 +398,7 @@ def parsear(texto, referencias_ids_validos, duraciones, datos_texto=None, fijos=
             "angulo": angulo, "errores_angulo": errores,
         })
     if not limpias:
-        raise AnalisisInvalido("Ninguna idea venía completa.")
+        raise AnalisisInvalido(gettext("Ninguna idea venía completa."))
     return limpias
 
 
@@ -408,11 +412,11 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
     Claude, para registrar el gasto real incluso si falla."""
     campana = datos.campana(cliente, campana_id)
     if not campana:
-        raise datos.ErrorDatos("Esa campaña no existe.")
+        raise datos.ErrorDatos(gettext("Esa campaña no existe."))
     if reemplaza is not None:
         vieja = datos.idea(cliente, reemplaza)
         if not vieja or vieja["campana_id"] != campana_id:
-            raise datos.ErrorDatos("Esa idea no existe en esta campaña.")
+            raise datos.ErrorDatos(gettext("Esa idea no existe en esta campaña."))
         # Para Claude (DATOS: «ya existen» / «descartadas») la vieja ya cuenta
         # como descartada, igual que antes; en la base sigue viva hasta que
         # haya con qué reemplazarla.
@@ -479,8 +483,9 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
         # En ese caso se quedan las dos.
         if (datos.idea(cliente, reemplaza) or {}).get("sin_sesion"):
             datos.actualizar_idea(cliente, reemplaza, estado_idea="descartada")
-    datos.registrar_evento(cliente, campana["sprint_id"], "ideas_propuestas",
-                           f"{len(creadas)} idea(s) propuesta(s) para la campaña {campana['orden'] + 1}",
+    mensaje = datos.texto_guardado(cliente, N_("%(n)s idea(s) propuesta(s) para la campaña %(orden)s"),
+                                   n=len(creadas), orden=campana['orden'] + 1)
+    datos.registrar_evento(cliente, campana["sprint_id"], "ideas_propuestas", mensaje,
                            {"campana_id": campana_id, "cp_ids": creadas, "reemplaza": reemplaza,
                             "con_faltantes": sum(1 for i in videos + imagenes if i["angulo"]["faltantes"])},
                            campana_id=campana_id)
@@ -505,10 +510,10 @@ def reescribir(cliente, cp_id):
     revisión final), tampoco se escribe: se lanza `IdeaConPieza`."""
     idea = datos.idea(cliente, cp_id)
     if not idea:
-        raise datos.ErrorDatos("Esa idea no existe.")
+        raise datos.ErrorDatos(gettext("Esa idea no existe."))
     angulo = (idea.get("extra") or {}).get("angulo")
     if not (isinstance(angulo, dict) and angulo.get("promesa")):
-        raise datos.ErrorDatos("La idea todavía no tiene un ángulo con promesa.")
+        raise datos.ErrorDatos(gettext("La idea todavía no tiene un ángulo con promesa."))
     ctx = contexto_campana(cliente, datos.campana(cliente, idea["campana_id"]))
     # Revisión final #5: para el DATOS de la reescritura, la propia idea no
     # cuenta como «ya existe» (no tiene sentido pedirle a Claude que no se
@@ -533,15 +538,15 @@ def reescribir(cliente, cp_id):
         t = (crudo or "").strip()
         ini, fin = t.find("{"), t.rfind("}")
         if ini < 0 or fin <= ini:
-            raise AnalisisInvalido("Claude no devolvió JSON.")
+            raise AnalisisInvalido(gettext("Claude no devolvió JSON."))
         try:
             data = json.loads(t[ini:fin + 1])
         except ValueError as e:
-            raise AnalisisInvalido(f"JSON inválido: {e}")
+            raise AnalisisInvalido(gettext("JSON inválido: %(error)s", error=e))
         titulo = str(data.get("titulo") or "").strip()[:200]
         escena = str(data.get("escena") or "").strip()
         if not titulo or not escena:
-            raise AnalisisInvalido("Claude no devolvió título y escena.")
+            raise AnalisisInvalido(gettext("Claude no devolvió título y escena."))
     except AnalisisInvalido as e:
         e.tokens_entrada, e.tokens_salida = ent, sal
         raise
@@ -552,7 +557,7 @@ def reescribir(cliente, cp_id):
     # a la idea mientras Claude respondía, lo escrito aquí se perdería.
     actual = datos.idea(cliente, cp_id)
     if actual and not actual["sin_sesion"]:
-        e = IdeaConPieza("La idea ya tiene una pieza generada; no se reescribió.")
+        e = IdeaConPieza(gettext("La idea ya tiene una pieza generada; no se reescribió."))
         e.tokens_entrada, e.tokens_salida = ent, sal
         raise e
     datos.actualizar_idea(cliente, cp_id, **campos)

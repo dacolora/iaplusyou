@@ -1,18 +1,18 @@
 {% from "_sprint_macros.html" import sugerido %}
 {# Sugeridos gratis de una campaña (sprints.campana_sugeridos →
    referentes.sugerir.sugerir_campana). Fragmento por fetch, sin <script>. #}
-{% set nombres = {"familias": "las familias de formato", "consciencia": "la consciencia", "etapa": "la etapa"} %}
+{% set nombres = {"familias": _("las familias de formato"), "consciencia": _("la consciencia"), "etapa": _("la etapa")} %}
 {% if sugeridos %}
-<p class="panel-sub">Sugeridos para esta campaña{% if aflojado %} <span class="vacio">— con todos los filtros no alcanzaban, así que ya no filtran por {% for a in aflojado %}{{ nombres[a] }}{% if not loop.last %} y {% endif %}{% endfor %}</span>{% endif %}</p>
+<p class="panel-sub">{{ _('Sugeridos para esta campaña') }}{% if aflojado %} <span class="vacio">— {{ _('con todos los filtros no alcanzaban, así que ya no filtran por') }} {% for a in aflojado %}{{ nombres[a] }}{% if not loop.last %} {{ _('y') }} {% endif %}{% endfor %}</span>{% endif %}</p>
 <div class="panel-sugeridos-grid">{% for s in sugeridos %}{{ sugerido(s, cliente, c.id) }}{% endfor %}</div>
 {% else %}
 <div class="estado-vacio">
-  <p class="estado-vacio-titulo">No hay referentes para sugerir</p>
-  <p class="estado-vacio-texto">La biblioteca no tiene anuncios nuevos que encajen{% if not todas %} con esta etapa{% endif %}.</p>
+  <p class="estado-vacio-titulo">{{ _('No hay referentes para sugerir') }}</p>
+  <p class="estado-vacio-texto">{{ _('La biblioteca no tiene anuncios nuevos que encajen') }}{% if not todas %} {{ _('con esta etapa') }}{% endif %}.</p>
   <div class="panel-acciones">
-    {% if not todas %}<button type="button" class="btn-sm" data-aflojar>Aflojar filtros (todas las etapas)</button>{% endif %}
-    <button type="button" class="btn-sm" data-sugerir-ia="{{ url_for('sprints.campana_sugerir_ia', cliente=cliente, cid=c.id) }}">✨ Sugerir con IA ({{ precio_sugerir_ia.texto }})</button>
-    <a class="btn-sm" href="{{ enlaces.traer }}">Traer nuevos de Meta</a>
+    {% if not todas %}<button type="button" class="btn-sm" data-aflojar>{{ _('Aflojar filtros (todas las etapas)') }}</button>{% endif %}
+    <button type="button" class="btn-sm" data-sugerir-ia="{{ url_for('sprints.campana_sugerir_ia', cliente=cliente, cid=c.id) }}">✨ {{ _('Sugerir con IA (%(precio)s)', precio=precio_sugerir_ia.texto) }}</button>
+    <a class="btn-sm" href="{{ enlaces.traer }}">{{ _('Traer nuevos de Meta') }}</a>
   </div>
 </div>
 {% endif %}

@@ -2,6 +2,7 @@
   edicion_producir  {cliente, edicion_id, version_id, final_id, idioma, pais}  max_intentos=1
   edicion_proxy     {cliente, material_id}                                     max_intentos=3
   edicion_desde_clon {cliente, cf_id}                                          max_intentos=2
+  material_de_pieza {cliente, cf_id}                                           max_intentos=2
   materiales_limpiar {}                                                         periódica diaria
 `edicion_producir` renderiza el documento CONGELADO en la versión (no el
 vivo), así lo que se produjo siempre se puede volver a ver. Contrato con la
@@ -25,7 +26,7 @@ import creative_flow
 import ediciones
 import materiales
 import trabajos
-from final_edition import cortes, motor, rasterizar
+from final_edition import cortes, mezcla, motor, rasterizar
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from storage import r2_uploader
@@ -69,6 +70,10 @@ def job_id_proxy(cliente, material_id):
 
 def job_id_desde_clon(cliente, cf_id):
     return f"{cliente}__{cf_id}__editor"
+
+
+def job_id_material_de_pieza(cliente, cf_id):
+    return f"{cliente}__{cf_id}__material"
 
 
 def _carpeta(cliente, nombre):
@@ -253,6 +258,7 @@ def ejecutar_proxy(tarea):
             v = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
             dur_s = cortes.duracion(original)
             campos.update(ancho=v.get("width"), alto=v.get("height"), duracion_ms=int(round(dur_s * 1000)))
+            extra["tiene_audio"] = mezcla.tiene_audio(original)
             proxy = os.path.join(carpeta, "proxy.mp4")
             generar_proxy(original, proxy)
             tira = os.path.join(carpeta, "tira.jpg")
@@ -297,3 +303,19 @@ def ejecutar_desde_clon(tarea):
         raise ValueError(f"cf_id inválido: {p.get('cf_id')!r}")
     eid = edicion_clon.crear(p["cliente"], p["cf_id"], _carpeta(p["cliente"], f"clon_{p['cf_id']}"))
     return f"Edición {eid} lista para editar."
+
+
+@registrar("material_de_pieza")
+def ejecutar_material_de_pieza(tarea):
+    """Biblioteca del editor (capa 4b, Task 1): materializa una pieza de
+    Crear como `material` (gratis) para que se pueda arrastrar al lienzo —
+    la misma preparación que `edicion_desde_clon` hace con el clon
+    (`biblioteca.materializar_pieza` reusa `insumos.clon`), sin crear
+    ninguna edición. `cf_id` forma el nombre de la carpeta: se valida antes
+    de tocar el disco."""
+    from final_edition import biblioteca
+    p = tarea["payload"]
+    if not isinstance(p.get("cf_id"), str) or not _CF_RE.fullmatch(p["cf_id"]):
+        raise ValueError(f"cf_id inválido: {p.get('cf_id')!r}")
+    mat = biblioteca.materializar_pieza(p["cliente"], p["cf_id"], _carpeta(p["cliente"], f"material_{p['cf_id']}"))
+    return f"Material {mat['id']} listo."

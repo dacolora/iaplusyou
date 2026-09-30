@@ -28,6 +28,17 @@ def al_interrumpir(tipo):
     return _dec
 
 
+class Continuar:
+    """Lo que devuelve una tarea que no terminó su trabajo pero sabe cómo
+    seguirlo: el worker la cierra `hecha` con `mensaje` y encola, en la misma
+    transacción, la tarea `tipo` con `payload` y el MISMO job_id (la barra de la
+    tarjeta sigue viva). Ej.: un video cuya espera se agotó sigue con
+    `flowplus_recuperar` (spec 2026-09-28-crear-sin-cola)."""
+
+    def __init__(self, tipo, payload, mensaje=None, ejecutar_desde=None):
+        self.tipo, self.payload, self.mensaje, self.ejecutar_desde = tipo, payload, mensaje, ejecutar_desde
+
+
 def ref_sufijo(tarea):
     """Marcador de intento (`:t<tarea_id>`) para la referencia de un gasto:
     el id de la fila `tarea` (nuevo por clic, estable en reintentos del
@@ -43,4 +54,4 @@ def cargar_todas():
     """Importa los módulos con tareas reales. Se llama desde worker.main(), no
     al importar el paquete, para que los tests puedan registrar tareas falsas
     sin arrastrar proveedores externos."""
-    from tareas import director, doctrina, edicion, experimentos, final_edition, flowplus, investigacion, mantenimiento, meta, musica, nicho, organico, referentes, sprints, swap, tiendas  # noqa: F401
+    from tareas import audios, director, doctrina, edicion, experimentos, final_edition, flowplus, investigacion, mantenimiento, meta, musica, nicho, organico, referentes, sprints, swap, tiendas, triple_whale  # noqa: F401

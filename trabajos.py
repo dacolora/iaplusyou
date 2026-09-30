@@ -30,13 +30,16 @@ porcentaje preciso — pegado a una etapa que sí es real, un número estimado
 aparenta ser real, y "en cola · 51%" mientras el proveedor todavía no arrancó es
 justo la mentira que este módulo trata de evitar.
 """
-import math
 import functools
+import logging
+import math
 import threading
 import time
 from datetime import datetime
 
 import cola  # cola persistente (db.py); los trabajos migrados al worker viven ahí
+
+log = logging.getLogger("creatv.trabajos")
 
 _LOCK = threading.Lock()
 _TRABAJOS = {}
@@ -201,7 +204,10 @@ def reportar(job_id, etapa=None, progreso=None, detalle=None):
     with _LOCK:
         t = _TRABAJOS.get(job_id)
     if not t:
-        cola.reportar(job_id, etapa=etapa, progreso=progreso, detalle=detalle)
+        try:
+            cola.reportar(job_id, etapa=etapa, progreso=progreso, detalle=detalle)
+        except Exception:  # noqa: BLE001 — p. ej. «database is locked» con varios hilos escribiendo
+            log.warning("no se pudo reportar el avance de %s", job_id, exc_info=True)
         return
     with _LOCK:
         t = _TRABAJOS.get(job_id)

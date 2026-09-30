@@ -9,6 +9,8 @@ import csv
 import io
 import os
 
+from flask_babel import gettext
+
 from nicho.fuentes.base import ErrorFuente, Fuente, normalizar_comentario
 
 MAX_BYTES = 5 * 1024 * 1024
@@ -27,7 +29,7 @@ def _decodificar(contenido):
             return contenido.decode(enc)
         except UnicodeDecodeError:
             continue
-    raise ErrorFuente("No pude leer el archivo como texto (¿es un CSV?).")
+    raise ErrorFuente(gettext("No pude leer el archivo como texto (¿es un CSV?)."))
 
 
 def _sin_vacias(filas):
@@ -42,7 +44,7 @@ def _filas_csv(contenido):
         dialecto = csv.excel
     filas = _sin_vacias(list(csv.reader(io.StringIO(texto), dialecto)))
     if not filas:
-        raise ErrorFuente("El archivo está vacío.")
+        raise ErrorFuente(gettext("El archivo está vacío."))
     return [str(c or "").strip() for c in filas[0]], filas[1:]
 
 
@@ -51,7 +53,7 @@ def _filas_xlsx(contenido):
     try:
         wb = load_workbook(io.BytesIO(contenido), read_only=True, data_only=True)
     except Exception:  # noqa: BLE001 — openpyxl lanza de todo con un archivo dañado
-        raise ErrorFuente("No pude abrir el Excel (¿está dañado o protegido?).") from None
+        raise ErrorFuente(gettext("No pude abrir el Excel (¿está dañado o protegido?).")) from None
     try:
         hoja = wb.worksheets[0]
         filas = []
@@ -63,11 +65,11 @@ def _filas_xlsx(contenido):
             # Corta apenas se pasa (encabezado + MAX_FILAS): una hoja enorme
             # nunca se termina de traer a memoria solo para descartarla después.
             if len(filas) > MAX_FILAS + 1:
-                raise ErrorFuente(f"El archivo tiene más de {MAX_FILAS} filas; pártelo.")
+                raise ErrorFuente(gettext("El archivo tiene más de %(max)s filas; pártelo.", max=MAX_FILAS))
     finally:
         wb.close()
     if not filas:
-        raise ErrorFuente("El Excel está vacío.")
+        raise ErrorFuente(gettext("El Excel está vacío."))
     return [c.strip() for c in filas[0]], filas[1:]
 
 
@@ -89,7 +91,7 @@ def detectar_columnas(encabezados, filas):
             if media > mejor_largo:
                 mejor, mejor_largo = i, media
         if mejor is None or mejor_largo < _MIN_LARGO_MEDIO:
-            raise ErrorFuente("No encontré una columna con comentarios (ponle «texto» o «comentario» de encabezado).")
+            raise ErrorFuente(gettext("No encontré una columna con comentarios (ponle «texto» o «comentario» de encabezado)."))
         texto = mejor
     return {"texto": texto, "url": _indice_por_nombre(encabezados, COLUMNAS_URL),
             "puntuacion": _indice_por_nombre(encabezados, COLUMNAS_PUNTUACION),
@@ -100,16 +102,16 @@ def leer_archivo(nombre, contenido):
     """-> comentarios normalizados. ErrorFuente si el archivo no sirve."""
     contenido = contenido or b""
     if len(contenido) > MAX_BYTES:
-        raise ErrorFuente("El archivo pesa más de 5 MB; pártelo.")
+        raise ErrorFuente(gettext("El archivo pesa más de 5 MB; pártelo."))
     ext = os.path.splitext(nombre or "")[1].lower()
     if ext == ".csv":
         encabezados, filas = _filas_csv(contenido)
     elif ext in (".xlsx", ".xlsm"):
         encabezados, filas = _filas_xlsx(contenido)
     else:
-        raise ErrorFuente("Solo acepto archivos .csv o .xlsx.")
+        raise ErrorFuente(gettext("Solo acepto archivos .csv o .xlsx."))
     if len(filas) > MAX_FILAS:
-        raise ErrorFuente(f"El archivo tiene más de {MAX_FILAS} filas; pártelo.")
+        raise ErrorFuente(gettext("El archivo tiene más de %(max)s filas; pártelo.", max=MAX_FILAS))
     cols = detectar_columnas(encabezados, filas)
 
     def celda(f, i):

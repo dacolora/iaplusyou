@@ -10,6 +10,8 @@ inglés; la palabra original se guarda para mostrar «dolor de pies» →
 lanza: buscar la palabra sin traducir en inglés trae ruido pagado."""
 from uuid import uuid4
 
+from flask_babel import gettext
+
 import gastos
 
 MAX_TOKENS = 60
@@ -19,7 +21,7 @@ PROMPT = ("Translate this ad-search keyword into the natural English an advertis
 
 
 class TraduccionInvalida(RuntimeError):
-    """El mensaje va tal cual a la persona."""
+    """El mensaje va tal cual a la persona (se lanza en la ruta: idioma de quien mira)."""
 
 
 def _llamar(texto):
@@ -32,7 +34,7 @@ def _llamar(texto):
     entrada = int(getattr(uso, "input_tokens", 0) or 0)
     salida = int(getattr(uso, "output_tokens", 0) or 0)
     if resp.stop_reason in ("refusal", "max_tokens"):
-        raise TraduccionInvalida("No pude traducir la palabra al inglés; escríbela de otra forma.")
+        raise TraduccionInvalida(gettext("No pude traducir la palabra al inglés; escríbela de otra forma."))
     return "".join(b.text for b in resp.content if b.type == "text"), entrada, salida
 
 
@@ -41,7 +43,7 @@ def al_ingles(palabra):
     texto, entrada, salida = _llamar(PROMPT.format(palabra=palabra))
     limpio = ((texto or "").strip().splitlines() or [""])[0].strip().strip("\"'«»“”").strip()
     if not limpio:
-        raise TraduccionInvalida("No pude traducir la palabra al inglés; escríbela de otra forma.")
+        raise TraduccionInvalida(gettext("No pude traducir la palabra al inglés; escríbela de otra forma."))
     return limpio[:120], entrada, salida
 
 
@@ -59,7 +61,7 @@ def preparar_consulta(consulta, cliente):
     except TraduccionInvalida:
         raise
     except Exception as e:
-        raise TraduccionInvalida("No pude traducir la palabra al inglés; intenta de nuevo en un momento.") from e
+        raise TraduccionInvalida(gettext("No pude traducir la palabra al inglés; intenta de nuevo en un momento.")) from e
     gastos.registrar_seguro(cliente or "_creatv", "otro", costo_real(entrada, salida),
                             f"referentes:traducir:{uuid4().hex[:12]}",
                             detalle=f"Traducir «{original}» → «{ingles}»", proveedor="anthropic")

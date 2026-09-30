@@ -14,6 +14,7 @@ cada fuente. `dormir` envuelve `time.sleep` para que las pruebas no esperen.
 import time
 
 import requests
+from flask_babel import gettext
 
 from nicho.fuentes.base import ErrorFuente
 
@@ -53,13 +54,14 @@ def pedir(sesion, metodo, url, nombre, **kw):
             r = sesion.request(metodo, url, **kw)
         except requests.exceptions.RequestException as e:
             if reintento_red:
-                raise ErrorFuente(f"{nombre} no respondió ({type(e).__name__}). Intenta de nuevo en un rato.") from None
+                raise ErrorFuente(gettext("%(nombre)s no respondió (%(error)s). Intenta de nuevo en un rato.", nombre=nombre,
+                                          error=type(e).__name__)) from None
             reintento_red = True
             dormir(ESPERA_5XX)
             continue
         if r.status_code == 429:
             if veces_429 >= MAX_429:
-                raise Error429(f"{nombre} limitó las llamadas (429) y no cedió tras {MAX_429} esperas.")
+                raise Error429(gettext("%(nombre)s limitó las llamadas (429) y no cedió tras %(n)s esperas.", nombre=nombre, n=MAX_429))
             veces_429 += 1
             dormir(_espera_429(r))
             continue
