@@ -260,6 +260,10 @@ Responde SOLO con JSON, sin texto antes ni después:
     return doctrina.bloque_system(*doctrina.COMBINACIONES["flowplus_clips"], extra=cuerpo, idioma=idioma)
 
 
+def _coma(x):
+    return f"{x:.1f}".replace(".", ",")
+
+
 def mensajes(video, esperados, fallas=None):
     lec, cfg = video["guion"]["lectura"], video["config"]
     textos = duracion.textos_efectivos(lec, cfg.get("hook", "original"))
@@ -275,7 +279,13 @@ def mensajes(video, esperados, fallas=None):
     modo = "voz en off (nadie habla en cámara)" if cfg["modo"] == "voiceover" else "diálogo a cámara con lip-sync"
     cabecera = f"Modo: {modo}. Formato {cfg['formato']}. Ritmo: {cfg['palabras_por_segundo']} palabras por segundo."
     if cfg.get("duracion_objetivo"):
-        cabecera += f" Duración objetivo del video: {cfg['duracion_objetivo']} s en total."
+        objetivo = cfg["duracion_objetivo"]
+        hablado = sum(duracion.seg_hablados(t, cfg["palabras_por_segundo"]) for _, t in cons)
+        aire = duracion.aire_disponible(cons, cfg["palabras_por_segundo"], objetivo)
+        cabecera += (f" Duración objetivo del video: {objetivo} s en total. Lo hablado suma {_coma(hablado)} s y "
+                     f"cada clip se redondea hacia arriba al segundo, así que el aire de todos los momentos juntos "
+                     f"(incluido el cuadro final) puede sumar como máximo {_coma(aire)} s; si te pasas, el video "
+                     f"no entra en el objetivo.")
     partes = [cabecera, f"<estilo>{lim(cfg['estilo'], 'estilo')}</estilo>", f"<referencias>\n{refs}\n</referencias>",
               f"<personajes>\n{personajes or '(sin descripción)'}\n</personajes>",
               f"<notas_estilo>{lim(lec.get('notas_estilo') or '', 'notas_estilo')}</notas_estilo>",
