@@ -469,6 +469,23 @@ def marcar_traducidas(pares):
     return n
 
 
+def guardar_lectura(referente_id, lectura):
+    """Guarda la lectura de «Recrear» en `extra.lectura` sin tocar el resto de
+    `extra` (spec 2026-09-30-recrear-fiel §3). Toma el candado de escritura
+    ANTES de leer (como experimentos._bloquear: un UPDATE sin efecto abre la
+    transacción), así una clasificación que reescribe `extra` a la vez no se pisa."""
+    t = db.referente
+    with db.conectar() as con:
+        if con.execute(t.update().where(t.c.id == referente_id)
+                       .values(actualizado_en=t.c.actualizado_en)).rowcount != 1:
+            return False
+        f = con.execute(sa.select(t.c.extra).where(t.c.id == referente_id)).first()
+        extra = dict(f.extra or {})
+        extra["lectura"] = dict(lectura, en=db.ahora())
+        con.execute(t.update().where(t.c.id == referente_id).values(extra=extra, actualizado_en=db.ahora()))
+    return True
+
+
 def rellenar_i18n_copycoders():
     """Para lo ya importado de copycoders (spec §B7, sin Claude): la firma
     original es inglés → i18n.en (con el dolor de origen, que también es

@@ -2302,6 +2302,9 @@ msgstr "Delete this proof"
 msgid "Borrar «{nombre}» de tus archivos"
 msgstr "Delete “{nombre}” from your files"
 
+msgid "Botón"
+msgstr "Button"
+
 msgid "Boxer"
 msgstr "Boxers"
 
@@ -2808,6 +2811,9 @@ msgstr "Claude decides"
 
 msgid "Claude mira tus ganadores y tus perdedores (imagen, texto y números), explica qué patrón se repite y propone anuncios nuevos basados en lo que ya vende. No genera nada: cada idea llega a Crear para que decidas."
 msgstr "Claude looks at your winners and your losers (image, text and numbers), explains which pattern repeats and suggests new ads based on what already sells. It doesn't generate anything: each idea goes to Create for you to decide."
+
+msgid "Claude no describió la composición."
+msgstr "Claude didn't describe the composition."
 
 msgid "Claude no devolvió JSON válido."
 msgstr "Claude didn't return valid JSON."
@@ -9426,6 +9432,9 @@ msgstr "Objective"
 msgid "Ocultar el original"
 msgstr "Hide the original"
 
+msgid "Oferta"
+msgstr "Offer"
+
 #, python-format
 msgid "Ojo: la campaña %(numeros)s tiene la misma persona, producto, etapa, consciencia y formato. Si es a propósito, cambia algo para que no salgan piezas repetidas."
 msgstr "Heads up: campaign %(numeros)s has the same persona, product, stage, awareness and format. If that's on purpose, change something so the pieces don't come out repeated."
@@ -9489,6 +9498,9 @@ msgstr "Other (uses the product description)"
 
 msgid "Otro lote tomó esta idea mientras se armaba la sesión."
 msgstr "Another batch claimed this idea while the session was being built."
+
+msgid "Otro texto"
+msgstr "Other text"
 
 msgid "Otros"
 msgstr "Other"

@@ -75,6 +75,10 @@ TARIFAS = {
     "regla_producto": 0.01,
     "caption_organico": 0.01,
     "adaptar_referente": 0.01,
+    # «Recrear» fiel (spec 2026-09-30): una llamada de visión que describe la
+    # composición y lee los textos de la referencia, una vez por referente.
+    # Inicial; se ajusta con lo medido en la prueba real.
+    "leer_referente": 0.01,
     "sugerir_ia": 0.04,
     "clasificacion": 0.012,
     # La de siempre + la salida del segundo idioma (~60 tokens más por anuncio,
@@ -244,6 +248,7 @@ _ESTIMADORES = {
     "regla_producto": lambda **_: (TARIFAS["regla_producto"], "una llamada corta a Claude"),
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
+    "leer_referente": lambda **_: (TARIFAS["leer_referente"], "una llamada corta a Claude con visión"),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
     "refinar_prompt": lambda **_: (TARIFAS["refinar_prompt"], "un mensaje a Claude"),
     "clasificacion": lambda n=1, bilingue=False, **_: (
