@@ -133,7 +133,8 @@ def test_al_parar_no_reparte_y_espera_a_los_hilos(w, monkeypatch):
 
 def test_el_carril_de_crear_son_las_generaciones_de_crear():
     import worker
-    assert set(worker.CARRIL_CREAR) == {"flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flowplus_director"}
+    assert set(worker.CARRIL_CREAR) == {"flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flowplus_director",
+                                        "hablado_voz"}
     assert worker.HILOS_CREAR == 4 and worker.HILOS_LOTE == 2
 
 
