@@ -11,8 +11,12 @@ fila para el producto, esta pasa a serlo (si es manual, también su
 fuente_id, salvo que ese fuente_id ya exista); si ya la tiene y esta está
 vacía (sin precio, url, en prueba, prioridad ni datos de la doctrina), se
 borra; si no está vacía, se apunta al producto y se archiva a mano
-(`extra.archivado_por = "manual"`, visible en «Archivados»). El downgrade no
-hace nada: no se sabe qué fila era de qué color y no hace falta para volver.
+(`extra.archivado_por = "manual"`). Esa fila archivada conserva sus datos en
+la base pero la galería NO la muestra (ni en «Archivados») mientras el
+producto tenga su fila viva: por activo gana la viva
+(`dashboard._producto_comercial_contexto`); recuperarla es una edición a
+mano en la base. El downgrade no hace nada: no se sabe qué fila era de qué
+color y no hace falta para volver.
 """
 import json
 from typing import Sequence, Union

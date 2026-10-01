@@ -961,45 +961,61 @@ on the VPS at the next `git pull`): never `git checkout .`/`reset --hard`/`stash
 `clientes/*/productos*` first. `catalogo_productos.listar()` still yields one entry per color plus `producto_id/variante/nombre_producto`; its id
 `pid/color` is the value of Crear's checkbox and of `fp_prefill` (as `<cat>:<id>`), `campana.catalogo_id` and a
 swap's `producto_id`, while Crear's `productos_ids` keeps the visible name (which is why `claves_de()` also returns
-names); `listar_productos()` yields one entry per product with `colores` and `fotos_generales`; `encontrar(pid)`
+names); `listar_productos()` yields one entry per product with `colores` and `fotos_generales` (it is also what
+Sprints' «Sugerir personas» prompt and Nicho's product picker list, ids = pid); `encontrar(pid)`
 falls back to the first color with photos; `producto_base()` strips the color (every `tiendas.por_activo(...)`
 lookup by activo id goes through it); `claves_de()`/`claves_de_producto()` give every id and name a product can be
-referred by (doctrina pedidos, usos, experiment counts). ONE `producto` row per product
+referred by (doctrina pedidos, usos, experiment counts, the Tablero alert «en prueba sin experimento»); `carpeta_de`
+refuses any id that resolves to the category folder itself («.», «», «x/..»). ONE `producto` row per product
 (`activo_catalogo_id = pid`; a hand-made product's `manual` row, `fuente_id = pid`, is created on the fly by
 `tiendas.asegurar_manual`, never for an id with «/»); data migration 0025 (`downgrade` a no-op) folded the old
 per-color rows into the product's (empty ones deleted, non-empty duplicates archived as manual,
-`extra.archivado_por="manual"`). `conectores/shopify_publico.py` (tipo `shopify_publico`, fuente `shopify`, only a
+`extra.archivado_por="manual"` — they keep their data in the DB but the gallery does NOT show them, not even under
+«Archivados», while the product has its live row: per activo the live row wins). `conectores/shopify_publico.py` (tipo `shopify_publico`, fuente `shopify`, only a
 `dominio`) reads a store's public `/meta.json` + `/products.json`: the color option (`OPCIONES_COLOR`, or the first
 option whose values have distinct featured images), one variante per color (`normalizar_variante`, in
 `extra.variantes`) with its studio photo(s) (`width=1000`), unassigned images as fotos de ambiente
 (`fotos_generales`), price = mode of the variants (`extra.precios` when they differ), currency from meta.json,
 services skipped (`PALABRAS_SERVICIO`); rows are saved under the connector's `fuente` (`Conector.fuente`, None =
-`tipo`; `tareas.tiendas` uses it). One Shopify per project: connecting the Admin-API `shopify` disconnects every
-`shopify_publico` of the project with `tiendas.desconectar(..., archivar=False)` (same `fuente`: rows stay alive
-and the API sync refreshes them; domains are not compared, the API connects with the `.myshopify.com` one),
-connecting `shopify_publico` while an Admin-API store exists is refused, and `desconectar(..., archivar=True)`
-archives by the connector's `fuente`, not the store's `tipo`. `importador.vincular_activo` creates/refreshes colors
+`tipo`; `tareas.tiendas` uses it). The public store is THE catalog source (ruling final-5, 2026-09-30): it and the
+Admin-API `shopify` can both be connected (neither disconnects nor refuses the other), and while the project has a
+`shopify_publico` the Admin API's `tienda_sync_productos` touches no product (no import, no archive; only
+`ultima_sync_productos`, `tareas.tiendas.catalogo_desde_tienda_publica`) — the Admin API only adds orders and
+attribution (its connector brings no colors and would freeze them; with the same `fuente` each sync would archive
+what only the other sees; domains are never compared, the API connects with the `.myshopify.com` one). A project
+with only the Admin API keeps syncing products from it, without colors. `desconectar(..., archivar=True)` archives
+by the connector's `fuente`, not the store's `tipo`, and the `tienda_desconectar` route passes `archivar=False` when
+another store of the project with the same `fuente` remains. `importador.vincular_activo` creates/refreshes colors
 (`_colocar_colores`: new colors always download, existing ones only with `forzar_fotos` or when empty, colors gone
-from the store become `disponible=False`; an existing color is matched by `fuente_id` first and adopted by name only
-when it has none, `_color_existente`, so two store variants whose names normalize alike get `-2`), pays the regla
-once per product and never leaves an activo without photos. UI: there is NO Productos tab — products live in
+from the store become `disponible=False`; an existing color is matched by `fuente_id` first — Shopify's is the id of
+the color's FIRST variant, which changes when a size is deleted or reordered — and otherwise adopted by name (stored
+name first, then the derived id) only when it has no `fuente_id` or its `fuente_id` no longer comes from the store,
+`_color_existente`, so two store variants whose names normalize alike still get `-2`); the root photos of an activo
+ALREADY linked to the store are store photos and never become a color (`agregar_color(..., conservar_raiz=True)`:
+they stay as fotos de ambiente) — only adopting a hand-made folder converts them (`convertir_actual`); it pays the
+regla once per product and never leaves an activo without photos. UI: there is NO Productos tab — products live in
 **Catálogo › Productos** (`_tab_catalogo.html`), a gallery fetched from `catalogo_grid` (`_catalogo_grid.html` +
 `_catalogo_tarjeta.html`, 60 cards per «Ver más»; `catalogo_vista.py` is the pure filter/sort/paginate/usos layer;
 filters live in the hash `#catalogo?cat=&filtro=&q=&orden=`) with a side-panel ficha fetched from `catalogo_ficha`
 (`_catalogo_ficha.html`, `#catalogo?ficha=<cat>:<pid>`; colors strip, per-color photos, lifestyle photos with
 «Asignar a color», datos + comercial fields, doctrina, usos, «Crear con este producto» →
 `fp_prefill.productos_catalogo` (with `cliente`: `_prefill_para` uses it once, only in that project), «Crear
-experimento», Eliminar) that closes as soon as the hash leaves `#catalogo`
-(hashchange or a sidebar click). Grid and ficha read Crear sessions and experiments once per request:
+experimento», Eliminar) that closes when the hash leaves `#catalogo` (hashchange or a sidebar click) — but with an
+unsaved edit (`data-sucio`) it is only hidden, content kept, and comes back when Catálogo is active again;
+Escape/backdrop/✕ (and opening another ficha) ask before discarding unsaved edits, and Escape with the delete modal
+open closes only the modal. Grid and ficha read Crear sessions and experiments once per request:
 `_experimentos_por_activo`, `_productos_tienda_contexto` and `_usos_por_producto` take them preloaded
 (`experimentos_exp`, `sesiones_cf`, `por_clave`). Every catalog POST returns to `#catalogo`, to that ficha when it
 still exists (`_volver_catalogo`/`_volver_fila`), except by design «Crear con este producto» (`#creativeflowplus`)
 and «Crear experimento» (`#experimentos`); only the two GET photo routes (`imagen_producto`,
 `imagen_producto_archivo`) take `<path:producto_id>` (ids with «/»), the POST photo routes take `<producto_id>` plus
-a `variante` form field; controls that never hold an unsaved edit (the orden select, the one-action selects «Asignar
+a `variante` form field (uploading to a `variante` that is not a color of the meta is refused, nothing written);
+`imagen_producto_archivo` serves a file name only if it is one of that folder's images (no `secure_filename`:
+happyflops' tracked «HOriginal - Beige_5.png» has spaces); controls that never hold an unsaved edit (the orden select, the one-action selects «Asignar
 a color» and the color of «Crear con») carry `data-busqueda` so the «Sin guardar» guard ignores them. «Traer de mi
 tienda» (`_catalogo_importar.html`, `details#cat-traer`: Shopify sin llaves first, then CSV/Excel and URL) connects
-a `shopify_publico` store from the catalog (`tienda_conectar`/`tienda_sync` with `volver=catalogo`; its sync banner
+a `shopify_publico` store from the catalog (`tienda_conectar`/`tienda_sync` with `volver=catalogo`; once connected
+it shows the last sync as `YYYY-MM-DD HH:MM` and, when the store is `rota`, its error; its sync banner
 is `id="cat-sync-<job>"`, because Configuración paints its own `trabajo-<job>` bar for the same job); Configuración
 › Conexiones offers «Shopify (sin llaves)» first (`conectores.TIPOS_CONECTABLES`). Crear's picker
 (`_selector_productos.html`) groups colors under their product and the Sprints panel select

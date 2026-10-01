@@ -171,7 +171,8 @@ sofisticación, pruebas y pedidos.
 
 **Tienda pública**:
 Una tienda Shopify conectada solo con su dominio, sin llaves («Shopify (sin llaves)», `shopify_publico`): lee el
-catálogo público y guarda sus filas con la fuente `shopify`, la misma de la conexión por Admin API.
+catálogo público y guarda sus filas con la fuente `shopify`, la misma de la conexión por Admin API. Es la fuente del
+catálogo: si la Admin API también está conectada, esa solo suma pedidos y atribución.
 
 **Ficha**:
 El panel lateral de un producto, un personaje o un entorno en la pestaña Catálogo.
