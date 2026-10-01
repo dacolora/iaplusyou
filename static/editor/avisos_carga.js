@@ -4,7 +4,7 @@
 // no se iban aunque una edición ya lo hubiera arreglado. Ahora la página los
 // recalcula en cada refresco con `avisosCarga` sobre el documento vigente.
 // Puro, sin DOM: lo prueba Node (tests/js/avisos_carga.test.mjs).
-import { adoptarVozComoFuente, clipsQuePidenDeMas, faltaDuracionAnimacion, normalizar } from "./operaciones.js";
+import { adoptarVozComoFuente, clipsQuePidenDeMas, faltaDuracionAnimacion, ID_SONIDO, normalizar } from "./operaciones.js";
 import { t } from "./textos.js";
 
 // Los materiales que la edición usa DE VERDAD: los de sus clips (y las voces
@@ -99,4 +99,31 @@ export function avisosCarga(doc, info, materiales, { acortado = false } = {}) {
       error: true,
     },
   };
+}
+
+// Capa 5b (D10.7): pares de clips de voz o grabación (de cualquier pista de
+// audio salvo `p_sonido`, el espejo de la escena) que suenan al mismo
+// tiempo — tras «todo sigue a su clip», dos voces pueden terminar
+// solapadas aunque ya no pisen la misma FILA. `t_ms` es el primer instante
+// del solape; la lista sale ordenada por `t_ms` (la página muestra el
+// primero). Sin texto propio: el aviso con su clave llega en la Tarea 8.
+export function vocesJuntas(doc) {
+  const candidatas = [];
+  for (const pista of doc?.pistas ?? []) {
+    if (pista.tipo !== "audio" || pista.id === ID_SONIDO) continue;
+    for (const clip of pista.clips ?? []) {
+      if (["voz", "grabacion"].includes(clip.rol_audio ?? "subida")) candidatas.push(clip);
+    }
+  }
+  const pares = [];
+  for (let i = 0; i < candidatas.length; i++) {
+    for (let j = i + 1; j < candidatas.length; j++) {
+      const a = candidatas[i];
+      const b = candidatas[j];
+      const t_ms = Math.max(a.inicio_ms, b.inicio_ms);
+      const fin = Math.min(a.inicio_ms + a.duracion_ms, b.inicio_ms + b.duracion_ms);
+      if (t_ms < fin) pares.push({ t_ms, ids: [a.id, b.id] });
+    }
+  }
+  return pares.sort((x, y) => x.t_ms - y.t_ms);
 }

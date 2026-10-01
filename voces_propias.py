@@ -69,9 +69,12 @@ class EntradaInvalida(ValueError):
 # --------------------------------------------------------------- leer ---
 
 def _como_voz(m):
+    """`forma_nombre` es un msgid: la plantilla lo traduce con `|traducir`."""
     e = m.get("extra") or {}
+    forma = e.get("forma") or "disenada"
     return {"id": m["id"], "valor": f"{PREFIJO}{m['id']}", "nombre": e.get("nombre") or f"Voz {m['id']}",
-            "forma": e.get("forma") or "disenada", "voice_id": e.get("voice_id") or "", "url": m.get("url") or "",
+            "forma": forma, "forma_nombre": NOMBRES_FORMA.get(forma, forma),
+            "voice_id": e.get("voice_id") or "", "url": m.get("url") or "",
             "idioma_muestra": e.get("idioma_muestra") or "es", "estrenada": bool(e.get("estrenada")),
             "descripcion": e.get("descripcion") or "", "creado_en": m.get("creado_en")}
 
