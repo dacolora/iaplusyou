@@ -254,3 +254,17 @@ def test_nombre_libre(cat, tmp_path):
     assert cat.nombre_libre(d, "a.jpg") == "a.jpg"
     _foto(d, "a.jpg")
     assert cat.nombre_libre(d, "a.jpg") == "a_2.jpg"
+
+
+def test_las_fotos_y_metas_nuevas_del_catalogo_no_se_versionan():
+    """Ruling final-6: una sync de tienda baja ~130 fotos por proyecto; nada
+    nuevo del catálogo (carpetas ni metas de las tres categorías) entra a git.
+    Lo ya comprometido de happyflops sigue rastreado a propósito (sacarlo del
+    índice lo borraría del VPS en el próximo `git pull`)."""
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, ".gitignore"), encoding="utf-8") as f:
+        reglas = [linea.strip() for linea in f]
+    for regla in ("clientes/*/productos/", "clientes/*/productos.json",
+                  "clientes/*/personajes_catalogo/", "clientes/*/personajes_catalogo.json",
+                  "clientes/*/entornos/", "clientes/*/entornos.json"):
+        assert regla in reglas, regla

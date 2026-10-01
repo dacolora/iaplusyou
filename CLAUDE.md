@@ -955,7 +955,10 @@ colors**. On disk `productos.json` keeps
 is a subfolder `productos/<pid>/<color_id>/` with its own reference photos (the root holds the «fotos de ambiente»,
 `fotos_generales`, when there are colors, or the reference photos of a plain product); a `color_id` is
 `id_desde_nombre` of the color name minus a «<producto> — » prefix (`_id_color_desde_nombre`).
-`catalogo_productos.listar()` still yields one entry per color plus `producto_id/variante/nombre_producto`; its id
+`.gitignore` ignores new catalog files (`clientes/*/productos/`, `personajes_catalogo/`, `entornos/` and their
+`.json` metas), but happyflops' old `productos.json` and photos are still tracked (untracking them would delete them
+on the VPS at the next `git pull`): never `git checkout .`/`reset --hard`/`stash` on the VPS without backing up
+`clientes/*/productos*` first. `catalogo_productos.listar()` still yields one entry per color plus `producto_id/variante/nombre_producto`; its id
 `pid/color` is the value of Crear's checkbox and of `fp_prefill` (as `<cat>:<id>`), `campana.catalogo_id` and a
 swap's `producto_id`, while Crear's `productos_ids` keeps the visible name (which is why `claves_de()` also returns
 names); `listar_productos()` yields one entry per product with `colores` and `fotos_generales`; `encontrar(pid)`
