@@ -7,9 +7,9 @@ inventario de actores `docs/nicho/apify-inventario-2026-09-20.md`.
 
 ## 0. Alcance
 
-**Entran:** Walmart, AliExpress, eBay y Etsy como tiendas de la cadena (buscar productos → Claude elige
-los del nicho → reseñas), más la regla de «otro mercado» para TODAS las tiendas (también Amazon y
-Mercado Libre).
+**Entran:** Walmart y AliExpress como tiendas de la cadena (buscar productos → Claude elige los del nicho
+→ reseñas), más la regla de «otro mercado» para TODAS las tiendas (también Amazon y Mercado Libre) y las
+búsquedas por idioma. eBay y Etsy se probaron y quedaron fuera (ver §1.1).
 
 **Fuera de esta tanda:** Google Maps, Trustpilot, Google Play, App Store, Instagram y Facebook (tanda
 siguiente: no son productos); Temu (ningún actor trae reseñas una por una, solo el promedio); ordenar por
@@ -40,6 +40,21 @@ Candidatos (inventario 2026-09-20):
 Plan B: si un actor falla, no trae texto de reseña o cobra distinto de lo que dice su página, se prueba la
 alternativa del inventario; si ninguna sirve, la tienda queda fuera con el motivo anotado en este spec. El
 precio que va al registro es el que se vio cobrar en la verificación.
+
+### 1.1 Resultado de la verificación (2026-09-30, ≈ US$ 0,20 anotados bajo `_creatv`)
+
+| Tienda | Búsqueda | Reseñas | Decisión |
+|---|---|---|---|
+| Walmart | `s-r~walmart-scraper` OK (item_id, title, rating, reviews_count, url, image, seller; **sin precio** salvo `fetch_prices`, que cobra US$ 0,003 por producto: no se pide) | `good-apis~walmart-reviews` falló (BACKEND_UNAVAILABLE y sin id de producto en la reseña); **`apt_marble~walmart-reviews-scraper` OK** (productId, reviewId, text, title, rating, date ISO, verifiedPurchase; US$ 0,001 por reseña; varios productos por corrida) | **entra** |
+| AliExpress | `dami_studio~aliexpress-products-scraper` OK (productId, productUrl, title, price, currency, rating, **orders** — no trae número de reseñas; US$ 0,001 arranque + 0,00012 por producto) | `axlymxp~aliexpress-reviews-scraper` OK (review_id, review_text en el idioma del comprador, rating, review_date «30 Jun 2026», **buyer_country**, product_id; US$ 0,01 arranque + 0,003 por reseña; varios productos por corrida) | **entra** |
+| eBay | `xtracto` 0 resultados (cobró 4 arranques); `burbn` llegó al techo sin resultados; `mrdoe` OK pero con precios en CLP (proxy de Chile) | `apt_marble~ebay-…` y `web_wanderer~ebay-…` devolvieron 0 reseñas para un producto común (eBay casi no tiene reseñas de producto fuera de su catálogo) | **fuera** de esta tanda |
+| Etsy | `good-apis~etsy-search-scraper` OK | `reviewly~etsy-shop-reviews-scraper` >6 min sin traer 5 reseñas (se abortó, US$ 0,02); `getdataforme~etsy-review-scraper` exige acceso completo a la cuenta de Apify (no se concede) | **fuera** de esta tanda |
+
+Consecuencias: esta tanda entrega **Walmart y AliExpress** más la regla de otro mercado para todas las tiendas
+y las búsquedas por idioma. Al elegir «los más reseñados», un producto sin número de reseñas desempata por
+sus pedidos/vendidos (`extra.vendidos`: AliExpress `orders`, Mercado Libre `soldQuantity`). Los fixtures de
+pruebas son la salida real recortada (sin autores): `walmart_busqueda/resenas.json`,
+`aliexpress_busqueda/resenas.json`.
 
 ## 2. Cómo entran en la cadena
 
