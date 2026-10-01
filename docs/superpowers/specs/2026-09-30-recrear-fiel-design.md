@@ -184,3 +184,31 @@ Se ajusta `TARIFAS["leer_referente"]` con el gasto medido.
 
 Elegir a mano qué fotos del producto se mandan; reescribir la lectura de un referente ya leído (se haría
 borrando `extra.lectura`); leer los referentes de antemano en los barridos; dos videos por clic.
+
+## 12. Como video: «igual» y «variación» (2026-10-01, pedido de Daniel: «ahora haz lo mismo para videos»)
+
+En la biblioteca no hay referentes de video (todos son imágenes o carruseles), así que esto es el modo «Como video ▸»
+de Recrear. Daniel eligió que el modelo que anima la versión fiel se elija en el formulario.
+
+- Mismas casillas que en imagen (`modo=fiel|libre`, las dos marcadas) y la misma casilla de textos. Junto a «Igual a la
+  referencia», el selector **«Animar con»** (`modelo_animar`, `MODELOS_ANIMAR = ("seedance25", "wan3")`, Seedance 2.5
+  por defecto: es el único que usa la imagen como primer fotograma). Cambiarlo recarga el formulario (precio nuevo).
+- Precio del botón con la duración por defecto del proyecto (`preferencias_flowplus`, ajustada a cada modelo):
+  igual = imagen fiel (Seedream) + video del modelo elegido; variación = video de `VIDEO_POR_DEFECTO`. Textos del botón
+  por combinación: `data-texto-0`, `data-texto-fiel`, `data-texto-libre`, `data-texto-2` (en imagen fiel y libre cuestan
+  lo mismo).
+- **Igual**: una sesión de IMAGEN (Seedream, `armar_prompt_fiel`, como en imagen) con
+  `extra.animar_despues = {modelo, duracion, formato, prompt, con_sonido, titulo}`. Cuando el worker termina esa imagen
+  (`tareas/flowplus.ejecutar_imagen`, después de guardar `video_listo`), `recrear.lanzar_animacion` crea UNA sesión de
+  video con esa imagen como única referencia (`recrear_modo="fiel_video"`, `imagen_origen=<cf de la imagen>`) y la lanza
+  con `flowplus_lanzar.lanzar` — el costo ya se aprobó con el clic. Antes de lanzar anota `animar_despues.cf_video` en la
+  imagen: un segundo intento no crea otra. Si la imagen falla, no hay video ni cobro. Si lanzar falla, la imagen queda
+  lista con `animar_error` (en el idioma del proyecto), que su detalle muestra.
+- Prompt de la animación (`recrear.armar_prompt_animar`, es/en, determinista): Image 1 es el primer fotograma; deja igual
+  encuadre, producto, personas y textos (quietos y legibles); solo movimiento suave y natural (cámara fija con leve
+  acercamiento); más la línea de SONIDO de siempre.
+- **Variación**: el video de hoy (`armar_prompt` con la línea de textos + cámara + sonido, `VIDEO_POR_DEFECTO`).
+- Títulos: «Recrear: … · igual» (imagen), «Recrear: … · igual · video», «Recrear: … · variación».
+- «Ver o editar los prompts» en video: `prompt_fiel` (la imagen), `prompt_animar` (la animación) y `prompt` (la
+  variación), cada uno con su `<campo>_editado`.
+- Prueba real: VIVAIA con «igual» animada con Wan 3.0 + variación (≈ US$ 1,70).
