@@ -175,7 +175,9 @@ a photo is a clip of the principal `video` track with `foto: true` (velocidad 1,
 `p_sonido` mirror, skipped by `verificar_recortes` and by «El sonido del video»); the render prepares it once per material
 (`final_edition/fotos.py::preparar`: EXIF, transparency over black, ≤ 4096, JPEG 92 → `rutas["foto:<mid>"]`) and repeats one
 frame with `loop`; a photo counts as one input in `PRESUPUESTO_VIDEOS` (427 MB measured on the Mac for 6 framed photos at
-`-threads 1`; still unmeasured on the VPS). `encuadre = {modo: llenar|ajustar, zoom 1–4, x, y}` per principal clip, ONE
+`-threads 1`; still unmeasured on the VPS), while a VIDEO whose `encuadre` zooms in weighs `ceil(zoom²)` inputs, capped at
+`PRESUPUESTO_VIDEOS` (`tramos.peso_video`, ruling R7: «llenar»/«ajustar» scale the whole frame before the crop on every
+frame — 6 such 1080p clips at zoom 2 = 1.5 GB, zoom 4 = 2.9 GB; crop-first in the compiler is deferred). `encuadre = {modo: llenar|ajustar, zoom 1–4, x, y}` per principal clip, ONE
 integer formula in `final_edition/encuadre.py` and `static/editor/encuadre.js` (`caja`, `fondo`, `par`, parity table
 `encuadre_casos.json`): the compiler turns it into `scale/crop` or `split` + `boxblur` background + `overlay`, the preview
 into `drawImage` (`lienzo.dibujarPrincipal`); no `encuadre` = the old chain; EVERY principal chain ends in

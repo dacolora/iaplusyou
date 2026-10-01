@@ -419,3 +419,20 @@ def test_ocho_fotos_sin_sonido_salen_en_dos_tramos(tmp_path, medios):
     streams, dur = _streams(out["archivo"])
     assert out["tramos"] == 2
     assert abs(dur - 8.0) <= 0.3 and "audio" not in streams
+
+
+@pytest.mark.slow
+def test_tres_videos_con_zoom_2_salen_cada_uno_en_su_tramo(tmp_path, medios):
+    # Revisión final de la capa 5b (R7): un video acercado pesa ceil(zoom²)
+    # entradas, así que tres con zoom 2 (4 + 4 + 4 > 6) van en tres tramos;
+    # la unión dura y mide lo mismo que la línea de tiempo.
+    doc = _solo_principal([
+        {"id": f"v{i}", "inicio_ms": i * 1000, "duracion_ms": 1000, "material_id": 4,
+         "recorte": {"desde_ms": i * 1000, "hasta_ms": (i + 1) * 1000},
+         "encuadre": {"modo": "llenar" if i != 1 else "ajustar", "zoom": 2.0, "x": 0.3 * i},
+         "ancho_px": 1280, "alto_px": 720} for i in range(3)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert out["tramos"] == 3
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 3.0) <= 0.2

@@ -228,3 +228,61 @@ def test_cada_foto_de_la_principal_cuenta_como_una_entrada():
     doc = d.resolver(d.validar(doc), "es", "CO")
     assert tr.videos(doc, 0, 8000) == 8
     assert tr.partir(doc) == [(0, 6000), (6000, 8000)]
+
+
+# ---- encuadre con acercamiento (revisión final de la capa 5b, R7) ----------
+# «llenar»/«ajustar» con zoom z escalan el cuadro ENTERO antes del crop: un
+# 1080p horizontal en 9:16 pasa por 3414·z × 1920·z en cada cuadro. Medido
+# (Mac, -threads 1): seis de esos clips en un tramo, zoom 2 = 1,5 GB y zoom 4
+# = 2,9 GB. Cada VIDEO con zoom > 1 pesa ceil(zoom²) entradas (tope
+# PRESUPUESTO_VIDEOS); una foto sigue en 1 (se escala una vez antes del loop).
+
+def _con_zoom(zooms, d_tr=0, modo="llenar"):
+    doc = _con_cortes(len(zooms), d_tr=d_tr)
+    for c, z in zip(doc["pistas"][0]["clips"], zooms):
+        c.update(encuadre={"modo": modo, "zoom": z, "x": 0.5, "y": 0.5}, ancho_px=1920, alto_px=1080)
+    return doc
+
+
+@pytest.mark.parametrize("zoom, peso", [(1.0, 1), (1.01, 2), (1.5, 3), (2.0, 4), (2.5, 6), (4.0, 6)])
+def test_un_video_acercado_pesa_ceil_de_zoom_al_cuadrado(zoom, peso):
+    assert tr.videos(_con_zoom([zoom]), 0, 1000) == peso
+
+
+def test_ajustar_con_zoom_pesa_igual_y_sin_zoom_pesa_uno():
+    assert tr.videos(_con_zoom([2.0], modo="ajustar"), 0, 1000) == 4
+    doc = _con_cortes(1)
+    doc["pistas"][0]["clips"][0].update(encuadre={"modo": "ajustar"}, ancho_px=1920, alto_px=1080)
+    assert tr.videos(doc, 0, 1000) == 1
+    doc["pistas"][0]["clips"][0]["encuadre"] = None
+    assert tr.videos(doc, 0, 1000) == 1
+
+
+def test_una_foto_acercada_sigue_pesando_uno():
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "f0", "inicio_ms": 0, "duracion_ms": 1000, "material_id": 4, "foto": True,
+                                  "encuadre": {"modo": "llenar", "zoom": 3.0}, "ancho_px": 4000, "alto_px": 3000}]
+    doc = d.resolver(d.validar(doc), "es", "CO")
+    assert tr.videos(doc, 0, 1000) == 1
+
+
+def test_seis_videos_con_zoom_2_van_cada_uno_en_su_tramo():
+    doc = _con_zoom([2.0] * 6)
+    cortes = tr.partir(doc)
+    assert cortes == [(i * 1000, (i + 1) * 1000) for i in range(6)]
+    for a, b in cortes:
+        assert tr.videos(doc, a, b) <= tr.PRESUPUESTO_VIDEOS
+
+
+def test_los_tramos_se_siguen_llenando_con_los_pesos():
+    # 4 + 1 + 1 = 6 caben juntos; el cuarto (4) abre otro tramo
+    assert tr.partir(_con_zoom([2.0, 1.0, 1.0, 2.0])) == [(0, 3000), (3000, 4000)]
+
+
+def test_con_zoom_y_transiciones_nunca_corta_dentro_de_una():
+    doc = _con_zoom([2.0, 1.0, 1.5, 2.0, 1.0, 4.0], d_tr=300)
+    cortes = tr.partir(doc)
+    _cubre_todo_seguido(cortes, 6000)
+    assert len(cortes) > 1
+    for ini, fin in tr._intervalos_transicion(doc):
+        assert not any(ini <= b < fin for _a, b in cortes[:-1])

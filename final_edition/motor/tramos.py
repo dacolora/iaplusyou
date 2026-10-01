@@ -4,8 +4,23 @@ entrada `-ss/-t`, ~85 MB (ffmpeg 8 con 1 CPU, el VPS: 4 cortes 663 MB, 8 984,
 16 1 714; los 32 de happyflops pidieron ~3 GB y el kernel mató el render el
 2026-09-30). Por encima de PRESUPUESTO_OVERLAYS o de PRESUPUESTO_VIDEOS el
 documento se renderiza por ventanas de tiempo y se concatena sin recodificar.
-Puro."""
+
+Encuadre con acercamiento (capa 5b, revisión final, R7): «llenar» hace
+`scale={sw}:{sh},crop=W:H` en CADA cuadro, y con zoom z un 1080p horizontal
+en 9:16 se escala a 3414·z × 1920·z antes del crop («ajustar» con zoom
+escala su primer plano igual). Medido en la Mac (`-threads 1`), un tramo de
+seis clips así: zoom 2 = 1,5 GB, zoom 4 = 2,9 GB — contra los ~85 MB por
+entrada que supone PRESUPUESTO_VIDEOS. Por eso un VIDEO de la principal con
+zoom > 1 pesa ceil(zoom²) entradas (tope PRESUPUESTO_VIDEOS: un clip muy
+acercado queda solo en su tramo); una foto sigue pesando 1, porque se escala
+una vez antes del `loop`. Recortar primero y escalar después (lo que
+ahorraría la memoria) queda para más adelante: cambia el compilador y su
+paridad con la vista previa. Puro."""
+import math
+
 from flask_babel import gettext
+
+from final_edition import encuadre as encuadre_mod
 
 from final_edition.documento import duracion_ms, pista_principal
 
@@ -41,13 +56,28 @@ def videos(doc, inicio_ms, fin_ms):
     1 como un video: es su propia entrada, decodificada y escalada una vez
     (medido en la Mac: seis fotos de 4000×3000, 332 MB — 427 MB con encuadre y zoom lento,
     `-threads 1`, Tarea 3 de la capa 5b —; seis videos 1080p,
-    565 MB — sin medir en el VPS no se le baja el peso). Una imagen
-    principal (edición de imagen) es una sola entrada."""
+    565 MB — sin medir en el VPS no se le baja el peso). Un video con
+    encuadre acercado pesa más (`peso_video`). Una imagen principal
+    (edición de imagen) es una sola entrada."""
     principal = pista_principal(doc)
     if not principal or principal["tipo"] != "video":
         return 0
-    return sum(1 for c in principal.get("clips") or []
+    return sum(peso_video(c) for c in principal.get("clips") or []
                if int(c["inicio_ms"]) < fin_ms and int(c["inicio_ms"]) + int(c["duracion_ms"]) > inicio_ms)
+
+
+def peso_video(clip):
+    """Cuántas entradas «de 85 MB» vale un clip de la principal de video:
+    1, o ceil(zoom²) (tope PRESUPUESTO_VIDEOS) para un VIDEO cuyo encuadre
+    acerca — escala el cuadro entero antes del crop en cada cuadro (ver el
+    docstring del módulo). Una foto vale 1: se escala una sola vez."""
+    enc = clip.get("encuadre")
+    if clip.get("foto") or not enc:
+        return 1
+    zoom = float(encuadre_mod.completo(enc)["zoom"])
+    if zoom <= 1:
+        return 1
+    return min(PRESUPUESTO_VIDEOS, math.ceil(zoom * zoom))
 
 
 def _fronteras_seguras(doc, total):
