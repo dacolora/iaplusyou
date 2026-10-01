@@ -595,8 +595,8 @@ msgid "%(n)s referentes no se pudieron clasificar; «Clasificar pendientes» los
 msgstr "%(n)s references couldn't be classified; “Classify pending” requests them again."
 
 #, python-format
-msgid "%(n)s resultado(s) de «Cambiar producto»"
-msgstr "%(n)s “Swap product” result(s)"
+msgid “%(n)s resultado(s) de «Cambiar producto»”
+msgstr “%(n)s “Change product” result(s)”
 
 #, python-format
 msgid "%(n)s s"
@@ -4783,7 +4783,7 @@ msgid "Ese sprint no existe."
 msgstr "That sprint doesn't exist."
 
 msgid "Ese tipo de tienda no se conecta desde aquí (Shopify, Shopify sin llaves o WooCommerce; MercadoLibre va por su botón)."
-msgstr "That store type can't be connected here (Shopify, Shopify without keys or WooCommerce; MercadoLibre has its own button)."
+msgstr "That store type can't be connected here (Shopify, Shopify (no keys) or WooCommerce; MercadoLibre has its own button)."
 
 msgid "Ese ya es tu correo y está confirmado."
 msgstr "That's already your email and it's confirmed."
@@ -9651,7 +9651,7 @@ msgstr "Without it the Amazon / TikTok card of each study stays off. Gray area o
 
 #, python-format
 msgid "Sincronizado de %(fuente)s: la tienda manda sobre el nombre, la descripción y los colores; el precio, la URL de compra, «en prueba» y la prioridad que pongas aquí se respetan."
-msgstr "Synced from %(fuente)s: the store owns the name, description and colors; the price, purchase URL, “in test” and priority you set here are kept."
+msgstr “Synced from %(fuente)s: the store owns the name, description and colors; the price, purchase URL, “in testing” and priority you set here are kept.”
 
 msgid "Sincronizando"
 msgstr "Syncing"
@@ -10646,7 +10646,7 @@ msgid "Tu tienda Shopify (sin llaves)"
 msgstr "Your Shopify store (no keys)"
 
 msgid "Tu tienda Shopify ya está conectada con la Admin API: el catálogo ya se sincroniza desde ahí."
-msgstr "Your Shopify store is already connected with the Admin API: the catalog already syncs from there."
+msgstr "Your Shopify store is already connected through the Admin API, so the catalog syncs from there."
 
 msgid "Tu tienda según Triple Whale"
 msgstr "Your store according to Triple Whale"
