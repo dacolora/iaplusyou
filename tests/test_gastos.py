@@ -289,3 +289,23 @@ def test_estimar_voz_editor_suma_locucion_y_sus_subtitulos():
     assert e["detalle"] == "120 caracteres con ElevenLabs y sus subtítulos"
     # sin caracteres nunca queda en 0: al menos 1 (igual que _estimar_locucion)
     assert gastos.estimar("voz_editor")["usd"] == round(fal_audio.COSTO_USD_POR_CARACTER + fal_audio.costo_whisper(1000), 4)
+
+
+def test_estimar_transcripcion_sin_duracion_no_tiene_precio():
+    """Revisión final de la capa 5a (m9): un archivo cuya duración no se
+    conoce nunca da un precio gratis: «precio no disponible»."""
+    import gastos
+    e = gastos.estimar("transcripcion", segundos=30, sin_duracion=True)
+    assert e["usd"] is None and e["texto"] == "precio no disponible"
+
+
+def test_estimar_voz_editor_solo_subtitulos_cobra_solo_whisper():
+    """Revisión final de la capa 5a (m7): la voz ya existe (mismo hash) pero
+    sin palabras — solo se paga Whisper sobre ella, con su duración real (o
+    la estimada por los caracteres si no se conoce)."""
+    import gastos
+    from providers import fal_audio
+    e = gastos.estimar("voz_editor", caracteres=120, solo_subtitulos=True, duracion_ms=42000)
+    assert e["usd"] == fal_audio.costo_whisper(42000)
+    sin_dur = gastos.estimar("voz_editor", caracteres=120, solo_subtitulos=True)
+    assert sin_dur["usd"] == fal_audio.costo_whisper(10000)

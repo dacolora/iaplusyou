@@ -9,7 +9,7 @@ import { derivar, palabrasDe } from "../../static/editor/subtitulos_fuente.js";
 import {
   alturaDePosicion, claveDeFuente, coloresResaltado, ENCARGO_MAX_MS, encargoGuardado, estadoPanel, estilosPanel, fuenteDeClave,
   fuentePorDefecto, fuentesDisponibles, idiomaPorDefecto, idsSinPalabras, lineaEn, lineasListado, PalabrasPendientes, pedido,
-  posicionDeAltura, POSICIONES, resaltadoElegido, textoBoton, textoEstado, textoTiempo,
+  posicionDeAltura, POSICIONES, resaltadoElegido, respuestaEstimado, textoBoton, textoEstado, textoTiempo,
 } from "../../static/editor/subtitulos_modelo.js";
 import { ponerTextos } from "../../static/editor/textos.js";
 import { docBase } from "./doc_base.mjs";
@@ -362,4 +362,19 @@ test("PalabrasPendientes: si el pedido falla, la próxima revisión lo intenta d
   assert.deepEqual(pedidos, [[2], [2]]);
   await pp.revisar(doc, mats);                                     // ya llegó: no se pide más
   assert.equal(pedidos.length, 2);
+});
+
+// Revisión final (m9): un archivo sin duración da «precio no disponible»
+// (usd null): el botón queda apagado con ese texto — ni gratis, ni un error
+// que se reintenta, ni un clic que transcriba.
+test("respuestaEstimado: gratis, precio, sin precio o error", () => {
+  assert.deepEqual(respuestaEstimado(true, { gratis: true, usd: 0, precio: "" }), { gratis: true });
+  assert.deepEqual(respuestaEstimado(true, { gratis: false, usd: 0.003, precio: "US$ <0,01 aprox." }),
+    { precio: "US$ <0,01 aprox." });
+  assert.deepEqual(respuestaEstimado(true, { gratis: false, usd: null, precio: "precio no disponible" }),
+    { sinPrecio: true, precio: "precio no disponible" });
+  assert.deepEqual(respuestaEstimado(true, { gratis: false, usd: null, precio: "" }), { error: true });
+  assert.deepEqual(respuestaEstimado(false, { error: "x" }), { error: true });
+  assert.deepEqual(respuestaEstimado(true, null), { error: true });
+  assert.deepEqual(respuestaEstimado(true, [1]), { error: true });
 });

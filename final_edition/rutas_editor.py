@@ -249,40 +249,71 @@ def _materiales_propios_de(cliente, ids):
     return salida
 
 
+# Tope de ids de UN pedido, antes de tocar la base (revisión final): el panel
+# manda todos los archivos de la fuente; los topes de `transcripcion`
+# (20 archivos, 10 min) se aplican a lo que de verdad falta transcribir.
+MAX_IDS_PEDIDO = 200
+
+
+def _ids_unicos(ids):
+    """Los ids de la lista, sin repetir y en el mismo orden (un id repetido no
+    cuenta dos veces para los topes ni para el precio). Compara tipo y valor:
+    `True` no es el id 1 (y sigue siendo inválido). Hasta MAX_IDS_PEDIDO."""
+    salida = []
+    for mid in ids:
+        if not any(type(m) is type(mid) and m == mid for m in salida):
+            salida.append(mid)
+    return salida
+
+
+def _sin_duracion(mat):
+    """Sin `duracion_ms` (o 0: «desconocida», como en la vista previa) no hay
+    precio: nunca se transcribe gratis ni se salta el tope de 10 min."""
+    return not mat.get("duracion_ms")
+
+
 @bp.post("/<int:edicion_id>/subtitulos/estimar", endpoint="subtitulos_estimar")
 def subtitulos_estimar(cliente, edicion_id):
     """Precio de transcribir con Whisper lo que todavía falta de
     `material_ids` (D6): `gratis` cuando ya todos tienen palabras — no hay
-    nada que cobrar ni que encolar."""
+    nada que cobrar ni que encolar. Si alguno de lo que falta no sabe cuánto
+    dura, el precio no está disponible (`usd` None): el botón queda apagado."""
     if not _mismo_origen():
         return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
     ed = _cargar(cliente, edicion_id)
     if not ed:
         return jsonify({"error": gettext("No existe esa edición.")}), 404
     cuerpo = request.get_json(silent=True)
-    ids = (cuerpo or {}).get("material_ids")
-    faltan, segundos = [], 0.0
-    for mid in ids if isinstance(ids, list) else []:
+    if not isinstance(cuerpo, dict):
+        return jsonify({"error": gettext("Elige qué transcribir.")}), 400
+    ids = cuerpo.get("material_ids")
+    ids = ids if isinstance(ids, list) else []
+    if len(ids) > MAX_IDS_PEDIDO:
+        return jsonify({"error": gettext("Son demasiados archivos para una vez: hasta 20.")}), 400
+    faltan, segundos, sin_duracion = [], 0.0, False
+    for mid in _ids_unicos(ids):
         if not isinstance(mid, int) or isinstance(mid, bool):
             continue
         mat = materiales.obtener(cliente, mid)
         if mat and transcripcion.necesita(mat):
             faltan.append(mid)
+            sin_duracion = sin_duracion or _sin_duracion(mat)
             segundos += (mat.get("duracion_ms") or 0) / 1000.0
     if not faltan:
         return jsonify({"faltan": [], "segundos": 0, "usd": 0, "precio": "", "gratis": True})
-    estimado = gastos.estimar("transcripcion", segundos=segundos)
-    return jsonify({"faltan": faltan, "segundos": round(segundos, 1), "usd": estimado["usd"],
-                    "precio": estimado["texto"], "gratis": False})
+    estimado = gastos.estimar("transcripcion", segundos=segundos, sin_duracion=sin_duracion)
+    return jsonify({"faltan": faltan, "segundos": None if sin_duracion else round(segundos, 1),
+                    "usd": estimado["usd"], "precio": estimado["texto"], "gratis": False})
 
 
 @bp.post("/<int:edicion_id>/subtitulos/transcribir", endpoint="transcribir")
 def transcribir_subtitulos(cliente, edicion_id):
     """Encola `material_transcribir` con lo que de `material_ids` todavía no
     tiene palabras (spec §2.4): nada se paga sin pasar por aquí, y nada se
-    transcribe dos veces. Límites ANTES de tocar la base: hasta
-    `transcripcion.MAX_ARCHIVOS` ids, un idioma de `audios.IDIOMAS`, y lo que
-    falta no puede pasar de `transcripcion.LIMITE_MS`."""
+    transcribe dos veces. Límites: hasta `MAX_IDS_PEDIDO` ids en el pedido
+    (antes de tocar la base) y un idioma de `audios.IDIOMAS`; de lo que FALTA
+    transcribir, hasta `transcripcion.MAX_ARCHIVOS` archivos, todos con su
+    duración conocida, y no más de `transcripcion.LIMITE_MS`."""
     if not _mismo_origen():
         return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
     ed = _cargar(cliente, edicion_id)
@@ -295,15 +326,21 @@ def transcribir_subtitulos(cliente, edicion_id):
     idioma = cuerpo.get("idioma")
     if not isinstance(ids, list) or not ids:
         return jsonify({"error": gettext("Elige qué transcribir.")}), 400
-    if len(ids) > transcripcion.MAX_ARCHIVOS:
+    if len(ids) > MAX_IDS_PEDIDO:
         return jsonify({"error": gettext("Son demasiados archivos para una vez: hasta 20.")}), 400
     if idioma not in audios.IDIOMAS:
         return jsonify({"error": gettext("Ese idioma no está disponible.")}), 400
-    materiales_ = _materiales_propios_de(cliente, ids)
+    materiales_ = _materiales_propios_de(cliente, _ids_unicos(ids))
     if materiales_ is None:
         return jsonify({"error": gettext("Ese archivo no es de este proyecto.")}), 404
-    faltan = [mat["id"] for mat in materiales_ if transcripcion.necesita(mat)]
-    segundos = sum((mat.get("duracion_ms") or 0) for mat in materiales_ if mat["id"] in faltan) / 1000.0
+    por_transcribir = [mat for mat in materiales_ if transcripcion.necesita(mat)]
+    if len(por_transcribir) > transcripcion.MAX_ARCHIVOS:
+        return jsonify({"error": gettext("Son demasiados archivos para una vez: hasta 20.")}), 400
+    if any(_sin_duracion(mat) for mat in por_transcribir):
+        aviso = gettext("Todavía no se sabe cuánto dura uno de los archivos: espera un momento y vuelve a intentarlo.")
+        return jsonify({"error": aviso}), 400
+    faltan = [mat["id"] for mat in por_transcribir]
+    segundos = sum(mat["duracion_ms"] for mat in por_transcribir) / 1000.0
     if segundos * 1000 > transcripcion.LIMITE_MS:
         return jsonify({"error": gettext("Es demasiado audio para una sola vez: hasta 10 minutos.")}), 400
     if not faltan:
@@ -337,16 +374,26 @@ def voz_estimar(cliente, edicion_id):
         return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
     if not _cargar(cliente, edicion_id):
         return jsonify({"error": gettext("No existe esa edición.")}), 404
-    cuerpo = request.get_json(silent=True) or {}
-    texto = " ".join((cuerpo.get("texto") or "").split())
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict):
+        return jsonify({"error": idiomas.traducir(audios.MENSAJES["texto"])}), 400
     voz, idioma, velocidad = cuerpo.get("voz"), cuerpo.get("idioma"), cuerpo.get("velocidad")
-    estimado = gastos.estimar("voz_editor", caracteres=len(texto))
-    ya_existe = False
-    if texto and voz and velocidad in audios.VELOCIDADES:
+    if audios.es_propia(voz):
+        return jsonify({"error": gettext("Esa voz no está disponible en el editor.")}), 400
+    texto = cuerpo.get("texto")
+    texto = " ".join(texto.split()) if isinstance(texto, str) else ""
+    # Esa voz exacta ya existe: con sus palabras no se paga nada (el botón dice
+    # «gratis»); sin ellas, solo Whisper sobre ella (revisión final).
+    existente = None
+    if (texto and isinstance(voz, str) and voz and isinstance(idioma, str)
+            and isinstance(velocidad, str) and velocidad in audios.VELOCIDADES):
         existente = materiales.buscar_hash(cliente, audios.hash_voz(texto, voz, idioma, velocidad))
-        ya_existe = bool(existente and _tiene_palabras(existente))
+    ya_existe = bool(existente and _tiene_palabras(existente))
+    solo_subtitulos = bool(existente) and not ya_existe
+    estimado = gastos.estimar("voz_editor", caracteres=len(texto), solo_subtitulos=solo_subtitulos,
+                              duracion_ms=existente.get("duracion_ms") if existente else None)
     return jsonify({"caracteres": len(texto), "usd": estimado["usd"], "precio": estimado["texto"],
-                    "ya_existe": ya_existe})
+                    "ya_existe": ya_existe, "solo_subtitulos": solo_subtitulos})
 
 
 @bp.post("/<int:edicion_id>/voz", endpoint="voz")
@@ -362,6 +409,10 @@ def voz(cliente, edicion_id):
     cuerpo = request.get_json(silent=True)
     if not isinstance(cuerpo, dict):
         cuerpo = {}
+    if audios.es_propia(cuerpo.get("voz")):
+        # el editor solo ofrece la galería (las voces propias van por otro
+        # motor y no tienen el caché de Crear › Audios que usa `editor_voz`)
+        return jsonify({"error": gettext("Esa voz no está disponible en el editor.")}), 400
     try:
         payload = audios.validar(cliente, cuerpo)
     except audios.EntradaInvalida as e:

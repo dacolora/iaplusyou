@@ -178,16 +178,29 @@ def costo_whisper(duracion_ms):
     return round(float(duracion_ms) / 60000.0 * COSTO_USD_POR_MINUTO_AUDIO, 4)
 
 
-def transcribir_palabras(audio_url, idioma, on_progreso=None):
+TIMEOUT_WHISPER_S = 180
+
+
+def timeout_whisper(duracion_ms=None):
+    """Cuánto esperar a Whisper (cola de fal incluida): 180 s alcanzan para un
+    audio corto, no para 10 min (el tope del editor). Con la duración:
+    max(180, 120 + 1,5 × segundos); sin ella, 180 (lo de siempre)."""
+    if not duracion_ms:
+        return TIMEOUT_WHISPER_S
+    return max(TIMEOUT_WHISPER_S, int(math.ceil(120 + 1.5 * float(duracion_ms) / 1000.0)))
+
+
+def transcribir_palabras(audio_url, idioma, on_progreso=None, duracion_ms=None):
     """Transcribe `audio_url` con marcas de tiempo por palabra. Devuelve
-    {"texto": str, "palabras": [{"inicio", "fin", "texto"}], "costo_usd": float}."""
+    {"texto": str, "palabras": [{"inicio", "fin", "texto"}], "costo_usd": float}.
+    `duracion_ms` (si se conoce) alarga la espera (`timeout_whisper`)."""
     payload = {
         "audio_url": audio_url,
         "task": "transcribe",
         "language": idioma,
         "chunk_level": "word",
     }
-    data = fal_client.llamar(MODELO_STT, payload, timeout=180, on_progreso=on_progreso)
+    data = fal_client.llamar(MODELO_STT, payload, timeout=timeout_whisper(duracion_ms), on_progreso=on_progreso)
 
     chunks = data.get("chunks") or []
     palabras = []

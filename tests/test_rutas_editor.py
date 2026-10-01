@@ -909,8 +909,10 @@ def test_transcribir_400_por_muchos_ids_idioma_invalido_o_demasiado_audio(dashbo
     ed, _c, _v = _edicion()
     a, _b = _materiales_subtitulos()
     c = _cliente_admin(dashboard)
+    sin_palabras = [materiales.registrar("acme", tipo="audio", origen="voz", url=f"https://r2/m{i}.mp3",
+                                         hash=f"hs-m{i}", bytes=1, duracion_ms=1000)["id"] for i in range(21)]
     r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
-              json={"material_ids": list(range(1, 22)), "idioma": "es"})
+              json={"material_ids": sin_palabras, "idioma": "es"})
     assert r.status_code == 400 and "20" in r.get_json()["error"]
     # "fr" está en audios.IDIOMAS desde Audios Europa (2026-09-30): el idioma
     # inválido para esta prueba es uno que de verdad no está en la lista.
@@ -1310,3 +1312,95 @@ def test_una_cancion_de_mi_musica_no_se_borra_desde_el_editor(dashboard, encolad
     assert r.status_code == 400 and "Mi música" in r.get_json()["error"]
     assert materiales.obtener("acme", cancion["id"]) and r2_borrados == []
     assert c.post(f"/cliente/acme/ediciones/materiales/{audio['id']}/borrar").status_code == 200
+
+
+# --- Revisión final de la capa 5a: precios y límites del servidor ---
+
+def test_transcribir_el_tope_de_20_cuenta_solo_lo_que_falta(dashboard, encolados):
+    # m8: el panel manda TODOS los archivos de la fuente; los ya transcritos
+    # no se pagan ni cuentan para el tope de 20.
+    import materiales
+    ed, _c, _v = _edicion()
+    hechos = [materiales.registrar("acme", tipo="audio", origen="voz", url=f"https://r2/h{i}.mp3", hash=f"hs-h{i}",
+                                   bytes=1, duracion_ms=1000, extra={"palabras": []})["id"] for i in range(25)]
+    faltan = [materiales.registrar("acme", tipo="audio", origen="voz", url=f"https://r2/f{i}.mp3", hash=f"hs-f{i}",
+                                   bytes=1, duracion_ms=1000)["id"] for i in range(3)]
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+              json={"material_ids": hechos + faltan + faltan[:1], "idioma": "es"})     # un id repetido no cuenta dos veces
+    assert r.status_code == 202
+    assert encolados[0][0][2]["material_ids"] == faltan
+
+
+def test_transcribir_y_estimar_rechazan_una_lista_desmedida(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    ids = list(range(1, 202))
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": ids, "idioma": "es"})
+    assert r.status_code == 400 and r.get_json()["error"]
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": ids})
+    assert r2.status_code == 400 and r2.get_json()["error"]
+    assert encolados == []
+
+
+def test_sin_duracion_el_precio_no_esta_disponible_y_no_se_transcribe(dashboard, encolados):
+    # m9: un archivo sin `duracion_ms` nunca da un precio gratis ni pasa el tope de 10 min.
+    import materiales
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos()
+    sin_dur = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/sd.mp3", hash="hs-sd", bytes=1)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": [a["id"], sin_dur["id"]]})
+    j = r.get_json()
+    assert r.status_code == 200 and j["gratis"] is False and j["faltan"] == [a["id"], sin_dur["id"]]
+    assert j["usd"] is None and j["precio"] == "precio no disponible"
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+               json={"material_ids": [a["id"], sin_dur["id"]], "idioma": "es"})
+    assert r2.status_code == 400 and r2.get_json()["error"]
+    assert encolados == []
+
+
+def test_un_cuerpo_que_no_es_objeto_es_400_y_no_500(dashboard, encolados):
+    # m10
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    for ruta in ("voz/estimar", "subtitulos/estimar", "subtitulos/transcribir", "voz"):
+        for cuerpo in ([1, 2], "texto", 7):
+            r = c.post(f"/cliente/acme/ediciones/{ed['id']}/{ruta}", json=cuerpo)
+            assert r.status_code == 400 and r.get_json()["error"], (ruta, cuerpo)
+    assert encolados == []
+
+
+def test_las_voces_propias_no_entran_por_el_editor(dashboard, encolados, monkeypatch):
+    # m6: el editor solo ofrece la galería; una voz `vp:` (MiniMax) no se acepta aquí.
+    import voces_propias
+    monkeypatch.setattr(voces_propias, "resolver", lambda cliente, voz: {"id": 3, "voice_id": "x", "nombre": "Mía",
+                                                                         "estrenada": True})
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    pedido = {"texto": "Hola mundo", "voz": "vp:3", "idioma": "es", "velocidad": "normal"}
+    for ruta in ("voz/estimar", "voz"):
+        r = c.post(f"/cliente/acme/ediciones/{ed['id']}/{ruta}", json=pedido)
+        assert r.status_code == 400 and r.get_json()["error"] == "Esa voz no está disponible en el editor.", ruta
+    assert encolados == []
+
+
+def test_voz_estimar_cobra_solo_los_subtitulos_si_la_voz_ya_existe_sin_palabras(dashboard, encolados):
+    # m7: la voz ya está pagada; solo falta Whisper sobre ella.
+    import audios
+    import materiales
+    from providers import fal_audio
+    ed, _c, _v = _edicion()
+    texto = "Hola mundo, esta es una voz que ya existe"
+    materiales.registrar("acme", tipo="audio", origen=audios.ORIGEN_VOZ, url="https://r2/v.mp3",
+                         hash=audios.hash_voz(texto, "Rachel", "es", "normal"), bytes=1, duracion_ms=42000)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+              json={"texto": texto, "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    j = r.get_json()
+    assert r.status_code == 200 and j["ya_existe"] is False
+    assert j["usd"] == fal_audio.costo_whisper(42000)
+    assert j["solo_subtitulos"] is True and j["precio"]
+    completa = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+                      json={"texto": texto + " y otra", "voz": "Rachel", "idioma": "es", "velocidad": "normal"}).get_json()
+    assert completa["usd"] > j["usd"] and completa["solo_subtitulos"] is False

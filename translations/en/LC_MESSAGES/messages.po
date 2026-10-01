@@ -5510,6 +5510,9 @@ msgstr "That version doesn't exist."
 msgid "Esa versión rompe reglas que no se negocian; pídele a Claude que la corrija."
 msgstr "That version breaks non-negotiable rules; ask Claude to fix it."
 
+msgid "Esa voz no está disponible en el editor."
+msgstr "That voice isn't available in the editor."
+
 msgid "Esa voz ya no está en Mis voces."
 msgstr "That voice is no longer in My voices."
 
@@ -13179,6 +13182,9 @@ msgstr "No global sweep has been brought in yet outside copycoders."
 #, python-format
 msgid "Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>%(redirect)s</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>."
 msgstr "Not yet possible: <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code>. Whoever administers it creates the app at developers.mercadolibre.com (<code>offline_access</code> permission, redirect <code>%(redirect)s</code>) — see the MercadoLibre card in <em>Setup</em>."
+
+msgid "Todavía no se sabe cuánto dura uno de los archivos: espera un momento y vuelve a intentarlo."
+msgstr "We don't know yet how long one of the files lasts: wait a moment and try again."
 
 msgid "Todavía no tiene ángulo"
 msgstr "Doesn't have an angle yet"

@@ -250,23 +250,32 @@ def _estimar_voz_disenada(**_):
     return fal_audio.COSTO_DISENAR_VOZ, "una voz diseñada con MiniMax"
 
 
-def _estimar_transcripcion(segundos=0, **_):
+def _estimar_transcripcion(segundos=0, sin_duracion=False, **_):
     """Editor capa 5a: subtítulos automáticos con Whisper vía fal, por
-    duración del audio (misma fórmula del gasto real, `fal_audio.costo_whisper`)."""
+    duración del audio (misma fórmula del gasto real, `fal_audio.costo_whisper`).
+    `sin_duracion`: algún archivo no sabe cuánto dura — sin precio (nunca
+    «gratis»: el botón queda apagado y la ruta no transcribe)."""
     from providers import fal_audio
+    if sin_duracion:
+        return None, "duración desconocida"
     n = max(0, int(segundos or 0))
     return fal_audio.costo_whisper(n * 1000), f"{n} s de audio con Whisper"
 
 
-def _estimar_voz_editor(caracteres=0, **_):
+def _estimar_voz_editor(caracteres=0, solo_subtitulos=False, duracion_ms=None, **_):
     """Editor capa 5a (D9): voz con IA + sus subtítulos, en un solo botón —
     la locución del texto completo más Whisper sobre ella. `ceil(N / 12)`
     segundos: 12 caracteres por segundo, una locución lenta (el estimado
-    nunca queda por debajo del real)."""
+    nunca queda por debajo del real). `solo_subtitulos` (revisión final): esa
+    voz ya existe (mismo `hash_voz`) pero sin palabras — solo se paga Whisper,
+    sobre su `duracion_ms` real si se conoce (la misma cuenta del gasto)."""
     from providers import fal_audio
     n = max(1, int(caracteres or 0))
-    usd_voz = n * fal_audio.COSTO_USD_POR_CARACTER
     segundos = math.ceil(n / 12)
+    if solo_subtitulos:
+        ms = int(duracion_ms) if duracion_ms else segundos * 1000
+        return fal_audio.costo_whisper(ms), f"subtítulos de una voz ya creada ({n} caracteres)"
+    usd_voz = n * fal_audio.COSTO_USD_POR_CARACTER
     return usd_voz + fal_audio.costo_whisper(segundos * 1000), f"{n} caracteres con ElevenLabs y sus subtítulos"
 
 

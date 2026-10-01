@@ -264,6 +264,19 @@ export function lineaEn(lineas, tMs) {
 
 // ---- El botón y los tiempos ----
 
+// Qué hacer con la respuesta de `subtitulos_estimar` (`ok`: r.ok): {gratis},
+// {precio} (el texto del servidor), {sinPrecio, precio} — algún archivo no
+// sabe cuánto dura: «precio no disponible» y el botón apagado (revisión
+// final: nunca gratis, nunca un clic que transcriba) — o {error} (se vuelve a
+// pedir el precio).
+export function respuestaEstimado(ok, j) {
+  if (!ok || !j || typeof j !== "object" || Array.isArray(j)) return { error: true };
+  if (j.gratis) return { gratis: true };
+  if (!j.precio) return { error: true };
+  if (j.usd === null || j.usd === undefined) return { sinPrecio: true, precio: String(j.precio) };
+  return { precio: String(j.precio) };
+}
+
 // Lo que dice «Generar subtítulos» (D6): mientras corre, la etapa; mientras
 // se calcula el precio o si falló, eso; si no hay nada que pagar, «(gratis)»;
 // si no, el precio TAL CUAL lo escribió el servidor.

@@ -307,14 +307,15 @@ def ejecutar_proxy(tarea):
     carpeta = _carpeta(cliente, f"proxy_{mid}")
     try:
         original = materiales.descargar(mat, os.path.join(carpeta, f"orig.{_extension(mat['tipo'])}"))
-        extra = dict(mat.get("extra") or {})
+        previo = mat.get("extra") or {}      # foto del inicio: solo para decidir, nunca se reescribe
+        nuevos = {}                          # SOLO lo que esta tarea calcula
         campos = {}
         if mat["tipo"] == "video":
             info = cortes.ffprobe_json(original)
             v = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
             dur_s = cortes.duracion(original)
             campos.update(ancho=v.get("width"), alto=v.get("height"), duracion_ms=int(round(dur_s * 1000)))
-            extra["tiene_audio"] = mezcla.tiene_audio(original)
+            nuevos["tiene_audio"] = mezcla.tiene_audio(original)
             proxy = os.path.join(carpeta, "proxy.mp4")
             generar_proxy(original, proxy)
             tira = os.path.join(carpeta, "tira.jpg")
@@ -323,20 +324,22 @@ def ejecutar_proxy(tarea):
             celdas = max(1, int(math.ceil(dur_s)))
             cortes.ffmpeg(["-i", original, "-vf", f"fps=1,scale=160:-2,tile={celdas}x1", "-frames:v", "1", "-q:v", "6", tira], timeout=600)
             campos["url_proxy"] = r2_uploader.upload_file(proxy, f"clientes/{cliente}/materiales/{mid}_proxy.mp4", "video/mp4")
-            extra["tira_url"] = r2_uploader.upload_file(tira, f"clientes/{cliente}/materiales/{mid}_tira.jpg", "image/jpeg")
-            extra["proxy_version"] = PROXY_VERSION
-            if "cortes_ms" not in extra:
+            nuevos["tira_url"] = r2_uploader.upload_file(tira, f"clientes/{cliente}/materiales/{mid}_tira.jpg", "image/jpeg")
+            nuevos["proxy_version"] = PROXY_VERSION
+            if "cortes_ms" not in previo:
                 # `insumos.clon` ya los midió al crear el material (I4,
                 # plan-mandated capa 2): no repetir el trabajo de `scdet`.
-                extra["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
+                nuevos["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
         else:  # audio (único otro tipo posible tras el chequeo de arriba)
             campos["duracion_ms"] = int(round(cortes.duracion(original) * 1000))
-            extra["picos"] = _picos(original)
-        # D5 (capa 5a): `extra` se lee al EMPEZAR y se escribe minutos después
-        # (ffmpeg real de por medio) — una transcripción que haya guardado
-        # `extra.palabras` mientras tanto nunca debe perderse. `actualizar_extra`
-        # mezcla contra el `extra` VIVO en vez de reescribirlo entero.
-        materiales.actualizar_extra(cliente, mid, **extra)
+            nuevos["picos"] = _picos(original)
+        # D5 (capa 5a) y revisión final: `extra` se leyó al EMPEZAR y se
+        # escribe minutos después (ffmpeg real de por medio). Se mezclan SOLO
+        # las claves que esta tarea calculó, contra el `extra` VIVO: lo que otra
+        # tarea guardó mientras tanto (`palabras`, un `nombre` nuevo…) nunca
+        # vuelve a su valor viejo, y una clave ajena (`cliente`, `material_id`)
+        # nunca choca con los argumentos de `actualizar_extra`.
+        materiales.actualizar_extra(cliente, mid, **nuevos)
         if campos:
             import db
             with db.conectar() as con:

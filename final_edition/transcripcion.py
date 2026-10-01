@@ -90,9 +90,10 @@ def transcribir(cliente, mat, idioma, carpeta, referencia):
             url = mat["url"]
         else:
             url, clave_temporal = _audio_de_video(cliente, mat, carpeta)
-        r = fal_audio.transcribir_palabras(url, idioma)
-        palabras = a_ms(r.get("palabras"))
         duracion_ms = int(mat.get("duracion_ms") or 0)
+        # la espera crece con el audio (10 min no caben en 180 s con la cola de fal)
+        r = fal_audio.transcribir_palabras(url, idioma, duracion_ms=duracion_ms or None)
+        palabras = a_ms(r.get("palabras"))
         usd = fal_audio.costo_whisper(duracion_ms)
         gastos.registrar_seguro(cliente, "transcripcion", usd, referencia,
                                 detalle=gettext("Whisper · %(s)s s de audio", s=round(duracion_ms / 1000.0, 1)),

@@ -36,7 +36,7 @@ import { derivar, palabrasDe } from "./subtitulos_fuente.js";
 import {
   alturaDePosicion, coloresResaltado, encargoGuardado, estadoPanel, estilosPanel, fuenteDeClave, fuentePorDefecto,
   fuentesDisponibles, idiomaPorDefecto, lineaEn, lineasListado, pedido, posicionDeAltura, POSICIONES, resaltadoElegido,
-  textoBoton, textoEstado, textoTiempo,
+  respuestaEstimado, textoBoton, textoEstado, textoTiempo,
 } from "./subtitulos_modelo.js";
 import { t } from "./textos.js";
 
@@ -329,7 +329,8 @@ export class SubtitulosPanel {
     });
     // con el precio sin calcular el botón queda activo, pero un clic solo vuelve
     // a pedir el precio (generar() nunca transcribe sin él)
-    this.generarBoton.disabled = corriendo || !est || Boolean(est.calculando) || this._enConflicto();
+    // sin precio (un archivo sin duración conocida) no se puede pagar: apagado
+    this.generarBoton.disabled = corriendo || !est || Boolean(est.calculando) || Boolean(est.sinPrecio) || this._enConflicto();
     this.progreso.hidden = !this.trabajo;
     if (this.trabajo) this.progreso.value = Math.max(0, Math.min(100, Number(this.trabajo.progreso) || 0));
   }
@@ -643,7 +644,10 @@ export class SubtitulosPanel {
   // `reintentosForzados`: un clic de la persona (sin reintentos solos después).
   _pedirEstimado(forzar = false, reintentosForzados = null) {
     const p = this.pedidoActual;
-    const firma = JSON.stringify([this.clave, p.faltan]);
+    // con las duraciones: cuando llega la de un archivo que no la tenía, el
+    // precio se vuelve a pedir
+    const mats = this.editor.materiales?.() ?? {};
+    const firma = JSON.stringify([this.clave, p.faltan, p.faltan.map((id) => mats[id]?.duracion_ms ?? null)]);
     if (!forzar && this.estimado?.firma === firma) return;
     clearTimeout(this.relojEstimar);
     const turno = ++this.turnoEstimar;
@@ -664,10 +668,8 @@ export class SubtitulosPanel {
     let res;
     try {
       const { r, j } = await this._pedirJSON(this.urls.subtitulos_estimar, { material_ids: ids });
-      if (r.ok && j && typeof j === "object" && j.gratis) res = { firma, gratis: true };
-      else if (r.ok && j && typeof j === "object" && j.usd !== null && j.usd !== undefined && j.precio) {
-        res = { firma, precio: String(j.precio) };
-      } else res = { firma, error: true, reintentos };
+      const q = respuestaEstimado(r.ok, j);
+      res = q.error ? { firma, error: true, reintentos } : { firma, ...q };
     } catch {
       res = { firma, error: true, reintentos };
     }
@@ -708,7 +710,7 @@ export class SubtitulosPanel {
     if (!p.todos.length) return;
     const encargo = { idioma: idiomaDe(ed.destino?.()), clave, ids: p.todos.filter((id) => !p.mudos.includes(id)) };
     this._decir("");
-    if (this.estimado?.error) {                              // sin precio no se paga: se vuelve a pedir el precio
+    if (this.estimado?.error || this.estimado?.sinPrecio) {  // sin precio no se paga: se vuelve a pedir el precio
       this._pedirEstimado(true, REINTENTOS_ESTIMAR);
       this._pintarGenerar();
       return;

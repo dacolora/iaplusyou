@@ -371,6 +371,38 @@ def test_proxy_de_audio_calcula_forma_de_onda(entorno, monkeypatch):
     assert m2["extra"]["picos"] == [0.1, 0.5, 0.9] and m2["duracion_ms"] == 7000
 
 
+def test_proxy_solo_escribe_lo_que_calcula_y_no_pisa_valores_mas_nuevos(entorno, monkeypatch, tmp_path):
+    # Revisión final (m5): el `extra` leído al empezar es una foto vieja. Si
+    # el proxy la reescribiera entera, una clave que cambió mientras corría
+    # (aquí `palabras_idioma` y `nombre`) volvería a su valor viejo; y una
+    # clave llamada `cliente` o `material_id` en `extra` reventaría la mezcla.
+    import materiales
+    from final_edition import cortes, mezcla
+    mat = materiales.buscar_hash("acme", "h1")
+    import db
+    with db.conectar() as con:            # `cliente`/`material_id` no se pueden pasar como **campos
+        con.execute(db.material.update().where(db.material.c.id == mat["id"]).values(
+            extra={**(mat.get("extra") or {}), "palabras": [], "palabras_idioma": "en", "nombre": "Viejo",
+                   "cliente": "raro", "material_id": 7}))
+    monkeypatch.setattr(cortes, "duracion", lambda p: 8.0)
+    monkeypatch.setattr(cortes, "detectar_cortes", lambda p, umbral=10.0: [3.5])
+    monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [{"codec_type": "video", "width": 540, "height": 960}], "format": {"duration": "8.0"}})
+    monkeypatch.setattr(mezcla, "tiene_audio", lambda p: True)
+    monkeypatch.setattr(cortes, "ffmpeg", lambda args, timeout=300: open(args[-1], "wb").write(b"x"))
+
+    def _generar_proxy_que_cambia_a_mitad(original, destino):
+        materiales.actualizar_extra("acme", mat["id"], palabras=[{"t_ms": 0, "dur_ms": 100, "texto": "hi"}],
+                                    palabras_idioma="es", nombre="Nuevo")
+        open(destino, "wb").write(b"x")
+    monkeypatch.setattr(entorno, "generar_proxy", _generar_proxy_que_cambia_a_mitad)
+    entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    extra = materiales.obtener("acme", mat["id"])["extra"]
+    assert extra["palabras"] == [{"t_ms": 0, "dur_ms": 100, "texto": "hi"}]
+    assert extra["palabras_idioma"] == "es" and extra["nombre"] == "Nuevo"
+    assert extra["cliente"] == "raro" and extra["material_id"] == 7          # lo ajeno al proxy, intacto
+    assert extra["tiene_audio"] is True and extra["cortes_ms"] == [3500] and extra["proxy_version"] == entorno.PROXY_VERSION
+
+
 def test_proxy_no_pisa_palabras_escritas_mientras_corria(entorno, monkeypatch, tmp_path):
     # D5 (capa 5a): generar_proxy tarda (ffmpeg real de por medio) y una
     # transcripción puede terminar y guardar `extra.palabras` mientras el

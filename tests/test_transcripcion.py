@@ -98,10 +98,11 @@ def test_transcribir_un_audio_llama_whisper_con_su_url_y_registra_el_gasto(base_
     mat = _audio(duracion_ms=52000)
     llamadas = []
     monkeypatch.setattr(transcripcion.fal_audio, "transcribir_palabras",
-                        lambda url, idioma, on_progreso=None: llamadas.append((url, idioma)) or
+                        lambda url, idioma, on_progreso=None, **k: llamadas.append((url, idioma, k)) or
                         {"texto": "hola", "costo_usd": 999, "palabras": [{"inicio": 0.0, "fin": 0.52, "texto": "hola"}]})
     actualizado = transcripcion.transcribir("acme", mat, "es", str(tmp_path), "transcripcion:x:t7")
-    assert llamadas == [(mat["url"], "es")]
+    # revisión final (m4): Whisper espera según lo que dura el audio
+    assert llamadas == [(mat["url"], "es", {"duracion_ms": 52000})]
     assert actualizado["extra"]["palabras"] == [{"t_ms": 0, "dur_ms": 520, "texto": "hola"}]
     assert actualizado["extra"]["palabras_idioma"] == "es" and actualizado["extra"]["palabras_fuente"] == "whisper"
     (g,) = _gastos("acme")
@@ -114,7 +115,7 @@ def test_transcribir_un_audio_llama_whisper_con_su_url_y_registra_el_gasto(base_
 def test_transcribir_un_audio_si_actualizar_extra_revienta_el_gasto_ya_quedo(base_temporal, r2, monkeypatch, tmp_path):
     mat = _audio(duracion_ms=10000)
     monkeypatch.setattr(transcripcion.fal_audio, "transcribir_palabras",
-                        lambda url, idioma, on_progreso=None: {"texto": "x", "costo_usd": 0, "palabras": []})
+                        lambda url, idioma, on_progreso=None, **k: {"texto": "x", "costo_usd": 0, "palabras": []})
 
     def _revienta(*a, **k):
         raise RuntimeError("base caída")
@@ -136,7 +137,7 @@ def test_transcribir_un_video_sube_el_audio_temporal_y_lo_borra(base_temporal, r
     monkeypatch.setattr(transcripcion.cortes, "ffmpeg", _ffmpeg)
     llamadas = []
     monkeypatch.setattr(transcripcion.fal_audio, "transcribir_palabras",
-                        lambda url, idioma, on_progreso=None: llamadas.append(url) or
+                        lambda url, idioma, on_progreso=None, **k: llamadas.append(url) or
                         {"texto": "", "costo_usd": 0, "palabras": []})
     transcripcion.transcribir("acme", mat, "en", str(tmp_path), f"transcripcion:{mat['id']}:t3")
     clave = f"clientes/acme/materiales/stt_{mat['id']}.mp3"
@@ -151,7 +152,7 @@ def test_transcribir_un_video_borra_la_clave_temporal_tambien_si_whisper_revient
     monkeypatch.setattr(materiales, "descargar", lambda m, destino: (open(destino, "wb").write(b"mp4"), destino)[1])
     monkeypatch.setattr(transcripcion.cortes, "ffmpeg", lambda args, timeout=300: open(args[-1], "wb").write(b"mp3"))
 
-    def _revienta(url, idioma, on_progreso=None):
+    def _revienta(url, idioma, on_progreso=None, **k):
         raise RuntimeError("fal caído")
     monkeypatch.setattr(transcripcion.fal_audio, "transcribir_palabras", _revienta)
     with pytest.raises(RuntimeError, match="fal caído"):
@@ -166,7 +167,7 @@ def test_transcribir_un_video_si_borrar_falla_no_se_propaga(base_temporal, r2, m
     monkeypatch.setattr(materiales, "descargar", lambda m, destino: (open(destino, "wb").write(b"mp4"), destino)[1])
     monkeypatch.setattr(transcripcion.cortes, "ffmpeg", lambda args, timeout=300: open(args[-1], "wb").write(b"mp3"))
     monkeypatch.setattr(transcripcion.fal_audio, "transcribir_palabras",
-                        lambda url, idioma, on_progreso=None: {"texto": "", "costo_usd": 0, "palabras": []})
+                        lambda url, idioma, on_progreso=None, **k: {"texto": "", "costo_usd": 0, "palabras": []})
 
     def _borrar_revienta(key):
         raise RuntimeError("R2 no responde")
@@ -186,7 +187,7 @@ def test_transcribir_un_video_real_de_dos_segundos_con_tono(base_temporal, r2, m
     mat = _video(duracion_ms=2000)
     monkeypatch.setattr(materiales, "descargar", lambda m, destino: (shutil.copy(clip, destino), destino)[1])
     monkeypatch.setattr(transcripcion.fal_audio, "transcribir_palabras",
-                        lambda url, idioma, on_progreso=None: {"texto": "", "costo_usd": 0, "palabras": []})
+                        lambda url, idioma, on_progreso=None, **k: {"texto": "", "costo_usd": 0, "palabras": []})
     transcripcion.transcribir("acme", mat, "es", str(tmp_path / "w"), f"transcripcion:{mat['id']}:t1")
     assert r2["subidos"] and r2["subidos"][0].endswith(f"stt_{mat['id']}.mp3")
     assert r2["borrados"] == r2["subidos"]
