@@ -26,7 +26,9 @@ De arriba abajo:
      URL pública está en `video_url`), las más recientes primero;
    - los **personajes** del Catálogo (los productos solos no tienen cara que mover);
    - las fotos subidas aquí con **«Subir una foto»** (jpg/png/webp, se guardan como `material`
-     imagen origen `subida` vía `final_edition.biblioteca.subir`, gratis).
+     imagen origen `subida` vía `final_edition.biblioteca.subir`, gratis). `biblioteca.subir` no deja
+     marcarlas como «de aquí», así que la cuadrícula muestra todas las imágenes `subida` del proyecto
+     (también las subidas desde el editor).
 
    Se elige una (radio visual). Encima, el consejo: «Cara de frente y sin tapar, producto por
    debajo de la cara, foto vertical. Las fotos nuevas se hacen en Desde referencias» (enlace a
@@ -87,18 +89,21 @@ la misma fórmula sin tocar a sus llamadores.
 ## 3. La voz («Escuchar la voz»)
 
 - `audios.py` gana la función compartida **`voz_cruda(cliente, texto, voz, idioma, velocidad,
-  ref_sufijo)`**, extraída de la closure `_tts` de `tareas/audios.py`: `audios.sintetizar` → gasto
+  ref_sufijo, carpeta=None)`**, extraída de la closure `_tts` de `tareas/audios.py`: `audios.sintetizar` → gasto
   `locucion` con referencia `locucion:<h_voz12><ref_sufijo>` apenas el proveedor cobra → mp3 en R2
   `clientes/<c>/materiales/voz_<h16>.mp3` → `materiales.obtener_o_crear(cliente, hash_voz, …)`
   (fila `material` tipo `audio`, origen `voz`, con `duracion_ms`). Devuelve `(material, creado)`.
-  `tareas/audios.py` pasa a usarla sin cambiar su comportamiento.
-- Ruta JSON **`hb_voz`** (`POST /cliente/<c>/hablado/voz`, mismo origen): valida con las reglas de
+  `tareas/audios.py` pasa a usarla sin cambiar su comportamiento: le pasa su carpeta de trabajo
+  (`carpeta`), donde queda el mp3 anotado en `extra.local` para mezclarlo sin volver a bajarlo; sin
+  `carpeta` se usa un temporal que se borra y no se anota `extra.local`.
+- Ruta JSON **`hablado.voz`** (Blueprint `hablado` en `hablado_rutas.py`; `POST /cliente/<c>/hablado/voz`, mismo origen): valida con las reglas de
   Audios y el tope de 500 caracteres; si el material de ese hash ya existe responde enseguida
   `{"listo": true, "voz": {...}}` (sin cobrar); si no, encola la tarea **`hablado_voz`**
   (`max_intentos=1`, job_id `<cliente>__hablado_voz`, una a la vez por proyecto) y responde
   `{"job_id": ...}`. La página sondea `/trabajo/<job_id>/estado` con su propio sondeo (como
-  Audios, sin `data-poll-job`, que recargaría la página) y, al terminar, repite el mismo POST, que ya
-  sale de la caché.
+  Audios, sin `data-poll-job`, que recargaría la página) y, al terminar, repite el mismo POST con
+  `solo_cache=1`, que ya sale de la caché y nunca encola otra síntesis (si la voz no está, responde
+  404 sin cobrar).
 - `"voz"` en la respuesta: `{"material_id", "url", "duracion_s", "hash", "precio_video"}` con
   `precio_video` = `estimate_hablado(..., duracion_s)` o `None` y un `aviso` si pasa de 30 s.
 - La tarea `hablado_voz` va en **`CARRIL_CREAR`** (`worker.py`): no espera detrás de renders.
@@ -107,7 +112,7 @@ la misma fórmula sin tocar a sus llamadores.
 
 ## 4. El video («Generar video»)
 
-Ruta JSON **`hb_crear`** (`POST /cliente/<c>/hablado/crear`, mismo origen). Recibe `foto`,
+Ruta JSON **`hablado.crear`** (`POST /cliente/<c>/hablado/crear`, mismo origen). Recibe `foto`,
 `voz_hash`, `movimiento` y `precio_visto`. Antes de crear nada:
 
 1. **La foto** llega como ficha, nunca como URL: `cf:<cf_id>` (sesión de imagen lista de ESTE
@@ -172,12 +177,12 @@ Experimentos, el editor («Editar»), «Revisar con la doctrina» y la publicaci
 
 ## 7. Errores
 
-- Foto, voz o precio inválidos en `hb_crear`: 400/409 con el motivo en palabras; nada se crea ni
+- Foto, voz o precio inválidos en `hablado.crear`: 400/409 con el motivo en palabras; nada se crea ni
   se cobra.
 - Falla la voz: el botón de video sigue apagado; lo que fal cobró ya quedó en `gasto`.
 - Falla el video: lo de siempre en Crear (`_mensaje_error`: rechazo del proveedor en palabras,
   «Recuperar el video» si WaveSpeed tarda, sin saldo explicado).
-- La voz se borró entre los dos clics: `hb_crear` responde «Escucha la voz otra vez».
+- La voz se borró entre los dos clics: `hablado.crear` responde «Escucha la voz otra vez».
 
 ## 8. Pruebas
 
@@ -189,8 +194,8 @@ Antes del código (TDD), con WaveSpeed y fal falsos:
   vacío).
 - `audios.voz_cruda`: segunda llamada con el mismo hash no sintetiza ni registra gasto; la tarea de
   Audios sigue pasando sus pruebas.
-- Rutas: `hb_voz` (cacheada → listo sin encolar; nueva → encola `hablado_voz` con `max_intentos=1`;
-  texto vacío/largo → 400), `hb_crear` (foto de otro proyecto, URL cruda, voz inexistente, voz de
+- Rutas: `hablado.voz` (cacheada → listo sin encolar; nueva → encola `hablado_voz` con `max_intentos=1`;
+  texto vacío/largo → 400), `hablado.crear` (foto de otro proyecto, URL cruda, voz inexistente, voz de
   más de 30 s y precio distinto → nada se crea; feliz → sesión con `modelo`, `modo_crear`, `hablado`
   y `flowplus_video` encolado), mismo origen.
 - Worker: `_preparar` conserva el modelo hablado; `ejecutar_video` llama a `generar_hablado` con
