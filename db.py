@@ -43,6 +43,33 @@ def pliegue(texto):
     return sin_marcas.casefold().strip()
 
 
+def _entero_env(nombre, defecto):
+    try:
+        return max(0, int(os.environ.get(nombre) or defecto))
+    except ValueError:
+        return defecto
+
+
+def opciones_pool(u):
+    """Pool de conexiones del engine (spec 2026-10-01-escala-y-monitoreo §3).
+    Cada hilo de gunicorn (y cada hilo de fondo de trabajos.iniciar) toma una
+    conexión prestada del pool y la devuelve al cerrar la transacción: abrir
+    una conexión de SQLite cuesta los PRAGMAs y registrar `pliegue`, así que
+    se reutilizan. `CREATV_DB_POOL` debe ser ≥ los hilos de gunicorn
+    (deploy/gunicorn.conf.py); `CREATV_DB_POOL_EXTRA` son las que se abren de
+    más en un pico y se cierran al devolverlas. Con otra base (Postgres, si
+    algún día se migra) se agrega pre_ping y reciclar: el servidor corta las
+    conexiones ociosas y SQLite no."""
+    if u.startswith("sqlite") and ":memory:" in u:
+        return {}
+    opciones = {"pool_size": _entero_env("CREATV_DB_POOL", 10),
+                "max_overflow": _entero_env("CREATV_DB_POOL_EXTRA", 10),
+                "pool_timeout": _entero_env("CREATV_DB_POOL_ESPERA", 15)}
+    if not u.startswith("sqlite"):
+        opciones.update(pool_pre_ping=True, pool_recycle=1800)
+    return opciones
+
+
 def engine():
     """Engine singleton del proceso. SQLite con WAL para que gunicorn (hilos) y
     el worker (otro proceso) lean y escriban a la vez sin 'database is locked'."""
@@ -50,7 +77,8 @@ def engine():
     if _ENGINE is None:
         u = url()
         asegurar_carpeta()
-        _ENGINE = sa.create_engine(u, connect_args={"check_same_thread": False, "timeout": 5}, future=True)
+        _ENGINE = sa.create_engine(u, connect_args={"check_same_thread": False, "timeout": 5}, future=True,
+                                   **opciones_pool(u))
 
         @sa.event.listens_for(_ENGINE, "connect")
         def _pragmas(dbapi_con, _):
@@ -58,6 +86,9 @@ def engine():
             cur.execute("PRAGMA journal_mode=WAL")
             cur.execute("PRAGMA busy_timeout=5000")
             cur.execute("PRAGMA foreign_keys=ON")
+            # Ordenar o agrupar sin índice usa un árbol temporal: en memoria, no
+            # en un archivo de /tmp (el disco del VPS es lo más lento que tiene).
+            cur.execute("PRAGMA temp_store=MEMORY")
             cur.close()
             dbapi_con.create_function("pliegue", 1, pliegue, deterministic=True)
     return _ENGINE
@@ -153,6 +184,7 @@ pieza = Table("pieza", metadata,
     Column("legado_id", String(60), index=True),
     Column("extra", JSON, default=dict),
     Column("edicion_version_id", Integer),
+    sa.Index("ix_pieza_padre", "padre_pieza_id"),  # finales de un proyecto (0026)
 )
 
 # --- editor (spec 2026-09-18-final-edition-editor-design.md §5) ---------------
@@ -241,6 +273,7 @@ experimento_pieza = Table("experimento_pieza", metadata,
     Column("error", Text),
     Column("legado_id", String(60), index=True),           # ad_... de ads.json
     Column("extra", JSON, default=dict),                    # nombre, fuente, contenido_url, objetivo, etc.
+    sa.Index("ix_experimento_pieza_pieza", "pieza_id"),  # clave foránea (0026)
 )
 
 metrica_snapshot = Table("metrica_snapshot", metadata,
@@ -257,6 +290,8 @@ metrica_snapshot = Table("metrica_snapshot", metadata,
     Column("cpa", Float, default=0.0),
     Column("fuente_ventas", String(8), default="ninguna"),
     Column("extra", JSON, default=dict),                    # resultado_nombre, estado_meta_texto, motivo_rechazo
+    # base del delta del Tablero sin leer todo el historial (0026)
+    sa.Index("ix_metrica_snapshot_pieza_tomado", "experimento_pieza_id", "tomado_en"),
 )
 
 evento = Table("evento", metadata,
@@ -268,6 +303,7 @@ evento = Table("evento", metadata,
     Column("mensaje", Text, nullable=False),
     Column("datos", JSON, default=dict),
     Column("creado_en", String(19), nullable=False),
+    sa.Index("ix_evento_experimento_pieza", "experimento_pieza_id"),  # clave foránea (0026)
 )
 
 propuesta = Table("propuesta", metadata,
@@ -432,6 +468,7 @@ pedido = Table("pedido", metadata,
     Column("utm_content", String(120)),
     Column("experimento_pieza_id", Integer, sa.ForeignKey("experimento_pieza.id")),
     sa.UniqueConstraint("cliente", "fuente_id", name="uq_pedido_fuente"),
+    sa.Index("ix_pedido_experimento_pieza", "experimento_pieza_id"),  # clave foránea (0026)
 )
 
 # --- Publicación orgánica (bloque 7) ---
@@ -457,6 +494,7 @@ publicacion = Table("publicacion", metadata,
     # `error` sí se puede volver a encolar (migración 0009).
     sa.Index("uq_publicacion_viva", "cliente", "pieza_id", "plataforma", unique=True,
              sqlite_where=sa.text("estado IN ('en_cola','publicando','publicada')")),
+    sa.Index("ix_publicacion_pieza", "pieza_id"),  # captions de Crear (0026)
 )
 
 # --- Gasto real por proyecto (docs/superpowers/plans/2026-09-18-gasto-real-por-proyecto.md) ---
@@ -475,6 +513,7 @@ gasto = Table("gasto", metadata,
     # referencia actualiza usd/detalle, nunca duplica (migración 0010).
     sa.UniqueConstraint("cliente", "referencia", name="uq_gasto_referencia"),
     sa.Index("ix_gasto_cliente_creado", "cliente", "creado_en"),
+    sa.Index("ix_gasto_creado", "creado_en"),  # «Últimos cobros» del panel (0026)
 )
 
 # ---------------------------------------------------- referentes ---
@@ -547,6 +586,7 @@ referente = Table("referente", metadata,
     Column("barrido_id", Integer, sa.ForeignKey("barrido.id"), index=True),
     Column("extra", JSON, default=dict),
     sa.Index("ix_referente_filtros", "cliente", "etapa", "consciencia", "familia"),
+    sa.Index("ix_referente_fuente_estado", "fuente", "estado_imagen"),  # /admin/referentes (0026)
 )
 
 kv = Table("kv", metadata,
@@ -697,6 +737,7 @@ sprint_evento = Table("sprint_evento", metadata,
     Column("mensaje", Text),
     Column("datos", JSON, default=dict),
     Column("creado_en", String(19), nullable=False),
+    sa.Index("ix_sprint_evento_campana", "campana_id"),  # clave foránea (0026)
 )
 
 # --- Nicho y avatares (docs/superpowers/specs/2026-09-18-nicho-avatares-design.md §2, migración 0011) ---
@@ -760,6 +801,7 @@ avatar = Table("avatar", metadata,
     Column("estado", String(12), nullable=False, default="propuesto"),   # propuesto|aprobado|descartado
     Column("persona_id", Integer, sa.ForeignKey("persona.id")),
     Column("extra", JSON, default=dict),
+    sa.Index("ix_avatar_padre", "padre_id"),  # clave foránea (0026)
 )
 
 # --- Nicho Parte 3: productos encontrados por la investigación (migración 0016) ---
@@ -867,6 +909,33 @@ guion_video = Table("guion_video", metadata,
     Column("usd", Float, default=0.0),
     Column("extra", JSON, default=dict),
     sa.UniqueConstraint("guion_id", "version_n", name="uq_guion_video_version"),
+)
+
+# --- monitoreo (spec 2026-10-01-escala-y-monitoreo §6, migración 0027) -------
+# Un error de la plataforma por huella (origen + tipo + dónde + ruta): cuántas
+# veces pasó, la primera y la última, y la traza de la última, sin tokens.
+# Único escritor: monitoreo.py.
+error_app = Table("error_app", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("huella", String(40), nullable=False, unique=True),
+    Column("origen", String(8), nullable=False),            # web|worker|hilo|log
+    Column("tipo", String(120), nullable=False),            # clase de la excepción o el logger
+    Column("mensaje", Text),
+    Column("ubicacion", String(300)),                       # archivo:línea función() más adentro de la app
+    Column("traza", Text),
+    Column("ruta", String(200)),                            # endpoint, tipo de tarea o plantilla del log
+    Column("metodo", String(8)),
+    Column("url", String(500)),                             # sin query string
+    Column("cliente", String(80)),
+    Column("usuario", String(80)),
+    Column("veces", Integer, nullable=False, default=1),
+    Column("primera_vez", String(19), nullable=False),
+    Column("ultima_vez", String(19), nullable=False),
+    Column("estado", String(10), nullable=False, default="abierto"),   # abierto|resuelto|silenciado
+    Column("resuelto_en", String(19)),
+    Column("extra", JSON, default=dict),
+    sa.Index("ix_error_app_estado_ultima", "estado", "ultima_vez"),
+    sa.Index("ix_error_app_ultima", "ultima_vez"),
 )
 
 

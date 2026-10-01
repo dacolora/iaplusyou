@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Registros') }}{% endblock %}
+{% block content %}
+{# Registros de la app (dashboard.admin_registros, registro_app.leer):
+   proceso (web|worker), nivel (ERROR|WARNING|INFO|None), buscar, entradas
+   [{fecha, nivel, origen, texto}] — la más nueva primero y ya sin tokens —,
+   procesos, niveles, existe (si el archivo está). #}
+<section class="hero aparece">
+  <div class="hero-texto">
+    <span class="eyebrow">{{ _('Panel de administrador') }}</span>
+    <h1>{{ _('Registros.') }}</h1>
+    <p class="hero-sub">{{ _('Lo que la app y el worker escriben mientras trabajan (data/logs). Los errores ya vienen agrupados en Salud; aquí está todo, con su contexto.') }}</p>
+    <p class="hero-sub"><a href="{{ url_for('admin_salud') }}">{{ _('← Volver a Salud') }}</a></p>
+  </div>
+</section>
+
+<section class="admin-bloque aparece">
+  <form method="get" action="{{ url_for('admin_registros') }}" class="salud-filtros-form">
+    <label>{{ _('Proceso') }}
+      <select name="proceso">
+        {% for p in procesos %}<option value="{{ p }}"{% if p == proceso %} selected{% endif %}>{% if p == 'web' %}{{ _('Web (páginas)') }}{% else %}{{ _('Worker (tareas)') }}{% endif %}</option>{% endfor %}
+      </select>
+    </label>
+    <label>{{ _('Nivel') }}
+      <select name="nivel">
+        <option value="">{{ _('Todo') }}</option>
+        <option value="WARNING"{% if nivel == 'WARNING' %} selected{% endif %}>{{ _('Avisos y errores') }}</option>
+        <option value="ERROR"{% if nivel == 'ERROR' %} selected{% endif %}>{{ _('Solo errores') }}</option>
+      </select>
+    </label>
+    <label>{{ _('Buscar') }}
+      <input type="search" name="q" value="{{ buscar }}" placeholder="{{ _('texto, tarea, proyecto…') }}">
+    </label>
+    <button type="submit" class="btn-sm">{{ _('Filtrar') }}</button>
+    {% if existe %}<a class="btn-sm" href="{{ url_for('admin_registros_descargar', proceso=proceso) }}">{{ _('Descargar el archivo') }}</a>{% endif %}
+  </form>
+
+  {% if not existe %}
+  <p class="vacio">{{ _('Todavía no hay registro de este proceso. Se escribe en data/logs cuando la app corre en el servidor (no en las pruebas); el worker empieza a escribirlo al reiniciarse con esta versión.') }}</p>
+  {% elif entradas %}
+  <p class="vacio">{{ ngettext('%(num)d entrada, la más nueva primero.', '%(num)d entradas, la más nueva primero.', entradas | length) }}</p>
+  <ol class="registro-lista">
+    {% for e in entradas %}
+    <li class="registro-entrada registro-{{ e.nivel | lower }}">
+      <div class="registro-cabeza">
+        <span class="registro-fecha">{{ e.fecha }}</span>
+        <span class="admin-pill{% if e.nivel in ('ERROR', 'CRITICAL') %} salud-pill-problema{% elif e.nivel == 'WARNING' %} salud-pill-aviso{% else %} off{% endif %}">{{ e.nivel }}</span>
+        <code>{{ e.origen }}</code>
+      </div>
+      {% if '\n' in e.texto %}
+      <details class="registro-detalle">
+        <summary><pre>{{ e.texto.split('\n', 1)[0] }}</pre></summary>
+        <pre>{{ e.texto.split('\n', 1)[1] }}</pre>
+      </details>
+      {% else %}
+      <pre>{{ e.texto }}</pre>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="vacio">{{ _('Nada con ese filtro en lo más reciente del archivo.') }}</p>
+  {% endif %}
+</section>
+{% endblock %}
