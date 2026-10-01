@@ -53,7 +53,10 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               ("materiales_limpiar", 86400),
               # Auditoría 2026-09-28: salidas/ crecía 2 GB cada dos semanas, tarea
               # sumaba ~485 filas vacías al día y la base solo se respaldaba a mano.
-              ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400)]
+              ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
+              # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
+              # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
+              ("cadena_vigilar", 60)]
 
 # Carril de Crear: generaciones que casi todo el tiempo esperan al proveedor.
 CARRIL_CREAR = ("flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flowplus_director")
