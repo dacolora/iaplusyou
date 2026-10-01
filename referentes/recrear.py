@@ -55,6 +55,11 @@ TEXTOS = {
         "fiel_sin_personas": "No agregues personas, manos, pies ni nada que no esté en Image 1.",
         "fiel_con_personas": "Conserva las personas, manos o pies exactamente como están en Image 1.",
         "fiel_sin_lectura": "No agregues nada que no esté en Image 1.",
+        # Como video, «igual» (spec §12): la imagen fiel se anima.
+        "animar": ("Image 1 es el primer fotograma del video: anímala tal cual. Deja igual el encuadre, el fondo, la luz, "
+                   "las personas y el producto ({nombre}), y los textos que tenga, quietos y legibles. Solo movimiento "
+                   "suave y natural; no cambies, agregues ni quites nada."),
+        "camara_animar": "Cámara fija con un leve acercamiento.",
     },
     "en": {
         "intro": ("Static social media ad, {formato} format. Follow the STRUCTURE and COMPOSITION of Image 1 "
@@ -90,6 +95,10 @@ TEXTOS = {
         "fiel_sin_personas": "Do not add people, hands, feet or anything that is not in Image 1.",
         "fiel_con_personas": "Keep the people, hands or feet exactly as they are in Image 1.",
         "fiel_sin_lectura": "Do not add anything that is not in Image 1.",
+        "animar": ("Image 1 is the first frame of the video: animate it as it is. Keep the framing, background, lighting, "
+                   "people and the product ({nombre}) unchanged, and any texts still and readable. Only soft, natural "
+                   "motion; do not change, add or remove anything."),
+        "camara_animar": "Static camera with a slight push-in.",
     },
 }
 SIN_VOZ_NI_MUSICA = TEXTOS["es"]["sin_voz"]
@@ -202,6 +211,45 @@ def armar_prompt_fiel(lectura, producto, linea_textos, formato, idioma="es"):
         partes.append(linea_textos)
     partes.append(t["sin_logos"])
     return " ".join(partes)
+
+
+def armar_prompt_animar(producto, con_sonido=True, sonido_texto="", idioma="es"):
+    """El video «igual a la referencia» (spec §12): la imagen fiel ya generada es
+    Image 1 y el primer fotograma; el video solo la anima, sin cambiar nada."""
+    t = _textos(idioma)
+    partes = [t["animar"].format(nombre=producto.get("nombre") or ""), t["camara_animar"]]
+    linea = _linea_sonido(sonido_texto, con_sonido, idioma)
+    if linea:
+        partes.append(linea)
+    return " ".join(partes)
+
+
+def lanzar_animacion(cliente, cf_id, imagen_url):
+    """Cuando la imagen fiel de un «Como video» queda lista, crea y lanza UN video
+    con esa imagen como única referencia (spec §12). El costo se aprobó con el
+    clic que pidió las dos cosas. Idempotente: anota `animar_despues.cf_video`
+    en la imagen ANTES de lanzar, así un segundo intento devuelve el mismo
+    video. Sin `animar_despues`, None. Lo llama el worker; las excepciones
+    las maneja él (la imagen nunca se pierde)."""
+    import creative_flow
+    import flowplus_lanzar
+    entry = creative_flow.cargar(cliente).get(cf_id) or {}
+    pedido = entry.get("animar_despues")
+    if not isinstance(pedido, dict):
+        return None
+    if pedido.get("cf_video"):
+        return pedido["cf_video"]
+    cf_video = creative_flow.crear(cliente, [], list(entry.get("productos_ids") or []), [], pedido.get("titulo") or "",
+                                   int(pedido.get("duracion") or 0), "", "A", referencias_urls=[imagen_url],
+                                   platforms=[])
+    creative_flow.actualizar(cliente, cf_video, prompt_relleno=pedido.get("prompt") or "",
+                             aspect_ratio=pedido.get("formato"), tipo="video", modelo=pedido.get("modelo"),
+                             con_sonido=bool(pedido.get("con_sonido")), sonido_texto="", musica_estilo="",
+                             calidad="final", referente_id=entry.get("referente_id"), recrear_modo="fiel_video",
+                             imagen_origen=cf_id, **({"angulo": entry["angulo"]} if entry.get("angulo") else {}))
+    creative_flow.actualizar(cliente, cf_id, animar_despues=dict(pedido, cf_video=cf_video))
+    flowplus_lanzar.lanzar(cliente, cf_video, creative_flow.cargar(cliente)[cf_video])
+    return cf_video
 
 
 def _sin_cierre(texto, etiqueta):

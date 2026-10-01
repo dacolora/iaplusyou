@@ -385,7 +385,22 @@ def ejecutar_imagen(tarea):
         revision_doctrina=None, revision_doctrina_error=None,
     )
     saldo.limpiar("wavespeed")   # salió bien: hay saldo
+    if isinstance(entry.get("animar_despues"), dict):
+        _animar_imagen(cliente, cf_id, imagen_url)
     return N_("Imagen de FlowPlus lista.")
+
+
+def _animar_imagen(cliente, cf_id, imagen_url):
+    """Recrear como video, «igual» (spec 2026-09-30-recrear-fiel §12): la imagen
+    fiel ya está lista y pagada; ahora se lanza el video que la anima. Nunca
+    tumba la tarea: si lanzar falla, la imagen queda lista con el aviso."""
+    from referentes import recrear      # perezoso: recrear importa flowplus_lanzar, que importa este módulo
+    try:
+        recrear.lanzar_animacion(cliente, cf_id, imagen_url)
+    except Exception as e:  # noqa: BLE001
+        creative_flow.actualizar(cliente, cf_id, animar_error=gettext(
+            "La imagen está lista, pero no se pudo lanzar su video (%(tipo)s). Usa «Editar y crear otra a partir de "
+            "esta» para animarla.", tipo=type(e).__name__))
 
 
 @registrar("flowplus_video")

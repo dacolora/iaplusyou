@@ -858,3 +858,66 @@ def test_el_gasto_de_wan_incluye_los_segundos_del_video_de_referencia(base_tempo
     assert cf.cargar("acme")[cid]["usd"] == 3.0
     (g,) = [g for g in gastos.historial("acme") if g["referencia"] == f"video:{cid}:t26"]
     assert g["usd"] == 3.0
+
+
+def _imagen_lista_para_generar(cf, fp, monkeypatch, tmp_path, **extra):
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], ["Rose"], [], "Recrear: X · igual", 0, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P",
+                  **extra)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", lambda *a, **k: "https://prov/i.png")
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_imagen", lambda m, n_referencias=1: {"credits": 2, "usd": 0.1})
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    return cid
+
+
+ANIMAR = {"modelo": "wan3", "duracion": 8, "formato": "9:16", "prompt": "ANIMA", "con_sonido": True,
+          "titulo": "Recrear: X · igual · video"}
+
+
+def test_imagen_fiel_lista_lanza_su_animacion(base_temporal, monkeypatch, tmp_path):
+    """Recrear como video (spec §12): al quedar lista la imagen fiel, el worker
+    lanza el video que la anima, con la imagen subida como única referencia."""
+    import creative_flow as cf
+    import flowplus_lanzar
+    import tareas.flowplus as fp
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzados.append(entry) or True)
+    cid = _imagen_lista_para_generar(cf, fp, monkeypatch, tmp_path, animar_despues=dict(ANIMAR))
+    fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    imagen = cf.cargar("acme")[cid]
+    assert imagen["estado"] == "video_listo" and len(lanzados) == 1
+    assert lanzados[0]["referencias_urls"] == [imagen["video_url"]] and lanzados[0]["modelo"] == "wan3"
+    assert imagen["animar_despues"]["cf_video"] and not imagen.get("animar_error")
+
+
+def test_imagen_fiel_si_no_se_puede_lanzar_el_video_queda_lista_con_el_aviso(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from referentes import recrear
+
+    def roto(*a, **k):
+        raise RuntimeError("base ocupada")
+    monkeypatch.setattr(recrear, "lanzar_animacion", roto)
+    cid = _imagen_lista_para_generar(cf, fp, monkeypatch, tmp_path, animar_despues=dict(ANIMAR))
+    msg = fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    imagen = cf.cargar("acme")[cid]
+    assert imagen["estado"] == "video_listo" and "lista" in msg
+    assert "RuntimeError" in imagen["animar_error"]
+
+
+def test_imagen_fallida_no_lanza_ningun_video(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from referentes import recrear
+    monkeypatch.setattr(recrear, "lanzar_animacion", lambda *a, **k: pytest.fail("no debía animar"))
+    cid = _imagen_lista_para_generar(cf, fp, monkeypatch, tmp_path, animar_despues=dict(ANIMAR))
+
+    def falla(*a, **k):
+        raise RuntimeError("proveedor caído")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", falla)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    assert cf.cargar("acme")[cid]["estado"] == "error"
