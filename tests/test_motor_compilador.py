@@ -59,8 +59,9 @@ def test_ventana_de_tramo_una_linea_que_cruza_la_union_sale_desde_cero_en_el_seg
     # cruza el límite 600 entre dos tramos.
     plan1 = c.compilar(_doc(), RUTAS, ventana=(0, 600), con_ass=True)
     plan2 = c.compilar(_doc(), RUTAS, ventana=(600, 7000), con_ass=True)
-    dialogos1 = [l for l in plan1.ass_texto.splitlines() if l.startswith("Dialogue:")]
-    dialogos2 = [l for l in plan2.ass_texto.splitlines() if l.startswith("Dialogue:")]
+    # karaoke lleva caja: la capa 1 es el texto (la 0, la caja de la misma línea)
+    dialogos1 = [l for l in plan1.ass_texto.splitlines() if l.startswith("Dialogue: 1,")]
+    dialogos2 = [l for l in plan2.ass_texto.splitlines() if l.startswith("Dialogue: 1,")]
     marca_mundo = "{\\1c&H00D4FF&}mundo{\\1c&HFFFFFF&}"
     corte = next(d for d in dialogos1 if marca_mundo in d)
     assert corte.split(",")[1] == "0:00:00.40" and corte.split(",")[2] == "0:00:00.60"

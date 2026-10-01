@@ -178,10 +178,29 @@ def test_generar_ass_karaoke_fontsize_y_tantos_dialogue_como_eventos():
     assert "Style: karaoke," in ass
     linea_style = next(l for l in ass.splitlines() if l.startswith("Style:"))
     assert linea_style.split(",")[2] == "64"
-    dialogos = [l for l in ass.splitlines() if l.startswith("Dialogue:")]
-    assert len(dialogos) == 6
-    assert "{\\1c&H00D4FF&}mundo{\\1c&HFFFFFF&}" in dialogos[1]
-    assert "\\pos(540,1498)" in dialogos[0]
+    # karaoke lleva caja: cada evento son DOS líneas — la caja (capa 0, la línea
+    # entera sin color, texto invisible) y el texto encima (capa 1, estilo sin borde)
+    cajas = [l for l in ass.splitlines() if l.startswith("Dialogue: 0,")]
+    textos = [l for l in ass.splitlines() if l.startswith("Dialogue: 1,")]
+    assert len(cajas) == len(textos) == 6
+    assert "{\\1c&H00D4FF&}mundo{\\1c&HFFFFFF&}" in textos[1] and ",karaoke_texto," in textos[1]
+    assert all("{\\1a&HFF&}" in l and "\\1c" not in l for l in cajas)
+    assert "\\pos(540,1498)" in cajas[0] and "\\pos(540,1498)" in textos[0]
+
+
+def test_la_caja_va_en_su_capa_y_el_texto_encima_sin_borde():
+    """libass pinta una caja por tramo de texto: con un `\\1c` en medio, las
+    cajas de los tramos se enciman en franjas oscuras (VPS, 2026-10-01). La
+    caja va sola, con la línea entera, y el texto encima con un estilo sin
+    borde ni sombra; los estilos sin caja siguen con una sola línea."""
+    ass = s.generar_ass({"estilo_id": "karaoke", "posicion": 0.5, "palabras": PAL[:3]}, "9:16")
+    estilos = {l.split(",")[0]: l.split(",") for l in ass.splitlines() if l.startswith("Style:")}
+    assert set(estilos) == {"Style: karaoke", "Style: karaoke_texto"}
+    texto = estilos["Style: karaoke_texto"]
+    assert (texto[15], texto[16], texto[17]) == ("1", "0", "0")              # BorderStyle 1, Outline 0, Shadow 0
+    assert texto[2] == estilos["Style: karaoke"][2] and texto[7] == estilos["Style: karaoke"][7]   # mismo tamaño y negrita
+    minimal = s.generar_ass({"estilo_id": "minimal", "posicion": 0.5, "palabras": PAL[:3]}, "9:16")
+    assert "_texto" not in minimal and not any(l.startswith("Dialogue: 1,") for l in minimal.splitlines())
 
 
 def test_generar_ass_escala_1_5_sale_96_en_el_style():

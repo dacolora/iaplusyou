@@ -229,6 +229,10 @@ def _texto_evento(evento, ef):
     return " ".join(partes).strip()
 
 
+# Estilo del texto que va encima de la caja (ver generar_ass).
+SUFIJO_TEXTO = "_texto"
+
+
 def generar_ass(subtitulos, formato, fuente_nombre="Inter", ventana=None):
     """El documento ASS completo, o `SIN_SUBTITULOS` si no queda ningún
     evento (sin palabras, o ninguna toca la `ventana`). Con `ventana=(ini,
@@ -270,6 +274,16 @@ def generar_ass(subtitulos, formato, fuente_nombre="Inter", ventana=None):
         # margen (así la pinta libass); sin caja, el contorno y su grosor.
         f"Style: {estilo_id},{fuente_nombre},{ef['tam_base_px']},{ef['primario']},{ef['primario']},{color_borde},{ef['fondo']},"
         f"{ef['negrita']},0,0,0,100,100,0,0,{ef['borde']},{ancho_borde},{ef['sombra']},5,40,40,0,1",
+    ]
+    if con_caja:
+        # libass pinta una caja (borde 3) POR CADA tramo de texto: un `\1c`
+        # que resalta una palabra parte la línea en tres tramos y sus cajas se
+        # enciman en franjas más oscuras (visto en el VPS, 2026-10-01). Así
+        # que la caja va en su propia capa (la línea entera, una sola caja, el
+        # texto invisible) y el texto encima, con este estilo sin borde.
+        lineas.append(f"Style: {estilo_id}{SUFIJO_TEXTO},{fuente_nombre},{ef['tam_base_px']},{ef['primario']},{ef['primario']},"
+                      f"{ef['contorno']},{ef['fondo']},{ef['negrita']},0,0,0,100,100,0,0,1,0,0,5,40,40,0,1")
+    lineas += [
         "", "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
@@ -278,8 +292,13 @@ def generar_ass(subtitulos, formato, fuente_nombre="Inter", ventana=None):
         # una línea achicada lleva también el margen de SU caja
         bord = f"{{\\bord{ev['caja_px']}}}" if con_caja and ev["caja_px"] != ef["caja_px"] else ""
         texto = _texto_evento(ev, ef)
-        lineas.append(f"Dialogue: 0,{_tiempo_ass(ev['t_ms'])},{_tiempo_ass(ev['t_ms'] + ev['dur_ms'])},{estilo_id},,0,0,0,,"
-                      f"{{\\an5\\pos({x},{y})}}{fs}{bord}{texto}")
+        tiempos = f"{_tiempo_ass(ev['t_ms'])},{_tiempo_ass(ev['t_ms'] + ev['dur_ms'])}"
+        if con_caja:
+            plano = " ".join(p["texto"] for p in ev["palabras"]).strip()
+            lineas.append(f"Dialogue: 0,{tiempos},{estilo_id},,0,0,0,,{{\\an5\\pos({x},{y})}}{fs}{bord}{{\\1a&HFF&}}{plano}")
+            lineas.append(f"Dialogue: 1,{tiempos},{estilo_id}{SUFIJO_TEXTO},,0,0,0,,{{\\an5\\pos({x},{y})}}{fs}{texto}")
+        else:
+            lineas.append(f"Dialogue: 0,{tiempos},{estilo_id},,0,0,0,,{{\\an5\\pos({x},{y})}}{fs}{bord}{texto}")
     return "\n".join(lineas) + "\n"
 
 
