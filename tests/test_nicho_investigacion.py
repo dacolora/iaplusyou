@@ -250,9 +250,9 @@ class TestPlataformas:
         assert isinstance(costo, float)
 
     def test_estimar_resenas_amazon(self):
-        """Estimate review cost for Amazon (por_producto=true)."""
+        """Estimate review cost for Amazon (junglee~amazon-reviews-scraper, por_producto=false: una corrida)."""
         costo = plat.estimar_resenas("amazon", 15, 100)
-        # 15 × 100 = 1500 resultados × $0.0009 = $1.35
+        # 15 × 40 (tope por producto) = 600 resultados × $0.006 = $3.6
         assert costo > 0
         assert isinstance(costo, float)
 
@@ -296,31 +296,42 @@ class TestPlataformas:
         assert prod is None
 
     def test_entradas_resenas_amazon(self):
-        """Build Apify input for Amazon reviews."""
+        """Build Apify input for Amazon reviews: junglee~amazon-reviews-scraper runs
+        ONE batch with the productUrls of every chosen product (not one run per product)."""
         productos = [
-            {"fuente_id": "B001", "url": "https://...", "titulo": "P1"},
-            {"fuente_id": "B002", "url": "https://...", "titulo": "P2"}
+            {"fuente_id": "B0000TEST1", "url": "https://www.amazon.com/dp/B0000TEST1", "titulo": "P1"},
+            {"fuente_id": "B0000TEST2", "url": "https://www.amazon.com/dp/B0000TEST2", "titulo": "P2"}
         ]
-        entradas = plat.entradas_resenas("amazon", productos, "US", 50)
+        entradas = plat.entradas_resenas("amazon", productos, "US", 30)      # bajo el tope de 40 por producto: no se recorta
 
-        assert len(entradas) == 2
-        assert all("asin" in e["entrada"] for e in entradas)
+        assert len(entradas) == 1
+        assert entradas[0]["entrada"]["productUrls"] == [{"url": "https://www.amazon.com/dp/B0000TEST1"},
+                                                          {"url": "https://www.amazon.com/dp/B0000TEST2"}]
+        assert entradas[0]["entrada"]["maxReviews"] == 30 and entradas[0]["max_items"] == 60
 
     def test_leer_resena_amazon(self):
-        """Normalize Amazon review."""
+        """Normalize Amazon review (junglee~amazon-reviews-scraper, 2026-10-01): reviewTitle/reviewDescription/
+        ratingScore, never userId/userProfileLink even when the actor sends them."""
         item = {
             "reviewId": "R123",
-            "text": "Great product!",
-            "rating": 5,
+            "reviewTitle": "Great",
+            "reviewDescription": "Great product!",
+            "ratingScore": 5,
             "date": "2026-09-22",
-            "verified": True
+            "productAsin": "B0TEST1234",
+            "productOriginalAsin": "B0TEST1234",
+            "input": "https://www.amazon.com/dp/B0TEST1234",
+            "userId": "secret-buyer-id",
+            "userProfileLink": "https://www.amazon.com/gp/profile/secret-buyer-id",
         }
         resena = plat.leer_resena("amazon", item)
 
         assert resena is not None
         assert resena["fuente_id"] == "R123"
-        assert resena["texto"] == "Great product!"
+        assert resena["texto"] == "Great. Great product!"
         assert resena["puntuacion"] == 5
+        assert resena["producto"] == "B0TEST1234" and resena["producto_pedido"] == "B0TEST1234"
+        assert "userId" not in resena and "userProfileLink" not in resena
 
 
 class TestConstantes:
@@ -401,12 +412,13 @@ def test_estimar_suma_plataformas_claude_y_avatares(monkeypatch):
     from nicho import avatares, investigacion as inv
     monkeypatch.setattr(avatares, "estimar_costo_maximo", lambda: {"usd": 0.4})
     e = inv.estimar({}, "SE", ["amazon", "tiktok_shop"], ["reddit"], inv.TOPES_DEFECTO)
-    # amazon búsqueda 60 × 0.005 = 0.3 (plan FREE de Apify, verificado 2026-10-01)
-    assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.3 and e["filas"][0]["resenas_usd"] == 1.35
+    # amazon búsqueda 60 × 0.005 = 0.3 (plan FREE de Apify, verificado 2026-10-01); amazon reseñas (junglee)
+    # 15 × 40 (tope por producto) × 0.006 = 3.6
+    assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.3 and e["filas"][0]["resenas_usd"] == 3.6
     # claude_usd sale de _tokens_claude (amazon + tiktok_shop buscan las dos en sueco: un idioma)
     entrada_cl, salida_cl = inv._tokens_claude(2, inv.TOPES_DEFECTO, 1)
     assert e["avatares_usd"] == 0.4 and e["claude_usd"] == inv._centavos(inv.costo_claude(entrada_cl, salida_cl)) > 0
-    assert e["total_usd"] == round(0.3 + 1.35 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
+    assert e["total_usd"] == round(0.3 + 3.6 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
     otro = inv.estimar({}, "SE", ["meli"], [], inv.TOPES_DEFECTO)["filas"][0]           # MELI no está en Suecia: busca en México
     assert (otro["mercado"], otro["sitio"]) == ("otro", "MX")
 

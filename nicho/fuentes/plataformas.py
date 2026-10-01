@@ -21,9 +21,11 @@ se descarta (None). Nunca se lee el nombre del autor ni del comprador.
   amazon      búsqueda `junglee~amazon-crawler` (US$ 5 / 1 000): no acepta
               palabras sueltas, así que la entrada lleva la URL de búsqueda
               del dominio del país (`https://www.amazon.<tld>/s?k=…`).
-              reseñas `axesso_data~amazon-reviews-scraper` (US$ 0,90 / 1 000,
-              15 marketplaces): UN `asin` + `domainCode` por corrida, 10
-              reseñas por página, `maxPages` ≤ 10 → una corrida por producto.
+              reseñas `junglee~amazon-reviews-scraper` (US$ 6 / 1 000, mismo
+              publicador que la búsqueda): UNA corrida con los `productUrls`
+              (`/dp/<asin>`) de todos los productos elegidos; techo mínimo
+              US$ 0,50 por corrida y máximo 40 reseñas por producto (axesso
+              se dejó de usar el 2026-10-01: pide acceso completo a la cuenta).
   meli        búsqueda `karamelo~mercado-libre-listings-scraper` (US$ 2 /
               1 000, 18 países): UN `keyword` + `country` (URL del sitio) por
               corrida. reseñas `karamelo~mercadolibre-review-scraper` (US$
@@ -74,8 +76,6 @@ IDIOMA_POR_PAIS = {"SE": "sv", "CO": "es", "MX": "es", "ES": "es", "AR": "es", "
                    "US": "en", "GB": "en", "CA": "en", "AU": "en", "IN": "en", "AE": "en", "BR": "pt", "DE": "de", "FR": "fr",
                    "IT": "it", "NL": "nl", "JP": "ja"}
 IDIOMAS = IDIOMA_POR_PAIS          # nombre viejo, lo importan nicho.investigacion y nicho.rutas
-RESENAS_POR_PAGINA_AMAZON = 10
-MAX_PAGINAS_AMAZON = 10
 _MONEDA_POR_SIMBOLO = {"$": "USD", "US$": "USD", "€": "EUR", "£": "GBP", "kr": "SEK", "R$": "BRL", "¥": "JPY", "₹": "INR", "C$": "CAD",
                        "A$": "AUD", "MX$": "MXN"}
 _RE_HTTP = re.compile(r"^https?://", re.IGNORECASE)      # la misma regla que base.normalizar_comentario
@@ -85,7 +85,8 @@ _DOLAR_LOCAL = {"MX": "MXN", "CO": "COP", "AR": "ARS", "CL": "CLP", "UY": "UYU",
                 "US": "USD", "EC": "USD", "SV": "USD", "PA": "USD"}
 _MESES_EN = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 # El id del producto dentro del link que le mandamos al actor de reseñas (y que devuelve con cada una):
-# walmart.com/ip/<id> (o /ip/<nombre>/<id>) y aliexpress.com/item/<id>.html.
+# amazon.<tld>/dp/<asin>, walmart.com/ip/<id> (o /ip/<nombre>/<id>) y aliexpress.com/item/<id>.html.
+_RE_ID_AMAZON = re.compile(r"/dp/([A-Z0-9]{10})")
 _RE_ID_WALMART = re.compile(r"/ip/(?:[^/?#]+/)*(\d+)/?(?:[?#]|$)")
 _RE_ID_ALIEXPRESS = re.compile(r"/item/(\d+)\.html")
 # Mercado Libre: la ficha de catálogo que agrupa publicaciones (`/p/MCO59691162`, sin guion) o,
@@ -221,7 +222,7 @@ def _id_meli_de_link(v):
 
 
 _ID_EN_LINK = {"meli": _id_meli_de_link, "walmart": lambda v: _id_de_link(v, _RE_ID_WALMART),
-               "aliexpress": lambda v: _id_de_link(v, _RE_ID_ALIEXPRESS)}
+               "aliexpress": lambda v: _id_de_link(v, _RE_ID_ALIEXPRESS), "amazon": lambda v: _id_de_link(v, _RE_ID_AMAZON)}
 
 
 def id_en_link(clave, url):
@@ -261,17 +262,24 @@ def _producto_amazon(item):
 
 
 def _resenas_amazon(productos, pais, resenas_por_producto):
+    # junglee no cobra arranque por corrida (`usd_por_corrida` 0): una sola corrida con los
+    # `productUrls` de TODOS los productos elegidos, no una por producto como el axesso viejo.
     tld = PAISES_AMAZON[pais]
-    paginas = max(1, min(MAX_PAGINAS_AMAZON, math.ceil(resenas_por_producto / RESENAS_POR_PAGINA_AMAZON)))
-    return [{"entrada": {"asin": p["fuente_id"], "domainCode": tld, "maxPages": paginas, "sortBy": "recent"},
-             "max_items": resenas_por_producto, "etiqueta": p["fuente_id"]} for p in productos]
+    return [{"entrada": {"productUrls": [{"url": f"https://www.amazon.{tld}/dp/{p['fuente_id']}"} for p in productos],
+                         "maxReviews": resenas_por_producto, "sort": "recent", "includeGdprSensitive": False,
+                         "scrapeProductDetails": False, "deduplicateRedirectedAsins": True},
+             "max_items": resenas_por_producto * len(productos), "etiqueta": "reseñas"}]
 
 
 def _resena_amazon(item):
-    partes = [_texto(item.get("title"), 300), _texto(item.get("text"), 2000)]
-    return {"fuente_id": _texto(_primero(item, "reviewId", "id"), 120), "texto": ". ".join(x for x in partes if x),
-            "puntuacion": _entero(_primero(item, "rating")), "fecha": _primero(item, "date"), "url": None,
-            "producto": _texto(_primero(item, "asin"), 120) or None}
+    partes = [_texto(item.get("reviewTitle"), 300), _texto(item.get("reviewDescription"), 2000)]
+    return {"fuente_id": _texto(_primero(item, "reviewId"), 120), "texto": ". ".join(x for x in partes if x),
+            "puntuacion": _entero(_primero(item, "ratingScore")), "fecha": _primero(item, "date"), "url": None,
+            "producto": _texto(_primero(item, "productOriginalAsin", "productAsin"), 120) or None,
+            # el link que le mandamos (`input`): identifica el producto aunque la reseña sea de una
+            # variante (`productAsin`/`productOriginalAsin` distinto); el actor también manda
+            # `userId`/`userProfileLink` (el comprador) — nunca se leen.
+            "producto_pedido": _id_de_link(_primero(item, "input"), _RE_ID_AMAZON)}
 
 
 # --------------------------------------------------------------- meli ---
@@ -443,8 +451,9 @@ PLATAFORMAS = {
         "nombre": "Amazon", "paises": PAISES_AMAZON, "casa": "US",
         "busqueda": {"actor": "junglee~amazon-crawler", "nombre": N_("Búsqueda en Amazon"), "usd_por_resultado": 0.005, "usd_por_corrida": 0.0,
                      "armar_entradas": _busqueda_amazon, "leer_producto": _producto_amazon},
-        "resenas": {"actor": "axesso_data~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.0009, "usd_por_corrida": 0.0,
-                    "por_producto": True, "necesita_link": False, "armar_entradas": _resenas_amazon, "leer_resena": _resena_amazon},
+        "resenas": {"actor": "junglee~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.006, "usd_por_corrida": 0.0,
+                    "tope_minimo_usd": 0.5, "max_resenas_por_producto": 40, "por_producto": False, "necesita_link": False,
+                    "armar_entradas": _resenas_amazon, "leer_resena": _resena_amazon},
     },
     "meli": {
         "nombre": "Mercado Libre", "paises": PAISES_MELI, "casa": "MX",
@@ -562,7 +571,10 @@ def estimar_resenas(clave, n_productos, resenas_por_producto, pais=None):
 
 
 def _con_tope(entradas, actor):
-    return [{**e, "max_usd": tope(e["max_items"], actor)} for e in entradas]
+    # Un actor con techo mínimo por corrida (junglee: Apify rechaza `maxTotalChargeUsd` < US$ 0,50)
+    # nunca manda menos que ese mínimo, aunque la corrida sea tan chica que `tope()` pida menos.
+    minimo = float(actor.get("tope_minimo_usd") or 0)
+    return [{**e, "max_usd": max(tope(e["max_items"], actor), minimo)} for e in entradas]
 
 
 def entradas_busqueda(clave, consultas, pais, productos_por_consulta):
@@ -597,7 +609,14 @@ def entradas_resenas(clave, productos, pais, resenas_por_producto):
         productos = [x for x in productos if x.get("url")]
         if not productos:
             raise ErrorFuente(gettext("%(plataforma)s: un producto elegido no tiene link.", plataforma=p["nombre"]))
-    return _con_tope(p["resenas"]["armar_entradas"](productos, sitio(clave, pais), max(1, int(resenas_por_producto))), p["resenas"])
+    resenas_por_producto = max(1, int(resenas_por_producto))
+    tope_producto = p["resenas"].get("max_resenas_por_producto")
+    if tope_producto:
+        # Amazon (junglee): como máximo 40 reseñas por producto -- se recorta ANTES de armar la
+        # corrida, para que el estimado (que arma la misma corrida con datos de relleno) y lo que
+        # realmente se pide nunca se desentiendan.
+        resenas_por_producto = min(resenas_por_producto, int(tope_producto))
+    return _con_tope(p["resenas"]["armar_entradas"](productos, sitio(clave, pais), resenas_por_producto), p["resenas"])
 
 
 def leer_resena(clave, item):
