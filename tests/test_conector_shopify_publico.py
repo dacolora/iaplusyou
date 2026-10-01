@@ -214,6 +214,19 @@ def test_listar_sin_json_valido_es_error_claro(sesion):
     assert "catálogo público de Shopify" in str(e.value)
 
 
+def test_un_429_que_sobrevive_al_reintento_dice_que_la_tienda_limito_las_peticiones(sesion):
+    """Revisión final: un 429 no es «no es una tienda Shopify»: es la tienda
+    frenando las peticiones (`_http.error_generico`)."""
+    s = sesion(lambda m, url, kw: Respuesta(429, None, texto="Too Many Requests", headers={"Retry-After": "1"}))
+    with pytest.raises(ErrorConector) as e:
+        _conector().listar_productos()
+    assert "limitó las peticiones (HTTP 429)" in str(e.value) and "catálogo público" not in str(e.value)
+    assert len(s.llamadas) == 4          # meta.json y products.json, cada una con su único reintento
+    with pytest.raises(ErrorConector) as e:
+        _conector().probar()
+    assert "limitó las peticiones (HTTP 429)" in str(e.value)
+
+
 def test_dominio_interno_no_se_consulta(sesion):
     s = sesion(_manejador())
     with pytest.raises(ErrorConector):

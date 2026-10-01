@@ -160,7 +160,9 @@ class ShopifyPublico(Conector):
     def _get(self, ruta, params=None, timeout=None, reintentar=True):
         """GET JSON siguiendo redirecciones a mano y validando cada host.
         Devuelve (json, host_final). ErrorConector con el mensaje de «no es
-        Shopify» ante HTML/4xx; error_generico ante 5xx."""
+        Shopify» ante HTML/4xx; error_generico ante 5xx y ante un 429 que
+        sobrevivió al reintento de `pedir` (la tienda frenó las peticiones:
+        no es que no sea Shopify)."""
         url = f"https://{self.dominio}{ruta}"
         nombre = f"la tienda {self.dominio}"
         s = sesion()
@@ -183,10 +185,10 @@ class ShopifyPublico(Conector):
                 kw.pop("params", None)       # la Location ya trae la query
                 continue
             break
+        if r.status_code == 429 or r.status_code >= 500:
+            raise error_generico(r, nombre)
         if 400 <= r.status_code < 500:
             raise ErrorConector(_MSG_NO_SHOPIFY % self.dominio)
-        if r.status_code >= 500:
-            raise error_generico(r, nombre)
         try:
             datos = r.json()
         except ValueError:
