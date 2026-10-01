@@ -454,3 +454,69 @@ def test_panel_tiene_el_boton_llevar_a_crear(app, catalogo_vacio):
     gid, vid = _video_armado(app)
     html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
     assert f'data-gpg-crear="/videos/{vid}/escenas/1/crear"' in html and "Llevar a Crear" in html
+
+
+# ------------------------------------------------------------ cadena de escenas ---
+
+def _con_imagenes(app, vid, subidas):
+    for n in ("1", "2"):
+        app["c"].post(f"{BASE}/videos/{vid}/imagenes/subir", data=_foto(f"r{n}.jpg", ref=n),
+                      content_type="multipart/form-data")
+
+
+def _cola(tipo):
+    import sqlalchemy as sa
+
+    import db
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(sa.select(db.tarea).where(db.tarea.c.tipo == tipo))]
+
+
+def test_panel_cadena_pide_lo_que_falta_y_luego_muestra_el_precio(app, catalogo_vacio, subidas):
+    from guiones import cadena, datos
+    gid, vid = _video_armado(app)
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "Generar todas las escenas" in html and "Falta la imagen" in html
+    assert 'data-gpg-accion="/videos/%d/cadena"' % vid not in html  # sin imágenes no hay botón activo
+    _con_imagenes(app, vid, subidas)
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    precio = cadena.precio(datos.video("acme", vid))
+    assert f'data-gpg-accion="/videos/{vid}/cadena"' in html and f"{precio:.2f}" in html
+
+
+def test_aprobar_la_cadena_exige_el_precio_visto(app, catalogo_vacio, subidas):
+    from guiones import cadena, datos
+    gid, vid = _video_armado(app)
+    assert app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": 1}).status_code == 409  # faltan imágenes
+    _con_imagenes(app, vid, subidas)
+    precio = cadena.precio(datos.video("acme", vid))
+    r = app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": precio + 1})
+    assert r.status_code == 409 and r.get_json()["precio"] == precio and _cola("cadena_elementos") == []
+    r = app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": precio})
+    assert r.status_code == 202 and len(_cola("cadena_elementos")) == 1
+    est = cadena.estado(datos.video("acme", vid))
+    assert est["estado"] == "corriendo" and est["aprobado_usd"] == precio and est["aprobado_por"] == "admin"
+    assert app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": precio}).status_code == 409  # ya corre
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert 'data-trabajando="1"' in html and f'data-gpg-accion="/videos/{vid}/cadena/detener"' in html
+    assert app["c"].post(f"{BASE}/videos/{vid}/cadena/detener", json={}).status_code == 200
+    assert cadena.estado(datos.video("acme", vid))["detener"] is True
+    assert app["c"].post(f"/cliente/otro/guiones/videos/{vid}/cadena", json={"total_visto": precio}).status_code == 404
+
+
+def test_rehacer_desde_una_escena(app, catalogo_vacio, subidas):
+    from guiones import cadena, datos
+    gid, vid = _video_armado(app)
+    _con_imagenes(app, vid, subidas)
+    v = datos.video("acme", vid)
+    datos.modificar_cadena("acme", vid, lambda e, _v: cadena.fallo(cadena.lanzada(cadena.lista(cadena.lanzada(
+        cadena.preparada(cadena.aprobar(v, 1, 1.0, "admin", "t"), {}), 1, "cf_1"), 1, "https://f1.jpg"), 2, "cf_2"),
+        2, "Kling 1200"))
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "Kling 1200" in html and '"desde": 2' in html
+    precio = cadena.precio(datos.video("acme", vid), desde=2, conocidos=cadena.estado(datos.video("acme", vid))["elementos"])
+    r = app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"desde": 2, "total_visto": precio})
+    assert r.status_code == 202, r.get_json()
+    est = cadena.estado(datos.video("acme", vid))
+    assert est["desde"] == 2 and est["escenas"]["1"]["frame_url"] == "https://f1.jpg" and "2" not in est["escenas"]
+    assert app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"desde": 3, "total_visto": 0}).status_code == 400

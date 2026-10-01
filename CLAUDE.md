@@ -671,6 +671,21 @@ escena no lleva se nombra en palabras — un número suelto haría que el modelo
 image = last frame of Clip N»), la duración de `DURACIONES_CREAR` que alcanza y el formato, y abre `#referencias` (hash
 nuevo de `cliente.html`/`_tab_flowplus.html` que fuerza «Desde referencias»). Sin imagen en alguna referencia de la escena
 o sin prompt en el chat, el botón queda apagado y la ruta responde 409. Nada se genera.
+**Cadena de escenas** («Generar todas las escenas», spec `docs/superpowers/specs/2026-09-30-flowplus-cadena-escenas-design.md`,
+plan `docs/superpowers/plans/2026-09-30-flowplus-cadena-escenas.md`; Etapa 0 real verificada el 2026-10-01): la escena 1 va
+por Kling O3 Pro `reference-to-video` con sus imágenes y cada siguiente por `image-to-video` desde el último cuadro de la
+anterior (`final_edition.cortes.ultimo_fotograma`) con hasta 3 «elementos» de Kling (`flowplus_modelos.crear_elemento`:
+la API exige 1–3 `refer_images`, va la misma ficha; caché en `kv` `kling_elemento:<cliente>:<sha>`, gasto tipo `video`
+US$ 0,01). Cada escena es una pieza de Crear (`tareas.cadena.lanzar_escena` → `flowplus_lanzar.lanzar`, prioridad 3;
+la sesión lleva `imagen_inicial`/`elementos`/`cadena`), así hereda recuperación, gasto y tarjeta. `guiones/cadena.py` es
+puro (revisión previa —imágenes, prompts, ≤ 7 imágenes en la 1, ≤ 3 elementos en las demás—, avisos de cambio de lugar,
+precio con `estimate_video` + elementos nuevos, `prompt_escena`, transiciones con `preparando`/`detener`); el estado en
+`guion_video.extra["cadena"]`, único escritor `datos.modificar_cadena` (candado; mientras corre, las imágenes por escena
+quedan bloqueadas). Worker `tareas/cadena.py`: `cadena_elementos` (max_intentos=1), periódica `cadena_vigilar` (60 s:
+escena lista → fotograma a R2 → siguiente; falló → `detenida`; al final `cadena_unir`, que arma la edición con
+`edicion_clon.crear_de_piezas`). Rutas `POST /videos/<id>/cadena` `{desde, total_visto}` (409 si el precio recalculado no
+coincide o falta algo) y `/cadena/detener`; UI `_gpg_cadena.html` dentro de `_gpg_escenas.html` (el panel sondea mientras
+corre, con el tope de 12 min de siempre).
 
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,

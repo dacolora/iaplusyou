@@ -1,7 +1,8 @@
 {# Panel de guiones de Flow Plus (fragmento; lo pide _crear_flowplus_guiones.html).
    Todo con autoescape de Jinja: nunca |safe con datos de la persona o de Claude. #}
 {% set trabajando = (lotes | selectattr('estado', 'equalto', 'leyendo') | list | length > 0)
-   or (video is not none and (video.estado in ('recortando', 'armando') or video.estado_imagenes == 'escribiendo')) %}
+   or (video is not none and (video.estado in ('recortando', 'armando') or video.estado_imagenes == 'escribiendo'))
+   or (cadena_vista is defined and cadena_vista.corriendo) %}
 <div class="gpg-panel" data-gpg-raiz data-guion="{{ guion.id if guion else '' }}"
      data-trabajando="{{ '1' if trabajando else '0' }}">
   <div class="gpg-cab">
