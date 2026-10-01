@@ -18,7 +18,7 @@
     {% if inv.relevantes %} · {{ _('%(n)s del nicho', n=inv.relevantes) }}{% endif %}
     {% if inv.resenas %} · {{ _('%(n)s comentario(s) nuevos', n=inv.resenas) }}{% endif %}
   </p>
-  {% if inv.consultas %}<p class="vacio">{{ _('Búsquedas:') }} {% for c in inv.consultas %}<span class="tag-estado">{{ c }}</span> {% endfor %}</p>{% endif %}
+  {% if inv.consultas %}<p class="vacio">{{ _('Búsquedas:') }} {% for c in inv.consultas %}<span class="tag-estado">{{ c }}</span> {% endfor %}{% for codigo, lista in inv.consultas_por_idioma.items() if codigo != inv.idioma_consultas %}<small>({{ codigo }})</small> {% for c in lista %}<span class="tag-estado">{{ c }}</span> {% endfor %}{% endfor %}</p>{% endif %}
   <ol class="nicho-inv-pasos">
     {% for paso in inv.orden %}
     {% set info = inv.pasos.get(paso, {}) %}

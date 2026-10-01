@@ -46,3 +46,103 @@ def test_gasto_cuenta_el_arranque_de_cada_corrida(base_temporal):
     filas = {g["referencia"]: g for g in gastos.historial("acme")}
     assert filas[f"recoleccion:{eid}:buscar:aliexpress:t7"]["usd"] == 0.01 and filas[f"recoleccion:{eid}:t8"]["usd"] == 0.03
     assert filas[f"recoleccion:{eid}:t8"]["extra"]["usd_por_corrida"] == 0.01 and f"recoleccion:{eid}:buscar:aliexpress:t9" not in filas
+
+
+def test_consultas_por_idioma_en_una_llamada(monkeypatch):
+    from nicho import avatares, investigacion as inv
+    llamadas = []
+
+    def _llamar(texto, max_tokens):
+        llamadas.append((texto, max_tokens))
+        return ('{"consultas": {"es": ["botella con horario", "botella motivacional", "botella con horario"], '
+                '"en": ["water bottle time marker", "motivational bottle"]}}'), 400, 60
+    monkeypatch.setattr(avatares, "_llamar", _llamar)
+    est = {"tema": "botellas con marcador de tiempo", "producto": ""}
+    por_idioma, te, ts = inv.consultas_por_idioma_con_claude(est, "CO", 3, ["es", "en"])
+    assert por_idioma == {"es": ["botella con horario", "botella motivacional"], "en": ["water bottle time marker", "motivational bottle"]}
+    assert (te, ts) == (400, 60) and len(llamadas) == 1
+    texto, max_tokens = llamadas[0]
+    assert "español (es)" in texto and "inglés (en)" in texto and '"en": ["...", "..."]' in texto and "de 2 a 3" in texto
+    assert max_tokens == inv.MAX_TOKENS_CONSULTAS >= 1000
+    # un idioma de más que no llega queda fuera (su tienda usará las del país); el del país es obligatorio
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: ('{"consultas": {"es": ["a uno", "b dos"]}}', 10, 5))
+    assert inv.consultas_por_idioma_con_claude(est, "CO", 3, ["es", "en"])[0] == {"es": ["a uno", "b dos"]}
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: ('{"consultas": {"en": ["a uno", "b dos"]}}', 10, 5))
+    with pytest.raises(avatares.AnalisisInvalido) as e:
+        inv.consultas_por_idioma_con_claude(est, "CO", 3, ["es", "en"])
+    assert e.value.tokens_entrada == 10
+    # la lista suelta (la forma de la Parte 3) cuenta como la del primer idioma
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: ('{"consultas": ["a uno", "b dos"]}', 10, 5))
+    assert inv.consultas_por_idioma_con_claude(est, "CO", 3, ["es", "en"])[0] == {"es": ["a uno", "b dos"]}
+    assert inv.consultas_con_claude(est, "CO", 3)[0] == ["a uno", "b dos"]
+
+
+def test_idiomas_necesarios_y_estimado_por_idioma(monkeypatch):
+    from nicho import avatares, investigacion as inv
+    assert inv.idiomas_necesarios("CO", ["meli", "amazon", "walmart", "aliexpress", "tiktok_shop"]) == ["es", "en"]
+    assert inv.idiomas_necesarios("SE", ["amazon", "meli"]) == ["sv", "es"] and inv.idiomas_necesarios("BR", []) == ["pt"]
+    assert inv.idiomas_necesarios("US", ["amazon", "walmart", "aliexpress"]) == ["en"]
+    un_idioma, dos = inv._tokens_claude(2, inv.TOPES_DEFECTO, 1), inv._tokens_claude(2, inv.TOPES_DEFECTO, 2)
+    assert dos[0] > un_idioma[0] and dos[1] > un_idioma[1] and inv._tokens_claude(2, inv.TOPES_DEFECTO) == un_idioma
+    monkeypatch.setattr(avatares, "estimar_costo_maximo", lambda: {"usd": 0.4})
+    vistos, real = [], inv._tokens_claude
+    monkeypatch.setattr(inv, "_tokens_claude", lambda n, topes, n_idiomas=1: vistos.append((n, n_idiomas)) or real(n, topes, n_idiomas))
+    inv.estimar({}, "CO", ["meli", "walmart"], [], inv.TOPES_DEFECTO)
+    assert vistos == [(2, 2)]
+
+
+def test_ejecutar_consultas_guarda_las_de_cada_idioma(base_temporal, monkeypatch):
+    from nicho import avatares, datos, investigacion as inv
+    from tareas import investigacion as ti
+    pedidos = []
+
+    def _llamar(texto, max_tokens):
+        pedidos.append(texto)
+        return ('{"consultas": {"es": ["botella con horario", "botella motivacional"], '
+                '"en": ["water bottle time marker", "motivational bottle"]}}'), 300, 40
+    monkeypatch.setattr(avatares, "_llamar", _llamar)
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda *a, **k: True)
+    eid = datos.crear_estudio("acme", "X", tema="botellas con marcador de tiempo", pais="CO")
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("botellas", "CO", ["meli", "walmart"], [], inv.TOPES_DEFECTO,
+                                                               estimado={"total_usd": 5.0}))
+    ti.ejecutar_consultas({"id": 3, "payload": {"cliente": "acme", "estudio_id": eid}, "intentos": 1, "max_intentos": 2})
+    i = datos.investigacion("acme", eid)
+    assert i["consultas"] == ["botella con horario", "botella motivacional"] and i["pasos"]["consultas"]["estado"] == "hecho"
+    assert i["consultas_por_idioma"] == {"es": ["botella con horario", "botella motivacional"], "en": ["water bottle time marker", "motivational bottle"]}
+    assert "español (es)" in pedidos[0] and "inglés (en)" in pedidos[0]
+
+
+def test_cada_tienda_busca_en_su_idioma(base_temporal, monkeypatch):
+    from nicho import datos, fuentes, investigacion as inv
+    from tareas import investigacion as ti
+    vistas = {}
+
+    class Falsa:
+        de_pago, resultados, aviso, corridas, run_id = True, 0, "", [], None
+
+        def __init__(self, clave):
+            self.clave = clave
+
+        def tarifa_busqueda(self):
+            return {"actor": "x", "nombre": "x", "usd_por_resultado": 0.001}
+
+        def buscar(self, consultas, pais, n, avanzar=None):
+            vistas[self.clave] = list(consultas)
+            return iter(())
+    monkeypatch.setattr(fuentes, "por_tipo", lambda tipo: (lambda: Falsa(tipo)))
+    monkeypatch.setattr(ti.trabajos, "encolar", lambda *a, **k: True)
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="CO")
+    i = inv.crear_inicial("t", "CO", ["meli", "walmart", "amazon"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 5.0})
+    i = inv.marcar_paso({**i, "consultas": ["botella con horario", "botella motivacional"],
+                         "consultas_por_idioma": {"es": ["botella con horario", "botella motivacional"], "en": ["water bottle time marker"]}},
+                        "consultas", "hecho")
+    datos.iniciar_investigacion("acme", eid, i)
+    for k, plat in enumerate(("meli", "walmart")):
+        ti.ejecutar_buscar({"id": 10 + k, "payload": {"cliente": "acme", "estudio_id": eid, "plataforma": plat}, "intentos": 1, "max_intentos": 1})
+    assert vistas == {"meli": ["botella con horario", "botella motivacional"], "walmart": ["water bottle time marker"]}
+    assert not datos.investigacion("acme", eid)["pasos"]["buscar:walmart"].get("aviso")
+    # sin las de su idioma, la tienda usa las del país y el paso lo dice
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "consultas_por_idioma": {"es": x["consultas"]}})
+    ti.ejecutar_buscar({"id": 12, "payload": {"cliente": "acme", "estudio_id": eid, "plataforma": "amazon"}, "intentos": 1, "max_intentos": 1})
+    assert vistas["amazon"] == ["botella con horario", "botella motivacional"]
+    assert datos.investigacion("acme", eid)["pasos"]["buscar:amazon"]["aviso"] == ti.NOTA_IDIOMA

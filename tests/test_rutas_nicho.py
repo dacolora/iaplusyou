@@ -669,3 +669,16 @@ def test_cliente_sin_apify_no_ve_plataformas_ni_variables_del_env(app, monkeypat
     r = c.post(f"/cliente/acme/nicho/{eid}/investigacion", data={"plataformas": "amazon", "total_visto": "99"}, follow_redirects=True)
     assert "Esa fuente no está disponible todavía." in r.data.decode()
     assert datos.investigacion("acme", eid) == {}
+
+
+def test_pagina_muestra_las_busquedas_por_idioma(app, llaves_inv):
+    from nicho import datos, investigacion as inv
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="CO")
+    i = inv.crear_inicial("t", "CO", ["meli", "walmart"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 2.0})
+    i = inv.marcar_paso({**i, "consultas": ["botella con horario"],
+                         "consultas_por_idioma": {"es": ["botella con horario"], "en": ["water bottle time marker"]}}, "consultas", "hecho")
+    datos.iniciar_investigacion("acme", eid, i)
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    linea = html.split("Búsquedas:")[1].split("</p>")[0]
+    assert "botella con horario" in linea and "<small>(en)</small>" in linea and "water bottle time marker" in linea
+    assert "<small>(es)</small>" not in linea                                   # las del país no se repiten

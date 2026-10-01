@@ -17195,3 +17195,6 @@ msgstr "AliExpress search"
 
 msgid "Reseñas de AliExpress"
 msgstr "AliExpress reviews"
+
+msgid "sin búsquedas en el idioma de la tienda: se usaron las del país"
+msgstr "no searches in the store's language: the country's searches were used"

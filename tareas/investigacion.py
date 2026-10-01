@@ -36,6 +36,7 @@ ETAPAS_CONSULTAS = [(N_("Consultas"), 60)]
 ETAPAS_BUSCAR = [(N_("Buscando"), 240), (N_("Guardando"), 10)]
 ETAPAS_SELECCION = [(N_("Eligiendo productos"), 60)]
 MAX_SALTOS = 12        # pasos sin tarea que `avanzar` puede cerrar en un solo llamado
+NOTA_IDIOMA = N_("sin búsquedas en el idioma de la tienda: se usaron las del país")
 
 
 def _ultimo_intento(tarea):
@@ -301,20 +302,25 @@ def ejecutar_consultas(tarea):
         _detener(cliente, eid, N_("sin tema"))
         return gettext("El estudio no tiene tema.")
     topes = {**inv.TOPES_DEFECTO, **(i.get("topes") or {})}
+    pais = i.get("pais") or est.get("pais") or "CO"
     job = tarea.get("job_id") or datos.job_id_inv(cliente, eid, "consultas")
     cola.reportar(job, etapa=N_("Consultas"))
     _marcar(cliente, eid, "consultas", "en_curso")
     try:
-        # el tope aprobado viaja a Claude: la búsqueda nunca gasta más que su línea (F3)
-        consultas, entrada, salida = inv.consultas_con_claude(est, i.get("pais") or est.get("pais") or "CO", topes["consultas"])
+        # el tope aprobado viaja a Claude (F3); una lista por idioma de búsqueda, en UNA llamada (Parte 4 §2)
+        idiomas_busqueda = inv.idiomas_necesarios(pais, i.get("plataformas") or [])
+        por_idioma, entrada, salida = inv.consultas_por_idioma_con_claude(est, pais, topes["consultas"], idiomas_busqueda)
     except Exception as e:
         _fallo_claude(cliente, eid, tarea, "consultas", e, lambda m: gettext("Claude no pudo escribir las consultas: %(e)s", e=m))
         raise
-    usd = _gasto_claude(cliente, eid, tarea, _ref_intento("consultas", tarea), entrada, salida, gettext("%(n)s consultas", n=len(consultas)))
+    consultas = por_idioma[idiomas_busqueda[0]]
+    usd = _gasto_claude(cliente, eid, tarea, _ref_intento("consultas", tarea), entrada, salida,
+                        gettext("%(n)s consultas", n=sum(len(v) for v in por_idioma.values())))
 
     def _fn(x):
         previo = float(((x.get("pasos") or {}).get("consultas") or {}).get("usd") or 0)
-        return inv.marcar_paso({**x, "consultas": consultas}, "consultas", "hecho", usd=round(previo + usd, 4), aviso="")
+        return inv.marcar_paso({**x, "consultas": consultas, "consultas_por_idioma": por_idioma}, "consultas", "hecho",
+                               usd=round(previo + usd, 4), aviso="")
     _o_interrumpir(tarea, cliente, eid, lambda: datos.actualizar_investigacion(cliente, eid, _fn))
     _avanzar_seguro(cliente, eid)
     return gettext("Consultas: %(consultas)s", consultas=", ".join(consultas))
@@ -330,12 +336,16 @@ def ejecutar_buscar(tarea):
         return gettext("La investigación no está activa.")
     paso = f"buscar:{plat}"
     topes = {**inv.TOPES_DEFECTO, **(i.get("topes") or {})}
-    # como máximo el tope aprobado: lo que el estimado cobró por esta búsqueda (F3)
-    consultas = [c for c in (i.get("consultas") or []) if c][:max(1, int(topes["consultas"]))]
+    pais = i.get("pais") or est.get("pais") or ""
+    # Las búsquedas en el idioma de la tienda (Parte 4 §2: otro mercado, o AliExpress en inglés); si Claude no las
+    # escribió, las del país y el paso lo avisa. Como máximo el tope aprobado: lo que el estimado cobró (F3).
+    idioma = plataformas.idioma_busqueda(plat, pais)
+    propias = [c for c in ((i.get("consultas_por_idioma") or {}).get(idioma) or []) if c]
+    sin_propias = not propias and idioma != plataformas.idioma(pais)
+    consultas = (propias or [c for c in (i.get("consultas") or []) if c])[:max(1, int(topes["consultas"]))]
     if not consultas:
         _detener(cliente, eid, N_("sin consultas"))
         return gettext("No hay consultas para buscar.")
-    pais = i.get("pais") or est.get("pais") or ""
     job = tarea.get("job_id") or datos.job_id_inv(cliente, eid, paso)
 
     def reportar(etapa, detalle=None):
@@ -370,7 +380,7 @@ def ejecutar_buscar(tarea):
     usd = _gasto_apify(cliente, eid, tarea, paso, fuente, fuente.tarifa_busqueda())
     _o_interrumpir(tarea, cliente, eid, lambda: _marcar_acumulando(cliente, eid, paso, "hecho" if productos else "vacio", usd,
                                                                    productos=len(productos), nuevos=guardado["nuevos"],
-                                                                   aviso=getattr(fuente, "aviso", "") or ""))
+                                                                   aviso=getattr(fuente, "aviso", "") or (NOTA_IDIOMA if sin_propias else "")))
     _avanzar_seguro(cliente, eid)
     return gettext("%(n)s producto(s) de %(plataforma)s (%(nuevos)s nuevos)", n=len(productos), plataforma=plataformas.nombre(plat), nuevos=guardado["nuevos"])
 
