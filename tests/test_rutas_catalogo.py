@@ -106,6 +106,33 @@ def test_mover_foto_general_a_un_color(app):
     assert any("No encontré esa imagen" in m for m in _flashes(app["c"]))
 
 
+def test_fotos_con_espacios_en_el_nombre_se_ven_se_borran_y_se_mueven(app):
+    """Revisión final: las fotos de happyflops ya comprometidas se llaman
+    «HOriginal - Beige_5.png»; `secure_filename` las volvía
+    «HOriginal_-_Beige_5.png» y la ficha daba 404. Ahora se sirve el nombre
+    tal cual si es una imagen de ESA carpeta; cualquier otra cosa, 404."""
+    from urllib.parse import quote
+    _con_colores(app, generales=0)
+    base = app["tmp"] / "clientes" / "acme" / "productos" / "original"
+    (base / "pink" / "HOriginal - Beige_5.png").write_bytes(JPG)
+    (base / "pink" / "notas.txt").write_bytes(b"no es foto")
+    (base / "HOriginal - Ambiente 1.png").write_bytes(JPG)
+    c = app["c"]
+    con_espacios = quote("HOriginal - Beige_5.png")
+    assert c.get(f"/cliente/acme/productos/original/pink/imagen/{con_espacios}?categoria=producto").status_code == 200
+    assert c.get(f"/cliente/acme/productos/original/imagen/{con_espacios}?categoria=producto&variante=pink&w=320").status_code == 200
+    assert c.get(f"/cliente/acme/productos/original/imagen/{quote('HOriginal - Ambiente 1.png')}?categoria=producto").status_code == 200
+    ficha = c.get("/cliente/acme/catalogo/producto/original/ficha").data.decode()
+    assert "HOriginal%20-%20Beige_5.png" in ficha                     # la ficha la pide con su nombre real
+    for malo in ("..", "..%2Fx", quote("../pink/01.jpg"), "notas.txt", quote("HOriginal_-_Beige_5.png")):
+        assert c.get(f"/cliente/acme/productos/original/pink/imagen/{malo}?categoria=producto").status_code == 404, malo
+    # borrar y mover aceptan el mismo nombre
+    r = c.post(f"/cliente/acme/productos/original/imagenes/{con_espacios}/eliminar", data={"categoria": "producto", "variante": "pink"})
+    assert r.status_code == 302 and sorted(os.listdir(base / "pink")) == ["01.jpg", "notas.txt"]
+    r = c.post(f"/cliente/acme/productos/original/fotos/{quote('HOriginal - Ambiente 1.png')}/mover", data={"variante": "beige"})
+    assert r.status_code == 302 and sorted(os.listdir(base / "beige")) == ["01.jpg", "HOriginal - Ambiente 1.png"]
+
+
 def test_crear_con_deja_el_color_marcado_para_crear(app):
     _con_colores(app)
     c = app["c"]

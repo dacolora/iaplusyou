@@ -2385,17 +2385,19 @@ def _foto_o_miniatura(ruta):
 @app.route("/cliente/<cliente>/productos/<path:producto_id>/imagen/<nombre>")
 def imagen_producto_archivo(cliente, producto_id, nombre):
     """Sirve UNA foto concreta: del producto (`pid`), de un color (`pid/color`,
-    o `pid` + `?variante=`). 404 ante cualquier id o color inválido."""
+    o `pid` + `?variante=`). 404 ante cualquier id o color inválido. El
+    nombre se valida contra las imágenes que de verdad hay en esa carpeta
+    (no con `secure_filename`, que cambia «HOriginal - Beige_5.png» por
+    «HOriginal_-_Beige_5.png» y dejaba sin foto a los nombres con espacios)."""
     try:
         carpeta = catalogo_productos.carpeta_de(
             cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")),
             variante=(request.args.get("variante") or "").strip() or None)
     except ValueError:
         abort(404)
-    ruta = os.path.join(carpeta, secure_filename(nombre))
-    if not os.path.isfile(ruta):
+    if nombre != os.path.basename(nombre) or nombre not in catalogo_productos._imagenes_en(carpeta):
         abort(404)
-    return _foto_o_miniatura(ruta)
+    return _foto_o_miniatura(os.path.join(carpeta, nombre))
 
 
 def _productos_con_uso(cliente):
