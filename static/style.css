@@ -1839,6 +1839,16 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .ref-recrear-titulo { margin: 0 0 .6rem; }
 .ref-recrear-form textarea { width: 100%; font-size: .82rem; }
 .ref-recrear-acciones { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
+/* Recrear fiel (spec 2026-09-30): textos leídos de la referencia e imágenes a generar. */
+.ref-recrear-bloque { margin: .7rem 0; display: grid; gap: .45rem; }
+.ref-recrear-bloque legend { font-weight: 600; font-size: .85rem; }
+.ref-recrear-bloque small { color: var(--muted); }
+.ref-recrear-textos { display: grid; gap: .5rem; }
+.ref-recrear-textos label { display: grid; gap: .2rem; font-size: .8rem; color: var(--muted); }
+.ref-recrear-textos input { width: 100%; }
+.ref-recrear-leyendo { margin: 0; font-size: .85rem; color: var(--muted); }
+.ref-recrear-prompts { margin-top: .6rem; }
+.ref-recrear-prompts .ayuda { font-size: .8rem; margin: .4rem 0; color: var(--muted); }
 .ref-usos { margin-top: .4rem; }
 
 /* Formularios dentro de un <dialog class="generado-modal"> (Traer referentes,

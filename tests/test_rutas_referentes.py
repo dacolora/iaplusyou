@@ -1408,3 +1408,13 @@ def test_recrear_adaptar_devuelve_textos_alineados(app, monkeypatch):
     r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar",
                       json={"producto_id": "espejo_led", "textos": ["50% OFF", ""], "traer_textos": True})
     assert r.status_code == 200 and r.get_json()["textos"] == ["40% OFF", ""]
+
+
+def test_pestana_referentes_trae_el_js_de_recrear_fiel():
+    """El JS del formulario vive en la pestaña (los <script> de un fragmento
+    cargado por fetch nunca corren): que no se pierda nada de Recrear fiel."""
+    import pathlib
+    texto = pathlib.Path("templates/_tab_referentes.html").read_text(encoding="utf-8")
+    for marca in ("data-recrear-leer", "data-recrear-modo", "data-recrear-editado", "data-recrear-texto",
+                  "lecturasEnCurso", "formato_elegido", "modos_vista", "traer_textos", "ref:fragmento"):
+        assert marca in texto, marca

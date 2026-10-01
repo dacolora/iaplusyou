@@ -100,6 +100,14 @@ def _textos(idioma):
     return TEXTOS[idioma if idioma in TEXTOS else "es"]
 
 
+def _frase(texto):
+    """El texto con punto final si no trae puntuación: la descripción del
+    catálogo suele venir sin punto y se pegaba a la regla de fidelidad
+    («…beige claro uniforme Reproduce it identical…»)."""
+    texto = (texto or "").strip()
+    return texto if not texto or texto[-1] in ".!?…" else texto + "."
+
+
 def _linea_sonido(sonido_texto, con_sonido, idioma="es"):
     t = _textos(idioma)
     texto = (sonido_texto or "").strip().rstrip(".")
@@ -122,7 +130,7 @@ def armar_prompt(referente, familia, producto, guia, titular, formato, tipo="ima
     if dolor and not dolor.startswith("ninguno-"):
         partes.append(t["dolor"].format(dolor=dolor))
     partes.append(t["producto"].format(imagenes=t["dos_fotos"] if n_fotos == 2 else "Image 2",
-                                       nombre=producto.get("nombre") or "", descripcion=producto.get("descripcion") or "",
+                                       nombre=producto.get("nombre") or "", descripcion=_frase(producto.get("descripcion")),
                                        regla=producto.get("regla") or "").strip())
     partes.append(t["sustituye"])
     if linea_textos is not None:            # spec 2026-09-30: los textos leídos (o «sin texto») mandan
@@ -178,7 +186,7 @@ def armar_prompt_fiel(lectura, producto, linea_textos, formato, idioma="es"):
     cada = (t["fiel_cada"].format(producto=lectura["producto"]) if lectura and lectura.get("producto")
             else t["fiel_el_producto"])
     partes.append(" ".join(t["fiel_reemplaza"].format(cada=cada, imagenes=imagenes, nombre=producto.get("nombre") or "",
-                                                       descripcion=producto.get("descripcion") or "",
+                                                       descripcion=_frase(producto.get("descripcion")),
                                                        regla=producto.get("regla") or "").split()))
     n = (lectura or {}).get("unidades")
     if n:

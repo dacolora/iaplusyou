@@ -422,3 +422,11 @@ def test_adaptar_acepta_respuesta_sin_titular(monkeypatch):
                                                                                     "textos": [], "prompt": "P"}), 1, 1))
     resultado, _, _ = recrear.adaptar(_referente(), _familia(), _producto(), "")
     assert resultado["prompt"] == "P" and resultado["textos"] == [] and resultado["titular"] == ""
+
+
+def test_la_descripcion_sin_punto_no_se_pega_a_la_regla():
+    from referentes import recrear
+    producto = _producto(descripcion="chanclas de goma, color beige", regla="Reproduce it identical.")
+    for p in (recrear.armar_prompt(_referente(), _familia(), producto, "", "", "1:1"),
+              recrear.armar_prompt_fiel(_lectura(), producto, "", "1:1", idioma="en")):
+        assert "color beige. Reproduce it identical." in p
