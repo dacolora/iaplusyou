@@ -83,13 +83,17 @@ def marcar(proveedor, detalle="", cliente=""):
 
 def _avisar_admin(proveedor, detalle, cliente):
     info = PROVEEDORES[proveedor]
+
+    def _asunto():   # en el idioma de cada admin (notificaciones.avisar_admin)
+        return gettext("%(proveedor)s se quedó sin saldo", proveedor=info["nombre"])
+
+    def _cuerpo():   # en el idioma de cada admin (notificaciones.avisar_admin)
+        return gettext("Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no "
+                       "tiene saldo. Mientras no se recargue en %(recarga)s, Crear y Cambiar producto no pueden "
+                       "generar; los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s",
+                       cliente=cliente or "-", proveedor=info["nombre"], recarga=info["recarga"], detalle=detalle or "-")
     try:
-        asunto = gettext("%(proveedor)s se quedó sin saldo", proveedor=info["nombre"])
-        cuerpo = gettext("Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no "
-                         "tiene saldo. Mientras no se recargue en %(recarga)s, Crear y Cambiar producto no pueden "
-                         "generar; los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s",
-                         cliente=cliente or "-", proveedor=info["nombre"], recarga=info["recarga"], detalle=detalle or "-")
-        notificaciones.avisar_admin("sin_saldo", asunto, cuerpo, cliente=cliente or "")
+        notificaciones.avisar_admin("sin_saldo", _asunto, _cuerpo, cliente=cliente or "")
     except Exception as error:  # noqa: BLE001
         log.error("no se pudo avisar la falta de saldo de %s: %s", proveedor, type(error).__name__)
 
