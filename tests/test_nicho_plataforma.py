@@ -36,7 +36,7 @@ def test_registro_y_tarifas(entorno):
     f = fuentes.por_tipo("amazon")()
     assert isinstance(f, FuentePlataforma) and f.tipo == "amazon" and f.de_pago is True
     assert fuentes.NOMBRES["meli"] == "Mercado Libre" and fuentes.LLAVES["tiktok_shop"] == ("APIFY_TOKEN",) and fuentes.llaves_faltantes("amazon") == []
-    assert f.tarifa()["actor"] == "axesso_data~amazon-reviews-scraper" and f.tarifa_busqueda()["usd_por_resultado"] == 0.003
+    assert f.tarifa()["actor"] == "axesso_data~amazon-reviews-scraper" and f.tarifa_busqueda()["usd_por_resultado"] == 0.005
     with pytest.raises(ErrorFuente):
         FuentePlataforma("magia")
     assert f.tarifa()["usd_por_corrida"] == 0.0
@@ -54,7 +54,7 @@ def test_buscar_amazon_guarda_consulta_y_dedup(entorno, monkeypatch):
     assert [p["fuente_id"] for p in lista] == ["B0AMZ00001", "B0AMZ00002"] and lista[0]["consulta"] == "tofflor mot fotsmärta | ortopediska tofflor"
     assert f.resultados == 4 and f.run_id == "rb" and f.aviso == "" and etapas[0] == "Buscando"
     m, u, kw = s.llamadas[0]
-    assert kw["params"] == {"timeout": 1200, "maxItems": 40, "maxTotalChargeUsd": 0.12} and kw["json"]["proxyCountry"] == "SE"
+    assert kw["params"] == {"timeout": 1200, "maxItems": 40, "maxTotalChargeUsd": 0.2} and kw["json"]["proxyCountry"] == "SE"
 
 
 def test_buscar_meli_una_corrida_por_consulta(entorno, monkeypatch):

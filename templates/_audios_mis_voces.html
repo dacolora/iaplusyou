@@ -2,7 +2,10 @@
    proyecto. La pinta la página y la re-pintan vp_lista/vp_disenar/vp_clonar/
    vp_borrar por fetch. Sin <form> ni <script>: el JS vive en
    _crear_audios.html. La barra NO lleva data-poll-job (recargaría la página y
-   borraría lo escrito): data-job + data-estado y sondeo propio. #}
+   borraría lo escrito): data-job + data-estado y sondeo propio. La tarjeta de
+   cada voz usa voz_propia_item (compartida con el panel de Anuncio hablado,
+   tarea 7) con su borrar_url: mismo marcado, mismo botón de borrar. #}
+{% from "_voces_galeria.html" import voz_propia_item %}
 <div class="au-vp" id="au-vp">
   {% if trabajo_voz %}
   <div class="barra-progreso" id="trabajo-{{ trabajo_voz.job_id }}" data-job="{{ trabajo_voz.job_id }}"
@@ -10,14 +13,7 @@
   <div class="progreso-texto">{{ _('Creando la voz…') }}</div>
   {% endif %}
   <div class="au-voces au-vp-voces" role="radiogroup" aria-label="{{ _('Mis voces') }}">
-    {% for v in voces_propias %}
-    <div class="au-voz au-voz-propia" data-voz="{{ v.valor }}" role="radio" aria-checked="false" tabindex="0">
-      <span class="au-voz-nombre">{{ v.nombre }}</span>
-      <small class="au-voz-tono">{{ nombres_forma_voz[v.forma]|traducir }}{% if not v.estrenada %} · {{ _('sin estrenar') }}{% endif %}</small>
-      <button type="button" class="au-vp-borrar" data-url="{{ url_for('vp_borrar', cliente=cliente, vid=v.id) }}" data-nombre="{{ v.nombre }}" aria-label="{{ _('Borrar') }} {{ v.nombre }}">✕</button>
-      <button type="button" class="au-voz-play" data-voz="{{ v.valor }}" aria-label="{{ _('Escuchar') }} {{ v.nombre }}">▶</button>
-    </div>
-    {% endfor %}
+    {% for v in voces_propias %}{{ voz_propia_item(v, borrar_url=url_for('vp_borrar', cliente=cliente, vid=v.id)) }}{% endfor %}
     <button type="button" class="au-vp-crear" id="au-vp-crear" aria-expanded="false" aria-controls="au-vp-panel">{{ _('+ Crear voz propia') }}</button>
   </div>
   {% if not voces_propias %}

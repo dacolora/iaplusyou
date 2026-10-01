@@ -14,10 +14,9 @@ import idiomas
 import materiales
 import trabajos
 import voces_propias
-# cortes: sin uso directo (lo llama audios.voz_cruda/mezclar); fal_audio: sin uso directo
-# (lo llama audios.sintetizar). Las pruebas parchean ta.cortes/ta.fal_audio, que son los
-# mismos módulos que usa audios.py.
 from final_edition import cortes, tipos  # noqa: F401
+# cortes: sin uso directo (lo usa audios.voz_cruda); las pruebas parchean
+# ta.cortes, que es el mismo módulo.
 from final_edition import musica as fe_musica
 from providers import fal_audio  # noqa: F401
 from storage import r2_uploader
@@ -92,10 +91,13 @@ def _generar(tarea):
     carpeta = carpeta_trabajo(cliente, h_audio)
     os.makedirs(carpeta, exist_ok=True)
     trabajos.reportar(jid, etapa=ETAPAS[0][0])
-    ref = f"locucion:{h_voz[:12]}{ref_sufijo(tarea)}"
 
-    voz_mat, _creada, costo = audios.voz_cruda(cliente, texto, voz, idioma, velocidad, carpeta, ref)
+    # La voz cruda es la misma que usa el anuncio hablado (audios.voz_cruda):
+    # caché por hash y gasto `locucion` apenas el proveedor cobra; el mp3 queda
+    # en la carpeta de trabajo (extra.local) para mezclarlo sin volver a bajarlo.
+    voz_mat, creada = audios.voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo(tarea), carpeta=carpeta)
     voz_nombre = (voz_mat.get("extra") or {}).get("voz") or voz
+    costo = float(voz_mat.get("costo_usd") or 0.0) if creada else 0.0
     voz_local = materiales.descargar(voz_mat, os.path.join(carpeta, "voz.mp3"))
 
     trabajos.reportar(jid, etapa=ETAPAS[1][0])

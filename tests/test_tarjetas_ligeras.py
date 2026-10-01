@@ -86,9 +86,20 @@ def test_pagina_desde_y_listas(app):
 
 def test_contexto_final_edition_tiene_lo_que_usan_los_detalles(app):
     ctx = app["dashboard"]._contexto_final_edition("acme")
-    for clave in ("paises_fe", "voces_fe", "estilos_fe", "presets_mezcla", "precios", "ediciones_por_cf", "mi_musica"):
+    for clave in ("paises_fe", "voces_fe", "estilos_fe", "presets_mezcla", "precios", "ediciones_por_cf", "mi_musica",
+                  "mis_voces_fe"):
         assert clave in ctx
     assert "guion" in ctx["precios"] and "final_por_pais" in ctx["precios"]
+
+
+def test_contexto_final_edition_trae_mis_voces_sin_voice_id(app):
+    import materiales
+    import voces_propias
+    v = materiales.registrar("acme", tipo="audio", origen=voces_propias.ORIGEN, url="https://r2/vp.mp3",
+                             hash=materiales.hash_clave("voz_propia", "minimax", "mmx_1"), bytes=1, duracion_ms=1000,
+                             costo_usd=3.0, extra={"nombre": "Astrid", "forma": "disenada", "voice_id": "mmx_1",
+                                                   "idioma_muestra": "sv", "estrenada": True})
+    assert app["dashboard"]._contexto_final_edition("acme")["mis_voces_fe"] == [{"valor": f"vp:{v['id']}", "nombre": "Astrid"}]
 
 
 # ------------------------------------------------------------ Task 2: base.html

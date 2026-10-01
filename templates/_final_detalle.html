@@ -2,8 +2,8 @@
 {% from "_final_macros.html" import etiqueta_fe with context %}
 {# Detalle de un video listo y de una final en Final edition: lo que antes
    iba en el <template> de cada tarjeta. Lo pide el modal por fetch. Se
-   importa `with context` (paises_fe, voces_fe, estilos_fe, presets_mezcla,
-   mi_musica, precios, ediciones_por_cf, cliente). #}
+   importa `with context` (paises_fe, voces_fe, mis_voces_fe, estilos_fe,
+   presets_mezcla, mi_musica, precios, ediciones_por_cf, cliente). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
 {% from "_angulo_editor.html" import editor_angulo %}
 {# Capa 4c (5/10): lo que se guarda en `f.error` es a menudo texto de ffmpeg o
@@ -77,6 +77,11 @@
           </ul>
           {% endif %}
 
+          {% if item.modo_crear == "hablado" %}
+          {# Anuncio hablado (spec 2026-10-01 §6): el camino automático pondría una
+             segunda voz encima y una traducción no movería los labios. #}
+          <p class="vacio fe-nota-hablado">{{ _('Este video ya habla; para otro idioma, haz otra pieza con el guion traducido.') }}</p>
+          {% else %}
           <details class="fe-automatico">
             <summary>{{ _('Automático con IA (opcional)') }}</summary>
             <section class="fe-seccion">
@@ -155,6 +160,11 @@
                       {% for v in (voces_fe.get(_g.idioma) or voces_fe.get("es") or []) %}
                       <option value="{{ v }}">{{ v }}</option>
                       {% endfor %}
+                      {% if mis_voces_fe %}
+                      <optgroup label="{{ _('Mis voces') }}">
+                        {% for v in mis_voces_fe %}<option value="{{ v.valor }}">{{ v.nombre }}</option>{% endfor %}
+                      </optgroup>
+                      {% endif %}
                     </select>
                   </label>
                   <label>{{ _('Música') }}
@@ -187,6 +197,7 @@
             {% endif %}
             </section>
           </details>
+          {% endif %}
         </div>
 {% endmacro %}
 

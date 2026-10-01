@@ -233,6 +233,9 @@ app.register_blueprint(guiones_pipeline.bp)
 from final_edition import rutas_editor  # noqa: E402  (vista previa del editor, capa 3)
 app.register_blueprint(rutas_editor.bp)
 
+import hablado_rutas  # noqa: E402  (Crear › Anuncio hablado: panel, foto, voz y video)
+app.register_blueprint(hablado_rutas.bp)
+
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
 # distintos podrían solaparse y pisarse las credenciales una a la otra — este
@@ -3025,6 +3028,10 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx):
             item["costo_estimado"] = flowplus_modelos.estimate_imagen(
                 entry.get("modelo") or flowplus_modelos.IMAGEN_POR_DEFECTO,
                 n_referencias=len(entry.get("referencias_urls") or []))
+        elif flowplus_modelos.es_hablado(entry.get("modelo")):
+            # Anuncio hablado (spec 2026-10-01 §6): «Reintentar» cobra por los
+            # segundos de la voz (estimate_video delega en estimate_hablado).
+            item["costo_estimado"] = flowplus_modelos.estimate_video(entry["modelo"], entry["duracion_objetivo"])
         else:
             mid = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
             # Con videos de referencia (Wan 3.0, 2026-09-30): la duración que de
@@ -3035,7 +3042,7 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx):
                 mid, flowplus_modelos.duracion_con_videos(mid, refs_sesion, entry["duracion_objetivo"]),
                 con_sonido=entry.get("con_sonido", True) is not False,
                 calidad=entry.get("calidad") or "final", **({"videos_ref_s": segundos_ref} if segundos_ref else {}))
-    item["modelo_nombre"] = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "Wan 3.0")
+    item["modelo_nombre"] = flowplus_modelos.nombre_modelo(entry.get("modelo")) or "Wan 3.0"
     # Final edition: solo tiene sentido sobre un video ya listo. Cada final
     # y el guion llevan su propio trabajo del worker para la barra de la UI.
     item["guion_base"] = None
@@ -3131,6 +3138,12 @@ def _contexto_organico(cliente):
     }
 
 
+def _mis_voces_fe(cliente):
+    """Las voces propias del proyecto para el selector «Voz» de Final edition:
+    solo valor y nombre (el voice_id de MiniMax no sale a la página)."""
+    return [{"valor": v["valor"], "nombre": v["nombre"]} for v in voces_propias.listar(cliente)]
+
+
 def _contexto_final_edition(cliente):
     """Contexto que leen los detalles de Final edition: la página y las rutas
     de detalle (fe_detalle_video / fe_detalle_final) lo reciben igual."""
@@ -3138,6 +3151,7 @@ def _contexto_final_edition(cliente):
         **_contexto_organico(cliente),
         "paises_fe": fe_tipos.PAISES,
         "voces_fe": fal_audio.VOCES,
+        "mis_voces_fe": _mis_voces_fe(cliente),
         "estilos_fe": list(fe_tipos.ESTILOS_MUSICA),
         "nombres_estilos_musica": fe_tipos.NOMBRES_ESTILOS_MUSICA,
         "nombres_estilo_musica": fe_tipos.NOMBRES_ESTILO_MUSICA,
@@ -6681,10 +6695,21 @@ def _sesion_con_video(cliente, cf_id):
     return entry
 
 
+def _sin_final_automatica(entry):
+    """True (con flash) si la sesión es un anuncio hablado: el guion con IA y
+    «Producir finales» le pondrían una segunda voz encima y una traducción no
+    movería los labios (spec 2026-10-01 §6). «Editar» sí sirve."""
+    if flowplus_modelos.es_sesion_hablada(entry):
+        flash(gettext("Este video ya habla; para otro idioma, haz otra pieza con el guion traducido."), "error")
+        return True
+    return False
+
+
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/preparar", methods=["POST"])
 def fe_preparar(cliente, cf_id):
     """Encola la escritura del guion base (capa 0, Anthropic). No produce nada."""
-    if _sesion_con_video(cliente, cf_id) is None:
+    entry = _sesion_con_video(cliente, cf_id)
+    if entry is None or _sin_final_automatica(entry):
         return _volver_final(cliente)
     # Decisión B (2026-09-28): el guion base no es por destino. La elección
     # explícita del selector gana; sin ella (o con una que no vale), el idioma
@@ -6746,7 +6771,8 @@ def _destinos_form(valores):
 def fe_producir(cliente, cf_id):
     """Encola una tarea `final_producir` por cada destino marcado. Exige guion
     base ya preparado (y revisado): sin él no se gasta nada."""
-    if _sesion_con_video(cliente, cf_id) is None:
+    entry = _sesion_con_video(cliente, cf_id)
+    if entry is None or _sin_final_automatica(entry):
         return _volver_final(cliente)
     base = creative_flow.guion_base(cliente, cf_id)
     if not base:
@@ -6760,7 +6786,13 @@ def fe_producir(cliente, cf_id):
     idioma_base = base.get("idioma") if base.get("idioma") in IDIOMAS_FE else "es"
     voces_validas = {v for lista in fal_audio.VOCES.values() for v in lista}
     voz = request.form.get("voz") or ""
-    if voz not in voces_validas:
+    if audios.es_propia(voz):
+        # Una voz propia solo si es de ESTE proyecto y sigue existiendo: si se
+        # borró en otra pestaña no se cambia en silencio por otra voz.
+        if not voces_propias.resolver(cliente, voz):
+            flash(idiomas.traducir(audios.MENSAJES["voz_borrada"]), "error")
+            return _volver_final(cliente)
+    elif voz not in voces_validas:
         voz = (fal_audio.VOCES.get(idioma_base) or fal_audio.VOCES["es"])[0]
     estilo = request.form.get("estilo_musica") or ""
     cancion = mi_musica.resolver(cliente, estilo)
@@ -7155,7 +7187,6 @@ def _contexto_mis_voces(cliente):
     jid = tareas_voces.job_id(cliente)
     return {"voces_propias": voces_propias.listar(cliente),
             "trabajo_voz": {"job_id": jid} if trabajos.en_curso(jid) else None,
-            "nombres_forma_voz": voces_propias.NOMBRES_FORMA,
             "precio_voz_clonada": gastos.estimar("voz_clonada"), "precio_voz_disenada": gastos.estimar("voz_disenada"),
             "texto_consentimiento": voces_propias.TEXTO_CONSENTIMIENTO}
 
@@ -7256,6 +7287,12 @@ def fp_reusar(cliente, cf_id):
     if not entry:
         flash(gettext("No encontré esa pieza."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if flowplus_modelos.es_sesion_hablada(entry):
+        # Spec 2026-10-01 §6 y §10: «Editar y crear otra» no sirve para un
+        # anuncio hablado (no hay referencias ni prompt que reusar).
+        flash(gettext("«Editar y crear otra» todavía no sirve para un anuncio hablado: haz otra pieza en "
+                      "Crear › Anuncio hablado."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="hablado"))
     # Sin variables quemadas (pedido de Daniel, 2026-09-28): la bandeja queda
     # SOLO con las referencias de esta pieza — antes se sumaban a lo que
     # hubiera y las referencias «del pasado» se colaban en la pieza nueva.
@@ -7616,7 +7653,8 @@ def cf_guardar_prompt(cliente, cf_id):
     """Guarda las ediciones de la persona sobre el prompt A (lo que se manda)
     y el B. Solo en prompt_listo; un texto vacío no pisa nada. No llama a Claude."""
     entry = creative_flow.cargar(cliente).get(cf_id)
-    if not entry or entry.get("estado") != "prompt_listo":
+    # Un anuncio hablado no tiene prompt que editar (spec 2026-10-01 §6).
+    if not entry or entry.get("estado") != "prompt_listo" or flowplus_modelos.es_sesion_hablada(entry):
         flash(gettext("Ese prompt no se puede editar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     campos = {}
@@ -7646,7 +7684,8 @@ def cf_rearmar(cliente, cf_id):
     prompt_listo con el fallback) — mientras el director siga corriendo para
     ella, se sigue rechazando para no encolar una segunda compilación encima."""
     entry = creative_flow.cargar(cliente).get(cf_id)
-    if not entry or (entry.get("tipo") or "video") == "imagen":
+    # Ni una imagen ni un anuncio hablado (spec 2026-10-01 §6) pasan por el director.
+    if not entry or (entry.get("tipo") or "video") == "imagen" or flowplus_modelos.es_sesion_hablada(entry):
         flash(gettext("Esa sesión no se puede rearmar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     estado = entry.get("estado")
@@ -7725,7 +7764,7 @@ def cf_generar_video(cliente, cf_id):
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    nombre_modelo = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre") or gettext("el modelo")
+    nombre_modelo = flowplus_modelos.nombre_modelo(entry.get("modelo")) or gettext("el modelo")
     es_imagen = (entry.get("tipo") or "video") == "imagen"
     que = gettext("la imagen") if es_imagen else gettext("el video")
     prompt_b = (entry.get("director") or {}).get("prompt_b")

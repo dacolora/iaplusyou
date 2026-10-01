@@ -332,6 +332,33 @@ def test_resolver_con_un_id_enorme_es_none(base_temporal):
     assert voces_propias.resolver("acme", "vp:" + "9" * 30) is None
 
 
+def test_sintetizar_lee_con_minimax_y_estrena_una_vez(base_temporal, fal):
+    v = voces_propias.resolver("acme", f"vp:{_voz(estrenada=False)['id']}")
+    r = voces_propias.sintetizar("acme", v, "Hola", "pt", velocidad=1.15)
+    assert r == {"url": "https://fal/estreno.mp3", "costo_usd": 0.0045, "duracion_ms": 4000}
+    assert fal == [("tts", "Hola", "mmx_1", "pt")]
+    assert voces_propias.obtener("acme", v["id"])["estrenada"] is True
+
+
+def test_sintetizar_no_pierde_lo_pagado_si_no_puede_marcar_estrenada(base_temporal, fal, monkeypatch):
+    v = voces_propias.resolver("acme", f"vp:{_voz(estrenada=False)['id']}")
+
+    def _falla(*a, **k):
+        raise RuntimeError("base bloqueada")
+    monkeypatch.setattr(voces_propias, "marcar_estrenada", _falla)
+    assert voces_propias.sintetizar("acme", v, "Hola", "es")["url"] == "https://fal/estreno.mp3"
+
+
+def test_sintetizar_con_voz_ya_estrenada_no_reescribe_la_fila(base_temporal, fal, monkeypatch):
+    v = voces_propias.resolver("acme", f"vp:{_voz(estrenada=True)['id']}")
+    # Se cuenta en vez de lanzar: `sintetizar` atrapa cualquier error al marcar
+    # (fal ya cobró), así que un AssertionError aquí nunca haría fallar la prueba.
+    marcadas = []
+    monkeypatch.setattr(voces_propias, "marcar_estrenada", lambda *a, **k: marcadas.append(a))
+    voces_propias.sintetizar("acme", v, "Hola", "es")
+    assert marcadas == []
+
+
 def test_muestra_propia_en_otro_idioma_se_cobra_al_proyecto_una_vez(base_temporal, r2, fal):
     v = _voz(idioma="es", estrenada=True)
     assert voces_propias.muestra("acme", f"vp:{v['id']}", "es") == v["url"] and fal == []
@@ -348,6 +375,25 @@ def test_muestra_de_una_voz_sin_estrenar_la_estrena(base_temporal, r2, fal):
     v = _voz(idioma="es", estrenada=False)
     voces_propias.muestra("acme", f"vp:{v['id']}", "es")
     assert fal[0][0] == "tts" and voces_propias.obtener("acme", v["id"])["estrenada"] is True
+
+
+def test_muestra_no_pierde_lo_pagado_si_no_puede_marcar_estrenada(base_temporal, r2, fal, monkeypatch):
+    # La muestra pasa por `sintetizar`: con la base bloqueada justo después de
+    # que fal cobró, la muestra se guarda igual y el siguiente ▶ no vuelve a pagar.
+    v = _voz(idioma="es", estrenada=False)
+    tts, esperas = voces_propias.fal_audio.tts_minimax, []
+
+    def _tts(texto, voice_id, idioma, velocidad=None, timeout=180):
+        esperas.append(timeout)
+        return tts(texto, voice_id, idioma, velocidad=velocidad, timeout=timeout)
+    monkeypatch.setattr(voces_propias.fal_audio, "tts_minimax", _tts)
+
+    def _falla(*a, **k):
+        raise RuntimeError("base bloqueada")
+    monkeypatch.setattr(voces_propias, "marcar_estrenada", _falla)
+    url = voces_propias.muestra("acme", f"vp:{v['id']}", "fi")
+    assert url and voces_propias.muestra("acme", f"vp:{v['id']}", "fi") == url
+    assert len(fal) == 1 and len(_gastos("acme")) == 1 and esperas == [45]
 
 
 def test_borrar_quita_voz_grabacion_y_muestras(base_temporal, r2, fal):
@@ -384,3 +430,15 @@ def test_tipo_de_gasto_y_estimados():
     assert "voz_propia" in gastos.TIPOS
     assert gastos.estimar("voz_clonada")["usd"] == fal_audio.COSTO_CLONAR_VOZ
     assert gastos.estimar("voz_disenada")["usd"] == fal_audio.COSTO_DISENAR_VOZ
+
+
+def test_muestra_propia_guarda_el_detalle_del_gasto_en_el_idioma_del_proyecto(base_temporal, r2, fal, monkeypatch):
+    """La ruta au_muestra la pide quien mira, pero el detalle del gasto se
+    GUARDA: va en el idioma del proyecto (spec 2026-09-26 §B8)."""
+    import idiomas
+    v = _voz(idioma="es", estrenada=True)
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    with idiomas.en_idioma("es"):                       # quien escucha, en español
+        voces_propias.muestra("acme", f"vp:{v['id']}", "fi")
+    (g,) = _gastos("acme")
+    assert g["detalle"] == "custom voice sample · Ana · fi"

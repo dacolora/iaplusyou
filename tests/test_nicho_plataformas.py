@@ -36,9 +36,9 @@ def test_claves_paises_idioma_y_dominio():
 def test_estimados_redondean_al_centavo_hacia_arriba():
     from nicho.fuentes import plataformas as pl
     assert pl.usd(30, 0.003) == 0.09 and pl.usd(1, 0.0009) == 0.01 and pl.usd(0, 0.5) == 0.0
-    assert pl.estimar_busqueda("amazon", 3, 20) == 0.18          # 60 × 0.003
+    assert pl.estimar_busqueda("amazon", 3, 20) == 0.3            # 60 × 0.005 (plan FREE de Apify, verificado 2026-10-01)
     assert pl.estimar_resenas("amazon", 15, 100) == 1.35         # 1500 × 0.0009
-    assert pl.estimar_busqueda("meli", 3, 20) == 0.12 and pl.estimar_resenas("meli", 15, 100) == 1.05
+    assert pl.estimar_busqueda("meli", 3, 20) == 0.12 and pl.estimar_resenas("meli", 15, 100) == 2.25   # 1500 × 0.0015
     assert pl.estimar_busqueda("tiktok_shop", 3, 20) == 0.27 and pl.estimar_resenas("tiktok_shop", 15, 100) == 6.75
     # con arranque por corrida: Walmart busca UNA consulta por corrida (20 × 0.001 + 0.001 → 0.03 cada una)
     assert pl.estimar_busqueda("walmart", 3, 20) == 0.09 and pl.estimar_resenas("walmart", 15, 100) == 1.5
@@ -54,7 +54,7 @@ def test_entradas_de_busqueda():
     from nicho.fuentes.base import ErrorFuente
     consultas = ["tofflor mot fotsmärta", "ortopediska tofflor"]
     e = pl.entradas_busqueda("amazon", consultas, "SE", 20)
-    assert len(e) == 1 and e[0]["max_items"] == 40 and e[0]["max_usd"] == 0.12 and e[0]["etiqueta"] == "búsqueda"
+    assert len(e) == 1 and e[0]["max_items"] == 40 and e[0]["max_usd"] == 0.2 and e[0]["etiqueta"] == "búsqueda"
     assert e[0]["entrada"] == {"categoryOrProductUrls": [{"url": "https://www.amazon.se/s?k=tofflor+mot+fotsm%C3%A4rta"},
                                                          {"url": "https://www.amazon.se/s?k=ortopediska+tofflor"}],
                                "maxItemsPerStartUrl": 20, "maxSearchPagesPerStartUrl": 2, "proxyCountry": "SE"}
@@ -108,7 +108,7 @@ def test_entradas_y_lectura_de_resenas():
     assert r[1]["texto"] == "För smala för mig, skickade tillbaka." and r[1]["fecha"] == "March 5, 2025"
     e = pl.entradas_resenas("meli", [{"fuente_id": "MCO123456789", "url": "https://articulo.mercadolibre.com.co/MCO-123456789-p", "titulo": "P"}], "CO", 50)
     assert e == [{"entrada": {"productUrls": ["https://articulo.mercadolibre.com.co/MCO-123456789-p"], "maxReviewsPerProduct": 50, "reviewOrder": "relevance"},
-                  "max_items": 50, "max_usd": 0.04, "etiqueta": "reseñas"}]
+                  "max_items": 50, "max_usd": 0.08, "etiqueta": "reseñas"}]        # 50 × 0.0015 (plan FREE, verificado 2026-10-01)
     r = [pl.leer_resena("meli", i) for i in _fixture("meli_resenas.json")]
     assert r[2] is None and r[0]["fuente_id"] == "rv1" and r[0]["puntuacion"] == 5 and r[0]["producto"] == "MCO123456789"   # sin guion
     assert r[1]["producto"] == "MCO123456789" and r[1]["fecha"] == "2025-01-22"

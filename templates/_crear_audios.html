@@ -5,6 +5,7 @@
    Lo que escribe la persona nunca se pinta con innerHTML. La canción se sube
    con mm_subir (la misma ruta de Mi música) y las dos listas de la página se
    avisan con el evento `mi-musica:cambio`. #}
+{% from "_voces_galeria.html" import fichas_galeria %}
 <div class="au" id="au"
      data-url-crear="{{ url_for('au_crear', cliente=cliente) }}"
      data-url-lista="{{ url_for('au_lista', cliente=cliente) }}"
@@ -63,15 +64,7 @@
           <button type="button" class="au-filtro" data-filtro-genero="mujer">{{ _('Mujer') }}</button>
           <button type="button" class="au-filtro" data-filtro-genero="hombre">{{ _('Hombre') }}</button>
         </div>
-        <div class="au-voces" id="au-voces" role="radiogroup" aria-label="{{ _('Voz') }}">
-          {% for f in fichas_voces %}
-          <div class="au-voz" data-voz="{{ f.nombre }}" data-genero="{{ f.genero }}" role="radio" aria-checked="{{ 'true' if loop.first else 'false' }}" tabindex="0">
-            <span class="au-voz-nombre">{{ f.nombre }}</span>
-            <small class="au-voz-tono">{{ f.genero_nombre|traducir }}{% if f.tono %} · {{ f.tono|traducir }}{% endif %}</small>
-            <button type="button" class="au-voz-play" data-voz="{{ f.nombre }}" aria-label="{{ _('Escuchar') }} {{ f.nombre }}">▶</button>
-          </div>
-          {% endfor %}
-        </div>
+        <div class="au-voces" id="au-voces" role="radiogroup" aria-label="{{ _('Voz') }}">{{ fichas_galeria(fichas_voces) }}</div>
         <p class="au-ayuda">{{ _('Toca ▶ para oír una muestra corta y la tarjeta para elegir la voz.') }}</p>
         <audio id="au-muestra" preload="none" hidden></audio>
       </fieldset>

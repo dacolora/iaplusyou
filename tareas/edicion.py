@@ -428,8 +428,9 @@ def _generar_voz(tarea):
     carpeta = _carpeta(cliente, f"voz_{edicion_id}")
     avisar(ETAPAS_VOZ[0][0])
     try:
-        ref = f"locucion:{audios.hash_voz(texto, voz, idioma, velocidad)[:12]}{ref_sufijo(tarea)}"
-        mat, _creada, _costo = audios.voz_cruda(cliente, texto, voz, idioma, velocidad, carpeta, ref)
+        # Gasto `locucion:<hash12>:t<tarea>` (lo arma audios.voz_cruda, la misma de Crear › Audios
+        # y del anuncio hablado: caché por hash, nunca se paga dos veces).
+        mat, _creada = audios.voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo(tarea), carpeta=carpeta)
         avisar(ETAPAS_VOZ[1][0])
         sin_palabras = False
         if transcripcion.necesita(mat):

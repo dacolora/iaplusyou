@@ -23,7 +23,7 @@ def test_registro_contiene_swap_generar(base_temporal):
         "edicion_desde_clon", "edicion_producir",
         "edicion_proxy", "editor_voz", "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_lanzar", "exp_refrescar",
         "exp_refrescar_todos", "final_guion", "final_producir", "flowplus_director", "flowplus_imagen",
-        "flowplus_recuperar", "flowplus_video", "material_de_pieza", "material_transcribir", "materiales_limpiar", "meta_publicar",
+        "flowplus_recuperar", "flowplus_video", "hablado_voz", "material_de_pieza", "material_transcribir", "materiales_limpiar", "meta_publicar",
         "meta_refrescar", "musica_generar", "nicho_completar_avatares", "nicho_generar_avatares", "nicho_inv_buscar", "nicho_inv_consultas",
         "nicho_inv_seleccionar", "nicho_recolectar", "organico_publicar", "pieza_revisar", "producto_pedidos",
         "producto_vincular", "referentes_barrer", "referentes_clasificar", "referentes_familias_en",

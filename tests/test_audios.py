@@ -306,14 +306,14 @@ def tts(monkeypatch):
 
 
 def test_voz_cruda_no_paga_dos_veces_el_mismo_texto_voz_y_velocidad(base_temporal, r2, tts, tmp_path):
-    m1, creada1, costo1 = audios.voz_cruda("acme", "Hola mundo", "Rachel", "es", "normal", str(tmp_path), "voz:1")
-    assert creada1 is True and costo1 == 0.002 and tts == ["Hola mundo"]
+    m1, creada1 = audios.voz_cruda("acme", "Hola mundo", "Rachel", "es", "normal", ":t1", carpeta=str(tmp_path))
+    assert creada1 is True and m1["costo_usd"] == 0.002 and tts == ["Hola mundo"]
     assert m1["origen"] == audios.ORIGEN_VOZ and m1["extra"]["nombre"] == "Hola mundo"
-    m2, creada2, costo2 = audios.voz_cruda("acme", "Hola mundo", "Rachel", "es", "normal", str(tmp_path), "voz:2")
-    assert creada2 is False and costo2 == 0.0 and tts == ["Hola mundo"]       # no volvió a llamar a fal
+    m2, creada2 = audios.voz_cruda("acme", "Hola mundo", "Rachel", "es", "normal", ":t2", carpeta=str(tmp_path))
+    assert creada2 is False and tts == ["Hola mundo"]                          # no volvió a llamar a fal
     assert m2["id"] == m1["id"]
     (g,) = _gastos("acme")
-    assert g["tipo"] == "locucion" and g["referencia"] == "voz:1"            # el gasto usó la referencia dada
+    assert g["tipo"] == "locucion" and g["referencia"].startswith("locucion:") and g["referencia"].endswith(":t1")
 
 
 def test_voz_cruda_compartida_entre_audio_generar_y_editor_voz(base_temporal, r2, tts, tmp_path, monkeypatch):
@@ -332,7 +332,23 @@ def test_voz_cruda_compartida_entre_audio_generar_y_editor_voz(base_temporal, r2
                         "velocidad": "normal", "musica_id": None, "inicio_s": 0, "volumen": "media"}}
     ta.ejecutar(tarea)
     assert tts == ["Hola mundo"]
-    m2, creada2, costo2 = audios.voz_cruda("acme", "Hola mundo", "Rachel", "es", "normal", str(tmp_path / "editor"),
-                                           "locucion:x:t2")
-    assert creada2 is False and costo2 == 0.0 and tts == ["Hola mundo"]      # sigue sin volver a llamar a fal
+    m2, creada2 = audios.voz_cruda("acme", "Hola mundo", "Rachel", "es", "normal", ":t2", carpeta=str(tmp_path / "editor"))
+    assert creada2 is False and tts == ["Hola mundo"]                          # sigue sin volver a llamar a fal
     assert len(_gastos("acme")) == 1
+
+
+def test_muestra_guarda_el_detalle_del_gasto_en_el_idioma_de_creatv(base_temporal, r2, monkeypatch):
+    """El detalle del gasto se GUARDA: va en el idioma de `_creatv` (el de
+    defecto), no en el de quien escucha la muestra ni en el msgid crudo que da
+    gettext fuera de toda app (precalentar_muestras.py corre sin app)."""
+    import idiomas
+    monkeypatch.setattr(idiomas, "DEFECTO", "en")
+    monkeypatch.setattr(audios.fal_audio, "tts", lambda texto, voz, idioma="es", on_progreso=None, velocidad=None,
+                        timeout=180, modelo=None, language_code=None: {"url": "https://fal/m.mp3", "costo_usd": 0.0052})
+    monkeypatch.setattr(audios, "descargar_url", lambda url, destino: open(destino, "wb").write(b"MP3") and destino)
+    monkeypatch.setattr(audios.cortes, "duracion", lambda path: 2.5)
+    with idiomas.en_idioma("es"):                       # quien escucha, en español
+        audios.muestra("Rachel", "de")
+    audios.muestra("Adam", "cs")                        # sin idioma forzado, como el script
+    assert sorted(g["detalle"] for g in gastos.historial("_creatv")) == [
+        "voice sample · Adam · cs", "voice sample · Rachel · de"]

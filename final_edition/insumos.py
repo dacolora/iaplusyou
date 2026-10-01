@@ -9,11 +9,13 @@ flujo lo decide `produccion.py`.
   archivo en vez de bajarlo; `extra.cortes_ms` y `extra.tiene_audio` se
   miden una sola vez.
 - voz por bloque: hash(texto_voz, voz, idioma) → mp3 crudo de ElevenLabs
-  (lo que cuesta). Si no cabe en la ventana del bloque se acelera hasta
-  1.35× y se recorta a ventana + 0.4 s (como voz._sintetizar_bloque) en un
-  material DERIVADO (`padre_id`, gratis). Las palabras de Whisper quedan en
-  `extra.palabras` (ms relativos al inicio del audio) del material que
-  suena — se transcribe una sola vez.
+  (lo que cuesta); con una voz propia (`vp:<id>`, Mis voces),
+  hash(texto_voz, "minimax", voice_id, idioma) → mp3 crudo de MiniMax. Si no
+  cabe en la ventana del bloque se acelera hasta 1.35× y se recorta a
+  ventana + 0.4 s (como voz._sintetizar_bloque) en un material DERIVADO
+  (`padre_id`, gratis). Las palabras de Whisper quedan en `extra.palabras`
+  (ms relativos al inicio del audio) del material que suena — se transcribe
+  una sola vez.
 - música: la pista de `musica.obtener_pista` (caché global data/musica +
   R2 `musica/<estilo>_<seg>.wav`) registrada como material del proyecto.
 - logo: el primer logo de clientes/<c>/logos/ subido a materiales/.
@@ -27,6 +29,7 @@ from flask_babel import gettext
 from PIL import Image
 
 import final_edition
+import idiomas
 import materiales
 import trabajos
 from final_edition import cortes, mezcla, musica as musica_mod
@@ -140,14 +143,32 @@ def voz_bloque(cliente, texto_voz, voz, idioma, ventana_ms, carpeta):
     """(material, costo_usd_nuevo) de la locución de un bloque, lista para
     sonar en `ventana_ms`: la cruda si cabe; si no, un material derivado
     acelerado (≤ 1.35×) y recortado a ventana + 400 ms. `extra.palabras`
-    siempre presente al volver (Whisper una sola vez por material)."""
+    siempre presente al volver (Whisper una sola vez por material).
+
+    Una voz propia (`vp:<id>`, Mis voces) se lee con MiniMax
+    (`voces_propias.sintetizar`, que la estrena) y su caché va por el
+    `voice_id`, no por el id de la fila (SQLite puede reutilizar el de una voz
+    borrada); ValueError si ya no es una voz de este proyecto. La galería va
+    por ElevenLabs como siempre."""
+    import audios          # perezosos: los dos importan final_edition.cortes
+    import voces_propias
     if not (texto_voz or "").strip():
         raise ValueError(gettext("voz_bloque: el bloque no tiene texto de voz."))
+    propia = None
+    if audios.es_propia(voz):
+        propia = voces_propias.resolver(cliente, voz)
+        if not propia:
+            raise ValueError(idiomas.traducir(audios.MENSAJES["voz_borrada"]))
+        h = materiales.hash_clave("voz", texto_voz, "minimax", propia["voice_id"], idioma)
+    else:
+        h = materiales.hash_clave("voz", texto_voz, voz, idioma)
     os.makedirs(carpeta, exist_ok=True)
-    h = materiales.hash_clave("voz", texto_voz, voz, idioma)
 
     def _tts():
-        r = fal_audio.tts(texto_voz, voz, idioma)
+        if propia:
+            r = voces_propias.sintetizar(cliente, propia, texto_voz, idioma)
+        else:
+            r = fal_audio.tts(texto_voz, voz, idioma)
         local = _descargar(r["url"], os.path.join(carpeta, f"voz_{h[:16]}.mp3"))
         url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h[:16]}.mp3", "audio/mpeg")
         return {"tipo": "audio", "origen": "voz", "url": url, "bytes": os.path.getsize(local),

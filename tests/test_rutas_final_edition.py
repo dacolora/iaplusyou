@@ -235,6 +235,43 @@ def test_producir_voz_o_estilo_invalidos_usan_defecto(base_temporal, monkeypatch
     assert o["con_sonido"] is False and o["mezcla"] == "equilibrada" and o["sonido"] == "nativo"
 
 
+def _voz_propia(cliente="acme", nombre="Astrid", voice_id="mmx_1"):
+    import materiales
+    import voces_propias
+    return materiales.registrar(
+        cliente, tipo="audio", origen=voces_propias.ORIGEN, url=f"https://r2/vp_{voice_id}.mp3",
+        hash=materiales.hash_clave("voz_propia", "minimax", voice_id), bytes=10, duracion_ms=3000, costo_usd=3.0,
+        extra={"nombre": nombre, "forma": "disenada", "proveedor": "minimax", "voice_id": voice_id,
+               "idioma_muestra": "es", "estrenada": True})
+
+
+def test_producir_con_voz_propia_la_pasa_tal_cual(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import dashboard
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)
+    v = _voz_propia()
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    c = _cliente_admin(dashboard)
+    c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir",
+           data={"destinos": ["es_CO", "en_US"], "voz": f"vp:{v['id']}", "con_voz": "si"})
+    assert [l["payload"]["opciones"]["voz"] for l in llamadas] == [f"vp:{v['id']}"] * 2
+
+
+def test_producir_con_voz_propia_borrada_o_ajena_no_encola(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import dashboard
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)
+    ajena = _voz_propia(cliente="otro")
+    _no_encolar(monkeypatch, dashboard)
+    c = _cliente_admin(dashboard)
+    for valor in (f"vp:{ajena['id']}", "vp:999999"):
+        r = c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={"destinos": ["es_CO"], "voz": valor})
+        assert r.status_code == 302
+    assert sum("Mis voces" in m for m in _flashes(c)) == 2
+
+
 # ---------- guardar guion ----------
 
 def _form_guion(guion, **cambios):
@@ -542,6 +579,19 @@ def test_plantilla_clon_mudo_desmarca_el_sonido():
                                                     capas={"sonido": {"proveedor": "wan3", "estado": "ausente"}}))
     assert 'name="con_sonido" value="si" checked' not in html and 'name="con_sonido" value="si"' in html
     assert "este clon no trae sonido" in html
+
+
+def test_plantilla_ofrece_mis_voces_solo_si_hay():
+    env = _entorno_plantilla()
+    item = _item_video_listo(guion_base=GUION_BASE)   # «Producir finales» solo sale con guion
+    ctx = dict(_contexto_minimo([item]), item=item, f=None)
+    con = env.get_template("_final_detalle_respuesta.html").render(
+        **ctx, mis_voces_fe=[{"valor": "vp:7", "nombre": "Astrid"}])
+    assert '<optgroup label="Mis voces">' in con and '<option value="vp:7">Astrid</option>' in con
+    selector_voz = con.split('<select name="voz">', 1)[1].split("</select>", 1)[0]
+    assert '<option value="vp:7">Astrid</option>' in selector_voz     # en el selector «Voz», no en otro
+    sin = env.get_template("_final_detalle_respuesta.html").render(**ctx, mis_voces_fe=[])
+    assert "Mis voces" not in sin
 
 
 def test_plantilla_imagen_no_muestra_final_edition():

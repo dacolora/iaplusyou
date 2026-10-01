@@ -115,6 +115,10 @@
         try { localStorage.setItem('crear-modo-{{ cliente }}', 'audios'); } catch (e) {}
         return 'creativeflowplus';
       }
+      if (t === 'hablado') {
+        try { localStorage.setItem('crear-modo-{{ cliente }}', 'hablado'); } catch (e) {}
+        return 'creativeflowplus';
+      }
       if (t === 'referencias') {
         try { localStorage.setItem('crear-modo-{{ cliente }}', 'referencias'); } catch (e) {}
         return 'creativeflowplus';

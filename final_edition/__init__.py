@@ -471,6 +471,60 @@ def _parametro_capa_original(cliente, cf_id, idioma, pais, capa, clave):
     return (((original.get("capas") or {}).get(capa) or {}).get("parametros") or {}).get(clave)
 
 
+PROVEEDOR_VOZ_GALERIA = "fal/elevenlabs"
+PROVEEDOR_VOZ_PROPIA = "fal/minimax"
+
+
+def proveedor_voz(voz):
+    """El proveedor que se anota en la capa `voz`: las voces propias (Mis voces,
+    `vp:<id>`) se leen con MiniMax; las de la galería con ElevenLabs."""
+    import audios   # perezoso: audios importa final_edition.cortes/mezcla
+    return PROVEEDOR_VOZ_PROPIA if audios.es_propia(voz) else PROVEEDOR_VOZ_GALERIA
+
+
+def etiqueta_voz(cliente, voz):
+    """Cómo se nombra la voz en un mensaje: el nombre de la voz propia («Mis
+    voces» si ya no existe); la de la galería tal cual."""
+    import audios
+    import voces_propias
+    if not audios.es_propia(voz):
+        return voz
+    vp = voces_propias.resolver(cliente, voz)
+    return vp["nombre"] if vp else gettext("Mis voces")
+
+
+def _voz_propia_de_la_sesion(cliente, cf_id):
+    """La voz propia (que todavía existe) de la final ORIGINAL más reciente de
+    la sesión, o None. Las variantes no cuentan."""
+    import voces_propias   # perezoso: voces_propias importa final_edition.cortes
+    for f in reversed(creative_flow.finales(cliente, cf_id)):
+        if f.get("variante") is not None:
+            continue
+        voz = ((((f.get("capas") or {}).get("voz") or {}).get("parametros")) or {}).get("voz")
+        if voces_propias.resolver(cliente, voz):
+            return voz
+    return None
+
+
+def voz_variante(cliente, cf_id, idioma, pais, lista_voces, variante_tipo):
+    """La voz de una variante sin voz explícita (derivar y rescatar). Una voz
+    propia es la voz de la marca: si la final original de este destino —o, si
+    este destino no tiene original, la más reciente de la sesión— se narró con
+    una voz propia que todavía existe, la variante la conserva, sea de gancho o
+    de estructura (prueba otro guion, no otra persona). Si no, lo de siempre: la
+    de gancho usa «otra» de la galería (la que sigue a la original, o a la de
+    defecto si no hay original) y la de estructura, la de defecto."""
+    import voces_propias
+    original = _parametro_capa_original(cliente, cf_id, idioma, pais, "voz", "voz")
+    if original is None:
+        original = _voz_propia_de_la_sesion(cliente, cf_id)
+    if voces_propias.resolver(cliente, original):
+        return original
+    if variante_tipo == "hook":
+        return _siguiente(lista_voces, original or lista_voces[0])
+    return lista_voces[0]
+
+
 def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_sufijo=""):
     """Produce la pieza final `idioma`/`pais` de la sesión. Devuelve
     `(final_id, resumen)`; `resumen` es el dict de `creative_flow.finales`.
@@ -505,7 +559,8 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
     con un guion variado a partir del guion base (`guion.variar_guion`) — el
     guion base del concepto NO se toca. Si no se fija `voz`/`estilo_musica`,
     `hook` cambia la voz respecto a la final original del destino y
-    `estructura` cambia el estilo de música."""
+    `estructura` cambia el estilo de música; una voz propia que todavía existe
+    se conserva en las dos (`voz_variante`)."""
     o = _opciones(opciones)
     entry = _sesion(cliente, cf_id)
     avisar = on_etapa or (lambda nombre: None)
@@ -634,33 +689,35 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
         archivo_voz, palabras = None, []
         voces = fal_audio.VOCES.get(idioma) or fal_audio.VOCES["es"]
         nombre_voz = o.get("voz")
-        if not nombre_voz and variante_tipo == "hook":
-            # Otra voz que la de la final original del destino (o la siguiente
-            # a la de defecto si no hay original).
-            nombre_voz = _siguiente(voces, _parametro_capa_original(cliente, cf_id, idioma, pais, "voz", "voz") or voces[0])
+        if not nombre_voz and variante_tipo:
+            # Una variante conserva la voz propia de la marca (la de la original
+            # del destino o, sin original, la de la sesión); si no hay, la de
+            # gancho rota la galería y la de estructura usa la de defecto (ver
+            # `voz_variante`).
+            nombre_voz = voz_variante(cliente, cf_id, idioma, pais, voces, variante_tipo)
         nombre_voz = nombre_voz or voces[0]
         if not o.get("con_voz", True):
-            capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="omitida")
+            capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, estado="omitida")
         else:
             try:
                 salida_voz, c = voz.sintetizar(guion, nombre_voz, os.path.join(carpeta, "voz"), cliente=cliente)
                 archivo_voz = salida_voz.get("archivo_voz")
                 palabras = salida_voz.get("palabras") or []
                 costo += float(c or 0.0)
-                capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, c)
+                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, c)
             except voz.ErrorPrimerBloque as e:
                 # El primer bloque (hook) falló: casi siempre algo
-                # determinístico (voz inválida para fal/ElevenLabs, texto
+                # determinístico (voz inválida o borrada de Mis voces, texto
                 # vacío) que fallaría igual en cualquier otro bloque —
                 # degradar aquí solo pagaría música por una pieza que de
                 # todos modos sale sin voz. Es fatal: no se genera música.
-                capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=str(e))
+                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, estado="error", error=str(e))
                 raise ValueError(gettext("No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s",
-                                         voz=nombre_voz, error=e)) from e
+                                         voz=etiqueta_voz(cliente, nombre_voz), error=e)) from e
             except Exception as e:
                 degradada = True
                 archivo_voz, palabras = None, []
-                capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=str(e))
+                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, estado="error", error=str(e))
 
         # 3. Música (degradable)
         avisar(ETAPAS_FINAL[3][0])

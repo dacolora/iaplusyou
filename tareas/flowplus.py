@@ -288,6 +288,12 @@ def _preparar(cliente, cf_id):
         modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.IMAGEN else flowplus_modelos.IMAGEN_POR_DEFECTO
         # Sin formato en la sesión, Seedream sigue a la primera imagen (None).
         aspect_ratio = flowplus_modelos.ajustar_formato(modelo, entry.get("aspect_ratio"), tipo="imagen") if entry.get("aspect_ratio") else None
+    elif flowplus_modelos.es_hablado(entry.get("modelo")):
+        # Anuncio hablado (spec 2026-10-01 §5): el modelo es el de la sesión,
+        # la duración la de la voz (ya en duracion_objetivo) y el formato sale
+        # de la foto: nada que ajustar.
+        modelo = entry["modelo"]
+        aspect_ratio = None
     else:
         modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
         # Última barrera antes de gastar: nunca se pide una duración o un formato
@@ -422,17 +428,27 @@ def ejecutar_video(tarea):
         # cortable(): si el worker se reinicia, la espera se corta y la retoma
         # flowplus_recuperar por el id de la predicción (nada se pierde).
         with wavespeed_common.cortable(plazo_s=ESPERA_PRIMERA):
-            video_url_wan = flowplus_modelos.generar_video(
-                modelo, prompt_texto, referencias, duracion,
-                aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
-                videos=videos_ref if modelo == "wan3" else None,
-                con_sonido=con_sonido, calidad=calidad,
-                # «Que Wan mejore mi prompt»: solo si la persona marcó la casilla.
-                mejorar_prompt=bool(entry.get("mejorar_prompt")),
-                # Cadena de escenas de Flow Plus: la escena arranca en el último
-                # fotograma de la anterior y conserva los elementos de Kling.
-                imagen_inicial=entry.get("imagen_inicial"), elementos=entry.get("elementos"),
-            )
+            if flowplus_modelos.es_hablado(modelo):
+                # Anuncio hablado (spec 2026-10-01 §5): la persona de la foto
+                # dice la voz ya pagada; «Cómo se mueve» va tal cual (vacío =
+                # no se manda y el modelo usa el suyo).
+                hablado = entry.get("hablado") or {}
+                video_url_wan = flowplus_modelos.generar_hablado(
+                    modelo, hablado["foto_url"], hablado["voz_url"], hablado.get("movimiento") or None,
+                    hablado.get("resolucion") or flowplus_modelos.RESOLUCION_HABLADO, on_progreso=avisar_fase,
+                )
+            else:
+                video_url_wan = flowplus_modelos.generar_video(
+                    modelo, prompt_texto, referencias, duracion,
+                    aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
+                    videos=videos_ref if modelo == "wan3" else None,
+                    con_sonido=con_sonido, calidad=calidad,
+                    # «Que Wan mejore mi prompt»: solo si la persona marcó la casilla.
+                    mejorar_prompt=bool(entry.get("mejorar_prompt")),
+                    # Cadena de escenas de Flow Plus: la escena arranca en el último
+                    # fotograma de la anterior y conserva los elementos de Kling.
+                    imagen_inicial=entry.get("imagen_inicial"), elementos=entry.get("elementos"),
+                )
     except wavespeed_common.EsperaAgotada as e:
         # Se acabó la espera (o se cortó por un reinicio) pero WaveSpeed sigue:
         # se sigue esperando solo, en otra tarea del carril de Crear.
@@ -483,9 +499,9 @@ def recuperar_video(tarea):
         creative_flow.actualizar(cliente, cf_id, estado="error",
                                  error=entry.get("error") or gettext("No hay nada que recuperar: genera de nuevo."))
         return gettext("No hay nada que recuperar en esta pieza.")
-    if pred.get("modelo") in flowplus_modelos.VIDEO:
+    if pred.get("modelo") in flowplus_modelos.VIDEO or flowplus_modelos.es_hablado(pred.get("modelo")):
         modelo = pred["modelo"]
-    nombre = flowplus_modelos.VIDEO[modelo]["nombre"]
+    nombre = flowplus_modelos.nombre_modelo(modelo) or modelo
     avisar_fase = _avisar_fase_de(job_id, cliente)
     trabajos.reportar(job_id, etapa=ETAPA_MODELO)
     try:

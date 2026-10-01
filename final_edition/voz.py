@@ -1,11 +1,12 @@
 """Final Edition, capa 2: locución por bloque del guion. Por cada bloque
-sintetiza `texto_voz` (fal_audio.tts), mide el mp3 y, si no cabe en la ventana
-del bloque, lo acelera con `atempo` hasta 1.35×; si aun así no cabe, se deja
-solapar con el bloque siguiente hasta 0.4 s (`recortado: True`) y se recorta
-lo que pase de ahí. Las marcas por palabra salen de transcribir el mp3 ya
-ajustado (subido a R2 para que Whisper lo lea) desplazadas a la línea de
-tiempo del video. Al final mezcla todas las pistas, cada una en su `inicio_s`,
-sobre silencio en un wav estéreo a 44.1 kHz.
+sintetiza `texto_voz` (`_tts`: fal_audio.tts, o MiniMax con una voz propia),
+mide el mp3 y, si no cabe en la ventana del bloque, lo acelera con `atempo`
+hasta 1.35×; si aun así no cabe, se deja solapar con el bloque siguiente
+hasta 0.4 s (`recortado: True`) y se recorta lo que pase de ahí. Las marcas
+por palabra salen de transcribir el mp3 ya ajustado (subido a R2 para que
+Whisper lo lea) desplazadas a la línea de tiempo del video. Al final mezcla
+todas las pistas, cada una en su `inicio_s`, sobre silencio en un wav
+estéreo a 44.1 kHz.
 """
 import os
 import uuid
@@ -13,6 +14,7 @@ import uuid
 import requests
 from flask_babel import gettext
 
+import idiomas
 from final_edition import cortes
 from providers import fal_audio
 from storage import r2_uploader
@@ -78,7 +80,7 @@ def _sintetizar_bloque(bloque, voz, idioma, carpeta, cliente):
     fin_s = float(bloque["fin_s"])
     ventana = fin_s - inicio_s
 
-    resultado = fal_audio.tts(bloque["texto_voz"], voz, idioma)
+    resultado = _tts(bloque["texto_voz"], voz, idioma, cliente)
     costo = float(resultado.get("costo_usd") or 0.0)
     crudo = os.path.join(carpeta, f"{rol}.mp3")
     _descargar(resultado["url"], crudo)
@@ -110,6 +112,20 @@ def _sintetizar_bloque(bloque, voz, idioma, carpeta, cliente):
         fin = min(round(inicio_s + float(p.get("fin") or 0.0), 3), tope)
         palabras.append({"inicio": ini, "fin": max(fin, ini), "texto": p.get("texto", "")})
     return pista, palabras, costo
+
+
+def _tts(texto, voz, idioma, cliente):
+    """La galería por ElevenLabs; una voz propia (`vp:<id>`) por MiniMax
+    (`voces_propias.sintetizar`, que la estrena). ValueError si la voz propia
+    ya no es de este proyecto."""
+    import audios          # perezosos: los dos importan final_edition.cortes
+    import voces_propias
+    if not audios.es_propia(voz):
+        return fal_audio.tts(texto, voz, idioma)
+    vp = voces_propias.resolver(cliente, voz)
+    if not vp:
+        raise ValueError(idiomas.traducir(audios.MENSAJES["voz_borrada"]))
+    return voces_propias.sintetizar(cliente, vp, texto, idioma)
 
 
 def _mezclar(pistas, destino):

@@ -106,7 +106,7 @@ instead of double-launching. Tasks that spend credits are queued with
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
 `2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has two lanes:
-`CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`)
+`CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`, `hablado_voz`)
 runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
 `HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
 runs one at a time in order, as before; the main thread only supervises (`worker.repartir`).
@@ -320,7 +320,11 @@ Mientras la investigación está viva, la recolección manual del estudio y «Ge
 esperan (las rutas los rechazan); si un trabajo manual con el mismo job_id sigue bloqueando un paso de la
 cadena, `avanzar` deja la investigación `interrumpida` para que «Reanudar» funcione en cuanto termine. El
 Blueprint de Nicho rechaza los POST que el navegador marca cross-site (`Sec-Fetch-Site`), como Sprints y
-Flow Plus.
+Flow Plus. Los precios por resultado del registro (`nicho/fuentes/plataformas.py`) son los del plan de
+Apify de Creatv (FREE), verificados contra el cobro real de corridas reales (Amazon búsqueda y MELI
+reseñas corregidos el 2026-10-01; un plan de pago puede bajar algunos); un actor que ahora exige acceso
+completo a la cuenta (`full-permission-actor-not-approved`) se rechaza con su propio aviso, nunca con el
+de token (`providers.apify.arrancar`).
 **Otro mercado** (Parte 4, spec `docs/superpowers/specs/2026-09-30-nicho-mas-tiendas-design.md`): una tienda
 sin sitio en el país del estudio no se rechaza: `plataformas.mercado(clave, pais)` → `("otro", casa)` y busca
 y trae reseñas de su sitio principal (Amazon y Walmart → EE. UU., Mercado Libre → México); en la tarjeta va en
@@ -627,9 +631,40 @@ tarea `voz_propia_crear` (`max_intentos=1`, job `<cliente>__voz_propia`): clonar
 obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripción (US$ 3,00); el gasto (tipo
 `voz_propia`) se registra apenas fal responde y la tarea ESTRENA la voz leyendo su muestra, porque MiniMax borra
 una voz sin uso real en 7 días (la vista previa no cuenta). En el formulario una voz propia es `vp:<id>`.
+Desde 2026-10-01 (spec `docs/superpowers/specs/2026-10-01-mis-voces-en-final-edition-design.md`) Mis voces
+también narran finales: grupo «Mis voces» en el selector «Voz» de «Producir finales» (`mis_voces_fe`, solo
+valor y nombre), `fe_producir` rechaza una voz propia ajena o borrada sin encolar, `insumos.voz_bloque` (y el
+legado `voz._sintetizar_bloque`) la leen con `voces_propias.sintetizar` (MiniMax, la estrena) con caché por
+`voice_id`, el `voice_id` entra al hash de la receta del borrador, la capa `voz` anota `fal/minimax`
+(`final_edition.proveedor_voz`) y una variante (de gancho o de estructura) conserva la voz propia de su final
+original —o, en un destino sin original, la de la final original más reciente de la sesión—
+(`final_edition.voz_variante`). Mismo precio por carácter que ElevenLabs.
 
 Fuera: efectos, subtítulos, usar el audio en
 un video o el editor, ElevenLabs v3.
+
+**Anuncio hablado en Crear** (`hablado.py`, `hablado_rutas.py`, `tareas/hablado.py`, `static/hablado.js`, spec
+`docs/superpowers/specs/2026-10-01-crear-anuncio-hablado-design.md`): quinto modo de Crear (`data-modo="hablado"`,
+`#hablado`): una foto del proyecto + un guion de hasta 500 caracteres leído por una voz de Audios → P-Video-Avatar
+(`pruna-ai/p-video/avatar`, 720p, US$ 0,025 por segundo de voz redondeado al segundo, tope 30 s). `flowplus_modelos.HABLADO`
+es un registro aparte que ningún selector, Sprints ni derivación recorre (`es_hablado`, `es_sesion_hablada`,
+`nombre_modelo`, `estimate_hablado`, `generar_hablado`; `estimate_video` delega, así el gasto y «Reintentar» salen de la
+misma fórmula). La voz la paga `audios.voz_cruda` (la misma caché `locucion_voz` y el mismo gasto `locucion` que Audios:
+una voz no se paga dos veces) desde la tarea `hablado_voz` (`max_intentos=1`, job `<c>__hablado_voz`, en `CARRIL_CREAR`).
+La cáscara `_crear_hablado.html` va en la página y el panel (`_hablado_panel.html`: fotos + galería de voces, con la
+macro `_voces_galeria.html` que comparte Audios) llega por fetch (`hablado.panel`) la primera vez que el modo se ve; el
+JS sondea la voz por su cuenta (sin `data-poll-job`) y repite el POST con `solo_cache=1`, que nunca encola. Blueprint
+`hablado` (`/cliente/<c>/hablado/{panel,foto,voz,crear}`, rechaza POST cross-site): la foto llega como ficha
+`cf:`/`mat:`/`cat:` de ESTE proyecto, nunca como URL (un personaje del catálogo se sube a R2 al crear); la voz, por su
+hash; el precio visto debe coincidir con `estimate_hablado` (si no, 409 y nada se crea). `hablado.crear_pieza` crea una
+sesión de Crear (`modelo="p_video_avatar"`, `modo_crear="hablado"`, `enfoque_nombre` «Anuncio hablado»,
+`hablado={foto_url, voz_url, movimiento, …}`) y la ruta la lanza con `flowplus_lanzar.lanzar`; el worker usa la misma
+`flowplus_video` (`_preparar` conserva el modelo hablado sin ajustar duración ni formato; `ejecutar_video` llama
+`generar_hablado`; `recuperar_video` lo encuentra por `nombre_modelo`). «Cómo se mueve» va tal cual como `video_prompt`
+(vacío = no se manda). Apagado para una pieza hablada: director y «Editar y crear otra» (también en `cf_rearmar`,
+`cf_guardar_prompt`, `fp_reusar`), el camino automático de Final edition (`fe_preparar`/`fe_producir`, nota «Este video
+ya habla…») y derivar/rescatar en Experimentos (`pz["sin_derivar"]`, `derivaciones._rechazar_imagen`); el editor, la
+doctrina, «Reintentar», «Recuperar» y la publicación orgánica sí funcionan.
 
 **Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»
 (`_tab_flowplus.html` → `_crear_flowplus.html`, hash `#flowplus`; the package is `guiones`
@@ -752,7 +787,8 @@ failed retry never leaves the client without a video. Every price is per-destino
 (`opciones["precios"]`, one raw number per país — never converted between currencies)
 so a badge/voice-over price is either the number typed for that specific country or
 absent, never another country's number reformatted. All fal.ai calls go through
-`providers/fal_audio.py` (ElevenLabs `multilingual-v2` for TTS, `fal-ai/whisper` for
+`providers/fal_audio.py` (ElevenLabs `multilingual-v2` for TTS — MiniMax Speech 2.8 HD
+for a project's own voices, see «Audios en Crear» —, `fal-ai/whisper` for
 word-level timestamps, Stable Audio for music); the premade voice list there is
 individually verified against fal (see the module docstring) rather than assumed from
 ElevenLabs' own catalog. Fonts are checked into `static/fonts/`; generated music
