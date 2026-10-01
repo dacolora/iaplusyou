@@ -11,6 +11,7 @@ from flask import Blueprint, Response, flash, jsonify, render_template, request,
 from flask_babel import gettext
 
 import catalogo_productos
+import db
 import gastos
 import proyectos
 import referencias_flowplus
@@ -18,11 +19,12 @@ import tiendas
 import trabajos
 import usuarios
 from final_edition import biblioteca
-from guiones import clips, config, datos, duracion, escenas, imagenes, lectura, notion, plantillas, recorte, refinador
+from guiones import cadena, clips, config, datos, duracion, escenas, imagenes, lectura, medios, notion, plantillas, recorte, refinador
 from guiones.refinador import Conflicto, DatoInvalido, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
 from providers import flowplus_modelos
 from storage import r2_uploader
+from tareas.cadena import PRIORIDAD_CADENA, job_id as job_cadena
 
 bp = Blueprint("guiones_pipeline", __name__, url_prefix="/cliente/<cliente>/guiones")
 bp.before_request(_solo_mismo_origen)
@@ -89,7 +91,32 @@ def _contexto(cliente, guion_id=None, video_id=None):
                                               escenas.refs_con_imagen(v))
         if v["estado"] == "armado":
             ctx["escenas"] = _vista_escenas(cliente, v, catalogo)
+            ctx["cadena_vista"] = _vista_cadena(v, ctx["prompts"])
     return ctx
+
+
+def _vista_cadena(v, prompts):
+    """Lo que muestra «Generar todas las escenas»: revisión, precio, estado de cada escena y desde dónde rehacer."""
+    est = cadena.estado(v)
+    ks = cadena.indices(v)
+    conocidos = list(((est or {}).get("elementos") or {}).keys())
+    corriendo = bool(est and est["estado"] == "corriendo")
+    vista = {"estado": est, "corriendo": corriendo, "revision": [], "avisos": cadena.avisos(v), "precio": None,
+             "filas": [], "total": len(ks)}
+    if not corriendo:
+        vista["revision"] = cadena.revisar(v, prompts)
+        if not vista["revision"]:
+            vista["precio"] = cadena.precio(v, ks[0], conocidos) if ks else None
+    for c in v["clips"]:
+        k = c["indice"]
+        e = ((est or {}).get("escenas") or {}).get(str(k)) or {}
+        fila = {"indice": k, "titulo": c.get("titulo") or "", "estado": e.get("estado") or ("espera" if est else None),
+                "error": e.get("error"), "rehacer_precio": None}
+        if est and not corriendo and k != ks[0] and cadena.puede_rehacer(est, k, ks[0]) \
+                and not cadena.revisar(v, prompts, desde=k):
+            fila["rehacer_precio"] = cadena.precio(v, k, conocidos)
+        vista["filas"].append(fila)
+    return vista
 
 
 def _src(cliente, img):
@@ -490,20 +517,6 @@ def escena_quitar(cliente, vid):
     return jsonify({"video_id": vid})
 
 
-def _url_para_bandeja(cliente, img):
-    """URL pública de una imagen de escena para la bandeja de Crear: lo subido
-    ya está en R2; una foto del Catálogo se sube con la misma clave que usa
-    Crear al generar (`cf_crear_video`), así que no se duplica."""
-    if not img.get("activo_id"):
-        return img["url"]
-    activo = catalogo_productos.encontrar(cliente, img["activo_id"], categoria=img["categoria"])
-    if activo is None:
-        raise Conflicto(gettext("«%(nombre)s» ya no está en el Catálogo.", nombre=img.get("nombre") or img["activo_id"]))
-    carpeta = catalogo_productos.CATEGORIAS[activo["categoria"]]["carpeta"]
-    ruta = activo["representativa"]
-    return r2_uploader.upload_image(ruta, f"clientes/{cliente}/{carpeta}/{activo['id']}/{os.path.basename(ruta)}")
-
-
 @bp.post("/videos/<int:vid>/escenas/<int:indice>/crear")
 def escena_a_crear(cliente, vid, indice):
     """«Llevar a Crear» (spec 2026-09-30): la bandeja de Crear se REEMPLAZA con
@@ -525,7 +538,7 @@ def escena_a_crear(cliente, vid, indice):
         if prompt is None:
             raise Conflicto(gettext("Esta escena todavía no tiene su prompt en el chat."))
         imagenes = escenas.imagenes_para_crear(v, indice)
-        urls = [_url_para_bandeja(cliente, x["imagen"]) for x in imagenes]
+        urls = [medios.url_publica(cliente, x["imagen"]) for x in imagenes]
     except ErrorRefinador as e:
         return _error(e)
     except Exception:  # noqa: BLE001 — subir una foto del Catálogo a R2 puede fallar
@@ -546,6 +559,78 @@ def escena_a_crear(cliente, vid, indice):
     }
     flash(gettext("Escena %(n)s cargada en Crear: revisa el texto y las referencias, y genera.", n=indice), "ok")
     return jsonify({"video_id": vid, "ir": url_for("ver_cliente", cliente=cliente, desde="flowplus") + "#referencias"})
+
+
+# ------------------------------------------------------------ cadena de escenas ---
+# (spec 2026-09-30) Una sola aprobación con el precio a la vista; el worker
+# (`tareas/cadena.py`) genera escena tras escena y frena si una falla.
+
+def _prompts_clip(vid):
+    return {f"principal:{(p['extra'] or {}).get('clip_index')}": {"id": p["id"], "estado": p["estado"]}
+            for p in datos.prompts_de_video(vid)
+            if p["tipo"] == "clip" and (p["extra"] or {}).get("variante") == "principal"}
+
+
+@bp.post("/videos/<int:vid>/cadena")
+def cadena_aprobar(cliente, vid):
+    """`{desde, total_visto}`: aprueba la cadena desde esa escena (la primera o,
+    para «Rehacer desde», una con el último cuadro de la anterior) si el precio
+    recalculado coincide con el que la persona vio."""
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    try:
+        v = _video_o_404(cliente, vid)
+        ks = cadena.indices(v)
+        if v["estado"] != "armado" or not ks:
+            raise Conflicto(gettext("Primero arma los clips de esta versión."))
+        desde = _entero(cuerpo.get("desde")) if cuerpo.get("desde") is not None else ks[0]
+        if desde not in ks:
+            raise DatoInvalido(gettext("Esa escena no existe en esta versión."))
+        problemas = cadena.revisar(v, _prompts_clip(vid), desde=desde)
+        if problemas:
+            return jsonify({"error": gettext("Antes de generar falta resolver esto:"),
+                            "problemas": [(gettext("Escena %(n)s: ", n=p["indice"]) if p["indice"] else "") + p["motivo"]
+                                          for p in problemas]}), 409
+        est = cadena.estado(v)
+        if desde != ks[0] and not cadena.puede_rehacer(est, desde, ks[0]):
+            raise Conflicto(gettext("Para rehacer desde esa escena hace falta el último cuadro de la anterior."))
+        precio = cadena.precio(v, desde, list(((est or {}).get("elementos") or {}).keys()))
+        try:
+            visto = float(cuerpo.get("total_visto"))
+        except (TypeError, ValueError):
+            visto = None
+        if visto is None or abs(visto - precio) > 0.005:
+            return jsonify({"error": gettext("El precio cambió: ahora es ≈ US$ %(precio)s. Revisa y vuelve a aprobar.",
+                                             precio=f"{precio:.2f}"), "precio": precio}), 409
+        usuario = session.get("usuario")
+
+        def aprobar(e, video):
+            if e and e.get("estado") == "corriendo":
+                raise Conflicto(gettext("La cadena ya está corriendo."))
+            return cadena.aprobar(video, desde, precio, usuario, db.ahora(), previo=e or {})
+        datos.modificar_cadena(cliente, vid, aprobar)
+    except ErrorRefinador as e:
+        return _error(e)
+    trabajos.encolar(job_cadena(cliente, vid, "elementos"), "cadena_elementos", {"cliente": cliente, "video_id": vid},
+                     duracion_estimada=60, cliente=cliente, max_intentos=1, prioridad=PRIORIDAD_CADENA)
+    return jsonify({"video_id": vid}), 202
+
+
+@bp.post("/videos/<int:vid>/cadena/detener")
+def cadena_detener(cliente, vid):
+    if _cuerpo() is None:
+        return _sin_cuerpo()
+
+    def detener(e, _video):
+        if not e or e.get("estado") != "corriendo":
+            raise Conflicto(gettext("La cadena no está corriendo."))
+        return cadena.pedir_detener(e)
+    try:
+        datos.modificar_cadena(cliente, vid, detener)
+    except ErrorRefinador as e:
+        return _error(e)
+    return jsonify({"video_id": vid})
 
 
 @bp.get("/bloque-global")

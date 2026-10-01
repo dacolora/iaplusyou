@@ -1864,6 +1864,9 @@ msgstr ""
 msgid "Antes de generar"
 msgstr "Before generating"
 
+msgid "Antes de generar falta resolver esto:"
+msgstr "Before generating, this needs fixing:"
+
 #, python-format
 msgid "Antes de lanzarla: lo que ven las reglas (gratis) y, si la pides, la revisión de Claude con los 12 puntos de <a href=\"%(url)s#revisar\" target=\"_blank\" rel=\"noopener\">la lista</a>. Solo informa: no bloquea nada."
 msgstr "Before launching it: what the rules see (free) and, if you ask for it, Claude's review with the 12 points on <a href=\"%(url)s#revisar\" target=\"_blank\" rel=\"noopener\">the list</a>. It only informs: it doesn't block anything."
@@ -2101,6 +2104,9 @@ msgstr "Building the prompt with AI… it'll appear here in a few seconds for yo
 
 msgid "Armando el zip; el enlace aparecerá aquí al terminar."
 msgstr "Building the zip; the link will appear here when it's done."
+
+msgid "Armando la edición con todas las escenas…"
+msgstr "Putting together the edit with all the scenes…"
 
 msgid "Armando lo que Claude necesita… la lista se actualiza sola."
 msgstr "Putting together what Claude needs… the list updates on its own."
@@ -3977,6 +3983,9 @@ msgstr "Technical detail"
 msgid "Detalle técnico (para soporte)"
 msgstr "Technical detail (for support)"
 
+msgid "Detener"
+msgstr "Stop"
+
 #, python-format
 msgid "Detenida: %(motivo)s"
 msgstr "Stopped: %(motivo)s"
@@ -4113,6 +4122,9 @@ msgstr "Edit %(id)s ready to edit."
 #, python-format
 msgid "Edición de %(pieza)s"
 msgstr "%(pieza)s edit"
+
+msgid "Edición lista."
+msgstr "Edit ready."
 
 msgid "Edita el prompt"
 msgstr "Edit the prompt"
@@ -4545,6 +4557,10 @@ msgstr "The country must be a 2-letter code, like CO."
 msgid "El porqué"
 msgstr "The reason why"
 
+#, python-format
+msgid "El precio cambió: ahora es ≈ US$ %(precio)s. Revisa y vuelve a aprobar."
+msgstr "The price changed: it is now ≈ US$ %(precio)s. Check it and approve again."
+
 msgid "El precio tiene que ser un número positivo (ej. 89900 o 25,50); no lo guardé."
 msgstr "The price has to be a positive number (e.g. 89900 or 25.50); I didn't save it."
 
@@ -4771,8 +4787,15 @@ msgstr "Choose new password"
 msgid "Elegir producto (%(n)s) →"
 msgstr "Choose product (%(n)s) →"
 
+#, python-format
+msgid "Elemento de Kling · %(nombre)s"
+msgstr "Kling element · %(nombre)s"
+
 msgid "Elementos"
 msgstr "Elements"
+
+msgid "Elementos listos; arrancó la primera escena."
+msgstr "Elements ready; the first scene has started."
 
 msgid "Elige al menos un destino de esta edición."
 msgstr "Choose at least one market of this edit."
@@ -5427,6 +5450,10 @@ msgstr "Scene %(n)s"
 msgid "Escena %(n)s cargada en Crear: revisa el texto y las referencias, y genera."
 msgstr "Scene %(n)s loaded in Create: check the text and the references, then generate."
 
+#, python-format
+msgid "Escena %(n)s: "
+msgstr "Scene %(n)s: "
+
 msgid "Escenas"
 msgstr "Scenes"
 
@@ -5779,6 +5806,9 @@ msgstr "This edit already has too many tracks."
 
 msgid "Esta edición ya tiene demasiadas pistas: no cabe el sonido del video."
 msgstr "This edit already has too many tracks: the video's sound doesn't fit."
+
+msgid "Esta escena cambia de lugar: como arranca en el último cuadro de la anterior, el lugar nuevo solo llega por el texto."
+msgstr "This scene changes location: since it starts on the last frame of the previous one, the new place only comes through the text."
 
 msgid "Esta escena todavía no tiene su prompt en el chat."
 msgstr "This scene doesn't have its prompt in the chat yet."
@@ -6243,6 +6273,9 @@ msgstr "Text is missing for %(plataformas)s: write it or press “Write text wit
 msgid "Falta el texto para: %(nombres)s. Escríbelo o pulsa «Escribir texto con IA»."
 msgstr "Text is missing for: %(nombres)s. Write it or press “Write text with AI”."
 
+msgid "Falta el último cuadro de la escena anterior."
+msgstr "The previous scene's last frame is missing."
+
 msgid "Falta la imagen"
 msgstr "Image missing"
 
@@ -6666,6 +6699,12 @@ msgstr "Generating video…"
 msgid "Generando video… 0%% · 0s"
 msgstr "Generating video… 0%% · 0s"
 
+#, python-format
+msgid "Generando: %(num)s de %(total)s escena lista."
+msgid_plural "Generando: %(num)s de %(total)s escenas listas."
+msgstr[0] "Generating: %(num)s of %(total)s scene ready."
+msgstr[1] "Generating: %(num)s of %(total)s scenes ready."
+
 msgid "Generando…"
 msgstr "Generating…"
 
@@ -6687,6 +6726,12 @@ msgstr "Generate %(n)s piece(s) — US$ %(usd)s"
 #, python-format
 msgid "Generar %(n)s pieza(s) — USD %(usd)s"
 msgstr "Generate %(n)s piece(s) — USD %(usd)s"
+
+#, python-format
+msgid "Generar %(num)s escena"
+msgid_plural "Generar las %(num)s escenas"
+msgstr[0] "Generate %(num)s scene"
+msgstr[1] "Generate the %(num)s scenes"
 
 msgid "Generar 2 imágenes"
 msgstr "Generate 2 images"
@@ -6721,6 +6766,9 @@ msgstr "Generate batch (%(n)s)"
 
 msgid "Generar también la versión B (dos videos)"
 msgstr "Also generate version B (two videos)"
+
+msgid "Generar todas las escenas"
+msgstr "Generate all scenes"
 
 msgid "Generar video"
 msgstr "Generate video"
@@ -7530,6 +7578,15 @@ msgstr "The database isn't SQLite: no backup."
 msgid "La biblioteca no tiene anuncios nuevos que encajen"
 msgstr "The library has no new ads that fit"
 
+msgid "La cadena está detenida."
+msgstr "The chain is stopped."
+
+msgid "La cadena no está corriendo."
+msgstr "The chain isn't running."
+
+msgid "La cadena ya está corriendo."
+msgstr "The chain is already running."
+
 msgid "La caja se abre, el producto sale y se mira de cerca."
 msgstr "The box opens, the product comes out and is looked at up close."
 
@@ -7635,8 +7692,14 @@ msgstr "The edit uses files that aren't from this project."
 msgid "La encoló el motor al declararla ganadora"
 msgstr "The engine queued it when it declared it the winner"
 
+msgid "La escena no se pudo generar."
+msgstr "The scene couldn't be generated."
+
 msgid "La escena ocurre en ESTE lugar: conserva paredes, piso, muebles, decoración y luz tal como se ven en las referencias. El producto y las personas se integran ahí; no reconstruyas ni redecores el espacio."
 msgstr "The scene takes place in THIS place: keep walls, floor, furniture, decoration and light exactly as seen in the references. The product and the people blend in there; do not rebuild or redecorate the space."
+
+msgid "La escena que se está generando termina (ya se cobró); después la cadena se detiene. ¿Detener?"
+msgstr "The scene being generated will finish (it has already been charged); then the chain stops. Stop?"
 
 msgid "La etapa debe ser TOF, MOF o BOF."
 msgstr "The stage must be TOF, MOF or BOF."
@@ -7761,6 +7824,9 @@ msgstr "The persona needs a name."
 #, python-format
 msgid "La pieza %(cf)s no tiene un video listo para el editor."
 msgstr "Piece %(cf)s doesn't have a video ready for the editor."
+
+msgid "La pieza de esta escena ya no está en Crear."
+msgstr "This scene's piece is no longer in Create."
 
 msgid "La pieza no tiene imagen ni fotograma que evaluar."
 msgstr "The piece has no image or frame to evaluate."
@@ -7947,6 +8013,9 @@ msgstr "Other sessions open with the previous password are closed; this one stay
 msgid "Las dos contraseñas no coinciden."
 msgstr "The two passwords don't match."
 
+msgid "Las escenas se están generando: espera a que termine o detén la cadena."
+msgstr "The scenes are being generated: wait for it to finish or stop the chain."
+
 msgid "Las familias deben ser una lista."
 msgstr "Format families must be a list."
 
@@ -8122,6 +8191,16 @@ msgstr "Reaching people is expensive (high CPM): the audience is saturated or th
 
 msgid "Llenar la pantalla"
 msgstr "Fill the screen"
+
+#, python-format
+msgid "Lleva %(n)s imágenes; la primera escena admite %(max)s: apaga alguna."
+msgstr "It has %(n)s images; the first scene allows %(max)s: turn one off."
+
+#, python-format
+msgid "Lleva %(num)s personaje o producto; Kling admite %(max)s por escena: apaga alguno."
+msgid_plural "Lleva %(num)s personajes o productos; Kling admite %(max)s por escena: apaga alguno."
+msgstr[0] "It has %(num)s character or product; Kling allows %(max)s per scene: turn one off."
+msgstr[1] "It has %(num)s characters or products; Kling allows %(max)s per scene: turn one off."
 
 msgid "Llevar a Crear"
 msgstr "Take to Create"
@@ -8987,6 +9066,12 @@ msgstr "There were no changes to save."
 msgid "No había ideas aprobadas sin generar."
 msgstr "There were no approved ideas left to generate."
 
+msgid "No había nada que preparar."
+msgstr "There was nothing to prepare."
+
+msgid "No había nada que unir."
+msgstr "There was nothing to join."
+
 msgid "No había ninguna solicitud pendiente."
 msgstr "There was no pending request."
 
@@ -9308,6 +9393,9 @@ msgstr "Couldn't load the suggestions."
 msgid "No se pudieron cargar {lista} (el enlace no respondió o el archivo ya no está): esas partes quedan vacías en la vista previa."
 msgstr "Couldn't load {lista} (the link didn't respond or the files are gone): those parts stay empty in the preview."
 
+msgid "No se pudieron crear los elementos."
+msgstr "The elements couldn't be created."
+
 msgid "No se pudieron escribir los prompts de imágenes. Vuelve a intentarlo."
 msgstr "Couldn't write the image prompts. Try again."
 
@@ -9321,6 +9409,10 @@ msgstr "The scene's images couldn't be prepared. Try again."
 #, python-format
 msgid "No se pudieron preparar las referencias (%(tipo)s)."
 msgstr "The references couldn't be prepared (%(tipo)s)."
+
+#, python-format
+msgid "No se pudieron preparar los personajes en Kling: %(e)s"
+msgstr "The characters couldn't be prepared in Kling: %(e)s"
 
 #, python-format
 msgid ""
@@ -9554,6 +9646,9 @@ msgstr "Couldn't read the reference."
 #, python-format
 msgid "No se pudo pausar por tope: %(error)s"
 msgstr "Could not pause for reaching the cap: %(error)s"
+
+msgid "No se pudo poner la escena en la cola."
+msgstr "The scene couldn't be queued."
 
 #, python-brace-format
 msgid "No se pudo preparar ese video (error {status})."
@@ -9934,6 +10029,9 @@ msgstr "For Creatv to manage it,"
 
 msgid "Para quién"
 msgstr "For whom"
+
+msgid "Para rehacer desde esa escena hace falta el último cuadro de la anterior."
+msgstr "To redo from that scene, the last frame of the previous one is needed."
 
 msgid "Para volver a tu propia app,"
 msgstr "To go back to your own app,"
@@ -10347,6 +10445,9 @@ msgstr "Preparing the video for the editor… it opens on its own as soon as it'
 
 msgid "Preparando la imagen"
 msgstr "Preparing the image"
+
+msgid "Preparando los personajes en Kling…"
+msgstr "Preparing the characters in Kling…"
 
 msgid "Preparando materiales"
 msgstr "Preparing files"
@@ -11264,6 +11365,9 @@ msgstr "Redo"
 msgid "Rehacer (Ctrl/Cmd+Shift+Z)"
 msgstr "Redo (Ctrl/Cmd+Shift+Z)"
 
+msgid "Rehacer desde aquí"
+msgstr "Redo from here"
+
 msgid "Reino Unido"
 msgstr "United Kingdom"
 
@@ -11565,6 +11669,9 @@ msgstr "The campaign, ad sets and ads will be created on Meta, PAUSED (it doesn'
 msgid "Se crean la campaña, los conjuntos y los anuncios en Meta, en pausa. ¿Seguimos?"
 msgstr "The campaign, ad sets and ads will be created on Meta, paused. Continue?"
 
+msgid "Se detiene al terminar la escena en curso."
+msgstr "It will stop when the current scene finishes."
+
 #, python-format
 msgid "Se detuvo de traer más anuncios: %(motivo)s."
 msgstr "Stopped getting more ads: %(motivo)s."
@@ -11585,6 +11692,12 @@ msgstr "Fatiguing"
 
 msgid "Se está escribiendo el guion… la página se recarga sola cuando esté listo."
 msgstr "The script is being written… the page reloads on its own once it's ready."
+
+#, python-format
+msgid "Se genera %(num)s escena con Kling O3 Pro por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?"
+msgid_plural "Se generan %(num)s escenas con Kling O3 Pro, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?"
+msgstr[0] "%(num)s scene will be generated with Kling O3 Pro for ≈ US$ %(precio)s. Nothing else is charged until you approve again. Generate?"
+msgstr[1] "%(num)s scenes will be generated with Kling O3 Pro, one after another, for ≈ US$ %(precio)s in total. If one fails, the chain stops and nothing after it is charged. Generate?"
 
 #, python-format
 msgid "Se generó, pero no se pudo subir al almacenamiento (%(error)s)."
@@ -11689,6 +11802,10 @@ msgstr "It gets seen but doesn't invite a click: make the offer and the call to 
 #, python-format
 msgid "Se vuelve a publicar en %(plataforma)s. Revisa antes que no haya salido ya allá. ¿Reintentar?"
 msgstr "It will be published again on %(plataforma)s. Check first that it hasn't already gone out there. Retry?"
+
+#, python-format
+msgid "Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?"
+msgstr "Scene %(n)s and the ones after it will be generated again for ≈ US$ %(precio)s. The earlier ones stay as they are. Redo?"
 
 msgid "Seedance 2.5"
 msgstr "Seedance 2.5"
@@ -12595,6 +12712,9 @@ msgstr "Customer lifetime"
 msgid "Todas"
 msgstr "All"
 
+msgid "Todas las escenas están listas."
+msgstr "All scenes are ready."
+
 msgid "Todas las familias"
 msgstr "All families"
 
@@ -13379,6 +13499,9 @@ msgstr "One single idea"
 
 msgid "Una transición va entre dos videos: agrega otro video primero."
 msgstr "A transition goes between two videos: add another video first."
+
+msgid "Una tras otra con Kling O3 Pro: la primera con sus imágenes y cada siguiente arranca en el último cuadro de la anterior, con los mismos personajes. Corre sola (unos 5 minutos por escena); puedes cerrar la página. Si una escena falla, la cadena se detiene y no cobra lo que sigue."
+msgstr "One after another with Kling O3 Pro: the first with its images and each next one starting on the last frame of the previous one, with the same characters. It runs on its own (about 5 minutes per scene); you can close the page. If a scene fails, the chain stops and nothing after it is charged."
 
 msgid "Unboxing"
 msgstr "Unboxing"

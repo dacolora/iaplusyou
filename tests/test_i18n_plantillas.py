@@ -69,7 +69,7 @@ PLANTILLAS_TRADUCIDAS = [
     "_avatar_ficha.html", "nicho_avatares_proyecto.html",
     # Merge de main (2026-09-30, Flow Plus: imágenes por escena): ya viene con _()
     # (0 hallazgos del detector), como el resto de los _gpg_*.
-    "_gpg_escenas.html",
+    "_gpg_cadena.html", "_gpg_escenas.html",
     # Catálogo por colores (rama catalogo-colores, spec 2026-09-28): la galería, sus
     # tarjetas y la ficha del producto reemplazan a _catalogo_lista.html y
     # _catalogo_sin_fotos.html (borradas); ya vienen con _() y su inglés en el catálogo.

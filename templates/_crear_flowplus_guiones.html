@@ -188,6 +188,7 @@
         sucios = {};
         cargar();
       } else if (b.dataset.gpgAccion) {
+        if (b.dataset.gpgConfirmar && !window.confirm(b.dataset.gpgConfirmar)) return;
         var cuerpo = {};
         try { cuerpo = JSON.parse(b.dataset.gpgCuerpo || '{}'); } catch (err) { cuerpo = {}; }
         post(b.dataset.gpgAccion, cuerpo, b.closest('[data-gpg-caja]') || panel, b);

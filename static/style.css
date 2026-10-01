@@ -2911,3 +2911,15 @@ body.panel-abierto { overflow: hidden; }
    texto en una voz propia y el nombre se metía debajo del ✕: aquí cada
    tarjeta pide al menos 12rem (una columna en 375 px). */
 @media (max-width: 760px) { .au-vp-voces { grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); } }
+/* ── Flow Plus: cadena de escenas (2026-10-01) ─────────────────────────────── */
+.gpg-cadena { margin: 1rem 0; padding: .8rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
+.gpg-cadena h5 { margin-top: 0; }
+.gpg-cadena-estado { margin: .5rem 0; font-weight: 600; }
+.gpg-cadena-faltan { margin: .3rem 0 .6rem; padding-left: 1.2rem; font-size: .82rem; color: var(--warn); overflow-wrap: anywhere; }
+.gpg-cadena-aviso { color: var(--warn); }
+.gpg-cadena-escenas { list-style: none; padding: 0; margin: .8rem 0 0; display: grid; gap: .35rem; }
+.gpg-cadena-escena { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; font-size: .85rem;
+  padding: .35rem .5rem; border-radius: 6px; background: var(--panel-2); overflow-wrap: anywhere; }
+.gpg-cadena-escena.lista .tag-estado { color: var(--ok); }
+.gpg-cadena-escena.fallo .tag-estado, .gpg-cadena-error { color: var(--error); }
+.gpg-cadena-escena .btn-xs { margin-left: auto; }

@@ -153,6 +153,13 @@ Script en el scratchpad (no en el repo), con el crédito de WaveSpeed de Creatv,
 se le cuenta a Daniel antes de seguir; el plan B es la cadena con Wan 3.0 `image-to-video` solo con el
 fotograma (más barato, identidad sostenida solo por el fotograma).
 
+**Resultado (2026-10-01, US$ ≈ 1,14 de Creatv):** con las fichas de Sophia y del HappyCozy de happyflops. Los
+elementos se crean con la misma ficha como `frontal_image` y como única `refer_images` (la API exige 1–3; sin ellas da
+1405) en 7–12 s; `element_list` va como `[{"element_id": "…"}]`; el nombre del elemento se escribe tal cual en el
+prompt. Escena 1 (`reference-to-video`, 5 s): 334 s, 1080×1920. Escena 2 (`image-to-video` desde su último cuadro, 5 s):
+267 s, 1080×1920 (sigue al fotograma), y su primer cuadro difiere del fotograma dado en 2/255 de media: arranca ahí. A
+la vista, Sophia se mantiene igual y la acción pedida ocurre. Se sigue con Kling O3 Pro.
+
 ## 7. Pruebas
 
 - Puras: `cadena.revisar` (cada motivo), `cadena.precio`, `cadena.prompt_escena`, las transiciones.
