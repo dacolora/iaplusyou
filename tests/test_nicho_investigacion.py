@@ -250,10 +250,11 @@ class TestPlataformas:
         assert isinstance(costo, float)
 
     def test_estimar_resenas_amazon(self):
-        """Estimate review cost for Amazon (junglee~amazon-reviews-scraper, por_producto=false: una corrida)."""
+        """Estimate review cost for Amazon (junglee~amazon-reviews-scraper, por_producto=True: una corrida por producto)."""
         costo = plat.estimar_resenas("amazon", 15, 100)
-        # 15 × 40 (tope por producto) = 600 resultados × $0.006 = $3.6
-        assert costo > 0
+        # 15 corridas × 10 reseñas (plan FREE de Apify: 10 por corrida) × $0.006 = $0.90; el techo mínimo de
+        # US$ 0,50 por corrida solo va en lo que se manda a Apify, no en el estimado
+        assert costo == 0.9
         assert isinstance(costo, float)
 
     def test_entradas_busqueda_amazon(self):
