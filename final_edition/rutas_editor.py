@@ -8,14 +8,16 @@ import re
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_babel import gettext
 
+import audios
 import creative_flow
 import ediciones
+import gastos
 import idiomas
 import materiales
 import trabajos
 from final_edition import biblioteca
 from final_edition import documento as documento_mod
-from final_edition import estimar, textos_editor, vista_previa
+from final_edition import estimar, textos_editor, transcripcion, vista_previa
 from final_edition.documento import DocumentoInvalido
 from final_edition.motor import compilador
 from tareas import edicion as tareas_edicion
@@ -51,7 +53,13 @@ def ver(cliente, edicion_id):
             "agregar_pieza": url_for("editor.agregar_pieza", cliente=cliente, cf_id="__CF__"),
             "materiales_por_id": url_for("editor.materiales_por_id", cliente=cliente),
             # capa 4c: «Borrar» en la biblioteca; el navegador pone el id en `__ID__`
-            "borrar_material": url_for("editor.borrar_material", cliente=cliente, material_id="__ID__")}
+            "borrar_material": url_for("editor.borrar_material", cliente=cliente, material_id="__ID__"),
+            # capa 5a: subtítulos automáticos (Task 5); `estado_trabajo` es la
+            # misma ruta de siempre para la barra de progreso (`__JOB__` lo
+            # pone el navegador con el job_id que toque).
+            "subtitulos_estimar": url_for("editor.subtitulos_estimar", cliente=cliente, edicion_id=edicion_id),
+            "transcribir": url_for("editor.transcribir", cliente=cliente, edicion_id=edicion_id),
+            "estado_trabajo": url_for("estado_trabajo", job_id="__JOB__")}
     datos = vista_previa.datos_pagina(cliente, ed, urls)
     # Los textos de static/editor/*.js en el idioma de quien mira (textos.js
     # los pone con ponerTextos antes de construir nada).
@@ -218,6 +226,91 @@ def producir(cliente, edicion_id):
                     "url": url_for("ver_cliente", cliente=cliente) + f"#final?cf={ed['cf_id']}"})
 
 
+# --- Subtítulos automáticos (editor capa 5a, Task 5): estimar y transcribir ---
+
+def _materiales_propios_de(cliente, ids):
+    """[material] de `ids` (en el mismo orden), o None si alguno no existe o
+    no es de este proyecto, o no es video/audio (lo único que se transcribe)."""
+    salida = []
+    for mid in ids:
+        if not isinstance(mid, int) or isinstance(mid, bool):
+            return None
+        mat = materiales.obtener(cliente, mid)
+        if not mat or mat.get("tipo") not in ("video", "audio"):
+            return None
+        salida.append(mat)
+    return salida
+
+
+@bp.post("/<int:edicion_id>/subtitulos/estimar", endpoint="subtitulos_estimar")
+def subtitulos_estimar(cliente, edicion_id):
+    """Precio de transcribir con Whisper lo que todavía falta de
+    `material_ids` (D6): `gratis` cuando ya todos tienen palabras — no hay
+    nada que cobrar ni que encolar."""
+    if not _mismo_origen():
+        return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
+    ed = _cargar(cliente, edicion_id)
+    if not ed:
+        return jsonify({"error": gettext("No existe esa edición.")}), 404
+    cuerpo = request.get_json(silent=True)
+    ids = (cuerpo or {}).get("material_ids")
+    faltan, segundos = [], 0.0
+    for mid in ids if isinstance(ids, list) else []:
+        if not isinstance(mid, int) or isinstance(mid, bool):
+            continue
+        mat = materiales.obtener(cliente, mid)
+        if mat and transcripcion.necesita(mat):
+            faltan.append(mid)
+            segundos += (mat.get("duracion_ms") or 0) / 1000.0
+    if not faltan:
+        return jsonify({"faltan": [], "segundos": 0, "usd": 0, "precio": "", "gratis": True})
+    estimado = gastos.estimar("transcripcion", segundos=segundos)
+    return jsonify({"faltan": faltan, "segundos": round(segundos, 1), "usd": estimado["usd"],
+                    "precio": estimado["texto"], "gratis": False})
+
+
+@bp.post("/<int:edicion_id>/subtitulos/transcribir", endpoint="transcribir")
+def transcribir_subtitulos(cliente, edicion_id):
+    """Encola `material_transcribir` con lo que de `material_ids` todavía no
+    tiene palabras (spec §2.4): nada se paga sin pasar por aquí, y nada se
+    transcribe dos veces. Límites ANTES de tocar la base: hasta
+    `transcripcion.MAX_ARCHIVOS` ids, un idioma de `audios.IDIOMAS`, y lo que
+    falta no puede pasar de `transcripcion.LIMITE_MS`."""
+    if not _mismo_origen():
+        return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
+    ed = _cargar(cliente, edicion_id)
+    if not ed:
+        return jsonify({"error": gettext("No existe esa edición.")}), 404
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict):
+        cuerpo = {}
+    ids = cuerpo.get("material_ids")
+    idioma = cuerpo.get("idioma")
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"error": gettext("Elige qué transcribir.")}), 400
+    if len(ids) > transcripcion.MAX_ARCHIVOS:
+        return jsonify({"error": gettext("Son demasiados archivos para una vez: hasta 20.")}), 400
+    if idioma not in audios.IDIOMAS:
+        return jsonify({"error": gettext("Ese idioma no está disponible.")}), 400
+    materiales_ = _materiales_propios_de(cliente, ids)
+    if materiales_ is None:
+        return jsonify({"error": gettext("Ese archivo no es de este proyecto.")}), 404
+    faltan = [mat["id"] for mat in materiales_ if transcripcion.necesita(mat)]
+    segundos = sum((mat.get("duracion_ms") or 0) for mat in materiales_ if mat["id"] in faltan) / 1000.0
+    if segundos * 1000 > transcripcion.LIMITE_MS:
+        return jsonify({"error": gettext("Es demasiado audio para una sola vez: hasta 10 minutos.")}), 400
+    if not faltan:
+        return jsonify({"listo": True})
+    job_id = tareas_edicion.job_id_transcribir(cliente, edicion_id)
+    if trabajos.en_curso(job_id):
+        return jsonify({"error": gettext("Ya se están generando subtítulos en esta edición: espera a que terminen.")}), 409
+    trabajos.encolar(job_id, "material_transcribir",
+                     {"cliente": cliente, "edicion_id": edicion_id, "material_ids": faltan, "idioma": idioma},
+                     duracion_estimada=20 + int(segundos // 4), etapas=list(tareas_edicion.ETAPAS_TRANSCRIBIR),
+                     cliente=cliente, max_intentos=1)
+    return jsonify({"job_id": job_id}), 202
+
+
 @bp.post("/desde/<cf_id>")
 def desde_clon(cliente, cf_id):
     """«Editar» (gratis): encola la preparación y vuelve a la pieza en Final
@@ -314,12 +407,17 @@ def materiales_por_id(cliente):
     de Mi música nunca los tuvo) — con la misma tarea gratis e idempotente que
     `ver` (`vista_previa.encolar_proxies`). La biblioteca lo pide UNA vez por
     material, al empezar a esperarlo; las preguntas siguientes solo leen (un
-    archivo que falla no se vuelve a encolar cada 3 s)."""
+    archivo que falla no se vuelve a encolar cada 3 s).
+
+    `&palabras=1` (capa 5a): manda también `palabras` de cada material (la
+    pestaña Subtítulos las pide cuando una transcripción recién terminó, sin
+    recargar toda la página)."""
+    con_palabras = request.args.get("palabras") == "1"
     out = {}
     for mid in _ids_de(request.args.get("ids")):
         m = materiales.obtener(cliente, mid)
         if m:
-            out[str(mid)] = vista_previa.material_para(m)
+            out[str(mid)] = vista_previa.material_para(m, con_palabras=con_palabras)
     preparar = {str(mid) for mid in _ids_de(request.args.get("preparar"))}
     if preparar:
         vista_previa.encolar_proxies(cliente, vista_previa.pendientes(

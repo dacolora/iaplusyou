@@ -363,6 +363,33 @@ def test_proxy_de_audio_calcula_forma_de_onda(entorno, monkeypatch):
     assert m2["extra"]["picos"] == [0.1, 0.5, 0.9] and m2["duracion_ms"] == 7000
 
 
+def test_proxy_no_pisa_palabras_escritas_mientras_corria(entorno, monkeypatch, tmp_path):
+    # D5 (capa 5a): generar_proxy tarda (ffmpeg real de por medio) y una
+    # transcripción puede terminar y guardar `extra.palabras` mientras el
+    # proxy sigue corriendo — `edicion_proxy` no debe pisarlas al mezclar su
+    # propio `extra` (tiene_audio, tira_url, cortes_ms...) al final.
+    import materiales
+    from final_edition import cortes, mezcla
+    mat = materiales.buscar_hash("acme", "h1")
+    monkeypatch.setattr(cortes, "duracion", lambda p: 8.0)
+    monkeypatch.setattr(cortes, "detectar_cortes", lambda p, umbral=10.0: [3.5])
+    monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [{"codec_type": "video", "width": 540, "height": 960}], "format": {"duration": "8.0"}})
+    monkeypatch.setattr(mezcla, "tiene_audio", lambda p: True)
+    monkeypatch.setattr(cortes, "ffmpeg", lambda args, timeout=300: open(args[-1], "wb").write(b"x"))
+
+    def _generar_proxy_que_escribe_a_mitad(original, destino):
+        materiales.actualizar_extra("acme", mat["id"], palabras=[{"t_ms": 0, "dur_ms": 100, "texto": "hola"}],
+                                    palabras_idioma="es", palabras_fuente="whisper")
+        open(destino, "wb").write(b"x")
+    monkeypatch.setattr(entorno, "generar_proxy", _generar_proxy_que_escribe_a_mitad)
+    entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    m2 = materiales.obtener("acme", mat["id"])
+    assert m2["extra"]["palabras"] == [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]
+    assert m2["extra"]["palabras_idioma"] == "es" and m2["extra"]["palabras_fuente"] == "whisper"
+    assert m2["extra"]["tiene_audio"] is True and m2["extra"]["cortes_ms"] == [3500]
+    assert m2["url_proxy"].endswith(f"/materiales/{mat['id']}_proxy.mp4")
+
+
 def test_limpiar_llama_a_materiales(entorno, monkeypatch):
     import materiales
     monkeypatch.setattr(materiales, "limpiar_sin_uso", lambda cliente=None, dias=30: 4)
@@ -394,7 +421,7 @@ def test_cargar_todas_registra_las_tareas_del_editor():
     necesita monkeypatchear nada."""
     import tareas
     tareas.cargar_todas()
-    assert {"edicion_producir", "edicion_proxy", "materiales_limpiar"} <= set(tareas.REGISTRO)
+    assert {"edicion_producir", "edicion_proxy", "material_transcribir", "materiales_limpiar"} <= set(tareas.REGISTRO)
 
 
 @pytest.mark.slow
@@ -468,3 +495,60 @@ def test_tarea_material_de_pieza_llama_a_la_biblioteca(base_temporal, monkeypatc
     assert llamadas[0][:2] == ("acme", "cf_1") and llamadas[0][2].endswith("material_cf_1")
     with pytest.raises(ValueError):
         edicion.ejecutar_material_de_pieza({"payload": {"cliente": "acme", "cf_id": "../x"}})
+
+
+# --- material_transcribir (editor capa 5a, Task 5) ---
+
+def test_job_id_transcribir(entorno):
+    assert entorno.job_id_transcribir("acme", 7) == "acme__ed7__subtitulos"
+
+
+def _tarea_transcribir(material_ids, idioma="es", tid=9, edicion_id=1):
+    return {"id": tid, "job_id": f"acme__ed{edicion_id}__subtitulos",
+            "payload": {"cliente": "acme", "edicion_id": edicion_id, "material_ids": material_ids, "idioma": idioma}}
+
+
+def test_tarea_transcribe_lo_que_falta_sigue_si_uno_falla_y_no_toca_lo_ajeno(entorno, monkeypatch):
+    import materiales
+    from final_edition import transcripcion
+    a = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/a.mp3", hash="ta1", bytes=1, duracion_ms=1000)
+    b = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/b.mp3", hash="ta2", bytes=1, duracion_ms=1000)
+    ajeno = materiales.registrar("otro", tipo="audio", origen="voz", url="https://r2/c.mp3", hash="ta3", bytes=1, duracion_ms=1000)
+    llamados = []
+
+    def _transcribir(cliente, mat, idioma, carpeta, referencia):
+        llamados.append(mat["id"])
+        if mat["id"] == b["id"]:
+            raise RuntimeError("fal caído")
+        return materiales.actualizar_extra(cliente, mat["id"], palabras=[], palabras_idioma=idioma, palabras_fuente="whisper")
+    monkeypatch.setattr(transcripcion, "transcribir", _transcribir)
+    tarea = _tarea_transcribir([a["id"], b["id"], ajeno["id"]])
+    with pytest.raises(RuntimeError, match="No se pudo transcribir 1 archivo."):
+        entorno.ejecutar_transcribir(tarea)
+    assert llamados == [a["id"], b["id"]]              # el ajeno nunca se toca
+    assert materiales.obtener("acme", a["id"])["extra"]["palabras"] == []
+    assert materiales.obtener("otro", ajeno["id"])["extra"] == {}
+    carpeta = os.path.join(os.environ["CREATV_SALIDAS"], "acme", "ediciones", "transcribir_1")
+    assert not os.path.exists(carpeta)
+    # un segundo pase no vuelve a llamar a Whisper para lo ya transcrito
+    llamados.clear()
+    entorno.ejecutar_transcribir(_tarea_transcribir([a["id"]], tid=10))
+    assert llamados == []
+
+
+def test_tarea_sin_fallos_devuelve_subtitulos_listos(entorno, monkeypatch):
+    import materiales
+    from final_edition import transcripcion
+    a = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/a.mp3", hash="ta4", bytes=1, duracion_ms=1000)
+    monkeypatch.setattr(transcripcion, "transcribir",
+                        lambda cliente, mat, idioma, carpeta, referencia:
+                        materiales.actualizar_extra(cliente, mat["id"], palabras=[], palabras_idioma=idioma, palabras_fuente="whisper"))
+    msg = entorno.ejecutar_transcribir(_tarea_transcribir([a["id"]]))
+    assert msg == "Subtítulos listos."
+
+
+def test_tarea_material_transcribir_registrada(base_temporal):
+    import tareas
+    tareas.cargar_todas()
+    import tareas.edicion as te
+    assert tareas.REGISTRO["material_transcribir"] is te.ejecutar_transcribir

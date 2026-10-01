@@ -170,6 +170,14 @@ def disenar_voz_minimax(prompt, preview_text, timeout=300):
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 
+def costo_whisper(duracion_ms):
+    """Misma fórmula para el «≈» del botón y para el gasto registrado
+    (editor capa 5a, D6): por duración del AUDIO, no por la última palabra —
+    el silencio también se procesa. US$ 0,002/min, estimado (fal no publica
+    el precio de Whisper; ver fal_audio.py docstring del módulo)."""
+    return round(float(duracion_ms) / 60000.0 * COSTO_USD_POR_MINUTO_AUDIO, 4)
+
+
 def transcribir_palabras(audio_url, idioma, on_progreso=None):
     """Transcribe `audio_url` con marcas de tiempo por palabra. Devuelve
     {"texto": str, "palabras": [{"inicio", "fin", "texto"}], "costo_usd": float}."""
@@ -190,7 +198,7 @@ def transcribir_palabras(audio_url, idioma, on_progreso=None):
         if fin is not None and fin > duracion_s:
             duracion_s = fin
 
-    costo = round((duracion_s / 60.0) * COSTO_USD_POR_MINUTO_AUDIO, 4)
+    costo = costo_whisper(duracion_s * 1000.0)
     return {"texto": data.get("text", ""), "palabras": palabras, "costo_usd": costo}
 
 

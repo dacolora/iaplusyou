@@ -3,6 +3,7 @@
   edicion_proxy     {cliente, material_id}                                     max_intentos=3
   edicion_desde_clon {cliente, cf_id}                                          max_intentos=2
   material_de_pieza {cliente, cf_id}                                           max_intentos=2
+  material_transcribir {cliente, edicion_id, material_ids, idioma}             max_intentos=1
   materiales_limpiar {}                                                         periódica diaria
 `edicion_producir` renderiza el documento CONGELADO en la versión (no el
 vivo), así lo que se produjo siempre se puede volver a ver. Contrato con la
@@ -14,14 +15,18 @@ duracion_estimada=estimar.segundos(doc), etapas=ETAPAS_EDICION)`. `idioma` y
 porque forman parte del nombre de la carpeta de trabajo. `edicion_desde_clon`
 (capa 4a, «Editar este video») hace el trabajo pesado de
 `final_edition.edicion_clon.crear` (bajar el clon, medirlo) fuera del hilo de
-Flask; no paga nada, así que un reintento no importa (`max_intentos=2`)."""
+Flask; no paga nada, así que un reintento no importa (`max_intentos=2`).
+`material_transcribir` (editor capa 5a, D5/D6) paga Whisper una vez por
+material (`final_edition/transcripcion.py`) y sigue con los demás si uno
+falla — lo que sí se transcribió no se pierde."""
+import logging
 import math
 import os
 import re
 import shutil
 import subprocess
 
-from flask_babel import gettext
+from flask_babel import gettext, ngettext
 
 import cola
 import creative_flow
@@ -29,15 +34,23 @@ import ediciones
 import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, mezcla, motor, rasterizar, subtitulos_fuente
+from final_edition import cortes, mezcla, motor, rasterizar, subtitulos_fuente, transcripcion
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from idiomas import N_
 from storage import r2_uploader
-from tareas import al_interrumpir, registrar
+from tareas import al_interrumpir, ref_sufijo, registrar
+
+log = logging.getLogger(__name__)
 
 # N_: se guardan en español y `estado_trabajo` las traduce para quien mira.
 ETAPAS_EDICION = ((N_("Preparando materiales"), 15), (N_("Renderizando"), 70), (N_("Subiendo"), 15))
+# Editor capa 5a: etapas de `material_transcribir` y mensajes finales de las
+# tareas de audio del editor (también usado por `editor_voz`, Task 6).
+ETAPAS_TRANSCRIBIR = ((N_("Preparando el audio"), 20), (N_("Transcribiendo"), 70), (N_("Guardando"), 10))
+MENSAJES_AUDIO_EDITOR = {
+    "subtitulos_listos": N_("Subtítulos listos."),
+}
 _EXT = {"video": "mp4", "imagen": "png", "audio": "wav", "png_texto": "png", "proxy": "mp4"}
 _IDIOMA_RE = re.compile(r"[a-z]{2}")
 _PAIS_RE = re.compile(r"[A-Z]{2}")
@@ -71,6 +84,10 @@ def job_id_producir(cliente, edicion_id, idioma, pais):
 
 def job_id_proxy(cliente, material_id):
     return f"{cliente}__mat{int(material_id)}__proxy"
+
+
+def job_id_transcribir(cliente, edicion_id):
+    return f"{cliente}__ed{int(edicion_id)}__subtitulos"
 
 
 def job_id_desde_clon(cliente, cf_id):
@@ -306,14 +323,59 @@ def ejecutar_proxy(tarea):
         else:  # audio (único otro tipo posible tras el chequeo de arriba)
             campos["duracion_ms"] = int(round(cortes.duracion(original) * 1000))
             extra["picos"] = _picos(original)
-        import db
-        with db.conectar() as con:
-            con.execute(db.material.update().where(db.material.c.id == mid).values(extra=extra, actualizado_en=db.ahora(), **campos))
+        # D5 (capa 5a): `extra` se lee al EMPEZAR y se escribe minutos después
+        # (ffmpeg real de por medio) — una transcripción que haya guardado
+        # `extra.palabras` mientras tanto nunca debe perderse. `actualizar_extra`
+        # mezcla contra el `extra` VIVO en vez de reescribirlo entero.
+        materiales.actualizar_extra(cliente, mid, **extra)
+        if campos:
+            import db
+            with db.conectar() as con:
+                con.execute(db.material.update().where(db.material.c.id == mid).values(actualizado_en=db.ahora(), **campos))
         return gettext("Proxy listo.")
     finally:
         # A diferencia de edicion_producir, acá no hay una fila "final" que
         # deje en error para depurar — la carpeta de trabajo siempre se
         # limpia, tanto si el proxy salió bien como si no.
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
+@registrar("material_transcribir")
+def ejecutar_transcribir(tarea):
+    """Transcribe cada material de `material_ids` que todavía lo necesite
+    (D5): un id de otro proyecto o que ya no exista se ignora sin más, y si
+    uno falla se sigue con los demás — lo que sí se transcribió (y su gasto)
+    no se pierde. Al final, si alguno falló, avisa cuántos."""
+    p = tarea["payload"]
+    cliente, edicion_id, idioma = p["cliente"], p["edicion_id"], p["idioma"]
+    jid = tarea.get("job_id") or job_id_transcribir(cliente, edicion_id)
+    avisar = lambda n: trabajos.reportar(jid, etapa=n)
+    carpeta = _carpeta(cliente, f"transcribir_{edicion_id}")
+    avisar(ETAPAS_TRANSCRIBIR[0][0])
+    fallos = 0
+    try:
+        for mid in p.get("material_ids") or []:
+            mat = materiales.obtener(cliente, mid)
+            if not mat or not transcripcion.necesita(mat):
+                continue
+            avisar(ETAPAS_TRANSCRIBIR[1][0])
+            ref = f"transcripcion:{mid}{ref_sufijo(tarea)}"
+            try:
+                transcripcion.transcribir(cliente, mat, idioma, carpeta, ref)
+            except Exception:  # noqa: BLE001 — sigue con los demás; el gasto de este ya quedó si alcanzó a pagar
+                log.exception("material_transcribir (tarea %s): material %s falló", tarea.get("id"), mid)
+                fallos += 1
+        avisar(ETAPAS_TRANSCRIBIR[2][0])
+        if fallos:
+            raise RuntimeError(ngettext("No se pudo transcribir %(num)s archivo.",
+                                        "No se pudieron transcribir %(num)s archivos.", fallos))
+        # Babel 2.18 no extrae bien un gettext(dict[clave]) (confunde el `[`
+        # con el paréntesis de la llamada y «ve» la clave como mensaje) — se
+        # saca a una variable antes, como ya hace el resto del código con
+        # ngettext(gettext(...)).
+        mensaje = MENSAJES_AUDIO_EDITOR["subtitulos_listos"]
+        return gettext(mensaje)
+    finally:
         shutil.rmtree(carpeta, ignore_errors=True)
 
 

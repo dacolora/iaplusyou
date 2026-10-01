@@ -8,6 +8,7 @@ import re
 
 import pytest
 
+import audios
 from tests.test_rutas_productos import _cliente_admin
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -95,8 +96,14 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
                              "agregar_pieza": "/cliente/acme/ediciones/biblioteca/pieza/__CF__",
                              "materiales_por_id": "/cliente/acme/ediciones/materiales",
                              # capa 4c (8/10): «Borrar» en la biblioteca (`__ID__` = el material)
-                             "borrar_material": "/cliente/acme/ediciones/materiales/__ID__/borrar"}
+                             "borrar_material": "/cliente/acme/ediciones/materiales/__ID__/borrar",
+                             # capa 5a (Task 5): subtítulos automáticos
+                             "subtitulos_estimar": f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar",
+                             "transcribir": f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+                             "estado_trabajo": "/trabajo/__JOB__/estado"}
     assert datos["estimado_s"] >= 20 and datos["cf_id"] is None
+    assert datos["subtitulos"] == {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA}
+    assert datos["trabajos_vivos"] == {"subtitulos": None}
     assert [a[1] for a, _k in encolados] == ["edicion_proxy"]
     assert encolados[0][0][2] == {"cliente": "acme", "material_id": clon["id"]}
 
@@ -705,6 +712,19 @@ def test_materiales_por_id_solo_los_de_este_proyecto(dashboard, encolados):
     assert j["materiales"][str(propio["id"])]["url"] == "https://r2/a.mp4"
 
 
+def test_materiales_por_id_con_palabras_las_manda_solo_si_se_pide(dashboard, encolados):
+    """Capa 5a (Task 5): `&palabras=1` manda `palabras`; sin él, no (aunque
+    `tiene_palabras` siempre va)."""
+    import materiales
+    con = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/v.mp3", hash="h-palabras", bytes=1,
+                               extra={"palabras": [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]})
+    sin_pedir = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/materiales?ids={con['id']}")
+    d = sin_pedir.get_json()["materiales"][str(con["id"])]
+    assert d["tiene_palabras"] is True and "palabras" not in d
+    pidiendo = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/materiales?ids={con['id']}&palabras=1")
+    assert pidiendo.get_json()["materiales"][str(con["id"])]["palabras"] == [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]
+
+
 def test_materiales_por_id_prepara_lo_pedido_que_falta(dashboard, encolados):
     """Fix final 11: una canción de Mi música (audio sin picos) agregada desde la
     biblioteca nunca tenía onda: nadie encolaba su edicion_proxy. Con
@@ -727,6 +747,119 @@ def test_materiales_por_id_prepara_lo_pedido_que_falta(dashboard, encolados):
     assert [(a[0], a[1], a[2]) for a, _k in encolados] == [
         (te.job_id_proxy("acme", cancion["id"]), "edicion_proxy", {"cliente": "acme", "material_id": cancion["id"]})]
     assert encolados[0][1]["max_intentos"] == 3
+
+
+# --- Subtítulos automáticos (editor capa 5a, Task 5): estimar y transcribir ---
+
+def _materiales_subtitulos(con_palabras_a=False, duracion_a=5000, duracion_b=4000):
+    import materiales
+    extra_a = {"palabras": []} if con_palabras_a else {}
+    a = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/a.mp3", hash="hs-a", bytes=1,
+                             duracion_ms=duracion_a, extra=extra_a)
+    b = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/b.mp3", hash="hs-b", bytes=1,
+                             duracion_ms=duracion_b)
+    return a, b
+
+
+def test_subtitulos_estimar_distingue_lo_que_falta_de_lo_que_ya_esta(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    a, b = _materiales_subtitulos(con_palabras_a=True)   # a ya transcrito, b no
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": [a["id"], b["id"]]})
+    j = r.get_json()
+    assert r.status_code == 200 and j["faltan"] == [b["id"]] and j["gratis"] is False
+    assert j["precio"] and j["usd"] > 0 and j["segundos"] == 4.0
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": [a["id"]]})
+    assert r2.get_json() == {"faltan": [], "segundos": 0, "usd": 0, "precio": "", "gratis": True}
+
+
+def test_subtitulos_estimar_exige_mismo_origen_y_edicion_existente(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": []},
+              headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert c.post("/cliente/acme/ediciones/999/subtitulos/estimar", json={"material_ids": []}).status_code == 404
+
+
+def test_transcribir_exige_mismo_origen(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": [a["id"]], "idioma": "es"},
+              headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert encolados == []
+
+
+def test_transcribir_404_por_edicion_o_material_ajeno(dashboard, encolados):
+    import materiales
+    ed, _c, _v = _edicion()
+    ajeno = materiales.registrar("otro", tipo="audio", origen="voz", url="https://r2/x.mp3", hash="hs-ajeno", bytes=1,
+                                 duracion_ms=1000)
+    c = _cliente_admin(dashboard)
+    assert c.post("/cliente/acme/ediciones/999/subtitulos/transcribir",
+                  json={"material_ids": [ajeno["id"]], "idioma": "es"}).status_code == 404
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+              json={"material_ids": [ajeno["id"]], "idioma": "es"})
+    assert r.status_code == 404
+    assert encolados == []
+
+
+def test_transcribir_400_por_muchos_ids_idioma_invalido_o_demasiado_audio(dashboard, encolados):
+    import materiales
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+              json={"material_ids": list(range(1, 22)), "idioma": "es"})
+    assert r.status_code == 400 and "20" in r.get_json()["error"]
+    # "fr" está en audios.IDIOMAS desde Audios Europa (2026-09-30): el idioma
+    # inválido para esta prueba es uno que de verdad no está en la lista.
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+               json={"material_ids": [a["id"]], "idioma": "xx"})
+    assert r2.status_code == 400
+    largo = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/largo.mp3", hash="hs-largo",
+                                 bytes=1, duracion_ms=11 * 60 * 1000)
+    r3 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+               json={"material_ids": [largo["id"]], "idioma": "es"})
+    assert r3.status_code == 400
+    assert encolados == []
+
+
+def test_transcribir_200_listo_sin_encolar_si_nada_falta(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos(con_palabras_a=True)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": [a["id"]], "idioma": "es"})
+    assert r.status_code == 200 and r.get_json() == {"listo": True}
+    assert encolados == []
+
+
+def test_transcribir_202_encola_solo_el_payload_de_lo_que_falta(dashboard, encolados):
+    from tareas import edicion as te
+    ed, _c, _v = _edicion()
+    a, b = _materiales_subtitulos(con_palabras_a=True)   # a transcrito, b no
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+              json={"material_ids": [a["id"], b["id"]], "idioma": "es"})
+    job_id = te.job_id_transcribir("acme", ed["id"])
+    assert r.status_code == 202 and r.get_json() == {"job_id": job_id}
+    args, kw = encolados[0]
+    assert args[0] == job_id and args[1] == "material_transcribir"
+    assert args[2] == {"cliente": "acme", "edicion_id": ed["id"], "material_ids": [b["id"]], "idioma": "es"}
+    assert kw["max_intentos"] == 1 and kw["cliente"] == "acme"
+
+
+def test_transcribir_409_si_ya_corre(dashboard, encolados, monkeypatch):
+    import trabajos
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos()
+    monkeypatch.setattr(trabajos, "en_curso", lambda jid: True)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": [a["id"]], "idioma": "es"})
+    assert r.status_code == 409
+    assert encolados == []
 
 
 @pytest.mark.slow

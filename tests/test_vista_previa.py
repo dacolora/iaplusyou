@@ -2,6 +2,7 @@
 proxies pendientes y la configuración compartida con el motor de ffmpeg."""
 import json
 
+import audios
 from final_edition import documento, vista_previa
 
 
@@ -92,3 +93,44 @@ def test_encolar_proxies_uno_por_material_gratis_y_con_reintentos(monkeypatch):
     args, kw = llamadas[0]
     assert args[:3] == ("acme__mat3__proxy", "edicion_proxy", {"cliente": "acme", "material_id": 3})
     assert kw["max_intentos"] == 3 and kw["cliente"] == "acme"
+
+
+def test_material_para_siempre_tiene_palabras_solo_con_con_palabras_trae_la_lista(base_temporal):
+    """Capa 5a (Task 5): `tiene_palabras` va siempre; `palabras` solo si se
+    pide (la biblioteca general no las manda — pesarían demasiado)."""
+    import materiales
+    m = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/v.wav", hash="hp1", bytes=1,
+                             extra={"palabras": [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]})
+    sin = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/v2.wav", hash="hp2", bytes=1)
+    d = vista_previa.material_para(m)
+    assert d["tiene_palabras"] is True and "palabras" not in d
+    d2 = vista_previa.material_para(m, con_palabras=True)
+    assert d2["palabras"] == [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]
+    assert vista_previa.material_para(sin)["tiene_palabras"] is False
+    assert vista_previa.material_para(sin, con_palabras=True)["palabras"] is None
+
+
+def test_materiales_para_manda_las_palabras(base_temporal):
+    """`materiales_para` (la que alimenta `datos_pagina`) siempre las pide:
+    la página deriva los subtítulos sin otra vuelta al servidor."""
+    import materiales
+    m = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/v.wav", hash="hp3", bytes=1,
+                             extra={"palabras": [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]})
+    mats = vista_previa.materiales_para("acme", {"materiales": [m["id"]]})
+    assert mats[m["id"]]["palabras"] == [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]
+
+
+def test_datos_pagina_trae_idiomas_y_trabajos_vivos_de_subtitulos(base_temporal, monkeypatch):
+    import ediciones
+    import trabajos
+    from final_edition import documento
+    from tareas import edicion as tareas_edicion
+    doc = documento.nuevo_video("9:16")
+    ed = ediciones.crear("acme", "video", "Demo", doc)
+    datos = vista_previa.datos_pagina("acme", ed, {})
+    assert datos["subtitulos"]["idiomas"] == list(audios.IDIOMAS)
+    assert datos["trabajos_vivos"]["subtitulos"] is None
+    job_id = tareas_edicion.job_id_transcribir("acme", ed["id"])
+    monkeypatch.setattr(trabajos, "en_curso", lambda jid: jid == job_id)
+    datos2 = vista_previa.datos_pagina("acme", ed, {})
+    assert datos2["trabajos_vivos"]["subtitulos"] == job_id

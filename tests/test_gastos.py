@@ -263,4 +263,17 @@ def test_estimar_proponer_ideas_por_numero_de_ideas():
     tres = gastos.estimar("proponer_ideas", n=3)
     assert tres["usd"] == round(gastos.IDEAS_BASE_USD + 3 * gastos.IDEAS_POR_IDEA_USD, 4)
     assert "aprox" in tres["texto"] and tres["detalle"] == "3 idea(s) con Claude"
+
+
+def test_estimar_transcripcion_usa_costo_whisper_del_editor():
+    """Editor capa 5a, Task 5: la misma fórmula del gasto real (D6)."""
+    import dashboard
+    import gastos
+    from providers import fal_audio
+    assert "transcripcion" in gastos.TIPOS
+    assert dashboard.NOMBRES_TIPO_GASTO["transcripcion"] == "Subtítulos (transcripción)"
+    e = gastos.estimar("transcripcion", segundos=90)
+    assert e["usd"] == fal_audio.costo_whisper(90000) == 0.003
+    assert e["texto"] == "US$ <0,01 aprox." and e["detalle"] == "90 s de audio con Whisper"
+    assert gastos.estimar("transcripcion")["usd"] == 0.0        # sin segundos: nada que cobrar
     assert gastos.estimar("proponer_ideas", n=0)["usd"] == gastos.estimar("proponer_ideas", n=1)["usd"]

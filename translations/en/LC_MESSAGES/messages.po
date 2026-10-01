@@ -4810,6 +4810,9 @@ msgstr "Choose the photos from your computer: the product gets created in the ca
 msgid "Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id=\"producir-tiempo\"></span>."
 msgstr "Choose the markets. It's free: it's produced with what's in this edit, without paying for anything new. It takes <span id=\"producir-tiempo\"></span>."
 
+msgid "Elige qué transcribir."
+msgstr "Choose what to transcribe."
+
 msgid "Elige tu nueva contraseña"
 msgstr "Choose your new password"
 
@@ -5163,6 +5166,9 @@ msgstr "Error:"
 #, python-format
 msgid "Error: %(detalle)s"
 msgstr "Error: %(detalle)s"
+
+msgid "Es demasiado audio para una sola vez: hasta 10 minutos."
+msgstr "That's too much audio at once: up to 10 minutes."
 
 msgid "Es el precio de cada país: sale de los precios de la edición y no se escribe aquí."
 msgstr "It's each country's price: it comes from the edit's prices and isn't typed here."
@@ -5565,6 +5571,9 @@ msgstr "That ad no longer exists."
 msgid "Ese aprendizaje ya no existe."
 msgstr "That learning no longer exists."
 
+msgid "Ese archivo no es de este proyecto."
+msgstr "That file isn't from this project."
+
 msgid "Ese archivo no se borra desde aquí."
 msgstr "That file can't be deleted from here."
 
@@ -5645,6 +5654,9 @@ msgstr "That script doesn't exist."
 
 msgid "Ese hook no existe en el guion."
 msgstr "That hook doesn't exist in the script."
+
+msgid "Ese idioma no está disponible."
+msgstr "That language isn't available."
 
 msgid "Ese link no parece de una página de Notion."
 msgstr "That link doesn't look like a Notion page."
@@ -9621,6 +9633,12 @@ msgstr "Couldn't suggest anything (%(tipo)s)."
 msgid "No se pudo sugerir."
 msgstr "Couldn't suggest anything."
 
+#, python-format
+msgid "No se pudo transcribir %(num)s archivo."
+msgid_plural "No se pudieron transcribir %(num)s archivos."
+msgstr[0] "Couldn't transcribe %(num)s file."
+msgstr[1] "Couldn't transcribe %(num)s files."
+
 msgid "No se subió"
 msgstr "Not uploaded"
 
@@ -10328,6 +10346,9 @@ msgstr "Asking WaveSpeed for the video… if it already finished, it shows up he
 
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
+
+msgid "Preparando el audio"
+msgstr "Preparing the audio"
 
 msgid "Preparando el video"
 msgstr "Preparing the video"
@@ -12090,6 +12111,9 @@ msgstr "Solutions they tried and why they failed (one per line: “what they use
 msgid "Sombra"
 msgstr "Shadow"
 
+msgid "Son demasiados archivos para una vez: hasta 20."
+msgstr "That's too many files at once: up to 20."
+
 msgid ""
 "Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta\n"
 "  y no entra en este total. Ningún gasto bloquea una acción: solo se informa."
@@ -12294,6 +12318,12 @@ msgstr "Subreddits (comma-separated; empty = all of Reddit)"
 
 msgid "Subtítulo"
 msgstr "Subtitle"
+
+msgid "Subtítulos (transcripción)"
+msgstr "Subtitles (transcription)"
+
+msgid "Subtítulos listos."
+msgstr "Subtitles ready."
 
 msgid "Subtítulos sin libass: omitidos"
 msgstr "Subtitles without libass: skipped"
@@ -12928,6 +12958,9 @@ msgstr "Bring in and classify ≈ US$ %(total)s"
 
 msgid "Traer y leer"
 msgstr "Fetch and read"
+
+msgid "Transcribiendo"
+msgstr "Transcribing"
 
 msgid "Transiciones"
 msgstr "Transitions"
@@ -13824,6 +13857,10 @@ msgstr "What are some of the characteristics your prospect wants others to see i
 msgid "What does the prospect want to achieve in society?"
 msgstr "What does the prospect want to achieve in society?"
 
+#, python-format
+msgid "Whisper · %(s)s s de audio"
+msgstr "Whisper · %(s)s s of audio"
+
 msgid "WooCommerce"
 msgstr "WooCommerce"
 
@@ -14054,6 +14091,9 @@ msgstr "This study's avatars are already being completed."
 
 msgid "Ya se están escribiendo las descripciones en inglés."
 msgstr "The English descriptions are already being written."
+
+msgid "Ya se están generando subtítulos en esta edición: espera a que terminen."
+msgstr "Subtitles are already being generated for this edit: wait for them to finish."
 
 msgid "Ya se están trayendo las métricas de Triple Whale."
 msgstr "The Triple Whale metrics are already being pulled."
