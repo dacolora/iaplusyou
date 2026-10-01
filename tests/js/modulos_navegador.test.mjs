@@ -93,20 +93,20 @@ test("fusionarMateriales suma sin tocar el mapa de antes y dice qué archivos ca
   assert.deepEqual(fusionarMateriales(antes, null).recibidos, []);
 });
 
-test("infoDe arma el mapa {id: {duracion_ms, tiene_audio}} que piden las operaciones", async () => {
+test("infoDe arma el mapa {id: {duracion_ms, tiene_audio, palabras}} que piden las operaciones", async () => {
   const { infoDe } = await import("../../static/editor/vista.js");
   const info = infoDe({
     1: { id: 1, tipo: "video", duracion_ms: 4000, tiene_audio: false },
-    2: { id: 2, tipo: "audio", duracion_ms: 2000, tiene_audio: null },
+    2: { id: 2, tipo: "audio", duracion_ms: 2000, tiene_audio: null, palabras: [{ t_ms: 0, dur_ms: 100, texto: "a" }] },
     3: { id: 3, tipo: "imagen", duracion_ms: null },
     4: { id: 4, tipo: "video", duracion_ms: 0 },                   // sin medir: desconocida, nunca 0
     5: null,
   });
   assert.deepEqual(info, {
-    1: { duracion_ms: 4000, tiene_audio: false },
-    2: { duracion_ms: 2000, tiene_audio: null },
-    3: { duracion_ms: null, tiene_audio: null },
-    4: { duracion_ms: null, tiene_audio: null },
+    1: { duracion_ms: 4000, tiene_audio: false, palabras: null },
+    2: { duracion_ms: 2000, tiene_audio: null, palabras: [{ t_ms: 0, dur_ms: 100, texto: "a" }] },
+    3: { duracion_ms: null, tiene_audio: null, palabras: null },
+    4: { duracion_ms: null, tiene_audio: null, palabras: null },
   });
   // las operaciones lo aceptan tal cual: agregar un video que dura 4 s
   const ops = await import("../../static/editor/operaciones.js");
@@ -237,4 +237,48 @@ test("fusionarMateriales: una copia vieja (de la biblioteca) sin copia liviana, 
   assert.deepEqual(r.materiales[2].picos, [0.1, 0.5]);
   assert.deepEqual(r.cambiados, []);                           // ningún archivo cambió: nada se recarga
   assert.deepEqual(r.recibidos, [1, 2]);
+});
+
+// ---- Subtítulos derivados (D1-D4, capa 5a): las palabras del material ----
+
+test("fusionarMateriales: una copia sin palabras/tiene_palabras no le quita a la vista las que ya tenía", async () => {
+  const { fusionarMateriales } = await import("../../static/editor/vista.js");
+  const antes = {
+    2: { id: 2, tipo: "audio", url: "https://r2/b.wav", palabras: [{ t_ms: 0, dur_ms: 300, texto: "voz" }], tiene_palabras: true },
+  };
+  const r = fusionarMateriales(antes, { 2: { ...antes[2], palabras: null, tiene_palabras: null } });
+  assert.deepEqual(r.materiales[2].palabras, [{ t_ms: 0, dur_ms: 300, texto: "voz" }]);
+  assert.equal(r.materiales[2].tiene_palabras, true);
+  // y si SÍ llegan palabras nuevas (la transcripción terminó), se usan:
+  const r2 = fusionarMateriales(antes, { 2: { ...antes[2], palabras: [{ t_ms: 0, dur_ms: 100, texto: "ya" }] } });
+  assert.deepEqual(r2.materiales[2].palabras, [{ t_ms: 0, dur_ms: 100, texto: "ya" }]);
+});
+
+test("agregarMateriales rederiva los subtítulos del destino vigente cuando llegan palabras nuevas (D1)", async () => {
+  const { VistaPrevia } = await import("../../static/editor/vista.js");
+  const llamadas = [];
+  const clipBase = { inicio_ms: 0, duracion_ms: 1000, recorte: { desde_ms: 0, hasta_ms: 1000 }, velocidad: 1.0 };
+  const docResuelto = {
+    destino: { idioma: "es", pais: "CO" },
+    subtitulos: { fuentes: { es: [{ tipo: "material", material_id: 9 }] }, palabras: [] },
+    pistas: [
+      { id: "p_video", tipo: "video", oculta: false, silenciada: false, clips: [{ ...clipBase, id: "v0", material_id: 1 }] },
+      { id: "p_audio", tipo: "audio", oculta: false, silenciada: false, clips: [{ ...clipBase, id: "c1", material_id: 9 }] },
+    ],
+  };
+  const falsa = vistaFalsa(VistaPrevia, llamadas);
+  falsa.doc = docResuelto;
+  const docAntes = falsa.doc;
+  VistaPrevia.prototype.agregarMateriales.call(falsa, { 9: { id: 9, tipo: "audio", url: "https://r2/voz.wav", palabras: [{ t_ms: 0, dur_ms: 500, texto: "hola" }] } });
+  assert.notEqual(falsa.doc, docAntes);                              // aplicarFuentes siempre devuelve uno nuevo
+  assert.deepEqual(falsa.doc.subtitulos.palabras, [{ t_ms: 0, dur_ms: 500, texto: "hola" }]);
+});
+
+test("agregarMateriales no toca nada si todavía no hay destino resuelto (this.doc nulo)", async () => {
+  const { VistaPrevia } = await import("../../static/editor/vista.js");
+  const llamadas = [];
+  const falsa = vistaFalsa(VistaPrevia, llamadas);
+  falsa.doc = null;
+  assert.doesNotThrow(() => VistaPrevia.prototype.agregarMateriales.call(falsa, { 9: { id: 9, tipo: "audio", url: "x" } }));
+  assert.equal(falsa.doc, null);
 });
