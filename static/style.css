@@ -1351,7 +1351,10 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .sprint-card { display: flex; gap: 1rem; align-items: center; padding: .8rem 1rem; text-decoration: none; color: inherit; }
 .sprint-card:hover { background: var(--panel-hover); }
 .anillo text { font-family: var(--font-body); font-weight: 700; }
-.estado-sprint { text-transform: capitalize; }
+/* Mayúscula solo en la primera letra («Ready to generate», «Listo para generar»):
+   `capitalize` ponía una en cada palabra («Ready To Generate»). Las etiquetas del
+   catálogo van en minúscula porque también se usan dentro de frases. */
+.estado-sprint::first-letter { text-transform: uppercase; }
 .estado-sprint-planeando, .estado-sprint-planeada { border-color: var(--muted-2); }
 .estado-sprint-referencias { border-color: var(--accent); }
 .estado-sprint-listo_para_generar, .estado-sprint-ideas_aprobadas { border-color: var(--ok); }
