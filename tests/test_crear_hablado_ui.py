@@ -64,6 +64,16 @@ def test_hablado_js_sin_texto_en_espanol_ni_recargas_de_barra():
     assert "location.reload()" in js and "precio_visto" in js
 
 
+def test_hablado_js_no_autorreproduce_fuera_de_su_modo_ni_con_texto_viejo():
+    # Fix round 1 (revisión de la tarea 7): una voz que llega tarde (la
+    # persona cambió de modo, o editó texto/voz/idioma/velocidad mientras se
+    # creaba) no se reproduce sola, y la que sonaba se calla al salir del modo.
+    js = open("static/hablado.js", encoding="utf-8").read()
+    assert "estado.activo = !!(ev.detail && ev.detail.modo === 'hablado');" in js
+    assert "if (!estado.activo) {\n      var audio = $('hb-voz-audio');\n      if (audio) audio.pause();" in js
+    assert "if (estado.activo && claveVoz === clave()) audio.play().catch(function () {});" in js
+
+
 @pytest.mark.skipif(not shutil.which("node"), reason="sin Node no se revisa la sintaxis del JS (el VPS no lo tiene)")
 def test_hablado_js_compila():
     r = subprocess.run([shutil.which("node"), "--check", "static/hablado.js"], capture_output=True, text=True)

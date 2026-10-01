@@ -7120,7 +7120,6 @@ def _contexto_mis_voces(cliente):
     jid = tareas_voces.job_id(cliente)
     return {"voces_propias": voces_propias.listar(cliente),
             "trabajo_voz": {"job_id": jid} if trabajos.en_curso(jid) else None,
-            "nombres_forma_voz": voces_propias.NOMBRES_FORMA,
             "precio_voz_clonada": gastos.estimar("voz_clonada"), "precio_voz_disenada": gastos.estimar("voz_disenada"),
             "texto_consentimiento": voces_propias.TEXTO_CONSENTIMIENTO}
 

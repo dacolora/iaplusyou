@@ -12,7 +12,7 @@
   if (!raiz) return;
   var T = window.HB_TEXTOS || {};
   var CABECERAS = {'X-Requested-With': 'fetch'};
-  var estado = {cargado: false, cargando: false, ocupado: false, voz: null, sonando: null};
+  var estado = {cargado: false, cargando: false, ocupado: false, voz: null, sonando: null, activo: raiz.offsetParent !== null};
 
   function $(id) { return document.getElementById(id); }
   function sep() { return raiz.dataset.sep || ','; }
@@ -52,6 +52,16 @@
     document.addEventListener('crear:modo', function (ev) { if (ev.detail && ev.detail.modo === 'hablado') abrir(); });
     if (raiz.offsetParent !== null) abrir();
   }
+  // Si la persona cambia de modo mientras la voz se está creando, el resultado
+  // puede llegar tarde: no se reproduce solo (ponerVoz la reusa igual) y la
+  // que ya sonaba se calla, para que nada suene fuera de este modo.
+  document.addEventListener('crear:modo', function (ev) {
+    estado.activo = !!(ev.detail && ev.detail.modo === 'hablado');
+    if (!estado.activo) {
+      var audio = $('hb-voz-audio');
+      if (audio) audio.pause();
+    }
+  });
 
   // ---- Lo que hay escrito y elegido ----
   function texto() { return ($('hb-texto').value || '').replace(/\s+/g, ' ').trim(); }
@@ -163,7 +173,10 @@
     $('hb-voz-duracion').textContent = T.dura.replace('{s}', String(datos.duracion_s).replace('.', sep()));
     mostrar('hb-aviso', datos.aviso || '');
     refrescar();
-    audio.play().catch(function () {});
+    // Si la persona cambió de modo o de texto/voz/idioma/velocidad mientras
+    // esta voz se creaba, queda guardada (Generar video ya exige su clave
+    // vigente, en refrescar) pero no suena sola ni encima de otro modo.
+    if (estado.activo && claveVoz === clave()) audio.play().catch(function () {});
   }
   function barra(si, textoBarra) {
     $('hb-barra').hidden = !si;
