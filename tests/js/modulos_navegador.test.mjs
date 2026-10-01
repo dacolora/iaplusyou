@@ -347,3 +347,124 @@ test("agregarMateriales no toca nada si todavía no hay destino resuelto (this.d
   assert.doesNotThrow(() => VistaPrevia.prototype.agregarMateriales.call(falsa, { 9: { id: 9, tipo: "audio", url: "x" } }));
   assert.equal(falsa.doc, null);
 });
+
+// ---- Capa 5b (Tarea 7, D6/D8): las medidas del cuadro de un clip de la
+// principal, para mover y acercar su encuadre sobre el video ----
+
+test("medidasPrincipal: las del cuadro que se dibuja (ya derecho); si no cargó, las del material", async () => {
+  const { VistaPrevia } = await import("../../static/editor/vista.js");
+  const { docBase } = await import("./doc_base.mjs");
+  const doc = docBase();
+  doc.pistas[0].clips.push({ id: "f0", inicio_ms: 8000, duracion_ms: 3000, material_id: 4, foto: true,
+    recorte: { desde_ms: 0, hasta_ms: 3000 }, velocidad: 1 });
+  const ligera = { complete: true, naturalWidth: 300, naturalHeight: 200 };
+  const falsa = {
+    doc,
+    documentoOriginal: doc,
+    materialesVigentes: { 1: { tipo: "video", ancho: 1920, alto: 1080 }, 4: { tipo: "imagen", ancho: 600, alto: 400 } },
+    // el <video> de v0 ya cargó (un video grabado de pie: el navegador lo da derecho); el de v1 no existe
+    videos: { elementoDe: (clip) => (clip.id === "v0" ? { videoWidth: 720, videoHeight: 1280 } : null) },
+    imagenesLigeras: new Map([[4, ligera]]),
+  };
+  const medidas = (id) => VistaPrevia.prototype.medidasPrincipal.call(falsa, id);
+  assert.deepEqual(medidas("v0"), [720, 1280]);
+  assert.deepEqual(medidas("v1"), [1920, 1080]);           // sin <video> todavía: el material
+  assert.deepEqual(medidas("f0"), [300, 200]);             // la foto: su copia liviana (misma proporción)
+  ligera.complete = false;
+  assert.deepEqual(medidas("f0"), [600, 400]);             // todavía cargando: el material
+  assert.equal(medidas("t1"), null);                       // un texto no es de la principal
+  assert.equal(medidas("nada"), null);
+  falsa.videos = { elementoDe: () => ({ videoWidth: 0, videoHeight: 0 }) };     // sin metadatos aún
+  assert.deepEqual(medidas("v0"), [1920, 1080]);
+  falsa.materialesVigentes = {};
+  assert.equal(medidas("v0"), null);                       // nada que medir
+  falsa.doc = null;                                        // antes de resolver el destino: el documento de la página
+  falsa.materialesVigentes = { 1: { tipo: "video", ancho: 1280, alto: 720 } };
+  assert.deepEqual(medidas("v1"), [1280, 720]);
+});
+
+// InteraccionLienzo es DOM, pero sus pasos se prueban con un `this` falso:
+// arrastrar el video pide el encuadre con la clave "<clip>:encuadre" (UN
+// deshacer por arrastre) y la caja del clip de la principal elegido es la
+// parte del cuadro que se ve.
+function elFalso() {
+  const clases = new Set();
+  return { hidden: true, style: {}, clases, classList: { toggle: (c, si) => (si ? clases.add(c) : clases.delete(c)) } };
+}
+
+test("InteraccionLienzo: arrastrar el video opera el encuadre con su clave; el asa, el zoom", async () => {
+  const { InteraccionLienzo } = await import("../../static/editor/lienzo_interaccion.js");
+  const llamadas = [];
+  const guias = [];
+  const falsa = {
+    lienzo: { width: 1080, height: 1920 },
+    _medida: () => ({ rect: { left: 0, top: 0, width: 270, height: 480 }, proporcion: 4 }),
+    _guias: (g) => guias.push(g),
+    _terminar: () => llamadas.push(["terminar"]),
+    editor: { operarCon: (...a) => { llamadas.push(a); return true; } },
+    gesto: {
+      activo: true, tipo: "encuadre", id: "v0", formato: "9:16", inicio: { x: 540, y: 300 }, iman: 32,
+      encuadre: { modo: "llenar", zoom: 1, x: 0.5, y: 0.5 }, medidas: [400, 200], x: 204, y: 75,  // (816, 300): +276 px del lienzo
+    },
+  };
+  InteraccionLienzo.prototype._aplicar.call(falsa);
+  assert.deepEqual(llamadas, [[{ clave: "v0:encuadre" }, "cambiar", "v0", { encuadre: { x: 0.4, y: 0.5 } }]]);
+  assert.deepEqual(guias, [{ vertical: false, horizontal: false }]);
+  // el asa: el zoom, con la misma clave y sin guías
+  llamadas.length = 0;
+  guias.length = 0;
+  falsa.gesto = { ...falsa.gesto, tipo: "asa_encuadre", inicio: { x: 1072, y: 1912 }, asa: { x: 1072, y: 1912, sx: 1, sy: 1 },
+    x: 268 + 133, y: 478 + 238 };                                                                // +532, +952
+  InteraccionLienzo.prototype._aplicar.call(falsa);
+  assert.deepEqual(llamadas, [[{ clave: "v0:encuadre" }, "cambiar", "v0", { encuadre: { zoom: 2 } }]]);
+  assert.deepEqual(guias, [null]);
+  // sin medidas del cuadro: no opera (ni corta el gesto)
+  llamadas.length = 0;
+  falsa.gesto = { ...falsa.gesto, tipo: "encuadre", medidas: null };
+  InteraccionLienzo.prototype._aplicar.call(falsa);
+  assert.deepEqual(llamadas, []);
+  // una capa sigue con su clave de siempre
+  falsa.gesto = { activo: true, tipo: "caja", id: "t1", formato: "9:16", inicio: { x: 540, y: 960 }, iman: 32,
+    transform: { x: 0.5, y: 0.5 }, x: 135 + 25, y: 240 };
+  InteraccionLienzo.prototype._aplicar.call(falsa);
+  assert.deepEqual(llamadas[0].slice(0, 3), [{ clave: "t1:transform" }, "cambiar", "t1"]);
+});
+
+test("InteraccionLienzo: elegido el clip de la principal, su caja es lo que se ve y su asa la esquina", async () => {
+  const { InteraccionLienzo } = await import("../../static/editor/lienzo_interaccion.js");
+  const { docBase } = await import("./doc_base.mjs");
+  const doc = docBase();
+  doc.pistas[0].clips[0].encuadre = { modo: "ajustar", zoom: 1, x: 0.5, y: 0.5 };
+  const falsa = {
+    caja: elFalso(), asa: elFalso(),
+    vista: { resuelto: doc, tiempo: () => 500, materiales: {}, medidasTexto: () => ({}) },
+    editor: { seleccion: "v0" },
+    medidasPrincipal: () => [400, 200],
+    _medida: () => ({ rect: { width: 270, height: 480 }, proporcion: 4 }),
+  };
+  InteraccionLienzo.prototype.pintar.call(falsa);
+  assert.equal(falsa.caja.hidden, false);
+  assert.deepEqual(falsa.caja.style, { left: "0%", top: "35.9375%", width: "100%", height: "28.125%" });   // 0, 690, 1080×540
+  assert.equal(falsa.caja.clases.has("ed-encuadre-caja"), true);
+  assert.equal(falsa.asa.clases.has("ed-encuadre-asa"), true);
+  assert.equal(falsa.asa.style.top, `${(1230 / 1920) * 100}%`);
+  // una capa elegida: la caja de siempre, sin la marca del encuadre
+  falsa.editor.seleccion = "a1";                                       // un audio: nada que mostrar
+  InteraccionLienzo.prototype.pintar.call(falsa);
+  assert.equal(falsa.caja.hidden, true);
+  assert.equal(falsa.caja.clases.has("ed-encuadre-caja"), false);
+  // sin quien mida (una vista sin medidasPrincipal): el video no tiene caja
+  falsa.editor.seleccion = "v0";
+  falsa.medidasPrincipal = null;
+  InteraccionLienzo.prototype.pintar.call(falsa);
+  assert.equal(falsa.caja.hidden, true);
+});
+
+test("Propiedades arma la foto y el bloque «Encuadre» (y la vista expone medidasPrincipal)", async () => {
+  const prop = await import("../../static/editor/propiedades.js");
+  for (const m of ["_armarFoto", "_armarEncuadre", "_armarZoomLento"]) {
+    assert.equal(typeof prop.Propiedades.prototype[m], "function", `Propiedades.${m}`);
+  }
+  const vp = await import("../../static/editor/vista.js");
+  assert.equal(typeof vp.VistaPrevia.prototype.medidasPrincipal, "function");
+});

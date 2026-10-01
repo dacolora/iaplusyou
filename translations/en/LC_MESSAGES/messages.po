@@ -1679,6 +1679,9 @@ msgstr "Zoom in on the video to be able to move it."
 msgid "Acercar"
 msgstr "Zoom in"
 
+msgid "Acercar el cuadro"
+msgstr "Zoom in on the frame"
+
 #, python-format
 msgid "Activadas %(n)s pieza(s)."
 msgstr "Activated %(n)s piece(s)."
@@ -4289,6 +4292,9 @@ msgstr "Lasts {s} s."
 msgid "Duración"
 msgstr "Duration"
 
+msgid "Duración de la foto"
+msgstr "Photo duration"
+
 msgid "Duración media"
 msgstr "Average duration"
 
@@ -5386,6 +5392,9 @@ msgstr "In “Redirect URI” put exactly {callback_meli}."
 
 msgid "Encaje con la campaña"
 msgstr "Campaign fit"
+
+msgid "Encuadre"
+msgstr "Framing"
 
 msgid "Energético"
 msgstr "Energetic"

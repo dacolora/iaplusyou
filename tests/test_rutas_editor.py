@@ -1226,6 +1226,35 @@ def test_la_capa_para_tocar_el_video_cubre_el_lienzo(dashboard, encolados):
     assert 'new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });' in js
 
 
+
+def test_encuadre_y_foto_en_editar_caben_y_se_enganchan(dashboard, encolados):
+    """Capa 5b (Tarea 7): el bloque «Encuadre» y la duración de una foto los arma
+    propiedades.js; la página trae sus estilos (los dos modos del encuadre se
+    envuelven y la duración no empuja la columna; en el celular el campo va a
+    16 px para que el iPhone no acerque la página) y la caja del clip de la
+    principal elegido. pagina_editor.js le pasa al panel las medidas del cuadro
+    que se dibuja."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    for sel in (".ed-prop .ed-encuadre-modos {", ".ed-prop .ed-encuadre-modos label {", ".ed-prop .ed-encuadre-modos span {",
+                ".ed-foto-campo {", ".ed-prop .ed-foto-campo input {", ".ed-foto-unidad {",
+                ".ed-caja.ed-encuadre-caja {", ".ed-asa.ed-encuadre-asa {"):
+        assert sel in css, sel
+    for regla in (r"\.ed-prop \.ed-encuadre-modos span \{([^}]*)\}", r"\.ed-foto-campo \{([^}]*)\}",
+                  r"\.ed-prop \.ed-foto-campo input \{([^}]*)\}"):
+        assert "min-width: 0" in re.search(regla, css).group(1), regla
+    assert "overflow-wrap: anywhere" in re.search(r"\.ed-prop \.ed-encuadre-modos span \{([^}]*)\}", css).group(1)
+    movil = css[css.index("@media (max-width: 760px)"):]
+    assert ".ed-prop .ed-foto-campo input { font-size: 16px; }" in movil
+    js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
+    assert "medidasPrincipal: (id) => vista.medidasPrincipal(id)" in js
+    prop = open(os.path.join(RAIZ, "static", "editor", "propiedades.js"), encoding="utf-8").read()
+    for marca in ('nombre: "ed-encuadre-modo"', 'id: "ed-encuadre-zoom"', '"ed-encuadre-centrar"', 'id: "ed-foto-duracion"',
+                  '`${id}:encuadre-zoom`', '"cambiarDuracionFoto"'):
+        assert marca in prop, marca
+
+
 # ---- Capa 4c (8/10): borrar de la biblioteca ----
 
 @pytest.fixture()

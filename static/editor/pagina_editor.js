@@ -607,9 +607,9 @@ function montarPaneles() {
   new VozPanel({ contenedor: biblioteca.zona("audio"), editor, datos });
   // las propiedades de lo elegido («Editar»: un formulario por clase de clip,
   // o la mezcla de la edición si no hay nada elegido; «Suena en» nombra los
-  // idiomas como la galería de voces)
+  // idiomas como la galería de voces; «Encuadre» mide el cuadro que se dibuja)
   new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () => vista.materiales,
-                    nombresIdioma });
+                    nombresIdioma, medidasPrincipal: (id) => vista.medidasPrincipal(id) });
   // tocar, mover y agrandar los textos y las imágenes sobre el video (necesita
   // la vista previa: el documento que se dibuja y las medidas de los textos)
   new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });

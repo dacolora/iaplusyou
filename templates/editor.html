@@ -54,6 +54,10 @@
     box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .45); }
   .ed-asa { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; box-sizing: border-box; border-radius: 50%;
     background: var(--accent); border: 2px solid var(--text); box-shadow: 0 1px 4px rgba(0, 0, 0, .5); pointer-events: none; }
+  /* capa 5b (D8): elegido el clip de la principal, su caja es la parte del
+     cuadro que se ve (encuadre.cajaVisible) y su asa lo acerca */
+  .ed-caja.ed-encuadre-caja { border-color: var(--accent-texto); }
+  .ed-asa.ed-encuadre-asa { border-color: var(--accent-texto); }
   .ed-guia { position: absolute; pointer-events: none; }
   .ed-guia-v { top: 0; bottom: 0; left: 50%; border-left: 1px dashed var(--accent-texto); }
   .ed-guia-h { left: 0; right: 0; top: 50%; border-top: 1px dashed var(--accent-texto); }
@@ -310,6 +314,16 @@
   .ed-prop-acciones { display: flex; flex-wrap: wrap; gap: .4rem; }
   .ed-prop-acciones .btn-sm[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto); }
   .ed-prop-pie { padding-top: .4rem; border-top: 1px solid var(--border); }
+  /* Capa 5b (Tarea 7): «Encuadre» (video y foto) y la duración de una foto.
+     Los dos modos miden lo mismo y su texto se envuelve: «Ajustar con fondo
+     desenfocado» cabe en la columna de 220 px y en la hoja de 375 px. */
+  .ed-prop .ed-encuadre-modos { border-radius: var(--radius-sm); }
+  .ed-prop .ed-encuadre-modos label { display: flex; flex: 1 1 0; min-width: 0; }
+  .ed-prop .ed-encuadre-modos span { display: flex; flex: 1 1 auto; align-items: center; justify-content: center;
+    min-width: 0; line-height: 1.25; overflow-wrap: anywhere; }
+  .ed-foto-campo { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+  .ed-prop .ed-foto-campo input { flex: 0 1 6.5rem; width: 6.5rem; min-width: 0; font-variant-numeric: tabular-nums; }
+  .ed-foto-unidad { flex: none; font-size: .8rem; color: var(--muted); }
 
   /* Subtítulos (capa 5a): subtitulos_panel.js arma lo de adentro de la pestaña
      «Subtítulos» (dentro de .ed-bib-zona) y linea_tiempo.js la fila de solo
@@ -559,6 +573,8 @@
     .ed-accion.ed-activa { color: var(--accent-texto); background: var(--panel-2); border-color: var(--border); }
     /* la galería de voces corre con la hoja (una caja que corre dentro de otra se pelea con el dedo) */
     .ed-voz-voces { max-height: none; overflow: visible; }
+    /* la duración de una foto a 16 px: con menos, el iPhone acerca la página al escribir */
+    .ed-prop .ed-foto-campo input { font-size: 16px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .ed-hoja, .ed-hoja.ed-hoja-abierta { transition: none; }

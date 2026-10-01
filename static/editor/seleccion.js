@@ -118,7 +118,10 @@ export function escalarDesdeAsa(transform, caja, dxPx, dyPx) {
 
 // Qué se tocó en (px, py): el asa de lo elegido, su caja (arrastrarla mueve lo
 // elegido aunque haya otra capa encima; un toque sin arrastrar elige la de
-// arriba: `alTocar`), otra capa (la de más arriba) o nada. `asa`: la de lo
+// arriba: `alTocar`), otra capa (la de más arriba), el video (capa 5b, D8:
+// con `medidasPrincipal`, el clip de la principal del cabezal —`encuadre`,
+// arrastrar mueve qué parte se ve— y, si es lo elegido, su asa —
+// `asa_encuadre`, lo acerca—) o nada (fuera del lienzo). `asa`: la de lo
 // elegido cuando lo tocado es su asa o su caja (el cursor la usa), si no null.
 // Dentro de la caja el asa alcanza como mucho TOPE_ASA_CAJA de su lado corto:
 // en un logo chico, el radio entero del asa se comería casi toda la caja y

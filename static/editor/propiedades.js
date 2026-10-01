@@ -3,7 +3,13 @@
 // clase de lo elegido:
 //
 // - Video (la pista principal): velocidad, volumen del sonido de la escena,
-//   zoom lento, transición al siguiente (y su duración) y borrar.
+//   encuadre, zoom lento, transición al siguiente (y su duración) y borrar.
+// - Foto (capa 5b: una foto como clip de la principal): cuánto dura (en vez
+//   de velocidad y sonido, que una foto no tiene), encuadre, zoom lento,
+//   transición al siguiente y borrar.
+// - «Encuadre» (capa 5b, D4/D8; video y foto): llenar o ajustar con el fondo
+//   desenfocado, acercar el cuadro (100–400 %) y centrarlo — qué parte se ve
+//   se elige arrastrando sobre el video (lienzo_interaccion.js).
 // - Texto: el texto, fuente, tamaño, color, contorno, sombra, fondo,
 //   alineación, animación de entrada, centrar y borrar.
 // - Imagen: tamaño (en % del ancho de la pantalla), opacidad, «Llenar la
@@ -25,8 +31,9 @@
 // No hace nada al importarse (lo prueba Node).
 import { avisoTransicion } from "./escala.js";
 import {
-  alternarSilencio, buscar, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, cambioSuenaEn, claveForma,
-  escalaDePorcentaje, mensajeRechazo, modelo, textoPorcentaje, textoSegundos,
+  alternarSilencio, buscar, cambioCentrarEncuadre, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioModoEncuadre,
+  cambioSombra, cambioSuenaEn, cambioZoomEncuadre, claveForma, escalaDePorcentaje, mensajeRechazo, modelo, msDeDuracionFoto,
+  textoDuracionFoto, textoPorcentaje, textoSegundos,
 } from "./propiedades_modelo.js";
 import { t } from "./textos.js";
 
@@ -66,11 +73,15 @@ export class Propiedades {
   // `contenedor`: #ed-panel-propiedades (la caja que corre hacia abajo);
   // `editor`: el de pagina_editor.js; `materiales()`: los de la vista previa
   // (las medidas de una imagen, para su tamaño en % y «Llenar la pantalla»);
-  // `nombresIdioma`: {es: "Español", …} para «Suena en» (capa 5a).
-  constructor({ contenedor, editor, materiales = () => ({}), nombresIdioma = {} }) {
+  // `nombresIdioma`: {es: "Español", …} para «Suena en» (capa 5a);
+  // `medidasPrincipal(clipId)`: [ancho, alto] que se ven del cuadro de un
+  // clip de la principal (vista.medidasPrincipal; capa 5b: «Encuadre» avisa
+  // si el cuadro no tiene margen para moverse — sin ella, las del material).
+  constructor({ contenedor, editor, materiales = () => ({}), nombresIdioma = {}, medidasPrincipal = null }) {
     this.contenedor = contenedor;
     this.editor = editor;
     this.materiales = materiales;
+    this.medidasPrincipal = typeof medidasPrincipal === "function" ? medidasPrincipal : null;
     this.nombresIdioma = nombresIdioma ?? {};
     this.m = null;                    // el modelo que se ve
     this.clave = null;                // forma:clipId del formulario armado
@@ -101,6 +112,7 @@ export class Propiedades {
     const ed = this.editor;
     const m = modelo(ed.doc(), ed.seleccion, {
       destino: ed.destino(), info: ed.info(), materiales: this.materiales() ?? {}, nombresIdioma: this.nombresIdioma,
+      medidasPrincipal: this.medidasPrincipal,
     });
     const otra = claveForma(m) !== this.clave;
     this.m = m;
@@ -131,7 +143,8 @@ export class Propiedades {
     this.cuerpo.replaceChildren();
     this.cuerpo.dataset.forma = m.forma;
     const armar = {
-      documento: this._armarDocumento, video: this._armarVideo, texto: this._armarTexto, imagen: this._armarImagen,
+      documento: this._armarDocumento, video: this._armarVideo, foto: this._armarFoto, texto: this._armarTexto,
+      imagen: this._armarImagen,
       audio: this._armarAudio, sonido: this._armarSonido, otro: this._armarOtro,
     }[m.forma] ?? this._armarDocumento;
     armar.call(this, m);
@@ -356,13 +369,86 @@ export class Propiedades {
       aplicar: (v) => this._operar(`${id}:sonido`, "volumenSonido", id, v / 100),
     });
     this._nota(this.cuerpo, (x) => x.sonido.motivo);
+    this._armarEncuadre(m);
+    this._armarZoomLento();
+    this._armarTransicion(m);
+    this._botonBorrar((x) => ({ deshabilitado: !x.puedeBorrar, titulo: x.motivoBorrar }));
+  }
+
+  // Capa 5b (D1, D8): una foto de la principal. Cuánto dura, en segundos con
+  // la coma del idioma (se aplica al soltar el campo: Enter o tocar afuera; lo
+  // que no es un número vuelve a lo de antes, y los topes —0,1 a 60 s— los
+  // pone operaciones.cambiarDuracionFoto), y en vez de velocidad y sonido, la
+  // nota de por qué no los tiene.
+  _armarFoto(m) {
+    const id = m.clipId;
+    this._cabeza(m.nombre);
+    const campo = el("div", "ed-prop-campo ed-foto-duracion", this.cuerpo);
+    const label = el("label", "ed-prop-etiqueta", campo, t("prop.duracion_foto"));
+    label.htmlFor = "ed-foto-duracion";
+    const fila = el("div", "ed-foto-campo", campo);
+    const input = el("input", "", fila);
+    Object.assign(input, { type: "text", id: "ed-foto-duracion", inputMode: "decimal", autocomplete: "off", spellcheck: false });
+    el("span", "ed-foto-unidad", fila, "s").setAttribute("aria-hidden", "true");
+    input.addEventListener("change", () => {
+      const ms = msDeDuracionFoto(input.value);
+      if (ms !== null && ms !== this.m?.duracionMs) this._operar(null, "cambiarDuracionFoto", id, ms);
+      this.pintar();
+      if (this.m?.forma === "foto") input.value = textoDuracionFoto(this.m.duracionMs);   // lo que de verdad quedó
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.blur();                  // aplica (change) y las teclas vuelven a la página
+      } else if (e.key === "Escape") {
+        input.value = textoDuracionFoto(this.m?.duracionMs);
+        input.blur();
+      }
+    });
+    this.pintores.push((x) => {
+      if (document.activeElement !== input) input.value = textoDuracionFoto(x.duracionMs);   // no mientras se escribe
+    });
+    this._nota(this.cuerpo, (x) => x.nota);
+    this._armarEncuadre(m);
+    this._armarZoomLento();
+    this._armarTransicion(m);
+    this._botonBorrar((x) => ({ deshabilitado: !x.puedeBorrar, titulo: x.motivoBorrar }));
+  }
+
+  _armarZoomLento() {
     this._opciones(this.cuerpo, {
       nombre: "ed-prop-zoom", etiqueta: t("prop.zoom_lento"), opciones: traducidas(KEN_BURNS),
       leer: (x) => ({ valor: x.kenBurns ?? "ninguno" }),
       aplicar: (v) => this._cambiar(null, { ken_burns: v === "ninguno" ? null : v }),
     });
-    this._armarTransicion(m);
-    this._botonBorrar((x) => ({ deshabilitado: !x.puedeBorrar, titulo: x.motivoBorrar }));
+  }
+
+  // «Encuadre» (capa 5b, D4/D8) de un video o una foto de la principal:
+  // llenar o ajustar con el fondo desenfocado, acercar el cuadro (un deshacer
+  // por arrastre del deslizador) y centrarlo. Qué parte se ve se elige
+  // arrastrando sobre el video: lo dice la ayuda, y si el cuadro no tiene
+  // margen para moverse (mide justo el lienzo), pide acercarlo.
+  _armarEncuadre(m) {
+    const id = m.clipId;
+    const fs = this._opciones(this.cuerpo, {
+      nombre: "ed-encuadre-modo", etiqueta: t("prop.encuadre"), opciones: m.encuadre.opciones,
+      leer: (x) => ({ valor: x.encuadre.modo }),
+      aplicar: (v) => this._cambiar(null, cambioModoEncuadre(v)),
+    });
+    fs.classList.add("ed-encuadre");
+    fs.querySelector(".ed-prop-segmentado")?.classList.add("ed-encuadre-modos");
+    this._deslizador(fs, {
+      id: "ed-encuadre-zoom", etiqueta: t("prop.encuadre_zoom"), min: 100, max: 400,
+      leer: (x) => ({ valor: x.encuadre.zoomPct }),
+      aplicar: (v) => this._cambiar(`${id}:encuadre-zoom`, cambioZoomEncuadre(v)),
+    });
+    const acciones = el("div", "ed-prop-acciones", fs);
+    this._boton(acciones, {
+      texto: t("prop.centrar"), leer: (x) => ({ deshabilitado: x.encuadre.centrado }),
+      aplicar: () => this._cambiar(null, cambioCentrarEncuadre()),
+    }).id = "ed-encuadre-centrar";
+    this._nota(fs, (x) => x.encuadre.ayuda);
+    this._nota(fs, (x) => x.encuadre.aviso, "ed-prop-aviso");
   }
 
   // Transición al siguiente video: el tipo y su duración. Si no cupo entera
@@ -398,6 +484,7 @@ export class Propiedades {
       tipo.disabled = !x.transicion.disponible;
     });
     this._nota(fs, (x) => x.transicion.motivo);
+    this._nota(fs, (x) => x.transicion.ayuda);         // capa 5b, D9: junta los dos clips
   }
 
   _armarTexto(m) {

@@ -8,9 +8,17 @@
 //   arrastrar la caja la mueve (se pega al centro y lo muestran las guías),
 //   arrastrar el asa la agranda o la achica (transform.escala); se puede
 //   arrastrar de una vez una capa que todavía no estaba elegida;
+// - tocar el video donde no hay ninguna capa elige el clip de la principal que
+//   suena en el cabezal (capa 5b, D8; en una transición, el que entra);
+//   arrastrar sobre el video mueve qué parte del cuadro se ve (su `encuadre`:
+//   la imagen sigue al dedo y se pega al centro) y, con ese clip elegido, el
+//   asa de la esquina lo acerca o lo aleja (zoom 1–4). Su caja es la parte
+//   del cuadro que se ve (encuadre.cajaVisible, lo mismo que dibuja
+//   lienzo.dibujarPrincipal), medida con vista.medidasPrincipal;
 // - dos toques seguidos en un texto llevan a escribirlo (editor.enfocarTexto);
 // - arrastrar pausa la reproducción, y cada arrastre queda en UN deshacer (la
-//   clave "<clipId>:transform" de editor.operarCon);
+//   clave "<clipId>:transform" de editor.operarCon; en el video,
+//   "<clipId>:encuadre");
 // - la caja sigue a la capa mientras corre el tiempo o cambia el documento, y
 //   desaparece si en ese instante la capa no está.
 //
@@ -20,8 +28,8 @@
 // las medidas de los textos del propio lienzo (vista.medidasTexto). La caja,
 // el asa y las guías son dibujo: no reciben el puntero.
 import {
-  asaDe, cajaElegida, cambiosArrastre, cursorEn, esDobleToque, esTexto, gestoEn, IMAN_PX, MARGEN_ASA_PX, porcentaje,
-  puntoEnLienzo, RADIO_ASA_PX, superaUmbral,
+  asaDe, cajaElegida, cajaEncuadreElegida, cambiosArrastre, cursorEn, esDobleToque, esTexto, gestoEn, IMAN_PX,
+  MARGEN_ASA_PX, porcentaje, puntoEnLienzo, RADIO_ASA_PX, superaUmbral,
 } from "./seleccion.js";
 
 function el(tag, clase, padre) {
@@ -36,6 +44,8 @@ function transformDe(doc, id) {
   for (const p of doc?.pistas ?? []) for (const c of p.clips ?? []) if (c.id === id) return { ...(c.transform ?? {}) };
   return null;
 }
+
+const ES_ENCUADRE = new Set(["encuadre", "asa_encuadre"]);
 
 export class InteraccionLienzo {
   // `escenario`: #ed-escenario (mide lo que se ve del lienzo); `lienzo`:
@@ -59,6 +69,9 @@ export class InteraccionLienzo {
     this.gesto = null;            // el puntero apretado sobre una capa
     this.toque = null;            // el último toque (sin arrastrar), para el doble toque
     this.cuadro = 0;              // requestAnimationFrame con el arrastre por aplicar
+    // D8: las medidas del cuadro de un clip de la principal (sin ellas, una
+    // vista sin medidasPrincipal, el video no se toca: lo de antes)
+    this.medidasPrincipal = typeof vista.medidasPrincipal === "function" ? (id) => vista.medidasPrincipal(id) : null;
     this.escuchas = [
       ["pointerdown", (e) => this._abajo(e)],
       ["pointermove", (e) => this._mover(e)],
@@ -95,9 +108,14 @@ export class InteraccionLienzo {
     const id = this.editor.seleccion;
     const medida = doc && id ? this._medida() : null;
     const t = this.vista.tiempo();
-    const caja = medida ? cajaElegida(doc, t, id, this.vista.materiales, this.vista.medidasTexto(t)) : null;
+    const capa = medida ? cajaElegida(doc, t, id, this.vista.materiales, this.vista.medidasTexto(t)) : null;
+    // si lo elegido es el clip de la principal del cabezal: la parte del cuadro que se ve
+    const video = medida && !capa ? cajaEncuadreElegida(doc, t, id, this.medidasPrincipal) : null;
+    const caja = capa ?? video;
     this.caja.hidden = !caja;
     this.asa.hidden = !caja;
+    this.caja.classList.toggle("ed-encuadre-caja", Boolean(video));
+    this.asa.classList.toggle("ed-encuadre-asa", Boolean(video));
     if (!caja) return;
     const c = porcentaje(caja, doc.formato);
     Object.assign(this.caja.style, { left: `${c.left}%`, top: `${c.top}%`, width: `${c.width}%`, height: `${c.height}%` });
@@ -123,6 +141,7 @@ export class InteraccionLienzo {
     const g = gestoEn(doc, t, p.x, p.y, {
       seleccion: this.editor.seleccion, materiales: this.vista.materiales, medidasTexto: this.vista.medidasTexto(t),
       radioAsa: RADIO_ASA_PX * medida.proporcion, margenAsa: MARGEN_ASA_PX * medida.proporcion,
+      medidasPrincipal: this.medidasPrincipal,
     });
     return { ...g, doc, punto: p, proporcion: medida.proporcion };
   }
@@ -148,6 +167,8 @@ export class InteraccionLienzo {
       pointerId: e.pointerId, tipo: g.tipo, id: g.id, alTocar: g.alTocar, texto: esTexto(g.doc, g.alTocar),
       // el imán del centro: IMAN_PX de pantalla, en px del lienzo
       transform, caja: g.caja, formato: g.doc.formato, inicio: g.punto, iman: IMAN_PX * g.proporcion,
+      // D8: el encuadre y las medidas del cuadro al empezar, y el asa (el zoom se mide desde ahí)
+      encuadre: g.encuadre ?? null, medidas: g.medidas ?? null, asa: g.asa ?? null,
       x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, activo: false,
     };
     try {
@@ -193,8 +214,10 @@ export class InteraccionLienzo {
     if (!medida) return;
     const p = puntoEnLienzo(g.x, g.y, medida.rect, this.lienzo.width, this.lienzo.height);
     const { cambios, guias } = cambiosArrastre(g, p.x - g.inicio.x, p.y - g.inicio.y);
-    this._guias(g.tipo === "caja" ? guias : null);
-    if (!this.editor.operarCon({ clave: `${g.id}:transform` }, "cambiar", g.id, cambios)) this._terminar();
+    this._guias(g.tipo === "caja" || g.tipo === "encuadre" ? guias : null);
+    if (!cambios) return;                // el cuadro todavía sin medidas: nada que mover
+    const clave = `${g.id}:${ES_ENCUADRE.has(g.tipo) ? "encuadre" : "transform"}`;
+    if (!this.editor.operarCon({ clave }, "cambiar", g.id, cambios)) this._terminar();
   }
 
   _arriba(e) {

@@ -25,7 +25,7 @@ import { resolver } from "./resolver.js";
 import { aplicarFuentes, palabrasDe } from "./subtitulos_fuente.js";
 import { rasterizarTexto } from "./texto_canvas.js";
 import { listaY, t } from "./textos.js";
-import { capasEn, cuadroVecino, duracionMs } from "./tiempo.js";
+import { capasEn, cuadroVecino, duracionMs, pistaPrincipal } from "./tiempo.js";
 import { Videos } from "./videos.js";
 
 const $ = (id) => document.getElementById(id);
@@ -226,6 +226,31 @@ export class VistaPrevia {
       out[clip.id] = [r.ancho, r.alto];
     }
     return out;
+  }
+
+  // Capa 5b (Tarea 7, D6/D8): [ancho, alto] que se VEN del cuadro de un
+  // clip de la pista principal de video — para mover y acercar su encuadre
+  // sobre el video y pintar su caja (seleccion.gestoEn): los del elemento
+  // que se dibuja (`videoWidth` del <video>, `naturalWidth` de la copia
+  // liviana de una foto — el navegador ya enderezó un video grabado de pie y
+  // la copia tiene la proporción del original) o, si todavía no cargó, los
+  // `ancho`/`alto` del material; null si no es un clip de la principal o no
+  // hay nada que medir.
+  medidasPrincipal(clipId) {
+    const doc = this.doc ?? this.documentoOriginal;
+    const p = doc ? pistaPrincipal(doc) : null;
+    const clip = p?.tipo === "video" ? p.clips.find((c) => c.id === clipId) : null;
+    if (!clip) return null;
+    const mid = Number(clip.material_id);
+    const m = this.materialesVigentes?.[mid];
+    const el = clip.foto || m?.tipo === "imagen" ? this.imagenesLigeras?.get(mid) : this.videos?.elementoDe(clip);
+    let w = 0;
+    let h = 0;
+    if (el && "videoWidth" in el) [w, h] = [el.videoWidth, el.videoHeight];
+    else if (el?.complete) [w, h] = [el.naturalWidth, el.naturalHeight];
+    if (w > 0 && h > 0) return [w, h];
+    const [mw, mh] = [Number(m?.ancho), Number(m?.alto)];
+    return mw > 0 && mh > 0 ? [mw, mh] : null;
   }
 
   // ---- Vista previa (capa 3) ----
