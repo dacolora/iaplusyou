@@ -249,7 +249,7 @@
   {% if estado_pixel.nombre %}<strong>{{ estado_pixel.nombre }}</strong>{% endif %}
   {% if estado_pixel.pixel_id %}<small class="vacio" style="padding:0;">id {{ estado_pixel.pixel_id }}</small>{% endif %}
   {% if estado_pixel.ultimo_disparo %}<small>· {{ _('último disparo') }} {{ estado_pixel.ultimo_disparo[:16] }}</small>{% endif %}
-  {% if estado_pixel.detalle %}<small class="vacio" style="padding:0;display:block;">{{ estado_pixel.detalle }}</small>{% endif %}
+  {% if estado_pixel.detalle %}<small class="vacio" style="padding:0;display:block;">{{ estado_pixel.detalle|traducir }}</small>{% endif %}
   <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">{{ _('Volver a comprobar') }}</button></form>
 </div>
 {% elif meta_conectado %}
@@ -563,7 +563,7 @@
   <div class="kpi-tile">
     <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ _('%(n)s cobro(s) a proveedores', n=gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {% for p in pauta_mes %}
   <div class="kpi-tile">

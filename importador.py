@@ -301,14 +301,16 @@ def _activo_con_fotos(cliente, activo_id):
 
 def _bajar_a(fotos, carpeta_destino, prod, errores, que=""):
     """Descarga `fotos` a un temporal y, si bajó alguna, reemplaza las
-    numeradas de `carpeta_destino`. True si colocó al menos una."""
+    numeradas de `carpeta_destino`. True si colocó al menos una. `que` (ya
+    pasado por gettext: el color o «fotos generales») va antes del aviso."""
     if not fotos:
         return False
     temporal = tempfile.mkdtemp(prefix="creatv_fotos_")
     try:
         rutas, fallidas = descargar_fotos(fotos, temporal)
         if fallidas:
-            errores.append(_aviso(prod, f"{que + ': ' if que else ''}{fallidas} foto(s) no se pudieron descargar."))
+            aviso = gettext("%(n)s foto(s) no se pudieron descargar.", n=fallidas)
+            errores.append(_aviso(prod, f"{que}: {aviso}" if que else aviso))
         if not rutas:
             return False
         _reemplazar_fotos(carpeta_destino, temporal)
@@ -365,6 +367,7 @@ def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
     nuevos, vistos = 0, set()
     for i, var in enumerate(variantes):
         nombre_color = f"{nombre_producto} — {var['nombre'].strip()}" if nombre_producto else var["nombre"].strip()
+        etiqueta = gettext("color «%(nombre)s»", nombre=var["nombre"])
         datos = {"fuente_id": var.get("fuente_id"), "url_compra": var.get("url_compra"),
                  "disponible": var.get("disponible", True) is not False}
         cid = _color_existente(existentes, var)
@@ -374,7 +377,7 @@ def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
                     cliente, activo_id, nombre_color, color_id=_color_id_libre(existentes, var["nombre"]),
                     convertir_actual=nombre_producto or activo_id, **datos)
             except ValueError as e:
-                errores.append(_aviso(prod, f"color «{var['nombre']}»: {e}"))
+                errores.append(_aviso(prod, f"{etiqueta}: {e}"))
                 continue
             existentes = _existentes()
             nuevos += 1
@@ -388,7 +391,7 @@ def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
             if bajar and i in descargadas:
                 _reemplazar_fotos(destino, descargadas[i])
         elif bajar:
-            _bajar_a(var.get("fotos") or [], destino, prod, errores, f"color «{var['nombre']}»")
+            _bajar_a(var.get("fotos") or [], destino, prod, errores, etiqueta)
     for cid, datos in existentes.items():
         if cid not in vistos and (datos or {}).get("fuente_id") and (datos or {}).get("disponible", True) is not False:
             catalogo_productos.actualizar_color(cliente, activo_id, cid, disponible=False)
@@ -403,7 +406,7 @@ def _completar_fotos(cliente, activo_id, prod, fotos, variantes, forzar_fotos, e
     carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
     nuevos = _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores) if variantes else 0
     if fotos and (forzar_fotos or not _tiene_imagenes(carpeta)):
-        _bajar_a(fotos, carpeta, prod, errores, "fotos generales" if variantes else "")
+        _bajar_a(fotos, carpeta, prod, errores, gettext("fotos generales") if variantes else "")
     return nuevos
 
 
@@ -457,7 +460,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         errores = []
     prod = tiendas.producto(cliente, producto_id)
     if prod is None:
-        errores.append(f"producto {producto_id}: no existe.")
+        errores.append(gettext("producto %(id)s: no existe.", id=producto_id))
         return None
     nombre = (prod.get("nombre") or "").strip()
     descripcion = (prod.get("descripcion") or "").strip()
@@ -472,7 +475,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         return activo_id
 
     if not fotos and not any(v.get("fotos") for v in variantes):
-        errores.append(_aviso(prod, "sin fotos: no se creó el activo del catálogo."))
+        errores.append(_aviso(prod, gettext("sin fotos: no se creó el activo del catálogo.")))
         return None
 
     activo_id = _id_activo_disponible(cliente, nombre, prod.get("fuente_id"), producto_id)
@@ -483,7 +486,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         _completar_fotos(cliente, activo_id, prod, fotos, variantes,
                          forzar_fotos or not _activo_con_fotos(cliente, activo_id), errores)
         if not _activo_con_fotos(cliente, activo_id):
-            errores.append(_aviso(prod, "sin fotos: no se enlazó al activo del catálogo."))
+            errores.append(_aviso(prod, gettext("sin fotos: no se enlazó al activo del catálogo.")))
             return None
         tiendas.marcar_producto(cliente, producto_id, activo_catalogo_id=activo_id)
         return activo_id
@@ -502,19 +505,22 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
             if rutas_c:
                 descargadas[i] = carpeta_c
         if not rutas_raiz and not descargadas:
-            errores.append(_aviso(prod, "no se pudo descargar ninguna foto: no se creó el activo del catálogo."))
+            errores.append(_aviso(prod, gettext(
+                "no se pudo descargar ninguna foto: no se creó el activo del catálogo.")))
             return None
         if fallidas:
-            errores.append(_aviso(prod, f"{fallidas} foto(s) no se pudieron descargar."))
+            errores.append(_aviso(prod, gettext("%(n)s foto(s) no se pudieron descargar.", n=fallidas)))
         regla = generador_prompts.regla_fidelidad(nombre, descripcion, prod.get("categoria") or "",
                                                    idiomas.de_proyecto(cliente))
         if regla:
             # Claude respondió (una regla vacía es el fallback sin llamada o
             # con error, que no cobra). Tarifa fija: el SDK no devuelve el
             # precio y una llamada de ~600 tokens cuesta menos que ese tope.
+            # Se guarda: en el idioma del proyecto aunque algún día la llame una ruta.
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                detalle = gettext("regla de fidelidad de «%(nombre)s»", nombre=nombre)[:300]
             gastos.registrar_seguro(cliente, "regla_producto", gastos.TARIFAS["regla_producto"],
-                                    f"regla_producto:{producto_id}", proveedor="anthropic",
-                                    detalle=f"regla de fidelidad de «{nombre}»"[:300])
+                                    f"regla_producto:{producto_id}", proveedor="anthropic", detalle=detalle)
         tipo = inferir_tipo(nombre, descripcion, prod.get("categoria") or "")
         try:
             activo_id = catalogo_productos.crear(cliente, nombre, descripcion, tipo=tipo,
@@ -534,7 +540,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         if not _activo_con_fotos(cliente, activo_id):
             if creado_ahora:
                 catalogo_productos.eliminar(cliente, activo_id, CATEGORIA_ACTIVO)
-            errores.append(_aviso(prod, "sin fotos: no se creó el activo del catálogo."))
+            errores.append(_aviso(prod, gettext("sin fotos: no se creó el activo del catálogo.")))
             return None
     finally:
         shutil.rmtree(temporal, ignore_errors=True)
@@ -609,13 +615,13 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
     Devuelve {"nuevos", "actualizados", "activos", "colores", "pendientes", "errores": [str]}."""
     resumen = {"nuevos": 0, "actualizados": 0, "activos": 0, "colores": 0, "pendientes": 0, "errores": []}
     lista = list(productos_normalizados or [])
-    _progreso(on_progreso, "Guardando productos", f"{len(lista)} producto(s)")
+    _progreso(on_progreso, idiomas.N_("Guardando productos"), gettext("%(n)s producto(s)", n=len(lista)))
     ids = []
     for prod in lista:
         try:
             fuente_id = str(prod.get("fuente_id") or "").strip()
             if not fuente_id or not (prod.get("nombre") or "").strip():
-                resumen["errores"].append(_aviso(prod, "sin nombre o sin identificador; se omitió."))
+                resumen["errores"].append(_aviso(prod, gettext("sin nombre o sin identificador; se omitió.")))
                 continue
             existia = tiendas.producto_por_fuente(cliente, fuente, fuente_id) is not None
             if existia and (prod.get("extra") or {}).get("descripcion_cargada") is False:
@@ -627,7 +633,8 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
             ids.append(pid)
         except Exception as error:  # noqa: BLE001 — un producto malo no frena la lista
             log.warning("importar %s/%s: %s", cliente, fuente, error, exc_info=True)
-            resumen["errores"].append(_aviso(prod, f"no se pudo guardar ({type(error).__name__})."))
+            resumen["errores"].append(_aviso(prod, gettext("no se pudo guardar (%(tipo)s).",
+                                                           tipo=type(error).__name__)))
 
     ids_set = set(ids)
     guardados = {p["id"]: p for p in tiendas.productos(cliente, incluir_archivados=True) if p["id"] in ids_set}
@@ -642,7 +649,7 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
     a_ligar = {p["id"] for p in pendientes}
     orden = [p["id"] for p in pendientes] + completos
     for i, pid in enumerate(orden, start=1):
-        _progreso(on_progreso, "Creando activos", f"{i} de {len(orden)}")
+        _progreso(on_progreso, idiomas.N_("Creando activos"), gettext("%(i)s de %(n)s", i=i, n=len(orden)))
         try:
             antes = _n_colores(cliente, pid)
             if vincular_activo(cliente, pid, errores=resumen["errores"]):
@@ -653,7 +660,8 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
         except Exception as error:  # noqa: BLE001
             log.warning("vincular activo %s/%s: %s", cliente, pid, error, exc_info=True)
             prod = tiendas.producto(cliente, pid) or {}
-            resumen["errores"].append(_aviso(prod, f"no se pudo crear el activo ({type(error).__name__})."))
+            resumen["errores"].append(_aviso(prod, gettext("no se pudo crear el activo (%(tipo)s).",
+                                                           tipo=type(error).__name__)))
             if pid in a_ligar:
                 tiendas.anotar_extra(cliente, pid, vinculo_intentado_en=db.ahora())
     return resumen
@@ -664,7 +672,7 @@ def desde_archivo(cliente, ruta, nombre_archivo, on_progreso=None, max_activos=N
     ErrorConector si el archivo no se puede leer (la tarea lo muestra tal
     cual). Un archivo con más filas que el tope del lector deja el aviso
     en `errores` (la persona tiene que saber que se recortó)."""
-    _progreso(on_progreso, "Leyendo", os.path.basename(str(nombre_archivo or "")))
+    _progreso(on_progreso, idiomas.N_("Leyendo"), os.path.basename(str(nombre_archivo or "")))
     avisos = []
     lista = csv_excel.leer(ruta, nombre_archivo, avisos=avisos)
     resumen = importar_lista(cliente, "csv", lista, on_progreso=on_progreso, max_activos=max_activos)
@@ -674,7 +682,7 @@ def desde_archivo(cliente, ruta, nombre_archivo, on_progreso=None, max_activos=N
 
 def desde_url(cliente, url, on_progreso=None, max_activos=None):
     """Página de producto (conectores.url) → importar_lista(fuente="url")."""
-    _progreso(on_progreso, "Leyendo", None)
+    _progreso(on_progreso, idiomas.N_("Leyendo"), None)
     prod = conector_url.leer(url)
     return importar_lista(cliente, "url", [prod], on_progreso=on_progreso, max_activos=max_activos)
 

@@ -1,7 +1,10 @@
 {# Mapa conceptual del código: la versión interactiva de ESTRUCTURA.md, solo
    para el admin (ruta /mapa, dashboard.mapa_codigo). Lo que va entre raw es HTML
    estático que se regenera junto con ESTRUCTURA.md; no lleva Jinja a propósito,
-   así se pega tal cual desde la versión publicada sin escapar nada. #}
+   así se pega tal cual desde la versión publicada sin escapar nada. Solo la
+   barra de arriba (#mapa-barra, fuera de los raw) pasa por el catálogo: el
+   mapa es documentación interna en español (fase 6 del idioma), por eso
+   <html lang="es"> se queda y fuera del español la barra lo avisa. #}
 <!doctype html>
 <html lang="es">
 <head>
@@ -164,7 +167,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);font-
 {% endraw %}
 </head>
 <body>
-<div class="barra-app"><a href="{{ url_for('panel') }}">Volver al panel</a><span>Mapa del código · versión del 20 de septiembre de 2026</span><span class="solo">Solo lo ve el administrador</span></div>
+<div class="barra-app" id="mapa-barra"><a href="{{ url_for('panel') }}">{{ _('Volver al panel') }}</a><span>{{ _('Mapa del código · versión del 20 de septiembre de 2026') }}</span><span class="solo">{{ _('Solo lo ve el administrador') }}</span>{% if idioma_ui != 'es' %}<span>{{ _('Este mapa es documentación interna y está en español.') }}</span>{% endif %}</div>
 {% raw %}
 <div class="wrap">
 <header class="top">

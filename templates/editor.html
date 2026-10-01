@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="es">
+<html lang="{{ idioma_ui }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ nombre_edicion }} · Editor</title>
+<title>{{ _('%(nombre)s · Editor', nombre=nombre_edicion) }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <style>
   {% for f in datos.config.fuentes %}
@@ -395,42 +395,42 @@
 {% macro icono(nombre) -%}
 <svg class="ed-icono" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{{ ICONOS[nombre]|safe }}</svg>
 {%- endmacro %}
-{% set PANELES = [("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("transiciones", "Transiciones")] %}
+{% set PANELES = [("medios", _("Medios")), ("audio", _("Audio")), ("texto", _("Texto")), ("transiciones", _("Transiciones"))] %}
 <body class="editor">
 <header id="ed-barra" class="ed-barra">
-  <a class="btn-sm" href="{{ datos.urls.final }}">← Final edition</a>
+  <a class="btn-sm" href="{{ datos.urls.final }}">{{ _('← Final edition') }}</a>
   <h1 class="ed-nombre">{{ nombre_edicion }}</h1>
   <div class="ed-barra-acciones">
     <div class="ed-destino">
-      <label class="campo-label" for="destino">Destino</label>
+      <label class="campo-label" for="destino">{{ _('Destino') }}</label>
       <select id="destino"></select>
     </div>
-    <span id="estado-guardado" class="ed-guardado" data-estado="guardado" aria-live="polite">Guardado</span>
-    <button id="recargar" type="button" class="btn-sm" hidden>Recargar</button>
-    <button id="producir" type="button" class="btn-generar btn-sm">Producir</button>
+    <span id="estado-guardado" class="ed-guardado" data-estado="guardado" aria-live="polite">{{ _('Guardado') }}</span>
+    <button id="recargar" type="button" class="btn-sm" hidden>{{ _('Recargar') }}</button>
+    <button id="producir" type="button" class="btn-generar btn-sm">{{ _('Producir') }}</button>
   </div>
 </header>
 <main id="ed-cuerpo" class="ed-cuerpo">
-  <aside id="ed-biblioteca" class="ed-lateral ed-hoja" aria-label="Biblioteca" tabindex="-1" data-panel-activo="medios">
+  <aside id="ed-biblioteca" class="ed-lateral ed-hoja" aria-label="{{ _('Biblioteca') }}" tabindex="-1" data-panel-activo="medios">
     <div class="ed-lateral-cabecera">
-      <div id="ed-pestanas-biblioteca" class="ed-pestanas" role="tablist" aria-label="Qué agregar">
+      <div id="ed-pestanas-biblioteca" class="ed-pestanas" role="tablist" aria-label="{{ _('Qué agregar') }}">
         {% for panel, nombre in PANELES %}
         <button type="button" role="tab" class="ed-pestana" data-panel="{{ panel }}" aria-controls="ed-panel-biblioteca" title="{{ nombre }}"
                 aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}">{{ icono(panel) }}<span>{{ nombre }}</span></button>
         {% endfor %}
       </div>
-      <button id="ed-cerrar-biblioteca" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-biblioteca">Listo</button>
+      <button id="ed-cerrar-biblioteca" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-biblioteca">{{ _('Listo') }}</button>
     </div>
-    <div id="ed-panel-biblioteca" class="ed-lateral-cuerpo" role="tabpanel" aria-label="Biblioteca">
+    <div id="ed-panel-biblioteca" class="ed-lateral-cuerpo" role="tabpanel" aria-label="{{ _('Biblioteca') }}">
       <div class="estado-vacio ed-vacio">
-        <p class="estado-vacio-texto">Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición.</p>
+        <p class="estado-vacio-texto">{{ _('Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición.') }}</p>
       </div>
     </div>
   </aside>
-  <section id="ed-centro" class="ed-centro" aria-label="Reproductor">
+  <section id="ed-centro" class="ed-centro" aria-label="{{ _('Reproductor') }}">
     <div class="ed-escena">
       <div id="ed-escenario" class="ed-escenario" style="--ed-ancho: {{ fmt[0] }}; --ed-alto: {{ fmt[1] }}">
-        <canvas id="lienzo" aria-label="Vista previa del video"></canvas>
+        <canvas id="lienzo" aria-label="{{ _('Vista previa del video') }}"></canvas>
         <div id="ed-interaccion" class="ed-interaccion" aria-hidden="true"></div>
       </div>
     </div>
@@ -440,62 +440,62 @@
       <p id="aviso-recortes" class="editor-aviso" hidden></p>
       <p id="aviso-preparando" class="editor-aviso" hidden></p>
       <p id="aviso-audio" class="editor-aviso" hidden></p>
-      <p id="aproximada" class="editor-aviso" hidden>Transición vista de forma aproximada: el video final la hace completa.</p>
+      <p id="aproximada" class="editor-aviso" hidden>{{ _('Transición vista de forma aproximada: el video final la hace completa.') }}</p>
       <p id="aviso-edicion" class="editor-aviso error" hidden></p>
-      <p id="producir-hecho" class="editor-aviso" hidden><span id="producir-hecho-texto"></span> <a id="producir-hecho-enlace" href="{{ datos.urls.final }}">Ir a Final edition</a></p>
+      <p id="producir-hecho" class="editor-aviso" hidden><span id="producir-hecho-texto"></span> <a id="producir-hecho-enlace" href="{{ datos.urls.final }}">{{ _('Ir a Final edition') }}</a></p>
     </div>
     <div class="ed-transporte">
-      <button id="inicio" class="btn-sm" type="button" aria-label="Ir al inicio">⏮</button>
-      <button id="reproducir" class="btn-generar" type="button" aria-label="Reproducir">▶</button>
+      <button id="inicio" class="btn-sm" type="button" aria-label="{{ _('Ir al inicio') }}">⏮</button>
+      <button id="reproducir" class="btn-generar" type="button" aria-label="{{ _('Reproducir') }}">▶</button>
       <span id="tiempo">0:00.0 / 0:00.0</span>
-      <input id="barra" type="range" min="0" max="0" step="1" value="0" aria-label="Posición en el video">
+      <input id="barra" type="range" min="0" max="0" step="1" value="0" aria-label="{{ _('Posición en el video') }}">
     </div>
   </section>
   <aside id="ed-propiedades" class="ed-lateral ed-hoja" aria-labelledby="ed-titulo-propiedades" tabindex="-1">
     <div class="ed-lateral-cabecera">
-      <h2 id="ed-titulo-propiedades" class="ed-titulo">Editar</h2>
-      <button id="ed-cerrar-propiedades" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-propiedades">Listo</button>
+      <h2 id="ed-titulo-propiedades" class="ed-titulo">{{ _('Editar') }}</h2>
+      <button id="ed-cerrar-propiedades" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-propiedades">{{ _('Listo') }}</button>
     </div>
     <div id="ed-panel-propiedades" class="ed-lateral-cuerpo">
       <div class="estado-vacio ed-vacio">
-        <p class="estado-vacio-texto">Elige algo en la línea de tiempo o en el video para cambiarlo.</p>
+        <p class="estado-vacio-texto">{{ _('Elige algo en la línea de tiempo o en el video para cambiarlo.') }}</p>
       </div>
     </div>
   </aside>
 </main>
-<section id="ed-herramientas" class="ed-herramientas" aria-label="Herramientas de edición">
+<section id="ed-herramientas" class="ed-herramientas" aria-label="{{ _('Herramientas de edición') }}">
   <div class="ed-grupo">
-    <button id="h-deshacer" type="button" class="btn-sm" aria-label="Deshacer" title="Deshacer (Ctrl/Cmd+Z)">↶</button>
-    <button id="h-rehacer" type="button" class="btn-sm" aria-label="Rehacer" title="Rehacer (Ctrl/Cmd+Shift+Z)">↷</button>
+    <button id="h-deshacer" type="button" class="btn-sm" aria-label="{{ _('Deshacer') }}" title="{{ _('Deshacer (Ctrl/Cmd+Z)') }}">↶</button>
+    <button id="h-rehacer" type="button" class="btn-sm" aria-label="{{ _('Rehacer') }}" title="{{ _('Rehacer (Ctrl/Cmd+Shift+Z)') }}">↷</button>
   </div>
   <div class="ed-grupo">
-    <button id="h-cortar" type="button" class="btn-sm" title="Cortar donde está el cabezal: el clip elegido o, si no eliges ninguno, el video (S)">✂ Cortar</button>
-    <button id="h-duplicar" type="button" class="btn-sm" title="Duplicar el clip elegido">Duplicar</button>
-    <button id="h-borrar" type="button" class="btn-sm" title="Borrar el clip elegido (Supr)">Borrar</button>
+    <button id="h-cortar" type="button" class="btn-sm" title="{{ _('Cortar donde está el cabezal: el clip elegido o, si no eliges ninguno, el video (S)') }}">{{ _('✂ Cortar') }}</button>
+    <button id="h-duplicar" type="button" class="btn-sm" title="{{ _('Duplicar el clip elegido') }}">{{ _('Duplicar') }}</button>
+    <button id="h-borrar" type="button" class="btn-sm" title="{{ _('Borrar el clip elegido (Supr)') }}">{{ _('Borrar') }}</button>
   </div>
-  <label class="ed-zoom">Zoom <input id="linea-zoom" type="range"></label>
+  <label class="ed-zoom">{{ _('Zoom') }} <input id="linea-zoom" type="range"></label>
 </section>
-<section id="linea" class="linea" aria-label="Línea de tiempo"></section>
-<nav id="ed-acciones-movil" class="ed-acciones-movil" aria-label="Agregar y editar">
+<section id="linea" class="linea" aria-label="{{ _('Línea de tiempo') }}"></section>
+<nav id="ed-acciones-movil" class="ed-acciones-movil" aria-label="{{ _('Agregar y editar') }}">
   {% for panel, nombre in PANELES %}
   <button id="ed-abrir-{{ panel }}" type="button" class="ed-accion" data-abrir-hoja="ed-biblioteca" data-abrir-panel="{{ panel }}"
           aria-controls="ed-biblioteca" aria-expanded="false">{{ icono(panel) }}<span>{{ nombre }}</span></button>
   {% endfor %}
   <button id="ed-abrir-propiedades" type="button" class="ed-accion" data-abrir-hoja="ed-propiedades"
-          aria-controls="ed-propiedades" aria-expanded="false">{{ icono("editar") }}<span>Editar</span></button>
+          aria-controls="ed-propiedades" aria-expanded="false">{{ icono("editar") }}<span>{{ _('Editar') }}</span></button>
 </nav>
 <dialog id="producir-dialogo" class="editor-dialogo" aria-labelledby="producir-titulo">
-  <h2 id="producir-titulo">Producir</h2>
-  <p>Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id="producir-tiempo"></span>.</p>
+  <h2 id="producir-titulo">{{ _('Producir') }}</h2>
+  <p>{{ _('Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id="producir-tiempo"></span>.') }}</p>
   <div id="producir-destinos" class="checks-plataformas"></div>
   <p id="producir-aviso" class="editor-aviso error" hidden></p>
   <div id="producir-reemplazo" class="editor-reemplazo" hidden>
     <p id="producir-reemplazo-texto"></p>
   </div>
   <div class="editor-dialogo-acciones">
-    <button id="producir-cancelar" type="button" class="btn-sm">Cancelar</button>
-    <button id="producir-confirmar" type="button" class="btn-generar">Producir</button>
-    <button id="producir-reemplazar" type="button" class="btn-generar" hidden>Reemplazar y producir</button>
+    <button id="producir-cancelar" type="button" class="btn-sm">{{ _('Cancelar') }}</button>
+    <button id="producir-confirmar" type="button" class="btn-generar">{{ _('Producir') }}</button>
+    <button id="producir-reemplazar" type="button" class="btn-generar" hidden>{{ _('Reemplazar y producir') }}</button>
   </div>
 </dialog>
 <script type="application/json" id="datos-editor">{{ datos|tojson }}</script>

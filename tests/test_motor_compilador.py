@@ -433,7 +433,7 @@ def test_ken_burns_agrega_zoompan_y_sigue_donde_iba_en_cada_tramo():
     doc["pistas"][0]["clips"][1]["ken_burns"] = "out"
     fg = c.compilar(doc, RUTAS, con_ass=False).filtergraph
     assert ("fps=30,zoompan=z='min(1+0.08*(on+0)/105,1.08)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-            ":s=1080x1920:fps=30,format=yuv420p[v0]") in fg
+            ":s=1080x1920:fps=30,setsar=1,format=yuv420p[v0]") in fg
     assert "zoompan=z='max(1.08-0.08*(on+0)/105,1)'" in fg
     # ventana que arranca a mitad del primer clip (tramos): el zoom continúa,
     # no reinicia — 1000 ms = 30 cuadros ya consumidos

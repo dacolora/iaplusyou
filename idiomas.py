@@ -4,16 +4,31 @@ idioma:
 
   - de la persona (usuarios.json, campo "idioma"): en qué idioma ve las pantallas;
   - del proyecto (clientes/<c>/proyecto.json, campo "idioma"): en qué idioma
-    escribe Claude y salen los anuncios de ese proyecto (fases 3-6);
+    escribe Claude y salen los anuncios de ese proyecto (fases 3-5), lo que
+    se guarda o se manda (errores, `detalle` de gastos, eventos, mensajes de
+    tareas, correos) y el guion base de Final edition por defecto; cada final
+    sale en el idioma de su país destino (decisión B de Daniel, 2026-09-28);
   - antes del login, la cookie `idioma`.
 
 Sin campo = DEFECTO. Desde 2026-09-28 (decisión de Daniel) DEFECTO es "en" y
 ACTIVO_PARA_TODOS es True: todos los usuarios y proyectos que no eligieron
-idioma están en inglés, y el selector lo ve todo el mundo — aunque varias
-pantallas (Sprints, Nicho, Referentes, Final edition/editor, admin, el mapa
-del código) sigan solo en español hasta que cierren las fases 5-6. Los tests
-fijan "es"/False (tests/conftest.py) porque comparan textos en español;
-cualquiera puede volver a español desde Configuración › Cuenta y avisos.
+idioma están en inglés, y el selector lo ve todo el mundo. Desde el cierre de
+la fase 6 (2026-09) toda la app pasa por el catálogo. Quedan en español a
+propósito: el contenido del mapa del código (`mapa_codigo.html`, con
+`lang="es"`; solo su barra se traduce) y los textos de la doctrina
+(`doctrina/textos/*.md`, instrucciones internas para Claude), los mensajes de
+contrato de `final_edition/documento.validar` y los de
+`static/editor/operaciones.js` (`INTERNOS` en tests/test_i18n_editor.py), los
+prompts para los modelos de video e imagen con sus tokens `Image N` /
+`Video N` / `@Imagen N` (`prompt_swap.py`, `flowplus_prompt`), y las 9
+plantillas del flujo viejo «Nueva idea» (excluidas hasta que Daniel decida
+qué pasa con ese flujo). Una excepción a §B8: «Escribe aquí» y «Escribe el
+precio» (capa 4c), el texto inicial editable de un clip de texto nuevo del
+editor, salen en el idioma de quien mira (el navegador solo tiene su
+diccionario). Los tests fijan
+"es"/False (tests/conftest.py) porque comparan textos en español;
+tests/test_i18n_app_entera.py prueba los valores de producción. Cualquiera
+puede volver a español desde Configuración › Cuenta y avisos.
 
 El texto en español es la fuente (msgid); el inglés vive en
 translations/en/LC_MESSAGES/messages.po (catalogo_i18n.py lo extrae y compila).

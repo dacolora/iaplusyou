@@ -3,7 +3,7 @@
 // se leía como «Esos destinos ya se estaban produciendo.»
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MENSAJE_SESION } from "../../static/editor/guardado.js";
+import { mensajeSesion } from "../../static/editor/guardado.js";
 import { respuestaProducir } from "../../static/editor/producir.js";
 
 const cab = (tipo) => ({ get: (k) => (k.toLowerCase() === "content-type" ? tipo : null) });
@@ -12,7 +12,7 @@ const JSON_ = cab("application/json");
 test("la página de entrar (redirigida o HTML) es «tu sesión terminó», nunca «ya se estaban produciendo»", () => {
   for (const r of [{ ok: true, status: 200, redirected: true, url: "https://app.test/login", headers: cab("text/html") },
     { ok: true, status: 200, redirected: false, headers: cab("text/html; charset=utf-8") }]) {
-    assert.deepEqual(respuestaProducir(r, null), { que: "error", texto: MENSAJE_SESION });
+    assert.deepEqual(respuestaProducir(r, null), { que: "error", texto: mensajeSesion() });
   }
 });
 

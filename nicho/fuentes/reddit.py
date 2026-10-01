@@ -193,7 +193,7 @@ class FuenteReddit(Fuente):
             _token(_http.sesion(), _llaves())
         except ErrorFuente as e:
             return {"ok": False, "detalle": e.usuario}
-        return {"ok": True, "detalle": "Reddit aceptó las llaves (solo lectura)."}
+        return {"ok": True, "detalle": gettext("Reddit aceptó las llaves (solo lectura).")}
 
     def recolectar(self, params, avanzar=None):
         p = normalizar_params(params)
@@ -221,7 +221,7 @@ class FuenteReddit(Fuente):
                 vistos.add(i)
                 pendientes.append(i)
         for n, post_id in enumerate(pendientes, start=1):
-            avanzar(N_("Leyendo comentarios"), f"post {n} de {len(pendientes)}")
+            avanzar(N_("Leyendo comentarios"), gettext("post %(n)s de %(total)s", n=n, total=len(pendientes)))
             _http.dormir(PAUSA)
             try:
                 data = _get(sesion, token, ll, f"/comments/{post_id}", {"sort": "top", "limit": p["max_comentarios_por_post"], "depth": 2})

@@ -22,11 +22,11 @@
 <form method="post" action="{{ url_for('referentes.copycoders', cliente=cliente) }}" class="ref-copycoders">
   {% if ref_copycoders_activa %}
   <input type="hidden" name="activa" value="0">
-  <span>{{ _('Biblioteca de copycoders: activa en este proyecto (%(n)s anuncios).', n=ref_copycoders_total) }}</span>
+  <span>{{ ngettext('Biblioteca de copycoders: activa en este proyecto (%(num)s anuncios).', 'Biblioteca de copycoders: activa en este proyecto (%(num)s anuncios).', ref_copycoders_total) }}</span>
   <button type="submit" class="btn-sm">{{ _('Quitar la biblioteca') }}</button>
   {% else %}
   <input type="hidden" name="activa" value="1">
-  <span><strong>{{ _('Biblioteca de copycoders') }}</strong> · {{ _('%(n)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas.', n=ref_copycoders_total) }}</span>
+  <span><strong>{{ _('Biblioteca de copycoders') }}</strong> · {{ ngettext('%(num)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas.', '%(num)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas.', ref_copycoders_total) }}</span>
   <button type="submit" class="btn-generar btn-sm">{{ _('Traer la biblioteca de copycoders') }}</button>
   {% endif %}
 </form>
@@ -80,6 +80,8 @@
           cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
             if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
           });
+          // El JS de «Recrear» vive en el otro <script> de la pestaña: se entera por este evento.
+          cuerpo.dispatchEvent(new CustomEvent('ref:fragmento'));
           return true;
         })
         .catch(function () { alert({{ _('No se pudo cargar.')|tojson }}); return false; });
@@ -226,19 +228,86 @@
     function cargarEnDialogo(url) {
       return fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
-        .then(function (html) { cuerpo.innerHTML = html; return true; })
+        .then(function (html) { cuerpo.innerHTML = html; iniciarLectura(); return true; })
         .catch(function () { alert({{ _('No se pudo cargar.')|tojson }}); return false; });
     }
+    // Un formulario «Recrear» abierto desde la ficha (el otro <script> de la
+    // pestaña) avisa con este evento; si aún no tiene lectura, se pide.
+    cuerpo.addEventListener('ref:fragmento', function () { iniciarLectura(); });
 
-    function recargarFormularioRecrear(form, tipoNuevo) {
+    // Recarga el formulario «Recrear» con lo que tiene puesto (spec
+    // 2026-09-30-recrear-fiel): textos escritos, casilla de textos, imágenes
+    // marcadas y el formato. Tras la lectura (`trasLeer`) el formato solo
+    // viaja si la persona lo eligió: si no, el servidor pone el más parecido
+    // a la referencia.
+    function recargarFormularioRecrear(form, tipoNuevo, opciones) {
+      opciones = opciones || {};
       var u = new URL(form.dataset.recrear, location.origin);
       var tipoActual = form.querySelector('input[name="tipo"]');
       u.searchParams.set('tipo', tipoNuevo || (tipoActual ? tipoActual.value : 'imagen'));
-      ['producto_id', 'formato', 'titular'].forEach(function (campo) {
-        var el = form.querySelector('[data-recrear-campo="' + campo + '"]');
-        if (el && el.value) u.searchParams.set(campo, el.value);
+      var producto = form.querySelector('[data-recrear-campo="producto_id"]');
+      if (producto && producto.value) u.searchParams.set('producto_id', producto.value);
+      var formato = form.querySelector('[data-recrear-campo="formato"]');
+      var elegido = formato && (opciones.formatoElegido || formato.dataset.elegido === '1');
+      if (formato && formato.value && (elegido || !opciones.trasLeer)) u.searchParams.set('formato', formato.value);
+      if (elegido) u.searchParams.set('formato_elegido', '1');
+      u.searchParams.set('campos_vista', '1');
+      var traer = form.querySelector('input[name="traer_textos"]');
+      if (traer && (traer.type === 'hidden' || traer.checked)) u.searchParams.set('traer_textos', '1');
+      form.querySelectorAll('[data-recrear-texto]').forEach(function (el) { u.searchParams.set(el.name, el.value); });
+      var modos = form.querySelectorAll('[data-recrear-modo]');
+      if (modos.length) {
+        u.searchParams.set('modos_vista', '1');
+        modos.forEach(function (m) { if (m.checked) u.searchParams.append('modo', m.value); });
+      }
+      return cargarEnDialogo(u.pathname + u.search);
+    }
+
+    // Lectura de la referencia (composición + textos, ≈ US$ 0,01 una sola vez
+    // por referente): una por referente a la vez; al terminar recarga el
+    // formulario que esté abierto si sigue siendo el de ese referente.
+    var lecturasEnCurso = {};
+    function iniciarLectura() {
+      var form = cuerpo.querySelector('.ref-recrear-form');
+      if (!form || !form.querySelector('[data-recrear-leer]')) return;
+      var url = form.dataset.leer;
+      if (lecturasEnCurso[url]) return;
+      lecturasEnCurso[url] = true;
+      fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          delete lecturasEnCurso[url];
+          var actual = cuerpo.querySelector('.ref-recrear-form');
+          if (!actual || actual.dataset.leer !== url) return;
+          if (res.ok) recargarFormularioRecrear(actual, null, { trasLeer: true });
+          else mostrarFalloLectura(actual, res.d && res.d.error);
+        })
+        .catch(function () {
+          delete lecturasEnCurso[url];
+          var actual = cuerpo.querySelector('.ref-recrear-form');
+          if (actual && actual.dataset.leer === url) mostrarFalloLectura(actual, null);
+        });
+    }
+    function mostrarFalloLectura(form, error) {
+      var aviso = form.querySelector('[data-recrear-leer]');
+      if (!aviso) return;
+      aviso.textContent = (error || {{ _('No se pudo leer la referencia.')|tojson }}) + ' ';
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-sm';
+      b.textContent = {{ _('Reintentar')|tojson }};
+      b.addEventListener('click', function () {
+        aviso.textContent = {{ _('Leyendo la referencia…')|tojson }};
+        iniciarLectura();
       });
-      cargarEnDialogo(u.pathname + u.search);
+      aviso.appendChild(b);
+    }
+    function actualizarBotonGenerar(form) {
+      var boton = form.querySelector('[data-recrear-generar]');
+      if (!boton) return;
+      var n = form.querySelectorAll('[data-recrear-modo]:checked').length;
+      boton.textContent = boton.getAttribute('data-texto-' + n);
+      boton.disabled = n === 0;
     }
 
     function leerHash() {
@@ -355,9 +424,30 @@
       form.submit();
     });
     cuerpo.addEventListener('change', function (ev) {
+      var form = ev.target.closest('.ref-recrear-form');
+      if (!form) return;
+      if (ev.target.matches('[data-recrear-modo]')) { actualizarBotonGenerar(form); return; }
+      if (ev.target.matches('[data-recrear-traer]')) {
+        var campos = form.querySelector('[data-recrear-campos-texto]');
+        if (campos) campos.hidden = !ev.target.checked;
+        return;
+      }
       var campo = ev.target.closest('[data-recrear-campo="producto_id"], [data-recrear-campo="formato"]');
       if (!campo) return;
-      recargarFormularioRecrear(campo.closest('form'));
+      recargarFormularioRecrear(form, null, { formatoElegido: campo.dataset.recrearCampo === 'formato' });
+    });
+    // Un prompt escrito a mano se usa tal cual; si no, el servidor lo arma al generar.
+    cuerpo.addEventListener('input', function (ev) {
+      var p = ev.target.closest('[data-recrear-prompt]');
+      if (!p) return;
+      var marca = p.closest('form').querySelector('[data-recrear-editado="' + p.dataset.recrearPrompt + '"]');
+      if (marca) marca.value = '1';
+    });
+    // Enter en un campo de una línea NO envía «Recrear» (generaría y cobraría,
+    // como pasaba en Crear): solo el botón genera.
+    cuerpo.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' || ev.isComposing || ev.target.tagName !== 'INPUT') return;
+      if (ev.target.closest('.ref-recrear-form')) ev.preventDefault();
     });
     cuerpo.addEventListener('click', function (ev) {
       // «Abrir» ([data-recrear-abrir]) se maneja arriba con un delegado
@@ -372,19 +462,28 @@
       if (adaptarBtn) {
         var f = adaptarBtn.closest('form');
         var productoSel = f.querySelector('[data-recrear-campo="producto_id"]');
-        var titularEl = f.querySelector('[data-recrear-campo="titular"]');
+        var textosEls = f.querySelectorAll('[data-recrear-texto]');
+        var traerEl = f.querySelector('input[name="traer_textos"]');
         var promptEl = f.querySelector('[data-recrear-campo="prompt"]');
         var anguloEl = f.querySelector('[data-recrear-campo="angulo"]');
         adaptarBtn.disabled = true;
         fetch(f.dataset.adaptar, {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
-          body: JSON.stringify({ producto_id: productoSel ? productoSel.value : '', titular: titularEl ? titularEl.value : '' })
+          body: JSON.stringify({
+            producto_id: productoSel ? productoSel.value : '',
+            textos: Array.prototype.map.call(textosEls, function (el) { return el.value; }),
+            traer_textos: !traerEl || traerEl.type === 'hidden' || traerEl.checked
+          })
         })
           .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
           .then(function (res) {
             if (!res.ok) { alert(res.d.error || {{ _('No se pudo adaptar.')|tojson }}); return; }
-            if (titularEl) titularEl.value = res.d.titular;
-            if (promptEl) promptEl.value = res.d.prompt;
+            if (Array.isArray(res.d.textos)) res.d.textos.forEach(function (v, i) { if (textosEls[i]) textosEls[i].value = v; });
+            if (promptEl) {
+              promptEl.value = res.d.prompt;
+              var editado = f.querySelector('[data-recrear-editado="prompt"]');
+              if (editado) editado.value = '1';
+            }
             if (anguloEl) anguloEl.value = res.d.angulo ? JSON.stringify(res.d.angulo) : '';
           })
           .catch(function () { alert({{ _('No se pudo adaptar.')|tojson }}); })

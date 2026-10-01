@@ -21,18 +21,23 @@ import re
 import shutil
 import subprocess
 
+from flask_babel import gettext
+
 import cola
 import creative_flow
 import ediciones
+import idiomas
 import materiales
 import trabajos
 from final_edition import cortes, mezcla, motor, rasterizar
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
+from idiomas import N_
 from storage import r2_uploader
 from tareas import al_interrumpir, registrar
 
-ETAPAS_EDICION = (("Preparando materiales", 15), ("Renderizando", 70), ("Subiendo", 15))
+# N_: se guardan en español y `estado_trabajo` las traduce para quien mira.
+ETAPAS_EDICION = ((N_("Preparando materiales"), 15), (N_("Renderizando"), 70), (N_("Subiendo"), 15))
 _EXT = {"video": "mp4", "imagen": "png", "audio": "wav", "png_texto": "png", "proxy": "mp4"}
 _IDIOMA_RE = re.compile(r"[a-z]{2}")
 _PAIS_RE = re.compile(r"[A-Z]{2}")
@@ -56,7 +61,7 @@ def generar_proxy(original, destino):
 def _extension(tipo):
     ext = _EXT.get(tipo)
     if not ext:
-        raise RuntimeError(f"Tipo de material sin extensión conocida: {tipo}")
+        raise RuntimeError(gettext("Tipo de material sin extensión conocida: %(tipo)s", tipo=tipo))
     return ext
 
 
@@ -101,7 +106,7 @@ def preparar_rutas(cliente, doc, carpeta):
     for mid in sorted(ids):
         mat = materiales.obtener(cliente, mid)
         if not mat:
-            raise RuntimeError(f"Falta el material {mid} de este proyecto.")
+            raise RuntimeError(gettext("Falta el material %(mid)s de este proyecto.", mid=mid))
         filas[mid] = mat
         destino = os.path.join(carpeta, f"{mid}.{_extension(mat['tipo'])}")
         rutas[mid] = materiales.descargar(mat, destino)
@@ -121,7 +126,8 @@ def preparar_rutas(cliente, doc, carpeta):
                 continue
             literal = (cl.get("texto") or {}).get("literal")
             if literal is None:
-                raise RuntimeError(f"El clip de texto {cl['id']} no está resuelto (¿falta documento.resolver?).")
+                raise RuntimeError(gettext("El clip de texto %(clip)s no está resuelto (¿falta documento.resolver?).",
+                                           clip=cl["id"]))
             medidas = rasterizar.png_texto(literal, cl.get("estilo") or {}, doc["formato"],
                                            os.path.join(carpeta, f"png_{cl['id']}.png"))
             rutas[clave] = os.path.join(carpeta, f"png_{cl['id']}.png")
@@ -151,12 +157,12 @@ def renderizar_final(cliente, final_id, version_id, idioma, pais, avisar=None):
     # idioma/pais forman el nombre de la carpeta de trabajo: se validan
     # ANTES de tocar el disco (un `../x` no debe ni crearla).
     if not isinstance(idioma, str) or not _IDIOMA_RE.fullmatch(idioma):
-        raise ValueError(f"idioma inválido: {idioma!r} (se esperan dos letras minúsculas).")
+        raise ValueError(gettext("idioma inválido: %(idioma)s (se esperan dos letras minúsculas).", idioma=repr(idioma)))
     if not isinstance(pais, str) or not _PAIS_RE.fullmatch(pais):
-        raise ValueError(f"país inválido: {pais!r} (se esperan dos letras mayúsculas).")
+        raise ValueError(gettext("país inválido: %(pais)s (se esperan dos letras mayúsculas).", pais=repr(pais)))
     v = ediciones.version(cliente, version_id)
     if not v:
-        raise RuntimeError("No existe esa versión de la edición.")
+        raise RuntimeError(gettext("No existe esa versión de la edición."))
     carpeta = _carpeta(cliente, f"{v['edicion_id']}_{idioma}_{pais}")
     # Como mucho una corrida fallida por destino queda en disco: un
     # reintento arranca de carpeta limpia (vacía pero existente).
@@ -199,10 +205,12 @@ def ejecutar_producir(tarea):
                                               url_miniatura=res["url_miniatura"], duracion_s=res["duracion_s"],
                                               capas={"render": {"edicion_version_id": res["version_id"], "tramos": res["tramos"],
                                                                 "con_ass": res["con_ass"]}}):
-            raise RuntimeError(f"La final {final_id} no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
+            raise RuntimeError(gettext("La final %(final)s no existe; la ruta debe crearla con creative_flow.crear_final "
+                                       "antes de encolar.", final=final_id))
         if not ediciones.apuntar_final(cliente, final_id, res["version_id"]):
-            raise RuntimeError(f"La final {final_id} no existe en pieza; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
-        return f"Final {p['idioma']}/{p['pais']} lista."
+            raise RuntimeError(gettext("La final %(final)s no existe en pieza; la ruta debe crearla con "
+                                       "creative_flow.crear_final antes de encolar.", final=final_id))
+        return gettext("Final %(destino)s lista.", destino=f"{p['idioma']}/{p['pais']}")
     except Exception as e:
         # I3 (capa 1): nunca un token crudo en la columna de error.
         creative_flow.actualizar_final(cliente, final_id, estado="error",
@@ -214,7 +222,10 @@ def ejecutar_producir(tarea):
 def _interrumpido(tarea, mensaje):
     p = tarea.get("payload") or {}
     if p.get("cliente") and p.get("final_id"):
-        error = f"interrumpido: {cola.recortar(cola.sin_token(str(mensaje)), 500)}"
+        # Se guarda en la final (la pestaña Final edition lo muestra): el idioma del
+        # proyecto. El hook no pasa por worker.ejecutar (como tareas/nicho.py).
+        with idiomas.en_idioma(idiomas.de_proyecto(p["cliente"])):
+            error = gettext("interrumpido: %(mensaje)s", mensaje=cola.recortar(cola.sin_token(str(mensaje)), 500))
         creative_flow.actualizar_final(p["cliente"], p["final_id"], estado="error", error=error)
 
 
@@ -242,12 +253,12 @@ def ejecutar_proxy(tarea):
     cliente, mid = p["cliente"], int(p["material_id"])
     mat = materiales.obtener(cliente, mid)
     if not mat:
-        return "Material inexistente."
+        return gettext("Material inexistente.")
     # Cheap fix (review): el tipo se valida ANTES de bajar nada — un material
     # sin proxy (imagen, png_texto, proxy, tira, forma_onda) no debe ni
     # crear su carpeta de trabajo.
     if mat["tipo"] not in ("video", "audio"):
-        return "Sin proxy para este tipo."
+        return gettext("Sin proxy para este tipo.")
     carpeta = _carpeta(cliente, f"proxy_{mid}")
     try:
         original = materiales.descargar(mat, os.path.join(carpeta, f"orig.{_extension(mat['tipo'])}"))
@@ -279,7 +290,7 @@ def ejecutar_proxy(tarea):
         import db
         with db.conectar() as con:
             con.execute(db.material.update().where(db.material.c.id == mid).values(extra=extra, actualizado_en=db.ahora(), **campos))
-        return "Proxy listo."
+        return gettext("Proxy listo.")
     finally:
         # A diferencia de edicion_producir, acá no hay una fila "final" que
         # deje en error para depurar — la carpeta de trabajo siempre se
@@ -290,7 +301,7 @@ def ejecutar_proxy(tarea):
 @registrar("materiales_limpiar")
 def ejecutar_limpiar(tarea):
     n = materiales.limpiar_sin_uso(dias=30)
-    return f"{n} materiales efímeros borrados."
+    return gettext("%(n)s materiales efímeros borrados.", n=n)
 
 
 @registrar("edicion_desde_clon")
@@ -300,9 +311,9 @@ def ejecutar_desde_clon(tarea):
     from final_edition import edicion_clon
     p = tarea["payload"]
     if not isinstance(p.get("cf_id"), str) or not _CF_RE.fullmatch(p["cf_id"]):
-        raise ValueError(f"cf_id inválido: {p.get('cf_id')!r}")
+        raise ValueError(gettext("cf_id inválido: %(cf)s", cf=repr(p.get("cf_id"))))
     eid = edicion_clon.crear(p["cliente"], p["cf_id"], _carpeta(p["cliente"], f"clon_{p['cf_id']}"))
-    return f"Edición {eid} lista para editar."
+    return gettext("Edición %(id)s lista para editar.", id=eid)
 
 
 @registrar("material_de_pieza")
@@ -316,6 +327,6 @@ def ejecutar_material_de_pieza(tarea):
     from final_edition import biblioteca
     p = tarea["payload"]
     if not isinstance(p.get("cf_id"), str) or not _CF_RE.fullmatch(p["cf_id"]):
-        raise ValueError(f"cf_id inválido: {p.get('cf_id')!r}")
+        raise ValueError(gettext("cf_id inválido: %(cf)s", cf=repr(p.get("cf_id"))))
     mat = biblioteca.materializar_pieza(p["cliente"], p["cf_id"], _carpeta(p["cliente"], f"material_{p['cf_id']}"))
-    return f"Material {mat['id']} listo."
+    return gettext("Material %(id)s listo.", id=mat["id"])

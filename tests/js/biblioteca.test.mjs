@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   aceptarPara, duracionTexto, faltaPreparar, miniatura, mensajeSubida, nombreDe, repartir, revisarArchivo, tipoDeArchivo,
-  TEXTOS_BIBLIOTECA, TRANSICIONES_BIBLIOTECA, urlPieza,
+  textosBiblioteca, transicionesBiblioteca, urlPieza,
 } from "../../static/editor/biblioteca.js";
 import * as op from "../../static/editor/operaciones.js";
 import { docBase } from "./doc_base.mjs";
@@ -102,15 +102,15 @@ test("urlPieza pone el id de la pieza en la plantilla de la ruta", () => {
 });
 
 test("los textos de muestra son los presets que agregarTexto conoce", () => {
-  assert.deepEqual(TEXTOS_BIBLIOTECA.map((t) => [t.preset, t.nombre]),
+  assert.deepEqual(textosBiblioteca().map((t) => [t.preset, t.nombre]),
     [["titulo", "Título"], ["subtitulo", "Subtítulo"], ["precio", "Precio"], ["llamado", "Llamado"]]);
-  for (const t of TEXTOS_BIBLIOTECA) assert.ok(op.agregarTexto(docBase(), 0, t.preset, {}).seleccion, t.preset);
+  for (const t of textosBiblioteca()) assert.ok(op.agregarTexto(docBase(), 0, t.preset, {}).seleccion, t.preset);
 });
 
 test("las transiciones de la biblioteca son las del render, en su orden, con nombre y explicación", () => {
-  assert.deepEqual(TRANSICIONES_BIBLIOTECA.map((t) => t.tipo), op.TRANSICIONES);
-  assert.deepEqual(TRANSICIONES_BIBLIOTECA.map((t) => t.nombre), ["Corte", "Fundido", "Deslizar", "Zoom", "Fundido a negro"]);
-  for (const t of TRANSICIONES_BIBLIOTECA) assert.ok(t.descripcion.length > 5, t.tipo);
+  assert.deepEqual(transicionesBiblioteca().map((t) => t.tipo), op.TRANSICIONES);
+  assert.deepEqual(transicionesBiblioteca().map((t) => t.nombre), ["Corte", "Fundido", "Deslizar", "Zoom", "Fundido a negro"]);
+  for (const t of transicionesBiblioteca()) assert.ok(t.descripcion.length > 5, t.tipo);
 });
 
 // ---- El sondeo, con un `this` falso (la clase es DOM; estos dos métodos no lo tocan) ----
@@ -214,8 +214,8 @@ test("firmaListado: igual si nada cambió (aunque lleguen objetos nuevos), disti
 
 test("_operar: con la edición cambiada en otra pestaña, la biblioteca lo dice así (no «debajo del video»)", async () => {
   const { Biblioteca } = await import("../../static/editor/biblioteca.js");
-  const { MENSAJE_CONFLICTO } = await import("../../static/editor/propiedades_modelo.js");
-  for (const [conflicto, esperado] of [[true, MENSAJE_CONFLICTO], [false, "No se pudo agregar: el aviso está debajo del video."]]) {
+  const { mensajeConflicto } = await import("../../static/editor/propiedades_modelo.js");
+  for (const [conflicto, esperado] of [[true, mensajeConflicto()], [false, "No se pudo agregar: el aviso está debajo del video."]]) {
     const dichos = [];
     const falsa = {
       editor: { operar: () => false, doc: () => docBase(), info: () => ({}), tiempo: () => 0, seleccion: null,

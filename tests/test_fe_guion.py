@@ -558,3 +558,68 @@ def test_variar_recibe_el_contexto_de_la_derivacion(monkeypatch):
     reg = _instalar_fake(monkeypatch, [json.dumps(variante)])
     guion.variar_guion(_guion_valido(), "hook", "", angulo=ANG)
     assert "Usa el arranque" not in reg.kwargs[0]["messages"][0]["content"]
+
+
+def test_guion_base_y_variante_llevan_la_orden_de_idioma(monkeypatch):
+    """Decisión B (2026-09-28): el guion base y sus variantes no son por
+    destino — siguen la regla de la fase 3 (orden al principio y al final)."""
+    import idiomas
+    from final_edition import guion
+    variante = dict(_guion_valido(idioma="en", pais="US"), angulo_variante={"lead": "secreto", "gancho": "Look at this"})
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido(idioma="en", pais="US")), json.dumps(variante)])
+    g, _ = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "en", "", "", angulo=ANG)
+    assert reg.kwargs[0]["system"][1]["text"].count(idiomas.orden_idioma("en")) == 2
+    guion.variar_guion(g, "hook", "", angulo=ANG)
+    assert reg.kwargs[1]["system"][1]["text"].count(idiomas.orden_idioma("en")) == 2
+
+
+def test_localizar_no_lleva_la_orden_del_proyecto(monkeypatch):
+    """La localización es por destino: el idioma lo dice su propio prompt."""
+    import idiomas
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido(idioma="en", pais="US"))])
+    guion.localizar_guion(_guion_valido(), "en", "US", 89.90)
+    texto = _sys(reg.kwargs[0])
+    assert idiomas.orden_idioma("en") not in texto and idiomas.orden_idioma("es") not in texto
+
+
+def test_un_guion_base_en_portugues_no_recibe_orden(monkeypatch):
+    """`orden_idioma("pt")` caería al inglés: un guion en un idioma que la app
+    no tiene va sin orden, como antes."""
+    import idiomas
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido(idioma="pt", pais="BR"))])
+    guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "pt", "", "", angulo=ANG)
+    texto = _sys(reg.kwargs[0])
+    assert idiomas.orden_idioma("en") not in texto and idiomas.orden_idioma("es") not in texto
+
+
+def test_guion_invalido_en_el_idioma_de_quien_lo_ve(monkeypatch):
+    """Revisión final de la fase 6: el error guardado de una final cuyo guion
+    falla dos veces empezaba con «Guion inválido:» también en inglés. Se arma
+    con gettext (el worker corre en el idioma del proyecto); en español, el
+    texto de siempre, byte a byte."""
+    import idiomas
+    from final_edition import guion
+    inventado = _guion_valido()
+    inventado["bloques"][0]["texto_pantalla"] = "3x más duración"
+    with idiomas.en_idioma("en"):
+        _instalar_fake(monkeypatch, ["esto no es json", "tampoco"])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value) == "Invalid script: Invalid JSON"
+        _instalar_fake(monkeypatch, [json.dumps(inventado), json.dumps(inventado)])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value).startswith("Invalid script: The figure “3x” in the hook block")
+        assert "inválido" not in str(e.value) and "cifra" not in str(e.value)
+    with idiomas.en_idioma("es"):
+        _instalar_fake(monkeypatch, ["esto no es json", "tampoco"])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value) == "Guion inválido: JSON inválido"
+        _instalar_fake(monkeypatch, [json.dumps(inventado), json.dumps(inventado)])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value) == ("Guion inválido: La cifra «3x» del bloque hook no está en los datos: reescríbelo "
+                                "sin ella o con el dato real.")

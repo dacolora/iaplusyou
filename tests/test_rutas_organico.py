@@ -263,6 +263,30 @@ def test_org_publicar_creacion_parcial_deja_lo_creado_en_error(app, base_tempora
         [("instagram", "error"), ("instagram", "en_cola"), ("facebook", "en_cola")]
 
 
+def test_org_publicar_creacion_parcial_guarda_en_el_idioma_del_proyecto(app, base_temporal, monkeypatch):
+    """Fase 6, Task 6, fix round 1: Instagram se crea y Facebook falla. El
+    `error` que queda en la fila de Instagram lo ve cualquiera después (idioma
+    del proyecto, con el nombre de la plataforma también traducido); el flash
+    es para quien publicó (su idioma)."""
+    import idiomas
+    import organico
+    pid = _pieza(base_temporal)
+    crear_real = organico.crear
+
+    def crear(cliente, pieza_id, plataforma, *a, **kw):
+        if plataforma == "facebook":
+            raise ValueError("Se cayó la base.")
+        return crear_real(cliente, pieza_id, plataforma, *a, **kw)
+    monkeypatch.setattr(app["dashboard"].organico, "crear", crear)
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda cliente: "en")    # el proyecto, en inglés
+    app["c"].post("/cliente/acme/organico/publicar", data=dict(FORM_OK, pieza_id=str(pid)))   # quien mira: español
+    pubs = app["organico"].listar("acme", pieza_id=pid)
+    assert [(p["plataforma"], p["estado"]) for p in pubs] == [("instagram", "error")]
+    assert pubs[0]["error"] == "The post on Facebook (Page) was not created: Se cayó la base."
+    assert _flashes(app["c"]) == ["Se cayó la base. No se publicó nada."]
+    assert app["encolados"] == []
+
+
 # ---- org_reintentar ----------------------------------------------------------
 
 def test_org_reintentar_solo_en_error(app, base_temporal):

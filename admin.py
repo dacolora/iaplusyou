@@ -25,12 +25,15 @@ import io
 from datetime import datetime
 
 import sqlalchemy as sa
+from flask_babel import gettext, ngettext
 
 import cola
 import db
 import estado
 import experimentos
+import idiomas
 import meta_conexion
+from idiomas import N_
 from referentes import datos as referentes_datos
 import tablero
 
@@ -38,7 +41,9 @@ MESES_HISTORIAL = 6
 ULTIMOS_COBROS = 20
 ULTIMOS_ERRORES = 5
 ESTADOS_PIEZA_GENERADA = ("listo", "degradada")
-ENCABEZADO_CSV = ["proyecto", "fecha", "tipo", "proveedor", "referencia", "detalle", "usd"]
+# La línea entera es UN msgid (como en gastos.py: «proyecto» suelto ya existe en
+# el catálogo y chocaría); `csv_mes` la traduce al escribirla.
+ENCABEZADO_CSV = N_("proyecto;fecha;tipo;proveedor;referencia;detalle;usd").split(";")
 _INICIOS_FORMULA = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -51,7 +56,8 @@ def _inicio_mes(iso):
 
 
 def hace(iso, ahora_iso=None):
-    """«hace 5 min» / «hace 3 h» / «hace 2 días»; None sin fecha."""
+    """«hace 5 min» / «hace 3 h» / «hace 2 días»; None sin fecha. En el idioma
+    activo (el panel lo calcula en cada petición, para quien mira)."""
     if not iso:
         return None
     try:
@@ -61,13 +67,12 @@ def hace(iso, ahora_iso=None):
         return None
     seg = max(0, int((ahora - t).total_seconds()))
     if seg < 60:
-        return "hace un momento"
+        return gettext("hace un momento")
     if seg < 3600:
-        return f"hace {seg // 60} min"
+        return gettext("hace %(n)s min", n=seg // 60)
     if seg < 86400:
-        return f"hace {seg // 3600} h"
-    dias = seg // 86400
-    return f"hace {dias} día" + ("s" if dias != 1 else "")
+        return gettext("hace %(n)s h", n=seg // 3600)
+    return ngettext("hace %(num)s día", "hace %(num)s días", seg // 86400)
 
 
 # ------------------------------------------------- generación (tabla gasto) ---
@@ -294,12 +299,13 @@ def csv_mes(clientes, ahora_iso=None):
     """CSV (`;`, BOM) con todos los cobros del mes de los proyectos dados, más
     el gasto interno de _creatv (importaciones, barridos globales — nunca de
     ningún proyecto): las mismas columnas que gastos.csv_mes más la del
-    proyecto."""
+    proyecto. Encabezados en el idioma activo (en la ruta, el de quien lo
+    descarga)."""
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
-    w.writerow(ENCABEZADO_CSV)
+    w.writerow(idiomas.traducir(";".join(ENCABEZADO_CSV)).split(";"))
     todos = list(clientes) + [referentes_datos.CLIENTE_CREATV]
     g = db.gasto
     q = (sa.select(g).where(g.c.cliente.in_(todos), g.c.creado_en >= desde, g.c.creado_en <= hasta)

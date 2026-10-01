@@ -10,21 +10,22 @@
 // "sonido" (el espejo de p_sonido: no se edita, se cambia desde su video) y
 // "otro" (un video encima u otra pista que el render no hace: solo borrar).
 import { FORMATOS } from "./formatos.js";
-import { etiquetaClip, NOMBRES_TRANSICION } from "./escala.js";
+import { etiquetaClip, nombreTransicion } from "./escala.js";
 import {
   cambiaPorDestino, FUENTES, ID_SONIDO, MEZCLAS, sincronizarSonido, TRANSICIONES, VELOCIDADES,
 } from "./operaciones.js";
 import * as operaciones from "./operaciones.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
+import { separadorDecimal, t } from "./textos.js";
 import { pistaPrincipal, tamanoCapaImagen } from "./tiempo.js";
 
-export const AYUDA_VACIA = "Elige algo en la línea de tiempo o en el video para cambiarlo.";
-
-export const NOMBRES_MEZCLA = { equilibrada: "Equilibrada", voz_protagonista: "Voz primero", ambiente_protagonista: "Ambiente primero" };
+// Los nombres que ve la persona son CLAVES de textos.js: se traducen donde se
+// usan (ningún módulo llama a t() al cargarse).
+export const NOMBRES_MEZCLA = { equilibrada: "prop.mezcla_equilibrada", voz_protagonista: "prop.mezcla_voz", ambiente_protagonista: "prop.mezcla_ambiente" };
 const AYUDAS_MEZCLA = {
-  equilibrada: "Voz, sonido del video y música, cada uno en su punto.",
-  voz_protagonista: "El sonido del video y la música bajan para que la voz se entienda.",
-  ambiente_protagonista: "El sonido del video se oye entero y la música queda baja.",
+  equilibrada: "prop.ayuda_equilibrada",
+  voz_protagonista: "prop.ayuda_voz",
+  ambiente_protagonista: "prop.ayuda_ambiente",
 };
 
 // La duración de una transición (ms): el deslizador del formulario del video.
@@ -44,17 +45,17 @@ const FUNDIDO_PASO_MS = 100;
 // El tope de transform.escala en operaciones.cambiar.
 export const ESCALA = { min: 0.05, max: 5 };
 
-// Las tres fuentes de static/fonts (operaciones.FUENTES), con un nombre que se lee.
-export const NOMBRES_FUENTE = { "Inter-Bold": "Inter gruesa", "Inter-SemiBold": "Inter media", "SpaceGrotesk-Bold": "Space Grotesk" };
+// Las tres fuentes de static/fonts (operaciones.FUENTES), con la clave del nombre que se lee.
+export const NOMBRES_FUENTE = { "Inter-Bold": "prop.fuente_inter_gruesa", "Inter-SemiBold": "prop.fuente_inter_media", "SpaceGrotesk-Bold": "prop.fuente_space" };
 // La paleta del color del texto; el color de marca entra tercero (`paletaDe`).
 export const COLORES = [
-  { nombre: "Blanco", color: "#FFFFFF" },
-  { nombre: "Negro", color: "#000000" },
-  { nombre: "Amarillo", color: "#FFD60A" },
-  { nombre: "Rojo", color: "#E53935" },
+  { nombre: "prop.color_blanco", color: "#FFFFFF" },
+  { nombre: "prop.color_negro", color: "#000000" },
+  { nombre: "prop.color_amarillo", color: "#FFD60A" },
+  { nombre: "prop.color_rojo", color: "#E53935" },
 ];
 
-const NOMBRES_ROL = { musica: "Música", efecto: "Efecto", voz: "Voz", grabacion: "Grabación", sonido: "Sonido", subida: "Audio" };
+const NOMBRES_ROL = { musica: "fila.musica", efecto: "fila.efecto", voz: "fila.voz", grabacion: "fila.grabacion", sonido: "fila.sonido", subida: "fila.audio" };
 const CLAVE_DESTINO = /^[a-z]{2}(_[A-Z]{2})?$/;   // lo que acepta operaciones.editarTexto
 const COLOR_RE = /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/;
 
@@ -70,10 +71,10 @@ export function colorBase(c, defecto = "#FFFFFF") {
 
 // ---- Cómo se escriben los valores ----
 
-const decimal = (n, max) => String(Number(n.toFixed(max))).replace(".", ",");
+const decimal = (n, max) => String(Number(n.toFixed(max))).replace(".", separadorDecimal());
 
 export function textoPorcentaje(n) {
-  return `${Math.round(Number(n) || 0)} %`;
+  return t("prop.porcentaje", { n: Math.round(Number(n) || 0) });
 }
 
 export function textoSegundos(ms) {
@@ -132,7 +133,7 @@ export function modelo(doc, id, { destino = null, info = {}, materiales = {} } =
     case "imagen": return modeloImagen(doc, h, materiales);
     case "audio": return modeloAudio(h);
     case "sonido": return modeloSonido(doc, h);
-    case "otro": return { forma, clipId: h.clip.id, nombre: h.pista.tipo === "superpuesto" ? "Video encima" : "Clip" };
+    case "otro": return { forma, clipId: h.clip.id, nombre: t(h.pista.tipo === "superpuesto" ? "fila.superpuesto" : "prop.clip") };
     default: return modeloDocumento(doc);
   }
 }
@@ -143,10 +144,10 @@ function modeloDocumento(doc) {
   return {
     forma: "documento",
     clipId: null,
-    ayuda: AYUDA_VACIA,
+    ayuda: t("prop.ayuda_vacia"),
     mezcla: MEZCLAS.includes(mz.preset) ? mz.preset : "equilibrada",
     aMedida: Object.values(volumenes).some((v) => v !== null && v !== undefined),
-    opcionesMezcla: MEZCLAS.map((valor) => ({ valor, texto: NOMBRES_MEZCLA[valor], ayuda: AYUDAS_MEZCLA[valor] })),
+    opcionesMezcla: MEZCLAS.map((valor) => ({ valor, texto: t(NOMBRES_MEZCLA[valor]), ayuda: t(AYUDAS_MEZCLA[valor]) })),
   };
 }
 
@@ -168,11 +169,11 @@ function sonidoDeVideo(doc, clip, info) {
   if (espejo) return { disponible: true, porcentaje: Math.round(Number(espejo.audio?.volumen ?? 1) * 100), motivo: null };
   const sinPista = !(doc?.pistas ?? []).some((p) => p.id === ID_SONIDO);
   if (sinPista && motivoRechazo(doc, "volumenSonido", [clip.id, 0], info) === null) {
-    return { disponible: true, porcentaje: 0, motivo: "Sin sonido: súbelo para oír el sonido de este video." };
+    return { disponible: true, porcentaje: 0, motivo: t("prop.sin_sonido") };
   }
   const velocidad = Number(clip.velocidad ?? 1);
   return { disponible: false, porcentaje: 0,
-           motivo: velocidad !== 1 ? "A otra velocidad el video va sin su sonido." : "Este video no trae sonido." };
+           motivo: velocidad !== 1 ? t("prop.velocidad_sin_sonido") : t("prop.video_sin_sonido") };
 }
 
 function modeloVideo(doc, { pista, clip, indice }, info) {
@@ -185,21 +186,21 @@ function modeloVideo(doc, { pista, clip, indice }, info) {
   return {
     forma: "video",
     clipId: clip.id,
-    nombre: "Video",
+    nombre: t("fila.video"),
     velocidad,
     velocidades: VELOCIDADES.map((v) => ({ valor: v, texto: textoVelocidad(v) })),
     sonido,
     kenBurns: clip.ken_burns === "in" || clip.ken_burns === "out" ? clip.ken_burns : null,
     transicion: {
       disponible: !ultimo,
-      motivo: ultimo ? "Es el último video: no tiene transición hacia el siguiente." : null,
+      motivo: ultimo ? t("prop.ultimo_video") : null,
       tipo: conTransicion ? tr.tipo : "corte",
       duracionMs: conTransicion ? Number(tr.duracion_ms) : TRANSICION_MS.defecto,
       min: TRANSICION_MS.min, max: TRANSICION_MS.max, paso: TRANSICION_MS.paso,
     },
-    transiciones: TRANSICIONES.map((t) => ({ valor: t, texto: NOMBRES_TRANSICION[t] ?? t })),
+    transiciones: TRANSICIONES.map((tipo) => ({ valor: tipo, texto: nombreTransicion(tipo) })),
     puedeBorrar: !soloUno,
-    motivoBorrar: soloUno ? "La edición necesita al menos un clip de video." : null,
+    motivoBorrar: soloUno ? t("op.un_clip") : null,
   };
 }
 
@@ -212,23 +213,23 @@ function claveTexto(doc, destino) {
 
 function textoDe(doc, pista, clip, destino) {
   const clave = claveTexto(doc, destino);
-  const t = clip.texto ?? {};
-  if (!("variable" in t)) return { valor: String(t.literal ?? ""), editable: true, destino: clave, nota: null };
-  if (t.variable === VARIABLE_PRECIO) {
+  const tx = clip.texto ?? {};
+  if (!("variable" in tx)) return { valor: String(tx.literal ?? ""), editable: true, destino: clave, nota: null };
+  if (tx.variable === VARIABLE_PRECIO) {
     return { valor: etiquetaClip(pista, clip, doc, destino), editable: false, destino: clave,
-             nota: "Es el precio de cada país: sale de los precios de la edición y no se escribe aquí." };
+             nota: t("prop.nota_precio") };
   }
   const [idioma, pais] = clave.split("_");
-  const valor = valorDestino(doc.variables?.textos?.[t.variable], idioma, pais);
+  const valor = valorDestino(doc.variables?.textos?.[tx.variable], idioma, pais);
   return { valor: valor === null || valor === undefined ? "" : String(valor), editable: true, destino: clave,
-           nota: `Este texto cambia según el país: lo que escribas aquí vale para ${clave.replace("_", " · ")}.` };
+           nota: t("prop.nota_por_pais", { destino: clave.replace("_", " · ") }) };
 }
 
 export function paletaDe(doc, color) {
   const marca = typeof doc?.marca?.color === "string" && COLOR_RE.test(doc.marca.color)
-    ? [{ nombre: "Color de marca", color: colorBase(doc.marca.color) }] : [];
+    ? [{ nombre: "prop.color_marca", color: colorBase(doc.marca.color) }] : [];
   const lista = [...COLORES.slice(0, 2), ...marca, ...COLORES.slice(2)];
-  return lista.map((c) => ({ ...c, elegido: c.color === color }));
+  return lista.map((c) => ({ ...c, nombre: t(c.nombre), elegido: c.color === color }));
 }
 
 // Capa 4c: el video final dibuja los textos con Inter / Space Grotesk, que no
@@ -237,7 +238,9 @@ export function paletaDe(doc, color) {
 // previa sí los muestra (el navegador cae a la fuente de emojis del equipo):
 // el panel lo avisa. ® ™ © no cuentan (las fuentes los traen).
 const EMOJI_RE = /(?![\u00A9\u00AE\u2122])\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
-export const AVISO_EMOJI = "Los emojis no salen en el video final: se quitan al producirlo.";
+export function avisoEmoji() {
+  return t("prop.aviso_emoji");
+}
 
 export function tieneEmoji(texto) {
   return typeof texto === "string" && EMOJI_RE.test(texto);
@@ -247,17 +250,17 @@ function modeloTexto(doc, { pista, clip }, destino) {
   const [, alto] = lienzo(doc.formato);
   const e = clip.estilo ?? {};
   const color = colorBase(e.color);
-  const t = clip.transform ?? {};
+  const tf = clip.transform ?? {};
   const fondo = e.fondo && typeof e.fondo === "object" ? e.fondo : null;
   const texto = textoDe(doc, pista, clip, destino);
   return {
     forma: "texto",
     clipId: clip.id,
-    nombre: "Texto",
+    nombre: t("fila.texto"),
     texto,
-    avisoEmoji: tieneEmoji(texto.valor) ? AVISO_EMOJI : null,
+    avisoEmoji: tieneEmoji(texto.valor) ? avisoEmoji() : null,
     fuente: typeof e.fuente === "string" ? e.fuente : null,
-    fuentes: FUENTES.map((f) => ({ valor: f, texto: NOMBRES_FUENTE[f] ?? f })),
+    fuentes: FUENTES.map((f) => ({ valor: f, texto: NOMBRES_FUENTE[f] ? t(NOMBRES_FUENTE[f]) : f })),
     tamano: { px: Math.round(acotar(Number(e.tamano ?? 0.04) * alto, TAMANO_TEXTO_PX.min, TAMANO_TEXTO_PX.max)),
               min: TAMANO_TEXTO_PX.min, max: TAMANO_TEXTO_PX.max },
     color,
@@ -276,7 +279,7 @@ function modeloTexto(doc, { pista, clip }, destino) {
     },
     alineacion: ["izquierda", "centro", "derecha"].includes(e.alineacion) ? e.alineacion : "centro",
     animacion: clip.animacion?.entrada ?? "ninguna",
-    centrado: { x: casi(t.x ?? 0.5, 0.5), y: casi(t.y ?? 0.5, 0.5) },
+    centrado: { x: casi(tf.x ?? 0.5, 0.5), y: casi(tf.y ?? 0.5, 0.5) },
   };
 }
 
@@ -305,23 +308,23 @@ export function cambioLlenar(clip, material, formato) {
 
 function modeloImagen(doc, { clip }, materiales) {
   const material = materiales?.[clip.material_id] ?? null;
-  const t = clip.transform ?? {};
-  const escala = Number(t.escala ?? 1);
+  const tf = clip.transform ?? {};
+  const escala = Number(tf.escala ?? 1);
   const [ancho, alto] = lienzo(doc.formato);
   const [w, h] = tamanoCapaImagen(clip, material);
   const cubrir = Math.max(ancho / w, alto / h);
   const llenar = cambioLlenar(clip, material, doc.formato).transform;
-  const centrada = casi(t.x ?? 0.5, 0.5) && casi(t.y ?? 0.5, 0.5);
+  const centrada = casi(tf.x ?? 0.5, 0.5) && casi(tf.y ?? 0.5, 0.5);
   return {
     forma: "imagen",
     clipId: clip.id,
-    nombre: "Imagen",
+    nombre: t("clip.imagen"),
     tamano: {
       porcentaje: Math.round(porcentajeDe(escala, clip, material, doc.formato)),
       min: Math.max(1, Math.ceil(porcentajeDe(ESCALA.min, clip, material, doc.formato))),
       max: Math.floor(porcentajeDe(ESCALA.max, clip, material, doc.formato)),
     },
-    opacidad: Math.round(Number(t.opacidad ?? 1) * 100),
+    opacidad: Math.round(Number(tf.opacidad ?? 1) * 100),
     centrada,
     llena: centrada && casi(escala, llenar.escala),
     llenar: { alcanza: cubrir <= ESCALA.max },
@@ -335,7 +338,7 @@ function modeloAudio({ clip }) {
   return {
     forma: "audio",
     clipId: clip.id,
-    nombre: NOMBRES_ROL[rol] ?? "Audio",
+    nombre: t(NOMBRES_ROL[rol] ?? "fila.audio"),
     volumen: Math.round(volumen * 100),
     silenciado: volumen === 0,
     fundidos: {
@@ -344,7 +347,7 @@ function modeloAudio({ clip }) {
       max: Math.min(FUNDIDO_MAX_MS, Math.floor(Number(clip.duracion_ms) / 2 / FUNDIDO_PASO_MS) * FUNDIDO_PASO_MS),
       paso: FUNDIDO_PASO_MS,
     },
-    nota: cambiaPorDestino(clip) ? "La voz se ajusta sola a cada país." : null,
+    nota: cambiaPorDestino(clip) ? t("prop.nota_voz") : null,
   };
 }
 
@@ -407,13 +410,15 @@ export function motivoRechazo(doc, nombre, args, info = {}) {
 // Lo que dicen el panel y la biblioteca cuando otra pestaña guardó antes (el
 // guardado quedó en «conflicto» y la página ya no deja editar): el aviso de
 // debajo del video no sirve de nada si la hoja del celular lo tapa.
-export const MENSAJE_CONFLICTO = "La edición cambió en otra pestaña: recarga la página para seguir.";
+export function mensajeConflicto() {
+  return t("prop.conflicto");
+}
 
 // El mensaje para una operación que la página no aplicó: el conflicto si lo
 // hay; si no, el porqué de la operación (motivoRechazo) o `otro`.
 export function mensajeRechazo(doc, nombre, args, info = {}, {
-  conflicto = false, otro = "No se pudo hacer ese cambio: el aviso está debajo del video.",
+  conflicto = false, otro = t("prop.rechazo"),
 } = {}) {
-  if (conflicto) return MENSAJE_CONFLICTO;
+  if (conflicto) return mensajeConflicto();
   return motivoRechazo(doc, nombre, args, info) ?? otro;
 }

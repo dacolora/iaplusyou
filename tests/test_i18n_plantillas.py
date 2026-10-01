@@ -17,7 +17,7 @@ PLANTILLAS_TRADUCIDAS = [
     "_llave_tarjeta.html", "_meta_conectar.html", "_meta_elegir_forma.html",
     "_meta_agencia_cliente.html", "_meta_propia_guia.html",
     "_tab_settings.html", "_seccion_marca.html", "_comparacion_modelos.html",
-    "_tab_flowplus.html", "_tab_creativeflowplus.html", "_flowplus_bandeja.html",
+    "_tab_flowplus.html", "_tab_creativeflowplus.html", "_flowplus_bandeja.html", "_aviso_sin_saldo.html",
     "_selector_productos.html", "_selector_productos_nuevo.html", "_mi_musica.html",
     "_crear_flowplus.html", "_crear_flowplus_guiones.html", "_gpg_panel.html", "_gpg_notion.html",
     "_gpg_guion.html", "_gpg_video.html", "_gpg_clips.html", "_gpg_imagenes.html", "_gpg_macros.html",
@@ -47,6 +47,33 @@ PLANTILLAS_TRADUCIDAS = [
     # sprint, Traer referentes y Mis barridos.
     "_tab_referentes.html", "_referente_ficha.html", "_referente_recrear.html", "_referente_usar_en_sprint.html",
     "_referentes_barridos.html", "_referentes_grid.html", "_referentes_traer.html",
+    # Fase 6, Task 1: Final edition (pestaña, tarjetas y detalles por fetch) y
+    # los parciales de Crear por fetch (tarjetas ligeras, 2026-09-28), más la
+    # página del proyecto que los envuelve.
+    "_tab_final.html", "_final_tarjetas.html", "_final_detalle.html", "_final_macros.html",
+    "_final_tarjetas_respuesta.html", "_final_detalle_respuesta.html",
+    "_crear_tarjetas.html", "_crear_detalle.html", "_crear_tarjetas_respuesta.html", "_crear_detalle_respuesta.html",
+    "cliente.html", "_etiquetas_estado.html",
+    # Merge de main (2026-09-28, PR #1 Triple Whale): la pestaña y su panel ya
+    # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
+    "_tab_triple_whale.html", "_tw_panel.html",
+    "editor.html",   # Fase 6, Task 2: la página del editor
+    "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
+    "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
+    # Fase 6, Task 6: llegaron con fusiones de main ya traducidas y solo faltaba
+    # sumarlas a la guardia — Crear › Audios (worktree-crear-audios, 82491a6) y el
+    # formulario de conexión de Triple Whale en su pestaña (4ecd154).
+    "_crear_audios.html", "_audios_lista.html", "_triple_whale_conectar.html",
+    # Merge de main (2026-09-30, Nicho: avatares del proyecto): la ficha compartida
+    # y la página «Avatares del proyecto» ya vienen con _() (0 hallazgos del detector).
+    "_avatar_ficha.html", "nicho_avatares_proyecto.html",
+    # Merge de main (2026-09-30, Flow Plus: imágenes por escena): ya viene con _()
+    # (0 hallazgos del detector), como el resto de los _gpg_*.
+    "_gpg_escenas.html",
+    # Catálogo por colores (rama catalogo-colores, spec 2026-09-28): la galería, sus
+    # tarjetas y la ficha del producto reemplazan a _catalogo_lista.html y
+    # _catalogo_sin_fotos.html (borradas); ya vienen con _() y su inglés en el catálogo.
+    "_catalogo_grid.html", "_catalogo_tarjeta.html", "_catalogo_ficha.html",
 ]
 
 
@@ -95,3 +122,33 @@ def test_tojson_no_dentro_de_atributo_con_comillas_dobles():
         "Un `{{ ... | tojson }}` dentro de un atributo HTML con comillas dobles se rompe "
         "(tojson emite \" que cierra el atributo a la mitad) — usa comillas simples en el "
         "atributo:\n" + "\n".join(hallazgos))
+
+
+LEGADO_NUEVA_IDEA = ("_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html",
+                     "_imagen_row.html", "_progreso_row.html", "_seccion_videos.html", "_video_card.html",
+                     "_seccion_bitacora.html")
+EXCLUIDAS = {
+    "mapa_codigo.html": "documentación interna en español, como los textos de la doctrina; su barra de arriba "
+                        "(id mapa-barra) sí está traducida y la cubre test_barra_del_mapa_en_ingles",
+    **{nombre: "flujo viejo sin pantalla viva; destino pendiente de Daniel" for nombre in LEGADO_NUEVA_IDEA},
+}
+
+
+def test_todas_las_plantillas_estan_en_la_guardia():
+    todas = sorted(os.path.basename(p) for p in glob.glob(os.path.join(RAIZ, "templates", "*.html")))
+    faltan = [t for t in todas if t not in PLANTILLAS_TRADUCIDAS and t not in EXCLUIDAS]
+    assert not faltan, ("Plantillas sin guardia de idioma (agregarlas a PLANTILLAS_TRADUCIDAS, o a EXCLUIDAS con "
+                        "su razón): " + ", ".join(faltan))
+    assert not set(EXCLUIDAS) & set(PLANTILLAS_TRADUCIDAS)
+
+
+def test_flujo_viejo_nueva_idea_excluido():
+    """El flujo «Nueva idea» no tiene ningún include vivo
+    (tests/test_configuracion_apartados.py::test_crear_ya_no_muestra_nueva_idea):
+    sus 9 plantillas siguen en disco, sin traducir y fuera de la guardia,
+    hasta que Daniel decida qué pasa con ese flujo. Sus rutas sí pasan sus
+    mensajes por el catálogo (tests/test_i18n_mensajes.py)."""
+    for nombre in LEGADO_NUEVA_IDEA:
+        assert os.path.exists(os.path.join(RAIZ, "templates", nombre)), nombre
+        assert EXCLUIDAS.get(nombre) == "flujo viejo sin pantalla viva; destino pendiente de Daniel", nombre
+        assert nombre not in PLANTILLAS_TRADUCIDAS, nombre

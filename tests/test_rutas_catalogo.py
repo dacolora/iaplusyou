@@ -112,10 +112,10 @@ def test_crear_con_deja_el_color_marcado_para_crear(app):
     r = c.post("/cliente/acme/catalogo/producto/original/crear-con", data={"variante": "beige"})
     assert r.status_code == 302 and r.headers["Location"].endswith("#creativeflowplus")
     with c.session_transaction() as s:
-        assert s["fp_prefill"] == {"productos_catalogo": ["producto:original/beige"]}
+        assert s["fp_prefill"] == {"cliente": "acme", "productos_catalogo": ["producto:original/beige"]}
     r = c.post("/cliente/acme/catalogo/producto/original/crear-con", data={})
     with c.session_transaction() as s:
-        assert s["fp_prefill"] == {"productos_catalogo": ["producto:original/pink"]}
+        assert s["fp_prefill"] == {"cliente": "acme", "productos_catalogo": ["producto:original/pink"]}
     html = c.get("/cliente/acme").data.decode()
     assert '"productos_catalogo": ["producto:original/pink"]' in html      # el prefill llega al JS de Crear
     c.post("/cliente/acme/catalogo/producto/nada/crear-con", data={})
@@ -138,7 +138,8 @@ def test_selector_de_crear_agrupa_los_colores_por_producto(app):
     assert 'value="producto:original/pink"' in grupo and 'value="producto:original/beige"' in grupo
     assert 'data-nombre="original original — pink"' in grupo and "<span>Pink</span>" in grupo
     assert 'value="producto:cojin"' in dialogo and 'class="producto-grupo"' not in dialogo.split('value="producto:cojin"', 1)[0].rsplit("<label", 1)[1]
-    assert "var prefillCat = " in html and "input[name=productos_catalogo][value=" in html
+    # «Crear con este producto» marca los colores desde la misma precarga de Crear (_prefill_para).
+    assert "prefill.productos_catalogo.forEach" in html and "input[name=productos_catalogo][value=" in html
 
 
 def test_prod_rutas_vuelven_a_la_ficha_si_la_fila_tiene_activo(app):

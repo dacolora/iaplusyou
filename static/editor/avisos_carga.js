@@ -5,6 +5,7 @@
 // recalcula en cada refresco con `avisosCarga` sobre el documento vigente.
 // Puro, sin DOM: lo prueba Node (tests/js/avisos_carga.test.mjs).
 import { clipsQuePidenDeMas, faltaDuracionAnimacion, normalizar } from "./operaciones.js";
+import { t } from "./textos.js";
 
 // Los materiales que la edición usa DE VERDAD: los de sus clips (y las voces
 // de cada país), los PNG de textos y el logo de la marca. No la lista
@@ -32,9 +33,17 @@ export function faltantes(doc, materiales) {
   return [...materialesUsados(doc)].filter((id) => !materiales?.[id]).sort((a, b) => a - b);
 }
 
-export const TEXTO_PIDE_DE_MAS = "Un clip pide más video del que tiene su archivo: se acorta solo con tu próximo cambio.";
-export const TEXTO_SE_ACORTO = "Un clip pedía más video del que tiene su archivo: se acortó solo.";
-export const TEXTO_NO_CABE = "Un clip pide más de lo que tiene su archivo, que es demasiado corto para acortarlo solo: bórralo o cámbialo por otro para poder producir.";
+export function textoPideDeMas() {
+  return t("vista.carga_pide_de_mas");
+}
+
+export function textoSeAcorto() {
+  return t("vista.carga_se_acorto");
+}
+
+export function textoNoCabe() {
+  return t("vista.carga_no_cabe");
+}
 
 const pideDeMas = (doc, info) => clipsQuePidenDeMas(doc, info).length > 0;
 
@@ -58,18 +67,16 @@ export function arreglarAlAbrir(doc, info) {
 // sin rojo, hasta el próximo cambio. Un clip que ni acortado al mínimo cabe
 // en su archivo no se promete arreglar: se pide borrarlo o cambiarlo.
 export function avisosCarga(doc, info, materiales, { acortado = false } = {}) {
-  let recortes = acortado ? { texto: TEXTO_SE_ACORTO, error: false } : null;
+  let recortes = acortado ? { texto: textoSeAcorto(), error: false } : null;
   if (pideDeMas(doc, info)) {
     const tieneArreglo = !pideDeMas(normalizar(structuredClone(doc), info), info);
-    recortes = { texto: tieneArreglo ? TEXTO_PIDE_DE_MAS : TEXTO_NO_CABE, error: true };
+    recortes = { texto: tieneArreglo ? textoPideDeMas() : textoNoCabe(), error: true };
   }
   const n = faltantes(doc, materiales).length;
   return {
     recortes,
     faltan: n === 0 ? null : {
-      texto: n === 1
-        ? "Falta 1 archivo de esta edición (se borró o no es de este proyecto): esa parte no se verá."
-        : `Faltan ${n} archivos de esta edición (se borraron o no son de este proyecto): esas partes no se verán.`,
+      texto: n === 1 ? t("vista.carga_falta_uno") : t("vista.carga_faltan", { n }),
       error: true,
     },
   };

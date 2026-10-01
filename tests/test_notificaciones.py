@@ -164,3 +164,20 @@ def test_tipos_nuevos_registrados():
     import notificaciones
     for tipo in ("meta_solicitud", "meta_conexion_cliente", "meta_cambio_forma", "meta_conectado"):
         assert tipo in notificaciones.TIPOS
+
+
+def test_avisar_admin_en_el_idioma_de_cada_admin(admins_falsos, monkeypatch):
+    """Spec 2026-09-26 §B8: cada admin recibe el aviso en su idioma; la
+    bitácora queda en el idioma por defecto."""
+    import idiomas
+    import notificaciones
+    import usuarios
+    from flask_babel import gettext
+    monkeypatch.setattr(usuarios, "cargar", lambda: {
+        "daniel": {"rol": "admin", "correo": "d@creatv.co", "correo_verificado": True},
+        "ana": {"rol": "admin", "correo": "a@creatv.co", "correo_verificado": True}})
+    monkeypatch.setattr(idiomas, "de_usuario", lambda u: {"daniel": "en"}.get(u, "es"))
+    n = notificaciones.avisar_admin("meta_solicitud", lambda: gettext("Idioma guardado."), lambda: "x", cliente="acme")
+    assert n == 2
+    assert sorted(admins_falsos["enviados"]) == [("a@creatv.co", "Idioma guardado."), ("d@creatv.co", "Language saved.")]
+    assert admins_falsos["registros"][-1][4] == "Idioma guardado."

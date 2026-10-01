@@ -191,6 +191,19 @@ def test_hace_en_espanol(admin):
     assert admin.hace("2026-09-19T07:00:00", AHORA) == "hace 3 h"
     assert admin.hace("2026-09-16T10:00:00", AHORA) == "hace 3 días"
     assert admin.hace(None, AHORA) is None
+    # Fase 6, fix round 1: por el catálogo, el español sigue igual letra por letra.
+    assert admin.hace("2026-09-19T09:59:50", AHORA) == "hace un momento"
+    assert admin.hace("2026-09-18T09:00:00", AHORA) == "hace 1 día"
+
+
+def test_hace_en_ingles(admin):
+    import idiomas
+    with idiomas.en_idioma("en"):
+        assert admin.hace("2026-09-19T09:59:50", AHORA) == "just now"
+        assert admin.hace("2026-09-19T09:58:30", AHORA) == "1 min ago"
+        assert admin.hace("2026-09-19T07:00:00", AHORA) == "3 h ago"
+        assert admin.hace("2026-09-18T09:00:00", AHORA) == "1 day ago"
+        assert admin.hace("2026-09-16T10:00:00", AHORA) == "3 days ago"
 
 
 def test_pauta_toma_la_moneda_de_la_pieza_o_de_meta_json_cuando_el_experimento_no_la_tiene(admin, base_temporal, monkeypatch):

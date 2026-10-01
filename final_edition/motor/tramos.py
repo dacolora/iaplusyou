@@ -5,6 +5,8 @@ entrada `-ss/-t`, ~85 MB (ffmpeg 8 con 1 CPU, el VPS: 4 cortes 663 MB, 8 984,
 2026-09-30). Por encima de PRESUPUESTO_OVERLAYS o de PRESUPUESTO_VIDEOS el
 documento se renderiza por ventanas de tiempo y se concatena sin recodificar.
 Puro."""
+from flask_babel import gettext
+
 from final_edition.documento import duracion_ms, pista_principal
 
 PRESUPUESTO_OVERLAYS = 60
@@ -111,7 +113,7 @@ def partir(doc, presupuesto=None, presupuesto_videos=None):
     if total <= 0 or cabe(0, total):
         return [(0, max(total, 0))]
     if _max_simultaneas(doc, 0, total) > presupuesto:
-        raise ValueError(f"Hay más de {presupuesto} capas en el mismo instante; quita algunas.")
+        raise ValueError(gettext("Hay más de %(n)s capas en el mismo instante; quita algunas.", n=presupuesto))
     fronteras = _fronteras_seguras(doc, total)
     # De frontera en frontera: el primer paso de cada tramo se toma siempre
     # (si ni eso cabe, lo subdivide el bucle de abajo); los siguientes solo

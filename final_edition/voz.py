@@ -11,6 +11,7 @@ import os
 import uuid
 
 import requests
+from flask_babel import gettext
 
 from final_edition import cortes
 from providers import fal_audio
@@ -41,11 +42,11 @@ def sintetizar(guion, voz, carpeta, on_progreso=None, cliente=None):
     `cliente` (kwarg o `guion["cliente"]`) decide la carpeta temporal de R2."""
     cliente = cliente or guion.get("cliente")
     if not cliente:
-        raise ValueError("voz.sintetizar: falta `cliente` (kwarg o guion['cliente']).")
+        raise ValueError(gettext("voz.sintetizar: falta `cliente` (kwarg o guion['cliente'])."))
     idioma = guion.get("idioma") or "es"
     bloques = guion.get("bloques") or []
     if not bloques:
-        raise ValueError("voz.sintetizar: el guion no tiene bloques.")
+        raise ValueError(gettext("voz.sintetizar: el guion no tiene bloques."))
     os.makedirs(carpeta, exist_ok=True)
 
     pistas, palabras = [], []

@@ -56,8 +56,9 @@ from tareas import registrar
 
 log = logging.getLogger("creatv.tareas.tiendas")
 
-ETAPAS_IMPORTAR = [("Leyendo", 20), ("Guardando productos", 30), ("Creando activos", 50)]
-ETAPAS_VINCULAR = [("Bajando fotos", 60), ("Creando el activo", 40)]
+ETAPAS_IMPORTAR = [(idiomas.N_("Leyendo"), 20), (idiomas.N_("Guardando productos"), 30),
+                   (idiomas.N_("Creando activos"), 50)]
+ETAPAS_VINCULAR = [(idiomas.N_("Bajando fotos"), 60), (idiomas.N_("Creando el activo"), 40)]
 CADA_SYNC_PRODUCTOS = 21600   # 6 h
 CADA_SYNC_PEDIDOS = 7200      # 2 h
 DIAS_PEDIDOS_INICIAL = 30
@@ -123,7 +124,7 @@ QUE_SINCRONIZA = {"productos": idiomas.N_("productos"), "pedidos": idiomas.N_("p
 def _conector(cliente, tienda, cargar_descripciones=False):
     creds = tiendas.credenciales(cliente, tienda["id"])
     if not creds:
-        raise ErrorConector("La tienda no tiene credenciales guardadas. Vuelve a conectarla.")
+        raise ErrorConector(gettext("La tienda no tiene credenciales guardadas. Vuelve a conectarla."))
     cls = conectores.por_tipo(tienda["tipo"])
     if tienda["tipo"] == "meli":
         # Solo MELI cobra la descripción aparte (una llamada por ítem).
@@ -159,7 +160,7 @@ def _marcar_rota(cliente, tienda, tarea, que, error):
 
 
 def _nombre(tienda):
-    return tienda.get("nombre") or tienda.get("dominio") or f"tienda {tienda['id']}"
+    return tienda.get("nombre") or tienda.get("dominio") or gettext("tienda %(id)s", id=tienda["id"])
 
 
 # --- sync productos ----------------------------------------------------------
@@ -187,7 +188,7 @@ def tienda_sync_productos(tarea):
     except _ERRORES_TIENDA as error:
         mensaje = _marcar_rota(cliente, tienda, tarea, "productos", error)
         raise ErrorConector(mensaje) from error
-    trabajos.reportar(job_id, etapa="Leyendo", detalle=_nombre(tienda))
+    trabajos.reportar(job_id, etapa=idiomas.N_("Leyendo"), detalle=_nombre(tienda))
     try:
         lista = con.listar_productos()
     except ErrorConector as error:
@@ -333,10 +334,11 @@ def producto_vincular(tarea):
     prod = tiendas.producto(cliente, pid)
     if prod is None:
         raise ErrorConector(gettext("Ese producto ya no existe."))
-    trabajos.reportar(job_id, etapa="Bajando fotos", detalle=prod.get("nombre") or f"producto {pid}")
+    trabajos.reportar(job_id, etapa=idiomas.N_("Bajando fotos"),
+                      detalle=prod.get("nombre") or gettext("producto %(id)s", id=pid))
     errores = []
     activo_id = importador.vincular_activo(cliente, pid, forzar_fotos=True, errores=errores)
-    trabajos.reportar(job_id, etapa="Creando el activo")
+    trabajos.reportar(job_id, etapa=idiomas.N_("Creando el activo"))
     if not activo_id:
         raise ErrorConector(gettext("No pude crear el activo: %(detalle)s",
                                     detalle=" ".join(errores) or gettext("el producto no tiene fotos descargables.")))

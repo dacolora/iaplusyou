@@ -75,6 +75,10 @@ TARIFAS = {
     "regla_producto": 0.01,
     "caption_organico": 0.01,
     "adaptar_referente": 0.01,
+    # «Recrear» fiel (spec 2026-09-30): una llamada de visión que describe la
+    # composición y lee los textos de la referencia, una vez por referente.
+    # Inicial; se ajusta con lo medido en la prueba real.
+    "leer_referente": 0.01,
     "sugerir_ia": 0.04,
     "clasificacion": 0.012,
     # La de siempre + la salida del segundo idioma (~60 tokens más por anuncio,
@@ -244,6 +248,7 @@ _ESTIMADORES = {
     "regla_producto": lambda **_: (TARIFAS["regla_producto"], "una llamada corta a Claude"),
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
+    "leer_referente": lambda **_: (TARIFAS["leer_referente"], "una llamada corta a Claude con visión"),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
     "refinar_prompt": lambda **_: (TARIFAS["refinar_prompt"], "un mensaje a Claude"),
     "clasificacion": lambda n=1, bilingue=False, **_: (
@@ -423,7 +428,9 @@ def por_proyecto_mes(clientes, ahora_iso=None):
 
 # ----------------------------------------------------------------- CSV ---
 
-ENCABEZADO_CSV = ["fecha", "tipo", "proveedor", "referencia", "detalle", "usd"]
+# La línea entera es UN msgid (una palabra suelta como «proyecto» ya existe en
+# el catálogo como plural y chocaría); `csv_mes` la traduce al escribirla.
+ENCABEZADO_CSV = N_("fecha;tipo;proveedor;referencia;detalle;usd").split(";")
 _INICIOS_FORMULA = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -438,12 +445,14 @@ def _celda(v):
 def csv_mes(cliente, ahora_iso=None):
     """CSV (`;`) con una fila por cobro del mes en curso, con BOM para que
     Excel lo abra en UTF-8. `usd` con coma decimal y 4 decimales (M5: mismo
-    separador que `tablero.csv_mes`, coherente con el `;` de delimitador)."""
+    separador que `tablero.csv_mes`, coherente con el `;` de delimitador).
+    Encabezados en el idioma activo (en la ruta, el de quien lo descarga); los
+    `detalle` guardados salen tal cual."""
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
-    w.writerow(ENCABEZADO_CSV)
+    w.writerow(idiomas.traducir(";".join(ENCABEZADO_CSV)).split(";"))
     g = db.gasto
     q = (sa.select(g).where(g.c.cliente == cliente, g.c.creado_en >= desde, g.c.creado_en <= hasta)
          .order_by(g.c.creado_en.asc(), g.c.id.asc()))

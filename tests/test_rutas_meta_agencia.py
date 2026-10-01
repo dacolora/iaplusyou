@@ -435,6 +435,19 @@ def test_panel_enlaza_al_panel_de_agencia(app, monkeypatch):
     assert 'href="/admin/meta"' in html and "Meta (agencia)" in html
 
 
+def _atributos(html, nombre):
+    """El valor (ya decodificado) de cada atributo `nombre` del HTML."""
+    from html.parser import HTMLParser
+    valores = []
+
+    class _P(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            valores.extend(v for k, v in attrs if k == nombre and v is not None)
+
+    _P(convert_charrefs=True).feed(html)
+    return valores
+
+
 def test_nombre_de_proyecto_no_entra_en_el_js_del_confirm(app, monkeypatch):
     """Un nombre de proyecto con comilla y paréntesis (lo pone el cliente) no
     puede romper el literal JS del confirm() de "Volver a propia": va en
@@ -444,8 +457,16 @@ def test_nombre_de_proyecto_no_entra_en_el_js_del_confirm(app, monkeypatch):
     _asignar_en_disco("acme")
     proyectos.guardar_nombre("acme", "x'); alert(1); ('")
     html = app["admin"].get("/admin/meta").get_data(as_text=True)
-    assert "alert(1)" not in html.split("confirm('")[1].split("')")[0]
-    assert "this.dataset.nombre" in html and "data-nombre=\"x&#39;); alert(1); (&#39;\"" in html
+    # Fase 6 (idioma): cada onsubmit de la página (con comillas de cualquier
+    # tipo, ya decodificado por html.parser) no trae el nombre ni un trozo de él;
+    # el de «Volver a propia» lo lee de data-nombre, con una función como
+    # reemplazo (un «$&» o «$'» del nombre no se interpreta como patrón).
+    onsubmits = _atributos(html, "onsubmit")
+    assert onsubmits and any("this.dataset.nombre" in js for js in onsubmits)
+    for js in onsubmits:
+        assert "x'); alert(1); ('" not in js and "alert(1)" not in js
+    assert '.replace("{nombre}", () => this.dataset.nombre)' in "".join(onsubmits)
+    assert "data-nombre=\"x&#39;); alert(1); (&#39;\"" in html
 
 
 # ---- solicitudes de clientes (spec §2.4) ----

@@ -163,15 +163,15 @@ def ejecutar_reescribir_idea(tarea):
         ent, sal = ideas.reescribir(cliente, cp_id)
     except ideas.AnalisisInvalido as e:
         ent, sal = getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0
-        detalle = ("reescribir idea · la idea ya tenía pieza" if isinstance(e, ideas.IdeaConPieza)
-                   else "reescribir idea · respuesta inválida")
+        detalle = (gettext("reescribir idea · la idea ya tenía pieza") if isinstance(e, ideas.IdeaConPieza)
+                   else gettext("reescribir idea · respuesta inválida"))
         if ent or sal:
             gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
                                     detalle=detalle,
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
     gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
-                            detalle="reescribir idea desde su ángulo",
+                            detalle=gettext("reescribir idea desde su ángulo"),
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     return gettext("Idea reescrita desde su ángulo.")
 
@@ -196,9 +196,9 @@ def ejecutar_proponer_ideas(tarea):
         creadas = ideas.proponer(cliente, campana_id, n_videos=p.get("n_videos"), n_imagenes=p.get("n_imagenes"),
                                  reemplaza=p.get("reemplaza"), uso=uso)
     except Exception:
-        _registrar("proponer ideas · la respuesta no sirvió")
+        _registrar(gettext("proponer ideas · la respuesta no sirvió"))
         raise
-    _registrar(f"proponer {len(creadas)} idea(s)")
+    _registrar(gettext("proponer %(n)s idea(s)", n=len(creadas)))
     c = datos.campana(cliente, campana_id)
     if c:
         estado.recalcular(cliente, c["sprint_id"])
@@ -266,12 +266,12 @@ def ejecutar_sugerir_biblioteca(tarea):
         if ent or sal:
             usd = costo_real(ent, sal)
             gastos.registrar_seguro(cliente, "sugerir_ia", usd, f"referentes:sugerir_ia:{cid}{ref_sufijo(tarea)}",
-                                    detalle="respuesta inválida", proveedor="anthropic",
+                                    detalle=gettext("respuesta inválida"), proveedor="anthropic",
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
     usd = costo_real(ent, sal)
     gastos.registrar_seguro(cliente, "sugerir_ia", usd, f"referentes:sugerir_ia:{cid}{ref_sufijo(tarea)}",
-                            detalle=f"{len(elegidos)} sugerencia(s)", proveedor="anthropic",
+                            detalle=gettext("%(n)s sugerencia(s)", n=len(elegidos)), proveedor="anthropic",
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     extra_actual = dict(c.get("extra") or {})
     extra_actual["sugerencias_ia"] = elegidos
@@ -329,13 +329,14 @@ def ejecutar_qa_pieza(tarea):
         resultado = dict(qa.evaluar(cliente, i, entry, campana, umbral=umbral))
     except Exception as e:
         _gasto_qa(cliente, referencia, getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0,
-                  "control de calidad · respuesta inválida")
+                  gettext("control de calidad · respuesta inválida"))
         datos.guardar_qa(cliente, cp_id, cf_id, {"veredicto": "error", "score": None, "checks": {}, "nota": str(e)[:300],
                                                  "cf_id": cf_id})
         raise
     revision = resultado.pop("doctrina", None)
     _gasto_qa(cliente, referencia, resultado.pop("tokens_entrada", 0) or 0, resultado.pop("tokens_salida", 0) or 0,
-              "control de calidad del sprint" + (" y doctrina" if revision else ""))
+              gettext("control de calidad del sprint y doctrina") if revision
+              else gettext("control de calidad del sprint"))
     resultado["cf_id"] = cf_id
     if not datos.guardar_qa(cliente, cp_id, cf_id, resultado):
         bitacora.registrar(cliente, cf_id, "sprint_qa", "descartado",
