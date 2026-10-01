@@ -35,11 +35,16 @@ TOKENS_DOCTRINA = int(len(doctrina.texto("investigar").split()) * 1.4)
 TOKENS_PROMPT = 800 + TOKENS_DOCTRINA   # instrucciones + doctrina por llamada
 TOKENS_SALIDA_ESTIMADO_NUCLEOS = 1500  # lo que suele ocupar la pasada 1
 TOKENS_SALIDA_ESTIMADO_SUBS = 3000     # por núcleo, pasada 2
-MAX_TOKENS_NUCLEOS = 4000              # tope de salida real (no es costo: es el corte)
-MAX_TOKENS_SUBS = 8000
+# Los tres topes de salida de abajo son un corte, no el costo (el estimado sigue en
+# TOKENS_SALIDA_ESTIMADO_*): el pensamiento adaptativo de claude-sonnet-5 gasta del mismo tope
+# y con uno chico la respuesta llega vacía (prueba real 2026-10-01, estudio 3 de colorado_forja:
+# núcleos se cortó con 4 000 para apenas 94 comentarios). 16 000 queda bajo el límite del SDK
+# sin streaming (≈ 21 333), como en investigacion.MAX_TOKENS_SELECCION.
+MAX_TOKENS_NUCLEOS = 16000
+MAX_TOKENS_SUBS = 16000
 TOKENS_SUB_JSON = 900                  # un sub-avatar incompleto dentro del prompt de completado
 TOKENS_SALIDA_ESTIMADO_COMPLETAR = 1500  # por núcleo, pasada de completado
-MAX_TOKENS_COMPLETAR = 6000
+MAX_TOKENS_COMPLETAR = 16000           # mismo tope y mismo motivo que arriba
 MAX_COMENTARIOS_COMPLETAR = 200        # comentarios que acompañan un completado de avatares ya guardados
 MARCA_COMPLETAR = "Estos sub-avatares quedaron incompletos"
 

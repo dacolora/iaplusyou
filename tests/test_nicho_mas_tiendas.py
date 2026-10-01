@@ -189,6 +189,15 @@ def test_topes_de_salida_de_claude_alcanzan_con_varias_tiendas():
     assert inv.MAX_TOKENS_CONSULTAS >= 4000
 
 
+def test_topes_de_salida_de_avatares_no_se_cortan_por_el_pensamiento():
+    """Segunda prueba de centavos en producción (2026-10-01, estudio 3 de colorado_forja): núcleos se
+    cortó con el tope viejo (4 000) para apenas 94 comentarios porque el pensamiento adaptativo de
+    claude-sonnet-5 gasta del mismo tope (`_llamar` no manda `thinking`); mismo remedio que arriba."""
+    from nicho import avatares
+    for tope in (avatares.MAX_TOKENS_NUCLEOS, avatares.MAX_TOKENS_SUBS, avatares.MAX_TOKENS_COMPLETAR):
+        assert 12000 <= tope <= 21000
+
+
 def test_seleccion_toma_por_turnos_entre_tiendas(monkeypatch):
     """Ola final F3: AliExpress no trae número de reseñas; con el corte de filas lleno no queda fuera: las
     tiendas se turnan y cada una conserva su orden de más reseñadas."""
