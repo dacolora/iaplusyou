@@ -24,7 +24,6 @@ import gastos
 import generador_prompts
 import idiomas
 import marca as marca_mod
-import idiomas
 import prompt_swap
 import saldo
 import swaps as swaps_mod
