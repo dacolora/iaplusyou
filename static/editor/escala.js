@@ -87,6 +87,15 @@ export function fondoTira(clip, material, pps) {
   return { imagen: material.tira_url, tamano: `${ancho}px 100%`, posicion: `${x}px 0` };
 }
 
+// Capa 5b (D12): una foto en la fila del video no tiene tira (no tiene
+// tiempo de fuente): se ve su imagen a lo alto del clip, repetida a lo largo
+// — la copia liviana (D13) si ya llegó, si no el original. null sin imagen.
+export function fondoFoto(clip, material) {
+  const imagen = material?.url_proxy || material?.url;
+  if (!imagen) return null;
+  return { imagen, tamano: "auto 100%", posicion: "0 0", repetir: "repeat-x" };
+}
+
 // Soltar un clip de la principal en xMs: su nuevo lugar es cuántos de los
 // OTROS clips tienen el centro antes de ese punto.
 export function indiceDestino(doc, clipId, xMs) {

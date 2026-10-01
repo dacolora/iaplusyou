@@ -1433,3 +1433,39 @@ def test_voz_estimar_cobra_solo_los_subtitulos_si_la_voz_ya_existe_sin_palabras(
     completa = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
                       json={"texto": texto + " y otra", "voz": "Rachel", "idioma": "es", "velocidad": "normal"}).get_json()
     assert completa["usd"] > j["usd"] and completa["solo_subtitulos"] is False
+
+
+def test_vincular_en_las_herramientas_y_el_aviso_de_voces_juntas(dashboard, encolados):
+    """Capa 5b (Tarea 8, D10.9 y D12): «Vincular» va en la barra de herramientas,
+    junto a Cortar · Duplicar · Borrar, con su icono de eslabones y su estado
+    (`aria-pressed`, prendido por defecto: pagina_editor.js lo corrige con lo que
+    recuerda quien mira); «dos voces suenan a la vez» tiene su lugar con los
+    demás avisos bajo el video; y el menú «¿Cómo agregar?» de una imagen
+    (biblioteca.js) trae su estilo."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    arbol = _ancestros(html)
+    boton = re.search(r'<button[^>]*id="h-vincular"[^>]*>(.*?)</button>', html, re.S)
+    assert boton, "falta el botón Vincular"
+    assert 'type="button"' in boton.group(0) and 'aria-pressed="true"' in boton.group(0)
+    assert "ed-vincular" in boton.group(0) and "btn-sm" in boton.group(0)
+    assert "<svg" in boton.group(1) and "<span>Vincular</span>" in boton.group(1)
+    assert "ed-herramientas" in arbol["h-vincular"]
+    # en el mismo grupo que Cortar · Duplicar · Borrar, después de ellos
+    grupo = re.search(r'<div class="ed-grupo">\s*<button id="h-cortar".*?</div>', html, re.S).group(0)
+    assert re.findall(r'id="(h-[a-z]+)"', grupo) == ["h-cortar", "h-duplicar", "h-borrar", "h-vincular"]
+    # el icono «vinculo»: dos eslabones (trazos), del mismo macro que los demás
+    icono = re.search(r'<svg class="ed-icono"[^>]*>(.*?)</svg>', boton.group(1), re.S).group(1)
+    assert icono.count("<path") >= 2
+    # el aviso de voces juntas, con los demás avisos (bajo el video, aria-live)
+    aviso = re.search(r'<p id="aviso-voces"[^>]*>', html)
+    assert aviso and "editor-aviso" in aviso.group(0) and "hidden" in aviso.group(0)
+    assert "ed-centro" in arbol["aviso-voces"]
+    avisos = re.search(r'<div class="editor-avisos"[^>]*>.*?</div>', html, re.S).group(0)
+    assert 'id="aviso-voces"' in avisos
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    for regla in (".ed-vincular", '.ed-vincular[aria-pressed="true"]', ".ed-bib-como {", ".ed-bib-como-opcion"):
+        assert regla in css, regla
+    # el menú de una imagen flota sobre la columna (no lo corta su scroll) y nunca la empuja de lado
+    como = re.search(r"\.ed-bib-como \{([^}]*)\}", css).group(1)
+    assert "position: fixed" in como and "max-width" in como

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   avisoTransicion, barrasOnda, bloquesSubtitulos, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, efectoTransicion,
-  estiloArrastre, etiquetaClip, filaEnY, filasVisuales, fondoTira, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables,
+  estiloArrastre, etiquetaClip, filaEnY, filasVisuales, fondoFoto, fondoTira, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables,
   marcasRegla, msAPx, msInsercion, nombreFila, nombreTransicion, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar,
   pedidoTransicion, puntoSoltar, pxAMs, soltar, textoEfectoTransicion, unionesConTransicion, VENTANA_PICOS_MS,
 } from "../../static/editor/escala.js";
@@ -522,4 +522,16 @@ test("pedidoAgregar de un audio de voz: rol voz y el idioma según el destino qu
   // la música no cambia
   const cancion = { id: 23, tipo: "audio", origen: "musica" };
   assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: cancion }, en("es_CO")), ["agregarAudio", cancion, 2500, { rol: "musica" }]);
+});
+
+// ---- Capa 5b (Tarea 8, D12): una foto en la fila del video ----
+
+test("fondoFoto: la imagen repetida a lo largo del clip (la copia liviana si ya la tiene), sin tira", () => {
+  const clip = { id: "foto1", inicio_ms: 0, duracion_ms: 3000, material_id: 7, foto: true, recorte: { desde_ms: 0, hasta_ms: 3000 } };
+  assert.deepEqual(fondoFoto(clip, { id: 7, tipo: "imagen", url: "https://r2/f.png", url_proxy: "https://r2/f.proxy.jpg" }),
+    { imagen: "https://r2/f.proxy.jpg", tamano: "auto 100%", posicion: "0 0", repetir: "repeat-x" });
+  assert.deepEqual(fondoFoto(clip, { id: 7, tipo: "imagen", url: "https://r2/f.png", url_proxy: null }),
+    { imagen: "https://r2/f.png", tamano: "auto 100%", posicion: "0 0", repetir: "repeat-x" });
+  assert.equal(fondoFoto(clip, undefined), null);
+  assert.equal(fondoFoto(clip, { id: 7, tipo: "imagen" }), null);
 });

@@ -5,12 +5,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  aceptarPara, detalleAudio, duracionTexto, etiquetaMas, faltaPreparar, miniatura, mensajeSubida, nombreDe, repartir,
-  revisarArchivo, tipoDeArchivo,
+  aceptarPara, detalleAudio, duracionTexto, etiquetaMas, faltaPreparar, miniatura, mensajeSubida, mensajeTransicion, nombreDe,
+  opcionesImagen, repartir, revisarArchivo, textoFotoAgregada, tipoDeArchivo,
   textosBiblioteca, transicionesBiblioteca, urlPieza,
 } from "../../static/editor/biblioteca.js";
 import * as op from "../../static/editor/operaciones.js";
-import { docBase } from "./doc_base.mjs";
+import { docBase, DURACIONES } from "./doc_base.mjs";
 
 const video = (id, extra = {}) => ({ id, tipo: "video", url: `https://r2/v${id}.mp4`, url_proxy: null, duracion_ms: 4000,
   ancho: 1080, alto: 1920, picos: null, tira_url: null, tiene_audio: true, nombre: `Video ${id}`, origen: "subida", ...extra });
@@ -93,7 +93,9 @@ test("faltaPreparar: un video sin copia liviana, un audio sin picos (lo que la v
   assert.equal(faltaPreparar(video(1, { tira_url: "t.jpg" })), true);
   assert.equal(faltaPreparar({ tipo: "audio", picos: null }), true);
   assert.equal(faltaPreparar({ tipo: "audio", picos: [0.2] }), false);
-  assert.equal(faltaPreparar({ tipo: "imagen" }), false);
+  // capa 5b (R6 de la Tarea 6): una foto subida a mitad de la sesión pide su copia liviana con el mismo `preparar=`
+  assert.equal(faltaPreparar({ tipo: "imagen" }), true);
+  assert.equal(faltaPreparar({ tipo: "imagen", url_proxy: "https://r2/p.jpg" }), false);
   assert.equal(faltaPreparar(null), false);
 });
 
@@ -313,4 +315,37 @@ test("nombreDe y detalleAudio: su nombre; sin nombre, qué es", () => {
   assert.equal(puedeBorrarse({ origen: "grabacion" }), true);
   assert.equal(puedeBorrarse({ origen: "voz" }), false);
   assert.equal(puedeBorrarse({ origen: "locucion" }), false);
+});
+
+// ---- Capa 5b (Tarea 8, D12): la imagen como clip o encima, y lo que se dice ----
+
+test("opcionesImagen: «Como clip del video» primero y «Encima del video» después", () => {
+  assert.deepEqual(opcionesImagen(), [
+    { como: "clip", texto: "Como clip del video" },
+    { como: "capa", texto: "Encima del video" },
+  ]);
+});
+
+test("miniatura de una imagen: su copia liviana si ya la tiene; si no, el original", () => {
+  const foto = { id: 3, tipo: "imagen", url: "https://r2/f.png", ancho: 600, alto: 400 };
+  assert.equal(miniatura(foto).url, "https://r2/f.png");
+  assert.equal(miniatura({ ...foto, url_proxy: "https://r2/f.proxy.jpg" }).url, "https://r2/f.proxy.jpg");
+});
+
+test("textoFotoAgregada dice cuánto dura la foto y dónde se cambia", () => {
+  assert.equal(textoFotoAgregada(3000), "Foto agregada al video: dura 3 s. Cámbialo en «Editar».");
+  assert.equal(textoFotoAgregada(2500), "Foto agregada al video: dura 2,5 s. Cámbialo en «Editar».");
+});
+
+test("mensajeTransicion: junta los dos clips (y dice cuánto se acortó); «Corte» a propósito no es un error", () => {
+  const antes = docBase();
+  const pedido = ["ponerTransicion", "v0", "fundido", 500];
+  const despues = op.ponerTransicion(antes, "v0", "fundido", 500, DURACIONES).doc;
+  assert.deepEqual(mensajeTransicion(antes, despues, pedido, { transicion: "fundido", nombre: "Fundido" }), {
+    texto: "«Fundido» quedó en la unión: junta los dos clips y el video quedó 0,5 s más corto.", error: false,
+  });
+  // quitarla con «Corte» a propósito: lo de siempre, sin el aviso de «no hay video de sobra»
+  const sinTr = op.ponerTransicion(despues, "v0", "corte", 500, DURACIONES).doc;
+  assert.deepEqual(mensajeTransicion(despues, sinTr, ["ponerTransicion", "v0", "corte", 500], { transicion: "corte", nombre: "Corte" }),
+    { texto: "Esa unión quedó en corte, sin transición.", error: false });
 });

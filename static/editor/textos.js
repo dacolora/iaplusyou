@@ -386,7 +386,14 @@ export const ES = {
   "prop.encuadre_sin_margen": "Acerca el video para poder moverlo.",
   "prop.duracion_foto": "Duración de la foto",
   "prop.nota_foto": "Una foto no tiene sonido ni velocidad: cambia cuánto dura.",
-  "prop.ayuda_solape": "Junta los dos clips: el video queda tan corto como dure la transición."
+  "prop.ayuda_solape": "Junta los dos clips: el video queda tan corto como dure la transición.",
+  "bib.como_clip": "Como clip del video",
+  "bib.encima": "Encima del video",
+  "bib.agregar_imagen": "¿Cómo agregar «{nombre}»?",
+  "bib.foto_agregada": "Foto agregada al video: dura {duracion}. Cámbialo en «Editar».",
+  "editar.vincular_si": "Lo de encima se mueve con su video. Toca para soltarlo.",
+  "editar.vincular_no": "Lo de encima se queda donde está. Toca para que siga a su video.",
+  "vista.voces_juntas": "Dos voces suenan al mismo tiempo en {tiempo}: muévelas o borra una."
 };
 
 let actuales = ES;

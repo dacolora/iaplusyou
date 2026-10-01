@@ -6,6 +6,9 @@
 // (lo hace pagina_editor.js, que sí lee la página al cargar y no se importa).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 test("los módulos de navegador cargan y exportan lo que la página usa", async () => {
   assert.equal(typeof globalThis.document, "undefined");
@@ -71,6 +74,10 @@ test("los módulos de navegador cargan y exportan lo que la página usa", async 
   assert.equal(typeof voz.VozPanel, "function");
   for (const m of ["pintar", "crear", "seguir", "grabar", "parar", "usar", "descartar"]) {
     assert.equal(typeof voz.VozPanel.prototype[m], "function", `VozPanel.${m}`);
+  }
+  // capa 5b (Tarea 8): la biblioteca pregunta cómo entra una imagen y dice cómo quedó (lo puro)
+  for (const f of ["opcionesImagen", "textoFotoAgregada", "mensajeTransicion", "faltaPreparar"]) {
+    assert.equal(typeof bib[f], "function", `biblioteca.${f}`);
   }
   assert.equal(typeof globalThis.document, "undefined");          // importarlos no tocó la página
   const pps = Object.getOwnPropertyDescriptor(lt.LineaTiempo.prototype, "pps");
@@ -467,4 +474,37 @@ test("Propiedades arma la foto y el bloque «Encuadre» (y la vista expone medid
   }
   const vp = await import("../../static/editor/vista.js");
   assert.equal(typeof vp.VistaPrevia.prototype.medidasPrincipal, "function");
+});
+
+// ---- Capa 5b (Tarea 8): pagina_editor.js sin ejecutarla ----
+// pagina_editor.js lee la página al cargarse (no se importa en Node): se mira
+// sin correrla — su sintaxis (`node --check`) y que cada nombre que importa
+// exista en su módulo (esos sí se importan, sin tocar la página). Así un
+// nombre mal escrito (o «Vincular» enganchado a una función que no existe) se
+// ve aquí y no al abrir el editor.
+test("pagina_editor.js: compila y todo lo que importa existe (vinculos.operar envuelve cada operación)", async () => {
+  const ruta = new URL("../../static/editor/pagina_editor.js", import.meta.url);
+  execFileSync(process.execPath, ["--check", fileURLToPath(ruta)]);          // lanza si no compila
+  const fuente = readFileSync(ruta, "utf-8");
+  const importaciones = [...fuente.matchAll(/^import\s+(\*\s+as\s+\w+|\{[^}]*\})\s+from\s+"(\.\/[\w.]+)";/gm)];
+  assert.ok(importaciones.length >= 15, "se leyeron las importaciones");
+  for (const [, que, de] of importaciones) {
+    const modulo = await import(new URL(de, ruta).href);
+    if (que.startsWith("*")) continue;
+    for (const nombre of que.slice(1, -1).split(",").map((x) => x.trim().split(/\s+as\s+/)[0]).filter(Boolean)) {
+      assert.ok(nombre in modulo, `${de} no exporta ${nombre}`);
+    }
+  }
+  assert.match(fuente, /^import \* as vinculos from "\.\/vinculos\.js";$/m);
+  const vinculos = await import("../../static/editor/vinculos.js");
+  for (const f of ["operar", "leerVincular", "guardarVincular"]) assert.equal(typeof vinculos[f], "function", `vinculos.${f}`);
+  for (const uso of [
+    "vinculos.operar(operaciones[nombre], historial.actual, args, info(), { vincular })",
+    "let vincular = vinculos.leerVincular(almacenSeguro());",
+    "vinculos.guardarVincular(almacenSeguro(), vincular)",
+    'pintarAvisoCarga("aviso-voces", a.voces)',
+  ]) assert.ok(fuente.includes(uso), uso);
+  // ninguna otra llamada directa a una operación: todas pasan por vinculos.operar (un paso, un guardado)
+  assert.doesNotMatch(fuente, /operaciones\[nombre\]\(historial\.actual/);
+  assert.equal(typeof globalThis.document, "undefined");
 });

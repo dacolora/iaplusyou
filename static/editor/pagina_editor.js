@@ -60,6 +60,15 @@
 //                                           biblioteca cambió de pestaña: quien
 //                                           no pinta oculto se pone al día)
 //
+// Capa 5b (D10): «todo sigue a su clip». Cada operación pasa por
+// vinculos.operar dentro de operarCon: con «Vincular» prendido (el botón
+// #h-vincular de las herramientas, prendido por defecto y recordado por quien
+// mira en localStorage), los textos, imágenes y voces que estaban encima de un
+// clip del video lo siguen cuando ese clip se recorta, se corta, se borra, se
+// mueve o cambia de velocidad. Lo movido y la operación son UN paso de
+// deshacer y UN guardado (es el mismo documento). Apagado, todo es como antes.
+// Si después dos voces suenan a la vez, se avisa bajo el video (#aviso-voces).
+//
 // Reglas de los avisos (avisos_editor.js, probadas en Node):
 // - «seleccion» sale solo si la selección cambió de verdad, también cuando la
 //   cambió una operación (duplicar elige la copia: "documento" y después
@@ -83,6 +92,7 @@ import { PalabrasPendientes } from "./subtitulos_modelo.js";
 import { SubtitulosPanel } from "./subtitulos_panel.js";
 import { listaY, ponerTextos, t } from "./textos.js";
 import { infoDe, VistaPrevia } from "./vista.js";
+import * as vinculos from "./vinculos.js";
 import { VozPanel } from "./voz_panel.js";
 
 // Los textos en el idioma de quien mira (ruta editor.ver), antes de construir
@@ -109,6 +119,9 @@ datos.documento = alAbrir.doc;
 let acortadoAlAbrir = alAbrir.acortado;
 const historial = new Historial(datos.documento);
 let seleccion = null;
+// «Vincular» (D10.9): lo que eligió quien mira; sin nada guardado (o si el
+// navegador no deja leerlo), prendido.
+let vincular = vinculos.leerVincular(almacenSeguro());
 const avisos = new Avisos();
 
 const vista = new VistaPrevia({
@@ -163,6 +176,16 @@ const TEXTO_GUARDADO = {
   conflicto: (m) => m,
 };
 
+// localStorage, o null si el navegador no deja tocarlo (modo privado de
+// Safari, cookies bloqueadas): «Vincular» funciona igual, solo no se recuerda.
+function almacenSeguro() {
+  try {
+    return window.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // El último argumento de cada operación: {id: {duracion_ms, tiene_audio}}.
 function info() {
   return infoDe(vista.materiales);
@@ -194,6 +217,7 @@ function pintarGuardado(estado, mensaje, detalle = "") {
 // documento vigente, así que se van en cuanto una edición los arregla.
 function pintarAvisoCarga(id, a) {
   const n = $(id);
+  if (!n) return;
   n.textContent = a?.texto ?? "";
   n.hidden = !a;
   n.classList.toggle("error", Boolean(a?.error));
@@ -203,6 +227,7 @@ function pintarAvisosCarga() {
   const a = avisosCarga(historial.actual, info(), vista.materiales, { acortado: acortadoAlAbrir });
   pintarAvisoCarga("aviso-recortes", a.recortes);
   pintarAvisoCarga("aviso-faltan", a.faltan);
+  pintarAvisoCarga("aviso-voces", a.voces);
 }
 
 function buscarClip(id) {
@@ -264,7 +289,9 @@ function operarCon(opciones, nombre, ...args) {
   }
   let res;
   try {
-    res = operaciones[nombre](historial.actual, ...args, info());
+    // con «Vincular», lo que estaba encima de un clip del video lo sigue (el
+    // mismo documento: un paso de deshacer, un guardado)
+    res = vinculos.operar(operaciones[nombre], historial.actual, args, info(), { vincular });
   } catch (e) {
     const invalida = e.name === "OperacionInvalida";
     if (!invalida) console.error(e);
@@ -311,6 +338,22 @@ function rehacer() {
   guardado.pedir(doc);
 }
 
+// «Vincular» (D10.9): prendido, lo de encima sigue a su clip del video;
+// apagado, se queda donde está. No cambia la edición (es una forma de
+// editar, no algo que se produce): no va al historial ni se guarda con ella.
+function pintarVincular() {
+  const b = $("h-vincular");
+  if (!b) return;
+  b.setAttribute("aria-pressed", String(vincular));
+  b.title = t(vincular ? "editar.vincular_si" : "editar.vincular_no");
+}
+
+function alternarVincular() {
+  vincular = !vincular;
+  vinculos.guardarVincular(almacenSeguro(), vincular);
+  pintarVincular();
+}
+
 // Un clic con el mouse no deja el foco en el botón: si no, Espacio
 // (reproducir) lo volvería a apretar — otro corte. Con el teclado (detail 0)
 // el foco se queda donde está.
@@ -327,6 +370,8 @@ function montarHerramientas() {
   herramienta("h-duplicar", () => seleccion && operar("duplicar", seleccion));
   herramienta("h-deshacer", deshacer);
   herramienta("h-rehacer", rehacer);
+  if ($("h-vincular")) herramienta("h-vincular", alternarVincular);
+  pintarVincular();
   // La velocidad está en el formulario del video, en «Editar» (propiedades.js).
   $("recargar").addEventListener("click", () => location.reload());
   // Espacio y flechas son de la vista previa (vista.js); estas, de la edición.

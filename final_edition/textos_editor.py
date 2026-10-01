@@ -406,6 +406,15 @@ TEXTOS = {
     "prop.duracion_foto": N_("Duración de la foto"),
     "prop.nota_foto": N_("Una foto no tiene sonido ni velocidad: cambia cuánto dura."),
     "prop.ayuda_solape": N_("Junta los dos clips: el video queda tan corto como dure la transición."),
+    # biblioteca.js (capa 5b, Tarea 8): una imagen como clip del video o encima, y la foto agregada
+    "bib.como_clip": N_("Como clip del video"),
+    "bib.encima": N_("Encima del video"),
+    "bib.agregar_imagen": N_("¿Cómo agregar «{nombre}»?"),
+    "bib.foto_agregada": N_("Foto agregada al video: dura {duracion}. Cámbialo en «Editar»."),
+    # pagina_editor.js (capa 5b, Tarea 8): el interruptor «Vincular» y el aviso de dos voces a la vez
+    "editar.vincular_si": N_("Lo de encima se mueve con su video. Toca para soltarlo."),
+    "editar.vincular_no": N_("Lo de encima se queda donde está. Toca para que siga a su video."),
+    "vista.voces_juntas": N_("Dos voces suenan al mismo tiempo en {tiempo}: muévelas o borra una."),
 }
 
 

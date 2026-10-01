@@ -116,3 +116,24 @@ def test_cada_tarjeta_cierra_su_div():
         for nombre, cuerpo in macros:
             cuerpo = re.sub(r"{#.*?#}", "", cuerpo, flags=re.S)
             assert cuerpo.count("<div") == cuerpo.count("</div>"), f"{ruta}::{nombre}"
+
+
+def test_editor_la_barra_de_herramientas_con_vincular_cabe_a_375():
+    """Capa 5b (Tarea 8, D12): «Vincular» se suma a Cortar · Duplicar · Borrar en
+    la barra de herramientas del editor. A 375 px la barra baja de línea en vez de
+    empujar la página de lado: la barra y cada grupo envuelven, el botón se puede
+    achicar (su nombre termina en «…», entero en su `title`) y en el celular los
+    botones de la barra van más angostos."""
+    import re
+    html = open("templates/editor.html", encoding="utf-8").read()
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    herramientas = re.search(r"\.ed-herramientas \{([^}]*)\}", css).group(1)
+    assert "flex-wrap: wrap" in herramientas
+    grupo = re.search(r"\.ed-grupo \{([^}]*)\}", css).group(1)
+    assert "flex-wrap: wrap" in grupo and "min-width: 0" in grupo and "max-width: 100%" in grupo
+    vincular = re.search(r"\.ed-vincular \{([^}]*)\}", css).group(1)
+    assert "min-width: 0" in vincular and "max-width: 100%" in vincular
+    nombre = re.search(r"\.ed-vincular span \{([^}]*)\}", css).group(1)
+    assert "text-overflow: ellipsis" in nombre and "white-space: nowrap" in nombre
+    celular = css[css.index("@media (max-width: 760px)"):]
+    assert re.search(r"\.ed-herramientas \.btn-sm \{[^}]*padding:", celular)

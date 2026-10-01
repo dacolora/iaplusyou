@@ -121,3 +121,34 @@ test("vocesJuntas: dos voces que se pisan dan el primer instante del solape; p_s
   doc.pistas.push({ ...voz, id: "p_musica", clips: [{ ...voz.clips[0], id: "m1", rol_audio: "musica", inicio_ms: 0 }] });
   assert.deepEqual(vocesJuntas(doc), [{ t_ms: 2000, ids: ["a1", "r1"] }]);
 });
+
+// Capa 5b (Tarea 8, D10.7): el aviso bajo el video, con el primer solape.
+test("avisosCarga avisa de dos voces juntas con el primer instante (0:00,5) y se va cuando ya no se pisan", () => {
+  const doc = docBase();
+  const voz = doc.pistas.find((p) => p.id === "p_voz");
+  doc.pistas.push({ ...voz, id: "p_voz_2", clips: [{ ...voz.clips[0], id: "r1", rol_audio: "grabacion", inicio_ms: 500,
+                                                     duracion_ms: 1000, recorte: { desde_ms: 0, hasta_ms: 1000 } }] });
+  assert.deepEqual(avisosCarga(doc, DURACIONES, MATS).voces, {
+    texto: "Dos voces suenan al mismo tiempo en 0:00,5: muévelas o borra una.", error: false,
+  });
+  doc.pistas.at(-1).clips[0].inicio_ms = 3000;                  // ya no se pisan
+  assert.equal(avisosCarga(doc, DURACIONES, MATS).voces, null);
+  assert.equal(avisosCarga(docBase(), DURACIONES, MATS).voces, null);
+});
+
+// Una voz en español y otra en inglés a la misma hora («Suena en», 5a D10) no
+// suenan juntas en ningún destino: resolver quita la del otro idioma. Una sin
+// idioma suena en todos, así que sí choca con cualquiera.
+test("vocesJuntas: dos voces de idiomas distintos a la misma hora no se avisan; una sin idioma sí choca", () => {
+  const doc = docBase();
+  const voz = doc.pistas.find((p) => p.id === "p_voz");
+  voz.clips[0].idioma = "es";
+  doc.pistas.push({ ...voz, id: "p_voz_2", clips: [{ ...voz.clips[0], id: "r1", idioma: "en", inicio_ms: 500, duracion_ms: 1000,
+                                                     recorte: { desde_ms: 0, hasta_ms: 1000 } }] });
+  assert.deepEqual(vocesJuntas(doc), []);
+  assert.equal(avisosCarga(doc, DURACIONES, MATS).voces, null);
+  doc.pistas.at(-1).clips[0].idioma = "es";
+  assert.deepEqual(vocesJuntas(doc), [{ t_ms: 500, ids: ["a1", "r1"] }]);
+  doc.pistas.at(-1).clips[0].idioma = null;
+  assert.deepEqual(vocesJuntas(doc), [{ t_ms: 500, ids: ["a1", "r1"] }]);
+});

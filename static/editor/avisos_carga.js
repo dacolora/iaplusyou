@@ -5,6 +5,7 @@
 // recalcula en cada refresco con `avisosCarga` sobre el documento vigente.
 // Puro, sin DOM: lo prueba Node (tests/js/avisos_carga.test.mjs).
 import { adoptarVozComoFuente, clipsQuePidenDeMas, faltaDuracionAnimacion, ID_SONIDO, normalizar } from "./operaciones.js";
+import { textoTiempo } from "./subtitulos_modelo.js";
 import { t } from "./textos.js";
 
 // Los materiales que la edición usa DE VERDAD: los de sus clips (y las voces
@@ -81,7 +82,7 @@ export function arreglarAlAbrir(doc, info) {
   return { doc: actual, guardar, acortado };
 }
 
-// {recortes, faltan}: cada uno `null` (no se muestra) o {texto, error}.
+// {recortes, faltan, voces}: cada uno `null` (no se muestra) o {texto, error}.
 // `acortado`: la página lo acortó al abrir (normalizar) — se dice una vez,
 // sin rojo, hasta el próximo cambio. Un clip que ni acortado al mínimo cabe
 // en su archivo no se promete arreglar: se pide borrarlo o cambiarlo.
@@ -92,11 +93,19 @@ export function avisosCarga(doc, info, materiales, { acortado = false } = {}) {
     recortes = { texto: tieneArreglo ? textoPideDeMas() : textoNoCabe(), error: true };
   }
   const n = faltantes(doc, materiales).length;
+  const juntas = vocesJuntas(doc);
   return {
     recortes,
     faltan: n === 0 ? null : {
       texto: n === 1 ? t("vista.carga_falta_uno") : t("vista.carga_faltan", { n }),
       error: true,
+    },
+    // capa 5b (D10.7): dos voces que suenan a la vez (tras «todo sigue a su
+    // clip», o puestas así a mano): el primer solape, sin rojo — se puede
+    // querer, pero casi nunca; se va solo cuando se arregla
+    voces: juntas.length === 0 ? null : {
+      texto: t("vista.voces_juntas", { tiempo: textoTiempo(juntas[0].t_ms) }),
+      error: false,
     },
   };
 }
@@ -106,7 +115,13 @@ export function avisosCarga(doc, info, materiales, { acortado = false } = {}) {
 // tiempo — tras «todo sigue a su clip», dos voces pueden terminar
 // solapadas aunque ya no pisen la misma FILA. `t_ms` es el primer instante
 // del solape; la lista sale ordenada por `t_ms` (la página muestra el
-// primero). Sin texto propio: el aviso con su clave llega en la Tarea 8.
+// primero, con su texto, en `avisosCarga().voces`).
+// Capa 5b (Tarea 8): dos voces con «Suena en» de idiomas distintos (5a D10)
+// nunca suenan juntas — resolver quita la del otro idioma en cada destino —;
+// una sin idioma suena en todos.
+const tieneIdioma = (c) => c.idioma !== undefined && c.idioma !== null;
+const enOtroIdioma = (a, b) => tieneIdioma(a) && tieneIdioma(b) && a.idioma !== b.idioma;
+
 export function vocesJuntas(doc) {
   const candidatas = [];
   for (const pista of doc?.pistas ?? []) {
@@ -120,6 +135,7 @@ export function vocesJuntas(doc) {
     for (let j = i + 1; j < candidatas.length; j++) {
       const a = candidatas[i];
       const b = candidatas[j];
+      if (enOtroIdioma(a, b)) continue;
       const t_ms = Math.max(a.inicio_ms, b.inicio_ms);
       const fin = Math.min(a.inicio_ms + a.duracion_ms, b.inicio_ms + b.duracion_ms);
       if (t_ms < fin) pares.push({ t_ms, ids: [a.id, b.id] });

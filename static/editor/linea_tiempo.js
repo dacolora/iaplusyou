@@ -29,8 +29,12 @@
 // recorta; tocar un bloque llama `alSubtitulo(t_ms)` (la página lleva el
 // cabezal ahí y abre la pestaña Subtítulos) y nada se suelta sobre ella
 // (`puntoEn` da null). Sin palabras, no hay fila.
+//
+// Capa 5b (D12): una foto de la fila del video se ve con su imagen repetida a
+// lo largo (escala.fondoFoto: la copia liviana si ya llegó), sin tira.
 import {
-  ANCHO_MIN_PX, barrasOnda, bloquesSubtitulos, cabeceraFila, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, ladosRecortables, marcasRegla,
+  ANCHO_MIN_PX, barrasOnda, bloquesSubtitulos, cabeceraFila, estiloArrastre, etiquetaClip, filasVisuales, fondoFoto, fondoTira, ladosRecortables,
+  marcasRegla,
   msAPx, msInsercion, nombreFila, PASO_ONDA_PX, PPS_DEFECTO, PPS_MAX, PPS_MIN, puntoSoltar, pxAMs, soltar, unionesConTransicion,
   VENTANA_PICOS_MS,
 } from "./escala.js";
@@ -183,15 +187,17 @@ export class LineaTiempo {
         c.style.left = `${msAPx(clip.inicio_ms, pps)}px`;
         c.style.width = `${Math.max(ANCHO_MIN_PX, msAPx(clip.duracion_ms, pps))}px`;
         const etiqueta = etiquetaClip(pista, clip, doc, destino);
-        c.title = etiqueta || fila.title;
+        c.title = etiqueta || (clip.foto ? t("prop.foto") : fila.title);
         if (pista.tipo === "video" || pista.tipo === "superpuesto") {
-          const tira = fondoTira(clip, mats[clip.material_id], pps);
+          // capa 5b (D12): una foto no tiene tira — su imagen, repetida a lo largo del clip
+          const tira = clip.foto ? fondoFoto(clip, mats[clip.material_id]) : fondoTira(clip, mats[clip.material_id], pps);
           if (tira) {
             c.style.backgroundImage = `url("${String(tira.imagen).replace(/["\\\n]/g, encodeURIComponent)}")`;
             c.style.backgroundSize = tira.tamano;
             c.style.backgroundPosition = tira.posicion;
+            if (tira.repetir) c.style.backgroundRepeat = tira.repetir;
           } else {
-            el("span", "linea-etiqueta", c).textContent = fila.title;   // sin tira todavía: al menos el nombre
+            el("span", "linea-etiqueta", c).textContent = c.title;   // sin tira (o sin la imagen) todavía: al menos el nombre
           }
           if (Number(clip.velocidad ?? 1) !== 1) el("span", "linea-insignia", c).textContent = `${clip.velocidad}×`;
         } else {

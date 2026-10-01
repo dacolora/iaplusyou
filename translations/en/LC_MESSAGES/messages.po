@@ -3244,6 +3244,9 @@ msgstr "Comments × 2 passes + prompts"
 msgid "Commits"
 msgstr "Commits"
 
+msgid "Como clip del video"
+msgstr "As a clip in the video"
+
 msgid "Como video"
 msgstr "As a video"
 
@@ -4275,6 +4278,10 @@ msgstr "Store domain"
 
 msgid "Dominio de la tienda (el shop-id de Triple Whale)"
 msgstr "Store domain (the Triple Whale shop-id)"
+
+#, python-brace-format
+msgid "Dos voces suenan al mismo tiempo en {tiempo}: muévelas o borra una."
+msgstr "Two voices play at the same time at {tiempo}: move them or delete one."
 
 msgid "Duplicar"
 msgstr "Duplicate"
@@ -5392,6 +5399,9 @@ msgstr "In “Redirect URI” put exactly {callback_meli}."
 
 msgid "Encaje con la campaña"
 msgstr "Campaign fit"
+
+msgid "Encima del video"
+msgstr "On top of the video"
 
 msgid "Encuadre"
 msgstr "Framing"
@@ -6843,6 +6853,10 @@ msgstr "Format: %(f)s"
 
 msgid "Foto"
 msgstr "Photo"
+
+#, python-brace-format
+msgid "Foto agregada al video: dura {duracion}. Cámbialo en «Editar»."
+msgstr "Photo added to the video: it lasts {duracion}. Change it in “Edit”."
 
 #, python-format
 msgid "Foto asignada al color (%(nombre)s)."
@@ -8710,6 +8724,12 @@ msgstr "Take to Create →"
 
 msgid "Llevar a final edition"
 msgstr "Take to Final edition"
+
+msgid "Lo de encima se mueve con su video. Toca para soltarlo."
+msgstr "What’s on top moves with its video. Tap to unlink it."
+
+msgid "Lo de encima se queda donde está. Toca para que siga a su video."
+msgstr "What’s on top stays where it is. Tap to make it follow its video."
 
 msgid "Lo esencial"
 msgstr "The essentials"
@@ -14684,6 +14704,9 @@ msgstr "Videos, images and audios from your references, or swap the product in a
 msgid "Videos, imágenes, guiones, finales y textos con IA pagados desde el inicio; detalle en Configuración › Gasto"
 msgstr "Videos, images, scripts, final cuts and AI text paid for since the start; detail in Settings › Spend"
 
+msgid "Vincular"
+msgstr "Link"
+
 msgid "Vista previa del video"
 msgstr "Video preview"
 
@@ -17839,6 +17862,10 @@ msgstr "How much and for how long?"
 
 msgid "¿Cuántos?"
 msgstr "How many?"
+
+#, python-brace-format
+msgid "¿Cómo agregar «{nombre}»?"
+msgstr "How do you want to add “{nombre}”?"
 
 msgid "¿Cómo quieres conectar Meta?"
 msgstr "How do you want to connect Meta?"

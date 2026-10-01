@@ -4,7 +4,11 @@
 // - Medios: «Subir» (varios archivos; cada uno con su barra y, si falla, su
 //   error en llano debajo), los videos e imágenes del proyecto y, debajo,
 //   «Videos de Crear» (las piezas listas; la que todavía no es material se
-//   prepara al tocar «+» — gratis — y se agrega sola cuando está).
+//   prepara al tocar «+» — gratis — y se agrega sola cuando está). Capa 5b
+//   (D12): «+» sobre una imagen abre un menú chico — «Como clip del video»
+//   (una foto en la fila del video) o «Encima del video» (la capa de
+//   siempre); arrastrarla a la fila del video la pone como foto, a otra fila,
+//   encima. Una imagen sin copia liviana la pide como un video (gratis).
 // - Audio: «Subir audio» y los audios del proyecto (subidos, de Mi música y,
 //   capa 5a, las grabaciones, las voces con IA y las locuciones de Crear ›
 //   Audios), con «Escuchar» y «+» (desde el cabezal: una voz como voz, lo
@@ -41,14 +45,16 @@
 // edición por `editor`. No hace nada al importarse (lo prueba Node).
 import { materialesUsados } from "./avisos_carga.js";
 import {
-  avisoTransicion, DURACION_TRANSICION_MS, nombreTransicion, pedidoAgregar, rolDeMaterial,
+  avisoTransicion, DURACION_TRANSICION_MS, efectoTransicion, nombreTransicion, pedidoAgregar, rolDeMaterial,
+  textoEfectoTransicion,
 } from "./escala.js";
 import * as operaciones from "./operaciones.js";
 import { TRANSICIONES } from "./operaciones.js";
 import { mensajeSesion, sesionTerminada } from "./guardado.js";
 import { evaluarRespuesta } from "./pendientes.js";
-import { mensajeConflicto } from "./propiedades_modelo.js";
+import { mensajeConflicto, textoSegundos } from "./propiedades_modelo.js";
 import { t } from "./textos.js";
+import { pistaPrincipal } from "./tiempo.js";
 import { idiomaDeVoz } from "./voz_modelo.js";
 
 // ---- Lo puro (lo prueba tests/js/biblioteca.test.mjs) ---------------------
@@ -128,7 +134,7 @@ export function miniatura(m, { formato = null } = {}) {
   if (m.tipo === "audio") return { clase: "audio" };
   const wh = medidas(m, formato);
   const forma = wh ? { proporcion: `${wh[0]} / ${wh[1]}`, vertical: wh[1] > wh[0] } : { proporcion: "16 / 9", vertical: false };
-  if (m.tipo === "imagen") return { clase: "imagen", url: m.url, ...forma };
+  if (m.tipo === "imagen") return { clase: "imagen", url: m.url_proxy || m.url, ...forma };   // capa 5b: la copia liviana (D13)
   if (m.tira_url && Number(m.duracion_ms) > 0) {
     const celdas = Math.max(1, Math.ceil(Number(m.duracion_ms) / 1000));
     return { clase: "tira", url: m.tira_url, tamano: `${celdas * 100}% 100%`, ...forma };
@@ -143,11 +149,44 @@ export function duracionTexto(ms) {
 }
 
 // Lo que la vista previa espera del servidor (tarea edicion_proxy): la copia
-// liviana de un video (su tira sale de la misma tarea) y los picos de un audio.
+// liviana de un video (su tira sale de la misma tarea) o de una imagen (capa
+// 5b, D13: una foto subida a mitad de la sesión la pide sin recargar) y los
+// picos de un audio. Espejo de vista_previa.pendientes.
 export function faltaPreparar(m) {
-  if (m?.tipo === "video") return !m.url_proxy;
+  if (m?.tipo === "video" || m?.tipo === "imagen") return !m.url_proxy;
   if (m?.tipo === "audio") return m.picos === null || m.picos === undefined;
   return false;
+}
+
+// Capa 5b (D12): «+» sobre una imagen pregunta cómo entra — como un clip más
+// del video (una foto en la fila del video, después del clip del cabezal) o
+// encima del video (la capa de imagen de siempre). `como` va tal cual a
+// escala.pedidoAgregar.
+export function opcionesImagen() {
+  return [
+    { como: "clip", texto: t("bib.como_clip") },
+    { como: "capa", texto: t("bib.encima") },
+  ];
+}
+
+// Lo que se dice al agregar una foto al video: cuánto dura y dónde se cambia.
+export function textoFotoAgregada(duracionMs) {
+  return t("bib.foto_agregada", { duracion: textoSegundos(duracionMs) });
+}
+
+// Lo que se dice después de poner una transición desde la biblioteca
+// (`pedido`: ["ponerTransicion", clipId, tipo, ms]; `cosa`: {transicion,
+// nombre}): {texto, error}. Capa 5b (D9): lo que le pasó de verdad a esa
+// unión entre el documento de antes y el de después — «junta los dos clips y
+// el video quedó X más corto», o que quedó en corte o más corta —; si no hay
+// nada de eso, lo de antes (avisoTransicion, o «quedó en la unión»). Elegir
+// «Corte» a propósito nunca se avisa como un problema.
+export function mensajeTransicion(antes, despues, pedido, cosa) {
+  if (cosa?.transicion === "corte") return { texto: t("bib.union_corte"), error: false };
+  const efecto = efectoTransicion(antes, despues, pedido[1]);
+  if (efecto) return { texto: textoEfectoTransicion(efecto, cosa?.nombre ?? ""), error: efecto.tipo !== "junta" };
+  const aviso = avisoTransicion(despues, pedido[1], pedido[2], pedido[3] ?? DURACION_TRANSICION_MS);
+  return { texto: aviso ?? t("bib.en_union", { nombre: cosa?.nombre ?? "" }), error: Boolean(aviso) };
 }
 
 // Lo que se ve en las listas (cómo va la carga, los materiales, las piezas y
@@ -240,7 +279,11 @@ const ICONOS = {
   pausa: '<path d="M8 5v14M16 5v14"/>',
   cerrar: '<path d="M6 6l12 12M18 6L6 18"/>',
   borrar: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  capas: '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
 };
+// El icono de cada opción del menú de una imagen (opcionesImagen).
+const ICONO_COMO = { clip: "video", capa: "capas" };
+const MENU_COMO_MARGEN_PX = 8;
 const ICONO_DE = { video: "video", pieza: "video", imagen: "imagen", audio: "nota", texto: "texto", transicion: "transicion" };
 const ESTADO_SUBIDA = {
   espera: () => t("bib.en_espera"),
@@ -321,10 +364,22 @@ export class Biblioteca {
     this.relojMateriales = null;
     this.arrastre = null;               // {clave, cosa, pointerId, x0, y0, x, y, activo, fantasma, origen, cuadro}
     this.pintarAlSoltar = false;        // llegó algo a mitad de un arrastre: las listas se pintan al soltar
+    this.pintarAlCerrar = false;        // llegó algo con el menú de una imagen abierto: se pintan al cerrarlo
     this.suprimirClic = false;          // el clic que el navegador manda tras soltar un arrastre
     this.escucha = null;                // {clave, audio}
     this.relojMensaje = null;
     this.observador = null;
+    this.como = null;                   // el menú «¿Cómo agregar?» de una imagen: {clave, cosa, boton, menu}
+    this.alTocarFueraComo = (e) => {
+      if (this.como && !this.como.menu.contains(e.target) && !this.como.boton.contains(e.target)) this._cerrarComo();
+    };
+    this.alTeclaComo = (e) => {
+      if (e.key !== "Escape" || !this.como) return;
+      e.preventDefault();
+      e.stopPropagation();                // no cierra la hoja del celular: solo el menú
+      this._cerrarComo({ devolverFoco: true });
+    };
+    this.alMoverComo = () => this._cerrarComo();
     this.alMover = (e) => this._moverArrastre(e);
     this.alSoltar = (e) => this._soltarArrastre(e);
     this.alCancelar = (e) => {
@@ -497,6 +552,7 @@ export class Biblioteca {
     const nombre = this.pestanas.querySelector(`[data-panel="${panel}"]`)?.textContent.trim();
     if (nombre) this.contenedor.setAttribute("aria-label", nombre);
     if (panel !== "audio") this._pararEscucha();
+    if (panel !== "medios") this._cerrarComo();
   }
 
   // El color de marca de la edición, para la muestra «Precio».
@@ -573,7 +629,12 @@ export class Biblioteca {
       this.pintarAlSoltar = true;
       return;
     }
+    if (this.como) {                      // el menú de una imagen está abierto: no se repinta bajo el dedo
+      this.pintarAlCerrar = true;
+      return;
+    }
     this.pintarAlSoltar = false;
+    this.pintarAlCerrar = false;
     for (const k of [...this.cosas.keys()]) if (k.startsWith("m:") || k.startsWith("p:")) this.cosas.delete(k);
     this.observador?.disconnect();
     if (this.carga !== "lista") {
@@ -687,7 +748,12 @@ export class Biblioteca {
     item.dataset.arrastrable = "";
     item.title = nombre;
     const mini = this._mini(miniatura(m), m.tipo === "video" ? duracionTexto(m.duracion_ms) : "");
-    mini.append(this._botonMas(clave, t("bib.agregar_nombre", { nombre })));
+    const mas = this._botonMas(clave, t("bib.agregar_nombre", { nombre }));
+    if (m.tipo === "imagen") {                     // capa 5b (D12): pregunta cómo entra
+      mas.setAttribute("aria-haspopup", "dialog");
+      mas.setAttribute("aria-expanded", "false");
+    }
+    mini.append(mas);
     if (puedeBorrarse(m) && this.urls.borrar_material) mini.append(this._botonBorrar(m, nombre));
     item.append(mini);
     el("span", "ed-bib-nombre", item, nombre);
@@ -744,8 +810,13 @@ export class Biblioteca {
     const objetivo = e.target;
     const subir = objetivo.closest?.("[data-subir]");
     if (subir) return this.contenedor.querySelector(`[data-entrada="${subir.dataset.subir}"]`)?.click();
+    const como = objetivo.closest?.("[data-agregar-como]");
+    if (como) return void this._elegirComo(como.dataset.agregarComo);
     const mas = objetivo.closest?.("[data-agregar]");
-    if (mas) return void this.agregar(mas.dataset.agregar);
+    if (mas) {
+      if (this.cosas.get(mas.dataset.agregar)?.tipo === "imagen") return this._alternarComo(mas.dataset.agregar, mas);
+      return void this.agregar(mas.dataset.agregar);
+    }
     const oir = objetivo.closest?.("[data-escuchar]");
     if (oir) return this._escuchar(oir.dataset.escuchar);
     const borrar = objetivo.closest?.("[data-borrar]");
@@ -759,18 +830,21 @@ export class Biblioteca {
 
   // Agrega lo que muestra `clave` en el cabezal (sin `punto`) o donde se
   // soltó (`punto` de LineaTiempo.puntoEn). Una pieza de Crear que todavía no
-  // es material se prepara primero y se agrega sola al tenerla.
-  agregar(clave, punto = null, cosa = this.cosas.get(clave)) {
+  // es material se prepara primero y se agrega sola al tenerla. `como` (capa
+  // 5b, solo una imagen sin `punto`): "clip" la pone como foto en el video,
+  // "capa" (o nada) encima — lo que eligió en el menú del «+».
+  agregar(clave, punto = null, cosa = this.cosas.get(clave), { como = null } = {}) {
     if (!cosa) return false;
     if (cosa.tipo === "pieza") return this._agregarPieza(cosa, punto);
-    return this._operar(cosa, punto);
+    return this._operar(cosa, punto, como);
   }
 
-  _operar(cosa, punto) {
+  _operar(cosa, punto, como = null) {
     const ed = this.editor;
     if (cosa.material) ed.agregarMateriales({ [cosa.material.id]: cosa.material });   // antes de operar
     const destino = ed.destino?.() ?? null;
-    const pedido = pedidoAgregar(ed.doc(), cosa, { punto, cabezalMs: ed.tiempo(), seleccion: ed.seleccion, destino });
+    const antes = ed.doc();
+    const pedido = pedidoAgregar(antes, cosa, { punto, cabezalMs: ed.tiempo(), seleccion: ed.seleccion, destino, como });
     if (!pedido) {
       this._decir(t("bib.sin_videos"), true);
       return false;
@@ -781,9 +855,12 @@ export class Biblioteca {
       return false;
     }
     if (cosa.tipo === "transicion") {
-      const aviso = avisoTransicion(ed.doc(), pedido[1], pedido[2], pedido[3] ?? DURACION_TRANSICION_MS);
-      this._decir(aviso ?? (cosa.transicion === "corte" ? t("bib.union_corte") : t("bib.en_union", { nombre: cosa.nombre })),
-        Boolean(aviso));
+      const { texto, error } = mensajeTransicion(antes, ed.doc(), pedido, cosa);
+      this._decir(texto, error);
+    } else if (pedido[0] === "agregarFoto") {
+      // la foto nueva queda elegida (operaciones.agregarFoto): su duración, y que se cambia en «Editar»
+      const foto = (pistaPrincipal(ed.doc())?.clips ?? []).find((c) => c.id === ed.seleccion);
+      this._decir(foto ? textoFotoAgregada(foto.duracion_ms) : t("bib.agregado", { nombre: cosa.nombre }));
     } else if (cosa.tipo === "texto") {
       this._decir(t("bib.texto_agregado"));
       ed.enfocarTexto();
@@ -797,6 +874,89 @@ export class Biblioteca {
     }
     if (cosa.material && faltaPreparar(cosa.material)) this._esperar(cosa.material.id);
     return true;
+  }
+
+  // ---- «¿Cómo agregar?» de una imagen (capa 5b, D12) ----
+  // Un menú chico junto al «+» (fijo en la pantalla, así no lo corta la
+  // columna ni la hoja del celular): «Como clip del video» o «Encima del
+  // video». Se cierra al elegir, con Esc (el foco vuelve al «+»), con un toque
+  // afuera, al correr la lista o al cambiar el tamaño de la ventana.
+
+  _alternarComo(clave, boton) {
+    if (this.como?.clave === clave) return this._cerrarComo({ devolverFoco: true });
+    this._abrirComo(clave, boton);
+  }
+
+  _abrirComo(clave, boton) {
+    const cosa = this.cosas.get(clave);
+    if (!cosa) return;
+    this._cerrarComo();
+    const menu = el("div", "ed-bib-como", this.contenedor);
+    menu.setAttribute("role", "dialog");
+    const titulo = el("p", "ed-bib-como-titulo", menu, t("bib.agregar_imagen", { nombre: cosa.nombre }));
+    titulo.id = "ed-bib-como-titulo";
+    menu.setAttribute("aria-labelledby", titulo.id);
+    for (const o of opcionesImagen()) {
+      const b = el("button", "ed-bib-como-opcion", menu);
+      b.type = "button";
+      b.dataset.agregarComo = o.como;
+      b.append(icono(ICONO_COMO[o.como] ?? "imagen", 18), el("span", "", null, o.texto));
+    }
+    // con el teclado, salir del menú con Tab lo cierra (con el mouse, Safari no
+    // enfoca el botón tocado — `relatedTarget` null —: ahí lo cierra el toque afuera)
+    menu.addEventListener("focusout", (e) => {
+      const a = e.relatedTarget;
+      if (a && this.como?.menu === menu && !menu.contains(a) && a !== this.como.boton) this._cerrarComo();
+    });
+    this.como = { clave, cosa, boton, menu };
+    boton.setAttribute("aria-expanded", "true");
+    this._ponerComo();
+    document.addEventListener("pointerdown", this.alTocarFueraComo, true);
+    document.addEventListener("keydown", this.alTeclaComo, true);
+    this.contenedor.addEventListener("scroll", this.alMoverComo, { passive: true });
+    window.addEventListener("resize", this.alMoverComo);
+    menu.querySelector("button")?.focus({ preventScroll: true });
+  }
+
+  // Debajo del «+», alineado a su derecha; si no cabe debajo, encima. Nunca
+  // fuera de la pantalla (MENU_COMO_MARGEN_PX de cada borde).
+  _ponerComo() {
+    const { boton, menu } = this.como ?? {};
+    if (!menu?.isConnected) return;
+    const b = boton.getBoundingClientRect();
+    const m = menu.getBoundingClientRect();
+    const ancho = window.innerWidth || document.documentElement.clientWidth || 0;
+    const alto = window.innerHeight || document.documentElement.clientHeight || 0;
+    const margen = MENU_COMO_MARGEN_PX;
+    const x = Math.max(margen, Math.min(b.right - m.width, ancho - m.width - margen));
+    const abajo = b.bottom + 4;
+    const y = abajo + m.height + margen <= alto ? abajo : Math.max(margen, b.top - 4 - m.height);
+    menu.style.left = `${Math.round(x)}px`;
+    menu.style.top = `${Math.round(y)}px`;
+  }
+
+  _cerrarComo({ devolverFoco = false } = {}) {
+    const como = this.como;
+    if (!como) return;
+    this.como = null;
+    document.removeEventListener("pointerdown", this.alTocarFueraComo, true);
+    document.removeEventListener("keydown", this.alTeclaComo, true);
+    this.contenedor.removeEventListener("scroll", this.alMoverComo);
+    window.removeEventListener("resize", this.alMoverComo);
+    como.menu.remove();
+    if (como.boton.isConnected) como.boton.setAttribute("aria-expanded", "false");
+    if (this.pintarAlCerrar) this._pintarListas();         // lo que llegó mientras estaba abierto
+    // el foco vuelve a su «+» (el nuevo, si la lista se repintó)
+    const boton = como.boton.isConnected ? como.boton : this.contenedor.querySelector(`[data-agregar="${como.clave}"]`);
+    if (devolverFoco) boton?.focus({ preventScroll: true });
+  }
+
+  _elegirComo(como) {
+    const abierto = this.como;
+    if (!abierto) return;
+    this._cerrarComo({ devolverFoco: true });
+    // la de la lista nueva si se repintó al cerrar (con su copia liviana, si llegó mientras tanto)
+    void this.agregar(abierto.clave, null, this.cosas.get(abierto.clave) ?? abierto.cosa, { como });
   }
 
   // Por qué la página rechazó una operación (el mismo mensaje que muestra
@@ -1186,7 +1346,7 @@ export class Biblioteca {
   _abajo(e) {
     if (e.button !== 0 || !e.isPrimary || e.pointerType === "touch" || this.arrastre) return;
     const item = e.target.closest?.("[data-arrastrable]");
-    if (!item || !this.contenedor.contains(item) || e.target.closest("[data-agregar], [data-escuchar], [data-borrar]")) return;
+    if (!item || !this.contenedor.contains(item) || e.target.closest("[data-agregar], [data-escuchar], [data-borrar], .ed-bib-como")) return;
     e.preventDefault();                           // sin seleccionar texto ni robar el foco (S, Supr, Ctrl+Z siguen andando)
     this.arrastre = {
       clave: item.dataset.clave, cosa: this.cosas.get(item.dataset.clave), pointerId: e.pointerId,
