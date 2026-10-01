@@ -6,7 +6,9 @@
 //   «Videos de Crear» (las piezas listas; la que todavía no es material se
 //   prepara al tocar «+» — gratis — y se agrega sola cuando está).
 // - Audio: «Subir audio» y los audios del proyecto (subidos y de Mi música),
-//   con «Escuchar» y «+» (entra como música desde el cabezal).
+//   con «Escuchar» y «+» (entra como música desde el cabezal). Arriba, en
+//   `zona("audio")`, la voz en off de voz_panel.js (capa 5a: voz con IA y
+//   grabar con el micrófono).
 // - Texto: cuatro muestras (Título, Subtítulo, Precio, Llamado) con su estilo;
 //   tocar una la pone en el cabezal, la deja elegida y pide el foco para su
 //   texto (editor.enfocarTexto: el panel de propiedades lo atiende).

@@ -261,6 +261,27 @@ export const ES = {
   "grab.inseguro": "Para grabar, abre el editor desde su dirección segura (https).",
   "grab.error": "No se pudo usar el micrófono.",
   "grab.error_subir": "No se pudo subir la grabación (error {status}).",
+  "voz.titulo_ia": "Voz con IA",
+  "voz.titulo_grabar": "Grabar tu voz",
+  "voz.texto": "Lo que va a decir",
+  "voz.contador": "{n} de {max} caracteres",
+  "voz.elige": "Elige una voz",
+  "voz.escuchar": "Escuchar a {voz}",
+  "voz.no_muestra": "No se pudo escuchar esa voz.",
+  "voz.velocidad": "Velocidad",
+  "voz.idioma": "Idioma",
+  "voz.ir_subtitulos": "Ir a Subtítulos",
+  "voz.error": "No se pudo crear la voz: {mensaje}",
+  "voz.fallo": "No se pudo crear la voz. Vuelve a intentar.",
+  "voz.sin_respuesta": "No sabemos cómo terminó la voz: recarga la página; si ya está lista, se agrega sola.",
+  "voz.otra_pestana": "Terminó una voz que se pidió en otra pestaña: escribe el mismo texto y agrégala gratis.",
+  "grab.grabar": "Grabar",
+  "grab.parar": "Parar",
+  "grab.nivel": "Nivel del micrófono",
+  "grab.escuchala": "Escúchala antes de usarla:",
+  "grab.usar": "Usar la grabación",
+  "grab.descartar": "Descartar",
+  "grab.tope": "Llegaste a los 5 minutos: la grabación se detuvo.",
   "prop.ayuda_vacia": "Elige algo en la línea de tiempo o en el video para cambiarlo.",
   "prop.mezcla_equilibrada": "Equilibrada",
   "prop.mezcla_voz": "Voz primero",
@@ -342,7 +363,9 @@ export const ES = {
   "prop.elegir_video": "Elegir el video",
   "prop.nota_otro": "El video final no muestra este clip: aquí solo se puede borrar.",
   "prop.solo_idioma": "Solo en {idioma}",
-  "prop.todos_idiomas": "Todos los idiomas"
+  "prop.todos_idiomas": "Todos los idiomas",
+  "prop.suena_en": "Suena en",
+  "prop.subtitulos_audio": "Subtítulos de este audio"
 };
 
 let actuales = ES;

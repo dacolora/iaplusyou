@@ -4925,6 +4925,9 @@ msgstr "Choose a persona (or create a quick one)."
 msgid "Elige una velocidad de la lista."
 msgstr "Pick a speed from the list."
 
+msgid "Elige una voz"
+msgstr "Choose a voice"
+
 msgid "Elige una voz de la lista."
 msgstr "Pick a voice from the list."
 
@@ -5603,8 +5606,15 @@ msgid "Escuchar"
 msgstr "Listen"
 
 #, python-brace-format
+msgid "Escuchar a {voz}"
+msgstr "Listen to {voz}"
+
+#, python-brace-format
 msgid "Escuchar «{nombre}»"
 msgstr "Listen to “{nombre}”"
+
+msgid "Escúchala antes de usarla:"
+msgstr "Listen to it before using it:"
 
 msgid "Ese anuncio no está en error."
 msgstr "That ad isn't in an error state."
@@ -6851,6 +6861,12 @@ msgstr "Recording added at the playhead."
 msgid "Grabación: de 10 segundos a 5 minutos, mp3, wav, m4a, aac u ogg"
 msgstr "Recording: 10 seconds to 5 minutes, mp3, wav, m4a, aac or ogg"
 
+msgid "Grabar"
+msgstr "Record"
+
+msgid "Grabar tu voz"
+msgstr "Record your voice"
+
 msgid "Gracias: quedó como prueba del producto y Claude ya la puede usar."
 msgstr "Thanks: it's saved as product proof and Claude can now use it."
 
@@ -7530,6 +7546,9 @@ msgstr "Go to Final edition"
 
 msgid "Ir a Ideas"
 msgstr "Go to Ideas"
+
+msgid "Ir a Subtítulos"
+msgstr "Go to Subtitles"
 
 #, python-brace-format
 msgid "Ir a {tiempo}"
@@ -8231,6 +8250,9 @@ msgstr "Keys and connections for the project, your account, stores, channels and
 msgid "Llegar a la gente sale caro (CPM alto): la audiencia está saturada o el anuncio no engancha."
 msgstr "Reaching people is expensive (high CPM): the audience is saturated or the ad doesn't hook."
 
+msgid "Llegaste a los 5 minutos: la grabación se detuvo."
+msgstr "You reached 5 minutes: the recording stopped."
+
 msgid "Llenar la pantalla"
 msgstr "Fill the screen"
 
@@ -8303,6 +8325,9 @@ msgstr "What's coming out:"
 
 msgid "Lo que tomó construirlo"
 msgstr "What it took to build this"
+
+msgid "Lo que va a decir"
+msgstr "What it will say"
 
 msgid "Lo que vendes: calzado, ropa, decoración, comida, lo que sea."
 msgstr "What you sell: shoes, clothes, home decor, food, anything."
@@ -8997,6 +9022,9 @@ msgstr "No sub-avatar came complete."
 msgid "Nivel de conciencia"
 msgstr "Awareness level"
 
+msgid "Nivel del micrófono"
+msgstr "Microphone level"
+
 msgid "No aplica"
 msgstr "Not applicable"
 
@@ -9406,6 +9434,9 @@ msgstr "Doesn't hold"
 msgid "No sabe que tiene el problema"
 msgstr "Doesn't know they have the problem"
 
+msgid "No sabemos cómo terminó la voz: recarga la página; si ya está lista, se agrega sola."
+msgstr "We lost track of the voice: reload the page; if it's ready, it gets added on its own."
+
 msgid "No sabemos cómo terminó: recarga la página para ver los subtítulos."
 msgstr "We don't know how it ended: reload the page to see the subtitles."
 
@@ -9620,6 +9651,13 @@ msgstr "Couldn't create version B: %(error)s. Nothing was generated."
 msgid "No se pudo crear la voz."
 msgstr "The voice could not be created."
 
+msgid "No se pudo crear la voz. Vuelve a intentar."
+msgstr "Couldn't create the voice. Try again."
+
+#, python-brace-format
+msgid "No se pudo crear la voz: {mensaje}"
+msgstr "Couldn't create the voice: {mensaje}"
+
 msgid "No se pudo describir (red)."
 msgstr "Couldn't describe it (network)."
 
@@ -9632,6 +9670,9 @@ msgstr "Couldn't queue the follow-up task (%(error)s)"
 
 msgid "No se pudo encolar la regeneración."
 msgstr "Couldn't queue the regeneration."
+
+msgid "No se pudo escuchar esa voz."
+msgstr "Couldn't play that voice."
 
 msgid "No se pudo escuchar ese audio."
 msgstr "Couldn't play that audio."
@@ -12500,6 +12541,9 @@ msgstr "Subtitles"
 msgid "Subtítulos (transcripción)"
 msgstr "Subtitles (transcription)"
 
+msgid "Subtítulos de este audio"
+msgstr "Subtitles for this audio"
+
 #, python-brace-format
 msgid "Subtítulos de la voz · {n} palabras."
 msgstr "Subtitles from the voice · {n} words."
@@ -12520,6 +12564,9 @@ msgstr "Subtitles without libass: skipped"
 
 msgid "Suecia"
 msgstr "Sweden"
+
+msgid "Suena en"
+msgstr "Plays in"
 
 #, python-format
 msgid "Sugeridas para %(etapa)s:"
@@ -12625,6 +12672,9 @@ msgstr "Finish or close first: %(partes)s"
 
 msgid "Terminó con error."
 msgstr "Finished with an error."
+
+msgid "Terminó una voz que se pidió en otra pestaña: escribe el mismo texto y agrégala gratis."
+msgstr "A voice requested in another tab is done: write the same text and add it for free."
 
 msgid "Textil de hogar (cobija, manta, cojín)"
 msgstr "Home textile (blanket, throw, cushion)"
@@ -13646,6 +13696,9 @@ msgstr "Use this image as a reference"
 msgid "Usar esta versión"
 msgstr "Use this version"
 
+msgid "Usar la grabación"
+msgstr "Use the recording"
+
 #, python-format
 msgid "Usar «%(titular)s» en un sprint"
 msgstr "Use “%(titular)s” in a sprint"
@@ -13996,6 +14049,9 @@ msgstr "Voice added at the playhead. Its subtitles are ready: add them for free 
 
 msgid "Voz clonada: ya está en Mis voces."
 msgstr "Voice cloned: it is in My voices."
+
+msgid "Voz con IA"
+msgstr "AI voice"
 
 msgid "Voz creada, pero no pude estrenarla: tócale ▶ antes de 7 días para que no se pierda."
 msgstr "Voice created, but I couldn't try it out: press ▶ within 7 days so it isn't lost."
@@ -16786,6 +16842,10 @@ msgstr "{mensaje} Choose another market."
 #, python-brace-format
 msgid "{n} %"
 msgstr "{n}%"
+
+#, python-brace-format
+msgid "{n} de {max} caracteres"
+msgstr "{n} of {max} characters"
 
 #, python-brace-format
 msgid "{tipo} «{archivo}»"

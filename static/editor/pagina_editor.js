@@ -82,6 +82,7 @@ import { Propiedades } from "./propiedades.js";
 import { SubtitulosPanel } from "./subtitulos_panel.js";
 import { listaY, ponerTextos, t } from "./textos.js";
 import { infoDe, VistaPrevia } from "./vista.js";
+import { VozPanel } from "./voz_panel.js";
 
 // Los textos en el idioma de quien mira (ruta editor.ver), antes de construir
 // nada: ningún módulo llama a t() al cargarse. Se ponen al leer `datos`, dentro
@@ -581,9 +582,14 @@ function montarPaneles() {
   // capa 5a: la pestaña «Subtítulos» (si al abrir ya corría una transcripción
   // de esta edición, retoma su barra)
   new SubtitulosPanel({ contenedor: biblioteca.zona("subtitulos"), editor, datos });
+  // capa 5a (Task 8): la voz en off arriba de «Audio» — voz con IA y grabar
+  // con el micrófono (si al abrir ya se creaba una voz, retoma su barra)
+  new VozPanel({ contenedor: biblioteca.zona("audio"), editor, datos });
   // las propiedades de lo elegido («Editar»: un formulario por clase de clip,
-  // o la mezcla de la edición si no hay nada elegido)
-  new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () => vista.materiales });
+  // o la mezcla de la edición si no hay nada elegido; «Suena en» nombra los
+  // idiomas como la galería de voces)
+  new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () => vista.materiales,
+                    nombresIdioma: datos.voz?.nombres_idioma ?? datos.subtitulos?.nombres_idioma ?? {} });
   // tocar, mover y agrandar los textos y las imágenes sobre el video (necesita
   // la vista previa: el documento que se dibuja y las medidas de los textos)
   new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });

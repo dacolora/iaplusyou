@@ -412,6 +412,78 @@
   .ed-sub-bloque:hover { border-color: var(--muted-2); }
   .ed-sub-bloque:active { transform: none; }
 
+  /* Voz en off (capa 5a, Task 8): voz_panel.js arma lo de arriba de la pestaña
+     «Audio» (dentro de .ed-bib-zona): «Voz con IA» y «Grabar tu voz», cada uno
+     abre su formulario ahí mismo. Las tarjetas de voz van en dos columnas en
+     la columna (220–300 px) y en la hoja del celular. */
+  .ed-voz { display: flex; flex-direction: column; gap: .6rem; min-width: 0; padding-bottom: .8rem; border-bottom: 1px solid var(--border); }
+  .ed-voz-acciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+  .ed-voz-abrir { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3rem; min-width: 0;
+    padding: .65rem .4rem; font-family: var(--font-body); font-size: .78rem; font-weight: 600; line-height: 1.25; text-align: center;
+    color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .ed-voz-abrir:hover { border-color: var(--muted-2); }
+  .ed-voz-abrir[aria-expanded="true"] { color: var(--accent-texto); border-color: var(--accent-texto); box-shadow: inset 0 0 0 1px var(--accent-texto); }
+  .ed-voz-abrir span { min-width: 0; overflow-wrap: anywhere; }
+  .ed-voz-icono { flex: none; }
+  .ed-voz-mensaje { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; min-width: 0; }
+  .ed-voz-mensaje:not(:has(> :not([hidden]))) { display: none; }
+  .ed-voz-aviso { margin: 0; text-align: left; overflow-wrap: anywhere; }
+  .ed-voz-detalle { font-size: .74rem; color: var(--muted); }
+  .ed-voz-detalle summary { cursor: pointer; }
+  .ed-voz-detalle pre { margin: .3rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .72rem; }
+  .ed-voz-bloque, .ed-grab { display: flex; flex-direction: column; gap: .65rem; min-width: 0; }
+  .ed-voz-campo { display: flex; flex-direction: column; gap: .3rem; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; }
+  .ed-voz-etiqueta, .ed-voz legend { min-width: 0; font-family: var(--font-body); font-size: .8rem; font-weight: 600; color: var(--text);
+    text-transform: none; letter-spacing: 0; }
+  .ed-voz legend { float: left; width: 100%; margin: 0 0 .3rem; padding: 0; }
+  .ed-voz legend + * { clear: both; }
+  .ed-voz textarea { width: 100%; min-height: 5.5rem; resize: vertical; }
+  .ed-voz select { width: 100%; padding: .4rem .5rem; }
+  .ed-voz-contador { font-size: .72rem; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .ed-voz-contador.error { color: var(--error); }
+  .ed-voz-filtro { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .1rem; }
+  .ed-voz-filtro .btn-sm { padding: .25rem .65rem; font-size: .74rem; border-radius: 999px; }
+  .ed-voz-filtro .btn-sm[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .ed-voz-voces { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; max-height: 16rem; padding: 2px;
+    overflow-y: auto; }
+  .ed-voz-voz { position: relative; min-width: 0; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .ed-voz-voz:hover { border-color: var(--muted-2); }
+  .ed-voz-voz:has(input:checked) { border-color: var(--accent-texto); box-shadow: inset 0 0 0 1px var(--accent-texto); }
+  .ed-voz-voz:has(input:focus-visible) { outline: 2px solid var(--accent-texto); outline-offset: 1px; }
+  .ed-voz-elegir { display: flex; flex-direction: column; gap: .1rem; min-width: 0; margin: 0; padding: .45rem 2.2rem .45rem .55rem;
+    cursor: pointer; text-transform: none; letter-spacing: 0; }
+  /* el radio se toca con la tarjeta entera (sigue andando con el teclado: flechas) */
+  .ed-voz-elegir input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+  .ed-voz-nombre { font-size: .8rem; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-voz-tono { font-size: .68rem; line-height: 1.3; color: var(--muted); overflow-wrap: anywhere; }
+  .ed-voz-play { position: absolute; top: 50%; right: .35rem; display: grid; place-items: center; width: 1.7rem; height: 1.7rem; padding: 0;
+    font-size: .66rem; line-height: 1; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 50%;
+    transform: translateY(-50%); }
+  .ed-voz-play:hover:not(:disabled) { color: var(--accent-texto); border-color: var(--accent-texto); }
+  .ed-voz-play[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .ed-voz-play[aria-busy="true"] { opacity: .55; cursor: progress; }
+  .ed-voz-play:active { transform: translateY(-50%); }
+  .ed-voz-fila { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
+  .ed-voz-crear { width: 100%; }
+  .ed-voz-progreso, .ed-grab-progreso { display: block; width: 100%; height: 6px; accent-color: var(--accent); }
+  .ed-voz-nota { margin: 0; font-size: .76rem; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+  .ed-grab-motivo { color: var(--warn); }
+  .ed-grab-controles { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .ed-grab-grabar::before, .ed-grab-parar::before { content: ""; display: inline-block; flex: none; width: .6rem; height: .6rem;
+    margin-right: .4rem; vertical-align: -.05rem; background: currentColor; }
+  .ed-grab-grabar::before { border-radius: 50%; }
+  .ed-grab-parar::before { border-radius: 2px; background: var(--error); }
+  .ed-grab-reloj { font-size: .84rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .ed-grab[data-estado="grabando"] .ed-grab-reloj { color: var(--error); font-weight: 600; }
+  .ed-grab-nivel { height: 8px; overflow: hidden; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; }
+  .ed-grab-nivel-barra { display: block; width: 100%; height: 100%; background: var(--ok); transform: scaleX(0); transform-origin: left center;
+    transition: transform .08s linear; }
+  .ed-grab-resultado { display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+  .ed-grab audio { display: block; width: 100%; max-width: 100%; }
+  .ed-grab-acciones { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .ed-grab-subida { display: flex; flex-direction: column; gap: .25rem; font-size: .76rem; color: var(--muted); }
+  .ed-voz-abrir:focus-visible, .ed-voz-play:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 1px; }
+
   /* «Producir» */
   .editor-dialogo { max-width: min(92vw, 420px); padding: 1.2rem; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); }
   .editor-dialogo::backdrop { background: color-mix(in srgb, var(--bg) 70%, transparent); }
@@ -483,9 +555,12 @@
       padding: .35rem .1rem; background: transparent; color: var(--muted); border: 1px solid transparent;
       border-radius: var(--radius-sm); font-size: .66rem; }
     .ed-accion.ed-activa { color: var(--accent-texto); background: var(--panel-2); border-color: var(--border); }
+    /* la galería de voces corre con la hoja (una caja que corre dentro de otra se pelea con el dedo) */
+    .ed-voz-voces { max-height: none; overflow: visible; }
   }
   @media (prefers-reduced-motion: reduce) {
     .ed-hoja, .ed-hoja.ed-hoja-abierta { transition: none; }
+    .ed-grab-nivel-barra { transition: none; }
   }
 </style>
 </head>

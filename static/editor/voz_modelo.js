@@ -33,6 +33,16 @@ export function elegirGrabacion(esSoportado) {
   return null;
 }
 
+// La extensión de lo que de verdad grabó el navegador (MediaRecorder.mimeType
+// puede traer el códec, o venir vacío si se creó sin pedir un tipo): webm si
+// no se sabe, lo más común.
+export function extensionDeMime(mime) {
+  const base = String(mime ?? "").toLowerCase().split(";")[0].trim();
+  if (base === "audio/mp4") return ".m4a";
+  if (base === "audio/ogg") return ".ogg";
+  return ".webm";
+}
+
 // «0:07», «4:59»: minutos y segundos CORTADOS (un reloj nunca dice 5:00
 // antes de tiempo).
 export function relojTexto(ms) {

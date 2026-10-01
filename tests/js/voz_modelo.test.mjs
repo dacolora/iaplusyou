@@ -7,7 +7,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ponerTextos } from "../../static/editor/textos.js";
 import {
-  avisoAgregada, botonCrear, elegirGrabacion, encargoVozGuardado, ENCARGO_VOZ_MAX_MS, estadoTexto, filtrarVoces, FILTROS_VOZ,
+  avisoAgregada, botonCrear, elegirGrabacion, encargoVozGuardado, ENCARGO_VOZ_MAX_MS, estadoTexto, extensionDeMime, filtrarVoces,
+  FILTROS_VOZ,
   firmaPedido, FORMATOS_GRABACION, horaLocal, idiomaInicial, MAX_GRABACION_MS, mensajeGrabacionSubida, mensajeMicrofono,
   motivoSinGrabar, nivelDe, nombreArchivo, relojTexto, textoReloj,
 } from "../../static/editor/voz_modelo.js";
@@ -194,4 +195,126 @@ test("avisoAgregada: qué se dice al agregar una voz o una grabación", () => {
     { texto: "Grabación agregada en el cabezal.", irSubtitulos: false, error: false });
   assert.deepEqual(avisoAgregada({ tipo: "grabacion", conPalabras: false, cortadaMs: 3000 }),
     { texto: "La voz dura más que lo que queda del video: quedó de 0:03.", irSubtitulos: false, error: true });
+});
+
+test("extensionDeMime: la extensión de lo que de verdad grabó el navegador", () => {
+  assert.equal(extensionDeMime("audio/webm;codecs=opus"), ".webm");
+  assert.equal(extensionDeMime("audio/webm"), ".webm");
+  assert.equal(extensionDeMime("audio/mp4"), ".m4a");
+  assert.equal(extensionDeMime("audio/mp4;codecs=mp4a.40.2"), ".m4a");
+  assert.equal(extensionDeMime("audio/ogg;codecs=opus"), ".ogg");
+  assert.equal(extensionDeMime("AUDIO/OGG"), ".ogg");
+  // sin decir (un MediaRecorder sin mimeType) o desconocido: webm, lo más común
+  assert.equal(extensionDeMime(""), ".webm");
+  assert.equal(extensionDeMime(undefined), ".webm");
+  assert.equal(extensionDeMime("video/x-matroska"), ".webm");
+});
+
+// ---- El panel (voz_panel.js) sin DOM: lo que hace con la edición ----
+import * as op from "../../static/editor/operaciones.js";
+import { VozPanel } from "../../static/editor/voz_panel.js";
+import { docBase } from "./doc_base.mjs";
+
+// Un `editor` como el de pagina_editor.js, con las operaciones de verdad.
+function editorFalso({ tiempo = 0, conflicto = false } = {}) {
+  const e = { doc: docBase(), seleccion: null, mats: {}, operaciones: [] };
+  const info = () => ({
+    1: { duracion_ms: 8000, tiene_audio: true }, 2: { duracion_ms: 3000 },
+    ...Object.fromEntries(Object.values(e.mats).map((m) => [m.id, { duracion_ms: m.duracion_ms, tiene_audio: null }])),
+  });
+  return {
+    e,
+    doc: () => e.doc,
+    tiempo: () => tiempo,
+    info,
+    get seleccion() { return e.seleccion; },
+    enConflicto: () => conflicto,
+    agregarMateriales: (mapa) => Object.assign(e.mats, mapa),
+    operar(nombre, ...args) {
+      if (conflicto) return false;
+      try {
+        const r = op[nombre](e.doc, ...args, info());
+        e.doc = r.doc;
+        e.seleccion = r.seleccion;
+        e.operaciones.push([nombre, ...args]);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
+function panelFalso(editor) {
+  const dichos = [];
+  const picos = [];
+  return {
+    dichos, picos, editor,
+    _enConflicto: VozPanel.prototype._enConflicto,
+    _decir: (texto, error = false, { irSubtitulos = false } = {}) => dichos.push({ texto, error, irSubtitulos }),
+    _esperarPicos: (id) => picos.push(id),
+  };
+}
+
+const VOZ_IA = { id: 30, tipo: "audio", url: "https://r2/voz.mp3", duracion_ms: 3000, picos: null, origen: "voz",
+                 palabras: [{ t_ms: 0, dur_ms: 400, texto: "Hola" }] };
+
+test("VozPanel._agregar: la voz entra en el cabezal como voz, con el idioma del destino, y lo dice", () => {
+  const editor = editorFalso({ tiempo: 1000 });
+  const panel = panelFalso(editor);
+  assert.equal(VozPanel.prototype._agregar.call(panel, VOZ_IA, { tipo: "ia", idioma: "es" }), true);
+  const clip = editor.e.doc.pistas.flatMap((p) => p.clips).find((c) => c.id === editor.e.seleccion);
+  assert.equal(clip.material_id, 30);
+  assert.equal(clip.rol_audio, "voz");
+  assert.equal(clip.idioma, "es");
+  assert.equal(clip.inicio_ms, 1000);
+  assert.equal(clip.por_destino, undefined);                      // se puede recortar (D9)
+  assert.equal(editor.e.mats[30], VOZ_IA);                          // la vista previa lo tuvo ANTES de operar
+  assert.deepEqual(panel.dichos, [{ texto: "Voz agregada en el cabezal. Sus subtítulos ya están listos: ponlos gratis en «Subtítulos».",
+                                    error: false, irSubtitulos: true }]);
+  assert.deepEqual(panel.picos, [30]);                             // sin picos todavía: se esperan (gratis)
+});
+
+test("VozPanel._agregar: si no cabe entera se dice hasta dónde quedó; sin idioma suena en todos", () => {
+  const editor = editorFalso({ tiempo: 6000 });
+  const panel = panelFalso(editor);
+  const larga = { ...VOZ_IA, id: 31, duracion_ms: 4000, picos: [0.1] };
+  assert.equal(VozPanel.prototype._agregar.call(panel, larga, { tipo: "ia", idioma: null }), true);
+  const clip = editor.e.doc.pistas.flatMap((p) => p.clips).find((c) => c.id === editor.e.seleccion);
+  assert.equal(clip.duracion_ms, 2000);
+  assert.equal("idioma" in clip, false);
+  assert.deepEqual(panel.dichos, [{ texto: "La voz dura más que lo que queda del video: quedó de 0:02.", error: true, irSubtitulos: true }]);
+  assert.deepEqual(panel.picos, []);                               // ya traía sus picos
+});
+
+test("VozPanel._agregar: una grabación se anuncia como tal; con la edición cambiada en otra pestaña no se agrega", () => {
+  const editor = editorFalso({ tiempo: 0 });
+  const panel = panelFalso(editor);
+  const grabacion = { id: 40, tipo: "audio", url: "https://r2/g.mp3", duracion_ms: 1500, picos: [0.2], origen: "grabacion" };
+  assert.equal(VozPanel.prototype._agregar.call(panel, grabacion, { tipo: "grabacion", idioma: "en" }), true);
+  assert.deepEqual(panel.dichos, [{ texto: "Grabación agregada en el cabezal.", error: false, irSubtitulos: false }]);
+  const bloqueado = editorFalso({ conflicto: true });
+  const p2 = panelFalso(bloqueado);
+  assert.equal(VozPanel.prototype._agregar.call(p2, grabacion, { tipo: "grabacion", idioma: "en" }), false);
+  assert.equal(bloqueado.e.operaciones.length, 0);
+  assert.equal(p2.dichos[0].error, true);
+  assert.match(p2.dichos[0].texto, /otra pestaña/);
+});
+
+test("VozPanel._retomar: retoma la barra de la voz que se creaba, o pone la que terminó mientras se recargaba", () => {
+  const clave = "b".repeat(64);
+  const guardado = { job: "acme__ed7__voz", sello: Date.now(), clave, idioma: "es" };
+  const llamadas = [];
+  const falsa = (vivo) => ({
+    datos: { trabajos_vivos: { voz: vivo } },
+    _leerEncargo: () => guardado,
+    _olvidarEncargo: () => llamadas.push(["olvidar"]),
+    seguir: (job, encargo, opciones) => llamadas.push(["seguir", job, encargo, opciones]),
+    _traerYAgregar: (encargo, opciones) => llamadas.push(["traer", encargo, opciones]),
+  });
+  VozPanel.prototype._retomar.call(falsa("acme__ed7__voz"));
+  assert.deepEqual(llamadas, [["seguir", "acme__ed7__voz", { clave, idioma: "es" }, { nuevo: false }]]);
+  llamadas.length = 0;
+  VozPanel.prototype._retomar.call(falsa(null));
+  assert.deepEqual(llamadas, [["olvidar"], ["traer", { clave, idioma: "es" }, { callado: true }]]);
 });

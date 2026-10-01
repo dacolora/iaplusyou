@@ -620,6 +620,58 @@ def test_la_pestana_subtitulos_en_la_biblioteca_y_en_el_celular(dashboard, encol
     assert "flex: 1 1 0" in accion and "min-width: 0" in accion
 
 
+def test_la_voz_en_off_arriba_de_la_pestana_audio(dashboard, encolados, monkeypatch):
+    """Capa 5a (Task 8, spec D8/D9/D12): voz_panel.js pone «Voz con IA» y
+    «Grabar tu voz» arriba de «Audio». La página trae lo que el panel pide: la
+    galería de voces (género y tono), el formulario (idiomas, velocidades, tope
+    de caracteres), el tope de una grabación, las rutas (precio, crear, traer
+    una voz por su clave, subir una grabación, la muestra de Crear › Audios y
+    el estado de un trabajo), sus textos y el trabajo de voz vivo para
+    retomarlo al recargar. Las tarjetas van en dos columnas también en el
+    celular, sin correr la página de lado."""
+    import trabajos
+    from final_edition import textos_editor
+    import idiomas
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    datos = _datos(html)
+    urls = datos["urls"]
+    for clave in ("voz_estimar", "voz", "voz_material", "grabacion", "muestra_voz", "estado_trabajo", "materiales_por_id"):
+        assert urls[clave], clave
+    assert "__CLAVE__" in urls["voz_material"] and "__JOB__" in urls["estado_trabajo"]
+    assert [v["nombre"] for v in datos["voces"]] == [f["nombre"] for f in audios.fichas_voces()]
+    assert {"mujer", "hombre"} <= {v["genero"] for v in datos["voces"]}
+    assert list(datos["voz"]["velocidades"]) == ["lenta", "normal", "rapida"]
+    assert datos["voz"]["idioma_defecto"] in datos["voz"]["idiomas"]
+    assert datos["voz"]["max_caracteres"] == audios.MAX_CARACTERES
+    assert datos["grabacion"]["max_ms"] == 300000 and datos["grabacion"]["max_bytes"] > 0
+    assert datos["trabajos_vivos"]["voz"] is None
+    # los textos del panel, en el idioma de quien mira (el precio del servidor ya dice «aprox.»: R6)
+    assert datos["textos"]["voz.crear_precio"] == "Crear la voz ({precio})"
+    assert datos["textos"]["grab.grabar"] == "Grabar" and datos["textos"]["prop.suena_en"] == "Suena en"
+    with idiomas.en_idioma("en"):
+        en = textos_editor.textos()
+    assert en["voz.crear_precio"] == "Create the voice ({precio})"
+    assert en["voz.titulo_ia"] == "AI voice" and en["grab.usar"] == "Use the recording"
+    # el CSS: dos columnas de voces, la barra de nivel y, en el celular, la galería corre con la hoja
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    voces = re.search(r"\.ed-voz-voces \{([^}]*)\}", css).group(1)
+    assert "repeat(2, minmax(0, 1fr))" in voces
+    for regla in (".ed-voz-acciones", ".ed-voz-voz", ".ed-voz-play", ".ed-voz-fila", ".ed-grab-nivel", ".ed-grab-controles"):
+        assert regla in css, regla
+    celular = css[css.index("@media (max-width: 760px)"):]
+    assert ".ed-voz-voces { max-height: none" in celular
+    # una voz que se estaba creando al recargar: la página trae su job para retomar la barra
+    monkeypatch.setattr(trabajos, "en_curso", lambda job: job.endswith("__voz"))
+    datos = _datos(_cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True))
+    assert datos["trabajos_vivos"]["voz"] and datos["trabajos_vivos"]["voz"].endswith("__voz")
+    # el módulo de la página monta el panel en la zona de «Audio»
+    with open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8") as f:
+        pagina = f.read()
+    assert 'import { VozPanel } from "./voz_panel.js";' in pagina
+    assert 'new VozPanel({ contenedor: biblioteca.zona("audio"), editor, datos });' in pagina
+
+
 def test_ningun_ancho_queda_sin_disposicion(dashboard, encolados):
     """Fix 1 de la Task 4: `(min-width: 761px)` + `(max-width: 760px)` dejaban
     sin regla los 760,x px (zoom del navegador) y el reproductor medía 0×0. El

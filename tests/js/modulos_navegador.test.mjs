@@ -61,6 +61,18 @@ test("los módulos de navegador cargan y exportan lo que la página usa", async 
   for (const m of ["zona", "mostrar"]) {
     assert.equal(typeof bib.Biblioteca.prototype[m], "function", `Biblioteca.${m}`);
   }
+  // capa 5a (Task 8): la voz en off de la pestaña «Audio» (su parte pura y su panel)
+  const vm = await import("../../static/editor/voz_modelo.js");
+  for (const f of ["elegirGrabacion", "relojTexto", "motivoSinGrabar", "mensajeMicrofono", "estadoTexto", "filtrarVoces",
+    "idiomaInicial", "botonCrear", "encargoVozGuardado"]) {
+    assert.equal(typeof vm[f], "function", `voz_modelo.${f}`);
+  }
+  const voz = await import("../../static/editor/voz_panel.js");
+  assert.equal(typeof voz.VozPanel, "function");
+  for (const m of ["pintar", "crear", "seguir", "grabar", "parar", "usar", "descartar"]) {
+    assert.equal(typeof voz.VozPanel.prototype[m], "function", `VozPanel.${m}`);
+  }
+  assert.equal(typeof globalThis.document, "undefined");          // importarlos no tocó la página
   const pps = Object.getOwnPropertyDescriptor(lt.LineaTiempo.prototype, "pps");
   assert.equal(typeof pps?.get, "function");
   assert.equal(typeof pps?.set, "function");
