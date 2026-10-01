@@ -6,7 +6,7 @@ ya existe no se vuelve a pagar). Así la primera persona que toca ▶ no espera.
 Uso, con el .env de la raíz cargado (en el VPS, como deploy):
     TZ=America/Bogota venv/bin/python3 precalentar_muestras.py            # todas
     TZ=America/Bogota venv/bin/python3 precalentar_muestras.py es en      # solo esos idiomas
-Costo: unos US$ 0,005 por muestra nueva (22 voces × 3 idiomas ≈ US$ 0,35 en total)."""
+Costo: unos US$ 0,005 por muestra nueva (22 voces × 10 idiomas; el noruego va por Turbo y cuesta la mitad)."""
 import os
 import sys
 import time

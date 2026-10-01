@@ -111,15 +111,24 @@ def actualizar(cliente, tienda_id, **campos):
                     .values(actualizado_en=db.ahora(), **campos))
 
 
-def desconectar(cliente, tienda_id):
+def desconectar(cliente, tienda_id, archivar=True):
     """Borra la tienda. Los productos que vinieron de ella no se borran —
-    quedan con su `fuente`/`fuente_id` de siempre, solo se archivan por
-    sync (así no desaparecen de golpe de un catálogo/experimento que ya los
-    use, y una reconexión los desarchiva sola). Los pedidos tampoco se
-    borran: `pedido.tienda_id` es FK a la tienda, así que se desligan
+    quedan con su `fuente`/`fuente_id` de siempre; con `archivar=True` (el
+    valor por defecto) además se archivan por sync (así no desaparecen de
+    golpe de un catálogo/experimento que ya los use, y una reconexión los
+    desarchiva sola) — `archivar=False` los deja tal cual, para cuando OTRA
+    tienda del mismo `fuente` sigue sirviéndolos (p. ej. al desconectar la
+    Admin API mientras la Shopify sin llaves sigue conectada: mismo
+    `fuente="shopify"`, la que queda los sigue trayendo; lo decide la ruta
+    `tienda_desconectar`). El `fuente` para archivar es el del CONECTOR,
+    no el `tipo` de la tienda — `shopify_publico` y `shopify` comparten
+    `fuente="shopify"` aunque sus `tipo` difieran — con `tipo` como respaldo
+    si el tipo ya no está registrado. Los pedidos tampoco se borran:
+    `pedido.tienda_id` es FK a la tienda, así que se desligan
     (`tienda_id=NULL`) en la misma transacción conservando su atribución —
     sin esto el DELETE fallaría con IntegrityError en cuanto la tienda
     tuviera una venta."""
+    import conectores
     t, p, pe = db.tienda, db.producto, db.pedido
     ahora = db.ahora()
     with db.conectar() as con:
@@ -129,7 +138,12 @@ def desconectar(cliente, tienda_id):
         tipo = fila[0]
         con.execute(pe.update().where(pe.c.cliente == cliente, pe.c.tienda_id == tienda_id).values(tienda_id=None))
         con.execute(t.delete().where(t.c.id == tienda_id, t.c.cliente == cliente))
-        _archivar_en(con, [p.c.cliente == cliente, p.c.fuente == tipo, p.c.archivado.is_(False)], "sync", ahora)
+        if archivar:
+            try:
+                fuente = getattr(conectores.por_tipo(tipo), "fuente", None) or tipo
+            except ValueError:
+                fuente = tipo
+            _archivar_en(con, [p.c.cliente == cliente, p.c.fuente == fuente, p.c.archivado.is_(False)], "sync", ahora)
         return True
 
 

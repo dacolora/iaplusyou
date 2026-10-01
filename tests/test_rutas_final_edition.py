@@ -353,6 +353,7 @@ def test_ver_cliente_pasa_contexto_fe(base_temporal, monkeypatch):
 def _entorno_plantilla():
     import jinja2
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    import catalogo_productos
     import gastos
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(raiz, "templates")),
                              extensions=["jinja2.ext.i18n"])
@@ -362,17 +363,22 @@ def _entorno_plantilla():
     env.globals.update(doctrina.globales_plantilla())   # editor del ángulo (doctrina, bloque 2)
     env.filters["usd"] = gastos.formatear   # mismo filtro que registra dashboard (costos «US$ 0,07»)
     env.filters["traducir"] = lambda x: x   # idiomas.traducir necesita un app de Flask-Babel; acá no hay ninguno
+    # _selector_productos.html (incluida por _tab_creativeflowplus.html) agrupa
+    # colores con este filtro (Task 14) — sin registrarlo acá, un catálogo no
+    # vacío revienta con TemplateRuntimeError: No filter named 'agrupar_por_producto'.
+    env.filters["agrupar_por_producto"] = catalogo_productos.agrupar_por_producto
     return env
 
 
-def _contexto_minimo(items):
+def _contexto_minimo(items, activos_por_categoria=None, categorias=None, productos=None):
     from final_edition import tipos
     from providers import fal_audio
     return dict(
         creative_flow_items=items, cliente="acme", logos=[],
         modelos_flowplus_video={}, modelos_flowplus_imagen={}, preferencias_flowplus={},
         preferencias_sonido={"con_sonido": True, "musica_al_crear": ""},
-        fp_prefill=None, activos_por_categoria={}, categorias={}, productos=[],
+        fp_prefill=None, activos_por_categoria=activos_por_categoria if activos_por_categoria is not None else {},
+        categorias=categorias if categorias is not None else {}, productos=productos if productos is not None else [],
         referencias_bandeja=[], trabajo_link=None, capacidades_meta={},
         paises_fe=tipos.PAISES, voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
         nombres_estilo_musica=tipos.NOMBRES_ESTILO_MUSICA,
@@ -415,14 +421,41 @@ def _detalle_video_fe(env, item):
     return env.get_template("_final_detalle_respuesta.html").render(**_contexto_minimo([item]), item=item, f=None)
 
 
-def _tab_crear(env, items):
+def _tab_crear(env, items, activos_por_categoria=None, categorias=None, productos=None):
     """La pestaña Crear: formulario + tarjetas + JS del modal."""
-    return env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo(items), **_listas(items))
+    return env.get_template("_tab_creativeflowplus.html").render(
+        **_contexto_minimo(items, activos_por_categoria=activos_por_categoria, categorias=categorias, productos=productos),
+        **_listas(items))
 
 
 def _detalle_crear(env, item):
     """Lo que responde cf_detalle para esa pieza."""
     return env.get_template("_crear_detalle_respuesta.html").render(**_contexto_minimo([item]), item=item)
+
+
+def test_tab_crear_con_catalogo_agrupa_los_colores():
+    """Regresión (Task 14, ronda de arreglos 1): _entorno_plantilla es un
+    jinja2.Environment aparte del de dashboard.app y necesita su propio
+    registro de `agrupar_por_producto` — con `activos_por_categoria` vacío
+    (el contexto mínimo de siempre) el filtro nunca se ejecuta de verdad
+    porque vive dentro de `{% if lista %}`, así que esta prueba, a propósito,
+    le da un catálogo con un producto de dos colores (forma real de
+    catalogo_productos.listar()) para que el filtro corra y, si algún día
+    falta el registro, truene con TemplateRuntimeError en vez de quedar en
+    verde por accidente."""
+    import catalogo_productos
+    env = _entorno_plantilla()
+    catalogo = [
+        {"id": "original/pink", "producto_id": "original", "nombre_producto": "Original",
+         "nombre": "Original — Pink", "variante": "pink", "categoria": "producto"},
+        {"id": "original/beige", "producto_id": "original", "nombre_producto": "Original",
+         "nombre": "Original — Beige", "variante": "beige", "categoria": "producto"},
+    ]
+    html = _tab_crear(env, [], activos_por_categoria={"producto": catalogo},
+                      categorias=catalogo_productos.CATEGORIAS, productos=catalogo)
+    dialogo = html.split('id="fp-catalogo"', 1)[1].split("</dialog>", 1)[0]
+    assert 'class="producto-grupo"' in dialogo
+    assert 'value="producto:original/pink"' in dialogo and 'value="producto:original/beige"' in dialogo
 
 
 def test_plantilla_sin_guion_ofrece_preparar():

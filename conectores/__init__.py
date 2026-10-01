@@ -14,6 +14,9 @@ REGISTRO = {}
 # Tipos con API (credenciales + sync). La UI los lista sin importar los módulos;
 # `por_tipo` los importa perezosamente al pedirlos.
 TIPOS_API = ("shopify", "woo", "meli")
+# Lo que la UI ofrece para conectar: primero el catálogo público de Shopify
+# (solo el dominio), luego los tipos con API.
+TIPOS_CONECTABLES = ("shopify_publico",) + TIPOS_API
 
 
 def registrar(cls):

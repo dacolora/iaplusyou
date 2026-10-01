@@ -59,6 +59,14 @@
           {% if item.estado == "error" %}
           <p class="tag-error">{{ item.error }}</p>
           {% endif %}
+          {# Recrear como video, «igual» (spec 2026-09-30-recrear-fiel §12): esta imagen se anima sola. #}
+          {% if item.animar_error %}
+          <p class="tag-error">{{ item.animar_error }}</p>
+          {% elif item.animar_despues and item.animar_despues.cf_video %}
+          <p class="vacio">{{ _('Su video ya se lanzó: búscalo como «%(titulo)s».', titulo=item.animar_despues.titulo) }}</p>
+          {% elif item.animar_despues %}
+          <p class="vacio">{{ _('Cuando esta imagen esté lista, se anima sola en video.') }}</p>
+          {% endif %}
           {% if item.revision_estado %}{{ revision_doctrina(item, cliente) }}{% endif %}
 
           <div class="detalle-acciones">

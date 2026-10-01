@@ -2,21 +2,27 @@
 fal, mezclarla sobre la canción elegida y dejar el mp3 en la biblioteca del
 proyecto. Paga: se encola con max_intentos=1 y el gasto se registra en cuanto
 fal cobró, ANTES de mezclar, para que un ffmpeg roto no lo pierda."""
+import logging
 import os
 import shutil
 
 from flask_babel import gettext
 
 import audios
+import cola
 import gastos
 import idiomas
 import materiales
 import trabajos
+import voces_propias
 from final_edition import cortes, tipos
 from final_edition import musica as fe_musica
-from providers import fal_audio
+# Sin uso directo (lo llama audios.sintetizar): las pruebas parchean ta.fal_audio, que es el mismo módulo.
+from providers import fal_audio  # noqa: F401
 from storage import r2_uploader
 from tareas import ref_sufijo, registrar
+
+log = logging.getLogger(__name__)
 
 ETAPAS = ((idiomas.N_("Sintetizando la voz"), 55), (idiomas.N_("Mezclando con la música"), 30), (idiomas.N_("Guardando"), 15))
 
@@ -29,6 +35,10 @@ MENSAJES = {
     "repetido": idiomas.N_("Ya tenías este audio con ese texto, voz y música: está en Tus audios."),
     "solo_voz": idiomas.N_("Audio listo solo con la voz: la canción ya no estaba en Mi música."),
 }
+# Los únicos errores que llegan tal cual (traducidos) al estado del trabajo:
+# los msgids fijos de Audios y de Mis voces (p. ej. la voz propia que se borró
+# entre el clic y el worker), que no llevan nada de la persona.
+MSGIDS_FIJOS = frozenset(audios.MENSAJES.values()) | frozenset(voces_propias.MENSAJES.values())
 
 
 def job_id(cliente):
@@ -39,8 +49,28 @@ def carpeta_trabajo(cliente, h):
     return os.path.join(tipos.BASE_DIR, "salidas", cliente, "audios", h[:16])
 
 
+def _error_publico(e, tarea):
+    """Lo que la tarea deja como error: el worker lo guarda y
+    /trabajo/<job_id>/estado (sin auth, job_id adivinable) lo muestra. El
+    cuerpo de un error de fal repite el input — el texto del anuncio —, así
+    que solo un msgid fijo pasa, traducido; cualquier otro error va al log con
+    su traza y sale como un mensaje fijo con su tipo (revisión final de Audios
+    Europa, F1). El gasto ya quedó registrado en _generar, apenas fal cobró."""
+    if isinstance(e, ValueError) and str(e) in MSGIDS_FIJOS:
+        return ValueError(gettext(str(e)))
+    log.exception("audio_generar (tarea %s) falló: %s", tarea.get("id"), cola.sin_token(e))
+    return RuntimeError(gettext("No pude crear el audio; intenta de nuevo (%(tipo)s).", tipo=type(e).__name__))
+
+
 @registrar("audio_generar")
 def ejecutar(tarea):
+    try:
+        return _generar(tarea)
+    except Exception as e:  # noqa: BLE001 — todo error sale por _error_publico
+        raise _error_publico(e, tarea) from e
+
+
+def _generar(tarea):
     p = tarea["payload"]
     cliente = p["cliente"]
     texto, voz, idioma = p["texto"], p["voz"], p["idioma"]
@@ -64,18 +94,21 @@ def ejecutar(tarea):
     ref = f"locucion:{h_voz[:12]}{ref_sufijo(tarea)}"
 
     def _tts():
-        r = fal_audio.tts(texto, voz, idioma, velocidad=audios.VELOCIDADES[velocidad])
+        r = audios.sintetizar(cliente, voz, texto, idioma, velocidad)
         usd = float(r.get("costo_usd") or 0.0)
         # fal ya cobró: el gasto queda aunque lo que sigue falle.
         gastos.registrar_seguro(cliente, "locucion", usd, ref,
-                                detalle=gettext("ElevenLabs · %(n)s caracteres · %(voz)s", n=len(texto), voz=voz),
-                                proveedor="fal/elevenlabs")
+                                detalle=gettext("%(motor)s · %(n)s caracteres · %(voz)s", motor=r["etiqueta"],
+                                                n=len(texto), voz=r["voz_nombre"]),
+                                proveedor=r["proveedor"])
         local = audios.descargar_url(r["url"], os.path.join(carpeta, f"voz_{h_voz[:16]}.mp3"))
         url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h_voz[:16]}.mp3", "audio/mpeg")
         return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": os.path.getsize(local),
                 "duracion_ms": int(round(cortes.duracion(local) * 1000)), "costo_usd": usd,
-                "extra": {"texto": texto, "voz": voz, "idioma": idioma, "velocidad": velocidad, "local": local}}
+                "extra": {"texto": texto, "voz": r["voz_nombre"], "voz_ref": voz, "idioma": idioma,
+                          "velocidad": velocidad, "local": local}}
     voz_mat, creada = materiales.obtener_o_crear(cliente, h_voz, _tts)
+    voz_nombre = (voz_mat.get("extra") or {}).get("voz") or voz
     costo = float(voz_mat.get("costo_usd") or 0.0) if creada else 0.0
     voz_local = materiales.descargar(voz_mat, os.path.join(carpeta, "voz.mp3"))
 
@@ -99,8 +132,8 @@ def ejecutar(tarea):
         url = r2_uploader.upload_file(salida, f"clientes/{cliente}/materiales/locucion_{h_audio[:16]}.mp3", "audio/mpeg")
         return {"tipo": "audio", "origen": audios.ORIGEN, "url": url, "bytes": os.path.getsize(salida),
                 "duracion_ms": mezcla["duracion_ms"], "costo_usd": costo, "padre_id": voz_mat["id"],
-                "extra": {"nombre": nombre, "texto": texto, "voz": voz, "idioma": idioma, "velocidad": velocidad,
-                          "volumen": volumen, "musica": musica_info}}
+                "extra": {"nombre": nombre, "texto": texto, "voz": voz_nombre, "voz_ref": voz, "idioma": idioma,
+                          "velocidad": velocidad, "volumen": volumen, "musica": musica_info}}
     materiales.obtener_o_crear(cliente, h_audio, _subir)
     shutil.rmtree(carpeta, ignore_errors=True)
     if musica_info and musica_info["estado"] == "ausente":

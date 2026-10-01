@@ -34,7 +34,7 @@ from idiomas import N_
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "voz_propia", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -75,6 +75,10 @@ TARIFAS = {
     "regla_producto": 0.01,
     "caption_organico": 0.01,
     "adaptar_referente": 0.01,
+    # «Recrear» fiel (spec 2026-09-30): una llamada de visión que describe la
+    # composición y lee los textos de la referencia, una vez por referente.
+    # Inicial; se ajusta con lo medido en la prueba real.
+    "leer_referente": 0.01,
     "sugerir_ia": 0.04,
     "clasificacion": 0.012,
     # La de siempre + la salida del segundo idioma (~60 tokens más por anuncio,
@@ -233,6 +237,19 @@ def _estimar_locucion(caracteres=0, **_):
     return n * fal_audio.COSTO_USD_POR_CARACTER, f"{n} caracteres con ElevenLabs"
 
 
+def _estimar_voz_clonada(**_):
+    """Voces propias de Audios: clonar una voz con MiniMax vía fal. La vista
+    previa de la frase de muestra se cobra aparte (US$ 0,0003 por carácter:
+    1-3 ¢ para una frase típica) y no entra en este estimado."""
+    from providers import fal_audio
+    return fal_audio.COSTO_CLONAR_VOZ, "una voz clonada con MiniMax"
+
+
+def _estimar_voz_disenada(**_):
+    from providers import fal_audio
+    return fal_audio.COSTO_DISENAR_VOZ, "una voz diseñada con MiniMax"
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
@@ -244,6 +261,7 @@ _ESTIMADORES = {
     "regla_producto": lambda **_: (TARIFAS["regla_producto"], "una llamada corta a Claude"),
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
+    "leer_referente": lambda **_: (TARIFAS["leer_referente"], "una llamada corta a Claude con visión"),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
     "refinar_prompt": lambda **_: (TARIFAS["refinar_prompt"], "un mensaje a Claude"),
     "clasificacion": lambda n=1, bilingue=False, **_: (
@@ -251,6 +269,8 @@ _ESTIMADORES = {
         f"{max(1, int(n))} anuncio(s) con Claude" + (", en español e inglés" if bilingue else "")),
     "musica_elevenlabs": lambda **_: (TARIFAS["musica_elevenlabs"], "una canción de 60 s con ElevenLabs"),
     "locucion": _estimar_locucion,
+    "voz_clonada": _estimar_voz_clonada,
+    "voz_disenada": _estimar_voz_disenada,
     "guion_clips": _estimar_guion_clips,
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),

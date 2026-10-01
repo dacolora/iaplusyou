@@ -19,7 +19,7 @@ def entorno(base_temporal, monkeypatch, tmp_path):
     import tareas.audios as ta
     llamadas, mezclas, subidos = [], [], []
     monkeypatch.setattr(ta.fal_audio, "tts",
-                        lambda texto, voz, idioma="es", on_progreso=None, velocidad=None:
+                        lambda texto, voz, idioma="es", on_progreso=None, velocidad=None, **kw:
                         llamadas.append({"texto": texto, "voz": voz, "velocidad": velocidad}) or {"url": "https://fal/v.mp3", "costo_usd": 0.0011})
     monkeypatch.setattr(ta.audios, "descargar_url", lambda url, destino: (open(destino, "wb").write(b"VOZ"), destino)[1])
     monkeypatch.setattr(ta.r2_uploader, "upload_file", lambda local, key, ct: subidos.append(key) or f"https://r2/{key}")
@@ -135,3 +135,31 @@ def test_la_tarea_queda_registrada_y_el_job_id_es_uno_por_cliente():
     assert "audio_generar" in tareas.REGISTRO
     import tareas.audios as ta
     assert ta.job_id("acme") == "acme__audio_generar" and len(ta.ETAPAS) == 3
+
+
+def test_tarea_con_voz_propia_lee_con_minimax(entorno, monkeypatch):
+    ta = entorno["ta"]
+    v = materiales.registrar("acme", tipo="audio", origen="voz_propia", url="https://r2/v.mp3", hash="h_vp", bytes=1,
+                             extra={"nombre": "Ana", "voice_id": "mmx_1", "forma": "disenada", "idioma_muestra": "es",
+                                    "estrenada": True})
+    minimax = []
+    monkeypatch.setattr(ta.audios.fal_audio, "tts_minimax", lambda texto, voice_id, idioma, velocidad=None, timeout=180:
+                        minimax.append((texto, voice_id, idioma, velocidad)) or
+                        {"url": "https://fal/m.mp3", "costo_usd": 0.001, "duracion_ms": 2000})
+    ta.ejecutar(_tarea(_payload(voz=f"vp:{v['id']}", idioma="fi")))
+    assert minimax == [("Hola mundo", "mmx_1", "fi", 1.15)] and entorno["llamadas"] == []
+    (a,) = audios.listar("acme")
+    assert a["voz"] == "Ana" and materiales.obtener("acme", a["id"])["extra"]["voz_ref"] == f"vp:{v['id']}"
+    (g,) = _gastos("acme")
+    assert g["proveedor"] == "fal/minimax" and "MiniMax" in g["detalle"] and "Ana" in g["detalle"]
+
+
+def test_tarea_en_noruego_con_voz_de_la_galeria_va_por_turbo(entorno, monkeypatch):
+    ta = entorno["ta"]
+    vistos = []
+    monkeypatch.setattr(ta.audios.fal_audio, "tts", lambda texto, voz, idioma="es", **kw:
+                        vistos.append(kw) or {"url": "https://fal/v.mp3", "costo_usd": 0.0005})
+    ta.ejecutar(_tarea(_payload(idioma="no")))
+    assert vistos == [{"velocidad": 1.15, "modelo": ta.audios.fal_audio.MODELO_TTS_TURBO, "language_code": "no"}]
+    (g,) = _gastos("acme")
+    assert "ElevenLabs Turbo" in g["detalle"]

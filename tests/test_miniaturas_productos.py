@@ -47,7 +47,7 @@ def test_la_ruta_sirve_la_miniatura_con_w(base_temporal, catalogo, monkeypatch, 
     monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
     foto = _foto(tmp_path / "foto.png")
     monkeypatch.setattr(catalogo, "encontrar", lambda cliente, pid, categoria=None: {"id": pid, "representativa": foto})
-    monkeypatch.setattr(catalogo, "carpeta_de", lambda cliente, pid, categoria=None: str(tmp_path))
+    monkeypatch.setattr(catalogo, "carpeta_de", lambda cliente, pid, categoria=None, variante=None: str(tmp_path))
     dashboard.app.config["TESTING"] = True
     c = dashboard.app.test_client()
     with c.session_transaction() as s:

@@ -387,7 +387,7 @@
       var st = document.getElementById('fp-sonido'); if (st && prefill.sonido_texto) st.value = prefill.sonido_texto;
       var mu = document.getElementById('fp-musica'); if (mu && typeof prefill.musica_estilo === 'string') mu.value = prefill.musica_estilo;
       if (inicioInput && prefill.musica_inicio_s) inicioInput.value = prefill.musica_inicio_s;
-      var ca = document.getElementById('fp-calidad'); if (ca) ca.checked = prefill.calidad === 'borrador';
+      var ca = document.getElementById('fp-calidad'); if (ca && prefill.calidad) ca.checked = prefill.calidad === 'borrador';
       var me = document.getElementById('fp-mejorar'); if (me) me.checked = !!prefill.mejorar_prompt;
       var pl = document.getElementById('fp-plantilla'); if (pl && prefill.plantilla) pl.value = prefill.plantilla;
       setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
@@ -680,6 +680,17 @@
     }
     pintarCatalogo();
     refrescar();
+
+    // «Crear con este producto» desde el Catálogo: llega el color marcado, en
+    // la misma precarga de arriba (una vez y solo en este proyecto, _prefill_para).
+    if (prefill && prefill.productos_catalogo) {
+      prefill.productos_catalogo.forEach(function (v) {
+        var cb = form.querySelector('input[name=productos_catalogo][value="' + String(v).replace(/"/g, '') + '"]');
+        if (cb) { cb.checked = true; cb.dispatchEvent(new Event('change', {bubbles: true})); }
+      });
+      pintarCatalogo();
+      refrescar();
+    }
 
     // Chips @Imagen N / @Video N de la bandeja: insertan la etiqueta en el texto.
     var chips = document.getElementById('fp-etiquetas');

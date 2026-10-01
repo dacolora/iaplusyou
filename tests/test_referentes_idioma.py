@@ -97,7 +97,7 @@ def test_adaptar_recibe_el_idioma_del_proyecto(app, monkeypatch):
     ids = _sembrar()
     idiomas.guardar_de_proyecto("acme", "en")
     visto = {}
-    monkeypatch.setattr(recrear, "adaptar", lambda referente, familia, producto, titular_actual, guia="", idioma="es": (
+    monkeypatch.setattr(recrear, "adaptar", lambda referente, familia, producto, titular_actual, guia="", idioma="es", **kw: (
         visto.update(idioma=idioma) or ({"titular": "T", "prompt": "P", "angulo": {}}, 10, 5)))
     r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
     assert r.status_code == 200 and visto["idioma"] == "en"

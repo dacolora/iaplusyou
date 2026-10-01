@@ -67,7 +67,8 @@ def sugerir_personas(cliente, cuantas=3):
     cuantas = max(1, int(cuantas or 3))
     idioma = idiomas.de_proyecto(cliente)
     guia = (marca.guia_efectiva(cliente) or "").strip() or "(sin guía de estilo todavía)"
-    productos = catalogo_productos.listar(cliente, "producto")
+    # Uno por PRODUCTO (listar() daría uno por color: los 14 de una chancla).
+    productos = catalogo_productos.listar_productos(cliente, "producto")
     lista = "\n".join(f"- {p['nombre']}" + (f": {p['descripcion']}" if p.get("descripcion") else "") for p in productos)
     texto = PROMPT_PERSONAS.format(marca=proyectos.nombre_visible(cliente), guia=guia,
                                    productos=lista or "- (catálogo vacío)", cuantas=cuantas,

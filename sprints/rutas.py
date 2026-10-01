@@ -519,7 +519,7 @@ def campana_panel(cliente, sid, cid):
     sugeridas = referentes_datos.familias_frecuentes(cliente, etapa=(c.get("funnel") or "tof").upper(),
                                                     consciencia=referentes_sugerir.consciencia_en(c.get("consciencia")))
     job = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
-    fila_producto = tiendas.por_activo(cliente).get(c["catalogo_id"]) or {}
+    fila_producto = tiendas.por_activo(cliente).get(catalogo_productos.producto_base(c["catalogo_id"])) or {}
     sof = (fila_producto.get("extra") or {}).get("sofisticacion")
     return render_template(
         "_sprint_panel.html", cliente=cliente, sprint=sp, c=c, personas=personas_, productos=productos,

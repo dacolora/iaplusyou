@@ -121,3 +121,71 @@ def test_voces():
     for idioma in ("es", "en", "pt"):
         assert "Roger" in fal_audio.VOCES[idioma]
         assert "Antoni" not in fal_audio.VOCES[idioma]  # legacy: fal ya no la sirve (404)
+
+
+def test_tts_turbo_manda_language_code_y_cobra_su_tarifa(monkeypatch):
+    from providers import fal_audio
+    llamadas = _capturar(monkeypatch, fal_audio, {"audio": {"url": "https://fal/n.mp3"}})
+    r = fal_audio.tts("a" * 1000, "Adam", "no", velocidad=1.15, modelo=fal_audio.MODELO_TTS_TURBO, language_code="no")
+    (ll,) = llamadas
+    assert ll["model_path"] == "fal-ai/elevenlabs/tts/turbo-v2.5"
+    assert ll["payload"]["language_code"] == "no" and ll["payload"]["speed"] == 1.15 and ll["payload"]["voice"] == "Adam"
+    assert r == {"url": "https://fal/n.mp3", "costo_usd": 0.05}
+    llamadas = _capturar(monkeypatch, fal_audio, {"audio": {"url": "https://fal/v.mp3"}})
+    assert fal_audio.tts("a" * 1000, "Rachel", "de")["costo_usd"] == 0.1
+    assert "language_code" not in llamadas[0]["payload"] and llamadas[0]["model_path"] == fal_audio.MODELO_TTS
+
+
+def test_tts_minimax_payload_respuesta_y_costo(monkeypatch):
+    from providers import fal_audio
+    llamadas = _capturar(monkeypatch, fal_audio, {"audio": {"url": "https://fal/m.mp3"}, "duration_ms": 5668})
+    r = fal_audio.tts_minimax("a" * 1000, "mmx_voz_1", "fi", velocidad=0.85)
+    (ll,) = llamadas
+    assert ll["model_path"] == "fal-ai/minimax/speech-2.8-hd" and ll["timeout"] == 180
+    assert ll["payload"] == {"prompt": "a" * 1000, "voice_setting": {"voice_id": "mmx_voz_1", "speed": 0.85},
+                             "language_boost": "Finnish", "output_format": "url",
+                             "audio_setting": {"format": "mp3", "sample_rate": 44100, "bitrate": 128000, "channel": 1}}
+    assert r == {"url": "https://fal/m.mp3", "costo_usd": 0.1, "duracion_ms": 5668}
+
+
+def test_tts_minimax_idiomas_y_errores(monkeypatch):
+    from providers import fal_audio
+    assert set(fal_audio.IDIOMAS_MINIMAX) == {"es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs"}
+    assert fal_audio.IDIOMAS_MINIMAX["no"] == "Norwegian" and fal_audio.IDIOMAS_MINIMAX["cs"] == "Czech"
+    llamadas = _capturar(monkeypatch, fal_audio, {"audio": {"url": "u"}, "duration_ms": 1})
+    fal_audio.tts_minimax("Hola", "v", "es")
+    assert "speed" not in llamadas[0]["payload"]["voice_setting"]
+    _capturar(monkeypatch, fal_audio, {"audio": {}})
+    with pytest.raises(RuntimeError, match="speech-2.8-hd"):
+        fal_audio.tts_minimax("Hola", "v", "es")
+    with pytest.raises(ValueError):
+        fal_audio.tts_minimax("", "v", "es")
+    with pytest.raises(ValueError):
+        fal_audio.tts_minimax("Hola", "v", "xx")
+
+
+def test_clonar_voz_minimax(monkeypatch):
+    from providers import fal_audio
+    llamadas = _capturar(monkeypatch, fal_audio, {"custom_voice_id": "mmx_clon_1", "audio": {"url": "https://fal/prev.mp3"}})
+    r = fal_audio.clonar_voz_minimax("https://r2/g.wav", "Hola, soy Ana.")
+    (ll,) = llamadas
+    assert ll["model_path"] == "fal-ai/minimax/voice-clone" and ll["timeout"] == 300
+    assert ll["payload"] == {"audio_url": "https://r2/g.wav", "noise_reduction": True,
+                             "need_volume_normalization": True, "text": "Hola, soy Ana."}
+    assert r == {"voice_id": "mmx_clon_1", "url_vista_previa": "https://fal/prev.mp3", "costo_usd": 1.5042}
+    _capturar(monkeypatch, fal_audio, {"audio": {"url": "x"}})
+    with pytest.raises(RuntimeError, match="voice-clone"):
+        fal_audio.clonar_voz_minimax("u", "t")
+
+
+def test_disenar_voz_minimax(monkeypatch):
+    from providers import fal_audio
+    llamadas = _capturar(monkeypatch, fal_audio, {"custom_voice_id": "mmx_dis_1", "audio": {"url": "https://fal/d.mp3"}})
+    r = fal_audio.disenar_voz_minimax("Mujer cálida", "Hola, soy Ana.")
+    (ll,) = llamadas
+    assert ll["model_path"] == "fal-ai/minimax/voice-design" and ll["timeout"] == 300
+    assert ll["payload"] == {"prompt": "Mujer cálida", "preview_text": "Hola, soy Ana."}
+    assert r == {"voice_id": "mmx_dis_1", "url_vista_previa": "https://fal/d.mp3", "costo_usd": 3.0004}
+    _capturar(monkeypatch, fal_audio, {"audio": {"url": "x"}})
+    with pytest.raises(RuntimeError, match="voice-design"):
+        fal_audio.disenar_voz_minimax("p", "t")
