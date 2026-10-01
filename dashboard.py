@@ -6019,7 +6019,10 @@ def tienda_conectar(cliente):
     """Shopify (con o sin llaves)/WooCommerce: prueba las credenciales contra
     la tienda (inline, una llamada corta), las guarda cifradas y encola la
     primera sync. `volver=catalogo` regresa a la pestaña Catálogo (el botón
-    «Traer de mi tienda» vive ahí); cualquier otro valor va a Configuración."""
+    «Traer de mi tienda» vive ahí); cualquier otro valor va a Configuración.
+    La Shopify sin llaves y la Admin API conviven: la sin llaves es la fuente
+    del catálogo (trae los colores) y la Admin API suma pedidos y atribución
+    (`tareas.tiendas.catalogo_desde_tienda_publica`; ruling final-5)."""
     bloqueo = _requiere_correo_verificado()
     if bloqueo:
         return bloqueo
@@ -6031,10 +6034,6 @@ def tienda_conectar(cliente):
 
     def _volver():
         return _volver_catalogo(cliente) if volver == "catalogo" else _volver_config(cliente)
-
-    if tipo == "shopify_publico" and any(t["tipo"] == "shopify" for t in tiendas.listar(cliente)):
-        flash(gettext("Tu tienda Shopify ya está conectada con la Admin API: el catálogo ya se sincroniza desde ahí."), "warn")
-        return _volver()
 
     if tipo == "shopify_publico":
         dominio = (request.form.get("dominio") or "").strip()
@@ -6062,21 +6061,14 @@ def tienda_conectar(cliente):
     dominio = str((resultado or {}).get("dominio") or dominio or "").strip() or None
     if tipo == "shopify_publico":
         creds = {"dominio": dominio}
-    reemplazo = False
-    if tipo == "shopify":
-        # Una sola Shopify por proyecto: la Admin API reemplaza cualquier conexión
-        # sin llaves que hubiera (misma `fuente`: los productos no se tocan,
-        # archivar=False — la sync de la Admin API los vuelve a traer).
-        for t in tiendas.listar(cliente):
-            if t["tipo"] == "shopify_publico":
-                tiendas.desconectar(cliente, t["id"], archivar=False)
-                reemplazo = True
     tid = tiendas.conectar(cliente, tipo, creds, nombre=nombre, dominio=dominio)
     n = _encolar_sync_tienda(cliente, tid, tipo, con_pedidos=bool(getattr(cls, "tiene_pedidos", True)))
     detalle = str((resultado or {}).get("detalle") or "").strip()
-    extra = gettext("Sincronizando el catálogo…") if n else gettext("Ya había una sincronización en curso.")
-    if reemplazo:
-        extra = extra + " " + gettext("Reemplaza la conexión sin llaves: el catálogo ahora se sincroniza con la Admin API.")
+    if tareas_tiendas.catalogo_desde_tienda_publica(cliente, {"tipo": tipo}):
+        # La sync de productos de la Admin API no tocará el catálogo (no trae colores).
+        extra = gettext("El catálogo sigue llegando desde la conexión sin llaves; la Admin API agrega pedidos y atribución.")
+    else:
+        extra = gettext("Sincronizando el catálogo…") if n else gettext("Ya había una sincronización en curso.")
     flash(gettext("Tienda %(nombre)s conectada. %(detalle)s %(extra)s", nombre=(nombre or dominio), detalle=detalle, extra=extra), "ok")
     return _volver()
 
@@ -6156,12 +6148,33 @@ def tienda_sync(cliente, tid):
     return _volver_catalogo(cliente) if volver == "catalogo" else _volver_config(cliente)
 
 
+def _fuente_de_tipo(tipo):
+    """La `fuente` con que el conector de ese tipo guarda sus productos
+    (`shopify_publico` y `shopify` comparten «shopify»); el tipo si no se sabe."""
+    try:
+        return getattr(conectores.por_tipo(tipo), "fuente", None) or tipo
+    except ValueError:
+        return tipo
+
+
 @app.route("/cliente/<cliente>/config/tienda/<int:tid>/desconectar", methods=["POST"])
 def tienda_desconectar(cliente, tid):
-    if tiendas.desconectar(cliente, tid):
-        flash(gettext("Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."), "ok")
-    else:
+    """Borra la tienda y archiva sus productos — salvo que OTRA tienda del
+    proyecto con la misma fuente (la Shopify sin llaves y la Admin API
+    conviven) los siga trayendo: entonces quedan como están."""
+    t = tiendas.obtener(cliente, tid)
+    if not t:
         flash(gettext("Esa tienda no existe."), "error")
+        return _volver_config(cliente)
+    fuente = _fuente_de_tipo(t["tipo"])
+    sigue = any(o["id"] != tid and _fuente_de_tipo(o["tipo"]) == fuente for o in tiendas.listar(cliente))
+    if not tiendas.desconectar(cliente, tid, archivar=not sigue):
+        flash(gettext("Esa tienda no existe."), "error")
+    elif sigue:
+        flash(gettext("Tienda desconectada. Sus productos siguen activos porque la otra conexión de la misma tienda "
+                      "los sigue trayendo; sus pedidos se conservan (no se borró nada)."), "ok")
+    else:
+        flash(gettext("Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."), "ok")
     return _volver_config(cliente)
 
 

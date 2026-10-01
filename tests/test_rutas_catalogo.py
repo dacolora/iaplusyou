@@ -333,33 +333,62 @@ def test_traer_de_mi_tienda_conecta_shopify_publico_y_vuelve_al_catalogo(app):
     assert r.headers["Location"].endswith("#catalogo")
 
 
-def test_conectar_shopify_con_api_desconecta_la_publica_del_mismo_dominio(app):
-    """Fix ronda 1 (revisión de Tarea 13): «una sola Shopify por proyecto» —
-    la Admin API reemplaza CUALQUIER conexión sin llaves del proyecto sin
-    comparar dominios (el formulario de la Admin API pide el dominio
-    `.myshopify.com`, distinto del dominio público real, así que compararlos
-    nunca habría coincidido en la práctica) y, como comparten `fuente`, los
-    productos que ya trajo la pública NO se archivan — la sync de la Admin
-    API los vuelve a traer."""
+def _falso_publico(monkeypatch):
+    """`conectores.por_tipo` con un conector sin llaves de fuente «shopify»
+    (el del fixture `app` sirve para todos los tipos y no tiene `fuente`)."""
+    import conectores
+    from tests.test_rutas_productos import FalsoConector
+
+    class FalsoPublico(FalsoConector):
+        tipo = "shopify_publico"
+        fuente = "shopify"
+        tiene_pedidos = False
+    monkeypatch.setattr(conectores, "por_tipo", lambda tipo: FalsoPublico if tipo == "shopify_publico" else FalsoConector)
+
+
+def test_conectar_admin_api_conserva_la_tienda_sin_llaves(app):
+    """Ruling final-5 (revierte parte de la ronda de la Tarea 13): la tienda
+    sin llaves es la fuente del catálogo — la Admin API no trae colores y lo
+    congelaría —, así que conectar la Admin API NO la desconecta: quedan las
+    dos, los productos no se tocan y la Admin API suma pedidos y atribución."""
     import tiendas
     from tests.test_rutas_productos import FalsoConector
     tiendas.conectar("acme", "shopify_publico", {"dominio": "www.acme.com"}, nombre="Acme", dominio="www.acme.com")
     pid = tiendas.upsert_producto("acme", "shopify", "p1", {"nombre": "Cojín"})
     FalsoConector.resultado = {"ok": True, "nombre": "Acme Store", "detalle": "ok"}
     app["c"].post("/cliente/acme/config/tienda/conectar", data={"tipo": "shopify", "dominio": "acme.myshopify.com", "token": "shpat_x"})
-    tipos = sorted(t["tipo"] for t in tiendas.listar("acme"))
-    assert tipos == ["shopify"]
+    assert sorted(t["tipo"] for t in tiendas.listar("acme")) == ["shopify", "shopify_publico"]
     assert tiendas.producto("acme", pid)["archivado"] is False
+    assert [e["tipo"] for e in app["encolados"]] == ["tienda_sync_productos", "tienda_sync_pedidos"]
+    assert any("El catálogo sigue llegando desde la conexión sin llaves; la Admin API agrega pedidos y atribución." in m
+               for m in _flashes(app["c"]))
 
 
-def test_no_se_conecta_la_publica_si_ya_hay_admin_api(app):
+def test_la_tienda_sin_llaves_se_conecta_aunque_haya_admin_api(app, monkeypatch):
     import tiendas
+    _falso_publico(monkeypatch)
     tiendas.conectar("acme", "shopify", {"dominio": "acme.myshopify.com", "token": "t"}, nombre="Acme Store", dominio="acme.myshopify.com")
     app["c"].post("/cliente/acme/config/tienda/conectar", data={"tipo": "shopify_publico", "dominio": "www.acme.com"})
-    tipos = sorted(t["tipo"] for t in tiendas.listar("acme"))
-    assert tipos == ["shopify"]
-    assert app["encolados"] == []
-    assert any("ya está conectada con la Admin API" in m for m in _flashes(app["c"]))
+    assert sorted(t["tipo"] for t in tiendas.listar("acme")) == ["shopify", "shopify_publico"]
+    assert [e["tipo"] for e in app["encolados"]] == ["tienda_sync_productos"]
+    assert not any("Admin API" in m and "ya está conectada" in m for m in _flashes(app["c"]))
+
+
+def test_desconectar_una_de_dos_shopify_no_archiva_el_catalogo(app, monkeypatch):
+    """Con la tienda sin llaves y la Admin API conectadas a la vez (misma
+    fuente «shopify»), desconectar una no archiva los productos que la otra
+    sigue trayendo; desconectar la última sí, como siempre."""
+    import tiendas
+    _falso_publico(monkeypatch)
+    publica = tiendas.conectar("acme", "shopify_publico", {"dominio": "www.acme.com"}, nombre="Acme", dominio="www.acme.com")
+    admin = tiendas.conectar("acme", "shopify", {"dominio": "acme.myshopify.com", "token": "t"}, nombre="Acme Store")
+    pid = tiendas.upsert_producto("acme", "shopify", "p1", {"nombre": "Cojín"})
+    app["c"].post(f"/cliente/acme/config/tienda/{admin}/desconectar")
+    assert [t["tipo"] for t in tiendas.listar("acme")] == ["shopify_publico"]
+    assert tiendas.producto("acme", pid)["archivado"] is False
+    assert any("siguen activos" in m for m in _flashes(app["c"]))
+    app["c"].post(f"/cliente/acme/config/tienda/{publica}/desconectar")
+    assert tiendas.listar("acme") == [] and tiendas.producto("acme", pid)["archivado"] is True
 
 
 def test_catalogo_ofrece_traer_de_mi_tienda_y_configuracion_el_tipo_sin_llaves(app):

@@ -4213,6 +4213,12 @@ msgstr "The global block breaks non-negotiable rules."
 msgid "El caption"
 msgstr "The caption"
 
+msgid "El catálogo llega desde la conexión sin llaves; esta conexión trae los pedidos."
+msgstr "The catalog comes from the no-keys connection; this connection brings in the orders."
+
+msgid "El catálogo sigue llegando desde la conexión sin llaves; la Admin API agrega pedidos y atribución."
+msgstr "The catalog still comes from the no-keys connection; the Admin API adds orders and attribution."
+
 #, python-format
 msgid "El clic sale caro con un CTR normal: CPC %(cpc)s (máximo %(max)s); es la subasta, no el creativo."
 msgstr "Clicks are expensive with a normal CTR: CPC %(cpc)s (maximum %(max)s); it's the auction, not the creative."
@@ -10868,9 +10874,6 @@ msgstr "Networks"
 msgid "Redundante"
 msgstr "Redundant"
 
-msgid "Reemplaza la conexión sin llaves: el catálogo ahora se sincroniza con la Admin API."
-msgstr "This replaces the no-keys connection: the catalog now syncs with the Admin API."
-
 msgid "Reemplazar el token"
 msgstr "Replace the token"
 
@@ -12250,6 +12253,9 @@ msgstr "Store %(nombre)s connected. %(detalle)s %(extra)s"
 msgid "Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."
 msgstr "Store disconnected. Its products were archived and its orders are kept (nothing was deleted)."
 
+msgid "Tienda desconectada. Sus productos siguen activos porque la otra conexión de la misma tienda los sigue trayendo; sus pedidos se conservan (no se borró nada)."
+msgstr "Store disconnected. Its products stay active because the other connection to the same store keeps bringing them in; its orders are kept (nothing was deleted)."
+
 msgid "Tiendas"
 msgstr "Stores"
 
@@ -12939,9 +12945,6 @@ msgstr "Your store"
 
 msgid "Tu tienda Shopify (sin llaves)"
 msgstr "Your Shopify store (no keys)"
-
-msgid "Tu tienda Shopify ya está conectada con la Admin API: el catálogo ya se sincroniza desde ahí."
-msgstr "Your Shopify store is already connected through the Admin API, so the catalog syncs from there."
 
 msgid "Tu tienda según Triple Whale"
 msgstr "Your store according to Triple Whale"

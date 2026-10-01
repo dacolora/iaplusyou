@@ -163,18 +163,34 @@ def _nombre(tienda):
     return tienda.get("nombre") or tienda.get("dominio") or gettext("tienda %(id)s", id=tienda["id"])
 
 
+def catalogo_desde_tienda_publica(cliente, tienda):
+    """True si `tienda` es la Shopify por Admin API y el proyecto también
+    tiene la tienda sin llaves (`shopify_publico`): el catálogo llega de esa
+    (trae los colores con su foto; el conector de la Admin API no) y esta
+    solo trae pedidos y atribución (ruling final-5 del catálogo por colores).
+    Si las dos sincronizaran productos, la de la Admin API congelaría los
+    colores y cada una archivaría lo que solo ve la otra (misma `fuente`)."""
+    return tienda.get("tipo") == "shopify" and any(
+        t["tipo"] == "shopify_publico" for t in tiendas.listar(cliente))
+
+
 # --- sync productos ----------------------------------------------------------
 
 @registrar("tienda_sync_productos")
 def tienda_sync_productos(tarea):
     """Baja el catálogo de la tienda, lo guarda/actualiza (importador),
-    liga activos, archiva lo que ya no está y marca `ultima_sync_productos`."""
+    liga activos, archiva lo que ya no está y marca `ultima_sync_productos`.
+    La Admin API de Shopify con una tienda sin llaves en el proyecto no toca
+    productos (`catalogo_desde_tienda_publica`): solo marca la hora."""
     p = tarea["payload"]
     cliente, tid = p["cliente"], p["tienda_id"]
     job_id = tarea.get("job_id") or job_id_sync_productos(cliente, tid)
     tienda = tiendas.obtener(cliente, tid)
     if tienda is None:
         return gettext("Esa tienda no existe.")
+    if catalogo_desde_tienda_publica(cliente, tienda):
+        tiendas.actualizar(cliente, tid, ultima_sync_productos=db.ahora())
+        return gettext("El catálogo llega desde la conexión sin llaves; esta conexión trae los pedidos.")
     try:
         # Lee la fuente del conector: si el conector tiene un atributo `fuente`,
         # úsalo; si no, usa el tipo de tienda. Esto permite conectores como
@@ -408,4 +424,4 @@ __all__ = ["ETAPAS_IMPORTAR", "ETAPAS_VINCULAR", "CADA_SYNC_PRODUCTOS", "CADA_SY
            "tienda_sync_productos", "tienda_sync_pedidos", "catalogo_importar", "producto_vincular",
            "tienda_sync_productos_todas", "tienda_sync_pedidos_todas",
            "job_id_sync_productos", "job_id_sync_pedidos", "job_id_importar_archivo", "job_id_importar_url",
-           "job_id_vincular", "job_id_continuacion"]
+           "job_id_vincular", "job_id_continuacion", "catalogo_desde_tienda_publica"]

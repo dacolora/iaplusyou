@@ -117,9 +117,10 @@ def desconectar(cliente, tienda_id, archivar=True):
     valor por defecto) además se archivan por sync (así no desaparecen de
     golpe de un catálogo/experimento que ya los use, y una reconexión los
     desarchiva sola) — `archivar=False` los deja tal cual, para cuando OTRA
-    tienda del mismo `fuente` sigue sirviéndolos (p. ej. al reemplazar Shopify
-    sin llaves por la Admin API: mismo `fuente="shopify"`, la sync de la que
-    queda los vuelve a traer). El `fuente` para archivar es el del CONECTOR,
+    tienda del mismo `fuente` sigue sirviéndolos (p. ej. al desconectar la
+    Admin API mientras la Shopify sin llaves sigue conectada: mismo
+    `fuente="shopify"`, la que queda los sigue trayendo; lo decide la ruta
+    `tienda_desconectar`). El `fuente` para archivar es el del CONECTOR,
     no el `tipo` de la tienda — `shopify_publico` y `shopify` comparten
     `fuente="shopify"` aunque sus `tipo` difieran — con `tipo` como respaldo
     si el tipo ya no está registrado. Los pedidos tampoco se borran:

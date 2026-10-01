@@ -557,3 +557,26 @@ def test_sync_productos_usa_la_fuente_del_conector(entorno, monkeypatch):
     filas = {p["fuente_id"]: p for p in tiendas.productos("acme", incluir_archivados=True)}
     assert filas["1"]["fuente"] == "shopify" and not filas["1"]["archivado"]
     assert filas["999"]["archivado"] and filas["999"]["extra"]["archivado_por"] == "sync"
+
+
+def test_sync_productos_admin_api_no_toca_el_catalogo_si_hay_tienda_sin_llaves(entorno):
+    """Ruling final-5: con una tienda `shopify_publico` en el proyecto, el
+    catálogo llega de ella (trae los colores). La sync de productos de la
+    Admin API no importa ni archiva nada (ni abre el conector): solo marca la
+    hora. Sus pedidos se sincronizan igual que siempre."""
+    import tareas
+    import tiendas
+    tiendas.conectar("acme", "shopify_publico", {"dominio": "www.acme.com"}, nombre="Acme", dominio="www.acme.com")
+    tid = _tienda()
+    viejo = tiendas.upsert_producto("acme", "shopify", "viejo", {"nombre": "Ya no está en la Admin API"})
+    Falso.productos = [_prod("p1", "Cojín Azul")]
+    msg = tareas.REGISTRO["tienda_sync_productos"]({"payload": {"cliente": "acme", "tienda_id": tid},
+                                                   "job_id": f"acme__tienda{tid}__productos"})
+    assert msg == "El catálogo llega desde la conexión sin llaves; esta conexión trae los pedidos."
+    assert Falso.instancias == []
+    filas = tiendas.productos("acme", incluir_archivados=True)
+    assert [(f["id"], f["archivado"]) for f in filas] == [(viejo, False)]
+    assert tiendas.obtener("acme", tid)["ultima_sync_productos"]
+    Falso.pedidos = [normalizar_pedido({"fuente_id": "o1", "fecha": "2026-09-15T10:00:00Z", "total": 50, "moneda": "USD"})]
+    msg = tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid}})
+    assert "1 pedido(s)" in msg and "1 nuevo(s)" in msg
