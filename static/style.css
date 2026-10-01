@@ -1844,6 +1844,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .ref-recrear-bloque { margin: .7rem 0; display: grid; gap: .45rem; }
 .ref-recrear-bloque legend { font-weight: 600; font-size: .85rem; }
 .ref-recrear-bloque small { color: var(--muted); }
+.ref-recrear-bloque .ayuda { margin: 0; font-size: .8rem; color: var(--muted); }
 .ref-recrear-textos { display: grid; gap: .5rem; }
 .ref-recrear-textos label { display: grid; gap: .2rem; font-size: .8rem; color: var(--muted); }
 .ref-recrear-textos input { width: 100%; }

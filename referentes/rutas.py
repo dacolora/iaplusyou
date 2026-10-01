@@ -217,11 +217,14 @@ def _familia_de(cliente, r, idioma):
     return dict(familia, descripcion=datos.descripcion_familia(familia, idioma)) if familia else None
 
 
-def _contexto_recrear(cliente, r, producto, formato, tipo, campos, idioma):
+def _contexto_recrear(cliente, r, producto, formato, tipo, campos, idioma, libre_como_video=False):
     """Lectura, textos y los dos prompts (fiel y variación/video) armados con
     los campos del formulario: lo mismo al pintarlo y al generar (spec
     2026-09-30-recrear-fiel §4-§5). Sin `campos_vista=1` (primera vez) los
-    textos son los leídos y la casilla «traer» va prendida."""
+    textos son los leídos y la casilla «traer» va prendida.
+    En video la variación también pasa primero por una imagen (spec §12), así
+    que su prompt es el de imagen; solo el formulario viejo de video
+    (`libre_como_video`) sigue pidiendo el prompt de video con cámara y sonido."""
     lec = lectura.de(r)
     con_campos = campos.get("campos_vista") == "1"
     traer = campos.get("traer_textos") == "1" if con_campos else True
@@ -229,7 +232,8 @@ def _contexto_recrear(cliente, r, producto, formato, tipo, campos, idioma):
     linea = recrear.instruccion_textos(lec, textos, traer, idioma)
     prefs_sonido = proyectos.preferencias_sonido(cliente)
     libre = recrear.armar_prompt(datos.localizado(r, idioma), _familia_de(cliente, r, idioma), producto,
-                                 marca_mod.guia_efectiva(cliente), "", formato, tipo=tipo,
+                                 marca_mod.guia_efectiva(cliente), "", formato,
+                                 tipo="video" if libre_como_video else "imagen",
                                  con_sonido=prefs_sonido["con_sonido"], idioma=idioma, linea_textos=linea)
     fiel = recrear.armar_prompt_fiel(lec, producto, linea, formato, idioma=idioma)
     animar = recrear.armar_prompt_animar(producto, con_sonido=prefs_sonido["con_sonido"], idioma=idioma)
@@ -261,16 +265,15 @@ def _duracion_video(cliente, modelo):
 
 
 def _precios_video(cliente, n_refs_imagen):
-    """Lo que cuesta cada parte de «Como video» (spec §12): la imagen fiel, su
-    animación con cada modelo y la variación, con la duración del proyecto."""
+    """Lo que cuesta cada video de «Como video» (spec §12): una imagen (la fiel o
+    la variación) más su animación con cada modelo, con la duración del proyecto."""
     con_sonido = proyectos.preferencias_sonido(cliente)["con_sonido"]
 
     def video(modelo):
         return gastos.estimar("video", modelo=modelo, duracion=_duracion_video(cliente, modelo), con_sonido=con_sonido)
     return {"imagen": gastos.estimar("imagen", modelo=flowplus_modelos.IMAGEN_POR_DEFECTO, n_referencias=n_refs_imagen),
             "animar": {m: video(m) for m in MODELOS_ANIMAR},
-            "libre": video(flowplus_modelos.VIDEO_POR_DEFECTO),
-            "duracion": {m: _duracion_video(cliente, m) for m in MODELOS_ANIMAR + (flowplus_modelos.VIDEO_POR_DEFECTO,)}}
+            "duracion": {m: _duracion_video(cliente, m) for m in MODELOS_ANIMAR}}
 
 
 def _modos_de(campos):
@@ -430,11 +433,13 @@ def recrear_generar(cliente, rid):
     # editó a mano. Sin esa marca (scripts, pruebas viejas) se usa `prompt` tal cual.
     nuevo = request.form.get("campos_vista") == "1"
     if nuevo:
-        ctx = _contexto_recrear(cliente, r, producto, formato, tipo, request.form, idioma)
         # En video, solo el formulario que muestra las casillas (`modos_vista`)
-        # pide «igual»: uno abierto antes de §12 sigue haciendo un solo video.
-        modos = (_modos_de(request.form) if tipo == "imagen" or request.form.get("modos_vista") == "1"
-                 else ["libre"])
+        # pide imagen + animación: uno abierto antes de §12 sigue haciendo un
+        # solo video con su prompt de video.
+        legado_video = tipo == "video" and request.form.get("modos_vista") != "1"
+        ctx = _contexto_recrear(cliente, r, producto, formato, tipo, request.form, idioma,
+                                libre_como_video=legado_video)
+        modos = ["libre"] if legado_video else _modos_de(request.form)
         if not modos:
             flash(gettext("Elige al menos una imagen."), "error")
             return volver
@@ -449,7 +454,7 @@ def recrear_generar(cliente, rid):
             else:
                 prompts[m] = ctx[campo]
         prompt_animar = ctx["prompt_animar"]
-        if tipo == "video" and "fiel" in modos and request.form.get("prompt_animar_editado") == "1":
+        if tipo == "video" and not legado_video and request.form.get("prompt_animar_editado") == "1":
             prompt_animar = (request.form.get("prompt_animar") or "").strip()
             if not prompt_animar:
                 flash(gettext("El prompt no puede quedar vacío."), "error")
@@ -460,7 +465,7 @@ def recrear_generar(cliente, rid):
         if not prompt:
             flash(gettext("El prompt no puede quedar vacío."), "error")
             return volver
-        modos, prompts, textos = ["libre"], {"libre": prompt}, []
+        modos, prompts, textos, legado_video = ["libre"], {"libre": prompt}, [], tipo == "video"
     try:
         referencias_urls = recrear.referencias_para(cliente, r, producto)
     except Exception as e:
@@ -484,11 +489,13 @@ def recrear_generar(cliente, rid):
             sufijos = {}
     lanzados = 0
     for m in modos:
-        nombre = f"{titulo} · {sufijos[m]}" if nuevo and (tipo == "imagen" or len(modos) > 1 or m == "fiel") else titulo
+        nombre = f"{titulo} · {sufijos[m]}" if nuevo and not legado_video else titulo
         tipo_m, modelo_m, formato_m, duracion_m = tipo, modelo, formato, duracion_objetivo
-        if tipo == "video" and m == "fiel":
-            # «Igual» en video (spec §12): primero la imagen fiel; el worker la
-            # anima en cuanto queda lista (`recrear.lanzar_animacion`).
+        animar = tipo == "video" and not legado_video
+        if animar:
+            # En video (spec §12) cada pieza es primero una imagen (la fiel o la
+            # variación); el worker la anima en cuanto queda lista
+            # (`recrear.lanzar_animacion`).
             tipo_m, modelo_m, duracion_m = "imagen", flowplus_modelos.IMAGEN_POR_DEFECTO, 0
             formato_m = flowplus_modelos.ajustar_formato(modelo_m, formato_pedido, tipo="imagen")
         cf_id = creative_flow.crear(cliente, [], [producto["nombre"]], [], nombre,
@@ -496,7 +503,7 @@ def recrear_generar(cliente, rid):
         campos = dict(prompt_relleno=prompts[m], aspect_ratio=formato_m, tipo=tipo_m, modelo=modelo_m,
                       con_sonido=prefs_sonido["con_sonido"], sonido_texto="", musica_estilo="",
                       calidad="final", referente_id=rid)
-        if tipo == "video" and m == "fiel":
+        if animar:
             animar_con = _modelo_animar(request.form)
             with idiomas.en_idioma(idioma):     # el título se GUARDA: idioma del proyecto
                 palabra_video = gettext("video")
@@ -514,9 +521,8 @@ def recrear_generar(cliente, rid):
         if flowplus_lanzar.lanzar(cliente, cf_id, entry):
             lanzados += 1
     if lanzados == len(modos):
-        if tipo == "video" and "fiel" in modos:
-            flash(gettext("Generando desde el referente… el video «igual» arranca solo cuando su imagen esté lista."),
-                  "ok")
+        if tipo == "video" and not legado_video:
+            flash(gettext("Generando desde el referente… cada video arranca solo cuando su imagen esté lista."), "ok")
         elif tipo == "imagen" and len(modos) > 1:
             flash(gettext("Generando %(n)s imágenes desde el referente…", n=len(modos)), "ok")
         else:

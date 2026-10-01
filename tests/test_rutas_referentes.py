@@ -1430,6 +1430,10 @@ def test_recrear_formulario_video_ofrece_igual_variacion_y_modelo(app):
     assert 'name="modelo_animar"' in html and 'value="seedance25" selected' in html and 'value="wan3"' in html
     assert 'name="prompt_fiel"' in html and 'name="prompt_animar"' in html and "primer fotograma" in html
     assert "Generar 2 videos" in html and 'data-texto-fiel="' in html and 'data-texto-libre="' in html
+    # Las dos partes cuestan lo mismo (imagen + animación): el mismo precio en las dos.
+    import re
+    assert re.search(r'data-texto-fiel="[^"]*≈ ([^"]+)"', html).group(1) == \
+        re.search(r'data-texto-libre="[^"]*≈ ([^"]+)"', html).group(1)
     con_wan = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear?tipo=video&modelo_animar=wan3").data.decode()
     assert 'value="wan3" selected' in con_wan
 
@@ -1452,8 +1456,14 @@ def test_recrear_video_igual_crea_la_imagen_que_se_anima_y_la_variacion(app, mon
     assert animar["modelo"] == "wan3" and animar["duracion"] == 8 and animar["formato"] == "9:16"
     assert "primer fotograma" in animar["prompt"] and animar["titulo"] == "Recrear: 40% OFF · igual · video"
     assert imagen["accion_central"] == "Recrear: 40% OFF · igual"
-    assert variacion["tipo"] == "video" and variacion["modelo"] == "wan3" and variacion["recrear_modo"] == "libre"
-    assert variacion["accion_central"] == "Recrear: 40% OFF · variación" and "Cámara fija" in variacion["prompt_relleno"]
+    # La variación también pasa por una imagen que después se anima (como «igual»).
+    assert variacion["tipo"] == "imagen" and variacion["modelo"] == "seedream_v5_pro" and variacion["recrear_modo"] == "libre"
+    assert variacion["accion_central"] == "Recrear: 40% OFF · variación"
+    assert "Sigue la ESTRUCTURA" in variacion["prompt_relleno"] and "Cámara fija" not in variacion["prompt_relleno"]
+    assert "cambia «50% OFF» por «40% OFF»" in variacion["prompt_relleno"]
+    animar_var = variacion["animar_despues"]
+    assert animar_var["modelo"] == "wan3" and animar_var["titulo"] == "Recrear: 40% OFF · variación · video"
+    assert animar_var["prompt"] == animar["prompt"]
 
 
 def test_recrear_video_modelo_desconocido_usa_seedance_y_respeta_el_prompt_editado(app, monkeypatch):
@@ -1516,4 +1526,17 @@ def test_recrear_video_usa_el_formato_mas_parecido_que_admite_el_modelo(app, mon
                         "modos_vista": "1", "modo": ["fiel", "libre"], "modelo_animar": "wan3"})
     imagen, variacion = (creative_flow.cargar("acme")[c] for c in lanzados)
     assert imagen["aspect_ratio"] == "4:5" and imagen["animar_despues"]["formato"] == "3:4"
-    assert variacion["aspect_ratio"] == "3:4"
+    assert variacion["aspect_ratio"] == "4:5" and variacion["animar_despues"]["formato"] == "3:4"
+
+
+
+def test_recrear_video_con_el_formulario_viejo_usa_el_prompt_de_video(app, monkeypatch):
+    """El camino viejo (sin `modos_vista`) sigue mandando el prompt de video
+    (cámara y sonido), no el de imagen."""
+    import creative_flow
+    ids = _sembrar()
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1"})
+    entry = creative_flow.cargar("acme")[lanzados[0]]
+    assert entry["tipo"] == "video" and "Cámara fija" in entry["prompt_relleno"]

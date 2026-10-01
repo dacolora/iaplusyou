@@ -225,7 +225,7 @@ def armar_prompt_animar(producto, con_sonido=True, sonido_texto="", idioma="es")
 
 
 def lanzar_animacion(cliente, cf_id, imagen_url):
-    """Cuando la imagen fiel de un «Como video» queda lista, crea y lanza UN video
+    """Cuando la imagen de un «Como video» (la fiel o la variación) queda lista, crea y lanza UN video
     con esa imagen como única referencia (spec §12). El costo se aprobó con el
     clic que pidió las dos cosas. Idempotente: anota `animar_despues.cf_video`
     en la imagen ANTES de lanzar, así un segundo intento devuelve el mismo
@@ -245,7 +245,8 @@ def lanzar_animacion(cliente, cf_id, imagen_url):
     creative_flow.actualizar(cliente, cf_video, prompt_relleno=pedido.get("prompt") or "",
                              aspect_ratio=pedido.get("formato"), tipo="video", modelo=pedido.get("modelo"),
                              con_sonido=bool(pedido.get("con_sonido")), sonido_texto="", musica_estilo="",
-                             calidad="final", referente_id=entry.get("referente_id"), recrear_modo="fiel_video",
+                             calidad="final", referente_id=entry.get("referente_id"),
+                             recrear_modo=f"{entry.get('recrear_modo') or 'fiel'}_video",
                              imagen_origen=cf_id, **({"angulo": entry["angulo"]} if entry.get("angulo") else {}))
     creative_flow.actualizar(cliente, cf_id, animar_despues=dict(pedido, cf_video=cf_video))
     flowplus_lanzar.lanzar(cliente, cf_video, creative_flow.cargar(cliente)[cf_video])
