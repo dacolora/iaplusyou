@@ -36,7 +36,7 @@ def test_registro_y_tarifas(entorno):
     f = fuentes.por_tipo("amazon")()
     assert isinstance(f, FuentePlataforma) and f.tipo == "amazon" and f.de_pago is True
     assert fuentes.NOMBRES["meli"] == "Mercado Libre" and fuentes.LLAVES["tiktok_shop"] == ("APIFY_TOKEN",) and fuentes.llaves_faltantes("amazon") == []
-    assert f.tarifa()["actor"] == "axesso_data~amazon-reviews-scraper" and f.tarifa_busqueda()["usd_por_resultado"] == 0.005
+    assert f.tarifa()["actor"] == "junglee~amazon-reviews-scraper" and f.tarifa_busqueda()["usd_por_resultado"] == 0.005
     with pytest.raises(ErrorFuente):
         FuentePlataforma("magia")
     assert f.tarifa()["usd_por_corrida"] == 0.0
@@ -83,26 +83,35 @@ def test_buscar_sin_resultados_y_corrida_fallida(entorno, monkeypatch):
     assert list(FuentePlataforma("tiktok_shop").buscar(["x"], "US", 5)) == []            # vacío no es error
 
 
-def test_recolectar_amazon_una_corrida_por_producto(entorno, monkeypatch):
+def test_recolectar_amazon_una_corrida_para_todos_los_productos(entorno, monkeypatch):
+    """junglee~amazon-reviews-scraper (2026-10-01): UNA corrida con los `productUrls` de TODOS los
+    productos elegidos (no una por producto, como el axesso que exigía acceso completo a la cuenta
+    y se dejó de usar). Una reseña de variante (`productAsin`/`productOriginalAsin` distinto del
+    nuestro) igual se atribuye por el link que mandamos (`input`)."""
     from nicho.fuentes import _http
     from nicho.fuentes.plataforma import FuentePlataforma
     resenas = _fixture("amazon_resenas.json")
-    s = _Sesion({"/actors/axesso_data~amazon-reviews-scraper/runs": [_corrida("SUCCEEDED", "ra", "da"), _corrida("SUCCEEDED", "rb", "db")],
-                 "/datasets/da/items": _Resp(200, resenas), "/datasets/db/items": _Resp(200, [{"reviewId": "R9", "text": "Bra.", "rating": 4, "asin": "B0AMZ00002"}])})
+    variante = {"reviewId": "R9", "reviewTitle": "", "reviewDescription": "Bra.", "ratingScore": 4,
+                "productAsin": "B0VARIANTE", "productOriginalAsin": "B0VARIANTE", "input": "https://www.amazon.com.mx/dp/B0AMZ00002"}
+    s = _Sesion({"/actors/junglee~amazon-reviews-scraper/runs": [_corrida("SUCCEEDED", "ra", "da")],
+                 "/datasets/da/items": _Resp(200, resenas + [variante])})
     monkeypatch.setattr(_http, "sesion", lambda: s)
-    productos = [{"fuente_id": "B0AMZ00001", "url": "https://www.amazon.se/dp/B0AMZ00001", "titulo": "Ortopediska tofflor"},
-                 {"fuente_id": "B0AMZ00002", "url": "https://www.amazon.se/dp/B0AMZ00002", "titulo": "Mjuka tofflor"}]
+    productos = [{"fuente_id": "B095NZBLT7", "url": "https://www.amazon.com.mx/dp/B095NZBLT7", "titulo": "Botella 1"},
+                 {"fuente_id": "B0AMZ00002", "url": "https://www.amazon.com.mx/dp/B0AMZ00002", "titulo": "Botella 2"}]
     f = FuentePlataforma("amazon")
-    lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 20, "pais": "SE"}))
-    assert [c["fuente_id"] for c in lista] == ["R1AMZ", "R2AMZ", "R9"]
-    assert lista[0]["contexto"] == "Ortopediska tofflor" and lista[0]["url"] == "https://www.amazon.se/dp/B0AMZ00001" and lista[0]["puntuacion"] == 5
-    assert lista[0]["extra"] == {"producto": "B0AMZ00001", "plataforma": "amazon", "pais": "SE", "mercado": "local"}
-    assert lista[2]["contexto"] == "Mjuka tofflor"
-    assert f.conteo_por_producto == {"B0AMZ00001": 2, "B0AMZ00002": 1} and f.resultados == 4
+    lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 20, "pais": "MX"}))
+    assert [c["fuente_id"] for c in lista] == ["RVZW4WM0GUOPL", "R148L690U7RG0N", "R9"]
+    assert lista[0]["contexto"] == "Botella 1" and lista[0]["url"] == "https://www.amazon.com.mx/dp/B095NZBLT7" and lista[0]["puntuacion"] == 5
+    assert lista[0]["extra"] == {"producto": "B095NZBLT7", "plataforma": "amazon", "pais": "MX", "mercado": "local"}
+    assert lista[2]["contexto"] == "Botella 2"            # atribuida por el link pedido (`input`), no por el ASIN de la variante
+    assert f.conteo_por_producto == {"B095NZBLT7": 2, "B0AMZ00002": 1} and f.resultados == 4
     posts = [kw for m, u, kw in s.llamadas if m == "POST"]
-    assert [p["json"] for p in posts] == [{"asin": "B0AMZ00001", "domainCode": "se", "maxPages": 2, "sortBy": "recent"},
-                                          {"asin": "B0AMZ00002", "domainCode": "se", "maxPages": 2, "sortBy": "recent"}]
-    assert posts[0]["params"]["maxItems"] == 20 and posts[0]["params"]["maxTotalChargeUsd"] == 0.02
+    assert len(posts) == 1                                # una sola corrida para los dos productos
+    assert posts[0]["json"] == {"productUrls": [{"url": "https://www.amazon.com.mx/dp/B095NZBLT7"},
+                                                 {"url": "https://www.amazon.com.mx/dp/B0AMZ00002"}],
+                                "maxReviews": 20, "sort": "recent", "includeGdprSensitive": False,
+                                "scrapeProductDetails": False, "deduplicateRedirectedAsins": True}
+    assert posts[0]["params"]["maxItems"] == 40 and posts[0]["params"]["maxTotalChargeUsd"] == 0.5   # 40 × 0.006 = 0.24 < el mínimo 0.50
 
 
 def test_recolectar_meli_asocia_por_product_id(entorno, monkeypatch):
@@ -119,14 +128,15 @@ def test_recolectar_meli_asocia_por_product_id(entorno, monkeypatch):
 
 def test_id_en_link():
     """El id de un producto dentro de su propio link (no el que le pedimos al actor de reseñas):
-    la ficha de catálogo y la página de publicación de Mercado Libre, Walmart, AliExpress; None
-    para una tienda que no lo sepa leer o un link que no sea http(s)."""
+    la ficha de catálogo y la página de publicación de Mercado Libre, Walmart, AliExpress y
+    Amazon; None para una tienda que no lo sepa leer o un link que no sea http(s)."""
     from nicho.fuentes.plataformas import id_en_link
     url_catalogo = "https://www.mercadolibre.com.co/botella-de-vidrio-32oz-civago-con-popote-y-marcador-de-tiempo-negra/p/MCO59691162"
     assert id_en_link("meli", url_catalogo) == "MCO59691162"
     assert id_en_link("meli", "https://articulo.mercadolibre.com.co/MCO-123456789-pantuflas") == "MCO123456789"
     assert id_en_link("walmart", "https://www.walmart.com/ip/mukoko-bottle/5394318269") == "5394318269"
     assert id_en_link("aliexpress", "https://www.aliexpress.com/item/3256806541493299.html") == "3256806541493299"
+    assert id_en_link("amazon", "https://www.amazon.com.mx/dp/B095NZBLT7") == "B095NZBLT7"
     assert id_en_link("meli", "/p/MCO59691162") is None                       # no es http(s)
     assert id_en_link("magia", "https://ejemplo.invalid/p/MCO1") is None      # tienda que no se sabe leer
 
