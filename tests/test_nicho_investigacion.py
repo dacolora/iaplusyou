@@ -250,10 +250,11 @@ class TestPlataformas:
         assert isinstance(costo, float)
 
     def test_estimar_resenas_amazon(self):
-        """Estimate review cost for Amazon (junglee~amazon-reviews-scraper, por_producto=false: una corrida)."""
+        """Estimate review cost for Amazon (junglee~amazon-reviews-scraper, por_producto=True: una corrida por producto)."""
         costo = plat.estimar_resenas("amazon", 15, 100)
-        # 15 × 40 (tope por producto) = 600 resultados × $0.006 = $3.6
-        assert costo > 0
+        # 15 corridas × 10 reseñas (plan FREE de Apify: 10 por corrida) × $0.006 = $0.90; el techo mínimo de
+        # US$ 0,50 por corrida solo va en lo que se manda a Apify, no en el estimado
+        assert costo == 0.9
         assert isinstance(costo, float)
 
     def test_entradas_busqueda_amazon(self):
@@ -296,18 +297,19 @@ class TestPlataformas:
         assert prod is None
 
     def test_entradas_resenas_amazon(self):
-        """Build Apify input for Amazon reviews: junglee~amazon-reviews-scraper runs
-        ONE batch with the productUrls of every chosen product (not one run per product)."""
+        """Build Apify input for Amazon reviews: junglee~amazon-reviews-scraper (FREE plan) runs
+        ONE run PER PRODUCT (never joins several productUrls: the FREE plan only reads the first
+        link of a run), capped at 10 reviews per product (the plan's real per-run limit)."""
         productos = [
             {"fuente_id": "B0000TEST1", "url": "https://www.amazon.com/dp/B0000TEST1", "titulo": "P1"},
             {"fuente_id": "B0000TEST2", "url": "https://www.amazon.com/dp/B0000TEST2", "titulo": "P2"}
         ]
-        entradas = plat.entradas_resenas("amazon", productos, "US", 30)      # bajo el tope de 40 por producto: no se recorta
+        entradas = plat.entradas_resenas("amazon", productos, "US", 30)      # 30 pedidas, recortadas al tope de 10
 
-        assert len(entradas) == 1
-        assert entradas[0]["entrada"]["productUrls"] == [{"url": "https://www.amazon.com/dp/B0000TEST1"},
-                                                          {"url": "https://www.amazon.com/dp/B0000TEST2"}]
-        assert entradas[0]["entrada"]["maxReviews"] == 30 and entradas[0]["max_items"] == 60
+        assert len(entradas) == 2
+        assert entradas[0]["entrada"]["productUrls"] == [{"url": "https://www.amazon.com/dp/B0000TEST1"}]
+        assert entradas[1]["entrada"]["productUrls"] == [{"url": "https://www.amazon.com/dp/B0000TEST2"}]
+        assert entradas[0]["entrada"]["maxReviews"] == 10 and entradas[0]["max_items"] == 10
 
     def test_leer_resena_amazon(self):
         """Normalize Amazon review (junglee~amazon-reviews-scraper, 2026-10-01): reviewTitle/reviewDescription/
@@ -412,13 +414,14 @@ def test_estimar_suma_plataformas_claude_y_avatares(monkeypatch):
     from nicho import avatares, investigacion as inv
     monkeypatch.setattr(avatares, "estimar_costo_maximo", lambda: {"usd": 0.4})
     e = inv.estimar({}, "SE", ["amazon", "tiktok_shop"], ["reddit"], inv.TOPES_DEFECTO)
-    # amazon búsqueda 60 × 0.005 = 0.3 (plan FREE de Apify, verificado 2026-10-01); amazon reseñas (junglee)
-    # 15 × 40 (tope por producto) × 0.006 = 3.6
-    assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.3 and e["filas"][0]["resenas_usd"] == 3.6
+    # amazon búsqueda 60 × 0.005 = 0.3 (plan FREE de Apify, verificado 2026-10-01); amazon reseñas
+    # (junglee, fix 3 2026-10-01): una corrida por producto, 10 reseñas por corrida (el tope real
+    # del plan FREE) -- 15 productos × (10 × 0.006) = 0.9, el peor caso REAL, sin el mínimo
+    assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.3 and e["filas"][0]["resenas_usd"] == 0.9
     # claude_usd sale de _tokens_claude (amazon + tiktok_shop buscan las dos en sueco: un idioma)
     entrada_cl, salida_cl = inv._tokens_claude(2, inv.TOPES_DEFECTO, 1)
     assert e["avatares_usd"] == 0.4 and e["claude_usd"] == inv._centavos(inv.costo_claude(entrada_cl, salida_cl)) > 0
-    assert e["total_usd"] == round(0.3 + 3.6 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
+    assert e["total_usd"] == round(0.3 + 0.9 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
     otro = inv.estimar({}, "SE", ["meli"], [], inv.TOPES_DEFECTO)["filas"][0]           # MELI no está en Suecia: busca en México
     assert (otro["mercado"], otro["sitio"]) == ("otro", "MX")
 

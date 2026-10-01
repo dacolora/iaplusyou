@@ -22,10 +22,18 @@ se descarta (None). Nunca se lee el nombre del autor ni del comprador.
               palabras sueltas, así que la entrada lleva la URL de búsqueda
               del dominio del país (`https://www.amazon.<tld>/s?k=…`).
               reseñas `junglee~amazon-reviews-scraper` (US$ 6 / 1 000, mismo
-              publicador que la búsqueda): UNA corrida con los `productUrls`
-              (`/dp/<asin>`) de todos los productos elegidos; techo mínimo
-              US$ 0,50 por corrida y máximo 40 reseñas por producto (axesso
-              se dejó de usar el 2026-10-01: pide acceso completo a la cuenta).
+              publicador que la búsqueda): UNA corrida POR PRODUCTO (no una
+              con todos los `productUrls`: verificado en producción el
+              2026-10-01, el plan FREE de Apify solo lee 1 link y entrega 10
+              reseñas por corrida -- una corrida con varios productUrls deja
+              sin leer a todos menos el primero; Starter sube ese tope a 40),
+              2048 MB por corrida (`memoria_mb`, para que quepan 5 a la vez
+              en el límite de 16 GB de la cuenta) y techo mínimo US$ 0,50 por
+              corrida -- ese mínimo solo va en lo que se MANDA a Apify
+              (`maxTotalChargeUsd`, Apify lo exige); el estimado que se
+              muestra es el peor caso real de cada corrida, sin el mínimo
+              (axesso se dejó de usar el 2026-10-01: pide acceso completo a
+              la cuenta).
   meli        búsqueda `karamelo~mercado-libre-listings-scraper` (US$ 2 /
               1 000, 18 países): UN `keyword` + `country` (URL del sitio) por
               corrida. reseñas `karamelo~mercadolibre-review-scraper` (US$
@@ -262,13 +270,16 @@ def _producto_amazon(item):
 
 
 def _resenas_amazon(productos, pais, resenas_por_producto):
-    # junglee no cobra arranque por corrida (`usd_por_corrida` 0): una sola corrida con los
-    # `productUrls` de TODOS los productos elegidos, no una por producto como el axesso viejo.
+    # junglee en el plan FREE de Apify solo lee 1 link y entrega 10 reseñas POR CORRIDA (verificado en
+    # producción el 2026-10-01): una corrida con los productUrls de varios productos deja sin leer a
+    # todos menos el primero. Por eso UNA corrida POR PRODUCTO (nunca junta varios productUrls); al
+    # subir de plan (Starter) solo cambia el tope de reseñas (`max_resenas_por_producto`), no esto.
     tld = PAISES_AMAZON[pais]
-    return [{"entrada": {"productUrls": [{"url": f"https://www.amazon.{tld}/dp/{p['fuente_id']}"} for p in productos],
+    return [{"entrada": {"productUrls": [{"url": f"https://www.amazon.{tld}/dp/{p['fuente_id']}"}],
                          "maxReviews": resenas_por_producto, "sort": "recent", "includeGdprSensitive": False,
                          "scrapeProductDetails": False, "deduplicateRedirectedAsins": True},
-             "max_items": resenas_por_producto * len(productos), "etiqueta": "reseñas"}]
+             "max_items": resenas_por_producto, "etiqueta": p["fuente_id"]}
+            for p in productos]
 
 
 def _resena_amazon(item):
@@ -452,8 +463,8 @@ PLATAFORMAS = {
         "busqueda": {"actor": "junglee~amazon-crawler", "nombre": N_("Búsqueda en Amazon"), "usd_por_resultado": 0.005, "usd_por_corrida": 0.0,
                      "armar_entradas": _busqueda_amazon, "leer_producto": _producto_amazon},
         "resenas": {"actor": "junglee~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.006, "usd_por_corrida": 0.0,
-                    "tope_minimo_usd": 0.5, "max_resenas_por_producto": 40, "por_producto": False, "necesita_link": False,
-                    "armar_entradas": _resenas_amazon, "leer_resena": _resena_amazon},
+                    "tope_minimo_usd": 0.5, "max_resenas_por_producto": 10, "por_producto": True, "necesita_link": False,
+                    "memoria_mb": 2048, "armar_entradas": _resenas_amazon, "leer_resena": _resena_amazon},
     },
     "meli": {
         "nombre": "Mercado Libre", "paises": PAISES_MELI, "casa": "MX",
@@ -558,23 +569,36 @@ def actor_resenas(clave):
 
 
 def estimar_busqueda(clave, n_consultas, productos_por_consulta, pais=None):
-    """Peor caso de la búsqueda: la suma de los techos de las corridas que se
-    lanzarían (cada una con su arranque), en el sitio que toca."""
+    """Peor caso REAL de la búsqueda: la suma de `peor_usd` de las corridas que se
+    lanzarían (resultados × precio + arranque, sin ningún mínimo), en el sitio que
+    toca. El techo que de verdad se MANDA a Apify (`max_usd`) puede ser más alto
+    solo por el mínimo que algún actor exige por corrida (enmienda 2026-10-01,
+    ruling 3 de `docs/superpowers/specs/2026-09-30-nicho-mas-tiendas-design.md`)."""
     consultas = [f"consulta {k + 1}" for k in range(max(1, int(n_consultas)))]
-    return round(sum(e["max_usd"] for e in entradas_busqueda(clave, consultas, pais, productos_por_consulta)), 2)
+    return round(sum(e["peor_usd"] for e in entradas_busqueda(clave, consultas, pais, productos_por_consulta)), 2)
 
 
 def estimar_resenas(clave, n_productos, resenas_por_producto, pais=None):
-    """Peor caso de las reseñas de `n_productos` elegidos, igual que la búsqueda."""
+    """Peor caso REAL de las reseñas de `n_productos` elegidos, igual que la búsqueda."""
     productos = [{"fuente_id": f"p{k + 1}", "url": f"https://ejemplo.invalid/p{k + 1}", "titulo": ""} for k in range(max(1, int(n_productos)))]
-    return round(sum(e["max_usd"] for e in entradas_resenas(clave, productos, pais, resenas_por_producto)), 2)
+    return round(sum(e["peor_usd"] for e in entradas_resenas(clave, productos, pais, resenas_por_producto)), 2)
 
 
 def _con_tope(entradas, actor):
     # Un actor con techo mínimo por corrida (junglee: Apify rechaza `maxTotalChargeUsd` < US$ 0,50)
-    # nunca manda menos que ese mínimo, aunque la corrida sea tan chica que `tope()` pida menos.
+    # nunca MANDA menos que ese mínimo, aunque la corrida sea tan chica que `tope()` pida menos
+    # (`max_usd`). El estimado que se le muestra a la persona ANTES de aprobar es el peor caso REAL de
+    # la corrida (`peor_usd`, sin el mínimo): mostrar el mínimo ahí exagera el costo de una corrida
+    # chica que nunca lo va a cobrar (ruling 3, 2026-10-01). Para un actor sin mínimo los dos valen
+    # igual. `memoria_mb`, si el actor lo trae, viaja también (`arrancar`/`correr_lote`).
     minimo = float(actor.get("tope_minimo_usd") or 0)
-    return [{**e, "max_usd": max(tope(e["max_items"], actor), minimo)} for e in entradas]
+    memoria_mb = actor.get("memoria_mb")
+    salida = []
+    for e in entradas:
+        peor = tope(e["max_items"], actor)
+        extra = {"memoria_mb": memoria_mb} if memoria_mb else {}
+        salida.append({**e, "max_usd": max(peor, minimo), "peor_usd": peor, **extra})
+    return salida
 
 
 def entradas_busqueda(clave, consultas, pais, productos_por_consulta):

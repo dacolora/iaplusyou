@@ -25,8 +25,13 @@ token de solo lectura (`client_credentials`, 100 llamadas/min, solo uso no
 comercial); YouTube una llave simple (`search.list` tiene cupo de 100
 llamadas/día, una por recolección); Apify solo actores con precio por resultado
 (`nicho/fuentes/apify_actores.py`, precios del plan FREE reverificados el 2026-10-01; junglee
-—reseñas de Amazon— pide un techo mínimo de US$ 0,50 por corrida, que `estimar()` ya suma) y
-el token siempre en cabecera. Las llaves
+—reseñas de Amazon, prueba real en producción el 2026-10-01, run `wpny9jQYLztteag8Z`— en el plan
+FREE de Apify solo lee 1 link y entrega 10 reseñas por corrida (Starter lo sube a 40): UNA
+corrida POR LINK (`corridas()`, nunca junta varios `productUrls`), 2048 MB (`memoria_mb`, para
+que quepan 5 a la vez en el límite de 16 GB de la cuenta) y un techo mínimo de US$ 0,50 por
+corrida que solo va en lo que se MANDA a Apify, nunca en lo que `estimar()` muestra antes del
+clic (el peor caso real)) y el token siempre en cabecera. La cuenta de Apify de Creatv es FREE:
+US$ 5 de uso al mes para toda la cuenta, 16 GB y 5 corridas a la vez. Las llaves
 (`REDDIT_*`, `YOUTUBE_API_KEY`, `APIFY_TOKEN`) viven en el `.env` raíz y se
 muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada — y solo
 la ve el admin: al cliente no se le muestra una fuente sin llave ni instrucciones del `.env`
@@ -40,13 +45,16 @@ llamada: el del país y el de cada tienda que busca en otro, `investigacion.idio
 `consultas` — las del país, las de Reddit/YouTube — y `consultas_por_idioma`; la búsqueda nunca usa más
 que ese tope) → `nicho_inv_buscar` por tienda, con las búsquedas de su idioma (si Claude no las escribió,
 las del país, y el paso lo avisa) (`nicho/fuentes/plataformas.py`: Amazon con tienda propia (sus reseñas
-vienen de `junglee~amazon-reviews-scraper` desde 2026-10-01 — US$ 0,006 por reseña en el plan FREE, techo
-mínimo US$ 0,50 por corrida, máximo 40 por producto; axesso se dejó de usar porque exige acceso completo
-a la cuenta), Mercado Libre en 18 países, Walmart solo en EE. UU., TikTok Shop y AliExpress en todo el
-mundo — AliExpress busca en inglés —; actores de Apify con precio por resultado más el arranque por
-corrida que cobran algunos (`usd_por_corrida`), `providers.apify.correr_lote` hasta 5 corridas a la vez
-con techo de cobro cada una (`plataformas.tope`); el estimado de una tienda es la suma de esos techos y
-el gasto, `plataformas.costo`)
+vienen de `junglee~amazon-reviews-scraper` desde 2026-10-01 — US$ 0,006 por reseña, una corrida POR
+PRODUCTO con 2048 MB: el plan FREE de Apify solo lee 1 link y entrega 10 reseñas por corrida — Starter lo
+sube a 40 —, techo mínimo US$ 0,50 por corrida solo en lo que se manda a Apify, nunca en el estimado;
+axesso se dejó de usar porque exige acceso completo a la cuenta), Mercado Libre en 18 países, Walmart solo
+en EE. UU., TikTok Shop y AliExpress en todo el mundo — AliExpress busca en inglés —; actores de Apify con
+precio por resultado más el arranque por corrida que cobran algunos (`usd_por_corrida`),
+`providers.apify.correr_lote` hasta 5 corridas a la vez con techo de cobro cada una (`plataformas.tope`);
+el estimado de una tienda es la suma del PEOR CASO REAL de cada corrida (`peor_usd`, nunca el techo mínimo
+que algún actor exige solo para que Apify acepte la corrida — enmienda 2026-10-01) y el gasto,
+`plataformas.costo`)
 → `nicho_inv_seleccionar` (Claude marca lo del nicho; se eligen los de más reseñas y, sin ese dato, los de
 más pedidos/vendidos) →
 `nicho_recolectar` por tienda y por red (Reddit/YouTube con las mismas búsquedas) → `nicho_generar_avatares`

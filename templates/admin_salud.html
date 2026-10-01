@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Salud de la plataforma') }}{% endblock %}
+{% block content %}
+{# Salud de la plataforma (dashboard.admin_salud, monitoreo.py). Contexto:
+   filtro, errores (filas de error_app, ya sin tokens), conteo ({abierto,
+   resuelto, silenciado, recientes}), sistema, cola, avisos [(nivel, clave,
+   texto)], metricas (METRICAS.resumen()), estado_general, nombres_origen,
+   nombres_estado, tamano (formateador de bytes), nombres (proyectos). Cada
+   parte puede venir en None si no se pudo leer. #}
+{% set m = metricas %}
+<section class="hero aparece">
+  <div class="hero-texto">
+    <span class="eyebrow">{{ _('Panel de administrador') }}</span>
+    <h1>{{ _('Salud de la plataforma.') }}</h1>
+    <p class="hero-sub">{{ _('Los errores de la app (páginas, worker y trabajos en segundo plano) agrupados, qué tan rápido responde cada página, el worker y el servidor. Un error nuevo te llega por correo si hay SMTP.') }}</p>
+    <p class="hero-sub"><a href="{{ url_for('panel') }}">{{ _('← Volver al panel') }}</a> · <a href="{{ url_for('admin_registros') }}">{{ _('Registros (logs) →') }}</a></p>
+  </div>
+  <div class="hero-stats">
+    <div class="stat">
+      <span class="stat-num salud-estado salud-estado-{{ estado_general }}">{% if estado_general == 'ok' %}✓{% elif estado_general == 'aviso' %}!{% else %}✗{% endif %}</span>
+      <span class="stat-label">{% if estado_general == 'ok' %}{{ _('todo en orden') }}{% elif estado_general == 'aviso' %}{{ _('con avisos') }}{% else %}{{ _('hay problemas') }}{% endif %}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ conteo.recientes if conteo else '—' }}</span>
+      <span class="stat-label">{{ _('errores en 24 h') }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ m.ultima_hora }}</span>
+      <span class="stat-label">{{ _('peticiones en la última hora') }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ m.en_vuelo }}</span>
+      <span class="stat-label">{{ _('atendiéndose ahora') }}</span>
+    </div>
+  </div>
+</section>
+
+{# ---- Qué arreglar ---- #}
+<section class="admin-bloque aparece" id="avisos">
+  <div class="admin-cabecera">
+    <h2>{{ _('Qué arreglar') }}</h2>
+    <span class="vacio">{{ _('lo grave primero') }}</span>
+  </div>
+  {% if avisos %}
+  <ul class="salud-avisos">
+    {% for nivel, clave, texto in avisos %}
+    <li class="salud-aviso salud-aviso-{{ nivel }}">
+      <span class="admin-pill salud-pill-{{ nivel }}">{% if nivel == 'problema' %}✗ {{ _('Problema') }}{% else %}! {{ _('Aviso') }}{% endif %}</span>
+      <span>{{ texto }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="vacio">{{ _('Todo en orden: nada que arreglar ahora.') }}</p>
+  {% endif %}
+</section>
+
+{# ---- Errores agrupados ---- #}
+<section class="admin-bloque aparece" id="errores">
+  <div class="admin-cabecera">
+    <h2>{{ _('Errores') }}</h2>
+    <span class="vacio">{{ _('uno por sitio donde pasa; «Resuelto» vuelve a abrirse solo si el error pasa otra vez') }}</span>
+  </div>
+  <div class="salud-filtros">
+    {% for est in ('abierto', 'resuelto', 'silenciado', 'todos') %}
+    <a class="filtro-pill{% if filtro == est %} activo{% endif %}" href="{{ url_for('admin_salud', estado=est, _anchor='errores') }}">
+      {% if est == 'todos' %}{{ _('Todos') }}{% else %}{{ nombres_estado[est] | traducir }}{% endif %}{% if conteo and est != 'todos' %} · {{ conteo[est] }}{% endif %}
+    </a>
+    {% endfor %}
+    {% if conteo and conteo.abierto %}
+    <form method="post" action="{{ url_for('admin_salud_resolver_todos') }}" class="salud-form-linea"
+          onsubmit="return confirm(this.dataset.confirmar)" data-confirmar="{{ _('¿Marcar todos los abiertos como resueltos? Los que vuelvan a pasar se reabren solos.') }}">
+      <button type="submit" class="btn-sm">{{ _('Marcar todos como resueltos') }}</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if errores %}
+  <div class="admin-scroll">
+    <table class="tabla-admin tabla-salud">
+      <thead><tr><th>{{ _('Última vez') }}</th><th>{{ _('Error') }}</th><th>{{ _('Dónde') }}</th><th class="num">{{ _('Veces') }}</th><th>{{ _('Acción') }}</th></tr></thead>
+      <tbody>
+      {% for e in errores %}
+      <tr>
+        <td class="salud-cuando">{{ e.ultima_vez | replace('T', ' ') }}<br><span class="admin-pill {% if e.estado == 'abierto' %}salud-pill-problema{% else %}off{% endif %}">{{ nombres_estado[e.estado] | traducir }}</span></td>
+        <td class="admin-error">
+          <strong>{{ e.tipo }}</strong>
+          <div class="salud-mensaje">{{ e.mensaje }}</div>
+          {% if e.traza %}
+          <details class="salud-traza">
+            <summary>{{ _('Traza y detalle') }}</summary>
+            <p class="vacio">{{ _('Primera vez: %(fecha)s', fecha=e.primera_vez | replace('T', ' ')) }}{% if e.metodo or e.url %} · <code>{{ e.metodo or '' }} {{ e.url or '' }}</code>{% endif %}{% if e.usuario %} · {{ _('usuario: %(u)s', u=e.usuario) }}{% endif %}</p>
+            <pre>{{ e.traza }}</pre>
+          </details>
+          {% endif %}
+        </td>
+        <td class="admin-detalle">
+          {{ nombres_origen.get(e.origen, e.origen) | traducir }}
+          {% if e.ruta %}<br><code>{{ e.ruta }}</code>{% endif %}
+          {% if e.ubicacion %}<br><code>{{ e.ubicacion }}</code>{% endif %}
+          {% if e.cliente %}<br>{{ nombres.get(e.cliente, e.cliente) }}{% endif %}
+        </td>
+        <td class="num">{{ e.veces }}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin_salud_error', error_id=e.id) }}" class="salud-acciones">
+            <input type="hidden" name="volver" value="{{ filtro }}">
+            {% if e.estado != 'resuelto' %}<button type="submit" name="accion" value="resolver" class="btn-sm">{{ _('Resuelto') }}</button>{% endif %}
+            {% if e.estado != 'silenciado' %}<button type="submit" name="accion" value="silenciar" class="btn-sm" title="{{ _('Sigue contando, pero no vuelve a avisar ni a abrirse.') }}">{{ _('Silenciar') }}</button>{% endif %}
+            {% if e.estado != 'abierto' %}<button type="submit" name="accion" value="reabrir" class="btn-sm">{{ _('Reabrir') }}</button>{% endif %}
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif conteo is none %}
+  <p class="vacio">{{ _('No pude leer los errores. ¿Falta correr «alembic upgrade head» en el servidor?') }}</p>
+  {% else %}
+  <p class="vacio">{{ _('Ningún error en esta lista.') }}</p>
+  {% endif %}
+</section>
+
+{# ---- Peticiones: este proceso desde que arrancó ---- #}
+<section class="admin-bloque aparece" id="peticiones">
+  <div class="admin-cabecera">
+    <h2>{{ _('Peticiones') }}</h2>
+    <span class="vacio">{{ _('desde que arrancó el proceso web (%(fecha)s); se reinician con cada despliegue', fecha=m.desde | replace('T', ' ')) }}</span>
+  </div>
+  <div class="kpis admin-kpis">
+    <div class="kpi">
+      <span>{{ _('Peticiones') }}</span>
+      <strong>{{ m.total }}</strong>
+      <small>{{ _('%(n)s en la última hora', n=m.ultima_hora) }}</small>
+    </div>
+    <div class="kpi{% if m.errores %} kpi-alerta{% endif %}">
+      <span>{{ _('Respuestas 5xx') }}</span>
+      <strong>{{ m.errores }}</strong>
+      <small>{{ _('%(n)s en la última hora', n=m.ultima_hora_errores) }}</small>
+    </div>
+    <div class="kpi">
+      <span>{{ _('A la vez (máximo)') }}</span>
+      <strong>{{ m.max_en_vuelo }}</strong>
+      <small>{{ _('hilos de gunicorn ocupados en el pico') }}</small>
+    </div>
+    <div class="kpi">
+      <span>{{ _('Lentas') }}</span>
+      <strong>{{ m.lentas | length }}</strong>
+      <small>{{ _('de más de 1 s (las últimas 50)') }}</small>
+    </div>
+  </div>
+
+  {# Una sola serie (peticiones por minuto) con las 5xx como parte de cada barra. #}
+  <figure class="salud-grafico">
+    <figcaption>{{ _('Peticiones por minuto, última hora') }}
+      <span class="salud-leyenda"><span class="salud-muestra salud-muestra-ok"></span>{{ _('peticiones') }}
+        <span class="salud-muestra salud-muestra-error"></span>{{ _('5xx') }}</span>
+    </figcaption>
+    <svg viewBox="0 0 600 90" preserveAspectRatio="none" role="img" aria-label="{{ _('Peticiones por minuto, última hora') }}">
+      <line x1="0" y1="89" x2="600" y2="89" class="salud-eje"/>
+      {% for p in m.serie %}
+      {% set alto = (p.n / m.max_minuto * 84) if p.n else 0 %}
+      {% set alto_err = (p.errores / m.max_minuto * 84) if p.errores else 0 %}
+      <g>
+        <title>{{ p.minuto }} · {{ ngettext('%(num)d petición', '%(num)d peticiones', p.n) }}{% if p.errores %} · {{ _('%(n)s con 5xx', n=p.errores) }}{% endif %}</title>
+        <rect x="{{ loop.index0 * 10 }}" y="0" width="10" height="90" class="salud-blanco"/>
+        {% if alto %}<rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 89 - alto }}" width="8" height="{{ alto }}" rx="2" class="salud-barra"/>{% endif %}
+        {% if alto_err %}<rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 89 - alto_err }}" width="8" height="{{ alto_err }}" rx="2" class="salud-barra-error"/>{% endif %}
+      </g>
+      {% endfor %}
+    </svg>
+    <div class="salud-eje-x"><span>{{ m.serie[0].minuto }}</span><span>{{ m.serie[-1].minuto }}</span></div>
+  </figure>
+
+  {% if m.rutas %}
+  <h3>{{ _('Por página o ruta (las que más tiempo suman)') }}</h3>
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>{{ _('Ruta') }}</th><th class="num">{{ _('Peticiones') }}</th><th class="num">5xx</th>
+        <th class="num" title="{{ _('La mitad de las peticiones tardó esto o menos (aproximado)') }}">p50</th>
+        <th class="num" title="{{ _('El 95 %% de las peticiones tardó esto o menos (aproximado)') }}">p95</th>
+        <th class="num">{{ _('Máximo') }}</th><th class="num">{{ _('Consultas por petición') }}</th></tr></thead>
+      <tbody>
+      {% for r in m.rutas %}
+      <tr>
+        <td><code>{{ r.ruta }}</code></td>
+        <td class="num">{{ r.n }}</td>
+        <td class="num">{{ r.errores or '—' }}</td>
+        <td class="num">≤ {{ r.p50 }} ms</td>
+        <td class="num">≤ {{ r.p95 }} ms</td>
+        <td class="num">{{ r.max_ms | round | int }} ms</td>
+        <td class="num">{{ '%.1f' | format(r.consultas) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if m.lentas %}
+  <h3>{{ _('Las más lentas (más de 1 s)') }}</h3>
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>{{ _('Cuándo') }}</th><th>{{ _('Ruta') }}</th><th>{{ _('Dirección') }}</th><th class="num">{{ _('Estado') }}</th><th class="num">ms</th><th>{{ _('Usuario') }}</th></tr></thead>
+      <tbody>
+      {% for l in m.lentas %}
+      <tr>
+        <td>{{ l.cuando | replace('T', ' ') }}</td>
+        <td><code>{{ l.ruta }}</code></td>
+        <td class="admin-detalle"><code>{{ l.url }}</code></td>
+        <td class="num">{{ l.estado }}</td>
+        <td class="num">{{ l.ms }}</td>
+        <td>{{ l.usuario or '—' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  <form method="post" action="{{ url_for('admin_salud_reiniciar_metricas') }}" class="salud-form-linea">
+    <button type="submit" class="btn-sm">{{ _('Reiniciar los contadores') }}</button>
+  </form>
+</section>
+
+{# ---- Worker y cola ---- #}
+{% if cola %}
+<section class="admin-bloque aparece" id="worker">
+  <div class="admin-cabecera">
+    <h2>{{ _('Worker y cola') }}</h2>
+    <span class="vacio">{{ _('si una tarea espera más de 10 min para empezar, el worker no está corriendo') }}</span>
+  </div>
+  <div class="kpis admin-kpis">
+    <div class="kpi"><span>{{ _('En espera') }}</span><strong>{{ cola.pendientes }}</strong><small>{{ _('en la cola') }}</small></div>
+    <div class="kpi{% if cola.atrasadas %} kpi-alerta{% endif %}"><span>{{ _('Atrasadas') }}</span><strong>{{ cola.atrasadas }}</strong><small>{{ _('debían empezar hace más de 10 min') }}</small></div>
+    <div class="kpi"><span>{{ _('En curso') }}</span><strong>{{ cola.en_curso }}</strong><small>{{ _('%(n)s hace más de 30 min', n=cola.largas) }}</small></div>
+    <div class="kpi"><span>{{ _('Última terminada') }}</span><strong class="salud-fecha">{{ (cola.ultima_hecha or '—') | replace('T', ' ') }}</strong><small>{{ _('%(n)s en error sin más reintentos', n=cola.error) }}</small></div>
+  </div>
+  {% if cola.por_tipo %}
+  <h3>{{ _('Tareas de las últimas 24 h por tipo') }}</h3>
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>{{ _('Tipo') }}</th><th class="num">{{ _('Hechas') }}</th><th class="num">{{ _('En error') }}</th><th class="num">{{ _('Duración media') }}</th><th class="num">{{ _('Máximo') }}</th></tr></thead>
+      <tbody>
+      {% for t in cola.por_tipo %}
+      <tr>
+        <td><code>{{ t.tipo }}</code></td>
+        <td class="num">{{ t.hechas }}</td>
+        <td class="num">{{ t.error or '—' }}</td>
+        <td class="num">{% if t.media_s is not none %}{{ t.media_s }} s{% else %}—{% endif %}</td>
+        <td class="num">{% if t.max_s is not none %}{{ t.max_s }} s{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{# ---- Servidor ---- #}
+{% if sistema %}
+{% set s = sistema %}
+<section class="admin-bloque aparece" id="servidor">
+  <div class="admin-cabecera">
+    <h2>{{ _('Servidor') }}</h2>
+    <span class="vacio">{{ _('lo que ve el proceso web en esta máquina') }}</span>
+  </div>
+  <div class="kpis admin-kpis">
+    <div class="kpi"><span>{{ _('Base de datos') }}</span><strong>{{ tamano(s.db_bytes) }}</strong><small>{{ _('WAL: %(peso)s', peso=tamano(s.wal_bytes)) }}</small></div>
+    <div class="kpi"><span>{{ _('Disco libre') }}</span><strong>{{ tamano(s.disco_libre) }}</strong><small>{{ _('de %(total)s', total=tamano(s.disco_total)) }}</small></div>
+    <div class="kpi"><span>{{ _('Memoria disponible') }}</span><strong>{{ tamano(s.mem_disponible) }}</strong><small>{{ _('de %(total)s · la app usa %(app)s', total=tamano(s.mem_total), app=tamano(s.mem_proceso)) }}</small></div>
+    <div class="kpi"><span>{{ _('Carga (1 · 5 · 15 min)') }}</span><strong>{% if s.carga %}{{ s.carga | join(' · ') }}{% else %}—{% endif %}</strong><small>{{ ngettext('%(num)d CPU', '%(num)d CPU', s.cpus or 0) }}</small></div>
+    <div class="kpi"><span>{{ _('Conexiones a la base') }}</span><strong>{% if s.pool %}{{ s.pool.prestadas }} / {{ s.pool.tamano }}{% else %}—{% endif %}</strong><small>{{ _('prestadas ahora / del pool · %(n)s hilos', n=s.hilos) }}</small></div>
+    <div class="kpi"><span>{{ _('Último respaldo') }}</span><strong class="salud-fecha">{{ (s.respaldo or '—') | replace('T', ' ') }}</strong><small>{{ _('data/respaldos (diario)') }}</small></div>
+    <div class="kpi"><span>{{ _('Registros') }}</span><strong>{{ tamano(s.registros_bytes) }}</strong><small>{{ _('data/logs · Python %(v)s', v=s.python) }}</small></div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -29,6 +29,8 @@ que rellena correo=None, correo_verificado=False, session_version=1.
 import os
 import re
 import secrets
+import threading
+import time
 from datetime import datetime
 
 from flask_babel import gettext
@@ -166,12 +168,41 @@ def crear(usuario, password, rol, cliente=None, correo=None):
     guardar(data)
 
 
+# Lectura recordada para `obtener` (spec 2026-10-01-escala-y-monitoreo §4): el
+# guard de sesión y el contexto de las plantillas la piden en CADA petición,
+# también en cada sondeo de una barra de progreso. Vale mientras el archivo no
+# cambie (inodo, fecha en ns y tamaño: `guardar` reemplaza el archivo entero,
+# así que cada escritura da otra firma) y como mucho _MEMO_S segundos, por si
+# dos escrituras cayeran en la misma firma. Nunca se entrega el dict recordado:
+# `obtener` copia el registro.
+_MEMO_S = 2.0
+_memo = {"firma": None, "datos": None, "en": 0.0}
+_memo_lock = threading.Lock()
+
+
+def _cargar_recordado():
+    ruta = _path()
+    try:
+        st = os.stat(ruta)
+    except OSError:
+        return cargar()
+    firma = (ruta, st.st_ino, st.st_mtime_ns, st.st_size)
+    ahora = time.monotonic()
+    with _memo_lock:
+        if _memo["firma"] == firma and ahora - _memo["en"] < _MEMO_S:
+            return _memo["datos"]
+    datos = cargar()
+    with _memo_lock:
+        _memo.update(firma=firma, datos=datos, en=ahora)
+    return datos
+
+
 def obtener(usuario):
     """Copia del registro del usuario (con defaults rellenados) SIN
     password_hash, o None. Es lo que puede llegar a session/templates sin
     riesgo; para lo que sí necesita el hash (verificar la contraseña) usa
     obtener_hash."""
-    entry = cargar().get(usuario)
+    entry = _cargar_recordado().get(usuario)
     if not entry:
         return None
     entry = _completar(dict(entry))

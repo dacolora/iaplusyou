@@ -83,35 +83,48 @@ def test_buscar_sin_resultados_y_corrida_fallida(entorno, monkeypatch):
     assert list(FuentePlataforma("tiktok_shop").buscar(["x"], "US", 5)) == []            # vacío no es error
 
 
-def test_recolectar_amazon_una_corrida_para_todos_los_productos(entorno, monkeypatch):
-    """junglee~amazon-reviews-scraper (2026-10-01): UNA corrida con los `productUrls` de TODOS los
-    productos elegidos (no una por producto, como el axesso que exigía acceso completo a la cuenta
-    y se dejó de usar). Una reseña de variante (`productAsin`/`productOriginalAsin` distinto del
-    nuestro) igual se atribuye por el link que mandamos (`input`)."""
+def test_recolectar_amazon_una_corrida_por_producto(entorno, monkeypatch):
+    """junglee~amazon-reviews-scraper en el plan FREE (fix 3, 2026-10-01, prueba real en
+    producción run `wpny9jQYLztteag8Z`): UNA corrida POR PRODUCTO -- el plan FREE solo lee 1 link
+    y entrega 10 reseñas por corrida, así que una corrida con los `productUrls` de varios
+    productos deja sin leer a todos menos el primero (antes se creía que una corrida con todos
+    los links funcionaba; axesso, que sí exigía acceso completo a la cuenta, se había dejado de
+    usar por otro motivo). Cada corrida pide 2048 MB y el mínimo de Apify (US$ 0,50). Una reseña
+    se atribuye por `productOriginalAsin`, por el link pedido (`input`) cuando el ASIN es de una
+    variante que no reconocemos, y -- nuevo con `por_producto=True` -- por la corrida que la
+    trajo cuando ni lo uno ni lo otro calzan con ninguno de nuestros productos (la corrida ya es
+    de UN producto, así que esa última pista basta)."""
     from nicho.fuentes import _http
     from nicho.fuentes.plataforma import FuentePlataforma
-    resenas = _fixture("amazon_resenas.json")
-    variante = {"reviewId": "R9", "reviewTitle": "", "reviewDescription": "Bra.", "ratingScore": 4,
-                "productAsin": "B0VARIANTE", "productOriginalAsin": "B0VARIANTE", "input": "https://www.amazon.com.mx/dp/B0AMZ00002"}
-    s = _Sesion({"/actors/junglee~amazon-reviews-scraper/runs": [_corrida("SUCCEEDED", "ra", "da")],
-                 "/datasets/da/items": _Resp(200, resenas + [variante])})
+    resenas_p1 = _fixture("amazon_resenas.json")                  # B095NZBLT7: 2 reseñas reales + 1 basura
+    variante_por_input = {"reviewId": "R9", "reviewTitle": "", "reviewDescription": "Bra.", "ratingScore": 4,
+                          "productAsin": "B0VARIANTE", "productOriginalAsin": "B0VARIANTE",
+                          "input": "https://www.amazon.com.mx/dp/B0AMZ00002"}
+    variante_sin_pista = {"reviewId": "R10", "reviewTitle": "", "reviewDescription": "Sin variante reconocible.",
+                          "ratingScore": 3, "productAsin": "B0OTRAVARIANTE", "productOriginalAsin": "B0OTRAVARIANTE",
+                          "input": "https://www.amazon.com.mx/dp/B0OTRAVARIANTE"}
+    s = _Sesion({"/actors/junglee~amazon-reviews-scraper/runs": [_corrida("SUCCEEDED", "ra1", "da1"), _corrida("SUCCEEDED", "ra2", "da2")],
+                 "/datasets/da1/items": _Resp(200, resenas_p1),
+                 "/datasets/da2/items": _Resp(200, [variante_por_input, variante_sin_pista])})
     monkeypatch.setattr(_http, "sesion", lambda: s)
     productos = [{"fuente_id": "B095NZBLT7", "url": "https://www.amazon.com.mx/dp/B095NZBLT7", "titulo": "Botella 1"},
                  {"fuente_id": "B0AMZ00002", "url": "https://www.amazon.com.mx/dp/B0AMZ00002", "titulo": "Botella 2"}]
     f = FuentePlataforma("amazon")
     lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 20, "pais": "MX"}))
-    assert [c["fuente_id"] for c in lista] == ["RVZW4WM0GUOPL", "R148L690U7RG0N", "R9"]
+    assert [c["fuente_id"] for c in lista] == ["RVZW4WM0GUOPL", "R148L690U7RG0N", "R9", "R10"]
     assert lista[0]["contexto"] == "Botella 1" and lista[0]["url"] == "https://www.amazon.com.mx/dp/B095NZBLT7" and lista[0]["puntuacion"] == 5
     assert lista[0]["extra"] == {"producto": "B095NZBLT7", "plataforma": "amazon", "pais": "MX", "mercado": "local"}
-    assert lista[2]["contexto"] == "Botella 2"            # atribuida por el link pedido (`input`), no por el ASIN de la variante
-    assert f.conteo_por_producto == {"B095NZBLT7": 2, "B0AMZ00002": 1} and f.resultados == 4
-    posts = [kw for m, u, kw in s.llamadas if m == "POST"]
-    assert len(posts) == 1                                # una sola corrida para los dos productos
-    assert posts[0]["json"] == {"productUrls": [{"url": "https://www.amazon.com.mx/dp/B095NZBLT7"},
-                                                 {"url": "https://www.amazon.com.mx/dp/B0AMZ00002"}],
-                                "maxReviews": 20, "sort": "recent", "includeGdprSensitive": False,
-                                "scrapeProductDetails": False, "deduplicateRedirectedAsins": True}
-    assert posts[0]["params"]["maxItems"] == 40 and posts[0]["params"]["maxTotalChargeUsd"] == 0.5   # 40 × 0.006 = 0.24 < el mínimo 0.50
+    assert lista[2]["contexto"] == "Botella 2"            # R9: atribuida por el link pedido (`input`), no por el ASIN de la variante
+    assert lista[3]["contexto"] == "Botella 2"            # R10: ni productOriginalAsin ni input calzan -- se atribuye por la corrida
+    assert f.conteo_por_producto == {"B095NZBLT7": 2, "B0AMZ00002": 2} and f.resultados == 5    # 3 + 2 ítems crudos (incluida la basura)
+    posts = [(u, kw) for m, u, kw in s.llamadas if m == "POST"]
+    assert len(posts) == 2                                # UNA corrida POR PRODUCTO, nunca junta productUrls
+    assert posts[0][1]["json"] == {"productUrls": [{"url": "https://www.amazon.com.mx/dp/B095NZBLT7"}],
+                                   "maxReviews": 10, "sort": "recent", "includeGdprSensitive": False,
+                                   "scrapeProductDetails": False, "deduplicateRedirectedAsins": True}
+    assert posts[1][1]["json"]["productUrls"] == [{"url": "https://www.amazon.com.mx/dp/B0AMZ00002"}]
+    assert all(kw["params"]["memory"] == 2048 and kw["params"]["maxTotalChargeUsd"] == 0.5 for _, kw in posts)
+    assert posts[0][1]["params"]["maxItems"] == 10        # 20 pedidas, recortadas al tope real del plan FREE (10)
 
 
 def test_recolectar_meli_asocia_por_product_id(entorno, monkeypatch):

@@ -105,6 +105,7 @@ incidente. Si la tarea cruza dos áreas, carga las dos.
 | Triple Whale: sincronización, pestaña, evaluación con IA, atribución | [`triple-whale`](.claude/skills/triple-whale/SKILL.md) |
 | una ruta nueva, una subida, una URL ajena, el login, las cuentas | [`seguridad`](.claude/skills/seguridad/SKILL.md) |
 | una pantalla, tarjeta o lista, `style.css`, `base.html`, el celular, la velocidad de la página | [`ui`](.claude/skills/ui/SKILL.md) |
+| una ruta GET con muchas tarjetas, una consulta o un índice, `deploy/`, `/admin/salud`, errores de producción | [`escala-y-salud`](.claude/skills/escala-y-salud/SKILL.md) |
 | cualquier texto visible, `messages.po`, `idiomas.py` | [`idioma`](.claude/skills/idioma/SKILL.md) |
 | una llamada a Claude que escribe copy, el ángulo, el revisor, el diagnóstico | [`doctrina`](.claude/skills/doctrina/SKILL.md) |
 

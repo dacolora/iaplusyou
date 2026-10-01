@@ -2,17 +2,21 @@
 Fuente `apify` (spec §3.5): reseñas de Amazon y comentarios de TikTok a través
 de los actores de `apify_actores` (de pago, por resultado). Llave APIFY_TOKEN
 SIEMPRE como cabecera `Authorization: Bearer …`, nunca en la URL (los logs de
-gunicorn y del worker guardan URLs). La mecánica de arrancar/sondear/leer el
-dataset vive en `providers/apify.py` (compartida con
-`referentes/fuentes/apify_adlibrary.py`, spec bloque 5) — este módulo solo
+gunicorn y del worker guardan URLs). `recolectar` arma la lista de corridas
+con `apify_actores.corridas()` (una por link para junglee -- reseñas de
+Amazon en el plan FREE --, una sola para los demás) y las corre con
+`providers.apify.correr_lote` (compartido con `nicho/fuentes/plataforma.py`
+y `referentes/fuentes/apify_adlibrary.py`, spec bloque 5) — este módulo solo
 sabe qué actor llamar y cómo convertir sus ítems crudos en comentarios.
-`resultados` es el número de ítems CRUDOS que devolvió el dataset (no solo
-los que traen texto): el worker anota el gasto como resultados × precio del
-actor ("aprox."). Si el dataset no se puede leer, `resultados` cae al
-`itemCount` del dataset y, en último caso, al tope aprobado — registrar de
-más es mejor que perder el registro de un cobro. `run_id`/`dataset_id`
-quedan en la fuente y en todo mensaje posterior al arranque para poder
-rastrear la corrida en console.apify.com.
+`resultados` es el número de ítems CRUDOS que devolvieron los datasets (no
+solo los que traen texto): el worker anota el gasto como resultados × precio
+del actor ("aprox."). Si un dataset no se puede leer, su cuota de
+`resultados` cae al `itemCount` del dataset y, en último caso, al tope
+aprobado de esa corrida — registrar de más es mejor que perder el registro
+de un cobro. `run_id`/`dataset_id` (de la primera corrida lanzada) y
+`corridas` (los registros de `correr_lote`, que `tareas.nicho._gasto_recoleccion`
+ya lee) quedan en la fuente para poder rastrear cualquier cobro en
+console.apify.com.
 """
 import os
 
@@ -60,6 +64,7 @@ class FuenteApify(Fuente):
         self.aviso = ""
         self.run_id = None
         self.dataset_id = None
+        self.corridas = []
 
     def estimar(self, params):
         p = normalizar_params(params)
@@ -75,39 +80,27 @@ class FuenteApify(Fuente):
         p = normalizar_params(params)
         token = _token()
         avanzar = avanzar or (lambda etapa, detalle=None: None)
-        self.resultados, self.aviso = 0, ""
+        self.resultados, self.aviso, self.corridas = 0, "", []
         self.run_id, self.dataset_id = None, None
         sesion = _http.sesion()
         actor = apify_actores.ACTORES[p["actor"]]
-        estimado = apify_actores.estimar(p["actor"], p["max_resultados"])
         avanzar(N_("Buscando"), actor["nombre"])
-        entrada = apify_actores.entrada(p["actor"], p["links"], p["max_resultados"])
-
-        def _guardar_ids(run_id, dataset_id):
-            # Se llama aunque `arrancar` termine lanzando: si Apify devolvió un id de
-            # corrida (pudo cobrar) queda guardado en la fuente antes del error.
-            self.run_id, self.dataset_id = run_id, dataset_id
-
-        _, _, estado = apify_api.arrancar(
-            sesion, token, actor["actor"], entrada, p["max_resultados"], estimado["usd"], on_ids=_guardar_ids)
-        estado = apify_api.sondear(sesion, token, self.run_id, estado, N_("Leyendo comentarios"), avanzar)
-        crudos, motivo = apify_api.leer_dataset(sesion, token, self.dataset_id, p["max_resultados"])   # la corrida ya se pagó: se lee pase lo que pase
-        if crudos is None:
-            contados = apify_api.contar_dataset(sesion, token, self.dataset_id)
-            self.resultados = p["max_resultados"] if contados is None else contados
-            raise ErrorFuente(gettext("Apify no entregó los resultados (%(motivo)s); corrida %(corrida)s, "
-                                      "dataset %(dataset)s: revísalos en console.apify.com.",
-                                      motivo=motivo, corrida=self.run_id, dataset=self.dataset_id))
-        self.resultados = len(crudos)                            # ítems CRUDOS: es lo que Apify cobra
-        for item in crudos:
+        corridas = apify_actores.corridas(p["actor"], p["links"], p["max_resultados"])
+        res = apify_api.correr_lote(sesion, token, actor["actor"], corridas, N_("Leyendo comentarios"), avanzar)
+        self.resultados, self.aviso, self.corridas = res["resultados"], res["aviso"], res["corridas"]
+        # La primera corrida lanzada (pudo cobrar aunque las demás no arrancaran o el lote
+        # termine en error): queda en la fuente para poder rastrearla en console.apify.com.
+        lanzadas = [c for c in res["corridas"] if c["run_id"]]
+        if lanzadas:
+            self.run_id, self.dataset_id = lanzadas[0]["run_id"], lanzadas[0]["dataset_id"]
+        # `correr_lote` ya levanta ErrorFuente si NINGUNA corrida arrancó (nada se cobró). Acá
+        # además: sin ítems que guardar y con alguna corrida que no terminó en SUCCEEDED o cuyo
+        # dataset no se pudo leer (`motivo`), es el mismo "sin resultados" de siempre.
+        if not res["items"] and any(c["estado"] != "SUCCEEDED" or c["motivo"] for c in res["corridas"]):
+            raise ErrorFuente(gettext("Apify no entregó resultados (%(aviso)s); revísalos en console.apify.com.",
+                                      aviso=res["aviso"]))
+        for _, item in res["items"]:
             crudo = apify_actores.leer_item(p["actor"], item if isinstance(item, dict) else {})
             c = normalizar_comentario(crudo) if crudo else None
             if c:
                 yield c
-        if estado != "SUCCEEDED":
-            if not self.resultados:
-                raise ErrorFuente(gettext("La corrida de Apify %(estado)s sin resultados (corrida %(corrida)s); "
-                                          "revísala en console.apify.com.",
-                                          estado=apify_api.frase_estado(estado), corrida=self.run_id))
-            self.aviso = gettext("Apify %(estado)s (corrida %(corrida)s); se guardaron %(n)s resultados.",
-                                 estado=apify_api.frase_estado(estado), corrida=self.run_id, n=self.resultados)

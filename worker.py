@@ -38,6 +38,8 @@ from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 import cola
 import db
 import idiomas
+import monitoreo
+import registro_app
 import tareas
 from providers import wavespeed_common
 
@@ -58,6 +60,8 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               # Auditoría 2026-09-28: salidas/ crecía 2 GB cada dos semanas, tarea
               # sumaba ~485 filas vacías al día y la base solo se respaldaba a mano.
               ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
+              # Salud (spec 2026-10-01): los errores resueltos viejos no se acumulan.
+              ("errores_limpiar", 86400),
               # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
               # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
               ("cadena_vigilar", 60)]
@@ -170,7 +174,11 @@ def _correr(tarea):
     except ContinuacionPerdida as e:
         log.error("tarea %s: no se pudo encolar su continuación: %s", tarea["id"], cola.sin_token(e))
     except Exception as e:  # noqa: BLE001 — el worker nunca muere por una tarea
-        log.error("tarea %s falló: %s\n%s", tarea["id"], cola.sin_token(e), cola.sin_token(traceback.format_exc()))
+        # A /admin/salud agrupado por tipo de tarea y lugar (no por id: el log.error
+        # de abajo no vuelve a contarlo).
+        monitoreo.registrar_excepcion(e, "worker", ruta=tarea["tipo"], cliente=tarea.get("cliente"))
+        log.error("tarea %s falló: %s\n%s", tarea["id"], cola.sin_token(e), cola.sin_token(traceback.format_exc()),
+                  extra={"sin_monitoreo": True})
         cola.fallar(tarea["id"], f"{type(e).__name__}: {e}")
 
 
@@ -298,6 +306,8 @@ def esperar_hilos(timeout=None):
 def main():
     load_dotenv(os.path.join(BASE_DIR, ".env"))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
+    # data/logs/worker.log (lo lee /admin/salud/registros) y log.error → errores agrupados.
+    registro_app.configurar("worker")
     tareas.cargar_todas()
     signal.signal(signal.SIGINT, _pedir_parada)
     signal.signal(signal.SIGTERM, _pedir_parada)
@@ -317,7 +327,8 @@ def main():
         except KeyboardInterrupt:
             _pedir_parada(signal.SIGINT, None)
         except Exception as e:  # noqa: BLE001
-            log.error("repartir falló: %s", cola.sin_token(e))
+            monitoreo.registrar_excepcion(e, "worker", ruta="repartir")
+            log.error("repartir falló: %s", cola.sin_token(e), extra={"sin_monitoreo": True})
             time.sleep(5)
     if en_vuelo():
         log.info("esperando que terminen %s tareas en curso", len(en_vuelo()))

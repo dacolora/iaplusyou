@@ -33,6 +33,7 @@ justo la mentira que este módulo trata de evitar.
 import functools
 import logging
 import math
+import re
 import threading
 import time
 from datetime import datetime
@@ -181,6 +182,12 @@ def iniciar(job_id, fn, duracion_estimada=60, etapas=None, cliente=None):
                     t["mensaje"] = mensaje or "Listo."
                     t["fin"] = time.time()
         except Exception as e:
+            # A /admin/salud: agrupado por la acción (lo último del job_id), no por
+            # el job entero, que lleva proyecto e ids.
+            import monitoreo
+            partes = str(job_id).split("__")
+            monitoreo.registrar_excepcion(e, "hilo", ruta=re.sub(r"\d+", "N", partes[-1])[:80],
+                                          cliente=partes[0] if len(partes) > 1 else None)
             with _LOCK:
                 t = _TRABAJOS.get(job_id)
                 if t:

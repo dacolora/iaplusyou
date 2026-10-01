@@ -5,9 +5,12 @@ referencia (mismo producto, distintos ángulos/tomas) para darle a Nano Banana
 la mejor fidelidad posible al generar. Al usuario solo se le muestra UNA foto
 representativa por producto — las demás son material interno.
 """
+import contextlib
+import functools
 import hashlib
 import os
 import re
+import threading
 import unicodedata
 
 from flask_babel import gettext
@@ -111,7 +114,93 @@ def guardar_meta(cliente, meta, categoria=CATEGORIA_POR_DEFECTO):
     escribir usa `modificar_meta`: gunicorn (Catálogo) y el worker
     (importador, una vez por producto durante una sync) escriben el mismo
     JSON, y sin lock una de las dos escrituras pisa a la otra."""
+    _olvidar_lecturas()
     _json_store.guardar(_meta_path(cliente, categoria), meta)
+
+
+# ------------------------------------------- lecturas memorizadas por petición ---
+# Cada `listar()` recorre el catálogo en disco (productos.json, proyecto.json y
+# un listdir por producto y por color). La página del proyecto lo pedía dos
+# veces por TARJETA de Crear (`encontrar_por_id_o_nombre`, el producto de cada
+# pieza, para la revisión rápida): con 25 productos × 3 colores y 300 piezas,
+# ~1 s de CPU por carga (medido el 2026-10-01, spec 2026-10-01-escala-y-
+# monitoreo §4). Dentro de `lecturas_memorizadas()` (las rutas GET que solo
+# pintan) las búsquedas (`encontrar*`) leen el catálogo UNA vez por petición;
+# fuera (rutas que escriben, el worker) todo sigue igual. Una búsqueda devuelve
+# una copia de la entrada, así que quien la modifique no le cambia nada a la
+# siguiente; y cualquier escritura de la meta olvida lo leído.
+_MEMO = threading.local()
+
+
+@contextlib.contextmanager
+def lecturas_memorizadas():
+    if getattr(_MEMO, "d", None) is not None:
+        yield
+        return
+    _MEMO.d = {}
+    try:
+        yield
+    finally:
+        _MEMO.d = None
+
+
+def con_lecturas_memorizadas(fn):
+    """Decorador para una ruta que solo LEE el catálogo (gunicorn reutiliza
+    los hilos: el memo se descarta al salir)."""
+    @functools.wraps(fn)
+    def envoltura(*args, **kwargs):
+        with lecturas_memorizadas():
+            return fn(*args, **kwargs)
+    return envoltura
+
+
+def _olvidar_lecturas():
+    d = getattr(_MEMO, "d", None)
+    if d is not None:
+        d.clear()
+
+
+def _copia(entradas):
+    """Copia de una lista de entradas: los dicts y las listas de cada entrada
+    (y los dicts de esas listas, como los colores) son nuevos."""
+    def valor(v):
+        if isinstance(v, list):
+            return [dict(x) if isinstance(x, dict) else x for x in v]
+        return dict(v) if isinstance(v, dict) else v
+    return [{k: valor(v) for k, v in e.items()} for e in entradas]
+
+
+def _memorizado(clave, leer):
+    """(lista, memorizada): la lista memorizada SIN copiar — para buscar dentro
+    de este módulo, que copia solo lo que devuelve — o, sin memo, `leer()`."""
+    d = getattr(_MEMO, "d", None)
+    if d is None:
+        return leer(), False
+    if clave not in d:
+        d[clave] = leer()
+    return d[clave], True
+
+
+def recordado(clave, leer):
+    """`leer()` recordado dentro de `lecturas_memorizadas()` (fuera, `leer()` tal
+    cual). Para lecturas de solo mirar que otro módulo repite por tarjeta (p. ej.
+    las filas comerciales por activo, final_edition._fila_producto): quien lo
+    use NO modifica lo que recibe."""
+    return _memorizado(clave, leer)[0]
+
+
+def _entradas(cliente, categoria):
+    # Siempre a través de `listar` (el nombre del módulo, que una prueba puede
+    # sustituir); dentro del memo, una sola vez por petición.
+    return _memorizado(("listar", cliente, categoria), lambda: listar(cliente, categoria))
+
+
+def _productos(cliente, categoria):
+    return _memorizado(("listar_productos", cliente, categoria), lambda: listar_productos(cliente, categoria))
+
+
+def _devolver(entrada, memorizada):
+    return _copia([entrada])[0] if entrada is not None and memorizada else entrada
 
 
 def _lock_meta(cliente, categoria):
@@ -392,14 +481,14 @@ def encontrar(cliente, producto_id, categoria=None):
         return None
     cats = [categoria_valida(categoria)] if categoria else list(CATEGORIAS)
     for cat in cats:
-        lista = listar(cliente, cat)
+        lista, memorizada = _entradas(cliente, cat)
         for p in lista:
             if p["id"] == producto_id:
-                return p
+                return _devolver(p, memorizada)
         if "/" not in str(producto_id):
             for p in lista:
                 if p["producto_id"] == producto_id and p["variante"]:
-                    return p
+                    return _devolver(p, memorizada)
     return None
 
 
@@ -407,7 +496,8 @@ def encontrar_producto(cliente, pid, categoria=CATEGORIA_POR_DEFECTO):
     """La entrada de listar_productos() del producto `pid` (o del producto de
     un id de color). None si no existe o no tiene fotos."""
     base = producto_base(pid)
-    return next((p for p in listar_productos(cliente, categoria) if p["id"] == base), None)
+    lista, memorizada = _productos(cliente, categoria_valida(categoria))
+    return _devolver(next((p for p in lista if p["id"] == base), None), memorizada)
 
 
 def claves_de_producto(cliente, pid, categoria=CATEGORIA_POR_DEFECTO):
@@ -426,11 +516,11 @@ def encontrar_por_id_o_nombre(cliente, valor, categoria=CATEGORIA_POR_DEFECTO):
     p = encontrar(cliente, valor, categoria=categoria)
     if p:
         return p
-    lista = listar(cliente, categoria)
+    lista, memorizada = _entradas(cliente, categoria_valida(categoria))
     p = next((c for c in lista if c.get("nombre") == valor), None)
     if p:
-        return p
-    return next((c for c in lista if c.get("nombre_producto") == valor), None)
+        return _devolver(p, memorizada)
+    return _devolver(next((c for c in lista if c.get("nombre_producto") == valor), None), memorizada)
 
 
 def carpeta_de(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO, variante=None):

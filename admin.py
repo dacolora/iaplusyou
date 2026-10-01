@@ -117,8 +117,9 @@ def pauta_mes(clientes, ahora_iso=None):
     with db.conectar() as con:
         piezas = con.execute(q).fetchall()
     moneda_cuenta = {}
+    todas = experimentos.snapshots_de([f[0] for f in piezas], desde)
     for ep_id, cliente, moneda, extra in piezas:
-        snaps = experimentos.snapshots(ep_id, desde=desde)
+        snaps = todas.get(ep_id)
         if not snaps:
             continue
         gasto = tablero.delta(snaps, desde, hasta, "gasto")

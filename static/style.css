@@ -2963,3 +2963,43 @@ body.panel-abierto { overflow: hidden; }
 .hb-movimiento { margin-top: .8rem; }
 .hb-voz-lista audio { width: 100%; height: 32px; }
 @media (max-width: 760px) { .hb-layout { grid-template-columns: minmax(0, 1fr); } .hb-fotos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ---- Salud de la plataforma (/admin/salud, /admin/salud/registros; spec
+   2026-10-01-escala-y-monitoreo §6). Reusa .admin-bloque, .kpis y .tabla-admin. ---- */
+.salud-estado-ok { color: var(--ok); }
+.salud-estado-aviso { color: var(--warn); }
+.salud-estado-problema { color: var(--error); }
+.admin-pill.salud-pill-problema { background: rgba(255, 95, 122, .14); color: var(--error); }
+.admin-pill.salud-pill-aviso { background: var(--warn-fondo); color: var(--warn); }
+.salud-avisos { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
+.salud-aviso { display: flex; gap: .6rem; align-items: baseline; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: .55rem .75rem; font-size: .86rem; line-height: 1.45; }
+.salud-aviso-problema { border-color: rgba(255, 95, 122, .45); }
+.salud-filtros { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: .7rem; }
+.filtro-pill { font-size: .78rem; padding: .25rem .7rem; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); text-decoration: none; white-space: nowrap; }
+.filtro-pill.activo { background: var(--panel-2); color: var(--text); border-color: var(--accent); }
+.salud-form-linea { display: inline-flex; margin: .6rem 0 0; }
+.salud-filtros .salud-form-linea { margin: 0 0 0 auto; }
+.tabla-salud td.salud-cuando { white-space: nowrap; font-size: .8rem; }
+.salud-mensaje { margin-top: .2rem; overflow-wrap: anywhere; }
+.salud-traza summary { cursor: pointer; font-size: .78rem; margin-top: .35rem; }
+.salud-traza pre, .registro-entrada pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .74rem; line-height: 1.45; background: var(--panel-2); border-radius: 8px; padding: .5rem .6rem; margin: .3rem 0 0; max-height: 28rem; overflow: auto; }
+.salud-acciones { display: flex; flex-wrap: wrap; gap: .3rem; }
+.salud-fecha { font-size: .95rem; }
+.salud-grafico { margin: 1rem 0 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: .7rem .8rem .5rem; }
+.salud-grafico figcaption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; font-size: .8rem; color: var(--muted); margin-bottom: .4rem; }
+.salud-grafico svg { width: 100%; height: 90px; display: block; }
+.salud-leyenda { display: inline-flex; align-items: center; gap: .35rem; }
+.salud-muestra { display: inline-block; width: .7rem; height: .7rem; border-radius: 3px; }
+.salud-muestra-ok, .salud-barra { fill: var(--accent); background: var(--accent); }
+.salud-muestra-error, .salud-barra-error { fill: var(--error); background: var(--error); }
+.salud-blanco { fill: transparent; }
+.salud-eje { stroke: var(--border); stroke-width: 1; }
+.salud-eje-x { display: flex; justify-content: space-between; font-size: .7rem; color: var(--muted); margin-top: .2rem; }
+.salud-filtros-form { display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-end; margin-bottom: 1rem; }
+.salud-filtros-form label { display: grid; gap: .25rem; font-size: .8rem; }
+.registro-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; }
+.registro-entrada { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: .45rem .65rem; }
+.registro-entrada.registro-error, .registro-entrada.registro-critical { border-color: rgba(255, 95, 122, .45); }
+.registro-cabeza { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; font-size: .76rem; color: var(--muted); }
+.registro-detalle summary { cursor: pointer; list-style: none; }
+.registro-detalle summary pre { display: inline; background: none; padding: 0; }

@@ -17,6 +17,7 @@ import unicodedata
 import secrets
 import socket
 import subprocess
+import sys
 import threading
 import time
 from functools import wraps
@@ -27,7 +28,7 @@ import sqlalchemy as sa
 
 from dotenv import load_dotenv
 from PIL import Image
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context, g, got_request_exception
 from flask_babel import Babel, format_decimal, get_locale, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
@@ -92,6 +93,8 @@ import triple_whale
 import triple_whale_tiendas
 import tablero
 import admin
+import monitoreo
+import registro_app
 import gastos
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
@@ -211,7 +214,62 @@ app.jinja_env.globals.update(doctrina.globales_plantilla())
 app.config["BABEL_DEFAULT_LOCALE"] = "es"
 app.config["BABEL_TRANSLATION_DIRECTORIES"] = idiomas.DIR_TRADUCCIONES
 Babel(app, locale_selector=idiomas.de_peticion)
+idiomas.instalar_gettext_rapido(app)  # mismo resultado que el de Flask-Babel, sin su costo por `_()`
 app.jinja_env.filters["traducir"] = idiomas.traducir
+
+# ---------- Monitoreo (spec 2026-10-01-escala-y-monitoreo §6) ----------
+# Registro en data/logs/web.log (lo lee /admin/salud/registros) y cada petición
+# medida: ruta, estado, milisegundos y consultas a la base. Nunca en las pruebas.
+if "pytest" not in sys.modules and (os.environ.get("CREATV_SIN_REGISTRO") or "").strip() != "1":
+    registro_app.configurar("web")
+monitoreo.instalar_contador_consultas()
+
+
+def _medir_inicio():
+    """El PRIMER before_request (insertado al frente, abajo): así también se
+    mide lo que los guards cortan con un redirect o un 404."""
+    g._monitoreo_t0 = time.perf_counter()
+    monitoreo.METRICAS.empezar()
+    monitoreo.contar_consultas_en_hilo()
+
+
+app.before_request_funcs.setdefault(None, []).insert(0, _medir_inicio)
+
+
+def _medir_fin(estado):
+    t0 = g.pop("_monitoreo_t0", None)
+    if t0 is None:
+        return
+    ms = (time.perf_counter() - t0) * 1000
+    # El usuario solo se anota en las lentas, y nunca en un estático: leer la
+    # sesión agrega «Vary: Cookie» y un CSS dejaría de ser cacheable igual para todos.
+    usuario = session.get("usuario") if ms >= monitoreo.LENTA_MS and request.endpoint != "static" else None
+    monitoreo.METRICAS.terminar(request.endpoint or "(sin ruta)", estado, ms, monitoreo.consultas_del_hilo(),
+                                url=request.path, usuario=usuario)
+
+
+@app.after_request
+def _medir_respuesta(resp):
+    _medir_fin(resp.status_code)
+    return resp
+
+
+@app.teardown_request
+def _medir_sin_respuesta(_exc):
+    """Una excepción sin atrapar no pasa por after_request: cuenta como 500."""
+    if "_monitoreo_t0" in g:
+        _medir_fin(500)
+
+
+def _error_de_peticion(_sender, exception, **_extra):
+    """Excepción sin atrapar en una ruta → errores agrupados de /admin/salud
+    (el 500 que ve la persona no cambia)."""
+    monitoreo.registrar_excepcion(exception, "web", ruta=request.endpoint, metodo=request.method, url=request.path,
+                                  cliente=(request.view_args or {}).get("cliente"), usuario=session.get("usuario"))
+    registro_app.marcar_registrada(exception)
+
+
+got_request_exception.connect(_error_de_peticion, app)
 # Errores de Meta: el JSON crudo de la Graph API se muestra en palabras de persona
 # (`{{ e.error|error_meta(modo_meta) }}`); el crudo sigue en el detalle técnico.
 app.jinja_env.filters["error_meta"] = meta_errores.explicar
@@ -384,7 +442,7 @@ def _solo_mismo_origen():
 ENDPOINTS_SIN_GUARD_SESION = frozenset((
     "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
     "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
-    "cambiar_idioma",
+    "cambiar_idioma", "salud_publica",
 ))
 
 
@@ -1194,8 +1252,126 @@ def panel():
     except Exception as e:  # noqa: BLE001 — el panel se pinta igual, sin números, y avisa
         print(f"[aviso] Panel: no pude calcular el resumen: {type(e).__name__}: {e}")
         datos = None
+    try:
+        errores_recientes = monitoreo.contar()["recientes"]
+    except Exception:  # noqa: BLE001 — sin la tabla (migración pendiente) el enlace va sin número
+        errores_recientes = None
     return render_template("panel.html", datos=datos, nombres=nombres, nombres_tipo=NOMBRES_TIPO_GASTO,
-                           usuarios_lista=_usuarios_panel(), smtp_ok=cuentas.smtp_configurado())
+                           usuarios_lista=_usuarios_panel(), smtp_ok=cuentas.smtp_configurado(),
+                           errores_recientes=errores_recientes)
+
+
+@app.route("/salud")
+def salud_publica():
+    """Para un monitor de disponibilidad externo (UptimeRobot, Better Stack…):
+    200 {"ok": true} si la app responde y la base contesta, 503 si no. Sin
+    sesión y sin ningún detalle: lo puede pedir cualquiera."""
+    ok = monitoreo.base_responde()
+    return jsonify({"ok": ok}), (200 if ok else 503)
+
+
+ESTADOS_FILTRO_ERRORES = ("abierto", "resuelto", "silenciado", "todos")
+
+
+@app.route("/admin/salud")
+@requiere_admin
+def admin_salud():
+    """Salud de la plataforma (spec 2026-10-01-escala-y-monitoreo §6): qué
+    arreglar, errores agrupados, peticiones (en la memoria de este proceso),
+    el worker y el servidor. Cada parte que falle se omite, nunca la página."""
+    filtro = request.args.get("estado") if request.args.get("estado") in ESTADOS_FILTRO_ERRORES else "abierto"
+    datos = {"filtro": filtro, "errores": [], "conteo": None, "sistema": None, "cola": None, "avisos": []}
+    try:
+        datos["errores"] = monitoreo.listar(None if filtro == "todos" else filtro)
+        datos["conteo"] = monitoreo.contar()
+    except Exception as e:  # noqa: BLE001 — sin tabla (migración pendiente) la página sigue
+        log.warning("salud: no pude leer los errores: %s", type(e).__name__, extra={"sin_monitoreo": True})
+    try:
+        datos["sistema"] = monitoreo.sistema()
+        datos["cola"] = monitoreo.cola_salud()
+        datos["avisos"] = monitoreo.avisos(datos["sistema"], datos["cola"], datos["conteo"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("salud: no pude leer el sistema: %s", type(e).__name__, extra={"sin_monitoreo": True})
+    return render_template("admin_salud.html", **datos, metricas=monitoreo.METRICAS.resumen(),
+                           estado_general=monitoreo.estado_general(datos["avisos"]),
+                           nombres_origen=monitoreo.NOMBRES_ORIGEN, nombres_estado=monitoreo.NOMBRES_ESTADO,
+                           tamano=monitoreo.tamano_legible, nombres=_nombres_proyectos())
+
+
+def _nombres_proyectos():
+    try:
+        return {cid: proyectos.nombre_visible(cid) for cid in estado_mod.listar_clientes()}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+ACCIONES_ERROR = {"resolver": "resuelto", "silenciar": "silenciado", "reabrir": "abierto"}
+
+
+@app.route("/admin/salud/errores/<int:error_id>", methods=["POST"])
+@requiere_admin
+def admin_salud_error(error_id):
+    """Resolver (vuelve a abrirse solo si el error pasa otra vez), silenciar
+    (sigue contando, nunca avisa) o reabrir."""
+    if not _mismo_origen():
+        abort(403)
+    estado = ACCIONES_ERROR.get(request.form.get("accion"))
+    if estado is None or not monitoreo.cambiar_estado(error_id, estado):
+        abort(404)
+    return redirect(url_for("admin_salud", estado=request.form.get("volver") or None, _anchor="errores"))
+
+
+@app.route("/admin/salud/errores/resolver-todos", methods=["POST"])
+@requiere_admin
+def admin_salud_resolver_todos():
+    """Después de un despliegue que arregla: todos los abiertos a resuelto
+    (el que vuelva a pasar se reabre solo)."""
+    if not _mismo_origen():
+        abort(403)
+    n = 0
+    for e in monitoreo.listar("abierto", limite=monitoreo.MAX_FILAS):
+        n += monitoreo.cambiar_estado(e["id"], "resuelto")
+    flash(ngettext("%(num)s error marcado como resuelto.", "%(num)s errores marcados como resueltos.", n), "ok")
+    return redirect(url_for("admin_salud", _anchor="errores"))
+
+
+@app.route("/admin/salud/metricas/reiniciar", methods=["POST"])
+@requiere_admin
+def admin_salud_reiniciar_metricas():
+    if not _mismo_origen():
+        abort(403)
+    monitoreo.METRICAS.reiniciar()
+    return redirect(url_for("admin_salud", _anchor="peticiones"))
+
+
+@app.route("/admin/salud/registros")
+@requiere_admin
+def admin_registros():
+    """Las últimas entradas de data/logs/<proceso>.log, filtradas por nivel y
+    texto (sin tokens ni llaves)."""
+    proceso = request.args.get("proceso") if request.args.get("proceso") in registro_app.PROCESOS else "web"
+    nivel = request.args.get("nivel") if request.args.get("nivel") in registro_app.NIVELES else None
+    buscar = (request.args.get("q") or "").strip()[:200]
+    entradas = registro_app.leer(proceso, n=400, nivel=nivel, buscar=buscar)
+    return render_template("admin_registros.html", proceso=proceso, nivel=nivel, buscar=buscar, entradas=entradas,
+                           procesos=registro_app.PROCESOS, niveles=registro_app.NIVELES,
+                           existe=os.path.exists(registro_app.ruta(proceso)))
+
+
+@app.route("/admin/salud/registros/<proceso>.log")
+@requiere_admin
+def admin_registros_descargar(proceso):
+    """El archivo actual entero, ya sin tokens ni llaves."""
+    if proceso not in registro_app.PROCESOS:
+        abort(404)
+    ruta = registro_app.ruta(proceso)
+    if not os.path.exists(ruta):
+        abort(404)
+    with open(ruta, encoding="utf-8", errors="replace") as f:
+        texto = monitoreo.limpiar_texto(f.read())
+    resp = Response(texto, mimetype="text/plain; charset=utf-8")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{proceso}_{db.ahora()[:10]}.log"'
+    return resp
 
 
 @app.route("/panel/gasto.csv")
@@ -1736,6 +1912,7 @@ def _aplicar_edicion(item, form):
 
 @app.route("/cliente/<cliente>")
 @trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def ver_cliente(cliente):
     videos_dict = estado_mod.cargar(cliente)
     videos = []
@@ -1855,7 +2032,7 @@ def ver_cliente(cliente):
     tablero_ctx = _contexto_tablero(cliente)
     gasto_ctx = _contexto_gasto(cliente, tablero_ctx)
 
-    cf_items = _creative_flow_items(cliente)
+    cf_items = _creative_flow_items(cliente, ligero=True)
     # `precios` ya viene en gasto_ctx (el mismo _precios_pagina()): sin quitarlo
     # render_template lo recibiría dos veces.
     fe_ctx = _contexto_final_edition(cliente)
@@ -3046,6 +3223,7 @@ _TRABAJOS_VACIOS = {"vincular": {}, "pedidos": {}, "tiendas": {}, "importar": No
 
 
 @app.route("/cliente/<cliente>/catalogo/grid")
+@catalogo_productos.con_lecturas_memorizadas
 def catalogo_grid(cliente):
     """Galería del catálogo (spec §10.2): fragmento con filtros, orden y páginas de 60."""
     cat = _cat(request.args.get("cat"))
@@ -3166,13 +3344,25 @@ def _ctx_items_cf(cliente):
         # escanea el catálogo; memo por tupla de `productos_ids`, una sola
         # resolución por producto distinto en toda la lista, no por pieza.
         "productos_por_ids": {},
+        # El mismo texto en todas las tarjetas: una vez por lista (escala 2026-10-01).
+        "precio_revision": gastos.estimar("revision_pieza")["texto"],
     }
 
 
-def _armar_item_cf(cliente, cf_id, entry, data, ctx):
+def _hijas_b(data):
+    """cf_ids que ya tienen una hija de versión B (creative_flow.duplicar la
+    crea con derivado_de=cf_id, variante="B"), en UNA pasada: antes cada
+    tarjeta recorría todas las sesiones (n² con 1 000 piezas)."""
+    return {e.get("derivado_de") for e in data.values() if e.get("variante") == "B" and e.get("derivado_de")}
+
+
+def _armar_item_cf(cliente, cf_id, entry, data, ctx, ligero=False):
     """El dict de UNA sesión de Crear (lo que leen la tarjeta y el detalle).
     `data` es creative_flow.cargar(cliente) entero (para `tiene_hija_b`);
-    `ctx` viene de _ctx_items_cf."""
+    `ctx` viene de _ctx_items_cf. `ligero` (las listas de tarjetas) se salta
+    lo que solo el detalle muestra: el costo estimado y las reglas de la
+    doctrina (`_revision_doctrina.html`, que buscaban el producto de cada pieza
+    en el catálogo: el 25 % de la página, spec 2026-10-01-escala-y-monitoreo)."""
     import final_edition
     job_id = _job_id_creative_flow(cliente, cf_id)
     # trabajo_director solo tiene sentido (y solo se consulta la cola) en
@@ -3192,12 +3382,14 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx):
     # Si ya existe una hija de versión B (creative_flow.duplicar la crea con
     # derivado_de=cf_id, variante="B"), no tiene sentido ofrecer generarla de
     # nuevo desde la tarjeta del padre: la plantilla oculta la casilla.
-    item["tiene_hija_b"] = any(e.get("derivado_de") == cf_id and e.get("variante") == "B" for e in data.values())
+    if "hijas_b" not in ctx:
+        ctx["hijas_b"] = _hijas_b(data)
+    item["tiene_hija_b"] = cf_id in ctx["hijas_b"]
     # Estimado real vía wan3_client.estimate_video() en vez de un número
     # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
     # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
     # así el botón nunca muestra un costo distinto al que se cobra.
-    if entry.get("estado") in ("prompt_listo", "error"):
+    if entry.get("estado") in ("prompt_listo", "error") and not ligero:
         if entry.get("tipo") == "imagen":
             item["costo_estimado"] = flowplus_modelos.estimate_imagen(
                 entry.get("modelo") or flowplus_modelos.IMAGEN_POR_DEFECTO,
@@ -3243,37 +3435,38 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx):
         item["revision_error"] = entry.get("revision_doctrina_error")
         item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
         item["revision_n"] = doctrina_revisor.contar(item["revision"])
-        try:
-            clave = tuple(entry.get("productos_ids") or ())
-            if clave:
-                producto = ctx["productos_por_ids"].get(clave)
-                if producto is None:
-                    try:
-                        producto = final_edition._producto(cliente, entry, None) or {}
-                    except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
-                        producto = {}
-                    # Solo se recuerda lo que resolvió el catálogo (trae «pruebas»): el
-                    # producto de respaldo sale de los datos de ESTA pieza y no sirve a otra.
-                    if "pruebas" in producto or not producto:
-                        ctx["productos_por_ids"][clave] = producto
-                d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
-                                            guia=ctx["guia_marca"], producto=producto, caption=ctx["captions"].get(cf_id, ""))
-            else:
-                d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=ctx["guia_marca"],
-                                            caption=ctx["captions"].get(cf_id, ""))
-            item["reglas"] = doctrina_revisor.reglas(d)
-        except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
-            item["reglas"] = []
+        if not ligero:
+            try:
+                clave = tuple(entry.get("productos_ids") or ())
+                if clave:
+                    producto = ctx["productos_por_ids"].get(clave)
+                    if producto is None:
+                        try:
+                            producto = final_edition._producto(cliente, entry, None) or {}
+                        except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
+                            producto = {}
+                        # Solo se recuerda lo que resolvió el catálogo (trae «pruebas»): el
+                        # producto de respaldo sale de los datos de ESTA pieza y no sirve a otra.
+                        if "pruebas" in producto or not producto:
+                            ctx["productos_por_ids"][clave] = producto
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
+                                                guia=ctx["guia_marca"], producto=producto, caption=ctx["captions"].get(cf_id, ""))
+                else:
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=ctx["guia_marca"],
+                                                caption=ctx["captions"].get(cf_id, ""))
+                item["reglas"] = doctrina_revisor.reglas(d)
+            except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
+                item["reglas"] = []
         jid_rev = tareas_doctrina.job_id_revisar(cliente, cf_id)
         item["trabajo_revision"] = {"job_id": jid_rev} if trabajos.en_curso(jid_rev) else None
-        item["precio_revision"] = gastos.estimar("revision_pieza")["texto"]
+        item["precio_revision"] = ctx["precio_revision"]
     return item
 
 
-def _creative_flow_items(cliente):
+def _creative_flow_items(cliente, ligero=False):
     data = creative_flow.cargar(cliente)
     ctx = _ctx_items_cf(cliente)
-    return [_armar_item_cf(cliente, cf_id, entry, data, ctx)
+    return [_armar_item_cf(cliente, cf_id, entry, data, ctx, ligero=ligero)
             for cf_id, entry in sorted(data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True)]
 
 
@@ -6740,16 +6933,20 @@ def rechazar(cliente, brief_id):
 
 
 @app.route("/cliente/<cliente>/crear/tarjetas")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def crear_tarjetas(cliente):
     """«Ver más» de Crear: las TARJETAS_POR_PAGINA siguientes (fragmento HTML;
     spec 2026-09-28 «tarjetas ligeras»)."""
     desde = _pagina_desde(request.args.get("desde"))
-    items = _creative_flow_items(cliente)
+    items = _creative_flow_items(cliente, ligero=True)
     return render_template("_crear_tarjetas_respuesta.html", cliente=cliente,
                            items=items[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(items))
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/detalle")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def cf_detalle(cliente, cf_id):
     """El detalle de una pieza (lo que antes iba embebido en un <template>
     por tarjeta); el modal lo pide al abrir. 404 si no es de este proyecto."""
@@ -6760,6 +6957,8 @@ def cf_detalle(cliente, cf_id):
 
 
 @app.route("/cliente/<cliente>/final/tarjetas")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def final_tarjetas(cliente):
     """«Ver más» de Final edition: `lista=videos` (videos listos) o
     `lista=finales`; las TARJETAS_POR_PAGINA siguientes desde `desde`."""
@@ -6767,7 +6966,7 @@ def final_tarjetas(cliente):
     if lista not in ("videos", "finales"):
         abort(400)
     desde = _pagina_desde(request.args.get("desde"))
-    completas = _listas_crear_final(_creative_flow_items(cliente), n=None)
+    completas = _listas_crear_final(_creative_flow_items(cliente, ligero=True), n=None)
     todos = completas["final_videos"] if lista == "videos" else completas["finales"]
     return render_template("_final_tarjetas_respuesta.html", cliente=cliente, lista=lista,
                            items=todos[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(todos),
@@ -6775,6 +6974,8 @@ def final_tarjetas(cliente):
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/detalle")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def fe_detalle_video(cliente, cf_id):
     """Detalle de un video listo en Final edition (guion, «Producir finales»,
     editor). 404 si no es un video listo de este proyecto."""
@@ -6786,6 +6987,8 @@ def fe_detalle_video(cliente, cf_id):
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/<final_id>/detalle")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def fe_detalle_final(cliente, cf_id, final_id):
     """Detalle de una final (capas, descargar, descartar, publicación orgánica)."""
     item = _creative_flow_item(cliente, cf_id)
