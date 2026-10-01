@@ -622,7 +622,14 @@ migración). Rutas JSON `/videos/<id>/escenas/<n>`, `/imagenes/subir` (multipart
 gratis; prueba antes de subir que se podrá guardar), `/imagenes/catalogo`, `/imagenes/quitar`; el JS del panel
 manda `data-gpg-cuerpo` con `data-gpg-accion` y sube con `input[type=file][data-gpg-subir]`. Lo elegido va a los
 dos `.md` y a «Antes de generar». `nueva_version` hereda las imágenes subidas de referencias iguales y las extra
-(y lo elegido por escena solo con los mismos clips).
+(y lo elegido por escena solo con los mismos clips). «Llevar a Crear →» por escena (`/videos/<id>/escenas/<n>/crear`,
+pedido de Daniel 2026-09-30): REEMPLAZA la bandeja de Crear con las imágenes de la escena en orden (las del Catálogo se
+suben a R2 con la clave de `cf_crear_video`), precarga `session["fp_prefill"]` con `escenas.prompt_para_crear` (REFERENCE
+MAP solo con esas imágenes, renumeradas como `@Imagen k` para que Crear las traduzca y revise; una imagen del video que la
+escena no lleva se nombra en palabras — un número suelto haría que el modelo tome otra, incidente 2026-09-28 —; sin «Start
+image = last frame of Clip N»), la duración de `DURACIONES_CREAR` que alcanza y el formato, y abre `#referencias` (hash
+nuevo de `cliente.html`/`_tab_flowplus.html` que fuerza «Desde referencias»). Sin imagen en alguna referencia de la escena
+o sin prompt en el chat, el botón queda apagado y la ruta responde 409. Nada se genera.
 
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,

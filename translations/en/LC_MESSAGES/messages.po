@@ -2645,6 +2645,9 @@ msgstr "Unsupported sound layer: %(sonido)s. Options: %(opciones)s"
 msgid "Capas"
 msgstr "Layers"
 
+msgid "Carga su prompt e imágenes en Crear › Desde referencias. No genera nada."
+msgstr "Loads its prompt and images into Create › From references. Nothing is generated."
+
 msgid "Carga tu catálogo"
 msgstr "Upload your catalog"
 
@@ -5261,6 +5264,10 @@ msgstr "Scene"
 msgid "Escena %(n)s"
 msgstr "Scene %(n)s"
 
+#, python-format
+msgid "Escena %(n)s cargada en Crear: revisa el texto y las referencias, y genera."
+msgstr "Scene %(n)s loaded in Create: check the text and the references, then generate."
+
 msgid "Escenas"
 msgstr "Scenes"
 
@@ -5607,6 +5614,9 @@ msgstr "This edit already has too many tracks."
 
 msgid "Esta edición ya tiene demasiadas pistas: no cabe el sonido del video."
 msgstr "This edit already has too many tracks: the video's sound doesn't fit."
+
+msgid "Esta escena todavía no tiene su prompt en el chat."
+msgstr "This scene doesn't have its prompt in the chat yet."
 
 msgid "Esta idea todavía no tiene un ángulo con promesa."
 msgstr "This idea doesn't have an angle with a promise yet."
@@ -6049,6 +6059,10 @@ msgstr "Text is missing for: %(nombres)s. Write it or press “Write text with A
 msgid "Falta la imagen"
 msgstr "Image missing"
 
+#, python-format
+msgid "Falta la imagen de %(lista)s: súbela antes de llevar la escena a Crear."
+msgstr "The image for %(lista)s is missing: upload it before taking the scene to Create."
+
 msgid "Falta la página de Notion."
 msgstr "Missing the Notion page."
 
@@ -6057,6 +6071,9 @@ msgstr "Missing the prompt's version (version_n)."
 
 msgid "Falta la versión del prompt."
 msgstr "Missing the prompt's version."
+
+msgid "Falta subir alguna imagen de esta escena."
+msgstr "An image for this scene still needs to be uploaded."
 
 msgid "Falta token_tiktok.json (autoriza desde tu Mac con auth/auth_tiktok.py)"
 msgstr "Missing token_tiktok.json (authorize from your Mac with auth/auth_tiktok.py)"
@@ -7248,6 +7265,9 @@ msgstr "The Meta authorization doesn't match this session — try again from Flo
 msgid "La autorización se hace <strong>en tu Mac</strong> (abre un navegador y escucha en localhost; no funciona en el servidor): <code>venv/bin/python auth/auth_youtube.py</code> con la cuenta dueña del canal."
 msgstr "Authorization happens <strong>on your Mac</strong> (it opens a browser and listens on localhost; it doesn't work on the server): <code>venv/bin/python auth/auth_youtube.py</code> with the account that owns the channel."
 
+msgid "La bandeja de Crear se reemplaza con las imágenes de esta escena y su prompt queda en el cuadro de texto. No se genera nada hasta que pulses «Generar». ¿Seguir?"
+msgstr "The Create tray will be replaced with this scene's images and its prompt will go in the text box. Nothing is generated until you press “Generate”. Continue?"
+
 msgid "La base no es SQLite: sin respaldo."
 msgstr "The database isn't SQLite: no backup."
 
@@ -7817,6 +7837,9 @@ msgstr "They came from a file, a URL or your store but don't have photos in the 
 
 msgid "Llenar la pantalla"
 msgstr "Fill the screen"
+
+msgid "Llevar a Crear"
+msgstr "Take to Create"
 
 msgid "Llevar a Crear →"
 msgstr "Take to Create →"
@@ -8959,6 +8982,9 @@ msgstr "Couldn't write the image prompts. Try again."
 #, python-brace-format
 msgid "No se pudieron preparar las copias livianas de {n} archivo(s): la vista previa sigue con los originales (se ve igual, solo tarda más en cargar)."
 msgstr "Couldn't prepare the lightweight copies of {n} file(s): the preview keeps using the originals (it looks the same, it just takes longer to load)."
+
+msgid "No se pudieron preparar las imágenes de la escena. Vuelve a intentarlo."
+msgstr "The scene's images couldn't be prepared. Try again."
 
 #, python-format
 msgid "No se pudieron preparar las referencias (%(tipo)s)."
@@ -15949,6 +15975,10 @@ msgstr "“%(nombre)s” has %(que)s not posted organically: post it from the pi
 #, python-format
 msgid "«%(nombre)s» ya está en el catálogo con %(n)s foto(s)."
 msgstr "“%(nombre)s” is already in the catalog with %(n)s photo(s)."
+
+#, python-format
+msgid "«%(nombre)s» ya no está en el Catálogo."
+msgstr "“%(nombre)s” is no longer in the Catalog."
 
 #, python-format
 msgid "«%(nombre)s»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta."
