@@ -147,3 +147,63 @@ def test_texto_por_clip_para_los_documentos():
                       "Image 2 · the AI podiatrist, adult British man (~45) — https://r2/x.jpg",
                       "Image 3 · modern bright podiatry clinic — falta la imagen"]
     assert escenas.refs_con_imagen(_video(est)) == {2}
+
+
+PROMPT_CLIP = """REFERENCE MAP
+Image 1 = hero object — HappyFlops Original: EVA slipper. Preserve its exact geometry.
+Image 2 = character — the AI podiatrist, adult British man (~45). Do not copy the background of Image 2.
+Image 3 = environment — modern bright podiatry clinic. Do not copy the background of Image 3.
+Image 4 = environment — Sala. Do not copy the background of Image 4.
+
+FORMAT & STYLE
+Aspect ratio 9:16. ultra-photorealistic live-action
+
+CLIP 2 of 2 — 12 seconds — 9:16 — B
+Start image = last frame of Clip 1.
+START STATE: Hands empty.
+TIMED SCRIPT
+0.0–3.0s  He walks past the window of Image 3 and lifts Image 1."""
+
+
+def test_imagenes_para_crear_en_el_orden_de_la_escena():
+    v = _video()
+    est = escenas.poner_ref(escenas.estado(v), v, 2, FOTO)
+    est = escenas.agregar_extra(est, _video(est), dict(FOTO, material_id=9, url="https://r2/calle.jpg", nombre="calle"), escena=2)
+    imgs = escenas.imagenes_para_crear(_video(est), 2)
+    assert [(x["clave"], x["numero"]) for x in imgs] == [("r1", 1), ("r2", 2), ("r4", 4), ("x1", 5)]
+
+
+def test_imagenes_para_crear_frena_si_falta_una():
+    v = _video()
+    with pytest.raises(Conflicto):
+        escenas.imagenes_para_crear(v, 1)  # Image 2 y 3 son «por crear» sin imagen
+
+
+def test_prompt_para_crear_renumera_y_deja_solo_lo_de_la_escena():
+    v = _video()
+    est = escenas.poner_ref(escenas.estado(v), v, 2, FOTO)
+    est = escenas.agregar_extra(est, _video(est), dict(FOTO, material_id=9, url="https://r2/calle.jpg", nombre="calle"), escena=2)
+    v = _video(est)
+    texto = escenas.prompt_para_crear(PROMPT_CLIP, v, escenas.imagenes_para_crear(v, 2))
+    lineas = texto.splitlines()
+    mapa = lineas[lineas.index("REFERENCE MAP") + 1: lineas.index("")]
+    assert mapa == ["@Imagen 1 = hero object — HappyFlops Original: EVA slipper. Preserve its exact geometry.",
+                    "@Imagen 2 = character — the AI podiatrist, adult British man (~45). Do not copy the background of @Imagen 2.",
+                    "@Imagen 3 = environment — Sala. Do not copy the background of @Imagen 3.",
+                    "@Imagen 4 = extra reference — calle."]
+    assert "Start image" not in texto
+    # Image 3 (la clínica) no va en esta escena: se nombra en palabras, nunca con un número que no existe.
+    assert "past the window of modern bright podiatry clinic and lifts @Imagen 1." in texto
+    assert "Image 3" not in texto and "@Imagen 5" not in texto
+
+
+def test_prompt_para_crear_sin_imagenes_quita_el_mapa():
+    v = _video(clips=[{"indice": 1, "titulo": "A", "duracion": 8, "entornos": []}],
+               config=dict(CFG, referencias=[dict(r, tipo="entorno") for r in CFG["referencias"]]))
+    est = escenas.usar(escenas.estado(v), v, 1, "r1", False)
+    est = escenas.usar(est, _video(est, clips=v["clips"], config=v["config"]), 1, "r4", False)
+    v = _video(est, clips=v["clips"], config=v["config"])
+    assert escenas.imagenes_para_crear(v, 1) == []
+    texto = escenas.prompt_para_crear(PROMPT_CLIP, v, [])
+    assert "REFERENCE MAP" not in texto and "@Imagen" not in texto
+    assert texto.startswith("FORMAT & STYLE")

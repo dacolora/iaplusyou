@@ -40,7 +40,15 @@ foto de celular enderezada, cuota de 2 GB del proyecto).
    armada, referencia por crear, escena existente, tope de extras) antes de subir nada a R2.
 5. **Topes**: 12 extra por versión, 10 imágenes por escena. Solo JPG, PNG o WEBP.
 
+## Llevar una escena a Crear (añadido el mismo día)
+
+«Llevar a Crear →» en cada escena: la bandeja de Crear se reemplaza con las imágenes de la escena (en su orden) y el
+formulario queda con el prompt del chat adaptado (`escenas.prompt_para_crear`: REFERENCE MAP solo con esas imágenes,
+renumeradas como `@Imagen k`; las del video que la escena no lleva se nombran en palabras; sin la línea «Start image»),
+la duración de Crear que alcanza para el clip y el formato del video. Se confirma antes (la bandeja es del proyecto) y
+no genera nada: la persona revisa y pulsa «Generar». Apagado si falta una imagen o el prompt.
+
 ## Fuera
 
-Llevar una escena a Crear con sus imágenes en la bandeja (Parte B de Flow Plus: generar), recortar o editar
-imágenes, generar las imágenes «por crear» desde aquí.
+Generar todas las escenas de una vez encadenando el último fotograma de cada clip (Parte B de Flow Plus), recortar o
+editar imágenes, generar las imágenes «por crear» desde aquí.

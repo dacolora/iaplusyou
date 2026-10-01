@@ -9,8 +9,8 @@
      · Audios (_crear_audios.html): un texto leído por la voz que la persona
        elige (ElevenLabs vía fal), solo o sobre una canción de Mi música → mp3
        para descargar. Spec docs/superpowers/specs/2026-09-28-crear-audios-design.md.
-   El modo se recuerda por navegador; #cambiar (o el viejo #calzado), #flowplus
-   y #audios lo abren. Cada cambio de modo avisa con el evento `crear:modo` (detail.modo)
+   El modo se recuerda por navegador; #cambiar (o el viejo #calzado), #flowplus,
+   #audios y #referencias («Llevar a Crear» de Flow Plus) lo abren. Cada cambio de modo avisa con el evento `crear:modo` (detail.modo)
    para que un modo pueda parar lo que tenga corriendo (el sondeo de Flow Plus). #}
 
 <div class="panel-cabecera">
@@ -70,6 +70,7 @@
     try { guardado = localStorage.getItem(KEY); } catch (e) {}
     // #flowplus: este script abre el modo; el de cliente.html abre la pestaña Crear.
     activar((h === 'cambiar' || h === 'calzado') ? 'cambiar'
-      : (h === 'flowplus' ? 'flowplus' : (h === 'audios' ? 'audios' : (guardado || 'referencias'))));
+      : (h === 'flowplus' ? 'flowplus' : (h === 'audios' ? 'audios'
+        : (h === 'referencias' ? 'referencias' : (guardado || 'referencias')))));
   })();
 </script>

@@ -2804,3 +2804,4 @@ body.panel-abierto { overflow: hidden; }
 .gpg-ficha:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gpg-ficha-mas { opacity: 1; border-style: dashed; text-align: center; }
 @media (max-width: 760px) { .gpg-img { width: calc(50% - .25rem); } }
+.gpg-escena-cab .gpg-a-crear { margin-left: auto; }
