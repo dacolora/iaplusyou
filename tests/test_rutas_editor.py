@@ -1337,7 +1337,7 @@ def test_transcribir_y_estimar_rechazan_una_lista_desmedida(dashboard, encolados
     c = _cliente_admin(dashboard)
     ids = list(range(1, 202))
     r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": ids, "idioma": "es"})
-    assert r.status_code == 400 and r.get_json()["error"]
+    assert r.status_code == 400 and r.get_json()["error"] == "Son demasiados archivos en un solo pedido."
     r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": ids})
     assert r2.status_code == 400 and r2.get_json()["error"]
     assert encolados == []

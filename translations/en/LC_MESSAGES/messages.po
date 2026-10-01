@@ -12502,6 +12502,9 @@ msgstr "Solutions they tried and why they failed (one per line: “what they use
 msgid "Sombra"
 msgstr "Shadow"
 
+msgid "Son demasiados archivos en un solo pedido."
+msgstr "Too many files in a single request."
+
 msgid "Son demasiados archivos para una vez: hasta 20."
 msgstr "That's too many files at once: up to 20."
 

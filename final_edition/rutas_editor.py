@@ -289,7 +289,7 @@ def subtitulos_estimar(cliente, edicion_id):
     ids = cuerpo.get("material_ids")
     ids = ids if isinstance(ids, list) else []
     if len(ids) > MAX_IDS_PEDIDO:
-        return jsonify({"error": gettext("Son demasiados archivos para una vez: hasta 20.")}), 400
+        return jsonify({"error": gettext("Son demasiados archivos en un solo pedido.")}), 400
     faltan, segundos, sin_duracion = [], 0.0, False
     for mid in _ids_unicos(ids):
         if not isinstance(mid, int) or isinstance(mid, bool):
@@ -327,7 +327,7 @@ def transcribir_subtitulos(cliente, edicion_id):
     if not isinstance(ids, list) or not ids:
         return jsonify({"error": gettext("Elige qué transcribir.")}), 400
     if len(ids) > MAX_IDS_PEDIDO:
-        return jsonify({"error": gettext("Son demasiados archivos para una vez: hasta 20.")}), 400
+        return jsonify({"error": gettext("Son demasiados archivos en un solo pedido.")}), 400
     if idioma not in audios.IDIOMAS:
         return jsonify({"error": gettext("Ese idioma no está disponible.")}), 400
     materiales_ = _materiales_propios_de(cliente, _ids_unicos(ids))
