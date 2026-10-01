@@ -96,7 +96,8 @@ def test_recolectar_amazon_una_corrida_por_producto(entorno, monkeypatch):
     lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 20, "pais": "SE"}))
     assert [c["fuente_id"] for c in lista] == ["R1AMZ", "R2AMZ", "R9"]
     assert lista[0]["contexto"] == "Ortopediska tofflor" and lista[0]["url"] == "https://www.amazon.se/dp/B0AMZ00001" and lista[0]["puntuacion"] == 5
-    assert lista[0]["extra"] == {"producto": "B0AMZ00001", "plataforma": "amazon"} and lista[2]["contexto"] == "Mjuka tofflor"
+    assert lista[0]["extra"] == {"producto": "B0AMZ00001", "plataforma": "amazon", "pais": "SE", "mercado": "local"}
+    assert lista[2]["contexto"] == "Mjuka tofflor"
     assert f.conteo_por_producto == {"B0AMZ00001": 2, "B0AMZ00002": 1} and f.resultados == 4
     posts = [kw for m, u, kw in s.llamadas if m == "POST"]
     assert [p["json"] for p in posts] == [{"asin": "B0AMZ00001", "domainCode": "se", "maxPages": 2, "sortBy": "recent"},
@@ -114,3 +115,38 @@ def test_recolectar_meli_asocia_por_product_id(entorno, monkeypatch):
     lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 50, "pais": "CO"}))
     assert [c["contexto"] for c in lista] == ["Pantuflas", "Pantuflas"] and f.conteo_por_producto == {"MCO123456789": 2}
     assert "FAILED" in f.aviso and "rm" in f.aviso and f.resultados == 3                  # falló pero entregó: aviso, no error
+
+
+def test_buscar_de_otro_mercado_lee_la_moneda_de_su_sitio(entorno, monkeypatch):
+    """Amazon no está en Colombia: busca en amazon.com y un «$» a secas son dólares, no pesos (Parte 4, R5)."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    item = {"asin": "B0X", "title": "Water bottle", "price": {"value": 19.99, "currency": "$"}, "url": "https://www.amazon.com/dp/B0X"}
+    s = _Sesion({"/actors/junglee~amazon-crawler/runs": [_corrida("SUCCEEDED", "rb", "db")], "/datasets/db/items": _Resp(200, [item])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    lista = list(FuentePlataforma("amazon").buscar(["water bottle"], "CO", 5))
+    assert lista[0]["moneda"] == "USD" and lista[0]["precio"] == 19.99
+    assert s.llamadas[0][2]["json"]["categoryOrProductUrls"] == [{"url": "https://www.amazon.com/s?k=water+bottle"}]
+
+
+def test_recolectar_marca_pais_y_mercado(entorno, monkeypatch):
+    """Cada reseña guarda el país del comprador (o el del sitio) y si es del mercado del estudio (Parte 4 §3)."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    s = _Sesion({"/actors/axlymxp~aliexpress-reviews-scraper/runs": [_corrida("SUCCEEDED", "ra", "da")],
+                 "/datasets/da/items": _Resp(200, _fixture("aliexpress_resenas.json"))})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    productos = [{"fuente_id": "3256806541493299", "url": None, "titulo": "Botella 1L"}]
+    lista = list(FuentePlataforma("aliexpress").recolectar({"productos": productos, "resenas_por_producto": 5, "pais": "BR"}))
+    assert [c["extra"] for c in lista] == [{"producto": "3256806541493299", "plataforma": "aliexpress", "pais": "BR", "mercado": "local"},
+                                           {"producto": "3256806541493299", "plataforma": "aliexpress", "pais": "ES", "mercado": "otro"}]
+    assert lista[0]["fecha"] == "2026-06-30T00:00:00" and lista[0]["contexto"] == "Botella 1L"
+    post = [kw for m, u, kw in s.llamadas if m == "POST"][0]
+    assert post["json"]["productUrls"] == ["https://www.aliexpress.com/item/3256806541493299.html"] and post["params"]["maxTotalChargeUsd"] == 0.03
+    s = _Sesion({"/actors/apt_marble~walmart-reviews-scraper/runs": [_corrida("SUCCEEDED", "rw", "dw")],
+                 "/datasets/dw/items": _Resp(200, _fixture("walmart_resenas.json"))})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    lista = list(FuentePlataforma("walmart").recolectar({"productos": [{"fuente_id": "5394318269", "url": None, "titulo": "Botella"}],
+                                                         "resenas_por_producto": 5, "pais": "CO"}))
+    assert len(lista) == 2 and all(c["extra"]["pais"] == "US" and c["extra"]["mercado"] == "otro" for c in lista)
+    assert lista[0]["fecha"] == "2026-05-14T00:00:00"

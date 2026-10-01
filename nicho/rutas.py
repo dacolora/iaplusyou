@@ -641,9 +641,6 @@ def _pedido_investigacion(fuente, est, cliente):
     redes = [r for r in _lista_param(fuente, "redes") if r in investigacion.REDES]
     if not plats and not redes:
         raise datos.ErrorDatos(gettext("Elige al menos una plataforma o una red."))
-    fuera = [p for p in plats if not plataformas.cubre(p, pais)]
-    if fuera:
-        raise datos.ErrorDatos(gettext("%(plataforma)s no cubre el país %(pais)s.", plataforma=plataformas.nombre(fuera[0]), pais=pais))
     faltan = sorted({v for x in plats + redes for v in fuentes_registro.llaves_faltantes(x)})
     if faltan:
         raise datos.ErrorDatos(gettext("Falta %(llaves)s en el .env del servidor (Configuración › Puesta a punto).", llaves=", ".join(faltan))

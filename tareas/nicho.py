@@ -20,7 +20,6 @@ rastrearse en console.apify.com.
 Nada corre solo: no hay periódicas.
 """
 import logging
-import math
 
 from flask_babel import gettext
 
@@ -30,7 +29,7 @@ import idiomas
 import trabajos
 from nicho import avatares, datos
 from nicho import fuentes as fuentes_registro
-from nicho.fuentes import apify_actores
+from nicho.fuentes import apify_actores, plataformas
 from idiomas import N_
 from tareas import al_interrumpir, ref_sufijo, registrar
 from tareas.investigacion import red_de_la_cadena
@@ -241,19 +240,23 @@ def _tarifa(fuente, params):
 
 
 def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
-    """Solo fuentes de pago: ítems crudos del dataset × precio del actor
-    ("aprox.": Apify suma cómputo). Nunca lanza. Devuelve el costo (0 si nada)."""
+    """Solo fuentes de pago: ítems crudos del dataset × precio del actor + el
+    arranque de cada corrida lanzada ("aprox.": Apify suma cómputo). Nunca
+    lanza. Devuelve el costo (0 si nada)."""
     n = int(getattr(fuente, "resultados", 0) or 0)
-    tarifa = _tarifa(fuente, params) if n > 0 else None
+    corridas = [c.get("run_id") for c in (getattr(fuente, "corridas", None) or []) if c.get("run_id")]
+    tarifa = _tarifa(fuente, params) if (n > 0 or corridas) else None
     if not tarifa:
         return 0.0
-    usd = math.ceil(round(n * tarifa["usd_por_resultado"] * 100, 6)) / 100     # round antes de ceil: 30 × 0.003 × 100 no es 9 exacto
-    corridas = [c.get("run_id") for c in (getattr(fuente, "corridas", None) or []) if c.get("run_id")]
+    usd = plataformas.costo(n, len(corridas), tarifa)
+    if usd <= 0:
+        return 0.0
     detalle = gettext("Apify %(actor)s: %(n)s resultado(s) aprox.", actor=idiomas.traducir(tarifa["nombre"]), n=n)
     gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}{ref_sufijo(tarea)}",
                             detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify",
-                            extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"], **_corrida(fuente),
+                            extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
+                                   "usd_por_corrida": tarifa.get("usd_por_corrida", 0), **_corrida(fuente),
                                    **({"corridas": corridas} if corridas else {})})
     return usd
 

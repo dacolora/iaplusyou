@@ -217,18 +217,19 @@ def costo_claude(tokens_entrada, tokens_salida):
 
 
 def estimar(estudio, pais, plataformas_elegidas, redes_elegidas, topes):
-    """Desglose del peor caso: búsquedas y reseñas por plataforma (registro),
-    Claude (consultas + selección) y avatares (`estimar_costo_maximo`).
-    ErrorFuente si una plataforma no cubre el país."""
+    """Desglose del peor caso: búsquedas y reseñas por tienda (la suma de los
+    techos de sus corridas, en el sitio que toca), Claude (consultas +
+    selección) y avatares (`estimar_costo_maximo`). Una tienda que no está en
+    el país NO se rechaza: su fila dice `mercado: "otro"` y el `sitio` donde
+    busca (spec Parte 4 §2)."""
     topes = {**TOPES_DEFECTO, **(topes or {})}
     filas, total = [], 0.0
     for clave in plataformas_elegidas or []:
-        if not plataformas.cubre(clave, pais):
-            raise plataformas.ErrorFuente(gettext("%(plataforma)s no cubre el país %(pais)s.", plataforma=plataformas.nombre(clave), pais=pais))
-        busqueda = plataformas.estimar_busqueda(clave, topes["consultas"], topes["productos_por_consulta"])
-        resenas = plataformas.estimar_resenas(clave, topes["productos_elegidos"], topes["resenas_por_producto"])
-        filas.append({"clave": clave, "nombre": plataformas.nombre(clave), "busqueda_usd": busqueda, "resenas_usd": resenas,
-                      "texto": gettext("Búsqueda + reseñas")})
+        mercado, sitio = plataformas.mercado(clave, pais)
+        busqueda = plataformas.estimar_busqueda(clave, topes["consultas"], topes["productos_por_consulta"], pais)
+        resenas = plataformas.estimar_resenas(clave, topes["productos_elegidos"], topes["resenas_por_producto"], pais)
+        filas.append({"clave": clave, "nombre": plataformas.nombre(clave), "mercado": mercado, "sitio": sitio,
+                      "busqueda_usd": busqueda, "resenas_usd": resenas, "texto": gettext("Búsqueda + reseñas")})
         total += busqueda + resenas
     entrada, salida = _tokens_claude(len(filas), topes)
     claude_usd = _centavos(costo_claude(entrada, salida))
@@ -256,9 +257,22 @@ def crear_inicial(tema, pais, plataformas_elegidas, redes_elegidas, topes, estim
 
 # ---------------------------------------------------------- selección ---
 
+def _vendidos(p):
+    try:
+        return int(((p.get("extra") or {}).get("vendidos")) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _mas_resenado(p):
+    """Más reseñas primero; sin ese dato (AliExpress) desempatan los pedidos o
+    vendidos (spec Parte 4 §1.1); luego el id."""
+    return (-(p.get("n_resenas") or 0), -_vendidos(p), int(p.get("id") or 0))
+
+
 def elegir(productos, decisiones, productos_elegidos):
     """Por plataforma, los `productos_elegidos` relevantes con más reseñas (sin
-    dato = 0; empate por id). -> {plataforma: [fuente_id, …]} solo con
+    dato = 0; empate por vendidos y luego por id). -> {plataforma: [fuente_id, …]} solo con
     plataformas que tengan alguno."""
     por_plataforma = {}
     for p in productos or []:
@@ -268,7 +282,7 @@ def elegir(productos, decisiones, productos_elegidos):
         por_plataforma.setdefault(p.get("plataforma"), []).append(p)
     salida = {}
     for clave, lista in por_plataforma.items():
-        lista.sort(key=lambda p: (-(p.get("n_resenas") or 0), int(p.get("id") or 0)))
+        lista.sort(key=_mas_resenado)
         salida[clave] = [p["fuente_id"] for p in lista[:max(1, int(productos_elegidos))]]
     return salida
 
@@ -353,7 +367,7 @@ def seleccion_con_claude(estudio, productos):
     """-> ({id: {"relevante", "motivo"}}, tokens_entrada, tokens_salida) para
     los productos dados (máximo MAX_FILAS_SELECCION, los de más reseñas
     primero); ids que Claude no menciona quedan fuera del dict."""
-    lista = sorted(productos or [], key=lambda p: (-(p.get("n_resenas") or 0), int(p.get("id") or 0)))[:MAX_FILAS_SELECCION]
+    lista = sorted(productos or [], key=_mas_resenado)[:MAX_FILAS_SELECCION]
     validos = {int(p["id"]) for p in lista}
     prompt = PROMPT_SELECCION.format(tema=(estudio.get("tema") or "").strip(), producto=(estudio.get("producto") or "").strip() or "—",
                                      pais=(estudio.get("pais") or ""),

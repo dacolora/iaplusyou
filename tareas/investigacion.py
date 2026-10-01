@@ -137,17 +137,19 @@ def _gasto_claude(cliente, eid, tarea, paso, entrada, salida, detalle):
 
 
 def _gasto_apify(cliente, eid, tarea, paso, fuente, tarifa, nota=""):
-    """Ítems crudos × precio del actor (aprox.), con las corridas para rastrear el cobro. Devuelve el costo."""
+    """Ítems crudos × precio del actor + el arranque de cada corrida lanzada
+    (aprox.; una corrida con arranque cobra aunque no traiga nada), con las
+    corridas para rastrear el cobro. Devuelve el costo."""
     n = int(getattr(fuente, "resultados", 0) or 0)
-    if n <= 0:
-        return 0.0
-    usd = plataformas.usd(n, tarifa["usd_por_resultado"])
     corridas = [c.get("run_id") for c in (getattr(fuente, "corridas", None) or []) if c.get("run_id")]
+    usd = plataformas.costo(n, len(corridas), tarifa)
+    if usd <= 0:
+        return 0.0
     detalle = gettext("Apify %(actor)s: %(n)s resultado(s) aprox.", actor=idiomas.traducir(tarifa["nombre"]), n=n)
     gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}:{paso}{ref_sufijo(tarea)}",
                             detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify", extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
-                                                      "corridas": corridas})
+                                                      "usd_por_corrida": tarifa.get("usd_por_corrida", 0), "corridas": corridas})
     return usd
 
 

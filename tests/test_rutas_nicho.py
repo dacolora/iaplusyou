@@ -381,7 +381,8 @@ def test_estimar_investigacion_json_y_errores(app, llaves_inv):
     assert r.status_code == 200 and [f["clave"] for f in d["filas"]] == ["amazon", "tiktok_shop"] and d["redes"] == ["youtube"]
     assert d["topes"]["consultas"] == 2 and d["texto"].startswith("US$") and d["filas"][0]["busqueda_texto"].startswith("US$")
     assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=amazon,tiktok_shop").get_json()["plataformas"] == ["amazon", "tiktok_shop"]
-    assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=meli").status_code == 400      # MELI no cubre Suecia
+    r = c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=meli")                              # MELI no está en Suecia: busca en México
+    assert r.status_code == 200 and (r.get_json()["filas"][0]["mercado"], r.get_json()["filas"][0]["sitio"]) == ("otro", "MX")
     assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=ZZ&plataformas=amazon").status_code == 400
     assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE").status_code == 400                        # nada elegido
     assert c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&redes=reddit").status_code == 400          # red sin llave

@@ -5,8 +5,9 @@ actores de `nicho/fuentes/plataformas.py`, corriendo varias corridas de Apify
 a la vez con `providers.apify.correr_lote`. `tipo` es la clave de la
 plataforma (`amazon`, `meli`, `tiktok_shop`, `walmart`, `aliexpress`): los comentarios entran a la
 base con esa `fuente`, `contexto` = título del producto y `extra.producto` =
-su id, para que la página cuente reseñas por plataforma y los avatares citen
-el producto. `resultados` son ítems crudos (lo que Apify cobra); `corridas`
+su id, `extra.pais`/`extra.mercado` = de dónde es la reseña, para que la
+página cuente reseñas por plataforma y los avatares citen el producto.
+`resultados` son ítems crudos (lo que Apify cobra); `corridas`
 y `run_id` sirven para rastrear un cobro en console.apify.com;
 `conteo_por_producto` alimenta `producto_nicho.resenas_traidas` (no se
 vuelve a pagar un producto ya traído). `aviso` queda con lo que no terminó
@@ -69,15 +70,18 @@ class FuentePlataforma(Fuente):
         return res
 
     def buscar(self, consultas, pais, productos_por_consulta, avanzar=None):
-        """Itera productos normalizados (con `consulta`), sin repetir ids."""
+        """Itera productos normalizados (con `consulta`), sin repetir ids.
+        Busca en el sitio que toca (`plataformas.sitio`): un «$» a secas se
+        lee con la moneda de ese sitio."""
         avanzar = avanzar or (lambda etapa, detalle=None: None)
         corridas = plataformas.entradas_busqueda(self.clave, consultas, pais, productos_por_consulta)
         avanzar(N_("Buscando"), idiomas.traducir(plataformas.actor_busqueda(self.clave)["nombre"]))
         res = self._correr(plataformas.actor_busqueda(self.clave)["actor"], corridas, N_("Buscando"), avanzar)
         conjunta = " | ".join(c for c in consultas if c)[:200]
+        donde = plataformas.sitio(self.clave, pais) or None
         vistos = set()
         for indice, item in res["items"]:
-            p = plataformas.leer_producto(self.clave, item, (pais or "").upper() or None)
+            p = plataformas.leer_producto(self.clave, item, donde)
             if not p or p["fuente_id"] in vistos:
                 continue
             vistos.add(p["fuente_id"])
@@ -86,7 +90,10 @@ class FuentePlataforma(Fuente):
             yield p
 
     def recolectar(self, params, avanzar=None):
-        """`params = {"productos": [{fuente_id, url, titulo}], "resenas_por_producto": n, "pais": "SE"}`."""
+        """`params = {"productos": [{fuente_id, url, titulo}], "resenas_por_producto": n, "pais": "SE"}`
+        (`pais` = el del estudio). Cada comentario lleva en `extra` el `pais`
+        del comprador (o el del sitio si la reseña no lo trae) y `mercado`:
+        `local` si es el del estudio, si no `otro` (spec Parte 4 §3)."""
         avanzar = avanzar or (lambda etapa, detalle=None: None)
         p = dict(params or {})
         productos = [dict(x) for x in (p.get("productos") or []) if (x or {}).get("fuente_id")]
@@ -96,6 +103,8 @@ class FuentePlataforma(Fuente):
         self.conteo_por_producto = {}
         avanzar(N_("Buscando"), idiomas.traducir(plataformas.actor_resenas(self.clave)["nombre"]))
         res = self._correr(plataformas.actor_resenas(self.clave)["actor"], corridas, N_("Leyendo comentarios"), avanzar)
+        pais_estudio = (p.get("pais") or "").upper()
+        donde = plataformas.sitio(self.clave, pais_estudio)
         for indice, item in res["items"]:
             r = plataformas.leer_resena(self.clave, item)
             if not r:
@@ -106,9 +115,11 @@ class FuentePlataforma(Fuente):
             if producto is None and len(productos) == 1:
                 producto = productos[0]
             pid = producto["fuente_id"] if producto else (r.get("producto") or None)
+            pais_c = (r.get("pais") or donde or "").upper() or None
             c = normalizar_comentario({"fuente_id": r["fuente_id"], "texto": r["texto"], "url": r.get("url") or (producto or {}).get("url"),
                                        "contexto": (producto or {}).get("titulo"), "puntuacion": r.get("puntuacion"), "fecha": r.get("fecha"),
-                                       "extra": {"producto": pid, "plataforma": self.clave}})
+                                       "extra": {"producto": pid, "plataforma": self.clave, "pais": pais_c,
+                                                 "mercado": "local" if (pais_c or "") == pais_estudio else "otro"}})
             if c:
                 if pid:
                     self.conteo_por_producto[pid] = self.conteo_por_producto.get(pid, 0) + 1

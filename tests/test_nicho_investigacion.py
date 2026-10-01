@@ -404,8 +404,8 @@ def test_estimar_suma_plataformas_claude_y_avatares(monkeypatch):
     assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.18 and e["filas"][0]["resenas_usd"] == 1.35
     assert e["avatares_usd"] == 0.4 and 0 < e["claude_usd"] < 0.2
     assert e["total_usd"] == round(0.18 + 1.35 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
-    with pytest.raises(Exception):
-        inv.estimar({}, "SE", ["meli"], [], inv.TOPES_DEFECTO)                            # MELI no cubre Suecia
+    otro = inv.estimar({}, "SE", ["meli"], [], inv.TOPES_DEFECTO)["filas"][0]           # MELI no está en Suecia: busca en México
+    assert (otro["mercado"], otro["sitio"]) == ("otro", "MX")
 
 
 def test_elegir_y_params_redes():
