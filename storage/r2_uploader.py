@@ -14,6 +14,7 @@ Requiere en el .env:
 Ver SETUP.md para cómo crear el bucket, el token de API y activar el acceso público.
 """
 import os
+import re
 from urllib.parse import quote
 
 import boto3
@@ -39,6 +40,25 @@ def _client():
     )
 
 
+# Claves que NUNCA se reescriben con otro contenido (spec 2026-10-01-escala-y-
+# monitoreo §5): la final de una versión congelada (`__v<id>`) y los materiales
+# nombrados por el hash de lo que contienen. Esas salen con caché de un año: el
+# navegador y el CDN de Cloudflare (con un dominio propio en R2_PUBLIC_BASE_URL)
+# las guardan y no vuelven a pedirlas. El resto no lleva Cache-Control (como
+# siempre): un video de Crear regenerado reusa su clave.
+INMUTABLE = "public, max-age=31536000, immutable"
+_CLAVES_INMUTABLES = (
+    re.compile(r"/finales/[^/]+__v\d+\.(mp4|png)$"),
+    re.compile(r"/materiales/(voz|locucion|grabacion)_[0-9a-f]{16}\.[a-z0-9]+$"),
+    re.compile(r"/materiales/[0-9a-f]{64}\.[a-z0-9]+$"),
+)
+
+
+def cache_control(key):
+    """INMUTABLE si la clave es de las que nunca cambian de contenido; None si no."""
+    return INMUTABLE if any(p.search(key or "") for p in _CLAVES_INMUTABLES) else None
+
+
 def upload_file(local_path, key, content_type):
     """Sube local_path al bucket bajo `key`. Devuelve la URL pública permanente."""
     bucket = os.environ.get("R2_BUCKET_NAME")
@@ -49,12 +69,14 @@ def upload_file(local_path, key, content_type):
         )
 
     client = _client()
+    extra = {"CacheControl": cache_control(key)} if cache_control(key) else {}
     with open(local_path, "rb") as f:
         client.put_object(
             Bucket=bucket,
             Key=key,
             Body=f,
             ContentType=content_type,
+            **extra,
         )
 
     # El nombre de archivo puede traer espacios u otros caracteres que una URL

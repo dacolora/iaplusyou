@@ -448,6 +448,39 @@ def snapshots(ep_id, desde=None):
         return ([_snapshot_a_dict(base)] if base else []) + [_snapshot_a_dict(f) for f in ventana]
 
 
+def snapshots_de(ep_ids, desde):
+    """{ep_id: snapshots(ep_id, desde)} de muchas piezas en DOS consultas (la
+    ventana y, con ROW_NUMBER, la última anterior a `desde` de cada una) en vez
+    de dos por pieza: el panel del admin suma la pauta de TODOS los anuncios
+    (415 consultas con 200 anuncios, medido el 2026-10-01). Las piezas sin
+    snapshots no aparecen."""
+    ids = sorted({int(i) for i in ep_ids})
+    if not ids:
+        return {}
+    ms = db.metrica_snapshot
+    out = {}
+    with db.conectar() as con:
+        for trozo in (ids[i:i + 500] for i in range(0, len(ids), 500)):
+            orden = sa.func.row_number().over(partition_by=ms.c.experimento_pieza_id,
+                                              order_by=(ms.c.tomado_en.desc(), ms.c.id.desc())).label("rn")
+            previas = sa.select(ms, orden).where(ms.c.experimento_pieza_id.in_(trozo), ms.c.tomado_en < desde).subquery()
+            for f in con.execute(sa.select(previas).where(previas.c.rn == 1)):
+                m = f._mapping
+                out.setdefault(m["experimento_pieza_id"], []).append(_snapshot_a_dict_crudo(m))
+            for f in con.execute(sa.select(ms).where(ms.c.experimento_pieza_id.in_(trozo), ms.c.tomado_en >= desde)
+                                 .order_by(ms.c.experimento_pieza_id, ms.c.id)):
+                out.setdefault(f._mapping[ms.c.experimento_pieza_id], []).append(_snapshot_a_dict(f))
+    return out
+
+
+def _snapshot_a_dict_crudo(m):
+    """_snapshot_a_dict de una fila cuyas columnas se leen por nombre (una subconsulta)."""
+    out = {c: m[c] for c in _SNAP_COLS}
+    out.update(m["extra"] or {})
+    out["tomado_en"] = m["tomado_en"]
+    return out
+
+
 def snapshot(ep_id, metricas, tomado_en=None):
     """Guarda una foto ACUMULADA de las métricas de una pieza. `tomado_en`
     (ISO naive, como db.ahora()) solo lo fijan los tests y un backfill: en

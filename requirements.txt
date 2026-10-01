@@ -6,6 +6,8 @@ google-auth-oauthlib
 boto3
 Flask
 Flask-Babel>=4,<5
+# servidor del VPS (deploy/gunicorn.conf.py)
+gunicorn>=22,<24
 anthropic
 jsonschema
 Pillow
