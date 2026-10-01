@@ -1810,6 +1810,9 @@ msgstr "Alignment"
 msgid "Alta"
 msgstr "High"
 
+msgid "Altura"
+msgstr "Height"
+
 msgid "Amarillo"
 msgstr "Yellow"
 
@@ -2133,6 +2136,9 @@ msgstr "Assign to color…"
 
 msgid "Así le explicamos a Claude cómo escribir tus anuncios. Cada pieza que genera la app sigue estas reglas."
 msgstr "This is how we explain to Claude how to write your ads. Every piece the app generates follows these rules."
+
+msgid "Así se ven"
+msgstr "This is how they look"
 
 msgid "Atajos:"
 msgstr "Shortcuts:"
@@ -3020,6 +3026,9 @@ msgstr "Colombia"
 msgid "Color"
 msgstr "Color"
 
+msgid "Color de la palabra que suena"
+msgstr "Color of the word being spoken"
+
 msgid "Color de marca"
 msgstr "Brand color"
 
@@ -3453,6 +3462,10 @@ msgstr "Runs Apify's actors: in Niche it brings Amazon reviews or TikTok comment
 
 msgid "Correcciones de prompt (Flow Plus)"
 msgstr "Prompt corrections (Flow Plus)"
+
+#, python-brace-format
+msgid "Corregida (se oyó «{original}»)"
+msgstr "Corrected (heard “{original}”)"
 
 msgid "Corregir con Claude"
 msgstr "Fix it with Claude"
@@ -5990,6 +6003,9 @@ msgstr "This video has no sound."
 msgid "Este video ya se generó o se está generando — no se puede volver a disparar."
 msgstr "This video was already generated or is being generated — it can't be triggered again."
 
+msgid "Estilo"
+msgstr "Style"
+
 msgid "Estilo del hook"
 msgstr "Hook's style"
 
@@ -7175,6 +7191,9 @@ msgstr "Language"
 msgid "Idioma base"
 msgstr "Base language"
 
+msgid "Idioma de lo que se dice"
+msgstr "Language being spoken"
+
 msgid "Idioma del proyecto"
 msgstr "Project language"
 
@@ -7484,6 +7503,10 @@ msgstr "Go to Final edition"
 
 msgid "Ir a Ideas"
 msgstr "Go to Ideas"
+
+#, python-brace-format
+msgid "Ir a {tiempo}"
+msgstr "Go to {tiempo}"
 
 msgid "Ir al inicio"
 msgstr "Go to start"
@@ -8207,6 +8230,9 @@ msgstr "What Claude knows about this prompt"
 msgid "Lo que costaría producir lo que pide esta propuesta (precio aproximado de los proveedores)"
 msgstr "What it would cost to produce what this proposal is asking for (approximate provider price)"
 
+msgid "Lo que dicen los subtítulos"
+msgstr "What the subtitles say"
+
 msgid ""
 "Lo que el generador recibe como imagen, en este orden. Elige un activo del Catálogo o describe\n"
 "      lo que falta: queda «por crear» y en el paso de imágenes sale su prompt."
@@ -8750,6 +8776,9 @@ msgstr "Currency of the figures"
 
 msgid "Monto"
 msgstr "Amount"
+
+msgid "Mostrar los subtítulos"
+msgstr "Show the subtitles"
 
 msgid "Mostrar más"
 msgstr "Show more"
@@ -9353,6 +9382,9 @@ msgstr "The original photo of this generation wasn't kept."
 msgid "No se creó la publicación en %(plataformas)s: %(error)s"
 msgstr "The post on %(plataformas)s was not created: %(error)s"
 
+msgid "No se encontraron palabras en ese audio."
+msgstr "No words were found in that audio."
+
 msgid "No se encontró. Puede que ya no exista."
 msgstr "Not found. It may no longer exist."
 
@@ -9376,6 +9408,10 @@ msgstr "Couldn't load {lista} (the link didn't respond or the files are gone): t
 
 msgid "No se pudieron escribir los prompts de imágenes. Vuelve a intentarlo."
 msgstr "Couldn't write the image prompts. Try again."
+
+#, python-brace-format
+msgid "No se pudieron generar los subtítulos: {mensaje}"
+msgstr "Couldn't generate the subtitles: {mensaje}"
 
 #, python-brace-format
 msgid "No se pudieron preparar las copias livianas de {n} archivo(s): la vista previa sigue con los originales (se ve igual, solo tarda más en cargar)."
@@ -10939,6 +10975,12 @@ msgstr "Remove this reference"
 msgid "Quitar la biblioteca"
 msgstr "Remove the library"
 
+msgid "Quitar la línea"
+msgstr "Remove the line"
+
+msgid "Quitar los subtítulos de este idioma"
+msgstr "Remove the subtitles for this language"
+
 msgid "Quitar todas"
 msgstr "Remove all"
 
@@ -11911,6 +11953,9 @@ msgstr "No connection: it wasn't saved. Try again."
 msgid "Sin conexión: no se pudo borrar. Vuelve a intentar."
 msgstr "No connection: couldn't delete. Try again."
 
+msgid "Sin conexión: no se pudo pedir. Vuelve a intentar."
+msgstr "No connection: the request couldn't be sent. Try again."
+
 msgid "Sin conexión: no se pudo preparar ese video. Vuelve a intentar."
 msgstr "No connection: couldn't prepare that video. Try again."
 
@@ -12395,6 +12440,9 @@ msgstr "Subreddits (comma-separated; empty = all of Reddit)"
 msgid "Subtítulo"
 msgstr "Subtitle"
 
+msgid "Subtítulos"
+msgstr "Subtitles"
+
 msgid "Subtítulos (transcripción)"
 msgstr "Subtitles (transcription)"
 
@@ -12680,6 +12728,9 @@ msgstr "Headline"
 
 msgid "Toca dónde va el producto"
 msgstr "Tap where the product goes"
+
+msgid "Toca una palabra para corregirla: Enter guarda, Esc la deja como estaba y vacía se quita."
+msgstr "Tap a word to correct it: Enter saves, Esc leaves it as it was, and an empty word is removed."
 
 msgid "Toca una para ponerla en el video que elegiste o, si no, en el corte más cercano al cabezal. Dura medio segundo; con el mouse también puedes arrastrarla a un corte."
 msgstr "Tap one to put it on the video you selected or, if none, on the cut closest to the playhead. It lasts half a second; with the mouse you can also drag it to a cut."
@@ -13852,6 +13903,9 @@ msgstr "Back to log in"
 
 msgid "Volver a intentar"
 msgstr "Try again"
+
+msgid "Volver a lo que se oyó"
+msgstr "Back to what was heard"
 
 msgid "Volver a lo sugerido"
 msgstr "Back to the suggestion"
@@ -16827,6 +16881,9 @@ msgstr "How many?"
 msgid "¿Cómo quieres conectar Meta?"
 msgstr "How do you want to connect Meta?"
 
+msgid "¿De dónde salen?"
+msgstr "Where do they come from?"
+
 msgid "¿De qué color son las fotos actuales?"
 msgstr "What color are the current photos?"
 
@@ -16968,6 +17025,9 @@ msgstr "Remove this project's Meta app? You'll have to register it again to reco
 #, python-format
 msgid "¿Quitar los %(n)s comentarios de %(fuente)s?"
 msgstr "Remove the %(n)s comments from %(fuente)s?"
+
+msgid "¿Quitar los subtítulos de este idioma? Lo transcrito se guarda: volver a ponerlos es gratis."
+msgstr "Remove the subtitles for this language? The transcription is kept: putting them back is free."
 
 msgid "¿Quitar todas las referencias?"
 msgstr "Remove all references?"

@@ -52,6 +52,15 @@ test("los módulos de navegador cargan y exportan lo que la página usa", async 
   }
   assert.equal(typeof vp.VistaPrevia.prototype.medidasTexto, "function");
   assert.equal(typeof Object.getOwnPropertyDescriptor(vp.VistaPrevia.prototype, "resuelto")?.get, "function", "VistaPrevia.resuelto");
+  // capa 5a (Task 7): la pestaña «Subtítulos» y dónde la monta la biblioteca
+  const sub = await import("../../static/editor/subtitulos_panel.js");
+  assert.equal(typeof sub.SubtitulosPanel, "function");
+  for (const m of ["pintar", "generar", "seguir"]) {
+    assert.equal(typeof sub.SubtitulosPanel.prototype[m], "function", `SubtitulosPanel.${m}`);
+  }
+  for (const m of ["zona", "mostrar"]) {
+    assert.equal(typeof bib.Biblioteca.prototype[m], "function", `Biblioteca.${m}`);
+  }
   const pps = Object.getOwnPropertyDescriptor(lt.LineaTiempo.prototype, "pps");
   assert.equal(typeof pps?.get, "function");
   assert.equal(typeof pps?.set, "function");

@@ -21,8 +21,16 @@
 // `resaltar(punto | null)` marca esa fila y dónde entraría. Cada unión de la
 // principal con transición lleva su marca (escala.unionesConTransicion);
 // tocarla elige el clip de antes (el que tiene la transición).
+//
+// Capa 5a (Task 7): arriba de todas, la fila «Subtítulos» de SOLO LECTURA —
+// un bloque por línea (escala.bloquesSubtitulos, con los topes del estilo)
+// de las palabras del destino que se ve (`subtitulos()`: las del documento
+// resuelto, ya derivadas). Sus tiempos salen del audio: no se arrastra ni se
+// recorta; tocar un bloque llama `alSubtitulo(t_ms)` (la página lleva el
+// cabezal ahí y abre la pestaña Subtítulos) y nada se suelta sobre ella
+// (`puntoEn` da null). Sin palabras, no hay fila.
 import {
-  ANCHO_MIN_PX, barrasOnda, cabeceraFila, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, ladosRecortables, marcasRegla,
+  ANCHO_MIN_PX, barrasOnda, bloquesSubtitulos, cabeceraFila, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, ladosRecortables, marcasRegla,
   msAPx, msInsercion, nombreFila, PASO_ONDA_PX, PPS_DEFECTO, PPS_MAX, PPS_MIN, puntoSoltar, pxAMs, soltar, unionesConTransicion,
   VENTANA_PICOS_MS,
 } from "./escala.js";
@@ -32,6 +40,7 @@ import { duracionMs, pistaPrincipal } from "./tiempo.js";
 
 const ALTO_FILA = { video: 56, superpuesto: 34, imagen: 30, texto: 30, audio: 36 };
 const ALTO_ESPEJO = 24;          // el sonido de la escena: sin onda (su material es el video), fila baja
+const ALTO_SUBTITULOS = 22;      // la fila de solo lectura «Subtítulos»
 const ETIQUETA_ONDA_PX = 13;     // arriba del clip de audio va su nombre; la onda, debajo
 const ONDA_MAX_PX = 8192;        // ancho máximo del canvas de una onda: más ancho, se estira
 const IMAN_PX = 8;
@@ -47,6 +56,7 @@ const ICONOS = {
   voz: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
   sonido: '<path d="M4 9.5v5h4l5 4v-13l-5 4z"/><path d="M16.5 9a4.5 4.5 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/>',
   transicion: '<path d="M4 6l8 6-8 6zM20 6l-8 6 8 6z"/>',
+  subtitulos: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12.5h6M15 12.5h2M7 15.5h3M12 15.5h5"/>',
 };
 
 function iconoSvg(nombre, tam, clase) {
@@ -69,9 +79,14 @@ export class LineaTiempo {
   // `destino()`: el `<idioma>_<PAIS>` de la vista previa, para escribir los
   // textos variables con su valor en ese destino. `ventanaPicosMs`: cada
   // cuánto de fuente hay un pico (config.ventana_picos_ms de la página).
+  // Capa 5a: `subtitulos()` da los subtítulos del destino resuelto
+  // ({palabras, estilo_id}, o null), `estilosSubtitulos` la tabla de estilos
+  // (config.subtitulos.estilos) y `alSubtitulo(t_ms)` atiende tocar un bloque.
   constructor({ contenedor, zoom, materiales = () => ({}), destino = () => null, alSeleccionar = () => {}, alOperar = () => {},
-    alIr = () => {}, ventanaPicosMs = VENTANA_PICOS_MS }) {
-    Object.assign(this, { contenedor, zoomInput: zoom, materiales, destino, alSeleccionar, alOperar, alIr });
+    alIr = () => {}, ventanaPicosMs = VENTANA_PICOS_MS, subtitulos = () => null, estilosSubtitulos = null,
+    alSubtitulo = () => {} }) {
+    Object.assign(this, { contenedor, zoomInput: zoom, materiales, destino, alSeleccionar, alOperar, alIr, subtitulos,
+      estilosSubtitulos, alSubtitulo });
     this.ventanaPicosMs = Number(ventanaPicosMs) > 0 ? Number(ventanaPicosMs) : VENTANA_PICOS_MS;
     this._pps = PPS_DEFECTO;
     this.doc = null;
@@ -97,6 +112,11 @@ export class LineaTiempo {
     this.lienzo.addEventListener("pointerup", (e) => this._arriba(e));
     this.lienzo.addEventListener("pointercancel", (e) => this._cancelar(e));
     this.lienzo.addEventListener("lostpointercapture", (e) => this._cancelar(e));
+    // un bloque de subtítulos: el clic (de mouse o de un toque sin deslizar)
+    this.filas.addEventListener("click", (e) => {
+      const b = e.target.closest?.(".ed-sub-bloque");
+      if (b) this.alSubtitulo(Number(b.dataset.t) || 0);
+    });
     this.scroll.addEventListener("wheel", (e) => {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
@@ -201,6 +221,11 @@ export class LineaTiempo {
       }
       return fila;
     }));
+    const sub = this._filaSubtitulos(pps);
+    if (sub) {
+      this.filas.prepend(sub.fila);
+      cabeceras.unshift(sub.cabecera);
+    }
     this.listaCabeceras.replaceChildren(...cabeceras);
     if (ondas.length) {
       const color = getComputedStyle(ondas[0].canvas).color;
@@ -214,6 +239,37 @@ export class LineaTiempo {
       this.arrastre.el = this._nodoClip(this.arrastre.id);
       if (this.arrastre.activo) this._pintarArrastre();
     }
+  }
+
+  // La fila «Subtítulos» (y su cabecera), o null si el destino no tiene
+  // palabras a la vista. Los bloques son botones que no toman el foco con el
+  // mouse (S, Supr o Espacio siguen siendo de la edición).
+  _filaSubtitulos(pps) {
+    const sub = this.subtitulos?.() ?? null;
+    const bloques = bloquesSubtitulos(sub?.palabras, this.estilosSubtitulos, sub?.estilo_id);
+    if (!bloques.length) return null;
+    const nombre = t("fila.subtitulos");
+    const fila = el("div", "linea-fila ed-sub-fila");
+    fila.dataset.subtitulos = "";
+    fila.style.height = `${ALTO_SUBTITULOS}px`;
+    fila.title = nombre;
+    for (const b of bloques) {
+      const n = el("button", "ed-sub-bloque", fila);
+      n.type = "button";
+      n.tabIndex = -1;
+      n.dataset.t = String(b.t_ms);
+      n.style.left = `${msAPx(b.t_ms, pps)}px`;
+      n.style.width = `${Math.max(ANCHO_MIN_PX, msAPx(b.dur_ms, pps))}px`;
+      n.textContent = b.texto;
+      n.title = b.texto;
+    }
+    const cabecera = el("div", "ed-cabecera ed-cabecera-subtitulos");
+    cabecera.dataset.subtitulos = "";
+    cabecera.style.height = `${ALTO_SUBTITULOS}px`;
+    cabecera.title = nombre;
+    cabecera.append(iconoSvg("subtitulos", 16, "ed-cabecera-icono"));
+    el("span", "ed-cabecera-nombre", cabecera).textContent = nombre;
+    return { fila, cabecera };
   }
 
   // `seguir` (reproduciendo): si el cabezal sale de lo visible, la línea corre con él.
@@ -238,10 +294,13 @@ export class LineaTiempo {
     if (!this.doc) return null;
     const caja = this.scroll.getBoundingClientRect();
     if (!(clientX >= caja.left && clientX < caja.right && clientY >= caja.top && clientY < caja.bottom)) return null;
+    // la fila «Subtítulos» es de solo lectura: ahí no se suelta nada
+    const sub = this.filas.querySelector(":scope > .ed-sub-fila")?.getBoundingClientRect();
+    if (sub && clientY >= sub.top && clientY < sub.bottom) return null;
     const lienzo = this.lienzo.getBoundingClientRect();
     const x = Math.max(clientX, this.cabeceras.getBoundingClientRect().right) - lienzo.left;
     const sobreRegla = clientY < this.regla.getBoundingClientRect().bottom;
-    const filas = [...this.filas.children].map((f) => {
+    const filas = [...this.filas.children].filter((f) => !f.classList.contains("ed-sub-fila")).map((f) => {
       const r = f.getBoundingClientRect();
       return { pistaId: f.dataset.pista, tipo: f.dataset.tipo, top: r.top - lienzo.top, alto: r.height };
     });
@@ -354,6 +413,11 @@ export class LineaTiempo {
     const activo = document.activeElement;
     if (activo && activo !== document.body) activo.blur?.();
     const tactil = e.pointerType === "touch";
+    // un bloque de subtítulos: lo atiende su clic (sin foco, sin buscar ni elegir)
+    if (e.target.closest?.(".ed-sub-bloque")) {
+      if (!tactil) e.preventDefault();
+      return;
+    }
     // la marca de una transición: elige el clip que la tiene (el de antes del corte)
     const union = e.target.closest?.(".ed-union");
     if (union) {

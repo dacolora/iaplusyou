@@ -1,5 +1,5 @@
 // Biblioteca del editor (capa 4b, Task 6): el panel de la izquierda (en el
-// celular, la hoja que sube desde abajo) con cuatro pestañas:
+// celular, la hoja que sube desde abajo) con cinco pestañas:
 //
 // - Medios: «Subir» (varios archivos; cada uno con su barra y, si falla, su
 //   error en llano debajo), los videos e imágenes del proyecto y, debajo,
@@ -10,8 +10,14 @@
 // - Texto: cuatro muestras (Título, Subtítulo, Precio, Llamado) con su estilo;
 //   tocar una la pone en el cabezal, la deja elegida y pide el foco para su
 //   texto (editor.enfocarTexto: el panel de propiedades lo atiende).
+// - Subtítulos (capa 5a): la llena subtitulos_panel.js en la zona que da
+//   `zona("subtitulos")`; la biblioteca solo la muestra.
 // - Transiciones: las cinco que el render hace; tocar una la pone (500 ms) en
 //   el video elegido o en el corte más cercano al cabezal.
+//
+// `zona(panel)` es el lugar (un div al principio del panel, debajo de su
+// título) donde otro módulo pone lo suyo sin tocar el resto del panel, y
+// `mostrar(panel)` muestra ese panel (la página, además, marca la pestaña).
 //
 // «+» (o tocar un texto o una transición) agrega en el cabezal; con el mouse,
 // cualquier cosa se arrastra a la línea de tiempo (LineaTiempo.puntoEn dice
@@ -301,10 +307,10 @@ export class Biblioteca {
       this._terminarArrastre();
     };
     this._construir();
-    this._mostrar(pestanas.querySelector('[aria-selected="true"]')?.dataset.panel ?? "medios");
+    this.mostrar(pestanas.querySelector('[aria-selected="true"]')?.dataset.panel ?? "medios");
     pestanas.addEventListener("click", (e) => {
       const b = e.target.closest("[data-panel]");
-      if (b) this._mostrar(b.dataset.panel);
+      if (b) this.mostrar(b.dataset.panel);
     });
     editor.escuchar((que) => {
       if (que === "documento") this._pintarMarca();
@@ -323,7 +329,7 @@ export class Biblioteca {
     this.mensaje.setAttribute("aria-live", "polite");
     this.mensaje.hidden = true;
     this.paneles = {};
-    for (const panel of ["medios", "audio", "texto", "transiciones"]) {
+    for (const panel of ["medios", "audio", "texto", "subtitulos", "transiciones"]) {
       const s = el("section", "ed-bib-panel", c);
       s.dataset.panel = panel;
       s.hidden = true;
@@ -435,7 +441,25 @@ export class Biblioteca {
     }
   }
 
-  _mostrar(panel) {
+  // El lugar de otro módulo dentro de un panel (capa 5a: la pestaña
+  // «Subtítulos», la voz en «Audio»): un div.ed-bib-zona al principio del
+  // panel, debajo de su título, creado una vez. null si el panel no existe.
+  // Ningún control de una zona lleva los data-* que esta clase atiende
+  // (data-agregar, data-borrar, data-clave…): sus clics no son de aquí.
+  zona(panel) {
+    const s = this.paneles[panel];
+    if (!s) return null;
+    let z = s.querySelector(":scope > .ed-bib-zona");
+    if (!z) {
+      z = el("div", "ed-bib-zona");
+      const cabeza = s.querySelector(":scope > .ed-bib-cabeza");
+      if (cabeza) cabeza.after(z);
+      else s.prepend(z);
+    }
+    return z;
+  }
+
+  mostrar(panel) {
     if (!this.paneles[panel]) return;
     this.panel = panel;
     for (const [k, s] of Object.entries(this.paneles)) s.hidden = k !== panel;

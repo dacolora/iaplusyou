@@ -546,9 +546,9 @@ def test_la_pagina_tiene_la_disposicion_de_capcut(dashboard, encolados):
     # (propiedades.js lo arma y conserva el id h-velocidad)
     assert 'id="h-velocidad"' not in html
     assert "ed-cuerpo" not in arbol["ed-herramientas"] and "ed-cuerpo" not in arbol["linea"]
-    # la biblioteca: cuatro pestañas con su icono
+    # la biblioteca: cinco pestañas con su icono (capa 5a: «Subtítulos» entre Texto y Transiciones)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    for panel in ("medios", "audio", "texto", "transiciones"):
+    for panel in ("medios", "audio", "texto", "subtitulos", "transiciones"):
         boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
         assert boton and "<svg" in boton.group(1), panel
     assert pestanas.count('aria-selected="true"') == 1
@@ -576,7 +576,8 @@ def test_las_pestanas_de_la_biblioteca_dicen_su_nombre(dashboard, encolados):
     ed, _c, _v = _edicion()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    for panel, nombre in (("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("transiciones", "Transiciones")):
+    for panel, nombre in (("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("subtitulos", "Subtítulos"),
+                          ("transiciones", "Transiciones")):
         boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
         assert boton and f'title="{nombre}"' in boton.group(0) and f"<span>{nombre}</span>" in boton.group(1), panel
     css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
@@ -585,6 +586,38 @@ def test_las_pestanas_de_la_biblioteca_dicen_su_nombre(dashboard, encolados):
     assert re.search(r"@container ed-pestanas \(min-width: \d+px\)", css), "con lugar, los nombres se ven"
     # la biblioteca la arma biblioteca.js dentro de su panel; la marca de una unión con transición, la línea
     assert "#ed-panel-biblioteca [hidden]" in css and ".ed-union {" in css
+
+
+def test_la_pestana_subtitulos_en_la_biblioteca_y_en_el_celular(dashboard, encolados):
+    """Capa 5a (Task 7, spec D12): «Subtítulos» es una pestaña de la biblioteca
+    entre Texto y Transiciones (subtitulos_panel.js la llena) y, en el celular,
+    el sexto botón de la barra de abajo, que abre la hoja en esa pestaña. La
+    página trae lo que el panel pide: estimar, transcribir, el estado de un
+    trabajo (`__JOB__`) y las palabras de un material; y la tabla de estilos."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
+    assert re.findall(r'data-panel="([a-z]+)"', pestanas) == ["medios", "audio", "texto", "subtitulos", "transiciones"]
+    movil = re.search(r'id="ed-acciones-movil".*?</nav>', html, re.S).group(0)
+    assert re.findall(r'id="(ed-abrir-[a-z]+)"', movil) == [
+        "ed-abrir-medios", "ed-abrir-audio", "ed-abrir-texto", "ed-abrir-subtitulos", "ed-abrir-transiciones",
+        "ed-abrir-propiedades"]
+    abrir = re.search(r'<button[^>]*id="ed-abrir-subtitulos"[^>]*>(.*?)</button>', html, re.S)
+    assert 'data-abrir-hoja="ed-biblioteca"' in abrir.group(0) and 'data-abrir-panel="subtitulos"' in abrir.group(0)
+    assert "<svg" in abrir.group(1) and "<span>Subtítulos</span>" in abrir.group(1)
+    datos = _datos(html)
+    urls = datos["urls"]
+    for clave in ("subtitulos_estimar", "transcribir", "estado_trabajo", "materiales_por_id"):
+        assert urls[clave], clave
+    assert "__JOB__" in urls["estado_trabajo"]
+    assert datos["config"]["subtitulos"]["estilos"]["palabra_grande"]["max_palabras"] == 1
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    for regla in (".ed-sub-lineas", ".ed-sub-palabra", ".ed-sub-estilo", ".ed-sub-fila", ".ed-sub-bloque"):
+        assert regla in css, regla
+    # seis botones en 375 px: cada uno se achica (nunca empuja la página de lado)
+    celular = css[css.index("@media (max-width: 760px)"):]
+    accion = re.search(r"\.ed-accion \{([^}]*)\}", celular).group(1)
+    assert "flex: 1 1 0" in accion and "min-width: 0" in accion
 
 
 def test_ningun_ancho_queda_sin_disposicion(dashboard, encolados):
