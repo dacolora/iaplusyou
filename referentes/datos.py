@@ -275,8 +275,11 @@ def _condiciones(cliente, filtros):
     q = _texto(f.get("q"), 80)
     if q:
         # Sin tildes ni mayúsculas de ningún lado (`db.pliegue`): «camara» encuentra «Cámara».
-        like = f"%{db.pliegue(q)}%"
-        cond.append(sa.or_(*(sa.func.pliegue(col).like(like) for col in (t.c.titular, t.c.firma, t.c.marca, t.c.dolor))))
+        # `%` y `_` escritos por la persona son letras, no comodines.
+        crudo = db.pliegue(q).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{crudo}%"
+        cond.append(sa.or_(*(sa.func.pliegue(col).like(like, escape="\\")
+                             for col in (t.c.titular, t.c.firma, t.c.marca, t.c.dolor))))
     # Filtros opcionales para el pool de sugeridos de Sprints (spec 2026-09-26,
     # fix de la ronda final): una campaña con marcas a imitar o idioma necesita
     # poder pedir DIRECTO esas filas, porque la biblioteca puede tener miles

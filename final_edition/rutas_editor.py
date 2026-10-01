@@ -95,9 +95,14 @@ def _mismo_origen():
 
 
 def _materiales_ajenos(cliente, doc):
-    """Ids de `doc["materiales"]` (ya derivados por validar) que no son de
-    este proyecto: un documento no puede apuntar a archivos de otro cliente."""
-    return [m for m in doc.get("materiales") or [] if not materiales.obtener(cliente, int(m))]
+    """Ids de `doc["materiales"]` (ya derivados por validar) y de las fuentes
+    de subtítulos (`subtitulos.fuentes`, que `materiales` no incluye) que no
+    son de este proyecto: un documento no puede apuntar a archivos de otro
+    cliente."""
+    ids = {int(m) for m in doc.get("materiales") or []}
+    for lista in ((doc.get("subtitulos") or {}).get("fuentes") or {}).values():
+        ids.update(int(f["material_id"]) for f in lista or [] if f.get("material_id") is not None)
+    return [m for m in sorted(ids) if not materiales.obtener(cliente, m)]
 
 
 @bp.put("/<int:edicion_id>")

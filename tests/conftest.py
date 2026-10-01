@@ -97,3 +97,18 @@ def idioma_de_tests(monkeypatch):
     import idiomas
     monkeypatch.setattr(idiomas, "DEFECTO", "es")
     monkeypatch.setattr(idiomas, "ACTIVO_PARA_TODOS", False)
+
+
+def _jpg_valido():
+    import io
+
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (2, 2), (120, 80, 40)).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+# Una foto JPEG de verdad (2×2) para los tests que suben fotos por una ruta:
+# desde la auditoría de seguridad 2026-10-01 el servidor mira el contenido,
+# y unos bytes que solo empiezan como JPEG ya no pasan.
+JPG_VALIDO = _jpg_valido()

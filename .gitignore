@@ -1,4 +1,7 @@
 .env
+# Variantes con secretos (.env.local, .env.bak…); la plantilla sí va en git.
+.env.*
+!.env.example
 client_secret_youtube.json
 token_youtube.json
 token_tiktok.json

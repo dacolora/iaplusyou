@@ -749,6 +749,15 @@ def investigacion(cliente, estudio_id):
 _PRODUCTO_COLS = ("titulo", "marca", "precio", "moneda", "estrellas", "n_resenas", "url", "imagen", "consulta", "extra")
 
 
+def _url_web(valor):
+    """La URL si es http(s)://, si no None: el `url` y la `imagen` de un
+    producto van a un enlace y a un <img>, y un «javascript:» no puede llegar
+    ahí (lo filtraba solo nicho/fuentes/plataformas.py; ahora también el
+    único escritor)."""
+    texto = _texto(valor, 500)
+    return texto if texto and texto.lower().startswith(("http://", "https://")) else None
+
+
 def _producto_limpio(p):
     p = dict(p or {})
     fuente_id, titulo = _texto(p.get("fuente_id"), 120), _texto(p.get("titulo"), 300)
@@ -756,7 +765,7 @@ def _producto_limpio(p):
         return None
     return {"fuente_id": fuente_id, "titulo": titulo, "marca": _texto(p.get("marca"), 120) or None,
             "precio": p.get("precio"), "moneda": (_texto(p.get("moneda"), 3) or None), "estrellas": p.get("estrellas"),
-            "n_resenas": p.get("n_resenas"), "url": _texto(p.get("url"), 500) or None, "imagen": _texto(p.get("imagen"), 500) or None,
+            "n_resenas": p.get("n_resenas"), "url": _url_web(p.get("url")), "imagen": _url_web(p.get("imagen")),
             "consulta": _texto(p.get("consulta"), 200),
             "extra": dict(p.get("extra")) if isinstance(p.get("extra"), dict) else {}}
 

@@ -736,11 +736,15 @@ def test_activos_de_portafolio_filtra_por_dueno_y_excluye_ocupadas(entorno):
     r = ma.activos_de_portafolio(" 777 ")
     assert [a["id"] for a in r["ad_accounts"]] == ["act_9"] and [p["id"] for p in r["pages"]] == ["p2"]
     assert r["paginas_sin_dueno"] is False
-    # act_9 ya asignada a «otro»: para «acme» desaparece; para «otro» sigue.
+    # 777 ya conectado a «otro»: «acme» ya no ve sus activos (auditoría de
+    # seguridad 2026-10-01: conocer el id del portafolio no prueba que sea
+    # suyo; pasa por «Avisar a Creatv»); para «otro» siguen ahí.
     ma.asignar("otro", "act_9", "p2", asignado_por="admin", portafolio_id="777")
     assert ma.cuentas_asignadas() == {"act_9": "otro"}
-    assert ma.activos_de_portafolio("777", cliente="acme")["ad_accounts"] == []
-    assert [a["id"] for a in ma.activos_de_portafolio("777", cliente="otro")["ad_accounts"]] == ["act_9"]
+    with pytest.raises(ma.MetaAgenciaError, match="otro proyecto"):
+        ma.activos_de_portafolio("777", cliente="acme")
+    r = ma.activos_de_portafolio("777", cliente="otro")
+    assert [a["id"] for a in r["ad_accounts"]] == ["act_9"] and [p["id"] for p in r["pages"]] == ["p2"]
     # Otro portafolio no ve nada de 777; nunca aparecen las cuentas propias de Creatv.
     assert [a["id"] for a in ma.activos_de_portafolio("888")["ad_accounts"]] == ["act_8"]
     assert ma.activos_de_portafolio("123456")["ad_accounts"] == []
@@ -748,12 +752,25 @@ def test_activos_de_portafolio_filtra_por_dueno_y_excluye_ocupadas(entorno):
         ma.activos_de_portafolio("")
 
 
-def test_activos_de_portafolio_marca_paginas_sin_dueno_y_pagina_de_socio(entorno):
+def test_autoservicio_no_muestra_paginas_ni_portafolios_de_otro_proyecto(entorno):
+    ma, _ = _conectada_con_socios(entorno)
+    # El admin conectó a «otro» con la cuenta de 888 y la Página p2 (de 777).
+    ma.asignar("otro", "act_8", "p2", asignado_por="admin", portafolio_id="888")
+    assert ma.paginas_asignadas() == {"p2": "otro"}
+    r = ma.activos_de_portafolio("777", cliente="acme")
+    assert [a["id"] for a in r["ad_accounts"]] == ["act_9"] and r["pages"] == []
+    assert ma.portafolio_de_otro("888", "acme") and not ma.portafolio_de_otro("888", "otro")
+    # Una solicitud pendiente también reserva el portafolio.
+    ma.solicitar("tercero", "999")
+    assert ma.portafolio_de_otro("999", "acme") and not ma.portafolio_de_otro("999", "tercero")
+    with pytest.raises(ma.MetaAgenciaError, match="otro proyecto"):
+        ma.activos_de_portafolio("999", cliente="acme")
+
+
+def test_activos_de_portafolio_marca_paginas_sin_dueno(entorno):
     ma, _ = _conectada_con_socios(entorno, paginas=[{"id": "p2", "name": "Página Cliente"}, {"id": "p3", "name": "Página Otro"}])
     r = ma.activos_de_portafolio("777")
     assert r["pages"] == [] and r["paginas_sin_dueno"] is True
-    assert ma.pagina_de_socio("p3")["name"] == "Página Otro"
-    assert ma.pagina_de_socio("p1") is None and ma.pagina_de_socio("nada") is None
 
 
 def test_asignar_rechaza_cuenta_de_otro_proyecto_y_guarda_portafolio(entorno):

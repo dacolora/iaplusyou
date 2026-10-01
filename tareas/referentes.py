@@ -306,6 +306,7 @@ def _job_continuacion_barrer(job_id):
 def _continuar_barrer(tarea, payload, bid, tipo=TIPO_BARRER):
     cuando = (datetime.now() + timedelta(seconds=ESPERA_CONT)).isoformat(timespec="seconds")
     cola.encolar(tipo, payload, job_id=_job_continuacion_barrer(tarea.get("job_id") or job_id_barrer(bid)),
+                cliente=tarea.get("cliente"),
                 duracion_estimada=1800, etapas=ETAPAS_BARRER, ejecutar_desde=cuando, max_intentos=1, prioridad=2)
 
 
@@ -318,7 +319,7 @@ def encolar_barrer(cliente, fuente, consulta, tope, usd_estimado, pedido_por=Non
     trabajos.encolar(job_id_barrer(bid), TIPO_BARRER,
                      {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
                       "consulta": {**consulta, "fuente": fuente}, "tope": tope},
-                     duracion_estimada=1800, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2)
+                     duracion_estimada=1800, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2, cliente=cliente)
     return bid
 
 
@@ -334,7 +335,7 @@ def encolar_clasificar_pendientes(cliente, barrido_id):
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_CLASIFICAR,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "clasificando",
                       "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
-                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2)
+                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2, cliente=cliente)
     return True
 
 
@@ -350,7 +351,7 @@ def encolar_reintentar_imagenes(cliente, barrido_id):
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_BARRER,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "imagenes",
                       "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
-                     duracion_estimada=600, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2)
+                     duracion_estimada=600, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2, cliente=cliente)
     return True
 
 

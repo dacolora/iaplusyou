@@ -13,17 +13,25 @@ Nunca se publica ni se re-sube el video ajeno: solo sirve como referencia de
 movimiento/estructura para generar uno nuevo con el producto del cliente.
 """
 import base64
+import io
 import os
 import re
 import subprocess
 import tempfile
+from urllib.parse import urlparse
 
 import requests
 from flask_babel import gettext
 
 import idiomas
+from conectores import ErrorConector
+from conectores import url as conector_url
 
 MAX_SEGUNDOS = 15
+# Tope de lo que se baja de un link (el mismo que yt-dlp, `max_filesize`) y de
+# la página de TrendTrack que se lee buscando el .mp4.
+MAX_BYTES_VIDEO = 200 * 1024 * 1024
+MAX_BYTES_PAGINA = 5 * 1024 * 1024
 _UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/128 Safari/537.36"}
 
 
@@ -32,25 +40,47 @@ class LinkError(RuntimeError):
 
 
 def _es_trendtrack(url):
-    return "trendtrack.io" in url
+    # Por el host, no por el texto: «http://169.254.169.254/?trendtrack.io»
+    # también contiene la palabra (auditoría de seguridad 2026-10-01).
+    host = (urlparse(url).hostname or "").lower()
+    return host == "trendtrack.io" or host.endswith(".trendtrack.io")
+
+
+def _bajar_limitado(url, f, tope, timeout):
+    """Copia `url` en el archivo abierto `f` sin pasar de `tope` bytes y sin
+    salir de hosts públicos, tampoco en una redirección (conectores.url.abrir:
+    antes un requests.get seguía cualquier redirección y leía sin tope)."""
+    try:
+        r = conector_url.abrir(url, cabeceras=_UA, timeout=timeout)
+    except ErrorConector:
+        raise LinkError(gettext("Ese link no está permitido (apunta a una red interna o local).")) from None
+    try:
+        if not r.ok:
+            raise LinkError(gettext("TrendTrack no dejó descargar el video (%(codigo)s).", codigo=r.status_code))
+        total = 0
+        for chunk in r.iter_content(1 << 16):
+            total += len(chunk)
+            if total > tope:
+                raise LinkError(gettext("El video del link pesa demasiado."))
+            f.write(chunk)
+    finally:
+        r.close()
 
 
 def _descargar_trendtrack(url, destino):
+    pagina = io.BytesIO()
     try:
-        html = requests.get(url, headers=_UA, timeout=30).text
+        _bajar_limitado(url, pagina, MAX_BYTES_PAGINA, 30)
     except requests.RequestException as e:
         raise LinkError(gettext("No pude abrir el link de TrendTrack (%(tipo)s).", tipo=type(e).__name__)) from None
+    html = pagina.getvalue().decode("utf-8", errors="replace")
     m = re.search(r'https://medias\.trendtrack\.io/[^"\'\\\s<>]+\.mp4', html)
     if not m:
         raise LinkError(gettext("En ese link de TrendTrack no encontré el video (¿es un anuncio de imagen, o el link no es público?)."))
     video_url = m.group(0)
     try:
-        with requests.get(video_url, headers=_UA, timeout=120, stream=True) as r:
-            if not r.ok:
-                raise LinkError(gettext("TrendTrack no dejó descargar el video (%(codigo)s).", codigo=r.status_code))
-            with open(destino, "wb") as f:
-                for chunk in r.iter_content(1 << 16):
-                    f.write(chunk)
+        with open(destino, "wb") as f:
+            _bajar_limitado(video_url, f, MAX_BYTES_VIDEO, 120)
     except requests.RequestException as e:
         raise LinkError(gettext("Falló la descarga del video de TrendTrack (%(tipo)s).", tipo=type(e).__name__)) from None
     return {"fuente": "trendtrack", "titulo": None}
@@ -63,7 +93,11 @@ def _descargar_ytdlp(url, destino):
         raise LinkError(gettext("Falta yt-dlp en el servidor para descargar de TikTok/Instagram/YouTube.")) from None
     opts = {
         "outtmpl": destino, "format": "mp4/bestvideo*+bestaudio/best", "merge_output_format": "mp4",
-        "quiet": True, "no_warnings": True, "noplaylist": True, "max_filesize": 200 * 1024 * 1024,
+        "quiet": True, "no_warnings": True, "noplaylist": True, "max_filesize": MAX_BYTES_VIDEO,
+        # Solo los extractores de cada red (TikTok, Instagram, YouTube…): el
+        # «genérico» abre cualquier URL y sigue sus redirecciones, que es
+        # justo lo que no debe hacer el servidor con un link ajeno (SSRF).
+        "allowed_extractors": ["default", "-generic"],
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -79,6 +113,12 @@ def descargar(url, carpeta, nombre_base):
     url = url.strip()
     if not re.match(r"^https?://", url):
         raise LinkError(gettext("Eso no parece un link (tiene que empezar por http:// o https://)."))
+    try:
+        publico = conector_url.host_permitido(url)
+    except ErrorConector:
+        publico = False
+    if not publico:
+        raise LinkError(gettext("Ese link no está permitido (apunta a una red interna o local)."))
     os.makedirs(carpeta, exist_ok=True)
     bruto = os.path.join(carpeta, nombre_base + ".orig.mp4")
     final = os.path.join(carpeta, nombre_base + ".mp4")

@@ -12,6 +12,7 @@ import pytest
 
 from conectores import ErrorConector
 from conectores.base import Conector
+from tests.conftest import JPG_VALIDO
 from tests.test_experimentos_db import PAISES
 
 
@@ -125,9 +126,10 @@ def test_importar_archivo_dos_subidas_seguidas_no_se_pisan(app):
 
 def test_importar_archivo_rechaza_por_content_length_antes_de_leer(app, monkeypatch):
     """Un POST muy grande se rechaza mirando Content-Length, sin parsear el
-    multipart (no hay MAX_CONTENT_LENGTH global: personajes/marca suben videos)."""
+    multipart (el MAX_CONTENT_LENGTH global es el de un video, 256 MB:
+    personajes/marca suben videos; esta ruta tiene su propio tope)."""
     d = app["dashboard"]
-    assert d.app.config.get("MAX_CONTENT_LENGTH") is None
+    assert d.app.config.get("MAX_CONTENT_LENGTH") == d.MAX_BYTES_PETICION > 12 * 1024 * 1024
     r = app["c"].post("/cliente/acme/productos/importar/archivo",
                       data={"archivo": (io.BytesIO(b"x" * (12 * 1024 * 1024)), "enorme.csv")},
                       content_type="multipart/form-data")
@@ -754,7 +756,7 @@ def test_pedidos_por_experimento(app, base_temporal):
 # --- Catálogo: activo de categoría producto ⇄ fila producto (manual) --------
 
 def _foto(nombre="a.jpg"):
-    return (io.BytesIO(b"\xff\xd8\xff\xe0fake-jpg"), nombre)
+    return (io.BytesIO(JPG_VALIDO), nombre)
 
 
 def _crear_activo(c, nombre="Cojín Azul", categoria="producto", **extra):
