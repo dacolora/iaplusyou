@@ -33,8 +33,12 @@ TOKENS_POR_CARACTER = 1 / 3.5          # conservador para español
 # el estimado del botón la cuenta (~1,4 tokens por palabra en español).
 TOKENS_DOCTRINA = int(len(doctrina.texto("investigar").split()) * 1.4)
 TOKENS_PROMPT = 800 + TOKENS_DOCTRINA   # instrucciones + doctrina por llamada
-TOKENS_SALIDA_ESTIMADO_NUCLEOS = 1500  # lo que suele ocupar la pasada 1
-TOKENS_SALIDA_ESTIMADO_SUBS = 3000     # por núcleo, pasada 2
+# Medido en la prueba real del 2026-10-01 (estudio 3 de colorado_forja, 94 comentarios -> 4 núcleos,
+# 14 subs: 47 589 tokens de salida reales): el pensamiento adaptativo de claude-sonnet-5 se cobra
+# como salida y `_llamar` no manda `thinking`, así que la salida esperada de cada llamada sube con lo
+# que de verdad pasó. Con estos valores, 1 núcleo + 4 sub-avatares ya reproducen esa cifra.
+TOKENS_SALIDA_ESTIMADO_NUCLEOS = 5000  # lo que suele ocupar la pasada 1
+TOKENS_SALIDA_ESTIMADO_SUBS = 10000    # por núcleo, pasada 2
 # Los tres topes de salida de abajo son un corte, no el costo (el estimado sigue en
 # TOKENS_SALIDA_ESTIMADO_*): el pensamiento adaptativo de claude-sonnet-5 gasta del mismo tope
 # y con uno chico la respuesta llega vacía (prueba real 2026-10-01, estudio 3 de colorado_forja:
@@ -43,7 +47,7 @@ TOKENS_SALIDA_ESTIMADO_SUBS = 3000     # por núcleo, pasada 2
 MAX_TOKENS_NUCLEOS = 16000
 MAX_TOKENS_SUBS = 16000
 TOKENS_SUB_JSON = 900                  # un sub-avatar incompleto dentro del prompt de completado
-TOKENS_SALIDA_ESTIMADO_COMPLETAR = 1500  # por núcleo, pasada de completado
+TOKENS_SALIDA_ESTIMADO_COMPLETAR = 5000  # por núcleo, pasada de completado (misma medición del 2026-10-01)
 MAX_TOKENS_COMPLETAR = 16000           # mismo tope y mismo motivo que arriba
 MAX_COMENTARIOS_COMPLETAR = 200        # comentarios que acompañan un completado de avatares ya guardados
 MARCA_COMPLETAR = "Estos sub-avatares quedaron incompletos"

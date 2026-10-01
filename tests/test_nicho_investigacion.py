@@ -402,7 +402,9 @@ def test_estimar_suma_plataformas_claude_y_avatares(monkeypatch):
     monkeypatch.setattr(avatares, "estimar_costo_maximo", lambda: {"usd": 0.4})
     e = inv.estimar({}, "SE", ["amazon", "tiktok_shop"], ["reddit"], inv.TOPES_DEFECTO)
     assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.18 and e["filas"][0]["resenas_usd"] == 1.35
-    assert e["avatares_usd"] == 0.4 and 0 < e["claude_usd"] < 0.2
+    # claude_usd sale de _tokens_claude (amazon + tiktok_shop buscan las dos en sueco: un idioma)
+    entrada_cl, salida_cl = inv._tokens_claude(2, inv.TOPES_DEFECTO, 1)
+    assert e["avatares_usd"] == 0.4 and e["claude_usd"] == inv._centavos(inv.costo_claude(entrada_cl, salida_cl)) > 0
     assert e["total_usd"] == round(0.18 + 1.35 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
     otro = inv.estimar({}, "SE", ["meli"], [], inv.TOPES_DEFECTO)["filas"][0]           # MELI no está en Suecia: busca en México
     assert (otro["mercado"], otro["sitio"]) == ("otro", "MX")
@@ -454,6 +456,16 @@ def test_consultas_y_seleccion_con_claude(monkeypatch):
     monkeypatch.setattr(avatares, "_llamar", lambda t, m: ('{"consultas": ["solo una"]}', 10, 5))
     with pytest.raises(avatares.AnalisisInvalido):
         inv.consultas_con_claude(est, "SE")                                               # menos de 2 consultas no sirve
+
+
+def test_tokens_claude_salida_es_siempre_el_tope_de_las_dos_llamadas():
+    """El pensamiento adaptativo de claude-sonnet-5 se cobra como salida y nunca pasa `max_tokens`
+    (medido en la prueba real del 2026-10-01): la salida del estimado es siempre la suma de los
+    dos topes, sin importar cuántas plataformas o idiomas entren."""
+    from nicho import investigacion as inv
+    for n in (0, 1, 2, 5):
+        for k in (1, 2, 3):
+            assert inv._tokens_claude(n, inv.TOPES_DEFECTO, k)[1] == inv.MAX_TOKENS_CONSULTAS + inv.MAX_TOKENS_SELECCION
 
 
 def test_estimar_costo_maximo():

@@ -42,6 +42,16 @@ def test_estimar_costo_y_costo_real(monkeypatch):
     assert avatares.costo_real(1_000_000, 0) == pytest.approx(1.0) and avatares.estimar_costo(lista)["modelo"] == "claude-haiku-4-5"
 
 
+def test_estimado_de_salida_reproduce_la_medicion_real():
+    """Prueba de centavos en producción (2026-10-01, estudio 3 de colorado_forja): 94 comentarios
+    -> 4 núcleos, 14 subs, 47 589 tokens de salida reales -- el pensamiento adaptativo de
+    claude-sonnet-5 se cobra como salida y `_llamar` no manda `thinking`. Con las constantes
+    calibradas, 1 núcleo + 4 sub-avatares ya alcanzan esa cifra (lo que de verdad pasó)."""
+    from nicho import avatares
+    salida_1_nucleo_4_subs = avatares.TOKENS_SALIDA_ESTIMADO_NUCLEOS + 4 * avatares.TOKENS_SALIDA_ESTIMADO_SUBS
+    assert salida_1_nucleo_4_subs >= 45000
+
+
 NUCLEOS_JSON = {"nucleos": [
     {"nombre": "Lavar sin cargar peso", "deseo": "Quiero que lavar sea fácil y que limpie bien", "resumen": "Gente cansada de garrafas", "comentarios": [1, 2, 2, 99, "3"]},
     {"nombre": "Repetido", "deseo": "Quiero lo mismo", "resumen": "", "comentarios": [1]},

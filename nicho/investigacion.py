@@ -46,10 +46,12 @@ ETIQUETAS_PASO = {"consultas": N_("consultas"), "buscar:amazon": N_("buscar en A
 TOPES_DEFECTO = {"consultas": 3, "productos_por_consulta": 20, "productos_elegidos": 15, "resenas_por_producto": 100}
 LIMITES = {"consultas": (1, 4), "productos_por_consulta": (5, 40), "productos_elegidos": (3, 30), "resenas_por_producto": (20, 200)}
 MAX_FILAS_SELECCION = 300
-# Topes de salida de las dos llamadas: son un corte, no el costo. El pensamiento adaptativo
-# gasta del mismo tope, así que van con margen: las consultas traen una lista por idioma en
-# la misma respuesta (Parte 4 §2), y la selección, 300 productos × ~25 tokens, que ya pasan
-# de 6 000. Ninguno llega al límite del SDK para una llamada sin streaming (≈ 21 333).
+# Topes de salida de las dos llamadas -- y también la salida que cuenta el estimado
+# (`_tokens_claude`): el pensamiento adaptativo de claude-sonnet-5 se cobra como salida y nunca
+# puede pasar de `max_tokens` (medido en la prueba real del 2026-10-01), así que el tope ES el peor
+# caso, no una cota aparte. Van con margen: las consultas traen una lista por idioma en la misma
+# respuesta (Parte 4 §2), y la selección, 300 productos × ~25 tokens, que ya pasan de 6 000. Ninguno
+# llega al límite del SDK para una llamada sin streaming (≈ 21 333).
 MAX_TOKENS_CONSULTAS = 6000
 MAX_TOKENS_SELECCION = 16000
 IDIOMAS = plataformas.IDIOMA_POR_PAIS
@@ -228,7 +230,7 @@ def _tokens_claude(n_plataformas, topes, n_idiomas=1):
     productos = n_plataformas * topes["consultas"] * topes["productos_por_consulta"]
     de_mas = max(0, int(n_idiomas) - 1)              # cada idioma de más: su lista de búsquedas en la misma llamada
     entrada = 1500 + 100 + 600 + 80 * productos + 60 * de_mas
-    salida = 100 + 25 * productos + 20 * topes["consultas"] * de_mas
+    salida = MAX_TOKENS_CONSULTAS + MAX_TOKENS_SELECCION  # el peor caso real: la salida nunca pasa su tope (pensamiento incluido)
     return entrada, salida
 
 

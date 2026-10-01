@@ -83,7 +83,11 @@ def test_idiomas_necesarios_y_estimado_por_idioma(monkeypatch):
     assert inv.idiomas_necesarios("SE", ["amazon", "meli"]) == ["sv", "es"] and inv.idiomas_necesarios("BR", []) == ["pt"]
     assert inv.idiomas_necesarios("US", ["amazon", "walmart", "aliexpress"]) == ["en"]
     un_idioma, dos = inv._tokens_claude(2, inv.TOPES_DEFECTO, 1), inv._tokens_claude(2, inv.TOPES_DEFECTO, 2)
-    assert dos[0] > un_idioma[0] and dos[1] > un_idioma[1] and inv._tokens_claude(2, inv.TOPES_DEFECTO) == un_idioma
+    # la salida es siempre el tope de las dos llamadas (el pensamiento adaptativo se cobra como
+    # salida y nunca lo pasa, medido en la prueba real del 2026-10-01): un idioma de más solo sube
+    # la entrada, nunca la salida
+    assert dos[0] > un_idioma[0] and dos[1] == un_idioma[1] == inv.MAX_TOKENS_CONSULTAS + inv.MAX_TOKENS_SELECCION
+    assert inv._tokens_claude(2, inv.TOPES_DEFECTO) == un_idioma
     monkeypatch.setattr(avatares, "estimar_costo_maximo", lambda: {"usd": 0.4})
     vistos, real = [], inv._tokens_claude
     monkeypatch.setattr(inv, "_tokens_claude", lambda n, topes, n_idiomas=1: vistos.append((n, n_idiomas)) or real(n, topes, n_idiomas))
