@@ -17,7 +17,7 @@ import referencias_flowplus
 import trabajos
 import usuarios
 from final_edition import biblioteca
-from guiones import clips, config, datos, duracion, escenas, imagenes, lectura, notion, plantillas, recorte, refinador
+from guiones import clips, config, datos, duracion, escenas, imagenes, lectura, medios, notion, plantillas, recorte, refinador
 from guiones.refinador import Conflicto, DatoInvalido, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
 from providers import flowplus_modelos
@@ -474,20 +474,6 @@ def escena_quitar(cliente, vid):
     return jsonify({"video_id": vid})
 
 
-def _url_para_bandeja(cliente, img):
-    """URL pública de una imagen de escena para la bandeja de Crear: lo subido
-    ya está en R2; una foto del Catálogo se sube con la misma clave que usa
-    Crear al generar (`cf_crear_video`), así que no se duplica."""
-    if not img.get("activo_id"):
-        return img["url"]
-    activo = catalogo_productos.encontrar(cliente, img["activo_id"], categoria=img["categoria"])
-    if activo is None:
-        raise Conflicto(gettext("«%(nombre)s» ya no está en el Catálogo.", nombre=img.get("nombre") or img["activo_id"]))
-    carpeta = catalogo_productos.CATEGORIAS[activo["categoria"]]["carpeta"]
-    ruta = activo["representativa"]
-    return r2_uploader.upload_image(ruta, f"clientes/{cliente}/{carpeta}/{activo['id']}/{os.path.basename(ruta)}")
-
-
 @bp.post("/videos/<int:vid>/escenas/<int:indice>/crear")
 def escena_a_crear(cliente, vid, indice):
     """«Llevar a Crear» (spec 2026-09-30): la bandeja de Crear se REEMPLAZA con
@@ -509,7 +495,7 @@ def escena_a_crear(cliente, vid, indice):
         if prompt is None:
             raise Conflicto(gettext("Esta escena todavía no tiene su prompt en el chat."))
         imagenes = escenas.imagenes_para_crear(v, indice)
-        urls = [_url_para_bandeja(cliente, x["imagen"]) for x in imagenes]
+        urls = [medios.url_publica(cliente, x["imagen"]) for x in imagenes]
     except ErrorRefinador as e:
         return _error(e)
     except Exception:  # noqa: BLE001 — subir una foto del Catálogo a R2 puede fallar

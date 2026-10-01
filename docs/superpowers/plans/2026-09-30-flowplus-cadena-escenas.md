@@ -32,7 +32,8 @@ ffmpeg, Cloudflare R2, Jinja + JS sin framework, Flask-Babel.
 
 - `kling-elements-advanced` exige `refer_images` (1–3): con la misma ficha como `frontal_image` y como única
   `refer_images` funciona (7–12 s, US$ 0,01). La respuesta trae `outputs[0].element_id`.
-- (Se completa con el resultado de las escenas 1 y 2: formato de `element_list`, si arranca en el fotograma y el formato.)
+- `element_list` = `[{"element_id": "…"}]` (aceptado). Escena 2 desde el último cuadro de la 1: 1080×1920, primer
+  cuadro a 2/255 del fotograma, Sophia igual. Kling tarda ~4,5–5,5 min por escena de 5 s.
 
 ## Archivos
 
