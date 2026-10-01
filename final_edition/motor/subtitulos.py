@@ -112,6 +112,22 @@ def ventanas(palabras, max_palabras=4, max_ms=1800, max_caracteres=None):
     return [{"t_ms": v[0]["t_ms"], "dur_ms": v[-1]["t_ms"] + v[-1]["dur_ms"] - v[0]["t_ms"], "palabras": v} for v in out]
 
 
+# Revisión final de la capa 5a: la caja de BorderStyle=3. libass la pinta con
+# OutlineColour (BorderStyle 4 sería el que usa BackColour) y su margen
+# alrededor del texto es el ancho de Outline; la vista previa pinta la misma
+# caja. Margen por línea: round(max(grosor, tam_px × 0,08)) en píxeles del
+# video (PlayRes = el video). Un estilo sin caja tiene margen 0.
+CAJA_POR_TAM = 0.08
+
+
+def margen_caja(e, tam_px):
+    """El margen de la caja de un estilo (`_ESTILOS[...]`) para una línea de
+    `tam_px`; 0 si el estilo no lleva caja (borde 1)."""
+    if e["borde"] != 3:
+        return 0
+    return round(max(e["grosor"], tam_px * CAJA_POR_TAM))
+
+
 def _estilo_id_valido(subtitulos):
     estilo_id = (subtitulos or {}).get("estilo_id") or "karaoke"
     return estilo_id if estilo_id in _ESTILOS else "karaoke"
@@ -131,9 +147,13 @@ def estilo_efectivo(subtitulos):
         resaltado = sub.get("resaltado") or e["resaltado"]
     else:
         resaltado = None
-    return {"id": estilo_id, "tam_base_px": round(e["tam"] * escala), "resaltado": resaltado,
+    tam_base_px = round(e["tam"] * escala)
+    # `caja`: el color de la caja (el fondo del estilo, con su transparencia)
+    # en un estilo con borde 3, si no None; `caja_px`: su margen al tamaño base.
+    return {"id": estilo_id, "tam_base_px": tam_base_px, "resaltado": resaltado,
             "negrita": e["negrita"], "borde": e["borde"], "grosor": e["grosor"], "sombra": e["sombra"],
-            "primario": e["primario"], "contorno": e["contorno"], "fondo": e["fondo"], "mayusculas": e["mayusculas"]}
+            "primario": e["primario"], "contorno": e["contorno"], "fondo": e["fondo"], "mayusculas": e["mayusculas"],
+            "caja": e["fondo"] if e["borde"] == 3 else None, "caja_px": margen_caja(e, tam_base_px)}
 
 
 def eventos(subtitulos):
@@ -170,13 +190,14 @@ def eventos(subtitulos):
         largo_linea = len(" ".join(p["texto"] for p in palabras_linea))
         factor = min(1.0, e["max_caracteres"] / largo_linea) if (e["max_caracteres"] and largo_linea) else 1.0
         tam_px = round(e["tam"] * escala * factor)
+        caja_px = margen_caja(e, tam_px)
         if e["resalta"]:
             for j, p in enumerate(palabras_linea):
                 fin_j = palabras_linea[j + 1]["t_ms"] if j + 1 < len(palabras_linea) else fin_efectivo
-                out.append({"t_ms": p["t_ms"], "dur_ms": fin_j - p["t_ms"], "tam_px": tam_px,
+                out.append({"t_ms": p["t_ms"], "dur_ms": fin_j - p["t_ms"], "tam_px": tam_px, "caja_px": caja_px,
                            "palabras": [{"texto": pp["texto"], "resaltada": k == j} for k, pp in enumerate(palabras_linea)]})
         else:
-            out.append({"t_ms": v["t_ms"], "dur_ms": fin_efectivo - v["t_ms"], "tam_px": tam_px,
+            out.append({"t_ms": v["t_ms"], "dur_ms": fin_efectivo - v["t_ms"], "tam_px": tam_px, "caja_px": caja_px,
                        "palabras": [{"texto": p["texto"], "resaltada": False} for p in palabras_linea]})
     return out
 
@@ -236,22 +257,29 @@ def generar_ass(subtitulos, formato, fuente_nombre="Inter", ventana=None):
     ef = estilo_efectivo(sub)
     y = int(round(float(sub.get("posicion", 0.78)) * alto))
     x = ancho // 2
+    con_caja = ef["caja"] is not None
+    color_borde = ef["caja"] if con_caja else ef["contorno"]
+    ancho_borde = ef["caja_px"] if con_caja else ef["grosor"]
     lineas = [
         "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {ancho}", f"PlayResY: {alto}", "WrapStyle: 2", "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        # SecondaryColour = primario (D7: ya no hay `\k`, no se usa).
-        f"Style: {estilo_id},{fuente_nombre},{ef['tam_base_px']},{ef['primario']},{ef['primario']},{ef['contorno']},{ef['fondo']},"
-        f"{ef['negrita']},0,0,0,100,100,0,0,{ef['borde']},{ef['grosor']},{ef['sombra']},5,40,40,0,1",
+        # SecondaryColour = primario (D7: ya no hay `\k`, no se usa). Con
+        # caja (borde 3), OutlineColour es el color de la caja y Outline su
+        # margen (así la pinta libass); sin caja, el contorno y su grosor.
+        f"Style: {estilo_id},{fuente_nombre},{ef['tam_base_px']},{ef['primario']},{ef['primario']},{color_borde},{ef['fondo']},"
+        f"{ef['negrita']},0,0,0,100,100,0,0,{ef['borde']},{ancho_borde},{ef['sombra']},5,40,40,0,1",
         "", "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
     for ev in evs:
         fs = f"{{\\fs{ev['tam_px']}}}" if ev["tam_px"] != ef["tam_base_px"] else ""
+        # una línea achicada lleva también el margen de SU caja
+        bord = f"{{\\bord{ev['caja_px']}}}" if con_caja and ev["caja_px"] != ef["caja_px"] else ""
         texto = _texto_evento(ev, ef)
         lineas.append(f"Dialogue: 0,{_tiempo_ass(ev['t_ms'])},{_tiempo_ass(ev['t_ms'] + ev['dur_ms'])},{estilo_id},,0,0,0,,"
-                      f"{{\\an5\\pos({x},{y})}}{fs}{texto}")
+                      f"{{\\an5\\pos({x},{y})}}{fs}{bord}{texto}")
     return "\n".join(lineas) + "\n"
 
 

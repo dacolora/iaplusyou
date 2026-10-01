@@ -995,6 +995,19 @@ function colapsarEspacios(s) {
   return String(s ?? "").trim().replace(/\s+/g, " ");
 }
 
+// Revisión final de la capa 5a: los subtítulos del video final salen con
+// Inter, que no trae emojis (libass dibujaría una caja vacía) y la vista
+// previa sí los mostraría. Una corrección escrita se guarda SIN ellos: los
+// pictogramas (menos © ® ™, que la fuente trae), las banderas, los tonos de
+// piel y lo que los une (ZWJ, selectores de variante, el «keycap», las
+// etiquetas de subdivisión); después se colapsan los espacios.
+const EMOJI_SUBTITULO_RE =
+  /(?![\u00A9\u00AE\u2122])\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|[\u200D\uFE0E\uFE0F\u20E3]|[\u{E0020}-\u{E007F}]/gu;
+
+export function sinEmojis(texto) {
+  return colapsarEspacios(String(texto ?? "").replace(EMOJI_SUBTITULO_RE, ""));
+}
+
 function colorSinAlfa(v, nombre) {
   if (typeof v !== "string" || !/^#[0-9A-Fa-f]{6}$/.test(v)) throw new OperacionInvalida(`${nombre} debe ser un color #RRGGBB.`);
   return v.toUpperCase();
@@ -1054,7 +1067,11 @@ export function ponerFuentesSubtitulos(doc, idioma, fuentes, info = {}) {
 // corrección (y el objeto por material, si queda vacío); `""` quita la
 // palabra. `info[materialId].palabras` (Tarea 3) es la lista conocida de
 // ESE material: un índice fuera de ella es un error (la palabra ya no
-// existe, o ese material no se transcribió).
+// existe, o ese material no se transcribió). Los emojis se quitan
+// (`sinEmojis`: el video final no los dibuja); si lo escrito era SOLO
+// emojis, no se toma como «quitar la palabra» — eso sería borrarla sin que
+// la persona lo pidiera —: se rechaza con un aviso en palabras. El largo se
+// cuenta en caracteres, como documento.validar.
 export function corregirPalabra(doc, materialId, indice, texto, info = {}) {
   const res = structuredClone(doc);
   const palabras = info?.[materialId]?.palabras;
@@ -1063,8 +1080,9 @@ export function corregirPalabra(doc, materialId, indice, texto, info = {}) {
     throw new OperacionInvalida(t("op.palabra_no_existe"));
   }
   const original = colapsarEspacios(palabras[i]?.texto);
-  const valor = texto === null || texto === undefined ? null : colapsarEspacios(texto);
-  if (valor !== null && valor.length > MAX_CORRECCION) throw new OperacionInvalida(t("op.palabra_larga"));
+  const valor = texto === null || texto === undefined ? null : sinEmojis(texto);
+  if (valor === "" && colapsarEspacios(texto) !== "") throw new OperacionInvalida(t("op.palabra_solo_emoji"));
+  if (valor !== null && [...valor].length > MAX_CORRECCION) throw new OperacionInvalida(t("op.palabra_larga"));
   const sub = { ...(res.subtitulos || {}) };
   const correcciones = { ...(sub.correcciones || {}) };
   const clave = String(materialId);

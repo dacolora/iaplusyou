@@ -742,6 +742,27 @@ test("corregirPalabra recorta espacios, borra la corrección al volver al origin
   invalida(() => op.corregirPalabra(docBase(), 2, 0, "x".repeat(121), INFO_SUB), /120/);
 });
 
+// Revisión final (m3c): el video final dibuja los subtítulos con Inter, que no
+// trae emojis, y la vista previa sí los mostraría: se quitan al corregir (con
+// sus uniones y variantes), y una corrección que era SOLO emojis no borra la
+// palabra en silencio — se rechaza con un aviso en palabras.
+test("corregirPalabra quita los emojis; solo emojis se rechaza; el largo se cuenta en caracteres", () => {
+  const con = op.corregirPalabra(docBase(), 2, 0, "Hola 😀 👍🏽 mundo", INFO_SUB).doc;
+  assert.deepEqual(con.subtitulos.correcciones, { 2: { 0: "Hola mundo" } });
+  const familia = op.corregirPalabra(docBase(), 2, 0, "👨‍👩‍👧familia❤️🇨🇴", INFO_SUB).doc;
+  assert.deepEqual(familia.subtitulos.correcciones, { 2: { 0: "familia" } });
+  const marca = op.corregirPalabra(docBase(), 2, 0, "Creatv® ™ ©", INFO_SUB).doc;      // la fuente sí los trae
+  assert.deepEqual(marca.subtitulos.correcciones, { 2: { 0: "Creatv® ™ ©" } });
+  const igual = op.corregirPalabra(docBase(), 2, 0, "Hola🎉", INFO_SUB).doc;            // sin el emoji es la original
+  assert.deepEqual(igual.subtitulos.correcciones, {});
+  invalida(() => op.corregirPalabra(docBase(), 2, 0, " 😀 🎉 ", INFO_SUB), /emoji/i);
+  assert.deepEqual(op.corregirPalabra(docBase(), 2, 1, "", INFO_SUB).doc.subtitulos.correcciones, { 2: { 1: "" } });
+  // 120 letras fuera del plano básico son 120 caracteres (240 unidades de UTF-16): entran, como en Python
+  const astral = "\u{1D538}".repeat(op.MAX_CORRECCION);
+  assert.equal(op.corregirPalabra(docBase(), 2, 0, astral, INFO_SUB).doc.subtitulos.correcciones[2][0], astral);
+  invalida(() => op.corregirPalabra(docBase(), 2, 0, astral + "\u{1D538}", INFO_SUB), /120/);
+});
+
 test("quitarLinea quita cada palabra de la línea de una", () => {
   const r = puroSinSeleccion((d) => op.quitarLinea(d, [
     { material_id: 2, indice: 0 }, { material_id: 2, indice: 1 }, { material_id: 2, indice: 2 },

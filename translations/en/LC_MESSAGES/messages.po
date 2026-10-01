@@ -8477,6 +8477,9 @@ msgstr "The ones with higher priority go first in the test loop"
 msgid "Los emojis no salen en el video final: se quitan al producirlo."
 msgstr "Emojis don't show in the final video: they're removed when it's produced."
 
+msgid "Los emojis no salen en los subtítulos: escribe la palabra con letras."
+msgstr "Emojis don't show in subtitles: type the word with letters."
+
 msgid "Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final."
 msgstr "Models perform best up to 15 s; for something longer, generate two pieces and join them later in the final edition."
 

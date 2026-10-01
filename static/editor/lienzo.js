@@ -93,7 +93,8 @@ function dibujarDentro(ctx, doc, tMs, recursos, cfg, W, H) {
 // (el `tam_px` del EVENTO, por línea, nunca por palabra) pasado a em con
 // `em_por_tam`; la palabra resaltada del evento en `resaltado` (ya un color
 // CSS, "#RRGGBB" — no pasa por colorAss, que es solo para ASS); borde 3 =
-// caja con el color de fondo, borde 1 = contorno + sombra.
+// la caja que pinta libass (color `caja` del estilo, margen `caja_px` del
+// evento, en píxeles del video), borde 1 = contorno + sombra.
 function dibujarSubtitulos(ctx, doc, tMs, cfg, W, H) {
   const estilos = cfg.subtitulos?.estilos;
   if (!estilos) return;
@@ -114,9 +115,9 @@ function dibujarSubtitulos(ctx, doc, tMs, cfg, W, H) {
   const yc = Math.round((doc.subtitulos?.posicion ?? 0.78) * H);
   const base = yc + (asc - desc) / 2;
   let x = W / 2 - total / 2;
-  if (ef.borde === 3) {
-    const pad = Math.max(ef.grosor, tam * 0.08);
-    ctx.fillStyle = colorAss(ef.fondo);
+  if (ef.borde === 3 && ef.caja) {
+    const pad = ev.caja_px ?? ef.caja_px;
+    ctx.fillStyle = colorAss(ef.caja);
     ctx.fillRect(x - pad, yc - (asc + desc) / 2 - pad, total + 2 * pad, asc + desc + 2 * pad);
   }
   textos.forEach((s, i) => {

@@ -8,8 +8,8 @@ import { resolver } from "../../static/editor/resolver.js";
 import { derivar, palabrasDe } from "../../static/editor/subtitulos_fuente.js";
 import {
   alturaDePosicion, claveDeFuente, coloresResaltado, ENCARGO_MAX_MS, encargoGuardado, estadoPanel, estilosPanel, fuenteDeClave,
-  fuentePorDefecto, fuentesDisponibles, idiomaPorDefecto, lineaEn, lineasListado, pedido, posicionDeAltura, POSICIONES,
-  resaltadoElegido, textoBoton, textoEstado, textoTiempo,
+  fuentePorDefecto, fuentesDisponibles, idiomaPorDefecto, idsSinPalabras, lineaEn, lineasListado, PalabrasPendientes, pedido,
+  posicionDeAltura, POSICIONES, resaltadoElegido, textoBoton, textoEstado, textoTiempo,
 } from "../../static/editor/subtitulos_modelo.js";
 import { ponerTextos } from "../../static/editor/textos.js";
 import { docBase } from "./doc_base.mjs";
@@ -290,4 +290,76 @@ test("encargoGuardado: el de ese trabajo, con su forma y de hace menos de 30 min
   assert.equal(encargoGuardado({ ...bueno, clave: "nada" }, bueno.job, ahora), null);
   assert.equal(encargoGuardado({ ...bueno, ids: "2" }, bueno.job, ahora), null);
   assert.equal(encargoGuardado(null, bueno.job, ahora), null);
+});
+
+// Revisión final (I1): lo que entra desde la biblioteca trae `tiene_palabras`
+// pero no `palabras` (la biblioteca no las manda); sin ellas la vista previa,
+// la fila y el listado no derivaban lo que el render sí deriva.
+test("idsSinPalabras: los materiales de la edición transcritos en el servidor cuyas palabras no llegaron", () => {
+  const doc = docBase();
+  doc.pistas.push({ id: "p_voz_2", tipo: "audio", bloqueada: false, silenciada: false, oculta: false, clips: [
+    { id: "a2", inicio_ms: 3000, duracion_ms: 1000, material_id: 7, rol_audio: "voz", recorte: { desde_ms: 0, hasta_ms: 1000 },
+      velocidad: 1, audio: { volumen: 1 }, por_destino: { es_MX: { material_id: 9 }, en: { material_id: 8 } } },
+  ] });
+  const mats = {
+    1: { id: 1, tipo: "video", tiene_palabras: true },                          // del clon: sin palabras en la página
+    2: { id: 2, tipo: "audio", tiene_palabras: true, palabras: [] },            // ya llegaron (vacías también cuentan)
+    7: { id: 7, tipo: "audio", tiene_palabras: true },
+    8: { id: 8, tipo: "audio", tiene_palabras: false },                         // sin transcribir: no hay nada que traer
+    9: { id: 9, tipo: "audio", tiene_palabras: true },                          // alternativa por destino
+    40: { id: 40, tipo: "audio", tiene_palabras: true },                        // en la página pero fuera de la edición
+  };
+  assert.deepEqual(idsSinPalabras(doc, mats), [1, 7, 9]);
+  assert.deepEqual(idsSinPalabras(doc, mats, [7, 1]), [9]);                     // lo que ya se pide no se repite
+  assert.deepEqual(idsSinPalabras(doc, {}), []);                                // material desconocido: nada
+  assert.deepEqual(idsSinPalabras(null, mats), []);
+});
+
+test("PalabrasPendientes: pide cada id una vez, aunque se revise mientras viaja, y suma lo que llega", async () => {
+  const doc = docBase();
+  let mats = { 1: { id: 1, tipo: "video", tiene_palabras: true }, 2: { id: 2, tipo: "audio", tiene_palabras: true } };
+  const pedidos = [];
+  let soltar;
+  const agregados = [];
+  const pp = new PalabrasPendientes({
+    pedir: (ids) => {
+      pedidos.push(ids);
+      return new Promise((r) => { soltar = r; });
+    },
+    agregar: (mapa) => {
+      agregados.push(mapa);
+      mats = { ...mats, ...mapa };
+      pp.revisar(doc, mats);                                       // el aviso «materiales» vuelve a revisar
+    },
+  });
+  const primero = pp.revisar(doc, mats);
+  pp.revisar(doc, mats);                                           // mientras viaja: no se pide otra vez
+  assert.deepEqual(pedidos, [[1, 2]]);
+  soltar({ 1: { id: 1, tiene_palabras: true, palabras: [{ t_ms: 0, dur_ms: 300, texto: "hola" }] },
+           2: { id: 2, tiene_palabras: true } });                  // el 2 no las trajo: no se vuelve a pedir en bucle
+  await primero;
+  assert.equal(agregados.length, 1);
+  pp.revisar(doc, mats);
+  assert.deepEqual(pedidos, [[1, 2]]);
+});
+
+test("PalabrasPendientes: si el pedido falla, la próxima revisión lo intenta de nuevo", async () => {
+  const doc = docBase();
+  const mats = { 2: { id: 2, tipo: "audio", tiene_palabras: true } };
+  const pedidos = [];
+  let falla = true;
+  const pp = new PalabrasPendientes({
+    pedir: async (ids) => {
+      pedidos.push(ids);
+      if (falla) throw new Error("sin conexión");
+      return { 2: { id: 2, tiene_palabras: true, palabras: [] } };
+    },
+    agregar: () => {},
+  });
+  await pp.revisar(doc, mats);
+  falla = false;
+  await pp.revisar(doc, mats);
+  assert.deepEqual(pedidos, [[2], [2]]);
+  await pp.revisar(doc, mats);                                     // ya llegó: no se pide más
+  assert.equal(pedidos.length, 2);
 });

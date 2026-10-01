@@ -7,9 +7,15 @@ import { redondearPar } from "./numeros.js";
 
 export const HUECO_MAX_MS = 600;
 
+// Espejo de motor/subtitulos._limpiar: llaves a paréntesis y la barra
+// invertida a «/» (libass leería `{`, `}` y `\` como órdenes).
 function limpiar(texto) {
-  return String(texto ?? "").replaceAll("{", "(").replaceAll("}", ")").replace(/\s+/g, " ").trim();
+  return String(texto ?? "").replaceAll("{", "(").replaceAll("}", ")").replaceAll("\\", "/").replace(/\s+/g, " ").trim();
 }
+
+// Largo en caracteres (puntos de código), como `len()` de Python — no en
+// unidades de UTF-16: una letra fuera del plano básico cuenta 1, no 2.
+const largo = (s) => [...s].length;
 
 // maxCaracteres (D7, capa 5a): la ventana también se cierra si la palabra
 // siguiente la haría pasar de ese largo (las palabras limpias, unidas por un
@@ -25,7 +31,7 @@ export function ventanas(palabras, maxPalabras = 4, maxMs = 1800, maxCaracteres 
       const finPrev = ult.t_ms + ult.dur_ms;
       const durSiEntra = p.t_ms + p.dur_ms - actual[0].t_ms;
       const cierraPorCaracteres = maxCaracteres != null &&
-        `${actual.map((a) => a.texto).join(" ")} ${textoP}`.length > maxCaracteres;
+        largo(`${actual.map((a) => a.texto).join(" ")} ${textoP}`) > maxCaracteres;
       if (actual.length >= maxPalabras || p.t_ms - finPrev > HUECO_MAX_MS || durSiEntra >= maxMs || cierraPorCaracteres) {
         out.push(actual);
         actual = [];
@@ -35,6 +41,17 @@ export function ventanas(palabras, maxPalabras = 4, maxMs = 1800, maxCaracteres 
   }
   if (actual.length) out.push(actual);
   return out.map((v) => ({ t_ms: v[0].t_ms, dur_ms: v[v.length - 1].t_ms + v[v.length - 1].dur_ms - v[0].t_ms, palabras: v }));
+}
+
+// La caja de los estilos con borde 3 (revisión final de la capa 5a; espejo de
+// motor/subtitulos.margen_caja): libass la pinta con OutlineColour y su
+// margen es el ancho de Outline; aquí se decide ese margen para una línea de
+// `tamPx` (round(max(grosor, tamPx × 0,08)) en píxeles del video), 0 sin caja.
+export const CAJA_POR_TAM = 0.08;
+
+export function margenCaja(e, tamPx) {
+  if (e.borde !== 3) return 0;
+  return redondearPar(Math.max(e.grosor, tamPx * CAJA_POR_TAM));
 }
 
 // estiloId válido para ese documento: el de `subtitulos.estilo_id` si existe
@@ -54,10 +71,12 @@ export function estiloEfectivo(subtitulos, estilos) {
   const e = estilos[estiloId];
   const escala = Number(sub.escala ?? 1.0);
   const resaltado = e.resalta ? (sub.resaltado || e.resaltado) : null;
+  const tamBase = redondearPar(e.tam * escala);
   return {
-    id: estiloId, tam_base_px: redondearPar(e.tam * escala), resaltado,
+    id: estiloId, tam_base_px: tamBase, resaltado,
     negrita: e.negrita, borde: e.borde, grosor: e.grosor, sombra: e.sombra,
     primario: e.primario, contorno: e.contorno, fondo: e.fondo, mayusculas: e.mayusculas,
+    caja: e.borde === 3 ? e.fondo : null, caja_px: margenCaja(e, tamBase),
   };
 }
 
@@ -89,20 +108,21 @@ export function eventos(subtitulos, estilos) {
       finEfectivo = finNatural;
     }
     const palabrasLinea = v.palabras;
-    const largoLinea = palabrasLinea.map((p) => p.texto).join(" ").length;
+    const largoLinea = largo(palabrasLinea.map((p) => p.texto).join(" "));
     const factor = e.max_caracteres && largoLinea ? Math.min(1.0, e.max_caracteres / largoLinea) : 1.0;
     const tamPx = redondearPar(e.tam * escala * factor);
+    const cajaPx = margenCaja(e, tamPx);
     if (e.resalta) {
       palabrasLinea.forEach((p, j) => {
         const finJ = j + 1 < palabrasLinea.length ? palabrasLinea[j + 1].t_ms : finEfectivo;
         out.push({
-          t_ms: p.t_ms, dur_ms: finJ - p.t_ms, tam_px: tamPx,
+          t_ms: p.t_ms, dur_ms: finJ - p.t_ms, tam_px: tamPx, caja_px: cajaPx,
           palabras: palabrasLinea.map((pp, k) => ({ texto: pp.texto, resaltada: k === j })),
         });
       });
     } else {
       out.push({
-        t_ms: v.t_ms, dur_ms: finEfectivo - v.t_ms, tam_px: tamPx,
+        t_ms: v.t_ms, dur_ms: finEfectivo - v.t_ms, tam_px: tamPx, caja_px: cajaPx,
         palabras: palabrasLinea.map((p) => ({ texto: p.texto, resaltada: false })),
       });
     }

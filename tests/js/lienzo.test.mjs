@@ -62,7 +62,8 @@ function ctxFalsoSubtitulos() {
     pila: 0, fillStyle: "", font: "", lineWidth: 0, strokeStyle: "", textBaseline: "", lineJoin: "",
     llamadas,
     save() { this.pila++; }, restore() { this.pila--; },
-    fillRect() {}, drawImage() {},
+    fillRect(x, y, w, h) { llamadas.push({ tipo: "fillRect", x, y, w, h, fillStyle: this.fillStyle }); },
+    drawImage() {},
     measureText(s) {
       return { width: String(s).length * 10, actualBoundingBoxAscent: 8, actualBoundingBoxDescent: 2 };
     },
@@ -70,6 +71,9 @@ function ctxFalsoSubtitulos() {
     strokeText(s, x, y) { llamadas.push({ tipo: "strokeText", texto: s, x, y, strokeStyle: this.strokeStyle, lineWidth: this.lineWidth }); },
   };
 }
+
+// sin el fondo negro del cuadro entero (lo primero que pinta dibujarCuadro)
+const sinFondo = (llamadas) => llamadas.filter((l) => !(l.tipo === "fillRect" && l.x === 0 && l.y === 0 && l.w === 1080));
 
 function docSoloSubtitulos(subtitulos) {
   return { formato: "9:16", pistas: [], subtitulos };
@@ -99,5 +103,33 @@ test("dibujarSubtitulos: sin evento en ese instante no dibuja nada", () => {
   const cfg = { ...CFG, subtitulos: { estilos: EVENTOS.estilos, em_por_tam: 1.0 } };
   const ctx = ctxFalsoSubtitulos();
   dibujarCuadro(ctx, docSoloSubtitulos(caso.subtitulos), 0, recursosVacios(), cfg);
-  assert.deepEqual(ctx.llamadas, []);
+  assert.deepEqual(sinFondo(ctx.llamadas), []);
+});
+
+// Revisión final (I2): la caja de borde 3 es la que pinta libass — el color de
+// `caja` (el fondo del estilo, con su transparencia) y el margen `caja_px` del
+// EVENTO (round(max(grosor, tam_px × 0,08)) en píxeles del video), no un
+// margen sacado del tamaño en em del navegador.
+test("dibujarSubtitulos (karaoke): la caja con el color y el margen de libass", () => {
+  const caso = EVENTOS.casos.find((c) => c.nombre === "karaoke por defecto: una palabra resaltada a la vez");
+  const cfg = { ...CFG, subtitulos: { estilos: EVENTOS.estilos, em_por_tam: 1.25 } };
+  const ctx = ctxFalsoSubtitulos();
+  dibujarCuadro(ctx, docSoloSubtitulos(caso.subtitulos), 500, recursosVacios(), cfg);
+  const cajas = sinFondo(ctx.llamadas).filter((l) => l.tipo === "fillRect");
+  assert.equal(cajas.length, 1);
+  // «Hola mundo esto es»: 40 + 50 + 40 + 20 + 3 espacios de 10 = 180; margen 5 por lado
+  assert.equal(cajas[0].w, 190);
+  assert.equal(cajas[0].h, 10 + 2 * 5);
+  assert.equal(cajas[0].fillStyle, "rgba(0, 0, 0, 0.6)");
+});
+
+test("dibujarSubtitulos (palabra_grande): sin caja, el contorno de siempre", () => {
+  const caso = EVENTOS.casos.find((c) => c.nombre === "palabra_grande: una palabra por línea, en mayúsculas, estirada");
+  const cfg = { ...CFG, subtitulos: { estilos: EVENTOS.estilos, em_por_tam: 1.0 } };
+  const ctx = ctxFalsoSubtitulos();
+  dibujarCuadro(ctx, docSoloSubtitulos(caso.subtitulos), 100, recursosVacios(), cfg);
+  assert.equal(sinFondo(ctx.llamadas).filter((l) => l.tipo === "fillRect").length, 0);
+  const trazo = ctx.llamadas.find((l) => l.tipo === "strokeText");
+  assert.equal(trazo.lineWidth, 10);
+  assert.equal(trazo.strokeStyle, "rgba(0, 0, 0, 1)");
 });

@@ -108,6 +108,15 @@ def casos_ventanas():
         [{"t_ms": 0, "dur_ms": 300, "texto": "Hola"}, {"t_ms": 300, "dur_ms": 300, "texto": "mundo"},
          {"t_ms": 600, "dur_ms": 300, "texto": "extraordinario"}],
         [{"t_ms": 0, "dur_ms": 300, "texto": "a" * 30}],
+        # revisión final (m3): la barra invertida pasa a «/» (libass la leería
+        # como una orden) y el largo se cuenta en caracteres, no en unidades de
+        # UTF-16: «𝔸𝔹𝔺𝔻𝔼𝔽» son 6 letras (12 unidades) — tres caben en 22.
+        [{"t_ms": 0, "dur_ms": 300, "texto": "a\\b"}, {"t_ms": 300, "dur_ms": 300, "texto": "c\\\\d"}],
+        [{"t_ms": 0, "dur_ms": 300, "texto": "\U0001D538\U0001D539\U0001D53A\U0001D53B\U0001D53C\U0001D53D"},
+         {"t_ms": 300, "dur_ms": 300, "texto": "\U0001D538\U0001D539\U0001D53A\U0001D53B\U0001D53C\U0001D53D"},
+         {"t_ms": 600, "dur_ms": 300, "texto": "\U0001D538\U0001D539\U0001D53A\U0001D53B\U0001D53C\U0001D53D"}],
+        [{"t_ms": 0, "dur_ms": 300, "texto": "acción"}, {"t_ms": 300, "dur_ms": 300, "texto": "ñandú"},
+         {"t_ms": 600, "dur_ms": 300, "texto": "pingüino"}, {"t_ms": 900, "dur_ms": 300, "texto": "ok"}],
     )
     for p in extra_parametros:
         casos.append({"palabras": p, "max_palabras": 4, "max_ms": 1800, "max_caracteres": 22,
@@ -160,6 +169,15 @@ def casos_eventos():
                                        {"t_ms": 901, "dur_ms": 200, "texto": "mundo"}]))
     agregar("sin palabras: sin eventos", _ev_sub("karaoke", []))
     agregar("estilo desconocido cae a karaoke", _ev_sub("inventado", _EV_PAL[:1]))
+    # revisión final (I2): la caja de una línea achicada se achica con ella (\\bord)
+    agregar("caja: línea más larga que el tope achica su tamaño y su margen",
+           _ev_sub("caja", [{"t_ms": 0, "dur_ms": 500, "texto": "a" * 30}]))
+    agregar("karaoke a escala 1.5: margen de la caja más grande", _ev_sub("karaoke", _EV_PAL[:1], escala=1.5))
+    # revisión final (m3): barra invertida, tildes y letras fuera del plano básico
+    agregar("barra invertida pasa a barra", _ev_sub("karaoke", [{"t_ms": 0, "dur_ms": 300, "texto": "a\\b"}]))
+    agregar("el largo de la línea se cuenta en caracteres (plano astral)",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 300,
+                                       "texto": "\U0001D538\U0001D539\U0001D53A\U0001D53B\U0001D53C\U0001D53D\U0001D538\U0001D539"}]))
     return {"estilos": sub_mod.ESTILOS_ASS, "casos": casos}
 
 

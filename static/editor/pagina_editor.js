@@ -79,6 +79,7 @@ import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
 import { respuestaProducir } from "./producir.js";
 import { Propiedades } from "./propiedades.js";
+import { PalabrasPendientes } from "./subtitulos_modelo.js";
 import { SubtitulosPanel } from "./subtitulos_panel.js";
 import { listaY, ponerTextos, t } from "./textos.js";
 import { infoDe, VistaPrevia } from "./vista.js";
@@ -137,6 +138,22 @@ const linea = new LineaTiempo({
   },
 });
 const guardado = new Guardado({ url: datos.urls.guardar, versionN: datos.edicion.version_n, alCambiar: pintarGuardado });
+// Revisión final de la capa 5a: lo que entra a la edición desde la biblioteca
+// (una grabación transcrita, una voz con IA, una pieza de Crear) llega con
+// `tiene_palabras` pero sin `palabras`; el render las lee del servidor, así
+// que la vista previa las trae (gratis) en cuanto el material está en la
+// edición — en UN lugar, `refrescar`, por donde pasa todo cambio.
+const palabrasPendientes = new PalabrasPendientes({
+  pedir: async (ids) => {
+    const r = await fetch(`${datos.urls.materiales_por_id}?ids=${ids.join(",")}&palabras=1`,
+      { headers: { Accept: "application/json" } });
+    if (sesionTerminada(r)) return {};        // la sesión se cerró: no se insiste (los paneles ya lo dicen)
+    if (!r.ok) return null;                   // se reintenta en el próximo cambio
+    const j = await r.json().catch(() => null);
+    return j && typeof j.materiales === "object" && j.materiales ? j.materiales : null;
+  },
+  agregar: (mapa) => vista.agregarMateriales(mapa),
+});
 
 const TEXTO_GUARDADO = {
   guardado: () => t("guardado.ok"),
@@ -216,6 +233,7 @@ function refrescar(que = "documento") {
   linea.dibujar(historial.actual, { seleccion, cabezalMs: vista.tiempo() });
   pintarHerramientas();
   pintarAvisosCarga();
+  if (que === "documento" || que === "materiales") palabrasPendientes.revisar(historial.actual, vista.materiales);
   avisos.cambio(que, seleccion);
 }
 

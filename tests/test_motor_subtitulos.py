@@ -225,3 +225,61 @@ def test_escala_libass_sale_de_la_tabla_os2_de_inter():
     k = s.escala_libass()
     assert 0.6 < k < 1.0          # em más chico que Fontsize: libass mide asc+desc
     assert s.escala_libass() == k  # determinista (con caché)
+
+
+# --- Revisión final (I2): la caja de los estilos con borde 3 ---
+# libass pinta la caja opaca de BorderStyle=3 con OutlineColour, y su margen
+# es el ancho de Outline (BorderStyle 4 sería el que usa BackColour). La
+# vista previa (lienzo.js) pinta la caja con `fondo` y el margen del evento:
+# los dos motores leen `caja` (color) y `caja_px` (margen) de aquí.
+
+def _campos_style(ass):
+    return next(l for l in ass.splitlines() if l.startswith("Style:")).split(",")
+
+
+def test_estilo_efectivo_trae_el_color_y_el_margen_de_la_caja():
+    ef = s.estilo_efectivo({"estilo_id": "karaoke"})
+    assert ef["caja"] == "&H66000000&" and ef["caja_px"] == 5          # round(max(0, 64 × 0,08)) = 5
+    ef = s.estilo_efectivo({"estilo_id": "caja"})
+    assert ef["caja"] == "&H4D000000&" and ef["caja_px"] == 5          # round(4,8)
+    ef = s.estilo_efectivo({"estilo_id": "karaoke", "escala": 1.5})
+    assert ef["caja_px"] == 8                                           # round(96 × 0,08 = 7,68)
+    for estilo_id in ("palabra_grande", "minimal"):                      # sin caja: nada
+        ef = s.estilo_efectivo({"estilo_id": estilo_id})
+        assert ef["caja"] is None and ef["caja_px"] == 0
+
+
+def test_cada_evento_trae_el_margen_de_su_caja():
+    assert {e["caja_px"] for e in s.eventos({"estilo_id": "karaoke", "palabras": PAL})} == {5}
+    assert {e["caja_px"] for e in s.eventos({"estilo_id": "palabra_grande", "palabras": PAL})} == {0}
+    # una línea más larga que el tope se achica, y su caja con ella: 60 × 22/30 = 44 px -> round(3,52) = 4
+    evs = s.eventos({"estilo_id": "caja", "palabras": [{"t_ms": 0, "dur_ms": 500, "texto": "a" * 30}]})
+    assert evs[0]["tam_px"] == 44 and evs[0]["caja_px"] == 4
+
+
+def test_generar_ass_caja_con_el_color_de_fondo_en_outlinecolour_y_su_margen_en_outline():
+    for estilo_id, fondo in (("karaoke", "&H66000000&"), ("caja", "&H4D000000&")):
+        campos = _campos_style(s.generar_ass({"estilo_id": estilo_id, "posicion": 0.78, "palabras": PAL}, "9:16"))
+        assert campos[5] == fondo, estilo_id               # OutlineColour = el color de la caja
+        assert campos[15] == "3" and campos[16] == "5", estilo_id   # BorderStyle 3, Outline = margen
+        assert campos[17] == "0", estilo_id
+
+
+def test_generar_ass_estilos_sin_caja_no_cambian():
+    campos = _campos_style(s.generar_ass({"estilo_id": "palabra_grande", "posicion": 0.78, "palabras": PAL}, "9:16"))
+    assert campos[5:7] == ["&H00000000&", "&H80000000&"]
+    assert campos[15:18] == ["1", "5", "3"]
+    campos = _campos_style(s.generar_ass({"estilo_id": "minimal", "posicion": 0.78, "palabras": PAL}, "9:16"))
+    assert campos[5:7] == ["&H00000000&", "&H00000000&"]
+    assert campos[15:18] == ["1", "2", "0"]
+    assert "\\bord" not in s.generar_ass({"estilo_id": "palabra_grande", "posicion": 0.78,
+                                          "palabras": [{"t_ms": 0, "dur_ms": 500, "texto": "extraordinariamente"}]}, "9:16")
+
+
+def test_generar_ass_linea_achicada_lleva_bord_con_el_margen_de_su_caja():
+    ass = s.generar_ass({"estilo_id": "caja", "posicion": 0.78,
+                         "palabras": [{"t_ms": 0, "dur_ms": 500, "texto": "a" * 30}]}, "9:16")
+    dialogo = next(l for l in ass.splitlines() if l.startswith("Dialogue:"))
+    assert "{\\fs44}" in dialogo and "{\\bord4}" in dialogo
+    normal = s.generar_ass({"estilo_id": "caja", "posicion": 0.78, "palabras": PAL}, "9:16")
+    assert "\\bord" not in normal                           # mismo margen que el Style: sin override

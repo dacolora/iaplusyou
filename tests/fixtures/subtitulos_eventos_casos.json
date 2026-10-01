@@ -4,6 +4,8 @@
    "esperado": {
     "estilo": {
      "borde": 3,
+     "caja": "&H66000000&",
+     "caja_px": 5,
      "contorno": "&H00000000&",
      "fondo": "&H66000000&",
      "grosor": 0,
@@ -17,6 +19,7 @@
     },
     "eventos": [
      {
+      "caja_px": 5,
       "dur_ms": 400,
       "palabras": [
        {
@@ -40,6 +43,7 @@
       "tam_px": 64
      },
      {
+      "caja_px": 5,
       "dur_ms": 500,
       "palabras": [
        {
@@ -63,6 +67,7 @@
       "tam_px": 64
      },
      {
+      "caja_px": 5,
       "dur_ms": 300,
       "palabras": [
        {
@@ -86,6 +91,7 @@
       "tam_px": 64
      },
      {
+      "caja_px": 5,
       "dur_ms": 300,
       "palabras": [
        {
@@ -109,6 +115,7 @@
       "tam_px": 64
      },
      {
+      "caja_px": 5,
       "dur_ms": 400,
       "palabras": [
        {
@@ -120,6 +127,7 @@
       "tam_px": 64
      },
      {
+      "caja_px": 5,
       "dur_ms": 400,
       "palabras": [
        {
@@ -174,6 +182,8 @@
    "esperado": {
     "estilo": {
      "borde": 3,
+     "caja": "&H4D000000&",
+     "caja_px": 5,
      "contorno": "&H00000000&",
      "fondo": "&H4D000000&",
      "grosor": 0,
@@ -187,6 +197,7 @@
     },
     "eventos": [
      {
+      "caja_px": 5,
       "dur_ms": 1500,
       "palabras": [
        {
@@ -210,6 +221,7 @@
       "tam_px": 60
      },
      {
+      "caja_px": 5,
       "dur_ms": 400,
       "palabras": [
        {
@@ -221,6 +233,7 @@
       "tam_px": 60
      },
      {
+      "caja_px": 5,
       "dur_ms": 400,
       "palabras": [
        {
@@ -275,6 +288,8 @@
    "esperado": {
     "estilo": {
      "borde": 1,
+     "caja": null,
+     "caja_px": 0,
      "contorno": "&H00000000&",
      "fondo": "&H00000000&",
      "grosor": 2,
@@ -288,6 +303,7 @@
     },
     "eventos": [
      {
+      "caja_px": 0,
       "dur_ms": 500,
       "palabras": [
        {
@@ -315,6 +331,7 @@
       "tam_px": 52
      },
      {
+      "caja_px": 0,
       "dur_ms": 50,
       "palabras": [
        {
@@ -369,6 +386,8 @@
    "esperado": {
     "estilo": {
      "borde": 1,
+     "caja": null,
+     "caja_px": 0,
      "contorno": "&H00000000&",
      "fondo": "&H80000000&",
      "grosor": 5,
@@ -382,6 +401,7 @@
     },
     "eventos": [
      {
+      "caja_px": 0,
       "dur_ms": 400,
       "palabras": [
        {
@@ -393,6 +413,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 500,
       "palabras": [
        {
@@ -404,6 +425,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 300,
       "palabras": [
        {
@@ -415,6 +437,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 300,
       "palabras": [
        {
@@ -426,6 +449,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 400,
       "palabras": [
        {
@@ -437,6 +461,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 400,
       "palabras": [
        {
@@ -491,6 +516,8 @@
    "esperado": {
     "estilo": {
      "borde": 3,
+     "caja": "&H66000000&",
+     "caja_px": 3,
      "contorno": "&H00000000&",
      "fondo": "&H66000000&",
      "grosor": 0,
@@ -504,6 +531,7 @@
     },
     "eventos": [
      {
+      "caja_px": 3,
       "dur_ms": 400,
       "palabras": [
        {
@@ -519,6 +547,7 @@
       "tam_px": 38
      },
      {
+      "caja_px": 3,
       "dur_ms": 500,
       "palabras": [
        {
@@ -558,6 +587,8 @@
    "esperado": {
     "estilo": {
      "borde": 3,
+     "caja": "&H66000000&",
+     "caja_px": 8,
      "contorno": "&H00000000&",
      "fondo": "&H66000000&",
      "grosor": 0,
@@ -571,6 +602,7 @@
     },
     "eventos": [
      {
+      "caja_px": 8,
       "dur_ms": 400,
       "palabras": [
        {
@@ -586,6 +618,7 @@
       "tam_px": 96
      },
      {
+      "caja_px": 8,
       "dur_ms": 500,
       "palabras": [
        {
@@ -625,6 +658,8 @@
    "esperado": {
     "estilo": {
      "borde": 3,
+     "caja": "&H66000000&",
+     "caja_px": 5,
      "contorno": "&H00000000&",
      "fondo": "&H66000000&",
      "grosor": 0,
@@ -638,6 +673,7 @@
     },
     "eventos": [
      {
+      "caja_px": 5,
       "dur_ms": 400,
       "palabras": [
        {
@@ -668,6 +704,8 @@
    "esperado": {
     "estilo": {
      "borde": 3,
+     "caja": "&H4D000000&",
+     "caja_px": 5,
      "contorno": "&H00000000&",
      "fondo": "&H4D000000&",
      "grosor": 0,
@@ -681,6 +719,7 @@
     },
     "eventos": [
      {
+      "caja_px": 5,
       "dur_ms": 400,
       "palabras": [
        {
@@ -711,6 +750,8 @@
    "esperado": {
     "estilo": {
      "borde": 1,
+     "caja": null,
+     "caja_px": 0,
      "contorno": "&H00000000&",
      "fondo": "&H80000000&",
      "grosor": 5,
@@ -724,6 +765,7 @@
     },
     "eventos": [
      {
+      "caja_px": 0,
       "dur_ms": 500,
       "palabras": [
        {
@@ -753,6 +795,8 @@
    "esperado": {
     "estilo": {
      "borde": 1,
+     "caja": null,
+     "caja_px": 0,
      "contorno": "&H00000000&",
      "fondo": "&H80000000&",
      "grosor": 5,
@@ -766,6 +810,7 @@
     },
     "eventos": [
      {
+      "caja_px": 0,
       "dur_ms": 300,
       "palabras": [
        {
@@ -777,6 +822,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 300,
       "palabras": [
        {
@@ -788,6 +834,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 300,
       "palabras": [
        {
@@ -827,6 +874,8 @@
    "esperado": {
     "estilo": {
      "borde": 1,
+     "caja": null,
+     "caja_px": 0,
      "contorno": "&H00000000&",
      "fondo": "&H80000000&",
      "grosor": 5,
@@ -840,6 +889,7 @@
     },
     "eventos": [
      {
+      "caja_px": 0,
       "dur_ms": 800,
       "palabras": [
        {
@@ -851,6 +901,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 200,
       "palabras": [
        {
@@ -885,6 +936,8 @@
    "esperado": {
     "estilo": {
      "borde": 1,
+     "caja": null,
+     "caja_px": 0,
      "contorno": "&H00000000&",
      "fondo": "&H80000000&",
      "grosor": 5,
@@ -898,6 +951,7 @@
     },
     "eventos": [
      {
+      "caja_px": 0,
       "dur_ms": 900,
       "palabras": [
        {
@@ -909,6 +963,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 200,
       "palabras": [
        {
@@ -943,6 +998,8 @@
    "esperado": {
     "estilo": {
      "borde": 1,
+     "caja": null,
+     "caja_px": 0,
      "contorno": "&H00000000&",
      "fondo": "&H80000000&",
      "grosor": 5,
@@ -956,6 +1013,7 @@
     },
     "eventos": [
      {
+      "caja_px": 0,
       "dur_ms": 300,
       "palabras": [
        {
@@ -967,6 +1025,7 @@
       "tam_px": 110
      },
      {
+      "caja_px": 0,
       "dur_ms": 200,
       "palabras": [
        {
@@ -1001,6 +1060,8 @@
    "esperado": {
     "estilo": {
      "borde": 3,
+     "caja": "&H66000000&",
+     "caja_px": 5,
      "contorno": "&H00000000&",
      "fondo": "&H66000000&",
      "grosor": 0,
@@ -1025,6 +1086,8 @@
    "esperado": {
     "estilo": {
      "borde": 3,
+     "caja": "&H66000000&",
+     "caja_px": 5,
      "contorno": "&H00000000&",
      "fondo": "&H66000000&",
      "grosor": 0,
@@ -1038,6 +1101,7 @@
     },
     "eventos": [
      {
+      "caja_px": 5,
       "dur_ms": 400,
       "palabras": [
        {
@@ -1058,6 +1122,187 @@
       "dur_ms": 400,
       "t_ms": 0,
       "texto": "Hola"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "caja": "&H4D000000&",
+     "caja_px": 5,
+     "contorno": "&H00000000&",
+     "fondo": "&H4D000000&",
+     "grosor": 0,
+     "id": "caja",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": null,
+     "sombra": 0,
+     "tam_base_px": 60
+    },
+    "eventos": [
+     {
+      "caja_px": 4,
+      "dur_ms": 500,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 44
+     }
+    ]
+   },
+   "nombre": "caja: línea más larga que el tope achica su tamaño y su margen",
+   "subtitulos": {
+    "estilo_id": "caja",
+    "palabras": [
+     {
+      "dur_ms": 500,
+      "t_ms": 0,
+      "texto": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "caja": "&H66000000&",
+     "caja_px": 8,
+     "contorno": "&H00000000&",
+     "fondo": "&H66000000&",
+     "grosor": 0,
+     "id": "karaoke",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 0,
+     "tam_base_px": 96
+    },
+    "eventos": [
+     {
+      "caja_px": 8,
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "Hola"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 96
+     }
+    ]
+   },
+   "nombre": "karaoke a escala 1.5: margen de la caja más grande",
+   "subtitulos": {
+    "escala": 1.5,
+    "estilo_id": "karaoke",
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "caja": "&H66000000&",
+     "caja_px": 5,
+     "contorno": "&H00000000&",
+     "fondo": "&H66000000&",
+     "grosor": 0,
+     "id": "karaoke",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 0,
+     "tam_base_px": 64
+    },
+    "eventos": [
+     {
+      "caja_px": 5,
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "a/b"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 64
+     }
+    ]
+   },
+   "nombre": "barra invertida pasa a barra",
+   "subtitulos": {
+    "estilo_id": "karaoke",
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "a\\b"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 1,
+     "caja": null,
+     "caja_px": 0,
+     "contorno": "&H00000000&",
+     "fondo": "&H80000000&",
+     "grosor": 5,
+     "id": "palabra_grande",
+     "mayusculas": true,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 3,
+     "tam_base_px": 110
+    },
+    "eventos": [
+     {
+      "caja_px": 0,
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "𝔸𝔹𝔺𝔻𝔼𝔽𝔸𝔹"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 110
+     }
+    ]
+   },
+   "nombre": "el largo de la línea se cuenta en caracteres (plano astral)",
+   "subtitulos": {
+    "estilo_id": "palabra_grande",
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "𝔸𝔹𝔺𝔻𝔼𝔽𝔸𝔹"
      }
     ],
     "posicion": 0.78

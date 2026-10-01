@@ -70,6 +70,7 @@ export const ES = {
   "op.sin_sonido_escena": "Ese clip no tiene sonido de la escena todavía.",
   "op.palabra_no_existe": "Esa palabra ya no está en los subtítulos.",
   "op.palabra_larga": "Una palabra corregida puede tener hasta 120 letras.",
+  "op.palabra_solo_emoji": "Los emojis no salen en los subtítulos: escribe la palabra con letras.",
   "vista.nombre_imagen": "la imagen",
   "vista.nombre_video": "el video",
   "vista.nombre_archivo": "el archivo",

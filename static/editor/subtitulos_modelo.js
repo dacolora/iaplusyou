@@ -122,6 +122,68 @@ export function pedido(resuelto, clave, materiales = {}) {
   };
 }
 
+// ---- Las palabras que el servidor ya tiene y la página no (revisión final) ----
+
+// Los material_id de la edición — de cualquier clip, también las
+// alternativas `por_destino` de una voz — que el servidor ya transcribió
+// (`tiene_palabras`) pero cuyas palabras todavía no llegaron a la página: lo
+// que entra desde la biblioteca (una grabación transcrita, una voz con IA,
+// una pieza de Crear) llega sin ellas, y sin ellas la vista previa, la fila y
+// el listado no derivaban lo que el render (que lee `extra.palabras`) sí
+// deriva. Sin los de `excluir` (los que ya se están pidiendo). Ordenados.
+export function idsSinPalabras(doc, materiales = {}, excluir = []) {
+  const fuera = new Set((excluir ?? []).map(Number));
+  const ids = new Set();
+  const mirar = (mid) => {
+    if (mid === null || mid === undefined) return;
+    const id = Number(mid);
+    const m = materiales?.[id];
+    if (m?.tiene_palabras === true && !conPalabras(m) && !fuera.has(id)) ids.add(id);
+  };
+  for (const pista of doc?.pistas ?? []) {
+    for (const clip of pista.clips ?? []) {
+      mirar(clip.material_id);
+      for (const alt of Object.values(clip.por_destino ?? {})) mirar(alt?.material_id);
+    }
+  }
+  return [...ids].sort((a, b) => a - b);
+}
+
+// Trae (gratis) esas palabras: la página la llama en cada cambio del
+// documento o de los materiales, así que cualquier camino que sume un
+// material pasa por aquí. Un id nunca se pide dos veces a la vez, y uno que
+// ya se trajo no se vuelve a pedir (si el servidor no mandó sus palabras, no
+// se insiste en bucle: `agregar` vuelve a avisar «materiales»). Un pedido
+// que falla (`pedir` lanza o devuelve null) se reintenta en la próxima
+// revisión. `pedir(ids)` → `{id: material}` (la forma de material_para con
+// `palabras`); `agregar(mapa)` los suma a la vista previa.
+export class PalabrasPendientes {
+  constructor({ pedir, agregar }) {
+    this.pedir = pedir;
+    this.agregar = agregar;
+    this.enCamino = new Set();
+    this.traidos = new Set();
+  }
+
+  async revisar(doc, materiales) {
+    const ids = idsSinPalabras(doc, materiales, [...this.enCamino, ...this.traidos]);
+    if (!ids.length) return [];
+    for (const id of ids) this.enCamino.add(id);
+    try {
+      const mapa = await this.pedir(ids);
+      if (mapa && typeof mapa === "object") {
+        for (const id of ids) this.traidos.add(id);
+        this.agregar(mapa);
+      }
+    } catch {
+      // sin conexión: la próxima revisión lo intenta otra vez
+    } finally {
+      for (const id of ids) this.enCamino.delete(id);
+    }
+    return ids;
+  }
+}
+
 // ---- Estado del idioma del destino (D4) ----
 
 // {tipo, clave, n}: «ninguno» (sin fuentes ni palabras guardadas para este
