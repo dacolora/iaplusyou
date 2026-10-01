@@ -109,6 +109,21 @@ def marcar_estrenada(cliente, voz_id):
     materiales.actualizar_extra(cliente, voz_id, estrenada=True)
 
 
+def sintetizar(cliente, vp, texto, idioma, velocidad=None):
+    """Lee `texto` en `idioma` con la voz propia `vp` (el dict de `resolver`)
+    por MiniMax y devuelve lo de `fal_audio.tts_minimax` ({"url", "costo_usd",
+    "duracion_ms"}). Es una síntesis REAL: estrena la voz (MiniMax borra las que
+    no se usan en 7 días). No registra gasto: lo hace quien llama apenas vuelve,
+    y por eso un fallo al marcar `estrenada` (base bloqueada) no se propaga."""
+    r = fal_audio.tts_minimax(texto, vp["voice_id"], idioma, velocidad=velocidad)
+    if not vp.get("estrenada"):
+        try:
+            marcar_estrenada(cliente, vp["id"])
+        except Exception:
+            log.warning("voz propia %s: no pude marcarla estrenada", vp["id"], exc_info=True)
+    return r
+
+
 # ----------------------------------------------------------- validar ---
 
 def _nombre(form):

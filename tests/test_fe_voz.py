@@ -197,3 +197,25 @@ def test_cliente_por_kwarg_y_obligatorio(tmp_path, proveedores_falsos):
 
     voz.sintetizar(guion, "Rachel", str(tmp_path), cliente="otro")
     assert proveedores_falsos["r2"][0]["key"].startswith("clientes/otro/final_edition/tmp/")
+
+
+def test_sintetizar_con_voz_propia_lee_con_minimax(base_temporal, tmp_path, proveedores_falsos, monkeypatch):
+    import materiales
+    import voces_propias
+    v = materiales.registrar("acme", tipo="audio", origen=voces_propias.ORIGEN, url="https://r2/vp.mp3",
+                             hash=materiales.hash_clave("voz_propia", "minimax", "mmx_9"), bytes=1, duracion_ms=1000,
+                             costo_usd=3.0, extra={"nombre": "Ana", "forma": "clonada", "voice_id": "mmx_9",
+                                                   "idioma_muestra": "es", "estrenada": True})
+    llamadas = []
+    monkeypatch.setattr(fal_audio, "tts_minimax", lambda texto, voice_id, idioma, velocidad=None, timeout=180:
+                        llamadas.append((voice_id, idioma))
+                        or {"url": "https://fal/mm.mp3", "costo_usd": 0.01, "duracion_ms": 3000})
+
+    def _no_elevenlabs(*a, **k):
+        raise AssertionError("una voz propia no va por ElevenLabs")
+    monkeypatch.setattr(fal_audio, "tts", _no_elevenlabs)
+    guion = _guion([(0, 4), (4, 6), (6, 10), (10, 14), (14, 18)])
+    voz.sintetizar(guion, f"vp:{v['id']}", str(tmp_path / "a"), cliente="acme")
+    assert llamadas and set(llamadas) == {("mmx_9", guion.get("idioma") or "es")}
+    with pytest.raises(voz.ErrorPrimerBloque, match="Mis voces"):
+        voz.sintetizar(guion, "vp:999999", str(tmp_path / "b"), cliente="acme")

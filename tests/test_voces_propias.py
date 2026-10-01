@@ -332,6 +332,32 @@ def test_resolver_con_un_id_enorme_es_none(base_temporal):
     assert voces_propias.resolver("acme", "vp:" + "9" * 30) is None
 
 
+def test_sintetizar_lee_con_minimax_y_estrena_una_vez(base_temporal, fal):
+    v = voces_propias.resolver("acme", f"vp:{_voz(estrenada=False)['id']}")
+    r = voces_propias.sintetizar("acme", v, "Hola", "pt", velocidad=1.15)
+    assert r == {"url": "https://fal/estreno.mp3", "costo_usd": 0.0045, "duracion_ms": 4000}
+    assert fal == [("tts", "Hola", "mmx_1", "pt")]
+    assert voces_propias.obtener("acme", v["id"])["estrenada"] is True
+
+
+def test_sintetizar_no_pierde_lo_pagado_si_no_puede_marcar_estrenada(base_temporal, fal, monkeypatch):
+    v = voces_propias.resolver("acme", f"vp:{_voz(estrenada=False)['id']}")
+
+    def _falla(*a, **k):
+        raise RuntimeError("base bloqueada")
+    monkeypatch.setattr(voces_propias, "marcar_estrenada", _falla)
+    assert voces_propias.sintetizar("acme", v, "Hola", "es")["url"] == "https://fal/estreno.mp3"
+
+
+def test_sintetizar_con_voz_ya_estrenada_no_reescribe_la_fila(base_temporal, fal, monkeypatch):
+    v = voces_propias.resolver("acme", f"vp:{_voz(estrenada=True)['id']}")
+
+    def _no(*a, **k):
+        raise AssertionError("no debía marcarla")
+    monkeypatch.setattr(voces_propias, "marcar_estrenada", _no)
+    voces_propias.sintetizar("acme", v, "Hola", "es")
+
+
 def test_muestra_propia_en_otro_idioma_se_cobra_al_proyecto_una_vez(base_temporal, r2, fal):
     v = _voz(idioma="es", estrenada=True)
     assert voces_propias.muestra("acme", f"vp:{v['id']}", "es") == v["url"] and fal == []

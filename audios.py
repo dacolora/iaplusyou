@@ -11,7 +11,6 @@ final_edition.musica al cargar (esa importa mi_musica; la tarea la usa).
 Desde el 2026-09-30 habla diez idiomas y decide el motor por voz e idioma
 (`motor_de`): ElevenLabs Multilingual v2, Turbo v2.5 para el noruego y
 MiniMax para las voces propias (`voces_propias.py`)."""
-import logging
 import os
 import tempfile
 import time
@@ -27,8 +26,6 @@ import mi_musica
 from final_edition import cortes, mezcla
 from providers import fal_audio
 from storage import r2_uploader
-
-log = logging.getLogger(__name__)
 
 ORIGEN = "locucion"
 ORIGEN_VOZ = "voz"
@@ -229,15 +226,7 @@ def sintetizar(cliente, voz, texto, idioma, velocidad):
         vp = voces_propias.resolver(cliente, voz)
         if not vp:
             raise ValueError(MENSAJES["voz_borrada"])
-        r = fal_audio.tts_minimax(texto, vp["voice_id"], idioma, velocidad=v)
-        if not vp["estrenada"]:
-            # fal ya cobró esta síntesis real: un fallo marcando `estrenada`
-            # (base bloqueada) no puede perder el gasto que registra quien llama
-            # justo después de este `return`.
-            try:
-                voces_propias.marcar_estrenada(cliente, vp["id"])
-            except Exception:
-                log.warning("voz propia %s: no pude marcarla estrenada", vp["id"], exc_info=True)
+        r = voces_propias.sintetizar(cliente, vp, texto, idioma, velocidad=v)
         return {"url": r["url"], "costo_usd": r["costo_usd"], "proveedor": "fal/minimax",
                 "etiqueta": ETIQUETAS_MOTOR[motor], "voz_nombre": vp["nombre"]}
     if motor == MOTOR_TURBO:
