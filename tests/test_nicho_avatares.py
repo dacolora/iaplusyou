@@ -22,9 +22,11 @@ def test_seleccionar_excluye_ordena_y_alterna_fuentes():
 
 def test_estimar_costo_y_costo_real(monkeypatch):
     from nicho import avatares
-    lista = [_c(i, texto="x" * 350) for i in range(1, 21)]           # 20 comentarios × 350 caracteres = 7 000 chars
+    lista = [_c(i, texto="x" * 350) for i in range(1, 21)]           # 20 comentarios × 350 caracteres = 7 000 chars de texto
     e = avatares.estimar_costo(lista, modelo="claude-sonnet-5")
-    tokens_texto = int(7000 * avatares.TOKENS_POR_CARACTER)
+    # cuenta la línea entera que va al prompt («[id] (fuente) texto»), no solo el texto (ola final F9)
+    tokens_texto = int(sum(len(avatares._linea(c)) for c in lista) * avatares.TOKENS_POR_CARACTER)
+    assert tokens_texto > int(7000 * avatares.TOKENS_POR_CARACTER)
     assert e["comentarios"] == 20 and e["suficientes"] is True and e["referencia"] is False and e["modelo"] == "claude-sonnet-5"
     assert e["tokens_entrada"] == (tokens_texto * 3 + avatares.TOKENS_PROMPT * (1 + 2 * avatares.MAX_NUCLEOS)
                                    + avatares.TOKENS_SUB_JSON * avatares.MAX_NUCLEOS * avatares.MAX_SUBS_POR_NUCLEO)
@@ -38,6 +40,16 @@ def test_estimar_costo_y_costo_real(monkeypatch):
     assert avatares.costo_real(1_000_000, 100_000, modelo="claude-sonnet-5") == pytest.approx(3.0)
     monkeypatch.setattr(avatares, "modelo_actual", lambda: "claude-haiku-4-5")
     assert avatares.costo_real(1_000_000, 0) == pytest.approx(1.0) and avatares.estimar_costo(lista)["modelo"] == "claude-haiku-4-5"
+
+
+def test_estimado_de_salida_reproduce_la_medicion_real():
+    """Prueba de centavos en producción (2026-10-01, estudio 3 de colorado_forja): 94 comentarios
+    -> 4 núcleos, 14 subs, 47 589 tokens de salida reales -- el pensamiento adaptativo de
+    claude-sonnet-5 se cobra como salida y `_llamar` no manda `thinking`. Con las constantes
+    calibradas, 1 núcleo + 4 sub-avatares ya alcanzan esa cifra (lo que de verdad pasó)."""
+    from nicho import avatares
+    salida_1_nucleo_4_subs = avatares.TOKENS_SALIDA_ESTIMADO_NUCLEOS + 4 * avatares.TOKENS_SALIDA_ESTIMADO_SUBS
+    assert salida_1_nucleo_4_subs >= 45000
 
 
 NUCLEOS_JSON = {"nucleos": [

@@ -17172,3 +17172,49 @@ msgstr "🔊 Sound"
 msgid "🖼 Imagen"
 msgstr "🖼 Image"
 
+msgid "buscar en Walmart"
+msgstr "search Walmart"
+
+msgid "buscar en AliExpress"
+msgstr "search AliExpress"
+
+msgid "reseñas de Walmart"
+msgstr "Walmart reviews"
+
+msgid "reseñas de AliExpress"
+msgstr "AliExpress reviews"
+
+msgid "Búsqueda en Walmart"
+msgstr "Walmart search"
+
+msgid "Reseñas de Walmart"
+msgstr "Walmart reviews"
+
+msgid "Búsqueda en AliExpress"
+msgstr "AliExpress search"
+
+msgid "Reseñas de AliExpress"
+msgstr "AliExpress reviews"
+
+msgid "sin búsquedas en el idioma de la tienda: se usaron las del país"
+msgstr "no searches in the store's language: the country's searches were used"
+
+msgid "Tiendas de %(pais)s"
+msgstr "Stores in %(pais)s"
+
+msgid "De otros mercados"
+msgstr "From other markets"
+
+msgid "Marcar todas"
+msgstr "Select all"
+
+msgid "otro mercado: %(pais)s"
+msgstr "other market: %(pais)s"
+
+msgid "Apify respondió sin datos legibles al arrancar la corrida (%(codigo)s); revisa en console.apify.com si arrancó."
+msgstr "Apify answered without readable data when starting the run (%(codigo)s); check at console.apify.com whether it started."
+
+msgid "%(num)s vendido"
+msgid_plural "%(num)s vendidos"
+msgstr[0] "%(num)s sold"
+msgstr[1] "%(num)s sold"

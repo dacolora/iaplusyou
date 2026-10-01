@@ -402,10 +402,12 @@ def test_estimar_suma_plataformas_claude_y_avatares(monkeypatch):
     monkeypatch.setattr(avatares, "estimar_costo_maximo", lambda: {"usd": 0.4})
     e = inv.estimar({}, "SE", ["amazon", "tiktok_shop"], ["reddit"], inv.TOPES_DEFECTO)
     assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.18 and e["filas"][0]["resenas_usd"] == 1.35
-    assert e["avatares_usd"] == 0.4 and 0 < e["claude_usd"] < 0.2
+    # claude_usd sale de _tokens_claude (amazon + tiktok_shop buscan las dos en sueco: un idioma)
+    entrada_cl, salida_cl = inv._tokens_claude(2, inv.TOPES_DEFECTO, 1)
+    assert e["avatares_usd"] == 0.4 and e["claude_usd"] == inv._centavos(inv.costo_claude(entrada_cl, salida_cl)) > 0
     assert e["total_usd"] == round(0.18 + 1.35 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
-    with pytest.raises(Exception):
-        inv.estimar({}, "SE", ["meli"], [], inv.TOPES_DEFECTO)                            # MELI no cubre Suecia
+    otro = inv.estimar({}, "SE", ["meli"], [], inv.TOPES_DEFECTO)["filas"][0]           # MELI no está en Suecia: busca en México
+    assert (otro["mercado"], otro["sitio"]) == ("otro", "MX")
 
 
 def test_elegir_y_params_redes():
@@ -456,15 +458,30 @@ def test_consultas_y_seleccion_con_claude(monkeypatch):
         inv.consultas_con_claude(est, "SE")                                               # menos de 2 consultas no sirve
 
 
+def test_tokens_claude_salida_es_siempre_el_tope_de_las_dos_llamadas():
+    """El pensamiento adaptativo de claude-sonnet-5 se cobra como salida y nunca pasa `max_tokens`
+    (medido en la prueba real del 2026-10-01): la salida del estimado es siempre la suma de los
+    dos topes, sin importar cuántas plataformas o idiomas entren."""
+    from nicho import investigacion as inv
+    for n in (0, 1, 2, 5):
+        for k in (1, 2, 3):
+            assert inv._tokens_claude(n, inv.TOPES_DEFECTO, k)[1] == inv.MAX_TOKENS_CONSULTAS + inv.MAX_TOKENS_SELECCION
+
+
 def test_estimar_costo_maximo():
     from nicho import avatares
     e = avatares.estimar_costo_maximo()
     assert e["comentarios"] == avatares.MAX_COMENTARIOS and e["usd"] > 0 and e["suficientes"]
     # Peor caso real: los DOS topes de seleccionar() llenos a la vez (una reseña
     # real llega a 2 000 caracteres, así que MAX_COMENTARIOS puede sumar
-    # MAX_CARACTERES completo) -- no solo MAX_COMENTARIOS × 250.
-    tokens_texto = int(avatares.MAX_CARACTERES * avatares.TOKENS_POR_CARACTER)
-    assert e["tokens_entrada"] == (tokens_texto * 3 + avatares.TOKENS_PROMPT * (1 + 2 * avatares.MAX_NUCLEOS)
+    # MAX_CARACTERES completo) -- no solo MAX_COMENTARIOS × 250 --, contado con la
+    # línea entera que va al prompt (`_linea`) y la regla de otro mercado en cada llamada.
+    falsos = avatares.comentarios_peor_caso()
+    assert len(falsos) == avatares.MAX_COMENTARIOS and sum(len(c["texto"]) for c in falsos) == avatares.MAX_CARACTERES
+    tokens_texto = int(sum(len(avatares._linea(c)) for c in falsos) * avatares.TOKENS_POR_CARACTER)
+    assert tokens_texto > int(avatares.MAX_CARACTERES * avatares.TOKENS_POR_CARACTER)
+    assert e["tokens_entrada"] == (tokens_texto * 3
+                                   + (avatares.TOKENS_PROMPT + avatares.TOKENS_REGLA_OTRO_MERCADO) * (1 + 2 * avatares.MAX_NUCLEOS)
                                    + avatares.TOKENS_SUB_JSON * avatares.MAX_NUCLEOS * avatares.MAX_SUBS_POR_NUCLEO)
 
 
@@ -503,6 +520,16 @@ def test_consultas_respetan_el_tope_aprobado(monkeypatch):
     assert len(inv.consultas_con_claude(est, "SE", 99)[0]) == inv.LIMITES["consultas"][1]          # nunca más que el límite
     monkeypatch.setattr(avatares, "_llamar", lambda t, m: ('{"consultas": ["sola"]}', 10, 5))
     assert inv.consultas_con_claude(est, "SE", 1)[0] == ["sola"]                                   # con tope 1, una sirve
+
+
+def test_pasos_y_etiquetas_de_las_tiendas_nuevas():
+    from nicho import investigacion as inv
+    assert inv.PASOS_CADENA == ("consultas", "buscar:amazon", "buscar:meli", "buscar:tiktok_shop", "buscar:walmart", "buscar:aliexpress",
+                                "seleccionar", "resenas:amazon", "resenas:meli", "resenas:tiktok_shop", "resenas:walmart", "resenas:aliexpress",
+                                "redes:reddit", "redes:youtube", "generar")
+    assert set(inv.ETIQUETAS_PASO) == set(inv.PASOS_CADENA)
+    assert inv.orden_pasos(["walmart", "aliexpress"], []) == ["consultas", "buscar:walmart", "buscar:aliexpress", "seleccionar",
+                                                             "resenas:walmart", "resenas:aliexpress", "generar"]
 
 
 if __name__ == "__main__":

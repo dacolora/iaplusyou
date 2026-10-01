@@ -768,7 +768,7 @@ producto_nicho = Table("producto_nicho", metadata,
     Column("id", Integer, primary_key=True),
     *_comunes(),
     Column("estudio_id", Integer, sa.ForeignKey("estudio.id"), nullable=False, index=True),
-    Column("plataforma", String(12), nullable=False),           # amazon|meli|tiktok_shop (clave de nicho.fuentes.plataformas)
+    Column("plataforma", String(12), nullable=False),           # clave de nicho.fuentes.plataformas (amazon, meli, tiktok_shop, walmart, aliexpress)
     Column("fuente_id", String(120), nullable=False),           # ASIN, id de MELI, id de TikTok Shop
     Column("consulta", String(200), nullable=False, default=""),   # la búsqueda que lo encontró
     Column("titulo", String(300), nullable=False),

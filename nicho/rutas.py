@@ -214,13 +214,17 @@ def ver(cliente, eid):
     for n in nucleos:
         for s in n["subs"]:
             s["faltantes"] = calidad.faltantes(s, con_evidencia=not datos.es_manual(est))
+    # «otro mercado» de las citas: solo los comentarios citados (la lista de comentarios lee su propio `extra`)
+    citados = [e.get("comentario_id") for n in nucleos for s in n["subs"] for e in (s.get("evidencia") or [])]
     completar_e = avatares.estimar_completar(cliente, eid)
     job_comp = datos.job_id_completar(cliente, eid)
+    pais_inv = est.get("pais") or proyectos.pais(cliente)
     return render_template(
         "nicho_estudio.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente), estudio=est,
         conteos=datos.contar_por_fuente(cliente, eid), fuente_filtro=fuente,
         pagina_comentarios=datos.comentarios(cliente, eid, fuente=fuente, pagina=pagina, por_pagina=POR_PAGINA),
         nucleos=nucleos, urls_comentarios=datos.urls_comentarios(cliente, eid),
+        paises_comentarios=datos.paises_otro_mercado_de(cliente, citados), nombres_pais=datos.NOMBRES_PAIS,
         estimado=estimado, precio_texto=gastos.formatear(estimado["usd"]), min_comentarios=avatares.MIN_COMENTARIOS,
         trabajo_generar=({"job_id": job} if trabajos.en_curso(job) else None),
         completar_estimado={**completar_e, "texto": gastos.formatear(completar_e["usd"])},
@@ -240,8 +244,8 @@ def ver(cliente, eid):
         trabajo_inv=({"job_id": job_inv, "paso": paso_vivo} if job_inv and trabajos.en_curso(job_inv) else None),
         productos_investigados=(datos.productos_nicho(cliente, eid) if inv_actual else []),
         paises_estudio=[(c, datos.NOMBRES_PAIS.get(c, c)) for c in datos.PAISES_ESTUDIO],
-        plataformas_inv=_plataformas_visibles(), redes_inv=_redes_visibles(), topes_inv=investigacion.TOPES_DEFECTO,
-        limites_inv=investigacion.LIMITES, pais_inv=est.get("pais") or proyectos.pais(cliente),
+        plataformas_inv=_plataformas_visibles(pais_inv), redes_inv=_redes_visibles(), topes_inv=investigacion.TOPES_DEFECTO,
+        limites_inv=investigacion.LIMITES, pais_inv=pais_inv, nombre_pais_inv=datos.NOMBRES_PAIS.get(pais_inv or "", pais_inv or ""),
         etiquetas_estudio=datos.ETIQUETAS_ESTADO_ESTUDIO, etiquetas_avatar=datos.ETIQUETAS_ESTADO_AVATAR,
         etiquetas_inv=investigacion.ETIQUETAS_ESTADO, etiquetas_paso_estado=investigacion.ETIQUETAS_ESTADO_PASO,
         etiquetas_paso=investigacion.ETIQUETAS_PASO, consciencias_nombre=doctrina.CONSCIENCIAS_NOMBRE,
@@ -505,7 +509,8 @@ def avatares_proyecto(cliente):
     return render_template("nicho_avatares_proyecto.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            estudio=None, grupos=grupos, completables=completables, nuevo=request.args.get("nuevo") == "1",
                            abrir=request.args.get("abrir") or "", urls_comentarios=datos.urls_de_comentarios(cliente, ids),
-                           niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES, consciencias_nombre=doctrina.CONSCIENCIAS_NOMBRE)
+                           niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES, consciencias_nombre=doctrina.CONSCIENCIAS_NOMBRE,
+                           paises_comentarios=datos.paises_otro_mercado_de(cliente, ids), nombres_pais=datos.NOMBRES_PAIS)
 
 
 @bp.post("/avatares/nuevo")
@@ -608,16 +613,23 @@ def _lista_param(fuente, nombre):
     return list(dict.fromkeys(salida))
 
 
-def _plataformas_visibles():
-    """Las plataformas del registro; sin APIFY_TOKEN el admin las ve apagadas y el cliente no las ve."""
+def _plataformas_visibles(pais=None):
+    """Las tiendas del registro con su mercado para `pais` (spec Parte 4 §4):
+    `local` si tienen sitio en ese país o venden en todo el mundo, `otro` si
+    buscan en su sitio principal (`casa_nombre` lo dice). `orden` es el del
+    registro (la tarjeta las reagrupa al cambiar de país sin desordenarlas).
+    Sin APIFY_TOKEN el admin las ve apagadas y el cliente no las ve."""
     salida = []
-    for clave in plataformas.claves():
+    for orden, clave in enumerate(plataformas.claves()):
         faltan = fuentes_registro.llaves_faltantes(clave)
         if faltan and not _es_admin():
             continue
-        paises = plataformas.PLATAFORMAS[clave]["paises"]
-        salida.append({"clave": clave, "nombre": plataformas.nombre(clave), "faltan": faltan,
-                       "paises": "*" if paises == plataformas.TODOS else " ".join(sorted(paises))})
+        p = plataformas.PLATAFORMAS[clave]
+        casa = p.get("casa") or ""
+        salida.append({"clave": clave, "nombre": plataformas.nombre(clave), "faltan": faltan, "orden": orden,
+                       "mercado": plataformas.mercado(clave, pais)[0],
+                       "paises": "*" if p["paises"] == plataformas.TODOS else " ".join(sorted(p["paises"])),
+                       "casa_nombre": datos.NOMBRES_PAIS.get(casa, casa)})
     return salida
 
 
@@ -641,9 +653,6 @@ def _pedido_investigacion(fuente, est, cliente):
     redes = [r for r in _lista_param(fuente, "redes") if r in investigacion.REDES]
     if not plats and not redes:
         raise datos.ErrorDatos(gettext("Elige al menos una plataforma o una red."))
-    fuera = [p for p in plats if not plataformas.cubre(p, pais)]
-    if fuera:
-        raise datos.ErrorDatos(gettext("%(plataforma)s no cubre el país %(pais)s.", plataforma=plataformas.nombre(fuera[0]), pais=pais))
     faltan = sorted({v for x in plats + redes for v in fuentes_registro.llaves_faltantes(x)})
     if faltan:
         raise datos.ErrorDatos(gettext("Falta %(llaves)s en el .env del servidor (Configuración › Puesta a punto).", llaves=", ".join(faltan))
@@ -661,7 +670,8 @@ def investigacion_estimar(cliente, eid):
     except (datos.ErrorDatos, ErrorFuente, ValueError) as ex:
         return jsonify({"error": str(ex)}), 400
     filas = [{**f, "busqueda_texto": gastos.formatear(f["busqueda_usd"]), "resenas_texto": gastos.formatear(f["resenas_usd"]),
-              "nombre": f["nombre"]} for f in e["filas"]]
+              "etiqueta": f["nombre"] if f["mercado"] == "local"
+              else f"{f['nombre']} ({idiomas.traducir(datos.NOMBRES_PAIS.get(f['sitio'], f['sitio']))})"} for f in e["filas"]]
     return jsonify({**e, "filas": filas, "claude_texto": gastos.formatear(e["claude_usd"]), "avatares_texto": gastos.formatear(e["avatares_usd"]),
                     "texto": gastos.formatear(e["total_usd"]), "pais": pais, "plataformas": plats, "redes": redes, "topes": topes})
 
