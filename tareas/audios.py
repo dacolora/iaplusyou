@@ -2,27 +2,20 @@
 fal, mezclarla sobre la canción elegida y dejar el mp3 en la biblioteca del
 proyecto. Paga: se encola con max_intentos=1 y el gasto se registra en cuanto
 fal cobró, ANTES de mezclar, para que un ffmpeg roto no lo pierda."""
-import logging
 import os
 import shutil
 
-from flask_babel import gettext
-
 import audios
-import cola
 import idiomas
 import materiales
 import trabajos
-import voces_propias
 from final_edition import cortes, tipos  # noqa: F401
 # cortes: sin uso directo (lo usa audios.voz_cruda); las pruebas parchean
 # ta.cortes, que es el mismo módulo.
 from final_edition import musica as fe_musica
 from providers import fal_audio  # noqa: F401
 from storage import r2_uploader
-from tareas import ref_sufijo, registrar
-
-log = logging.getLogger(__name__)
+from tareas import errores_voz, ref_sufijo, registrar
 
 ETAPAS = ((idiomas.N_("Sintetizando la voz"), 55), (idiomas.N_("Mezclando con la música"), 30), (idiomas.N_("Guardando"), 15))
 
@@ -35,10 +28,9 @@ MENSAJES = {
     "repetido": idiomas.N_("Ya tenías este audio con ese texto, voz y música: está en Tus audios."),
     "solo_voz": idiomas.N_("Audio listo solo con la voz: la canción ya no estaba en Mi música."),
 }
-# Los únicos errores que llegan tal cual (traducidos) al estado del trabajo:
-# los msgids fijos de Audios y de Mis voces (p. ej. la voz propia que se borró
-# entre el clic y el worker), que no llevan nada de la persona.
-MSGIDS_FIJOS = frozenset(audios.MENSAJES.values()) | frozenset(voces_propias.MENSAJES.values())
+# Cualquier otro error (ver errores_voz.publico): el gasto ya quedó registrado
+# en _generar, apenas fal cobró.
+MENSAJE_ERROR = idiomas.N_("No pude crear el audio; intenta de nuevo (%(tipo)s).")
 
 
 def job_id(cliente):
@@ -49,25 +41,12 @@ def carpeta_trabajo(cliente, h):
     return os.path.join(tipos.BASE_DIR, "salidas", cliente, "audios", h[:16])
 
 
-def _error_publico(e, tarea):
-    """Lo que la tarea deja como error: el worker lo guarda y
-    /trabajo/<job_id>/estado (sin auth, job_id adivinable) lo muestra. El
-    cuerpo de un error de fal repite el input — el texto del anuncio —, así
-    que solo un msgid fijo pasa, traducido; cualquier otro error va al log con
-    su traza y sale como un mensaje fijo con su tipo (revisión final de Audios
-    Europa, F1). El gasto ya quedó registrado en _generar, apenas fal cobró."""
-    if isinstance(e, ValueError) and str(e) in MSGIDS_FIJOS:
-        return ValueError(gettext(str(e)))
-    log.exception("audio_generar (tarea %s) falló: %s", tarea.get("id"), cola.sin_token(e))
-    return RuntimeError(gettext("No pude crear el audio; intenta de nuevo (%(tipo)s).", tipo=type(e).__name__))
-
-
 @registrar("audio_generar")
 def ejecutar(tarea):
     try:
         return _generar(tarea)
-    except Exception as e:  # noqa: BLE001 — todo error sale por _error_publico
-        raise _error_publico(e, tarea) from e
+    except Exception as e:  # noqa: BLE001 — todo error sale por errores_voz.publico
+        raise errores_voz.publico(e, tarea, "audio_generar", MENSAJE_ERROR) from e
 
 
 def _generar(tarea):
