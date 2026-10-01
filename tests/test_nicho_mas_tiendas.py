@@ -146,3 +146,36 @@ def test_cada_tienda_busca_en_su_idioma(base_temporal, monkeypatch):
     ti.ejecutar_buscar({"id": 12, "payload": {"cliente": "acme", "estudio_id": eid, "plataforma": "amazon"}, "intentos": 1, "max_intentos": 1})
     assert vistas["amazon"] == ["botella con horario", "botella motivacional"]
     assert datos.investigacion("acme", eid)["pasos"]["buscar:amazon"]["aviso"] == ti.NOTA_IDIOMA
+
+
+def test_seleccion_pone_primero_el_mercado_local():
+    from nicho import avatares
+
+    def c(i, fuente, mercado=None):
+        extra = {"mercado": mercado, "pais": "US" if mercado == "otro" else "CO"} if mercado else {}
+        return {"id": i, "fuente": fuente, "texto": "x" * 30, "puntuacion": 5, "fecha": None, "extra": extra}
+    comentarios = [c(1, "aliexpress", "otro"), c(2, "aliexpress", "local"), c(3, "walmart", "otro"), c(4, "meli", "local"), c(5, "youtube")]
+    assert [x["id"] for x in avatares.seleccionar(comentarios)] == [2, 4, 5, 1, 3]
+    assert [x["id"] for x in avatares.seleccionar(comentarios, max_n=3)] == [2, 4, 5]
+
+
+def test_prompts_marcan_el_otro_mercado_y_llevan_la_regla():
+    from nicho import avatares
+    est = {"producto": "Botella", "tema": "botellas", "idioma": "es", "pais": "CO"}
+    comentarios = [{"id": 1, "fuente": "meli", "texto": "Me encanta la botella", "puntuacion": 5, "contexto": "Botella 1L",
+                    "extra": {"mercado": "local", "pais": "CO"}},
+                   {"id": 2, "fuente": "walmart", "texto": "Love this bottle", "puntuacion": 4, "contexto": None,
+                    "extra": {"mercado": "otro", "pais": "US"}},
+                   {"id": 3, "fuente": "aliexpress", "texto": "Muito boa", "puntuacion": 5, "contexto": None,
+                    "extra": {"mercado": "otro", "pais": "PL"}}]
+    p = avatares.armar_prompt_nucleos(est, comentarios)
+    assert "[1] (meli · 5 · Botella 1L) Me encanta" in p and "[2] (walmart · 4 · otro mercado: Estados Unidos) Love this bottle" in p
+    assert "[3] (aliexpress · 5 · otro mercado: PL) Muito boa" in p
+    assert "Mercado del estudio: Colombia." in p and "el tono" in p and p.index("Mercado del estudio") < p.index("COMENTARIOS:")
+    nucleo = {"nombre": "N", "deseo": "Quiero", "resumen": "r"}
+    assert "Mercado del estudio: Colombia." in avatares.armar_prompt_subs(est, nucleo, comentarios)
+    assert "Mercado del estudio: Colombia." in avatares.armar_prompt_completar(est, nucleo, comentarios, [(0, {}, ["deseo"])])
+    solo_locales = [comentarios[0], {"id": 4, "fuente": "texto", "texto": "Otro comentario", "puntuacion": None, "contexto": None}]
+    assert "Mercado del estudio" not in avatares.armar_prompt_nucleos(est, solo_locales)
+    assert "otro mercado" not in avatares.armar_prompt_subs(est, nucleo, solo_locales)
+    assert "otro mercado" not in avatares.armar_prompt_completar(est, nucleo, solo_locales, [(0, {}, ["deseo"])])

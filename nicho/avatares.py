@@ -73,15 +73,18 @@ def modelo_actual():
 # ----------------------------------------------------------- selección ---
 
 def seleccionar(comentarios, max_n=MAX_COMENTARIOS, max_caracteres=MAX_CARACTERES):
-    """Los que entran a Claude (spec §4.1): fuera los excluidos; dentro de
-    cada fuente por puntuación desc, fecha desc, id asc; se toman en ronda
-    entre fuentes hasta llenar el primer tope. Un comentario que no cabe en
-    los caracteres se salta (no corta la ronda)."""
+    """Los que entran a Claude (spec §4.1 y Parte 4 §3): fuera los excluidos; dentro de
+    cada fuente por puntuación desc, fecha desc, id asc; se toman en ronda entre fuentes
+    hasta llenar el primer tope, y en cada vuelta van primero las del mercado del estudio
+    (las reseñas con `extra.mercado == "otro"` hacen su propia cola, después). Un
+    comentario que no cabe en los caracteres se salta (no corta la ronda)."""
     por_fuente = {}
     for c in comentarios or []:
         if c.get("excluido"):
             continue
-        por_fuente.setdefault(c.get("fuente") or "texto", []).append(c)
+        ex = c.get("extra") if isinstance(c.get("extra"), dict) else {}
+        clave = (1 if ex.get("mercado") == "otro" else 0, c.get("fuente") or "texto")
+        por_fuente.setdefault(clave, []).append(c)
     for lista in por_fuente.values():
         # tres ordenamientos estables = (puntuación desc, fecha desc, id asc)
         lista.sort(key=lambda c: int(c.get("id") or 0))
@@ -170,7 +173,7 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
 
 Reglas: cada comentario va en un solo núcleo, o en ninguno si no aporta; no inventes nada que los comentarios no digan; escribe todo en {idioma}. Aplica la doctrina de investigación del principio: agrupa por el deseo de fondo y prefiere los deseos con más urgencia, permanencia y alcance.
 
-COMENTARIOS:
+{regla_mercado}COMENTARIOS:
 {comentarios}"""
 
 PROMPT_SUBS = """Eres estratega de investigación de clientes para la marca {marca}.
@@ -203,12 +206,27 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
 
 Reglas: todos los campos son obligatorios y ninguno puede quedar vacío; mínimos: 2 situaciones, 1 solución probada con sus motivos de falla, 3 palabras clave y 2 citas. Escribe en {idioma}, salvo las citas, que se copian tal cual en el idioma en que la gente escribió; no inventes datos ni cifras (lo inferido va marcado «(inferido)»); cada cita debe aparecer palabra por palabra en el comentario indicado. Aplica la doctrina de investigación del principio: anota literalmente lo que ya probaron y por qué les falló, y el nivel de conciencia según lo que dicen los comentarios.
 
-COMENTARIOS:
+{regla_mercado}COMENTARIOS:
 {comentarios}"""
 
 
 def nombre_idioma(codigo):
     return IDIOMAS.get((codigo or "").lower(), codigo or "es")
+
+
+REGLA_OTRO_MERCADO = ("Mercado del estudio: {pais}. Los comentarios marcados «otro mercado: <país>» son de compradores de otro país: "
+                      "la identidad, la demografía, la edad, el momento de vida, el tono y el nivel de conciencia salen de los "
+                      "comentarios del mercado del estudio (si esos no alcanzan, infiere lo más probable y termina con «(inferido)»); "
+                      "los deseos, los dolores, las soluciones que probaron, las situaciones y momentos de uso y las palabras clave "
+                      "pueden salir de todos.")
+
+
+def _regla_mercado(estudio, comentarios):
+    """La regla de otro mercado (spec Parte 4 §3), solo si alguno de estos comentarios es de otro mercado."""
+    if not any(isinstance(c.get("extra"), dict) and c["extra"].get("mercado") == "otro" for c in comentarios or []):
+        return ""
+    pais = (estudio.get("pais") or "").upper()
+    return REGLA_OTRO_MERCADO.format(pais=datos.NOMBRES_PAIS.get(pais, pais) or "—") + "\n\n"
 
 
 def _linea(c):
@@ -217,6 +235,10 @@ def _linea(c):
         partes.append(str(c["puntuacion"]))
     if c.get("contexto"):
         partes.append(str(c["contexto"])[:80])
+    ex = c.get("extra") if isinstance(c.get("extra"), dict) else {}
+    if ex.get("mercado") == "otro":                  # spec Parte 4 §3: Claude sabe qué no es del mercado del estudio
+        pais = str(ex.get("pais") or "").upper()
+        partes.append(f"otro mercado: {datos.NOMBRES_PAIS.get(pais, pais) or '?'}")
     return f"[{c['id']}] ({' · '.join(partes)}) {c.get('texto') or ''}"
 
 
@@ -228,7 +250,8 @@ def armar_prompt_nucleos(estudio, comentarios, marca_nombre=""):
     return PROMPT_NUCLEOS.format(
         marca=marca_nombre or "este proyecto", producto=(estudio.get("producto") or "").strip() or "(sin describir)",
         tema=(estudio.get("tema") or "").strip() or "(sin describir)", n=len(comentarios), max_nucleos=MAX_NUCLEOS,
-        idioma=nombre_idioma(estudio.get("idioma")), comentarios=lineas_comentarios(comentarios))
+        idioma=nombre_idioma(estudio.get("idioma")), regla_mercado=_regla_mercado(estudio, comentarios),
+        comentarios=lineas_comentarios(comentarios))
 
 
 def armar_prompt_subs(estudio, nucleo, comentarios, guia="", marca_nombre=""):
@@ -237,7 +260,7 @@ def armar_prompt_subs(estudio, nucleo, comentarios, guia="", marca_nombre=""):
         guia=(guia or "").strip() or "(sin guía de estilo todavía)", tema=(estudio.get("tema") or "").strip() or "(sin describir)",
         nucleo_nombre=nucleo.get("nombre") or "", nucleo_deseo=nucleo.get("deseo") or "", nucleo_resumen=nucleo.get("resumen") or "",
         max_subs=MAX_SUBS_POR_NUCLEO, niveles=", ".join(datos.NIVELES_CONCIENCIA), idioma=nombre_idioma(estudio.get("idioma")),
-        comentarios=lineas_comentarios(comentarios))
+        regla_mercado=_regla_mercado(estudio, comentarios), comentarios=lineas_comentarios(comentarios))
 
 
 PROMPT_COMPLETAR = """Eres estratega de investigación de clientes para la marca {marca}.
@@ -257,7 +280,7 @@ Formas: demografia, edad_rango, emocion, comportamiento, encaje_producto, tono y
 
 Reglas: escribe en {idioma}, salvo las citas, que se copian tal cual; la demografía y la edad, si los comentarios no lo dicen, se infieren de lo que cuentan, el producto y el mercado y terminan con «(inferido)»; no inventes cifras; cada cita debe aparecer palabra por palabra en el comentario indicado.
 
-COMENTARIOS:
+{regla_mercado}COMENTARIOS:
 {comentarios}"""
 
 _PEDIDOS = {"identidad": "identidad (las tres respuestas)", "conciencia": "conciencia (nivel y detalle)",
@@ -275,7 +298,8 @@ def armar_prompt_completar(estudio, nucleo, comentarios, pendientes, guia="", ma
         marca=marca_nombre or "este proyecto", producto=(estudio.get("producto") or "").strip() or "(sin describir)",
         guia=(guia or "").strip() or "(sin guía de estilo todavía)", tema=(estudio.get("tema") or "").strip() or "(sin describir)",
         nucleo_nombre=nucleo.get("nombre") or "", nucleo_deseo=nucleo.get("deseo") or "", incompletos="\n\n".join(bloques),
-        niveles=", ".join(datos.NIVELES_CONCIENCIA), idioma=nombre_idioma(estudio.get("idioma")), comentarios=lineas_comentarios(comentarios))
+        niveles=", ".join(datos.NIVELES_CONCIENCIA), idioma=nombre_idioma(estudio.get("idioma")),
+        regla_mercado=_regla_mercado(estudio, comentarios), comentarios=lineas_comentarios(comentarios))
 
 
 def completar_subs(estudio, nucleo, comentarios, subs, guia="", marca_nombre="", tokens=None, con_evidencia=True):
