@@ -2510,6 +2510,9 @@ msgstr "Every loser is diagnosed on its own (%(precio)s) and leaves its line her
 msgid "Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué."
 msgstr "Each card shows the QA: ✓ passes, ✗ fails; tap the QA row to read why."
 
+msgid "Cada video se hace en dos pasos: primero la imagen y después se anima."
+msgstr "Each video is made in two steps: first the image, then it's animated."
+
 msgid "Cadera / entrepierna"
 msgstr "Hips / groin"
 
@@ -6659,8 +6662,8 @@ msgstr "Generating with the model"
 msgid "Generando desde el referente…"
 msgstr "Generating from the reference…"
 
-msgid "Generando desde el referente… el video «igual» arranca solo cuando su imagen esté lista."
-msgstr "Generating from the reference… the “same” video starts on its own once its image is ready."
+msgid "Generando desde el referente… cada video arranca solo cuando su imagen esté lista."
+msgstr "Generating from the reference… each video starts on its own once its image is ready."
 
 msgid "Generando el swap…"
 msgstr "Generating the swap…"
@@ -7197,9 +7200,6 @@ msgstr "Same as YouTube, <strong>on your Mac</strong>: <code>venv/bin/python aut
 msgid "Igual que «Traer referentes» de un proyecto, pero sin dueño: quedan visibles para todos los proyectos."
 msgstr "Same as a project's “Bring in references”, but with no owner: they stay visible to every project."
 
-msgid "Igual: la animación"
-msgstr "Same: the animation"
-
 msgid "Igual: la imagen"
 msgstr "Same: the image"
 
@@ -7546,6 +7546,9 @@ msgstr "The agency isn't connected — an admin has to connect Creatv's Business
 
 msgid "La agencia no está conectada."
 msgstr "The agency isn't connected."
+
+msgid "La animación (los dos videos)"
+msgstr "The animation (both videos)"
 
 msgid "La app de Meta necesita el permiso <code>instagram_content_publish</code> aprobado en <strong>App Review</strong>; sin él Meta rechaza la publicación."
 msgstr "The Meta app needs the <code>instagram_content_publish</code> permission approved in <strong>App Review</strong>; without it Meta rejects the post."
@@ -13603,6 +13606,9 @@ msgstr "Variable"
 msgid "Variación"
 msgstr "Variation"
 
+msgid "Variación: la imagen"
+msgstr "Variation: the image"
+
 #, python-format
 msgid "Variante %(n)s (%(tipo)s)"
 msgstr "Variant %(n)s (%(tipo)s)"
@@ -15873,9 +15879,6 @@ msgstr "brand presence"
 
 msgid "presupuesto"
 msgstr "budget"
-
-msgid "primero la imagen igual a la referencia y después se anima"
-msgstr "first the image same as the reference, then it's animated"
 
 #, python-format
 msgid "prioridad %(n)s"
