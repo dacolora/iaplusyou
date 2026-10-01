@@ -2628,8 +2628,15 @@ def _guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto"
     """Guarda las fotos en la carpeta del producto (o de uno de sus colores,
     con `variante`) y devuelve cuántas entraron. Quedan SOLO en disco a
     propósito: catalogo_productos las lee de ahí y el swap las sube a R2
-    recién cuando se va a generar."""
+    recién cuando se va a generar. ValueError (sin escribir nada) si
+    `variante` no es un color de la meta del producto: su carpeta no la
+    vería ningún listado."""
     carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria, variante=variante)
+    if variante:
+        propio = catalogo_productos.cargar_meta(cliente, categoria).get(producto_id) or {}
+        variantes = propio.get("variantes")
+        if not isinstance(variantes, dict) or variante not in variantes:
+            raise ValueError(gettext("Ese color no existe."))
     os.makedirs(carpeta, exist_ok=True)
     guardadas = 0
     for archivo in archivos:

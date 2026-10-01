@@ -63,6 +63,26 @@ def test_subir_y_quitar_foto_de_un_color_vuelven_a_la_ficha(app):
     assert any("única foto" in m for m in _flashes(c))
 
 
+def test_subir_fotos_a_un_color_que_no_existe_no_escribe_nada(app):
+    """Revisión final: un `variante` que no es un color de la meta creaba la
+    subcarpeta y guardaba la foto donde ningún listado la ve."""
+    _con_colores(app)
+    c = app["c"]
+    base = app["tmp"] / "clientes" / "acme" / "productos" / "original"
+    antes = sorted(os.listdir(base))
+    r = c.post("/cliente/acme/productos/original/imagenes/subir",
+               data={"categoria": "producto", "variante": "rojo", "imagenes": [_foto("x.jpg")]}, content_type="multipart/form-data")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo?ficha=producto:original")
+    assert any("Ese color no existe." in m for m in _flashes(c))
+    assert sorted(os.listdir(base)) == antes and not (base / "rojo").exists()
+    # un personaje no tiene colores
+    import catalogo_productos as cp
+    aid = cp.crear("acme", "Ana", categoria="personaje")
+    c.post(f"/cliente/acme/productos/{aid}/imagenes/subir",
+           data={"categoria": "personaje", "variante": "pink", "imagenes": [_foto("y.jpg")]}, content_type="multipart/form-data")
+    assert os.listdir(cp.carpeta_de("acme", aid, "personaje")) == []
+
+
 def test_actualizar_y_crear_vuelven_a_la_ficha(app):
     _con_colores(app)
     c = app["c"]
