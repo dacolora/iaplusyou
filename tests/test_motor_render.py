@@ -374,6 +374,11 @@ def test_encuadre_ajustar_la_foto_entera_sobre_su_fondo_desenfocado(tmp_path, me
     for punto in ((540, 600), (540, 1300)):
         r_, _g, b = cuadro.getpixel(punto)
         assert r_ > 60 and b > 60, punto
+    # El punto que distingue «ajustar» de «llenar»: arriba a la izquierda, en
+    # «llenar» se ve la mitad roja pura; en «ajustar» el fondo desenfocado
+    # mezcla el rojo con el azul (revisión de la Tarea 3).
+    r_, _g, b = cuadro.getpixel((480, 300))
+    assert r_ > 60 and b > 60, (r_, b)
 
 
 @pytest.mark.slow
