@@ -2,7 +2,7 @@
 // hablan en llano (sin ids ni milisegundos).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { avisosCarga, faltantes, materialesUsados, TEXTO_PIDE_DE_MAS, TEXTO_SE_ACORTO } from "../../static/editor/avisos_carga.js";
+import { avisosCarga, faltantes, materialesUsados, textoPideDeMas, textoSeAcorto } from "../../static/editor/avisos_carga.js";
 import * as op from "../../static/editor/operaciones.js";
 import { docBase, DURACIONES } from "./doc_base.mjs";
 
@@ -18,14 +18,14 @@ test("un clip que pide más material del que hay se avisa en llano, y se va en c
   const { doc, info } = pideDeMas();
   assert.deepEqual(op.clipsQuePidenDeMas(doc, info), ["v1"]);
   const antes = avisosCarga(doc, info, MATS);
-  assert.deepEqual(antes.recortes, { texto: TEXTO_PIDE_DE_MAS, error: true });
+  assert.deepEqual(antes.recortes, { texto: textoPideDeMas(), error: true });
   assert.doesNotMatch(antes.recortes.texto, tecnico);
   // cualquier operación termina en normalizar: con el documento ya arreglado el aviso se va
   const arreglado = op.moverA(doc, "t1", 2000, info).doc;
   assert.deepEqual(op.clipsQuePidenDeMas(arreglado, info), []);
   assert.equal(avisosCarga(arreglado, info, MATS).recortes, null);
   // la página lo acortó al abrir: se dice una vez, sin rojo
-  assert.deepEqual(avisosCarga(arreglado, info, MATS, { acortado: true }).recortes, { texto: TEXTO_SE_ACORTO, error: false });
+  assert.deepEqual(avisosCarga(arreglado, info, MATS, { acortado: true }).recortes, { texto: textoSeAcorto(), error: false });
 });
 
 test("la música (en bucle) y un material sin duración conocida no cuentan como pedir de más", () => {
@@ -54,7 +54,7 @@ test("los archivos que faltan se cuentan de lo que la edición usa de verdad, y 
 });
 
 // ---- Arreglo 1 (crítico) y borde del ítem 4: lo que la página arregla al abrir ----
-import { arreglarAlAbrir, TEXTO_NO_CABE } from "../../static/editor/avisos_carga.js";
+import { arreglarAlAbrir, textoNoCabe } from "../../static/editor/avisos_carga.js";
 
 test("arreglarAlAbrir acorta lo que se puede y, ya arreglado, no pide guardar otra vez", () => {
   const { doc, info } = pideDeMas();
@@ -78,7 +78,7 @@ test("un archivo más corto que el mínimo de un clip: no se promete «se acorta
   assert.equal(segunda.guardar, false, "la segunda carga ya no cambia nada: no se guarda");
   for (const d of [doc, primera.doc]) {
     const a = avisosCarga(d, info, MATS, { acortado: primera.acortado });
-    assert.deepEqual(a.recortes, { texto: TEXTO_NO_CABE, error: true });
+    assert.deepEqual(a.recortes, { texto: textoNoCabe(), error: true });
     assert.doesNotMatch(a.recortes.texto, /próximo cambio|se acortó/);
     assert.doesNotMatch(a.recortes.texto, tecnico);
   }

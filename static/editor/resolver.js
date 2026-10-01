@@ -4,6 +4,7 @@
 // el del país o el clip desaparece; una voz con por_destino null para el
 // destino se quita, nunca hereda la de otro idioma.
 import { formatearPrecio, SIMBOLOS } from "./precio.js";
+import { t } from "./textos.js";
 
 export const VARIABLE_PRECIO = "precio";
 
@@ -37,19 +38,19 @@ export function resolver(doc, idioma, pais) {
     if (p.tipo === "texto") {
       const vivos = [];
       for (const c of p.clips) {
-        const t = c.texto ?? {};
-        if ("variable" in t) {
-          const rol = t.variable;
+        const tx = c.texto ?? {};
+        if ("variable" in tx) {
+          const rol = tx.variable;
           if (rol === VARIABLE_PRECIO) {
             if (precio === null) {
               if (res.pngs) delete res.pngs[c.id];
               continue;
             }
-            if (!(pais in SIMBOLOS)) throw new Error(`No sé formatear precios de ${pais}.`);
+            if (!(pais in SIMBOLOS)) throw new Error(t("precio.sin_formato", { pais }));
             c.texto = { literal: formatearPrecio(precio, pais) };
           } else {
             const valor = valorDestino(textos[rol], idioma, pais);
-            if (valor === null) throw new VariableSinValor(`El texto '${rol}' no tiene valor en ${idioma}.`);
+            if (valor === null) throw new VariableSinValor(t("resolver.sin_valor", { rol, idioma }));
             c.texto = { literal: valor };
           }
         }

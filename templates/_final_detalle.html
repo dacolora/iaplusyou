@@ -1,4 +1,5 @@
 {% from "_etiquetas_estado.html" import etiqueta_estado with context %}
+{% from "_final_macros.html" import etiqueta_fe with context %}
 {# Detalle de un video listo y de una final en Final edition: lo que antes
    iba en el <template> de cada tarjeta. Lo pide el modal por fetch. Se
    importa `with context` (paises_fe, voces_fe, estilos_fe, presets_mezcla,
@@ -9,45 +10,45 @@
    del render («Error applying option 'st'…»). La persona lee una frase llana;
    el texto crudo queda plegado en «Detalle técnico», para soporte. #}
 {% macro error_final(f) %}
-              <span class="fe-error-final"><span class="tag-error" style="font-size:.72rem;">No se pudo producir esta final. Vuelve a intentar; si se repite, avísanos.</span>
-              <details class="detalle-tecnico"><summary>Detalle técnico</summary><code>{{ f.error }}</code></details></span>
+              <span class="fe-error-final"><span class="tag-error" style="font-size:.72rem;">{{ _('No se pudo producir esta final. Vuelve a intentar; si se repite, avísanos.') }}</span>
+              <details class="detalle-tecnico"><summary>{{ _('Detalle técnico') }}</summary><code>{{ f.error }}</code></details></span>
 {% endmacro %}
 {% macro detalle_video_fe(item) %}
         <div class="detalle-media"><video src="{{ item.video_url }}" controls autoplay muted loop playsinline></video></div>
         <div class="detalle-info">
-          <p class="campo-label">Qué tenía que pasar</p>
-          <p class="detalle-texto">{{ item.accion_central or "(sin texto)" }}</p>
+          <p class="campo-label">{{ _('Qué tenía que pasar') }}</p>
+          <p class="detalle-texto">{{ item.accion_central or _('(sin texto)') }}</p>
           {% set _eds = ediciones_por_cf.get(item.id) or [] %}
           {# Editor capa 4b (9/9): «Editar» es la acción principal de cada
              video listo — gratis y directa. Lo automático con IA (ángulo,
              guion, «Producir finales») queda como sección opcional más abajo,
              cerrada por defecto. #}
           <section class="fe-seccion">
-            <h4 class="fe-titulo">Editor</h4>
+            <h4 class="fe-titulo">{{ _('Editor') }}</h4>
             {% if item.trabajo_editor %}
-            <p class="vacio" style="padding:0;font-size:.78rem;">Preparando el video para el editor… la página se recarga y entra sola.</p>
+            <p class="vacio" style="padding:0;font-size:.78rem;">{{ _('Preparando el video para el editor… la página se recarga y entra sola.') }}</p>
             {% else %}
               {% if _eds %}
-              <a class="btn-generar btn-sm" href="{{ url_for('editor.ver', cliente=cliente, edicion_id=_eds[0].id) }}">Editar</a>
+              <a class="btn-generar btn-sm" href="{{ url_for('editor.ver', cliente=cliente, edicion_id=_eds[0].id) }}">{{ _('Editar') }}</a>
               {% else %}
               <form method="post" action="{{ url_for('editor.desde_clon', cliente=cliente, cf_id=item.id) }}" class="fe-editar">
-                <button type="submit" class="btn-generar btn-sm">Editar</button>
+                <button type="submit" class="btn-generar btn-sm">{{ _('Editar') }}</button>
               </form>
               {% endif %}
-              <small class="vacio" style="padding:0;display:block;">Gratis: corta, recorta, reordena, agrega texto y música en el editor.</small>
+              <small class="vacio" style="padding:0;display:block;">{{ _('Gratis: corta, recorta, reordena, agrega texto y música en el editor.') }}</small>
               {% if _eds %}
               <form method="post" action="{{ url_for('editor.desde_clon', cliente=cliente, cf_id=item.id) }}" class="fe-editar-otra">
-                <button type="submit" class="btn-sm">Empezar otra edición desde el video</button>
+                <button type="submit" class="btn-sm">{{ _('Empezar otra edición desde el video') }}</button>
               </form>
               {% endif %}
             {% endif %}
             {% if _eds %}
-            <h5 class="fe-subtitulo">En el editor</h5>
+            <h5 class="fe-subtitulo">{{ _('En el editor') }}</h5>
             <ul class="fe-lista">
               {% for e in _eds %}
               <li class="fe-final">
                 <span class="fe-final-nombre">{{ e.nombre_visible or e.nombre }}</span>
-                <a class="btn-guardar btn-sm" href="{{ url_for('editor.ver', cliente=cliente, edicion_id=e.id) }}">Abrir en el editor</a>
+                <a class="btn-guardar btn-sm" href="{{ url_for('editor.ver', cliente=cliente, edicion_id=e.id) }}">{{ _('Abrir en el editor') }}</a>
               </li>
               {% endfor %}
             </ul>
@@ -55,7 +56,7 @@
           </section>
 
           {% if item.finales %}
-          <h5 class="fe-subtitulo">Finales de esta pieza</h5>
+          <h5 class="fe-subtitulo">{{ _('Finales de esta pieza') }}</h5>
           <ul class="fe-lista">
             {% for f in item.finales %}
             <li class="fe-final">
@@ -63,13 +64,13 @@
               <span class="fe-final-nombre">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else "" }} {{ f.idioma }}_{{ f.pais }}</span>
               <span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>
               {% if f.estado == "generando" %}
-              <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}produciendo…{% else %}interrumpida{% endif %}</span>
+              <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}{{ _('produciendo…') }}{% else %}{{ _('interrumpida') }}{% endif %}</span>
               {% elif f.estado == "error" and f.error %}
               {{ error_final(f) }}
               {% endif %}
-              {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>{% endif %}
-              <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
-                <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+              {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>{% endif %}
+              <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit='return confirm({{ _("¿Descartar esta final?")|tojson }});' style="display:inline;">
+                <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
               </form>
             </li>
             {% endfor %}
@@ -77,28 +78,32 @@
           {% endif %}
 
           <details class="fe-automatico">
-            <summary>Automático con IA (opcional)</summary>
+            <summary>{{ _('Automático con IA (opcional)') }}</summary>
             <section class="fe-seccion">
-            <h4 class="fe-titulo">Final edition</h4>
-            <p class="vacio" style="padding:0;font-size:.76rem;">Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.</p>
+            <h4 class="fe-titulo">{{ _('Final edition') }}</h4>
+            <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.') }}</p>
             {{ editor_angulo(item.angulo, url_for('cf_angulo', cliente=cliente, cf_id=item.id), cliente,
-                             resumen_vacio="Todavía no tiene ángulo: se decide al preparar el guion") }}
+                             resumen_vacio=_('Todavía no tiene ángulo: se decide al preparar el guion')) }}
             {% if not item.guion_base %}
               {% if item.trabajo_guion %}
-              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
+              <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Se está escribiendo el guion… la página se recarga sola cuando esté listo.') }}</p>
               {% else %}
               <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar">
-                <label>Precio (opcional)
-                  <input type="number" name="precio" min="0" step="any" placeholder="p.ej. 89900" style="width:9rem;">
+                <label>{{ _('Precio (opcional)') }}
+                  <input type="number" name="precio" min="0" step="any" placeholder="{{ _('p.ej. 89900') }}" style="width:9rem;">
                 </label>
-                <label>Idioma base
+                {# Decisión B (2026-09-28): marca de entrada el idioma del proyecto;
+                   la elección explícita gana. Los nombres van en su propia
+                   lengua, como el selector de Configuración. #}
+                {% set _idioma_def = idioma_proyecto or "es" %}
+                <label>{{ _('Idioma base') }}
                   <select name="idioma_base">
-                    <option value="es">Español</option>
-                    <option value="en">English</option>
+                    <option value="es"{% if _idioma_def == "es" %} selected{% endif %}>Español</option>
+                    <option value="en"{% if _idioma_def == "en" %} selected{% endif %}>English</option>
                     <option value="pt">Português</option>
                   </select>
                 </label>
-                <button type="submit" class="btn-guardar btn-sm">Preparar guion con IA{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
+                <button type="submit" class="btn-guardar btn-sm">{{ _('Preparar guion con IA') }}{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
               </form>
               {% endif %}
             {% else %}
@@ -106,20 +111,20 @@
               <form method="post" action="{{ url_for('fe_guardar_guion', cliente=cliente, cf_id=item.id) }}" class="fe-guion">
                 {% for b in _g.bloques %}
                 <div class="fe-bloque">
-                  <div class="fe-bloque-cab"><strong>{{ loop.index }}. {{ b.rol }}</strong> <small>{{ b.inicio_s }}s – {{ b.fin_s }}s</small></div>
-                  <label>Texto en pantalla <input type="text" name="bloque_{{ loop.index0 }}_pantalla" value="{{ b.texto_pantalla }}" maxlength="80"></label>
-                  <label>Texto de voz <textarea name="bloque_{{ loop.index0 }}_voz" rows="2">{{ b.texto_voz }}</textarea></label>
+                  <div class="fe-bloque-cab"><strong>{{ loop.index }}. {{ etiqueta_fe(b.rol) }}</strong> <small>{{ b.inicio_s }}s – {{ b.fin_s }}s</small></div>
+                  <label>{{ _('Texto en pantalla') }} <input type="text" name="bloque_{{ loop.index0 }}_pantalla" value="{{ b.texto_pantalla }}" maxlength="80"></label>
+                  <label>{{ _('Texto de voz') }} <textarea name="bloque_{{ loop.index0 }}_voz" rows="2">{{ b.texto_voz }}</textarea></label>
                 </div>
                 {% endfor %}
-                <button type="submit" class="btn-guardar btn-sm">Guardar guion</button>
+                <button type="submit" class="btn-guardar btn-sm">{{ _('Guardar guion') }}</button>
               </form>
               {% if item.trabajo_guion %}
-              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
+              <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Se está escribiendo el guion… la página se recarga sola cuando esté listo.') }}</p>
               {% else %}
               <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar"
-                    onsubmit="return confirm('¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones).');">
+                    onsubmit='return confirm({{ _("¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones).")|tojson }});'>
                 <input type="hidden" name="idioma_base" value="{{ _g.idioma if _g.idioma in ('es', 'en', 'pt') else 'es' }}">
-                <button type="submit" class="btn-rechazar btn-sm">Volver a escribir con IA</button>
+                <button type="submit" class="btn-rechazar btn-sm">{{ _('Volver a escribir con IA') }}</button>
               </form>
               {% endif %}
 
@@ -127,7 +132,7 @@
               {% for f in item.finales if f.estado in ("listo", "degradada") %}
               {% set _nada = _finales_por_destino.__setitem__(f.idioma ~ "_" ~ f.pais, f) %}
               {% endfor %}
-              <h5 class="fe-subtitulo">Producir finales</h5>
+              <h5 class="fe-subtitulo">{{ _('Producir finales') }}</h5>
               <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir"
                     data-moneda-base="{{ paises_fe[_g.pais].moneda if _g.pais in paises_fe else '' }}"
                     onsubmit="return feConfirmarReemplazo(this);">
@@ -136,48 +141,48 @@
                   {% set _ya = _finales_por_destino.get(p.idioma ~ "_" ~ codigo) %}
                   <label class="fe-destino">
                     <input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}" {% if _ya %}data-ya-producida="1"{% endif %}>
-                    {{ p.bandera }} {{ p.nombre }} <small>({{ p.idioma }})</small>
+                    {{ p.bandera }} {{ p.nombre|traducir }} <small>(<span translate="no">{{ p.idioma }}</span>)</small>
                     <input type="number" name="precio_{{ p.idioma }}_{{ codigo }}" min="0" step="any"
-                           placeholder="Precio (opcional)" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;"
+                           placeholder="{{ _('Precio (opcional)') }}" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;"
                            {% if codigo == _g.pais and _g.precio_base is not none %}value="{{ _g.precio_base }}"{% endif %}>
-                    {% if _ya %}<small class="tag-estado">(ya producida — se reemplaza)</small>{% endif %}
+                    {% if _ya %}<small class="tag-estado">{{ _('(ya producida — se reemplaza)') }}</small>{% endif %}
                   </label>
                   {% endfor %}
                 </div>
                 <div class="fe-opciones">
-                  <label>Voz
+                  <label>{{ _('Voz') }}
                     <select name="voz">
                       {% for v in (voces_fe.get(_g.idioma) or voces_fe.get("es") or []) %}
                       <option value="{{ v }}">{{ v }}</option>
                       {% endfor %}
                     </select>
                   </label>
-                  <label>Música
+                  <label>{{ _('Música') }}
                     <select name="estilo_musica">
                       {% for e in estilos_fe %}
-                      <option value="{{ e }}">{{ e }}</option>
+                      <option value="{{ e }}">{{ e|traducir }}</option>
                       {% endfor %}
-                      <optgroup label="Mi música" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
+                      <optgroup label="{{ _('Mi música') }}" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
                         {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
                       </optgroup>
                     </select>
                   </label>
-                  <label>Empieza en el segundo <small>(Mi música)</small>
+                  <label>{{ _('Empieza en el segundo') }} <small>{{ _('(Mi música)') }}</small>
                     <input type="number" name="musica_inicio_s" min="0" step="1" value="0" style="width:5rem;">
                   </label>
-                  <label>Precio base <input type="number" name="precio" min="0" step="any"
-                         placeholder="opcional, país base" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
-                  <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> con voz</label>
-                  <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> con música</label>
-                  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if not (item.capas.sonido and item.capas.sonido.estado == "ausente") %}checked{% endif %}> con sonido de la escena{% if item.capas.sonido and item.capas.sonido.estado == "ausente" %} <small class="tag-estado">(este clon no trae sonido)</small>{% endif %}</label>
-                  <label>Mezcla
+                  <label>{{ _('Precio base') }} <input type="number" name="precio" min="0" step="any"
+                         placeholder="{{ _('opcional, país base') }}" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
+                  <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> {{ _('con voz') }}</label>
+                  <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> {{ _('con música') }}</label>
+                  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if not (item.capas.sonido and item.capas.sonido.estado == "ausente") %}checked{% endif %}> {{ _('con sonido de la escena') }}{% if item.capas.sonido and item.capas.sonido.estado == "ausente" %} <small class="tag-estado">{{ _('(este clon no trae sonido)') }}</small>{% endif %}</label>
+                  <label>{{ _('Mezcla') }}
                     <select name="mezcla">
-                      {% for p in presets_mezcla %}<option value="{{ p }}">{{ p | replace("_", " ") }}</option>{% endfor %}
+                      {% for p in presets_mezcla %}<option value="{{ p }}">{{ etiqueta_fe(p) }}</option>{% endfor %}
                     </select>
                   </label>
                 </div>
-                {% set _cu = (" ≈ " ~ (precios.final_por_pais.usd | usd) ~ " c/u") if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
-                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="Producir {n} finales{{ _cu }}">Producir finales{{ _cu }}</button>
+                {% set _cu = (' ' ~ _('≈ %(usd)s c/u', usd=(precios.final_por_pais.usd | usd))) if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
+                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="{{ _('Producir {n} finales') }}{{ _cu }}" data-plantilla-uno="{{ _('Producir 1 final') }}{{ _cu }}" data-sin-n="{{ _('Producir finales') }}{{ _cu }}">{{ _('Producir finales') }}{{ _cu }}</button>
               </form>
             {% endif %}
             </section>
@@ -197,19 +202,19 @@
           {% endif %}
         </div>
         <div class="detalle-info">
-          <p class="campo-label">Final edition</p>
-          <p class="detalle-texto">{{ _bandera }} {{ paises_fe[f.pais].nombre if f.pais in paises_fe else f.pais }} · {{ f.idioma }}</p>
+          <p class="campo-label">{{ _('Final edition') }}</p>
+          <p class="detalle-texto">{{ _bandera }} {{ (paises_fe[f.pais].nombre|traducir) if f.pais in paises_fe else f.pais }} · <span translate="no">{{ f.idioma }}</span></p>
           <p class="vacio" style="padding:0;font-size:.78rem;">
-            Final de: {{ item.accion_central or item.id }}
+            {{ _('Final de: %(texto)s', texto=(item.accion_central or item.id)) }}
             {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}
-            {% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}
+            {% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}
             · <span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>
           </p>
           {% if f.capas %}
-          <p class="campo-label" style="margin-top:.8rem;">Capas</p>
+          <p class="campo-label" style="margin-top:.8rem;">{{ _('Capas') }}</p>
           <ul class="fe-capas">
             {% for nombre, capa in f.capas.items() %}
-            <li><strong>{{ nombre }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ capa.estado }}</span>{% if capa.costo_usd %} · {{ capa.costo_usd | usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
+            <li><strong>{{ etiqueta_fe(nombre) }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ etiqueta_fe(capa.estado) }}</span>{% if capa.costo_usd %} · {{ capa.costo_usd | usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
             {% endfor %}
           </ul>
           {% endif %}
@@ -218,18 +223,18 @@
           {% endif %}
           <div class="detalle-acciones">
             {% if f.video_url %}
-            <a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>
+            <a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>
             {% endif %}
-            <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
-              <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+            <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit='return confirm({{ _("¿Descartar esta final?")|tojson }});' style="display:inline;">
+              <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
             </form>
             {% if f.estado in ("listo", "degradada") and f.pieza_id %}
-            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ f.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Probar en Meta</a>
+            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ f.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
             {% endif %}
           </div>
           {% if f.estado in ("listo", "degradada") and f.video_url and f.pieza_id %}
           {# Bloque 7: mismo bloque que en Experimentos (sin ep_id: sale de Final edition). #}
-          <p class="campo-label" style="margin-top:.8rem;">Publicación orgánica</p>
+          <p class="campo-label" style="margin-top:.8rem;">{{ _('Publicación orgánica') }}</p>
           {{ bloque_organico(f.pieza_id, "final") }}
           {% endif %}
         </div>

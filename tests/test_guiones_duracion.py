@@ -24,7 +24,8 @@ def test_conservadas_y_bloques_quitados():
 
 def test_estimado_previo():
     lineas = [(1, "a b c d e f"), (2, "g h i j k l")]          # 12 palabras
-    assert duracion.estimado_previo(lineas, 2.4, 0.6) == round(12 / 2.4 + 1.2 + 1.0, 1)
+    # lo hablado + el aire por línea + el cuadro final + medio segundo de redondeo por clip (aquí, uno)
+    assert duracion.estimado_previo(lineas, 2.4, 0.6) == round(12 / 2.4 + 1.2 + 1.0 + 0.5, 1)
     assert duracion.estimado_previo([], 2.4, 0.6) == 0.0
 
 
@@ -50,3 +51,21 @@ def test_calcular_clip_minimo_y_exceso():
 def test_calcular_clip_numero_exacto_no_sube():
     c = duracion.calcular_clip([{"dice": [1], "aire": 0.0, "visual": "x"}], {1: " ".join(["w"] * 24)}, 2.4)
     assert c["duracion"] == 10
+
+
+def test_estimado_cuenta_el_redondeo_de_cada_clip():
+    """HappyCozy (2026-09-30): 34 líneas, 110,8 s hablados; el estimado viejo decía 132,2 s («entra» en 133)
+    y armado dio 141–150 s. Cada clip se redondea hacia arriba al segundo: medio segundo por clip esperado."""
+    lineas = [(n, " ".join(["palabra"] * 8)) for n in range(1, 35)]  # 34 líneas × 8 palabras = 113,3 s a 2,4 p/s
+    base = 34 * 8 / 2.4 + 0.6 * 34 + 1.0
+    clips = -(-base // duracion.CLIP_PROMEDIO)
+    assert duracion.estimado_previo(lineas, 2.4, 0.6) == round(base + 0.5 * clips, 1)
+    assert duracion.estimado_previo(lineas, 2.4, 0.6) > round(base, 1)
+
+
+def test_aire_disponible():
+    lineas = [(n, " ".join(["palabra"] * 8)) for n in range(1, 35)]
+    hablado = 34 * 8 / 2.4
+    # 145 s de objetivo → se cuentan 15 clips de 10 s con 1 s de redondeo cada uno (de más, a propósito)
+    assert duracion.aire_disponible(lineas, 2.4, 145) == round(145 - hablado - 15, 1)
+    assert duracion.aire_disponible(lineas, 2.4, 100) == 0.0  # no entra: nada de aire

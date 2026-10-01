@@ -64,6 +64,10 @@
       <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/escenas/{{ f.indice }}"
               data-gpg-cuerpo='{"sugeridas": true}'>{{ _('Volver a lo sugerido') }}</button>
       {% endif %}
+      {% set p_escena = prompts.get('principal:' ~ f.indice) %}
+      <button type="button" class="btn-guardar btn-xs gpg-a-crear" data-gpg-crear="/videos/{{ video.id }}/escenas/{{ f.indice }}/crear"
+              {% if f.faltan or not p_escena %}disabled{% endif %}
+              title="{{ _('Falta subir alguna imagen de esta escena.') if f.faltan else (_('Esta escena todavía no tiene su prompt en el chat.') if not p_escena else _('Carga su prompt e imágenes en Crear › Desde referencias. No genera nada.')) }}">{{ _('Llevar a Crear') }} →</button>
     </div>
     <div class="gpg-fichas" role="group" aria-label="{{ _('Imágenes de la escena %(n)s', n=f.indice) }}">
       {% for x in E.pool %}{% set en = x.clave in f.claves %}

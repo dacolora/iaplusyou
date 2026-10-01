@@ -2,8 +2,10 @@
 El documento se valida al entrar y al salir; el autoguardado es CAS por
 `version_n` (mismo patrón que `pieza_qa`): dos pestañas no se pisan."""
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
+import idiomas
 import materiales
 from final_edition import documento as documento_mod
 
@@ -18,13 +20,13 @@ def _dict(f):
 
 def crear(cliente, tipo, nombre, documento, cf_id=None, creada_por=None):
     if tipo not in ("video", "imagen"):
-        raise ValueError("tipo debe ser video o imagen")
+        raise ValueError(gettext("tipo debe ser video o imagen"))
     doc = documento_mod.validar(documento)
     ahora = db.ahora()
     with db.conectar() as con:
         r = con.execute(db.edicion.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, cf_id=cf_id, tipo=tipo,
-            nombre=(nombre or "Sin nombre")[:120], documento=doc, version_n=0, estado="borrador", creada_por=creada_por))
+            nombre=(nombre or gettext("Sin nombre"))[:120], documento=doc, version_n=0, estado="borrador", creada_por=creada_por))
         eid = r.inserted_primary_key[0]
     materiales.marcar_uso(doc.get("materiales") or [])
     return cargar(cliente, eid)
@@ -47,21 +49,39 @@ def cargar(cliente, edicion_id):
 # y «Editar» prefiere siempre una edición suya.
 AUTOMATICA = "final_edition"
 _PREFIJO_BORRADOR = "Borrador · "
+_PREFIJOS_BORRADOR_CACHE = None
 
 
 def es_automatica(edicion):
     return (edicion or {}).get("creada_por") == AUTOMATICA
 
 
+def _prefijos_borrador():
+    """`"Borrador" + " · "` en cada idioma de `idiomas.IDIOMAS` (el nombre
+    guardado queda en el idioma del proyecto que lo creó; quien mira puede
+    tener otro) más el literal en español, aunque el catálogo cambie. Se
+    calcula una sola vez por proceso, con el catálogo ya cargado."""
+    global _PREFIJOS_BORRADOR_CACHE
+    if _PREFIJOS_BORRADOR_CACHE is None:
+        prefijos = {_PREFIJO_BORRADOR}
+        for idioma in idiomas.IDIOMAS:
+            with idiomas.en_idioma(idioma):
+                prefijos.add(gettext("Borrador") + " · ")
+        _PREFIJOS_BORRADOR_CACHE = prefijos
+    return _PREFIJOS_BORRADOR_CACHE
+
+
 def nombre_visible(edicion):
     """El nombre que ve la persona: el de la edición, salvo el borrador
     automático, que dice que lo es."""
-    nombre = (edicion or {}).get("nombre") or "Sin nombre"
+    nombre = (edicion or {}).get("nombre") or gettext("Sin nombre")
     if not es_automatica(edicion):
         return nombre
-    if nombre.startswith(_PREFIJO_BORRADOR):
-        nombre = nombre[len(_PREFIJO_BORRADOR):]
-    return f"Borrador automático · {nombre}"
+    for prefijo in _prefijos_borrador():
+        if nombre.startswith(prefijo):
+            nombre = nombre[len(prefijo):]
+            break
+    return gettext("Borrador automático · %(nombre)s", nombre=nombre)
 
 
 def para_editar(eds):
@@ -90,7 +110,7 @@ def guardar(cliente, edicion_id, documento, version_n):
             db.edicion.c.version_n == int(version_n)).values(
             documento=doc, version_n=nuevo, actualizado_en=db.ahora()))
         if r.rowcount != 1:
-            raise Conflicto("La edición cambió en otra pestaña; recarga para seguir.")
+            raise Conflicto(gettext("La edición cambió en otra pestaña; recarga para seguir."))
     materiales.marcar_uso(doc.get("materiales") or [])
     return nuevo
 
@@ -124,8 +144,8 @@ def versionar(cliente, edicion_id, motivo, version_n=None):
             existe = con.execute(sa.select(db.edicion.c.id).where(
                 db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id))).first()
             if not existe:
-                raise Conflicto("No existe esa edición.")
-            raise Conflicto("La edición cambió en otra pestaña; recarga para seguir.")
+                raise Conflicto(gettext("No existe esa edición."))
+            raise Conflicto(gettext("La edición cambió en otra pestaña; recarga para seguir."))
         ed = _dict(con.execute(sa.select(db.edicion).where(
             db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id))).first())
         n = int(con.execute(sa.select(sa.func.coalesce(sa.func.max(db.edicion_version.c.n), 0))
@@ -159,7 +179,7 @@ def restaurar(cliente, edicion_id, n):
             .where(db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id),
                    db.edicion_version.c.n == int(n))).first())
         if not v:
-            raise Conflicto("No existe esa versión.")
+            raise Conflicto(gettext("No existe esa versión."))
         actual = int(con.execute(sa.select(db.edicion.c.version_n).where(db.edicion.c.id == int(edicion_id))).scalar())
     return guardar(cliente, edicion_id, documento_mod.migrar(v["documento"]), actual)
 

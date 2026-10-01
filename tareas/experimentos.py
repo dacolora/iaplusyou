@@ -217,7 +217,7 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     except doctrina_diagnostico.ErrorDiagnostico as e:
         if e.tokens_entrada or e.tokens_salida:
             gastos.registrar_seguro(cliente, "revision", costo_real(e.tokens_entrada, e.tokens_salida), referencia,
-                                    proveedor="anthropic", detalle="diagnóstico de perdedora · respuesta inválida",
+                                    proveedor="anthropic", detalle=gettext("diagnóstico de perdedora · respuesta inválida"),
                                     extra={"tokens_entrada": e.tokens_entrada, "tokens_salida": e.tokens_salida,
                                            "modelo": modelo_actual()})
         error = {"error": cola.sin_token(str(e))[:200], "pistas": doctrina_diagnostico.pistas(
@@ -235,7 +235,7 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
         return None
     usd = costo_real(ent, sal)
     gastos.registrar_seguro(cliente, "revision", usd, referencia, proveedor="anthropic",
-                            detalle="diagnóstico de perdedora",
+                            detalle=gettext("diagnóstico de perdedora"),
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     d = dict(d, version=doctrina_diagnostico.VERSION, modelo=modelo_actual(), usd=usd, en=db.ahora())
     causas = ", ".join(idiomas.traducir(doctrina.CAUSAS_NOMBRE.get(c["codigo"], c["codigo"])) for c in d["causas"])

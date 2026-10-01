@@ -617,3 +617,45 @@ def test_precio_estimado_del_rescate_respeta_el_salto(ent, monkeypatch):
     ex.actualizar_pieza("acme", ep, escalon_rescate=2)
     e = ex.obtener("acme", eid)
     assert ac._precio_estimado("acme", e, "rescatar", {"ep_id": ep, "salto": 2})["usd"] == 6.0     # nunca vuelve atrás
+
+
+def test_lo_que_guardan_las_acciones_aprobadas_a_mano_va_en_el_idioma_del_proyecto(ent, monkeypatch):
+    """I2 (revisión final de la fase 4): aprobar una propuesta desde el panel
+    corre acciones.ejecutar en el idioma de quien mira; lo que las acciones
+    GUARDAN por dentro (eventos del lanzador, el experimento hijo y sus
+    eventos) va en el del proyecto. Se mira el idioma activo dentro de cada
+    efecto; el mensaje que vuelve sigue a quien mira."""
+    import idiomas
+    ac, eid, ep = ent["ac"], ent["eid"], ent["ep"]
+    vistos = []
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "es")
+    monkeypatch.setattr(ac.lanzador, "pausar_pieza", lambda c, e: vistos.append(("pausar", idiomas.activo())))
+    monkeypatch.setattr(ac.lanzador, "escalar_pais",
+                        lambda c, e, p, pct, tope_dia=None: (vistos.append(("escalar", idiomas.activo())), 24.0)[1])
+    monkeypatch.setattr(ac.derivaciones, "planificar",
+                        lambda c, e, tipo, payload: (vistos.append((tipo, idiomas.activo())), 99)[1])
+    with idiomas.en_idioma("en"):
+        mensaje = ac.ejecutar("acme", eid, "pausar", {"ep_id": ep}, propuesta_id=1, ep_id_evento=ep)
+        ac.ejecutar("acme", eid, "escalar", {"pais": "CO"}, propuesta_id=2)
+        ac.ejecutar("acme", eid, "derivar", {"ep_id": ep}, propuesta_id=3)
+    assert mensaje.startswith("Paused ")
+    assert vistos == [("pausar", "es"), ("escalar", "es"), ("derivar", "es")]
+
+
+def test_rescatar_y_activar_aprobados_a_mano_guardan_en_el_idioma_del_proyecto(ent, monkeypatch):
+    """I2, las otras dos ramas que guardan: rescatar (planificar + la pausa) y
+    activar (activar_pieza de cada pieza). El mensaje que vuelve, a quien mira."""
+    import idiomas
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+    vistos = []
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "es")
+    monkeypatch.setattr(ac.lanzador, "pausar_pieza", lambda c, e: vistos.append(("pausar", idiomas.activo())))
+    monkeypatch.setattr(ac.lanzador, "activar_pieza", lambda c, e: vistos.append(("activar", idiomas.activo())))
+    monkeypatch.setattr(ac.derivaciones, "planificar",
+                        lambda c, e, tipo, payload: (vistos.append((tipo, idiomas.activo())), 99)[1])
+    with idiomas.en_idioma("en"):
+        ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep}, propuesta_id=1, ep_id_evento=ep)
+        ex.actualizar("acme", eid, estado="pausado")
+        mensaje = ac.ejecutar("acme", eid, "activar", {"ep_ids": [ep]}, propuesta_id=2)
+    assert mensaje.startswith("Activated ")
+    assert vistos == [("rescatar", "es"), ("pausar", "es"), ("activar", "es")]

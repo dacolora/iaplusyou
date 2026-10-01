@@ -32,8 +32,9 @@ log = logging.getLogger("creatv.tareas.triple_whale")
 TIPO_SYNC = "tw_sincronizar"
 TIPO_TODAS = "tw_sincronizar_todas"
 TIPO_EVALUAR = "tw_evaluar"
-ETAPAS_SYNC = [("Trayendo métricas", 100)]
-ETAPAS_EVALUAR = [("Buscando miniaturas", 10), ("Sacando fotogramas", 15), ("Analizando con Claude", 75)]
+ETAPAS_SYNC = [(idiomas.N_("Trayendo métricas"), 100)]
+ETAPAS_EVALUAR = [(idiomas.N_("Buscando miniaturas"), 10), (idiomas.N_("Sacando fotogramas"), 15),
+                  (idiomas.N_("Analizando con Claude"), 75)]
 MAX_INTENTOS_SYNC = 2
 
 
@@ -79,7 +80,7 @@ def tw_sincronizar(tarea):
         return gettext("Triple Whale ya no está conectado en este proyecto.")
 
     def progreso(i, n, desde, hasta):
-        trabajos.reportar(job_id, etapa="Trayendo métricas", progreso=i * 100.0 / max(1, n),
+        trabajos.reportar(job_id, etapa=idiomas.N_("Trayendo métricas"), progreso=i * 100.0 / max(1, n),
                           detalle=f"{desde} → {hasta}")
 
     try:
@@ -109,7 +110,7 @@ def tw_sincronizar(tarea):
 @registrar(TIPO_TODAS)
 def tw_sincronizar_todas(tarea):
     n = sum(1 for cliente in triple_whale_tiendas.conectados() if encolar_sync(cliente))
-    return f"{n} sincronización(es) de Triple Whale en cola"
+    return gettext("%(n)s sincronización(es) de Triple Whale en cola", n=n)
 
 
 @registrar(TIPO_EVALUAR)
@@ -123,7 +124,7 @@ def tw_evaluar(tarea):
     datos.actualizar_evaluacion(eid, estado="analizando", tarea_id=tarea.get("id"), error=None)
     anuncios = list(fila["anuncios"] or [])
     extra = dict(fila["extra"] or {})
-    trabajos.reportar(job_id, etapa="Buscando miniaturas", detalle=gettext("%(n)s anuncio(s)", n=len(anuncios)))
+    trabajos.reportar(job_id, etapa=idiomas.N_("Buscando miniaturas"), detalle=gettext("%(n)s anuncio(s)", n=len(anuncios)))
     medios = analisis.medios_meta(cliente, anuncios)
     # Las piezas hechas en Creatv tienen su video y su miniatura en R2: la
     # miniatura sirve tal cual y Claude recibe los fotogramas del video.
@@ -138,10 +139,10 @@ def tw_evaluar(tarea):
             medio.update(imagen=imagen, imagen_origen=imagen)
         medio["origen"] = "creatv"
     medios = analisis.copiar_miniaturas(cliente, eid, anuncios, medios)
-    trabajos.reportar(job_id, etapa="Sacando fotogramas")
+    trabajos.reportar(job_id, etapa=idiomas.N_("Sacando fotogramas"))
     bloques, temporales = analisis.visuales(cliente, anuncios, medios, creatv)
     productos = datos.top_productos(cliente, fila["desde"], fila["hasta"], limite=analisis.MAX_PRODUCTOS)
-    trabajos.reportar(job_id, etapa="Analizando con Claude")
+    trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
     contexto = {"desde": fila["desde"], "hasta": fila["hasta"], "moneda": fila["moneda"],
                 "modelo": extra.get("modelo"), "ventana": extra.get("ventana"),
                 "benchmarks": extra.get("benchmarks") or {}, "meta_roas": extra.get("meta_roas")}
@@ -156,7 +157,7 @@ def tw_evaluar(tarea):
         usd = costo_real(entrada, salida) if (entrada or salida) else 0.0
         if usd:
             gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                                    detalle="sin resultado usable")
+                                    detalle=gettext("sin resultado usable"))
         mensaje = analisis.texto_error(e)
         datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)
         raise RuntimeError(mensaje) from None
@@ -164,7 +165,7 @@ def tw_evaluar(tarea):
         analisis.borrar_temporales(temporales)
     usd = costo_real(entrada, salida)
     gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                            detalle=f"{len(anuncios)} anuncio(s) de Triple Whale")
+                            detalle=gettext("%(n)s anuncio(s) de Triple Whale", n=len(anuncios)))
     for a in anuncios:
         medio = medios.get(a["ad_id"])
         if medio:

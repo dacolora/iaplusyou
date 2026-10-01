@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import db
+import idiomas
 from doctrina import revisor as doctrina_revisor
 from idiomas import N_
 
@@ -158,13 +159,13 @@ def crear_hijo(cliente, padre_id, nombre, pieza_origen_ep_id):
     ahora = db.ahora()
     with db.conectar() as con:
         if not _bloquear(con, db.experimento, padre_id, cliente):
-            raise ValueError("Ese experimento no existe.")
+            raise ValueError(gettext("Ese experimento no existe."))
         existente = _hijo_existente(con, cliente, padre_id, pieza_origen_ep_id)
         if existente:
             return existente
         f = _fila_experimento(con, cliente, padre_id)
         if not f:
-            raise ValueError("Ese experimento no existe.")
+            raise ValueError(gettext("Ese experimento no existe."))
         m = f._mapping
         e = db.experimento
         extra_padre = m[e.c.extra] or {}
@@ -333,6 +334,11 @@ def crear_con_piezas(cliente, datos, combinaciones):
         atribucion = atribucion_sugerida(cliente)
     if atribucion not in ATRIBUCIONES:
         raise ValueError(gettext("Atribución no válida: %(atribucion)s (usa pixel, tienda o ninguna).", atribucion=repr(atribucion)))
+    # El evento se guarda: en el idioma del proyecto, no en el de quien marcó
+    # las piezas en la galería (la ruta exp_probar).
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        mensaje_creado = gettext("Experimento creado desde la galería con %(anuncios)s anuncio(s) en %(paises)s país(es)",
+                                 anuncios=len(finales), paises=len(paises_exp))
     with db.conectar() as con:
         eid = con.execute(db.experimento.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=datos["nombre"], modo=datos.get("modo", "manual"),
@@ -347,7 +353,7 @@ def crear_con_piezas(cliente, datos, combinaciones):
                 pais=pais, estado="en_cola", veredicto="pendiente", escalon_rescate=0, extra={}))
         con.execute(db.evento.insert().values(
             cliente=cliente, creado_en=ahora, experimento_id=eid, tipo="creado",
-            mensaje=f"Experimento creado desde la galería con {len(finales)} anuncio(s) en {len(paises_exp)} país(es)",
+            mensaje=mensaje_creado,
             datos={}))
     return eid
 
@@ -395,11 +401,11 @@ def marcar_pieza(cliente, ep_id, **flags):
     ep = db.experimento_pieza
     with db.conectar() as con:
         if not _bloquear(con, ep, ep_id, cliente):
-            raise ValueError("Esa pieza no está en el experimento.")
+            raise ValueError(gettext("Esa pieza no está en el experimento."))
         f = con.execute(sa.select(ep.c.extra).where(
             ep.c.id == ep_id, ep.c.cliente == cliente)).first()
         if f is None:
-            raise ValueError("Esa pieza no está en el experimento.")
+            raise ValueError(gettext("Esa pieza no está en el experimento."))
         extra = {**(f._mapping[ep.c.extra] or {}), **flags}
         con.execute(ep.update().where(ep.c.id == ep_id, ep.c.cliente == cliente)
                     .values(actualizado_en=db.ahora(), extra=extra))

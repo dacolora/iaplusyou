@@ -14,6 +14,8 @@ Ids de trabajo (los mismos que usa dashboard para encolar y consultar):
 localización) y `producir` ya deja la pieza en `error` con el motivo; la
 persona decide si vuelve a producir desde la tarjeta.
 """
+from flask_babel import gettext
+
 import creative_flow
 import final_edition
 import trabajos
@@ -48,7 +50,7 @@ def ejecutar_guion(tarea):
     propio cobro."""
     p = tarea["payload"]
     final_edition.preparar_guion(p["cliente"], p["cf_id"], p.get("opciones") or {}, ref_sufijo=ref_sufijo(tarea))
-    return "Guion listo — revísalo y produce las finales."
+    return gettext("Guion listo — revísalo y produce las finales.")
 
 
 @registrar("final_producir")
@@ -62,12 +64,12 @@ def ejecutar_producir(tarea):
     _, resumen = final_edition.producir(
         cliente, cf_id, idioma, pais, p.get("opciones") or {},
         on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre), ref_sufijo=ref_sufijo(tarea))
-    nombre = f"Final {idioma}_{pais}"
+    nombre = gettext("Final %(id)s", id=f"{idioma}_{pais}")
     if _variante(p) is not None:
-        nombre = f"Variante {_variante(p)} de la final {idioma}_{pais}"
+        nombre = gettext("Variante %(n)s de la final %(id)s", n=_variante(p), id=f"{idioma}_{pais}")
     if (resumen or {}).get("estado") == "degradada":
-        return f"{nombre} lista (sin voz/música)."
-    return f"{nombre} lista."
+        return gettext("%(nombre)s lista (sin voz/música).", nombre=nombre)
+    return gettext("%(nombre)s lista.", nombre=nombre)
 
 
 @al_interrumpir("final_producir")

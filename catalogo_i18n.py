@@ -25,7 +25,9 @@ PO = os.path.join(idiomas.DIR_TRADUCCIONES, "en", "LC_MESSAGES", "messages.po")
 MO = os.path.join(idiomas.DIR_TRADUCCIONES, "en", "LC_MESSAGES", "messages.mo")
 PAQUETES = ("auth", "conectores", "doctrina", "final_edition", "guiones", "meta_ads", "nicho",
             "providers", "referentes", "sprints", "storage", "tareas", "triple_whale", "uploaders")
-PALABRAS = {"_": None, "gettext": None, "ngettext": (1, 2), "N_": None}
+# pgettext:1c,2 (el contexto primero): «Fuente» del editor es la tipografía,
+# no la fuente de datos de Nicho (final_edition/textos_editor.py).
+PALABRAS = {"_": None, "gettext": None, "ngettext": (1, 2), "N_": None, "pgettext": ((1, "c"), 2)}
 
 
 def archivos_py():

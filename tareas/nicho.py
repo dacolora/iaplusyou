@@ -146,7 +146,7 @@ def ejecutar_generar(tarea):
             usd = avatares.costo_real(entrada, salida)
         if entrada + salida > 0:
             gastos.registrar_seguro(cliente, "avatares", usd, f"avatares:{eid}:fallido{ref_sufijo(tarea)}",
-                                    detalle=f"intento fallido: {cola.recortar(cola.sin_token(e), 200)}",
+                                    detalle=gettext("intento fallido: %(error)s", error=cola.recortar(cola.sin_token(e), 200)),
                                     proveedor="anthropic",
                                     extra={"tokens_entrada": entrada, "tokens_salida": salida, "modelo": avatares.modelo_actual()})
         _anotar_error(cliente, eid, gettext("%(error)s (si Claude alcanzó a responder, este intento sí se cobró)",
@@ -163,7 +163,8 @@ def ejecutar_generar(tarea):
         raise
     resumen = r["resumen"]
     gastos.registrar_seguro(cliente, "avatares", resumen.get("usd"), f"avatares:{eid}:{res['generacion']}",
-                            detalle=f"{res['nucleos']} núcleo(s), {res['subs']} sub-avatar(es), {resumen.get('comentarios')} comentarios",
+                            detalle=gettext("%(nucleos)s núcleo(s), %(subs)s sub-avatar(es), %(comentarios)s comentarios",
+                                            nucleos=res["nucleos"], subs=res["subs"], comentarios=resumen.get("comentarios")),
                             proveedor="anthropic",
                             extra={"tokens_entrada": resumen.get("tokens_entrada"), "tokens_salida": resumen.get("tokens_salida"),
                                    "modelo": resumen.get("modelo")})
@@ -248,8 +249,9 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
         return 0.0
     usd = math.ceil(round(n * tarifa["usd_por_resultado"] * 100, 6)) / 100     # round antes de ceil: 30 × 0.003 × 100 no es 9 exacto
     corridas = [c.get("run_id") for c in (getattr(fuente, "corridas", None) or []) if c.get("run_id")]
+    detalle = gettext("Apify %(actor)s: %(n)s resultado(s) aprox.", actor=idiomas.traducir(tarifa["nombre"]), n=n)
     gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}{ref_sufijo(tarea)}",
-                            detalle=f"Apify {tarifa['nombre']}: {n} resultado(s) aprox." + (f" — {nota}" if nota else ""),
+                            detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify",
                             extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"], **_corrida(fuente),
                                    **({"corridas": corridas} if corridas else {})})
@@ -325,7 +327,7 @@ def ejecutar_recolectar(tarea):
         except Exception:  # noqa: BLE001 — si la base también falla, manda el error original
             log.exception("No se pudo guardar el lote pendiente de %s", tipo)
         mensaje = cola.recortar(cola.sin_token(e), 300)
-        usd = _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota="intento fallido") if fuente is not None else 0.0
+        usd = _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=gettext("intento fallido")) if fuente is not None else 0.0
         # Cierra el paso de la cadena ANTES de las escrituras genéricas que siguen: si
         # `registrar_recoleccion`/`recalcular` revientan, el paso igual queda cerrado
         # (nunca `en_curso` con nada vivo detrás) -- R17.
@@ -393,14 +395,15 @@ def ejecutar_completar(tarea):
         if r is not None and r["resumen"]["tokens_entrada"] + r["resumen"]["tokens_salida"] > 0:
             res = r["resumen"]
             gastos.registrar_seguro(cliente, "avatares", res["usd"], f"avatares:{eid}:completar:fallido{ref_sufijo(tarea)}",
-                                    detalle=f"intento fallido: {cola.recortar(cola.sin_token(e), 200)}", proveedor="anthropic",
+                                    detalle=gettext("intento fallido: %(error)s", error=cola.recortar(cola.sin_token(e), 200)), proveedor="anthropic",
                                     extra={"tokens_entrada": res["tokens_entrada"], "tokens_salida": res["tokens_salida"], "modelo": res["modelo"]})
         _anotar_error(cliente, eid, gettext("%(error)s (si Claude alcanzó a responder, este intento sí se cobró)", error=cola.sin_token(e)))
         raise
     res = r["resumen"]
     if res["tokens_entrada"] + res["tokens_salida"] > 0:
         gastos.registrar_seguro(cliente, "avatares", res["usd"], f"avatares:{eid}:completar{ref_sufijo(tarea)}",
-                                detalle=f"completado: {res['completados']} de {res['avatares']} avatar(es)", proveedor="anthropic",
+                                detalle=gettext("completado: %(n)s de %(t)s avatar(es)", n=res["completados"],
+                                                t=res["avatares"]), proveedor="anthropic",
                                 extra={"tokens_entrada": res["tokens_entrada"], "tokens_salida": res["tokens_salida"], "modelo": res["modelo"]})
     for aid in aprobados:
         datos.aprobar_avatar(cliente, aid)                    # la persona que usa la app queda al día

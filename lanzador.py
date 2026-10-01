@@ -12,6 +12,7 @@ import atribucion
 import cola
 import db
 import experimentos
+import idiomas
 import meta_conexion
 import meta_errores
 import notificaciones
@@ -23,7 +24,7 @@ from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
 from tareas.meta import MONEDAS_SIN_DECIMALES, _LOCK, _miniatura_para_ad
 
-ETAPAS_LANZAR = [("Campaña", 15), ("Conjuntos por país", 25), ("Anuncios", 60)]
+ETAPAS_LANZAR = [(idiomas.N_("Campaña"), 15), (idiomas.N_("Conjuntos por país"), 25), (idiomas.N_("Anuncios"), 60)]
 # Meta rechaza spend_cap por debajo de ~100 USD; por debajo no se manda.
 SPEND_CAP_MINIMO_USD = 100.0
 _MIN_POR_MONEDA = {"COP": 400000.0, "MXN": 2000.0, "BRL": 600.0, "EUR": 100.0, "PEN": 400.0, "CLP": 100000.0, "ARS": 100000.0, "USD": 100.0}
@@ -97,7 +98,9 @@ def _promoted_object_para(cliente, ex):
     if px is None:
         px = meta_conexion.estado_pixel(cliente)
     if not px or px.get("estado") != "ok" or not px.get("pixel_id"):
-        detalle = (px or {}).get("detalle") or ""
+        # Desde la fase 6 el `detalle` del Pixel es un msgid (N_): se traduce acá,
+        # en el idioma ambiente (el del proyecto, en el worker).
+        detalle = idiomas.traducir((px or {}).get("detalle") or "")
         detalle_txt = f" ({detalle.rstrip('.')})" if detalle else ""
         raise ValueError(gettext(
             "Este experimento optimiza por compras y el Pixel no está activo%(detalle)s. "

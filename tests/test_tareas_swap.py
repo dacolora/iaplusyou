@@ -294,3 +294,24 @@ def test_ejecutar_foto_con_mejora_fallida_no_dice_con_mejora(base_temporal, monk
     assert g["referencia"] == "swap:swap_m2:t1"
     assert "con mejora" not in g["detalle"]
     assert g["usd"] == pytest.approx(0.039)  # el upscale nunca se cobró
+
+
+def test_swap_sin_saldo_se_explica_y_avisa(base_temporal, monkeypatch, tmp_path):
+    """Incidente 2026-09-30: sin saldo en WaveSpeed, «Cambiar producto» también
+    guardaba el JSON crudo del proveedor como error."""
+    import tareas.swap as sw
+    from providers import wavespeed_common as wc
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path)
+
+    def _boom(*a, **k):
+        raise wc.SinSaldo("bytedance/seedream-v5.0-pro/edit", 400,
+                          "Insufficient credits. Please top up your account to continue.")
+    monkeypatch.setattr(sw.nano_banana_client, "swap_producto", _boom)
+    actualizaciones, marcas = [], []
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda c, sid, **k: actualizaciones.append(k))
+    monkeypatch.setattr(sw.saldo, "marcar", lambda proveedor, detalle="", cliente="": marcas.append((proveedor, cliente)) or True)
+    with pytest.raises(RuntimeError):
+        sw.ejecutar({"id": 3, "job_id": "acme__swap_x__swap", "payload": payload})
+    (error,) = [k["error"] for k in actualizaciones if k.get("estado") == "error"]
+    assert "saldo" in error and "Insufficient" not in error
+    assert marcas == [("wavespeed", "acme")]

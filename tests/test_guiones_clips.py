@@ -99,3 +99,20 @@ def test_validar_forma():
     assert p["clips"][0]["momentos"][0] == {"dice": [1], "aire": 6.0, "visual": "x"}
     assert p["clips"][0]["momentos"][1]["dice"] is None and p["clips"][0]["titulo"] == "Clip 1"
     assert p["hooks"] == {} and p["bloque_video"]["props"] == clips.DEFECTOS_BLOQUE["props"]
+
+
+def test_mensajes_dan_la_cuenta_del_aire_cuando_hay_objetivo(base_temporal):
+    """Con solo «Duración objetivo: 145 s» Claude repartió 33 s de aire y el video dio 150 s (HappyCozy)."""
+    from guiones import clips, datos, duracion
+    from tests.fixtures_guiones import CONFIG, video_nuevo
+    _, vid = video_nuevo(config=dict(CONFIG, duracion_objetivo=30))
+    v = datos.video("acme", vid)
+    texto = clips.mensajes(v, [])[0]["content"]
+    textos = duracion.textos_efectivos(v["guion"]["lectura"], "original")
+    cons = duracion.conservadas(textos)
+    hablado = sum(duracion.seg_hablados(t, 2.4) for _, t in cons)
+    assert "Duración objetivo del video: 30 s en total." in texto
+    assert f"Lo hablado suma {hablado:.1f} s".replace(".", ",") in texto
+    assert f"{duracion.aire_disponible(cons, 2.4, 30):.1f} s".replace(".", ",") in texto
+    sin = clips.mensajes(dict(v, config=dict(v["config"], duracion_objetivo=None)), [])[0]["content"]
+    assert "Lo hablado suma" not in sin

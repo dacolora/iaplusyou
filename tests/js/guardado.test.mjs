@@ -87,7 +87,7 @@ test("capa 4c (5/10): un 400 del validador muestra la frase llana y guarda el de
 });
 
 // ---- Capa 4c (6/10): la sesión venció ----
-import { MENSAJE_SESION, sesionTerminada } from "../../static/editor/guardado.js";
+import { mensajeSesion, sesionTerminada } from "../../static/editor/guardado.js";
 
 const html = { get: (k) => (k.toLowerCase() === "content-type" ? "text/html; charset=utf-8" : null) };
 const json = { get: (k) => (k.toLowerCase() === "content-type" ? "application/json" : null) };
@@ -103,7 +103,7 @@ test("sesionTerminada: solo una redirección a /login o una página HTML con 200
   for (const status of [500, 502, 504]) assert.equal(sesionTerminada({ status, redirected: false, headers: html }), false, status);
   // una redirección que no va a /login tampoco
   assert.equal(sesionTerminada({ status: 405, redirected: true, url: "https://app.test/cliente/acme", headers: html }), false);
-  assert.match(MENSAJE_SESION, /sesión terminó.*recarga la página e inicia sesión/);
+  assert.match(mensajeSesion(), /sesión terminó.*recarga la página e inicia sesión/);
 });
 
 test("un 5xx al guardar no dice «sesión terminó»: queda pendiente y se guarda con el próximo cambio", async () => {
@@ -113,7 +113,7 @@ test("un 5xx al guardar no dice «sesión terminó»: queda pendiente y se guard
     g.pedir({ n: 1 });
     await g.ahora();
     assert.equal(g.estado, "error");
-    assert.notEqual(g.mensaje, MENSAJE_SESION);
+    assert.notEqual(g.mensaje, mensajeSesion());
     assert.match(g.mensaje, new RegExp(`error ${status}.*se guarda con el próximo cambio`));
     assert.ok(g.sinGuardar, "el cambio sigue pendiente");
   }
@@ -127,7 +127,7 @@ test("guardar con la sesión vencida dice eso (no «error 405») y no pierde el 
     g.pedir({ n: 1 });
     await g.ahora();
     assert.equal(g.estado, "error");
-    assert.equal(g.mensaje, MENSAJE_SESION);
+    assert.equal(g.mensaje, mensajeSesion());
     assert.equal(g.versionN, 3, "no toma una versión de la página de entrar");
     assert.ok(g.sinGuardar, "el cambio sigue pendiente");
   }

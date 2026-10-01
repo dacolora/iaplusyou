@@ -8,13 +8,18 @@ from datetime import datetime, timedelta
 from urllib.parse import unquote, urlparse
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
+import idiomas
+from idiomas import N_
 from storage import r2_uploader
 
 LIMITES = {"video": (200 * 1024 * 1024, 120000), "imagen": (20 * 1024 * 1024, None), "audio": (20 * 1024 * 1024, None)}
 CUOTA_BYTES = 2 * 1024 ** 3
 EFIMEROS = ("png_texto", "proxy", "tira", "forma_onda")
+# El tipo dentro de «El %(tipo)s pesa más de…» (se muestra: N_, se traduce al armar el mensaje).
+NOMBRES_TIPO = {"video": N_("video"), "imagen": N_("imagen"), "audio": N_("audio")}
 
 
 class MaterialEnUso(RuntimeError):
@@ -179,7 +184,7 @@ def borrar(cliente, material_id):
     if not mat:
         return False
     if en_uso(cliente, material_id):
-        raise MaterialEnUso("Ese material está en una edición; quítalo de ahí primero.")
+        raise MaterialEnUso(gettext("Ese material está en una edición; quítalo de ahí primero."))
     # La fila es el único handle al objeto en R2: si el borrado ahí falla,
     # propaga y no toca la base — mejor un material huérfano en la base
     # (reintentable) que uno huérfano en R2 (sin ninguna fila que lo recuerde).
@@ -218,12 +223,13 @@ def limpiar_sin_uso(cliente=None, dias=30):
 
 def validar_subida(tipo, bytes_, duracion_ms=None):
     if tipo not in LIMITES:
-        raise SubidaInvalida(f"tipo de archivo no permitido: {tipo}. Acepto video, imagen y audio.")
+        raise SubidaInvalida(gettext("tipo de archivo no permitido: %(tipo)s. Acepto video, imagen y audio.", tipo=tipo))
     max_bytes, max_ms = LIMITES[tipo]
     if int(bytes_) > max_bytes:
-        raise SubidaInvalida(f"El {tipo} pesa más de {max_bytes // (1024 * 1024)} MB.")
+        nombre = idiomas.traducir(NOMBRES_TIPO[tipo])
+        raise SubidaInvalida(gettext("El %(tipo)s pesa más de %(mb)s MB.", tipo=nombre, mb=max_bytes // (1024 * 1024)))
     if max_ms and duracion_ms and int(duracion_ms) > max_ms:
-        raise SubidaInvalida("El video dura más de 2 min.")
+        raise SubidaInvalida(gettext("El video dura más de 2 min."))
 
 
 def bytes_usados(cliente):

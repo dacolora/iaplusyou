@@ -1,0 +1,17 @@
+{# Proveedor sin saldo (incidente 2026-09-30: WaveSpeed sin saldo y los videos
+   fallaban con el JSON crudo del proveedor). `aviso_saldo` viene de
+   saldo.vigente("wavespeed"); se quita solo con la próxima generación que sale
+   bien. El administrador ve desde cuándo y dónde recargar; el cliente, un aviso
+   neutro (la cuenta es de Creatv, no suya). #}
+{% if aviso_saldo %}
+<div class="flash warn aviso-saldo" data-aviso-saldo role="status">
+  {% if session.get('rol') == 'admin' %}
+  <strong>{{ _('%(proveedor)s se quedó sin saldo.', proveedor=aviso_saldo.nombre) }}</strong>
+  {{ _('Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). Recarga la cuenta; este aviso se quita solo con la próxima generación que salga bien.', desde=(aviso_saldo.desde or '')[:16].replace('T', ' ')) }}
+  <a href="{{ aviso_saldo.recarga }}" target="_blank" rel="noopener">{{ _('Recargar %(proveedor)s', proveedor=aviso_saldo.nombre) }}</a>
+  {% else %}
+  <strong>{{ _('La generación de videos e imágenes está en pausa.') }}</strong>
+  {{ _('Hay un problema con el proveedor y ya le avisamos a Creatv. Vuelve a intentarlo en un rato: los intentos fallidos no se cobran.') }}
+  {% endif %}
+</div>
+{% endif %}

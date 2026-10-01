@@ -16,18 +16,22 @@ import os
 import subprocess
 
 import requests
+from flask_babel import gettext
 
 import bitacora
 import catalogo_productos
 import gastos
 import generador_prompts
+import idiomas
 import marca as marca_mod
 import prompt_swap
+import saldo
 import swaps as swaps_mod
 import trabajos
+from idiomas import N_
 from providers import aspect_ratio as aspect_ratio_mod
 from providers import nano_banana_client, kling_o1_client, comparador_modelos, wavespeed_client
-from providers import wavespeed_video_edit, wavespeed_imagen
+from providers import wavespeed_common, wavespeed_video_edit, wavespeed_imagen
 from storage import r2_uploader
 from tareas import al_interrumpir, ref_sufijo, registrar
 
@@ -38,13 +42,14 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # constantes para que no puedan desincronizarse por un typo. Los pesos son
 # "qué fracción del tiempo se lleva más o menos cada paso" — la llamada al
 # modelo es de lejos la más larga.
-ETAPA_SUBIR_ORIGINAL = "Subiendo tu video original"
-ETAPA_SUBIR_REFERENCIAS = "Subiendo las fotos del producto"
-ETAPA_PREPARAR_FOTO = "Preparando la imagen"
-ETAPA_MODELO = "Generando con el modelo"
-ETAPA_DESCARGAR = "Descargando el resultado"
-ETAPA_GUARDAR = "Guardando y evaluando la marca"
-ETAPA_MEJORAR = "Mejorando la calidad de la imagen"
+# Se guardan en español (N_) y estado_trabajo las traduce al mostrarlas.
+ETAPA_SUBIR_ORIGINAL = N_("Subiendo tu video original")
+ETAPA_SUBIR_REFERENCIAS = N_("Subiendo las fotos del producto")
+ETAPA_PREPARAR_FOTO = N_("Preparando la imagen")
+ETAPA_MODELO = N_("Generando con el modelo")
+ETAPA_DESCARGAR = N_("Descargando el resultado")
+ETAPA_GUARDAR = N_("Guardando y evaluando la marca")
+ETAPA_MEJORAR = N_("Mejorando la calidad de la imagen")
 
 ETAPAS_SWAP_VIDEO = [
     (ETAPA_SUBIR_ORIGINAL, 5),
@@ -69,15 +74,15 @@ ETAPAS_SWAP_FOTO_MEJORADA = [
 # Los proveedores hablan en sus propios códigos de estado; esto es lo único
 # honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
 _FASES_PROVEEDOR = {
-    "IN_QUEUE": "en cola",
-    "IN_PROGRESS": "el modelo está trabajando",
-    "created": "en cola",
-    "processing": "el modelo está trabajando",
-    "queued": "en cola",
-    "starting": "arrancando",
-    "running": "el modelo está trabajando",
-    "in_progress": "el modelo está trabajando",
-    "pending": "en cola",
+    "IN_QUEUE": N_("en cola"),
+    "IN_PROGRESS": N_("el modelo está trabajando"),
+    "created": N_("en cola"),
+    "processing": N_("el modelo está trabajando"),
+    "queued": N_("en cola"),
+    "starting": N_("arrancando"),
+    "running": N_("el modelo está trabajando"),
+    "in_progress": N_("el modelo está trabajando"),
+    "pending": N_("en cola"),
 }
 
 # Estados terminales: el poll también los emite en su última vuelta, pero mostrar
@@ -87,7 +92,8 @@ _FASES_TERMINALES = ("COMPLETED", "completed", "succeeded", "success", "done")
 
 
 def _texto_fase(info):
-    """Traduce a español el estado crudo que reporta un proveedor durante el poll.
+    """Traduce al idioma del proyecto (el worker ya corre en él) el estado crudo
+    que reporta un proveedor durante el poll.
     Con fallback: si aparece una fase que no conocemos se muestra tal cual en vez
     de tragarse la información (los proveedores agregan estados sin avisar)."""
     if not info:
@@ -95,12 +101,12 @@ def _texto_fase(info):
     fase = info.get("fase")
     if fase in _FASES_TERMINALES:
         return None
-    texto = _FASES_PROVEEDOR.get(fase, fase)
+    texto = idiomas.traducir(_FASES_PROVEEDOR.get(fase, fase))
     if not texto:
         return None
     posicion = info.get("queue_position")
     if posicion is not None:
-        texto = f"{texto} (puesto {posicion})"
+        texto = gettext("%(fase)s (puesto %(n)s)", fase=texto, n=posicion)
     return texto
 
 
@@ -187,7 +193,7 @@ def ejecutar(tarea):
     if producto is None:
         # Lo borraron del catálogo entre encolar y ejecutar: sin referencias no
         # hay nada que generar, y el swap no puede quedar "generando" por siempre.
-        mensaje = "El producto ya no está en el catálogo; no se generó el swap."
+        mensaje = gettext("El producto ya no está en el catálogo; no se generó el swap.")
         swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje)
         bitacora.registrar(cliente, swap_id, "swap", "error", mensaje)
         return mensaje
@@ -235,7 +241,7 @@ def ejecutar(tarea):
                 trabajos.reportar(
                     job_id,
                     progreso=100.0 * i / len(referencias),
-                    detalle=f"foto {i + 1} de {len(referencias)}",
+                    detalle=gettext("foto %(n)s de %(total)s", n=i + 1, total=len(referencias)),
                 )
                 key = f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref_local)}"
                 referencias_urls.append(r2_uploader.upload_image(ref_local, key))
@@ -405,13 +411,19 @@ def ejecutar(tarea):
             else:
                 _evaluar_swap_contra_matriz(cliente, swap_id, url)
 
-        return "Swap listo."
+        return gettext("Swap listo.")
     except Exception as e:
-        swaps_mod.actualizar(cliente, swap_id, estado="error", error=str(e))
+        mensaje_error = str(e)
+        if isinstance(e, wavespeed_common.SinSaldo):
+            # Incidente 2026-09-30: en palabras, y el administrador se entera.
+            saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                mensaje_error = saldo.mensaje_tarjeta(e.proveedor)
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje_error)
         bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
         if costo is not None:
             _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok,
-                             sufijo=" · falló después de generar; el proveedor ya cobró")
+                             sufijo=" · " + gettext("falló después de generar; el proveedor ya cobró"))
         raise
 
 
@@ -421,8 +433,11 @@ def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, suf
     tarifa (usd None) se registra en 0 con "sin tarifa" para que quede
     constancia del cobro."""
     usd = (costo or {}).get("usd")
-    detalle = f"{proveedor} · {'video' if tipo == 'video' else 'foto'}" + (" · con mejora" if mejora_ok else "")
+    partes = [proveedor, gettext("video") if tipo == "video" else gettext("foto")]
+    if mejora_ok:
+        partes.append(gettext("con mejora"))
     if usd is None:
-        detalle += " · sin tarifa"
+        partes.append(gettext("sin tarifa"))
+    detalle = " · ".join(partes)
     gastos.registrar_seguro(cliente, "swap", usd, referencia, detalle=detalle + sufijo, proveedor=proveedor,
                             extra={"credits": (costo or {}).get("credits"), "sin_tarifa": usd is None})

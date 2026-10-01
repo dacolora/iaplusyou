@@ -103,7 +103,9 @@ def _parsear(texto):
     return data
 
 
-_PREFIJO_EMERGING = re.compile(r"^\s*EMERGING\s*:\s*", re.IGNORECASE)
+# «EMERGING:» y «NEW:» (en cualquier orden y cantidad): copycoders usa los dos
+# y Claude a veces propone una familia que ya existe con el otro (2026-10-01).
+_PREFIJO_EMERGING = re.compile(r"^\s*(?:(?:EMERGING|NEW)\s*:\s*)+", re.IGNORECASE)
 
 
 def _resolver_familia(familia, familia_nueva, vocabulario):
@@ -114,8 +116,8 @@ def _resolver_familia(familia, familia_nueva, vocabulario):
     mismo cada vez, «Clasificar pendientes» re-facturaba el mismo anuncio sin
     arreglarlo nunca. Ahora un nombre que no está en el vocabulario se toma
     como familia nueva (la tarea lo guarda como `EMERGING: <nombre>`). Se
-    compara sin mayúsculas y sin el prefijo `EMERGING:`, para no duplicar una
-    familia que ya existe ni guardar `EMERGING: EMERGING: …`."""
+    compara sin mayúsculas y sin los prefijos `EMERGING:`/`NEW:`, para no
+    duplicar una familia que ya existe ni guardar `EMERGING: EMERGING: …`."""
     por_clave = {}
     for v in vocabulario:
         por_clave.setdefault(v.casefold(), v)

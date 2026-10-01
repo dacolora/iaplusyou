@@ -16,6 +16,8 @@ Las claves son `r<n>` (Image n del REFERENCE MAP, que ya está en el prompt de
 cada clip) y `x<k>` (extra; el prompt no las nombra hasta que la persona lo
 pida en el chat). Nada de esto llama a Claude ni cobra.
 """
+import re
+
 from flask_babel import gettext
 
 from guiones.refinador import Conflicto, DatoInvalido
@@ -241,3 +243,69 @@ def texto_por_clip(video, url_de=None):
             lineas.append(f"{etiqueta} — {url}" if url else etiqueta)
         salida[f["indice"]] = lineas
     return salida
+
+
+# ------------------------------------------------ llevar una escena a Crear ---
+
+_LINEA_MAPA = re.compile(r"^Image (\d+) = ")
+_MENCION_IMAGE = re.compile(r"(?<![\w@])Image (\d+)\b")
+_ARRANQUE = re.compile(r"^Start image = last frame of Clip \d+\.?$")
+
+
+def imagenes_para_crear(video, indice):
+    """Las imágenes de la escena, en el orden en que entran a la bandeja de Crear
+    (el de Image n). `Conflicto` si alguna todavía no tiene imagen: sin ella el
+    clip se generaría sin ese personaje o ese lugar."""
+    clip = _clip(video, indice)
+    por_clave = {x["clave"]: x for x in pool(video)}
+    claves, _ = claves_de(video, clip)
+    faltan = [f"Image {por_clave[c]['numero']}" for c in claves if por_clave[c]["origen"] == "falta"]
+    if faltan:
+        raise Conflicto(gettext("Falta la imagen de %(lista)s: súbela antes de llevar la escena a Crear.",
+                                lista=", ".join(faltan)))
+    return [por_clave[c] for c in claves]
+
+
+def prompt_para_crear(texto, video, imagenes):
+    """El prompt del clip listo para Crear (spec 2026-09-30, «Llevar a Crear»):
+    el REFERENCE MAP queda solo con las imágenes de la escena, renumeradas como
+    en la bandeja y escritas como menciones de Crear (`@Imagen k`, que Crear
+    traduce al token de cada modelo y revisa antes de cobrar); una imagen del
+    video que la escena no lleva se nombra en palabras (un número suelto haría
+    que el modelo tome otra imagen: incidente 2026-09-28); las extra suman su
+    línea al mapa; «Start image = last frame of Clip N» se quita porque en Crear
+    no hay clip anterior. La persona ve el resultado en Crear antes de generar."""
+    nuevo = {x["numero"]: k for k, x in enumerate(imagenes, start=1)}
+    nombres = {x["numero"]: x["nombre"] or f"reference {x['numero']}" for x in pool(video)}
+
+    def renumerar(linea):
+        def cambiar(m):
+            n = int(m.group(1))
+            return f"@Imagen {nuevo[n]}" if n in nuevo else nombres.get(n, m.group(0))
+        return _MENCION_IMAGE.sub(cambiar, linea)
+
+    extras = [f"@Imagen {nuevo[x['numero']]} = extra reference — {x['nombre'] or 'image'}."
+              for x in imagenes if x["tipo"] == "extra"]
+    salida, en_mapa, mapa = [], False, []
+    for linea in (texto or "").splitlines():
+        if _ARRANQUE.match(linea.strip()):
+            continue
+        if not en_mapa and linea.strip() == "REFERENCE MAP":
+            en_mapa, mapa = True, []
+            continue
+        if en_mapa:
+            m = _LINEA_MAPA.match(linea.strip())
+            if m:
+                if int(m.group(1)) in nuevo:
+                    mapa.append(renumerar(linea))
+                continue
+            en_mapa = False
+            mapa += extras
+            if mapa:
+                salida += ["REFERENCE MAP"] + mapa
+            elif not linea.strip():
+                continue  # sin imágenes: fuera el mapa y su línea en blanco
+        salida.append(renumerar(linea))
+    if en_mapa and (mapa or extras):
+        salida += ["REFERENCE MAP"] + mapa + extras
+    return "\n".join(salida).strip()

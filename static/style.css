@@ -1839,6 +1839,16 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .ref-recrear-titulo { margin: 0 0 .6rem; }
 .ref-recrear-form textarea { width: 100%; font-size: .82rem; }
 .ref-recrear-acciones { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
+/* Recrear fiel (spec 2026-09-30): textos leídos de la referencia e imágenes a generar. */
+.ref-recrear-bloque { margin: .7rem 0; display: grid; gap: .45rem; }
+.ref-recrear-bloque legend { font-weight: 600; font-size: .85rem; }
+.ref-recrear-bloque small { color: var(--muted); }
+.ref-recrear-textos { display: grid; gap: .5rem; }
+.ref-recrear-textos label { display: grid; gap: .2rem; font-size: .8rem; color: var(--muted); }
+.ref-recrear-textos input { width: 100%; }
+.ref-recrear-leyendo { margin: 0; font-size: .85rem; color: var(--muted); }
+.ref-recrear-prompts { margin-top: .6rem; }
+.ref-recrear-prompts .ayuda { font-size: .8rem; margin: .4rem 0; color: var(--muted); }
 .ref-usos { margin-top: .4rem; }
 
 /* Formularios dentro de un <dialog class="generado-modal"> (Traer referentes,
@@ -2502,6 +2512,13 @@ body.panel-abierto { overflow: hidden; }
   margin: .6rem .2rem 0; font-size: .78rem; color: var(--muted); }
 .crear-pie .crear-enlace { color: var(--muted); font-weight: 500; }
 .crear-pie .crear-enlace strong { color: var(--accent-texto); font-weight: 600; }
+/* Receta de tomas (2026-09-30): va pegada a «Crear super prompt», que es lo único que la usa. */
+.crear-super { display: flex; align-items: center; flex-wrap: wrap; gap: .3rem .8rem; min-width: 0; }
+.crear-receta { display: inline-flex; flex-direction: row; align-items: center; gap: .4rem; margin: 0; font-size: .78rem; color: var(--muted); }
+.crear-receta { max-width: 100%; }
+.crear-receta > span { white-space: nowrap; }
+.crear-receta select { width: auto; min-width: 0; max-width: 100%; flex: 0 1 auto; margin: 0; padding: .2rem .5rem; font-size: .78rem; }
+.crear-pie .crear-receta-desc { flex-basis: 100%; margin: 0; }
 .crear-consejos { max-width: 920px; margin: .5rem .2rem 0; font-size: .78rem; color: var(--muted); }
 .crear-consejos summary { font-weight: 500; }
 .crear-consejos ul { margin: .35rem 0 0; padding-left: 1.2rem; line-height: 1.5; }
@@ -2797,6 +2814,7 @@ body.panel-abierto { overflow: hidden; }
 .gpg-ficha:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gpg-ficha-mas { opacity: 1; border-style: dashed; text-align: center; }
 @media (max-width: 760px) { .gpg-img { width: calc(50% - .25rem); } }
+.gpg-escena-cab .gpg-a-crear { margin-left: auto; }
 
 /* Mis voces (2026-09-30): voces propias arriba de la galería, con su ✕ a la
    izquierda del ▶, y el panel para clonar o diseñar. */

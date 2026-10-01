@@ -28,6 +28,8 @@ con publicación en cola/publicándose/publicada se salta) y por
 ("ya salió orgánica alguna vez"), escrita apenas se encoló algo de verdad;
 hoy nadie la lee para decidir nada.
 """
+from contextlib import contextmanager
+
 from flask_babel import gettext
 
 import cola
@@ -57,6 +59,15 @@ ETIQUETAS_ACCION = {
     "rescatar": idiomas.N_("rescatar"), "activar": idiomas.N_("activar"), "archivar": idiomas.N_("archivar"),
     "publicar_organico": idiomas.N_("publicar orgánico"),
 }
+
+
+@contextmanager
+def _del_proyecto(cliente):
+    """Lo que un efecto GUARDA (eventos del lanzador, el experimento hijo)
+    va en el idioma del proyecto aunque la acción la apruebe alguien que mira
+    en otro idioma (I2); el mensaje que devuelve `ejecutar` queda afuera."""
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        yield
 
 
 def _experimento(cliente, experimento_id):
@@ -137,7 +148,10 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
     """Ejecuta la acción y devuelve un mensaje corto de lo que pasó, en el
     idioma ambiente de quien llama (el proyecto, si es el worker — lo pone
     worker.ejecutar —; quien mira, si es una ruta). Lanza ValueError si la
-    acción no existe o faltan datos. `propuesta_id`/`ep_id_evento`: cuando la
+    acción no existe o faltan datos. Lo que los efectos GUARDAN (eventos del
+    lanzador, el experimento hijo, errores de publicación) va en el idioma del
+    proyecto (`_del_proyecto`, I2 de la fase 4), y un ValueError que salga de
+    adentro de un efecto, también. `propuesta_id`/`ep_id_evento`: cuando la
     acción viene de aprobar una propuesta a mano (dashboard._ejecutar_propuesta),
     además deja el evento en la bitácora en el idioma del proyecto — ver
     `_registrar_evento_aprobada`."""
@@ -155,14 +169,17 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
 
     if accion == "pausar":
         pz = _pieza(ex, payload["ep_id"])
-        lanzador.pausar_pieza(cliente, pz["id"])
+        with _del_proyecto(cliente):
+            lanzador.pausar_pieza(cliente, pz["id"])
         _evento("Pausada %(nombre)s (%(pais)s).", nombre=pz["nombre"], pais=pz["pais"])
         return gettext("Pausada %(nombre)s (%(pais)s).", nombre=pz["nombre"], pais=pz["pais"])
 
     if accion == "escalar":
         pais = payload["pais"]
         reglas = reglas_de(cliente, ex)
-        nuevo = lanzador.escalar_pais(cliente, experimento_id, pais, reglas["escalar_pct_dia"], reglas["escalar_tope_dia"])
+        with _del_proyecto(cliente):
+            nuevo = lanzador.escalar_pais(cliente, experimento_id, pais, reglas["escalar_pct_dia"],
+                                          reglas["escalar_tope_dia"])
         _evento("Presupuesto de %(pais)s escalado a %(nuevo)s %(moneda)s por día.",
                pais=pais, nuevo=f"{nuevo:g}", moneda=ex.get("moneda") or "")
         return gettext("Presupuesto de %(pais)s escalado a %(nuevo)s %(moneda)s por día.",
@@ -173,7 +190,8 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
         if (pz.get("extra") or {}).get("derivado"):
             _evento("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
             return gettext("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
-        hijo = derivaciones.planificar(cliente, experimento_id, "derivar", payload)
+        with _del_proyecto(cliente):
+            hijo = derivaciones.planificar(cliente, experimento_id, "derivar", payload)
         # planificar ya marcó `derivado`; repetirlo es inocuo (misma bandera).
         experimentos.marcar_pieza(cliente, pz["id"], derivado=True)
         _evento("Derivación planificada a partir de %(nombre)s (experimento hijo %(hijo)s).",
@@ -192,12 +210,14 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
         # rescate de este escalón ya se planificó: no se vuelve a producir ni
         # a gastar; solo se asegura la pausa (por si falló la primera vez).
         if marcado is not None and marcado >= escalon_actual:
-            _pausar_si_activa(cliente, pz)
+            with _del_proyecto(cliente):
+                _pausar_si_activa(cliente, pz)
             _evento("%(nombre)s ya rescatada (escalón %(escalon)s); pieza pausada.",
                    nombre=pz["nombre"], escalon=marcado)
             return gettext("%(nombre)s ya rescatada (escalón %(escalon)s); pieza pausada.",
                            nombre=pz["nombre"], escalon=marcado)
-        derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
+        with _del_proyecto(cliente):
+            derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
         # planificar ya dejó `rescatado_en_escalon` (I-5); acá se refuerza
         # ANTES de pausar y sin bajar lo que ya haya: si Meta falla al
         # pausar, la marca existe y una re-ejecución (reintento de la
@@ -206,7 +226,8 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
         escalon = max(int(pz_post.get("escalon_rescate") or 0), escalon_actual + 1,
                       int((pz_post.get("extra") or {}).get("rescatado_en_escalon") or 0))
         experimentos.marcar_pieza(cliente, pz["id"], rescatado_en_escalon=escalon)
-        _pausar_si_activa(cliente, pz)
+        with _del_proyecto(cliente):
+            _pausar_si_activa(cliente, pz)
         _evento("Rescate planificado para %(nombre)s (escalón %(escalon)s); la pieza queda pausada.",
                nombre=pz["nombre"], escalon=escalon)
         return gettext("Rescate planificado para %(nombre)s (escalón %(escalon)s); la pieza queda pausada.",
@@ -221,8 +242,9 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
         # I-1: nunca `cambiar_estado(ACTIVE)` del experimento entero desde
         # acá — reactivaría en Meta las piezas que el decisor ya retiró.
         # `activar_pieza` reactiva campaña y conjunto por su cuenta.
-        for ep_id in ep_ids:
-            lanzador.activar_pieza(cliente, ep_id)
+        with _del_proyecto(cliente):
+            for ep_id in ep_ids:
+                lanzador.activar_pieza(cliente, ep_id)
         _evento("Activadas %(n)s pieza(s).", n=len(ep_ids))
         return gettext("Activadas %(n)s pieza(s).", n=len(ep_ids))
 
@@ -231,7 +253,8 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
         if (pz.get("extra") or {}).get("archivado"):
             _evento("%(nombre)s ya archivada.", nombre=pz["nombre"])
             return gettext("%(nombre)s ya archivada.", nombre=pz["nombre"])
-        _pausar_si_activa(cliente, pz)
+        with _del_proyecto(cliente):
+            _pausar_si_activa(cliente, pz)
         for cf_id in _cadena_conceptos(cliente, payload.get("cf_id")):
             creative_flow.archivar_concepto(cliente, cf_id, motivo)
         experimentos.marcar_pieza(cliente, pz["id"], archivado=True)
@@ -339,10 +362,11 @@ def _publicar_organico(cliente, ex, payload, propuesta_id=None, ep_id_evento=Non
                 # Creación parcial (mismo criterio que org_publicar): lo ya
                 # creado no puede quedar `en_cola` sin tarea bloqueando la
                 # plataforma por unicidad; en `error` se reintenta desde el panel.
-                for pub_id in pub_ids:
-                    organico.actualizar(cliente, pub_id, estado="error",
-                                        error=gettext("No se creó la publicación en %(nombre)s: %(error)s",
-                                                      nombre=_nombres([p]), error=error))
+                with _del_proyecto(cliente):             # se guarda: idioma del proyecto (I2)
+                    for pub_id in pub_ids:
+                        organico.actualizar(cliente, pub_id, estado="error",
+                                            error=gettext("No se creó la publicación en %(plataformas)s: %(error)s",
+                                                          plataformas=_nombres([p]), error=error))
                 raise
     aviso_saltadas = (gettext(" Ya estaba publicada (o en cola) en %(nombres)s.", nombres=_nombres(saltadas))
                       if saltadas else "")
@@ -360,9 +384,11 @@ def _publicar_organico(cliente, ex, payload, propuesta_id=None, ep_id_evento=Non
     if not encolada:
         # Entre en_curso() y encolar() alguien encoló la misma pieza: las filas
         # nuevas no tienen tarea; en `error` la persona las reintenta desde el panel.
-        for pub_id in pub_ids:
-            organico.actualizar(cliente, pub_id, estado="error",
-                                error=gettext("Ya había una publicación de esta pieza en curso; reintenta cuando termine."))
+        with _del_proyecto(cliente):                     # se guarda: idioma del proyecto (I2)
+            for pub_id in pub_ids:
+                organico.actualizar(cliente, pub_id, estado="error",
+                                    error=gettext("Ya había una publicación de esta pieza en curso; reintenta cuando "
+                                                  "termine."))
         _evento(lambda: gettext(
             "Ya hay una publicación orgánica de %(nombre)s en curso; las nuevas quedaron para reintentar.",
             nombre=pz["nombre"]))

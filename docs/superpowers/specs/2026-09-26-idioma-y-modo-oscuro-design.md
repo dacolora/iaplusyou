@@ -182,6 +182,8 @@ def en_idioma(idioma)                   # context manager para worker/correos (f
 
 ### B5. Los anuncios: siempre en el idioma del proyecto
 
+> **Reemplazado para Final edition (decisión B de Daniel, 2026-09-28):** las finales salen en el idioma de cada país destino, como antes; el guion base, en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. Nicho, Crear, Sprints y orgánico siguen como dice esta sección (fases 3-5).
+
 - **Final edition**: el destino se elige por **país** (moneda y precio). El idioma de toda final es
   el del proyecto. En la plantilla desaparece el `(es)`/`(pt)` de cada país; `final_edition.tipos.PAISES`
   conserva `idioma` solo como dato histórico (ya no decide nada). La clave de una final sigue siendo
@@ -298,12 +300,22 @@ Cada fase es un commit (o varios) sobre `main`, probada y desplegable sola.
    `campana_*.html`, `_tab_nicho.html`, `_nicho_*.html`, `nicho_estudio.html`, `_tab_referentes.html`,
    `_referente*.html`, `_referentes_*.html`; Claude en `sprints/*`, `nicho/avatares.py`,
    `referentes/*`; §B7 (dos idiomas, migración 0021, relleno de copycoders).
-6. **Final edition, editor, admin y resto**: final edition por país (§B5), editor, `admin_meta.html`,
+6. **Final edition, editor, admin y resto**: final edition por país (§B5) — por país y en el idioma de cada país: decisión B, 2026-09-28 —, editor, `admin_meta.html`,
    `admin_referentes.html`, `mapa_codigo.html`, `_tab_cambiar_calzado.html`, flujo viejo «Nueva idea»
    (`_seccion_*.html`, `_idea_*.html`, `_prompt_row.html`, `_imagen_row.html`, `_video_card.html`),
    `_meta_*.html`, `meta_elegir.html`, barrido final de mensajes del worker (§B8). **Al cerrar la
    fase: `idiomas.DEFECTO = "en"` y el selector visible para todos** — ese es el momento en que todos
    los usuarios y proyectos existentes pasan a inglés.
+   > **Cierre de la fase 6 (2026-09):** `DEFECTO = "en"` y el selector para todos se adelantaron al
+   > 2026-09-28 (decisión de Daniel); `tests/test_i18n_app_entera.py` prueba que, con esos valores, una
+   > persona sin idioma guardado ve todas las pestañas, las páginas públicas y las de admin en inglés.
+   > Quedan en español a propósito: el contenido de `mapa_codigo.html` (`lang="es"`; solo su barra se
+   > traduce) y de la doctrina (`doctrina/textos/*.md`), documentación interna; los mensajes de contrato de
+   > `final_edition/documento.validar` y de `static/editor/operaciones.js` (`INTERNOS`); los prompts para
+   > los modelos de video e imagen y sus tokens `Image N`/`Video N`/`@Imagen N` (`prompt_swap.py`, `flowplus_prompt`); y las 9 plantillas
+   > del flujo viejo «Nueva idea», excluidas de la guardia hasta que Daniel decida qué pasa con ese flujo.
+   > Una excepción a §B8: «Escribe aquí», el texto inicial editable de un clip de texto nuevo del editor,
+   > sale en el idioma de quien mira.
 
 Mientras `DEFECTO` sea `"es"` nada cambia para los clientes: todo lo nuevo cae al español, que es la
 fuente.
@@ -329,6 +341,7 @@ fuente.
   aparece para clientes mientras `DEFECTO == "es"` en fase 2–5.
 - **Final edition**: con proyecto en `en`, producir para `CO` crea `<cf_id>__en_CO` y la localización
   pide inglés con precio en COP.
+  > Reemplazado por la decisión B: un proyecto en `en` que produce para CO crea `<cf_id>__es_CO` y localiza en español con precio en COP — lo fija `tests/test_rutas_final_edition.py::test_decision_b_un_proyecto_en_ingles_produce_co_en_espanol`.
 - **Modo oscuro**: §A5.
 - **Visual**: app local sin llaves (memoria «ver la UI sin contraseña»), capturas de las 8 pestañas y
   páginas sueltas en oscuro, y en inglés las pantallas de cada fase cerrada; a 375 px también.

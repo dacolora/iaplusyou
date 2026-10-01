@@ -731,3 +731,22 @@ def test_preparar_guion_le_pasa_los_aprendizajes_del_proyecto(entorno, monkeypat
     monkeypatch.setattr(guion_mod, "generar_guion_base", fake)
     final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
     assert "Perdió en CO: «¿Frío?»" in vistos["aprendizajes"]
+
+
+def test_preparar_guion_sin_idioma_base_usa_el_del_proyecto(entorno, monkeypatch):
+    """Decisión B: el guion base (también el que arma `producir` cuando falta)
+    sale en el idioma del proyecto."""
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["idioma_base"] == "en"
+
+
+def test_decision_b_la_final_co_de_un_proyecto_en_ingles_se_localiza_en_espanol(entorno, monkeypatch):
+    import creative_flow as cf
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    cf.guardar_guion_base("acme", entorno["cf_id"], dict(GUION_BASE, idioma="en", pais="US"))
+    final_id, _ = final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"precios": {"es_CO": 89900}})
+    assert final_id.endswith("__es_CO")
+    assert entorno["localizar"][:2] == ("es", "CO")

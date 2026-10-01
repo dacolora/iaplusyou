@@ -11,9 +11,11 @@ import time
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
+from flask_babel import gettext
 from sqlalchemy.exc import IntegrityError
 
 import db
+import idiomas
 
 # access_token: Meta (paging.next, mensajes de Graph). upload_token: la
 # upload_url de TikTok (PUT de chunks) — un chunk rechazado la mete en el HTTPError.
@@ -171,21 +173,26 @@ def recuperar_colgadas(minutos=30, excluir=()):
     if excluir:
         condiciones.append(db.tarea.c.id.notin_(tuple(excluir)))
     with db.conectar() as con:
-        filas = con.execute(sa.select(db.tarea.c.id, db.tarea.c.intentos, db.tarea.c.max_intentos).where(
-            *condiciones)).all()
+        filas = con.execute(sa.select(db.tarea.c.id, db.tarea.c.intentos, db.tarea.c.max_intentos,
+                                      db.tarea.c.cliente, db.tarea.c.payload).where(*condiciones)).all()
         tocadas = 0
         interrumpidas = []
         for fila in filas:
+            # Lo que se guarda va en el idioma del proyecto de cada tarea (§B8),
+            # no en el del proceso que recupera.
+            idioma = idiomas.de_tarea({"cliente": fila.cliente, "payload": fila.payload or {}})
             if fila.intentos >= fila.max_intentos:
-                mensaje = recortar("Se interrumpió (llevaba más de %d min en curso). Revisa el resultado y "
-                                   "vuelve a intentar." % minutos)
+                with idiomas.en_idioma(idioma):
+                    mensaje = recortar(gettext("Se interrumpió (llevaba más de %(min)s min en curso). Revisa el "
+                                               "resultado y vuelve a intentar.", min=minutos))
                 con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
                     estado="error", terminada_en=db.ahora(), error=mensaje, mensaje=mensaje))
                 interrumpidas.append(_fila(con.execute(sa.select(db.tarea).where(db.tarea.c.id == fila.id)).first()))
             else:
+                with idiomas.en_idioma(idioma):
+                    error = recortar(gettext("recuperada: llevaba más de %(min)s min en curso", min=minutos))
                 con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
-                    estado="pendiente", ejecutar_desde=db.ahora(),
-                    error=recortar("recuperada: llevaba más de %d min en curso" % minutos)))
+                    estado="pendiente", ejecutar_desde=db.ahora(), error=error))
             tocadas += 1
         return tocadas, interrumpidas
 

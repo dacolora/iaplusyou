@@ -14,7 +14,7 @@
     var CLIENTE = {{ cliente | tojson }};
     var BASE = '/cliente/' + encodeURIComponent(CLIENTE) + '/guiones';
     var CLAVE = 'gpg-sel-' + CLIENTE;
-    var SONDEO_MS = 2000, SONDEO_MAX_MS = 6 * 60 * 1000;
+    var SONDEO_MS = 2000, SONDEO_MAX_MS = 12 * 60 * 1000;
     var sel = leerSel(), timer = null, inicioSondeo = 0, activo = false;
     var ultimoHTML = null, peticionN = 0, revelados = {}, sucios = {};
 
@@ -165,7 +165,24 @@
     panel.addEventListener('click', function (e) {
       var b = e.target.closest('button');
       if (!b || !panel.contains(b)) return;
-      if (b.hasAttribute('data-gpg-ir')) {
+      if (b.dataset.gpgCrear) {
+        // «Llevar a Crear»: reemplaza la bandeja de Crear (como «Editar y crear
+        // otra») y precarga el texto; no genera nada. Se confirma antes.
+        if (!window.confirm({{ _('La bandeja de Crear se reemplaza con las imágenes de esta escena y su prompt queda en el cuadro de texto. No se genera nada hasta que pulses «Generar». ¿Seguir?')|tojson }})) return;
+        var cajaC = b.closest('[data-gpg-caja]') || panel;
+        b.disabled = true;
+        enviar(b.dataset.gpgCrear, {}).then(function (res) {
+          if (!res.ok || !res.d.ir) {
+            errorEn(cajaC, res.d.error || ({{ _('Algo salió mal (HTTP %(status)s).', status='__STATUS__')|tojson }}.replace('__STATUS__', res.status)));
+            b.disabled = false;
+            return;
+          }
+          window.location.assign(res.d.ir);
+        }, function () {
+          errorEn(cajaC, {{ _('No hay conexión con el servidor.')|tojson }});
+          b.disabled = false;
+        });
+      } else if (b.hasAttribute('data-gpg-ir')) {
         sel = { guion: numero(b.dataset.guion), video: numero(b.dataset.video) };
         guardarSel();
         sucios = {};

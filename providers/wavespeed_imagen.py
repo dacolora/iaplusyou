@@ -54,7 +54,7 @@ def _lanzar(model_path, payload):
         timeout=60,
     )
     if not resp.ok:
-        raise RuntimeError(f"WaveSpeed ({model_path}) respondió {resp.status_code}: {resp.text[:500]}")
+        raise wavespeed_common.error_de_respuesta(resp, model_path)
     data = resp.json().get("data") or {}
     prediction_id = data.get("id")
     if not prediction_id:

@@ -23,6 +23,7 @@ renderizar y salidas/ es efímero por diseño."""
 import os
 
 import requests
+from flask_babel import gettext
 from PIL import Image
 
 import final_edition
@@ -68,7 +69,7 @@ def clon(cliente, cf_id, entry, ruta_local):
     material aún no tiene proxy."""
     url = entry.get("video_url_crudo") or entry.get("video_url")
     if not url:
-        raise ValueError(f"La sesión {cf_id} no tiene video listo para producir.")
+        raise ValueError(gettext("La sesión %(cf_id)s no tiene video listo para producir.", cf_id=cf_id))
     h = materiales.hash_archivo(ruta_local)
 
     def _medir():
@@ -141,7 +142,7 @@ def voz_bloque(cliente, texto_voz, voz, idioma, ventana_ms, carpeta):
     acelerado (≤ 1.35×) y recortado a ventana + 400 ms. `extra.palabras`
     siempre presente al volver (Whisper una sola vez por material)."""
     if not (texto_voz or "").strip():
-        raise ValueError("voz_bloque: el bloque no tiene texto de voz.")
+        raise ValueError(gettext("voz_bloque: el bloque no tiene texto de voz."))
     os.makedirs(carpeta, exist_ok=True)
     h = materiales.hash_clave("voz", texto_voz, voz, idioma)
 

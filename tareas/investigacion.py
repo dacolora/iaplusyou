@@ -143,8 +143,9 @@ def _gasto_apify(cliente, eid, tarea, paso, fuente, tarifa, nota=""):
         return 0.0
     usd = plataformas.usd(n, tarifa["usd_por_resultado"])
     corridas = [c.get("run_id") for c in (getattr(fuente, "corridas", None) or []) if c.get("run_id")]
+    detalle = gettext("Apify %(actor)s: %(n)s resultado(s) aprox.", actor=idiomas.traducir(tarifa["nombre"]), n=n)
     gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}:{paso}{ref_sufijo(tarea)}",
-                            detalle=f"Apify {tarifa['nombre']}: {n} resultado(s) aprox." + (f" — {nota}" if nota else ""),
+                            detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify", extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
                                                       "corridas": corridas})
     return usd

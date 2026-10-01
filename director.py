@@ -20,6 +20,7 @@ import anthropic
 import doctrina
 import flowplus_prompt
 import idiomas
+import plantillas_anuncio
 from providers import flowplus_modelos
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
@@ -155,8 +156,9 @@ def _mensaje(sesion, idioma):
     con_sonido = bool(sesion.get("con_sonido"))
     lineas.append(f"SONIDO: {'sí' if con_sonido else 'no'}" + (f" — {sesion['sonido_texto']}" if con_sonido and sesion.get("sonido_texto") else ""))
     lineas.append(f"PRESET: {sesion.get('preset_camara') or 'auto'}")
-    if sesion.get("plantilla"):
-        lineas.append(f"PLANTILLA: {json.dumps(sesion['plantilla'], ensure_ascii=False)}")
+    plantilla = plantillas_anuncio.por_id(sesion.get("plantilla"))
+    if plantilla:
+        lineas += plantillas_anuncio.bloque_director(plantilla, sesion.get("duracion_objetivo"), refs)
     ctx = sesion.get("contexto") or {}
     if ctx.get("persona"):
         lineas.append(f"AUDIENCIA: {json.dumps(ctx['persona'], ensure_ascii=False)}")
@@ -257,6 +259,10 @@ def compilar(cliente, sesion, idioma="es"):
     if duracion <= 0:
         raise DirectorError("la sesión no tiene duración")
     n = n_planos(duracion)
+    plantilla = plantillas_anuncio.por_id(sesion.get("plantilla"))
+    if plantilla:
+        # Con receta, al menos un plano por acto (spec §9).
+        n = plantillas_anuncio.n_planos(plantilla, duracion, n)
     cierre = flowplus_modelos.cierre_sonido(modelo)
     idioma = "en" if idioma == "en" else "es"
     system = doctrina.bloque_system("video", extra=_system(familia, cierre, n, duracion, idioma), idioma=idioma)

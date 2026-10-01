@@ -70,3 +70,14 @@ def test_crear_rechaza_una_pieza_sin_video(base_temporal, tmp_path):
     cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira", 8, "", "A")
     with pytest.raises(ValueError, match="video listo"):
         edicion_clon.crear("acme", cf, str(tmp_path))
+
+
+def test_la_edicion_desde_el_clon_usa_el_idioma_del_pais():
+    """Decisión B (2026-09-28): una final sale en el idioma de su país; la
+    edición «Editar este video» de un proyecto en EE. UU. produce en_US (la
+    misma clave que usa fe_producir), una de México es_MX."""
+    from final_edition import edicion_clon
+    clon = {"id": 7, "duracion_ms": 4000, "extra": {}}
+    assert edicion_clon.documento(clon, "9:16", pais="US")["idioma_base"] == "en"
+    assert edicion_clon.documento(clon, "9:16", pais="MX")["idioma_base"] == "es"
+    assert edicion_clon.documento(clon, "9:16")["idioma_base"] == "es"

@@ -43,7 +43,7 @@ def _solo_mismo_origen():
     sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
     if request.method == "POST" and sitio and sitio not in ("same-origin", "none"):
         if _quiere_json() or request.is_json:
-            return jsonify({"ok": False, "error": "Pedido rechazado: no viene de esta página."}), 403
+            return jsonify({"ok": False, "error": gettext("Pedido rechazado: no viene de esta página.")}), 403
         abort(403)
 
 
