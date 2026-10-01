@@ -42,6 +42,7 @@ WORKER += ["worker.py", "cola.py", "organico.py", "experimentos.py", "derivacion
            "importador.py", "nicho/fuentes/reddit.py", "nicho/fuentes/youtube.py", "nicho/fuentes/apify.py",
            "providers/apify.py"]
 WORKER += ["providers/wavespeed_common.py", "nicho/fuentes/plataformas.py", "nicho/fuentes/plataforma.py"]   # Task 7, fix 1
+WORKER += ["voces_propias.py", "audios.py"]   # Audios Europa (2026-09-30)
 
 
 def _nombre(llamada):

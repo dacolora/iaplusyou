@@ -78,6 +78,7 @@ PLANTILLAS_TRADUCIDAS = [
     # pero traducido igual; tests/test_i18n_nueva_idea.py lo pinta en los dos idiomas.
     "_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html", "_imagen_row.html",
     "_progreso_row.html", "_seccion_videos.html", "_video_card.html", "_seccion_bitacora.html",
+    "_audios_mis_voces.html",   # Audios Europa (2026-09-30): Crear › Audios › Mis voces, ya con _()
 ]
 
 

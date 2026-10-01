@@ -34,7 +34,7 @@ from idiomas import N_
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "voz_propia", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -237,6 +237,19 @@ def _estimar_locucion(caracteres=0, **_):
     return n * fal_audio.COSTO_USD_POR_CARACTER, f"{n} caracteres con ElevenLabs"
 
 
+def _estimar_voz_clonada(**_):
+    """Voces propias de Audios: clonar una voz con MiniMax vía fal. La vista
+    previa de la frase de muestra se cobra aparte (US$ 0,0003 por carácter:
+    1-3 ¢ para una frase típica) y no entra en este estimado."""
+    from providers import fal_audio
+    return fal_audio.COSTO_CLONAR_VOZ, "una voz clonada con MiniMax"
+
+
+def _estimar_voz_disenada(**_):
+    from providers import fal_audio
+    return fal_audio.COSTO_DISENAR_VOZ, "una voz diseñada con MiniMax"
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
@@ -256,6 +269,8 @@ _ESTIMADORES = {
         f"{max(1, int(n))} anuncio(s) con Claude" + (", en español e inglés" if bilingue else "")),
     "musica_elevenlabs": lambda **_: (TARIFAS["musica_elevenlabs"], "una canción de 60 s con ElevenLabs"),
     "locucion": _estimar_locucion,
+    "voz_clonada": _estimar_voz_clonada,
+    "voz_disenada": _estimar_voz_disenada,
     "guion_clips": _estimar_guion_clips,
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),

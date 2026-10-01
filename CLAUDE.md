@@ -573,7 +573,7 @@ with the re-rendered panel and the song list. Voice cloning is NOT here (fal has
 de las 22 voces verificadas de `fal_audio.VOCES`, elegida en una galería de tarjetas (género y tono de
 `audios.VOCES_INFO`/`fichas_voces`, filtros Mujer/Hombre, ▶ por voz: la muestra por voz e idioma se sintetiza UNA
 vez para toda la plataforma, fila `material` y gasto del cliente interno `_creatv`; `precalentar_muestras.py`
-las genera todas de antemano), idioma es/en/pt,
+las genera todas de antemano), diez idiomas (es, en, pt, de, fr, it, fi, sv, no, cs; desde 2026-09-30),
 velocidad (`speed` del modelo; nunca `language_code`, multilingual-v2 lo rechaza), y opcionalmente una
 canción de Mi música con «empieza en el segundo» y volumen. El resultado es un mp3 (`libmp3lame` 192k):
 la música arranca 0,6 s antes de la voz, se agacha (`mezcla.DUCKING_VOZ_SOBRE_MUSICA`), sigue 1,5 s y se
@@ -589,7 +589,20 @@ au_muestra/au_descargar` (el mp3 se sirve como adjunto desde Flask: `download` n
 La lista `_audios_lista.html` se re-pinta por fetch y su barra NO lleva `data-poll-job` (recargaría la
 página): sondeo propio como `mm-progreso`. Subir una canción aquí usa `mm_subir` y avisa al panel de Mi
 música con el evento `mi-musica:cambio` (y al revés). `fal_audio.COSTO_USD_POR_CARACTER` es 0,0001 desde
-2026-09-28 (precio real de fal; estuvo 3× alto). Fuera: voz clonada, efectos, subtítulos, usar el audio en
+2026-09-28 (precio real de fal; estuvo 3× alto).
+
+Desde 2026-09-30 (spec `docs/superpowers/specs/2026-09-30-audios-europa-voces-propias-design.md`) el motor lo
+decide `audios.motor_de(voz, idioma)`: la galería por Multilingual v2 salvo el noruego, que v2 no habla y va por
+ElevenLabs Turbo v2.5 con `language_code`; las **voces propias** por MiniMax Speech 2.8 HD con `language_boost`.
+`voces_propias.py` es el único escritor de las voces propias (filas `material` origen `voz_propia`, `url` = su
+muestra, `extra.voice_id` de MiniMax), de la grabación de un clon (origen `grabacion`, hash con prefijo propio para
+no chocar con Mi música) y de sus muestras por idioma (hash `muestra_propia`, las paga el proyecto). Se crean con la
+tarea `voz_propia_crear` (`max_intentos=1`, job `<cliente>__voz_propia`): clonar (US$ 1,50, casilla de permiso
+obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripción (US$ 3,00); el gasto (tipo
+`voz_propia`) se registra apenas fal responde y la tarea ESTRENA la voz leyendo su muestra, porque MiniMax borra
+una voz sin uso real en 7 días (la vista previa no cuenta). En el formulario una voz propia es `vp:<id>`.
+
+Fuera: efectos, subtítulos, usar el audio en
 un video o el editor, ElevenLabs v3.
 
 **Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»

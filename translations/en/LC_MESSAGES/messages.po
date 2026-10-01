@@ -357,6 +357,10 @@ msgstr ""
 "Experiment #%(id)s, country %(pais)s."
 
 #, python-format
+msgid "%(motor)s · %(n)s caracteres · %(voz)s"
+msgstr "%(motor)s · %(n)s characters · %(voz)s"
+
+#, python-format
 msgid "%(n)s acción(es) con error"
 msgstr "%(n)s action(s) with error"
 
@@ -1276,6 +1280,9 @@ msgstr "(already produced — will be replaced)"
 
 msgid "+ Color"
 msgstr "+ Color"
+
+msgid "+ Crear voz propia"
+msgstr "+ Create custom voice"
 
 msgid "+ Del Catálogo"
 msgstr "+ From the Catalog"
@@ -2976,6 +2983,21 @@ msgstr "Video clip"
 msgid "Clips · %(total)s s en total"
 msgstr "Clips · %(total)s s total"
 
+msgid "Clona una voz con permiso o diseña una nueva desde una descripción."
+msgstr "Clone a voice with permission or design a new one from a description."
+
+msgid "Clonada"
+msgstr "Cloned"
+
+msgid "Clonando la voz…"
+msgstr "Cloning the voice…"
+
+msgid "Clonar una voz"
+msgstr "Clone a voice"
+
+msgid "Clonar voz"
+msgstr "Clone voice"
+
 msgid "Cloudflare R2 (almacenamiento)"
 msgstr "Cloudflare R2 (storage)"
 
@@ -3517,6 +3539,12 @@ msgstr "Creating the audio…"
 msgid "Creando la canción con ElevenLabs…"
 msgstr "Creating the song with ElevenLabs…"
 
+msgid "Creando la voz"
+msgstr "Creating the voice"
+
+msgid "Creando la voz…"
+msgstr "Creating the voice…"
+
 msgid "Crear"
 msgstr "Create"
 
@@ -3855,6 +3883,9 @@ msgstr "Describe the video idea"
 msgid "Describe la música que quieres."
 msgstr "Describe the music you want."
 
+msgid "Describe la voz en 10 a 500 caracteres."
+msgstr "Describe the voice in 10 to 500 characters."
+
 msgid "Describe qué tiene que pasar. Ej.: @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"
 msgstr "Describe what has to happen. E.g.: @Imagen 1 is the product; a girl discovers it and jumps for joy, the camera follows her like in @Video 1"
 
@@ -3955,6 +3986,15 @@ msgstr "Diagnosis: %(causas)s — next: %(que)s"
 
 msgid "Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;"
 msgstr "Tell Claude what’s wrong, for example: &quot;clip 3 is 16 seconds long&quot;"
+
+msgid "Diseñada"
+msgstr "Designed"
+
+msgid "Diseñar una voz"
+msgstr "Design a voice"
+
+msgid "Diseñar voz"
+msgstr "Design voice"
 
 msgid "Disfraces, fiestas y decoración; tono lúdico."
 msgstr "Costumes, parties and decorations; a playful tone."
@@ -4445,9 +4485,6 @@ msgstr "A Meta page id is digits only."
 msgid "El id del Business está en <em>Configuración del negocio › Información del negocio</em>."
 msgstr "The Business id is in <em>Business settings › Business info</em>."
 
-msgid "El idioma lo decide el texto; este selector solo cambia la muestra de la voz."
-msgstr "The text decides the language; this selector only changes the voice sample."
-
 msgid ""
 "El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia\n"
 "  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.\n"
@@ -4730,10 +4767,6 @@ msgstr "Choose product (%(n)s) →"
 msgid "Elementos"
 msgstr "Elements"
 
-#, python-format
-msgid "ElevenLabs · %(n)s caracteres · %(voz)s"
-msgstr "ElevenLabs · %(n)s characters · %(voz)s"
-
 msgid "Elige al menos un destino de esta edición."
 msgstr "Choose at least one market of this edit."
 
@@ -4754,6 +4787,9 @@ msgstr "Choose at least one platform."
 
 msgid "Elige algo en la línea de tiempo o en el video para cambiarlo."
 msgstr "Select something on the timeline or in the video to change it."
+
+msgid "Elige el idioma en que está escrito el texto: con él suena la muestra de cada voz y, en noruego y en tus voces propias, se fuerza el acento."
+msgstr "Choose the language the text is written in: each voice's sample plays in it and, for Norwegian and your custom voices, it also sets the accent."
 
 msgid "Elige el modo del video: diálogo a cámara o voz en off."
 msgstr "Choose the video mode: on-camera dialogue or voice-over."
@@ -5149,6 +5185,9 @@ msgstr "It is the SAME person/character in every shot: same face, same features,
 msgid "Es la única foto del producto. Si quieres quitarla, sube otra primero o elimina el producto completo."
 msgstr "It's the product's only photo. If you want to remove it, upload another one first or delete the whole product."
 
+msgid "Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios."
+msgstr "This is my voice, or I have the person's written permission to clone it and use it in ads."
+
 msgid "Es un comentario real de un comprador"
 msgstr "It's a real buyer's comment"
 
@@ -5356,6 +5395,9 @@ msgstr "That version doesn't exist."
 
 msgid "Esa versión rompe reglas que no se negocian; pídele a Claude que la corrija."
 msgstr "That version breaks non-negotiable rules; ask Claude to fix it."
+
+msgid "Esa voz ya no está en Mis voces."
+msgstr "That voice is no longer in My voices."
 
 msgid "Esas piezas ya se estaban generando."
 msgstr "Those pieces were already being generated."
@@ -5954,6 +5996,9 @@ msgstr "These texts are in Spanish: they're the internal instructions Claude rec
 
 msgid "Estrellas"
 msgstr "Stars"
+
+msgid "Estrenando la voz"
+msgstr "Trying out the voice"
 
 msgid "Estudio creado. Ahora agrégale comentarios."
 msgstr "Study created. Now add comments to it."
@@ -6699,8 +6744,14 @@ msgstr "Google › App passwords"
 msgid "Gorra / sombrero"
 msgstr "Cap / hat"
 
+msgid "Graba en un lugar silencioso, con una sola persona hablando y sin música."
+msgstr "Record somewhere quiet, with a single person speaking and no music."
+
 msgid "Grabación"
 msgstr "Recording"
+
+msgid "Grabación: de 10 segundos a 5 minutos, mp3, wav, m4a, aac u ogg"
+msgstr "Recording: 10 seconds to 5 minutes, mp3, wav, m4a, aac or ogg"
 
 msgid "Gracias: quedó como prueba del producto y Claude ya la puede usar."
 msgstr "Thanks: it's saved as product proof and Claude can now use it."
@@ -7074,6 +7125,9 @@ msgstr "Project language"
 
 msgid "Idioma del proyecto guardado."
 msgstr "Project language saved."
+
+msgid "Idioma del texto"
+msgstr "Text language"
 
 msgid "Idioma guardado."
 msgstr "Language saved."
@@ -7622,6 +7676,18 @@ msgstr "The generation was interrupted because the server restarted — try agai
 
 msgid "La gente se va antes del final: acorta el video o sube el ritmo del cuerpo."
 msgstr "People leave before the end: shorten the video or speed up the body."
+
+msgid "La grabación de esa voz ya no está."
+msgstr "That voice's recording is no longer available."
+
+msgid "La grabación pesa más de 20 MB."
+msgstr "The recording is larger than 20 MB."
+
+msgid "La grabación puede durar hasta 5 minutos."
+msgstr "The recording can be up to 5 minutes long."
+
+msgid "La grabación tiene que durar al menos 10 segundos."
+msgstr "The recording must be at least 10 seconds long."
 
 msgid "La idea todavía no tiene un ángulo con promesa."
 msgstr "The idea doesn't have an angle with a promise yet."
@@ -8262,6 +8328,9 @@ msgstr "Select at least one platform to publish to."
 msgid "Marca al menos una plataforma."
 msgstr "Select at least one platform."
 
+msgid "Marca la casilla de permiso para clonar esta voz."
+msgstr "Tick the permission box to clone this voice."
+
 msgid "Marca las líneas que salen. Se quitan enteras; la línea 1 (el hook) no se puede quitar."
 msgstr "Check the lines that come out. They're removed whole; line 1 (the hook) can't be removed."
 
@@ -8494,6 +8563,18 @@ msgid "Mi música · gratis"
 msgstr "My music · free"
 
 #, python-format
+msgid "MiniMax · clonar voz · %(nombre)s"
+msgstr "MiniMax · clone voice · %(nombre)s"
+
+#, python-format
+msgid "MiniMax · diseñar voz · %(nombre)s"
+msgstr "MiniMax · design voice · %(nombre)s"
+
+#, python-format
+msgid "MiniMax · estreno · %(nombre)s"
+msgstr "MiniMax · try-out · %(nombre)s"
+
+#, python-format
 msgid "Mira el detalle en la pestaña Triple Whale del proyecto %(cliente)s."
 msgstr "See the details in the Triple Whale tab of the %(cliente)s project."
 
@@ -8506,6 +8587,9 @@ msgstr "Looking at the references…"
 
 msgid "Mis barridos"
 msgstr "My sweeps"
+
+msgid "Mis voces"
+msgstr "My voices"
 
 msgid "Mismo mensaje"
 msgstr "Same message"
@@ -8796,6 +8880,9 @@ msgstr "Not applicable — it receives the already-generated result"
 msgid "No cambiaste nada."
 msgstr "You didn't change anything."
 
+msgid "No describas a una persona real ni pidas imitar a alguien famoso."
+msgstr "Don't describe a real person or ask to imitate someone famous."
+
 msgid "No elegiste ninguna foto."
 msgstr "You didn't choose any photo."
 
@@ -9062,6 +9149,14 @@ msgid "No pude crear el activo: %(detalle)s"
 msgstr "Could not create the asset: %(detalle)s"
 
 #, python-format
+msgid "No pude crear el audio; intenta de nuevo (%(tipo)s)."
+msgstr "I couldn't create the audio; try again (%(tipo)s)."
+
+#, python-format
+msgid "No pude crear la voz; intenta de nuevo (%(tipo)s)."
+msgstr "I couldn't create the voice; try again (%(tipo)s)."
+
+#, python-format
 msgid "No pude descargar el video: %(error)s"
 msgstr "I couldn't download the video: %(error)s"
 
@@ -9155,6 +9250,10 @@ msgstr "I couldn't upload %(archivo)s: %(error)s"
 #, python-format
 msgid "No pude subir la canción (%(tipo)s)."
 msgstr "I couldn't upload the song (%(tipo)s)."
+
+#, python-format
+msgid "No pude subir la grabación (%(tipo)s)."
+msgstr "I couldn't upload the recording (%(tipo)s)."
 
 msgid "No pude traducir la palabra al inglés; escríbela de otra forma."
 msgstr "I couldn't translate the word into English; write it another way."
@@ -9363,6 +9462,9 @@ msgstr "Couldn't create the song."
 msgid "No se pudo crear la versión B: %(error)s. No se generó nada."
 msgstr "Couldn't create version B: %(error)s. Nothing was generated."
 
+msgid "No se pudo crear la voz."
+msgstr "The voice could not be created."
+
 msgid "No se pudo describir (red)."
 msgstr "Couldn't describe it (network)."
 
@@ -9568,6 +9670,9 @@ msgstr "Name / archetype"
 
 msgid "Nombre de color inválido."
 msgstr "Invalid color name."
+
+msgid "Nombre de la voz"
+msgstr "Voice name"
 
 msgid "Nombre de tu empresa o marca"
 msgstr "Your company or brand name"
@@ -10144,6 +10249,9 @@ msgstr "Add email"
 
 msgid "Ponle un nombre a la empresa."
 msgstr "Give the company a name."
+
+msgid "Ponle un nombre a la voz (hasta 40 caracteres)."
+msgstr "Give the voice a name (up to 40 characters)."
 
 msgid "Ponle un nombre al color."
 msgstr "Give the color a name."
@@ -13084,6 +13192,9 @@ msgstr "Your Facebook user doesn't manage any ad account. Ask your Business Mana
 msgid "Tu usuario no administra ninguna Página de Facebook. Crea una o pide acceso, y vuelve a conectar."
 msgstr "Your user doesn't manage any Facebook Page. Create one or ask for access, and connect again."
 
+msgid "Tu voz habla los diez idiomas; su muestra se crea en el idioma del texto que elijas abajo."
+msgstr "Your voice speaks all ten languages; its sample is made in the text language you choose below."
+
 msgid "Tus anuncios"
 msgstr "Your ads"
 
@@ -13573,6 +13684,12 @@ msgstr "Video preview"
 msgid "Visuales"
 msgstr "Visuals"
 
+msgid "Voces de la galería"
+msgstr "Gallery voices"
+
+msgid "Voces propias"
+msgstr "Custom voices"
+
 msgid "Volumen"
 msgstr "Volume"
 
@@ -13629,6 +13746,15 @@ msgstr "Voice"
 
 msgid "Voz (solo en diálogo)"
 msgstr "Voice (dialogue mode only)"
+
+msgid "Voz clonada: ya está en Mis voces."
+msgstr "Voice cloned: it is in My voices."
+
+msgid "Voz creada, pero no pude estrenarla: tócale ▶ antes de 7 días para que no se pierda."
+msgstr "Voice created, but I couldn't try it out: press ▶ within 7 days so it isn't lost."
+
+msgid "Voz diseñada: ya está en Mis voces."
+msgstr "Voice designed: it is in My voices."
 
 msgid "Voz en off"
 msgstr "Voice-over"
@@ -13872,6 +13998,9 @@ msgstr "An audio is already being created — wait for it to finish."
 
 msgid "Ya se está creando una canción — espera a que termine."
 msgstr "A song is already being created — wait for it to finish."
+
+msgid "Ya se está creando una voz — espera a que termine."
+msgstr "A voice is already being created — wait for it to finish."
 
 msgid "Ya se está descargando un link — espera a que termine."
 msgstr "A link is already downloading — wait for it to finish."
@@ -14579,6 +14708,9 @@ msgstr "real editor: preserves movement and scene, the cheapest of the ones that
 msgid "ej. 89900"
 msgstr "e.g. 89900"
 
+msgid "ej. Astrid, cálida"
+msgstr "e.g. Astrid, warm"
+
 msgid "ej. Clip 3: Ana en la cocina"
 msgstr "e.g. Clip 3: Ana in the kitchen"
 
@@ -14591,11 +14723,17 @@ msgstr "e.g. Happy Flops"
 msgid "ej. HappyBlanket — White"
 msgstr "e.g. HappyBlanket — White"
 
+msgid "ej. Mujer de unos 30 años, voz cálida y cercana, ritmo pausado, acento sueco suave"
+msgstr "e.g. Woman in her 30s, warm and friendly voice, unhurried pace, soft Swedish accent"
+
 msgid "ej. Rosa"
 msgstr "e.g. Pink"
 
 msgid "ej. Showroom principal"
 msgstr "e.g. Main showroom"
+
+msgid "ej. Voz de Ana"
+msgstr "e.g. Ana's voice"
 
 msgid "ej. chanclas tipo slide de goma acanalada, color verde uniforme"
 msgstr "e.g. ribbed rubber slide sandals, solid green"
@@ -14823,6 +14961,10 @@ msgid "expresiva"
 msgstr "expressive"
 
 #, python-format
+msgid "fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s"
+msgstr "fal.ai (%(modelo)s) didn't return custom_voice_id: %(datos)s"
+
+#, python-format
 msgid "fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s"
 msgstr "fal.ai (%(modelo)s) didn't return an audio URL: %(datos)s"
 
@@ -14831,6 +14973,13 @@ msgstr "fal.ai (voice and music)"
 
 msgid "fal_audio.tts: texto vacío."
 msgstr "fal_audio.tts: empty text."
+
+#, python-format
+msgid "fal_audio.tts_minimax: idioma sin MiniMax: %(idioma)s"
+msgstr "fal_audio.tts_minimax: language not supported by MiniMax: %(idioma)s"
+
+msgid "fal_audio.tts_minimax: texto vacío."
+msgstr "fal_audio.tts_minimax: empty text."
 
 msgid "falla"
 msgstr "fails"
@@ -15330,6 +15479,14 @@ msgstr "engine"
 
 msgid "moverse."
 msgstr "move."
+
+#, python-format
+msgid "muestra de voz propia · %(nombre)s · %(idioma)s"
+msgstr "custom voice sample · %(nombre)s · %(idioma)s"
+
+#, python-format
+msgid "muestra de voz · %(voz)s · %(idioma)s"
+msgstr "voice sample · %(voz)s · %(idioma)s"
 
 msgid "musica"
 msgstr "music"
@@ -15979,6 +16136,9 @@ msgstr "not set"
 msgid "sin detalle"
 msgstr "no detail"
 
+msgid "sin estrenar"
+msgstr "not tried out yet"
+
 msgid "sin evaluar"
 msgstr "not evaluated"
 
@@ -16297,6 +16457,9 @@ msgstr "voice"
 msgid "voz en off"
 msgstr "voice-over"
 
+msgid "voz o idioma desconocidos"
+msgstr "unknown voice or language"
+
 msgid "voz protagonista"
 msgstr "voice first"
 
@@ -16484,6 +16647,9 @@ msgstr "Archive this sprint? It can be unarchived later."
 #, python-format
 msgid "¿Archivar «%(nombre)s»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Archivados»)."
 msgstr "Archive “%(nombre)s”? Nothing is deleted: it's hidden from the list and the store sync won't bring it back (recover it from “Archived”)."
+
+msgid "¿Borrar esta voz de Mis voces? Los audios ya hechos con ella se conservan."
+msgstr "Delete this voice from My voices? Audios already made with it are kept."
 
 msgid "¿Borrar este audio?"
 msgstr "Delete this audio?"
