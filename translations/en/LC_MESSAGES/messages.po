@@ -12259,6 +12259,9 @@ msgstr "Store disconnected. Its products stay active because the other connectio
 msgid "Tiendas"
 msgstr "Stores"
 
+msgid "Tienes cambios sin guardar en esta ficha. ¿Cerrarla igual?"
+msgstr "You have unsaved changes here. Close the details anyway?"
+
 msgid "Tienes cambios sin guardar, por eso no se recargó sola."
 msgstr "You have unsaved changes, so it didn't reload on its own."
 

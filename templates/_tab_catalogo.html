@@ -331,14 +331,40 @@
     });
 
     // ---- Ficha (panel lateral) ----
+    var MSG_SIN_GUARDAR = {{ _('Tienes cambios sin guardar en esta ficha. ¿Cerrarla igual?')|tojson }};
+    // Un campo de la ficha editado y sin guardar (base.html lo marca con data-sucio).
+    function fichaSucia() { return !!cuerpo.querySelector('[data-sucio]'); }
     function mostrar() { panel.hidden = false; fondo.hidden = false; document.body.classList.add('panel-abierto'); }
+    function ocultar() { panel.hidden = true; fondo.hidden = true; document.body.classList.remove('panel-abierto'); }
     function cerrar() {
-      panel.hidden = true; fondo.hidden = true; cuerpo.innerHTML = ''; fichaActual = null;
-      document.body.classList.remove('panel-abierto'); escribirHash();
+      ocultar(); cuerpo.innerHTML = ''; fichaActual = null; escribirHash();
+    }
+    // Escape, el fondo y la ✕: con algo escrito sin guardar, se pregunta antes.
+    function pedirCerrar() {
+      if (fichaSucia() && !confirm(MSG_SIN_GUARDAR)) return;
+      cerrar();
+    }
+    // Salir de la pestaña (un hash que no es #catalogo o la barra lateral):
+    // con cambios sin guardar el panel solo se OCULTA — su contenido y
+    // fichaActual quedan — y vuelve al regresar a Catálogo; sin cambios se
+    // cierra como siempre. Ocultarlo también suelta el scroll del body
+    // (panel-abierto), que si no quedaba bloqueado en la pestaña nueva.
+    function salirDeCatalogo() {
+      if (panel.hidden) return;
+      if (fichaSucia()) ocultar(); else cerrar();
+    }
+    function volverACatalogo() {
+      if (!fichaActual || !panel.hidden || !cuerpo.firstChild) return;
+      mostrar(); escribirHash();
     }
     function abrirFicha(clave) {
       var partes = clave.split(':'), cat = partes[0], id = partes.slice(1).join(':');
       var mismo = fichaActual === clave;
+      if (fichaActual && fichaSucia()) {
+        // La misma ficha con cambios no se vuelve a pedir (se perderían); otra
+        // ficha la reemplaza solo si la persona acepta perderlos.
+        if (mismo || !confirm(MSG_SIN_GUARDAR)) { mostrar(); escribirHash(); return; }
+      }
       fichaActual = clave; mostrar(); escribirHash();
       var scroll = mismo ? panel.scrollTop : 0;
       if (!mismo) cuerpo.innerHTML = '<p class="vacio">' + {{ _('Cargando…')|tojson }} + '</p>';
@@ -364,9 +390,9 @@
           if (mia === peticionFicha) cuerpo.innerHTML = '<p class="campo-error">' + {{ _('No se pudo abrir la ficha. Revisa tu conexión e intenta de nuevo.')|tojson }} + '</p>';
         });
     }
-    fondo.addEventListener('click', cerrar);
+    fondo.addEventListener('click', pedirCerrar);
     panel.addEventListener('click', function (ev) {
-      if (ev.target.closest('[data-panel-cerrar]')) { cerrar(); return; }
+      if (ev.target.closest('[data-panel-cerrar]')) { pedirCerrar(); return; }
       var color = ev.target.closest('[data-color]');
       if (!color) return;
       panel.querySelectorAll('[data-color]').forEach(function (b) { b.setAttribute('aria-selected', b === color ? 'true' : 'false'); });
@@ -377,7 +403,15 @@
       var sel = panel.querySelector('footer select[name=variante]');
       if (sel) sel.value = color.dataset.color;
     });
-    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !panel.hidden) cerrar(); });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Escape' || panel.hidden) return;
+      // Con el modal «¿Eliminar este producto?» abierto, Escape cierra solo el
+      // modal (lo hace su propio script). Se busca aquí y no al cargar: el
+      // modal está DESPUÉS de este <script> en la página.
+      var modalEliminar = document.getElementById('modal-eliminar-producto');
+      if (modalEliminar && !modalEliminar.hidden) return;
+      pedirCerrar();
+    });
     window.catalogo = {abrirFicha: abrirFicha, cerrar: cerrar, recargar: function () { cargarGrid(estado.cat, 1, false); }};
 
     // ---- Arranque: el hash manda; si no, la categoría recordada. La galería
@@ -403,24 +437,27 @@
     if (enCatalogo()) arrancar();
     document.querySelectorAll('.sidebar-item[data-tab="catalogo"]').forEach(function (b) { b.addEventListener('click', arrancar); });
     // Un enlace de la ficha a otra pestaña («Dónde se usó») cambia el hash a
-    // algo que no es #catalogo: hay que cerrar el panel (si no, el bloqueo de
-    // scroll del body — panel-abierto — se queda puesto en la pestaña nueva
-    // hasta que alguien presione Escape). Un clic en la barra lateral cambia
-    // de pestaña con history.replaceState, que no dispara hashchange, así que
-    // se cierra también ahí.
+    // algo que no es #catalogo: el panel sale de la vista (salirDeCatalogo:
+    // se cierra, o se oculta si tiene cambios sin guardar). Un clic en la
+    // barra lateral cambia de pestaña con history.replaceState, que no
+    // dispara hashchange, así que se hace también ahí; al volver a Catálogo
+    // por la barra, la ficha oculta reaparece en el turno siguiente
+    // (cliente.html pone #catalogo DESPUÉS de este listener).
     document.querySelectorAll('.sidebar-item[data-tab]').forEach(function (b) {
       b.addEventListener('click', function () {
-        if (b.dataset.tab !== 'catalogo' && !panel.hidden) cerrar();
+        if (b.dataset.tab !== 'catalogo') salirDeCatalogo();
+        else setTimeout(volverACatalogo, 0);
       });
     });
     window.addEventListener('hashchange', function () {
       if ((location.hash || '').indexOf('#catalogo') !== 0) {
-        if (!panel.hidden) cerrar();
+        salirDeCatalogo();
         return;
       }
       if (!arrancado) { arrancar(); return; }
       var h = leerHash();
       if (h.ficha && h.ficha !== fichaActual) abrirFicha(h.ficha);
+      else volverACatalogo();
       if (h.cat && h.cat !== estado.cat) activar(h.cat, true);
     });
   })();

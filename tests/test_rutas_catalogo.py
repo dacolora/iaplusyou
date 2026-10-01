@@ -276,6 +276,30 @@ def test_la_pestana_trae_el_js_del_panel_y_el_css(app):
         assert clase in bloque, clase
 
 
+def test_cerrar_la_ficha_o_cambiar_de_pestana_no_pierde_lo_escrito(app):
+    """Ruling I-7: Escape, el fondo y la ✕ preguntan si la ficha tiene campos
+    sin guardar (data-sucio, base.html); salir de la pestaña con cambios solo
+    OCULTA el panel (sin vaciarlo) y vuelve al regresar a Catálogo; con el
+    modal de eliminar abierto, Escape cierra solo el modal."""
+    html = app["c"].get("/cliente/acme").data.decode()
+    tab = html.split('id="tab-catalogo"', 1)[1].split('id="tab-settings"', 1)[0]
+    for pieza in ("Tienes cambios sin guardar en esta ficha",
+                  "function fichaSucia() { return !!cuerpo.querySelector('[data-sucio]'); }",
+                  "function pedirCerrar()", "if (fichaSucia() && !confirm(MSG_SIN_GUARDAR)) return;",
+                  "fondo.addEventListener('click', pedirCerrar);",
+                  "if (ev.target.closest('[data-panel-cerrar]')) { pedirCerrar(); return; }",
+                  "function salirDeCatalogo()", "if (fichaSucia()) ocultar(); else cerrar();",
+                  "function volverACatalogo()", "setTimeout(volverACatalogo, 0)",
+                  "var modalEliminar = document.getElementById('modal-eliminar-producto');",
+                  "if (modalEliminar && !modalEliminar.hidden) return;"):
+        assert pieza in tab, pieza
+    # ocultar() no vacía el panel: solo cerrar() lo hace
+    ocultar = tab.split("function ocultar()", 1)[1].split("\n", 1)[0]
+    assert "innerHTML" not in ocultar and "fichaActual" not in ocultar
+    # el hashchange fuera de #catalogo y el clic en otra pestaña ya no cierran a ciegas
+    assert "if (!panel.hidden) cerrar();" not in tab
+
+
 def test_grid_y_ficha_leen_crear_y_experimentos_una_vez(app, monkeypatch):
     """Fix round 1 (revisión de Task 11): _usos_por_producto y
     _experimentos_por_activo no deben releer creative_flow.cargar/
