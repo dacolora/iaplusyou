@@ -153,3 +153,15 @@ def test_mezclas_del_panel_iguales_a_python():
     from final_edition import mezcla
     assert _constante_js("operaciones.js", "MEZCLAS") == list(mezcla.PRESETS)
     assert mezcla.PRESET_DEFECTO == "equilibrada"
+
+
+def test_encuadre_js_constantes_iguales_a_python():
+    # Capa 5b (D4-D7): el panel «Encuadre» y el arrastre/asa del lienzo
+    # clavan los mismos límites que `documento.validar` y el compilador.
+    from final_edition import encuadre
+    assert _constante_js("encuadre.js", "MODOS") == list(encuadre.MODOS)
+    assert _constante_js("encuadre.js", "ZOOM_MIN") == encuadre.ZOOM_MIN
+    assert _constante_js("encuadre.js", "ZOOM_MAX") == encuadre.ZOOM_MAX
+    assert _constante_js("encuadre.js", "DEFECTO") == encuadre.DEFECTO
+    assert _constante_js("encuadre.js", "FONDO_DIVISOR") == encuadre.FONDO_DIVISOR
+    assert _constante_js("encuadre.js", "UMBRAL_AJUSTE") == list(encuadre.UMBRAL_AJUSTE)

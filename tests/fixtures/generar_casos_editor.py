@@ -26,8 +26,16 @@ def casos_precios():
 
 def _doc_resolver():
     doc = documento.nuevo_video("9:16")
-    doc["pistas"][0]["clips"] = [{"id": "v0", "inicio_ms": 0, "duracion_ms": 4000, "material_id": 1,
-                                  "recorte": {"desde_ms": 0, "hasta_ms": 4000}}]
+    doc["pistas"][0]["clips"] = [
+        {"id": "v0", "inicio_ms": 0, "duracion_ms": 4000, "material_id": 1,
+         "recorte": {"desde_ms": 0, "hasta_ms": 4000},
+         # capa 5b: una transición "solape" (D9) junta v0 con la foto que
+         # sigue; `resolver` la copia tal cual, no la interpreta.
+         "transicion": {"tipo": "fundido", "duracion_ms": 500, "modo": "solape"}},
+        # capa 5b: una foto (D1) con encuadre (D4) en la principal.
+        {"id": "foto1", "inicio_ms": 4000, "duracion_ms": 3000, "material_id": 6, "foto": True,
+         "encuadre": {"modo": "ajustar", "zoom": 1.2, "x": 0.3, "y": 0.7}},
+    ]
     doc["pistas"].append({"id": "p_texto", "tipo": "texto", "clips": [
         {"id": "t_hook", "inicio_ms": 0, "duracion_ms": 2000, "texto": {"variable": "hook"}, "estilo": {"fuente": "SpaceGrotesk-Bold"}},
         {"id": "t_precio", "inicio_ms": 1000, "duracion_ms": 2000, "texto": {"variable": "precio"}, "estilo": {"fuente": "Inter-Bold"}},
@@ -204,6 +212,15 @@ def _sf_pista(id_, tipo, clips):
     return {"id": id_, "tipo": tipo, "bloqueada": False, "silenciada": False, "oculta": False, "clips": clips}
 
 
+def _sf_clip_foto(id_, inicio_ms, duracion_ms, material_id):
+    # capa 5b, D11: una foto en la principal; `{tipo: "sonido"}` la salta.
+    return {"id": id_, "inicio_ms": inicio_ms, "duracion_ms": duracion_ms, "material_id": material_id, "foto": True,
+            "recorte": {"desde_ms": 0, "hasta_ms": duracion_ms}, "velocidad": 1.0,
+            "transform": {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"},
+            "keyframes": [], "animacion": None, "transicion": None,
+            "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}}
+
+
 def _sf_doc_base(fuentes=None):
     """v0 (material 1, 0-4000, recorte 0-4000) + v1 (material 1, 4000-7000,
     recorte 5000-8000) en la principal; voz_a (material 2, 1000-4000,
@@ -312,7 +329,58 @@ def casos_subtitulos_fuente():
     dedup = _sf_doc_base(fuentes={"es": [{"tipo": "material", "material_id": 2}, {"tipo": "voz"}]})
     casos.append(_sf_caso("material + voz no duplican el clip; texto en blanco no sale", dedup, "es", "CO",
                          {"2": [{"t_ms": 0, "dur_ms": 300, "texto": "voz-es"}, {"t_ms": 400, "dur_ms": 100, "texto": "   "}]}))
+
+    # capa 5b, D11: una foto en la principal (f0, material 4) no suena — la
+    # fuente "sonido" la salta y solo salen las palabras del video (v0,
+    # material 1) que la sigue. Una imagen nunca tiene `palabras` (nadie la
+    # transcribe), así que esta tabla NO le da ninguna a material 4: el
+    # salto explícito de la JS (Tarea 4) no hace falta para que este caso
+    # pase hoy en los dos motores — la prueba de Python
+    # (test_subtitulos_fuente.py) sí le da palabras a la foto para probar
+    # que `clips_de_fuente` la excluye de verdad.
+    foto_fuente = documento.nuevo_video("9:16")
+    foto_fuente["pistas"][0]["clips"] = [_sf_clip_foto("f0", 0, 3000, 4),
+                                         _sf_clip_video("v0", 3000, 4000, 0, 4000, material_id=1)]
+    foto_fuente["subtitulos"] = {**foto_fuente["subtitulos"], "fuentes": {"es": [{"tipo": "sonido"}]}}
+    casos.append(_sf_caso("una foto en la principal no aporta subtítulos (D11)", foto_fuente, "es", "CO",
+                         {"1": [{"t_ms": 100, "dur_ms": 200, "texto": "video"}]}))
     return casos
+
+
+# --- encuadre (editor, capa 5b, D4-D7): la Tarea 1 escribe el espejo
+# static/editor/encuadre.js contra esta tabla.
+ENCUADRE_MEDIDAS = (
+    (1920, 1080), (1080, 1920), (1000, 1000), (400, 200), (1284, 2778),
+    (3000, 2000), (3024, 4032), (800, 600), (1081, 1919),      # redondeos
+)
+
+ENCUADRE_VARIANTES = (
+    None,
+    {"modo": "llenar", "x": 0},
+    {"modo": "llenar", "x": 1},
+    {"modo": "llenar", "y": 0},
+    {"modo": "llenar", "zoom": 1.5},
+    {"modo": "llenar", "zoom": 1.37, "x": 0.3, "y": 0.7},
+    {"modo": "llenar", "zoom": 4},
+    {"modo": "ajustar"},
+    {"modo": "ajustar", "zoom": 2, "x": 0.25},
+)
+
+
+def casos_encuadre():
+    from final_edition import encuadre
+    cajas = []
+    automaticos = []
+    fondos = {}
+    for formato, (lienzo_w, lienzo_h) in documento.FORMATOS.items():
+        fondos[formato] = encuadre.fondo(lienzo_w, lienzo_h)
+        for ancho, alto in ENCUADRE_MEDIDAS:
+            automaticos.append({"ancho": ancho, "alto": alto, "formato": formato,
+                               "esperado": encuadre.ajuste_automatico(ancho, alto, lienzo_w, lienzo_h)})
+            for enc in ENCUADRE_VARIANTES:
+                cajas.append({"ancho": ancho, "alto": alto, "formato": formato, "encuadre": enc,
+                             "esperado": encuadre.caja(ancho, alto, lienzo_w, lienzo_h, enc)})
+    return {"cajas": cajas, "fondos": fondos, "automaticos": automaticos}
 
 
 ARCHIVOS = {
@@ -322,6 +390,7 @@ ARCHIVOS = {
     "ventanas_casos.json": casos_ventanas,
     "subtitulos_fuente_casos.json": casos_subtitulos_fuente,
     "subtitulos_eventos_casos.json": casos_eventos,
+    "encuadre_casos.json": casos_encuadre,
 }
 
 
