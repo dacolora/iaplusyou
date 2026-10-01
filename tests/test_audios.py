@@ -280,3 +280,20 @@ def test_sintetizar_con_voz_propia_va_por_minimax(base_temporal, monkeypatch):
     voces_propias.borrar("acme", v["id"])
     with pytest.raises(ValueError):
         audios.sintetizar("acme", f"vp:{v['id']}", "Hei", "no", "normal")
+
+
+def test_muestra_guarda_el_detalle_del_gasto_en_el_idioma_de_creatv(base_temporal, r2, monkeypatch):
+    """El detalle del gasto se GUARDA: va en el idioma de `_creatv` (el de
+    defecto), no en el de quien escucha la muestra ni en el msgid crudo que da
+    gettext fuera de toda app (precalentar_muestras.py corre sin app)."""
+    import idiomas
+    monkeypatch.setattr(idiomas, "DEFECTO", "en")
+    monkeypatch.setattr(audios.fal_audio, "tts", lambda texto, voz, idioma="es", on_progreso=None, velocidad=None,
+                        timeout=180, modelo=None, language_code=None: {"url": "https://fal/m.mp3", "costo_usd": 0.0052})
+    monkeypatch.setattr(audios, "descargar_url", lambda url, destino: open(destino, "wb").write(b"MP3") and destino)
+    monkeypatch.setattr(audios.cortes, "duracion", lambda path: 2.5)
+    with idiomas.en_idioma("es"):                       # quien escucha, en español
+        audios.muestra("Rachel", "de")
+    audios.muestra("Adam", "cs")                        # sin idioma forzado, como el script
+    assert sorted(g["detalle"] for g in gastos.historial("_creatv")) == [
+        "voice sample · Adam · cs", "voice sample · Rachel · de"]

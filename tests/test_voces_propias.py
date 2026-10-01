@@ -411,3 +411,15 @@ def test_tipo_de_gasto_y_estimados():
     assert "voz_propia" in gastos.TIPOS
     assert gastos.estimar("voz_clonada")["usd"] == fal_audio.COSTO_CLONAR_VOZ
     assert gastos.estimar("voz_disenada")["usd"] == fal_audio.COSTO_DISENAR_VOZ
+
+
+def test_muestra_propia_guarda_el_detalle_del_gasto_en_el_idioma_del_proyecto(base_temporal, r2, fal, monkeypatch):
+    """La ruta au_muestra la pide quien mira, pero el detalle del gasto se
+    GUARDA: va en el idioma del proyecto (spec 2026-09-26 §B8)."""
+    import idiomas
+    v = _voz(idioma="es", estrenada=True)
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    with idiomas.en_idioma("es"):                       # quien escucha, en español
+        voces_propias.muestra("acme", f"vp:{v['id']}", "fi")
+    (g,) = _gastos("acme")
+    assert g["detalle"] == "custom voice sample · Ana · fi"

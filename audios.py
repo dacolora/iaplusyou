@@ -356,9 +356,12 @@ def muestra(voz, idioma):
         # (uno fallido tras pagar, y su reintento) pisaban la misma fila de
         # gasto y solo uno de los dos pagos quedaba anotado.
         ref = f"muestra_voz:{voz}:{idioma}:v{VERSION_MUESTRA}:{int(time.time() * 1000)}"
-        gastos.registrar_seguro(CLIENTE_MUESTRAS, "locucion", usd, ref,
-                                detalle=gettext("muestra de voz · %(voz)s · %(idioma)s", voz=voz, idioma=idioma),
-                                proveedor="fal/elevenlabs")
+        # El detalle se GUARDA: va en el idioma de `_creatv` (el de defecto),
+        # no en el de quien escucha la muestra ni en el msgid crudo que da
+        # gettext fuera de toda app (precalentar_muestras.py corre sin app).
+        with idiomas.en_idioma(idiomas.de_tarea({"cliente": CLIENTE_MUESTRAS})):
+            detalle = gettext("muestra de voz · %(voz)s · %(idioma)s", voz=voz, idioma=idioma)
+        gastos.registrar_seguro(CLIENTE_MUESTRAS, "locucion", usd, ref, detalle=detalle, proveedor="fal/elevenlabs")
         with tempfile.TemporaryDirectory() as tmp:
             local = descargar_url(r["url"], os.path.join(tmp, "muestra.mp3"))
             key = f"clientes/{CLIENTE_MUESTRAS}/materiales/muestra_{voz}_{idioma}_v{VERSION_MUESTRA}.mp3"

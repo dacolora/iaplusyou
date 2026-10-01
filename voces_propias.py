@@ -340,11 +340,13 @@ def muestra(cliente, valor, idioma):
     def _producir():
         t = fal_audio.tts_minimax(frase, vp["voice_id"], idioma, timeout=45)
         usd = float(t["costo_usd"])
+        # La pide quien mira (ruta au_muestra), pero el detalle se GUARDA: va en
+        # el idioma del proyecto (spec 2026-09-26 §B8).
+        with idiomas.en_idioma(idiomas.de_tarea({"cliente": cliente})):
+            detalle = gettext("muestra de voz propia · %(nombre)s · %(idioma)s", nombre=vp["nombre"], idioma=idioma)
         gastos.registrar_seguro(cliente, "locucion", usd,
                                 f"muestra_propia:{vp['id']}:{idioma}:{int(time.time() * 1000)}",
-                                detalle=gettext("muestra de voz propia · %(nombre)s · %(idioma)s",
-                                                nombre=vp["nombre"], idioma=idioma),
-                                proveedor=PROVEEDOR)
+                                detalle=detalle, proveedor=PROVEEDOR)
         marcar_estrenada(cliente, vp["id"])
         url, bytes_, dur = _subir_mp3(cliente, t["url"], f"clientes/{cliente}/materiales/muestra_propia_{h[:16]}.mp3")
         return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": bytes_, "duracion_ms": dur,
