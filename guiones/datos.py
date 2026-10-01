@@ -13,7 +13,7 @@ from flask_babel import gettext
 
 import db
 import idiomas
-from guiones import escenas
+from guiones import cadena, escenas
 from guiones.refinador import Conflicto, DatoInvalido, NoExiste
 
 # 48 000 fragmentos de salida (armar clips) a ~110 por segundo son ~7 min
@@ -447,8 +447,36 @@ def modificar_imagenes_escenas(cliente, video_id, fn):
         fila = _bloquear_video(con, cliente, video_id)
         if fila.estado != "armado":
             raise Conflicto(gettext("Primero arma los clips de esta versión."))
+        if ((fila.extra or {}).get("cadena") or {}).get("estado") == "corriendo":
+            raise Conflicto(gettext("Las escenas se están generando: espera a que termine o detén la cadena."))
         video = {"config": fila.config or {}, "clips": fila.clips or [], "extra": fila.extra or {}}
         nuevo = fn(escenas.estado(video), video)
         con.execute(v.update().where(v.c.id == video_id).values(
             extra=dict(fila.extra or {}, **{escenas.CLAVE: nuevo}), actualizado_en=db.ahora()))
         return nuevo
+
+
+def modificar_cadena(cliente, video_id, fn):
+    """Cadena de escenas (`guiones.cadena`): `fn(estado | None, video)` devuelve
+    el estado nuevo, leído y escrito con el lock de SQLite tomado (el worker y
+    las rutas lo tocan a la vez). Solo con la versión armada."""
+    v = db.guion_video
+    with db.conectar() as con:
+        fila = _bloquear_video(con, cliente, video_id)
+        if fila.estado != "armado":
+            raise Conflicto(gettext("Primero arma los clips de esta versión."))
+        video = {"id": fila.id, "cliente": fila.cliente, "estado": fila.estado, "config": fila.config or {},
+                 "clips": fila.clips or [], "extra": fila.extra or {}}
+        nuevo = fn(cadena.estado(video), video)
+        con.execute(v.update().where(v.c.id == video_id).values(
+            extra=dict(fila.extra or {}, **{cadena.CLAVE: nuevo}), actualizado_en=db.ahora()))
+        return nuevo
+
+
+def cadenas_vivas():
+    """[(cliente, video_id)] de las cadenas que están corriendo (para el vigilante del worker)."""
+    v = db.guion_video
+    with db.conectar() as con:
+        filas = con.execute(sa.select(v.c.cliente, v.c.id).where(
+            sa.func.json_extract(v.c.extra, "$.cadena.estado") == "corriendo").order_by(v.c.id))
+        return [(f.cliente, int(f.id)) for f in filas]
