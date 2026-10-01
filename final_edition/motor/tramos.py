@@ -37,7 +37,12 @@ def contar(doc, inicio_ms, fin_ms):
 def videos(doc, inicio_ms, fin_ms):
     """Clips de la pista principal de video que tocan la ventana: las
     entradas que el compilador abrirá en ese tramo (mismo criterio que
-    `compilador._clips_en`). Una imagen principal es una sola entrada."""
+    `compilador._clips_en`). Una foto de la principal (capa 5b, D2) cuenta
+    1 como un video: es su propia entrada, decodificada y escalada una vez
+    (medido en la Mac: seis fotos de 4000×3000, 332 MB — 427 MB con encuadre y zoom lento,
+    `-threads 1`, Tarea 3 de la capa 5b —; seis videos 1080p,
+    565 MB — sin medir en el VPS no se le baja el peso). Una imagen
+    principal (edición de imagen) es una sola entrada."""
     principal = pista_principal(doc)
     if not principal or principal["tipo"] != "video":
         return 0

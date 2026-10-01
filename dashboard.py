@@ -27,6 +27,7 @@ import requests
 import sqlalchemy as sa
 
 from dotenv import load_dotenv
+from PIL import Image
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context, g, got_request_exception
 from flask_babel import Babel, format_decimal, get_locale, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -132,10 +133,78 @@ ALL_PLATFORMS = ["youtube", "facebook", "instagram", "tiktok"]
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 VIDEO_EXTS = (".mp4", ".mov", ".webm")
 FRAME_SUFFIX = ".frame.jpg"
+# Tipo con el que se sirve un archivo subido, por extensión de la lista blanca
+# (nunca el que adivina send_file: un .html o .svg se abriría en este dominio).
+MIMETYPES_MEDIOS = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+    ".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
+}
+# Cada archivo de «Cambiar producto» encola una generación pagada.
+MAX_SWAPS_POR_ENVIO = 10
+# Formatos que Pillow debe reconocer en una foto subida (jpg/png/webp).
+FORMATOS_IMAGEN = frozenset(("JPEG", "PNG", "WEBP", "MPO"))
+# Tope de una foto subida (el mismo que materiales.LIMITES["imagen"]).
+MAX_BYTES_IMAGEN = 20 * 1024 * 1024
+# Tope de CUALQUIER petición (auditoría de seguridad 2026-10-01): antes no
+# había ninguno y una subida podía llenar el disco del VPS. Alcanza para el
+# video más grande que se acepta (materiales.LIMITES["video"], 200 MB) más el
+# resto del formulario; Werkzeug corta con 413 antes de guardar nada, también
+# en una subida sin Content-Length. Las rutas con un tope menor lo siguen
+# aplicando ellas mismas.
+MAX_BYTES_PETICION = 256 * 1024 * 1024
+# Pillow solo rechaza una imagen por encima del doble de esto: una "bomba"
+# de pocos KB que descomprime a cientos de MB de RAM (el VPS tiene 1 CPU).
+Image.MAX_IMAGE_PIXELS = 64_000_000
+
+
+def _ext_de(nombre):
+    """Extensión en minúsculas de un nombre de archivo ("" si no tiene)."""
+    return os.path.splitext(nombre or "")[1].lower()
+
+
+def _tamano_subida(archivo):
+    """Bytes de un FileStorage (Werkzeug ya lo guardó en memoria o en un
+    temporal); deja el stream al principio."""
+    flujo = archivo.stream
+    posicion = flujo.tell()
+    flujo.seek(0, os.SEEK_END)
+    tamano = flujo.tell()
+    flujo.seek(posicion)
+    return tamano
+
+
+def _foto_subida_invalida(archivo):
+    """None si la foto subida se puede guardar; si no, el motivo para la
+    persona. Mira el contenido (no la extensión, que la elige quien sube) y
+    el tamaño."""
+    if _tamano_subida(archivo) > MAX_BYTES_IMAGEN:
+        return gettext("La imagen %(nombre)s pesa más de %(mb)s MB.",
+                       nombre=archivo.filename, mb=MAX_BYTES_IMAGEN // (1024 * 1024))
+    if not _imagen_valida(archivo.stream):
+        return gettext("No pude leer la imagen %(nombre)s.", nombre=archivo.filename)
+    return None
+
+
+def _imagen_valida(origen):
+    """True si `origen` (ruta o stream de una subida) es de verdad una imagen
+    jpg/png/webp: la extensión la elige quien sube, el contenido no miente.
+    Un stream se deja al principio para poder guardarlo después."""
+    posicion = origen.tell() if hasattr(origen, "tell") else None
+    try:
+        with Image.open(origen) as im:
+            formato = im.format
+            im.verify()
+        return formato in FORMATOS_IMAGEN
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError):
+        return False
+    finally:
+        if posicion is not None:
+            origen.seek(posicion)
 
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = MAX_BYTES_PETICION
 # Vocabulario de la doctrina en palabras simples para los selectores de
 # persona y producto (bloque 2 de la doctrina).
 app.jinja_env.globals.update(doctrina.globales_plantilla())
@@ -346,6 +415,26 @@ def _verificar_host():
     abort(404)
 
 
+METODOS_QUE_ESCRIBEN = frozenset(("POST", "PUT", "PATCH", "DELETE"))
+
+
+@app.before_request
+def _solo_mismo_origen():
+    """Barrera CSRF para TODA la app (auditoría de seguridad 2026-10-01):
+    antes solo los Blueprints y ~30 rutas de este archivo miraban
+    Sec-Fetch-Site; las demás confiaban solo en SameSite=Lax, que no frena
+    un POST desde otro subdominio del mismo sitio ni el «login CSRF» (un
+    formulario ajeno que inicia sesión con la cuenta del atacante). La app no
+    recibe webhooks ni POST legítimos de otros sitios: los callbacks de OAuth
+    son GET."""
+    if request.method not in METODOS_QUE_ESCRIBEN or _mismo_origen():
+        return None
+    mensaje = gettext("Pedido rechazado: no viene de esta página.")
+    if request.is_json or request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": False, "error": mensaje}), 403
+    abort(403)
+
+
 # Rutas de cuentas que deben funcionar aunque la sesión esté vencida o el
 # usuario ya no exista (verificar el correo o restablecer la contraseña se
 # abren desde un enlace, muchas veces sin sesión): el guard de sesión no las
@@ -360,7 +449,10 @@ ENDPOINTS_SIN_GUARD_SESION = frozenset((
 def _abrir_sesion(usuario, entry):
     """Escribe la sesión de Flask tras un login o un alta. `sv` es la
     session_version del usuario: cambiar la contraseña la sube y el guard
-    (_verificar_sesion) cierra cualquier sesión que traiga otra."""
+    (_verificar_sesion) cierra cualquier sesión que traiga otra. Empieza de
+    cero: nada de la sesión anterior (un OAuth a medias, una precarga de
+    Crear) pasa a la cuenta que entra."""
+    session.clear()
     session["usuario"] = usuario
     session["rol"] = entry["rol"]
     session["cliente"] = entry.get("cliente")
@@ -379,8 +471,12 @@ def _verificar_sesion():
     if request.endpoint in ENDPOINTS_SIN_GUARD_SESION or "usuario" not in session:
         return None
     entry = usuarios.obtener(session["usuario"])
+    # El rol y el proyecto de la cookie tienen que seguir siendo los del
+    # usuario: si cambiaron en usuarios.json (bajarle el rol, moverlo de
+    # proyecto), la cookie vieja no conserva el permiso anterior.
     vigente = entry is not None and (
-        "sv" not in session or int(entry.get("session_version") or 1) == int(session.get("sv") or 0))
+        "sv" not in session or int(entry.get("session_version") or 1) == int(session.get("sv") or 0)
+    ) and session.get("rol") == entry.get("rol") and session.get("cliente") == entry.get("cliente")
     if not vigente:
         session.clear()
         flash(gettext("Tu sesión se cerró; entra de nuevo."), "error")
@@ -549,11 +645,61 @@ def _sin_cache(resp):
     return resp
 
 
+# Cabeceras de seguridad (auditoría 2026-10-01). La CSP no restringe todavía
+# de dónde salen scripts, estilos ni medios (las plantillas tienen ~80
+# <script> y ~90 manejadores en línea, y los medios vienen de R2): solo
+# cierra lo que no rompe nada — que otro sitio enmarque la app (clickjacking
+# sobre Aprobar/Publicar/Generar), <object>/<embed> y un <base> inyectado.
+CABECERAS_SEGURIDAD = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+    # El editor graba la voz con el micrófono; nada usa cámara, ubicación ni pagos.
+    "Permissions-Policy": "camera=(), geolocation=(), payment=(), microphone=(self)",
+}
+HSTS = "max-age=31536000"
+
+
+@app.after_request
+def _cabeceras_seguridad(resp):
+    for nombre, valor in CABECERAS_SEGURIDAD.items():
+        resp.headers.setdefault(nombre, valor)
+    # Solo cuando el sitio público es https (en local, http seguiría andando).
+    if app.config.get("SESSION_COOKIE_SECURE") or request.is_secure:
+        resp.headers.setdefault("Strict-Transport-Security", HSTS)
+    return resp
+
+
+@app.errorhandler(413)
+def _peticion_demasiado_grande(_error):
+    """Werkzeug corta en MAX_BYTES_PETICION: se le dice a la persona en
+    palabras (JSON a un fetch; aviso y de vuelta al proyecto a un formulario)."""
+    mensaje = gettext("Lo que subiste pesa más de %(mb)s MB.", mb=MAX_BYTES_PETICION // (1024 * 1024))
+    if _quiere_json() or request.is_json:
+        return jsonify({"ok": False, "error": mensaje}), 413
+    flash(mensaje, "error")
+    cliente = (request.view_args or {}).get("cliente")
+    if cliente and usuarios.puede_acceder(_sesion(), cliente):
+        return redirect(url_for("ver_cliente", cliente=cliente))
+    return redirect(url_for("index"))
+
+
 @app.route("/trabajo/<path:job_id>/estado")
 def estado_trabajo(job_id):
     """El navegador consulta esto cada poco tiempo para actualizar la barra de
-    progreso de una generación en curso (imagen, video, o publicación)."""
-    info = trabajos.consultar(job_id)
+    progreso de una generación en curso (imagen, video, o publicación).
+    Solo responde a quien puede entrar al proyecto dueño del trabajo (el
+    administrador, a todos): antes era pública y los job_id se adivinan
+    (`<cliente>__…`), así que cualquiera leía el error —con URLs, ids de
+    predicción o textos de proveedores— de otro proyecto. A los demás se les
+    contesta como a un trabajo que no existe."""
+    sesion = _sesion()
+    if sesion and sesion["rol"] == "admin":
+        permitido = True
+    else:
+        dueno = trabajos.dueno(job_id) if sesion else None
+        permitido = dueno is not None and usuarios.puede_acceder(sesion, dueno)
+    info = trabajos.consultar(job_id) if permitido else None
     if info is None:
         # Mismas claves que devuelve trabajos.consultar(), para que el JS no tenga
         # que distinguir casos ni leer undefined.
@@ -673,6 +819,10 @@ def _subir_asset(cliente, subcarpeta, archivo):
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
         return False, gettext("Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm.")
+    if ext in IMAGE_EXTS:
+        motivo = _foto_subida_invalida(archivo)
+        if motivo:
+            return False, motivo
 
     carpeta = os.path.join(_client_dir(cliente), subcarpeta)
     os.makedirs(carpeta, exist_ok=True)
@@ -780,7 +930,7 @@ def subir_logo(cliente):
 
 @app.route("/cliente/<cliente>/logos/<nombre>/eliminar", methods=["POST"])
 def eliminar_logo(cliente, nombre):
-    ok, mensaje = _eliminar_asset(cliente, "logos", nombre)
+    ok, mensaje = _eliminar_asset(cliente, "logos", secure_filename(nombre))
     flash(mensaje, "ok" if ok else "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
@@ -814,7 +964,7 @@ def analizar_marca(cliente):
         marca_mod.guardar(cliente, data)
         return idiomas.N_("Guía de estilo generada.")
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=15):
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=15, cliente=cliente):
         flash(gettext("Analizando referencias de marca…"), "ok")
     else:
         flash(gettext("Ya se está analizando — espera a que termine."), "warn")
@@ -1269,6 +1419,11 @@ def mapa_codigo():
     return render_template("mapa_codigo.html")
 
 
+LOGIN_MAX_POR_USUARIO = 10
+LOGIN_MAX_POR_IP = 30
+LOGIN_VENTANA_S = 15 * 60
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -1278,8 +1433,19 @@ def login():
 
     usuario = (request.form.get("usuario") or "").strip()
     password = request.form.get("password") or ""
+    # Tope de intentos FALLIDOS (auditoría de seguridad 2026-10-01): por
+    # usuario frena adivinar una contraseña; por IP, probar muchos usuarios
+    # (y cada intento cuesta ~1 s de CPU en el VPS). Se mira antes de
+    # calcular el hash y solo se anota un intento que falló.
+    claves = (f"login:{usuario.lower()}", f"login:ip:{_ip_cliente() or 'desconocida'}")
+    topes = (LOGIN_MAX_POR_USUARIO, LOGIN_MAX_POR_IP)
+    if not all(cuentas.limite_disponible(c, maximo=m, ventana_s=LOGIN_VENTANA_S) for c, m in zip(claves, topes)):
+        flash(gettext("Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo."), "error")
+        return render_template("login.html"), 429
     entry = usuarios.verificar(usuario, password)
     if not entry:
+        for c, m in zip(claves, topes):
+            cuentas.limite_ok(c, maximo=m, ventana_s=LOGIN_VENTANA_S)
         flash(gettext("Usuario o contraseña incorrectos."), "error")
         return render_template("login.html"), 401
 
@@ -1323,6 +1489,11 @@ def crear_proyecto():
     error_password = usuarios.validar_password(password)
     if error_password:
         return _error(error_password)
+    # Las dos respuestas de abajo dicen si un usuario o un correo ya existen:
+    # con tope por IP para que no sirvan para sacar la lista de cuentas.
+    if not cuentas.limite_ok(f"alta:consulta:ip:{_ip_cliente() or 'desconocida'}", maximo=20):
+        flash(gettext("Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo."), "error")
+        return render_template("index.html", form=form), 429
     if usuarios.existe(usuario):
         return _error(gettext("Ya existe un usuario '%(usuario)s' — elige otro.", usuario=usuario))
     if usuarios.por_correo(correo):
@@ -2336,7 +2507,7 @@ def _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, prompt
     return trabajos.iniciar(
         job_id, trabajo,
         duracion_estimada=45 if proveedor == "higgsfield" else 20,
-        etapas=ETAPAS_IMAGEN,
+        etapas=ETAPAS_IMAGEN, cliente=cliente,
     )
 
 
@@ -2349,7 +2520,10 @@ def nueva_idea_visual(cliente):
     image_url = request.form.get("image_url", "").strip()
     platforms = request.form.getlist("platforms")
 
-    if not idea_texto or not image_url:
+    # Solo uno de los personajes del proyecto (lo que ofrece el selector): la
+    # URL la descarga el servidor, así que una escrita a mano podía apuntar a
+    # una red interna (SSRF, auditoría de seguridad 2026-10-01).
+    if not idea_texto or image_url not in {p["url"] for p in _personajes(cliente) if p.get("url")}:
         flash(gettext("Escribe la idea y elige un personaje."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
@@ -2490,7 +2664,7 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
     # de generar_video, así que ese paso no se puede anunciar por separado.
     if trabajos.iniciar(
         job_id, trabajo, duracion_estimada=130,
-        etapas=[(ETAPA_MODELO, 90), (ETAPA_GUARDAR_VIDEO, 10)],
+        etapas=[(ETAPA_MODELO, 90), (ETAPA_GUARDAR_VIDEO, 10)], cliente=cliente,
     ):
         flash(gettext("Generando video…"), "ok")
     else:
@@ -2834,7 +3008,7 @@ def _guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto"
     guardadas = 0
     for archivo in archivos:
         nombre = secure_filename(archivo.filename)
-        if not nombre.lower().endswith(catalogo_productos.IMAGE_EXTS):
+        if not nombre.lower().endswith(catalogo_productos.IMAGE_EXTS) or _foto_subida_invalida(archivo):
             continue
         # Varias fotos con el mismo nombre (desde el celular todas llegan como
         # "image.jpeg") no se pisan: se numeran.
@@ -3519,6 +3693,19 @@ def generar_swap(cliente):
     if not archivos:
         flash(gettext("Sube al menos una foto o video primero."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    # Solo fotos y videos: el original se vuelve a servir desde este dominio
+    # (imagen_swap_original), así que un .html o .svg disfrazado sería un XSS
+    # almacenado (auditoría de seguridad 2026-10-01). Y un tope por envío:
+    # cada archivo encola una generación pagada.
+    if len(archivos) > MAX_SWAPS_POR_ENVIO:
+        flash(gettext("Sube máximo %(n)s archivos a la vez.", n=MAX_SWAPS_POR_ENVIO), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    if any(_ext_de(a.filename) not in IMAGE_EXTS + VIDEO_EXTS for a in archivos):
+        flash(gettext("Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    if any(_ext_de(a.filename) in IMAGE_EXTS and not _imagen_valida(a.stream) for a in archivos):
+        flash(gettext("No pude leer esa imagen."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     producto = catalogo_productos.encontrar(cliente, producto_id)
     if not producto:
@@ -3545,6 +3732,8 @@ def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, provee
     propia barra de progreso independiente."""
     nombre = secure_filename(archivo.filename)
     ext = os.path.splitext(nombre)[1].lower()
+    if ext not in IMAGE_EXTS + VIDEO_EXTS:
+        return False
     es_video = ext in VIDEO_EXTS
     tipo = "video" if es_video else "foto"
     proveedor = proveedor_video if es_video else proveedor_foto
@@ -3595,7 +3784,13 @@ def imagen_swap_original(cliente, swap_id):
     if not entry or not entry.get("foto_original_local") or not os.path.exists(entry["foto_original_local"]):
         flash(gettext("No encontré la foto original."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
-    return send_file(entry["foto_original_local"])
+    # El tipo sale de la lista blanca, nunca del nombre que mandó el navegador:
+    # un original viejo con otra extensión se descarga, no se abre aquí.
+    ruta = entry["foto_original_local"]
+    tipo = MIMETYPES_MEDIOS.get(_ext_de(ruta))
+    if tipo is None:
+        return send_file(ruta, mimetype="application/octet-stream", as_attachment=True)
+    return send_file(ruta, mimetype=tipo)
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/eliminar", methods=["POST"])
@@ -3736,7 +3931,8 @@ def meta_callback():
     sale de la sesión, nunca de la query, y el state es de un solo uso."""
     pendiente = session.pop("meta_oauth", None) or {}
     cliente = pendiente.get("cliente")
-    state_ok = bool(pendiente.get("state")) and request.args.get("state") == pendiente.get("state")
+    state_ok = bool(pendiente.get("state")) and secrets.compare_digest(
+        str(request.args.get("state") or "").encode(), str(pendiente.get("state")).encode())
     if not cliente or not state_ok:
         flash(gettext("La autorización con Meta no coincide con esta sesión — vuelve a intentarlo desde FlowMarketing."),
               "error")
@@ -3984,10 +4180,12 @@ def meta_agencia_conectar(cliente):
         flash(gettext("Esa Página no aparece entre las de tu portafolio; vuelve a buscar."), "error")
         return _ir_a_meta(cliente)
     if not page_id and page_id_manual:
-        if not activos["paginas_sin_dueno"] or not meta_agencia.pagina_de_socio(page_id_manual):
-            flash(gettext("Esa Página no está compartida con Creatv; revisa el paso 2 de la guía."), "error")
-            return _ir_a_meta(cliente)
-        page_id = page_id_manual
+        # Una Página escrita a mano no prueba de quién es (los ids de Página
+        # son públicos): la conecta Creatv después de revisarla (auditoría de
+        # seguridad 2026-10-01).
+        flash(gettext("Para conectar una Página escribiendo su ID, usa «Avisar a Creatv»: la revisamos y la "
+                      "conectamos nosotros."), "error")
+        return _ir_a_meta(cliente)
     try:
         detalle = meta_agencia.asignar(cliente, ad_account_id, page_id,
                                        asignado_por=f"cliente:{session.get('usuario')}", portafolio_id=portafolio)
@@ -4733,8 +4931,13 @@ def _calcular_tablero(cliente):
         datos = None
         print(f"[aviso] Tablero de {cliente}: no pude cargar los datos de una vez: {type(e).__name__}")
     partes = {
+        # El mes en curso solo lo usa el chip del menú lateral (_pauta_mes);
+        # los tiles son el total desde el inicio y debajo va el mes a mes.
         "resumen": lambda: tablero.resumen_mes(cliente, ahora, datos=datos),
-        "resumen_triple_whale": lambda: tablero.resumen_mes_triple_whale(cliente, ahora, datos=datos),
+        "total": lambda: tablero.resumen_total(cliente, ahora, datos=datos),
+        "total_triple_whale": lambda: tablero.resumen_total_triple_whale(cliente, ahora, datos=datos),
+        "meses": lambda: tablero.mes_a_mes(cliente, ahora, datos=datos),
+        "generacion_total": lambda: gastos.resumen_total(cliente, ahora),
         # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
         "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
         "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
@@ -4778,12 +4981,14 @@ _TABLERO_LOCK = threading.Lock()
 def _clave_tablero(cliente):
     """(último id de metrica_snapshot, propuestas pendientes, nº de
     experimentos y su último actualizado_en, último actualizado_en de pieza,
-    nº y último actualizado_en de publicación orgánica) del proyecto: cinco
+    nº y último actualizado_en de publicación orgánica, copia de Triple
+    Whale, nº/último id/suma de los cobros de generación) del proyecto:
     consultas baratas con índice. Cualquier cambio que
     el tablero pinte (snapshot del worker, propuesta del motor, estado o
-    veredicto tocado por el dueño, publicación orgánica) mueve la clave."""
+    veredicto tocado por el dueño, publicación orgánica, cobro de un
+    proveedor) mueve la clave."""
     ms, ep, pr, ex, pub = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento, db.publicacion
-    tw = db.triple_whale
+    tw, gs = db.triple_whale, db.gasto
     with db.conectar() as con:
         ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
             ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
@@ -4798,7 +5003,12 @@ def _clave_tablero(cliente):
         # La tienda según Triple Whale (spec 2026-09-28 §13): conectar,
         # desconectar o una copia nueva mueven sus tiles.
         triple = con.execute(sa.select(sa.func.max(tw.c.actualizado_en)).where(tw.c.cliente == cliente)).scalar()
-    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple)
+        # La generación (tile total y columna del mes a mes): un cobro nuevo
+        # o uno que se actualiza (misma referencia, otro usd) mueve la clave.
+        cobros = con.execute(sa.select(sa.func.count(), sa.func.max(gs.c.id), sa.func.sum(gs.c.usd))
+                             .where(gs.c.cliente == cliente)).first()
+    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple,
+            tuple(cobros))
 
 
 def invalidar_tablero(cliente=None):
@@ -6360,7 +6570,8 @@ def meli_callback():
     es de un solo uso. Mismo patrón que meta_callback."""
     pendiente = session.pop("meli_oauth", None) or {}
     cliente = pendiente.get("cliente")
-    state_ok = bool(pendiente.get("state")) and request.args.get("state") == pendiente.get("state")
+    state_ok = bool(pendiente.get("state")) and secrets.compare_digest(
+        str(request.args.get("state") or "").encode(), str(pendiente.get("state")).encode())
     if not cliente or not state_ok:
         flash(gettext("La autorización con MercadoLibre no coincide con esta sesión — vuelve a intentarlo desde Configuración."), "error")
         return _volver_config(cliente) if cliente else redirect(url_for("index"))
@@ -6529,7 +6740,7 @@ def _lanzar_generacion_imagen(cliente, prompt_id):
             raise RuntimeError(error)
         return idiomas.N_("Imagen candidata lista.")
 
-    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45, etapas=ETAPAS_IMAGEN)
+    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45, etapas=ETAPAS_IMAGEN, cliente=cliente)
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar", methods=["POST"])
@@ -6643,7 +6854,7 @@ def aprobar_imagen(cliente, prompt_id):
         prompts_mod.guardar(cliente, data2)
         return idiomas.N_("Video listo, pendiente de revisión.")
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130, etapas=ETAPAS_VIDEO):
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130, etapas=ETAPAS_VIDEO, cliente=cliente):
         flash(gettext("Generando el video de %(prompt)s…", prompt=prompt_id), "ok")
     else:
         flash(gettext("Ya se está generando el video de %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
@@ -6699,7 +6910,7 @@ def aprobar(cliente, brief_id):
             raise RuntimeError(idiomas.N_("Se publicó, pero alguna plataforma falló — revisa la bitácora."))
         return idiomas.N_("Publicado en todas las plataformas.")
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=90):
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=90, cliente=cliente):
         flash(gettext("Publicando %(video)s…", video=brief_id), "ok")
     else:
         flash(gettext("Ya se está publicando %(video)s — espera a que termine.", video=brief_id), "warn")
@@ -7091,6 +7302,10 @@ def _guardar_referencia_archivo(cliente, archivo, i):
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
         return False
+    if ext in IMAGE_EXTS:
+        motivo = _foto_subida_invalida(archivo)
+        if motivo:
+            raise ValueError(motivo)
     carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
     os.makedirs(carpeta, exist_ok=True)
     unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{i}{ext}"
@@ -7195,7 +7410,7 @@ def fp_agregar_link(cliente):
                 raise
         return idiomas.N_("Video del link agregado a las referencias.")
 
-    arranco = trabajos.iniciar(job_id, trabajo, duracion_estimada=40)
+    arranco = trabajos.iniciar(job_id, trabajo, duracion_estimada=40, cliente=cliente)
     if _quiere_json():
         return _respuesta_bandeja(cliente, mensaje=gettext("Descargando el video del link…") if arranco else None,
                                   error=None if arranco else gettext("Ya se está descargando un link — espera a que termine."))

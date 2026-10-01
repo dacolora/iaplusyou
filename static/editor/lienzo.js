@@ -7,6 +7,8 @@
 // está entre los materiales de la página (se borró o es de otro proyecto: el
 // aviso «Faltan N archivo(s)» ya lo dice) no lo pide: se queda en negro sin
 // redibujar, también en pausa.
+import { caja as cajaEncuadre, completo as encuadreCompleto, fondo as fondoEncuadre, FONDO_SIGMA_PX, rectConZoom }
+  from "./encuadre.js";
 import { colorAss, estiloEfectivo, eventoEn, eventos } from "./subtitulos.js";
 import { rasterizarTexto } from "./texto_canvas.js";
 import { capasEn, posicionCapa, principalEn, tamanoCapaImagen, zoomKenBurns } from "./tiempo.js";
@@ -43,6 +45,51 @@ function perdido(recursos, clip) {
   return !recursos.material(clip.material_id) || Boolean(recursos.fallo?.(clip));
 }
 
+// Dibuja UNA capa de la principal (D4/D5, capa 5b): `capa` es la forma de
+// tiempo.principalEn (clip, dx, alfa, tZoom); `fuente` ya tiene cuadro
+// (medido en [fw, fh] — el llamador se saltó esta función si no). Sin
+// `encuadre` en el clip: exactamente lo de hoy (scale=W:H:…increase,crop=W:H
+// y el zoompan centrado del Ken Burns). Con `encuadre`: la caja de
+// `encuadre.caja` (D4) y, en «ajustar», antes el fondo desenfocado (D5) — el
+// mismo cuadro, chico (`encuadre.fondo(W,H)`, `recursos.lienzoFondo`),
+// desenfocado (`recursos.filtroFondo`) y agrandado al lienzo. El zoom lento
+// y el desliz de una transición (`capa.dx`) se aplican DESPUÉS, sobre el
+// rectángulo ya compuesto (`encuadre.rectConZoom`), como el `zoompan` del
+// compilador — tanto al fondo como al primer plano, así la transición
+// mueve/acerca el cuadro entero. Exportada para probarla sola.
+export function dibujarPrincipal(ctx, capa, fuente, [fw, fh], W, H, recursos) {
+  // el cuadro congelado usa su propio instante; una imagen principal no
+  // lleva zoom (tZoom null: el compilador nunca le aplica Ken Burns).
+  const zoom = capa.tZoom === null ? 1 : zoomKenBurns(capa.clip, capa.tZoom);
+  const dx = capa.dx;
+  ctx.globalAlpha = capa.alfa;
+  const enc = capa.clip.encuadre;
+  if (!enc) {
+    const escala = Math.max(W / fw, H / fh) * zoom;
+    const dw = fw * escala;
+    const dh = fh * escala;
+    ctx.drawImage(fuente, (W - dw) / 2 + dx * W, (H - dh) / 2, dw, dh);
+    return;
+  }
+  if (encuadreCompleto(enc).modo === "ajustar") {
+    const [fW, fH] = fondoEncuadre(W, H);
+    const chico = recursos.lienzoFondo(fW, fH);
+    const cctx = chico.getContext("2d");
+    cctx.filter = recursos.filtroFondo ? `blur(${FONDO_SIGMA_PX}px)` : "none";
+    // «llenar» centrado, un 20 % más grande que el lienzo chico (D5: para
+    // que el desenfoque no traiga negro de los bordes).
+    const escalaChico = Math.max(fW / fw, fH / fh) * 1.2;
+    const dwc = fw * escalaChico;
+    const dhc = fh * escalaChico;
+    cctx.drawImage(fuente, (fW - dwc) / 2, (fH - dhc) / 2, dwc, dhc);
+    const rf = rectConZoom({ x: 0, y: 0, w: W, h: H }, zoom, dx, W, H);
+    ctx.drawImage(chico, rf.x, rf.y, rf.w, rf.h);
+  }
+  const { sw, sh, px, py } = cajaEncuadre(fw, fh, W, H, enc);
+  const r = rectConZoom({ x: px, y: py, w: sw, h: sh }, zoom, dx, W, H);
+  ctx.drawImage(fuente, r.x, r.y, r.w, r.h);
+}
+
 function dibujarDentro(ctx, doc, tMs, recursos, cfg, W, H) {
   ctx.globalAlpha = 1;
   ctx.fillStyle = "#000";
@@ -56,15 +103,7 @@ function dibujarDentro(ctx, doc, tMs, recursos, cfg, W, H) {
       if (!perdido(recursos, capa.clip)) faltaCuadro = true;
       continue;
     }
-    // scale=W:H:force_original_aspect_ratio=increase,crop=W:H y el zoompan
-    // centrado del Ken Burns en el instante que dice la capa (el cuadro
-    // congelado usa el suyo; una imagen principal no lleva zoom: tZoom null).
-    const zoom = capa.tZoom === null ? 1 : zoomKenBurns(capa.clip, capa.tZoom);
-    const escala = Math.max(W / fw, H / fh) * zoom;
-    const dw = fw * escala;
-    const dh = fh * escala;
-    ctx.globalAlpha = capa.alfa;
-    ctx.drawImage(fuente, (W - dw) / 2 + capa.dx * W, (H - dh) / 2, dw, dh);
+    dibujarPrincipal(ctx, capa, fuente, [fw, fh], W, H, recursos);
   }
   for (const { pista, clip } of capasEn(doc, tMs)) {
     let src;

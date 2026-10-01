@@ -312,13 +312,14 @@ def test_un_solo_clip_de_efecto_entra_como_au_sonido():
 
 
 def test_superpuesto_con_clips_es_error_explicito():
-    # I1: el PIP no se renderiza en la capa 1; mejor un error claro que un
-    # video con la capa ignorada en silencio.
+    # I1: el PIP no se renderiza (capa 5b, D14: se aplaza); mejor un error
+    # claro, en palabras de la persona, que un video con la capa ignorada en
+    # silencio.
     doc = _doc()
     doc["pistas"].append({"id": "p_pip", "tipo": "superpuesto", "bloqueada": False, "silenciada": False, "oculta": False,
                           "clips": [{"id": "pip1", "inicio_ms": 0, "duracion_ms": 1000, "material_id": 1,
                                      "recorte": {"desde_ms": 0, "hasta_ms": 1000}, "transform": dict(_TRANSFORM), "keyframes": []}]})
-    with pytest.raises(ValueError, match="PIP"):
+    with pytest.raises(ValueError, match="^El video encima de otro video todavía no se puede producir.$"):
         c.compilar(doc, RUTAS, con_ass=False)
     doc["pistas"][-1]["clips"] = []
     c.compilar(doc, RUTAS, con_ass=False)  # una pista superpuesta vacía no molesta
@@ -459,3 +460,142 @@ def test_ken_burns_agrega_zoompan_y_sigue_donde_iba_en_cada_tramo():
     assert "min(1+0.08*(on+30)/105,1.08)" in fg2
     # sin ken_burns no aparece (el fixture esperado sigue intacto)
     assert "zoompan" not in c.compilar(_doc(), RUTAS, con_ass=False).filtergraph
+
+
+# ---- capa 5b: fotos en la principal, encuadre y setsar (spec D2-D6, §2.3) ----
+# R2 (controlador): toda cadena de la principal TERMINA en
+# `,setsar=1,format=yuv420p[vN]`, después del zoompan, como dejó el arreglo
+# 25edb51 en producción; las cadenas del plan que ponían `setsar=1` antes de
+# `fps` van aquí en ese orden.
+
+_LLENAR = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
+
+
+def _doc_foto():
+    """v0 (video, material 1, 0-2000) + f1 (foto, material 4, 2000-5000)."""
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [
+        {"id": "v0", "inicio_ms": 0, "duracion_ms": 2000, "material_id": 1, "recorte": {"desde_ms": 0, "hasta_ms": 2000}},
+        {"id": "f1", "inicio_ms": 2000, "duracion_ms": 3000, "material_id": 4, "foto": True},
+    ]
+    return doc
+
+
+def _compilar_foto(doc, ventana=None):
+    doc = d.resolver(d.validar(doc), "es", "CO")
+    return c.compilar(doc, {1: "/c.mp4", "foto:4": "/f.jpg"}, ventana=ventana, con_ass=False)
+
+
+def test_una_foto_entra_sin_tiempo_y_se_repite_con_loop():
+    plan = _compilar_foto(_doc_foto())
+    assert plan.entradas[0] == {"ruta": "/c.mp4", "opciones": ["-ss", "0.000", "-t", "2.000"]}
+    assert plan.entradas[1] == {"ruta": "/f.jpg", "opciones": []}
+    partes = plan.filtergraph.split(";")
+    assert f"[0:v]setpts=PTS-STARTPTS,{_LLENAR},fps=30,setsar=1,format=yuv420p[v0]" in partes
+    # escalar (y encuadrar) una vez, ANTES del loop; 3000 ms = 90 cuadros
+    assert (f"[1:v]{_LLENAR},format=yuv420p,loop=loop=89:size=1:start=0,setpts=N/(30*TB),fps=30,"
+            "setsar=1,format=yuv420p[v1]") in partes
+    assert "[v0][v1]concat=n=2:v=1:a=0,settb=1/30[vc]" in partes
+    assert plan.duracion_ms == 5000
+
+
+def test_un_video_que_se_funde_en_una_foto():
+    doc = _doc_foto()
+    doc["pistas"][0]["clips"][0]["transicion"] = {"tipo": "fundido", "duracion_ms": 500}
+    plan = _compilar_foto(doc)
+    assert plan.entradas[0]["opciones"] == ["-ss", "0.000", "-t", "2.500"]
+    assert "[v0][v1]xfade=transition=fade:duration=0.500:offset=2.000[vc]" in plan.filtergraph.split(";")
+
+
+def test_la_cola_de_una_foto_sale_del_mismo_loop():
+    # foto primero (0-3000) con un fundido de 500 hacia el video: 3500 ms = 105 cuadros
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [
+        {"id": "f1", "inicio_ms": 0, "duracion_ms": 3000, "material_id": 4, "foto": True,
+         "transicion": {"tipo": "fundido", "duracion_ms": 500, "modo": "solape"}},
+        {"id": "v0", "inicio_ms": 3000, "duracion_ms": 2000, "material_id": 1, "recorte": {"desde_ms": 0, "hasta_ms": 2000}},
+    ]
+    plan = _compilar_foto(doc)
+    assert plan.entradas[0] == {"ruta": "/f.jpg", "opciones": []}
+    assert "loop=loop=104:size=1:start=0" in plan.filtergraph
+    assert "[v0][v1]xfade=transition=fade:duration=0.500:offset=3.000[vc]" in plan.filtergraph
+
+
+def test_el_zoom_lento_de_una_foto_va_despues_del_loop_y_sigue_en_cada_tramo():
+    doc = _doc_foto()
+    doc["pistas"][0]["clips"][1]["ken_burns"] = "in"
+    zp = "zoompan=z='min(1+0.08*(on+{off})/90,1.08)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps=30"
+    plan = _compilar_foto(doc)
+    assert f"loop=loop=89:size=1:start=0,setpts=N/(30*TB),fps=30,{zp.format(off=0)},setsar=1,format=yuv420p[v1]" in plan.filtergraph
+    # ventana que entra a mitad de la foto: se repite solo lo que se ve (2000 ms)
+    # y el zoom sigue donde iba (1000 ms = 30 cuadros ya consumidos)
+    plan = _compilar_foto(doc, ventana=(3000, 5000))
+    assert plan.entradas == [{"ruta": "/f.jpg", "opciones": []}]
+    assert f"[0:v]{_LLENAR},format=yuv420p,loop=loop=59:size=1:start=0,setpts=N/(30*TB),fps=30,{zp.format(off=30)}" in plan.filtergraph
+
+
+def test_encuadre_llenar_escala_a_la_caja_y_recorta_donde_se_ve():
+    doc = _doc_foto()
+    doc["pistas"][0]["clips"][1].update(encuadre={"x": 0}, ancho_px=400, alto_px=200)
+    plan = _compilar_foto(doc)
+    assert ("[1:v]scale=3840:1920,crop=1080:1920:0:0,format=yuv420p,loop=loop=89:size=1:start=0,"
+            "setpts=N/(30*TB),fps=30,setsar=1,format=yuv420p[v1]") in plan.filtergraph.split(";")
+    doc["pistas"][0]["clips"][1]["encuadre"] = {"x": 1}
+    assert "[1:v]scale=3840:1920,crop=1080:1920:2760:0,format=yuv420p,loop=" in _compilar_foto(doc).filtergraph
+
+
+def test_encuadre_ajustar_pone_el_cuadro_entero_sobre_el_fondo_desenfocado():
+    doc = _doc_foto()
+    doc["pistas"][0]["clips"][0].update(encuadre={"modo": "ajustar"}, ancho_px=1920, alto_px=1080)
+    partes = _compilar_foto(doc).filtergraph.split(";")
+    i = partes.index("[0:v]setpts=PTS-STARTPTS,split=2[f0a][f0b]")
+    assert partes[i:i + 4] == [
+        "[0:v]setpts=PTS-STARTPTS,split=2[f0a][f0b]",
+        "[f0a]scale=108:192:force_original_aspect_ratio=increase,crop=108:192,boxblur=luma_radius=6:luma_power=2,"
+        "scale=1080:1920,setsar=1[f0c]",
+        "[f0b]scale=1080:608,setsar=1[f0d]",
+        "[f0c][f0d]overlay=x=0:y=656,fps=30,setsar=1,format=yuv420p[v0]",
+    ]
+
+
+def test_foto_en_ajustar_repite_el_cuadro_ya_compuesto():
+    doc = _doc_foto()
+    doc["pistas"][0]["clips"][1].update(encuadre={"modo": "ajustar"}, ancho_px=400, alto_px=200)
+    partes = _compilar_foto(doc).filtergraph.split(";")
+    assert "[1:v]split=2[f1a][f1b]" in partes
+    assert "[f1b]scale=1080:540,setsar=1[f1d]" in partes
+    assert ("[f1c][f1d]overlay=x=0:y=690,format=yuv420p,loop=loop=89:size=1:start=0,setpts=N/(30*TB),fps=30,"
+            "setsar=1,format=yuv420p[v1]") in partes
+
+
+def test_sin_encuadre_la_cadena_es_la_de_siempre():
+    # un documento viejo (sin `encuadre`) se produce con el mismo texto
+    plan = c.compilar(_doc(), RUTAS, con_ass=False)
+    assert plan.filtergraph.split(";")[:2] == _esperado()[:2]
+    assert "[f0a]" not in plan.filtergraph and "boxblur" not in plan.filtergraph
+
+
+def test_encuadre_sin_medidas_es_error_de_quien_llama():
+    doc = _doc_foto()
+    doc["pistas"][0]["clips"][1]["encuadre"] = {"modo": "ajustar"}
+    with pytest.raises(ValueError, match="Falta el tamaño del clip «f1» para su encuadre."):
+        _compilar_foto(doc)
+
+
+def test_foto_sin_su_ruta_preparada_es_el_error_de_siempre():
+    doc = d.resolver(d.validar(_doc_foto()), "es", "CO")
+    with pytest.raises(ValueError, match="Falta la ruta"):
+        c.compilar(doc, {1: "/c.mp4", 4: "/original.png"}, con_ass=False)
+
+
+def test_verificar_recortes_salta_las_fotos():
+    # una foto no tiene tiempo de fuente: su cola nunca se acaba
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [
+        {"id": "f1", "inicio_ms": 0, "duracion_ms": 3000, "material_id": 4, "foto": True,
+         "transicion": {"tipo": "fundido", "duracion_ms": 500}},
+        {"id": "v0", "inicio_ms": 3000, "duracion_ms": 2000, "material_id": 1, "recorte": {"desde_ms": 0, "hasta_ms": 2000}},
+    ]
+    doc = d.validar(doc)
+    out = c.verificar_recortes(doc, {4: 10, 1: 5000})
+    assert out["pistas"][0]["clips"][0]["transicion"] == {"tipo": "fundido", "duracion_ms": 500}

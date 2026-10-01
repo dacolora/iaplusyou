@@ -56,13 +56,27 @@ Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
     clave ausente = legado con las `palabras` guardadas, lista vacía =
     sin subtítulos) y `correcciones` (por `material_id` y por índice de
     palabra de ESE material; `""` la quita). `palabras` sigue siendo el
-    respaldo de legado (absoluto, por destino)."""
+    respaldo de legado (absoluto, por destino);
+  - capa 5b (fotos, encuadre, transiciones que juntan): un clip de la
+    pista `video` puede ser `foto: true` (D1) — dura `duracion_ms`
+    (100–60 000 ms), su `recorte` se normaliza a `{0, duracion_ms}` y su
+    `velocidad` debe ser 1.0 (una foto no tiene tiempo de fuente ni
+    velocidad); `foto: false` quita la marca y el clip vuelve a ser un
+    video de siempre. `encuadre` (D4, `null`/ausente = llenar centrado sin
+    acercar) solo va en pistas `video` (videos y fotos), se guarda
+    completo (`encuadre.DEFECTO` rellena lo que falte) y si queda igual al
+    defecto se guarda `None`. `transicion.modo` (D9), si viene, debe ser
+    uno de `MODOS_TRANSICION` (`"solape"`: la transición JUNTA los dos
+    clips enteros, A cede sus últimos ms — lo hace `operaciones.js`, no
+    `validar`); ausente/`None` es la transición de cola de siempre. Un
+    documento sin ninguna de estas claves nuevas valida byte a byte igual
+    que antes de esta capa."""
 import copy
 import re
 
 from flask_babel import gettext
 
-from final_edition import tipos
+from final_edition import encuadre, tipos
 
 _CLAVE_RE = re.compile(r"^[a-z]{2}(_[A-Z]{2})?$")     # "es" o "es_CO": textos, voz, subtítulos, por_destino
 _DESTINO_RE = re.compile(r"^[a-z]{2}_[A-Z]{2}$")     # precios: siempre con país
@@ -89,6 +103,15 @@ FUENTES_SUBTITULO = ("voz", "sonido", "material")                      # D4: qu�
 MAX_FUENTES_SUBTITULO = 8
 MAX_CORRECCION = 120
 TRANSICIONES = ("corte", "fundido", "deslizar", "zoom", "desenfoque")
+# Capa 5b, D1/D9: una foto es un clip de la pista `video` con `foto: true`
+# (dura `duracion_ms`, nunca tiene tiempo de fuente); una transición nueva
+# puede JUNTAR los dos clips enteros (`modo: "solape"`, D9) en vez de vivir
+# de la cola de A — ausente/`None` sigue siendo la transición de cola de
+# siempre.
+FOTO_MIN_MS = 100
+FOTO_MAX_MS = 60000
+FOTO_DEFECTO_MS = 3000
+MODOS_TRANSICION = ("solape",)
 ANIMACIONES = ("ninguna", "aparecer", "deslizar", "rebote", "zoom", "maquina")
 _TRANSFORM_DEFECTO = {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"}
 _AUDIO_DEFECTO = {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}
@@ -248,6 +271,26 @@ def _validar_clip(clip, pista, i):
         _fallar(f"{ruta}.material_id es obligatorio en pistas de {tipo}.")
     if clip.get("material_id") is not None:
         _entero_positivo(clip["material_id"], f"{ruta}.material_id")
+    # `foto` (capa 5b, D1): un clip de la pista `video` que es una imagen
+    # fija en vez de un video — mismo contrato de tiempo salvo que nunca
+    # tiene tiempo de fuente (su `recorte` se normaliza a {0, duracion_ms})
+    # ni velocidad (siempre 1.0). `foto: false` vuelve al clip de siempre.
+    if "foto" in clip:
+        foto = clip["foto"]
+        if not isinstance(foto, bool):
+            _fallar(f"{ruta}.foto debe ser verdadero o falso (vino {foto!r}).")
+        if tipo != "video":
+            _fallar(f"{ruta}.foto solo va en la pista de video.")
+        if foto:
+            clip["foto"] = True
+        else:
+            clip.pop("foto")
+    es_foto = tipo == "video" and clip.get("foto") is True
+    if es_foto:
+        dur = clip.get("duracion_ms")
+        if not FOTO_MIN_MS <= dur <= FOTO_MAX_MS:
+            _fallar(f"{ruta}.duracion_ms de una foto debe estar entre {FOTO_MIN_MS} y {FOTO_MAX_MS} (vino {dur!r}).")
+        clip["recorte"] = {"desde_ms": 0, "hasta_ms": dur}
     if tipo in ("video", "superpuesto", "audio"):
         r = clip.get("recorte") or {}
         _entero_no_negativo(r.get("desde_ms", 0), f"{ruta}.recorte.desde_ms")
@@ -264,6 +307,8 @@ def _validar_clip(clip, pista, i):
             # el compilador no aplica `atempo` todavía: aceptar otra velocidad
             # daría un audio a ritmo normal con la duración de otro.
             _fallar(f"{ruta}.velocidad debe ser 1.0 en pistas de audio (atempo llega después).")
+        if es_foto and v != 1.0:
+            _fallar(f"{ruta}.velocidad: una foto va a velocidad 1.")
         clip["velocidad"] = v
         clip["audio"] = {**_AUDIO_DEFECTO, **(clip.get("audio") or {})}
         clip["audio"]["volumen"] = _fraccion(clip["audio"]["volumen"], f"{ruta}.audio.volumen")
@@ -290,6 +335,33 @@ def _validar_clip(clip, pista, i):
             _fallar(f"{ruta}.bloque debe ser texto (el rol del guion) o null.")
     if tipo in ("video", "superpuesto") and clip.get("ken_burns") not in KEN_BURNS:
         _fallar(f"{ruta}.ken_burns debe ser null, 'in' u 'out'.")
+    # `encuadre` (capa 5b, D4): qué parte del cuadro se ve y cómo se
+    # compone cuando no coincide con el lienzo — solo en pistas `video`
+    # (videos y fotos). `null`/ausente = el llenado centrado de siempre.
+    # Se guarda completo (defaults rellenados); si queda igual a
+    # `encuadre.DEFECTO` se guarda `null` (un documento sin diferencias no
+    # carga nada nuevo al compilador ni a la vista previa).
+    if "encuadre" in clip:
+        if tipo != "video":
+            _fallar(f"{ruta}.encuadre solo va en la pista de video.")
+        enc = clip["encuadre"]
+        if enc is None:
+            clip["encuadre"] = None
+        else:
+            if not isinstance(enc, dict):
+                _fallar(f"{ruta}.encuadre debe ser un objeto o null.")
+            extra = sorted(set(enc) - {"modo", "zoom", "x", "y"})
+            if extra:
+                _fallar(f"{ruta}.encuadre: clave desconocida {extra[0]!r}.")
+            modo = enc.get("modo", encuadre.DEFECTO["modo"])
+            if modo not in encuadre.MODOS:
+                _fallar(f"{ruta}.encuadre.modo desconocido: {modo!r}.")
+            zoom = _numero(enc.get("zoom", encuadre.DEFECTO["zoom"]), f"{ruta}.encuadre.zoom",
+                           encuadre.ZOOM_MIN, encuadre.ZOOM_MAX)
+            x = _fraccion(enc.get("x", encuadre.DEFECTO["x"]), f"{ruta}.encuadre.x")
+            y = _fraccion(enc.get("y", encuadre.DEFECTO["y"]), f"{ruta}.encuadre.y")
+            lleno = {"modo": modo, "zoom": zoom, "x": x, "y": y}
+            clip["encuadre"] = None if lleno == encuadre.DEFECTO else lleno
     if tipo != "audio":
         clip["transform"] = _validar_transform(clip.get("transform"), ruta)
         for k in ("ancho_px", "alto_px"):
@@ -302,6 +374,12 @@ def _validar_clip(clip, pista, i):
         _fallar(f"{ruta}.transicion.tipo desconocida: {tr.get('tipo')!r}.")
     if tr:
         _entero_no_negativo(tr.get("duracion_ms", 0), f"{ruta}.transicion.duracion_ms")
+        # `modo` (capa 5b, D9): ausente/`None` es la transición de cola de
+        # siempre; "solape" dice que A cedió sus últimos ms para juntar los
+        # dos clips enteros (la cuenta la hace `operaciones.js`, no `validar`).
+        modo_tr = tr.get("modo")
+        if modo_tr is not None and modo_tr not in MODOS_TRANSICION:
+            _fallar(f"{ruta}.transicion.modo desconocido: {modo_tr!r}.")
     an = clip.get("animacion")
     if an:
         for k in ("entrada", "salida"):

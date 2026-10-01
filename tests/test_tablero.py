@@ -146,6 +146,137 @@ def test_resumen_mes_sin_experimentos(base_temporal, sin_red):
     assert r["por_moneda"] == {} and r["experimentos_corriendo"] == 0 and r["piezas_activas"] == 0
 
 
+# ---------- total desde el inicio y mes a mes ----------
+
+def _sembrar_meses(db):
+    """COP con actividad en julio, agosto y septiembre (uno exactamente a las
+    00:00 del 1 de septiembre, que es la base de septiembre como en
+    resumen_mes), USD solo en septiembre, un snapshot futuro respecto a AHORA
+    que no cuenta y generación en mayo (junio queda vacío) y septiembre."""
+    import experimentos as ex
+    import gastos
+    e_cop = _experimento(db, "Cojín", moneda="COP")
+    e_usd = _experimento(db, "Manta", moneda="USD", estado="pausado")
+    ep = _pieza_en(db, e_cop)
+    ep_usd = _pieza_en(db, e_usd, legado="cf_2__es_CO")
+    for t, g, c, i in (("2026-07-10T08:00:00", 100, 1, 1000), ("2026-07-31T20:00:00", 150, 1, 1000),
+                       ("2026-08-15T08:00:00", 400, 3, 5000), ("2026-09-01T00:00:00", 450, 3, 5000),
+                       ("2026-09-10T08:00:00", 600, 4, 7000), ("2026-09-20T08:00:00", 9000, 99, 1)):
+        ex.snapshot(ep, {"gasto": g, "compras": c, "ingresos": i, "impresiones": g * 10, "clics_enlace": c * 5,
+                         "fuente_ventas": "meta"}, tomado_en=t)
+    ex.snapshot(ep_usd, {"gasto": 12.5, "impresiones": 40}, tomado_en="2026-09-05T08:00:00")
+    gastos.registrar("acme", "video", 2.0, "video:mayo", creado_en="2026-05-15T10:00:00")
+    gastos.registrar("acme", "video", 0.5, "video:sep", creado_en="2026-09-05T10:00:00")
+    return ep, ep_usd
+
+
+def test_resumen_total_es_el_acumulado_hasta_ahora(base_temporal, sin_red):
+    import tablero
+    _sembrar_meses(base_temporal)
+    r = tablero.resumen_total("acme", ahora_iso=AHORA)
+    assert r["hasta"] == AHORA
+    assert r["por_moneda"]["COP"]["gasto"] == 600 and r["por_moneda"]["COP"]["compras"] == 4
+    assert r["por_moneda"]["COP"]["ingresos"] == 7000 and r["por_moneda"]["COP"]["roas"] == round(7000 / 600, 2)
+    assert r["por_moneda"]["USD"]["gasto"] == 12.5 and r["por_moneda"]["USD"]["roas"] == 0.0
+    assert r["experimentos_corriendo"] == 1 and r["piezas_activas"] == 2
+    assert r["propuestas_pendientes"] == 0 and r["ganadoras_publicadas"] == 0
+
+
+def test_resumen_total_no_vuelve_a_leer_los_snapshots(base_temporal, sin_red, monkeypatch):
+    """El total de una pieza es su último snapshot, que la carga del tablero
+    ya trae aunque solo pida la ventana del mes: no hace falta leer el
+    histórico entero."""
+    import experimentos as ex
+    import tablero
+    _sembrar_meses(base_temporal)
+    datos = tablero.cargar_datos("acme", AHORA)
+    leidas = []
+    monkeypatch.setattr(ex, "snapshots", lambda ep_id, desde=None: leidas.append(ep_id) or [])
+    r = tablero.resumen_total("acme", AHORA, datos=datos)
+    assert leidas == [] and r["por_moneda"]["COP"]["gasto"] == 600
+
+
+def test_resumen_total_triple_whale_solo_sus_experimentos(base_temporal, sin_red):
+    import experimentos as ex
+    import tablero
+    _sembrar_meses(base_temporal)
+    assert tablero.resumen_total_triple_whale("acme", AHORA) is None
+    e_tw = _experimento(base_temporal, "TW", atribucion="triple_whale")
+    ep = _pieza_en(base_temporal, e_tw, legado="cf_9__es_CO")
+    ex.snapshot(ep, {"gasto": 300, "compras": 5, "ingresos": 20000, "fuente_ventas": "triple_whale"},
+                tomado_en="2026-08-10T10:00:00")
+    r = tablero.resumen_total_triple_whale("acme", AHORA)
+    assert list(r["por_moneda"]) == ["COP"] and r["por_moneda"]["COP"]["gasto"] == 300
+    assert r["por_moneda"]["COP"]["ingresos"] == 20000 and r["experimentos_corriendo"] == 1
+
+
+def test_mes_a_mes_desglosa_pauta_y_generacion(base_temporal, sin_red):
+    import tablero
+    _sembrar_meses(base_temporal)
+    filas = tablero.mes_a_mes("acme", AHORA)
+    assert [f["mes"] for f in filas] == ["2026-09", "2026-08", "2026-07", "2026-06", "2026-05"]
+    assert [f["etiqueta"] for f in filas] == ["septiembre 2026", "agosto 2026", "julio 2026", "junio 2026",
+                                              "mayo 2026"]
+    sep, ago, jul, jun, may = filas
+    assert sep["por_moneda"]["COP"]["gasto"] == 150 and sep["por_moneda"]["COP"]["compras"] == 1
+    assert sep["por_moneda"]["COP"]["ingresos"] == 2000 and sep["por_moneda"]["USD"]["gasto"] == 12.5
+    assert sep["generacion"] == {"usd": 0.5, "n": 1}
+    # El snapshot de las 00:00 del 1 de septiembre cierra agosto.
+    assert ago["por_moneda"] == {"COP": ago["por_moneda"]["COP"]} and ago["por_moneda"]["COP"]["gasto"] == 300
+    assert ago["por_moneda"]["COP"]["compras"] == 2 and ago["por_moneda"]["COP"]["ingresos"] == 4000
+    assert ago["por_moneda"]["COP"]["roas"] == round(4000 / 300, 2) and ago["generacion"] == {"usd": 0.0, "n": 0}
+    assert jul["por_moneda"]["COP"]["gasto"] == 150 and jul["por_moneda"]["COP"]["ingresos"] == 1000
+    # Un mes sin nada entre dos con actividad sigue en la tabla; una moneda sin actividad no.
+    assert jun == {"mes": "2026-06", "etiqueta": "junio 2026", "por_moneda": {}, "generacion": {"usd": 0.0, "n": 0}}
+    assert may["por_moneda"] == {} and may["generacion"] == {"usd": 2.0, "n": 1}
+
+
+def test_mes_a_mes_cuadra_con_el_mes_en_curso_y_el_total(base_temporal, sin_red):
+    """La fila del mes en curso es exactamente resumen_mes, y la suma de los
+    meses es el total."""
+    import tablero
+    _sembrar_meses(base_temporal)
+    filas = tablero.mes_a_mes("acme", AHORA)
+    mes = tablero.resumen_mes("acme", AHORA)
+    assert filas[0]["por_moneda"] == mes["por_moneda"]
+    total = tablero.resumen_total("acme", AHORA)
+    for moneda in ("COP", "USD"):
+        for campo in ("gasto", "compras", "ingresos", "impresiones", "clics_enlace"):
+            suma = sum(f["por_moneda"].get(moneda, {}).get(campo, 0) for f in filas)
+            assert suma == total["por_moneda"][moneda][campo], (moneda, campo)
+
+
+def test_mes_a_mes_una_consulta_para_todas_las_piezas(base_temporal, sin_red, monkeypatch):
+    """Los cierres de mes salen de UNA consulta, no una por pieza ni por mes."""
+    import experimentos as ex
+    import sqlalchemy as sa
+    import db
+    import tablero
+    for k in range(6):
+        eid = _experimento(base_temporal, f"E{k}")
+        ep = _pieza_en(base_temporal, eid, legado=f"cf_{k}__es_CO")
+        for mes in ("06", "07", "08", "09"):
+            ex.snapshot(ep, {"gasto": int(mes) * 10}, tomado_en=f"2026-{mes}-10T08:00:00")
+    datos = tablero.cargar_datos("acme", AHORA)
+    sentencias = []
+
+    def _anotar(conn, cursor, sentencia, *_):
+        sentencias.append(sentencia)
+    sa.event.listen(db.engine(), "before_cursor_execute", _anotar)
+    try:
+        filas = tablero.mes_a_mes("acme", AHORA, datos=datos)
+    finally:
+        sa.event.remove(db.engine(), "before_cursor_execute", _anotar)
+    snaps = [s for s in sentencias if "metrica_snapshot" in s]
+    assert len(snaps) == 1, snaps
+    assert [f["por_moneda"]["COP"]["gasto"] for f in filas] == [6 * 10, 6 * 10, 6 * 10, 6 * 60]
+
+
+def test_mes_a_mes_sin_nada(base_temporal, sin_red):
+    import tablero
+    assert tablero.mes_a_mes("acme", AHORA) == []
+
+
 # ---------- serie_diaria ----------
 
 def test_serie_diaria_tres_dias(base_temporal, sin_red):

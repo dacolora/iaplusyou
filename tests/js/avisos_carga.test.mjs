@@ -104,3 +104,20 @@ test("arreglarAlAbrir adopta la voz como fuente de subtítulos de un borrador au
   const otraVez = arreglarAlAbrir(r.doc, INFO_PALABRAS);
   assert.equal(otraVez.guardar, false, "ya adoptado: la segunda vuelta no pide guardar de nuevo");
 });
+
+// Capa 5b (2/9): dos voces que suenan a la vez (la grabación y la voz con IA,
+// o una voz que un vínculo movió encima de otra). Sin solape, nada que avisar.
+import { vocesJuntas } from "../../static/editor/avisos_carga.js";
+
+test("vocesJuntas: el documento base (una sola voz) no tiene voces juntas", () => {
+  assert.deepEqual(vocesJuntas(docBase()), []);
+});
+
+test("vocesJuntas: dos voces que se pisan dan el primer instante del solape; p_sonido y la música no cuentan", () => {
+  const doc = docBase();
+  const voz = doc.pistas.find((p) => p.id === "p_voz");
+  doc.pistas.push({ ...voz, id: "p_voz_2", clips: [{ ...voz.clips[0], id: "r1", inicio_ms: 2000, duracion_ms: 2000,
+                                                     recorte: { desde_ms: 0, hasta_ms: 2000 } }] });
+  doc.pistas.push({ ...voz, id: "p_musica", clips: [{ ...voz.clips[0], id: "m1", rol_audio: "musica", inicio_ms: 0 }] });
+  assert.deepEqual(vocesJuntas(doc), [{ t_ms: 2000, ids: ["a1", "r1"] }]);
+});

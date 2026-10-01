@@ -44,6 +44,11 @@ sanity check before committing.
 The alternate CLI entry points (`run_batch.py`, `revisar.py`, `subir_personaje.py`)
 predate the dashboard and still work, but `dashboard.py` is the primary interface —
 prefer extending it over the CLI scripts unless asked for a batch/scriptable path.
+`comparar_seedance_turbo.py` (2026-10-01) is a research CLI for the VPS, like `comparar_modelos.py`: it
+regenerates existing Seedance 2.5 pieces through WaveSpeed's Turbo routes with the worker's same inputs
+(`tareas.flowplus._preparar`) for a side-by-side page, asks «si» before spending and registers the gasto
+(`docs/investigacion/2026-10-01-seedance-turbo.md`). Crear keeps the standard route until that comparison
+says otherwise.
 See `SETUP.md` for the full human-facing setup walkthrough (registering apps with
 Google/Meta/TikTok, Cloudflare R2, etc.).
 
@@ -1189,10 +1194,20 @@ is `valor_en(hasta) − valor_en(desde)`, negatives truncated to 0) grouped by a
 currency; revenue only counts snapshots attributed by Meta Pixel, store, or Triple Whale
 (`tablero.FUENTES_VENTAS`). `tablero.contexto`
 loads each piece's snapshots once (bounded by `experimentos.snapshots(ep_id, desde=)`, which
-also returns the last row before the window) and derives the month tiles, the 30-day
-series, the top-5 winners and the alerts; `dashboard._contexto_tablero` caches it 60 s per
-client keyed by the latest snapshot id and the proposal count, and degrades part by part
-(never leaking exception text). The chart is inline SVG on a single axis (spend bars,
+also returns the last row before the window) and derives the tiles, the 30-day
+series, the top-5 winners and the alerts. Since 2026-10-01 (pedido de Daniel) the tiles are the
+**total since the start** (`resumen_total`: a piece's total is its latest snapshot, already in the
+loaded window, so nothing is re-read; `resumen_total_triple_whale`; generation from
+`gastos.resumen_total`) and below them the **«Mes a mes»** table (`mes_a_mes`: one row per month,
+newest first, from the first month with ad spend or generation, a row per currency, generation only
+on the first; the month-end snapshots come from ONE query, `_cierres_de_mes`, ROW_NUMBER per piece
+and month, where a snapshot taken exactly at 00:00 of day 1 closes the previous month so the current
+month's row equals `resumen_mes` and the months add up to the total; generation per month from
+`gastos.por_mes`). `resumen_mes` (the month in progress) now only feeds the sidebar chip; the
+«Tu tienda según Triple Whale» block and the CSV are still the current month.
+`dashboard._contexto_tablero` caches it 60 s per client keyed by the latest snapshot id, the
+proposal count and the project's generation charges (count, last id, sum), and degrades part by
+part (never leaking exception text). The chart is inline SVG on a single axis (spend bars,
 revenue line, validated colorblind-safe pair). `csv_mes` escapes formula-leading cells.
 When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 `OUTCOME_SALES`; `lanzador.lanzar` then re-checks the Pixel before touching Meta and sends
@@ -1290,6 +1305,30 @@ top of Configuración (`_tab_settings.html`), not on every tab (removed from `ba
 one (or localhost); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are HttpOnly, SameSite
 Lax, Secure when the platform URL is https. Emails go through `notificaciones.enviar(html=)` —
 if SMTP is missing the flows still work and the admin panel shows the warning.
+
+**Seguridad (auditoría 2026-10-01)**: reglas que valen para todo lo nuevo. (1) CSRF: `dashboard._solo_mismo_origen`
+(before_request de la app, corre también para los Blueprints) rechaza todo POST/PUT/PATCH/DELETE que el navegador marque
+de otro sitio (`Sec-Fetch-Site` distinto de `same-origin`/`none`; JSON a un fetch, 403 al resto); la app no recibe
+webhooks: si algún día llega uno, necesita su excepción Y verificar su firma (HMAC, `compare_digest`). (2) Cabeceras:
+`_cabeceras_seguridad` pone `nosniff`, `X-Frame-Options: DENY`, una CSP que solo cierra `frame-ancestors`/`object-src`/
+`base-uri` (todavía hay ~80 `<script>` y ~90 manejadores en línea, y los medios vienen de R2) y HSTS cuando el sitio es
+https. (3) `/trabajo/<job_id>/estado` solo responde al admin o a quien puede entrar al proyecto dueño
+(`trabajos.dueno`: el `cliente` de la fila de la cola o el de `trabajos.iniciar(..., cliente=)`); todo trabajo nuevo
+que la persona sondea lleva su `cliente`, si no su barra no se ve. (4) Login: tope de intentos FALLIDOS por usuario (10)
+y por IP (30) cada 15 min (`cuentas.limite_disponible` mira, `limite_ok` anota), hash de relleno para un usuario que no
+existe, `_abrir_sesion` limpia la sesión y `_verificar_sesion` cierra la que traiga otro rol o proyecto que
+usuarios.json. (5) Subidas: `MAX_CONTENT_LENGTH` = `MAX_BYTES_PETICION` (256 MB, 413 → `_peticion_demasiado_grande`);
+una foto se valida por su contenido (`_foto_subida_invalida`: Pillow + 20 MB), nunca por la extensión; lo que se vuelve a
+servir desde el dominio de la app va con `mimetype` de la lista blanca (`MIMETYPES_MEDIOS`), jamás adivinado;
+`Image.MAX_IMAGE_PIXELS` = 64 MP en Flask y en el worker; un .xlsx pasa por `conectores.base.xlsx_demasiado_grande`.
+(6) SSRF: toda URL que escribe una persona o trae una página ajena se pide con `conectores.url.abrir` (valida el host en
+cada redirección; `host_permitido` rechaza todo lo que no sea `is_global`, también la IPv4 dentro de IPv6), una tienda con
+dirección del cliente con `_http.pedir_tienda` (sin redirecciones: las claves irían al destino) y los links de video sin
+el extractor genérico de yt-dlp. (7) Meta agencia en autoservicio: un portafolio que ya usa otro proyecto (conectado o
+con solicitud) no se lista (`meta_agencia.portafolio_de_otro`), una Página asignada a otro proyecto tampoco, y una Página
+escrita a mano va por «Avisar a Creatv». (8) Tokens de YouTube/TikTok en disco con 0600 (`_json_store.escribir_privado`).
+Dependencias: `requirements.txt` trae pisos verificados con `pip-audit` (`venv/bin/pip install pip-audit && venv/bin/pip-audit`); en el VPS,
+`pip install -U -r requirements.txt` los aplica.
 
 **UI base** (2026-09-25/26, specs `2026-09-25-base-visual-comun` and `2026-09-26-movil`): the
 block «Base visual común (2026-09-25)» at the END of `static/style.css` is the source of truth for

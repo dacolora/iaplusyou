@@ -151,6 +151,10 @@ function vistaFalsa(VistaPrevia, llamadas, { reproduciendo = false } = {}) {
     audio: { materiales: null, buffers: new Map([[1, "buf"], [9, "otro"]]), fallidos: new Set([1]) },
     imagenes: new Map([[3, { src: "https://r2/c.png" }]]),
     imagenesFallidas: new Set([3]),
+    // D13 (capa 5b, Tarea 4): la caché aparte de la copia liviana (fotos de
+    // la principal y la imagen principal) también se suelta al renovar.
+    imagenesLigeras: new Map([[3, { src: "https://r2/c_p.png" }]]),
+    imagenesLigerasFallidas: new Set([3]),
     fallasCarga: new Set([1, 3, 9]),
     mostrarFallas: () => llamadas.push(["fallas"]),
     pedirCuadro: () => llamadas.push(["cuadro"]),
@@ -178,6 +182,8 @@ test("agregarMateriales renueva los videos que cambiaron, avisa a la página y p
   assert.equal(falsa.audio.fallidos.has(1), false);
   assert.equal(falsa.imagenes.has(3), false);                           // la imagen se vuelve a cargar
   assert.equal(falsa.imagenesFallidas.has(3), false);
+  assert.equal(falsa.imagenesLigeras.has(3), false);                    // su copia liviana también
+  assert.equal(falsa.imagenesLigerasFallidas.has(3), false);
   assert.deepEqual([...falsa.fallasCarga], [9]);
   assert.equal(falsa.porRenovar.size, 0);
   assert.deepEqual(llamadas, [
@@ -200,6 +206,7 @@ test("agregarMateriales no corta lo que reproduce: recarga los archivos nuevos a
   assert.deepEqual(Object.keys(falsa.materialesVigentes).sort(), ["1", "3", "5"]);   // ya entraron
   assert.equal(falsa.videos.materiales, falsa.materialesVigentes);                    // un clip nuevo ya los encuentra
   assert.equal(falsa.imagenes.has(3), true);                                          // lo que se ve sigue
+  assert.equal(falsa.imagenesLigeras.has(3), true);
   assert.equal(falsa.audio.buffers.has(1), true);
   assert.deepEqual(llamadas, [["cuadro"], ["pagina", ["1", "3", "5"]]]);
   llamadas.length = 0;
@@ -207,6 +214,7 @@ test("agregarMateriales no corta lo que reproduce: recarga los archivos nuevos a
   falsa.renovarPendientes();                                                          // lo llama pausar()
   assert.deepEqual(llamadas, [["renovar", ["1", "3", "5"], [1, 3, 5]], ["fallas"]]);
   assert.equal(falsa.imagenes.has(3), false);
+  assert.equal(falsa.imagenesLigeras.has(3), false);
   assert.equal(falsa.audio.buffers.has(1), false);
   llamadas.length = 0;
   falsa.renovarPendientes();                                                          // una sola vez

@@ -2,8 +2,9 @@
 // resultan, para que tests/test_operaciones_editor.py los pase por
 // documento.validar y compilador.verificar_recortes (la referencia es Python).
 import * as op from "../../static/editor/operaciones.js";
-import { docBase, docConVozYPalabras, DURACIONES as D, INFO_PALABRAS } from "./doc_base.mjs";
+import { docBase, docConVozYPalabras, docVinculos, DURACIONES as D, INFO_PALABRAS } from "./doc_base.mjs";
 import * as prop from "../../static/editor/propiedades_modelo.js";
+import * as vinc from "../../static/editor/vinculos.js";
 
 const casos = [];
 const anotar = (nombre, fn, duraciones) => casos.push({ nombre, doc: fn().doc, ...(duraciones ? { duraciones } : {}) });
@@ -194,5 +195,31 @@ anotar("cambiar_subtitulos", () => op.cambiarSubtitulos(docBase(), {
 anotar("agregar_voz", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "voz", idioma: "es" }, INFO));
 anotar("cambiar_idioma_audio", () => op.cambiar(docBase(), "a1", { idioma: "en" }, INFO));
 casos.push({ nombre: "adoptar_voz", doc: op.adoptarVozComoFuente(docConVozYPalabras(), INFO_PALABRAS) });
+
+// ---- Capa 5b (Tarea 2, D10): «todo sigue a su clip» ----
+// Cada caso vincula el resultado de una operación sobre docVinculos() (que
+// trae un segundo texto, t2, para forzar una colisión de fila al seguir, y
+// una música, m1, que nunca sigue pero sí se recorta por «nada alarga»).
+const vincular = (fn, info = D) => {
+  const antes = docVinculos();
+  return { doc: vinc.seguirPrincipal(antes, fn(antes).doc, info) };
+};
+anotar("vinculado_borrar_v0", () => vincular((d) => op.borrar(d, "v0", D)));
+anotar("vinculado_mover_v1", () => vincular((d) => op.moverPrincipal(d, "v1", 0, D)));
+anotar("vinculado_recortar_inicio", () => vincular((d) => op.recortar(d, "v0", "inicio", 1000, D)));
+anotar("vinculado_velocidad", () => vincular((d) => op.cambiarVelocidad(d, "v0", 2, D)));
+const INFO_VINCULADO = { 1: { duracion_ms: 8000, tiene_audio: true }, 2: { duracion_ms: 3000 }, 3: { duracion_ms: 1500, tiene_audio: false } };
+anotar("vinculado_agregar_video_al_principio",
+  () => vincular((d) => op.agregarVideo(d, { id: 3 }, { indice: 0 }, INFO_VINCULADO), INFO_VINCULADO),
+  { ...D, 3: 1500 });
+anotar("vinculado_borrar_ultimo", () => vincular((d) => op.borrar(d, "v1", D)));
+anotar("vinculado_voces", () => {
+  const antes = docVinculos();
+  antes.pistas[2].clips.push({
+    id: "r1", inicio_ms: 4500, duracion_ms: 2000, material_id: 2, rol_audio: "voz",
+    recorte: { desde_ms: 0, hasta_ms: 2000 }, velocidad: 1, audio: { volumen: 1, fundido_entrada_ms: 0, fundido_salida_ms: 0, ducking: true },
+  });
+  return { doc: vinc.seguirPrincipal(antes, op.borrar(antes, "v0", D).doc, D) };
+});
 
 process.stdout.write(JSON.stringify(casos));

@@ -20,6 +20,7 @@
     "materiales": [
      1,
      2,
+     6,
      9
     ],
     "mezcla": {
@@ -48,6 +49,44 @@
         "recorte": {
          "desde_ms": 0,
          "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "transicion": {
+         "duracion_ms": 500,
+         "modo": "solape",
+         "tipo": "fundido"
+        },
+        "velocidad": 1.0
+       },
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 3000,
+        "encuadre": {
+         "modo": "ajustar",
+         "x": 0.3,
+         "y": 0.7,
+         "zoom": 1.2
+        },
+        "foto": true,
+        "id": "foto1",
+        "inicio_ms": 4000,
+        "keyframes": [],
+        "material_id": 6,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 3000
         },
         "transform": {
          "ancla": "centro",
@@ -263,6 +302,7 @@
     "materiales": [
      1,
      2,
+     6,
      9
     ],
     "mezcla": {
@@ -291,6 +331,44 @@
         "recorte": {
          "desde_ms": 0,
          "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "transicion": {
+         "duracion_ms": 500,
+         "modo": "solape",
+         "tipo": "fundido"
+        },
+        "velocidad": 1.0
+       },
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 3000,
+        "encuadre": {
+         "modo": "ajustar",
+         "x": 0.3,
+         "y": 0.7,
+         "zoom": 1.2
+        },
+        "foto": true,
+        "id": "foto1",
+        "inicio_ms": 4000,
+        "keyframes": [],
+        "material_id": 6,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 3000
         },
         "transform": {
          "ancla": "centro",
@@ -505,7 +583,8 @@
     },
     "materiales": [
      1,
-     2
+     2,
+     6
     ],
     "mezcla": {
      "preset": "equilibrada",
@@ -533,6 +612,44 @@
         "recorte": {
          "desde_ms": 0,
          "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "transicion": {
+         "duracion_ms": 500,
+         "modo": "solape",
+         "tipo": "fundido"
+        },
+        "velocidad": 1.0
+       },
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 3000,
+        "encuadre": {
+         "modo": "ajustar",
+         "x": 0.3,
+         "y": 0.7,
+         "zoom": 1.2
+        },
+        "foto": true,
+        "id": "foto1",
+        "inicio_ms": 4000,
+        "keyframes": [],
+        "material_id": 6,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 3000
         },
         "transform": {
          "ancla": "centro",
@@ -717,6 +834,7 @@
     "materiales": [
      1,
      5,
+     6,
      7,
      9
     ],
@@ -746,6 +864,44 @@
         "recorte": {
          "desde_ms": 0,
          "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "transicion": {
+         "duracion_ms": 500,
+         "modo": "solape",
+         "tipo": "fundido"
+        },
+        "velocidad": 1.0
+       },
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 3000,
+        "encuadre": {
+         "modo": "ajustar",
+         "x": 0.3,
+         "y": 0.7,
+         "zoom": 1.2
+        },
+        "foto": true,
+        "id": "foto1",
+        "inicio_ms": 4000,
+        "keyframes": [],
+        "material_id": 6,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 3000
         },
         "transform": {
          "ancla": "centro",
@@ -979,7 +1135,8 @@
      "marca_de_agua": null
     },
     "materiales": [
-     1
+     1,
+     6
     ],
     "mezcla": {
      "preset": "equilibrada",
@@ -1007,6 +1164,44 @@
         "recorte": {
          "desde_ms": 0,
          "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "transicion": {
+         "duracion_ms": 500,
+         "modo": "solape",
+         "tipo": "fundido"
+        },
+        "velocidad": 1.0
+       },
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 3000,
+        "encuadre": {
+         "modo": "ajustar",
+         "x": 0.3,
+         "y": 0.7,
+         "zoom": 1.2
+        },
+        "foto": true,
+        "id": "foto1",
+        "inicio_ms": 4000,
+        "keyframes": [],
+        "material_id": 6,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 3000
         },
         "transform": {
          "ancla": "centro",
@@ -1172,6 +1367,7 @@
    1,
    2,
    5,
+   6,
    7,
    9
   ],
@@ -1201,6 +1397,44 @@
       "recorte": {
        "desde_ms": 0,
        "hasta_ms": 4000
+      },
+      "transform": {
+       "ancla": "centro",
+       "escala": 1.0,
+       "opacidad": 1.0,
+       "rotacion": 0.0,
+       "x": 0.5,
+       "y": 0.5
+      },
+      "transicion": {
+       "duracion_ms": 500,
+       "modo": "solape",
+       "tipo": "fundido"
+      },
+      "velocidad": 1.0
+     },
+     {
+      "audio": {
+       "ducking": true,
+       "fundido_entrada_ms": 0,
+       "fundido_salida_ms": 0,
+       "volumen": 1.0
+      },
+      "duracion_ms": 3000,
+      "encuadre": {
+       "modo": "ajustar",
+       "x": 0.3,
+       "y": 0.7,
+       "zoom": 1.2
+      },
+      "foto": true,
+      "id": "foto1",
+      "inicio_ms": 4000,
+      "keyframes": [],
+      "material_id": 6,
+      "recorte": {
+       "desde_ms": 0,
+       "hasta_ms": 3000
       },
       "transform": {
        "ancla": "centro",

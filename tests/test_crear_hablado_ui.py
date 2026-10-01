@@ -31,8 +31,76 @@ def test_el_modo_hablado_esta_en_crear_sin_su_contenido_pesado(app):
 
 def test_hash_hablado_abre_crear_en_ese_modo(app):
     html = app["c"].get("/cliente/acme").data.decode()
-    assert "h === 'hablado' ? 'hablado'" in html and "hablado: document.getElementById('crear-modo-hablado')" in html
+    assert "hablado: document.getElementById('crear-modo-hablado')" in html
     assert "if (t === 'hablado')" in html and "localStorage.setItem('crear-modo-acme', 'hablado')" in html
+
+
+def _script_modos(html):
+    """El <script> de _tab_flowplus.html que cambia de modo en Crear."""
+    for m in re.finditer(r"<script>(.*?)</script>", _crear(html), re.S):
+        if "var KEY = 'crear-modo-" in m.group(1):
+            return m.group(1)
+    raise AssertionError("no encontré el script de los modos de Crear")
+
+
+# Un DOM mínimo para correr el script de los modos en Node: pastillas y paneles
+# con classList, el hash, localStorage y los eventos que despacha. `pasos` es
+# una lista de hashes: el primero es el de la carga; cada uno de los demás
+# cambia location.hash y dispara hashchange. Imprime el modo activo tras cada paso.
+_DOM_MODOS = r"""
+const MODOS = ['referencias', 'cambiar', 'flowplus', 'audios', 'hablado'];
+function clases(ini) { const s = new Set(ini); return {
+  toggle(c, si) { si ? s.add(c) : s.delete(c); }, contains(c) { return s.has(c); } }; }
+const botones = MODOS.map(m => ({ dataset: { modo: m }, classList: clases(m === 'referencias' ? ['activo'] : []),
+  addEventListener() {} }));
+const paneles = {}; MODOS.forEach(m => { paneles['crear-modo-' + m] = { classList: clases([]) }; });
+const oyentes = {}; const avisados = [];
+const almacen = { 'crear-modo-acme': GUARDADO };
+global.window = { addEventListener(t, f) { (oyentes[t] = oyentes[t] || []).push(f); } };
+global.location = { hash: PASOS[0] };
+global.localStorage = { getItem(k) { return k in almacen ? almacen[k] : null; }, setItem(k, v) { almacen[k] = v; } };
+global.CustomEvent = function (t, o) { this.type = t; this.detail = o.detail; };
+global.document = { querySelectorAll() { return botones; }, getElementById(id) { return paneles[id] || null; },
+  dispatchEvent(e) { avisados.push(e.detail.modo); } };
+function activo() {
+  const p = MODOS.filter(m => paneles['crear-modo-' + m].classList.contains('activo'));
+  const b = botones.filter(x => x.classList.contains('activo')).map(x => x.dataset.modo);
+  return p.length === 1 && b.length === 1 && p[0] === b[0] ? p[0] : 'roto:' + p + '|' + b;
+}
+const vistos = [];
+SCRIPT
+vistos.push(activo());
+for (const h of PASOS.slice(1)) {
+  location.hash = h; (oyentes.hashchange || []).forEach(f => f());
+  vistos.push(activo());
+}
+console.log(JSON.stringify({ vistos, avisados, guardado: almacen['crear-modo-acme'] }));
+"""
+
+
+def _correr_modos(script, pasos, guardado=None):
+    js = (_DOM_MODOS.replace("GUARDADO", json.dumps(guardado)).replace("PASOS", json.dumps(pasos))
+          .replace("SCRIPT", script))
+    r = subprocess.run([shutil.which("node"), "-e", js], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="sin Node no se corre el JS (el VPS no lo tiene)")
+def test_el_hash_de_un_modo_lo_abre_al_cargar_y_estando_ya_en_la_pagina(app):
+    script = _script_modos(app["c"].get("/cliente/acme").data.decode())
+    # Al cargar: el hash manda; sin hash de modo, el recordado; sin nada, «Desde referencias».
+    assert _correr_modos(script, ["#hablado"], guardado="audios")["vistos"] == ["hablado"]
+    assert _correr_modos(script, ["#creativeflowplus"], guardado="audios")["vistos"] == ["audios"]
+    assert _correr_modos(script, [""])["vistos"] == ["referencias"]
+    # Ya en la página (deuda del anuncio hablado: antes solo funcionaba al cargar).
+    r = _correr_modos(script, ["#creativeflowplus", "#audios", "#hablado", "#calzado", "#referencias"])
+    assert r["vistos"] == ["referencias", "audios", "hablado", "cambiar", "referencias"]
+    assert r["avisados"] == ["referencias", "audios", "hablado", "cambiar", "referencias"]
+    assert r["guardado"] == "referencias"
+    # Un hash que no es un modo (otra pestaña, o un nombre de Object.prototype) no lo cambia.
+    r = _correr_modos(script, ["#audios", "#experimentos", "#constructor", "#flowplus?x=1"])
+    assert r["vistos"] == ["audios", "audios", "audios", "flowplus"]
 
 
 def test_audios_sigue_pintando_su_galeria_con_la_macro(app):

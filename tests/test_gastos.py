@@ -67,6 +67,24 @@ def test_resumen_mes_por_tipo_ignora_otro_mes(base_temporal):
     assert r["total"] == 0.77 and r["n"] == 3
 
 
+def test_total_y_por_mes_desde_el_inicio(base_temporal):
+    """El Tablero muestra el total desde el inicio y el desglose mes a mes:
+    todo lo cobrado hasta `ahora`, de este proyecto, agrupado por mes."""
+    import gastos
+    gastos.registrar("acme", "video", 0.5, "video:a", creado_en="2026-09-03T10:00:00")
+    gastos.registrar("acme", "guion", 0.02, "guion:a", creado_en="2026-09-11T10:00:00")
+    gastos.registrar("acme", "video", 9.0, "video:viejo", creado_en="2026-07-30T10:00:00")
+    gastos.registrar("acme", "video", 1.25, "video:agosto", creado_en="2026-08-01T00:00:00")
+    gastos.registrar("acme", "video", 9.0, "video:futuro", creado_en="2026-09-20T10:00:00")
+    gastos.registrar("otro", "video", 9.0, "video:a", creado_en="2026-09-10T10:00:00")
+    ahora = "2026-09-18T12:00:00"
+    assert gastos.resumen_total("acme", ahora_iso=ahora) == {"total": 10.77, "n": 4}
+    assert gastos.por_mes("acme", ahora_iso=ahora) == {
+        "2026-07": {"usd": 9.0, "n": 1}, "2026-08": {"usd": 1.25, "n": 1}, "2026-09": {"usd": 0.52, "n": 2}}
+    assert gastos.resumen_total("nadie", ahora_iso=ahora) == {"total": 0.0, "n": 0}
+    assert gastos.por_mes("nadie", ahora_iso=ahora) == {}
+
+
 def test_historial_mas_nuevo_primero_con_limite_y_desde(base_temporal):
     import gastos
     gastos.registrar("acme", "video", 1, "video:1", creado_en="2026-09-01T10:00:00")

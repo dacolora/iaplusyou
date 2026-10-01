@@ -21,7 +21,7 @@ import unicodedata
 from itertools import islice
 
 import idiomas
-from .base import ErrorConector, normalizar_producto
+from .base import ErrorConector, normalizar_producto, xlsx_demasiado_grande
 
 # Se muestra tal cual en Catálogo › Productos › «Traer productos de…»
 # (_catalogo_importar.html); solo la nota entre paréntesis se traduce, los
@@ -104,6 +104,8 @@ def _filas_xlsx(datos):
         import openpyxl
     except ImportError:  # pragma: no cover - openpyxl está en requirements
         raise ErrorConector("No se puede leer Excel en este servidor (falta openpyxl). Sube un CSV.")
+    if xlsx_demasiado_grande(datos):
+        raise ErrorConector("El Excel es demasiado grande por dentro; guárdalo como CSV y súbelo así.")
     try:
         libro = openpyxl.load_workbook(io.BytesIO(datos), read_only=True, data_only=True)
     except Exception:

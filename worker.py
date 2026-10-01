@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from dotenv import load_dotenv
+from PIL import Image
 from flask_babel import gettext
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
@@ -43,6 +44,9 @@ import tareas
 from providers import wavespeed_common
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Como en dashboard.py: Pillow rechaza una imagen-bomba (pocos KB que se
+# descomprimen a cientos de MB) desde el doble de esto, no desde ~180 MP.
+Image.MAX_IMAGE_PIXELS = 64_000_000
 log = logging.getLogger("creatv.worker")
 
 # (tipo, cada_segundos). Los tipos se registran en tareas/. El orden importa

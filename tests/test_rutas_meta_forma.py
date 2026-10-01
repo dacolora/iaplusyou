@@ -124,23 +124,25 @@ def test_conectar_rechaza_cuenta_o_pagina_ajenas(cliente, app, monkeypatch):
     assert any("cuenta publicitaria no aparece" in m for m in mensajes) and any("Página no aparece" in m for m in mensajes)
 
 
-def test_conectar_pagina_manual_solo_cuando_meta_no_dio_dueno(cliente, app, monkeypatch):
+def test_conectar_no_acepta_una_pagina_escrita_a_mano(cliente, app, monkeypatch):
+    """Auditoría de seguridad 2026-10-01: un id de Página es público y no
+    prueba de quién es; escrita a mano, la Página la conecta Creatv tras
+    revisarla («Avisar a Creatv»). Sin Página, la cuenta sí se conecta."""
     _fake_conectada(app, monkeypatch)
     sin_dueno = {**ACTIVOS_777, "pages": [], "paginas_sin_dueno": True}
     monkeypatch.setattr(app["ma"], "activos_de_portafolio", lambda portafolio_id, cliente=None, forzar=False: sin_dueno)
-    monkeypatch.setattr(app["ma"], "pagina_de_socio", lambda page_id: {"id": "p3", "name": "Página Otro"} if page_id == "p3" else None)
     asignaciones = []
     monkeypatch.setattr(app["ma"], "asignar", lambda *a, **k: asignaciones.append(a) or dict(DETALLE_OK))
-    _post(cliente, "/cliente/acme/meta/agencia/conectar", portafolio_id="77700077700", ad_account_id="act_9", page_id="", page_id_manual="p9")
-    assert asignaciones == [] and any("no está compartida con Creatv" in m for m in _flashes(cliente["c"]))
     _post(cliente, "/cliente/acme/meta/agencia/conectar", portafolio_id="77700077700", ad_account_id="act_9", page_id="", page_id_manual="p3")
-    assert asignaciones == [("acme", "act_9", "p3")]
+    assert asignaciones == [] and any("Avisar a Creatv" in m for m in _flashes(cliente["c"]))
+    _post(cliente, "/cliente/acme/meta/agencia/conectar", portafolio_id="77700077700", ad_account_id="act_9", page_id="")
+    assert asignaciones == [("acme", "act_9", None)]
 
 
 def test_conectar_y_avisar_exigen_correo_verificado(app, monkeypatch):
     _fake_conectada(app, monkeypatch)
     d = app["dashboard"]
-    monkeypatch.setattr(d.usuarios, "obtener", lambda u: {"usuario": u, "rol": "cliente", "correo_verificado": False})
+    monkeypatch.setattr(d.usuarios, "obtener", lambda u: {"usuario": u, "rol": "cliente", "cliente": "acme", "correo_verificado": False})
     llamadas = []
     monkeypatch.setattr(app["ma"], "asignar", lambda *a, **k: llamadas.append(a))
     monkeypatch.setattr(app["ma"], "solicitar", lambda *a, **k: llamadas.append(a))
@@ -248,13 +250,26 @@ def test_sin_resultados_ofrece_volver_a_buscar_y_avisar(cliente, app, monkeypatc
     assert 'action="/cliente/acme/meta/agencia/avisar"' in html and "Avisar a Creatv" in html
 
 
-def test_pagina_manual_solo_si_meta_no_dio_dueno(cliente, app, monkeypatch):
+def test_sin_dueno_de_paginas_ofrece_avisar_y_no_pide_la_pagina_a_mano(cliente, app, monkeypatch):
     _fake_conectada(app, monkeypatch)
     proyectos.guardar_meta_forma("acme", "agencia")
     sin_dueno = {**ACTIVOS_777, "pages": [], "paginas_sin_dueno": True}
     monkeypatch.setattr(app["ma"], "activos_de_portafolio", lambda portafolio_id, cliente=None, forzar=False: sin_dueno)
     html = _html(cliente, "/cliente/acme?agencia_portafolio=77700077700")
-    assert 'name="page_id_manual"' in html
+    assert 'name="page_id_manual"' not in html
+    assert 'action="/cliente/acme/meta/agencia/conectar"' in html and 'action="/cliente/acme/meta/agencia/avisar"' in html
+
+
+def test_portafolio_de_otro_proyecto_muestra_el_error_y_avisar(cliente, app, monkeypatch):
+    _fake_conectada(app, monkeypatch)
+    proyectos.guardar_meta_forma("acme", "agencia")
+
+    def ocupado(portafolio_id, cliente=None, forzar=False):
+        raise app["ma"].MetaAgenciaError("Ese portafolio ya está conectado a otro proyecto de Creatv.")
+    monkeypatch.setattr(app["ma"], "activos_de_portafolio", ocupado)
+    html = _html(cliente, "/cliente/acme?agencia_portafolio=77700077700")
+    assert "ya está conectado a otro proyecto" in html
+    assert 'action="/cliente/acme/meta/agencia/conectar"' not in html and 'action="/cliente/acme/meta/agencia/avisar"' in html
 
 
 def test_solicitud_pendiente_se_ve_con_cancelar(cliente, app, monkeypatch):

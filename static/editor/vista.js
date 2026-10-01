@@ -125,6 +125,13 @@ export class VistaPrevia {
     this.audio = new MotorAudio(this.cfg, this.materialesVigentes);
     this.imagenes = new Map();
     this.imagenesFallidas = new Set();
+    // D13 (capa 5b): copia liviana (url_proxy || url) de una foto de la
+    // principal o de la imagen principal — caché APARTE de `imagenes` (que
+    // sigue siendo la original, para las capas encima, que necesitan su
+    // alfa y, en la capa 5, el canvas sin `crossOrigin` de las copias).
+    this.imagenesLigeras = new Map();
+    this.imagenesLigerasFallidas = new Set();
+    this.lienzosFondo = new Map();       // D5: el lienzo chico del fondo, por tamaño
     this.inicioSondeo = null;
     this.recursos = this.crearRecursos();
   }
@@ -183,6 +190,8 @@ export class VistaPrevia {
       this.audio.fallidos?.delete(mid);
       this.imagenes.delete(mid);
       this.imagenesFallidas.delete(mid);
+      this.imagenesLigeras.delete(mid);
+      this.imagenesLigerasFallidas.delete(mid);
       this.fallasCarga.delete(mid);
     }
     this.mostrarFallas();
@@ -229,13 +238,19 @@ export class VistaPrevia {
     const vista = this;
     const recursos = {
       material: (mid) => vista.materialesVigentes[mid] ?? null,
+      // D1/D13 (capa 5b): una foto (clip.foto) o la imagen principal van por
+      // la copia LIVIANA (url_proxy || url, D13) — un video sigue por su
+      // <video> de siempre.
       fuentePrincipal(clip) {
-        if (vista.materialesVigentes[clip.material_id]?.tipo === "imagen") return recursos.imagen(clip.material_id);
+        if (clip.foto || vista.materialesVigentes[clip.material_id]?.tipo === "imagen") {
+          return recursos.imagenLigera(clip.material_id);
+        }
         const el = vista.videos.elementoDe(clip);
         return el && el.readyState >= 2 ? el : null;
       },
       // un material que falló no se reintenta ni pide redibujar en cada cuadro
-      fallo: (clip) => vista.imagenesFallidas.has(Number(clip.material_id)) || vista.videos.fallo(clip),
+      fallo: (clip) => vista.imagenesFallidas.has(Number(clip.material_id)) ||
+        vista.imagenesLigerasFallidas.has(Number(clip.material_id)) || vista.videos.fallo(clip),
       medidas: (f) => (f instanceof HTMLVideoElement ? [f.videoWidth, f.videoHeight] : [f.naturalWidth, f.naturalHeight]),
       imagen(mid) {
         const id = Number(mid);
@@ -256,6 +271,45 @@ export class VistaPrevia {
         }
         return img.complete && img.naturalWidth ? img : null;
       },
+      // D13: la misma caché que `imagen`, pero con `url_proxy || url` (lado
+      // largo ≤ 1920 px: una foto de 12 MP entera tumbaría un teléfono) y
+      // guardada aparte (una capa encima de la misma imagen sigue pidiendo
+      // la original, con su alfa).
+      imagenLigera(mid) {
+        const id = Number(mid);
+        if (vista.imagenesLigerasFallidas.has(id)) return null;
+        let img = vista.imagenesLigeras.get(id);
+        if (!img) {
+          const m = vista.materialesVigentes[id];
+          if (!m) return null;
+          img = new Image();
+          img.addEventListener("load", vista.pedirCuadro);
+          img.addEventListener("error", () => {
+            vista.imagenesLigerasFallidas.add(id);
+            vista.avisarFalla(id);
+            vista.pedirCuadro();
+          });
+          img.src = m.url_proxy || m.url;
+          vista.imagenesLigeras.set(id, img);
+        }
+        return img.complete && img.naturalWidth ? img : null;
+      },
+      // D5: el lienzo chico del fondo desenfocado, reutilizado por tamaño
+      // (el formato de la edición no cambia en una sesión).
+      lienzoFondo(w, h) {
+        const clave = `${w}x${h}`;
+        let c = vista.lienzosFondo.get(clave);
+        if (!c) {
+          c = document.createElement("canvas");
+          c.width = w;
+          c.height = h;
+          vista.lienzosFondo.set(clave, c);
+        }
+        return c;
+      },
+      // D5: se mira una sola vez (Safari viejo no tiene `filter` en el
+      // lienzo: se ve blando, sin desenfoque real — se acepta, spec riesgo 3).
+      filtroFondo: typeof vista.ctx.filter === "string",
     };
     return recursos;
   }

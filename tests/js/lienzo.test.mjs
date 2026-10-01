@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dibujarCuadro } from "../../static/editor/lienzo.js";
+import { dibujarCuadro, dibujarPrincipal } from "../../static/editor/lienzo.js";
 
 const CFG = { formatos: { "9:16": [1080, 1920] } };
 const EVENTOS = JSON.parse(readFileSync(new URL("../fixtures/subtitulos_eventos_casos.json", import.meta.url), "utf8"));
@@ -14,9 +14,10 @@ const DOC = { formato: "9:16", pistas: [{ id: "p", tipo: "video", clips: [
 
 function ctxFalso() {
   return {
-    pila: 0, dibujos: 0, globalAlpha: 1, fillStyle: "",
+    pila: 0, dibujos: 0, globalAlpha: 1, fillStyle: "", llamadas: [],
     save() { this.pila++; }, restore() { this.pila--; },
-    fillRect() {}, drawImage() { this.dibujos++; },
+    fillRect() {},
+    drawImage(img, x, y, w, h) { this.dibujos++; this.llamadas.push({ img, x, y, w, h }); },
   };
 }
 
@@ -132,4 +133,113 @@ test("dibujarSubtitulos (palabra_grande): sin caja, el contorno de siempre", () 
   const trazo = ctx.llamadas.find((l) => l.tipo === "strokeText");
   assert.equal(trazo.lineWidth, 10);
   assert.equal(trazo.strokeStyle, "rgba(0, 0, 0, 1)");
+});
+
+// ---- dibujarPrincipal (D4/D5, capa 5b, Tarea 4): sin encuadre, lo de hoy;
+// con encuadre, la caja de encuadre.caja y, en «ajustar», antes el fondo
+// desenfocado (fondo(W,H), lienzoFondo, blur) — el primer plano con
+// rectConZoom (el zoom lento y el desliz de una transición) ----
+
+const FUENTE = { naturalWidth: 400, naturalHeight: 200 };   // 400×200, como el compilador (D4 ejemplos)
+const W = 1080, H = 1920;                                   // 9:16
+
+function ctxDibujo() {
+  return {
+    globalAlpha: 1,
+    llamadas: [],
+    drawImage(img, x, y, w, h) { this.llamadas.push({ img, x, y, w, h, alfa: this.globalAlpha }); },
+  };
+}
+
+function lienzoFalso() {
+  const ctx = { filter: "", llamadas: [], drawImage(img, x, y, w, h) { this.llamadas.push({ img, x, y, w, h }); } };
+  return { getContext: () => ctx, _ctx: ctx };
+}
+
+// `filtroFondo` por defecto `true` (como en un navegador normal); los
+// lienzos chicos se recuerdan por tamaño, como pide la vista (D5).
+function recursosEncuadre({ filtroFondo = true } = {}) {
+  const chicos = {};
+  const pedidos = [];
+  return {
+    filtroFondo,
+    lienzoFondo(w, h) {
+      pedidos.push([w, h]);
+      const clave = `${w}x${h}`;
+      if (!chicos[clave]) chicos[clave] = lienzoFalso();
+      return chicos[clave];
+    },
+    _chicos: chicos,
+    _pedidos: pedidos,
+  };
+}
+
+function capaDe({ encuadre, dx = 0, alfa = 1, tZoom = null, kenBurns = null, iniKb = 0, durKb = 3000 } = {}) {
+  const clip = { encuadre };
+  if (kenBurns) Object.assign(clip, { ken_burns: kenBurns, inicio_ms: iniKb, duracion_ms: durKb });
+  return { clip, dx, alfa, tZoom };
+}
+
+test("dibujarPrincipal: sin encuadre, exactamente lo de hoy", () => {
+  const ctx = ctxDibujo();
+  dibujarPrincipal(ctx, capaDe({}), FUENTE, [400, 200], W, H, recursosEncuadre());
+  assert.deepEqual(ctx.llamadas.map(({ img, x, y, w, h }) => [img, x, y, w, h]), [[FUENTE, -1380, 0, 3840, 1920]]);
+});
+
+test("dibujarPrincipal: encuadre {x: 0} y {x: 1} en «llenar» (modo por defecto, sin fondo)", () => {
+  const ctx0 = ctxDibujo();
+  dibujarPrincipal(ctx0, capaDe({ encuadre: { x: 0 } }), FUENTE, [400, 200], W, H, recursosEncuadre());
+  assert.deepEqual(ctx0.llamadas.map(({ x, y, w, h }) => [x, y, w, h]), [[0, 0, 3840, 1920]]);
+
+  const ctx1 = ctxDibujo();
+  dibujarPrincipal(ctx1, capaDe({ encuadre: { x: 1 } }), FUENTE, [400, 200], W, H, recursosEncuadre());
+  assert.deepEqual(ctx1.llamadas.map(({ x, y, w, h }) => [x, y, w, h]), [[-2760, 0, 3840, 1920]]);
+});
+
+test("dibujarPrincipal: «ajustar» dibuja primero el fondo (lienzoFondo 108×192, blur(5px)) y después el primer plano", () => {
+  const ctx = ctxDibujo();
+  const recursos = recursosEncuadre({ filtroFondo: true });
+  dibujarPrincipal(ctx, capaDe({ encuadre: { modo: "ajustar" } }), FUENTE, [400, 200], W, H, recursos);
+  assert.deepEqual(recursos._pedidos, [[108, 192]]);
+  const chico = recursos._chicos["108x192"];
+  assert.equal(chico._ctx.filter, "blur(5px)");
+  assert.deepEqual(
+    ctx.llamadas.map(({ img, x, y, w, h }) => [img === chico ? "chico" : "fuente", x, y, w, h]),
+    [["chico", 0, 0, 1080, 1920], ["fuente", 0, 690, 1080, 540]],
+  );
+});
+
+test("dibujarPrincipal: «ajustar» sin `ctx.filter` en el lienzo (Safari viejo) usa \"none\"", () => {
+  const ctx = ctxDibujo();
+  const recursos = recursosEncuadre({ filtroFondo: false });
+  dibujarPrincipal(ctx, capaDe({ encuadre: { modo: "ajustar" } }), FUENTE, [400, 200], W, H, recursos);
+  assert.equal(recursos._chicos["108x192"]._ctx.filter, "none");
+});
+
+test("dibujarPrincipal: ken_burns «in» a los 1500 ms (zoom 1,04) acerca el primer plano hacia el centro (±1e-9)", () => {
+  const ctx = ctxDibujo();
+  const capa = capaDe({ encuadre: { x: 0 }, tZoom: 1500, kenBurns: "in", iniKb: 0, durKb: 3000 });
+  dibujarPrincipal(ctx, capa, FUENTE, [400, 200], W, H, recursosEncuadre());
+  const [{ x, y, w, h }] = ctx.llamadas;
+  assert.ok(Math.abs(x - -21.6) < 1e-9, x);
+  assert.ok(Math.abs(y - -38.4) < 1e-9, y);
+  assert.ok(Math.abs(w - 3993.6) < 1e-9, w);
+  assert.ok(Math.abs(h - 1996.8) < 1e-9, h);
+});
+
+test("dibujarPrincipal: en un «deslizar» a la mitad (dx −0,5) el primer plano corre −540", () => {
+  const ctx = ctxDibujo();
+  dibujarPrincipal(ctx, capaDe({ encuadre: { x: 0 }, dx: -0.5 }), FUENTE, [400, 200], W, H, recursosEncuadre());
+  assert.deepEqual(ctx.llamadas.map(({ x, y, w, h }) => [x, y, w, h]), [[-540, 0, 3840, 1920]]);
+});
+
+test("dibujarCuadro: un video sin encuadre dibuja exactamente igual que antes (vía dibujarPrincipal)", () => {
+  const ctx = { ...ctxFalso(), ...ctxDibujo() };
+  const doc = { formato: "9:16", pistas: [{ id: "p", tipo: "video", clips: [
+    { id: "v0", material_id: 7, inicio_ms: 0, duracion_ms: 4000, recorte: { desde_ms: 0, hasta_ms: 4000 } },
+  ] }] };
+  const r = { ...recursos({ tipo: "video", url: "/v.mp4" }), fuentePrincipal: () => FUENTE, medidas: () => [400, 200] };
+  dibujarCuadro(ctx, doc, 1000, r, CFG);
+  const dibujos = ctx.llamadas.filter((l) => l.img === FUENTE);
+  assert.deepEqual(dibujos.map(({ x, y, w, h }) => [x, y, w, h]), [[-1380, 0, 3840, 1920]]);
 });

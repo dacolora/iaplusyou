@@ -35,6 +35,14 @@ def _pista(id_, tipo, clips):
     return {"id": id_, "tipo": tipo, "bloqueada": False, "silenciada": False, "oculta": False, "clips": clips}
 
 
+def _clip_foto(id_, inicio_ms, duracion_ms, material_id):
+    return {"id": id_, "inicio_ms": inicio_ms, "duracion_ms": duracion_ms, "material_id": material_id, "foto": True,
+            "recorte": {"desde_ms": 0, "hasta_ms": duracion_ms}, "velocidad": 1.0,
+            "transform": {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"},
+            "keyframes": [], "animacion": None, "transicion": None,
+            "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}}
+
+
 # Documento base (brief): principal `v0` (material 1, 0-4000, recorte
 # 0-4000) + `v1` (material 1, 4000-7000, recorte 5000-8000); `p_voz` con
 # `voz_a` (material 2, 1000-4000, bloque "hook", por_destino {es: 2, en: 5}).
@@ -74,6 +82,22 @@ def test_fuente_sonido_usa_la_pista_principal_y_la_regla_del_centro():
     resuelto = d.resolver(doc, "es", "CO")
     derivado = sf.derivar(resuelto, {1: PALABRAS_M1})
     assert [(w["t_ms"], w["dur_ms"], w["texto"]) for w in derivado] == [(500, 200, "Hola"), (4200, 200, "video")]
+
+
+# --- una foto no suena: `{tipo: "sonido"}` la salta (capa 5b, D11) --------
+
+def test_fuente_sonido_salta_los_clips_foto_de_la_principal():
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [_clip_foto("f0", 0, 3000, 4), _clip_video("v0", 3000, 4000, 0, 4000, material_id=1)]
+    doc["subtitulos"] = {**doc["subtitulos"], "fuentes": {"es": [{"tipo": "sonido"}]}}
+    doc = d.validar(doc)
+    resuelto = d.resolver(doc, "es", "CO")
+    pares = sf.clips_de_fuente(resuelto, [{"tipo": "sonido"}])
+    assert [clip["id"] for _pista, clip in pares] == ["v0"]
+    palabras_m4 = [{"t_ms": 500, "dur_ms": 200, "texto": "foto"}]
+    palabras_m1 = [{"t_ms": 500, "dur_ms": 200, "texto": "video"}]
+    derivado = sf.derivar(resuelto, {4: palabras_m4, 1: palabras_m1})
+    assert [(w["texto"], w["clip_id"]) for w in derivado] == [("video", "v0")]
 
 
 def test_corte_a_mitad_de_palabra_la_deja_en_una_sola_mitad():

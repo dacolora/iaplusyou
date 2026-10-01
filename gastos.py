@@ -16,8 +16,8 @@ tumbar la tarea que ya pagó: los llamadores envuelven en try/except.
 `TARIFAS` y los `estimate_*` de los proveedores; cuando no hay tarifa
 devuelve `usd=None` y el texto "precio no disponible" — nunca se inventa.
 
-Lecturas: `resumen_mes`, `historial`, `serie_diaria`, `csv_mes`,
-`por_proyecto_mes`; `formatear(usd)` -> "US$ 0,07".
+Lecturas: `resumen_mes`, `resumen_total`, `por_mes`, `historial`,
+`serie_diaria`, `csv_mes`, `por_proyecto_mes`; `formatear(usd)` -> "US$ 0,07".
 """
 import csv
 import io
@@ -420,6 +420,27 @@ def resumen_mes(cliente, ahora_iso=None):
     total = round(sum(v["usd"] for v in por_tipo.values()), 4)
     return {"desde": desde, "hasta": hasta, "total": total, "por_tipo": por_tipo,
             "n": sum(v["n"] for v in por_tipo.values())}
+
+
+def resumen_total(cliente, ahora_iso=None):
+    """{"total", "n"} de todo lo cobrado al proyecto hasta `ahora` (Tablero:
+    el total desde el inicio)."""
+    g = db.gasto
+    q = sa.select(sa.func.sum(g.c.usd), sa.func.count()).where(g.c.cliente == cliente, g.c.creado_en <= _ahora(ahora_iso))
+    with db.conectar() as con:
+        suma, n = con.execute(q).first()
+    return {"total": round(float(suma or 0.0), 4), "n": int(n or 0)}
+
+
+def por_mes(cliente, ahora_iso=None):
+    """{"YYYY-MM": {"usd", "n"}} de todo lo cobrado al proyecto hasta `ahora`,
+    un mes por clave (Tablero: el desglose mes a mes)."""
+    g = db.gasto
+    mes = sa.func.substr(g.c.creado_en, 1, 7)
+    q = (sa.select(mes, sa.func.sum(g.c.usd), sa.func.count())
+         .where(g.c.cliente == cliente, g.c.creado_en <= _ahora(ahora_iso)).group_by(mes))
+    with db.conectar() as con:
+        return {m: {"usd": round(float(suma or 0.0), 4), "n": int(n)} for m, suma, n in con.execute(q)}
 
 
 def historial(cliente, limite=200, desde=None):
