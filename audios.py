@@ -13,6 +13,7 @@ Desde el 2026-09-30 habla diez idiomas y decide el motor por voz e idioma
 MiniMax para las voces propias (`voces_propias.py`)."""
 import logging
 import os
+import shutil
 import tempfile
 import time
 
@@ -246,6 +247,43 @@ def sintetizar(cliente, voz, texto, idioma, velocidad):
         r = fal_audio.tts(texto, voz, idioma, velocidad=v)
     return {"url": r["url"], "costo_usd": r["costo_usd"], "proveedor": "fal/elevenlabs",
             "etiqueta": ETIQUETAS_MOTOR[motor], "voz_nombre": voz}
+
+
+def voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo, carpeta=None):
+    """La voz cruda de `texto` (fila `material` tipo audio, origen `voz`, hash
+    `hash_voz`). Si ya existe en este proyecto — también si se hizo en Audios
+    o en el anuncio hablado — sale de la caché sin pagar. Si no, la sintetiza
+    (`sintetizar`, el motor que toca), registra el gasto `locucion`
+    (`locucion:<hash12><ref_sufijo>`) apenas el proveedor cobra — ANTES de
+    bajarla y subirla, así un fallo después no pierde lo pagado —, la sube a R2
+    (`clientes/<c>/materiales/voz_<h16>.mp3`) y crea la fila. Devuelve
+    `(material, creado)`. `carpeta`: donde bajar el mp3 (Audios la pasa y lo
+    anota en `extra.local` para mezclarlo sin volver a bajarlo); sin carpeta,
+    un temporal que se borra apenas se sube."""
+    h_voz = hash_voz(texto, voz, idioma, velocidad)
+    referencia = f"locucion:{h_voz[:12]}{ref_sufijo}"
+
+    def _producir():
+        r = sintetizar(cliente, voz, texto, idioma, velocidad)
+        usd = float(r.get("costo_usd") or 0.0)
+        # El proveedor ya cobró: el gasto queda aunque lo que sigue falle.
+        gastos.registrar_seguro(cliente, "locucion", usd, referencia,
+                                detalle=gettext("%(motor)s · %(n)s caracteres · %(voz)s", motor=r["etiqueta"],
+                                                n=len(texto), voz=r["voz_nombre"]),
+                                proveedor=r["proveedor"])
+        destino = carpeta or tempfile.mkdtemp(prefix="voz_cruda_")
+        try:
+            local = descargar_url(r["url"], os.path.join(destino, f"voz_{h_voz[:16]}.mp3"))
+            url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h_voz[:16]}.mp3", "audio/mpeg")
+            extra = {"texto": texto, "voz": r["voz_nombre"], "voz_ref": voz, "idioma": idioma, "velocidad": velocidad}
+            if carpeta:
+                extra["local"] = local
+            return {"tipo": "audio", "origen": ORIGEN_VOZ, "url": url, "bytes": os.path.getsize(local),
+                    "duracion_ms": int(round(cortes.duracion(local) * 1000)), "costo_usd": usd, "extra": extra}
+        finally:
+            if not carpeta:
+                shutil.rmtree(destino, ignore_errors=True)
+    return materiales.obtener_o_crear(cliente, h_voz, _producir)
 
 
 # ------------------------------------------------------------- mezcla ---
