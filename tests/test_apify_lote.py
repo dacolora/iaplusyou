@@ -102,6 +102,65 @@ def test_lote_sondeo_tolera_fallos_y_se_rinde_por_corrida(esperas):
     assert "sin estado" not in res["aviso"] and "no se pudo saber cómo terminó" in res["aviso"]
 
 
+class _SinJson(_Resp):
+    """Un 2xx cuyo cuerpo no es JSON (una página de error de un proxy, un corte a la mitad)."""
+
+    def json(self):
+        raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+
+def test_lote_sondeo_que_no_es_json_cuenta_como_lectura_mala(esperas):
+    """Ola final F10: un 200 sin JSON al sondear nunca tumba el lote: la corrida ya pagada se sigue sondeando,
+    su dataset se lee y sus resultados se cuentan."""
+    import providers.apify as ap
+    s = _Sesion({"/actors/x~y/runs": [_corrida("READY", "r0", "d0")],
+                 "/actor-runs/r0": [_SinJson(200), _corrida("SUCCEEDED", "r0", "d0")],
+                 "/datasets/d0/items": _Resp(200, [{"t": "a"}, {"t": "b"}])})
+    res = ap.correr_lote(s, "tok", "x~y", _pedidas(1), "Leyendo")
+    assert res["corridas"][0]["estado"] == "SUCCEEDED" and res["resultados"] == 2 and [i for i, _ in res["items"]] == [0, 0]
+    assert res["aviso"] == ""
+    # siempre ilegible: se rinde como con un error HTTP, y lo cobrado se lee igual
+    s = _Sesion({"/actors/x~y/runs": [_corrida("READY", "r0", "d0")],
+                 "/actor-runs/r0": [_SinJson(200)] * ap.MAX_FALLOS_SONDEO,
+                 "/datasets/d0/items": _Resp(200, [{"t": "a"}])})
+    res = ap.correr_lote(s, "tok", "x~y", _pedidas(1), "Leyendo")
+    assert res["corridas"][0]["estado"] == ap.ESTADO_SIN_ESTADO and res["resultados"] == 1
+    assert "respuesta ilegible" in res["aviso"] and "r0" in res["aviso"]
+    # una lista en vez de un objeto tampoco revienta: no trae estado y se sigue esperando
+    s = _Sesion({"/actors/x~y/runs": [_corrida("READY", "r0", "d0")],
+                 "/actor-runs/r0": [_Resp(200, ["raro"]), _corrida("SUCCEEDED", "r0", "d0")],
+                 "/datasets/d0/items": _Resp(200, [{"t": "a"}])})
+    assert ap.correr_lote(s, "tok", "x~y", _pedidas(1), "Leyendo")["corridas"][0]["estado"] == "SUCCEEDED"
+
+
+def test_arrancar_sin_json_no_cuenta_como_lanzada(esperas):
+    """Ola final F10: un 2xx sin JSON al arrancar es ErrorFuente con un mensaje claro (sin ids: no consta como
+    lanzada); en un lote, las demás corridas siguen."""
+    import providers.apify as ap
+    from nicho.fuentes.base import ErrorFuente
+    ids = []
+    with pytest.raises(ErrorFuente) as e:
+        ap.arrancar(_Sesion({"/actors/x~y/runs": _SinJson(201)}), "tok", "x~y", {}, 10, 0.01, on_ids=lambda r, d: ids.append((r, d)))
+    assert "console.apify.com" in str(e.value) and ids == []
+    s = _Sesion({"/actors/x~y/runs": [_SinJson(201), _corrida("READY", "r1", "d1")],
+                 "/actor-runs/r1": [_corrida("SUCCEEDED", "r1", "d1")], "/datasets/d1/items": _Resp(200, [{"t": "a"}])})
+    res = ap.correr_lote(s, "tok", "x~y", _pedidas(2), "Leyendo")
+    assert [c["estado"] for c in res["corridas"]] == [ap.ESTADO_NO_ARRANCO, "SUCCEEDED"] and res["resultados"] == 1
+    assert "console.apify.com" in res["aviso"]
+
+
+def test_sondear_que_no_es_json_cuenta_como_lectura_mala(esperas):
+    """Lo mismo en `sondear` (la fuente Apify manual de Nicho y los barridos de referentes)."""
+    import providers.apify as ap
+    from nicho.fuentes.base import ErrorFuente
+    s = _Sesion({"/actor-runs/r0": [_SinJson(200), _corrida("SUCCEEDED", "r0", "d0")]})
+    assert ap.sondear(s, "tok", "r0", "READY", "Leyendo") == "SUCCEEDED"
+    s = _Sesion({"/actor-runs/r0": [_SinJson(200)] * ap.MAX_FALLOS_SONDEO})
+    with pytest.raises(ErrorFuente) as e:
+        ap.sondear(s, "tok", "r0", "READY", "Leyendo")
+    assert "respuesta ilegible" in str(e.value) and "r0" in str(e.value)
+
+
 def test_frase_estado_de_los_estados_ficticios():
     from providers import apify as ap
     assert ap.frase_estado(ap.ESTADO_NO_ARRANCO) == "no arrancó"

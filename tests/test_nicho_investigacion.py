@@ -462,9 +462,14 @@ def test_estimar_costo_maximo():
     assert e["comentarios"] == avatares.MAX_COMENTARIOS and e["usd"] > 0 and e["suficientes"]
     # Peor caso real: los DOS topes de seleccionar() llenos a la vez (una reseña
     # real llega a 2 000 caracteres, así que MAX_COMENTARIOS puede sumar
-    # MAX_CARACTERES completo) -- no solo MAX_COMENTARIOS × 250.
-    tokens_texto = int(avatares.MAX_CARACTERES * avatares.TOKENS_POR_CARACTER)
-    assert e["tokens_entrada"] == (tokens_texto * 3 + avatares.TOKENS_PROMPT * (1 + 2 * avatares.MAX_NUCLEOS)
+    # MAX_CARACTERES completo) -- no solo MAX_COMENTARIOS × 250 --, contado con la
+    # línea entera que va al prompt (`_linea`) y la regla de otro mercado en cada llamada.
+    falsos = avatares.comentarios_peor_caso()
+    assert len(falsos) == avatares.MAX_COMENTARIOS and sum(len(c["texto"]) for c in falsos) == avatares.MAX_CARACTERES
+    tokens_texto = int(sum(len(avatares._linea(c)) for c in falsos) * avatares.TOKENS_POR_CARACTER)
+    assert tokens_texto > int(avatares.MAX_CARACTERES * avatares.TOKENS_POR_CARACTER)
+    assert e["tokens_entrada"] == (tokens_texto * 3
+                                   + (avatares.TOKENS_PROMPT + avatares.TOKENS_REGLA_OTRO_MERCADO) * (1 + 2 * avatares.MAX_NUCLEOS)
                                    + avatares.TOKENS_SUB_JSON * avatares.MAX_NUCLEOS * avatares.MAX_SUBS_POR_NUCLEO)
 
 

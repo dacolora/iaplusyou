@@ -46,8 +46,12 @@ ETIQUETAS_PASO = {"consultas": N_("consultas"), "buscar:amazon": N_("buscar en A
 TOPES_DEFECTO = {"consultas": 3, "productos_por_consulta": 20, "productos_elegidos": 15, "resenas_por_producto": 100}
 LIMITES = {"consultas": (1, 4), "productos_por_consulta": (5, 40), "productos_elegidos": (3, 30), "resenas_por_producto": (20, 200)}
 MAX_FILAS_SELECCION = 300
-MAX_TOKENS_CONSULTAS = 2000          # una lista por idioma en la misma respuesta (Parte 4 §2); es un corte, no el costo
-MAX_TOKENS_SELECCION = 6000
+# Topes de salida de las dos llamadas: son un corte, no el costo. El pensamiento adaptativo
+# gasta del mismo tope, así que van con margen: las consultas traen una lista por idioma en
+# la misma respuesta (Parte 4 §2), y la selección, 300 productos × ~25 tokens, que ya pasan
+# de 6 000. Ninguno llega al límite del SDK para una llamada sin streaming (≈ 21 333).
+MAX_TOKENS_CONSULTAS = 6000
+MAX_TOKENS_SELECCION = 16000
 IDIOMAS = plataformas.IDIOMA_POR_PAIS
 PLATAFORMAS_POR_PAIS = {clave: plataformas.PLATAFORMAS[clave]["paises"] for clave in plataformas.PLATAFORMAS}
 
@@ -286,6 +290,29 @@ def _mas_resenado(p):
     return (-(p.get("n_resenas") or 0), -_vendidos(p), int(p.get("id") or 0))
 
 
+def _repartir_por_plataforma(productos, maximo):
+    """Hasta `maximo` productos tomados por turnos entre plataformas (en orden
+    de clave), cada una en su orden de `_mas_resenado`. Un corte global por
+    reseñas dejaría fuera a AliExpress, que no trae ese número, aunque sus
+    productos ya se pagaron; con una sola plataforma es el mismo orden de siempre."""
+    grupos = {}
+    for p in productos or []:
+        grupos.setdefault(str(p.get("plataforma") or ""), []).append(p)
+    colas = [iter(sorted(grupos[clave], key=_mas_resenado)) for clave in sorted(grupos)]
+    salida = []
+    while colas and len(salida) < maximo:
+        siguientes = []
+        for cola in colas:
+            if len(salida) >= maximo:
+                break
+            p = next(cola, None)
+            if p is not None:
+                salida.append(p)
+                siguientes.append(cola)
+        colas = siguientes
+    return salida
+
+
 def elegir(productos, decisiones, productos_elegidos):
     """Por plataforma, los `productos_elegidos` relevantes con más reseñas (sin
     dato = 0; empate por vendidos y luego por id). -> {plataforma: [fuente_id, …]} solo con
@@ -355,14 +382,26 @@ def _limpiar_consultas(lista, n):
     return salida[:n]
 
 
+def _por_codigo(bruto):
+    """{código de 2 letras: [consultas]}: «ES», «en-US» o « en » cuentan como
+    «es»/«en»; dos claves del mismo idioma suman sus listas."""
+    salida = {}
+    for clave, lista in bruto.items():
+        if isinstance(lista, list):
+            salida.setdefault(str(clave).strip().lower()[:2], []).extend(lista)
+    return salida
+
+
 def consultas_por_idioma_con_claude(estudio, pais, n=None, idiomas=None):
     """-> ({idioma: [consultas]}, tokens_entrada, tokens_salida), todo en UNA
-    llamada (spec Parte 4 §2): entre min(2, n) y n consultas limpias y sin
-    repetir por idioma, con n = el tope aprobado (la búsqueda nunca gasta más
-    que su línea del estimado). `idiomas[0]` (por defecto el del país) es
-    obligatorio: sin él, AnalisisInvalido con tokens. Un idioma de más que no
-    llegue queda fuera y su tienda usa las del país. Una lista suelta
-    (`{"consultas": [...]}`, la forma de la Parte 3) cuenta como la del primer idioma."""
+    llamada (spec Parte 4 §2): hasta n consultas limpias y sin repetir por
+    idioma, con n = el tope aprobado (la búsqueda nunca gasta más que su línea
+    del estimado). `idiomas[0]` (por defecto el del país) es obligatorio y pide
+    min(2, n): sin eso, AnalisisInvalido con tokens. Un idioma de más vale con
+    una sola; si no llega, queda fuera y su tienda usa las del país. Una lista
+    suelta (`{"consultas": [...]}`, la forma de la Parte 3) cuenta como la del
+    primer idioma; una respuesta sin «consultas» (`{"es": [...], …}`) también se
+    lee, y las claves se comparan por sus dos primeras letras («ES», «en-US»)."""
     minimo_tope, maximo_tope = LIMITES["consultas"]
     n = max(minimo_tope, min(int(n or TOPES_DEFECTO["consultas"]), maximo_tope))
     minimo = min(2, n)
@@ -375,14 +414,14 @@ def consultas_por_idioma_con_claude(estudio, pais, n=None, idiomas=None):
         data = avatares._json_objeto(texto)
     except avatares.AnalisisInvalido as e:
         raise _con_tokens(e, entrada, salida)
-    bruto = data.get("consultas")
+    bruto = data.get("consultas") if "consultas" in data else data
     if isinstance(bruto, list):
         bruto = {idiomas[0]: bruto}
-    bruto = bruto if isinstance(bruto, dict) else {}
+    bruto = _por_codigo(bruto) if isinstance(bruto, dict) else {}
     por_idioma = {}
-    for codigo in idiomas:
-        lista = _limpiar_consultas(bruto.get(codigo), n)
-        if len(lista) >= minimo:
+    for k, codigo in enumerate(idiomas):
+        lista = _limpiar_consultas(bruto.get(str(codigo).strip().lower()[:2]), n)
+        if len(lista) >= (minimo if k == 0 else 1):
             por_idioma[codigo] = lista
     if idiomas[0] not in por_idioma:
         raise _con_tokens(avatares.AnalisisInvalido(gettext("Claude devolvió menos de %(n)s consultas.", n=minimo)), entrada, salida)
@@ -404,9 +443,10 @@ def _fila_producto(p):
 
 def seleccion_con_claude(estudio, productos):
     """-> ({id: {"relevante", "motivo"}}, tokens_entrada, tokens_salida) para
-    los productos dados (máximo MAX_FILAS_SELECCION, los de más reseñas
-    primero); ids que Claude no menciona quedan fuera del dict."""
-    lista = sorted(productos or [], key=_mas_resenado)[:MAX_FILAS_SELECCION]
+    los productos dados: máximo MAX_FILAS_SELECCION, por turnos entre
+    plataformas y en cada una los de más reseñas primero
+    (`_repartir_por_plataforma`); ids que Claude no menciona quedan fuera del dict."""
+    lista = _repartir_por_plataforma(productos, MAX_FILAS_SELECCION)
     validos = {int(p["id"]) for p in lista}
     prompt = PROMPT_SELECCION.format(tema=(estudio.get("tema") or "").strip(), producto=(estudio.get("producto") or "").strip() or "—",
                                      pais=(estudio.get("pais") or ""),

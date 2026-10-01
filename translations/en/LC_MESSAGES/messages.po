@@ -17213,3 +17213,6 @@ msgstr "other market: %(pais)s"
 
 msgid "%(n)s vendidos"
 msgstr "%(n)s sold"
+
+msgid "Apify respondió sin datos legibles al arrancar la corrida (%(codigo)s); revisa en console.apify.com si arrancó."
+msgstr "Apify answered without readable data when starting the run (%(codigo)s); check at console.apify.com whether it started."

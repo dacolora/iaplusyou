@@ -150,3 +150,24 @@ def test_recolectar_marca_pais_y_mercado(entorno, monkeypatch):
                                                          "resenas_por_producto": 5, "pais": "CO"}))
     assert len(lista) == 2 and all(c["extra"]["pais"] == "US" and c["extra"]["mercado"] == "otro" for c in lista)
     assert lista[0]["fecha"] == "2026-05-14T00:00:00"
+
+
+def test_recolectar_atribuye_por_el_link_pedido(entorno, monkeypatch):
+    """Ola final F5: una reseña de Walmart cuyo `productId` es el de una variante (no el que pedimos) igual se
+    atribuye a nuestro producto por el link que le mandamos (`requestedInput`)."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    base = _fixture("walmart_resenas.json")[0]
+    variante = {**base, "reviewId": "r-variante", "productId": "999000111"}           # requestedInput sigue siendo …/ip/5394318269
+    otra = {**base, "reviewId": "r-otra", "productId": "17345973281", "requestedInput": "https://www.walmart.com/ip/17345973281",
+            "productUrl": "https://www.walmart.com/ip/17345973281"}
+    s = _Sesion({"/actors/apt_marble~walmart-reviews-scraper/runs": [_corrida("SUCCEEDED", "rw", "dw")],
+                 "/datasets/dw/items": _Resp(200, [variante, otra])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    productos = [{"fuente_id": "5394318269", "url": None, "titulo": "Botella MUKOKO"},
+                 {"fuente_id": "17345973281", "url": None, "titulo": "Botella OFEFE"}]
+    f = FuentePlataforma("walmart")
+    lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 5, "pais": "US"}))
+    assert [(c["fuente_id"], c["contexto"], c["extra"]["producto"]) for c in lista] == [
+        ("r-variante", "Botella MUKOKO", "5394318269"), ("r-otra", "Botella OFEFE", "17345973281")]
+    assert f.conteo_por_producto == {"5394318269": 1, "17345973281": 1}

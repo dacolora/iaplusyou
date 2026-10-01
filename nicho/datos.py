@@ -161,7 +161,28 @@ def actualizar_estudio(cliente, estudio_id, /, **campos):
     if "catalogo_id" in campos:
         campos["catalogo_id"] = _texto(campos["catalogo_id"], 80) or None
     with db.conectar() as con:
-        return _actualizar(con, db.estudio, estudio_id, cliente, _ESTUDIO_COLS, campos)
+        ok = _actualizar(con, db.estudio, estudio_id, cliente, _ESTUDIO_COLS, campos)
+        if ok and "pais" in campos:
+            _remarcar_mercado(con, cliente, estudio_id, campos["pais"])
+        return ok
+
+
+def _remarcar_mercado(con, cliente, estudio_id, pais):
+    """`extra.mercado` de un comentario es relativo al país del estudio (spec
+    Parte 4 §3): si el estudio cambia de país («Investigar de nuevo», «Editar
+    estudio»), en la misma transacción cada comentario con `extra.pais` queda
+    `local` si es el país nuevo y si no `otro` (la regla de
+    `FuentePlataforma.recolectar`). Solo se escriben las filas que cambian."""
+    c = db.comentario
+    pais, ahora = (pais or "").upper(), db.ahora()
+    filas = con.execute(sa.select(c.c.id, c.c.extra).where(c.c.cliente == cliente, c.c.estudio_id == estudio_id)).all()
+    for f in filas:
+        ex = f.extra if isinstance(f.extra, dict) else {}
+        if not ex.get("pais"):
+            continue
+        mercado = "local" if str(ex["pais"]).upper() == pais else "otro"
+        if ex.get("mercado") != mercado:
+            con.execute(c.update().where(c.c.id == f.id).values(actualizado_en=ahora, extra={**ex, "mercado": mercado}))
 
 
 def archivar_estudio(cliente, estudio_id, archivado=True):

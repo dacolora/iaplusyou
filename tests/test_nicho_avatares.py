@@ -22,9 +22,11 @@ def test_seleccionar_excluye_ordena_y_alterna_fuentes():
 
 def test_estimar_costo_y_costo_real(monkeypatch):
     from nicho import avatares
-    lista = [_c(i, texto="x" * 350) for i in range(1, 21)]           # 20 comentarios × 350 caracteres = 7 000 chars
+    lista = [_c(i, texto="x" * 350) for i in range(1, 21)]           # 20 comentarios × 350 caracteres = 7 000 chars de texto
     e = avatares.estimar_costo(lista, modelo="claude-sonnet-5")
-    tokens_texto = int(7000 * avatares.TOKENS_POR_CARACTER)
+    # cuenta la línea entera que va al prompt («[id] (fuente) texto»), no solo el texto (ola final F9)
+    tokens_texto = int(sum(len(avatares._linea(c)) for c in lista) * avatares.TOKENS_POR_CARACTER)
+    assert tokens_texto > int(7000 * avatares.TOKENS_POR_CARACTER)
     assert e["comentarios"] == 20 and e["suficientes"] is True and e["referencia"] is False and e["modelo"] == "claude-sonnet-5"
     assert e["tokens_entrada"] == (tokens_texto * 3 + avatares.TOKENS_PROMPT * (1 + 2 * avatares.MAX_NUCLEOS)
                                    + avatares.TOKENS_SUB_JSON * avatares.MAX_NUCLEOS * avatares.MAX_SUBS_POR_NUCLEO)

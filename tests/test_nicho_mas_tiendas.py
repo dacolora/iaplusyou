@@ -179,3 +179,103 @@ def test_prompts_marcan_el_otro_mercado_y_llevan_la_regla():
     assert "Mercado del estudio" not in avatares.armar_prompt_nucleos(est, solo_locales)
     assert "otro mercado" not in avatares.armar_prompt_subs(est, nucleo, solo_locales)
     assert "otro mercado" not in avatares.armar_prompt_completar(est, nucleo, solo_locales, [(0, {}, ["deseo"])])
+
+
+def test_topes_de_salida_de_claude_alcanzan_con_varias_tiendas():
+    """Ola final F1/F2: el pensamiento adaptativo gasta del mismo tope; 300 productos × ~25 tokens ya pasan
+    de 6 000, y el tope sigue bajo el límite del SDK sin streaming (≈ 21 333)."""
+    from nicho import investigacion as inv
+    assert inv.MAX_TOKENS_SELECCION >= 25 * inv.MAX_FILAS_SELECCION + 4000 and inv.MAX_TOKENS_SELECCION <= 21000
+    assert inv.MAX_TOKENS_CONSULTAS >= 4000
+
+
+def test_seleccion_toma_por_turnos_entre_tiendas(monkeypatch):
+    """Ola final F3: AliExpress no trae número de reseñas; con el corte de filas lleno no queda fuera: las
+    tiendas se turnan y cada una conserva su orden de más reseñadas."""
+    from nicho import avatares, investigacion as inv
+    amazon = [{"id": i, "plataforma": "amazon", "fuente_id": f"A{i}", "titulo": f"Amazon {i}", "n_resenas": 100 * i, "extra": {}}
+              for i in (1, 2, 3)]
+    ali = [{"id": 10 + i, "plataforma": "aliexpress", "fuente_id": f"X{i}", "titulo": f"Ali {i}", "n_resenas": None,
+            "extra": {"vendidos": i}} for i in (1, 2, 3)]
+    r = inv._repartir_por_plataforma(amazon + ali, 4)
+    assert [p["id"] for p in r] == [13, 3, 12, 2]                     # aliexpress y amazon (orden de clave), dos de cada una
+    assert [p["id"] for p in inv._repartir_por_plataforma(amazon, 2)] == [3, 2]
+    assert inv._repartir_por_plataforma(ali, 10) == sorted(ali, key=inv._mas_resenado) and inv._repartir_por_plataforma([], 5) == []
+    vistos = []
+    monkeypatch.setattr(inv, "MAX_FILAS_SELECCION", 4)
+    monkeypatch.setattr(avatares, "_llamar", lambda t, m: vistos.append(t) or ('{"productos": [{"id": 3, "relevante": true}]}', 10, 5))
+    inv.seleccion_con_claude({"tema": "t"}, amazon + ali)
+    lista = vistos[0].split("reseñas):\n", 1)[1]
+    assert "Ali 3" in lista and "Ali 2" in lista and "Amazon 3" in lista and "Amazon 2" in lista
+    assert "Ali 1" not in lista and "Amazon 1" not in lista
+
+
+def test_cambiar_el_pais_del_estudio_remarca_el_mercado(base_temporal, monkeypatch):
+    """Ola final F4: `mercado` es relativo al país del estudio; si el estudio cambia de país se recalcula en la
+    misma escritura (solo las filas que cambian)."""
+    import db
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="CO")
+    datos.agregar_comentarios("acme", eid, "walmart", [{"fuente_id": "w1", "texto": "Love this bottle",
+                                                        "extra": {"producto": "1", "plataforma": "walmart", "pais": "US", "mercado": "otro"}}])
+    datos.agregar_comentarios("acme", eid, "meli", [{"fuente_id": "m1", "texto": "Me encanta", "extra": {"pais": "CO", "mercado": "local"}}])
+    datos.agregar_comentarios("acme", eid, "aliexpress", [{"fuente_id": "a1", "texto": "Great", "extra": {"pais": "US", "mercado": "local"}}])
+    datos.agregar_comentarios("acme", eid, "texto", [{"fuente_id": "t1", "texto": "Sin país"}])
+    otro = datos.crear_estudio("acme", "Y", tema="t", pais="CO")
+    datos.agregar_comentarios("acme", otro, "walmart", [{"fuente_id": "w1", "texto": "Love it", "extra": {"pais": "US", "mercado": "otro"}}])
+    antes = {c["fuente_id"]: c for c in datos.comentarios_para_generar("acme", eid)}
+    monkeypatch.setattr(db, "ahora", lambda: "2099-01-01T00:00:00")
+    assert datos.actualizar_estudio("acme", eid, pais="us")
+    despues = {c["fuente_id"]: c for c in datos.comentarios_para_generar("acme", eid)}
+    assert despues["w1"]["extra"] == {"producto": "1", "plataforma": "walmart", "pais": "US", "mercado": "local"}
+    assert despues["m1"]["extra"] == {"pais": "CO", "mercado": "otro"}
+    assert despues["w1"]["actualizado_en"] == despues["m1"]["actualizado_en"] == "2099-01-01T00:00:00"
+    for clave in ("a1", "t1"):                                         # ya estaba bien / sin país: no se escribe
+        assert despues[clave]["extra"] == antes[clave]["extra"] and despues[clave]["actualizado_en"] == antes[clave]["actualizado_en"]
+    assert datos.comentarios_para_generar("acme", otro)[0]["extra"]["mercado"] == "otro"          # otro estudio: intacto
+    assert datos.estudio("acme", eid)["pais"] == "US"
+
+
+def test_consultas_por_idioma_toleran_la_forma_de_la_respuesta(monkeypatch):
+    """Ola final F7: respuesta sin «consultas», claves con mayúsculas o región y un idioma de más con una sola búsqueda."""
+    from nicho import avatares, investigacion as inv
+    est = {"tema": "botellas", "producto": ""}
+
+    def responde(texto):
+        monkeypatch.setattr(avatares, "_llamar", lambda t, m: (texto, 10, 5))
+    responde('{"es": ["botella con horario", "botella motivacional"], "en": ["water bottle time marker", "motivational bottle"]}')
+    assert inv.consultas_por_idioma_con_claude(est, "CO", 3, ["es", "en"])[0] == {
+        "es": ["botella con horario", "botella motivacional"], "en": ["water bottle time marker", "motivational bottle"]}
+    responde('{"consultas": {"ES": ["botella con horario", "botella motivacional"], "en-US": ["water bottle time marker", "motivational bottle"]}}')
+    assert inv.consultas_por_idioma_con_claude(est, "CO", 3, ["es", "en"])[0] == {
+        "es": ["botella con horario", "botella motivacional"], "en": ["water bottle time marker", "motivational bottle"]}
+    responde('{"consultas": {"es": ["botella con horario", "botella motivacional"], "en": ["water bottle time marker"]}}')
+    assert inv.consultas_por_idioma_con_claude(est, "CO", 3, ["es", "en"])[0]["en"] == ["water bottle time marker"]
+    responde('{"consultas": {"es": ["botella con horario"], "en": ["water bottle time marker", "motivational bottle"]}}')
+    with pytest.raises(avatares.AnalisisInvalido):                       # el del país sigue pidiendo min(2, n)
+        inv.consultas_por_idioma_con_claude(est, "CO", 3, ["es", "en"])
+
+
+def test_estimado_de_avatares_cuenta_lo_que_se_manda():
+    """Ola final F9: el prompt manda la línea entera de cada comentario (`_linea`) y, con algún comentario de otro
+    mercado, la regla en cada llamada; el estimado cuenta las dos cosas."""
+    from nicho import avatares
+
+    def c(i, mercado):
+        return {"id": i, "fuente": "walmart", "texto": "x" * 400, "puntuacion": 4, "fecha": None, "contexto": "Botella de vidrio 1L",
+                "extra": {"mercado": mercado, "pais": "US" if mercado == "otro" else "CO"}}
+    llamadas = 1 + 2 * avatares.MAX_NUCLEOS
+    fijo = avatares.TOKENS_SUB_JSON * avatares.MAX_NUCLEOS * avatares.MAX_SUBS_POR_NUCLEO
+    locales = [c(i, "local") for i in range(1, 26)]
+    lineas = int(sum(len(avatares._linea(x)) for x in locales) * avatares.TOKENS_POR_CARACTER)
+    assert lineas > int(400 * 25 * avatares.TOKENS_POR_CARACTER)
+    assert avatares.estimar_costo(locales)["tokens_entrada"] == lineas * 3 + avatares.TOKENS_PROMPT * llamadas + fijo
+    mezcla = locales[:-1] + [c(99, "otro")]
+    lineas = int(sum(len(avatares._linea(x)) for x in mezcla) * avatares.TOKENS_POR_CARACTER)
+    regla = avatares.TOKENS_REGLA_OTRO_MERCADO
+    assert regla >= len(avatares.REGLA_OTRO_MERCADO) * avatares.TOKENS_POR_CARACTER
+    assert avatares.estimar_costo(mezcla)["tokens_entrada"] == lineas * 3 + (avatares.TOKENS_PROMPT + regla) * llamadas + fijo
+    # el peor caso de la investigación lleva la línea más larga y la regla: nunca queda corto frente a uno real
+    peor = avatares.comentarios_peor_caso()
+    assert len(avatares.seleccionar(peor)) == avatares.MAX_COMENTARIOS and all(x["extra"]["mercado"] == "otro" for x in peor)
+    assert avatares.estimar_costo_maximo()["tokens_entrada"] >= avatares.estimar_costo(mezcla * 30)["tokens_entrada"]

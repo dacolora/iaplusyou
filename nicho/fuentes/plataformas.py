@@ -78,6 +78,11 @@ _RE_HTTP = re.compile(r"^https?://", re.IGNORECASE)      # la misma regla que ba
 _DOLAR_LOCAL = {"MX": "MXN", "CO": "COP", "AR": "ARS", "CL": "CLP", "UY": "UYU", "DO": "DOP", "CA": "CAD", "AU": "AUD",
                 "US": "USD", "EC": "USD", "SV": "USD", "PA": "USD"}
 _MESES_EN = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+# El id del producto dentro del link que le mandamos al actor de reseñas (y que devuelve con cada una):
+# walmart.com/ip/<id> (o /ip/<nombre>/<id>) y aliexpress.com/item/<id>.html.
+_RE_ID_WALMART = re.compile(r"/ip/(?:[^/?#]+/)*(\d+)/?(?:[?#]|$)")
+_RE_ID_ALIEXPRESS = re.compile(r"/item/(\d+)\.html")
+_PAIS_ALIAS = {"UK": "GB"}                  # AliExpress llama «UK» al Reino Unido
 
 
 # ------------------------------------------------------------ helpers ---
@@ -186,6 +191,12 @@ def _url(v):
 
 def _sin_guion(v):
     return str(v or "").replace("-", "").strip()
+
+
+def _id_de_link(v, patron):
+    """El id del producto dentro de un link http(s) (el que le pedimos al actor), o None."""
+    m = patron.search(_url(v) or "")
+    return m.group(1) if m else None
 
 
 # ------------------------------------------------------------- amazon ---
@@ -331,7 +342,9 @@ def _resena_walmart(item):
     partes = [_texto(item.get("title"), 300), _texto(item.get("text"), 2000)]
     return {"fuente_id": _texto(_primero(item, "reviewId", "id"), 120) if es_resena else "", "texto": ". ".join(x for x in partes if x),
             "puntuacion": _entero(_primero(item, "rating")), "fecha": _primero(item, "date"), "url": None,
-            "producto": _texto(_primero(item, "productId"), 120) or None}
+            "producto": _texto(_primero(item, "productId"), 120) or None,
+            # el link que le mandamos (`requestedInput`; `productUrl` si no lo repite): `productId` puede ser el de una variante
+            "producto_pedido": _id_de_link(_primero(item, "requestedInput", "productUrl"), _RE_ID_WALMART)}
 
 
 # --------------------------------------------------------- aliexpress ---
@@ -343,7 +356,11 @@ def _busqueda_aliexpress(consultas, pais, productos_por_consulta):
 
 
 def _producto_aliexpress(item):
-    precio, moneda = _precio_moneda(item)
+    # Siempre busca con country=US y currency=USD (`_busqueda_aliexpress`): un «$» es dólar sea cual sea el
+    # país del estudio, y un precio sin moneda también.
+    precio, moneda = _precio_moneda({**item, "loadedCountryCode": "US"})
+    if precio is not None and not moneda:
+        moneda = "USD"
     extra = {}
     vendidos = _entero(_primero(item, "orders", "sold"))
     if vendidos is not None:
@@ -371,6 +388,7 @@ def _fecha_dia_mes(v):
 
 def _pais_iso(v):
     s = _texto(v, 10).upper()
+    s = _PAIS_ALIAS.get(s, s)
     return s if len(s) == 2 and s.isalpha() else None
 
 
@@ -379,6 +397,7 @@ def _resena_aliexpress(item):
             "texto": _texto(_primero(item, "review_text", "text"), 2000),
             "puntuacion": _entero(_primero(item, "rating")), "fecha": _fecha_dia_mes(_primero(item, "review_date", "date")), "url": None,
             "producto": _texto(_primero(item, "product_id", "productId"), 120) or None,
+            "producto_pedido": _id_de_link(_primero(item, "product_url", "productUrl"), _RE_ID_ALIEXPRESS),
             "pais": _pais_iso(_primero(item, "buyer_country", "country"))}
 
 
@@ -547,8 +566,12 @@ def entradas_resenas(clave, productos, pais, resenas_por_producto):
 
 
 def leer_resena(clave, item):
-    """`{fuente_id, texto, puntuacion, fecha, url, producto[, pais]}` o None sin id o sin
-    texto. `producto` es el id del producto en la plataforma (para el título y
-    el link); el autor nunca se lee."""
+    """`{fuente_id, texto, puntuacion, fecha, url, producto[, producto_pedido][, pais]}` o
+    None sin id o sin texto. `producto` es el id del producto en la plataforma
+    (para el título y el link); `producto_pedido` (Walmart y AliExpress) es el id
+    sacado del link que le mandamos al actor y que cada reseña devuelve: la
+    atribuye a nuestro producto aunque `producto` sea el de una variante (None si
+    no viene); `pais` es el ISO del comprador cuando el actor lo da (hoy solo
+    AliExpress). El autor nunca se lee."""
     d = _plataforma(clave)["resenas"]["leer_resena"](item if isinstance(item, dict) else {})
     return d if d["fuente_id"] and d["texto"] else None

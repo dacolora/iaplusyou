@@ -248,3 +248,39 @@ def test_lectores_de_walmart_y_aliexpress_con_datos_reales():
     assert r[0]["producto"] == "3256806541493299" and r[0]["texto"].startswith("É a segunda que compro")
     assert r[1]["pais"] == "ES" and r[1]["fecha"] == "2026-01-03" and r[1]["puntuacion"] == 5
     assert pl.leer_resena("aliexpress", {**_fixture("aliexpress_resenas.json")[0], "buyer_country": "Brazil"})["pais"] is None
+
+
+def test_resenas_traen_el_producto_del_link_pedido():
+    """Ola final F5: Walmart y AliExpress devuelven el link que les mandamos; de ahí sale el id del producto
+    pedido aunque `productId` sea el de una variante."""
+    from nicho.fuentes import plataformas as pl
+    w = _fixture("walmart_resenas.json")[0]
+    assert pl.leer_resena("walmart", w)["producto_pedido"] == "5394318269"
+    sin_eco = {k: v for k, v in w.items() if k != "requestedInput"}
+    assert pl.leer_resena("walmart", sin_eco)["producto_pedido"] == "5394318269"                  # cae a productUrl
+    assert pl.leer_resena("walmart", {**sin_eco, "productUrl": "https://www.walmart.com/ip/Botella-Azul/17345973281?classType=VARIANT"}
+                          )["producto_pedido"] == "17345973281"
+    assert pl.leer_resena("walmart", {k: v for k, v in sin_eco.items() if k != "productUrl"})["producto_pedido"] is None
+    a = _fixture("aliexpress_resenas.json")[0]
+    assert pl.leer_resena("aliexpress", a)["producto_pedido"] == "3256806541493299"
+    assert pl.leer_resena("aliexpress", {**a, "product_url": "https://es.aliexpress.com/item/1005006.html?spm=x"})["producto_pedido"] == "1005006"
+    assert pl.leer_resena("aliexpress", {k: v for k, v in a.items() if k != "product_url"})["producto_pedido"] is None
+    assert pl.leer_resena("aliexpress", {**a, "product_url": "javascript:alert(1)"})["producto_pedido"] is None
+
+
+def test_precio_de_aliexpress_siempre_en_dolares():
+    """Ola final F6: AliExpress busca con country=US y currency=USD: un «$» es dólar aunque el estudio sea de Colombia."""
+    from nicho.fuentes import plataformas as pl
+    base = {"productId": "3256806541493299", "title": "Botella 1L", "productUrl": "https://www.aliexpress.com/item/3256806541493299.html"}
+    p = pl.leer_producto("aliexpress", {**base, "price": "$4.03"}, "CO")
+    assert p["precio"] == 4.03 and p["moneda"] == "USD"
+    assert pl.leer_producto("aliexpress", {**base, "price": 4.03}, "MX")["moneda"] == "USD"                # número sin moneda
+    assert pl.leer_producto("aliexpress", {**base, "price": 4.03, "currency": "EUR"}, "CO")["moneda"] == "EUR"
+    assert pl.leer_producto("aliexpress", base, "CO")["moneda"] is None                                   # sin precio, sin moneda
+
+
+def test_pais_del_comprador_uk_es_gb():
+    """Ola final F8: AliExpress llama «UK» al Reino Unido; el ISO es GB."""
+    from nicho.fuentes import plataformas as pl
+    assert pl._pais_iso("UK") == "GB" and pl._pais_iso("uk") == "GB" and pl._pais_iso("BR") == "BR" and pl._pais_iso("Brazil") is None
+    assert pl.leer_resena("aliexpress", {**_fixture("aliexpress_resenas.json")[0], "buyer_country": "UK"})["pais"] == "GB"

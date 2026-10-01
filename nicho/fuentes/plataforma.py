@@ -110,6 +110,8 @@ class FuentePlataforma(Fuente):
             if not r:
                 continue
             producto = por_id.get(r.get("producto") or "")
+            if producto is None:                     # el link que pedimos (Walmart, AliExpress): `producto` puede ser una variante
+                producto = por_id.get(r.get("producto_pedido") or "")
             if producto is None and por_producto and indice < len(corridas):
                 producto = por_id.get(corridas[indice].get("etiqueta") or "")
             if producto is None and len(productos) == 1:

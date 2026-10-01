@@ -125,18 +125,26 @@ def costo_real(tokens_entrada, tokens_salida, modelo=None):
     return round((tokens_entrada * precios["entrada"] + tokens_salida * precios["salida"]) / 1e6, 4)
 
 
+def _es_otro_mercado(c):
+    return isinstance(c.get("extra"), dict) and c["extra"].get("mercado") == "otro"
+
+
 def estimar_costo(comentarios, modelo=None):
     """Precio ANTES de gastar (spec §4.4): la entrada se cuenta dos veces
     (pasada 1 y repartida en la pasada 2) más el prompt por llamada; la
     salida es lo esperado, con MAX_NUCLEOS en la pasada 2. Redondeado hacia
     arriba al centavo. Más la pasada de completado en su peor caso: un tercer
     reparto de la entrada (los sub-avatares incompletos que vuelven al
-    prompt) y su propia salida por núcleo."""
+    prompt) y su propia salida por núcleo. Cada comentario cuenta con la línea
+    entera que va al prompt (`_linea`: id, fuente, puntuación, contexto y
+    «otro mercado»), y si alguno es de otro mercado cada llamada lleva además
+    la regla (`TOKENS_REGLA_OTRO_MERCADO`, spec Parte 4 §3)."""
     modelo = modelo or modelo_actual()
     sel = seleccionar(comentarios)
-    caracteres = sum(len(c.get("texto") or "") for c in sel)
+    caracteres = sum(len(_linea(c)) for c in sel)
     tokens_texto = int(caracteres * TOKENS_POR_CARACTER)
-    entrada = (tokens_texto * 3 + TOKENS_PROMPT * (1 + 2 * MAX_NUCLEOS)
+    por_llamada = TOKENS_PROMPT + (TOKENS_REGLA_OTRO_MERCADO if any(_es_otro_mercado(c) for c in sel) else 0)
+    entrada = (tokens_texto * 3 + por_llamada * (1 + 2 * MAX_NUCLEOS)
                + TOKENS_SUB_JSON * MAX_NUCLEOS * MAX_SUBS_POR_NUCLEO)
     salida = TOKENS_SALIDA_ESTIMADO_NUCLEOS + (TOKENS_SALIDA_ESTIMADO_SUBS + TOKENS_SALIDA_ESTIMADO_COMPLETAR) * MAX_NUCLEOS
     precios, referencia = _precios(modelo)
@@ -145,19 +153,34 @@ def estimar_costo(comentarios, modelo=None):
             "referencia": referencia, "modelo": modelo, "suficientes": len(sel) >= MIN_COMENTARIOS}
 
 
+ID_PEOR_CASO = 1_000_000          # ids de 7 cifras en las líneas falsas: cubre hasta 9 999 999 comentarios en la base
+
+
+def comentarios_peor_caso():
+    """Los comentarios falsos de `estimar_costo_maximo`: los DOS topes de
+    `seleccionar` llenos a la vez, no solo el de cantidad -- una reseña real
+    puede llegar a 2 000 caracteres, así que un lote de MAX_COMENTARIOS puede
+    alcanzar también MAX_CARACTERES. Cada uno recibe MAX_CARACTERES //
+    MAX_COMENTARIOS caracteres y los primeros MAX_CARACTERES % MAX_COMENTARIOS
+    uno más, para que la suma dé MAX_CARACTERES exacto y `seleccionar` los
+    conserve a todos (la suma corrida nunca pasa el tope). Y cada línea del
+    prompt (`_linea`) lleva lo más largo que puede llevar una reseña real: la
+    fuente de nombre más largo, puntuación, un contexto de 80 caracteres (lo que
+    `_linea` deja del título) y «otro mercado» con el país de nombre más largo
+    -- con eso cada llamada lleva además la regla de otro mercado."""
+    base, resto = divmod(MAX_CARACTERES, MAX_COMENTARIOS)
+    fuente = max(datos.FUENTES, key=len)
+    pais = max(datos.NOMBRES_PAIS, key=lambda k: len(datos.NOMBRES_PAIS[k]))
+    return [{"id": ID_PEOR_CASO + i, "texto": "x" * (base + 1 if i < resto else base), "fuente": fuente, "puntuacion": 5,
+             "fecha": None, "contexto": "x" * 80, "extra": {"mercado": "otro", "pais": pais}}
+            for i in range(MAX_COMENTARIOS)]
+
+
 def estimar_costo_maximo(modelo=None):
     """Peor caso de una generación (lo que la investigación aprueba antes de
-    tener comentarios): los DOS topes de `seleccionar` llenos a la vez, no
-    solo el de cantidad -- una reseña real puede llegar a 2 000 caracteres,
-    así que un lote de MAX_COMENTARIOS puede alcanzar también MAX_CARACTERES.
-    Cada comentario falso recibe MAX_CARACTERES // MAX_COMENTARIOS caracteres
-    y los primeros MAX_CARACTERES % MAX_COMENTARIOS reciben uno más, para que
-    la suma dé MAX_CARACTERES exacto y `seleccionar` los conserve a todos
-    (la suma corrida nunca pasa el tope)."""
-    base, resto = divmod(MAX_CARACTERES, MAX_COMENTARIOS)
-    falsos = [{"id": i, "texto": "x" * (base + 1 if i < resto else base), "fuente": "amazon", "puntuacion": 0, "fecha": None}
-              for i in range(MAX_COMENTARIOS)]
-    return estimar_costo(falsos, modelo)
+    tener comentarios): `estimar_costo` sobre `comentarios_peor_caso()`. Así
+    ningún lote real cuesta más que lo aprobado para la línea de avatares."""
+    return estimar_costo(comentarios_peor_caso(), modelo)
 
 
 # ------------------------------------------------------------- prompts ---
@@ -219,11 +242,15 @@ REGLA_OTRO_MERCADO = ("Mercado del estudio: {pais}. Los comentarios marcados «o
                       "comentarios del mercado del estudio (si esos no alcanzan, infiere lo más probable y termina con «(inferido)»); "
                       "los deseos, los dolores, las soluciones que probaron, las situaciones y momentos de uso y las palabras clave "
                       "pueden salir de todos.")
+# Lo que la regla suma a CADA llamada cuando el lote trae otro mercado (lo cuenta `estimar_costo`): con el
+# país de nombre más largo y la línea en blanco que la separa de los comentarios, a TOKENS_POR_CARACTER.
+TOKENS_REGLA_OTRO_MERCADO = math.ceil(len(REGLA_OTRO_MERCADO.format(pais=max(datos.NOMBRES_PAIS.values(), key=len)) + "\n\n")
+                                      * TOKENS_POR_CARACTER)
 
 
 def _regla_mercado(estudio, comentarios):
     """La regla de otro mercado (spec Parte 4 §3), solo si alguno de estos comentarios es de otro mercado."""
-    if not any(isinstance(c.get("extra"), dict) and c["extra"].get("mercado") == "otro" for c in comentarios or []):
+    if not any(_es_otro_mercado(c) for c in comentarios or []):
         return ""
     pais = (estudio.get("pais") or "").upper()
     return REGLA_OTRO_MERCADO.format(pais=datos.NOMBRES_PAIS.get(pais, pais) or "—") + "\n\n"
