@@ -32,3 +32,16 @@ def guardar(path, data):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     os.replace(tmp, path)
+
+
+def escribir_privado(path, texto):
+    """Escritura atómica de un archivo con secretos (tokens de YouTube/TikTok):
+    solo el usuario del servicio lo puede leer (0600), como meta.json. Con
+    open(..., "w") nacía 0644, legible para cualquier usuario del servidor."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(texto)
+    os.chmod(tmp, 0o600)  # a prueba de umask
+    os.replace(tmp, path)

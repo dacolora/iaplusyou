@@ -12,6 +12,8 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+import _json_store
+
 DEFAULT_TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "token_youtube.json")
 
 
@@ -24,8 +26,7 @@ def _get_credentials(token_path):
     creds = Credentials.from_authorized_user_file(token_path)
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
-        with open(token_path, "w", encoding="utf-8") as f:
-            f.write(creds.to_json())
+        _json_store.escribir_privado(token_path, creds.to_json())
     return creds
 
 

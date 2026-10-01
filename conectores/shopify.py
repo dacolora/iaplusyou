@@ -22,7 +22,7 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 from . import registrar
-from ._http import TIMEOUT_PROBAR, error_generico, json_de, pedir, sesion
+from ._http import TIMEOUT_PROBAR, error_generico, json_de, pedir_tienda, sesion
 from .base import Conector, ErrorConector, limpiar_html, normalizar_pedido, normalizar_producto
 
 VERSION_API = "2025-07"
@@ -175,7 +175,7 @@ class Shopify(Conector):
     def _graphql_una_vez(self, query, variables=None, **kw_http):
         if self._s is None:
             self._s = sesion()
-        r = pedir(self._s, "POST", self._url, nombre=NOMBRE,
+        r = pedir_tienda(self._s, "POST", self._url, nombre=NOMBRE,
                   headers={"X-Shopify-Access-Token": self._token, "Content-Type": "application/json"},
                   json={"query": query, "variables": variables or {}}, **kw_http)
         if r.status_code in (401, 403):

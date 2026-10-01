@@ -28,6 +28,7 @@ que rellena correo=None, correo_verificado=False, session_version=1.
 """
 import os
 import re
+import secrets
 from datetime import datetime
 
 from flask_babel import gettext
@@ -188,10 +189,23 @@ def obtener_hash(usuario):
     return _completar(dict(entry))
 
 
+_HASH_DE_RELLENO = []
+
+
+def _hash_de_relleno():
+    """Un hash cualquiera, calculado una vez, para comparar cuando el usuario
+    no existe: así esa respuesta tarda lo mismo que una contraseña equivocada
+    y el tiempo no delata qué usuarios existen."""
+    if not _HASH_DE_RELLENO:
+        _HASH_DE_RELLENO.append(_hash(secrets.token_hex(16)))
+    return _HASH_DE_RELLENO[0]
+
+
 def verificar(usuario, password):
     """Devuelve el registro del usuario si la contraseña es correcta, o None."""
     entry = cargar().get(usuario)
     if not entry:
+        check_password_hash(_hash_de_relleno(), password)
         return None
     if not check_password_hash(entry["password_hash"], password):
         return None

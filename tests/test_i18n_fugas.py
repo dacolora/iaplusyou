@@ -8,6 +8,7 @@ import re
 import pytest
 
 import idiomas
+from tests.conftest import JPG_VALIDO
 from tests.i18n_util import _con_marca, espanol_visible
 
 CLAVES = [
@@ -448,7 +449,7 @@ def test_catalogo_producto_con_doctrina_en_ingles(admin_en):
     from doctrina import producto as doctrina_producto
     r = admin_en.post("/cliente/acme/productos/crear", headers=MISMO_ORIGEN, content_type="multipart/form-data",
                       data={"nombre": "Blue Cushion", "descripcion": "soft", "categoria": "producto", "volver": "catalogo",
-                            "imagenes": (io.BytesIO(b"\xff\xd8\xff\xe0fake-jpg"), "a.jpg")})
+                            "imagenes": (io.BytesIO(JPG_VALIDO), "a.jpg")})
     assert r.status_code == 302
     pid = tiendas.por_activo("acme")["blue_cushion"]["id"]
     admin_en.post(f"/cliente/acme/productos/{pid}/pruebas", data={"texto": "Filling of 1,200 g", "fuente": "ficha"},

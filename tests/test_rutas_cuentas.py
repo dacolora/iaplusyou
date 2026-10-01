@@ -612,7 +612,9 @@ def test_registro_limita_por_ip_y_el_correo_por_limite(app, monkeypatch):
     c = d.app.test_client()
     r = c.post("/proyectos/nuevo", data=REGISTRO, environ_base={"REMOTE_ADDR": "5.6.7.8"})
     assert r.status_code == 302 and len(app["correos"]) == 1
-    assert claves == ["alta:ip:5.6.7.8", "verif:dueno@acme.com", "verif:ip:5.6.7.8"]
+    # «alta:consulta» va antes de decir si el usuario o el correo existen (tope
+    # aparte, más alto: auditoría de seguridad 2026-10-01).
+    assert claves == ["alta:consulta:ip:5.6.7.8", "alta:ip:5.6.7.8", "verif:dueno@acme.com", "verif:ip:5.6.7.8"]
     # Sexto registro desde la misma IP en la hora: 429 y no se crea nada.
     for i in range(4):
         real(f"alta:ip:5.6.7.8")

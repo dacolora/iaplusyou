@@ -17,6 +17,8 @@ import time
 
 import requests
 
+import _json_store
+
 DEFAULT_TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "token_tiktok.json")
 API_BASE = "https://open.tiktokapis.com/v2"
 MIN_CHUNK_SIZE = 5 * 1024 * 1024  # 5MB
@@ -54,8 +56,7 @@ def _refresh_token(token_data, token_path):
     )
     resp.raise_for_status()
     new_token = resp.json()
-    with open(token_path, "w", encoding="utf-8") as f:
-        json.dump(new_token, f)
+    _json_store.escribir_privado(token_path, json.dumps(new_token))
     return new_token
 
 

@@ -1286,6 +1286,30 @@ one (or localhost); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are Ht
 Lax, Secure when the platform URL is https. Emails go through `notificaciones.enviar(html=)` —
 if SMTP is missing the flows still work and the admin panel shows the warning.
 
+**Seguridad (auditoría 2026-10-01)**: reglas que valen para todo lo nuevo. (1) CSRF: `dashboard._solo_mismo_origen`
+(before_request de la app, corre también para los Blueprints) rechaza todo POST/PUT/PATCH/DELETE que el navegador marque
+de otro sitio (`Sec-Fetch-Site` distinto de `same-origin`/`none`; JSON a un fetch, 403 al resto); la app no recibe
+webhooks: si algún día llega uno, necesita su excepción Y verificar su firma (HMAC, `compare_digest`). (2) Cabeceras:
+`_cabeceras_seguridad` pone `nosniff`, `X-Frame-Options: DENY`, una CSP que solo cierra `frame-ancestors`/`object-src`/
+`base-uri` (todavía hay ~80 `<script>` y ~90 manejadores en línea, y los medios vienen de R2) y HSTS cuando el sitio es
+https. (3) `/trabajo/<job_id>/estado` solo responde al admin o a quien puede entrar al proyecto dueño
+(`trabajos.dueno`: el `cliente` de la fila de la cola o el de `trabajos.iniciar(..., cliente=)`); todo trabajo nuevo
+que la persona sondea lleva su `cliente`, si no su barra no se ve. (4) Login: tope de intentos FALLIDOS por usuario (10)
+y por IP (30) cada 15 min (`cuentas.limite_disponible` mira, `limite_ok` anota), hash de relleno para un usuario que no
+existe, `_abrir_sesion` limpia la sesión y `_verificar_sesion` cierra la que traiga otro rol o proyecto que
+usuarios.json. (5) Subidas: `MAX_CONTENT_LENGTH` = `MAX_BYTES_PETICION` (256 MB, 413 → `_peticion_demasiado_grande`);
+una foto se valida por su contenido (`_foto_subida_invalida`: Pillow + 20 MB), nunca por la extensión; lo que se vuelve a
+servir desde el dominio de la app va con `mimetype` de la lista blanca (`MIMETYPES_MEDIOS`), jamás adivinado;
+`Image.MAX_IMAGE_PIXELS` = 64 MP en Flask y en el worker; un .xlsx pasa por `conectores.base.xlsx_demasiado_grande`.
+(6) SSRF: toda URL que escribe una persona o trae una página ajena se pide con `conectores.url.abrir` (valida el host en
+cada redirección; `host_permitido` rechaza todo lo que no sea `is_global`, también la IPv4 dentro de IPv6), una tienda con
+dirección del cliente con `_http.pedir_tienda` (sin redirecciones: las claves irían al destino) y los links de video sin
+el extractor genérico de yt-dlp. (7) Meta agencia en autoservicio: un portafolio que ya usa otro proyecto (conectado o
+con solicitud) no se lista (`meta_agencia.portafolio_de_otro`), una Página asignada a otro proyecto tampoco, y una Página
+escrita a mano va por «Avisar a Creatv». (8) Tokens de YouTube/TikTok en disco con 0600 (`_json_store.escribir_privado`).
+Dependencias: `requirements.txt` trae pisos verificados con `pip-audit` (`venv/bin/pip install pip-audit && venv/bin/pip-audit`); en el VPS,
+`pip install -U -r requirements.txt` los aplica.
+
 **UI base** (2026-09-25/26, specs `2026-09-25-base-visual-comun` and `2026-09-26-movil`): the
 block «Base visual común (2026-09-25)» at the END of `static/style.css` is the source of truth for
 fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.btn`/classless

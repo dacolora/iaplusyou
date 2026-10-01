@@ -11,6 +11,7 @@ import os
 
 from flask_babel import gettext
 
+from conectores.base import xlsx_demasiado_grande
 from nicho.fuentes.base import ErrorFuente, Fuente, normalizar_comentario
 
 MAX_BYTES = 5 * 1024 * 1024
@@ -50,6 +51,8 @@ def _filas_csv(contenido):
 
 def _filas_xlsx(contenido):
     from openpyxl import load_workbook
+    if xlsx_demasiado_grande(contenido):
+        raise ErrorFuente(gettext("No pude abrir el Excel (¿está dañado o protegido?)."))
     try:
         wb = load_workbook(io.BytesIO(contenido), read_only=True, data_only=True)
     except Exception:  # noqa: BLE001 — openpyxl lanza de todo con un archivo dañado

@@ -82,38 +82,52 @@ def host_permitido(url):
             ip = ipaddress.ip_address(ip_bruta)
         except ValueError:
             return False
+        # "::ffff:127.0.0.1" es 127.0.0.1: se juzga la IPv4 de adentro.
+        if ip.version == 6 and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        # `not is_global` cubre además lo que is_private no marca, como la
+        # red compartida 100.64.0.0/10 (CGNAT, Tailscale).
         if (ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast
-                or ip.is_reserved or ip.is_unspecified):
+                or ip.is_reserved or ip.is_unspecified or not ip.is_global):
             return False
     return True
 
 
 # --- descarga -----------------------------------------------------------------
 
-def _descargar(url):
+def abrir(url, cabeceras=None, timeout=TIMEOUT, max_redirecciones=MAX_REDIRECCIONES):
+    """GET en streaming a una URL que puso una persona o una página externa,
+    sin salir NUNCA de hosts públicos: valida el host antes de pedir y en cada
+    redirección (requests las seguiría solo, sin mirar adónde van — p. ej. a
+    169.254.169.254). Devuelve la respuesta abierta (quien llama la cierra);
+    `ErrorConector` si el host no está permitido o no se pudo abrir."""
     if not host_permitido(url):
         raise ErrorConector("Esa URL no está permitida (apunta a una red interna o local).")
     redirecciones = 0
     while True:
         try:
-            respuesta = requests.get(url, headers=_CABECERAS, timeout=TIMEOUT, stream=True, allow_redirects=False)
+            respuesta = requests.get(url, headers=cabeceras or _CABECERAS, timeout=timeout, stream=True,
+                                     allow_redirects=False)
         except requests.RequestException as e:
             raise ErrorConector(f"No se pudo abrir la URL ({type(e).__name__}). Revisa que sea pública y esté bien escrita.")
-        if respuesta.status_code in _CODIGOS_REDIRECCION:
-            cerrar = getattr(respuesta, "close", None)
-            if cerrar:
-                cerrar()
-            if redirecciones >= MAX_REDIRECCIONES:
-                raise ErrorConector("La página redirige demasiadas veces.")
-            ubicacion = respuesta.headers.get("Location")
-            if not ubicacion:
-                raise ErrorConector("La página redirigió sin indicar destino.")
-            redirecciones += 1
-            url = urljoin(url, ubicacion)
-            if not host_permitido(url):
-                raise ErrorConector("Esa URL no está permitida (apunta a una red interna o local).")
-            continue
-        break
+        if respuesta.status_code not in _CODIGOS_REDIRECCION:
+            return respuesta
+        cerrar = getattr(respuesta, "close", None)
+        if cerrar:
+            cerrar()
+        if redirecciones >= max_redirecciones:
+            raise ErrorConector("La página redirige demasiadas veces.")
+        ubicacion = respuesta.headers.get("Location")
+        if not ubicacion:
+            raise ErrorConector("La página redirigió sin indicar destino.")
+        redirecciones += 1
+        url = urljoin(url, ubicacion)
+        if not host_permitido(url):
+            raise ErrorConector("Esa URL no está permitida (apunta a una red interna o local).")
+
+
+def _descargar(url):
+    respuesta = abrir(url)
     try:
         if respuesta.status_code >= 400:
             raise ErrorConector(f"La página respondió con error HTTP {respuesta.status_code}.")
