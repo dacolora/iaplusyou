@@ -4540,8 +4540,13 @@ def _calcular_tablero(cliente):
         datos = None
         print(f"[aviso] Tablero de {cliente}: no pude cargar los datos de una vez: {type(e).__name__}")
     partes = {
+        # El mes en curso solo lo usa el chip del menú lateral (_pauta_mes);
+        # los tiles son el total desde el inicio y debajo va el mes a mes.
         "resumen": lambda: tablero.resumen_mes(cliente, ahora, datos=datos),
-        "resumen_triple_whale": lambda: tablero.resumen_mes_triple_whale(cliente, ahora, datos=datos),
+        "total": lambda: tablero.resumen_total(cliente, ahora, datos=datos),
+        "total_triple_whale": lambda: tablero.resumen_total_triple_whale(cliente, ahora, datos=datos),
+        "meses": lambda: tablero.mes_a_mes(cliente, ahora, datos=datos),
+        "generacion_total": lambda: gastos.resumen_total(cliente, ahora),
         # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
         "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
         "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
@@ -4585,12 +4590,14 @@ _TABLERO_LOCK = threading.Lock()
 def _clave_tablero(cliente):
     """(último id de metrica_snapshot, propuestas pendientes, nº de
     experimentos y su último actualizado_en, último actualizado_en de pieza,
-    nº y último actualizado_en de publicación orgánica) del proyecto: cinco
+    nº y último actualizado_en de publicación orgánica, copia de Triple
+    Whale, nº/último id/suma de los cobros de generación) del proyecto:
     consultas baratas con índice. Cualquier cambio que
     el tablero pinte (snapshot del worker, propuesta del motor, estado o
-    veredicto tocado por el dueño, publicación orgánica) mueve la clave."""
+    veredicto tocado por el dueño, publicación orgánica, cobro de un
+    proveedor) mueve la clave."""
     ms, ep, pr, ex, pub = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento, db.publicacion
-    tw = db.triple_whale
+    tw, gs = db.triple_whale, db.gasto
     with db.conectar() as con:
         ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
             ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
@@ -4605,7 +4612,12 @@ def _clave_tablero(cliente):
         # La tienda según Triple Whale (spec 2026-09-28 §13): conectar,
         # desconectar o una copia nueva mueven sus tiles.
         triple = con.execute(sa.select(sa.func.max(tw.c.actualizado_en)).where(tw.c.cliente == cliente)).scalar()
-    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple)
+        # La generación (tile total y columna del mes a mes): un cobro nuevo
+        # o uno que se actualiza (misma referencia, otro usd) mueve la clave.
+        cobros = con.execute(sa.select(sa.func.count(), sa.func.max(gs.c.id), sa.func.sum(gs.c.usd))
+                             .where(gs.c.cliente == cliente)).first()
+    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple,
+            tuple(cobros))
 
 
 def invalidar_tablero(cliente=None):
