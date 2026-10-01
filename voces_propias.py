@@ -16,6 +16,7 @@ import time
 import uuid
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import audios
 import db
@@ -231,8 +232,9 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
         r = fal_audio.disenar_voz_minimax(payload["descripcion"], frase)
     usd = float(r["costo_usd"])
     # fal ya cobró: el gasto queda aunque lo que sigue falle.
-    gastos.registrar_seguro(cliente, "voz_propia", usd, f"voz_propia:{forma}{ref_sufijo}",
-                            detalle=f"MiniMax · {'clonar' if forma == 'clonar' else 'diseñar'} voz · {nombre}",
+    detalle = (gettext("MiniMax · clonar voz · %(nombre)s", nombre=nombre) if forma == "clonar"
+               else gettext("MiniMax · diseñar voz · %(nombre)s", nombre=nombre))
+    gastos.registrar_seguro(cliente, "voz_propia", usd, f"voz_propia:{forma}{ref_sufijo}", detalle=detalle,
                             proveedor=PROVEEDOR, extra={"voice_id": r["voice_id"]})
     if reportar:
         reportar(1)
@@ -241,7 +243,8 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
     try:
         t = fal_audio.tts_minimax(frase, r["voice_id"], idioma)
         gastos.registrar_seguro(cliente, "locucion", float(t["costo_usd"]), f"voz_propia_estreno{ref_sufijo}",
-                                detalle=f"MiniMax · estreno · {nombre}", proveedor=PROVEEDOR)
+                                detalle=gettext("MiniMax · estreno · %(nombre)s", nombre=nombre),
+                                proveedor=PROVEEDOR)
         fuente, estrenada = t["url"], True
     except Exception:
         log.warning("voz propia %s: no pude estrenarla", r["voice_id"], exc_info=True)
@@ -281,7 +284,7 @@ def muestra(cliente, valor, idioma):
     ValueError si la voz no es de este proyecto o el idioma no existe."""
     vp = resolver(cliente, valor)
     if not vp or idioma not in audios.IDIOMAS:
-        raise ValueError("voz o idioma desconocidos")
+        raise ValueError(gettext("voz o idioma desconocidos"))
     if idioma == vp["idioma_muestra"] and vp["url"] and vp["estrenada"]:
         return vp["url"]
     h = _hash_muestra(vp["voice_id"], idioma)
@@ -292,7 +295,9 @@ def muestra(cliente, valor, idioma):
         usd = float(t["costo_usd"])
         gastos.registrar_seguro(cliente, "locucion", usd,
                                 f"muestra_propia:{vp['id']}:{idioma}:{int(time.time() * 1000)}",
-                                detalle=f"muestra de voz propia · {vp['nombre']} · {idioma}", proveedor=PROVEEDOR)
+                                detalle=gettext("muestra de voz propia · %(nombre)s · %(idioma)s",
+                                                nombre=vp["nombre"], idioma=idioma),
+                                proveedor=PROVEEDOR)
         marcar_estrenada(cliente, vp["id"])
         url, bytes_, dur = _subir_mp3(cliente, t["url"], f"clientes/{cliente}/materiales/muestra_propia_{h[:16]}.mp3")
         return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": bytes_, "duracion_ms": dur,

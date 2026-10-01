@@ -120,9 +120,9 @@ def tts_minimax(texto, voice_id, idioma, velocidad=None, timeout=180):
     clonar/diseñar) forzando el idioma con `language_boost`. Devuelve
     {"url", "costo_usd", "duracion_ms"}."""
     if not texto:
-        raise ValueError("fal_audio.tts_minimax: texto vacío.")
+        raise ValueError(gettext("fal_audio.tts_minimax: texto vacío."))
     if idioma not in IDIOMAS_MINIMAX:
-        raise ValueError(f"fal_audio.tts_minimax: idioma sin MiniMax: {idioma!r}")
+        raise ValueError(gettext("fal_audio.tts_minimax: idioma sin MiniMax: %(idioma)s", idioma=repr(idioma)))
     voice_setting = {"voice_id": voice_id}
     if velocidad is not None:
         voice_setting["speed"] = round(float(velocidad), 2)
@@ -136,7 +136,8 @@ def tts_minimax(texto, voice_id, idioma, velocidad=None, timeout=180):
     data = fal_client.llamar(MODELO_MINIMAX_TTS, payload, timeout=timeout)
     url = (data.get("audio") or {}).get("url")
     if not url:
-        raise RuntimeError(f"fal.ai ({MODELO_MINIMAX_TTS}) no devolvió una URL de audio: {data}")
+        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
+                                   modelo=MODELO_MINIMAX_TTS, datos=data))
     return {"url": url, "costo_usd": round(len(texto) * COSTO_MINIMAX_POR_CARACTER, 4),
             "duracion_ms": int(data.get("duration_ms") or 0)}
 
@@ -150,7 +151,8 @@ def clonar_voz_minimax(audio_url, preview_text, timeout=300):
     data = fal_client.llamar(MODELO_MINIMAX_CLONAR, payload, timeout=timeout)
     voice_id = data.get("custom_voice_id")
     if not voice_id:
-        raise RuntimeError(f"fal.ai ({MODELO_MINIMAX_CLONAR}) no devolvió custom_voice_id: {data}")
+        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s",
+                                   modelo=MODELO_MINIMAX_CLONAR, datos=data))
     costo = round(COSTO_CLONAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_CLON_POR_CARACTER, 4)
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
@@ -162,7 +164,8 @@ def disenar_voz_minimax(prompt, preview_text, timeout=300):
     data = fal_client.llamar(MODELO_MINIMAX_DISENAR, payload, timeout=timeout)
     voice_id = data.get("custom_voice_id")
     if not voice_id:
-        raise RuntimeError(f"fal.ai ({MODELO_MINIMAX_DISENAR}) no devolvió custom_voice_id: {data}")
+        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s",
+                                   modelo=MODELO_MINIMAX_DISENAR, datos=data))
     costo = round(COSTO_DISENAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 

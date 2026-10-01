@@ -70,6 +70,7 @@ PLANTILLAS_TRADUCIDAS = [
     # Merge de main (2026-09-30, Flow Plus: imágenes por escena): ya viene con _()
     # (0 hallazgos del detector), como el resto de los _gpg_*.
     "_gpg_escenas.html",
+    "_audios_mis_voces.html",   # Audios Europa (2026-09-30): Crear › Audios › Mis voces, ya con _()
 ]
 
 

@@ -17,6 +17,7 @@ import tempfile
 import time
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
 import gastos
@@ -351,7 +352,7 @@ def muestra(voz, idioma):
     ValueError si la voz o el idioma no existen; los errores de fal/R2 se
     propagan."""
     if voz not in voces() or idioma not in IDIOMAS:
-        raise ValueError("voz o idioma desconocidos")
+        raise ValueError(gettext("voz o idioma desconocidos"))
     h = hash_muestra(voz, idioma)
     frase = FRASES_MUESTRA[idioma].format(voz=voz)
 
@@ -367,7 +368,8 @@ def muestra(voz, idioma):
         # gasto y solo uno de los dos pagos quedaba anotado.
         ref = f"muestra_voz:{voz}:{idioma}:v{VERSION_MUESTRA}:{int(time.time() * 1000)}"
         gastos.registrar_seguro(CLIENTE_MUESTRAS, "locucion", usd, ref,
-                                detalle=f"muestra de voz · {voz} · {idioma}", proveedor="fal/elevenlabs")
+                                detalle=gettext("muestra de voz · %(voz)s · %(idioma)s", voz=voz, idioma=idioma),
+                                proveedor="fal/elevenlabs")
         with tempfile.TemporaryDirectory() as tmp:
             local = descargar_url(r["url"], os.path.join(tmp, "muestra.mp3"))
             key = f"clientes/{CLIENTE_MUESTRAS}/materiales/muestra_{voz}_{idioma}_v{VERSION_MUESTRA}.mp3"

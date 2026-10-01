@@ -8379,6 +8379,18 @@ msgid "Mi música · gratis"
 msgstr "My music · free"
 
 #, python-format
+msgid "MiniMax · clonar voz · %(nombre)s"
+msgstr "MiniMax · clone voice · %(nombre)s"
+
+#, python-format
+msgid "MiniMax · diseñar voz · %(nombre)s"
+msgstr "MiniMax · design voice · %(nombre)s"
+
+#, python-format
+msgid "MiniMax · estreno · %(nombre)s"
+msgstr "MiniMax · try-out · %(nombre)s"
+
+#, python-format
 msgid "Mira el detalle en la pestaña Triple Whale del proyecto %(cliente)s."
 msgstr "See the details in the Triple Whale tab of the %(cliente)s project."
 
@@ -14616,6 +14628,10 @@ msgid "expresiva"
 msgstr "expressive"
 
 #, python-format
+msgid "fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s"
+msgstr "fal.ai (%(modelo)s) didn't return custom_voice_id: %(datos)s"
+
+#, python-format
 msgid "fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s"
 msgstr "fal.ai (%(modelo)s) didn't return an audio URL: %(datos)s"
 
@@ -14624,6 +14640,13 @@ msgstr "fal.ai (voice and music)"
 
 msgid "fal_audio.tts: texto vacío."
 msgstr "fal_audio.tts: empty text."
+
+#, python-format
+msgid "fal_audio.tts_minimax: idioma sin MiniMax: %(idioma)s"
+msgstr "fal_audio.tts_minimax: language not supported by MiniMax: %(idioma)s"
+
+msgid "fal_audio.tts_minimax: texto vacío."
+msgstr "fal_audio.tts_minimax: empty text."
 
 msgid "falla"
 msgstr "fails"
@@ -15114,6 +15137,14 @@ msgstr "engine"
 
 msgid "moverse."
 msgstr "move."
+
+#, python-format
+msgid "muestra de voz propia · %(nombre)s · %(idioma)s"
+msgstr "custom voice sample · %(nombre)s · %(idioma)s"
+
+#, python-format
+msgid "muestra de voz · %(voz)s · %(idioma)s"
+msgstr "voice sample · %(voz)s · %(idioma)s"
 
 msgid "musica"
 msgstr "music"
@@ -16067,6 +16098,9 @@ msgstr "voice"
 
 msgid "voz en off"
 msgstr "voice-over"
+
+msgid "voz o idioma desconocidos"
+msgstr "unknown voice or language"
 
 msgid "voz protagonista"
 msgstr "voice first"
