@@ -156,8 +156,8 @@ def panel(cliente):
     return render_template("_gpg_panel.html", **ctx)
 
 
-def _lanzar_lectura(lote_id):
-    trabajos.iniciar(f"guion_leer_{lote_id}", lambda: lectura.leer_lote(lote_id), duracion_estimada=60)
+def _lanzar_lectura(cliente, lote_id):
+    trabajos.iniciar(f"guion_leer_{lote_id}", lambda: lectura.leer_lote(lote_id), duracion_estimada=60, cliente=cliente)
 
 
 @bp.post("/lotes")
@@ -177,7 +177,7 @@ def lote_crear(cliente):
             lote_id = datos.crear_lote(cliente, cuerpo.get("texto"))
     except ErrorRefinador as e:
         return _error(e)
-    _lanzar_lectura(lote_id)
+    _lanzar_lectura(cliente, lote_id)
     return jsonify({"lote_id": lote_id}), 202
 
 
@@ -228,7 +228,7 @@ def lote_reintentar(cliente, lid):
         datos.reintentar_lote(cliente, lid)
     except ErrorRefinador as e:
         return _error(e)
-    _lanzar_lectura(lid)
+    _lanzar_lectura(cliente, lid)
     return jsonify({"lote_id": lid}), 202
 
 
@@ -331,7 +331,7 @@ def video_recorte_proponer(cliente, vid):
         datos.empezar(cliente, vid, "recortando", ("configurando",))
     except ErrorRefinador as e:
         return _error(e)
-    trabajos.iniciar(f"guion_recorte_{vid}", lambda: recorte.proponer(vid), duracion_estimada=40)
+    trabajos.iniciar(f"guion_recorte_{vid}", lambda: recorte.proponer(vid), duracion_estimada=40, cliente=cliente)
     return jsonify({"video_id": vid}), 202
 
 
@@ -356,7 +356,7 @@ def video_armar(cliente, vid):
         datos.empezar(cliente, vid, "armando", ("configurando", "invalido", "error"))
     except ErrorRefinador as e:
         return _error(e)
-    trabajos.iniciar(f"guion_armar_{vid}", lambda: clips.armar(vid), duracion_estimada=300)
+    trabajos.iniciar(f"guion_armar_{vid}", lambda: clips.armar(vid), duracion_estimada=300, cliente=cliente)
     return jsonify({"video_id": vid}), 202
 
 
@@ -407,7 +407,7 @@ def video_imagenes(cliente, vid):
         datos.empezar_imagenes(cliente, vid)
     except ErrorRefinador as e:
         return _error(e)
-    trabajos.iniciar(f"guion_imagenes_{vid}", lambda: imagenes.escribir(vid), duracion_estimada=60)
+    trabajos.iniciar(f"guion_imagenes_{vid}", lambda: imagenes.escribir(vid), duracion_estimada=60, cliente=cliente)
     return jsonify({"video_id": vid}), 202
 
 

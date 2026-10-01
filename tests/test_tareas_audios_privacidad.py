@@ -113,7 +113,9 @@ def test_la_grabacion_borrada_sigue_mostrando_su_mensaje(entorno, monkeypatch):
 
 def test_el_estado_del_trabajo_nunca_muestra_el_error_del_proveedor(entorno, monkeypatch):
     """De punta a punta: la tarea falla en el worker y ni la fila `tarea` ni lo
-    que responde /trabajo/<job_id>/estado (sin sesión) traen el cuerpo de fal."""
+    que responde /trabajo/<job_id>/estado traen el cuerpo de fal. Desde la
+    auditoría de seguridad 2026-10-01 ese estado solo se le da a quien puede
+    entrar al proyecto; sin sesión, el trabajo «no existe»."""
     import cola
     import dashboard
     import tareas
@@ -129,6 +131,11 @@ def test_el_estado_del_trabajo_nunca_muestra_el_error_del_proveedor(entorno, mon
                            .where(db.tarea.c.job_id == jid)).first()
     assert fila.estado == "error" and _sin_secreto(fila.error) and _sin_secreto(fila.mensaje)
     dashboard.app.config["TESTING"] = True
-    estado = dashboard.app.test_client().get(f"/trabajo/{jid}/estado").get_json()
+    anonimo = dashboard.app.test_client().get(f"/trabajo/{jid}/estado").get_json()
+    assert anonimo["estado"] == "desconocido" and anonimo["mensaje"] is None
+    c = dashboard.app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    estado = c.get(f"/trabajo/{jid}/estado").get_json()
     assert estado["estado"] == "error" and "No pude crear la voz; intenta de nuevo (RuntimeError)." in estado["mensaje"]
     assert _sin_secreto(json.dumps(estado, ensure_ascii=False))

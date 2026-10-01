@@ -49,8 +49,11 @@ def main():
     flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_PATH, SCOPES)
     creds = flow.run_local_server(port=0)
 
-    with open(token_path, "w", encoding="utf-8") as f:
+    # 0600: el token da acceso al canal; nadie más en la máquina debe leerlo.
+    fd = os.open(token_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(creds.to_json())
+    os.chmod(token_path, 0o600)
 
     print(f"Listo. Autorización guardada en {token_path}")
 

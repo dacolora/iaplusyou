@@ -75,12 +75,22 @@
       try { document.dispatchEvent(new CustomEvent('crear:modo', { detail: { modo: m } })); } catch (e) {}
     }
     botones.forEach(function (b) { b.addEventListener('click', function () { activar(b.dataset.modo); }); });
-    var h = location.hash.replace('#', '').split('?')[0];
+    // El modo que pide el hash (#cambiar o el viejo #calzado, #flowplus,
+    // #audios, #hablado, #referencias); null si el hash no es un modo.
+    function modoDelHash() {
+      var h = location.hash.replace('#', '').split('?')[0];
+      if (h === 'calzado') return 'cambiar';
+      return Object.prototype.hasOwnProperty.call(paneles, h) ? h : null;
+    }
     var guardado = null;
     try { guardado = localStorage.getItem(KEY); } catch (e) {}
     // #flowplus: este script abre el modo; el de cliente.html abre la pestaña Crear.
-    activar((h === 'cambiar' || h === 'calzado') ? 'cambiar'
-      : (h === 'flowplus' ? 'flowplus' : (h === 'audios' ? 'audios' : (h === 'hablado' ? 'hablado'
-        : (h === 'referencias' ? 'referencias' : (guardado || 'referencias'))))));
+    activar(modoDelHash() || guardado || 'referencias');
+    // Un enlace a un modo estando ya en la página cambia solo el hash: sin esto
+    // cliente.html abría la pestaña Crear pero el modo seguía siendo el de antes.
+    window.addEventListener('hashchange', function () {
+      var m = modoDelHash();
+      if (m) activar(m);
+    });
   })();
 </script>

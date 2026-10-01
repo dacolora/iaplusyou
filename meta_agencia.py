@@ -541,33 +541,56 @@ def cuentas_asignadas():
 
 # ---------- autoservicio del cliente (spec 2026-09-20 §2.2) ----------
 
+def paginas_asignadas():
+    """{page_id: cliente} de los proyectos en modo agencia."""
+    return {d["page_id"]: c for c, d in proyectos_asignados().items() if d.get("page_id")}
+
+
+def portafolio_de_otro(portafolio_id, cliente):
+    """True si OTRO proyecto ya usa ese portafolio: conectado en modo agencia
+    con él, o con una solicitud pendiente para él.
+
+    Auditoría de seguridad 2026-10-01: el id de un portafolio no es secreto y
+    era la única prueba de que los activos son de quien los pide; con él,
+    cualquier cuenta registrada podía ver los activos de otro cliente de
+    Creatv y conectar su cuenta publicitaria o su Página. Ahora el
+    autoservicio solo sirve para el PRIMER proyecto que usa un portafolio; los
+    demás pasan por «Avisar a Creatv», donde el admin comprueba de quién es."""
+    portafolio_id = str(portafolio_id or "").strip()
+    if not portafolio_id:
+        return False
+    for otro in _clientes_en_modo_agencia():
+        if otro != cliente and str((meta_conexion._cargar_crudo(otro) or {}).get("portafolio_cliente_id") or "") == portafolio_id:
+            return True
+    return any(s.get("portafolio_id") == portafolio_id and s.get("cliente") != cliente for s in solicitudes())
+
+
 def activos_de_portafolio(portafolio_id, cliente=None, forzar=False):
     """Cuentas y Páginas de socio cuyo dueño es ese portafolio, sin las
-    cuentas ya asignadas a OTRO proyecto (`cliente` es el que pregunta: su
-    propia cuenta sí se muestra). `paginas_sin_dueno` es True cuando hay
-    Páginas de socio pero Meta no dijo de quién es ninguna (la pantalla pide
-    entonces el id de la Página a mano)."""
+    cuentas ni las Páginas ya asignadas a OTRO proyecto (`cliente` es el que
+    pregunta: las suyas sí se muestran). `paginas_sin_dueno` es True cuando
+    hay Páginas de socio pero Meta no dijo de quién es ninguna (la pantalla
+    manda entonces a «Avisar a Creatv»: una Página elegida por id no prueba
+    de quién es). MetaAgenciaError si otro proyecto ya usa el portafolio
+    (`portafolio_de_otro`)."""
     portafolio_id = str(portafolio_id or "").strip()
     if not portafolio_id:
         raise MetaAgenciaError(gettext("Falta el id de tu portafolio comercial."))
+    if portafolio_de_otro(portafolio_id, cliente):
+        raise MetaAgenciaError(gettext(
+            "Ese portafolio ya está conectado a otro proyecto de Creatv. Si es tuyo, usa «Avisar a Creatv» "
+            "y lo revisamos."))
     activos = listar_activos(forzar=forzar)
     ocupadas = cuentas_asignadas()
+    paginas_ocupadas = paginas_asignadas()
     cuentas = [a for a in activos["ad_accounts"]
                if a["origen"] == "cliente" and a["business_id"] == portafolio_id
                and ocupadas.get(a["id"]) in (None, cliente)]
     de_socios = [p for p in activos["pages"] if p["origen"] == "cliente"]
-    paginas = [p for p in de_socios if p["business_id"] == portafolio_id]
+    paginas = [p for p in de_socios if p["business_id"] == portafolio_id
+               and paginas_ocupadas.get(p["id"]) in (None, cliente)]
     return {
         "ad_accounts": cuentas,
         "pages": paginas,
         "paginas_sin_dueno": bool(de_socios) and all(p["business_id"] is None for p in de_socios),
     }
-
-
-def pagina_de_socio(page_id):
-    """La Página de socio con ese id (respaldo cuando Meta no entrega el
-    dueño), o None si no está compartida con el Business."""
-    page_id = str(page_id or "").strip()
-    if not page_id:
-        return None
-    return next((p for p in listar_activos()["pages"] if p["origen"] == "cliente" and p["id"] == page_id), None)

@@ -168,6 +168,20 @@ def consumir(tipo, token):
 
 # --- límites --------------------------------------------------------------
 
+def limite_disponible(clave, maximo=LIMITE_MAXIMO, ventana_s=LIMITE_VENTANA_S):
+    """Como `limite_ok` pero sin anotar nada: True si en la ventana hubo menos
+    de `maximo` intentos. El login la usa para contar solo los fallidos (mira
+    con esta, anota con `limite_ok` cuando la contraseña no sirvió)."""
+    with db.conectar() as con:
+        crudo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == f"limite:{clave}")).scalar()
+    try:
+        marcas = [float(t) for t in (json.loads(crudo) if crudo else [])]
+    except (TypeError, ValueError):
+        marcas = []
+    desde = time.time() - ventana_s
+    return sum(1 for t in marcas if t > desde) < maximo
+
+
 def limite_ok(clave, maximo=LIMITE_MAXIMO, ventana_s=LIMITE_VENTANA_S):
     """Ventana deslizante en kv (`limite:<clave>` = JSON con timestamps).
     True si todavía cabe otro intento (y lo anota); False si en la ventana ya

@@ -3877,6 +3877,9 @@ msgstr "From the catalog (optional, %(n)s) →"
 msgid "Del sprint: %(marcas)s. Escribe aquí para cambiarlas solo en esta campaña."
 msgstr "From the sprint: %(marcas)s. Write here to change them only for this campaign."
 
+msgid "Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo."
+msgstr "Too many failed attempts. Wait a few minutes and try again."
+
 msgid "Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo."
 msgstr "Too many sign-ups in a row from this connection. Wait a while and try again."
 
@@ -4845,6 +4848,9 @@ msgstr "The video"
 msgid "El video %(nombre)s se subió, pero no pude extraer su fotograma de referencia (no se puede usar hasta resolver esto): %(error)s"
 msgstr "The video %(nombre)s was uploaded, but I couldn't extract its reference frame (it can't be used until this is fixed): %(error)s"
 
+msgid "El video del link pesa demasiado."
+msgstr "The video at that link is too large."
+
 #, python-format
 msgid "El video dura %(total)s s y el objetivo es %(objetivo)s s."
 msgstr "The video is %(total)s s long and the target is %(objetivo)s s."
@@ -5366,9 +5372,6 @@ msgstr "It's a cap: each run carries its own charge ceiling and the real spend s
 msgid "Esa Página no aparece entre las de tu portafolio; vuelve a buscar."
 msgstr "That Page doesn't show up among your portfolio's; search again."
 
-msgid "Esa Página no está compartida con Creatv; revisa el paso 2 de la guía."
-msgstr "That Page isn't shared with Creatv; check step 2 of the guide."
-
 msgid "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en Facebook."
 msgstr "That Page has no Instagram linked: Reels won't publish until it's linked on Facebook."
 
@@ -5856,6 +5859,9 @@ msgstr "That hook doesn't exist in the script."
 msgid "Ese idioma no está disponible."
 msgstr "That language isn't available."
 
+msgid "Ese link no está permitido (apunta a una red interna o local)."
+msgstr "That link isn't allowed (it points to an internal or local network)."
+
 msgid "Ese link no parece de una página de Notion."
 msgstr "That link doesn't look like a Notion page."
 
@@ -5889,6 +5895,9 @@ msgstr "That country has no ad set on Meta."
 
 msgid "Ese pedido ya no está abierto."
 msgstr "That request is no longer open."
+
+msgid "Ese portafolio ya está conectado a otro proyecto de Creatv. Si es tuyo, usa «Avisar a Creatv» y lo revisamos."
+msgstr "That portfolio is already connected to another Creatv project. If it's yours, use “Let Creatv know” and we'll review it."
 
 msgid "Ese precio es para un guion de unas 750 palabras; uno más largo cuesta un poco más."
 msgstr "That price is for a script of about 750 words; a longer one costs a bit more."
@@ -7341,9 +7350,6 @@ msgstr "How does your product help them achieve that status/characteristics?"
 msgid "ID de Creatv"
 msgstr "Creatv's ID"
 
-msgid "ID de tu Página (Meta no nos dijo de quién es cada Página compartida)"
-msgstr "Your Page's ID (Meta didn't tell us who owns each shared Page)"
-
 msgid "ID de tu Página (opcional)"
 msgstr "Your Page's ID (optional)"
 
@@ -8016,6 +8022,10 @@ msgstr "The idea doesn't have an angle with a promise yet."
 msgid "La idea ya tiene una pieza generada; no se reescribió."
 msgstr "The idea already has a generated piece; it wasn't rewritten."
 
+#, python-format
+msgid "La imagen %(nombre)s pesa más de %(mb)s MB."
+msgstr "The image %(nombre)s is larger than %(mb)s MB."
+
 msgid "La imagen es chica: quedó lo más grande posible, pero no llega a llenar toda la pantalla."
 msgstr "The image is small: it's as large as possible, but it doesn't fill the whole screen."
 
@@ -8549,6 +8559,10 @@ msgstr "What must never change in this asset"
 msgid "Lo que sale:"
 msgstr "What's coming out:"
 
+#, python-format
+msgid "Lo que subiste pesa más de %(mb)s MB."
+msgstr "What you uploaded is larger than %(mb)s MB."
+
 msgid "Lo que tomó construirlo"
 msgstr "What it took to build this"
 
@@ -8857,6 +8871,9 @@ msgstr "Meta isn't connected: connect it in Settings to launch and measure exper
 #, python-format
 msgid "Meta no lo está mostrando: %(motivo)s"
 msgstr "Meta isn't showing it: %(motivo)s"
+
+msgid "Meta no nos dijo de quién es cada Página compartida. Conecta sin Página o usa «Avisar a Creatv» (abajo) con el ID de tu Página y la conectamos nosotros."
+msgstr "Meta didn't tell us who owns each shared Page. Connect without a Page, or use “Let Creatv know” (below) with your Page's ID and we'll connect it for you."
 
 #, python-format
 msgid "Meta no termina de paginar %(edge)s después de %(n)s páginas — parece un bucle; revisa el Business o avisa a soporte."
@@ -9627,6 +9644,10 @@ msgid "No pude leer la foto %(archivo)s."
 msgstr "I couldn't read the photo %(archivo)s."
 
 #, python-format
+msgid "No pude leer la imagen %(nombre)s."
+msgstr "I couldn't read the image %(nombre)s."
+
+#, python-format
 msgid "No pude leer los activos del Business: %(error)s"
 msgstr "Couldn't read the Business assets: %(error)s"
 
@@ -10386,6 +10407,9 @@ msgstr "To connect MercadoLibre, <code>FLASK_SECRET_KEY</code> is missing in the
 #, python-format
 msgid "Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>%(redirect)s</code>)."
 msgstr "To connect MercadoLibre, <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code> (app at developers.mercadolibre.com with <code>offline_access</code> permission and redirect <code>%(redirect)s</code>)."
+
+msgid "Para conectar una Página escribiendo su ID, usa «Avisar a Creatv»: la revisamos y la conectamos nosotros."
+msgstr "To connect a Page by typing its ID, use “Let Creatv know”: we'll review it and connect it for you."
 
 msgid "Para grabar, abre el editor desde su dirección segura (https)."
 msgstr "To record, open the editor from its secure address (https)."
@@ -12734,6 +12758,10 @@ msgstr "Upload at least one photo."
 
 msgid "Sube al menos una referencia de marca (imagen o video) primero."
 msgstr "Upload at least one brand reference (image or video) first."
+
+#, python-format
+msgid "Sube máximo %(n)s archivos a la vez."
+msgstr "Upload at most %(n)s files at a time."
 
 msgid "Sube solo música tuya o con licencia."
 msgstr "Upload only music you own or have licensed."

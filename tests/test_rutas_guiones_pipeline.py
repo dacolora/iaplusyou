@@ -16,7 +16,7 @@ def app(base_temporal, monkeypatch, tmp_path):
         (tmp_path / "clientes" / c).mkdir(parents=True)
     iniciados = []
     monkeypatch.setattr(trabajos, "iniciar",
-                        lambda job_id, fn, duracion_estimada=60, etapas=None: iniciados.append((job_id, fn)) or True)
+                        lambda job_id, fn, duracion_estimada=60, etapas=None, cliente=None: iniciados.append((job_id, fn)) or True)
     dashboard.app.config["TESTING"] = True
     c = dashboard.app.test_client()
     with c.session_transaction() as s:

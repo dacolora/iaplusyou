@@ -21,6 +21,15 @@ def fixture(nombre):
         return json.load(f)
 
 
+@pytest.fixture(autouse=True)
+def _dns_publica(monkeypatch):
+    """Woo y la Admin API de Shopify solo llaman a hosts públicos
+    (`_http.pedir_tienda`): los dominios de prueba resuelven a una IP pública.
+    Los tests de SSRF pisan esto con su propio monkeypatch."""
+    from conectores import url as conector_url
+    monkeypatch.setattr(conector_url.socket, "getaddrinfo", lambda host, *a, **kw: [(2, 1, 6, "", ("93.184.216.34", 0))])
+
+
 # --- sesión falsa ------------------------------------------------------------
 
 class Respuesta:

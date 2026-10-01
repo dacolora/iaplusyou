@@ -40,7 +40,7 @@ from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from idiomas import N_
 from storage import r2_uploader
-from tareas import al_interrumpir, ref_sufijo, registrar
+from tareas import al_interrumpir, errores_voz, ref_sufijo, registrar
 
 log = logging.getLogger(__name__)
 
@@ -432,24 +432,19 @@ def ejecutar_transcribir(tarea):
         shutil.rmtree(carpeta, ignore_errors=True)
 
 
-# Lo único que llega tal cual (traducido) al estado del trabajo: el único
-# msgid fijo que audios.sintetizar puede lanzar (una voz propia borrada entre
-# el clic y el worker — no aplica hoy, la galería del editor es solo las 22
-# voces de fal_audio.VOCES, pero audios.voz_cruda no lo sabe). Cualquier otro
-# error (p. ej. de fal, que repite el input — el texto de la persona) nunca
-# pasa tal cual: el estado de trabajos no pide sesión (D13).
-_MSGIDS_FIJOS_VOZ = frozenset(audios.MENSAJES.values())
+# El mismo saneado que Audios, Mis voces y Anuncio hablado (tareas/errores_voz.py):
+# solo un msgid fijo pasa tal cual; cualquier otro error (p. ej. de fal, que
+# repite el input — el texto de la persona) sale como este mensaje con su tipo,
+# porque el estado de trabajos no pide sesión (D13).
+MENSAJE_ERROR_VOZ = N_("No pude crear la voz; intenta de nuevo (%(tipo)s).")
 
 
 @registrar("editor_voz")
 def ejecutar_voz(tarea):
     try:
         return _generar_voz(tarea)
-    except Exception as e:  # noqa: BLE001 — todo error sale saneado, nunca el texto de la persona
-        if isinstance(e, ValueError) and str(e) in _MSGIDS_FIJOS_VOZ:
-            raise ValueError(gettext(str(e))) from e
-        log.exception("editor_voz (tarea %s) falló: %s", tarea.get("id"), cola.sin_token(e))
-        raise RuntimeError(gettext("No pude crear la voz; intenta de nuevo (%(tipo)s).", tipo=type(e).__name__)) from e
+    except Exception as e:  # noqa: BLE001 — todo error sale por errores_voz.publico
+        raise errores_voz.publico(e, tarea, "editor_voz", MENSAJE_ERROR_VOZ) from e
 
 
 def _generar_voz(tarea):

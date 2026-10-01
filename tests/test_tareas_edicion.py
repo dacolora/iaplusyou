@@ -794,8 +794,8 @@ def test_editor_voz_no_vuelve_a_transcribir_si_la_voz_ya_tenia_palabras(entorno,
 def test_editor_voz_un_error_de_fal_nunca_deja_el_texto_de_la_persona(entorno, monkeypatch):
     """Un error crudo de fal suele repetir el input (el texto que la persona
     escribió): el estado del trabajo (sin sesión, job_id adivinable) nunca
-    debe mostrarlo — mismo saneado que tareas/audios.py::_error_publico para
-    la misma llamada subyacente."""
+    debe mostrarlo — el mismo saneado que las otras tareas de voz
+    (tareas/errores_voz.py)."""
     import audios as audios_mod
 
     def _revienta(texto, voz, idioma="es", on_progreso=None, velocidad=None, **kw):

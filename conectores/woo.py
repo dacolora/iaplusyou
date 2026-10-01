@@ -14,7 +14,7 @@ import re
 from urllib.parse import urlparse
 
 from . import registrar
-from ._http import TIMEOUT_PROBAR, error_generico, json_de, pedir, sesion
+from ._http import TIMEOUT_PROBAR, error_generico, json_de, pedir_tienda, sesion
 from .base import Conector, ErrorConector, limpiar_html, normalizar_pedido, normalizar_producto
 
 TAMANO_PAGINA = 50
@@ -58,7 +58,7 @@ class Woo(Conector):
     def _get(self, ruta, params=None, **kw_http):
         if self._s is None:
             self._s = sesion()
-        r = pedir(self._s, "GET", f"{self.url}/wp-json/wc/v3/{ruta.lstrip('/')}", nombre=NOMBRE,
+        r = pedir_tienda(self._s, "GET", f"{self.url}/wp-json/wc/v3/{ruta.lstrip('/')}", nombre=NOMBRE,
                   params=params or {}, auth=self._auth, headers={"Accept": "application/json"}, **kw_http)
         if r.status_code in (401, 403):
             raise ErrorConector("WooCommerce rechazó las claves: Consumer key/secret inválidos o sin "
