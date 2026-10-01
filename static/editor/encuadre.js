@@ -100,3 +100,20 @@ export function ajusteAutomatico(ancho, alto, lienzoW, lienzoH) {
   if (menor * w * H > mayor * h * W || mayor * w * H < menor * h * W) return { modo: "ajustar" };
   return null;
 }
+
+// Solo navegador (sin espejo en Python: el render aplica `zoompan` directo
+// sobre el filtergraph, nunca sobre un rectángulo ya compuesto). El
+// rectángulo `{x, y, w, h}` (la caja de D4, o `{0, 0, W, H}` para el fondo
+// de D5) con el zoom lento acercando hacia el CENTRO del lienzo — como
+// `zoompan` — y, en una transición «deslizar», el desplazamiento `dx`
+// (fracción del ancho del lienzo, de tiempo.principalEn). `zoom` 1 y `dx` 0
+// devuelven el mismo rectángulo.
+export function rectConZoom({ x, y, w, h }, zoom, dx, lienzoW, lienzoH) {
+  const W = lienzoW, H = lienzoH;
+  return {
+    x: W / 2 + (x - W / 2) * zoom + dx * W,
+    y: H / 2 + (y - H / 2) * zoom,
+    w: w * zoom,
+    h: h * zoom,
+  };
+}

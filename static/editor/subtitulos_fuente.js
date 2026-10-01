@@ -88,8 +88,11 @@ export function clipsDeFuente(resuelto, fuentes) {
     const esAudioFuente = pista.tipo === "audio" && pista.id !== "p_sonido";
     if (!esPrincipalVideo && !esAudioFuente) continue;
     for (const clip of pista.clips ?? []) {
+      // D11 (capa 5b): una foto no tiene sonido — «sonido» salta los clips
+      // `foto` de la principal (pedirla por `material` SÍ la trae: la
+      // persona la eligió a propósito).
       const incluir =
-        (esPrincipalVideo && quiereSonido) ||
+        (esPrincipalVideo && quiereSonido && !clip.foto) ||
         (esAudioFuente && quiereVoz && clip.rol_audio === "voz") ||
         (materialesPedidos.size > 0 && materialesPedidos.has(clip.material_id));
       if (!incluir) continue;

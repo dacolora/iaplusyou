@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ajusteAutomatico, caja, completo, DEFECTO, esDefecto, fondo, limpio, par }
+import { ajusteAutomatico, caja, completo, DEFECTO, esDefecto, fondo, limpio, par, rectConZoom }
   from "../../static/editor/encuadre.js";
 import { FORMATOS } from "../../static/editor/formatos.js";
 
@@ -76,4 +76,25 @@ test("limpio: redondea a 4 decimales", () => {
 
 test("limpio: un modo fuera de MODOS pasa tal cual (no valida, solo limpia los números)", () => {
   assert.deepEqual(limpio({ modo: "estirar" }), { modo: "estirar", zoom: 1, x: 0.5, y: 0.5 });
+});
+
+// ---- rectConZoom (solo navegador, Tarea 4): el zoom lento acerca hacia el
+// centro del lienzo (como zoompan); dx desplaza (transición «deslizar») ----
+
+test("rectConZoom: zoom lento 1,04 acerca hacia el centro del lienzo (±1e-9)", () => {
+  const r = rectConZoom({ x: 0, y: 0, w: 3840, h: 1920 }, 1.04, 0, 1080, 1920);
+  assert.ok(Math.abs(r.x - -21.6) < 1e-9, r.x);
+  assert.ok(Math.abs(r.y - -38.4) < 1e-9, r.y);
+  assert.ok(Math.abs(r.w - 3993.6) < 1e-9, r.w);
+  assert.ok(Math.abs(r.h - 1996.8) < 1e-9, r.h);
+});
+
+test("rectConZoom: zoom 1 y dx 0 devuelve el mismo rectángulo", () => {
+  const rect = { x: 10, y: 20, w: 300, h: 400 };
+  assert.deepEqual(rectConZoom(rect, 1, 0, 1080, 1920), rect);
+});
+
+test("rectConZoom: dx desplaza en fracción del ancho del lienzo (deslizar)", () => {
+  const r = rectConZoom({ x: 0, y: 0, w: 3840, h: 1920 }, 1, -0.5, 1080, 1920);
+  assert.equal(r.x, -540);
 });

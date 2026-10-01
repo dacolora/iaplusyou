@@ -78,6 +78,21 @@ test("aplicarFuentes no toca su entrada y devuelve un objeto nuevo", () => {
   assert.deepEqual(r.subtitulos.palabras, CASOS[0].esperado.map((w) => ({ t_ms: w.t_ms, dur_ms: w.dur_ms, texto: w.texto })));
 });
 
+// ---- D11 (capa 5b, Tarea 4): una foto no tiene sonido ----
+
+test("clipsDeFuente/materialesDeFuente: una foto en la principal no cuenta para «sonido» (D11)", () => {
+  const resuelto = {
+    destino: { idioma: "es", pais: "CO" },
+    pistas: [{ id: "p_video", tipo: "video", oculta: false, silenciada: false, clips: [
+      { id: "f0", material_id: 4, foto: true, inicio_ms: 0, duracion_ms: 1500, recorte: { desde_ms: 0, hasta_ms: 1500 }, velocidad: 1.0 },
+      { id: "v0", material_id: 1, inicio_ms: 1500, duracion_ms: 4000, recorte: { desde_ms: 0, hasta_ms: 4000 }, velocidad: 1.0 },
+    ] }],
+  };
+  assert.deepEqual(materialesDeFuente(resuelto, { tipo: "sonido" }), [1]);
+  const pares = clipsDeFuente(resuelto, [{ tipo: "sonido" }]);
+  assert.deepEqual(pares.map(([, c]) => c.id), ["v0"]);
+});
+
 test("aplicarFuentes: visibles=false o fuentes ausentes deja las palabras ya resueltas tal cual", () => {
   const base = { destino: { idioma: "es", pais: "CO" }, subtitulos: { visibles: false, palabras: [{ t_ms: 0, dur_ms: 1, texto: "x" }] }, pistas: [] };
   const r = aplicarFuentes(base, {});

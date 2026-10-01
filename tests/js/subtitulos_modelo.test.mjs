@@ -54,6 +54,14 @@ test("fuentesDisponibles: un video mudo no ofrece su sonido (uno sin medir, sí)
   assert.equal(fuentesDisponibles(resuelto(), sinMedir).find((o) => o.clave === "sonido").disponible, true);
 });
 
+test("fuentesDisponibles: con solo fotos en la principal, «sonido» no está disponible (D11)", () => {
+  const doc = docBase();
+  for (const c of doc.pistas[0].clips) c.foto = true;
+  const sonido = fuentesDisponibles(resuelto(doc), MATS).find((o) => o.clave === "sonido");
+  assert.equal(sonido.disponible, false);
+  assert.equal(sonido.motivo, "Los videos de esta edición no traen sonido.");
+});
+
 test("fuentesDisponibles: dos clips del mismo audio dan UNA opción; sin nombre, el de su fila", () => {
   const doc = docBase();
   const a1 = doc.pistas[2].clips[0];
