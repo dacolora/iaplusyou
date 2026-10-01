@@ -79,6 +79,9 @@ PLANTILLAS_TRADUCIDAS = [
     "_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html", "_imagen_row.html",
     "_progreso_row.html", "_seccion_videos.html", "_video_card.html", "_seccion_bitacora.html",
     "_audios_mis_voces.html",   # Audios Europa (2026-09-30): Crear › Audios › Mis voces, ya con _()
+    # Anuncio hablado en Crear (2026-10-01): el panel por fetch, su tarjeta de foto y la
+    # galería de voces que comparte con Audios; la cáscara de la página llega en la Task 7.
+    "_hablado_panel.html", "_hablado_macros.html", "_voces_galeria.html",
 ]
 
 

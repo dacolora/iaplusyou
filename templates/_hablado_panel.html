@@ -1,0 +1,80 @@
+{# Crear › Anuncio hablado (spec 2026-10-01 §1): el panel que hablado.panel
+   devuelve por fetch la primera vez que el modo se ve — nunca en la carga de
+   la página del proyecto. Sin <script> (un fragmento por fetch no los corre:
+   el JS vive en static/hablado.js) y sin <form> (Enter nunca cobra). La barra
+   de la voz no lleva data-poll-job: recargaría la página y borraría lo escrito. #}
+{% from "_hablado_macros.html" import tarjeta_foto %}
+{% from "_voces_galeria.html" import fichas_galeria, voz_propia_item %}
+<div class="hb-layout" id="hb-form" data-usd-caracter="{{ usd_por_caracter }}"{% if trabajo_voz %} data-job-voz="{{ trabajo_voz.job_id }}" data-estado-voz="{{ url_for('estado_trabajo', job_id=trabajo_voz.job_id) }}"{% endif %}>
+  <section class="hb-paso" aria-labelledby="hb-t-foto">
+    <h3 id="hb-t-foto">{{ _('1. La foto') }}</h3>
+    <p class="au-ayuda">{{ _('Cara de frente y sin tapar, producto por debajo de la cara, foto vertical. Las fotos nuevas se hacen en Desde referencias.') }} <a href="#referencias" data-crear-modo="referencias">{{ _('Ir a Desde referencias') }}</a></p>
+    <div class="hb-fotos" id="hb-fotos" role="radiogroup" aria-labelledby="hb-t-foto">
+      {% for f in fotos %}{{ tarjeta_foto(f) }}{% endfor %}
+    </div>
+    <p class="vacio" id="hb-fotos-vacio"{% if fotos %} hidden{% endif %}>{{ _('Todavía no hay fotos: sube una o crea una imagen en Desde referencias.') }}</p>
+    <div class="au-fila">
+      <label class="btn-sm hb-subir">{{ _('Subir una foto') }}<input type="file" id="hb-archivo" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" hidden></label>
+    </div>
+    <p class="au-ayuda" id="hb-subida" hidden aria-live="polite"></p>
+    <p class="au-ayuda">{{ _('El video sale con la forma de la foto.') }}</p>
+  </section>
+
+  <section class="hb-paso" aria-labelledby="hb-t-voz">
+    <h3 id="hb-t-voz">{{ _('2. El guion y la voz') }}</h3>
+    <label class="campo-label" for="hb-texto">{{ _('Guion') }}</label>
+    <textarea id="hb-texto" class="hb-texto" rows="5" maxlength="{{ max_caracteres }}" placeholder="{{ _('Escribe lo que dirá la persona de la foto, como presentador.') }}"></textarea>
+    <p class="au-ayuda"><span id="hb-contador">0</span> / {{ max_caracteres }}</p>
+    <p class="hb-aviso-legal">{{ _('Escribe como presentador, no como cliente: una persona hecha con IA no puede decir que compró el producto.') }}</p>
+    <p class="au-ayuda">{{ _('Frases cortas y naturales: unos 10 s de voz por toma; el anuncio hablado llega a 30 s.') }}</p>
+    <fieldset class="au-voces-caja">
+      <legend>{{ _('Voz') }}: <span id="hb-voz-nombre">{{ fichas_voces[0].nombre if fichas_voces else '' }}</span></legend>
+      <input type="hidden" id="hb-voz" value="{{ fichas_voces[0].nombre if fichas_voces else '' }}">
+      {% if voces_propias %}
+      <h4 class="au-vp-titulo">{{ _('Mis voces') }}</h4>
+      <div class="au-voces au-vp-voces" role="radiogroup" aria-label="{{ _('Mis voces') }}">
+        {% for v in voces_propias %}{{ voz_propia_item(v) }}{% endfor %}
+      </div>
+      {% endif %}
+      <h4 class="au-vp-titulo">{{ _('Voces de la galería') }}</h4>
+      <div class="au-voces-filtros" role="group" aria-label="{{ _('Filtrar voces') }}">
+        <button type="button" class="au-filtro activo" data-filtro-genero="">{{ _('Todas') }}</button>
+        <button type="button" class="au-filtro" data-filtro-genero="mujer">{{ _('Mujer') }}</button>
+        <button type="button" class="au-filtro" data-filtro-genero="hombre">{{ _('Hombre') }}</button>
+      </div>
+      <div class="au-voces" id="hb-voces" role="radiogroup" aria-label="{{ _('Voz') }}">{{ fichas_galeria(fichas_voces) }}</div>
+      <p class="au-ayuda">{{ _('Toca ▶ para oír una muestra corta y la tarjeta para elegir la voz.') }}</p>
+      <audio id="hb-muestra" preload="none" hidden></audio>
+    </fieldset>
+    <div class="au-fila">
+      <label class="campo-label" for="hb-idioma">{{ _('Idioma del texto') }}
+        <select id="hb-idioma">{% for i in idiomas_audio %}<option value="{{ i }}" {% if i == idioma_audio_defecto %}selected{% endif %}>{{ nombres_idioma_audio[i] }}</option>{% endfor %}</select>
+      </label>
+      <label class="campo-label" for="hb-velocidad">{{ _('Velocidad') }}
+        <select id="hb-velocidad">{% for k, n in velocidades_audio.items() %}<option value="{{ k }}" {% if k == 'normal' %}selected{% endif %}>{{ n|traducir }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    <details class="hb-movimiento">
+      <summary>{{ _('Cómo se mueve (opcional)') }}</summary>
+      <textarea id="hb-movimiento" rows="3" maxlength="{{ max_movimiento }}" placeholder="{{ _('ej. Habla a la cámara con entusiasmo, mueve la cabeza con naturalidad y sostiene el producto a la altura del pecho.') }}"></textarea>
+      <p class="au-ayuda">{{ _('Va tal cual al modelo. Vacío: la persona solo habla.') }}</p>
+    </details>
+  </section>
+
+  <section class="hb-paso hb-paso-final" aria-labelledby="hb-t-generar">
+    <h3 id="hb-t-generar">{{ _('3. Escucha y genera') }}</h3>
+    <div class="hb-voz-lista" id="hb-voz-lista" hidden>
+      <audio id="hb-voz-audio" controls preload="none"></audio>
+      <p class="au-ayuda" id="hb-voz-duracion"></p>
+    </div>
+    <div class="barra-progreso" id="hb-barra" hidden><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+    <p class="progreso-texto" id="hb-barra-texto" hidden></p>
+    <p class="au-ayuda" id="hb-aviso" hidden aria-live="polite"></p>
+    <p class="au-ayuda" id="hb-falta" hidden></p>
+    <p class="campo-error" id="hb-error" hidden></p>
+    <div class="au-botones">
+      <button type="button" class="btn-sm" id="hb-escuchar" disabled>{{ _('Escuchar la voz') }} <span id="hb-escuchar-precio"></span></button>
+      <button type="button" class="btn-generar" id="hb-generar" disabled>{{ _('Generar video') }} <span id="hb-generar-precio"></span></button>
+    </div>
+  </section>
+</div>

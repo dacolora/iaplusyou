@@ -1,0 +1,31 @@
+{# Galería de voces de ElevenLabs (Crear › Audios y Crear › Anuncio hablado):
+   una tarjeta por voz con su ▶; la primera queda elegida. Sin <script>: el JS
+   de cada modo la maneja con clics delegados sobre .au-voz / .au-voz-play.
+
+   `voz_propia_item` (tarea 6, anuncio hablado): la tarjeta de UNA voz propia,
+   compartida entre el panel de Anuncio hablado (sin borrar_url: solo
+   escuchar y elegir, sin el aviso «sin estrenar» — ahí no hay nada que
+   arreglar con eso) y Crear › Audios › Mis voces (con borrar_url: además
+   borra y avisa «sin estrenar» — la tarea 7 cambia _audios_mis_voces.html a
+   usarla, pasando su propia url_for('vp_borrar', …)). El diccionario de
+   formas vive DENTRO de la macro, como etiqueta_sprint en _sprint_macros.html:
+   importarlo del contexto de quien llama se cachearía en un solo idioma. #}
+{% macro fichas_galeria(fichas_voces) %}
+{% for f in fichas_voces %}
+<div class="au-voz" data-voz="{{ f.nombre }}" data-genero="{{ f.genero }}" role="radio" aria-checked="{{ 'true' if loop.first else 'false' }}" tabindex="0">
+  <span class="au-voz-nombre">{{ f.nombre }}</span>
+  <small class="au-voz-tono">{{ f.genero_nombre|traducir }}{% if f.tono %} · {{ f.tono|traducir }}{% endif %}</small>
+  <button type="button" class="au-voz-play" data-voz="{{ f.nombre }}" aria-label="{{ _('Escuchar') }} {{ f.nombre }}">▶</button>
+</div>
+{% endfor %}
+{% endmacro %}
+
+{% macro voz_propia_item(v, borrar_url=None) -%}
+{%- set nombres_forma = {"clonada": _("Clonada"), "disenada": _("Diseñada")} -%}
+<div class="au-voz au-voz-propia" data-voz="{{ v.valor }}" role="radio" aria-checked="false" tabindex="0">
+  <span class="au-voz-nombre">{{ v.nombre }}</span>
+  <small class="au-voz-tono">{{ nombres_forma.get(v.forma, v.forma) }}{% if borrar_url and not v.estrenada %} · {{ _('sin estrenar') }}{% endif %}</small>
+  {% if borrar_url %}<button type="button" class="au-vp-borrar" data-url="{{ borrar_url }}" data-nombre="{{ v.nombre }}" aria-label="{{ _('Borrar') }} {{ v.nombre }}">✕</button>{% endif %}
+  <button type="button" class="au-voz-play" data-voz="{{ v.valor }}" aria-label="{{ _('Escuchar') }} {{ v.nombre }}">▶</button>
+</div>
+{%- endmacro %}

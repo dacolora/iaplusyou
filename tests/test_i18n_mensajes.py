@@ -29,6 +29,7 @@ RUTAS = ["final_edition/rutas_editor.py"]
 RUTAS += ["dashboard.py", "guiones/rutas.py", "guiones/rutas_pipeline.py", "nicho/rutas.py",
           "referentes/rutas.py", "sprints/rutas.py"]
 RUTAS += ["triple_whale/rutas.py"]   # Fase 6, Task 6: llegó con una fusión de main (pestaña Triple Whale)
+RUTAS += ["hablado_rutas.py"]   # Anuncio hablado en Crear (2026-10-01)
 WORKER = ["ediciones.py", "final_edition/edicion_clon.py", "final_edition/motor/__init__.py", "tareas/edicion.py",
           "final_edition/biblioteca.py"]
 WORKER += ["final_edition/__init__.py", "final_edition/produccion.py", "final_edition/borrador.py",
@@ -43,6 +44,7 @@ WORKER += ["worker.py", "cola.py", "organico.py", "experimentos.py", "derivacion
            "providers/apify.py"]
 WORKER += ["providers/wavespeed_common.py", "nicho/fuentes/plataformas.py", "nicho/fuentes/plataforma.py"]   # Task 7, fix 1
 WORKER += ["voces_propias.py", "audios.py"]   # Audios Europa (2026-09-30)
+WORKER += ["hablado.py"]   # Anuncio hablado en Crear (2026-10-01); tareas/hablado.py ya entra por el glob
 
 
 def _nombre(llamada):

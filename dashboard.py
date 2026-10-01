@@ -233,6 +233,9 @@ app.register_blueprint(guiones_pipeline.bp)
 from final_edition import rutas_editor  # noqa: E402  (vista previa del editor, capa 3)
 app.register_blueprint(rutas_editor.bp)
 
+import hablado_rutas  # noqa: E402  (Crear › Anuncio hablado: panel, foto, voz y video)
+app.register_blueprint(hablado_rutas.bp)
+
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
 # distintos podrían solaparse y pisarse las credenciales una a la otra — este

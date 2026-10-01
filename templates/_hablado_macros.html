@@ -1,0 +1,10 @@
+{# Crear › Anuncio hablado: la tarjeta de una foto (radio visual). La pinta el
+   panel y la ruta hablado.foto (get_template_attribute) al subir una foto
+   nueva, así el JS la inserta tal cual (HTML escapado por Jinja). #}
+{% macro tarjeta_foto(f) %}
+<label class="hb-foto" title="{{ f.nombre }}">
+  <input type="radio" name="hb-foto" value="{{ f.ficha }}">
+  <img src="{{ f.miniatura }}" alt="{{ f.nombre }}" loading="lazy">
+  <small class="hb-foto-origen">{{ f.origen_nombre|traducir }}</small>
+</label>
+{% endmacro %}
