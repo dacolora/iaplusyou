@@ -1,18 +1,26 @@
 """
 Actores de Apify permitidos (spec §3.5), mismo patrón que
 providers/flowplus_modelos: solo entran actores con precio POR RESULTADO (los
-que cobran por cómputo no se pueden estimar antes del clic). Verificado
-2026-09-20 en la tienda de Apify:
+que cobran por cómputo no se pueden estimar antes del clic). Forma de la
+entrada/salida verificada 2026-09-20 en la tienda de Apify; precios del plan
+FREE de Creatv reverificados el 2026-10-01 contra `GET /v2/acts/<actor>` (los
+de antes estaban por debajo de lo real: con `maxTotalChargeUsd` de ese tamaño
+Apify cortaba la corrida antes de lo pedido y el gasto registrado quedaba por
+debajo del real, el mismo problema que las reseñas de Amazon de la
+investigación automática):
 
-  junglee~amazon-reviews-scraper — US$ 3.00 por 1 000 reseñas. Entrada
-    `productUrls` (lista de {url}), `maxReviews`, `includeGdprSensitive`.
-    Salida `reviewTitle`, `reviewDescription`, `ratingScore`, `reviewedIn`
-    ("Reviewed in the United States on February 3, 2022"), `reviewUrl`
-    (…/customer-reviews/<id>/), `productAsin`.
-  clockworks~tiktok-comments-scraper — US$ 0.50 por 1 000 comentarios.
-    Entrada `postURLs` (lista de urls), `commentsPerPost`,
+  junglee~amazon-reviews-scraper — US$ 6.00 por 1 000 reseñas (antes se creía
+    US$ 3.00). Entrada `productUrls` (lista de {url}), `maxReviews`,
+    `includeGdprSensitive`. Salida `reviewTitle`, `reviewDescription`,
+    `ratingScore`, `reviewedIn` ("Reviewed in the United States on February
+    3, 2022"), `reviewUrl` (…/customer-reviews/<id>/), `productAsin`. Apify
+    rechaza el POST de la corrida (400 `max-total-charge-usd-below-minimum`)
+    si `maxTotalChargeUsd` < US$ 0.50: ese es el techo mínimo de CUALQUIER
+    corrida de este actor, aunque se pidan pocas reseñas.
+  clockworks~tiktok-comments-scraper — US$ 1.25 por 1 000 comentarios (antes
+    se creía US$ 0.50). Entrada `postURLs` (lista de urls), `commentsPerPost`,
     `maxRepliesPerComment`. Salida `text`, `diggCount`, `createTimeISO`,
-    `cid`, `videoWebUrl`.
+    `cid`, `videoWebUrl`. Sin techo mínimo.
 
 Los dos topes de entrada (`maxReviews`, `commentsPerPost`) son POR LINK, no
 por corrida: se reparten con `_por_link` para que 4 links no cobren cuatro
@@ -20,7 +28,12 @@ veces el tope aprobado en la puerta.
 
 Si Apify cambia la forma de la entrada, `armar_entrada` de cada actor es el
 único sitio que tocar: un 400 de Apify llega al usuario con su mensaje.
-El estimado es max_resultados × precio (Apify suma cómputo: "aprox.").
+El estimado es max_resultados × precio, con el techo mínimo del actor cuando
+lo tiene (Apify suma cómputo: "aprox."). Ese estimado es también lo que se
+manda como `maxTotalChargeUsd` (`nicho.fuentes.apify.FuenteApify.recolectar`):
+el mínimo tiene que estar ahí para que Apify acepte la corrida, pero el gasto
+REAL que se registra (`tareas.nicho._gasto_recoleccion`) nunca lo usa — sale
+de `usd_por_resultado` × los resultados que realmente llegaron, sin piso.
 """
 import math
 import re
@@ -88,12 +101,13 @@ def _item_tiktok(item):
 
 ACTORES = {
     "amazon_resenas": {
-        "actor": "junglee~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.003,
+        "actor": "junglee~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.006,
+        "tope_minimo_usd": 0.5,          # Apify rechaza la corrida si se manda menos (ver docstring del módulo)
         "ayuda": N_("Links de producto de Amazon (con /dp/ o /gp/product/), uno por línea."),
         "patron_link": _RE_AMAZON, "armar_entrada": _entrada_amazon, "leer_item": _item_amazon,
     },
     "tiktok_comentarios": {
-        "actor": "clockworks~tiktok-comments-scraper", "nombre": N_("Comentarios de TikTok"), "usd_por_resultado": 0.0005,
+        "actor": "clockworks~tiktok-comments-scraper", "nombre": N_("Comentarios de TikTok"), "usd_por_resultado": 0.00125,
         "ayuda": N_("Links de videos de TikTok, uno por línea."),
         "patron_link": _RE_TIKTOK, "armar_entrada": _entrada_tiktok, "leer_item": _item_tiktok,
     },
@@ -118,7 +132,12 @@ def estimar(clave, max_resultados):
     a = _actor(clave)
     n = _tope(max_resultados)
     # round() antes de ceil(): 30 × 0.003 × 100 da 9.000000000000002 en binario y ceil lo subiría a 10.
-    return {"actor": a["actor"], "max_resultados": n, "usd": math.ceil(round(n * a["usd_por_resultado"] * 100, 6)) / 100}
+    usd = math.ceil(round(n * a["usd_por_resultado"] * 100, 6)) / 100
+    # junglee (reseñas de Amazon): Apify rechaza la corrida bajo su techo mínimo, así que esto
+    # es tanto lo que se muestra antes del clic como lo que se manda como `maxTotalChargeUsd`
+    # (`FuenteApify.recolectar`) — nunca el gasto real, que sale de resultados × precio sin piso.
+    usd = max(usd, float(a.get("tope_minimo_usd") or 0))
+    return {"actor": a["actor"], "max_resultados": n, "usd": usd}
 
 
 def validar_links(clave, links):

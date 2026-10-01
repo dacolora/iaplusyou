@@ -291,16 +291,19 @@ class TestPlataformas:
         assert plataformas_mod.leer_producto("amazon", {"title": "X"}) is None
 
     def test_leer_resena_amazon_valida(self, plataformas_mod):
-        """Read Amazon review."""
+        """Read Amazon review (junglee~amazon-reviews-scraper, 2026-10-01)."""
         item = {
             "reviewId": "R123",
-            "text": "Great!",
-            "rating": 5,
-            "date": "2026-09-20"
+            "reviewTitle": "Great",
+            "reviewDescription": "Great product!",
+            "ratingScore": 5,
+            "date": "2026-09-20",
+            "productAsin": "B001",
+            "productOriginalAsin": "B001",
         }
         resena = plataformas_mod.leer_resena("amazon", item)
         assert resena["fuente_id"] == "R123"
-        assert resena["texto"] == "Great!"
+        assert resena["texto"] == "Great. Great product!"
 
     def test_leer_resena_invalida(self, plataformas_mod):
         """Return None for incomplete review."""

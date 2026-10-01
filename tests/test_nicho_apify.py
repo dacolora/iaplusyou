@@ -14,13 +14,24 @@ def _fixture(nombre):
 def test_registro_de_actores_y_estimado():
     from nicho.fuentes import apify_actores as aa, base
     assert set(aa.ACTORES) == {"amazon_resenas", "tiktok_comentarios"}
-    assert aa.ACTORES["amazon_resenas"]["actor"] == "junglee~amazon-reviews-scraper" and aa.ACTORES["amazon_resenas"]["usd_por_resultado"] == 0.003
-    assert aa.ACTORES["tiktok_comentarios"]["actor"] == "clockworks~tiktok-comments-scraper" and aa.ACTORES["tiktok_comentarios"]["usd_por_resultado"] == 0.0005
-    assert aa.estimar("amazon_resenas", 200) == {"actor": "junglee~amazon-reviews-scraper", "max_resultados": 200, "usd": 0.6}
-    assert aa.estimar("tiktok_comentarios", 5000)["max_resultados"] == aa.MAX_RESULTADOS and aa.estimar("tiktok_comentarios", 5000)["usd"] == 0.5
+    # precios del plan FREE de Apify, reverificados 2026-10-01 (antes 0.003/0.0005, por debajo de lo real)
+    assert aa.ACTORES["amazon_resenas"]["actor"] == "junglee~amazon-reviews-scraper" and aa.ACTORES["amazon_resenas"]["usd_por_resultado"] == 0.006
+    assert aa.ACTORES["tiktok_comentarios"]["actor"] == "clockworks~tiktok-comments-scraper" and aa.ACTORES["tiktok_comentarios"]["usd_por_resultado"] == 0.00125
+    assert aa.estimar("amazon_resenas", 200) == {"actor": "junglee~amazon-reviews-scraper", "max_resultados": 200, "usd": 1.2}
+    assert aa.estimar("tiktok_comentarios", 5000)["max_resultados"] == aa.MAX_RESULTADOS and aa.estimar("tiktok_comentarios", 5000)["usd"] == 1.25
     assert aa.estimar("tiktok_comentarios", "abc")["max_resultados"] == 1 and aa.estimar("tiktok_comentarios", 1)["usd"] == 0.01   # centavo hacia arriba
     with pytest.raises(base.ErrorFuente):
         aa.estimar("magia", 10)
+
+
+def test_estimar_minimo_de_junglee_y_precios_reales():
+    """Precios reales del plan FREE verificados 2026-10-01: junglee US$ 0,006 por reseña con un
+    techo mínimo de US$ 0,50 por corrida (Apify rechaza `maxTotalChargeUsd` menor con 400
+    `max-total-charge-usd-below-minimum`); clockworks US$ 0,00125 por comentario, sin mínimo."""
+    from nicho.fuentes import apify_actores as aa
+    assert aa.estimar("amazon_resenas", 10)["usd"] == 0.5             # 10 × 0.006 = 0.06 < el mínimo 0.50
+    assert aa.estimar("amazon_resenas", 500)["usd"] == 3.0            # 500 × 0.006 = 3.0, ya sobre el mínimo
+    assert aa.estimar("tiktok_comentarios", 1000)["usd"] == 1.25      # sin mínimo: 1000 × 0.00125
 
 
 def test_validar_links_y_entradas():
@@ -129,7 +140,7 @@ def test_recolectar_corre_sondea_y_baja_el_dataset(entorno_apify, monkeypatch):
     metodo, url, kw = s.llamadas[0]
     assert metodo == "POST" and url == apify.URL_API + "/actors/clockworks~tiktok-comments-scraper/runs"
     assert kw["json"] == {"postURLs": links, "commentsPerPost": 50, "maxRepliesPerComment": 0}
-    assert kw["params"] == {"timeout": apify.MAX_ESPERA_S, "maxItems": 100, "maxTotalChargeUsd": 0.05}
+    assert kw["params"] == {"timeout": apify.MAX_ESPERA_S, "maxItems": 100, "maxTotalChargeUsd": 0.13}    # 100 × 0.00125 = 0.125 -> 0.13
     assert kw["headers"]["Authorization"] == "Bearer apify_secreto"
     assert all("apify_secreto" not in u for _, u, _ in s.llamadas)                  # el token nunca va en la URL
     assert s.llamadas[-1][1] == apify.URL_API + "/datasets/ds1/items" and s.llamadas[-1][2]["params"] == {"clean": "true", "format": "json", "limit": 100}
@@ -137,19 +148,21 @@ def test_recolectar_corre_sondea_y_baja_el_dataset(entorno_apify, monkeypatch):
     assert etapas[0][0] == "Buscando" and any(e == "Leyendo comentarios" and "RUNNING" in (d or "") for e, d in etapas)
     assert all("run1" in (d or "") for e, d in etapas if e == "Leyendo comentarios")   # la fila de la tarea conserva el id de la corrida
     assert f.run_id == "run1" and f.dataset_id == "ds1" and f.aviso == ""
-    assert f.estimar({"actor": "tiktok_comentarios", "links": links, "max_resultados": 100}) == {"actor": "clockworks~tiktok-comments-scraper", "max_resultados": 100, "usd": 0.05}
+    assert f.estimar({"actor": "tiktok_comentarios", "links": links, "max_resultados": 100}) == {"actor": "clockworks~tiktok-comments-scraper", "max_resultados": 100, "usd": 0.13}
 
 
 def test_el_post_de_la_corrida_lleva_los_topes_de_cobro(entorno_apify, monkeypatch):
     """C1: además del tope por link, la corrida lleva los topes de cobro del lado
-    de Apify (maxItems y maxTotalChargeUsd = lo que mostró la puerta)."""
+    de Apify (maxItems y maxTotalChargeUsd = lo que mostró la puerta). 30 reseñas × 0.006 = 0.18,
+    bajo el mínimo de junglee: lo que se manda es el mínimo (0.50), nunca menos."""
     from nicho.fuentes import _http, apify, apify_actores
     s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_t", "status": "SUCCEEDED", "defaultDatasetId": "ds_t"}}),
                  "/datasets/ds_t/items": _Resp(200, [])})
     monkeypatch.setattr(_http, "sesion", lambda: s)
     list(apify.FuenteApify().recolectar({"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 30}))
-    assert s.llamadas[0][2]["params"] == {"timeout": apify.MAX_ESPERA_S, "maxItems": 30, "maxTotalChargeUsd": 0.09}
-    assert apify_actores.estimar("amazon_resenas", 30)["usd"] == 0.09          # el mismo número de la puerta
+    assert s.llamadas[0][2]["params"]["maxTotalChargeUsd"] >= 0.5
+    assert s.llamadas[0][2]["params"] == {"timeout": apify.MAX_ESPERA_S, "maxItems": 30, "maxTotalChargeUsd": 0.5}
+    assert apify_actores.estimar("amazon_resenas", 30)["usd"] == 0.5           # el mismo número de la puerta
 
 
 def test_recolectar_amazon_exito_salta_basura_y_vacios(entorno_apify, monkeypatch):
