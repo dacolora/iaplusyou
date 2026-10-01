@@ -71,6 +71,10 @@ VIDEO = {
         "familia": "kling",
         "path": "kwaivgi/kling-video-o3-pro/reference-to-video",
         "path_texto": "kwaivgi/kling-video-o3-pro/text-to-video",
+        # Imagen a video (cadena de escenas de Flow Plus, spec 2026-09-30): arranca en
+        # `image` y conserva identidades con hasta 3 «elementos» de Kling.
+        "path_i2v": "kwaivgi/kling-video-o3-pro/image-to-video",
+        "max_elementos": 3,
         "max_referencias": 7,
         "usd_por_segundo": 0.112,
         "duraciones": (5, 8, 10, 12, 15),
@@ -311,7 +315,8 @@ def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
 
 
 def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16", on_progreso=None,
-                  videos=None, con_sonido=True, calidad="final", mejorar_prompt=False):
+                  videos=None, con_sonido=True, calidad="final", mejorar_prompt=False, imagen_inicial=None,
+                  elementos=None):
     """Devuelve la URL pública del video. referencias: URLs públicas de imágenes
     (la primera es la principal; Seedance solo usa esa). videos: URLs públicas
     de videos de referencia — solo Wan 3.0 los recibe tal cual; para los demás
@@ -320,8 +325,17 @@ def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16",
     salvo que la pieza se quiera muda a propósito. Sin imágenes ni videos va a
     la ruta de solo texto del modelo (`path_texto`). mejorar_prompt: prende el
     mejorador propio de Wan 3.0 (`enable_prompt_expansion`) — solo cuando la
-    persona marcó la casilla; los demás modelos no tienen y lo ignoran."""
+    persona marcó la casilla; los demás modelos no tienen y lo ignoran.
+    imagen_inicial/elementos: la cadena de escenas de Flow Plus — con Kling O3
+    Pro el video arranca en esa imagen y conserva hasta 3 elementos (ids de
+    `crear_elemento`); el formato lo da la imagen."""
     info = VIDEO[modelo_id]
+    if imagen_inicial and info.get("path_i2v"):
+        payload = {"prompt": prompt, "image": imagen_inicial, "duration": int(duration), "sound": bool(con_sonido)}
+        ids = [str(e) for e in (elementos or []) if e][: info.get("max_elementos", 0)]
+        if ids:
+            payload["element_list"] = [{"element_id": e} for e in ids]
+        return _lanzar(info["path_i2v"], payload, info["nombre"], on_progreso=on_progreso)
     videos = list(videos or [])[: info.get("max_videos", 0)]
     if not referencias and not videos:
         return _generar_video_texto(modelo_id, prompt, duration, aspect_ratio, on_progreso, con_sonido, calidad,
@@ -382,3 +396,22 @@ def generar_imagen(modelo_id, prompt, referencias, on_progreso=None, aspect_rati
             resolution="2k", on_progreso=on_progreso, aspect_ratio=aspect_ratio,
         )
     raise ValueError(f"Modelo de imagen desconocido: {modelo_id}")
+
+
+# «Elementos» de Kling: la identidad reutilizable de un personaje u objeto que
+# usa la cadena de escenas de Flow Plus. Etapa 0 (2026-10-01): la API exige 1–3
+# `refer_images`; con una sola ficha va la misma imagen en las dos.
+ELEMENTOS_PATH = "kwaivgi/kling-elements-advanced"
+PRECIO_ELEMENTO = 0.01
+
+
+def crear_elemento(nombre, descripcion, imagen_url):
+    """Crea un elemento de Kling y devuelve su `element_id` (texto)."""
+    salida = _lanzar(ELEMENTOS_PATH, {
+        "name": (nombre or "Element").strip()[:20], "description": (descripcion or nombre or "").strip()[:100],
+        "reference_type": "image_refer", "frontal_image": imagen_url, "refer_images": [imagen_url],
+    }, "Kling Elements", timeout_seconds=300)
+    eid = salida.get("element_id") if isinstance(salida, dict) else None
+    if not eid:
+        raise RuntimeError(f"Kling no devolvió el elemento: {str(salida)[:300]}")
+    return str(eid)

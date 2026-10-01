@@ -429,6 +429,9 @@ def ejecutar_video(tarea):
                 con_sonido=con_sonido, calidad=calidad,
                 # «Que Wan mejore mi prompt»: solo si la persona marcó la casilla.
                 mejorar_prompt=bool(entry.get("mejorar_prompt")),
+                # Cadena de escenas de Flow Plus: la escena arranca en el último
+                # fotograma de la anterior y conserva los elementos de Kling.
+                imagen_inicial=entry.get("imagen_inicial"), elementos=entry.get("elementos"),
             )
     except wavespeed_common.EsperaAgotada as e:
         # Se acabó la espera (o se cortó por un reinicio) pero WaveSpeed sigue:
