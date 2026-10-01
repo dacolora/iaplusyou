@@ -421,10 +421,12 @@ def encontrar_por_id_o_nombre(cliente, valor, categoria=CATEGORIA_POR_DEFECTO):
 def carpeta_de(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO, variante=None):
     """Ruta en disco de un activo (o de uno de sus colores con `variante`),
     validada contra fugas de directorio: el id y el color llegan desde la
-    URL o un formulario, así que un '../..' no puede salir de la carpeta."""
+    URL o un formulario, así que un '../..' no puede salir de la carpeta. Un
+    id que resuelve a la carpeta de la categoría misma («.», «./», «»,
+    «x/..») tampoco vale: `eliminar` con él borraría el catálogo entero."""
     base = os.path.abspath(_carpeta(cliente, categoria))
     destino = os.path.abspath(os.path.join(base, producto_id))
-    if destino != base and not destino.startswith(base + os.sep):
+    if not destino.startswith(base + os.sep):
         raise ValueError(f"id de producto inválido: {producto_id!r}")
     if variante:
         if os.sep in variante or "/" in variante:

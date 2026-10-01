@@ -149,6 +149,19 @@ def test_carpeta_de_con_variante_valida_fugas(cat):
             cat.carpeta_de("acme", "original", "producto", variante=mala)
 
 
+def test_carpeta_de_rechaza_la_carpeta_de_la_categoria(cat):
+    """Revisión final: «.», «./», «» u «original/..» resuelven a la carpeta
+    de TODA la categoría; `eliminar` con uno de esos ids borraba el catálogo."""
+    _producto_con_colores(cat)
+    for malo in (".", "./", "", "original/.."):
+        with pytest.raises(ValueError):
+            cat.carpeta_de("acme", malo, "producto")
+    assert cat.existe("acme", ".", "producto") is False
+    with pytest.raises(ValueError):
+        cat.eliminar("acme", ".", "producto")
+    assert cat.encontrar_producto("acme", "original") is not None          # nada se borró
+
+
 def test_agregar_color_crea_subcarpeta_y_meta_en_orden(cat):
     _producto_con_colores(cat, colores=("Pink",))
     cid = cat.agregar_color("acme", "original", "Original — Sky Blue", descripcion="celeste", fuente_id="v9",
