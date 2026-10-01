@@ -20,7 +20,7 @@ def test_registro_contiene_swap_generar(base_temporal):
     assert tareas.REGISTRO["swap_generar"] is sw.ejecutar
     assert sorted(tareas.REGISTRO) == [
         "audio_generar", "catalogo_importar", "cola_limpiar", "db_respaldar", "edicion_desde_clon", "edicion_producir",
-        "edicion_proxy", "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_lanzar", "exp_refrescar",
+        "edicion_proxy", "editor_voz", "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_lanzar", "exp_refrescar",
         "exp_refrescar_todos", "final_guion", "final_producir", "flowplus_director", "flowplus_imagen",
         "flowplus_recuperar", "flowplus_video", "material_de_pieza", "material_transcribir", "materiales_limpiar", "meta_publicar",
         "meta_refrescar", "musica_generar", "nicho_completar_avatares", "nicho_generar_avatares", "nicho_inv_buscar", "nicho_inv_consultas",

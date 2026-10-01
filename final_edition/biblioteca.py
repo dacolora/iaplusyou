@@ -13,7 +13,9 @@ proyecto (`worker.ejecutar`). El nombre de respaldo de un archivo sin
 nombre se guarda en el idioma del proyecto."""
 import math
 import os
+import re
 import uuid
+from datetime import datetime, timezone
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -42,8 +44,10 @@ EXTENSIONES = {
 # Materiales que la persona puede arrastrar al lienzo: nunca los efímeros
 # (png_texto, proxy, tira, forma_onda — `materiales.EFIMEROS`) ni una voz
 # sintetizada de un guion que no le pertenece a ella todavía. El logo del
-# proyecto se guarda con origen «marca» (`insumos.logo`).
-ORIGENES_BIBLIOTECA = ("subida", "crear", "musica", "voz", "marca")
+# proyecto se guarda con origen «marca» (`insumos.logo`). Capa 5a (Task 6):
+# «grabacion» (el micrófono del editor) y «locucion» (los audios terminados
+# de Crear › Audios, voz + música) se suman a la lista.
+ORIGENES_BIBLIOTECA = ("subida", "crear", "musica", "voz", "marca", "grabacion", "locucion")
 TOPE_MATERIALES = 200
 
 
@@ -55,8 +59,9 @@ class SubidaInvalida(ValueError):
 # subió y los videos de Crear ya preparados como material. Nunca una voz de
 # guion, el logo (marca) ni una canción de Mi música — creada (origen musica)
 # o subida (origen subida con `extra.fuente`, `vista_previa.es_de_mi_musica`):
-# esas se borran en Crear › Mi música.
-ORIGENES_BORRABLES = ("subida", "crear")
+# esas se borran en Crear › Mi música. Capa 5a (Task 6): una grabación del
+# micrófono SÍ se borra desde aquí (es solo suya, como una subida).
+ORIGENES_BORRABLES = ("subida", "crear", "grabacion")
 
 
 class NoSePuedeBorrar(ValueError):
@@ -234,6 +239,84 @@ def _guardar(cliente, local, ext, tipo, content_type, nombre_archivo):
                          {"cliente": cliente, "material_id": m["id"]}, duracion_estimada=60,
                          cliente=cliente, max_intentos=3, prioridad=1)
     return vista_previa.material_para(m)
+
+
+# --- Grabación del micrófono (editor capa 5a, D8/Task 6): gratis, siempre a mp3 ---
+
+# Lo que el navegador puede mandar (D8): `audio/webm;codecs=opus` (Chrome,
+# Edge, Firefox) -> .webm, `audio/mp4` (Safari) -> .m4a/.mp4, `audio/ogg` ->
+# .ogg. Nunca .mp3: el micrófono no lo produce directamente.
+EXTENSIONES_GRABACION = {".webm", ".m4a", ".mp4", ".ogg", ".wav"}
+MAX_GRABACION_MS = 300000   # 5 min
+_HORA_RE = re.compile(r"^\d{2}:\d{2}$")
+
+
+def _hora_de_grabacion(hora):
+    """La hora HH:MM que manda el navegador (hora local de quien graba); sin
+    ella, o mal formada, la hora UTC del servidor."""
+    if isinstance(hora, str) and _HORA_RE.fullmatch(hora):
+        return hora
+    return datetime.now(timezone.utc).strftime("%H:%M")
+
+
+def guardar_grabacion(cliente, archivo, hora=None):
+    """Grabación del micrófono del editor (D8, gratis): se sube SIEMPRE
+    pasada a mp3 (`-vn -ac 1 -ar 44100 -c:a libmp3lame -b:a 128k`) — el
+    .webm de Chrome no trae duración y Safari viejo no decodifica opus con
+    `decodeAudioData` —, con tope de 5 minutos, 20 MB y la cuota del
+    proyecto. `archivo`: FileStorage de Flask (o algo con `.filename` y
+    `.save`). Encola el proxy (picos) como cualquier audio nuevo. Los
+    temporales (el original y el mp3) se borran en un `finally`."""
+    nombre_archivo = os.path.basename(archivo.filename or "")
+    ext = os.path.splitext(nombre_archivo)[1].lower()
+    if ext not in EXTENSIONES_GRABACION:
+        raise SubidaInvalida(gettext("Sube una grabación .webm, .m4a, .mp4, .ogg o .wav."))
+    carpeta = _carpeta_tmp(cliente)
+    local = os.path.join(carpeta, f"grabacion_{uuid.uuid4().hex}{ext}")
+    mp3 = local + ".mp3"
+    archivo.save(local)
+    try:
+        try:
+            info = cortes.ffprobe_json(local)
+            tiene_audio = any((s or {}).get("codec_type") == "audio" for s in info.get("streams") or [])
+        except Exception:
+            tiene_audio = False
+        if not tiene_audio:
+            raise SubidaInvalida(gettext("No pude leer esa grabación."))
+        try:
+            cortes.ffmpeg(["-i", local, "-vn", "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k", mp3])
+        except SubidaInvalida:
+            raise
+        except Exception:
+            raise SubidaInvalida(gettext("No pude leer esa grabación."))
+        try:
+            dur_ms = int(round(cortes.duracion(mp3) * 1000))
+        except Exception:
+            raise SubidaInvalida(gettext("No pude leer esa grabación."))
+        if dur_ms > MAX_GRABACION_MS:
+            raise SubidaInvalida(gettext("La grabación dura más de 5 minutos."))
+        tam = os.path.getsize(mp3)
+        try:
+            materiales.validar_subida("audio", tam)
+        except materiales.SubidaInvalida as e:
+            raise SubidaInvalida(str(e))
+        if materiales.bytes_usados(cliente) + tam > materiales.CUOTA_BYTES:
+            raise SubidaInvalida(gettext("El proyecto llegó a su límite de espacio (2 GB): borra en «Tus archivos» lo que ya no uses antes de subir más."))
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):   # se guarda: el idioma del proyecto
+            nombre = gettext("Grabación %(hora)s", hora=_hora_de_grabacion(hora))
+        h = materiales.hash_archivo(mp3)
+        m = materiales.subir(cliente, mp3, f"clientes/{cliente}/materiales/grabacion_{h[:16]}.mp3", "audio/mpeg",
+                             tipo="audio", origen="grabacion", duracion_ms=dur_ms, extra={"nombre": nombre})
+        trabajos.encolar(tareas_edicion.job_id_proxy(cliente, m["id"]), "edicion_proxy",
+                         {"cliente": cliente, "material_id": m["id"]}, duracion_estimada=60,
+                         cliente=cliente, max_intentos=3, prioridad=1)
+        return vista_previa.material_para(m)
+    finally:
+        for ruta in (local, mp3):
+            try:
+                os.remove(ruta)
+            except OSError:
+                pass
 
 
 def _materiales_de_piezas(cliente):

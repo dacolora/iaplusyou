@@ -59,6 +59,13 @@ def ver(cliente, edicion_id):
             # pone el navegador con el job_id que toque).
             "subtitulos_estimar": url_for("editor.subtitulos_estimar", cliente=cliente, edicion_id=edicion_id),
             "transcribir": url_for("editor.transcribir", cliente=cliente, edicion_id=edicion_id),
+            # capa 5a (Task 6): voz con IA (caché compartida con Crear › Audios,
+            # `voz_material` con `__CLAVE__` = hash_voz) y grabación del micrófono.
+            "voz_estimar": url_for("editor.voz_estimar", cliente=cliente, edicion_id=edicion_id),
+            "voz": url_for("editor.voz", cliente=cliente, edicion_id=edicion_id),
+            "voz_material": url_for("editor.voz_material", cliente=cliente, clave="__CLAVE__"),
+            "grabacion": url_for("editor.grabacion", cliente=cliente),
+            "muestra_voz": url_for("au_muestra", cliente=cliente),
             "estado_trabajo": url_for("estado_trabajo", job_id="__JOB__")}
     datos = vista_previa.datos_pagina(cliente, ed, urls)
     # Los textos de static/editor/*.js en el idioma de quien mira (textos.js
@@ -309,6 +316,99 @@ def transcribir_subtitulos(cliente, edicion_id):
                      duracion_estimada=20 + int(segundos // 4), etapas=list(tareas_edicion.ETAPAS_TRANSCRIBIR),
                      cliente=cliente, max_intentos=1)
     return jsonify({"job_id": job_id}), 202
+
+
+# --- Voz con IA y grabación (editor capa 5a, Task 6) ---
+
+_CLAVE_VOZ_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _tiene_palabras(mat):
+    return isinstance((mat.get("extra") or {}).get("palabras"), list)
+
+
+@bp.post("/<int:edicion_id>/voz/estimar", endpoint="voz_estimar")
+def voz_estimar(cliente, edicion_id):
+    """Precio de «Voz con IA» (D6/D9): la locución completa más sus
+    subtítulos (Whisper), en un solo botón. `ya_existe` dice si esa voz
+    exacta (mismo texto/voz/idioma/velocidad) ya está pagada y transcrita —
+    el botón pasa a «(gratis)» y no encola nada."""
+    if not _mismo_origen():
+        return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
+    if not _cargar(cliente, edicion_id):
+        return jsonify({"error": gettext("No existe esa edición.")}), 404
+    cuerpo = request.get_json(silent=True) or {}
+    texto = " ".join((cuerpo.get("texto") or "").split())
+    voz, idioma, velocidad = cuerpo.get("voz"), cuerpo.get("idioma"), cuerpo.get("velocidad")
+    estimado = gastos.estimar("voz_editor", caracteres=len(texto))
+    ya_existe = False
+    if texto and voz and velocidad in audios.VELOCIDADES:
+        existente = materiales.buscar_hash(cliente, audios.hash_voz(texto, voz, idioma, velocidad))
+        ya_existe = bool(existente and _tiene_palabras(existente))
+    return jsonify({"caracteres": len(texto), "usd": estimado["usd"], "precio": estimado["texto"],
+                    "ya_existe": ya_existe})
+
+
+@bp.post("/<int:edicion_id>/voz", endpoint="voz")
+def voz(cliente, edicion_id):
+    """Crea (o reutiliza) una voz con IA (D9): si ya existe con sus palabras,
+    la devuelve sin encolar nada (gratis); si no, encola `editor_voz`. Un
+    segundo clic mientras esa edición ya está generando una voz es 409 — el
+    `job_id` es uno por edición, nunca por texto."""
+    if not _mismo_origen():
+        return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
+    if not _cargar(cliente, edicion_id):
+        return jsonify({"error": gettext("No existe esa edición.")}), 404
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict):
+        cuerpo = {}
+    try:
+        payload = audios.validar(cliente, cuerpo)
+    except audios.EntradaInvalida as e:
+        return jsonify({"error": idiomas.traducir(str(e))}), 400
+    texto, voz_, idioma, velocidad = payload["texto"], payload["voz"], payload["idioma"], payload["velocidad"]
+    clave = audios.hash_voz(texto, voz_, idioma, velocidad)
+    existente = materiales.buscar_hash(cliente, clave)
+    if existente and _tiene_palabras(existente):
+        materiales.marcar_uso([existente["id"]])
+        return jsonify({"material": vista_previa.material_para(existente, con_palabras=True)})
+    job_id = tareas_edicion.job_id_voz(cliente, edicion_id)
+    if trabajos.en_curso(job_id):
+        return jsonify({"error": gettext("Ya se está creando una voz en esta edición: espera a que termine.")}), 409
+    trabajos.encolar(job_id, "editor_voz",
+                     {"cliente": cliente, "edicion_id": edicion_id, "texto": texto, "voz": voz_, "idioma": idioma,
+                      "velocidad": velocidad}, duracion_estimada=40, etapas=list(tareas_edicion.ETAPAS_VOZ),
+                     cliente=cliente, max_intentos=1)
+    return jsonify({"job_id": job_id, "clave": clave}), 202
+
+
+@bp.get("/voz/<clave>", endpoint="voz_material")
+def voz_material(cliente, clave):
+    """La voz cruda (con sus palabras, si ya las tiene) por su `hash_voz`:
+    lo que `editor_voz` pide el navegador cuando termina. No depende de
+    ninguna edición en particular — la caché es por proyecto (D9)."""
+    if not _CLAVE_VOZ_RE.fullmatch(clave or ""):
+        return jsonify({"error": gettext("Esa voz ya no existe.")}), 404
+    mat = materiales.buscar_hash(cliente, clave)
+    if not mat or mat.get("origen") != audios.ORIGEN_VOZ:
+        return jsonify({"error": gettext("Esa voz ya no existe.")}), 404
+    return jsonify({"material": vista_previa.material_para(mat, con_palabras=True)})
+
+
+@bp.post("/materiales/grabacion", endpoint="grabacion")
+def grabacion(cliente):
+    """Sube una grabación del micrófono (D8, gratis): el servidor la pasa a
+    mp3 y la deja lista para el cabezal."""
+    if not _mismo_origen():
+        return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return jsonify({"error": gettext("Elige un archivo.")}), 400
+    try:
+        material = biblioteca.guardar_grabacion(cliente, archivo, hora=request.form.get("hora"))
+    except biblioteca.SubidaInvalida as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"material": material})
 
 
 @bp.post("/desde/<cf_id>")

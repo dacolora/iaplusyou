@@ -277,3 +277,15 @@ def test_estimar_transcripcion_usa_costo_whisper_del_editor():
     assert e["texto"] == "US$ <0,01 aprox." and e["detalle"] == "90 s de audio con Whisper"
     assert gastos.estimar("transcripcion")["usd"] == 0.0        # sin segundos: nada que cobrar
     assert gastos.estimar("proponer_ideas", n=0)["usd"] == gastos.estimar("proponer_ideas", n=1)["usd"]
+
+
+def test_estimar_voz_editor_suma_locucion_y_sus_subtitulos():
+    """Editor capa 5a, Task 6 (D9): voz con IA + Whisper sobre ella, un solo
+    botón; ceil(N / 12) segundos (12 caracteres por segundo)."""
+    import gastos
+    from providers import fal_audio
+    e = gastos.estimar("voz_editor", caracteres=120)
+    assert e["usd"] == round(0.012 + fal_audio.costo_whisper(10000), 4)
+    assert e["detalle"] == "120 caracteres con ElevenLabs y sus subtítulos"
+    # sin caracteres nunca queda en 0: al menos 1 (igual que _estimar_locucion)
+    assert gastos.estimar("voz_editor")["usd"] == round(fal_audio.COSTO_USD_POR_CARACTER + fal_audio.costo_whisper(1000), 4)

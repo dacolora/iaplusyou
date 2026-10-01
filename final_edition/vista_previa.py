@@ -9,6 +9,7 @@ import glob
 import os
 
 import audios
+import idiomas
 import materiales
 import trabajos
 from final_edition import estimar, mezcla
@@ -155,10 +156,23 @@ def documento_para_vista(doc, mats):
     return copia, None
 
 
+def _voces_traducidas():
+    """`audios.fichas_voces()` con `genero_nombre` y `tono` traducidos (son
+    msgids N_): la galería de voces del editor (D9/D12) no tiene plantilla
+    Jinja que los traduzca sola, a diferencia de Crear › Audios."""
+    salida = []
+    for ficha in audios.fichas_voces():
+        salida.append({**ficha, "genero_nombre": idiomas.traducir(ficha["genero_nombre"]),
+                       "tono": idiomas.traducir(ficha["tono"])})
+    return salida
+
+
 def datos_pagina(cliente, edicion, urls):
+    from final_edition import biblioteca   # import tardío: biblioteca importa este módulo
     mats = materiales_para(cliente, edicion["documento"])
     doc, aviso = documento_para_vista(edicion["documento"], mats)
     job_subtitulos = tareas_edicion.job_id_transcribir(cliente, edicion["id"])
+    job_voz = tareas_edicion.job_id_voz(cliente, edicion["id"])
     return {
         "edicion": {"id": edicion["id"], "nombre": edicion["nombre"], "version_n": edicion["version_n"]},
         "documento": doc,
@@ -174,6 +188,13 @@ def datos_pagina(cliente, edicion, urls):
         # transcripción corriendo en esta edición (la barra sigue viva si la
         # página se recarga mientras tanto).
         "subtitulos": {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA},
-        "trabajos_vivos": {"subtitulos": job_subtitulos if trabajos.en_curso(job_subtitulos) else None},
+        # Task 6: voz con IA (la galería de Crear › Audios) y grabación con el micrófono.
+        "voces": _voces_traducidas(),
+        "voz": {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA,
+               "velocidades": {k: idiomas.traducir(v) for k, v in audios.NOMBRES_VELOCIDAD.items()},
+               "max_caracteres": audios.MAX_CARACTERES, "idioma_defecto": audios.idioma_defecto(cliente)},
+        "grabacion": {"max_ms": biblioteca.MAX_GRABACION_MS, "max_bytes": materiales.LIMITES["audio"][0]},
+        "trabajos_vivos": {"subtitulos": job_subtitulos if trabajos.en_curso(job_subtitulos) else None,
+                           "voz": job_voz if trabajos.en_curso(job_voz) else None},
         "urls": urls,
     }

@@ -134,3 +134,43 @@ def test_datos_pagina_trae_idiomas_y_trabajos_vivos_de_subtitulos(base_temporal,
     monkeypatch.setattr(trabajos, "en_curso", lambda jid: jid == job_id)
     datos2 = vista_previa.datos_pagina("acme", ed, {})
     assert datos2["trabajos_vivos"]["subtitulos"] == job_id
+
+
+def test_datos_pagina_trae_voz_y_grabacion(base_temporal, monkeypatch):
+    """Editor capa 5a, Task 6 (D9/D12): la galería de voces (con género y tono
+    ya traducidos — el editor no es Jinja), las velocidades traducidas, y los
+    topes de la grabación del micrófono; `trabajos_vivos.voz` sigue la
+    edición igual que `subtitulos`."""
+    import ediciones
+    import materiales
+    import trabajos
+    from final_edition import biblioteca, documento
+    from tareas import edicion as tareas_edicion
+    doc = documento.nuevo_video("9:16")
+    ed = ediciones.crear("acme", "video", "Demo", doc)
+    datos = vista_previa.datos_pagina("acme", ed, {})
+    assert len(datos["voces"]) == len(audios.fichas_voces())
+    assert {"nombre", "genero", "genero_nombre", "tono"} <= set(datos["voces"][0])
+    assert datos["voz"] == {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA,
+                            "velocidades": dict(audios.NOMBRES_VELOCIDAD), "max_caracteres": audios.MAX_CARACTERES,
+                            "idioma_defecto": audios.idioma_defecto("acme")}
+    assert datos["grabacion"] == {"max_ms": biblioteca.MAX_GRABACION_MS, "max_bytes": materiales.LIMITES["audio"][0]}
+    assert datos["trabajos_vivos"]["voz"] is None
+    job_id = tareas_edicion.job_id_voz("acme", ed["id"])
+    monkeypatch.setattr(trabajos, "en_curso", lambda jid: jid == job_id)
+    datos2 = vista_previa.datos_pagina("acme", ed, {})
+    assert datos2["trabajos_vivos"]["voz"] == job_id
+
+
+def test_datos_pagina_traduce_las_voces_al_idioma_de_quien_mira(base_temporal):
+    """`voces` sale en el idioma activo (D13): un proyecto en inglés ve
+    `genero_nombre`/`tono` en inglés, no en español."""
+    import ediciones
+    import idiomas
+    from final_edition import documento
+    doc = documento.nuevo_video("9:16")
+    ed = ediciones.crear("acme", "video", "Demo", doc)
+    with idiomas.en_idioma("en"):
+        datos = vista_previa.datos_pagina("acme", ed, {})
+    por_nombre = {v["nombre"]: v for v in datos["voces"]}
+    assert por_nombre["Rachel"]["genero_nombre"] == "Female" and por_nombre["Rachel"]["tono"] == "calm"

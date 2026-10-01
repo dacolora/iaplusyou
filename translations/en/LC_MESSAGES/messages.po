@@ -5408,6 +5408,9 @@ msgstr "That version breaks non-negotiable rules; ask Claude to fix it."
 msgid "Esa voz ya no está en Mis voces."
 msgstr "That voice is no longer in My voices."
 
+msgid "Esa voz ya no existe."
+msgstr "That voice no longer exists."
+
 msgid "Esas piezas ya se estaban generando."
 msgstr "Those pieces were already being generated."
 
@@ -6765,6 +6768,10 @@ msgstr "Record somewhere quiet, with a single person speaking and no music."
 msgid "Grabación"
 msgstr "Recording"
 
+#, python-format
+msgid "Grabación %(hora)s"
+msgstr "Recording %(hora)s"
+
 msgid "Grabación: de 10 segundos a 5 minutos, mp3, wav, m4a, aac u ogg"
 msgstr "Recording: 10 seconds to 5 minutes, mp3, wav, m4a, aac or ogg"
 
@@ -7694,6 +7701,9 @@ msgstr "People leave before the end: shorten the video or speed up the body."
 
 msgid "La grabación de esa voz ya no está."
 msgstr "That voice's recording is no longer available."
+
+msgid "La grabación dura más de 5 minutos."
+msgstr "The recording is longer than 5 minutes."
 
 msgid "La grabación pesa más de 20 MB."
 msgstr "The recording is larger than 20 MB."
@@ -9217,6 +9227,9 @@ msgstr "I couldn't reach Triple Whale (%(tipo)s)."
 msgid "No pude leer el archivo como texto (¿es un CSV?)."
 msgstr "I couldn't read the file as text (is it a CSV?)."
 
+msgid "No pude leer esa grabación."
+msgstr "I couldn't read that recording."
+
 msgid "No pude leer esa imagen."
 msgstr "I couldn't read that image."
 
@@ -10367,6 +10380,9 @@ msgstr "Preparing files"
 
 msgid "Preparando para el editor…"
 msgstr "Preparing for the editor…"
+
+msgid "Preparando sus subtítulos"
+msgstr "Preparing its subtitles"
 
 #, python-brace-format
 msgid "Preparando {n} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales."
@@ -12237,6 +12253,9 @@ msgstr "Upload an mp3, wav, m4a, aac or ogg."
 msgid "Sube un video, una imagen o un audio."
 msgstr "Upload a video, an image or an audio file."
 
+msgid "Sube una grabación .webm, .m4a, .mp4, .ogg o .wav."
+msgstr "Upload a .webm, .m4a, .mp4, .ogg, or .wav recording."
+
 msgid "Sube una imagen JPG, PNG o WEBP."
 msgstr "Upload a JPG, PNG or WEBP image."
 
@@ -13804,6 +13823,12 @@ msgstr "Voice-over (ElevenLabs), word-level subtitles (Whisper) and music (Stabl
 msgid "Voz en off: la voz se agrega después"
 msgstr "Voice-over: the voice is added afterward"
 
+msgid "Voz lista."
+msgstr "Voice ready."
+
+msgid "Voz lista; sus subtítulos se generan después (no se pudieron preparar ahora)."
+msgstr "Voice ready; its subtitles will be generated later (they couldn't be prepared now)."
+
 msgid "Voz primero"
 msgstr "Voice first"
 
@@ -14041,6 +14066,9 @@ msgstr "An audio is already being created — wait for it to finish."
 
 msgid "Ya se está creando una canción — espera a que termine."
 msgstr "A song is already being created — wait for it to finish."
+
+msgid "Ya se está creando una voz en esta edición: espera a que termine."
+msgstr "A voice is already being created for this edit: wait for it to finish."
 
 msgid "Ya se está creando una voz — espera a que termine."
 msgstr "A voice is already being created — wait for it to finish."

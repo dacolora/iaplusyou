@@ -28,6 +28,7 @@ import subprocess
 
 from flask_babel import gettext, ngettext
 
+import audios
 import cola
 import creative_flow
 import ediciones
@@ -48,8 +49,12 @@ ETAPAS_EDICION = ((N_("Preparando materiales"), 15), (N_("Renderizando"), 70), (
 # Editor capa 5a: etapas de `material_transcribir` y mensajes finales de las
 # tareas de audio del editor (también usado por `editor_voz`, Task 6).
 ETAPAS_TRANSCRIBIR = ((N_("Preparando el audio"), 20), (N_("Transcribiendo"), 70), (N_("Guardando"), 10))
+# Task 6: etapas de `editor_voz` (TTS + Whisper sobre la voz).
+ETAPAS_VOZ = ((N_("Creando la voz"), 60), (N_("Preparando sus subtítulos"), 30), (N_("Guardando"), 10))
 MENSAJES_AUDIO_EDITOR = {
     "subtitulos_listos": N_("Subtítulos listos."),
+    "voz_lista": N_("Voz lista."),
+    "voz_sin_palabras": N_("Voz lista; sus subtítulos se generan después (no se pudieron preparar ahora)."),
 }
 _EXT = {"video": "mp4", "imagen": "png", "audio": "wav", "png_texto": "png", "proxy": "mp4"}
 _IDIOMA_RE = re.compile(r"[a-z]{2}")
@@ -88,6 +93,10 @@ def job_id_proxy(cliente, material_id):
 
 def job_id_transcribir(cliente, edicion_id):
     return f"{cliente}__ed{int(edicion_id)}__subtitulos"
+
+
+def job_id_voz(cliente, edicion_id):
+    return f"{cliente}__ed{int(edicion_id)}__voz"
 
 
 def job_id_desde_clon(cliente, cf_id):
@@ -374,6 +383,66 @@ def ejecutar_transcribir(tarea):
         # saca a una variable antes, como ya hace el resto del código con
         # ngettext(gettext(...)).
         mensaje = MENSAJES_AUDIO_EDITOR["subtitulos_listos"]
+        return gettext(mensaje)
+    finally:
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
+# Lo único que llega tal cual (traducido) al estado del trabajo: el único
+# msgid fijo que audios.sintetizar puede lanzar (una voz propia borrada entre
+# el clic y el worker — no aplica hoy, la galería del editor es solo las 22
+# voces de fal_audio.VOCES, pero audios.voz_cruda no lo sabe). Cualquier otro
+# error (p. ej. de fal, que repite el input — el texto de la persona) nunca
+# pasa tal cual: el estado de trabajos no pide sesión (D13).
+_MSGIDS_FIJOS_VOZ = frozenset(audios.MENSAJES.values())
+
+
+@registrar("editor_voz")
+def ejecutar_voz(tarea):
+    try:
+        return _generar_voz(tarea)
+    except Exception as e:  # noqa: BLE001 — todo error sale saneado, nunca el texto de la persona
+        if isinstance(e, ValueError) and str(e) in _MSGIDS_FIJOS_VOZ:
+            raise ValueError(gettext(str(e))) from e
+        log.exception("editor_voz (tarea %s) falló: %s", tarea.get("id"), cola.sin_token(e))
+        raise RuntimeError(gettext("No pude crear la voz; intenta de nuevo (%(tipo)s).", tipo=type(e).__name__)) from e
+
+
+def _generar_voz(tarea):
+    """Voz con IA dentro del editor (D9, Task 6): TTS (caché compartida con
+    Crear › Audios, `audios.voz_cruda`) y, enseguida, Whisper sobre esa voz —
+    así «Generar subtítulos» con ella sale gratis. Si Whisper falla, la voz
+    (ya pagada) se entrega igual y el mensaje final lo avisa — nunca se
+    pierde lo pagado, y el mensaje nunca lleva el texto de la persona (D13:
+    el estado de trabajos no pide sesión)."""
+    p = tarea["payload"]
+    cliente, edicion_id = p["cliente"], p["edicion_id"]
+    texto, voz, idioma = p["texto"], p["voz"], p["idioma"]
+    velocidad = p.get("velocidad") or "normal"
+    jid = tarea.get("job_id") or job_id_voz(cliente, edicion_id)
+    avisar = lambda n: trabajos.reportar(jid, etapa=n)
+    carpeta = _carpeta(cliente, f"voz_{edicion_id}")
+    avisar(ETAPAS_VOZ[0][0])
+    try:
+        ref = f"locucion:{audios.hash_voz(texto, voz, idioma, velocidad)[:12]}{ref_sufijo(tarea)}"
+        mat, _creada, _costo = audios.voz_cruda(cliente, texto, voz, idioma, velocidad, carpeta, ref)
+        avisar(ETAPAS_VOZ[1][0])
+        sin_palabras = False
+        if transcripcion.necesita(mat):
+            ref_t = f"transcripcion:{mat['id']}{ref_sufijo(tarea)}"
+            try:
+                mat = transcripcion.transcribir(cliente, mat, idioma, carpeta, ref_t)
+            except Exception:  # noqa: BLE001 — la voz (ya pagada) se entrega igual
+                log.exception("editor_voz (tarea %s): no se pudo transcribir la voz %s", tarea.get("id"), mat["id"])
+                sin_palabras = True
+        avisar(ETAPAS_VOZ[2][0])
+        if (mat.get("extra") or {}).get("picos") is None:
+            trabajos.encolar(job_id_proxy(cliente, mat["id"]), "edicion_proxy",
+                             {"cliente": cliente, "material_id": mat["id"]}, duracion_estimada=60,
+                             cliente=cliente, max_intentos=3, prioridad=1)
+        materiales.marcar_uso([mat["id"]])
+        # Mismo truco que arriba: Babel 2.18 no extrae bien gettext(dict[clave]).
+        mensaje = MENSAJES_AUDIO_EDITOR["voz_sin_palabras"] if sin_palabras else MENSAJES_AUDIO_EDITOR["voz_lista"]
         return gettext(mensaje)
     finally:
         shutil.rmtree(carpeta, ignore_errors=True)

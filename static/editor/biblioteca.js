@@ -150,8 +150,9 @@ export function urlPieza(plantilla, cfId) {
 // preparados (espejo de final_edition/biblioteca.ORIGENES_BORRABLES). Nunca
 // el logo, una voz de guion ni una canción de Mi música: la creada tiene
 // origen «musica» y la subida trae `mi_musica` (vista_previa.material_para);
-// las dos se borran en Crear › Mi música.
-export const ORIGENES_BORRABLES = ["subida", "crear"];
+// las dos se borran en Crear › Mi música. Capa 5a (Task 6): una grabación del
+// micrófono SÍ se borra desde aquí (es solo suya, como una subida).
+export const ORIGENES_BORRABLES = ["subida", "crear", "grabacion"];
 
 export function puedeBorrarse(m) {
   return Boolean(m) && ORIGENES_BORRABLES.includes(m.origen) && !m.mi_musica;

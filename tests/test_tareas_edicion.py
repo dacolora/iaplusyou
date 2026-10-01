@@ -3,6 +3,9 @@ import os
 import subprocess
 
 import pytest
+import sqlalchemy as sa
+
+import db
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures", "documentos", "video_basico.json")
 
@@ -10,6 +13,11 @@ FIX = os.path.join(os.path.dirname(__file__), "fixtures", "documentos", "video_b
 def _doc():
     with open(FIX, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _gastos(cliente):
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente))]
 
 
 @pytest.fixture()
@@ -552,3 +560,101 @@ def test_tarea_material_transcribir_registrada(base_temporal):
     tareas.cargar_todas()
     import tareas.edicion as te
     assert tareas.REGISTRO["material_transcribir"] is te.ejecutar_transcribir
+
+
+# --- editor_voz (editor capa 5a, Task 6): voz con IA ---
+
+def test_job_id_voz(entorno):
+    assert entorno.job_id_voz("acme", 7) == "acme__ed7__voz"
+
+
+def _tarea_voz(texto="Hola mundo", voz="Rachel", idioma="es", velocidad="normal", tid=20, edicion_id=1):
+    return {"id": tid, "job_id": f"acme__ed{edicion_id}__voz",
+            "payload": {"cliente": "acme", "edicion_id": edicion_id, "texto": texto, "voz": voz, "idioma": idioma,
+                        "velocidad": velocidad}}
+
+
+@pytest.fixture()
+def entorno_voz(entorno, monkeypatch):
+    """TTS falso (una llamada por texto/voz/velocidad) y Whisper falso que
+    deja `palabras` en el material — mismas piezas que ejecutar_voz orquesta."""
+    import audios as audios_mod
+    import gastos
+    import materiales
+    from final_edition import transcripcion as transcripcion_mod
+    tts = []
+    monkeypatch.setattr(audios_mod.fal_audio, "tts",
+                        lambda texto, voz, idioma="es", on_progreso=None, velocidad=None, **kw:
+                        tts.append(texto) or {"url": "https://fal/v.mp3", "costo_usd": 0.002})
+    monkeypatch.setattr(audios_mod, "descargar_url", lambda url, destino: (open(destino, "wb").write(b"VOZ"), destino)[1])
+    monkeypatch.setattr(audios_mod.cortes, "duracion", lambda path: 1.5)
+    whisper = []
+
+    def _whisper(cliente, mat, idioma, carpeta, referencia):
+        whisper.append(mat["id"])
+        gastos.registrar_seguro(cliente, "transcripcion", 0.0001, referencia, proveedor="fal/whisper")
+        return materiales.actualizar_extra(cliente, mat["id"], palabras=[{"t_ms": 0, "dur_ms": 400, "texto": "Hola"}],
+                                           palabras_idioma=idioma, palabras_fuente="whisper")
+    monkeypatch.setattr(transcripcion_mod, "transcribir", _whisper)
+    return {"tts": tts, "whisper": whisper}
+
+
+def test_editor_voz_crea_la_voz_con_palabras_y_los_dos_gastos(entorno, entorno_voz):
+    import audios
+    import materiales
+    import trabajos
+    msg = entorno.ejecutar_voz(_tarea_voz())
+    assert msg == "Voz lista."
+    assert entorno_voz["tts"] == ["Hola mundo"] and len(entorno_voz["whisper"]) == 1
+    gastos_ = _gastos("acme")
+    assert {g["tipo"] for g in gastos_} == {"locucion", "transcripcion"}
+    h = audios.hash_voz("Hola mundo", "Rachel", "es", "normal")
+    mat = materiales.buscar_hash("acme", h)
+    assert mat["extra"]["palabras"] == [{"t_ms": 0, "dur_ms": 400, "texto": "Hola"}]
+    # la voz nueva no tiene picos: se encoló su proxy (gratis)
+    assert trabajos.en_curso(entorno.job_id_proxy("acme", mat["id"]))
+
+
+def test_editor_voz_whisper_falla_devuelve_mensaje_sin_palabras_y_el_gasto_de_la_voz_queda(entorno, entorno_voz, monkeypatch):
+    from final_edition import transcripcion as transcripcion_mod
+
+    def _revienta(cliente, mat, idioma, carpeta, referencia):
+        raise RuntimeError("fal caído")
+    monkeypatch.setattr(transcripcion_mod, "transcribir", _revienta)
+    msg = entorno.ejecutar_voz(_tarea_voz(texto="Un secreto que nadie debe leer en un mensaje"))
+    assert msg == "Voz lista; sus subtítulos se generan después (no se pudieron preparar ahora)."
+    assert "secreto" not in msg.lower()                      # el mensaje nunca lleva el texto de la persona
+    gastos_ = _gastos("acme")
+    assert len(gastos_) == 1 and gastos_[0]["tipo"] == "locucion"    # la voz (ya pagada) quedó
+
+
+def test_editor_voz_no_vuelve_a_transcribir_si_la_voz_ya_tenia_palabras(entorno, entorno_voz):
+    entorno.ejecutar_voz(_tarea_voz(tid=20))
+    assert len(entorno_voz["whisper"]) == 1
+    entorno_voz["tts"].clear()
+    msg = entorno.ejecutar_voz(_tarea_voz(tid=21))            # mismo texto/voz/velocidad: la voz ya existe
+    assert msg == "Voz lista."
+    assert entorno_voz["tts"] == [] and len(entorno_voz["whisper"]) == 1   # ni fal ni Whisper de nuevo
+
+
+def test_editor_voz_un_error_de_fal_nunca_deja_el_texto_de_la_persona(entorno, monkeypatch):
+    """Un error crudo de fal suele repetir el input (el texto que la persona
+    escribió): el estado del trabajo (sin sesión, job_id adivinable) nunca
+    debe mostrarlo — mismo saneado que tareas/audios.py::_error_publico para
+    la misma llamada subyacente."""
+    import audios as audios_mod
+
+    def _revienta(texto, voz, idioma="es", on_progreso=None, velocidad=None, **kw):
+        raise RuntimeError(f"fal rejected prompt: {texto!r}")
+    monkeypatch.setattr(audios_mod.fal_audio, "tts", _revienta)
+    with pytest.raises(RuntimeError) as exc:
+        entorno.ejecutar_voz(_tarea_voz(texto="un secreto de la persona"))
+    assert "secreto" not in str(exc.value).lower()
+    assert "RuntimeError" in str(exc.value)
+
+
+def test_editor_voz_registrada(base_temporal):
+    import tareas
+    tareas.cargar_todas()
+    import tareas.edicion as te
+    assert tareas.REGISTRO["editor_voz"] is te.ejecutar_voz

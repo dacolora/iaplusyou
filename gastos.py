@@ -258,6 +258,18 @@ def _estimar_transcripcion(segundos=0, **_):
     return fal_audio.costo_whisper(n * 1000), f"{n} s de audio con Whisper"
 
 
+def _estimar_voz_editor(caracteres=0, **_):
+    """Editor capa 5a (D9): voz con IA + sus subtítulos, en un solo botón —
+    la locución del texto completo más Whisper sobre ella. `ceil(N / 12)`
+    segundos: 12 caracteres por segundo, una locución lenta (el estimado
+    nunca queda por debajo del real)."""
+    from providers import fal_audio
+    n = max(1, int(caracteres or 0))
+    usd_voz = n * fal_audio.COSTO_USD_POR_CARACTER
+    segundos = math.ceil(n / 12)
+    return usd_voz + fal_audio.costo_whisper(segundos * 1000), f"{n} caracteres con ElevenLabs y sus subtítulos"
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
@@ -280,6 +292,7 @@ _ESTIMADORES = {
     "voz_clonada": _estimar_voz_clonada,
     "voz_disenada": _estimar_voz_disenada,
     "transcripcion": _estimar_transcripcion,
+    "voz_editor": _estimar_voz_editor,
     "guion_clips": _estimar_guion_clips,
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),

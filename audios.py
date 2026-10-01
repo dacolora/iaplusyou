@@ -248,6 +248,36 @@ def sintetizar(cliente, voz, texto, idioma, velocidad):
             "etiqueta": ETIQUETAS_MOTOR[motor], "voz_nombre": voz}
 
 
+def voz_cruda(cliente, texto, voz, idioma, velocidad, carpeta, referencia):
+    """La voz cruda (sin música), cacheada por `hash_voz`: el mismo texto con
+    la misma voz y la misma velocidad nunca se paga dos veces, se haya pedido
+    desde Crear › Audios o desde el editor (capa 5a, D9). El gasto se
+    registra en cuanto fal cobra — ANTES de bajar/subir el archivo — así que
+    un fallo después no lo pierde. Esto es lo que hacía
+    `tareas/audios.py::_tts`; las dos tareas lo usan. Devuelve
+    `(material, creada, costo_usd)` — `costo_usd` es 0.0 si el material ya
+    existía (nada se pagó esta vez)."""
+    h_voz = hash_voz(texto, voz, idioma, velocidad)
+
+    def _tts():
+        r = sintetizar(cliente, voz, texto, idioma, velocidad)
+        usd = float(r.get("costo_usd") or 0.0)
+        # fal ya cobró: el gasto queda aunque lo que sigue falle.
+        gastos.registrar_seguro(cliente, "locucion", usd, referencia,
+                                detalle=gettext("%(motor)s · %(n)s caracteres · %(voz)s", motor=r["etiqueta"],
+                                                n=len(texto), voz=r["voz_nombre"]),
+                                proveedor=r["proveedor"])
+        local = descargar_url(r["url"], os.path.join(carpeta, f"voz_{h_voz[:16]}.mp3"))
+        url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h_voz[:16]}.mp3", "audio/mpeg")
+        return {"tipo": "audio", "origen": ORIGEN_VOZ, "url": url, "bytes": os.path.getsize(local),
+                "duracion_ms": int(round(cortes.duracion(local) * 1000)), "costo_usd": usd,
+                "extra": {"texto": texto, "voz": r["voz_nombre"], "voz_ref": voz, "idioma": idioma,
+                          "velocidad": velocidad, "local": local, "nombre": nombre_de(texto)}}
+    m, creada = materiales.obtener_o_crear(cliente, h_voz, _tts)
+    costo = float(m.get("costo_usd") or 0.0) if creada else 0.0
+    return m, creada, costo
+
+
 # ------------------------------------------------------------- mezcla ---
 
 def duracion_total_ms(voz_ms, con_musica):

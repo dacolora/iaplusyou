@@ -9,6 +9,7 @@ import re
 import pytest
 
 import audios
+import materiales
 from tests.test_rutas_productos import _cliente_admin
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -100,10 +101,22 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
                              # capa 5a (Task 5): subtítulos automáticos
                              "subtitulos_estimar": f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar",
                              "transcribir": f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+                             # capa 5a (Task 6): voz con IA y grabación
+                             "voz_estimar": f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+                             "voz": f"/cliente/acme/ediciones/{ed['id']}/voz",
+                             "voz_material": "/cliente/acme/ediciones/voz/__CLAVE__",
+                             "grabacion": "/cliente/acme/ediciones/materiales/grabacion",
+                             "muestra_voz": "/cliente/acme/audios/muestra",
                              "estado_trabajo": "/trabajo/__JOB__/estado"}
     assert datos["estimado_s"] >= 20 and datos["cf_id"] is None
     assert datos["subtitulos"] == {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA}
-    assert datos["trabajos_vivos"] == {"subtitulos": None}
+    assert datos["trabajos_vivos"] == {"subtitulos": None, "voz": None}
+    assert len(datos["voces"]) == len(audios.fichas_voces())
+    assert all(v["genero_nombre"] and v["tono"] is not None for v in datos["voces"])
+    assert datos["voz"] == {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA,
+                            "velocidades": dict(audios.NOMBRES_VELOCIDAD),
+                            "max_caracteres": audios.MAX_CARACTERES, "idioma_defecto": audios.idioma_defecto("acme")}
+    assert datos["grabacion"] == {"max_ms": 300000, "max_bytes": materiales.LIMITES["audio"][0]}
     assert [a[1] for a, _k in encolados] == ["edicion_proxy"]
     assert encolados[0][0][2] == {"cliente": "acme", "material_id": clon["id"]}
 
@@ -860,6 +873,151 @@ def test_transcribir_409_si_ya_corre(dashboard, encolados, monkeypatch):
     r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": [a["id"]], "idioma": "es"})
     assert r.status_code == 409
     assert encolados == []
+
+
+# --- Voz con IA y grabación (editor capa 5a, Task 6) ---
+
+def _voz_lista(texto="Hola mundo", voz="Rachel", idioma="es", velocidad="normal"):
+    import audios
+    import materiales
+    h = audios.hash_voz(texto, voz, idioma, velocidad)
+    return materiales.registrar("acme", tipo="audio", origen=audios.ORIGEN_VOZ, url="https://r2/voz.mp3", hash=h,
+                                bytes=1, extra={"palabras": [{"t_ms": 0, "dur_ms": 1, "texto": "Hola"}]})
+
+
+def test_voz_estimar_dice_ya_existe_y_el_precio(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+              json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    j = r.get_json()
+    assert r.status_code == 200 and j["ya_existe"] is False
+    assert j["caracteres"] == len("Hola mundo") and j["usd"] > 0 and j["precio"]
+    _voz_lista()
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+               json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r2.get_json()["ya_existe"] is True
+
+
+def test_voz_estimar_exige_mismo_origen_y_edicion_existente(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar", json={"texto": "x"},
+              headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert c.post("/cliente/acme/ediciones/999/voz/estimar", json={"texto": "x"}).status_code == 404
+
+
+def test_voz_exige_mismo_origen(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz", json={"texto": "Hola mundo"},
+              headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert encolados == []
+
+
+def test_voz_400_por_texto_vacio_y_voz_inventada(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+              json={"texto": "", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r.status_code == 400 and r.get_json()["error"]
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+               json={"texto": "Hola", "voz": "Nadie", "idioma": "es", "velocidad": "normal"})
+    assert r2.status_code == 400 and r2.get_json()["error"]
+    assert encolados == []
+
+
+def test_voz_200_con_la_existente_no_encola(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    v = _voz_lista()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+              json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["material"]["id"] == v["id"] and j["material"]["tiene_palabras"] is True
+    assert encolados == []
+
+
+def test_voz_202_encola_con_clave_de_64_hex(dashboard, encolados):
+    import re as re_mod
+    from tareas import edicion as te
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+              json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r.status_code == 202
+    j = r.get_json()
+    assert re_mod.fullmatch(r"[0-9a-f]{64}", j["clave"])
+    job_id = te.job_id_voz("acme", ed["id"])
+    assert j["job_id"] == job_id
+    args, kw = encolados[0]
+    assert args[0] == job_id and args[1] == "editor_voz"
+    assert args[2] == {"cliente": "acme", "edicion_id": ed["id"], "texto": "Hola mundo", "voz": "Rachel",
+                       "idioma": "es", "velocidad": "normal"}
+    assert kw["max_intentos"] == 1 and kw["cliente"] == "acme"
+
+
+def test_voz_409_si_ya_corre(dashboard, encolados, monkeypatch):
+    import trabajos
+    ed, _c, _v = _edicion()
+    monkeypatch.setattr(trabajos, "en_curso", lambda jid: True)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+              json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r.status_code == 409
+    assert encolados == []
+
+
+def test_voz_material_404_por_clave_rara_o_inexistente(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    assert c.get("/cliente/acme/ediciones/voz/no-es-hex").status_code == 404
+    assert c.get("/cliente/acme/ediciones/voz/" + "0" * 64).status_code == 404
+
+
+def test_voz_material_200_con_palabras(dashboard, encolados):
+    import audios
+    v = _voz_lista()
+    h = audios.hash_voz("Hola mundo", "Rachel", "es", "normal")
+    c = _cliente_admin(dashboard)
+    r = c.get(f"/cliente/acme/ediciones/voz/{h}")
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["material"]["id"] == v["id"]
+    assert j["material"]["palabras"] == [{"t_ms": 0, "dur_ms": 1, "texto": "Hola"}]
+
+
+def test_grabacion_403_por_otro_origen(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/materiales/grabacion", data={}, headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+
+
+def test_grabacion_400_sin_archivo(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/materiales/grabacion", data={})
+    assert r.status_code == 400 and r.get_json()["error"]
+
+
+def test_grabacion_200_y_400_segun_lo_que_diga_la_biblioteca(dashboard, encolados, monkeypatch):
+    from final_edition import biblioteca
+    c = _cliente_admin(dashboard)
+    vistos = []
+    monkeypatch.setattr(biblioteca, "guardar_grabacion",
+                        lambda cliente, archivo, hora=None: vistos.append(hora) or {"id": 1, "origen": "grabacion"})
+    r = c.post("/cliente/acme/ediciones/materiales/grabacion",
+              data={"archivo": (io.BytesIO(b"x"), "grab.webm"), "hora": "14:32"}, content_type="multipart/form-data")
+    assert r.status_code == 200 and r.get_json()["material"]["id"] == 1
+    assert vistos == ["14:32"]
+
+    def _invalida(cliente, archivo, hora=None):
+        raise biblioteca.SubidaInvalida("No pude leer esa grabación.")
+    monkeypatch.setattr(biblioteca, "guardar_grabacion", _invalida)
+    r2 = c.post("/cliente/acme/ediciones/materiales/grabacion",
+               data={"archivo": (io.BytesIO(b"x"), "grab.webm")}, content_type="multipart/form-data")
+    assert r2.status_code == 400 and r2.get_json()["error"] == "No pude leer esa grabación."
 
 
 @pytest.mark.slow

@@ -191,6 +191,115 @@ def test_subir_no_duplica_el_mismo_archivo(entorno):
     assert a["id"] == b["id"]
 
 
+# --- guardar_grabacion (editor capa 5a, Task 6, D8): el micrófono del editor ---
+
+def test_grabacion_extension_no_permitida(entorno):
+    with pytest.raises(entorno.SubidaInvalida, match=r"\.webm"):
+        entorno.guardar_grabacion("acme", _Archivo("virus.exe", b"MZ..."))
+
+
+def test_grabacion_sin_pista_de_audio_se_rechaza(entorno, monkeypatch):
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "video"}]})
+    with pytest.raises(entorno.SubidaInvalida, match="No pude leer esa grabación."):
+        entorno.guardar_grabacion("acme", _Archivo("solo_video.webm", b"x"))
+
+
+def test_grabacion_ffprobe_roto_tambien_es_no_pude_leer(entorno, monkeypatch):
+    def _revienta(path):
+        raise RuntimeError("ffprobe roto")
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", _revienta)
+    with pytest.raises(entorno.SubidaInvalida, match="No pude leer esa grabación."):
+        entorno.guardar_grabacion("acme", _Archivo("rota.webm", b"x"))
+
+
+def test_grabacion_mas_de_cinco_minutos_se_rechaza(entorno, monkeypatch):
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", lambda args: open(args[-1], "wb").write(b"MP3"))
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 301.0)
+    with pytest.raises(entorno.SubidaInvalida, match="5 minutos"):
+        entorno.guardar_grabacion("acme", _Archivo("larga.webm", b"x"))
+
+
+def test_grabacion_respeta_la_cuota(entorno, monkeypatch):
+    import materiales
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", lambda args: open(args[-1], "wb").write(b"MP3" * 1000))
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 1.0)
+    monkeypatch.setattr(materiales, "CUOTA_BYTES", 10)
+    with pytest.raises(entorno.SubidaInvalida, match="límite"):
+        entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"))
+
+
+def test_grabacion_hora_invalida_o_ausente_usa_la_hora_utc_del_servidor(entorno, monkeypatch):
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", lambda args: open(args[-1], "wb").write(b"MP3"))
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 1.0)
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"), hora="no es una hora")
+    assert m["nombre"].startswith("Grabación ") and m["nombre"] != "Grabación no es una hora"
+
+
+def test_grabacion_usa_la_hora_que_manda_el_navegador(entorno, monkeypatch):
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", lambda args: open(args[-1], "wb").write(b"MP3"))
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 1.0)
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"), hora="14:32")
+    assert m["nombre"] == "Grabación 14:32"
+
+
+@pytest.mark.slow
+@_sin_ffmpeg
+def test_grabacion_webm_opus_real_se_pasa_a_mp3_y_encola_el_proxy(entorno, tmp_path):
+    import trabajos
+    from tareas import edicion as te
+    clip = str(tmp_path / "grab.webm")
+    try:
+        subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                        "-i", "sine=frequency=440:duration=1", "-c:a", "libopus", clip], check=True)
+    except subprocess.CalledProcessError:
+        pytest.skip("el ffmpeg local no trae libopus")
+    with open(clip, "rb") as f:
+        datos = f.read()
+    m = entorno.guardar_grabacion("acme", _Archivo("grabacion.webm", datos))
+    assert m["tipo"] == "audio" and m["origen"] == "grabacion"
+    assert 900 <= m["duracion_ms"] <= 1200
+    assert m["nombre"].startswith("Grabación")
+    assert trabajos.en_curso(te.job_id_proxy("acme", m["id"]))
+
+
+@pytest.mark.slow
+@_sin_ffmpeg
+def test_grabacion_m4a_aac_real_se_pasa_a_mp3(entorno, tmp_path):
+    clip = str(tmp_path / "grab.m4a")
+    subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                    "-i", "sine=frequency=440:duration=1", "-c:a", "aac", clip], check=True)
+    with open(clip, "rb") as f:
+        datos = f.read()
+    m = entorno.guardar_grabacion("acme", _Archivo("grabacion.m4a", datos))
+    assert m["tipo"] == "audio" and m["origen"] == "grabacion"
+    assert 900 <= m["duracion_ms"] <= 1200
+
+
+# --- orígenes de la biblioteca (editor capa 5a, Task 6) ---
+
+def test_listar_incluye_grabacion_y_locucion(entorno):
+    import materiales
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/g.mp3", hash="h-grab",
+                             bytes=1, extra={"nombre": "Grabación 14:32"})
+    l = materiales.registrar("acme", tipo="audio", origen="locucion", url="https://r2/l.mp3", hash="h-loc",
+                             bytes=1, extra={"nombre": "Hola mundo"})
+    ids = {m["id"] for m in entorno.listar("acme")["materiales"]}
+    assert {g["id"], l["id"]} <= ids
+
+
+def test_borrar_quita_una_grabacion_del_microfono(entorno):
+    import materiales
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/g2.mp3", hash="h-grab2",
+                             bytes=1, extra={"nombre": "Grabación 09:00"})
+    out = entorno.borrar("acme", g["id"])
+    assert out["id"] == g["id"]
+    assert materiales.obtener("acme", g["id"]) is None
+
+
 def _pieza_lista(cliente="acme", nombre="gira sobre la mesa", **extra):
     import creative_flow
     cf = creative_flow.crear(cliente, [], ["Espejo LED"], [], nombre, 8, "", "A")
