@@ -435,6 +435,25 @@ def test_desconectar_una_de_dos_shopify_no_archiva_el_catalogo(app, monkeypatch)
     assert tiendas.listar("acme") == [] and tiendas.producto("acme", pid)["archivado"] is True
 
 
+def test_traer_de_mi_tienda_muestra_la_fecha_legible_y_el_error_de_una_tienda_rota(app):
+    """Revisión final: la última sincronización se lee «2026-09-30 12:34» (sin
+    la «T» del ISO) y, si la tienda sin llaves quedó «rota», se ve su error
+    sin perder «Sincronizar ahora»."""
+    import tiendas
+    tid = tiendas.conectar("acme", "shopify_publico", {"dominio": "www.acme.com"}, nombre="Acme", dominio="www.acme.com")
+    tiendas.actualizar("acme", tid, ultima_sync_productos="2026-09-30T12:34:56")
+
+    def bloque():
+        html = app["c"].get("/cliente/acme").data.decode()
+        return html.split('id="cat-traer"', 1)[1].split("Importar CSV/Excel", 1)[0]
+
+    b = bloque()
+    assert "2026-09-30 12:34" in b and "2026-09-30T12:34" not in b and "tag-error" not in b
+    tiendas.actualizar("acme", tid, estado="rota", error="la tienda www.acme.com limitó las peticiones (HTTP 429).")
+    b = bloque()
+    assert '<p class="tag-error">' in b and "limitó las peticiones (HTTP 429)." in b and "Sincronizar ahora" in b
+
+
 def test_catalogo_ofrece_traer_de_mi_tienda_y_configuracion_el_tipo_sin_llaves(app):
     html = app["c"].get("/cliente/acme").data.decode()
     pestana = html.split('id="tab-catalogo"', 1)[1].split('id="tab-settings"', 1)[0]

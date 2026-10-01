@@ -7750,6 +7750,9 @@ msgstr "The last evaluation failed: %(error)s"
 msgid "La última revisión no se pudo terminar: %(error)s"
 msgstr "The last review couldn't finish: %(error)s"
 
+msgid "La última sincronización falló."
+msgstr "The last sync failed."
+
 #, python-format
 msgid "La última tanda de descripciones en inglés falló: %(error)s"
 msgstr "The last batch of English descriptions failed: %(error)s"
