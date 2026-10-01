@@ -558,3 +558,104 @@ def test_resolver_quita_clip_de_audio_de_otro_idioma():
     assert d.resolver(v, "es", "CO")["pistas"][2]["clips"] == []
     en = d.resolver(v, "en", "US")
     assert en["pistas"][2]["clips"][0]["material_id"] == 2
+
+
+# --- foto, encuadre y transición que junta (editor, capa 5b, D1/D4/D9) ------
+
+def _doc_foto(**sobre_clip):
+    """Un video de un solo clip en la principal (sin lío de contigüidad
+    para las pruebas de `foto`/`encuadre`)."""
+    doc = d.nuevo_video("9:16")
+    clip = {"id": "f0", "inicio_ms": 0, "duracion_ms": 3000, "material_id": 4}
+    clip.update(sobre_clip)
+    doc["pistas"][0]["clips"] = [clip]
+    return doc
+
+
+def test_documento_viejo_valida_igual_sin_foto_encuadre_ni_transicion_modo():
+    doc = cargar("video_basico.json")
+    v1 = d.validar(doc)
+    v2 = d.validar(copy.deepcopy(v1))
+    assert v1 == v2
+    for p in v1["pistas"]:
+        for c in p["clips"]:
+            assert "foto" not in c and "encuadre" not in c
+
+
+def test_foto_normaliza_recorte_a_0_duracion_aunque_venga_otro():
+    doc = _doc_foto(foto=True, velocidad=1.0, duracion_ms=3000, recorte={"desde_ms": 5, "hasta_ms": 9})
+    v = d.validar(doc)
+    c = v["pistas"][0]["clips"][0]
+    assert c["foto"] is True
+    assert c["recorte"] == {"desde_ms": 0, "hasta_ms": 3000}
+
+
+def test_foto_false_desaparece_del_clip():
+    doc = _doc_foto(foto=False)
+    v = d.validar(doc)
+    assert "foto" not in v["pistas"][0]["clips"][0]
+
+
+@pytest.mark.parametrize("sobre_clip", [
+    {"foto": True, "velocidad": 2.0},
+    {"foto": True, "duracion_ms": 70000},
+    {"foto": True, "duracion_ms": 50},
+    {"foto": "sí"},
+])
+def test_foto_invalida(sobre_clip):
+    doc = _doc_foto(**sobre_clip)
+    with pytest.raises(d.DocumentoInvalido):
+        d.validar(doc)
+
+
+@pytest.mark.parametrize("tipo_pista", ["texto", "imagen", "audio", "superpuesto"])
+def test_foto_solo_va_en_la_pista_de_video(tipo_pista):
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "v0", "inicio_ms": 0, "duracion_ms": 3000, "material_id": 1,
+                                  "recorte": {"desde_ms": 0, "hasta_ms": 3000}}]
+    clip = {"id": "cx", "inicio_ms": 0, "duracion_ms": 1000, "material_id": 1, "foto": True}
+    if tipo_pista == "texto":
+        clip["texto"] = {"literal": "x"}
+        clip["estilo"] = {"fuente": "Inter-Bold"}
+    doc["pistas"].append({"id": "px", "tipo": tipo_pista, "clips": [clip]})
+    with pytest.raises(d.DocumentoInvalido, match="foto"):
+        d.validar(doc)
+
+
+def test_encuadre_completo_se_guarda_y_el_defecto_se_guarda_null():
+    v = d.validar(_doc_foto(encuadre={"modo": "ajustar"}))
+    assert v["pistas"][0]["clips"][0]["encuadre"] == {"modo": "ajustar", "zoom": 1.0, "x": 0.5, "y": 0.5}
+    assert d.validar(_doc_foto(encuadre={}))["pistas"][0]["clips"][0]["encuadre"] is None
+    completo = {"modo": "llenar", "zoom": 1.0, "x": 0.5, "y": 0.5}
+    assert d.validar(_doc_foto(encuadre=completo))["pistas"][0]["clips"][0]["encuadre"] is None
+
+
+@pytest.mark.parametrize("enc", [
+    "ajustar",
+    {"zoom": 0.5},
+    {"zoom": 4.5},
+    {"x": 1.2},
+    {"modo": "estirar"},
+    {"rotacion": 1},
+])
+def test_encuadre_invalido(enc):
+    with pytest.raises(d.DocumentoInvalido):
+        d.validar(_doc_foto(encuadre=enc))
+
+
+def test_encuadre_solo_va_en_la_pista_de_video():
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "v0", "inicio_ms": 0, "duracion_ms": 3000, "material_id": 1,
+                                  "recorte": {"desde_ms": 0, "hasta_ms": 3000}}]
+    doc["pistas"].append({"id": "p_sup", "tipo": "superpuesto", "clips": [
+        {"id": "s0", "inicio_ms": 0, "duracion_ms": 1000, "material_id": 1, "encuadre": {"modo": "ajustar"}},
+    ]})
+    with pytest.raises(d.DocumentoInvalido, match="encuadre"):
+        d.validar(doc)
+
+
+def test_transicion_modo_solape_pasa_y_modo_desconocido_falla():
+    v = d.validar(_doc_foto(transicion={"tipo": "fundido", "duracion_ms": 500, "modo": "solape"}))
+    assert v["pistas"][0]["clips"][0]["transicion"]["modo"] == "solape"
+    with pytest.raises(d.DocumentoInvalido, match="transicion"):
+        d.validar(_doc_foto(transicion={"tipo": "fundido", "duracion_ms": 500, "modo": "otro"}))

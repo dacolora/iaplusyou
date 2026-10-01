@@ -85,7 +85,10 @@ def clips_de_fuente(resuelto, fuentes):
     fuentes nombren. Solo cuentan pistas no `oculta` ni `silenciada`: la
     pista principal de VIDEO para `sonido` (y, por material, también para
     `material`), y cualquier pista de audio que no sea `p_sonido` (el
-    espejo del sonido de la principal) para `voz` y `material`."""
+    espejo del sonido de la principal) para `voz` y `material`. Capa 5b,
+    D11: una foto no tiene sonido — `{tipo: "sonido"}` salta los clips
+    `foto` de la principal (pedirla por `material` SÍ la trae: la persona
+    eligió ESE material a propósito)."""
     principal = documento.pista_principal(resuelto)
     quiere_voz = any(f.get("tipo") == "voz" for f in fuentes or [])
     quiere_sonido = any(f.get("tipo") == "sonido" for f in fuentes or [])
@@ -101,7 +104,7 @@ def clips_de_fuente(resuelto, fuentes):
             continue
         for clip in pista.get("clips") or []:
             incluir = (
-                (es_principal_video and quiere_sonido)
+                (es_principal_video and quiere_sonido and not clip.get("foto"))
                 or (es_audio_fuente and quiere_voz and clip.get("rol_audio") == "voz")
                 or (materiales_pedidos and clip.get("material_id") in materiales_pedidos)
             )
