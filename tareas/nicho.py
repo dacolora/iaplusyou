@@ -14,9 +14,10 @@ Claude alcanzó a cobrar). La recolección guarda en lotes de LOTE comentarios
 (idempotente por la unicidad estudio + fuente + fuente_id), anota la
 recolección en `estudio.extra.recolecciones` y, para Apify, el gasto
 (`recoleccion:<estudio_id>:t<tarea>`, ítems crudos del dataset × precio del
-actor, aprox.). Cuando la fuente dejó un id de corrida, ese id viaja en el
-registro y en el extra del gasto: un cobro sin resultados tiene que poder
-rastrearse en console.apify.com.
+actor más el arranque de cada corrida lanzada — `usd_por_corrida`, que algunos
+actores cobran aunque la corrida no traiga nada —, aprox.). Cuando la fuente
+dejó un id de corrida, ese id viaja en el registro y en el extra del gasto: un
+cobro sin resultados tiene que poder rastrearse en console.apify.com.
 Nada corre solo: no hay periódicas.
 """
 import logging
