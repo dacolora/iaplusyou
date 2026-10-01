@@ -44,8 +44,13 @@ def test_las_operaciones_del_navegador_dejan_documentos_validos():
             assert documento.duracion_ms(doc) == fin_principal, f"{caso['nombre']}: el video quedó más largo"
         # capa 5b (D10.6): una capa movida que pisaba a otra de su misma fila
         # se reparte a una fila libre — ningún clip de una pista de texto
-        # pisa a otro de su misma pista.
-        if caso["nombre"].startswith("vinculado_"):
+        # pisa a otro de su misma pista. Con las MAX_PISTAS ocupadas no hay
+        # fila nueva: la capa se queda en la suya (revisión final).
+        if caso["nombre"] == "vinculado_ocho_pistas":
+            assert len(doc["pistas"]) == documento.MAX_PISTAS
+            texto = next(p for p in doc["pistas"] if p["id"] == "p_texto")
+            assert sorted(c["id"] for c in texto["clips"]) == ["t1", "t2"]
+        elif caso["nombre"].startswith("vinculado_"):
             for p in doc["pistas"]:
                 if p["tipo"] != "texto":
                     continue

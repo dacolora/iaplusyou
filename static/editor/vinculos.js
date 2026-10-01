@@ -8,7 +8,7 @@
 // visibles (el aviso de "dos voces a la vez" lleva su clave en la Tarea 8).
 import { pistaPrincipal } from "./tiempo.js";
 import {
-  BASE_PISTA, cambiaPorDestino, finPrincipal, ID_SONIDO, mismoRolQue, normalizar, pistaLibre, raizId,
+  BASE_PISTA, cambiaPorDestino, finPrincipal, ID_SONIDO, mismoRolQue, normalizar, OperacionInvalida, pistaLibre, raizId,
 } from "./operaciones.js";
 
 export const CLAVE_VINCULAR = "creatv.editor.vincular";
@@ -155,8 +155,11 @@ export function seguirPrincipal(antes, despues, info = {}) {
         const { A, f, desfase } = ancla;
         const C = buscarLlegada(principalRes.clips, idsAntesPrincipal, A, f);
         if (C) {
-          const enC = C.foto ? acotar(f, 0, C.duracion_ms)
-            : acotar(Math.round((f - (C.recorte?.desde_ms ?? 0)) / (C.velocidad ?? 1)), 0, C.duracion_ms);
+          // Hasta el ÚLTIMO ms de C, nunca su fin: en el fin ya empieza el
+          // clip siguiente, y la capa quedaría anclada a él (revisión final).
+          const ultimo = Math.max(0, C.duracion_ms - 1);
+          const enC = C.foto ? acotar(f, 0, ultimo)
+            : acotar(Math.round((f - (C.recorte?.desde_ms ?? 0)) / (C.velocidad ?? 1)), 0, ultimo);
           X.inicio_ms = C.inicio_ms + enC;
         } else {
           X.inicio_ms = cierreTrasA(clipsAntes, principalRes.clips, A, fin) + desfase;
@@ -198,7 +201,9 @@ export function seguirPrincipal(antes, despues, info = {}) {
 
     // Filas (D10.6): una capa movida que queda encima de otra de su misma
     // fila pasa a la primera fila de su clase donde quepa (la regla de
-    // agregar, `pistaLibre`); sin filas libres se queda en la suya.
+    // agregar, `pistaLibre`); sin filas libres — ni lugar para una nueva:
+    // las 8 pistas ocupadas, `pistaNueva` lanza — se queda en la suya
+    // (documento.validar solo prohíbe el solape en la principal).
     for (const { pista, clip } of movidas) {
       const pisa = pista.clips.some((c) => c !== clip
         && c.inicio_ms < clip.inicio_ms + clip.duracion_ms && clip.inicio_ms < c.inicio_ms + c.duracion_ms);
@@ -206,8 +211,15 @@ export function seguirPrincipal(antes, despues, info = {}) {
       const indice = pista.clips.indexOf(clip);
       if (indice >= 0) pista.clips.splice(indice, 1);
       const acepta = pista.tipo === "audio" ? mismoRolQue(clip.rol_audio ?? "subida") : () => true;
-      const destino = pistaLibre(res, pista.tipo, BASE_PISTA[pista.tipo] ?? pista.id, clip.inicio_ms, clip.duracion_ms,
-        [ID_SONIDO], acepta);
+      let destino;
+      try {
+        destino = pistaLibre(res, pista.tipo, BASE_PISTA[pista.tipo] ?? pista.id, clip.inicio_ms, clip.duracion_ms,
+          [ID_SONIDO], acepta);
+      } catch (e) {
+        if (!(e instanceof OperacionInvalida)) throw e;
+        pista.clips.splice(Math.max(0, indice), 0, clip);
+        continue;
+      }
       destino.clips.push(clip);
     }
   }
@@ -222,6 +234,28 @@ export function operar(fn, doc, args, info, { vincular = true } = {}) {
   const res = fn(doc, ...args, info);
   if (!vincular) return res;
   return { doc: seguirPrincipal(doc, res.doc, info), seleccion: res.seleccion };
+}
+
+// Revisión final de la capa 5b: un GESTO con clave (el deslizador de la
+// duración de una transición, un arrastre — los pasos que el historial
+// fusiona en un deshacer) se deriva siempre de su base, el documento de antes
+// de su primer paso: `crudo = fn(crudoPrevio ?? base, ...)` es la cadena de
+// la operación SIN seguir, y `doc = seguirPrincipal(base, crudo)`. Encadenar
+// `operar` paso a paso hacía que el lugar de una capa dependiera del camino
+// (200 → 1000 → 200 ms dejaba un texto sobre el clip siguiente). `continua`
+// (lo dice la página con `historial.fusionaria(clave)`) y `gesto.ultimo ===
+// doc` (nadie cambió el documento en medio) siguen el gesto; si no, o con
+// otra clave, o con «Vincular» cambiado, empieza uno nuevo. Sin clave es
+// `operar` tal cual. Devuelve {doc, seleccion, gesto} — `gesto` null sin
+// clave.
+export function operarGesto(fn, doc, args, info, { vincular = true, clave = null, gesto = null, continua = false } = {}) {
+  if (clave === null) return { ...operar(fn, doc, args, info, { vincular }), gesto: null };
+  const sigueGesto = Boolean(continua && gesto && gesto.clave === clave && gesto.vincular === vincular
+    && gesto.ultimo === doc);
+  const base = sigueGesto ? gesto.base : doc;
+  const crudo = fn(sigueGesto ? gesto.crudo : base, ...args, info);
+  const res = vincular ? seguirPrincipal(base, crudo.doc, info) : crudo.doc;
+  return { doc: res, seleccion: crudo.seleccion, gesto: { clave, vincular, base, crudo: crudo.doc, ultimo: res } };
 }
 
 // D10.9: «Vincular» en localStorage, con try/catch — si falla (o no hay

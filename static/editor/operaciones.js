@@ -339,8 +339,11 @@ function recorteDeSolape(clip, nuevaDur) {
 
 // A recupera los `d` ms que había cedido (al quitar la transición, al
 // cambiarle la duración, o cuando queda último: `deshacerSolapeUltimo`).
+// Una foto nunca pasa de FOTO_MAX_MS (revisión final): una de 60 s con 500
+// ms cedidos quedaba en 60,5 s y desde ahí cada guardado fallaba.
 function devolverASolape(clip, d) {
   clip.duracion_ms += d;
+  if (clip.foto) clip.duracion_ms = Math.min(FOTO_MAX_MS, clip.duracion_ms);
   clip.recorte = recorteDeSolape(clip, clip.duracion_ms);
 }
 
@@ -370,6 +373,22 @@ function deshacerSolapeUltimo(doc) {
   ultimo.transicion = null;
 }
 
+// Última barrera (revisión final de la capa 5b): toda foto de la principal
+// dura entre MIN_CLIP_MS y FOTO_MAX_MS (lo que exige documento.validar), con
+// su recorte {0, duración}; `ajustarAlMaterial`, justo después, recoloca la
+// principal.
+function acotarFotos(doc) {
+  const p = pistaPrincipal(doc);
+  if (!p || p.tipo !== "video") return;
+  for (const c of p.clips) {
+    if (!c.foto) continue;
+    const dur = Math.max(MIN_CLIP_MS, Math.min(FOTO_MAX_MS, c.duracion_ms));
+    if (dur === c.duracion_ms) continue;
+    c.duracion_ms = dur;
+    c.recorte = { desde_ms: 0, hasta_ms: dur };
+  }
+}
+
 // Espejo de compilador.verificar_recortes: primero ningún clip pide material
 // de más (`ajustarAlMaterial`, con la principal otra vez contigua desde 0 y
 // el sonido de la escena rehecho); después, en la principal, la cola de A
@@ -382,6 +401,7 @@ function deshacerSolapeUltimo(doc) {
 // material, para que lo recuperado también quede acotado si hiciera falta.
 export function normalizar(doc, info = {}) {
   deshacerSolapeUltimo(doc);
+  acotarFotos(doc);
   ajustarAlMaterial(doc, info);
   sincronizarSonido(doc, info);
   acotarFundidos(doc);

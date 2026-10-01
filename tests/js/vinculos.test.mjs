@@ -286,3 +286,80 @@ test("guardarVincular nunca lanza, aunque el almacén falle", () => {
   vinc.guardarVincular({ setItem: (k, v) => almacen.set(k, v), getItem: (k) => almacen.get(k) ?? null }, false);
   assert.equal(almacen.get(vinc.CLAVE_VINCULAR), "0");
 });
+
+// Revisión final de la capa 5b (D10.6): con las 8 pistas ocupadas, una capa
+// movida que pisa a otra de su fila «se queda en la suya» — antes
+// `pistaLibre` → `pistaNueva` lanzaba «demasiadas pistas» y un borrado o un
+// reordenamiento corriente se rechazaba con «Vincular» prendido.
+function docOchoPistas() {
+  let d = docVinculos();
+  for (let i = 0; i < 3; i++) d = op.agregarImagen(d, { id: 4, ancho: 600, alto: 400 }, 0, { duracionMs: 1000 }, D).doc;
+  assert.equal(d.pistas.length, 8);
+  return d;
+}
+
+test("con 8 pistas, una capa que pisa a otra se queda en su fila en vez de rechazar la operación (D10.6)", () => {
+  const antes = docOchoPistas();
+  const res = vinc.operar(op.borrar, antes, ["v0"], D).doc;
+  assert.equal(res.pistas.length, 8);
+  assert.deepEqual([inicioDe(res, "t1"), pistaDe(res, "t1")], [1000, "p_texto"]);
+  assert.deepEqual([inicioDe(res, "t2"), pistaDe(res, "t2")], [1000, "p_texto"], "sin filas libres, t2 se queda en la suya");
+  const reordenado = vinc.operar(op.moverPrincipal, antes, ["v1", 0], D).doc;
+  assert.equal(reordenado.pistas[0].clips[0].id, "v1");
+});
+
+// ---- Revisión final de la capa 5b: el deslizador de la duración de una
+// transición (un gesto con clave) daba un lugar distinto según el camino ----
+// Un texto en 3600, dentro de v0 (0–4000). Fundido a 200, deslizar a 1000 y
+// volver a 200 en UN gesto: encadenado paso a paso, el texto terminaba en
+// 3800 (sobre v1); de 200 a 200 directo se queda en 3600.
+function docTextoEn3600() {
+  const d = docVinculos();
+  d.pistas[1].clips[0].inicio_ms = 3600;   // t1
+  d.pistas[1].clips[0].duracion_ms = 300;
+  return d;
+}
+const CLAVE_TR = "v0:transicion";
+
+function gesto(doc, pasos, info = D) {
+  let g = null;
+  for (const ms of pasos) {
+    const r = vinc.operarGesto(op.ponerTransicion, doc, ["v0", "fundido", ms], info,
+      { clave: CLAVE_TR, gesto: g, continua: g !== null });
+    doc = r.doc;
+    g = r.gesto;
+  }
+  return { doc, gesto: g };
+}
+
+test("un gesto con clave se deriva de su base: el lugar de una capa no depende del camino", () => {
+  const base = docTextoEn3600();
+  assert.equal(inicioDe(gesto(base, [200]).doc, "t1"), 3600);
+  assert.equal(inicioDe(gesto(base, [200, 1000, 200]).doc, "t1"), 3600);
+  const ida = gesto(base, [200, 1000]);
+  assert.equal(inicioDe(ida.doc, "t1"), 2999, "sin lugar en v0 (dura 3000), queda en su último ms — nunca sobre v1");
+  assert.equal(ida.gesto.base, base, "la base del gesto es el documento de antes del primer paso");
+});
+
+test("operarGesto sin clave, con otra clave o sin `continua` es vinculos.operar de siempre", () => {
+  const base = docTextoEn3600();
+  const r = vinc.operarGesto(op.ponerTransicion, base, ["v0", "fundido", 200], D, {});
+  assert.deepEqual(r.doc, vinc.operar(op.ponerTransicion, base, ["v0", "fundido", 200], D).doc);
+  assert.equal(r.gesto, null);
+  const g = gesto(base, [200, 1000]).gesto;
+  const otra = vinc.operarGesto(op.ponerTransicion, g.ultimo, ["v0", "fundido", 200], D, { clave: "otra", gesto: g, continua: true });
+  assert.equal(otra.gesto.base, g.ultimo, "otra clave: la base es el documento actual");
+  const cortada = vinc.operarGesto(op.ponerTransicion, g.ultimo, ["v0", "fundido", 200], D, { clave: CLAVE_TR, gesto: g, continua: false });
+  assert.equal(cortada.gesto.base, g.ultimo, "sin `continua` (deshacer, guardado, otra racha): base nueva");
+  const ajeno = vinc.operarGesto(op.ponerTransicion, docTextoEn3600(), ["v0", "fundido", 200], D, { clave: CLAVE_TR, gesto: g, continua: true });
+  assert.notEqual(ajeno.gesto.base, g.base, "si el documento ya no es el último del gesto, base nueva");
+  const apagado = vinc.operarGesto(op.ponerTransicion, g.ultimo, ["v0", "fundido", 200], D, { clave: CLAVE_TR, gesto: g, continua: true, vincular: false });
+  assert.equal(apagado.gesto.base, g.ultimo, "cambiar «Vincular» a mitad del gesto también empieza otro");
+});
+
+test("una capa cuyo clip ya no muestra su momento queda en el último ms de ese clip, no en el inicio del siguiente", () => {
+  const antes = op.ponerTransicion(docTextoEn3600(), "v0", "fundido", 200, D).doc;
+  const despues = op.ponerTransicion(antes, "v0", "fundido", 1000, D).doc;
+  const res = seguir(antes, despues);
+  assert.equal(inicioDe(res, "t1"), 2999);
+});

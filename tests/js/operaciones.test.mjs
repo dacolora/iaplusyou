@@ -986,3 +986,39 @@ test("una foto como A cede sus ms igual que un video (D9)", () => {
   const { doc } = op.ponerTransicion(conFoto, "foto_2", "fundido", 500, DURACIONES);
   assert.equal(doc.pistas[0].clips.find((c) => c.id === "foto_2").duracion_ms, 2500);
 });
+
+// Revisión final de la capa 5b: una foto de 60 s que recupera lo que había
+// cedido a una transición «solape» pasaba de FOTO_MAX_MS (60,5 s) y desde ahí
+// cada guardado fallaba en documento.validar.
+function foto60ConSolape() {
+  let d = op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  d = op.cambiarDuracionFoto(d, "foto_2", 60000, DURACIONES).doc;
+  d = op.ponerTransicion(d, "foto_2", "fundido", 500, DURACIONES).doc;
+  assert.equal(d.pistas[0].clips[1].duracion_ms, 59500);
+  return op.cambiarDuracionFoto(d, "foto_2", 60000, DURACIONES).doc;   // otra vez 60 s, con 500 cedidos
+}
+const fotoDe = (doc) => doc.pistas[0].clips.find((c) => c.id === "foto_2");
+
+test("una foto de 60 s nunca pasa de FOTO_MAX_MS al recuperar lo que cedió a un solape", () => {
+  const base = foto60ConSolape();
+  assert.equal(fotoDe(base).duracion_ms, 60000);
+  for (const [nombre, hacer] of [
+    ["quitar la transición", (d) => op.ponerTransicion(d, "foto_2", "corte", 0, DURACIONES)],
+    ["cambiar su duración", (d) => op.ponerTransicion(d, "foto_2", "fundido", 300, DURACIONES)],
+    ["borrar el siguiente", (d) => op.borrar(d, "v1", DURACIONES)],
+    ["reordenar el siguiente", (d) => op.moverPrincipal(d, "v1", 0, DURACIONES)],
+  ]) {
+    const foto = fotoDe(hacer(structuredClone(base)).doc);
+    assert.ok(foto.duracion_ms <= op.FOTO_MAX_MS, `${nombre}: ${foto.duracion_ms}`);
+    assert.deepEqual(foto.recorte, { desde_ms: 0, hasta_ms: foto.duracion_ms }, nombre);
+  }
+});
+
+test("normalizar acota a FOTO_MAX_MS cualquier foto de la principal y la recoloca", () => {
+  const d = op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  d.pistas[0].clips[1].duracion_ms = 61000;
+  d.pistas[0].clips[1].recorte = { desde_ms: 0, hasta_ms: 61000 };
+  const n = op.normalizar(d, DURACIONES);
+  assert.deepEqual([n.pistas[0].clips[1].duracion_ms, n.pistas[0].clips[1].recorte, n.pistas[0].clips[2].inicio_ms],
+    [60000, { desde_ms: 0, hasta_ms: 60000 }, 64000]);
+});

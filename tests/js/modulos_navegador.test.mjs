@@ -482,7 +482,7 @@ test("Propiedades arma la foto y el bloque «Encuadre» (y la vista expone medid
 // exista en su módulo (esos sí se importan, sin tocar la página). Así un
 // nombre mal escrito (o «Vincular» enganchado a una función que no existe) se
 // ve aquí y no al abrir el editor.
-test("pagina_editor.js: compila y todo lo que importa existe (vinculos.operar envuelve cada operación)", async () => {
+test("pagina_editor.js: compila y todo lo que importa existe (vinculos.operarGesto envuelve cada operación)", async () => {
   const ruta = new URL("../../static/editor/pagina_editor.js", import.meta.url);
   execFileSync(process.execPath, ["--check", fileURLToPath(ruta)]);          // lanza si no compila
   const fuente = readFileSync(ruta, "utf-8");
@@ -497,14 +497,16 @@ test("pagina_editor.js: compila y todo lo que importa existe (vinculos.operar en
   }
   assert.match(fuente, /^import \* as vinculos from "\.\/vinculos\.js";$/m);
   const vinculos = await import("../../static/editor/vinculos.js");
-  for (const f of ["operar", "leerVincular", "guardarVincular"]) assert.equal(typeof vinculos[f], "function", `vinculos.${f}`);
+  for (const f of ["operar", "operarGesto", "leerVincular", "guardarVincular"]) assert.equal(typeof vinculos[f], "function", `vinculos.${f}`);
   for (const uso of [
-    "vinculos.operar(operaciones[nombre], historial.actual, args, info(), { vincular })",
+    // revisión final de la capa 5b: un gesto con clave se deriva de su base
+    "vinculos.operarGesto(operaciones[nombre], historial.actual, args, info(),",
+    "{ vincular, clave, gesto, continua: historial.fusionaria(clave) }",
     "let vincular = vinculos.leerVincular(almacenSeguro());",
     "vinculos.guardarVincular(almacenSeguro(), vincular)",
     'pintarAvisoCarga("aviso-voces", a.voces)',
   ]) assert.ok(fuente.includes(uso), uso);
-  // ninguna otra llamada directa a una operación: todas pasan por vinculos.operar (un paso, un guardado)
+  // ninguna otra llamada directa a una operación: todas pasan por vinculos.operarGesto (un paso, un guardado)
   assert.doesNotMatch(fuente, /operaciones\[nombre\]\(historial\.actual/);
   assert.equal(typeof globalThis.document, "undefined");
 });

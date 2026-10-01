@@ -262,5 +262,23 @@ anotarSolape("solape_ultimo_se_deshace",
   () => op.moverPrincipal(op.ponerTransicion(docBase(), "v0", "fundido", 500, D).doc, "v0", 1, D), 8000);
 
 anotar("vinculado_solape", () => vincular((d) => op.ponerTransicion(d, "v0", "fundido", 500, D)));
+// Revisión final (D10.6): con las 8 pistas ocupadas (docVinculos + tres
+// filas de imagen), t2 pisa a t1 al seguir y se queda en su fila.
+anotar("vinculado_ocho_pistas", () => {
+  let antes = docVinculos();
+  for (let i = 0; i < 3; i++) antes = op.agregarImagen(antes, { id: 4, ancho: 600, alto: 400 }, 0, { duracionMs: 1000 }, D).doc;
+  return { doc: vinc.seguirPrincipal(antes, op.borrar(antes, "v0", D).doc, D) };
+});
+
+// Revisión final de la capa 5b: una foto de 60 s con 500 ms cedidos a un
+// solape que los recupera (al quitar la transición o al borrar lo que venía
+// después) nunca pasa de documento.FOTO_MAX_MS.
+const foto60ConSolape = () => {
+  let d = op.cambiarDuracionFoto(conFoto(), "foto_2", 60000, D).doc;
+  d = op.ponerTransicion(d, "foto_2", "fundido", 500, D).doc;
+  return op.cambiarDuracionFoto(d, "foto_2", 60000, D).doc;
+};
+anotar("foto_60_solape_ida_y_vuelta", () => op.ponerTransicion(foto60ConSolape(), "foto_2", "corte", 0, D));
+anotar("foto_60_borrar_siguiente", () => op.borrar(foto60ConSolape(), "v1", D));
 
 process.stdout.write(JSON.stringify(casos));

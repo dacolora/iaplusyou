@@ -122,6 +122,10 @@ let seleccion = null;
 // «Vincular» (D10.9): lo que eligió quien mira; sin nada guardado (o si el
 // navegador no deja leerlo), prendido.
 let vincular = vinculos.leerVincular(almacenSeguro());
+// El gesto con clave en curso (vinculos.operarGesto): su base y la cadena
+// sin seguir. Se olvida al deshacer/rehacer, al guardar, en conflicto (y al
+// recargar, claro); cambiar de clave empieza otro.
+let gesto = null;
 const avisos = new Avisos();
 
 const vista = new VistaPrevia({
@@ -203,6 +207,7 @@ function aviso(texto) {
 }
 
 function pintarGuardado(estado, mensaje, detalle = "") {
+  if (estado === "guardando" || estado === "conflicto") gesto = null;
   const n = $("estado-guardado");
   n.dataset.estado = estado;
   n.textContent = TEXTO_GUARDADO[estado]?.(mensaje) ?? "";
@@ -280,10 +285,13 @@ function operar(nombre, ...args) {
 
 // `clave`: pasos seguidos con la misma clave quedan en UN deshacer
 // (Historial.aplicar); sin clave (o con `opciones` null) cada operación es su
-// propio paso.
+// propio paso. Un gesto con clave se deriva de su base (vinculos.operarGesto,
+// revisión final de la capa 5b): con «Vincular», dónde queda una capa no
+// depende del camino que hizo el deslizador.
 function operarCon(opciones, nombre, ...args) {
   const clave = opciones?.clave ?? null;
   if (!editable()) {
+    gesto = null;
     refrescar(null);
     return false;
   }
@@ -291,7 +299,8 @@ function operarCon(opciones, nombre, ...args) {
   try {
     // con «Vincular», lo que estaba encima de un clip del video lo sigue (el
     // mismo documento: un paso de deshacer, un guardado)
-    res = vinculos.operar(operaciones[nombre], historial.actual, args, info(), { vincular });
+    res = vinculos.operarGesto(operaciones[nombre], historial.actual, args, info(),
+      { vincular, clave, gesto, continua: historial.fusionaria(clave) });
   } catch (e) {
     const invalida = e.name === "OperacionInvalida";
     if (!invalida) console.error(e);
@@ -302,9 +311,12 @@ function operarCon(opciones, nombre, ...args) {
   aviso("");
   seleccion = res.seleccion;
   if (JSON.stringify(res.doc) === JSON.stringify(historial.actual)) {   // nada cambió: ni historial ni guardado
+    // el gesto sigue sobre el mismo documento (el último del historial)
+    gesto = res.gesto ? { ...res.gesto, ultimo: historial.actual } : null;
     refrescar(null);
     return true;
   }
+  gesto = res.gesto;
   historial.aplicar(res.doc, { clave });
   refrescar();
   guardado.pedir(res.doc);
@@ -322,6 +334,7 @@ function cortar() {
 
 function deshacer() {
   if (!editable()) return;
+  gesto = null;
   const doc = historial.deshacer();
   if (!doc) return;
   aviso("");
@@ -331,6 +344,7 @@ function deshacer() {
 
 function rehacer() {
   if (!editable()) return;
+  gesto = null;
   const doc = historial.rehacer();
   if (!doc) return;
   aviso("");
