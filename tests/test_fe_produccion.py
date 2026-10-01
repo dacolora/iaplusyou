@@ -618,3 +618,153 @@ def test_variante_en_el_pais_base_con_conflicto_conserva_el_costo_del_guion(ento
     g = {x["referencia"]: x for x in gastos.historial("acme")}[f"final:{final_id}:t1"]
     assert g["usd"] == pytest.approx(0.29)
     assert g["extra"]["capas"]["guion"] == 0.02 and "guion" in g["detalle"]
+
+
+# ------------------------------------------------- Mis voces en Final edition ---
+
+def _voz_propia(cliente="acme", nombre="Ana", voice_id="mmx_1"):
+    import materiales
+    import voces_propias
+    return materiales.registrar(
+        cliente, tipo="audio", origen=voces_propias.ORIGEN, url=f"https://r2/vp_{voice_id}.mp3",
+        hash=materiales.hash_clave("voz_propia", "minimax", voice_id), bytes=10, duracion_ms=3000, costo_usd=3.0,
+        extra={"nombre": nombre, "forma": "disenada", "proveedor": "minimax", "voice_id": voice_id,
+               "idioma_muestra": "es", "estrenada": True})
+
+
+def test_proveedor_y_etiqueta_de_la_voz(base_temporal):
+    import materiales
+    v = _voz_propia()
+    assert final_edition.proveedor_voz(f"vp:{v['id']}") == "fal/minimax"
+    assert final_edition.proveedor_voz("Rachel") == "fal/elevenlabs" and final_edition.proveedor_voz(None) == "fal/elevenlabs"
+    assert final_edition.etiqueta_voz("acme", f"vp:{v['id']}") == "Ana"
+    assert final_edition.etiqueta_voz("acme", "Rachel") == "Rachel"
+    materiales.borrar("acme", v["id"])
+    assert final_edition.etiqueta_voz("acme", f"vp:{v['id']}") == "Mis voces"
+
+
+def test_voz_variante(base_temporal, monkeypatch):
+    vp = f"vp:{_voz_propia()['id']}"
+    lista = ["Rachel", "Adam"]
+    # (voz de la final original del destino, voz propia de la sesión, esperada en hook, esperada en estructura)
+    casos = ((vp, None, vp, vp),                        # original propia: la conserva en los dos tipos
+             ("Rachel", None, "Adam", "Rachel"),        # original de la galería: lo de siempre
+             (None, None, "Adam", "Rachel"),            # sin original ni voz propia en la sesión: lo de siempre
+             (None, vp, vp, vp),                        # sin original: la voz propia de la sesión
+             ("vp:999999", vp, "Rachel", "Rachel"))     # original propia borrada: galería (la sesión no cuenta)
+    for original, de_sesion, hook, estructura in casos:
+        monkeypatch.setattr(final_edition, "_parametro_capa_original", lambda *a, o=original: o)
+        monkeypatch.setattr(final_edition, "_voz_propia_de_la_sesion", lambda *a, s=de_sesion: s)
+        assert final_edition.voz_variante("acme", "cf", "es", "CO", lista, "hook") == hook, (original, de_sesion)
+        assert final_edition.voz_variante("acme", "cf", "es", "CO", lista, "estructura") == estructura, (original, de_sesion)
+
+
+def test_voz_propia_de_la_sesion_ignora_variantes_y_voces_borradas(entorno):
+    import materiales
+    from final_edition import produccion
+    v1, v2, v3 = (_voz_propia(nombre=n, voice_id=f"mmx_{n}") for n in ("Ana", "Beto", "Caro"))
+    cf_id = entorno["cf_id"]
+    assert final_edition._voz_propia_de_la_sesion("acme", cf_id) is None                # sin finales
+    produccion.producir("acme", cf_id, "es", "CO", {"voz": f"vp:{v1['id']}"}, ref_sufijo=":t1")
+    produccion.producir("acme", cf_id, "en", "US", {"voz": f"vp:{v2['id']}"}, ref_sufijo=":t2")
+    produccion.producir("acme", cf_id, "es", "CO", {"voz": f"vp:{v3['id']}", "variante": 1, "variante_tipo": "hook"},
+                        ref_sufijo=":t3")
+    assert final_edition._voz_propia_de_la_sesion("acme", cf_id) == f"vp:{v2['id']}"   # la original más reciente
+    materiales.borrar("acme", v2["id"])
+    assert final_edition._voz_propia_de_la_sesion("acme", cf_id) == f"vp:{v1['id']}"   # la borrada no cuenta
+    materiales.borrar("acme", v1["id"])
+    assert final_edition._voz_propia_de_la_sesion("acme", cf_id) is None                # la de la variante tampoco
+
+
+def test_voz_propia_va_por_minimax_en_la_capa_y_en_todos_los_bloques(entorno):
+    from final_edition import produccion
+    v = _voz_propia()
+    _, r = produccion.producir("acme", entorno["cf_id"], "es", "CO", {"voz": f"vp:{v['id']}"}, ref_sufijo=":t1")
+    assert r["capas"]["voz"]["proveedor"] == "fal/minimax" and r["capas"]["voz"]["parametros"]["voz"] == f"vp:{v['id']}"
+    assert entorno["voz"] and {x[1] for x in entorno["voz"]} == {f"vp:{v['id']}"}
+    _, r_en = produccion.producir("acme", entorno["cf_id"], "en", "US", {"voz": f"vp:{v['id']}"}, ref_sufijo=":t2")
+    assert r_en["capas"]["voz"]["proveedor"] == "fal/minimax"       # el destino nuevo (traducir) también
+
+
+def test_receta_de_una_voz_propia_cambia_con_su_voice_id(entorno):
+    import ediciones
+    import materiales
+    from final_edition import produccion
+    v = _voz_propia()
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {"voz": f"vp:{v['id']}"}, ref_sufijo=":t1")
+    produccion.producir("acme", cf_id, "es", "CO", {"voz": f"vp:{v['id']}"}, ref_sufijo=":t2")
+    assert len(ediciones.listar("acme", cf_id=cf_id)) == 1           # misma voz: se reutiliza el borrador
+    materiales.actualizar_extra("acme", v["id"], voice_id="mmx_2")   # el mismo vp:<id> con otra voz detrás
+    produccion.producir("acme", cf_id, "es", "CO", {"voz": f"vp:{v['id']}"}, ref_sufijo=":t3")
+    assert len(ediciones.listar("acme", cf_id=cf_id)) == 2
+
+
+def test_variante_hook_conserva_la_voz_propia_y_rota_si_se_borro(entorno):
+    import materiales
+    from final_edition import produccion
+    from providers import fal_audio
+    v = _voz_propia()
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {"voz": f"vp:{v['id']}"}, ref_sufijo=":t1")
+    _, r = produccion.producir("acme", cf_id, "es", "CO", {"variante": 1, "variante_tipo": "hook"}, ref_sufijo=":t2")
+    assert r["capas"]["voz"]["parametros"]["voz"] == f"vp:{v['id']}" and r["capas"]["voz"]["proveedor"] == "fal/minimax"
+    materiales.borrar("acme", v["id"])
+    _, r2 = produccion.producir("acme", cf_id, "es", "CO", {"variante": 2, "variante_tipo": "hook"}, ref_sufijo=":t3")
+    assert r2["capas"]["voz"]["parametros"]["voz"] == fal_audio.VOCES["es"][0]
+
+
+def test_variante_hook_con_voz_propia_escribe_el_guion_variado_una_vez(entorno):
+    # «¿Ya existe el borrador de esta variante?» se pregunta con la MISMA receta
+    # que guarda `asegurar_borrador` (la de una voz propia lleva su voice_id): si
+    # no, cada destino de la variante volvería a pagarle a Claude por variarla.
+    import ediciones
+    from final_edition import produccion
+    v = _voz_propia()
+    cf_id = entorno["cf_id"]
+    for idioma, pais, sufijo in (("es", "CO", ":t1"), ("en", "US", ":t2")):
+        produccion.producir("acme", cf_id, idioma, pais, {"voz": f"vp:{v['id']}"}, ref_sufijo=sufijo)
+    opciones = {"variante": 1, "variante_tipo": "hook"}
+    produccion.producir("acme", cf_id, "es", "CO", dict(opciones), ref_sufijo=":t3")
+    _, r = produccion.producir("acme", cf_id, "en", "US", dict(opciones), ref_sufijo=":t4")
+    assert entorno["variar"] == 1 and len(ediciones.listar("acme", cf_id=cf_id)) == 2
+    assert r["capas"]["voz"]["parametros"]["voz"] == f"vp:{v['id']}" and r["capas"]["guion"]["costo_usd"] == 0.02
+
+
+def test_variante_de_estructura_conserva_la_voz_propia(entorno):
+    from final_edition import produccion
+    vp = f"vp:{_voz_propia()['id']}"
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {"voz": vp}, ref_sufijo=":t1")
+    _, r = produccion.producir("acme", cf_id, "es", "CO", {"variante": 1, "variante_tipo": "estructura"}, ref_sufijo=":t2")
+    assert r["capas"]["voz"]["parametros"]["voz"] == vp and r["capas"]["voz"]["proveedor"] == "fal/minimax"
+
+
+def test_variante_en_un_destino_sin_original_toma_la_voz_propia_de_la_sesion_y_varia_una_vez(entorno):
+    # `derivar` produce la variante en TODOS los países del experimento: un país
+    # sin final original no puede caer a la galería (otra voz y otro guion pagado).
+    from final_edition import produccion
+    vp = f"vp:{_voz_propia()['id']}"
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {"voz": vp}, ref_sufijo=":t1")       # en_US no tiene original
+    opciones = {"variante": 1, "variante_tipo": "hook"}
+    _, r_co = produccion.producir("acme", cf_id, "es", "CO", dict(opciones), ref_sufijo=":t2")
+    _, r_us = produccion.producir("acme", cf_id, "en", "US", dict(opciones), ref_sufijo=":t3")
+    assert r_co["capas"]["voz"]["parametros"]["voz"] == vp and r_us["capas"]["voz"]["parametros"]["voz"] == vp
+    assert entorno["variar"] == 1                       # misma receta: el guion variado se paga una vez
+
+
+def test_voz_fatal_nombra_la_voz_propia(entorno):
+    import materiales
+    from final_edition import produccion
+    v = _voz_propia()
+    entorno["fallar_voz_en"] = 1
+    with pytest.raises(produccion.VozFatal, match="'Ana'"):
+        produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE,
+                                     _opciones(voz=f"vp:{v['id']}"), lambda n: None)
+    materiales.borrar("acme", v["id"])
+    entorno["voz"].clear()
+    with pytest.raises(produccion.VozFatal, match="'Mis voces'") as exc:
+        produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE,
+                                     _opciones(voz=f"vp:{v['id']}"), lambda n: None)
+    assert exc.value.capas["voz"]["proveedor"] == "fal/minimax"

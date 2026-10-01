@@ -97,14 +97,26 @@ def _voces_bloques(cliente, guion, nombre_voz, carpeta):
     return voces, round(costo, 4)
 
 
+def _opciones_receta(cliente, o):
+    """Las opciones con que se calcula la receta del borrador. Con una voz
+    propia, `voz` lleva también su `voice_id`: el id de la fila (`vp:<id>`) se
+    puede reutilizar en SQLite tras borrar la voz y la receta no puede tomar un
+    borrador hecho con otra voz. Las de la galería quedan igual (sus recetas de
+    siempre se siguen reutilizando)."""
+    import voces_propias   # perezoso: voces_propias importa final_edition.cortes
+    vp = voces_propias.resolver(cliente, o.get("voz"))
+    return {**o, "voz": f"{o['voz']}:{vp['voice_id']}"} if vp else o
+
+
 def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
     """La edición-borrador de la sesión para esta receta: la reutiliza si
     existe (y no quedó degradada) o la crea pagando solo lo que falte.
     `guion` es el base o el variado (variante); la receta se calcula con el
-    BASE + las opciones (`borrador.receta`). Devuelve (edicion, capas,
-    costo_nuevo, creada). Reporta «Cortes», «Voz» y «Música» solo al crear."""
+    BASE + las opciones (`borrador.receta` sobre `_opciones_receta`). Devuelve
+    (edicion, capas, costo_nuevo, creada). Reporta «Cortes», «Voz» y «Música»
+    solo al crear."""
     formato = borrador.formato_de(entry.get("aspect_ratio"))
-    rec = borrador.receta(guion_base, o, formato)
+    rec = borrador.receta(guion_base, _opciones_receta(cliente, o), formato)
     existente = ediciones.buscar_origen(cliente, cf_id, rec)
     if existente:
         capas = copy.deepcopy(((existente["documento"].get("origen") or {}).get("capas")) or {})
@@ -141,21 +153,23 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
         # 2. voz por bloque (degradable, salvo el primer bloque)
         avisar(ETAPAS_FINAL[2][0])
         voces = None
+        proveedor_voz = final_edition.proveedor_voz(o.get("voz"))
         if not o.get("con_voz", True):
-            _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, estado="omitida")
+            _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, estado="omitida")
         else:
             try:
                 voces, c = _voces_bloques(cliente, guion, o.get("voz"), carpeta)
                 costo += c
-                _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, c)
+                _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, c)
             except voz_mod.ErrorPrimerBloque as e:
-                _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, estado="error", error=_mensaje(e))
+                _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, estado="error", error=_mensaje(e))
                 raise VozFatal(gettext("No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s",
-                                       voz=o.get("voz"), error=e), round(costo, 4), capas) from e
+                                       voz=final_edition.etiqueta_voz(cliente, o.get("voz")), error=e),
+                               round(costo, 4), capas) from e
             except VozIncompleta as e:
                 degradada, voces = True, None
                 costo += e.costo
-                _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, e.costo, estado="error", error=_mensaje(e))
+                _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, e.costo, estado="error", error=_mensaje(e))
         # 3. música (degradable)
         avisar(ETAPAS_FINAL[3][0])
         musica = None
@@ -259,17 +273,19 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
             hay_pista_voz = any(p["tipo"] == "audio" and any(cl.get("rol_audio") == "voz" for cl in p["clips"]) for p in doc["pistas"])
             if con_voz and hay_pista_voz:
                 carpeta = _carpeta_borrador(cliente, edicion.get("cf_id") or f"ed{edicion['id']}")
+                proveedor_voz = final_edition.proveedor_voz(nombre_voz)
                 try:
                     voces, cv = _voces_bloques(cliente, g, nombre_voz, carpeta)
                     costo += cv
-                    _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, cv)
+                    _capa(capas, "voz", proveedor_voz, {"voz": nombre_voz}, cv)
                 except voz_mod.ErrorPrimerBloque as e:
-                    _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=_mensaje(e))
+                    _capa(capas, "voz", proveedor_voz, {"voz": nombre_voz}, estado="error", error=_mensaje(e))
                     raise VozFatal(gettext("No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s",
-                                           voz=nombre_voz, error=e), round(costo, 4), capas) from e
+                                           voz=final_edition.etiqueta_voz(cliente, nombre_voz), error=e),
+                                   round(costo, 4), capas) from e
                 except VozIncompleta as e:
                     costo += e.costo
-                    _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, e.costo, estado="error", error=_mensaje(e))
+                    _capa(capas, "voz", proveedor_voz, {"voz": nombre_voz}, e.costo, estado="error", error=_mensaje(e))
 
             def aplicar(d):
                 return borrador.agregar_destino(d, g, voces, precio)
@@ -329,12 +345,12 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         # Voz y estilo concretos ANTES de la receta (la receta los incluye).
         lista_voces = fal_audio.VOCES.get(guion_base.get("idioma") or "es") or fal_audio.VOCES["es"]
         if not o.get("voz"):
-            o["voz"] = lista_voces[0]
-            if variante_tipo == "hook":
-                # Otra voz que la de la final original del destino (o la
-                # siguiente a la de defecto si no hay original).
-                o["voz"] = final_edition._siguiente(
-                    lista_voces, final_edition._parametro_capa_original(cliente, cf_id, idioma, pais, "voz", "voz") or lista_voces[0])
+            # Una variante conserva la voz propia de la marca (la de la original
+            # del destino o, sin original, la de la sesión); si no hay, la de
+            # gancho rota la galería y la de estructura usa la de defecto (ver
+            # `voz_variante`).
+            o["voz"] = (final_edition.voz_variante(cliente, cf_id, idioma, pais, lista_voces, variante_tipo)
+                        if variante_tipo else lista_voces[0])
         if not o.get("estilo_musica"):
             producto = final_edition._producto(cliente, entry, None)
             estilo = musica_mod.elegir_estilo(producto.get("tipo"), entry.get("enfoque"))
@@ -343,7 +359,8 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
                     tipos.ESTILOS_MUSICA, final_edition._parametro_capa_original(cliente, cf_id, idioma, pais, "musica", "estilo") or estilo)
             o["estilo_musica"] = estilo
         guion_trabajo = guion_base
-        if variante_tipo and ediciones.buscar_origen(cliente, cf_id, borrador.receta(guion_base, o, formato)) is None:
+        if variante_tipo and ediciones.buscar_origen(cliente, cf_id,
+                                                     borrador.receta(guion_base, _opciones_receta(cliente, o), formato)) is None:
             # La variante se escribe UNA vez por receta: los demás destinos
             # de la misma variante la leen del documento (doc["guion"]).
             # Doctrina, bloque 4: la variante recibe el ángulo de la sesión y el
@@ -406,7 +423,7 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         if "voz" in capas_t:
             previa = capas.get("voz") or {}
             estado = "error" if "error" in (previa.get("estado"), capas_t["voz"]["estado"]) else capas_t["voz"]["estado"]
-            _capa(capas, "voz", "fal/elevenlabs", capas_t["voz"]["parametros"],
+            _capa(capas, "voz", final_edition.proveedor_voz(o["voz"]), capas_t["voz"]["parametros"],
                   float(previa.get("costo_usd") or 0.0) + capas_t["voz"]["costo_usd"], estado=estado,
                   error=capas_t["voz"].get("error") or previa.get("error"))
         # (`guion_destino` arma un dict nuevo sin `angulo_variante`: el ángulo de

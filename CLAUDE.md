@@ -631,6 +631,14 @@ tarea `voz_propia_crear` (`max_intentos=1`, job `<cliente>__voz_propia`): clonar
 obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripción (US$ 3,00); el gasto (tipo
 `voz_propia`) se registra apenas fal responde y la tarea ESTRENA la voz leyendo su muestra, porque MiniMax borra
 una voz sin uso real en 7 días (la vista previa no cuenta). En el formulario una voz propia es `vp:<id>`.
+Desde 2026-10-01 (spec `docs/superpowers/specs/2026-10-01-mis-voces-en-final-edition-design.md`) Mis voces
+también narran finales: grupo «Mis voces» en el selector «Voz» de «Producir finales» (`mis_voces_fe`, solo
+valor y nombre), `fe_producir` rechaza una voz propia ajena o borrada sin encolar, `insumos.voz_bloque` (y el
+legado `voz._sintetizar_bloque`) la leen con `voces_propias.sintetizar` (MiniMax, la estrena) con caché por
+`voice_id`, el `voice_id` entra al hash de la receta del borrador, la capa `voz` anota `fal/minimax`
+(`final_edition.proveedor_voz`) y una variante (de gancho o de estructura) conserva la voz propia de su final
+original —o, en un destino sin original, la de la final original más reciente de la sesión—
+(`final_edition.voz_variante`). Mismo precio por carácter que ElevenLabs.
 
 Fuera: efectos, subtítulos, usar el audio en
 un video o el editor, ElevenLabs v3.
@@ -779,7 +787,8 @@ failed retry never leaves the client without a video. Every price is per-destino
 (`opciones["precios"]`, one raw number per país — never converted between currencies)
 so a badge/voice-over price is either the number typed for that specific country or
 absent, never another country's number reformatted. All fal.ai calls go through
-`providers/fal_audio.py` (ElevenLabs `multilingual-v2` for TTS, `fal-ai/whisper` for
+`providers/fal_audio.py` (ElevenLabs `multilingual-v2` for TTS — MiniMax Speech 2.8 HD
+for a project's own voices, see «Audios en Crear» —, `fal-ai/whisper` for
 word-level timestamps, Stable Audio for music); the premade voice list there is
 individually verified against fal (see the module docstring) rather than assumed from
 ElevenLabs' own catalog. Fonts are checked into `static/fonts/`; generated music

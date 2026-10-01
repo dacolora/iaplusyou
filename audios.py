@@ -11,7 +11,6 @@ final_edition.musica al cargar (esa importa mi_musica; la tarea la usa).
 Desde el 2026-09-30 habla diez idiomas y decide el motor por voz e idioma
 (`motor_de`): ElevenLabs Multilingual v2, Turbo v2.5 para el noruego y
 MiniMax para las voces propias (`voces_propias.py`)."""
-import logging
 import os
 import shutil
 import tempfile
@@ -28,8 +27,6 @@ import mi_musica
 from final_edition import cortes, mezcla
 from providers import fal_audio
 from storage import r2_uploader
-
-log = logging.getLogger(__name__)
 
 ORIGEN = "locucion"
 ORIGEN_VOZ = "voz"
@@ -230,15 +227,7 @@ def sintetizar(cliente, voz, texto, idioma, velocidad):
         vp = voces_propias.resolver(cliente, voz)
         if not vp:
             raise ValueError(MENSAJES["voz_borrada"])
-        r = fal_audio.tts_minimax(texto, vp["voice_id"], idioma, velocidad=v)
-        if not vp["estrenada"]:
-            # fal ya cobró esta síntesis real: un fallo marcando `estrenada`
-            # (base bloqueada) no puede perder el gasto que registra quien llama
-            # justo después de este `return`.
-            try:
-                voces_propias.marcar_estrenada(cliente, vp["id"])
-            except Exception:
-                log.warning("voz propia %s: no pude marcarla estrenada", vp["id"], exc_info=True)
+        r = voces_propias.sintetizar(cliente, vp, texto, idioma, velocidad=v)
         return {"url": r["url"], "costo_usd": r["costo_usd"], "proveedor": "fal/minimax",
                 "etiqueta": ETIQUETAS_MOTOR[motor], "voz_nombre": vp["nombre"]}
     if motor == MOTOR_TURBO:
@@ -405,9 +394,12 @@ def muestra(voz, idioma):
         # (uno fallido tras pagar, y su reintento) pisaban la misma fila de
         # gasto y solo uno de los dos pagos quedaba anotado.
         ref = f"muestra_voz:{voz}:{idioma}:v{VERSION_MUESTRA}:{int(time.time() * 1000)}"
-        gastos.registrar_seguro(CLIENTE_MUESTRAS, "locucion", usd, ref,
-                                detalle=gettext("muestra de voz · %(voz)s · %(idioma)s", voz=voz, idioma=idioma),
-                                proveedor="fal/elevenlabs")
+        # El detalle se GUARDA: va en el idioma de `_creatv` (el de defecto),
+        # no en el de quien escucha la muestra ni en el msgid crudo que da
+        # gettext fuera de toda app (precalentar_muestras.py corre sin app).
+        with idiomas.en_idioma(idiomas.de_tarea({"cliente": CLIENTE_MUESTRAS})):
+            detalle = gettext("muestra de voz · %(voz)s · %(idioma)s", voz=voz, idioma=idioma)
+        gastos.registrar_seguro(CLIENTE_MUESTRAS, "locucion", usd, ref, detalle=detalle, proveedor="fal/elevenlabs")
         with tempfile.TemporaryDirectory() as tmp:
             local = descargar_url(r["url"], os.path.join(tmp, "muestra.mp3"))
             key = f"clientes/{CLIENTE_MUESTRAS}/materiales/muestra_{voz}_{idioma}_v{VERSION_MUESTRA}.mp3"

@@ -3138,6 +3138,12 @@ def _contexto_organico(cliente):
     }
 
 
+def _mis_voces_fe(cliente):
+    """Las voces propias del proyecto para el selector «Voz» de Final edition:
+    solo valor y nombre (el voice_id de MiniMax no sale a la página)."""
+    return [{"valor": v["valor"], "nombre": v["nombre"]} for v in voces_propias.listar(cliente)]
+
+
 def _contexto_final_edition(cliente):
     """Contexto que leen los detalles de Final edition: la página y las rutas
     de detalle (fe_detalle_video / fe_detalle_final) lo reciben igual."""
@@ -3145,6 +3151,7 @@ def _contexto_final_edition(cliente):
         **_contexto_organico(cliente),
         "paises_fe": fe_tipos.PAISES,
         "voces_fe": fal_audio.VOCES,
+        "mis_voces_fe": _mis_voces_fe(cliente),
         "estilos_fe": list(fe_tipos.ESTILOS_MUSICA),
         "nombres_estilos_musica": fe_tipos.NOMBRES_ESTILOS_MUSICA,
         "nombres_estilo_musica": fe_tipos.NOMBRES_ESTILO_MUSICA,
@@ -6778,7 +6785,13 @@ def fe_producir(cliente, cf_id):
     idioma_base = base.get("idioma") if base.get("idioma") in IDIOMAS_FE else "es"
     voces_validas = {v for lista in fal_audio.VOCES.values() for v in lista}
     voz = request.form.get("voz") or ""
-    if voz not in voces_validas:
+    if audios.es_propia(voz):
+        # Una voz propia solo si es de ESTE proyecto y sigue existiendo: si se
+        # borró en otra pestaña no se cambia en silencio por otra voz.
+        if not voces_propias.resolver(cliente, voz):
+            flash(idiomas.traducir(audios.MENSAJES["voz_borrada"]), "error")
+            return _volver_final(cliente)
+    elif voz not in voces_validas:
         voz = (fal_audio.VOCES.get(idioma_base) or fal_audio.VOCES["es"])[0]
     estilo = request.form.get("estilo_musica") or ""
     cancion = mi_musica.resolver(cliente, estilo)
