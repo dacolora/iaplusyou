@@ -98,6 +98,22 @@ def test_subir_video_con_audio_marca_tiene_audio(entorno, tmp_path):
     assert m["tiene_audio"] is True
 
 
+def test_medir_video_guarda_las_medidas_que_se_ven_no_las_codificadas(entorno, monkeypatch, tmp_path):
+    # D6 (Tarea 6): grabado «de pie» — ffprobe dice 1280x720 con una marca de
+    # rotación de 90°; lo que se VE (y lo que debe guardar _medir) es 720x1280.
+    from final_edition import cortes
+
+    def _ffprobe(ruta):
+        return {"streams": [{"codec_type": "audio"},
+                            {"codec_type": "video", "width": 1280, "height": 720,
+                             "side_data_list": [{"rotation": 90}]}]}
+    monkeypatch.setattr(cortes, "ffprobe_json", _ffprobe)
+    monkeypatch.setattr(cortes, "duracion", lambda p: 4.0)
+    monkeypatch.setattr(entorno.mezcla, "tiene_audio", lambda p: True)
+    dur_ms, ancho, alto, tiene_audio = entorno._medir("video", str(tmp_path / "x.mp4"))
+    assert (ancho, alto) == (720, 1280) and dur_ms == 4000 and tiene_audio is True
+
+
 def test_subir_imagen_sin_proxy(entorno):
     import trabajos
     from tareas import edicion as te

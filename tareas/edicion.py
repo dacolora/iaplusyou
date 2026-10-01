@@ -341,9 +341,9 @@ def ejecutar_proxy(tarea):
     if not mat:
         return gettext("Material inexistente.")
     # Cheap fix (review): el tipo se valida ANTES de bajar nada — un material
-    # sin proxy (imagen, png_texto, proxy, tira, forma_onda) no debe ni
-    # crear su carpeta de trabajo.
-    if mat["tipo"] not in ("video", "audio"):
+    # sin proxy (png_texto, proxy, tira, forma_onda) no debe ni crear su
+    # carpeta de trabajo.
+    if mat["tipo"] not in ("video", "audio", "imagen"):
         return gettext("Sin proxy para este tipo.")
     carpeta = _carpeta(cliente, f"proxy_{mid}")
     try:
@@ -355,7 +355,11 @@ def ejecutar_proxy(tarea):
             info = cortes.ffprobe_json(original)
             v = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
             dur_s = cortes.duracion(original)
-            campos.update(ancho=v.get("width"), alto=v.get("height"), duracion_ms=int(round(dur_s * 1000)))
+            # D6: las medidas que se VEN (un grabado «de pie» viene
+            # codificado acostado, con una marca de rotación), no las de
+            # ffprobe tal cual.
+            ancho, alto = encuadre.medidas_visibles(v)
+            campos.update(ancho=ancho, alto=alto, duracion_ms=int(round(dur_s * 1000)))
             nuevos["tiene_audio"] = mezcla.tiene_audio(original)
             proxy = os.path.join(carpeta, "proxy.mp4")
             generar_proxy(original, proxy)
@@ -371,6 +375,18 @@ def ejecutar_proxy(tarea):
                 # `insumos.clon` ya los midió al crear el material (I4,
                 # plan-mandated capa 2): no repetir el trabajo de `scdet`.
                 nuevos["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
+        elif mat["tipo"] == "imagen":
+            # D13: la copia liviana para la vista previa (lado largo <=
+            # fotos.LADO_LIGERA, con su alfa si la trae) — nunca tira ni
+            # picos, que son solo de video/audio.
+            ruta, content_type, ancho, alto = fotos.ligera(original, carpeta)
+            ext = "png" if content_type == "image/png" else "jpg"
+            campos["url_proxy"] = r2_uploader.upload_file(ruta, f"clientes/{cliente}/materiales/{mid}_proxy.{ext}", content_type)
+            if not mat.get("ancho") or not mat.get("alto"):
+                # D6: un material viejo (o de otra vía) puede no traer las
+                # medidas que se VEN — se llenan con las de la copia liviana
+                # (ya derecha) en vez de dejarlas vacías.
+                campos["ancho"], campos["alto"] = ancho, alto
         else:  # audio (único otro tipo posible tras el chequeo de arriba)
             campos["duracion_ms"] = int(round(cortes.duracion(original) * 1000))
             nuevos["picos"] = _picos(original)

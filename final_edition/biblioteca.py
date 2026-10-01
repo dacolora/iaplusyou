@@ -28,7 +28,7 @@ import final_edition
 import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, insumos, mezcla, vista_previa
+from final_edition import cortes, encuadre, insumos, mezcla, vista_previa
 from tareas import edicion as tareas_edicion
 
 # video/imagen/audio (spec §11): extensión -> (tipo de material, content-type
@@ -140,7 +140,9 @@ def _enderezar(local, ext):
 
 def _medir(tipo, local):
     """(duracion_ms, ancho, alto, tiene_audio) según el tipo; `SubidaInvalida`
-    si el archivo no se puede leer con ffprobe/Pillow."""
+    si el archivo no se puede leer con ffprobe/Pillow. Un video guarda las
+    medidas que se VEN (`encuadre.medidas_visibles`, D6): un grabado «de
+    pie» viene codificado acostado, con una marca de rotación."""
     if tipo == "imagen":
         try:
             with Image.open(local) as im:
@@ -167,7 +169,8 @@ def _medir(tipo, local):
             raise ValueError(gettext("duración inválida"))
         dur_ms = int(round(dur_s * 1000))
         if tipo == "video":
-            return dur_ms, int(v["width"]), int(v["height"]), mezcla.tiene_audio(local)
+            ancho, alto = encuadre.medidas_visibles(v)
+            return dur_ms, ancho, alto, mezcla.tiene_audio(local)
         return dur_ms, None, None, None
     except Exception as e:
         raise SubidaInvalida(mensaje) from e

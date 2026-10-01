@@ -100,12 +100,16 @@ def faltantes(doc, mats):
 
 
 def pendientes(mats):
-    """Videos sin proxy o con proxy de una receta anterior, y audios sin
-    picos (el agache de la música los necesita)."""
+    """Videos sin proxy o con proxy de una receta anterior, imágenes sin su
+    copia liviana (D13) y audios sin picos (el agache de la música los
+    necesita)."""
     out = []
     for mid, m in mats.items():
         if m["tipo"] == "video":
             if not m.get("url_proxy") or (m.get("proxy_version") or 1) < tareas_edicion.PROXY_VERSION:
+                out.append(mid)
+        elif m["tipo"] == "imagen":
+            if not m.get("url_proxy"):
                 out.append(mid)
         elif m["tipo"] == "audio" and m.get("picos") is None:
             out.append(mid)

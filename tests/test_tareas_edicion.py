@@ -481,6 +481,102 @@ def test_proxy_real_sobre_un_clip_de_tres_segundos(entorno, monkeypatch, tmp_pat
     assert Image.open(copias[f"clientes/acme/materiales/{mat['id']}_tira.jpg"]).size[0] == 160 * 3
 
 
+def test_proxy_mide_el_video_con_encuadre_como_se_ve(entorno, monkeypatch, tmp_path):
+    # D6 (Tarea 6): grabado «de pie» — ffprobe dice 1280x720 con rotación de
+    # 90°; `ejecutar_proxy` debe guardar lo que se VE (720x1280), no lo
+    # codificado, igual que `biblioteca._medir` y `preparar_rutas`.
+    import materiales
+    from final_edition import cortes, mezcla
+    mat = materiales.buscar_hash("acme", "h1")
+    monkeypatch.setattr(cortes, "ffmpeg", lambda args, timeout=300: open(args[-1], "wb").write(b"x"))
+    monkeypatch.setattr(cortes, "duracion", lambda p: 4.0)
+    monkeypatch.setattr(cortes, "detectar_cortes", lambda p, umbral=10.0: [])
+    monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [
+        {"codec_type": "audio"},
+        {"codec_type": "video", "width": 1280, "height": 720, "side_data_list": [{"rotation": 90}]}]})
+    monkeypatch.setattr(mezcla, "tiene_audio", lambda p: True)
+    entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    m2 = materiales.obtener("acme", mat["id"])
+    assert (m2["ancho"], m2["alto"]) == (720, 1280)
+
+
+@pytest.mark.slow
+def test_proxy_real_de_un_video_grabado_de_pie_guarda_las_medidas_que_se_ven(entorno, monkeypatch, tmp_path):
+    # D6 con ffmpeg/ffprobe reales: un 1280x720 marcado con
+    # -display_rotation:v:0 90 (lo que manda un celular grabando «de pie»)
+    # se decodifica 720x1280 — y eso es lo que debe quedar en la fila.
+    import materiales
+    from final_edition import cortes
+    horizontal = str(tmp_path / "horizontal.mp4")
+    rotado = str(tmp_path / "rotado.mp4")
+    cortes.ffmpeg(["-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30", "-t", "1", "-pix_fmt", "yuv420p", horizontal])
+    cortes.ffmpeg(["-display_rotation:v:0", "90", "-i", horizontal, "-t", "1", "-c", "copy", rotado])
+    monkeypatch.setattr(materiales, "descargar", lambda mat, destino: __import__("shutil").copy(rotado, destino) and destino)
+    mat = materiales.buscar_hash("acme", "h1")
+    entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    m2 = materiales.obtener("acme", mat["id"])
+    assert (m2["ancho"], m2["alto"]) == (720, 1280)
+
+
+# ---- editor_proxy, rama imagen (Tarea 6, D13): la copia liviana de una foto ----
+
+def test_proxy_de_imagen_sube_la_copia_liviana_y_guarda_url_proxy(entorno, monkeypatch):
+    import materiales
+    from PIL import Image
+    mat = materiales.registrar("acme", tipo="imagen", origen="subida", url="https://r2/foto", hash="hf9", bytes=1)
+
+    def _descargar(m, destino):
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        Image.new("RGB", (3000, 2000), (10, 120, 10)).save(destino)
+        return destino
+    monkeypatch.setattr(materiales, "descargar", _descargar)
+    r = entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    assert r == "Proxy listo."
+    m2 = materiales.obtener("acme", mat["id"])
+    assert m2["url_proxy"].endswith(f"/materiales/{mat['id']}_proxy.jpg")
+    assert "tira_url" not in m2["extra"] and "picos" not in m2["extra"]
+    assert (m2["ancho"], m2["alto"]) == (1920, 1280)        # D6: faltaban, se llenan con lo que se VE
+
+
+def test_proxy_de_imagen_no_pisa_ancho_alto_que_ya_tenia(entorno, monkeypatch):
+    import materiales
+    from PIL import Image
+    mat = materiales.registrar("acme", tipo="imagen", origen="subida", url="https://r2/foto", hash="hf10", bytes=1,
+                               ancho=10, alto=20)
+
+    def _descargar(m, destino):
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        Image.new("RGB", (3000, 2000), (10, 120, 10)).save(destino)
+        return destino
+    monkeypatch.setattr(materiales, "descargar", _descargar)
+    entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    m2 = materiales.obtener("acme", mat["id"])
+    assert (m2["ancho"], m2["alto"]) == (10, 20)
+
+
+def test_proxy_de_imagen_con_transparencia_sube_png(entorno, monkeypatch):
+    import materiales
+    from PIL import Image
+    mat = materiales.registrar("acme", tipo="imagen", origen="subida", url="https://r2/foto", hash="hf11", bytes=1)
+
+    def _descargar(m, destino):
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        Image.new("RGBA", (100, 100), (0, 0, 255, 0)).save(destino)
+        return destino
+    monkeypatch.setattr(materiales, "descargar", _descargar)
+    entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    m2 = materiales.obtener("acme", mat["id"])
+    assert m2["url_proxy"].endswith(f"/materiales/{mat['id']}_proxy.png")
+
+
+def test_png_texto_sigue_sin_proxy(entorno):
+    import materiales
+    mat = materiales.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/pt", hash="hpt", bytes=1)
+    r = entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    assert r == "Sin proxy para este tipo."
+    assert materiales.obtener("acme", mat["id"])["url_proxy"] is None
+
+
 def test_proxy_de_audio_calcula_forma_de_onda(entorno, monkeypatch):
     import materiales
     from final_edition import cortes

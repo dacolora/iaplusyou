@@ -221,6 +221,42 @@ test("agregarMateriales no corta lo que reproduce: recarga los archivos nuevos a
   assert.deepEqual(llamadas, []);
 });
 
+// ---- Capa 5b (Tarea 6, D13): usarListos (el sondeo de edicion_proxy) también
+// suelta la copia liviana de una imagen que acaba de llegar, no solo
+// videos.renovar — si no, una <Image> ya cacheada con el original (sin
+// url_proxy) se queda con ese `src` para siempre.
+
+test("usarListos suelta la copia liviana de las imágenes cuyo proxy llegó", async () => {
+  const { VistaPrevia } = await import("../../static/editor/vista.js");
+  const llamadas = [];
+  const falsa = {
+    datos: { pendientes: [3, 9] },
+    materialesVigentes: {
+      1: { id: 1, tipo: "video", url: "https://r2/a.mp4", url_proxy: null },
+      3: { id: 3, tipo: "imagen", url: "https://r2/c.png", url_proxy: null },
+    },
+    get materiales() { return this.materialesVigentes; },
+    audio: { materiales: null },
+    videos: { renovar: (mats, ids) => llamadas.push(["renovar", ids]) },
+    fallasCarga: new Set([1, 3, 9]),
+    imagenesLigeras: new Map([[3, { src: "https://r2/c.png" }]]),
+    imagenesLigerasFallidas: new Set([3]),
+    mostrarFallas: () => llamadas.push(["fallas"]),
+    pedirCuadro: () => llamadas.push(["cuadro"]),
+    alCambiarMateriales: (m) => llamadas.push(["pagina", Object.keys(m).sort()]),
+  };
+  const j = {
+    pendientes: [9],                          // 9 sigue pendiente; 3 ya llegó
+    materiales: { 3: { id: 3, tipo: "imagen", url: "https://r2/c.png", url_proxy: "https://r2/c_p.png" } },
+  };
+  VistaPrevia.prototype.usarListos.call(falsa, j);
+  assert.deepEqual(falsa.datos.pendientes, [9]);
+  assert.equal(falsa.materialesVigentes[3].url_proxy, "https://r2/c_p.png");
+  assert.equal(falsa.imagenesLigeras.has(3), false);     // la caché vieja (sin proxy) se suelta
+  assert.equal(falsa.imagenesLigerasFallidas.has(3), false);
+  assert.deepEqual(llamadas, [["renovar", [3]], ["fallas"], ["cuadro"], ["pagina", ["1", "3"]]]);
+});
+
 // ---- Capa 4b (Task 8): las medidas de los textos para tocar sobre el video ----
 
 test("medidasTexto mide solo los textos que se ven en ese instante, como los dibuja el lienzo", async () => {

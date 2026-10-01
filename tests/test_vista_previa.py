@@ -31,8 +31,9 @@ def test_destinos_incluye_voces_y_subtitulos_por_destino():
 def test_pendientes_video_sin_proxy_o_viejo_y_audio_sin_picos():
     mats = {1: {"tipo": "video", "url_proxy": None}, 2: {"tipo": "video", "url_proxy": "u", "proxy_version": None},
             3: {"tipo": "video", "url_proxy": "u", "proxy_version": 2}, 4: {"tipo": "audio", "picos": None},
-            5: {"tipo": "audio", "picos": []}, 6: {"tipo": "imagen"}}
-    assert vista_previa.pendientes(mats) == [1, 2, 4]
+            5: {"tipo": "audio", "picos": []}, 6: {"tipo": "imagen"}, 7: {"tipo": "imagen", "url_proxy": "u"}}
+    # Tarea 6 (D13): una imagen sin su copia liviana también está pendiente.
+    assert vista_previa.pendientes(mats) == [1, 2, 4, 6]
 
 
 def test_config_navegador_sale_de_los_modulos():

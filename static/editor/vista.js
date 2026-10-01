@@ -455,7 +455,14 @@ export class VistaPrevia {
     for (const mid of ids) this.materialesVigentes[mid] = j.materiales[mid];
     this.audio.materiales = this.materialesVigentes;
     this.videos.renovar(this.materialesVigentes, ids);
-    for (const mid of ids) if (this.materialesVigentes[mid]?.tipo === "video") this.fallasCarga.delete(mid);
+    for (const mid of ids) {
+      if (this.materialesVigentes[mid]?.tipo === "video") this.fallasCarga.delete(mid);
+      // D13 (capa 5b, Tarea 6): la foto o la imagen principal que acaba de
+      // recibir su `url_proxy` — si no se suelta, la <Image> ya cacheada se
+      // queda con el `src` del original para siempre (como renovarPendientes).
+      this.imagenesLigeras.delete(mid);
+      this.imagenesLigerasFallidas.delete(mid);
+    }
     this.mostrarFallas();
     this.pedirCuadro();
     this.alCambiarMateriales(this.materiales);   // llegaron proxies o tiras: la línea las usa

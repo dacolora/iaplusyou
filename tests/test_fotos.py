@@ -73,3 +73,56 @@ def test_un_archivo_que_no_es_imagen_dice_cual(tmp_path):
     origen.write_text("esto no es una foto", encoding="utf-8")
     with pytest.raises(RuntimeError, match="No pude leer la foto notas.png"):
         fotos.preparar(str(origen), str(tmp_path / "f.jpg"))
+
+
+# ---- fotos.ligera (editor capa 5b, Tarea 6, D13): la copia liviana para la
+# vista previa — lado largo <= LADO_LIGERA, PNG con alfa si tiene
+# transparencia (una capa encima la necesita), si no JPEG calidad 85. ----
+
+def test_una_foto_grande_sin_transparencia_sale_jpg_a_1920_de_lado_largo(tmp_path):
+    origen = str(tmp_path / "grande.jpg")
+    Image.new("RGB", (3000, 2000), (10, 120, 10)).save(origen)
+    ruta, content_type, ancho, alto = fotos.ligera(origen, str(tmp_path / "proxy"))
+    assert ruta.endswith("ligera.jpg") and content_type == "image/jpeg"
+    assert (ancho, alto) == (1920, 1280)
+    out = _abrir(ruta)
+    assert out.format == "JPEG" and out.mode == "RGB" and out.size == (1920, 1280)
+
+
+def test_un_png_con_transparencia_conserva_el_alfa(tmp_path):
+    origen = str(tmp_path / "alfa.png")
+    im = Image.new("RGBA", (100, 100), (0, 0, 255, 255))
+    for x in range(50):
+        for y in range(100):
+            im.putpixel((x, y), (255, 0, 0, 0))
+    im.save(origen)
+    ruta, content_type, ancho, alto = fotos.ligera(origen, str(tmp_path / "proxy"))
+    assert ruta.endswith("ligera.png") and content_type == "image/png"
+    assert (ancho, alto) == (100, 100)
+    out = _abrir(ruta)
+    assert out.format == "PNG" and out.mode == "RGBA" and out.size == (100, 100)
+    assert out.getpixel((0, 0))[3] == 0          # lo transparente sigue transparente
+
+
+def test_una_foto_chica_no_se_agranda_en_la_copia_ligera(tmp_path):
+    origen = str(tmp_path / "chica.jpg")
+    Image.new("RGB", (800, 600), (10, 120, 10)).save(origen)
+    ruta, content_type, ancho, alto = fotos.ligera(origen, str(tmp_path / "proxy"))
+    assert (ancho, alto) == (800, 600) and content_type == "image/jpeg"
+    assert _abrir(ruta).size == (800, 600)
+
+
+def test_ligera_tambien_aplica_exif(tmp_path):
+    origen = str(tmp_path / "celular.jpg")
+    exif = Image.Exif()
+    exif[0x0112] = 6   # girar 90° a la derecha al mostrar
+    Image.new("RGB", (40, 20), (200, 10, 10)).save(origen, exif=exif.tobytes())
+    _, _, ancho, alto = fotos.ligera(origen, str(tmp_path / "proxy"))
+    assert (ancho, alto) == (20, 40)
+
+
+def test_ligera_un_archivo_que_no_es_imagen_dice_cual_mismo_mensaje_de_preparar(tmp_path):
+    origen = tmp_path / "notas.png"
+    origen.write_text("esto no es una foto", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="No pude leer la foto notas.png"):
+        fotos.ligera(str(origen), str(tmp_path / "proxy"))
