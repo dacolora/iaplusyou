@@ -12,6 +12,8 @@ docs/superpowers/plans/2026-09-15-motor-bloque2-final-edition.md > Global Constr
 """
 import math
 
+from flask_babel import gettext
+
 from providers import fal_client
 
 MODELO_TTS = "fal-ai/elevenlabs/tts/multilingual-v2"
@@ -63,7 +65,7 @@ def tts(texto, voz="Rachel", idioma="es", on_progreso=None, velocidad=None, time
     una muestra corta (`audios.muestra`) manda uno más chico para no colgar un
     clic en línea."""
     if not texto:
-        raise ValueError("fal_audio.tts: texto vacío.")
+        raise ValueError(gettext("fal_audio.tts: texto vacío."))
 
     payload = {
         "text": texto,
@@ -77,7 +79,8 @@ def tts(texto, voz="Rachel", idioma="es", on_progreso=None, velocidad=None, time
 
     url = (data.get("audio") or {}).get("url")
     if not url:
-        raise RuntimeError(f"fal.ai ({MODELO_TTS}) no devolvió una URL de audio: {data}")
+        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
+                                   modelo=MODELO_TTS, datos=data))
 
     costo = round(len(texto) * COSTO_USD_POR_CARACTER, 4)
     return {"url": url, "costo_usd": costo}
@@ -116,7 +119,8 @@ def musica(prompt, segundos, on_progreso=None):
 
     url = (data.get("audio_file") or {}).get("url")
     if not url:
-        raise RuntimeError(f"fal.ai ({MODELO_MUSICA}) no devolvió una URL de audio: {data}")
+        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
+                                   modelo=MODELO_MUSICA, datos=data))
 
     return {"url": url, "costo_usd": COSTO_USD_POR_PISTA_MUSICA}
 
@@ -133,5 +137,6 @@ def musica_elevenlabs(prompt, segundos=60, instrumental=True, on_progreso=None):
     data = fal_client.llamar(MODELO_MUSICA_ELEVENLABS, payload, timeout=600, on_progreso=on_progreso)
     url = (data.get("audio") or {}).get("url")
     if not url:
-        raise RuntimeError(f"fal.ai ({MODELO_MUSICA_ELEVENLABS}) no devolvió una URL de audio: {data}")
+        raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió una URL de audio: %(datos)s",
+                                   modelo=MODELO_MUSICA_ELEVENLABS, datos=data))
     return {"url": url, "costo_usd": costo_elevenlabs(segundos)}

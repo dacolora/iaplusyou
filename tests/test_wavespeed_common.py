@@ -78,3 +78,64 @@ def test_avisar_lanzada_no_tumba_nada(monkeypatch):
     wc.avisar_lanzada(vistos.append, "p3")
     assert vistos == [{"fase": "created", "elapsed": 0, "prediction_id": "p3"}]
     wc.avisar_lanzada(None, "p3")
+
+
+# --- Incidente 2026-09-30: WaveSpeed sin saldo -------------------------------
+# «Insufficient credits. Please top up your account to continue.» salía como
+# el JSON crudo en la tarjeta del cliente; ahora es SinSaldo (RuntimeError, así
+# todo el manejo de errores de siempre lo sigue atrapando).
+
+import json as _json
+
+CUERPO_SIN_SALDO = {"code": 400, "message": "Insufficient credits. Please top up your account to continue."}
+
+
+class _RespPost:
+    def __init__(self, status, cuerpo):
+        self.status_code = status
+        self.ok = 200 <= status < 300
+        self._cuerpo = cuerpo
+        self.text = cuerpo if isinstance(cuerpo, str) else _json.dumps(cuerpo)
+
+    def json(self):
+        if isinstance(self._cuerpo, str):
+            raise ValueError("no es JSON")
+        return self._cuerpo
+
+
+def test_saldo_insuficiente_es_sin_saldo():
+    e = wc.error_de_respuesta(_RespPost(400, CUERPO_SIN_SALDO), "alibaba/wan-3.0/reference-to-video")
+    assert isinstance(e, wc.SinSaldo) and isinstance(e, RuntimeError)
+    assert e.proveedor == "wavespeed" and e.status == 400
+    assert e.detalle == "Insufficient credits. Please top up your account to continue."
+    assert "alibaba/wan-3.0/reference-to-video" in str(e)
+
+
+def test_un_402_tambien_es_sin_saldo():
+    assert isinstance(wc.error_de_respuesta(_RespPost(402, {"message": "Payment required"}), "x/y"), wc.SinSaldo)
+
+
+def test_los_demas_errores_siguen_con_el_texto_de_siempre():
+    cuerpo = {"code": 422, "message": "duration must be <= 30"}
+    e = wc.error_de_respuesta(_RespPost(422, cuerpo), "x/y")
+    assert type(e) is RuntimeError
+    assert str(e) == "WaveSpeed (x/y) respondió 422: " + _json.dumps(cuerpo)
+    e = wc.error_de_respuesta(_RespPost(500, "<html>caído</html>"), "x/y")
+    assert type(e) is RuntimeError and str(e) == "WaveSpeed (x/y) respondió 500: <html>caído</html>"
+
+
+def test_todos_los_lanzadores_de_wavespeed_reconocen_el_saldo(monkeypatch):
+    import requests
+    from providers import flowplus_modelos, wan3_client, wavespeed_client, wavespeed_imagen, wavespeed_video_edit
+    monkeypatch.setattr(wc, "api_key", lambda: "k")
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _RespPost(400, CUERPO_SIN_SALDO))
+    with pytest.raises(wc.SinSaldo):
+        flowplus_modelos._lanzar("kwaivgi/kling-video-o3-pro/reference-to-video", {"prompt": "p"}, "Kling O3 Pro")
+    with pytest.raises(wc.SinSaldo):
+        wan3_client.generar_video("p", ["https://x/1.png"], duration=5)
+    with pytest.raises(wc.SinSaldo):
+        wavespeed_imagen._lanzar("bytedance/seedream-v5.0-pro/edit", {"prompt": "p"})
+    with pytest.raises(wc.SinSaldo):
+        wavespeed_client.editar_video("https://x/v.mp4", "p")
+    with pytest.raises(wc.SinSaldo):
+        wavespeed_video_edit.editar_video(next(iter(wavespeed_video_edit.MODELOS)), "https://x/v.mp4", "p")

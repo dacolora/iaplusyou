@@ -7,12 +7,13 @@ español, 404 para lo de otro proyecto.
 """
 import os
 
-from flask import Blueprint, Response, jsonify, render_template, request, session, url_for
+from flask import Blueprint, Response, flash, jsonify, render_template, request, session, url_for
 from flask_babel import gettext
 
 import catalogo_productos
 import gastos
 import proyectos
+import referencias_flowplus
 import trabajos
 import usuarios
 from final_edition import biblioteca
@@ -20,6 +21,7 @@ from guiones import clips, config, datos, duracion, escenas, imagenes, lectura, 
 from guiones.refinador import Conflicto, DatoInvalido, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
 from providers import flowplus_modelos
+from storage import r2_uploader
 
 bp = Blueprint("guiones_pipeline", __name__, url_prefix="/cliente/<cliente>/guiones")
 bp.before_request(_solo_mismo_origen)
@@ -311,7 +313,7 @@ def video_armar(cliente, vid):
         datos.empezar(cliente, vid, "armando", ("configurando", "invalido", "error"))
     except ErrorRefinador as e:
         return _error(e)
-    trabajos.iniciar(f"guion_armar_{vid}", lambda: clips.armar(vid), duracion_estimada=120)
+    trabajos.iniciar(f"guion_armar_{vid}", lambda: clips.armar(vid), duracion_estimada=300)
     return jsonify({"video_id": vid}), 202
 
 
@@ -470,6 +472,64 @@ def escena_quitar(cliente, vid):
     except ErrorRefinador as e:
         return _error(e)
     return jsonify({"video_id": vid})
+
+
+def _url_para_bandeja(cliente, img):
+    """URL pública de una imagen de escena para la bandeja de Crear: lo subido
+    ya está en R2; una foto del Catálogo se sube con la misma clave que usa
+    Crear al generar (`cf_crear_video`), así que no se duplica."""
+    if not img.get("activo_id"):
+        return img["url"]
+    activo = catalogo_productos.encontrar(cliente, img["activo_id"], categoria=img["categoria"])
+    if activo is None:
+        raise Conflicto(gettext("«%(nombre)s» ya no está en el Catálogo.", nombre=img.get("nombre") or img["activo_id"]))
+    carpeta = catalogo_productos.CATEGORIAS[activo["categoria"]]["carpeta"]
+    ruta = activo["representativa"]
+    return r2_uploader.upload_image(ruta, f"clientes/{cliente}/{carpeta}/{activo['id']}/{os.path.basename(ruta)}")
+
+
+@bp.post("/videos/<int:vid>/escenas/<int:indice>/crear")
+def escena_a_crear(cliente, vid, indice):
+    """«Llevar a Crear» (spec 2026-09-30): la bandeja de Crear se REEMPLAZA con
+    las imágenes de la escena (como «Editar y crear otra») y el formulario queda
+    precargado con su prompt (`escenas.prompt_para_crear`), la duración del clip
+    y el formato. Nada se genera: la persona revisa y pulsa «Generar» en Crear."""
+    if _cuerpo() is None:
+        return _sin_cuerpo()
+    try:
+        v = _video_o_404(cliente, vid)
+        if v["estado"] != "armado":
+            raise Conflicto(gettext("Primero arma los clips de esta versión."))
+        clip = next((c for c in v["clips"] if c["indice"] == indice), None)
+        if clip is None:
+            raise DatoInvalido(gettext("Esa escena no existe en esta versión."))
+        prompt = next((p for p in datos.prompts_de_video(vid) if p["tipo"] == "clip"
+                       and (p["extra"] or {}).get("variante") == "principal"
+                       and (p["extra"] or {}).get("clip_index") == indice), None)
+        if prompt is None:
+            raise Conflicto(gettext("Esta escena todavía no tiene su prompt en el chat."))
+        imagenes = escenas.imagenes_para_crear(v, indice)
+        urls = [_url_para_bandeja(cliente, x["imagen"]) for x in imagenes]
+    except ErrorRefinador as e:
+        return _error(e)
+    except Exception:  # noqa: BLE001 — subir una foto del Catálogo a R2 puede fallar
+        return jsonify({"error": gettext("No se pudieron preparar las imágenes de la escena. Vuelve a intentarlo.")}), 502
+    referencias_flowplus.vaciar(cliente)
+    for x, url in zip(imagenes, urls):
+        referencias_flowplus.agregar(cliente, "imagen", url, origen="flowplus",
+                                     titulo=f"Image {x['numero']}" + (f" · {x['nombre']}" if x["nombre"] else ""))
+    session["fp_prefill"] = {
+        "cliente": cliente,
+        "texto": escenas.prompt_para_crear(prompt["texto_vigente"], v, imagenes),
+        "tipo": "video",
+        # Crear ofrece duraciones fijas: la primera que alcanza para la escena
+        # (13 s → 15 s), así el diálogo nunca queda cortado.
+        "duracion": next((d for d in flowplus_modelos.DURACIONES_CREAR if d >= clip["duracion"]),
+                         flowplus_modelos.DURACIONES_CREAR[-1]),
+        "aspect_ratio": v["config"].get("formato") or "9:16",
+    }
+    flash(gettext("Escena %(n)s cargada en Crear: revisa el texto y las referencias, y genera.", n=indice), "ok")
+    return jsonify({"video_id": vid, "ir": url_for("ver_cliente", cliente=cliente, desde="flowplus") + "#referencias"})
 
 
 @bp.get("/bloque-global")

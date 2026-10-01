@@ -23,6 +23,7 @@ import { evaluarRespuesta, INTERVALO_SONDEO_MS, listos, TOPE_SONDEO_MS } from ".
 import { Reloj } from "./reloj.js";
 import { resolver } from "./resolver.js";
 import { rasterizarTexto } from "./texto_canvas.js";
+import { listaY, t } from "./textos.js";
 import { capasEn, cuadroVecino, duracionMs } from "./tiempo.js";
 import { Videos } from "./videos.js";
 
@@ -41,14 +42,6 @@ function aviso(id, texto, error = false) {
   el.textContent = texto || "";
   el.hidden = !texto;
   el.classList.toggle("error", Boolean(error));
-}
-
-function enumerar(lista) {
-  try {
-    return new Intl.ListFormat("es", { type: "conjunction" }).format(lista);
-  } catch {
-    return lista.join(", ");
-  }
 }
 
 function formatoTiempo(ms) {
@@ -263,12 +256,12 @@ export class VistaPrevia {
 
   nombreMaterial(mid) {
     const m = this.materialesVigentes[mid];
-    const tipo = m?.tipo === "imagen" ? "la imagen" : m?.tipo === "video" ? "el video" : "el archivo";
+    const tipo = t(m?.tipo === "imagen" ? "vista.nombre_imagen" : m?.tipo === "video" ? "vista.nombre_video" : "vista.nombre_archivo");
     let archivo = "";
     try {
       archivo = decodeURIComponent(String(m?.url_proxy || m?.url || "").split("?")[0].split("/").pop() || "");
     } catch { /* nombre raro: solo el tipo */ }
-    return archivo ? `${tipo} «${archivo.slice(0, 40)}»` : tipo;
+    return archivo ? t("vista.nombre_con_archivo", { tipo, archivo: archivo.slice(0, 40) }) : tipo;
   }
 
   avisarFalla(mid) {
@@ -280,20 +273,20 @@ export class VistaPrevia {
     const lista = [...this.fallasCarga].map((mid) => this.nombreMaterial(mid));
     const varias = lista.length > 1;
     aviso("aviso-carga", lista.length
-      ? `No se ${varias ? "pudieron" : "pudo"} cargar ${enumerar(lista)} (el enlace no respondió o el archivo ya no está): ${varias ? "esas partes quedan vacías" : "esa parte queda vacía"} en la vista previa.`
+      ? t(varias ? "vista.carga_varias" : "vista.carga_una", { lista: listaY(lista) })
       : "", true);
   }
 
   avisoSonido() {
     const n = this.audio.fallidos.size;
     return n
-      ? `No se pudo cargar el sonido de ${n} archivo(s) (puede ser la conexión o que el almacenamiento no dé permiso de lectura): la vista previa sigue sin ese sonido.`
+      ? t("vista.sonido_fallo", { n })
       : "";
   }
 
   elegirDestino(clave) {
     this.destinoActual = clave;
-    const t = this.reloj ? this.reloj.tiempo() : 0;
+    const ms = this.reloj ? this.reloj.tiempo() : 0;
     if (this.ocupado()) this.pausar();
     const [idioma, pais] = clave.split("_");
     try {
@@ -301,13 +294,13 @@ export class VistaPrevia {
       aviso("aviso-destino", "");
     } catch (e) {
       this.doc = null;
-      aviso("aviso-destino", e.name === "VariableSinValor" ? `${e.message} Elige otro destino.`
-        : `No se pudo preparar este destino: ${e.message}`, true);
+      aviso("aviso-destino", e.name === "VariableSinValor" ? t("vista.destino_sin_valor", { mensaje: e.message })
+        : t("vista.destino_error", { mensaje: e.message }), true);
       return;
     }
     const dur = duracionMs(this.doc);
     this.reloj = new Reloj(() => this.audio.ahoraMs(), dur);
-    this.reloj.ir(Math.min(t, dur));
+    this.reloj.ir(Math.min(ms, dur));
     $("barra").max = String(dur);
     this.pedirCuadro();
   }
@@ -318,8 +311,8 @@ export class VistaPrevia {
     const miTurno = ++this.turno;
     this.cargando = true;
     $("reproducir").textContent = "⏸";
-    $("reproducir").setAttribute("aria-label", "Pausar");
-    aviso("aviso-audio", "Cargando el sonido…");
+    $("reproducir").setAttribute("aria-label", t("vista.pausar"));
+    aviso("aviso-audio", t("vista.cargando_sonido"));
     let inicio = null;
     let falla = null;
     try {
@@ -331,7 +324,7 @@ export class VistaPrevia {
     this.cargando = false;
     if (falla) {
       inicio = this.audio.ahoraMs();
-      aviso("aviso-audio", `La vista previa va sin sonido: ${falla.message}`, true);
+      aviso("aviso-audio", t("vista.sin_sonido", { mensaje: falla.message }), true);
     } else if (inicio === null) {      // MotorAudio la descartó por vieja
       this.pausar();
       return;
@@ -350,7 +343,7 @@ export class VistaPrevia {
     this.videos.pausarTodo();
     this.renovarPendientes();                    // lo que llegó mientras reproducía
     $("reproducir").textContent = "▶";
-    $("reproducir").setAttribute("aria-label", "Reproducir");
+    $("reproducir").setAttribute("aria-label", t("vista.reproducir"));
     this.pedirCuadro();
   }
 
@@ -359,24 +352,24 @@ export class VistaPrevia {
     requestAnimationFrame(this.cuadro);
     if (!this.doc || !this.reloj) return;
     try {
-      const t = this.reloj.tiempo();
+      const ms = this.reloj.tiempo();
       const rep = this.reloj.reproduciendo;
-      this.videos.sincronizar(this.doc, t, rep);
+      this.videos.sincronizar(this.doc, ms, rep);
       if (rep || this.pedido) {
         this.pedido = false;
-        const r = dibujarCuadro(this.ctx, this.doc, t, this.recursos, this.cfg);
+        const r = dibujarCuadro(this.ctx, this.doc, ms, this.recursos, this.cfg);
         $("aproximada").hidden = !r.aproximada;
         if (r.faltaCuadro) this.pedido = true;        // el video todavía no tiene ese cuadro
-        $("tiempo").textContent = `${formatoTiempo(t)} / ${formatoTiempo(this.reloj.dur)}`;
-        if (document.activeElement !== $("barra")) $("barra").value = String(Math.round(t));
-        this.alCambiarTiempo(t, rep);              // la línea de tiempo mueve su cabezal
+        $("tiempo").textContent = `${formatoTiempo(ms)} / ${formatoTiempo(this.reloj.dur)}`;
+        if (document.activeElement !== $("barra")) $("barra").value = String(Math.round(ms));
+        this.alCambiarTiempo(ms, rep);              // la línea de tiempo mueve su cabezal
       }
       if (rep && this.reloj.terminado()) this.pausar();
     } catch (e) {
       if (!this.errorDibujo) {
         this.errorDibujo = true;
         console.error(e);
-        aviso("aviso-dibujo", `La vista previa tuvo un problema al dibujar (${e.message}). Recarga la página; si se repite, avísanos.`, true);
+        aviso("aviso-dibujo", t("vista.dibujo", { mensaje: e.message }), true);
       }
     }
   }
@@ -388,7 +381,7 @@ export class VistaPrevia {
   // (sesión vencida, edición borrada), se deja de preguntar y se avisa.
   rendirsePendientes() {
     const n = this.datos.pendientes.length;
-    aviso("aviso-preparando", `No se ${n > 1 ? "pudieron" : "pudo"} preparar las copias livianas de ${n} archivo(s): la vista previa sigue con los originales (se ve igual, solo tarda más en cargar).`);
+    aviso("aviso-preparando", t(n > 1 ? "vista.proxies_varios" : "vista.proxies_uno", { n }));
   }
 
   usarListos(j) {
@@ -414,7 +407,7 @@ export class VistaPrevia {
       this.rendirsePendientes();
       return;
     }
-    aviso("aviso-preparando", `Preparando ${this.datos.pendientes.length} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales.`);
+    aviso("aviso-preparando", t("vista.preparando", { n: this.datos.pendientes.length }));
     let decision = "reintentar";                 // sin red: se vuelve a intentar
     try {
       const r = await fetch(this.datos.urls.materiales, { headers: { Accept: "application/json" } });

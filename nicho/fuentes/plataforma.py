@@ -17,6 +17,7 @@ import os
 
 from flask_babel import gettext
 
+import idiomas
 import providers.apify as apify_api
 from idiomas import N_
 from nicho.fuentes import _http, plataformas
@@ -71,7 +72,7 @@ class FuentePlataforma(Fuente):
         """Itera productos normalizados (con `consulta`), sin repetir ids."""
         avanzar = avanzar or (lambda etapa, detalle=None: None)
         corridas = plataformas.entradas_busqueda(self.clave, consultas, pais, productos_por_consulta)
-        avanzar(N_("Buscando"), plataformas.actor_busqueda(self.clave)["nombre"])
+        avanzar(N_("Buscando"), idiomas.traducir(plataformas.actor_busqueda(self.clave)["nombre"]))
         res = self._correr(plataformas.actor_busqueda(self.clave)["actor"], corridas, N_("Buscando"), avanzar)
         conjunta = " | ".join(c for c in consultas if c)[:200]
         vistos = set()
@@ -93,7 +94,7 @@ class FuentePlataforma(Fuente):
         por_id = {x["fuente_id"]: x for x in productos}
         por_producto = plataformas.PLATAFORMAS[self.clave]["resenas"]["por_producto"]
         self.conteo_por_producto = {}
-        avanzar(N_("Buscando"), plataformas.actor_resenas(self.clave)["nombre"])
+        avanzar(N_("Buscando"), idiomas.traducir(plataformas.actor_resenas(self.clave)["nombre"]))
         res = self._correr(plataformas.actor_resenas(self.clave)["actor"], corridas, N_("Leyendo comentarios"), avanzar)
         for indice, item in res["items"]:
             r = plataformas.leer_resena(self.clave, item)

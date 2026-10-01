@@ -15,14 +15,14 @@
          tabindex="0" role="button">
       <div class="generado-media">
         <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
-        <span class="generado-tipo">Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "formato de la imagen" }}</span>
+        <span class="generado-tipo">{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}</span>
         {% if item.trabajo_guion %}
         {# El guion se escribe en el worker: la barra va en la TARJETA (no en el
            detalle, que llega por fetch al abrirla) para que el sondeo
            (data-poll-job) arranque al cargar la página y un fallo se vea. #}
         <div class="generado-velo">
           <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}" data-poll-job="{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-          <div class="progreso-texto">Escribiendo el guion…</div>
+          <div class="progreso-texto">{{ _('Escribiendo el guion…') }}</div>
         </div>
         {% if item.trabajo_editor %}
         {# Fix round 1 (Important): el guion y «Editar este video» son dos
@@ -43,13 +43,13 @@
            el worker y necesita arrancar su polling en la tarjeta. #}
         <div class="generado-velo">
           <div class="barra-progreso" id="trabajo-{{ item.trabajo_editor.job_id }}" data-poll-job="{{ item.trabajo_editor.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-          <div class="progreso-texto">Preparando para el editor…</div>
+          <div class="progreso-texto">{{ _('Preparando para el editor…') }}</div>
         </div>
         {% endif %}
       </div>
       <div class="generado-pie">
-        <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
-        <small>{{ item.finales | length }} final{{ "es" if item.finales | length != 1 }}{% if _eds %} · en el editor{% endif %}</small>
+        <strong>{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}</strong>
+        <small>{{ ngettext('%(num)d final', '%(num)d finales', item.finales | length) }}{% if _eds %} · {{ _('en el editor') }}{% endif %}</small>
       </div>
     </div>
 {% endmacro %}
@@ -65,25 +65,25 @@
         {% else %}
         <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga class="generado-portada"></video>
         {% endif %}
-        <span class="generado-badge">{{ _bandera }} {{ f.idioma }}</span>
+        <span class="generado-badge">{{ _bandera }} <span translate="no">{{ f.idioma }}</span></span>
         {% if f.estado == "generando" %}
         <div class="generado-velo">
           {% if f.trabajo %}
           <div class="barra-progreso" id="trabajo-{{ f.trabajo.job_id }}" data-poll-job="{{ f.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">Produciendo… 0% · 0s</div>
+          <div class="progreso-texto">{{ _('Produciendo… 0%% · 0s') }}</div>
           {% else %}
-          <span class="generado-estado">Interrumpida</span>
+          <span class="generado-estado">{{ _('Interrumpida') }}</span>
           {% endif %}
         </div>
         {% elif f.estado == "error" %}
-        <div class="generado-velo"><span class="generado-estado error">Error</span></div>
+        <div class="generado-velo"><span class="generado-estado error">{{ _('Error') }}</span></div>
         {% elif f.estado == "degradada" %}
-        <div class="generado-velo"><span class="generado-estado">Sin voz/música</span></div>
+        <div class="generado-velo"><span class="generado-estado">{{ _('Sin voz/música') }}</span></div>
         {% endif %}
       </div>
       <div class="generado-pie">
-        <strong>Final {{ f.idioma }}_{{ f.pais }}</strong>
-        <small>Final de {{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}{% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}</small>
+        <strong>{{ _('Final %(id)s', id=(f.idioma ~ '_' ~ f.pais)) }}</strong>
+        <small>{{ _('Final de %(enfoque)s', enfoque=((item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')))) }}{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}</small>
       </div>
     </div>
 {% endmacro %}

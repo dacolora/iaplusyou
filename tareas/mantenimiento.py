@@ -21,6 +21,8 @@ import sqlite3
 import time
 from datetime import datetime
 
+from flask_babel import gettext
+
 import cola
 import db
 from tareas import registrar
@@ -116,16 +118,16 @@ def respaldar_db(conservar=RESPALDOS_CONSERVAR, carpeta=None):
 @registrar("salidas_limpiar")
 def ejecutar_salidas_limpiar(tarea):
     n, total = limpiar_salidas()
-    return f"{n} archivos borrados de salidas/ ({total / 1e6:.0f} MB)."
+    return gettext("%(n)s archivos borrados de salidas/ (%(mb)s MB).", n=n, mb=f"{total / 1e6:.0f}")
 
 
 @registrar("cola_limpiar")
 def ejecutar_cola_limpiar(tarea):
     n = cola.limpiar_terminadas()
-    return f"{n} tareas viejas borradas."
+    return gettext("%(n)s tareas viejas borradas.", n=n)
 
 
 @registrar("db_respaldar")
 def ejecutar_db_respaldar(tarea):
     destino = respaldar_db()
-    return f"Respaldo en {destino}." if destino else "La base no es SQLite: sin respaldo."
+    return gettext("Respaldo en %(ruta)s.", ruta=destino) if destino else gettext("La base no es SQLite: sin respaldo.")

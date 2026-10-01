@@ -99,3 +99,38 @@ def test_gettext_no_dentro_de_llaves_de_fstring():
                 malos.append(f"{os.path.relpath(ruta, RAIZ)}:{tok.start[0]}: {tok.string[:100]!r}")
     assert not malos, ("gettext/ngettext/N_ dentro de las llaves de un f-string (Babel no lo ve, "
                         "calcúlalo en una variable antes): \n" + "\n".join(malos))
+
+
+# Un script que rellenaba el .po tras un merge corrió las traducciones un
+# puesto: «Empezar de cero» quedó con el inglés de OTRA entrada (una frase
+# entera). Ninguna guardia lo veía porque la entrada tenía texto y sus
+# marcadores coincidían (ninguno). Una traducción desalineada casi siempre
+# tiene un largo que no se parece al del español.
+_PALABRA = re.compile(r"[^\W\d_]+")
+_SIN_CONTAR = re.compile(r"%\(\w+\)[sd]|<[^>]*>|\{[^{}]*\}")
+
+
+def _palabras(texto):
+    return len(_PALABRA.findall(_SIN_CONTAR.sub(" ", texto)))
+
+
+def test_ninguna_traduccion_desproporcionada():
+    malos = []
+    for m in _po():
+        if not m.id or not m.string or isinstance(m.id, tuple) or isinstance(m.string, tuple):
+            continue
+        es, en = _palabras(m.id), _palabras(m.string)
+        if (en >= 3 * es and en - es >= 5) or (es >= 3 * en and es - en >= 5):
+            malos.append(f"{m.id!r} -> {m.string!r}")
+    assert not malos, ("Traducción de un largo que no se parece al del español (¿desalineada con "
+                        "otra entrada?):\n" + "\n".join(malos))
+
+
+def test_empezar_de_cero_en_ingles():
+    from flask_babel import gettext
+
+    import idiomas
+    with idiomas.en_idioma("en"):
+        assert gettext("Empezar de cero") == "Start from scratch"
+    with idiomas.en_idioma("es"):
+        assert gettext("Empezar de cero") == "Empezar de cero"

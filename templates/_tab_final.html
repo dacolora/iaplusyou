@@ -14,15 +14,15 @@
 {% from "_final_tarjetas.html" import lista_videos_fe, lista_finales_fe with context %}
 <header class="panel-cabecera">
   <div>
-    <h2>Final edition</h2>
-    <p class="panel-cabecera-desc">Convierte un video de Crear en un anuncio terminado: guion con IA, voz, música, textos y subtítulos, en el idioma y con el precio de cada país. Abre cada edición en el editor para verla antes de publicarla.</p>
+    <h2>{{ _('Final edition') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Convierte un video de Crear en un anuncio terminado: guion con IA, voz, música, textos y subtítulos, en el idioma y con el precio de cada país. Abre cada edición en el editor para verla antes de publicarla.') }}</p>
   </div>
 </header>
 
 <section class="fe-pestana-bloque">
-  <h3>Videos listos ({{ final_videos_total }})</h3>
+  <h3>{{ _('Videos listos (%(n)s)', n=final_videos_total) }}</h3>
   {% if not final_videos_total %}
-  <div class="estado-vacio">Todavía no hay videos listos. Genera uno en <a href="#creativeflowplus">Crear</a> y vuelve aquí para terminarlo.</div>
+  <div class="estado-vacio">{{ _('Todavía no hay videos listos. Genera uno en <a href="#creativeflowplus">Crear</a> y vuelve aquí para terminarlo.') }}</div>
   {% endif %}
   <div class="generados-grid" id="fe-videos" data-tarjetas="{{ url_for('final_tarjetas', cliente=cliente, lista='videos') }}">
     {{ lista_videos_fe(final_videos, 0, final_videos_total) }}
@@ -30,9 +30,9 @@
 </section>
 
 <section class="fe-pestana-bloque" style="margin-top:2rem;">
-  <h3>Finales ({{ finales_total }})</h3>
+  <h3>{{ _('Finales (%(n)s)', n=finales_total) }}</h3>
   {% if not finales_total %}
-  <p class="vacio">Todavía no hay finales. Abre un video de arriba, prepara el guion y elige los países.</p>
+  <p class="vacio">{{ _('Todavía no hay finales. Abre un video de arriba, prepara el guion y elige los países.') }}</p>
   {% endif %}
   <div class="generados-grid" id="fe-finales" data-tarjetas="{{ url_for('final_tarjetas', cliente=cliente, lista='finales') }}">
     {{ lista_finales_fe(finales, 0, finales_total) }}
@@ -40,7 +40,7 @@
 </section>
 
 <dialog id="fe-modal" class="generado-modal">
-  <button type="button" class="generado-cerrar" id="fe-modal-cerrar" aria-label="Cerrar">×</button>
+  <button type="button" class="generado-cerrar" id="fe-modal-cerrar" aria-label="{{ _('Cerrar') }}">×</button>
   <div id="fe-modal-cuerpo" class="generado-modal-cuerpo"></div>
 </dialog>
 <script>
@@ -68,7 +68,7 @@
       if (cb.dataset.yaProducida) reemplaza = true;
     });
     if (!reemplaza) return true;
-    return confirm('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).');
+    return confirm({{ _('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).')|tojson }});
   };
   (function () {
     var panel = document.getElementById('tab-final');
@@ -132,13 +132,13 @@
       var btn = form && form.querySelector('.fe-producir-btn');
       if (!btn) return;
       var n = form.querySelectorAll('input[name="destinos"]:checked').length;
-      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.plantilla.replace('Producir {n} finales', 'Producir finales');
+      btn.textContent = n === 1 ? btn.dataset.plantillaUno : n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.sinN;
     });
     cuerpo.addEventListener('submit', function (e) {
       var form = e.target;
       if (form.classList.contains('fe-producir') && !form.querySelectorAll('input[name="destinos"]:checked').length) {
         e.preventDefault();
-        alert('Marca al menos un destino.');
+        alert({{ _('Marca al menos un destino.')|tojson }});
       }
     });
     // #final?cf=<id> (el botón «Llevar a final edition» de Crear): abre esa pieza.

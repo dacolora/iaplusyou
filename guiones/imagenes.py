@@ -220,7 +220,7 @@ def escribir(video_id, llamar=None):
                 data, usd, error = claude.pedir_json(
                     v["cliente"], "imagenes", video_id, _sistema(idiomas.de_proyecto(v["cliente"])), mensajes(v, lista),
                     f"Prompts de imágenes · {(v['guion']['titulo'] or '')[:50]} · v{v['version_n']}",
-                    llamar_fn=llamar, max_tokens=8000, timeout=180)
+                    llamar_fn=llamar, max_tokens=16000, timeout=180)
                 if error:
                     datos.fallar_imagenes(video_id, error, usd)
                     return

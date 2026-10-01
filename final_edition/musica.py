@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import requests
+from flask_babel import gettext
 
 import mi_musica
 from mi_musica import es_propia  # noqa: F401 — los llamadores preguntan musica.es_propia(valor)
@@ -32,7 +33,8 @@ def obtener_pista(estilo, segundos, carpeta_cache=None, on_progreso=None):
     `segundos` se redondea hacia arriba al múltiplo de 15 más cercano (máx. 45)."""
     if estilo not in tipos.ESTILOS_MUSICA:
         validos = ", ".join(sorted(tipos.ESTILOS_MUSICA))
-        raise ValueError(f"musica.obtener_pista: estilo desconocido '{estilo}'. Válidos: {validos}.")
+        raise ValueError(gettext("musica.obtener_pista: estilo desconocido '%(estilo)s'. Válidos: %(validos)s.",
+                                 estilo=estilo, validos=validos))
 
     carpeta_cache = carpeta_cache or CARPETA_CACHE_DEFAULT
     os.makedirs(carpeta_cache, exist_ok=True)
@@ -122,7 +124,7 @@ def pista_propia(cliente, valor, inicio_s=0, carpeta_cache=None):
     tramo es más corto que el video se repite ese mismo tramo. Cuesta 0."""
     m = mi_musica.resolver(cliente, valor)
     if not m:
-        raise ValueError("Esa canción ya no está en Mi música.")
+        raise ValueError(gettext("Esa canción ya no está en Mi música."))
     inicio = mi_musica.inicio_valido(m, inicio_s)
     carpeta = carpeta_cache or CARPETA_PROPIA_DEFAULT
     os.makedirs(carpeta, exist_ok=True)

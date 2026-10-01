@@ -7,7 +7,11 @@
 // una frase para la persona y, si hay, en `detalle` lo técnico (la ruta del
 // validador): queda en `this.detalle` y le llega a `alCambiar` como tercer
 // argumento (la página lo pone en el `title`, capa 4c).
-export const MENSAJE_SESION = "Tu sesión terminó: recarga la página e inicia sesión.";
+import { t } from "./textos.js";
+
+export function mensajeSesion() {
+  return t("guardado.sesion");
+}
 
 // Capa 4c: ¿la respuesta es la página de entrar? Con la sesión vencida el
 // servidor redirige a /login y `fetch` sigue la redirección: llega marcada
@@ -75,7 +79,7 @@ export class Guardado {
         if (sesionTerminada(r)) {
           // nada se guardó: el cambio sigue pendiente (y el aviso al salir lo protege)
           this.pendiente = this.pendiente ?? doc;
-          this._poner("error", MENSAJE_SESION);
+          this._poner("error", mensajeSesion());
           return;
         }
         const cuerpo = await r.json().catch(() => ({}));
@@ -83,17 +87,17 @@ export class Guardado {
           this.versionN = cuerpo.version_n;
           this._poner(this.pendiente ? "pendiente" : "guardado");
         } else if (r.status === 409) {
-          this._poner("conflicto", cuerpo.error || "La edición cambió en otra pestaña; recarga para seguir.");
+          this._poner("conflicto", cuerpo.error || t("guardado.conflicto"));
         } else {
           this.pendiente = this.pendiente ?? doc;
           const porDefecto = r.status >= 500
-            ? `el servidor falló (error ${r.status}): se guarda con el próximo cambio.`
-            : `No se pudo guardar (error ${r.status}).`;
+            ? t("guardado.fallo_servidor", { status: r.status })
+            : t("guardado.fallo", { status: r.status });
           this._poner("error", cuerpo.error || porDefecto, cuerpo.detalle || "");
         }
       } catch {
         this.pendiente = this.pendiente ?? doc;
-        this._poner("error", "Sin conexión: se guarda con el próximo cambio.");
+        this._poner("error", t("guardado.sin_conexion"));
       } finally {
         this.enVuelo = null;
       }

@@ -133,7 +133,7 @@ def leer_lote(lote_id, llamar=None):
                     return
             data, usd, error = claude.pedir_json(
                 lote["cliente"], "leer", lote_id, SISTEMA, _mensajes(lote["texto_crudo"]),
-                f"Leer guion · {(lote['titulo'] or '')[:60]}", llamar_fn=llamar, max_tokens=16000, timeout=240)
+                f"Leer guion · {(lote['titulo'] or '')[:60]}", llamar_fn=llamar, max_tokens=32000, timeout=240)
             if error:
                 datos.fallar_lote(lote_id, error, usd)
                 return

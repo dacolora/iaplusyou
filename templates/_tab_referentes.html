@@ -22,11 +22,11 @@
 <form method="post" action="{{ url_for('referentes.copycoders', cliente=cliente) }}" class="ref-copycoders">
   {% if ref_copycoders_activa %}
   <input type="hidden" name="activa" value="0">
-  <span>{{ _('Biblioteca de copycoders: activa en este proyecto (%(n)s anuncios).', n=ref_copycoders_total) }}</span>
+  <span>{{ ngettext('Biblioteca de copycoders: activa en este proyecto (%(num)s anuncios).', 'Biblioteca de copycoders: activa en este proyecto (%(num)s anuncios).', ref_copycoders_total) }}</span>
   <button type="submit" class="btn-sm">{{ _('Quitar la biblioteca') }}</button>
   {% else %}
   <input type="hidden" name="activa" value="1">
-  <span><strong>{{ _('Biblioteca de copycoders') }}</strong> · {{ _('%(n)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas.', n=ref_copycoders_total) }}</span>
+  <span><strong>{{ _('Biblioteca de copycoders') }}</strong> · {{ ngettext('%(num)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas.', '%(num)s anuncios que ya funcionaron. No se cargan en este proyecto hasta que los pidas.', ref_copycoders_total) }}</span>
   <button type="submit" class="btn-generar btn-sm">{{ _('Traer la biblioteca de copycoders') }}</button>
   {% endif %}
 </form>

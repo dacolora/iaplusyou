@@ -39,6 +39,8 @@ que la ruta con referencias): alibaba/wan-3.0/text-to-video (480p/720p,
 SÍ elige formato: `formatos_texto`, `generate_audio`) y
 bytedance/seedream-v5.0-pro (text-to-image, sin sufijo).
 """
+import math
+
 import requests
 
 from idiomas import N_
@@ -57,6 +59,10 @@ VIDEO = {
         "max_duracion": 30,
         "formatos": ("9:16", "16:9", "1:1", "4:3", "3:4"),
         "max_videos": 5,
+        # Con videos de referencia (esquema de WaveSpeed, 2026-09-30): juntos suman
+        # hasta 15 s, y entrada + salida no pasan de 30 s (1405 si no).
+        "max_videos_s": 15,
+        "max_total_con_videos": 30,
         "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
         "nota": N_("Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido."),
     },
@@ -213,8 +219,70 @@ def usd_por_segundo(modelo_id, con_sonido=True, calidad="final"):
     return round(base + (info["audio_nativo"]["recargo_usd_s"] if con_sonido else 0.0), 4)
 
 
-def estimate_video(modelo_id, duration, con_sonido=True, calidad="final"):
-    return {"credits": None, "usd": round(usd_por_segundo(modelo_id, con_sonido, calidad) * duration, 3)}
+def segundos_videos(modelo_id, referencias):
+    """Duraciones conocidas (s) de los videos de referencia que el modelo
+    recibe COMO VIDEO: solo Wan 3.0 (hasta `max_videos`); los demás usan su
+    fotograma. Un video sin `duracion_s` se omite."""
+    info = VIDEO.get(modelo_id) or {}
+    max_videos = int(info.get("max_videos") or 0)
+    if not max_videos:
+        return []
+    videos = [r for r in (referencias or []) if r.get("tipo") == "video"][:max_videos]
+    return [float(r["duracion_s"]) for r in videos if r.get("duracion_s") is not None]
+
+
+def problema_duracion(modelo_id, referencias, duracion):
+    """None si la duración pedida cabe con los videos de referencia; si no,
+    qué regla rompe (incidente 2026-09-30 en Forja: 14,9 s de video + 20 s
+    pedidos → WaveSpeed 1405 «exceeds 30s limit»):
+    {"motivo": "videos_largos", "videos_s", "maxima_videos"} o
+    {"motivo": "total", "videos_s", "maxima"} (la salida más larga que cabe).
+    Un video de duración desconocida no se juzga: lo mide el worker."""
+    info = VIDEO.get(modelo_id) or {}
+    segundos = segundos_videos(modelo_id, referencias)
+    if not segundos or not info.get("max_total_con_videos"):
+        return None
+    total = round(sum(segundos), 2)
+    if total > info["max_videos_s"]:
+        return {"motivo": "videos_largos", "videos_s": total, "maxima_videos": info["max_videos_s"]}
+    maxima = int(math.floor(info["max_total_con_videos"] - total))
+    if int(duracion) > maxima:
+        return {"motivo": "total", "videos_s": total, "maxima": maxima}
+    return None
+
+
+def duracion_con_videos(modelo_id, referencias, duracion):
+    """La duración que de verdad se pide: con videos de referencia de
+    duración conocida, Wan 3.0 recorta la salida para que entrada + salida no
+    pasen de 30 s (última barrera en el worker y precio para reintentar, igual
+    que ajustar_duracion); sin videos, o con otros modelos, no cambia."""
+    info = VIDEO.get(modelo_id) or {}
+    segundos = segundos_videos(modelo_id, referencias)
+    if not segundos or not info.get("max_total_con_videos"):
+        return duracion
+    maxima = int(math.floor(info["max_total_con_videos"] - sum(segundos)))
+    return max(int(info["min_duracion"]), min(int(duracion), maxima))
+
+
+def segundos_facturables_referencia(duraciones):
+    """Segundos de entrada que WaveSpeed factura en Wan 3.0 (esquema
+    publicado): cada video cuenta entre 1 y 15 s, el total hasta 15 s,
+    redondeado hacia arriba al segundo."""
+    if not duraciones:
+        return 0
+    total = sum(min(15.0, max(1.0, float(d))) for d in duraciones)
+    return int(math.ceil(min(15.0, total) - 1e-9))
+
+
+def estimate_video(modelo_id, duration, con_sonido=True, calidad="final", videos_ref_s=()):
+    """Costo de la generación. `videos_ref_s`: duraciones de los videos de
+    referencia; solo Wan 3.0 los factura (los segundos de entrada normalizados
+    más los de salida, a la misma tarifa) — antes del 2026-09-30 el estimado y
+    el gasto los ignoraban. Los demás modelos reciben el fotograma y no cambian."""
+    segundos = duration
+    if (VIDEO.get(modelo_id) or {}).get("max_videos") and videos_ref_s:
+        segundos = duration + segundos_facturables_referencia(videos_ref_s)
+    return {"credits": None, "usd": round(usd_por_segundo(modelo_id, con_sonido, calidad) * segundos, 3)}
 
 
 def estimate_imagen(modelo_id, n_referencias=1):
@@ -228,7 +296,7 @@ def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
         headers=wavespeed_common.headers(), timeout=60,
     )
     if not resp.ok:
-        raise RuntimeError(f"WaveSpeed ({path}) respondió {resp.status_code}: {resp.text[:500]}")
+        raise wavespeed_common.error_de_respuesta(resp, path)
     prediction_id = (resp.json().get("data") or {}).get("id")
     if not prediction_id:
         raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")

@@ -76,7 +76,10 @@ clobber each other's credentials mid-flight.
 **State machine modules** (`estado.py`, `prompts.py`, `marca.py`) are thin JSON
 read/write wrappers, one file per client, no database. `prompts.py` nests prompts
 under an `idea_id`; each prompt's `estado` field drives which template renders it
-(`pendiente` -> `_prompt_row.html`, `imagen_pendiente` -> `_imagen_row.html`). When a
+(`pendiente` -> `_prompt_row.html`, `imagen_pendiente` -> `_imagen_row.html`). These
+old «Nueva idea» templates are kept on disk but have no live screen, so they are excluded
+from the language guard (`tests/test_i18n_plantillas.py::EXCLUIDAS`) until Daniel decides
+what happens to that flow; their routes' messages do go through the catalog. When a
 video finally generates, its entry is deleted from `prompts_pendientes.json` and
 created fresh in `estado_videos.json` — the two files together are the full pipeline
 state for a client. `creative_flow.py` and `ads.py` present the same read/write API
@@ -427,7 +430,15 @@ the whole tray is used and emptied, as before.
 Las referencias se nombran `Image N` / `Video N` (`flowplus_prompt.asignar_tokens`,
 por modelo: Wan recibe los videos aparte). Spec:
 `docs/superpowers/specs/2026-09-18-director-prompts-crear-design.md` (Etapa 1 hecha;
-presets de cámara y plantillas de anuncio son las Etapas 2 y 3).
+presets de cámara, Etapa 2, pendiente). **Etapa 3, recetas de tomas (2026-09-30):**
+`plantillas_anuncio.py` (8 recetas: «Antes y después» + las 7 del spec §9; datos puros +
+`actos_en_segundos`, `n_planos`, `bloque_director`) y el selector «Receta de tomas» pegado a «Crear super
+prompt» en Crear (`name="plantilla"`). Solo cuenta con `modo_prompt=director`: el «Generar video» directo la
+ignora y guarda `plantilla=None`. Con receta, el enfoque lo fija la receta (si tiene; una pieza sin
+referencias sigue `libre`), `director._mensaje` recibe los actos ya en segundos y `director.compilar` pide al
+menos un plano por acto (nunca más de uno cada 2 s); «Recrear mi video de referencia» exige un `Video N`
+(video en la bandeja con Wan 3.0) en el navegador y otra vez en `cf_crear_video`. Sprints sigue con
+`banco_prompts.py`.
 **Menciones y recuperación (incidente 2026-09-28,** 6 de 12 videos del día fallaron y los buenos traían
 personajes dobles y el dibujo de otro clip**):** `flowplus_prompt.sustituir_tokens` entiende todo lo que la
 gente pega de otras herramientas (`@Image1`, `@Image 1`, `@[Image 1](image_1)`, `@image_4`, cualquier
@@ -454,6 +465,23 @@ referencias de las que la persona ve**: `flowplus_modelos.referencias_de_mas(mod
 Seedance 2.5: SOLO la primera; Seedream: 10) y `cf_crear_video` avisa y no genera si sobra alguna (incidente «mira lo
 que sacó»: cuatro referencias con Seedance, tres descartadas en silencio, US$ 3,6 cobrados); el compositor muestra el
 mismo aviso en vivo (`#fp-aviso-refs`, `data-max`/`data-max-videos` de los radios de modelo) y frena el envío.
+**Sin saldo y Wan con videos de referencia (incidente 2026-09-30):** WaveSpeed se quedó sin saldo y los videos
+fallaban con su JSON crudo en la tarjeta. `wavespeed_common.error_de_respuesta(resp, path)` es lo que lanzan los cinco
+lanzadores de WaveSpeed ante una respuesta no-ok: `SinSaldo` (RuntimeError; 402 o «insufficient credits» / «top up»)
+o el RuntimeError de siempre. `saldo.py` recuerda la falta en `kv` (`sin_saldo:<proveedor>`), avisa al administrador
+por `notificaciones.avisar_admin` (tipo `sin_saldo`) UNA vez cada `REAVISO_S`, `vigente()` pinta
+`_aviso_sin_saldo.html` en Crear y en Cambiar producto (el admin ve desde cuándo y el enlace de recarga; el cliente,
+un aviso neutro) y la próxima generación nueva que sale bien lo `limpia` (vence solo a las `VIGENCIA_S` sin fallos).
+La tarjeta dice `saldo.mensaje_tarjeta` en el idioma del proyecto, en Crear (video e imagen, que ahora también pasa
+por `_mensaje_error`) y en swap; un video sin saldo nunca persigue una predicción vieja. OJO: el VPS no tiene SMTP_* ni
+un admin con correo verificado, así que hoy el aviso que llega es el de la app. Y Wan 3.0 con videos de referencia:
+los videos juntos hasta 15 s y entrada + salida hasta 30 s (`max_videos_s`, `max_total_con_videos`; 1405 si no).
+La bandeja guarda `duracion_s` de cada video (ffprobe al subirlo o bajar el link, `dashboard._duracion_video`;
+`fp_reusar` la conserva), `cf_crear_video` avisa y no genera con `flowplus_modelos.problema_duracion`, el compositor
+lo avisa en vivo (`data-duracion` en la bandeja, `data-max-total`/`data-max-videos-s` en los radios), el worker recorta
+la salida como última barrera (`duracion_con_videos`, midiendo por URL lo que la sesión no traía) y el precio incluye
+los segundos de entrada que WaveSpeed factura en Wan (`segundos_facturables_referencia`: cada video 1–15 s, el total
+hasta 15 s, hacia arriba; `estimate_video(..., videos_ref_s=)` en el botón, al reintentar y en el gasto real).
 Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
 `wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
 devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)
@@ -564,7 +592,7 @@ página de Notion, `leyendo|leido|error`), `guion` (un script: `lectura` con lí
 `literal`, `leido|confirmado`) y `guion_video` (una versión: `config`, `recorte`, `plan`, `clips`,
 `hooks_alt`, `validaciones`, `avisos`, `imagenes`; `configurando|recortando|armando|armado|invalido|error`
 y `estado_imagenes`). `guiones/datos.py` es el único escritor; un trabajo con `iniciado_en` de más de
-6 min se da por interrumpido: un lote `leyendo` y un video `armando` o con imágenes `escribiendo`
+12 min se da por interrumpido: un lote `leyendo` y un video `armando` o con imágenes `escribiendo`
 pasan a `error`, y un video `recortando` vuelve a `configurando`. Claude planea y el código escribe: `lectura.py` (copia literal verificada),
 `recorte.py` (orden de prescindibles; nunca la línea 1), `clips.py` (plan por números de línea →
 `duracion.calcular_clip` → `plantillas.prompt_clip` → validaciones V1-V6/E1-E4 que bloquean; los
@@ -572,7 +600,13 @@ prompts entran al chat con `refinador.crear(origen="pipeline", texto_fijo=línea
 `imagenes.py` (hojas de personaje, entornos, producto con sus fotos; tabla imagen↔clip; checklist).
 Todo prompt de fábrica pasa `refinador.validar`. Una llamada por paso vía `guiones/claude.py`
 (`pedir_json`, gasto `guion_clips` también si la respuesta no sirvió), en un hilo
-(`trabajos.iniciar`). Cambiar una versión armada crea otra (`nueva_version`; con solo el bloque del
+(`trabajos.iniciar`), siempre con streaming y topes amplios (armar 48 000, leer 32 000, imágenes 16 000, recorte
+12 000): el pensamiento adaptativo gasta del mismo tope, y con 16 000 un guion real de 34 líneas nunca se armó
+(2026-09-28; medido 2026-09-30: 19 809 de salida, US$ 0,21). Duración: `duracion.estimado_previo` suma medio segundo de redondeo por clip
+esperado (uno cada 12 s) y, con objetivo, `clips.mensajes` le da a Claude lo hablado y el aire máximo
+(`duracion.aire_disponible`, contado de más: clips de 10 s y 1 s de redondeo cada uno, porque Claude usa todo el
+margen y V6 solo rechaza pasarse): sin eso HappyCozy salió 141/150/165 s con objetivos 133/145/155; con eso, 142 s
+en 155 al primer intento. Cambiar una versión armada crea otra (`nueva_version`; con solo el bloque del
 video, `clips.version_con_bloque` no llama a Claude). Notion: llave de integración cifrada en `kv`
 (`notion:<cliente>`), solo `api.notion.com`, exige correo verificado. UI: `/panel` como fragmento
 (`_gpg_*.html`) + `_crear_flowplus_guiones.html`; «Abrir en el chat» emite `gp:abrir-prompt`.
@@ -588,13 +622,22 @@ migración). Rutas JSON `/videos/<id>/escenas/<n>`, `/imagenes/subir` (multipart
 gratis; prueba antes de subir que se podrá guardar), `/imagenes/catalogo`, `/imagenes/quitar`; el JS del panel
 manda `data-gpg-cuerpo` con `data-gpg-accion` y sube con `input[type=file][data-gpg-subir]`. Lo elegido va a los
 dos `.md` y a «Antes de generar». `nueva_version` hereda las imágenes subidas de referencias iguales y las extra
-(y lo elegido por escena solo con los mismos clips).
+(y lo elegido por escena solo con los mismos clips). «Llevar a Crear →» por escena (`/videos/<id>/escenas/<n>/crear`,
+pedido de Daniel 2026-09-30): REEMPLAZA la bandeja de Crear con las imágenes de la escena en orden (las del Catálogo se
+suben a R2 con la clave de `cf_crear_video`), precarga `session["fp_prefill"]` con `escenas.prompt_para_crear` (REFERENCE
+MAP solo con esas imágenes, renumeradas como `@Imagen k` para que Crear las traduzca y revise; una imagen del video que la
+escena no lleva se nombra en palabras — un número suelto haría que el modelo tome otra, incidente 2026-09-28 —; sin «Start
+image = last frame of Clip N»), la duración de `DURACIONES_CREAR` que alcanza y el formato, y abre `#referencias` (hash
+nuevo de `cliente.html`/`_tab_flowplus.html` que fuerza «Desde referencias»). Sin imagen en alguna referencia de la escena
+o sin prompt en el chat, el botón queda apagado y la ruta responde 409. Nada se genera.
 
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
 subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with
 Anthropic; `fe_producir` queues one `final_producir` task per destino ticked, each
-worth its own approval). `final_edition/__init__.py::producir` (the worker task `final_producir`, one per destino,
+worth its own approval) — the base guion is written in the language picked in «Idioma base», which defaults to the
+project's language (`idiomas.de_proyecto`), and each destino localizes it to its country's language (decisión B,
+2026-09-28). `final_edition/__init__.py::producir` (the worker task `final_producir`, one per destino,
 `max_intentos=1`) now runs through the editor (capa 2, 2026-09): `final_edition/produccion.py`
 turns the guion into an **edición** (a capa-1 document built by `final_edition/borrador.py`
 from materials cached by hash in `final_edition/insumos.py`: the raw clon, the voice per
@@ -736,7 +779,8 @@ round-half-to-even, so what fits in the browser fits in the render — and then 
 `version_n`, 409 → «Recargar»; the route refuses materials from another project), a DOM timeline
 (`escala.js` pure + `linea_tiempo.js`) and `pagina_editor.js`; «Editar este video» in the Final edition
 tab (`editor.desde_clon` → free worker task `edicion_desde_clon`, `final_edition/edicion_clon.py`: the
-raw clon as one clip + mirrored scene sound, destino `es_<proyectos.pais>` via `origen.pais`) and «Producir»
+raw clon as one clip + mirrored scene sound, destino `<idioma del país>_<proyectos.pais>` via `origen.pais` — `en_US`
+for a US project, decisión B; "es" without a country) and «Producir»
 from the editor (`editor.producir`: `versionar` → `crear_final` → `edicion_producir` per destino, free; each
 destino is first resolved and checked with `verificar_recortes`, a destino whose paid `final_producir` is running
 is refused, and a final with video NOT made from this edición — `ediciones.edicion_de_final` — needs
@@ -766,8 +810,8 @@ slider's value, the rest at 0) create it, and with nothing to mirror it stays em
 that is added lengthens the video (image/text layers and música/efecto end at the principal's end — music loops in
 the render — and with the playhead at the end they enter whole, ending there); audio added by hand only reuses a
 track whose clips share its `rol_audio` (music never lands in the voice's gap). Still out: PIP (video over video),
-color filters, rotation, a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla») and the
-editor's i18n (phase 6). Capa 4c (2026-09-29, trust fixes, spec §2): audio fades never exceed their clip (`normalizar`
+color filters, rotation and a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla»).
+Capa 4c (2026-09-29, trust fixes, spec §2): audio fades never exceed their clip (`normalizar`
 + a compiler `st >= 0` cap), «deslizar» stores 400 ms and drops 8 % of the canvas height in both engines, moving,
 stretching or duplicating a layer stops at the principal's end, load warnings are recomputed per change
 (`avisos_carga.js`), technical errors fold into «Detalle técnico»/`title`, an expired session says so
@@ -1057,9 +1101,34 @@ no del idioma del estudio. La biblioteca global de referentes es bilingüe (§B7
 a la vista, gasto `otro` bajo `_creatv`), `referentes.datos.rellenar_i18n_copycoders()` (idempotente, sin Claude:
 correr una vez al desplegar), y los barridos globales clasifican en español e inglés en UNA llamada
 (`clasificar.salida_para`, tarifa `clasificacion_bilingue`); la ficha sale en el idioma de quien mira y
-Recrear/Adaptar/las referencias de un sprint en el del proyecto. Final edition/editor, las páginas de admin y el
-mapa del código siguen solo en español hasta la fase 6 (plan `docs/superpowers/plans/2026-09-28-fase6-*.md`;
-las finales van en el idioma de cada país — decisión B de Daniel, 2026-09-28).
+Recrear/Adaptar/las referencias de un sprint en el del proyecto.
+Desde la fase 6 (2026-09) toda la app pasa por el catálogo (excepciones a propósito: el contenido de
+`mapa_codigo.html` — `<html lang="es">`, solo su barra `#mapa-barra` se traduce — y de la doctrina
+(`doctrina/textos/*.md`), documentación interna en español; los mensajes de contrato de
+`final_edition/documento.validar` y los de `static/editor/operaciones.js` (`INTERNOS` en `tests/test_i18n_editor.py`);
+los prompts para los modelos de video e imagen y sus tokens `Image N`/`Video N`/`@Imagen N` (`prompt_swap.py`,
+`flowplus_prompt`); y las 9 plantillas del flujo viejo «Nueva idea», en `EXCLUIDAS` hasta que Daniel decida qué pasa
+con ese flujo. Una excepción a §B8: «Escribe aquí» y «Escribe el precio» (capa 4c), el texto inicial editable de un
+clip de texto nuevo del editor, salen en el idioma de quien mira). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
+del spec): cada final sale en el idioma de su país destino (`<idioma>_<PAIS>`); el guion base, que no es por destino,
+en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. El editor
+no es Jinja: sus textos viven en `static/editor/textos.js` (`ES`, la fuente) y la ruta `editor.ver` manda los
+traducidos en `datos-editor.textos` (`final_edition/textos_editor.py::TEXTOS`, mismas claves con `N_`; un test de
+paridad compara los dos); `pagina_editor.js` llama a `ponerTextos`, cada módulo usa `t("clave", {x})` (ninguna
+variable local se llama `t`: `TAPA_T`) y `separadorDecimal()` para los números; todo texto nuevo de un módulo del
+editor va con `t("clave")` en los dos. `pgettext` es palabra clave del extractor (`catalogo_i18n.PALABRAS`) para un
+mismo español con dos inglés: «Fuente» del editor → Font (`msgctxt "editor"`), la columna «Referentes» de
+`/admin/referentes` → References. Quién decide: lo que responde una ruta = quien mira; lo que se guarda o se manda
+(errores de finales y publicaciones, `detalle` de gastos, eventos, mensajes y `return` de tareas, correos del
+proyecto) = el proyecto (`worker.ejecutar` ya lo pone; en una ruta,
+`with idiomas.en_idioma(idiomas.de_proyecto(cliente)):` alrededor de lo que se guarda, no de lo que se responde);
+los correos a admins = el idioma de cada admin. Guardias: `tests/test_i18n_plantillas.py` (toda plantilla
+traducida o en `EXCLUIDAS` con su motivo), `test_i18n_mensajes.py` (`RUTAS`/`WORKER`: ninguna ruta ni tarea con un texto fijo fuera de gettext/N_; las claves
+quedan eximidas), `test_i18n_editor.py` (JS del editor), `test_i18n_guardado.py` (lo guardado, en el idioma del
+proyecto), `test_i18n_fugas.py` (render en inglés), `test_i18n_app_entera.py` (toda la app en inglés con los
+valores de producción). Trampas: Babel 2.18 no extrae un `gettext(...)` anidado en los argumentos de
+`ngettext(...)` (sácalo antes a una variable local); `actualizar` puede marcar una entrada `fuzzy`, que no se usa en
+tiempo de ejecución — corrígela y quita la marca.
 Fase 3 (Crear en el idioma del proyecto): las llamadas a Claude reciben el idioma con
 `idiomas.de_proyecto(cliente)`, pasado a `doctrina.bloque_system(..., idioma=)` o envuelto a mano con
 `idiomas.orden_idioma` (va al inicio Y al final de las instrucciones del sitio; el prompt para el modelo de

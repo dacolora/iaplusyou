@@ -401,3 +401,56 @@ def test_nombre_de_la_imagen_va_escapado(app, catalogo_vacio, subidas):
                   content_type="multipart/form-data")
     html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
     assert "<b>x</b>" not in html
+
+
+# ------------------------------------------------ llevar una escena a Crear ---
+
+@pytest.fixture()
+def bandeja(monkeypatch, tmp_path):
+    import referencias_flowplus
+    from storage import r2_uploader
+    monkeypatch.setattr(referencias_flowplus, "BASE_DIR", str(tmp_path))
+    subidas = []
+    monkeypatch.setattr(r2_uploader, "upload_image",
+                        lambda ruta, key: subidas.append(key) or f"https://r2.test/{key}")
+    return subidas
+
+
+def test_llevar_escena_a_crear_carga_bandeja_y_texto(app, catalogo_vacio, subidas, bandeja):
+    import referencias_flowplus
+    from guiones import datos
+    gid, vid = _video_armado(app)
+    r = app["c"].post(f"{BASE}/videos/{vid}/escenas/1/crear", json={})
+    assert r.status_code == 409 and "Image 1" in r.get_json()["error"]  # las dos «por crear» sin imagen
+    for n in ("1", "2"):
+        app["c"].post(f"{BASE}/videos/{vid}/imagenes/subir", data=_foto(f"ref{n}.jpg", ref=n),
+                      content_type="multipart/form-data")
+    referencias_flowplus.agregar("acme", "imagen", "https://viejo/otra.jpg")  # lo de antes se reemplaza
+    r = app["c"].post(f"{BASE}/videos/{vid}/escenas/2/crear", json={})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["ir"].endswith("#referencias")
+    refs = referencias_flowplus.listar("acme")
+    assert [x["url"] for x in refs] == ["https://r2.test/m1.jpg", "https://r2.test/m2.jpg"]
+    assert [x["etiqueta"] for x in refs] == ["@Imagen 1", "@Imagen 2"]
+    with app["c"].session_transaction() as s:
+        pre = s["fp_prefill"]
+    assert pre["cliente"] == "acme" and pre["tipo"] == "video" and pre["aspect_ratio"] == "9:16"
+    from providers import flowplus_modelos
+    v = datos.video("acme", vid)
+    assert pre["duracion"] in flowplus_modelos.DURACIONES_CREAR and pre["duracion"] >= v["clips"][1]["duracion"]
+    assert pre["duracion"] - v["clips"][1]["duracion"] < 3  # la más cercana hacia arriba
+    assert "REFERENCE MAP\n@Imagen 1 = character" in pre["texto"] and "Start image" not in pre["texto"]
+    assert "@Imagen 3" not in pre["texto"]
+
+
+def test_llevar_escena_sin_prompt_o_de_otro_proyecto(app, catalogo_vacio, bandeja):
+    gid = _confirmado(app)
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=FORM_VIDEO).get_json()["video_id"]
+    assert app["c"].post(f"{BASE}/videos/{vid}/escenas/1/crear", json={}).status_code == 409
+    assert app["c"].post(f"/cliente/otro/guiones/videos/{vid}/escenas/1/crear", json={}).status_code == 404
+
+
+def test_panel_tiene_el_boton_llevar_a_crear(app, catalogo_vacio):
+    gid, vid = _video_armado(app)
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert f'data-gpg-crear="/videos/{vid}/escenas/1/crear"' in html and "Llevar a Crear" in html

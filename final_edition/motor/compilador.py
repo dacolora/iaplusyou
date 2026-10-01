@@ -53,6 +53,8 @@ Rutas dentro del filtergraph (`subtitles=`, `fontsdir=`): van citadas con
 import os
 from dataclasses import dataclass, field
 
+from flask_babel import gettext
+
 import final_edition
 from final_edition import geometria, mezcla
 from final_edition.documento import FORMATOS, duracion_ms, pista_principal
@@ -240,8 +242,8 @@ def verificar_recortes(doc, duraciones):
             desde = int((cl.get("recorte") or {}).get("desde_ms", 0))
             fin_fuente = desde + _fuente_ms(cl)
             if fin_fuente > material:
-                raise ValueError(f"El clip '{cl['id']}' pide {fin_fuente} ms de un material de {material} ms; "
-                                 f"acorta el clip o el recorte.")
+                raise ValueError(gettext("El clip '%(clip)s' pide %(pide)s ms de un material de %(hay)s ms; "
+                                         "acorta el clip o el recorte.", clip=cl["id"], pide=fin_fuente, hay=material))
             tr = _transicion_real(cl)
             if p is principal and tr and i + 1 < len(clips):
                 vel = float(cl.get("velocidad") or 1.0)
@@ -313,12 +315,15 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             # Entrada propia con búsqueda de entrada: `-ss` antes de `-i` es
             # exacto al transcodificar (ffmpeg descarta los cuadros previos
             # al punto pedido) y `-t` acota lo que se lee.
+            # `setsar=1`: un video de otra proporción (horizontal en una
+            # edición vertical) sale del scale+crop con píxeles de 3413:3414
+            # y `concat` rechaza el corte seco con el clip vecino.
             idx = len(plan.entradas)
             plan.entradas.append({"ruta": rutas[cl["material_id"]], "opciones": ["-ss", _s(desde), "-t", _s(hasta - desde)]})
             setpts = "setpts=PTS-STARTPTS" if vel == 1.0 else f"setpts=(PTS-STARTPTS)/{vel}"
             partes.append(f"[{idx}:v]{setpts},"
                           f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},fps={fps}"
-                          f"{_zoompan(cl, corte_ini, fps, ancho, alto)},format=yuv420p[v{i}]")
+                          f"{_zoompan(cl, corte_ini, fps, ancho, alto)},setsar=1,format=yuv420p[v{i}]")
         etiquetas.append((f"[v{i}]", cl))
     # Relleno: si la principal termina antes que el tramo (la voz sigue), el
     # último cuadro se clona hasta `dur_tramo`. Cero para una imagen.

@@ -27,6 +27,7 @@ import {
   VENTANA_PICOS_MS,
 } from "./escala.js";
 import { ID_SONIDO } from "./operaciones.js";
+import { t } from "./textos.js";
 import { duracionMs, pistaPrincipal } from "./tiempo.js";
 
 const ALTO_FILA = { video: 56, superpuesto: 34, imagen: 30, texto: 30, audio: 36 };
@@ -194,7 +195,7 @@ export class LineaTiempo {
           const m = el("span", `ed-union${u.clipId === seleccion ? " ed-union-elegida" : ""}`, fila);
           m.dataset.clip = u.clipId;
           m.style.left = `${msAPx(u.ms, pps)}px`;
-          m.title = `Transición: ${u.nombre}`;
+          m.title = t("tl.transicion", { nombre: u.nombre });
           m.append(iconoSvg("transicion", 12, "ed-union-icono"));
         }
       }
@@ -403,14 +404,14 @@ export class LineaTiempo {
   }
 
   _arriba(e) {
-    const t = this.toque;
-    if (t && t.pointerId === e.pointerId) {
+    const toque = this.toque;
+    if (toque && toque.pointerId === e.pointerId) {
       this.toque = null;
-      if (t.clip) {
-        this.alSeleccionar(t.clip);
+      if (toque.clip) {
+        this.alSeleccionar(toque.clip);
       } else {
-        if (t.soltar) this.alSeleccionar(null);
-        this.alIr(t.ms);
+        if (toque.soltar) this.alSeleccionar(null);
+        this.alIr(toque.ms);
       }
       return;
     }

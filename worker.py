@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from dotenv import load_dotenv
+from flask_babel import gettext
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import cola
@@ -106,14 +107,16 @@ def ejecutar(tarea):
     """Corre la tarea en el idioma de su proyecto (spec 2026-09-26 §B8): todo
     gettext de adentro — motivos, eventos, avisos, el mensaje que devuelve y
     el texto de una excepción — sale en ese idioma."""
-    fn = tareas.REGISTRO.get(tarea["tipo"])
-    if fn is None:
-        raise RuntimeError(f"tipo de tarea desconocido: {tarea['tipo']}")
     with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+        fn = tareas.REGISTRO.get(tarea["tipo"])
+        if fn is None:
+            raise RuntimeError(gettext("tipo de tarea desconocido: %(tipo)s", tipo=tarea["tipo"]))
         return fn(tarea)
 
 
-MENSAJE_INTERRUMPIDA = "Se interrumpió por un reinicio del servidor. Vuelve a intentar."
+# Se guarda en la entidad de atrás (sesión, swap, anuncio): va en el idioma
+# del proyecto de cada tarea — gettext dentro de idiomas.en_idioma(de_tarea).
+MENSAJE_INTERRUMPIDA = idiomas.N_("Se interrumpió por un reinicio del servidor. Vuelve a intentar.")
 
 
 def en_vuelo():
@@ -135,7 +138,8 @@ def recuperar_interrumpidas(minutos):
         if hook is None:
             continue
         try:
-            hook(t, MENSAJE_INTERRUMPIDA)
+            with idiomas.en_idioma(idiomas.de_tarea(t)):
+                hook(t, gettext(MENSAJE_INTERRUMPIDA))
             log.info("tarea %s interrumpida → entidad marcada en error", t["id"])
         except Exception as e:  # noqa: BLE001 — el hook nunca tumba al worker
             log.error("tarea %s interrumpida: el hook de %s falló: %s", t["id"], t["tipo"], cola.sin_token(e))
@@ -181,11 +185,15 @@ def _terminar_y_encolar(tarea, siguiente):
         except Exception as e:  # noqa: BLE001
             ultimo = e
             time.sleep(1 + intento)
-    cola.fallar(tarea["id"], f"No se pudo encolar la continuación ({type(ultimo).__name__}: {ultimo})")
+    # Este hilo ya salió de ejecutar (y de su idioma): lo que se guarda va en el del proyecto.
+    with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+        cola.fallar(tarea["id"], gettext("No se pudo encolar la continuación (%(error)s)",
+                                         error=f"{type(ultimo).__name__}: {ultimo}"))
     hook = tareas.AL_INTERRUMPIR.get(tarea["tipo"])
     if hook is not None:
         try:
-            hook(tarea, MENSAJE_INTERRUMPIDA)
+            with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+                hook(tarea, gettext(MENSAJE_INTERRUMPIDA))
         except Exception as e:  # noqa: BLE001 — el gancho nunca tumba al worker
             log.error("tarea %s: el gancho de %s falló: %s", tarea["id"], tarea["tipo"], cola.sin_token(e))
     raise ContinuacionPerdida(str(ultimo))

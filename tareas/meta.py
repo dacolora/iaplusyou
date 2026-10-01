@@ -19,6 +19,7 @@ import subprocess
 import threading
 
 import requests
+from flask_babel import gettext
 
 import ads
 import bitacora
@@ -94,7 +95,7 @@ def publicar(tarea):
     destino_url = p["destino_url"]
     entry = ads.cargar(cliente).get(ad_id)
     if entry is None:
-        return "Ese anuncio ya no existe."
+        return gettext("Ese anuncio ya no existe.")
 
     # Idempotencia: max_intentos=1, pero si el proceso murió a mitad de la
     # cadena (recuperar_colgadas la marcó "error") no reintentamos solos —
@@ -102,7 +103,7 @@ def publicar(tarea):
     # Meta. Si ya no está "publicando" o si ya alcanzó a crear una campaña,
     # paramos sin llamar a Meta; la persona revisa y reintenta a mano.
     if entry.get("estado") != "publicando" or (entry.get("meta_ids") or {}).get("campaign_id"):
-        msg = "Se interrumpió la publicación; revisa Ads Manager antes de volver a intentar."
+        msg = gettext("Se interrumpió la publicación; revisa Ads Manager antes de volver a intentar.")
         ads.actualizar(cliente, ad_id, estado="error", error=msg)
         return msg
 
@@ -167,20 +168,20 @@ def publicar(tarea):
                 },
             )
             bitacora.registrar(cliente, ad_id, "ads_publicar", "ok", campaign_id)
-            return "Anuncio publicado (pausado, revísalo en Meta Ads Manager antes de activarlo)."
+            return gettext("Anuncio publicado (pausado, revísalo en Meta Ads Manager antes de activarlo).")
         except Exception as e:
             msg = str(e)
             # Meta no permite crear anuncios con la app en modo desarrollo
             # (subcode 1885183 / "(#3) capability"): hasta pasar App Review
             # se conecta y se leen métricas, pero no se publica.
             if "1359188" in msg or "todo de pago" in msg:
-                msg = ("Tu cuenta publicitaria de Meta no tiene un método de pago. Agrégalo en "
-                       "business.facebook.com › Facturación y pagos (tarjeta o PSE) y vuelve a intentar; "
-                       "la pieza sigue en la lista.")
+                msg = gettext("Tu cuenta publicitaria de Meta no tiene un método de pago. Agrégalo en "
+                              "business.facebook.com › Facturación y pagos (tarjeta o PSE) y vuelve a intentar; "
+                              "la pieza sigue en la lista.")
             elif "1885183" in msg or "modo de desarrollo" in msg or "does not have the capability" in msg:
-                msg = ("Meta rechazó la solicitud por permisos de la app (#3). Desconecta y vuelve a "
-                       "conectar Meta para renovar los permisos; si sigue igual, avísanos. La pieza "
-                       "sigue en la lista.")
+                msg = gettext("Meta rechazó la solicitud por permisos de la app (#3). Desconecta y vuelve a "
+                              "conectar Meta para renovar los permisos; si sigue igual, avísanos. La pieza "
+                              "sigue en la lista.")
             ads.actualizar(cliente, ad_id, estado="error", error=msg)
             bitacora.registrar(cliente, ad_id, "ads_publicar", "error", str(e))
             raise
@@ -196,9 +197,9 @@ def refrescar(tarea):
     cliente, ad_id = p["cliente"], p["ad_id"]
     entry = ads.cargar(cliente).get(ad_id)
     if entry is None:
-        return "Ese anuncio ya no existe."
+        return gettext("Ese anuncio ya no existe.")
     if not entry.get("meta_ids", {}).get("ad_id"):
-        return "Ese anuncio todavía no está publicado en Meta."
+        return gettext("Ese anuncio todavía no está publicado en Meta.")
     # Serializado: meta_auth.configurar() escribe credenciales globales del
     # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
     # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
@@ -209,6 +210,6 @@ def refrescar(tarea):
             resultados = meta_insights.obtener_resultados(entry["meta_ids"]["ad_id"], objetivo=entry.get("objetivo"))
             resultados["actualizado_en"] = db.ahora()
             ads.actualizar(cliente, ad_id, metricas=resultados)
-            return "Resultados actualizados."
+            return gettext("Resultados actualizados.")
         finally:
             meta_auth.limpiar()

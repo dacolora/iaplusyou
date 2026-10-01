@@ -262,7 +262,7 @@ def _guardar(cliente, experimento_id, derivacion):
         extra["derivaciones"] = sorted(lista, key=_numero)
         return extra
     if experimentos.actualizar_extra(cliente, experimento_id, _poner) is None:
-        raise ValueError("Ese experimento no existe.")
+        raise ValueError(gettext("Ese experimento no existe."))
     return derivacion["id"]
 
 

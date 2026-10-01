@@ -7,6 +7,9 @@ duración objetivo) y `localizar_guion` lo traduce/adapta a otro idioma y país
 `tipos.validar_guion` y, si hay errores, piden UNA corrección a Claude antes de
 rendirse con `GuionInvalido`.
 
+Decisión B (2026-09-28): el guion base y las variantes van en el idioma del
+proyecto con la orden de idioma; la localización, en el del país destino.
+
 Forma del guion:
 {"bloques": [{"rol", "texto_pantalla", "texto_voz", "inicio_s", "fin_s"}],
  "idioma", "pais", "moneda", "precio_texto"}
@@ -17,8 +20,10 @@ import math
 import os
 
 import anthropic
+from flask_babel import gettext
 
 import doctrina
+import idiomas
 from final_edition import tipos
 
 # Mismo patrón que generador_prompts (replicado para no acoplar este módulo al
@@ -34,10 +39,12 @@ MAX_PALABRAS_PANTALLA = 6
 
 
 class GuionInvalido(Exception):
-    """El guion sigue inválido después de pedir corrección a Claude."""
+    """El guion sigue inválido después de pedir corrección a Claude. Su texto
+    es el `error` que ve la persona en la final: se arma con gettext (el
+    worker corre en el idioma del proyecto)."""
     def __init__(self, errores):
         self.errores = list(errores)
-        super().__init__("Guion inválido: " + "; ".join(self.errores))
+        super().__init__(gettext("Guion inválido: %(errores)s", errores="; ".join(self.errores)))
 
 
 def _api_key():
@@ -166,12 +173,20 @@ NUNCA su texto literal ni su marca.
 {formato}"""
 
 
+def _orden(idioma):
+    """El idioma para `doctrina.bloque_system(idioma=)`: la orden va solo si
+    es un idioma de la app (es/en). Un guion base viejo en portugués sigue
+    sin orden — `idiomas.orden_idioma("pt")` caería al inglés."""
+    return idiomas.normalizar(idioma)
+
+
 def _system_generar(duracion_s, idioma_base, canal_optimo=None, con_angulo=False):
     """System del guion base: doctrina (con caché) + reglas. Sin ángulo en la
     sesión, la doctrina incluye la rebanada de ángulo y se le pide decidirlo."""
     rebanadas = ("guion", "gancho") if con_angulo else ("angulo", "guion", "gancho")
     return doctrina.bloque_system(*rebanadas, extra=_reglas_generar(duracion_s, idioma_base, canal_optimo,
-                                                                     pedir_angulo=not con_angulo))
+                                                                     pedir_angulo=not con_angulo),
+                                  idioma=_orden(idioma_base))
 
 
 def _formato_json_localizado(idioma, pais, moneda, precio_texto):
@@ -358,8 +373,8 @@ def _errores_de_cifras(guion, datos_texto):
     for b in guion.get("bloques") or []:
         texto = f"{b.get('texto_pantalla') or ''} {b.get('texto_voz') or ''}"
         for cifra in doctrina.verificar_cifras(texto, datos_texto):
-            errores.append(f"La cifra «{cifra}» del bloque {b.get('rol')} no está en los datos: reescríbelo sin ella "
-                           "o con el dato real.")
+            errores.append(gettext("La cifra «%(cifra)s» del bloque %(rol)s no está en los datos: reescríbelo "
+                                   "sin ella o con el dato real.", cifra=cifra, rol=b.get("rol")))
     return errores
 
 
@@ -386,7 +401,7 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
         guion = _parsear(texto)
         extra = []
         if guion is None:
-            errores = ["JSON inválido"]
+            errores = [gettext("JSON inválido")]
         else:
             guion = ajustar(guion)
             errores = tipos.validar_guion(guion, duracion_s)
@@ -603,7 +618,8 @@ def variar_guion(guion_base, variante_tipo, marca, angulo=None, contexto=None):
         return g
 
     return _generar_con_correccion(
-        doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE),
+        doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE,
+                               idioma=_orden(idioma)),
         _mensaje_variar(base, variante_tipo, marca, angulo=angulo, contexto=contexto),
         duracion_s, ajustar, _datos_verificables(base, doctrina.texto_verificable(angulo),
                                                  _precio_verificable(base.get("precio_base"), pais)),

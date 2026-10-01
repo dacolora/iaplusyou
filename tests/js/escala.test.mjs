@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   avisoTransicion, barrasOnda, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, estiloArrastre, etiquetaClip,
   filaEnY, filasVisuales, fondoTira, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables, marcasRegla, msAPx,
-  msInsercion, nombreFila, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar, pedidoTransicion, puntoSoltar,
+  msInsercion, nombreFila, nombreTransicion, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar, pedidoTransicion, puntoSoltar,
   pxAMs, soltar, unionesConTransicion, VENTANA_PICOS_MS,
 } from "../../static/editor/escala.js";
 import { TRANSICIONES } from "../../static/editor/operaciones.js";
@@ -412,7 +412,7 @@ test("avisoTransicion: dice cuando la transición no cupo entera en el material"
 
 test("las transiciones de la biblioteca son las que el render hace, con su nombre", () => {
   assert.deepEqual(Object.keys(NOMBRES_TRANSICION), TRANSICIONES);
-  assert.equal(NOMBRES_TRANSICION.desenfoque, "Fundido a negro");       // el filtro real es fadeblack
+  assert.equal(nombreTransicion("desenfoque"), "Fundido a negro");       // el filtro real es fadeblack
 });
 
 test("unionesConTransicion: dónde marcar en la línea las uniones con transición", () => {
