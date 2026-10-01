@@ -32,10 +32,10 @@
         <div id="au-vp-wrap">{% include "_audios_mis_voces.html" %}</div>
         <div class="au-vp-panel" id="au-vp-panel" hidden>
           <div class="au-vp-pestanas" role="tablist">
-            <button type="button" class="au-filtro activo" data-vp-pestana="clonar" role="tab">{{ _('Clonar una voz') }}</button>
-            <button type="button" class="au-filtro" data-vp-pestana="disenar" role="tab">{{ _('Diseñar una voz') }}</button>
+            <button type="button" class="au-filtro activo" data-vp-pestana="clonar" role="tab" aria-selected="true" aria-controls="au-vp-form-clonar">{{ _('Clonar una voz') }}</button>
+            <button type="button" class="au-filtro" data-vp-pestana="disenar" role="tab" aria-selected="false" aria-controls="au-vp-form-disenar">{{ _('Diseñar una voz') }}</button>
           </div>
-          <div class="au-vp-form" data-vp-form="clonar">
+          <div class="au-vp-form" id="au-vp-form-clonar" role="tabpanel" data-vp-form="clonar">
             <label class="campo-label" for="au-vp-nombre-c">{{ _('Nombre de la voz') }}
               <input type="text" id="au-vp-nombre-c" maxlength="40" placeholder="{{ _('ej. Voz de Ana') }}"></label>
             <label class="campo-label" for="au-vp-archivo">{{ _('Grabación: de 10 segundos a 5 minutos, mp3, wav, m4a, aac u ogg') }}
@@ -44,7 +44,7 @@
             <p class="au-ayuda">{{ _('Graba en un lugar silencioso, con una sola persona hablando y sin música.') }}</p>
             <div><button type="button" class="btn-generar btn-sm" id="au-vp-clonar">{{ _('Clonar voz') }} ≈ {{ precio_voz_clonada.usd|usd }}</button></div>
           </div>
-          <div class="au-vp-form" data-vp-form="disenar" hidden>
+          <div class="au-vp-form" id="au-vp-form-disenar" role="tabpanel" data-vp-form="disenar" hidden>
             <label class="campo-label" for="au-vp-nombre-d">{{ _('Nombre de la voz') }}
               <input type="text" id="au-vp-nombre-d" maxlength="40" placeholder="{{ _('ej. Astrid, cálida') }}"></label>
             <label class="campo-label" for="au-vp-descripcion">{{ _('Descripción') }}
@@ -202,6 +202,9 @@
         botonSonando = boton; boton.classList.add('sonando');
         muestra.src = d.url;
         muestra.play().catch(function () { muestra.hidden = false; muestra.controls = true; });
+        // Oír una voz propia la estrena en el servidor: Mis voces se vuelve a
+        // pedir para que se vaya «sin estrenar» (la voz elegida se conserva).
+        if (boton.dataset.voz.indexOf('vp:') === 0) refrescarVoces(boton);
       })
       .catch(function () { mostrarError(T.sinConexion); })
       .then(function () { boton.disabled = false; boton.textContent = '▶'; boton.removeAttribute('aria-busy'); });
@@ -255,7 +258,7 @@
   // voz propia» nuevo diga la verdad; devuelve d.ok (el clon limpia el archivo
   // solo si salió: un error de la casilla no obliga a elegirlo otra vez).
   function enviarVoz(url, fd) {
-    mostrarErrorVoz('');
+    mostrarErrorVoz(''); mostrarAviso('');
     return fetch(url, {method: 'POST', body: fd, headers: {'X-Requested-With': 'fetch'}})
       .then(function (r) { return r.json(); })
       .then(function (d) { if (d.ok) vpPanel.hidden = true; pintarVoces(d, false); return d.ok; })
@@ -263,13 +266,18 @@
   }
   // La voz se crea en el worker: se consulta su estado y al terminar se pide
   // solo la sección (recargar borraría lo escrito); la voz nueva queda elegida.
+  // Un re-pintado trae otra barra con su propio sondeo: el de la barra vieja,
+  // ya fuera de la página, se calla. Cinco fallos seguidos (sesión vencida, sin
+  // red) también lo paran, en vez de preguntar para siempre.
   function vigilarVoz() {
     var barra = vpWrap.querySelector('.barra-progreso[data-job]');
     if (!barra || barra.dataset.vigilando) return;
     barra.dataset.vigilando = '1';
-    var textoBarra = barra.nextElementSibling;
+    var textoBarra = barra.nextElementSibling, fallos = 0;
     var t = setInterval(function () {
+      if (!barra.isConnected) { clearInterval(t); return; }
       fetch(barra.dataset.estado).then(function (r) { return r.json(); }).then(function (e) {
+        fallos = 0;
         if (e.estado === 'en_progreso') {
           if (textoBarra && e.etapa) textoBarra.textContent = e.etapa;
           return;
@@ -282,8 +290,22 @@
             else { mostrarAviso(e.mensaje || ''); pintarVoces(d, true); }
           })
           .catch(function () { mostrarErrorVoz(T.sinConexion); });
-      }).catch(function () {});
+      }).catch(function () {
+        if (++fallos >= 5) { clearInterval(t); mostrarErrorVoz(T.sinConexion); }
+      });
     }, 4000);
+  }
+  // Tras el ▶ de una voz propia: la sección re-pintada trae un ▶ nuevo, que
+  // queda marcado si la muestra sigue sonando.
+  function refrescarVoces(boton) {
+    fetch(raiz.dataset.urlVpLista, {headers: {'X-Requested-With': 'fetch'}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        pintarVoces(d, false);
+        var nuevo = vpWrap.querySelector('.au-voz-play[data-voz="' + boton.dataset.voz + '"]');
+        if (nuevo && botonSonando === boton) { botonSonando = nuevo; nuevo.classList.add('sonando'); }
+      })
+      .catch(function () { mostrarErrorVoz(T.sinConexion); });
   }
   vpWrap.addEventListener('click', function (ev) {
     if (ev.target.closest('#au-vp-crear')) {
@@ -309,25 +331,46 @@
   });
   vpPanel.querySelectorAll('[data-vp-pestana]').forEach(function (p) {
     p.addEventListener('click', function () {
-      vpPanel.querySelectorAll('[data-vp-pestana]').forEach(function (o) { o.classList.toggle('activo', o === p); });
+      vpPanel.querySelectorAll('[data-vp-pestana]').forEach(function (o) {
+        o.classList.toggle('activo', o === p);
+        o.setAttribute('aria-selected', o === p ? 'true' : 'false');
+      });
       vpPanel.querySelectorAll('[data-vp-form]').forEach(function (f) { f.hidden = f.dataset.vpForm !== p.dataset.vpPestana; });
     });
   });
-  document.getElementById('au-vp-disenar').addEventListener('click', function () {
+  // El botón queda apagado mientras viaja el pedido (un doble clic no cobra dos
+  // veces). Si salió, el formulario queda vacío: reabrir el panel no deja a un
+  // clic de pagar otra voz igual y, en un clon, la casilla de permiso vuelve a
+  // estar sin marcar — cada clon pide su propio permiso.
+  var botonDisenar = document.getElementById('au-vp-disenar'), botonClonar = document.getElementById('au-vp-clonar');
+  botonDisenar.addEventListener('click', function () {
     var fd = new FormData();
     fd.append('nombre', document.getElementById('au-vp-nombre-d').value);
     fd.append('descripcion', document.getElementById('au-vp-descripcion').value);
     fd.append('idioma', document.getElementById('au-idioma').value);
-    enviarVoz(raiz.dataset.urlVpDisenar, fd);
+    botonDisenar.disabled = true;
+    enviarVoz(raiz.dataset.urlVpDisenar, fd).then(function (ok) {
+      botonDisenar.disabled = false;
+      if (!ok) return;
+      document.getElementById('au-vp-nombre-d').value = '';
+      document.getElementById('au-vp-descripcion').value = '';
+    });
   });
-  document.getElementById('au-vp-clonar').addEventListener('click', function () {
+  botonClonar.addEventListener('click', function () {
     var archivo = document.getElementById('au-vp-archivo');
     var fd = new FormData();
     fd.append('nombre', document.getElementById('au-vp-nombre-c').value);
     fd.append('idioma', document.getElementById('au-idioma').value);
     fd.append('consentimiento', document.getElementById('au-vp-permiso').checked ? 'si' : 'no');
     if (archivo.files.length) fd.append('grabacion', archivo.files[0]);
-    enviarVoz(raiz.dataset.urlVpClonar, fd).then(function (ok) { if (ok) archivo.value = ''; });
+    botonClonar.disabled = true;
+    enviarVoz(raiz.dataset.urlVpClonar, fd).then(function (ok) {
+      botonClonar.disabled = false;
+      if (!ok) return;
+      archivo.value = '';
+      document.getElementById('au-vp-nombre-c').value = '';
+      document.getElementById('au-vp-permiso').checked = false;
+    });
   });
 
   // Música: reproductor, segundo de inicio y volumen solo con una canción elegida.
@@ -416,14 +459,18 @@
   });
   // El audio se hace en el worker: se consulta su estado y al terminar se
   // vuelve a pedir SOLO la lista (recargar borraría lo que ya escribiste).
+  // Igual que vigilarVoz: una barra re-pintada calla el sondeo de la vieja, y
+  // cinco fallos seguidos lo paran.
   function vigilar() {
     var barra = document.querySelector('#au-lista .barra-progreso[data-job]');
     if (!barra) { ocupado(false); return; }
     if (barra.dataset.vigilando) return;
     barra.dataset.vigilando = '1'; ocupado(true);
-    var textoBarra = barra.nextElementSibling;
+    var textoBarra = barra.nextElementSibling, fallos = 0;
     var t = setInterval(function () {
+      if (!barra.isConnected) { clearInterval(t); return; }
       fetch(barra.dataset.estado).then(function (r) { return r.json(); }).then(function (e) {
+        fallos = 0;
         if (e.estado === 'en_progreso') {
           if (textoBarra && e.etapa) textoBarra.textContent = e.etapa + (e.progreso ? ' · ' + Math.round(e.progreso) + '%' : '');
           var fill = barra.querySelector('.barra-progreso-fill');
@@ -444,7 +491,9 @@
             pintarLista(d);
           })
           .catch(function () { mostrarError(T.sinConexion); ocupado(false); });
-      }).catch(function () {});
+      }).catch(function () {
+        if (++fallos >= 5) { clearInterval(t); mostrarError(T.sinConexion); ocupado(false); }
+      });
     }, 4000);
   }
   raiz.addEventListener('click', function (ev) {

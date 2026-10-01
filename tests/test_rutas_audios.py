@@ -1,4 +1,6 @@
 """Rutas de Audios en Crear (spec 2026-09-28 §4): JSON con la lista ya pintada."""
+import re
+
 import pytest
 
 import audios
@@ -244,3 +246,20 @@ def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
     sel = html.split('id="au-idioma"')[1].split("</select>")[0]
     assert sel.count("<option") == 10 and "Norsk" in sel and "Čeština" in sel and "Suomi" in sel
     assert "Idioma del texto" in html
+    # Pestañas del panel accesibles (revisión Task 6): cada una dice si está
+    # elegida y qué formulario controla; los formularios son sus tabpanel.
+    clonar = re.search(r'<button[^>]*data-vp-pestana="clonar"[^>]*>', html).group(0)
+    disenar = re.search(r'<button[^>]*data-vp-pestana="disenar"[^>]*>', html).group(0)
+    assert 'aria-selected="true"' in clonar and 'aria-controls="au-vp-form-clonar"' in clonar
+    assert 'aria-selected="false"' in disenar and 'aria-controls="au-vp-form-disenar"' in disenar
+    for forma in ("clonar", "disenar"):
+        panel = re.search(rf'<div[^>]*data-vp-form="{forma}"[^>]*>', html).group(0)
+        assert 'role="tabpanel"' in panel and f'id="au-vp-form-{forma}"' in panel
+    # No hay arnés de JS: como en test_base_visual/test_movil, se mira el
+    # script de la página. Un clon que salió desmarca la casilla de permiso
+    # (cada clon pide su propio permiso) y un sondeo cuya barra ya no está en
+    # la página se calla (uno solo por trabajo).
+    assert "document.getElementById('au-vp-permiso').checked = false" in html
+    assert html.count("if (!barra.isConnected) { clearInterval(t); return; }") == 2
+    css = open("static/style.css", encoding="utf-8").read()
+    assert ".au-voz-propia .au-voz-nombre" in css

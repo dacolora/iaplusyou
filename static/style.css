@@ -2803,6 +2803,8 @@ body.panel-abierto { overflow: hidden; }
 .au-vp-titulo { margin: .5rem 0 .45rem; font-size: .8rem; font-weight: 600; color: var(--muted); }
 .au-vp-voces { margin-bottom: .3rem; }
 .au-voz-propia { padding-right: 4.6rem; }
+/* Un nombre propio largo y sin espacios no se mete debajo del ✕ (ni estira la leyenda «Voz: …»). */
+.au-voz-propia .au-voz-nombre, .au-voces-caja legend span { overflow-wrap: anywhere; }
 .au-vp-borrar { position: absolute; right: 2.85rem; top: 50%; transform: translateY(-50%); width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: .72rem; line-height: 1; cursor: pointer; }
 .au-vp-borrar:hover { color: var(--error); background: rgba(196, 63, 90, .1); }
 .au-vp-crear { min-height: 3.2rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--accent-texto); font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; padding: .55rem .7rem; }
