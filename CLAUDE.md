@@ -607,6 +607,29 @@ una voz sin uso real en 7 días (la vista previa no cuenta). En el formulario un
 Fuera: efectos, subtítulos, usar el audio en
 un video o el editor, ElevenLabs v3.
 
+**Anuncio hablado en Crear** (`hablado.py`, `hablado_rutas.py`, `tareas/hablado.py`, `static/hablado.js`, spec
+`docs/superpowers/specs/2026-10-01-crear-anuncio-hablado-design.md`): quinto modo de Crear (`data-modo="hablado"`,
+`#hablado`): una foto del proyecto + un guion de hasta 500 caracteres leído por una voz de Audios → P-Video-Avatar
+(`pruna-ai/p-video/avatar`, 720p, US$ 0,025 por segundo de voz redondeado al segundo, tope 30 s). `flowplus_modelos.HABLADO`
+es un registro aparte que ningún selector, Sprints ni derivación recorre (`es_hablado`, `es_sesion_hablada`,
+`nombre_modelo`, `estimate_hablado`, `generar_hablado`; `estimate_video` delega, así el gasto y «Reintentar» salen de la
+misma fórmula). La voz la paga `audios.voz_cruda` (la misma caché `locucion_voz` y el mismo gasto `locucion` que Audios:
+una voz no se paga dos veces) desde la tarea `hablado_voz` (`max_intentos=1`, job `<c>__hablado_voz`, en `CARRIL_CREAR`).
+La cáscara `_crear_hablado.html` va en la página y el panel (`_hablado_panel.html`: fotos + galería de voces, con la
+macro `_voces_galeria.html` que comparte Audios) llega por fetch (`hablado.panel`) la primera vez que el modo se ve; el
+JS sondea la voz por su cuenta (sin `data-poll-job`) y repite el POST con `solo_cache=1`, que nunca encola. Blueprint
+`hablado` (`/cliente/<c>/hablado/{panel,foto,voz,crear}`, rechaza POST cross-site): la foto llega como ficha
+`cf:`/`mat:`/`cat:` de ESTE proyecto, nunca como URL (un personaje del catálogo se sube a R2 al crear); la voz, por su
+hash; el precio visto debe coincidir con `estimate_hablado` (si no, 409 y nada se crea). `hablado.crear_pieza` crea una
+sesión de Crear (`modelo="p_video_avatar"`, `modo_crear="hablado"`, `enfoque_nombre` «Anuncio hablado»,
+`hablado={foto_url, voz_url, movimiento, …}`) y la ruta la lanza con `flowplus_lanzar.lanzar`; el worker usa la misma
+`flowplus_video` (`_preparar` conserva el modelo hablado sin ajustar duración ni formato; `ejecutar_video` llama
+`generar_hablado`; `recuperar_video` lo encuentra por `nombre_modelo`). «Cómo se mueve» va tal cual como `video_prompt`
+(vacío = no se manda). Apagado para una pieza hablada: director y «Editar y crear otra» (también en `cf_rearmar`,
+`cf_guardar_prompt`, `fp_reusar`), el camino automático de Final edition (`fe_preparar`/`fe_producir`, nota «Este video
+ya habla…») y derivar/rescatar en Experimentos (`pz["sin_derivar"]`, `derivaciones._rechazar_imagen`); el editor, la
+doctrina, «Reintentar», «Recuperar» y la publicación orgánica sí funcionan.
+
 **Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»
 (`_tab_flowplus.html` → `_crear_flowplus.html`, hash `#flowplus`; the package is `guiones`
 because `flowplus_*` already names Crear's own pipeline). This paragraph covers the correction

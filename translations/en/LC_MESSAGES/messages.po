@@ -725,6 +725,10 @@ msgid "%(nombre)s (%(pais)s): %(causas)s — siguiente: %(que)s."
 msgstr "%(nombre)s (%(pais)s): %(causas)s — next: %(que)s."
 
 #, python-format
+msgid "%(nombre)s (%(pais)s): Anuncio hablado: sin rescate/derivación (pondría otra voz encima)."
+msgstr "%(nombre)s (%(pais)s): Talking ad: no rescue/derivation (it would put another voice on top)."
+
+#, python-format
 msgid "%(nombre)s (%(pais)s): Pieza de imagen: sin rescate/derivación (solo videos)."
 msgstr "%(nombre)s (%(pais)s): Image piece: no rescue/derivation (video only)."
 
@@ -1376,6 +1380,9 @@ msgstr "1 message"
 msgid "1 · Dónde"
 msgstr "1 · Where"
 
+msgid "1. La foto"
+msgstr "1. The photo"
+
 msgid "12 de septiembre de 2026"
 msgstr "September 12, 2026"
 
@@ -1385,6 +1392,9 @@ msgstr "14 days"
 msgid "2 · Cuánto"
 msgstr "2 · How much"
 
+msgid "2. El guion y la voz"
+msgstr "2. The script and the voice"
+
 msgid "28 días"
 msgstr "28 days"
 
@@ -1393,6 +1403,9 @@ msgstr "3 · Review"
 
 msgid "3-6, distintos ángulos"
 msgstr "3-6, different angles"
+
+msgid "3. Escucha y genera"
+msgstr "3. Listen and generate"
 
 msgid "60 s de música a medida. No nombres artistas, canciones ni sellos: ElevenLabs lo rechaza."
 msgstr "60 s of custom music. Don't name artists, songs, or labels: ElevenLabs rejects it."
@@ -1886,6 +1899,12 @@ msgstr "Ad activated on Meta."
 #, python-format
 msgid "Anuncio creado: %(nombre)s (%(pais)s)"
 msgstr "Ad created: %(nombre)s (%(pais)s)"
+
+msgid "Anuncio hablado"
+msgstr "Talking ad"
+
+msgid "Anuncio hablado: una foto que dice tu guion"
+msgstr "Talking ad: a photo that says your script"
 
 msgid "Anuncio pausado en Meta."
 msgstr "Ad paused on Meta."
@@ -2711,6 +2730,9 @@ msgstr "Unsupported sound layer: %(sonido)s. Options: %(opciones)s"
 
 msgid "Capas"
 msgstr "Layers"
+
+msgid "Cara de frente y sin tapar, producto por debajo de la cara, foto vertical. Las fotos nuevas se hacen en Desde referencias."
+msgstr "Face forward and uncovered, product below the face, vertical photo. New photos are made in From references."
 
 msgid "Carga su prompt e imágenes en Crear › Desde referencias. No genera nada."
 msgstr "Loads its prompt and images into Create › From references. Nothing is generated."
@@ -3737,6 +3759,9 @@ msgstr ""
 "    sessions that ended with no commit, or single-commit days (which\n"
 "    show up as 0 h). The real time invested is higher than this figure."
 
+msgid "Cómo se mueve (opcional)"
+msgstr "How they move (optional)"
+
 msgid "Cómo se paga:"
 msgstr "How it's paid:"
 
@@ -4054,6 +4079,10 @@ msgstr "Duplicate the selected clip"
 
 msgid "Duplicar guion"
 msgstr "Duplicate script"
+
+#, python-brace-format
+msgid "Dura {s} s."
+msgstr "Lasts {s} s."
 
 msgid "Duración"
 msgstr "Duration"
@@ -4488,6 +4517,9 @@ msgstr "The script doesn't end with a call to action."
 msgid "El guion o notas que Claude debe conocer"
 msgstr "The script or notes Claude should know"
 
+msgid "El guion pasa de 500 caracteres."
+msgstr "The script is over 500 characters."
+
 msgid "El hook tiene un estilo visual distinto al resto"
 msgstr "The hook has a different visual style from the rest"
 
@@ -4556,6 +4588,9 @@ msgstr "The reason why"
 #, python-format
 msgid "El precio cambió: ahora es ≈ US$ %(precio)s. Revisa y vuelve a aprobar."
 msgstr "The price changed: it is now ≈ US$ %(precio)s. Check it and approve again."
+
+msgid "El precio cambió: revísalo y vuelve a generar."
+msgstr "The price changed: check it and generate again."
 
 msgid "El precio tiene que ser un número positivo (ej. 89900 o 25,50); no lo guardé."
 msgstr "The price has to be a positive number (e.g. 89900 or 25.50); I didn't save it."
@@ -4744,6 +4779,9 @@ msgstr "The final video doesn't show this clip: here you can only delete it."
 msgid "El video pesa más de {mb} MB."
 msgstr "The video is larger than {mb} MB."
 
+msgid "El video sale con la forma de la foto."
+msgstr "The video takes the shape of the photo."
+
 msgid "El video trae el sonido de la escena"
 msgstr "The video comes with the scene's sound"
 
@@ -4887,8 +4925,14 @@ msgstr "Choose one of the two ways to connect."
 msgid "Elige una familia de la lista."
 msgstr "Choose a family from the list."
 
+msgid "Elige una foto de este proyecto."
+msgstr "Choose a photo from this project."
+
 msgid "Elige una foto del Catálogo."
 msgstr "Pick a photo from the Catalog."
+
+msgid "Elige una foto, escribe el guion y escucha la voz: la persona de la foto lo dice en video. Nada se cobra hasta que pulses «Escuchar la voz» o «Generar video»."
+msgstr "Choose a photo, write the script and listen to the voice: the person in the photo says it on video. Nothing is charged until you press “Listen to the voice” or “Generate video”."
 
 msgid "Elige una fuente."
 msgstr "Pick a source."
@@ -5314,6 +5358,9 @@ msgstr "That persona doesn't exist in this project."
 msgid "Esa persona no existe."
 msgstr "That persona doesn't exist."
 
+msgid "Esa pieza es un anuncio hablado: no se puede derivar ni rescatar (pondría otra voz encima)."
+msgstr "That piece is a talking ad: it can't be derived or rescued (it would put another voice on top)."
+
 msgid "Esa pieza no está disponible (o no está lista)."
 msgstr "That piece isn't available (or isn't ready)."
 
@@ -5459,6 +5506,9 @@ msgstr "Type something: a text can't be empty."
 msgid "Escribe aquí"
 msgstr "Type here"
 
+msgid "Escribe como presentador, no como cliente: una persona hecha con IA no puede decir que compró el producto."
+msgstr "Write as a presenter, not as a customer: a person made with AI can't say they bought the product."
+
 msgid "Escribe el aprendizaje."
 msgstr "Write the learning."
 
@@ -5482,6 +5532,9 @@ msgstr "Enter the total cap."
 
 msgid "Escribe la idea y elige un personaje."
 msgstr "Write the idea and choose a character."
+
+msgid "Escribe lo que dirá la persona de la foto, como presentador."
+msgstr "Write what the person in the photo will say, as a presenter."
 
 msgid "Escribe los 5 prompts por idea y los guiones de las finales."
 msgstr "Writes the 5 prompts per idea and the scripts for the final cuts."
@@ -5567,8 +5620,17 @@ msgstr "Hand-written"
 msgid "Escríbela en español o en inglés: se traduce al inglés y se buscan anuncios en inglés, el mercado más grande (la traducción cuesta centavos)."
 msgstr "Write it in Spanish or English: it's translated into English and ads in English are searched, the biggest market (the translation costs cents)."
 
+msgid "Escucha la voz con el texto y la voz de ahora para poder generar."
+msgstr "Listen to the voice with the current text and voice before generating."
+
+msgid "Escucha la voz otra vez."
+msgstr "Listen to the voice again."
+
 msgid "Escuchar"
 msgstr "Listen"
+
+msgid "Escuchar la voz"
+msgstr "Listen to the voice"
 
 #, python-brace-format
 msgid "Escuchar «{nombre}»"
@@ -5846,6 +5908,10 @@ msgstr "This version can't be changed anymore; create a new version."
 msgid "Esta versión ya tiene %(n)s imágenes extra; quita alguna antes."
 msgstr "This version already has %(n)s extra images; remove one first."
 
+#, python-format
+msgid "Esta voz dura %(n)s s; el anuncio hablado llega a 30 s. Pártelo en tomas de unos 10 s y júntalas en el editor."
+msgstr "This voice lasts %(n)s s; a talking ad can be up to 30 s. Split it into takes of about 10 s and join them in the editor."
+
 msgid "Estado"
 msgstr "Status"
 
@@ -5982,6 +6048,9 @@ msgstr "This text changes by country: what you type here applies to {destino}."
 
 msgid "Este video no trae sonido."
 msgstr "This video has no sound."
+
+msgid "Este video ya habla; para otro idioma, haz otra pieza con el guion traducido."
+msgstr "This video already talks; for another language, make another piece with the translated script."
 
 msgid "Este video ya se generó o se está generando — no se puede volver a disparar."
 msgstr "This video was already generated or is being generated — it can't be triggered again."
@@ -6272,6 +6341,9 @@ msgstr "Text is missing for: %(nombres)s. Write it or press “Write text with A
 msgid "Falta el último cuadro de la escena anterior."
 msgstr "The previous scene's last frame is missing."
 
+msgid "Falta elegir la foto."
+msgstr "Choose the photo first."
+
 msgid "Falta la imagen"
 msgstr "Image missing"
 
@@ -6471,6 +6543,9 @@ msgstr "Photos of the product, your characters, your spaces and the logo."
 
 msgid "Francia"
 msgstr "France"
+
+msgid "Frases cortas y naturales: unos 10 s de voz por toma; el anuncio hablado llega a 30 s."
+msgstr "Short, natural sentences: about 10 s of voice per take; a talking ad can be up to 30 s."
 
 msgid "Frases que no se pueden cambiar"
 msgstr "Phrases that can't be changed"
@@ -7951,6 +8026,12 @@ msgstr "The preview had a problem drawing ({mensaje}). Reload the page; if it ha
 msgid "La vista previa va sin sonido: {mensaje}"
 msgstr "The preview has no sound: {mensaje}"
 
+msgid "La voz no quedó guardada: toca «Escuchar la voz» otra vez."
+msgstr "The voice wasn't saved: tap “Listen to the voice” again."
+
+msgid "La voz quedó lista: toca «Escuchar la voz» para oírla (no se paga de nuevo)."
+msgstr "The voice is ready: tap “Listen to the voice” to hear it (no new charge)."
+
 msgid "La voz se ajusta sola a cada país."
 msgstr "The voice adjusts itself to each country."
 
@@ -7984,6 +8065,9 @@ msgstr "Collection launch"
 
 msgid "Lanzando el experimento a Meta (queda en pausa)…"
 msgstr "Launching the experiment to Meta (it stays paused)…"
+
+msgid "Lanzando el video…"
+msgstr "Launching the video…"
 
 msgid "Lanzando…"
 msgstr "Launching…"
@@ -9321,6 +9405,9 @@ msgstr "I couldn't measure the length of that audio."
 msgid "No pude preparar el video descargado: %(detalle)s"
 msgstr "I couldn't prepare the downloaded video: %(detalle)s"
 
+msgid "No pude preparar esa foto; intenta de nuevo."
+msgstr "I couldn't prepare that photo; try again."
+
 msgid "No pude quitar esa pieza (¿ya está en Meta?)."
 msgstr "Couldn't remove that piece (is it already on Meta?)."
 
@@ -9338,6 +9425,10 @@ msgstr "I couldn't upload %(archivo)s: %(error)s"
 #, python-format
 msgid "No pude subir la canción (%(tipo)s)."
 msgstr "I couldn't upload the song (%(tipo)s)."
+
+#, python-format
+msgid "No pude subir la foto (%(tipo)s); intenta de nuevo."
+msgstr "I couldn't upload the photo (%(tipo)s); try again."
 
 #, python-format
 msgid "No pude subir la grabación (%(tipo)s)."
@@ -9619,6 +9710,9 @@ msgstr "Couldn't make that change ({error}). The edit stayed as it was."
 
 msgid "No se pudo hacer ese cambio: el aviso está debajo del video."
 msgstr "Couldn't make that change: the notice is below the video."
+
+msgid "No se pudo lanzar el video."
+msgstr "The video couldn't be launched."
 
 msgid "No se pudo leer el guion. Vuelve a intentarlo."
 msgstr "Couldn't read the script. Try again."
@@ -12330,11 +12424,17 @@ msgstr "Upload an mp3, wav, m4a, aac or ogg."
 msgid "Sube un video, una imagen o un audio."
 msgstr "Upload a video, an image or an audio file."
 
+msgid "Sube una foto jpg, png o webp."
+msgstr "Upload a jpg, png or webp photo."
+
 msgid "Sube una imagen JPG, PNG o WEBP."
 msgstr "Upload a JPG, PNG or WEBP image."
 
 msgid "Sube una o varias fotos y/o videos reales (3-10s) y elige el producto — puedes mezclar fotos y videos en la misma subida. El resultado es lo mismo que subiste — misma pose, mismo rostro, mismo fondo, mismo movimiento si es video — con el calzado reemplazado por el que elegiste, uno por cada archivo. Nada más cambia."
 msgstr "Upload one or more real photos and/or videos (3-10s) and choose the product — you can mix photos and videos in the same upload. The result is exactly what you uploaded — same pose, same face, same background, same movement if it's a video — with the footwear replaced by the one you chose, one per file. Nothing else changes."
+
+msgid "Subida"
+msgstr "Uploaded"
 
 #, python-brace-format
 msgid "Subida de «{nombre}»"
@@ -12402,6 +12502,9 @@ msgstr "Upload character (image or video)"
 
 msgid "Subir referencia de marca"
 msgstr "Upload brand reference"
+
+msgid "Subir una foto"
+msgstr "Upload a photo"
 
 msgid "Subir · link · fotos del producto"
 msgstr "Upload · link · product photos"
@@ -12774,6 +12877,9 @@ msgstr "There are no experiments yet. Select pieces in the gallery above and pre
 
 msgid "Todavía no hay finales. Abre un video de arriba, prepara el guion y elige los países."
 msgstr "No final cuts yet. Open a video above, prepare the script and pick the countries."
+
+msgid "Todavía no hay fotos: sube una o crea una imagen en Desde referencias."
+msgstr "No photos yet: upload one or create an image in From references."
 
 msgid "Todavía no hay gasto ni ventas en los últimos 30 días. Cuando un experimento empiece a gastar, aquí verás el día a día."
 msgstr "There's no spend or sales yet in the last 30 days. Once an experiment starts spending, you'll see the day-by-day here."
@@ -13582,6 +13688,9 @@ msgstr "VIDEO"
 msgid "Va al final de cada prompt de clip en todos los videos de este proyecto. Déjalo vacío para volver al de fábrica."
 msgstr "Goes at the end of every clip prompt in every video of this project. Leave it empty to go back to the default."
 
+msgid "Va tal cual al modelo. Vacío: la persona solo habla."
+msgstr "Sent to the model as is. Empty: the person just talks."
+
 msgid "Vacaciones de mitad de año"
 msgstr "Mid-year vacation"
 
@@ -13893,6 +14002,9 @@ msgstr "Voice-over (ElevenLabs), word-level subtitles (Whisper) and music (Stabl
 
 msgid "Voz en off: la voz se agrega después"
 msgstr "Voice-over: the voice is added afterward"
+
+msgid "Voz lista: escúchala y genera el video."
+msgstr "Voice ready: listen to it and generate the video."
 
 msgid "Voz primero"
 msgstr "Voice first"
@@ -14845,6 +14957,9 @@ msgstr "e.g. Clip 3: Ana in the kitchen"
 
 msgid "ej. Forja (personaje)"
 msgstr "e.g. Forja (character)"
+
+msgid "ej. Habla a la cámara con entusiasmo, mueve la cabeza con naturalidad y sostiene el producto a la altura del pecho."
+msgstr "e.g. Talks to the camera with enthusiasm, moves their head naturally and holds the product at chest height."
 
 msgid "ej. Happy Flops"
 msgstr "e.g. Happy Flops"
@@ -16735,6 +16850,12 @@ msgstr "“%(x)s” isn't a family from the library."
 
 msgid "«Crear credenciales» › «Clave de API»; en «Restricciones de API» limítala a YouTube Data API v3."
 msgstr "“Create credentials” › “API key”; in “API restrictions” limit it to YouTube Data API v3."
+
+msgid "«Cómo se mueve» pasa de 500 caracteres."
+msgstr "“How they move” is over 500 characters."
+
+msgid "«Editar y crear otra» todavía no sirve para un anuncio hablado: haz otra pieza en Crear › Anuncio hablado."
+msgstr "“Edit and create another one from this” doesn't work for a talking ad yet: make another piece in Create › Talking ad."
 
 #, python-format
 msgid "«siguiente» trae un paso que no existe: %(que)s."
