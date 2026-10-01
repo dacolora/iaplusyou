@@ -10,14 +10,14 @@ from flask_babel import gettext
 
 import audios
 import cola
-import gastos
 import idiomas
 import materiales
 import trabajos
 import voces_propias
-from final_edition import cortes, tipos
+from final_edition import cortes, tipos  # noqa: F401
+# cortes: sin uso directo (lo usa audios.voz_cruda); las pruebas parchean
+# ta.cortes, que es el mismo módulo.
 from final_edition import musica as fe_musica
-# Sin uso directo (lo llama audios.sintetizar): las pruebas parchean ta.fal_audio, que es el mismo módulo.
 from providers import fal_audio  # noqa: F401
 from storage import r2_uploader
 from tareas import ref_sufijo, registrar
@@ -91,23 +91,11 @@ def _generar(tarea):
     carpeta = carpeta_trabajo(cliente, h_audio)
     os.makedirs(carpeta, exist_ok=True)
     trabajos.reportar(jid, etapa=ETAPAS[0][0])
-    ref = f"locucion:{h_voz[:12]}{ref_sufijo(tarea)}"
 
-    def _tts():
-        r = audios.sintetizar(cliente, voz, texto, idioma, velocidad)
-        usd = float(r.get("costo_usd") or 0.0)
-        # fal ya cobró: el gasto queda aunque lo que sigue falle.
-        gastos.registrar_seguro(cliente, "locucion", usd, ref,
-                                detalle=gettext("%(motor)s · %(n)s caracteres · %(voz)s", motor=r["etiqueta"],
-                                                n=len(texto), voz=r["voz_nombre"]),
-                                proveedor=r["proveedor"])
-        local = audios.descargar_url(r["url"], os.path.join(carpeta, f"voz_{h_voz[:16]}.mp3"))
-        url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h_voz[:16]}.mp3", "audio/mpeg")
-        return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": os.path.getsize(local),
-                "duracion_ms": int(round(cortes.duracion(local) * 1000)), "costo_usd": usd,
-                "extra": {"texto": texto, "voz": r["voz_nombre"], "voz_ref": voz, "idioma": idioma,
-                          "velocidad": velocidad, "local": local}}
-    voz_mat, creada = materiales.obtener_o_crear(cliente, h_voz, _tts)
+    # La voz cruda es la misma que usa el anuncio hablado (audios.voz_cruda):
+    # caché por hash y gasto `locucion` apenas el proveedor cobra; el mp3 queda
+    # en la carpeta de trabajo (extra.local) para mezclarlo sin volver a bajarlo.
+    voz_mat, creada = audios.voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo(tarea), carpeta=carpeta)
     voz_nombre = (voz_mat.get("extra") or {}).get("voz") or voz
     costo = float(voz_mat.get("costo_usd") or 0.0) if creada else 0.0
     voz_local = materiales.descargar(voz_mat, os.path.join(carpeta, "voz.mp3"))

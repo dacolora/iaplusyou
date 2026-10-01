@@ -8,9 +8,10 @@ def test_estimar_no_rechaza_otro_mercado(monkeypatch):
     e = inv.estimar({}, "CO", ["meli", "amazon", "walmart", "aliexpress"], [], inv.TOPES_DEFECTO)
     assert [(f["clave"], f["mercado"], f["sitio"]) for f in e["filas"]] == [("meli", "local", "CO"), ("amazon", "otro", "US"),
                                                                             ("walmart", "otro", "US"), ("aliexpress", "local", "CO")]
-    # precios del plan FREE de Apify, verificados 2026-10-01: meli reseñas 1500 × 0.0015 = 2.25; amazon búsqueda 60 × 0.005 = 0.3
-    assert [(f["busqueda_usd"], f["resenas_usd"]) for f in e["filas"]] == [(0.12, 2.25), (0.3, 1.35), (0.09, 1.5), (0.03, 4.51)]
-    assert e["total_usd"] == round(0.12 + 2.25 + 0.3 + 1.35 + 0.09 + 1.5 + 0.03 + 4.51 + e["claude_usd"] + 0.4, 2)
+    # precios del plan FREE de Apify, verificados 2026-10-01: meli reseñas 1500 × 0.0015 = 2.25; amazon búsqueda 60 × 0.005 = 0.3;
+    # amazon reseñas (junglee desde 2026-10-01) 15 × 40 (tope por producto) × 0.006 = 3.6
+    assert [(f["busqueda_usd"], f["resenas_usd"]) for f in e["filas"]] == [(0.12, 2.25), (0.3, 3.6), (0.09, 1.5), (0.03, 4.51)]
+    assert e["total_usd"] == round(0.12 + 2.25 + 0.3 + 3.6 + 0.09 + 1.5 + 0.03 + 4.51 + e["claude_usd"] + 0.4, 2)
 
 
 def test_mas_resenados_desempatan_por_vendidos(monkeypatch):

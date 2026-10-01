@@ -106,7 +106,7 @@ instead of double-launching. Tasks that spend credits are queued with
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
 `2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has two lanes:
-`CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`)
+`CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`, `hablado_voz`)
 runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
 `HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
 runs one at a time in order, as before; the main thread only supervises (`worker.repartir`).
@@ -274,7 +274,9 @@ gasto como tipo `recoleccion`; Reddit/YouTube `max_intentos=2`). Reddit usa el
 token de solo lectura (`client_credentials`, 100 llamadas/min, solo uso no
 comercial); YouTube una llave simple (`search.list` tiene cupo de 100
 llamadas/día, una por recolección); Apify solo actores con precio por resultado
-(`nicho/fuentes/apify_actores.py`) y el token siempre en cabecera. Las llaves
+(`nicho/fuentes/apify_actores.py`, precios del plan FREE reverificados el 2026-10-01; junglee
+—reseñas de Amazon— pide un techo mínimo de US$ 0,50 por corrida, que `estimar()` ya suma) y
+el token siempre en cabecera. Las llaves
 (`REDDIT_*`, `YOUTUBE_API_KEY`, `APIFY_TOKEN`) viven en el `.env` raíz y se
 muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada — y solo
 la ve el admin: al cliente no se le muestra una fuente sin llave ni instrucciones del `.env`
@@ -287,11 +289,14 @@ cifra aprobada (el estimado lo calcula el servidor y el POST exige `total_visto`
 llamada: el del país y el de cada tienda que busca en otro, `investigacion.idiomas_necesarios`; se guardan
 `consultas` — las del país, las de Reddit/YouTube — y `consultas_por_idioma`; la búsqueda nunca usa más
 que ese tope) → `nicho_inv_buscar` por tienda, con las búsquedas de su idioma (si Claude no las escribió,
-las del país, y el paso lo avisa) (`nicho/fuentes/plataformas.py`: Amazon con tienda propia, Mercado Libre
-en 18 países, Walmart solo en EE. UU., TikTok Shop y AliExpress en todo el mundo — AliExpress busca en
-inglés —; actores de Apify con precio por resultado más el arranque por corrida que cobran algunos
-(`usd_por_corrida`), `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de cobro cada una
-(`plataformas.tope`); el estimado de una tienda es la suma de esos techos y el gasto, `plataformas.costo`)
+las del país, y el paso lo avisa) (`nicho/fuentes/plataformas.py`: Amazon con tienda propia (sus reseñas
+vienen de `junglee~amazon-reviews-scraper` desde 2026-10-01 — US$ 0,006 por reseña en el plan FREE, techo
+mínimo US$ 0,50 por corrida, máximo 40 por producto; axesso se dejó de usar porque exige acceso completo
+a la cuenta), Mercado Libre en 18 países, Walmart solo en EE. UU., TikTok Shop y AliExpress en todo el
+mundo — AliExpress busca en inglés —; actores de Apify con precio por resultado más el arranque por
+corrida que cobran algunos (`usd_por_corrida`), `providers.apify.correr_lote` hasta 5 corridas a la vez
+con techo de cobro cada una (`plataformas.tope`); el estimado de una tienda es la suma de esos techos y
+el gasto, `plataformas.costo`)
 → `nicho_inv_seleccionar` (Claude marca lo del nicho; se eligen los de más reseñas y, sin ese dato, los de
 más pedidos/vendidos) →
 `nicho_recolectar` por tienda y por red (Reddit/YouTube con las mismas búsquedas) → `nicho_generar_avatares`
@@ -643,6 +648,29 @@ original —o, en un destino sin original, la de la final original más reciente
 Fuera: efectos, subtítulos, usar el audio en
 un video o el editor, ElevenLabs v3.
 
+**Anuncio hablado en Crear** (`hablado.py`, `hablado_rutas.py`, `tareas/hablado.py`, `static/hablado.js`, spec
+`docs/superpowers/specs/2026-10-01-crear-anuncio-hablado-design.md`): quinto modo de Crear (`data-modo="hablado"`,
+`#hablado`): una foto del proyecto + un guion de hasta 500 caracteres leído por una voz de Audios → P-Video-Avatar
+(`pruna-ai/p-video/avatar`, 720p, US$ 0,025 por segundo de voz redondeado al segundo, tope 30 s). `flowplus_modelos.HABLADO`
+es un registro aparte que ningún selector, Sprints ni derivación recorre (`es_hablado`, `es_sesion_hablada`,
+`nombre_modelo`, `estimate_hablado`, `generar_hablado`; `estimate_video` delega, así el gasto y «Reintentar» salen de la
+misma fórmula). La voz la paga `audios.voz_cruda` (la misma caché `locucion_voz` y el mismo gasto `locucion` que Audios:
+una voz no se paga dos veces) desde la tarea `hablado_voz` (`max_intentos=1`, job `<c>__hablado_voz`, en `CARRIL_CREAR`).
+La cáscara `_crear_hablado.html` va en la página y el panel (`_hablado_panel.html`: fotos + galería de voces, con la
+macro `_voces_galeria.html` que comparte Audios) llega por fetch (`hablado.panel`) la primera vez que el modo se ve; el
+JS sondea la voz por su cuenta (sin `data-poll-job`) y repite el POST con `solo_cache=1`, que nunca encola. Blueprint
+`hablado` (`/cliente/<c>/hablado/{panel,foto,voz,crear}`, rechaza POST cross-site): la foto llega como ficha
+`cf:`/`mat:`/`cat:` de ESTE proyecto, nunca como URL (un personaje del catálogo se sube a R2 al crear); la voz, por su
+hash; el precio visto debe coincidir con `estimate_hablado` (si no, 409 y nada se crea). `hablado.crear_pieza` crea una
+sesión de Crear (`modelo="p_video_avatar"`, `modo_crear="hablado"`, `enfoque_nombre` «Anuncio hablado»,
+`hablado={foto_url, voz_url, movimiento, …}`) y la ruta la lanza con `flowplus_lanzar.lanzar`; el worker usa la misma
+`flowplus_video` (`_preparar` conserva el modelo hablado sin ajustar duración ni formato; `ejecutar_video` llama
+`generar_hablado`; `recuperar_video` lo encuentra por `nombre_modelo`). «Cómo se mueve» va tal cual como `video_prompt`
+(vacío = no se manda). Apagado para una pieza hablada: director y «Editar y crear otra» (también en `cf_rearmar`,
+`cf_guardar_prompt`, `fp_reusar`), el camino automático de Final edition (`fe_preparar`/`fe_producir`, nota «Este video
+ya habla…») y derivar/rescatar en Experimentos (`pz["sin_derivar"]`, `derivaciones._rechazar_imagen`); el editor, la
+doctrina, «Reintentar», «Recuperar» y la publicación orgánica sí funcionan.
+
 **Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»
 (`_tab_flowplus.html` → `_crear_flowplus.html`, hash `#flowplus`; the package is `guiones`
 because `flowplus_*` already names Crear's own pipeline). This paragraph covers the correction
@@ -777,7 +805,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
 
-**Editor (capas 1–4c, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–5a, 2026-09/10):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -914,6 +942,32 @@ stretching or duplicating a layer stops at the principal's end, load warnings ar
 (`editor.borrar_material` → `biblioteca.borrar`, 409 names the edición), «Editar» prefers the person's edición over
 the «Borrador automático» (`ediciones.para_editar`/`nombre_visible`), and `rasterizar.sin_glifos_faltantes` strips
 glyphs the font lacks (emojis) while the panel warns.
+Capa 5a (2026-10-01, automatic subtitles + voice-over, spec `2026-09-30-editor-capa5a-subtitulos-voz-design.md`):
+subtitles are no longer stored with absolute times. The document says WHAT is subtitled per language
+(`subtitulos.fuentes`: `voz` | `sonido` | `material:<id>`, ≤ 8; `[]` = none; absent = the old absolute `palabras`
+stay) plus `correcciones[material_id][índice]`; the words live on the material (`extra.palabras`, material time,
+`[]` counts as transcribed) and the pure `final_edition/subtitulos_fuente.py` (mirror `static/editor/subtitulos_fuente.js`,
+parity table `subtitulos_fuente_casos.json`) maps them onto the timeline when each destino is resolved: a word belongs
+to the clip that holds its midpoint, through recorte/velocidad/inicio (`mapear` in quarters, half-to-even), capped at the
+clip and principal ends — so subtitles follow every cut, trim, reorder, delete and speed change, and corrections survive
+cuts. `tareas.edicion.renderizar_final` derives before `preparar_rutas`; `vista.js` derives after `resolver`. Audio clips
+may carry `idioma` (`resolver` drops them in other languages); `subtitulos.visibles`, `escala` (0.6–1.6) and
+`resaltado` (`#RRGGBB`) are new. Four styles (`karaoke`, `caja`, `palabra_grande`, `minimal`, table `ESTILOS_ASS`) come
+from ONE event list (`motor/subtitulos.eventos`, mirror `subtitulos.js`, table `subtitulos_eventos_casos.json`): the ASS
+writes one `Dialogue` per event (highlight with `\1c`, no `\k`), `generar_ass(ventana=)` crops per render window, and the
+canvas draws the same events. Paid, always behind a button with the server's price and `max_intentos=1`: task
+`material_transcribir` (`final_edition/transcripcion.py`, Whisper via fal, a video's audio goes to a temp R2 key deleted
+in a `finally`, gasto `transcripcion` registered before saving; price `fal_audio.costo_whisper`, US$0.002/min, an
+ESTIMATE until checked against fal's billing) and task `editor_voz` (`audios.voz_cruda`, the Crear › Audios cache by
+`hash_voz`, then its Whisper words; errors are sanitized so the text never reaches the unauthenticated job status).
+Free: the mic recording (`biblioteca.guardar_grabacion`: webm/m4a/ogg/wav → mp3, ≤ 5 min with a 2 s margin, duration-less
+webm transcoded with a bound and trimmed). `edicion_proxy` now MERGES `extra`. Automatic drafts write `fuentes = {idioma:
+[voz]}` (`borrador.es_voz_de_guion`: a voice with `bloque`); an old draft adopts its voice as source on open when every
+voice material has words (`avisos_carga.arreglarAlAbrir`). UI: a «Subtítulos» library tab (`subtitulos_modelo.js` +
+`subtitulos_panel.js`: source, generate, styles, highlight, height/size, word-by-word correction, quitar línea) with a
+read-only row at the top of the timeline; voice-over at the top of «Audio» (`voz_modelo.js` + `voz_panel.js`: AI voice
+with the 22-voice gallery and samples, mic recording with a level meter), «Suena en» on a voice clip (not on guion
+voices) and recordings/AI voices listed in the library and re-added as VOICE (`escala.rolDeMaterial`).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
@@ -1315,6 +1369,8 @@ Trampa: `_('…', x=dato)` con variables devuelve `Markup`, que ya escapó `x` c
 o usa `|tojson` solo sobre texto fijo y une los datos en JS; y nunca metas `|tojson` dentro de un
 atributo con comillas dobles (`onsubmit="…"`), porque emite `"` que cierra el atributo a la mitad —
 usa comillas simples o un `data-*`.
+Otra trampa (Babel 2.18): `gettext(DICCIONARIO["clave"])` hace que la extracción tome la clave como msgid; con
+constantes `N_` en un diccionario, escribe `mensaje = DICCIONARIO["clave"]` y después `gettext(mensaje)`.
 
 **Doctrina de venta y ángulo** (`doctrina/`, spec `docs/superpowers/specs/2026-09-25-doctrina-copywriting-design.md`,
 ADR 0004): los principios de seis libros de copywriting (Kennedy, Hopkins, Ogilvy, Great Leads, Schwartz, Theriot)

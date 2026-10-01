@@ -7,12 +7,15 @@
 // punto y qué pide soltar ahí algo de la biblioteca, y qué corta «Cortar»;
 // qué operación pide agregar algo de la biblioteca («+» o soltar), a qué
 // unión va una transición y dónde se marcan las uniones con transición.
+// Capa 5a: los bloques de la fila de solo lectura «Subtítulos».
 // Puro: lo prueba Node (linea_tiempo.js y biblioteca.js solo ponen esto en el DOM).
 import { cambiaPorDestino, ID_SONIDO } from "./operaciones.js";
 import { formatearPrecio, SIMBOLOS } from "./precio.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
+import { ventanas } from "./subtitulos.js";
 import { separadorDecimal, t } from "./textos.js";
 import { pistaPrincipal } from "./tiempo.js";
+import { idiomaDeVoz } from "./voz_modelo.js";
 
 export const PPS_MIN = 20;
 export const PPS_MAX = 400;
@@ -391,6 +394,15 @@ export function pedidoTransicion(doc, seleccionId, tMs, tipo, duracionMs = DURAC
   return id ? ["ponerTransicion", id, tipo, duracionMs] : null;
 }
 
+// Con qué rol entra un audio de la biblioteca (capa 5a, fix round 1): una
+// grabación del micrófono, una voz con IA (del editor o de Crear › Audios) o
+// una locución de Crear › Audios es una VOZ; nunca música.
+const ORIGENES_VOZ = ["grabacion", "voz", "locucion"];
+
+export function rolDeMaterial(material) {
+  return ORIGENES_VOZ.includes(material?.origen) ? "voz" : "musica";
+}
+
 // Qué operación pide agregar algo de la biblioteca: [nombre, ...args] para
 // `editor.operar` (sin el documento ni info), o null si no hay dónde.
 // `cosa`: {tipo: "video" | "imagen" | "audio", material}, {tipo: "texto",
@@ -400,8 +412,11 @@ export function pedidoTransicion(doc, seleccionId, tMs, tipo, duracionMs = DURAC
 // una imagen, como capa en ese instante aunque caiga en la fila del video; una
 // transición, en el corte más cercano al dedo. Sin `punto` («+» o tocar), en
 // el cabezal: el video después del clip bajo el cabezal (indiceAgregarVideo),
-// la transición como pedidoTransicion. El audio entra como música.
-export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccion = null } = {}) {
+// la transición como pedidoTransicion. El audio entra con rolDeMaterial: una
+// grabación, una voz con IA o una locución como VOZ (agacha la música), con
+// el idioma del destino que se ve si habla ese idioma (`destino`,
+// voz_modelo.idiomaDeVoz); lo demás como música.
+export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccion = null, destino = null } = {}) {
   const ms = Math.max(0, Math.round(Number(punto ? punto.tMs : cabezalMs) || 0));
   switch (cosa?.tipo) {
     case "video": {
@@ -411,8 +426,10 @@ export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccio
     }
     case "imagen":
       return ["agregarImagen", cosa.material, ms, {}];
-    case "audio":
-      return ["agregarAudio", cosa.material, ms, { rol: "musica" }];
+    case "audio": {
+      if (rolDeMaterial(cosa.material) !== "voz") return ["agregarAudio", cosa.material, ms, { rol: "musica" }];
+      return ["agregarAudio", cosa.material, ms, { rol: "voz", idioma: idiomaDeVoz(cosa.material?.idioma, destino).idioma }];
+    }
     case "texto":
       return ["agregarTexto", ms, cosa.preset];
     case "transicion": {
@@ -450,4 +467,20 @@ export function unionesConTransicion(doc) {
       clipId: c.id, ms: c.inicio_ms + c.duracion_ms, tipo: c.transicion.tipo, duracion_ms: c.transicion.duracion_ms,
       nombre: `${nombreTransicion(c.transicion.tipo)} · ${segundosTexto(c.transicion.duracion_ms)}`,
     }));
+}
+
+// ---- Capa 5a (Task 7): la fila «Subtítulos» de la línea de tiempo ----------
+
+// Los bloques de la fila de solo lectura «Subtítulos» (arriba de todas): una
+// línea de `ventanas()` por bloque, con los topes del estilo elegido (tabla
+// D7 que manda el servidor: «Palabra grande» va de a una palabra). Un estilo
+// desconocido es karaoke; sin la tabla, de a 4 como siempre. `palabras`: las
+// del destino ya resuelto y derivado (vacías con «Mostrar» apagado).
+export function bloquesSubtitulos(palabras, estilos, estiloId) {
+  const lista = Array.isArray(palabras) ? palabras : [];
+  if (!lista.length) return [];
+  const e = estilos?.[estiloId] ?? estilos?.karaoke ?? {};
+  return ventanas(lista, e.max_palabras ?? 4, 1800, e.max_caracteres ?? null).map((v) => ({
+    t_ms: v.t_ms, dur_ms: v.dur_ms, texto: v.palabras.map((p) => p.texto).join(" "),
+  }));
 }

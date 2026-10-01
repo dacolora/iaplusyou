@@ -53,6 +53,24 @@ def test_sin_subtitulos_en_el_idioma_no_hay_filtro():
     assert "subtitles=" not in plan.filtergraph and plan.ass_texto == ""
 
 
+def test_ventana_de_tramo_una_linea_que_cruza_la_union_sale_desde_cero_en_el_segundo():
+    # video_basico.json trae "Hola" (0-400) y "mundo" (400-900) en es: en
+    # karaoke se separan en un evento por palabra (D7 regla 4); "mundo"
+    # cruza el límite 600 entre dos tramos.
+    plan1 = c.compilar(_doc(), RUTAS, ventana=(0, 600), con_ass=True)
+    plan2 = c.compilar(_doc(), RUTAS, ventana=(600, 7000), con_ass=True)
+    # karaoke lleva caja: la capa 1 es el texto (la 0, la caja de la misma línea)
+    dialogos1 = [l for l in plan1.ass_texto.splitlines() if l.startswith("Dialogue: 1,")]
+    dialogos2 = [l for l in plan2.ass_texto.splitlines() if l.startswith("Dialogue: 1,")]
+    marca_mundo = "{\\1c&H00D4FF&}mundo{\\1c&HFFFFFF&}"
+    corte = next(d for d in dialogos1 if marca_mundo in d)
+    assert corte.split(",")[1] == "0:00:00.40" and corte.split(",")[2] == "0:00:00.60"
+    assert len(dialogos2) == 1
+    continuado = dialogos2[0]
+    assert marca_mundo in continuado
+    assert continuado.split(",")[1] == "0:00:00.00" and continuado.split(",")[2] == "0:00:00.30"
+
+
 def test_ventana_desplaza_tiempos_a_cero():
     plan = c.compilar(_doc(), RUTAS, ventana=(3500, 7000), con_ass=False)
     assert plan.entradas[0]["opciones"] == ["-ss", "3.500", "-t", "3.500"]

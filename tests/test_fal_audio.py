@@ -189,3 +189,16 @@ def test_disenar_voz_minimax(monkeypatch):
     _capturar(monkeypatch, fal_audio, {"audio": {"url": "x"}})
     with pytest.raises(RuntimeError, match="voice-design"):
         fal_audio.disenar_voz_minimax("p", "t")
+
+
+def test_whisper_espera_segun_lo_que_dura_el_audio(monkeypatch):
+    """Revisión final de la capa 5a (m4): 180 s (cola incluida) no alcanzan
+    para 10 min de audio. max(180, 120 + 1,5 × segundos); sin duración, 180."""
+    from providers import fal_audio
+    assert fal_audio.timeout_whisper(None) == 180
+    assert fal_audio.timeout_whisper(10000) == 180           # 120 + 15 < 180
+    assert fal_audio.timeout_whisper(60000) == 210
+    assert fal_audio.timeout_whisper(600000) == 1020
+    llamadas = _capturar(monkeypatch, fal_audio, {"text": "", "chunks": []})
+    fal_audio.transcribir_palabras("https://x/a.mp3", "es", duracion_ms=600000)
+    assert llamadas[0]["timeout"] == 1020

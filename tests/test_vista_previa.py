@@ -2,6 +2,7 @@
 proxies pendientes y la configuración compartida con el motor de ffmpeg."""
 import json
 
+import audios
 from final_edition import documento, vista_previa
 
 
@@ -45,6 +46,7 @@ def test_config_navegador_sale_de_los_modulos():
     assert cfg["mezcla"]["ducking_sonido"] == mezcla.DUCKING_VOZ_SOBRE_SONIDO
     assert (cfg["mezcla"]["vol_musica_sola"], cfg["mezcla"]["vol_musica_con_sonido"]) == (mezcla.VOL_MUSICA_SOLA, mezcla.VOL_MUSICA_CON_SONIDO)
     assert cfg["subtitulos"]["estilos"] == subtitulos.ESTILOS_ASS
+    assert cfg["subtitulos"]["estilos"]["palabra_grande"]["max_palabras"] == 1
     assert cfg["subtitulos"]["em_por_tam"] == subtitulos.escala_libass()
     assert {"Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"} <= set(cfg["fuentes"])
     json.dumps(cfg)
@@ -91,3 +93,99 @@ def test_encolar_proxies_uno_por_material_gratis_y_con_reintentos(monkeypatch):
     args, kw = llamadas[0]
     assert args[:3] == ("acme__mat3__proxy", "edicion_proxy", {"cliente": "acme", "material_id": 3})
     assert kw["max_intentos"] == 3 and kw["cliente"] == "acme"
+
+
+def test_material_para_siempre_tiene_palabras_solo_con_con_palabras_trae_la_lista(base_temporal):
+    """Capa 5a (Task 5): `tiene_palabras` va siempre; `palabras` solo si se
+    pide (la biblioteca general no las manda — pesarían demasiado)."""
+    import materiales
+    m = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/v.wav", hash="hp1", bytes=1,
+                             extra={"palabras": [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]})
+    sin = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/v2.wav", hash="hp2", bytes=1)
+    d = vista_previa.material_para(m)
+    assert d["tiene_palabras"] is True and "palabras" not in d
+    d2 = vista_previa.material_para(m, con_palabras=True)
+    assert d2["palabras"] == [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]
+    assert vista_previa.material_para(sin)["tiene_palabras"] is False
+    assert vista_previa.material_para(sin, con_palabras=True)["palabras"] is None
+
+
+def test_materiales_para_manda_las_palabras(base_temporal):
+    """`materiales_para` (la que alimenta `datos_pagina`) siempre las pide:
+    la página deriva los subtítulos sin otra vuelta al servidor."""
+    import materiales
+    m = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/v.wav", hash="hp3", bytes=1,
+                             extra={"palabras": [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]})
+    mats = vista_previa.materiales_para("acme", {"materiales": [m["id"]]})
+    assert mats[m["id"]]["palabras"] == [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]
+
+
+def test_datos_pagina_trae_idiomas_y_trabajos_vivos_de_subtitulos(base_temporal, monkeypatch):
+    import ediciones
+    import trabajos
+    from final_edition import documento
+    from tareas import edicion as tareas_edicion
+    doc = documento.nuevo_video("9:16")
+    ed = ediciones.crear("acme", "video", "Demo", doc)
+    datos = vista_previa.datos_pagina("acme", ed, {})
+    assert datos["subtitulos"]["idiomas"] == list(audios.IDIOMAS)
+    assert datos["trabajos_vivos"]["subtitulos"] is None
+    job_id = tareas_edicion.job_id_transcribir("acme", ed["id"])
+    monkeypatch.setattr(trabajos, "en_curso", lambda jid: jid == job_id)
+    datos2 = vista_previa.datos_pagina("acme", ed, {})
+    assert datos2["trabajos_vivos"]["subtitulos"] == job_id
+
+
+def test_datos_pagina_trae_voz_y_grabacion(base_temporal, monkeypatch):
+    """Editor capa 5a, Task 6 (D9/D12): la galería de voces (con género y tono
+    ya traducidos — el editor no es Jinja), las velocidades traducidas, y los
+    topes de la grabación del micrófono; `trabajos_vivos.voz` sigue la
+    edición igual que `subtitulos`."""
+    import ediciones
+    import materiales
+    import trabajos
+    from final_edition import biblioteca, documento
+    from tareas import edicion as tareas_edicion
+    doc = documento.nuevo_video("9:16")
+    ed = ediciones.crear("acme", "video", "Demo", doc)
+    datos = vista_previa.datos_pagina("acme", ed, {})
+    assert len(datos["voces"]) == len(audios.fichas_voces())
+    assert {"nombre", "genero", "genero_nombre", "tono"} <= set(datos["voces"][0])
+    assert datos["voz"] == {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA,
+                            "velocidades": dict(audios.NOMBRES_VELOCIDAD), "max_caracteres": audios.MAX_CARACTERES,
+                            "idioma_defecto": audios.idioma_defecto("acme")}
+    assert datos["grabacion"] == {"max_ms": biblioteca.MAX_GRABACION_MS, "max_bytes": materiales.LIMITES["audio"][0]}
+    assert datos["trabajos_vivos"]["voz"] is None
+    job_id = tareas_edicion.job_id_voz("acme", ed["id"])
+    monkeypatch.setattr(trabajos, "en_curso", lambda jid: jid == job_id)
+    datos2 = vista_previa.datos_pagina("acme", ed, {})
+    assert datos2["trabajos_vivos"]["voz"] == job_id
+
+
+def test_datos_pagina_traduce_las_voces_al_idioma_de_quien_mira(base_temporal):
+    """`voces` sale en el idioma activo (D13): un proyecto en inglés ve
+    `genero_nombre`/`tono` en inglés, no en español."""
+    import ediciones
+    import idiomas
+    from final_edition import documento
+    doc = documento.nuevo_video("9:16")
+    ed = ediciones.crear("acme", "video", "Demo", doc)
+    with idiomas.en_idioma("en"):
+        datos = vista_previa.datos_pagina("acme", ed, {})
+    por_nombre = {v["nombre"]: v for v in datos["voces"]}
+    assert por_nombre["Rachel"]["genero_nombre"] == "Female" and por_nombre["Rachel"]["tono"] == "calm"
+
+
+def test_material_para_dice_el_idioma_que_habla_una_voz(base_temporal):
+    """Capa 5a (Task 8, fix round 1): la biblioteca decide con qué idioma entra
+    una voz con IA o una locución por el que habla (`extra.idioma`); lo que no
+    es un idioma de dos letras no se manda."""
+    import materiales
+    voz = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/i1.mp3", hash="hi1", bytes=1,
+                               extra={"nombre": "Hola", "idioma": "en"})
+    raro = materiales.registrar("acme", tipo="audio", origen="locucion", url="https://r2.test/i2.mp3", hash="hi2", bytes=1,
+                                extra={"idioma": "english"})
+    grab = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2.test/i3.mp3", hash="hi3", bytes=1)
+    assert vista_previa.material_para(voz)["idioma"] == "en"
+    assert vista_previa.material_para(raro)["idioma"] is None
+    assert vista_previa.material_para(grab)["idioma"] is None

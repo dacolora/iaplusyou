@@ -3,6 +3,7 @@
   edicion_proxy     {cliente, material_id}                                     max_intentos=3
   edicion_desde_clon {cliente, cf_id}                                          max_intentos=2
   material_de_pieza {cliente, cf_id}                                           max_intentos=2
+  material_transcribir {cliente, edicion_id, material_ids, idioma}             max_intentos=1
   materiales_limpiar {}                                                         periódica diaria
 `edicion_producir` renderiza el documento CONGELADO en la versión (no el
 vivo), así lo que se produjo siempre se puede volver a ver. Contrato con la
@@ -14,30 +15,48 @@ duracion_estimada=estimar.segundos(doc), etapas=ETAPAS_EDICION)`. `idioma` y
 porque forman parte del nombre de la carpeta de trabajo. `edicion_desde_clon`
 (capa 4a, «Editar este video») hace el trabajo pesado de
 `final_edition.edicion_clon.crear` (bajar el clon, medirlo) fuera del hilo de
-Flask; no paga nada, así que un reintento no importa (`max_intentos=2`)."""
+Flask; no paga nada, así que un reintento no importa (`max_intentos=2`).
+`material_transcribir` (editor capa 5a, D5/D6) paga Whisper una vez por
+material (`final_edition/transcripcion.py`) y sigue con los demás si uno
+falla — lo que sí se transcribió no se pierde."""
+import logging
 import math
 import os
 import re
 import shutil
 import subprocess
 
-from flask_babel import gettext
+from flask_babel import gettext, ngettext
 
+import audios
 import cola
 import creative_flow
 import ediciones
 import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, mezcla, motor, rasterizar
+from final_edition import cortes, mezcla, motor, rasterizar, subtitulos_fuente, transcripcion
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from idiomas import N_
 from storage import r2_uploader
-from tareas import al_interrumpir, registrar
+from tareas import al_interrumpir, ref_sufijo, registrar
+
+log = logging.getLogger(__name__)
 
 # N_: se guardan en español y `estado_trabajo` las traduce para quien mira.
 ETAPAS_EDICION = ((N_("Preparando materiales"), 15), (N_("Renderizando"), 70), (N_("Subiendo"), 15))
+# Editor capa 5a: etapas de `material_transcribir` y mensajes finales de las
+# tareas de audio del editor (también usado por `editor_voz`, Task 6).
+ETAPAS_TRANSCRIBIR = ((N_("Preparando el audio"), 20), (N_("Transcribiendo"), 70), (N_("Guardando"), 10))
+# Task 6: etapas de `editor_voz` (TTS + Whisper sobre la voz).
+ETAPAS_VOZ = ((N_("Creando la voz"), 60), (N_("Preparando sus subtítulos"), 30), (N_("Guardando"), 10))
+MENSAJES_AUDIO_EDITOR = {
+    "subtitulos_listos": N_("Subtítulos listos."),
+    "voz_lista": N_("Voz lista."),
+    # nada los genera solo después: se dice dónde hacerlo (revisión final)
+    "voz_sin_palabras": N_("La voz quedó lista, pero no se pudieron sacar sus subtítulos: puedes generarlos desde «Subtítulos»."),
+}
 _EXT = {"video": "mp4", "imagen": "png", "audio": "wav", "png_texto": "png", "proxy": "mp4"}
 _IDIOMA_RE = re.compile(r"[a-z]{2}")
 _PAIS_RE = re.compile(r"[A-Z]{2}")
@@ -73,6 +92,14 @@ def job_id_proxy(cliente, material_id):
     return f"{cliente}__mat{int(material_id)}__proxy"
 
 
+def job_id_transcribir(cliente, edicion_id):
+    return f"{cliente}__ed{int(edicion_id)}__subtitulos"
+
+
+def job_id_voz(cliente, edicion_id):
+    return f"{cliente}__ed{int(edicion_id)}__voz"
+
+
 def job_id_desde_clon(cliente, cf_id):
     return f"{cliente}__{cf_id}__editor"
 
@@ -86,6 +113,21 @@ def _carpeta(cliente, nombre):
     c = os.path.join(raiz, cliente, "ediciones", nombre)
     os.makedirs(c, exist_ok=True)
     return c
+
+
+def _palabras_por_material(cliente, resuelto):
+    """`{material_id: palabras}` (D1/D5, capa 5a) solo para los materiales
+    del documento RESUELTO que ya tienen `extra.palabras` (una lista: una
+    transcripción vacía cuenta como hecha). Lo que usa
+    `subtitulos_fuente.derivar` antes de renderizar."""
+    salida = {}
+    for mid in resuelto.get("materiales") or []:
+        mat = materiales.obtener(cliente, mid)
+        palabras = (mat or {}).get("extra") or {}
+        palabras = palabras.get("palabras")
+        if isinstance(palabras, list):
+            salida[int(mid)] = palabras
+    return salida
 
 
 def preparar_rutas(cliente, doc, carpeta):
@@ -170,6 +212,10 @@ def renderizar_final(cliente, final_id, version_id, idioma, pais, avisar=None):
     os.makedirs(carpeta, exist_ok=True)
     avisar(ETAPAS_EDICION[0][0])
     doc = documento_mod.resolver(documento_mod.validar(documento_mod.migrar(v["documento"])), idioma, pais)
+    # D1 (capa 5a): los subtítulos se derivan del audio AQUÍ, sobre el
+    # documento ya resuelto para este destino — nunca antes (`resolver` ya
+    # aplicó `por_destino` y quitó los audios de otro idioma).
+    doc = subtitulos_fuente.aplicar(doc, _palabras_por_material(cliente, doc))
     rutas = preparar_rutas(cliente, doc, carpeta)
     avisar(ETAPAS_EDICION[1][0])
     es_imagen = documento_mod.duracion_ms(doc) == 0
@@ -262,14 +308,15 @@ def ejecutar_proxy(tarea):
     carpeta = _carpeta(cliente, f"proxy_{mid}")
     try:
         original = materiales.descargar(mat, os.path.join(carpeta, f"orig.{_extension(mat['tipo'])}"))
-        extra = dict(mat.get("extra") or {})
+        previo = mat.get("extra") or {}      # foto del inicio: solo para decidir, nunca se reescribe
+        nuevos = {}                          # SOLO lo que esta tarea calcula
         campos = {}
         if mat["tipo"] == "video":
             info = cortes.ffprobe_json(original)
             v = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
             dur_s = cortes.duracion(original)
             campos.update(ancho=v.get("width"), alto=v.get("height"), duracion_ms=int(round(dur_s * 1000)))
-            extra["tiene_audio"] = mezcla.tiene_audio(original)
+            nuevos["tiene_audio"] = mezcla.tiene_audio(original)
             proxy = os.path.join(carpeta, "proxy.mp4")
             generar_proxy(original, proxy)
             tira = os.path.join(carpeta, "tira.jpg")
@@ -278,23 +325,131 @@ def ejecutar_proxy(tarea):
             celdas = max(1, int(math.ceil(dur_s)))
             cortes.ffmpeg(["-i", original, "-vf", f"fps=1,scale=160:-2,tile={celdas}x1", "-frames:v", "1", "-q:v", "6", tira], timeout=600)
             campos["url_proxy"] = r2_uploader.upload_file(proxy, f"clientes/{cliente}/materiales/{mid}_proxy.mp4", "video/mp4")
-            extra["tira_url"] = r2_uploader.upload_file(tira, f"clientes/{cliente}/materiales/{mid}_tira.jpg", "image/jpeg")
-            extra["proxy_version"] = PROXY_VERSION
-            if "cortes_ms" not in extra:
+            nuevos["tira_url"] = r2_uploader.upload_file(tira, f"clientes/{cliente}/materiales/{mid}_tira.jpg", "image/jpeg")
+            nuevos["proxy_version"] = PROXY_VERSION
+            if "cortes_ms" not in previo:
                 # `insumos.clon` ya los midió al crear el material (I4,
                 # plan-mandated capa 2): no repetir el trabajo de `scdet`.
-                extra["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
+                nuevos["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
         else:  # audio (único otro tipo posible tras el chequeo de arriba)
             campos["duracion_ms"] = int(round(cortes.duracion(original) * 1000))
-            extra["picos"] = _picos(original)
-        import db
-        with db.conectar() as con:
-            con.execute(db.material.update().where(db.material.c.id == mid).values(extra=extra, actualizado_en=db.ahora(), **campos))
+            nuevos["picos"] = _picos(original)
+        # D5 (capa 5a) y revisión final: `extra` se leyó al EMPEZAR y se
+        # escribe minutos después (ffmpeg real de por medio). Se mezclan SOLO
+        # las claves que esta tarea calculó, contra el `extra` VIVO: lo que otra
+        # tarea guardó mientras tanto (`palabras`, un `nombre` nuevo…) nunca
+        # vuelve a su valor viejo, y una clave ajena (`cliente`, `material_id`)
+        # nunca choca con los argumentos de `actualizar_extra`.
+        materiales.actualizar_extra(cliente, mid, **nuevos)
+        if campos:
+            import db
+            with db.conectar() as con:
+                con.execute(db.material.update().where(db.material.c.id == mid).values(actualizado_en=db.ahora(), **campos))
         return gettext("Proxy listo.")
     finally:
         # A diferencia de edicion_producir, acá no hay una fila "final" que
         # deje en error para depurar — la carpeta de trabajo siempre se
         # limpia, tanto si el proxy salió bien como si no.
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
+@registrar("material_transcribir")
+def ejecutar_transcribir(tarea):
+    """Transcribe cada material de `material_ids` que todavía lo necesite
+    (D5): un id de otro proyecto o que ya no exista se ignora sin más, y si
+    uno falla se sigue con los demás — lo que sí se transcribió (y su gasto)
+    no se pierde. Al final, si alguno falló, avisa cuántos."""
+    p = tarea["payload"]
+    cliente, edicion_id, idioma = p["cliente"], p["edicion_id"], p["idioma"]
+    jid = tarea.get("job_id") or job_id_transcribir(cliente, edicion_id)
+    avisar = lambda n: trabajos.reportar(jid, etapa=n)
+    carpeta = _carpeta(cliente, f"transcribir_{edicion_id}")
+    avisar(ETAPAS_TRANSCRIBIR[0][0])
+    fallos = 0
+    try:
+        for mid in p.get("material_ids") or []:
+            mat = materiales.obtener(cliente, mid)
+            if not mat or not transcripcion.necesita(mat):
+                continue
+            avisar(ETAPAS_TRANSCRIBIR[1][0])
+            ref = f"transcripcion:{mid}{ref_sufijo(tarea)}"
+            try:
+                transcripcion.transcribir(cliente, mat, idioma, carpeta, ref)
+            except Exception:  # noqa: BLE001 — sigue con los demás; el gasto de este ya quedó si alcanzó a pagar
+                log.exception("material_transcribir (tarea %s): material %s falló", tarea.get("id"), mid)
+                fallos += 1
+        avisar(ETAPAS_TRANSCRIBIR[2][0])
+        if fallos:
+            raise RuntimeError(ngettext("No se pudo transcribir %(num)s archivo.",
+                                        "No se pudieron transcribir %(num)s archivos.", fallos))
+        # Babel 2.18 no extrae bien un gettext(dict[clave]) (confunde el `[`
+        # con el paréntesis de la llamada y «ve» la clave como mensaje) — se
+        # saca a una variable antes, como ya hace el resto del código con
+        # ngettext(gettext(...)).
+        mensaje = MENSAJES_AUDIO_EDITOR["subtitulos_listos"]
+        return gettext(mensaje)
+    finally:
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
+# Lo único que llega tal cual (traducido) al estado del trabajo: el único
+# msgid fijo que audios.sintetizar puede lanzar (una voz propia borrada entre
+# el clic y el worker — no aplica hoy, la galería del editor es solo las 22
+# voces de fal_audio.VOCES, pero audios.voz_cruda no lo sabe). Cualquier otro
+# error (p. ej. de fal, que repite el input — el texto de la persona) nunca
+# pasa tal cual: el estado de trabajos no pide sesión (D13).
+_MSGIDS_FIJOS_VOZ = frozenset(audios.MENSAJES.values())
+
+
+@registrar("editor_voz")
+def ejecutar_voz(tarea):
+    try:
+        return _generar_voz(tarea)
+    except Exception as e:  # noqa: BLE001 — todo error sale saneado, nunca el texto de la persona
+        if isinstance(e, ValueError) and str(e) in _MSGIDS_FIJOS_VOZ:
+            raise ValueError(gettext(str(e))) from e
+        log.exception("editor_voz (tarea %s) falló: %s", tarea.get("id"), cola.sin_token(e))
+        raise RuntimeError(gettext("No pude crear la voz; intenta de nuevo (%(tipo)s).", tipo=type(e).__name__)) from e
+
+
+def _generar_voz(tarea):
+    """Voz con IA dentro del editor (D9, Task 6): TTS (caché compartida con
+    Crear › Audios, `audios.voz_cruda`) y, enseguida, Whisper sobre esa voz —
+    así «Generar subtítulos» con ella sale gratis. Si Whisper falla, la voz
+    (ya pagada) se entrega igual y el mensaje final lo avisa — nunca se
+    pierde lo pagado, y el mensaje nunca lleva el texto de la persona (D13:
+    el estado de trabajos no pide sesión)."""
+    p = tarea["payload"]
+    cliente, edicion_id = p["cliente"], p["edicion_id"]
+    texto, voz, idioma = p["texto"], p["voz"], p["idioma"]
+    velocidad = p.get("velocidad") or "normal"
+    jid = tarea.get("job_id") or job_id_voz(cliente, edicion_id)
+    avisar = lambda n: trabajos.reportar(jid, etapa=n)
+    carpeta = _carpeta(cliente, f"voz_{edicion_id}")
+    avisar(ETAPAS_VOZ[0][0])
+    try:
+        # Gasto `locucion:<hash12>:t<tarea>` (lo arma audios.voz_cruda, la misma de Crear › Audios
+        # y del anuncio hablado: caché por hash, nunca se paga dos veces).
+        mat, _creada = audios.voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo(tarea), carpeta=carpeta)
+        avisar(ETAPAS_VOZ[1][0])
+        sin_palabras = False
+        if transcripcion.necesita(mat):
+            ref_t = f"transcripcion:{mat['id']}{ref_sufijo(tarea)}"
+            try:
+                mat = transcripcion.transcribir(cliente, mat, idioma, carpeta, ref_t)
+            except Exception:  # noqa: BLE001 — la voz (ya pagada) se entrega igual
+                log.exception("editor_voz (tarea %s): no se pudo transcribir la voz %s", tarea.get("id"), mat["id"])
+                sin_palabras = True
+        avisar(ETAPAS_VOZ[2][0])
+        if (mat.get("extra") or {}).get("picos") is None:
+            trabajos.encolar(job_id_proxy(cliente, mat["id"]), "edicion_proxy",
+                             {"cliente": cliente, "material_id": mat["id"]}, duracion_estimada=60,
+                             cliente=cliente, max_intentos=3, prioridad=1)
+        materiales.marcar_uso([mat["id"]])
+        # Mismo truco que arriba: Babel 2.18 no extrae bien gettext(dict[clave]).
+        mensaje = MENSAJES_AUDIO_EDITOR["voz_sin_palabras"] if sin_palabras else MENSAJES_AUDIO_EDITOR["voz_lista"]
+        return gettext(mensaje)
+    finally:
         shutil.rmtree(carpeta, ignore_errors=True)
 
 

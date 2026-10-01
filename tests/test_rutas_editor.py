@@ -8,6 +8,8 @@ import re
 
 import pytest
 
+import audios
+import materiales
 from tests.test_rutas_productos import _cliente_admin
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -95,8 +97,26 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
                              "agregar_pieza": "/cliente/acme/ediciones/biblioteca/pieza/__CF__",
                              "materiales_por_id": "/cliente/acme/ediciones/materiales",
                              # capa 4c (8/10): «Borrar» en la biblioteca (`__ID__` = el material)
-                             "borrar_material": "/cliente/acme/ediciones/materiales/__ID__/borrar"}
+                             "borrar_material": "/cliente/acme/ediciones/materiales/__ID__/borrar",
+                             # capa 5a (Task 5): subtítulos automáticos
+                             "subtitulos_estimar": f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar",
+                             "transcribir": f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+                             # capa 5a (Task 6): voz con IA y grabación
+                             "voz_estimar": f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+                             "voz": f"/cliente/acme/ediciones/{ed['id']}/voz",
+                             "voz_material": "/cliente/acme/ediciones/voz/__CLAVE__",
+                             "grabacion": "/cliente/acme/ediciones/materiales/grabacion",
+                             "muestra_voz": "/cliente/acme/audios/muestra",
+                             "estado_trabajo": "/trabajo/__JOB__/estado"}
     assert datos["estimado_s"] >= 20 and datos["cf_id"] is None
+    assert datos["subtitulos"] == {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA}
+    assert datos["trabajos_vivos"] == {"subtitulos": None, "voz": None}
+    assert len(datos["voces"]) == len(audios.fichas_voces())
+    assert all(v["genero_nombre"] and v["tono"] is not None for v in datos["voces"])
+    assert datos["voz"] == {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA,
+                            "velocidades": dict(audios.NOMBRES_VELOCIDAD),
+                            "max_caracteres": audios.MAX_CARACTERES, "idioma_defecto": audios.idioma_defecto("acme")}
+    assert datos["grabacion"] == {"max_ms": 300000, "max_bytes": materiales.LIMITES["audio"][0]}
     assert [a[1] for a, _k in encolados] == ["edicion_proxy"]
     assert encolados[0][0][2] == {"cliente": "acme", "material_id": clon["id"]}
 
@@ -526,9 +546,9 @@ def test_la_pagina_tiene_la_disposicion_de_capcut(dashboard, encolados):
     # (propiedades.js lo arma y conserva el id h-velocidad)
     assert 'id="h-velocidad"' not in html
     assert "ed-cuerpo" not in arbol["ed-herramientas"] and "ed-cuerpo" not in arbol["linea"]
-    # la biblioteca: cuatro pestañas con su icono
+    # la biblioteca: cinco pestañas con su icono (capa 5a: «Subtítulos» entre Texto y Transiciones)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    for panel in ("medios", "audio", "texto", "transiciones"):
+    for panel in ("medios", "audio", "texto", "subtitulos", "transiciones"):
         boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
         assert boton and "<svg" in boton.group(1), panel
     assert pestanas.count('aria-selected="true"') == 1
@@ -556,7 +576,8 @@ def test_las_pestanas_de_la_biblioteca_dicen_su_nombre(dashboard, encolados):
     ed, _c, _v = _edicion()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    for panel, nombre in (("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("transiciones", "Transiciones")):
+    for panel, nombre in (("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("subtitulos", "Subtítulos"),
+                          ("transiciones", "Transiciones")):
         boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
         assert boton and f'title="{nombre}"' in boton.group(0) and f"<span>{nombre}</span>" in boton.group(1), panel
     css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
@@ -565,6 +586,90 @@ def test_las_pestanas_de_la_biblioteca_dicen_su_nombre(dashboard, encolados):
     assert re.search(r"@container ed-pestanas \(min-width: \d+px\)", css), "con lugar, los nombres se ven"
     # la biblioteca la arma biblioteca.js dentro de su panel; la marca de una unión con transición, la línea
     assert "#ed-panel-biblioteca [hidden]" in css and ".ed-union {" in css
+
+
+def test_la_pestana_subtitulos_en_la_biblioteca_y_en_el_celular(dashboard, encolados):
+    """Capa 5a (Task 7, spec D12): «Subtítulos» es una pestaña de la biblioteca
+    entre Texto y Transiciones (subtitulos_panel.js la llena) y, en el celular,
+    el sexto botón de la barra de abajo, que abre la hoja en esa pestaña. La
+    página trae lo que el panel pide: estimar, transcribir, el estado de un
+    trabajo (`__JOB__`) y las palabras de un material; y la tabla de estilos."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
+    assert re.findall(r'data-panel="([a-z]+)"', pestanas) == ["medios", "audio", "texto", "subtitulos", "transiciones"]
+    movil = re.search(r'id="ed-acciones-movil".*?</nav>', html, re.S).group(0)
+    assert re.findall(r'id="(ed-abrir-[a-z]+)"', movil) == [
+        "ed-abrir-medios", "ed-abrir-audio", "ed-abrir-texto", "ed-abrir-subtitulos", "ed-abrir-transiciones",
+        "ed-abrir-propiedades"]
+    abrir = re.search(r'<button[^>]*id="ed-abrir-subtitulos"[^>]*>(.*?)</button>', html, re.S)
+    assert 'data-abrir-hoja="ed-biblioteca"' in abrir.group(0) and 'data-abrir-panel="subtitulos"' in abrir.group(0)
+    assert "<svg" in abrir.group(1) and "<span>Subtítulos</span>" in abrir.group(1)
+    datos = _datos(html)
+    urls = datos["urls"]
+    for clave in ("subtitulos_estimar", "transcribir", "estado_trabajo", "materiales_por_id"):
+        assert urls[clave], clave
+    assert "__JOB__" in urls["estado_trabajo"]
+    assert datos["config"]["subtitulos"]["estilos"]["palabra_grande"]["max_palabras"] == 1
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    for regla in (".ed-sub-lineas", ".ed-sub-palabra", ".ed-sub-estilo", ".ed-sub-fila", ".ed-sub-bloque"):
+        assert regla in css, regla
+    # seis botones en 375 px: cada uno se achica (nunca empuja la página de lado)
+    celular = css[css.index("@media (max-width: 760px)"):]
+    accion = re.search(r"\.ed-accion \{([^}]*)\}", celular).group(1)
+    assert "flex: 1 1 0" in accion and "min-width: 0" in accion
+
+
+def test_la_voz_en_off_arriba_de_la_pestana_audio(dashboard, encolados, monkeypatch):
+    """Capa 5a (Task 8, spec D8/D9/D12): voz_panel.js pone «Voz con IA» y
+    «Grabar tu voz» arriba de «Audio». La página trae lo que el panel pide: la
+    galería de voces (género y tono), el formulario (idiomas, velocidades, tope
+    de caracteres), el tope de una grabación, las rutas (precio, crear, traer
+    una voz por su clave, subir una grabación, la muestra de Crear › Audios y
+    el estado de un trabajo), sus textos y el trabajo de voz vivo para
+    retomarlo al recargar. Las tarjetas van en dos columnas también en el
+    celular, sin correr la página de lado."""
+    import trabajos
+    from final_edition import textos_editor
+    import idiomas
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    datos = _datos(html)
+    urls = datos["urls"]
+    for clave in ("voz_estimar", "voz", "voz_material", "grabacion", "muestra_voz", "estado_trabajo", "materiales_por_id"):
+        assert urls[clave], clave
+    assert "__CLAVE__" in urls["voz_material"] and "__JOB__" in urls["estado_trabajo"]
+    assert [v["nombre"] for v in datos["voces"]] == [f["nombre"] for f in audios.fichas_voces()]
+    assert {"mujer", "hombre"} <= {v["genero"] for v in datos["voces"]}
+    assert list(datos["voz"]["velocidades"]) == ["lenta", "normal", "rapida"]
+    assert datos["voz"]["idioma_defecto"] in datos["voz"]["idiomas"]
+    assert datos["voz"]["max_caracteres"] == audios.MAX_CARACTERES
+    assert datos["grabacion"]["max_ms"] == 300000 and datos["grabacion"]["max_bytes"] > 0
+    assert datos["trabajos_vivos"]["voz"] is None
+    # los textos del panel, en el idioma de quien mira (el precio del servidor ya dice «aprox.»: R6)
+    assert datos["textos"]["voz.crear_precio"] == "Crear la voz ({precio})"
+    assert datos["textos"]["grab.grabar"] == "Grabar" and datos["textos"]["prop.suena_en"] == "Suena en"
+    with idiomas.en_idioma("en"):
+        en = textos_editor.textos()
+    assert en["voz.crear_precio"] == "Create the voice ({precio})"
+    assert en["voz.titulo_ia"] == "AI voice" and en["grab.usar"] == "Use the recording"
+    # el CSS: dos columnas de voces, la barra de nivel y, en el celular, la galería corre con la hoja
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    voces = re.search(r"\.ed-voz-voces \{([^}]*)\}", css).group(1)
+    assert "repeat(2, minmax(0, 1fr))" in voces
+    for regla in (".ed-voz-acciones", ".ed-voz-voz", ".ed-voz-play", ".ed-voz-fila", ".ed-grab-nivel", ".ed-grab-controles"):
+        assert regla in css, regla
+    celular = css[css.index("@media (max-width: 760px)"):]
+    assert ".ed-voz-voces { max-height: none" in celular
+    # una voz que se estaba creando al recargar: la página trae su job para retomar la barra
+    monkeypatch.setattr(trabajos, "en_curso", lambda job: job.endswith("__voz"))
+    datos = _datos(_cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True))
+    assert datos["trabajos_vivos"]["voz"] and datos["trabajos_vivos"]["voz"].endswith("__voz")
+    # el módulo de la página monta el panel en la zona de «Audio»
+    with open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8") as f:
+        pagina = f.read()
+    assert 'import { VozPanel } from "./voz_panel.js";' in pagina
+    assert 'new VozPanel({ contenedor: biblioteca.zona("audio"), editor, datos });' in pagina
 
 
 def test_ningun_ancho_queda_sin_disposicion(dashboard, encolados):
@@ -705,6 +810,19 @@ def test_materiales_por_id_solo_los_de_este_proyecto(dashboard, encolados):
     assert j["materiales"][str(propio["id"])]["url"] == "https://r2/a.mp4"
 
 
+def test_materiales_por_id_con_palabras_las_manda_solo_si_se_pide(dashboard, encolados):
+    """Capa 5a (Task 5): `&palabras=1` manda `palabras`; sin él, no (aunque
+    `tiene_palabras` siempre va)."""
+    import materiales
+    con = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/v.mp3", hash="h-palabras", bytes=1,
+                               extra={"palabras": [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]})
+    sin_pedir = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/materiales?ids={con['id']}")
+    d = sin_pedir.get_json()["materiales"][str(con["id"])]
+    assert d["tiene_palabras"] is True and "palabras" not in d
+    pidiendo = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/materiales?ids={con['id']}&palabras=1")
+    assert pidiendo.get_json()["materiales"][str(con["id"])]["palabras"] == [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]
+
+
 def test_materiales_por_id_prepara_lo_pedido_que_falta(dashboard, encolados):
     """Fix final 11: una canción de Mi música (audio sin picos) agregada desde la
     biblioteca nunca tenía onda: nadie encolaba su edicion_proxy. Con
@@ -727,6 +845,266 @@ def test_materiales_por_id_prepara_lo_pedido_que_falta(dashboard, encolados):
     assert [(a[0], a[1], a[2]) for a, _k in encolados] == [
         (te.job_id_proxy("acme", cancion["id"]), "edicion_proxy", {"cliente": "acme", "material_id": cancion["id"]})]
     assert encolados[0][1]["max_intentos"] == 3
+
+
+# --- Subtítulos automáticos (editor capa 5a, Task 5): estimar y transcribir ---
+
+def _materiales_subtitulos(con_palabras_a=False, duracion_a=5000, duracion_b=4000):
+    import materiales
+    extra_a = {"palabras": []} if con_palabras_a else {}
+    a = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/a.mp3", hash="hs-a", bytes=1,
+                             duracion_ms=duracion_a, extra=extra_a)
+    b = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/b.mp3", hash="hs-b", bytes=1,
+                             duracion_ms=duracion_b)
+    return a, b
+
+
+def test_subtitulos_estimar_distingue_lo_que_falta_de_lo_que_ya_esta(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    a, b = _materiales_subtitulos(con_palabras_a=True)   # a ya transcrito, b no
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": [a["id"], b["id"]]})
+    j = r.get_json()
+    assert r.status_code == 200 and j["faltan"] == [b["id"]] and j["gratis"] is False
+    assert j["precio"] and j["usd"] > 0 and j["segundos"] == 4.0
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": [a["id"]]})
+    assert r2.get_json() == {"faltan": [], "segundos": 0, "usd": 0, "precio": "", "gratis": True}
+
+
+def test_subtitulos_estimar_exige_mismo_origen_y_edicion_existente(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": []},
+              headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert c.post("/cliente/acme/ediciones/999/subtitulos/estimar", json={"material_ids": []}).status_code == 404
+
+
+def test_transcribir_exige_mismo_origen(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": [a["id"]], "idioma": "es"},
+              headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert encolados == []
+
+
+def test_transcribir_404_por_edicion_o_material_ajeno(dashboard, encolados):
+    import materiales
+    ed, _c, _v = _edicion()
+    ajeno = materiales.registrar("otro", tipo="audio", origen="voz", url="https://r2/x.mp3", hash="hs-ajeno", bytes=1,
+                                 duracion_ms=1000)
+    c = _cliente_admin(dashboard)
+    assert c.post("/cliente/acme/ediciones/999/subtitulos/transcribir",
+                  json={"material_ids": [ajeno["id"]], "idioma": "es"}).status_code == 404
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+              json={"material_ids": [ajeno["id"]], "idioma": "es"})
+    assert r.status_code == 404
+    assert encolados == []
+
+
+def test_transcribir_400_por_muchos_ids_idioma_invalido_o_demasiado_audio(dashboard, encolados):
+    import materiales
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos()
+    c = _cliente_admin(dashboard)
+    sin_palabras = [materiales.registrar("acme", tipo="audio", origen="voz", url=f"https://r2/m{i}.mp3",
+                                         hash=f"hs-m{i}", bytes=1, duracion_ms=1000)["id"] for i in range(21)]
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+              json={"material_ids": sin_palabras, "idioma": "es"})
+    assert r.status_code == 400 and "20" in r.get_json()["error"]
+    # "fr" está en audios.IDIOMAS desde Audios Europa (2026-09-30): el idioma
+    # inválido para esta prueba es uno que de verdad no está en la lista.
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+               json={"material_ids": [a["id"]], "idioma": "xx"})
+    assert r2.status_code == 400
+    largo = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/largo.mp3", hash="hs-largo",
+                                 bytes=1, duracion_ms=11 * 60 * 1000)
+    r3 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+               json={"material_ids": [largo["id"]], "idioma": "es"})
+    assert r3.status_code == 400
+    assert encolados == []
+
+
+def test_transcribir_200_listo_sin_encolar_si_nada_falta(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos(con_palabras_a=True)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": [a["id"]], "idioma": "es"})
+    assert r.status_code == 200 and r.get_json() == {"listo": True}
+    assert encolados == []
+
+
+def test_transcribir_202_encola_solo_el_payload_de_lo_que_falta(dashboard, encolados):
+    from tareas import edicion as te
+    ed, _c, _v = _edicion()
+    a, b = _materiales_subtitulos(con_palabras_a=True)   # a transcrito, b no
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+              json={"material_ids": [a["id"], b["id"]], "idioma": "es"})
+    job_id = te.job_id_transcribir("acme", ed["id"])
+    assert r.status_code == 202 and r.get_json() == {"job_id": job_id}
+    args, kw = encolados[0]
+    assert args[0] == job_id and args[1] == "material_transcribir"
+    assert args[2] == {"cliente": "acme", "edicion_id": ed["id"], "material_ids": [b["id"]], "idioma": "es"}
+    assert kw["max_intentos"] == 1 and kw["cliente"] == "acme"
+
+
+def test_transcribir_409_si_ya_corre(dashboard, encolados, monkeypatch):
+    import trabajos
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos()
+    monkeypatch.setattr(trabajos, "en_curso", lambda jid: True)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": [a["id"]], "idioma": "es"})
+    assert r.status_code == 409
+    assert encolados == []
+
+
+# --- Voz con IA y grabación (editor capa 5a, Task 6) ---
+
+def _voz_lista(texto="Hola mundo", voz="Rachel", idioma="es", velocidad="normal"):
+    import audios
+    import materiales
+    h = audios.hash_voz(texto, voz, idioma, velocidad)
+    return materiales.registrar("acme", tipo="audio", origen=audios.ORIGEN_VOZ, url="https://r2/voz.mp3", hash=h,
+                                bytes=1, extra={"palabras": [{"t_ms": 0, "dur_ms": 1, "texto": "Hola"}]})
+
+
+def test_voz_estimar_dice_ya_existe_y_el_precio(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+              json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    j = r.get_json()
+    assert r.status_code == 200 and j["ya_existe"] is False
+    assert j["caracteres"] == len("Hola mundo") and j["usd"] > 0 and j["precio"]
+    _voz_lista()
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+               json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r2.get_json()["ya_existe"] is True
+
+
+def test_voz_estimar_exige_mismo_origen_y_edicion_existente(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar", json={"texto": "x"},
+              headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert c.post("/cliente/acme/ediciones/999/voz/estimar", json={"texto": "x"}).status_code == 404
+
+
+def test_voz_exige_mismo_origen(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz", json={"texto": "Hola mundo"},
+              headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert encolados == []
+
+
+def test_voz_400_por_texto_vacio_y_voz_inventada(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+              json={"texto": "", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r.status_code == 400 and r.get_json()["error"]
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+               json={"texto": "Hola", "voz": "Nadie", "idioma": "es", "velocidad": "normal"})
+    assert r2.status_code == 400 and r2.get_json()["error"]
+    assert encolados == []
+
+
+def test_voz_200_con_la_existente_no_encola(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    v = _voz_lista()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+              json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["material"]["id"] == v["id"] and j["material"]["tiene_palabras"] is True
+    assert encolados == []
+
+
+def test_voz_202_encola_con_clave_de_64_hex(dashboard, encolados):
+    import re as re_mod
+    from tareas import edicion as te
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+              json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r.status_code == 202
+    j = r.get_json()
+    assert re_mod.fullmatch(r"[0-9a-f]{64}", j["clave"])
+    job_id = te.job_id_voz("acme", ed["id"])
+    assert j["job_id"] == job_id
+    args, kw = encolados[0]
+    assert args[0] == job_id and args[1] == "editor_voz"
+    assert args[2] == {"cliente": "acme", "edicion_id": ed["id"], "texto": "Hola mundo", "voz": "Rachel",
+                       "idioma": "es", "velocidad": "normal"}
+    assert kw["max_intentos"] == 1 and kw["cliente"] == "acme"
+
+
+def test_voz_409_si_ya_corre(dashboard, encolados, monkeypatch):
+    import trabajos
+    ed, _c, _v = _edicion()
+    monkeypatch.setattr(trabajos, "en_curso", lambda jid: True)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz",
+              json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    assert r.status_code == 409
+    assert encolados == []
+
+
+def test_voz_material_404_por_clave_rara_o_inexistente(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    assert c.get("/cliente/acme/ediciones/voz/no-es-hex").status_code == 404
+    assert c.get("/cliente/acme/ediciones/voz/" + "0" * 64).status_code == 404
+
+
+def test_voz_material_200_con_palabras(dashboard, encolados):
+    import audios
+    v = _voz_lista()
+    h = audios.hash_voz("Hola mundo", "Rachel", "es", "normal")
+    c = _cliente_admin(dashboard)
+    r = c.get(f"/cliente/acme/ediciones/voz/{h}")
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["material"]["id"] == v["id"]
+    assert j["material"]["palabras"] == [{"t_ms": 0, "dur_ms": 1, "texto": "Hola"}]
+
+
+def test_grabacion_403_por_otro_origen(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/materiales/grabacion", data={}, headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+
+
+def test_grabacion_400_sin_archivo(dashboard, encolados):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/materiales/grabacion", data={})
+    assert r.status_code == 400 and r.get_json()["error"]
+
+
+def test_grabacion_200_y_400_segun_lo_que_diga_la_biblioteca(dashboard, encolados, monkeypatch):
+    from final_edition import biblioteca
+    c = _cliente_admin(dashboard)
+    vistos = []
+    monkeypatch.setattr(biblioteca, "guardar_grabacion",
+                        lambda cliente, archivo, hora=None: vistos.append(hora) or {"id": 1, "origen": "grabacion"})
+    r = c.post("/cliente/acme/ediciones/materiales/grabacion",
+              data={"archivo": (io.BytesIO(b"x"), "grab.webm"), "hora": "14:32"}, content_type="multipart/form-data")
+    assert r.status_code == 200 and r.get_json()["material"]["id"] == 1
+    assert vistos == ["14:32"]
+
+    def _invalida(cliente, archivo, hora=None):
+        raise biblioteca.SubidaInvalida("No pude leer esa grabación.")
+    monkeypatch.setattr(biblioteca, "guardar_grabacion", _invalida)
+    r2 = c.post("/cliente/acme/ediciones/materiales/grabacion",
+               data={"archivo": (io.BytesIO(b"x"), "grab.webm")}, content_type="multipart/form-data")
+    assert r2.status_code == 400 and r2.get_json()["error"] == "No pude leer esa grabación."
 
 
 @pytest.mark.slow
@@ -934,3 +1312,95 @@ def test_una_cancion_de_mi_musica_no_se_borra_desde_el_editor(dashboard, encolad
     assert r.status_code == 400 and "Mi música" in r.get_json()["error"]
     assert materiales.obtener("acme", cancion["id"]) and r2_borrados == []
     assert c.post(f"/cliente/acme/ediciones/materiales/{audio['id']}/borrar").status_code == 200
+
+
+# --- Revisión final de la capa 5a: precios y límites del servidor ---
+
+def test_transcribir_el_tope_de_20_cuenta_solo_lo_que_falta(dashboard, encolados):
+    # m8: el panel manda TODOS los archivos de la fuente; los ya transcritos
+    # no se pagan ni cuentan para el tope de 20.
+    import materiales
+    ed, _c, _v = _edicion()
+    hechos = [materiales.registrar("acme", tipo="audio", origen="voz", url=f"https://r2/h{i}.mp3", hash=f"hs-h{i}",
+                                   bytes=1, duracion_ms=1000, extra={"palabras": []})["id"] for i in range(25)]
+    faltan = [materiales.registrar("acme", tipo="audio", origen="voz", url=f"https://r2/f{i}.mp3", hash=f"hs-f{i}",
+                                   bytes=1, duracion_ms=1000)["id"] for i in range(3)]
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+              json={"material_ids": hechos + faltan + faltan[:1], "idioma": "es"})     # un id repetido no cuenta dos veces
+    assert r.status_code == 202
+    assert encolados[0][0][2]["material_ids"] == faltan
+
+
+def test_transcribir_y_estimar_rechazan_una_lista_desmedida(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    ids = list(range(1, 202))
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir", json={"material_ids": ids, "idioma": "es"})
+    assert r.status_code == 400 and r.get_json()["error"] == "Son demasiados archivos en un solo pedido."
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": ids})
+    assert r2.status_code == 400 and r2.get_json()["error"]
+    assert encolados == []
+
+
+def test_sin_duracion_el_precio_no_esta_disponible_y_no_se_transcribe(dashboard, encolados):
+    # m9: un archivo sin `duracion_ms` nunca da un precio gratis ni pasa el tope de 10 min.
+    import materiales
+    ed, _c, _v = _edicion()
+    a, _b = _materiales_subtitulos()
+    sin_dur = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2/sd.mp3", hash="hs-sd", bytes=1)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/estimar", json={"material_ids": [a["id"], sin_dur["id"]]})
+    j = r.get_json()
+    assert r.status_code == 200 and j["gratis"] is False and j["faltan"] == [a["id"], sin_dur["id"]]
+    assert j["usd"] is None and j["precio"] == "precio no disponible"
+    r2 = c.post(f"/cliente/acme/ediciones/{ed['id']}/subtitulos/transcribir",
+               json={"material_ids": [a["id"], sin_dur["id"]], "idioma": "es"})
+    assert r2.status_code == 400 and r2.get_json()["error"]
+    assert encolados == []
+
+
+def test_un_cuerpo_que_no_es_objeto_es_400_y_no_500(dashboard, encolados):
+    # m10
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    for ruta in ("voz/estimar", "subtitulos/estimar", "subtitulos/transcribir", "voz"):
+        for cuerpo in ([1, 2], "texto", 7):
+            r = c.post(f"/cliente/acme/ediciones/{ed['id']}/{ruta}", json=cuerpo)
+            assert r.status_code == 400 and r.get_json()["error"], (ruta, cuerpo)
+    assert encolados == []
+
+
+def test_las_voces_propias_no_entran_por_el_editor(dashboard, encolados, monkeypatch):
+    # m6: el editor solo ofrece la galería; una voz `vp:` (MiniMax) no se acepta aquí.
+    import voces_propias
+    monkeypatch.setattr(voces_propias, "resolver", lambda cliente, voz: {"id": 3, "voice_id": "x", "nombre": "Mía",
+                                                                         "estrenada": True})
+    ed, _c, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    pedido = {"texto": "Hola mundo", "voz": "vp:3", "idioma": "es", "velocidad": "normal"}
+    for ruta in ("voz/estimar", "voz"):
+        r = c.post(f"/cliente/acme/ediciones/{ed['id']}/{ruta}", json=pedido)
+        assert r.status_code == 400 and r.get_json()["error"] == "Esa voz no está disponible en el editor.", ruta
+    assert encolados == []
+
+
+def test_voz_estimar_cobra_solo_los_subtitulos_si_la_voz_ya_existe_sin_palabras(dashboard, encolados):
+    # m7: la voz ya está pagada; solo falta Whisper sobre ella.
+    import audios
+    import materiales
+    from providers import fal_audio
+    ed, _c, _v = _edicion()
+    texto = "Hola mundo, esta es una voz que ya existe"
+    materiales.registrar("acme", tipo="audio", origen=audios.ORIGEN_VOZ, url="https://r2/v.mp3",
+                         hash=audios.hash_voz(texto, "Rachel", "es", "normal"), bytes=1, duracion_ms=42000)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+              json={"texto": texto, "voz": "Rachel", "idioma": "es", "velocidad": "normal"})
+    j = r.get_json()
+    assert r.status_code == 200 and j["ya_existe"] is False
+    assert j["usd"] == fal_audio.costo_whisper(42000)
+    assert j["solo_subtitulos"] is True and j["precio"]
+    completa = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+                      json={"texto": texto + " y otra", "voz": "Rachel", "idioma": "es", "velocidad": "normal"}).get_json()
+    assert completa["usd"] > j["usd"] and completa["solo_subtitulos"] is False

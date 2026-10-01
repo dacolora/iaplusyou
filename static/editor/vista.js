@@ -22,6 +22,7 @@ import { MotorAudio } from "./motor_audio.js";
 import { evaluarRespuesta, INTERVALO_SONDEO_MS, listos, TOPE_SONDEO_MS } from "./pendientes.js";
 import { Reloj } from "./reloj.js";
 import { resolver } from "./resolver.js";
+import { aplicarFuentes, palabrasDe } from "./subtitulos_fuente.js";
 import { rasterizarTexto } from "./texto_canvas.js";
 import { listaY, t } from "./textos.js";
 import { capasEn, cuadroVecino, duracionMs } from "./tiempo.js";
@@ -61,7 +62,7 @@ const archivoDe = (m) => `${m?.url ?? ""}\n${m?.url_proxy ?? ""}`;
 // picos) nunca se pierde: una copia vieja del mismo material (la de la
 // biblioteca, pintada antes de que llegara) que no lo trae se queda con lo
 // que la vista ya tenía — si no, la vista volvía al video original pesado.
-const PREPARADO = ["url_proxy", "proxy_version", "tira_url", "picos"];
+const PREPARADO = ["url_proxy", "proxy_version", "tira_url", "picos", "palabras", "tiene_palabras"];
 
 export function fusionarMateriales(vigentes, mapa) {
   const materiales = { ...vigentes };
@@ -92,7 +93,7 @@ export function infoDe(materiales) {
   const out = {};
   for (const [k, m] of Object.entries(materiales ?? {})) {
     if (!m) continue;
-    out[k] = { duracion_ms: m.duracion_ms || null, tiene_audio: m.tiene_audio ?? null };
+    out[k] = { duracion_ms: m.duracion_ms || null, tiene_audio: m.tiene_audio ?? null, palabras: m.palabras ?? null };
   }
   return out;
 }
@@ -160,6 +161,11 @@ export class VistaPrevia {
     this.materialesVigentes = materiales;
     this.audio.materiales = materiales;
     this.videos.materiales = materiales;
+    // las palabras pueden llegar después (la transcripción tarda): recalcular
+    // los subtítulos derivados del destino vigente, sin volver a resolver
+    // (aplicarFuentes nunca toca `this.doc` — devuelve uno nuevo, así que la
+    // caché de lienzo.js por identidad se refresca sola).
+    if (this.doc) this.doc = aplicarFuentes(this.doc, palabrasDe(materiales));
     for (const mid of cambiados) this.porRenovar.add(mid);
     if (!this.ocupado()) this.renovarPendientes();
     this.pedirCuadro();
@@ -290,7 +296,10 @@ export class VistaPrevia {
     if (this.ocupado()) this.pausar();
     const [idioma, pais] = clave.split("_");
     try {
-      this.doc = resolver(this.documentoOriginal, idioma, pais);
+      // D1 (capa 5a): el resuelto ya aplicó por_destino e idioma (D10); las
+      // palabras de los subtítulos se derivan aparte, de las fuentes que
+      // elige el documento, nunca de tiempos absolutos guardados.
+      this.doc = aplicarFuentes(resolver(this.documentoOriginal, idioma, pais), palabrasDe(this.materialesVigentes));
       aviso("aviso-destino", "");
     } catch (e) {
       this.doc = null;

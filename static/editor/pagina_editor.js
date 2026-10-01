@@ -36,6 +36,17 @@
 //   editor.agregarMateriales(mapa)          suma materiales (forma de
 //                                           material_para) a la vista previa
 //                                           ANTES de operar con ellos
+//   editor.ir(tMs)                          lleva el cabezal a tMs (pausa si
+//                                           reproducía)
+//   editor.resuelto()                       el documento del destino que se ve,
+//                                           resuelto y con los subtítulos ya
+//                                           derivados (null antes de arrancar)
+//   editor.materiales()                     {id: material} de la vista previa
+//                                           (con `palabras` si se transcribió)
+//   editor.mostrarBiblioteca(panel)         abre esa pestaña de la biblioteca
+//                                           (en el celular sube su hoja); como
+//                                           todo cambio de pestaña, avisa
+//                                           "biblioteca"
 //   editor.enfocarTexto()                   pide el foco para escribir el texto
 //                                           elegido (la biblioteca, al agregar
 //                                           un texto): en el celular sube la
@@ -45,7 +56,9 @@
 //   editor.escuchar(fn) -> dejar()          fn(que) después de cada cambio:
 //                                           "documento" | "seleccion" |
 //                                           "materiales" | "destino" | "tiempo"
-//                                           | "foco-texto"
+//                                           | "foco-texto" | "biblioteca" (la
+//                                           biblioteca cambió de pestaña: quien
+//                                           no pinta oculto se pone al día)
 //
 // Reglas de los avisos (avisos_editor.js, probadas en Node):
 // - «seleccion» sale solo si la selección cambió de verdad, también cuando la
@@ -66,8 +79,11 @@ import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
 import { respuestaProducir } from "./producir.js";
 import { Propiedades } from "./propiedades.js";
+import { PalabrasPendientes } from "./subtitulos_modelo.js";
+import { SubtitulosPanel } from "./subtitulos_panel.js";
 import { listaY, ponerTextos, t } from "./textos.js";
 import { infoDe, VistaPrevia } from "./vista.js";
+import { VozPanel } from "./voz_panel.js";
 
 // Los textos en el idioma de quien mira (ruta editor.ver), antes de construir
 // nada: ningún módulo llama a t() al cargarse. Se ponen al leer `datos`, dentro
@@ -111,12 +127,33 @@ const linea = new LineaTiempo({
   ventanaPicosMs: datos.config?.ventana_picos_ms,
   alSeleccionar: (id) => seleccionar(id),
   alOperar: operar,
-  alIr: (ms) => {
-    vista.ir(ms);
-    linea.moverCabezal(vista.tiempo());
+  alIr: (ms) => ir(ms),
+  // capa 5a: la fila de solo lectura «Subtítulos» (las palabras del destino
+  // que se ve, ya derivadas); tocar un bloque abre la pestaña en esa línea
+  subtitulos: () => vista.resuelto?.subtitulos ?? null,
+  estilosSubtitulos: datos.config?.subtitulos?.estilos ?? null,
+  alSubtitulo: (ms) => {
+    ir(ms);
+    mostrarBiblioteca("subtitulos");
   },
 });
 const guardado = new Guardado({ url: datos.urls.guardar, versionN: datos.edicion.version_n, alCambiar: pintarGuardado });
+// Revisión final de la capa 5a: lo que entra a la edición desde la biblioteca
+// (una grabación transcrita, una voz con IA, una pieza de Crear) llega con
+// `tiene_palabras` pero sin `palabras`; el render las lee del servidor, así
+// que la vista previa las trae (gratis) en cuanto el material está en la
+// edición — en UN lugar, `refrescar`, por donde pasa todo cambio.
+const palabrasPendientes = new PalabrasPendientes({
+  pedir: async (ids) => {
+    const r = await fetch(`${datos.urls.materiales_por_id}?ids=${ids.join(",")}&palabras=1`,
+      { headers: { Accept: "application/json" } });
+    if (sesionTerminada(r)) return {};        // la sesión se cerró: no se insiste (los paneles ya lo dicen)
+    if (!r.ok) return null;                   // se reintenta en el próximo cambio
+    const j = await r.json().catch(() => null);
+    return j && typeof j.materiales === "object" && j.materiales ? j.materiales : null;
+  },
+  agregar: (mapa) => vista.agregarMateriales(mapa),
+});
 
 const TEXTO_GUARDADO = {
   guardado: () => t("guardado.ok"),
@@ -129,6 +166,11 @@ const TEXTO_GUARDADO = {
 // El último argumento de cada operación: {id: {duracion_ms, tiene_audio}}.
 function info() {
   return infoDe(vista.materiales);
+}
+
+function ir(ms) {
+  vista.ir(ms);
+  linea.moverCabezal(vista.tiempo());
 }
 
 function aviso(texto) {
@@ -191,6 +233,7 @@ function refrescar(que = "documento") {
   linea.dibujar(historial.actual, { seleccion, cabezalMs: vista.tiempo() });
   pintarHerramientas();
   pintarAvisosCarga();
+  if (que === "documento" || que === "materiales") palabrasPendientes.revisar(historial.actual, vista.materiales);
   avisos.cambio(que, seleccion);
 }
 
@@ -434,6 +477,9 @@ function marcarPestana(boton) {
   }
   $("ed-biblioteca").dataset.panelActivo = boton.dataset.panel;
   pintarAcciones();
+  // después de que la biblioteca muestre el panel (escucha el mismo clic, más
+  // tarde) y, en el celular, de que suba la hoja: así el panel ya se ve
+  queueMicrotask(() => avisos.notificar("biblioteca"));
 }
 
 function pintarAcciones() {
@@ -498,6 +544,20 @@ function montarDisposicion() {
 // pone propiedades.js). En el escritorio la columna ya se ve.
 const CELULAR = "(max-width: 760px)";
 
+// Capa 5a: abre una pestaña de la biblioteca desde otro lado (tocar un bloque
+// de la fila «Subtítulos»): en el celular sube primero su hoja; el clic en la
+// pestaña la marca y la muestra (montarDisposicion y la biblioteca lo
+// atienden) y marcarPestana avisa "biblioteca" (el panel que se abrió se pone
+// al día).
+function mostrarBiblioteca(panel) {
+  const boton = $("ed-pestanas-biblioteca").querySelector(`[data-panel="${panel}"]`);
+  if (!boton) return;
+  if (window.matchMedia?.(CELULAR).matches && hojaAbierta !== "ed-biblioteca") {
+    abrirHoja("ed-biblioteca", $(`ed-abrir-${panel}`));
+  }
+  boton.click();
+}
+
 function enfocarTexto() {
   const celular = window.matchMedia?.(CELULAR).matches;
   if (hojaAbierta === "ed-biblioteca" || (celular && hojaAbierta !== "ed-propiedades")) {
@@ -521,28 +581,52 @@ const editor = Object.freeze({
   info,
   enConflicto: () => guardado.estado === "conflicto",
   agregarMateriales: (mapa) => vista.agregarMateriales(mapa),
+  ir,
+  resuelto: () => vista.resuelto,
+  materiales: () => vista.materiales,
+  mostrarBiblioteca,
   enfocarTexto,
   escuchar: (fn) => avisos.escuchar(fn),
 });
 
+// Los paneles que se enganchan por `editor` (dentro de una función: lo de
+// nivel superior que ejecuta algo va después de declararlo todo).
+function montarPaneles() {
+  // la biblioteca (Medios · Audio · Texto · Subtítulos · Transiciones): carga
+  // lo del proyecto mientras la vista previa arranca
+  const nombresIdioma = datos.voz?.nombres_idioma ?? datos.subtitulos?.nombres_idioma ?? {};
+  const biblioteca = new Biblioteca({
+    contenedor: $("ed-panel-biblioteca"), pestanas: $("ed-pestanas-biblioteca"), urls: datos.urls, editor, linea,
+    nombresIdioma,
+  });
+  // capa 5a: la pestaña «Subtítulos» (si al abrir ya corría una transcripción
+  // de esta edición, retoma su barra)
+  new SubtitulosPanel({ contenedor: biblioteca.zona("subtitulos"), editor, datos });
+  // capa 5a (Task 8): la voz en off arriba de «Audio» — voz con IA y grabar
+  // con el micrófono (si al abrir ya se creaba una voz, retoma su barra)
+  new VozPanel({ contenedor: biblioteca.zona("audio"), editor, datos });
+  // las propiedades de lo elegido («Editar»: un formulario por clase de clip,
+  // o la mezcla de la edición si no hay nada elegido; «Suena en» nombra los
+  // idiomas como la galería de voces)
+  new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () => vista.materiales,
+                    nombresIdioma });
+  // tocar, mover y agrandar los textos y las imágenes sobre el video (necesita
+  // la vista previa: el documento que se dibuja y las medidas de los textos)
+  new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });
+}
+
 montarHerramientas();
 montarProducir();
 montarDisposicion();
-// la biblioteca (Medios · Audio · Texto · Transiciones): carga lo del proyecto
-// mientras la vista previa arranca
-new Biblioteca({ contenedor: $("ed-panel-biblioteca"), pestanas: $("ed-pestanas-biblioteca"), urls: datos.urls, editor, linea });
-// las propiedades de lo elegido («Editar»: un formulario por clase de clip, o
-// la mezcla de la edición si no hay nada elegido)
-new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () => vista.materiales });
-// tocar, mover y agrandar los textos y las imágenes sobre el video (necesita
-// la vista previa: el documento que se dibuja y las medidas de los textos)
-new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });
+montarPaneles();
 refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
 // lo arreglado al abrir también se guarda (ya con todo declarado y montado:
 // ver arreglarAlAbrir arriba; tests/test_editor_js.py vigila el orden)
 if (alAbrir.guardar) guardado.pedir(historial.actual);
 await vista.iniciar();
-refrescar(null);           // con el reloj listo: el cabezal donde está
+// con el reloj listo: el cabezal donde está, y ya hay destino elegido (la
+// pestaña Subtítulos y la fila de la línea lo necesitan resuelto)
+refrescar("destino");
 // otro destino: los textos variables de la línea cambian (vista.js ya escucha
 // este select desde iniciar(), así que cuando esto corre el destino ya cambió)
 $("destino").addEventListener("change", () => refrescar("destino"));

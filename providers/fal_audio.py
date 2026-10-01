@@ -170,16 +170,37 @@ def disenar_voz_minimax(prompt, preview_text, timeout=300):
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 
-def transcribir_palabras(audio_url, idioma, on_progreso=None):
+def costo_whisper(duracion_ms):
+    """Misma fórmula para el «≈» del botón y para el gasto registrado
+    (editor capa 5a, D6): por duración del AUDIO, no por la última palabra —
+    el silencio también se procesa. US$ 0,002/min, estimado (fal no publica
+    el precio de Whisper; ver fal_audio.py docstring del módulo)."""
+    return round(float(duracion_ms) / 60000.0 * COSTO_USD_POR_MINUTO_AUDIO, 4)
+
+
+TIMEOUT_WHISPER_S = 180
+
+
+def timeout_whisper(duracion_ms=None):
+    """Cuánto esperar a Whisper (cola de fal incluida): 180 s alcanzan para un
+    audio corto, no para 10 min (el tope del editor). Con la duración:
+    max(180, 120 + 1,5 × segundos); sin ella, 180 (lo de siempre)."""
+    if not duracion_ms:
+        return TIMEOUT_WHISPER_S
+    return max(TIMEOUT_WHISPER_S, int(math.ceil(120 + 1.5 * float(duracion_ms) / 1000.0)))
+
+
+def transcribir_palabras(audio_url, idioma, on_progreso=None, duracion_ms=None):
     """Transcribe `audio_url` con marcas de tiempo por palabra. Devuelve
-    {"texto": str, "palabras": [{"inicio", "fin", "texto"}], "costo_usd": float}."""
+    {"texto": str, "palabras": [{"inicio", "fin", "texto"}], "costo_usd": float}.
+    `duracion_ms` (si se conoce) alarga la espera (`timeout_whisper`)."""
     payload = {
         "audio_url": audio_url,
         "task": "transcribe",
         "language": idioma,
         "chunk_level": "word",
     }
-    data = fal_client.llamar(MODELO_STT, payload, timeout=180, on_progreso=on_progreso)
+    data = fal_client.llamar(MODELO_STT, payload, timeout=timeout_whisper(duracion_ms), on_progreso=on_progreso)
 
     chunks = data.get("chunks") or []
     palabras = []
@@ -190,7 +211,7 @@ def transcribir_palabras(audio_url, idioma, on_progreso=None):
         if fin is not None and fin > duracion_s:
             duracion_s = fin
 
-    costo = round((duracion_s / 60.0) * COSTO_USD_POR_MINUTO_AUDIO, 4)
+    costo = costo_whisper(duracion_s * 1000.0)
     return {"texto": data.get("text", ""), "palabras": palabras, "costo_usd": costo}
 
 

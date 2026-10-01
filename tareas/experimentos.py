@@ -282,15 +282,25 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
     if v["veredicto"] == "ganador":
         # Antes de las acciones: si escalar/derivar/orgánico lanzan, la línea ya quedó.
         _aprender(cliente, ex, pz, v, None)
-    # Una pieza de imagen no se deriva ni se rescata (derivaciones rechaza
-    # las sesiones de imagen: sería un evento `error`, o una propuesta que
-    # falla al aprobarla). Ganadora: solo escala. Perdedora: solo se pausa.
+    # Una pieza de imagen o un anuncio hablado no se deriva ni se rescata
+    # (derivaciones rechaza esas sesiones: sería un evento `error`, o una
+    # propuesta que falla al aprobarla; al hablado una re-edición le pondría
+    # otra voz encima). Ganadora: solo escala. Perdedora: solo se pausa.
+    # `sin_derivar` lo arma experimentos._piezas; `es_imagen` cubre las piezas
+    # que no lo traen.
     es_imagen = bool(pz.get("es_imagen"))
-    if es_imagen and accion in ("escalar_y_derivar", "rescatar"):
-        experimentos.registrar_evento(cliente, ex["id"], "imagen",
-                                      gettext("%(nombre)s (%(pais)s): Pieza de imagen: sin rescate/derivación "
-                                              "(solo videos).", nombre=pz["nombre"], pais=pz["pais"]),
-                                      {"accion": accion}, ep_id=ep_id)
+    sin_derivar = bool(pz.get("sin_derivar") or es_imagen)
+    if sin_derivar and accion in ("escalar_y_derivar", "rescatar"):
+        if es_imagen:
+            experimentos.registrar_evento(cliente, ex["id"], "imagen",
+                                          gettext("%(nombre)s (%(pais)s): Pieza de imagen: sin rescate/derivación "
+                                                  "(solo videos).", nombre=pz["nombre"], pais=pz["pais"]),
+                                          {"accion": accion}, ep_id=ep_id)
+        else:
+            experimentos.registrar_evento(cliente, ex["id"], "hablado",
+                                          gettext("%(nombre)s (%(pais)s): Anuncio hablado: sin rescate/derivación "
+                                                  "(pondría otra voz encima).", nombre=pz["nombre"], pais=pz["pais"]),
+                                          {"accion": accion}, ep_id=ep_id)
     if accion == "escalar_y_derivar":
         # "escalar" es una acción por país (sube el presupuesto del conjunto
         # en Meta), no por pieza: con varios ganadores del mismo país en una
@@ -303,7 +313,7 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
         else:
             resultado["escalados"].add(pz["pais"])
             _pedir(cliente, ex["id"], "escalar", {"pais": pz["pais"], "ep_id": ep_id}, v["motivo"], resultado)
-        if not es_imagen:
+        if not sin_derivar:
             _pedir(cliente, ex["id"], "derivar", {"ep_id": ep_id}, v["motivo"], resultado)
         resultado["ganadores"].append(pz)
         _pedir_publicacion_organica(cliente, ex, pz, v["motivo"], resultado)
@@ -316,7 +326,7 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
         # deja de gastar aunque Claude tarde o el worker muera en el medio) y
         # ANTES del rescate, al que informa.
         diagnostico, diagnosticado = _diag(), True
-        if not es_imagen:
+        if not sin_derivar:
             decision = doctrina_diagnostico.decision_rescate(diagnostico)
             payload = {"ep_id": ep_id}
             if decision["salto"]:

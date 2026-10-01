@@ -41,7 +41,22 @@ Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
     destino y se conserva igual en cualquiera; `bloque` guarda el rol del
     guion que lo originó; en video/superpuesto, `ken_burns` es `None`,
     `"in"` o `"out"`; `origen` y `guion`, si vienen, deben ser objeto o
-    null — `validar` los conserva tal cual, sin mirar su contenido."""
+    null — `validar` los conserva tal cual, sin mirar su contenido;
+  - un clip de audio puede llevar `idioma` (`None` o dos letras, p. ej.
+    `"es"`; capa 5a, D10) — en cualquier otro tipo de pista falla;
+    `resolver` QUITA un clip de audio cuyo `idioma` no es el del destino,
+    ANTES de mirar `por_destino`;
+  - `subtitulos` (capa 5a, spec §2.1): además de `estilo_id` (desconocido
+    → `"karaoke"`, sin fallar) y `posicion`, lleva `escala` (0.6–1.6),
+    `resaltado` (`None` o `#RRGGBB`, el color de la palabra que suena) y
+    `visibles` (bool; `False` apaga los subtítulos en TODO destino); y
+    dos cosas que `subtitulos_fuente.py` usa para DERIVAR las palabras en
+    vez de guardarlas con tiempos absolutos (D1-D4): `fuentes` (por
+    idioma, qué se subtitula — `voz`, `sonido` o un `material` concreto;
+    clave ausente = legado con las `palabras` guardadas, lista vacía =
+    sin subtítulos) y `correcciones` (por `material_id` y por índice de
+    palabra de ESE material; `""` la quita). `palabras` sigue siendo el
+    respaldo de legado (absoluto, por destino)."""
 import copy
 import re
 
@@ -53,6 +68,9 @@ _CLAVE_RE = re.compile(r"^[a-z]{2}(_[A-Z]{2})?$")     # "es" o "es_CO": textos, 
 _DESTINO_RE = re.compile(r"^[a-z]{2}_[A-Z]{2}$")     # precios: siempre con país
 _FUENTE_RE = re.compile(r"^[A-Za-z0-9_-]{1,60}$")    # nombre de TTF en static/fonts, sin rutas ni extensión
 _COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$")
+_COLOR_SIN_ALFA_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")     # subtitulos.resaltado: sin canal alfa (D7)
+_IDIOMA_CLIP_RE = re.compile(r"^[a-z]{2}$")           # idioma de un clip de audio (D10)
+_DIGITOS_RE = re.compile(r"^[0-9]+$")                 # subtitulos.correcciones: claves material_id / índice
 VARIABLE_PRECIO = "precio"                          # texto variable reservado: el precio del destino
 KEN_BURNS = (None, "in", "out")
 _CONTORNO_DEFECTO = {"color": "#000000", "grosor": 0.002}
@@ -66,6 +84,10 @@ TIPOS_PISTA = ("video", "superpuesto", "imagen", "texto", "subtitulos", "audio")
 MAX_PISTAS = 8
 ANCLAS = ("centro", "sup_izq", "sup_der", "inf_izq", "inf_der")
 ROLES_AUDIO = ("voz", "musica", "sonido", "efecto", "subida", "grabacion")
+ESTILOS_SUBTITULOS = ("karaoke", "caja", "palabra_grande", "minimal")   # D7; motor/subtitulos los toma de aquí
+FUENTES_SUBTITULO = ("voz", "sonido", "material")                      # D4: qué deriva subtitulos_fuente.py
+MAX_FUENTES_SUBTITULO = 8
+MAX_CORRECCION = 120
 TRANSICIONES = ("corte", "fundido", "deslizar", "zoom", "desenfoque")
 ANIMACIONES = ("ninguna", "aparecer", "deslizar", "rebote", "zoom", "maquina")
 _TRANSFORM_DEFECTO = {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"}
@@ -248,6 +270,12 @@ def _validar_clip(clip, pista, i):
     if tipo == "audio" and clip.get("rol_audio", "subida") not in ROLES_AUDIO:
         _fallar(f"{ruta}.rol_audio desconocido.")
     if tipo == "audio":
+        idioma_clip = clip.get("idioma")
+        if idioma_clip is not None and not _IDIOMA_CLIP_RE.match(idioma_clip):
+            _fallar(f"{ruta}.idioma debe ser dos letras minúsculas o null (vino {idioma_clip!r}).")
+    elif clip.get("idioma") is not None:
+        _fallar(f"{ruta}.idioma solo puede ir en clips de audio (vino en un clip de {tipo!r}).")
+    if tipo == "audio":
         pd = clip.get("por_destino")
         if pd is not None:
             _validar_claves(pd, f"{ruta}.por_destino")
@@ -352,15 +380,71 @@ def validar(doc):
             if cid not in ids_texto:
                 _fallar(f"pngs[{cid!r}] no es un clip de texto del documento.")
             _entero_positivo(mid, f"pngs[{cid!r}]")
+    # Como `marca`/`pistas` arriba: un "subtitulos" de otro tipo (p. ej. "x")
+    # no se valida explícitamente aquí — revienta más abajo (`.get`) y cae en
+    # el `except (TypeError, AttributeError)` genérico de la ruta de guardar
+    # (`rutas_editor.guardar`), igual que esos otros campos.
     sub = doc.get("subtitulos") or {}
-    sub.setdefault("estilo_id", "karaoke")
+    sub["estilo_id"] = sub.get("estilo_id") if sub.get("estilo_id") in ESTILOS_SUBTITULOS else "karaoke"
     sub["posicion"] = _fraccion(sub.get("posicion", 0.78), "subtitulos.posicion")
+    sub["escala"] = _numero(sub.get("escala", 1.0), "subtitulos.escala", 0.6, 1.6)
+    resaltado = sub.get("resaltado")
+    if resaltado is not None and (not isinstance(resaltado, str) or not _COLOR_SIN_ALFA_RE.match(resaltado)):
+        _fallar(f"subtitulos.resaltado debe ser #RRGGBB o null (vino {resaltado!r}).")
+    sub["resaltado"] = resaltado
+    visibles = sub.get("visibles", True)
+    if not isinstance(visibles, bool):
+        _fallar(f"subtitulos.visibles debe ser verdadero o falso (vino {visibles!r}).")
+    sub["visibles"] = visibles
+    # `fuentes` (D4): por idioma/destino, qué deriva subtitulos_fuente.py;
+    # clave ausente = legado (usa `palabras` guardadas); lista vacía = sin
+    # subtítulos en ese idioma. `material` exige `material_id`; las otras
+    # fuentes no lo llevan; sin fuentes repetidas, máximo MAX_FUENTES_SUBTITULO.
+    fuentes = sub.get("fuentes") or {}
+    _validar_claves(fuentes, "subtitulos.fuentes")
+    for clave, lista in fuentes.items():
+        if not isinstance(lista, list) or len(lista) > MAX_FUENTES_SUBTITULO:
+            _fallar(f"subtitulos.fuentes[{clave!r}] debe ser una lista de hasta {MAX_FUENTES_SUBTITULO} fuentes.")
+        vistas = set()
+        for i, f in enumerate(lista):
+            if not isinstance(f, dict) or f.get("tipo") not in FUENTES_SUBTITULO:
+                _fallar(f"subtitulos.fuentes[{clave!r}][{i}].tipo debe ser uno de {FUENTES_SUBTITULO}.")
+            if f["tipo"] == "material":
+                _entero_positivo(f.get("material_id"), f"subtitulos.fuentes[{clave!r}][{i}].material_id")
+                marca = ("material", f["material_id"])
+            else:
+                if f.get("material_id") is not None:
+                    _fallar(f"subtitulos.fuentes[{clave!r}][{i}]: material_id solo va con tipo 'material'.")
+                marca = (f["tipo"],)
+            if marca in vistas:
+                _fallar(f"subtitulos.fuentes[{clave!r}] tiene una fuente repetida.")
+            vistas.add(marca)
+    sub["fuentes"] = fuentes
+    # `correcciones` (D3): por `material_id` (nunca por clip, que cambia de
+    # id al cortar) y por índice de palabra en `material.extra.palabras`;
+    # `""` quita la palabra. Tope MAX_CORRECCION caracteres por palabra.
+    correcciones = sub.get("correcciones") or {}
+    if not isinstance(correcciones, dict):
+        _fallar("subtitulos.correcciones debe ser un objeto.")
+    for mid, mapa in correcciones.items():
+        if not isinstance(mid, str) or not _DIGITOS_RE.match(mid) or int(mid) <= 0:
+            _fallar(f"subtitulos.correcciones: la clave {mid!r} debe ser un id de material > 0.")
+        if not isinstance(mapa, dict):
+            _fallar(f"subtitulos.correcciones[{mid!r}] debe ser un objeto.")
+        for indice, texto in mapa.items():
+            if not isinstance(indice, str) or not _DIGITOS_RE.match(indice):
+                _fallar(f"subtitulos.correcciones[{mid!r}]: el índice {indice!r} debe ser ≥ 0.")
+            if not isinstance(texto, str) or len(texto) > MAX_CORRECCION:
+                _fallar(f"subtitulos.correcciones[{mid!r}][{indice!r}] debe ser texto de hasta {MAX_CORRECCION} caracteres.")
+    sub["correcciones"] = correcciones
     sub.setdefault("palabras", {})
     _validar_claves(sub["palabras"], "subtitulos.palabras")
     for clave, palabras in sub["palabras"].items():
         for k, p in enumerate(palabras):
             _entero_no_negativo(p.get("t_ms"), f"subtitulos.palabras.{clave}[{k}].t_ms")
             _entero_no_negativo(p.get("dur_ms"), f"subtitulos.palabras.{clave}[{k}].dur_ms")
+            if not isinstance(p.get("texto"), str):
+                _fallar(f"subtitulos.palabras.{clave}[{k}].texto debe ser texto (vino {p.get('texto')!r}).")
     doc["subtitulos"] = sub
     var = doc.get("variables") or {}
     var.setdefault("textos", {})
@@ -493,9 +577,14 @@ def resolver(doc, idioma, pais):
     `{}`) queda tal cual, para cualquier destino. Si lo tiene: gana la
     clave exacta `<idioma>_<pais>` si está en el mapa (aunque sea `None`);
     si no, `<idioma>` si está; si ninguna, el clip SE QUITA — nunca cae al
-    `material_id` crudo del clip (la voz de otro idioma/país). `materiales`
-    se recalcula con lo que ESTE destino usa (las voces de otros idiomas
-    no se descargan al renderizar)."""
+    `material_id` crudo del clip (la voz de otro idioma/país). Antes de
+    mirar `por_destino`, un clip de audio con `idioma` distinto del de
+    este destino también se quita (D10). `subtitulos.visibles is False`
+    deja `subtitulos.palabras = []` (apagados en TODO destino); si no,
+    es el respaldo de legado — `subtitulos_fuente.aplicar` lo reemplaza
+    por las palabras derivadas cuando el destino tiene `fuentes`.
+    `materiales` se recalcula con lo que ESTE destino usa (las voces de
+    otros idiomas no se descargan al renderizar)."""
     res = copy.deepcopy(doc)
     textos = (res.get("variables") or {}).get("textos") or {}
     precios = (res.get("variables") or {}).get("precios") or {}
@@ -527,6 +616,10 @@ def resolver(doc, idioma, pais):
         elif p["tipo"] == "audio":
             vivos = []
             for c in p["clips"]:
+                if c.get("idioma") is not None and c["idioma"] != idioma:
+                    # D10: un audio marcado para OTRO idioma no suena en este
+                    # destino — se mira ANTES de `por_destino`.
+                    continue
                 pd = c.get("por_destino") or {}
                 quitar = False
                 if pd:
@@ -550,8 +643,12 @@ def resolver(doc, idioma, pais):
                 if not quitar:
                     vivos.append(c)
             p["clips"] = vivos
-    palabras = valor_destino((res.get("subtitulos") or {}).get("palabras"), idioma, pais) or []
-    res["subtitulos"] = {**res.get("subtitulos", {}), "palabras": list(palabras)}
+    sub = res.get("subtitulos") or {}
+    if sub.get("visibles") is False:
+        palabras = []
+    else:
+        palabras = valor_destino(sub.get("palabras"), idioma, pais) or []
+    res["subtitulos"] = {**sub, "palabras": list(palabras)}
     res["destino"] = {"idioma": idioma, "pais": pais, "precio": precio}
     res["materiales"] = _materiales_de_clips(res)
     return res

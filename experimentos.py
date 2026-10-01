@@ -525,6 +525,9 @@ def _piezas(con, cliente, experimento_id):
             "veredicto_motivo": m[ep.c.veredicto_motivo], "veredicto_en": m[ep.c.veredicto_en],
             "nombre": nombre[:80], "url_video": m["url_video"], "url_miniatura": m["url_miniatura"], "tipo": tipo,
             "es_imagen": m["tipo"] == "imagen", "url_imagen": m["url_video"] if m["tipo"] == "imagen" else None,
+            # Ni una imagen ni un anuncio hablado se derivan ni se rescatan
+            # (spec 2026-10-01 §6): tareas/experimentos corta ahí.
+            "sin_derivar": m["tipo"] == "imagen" or c_extra.get("modo_crear") == "hablado",
             "idioma": m["p_idioma"], "legado_id": m["p_legado"], "duracion_s": m["duracion_s"],
             "metricas": _ultima_metrica(con, m[ep.c.id]), "creado_en": m[ep.c.creado_en],
             "extra": m[ep.c.extra] or {}, "escalon_rescate": m[ep.c.escalon_rescate] or 0,
@@ -669,6 +672,7 @@ def elegibles(cliente):
             sprint = extra_c.get("sprint") if isinstance(extra_c.get("sprint"), dict) else None
             origen = "final" if tipo == "final" else ("sprint" if sprint else "crear")
             out.append({"pieza_id": m[pz.c.id], "legado_id": m[pz.c.legado_id], "tipo": tipo, "es_imagen": es_imagen,
+                        "sin_derivar": es_imagen or extra_c.get("modo_crear") == "hablado",
                         "nombre": nombre[:80], "url_video": m[pz.c.url_video], "url_miniatura": m[pz.c.url_miniatura],
                         "idioma": m[pz.c.idioma], "pais": m[pz.c.pais] if tipo == "final" else None,
                         "duracion_s": m[pz.c.duracion_s], "formato": m[pz.c.aspect_ratio],

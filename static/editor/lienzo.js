@@ -1,24 +1,29 @@
 // Dibuja un cuadro de la vista previa en el orden del compilador: la pista
 // principal cubriendo el lienzo (con Ken Burns y la transición en curso), las
-// capas de imagen y texto, y los subtítulos como los pinta libass.
+// capas de imagen y texto, y los subtítulos como los pinta libass (D7: a
+// partir de los EVENTOS compartidos, nunca de un \k propio del navegador).
 // `faltaCuadro` pide otro intento en el próximo cuadro (el video todavía no
 // tiene ese fotograma); un material que ya falló (`recursos.fallo`) o que no
 // está entre los materiales de la página (se borró o es de otro proyecto: el
 // aviso «Faltan N archivo(s)» ya lo dice) no lo pide: se queda en negro sin
 // redibujar, también en pausa.
-import { colorAss, estadoKaraoke, ventanaEn, ventanas } from "./subtitulos.js";
+import { colorAss, estiloEfectivo, eventoEn, eventos } from "./subtitulos.js";
 import { rasterizarTexto } from "./texto_canvas.js";
 import { capasEn, posicionCapa, principalEn, tamanoCapaImagen, zoomKenBurns } from "./tiempo.js";
 
-const ventanasPorDoc = new WeakMap();
+// Los eventos de TODO el documento (no dependen de tMs): se recalculan solo
+// cuando cambia el documento resuelto. Como `aplicarFuentes` (subtitulos_fuente.js)
+// siempre entrega un objeto nuevo al recalcular las palabras, esta caché por
+// identidad se invalida sola cuando toca.
+const eventosPorDoc = new WeakMap();
 
-function ventanasDe(doc) {
-  let vs = ventanasPorDoc.get(doc);
-  if (!vs) {
-    vs = ventanas(doc.subtitulos?.palabras ?? []);
-    ventanasPorDoc.set(doc, vs);
+function eventosDe(doc, estilos) {
+  let evs = eventosPorDoc.get(doc);
+  if (!evs) {
+    evs = eventos(doc.subtitulos, estilos);
+    eventosPorDoc.set(doc, evs);
   }
-  return vs;
+  return evs;
 }
 
 export function dibujarCuadro(ctx, doc, tMs, recursos, cfg) {
@@ -85,20 +90,22 @@ function dibujarDentro(ctx, doc, tMs, recursos, cfg, W, H) {
 }
 
 // Una línea centrada en (W/2, posicion·H) como `\an5\pos`; tamaño de libass
-// pasado a em con `em_por_tam`; karaoke por \k (estadoKaraoke); borde 3 =
-// caja con el color de fondo, borde 1 = contorno + sombra.
+// (el `tam_px` del EVENTO, por línea, nunca por palabra) pasado a em con
+// `em_por_tam`; la palabra resaltada del evento en `resaltado` (ya un color
+// CSS, "#RRGGBB" — no pasa por colorAss, que es solo para ASS); borde 3 =
+// la caja que pinta libass (color `caja` del estilo, margen `caja_px` del
+// evento, en píxeles del video), borde 1 = contorno + sombra.
 function dibujarSubtitulos(ctx, doc, tMs, cfg, W, H) {
-  const v = ventanaEn(ventanasDe(doc), tMs);
-  if (!v) return;
-  const estilos = cfg.subtitulos.estilos;
-  const id = estilos[doc.subtitulos?.estilo_id] ? doc.subtitulos.estilo_id : "karaoke";
-  const e = estilos[id];
-  const tam = e.tam * cfg.subtitulos.em_por_tam;
-  ctx.font = `${tam}px "${e.negrita ? "Inter-Bold" : "Inter-SemiBold"}"`;
+  const estilos = cfg.subtitulos?.estilos;
+  if (!estilos) return;
+  const ev = eventoEn(eventosDe(doc, estilos), tMs);
+  if (!ev) return;
+  const ef = estiloEfectivo(doc.subtitulos, estilos);
+  const tam = ev.tam_px * cfg.subtitulos.em_por_tam;
+  ctx.font = `${tam}px "${ef.negrita ? "Inter-Bold" : "Inter-SemiBold"}"`;
   ctx.textBaseline = "alphabetic";
   ctx.lineJoin = "round";
-  const encendidas = id === "karaoke" || id === "palabra_grande" ? estadoKaraoke(v, tMs) : v.palabras.map(() => true);
-  const textos = v.palabras.map((p) => p.texto);
+  const textos = ev.palabras.map((p) => p.texto);
   const espacio = ctx.measureText(" ").width;
   const anchos = textos.map((s) => ctx.measureText(s).width);
   const total = anchos.reduce((a, b) => a + b, 0) + espacio * Math.max(0, textos.length - 1);
@@ -108,22 +115,22 @@ function dibujarSubtitulos(ctx, doc, tMs, cfg, W, H) {
   const yc = Math.round((doc.subtitulos?.posicion ?? 0.78) * H);
   const base = yc + (asc - desc) / 2;
   let x = W / 2 - total / 2;
-  if (e.borde === 3) {
-    const pad = Math.max(e.grosor, tam * 0.08);
-    ctx.fillStyle = colorAss(e.fondo);
+  if (ef.borde === 3 && ef.caja) {
+    const pad = ev.caja_px ?? ef.caja_px;
+    ctx.fillStyle = colorAss(ef.caja);
     ctx.fillRect(x - pad, yc - (asc + desc) / 2 - pad, total + 2 * pad, asc + desc + 2 * pad);
   }
   textos.forEach((s, i) => {
-    if (e.borde === 1 && e.sombra > 0) {
-      ctx.fillStyle = colorAss(e.fondo);
-      ctx.fillText(s, x + e.sombra, base + e.sombra);
+    if (ef.borde === 1 && ef.sombra > 0) {
+      ctx.fillStyle = colorAss(ef.fondo);
+      ctx.fillText(s, x + ef.sombra, base + ef.sombra);
     }
-    if (e.borde === 1 && e.grosor > 0) {
-      ctx.lineWidth = 2 * e.grosor;
-      ctx.strokeStyle = colorAss(e.contorno);
+    if (ef.borde === 1 && ef.grosor > 0) {
+      ctx.lineWidth = 2 * ef.grosor;
+      ctx.strokeStyle = colorAss(ef.contorno);
       ctx.strokeText(s, x, base);
     }
-    ctx.fillStyle = colorAss(encendidas[i] ? e.primario : e.secundario);
+    ctx.fillStyle = ev.palabras[i].resaltada && ef.resaltado ? ef.resaltado : colorAss(ef.primario);
     ctx.fillText(s, x, base);
     x += anchos[i] + espacio;
   });

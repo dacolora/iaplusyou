@@ -7,7 +7,10 @@ documento ni paga nada; encolar proxies es gratis (edicion_proxy)."""
 import copy
 import glob
 import os
+import re
 
+import audios
+import idiomas
 import materiales
 import trabajos
 from final_edition import estimar, mezcla
@@ -43,20 +46,33 @@ def config_navegador():
     }
 
 
-def material_para(m):
+_IDIOMA_RE = re.compile(r"^[a-z]{2}$")
+
+
+def material_para(m, con_palabras=False):
     """La forma que el navegador necesita de UN material: original + proxy +
     lo medido + lo derivado del proxy (picos, tira), más lo que la
     biblioteca (spec editor capa 4b, Task 1) necesita para mostrarlo sin
     volver a tocar la base: `tiene_audio`, `nombre` y `origen`; y
     `mi_musica` (capa 4c): una canción de Mi música — también con origen
     `subida` si se subió — que se borra solo en Crear, nunca desde el editor
-    (`mi_musica.py` le pone `extra.fuente`)."""
+    (`mi_musica.py` le pone `extra.fuente`). Capa 5a: `tiene_palabras` va
+    siempre (si ya se transcribió); `palabras` solo con `con_palabras=True`
+    (la biblioteca general no las manda: 200 materiales con sus palabras
+    pesarían cientos de KB — spec riesgo 6)."""
     extra = m.get("extra") or {}
-    return {"id": m["id"], "tipo": m["tipo"], "url": m["url"], "url_proxy": m.get("url_proxy"),
-            "duracion_ms": m.get("duracion_ms"), "ancho": m.get("ancho"), "alto": m.get("alto"),
-            "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
-            "tira_url": extra.get("tira_url"), "tiene_audio": extra.get("tiene_audio"),
-            "nombre": extra.get("nombre"), "origen": m["origen"], "mi_musica": es_de_mi_musica(m)}
+    d = {"id": m["id"], "tipo": m["tipo"], "url": m["url"], "url_proxy": m.get("url_proxy"),
+         "duracion_ms": m.get("duracion_ms"), "ancho": m.get("ancho"), "alto": m.get("alto"),
+         "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
+         "tira_url": extra.get("tira_url"), "tiene_audio": extra.get("tiene_audio"),
+         "nombre": extra.get("nombre"), "origen": m["origen"], "mi_musica": es_de_mi_musica(m),
+         "tiene_palabras": isinstance(extra.get("palabras"), list),
+         # capa 5a (Task 8, fix round 1): el idioma que habla una voz con IA o
+         # una locución, para decidir con qué idioma entra al agregarla
+         "idioma": extra["idioma"] if _IDIOMA_RE.fullmatch(str(extra.get("idioma") or "")) else None}
+    if con_palabras:
+        d["palabras"] = extra.get("palabras")
+    return d
 
 
 def es_de_mi_musica(m):
@@ -67,13 +83,15 @@ def es_de_mi_musica(m):
 
 def materiales_para(cliente, doc):
     """{material_id: material_para(m)} de los materiales del documento que
-    existen para ESTE cliente (un id ajeno no aparece)."""
+    existen para ESTE cliente (un id ajeno no aparece). Con sus palabras
+    (capa 5a): la página del editor las necesita para derivar los
+    subtítulos (`subtitulos_fuente.aplicar`) sin otra vuelta al servidor."""
     out = {}
     for mid in doc.get("materiales") or []:
         m = materiales.obtener(cliente, int(mid))
         if not m:
             continue
-        out[int(mid)] = material_para(m)
+        out[int(mid)] = material_para(m, con_palabras=True)
     return out
 
 
@@ -145,9 +163,23 @@ def documento_para_vista(doc, mats):
     return copia, None
 
 
+def _voces_traducidas():
+    """`audios.fichas_voces()` con `genero_nombre` y `tono` traducidos (son
+    msgids N_): la galería de voces del editor (D9/D12) no tiene plantilla
+    Jinja que los traduzca sola, a diferencia de Crear › Audios."""
+    salida = []
+    for ficha in audios.fichas_voces():
+        salida.append({**ficha, "genero_nombre": idiomas.traducir(ficha["genero_nombre"]),
+                       "tono": idiomas.traducir(ficha["tono"])})
+    return salida
+
+
 def datos_pagina(cliente, edicion, urls):
+    from final_edition import biblioteca   # import tardío: biblioteca importa este módulo
     mats = materiales_para(cliente, edicion["documento"])
     doc, aviso = documento_para_vista(edicion["documento"], mats)
+    job_subtitulos = tareas_edicion.job_id_transcribir(cliente, edicion["id"])
+    job_voz = tareas_edicion.job_id_voz(cliente, edicion["id"])
     return {
         "edicion": {"id": edicion["id"], "nombre": edicion["nombre"], "version_n": edicion["version_n"]},
         "documento": doc,
@@ -159,5 +191,17 @@ def datos_pagina(cliente, edicion, urls):
         "config": config_navegador(),
         "estimado_s": estimar.segundos(doc),
         "cf_id": edicion.get("cf_id"),
+        # Capa 5a: idiomas disponibles para transcribir y si ya hay una
+        # transcripción corriendo en esta edición (la barra sigue viva si la
+        # página se recarga mientras tanto).
+        "subtitulos": {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA},
+        # Task 6: voz con IA (la galería de Crear › Audios) y grabación con el micrófono.
+        "voces": _voces_traducidas(),
+        "voz": {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA,
+               "velocidades": {k: idiomas.traducir(v) for k, v in audios.NOMBRES_VELOCIDAD.items()},
+               "max_caracteres": audios.MAX_CARACTERES, "idioma_defecto": audios.idioma_defecto(cliente)},
+        "grabacion": {"max_ms": biblioteca.MAX_GRABACION_MS, "max_bytes": materiales.LIMITES["audio"][0]},
+        "trabajos_vivos": {"subtitulos": job_subtitulos if trabajos.en_curso(job_subtitulos) else None,
+                           "voz": job_voz if trabajos.en_curso(job_voz) else None},
         "urls": urls,
     }

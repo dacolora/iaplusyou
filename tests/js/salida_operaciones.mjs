@@ -2,7 +2,7 @@
 // resultan, para que tests/test_operaciones_editor.py los pase por
 // documento.validar y compilador.verificar_recortes (la referencia es Python).
 import * as op from "../../static/editor/operaciones.js";
-import { docBase, DURACIONES as D } from "./doc_base.mjs";
+import { docBase, docConVozYPalabras, DURACIONES as D, INFO_PALABRAS } from "./doc_base.mjs";
 import * as prop from "../../static/editor/propiedades_modelo.js";
 
 const casos = [];
@@ -174,4 +174,25 @@ for (const v of op.VELOCIDADES) {
     anotar(`al_final_${v}x_corte_e_inicio_${d}`, () => op.recortar(cortado, "v1_2", "inicio", d, D9), D9);
   }
 }
+
+// ---- Capa 5a (Tarea 4): subtítulos y voz ----
+const PALABRAS_A1 = [{ t_ms: 0, dur_ms: 400, texto: "Hola" }, { t_ms: 500, dur_ms: 300, texto: "mundo" }];
+const INFO_SUB = { ...D, 2: { duracion_ms: 3000, palabras: PALABRAS_A1 } };
+anotar("poner_fuentes_voz", () => op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "voz" }], D));
+anotar("poner_fuentes_vacias", () => op.ponerFuentesSubtitulos(docBase(), "en", [], D));
+// Fix round 1: el tope (documento.MAX_FUENTES_SUBTITULO) con justo 8 fuentes distintas.
+anotar("poner_fuentes_ocho", () => op.ponerFuentesSubtitulos(docBase(), "es", [
+  { tipo: "voz" }, { tipo: "sonido" },
+  { tipo: "material", material_id: 1 }, { tipo: "material", material_id: 2 }, { tipo: "material", material_id: 3 },
+  { tipo: "material", material_id: 4 }, { tipo: "material", material_id: 5 }, { tipo: "material", material_id: 6 },
+], D));
+anotar("corregir_palabra", () => op.corregirPalabra(docBase(), 2, 0, "  Creatv  ", INFO_SUB));
+anotar("quitar_linea", () => op.quitarLinea(docBase(), [{ material_id: 2, indice: 0 }, { material_id: 2, indice: 1 }], INFO_SUB));
+anotar("cambiar_subtitulos", () => op.cambiarSubtitulos(docBase(), {
+  estilo_id: "minimal", posicion: 0.3, escala: 1.2, resaltado: "#3ddc84", visibles: true,
+}, D));
+anotar("agregar_voz", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "voz", idioma: "es" }, INFO));
+anotar("cambiar_idioma_audio", () => op.cambiar(docBase(), "a1", { idioma: "en" }, INFO));
+casos.push({ nombre: "adoptar_voz", doc: op.adoptarVozComoFuente(docConVozYPalabras(), INFO_PALABRAS) });
+
 process.stdout.write(JSON.stringify(casos));

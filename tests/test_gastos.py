@@ -263,4 +263,49 @@ def test_estimar_proponer_ideas_por_numero_de_ideas():
     tres = gastos.estimar("proponer_ideas", n=3)
     assert tres["usd"] == round(gastos.IDEAS_BASE_USD + 3 * gastos.IDEAS_POR_IDEA_USD, 4)
     assert "aprox" in tres["texto"] and tres["detalle"] == "3 idea(s) con Claude"
+
+
+def test_estimar_transcripcion_usa_costo_whisper_del_editor():
+    """Editor capa 5a, Task 5: la misma fórmula del gasto real (D6)."""
+    import dashboard
+    import gastos
+    from providers import fal_audio
+    assert "transcripcion" in gastos.TIPOS
+    assert dashboard.NOMBRES_TIPO_GASTO["transcripcion"] == "Subtítulos (transcripción)"
+    e = gastos.estimar("transcripcion", segundos=90)
+    assert e["usd"] == fal_audio.costo_whisper(90000) == 0.003
+    assert e["texto"] == "US$ <0,01 aprox." and e["detalle"] == "90 s de audio con Whisper"
+    assert gastos.estimar("transcripcion")["usd"] == 0.0        # sin segundos: nada que cobrar
     assert gastos.estimar("proponer_ideas", n=0)["usd"] == gastos.estimar("proponer_ideas", n=1)["usd"]
+
+
+def test_estimar_voz_editor_suma_locucion_y_sus_subtitulos():
+    """Editor capa 5a, Task 6 (D9): voz con IA + Whisper sobre ella, un solo
+    botón; ceil(N / 12) segundos (12 caracteres por segundo)."""
+    import gastos
+    from providers import fal_audio
+    e = gastos.estimar("voz_editor", caracteres=120)
+    assert e["usd"] == round(0.012 + fal_audio.costo_whisper(10000), 4)
+    assert e["detalle"] == "120 caracteres con ElevenLabs y sus subtítulos"
+    # sin caracteres nunca queda en 0: al menos 1 (igual que _estimar_locucion)
+    assert gastos.estimar("voz_editor")["usd"] == round(fal_audio.COSTO_USD_POR_CARACTER + fal_audio.costo_whisper(1000), 4)
+
+
+def test_estimar_transcripcion_sin_duracion_no_tiene_precio():
+    """Revisión final de la capa 5a (m9): un archivo cuya duración no se
+    conoce nunca da un precio gratis: «precio no disponible»."""
+    import gastos
+    e = gastos.estimar("transcripcion", segundos=30, sin_duracion=True)
+    assert e["usd"] is None and e["texto"] == "precio no disponible"
+
+
+def test_estimar_voz_editor_solo_subtitulos_cobra_solo_whisper():
+    """Revisión final de la capa 5a (m7): la voz ya existe (mismo hash) pero
+    sin palabras — solo se paga Whisper sobre ella, con su duración real (o
+    la estimada por los caracteres si no se conoce)."""
+    import gastos
+    from providers import fal_audio
+    e = gastos.estimar("voz_editor", caracteres=120, solo_subtitulos=True, duracion_ms=42000)
+    assert e["usd"] == fal_audio.costo_whisper(42000)
+    sin_dur = gastos.estimar("voz_editor", caracteres=120, solo_subtitulos=True)
+    assert sin_dur["usd"] == fal_audio.costo_whisper(10000)
