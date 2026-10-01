@@ -5133,6 +5133,9 @@ msgstr "That brand doesn't exist in Atria."
 msgid "Esa opción todavía no está disponible: Creatv está terminando de activarla."
 msgstr "That option isn't available yet: Creatv is still finishing activating it."
 
+msgid "Esa palabra ya no está en los subtítulos."
+msgstr "That word is no longer in the subtitles."
+
 msgid "Esa persona no existe en este proyecto."
 msgstr "That persona doesn't exist in this project."
 
@@ -12879,6 +12882,9 @@ msgstr "One line: what they want or what hurts them"
 
 msgid "Una marca"
 msgstr "A brand"
+
+msgid "Una palabra corregida puede tener hasta 120 letras."
+msgstr "A corrected word can be up to 120 letters long."
 
 msgid "Una persona con el producto: un gancho que llama la atención, uso natural y cierre en un gesto o un detalle."
 msgstr "A person with the product: an attention-grabbing hook, natural use and a close on a gesture or a detail."

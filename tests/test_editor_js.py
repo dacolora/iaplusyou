@@ -96,6 +96,11 @@ def test_transiciones_js_iguales_a_python():
     assert _constante_js("operaciones.js", "TRANSICIONES") == list(documento.TRANSICIONES)
 
 
+def test_estilos_subtitulos_js_iguales_a_python():
+    # cambiarSubtitulos solo acepta un estilo_id que documento.validar conoce
+    assert _constante_js("operaciones.js", "ESTILOS_SUBTITULOS") == list(documento.ESTILOS_SUBTITULOS)
+
+
 def _generador():
     import importlib.util
     ruta = os.path.join(RAIZ, "tests", "fixtures", "generar_casos_editor.py")

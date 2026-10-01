@@ -18,7 +18,8 @@ from tests.test_editor_js import _constante_js
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EDITOR = os.path.join(RAIZ, "static", "editor")
-CLAVE = re.compile(r"[\"']((?:guardado|editar|producir|op|vista|fila|clip|resolver|precio|tr|tl|bib|prop)\.[a-z0-9_]+)[\"']")
+CLAVE = re.compile(
+    r"[\"']((?:guardado|editar|producir|op|vista|fila|clip|resolver|precio|tr|tl|bib|prop|sub|voz|grab)\.[a-z0-9_]+)[\"']")
 # Errores de programación: solo salen con un bug y nunca como texto propio de
 # la página (a la consola, o dentro de un aviso ya traducido). En
 # operaciones.js, además, los mensajes de CONTRATO de agregar*/ponerTransicion/
@@ -37,6 +38,7 @@ INTERNOS = {
         "no se agrega a mano", "Ese estilo de texto no existe", "Esa transición no existe", "Ese destino no es válido",
         "no es un número válido", "no se puede cambiar", "No se puede cambiar «", "Esa fuente no está disponible",
         "inválida (", "ken_burns solo se cambia", "Esa mezcla no existe",
+        "Esa fuente de subtítulos no existe", "Ese estilo de subtítulos no existe", "Ese idioma no es válido",
     ),
 }
 # Palabras españolas del editor que MARCAS_CODIGO no trae (etiquetas de la

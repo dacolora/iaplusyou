@@ -5,7 +5,7 @@ import {
   OperacionInvalida, recortar, VELOCIDADES,
 } from "../../static/editor/operaciones.js";
 import * as op from "../../static/editor/operaciones.js";
-import { docBase, DURACIONES } from "./doc_base.mjs";
+import { docBase, docConVozYPalabras, DURACIONES, INFO_PALABRAS } from "./doc_base.mjs";
 
 const principal = (d) => d.pistas[0].clips.map((c) => [c.id, c.inicio_ms, c.duracion_ms, c.recorte.desde_ms, c.recorte.hasta_ms]);
 const sonido = (d) => d.pistas.find((p) => p.id === "p_sonido").clips.map((c) => [c.inicio_ms, c.duracion_ms, c.recorte.desde_ms]);
@@ -289,7 +289,6 @@ test("agregarAudio toma la duración de la fuente entera y distingue el fundido 
     assert.equal(c.audio.fundido_salida_ms, rol === "musica" ? 1000 : 0);
     assert.equal(c.rol_audio, rol);
   }
-  invalida(() => op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "voz" }, INFO), /rol/i);
 });
 
 test("agregarTexto usa tamaños fraccionarios del lienzo y el fondo de marca en el preset precio", () => {
@@ -668,4 +667,147 @@ test("arreglo 4: un «deslizar» guardado sin duración (capa 4b) la recibe al n
   const ninguna = docBase();
   ninguna.pistas[1].clips[0].animacion = { entrada: "ninguna" };
   assert.deepEqual(clipDe(op.normalizar(ninguna, INFO), "t1").animacion, { entrada: "ninguna" });
+});
+
+// ---- Capa 5a (Tarea 4): subtítulos y voz ---------------------------------
+
+// Como `puro`, pero para operaciones que no seleccionan ningún clip (las de
+// subtítulos: `seleccion` siempre queda en `null`, D4/D3/D7).
+function puroSinSeleccion(fn, base = docBase()) {
+  const antes = structuredClone(base);
+  const r = fn(base);
+  assert.deepEqual(base, antes, "no debe tocar el documento de entrada");
+  assert.notEqual(r.doc, base);
+  assert.equal(r.seleccion, null, "la selección no cambia");
+  return r;
+}
+
+test("ponerFuentesSubtitulos valida el idioma y cada fuente, y normaliza sin repetidas", () => {
+  const vacio = puroSinSeleccion((d) => op.ponerFuentesSubtitulos(d, "en", [], DURACIONES));
+  assert.deepEqual(vacio.doc.subtitulos.fuentes, { en: [] });
+  const conVoz = op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "voz" }], DURACIONES).doc;
+  assert.deepEqual(conVoz.subtitulos.fuentes, { es: [{ tipo: "voz" }] });
+  const conMaterial = op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "material", material_id: "2" }], DURACIONES).doc;
+  assert.deepEqual(conMaterial.subtitulos.fuentes, { es: [{ tipo: "material", material_id: 2 }] });
+  // dos veces la misma fuente: queda una sola (documento.validar rechaza las repetidas)
+  const repetida = op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "voz" }, { tipo: "voz" }], DURACIONES).doc;
+  assert.deepEqual(repetida.subtitulos.fuentes.es, [{ tipo: "voz" }]);
+  // dos destinos no se pisan
+  const dos = op.ponerFuentesSubtitulos(conVoz, "en", [{ tipo: "sonido" }], DURACIONES).doc;
+  assert.deepEqual(dos.subtitulos.fuentes, { es: [{ tipo: "voz" }], en: [{ tipo: "sonido" }] });
+  invalida(() => op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "material" }], DURACIONES), /fuente de subtítulos/);
+  invalida(() => op.ponerFuentesSubtitulos(docBase(), "esp", [{ tipo: "voz" }], DURACIONES), /idioma/);
+  invalida(() => op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "otra" }], DURACIONES), /fuente de subtítulos/);
+});
+
+const PALABRAS_A1 = [
+  { t_ms: 0, dur_ms: 400, texto: "Hola" },
+  { t_ms: 500, dur_ms: 300, texto: "mundo" },
+  { t_ms: 900, dur_ms: 200, texto: "bien" },
+];
+const INFO_SUB = { ...DURACIONES, 2: { duracion_ms: 3000, palabras: PALABRAS_A1 } };
+
+test("corregirPalabra recorta espacios, borra la corrección al volver al original, y «» quita la palabra", () => {
+  const r = puroSinSeleccion((d) => op.corregirPalabra(d, 2, 0, "  Creatv  ", INFO_SUB));
+  assert.deepEqual(r.doc.subtitulos.correcciones, { 2: { 0: "Creatv" } });
+  const devuelta = op.corregirPalabra(r.doc, 2, 0, "Hola", INFO_SUB).doc;
+  assert.deepEqual(devuelta.subtitulos.correcciones, {});
+  const devueltaNull = op.corregirPalabra(r.doc, 2, 0, null, INFO_SUB).doc;
+  assert.deepEqual(devueltaNull.subtitulos.correcciones, {});
+  const quitada = op.corregirPalabra(docBase(), 2, 1, "", INFO_SUB).doc;
+  assert.deepEqual(quitada.subtitulos.correcciones, { 2: { 1: "" } });
+  // dos correcciones en el mismo material conviven
+  const dos = op.corregirPalabra(quitada, 2, 2, "ok", INFO_SUB).doc;
+  assert.deepEqual(dos.subtitulos.correcciones, { 2: { 1: "", 2: "ok" } });
+  invalida(() => op.corregirPalabra(docBase(), 2, 99, "x", INFO_SUB), /ya no está/);
+  invalida(() => op.corregirPalabra(docBase(), 2, 0, "x".repeat(121), INFO_SUB), /120/);
+});
+
+test("quitarLinea quita cada palabra de la línea de una", () => {
+  const r = puroSinSeleccion((d) => op.quitarLinea(d, [
+    { material_id: 2, indice: 0 }, { material_id: 2, indice: 1 }, { material_id: 2, indice: 2 },
+  ], INFO_SUB));
+  assert.deepEqual(r.doc.subtitulos.correcciones, { 2: { 0: "", 1: "", 2: "" } });
+});
+
+test("cambiarSubtitulos acota posición/escala, normaliza el color y rechaza una clave fuera de la lista blanca", () => {
+  const r = puroSinSeleccion((d) => op.cambiarSubtitulos(d, {
+    estilo_id: "minimal", posicion: 0.99, escala: 3, resaltado: "#3ddc84", visibles: false,
+  }, DURACIONES));
+  assert.deepEqual(r.doc.subtitulos, {
+    estilo_id: "minimal", posicion: 0.95, escala: 1.6, resaltado: "#3DDC84", visibles: false, palabras: {},
+  });
+  const sinResaltado = op.cambiarSubtitulos(docBase(), { resaltado: null }, DURACIONES).doc;
+  assert.equal(sinResaltado.subtitulos.resaltado, null);
+  invalida(() => op.cambiarSubtitulos(docBase(), { fuente: "x" }, DURACIONES), /No se puede cambiar/);
+  invalida(() => op.cambiarSubtitulos(docBase(), { estilo_id: "x" }, DURACIONES), /estilo de subtítulos/);
+});
+
+test("agregarAudio de voz comparte pista con la voz (p_voz), sin fundido de salida, y guarda el idioma", () => {
+  const r = puro((d) => op.agregarAudio(d, { id: 2 }, 4000, { rol: "voz", idioma: "es" }, INFO));
+  const c = clipDe(r.doc, r.seleccion);
+  assert.equal(c.rol_audio, "voz");
+  assert.equal(c.idioma, "es");
+  assert.equal(c.audio.fundido_salida_ms, 0);
+  const pista = r.doc.pistas.find((p) => p.clips.includes(c));
+  assert.equal(pista.id, "p_voz");
+  assert.equal(pista.clips.length, 2, "comparte la pista con la voz que ya había (a1)");
+  // la música sigue sin caer en la pista de la voz
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO);
+  assert.notEqual(musica.doc.pistas.find((p) => p.clips.some((cl) => cl.id === musica.seleccion)).id, "p_voz");
+  invalida(() => op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "voz", idioma: "esp" }, INFO), /idioma/);
+});
+
+test("agregarAudio de voz se corta si el video no tiene tanto tiempo libre (vozCortada)", () => {
+  const video7s = op.recortar(docBase(), "v1", "fin", -1000, DURACIONES).doc;   // principal: 4000 + 3000 = 7000
+  const infoVoz = { ...INFO, 8: { duracion_ms: 9000 } };
+  const r = op.agregarAudio(video7s, { id: 8 }, 1000, { rol: "voz" }, infoVoz);
+  const c = clipDe(r.doc, r.seleccion);
+  assert.equal(c.duracion_ms, 6000);
+  assert.equal(op.vozCortada(video7s, r.doc, r.seleccion, infoVoz), 6000);
+  // una voz que entra entera no se reporta como cortada
+  const entera = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "voz" }, INFO);
+  assert.equal(op.vozCortada(docBase(), entera.doc, entera.seleccion, INFO), null);
+  // un clip que ya existía antes de este `antes` no se reporta (no es "la voz que se acaba de agregar")
+  assert.equal(op.vozCortada(r.doc, r.doc, r.seleccion, infoVoz), null);
+});
+
+test("cambiar(idioma) solo se cambia en audio y valida el formato", () => {
+  const r = puro((d) => op.cambiar(d, "a1", { idioma: "en" }, INFO));
+  assert.equal(clipDe(r.doc, "a1").idioma, "en");
+  const sinIdioma = op.cambiar(r.doc, "a1", { idioma: null }, INFO).doc;
+  assert.equal(clipDe(sinIdioma, "a1").idioma, undefined);
+  invalida(() => op.cambiar(docBase(), "t1", { idioma: "en" }, INFO), /idioma no es válido/);
+  invalida(() => op.cambiar(docBase(), "a1", { idioma: "english" }, INFO), /idioma no es válido/);
+});
+
+test("adoptarVozComoFuente deja los mismos subtítulos, ahora derivados de la voz (D14)", () => {
+  const doc = docConVozYPalabras();
+  const adoptado = op.adoptarVozComoFuente(doc, INFO_PALABRAS);
+  assert.notEqual(adoptado, doc, "devuelve un documento nuevo cuando sí adopta");
+  assert.deepEqual(adoptado.subtitulos.fuentes, { es: [{ tipo: "voz" }] });
+  assert.deepEqual(adoptado.subtitulos.palabras, doc.subtitulos.palabras, "las palabras de legado no se tocan: las deriva subtitulos_fuente.aplicar");
+  assert.equal(doc.subtitulos.fuentes, undefined, "el documento de entrada no se tocó");
+});
+
+test("adoptarVozComoFuente no hace nada si ya hay fuentes, si no hay voz, o si falta transcribir una voz por destino", () => {
+  const conFuentes = docConVozYPalabras();
+  conFuentes.subtitulos.fuentes = { en: [] };
+  assert.equal(op.adoptarVozComoFuente(conFuentes, INFO_PALABRAS), conFuentes);
+
+  const sinPalabrasGuardadas = docConVozYPalabras();
+  sinPalabrasGuardadas.subtitulos.palabras = {};
+  assert.equal(op.adoptarVozComoFuente(sinPalabrasGuardadas, INFO_PALABRAS), sinPalabrasGuardadas);
+
+  const sinVoz = docConVozYPalabras();
+  sinVoz.pistas = sinVoz.pistas.filter((p) => p.id !== "p_voz");
+  assert.equal(op.adoptarVozComoFuente(sinVoz, INFO_PALABRAS), sinVoz);
+
+  const conPorDestino = docConVozYPalabras();
+  conPorDestino.pistas[2].clips[0].por_destino = { en_US: { material_id: 5, duracion_ms: 2000 } };
+  assert.equal(op.adoptarVozComoFuente(conPorDestino, INFO_PALABRAS), conPorDestino);   // material 5 no trae palabras
+
+  // con TODAS las voces (incluida la de por_destino) transcritas, sí adopta
+  const infoCompleta = { ...INFO_PALABRAS, 5: { duracion_ms: 2000, palabras: [] } };
+  assert.notEqual(op.adoptarVozComoFuente(conPorDestino, infoCompleta), conPorDestino);
 });

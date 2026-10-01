@@ -68,6 +68,8 @@ export const ES = {
   "op.audio_solo_audio": "El audio solo se cambia en clips de audio.",
   "op.sonido_no_cabe": "Esta edición ya tiene demasiadas pistas: no cabe el sonido del video.",
   "op.sin_sonido_escena": "Ese clip no tiene sonido de la escena todavía.",
+  "op.palabra_no_existe": "Esa palabra ya no está en los subtítulos.",
+  "op.palabra_larga": "Una palabra corregida puede tener hasta 120 letras.",
   "vista.nombre_imagen": "la imagen",
   "vista.nombre_video": "el video",
   "vista.nombre_archivo": "el archivo",

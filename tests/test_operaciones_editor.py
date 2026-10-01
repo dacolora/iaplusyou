@@ -9,7 +9,7 @@ import subprocess
 
 import pytest
 
-from final_edition import documento, mezcla
+from final_edition import documento, mezcla, subtitulos_fuente
 from final_edition.motor import compilador
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -60,3 +60,24 @@ def test_las_operaciones_del_navegador_dejan_documentos_validos():
         # la mezcla que deja el panel de propiedades es una que el render conoce
         mz = doc.get("mezcla") or {}
         mezcla.volumenes_para(mz.get("preset"), mz.get("volumenes"))
+
+
+@pytest.mark.skipif(not NODE, reason="sin Node no corren las pruebas de JS (el VPS no lo tiene)")
+def test_adoptar_voz_al_resolver_da_las_mismas_palabras_que_guardaba():
+    """D14: el documento `adoptar_voz` (docConVozYPalabras adoptado por
+    operaciones.adoptarVozComoFuente) no tocó `subtitulos.palabras` — ese
+    respaldo de legado sigue como estaba, para `es_CO` —; lo que cambia es
+    que ahora hay una fuente «voz» para "es". Al resolver ese destino y
+    derivar con subtitulos_fuente.aplicar (las mismas palabras que trae el
+    material, en Python con claves enteras) el resultado es ESE MISMO
+    respaldo: adoptar no cambia lo que se ve."""
+    r = subprocess.run([NODE, "tests/js/salida_operaciones.mjs"], cwd=RAIZ, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr[-3000:]
+    casos = {c["nombre"]: c["doc"] for c in json.loads(r.stdout)}
+    crudo = casos["adoptar_voz"]
+    esperado = crudo["subtitulos"]["palabras"]["es_CO"]
+    doc = documento.validar(crudo)
+    assert doc["subtitulos"]["fuentes"] == {"es": [{"tipo": "voz"}]}
+    resuelto = documento.resolver(doc, "es", "CO")
+    final = subtitulos_fuente.aplicar(resuelto, {2: esperado})
+    assert final["subtitulos"]["palabras"] == esperado

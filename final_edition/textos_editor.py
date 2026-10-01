@@ -73,6 +73,8 @@ TEXTOS = {
     "op.audio_solo_audio": N_("El audio solo se cambia en clips de audio."),
     "op.sonido_no_cabe": N_("Esta edición ya tiene demasiadas pistas: no cabe el sonido del video."),
     "op.sin_sonido_escena": N_("Ese clip no tiene sonido de la escena todavía."),
+    "op.palabra_no_existe": N_("Esa palabra ya no está en los subtítulos."),
+    "op.palabra_larga": N_("Una palabra corregida puede tener hasta 120 letras."),
     # vista.js
     "vista.nombre_imagen": N_("la imagen"),
     "vista.nombre_video": N_("el video"),

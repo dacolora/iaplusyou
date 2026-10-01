@@ -41,6 +41,11 @@ export const DURACION_ANIMACION_MS = 400;
 const MAX_PISTAS = 8;   // documento.MAX_PISTAS
 const ESCALA_MIN = 0.05;  // transform.escala: lo que acepta cambiar
 const ESCALA_MAX = 5;
+const _IDIOMA_RE = /^[a-z]{2}$/;   // documento._IDIOMA_CLIP_RE (D10): solo idioma, nunca país
+const MAX_CORRECCION = 120;   // documento.MAX_CORRECCION (D3)
+// Lista blanca de `cambiarSubtitulos` (D7): tiene que ser la misma de
+// documento.ESTILOS_SUBTITULOS (tests/test_editor_js.py los compara).
+export const ESTILOS_SUBTITULOS = ["karaoke", "caja", "palabra_grande", "minimal"];
 
 export class OperacionInvalida extends Error {
   constructor(mensaje) {
@@ -625,24 +630,48 @@ export function agregarImagen(doc, material, tMs, { llenar = false, duracionMs =
 
 // Clip de audio del material entero (hasta el fin del video: `lugarCapa`)
 // en una pista audio libre (nunca p_sonido, que es solo para el espejo
-// automático de la escena). `rol`
-// musica o efecto — una voz se agrega con su propio flujo (director/guion),
-// no aquí. La música entra con un fundido de salida de 1 s; un efecto no
-// trae fundidos.
-export function agregarAudio(doc, material, tMs, { rol = "musica" } = {}, info = {}) {
+// automático de la escena). `rol` musica, efecto o voz (capa 5a, D8/D9: voz
+// con IA y grabación entran así, en el cabezal; a diferencia de la voz del
+// guion, sin `por_destino`, así que sí se puede recortar). La música entra
+// con un fundido de salida de 1 s; un efecto o una voz no traen fundidos
+// (`AUDIO` ya nace en 0). `idioma` (D10, `^[a-z]{2}$` o `null`) se guarda en
+// el clip si viene — «suena en: solo en <idioma> · todos los idiomas».
+export function agregarAudio(doc, material, tMs, { rol = "musica", idioma = null } = {}, info = {}) {
   const res = structuredClone(doc);
-  if (rol !== "musica" && rol !== "efecto") throw new OperacionInvalida(`Ese rol de audio no se agrega a mano (${rol}).`);
+  if (!["musica", "efecto", "voz"].includes(rol)) {
+    throw new OperacionInvalida(`Ese rol de audio no se agrega a mano (${rol}).`);
+  }
+  if (idioma !== null && idioma !== undefined && !_IDIOMA_RE.test(idioma)) {
+    throw new OperacionInvalida(`Ese idioma no es válido (${idioma}).`);
+  }
   const entero = duracionDe(info, material.id);
   if (entero === undefined || entero === null) throw new OperacionInvalida(t("op.audio_preparando"));
   const { inicio, dur } = lugarCapa(res, tMs, entero);
-  const pista = pistaLibre(res, "audio", BASE_PISTA.audio, inicio, dur, [ID_SONIDO], mismoRolQue(rol));
+  const base = rol === "voz" ? "p_voz" : BASE_PISTA.audio;
+  const pista = pistaLibre(res, "audio", base, inicio, dur, [ID_SONIDO], mismoRolQue(rol));
   const clip = {
-    id: idNuevo(res, "audio"), inicio_ms: inicio, duracion_ms: dur, material_id: material.id, rol_audio: rol,
-    recorte: { desde_ms: 0, hasta_ms: dur }, velocidad: 1,
+    id: idNuevo(res, rol === "voz" ? "voz" : "audio"), inicio_ms: inicio, duracion_ms: dur, material_id: material.id,
+    rol_audio: rol, recorte: { desde_ms: 0, hasta_ms: dur }, velocidad: 1,
     audio: { ...AUDIO, fundido_salida_ms: rol === "musica" ? 1000 : 0 },
+    ...(idioma ? { idioma } : {}),
   };
   pista.clips.push(clip);
   return terminar(res, clip.id, info);
+}
+
+// D9: la voz agregada (agregarAudio con rol "voz") quedó más corta que su
+// material completo — el video no tenía tanto tiempo libre desde el
+// cabezal — así que se cortó: cuánto dura ahora, o `null` si entró entera.
+// `antes` es el documento ANTES de agregarla (si `clipId` ya estaba ahí, no
+// es "la voz que se acaba de agregar": nada que reportar).
+export function vozCortada(antes, res, clipId, info = {}) {
+  const yaEstaba = (antes?.pistas ?? []).some((p) => (p.clips ?? []).some((c) => c.id === clipId));
+  if (yaEstaba) return null;
+  const clip = (res?.pistas ?? []).flatMap((p) => p.clips ?? []).find((c) => c.id === clipId);
+  if (!clip) return null;
+  const entero = duracionDe(info, clip.material_id);
+  if (entero === undefined || entero === null) return null;
+  return clip.duracion_ms < entero ? clip.duracion_ms : null;
 }
 
 // Medidas de estilo en 1080x1920 (borrador.py), en fracción de la altura del
@@ -785,7 +814,7 @@ function subCambio(actual, valor, campos, nombre, automaticos = []) {
 const CAMPOS_CONTORNO = { color: null, grosor: [0, 0.1] };
 const CAMPOS_SOMBRA = { color: null, dx: [-0.1, 0.1], dy: [-0.1, 0.1] };
 const CAMPOS_FONDO = { color: null, opacidad: [0, 1], radio: [0, 1], relleno_x: [0, 0.5], relleno_y: [0, 0.5], ancho: [0, 1] };
-const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion"];
+const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion", "idioma"];
 
 // Cambia un clip existente por una lista blanca de campos (cualquier otra
 // clave, en cualquier nivel, se rechaza): estilo.{fuente, tamano, color,
@@ -894,6 +923,15 @@ export function cambiar(doc, clipId, cambios, info = {}) {
         : { ...(clip.animacion || {}), entrada: an.entrada, duracion_ms: previa > 0 ? previa : DURACION_ANIMACION_MS };
     }
   }
+  if (cambios.idioma !== undefined) {
+    // D10: «suena en» — solo en audio, y solo `^[a-z]{2}$` o `null` (todos
+    // los idiomas). Cualquier otro caso es de contrato (la página nunca
+    // ofrece este control fuera de un clip de audio): un solo mensaje.
+    const valor = cambios.idioma;
+    const formatoValido = valor === null || (typeof valor === "string" && _IDIOMA_RE.test(valor));
+    if (pista.tipo !== "audio" || !formatoValido) throw new OperacionInvalida(`Ese idioma no es válido (${valor}).`);
+    if (valor === null) delete clip.idioma; else clip.idioma = valor;
+  }
   if (tocaEstilo && pista.tipo === "texto" && res.pngs) delete res.pngs[clipId];
   return terminar(res, clip.id, info);
 }
@@ -933,4 +971,185 @@ export function cambiarMezcla(doc, preset, info = {}) {
   const res = structuredClone(doc);
   res.mezcla = { preset, volumenes: null };
   return terminar(res, null, info);
+}
+
+// ---- Subtítulos y voz (capa 5a) ------------------------------------------
+
+const FUENTES_SUBTITULO = ["voz", "sonido", "material"];   // documento.FUENTES_SUBTITULO (D4)
+const CAMBIOS_SUBTITULOS = ["estilo_id", "posicion", "escala", "resaltado", "visibles"];
+
+function colapsarEspacios(s) {
+  return String(s ?? "").trim().replace(/\s+/g, " ");
+}
+
+function colorSinAlfa(v, nombre) {
+  if (typeof v !== "string" || !/^#[0-9A-Fa-f]{6}$/.test(v)) throw new OperacionInvalida(`${nombre} debe ser un color #RRGGBB.`);
+  return v.toUpperCase();
+}
+
+// D4: qué subtitular en ESE idioma — SIEMPRE `<idioma>`, sin país (el
+// editor edita el destino que se está viendo, pero los subtítulos dependen
+// del idioma, no del país). `[]` = «sin subtítulos en este idioma» (gana
+// sobre las `palabras` de legado). Cada fuente se limpia (`material_id` a
+// entero) y la lista se normaliza sin repetidas — nunca falla por una
+// repetida, porque `documento.validar` sí fallaría con dos iguales — para
+// que el documento que resulta siempre pase ese contrato. Una fuente que no
+// es de la lista blanca (D4), o un `material` sin `material_id` entero > 0,
+// sí es un error: la página nunca ofrece otra cosa.
+export function ponerFuentesSubtitulos(doc, idioma, fuentes, info = {}) {
+  const res = structuredClone(doc);
+  if (typeof idioma !== "string" || !_IDIOMA_RE.test(idioma)) {
+    throw new OperacionInvalida(`Ese idioma no es válido (${idioma}).`);
+  }
+  const vistas = new Set();
+  const limpias = [];
+  for (const f of Array.isArray(fuentes) ? fuentes : []) {
+    if (!f || typeof f !== "object" || !FUENTES_SUBTITULO.includes(f.tipo)) {
+      throw new OperacionInvalida(`Esa fuente de subtítulos no existe (${f?.tipo}).`);
+    }
+    let limpia;
+    if (f.tipo === "material") {
+      const materialId = Number(f.material_id);
+      if (!Number.isInteger(materialId) || materialId <= 0) {
+        throw new OperacionInvalida(`Esa fuente de subtítulos no existe (material sin id válido).`);
+      }
+      limpia = { tipo: "material", material_id: materialId };
+    } else {
+      limpia = { tipo: f.tipo };
+    }
+    const marca = limpia.tipo === "material" ? `material:${limpia.material_id}` : limpia.tipo;
+    if (vistas.has(marca)) continue;
+    vistas.add(marca);
+    limpias.push(limpia);
+  }
+  const sub = { ...(res.subtitulos || {}) };
+  sub.fuentes = { ...(sub.fuentes || {}), [idioma]: limpias };
+  res.subtitulos = sub;
+  return terminar(res, null, info);
+}
+
+// D3: una corrección vive por MATERIAL y por índice de palabra (nunca por
+// clip, que cambia de id al cortar o duplicar): sigue corregida en las dos
+// mitades de un corte. `texto` se recorta y colapsa antes de guardarse;
+// `null` o el texto de siempre («volver a lo que se oyó») borra la
+// corrección (y el objeto por material, si queda vacío); `""` quita la
+// palabra. `info[materialId].palabras` (Tarea 3) es la lista conocida de
+// ESE material: un índice fuera de ella es un error (la palabra ya no
+// existe, o ese material no se transcribió).
+export function corregirPalabra(doc, materialId, indice, texto, info = {}) {
+  const res = structuredClone(doc);
+  const palabras = info?.[materialId]?.palabras;
+  const i = Number(indice);
+  if (!Array.isArray(palabras) || !Number.isInteger(i) || i < 0 || i >= palabras.length) {
+    throw new OperacionInvalida(t("op.palabra_no_existe"));
+  }
+  const original = colapsarEspacios(palabras[i]?.texto);
+  const valor = texto === null || texto === undefined ? null : colapsarEspacios(texto);
+  if (valor !== null && valor.length > MAX_CORRECCION) throw new OperacionInvalida(t("op.palabra_larga"));
+  const sub = { ...(res.subtitulos || {}) };
+  const correcciones = { ...(sub.correcciones || {}) };
+  const clave = String(materialId);
+  const porMaterial = { ...(correcciones[clave] || {}) };
+  const indiceClave = String(i);
+  if (valor === null || valor === original) delete porMaterial[indiceClave];
+  else porMaterial[indiceClave] = valor;
+  if (Object.keys(porMaterial).length === 0) delete correcciones[clave];
+  else correcciones[clave] = porMaterial;
+  sub.correcciones = correcciones;
+  res.subtitulos = sub;
+  return terminar(res, null, info);
+}
+
+// «Quitar la línea»: cada palabra de `refs` ({material_id, indice}) se
+// corrige a "" (D3), una por una, sobre el mismo documento resultante.
+export function quitarLinea(doc, refs = [], info = {}) {
+  let actual = doc;
+  for (const { material_id, indice } of refs ?? []) {
+    actual = corregirPalabra(actual, material_id, indice, "", info).doc;
+  }
+  return terminar(actual, null, info);
+}
+
+// El panel de Subtítulos: estilo, posición, tamaño, color de la palabra que
+// suena y «Mostrar los subtítulos». Lista blanca (D7); `estilo_id` tiene
+// que ser uno de `ESTILOS_SUBTITULOS` (la página solo ofrece esas 4
+// tarjetas); `posicion`/`escala` se acotan en vez de rechazarse, como el
+// resto de `cambiar`; `resaltado` se guarda en mayúsculas (`#RRGGBB`, sin
+// alfa) o `null` = el color por defecto del estilo.
+export function cambiarSubtitulos(doc, cambios, info = {}) {
+  const res = structuredClone(doc);
+  if (!cambios || typeof cambios !== "object" || Array.isArray(cambios)) throw new OperacionInvalida(t("op.sin_cambios"));
+  for (const clave of Object.keys(cambios)) {
+    if (!CAMBIOS_SUBTITULOS.includes(clave)) throw new OperacionInvalida(`No se puede cambiar «${clave}» aquí.`);
+  }
+  const sub = { ...(res.subtitulos || {}) };
+  if (cambios.estilo_id !== undefined) {
+    if (!ESTILOS_SUBTITULOS.includes(cambios.estilo_id)) {
+      throw new OperacionInvalida(`Ese estilo de subtítulos no existe (${cambios.estilo_id}).`);
+    }
+    sub.estilo_id = cambios.estilo_id;
+  }
+  if (cambios.posicion !== undefined) sub.posicion = acotar(numeroCambio(cambios.posicion, "posicion"), 0.05, 0.95);
+  if (cambios.escala !== undefined) sub.escala = acotar(numeroCambio(cambios.escala, "escala"), 0.6, 1.6);
+  if (cambios.resaltado !== undefined) {
+    sub.resaltado = cambios.resaltado === null ? null : colorSinAlfa(cambios.resaltado, "resaltado");
+  }
+  if (cambios.visibles !== undefined) {
+    if (typeof cambios.visibles !== "boolean") throw new OperacionInvalida("subtitulos.visibles debe ser verdadero o falso.");
+    sub.visibles = cambios.visibles;
+  }
+  res.subtitulos = sub;
+  return terminar(res, null, info);
+}
+
+// Los clips de audio con rol_audio "voz" de todo el documento (cualquier
+// pista de audio, no solo "p_voz").
+function clipsDeVoz(doc) {
+  const out = [];
+  for (const p of doc?.pistas ?? []) {
+    if (p.tipo !== "audio") continue;
+    for (const c of p.clips ?? []) {
+      if ((c.rol_audio ?? "subida") === "voz") out.push(c);
+    }
+  }
+  return out;
+}
+
+// Los material_id que alimentan este clip de voz: el suyo, y el de cada
+// alternativa `por_destino` (una voz del guion trae una grabación distinta
+// por país) — D14 exige que TODOS traigan palabras, no solo el del clip.
+function materialesDeVoz(clip) {
+  const ids = [];
+  if (clip.material_id !== null && clip.material_id !== undefined) ids.push(clip.material_id);
+  for (const alt of Object.values(clip.por_destino ?? {})) {
+    if (alt && alt.material_id !== null && alt.material_id !== undefined) ids.push(alt.material_id);
+  }
+  return ids;
+}
+
+// D14: lo único automático del editor, y gratis. Un borrador SIN `fuentes`
+// (legado: subtítulos con `palabras` absolutas) cuyas voces — también las
+// de `por_destino` — traen TODAS `palabras` en `info` (Tarea 3), adopta
+// `fuentes = {<idioma>: [{tipo: "voz"}]}` por cada idioma de sus `palabras`
+// guardadas (las que de verdad decían algo): desde ese momento los
+// subtítulos siguen a la voz si se mueve o se corta, con las MISMAS
+// palabras (las deriva `subtitulos_fuente.aplicar` de esos mismos
+// materiales). Si no aplica (ya hay `fuentes`, nada guardado, sin voz, o
+// falta transcribir alguna) devuelve el documento TAL CUAL — misma
+// referencia, para que `avisos_carga.arreglarAlAbrir` sepa que no hay nada
+// que guardar.
+export function adoptarVozComoFuente(doc, info = {}) {
+  const sub = doc?.subtitulos ?? {};
+  if (Object.keys(sub.fuentes ?? {}).length > 0) return doc;
+  const palabras = sub.palabras ?? {};
+  const claves = Object.keys(palabras).filter((k) => Array.isArray(palabras[k]) && palabras[k].length > 0);
+  if (claves.length === 0) return doc;
+  const voces = clipsDeVoz(doc);
+  if (voces.length === 0) return doc;
+  const todasTranscritas = voces.every((c) => materialesDeVoz(c).every((mid) => Array.isArray(info?.[mid]?.palabras)));
+  if (!todasTranscritas) return doc;
+  const idiomas = [...new Set(claves.map((k) => k.slice(0, 2)))];
+  const res = structuredClone(doc);
+  res.subtitulos = { ...(res.subtitulos ?? {}), fuentes: Object.fromEntries(idiomas.map((idioma) => [idioma, [{ tipo: "voz" }]])) };
+  return res;
 }
