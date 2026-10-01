@@ -8954,6 +8954,14 @@ msgid "No pude crear el activo: %(detalle)s"
 msgstr "Could not create the asset: %(detalle)s"
 
 #, python-format
+msgid "No pude crear el audio; intenta de nuevo (%(tipo)s)."
+msgstr "I couldn't create the audio; try again (%(tipo)s)."
+
+#, python-format
+msgid "No pude crear la voz; intenta de nuevo (%(tipo)s)."
+msgstr "I couldn't create the voice; try again (%(tipo)s)."
+
+#, python-format
 msgid "No pude descargar el video: %(error)s"
 msgstr "I couldn't download the video: %(error)s"
 

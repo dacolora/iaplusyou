@@ -266,16 +266,19 @@
   }
   // La voz se crea en el worker: se consulta su estado y al terminar se pide
   // solo la sección (recargar borraría lo escrito); la voz nueva queda elegida.
-  // Un re-pintado trae otra barra con su propio sondeo: el de la barra vieja,
-  // ya fuera de la página, se calla. Cinco fallos seguidos (sesión vencida, sin
-  // red) también lo paran, en vez de preguntar para siempre.
+  // Un re-pintado que trae su propia barra de este trabajo trae también su
+  // sondeo: el de la barra vieja se calla. Si la barra se fue sin reemplazo (el
+  // trabajo terminó justo antes de un re-pintado, p. ej. tras un ▶), este sigue:
+  // su próxima consulta ve el final y muestra el aviso o el error. Cinco fallos
+  // seguidos (sesión vencida, sin red) también lo paran, en vez de preguntar
+  // para siempre.
   function vigilarVoz() {
     var barra = vpWrap.querySelector('.barra-progreso[data-job]');
     if (!barra || barra.dataset.vigilando) return;
     barra.dataset.vigilando = '1';
     var textoBarra = barra.nextElementSibling, fallos = 0;
     var t = setInterval(function () {
-      if (!barra.isConnected) { clearInterval(t); return; }
+      if (!barra.isConnected && vpWrap.querySelector('.barra-progreso[data-job="' + barra.dataset.job + '"]')) { clearInterval(t); return; }
       fetch(barra.dataset.estado).then(function (r) { return r.json(); }).then(function (e) {
         fallos = 0;
         if (e.estado === 'en_progreso') {
@@ -372,6 +375,11 @@
       document.getElementById('au-vp-permiso').checked = false;
     });
   });
+  // El permiso es para ESE archivo: elegir otro (también después de un intento
+  // que falló) desmarca la casilla, así nunca pasa de una grabación a otra.
+  document.getElementById('au-vp-archivo').addEventListener('change', function () {
+    document.getElementById('au-vp-permiso').checked = false;
+  });
 
   // Música: reproductor, segundo de inicio y volumen solo con una canción elegida.
   function mostrarMusica() {
@@ -459,8 +467,9 @@
   });
   // El audio se hace en el worker: se consulta su estado y al terminar se
   // vuelve a pedir SOLO la lista (recargar borraría lo que ya escribiste).
-  // Igual que vigilarVoz: una barra re-pintada calla el sondeo de la vieja, y
-  // cinco fallos seguidos lo paran.
+  // Igual que vigilarVoz: solo una lista re-pintada con su propia barra de este
+  // trabajo calla el sondeo de la vieja (si la barra se fue sin reemplazo, este
+  // sigue y muestra el final), y cinco fallos seguidos lo paran.
   function vigilar() {
     var barra = document.querySelector('#au-lista .barra-progreso[data-job]');
     if (!barra) { ocupado(false); return; }
@@ -468,7 +477,7 @@
     barra.dataset.vigilando = '1'; ocupado(true);
     var textoBarra = barra.nextElementSibling, fallos = 0;
     var t = setInterval(function () {
-      if (!barra.isConnected) { clearInterval(t); return; }
+      if (!barra.isConnected && document.querySelector('#au-lista .barra-progreso[data-job="' + barra.dataset.job + '"]')) { clearInterval(t); return; }
       fetch(barra.dataset.estado).then(function (r) { return r.json(); }).then(function (e) {
         fallos = 0;
         if (e.estado === 'en_progreso') {

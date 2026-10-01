@@ -122,6 +122,46 @@ def test_grabacion_invalida(base_temporal, r2, monkeypatch, tmp_path):
     assert r2["subidos"] == [] and os.listdir(carpeta) == []
 
 
+@pytest.mark.parametrize("ext, convierte", [(".ogg", True), (".aac", True), (".m4a", False)])
+def test_grabacion_aac_u_ogg_se_sube_convertida_a_mp3(base_temporal, monkeypatch, tmp_path, ext, convierte):
+    """Revisión final F6: MiniMax clona desde mp3, m4a o wav; un .aac u .ogg se
+    convierte a mp3 antes de medirlo y subirlo, y la carpeta temporal queda vacía."""
+    conversiones, medidos, subidos = [], [], []
+
+    def _ffmpeg(args, timeout=300):
+        conversiones.append(list(args))
+        with open(args[-1], "wb") as f:
+            f.write(b"ID3 mp3 convertido")
+    monkeypatch.setattr(voces_propias.cortes, "ffmpeg", _ffmpeg)
+    monkeypatch.setattr(voces_propias, "_duracion_ms", lambda path: medidos.append(path) or 15000)
+    monkeypatch.setattr(voces_propias.r2_uploader, "upload_file",
+                        lambda local, key, ct: subidos.append((key, ct)) or f"https://r2/{key}")
+    carpeta = str(tmp_path / "tmp")
+    g = voces_propias.guardar_grabacion("acme", _Archivo("Mi voz" + ext), carpeta)
+    ((key, ct),) = subidos
+    assert key.startswith("clientes/acme/materiales/grabacion_") and g["extra"]["nombre"] == "Mi voz"
+    if convierte:
+        (args,) = conversiones
+        origen, salida = args[1], args[-1]
+        assert args == ["-i", origen, "-vn", "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k", salida]
+        assert origen.endswith(ext) and salida.endswith(".mp3") and medidos == [salida]
+        assert key.endswith(".mp3") and ct == "audio/mpeg" and g["bytes"] == len(b"ID3 mp3 convertido")
+    else:
+        assert conversiones == [] and key.endswith(".m4a") and ct == "audio/mp4"
+    assert os.listdir(carpeta) == []
+
+
+def test_grabacion_que_ffmpeg_no_puede_convertir(base_temporal, r2, monkeypatch, tmp_path):
+    def _falla(args, timeout=300):
+        raise RuntimeError("ffmpeg falló (código 1): Invalid data found when processing input")
+    monkeypatch.setattr(voces_propias.cortes, "ffmpeg", _falla)
+    carpeta = str(tmp_path / "tmp")
+    with pytest.raises(voces_propias.EntradaInvalida) as e:
+        voces_propias.guardar_grabacion("acme", _Archivo("voz.ogg"), carpeta)
+    assert str(e.value) == voces_propias.MENSAJES["leer"]
+    assert r2["subidos"] == [] and os.listdir(carpeta) == []
+
+
 def test_crear_disenada_registra_gasto_estrena_y_guarda(base_temporal, r2, fal):
     etapas = []
     payload = {"forma": "disenar", "nombre": "Ana", "descripcion": "Mujer cálida", "idioma": "sv"}
@@ -138,6 +178,8 @@ def test_crear_disenada_registra_gasto_estrena_y_guarda(base_temporal, r2, fal):
     g = sorted((x["tipo"], x["usd"], x["referencia"], x["proveedor"]) for x in _gastos("acme"))
     assert g == [("locucion", 0.0045, "voz_propia_estreno:t9", "fal/minimax"),
                  ("voz_propia", 3.0004, "voz_propia:disenar:t9", "fal/minimax")]
+    (gasto_diseno,) = [x for x in _gastos("acme") if x["tipo"] == "voz_propia"]
+    assert gasto_diseno["extra"] == {"voice_id": "mmx_dis"}      # un diseño no lleva consentimiento
     assert voces_propias.listar("acme") == [voz]
 
 
@@ -154,6 +196,9 @@ def test_crear_clonada_guarda_el_consentimiento_y_la_grabacion(base_temporal, r2
     assert voz["forma"] == "clonada"
     (gasto_clon,) = [x for x in _gastos("acme") if x["tipo"] == "voz_propia"]
     assert (gasto_clon["usd"], gasto_clon["referencia"]) == (1.5042, "voz_propia:clonar:t3")
+    # Revisión final F5: la constancia del permiso viaja con el cobro del clon
+    # (sobrevive a borrar la voz y su extra).
+    assert gasto_clon["extra"] == {"voice_id": "mmx_clon", "consentimiento": consentimiento}
 
 
 def test_crear_clon_sin_consentimiento_no_paga(base_temporal, r2, fal):
@@ -221,6 +266,56 @@ def test_si_la_creacion_falla_no_hay_gasto_ni_voz(base_temporal, r2, fal, monkey
     with pytest.raises(RuntimeError):
         voces_propias.crear("acme", {"forma": "disenar", "nombre": "Ana", "descripcion": "Mujer cálida", "idioma": "es"})
     assert _gastos("acme") == [] and voces_propias.listar("acme") == []
+
+
+def _clon_que_falla(monkeypatch, grabacion_id):
+    def _falla(*a, **k):
+        raise RuntimeError("fal caído")
+    monkeypatch.setattr(voces_propias.fal_audio, "clonar_voz_minimax", _falla)
+    consentimiento = {"usuario": "admin", "fecha": "2026-09-30T10:00:00", "texto": voces_propias.TEXTO_CONSENTIMIENTO}
+    with pytest.raises(RuntimeError):
+        voces_propias.crear("acme", {"forma": "clonar", "nombre": "Daniel", "idioma": "cs", "grabacion_id": grabacion_id,
+                                     "consentimiento": consentimiento}, ref_sufijo=":t2")
+
+
+def test_si_el_clon_falla_la_grabacion_no_se_queda(base_temporal, r2, fal, monkeypatch):
+    """Revisión final F2: fal no devolvió una voz, así que la grabación de la
+    persona (fila y objeto en R2) no se queda sin una voz que la use."""
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/clientes/acme/materiales/grabacion_f.wav",
+                             hash="h_grab_f", bytes=10, duracion_ms=15000, extra={"nombre": "Mi voz"})
+    _clon_que_falla(monkeypatch, g["id"])
+    assert materiales.obtener("acme", g["id"]) is None
+    assert "clientes/acme/materiales/grabacion_f.wav" in r2["borrados"]
+    assert _gastos("acme") == [] and voces_propias.listar("acme") == []
+
+
+def test_si_el_clon_falla_no_borra_una_grabacion_que_usa_otra_voz(base_temporal, r2, fal, monkeypatch):
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/clientes/acme/materiales/grabacion_c.wav",
+                             hash="h_grab_c", bytes=10, duracion_ms=15000, extra={"nombre": "Mi voz"})
+    v = _voz(voice_id="mmx_previa")
+    materiales.actualizar_extra("acme", v["id"], grabacion_id=g["id"])
+    _clon_que_falla(monkeypatch, g["id"])
+    assert materiales.obtener("acme", g["id"]) is not None
+    assert "clientes/acme/materiales/grabacion_c.wav" not in r2["borrados"]
+
+
+def test_borrar_grabacion_huerfana_solo_toca_grabaciones_del_proyecto_y_nunca_lanza(base_temporal, r2, monkeypatch):
+    cancion = materiales.registrar("acme", tipo="audio", origen="subida", url="https://r2/clientes/acme/materiales/c.mp3",
+                                   hash="h_cancion", bytes=10, extra={"nombre": "Canción"})
+    ajena = materiales.registrar("otro", tipo="audio", origen="grabacion", url="https://r2/clientes/otro/materiales/g.wav",
+                                 hash="h_ajena", bytes=10, extra={})
+    voces_propias._borrar_grabacion_si_huerfana("acme", cancion["id"])
+    voces_propias._borrar_grabacion_si_huerfana("acme", ajena["id"])
+    voces_propias._borrar_grabacion_si_huerfana("acme", 999)
+    assert materiales.obtener("acme", cancion["id"]) and materiales.obtener("otro", ajena["id"]) and r2["borrados"] == []
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/clientes/acme/materiales/g.wav",
+                             hash="h_grab_r2", bytes=10, extra={})
+
+    def _r2_caido(key):
+        raise RuntimeError("R2 caído")
+    monkeypatch.setattr(materiales.r2_uploader, "delete_file", _r2_caido)
+    voces_propias._borrar_grabacion_si_huerfana("acme", g["id"])      # no lanza
+    assert materiales.obtener("acme", g["id"]) is not None             # la fila queda para reintentar
 
 
 def test_resolver_solo_del_proyecto(base_temporal):

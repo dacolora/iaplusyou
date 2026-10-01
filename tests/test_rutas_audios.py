@@ -199,6 +199,45 @@ def test_clonar_exige_permiso_y_guarda_la_grabacion(app, monkeypatch):
     assert app["subidos"][0].startswith("clientes/acme/materiales/grabacion_")
 
 
+def _clonar_con_cola_ocupada(app, monkeypatch):
+    """Otra creación se encoló entre el chequeo de la ruta y su encolar (la
+    carrera): `trabajos.encolar` se niega después de subir la grabación."""
+    import io
+
+    import voces_propias
+    monkeypatch.setattr(voces_propias, "_duracion_ms", lambda path: 15000)
+    monkeypatch.setattr(app["dashboard"].trabajos, "encolar", lambda *a, **k: False)
+    datos = {"nombre": "Daniel", "idioma": "cs", "consentimiento": "si", "grabacion": (io.BytesIO(b"audio falso"), "voz.wav")}
+    r = app["c"].post("/cliente/acme/audios/voces/clonar", data=datos, content_type="multipart/form-data", headers=FETCH)
+    assert r.status_code == 400 and r.get_json()["error"] == voces_propias.MENSAJES["en_curso"]
+
+
+def _hash_grabacion(datos):
+    import hashlib
+    return materiales.hash_clave("grabacion", hashlib.sha256(datos).hexdigest())
+
+
+def test_clonar_sin_poder_encolar_borra_la_grabacion(app, monkeypatch):
+    """Revisión final F2: la grabación recién subida no se queda en R2 sin voz."""
+    _clonar_con_cola_ocupada(app, monkeypatch)
+    (key,) = app["subidos"]
+    assert key.startswith("clientes/acme/materiales/grabacion_") and app["borrados"] == [key]
+    assert materiales.buscar_hash("acme", _hash_grabacion(b"audio falso")) is None
+
+
+def test_clonar_sin_poder_encolar_no_borra_la_grabacion_de_la_creacion_viva(app, monkeypatch):
+    """La creación que ganó la carrera clona el mismo archivo (una sola fila
+    por hash): esa grabación sigue ahí para ella."""
+    import cola
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/clientes/acme/materiales/grabacion_v.wav",
+                             hash=_hash_grabacion(b"audio falso"), bytes=11, duracion_ms=15000, extra={"nombre": "voz"})
+    cola.encolar("voz_propia_crear", {"cliente": "acme", "forma": "clonar", "grabacion_id": g["id"]},
+                 cliente="acme", job_id="acme__voz_propia", max_intentos=1)
+    _clonar_con_cola_ocupada(app, monkeypatch)
+    assert materiales.obtener("acme", g["id"]) is not None
+    assert app["subidos"] == [] and app["borrados"] == []
+
+
 def test_borrar_voz_propia(app):
     v = _voz_propia()
     d = app["c"].post(f"/cliente/acme/audios/voces/{v['id']}/borrar", headers=FETCH).get_json()
@@ -257,9 +296,18 @@ def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
         assert 'role="tabpanel"' in panel and f'id="au-vp-form-{forma}"' in panel
     # No hay arnés de JS: como en test_base_visual/test_movil, se mira el
     # script de la página. Un clon que salió desmarca la casilla de permiso
-    # (cada clon pide su propio permiso) y un sondeo cuya barra ya no está en
-    # la página se calla (uno solo por trabajo).
+    # (cada clon pide su propio permiso) y elegir otro archivo también la
+    # desmarca: el permiso es por archivo (revisión final F4).
     assert "document.getElementById('au-vp-permiso').checked = false" in html
-    assert html.count("if (!barra.isConnected) { clearInterval(t); return; }") == 2
+    assert re.search(r"getElementById\('au-vp-archivo'\)\.addEventListener\('change', function \(\) \{\s*"
+                     r"document\.getElementById\('au-vp-permiso'\)\.checked = false;", html)
+    # Un sondeo se calla solo si el re-pintado trajo su propia barra del mismo
+    # trabajo (uno solo por trabajo); si la barra se fue sin reemplazo sigue y
+    # muestra el aviso o el error del final (revisión final F7).
+    assert "if (!barra.isConnected) { clearInterval(t); return; }" not in html
+    assert ("if (!barra.isConnected && vpWrap.querySelector('.barra-progreso[data-job=\"' + barra.dataset.job"
+            " + '\"]')) { clearInterval(t); return; }") in html
+    assert ("if (!barra.isConnected && document.querySelector('#au-lista .barra-progreso[data-job=\"' + barra.dataset.job"
+            " + '\"]')) { clearInterval(t); return; }") in html
     css = open("static/style.css", encoding="utf-8").read()
     assert ".au-voz-propia .au-voz-nombre" in css

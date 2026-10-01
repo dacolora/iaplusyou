@@ -593,7 +593,7 @@ obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripció
 `voz_propia`) se registra apenas fal responde y la tarea ESTRENA la voz leyendo su muestra, porque MiniMax borra
 una voz sin uso real en 7 días (la vista previa no cuenta). En el formulario una voz propia es `vp:<id>`.
 
-Fuera: voz clonada, efectos, subtítulos, usar el audio en
+Fuera: efectos, subtítulos, usar el audio en
 un video o el editor, ElevenLabs v3.
 
 **Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»

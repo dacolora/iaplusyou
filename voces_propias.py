@@ -37,6 +37,9 @@ PROVEEDOR = "fal/minimax"
 NOMBRES_FORMA = {"clonada": idiomas.N_("Clonada"), "disenada": idiomas.N_("Diseñada")}
 MIN_GRABACION_MS = 10 * 1000
 MAX_GRABACION_MS = 5 * 60 * 1000
+# MiniMax clona desde mp3, m4a o wav (su documentación): una grabación .aac u
+# .ogg se guarda convertida a mp3. Lo que se acepta al subir no cambia.
+CONVERTIR_A_MP3 = (".aac", ".ogg")
 MAX_NOMBRE = 40
 MIN_DESCRIPCION, MAX_DESCRIPCION = 10, 500
 VERSION_MUESTRA = 1
@@ -153,21 +156,39 @@ def _duracion_ms(path):
     return int(round(float(dur) * 1000))
 
 
+def _convertir_a_mp3(origen, salida):
+    """`origen` → mp3 mono 44,1 kHz 128 kbps en `salida`. Lo que ffmpeg no
+    puede decodificar es «No pude leer ese archivo de audio.», como en
+    _duracion_ms."""
+    try:
+        cortes.ffmpeg(["-i", origen, "-vn", "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k", salida])
+    except Exception:
+        log.warning("grabación %s: no pude convertirla a mp3", os.path.basename(origen), exc_info=True)
+        raise EntradaInvalida(MENSAJES["leer"])
+
+
 def guardar_grabacion(cliente, archivo, carpeta_tmp):
     """Sube la grabación de un clon a R2 como `material` (origen `grabacion`) y
     devuelve la fila. El hash va con prefijo propio para no devolver una canción
-    idéntica de Mi música. `archivo`: FileStorage de Flask."""
+    idéntica de Mi música. Un .aac u .ogg se convierte a mp3 antes de medirlo y
+    subirlo (CONVERTIR_A_MP3). `archivo`: FileStorage de Flask."""
     nombre = os.path.basename(archivo.filename or "")
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in mi_musica.EXTENSIONES:
         raise EntradaInvalida(MENSAJES["archivo"])
     os.makedirs(carpeta_tmp, exist_ok=True)
-    local = os.path.join(carpeta_tmp, f"grabacion_{uuid.uuid4().hex}{ext}")
-    archivo.save(local)
+    base = os.path.join(carpeta_tmp, f"grabacion_{uuid.uuid4().hex}")
+    temporales = [base + ext]
     try:
-        tam = os.path.getsize(local)
-        if tam > materiales.LIMITES["audio"][0]:
+        archivo.save(temporales[0])
+        if os.path.getsize(temporales[0]) > materiales.LIMITES["audio"][0]:
             raise EntradaInvalida(MENSAJES["pesado"])
+        local = temporales[0]
+        if ext in CONVERTIR_A_MP3:
+            local, ext = base + ".mp3", ".mp3"
+            temporales.append(local)
+            _convertir_a_mp3(temporales[0], local)
+        tam = os.path.getsize(local)
         dur = _duracion_ms(local)
         if dur < MIN_GRABACION_MS:
             raise EntradaInvalida(MENSAJES["corta"])
@@ -185,10 +206,11 @@ def guardar_grabacion(cliente, archivo, carpeta_tmp):
         m, _ = materiales.obtener_o_crear(cliente, h, _producir)
         return m
     finally:
-        try:
-            os.remove(local)
-        except OSError:
-            pass
+        for ruta in temporales:
+            try:
+                os.remove(ruta)
+            except OSError:
+                pass
 
 
 # ------------------------------------------------------------- crear ---
@@ -227,15 +249,25 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
         grabacion = materiales.obtener(cliente, payload["grabacion_id"])
         if not grabacion or grabacion["origen"] != ORIGEN_GRABACION:
             raise ValueError(MENSAJES["grabacion_borrada"])
-        r = fal_audio.clonar_voz_minimax(grabacion["url"], frase)
+        try:
+            r = fal_audio.clonar_voz_minimax(grabacion["url"], frase)
+        except Exception:
+            # fal no devolvió una voz (nada que registrar): la grabación de la
+            # persona no se queda en R2 sin una voz que la use.
+            _borrar_grabacion_si_huerfana(cliente, grabacion["id"])
+            raise
     else:
         r = fal_audio.disenar_voz_minimax(payload["descripcion"], frase)
     usd = float(r["costo_usd"])
-    # fal ya cobró: el gasto queda aunque lo que sigue falle.
+    # fal ya cobró: el gasto queda aunque lo que sigue falle. El de un clon
+    # lleva también la constancia del permiso, que sobrevive a borrar la voz.
     detalle = (gettext("MiniMax · clonar voz · %(nombre)s", nombre=nombre) if forma == "clonar"
                else gettext("MiniMax · diseñar voz · %(nombre)s", nombre=nombre))
+    extra_gasto = {"voice_id": r["voice_id"]}
+    if forma == "clonar":
+        extra_gasto["consentimiento"] = payload["consentimiento"]
     gastos.registrar_seguro(cliente, "voz_propia", usd, f"voz_propia:{forma}{ref_sufijo}", detalle=detalle,
-                            proveedor=PROVEEDOR, extra={"voice_id": r["voice_id"]})
+                            proveedor=PROVEEDOR, extra=extra_gasto)
     if reportar:
         reportar(1)
     h = materiales.hash_clave(ORIGEN, "minimax", r["voice_id"])
@@ -318,6 +350,21 @@ def _grabacion_en_uso_por_otra_voz(cliente, voz_id, gid):
             db.material.c.cliente == cliente, db.material.c.origen == ORIGEN,
             db.material.c.id != voz_id)).scalars().all()
     return any((e or {}).get("grabacion_id") == gid for e in extras)
+
+
+def _borrar_grabacion_si_huerfana(cliente, grabacion_id):
+    """Borra, con su objeto en R2, la grabación de un clon que no llegó a ser
+    voz (fal falló o la tarea no se pudo encolar): la voz de una persona no se
+    queda guardada sin una voz propia que la use (spec §3). Solo una fila
+    `grabacion` de este proyecto que ninguna voz propia usa (dos clones del
+    mismo archivo comparten la fila). Nunca lanza: quien la llama ya tiene su
+    propio error que contar."""
+    try:
+        g = materiales.obtener(cliente, grabacion_id)
+        if g and g["origen"] == ORIGEN_GRABACION and not _grabacion_en_uso_por_otra_voz(cliente, 0, g["id"]):
+            materiales.borrar(cliente, g["id"])
+    except Exception:
+        log.warning("grabación %s de %s: no pude borrarla", grabacion_id, cliente, exc_info=True)
 
 
 def borrar(cliente, voz_id):

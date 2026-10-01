@@ -6919,6 +6919,13 @@ def vp_clonar(cliente):
     payload["grabacion_id"] = g["id"]
     jid = _encolar_voz(cliente, payload)
     if not jid:
+        # Otra creación se encoló entre el chequeo de arriba y aquí: la grabación
+        # recién guardada no se queda en R2 sin voz — salvo que sea la misma fila
+        # (mismo archivo, mismo hash) que esa creación viva va a clonar.
+        viva = cola.consultar_por_job(tareas_voces.job_id(cliente)) or {}
+        if not (viva.get("estado") in ("pendiente", "en_curso")
+                and (viva.get("payload") or {}).get("grabacion_id") == g["id"]):
+            voces_propias._borrar_grabacion_si_huerfana(cliente, g["id"])
         return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["en_curso"]))
     return _respuesta_mis_voces(cliente, mensaje=gettext("Clonando la voz…"), job_id=jid)
 
