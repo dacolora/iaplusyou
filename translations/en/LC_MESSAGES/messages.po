@@ -14778,8 +14778,8 @@ msgstr "photo"
 msgid "foto %(n)s de %(total)s"
 msgstr "photo %(n)s of %(total)s"
 
-msgid "fotos generales"
-msgstr "general photos"
+msgid "fotos de ambiente"
+msgstr "lifestyle photos"
 
 msgid "francés"
 msgstr "French"

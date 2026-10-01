@@ -170,6 +170,18 @@ def test_activo_plano_ligado_que_recibe_colores_no_inventa_un_color_con_sus_foto
     assert entorno["reglas"] == ["Cojín Azul"]                        # la regla no se vuelve a pedir
 
 
+def test_el_aviso_de_fotos_sin_color_que_fallan_dice_fotos_de_ambiente(entorno):
+    """Revisión final: lo que la persona lee es «fotos de ambiente» (como en
+    la ficha), no el nombre interno «fotos generales»."""
+    import importador
+    import tiendas
+    importador.importar_lista("acme", "shopify", [_prod()])
+    entorno["respuestas"]["https://cdn.test/g1.png"] = _Respuesta(status=500)
+    errores = []
+    importador.vincular_activo("acme", tiendas.productos("acme")[0]["id"], forzar_fotos=True, errores=errores)
+    assert errores == ["Cojín Azul: fotos de ambiente: 1 foto(s) no se pudieron descargar."]
+
+
 def _un_color(nombre, fid):
     return (nombre, fid, (f"https://cdn.test/{fid}.png",))
 

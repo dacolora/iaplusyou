@@ -307,7 +307,7 @@ def _activo_con_fotos(cliente, activo_id):
 def _bajar_a(fotos, carpeta_destino, prod, errores, que=""):
     """Descarga `fotos` a un temporal y, si bajó alguna, reemplaza las
     numeradas de `carpeta_destino`. True si colocó al menos una. `que` (ya
-    pasado por gettext: el color o «fotos generales») va antes del aviso."""
+    pasado por gettext: el color o «fotos de ambiente») va antes del aviso."""
     if not fotos:
         return False
     temporal = tempfile.mkdtemp(prefix="creatv_fotos_")
@@ -443,7 +443,7 @@ def _completar_fotos(cliente, activo_id, prod, fotos, variantes, forzar_fotos, e
     nuevos = _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
                               convertir=convertir) if variantes else 0
     if fotos and (forzar_fotos or not _tiene_imagenes(carpeta)):
-        _bajar_a(fotos, carpeta, prod, errores, gettext("fotos generales") if variantes else "")
+        _bajar_a(fotos, carpeta, prod, errores, gettext("fotos de ambiente") if variantes else "")
     return nuevos
 
 
