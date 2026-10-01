@@ -206,7 +206,8 @@ def ejecutar_elementos(tarea):
                     eid = flowplus_modelos.crear_elemento(e["nombre"], e["descripcion"], url)
                     _kv_guardar(clave, eid)
                     gastos.registrar_seguro(cliente, "video", flowplus_modelos.PRECIO_ELEMENTO,
-                                            f"kling_elemento:{sha}", detalle=f"Elemento de Kling · {e['nombre']}",
+                                            f"kling_elemento:{sha}",
+                                            detalle=gettext("Elemento de Kling · %(nombre)s", nombre=e["nombre"]),
                                             proveedor="wavespeed", extra={"element_id": eid})
                 nuevos[e["id"]] = eid
         except Exception as ex:  # noqa: BLE001 — la cadena se detiene antes de generar ningún video

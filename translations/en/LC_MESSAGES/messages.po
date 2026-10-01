@@ -4780,6 +4780,10 @@ msgstr "Choose new password"
 msgid "Elegir producto (%(n)s) →"
 msgstr "Choose product (%(n)s) →"
 
+#, python-format
+msgid "Elemento de Kling · %(nombre)s"
+msgstr "Kling element · %(nombre)s"
+
 msgid "Elementos"
 msgstr "Elements"
 
