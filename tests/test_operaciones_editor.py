@@ -69,6 +69,33 @@ def test_las_operaciones_del_navegador_dejan_documentos_validos():
                 an = c.get("animacion") or {}
                 if an.get("entrada") not in (None, "ninguna"):
                     assert an.get("duracion_ms", 0) > 0, f"{caso['nombre']}: {c['id']} anima sin duración"
+        # capa 5b (D1): una foto no tiene tiempo de fuente ni velocidad, y
+        # nunca suena — ningún clip de p_sonido usa su material.
+        fotos_material = set()
+        for p in doc["pistas"]:
+            for c in p["clips"]:
+                if not c.get("foto"):
+                    continue
+                fotos_material.add(c["material_id"])
+                assert c["recorte"] == {"desde_ms": 0, "hasta_ms": c["duracion_ms"]}, (
+                    f"{caso['nombre']}: {c['id']} es una foto con recorte {c['recorte']}")
+                assert c["velocidad"] == 1, f"{caso['nombre']}: {c['id']} es una foto a velocidad {c['velocidad']}"
+        if fotos_material:
+            sonido = next((p for p in doc["pistas"] if p["id"] == "p_sonido"), None)
+            for c in (sonido or {}).get("clips", []):
+                assert c["material_id"] not in fotos_material, (
+                    f"{caso['nombre']}: {c['id']} en p_sonido usa el material de una foto")
+        # capa 5b (D9): en los casos solape_*, la duración total queda en la
+        # de antes menos lo que la transición tiene cedido ahora mismo (o
+        # igual si se quitó — nada queda cedido).
+        if caso["nombre"].startswith("solape_") and "duracion_antes" in caso:
+            principal = documento.pista_principal(doc)
+            cedido = sum(
+                c["transicion"]["duracion_ms"] for c in principal["clips"]
+                if c.get("transicion") and c["transicion"].get("modo") == "solape")
+            assert documento.duracion_ms(doc) == caso["duracion_antes"] - cedido, (
+                f"{caso['nombre']}: duración total {documento.duracion_ms(doc)}, "
+                f"esperada {caso['duracion_antes']} - {cedido} cedidos")
         # la mezcla que deja el panel de propiedades es una que el render conoce
         mz = doc.get("mezcla") or {}
         mezcla.volumenes_para(mz.get("preset"), mz.get("volumenes"))

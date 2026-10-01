@@ -29,11 +29,20 @@
 import { pistaPrincipal, CAPA_DEFECTO } from "./tiempo.js";
 import { FORMATOS } from "./formatos.js";
 import { t } from "./textos.js";
+import { ajusteAutomatico, completo, limpio, MODOS } from "./encuadre.js";
 
 export const MIN_CLIP_MS = 100;
 export const VELOCIDADES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 export const ID_SONIDO = "p_sonido";
 export const TRANSICIONES = ["corte", "fundido", "deslizar", "zoom", "desenfoque"];
+// Capa 5b (D1, D9): paridad con documento.FOTO_MAX_MS/FOTO_DEFECTO_MS
+// (tests/test_editor_js.py) — FOTO_MIN_MS es MIN_CLIP_MS (los dos valen
+// 100). TRANSICION_MIN_MS (D9) no tiene espejo en Python: documento.validar
+// no juzga cuán corta queda una transición de cola, solo operaciones.js
+// rechaza una solape que no llegue a 200 ms.
+export const FOTO_MAX_MS = 60000;
+export const FOTO_DEFECTO_MS = 3000;
+export const TRANSICION_MIN_MS = 200;
 export const FUENTES = ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"];
 // Cuánto dura la entrada «deslizar» elegida en el panel (capa 4c): sin
 // `duracion_ms` ni la vista previa ni el render la aplican.
@@ -181,9 +190,10 @@ export function pistaLibre(doc, tipo, base, tMs, dMs, excluir = [], acepta = () 
 }
 
 // Los clips de la principal que tienen sonido de la escena: a velocidad 1 y
-// de un material que trae sonido (desconocido cuenta como que sí).
+// de un material que trae sonido (desconocido cuenta como que sí). Capa 5b
+// (D1): una foto nunca suena, así que nunca tiene espejo en p_sonido.
 function espejables(principal, info) {
-  return principal.clips.filter((c) => vel(c) === 1 && tieneAudioDe(info, c.material_id));
+  return principal.clips.filter((c) => !c.foto && vel(c) === 1 && tieneAudioDe(info, c.material_id));
 }
 
 // Rehace los clips de `sonido` desde la principal: un espejo por clip
@@ -249,6 +259,7 @@ function abrirSonido(doc, info, suena) {
 function materialQueFalta(pista, c, info) {
   if (!["video", "superpuesto", "audio"].includes(pista.tipo) || pista.id === ID_SONIDO) return null;
   if (pista.tipo === "audio" && (c.rol_audio ?? "subida") === "musica") return null;
+  if (c.foto) return null;   // D1: sin tiempo de fuente, nunca pide material de más
   const material = duracionDe(info, c.material_id);
   if (material === undefined || material === null) return null;
   return (c.recorte?.desde_ms ?? 0) + fuente(c) <= material ? null : material;
@@ -316,6 +327,49 @@ function completarAnimaciones(doc) {
   }
 }
 
+// Capa 5b (D9): cuánto dura A con `d` ms de más o de menos cedidos a una
+// transición «solape». Para un video, `recorte.hasta_ms` sigue a la
+// duración (desde + round(duración × velocidad)); una foto no tiene tiempo
+// de fuente — su recorte es siempre {0, duración}.
+function recorteDeSolape(clip, nuevaDur) {
+  if (clip.foto) return { desde_ms: 0, hasta_ms: nuevaDur };
+  const desde = clip.recorte?.desde_ms ?? 0;
+  return { desde_ms: desde, hasta_ms: desde + Math.round(nuevaDur * vel(clip)) };
+}
+
+// A recupera los `d` ms que había cedido (al quitar la transición, al
+// cambiarle la duración, o cuando queda último: `deshacerSolapeUltimo`).
+function devolverASolape(clip, d) {
+  clip.duracion_ms += d;
+  clip.recorte = recorteDeSolape(clip, clip.duracion_ms);
+}
+
+// A cede hasta `pedido` ms de sus últimos ms a una transición nueva: `d =
+// min(pedido, A.dur − MIN_CLIP_MS, B.dur − MIN_CLIP_MS)` (D9); menos de
+// TRANSICION_MIN_MS, ni junta ni cede nada. Devuelve `d`.
+function cederASolape(A, B, pedido) {
+  const d = Math.min(Math.max(0, pedido), A.duracion_ms - MIN_CLIP_MS, B.duracion_ms - MIN_CLIP_MS);
+  if (d < TRANSICION_MIN_MS) throw new OperacionInvalida(t("op.transicion_cortos"));
+  A.duracion_ms -= d;
+  A.recorte = recorteDeSolape(A, A.duracion_ms);
+  return d;
+}
+
+// D9: si el ÚLTIMO clip de la principal quedó con una transición «solape»
+// (se reordenó, o se borró lo que venía después), se deshace — no tiene
+// sentido perder esos ms sin nada que juntar. `ajustarAlMaterial`, que corre
+// justo después dentro de `normalizar`, acota el resultado a su material si
+// hiciera falta (D9).
+function deshacerSolapeUltimo(doc) {
+  const p = pistaPrincipal(doc);
+  if (!p || p.tipo !== "video" || !p.clips.length) return;
+  const ultimo = p.clips[p.clips.length - 1];
+  const tr = ultimo.transicion;
+  if (!tr || (tr.modo ?? null) !== "solape") return;
+  devolverASolape(ultimo, tr.duracion_ms);
+  ultimo.transicion = null;
+}
+
 // Espejo de compilador.verificar_recortes: primero ningún clip pide material
 // de más (`ajustarAlMaterial`, con la principal otra vez contigua desde 0 y
 // el sonido de la escena rehecho); después, en la principal, la cola de A
@@ -323,8 +377,11 @@ function completarAnimaciones(doc) {
 // acorta a lo que queda o pasa a corte seco. La transición del último clip no
 // se toca (el compilador tampoco). Además (capa 4c) los fundidos de cada audio
 // caben en su clip (`acotarFundidos`) y toda entrada animada lleva su
-// duración (`completarAnimaciones`).
+// duración (`completarAnimaciones`); y (capa 5b, D9) un clip que quedó
+// último con una transición «solape» la deshace ANTES de ajustarse al
+// material, para que lo recuperado también quede acotado si hiciera falta.
 export function normalizar(doc, info = {}) {
+  deshacerSolapeUltimo(doc);
   ajustarAlMaterial(doc, info);
   sincronizarSonido(doc, info);
   acotarFundidos(doc);
@@ -365,14 +422,21 @@ export function cortarEn(doc, tMs, info = {}) {
   const antes = Math.round(tMs - a.inicio_ms);
   const despues = a.duracion_ms - antes;
   if (antes < MIN_CLIP_MS || despues < MIN_CLIP_MS) throw new OperacionInvalida(t("op.muy_cerca"));
-  const desde = a.recorte?.desde_ms ?? 0;
   const b = structuredClone(a);
   b.id = idNuevo(res, a.id);
   a.duracion_ms = antes;
-  a.recorte = { desde_ms: desde, hasta_ms: desde + Math.round(antes * vel(a)) };
-  a.transicion = null;
   b.duracion_ms = despues;
-  b.recorte = { desde_ms: a.recorte.hasta_ms, hasta_ms: a.recorte.hasta_ms + Math.round(despues * vel(b)) };
+  if (a.foto) {
+    // D1: una foto no tiene tiempo de fuente — las dos mitades quedan con
+    // su propio recorte {0, duración}, nunca uno desplazado del otro.
+    a.recorte = { desde_ms: 0, hasta_ms: antes };
+    b.recorte = { desde_ms: 0, hasta_ms: despues };
+  } else {
+    const desde = a.recorte?.desde_ms ?? 0;
+    a.recorte = { desde_ms: desde, hasta_ms: desde + Math.round(antes * vel(a)) };
+    b.recorte = { desde_ms: a.recorte.hasta_ms, hasta_ms: a.recorte.hasta_ms + Math.round(despues * vel(b)) };
+  }
+  a.transicion = null;
   p.clips.splice(i + 1, 0, b);
   recolocar(p);
   return terminar(res, b.id, info);
@@ -399,7 +463,12 @@ export function cortarClip(doc, clipId, tMs, info = {}) {
   clip.duracion_ms = antes;
   b.duracion_ms = despues;
   b.inicio_ms = clip.inicio_ms + antes;
-  if (conRecorte) {
+  if (conRecorte && clip.foto) {
+    // D1: igual que cortarEn — cada mitad de una foto queda con su propio
+    // recorte {0, duración}.
+    clip.recorte = { desde_ms: 0, hasta_ms: antes };
+    b.recorte = { desde_ms: 0, hasta_ms: despues };
+  } else if (conRecorte) {
     const desde = clip.recorte?.desde_ms ?? 0;
     clip.recorte = { desde_ms: desde, hasta_ms: desde + Math.round(antes * vel(clip)) };
     b.recorte = { desde_ms: clip.recorte.hasta_ms, hasta_ms: clip.recorte.hasta_ms + Math.round(despues * vel(b)) };
@@ -466,6 +535,22 @@ export function duplicar(doc, clipId, info = {}) {
   return terminar(res, copia.id, info);
 }
 
+// Capa 5b (D1, D9): una foto no tiene velocidad ni material que mirar —
+// recortarla por cualquier lado solo cambia cuánto dura, entre MIN_CLIP_MS
+// y FOTO_MAX_MS (nunca se mueve un punto de entrada que no existe); su
+// recorte queda siempre {0, duración}.
+function recortarFoto(clip, lado, d) {
+  const maxAlargar = FOTO_MAX_MS - clip.duracion_ms;
+  if (lado === "inicio") {
+    d = Math.max(-maxAlargar, Math.min(clip.duracion_ms - MIN_CLIP_MS, d));
+    clip.duracion_ms -= d;
+  } else {
+    d = Math.max(-(clip.duracion_ms - MIN_CLIP_MS), Math.min(maxAlargar, d));
+    clip.duracion_ms += d;
+  }
+  clip.recorte = { desde_ms: 0, hasta_ms: clip.duracion_ms };
+}
+
 export function recortar(doc, clipId, lado, deltaMs, info = {}) {
   const res = structuredClone(doc);
   const { pista, clip } = buscar(res, clipId);
@@ -474,6 +559,12 @@ export function recortar(doc, clipId, lado, deltaMs, info = {}) {
     throw new OperacionInvalida(t("op.voz_destino"));
   }
   const esPrincipal = pista === pistaPrincipal(res);
+  if (clip.foto) {
+    if (lado !== "inicio" && lado !== "fin") throw new OperacionInvalida(`No sé recortar por «${lado}».`);
+    recortarFoto(clip, lado, Math.round(Number(deltaMs) || 0));
+    if (esPrincipal) recolocar(pista);
+    return terminar(res, clip.id, info);
+  }
   const conRecorte = pista.tipo === "video" || pista.tipo === "superpuesto" || pista.tipo === "audio";
   const v = vel(clip);
   const desde = clip.recorte?.desde_ms ?? 0;
@@ -544,6 +635,7 @@ export function cambiarVelocidad(doc, clipId, velocidad, info = {}) {
   if (pista.tipo !== "video" && pista.tipo !== "superpuesto") {
     throw new OperacionInvalida(t("op.velocidad_video"));
   }
+  if (clip.foto) throw new OperacionInvalida(t("op.foto_velocidad"));   // D1: una foto no tiene velocidad
   if (!VELOCIDADES.includes(velocidad)) throw new OperacionInvalida(t("op.velocidad_no", { v: velocidad }));
   const tramo = fuente(clip);
   const desde = clip.recorte?.desde_ms ?? 0;
@@ -580,35 +672,97 @@ function lugarCapa(doc, tMs, dMs) {
   return { inicio, dur };
 }
 
+// D7: el encuadre automático al AGREGAR un clip de video o foto a la
+// principal — solo cuando se conocen sus medidas; si no, sin encuadre (como
+// hoy). `ajusteAutomatico` ya devuelve `null` cuando la proporción no se
+// aleja lo suficiente del lienzo, y `limpio(null)` también da `null`, así
+// que esta función sola decide si la clave `encuadre` va en el clip.
+function encuadreAlAgregar(material, formato) {
+  const tieneMedidas = Number(material?.ancho) > 0 && Number(material?.alto) > 0;
+  if (!tieneMedidas) return null;
+  const [anchoLienzo, altoLienzo] = FORMATOS[formato];
+  return limpio(ajusteAutomatico(material.ancho, material.alto, anchoLienzo, altoLienzo));
+}
+
+// Dónde entra un clip nuevo de la principal (`agregarVideo`/`agregarFoto`):
+// después de `despuesDe`, en `indice`, o al final (`despuesDe` manda si
+// vienen los dos).
+function lugarPrincipal(p, { despuesDe, indice }) {
+  if (despuesDe !== null && despuesDe !== undefined) {
+    const i = p.clips.findIndex((c) => c.id === despuesDe);
+    if (i < 0) throw new OperacionInvalida(t("op.fuera_principal"));
+    return i + 1;
+  }
+  if (indice !== null && indice !== undefined && Number.isFinite(Number(indice))) {
+    return Math.max(0, Math.min(p.clips.length, Math.round(Number(indice))));
+  }
+  return p.clips.length;
+}
+
 // Inserta un clip del material ENTERO (recorte 0..duración, velocidad 1, sin
 // transición, sin Ken Burns) en la principal, después del clip `despuesDe`, o
 // en el lugar `indice` (0 = primero; la biblioteca lo usa al soltar un video
 // en la fila del video), o al final si no se da ninguno (`despuesDe` manda si
 // vienen los dos). El material tiene que traer duración conocida en `info` —
-// si no, todavía se está subiendo/procesando.
+// si no, todavía se está subiendo/procesando. Capa 5b (D1): una imagen no
+// entra por aquí (`agregarFoto`); el clip nuevo toma el encuadre automático
+// de sus medidas (D7) si las trae.
 export function agregarVideo(doc, material, { despuesDe = null, indice = null } = {}, info = {}) {
+  if (material?.tipo === "imagen") throw new OperacionInvalida(t("op.es_foto"));
   const res = structuredClone(doc);
   const p = principalDe(res);
   const dur = duracionDe(info, material.id);
   if (dur === undefined || dur === null) throw new OperacionInvalida(t("op.video_preparando"));
-  let lugar = p.clips.length;
-  if (despuesDe !== null && despuesDe !== undefined) {
-    const i = p.clips.findIndex((c) => c.id === despuesDe);
-    if (i < 0) throw new OperacionInvalida(t("op.fuera_principal"));
-    lugar = i + 1;
-  } else if (indice !== null && indice !== undefined && Number.isFinite(Number(indice))) {
-    lugar = Math.max(0, Math.min(p.clips.length, Math.round(Number(indice))));
-  }
+  const lugar = lugarPrincipal(p, { despuesDe, indice });
+  const encuadre = encuadreAlAgregar(material, res.formato);
   const clip = {
     id: idNuevo(res, "v"), inicio_ms: 0, duracion_ms: dur, material_id: material.id,
     recorte: { desde_ms: 0, hasta_ms: dur }, velocidad: 1, transform: { ...TRANSFORM },
     keyframes: [], animacion: null, transicion: null, ken_burns: null, audio: { ...AUDIO },
+    ...(encuadre ? { encuadre } : {}),
   };
   p.clips.splice(lugar, 0, clip);
   recolocar(p);
   // Un video con sonido abre el sonido de la escena si la edición no lo
   // tenía, pero solo para ESTE clip: los de antes entran en silencio.
   if (tieneAudioDe(info, material.id)) abrirSonido(res, info, (c) => c === clip);
+  return terminar(res, clip.id, info);
+}
+
+// Capa 5b (D1, D7, D12): «Como clip del video» — una foto es un clip más de
+// la principal (`foto: true`), de `duracionMs` (3 s por defecto, acotada a
+// [MIN_CLIP_MS, FOTO_MAX_MS]), recorte SIEMPRE {0, duración} (no tiene
+// tiempo de fuente), velocidad 1 y el encuadre automático de sus medidas si
+// las trae (D7). Nunca abre `p_sonido` (una foto no suena; `espejables` ya
+// la salta). Mismos `despuesDe`/`indice` que `agregarVideo`.
+export function agregarFoto(doc, material, { despuesDe = null, indice = null, duracionMs = FOTO_DEFECTO_MS } = {}, info = {}) {
+  if (material?.tipo !== "imagen") throw new OperacionInvalida(t("op.no_es_imagen"));
+  const res = structuredClone(doc);
+  const p = principalDe(res);
+  const lugar = lugarPrincipal(p, { despuesDe, indice });
+  const dur = Math.max(MIN_CLIP_MS, Math.min(FOTO_MAX_MS, Math.round(Number(duracionMs) || FOTO_DEFECTO_MS)));
+  const encuadre = encuadreAlAgregar(material, res.formato);
+  const clip = {
+    id: idNuevo(res, "foto"), inicio_ms: 0, duracion_ms: dur, material_id: material.id, foto: true,
+    recorte: { desde_ms: 0, hasta_ms: dur }, velocidad: 1, transform: { ...TRANSFORM },
+    keyframes: [], animacion: null, transicion: null, ken_burns: null, audio: { ...AUDIO },
+    ...(encuadre ? { encuadre } : {}),
+  };
+  p.clips.splice(lugar, 0, clip);
+  recolocar(p);
+  return terminar(res, clip.id, info);
+}
+
+// Capa 5b (D1, D8): cuánto dura una foto — acotada a [MIN_CLIP_MS,
+// FOTO_MAX_MS], sin material que mirar (una foto no tiene tiempo de
+// fuente). Su `recorte` queda siempre {0, duración}.
+export function cambiarDuracionFoto(doc, clipId, ms, info = {}) {
+  const res = structuredClone(doc);
+  const { pista, clip } = buscar(res, clipId);
+  if (!clip.foto) throw new OperacionInvalida(t("op.no_es_foto"));
+  clip.duracion_ms = Math.max(MIN_CLIP_MS, Math.min(FOTO_MAX_MS, Math.round(Number(ms) || 0)));
+  clip.recorte = { desde_ms: 0, hasta_ms: clip.duracion_ms };
+  if (pista === pistaPrincipal(res)) recolocar(pista);
   return terminar(res, clip.id, info);
 }
 
@@ -732,10 +886,19 @@ export function agregarTexto(doc, tMs, preset, info = {}) {
   return terminar(res, clip.id, info);
 }
 
-// Pone (o quita, con tipo "corte") la transición de un clip de la principal
-// que no sea el último hacia el siguiente. `normalizar` (dentro de
-// `terminar`) ya se encarga de acortarla o quitarla si la cola no cabe en el
-// material.
+// `true` si `tr` es una transición real (no «corte», con duración > 0).
+function tieneTransicion(tr) {
+  return Boolean(tr) && (tr.tipo ?? "corte") !== "corte" && tr.duracion_ms > 0;
+}
+
+// D9: pone (o cambia, o quita) la transición de un clip de la principal
+// hacia el siguiente. Toda transición que nace donde no había (A sin
+// transición, o con una ya quitada) nace «solape» — A cede sus últimos ms
+// (`cederASolape`) salvo que se pida «corte», que no nace nada. Si A ya
+// tenía una «solape»: cambiar solo el tipo no toca la duración; cambiar la
+// duración devuelve lo que A había cedido y cede lo nuevo; «corte» le
+// devuelve lo cedido. Una transición de «cola» (de un borrador automático,
+// sin `modo`) sigue cambiando como siempre — nunca se vuelve «solape» sola.
 export function ponerTransicion(doc, clipId, tipo, duracionMs = 500, info = {}) {
   const res = structuredClone(doc);
   const p = principalDe(res);
@@ -743,9 +906,28 @@ export function ponerTransicion(doc, clipId, tipo, duracionMs = 500, info = {}) 
   if (i < 0) throw new OperacionInvalida(t("op.transicion_principal"));
   if (i === p.clips.length - 1) throw new OperacionInvalida(t("op.transicion_ultimo"));
   if (!TRANSICIONES.includes(tipo)) throw new OperacionInvalida(`Esa transición no existe (${tipo}).`);
-  const clip = p.clips[i];
-  clip.transicion = tipo === "corte" ? null : { tipo, duracion_ms: Math.max(0, Math.round(Number(duracionMs) || 0)) };
-  return terminar(res, clip.id, info);
+  const A = p.clips[i];
+  const B = p.clips[i + 1];
+  const actual = A.transicion;
+  const pedida = Math.max(0, Math.round(Number(duracionMs) || 0));
+  if (actual && (actual.modo ?? null) === "solape") {
+    if (tipo === "corte") {
+      devolverASolape(A, actual.duracion_ms);
+      A.transicion = null;
+    } else if (pedida === actual.duracion_ms) {
+      A.transicion = { ...actual, tipo };   // solo el tipo: no toca nada más
+    } else {
+      devolverASolape(A, actual.duracion_ms);
+      const d = cederASolape(A, B, pedida);
+      A.transicion = { tipo, duracion_ms: d, modo: "solape" };
+    }
+  } else if (!tieneTransicion(actual)) {
+    A.transicion = tipo === "corte" ? null : { tipo, duracion_ms: cederASolape(A, B, pedida), modo: "solape" };
+  } else {
+    // «Cola» de siempre (sin modo): como hoy, intacto.
+    A.transicion = tipo === "corte" ? null : { tipo, duracion_ms: pedida };
+  }
+  return terminar(res, A.id, info);
 }
 
 const _CLAVE_RE = /^[a-z]{2}(_[A-Z]{2})?$/;   // documento._CLAVE_RE: "es" o "es_CO"
@@ -827,7 +1009,7 @@ function subCambio(actual, valor, campos, nombre, automaticos = []) {
 const CAMPOS_CONTORNO = { color: null, grosor: [0, 0.1] };
 const CAMPOS_SOMBRA = { color: null, dx: [-0.1, 0.1], dy: [-0.1, 0.1] };
 const CAMPOS_FONDO = { color: null, opacidad: [0, 1], radio: [0, 1], relleno_x: [0, 0.5], relleno_y: [0, 0.5], ancho: [0, 1] };
-const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion", "idioma"];
+const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion", "idioma", "encuadre"];
 
 // Cambia un clip existente por una lista blanca de campos (cualquier otra
 // clave, en cualquier nivel, se rechaza): estilo.{fuente, tamano, color,
@@ -837,8 +1019,10 @@ const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion", "
 // fundido_entrada_ms, fundido_salida_ms} (solo audio, incluido el espejo
 // p_sonido), ken_burns (solo video/superpuesto), animacion.entrada
 // (ninguna|deslizar: con su duración, DURACION_ANIMACION_MS; «ninguna» deja
-// `animacion: null`). Los valores fuera de rango se
-// acotan en vez de rechazarse; `estilo.tamano` llega en PÍXELES (12–200,
+// `animacion: null`), encuadre (capa 5b, D4/D8: solo en un clip de la
+// principal de video — videos y fotos —; `null` quita el encuadre; se
+// fusiona sobre el actual y pasa por `encuadre.limpio`). Los valores fuera
+// de rango se acotan en vez de rechazarse; `estilo.tamano` llega en PÍXELES (12–200,
 // como los presets de agregarTexto) y se guarda como fracción de la altura
 // del lienzo. Cambiar el estilo de un texto invalida su png en caché.
 export function cambiar(doc, clipId, cambios, info = {}) {
@@ -944,6 +1128,25 @@ export function cambiar(doc, clipId, cambios, info = {}) {
     const formatoValido = valor === null || (typeof valor === "string" && _IDIOMA_RE.test(valor));
     if (pista.tipo !== "audio" || !formatoValido) throw new OperacionInvalida(`Ese idioma no es válido (${valor}).`);
     if (valor === null) delete clip.idioma; else clip.idioma = valor;
+  }
+  if (cambios.encuadre !== undefined) {
+    // D4/D8: solo en un clip de la principal de video (videos y fotos);
+    // `null` = sin encuadre; se fusiona sobre el actual (completo) y pasa
+    // por `encuadre.limpio` (acota zoom/x/y, y vuelve a `null` si queda
+    // igual al defecto). `modo`/claves de contrato: documento.validar los
+    // rechazaría igual, así que el mensaje queda en español (INTERNOS).
+    if (pista.tipo !== "video") throw new OperacionInvalida(t("op.encuadre_principal"));
+    const enc = cambios.encuadre;
+    if (enc === null) {
+      clip.encuadre = null;
+    } else {
+      if (typeof enc !== "object" || Array.isArray(enc)) throw new OperacionInvalida("encuadre debe ser un objeto o null.");
+      for (const clave of Object.keys(enc)) {
+        if (!["modo", "zoom", "x", "y"].includes(clave)) throw new OperacionInvalida(`encuadre.${clave} no se puede cambiar.`);
+      }
+      if (enc.modo !== undefined && !MODOS.includes(enc.modo)) throw new OperacionInvalida(`Ese encuadre no existe (${enc.modo}).`);
+      clip.encuadre = limpio({ ...completo(clip.encuadre), ...enc });
+    }
   }
   if (tocaEstilo && pista.tipo === "texto" && res.pngs) delete res.pngs[clipId];
   return terminar(res, clip.id, info);

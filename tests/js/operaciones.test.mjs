@@ -319,11 +319,16 @@ test("cortarClip parte el recorte en audio, solo el tiempo en texto (y copia el 
   invalida(() => op.cortarClip(docBase(), "s0", 1000, INFO), /sonido/);
 });
 
-test("ponerTransicion normaliza la cola contra el material y rechaza el último clip o uno fuera de la principal", () => {
-  for (const tipo of ["corte", "fundido", "deslizar", "zoom", "desenfoque"]) {
+test("ponerTransicion rechaza el último clip o uno fuera de la principal; toda transición nueva nace solape (D9)", () => {
+  // Capa 5b (D9): sobre un documento del borrador sin ninguna transición
+  // todavía, ponerTransicion siempre crea una «solape» — A cede sus ms
+  // (docBase: material de sobra, así que los 500 ms pedidos caben enteros).
+  for (const tipo of ["fundido", "deslizar", "zoom", "desenfoque"]) {
     const r = puro((d) => op.ponerTransicion(d, "v0", tipo, 500, INFO));
-    assert.deepEqual(clipDe(r.doc, "v0").transicion, tipo === "corte" ? null : { tipo, duracion_ms: 500 });
+    assert.deepEqual(clipDe(r.doc, "v0").transicion, { tipo, duracion_ms: 500, modo: "solape" });
   }
+  const sinNada = puro((d) => op.ponerTransicion(d, "v0", "corte", 500, INFO));
+  assert.equal(clipDe(sinNada.doc, "v0").transicion, null);
   invalida(() => op.ponerTransicion(docBase(), "v1", "fundido", 500, INFO), /último/);
   invalida(() => op.ponerTransicion(docBase(), "t1", "fundido", 500, INFO), /principal/);
   invalida(() => op.ponerTransicion(docBase(), "v0", "inventada", 500, INFO), /transición/);
@@ -850,4 +855,134 @@ test("adoptarVozComoFuente no hace nada si ya hay fuentes, si no hay voz, o si f
   // con TODAS las voces (incluida la de por_destino) transcritas, sí adopta
   const infoCompleta = { ...INFO_PALABRAS, 5: { duracion_ms: 2000, palabras: [] } };
   assert.notEqual(op.adoptarVozComoFuente(conPorDestino, infoCompleta), conPorDestino);
+});
+
+// ---- Capa 5b (Tarea 5): fotos, encuadre y transiciones que juntan ----
+const M4 = { id: 4, tipo: "imagen", ancho: 1000, alto: 1000 };
+const M5 = { id: 5, tipo: "imagen", ancho: 1080, alto: 1920 };
+const totalPrincipal = (doc) => doc.pistas[0].clips.reduce((s, c) => s + c.duracion_ms, 0);
+
+test("agregarFoto inserta una foto en la principal con su encuadre automático (D1, D7)", () => {
+  const { doc, seleccion } = op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES);
+  assert.equal(seleccion, "foto_2");
+  const foto = doc.pistas[0].clips[1];
+  assert.deepEqual([foto.id, foto.inicio_ms, foto.duracion_ms], ["foto_2", 4000, 3000]);
+  assert.deepEqual(foto.recorte, { desde_ms: 0, hasta_ms: 3000 });
+  assert.deepEqual(foto.encuadre, { modo: "ajustar", zoom: 1, x: 0.5, y: 0.5 });
+  assert.deepEqual([doc.pistas[0].clips[2].id, doc.pistas[0].clips[2].inicio_ms], ["v1", 7000]);
+  assert.deepEqual(doc.pistas.find((p) => p.id === "p_sonido").clips.map((c) => c.id), ["s_v0", "s_v1"]);
+
+  const conM5 = op.agregarFoto(docBase(), M5, { indice: 1 }, DURACIONES).doc.pistas[0].clips[1];
+  assert.equal(conM5.encuadre, undefined);
+
+  invalida(() => op.agregarFoto(docBase(), { id: 1, tipo: "video" }, { indice: 1 }, DURACIONES), /no es una imagen/);
+});
+
+test("agregarVideo rechaza una imagen y calcula el encuadre automático de sus medidas (D7)", () => {
+  invalida(() => op.agregarVideo(docBase(), { id: 4, tipo: "imagen" }, {}, DURACIONES), /foto/);
+  const conEncuadre = op.agregarVideo(docBase(), { id: 3, tipo: "video", ancho: 1920, alto: 1080 }, { despuesDe: "v1" },
+    { ...DURACIONES, 3: 1500 }).doc;
+  const clip3 = conEncuadre.pistas[0].clips.find((c) => c.material_id === 3);
+  assert.deepEqual(clip3.encuadre, { modo: "ajustar", zoom: 1, x: 0.5, y: 0.5 });
+  const sinMedidas = op.agregarVideo(docBase(), { id: 3 }, { despuesDe: "v1" }, { ...DURACIONES, 3: 1500 }).doc;
+  assert.equal(sinMedidas.pistas[0].clips.find((c) => c.material_id === 3).encuadre, undefined);
+});
+
+test("cambiarDuracionFoto acota entre MIN_CLIP_MS y FOTO_MAX_MS y recoloca la principal", () => {
+  const conFoto = () => op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  const a = op.cambiarDuracionFoto(conFoto(), "foto_2", 5000, DURACIONES).doc;
+  assert.deepEqual([a.pistas[0].clips[1].duracion_ms, a.pistas[0].clips[2].inicio_ms], [5000, 9000]);
+  assert.equal(op.cambiarDuracionFoto(conFoto(), "foto_2", 70000, DURACIONES).doc.pistas[0].clips[1].duracion_ms, op.FOTO_MAX_MS);
+  assert.equal(op.cambiarDuracionFoto(conFoto(), "foto_2", 50, DURACIONES).doc.pistas[0].clips[1].duracion_ms, MIN_CLIP_MS);
+  invalida(() => op.cambiarDuracionFoto(conFoto(), "v0", 5000, DURACIONES), /no es una foto/);
+});
+
+test("recortar y cortarEn tratan una foto sin velocidad ni material que mirar (D1, D9)", () => {
+  const conFoto = () => op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  const fin = op.recortar(conFoto(), "foto_2", "fin", -1000, DURACIONES).doc.pistas[0].clips[1];
+  assert.equal(fin.duracion_ms, 2000);
+  const inicio = op.recortar(conFoto(), "foto_2", "inicio", 500, DURACIONES).doc.pistas[0].clips[1];
+  assert.deepEqual([inicio.duracion_ms, inicio.recorte], [2500, { desde_ms: 0, hasta_ms: 2500 }]);
+  const alargada = op.recortar(conFoto(), "foto_2", "inicio", -2000, DURACIONES).doc.pistas[0].clips[1];
+  assert.equal(alargada.duracion_ms, 5000);
+
+  const { doc } = op.cortarEn(conFoto(), 5000, DURACIONES);
+  const [f1, f2] = doc.pistas[0].clips.filter((c) => c.foto);
+  assert.deepEqual([f1.duracion_ms, f1.recorte], [1000, { desde_ms: 0, hasta_ms: 1000 }]);
+  assert.deepEqual([f2.duracion_ms, f2.recorte], [2000, { desde_ms: 0, hasta_ms: 2000 }]);
+
+  invalida(() => op.cambiarVelocidad(conFoto(), "foto_2", 2, DURACIONES), /no tiene velocidad/);
+});
+
+test("cambiar admite un encuadre válido, lo fusiona con el actual y lo limpia (D4)", () => {
+  let d = op.cambiar(docBase(), "v0", { encuadre: { modo: "ajustar" } }, DURACIONES).doc;
+  assert.deepEqual(d.pistas[0].clips[0].encuadre, { modo: "ajustar", zoom: 1, x: 0.5, y: 0.5 });
+  d = op.cambiar(d, "v0", { encuadre: { modo: "llenar" } }, DURACIONES).doc;
+  assert.equal(d.pistas[0].clips[0].encuadre, null);
+  d = op.cambiar(d, "v0", { encuadre: { zoom: 9 } }, DURACIONES).doc;
+  assert.equal(d.pistas[0].clips[0].encuadre.zoom, 4);
+  invalida(() => op.cambiar(docBase(), "v0", { encuadre: { rotacion: 1 } }, DURACIONES), /encuadre\.rotacion no se puede cambiar/);
+  invalida(() => op.cambiar(docBase(), "v0", { encuadre: { modo: "estirar" } }, DURACIONES), /Ese encuadre no existe \(estirar\)/);
+  invalida(() => op.cambiar(docBase(), "t1", { encuadre: { modo: "ajustar" } }, DURACIONES), /El encuadre se cambia solo/);
+  const sinEnc = op.cambiar(docBase(), "v0", { encuadre: null }, DURACIONES).doc;
+  assert.equal(sinEnc.pistas[0].clips[0].encuadre, null);
+});
+
+test("ponerTransicion nace solape, cede sus ms y los devuelve al quitarla o al cambiar la duración (D9)", () => {
+  let d = op.ponerTransicion(docBase(), "v0", "fundido", 500, DURACIONES).doc;
+  assert.deepEqual([d.pistas[0].clips[0].duracion_ms, d.pistas[0].clips[0].recorte, d.pistas[0].clips[0].transicion, d.pistas[0].clips[1].inicio_ms],
+    [3500, { desde_ms: 0, hasta_ms: 3500 }, { tipo: "fundido", duracion_ms: 500, modo: "solape" }, 3500]);
+
+  d = op.ponerTransicion(d, "v0", "deslizar", 500, DURACIONES).doc;
+  assert.deepEqual(d.pistas[0].clips[0].transicion, { tipo: "deslizar", duracion_ms: 500, modo: "solape" });
+  assert.equal(d.pistas[0].clips[0].duracion_ms, 3500);   // solo cambió el tipo
+
+  d = op.ponerTransicion(d, "v0", "fundido", 800, DURACIONES).doc;
+  assert.equal(d.pistas[0].clips[0].duracion_ms, 3200);
+
+  d = op.ponerTransicion(d, "v0", "corte", 0, DURACIONES).doc;
+  assert.deepEqual([d.pistas[0].clips[0].duracion_ms, d.pistas[0].clips[0].transicion, d.pistas[0].clips[1].inicio_ms], [4000, null, 4000]);
+});
+
+function dosClipsEnteros(dur2 = 1500, id2 = 3) {
+  const sinV1 = op.borrar(docBase(), "v1", DURACIONES).doc;
+  const extendido = op.recortar(sinV1, "v0", "fin", 4000, DURACIONES).doc;
+  return op.agregarVideo(extendido, { id: id2 }, { despuesDe: "v0" }, { ...DURACIONES, [id2]: dur2 }).doc;
+}
+
+test("ponerTransicion siempre nace solape entre dos clips enteros, aunque el material no tenga cola (D9)", () => {
+  const base = dosClipsEnteros();
+  assert.deepEqual(base.pistas[0].clips.map((c) => c.duracion_ms), [8000, 1500]);
+  const con500 = op.ponerTransicion(base, "v0", "fundido", 500, { ...DURACIONES, 3: 1500 }).doc;
+  assert.deepEqual([con500.pistas[0].clips[0].duracion_ms, con500.pistas[0].clips[0].transicion],
+    [7500, { tipo: "fundido", duracion_ms: 500, modo: "solape" }]);
+
+  const corto = dosClipsEnteros(250, 7);
+  invalida(() => op.ponerTransicion(corto, "v0", "fundido", 500, { ...DURACIONES, 7: 250 }), /cortos/);
+
+  const clip400 = dosClipsEnteros(400, 7);
+  const con400 = op.ponerTransicion(clip400, "v0", "fundido", 500, { ...DURACIONES, 7: 400 }).doc;
+  assert.equal(con400.pistas[0].clips[0].transicion.duracion_ms, 300);
+});
+
+test("una transición de cola existente (sin modo) sigue cambiando como antes (D9)", () => {
+  const d = docBase();
+  d.pistas[0].clips[0].transicion = { tipo: "fundido", duracion_ms: 500 };
+  const con800 = op.ponerTransicion(d, "v0", "fundido", 800, DURACIONES).doc;
+  assert.deepEqual([con800.pistas[0].clips[0].duracion_ms, con800.pistas[0].clips[0].transicion],
+    [4000, { tipo: "fundido", duracion_ms: 800 }]);
+});
+
+test("normalizar deshace el solape si el clip queda último (D9)", () => {
+  const conSolape = op.ponerTransicion(docBase(), "v0", "fundido", 500, DURACIONES).doc;
+  const { doc } = op.moverPrincipal(conSolape, "v0", 1, DURACIONES);
+  const v0 = doc.pistas[0].clips.find((c) => c.id === "v0");
+  assert.deepEqual([doc.pistas[0].clips.at(-1).id, v0.duracion_ms, v0.transicion], ["v0", 4000, null]);
+  assert.equal(totalPrincipal(doc), 8000);
+});
+
+test("una foto como A cede sus ms igual que un video (D9)", () => {
+  const conFoto = op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  const { doc } = op.ponerTransicion(conFoto, "foto_2", "fundido", 500, DURACIONES);
+  assert.equal(doc.pistas[0].clips.find((c) => c.id === "foto_2").duracion_ms, 2500);
 });

@@ -409,14 +409,18 @@ export function rolDeMaterial(material) {
 // preset} o {tipo: "transicion", transicion}. Con `punto` (lo que dio
 // LineaTiempo.puntoEn al soltar) va ahí: un video, en su lugar de la
 // principal (soltado en otra fila, por el tiempo: no hay video sobre video);
-// una imagen, como capa en ese instante aunque caiga en la fila del video; una
-// transición, en el corte más cercano al dedo. Sin `punto` («+» o tocar), en
-// el cabezal: el video después del clip bajo el cabezal (indiceAgregarVideo),
-// la transición como pedidoTransicion. El audio entra con rolDeMaterial: una
-// grabación, una voz con IA o una locución como VOZ (agacha la música), con
-// el idioma del destino que se ve si habla ese idioma (`destino`,
-// voz_modelo.idiomaDeVoz); lo demás como música.
-export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccion = null, destino = null } = {}) {
+// una imagen, como capa en ese instante aunque caiga en la fila del video —
+// salvo que se suelte justo en la fila del video (`punto.indicePrincipal`),
+// donde entra como foto (capa 5b, D1/D12); una transición, en el corte más
+// cercano al dedo. Sin `punto` («+» o tocar), en el cabezal: el video
+// después del clip bajo el cabezal (indiceAgregarVideo), la transición como
+// pedidoTransicion; una imagen con `como === "clip"` (el menú «+» de la
+// biblioteca) entra igual, como foto, en ese mismo lugar — si no, como capa
+// de siempre. El audio entra con rolDeMaterial: una grabación, una voz con
+// IA o una locución como VOZ (agacha la música), con el idioma del destino
+// que se ve si habla ese idioma (`destino`, voz_modelo.idiomaDeVoz); lo
+// demás como música.
+export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccion = null, destino = null, como = null } = {}) {
   const ms = Math.max(0, Math.round(Number(punto ? punto.tMs : cabezalMs) || 0));
   switch (cosa?.tipo) {
     case "video": {
@@ -424,8 +428,14 @@ export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccio
       const indice = !punto ? indiceAgregarVideo(doc, ms) : enPrincipal ? punto.indicePrincipal : indiceDestino(doc, null, ms);
       return ["agregarVideo", cosa.material, { indice }];
     }
-    case "imagen":
+    case "imagen": {
+      const enPrincipal = punto && punto.indicePrincipal !== null && punto.indicePrincipal !== undefined;
+      if (como === "clip" || enPrincipal) {
+        const indice = !punto ? indiceAgregarVideo(doc, ms) : enPrincipal ? punto.indicePrincipal : indiceDestino(doc, null, ms);
+        return ["agregarFoto", cosa.material, { indice }];
+      }
       return ["agregarImagen", cosa.material, ms, {}];
+    }
     case "audio": {
       if (rolDeMaterial(cosa.material) !== "voz") return ["agregarAudio", cosa.material, ms, { rol: "musica" }];
       return ["agregarAudio", cosa.material, ms, { rol: "voz", idioma: idiomaDeVoz(cosa.material?.idioma, destino).idioma }];
@@ -456,6 +466,45 @@ export function avisoTransicion(doc, clipId, tipo, pedidoMs = DURACION_TRANSICIO
   }
   if (tr.duracion_ms < pedidoMs) return t("tr.acortada", { duracion: segundosTexto(tr.duracion_ms) });
   return null;
+}
+
+// Capa 5b (D9): qué pasó con la transición de un clip de la principal,
+// comparando el documento de ANTES de una operación con el de DESPUÉS —
+// generaliza `avisoTransicion` (que solo mira el resultado contra lo
+// pedido) a cualquier operación que pueda tocar una transición ya puesta,
+// no solo `ponerTransicion`. `{tipo: "junta", ms}`: la transición quedó
+// «solape» (recién nacida, o con la cola que le queda) y el video se
+// acortó `ms`. `{tipo: "corte"}` / `{tipo: "acortada", ms}`: lo de hoy, para
+// una transición de «cola» que no cupo entera o quedó más corta que antes.
+// `null` si no hay nada que avisar.
+function tieneTransicionReal(tr) {
+  return Boolean(tr) && (tr.tipo ?? "corte") !== "corte" && tr.duracion_ms > 0;
+}
+
+export function efectoTransicion(antes, despues, clipId) {
+  const clipDespues = clipsPrincipales(despues).find((c) => c.id === clipId);
+  if (!clipDespues) return null;
+  const trDespues = clipDespues.transicion;
+  const tiene = tieneTransicionReal(trDespues);
+  if (tiene && (trDespues.modo ?? null) === "solape") {
+    return { tipo: "junta", ms: trDespues.duracion_ms };
+  }
+  const clipAntes = clipsPrincipales(antes).find((c) => c.id === clipId);
+  const trAntes = clipAntes?.transicion;
+  if (!tieneTransicionReal(trAntes)) return null;
+  if (!tiene) return { tipo: "corte" };
+  if (trDespues.duracion_ms < trAntes.duracion_ms) return { tipo: "acortada", ms: trDespues.duracion_ms };
+  return null;
+}
+
+// El texto de `efectoTransicion`, con `nombre` (el de la transición,
+// nombreTransicion(tipo)) para «junta». `segundosTexto` es la misma
+// conversión que usa `avisoTransicion`.
+export function textoEfectoTransicion(efecto, nombre) {
+  if (!efecto) return null;
+  if (efecto.tipo === "junta") return t("tr.junta", { nombre, duracion: segundosTexto(efecto.ms) });
+  if (efecto.tipo === "corte") return t("tr.union_corte");
+  return t("tr.acortada", { duracion: segundosTexto(efecto.ms) });
 }
 
 // Las uniones de la principal que llevan transición, para marcarlas en la

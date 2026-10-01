@@ -1,14 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  avisoTransicion, barrasOnda, bloquesSubtitulos, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, estiloArrastre, etiquetaClip,
-  filaEnY, filasVisuales, fondoTira, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables, marcasRegla, msAPx,
-  msInsercion, nombreFila, nombreTransicion, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar, pedidoTransicion, puntoSoltar,
-  pxAMs, soltar, unionesConTransicion, VENTANA_PICOS_MS,
+  avisoTransicion, barrasOnda, bloquesSubtitulos, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, efectoTransicion,
+  estiloArrastre, etiquetaClip, filaEnY, filasVisuales, fondoTira, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables,
+  marcasRegla, msAPx, msInsercion, nombreFila, nombreTransicion, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar,
+  pedidoTransicion, puntoSoltar, pxAMs, soltar, textoEfectoTransicion, unionesConTransicion, VENTANA_PICOS_MS,
 } from "../../static/editor/escala.js";
 import { readFileSync } from "node:fs";
-import { TRANSICIONES } from "../../static/editor/operaciones.js";
-import { docBase } from "./doc_base.mjs";
+import { normalizar, ponerTransicion, TRANSICIONES } from "../../static/editor/operaciones.js";
+import { docBase, DURACIONES } from "./doc_base.mjs";
 
 test("ms y px a una escala dada", () => {
   assert.equal(msAPx(1500, 80), 120);
@@ -385,8 +385,12 @@ test("pedidoAgregar al soltar: el video en su lugar de la principal, lo demás e
   assert.deepEqual(pedidoAgregar(doc, { tipo: "video", material: video }, { punto: { pistaId: null, tipo: null, tMs: 7000, indicePrincipal: null } }),
     ["agregarVideo", video, { indice: 2 }]);
   const imagen = { id: 8, tipo: "imagen" };
+  // Capa 5b (D1, D12): soltada en la fila del video entra como foto, en ese
+  // lugar de la principal; en cualquier otra fila sigue siendo una capa.
   assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: imagen }, { punto: sobreVideo, cabezalMs: 6000 }),
-    ["agregarImagen", imagen, 0, {}]);                          // la imagen es una capa en ese tiempo, aunque caiga en el video
+    ["agregarFoto", imagen, { indice: 0 }]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: imagen }, { punto: sobreTexto, cabezalMs: 6000 }),
+    ["agregarImagen", imagen, 5000, {}]);
   assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "llamado" }, { punto: sobreTexto, cabezalMs: 100 }),
     ["agregarTexto", 5000, "llamado"]);
   // una transición soltada: el corte más cercano al dedo (la selección no cuenta)
@@ -409,6 +413,48 @@ test("avisoTransicion: dice cuando la transición no cupo entera en el material"
   assert.match(avisoTransicion(con({ tipo: "fundido", duracion_ms: 300 }), "v0", "fundido"), /quedó de 0,3 s/);
   assert.equal(avisoTransicion(con(null), "v0", "corte"), null);         // «Corte» la quita a propósito
   assert.equal(avisoTransicion(con(null), "ya-no-existe", "fundido"), null);
+});
+
+// ---- Capa 5b (Tarea 5): fotos, encuadre y transiciones que juntan ----
+
+test("pedidoAgregar de una imagen: «como clip» o soltada en la fila del video entra como foto; si no, como capa", () => {
+  const doc = docBase();
+  const foto = { id: 10, tipo: "imagen" };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500, como: "clip" }),
+    ["agregarFoto", foto, { indice: 1 }]);
+  const sobreVideo = { pistaId: "p_video", tipo: "video", tMs: 0, indicePrincipal: 1 };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: foto }, { punto: sobreVideo }),
+    ["agregarFoto", foto, { indice: 1 }]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500, como: "capa" }),
+    ["agregarImagen", foto, 2500, {}]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500 }),
+    ["agregarImagen", foto, 2500, {}]);
+  // ningún pedido de una imagen crea un superpuesto (video encima de video)
+  for (const r of [
+    pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500, como: "clip" }),
+    pedidoAgregar(doc, { tipo: "imagen", material: foto }, { punto: sobreVideo }),
+    pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500, como: "capa" }),
+  ]) assert.notEqual(r[0], "agregarSuperpuesto");
+});
+
+test("efectoTransicion: junta (solape recién nacida), corte (cola sin material) y nada si no cambió", () => {
+  const solape = ponerTransicion(docBase(), "v0", "fundido", 500, DURACIONES).doc;
+  assert.deepEqual(efectoTransicion(docBase(), solape, "v0"), { tipo: "junta", ms: 500 });
+
+  const antes = docBase();
+  antes.pistas[0].clips[0].transicion = { tipo: "fundido", duracion_ms: 500 };
+  const despues = normalizar(structuredClone(antes), { 1: 4000 });
+  assert.deepEqual(efectoTransicion(antes, despues, "v0"), { tipo: "corte" });
+
+  assert.equal(efectoTransicion(docBase(), docBase(), "v0"), null);
+  assert.equal(efectoTransicion(docBase(), docBase(), "no-existe"), null);
+});
+
+test("textoEfectoTransicion usa segundosTexto para la duración, como avisoTransicion", () => {
+  assert.equal(textoEfectoTransicion({ tipo: "junta", ms: 500 }, "Fundido"),
+    "«Fundido» quedó en la unión: junta los dos clips y el video quedó 0,5 s más corto.");
+  assert.equal(textoEfectoTransicion({ tipo: "corte" }, "Fundido"), "Esa unión quedó en corte: el primer clip no tiene video de sobra al final para la transición. Recorta un poco su final y vuelve a ponerla.");
+  assert.equal(textoEfectoTransicion(null, "Fundido"), null);
 });
 
 test("las transiciones de la biblioteca son las que el render hace, con su nombre", () => {

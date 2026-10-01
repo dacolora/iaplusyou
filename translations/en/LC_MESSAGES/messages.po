@@ -4510,6 +4510,9 @@ msgstr "The pain point or desire goes in a short sentence (%(n)s characters max)
 msgid "El dominio es el <code>shop-id</code> que aparece en la URL de Triple Whale (por ejemplo <code>?shop-id=mitienda.myshopify.com</code>)."
 msgstr "The domain is the <code>shop-id</code> shown in the Triple Whale URL (for example <code>?shop-id=mystore.myshopify.com</code>)."
 
+msgid "El encuadre se cambia solo en los clips del video."
+msgstr "Framing only changes on video clips."
+
 #, python-format
 msgid "El enlace vence en %(vence)s y sirve una sola vez. Si no pediste cambiar tu contraseña, ignora este correo: tu cuenta sigue igual."
 msgstr "The link expires in %(vence)s and works only once. If you didn't ask to change your password, ignore this email: your account stays the same."
@@ -5396,6 +5399,9 @@ msgstr "That ad account doesn't show up among your portfolio's; search again."
 msgid "Esa cuenta publicitaria ya está conectada a otro proyecto; avísale a Creatv."
 msgstr "That ad account is already connected to another project; let Creatv know."
 
+msgid "Esa es una foto: agrégala como clip del video o encima."
+msgstr "That's a photo: add it as a video clip or on top of it."
+
 msgid "Esa escena no existe en esta versión."
 msgstr "That scene doesn't exist in this version."
 
@@ -5775,6 +5781,9 @@ msgstr "That learning no longer exists."
 msgid "Ese archivo no es de este proyecto."
 msgstr "That file isn't from this project."
 
+msgid "Ese archivo no es una imagen."
+msgstr "That file isn't an image."
+
 msgid "Ese archivo no se borra desde aquí."
 msgstr "That file can't be deleted from here."
 
@@ -5789,6 +5798,9 @@ msgstr "That audio is still being prepared."
 
 msgid "Ese avatar no existe."
 msgstr "That avatar doesn't exist."
+
+msgid "Ese clip no es una foto."
+msgstr "That clip isn't a photo."
 
 msgid "Ese clip no está en la pista principal."
 msgstr "That clip isn't on the main track."
@@ -5952,6 +5964,9 @@ msgstr "That isn't a text clip."
 
 msgid "Eso no parece un link (tiene que empezar por http:// o https://)."
 msgstr "That doesn't look like a link (it must start with http:// or https://)."
+
+msgid "Esos clips son muy cortos para una transición: alárgalos un poco."
+msgstr "Those clips are too short for a transition: make them a bit longer."
 
 msgid "Esos destinos ya se estaban produciendo."
 msgstr "Those markets were already being produced."
@@ -13951,6 +13966,9 @@ msgstr "One of the pieces is not available (or not ready)."
 msgid "Una escena puede llevar hasta %(n)s imágenes."
 msgstr "A scene can have up to %(n)s images."
 
+msgid "Una foto no tiene velocidad: cambia cuánto dura."
+msgstr "A photo has no speed: change how long it lasts."
+
 msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde."
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
 
@@ -17336,6 +17354,10 @@ msgstr "“siguiente” has a step that doesn't exist: %(que)s."
 #, python-brace-format
 msgid "«{nombre}» quedó en la unión."
 msgstr "“{nombre}” was placed on the join."
+
+#, python-brace-format
+msgid "«{nombre}» quedó en la unión: junta los dos clips y el video quedó {duracion} más corto."
+msgstr "“{nombre}” was placed on the join: it merges the two clips, and the video is {duracion} shorter now."
 
 #, python-brace-format
 msgid "«{nombre}» se está preparando"

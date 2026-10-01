@@ -155,6 +155,15 @@ def test_mezclas_del_panel_iguales_a_python():
     assert mezcla.PRESET_DEFECTO == "equilibrada"
 
 
+def test_foto_constantes_js_iguales_a_python():
+    # Capa 5b (D1): agregarFoto/cambiarDuracionFoto acotan a lo mismo que
+    # documento.validar aceptaría (FOTO_MIN_MS es MIN_CLIP_MS, ya igual: 100).
+    from final_edition import documento
+    assert _constante_js("operaciones.js", "FOTO_MAX_MS") == documento.FOTO_MAX_MS
+    assert _constante_js("operaciones.js", "FOTO_DEFECTO_MS") == documento.FOTO_DEFECTO_MS
+    assert _constante_js("operaciones.js", "MIN_CLIP_MS") == documento.FOTO_MIN_MS
+
+
 def test_encuadre_js_constantes_iguales_a_python():
     # Capa 5b (D4-D7): el panel «Encuadre» y el arrastre/asa del lienzo
     # clavan los mismos límites que `documento.validar` y el compilador.

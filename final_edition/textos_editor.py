@@ -76,6 +76,13 @@ TEXTOS = {
     "op.palabra_no_existe": N_("Esa palabra ya no está en los subtítulos."),
     "op.palabra_larga": N_("Una palabra corregida puede tener hasta 120 letras."),
     "op.palabra_solo_emoji": N_("Los emojis no salen en los subtítulos: escribe la palabra con letras."),
+    # operaciones.js (capa 5b): fotos, encuadre y transiciones que juntan
+    "op.no_es_imagen": N_("Ese archivo no es una imagen."),
+    "op.es_foto": N_("Esa es una foto: agrégala como clip del video o encima."),
+    "op.foto_velocidad": N_("Una foto no tiene velocidad: cambia cuánto dura."),
+    "op.no_es_foto": N_("Ese clip no es una foto."),
+    "op.encuadre_principal": N_("El encuadre se cambia solo en los clips del video."),
+    "op.transicion_cortos": N_("Esos clips son muy cortos para una transición: alárgalos un poco."),
     # vista.js
     "vista.nombre_imagen": N_("la imagen"),
     "vista.nombre_video": N_("el video"),
@@ -130,6 +137,7 @@ TEXTOS = {
     "tr.desenfoque": N_("Fundido a negro"),
     "tr.union_corte": N_("Esa unión quedó en corte: el primer clip no tiene video de sobra al final para la transición. Recorta un poco su final y vuelve a ponerla."),
     "tr.acortada": N_("La transición quedó de {duracion}: no hay más video al final del primer clip."),
+    "tr.junta": N_("«{nombre}» quedó en la unión: junta los dos clips y el video quedó {duracion} más corto."),
     # linea_tiempo.js
     "tl.transicion": N_("Transición: {nombre}"),
     # biblioteca.js

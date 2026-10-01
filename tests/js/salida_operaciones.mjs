@@ -222,4 +222,45 @@ anotar("vinculado_voces", () => {
   return { doc: vinc.seguirPrincipal(antes, op.borrar(antes, "v0", D).doc, D) };
 });
 
+// ---- Capa 5b (Tarea 5): fotos, encuadre y transiciones que juntan ----
+const M4 = { id: 4, tipo: "imagen", ancho: 1000, alto: 1000 };
+const conFoto = () => op.agregarFoto(docBase(), M4, { indice: 1 }, D).doc;
+
+anotar("agregar_foto", () => op.agregarFoto(docBase(), M4, { indice: 1 }, D));
+anotar("agregar_foto_al_principio", () => op.agregarFoto(docBase(), M4, { indice: 0 }, D));
+anotar("foto_duracion", () => op.cambiarDuracionFoto(conFoto(), "foto_2", 5000, D));
+anotar("foto_recortar_inicio", () => op.recortar(conFoto(), "foto_2", "inicio", 500, D));
+anotar("foto_cortar", () => op.cortarClip(conFoto(), "foto_2", 5000, D));
+anotar("foto_transicion", () => op.ponerTransicion(conFoto(), "foto_2", "fundido", 500, D));
+anotar("encuadre_ajustar", () => op.cambiar(docBase(), "v0", { encuadre: { modo: "ajustar" } }, D));
+anotar("encuadre_llenar_x0", () => op.cambiar(docBase(), "v0", { encuadre: { modo: "llenar", x: 0 } }, D));
+
+// Un total previo a la operación, para que Python revise que la duración
+// total queda en la de antes menos lo que la transición tiene cedido ahora
+// (o igual si se quitó: D9).
+const anotarSolape = (nombre, fn, duracionAntes, duraciones) =>
+  casos.push({ nombre, doc: fn().doc, duracion_antes: duracionAntes, ...(duraciones ? { duraciones } : {}) });
+
+anotarSolape("solape_fundido", () => op.ponerTransicion(docBase(), "v0", "fundido", 500, D), 8000);
+anotarSolape("solape_cambiar_duracion", () => {
+  const con = op.ponerTransicion(docBase(), "v0", "fundido", 500, D).doc;
+  return op.ponerTransicion(con, "v0", "fundido", 800, D);
+}, 8000);
+anotarSolape("solape_quitar", () => {
+  const con = op.ponerTransicion(docBase(), "v0", "fundido", 500, D).doc;
+  return op.ponerTransicion(con, "v0", "corte", 0, D);
+}, 8000);
+
+function dosClipsEnteros() {
+  const sinV1 = op.borrar(docBase(), "v1", D).doc;
+  const extendido = op.recortar(sinV1, "v0", "fin", 4000, D).doc;
+  return op.agregarVideo(extendido, { id: 3 }, { despuesDe: "v0" }, { ...D, 3: 1500 }).doc;
+}
+anotarSolape("solape_clips_enteros", () => op.ponerTransicion(dosClipsEnteros(), "v0", "fundido", 500, { 1: 8000, 3: 1500 }),
+  9500, { 1: 8000, 3: 1500 });
+anotarSolape("solape_ultimo_se_deshace",
+  () => op.moverPrincipal(op.ponerTransicion(docBase(), "v0", "fundido", 500, D).doc, "v0", 1, D), 8000);
+
+anotar("vinculado_solape", () => vincular((d) => op.ponerTransicion(d, "v0", "fundido", 500, D)));
+
 process.stdout.write(JSON.stringify(casos));
