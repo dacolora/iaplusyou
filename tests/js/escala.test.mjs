@@ -535,3 +535,15 @@ test("fondoFoto: la imagen repetida a lo largo del clip (la copia liviana si ya 
   assert.equal(fondoFoto(clip, undefined), null);
   assert.equal(fondoFoto(clip, { id: 7, tipo: "imagen" }), null);
 });
+
+// Revisión final de la capa 5b: «junta … quedó X más corto» solo cuando el
+// video de verdad quedó más corto (X = fin de antes − fin de después).
+test("efectoTransicion: cambiar el tipo o volver a poner la misma no «junta» nada; alargar la unión dice cuánto se acortó", () => {
+  const con500 = ponerTransicion(docBase(), "v0", "fundido", 500, DURACIONES).doc;
+  assert.equal(efectoTransicion(con500, ponerTransicion(con500, "v0", "deslizar", 500, DURACIONES).doc, "v0"), null);
+  assert.equal(efectoTransicion(con500, ponerTransicion(con500, "v0", "fundido", 500, DURACIONES).doc, "v0"), null);
+  const con800 = ponerTransicion(con500, "v0", "fundido", 800, DURACIONES).doc;
+  assert.deepEqual(efectoTransicion(con500, con800, "v0"), { tipo: "junta", ms: 300 });
+  assert.equal(efectoTransicion(con800, ponerTransicion(con800, "v0", "fundido", 500, DURACIONES).doc, "v0"), null,
+    "más corta a propósito: el video quedó más LARGO, nada que avisar");
+});

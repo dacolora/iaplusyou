@@ -194,5 +194,17 @@ are `pendientes`, and `biblioteca.faltaPreparar` asks for them. UI: «+» on an 
 «Encima del video» (`.ed-bib-como`), a photo shows its image in the timeline's video row (`escala.fondoFoto`), dragging on
 the player moves the framing and its corner zooms (`seleccion.gestoEn` → `encuadre`/`asa_encuadre`,
 `encuadre.moverEncuadre/zoomEncuadre/cajaVisible`), «Editar» has the «Encuadre» block and the «foto» form (duration,
-slow zoom, transition), and `avisos_carga.vocesJuntas` warns when two voices sound at once. Still out: PIP (video over
-video, D14), per-clip «Vincular», filters and rotation (capa 5c), Producir per country (capa 5d).
+slow zoom, transition), and `avisos_carga.vocesJuntas` warns when two voices sound at once. Final-review fixes
+(2026-10-01): a photo never passes `FOTO_MAX_MS` when a solape gives its ms back (`devolverASolape`, plus `acotarFotos` in
+`normalizar` as the last barrier); a transparent photo gets black under its foreground at the same alpha and the small
+blurred-background canvas is filled black before every draw (the render flattens on black); with all 8 tracks taken a
+followed layer stays in its own row instead of refusing the operation (D10.6); a KEYED gesture (`operarCon({clave})`)
+derives from its base through `vinculos.operarGesto` (`crudo = fn(crudoPrevio ?? base)`, `seguirPrincipal(base, crudo)`,
+restarted when `historial.fusionaria(clave)` is false, on undo/redo, save, conflict or a «Vincular» change), and a layer
+whose clip no longer shows its moment lands on that clip's last ms, never on the next clip's start; «junta» is reported
+only when the video really got shorter (`finAntes − finDespues`); toggling «Vincular» says so under the video (phones
+never see `title`); an image edition adds an image straight as a layer; a framing margin under `IMAN_ENCUADRE_PX` (12
+canvas px) counts as «sin margen» in the drag and the panel (`encuadre.sinMargen`) and the magnet never takes more than a
+quarter of the margin; the menu's deferred repaint waits for the closing tap's click (`biblioteca.despuesDelToque`); and
+a second tap on the already selected principal clip deselects it (`seleccion.eleccionTrasToque`). Still out: PIP (video
+over video, D14), per-clip «Vincular», filters and rotation (capa 5c), Producir per country (capa 5d).

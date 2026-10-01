@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   aceptarPara, detalleAudio, duracionTexto, etiquetaMas, faltaPreparar, miniatura, mensajeSubida, mensajeTransicion, nombreDe,
-  opcionesImagen, repartir, revisarArchivo, textoFotoAgregada, tipoDeArchivo,
+  despuesDelToque, opcionesImagen, repartir, revisarArchivo, textoFotoAgregada, tipoDeArchivo,
   textosBiblioteca, transicionesBiblioteca, urlPieza,
 } from "../../static/editor/biblioteca.js";
 import * as op from "../../static/editor/operaciones.js";
@@ -326,6 +326,15 @@ test("opcionesImagen: «Como clip del video» primero y «Encima del video» des
   ]);
 });
 
+// Revisión final: en una edición de imagen (la principal no es un video) no
+// hay «clip del video» que ofrecer — la imagen entra directo como capa.
+test("opcionesImagen: sin pista principal de video, solo «Encima del video»", () => {
+  const conVideo = { pistas: [{ id: "p_video", tipo: "video", clips: [] }] };
+  assert.equal(opcionesImagen(conVideo).length, 2);
+  const deImagen = { pistas: [{ id: "p_imagen", tipo: "imagen", clips: [{ id: "i0", inicio_ms: 0, duracion_ms: 1, material_id: 3 }] }] };
+  assert.deepEqual(opcionesImagen(deImagen), [{ como: "capa", texto: "Encima del video" }]);
+});
+
 test("miniatura de una imagen: su copia liviana si ya la tiene; si no, el original", () => {
   const foto = { id: 3, tipo: "imagen", url: "https://r2/f.png", ancho: 600, alto: 400 };
   assert.equal(miniatura(foto).url, "https://r2/f.png");
@@ -348,4 +357,49 @@ test("mensajeTransicion: junta los dos clips (y dice cuánto se acortó); «Cort
   const sinTr = op.ponerTransicion(despues, "v0", "corte", 500, DURACIONES).doc;
   assert.deepEqual(mensajeTransicion(despues, sinTr, ["ponerTransicion", "v0", "corte", 500], { transicion: "corte", nombre: "Corte" }),
     { texto: "Esa unión quedó en corte, sin transición.", error: false });
+});
+
+// Revisión final de la capa 5b: el repintado que esperaba a que se cerrara el
+// menú de una imagen, si lo cerró un toque afuera, espera a que ese toque
+// termine — si no, la lista nueva reemplazaba la tarjeta bajo el dedo y el
+// toque (su click) no llegaba a nada.
+function documentoFalso() {
+  const oyentes = new Map();
+  return {
+    addEventListener(tipo, fn, captura) { oyentes.set(`${tipo}:${captura}`, fn); },
+    removeEventListener(tipo, fn, captura) { if (oyentes.get(`${tipo}:${captura}`) === fn) oyentes.delete(`${tipo}:${captura}`); },
+    soltar(tipo = "pointerup") { oyentes.get(`${tipo}:true`)?.({ type: tipo }); },
+    oyentes,
+  };
+}
+function relojFalso() {
+  const pendientes = [];
+  return { programar: (fn, ms) => pendientes.push({ fn, ms }), correr: () => pendientes.splice(0).forEach((p) => p.fn()), pendientes };
+}
+
+test("despuesDelToque: pinta después del click del toque que cerró el menú (pointerup + setTimeout 0), una sola vez", () => {
+  const doc = documentoFalso();
+  const reloj = relojFalso();
+  let pintadas = 0;
+  despuesDelToque(doc, () => pintadas++, reloj.programar);
+  assert.equal(pintadas, 0, "nada mientras el dedo sigue abajo");
+  doc.soltar();
+  assert.equal(pintadas, 0, "ni en el pointerup: el click todavía no salió");
+  assert.ok(reloj.pendientes.some((p) => p.ms === 0));
+  reloj.correr();
+  assert.equal(pintadas, 1);
+  doc.soltar();
+  reloj.correr();
+  assert.equal(pintadas, 1, "una sola vez, y sin oyentes colgados");
+  assert.equal(doc.oyentes.size, 0);
+});
+
+test("despuesDelToque: un toque cancelado (el dedo corrió la lista) también pinta", () => {
+  const doc = documentoFalso();
+  const reloj = relojFalso();
+  let pintadas = 0;
+  despuesDelToque(doc, () => pintadas++, reloj.programar);
+  doc.soltar("pointercancel");
+  reloj.correr();
+  assert.equal(pintadas, 1);
 });

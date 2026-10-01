@@ -57,6 +57,19 @@ function perdido(recursos, clip) {
 // rectángulo ya compuesto (`encuadre.rectConZoom`), como el `zoompan` del
 // compilador — tanto al fondo como al primer plano, así la transición
 // mueve/acerca el cuadro entero. Exportada para probarla sola.
+//
+// Una foto con transparencia (revisión final): el render la aplana sobre
+// negro (`fotos.preparar`), así que aquí va negro debajo del primer plano,
+// con el mismo alfa (en un fundido, la foto no deja ver el clip de al lado
+// por sus partes transparentes). Y el lienzo chico del fondo se llena de
+// negro antes de cada dibujo: si no, los bordes semitransparentes se
+// acumulaban cuadro tras cuadro.
+function negroDebajo(ctx, clip, x, y, w, h) {
+  if (!clip.foto) return;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(x, y, w, h);
+}
+
 export function dibujarPrincipal(ctx, capa, fuente, [fw, fh], W, H, recursos) {
   // el cuadro congelado usa su propio instante; una imagen principal no
   // lleva zoom (tZoom null: el compilador nunca le aplica Ken Burns).
@@ -68,6 +81,7 @@ export function dibujarPrincipal(ctx, capa, fuente, [fw, fh], W, H, recursos) {
     const escala = Math.max(W / fw, H / fh) * zoom;
     const dw = fw * escala;
     const dh = fh * escala;
+    negroDebajo(ctx, capa.clip, (W - dw) / 2 + dx * W, (H - dh) / 2, dw, dh);
     ctx.drawImage(fuente, (W - dw) / 2 + dx * W, (H - dh) / 2, dw, dh);
     return;
   }
@@ -75,6 +89,10 @@ export function dibujarPrincipal(ctx, capa, fuente, [fw, fh], W, H, recursos) {
     const [fW, fH] = fondoEncuadre(W, H);
     const chico = recursos.lienzoFondo(fW, fH);
     const cctx = chico.getContext("2d");
+    cctx.filter = "none";
+    cctx.globalAlpha = 1;
+    cctx.fillStyle = "#000";
+    cctx.fillRect(0, 0, fW, fH);
     cctx.filter = recursos.filtroFondo ? `blur(${FONDO_SIGMA_PX}px)` : "none";
     // «llenar» centrado, un 20 % más grande que el lienzo chico (D5: para
     // que el desenfoque no traiga negro de los bordes).
@@ -87,6 +105,7 @@ export function dibujarPrincipal(ctx, capa, fuente, [fw, fh], W, H, recursos) {
   }
   const { sw, sh, px, py } = cajaEncuadre(fw, fh, W, H, enc);
   const r = rectConZoom({ x: px, y: py, w: sw, h: sh }, zoom, dx, W, H);
+  negroDebajo(ctx, capa.clip, r.x, r.y, r.w, r.h);
   ctx.drawImage(fuente, r.x, r.y, r.w, r.h);
 }
 

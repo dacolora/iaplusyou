@@ -101,7 +101,7 @@ test("rectConZoom: dx desplaza en fracción del ancho del lienzo (deslizar)", ()
 
 // ---- Tarea 7 (D8): mover y acercar el encuadre sobre el video, y la caja
 // que se ve (la selección del clip de la principal) ----
-import { cajaVisible, moverEncuadre, zoomEncuadre } from "../../static/editor/encuadre.js";
+import { cajaVisible, IMAN_ENCUADRE_PX, moverEncuadre, sinMargen, zoomEncuadre } from "../../static/editor/encuadre.js";
 
 const SIN_GUIAS = { vertical: false, horizontal: false };
 
@@ -168,4 +168,25 @@ test("cajaVisible: el cuadro colocado, recortado al lienzo", () => {
   assert.deepEqual(cajaVisible({ modo: "ajustar", zoom: 2 }, [400, 200], 1080, 1920), { x: 0, y: 420, ancho: 1080, alto: 1080 });
   // sin medidas no se sabe dónde queda: el lienzo entero
   assert.deepEqual(cajaVisible({ modo: "ajustar" }, null, 1080, 1920), { x: 0, y: 0, ancho: 1080, alto: 1920 });
+});
+
+// Revisión final de la capa 5b: un margen más chico que el imán (1080×1918
+// en 9:16 llena con sw 1082: 2 px a lo ancho) nunca se movía — todo arrastre
+// terminaba pegado al centro —, y el panel no decía «sin margen».
+test("moverEncuadre: un eje con menos margen que el imán no se mueve ni marca guía", () => {
+  assert.equal(caja(1080, 1918, 1080, 1920, null).sw, 1082);
+  assert.ok(sinMargen(null, [1080, 1918], 1080, 1920));
+  assert.deepEqual(moverEncuadre(null, [1080, 1918], 1080, 1920, 100, 0), { x: 0.5, y: 0.5, guias: SIN_GUIAS });
+  assert.ok(!sinMargen(null, [400, 200], 1080, 1920));
+  assert.ok(!sinMargen({ zoom: 1.5 }, [1080, 1918], 1080, 1920));
+  assert.equal(IMAN_ENCUADRE_PX, 12);
+});
+
+test("moverEncuadre: un margen chico (30 px) con un imán grande (24) igual llega al borde — el imán nunca lo atrapa", () => {
+  assert.equal(caja(1110, 1920, 1080, 1920, null).sw, 1110);
+  assert.deepEqual(moverEncuadre(null, [1110, 1920], 1080, 1920, -100, 0, { iman: 24 }), { x: 1, y: 0.5, guias: SIN_GUIAS });
+  assert.deepEqual(moverEncuadre(null, [1110, 1920], 1080, 1920, 100, 0, { iman: 24 }), { x: 0, y: 0.5, guias: SIN_GUIAS });
+  // cerca del centro sigue pegando (un cuarto del margen: 7,5 px)
+  assert.deepEqual(moverEncuadre(null, [1110, 1920], 1080, 1920, 3, 0, { iman: 24 }),
+    { x: 0.5, y: 0.5, guias: { vertical: true, horizontal: false } });
 });

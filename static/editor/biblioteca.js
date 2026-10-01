@@ -158,15 +158,36 @@ export function faltaPreparar(m) {
   return false;
 }
 
+// Revisión final de la capa 5b: el repintado que esperaba a que se cerrara el
+// menú de una imagen (`pintarAlCerrar`), cuando lo cerró un toque AFUERA
+// (pointerdown), espera a que ese toque termine y su click salga: en el
+// pointerup (o pointercancel, si el dedo corrió la lista) se programa para
+// después (`setTimeout(…, 0)`). Si no, la lista nueva reemplazaba la tarjeta
+// bajo el dedo y el toque no llegaba a nada. `fn` corre una sola vez.
+export function despuesDelToque(doc, fn, programar = (f, ms) => setTimeout(f, ms)) {
+  let hecho = false;
+  const listo = () => {
+    doc.removeEventListener("pointerup", listo, true);
+    doc.removeEventListener("pointercancel", listo, true);
+    programar(() => {
+      if (hecho) return;
+      hecho = true;
+      fn();
+    }, 0);
+  };
+  doc.addEventListener("pointerup", listo, true);
+  doc.addEventListener("pointercancel", listo, true);
+}
+
 // Capa 5b (D12): «+» sobre una imagen pregunta cómo entra — como un clip más
 // del video (una foto en la fila del video, después del clip del cabezal) o
 // encima del video (la capa de imagen de siempre). `como` va tal cual a
-// escala.pedidoAgregar.
-export function opcionesImagen() {
-  return [
-    { como: "clip", texto: t("bib.como_clip") },
-    { como: "capa", texto: t("bib.encima") },
-  ];
+// escala.pedidoAgregar. En una edición de imagen (la principal no es un
+// video, revisión final) solo queda «Encima»: `_clic` la agrega sin menú.
+export function opcionesImagen(doc = null) {
+  const encima = { como: "capa", texto: t("bib.encima") };
+  if (doc && pistaPrincipal(doc)?.tipo !== "video") return [encima];
+  return [{ como: "clip", texto: t("bib.como_clip") }, encima];
 }
 
 // Lo que se dice al agregar una foto al video: cuánto dura y dónde se cambia.
@@ -371,7 +392,9 @@ export class Biblioteca {
     this.observador = null;
     this.como = null;                   // el menú «¿Cómo agregar?» de una imagen: {clave, cosa, boton, menu}
     this.alTocarFueraComo = (e) => {
-      if (this.como && !this.como.menu.contains(e.target) && !this.como.boton.contains(e.target)) this._cerrarComo();
+      if (this.como && !this.como.menu.contains(e.target) && !this.como.boton.contains(e.target)) {
+        this._cerrarComo({ porToque: true });
+      }
     };
     this.alTeclaComo = (e) => {
       if (e.key !== "Escape" || !this.como) return;
@@ -814,7 +837,10 @@ export class Biblioteca {
     if (como) return void this._elegirComo(como.dataset.agregarComo);
     const mas = objetivo.closest?.("[data-agregar]");
     if (mas) {
-      if (this.cosas.get(mas.dataset.agregar)?.tipo === "imagen") return this._alternarComo(mas.dataset.agregar, mas);
+      if (this.cosas.get(mas.dataset.agregar)?.tipo === "imagen") {
+        if (opcionesImagen(this.editor.doc()).length > 1) return this._alternarComo(mas.dataset.agregar, mas);
+        return void this.agregar(mas.dataset.agregar, null, undefined, { como: "capa" });   // edición de imagen
+      }
       return void this.agregar(mas.dataset.agregar);
     }
     const oir = objetivo.closest?.("[data-escuchar]");
@@ -896,7 +922,7 @@ export class Biblioteca {
     const titulo = el("p", "ed-bib-como-titulo", menu, t("bib.agregar_imagen", { nombre: cosa.nombre }));
     titulo.id = "ed-bib-como-titulo";
     menu.setAttribute("aria-labelledby", titulo.id);
-    for (const o of opcionesImagen()) {
+    for (const o of opcionesImagen(this.editor.doc())) {
       const b = el("button", "ed-bib-como-opcion", menu);
       b.type = "button";
       b.dataset.agregarComo = o.como;
@@ -935,7 +961,7 @@ export class Biblioteca {
     menu.style.top = `${Math.round(y)}px`;
   }
 
-  _cerrarComo({ devolverFoco = false } = {}) {
+  _cerrarComo({ devolverFoco = false, porToque = false } = {}) {
     const como = this.como;
     if (!como) return;
     this.como = null;
@@ -945,7 +971,9 @@ export class Biblioteca {
     window.removeEventListener("resize", this.alMoverComo);
     como.menu.remove();
     if (como.boton.isConnected) como.boton.setAttribute("aria-expanded", "false");
-    if (this.pintarAlCerrar) this._pintarListas();         // lo que llegó mientras estaba abierto
+    // lo que llegó mientras estaba abierto; si lo cerró un toque afuera, después de su click
+    if (this.pintarAlCerrar && porToque) despuesDelToque(document, () => this.pintarAlCerrar && this._pintarListas());
+    else if (this.pintarAlCerrar) this._pintarListas();
     // el foco vuelve a su «+» (el nuevo, si la lista se repintó)
     const boton = como.boton.isConnected ? como.boton : this.contenedor.querySelector(`[data-agregar="${como.clave}"]`);
     if (devolverFoco) boton?.focus({ preventScroll: true });

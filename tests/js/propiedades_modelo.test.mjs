@@ -462,6 +462,18 @@ test("modeloEncuadre: sin margen solo si el cuadro mide justo el lienzo (llenar,
   assert.equal(modelo(d, "v0", { info: INFO, materiales: { 1: { ancho: 1920, alto: 1080 } } }).encuadre.sinMargen, false);
 });
 
+// Revisión final de la capa 5b: un margen más chico que el imán cuenta como
+// «sin margen» (igual que encuadre.sinMargen), y la ayuda habla de «la
+// imagen» (sirve para un video y para una foto).
+test("modeloEncuadre: un margen menor que el imán (1080×1918) es «sin margen», y los textos hablan de la imagen", () => {
+  const m = modeloEncuadre({ encuadre: null }, { medidas: [1080, 1918], formato: "9:16" });
+  assert.equal(m.sinMargen, true);
+  assert.equal(m.aviso, "Acerca la imagen para poder moverla.");
+  assert.equal(m.ayuda, "Arrastra la imagen para elegir qué parte se ve; la esquina la acerca.");
+  assert.equal(modeloEncuadre({ encuadre: { modo: "ajustar" } }, { medidas: [1080, 1918], formato: "9:16" }).sinMargen, true);
+  assert.equal(modeloEncuadre({ encuadre: null }, { medidas: [1110, 1920], formato: "9:16" }).sinMargen, false);
+});
+
 test("los cambios del bloque «Encuadre» son los que acepta operaciones.cambiar", () => {
   assert.deepEqual(cambioModoEncuadre("ajustar"), { encuadre: { modo: "ajustar" } });
   assert.deepEqual(cambioZoomEncuadre(150), { encuadre: { zoom: 1.5 } });

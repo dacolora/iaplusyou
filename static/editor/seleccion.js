@@ -231,6 +231,17 @@ export function superaUmbral(dx, dy, tipoPuntero) {
 }
 
 // `previo`/`actual`: {t (ms), x, y (px de pantalla), id del clip tocado}.
+// Qué queda elegido después de un TOQUE (sin arrastrar) — revisión final de
+// la capa 5b: en el celular el video llena el lienzo y no hay «afuera» que
+// tocar, así que un segundo toque sobre el clip del video que ya estaba
+// elegido (`yaElegido`, medido al bajar el dedo) lo suelta (null). Su asa no
+// lo suelta, y las capas siguen como siempre: dentro de la caja de lo
+// elegido gana la de arriba (`alTocar`).
+export function eleccionTrasToque({ tipo, alTocar, yaElegido }) {
+  if (tipo === "encuadre" && yaElegido) return null;
+  return alTocar;
+}
+
 export function esDobleToque(previo, actual, { ms = DOBLE_TOQUE.ms, distancia = DOBLE_TOQUE.distancia } = {}) {
   if (!previo || !actual || previo.id === null || previo.id === undefined || previo.id !== actual.id) return false;
   const dt = actual.t - previo.t;

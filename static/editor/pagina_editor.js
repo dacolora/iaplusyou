@@ -200,10 +200,23 @@ function ir(ms) {
   linea.moverCabezal(vista.tiempo());
 }
 
-function aviso(texto) {
+// El aviso bajo el video: un error por defecto (en rojo); `error: false` para
+// algo que solo se cuenta, y `breve` para que se vaya solo a los 3 s si nadie
+// lo reemplazó antes (lo de «Vincular», revisión final de la capa 5b).
+let avisoBreve = null;
+function aviso(texto, { error = true, breve = false } = {}) {
   const n = $("aviso-edicion");
+  if (avisoBreve !== null) clearTimeout(avisoBreve);
+  avisoBreve = null;
   n.textContent = texto || "";
   n.hidden = !texto;
+  n.classList.toggle("error", error);
+  if (breve && texto) {
+    avisoBreve = setTimeout(() => {
+      avisoBreve = null;
+      if (n.textContent === texto) aviso("");
+    }, 3000);
+  }
 }
 
 function pintarGuardado(estado, mensaje, detalle = "") {
@@ -364,8 +377,11 @@ function pintarVincular() {
 
 function alternarVincular() {
   vincular = !vincular;
+  gesto = null;
   vinculos.guardarVincular(almacenSeguro(), vincular);
   pintarVincular();
+  // en el celular el `title` no se ve nunca: se dice al tocarlo
+  aviso(t(vincular ? "editar.vincular_si" : "editar.vincular_no"), { error: false, breve: true });
 }
 
 // Un clic con el mouse no deja el foco en el botón: si no, Espacio

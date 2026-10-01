@@ -123,14 +123,33 @@ export function rectConZoom({ x, y, w, h }, zoom, dx, lienzoW, lienzoH) {
 
 const acotar = (v, min, max) => Math.min(max, Math.max(min, v));
 
+// Por debajo de este margen (px del LIENZO) un eje no tiene nada que mover
+// (revisión final de la capa 5b): 1080×1918 en 9:16 llena con 2 px de margen
+// a lo ancho, y antes todo arrastre terminaba pegado al centro sin que el
+// panel dijera «sin margen». El mismo número para el arrastre y para el
+// panel (`sinMargen`, propiedades_modelo.modeloEncuadre), que no sabe a qué
+// tamaño se ve el reproductor; es el imán por defecto de `moverEncuadre`.
+export const IMAN_ENCUADRE_PX = 12;
+
+const ejeSinMargen = (margen) => Math.abs(margen) < IMAN_ENCUADRE_PX;
+
+// `true` si el cuadro no tiene margen para moverse en ninguno de los dos ejes
+// (arrastrarlo no hace nada: el panel pide acercarlo).
+export function sinMargen(enc, [w, h], lienzoW, lienzoH) {
+  const c = caja(w, h, lienzoW, lienzoH, enc);
+  return ejeSinMargen(c.sw - lienzoW) && ejeSinMargen(c.sh - lienzoH);
+}
+
 // Un eje del arrastre: `margen` es lo que el cuadro escalado pasa del
 // lienzo en ese eje (`sw − W`; negativo en «ajustar», donde el cuadro es más
-// chico y se mueve DENTRO del lienzo). Con margen 0 el eje no se mueve ni
-// pega al centro (no hay nada que mover).
+// chico y se mueve DENTRO del lienzo). Sin margen (menos de
+// IMAN_ENCUADRE_PX) el eje no se mueve ni pega al centro. El imán nunca toma
+// más de un cuarto del margen: si no, con un margen chico y un imán grande
+// (el de un reproductor chico) todo arrastre terminaba en el centro.
 function ejeArrastre(v, d, margen, iman) {
-  if (margen === 0) return { v, guia: false };
+  if (ejeSinMargen(margen)) return { v, guia: false };
   const nuevo = acotar(v - d / margen, 0, 1);
-  if (Math.abs((nuevo - 0.5) * margen) < iman) return { v: 0.5, guia: true };
+  if (Math.abs((nuevo - 0.5) * margen) < Math.min(iman, Math.abs(margen) / 4)) return { v: 0.5, guia: true };
   return { v: nuevo, guia: false };
 }
 
@@ -140,7 +159,7 @@ function ejeArrastre(v, d, margen, iman) {
 // a menos de `iman` px del lienzo del cuadro centrado pega en 0,5 y lo dice
 // en `guias` (vertical = el eje x, como las capas). A 4 decimales. `medidas`:
 // [ancho, alto] que se VEN del clip.
-export function moverEncuadre(enc, [w, h], lienzoW, lienzoH, dxPx, dyPx, { iman = 12 } = {}) {
+export function moverEncuadre(enc, [w, h], lienzoW, lienzoH, dxPx, dyPx, { iman = IMAN_ENCUADRE_PX } = {}) {
   const c0 = completo(enc);
   const c = caja(w, h, lienzoW, lienzoH, c0);
   const ex = ejeArrastre(Number(c0.x), dxPx, c.sw - lienzoW, iman);

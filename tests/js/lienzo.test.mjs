@@ -152,7 +152,11 @@ function ctxDibujo() {
 }
 
 function lienzoFalso() {
-  const ctx = { filter: "", llamadas: [], drawImage(img, x, y, w, h) { this.llamadas.push({ img, x, y, w, h }); } };
+  const ctx = {
+    filter: "", globalAlpha: 1, fillStyle: "", llamadas: [], orden: [],
+    drawImage(img, x, y, w, h) { this.llamadas.push({ img, x, y, w, h }); this.orden.push(["drawImage", this.filter]); },
+    fillRect(x, y, w, h) { this.orden.push(["fillRect", this.fillStyle, x, y, w, h, this.globalAlpha, this.filter]); },
+  };
   return { getContext: () => ctx, _ctx: ctx };
 }
 
@@ -242,4 +246,57 @@ test("dibujarCuadro: un video sin encuadre dibuja exactamente igual que antes (v
   dibujarCuadro(ctx, doc, 1000, r, CFG);
   const dibujos = ctx.llamadas.filter((l) => l.img === FUENTE);
   assert.deepEqual(dibujos.map(({ x, y, w, h }) => [x, y, w, h]), [[-1380, 0, 3840, 1920]]);
+});
+
+
+// ---- Revisión final de la capa 5b: una foto con transparencia --------------
+// El render (fotos.preparar) la aplana sobre negro; la vista previa dibujaba
+// el PNG con su alfa encima del fondo desenfocado, y el lienzo chico del
+// fondo nunca se limpiaba (los bordes semitransparentes se acumulaban cuadro
+// tras cuadro).
+function ctxConRellenos() {
+  return {
+    globalAlpha: 1, fillStyle: "", llamadas: [], orden: [],
+    drawImage(img, x, y, w, h) {
+      this.llamadas.push({ img, x, y, w, h, alfa: this.globalAlpha });
+      this.orden.push(["drawImage", img, x, y, w, h, this.globalAlpha]);
+    },
+    fillRect(x, y, w, h) { this.orden.push(["fillRect", this.fillStyle, x, y, w, h, this.globalAlpha]); },
+  };
+}
+
+test("«ajustar»: el lienzo chico se llena de negro (sin desenfoque) ANTES de dibujar en él, cada vez", () => {
+  const recursos = recursosEncuadre();
+  for (let i = 0; i < 2; i++) {
+    dibujarPrincipal(ctxConRellenos(), capaDe({ encuadre: { modo: "ajustar" } }), FUENTE, [400, 200], W, H, recursos);
+  }
+  const orden = recursos._chicos["108x192"]._ctx.orden;
+  assert.deepEqual(orden, [
+    ["fillRect", "#000", 0, 0, 108, 192, 1, "none"], ["drawImage", "blur(5px)"],
+    ["fillRect", "#000", 0, 0, 108, 192, 1, "none"], ["drawImage", "blur(5px)"],
+  ]);
+});
+
+test("una foto: negro bajo el primer plano, con el mismo alfa, justo antes de dibujarla (también en un fundido)", () => {
+  const foto = (encuadre) => ({ ...capaDe({ encuadre, alfa: 0.4 }), clip: { encuadre, foto: true } });
+  const ctx = ctxConRellenos();
+  dibujarPrincipal(ctx, foto({ modo: "ajustar" }), FUENTE, [400, 200], W, H, recursosEncuadre());
+  assert.deepEqual(ctx.orden.slice(1), [
+    ["fillRect", "#000", 0, 690, 1080, 540, 0.4], ["drawImage", FUENTE, 0, 690, 1080, 540, 0.4],
+  ]);
+  assert.equal(ctx.orden[0][0], "drawImage", "primero el fondo desenfocado");
+
+  const llenar = ctxConRellenos();
+  dibujarPrincipal(llenar, foto({ x: 0 }), FUENTE, [400, 200], W, H, recursosEncuadre());
+  assert.deepEqual(llenar.orden, [["fillRect", "#000", 0, 0, 3840, 1920, 0.4], ["drawImage", FUENTE, 0, 0, 3840, 1920, 0.4]]);
+
+  const sinEncuadre = ctxConRellenos();
+  dibujarPrincipal(sinEncuadre, foto(undefined), FUENTE, [400, 200], W, H, recursosEncuadre());
+  assert.deepEqual(sinEncuadre.orden, [["fillRect", "#000", -1380, 0, 3840, 1920, 0.4], ["drawImage", FUENTE, -1380, 0, 3840, 1920, 0.4]]);
+});
+
+test("un video no lleva negro debajo (no tiene transparencia)", () => {
+  const ctx = ctxConRellenos();
+  dibujarPrincipal(ctx, capaDe({ encuadre: { modo: "ajustar" } }), FUENTE, [400, 200], W, H, recursosEncuadre());
+  assert.deepEqual(ctx.orden.map((l) => l[0]), ["drawImage", "drawImage"]);
 });

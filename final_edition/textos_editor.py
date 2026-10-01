@@ -401,9 +401,10 @@ TEXTOS = {
     "prop.encuadre_llenar": N_("Llenar"),
     "prop.encuadre_ajustar": N_("Ajustar con fondo desenfocado"),
     "prop.encuadre_zoom": N_("Acercar el cuadro"),
-    "prop.encuadre_ayuda": N_("Arrastra el video para elegir qué parte se ve; la esquina lo acerca."),
-    "prop.encuadre_sin_margen": N_("Acerca el video para poder moverlo."),
+    "prop.encuadre_ayuda": N_("Arrastra la imagen para elegir qué parte se ve; la esquina la acerca."),
+    "prop.encuadre_sin_margen": N_("Acerca la imagen para poder moverla."),
     "prop.duracion_foto": N_("Duración de la foto"),
+    "prop.duracion_foto_segundos": N_("Duración de la foto, en segundos"),
     "prop.nota_foto": N_("Una foto no tiene sonido ni velocidad: cambia cuánto dura."),
     "prop.ayuda_solape": N_("Junta los dos clips: el video queda tan corto como dure la transición."),
     # biblioteca.js (capa 5b, Tarea 8): una imagen como clip del video o encima, y la foto agregada

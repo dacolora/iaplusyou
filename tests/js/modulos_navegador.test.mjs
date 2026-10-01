@@ -502,6 +502,10 @@ test("pagina_editor.js: compila y todo lo que importa existe (vinculos.operarGes
     // revisión final de la capa 5b: un gesto con clave se deriva de su base
     "vinculos.operarGesto(operaciones[nombre], historial.actual, args, info(),",
     "{ vincular, clave, gesto, continua: historial.fusionaria(clave) }",
+    // revisión final: en el celular nadie ve el `title` — al tocar
+    // «Vincular» se dice, breve y sin el rojo de un error
+    'aviso(t(vincular ? "editar.vincular_si" : "editar.vincular_no"), { error: false, breve: true });',
+    'n.classList.toggle("error", error);',
     "let vincular = vinculos.leerVincular(almacenSeguro());",
     "vinculos.guardarVincular(almacenSeguro(), vincular)",
     'pintarAvisoCarga("aviso-voces", a.voces)',

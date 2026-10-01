@@ -482,12 +482,18 @@ export function avisoTransicion(doc, clipId, tipo, pedidoMs = DURACION_TRANSICIO
 // generaliza `avisoTransicion` (que solo mira el resultado contra lo
 // pedido) a cualquier operación que pueda tocar una transición ya puesta,
 // no solo `ponerTransicion`. `{tipo: "junta", ms}`: la transición quedó
-// «solape» (recién nacida, o con la cola que le queda) y el video se
-// acortó `ms`. `{tipo: "corte"}` / `{tipo: "acortada", ms}`: lo de hoy, para
-// una transición de «cola» que no cupo entera o quedó más corta que antes.
-// `null` si no hay nada que avisar.
+// «solape» y el video de verdad se acortó `ms` (fin de antes − fin de
+// después; revisión final: cambiar solo el tipo, volver a poner la misma o
+// dejarla más corta no se avisa como «junta»). `{tipo: "corte"}` /
+// `{tipo: "acortada", ms}`: lo de hoy, para una transición de «cola» que no
+// cupo entera o quedó más corta que antes. `null` si no hay nada que avisar.
 function tieneTransicionReal(tr) {
   return Boolean(tr) && (tr.tipo ?? "corte") !== "corte" && tr.duracion_ms > 0;
+}
+
+function finDe(doc) {
+  const clips = clipsPrincipales(doc);
+  return clips.length ? Math.max(...clips.map((c) => c.inicio_ms + c.duracion_ms)) : 0;
 }
 
 export function efectoTransicion(antes, despues, clipId) {
@@ -496,7 +502,8 @@ export function efectoTransicion(antes, despues, clipId) {
   const trDespues = clipDespues.transicion;
   const tiene = tieneTransicionReal(trDespues);
   if (tiene && (trDespues.modo ?? null) === "solape") {
-    return { tipo: "junta", ms: trDespues.duracion_ms };
+    const ms = finDe(antes) - finDe(despues);
+    return ms > 0 ? { tipo: "junta", ms } : null;
   }
   const clipAntes = clipsPrincipales(antes).find((c) => c.id === clipId);
   const trAntes = clipAntes?.transicion;

@@ -316,3 +316,18 @@ test("el cursor sobre el video: mover, y el de agrandar en el asa", () => {
   assert.equal(cursorEn({ tipo: "encuadre" }), "move");
   assert.equal(cursorEn({ tipo: "asa_encuadre", asa: { sx: 1, sy: 1 } }), "nwse-resize");
 });
+
+// Revisión final de la capa 5b: en el celular el video llena el lienzo y no
+// hay «afuera» que tocar para soltar el clip de la principal — un segundo
+// toque (sin arrastrar) sobre el clip del video ya elegido lo suelta. Las
+// capas no cambian: un toque elige la de arriba (el doble toque de un texto
+// lo maneja esDobleToque).
+test("eleccionTrasToque: el clip del video ya elegido se suelta con otro toque; lo demás se elige como siempre", async () => {
+  const { eleccionTrasToque } = await import("../../static/editor/seleccion.js");
+  assert.equal(eleccionTrasToque({ tipo: "encuadre", alTocar: "v0", yaElegido: true }), null);
+  assert.equal(eleccionTrasToque({ tipo: "encuadre", alTocar: "v0", yaElegido: false }), "v0", "el primer toque lo elige");
+  assert.equal(eleccionTrasToque({ tipo: "asa_encuadre", alTocar: "v0", yaElegido: true }), "v0", "su asa no lo suelta");
+  assert.equal(eleccionTrasToque({ tipo: "caja", alTocar: "t1", yaElegido: true }), "t1", "una capa elegida sigue elegida");
+  assert.equal(eleccionTrasToque({ tipo: "caja", alTocar: "t2", yaElegido: true }), "t2", "dentro de la caja gana la de arriba");
+  assert.equal(eleccionTrasToque({ tipo: "asa", alTocar: "t1", yaElegido: true }), "t1");
+});

@@ -1673,8 +1673,8 @@ msgstr "Unknown action."
 msgid "Acción desconocida: %(accion)s."
 msgstr "Unknown action: %(accion)s."
 
-msgid "Acerca el video para poder moverlo."
-msgstr "Zoom in on the video to be able to move it."
+msgid "Acerca la imagen para poder moverla."
+msgstr "Zoom in on the image to be able to move it."
 
 msgid "Acercar"
 msgstr "Zoom in"
@@ -2267,11 +2267,11 @@ msgstr "Lead"
 msgid "Arrastra aquí imágenes o videos, o toca <strong>+</strong> para sumar referencias o elegir del catálogo. Son opcionales: sin nada, se genera solo con tu texto."
 msgstr "Drag images or videos here, or tap <strong>+</strong> to add references or pick from the catalog. They're optional: with nothing, it generates from your text alone."
 
-msgid "Arrastra el video para elegir qué parte se ve; la esquina lo acerca."
-msgstr "Drag the video to choose which part shows; the corner zooms it in."
-
 msgid "Arrastra imágenes o videos aquí"
 msgstr "Drag images or videos here"
+
+msgid "Arrastra la imagen para elegir qué parte se ve; la esquina la acerca."
+msgstr "Drag the image to choose which part shows; the corner zooms in."
 
 msgid "Arriba"
 msgstr "Top"
@@ -4301,6 +4301,9 @@ msgstr "Duration"
 
 msgid "Duración de la foto"
 msgstr "Photo duration"
+
+msgid "Duración de la foto, en segundos"
+msgstr "Photo duration, in seconds"
 
 msgid "Duración media"
 msgstr "Average duration"

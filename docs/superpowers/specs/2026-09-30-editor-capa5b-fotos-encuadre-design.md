@@ -193,8 +193,9 @@ automático sigue igual).
   cabezal — hoy no elige nada —; tocar fuera del lienzo sigue quitando la selección. Con un clip de la principal
   elegido, **arrastrar** mueve el cuadro (cambia `x`/`y`: la imagen sigue al dedo, con imán al centro como las capas)
   y el **asa** de la esquina lo acerca o aleja (`zoom` 1–4). Cada arrastre es UN deshacer (`operarCon({clave:
-  "<clip>:encuadre"})`). Si el cuadro no tiene margen para moverse (llenar sin acercar y misma proporción), el panel
-  dice «Acerca el video para poder moverlo».
+  "<clip>:encuadre"})`). Si el cuadro no tiene margen para moverse (llenar sin acercar y misma proporción; desde la
+  revisión final, también un margen de menos de 12 px del lienzo en los dos ejes, `encuadre.IMAN_ENCUADRE_PX`), el panel
+  dice «Acerca la imagen para poder moverla».
 - **Propiedades** del clip de video y de la foto: «Encuadre» con «Llenar» · «Ajustar con fondo desenfocado»,
   «Acercar» (100–400 %) y «Centrar». La foto además: «Duración» (0,1–60 s) y sin «Velocidad» ni «Volumen del sonido».
 - Durante una transición se ven dos clips: el gesto actúa sobre el del cabezal (el que entra).

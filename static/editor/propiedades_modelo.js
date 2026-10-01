@@ -10,7 +10,7 @@
 // principal), "texto", "imagen", "audio" (música, efecto, voz…),
 // "sonido" (el espejo de p_sonido: no se edita, se cambia desde su video) y
 // "otro" (un video encima u otra pista que el render no hace: solo borrar).
-import { caja as cajaEncuadre, completo as encuadreCompleto, MODOS as MODOS_ENCUADRE } from "./encuadre.js";
+import { completo as encuadreCompleto, MODOS as MODOS_ENCUADRE, sinMargen as encuadreSinMargen } from "./encuadre.js";
 import { FORMATOS } from "./formatos.js";
 import { etiquetaClip, nombreTransicion } from "./escala.js";
 import {
@@ -279,16 +279,16 @@ function medidasDeClip(clip, materiales, medidasPrincipal) {
 }
 
 // «Encuadre» (D4, D8) de un clip de la principal: el modo, el zoom en %, si
-// está centrado y si el cuadro tiene margen para moverse — sin margen (mide
-// justo el lienzo: llenar, sin acercar y con su misma proporción) arrastrar
-// no hace nada y el panel pide acercarlo. Sin `medidas` no se sabe: no lo dice.
+// está centrado y si el cuadro tiene margen para moverse — sin margen (en
+// ningún eje pasa del lienzo en IMAN_ENCUADRE_PX o más: encuadre.sinMargen,
+// el mismo criterio que el arrastre) arrastrar no hace nada y el panel pide
+// acercarlo. Sin `medidas` no se sabe: no lo dice.
 export function modeloEncuadre(clip, { medidas = null, formato = "9:16" } = {}) {
   const e = encuadreCompleto(clip?.encuadre);
   let sinMargen = false;
   if (medidas && medidas[0] > 0 && medidas[1] > 0) {
     const [ancho, alto] = lienzo(formato);
-    const c = cajaEncuadre(medidas[0], medidas[1], ancho, alto, e);
-    sinMargen = c.sw === ancho && c.sh === alto;
+    sinMargen = encuadreSinMargen(e, medidas, ancho, alto);
   }
   return {
     modo: MODOS_ENCUADRE.includes(e.modo) ? e.modo : "llenar",

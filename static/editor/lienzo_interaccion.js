@@ -28,7 +28,7 @@
 // las medidas de los textos del propio lienzo (vista.medidasTexto). La caja,
 // el asa y las guías son dibujo: no reciben el puntero.
 import {
-  asaDe, cajaElegida, cajaEncuadreElegida, cambiosArrastre, cursorEn, esDobleToque, esTexto, gestoEn, IMAN_PX,
+  asaDe, cajaElegida, cajaEncuadreElegida, cambiosArrastre, cursorEn, eleccionTrasToque, esDobleToque, esTexto, gestoEn, IMAN_PX,
   MARGEN_ASA_PX, porcentaje, puntoEnLienzo, RADIO_ASA_PX, superaUmbral,
 } from "./seleccion.js";
 
@@ -162,9 +162,10 @@ export class InteraccionLienzo {
     }
     const transform = transformDe(this.editor.doc(), g.id);
     if (!transform) return;
-    if (g.id !== this.editor.seleccion) this.editor.seleccionar(g.id);   // la caja aparece bajo el dedo
+    const yaElegido = g.id === this.editor.seleccion;                   // otro toque lo suelta (eleccionTrasToque)
+    if (!yaElegido) this.editor.seleccionar(g.id);                      // la caja aparece bajo el dedo
     this.gesto = {
-      pointerId: e.pointerId, tipo: g.tipo, id: g.id, alTocar: g.alTocar, texto: esTexto(g.doc, g.alTocar),
+      pointerId: e.pointerId, tipo: g.tipo, id: g.id, alTocar: g.alTocar, texto: esTexto(g.doc, g.alTocar), yaElegido,
       // el imán del centro: IMAN_PX de pantalla, en px del lienzo
       transform, caja: g.caja, formato: g.doc.formato, inicio: g.punto, iman: IMAN_PX * g.proporcion,
       // D8: el encuadre y las medidas del cuadro al empezar, y el asa (el zoom se mide desde ahí)
@@ -230,8 +231,14 @@ export class InteraccionLienzo {
     }
     this._terminar();
     if (g.activo) return;
-    // fue un toque: dentro de la caja de lo elegido, gana la capa de arriba
-    if (g.alTocar !== this.editor.seleccion) this.editor.seleccionar(g.alTocar);
+    // fue un toque: dentro de la caja de lo elegido, gana la capa de arriba; el
+    // clip del video que ya estaba elegido se suelta (en el celular no hay «afuera»)
+    const elegir = eleccionTrasToque(g);
+    if (elegir !== this.editor.seleccion) this.editor.seleccionar(elegir);
+    if (elegir === null) {
+      this.toque = null;
+      return;
+    }
     const toque = { t: e.timeStamp, x: e.clientX, y: e.clientY, id: g.alTocar };
     if (g.texto && esDobleToque(this.toque, toque)) {
       this.toque = null;

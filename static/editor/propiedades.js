@@ -389,6 +389,8 @@ export class Propiedades {
     const fila = el("div", "ed-foto-campo", campo);
     const input = el("input", "", fila);
     Object.assign(input, { type: "text", id: "ed-foto-duracion", inputMode: "decimal", autocomplete: "off", spellcheck: false });
+    // la «s» es solo visual: un lector de pantalla oye «… en segundos» (revisión final)
+    input.setAttribute("aria-label", t("prop.duracion_foto_segundos"));
     el("span", "ed-foto-unidad", fila, "s").setAttribute("aria-hidden", "true");
     input.addEventListener("change", () => {
       const ms = msDeDuracionFoto(input.value);

@@ -1253,6 +1253,11 @@ def test_encuadre_y_foto_en_editar_caben_y_se_enganchan(dashboard, encolados):
     for marca in ('nombre: "ed-encuadre-modo"', 'id: "ed-encuadre-zoom"', '"ed-encuadre-centrar"', 'id: "ed-foto-duracion"',
                   '`${id}:encuadre-zoom`', '"cambiarDuracionFoto"'):
         assert marca in prop, marca
+    # revisión final: la «s» de la unidad es solo visual (aria-hidden); el
+    # nombre accesible del campo dice que va en segundos
+    from final_edition.textos_editor import TEXTOS
+    assert 'input.setAttribute("aria-label", t("prop.duracion_foto_segundos"));' in prop
+    assert TEXTOS["prop.duracion_foto_segundos"] == "Duración de la foto, en segundos"
 
 
 # ---- Capa 4c (8/10): borrar de la biblioteca ----
