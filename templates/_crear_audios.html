@@ -10,6 +10,9 @@
      data-url-lista="{{ url_for('au_lista', cliente=cliente) }}"
      data-url-muestra="{{ url_for('au_muestra', cliente=cliente) }}"
      data-url-subir="{{ url_for('mm_subir', cliente=cliente) }}"
+     data-url-vp-lista="{{ url_for('vp_lista', cliente=cliente) }}"
+     data-url-vp-clonar="{{ url_for('vp_clonar', cliente=cliente) }}"
+     data-url-vp-disenar="{{ url_for('vp_disenar', cliente=cliente) }}"
      data-usd-caracter="{{ usd_por_caracter }}">
   <p class="vacio au-intro">{{ _('Escribe un texto, elige la voz y, si quieres, una canción de fondo. Sale un mp3 para escuchar y descargar. Nada se cobra hasta que pulses «Crear audio».') }}</p>
 
@@ -25,6 +28,36 @@
       <fieldset class="au-voces-caja">
         <legend>{{ _('Voz') }}: <span id="au-voz-nombre">{{ fichas_voces[0].nombre if fichas_voces else '' }}</span></legend>
         <input type="hidden" id="au-voz" value="{{ fichas_voces[0].nombre if fichas_voces else '' }}">
+        <h4 class="au-vp-titulo">{{ _('Mis voces') }}</h4>
+        <div id="au-vp-wrap">{% include "_audios_mis_voces.html" %}</div>
+        <div class="au-vp-panel" id="au-vp-panel" hidden>
+          <div class="au-vp-pestanas" role="tablist">
+            <button type="button" class="au-filtro activo" data-vp-pestana="clonar" role="tab">{{ _('Clonar una voz') }}</button>
+            <button type="button" class="au-filtro" data-vp-pestana="disenar" role="tab">{{ _('Diseñar una voz') }}</button>
+          </div>
+          <div class="au-vp-form" data-vp-form="clonar">
+            <label class="campo-label" for="au-vp-nombre-c">{{ _('Nombre de la voz') }}
+              <input type="text" id="au-vp-nombre-c" maxlength="40" placeholder="{{ _('ej. Voz de Ana') }}"></label>
+            <label class="campo-label" for="au-vp-archivo">{{ _('Grabación: de 10 segundos a 5 minutos, mp3, wav, m4a, aac u ogg') }}
+              <input type="file" id="au-vp-archivo" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*"></label>
+            <label class="au-vp-permiso"><input type="checkbox" id="au-vp-permiso"> <span>{{ texto_consentimiento|traducir }}</span></label>
+            <p class="au-ayuda">{{ _('Graba en un lugar silencioso, con una sola persona hablando y sin música.') }}</p>
+            <div><button type="button" class="btn-generar btn-sm" id="au-vp-clonar">{{ _('Clonar voz') }} ≈ {{ precio_voz_clonada.usd|usd }}</button></div>
+          </div>
+          <div class="au-vp-form" data-vp-form="disenar" hidden>
+            <label class="campo-label" for="au-vp-nombre-d">{{ _('Nombre de la voz') }}
+              <input type="text" id="au-vp-nombre-d" maxlength="40" placeholder="{{ _('ej. Astrid, cálida') }}"></label>
+            <label class="campo-label" for="au-vp-descripcion">{{ _('Descripción') }}
+              <textarea id="au-vp-descripcion" rows="3" maxlength="500" placeholder="{{ _('ej. Mujer de unos 30 años, voz cálida y cercana, ritmo pausado, acento sueco suave') }}"></textarea></label>
+            <p class="au-ayuda">{{ _('No describas a una persona real ni pidas imitar a alguien famoso.') }}</p>
+            <div><button type="button" class="btn-generar btn-sm" id="au-vp-disenar">{{ _('Diseñar voz') }} ≈ {{ precio_voz_disenada.usd|usd }}</button></div>
+          </div>
+          <p class="au-ayuda">{{ _('Tu voz habla los diez idiomas; su muestra se crea en el idioma del texto que elijas abajo.') }}</p>
+        </div>
+        {# Fuera del panel: el error de un borrado, o de una creación que falló en
+           el worker, llega con el panel ya cerrado y tiene que verse igual. #}
+        <p class="campo-error" id="au-vp-error" hidden></p>
+        <h4 class="au-vp-titulo">{{ _('Voces de la galería') }}</h4>
         <div class="au-voces-filtros" role="group" aria-label="{{ _('Filtrar voces') }}">
           <button type="button" class="au-filtro activo" data-filtro-genero="">{{ _('Todas') }}</button>
           <button type="button" class="au-filtro" data-filtro-genero="mujer">{{ _('Mujer') }}</button>
@@ -43,14 +76,14 @@
         <audio id="au-muestra" preload="none" hidden></audio>
       </fieldset>
       <div class="au-fila">
-        <label class="campo-label" for="au-idioma">{{ _('Idioma') }}
+        <label class="campo-label" for="au-idioma">{{ _('Idioma del texto') }}
           <select id="au-idioma">{% for i in idiomas_audio %}<option value="{{ i }}" {% if i == idioma_audio_defecto %}selected{% endif %}>{{ nombres_idioma_audio[i] }}</option>{% endfor %}</select>
         </label>
         <label class="campo-label" for="au-velocidad">{{ _('Velocidad') }}
           <select id="au-velocidad">{% for k, n in velocidades_audio.items() %}<option value="{{ k }}" {% if k == 'normal' %}selected{% endif %}>{{ n|traducir }}</option>{% endfor %}</select>
         </label>
       </div>
-      <p class="au-ayuda">{{ _('El idioma lo decide el texto; este selector solo cambia la muestra de la voz.') }}</p>
+      <p class="au-ayuda">{{ _('Elige el idioma en que está escrito el texto: con él suena la muestra de cada voz y, en noruego y en tus voces propias, se fuerza el acento.') }}</p>
 
       <fieldset class="au-musica">
         <legend>{{ _('Música de fondo') }}</legend>
@@ -105,7 +138,9 @@
     errorSubir: {{ _('Error al subir; recarga la página.')|tojson }},
     errorRed: {{ _('Error de red al subir.')|tojson }},
     noSePudo: {{ _('No se pudo crear el audio.')|tojson }},
-    confirmarBorrar: {{ _('¿Borrar este audio?')|tojson }}
+    confirmarBorrar: {{ _('¿Borrar este audio?')|tojson }},
+    confirmarBorrarVoz: {{ _('¿Borrar esta voz de Mis voces? Los audios ya hechos con ella se conservan.')|tojson }},
+    noSePudoVoz: {{ _('No se pudo crear la voz.')|tojson }}
   };
   // El separador decimal del idioma de quien mira (el filtro usd ya lo sabe).
   var sep = {{ (0.5|usd)|tojson }}.indexOf(',') >= 0 ? ',' : '.';
@@ -148,8 +183,9 @@
   var voces = document.getElementById('au-voces'), botonSonando = null;
   function elegirVoz(nombre) {
     vozInput.value = nombre;
-    document.getElementById('au-voz-nombre').textContent = nombre;
-    voces.querySelectorAll('.au-voz').forEach(function (c) {
+    var tarjeta = raiz.querySelector('.au-voz[data-voz="' + nombre + '"] .au-voz-nombre');
+    document.getElementById('au-voz-nombre').textContent = tarjeta ? tarjeta.textContent : nombre;
+    raiz.querySelectorAll('.au-voz').forEach(function (c) {
       c.setAttribute('aria-checked', c.dataset.voz === nombre ? 'true' : 'false');
     });
   }
@@ -184,12 +220,114 @@
     var tarjeta = ev.target.closest('.au-voz');
     if (tarjeta && ev.target === tarjeta) { ev.preventDefault(); elegirVoz(tarjeta.dataset.voz); }
   });
-  document.querySelectorAll('#au .au-filtro').forEach(function (f) {
+  document.querySelectorAll('#au .au-voces-filtros .au-filtro').forEach(function (f) {
     f.addEventListener('click', function () {
-      document.querySelectorAll('#au .au-filtro').forEach(function (o) { o.classList.toggle('activo', o === f); });
+      document.querySelectorAll('#au .au-voces-filtros .au-filtro').forEach(function (o) { o.classList.toggle('activo', o === f); });
       var g = f.dataset.filtroGenero;
       voces.querySelectorAll('.au-voz').forEach(function (c) { c.hidden = !!g && c.dataset.genero !== g; });
     });
+  });
+
+  // Mis voces (spec 2026-09-30): tarjetas re-pintadas por fetch dentro de
+  // #au-vp-wrap; los clics van delegados (las tarjetas cambian).
+  var vpWrap = document.getElementById('au-vp-wrap'), vpPanel = document.getElementById('au-vp-panel');
+  function mostrarErrorVoz(msg) {
+    var el = document.getElementById('au-vp-error');
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
+  function pintarVoces(d, elegirNueva) {
+    if (d.html !== undefined) vpWrap.innerHTML = d.html;
+    mostrarErrorVoz(d.error);
+    if (elegirNueva && d.voces && d.voces.length) {
+      elegirVoz(d.voces[0].valor);
+    } else if (vozInput.value.indexOf('vp:') === 0 && !raiz.querySelector('.au-voz[data-voz="' + vozInput.value + '"]')) {
+      var primera = voces.querySelector('.au-voz');     // la elegida se borró: vuelve a la primera de la galería
+      if (primera) elegirVoz(primera.dataset.voz);
+    } else {
+      elegirVoz(vozInput.value);
+    }
+    var crearBtn = document.getElementById('au-vp-crear');
+    if (crearBtn) crearBtn.setAttribute('aria-expanded', vpPanel.hidden ? 'false' : 'true');
+    vigilarVoz();
+  }
+  // El panel se cierra ANTES de re-pintar, para que aria-expanded del «+ Crear
+  // voz propia» nuevo diga la verdad; devuelve d.ok (el clon limpia el archivo
+  // solo si salió: un error de la casilla no obliga a elegirlo otra vez).
+  function enviarVoz(url, fd) {
+    mostrarErrorVoz('');
+    return fetch(url, {method: 'POST', body: fd, headers: {'X-Requested-With': 'fetch'}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.ok) vpPanel.hidden = true; pintarVoces(d, false); return d.ok; })
+      .catch(function () { mostrarErrorVoz(T.sinConexion); });
+  }
+  // La voz se crea en el worker: se consulta su estado y al terminar se pide
+  // solo la sección (recargar borraría lo escrito); la voz nueva queda elegida.
+  function vigilarVoz() {
+    var barra = vpWrap.querySelector('.barra-progreso[data-job]');
+    if (!barra || barra.dataset.vigilando) return;
+    barra.dataset.vigilando = '1';
+    var textoBarra = barra.nextElementSibling;
+    var t = setInterval(function () {
+      fetch(barra.dataset.estado).then(function (r) { return r.json(); }).then(function (e) {
+        if (e.estado === 'en_progreso') {
+          if (textoBarra && e.etapa) textoBarra.textContent = e.etapa;
+          return;
+        }
+        clearInterval(t);
+        fetch(raiz.dataset.urlVpLista, {headers: {'X-Requested-With': 'fetch'}})
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (e.estado === 'error') { d.error = e.mensaje || T.noSePudoVoz; pintarVoces(d, false); }
+            else { mostrarAviso(e.mensaje || ''); pintarVoces(d, true); }
+          })
+          .catch(function () { mostrarErrorVoz(T.sinConexion); });
+      }).catch(function () {});
+    }, 4000);
+  }
+  vpWrap.addEventListener('click', function (ev) {
+    if (ev.target.closest('#au-vp-crear')) {
+      vpPanel.hidden = !vpPanel.hidden;
+      ev.target.closest('#au-vp-crear').setAttribute('aria-expanded', vpPanel.hidden ? 'false' : 'true');
+      return;
+    }
+    var borrar = ev.target.closest('.au-vp-borrar');
+    if (borrar) {
+      if (!confirm(T.confirmarBorrarVoz + ' «' + borrar.dataset.nombre + '»')) return;
+      enviarVoz(borrar.dataset.url, new FormData());
+      return;
+    }
+    var play = ev.target.closest('.au-voz-play');
+    if (play) { escucharVoz(play); return; }
+    var tarjeta = ev.target.closest('.au-voz');
+    if (tarjeta) elegirVoz(tarjeta.dataset.voz);
+  });
+  vpWrap.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    var tarjeta = ev.target.closest('.au-voz');
+    if (tarjeta && ev.target === tarjeta) { ev.preventDefault(); elegirVoz(tarjeta.dataset.voz); }
+  });
+  vpPanel.querySelectorAll('[data-vp-pestana]').forEach(function (p) {
+    p.addEventListener('click', function () {
+      vpPanel.querySelectorAll('[data-vp-pestana]').forEach(function (o) { o.classList.toggle('activo', o === p); });
+      vpPanel.querySelectorAll('[data-vp-form]').forEach(function (f) { f.hidden = f.dataset.vpForm !== p.dataset.vpPestana; });
+    });
+  });
+  document.getElementById('au-vp-disenar').addEventListener('click', function () {
+    var fd = new FormData();
+    fd.append('nombre', document.getElementById('au-vp-nombre-d').value);
+    fd.append('descripcion', document.getElementById('au-vp-descripcion').value);
+    fd.append('idioma', document.getElementById('au-idioma').value);
+    enviarVoz(raiz.dataset.urlVpDisenar, fd);
+  });
+  document.getElementById('au-vp-clonar').addEventListener('click', function () {
+    var archivo = document.getElementById('au-vp-archivo');
+    var fd = new FormData();
+    fd.append('nombre', document.getElementById('au-vp-nombre-c').value);
+    fd.append('idioma', document.getElementById('au-idioma').value);
+    fd.append('consentimiento', document.getElementById('au-vp-permiso').checked ? 'si' : 'no');
+    if (archivo.files.length) fd.append('grabacion', archivo.files[0]);
+    enviarVoz(raiz.dataset.urlVpClonar, fd).then(function (ok) { if (ok) archivo.value = ''; });
   });
 
   // Música: reproductor, segundo de inicio y volumen solo con una canción elegida.
@@ -332,6 +470,6 @@
   form.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault();
   });
-  refrescarPrecio(); mostrarMusica(); vigilar();
+  refrescarPrecio(); mostrarMusica(); vigilar(); vigilarVoz();
 })();
 </script>

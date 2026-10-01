@@ -231,3 +231,16 @@ def test_los_post_de_mis_voces_de_otro_sitio_dan_403(app):
 
 def test_el_gasto_de_voces_propias_tiene_nombre(app):
     assert app["dashboard"].NOMBRES_TIPO_GASTO["voz_propia"] == "Voces propias"
+
+
+def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
+    v = _voz_propia()
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert 'id="au-vp-wrap"' in html and f'data-voz="vp:{v["id"]}"' in html and 'id="au-vp-panel"' in html
+    assert 'data-vp-pestana="clonar"' in html and 'data-vp-pestana="disenar"' in html
+    assert 'id="au-vp-permiso"' in html and "tengo permiso escrito de la persona" in html
+    assert 'id="au-vp-descripcion"' in html and "US$ 1,50" in html and "US$ 3,00" in html
+    assert "data-url-vp-clonar=" in html and "data-url-vp-lista=" in html
+    sel = html.split('id="au-idioma"')[1].split("</select>")[0]
+    assert sel.count("<option") == 10 and "Norsk" in sel and "Čeština" in sel and "Suomi" in sel
+    assert "Idioma del texto" in html

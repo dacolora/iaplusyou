@@ -193,6 +193,10 @@ msgid "%(fase)s (puesto %(n)s)"
 msgstr "%(fase)s (position %(n)s)"
 
 #, python-format
+msgid "%(fuente)s solo busca por palabra clave: elige «Por palabra clave» o cambia de fuente."
+msgstr "%(fuente)s only searches by keyword: choose “By keyword” or switch source."
+
+#, python-format
 msgid "%(fuente)s todavía no está configurada. Avísale al equipo de Creatv para activarla."
 msgstr "%(fuente)s isn't set up yet. Ask the Creatv team to turn it on."
 
@@ -1082,6 +1086,9 @@ msgstr "(suggested)"
 
 msgid "(sugerido)"
 msgstr "(suggested)"
+
+msgid "+ Crear voz propia"
+msgstr "+ Create custom voice"
 
 msgid "+ Del Catálogo"
 msgstr "+ From the Catalog"
@@ -2519,6 +2526,21 @@ msgstr "Video clip"
 msgid "Clips · %(total)s s en total"
 msgstr "Clips · %(total)s s total"
 
+msgid "Clona una voz con permiso o diseña una nueva desde una descripción."
+msgstr "Clone a voice with permission or design a new one from a description."
+
+msgid "Clonada"
+msgstr "Cloned"
+
+msgid "Clonando la voz…"
+msgstr "Cloning the voice…"
+
+msgid "Clonar una voz"
+msgstr "Clone a voice"
+
+msgid "Clonar voz"
+msgstr "Clone voice"
+
 msgid "Cloudflare R2 (almacenamiento)"
 msgstr "Cloudflare R2 (storage)"
 
@@ -2951,6 +2973,9 @@ msgstr "Create your first experiment"
 msgid "Crea tu proyecto en un minuto. Sin tarjeta: pagas solo lo que generas."
 msgstr "Create your project in a minute. No card: you only pay for what you generate."
 
+msgid "Crea una API key en tu workspace de TrendTrack (guía: docs.trendtrack.io › Getting Started)."
+msgstr "Create an API key in your TrendTrack workspace (guide: docs.trendtrack.io › Getting Started)."
+
 msgid "Creando activo…"
 msgstr "Creating asset…"
 
@@ -2963,6 +2988,12 @@ msgstr "Creating the audio…"
 
 msgid "Creando la canción con ElevenLabs…"
 msgstr "Creating the song with ElevenLabs…"
+
+msgid "Creando la voz"
+msgstr "Creating the voice"
+
+msgid "Creando la voz…"
+msgstr "Creating the voice…"
 
 msgid "Crear"
 msgstr "Create"
@@ -3269,6 +3300,9 @@ msgstr "Describe the video's visual style."
 msgid "Describe la música que quieres."
 msgstr "Describe the music you want."
 
+msgid "Describe la voz en 10 a 500 caracteres."
+msgstr "Describe the voice in 10 to 500 characters."
+
 msgid "Describe qué tiene que pasar. Ej.: @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"
 msgstr "Describe what has to happen. E.g.: @Imagen 1 is the product; a girl discovers it and jumps for joy, the camera follows her like in @Video 1"
 
@@ -3350,6 +3384,15 @@ msgstr "Diagnosis: %(causas)s — next: %(que)s"
 
 msgid "Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;"
 msgstr "Tell Claude what’s wrong, for example: &quot;clip 3 is 16 seconds long&quot;"
+
+msgid "Diseñada"
+msgstr "Designed"
+
+msgid "Diseñar una voz"
+msgstr "Design a voice"
+
+msgid "Diseñar voz"
+msgstr "Design voice"
 
 msgid "Disfraces, fiestas y decoración; tono lúdico."
 msgstr "Costumes, parties and decorations; a playful tone."
@@ -3729,9 +3772,6 @@ msgstr "The hook has a different visual style from the rest of the video."
 msgid "El id de página de Meta son solo dígitos."
 msgstr "A Meta page id is digits only."
 
-msgid "El idioma lo decide el texto; este selector solo cambia la muestra de la voz."
-msgstr "The text decides the language; this selector only changes the voice sample."
-
 msgid ""
 "El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia\n"
 "  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.\n"
@@ -3833,6 +3873,9 @@ msgstr "The current prompt is the same as the original."
 msgid "El proveedor entregó el video sin pista de audio"
 msgstr "The provider delivered the video without an audio track"
 
+msgid "El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más."
+msgstr "The project reached its storage limit (2 GB): delete something before uploading more."
+
 #, python-format
 msgid "El punto %(n)s dice «mejorar» sin decir qué."
 msgstr "Point %(n)s says “mejorar” without saying what."
@@ -3927,6 +3970,9 @@ msgstr "Choose at least one platform or network."
 
 msgid "Elige al menos una plataforma."
 msgstr "Choose at least one platform."
+
+msgid "Elige el idioma en que está escrito el texto: con él suena la muestra de cada voz y, en noruego y en tus voces propias, se fuerza el acento."
+msgstr "Choose the language the text is written in: each voice's sample plays in it and, for Norwegian and your custom voices, it also sets the accent."
 
 msgid "Elige el modo del video: diálogo a cámara o voz en off."
 msgstr "Choose the video mode: on-camera dialogue or voice-over."
@@ -4134,6 +4180,9 @@ msgstr "At notion.so/profile/integrations create an internal integration (conten
 msgid "En prueba"
 msgstr "In testing"
 
+msgid "En trendtrack.io elige el plan Pro o superior (incluye la API y 20 000 créditos al mes)."
+msgstr "At trendtrack.io choose the Pro plan or higher (it includes the API and 20,000 credits a month)."
+
 #, python-format
 msgid "En tu catálogo: %(nombre)s"
 msgstr "In your catalog: %(nombre)s"
@@ -4261,6 +4310,9 @@ msgstr "It is the SAME person/character in every shot: same face, same features,
 msgid "Es la única foto del producto. Si quieres quitarla, sube otra primero o elimina el producto completo."
 msgstr "It's the product's only photo. If you want to remove it, upload another one first or delete the whole product."
 
+msgid "Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios."
+msgstr "This is my voice, or I have the person's written permission to clone it and use it in ads."
+
 msgid "Es un comentario real de un comprador"
 msgstr "It's a real buyer's comment"
 
@@ -4309,6 +4361,9 @@ msgstr "That final cut no longer exists."
 
 msgid "Esa foto ya no está en el Catálogo."
 msgstr "That photo is no longer in the Catalog."
+
+msgid "Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente."
+msgstr "That source doesn't support this kind of search; search by keyword or switch source."
 
 msgid "Esa fuente no está configurada."
 msgstr "That source isn't set up."
@@ -4437,6 +4492,9 @@ msgstr "That version doesn't exist."
 
 msgid "Esa versión rompe reglas que no se negocian; pídele a Claude que la corrija."
 msgstr "That version breaks non-negotiable rules; ask Claude to fix it."
+
+msgid "Esa voz ya no está en Mis voces."
+msgstr "That voice is no longer in My voices."
 
 msgid "Esas piezas ya se estaban generando."
 msgstr "Those pieces were already being generated."
@@ -4571,6 +4629,9 @@ msgstr "That ad was already in the Swipe file."
 
 msgid "Ese aprendizaje ya no existe."
 msgstr "That learning no longer exists."
+
+msgid "Ese archivo no trae audio."
+msgstr "That file has no audio."
 
 msgid "Ese avatar no existe."
 msgstr "That avatar doesn't exist."
@@ -4886,6 +4947,9 @@ msgstr "These texts are in Spanish: they're the internal instructions Claude rec
 
 msgid "Estrellas"
 msgstr "Stars"
+
+msgid "Estrenando la voz"
+msgstr "Trying out the voice"
 
 msgid "Estudio creado. Ahora agrégale comentarios."
 msgstr "Study created. Now add comments to it."
@@ -5417,6 +5481,12 @@ msgstr "Google › App passwords"
 msgid "Gorra / sombrero"
 msgstr "Cap / hat"
 
+msgid "Graba en un lugar silencioso, con una sola persona hablando y sin música."
+msgstr "Record somewhere quiet, with a single person speaking and no music."
+
+msgid "Grabación: de 10 segundos a 5 minutos, mp3, wav, m4a, aac u ogg"
+msgstr "Recording: 10 seconds to 5 minutes, mp3, wav, m4a, aac or ogg"
+
 msgid "Gracias: quedó como prueba del producto y Claude ya la puede usar."
 msgstr "Thanks: it's saved as product proof and Claude can now use it."
 
@@ -5711,6 +5781,9 @@ msgstr "Project language"
 
 msgid "Idioma del proyecto guardado."
 msgstr "Project language saved."
+
+msgid "Idioma del texto"
+msgstr "Text language"
 
 msgid "Idioma guardado."
 msgstr "Language saved."
@@ -6110,6 +6183,18 @@ msgstr "The start date isn't valid (use YYYY-MM-DD)."
 
 msgid "La gente se va antes del final: acorta el video o sube el ritmo del cuerpo."
 msgstr "People leave before the end: shorten the video or speed up the body."
+
+msgid "La grabación de esa voz ya no está."
+msgstr "That voice's recording is no longer available."
+
+msgid "La grabación pesa más de 20 MB."
+msgstr "The recording is larger than 20 MB."
+
+msgid "La grabación puede durar hasta 5 minutos."
+msgstr "The recording can be up to 5 minutes long."
+
+msgid "La grabación tiene que durar al menos 10 segundos."
+msgstr "The recording must be at least 10 seconds long."
 
 msgid "La idea todavía no tiene un ángulo con promesa."
 msgstr "The idea doesn't have an angle with a promise yet."
@@ -6641,6 +6726,9 @@ msgstr "Select at least one platform to publish to."
 msgid "Marca al menos una plataforma."
 msgstr "Select at least one platform."
 
+msgid "Marca la casilla de permiso para clonar esta voz."
+msgstr "Tick the permission box to clone this voice."
+
 msgid "Marca las líneas que salen. Se quitan enteras; la línea 1 (el hook) no se puede quitar."
 msgstr "Check the lines that come out. They're removed whole; line 1 (the hook) can't be removed."
 
@@ -6823,6 +6911,9 @@ msgstr "Looking at the references…"
 
 msgid "Mis barridos"
 msgstr "My sweeps"
+
+msgid "Mis voces"
+msgstr "My voices"
 
 msgid "Mismo mensaje"
 msgstr "Same message"
@@ -7090,6 +7181,9 @@ msgstr "Not applicable — it receives the already-generated result"
 msgid "No cambiaste nada."
 msgstr "You didn't change anything."
 
+msgid "No describas a una persona real ni pidas imitar a alguien famoso."
+msgstr "Don't describe a real person or ask to imitate someone famous."
+
 msgid "No elegiste ninguna foto."
 msgstr "You didn't choose any photo."
 
@@ -7307,6 +7401,9 @@ msgstr "I couldn't reach Triple Whale (%(tipo)s)."
 msgid "No pude leer el archivo como texto (¿es un CSV?)."
 msgstr "I couldn't read the file as text (is it a CSV?)."
 
+msgid "No pude leer ese archivo de audio."
+msgstr "I couldn't read that audio file."
+
 msgid "No pude leer tus activos:"
 msgstr "Couldn't read your assets:"
 
@@ -7331,6 +7428,10 @@ msgstr "I couldn't upload %(archivo)s: %(error)s"
 #, python-format
 msgid "No pude subir la canción (%(tipo)s)."
 msgstr "I couldn't upload the song (%(tipo)s)."
+
+#, python-format
+msgid "No pude subir la grabación (%(tipo)s)."
+msgstr "I couldn't upload the recording (%(tipo)s)."
 
 msgid "No pude traducir la palabra al inglés; escríbela de otra forma."
 msgstr "I couldn't translate the word into English; write it another way."
@@ -7462,6 +7563,10 @@ msgid "No se pudo conectar con Atria: %(tipo)s."
 msgstr "Couldn't connect to Atria: %(tipo)s."
 
 #, python-format
+msgid "No se pudo conectar con TrendTrack: %(tipo)s."
+msgstr "Couldn't connect to TrendTrack: %(tipo)s."
+
+#, python-format
 msgid "No se pudo consultar a Claude (%(tipo)s). Vuelve a enviar tu mensaje."
 msgstr "Couldn't reach Claude (%(tipo)s). Send your message again."
 
@@ -7489,6 +7594,9 @@ msgstr "Couldn't create the song."
 #, python-format
 msgid "No se pudo crear la versión B: %(error)s. No se generó nada."
 msgstr "Couldn't create version B: %(error)s. Nothing was generated."
+
+msgid "No se pudo crear la voz."
+msgstr "The voice could not be created."
 
 msgid "No se pudo describir (red)."
 msgstr "Couldn't describe it (network)."
@@ -7601,6 +7709,9 @@ msgstr "Name (e.g. Practical mom)"
 
 msgid "Nombre / arquetipo"
 msgstr "Name / archetype"
+
+msgid "Nombre de la voz"
+msgstr "Voice name"
 
 msgid "Nombre de tu empresa o marca"
 msgstr "Your company or brand name"
@@ -8092,6 +8203,9 @@ msgstr "Add email"
 msgid "Ponle un nombre a la empresa."
 msgstr "Give the company a name."
 
+msgid "Ponle un nombre a la voz (hasta 40 caracteres)."
+msgstr "Give the voice a name (up to 40 characters)."
+
 msgid "Ponle un nombre."
 msgstr "Give it a name."
 
@@ -8460,6 +8574,9 @@ msgstr "Paste it as ATRIA_API_KEY in the server's .env and restart both services
 
 msgid "Pégala como FAL_KEY en el .env del servidor y reinicia."
 msgstr "Paste it as FAL_KEY in the server's .env and restart."
+
+msgid "Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."
+msgstr "Paste it as TRENDTRACK_API_KEY in the server's .env and restart both services."
 
 msgid "Pégalo aquí y pulsa <strong>Buscar mis activos</strong>."
 msgstr "Paste it here and press <strong>Search my assets</strong>."
@@ -9358,6 +9475,9 @@ msgstr "Not enough data"
 msgid "Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token."
 msgstr "Without it the Atria source stays off in “Fetch references” (per project and in the admin panel); Apify is still available if it has its own token."
 
+msgid "Sin ella la fuente TrendTrack queda apagada en «Traer referentes». La API pide el plan Pro o superior: el Starter no la incluye."
+msgstr "Without it the TrendTrack source stays off in “Bring in references”. The API needs the Pro plan or higher: Starter doesn't include it."
+
 msgid "Sin ella la tarjeta YouTube de cada estudio queda apagada."
 msgstr "Without it the YouTube card of each study stays off."
 
@@ -9655,6 +9775,9 @@ msgstr ""
 "Upload your products, characters and spaces once. Generate videos and images with the\n"
 "      best models on the market, swap the product in real photos and videos, and launch campaigns on\n"
 "      Meta from the same place — no agency, no editor, no waiting."
+
+msgid "Sube un mp3, wav, m4a, aac u ogg."
+msgstr "Upload an mp3, wav, m4a, aac or ogg."
 
 msgid "Sube una imagen JPG, PNG o WEBP."
 msgstr "Upload a JPG, PNG or WEBP image."
@@ -10171,6 +10294,9 @@ msgstr "Translating"
 msgid "Traduciendo firmas…"
 msgstr "Translating “why it works” notes…"
 
+msgid "Trae anuncios reales de Meta que TrendTrack ha registrado para la biblioteca de referentes; busca por palabra clave."
+msgstr "Brings in real Meta ads that TrendTrack has recorded, for the Swipe file; it searches by keyword."
+
 msgid "Trae anuncios reales de la Ad Library de Meta para la biblioteca de referentes -- la fuente cubre la Unión Europea."
 msgstr "Brings real ads from Meta's Ad Library into the swipe file -- this source covers the European Union."
 
@@ -10241,6 +10367,45 @@ msgstr "Getting… %(traidos)s/%(tope)s."
 
 msgid "Traídas"
 msgstr "Fetched"
+
+msgid "TrendTrack (anuncios de Meta)"
+msgstr "TrendTrack (Meta ads)"
+
+msgid "TrendTrack (biblioteca de referentes: anuncios de Meta)"
+msgstr "TrendTrack (Swipe file: Meta ads)"
+
+#, python-format
+msgid "TrendTrack devolvió anuncios con campos que Creatv no reconoce todavía (recibidos: %(campos)s). Avisa al equipo para ajustar el conector; se detuvo para no gastar más créditos."
+msgstr "TrendTrack returned ads with fields Creatv doesn't recognize yet (received: %(campos)s). Let the team know so they can adjust the connector; it stopped to avoid spending more credits."
+
+msgid "TrendTrack devolvió la lista de anuncios en una forma que Creatv no reconoce todavía."
+msgstr "TrendTrack returned the list of ads in a shape Creatv doesn't recognize yet."
+
+msgid "TrendTrack mira los anuncios de Meta que ha registrado y se cobra en créditos de tu plan (un crédito por anuncio revisado). No filtra por formato: los anuncios que no son del formato elegido también gastan crédito, por eso se revisan hasta tres veces el máximo que pidas."
+msgstr "TrendTrack looks at the Meta ads it has recorded and is billed in credits from your plan (one credit per ad checked). It can't filter by format: ads that aren't in the chosen format also use a credit, so up to three times the maximum you ask for are checked."
+
+msgid "TrendTrack no aceptó la llave (TRENDTRACK_API_KEY): revísala o genera otra."
+msgstr "TrendTrack didn't accept the key (TRENDTRACK_API_KEY): check it or generate another one."
+
+msgid "TrendTrack no está configurado (falta TRENDTRACK_API_KEY)."
+msgstr "TrendTrack isn't configured (TRENDTRACK_API_KEY is missing)."
+
+#, python-format
+msgid "TrendTrack respondió algo inesperado (HTTP %(codigo)s)."
+msgstr "TrendTrack responded with something unexpected (HTTP %(codigo)s)."
+
+#, python-format
+msgid "TrendTrack respondió con un error (HTTP %(codigo)s)."
+msgstr "TrendTrack responded with an error (HTTP %(codigo)s)."
+
+msgid "TrendTrack solo busca por palabra clave; para los anuncios de una marca usa Atria o Apify."
+msgstr "TrendTrack only searches by keyword; for a brand's ads use Atria or Apify."
+
+msgid "TrendTrack: se acabaron los créditos del plan."
+msgstr "TrendTrack: the plan's credits have run out."
+
+msgid "TrendTrack: se alcanzó el límite de peticiones del plan; intenta en un rato."
+msgstr "TrendTrack: the plan's request limit was reached; try again in a while."
 
 msgid "Triple Whale"
 msgstr "Triple Whale"
@@ -10353,6 +10518,9 @@ msgstr "Your moment"
 msgid "Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado."
 msgstr "Your AI content machine.<br>From the product photo to the published ad."
 
+msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
+msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
+
 msgid "Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
 msgstr "Your project uses its own Meta app: CreatvMachine operates only with your credentials and your data doesn't pass through any third-party app."
 
@@ -10377,6 +10545,9 @@ msgstr "Your store"
 
 msgid "Tu tienda según Triple Whale"
 msgstr "Your store according to Triple Whale"
+
+msgid "Tu voz habla los diez idiomas; su muestra se crea en el idioma del texto que elijas abajo."
+msgstr "Your voice speaks all ten languages; its sample is made in the text language you choose below."
 
 msgid "Tus anuncios"
 msgstr "Your ads"
@@ -10431,6 +10602,9 @@ msgstr "An ad that has been running for weeks, or that the brand duplicated into
 
 msgid "Un avatar escrito a mano nace aprobado: toda la app lo usa en cuanto lo guardas."
 msgstr "A hand-written avatar is born approved: the whole app uses it as soon as you save it."
+
+msgid "Un crédito de TrendTrack por anuncio revisado (US$ 1 = 1 000 créditos); el plan Pro incluye 20 000 créditos al mes. El uso está en Referentes (admin)."
+msgstr "One TrendTrack credit per ad checked (US$ 1 = 1,000 credits); the Pro plan includes 20,000 credits a month. Usage is shown in Swipe file (admin)."
 
 msgid "Un dibujo, una foto o una pantalla que sale en la escena, descríbelo con palabras y sin @Imagen: con @Imagen el modelo lo convierte en personajes reales."
 msgstr "A drawing, photo or screen that shows up in the scene: describe it in words, without @Imagen. With @Imagen the model turns it into real characters."
@@ -10780,6 +10954,12 @@ msgstr "Videos, images, scripts, final cuts and AI text paid for this month; det
 msgid "Visuales"
 msgstr "Visuals"
 
+msgid "Voces de la galería"
+msgstr "Gallery voices"
+
+msgid "Voces propias"
+msgstr "Custom voices"
+
 msgid "Volumen de la música"
 msgstr "Music volume"
 
@@ -10815,6 +10995,15 @@ msgstr "Voice"
 
 msgid "Voz (solo en diálogo)"
 msgstr "Voice (dialogue mode only)"
+
+msgid "Voz clonada: ya está en Mis voces."
+msgstr "Voice cloned: it is in My voices."
+
+msgid "Voz creada, pero no pude estrenarla: tócale ▶ antes de 7 días para que no se pierda."
+msgstr "Voice created, but I couldn't try it out: press ▶ within 7 days so it isn't lost."
+
+msgid "Voz diseñada: ya está en Mis voces."
+msgstr "Voice designed: it is in My voices."
 
 msgid "Voz en off"
 msgstr "Voice-over"
@@ -11016,6 +11205,9 @@ msgstr "An audio is already being created — wait for it to finish."
 
 msgid "Ya se está creando una canción — espera a que termine."
 msgstr "A song is already being created — wait for it to finish."
+
+msgid "Ya se está creando una voz — espera a que termine."
+msgstr "A voice is already being created — wait for it to finish."
 
 msgid "Ya se está descargando un link — espera a que termine."
 msgstr "A link is already downloading — wait for it to finish."
@@ -11559,6 +11751,9 @@ msgstr "real editor: preserves movement and scene, the cheapest of the ones that
 msgid "ej. 89900"
 msgstr "e.g. 89900"
 
+msgid "ej. Astrid, cálida"
+msgstr "e.g. Astrid, warm"
+
 msgid "ej. Clip 3: Ana en la cocina"
 msgstr "e.g. Clip 3: Ana in the kitchen"
 
@@ -11571,8 +11766,14 @@ msgstr "e.g. Happy Flops"
 msgid "ej. HappyBlanket — White"
 msgstr "e.g. HappyBlanket — White"
 
+msgid "ej. Mujer de unos 30 años, voz cálida y cercana, ritmo pausado, acento sueco suave"
+msgstr "e.g. Woman in her 30s, warm and friendly voice, unhurried pace, soft Swedish accent"
+
 msgid "ej. Showroom principal"
 msgstr "e.g. Main showroom"
+
+msgid "ej. Voz de Ana"
+msgstr "e.g. Ana's voice"
 
 msgid "ej. chanclas tipo slide de goma acanalada, color verde uniforme"
 msgstr "e.g. ribbed rubber slide sandals, solid green"
@@ -11889,6 +12090,12 @@ msgstr "deep"
 #, python-format
 msgid "hasta %(n)s referencias · 2k"
 msgstr "up to %(n)s references · 2k"
+
+#, python-format
+msgid "hasta %(num)d crédito de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
+msgid_plural "hasta %(num)d créditos de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
+msgstr[0] "up to %(num)d TrendTrack credit (from the plan; US$ %(usd)s if they were top-up credits)"
+msgstr[1] "up to %(num)d TrendTrack credits (from the plan; US$ %(usd)s if they were top-up credits)"
 
 #, python-format
 msgid "hasta %(num)s referencia"
@@ -12638,6 +12845,9 @@ msgstr "not set"
 msgid "sin detalle"
 msgstr "no detail"
 
+msgid "sin estrenar"
+msgstr "not tried out yet"
+
 msgid "sin evaluar"
 msgstr "not evaluated"
 
@@ -12993,6 +13203,9 @@ msgstr "Archive this sprint? It can be unarchived later."
 msgid "¿Archivar «%(nombre)s»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Mostrar archivados»)."
 msgstr "Archive “%(nombre)s”? It doesn't get deleted: it's hidden from the list and the store sync won't show it again (you get it back from “Show archived”)."
 
+msgid "¿Borrar esta voz de Mis voces? Los audios ya hechos con ella se conservan."
+msgstr "Delete this voice from My voices? Audios already made with it are kept."
+
 msgid "¿Borrar este audio?"
 msgstr "Delete this audio?"
 
@@ -13288,79 +13501,3 @@ msgstr "🔊 Sound"
 msgid "🖼 Imagen"
 msgstr "🖼 Image"
 
-#, python-format
-msgid "%(fuente)s solo busca por palabra clave: elige «Por palabra clave» o cambia de fuente."
-msgstr "%(fuente)s only searches by keyword: choose “By keyword” or switch source."
-
-msgid "Crea una API key en tu workspace de TrendTrack (guía: docs.trendtrack.io › Getting Started)."
-msgstr "Create an API key in your TrendTrack workspace (guide: docs.trendtrack.io › Getting Started)."
-
-msgid "En trendtrack.io elige el plan Pro o superior (incluye la API y 20 000 créditos al mes)."
-msgstr "At trendtrack.io choose the Pro plan or higher (it includes the API and 20,000 credits a month)."
-
-msgid "Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente."
-msgstr "That source doesn't support this kind of search; search by keyword or switch source."
-
-#, python-format
-msgid "No se pudo conectar con TrendTrack: %(tipo)s."
-msgstr "Couldn't connect to TrendTrack: %(tipo)s."
-
-msgid "Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."
-msgstr "Paste it as TRENDTRACK_API_KEY in the server's .env and restart both services."
-
-msgid "Sin ella la fuente TrendTrack queda apagada en «Traer referentes». La API pide el plan Pro o superior: el Starter no la incluye."
-msgstr "Without it the TrendTrack source stays off in “Bring in references”. The API needs the Pro plan or higher: Starter doesn't include it."
-
-msgid "Trae anuncios reales de Meta que TrendTrack ha registrado para la biblioteca de referentes; busca por palabra clave."
-msgstr "Brings in real Meta ads that TrendTrack has recorded, for the Swipe file; it searches by keyword."
-
-msgid "TrendTrack (anuncios de Meta)"
-msgstr "TrendTrack (Meta ads)"
-
-msgid "TrendTrack (biblioteca de referentes: anuncios de Meta)"
-msgstr "TrendTrack (Swipe file: Meta ads)"
-
-#, python-format
-msgid "TrendTrack devolvió anuncios con campos que Creatv no reconoce todavía (recibidos: %(campos)s). Avisa al equipo para ajustar el conector; se detuvo para no gastar más créditos."
-msgstr "TrendTrack returned ads with fields Creatv doesn't recognize yet (received: %(campos)s). Let the team know so they can adjust the connector; it stopped to avoid spending more credits."
-
-msgid "TrendTrack devolvió la lista de anuncios en una forma que Creatv no reconoce todavía."
-msgstr "TrendTrack returned the list of ads in a shape Creatv doesn't recognize yet."
-
-msgid "TrendTrack mira los anuncios de Meta que ha registrado y se cobra en créditos de tu plan (un crédito por anuncio revisado). No filtra por formato: los anuncios que no son del formato elegido también gastan crédito, por eso se revisan hasta tres veces el máximo que pidas."
-msgstr "TrendTrack looks at the Meta ads it has recorded and is billed in credits from your plan (one credit per ad checked). It can't filter by format: ads that aren't in the chosen format also use a credit, so up to three times the maximum you ask for are checked."
-
-msgid "TrendTrack no aceptó la llave (TRENDTRACK_API_KEY): revísala o genera otra."
-msgstr "TrendTrack didn't accept the key (TRENDTRACK_API_KEY): check it or generate another one."
-
-msgid "TrendTrack no está configurado (falta TRENDTRACK_API_KEY)."
-msgstr "TrendTrack isn't configured (TRENDTRACK_API_KEY is missing)."
-
-#, python-format
-msgid "TrendTrack respondió algo inesperado (HTTP %(codigo)s)."
-msgstr "TrendTrack responded with something unexpected (HTTP %(codigo)s)."
-
-#, python-format
-msgid "TrendTrack respondió con un error (HTTP %(codigo)s)."
-msgstr "TrendTrack responded with an error (HTTP %(codigo)s)."
-
-msgid "TrendTrack solo busca por palabra clave; para los anuncios de una marca usa Atria o Apify."
-msgstr "TrendTrack only searches by keyword; for a brand's ads use Atria or Apify."
-
-msgid "TrendTrack: se acabaron los créditos del plan."
-msgstr "TrendTrack: the plan's credits have run out."
-
-msgid "TrendTrack: se alcanzó el límite de peticiones del plan; intenta en un rato."
-msgstr "TrendTrack: the plan's request limit was reached; try again in a while."
-
-msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
-msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
-
-msgid "Un crédito de TrendTrack por anuncio revisado (US$ 1 = 1 000 créditos); el plan Pro incluye 20 000 créditos al mes. El uso está en Referentes (admin)."
-msgstr "One TrendTrack credit per ad checked (US$ 1 = 1,000 credits); the Pro plan includes 20,000 credits a month. Usage is shown in Swipe file (admin)."
-
-#, python-format
-msgid "hasta %(num)d crédito de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
-msgid_plural "hasta %(num)d créditos de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)"
-msgstr[0] "up to %(num)d TrendTrack credit (from the plan; US$ %(usd)s if they were top-up credits)"
-msgstr[1] "up to %(num)d TrendTrack credits (from the plan; US$ %(usd)s if they were top-up credits)"
