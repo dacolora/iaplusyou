@@ -106,7 +106,7 @@ instead of double-launching. Tasks that spend credits are queued with
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
 `2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has two lanes:
-`CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`)
+`CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`, `hablado_voz`)
 runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
 `HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
 runs one at a time in order, as before; the main thread only supervises (`worker.repartir`).

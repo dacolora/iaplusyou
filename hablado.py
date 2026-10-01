@@ -181,7 +181,11 @@ def resolver_foto(cliente, ficha):
             m = materiales.obtener(cliente, int(valor))
         except (ValueError, OverflowError):      # un id descomunal: SQLite lanza OverflowError
             m = None
-        if m and m["tipo"] == "imagen" and m["origen"] == "subida" and _es_url(m.get("url")):
+        # Cualquier origen vale (biblioteca.subir dedupea por hash: una foto ya
+        # subida antes con otro origen, p. ej. "crear", vuelve tal cual aunque
+        # la tarjeta la muestre como «Subida» — materiales.obtener ya filtra
+        # por `cliente`, así que esto nunca cruza de otro proyecto).
+        if m and m["tipo"] == "imagen" and _es_url(m.get("url")):
             return m["url"]
     elif valor and tipo == "cat":
         a = catalogo_productos.encontrar(cliente, valor, categoria="personaje")
@@ -199,12 +203,13 @@ def resolver_foto(cliente, ficha):
 
 def crear_pieza(cliente, foto_ficha, voz_hash, movimiento, precio_visto):
     """Crea la sesión de Crear del anuncio hablado y devuelve su cf_id. Antes de
-    crear nada valida la foto (ficha de este proyecto), la voz (ya hecha, de
-    este proyecto, ≤ MAX_SEGUNDOS), «Cómo se mueve» (≤ MAX_MOVIMIENTO) y que
-    `precio_visto` sea el precio que se cobraría (si no, PrecioCambio). La
-    sesión queda en `prompt_pendiente`: la lanza la ruta con
-    `flowplus_lanzar.lanzar`. El guion es el texto guardado en la voz."""
-    foto_url = resolver_foto(cliente, foto_ficha)
+    crear nada valida la voz (ya hecha, de este proyecto, ≤ MAX_SEGUNDOS),
+    «Cómo se mueve» (≤ MAX_MOVIMIENTO) y que `precio_visto` sea el precio que
+    se cobraría (si no, PrecioCambio) — recién al final resuelve la foto
+    (ficha de este proyecto), porque un "cat:" la sube a R2 en el momento: un
+    precio o una voz inválidos no deben gastar esa subida. La sesión queda en
+    `prompt_pendiente`: la lanza la ruta con `flowplus_lanzar.lanzar`. El
+    guion es el texto guardado en la voz."""
     m = voz_existente(cliente, voz_hash)
     if not m:
         raise EntradaInvalida(MENSAJES["voz_otra_vez"])
@@ -221,6 +226,7 @@ def crear_pieza(cliente, foto_ficha, voz_hash, movimiento, precio_visto):
         visto = None
     if visto is None or abs(visto - info["precio_video"]) > 0.0005:
         raise PrecioCambio(MENSAJES["precio"])
+    foto_url = resolver_foto(cliente, foto_ficha)
     extra = m.get("extra") or {}
     guion = extra.get("texto") or ""
     cf_id = creative_flow.crear(cliente, [], [], [], guion, flowplus_modelos.segundos_facturables(segundos), "", "A",

@@ -113,6 +113,23 @@ def test_resolver_foto_solo_acepta_fichas_de_este_proyecto(entorno):
         assert e.value.texto() == "Elige una foto de este proyecto.", ficha
 
 
+def test_resolver_foto_acepta_cualquier_origen_del_proyecto(entorno):
+    # biblioteca.subir dedupea por hash (materiales.obtener_o_crear): si la
+    # misma imagen ya existía como material con otro origen (p. ej. "crear",
+    # de una pieza previa de Crear), esa fila vuelve tal cual — la tarjeta la
+    # muestra como «Subida» pero resolver_foto no debe rechazarla.
+    propia = materiales.registrar("acme", tipo="imagen", origen="crear",
+                                  url="https://r2/clientes/acme/flowplus/otra-pieza.png",
+                                  hash=materiales.hash_clave("foto-crear", "acme"), bytes=10, ancho=704, alto=1280)
+    assert hablado.resolver_foto("acme", f"mat:{propia['id']}") == propia["url"]
+    ajena = materiales.registrar("otro", tipo="imagen", origen="crear",
+                                 url="https://r2/clientes/otro/flowplus/otra-pieza.png",
+                                 hash=materiales.hash_clave("foto-crear", "otro"), bytes=10, ancho=704, alto=1280)
+    with pytest.raises(hablado.EntradaInvalida) as e:
+        hablado.resolver_foto("acme", f"mat:{ajena['id']}")
+    assert e.value.texto() == "Elige una foto de este proyecto."
+
+
 def test_crear_pieza_deja_la_sesion_lista_para_el_worker(entorno):
     m, v = _foto_subida(), _voz()
     cf_id = hablado.crear_pieza("acme", f"mat:{m['id']}", v["hash"], "  Sonríe y señala la chancla.  ", "0.2")
@@ -148,3 +165,18 @@ def test_crear_pieza_valida_todo_antes_de_crear_nada(entorno):
             hablado.crear_pieza("acme", **{**base, **cambio})
         assert texto in e.value.texto(), cambio
     assert creative_flow.cargar("acme") == {}
+
+
+def test_crear_pieza_no_sube_la_foto_si_la_voz_o_el_precio_fallan_antes(entorno):
+    # La voz y el precio se validan ANTES de resolver la foto: un "cat:" sube
+    # la imagen a R2 al resolverse (como en Crear), así que un precio o una
+    # voz inválidos no deben gastar esa subida (spec: nada se crea si algo no
+    # cuadra, y aquí tampoco se sube nada de más).
+    v = _voz()
+    with pytest.raises(hablado.PrecioCambio):
+        hablado.crear_pieza("acme", "cat:ana", v["hash"], "", "0.15")
+    assert entorno["subidas"] == []
+    with pytest.raises(hablado.EntradaInvalida) as e:
+        hablado.crear_pieza("acme", "cat:ana", "f" * 64, "", "0.2")
+    assert e.value.texto() == "Escucha la voz otra vez."
+    assert entorno["subidas"] == []

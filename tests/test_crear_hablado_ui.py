@@ -1,5 +1,6 @@
 """Crear › Anuncio hablado en la página (spec 2026-10-01 §1): el quinto modo,
 su hash, nada pesado en la carga, el JS sin textos sueltos y el celular."""
+import json
 import re
 import shutil
 import subprocess
@@ -71,10 +72,34 @@ def test_hablado_js_no_autorreproduce_fuera_de_su_modo_ni_con_texto_viejo():
     js = open("static/hablado.js", encoding="utf-8").read()
     assert "estado.activo = !!(ev.detail && ev.detail.modo === 'hablado');" in js
     assert "if (!estado.activo) {\n      var audio = $('hb-voz-audio');\n      if (audio) audio.pause();" in js
-    assert "if (estado.activo && claveVoz === clave()) audio.play().catch(function () {});" in js
+    # Revisión final (hallazgo 3): estado.activo solo sigue crear:modo, así que
+    # otra pestaña del mismo proyecto puede quedar con estado.activo=true sin
+    # que el panel esté realmente a la vista — se exige además que el panel
+    # esté visible (offsetParent) justo antes de reproducir.
+    assert "if (estado.activo && raiz.offsetParent !== null && claveVoz === clave()) audio.play().catch(function () {});" in js
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="sin Node no se revisa la sintaxis del JS (el VPS no lo tiene)")
 def test_hablado_js_compila():
     r = subprocess.run([shutil.which("node"), "--check", "static/hablado.js"], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def _cuerpo_fmt_usd():
+    js = open("static/hablado.js", encoding="utf-8").read()
+    m = re.search(r"function fmtUsd\(v\) \{.*?\n  (?=function )", js, re.S)
+    assert m, "no encontré fmtUsd en static/hablado.js"
+    return m.group(0)
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="sin Node no se corre el JS (el VPS no lo tiene)")
+def test_fmt_usd_muestra_tres_decimales_solo_si_el_tercero_no_es_cero():
+    # Hallazgo 4: 11 s de voz cuestan US$ 0,275 (ceil(11) × 0,025) y la
+    # pantalla redondeaba a «US$ 0,28». fmtUsd debe mostrar el tercer
+    # decimal solo cuando no es cero; el round-trip de precio_visto sigue
+    # mandando el número crudo (sin pasar por fmtUsd) — eso no cambia aquí.
+    script = "function sep(){return ',';}\n" + _cuerpo_fmt_usd() + \
+        "\nconsole.log(JSON.stringify([fmtUsd(0.275), fmtUsd(0.2), fmtUsd(0.75), fmtUsd(0.025)]));"
+    r = subprocess.run([shutil.which("node"), "-e", script], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == ["US$ 0,275", "US$ 0,20", "US$ 0,75", "US$ 0,025"]

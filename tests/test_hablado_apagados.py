@@ -73,6 +73,19 @@ def test_las_rutas_del_director_y_de_reusar_lo_rechazan(app, encolados):
     assert "anuncio hablado" in _flashes(app)
 
 
+def test_reintentar_encola_flowplus_video_sin_tocar_el_director(app, encolados):
+    # Hallazgo 7a (revisión final): «Reintentar» sobre una sesión de anuncio
+    # hablado en error debe seguir el mismo camino que cualquier reintento de
+    # Crear (flowplus_lanzar.lanzar -> flowplus_video), nunca el director (que
+    # ya está apagado para hablado: test_las_rutas_del_director_y_de_reusar_lo_rechazan).
+    cf = _hablada(estado="error", error="falló")
+    r = app["c"].post(f"/cliente/acme/creative_flow/{cf}/generar_video")
+    assert r.status_code == 302
+    assert encolados == ["flowplus_video"]
+    e = creative_flow.cargar("acme")[cf]
+    assert e["estado"] == "video_generando" and e["modo_crear"] == "hablado"
+
+
 def test_final_edition_sin_camino_automatico(app, encolados):
     cf = _hablada()
     html = app["c"].get(f"/cliente/acme/creative_flow/{cf}/final/detalle").get_data(as_text=True)

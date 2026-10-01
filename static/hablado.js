@@ -16,7 +16,14 @@
 
   function $(id) { return document.getElementById(id); }
   function sep() { return raiz.dataset.sep || ','; }
-  function fmtUsd(v) { return 'US$ ' + (Math.round(v * 100) / 100).toFixed(2).replace('.', sep()); }
+  // Hasta 3 decimales, y solo cuando el tercero no es cero (0,275 por 11 s de
+  // voz; 0,20 se queda en dos) — el precio real (0,025 por segundo) a veces
+  // cae en medio centavo y redondear a 2 decimales mentía sobre lo cobrado.
+  function fmtUsd(v) {
+    var miles = Math.round(v * 1000);
+    var dec = miles % 10 === 0 ? 2 : 3;
+    return 'US$ ' + (miles / 1000).toFixed(dec).replace('.', sep());
+  }
   function mostrar(id, msg) {
     var el = $(id);
     if (!el) return;
@@ -175,8 +182,11 @@
     refrescar();
     // Si la persona cambió de modo o de texto/voz/idioma/velocidad mientras
     // esta voz se creaba, queda guardada (Generar video ya exige su clave
-    // vigente, en refrescar) pero no suena sola ni encima de otro modo.
-    if (estado.activo && claveVoz === clave()) audio.play().catch(function () {});
+    // vigente, en refrescar) pero no suena sola ni encima de otro modo. Y si
+    // esto es otra pestaña del mismo proyecto, estado.activo puede seguir en
+    // true (sigue crear:modo) aunque el panel no esté realmente a la vista:
+    // se exige también que esté visible justo antes de reproducir.
+    if (estado.activo && raiz.offsetParent !== null && claveVoz === clave()) audio.play().catch(function () {});
   }
   function barra(si, textoBarra) {
     $('hb-barra').hidden = !si;

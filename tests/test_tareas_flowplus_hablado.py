@@ -87,6 +87,29 @@ def test_movimiento_vacio_no_se_manda(base_temporal, monkeypatch, tmp_path):
     assert vistos == [None]
 
 
+def test_la_espera_agotada_de_un_anuncio_hablado_sigue_esperando_sola(base_temporal, monkeypatch, tmp_path):
+    # Hallazgo 7b (revisión final): como con Wan (tests/test_tareas_flowplus.py,
+    # tests/test_crear_sin_cola.py), que WaveSpeed se tome más de ESPERA_PRIMERA
+    # con un anuncio hablado no debe tumbar la sesión ni perder la predicción —
+    # sigue en video_generando y la retoma flowplus_recuperar con el mismo modelo.
+    import creative_flow as cf
+    import tareas
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_hablada(monkeypatch, tmp_path)
+
+    def _hablar(modelo, imagen_url, audio_url, video_prompt=None, resolucion="720p", on_progreso=None):
+        on_progreso({"fase": "processing", "elapsed": 30, "prediction_id": "pred-1"})
+        raise wc.EsperaAgotada("P-Video-Avatar", "pred-1", 600)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_hablado", _hablar)
+    r = fp.ejecutar_video({"id": 9, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    assert isinstance(r, tareas.Continuar) and r.tipo == "flowplus_recuperar"
+    assert r.payload == {"cliente": "acme", "cf_id": cid}
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "video_generando" and not e.get("error")
+    assert e["prediccion"]["id"] == "pred-1" and e["prediccion"]["modelo"] == "p_video_avatar"
+
+
 def test_recuperar_video_de_un_anuncio_hablado_encuentra_su_nombre(base_temporal, monkeypatch, tmp_path):
     import creative_flow as cf
     import tareas.flowplus as fp
