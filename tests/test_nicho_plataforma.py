@@ -117,6 +117,49 @@ def test_recolectar_meli_asocia_por_product_id(entorno, monkeypatch):
     assert "FAILED" in f.aviso and "rm" in f.aviso and f.resultados == 3                  # falló pero entregó: aviso, no error
 
 
+def test_id_en_link():
+    """El id de un producto dentro de su propio link (no el que le pedimos al actor de reseñas):
+    la ficha de catálogo y la página de publicación de Mercado Libre, Walmart, AliExpress; None
+    para una tienda que no lo sepa leer o un link que no sea http(s)."""
+    from nicho.fuentes.plataformas import id_en_link
+    url_catalogo = "https://www.mercadolibre.com.co/botella-de-vidrio-32oz-civago-con-popote-y-marcador-de-tiempo-negra/p/MCO59691162"
+    assert id_en_link("meli", url_catalogo) == "MCO59691162"
+    assert id_en_link("meli", "https://articulo.mercadolibre.com.co/MCO-123456789-pantuflas") == "MCO123456789"
+    assert id_en_link("walmart", "https://www.walmart.com/ip/mukoko-bottle/5394318269") == "5394318269"
+    assert id_en_link("aliexpress", "https://www.aliexpress.com/item/3256806541493299.html") == "3256806541493299"
+    assert id_en_link("meli", "/p/MCO59691162") is None                       # no es http(s)
+    assert id_en_link("magia", "https://ejemplo.invalid/p/MCO1") is None      # tienda que no se sabe leer
+
+
+def test_recolectar_meli_asocia_por_el_id_del_link_de_catalogo(entorno, monkeypatch):
+    """Prueba de centavos en producción (2026-10-01, estudio 3 de colorado_forja): el actor de
+    reseñas identifica el producto con el id de la FICHA DE CATÁLOGO del link que le mandamos
+    (`productId`), no con el `fuente_id` de la publicación que buscamos; `catalogProductId` puede
+    ser el de OTRO catálogo (otro país) y no debe usarse para la atribución."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    resenas = [
+        {"reviewId": "rv1", "reviewText": "Llegó rápido y es tal cual la foto.", "reviewRating": 5,
+         "productId": "MCO59691162", "catalogProductId": "MCO59691162"},
+        {"reviewId": "rv2", "reviewText": "Buena calidad, la recomiendo.", "reviewRating": 4,
+         "productId": "MCO24057598", "catalogProductId": "MLB23920661"},
+        {"reviewId": "rv3", "reviewText": "El popote se rompió al segundo uso.", "reviewRating": 2,
+         "productId": "MCO24057598", "catalogProductId": "MLB23920661"},
+    ]
+    s = _Sesion({"/actors/karamelo~mercadolibre-review-scraper/runs": [_corrida("SUCCEEDED", "rm", "dm")],
+                 "/datasets/dm/items": _Resp(200, resenas)})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    productos = [{"fuente_id": "MCO1735647533", "titulo": "Botella de vidrio 32oz",
+                  "url": "https://www.mercadolibre.com.co/botella-de-vidrio-32oz-civago-con-popote-y-marcador-de-tiempo-negra/p/MCO59691162"},
+                 {"fuente_id": "MCO1735648777", "titulo": "Pantuflas de memory foam",
+                  "url": "https://www.mercadolibre.com.co/pantuflas-de-memory-foam/p/MCO24057598"}]
+    f = FuentePlataforma("meli")
+    lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 50, "pais": "CO"}))
+    assert [c["contexto"] for c in lista] == ["Botella de vidrio 32oz", "Pantuflas de memory foam", "Pantuflas de memory foam"]
+    assert [c["extra"]["producto"] for c in lista] == ["MCO1735647533", "MCO1735648777", "MCO1735648777"]
+    assert f.conteo_por_producto == {"MCO1735647533": 1, "MCO1735648777": 2}
+
+
 def test_buscar_de_otro_mercado_lee_la_moneda_de_su_sitio(entorno, monkeypatch):
     """Amazon no está en Colombia: busca en amazon.com y un «$» a secas son dólares, no pesos (Parte 4, R5)."""
     from nicho.fuentes import _http

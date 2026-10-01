@@ -91,7 +91,9 @@ class FuentePlataforma(Fuente):
 
     def recolectar(self, params, avanzar=None):
         """`params = {"productos": [{fuente_id, url, titulo}], "resenas_por_producto": n, "pais": "SE"}`
-        (`pais` = el del estudio). Cada comentario lleva en `extra` el `pais`
+        (`pais` = el del estudio). Un producto también se reconoce por el id que su propio
+        link trae (`plataformas.id_en_link`: la ficha de catálogo de Mercado Libre), no solo
+        por `fuente_id`/`producto_pedido`. Cada comentario lleva en `extra` el `pais`
         del comprador (o el del sitio si la reseña no lo trae) y `mercado`:
         `local` si es el del estudio, si no `otro` (spec Parte 4 §3)."""
         avanzar = avanzar or (lambda etapa, detalle=None: None)
@@ -99,6 +101,13 @@ class FuentePlataforma(Fuente):
         productos = [dict(x) for x in (p.get("productos") or []) if (x or {}).get("fuente_id")]
         corridas = plataformas.entradas_resenas(self.clave, productos, p.get("pais") or "", int(p.get("resenas_por_producto") or 100))
         por_id = {x["fuente_id"]: x for x in productos}
+        por_link = {}
+        for x in productos:
+            if not x.get("url"):
+                continue
+            lid = plataformas.id_en_link(self.clave, x["url"])
+            if lid and lid not in por_id:                      # nunca pisa una entrada de por_id
+                por_link[lid] = x
         por_producto = plataformas.PLATAFORMAS[self.clave]["resenas"]["por_producto"]
         self.conteo_por_producto = {}
         avanzar(N_("Buscando"), idiomas.traducir(plataformas.actor_resenas(self.clave)["nombre"]))
@@ -112,6 +121,10 @@ class FuentePlataforma(Fuente):
             producto = por_id.get(r.get("producto") or "")
             if producto is None:                     # el link que pedimos (Walmart, AliExpress): `producto` puede ser una variante
                 producto = por_id.get(r.get("producto_pedido") or "")
+            if producto is None:                     # Mercado Libre: la reseña trae el id de la ficha de catálogo del link, no el de la publicación
+                producto = por_link.get(r.get("producto") or "")
+            if producto is None:
+                producto = por_link.get(r.get("producto_pedido") or "")
             if producto is None and por_producto and indice < len(corridas):
                 producto = por_id.get(corridas[indice].get("etiqueta") or "")
             if producto is None and len(productos) == 1:

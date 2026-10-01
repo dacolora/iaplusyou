@@ -82,6 +82,12 @@ _MESES_EN = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 
 # walmart.com/ip/<id> (o /ip/<nombre>/<id>) y aliexpress.com/item/<id>.html.
 _RE_ID_WALMART = re.compile(r"/ip/(?:[^/?#]+/)*(\d+)/?(?:[?#]|$)")
 _RE_ID_ALIEXPRESS = re.compile(r"/item/(\d+)\.html")
+# Mercado Libre: la ficha de catálogo que agrupa publicaciones (`/p/MCO59691162`, sin guion) o,
+# si no hay catálogo, la página de la publicación (`.../MCO-123456789-slug`, con guion) — las
+# reseñas devuelven el id de catálogo, no el `fuente_id` de la publicación que buscamos (prueba
+# de centavos 2026-10-01, estudio 3 de colorado_forja).
+_RE_ID_MELI_CATALOGO = re.compile(r"/p/([A-Za-z]{2,4}\d+)")
+_RE_ID_MELI_ITEM = re.compile(r"/([A-Za-z]{2,4})-(\d+)(?:[-/?#]|$)")
 _PAIS_ALIAS = {"UK": "GB"}                  # AliExpress llama «UK» al Reino Unido
 
 
@@ -197,6 +203,29 @@ def _id_de_link(v, patron):
     """El id del producto dentro de un link http(s) (el que le pedimos al actor), o None."""
     m = patron.search(_url(v) or "")
     return m.group(1) if m else None
+
+
+def _id_meli_de_link(v):
+    url = _url(v) or ""
+    m = _RE_ID_MELI_CATALOGO.search(url)
+    if m:
+        return m.group(1)
+    m = _RE_ID_MELI_ITEM.search(url)
+    return f"{m.group(1)}{m.group(2)}" if m else None
+
+
+_ID_EN_LINK = {"meli": _id_meli_de_link, "walmart": lambda v: _id_de_link(v, _RE_ID_WALMART),
+               "aliexpress": lambda v: _id_de_link(v, _RE_ID_ALIEXPRESS)}
+
+
+def id_en_link(clave, url):
+    """El id del producto de `clave` dentro de un link SUYO (de catálogo o de
+    publicación), para reconocer el producto de una reseña que no lo identifica
+    por su `fuente_id` ni por el link que le pedimos (`producto_pedido`). Solo
+    meli, walmart y aliexpress saben leerlo; las demás tiendas, o un link que no
+    sea http(s), -> None."""
+    f = _ID_EN_LINK.get(clave)
+    return f(url) if f else None
 
 
 # ------------------------------------------------------------- amazon ---
