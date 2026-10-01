@@ -4,6 +4,8 @@ import io
 
 import pytest
 
+from catalogo_productos import listar_productos as _listar_productos_real
+
 SUB = {"base": "emocion", "nombre": "Ana / La que carga", "deseo": "Quiero lavar sin cargar", "demografia": "", "edad_rango": "",
        "emocion": "Cansancio", "identidad": {"quiere_que_vean": "a", "cree_de_si": "b", "quiere_lograr": "c"},
        "soluciones_previas": [{"que": "Líquido", "por_que_fallo": ["pesa"]}], "situaciones": ["Cargando garrafas"],
@@ -30,7 +32,7 @@ def app(base_temporal, monkeypatch, tmp_path):
     encolados = []
     monkeypatch.setattr(tareas_nicho.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append({"job_id": job_id, "tipo": tipo, "payload": payload, **kw}) or True)
     monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job_id: False)
-    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [
+    monkeypatch.setattr(catalogo_productos, "listar_productos", lambda c, cat="producto": [
         {"id": "capsulas", "nombre": "Cápsulas", "descripcion": "sin plástico", "representativa_url": None}])
     monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
     (tmp_path / "clientes" / "acme").mkdir(parents=True)
@@ -90,6 +92,29 @@ def test_contexto(app):
     ctx = rutas.contexto("acme")
     assert ctx["estudios_nicho"][0]["comentarios_total"] == 25 and ctx["productos_nicho"][0]["id"] == "capsulas"
     assert ctx["min_comentarios_nicho"] == 20 and "idiomas_nicho" not in ctx
+
+
+def test_selector_de_producto_del_estudio_es_uno_por_producto(app, monkeypatch, tmp_path):
+    """Revisión final (catálogo por colores): Nicho elige un PRODUCTO, no
+    cada color (`listar_productos`, id = pid); un estudio guardado con un id
+    de color de antes («original/pink») sigue mostrando su producto elegido
+    (encontrar(pid) cae al primer color, así que el pid sigue resolviendo)."""
+    import catalogo_productos
+    from nicho import datos, rutas
+    monkeypatch.setattr(catalogo_productos, "listar_productos", _listar_productos_real)
+    monkeypatch.setattr(catalogo_productos, "BASE_DIR", str(tmp_path))
+    carpeta = tmp_path / "clientes" / "acme" / "productos" / "original"
+    for color in ("pink", "beige"):
+        (carpeta / color).mkdir(parents=True)
+        (carpeta / color / "01.jpg").write_bytes(b"\xff\xd8\xff\xe0fake")
+    catalogo_productos.guardar_meta("acme", {"original": {"nombre": "Original", "descripcion": "chancla de goma", "variantes": {
+        "pink": {"nombre": "Original — Pink"}, "beige": {"nombre": "Original — Beige"}}}})
+    assert rutas._productos("acme") == [{"id": "original", "nombre": "Original", "descripcion": "chancla de goma"}]
+    assert catalogo_productos.encontrar("acme", "original")["id"] == "original/pink"
+    eid = datos.crear_estudio("acme", "Chanclas", producto="Chanclas", catalogo_id="original/pink")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert '<option value="original" selected>Original</option>' in html
+    assert "original/pink" not in html.split('name="catalogo_id"', 1)[1].split("</select>", 1)[0]
 
 
 def test_editar_y_archivar(app):

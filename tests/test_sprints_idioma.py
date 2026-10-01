@@ -124,7 +124,7 @@ def test_personas_sugeridas_en_ingles(monkeypatch):
     import proyectos
     from sprints import sugerencias
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "Natural light.")
-    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [{"nombre": "LED mirror", "descripcion": "round"}])
+    monkeypatch.setattr(catalogo_productos, "listar_productos", lambda c, cat="producto": [{"nombre": "LED mirror", "descripcion": "round"}])
     monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Glow")
     monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
     visto = {}
