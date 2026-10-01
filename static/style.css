@@ -1351,7 +1351,10 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .sprint-card { display: flex; gap: 1rem; align-items: center; padding: .8rem 1rem; text-decoration: none; color: inherit; }
 .sprint-card:hover { background: var(--panel-hover); }
 .anillo text { font-family: var(--font-body); font-weight: 700; }
-.estado-sprint { text-transform: capitalize; }
+/* Mayúscula solo en la primera letra («Ready to generate», «Listo para generar»):
+   `capitalize` ponía una en cada palabra («Ready To Generate»). Las etiquetas del
+   catálogo van en minúscula porque también se usan dentro de frases. */
+.estado-sprint::first-letter { text-transform: uppercase; }
 .estado-sprint-planeando, .estado-sprint-planeada { border-color: var(--muted-2); }
 .estado-sprint-referencias { border-color: var(--accent); }
 .estado-sprint-listo_para_generar, .estado-sprint-ideas_aprobadas { border-color: var(--ok); }
@@ -1844,6 +1847,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .ref-recrear-bloque { margin: .7rem 0; display: grid; gap: .45rem; }
 .ref-recrear-bloque legend { font-weight: 600; font-size: .85rem; }
 .ref-recrear-bloque small { color: var(--muted); }
+.ref-recrear-bloque .ayuda { margin: 0; font-size: .8rem; color: var(--muted); }
 .ref-recrear-textos { display: grid; gap: .5rem; }
 .ref-recrear-textos label { display: grid; gap: .2rem; font-size: .8rem; color: var(--muted); }
 .ref-recrear-textos input { width: 100%; }
@@ -2873,6 +2877,12 @@ body.panel-abierto { overflow: hidden; }
 .cat-nuevo-color form { display: grid; gap: .5rem; margin-top: .5rem; }
 .cat-crear-con { display: inline-flex; gap: .4rem; align-items: center; margin: 0; }
 .cat-crear-con select { width: auto; margin: 0; }
+/* Producto archivado (2026-10-01): aviso con «Desarchivar» arriba de la
+   ficha; «Archivar» va en el pie, junto a «Eliminar». */
+.cat-ficha-archivado { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin: .6rem 0 0; padding: .6rem .8rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); background: var(--panel-2); font-size: .84rem; }
+.cat-ficha-archivado p { margin: 0; flex: 1 1 16rem; color: var(--muted); }
+.cat-ficha-archivado form, .cat-pie-quitar form { margin: 0; }
+.cat-pie-quitar { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 /* Selector de Crear/Sprints: un producto con colores agrupa sus tiles bajo un
    encabezado en vez de listarlos sueltos (spec 2026-09-28 §10.5). */
 .producto-grupo { flex: 1 1 100%; }
@@ -2905,3 +2915,15 @@ body.panel-abierto { overflow: hidden; }
    texto en una voz propia y el nombre se metía debajo del ✕: aquí cada
    tarjeta pide al menos 12rem (una columna en 375 px). */
 @media (max-width: 760px) { .au-vp-voces { grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); } }
+/* ── Flow Plus: cadena de escenas (2026-10-01) ─────────────────────────────── */
+.gpg-cadena { margin: 1rem 0; padding: .8rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
+.gpg-cadena h5 { margin-top: 0; }
+.gpg-cadena-estado { margin: .5rem 0; font-weight: 600; }
+.gpg-cadena-faltan { margin: .3rem 0 .6rem; padding-left: 1.2rem; font-size: .82rem; color: var(--warn); overflow-wrap: anywhere; }
+.gpg-cadena-aviso { color: var(--warn); }
+.gpg-cadena-escenas { list-style: none; padding: 0; margin: .8rem 0 0; display: grid; gap: .35rem; }
+.gpg-cadena-escena { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; font-size: .85rem;
+  padding: .35rem .5rem; border-radius: 6px; background: var(--panel-2); overflow-wrap: anywhere; }
+.gpg-cadena-escena.lista .tag-estado { color: var(--ok); }
+.gpg-cadena-escena.fallo .tag-estado, .gpg-cadena-error { color: var(--error); }
+.gpg-cadena-escena .btn-xs { margin-left: auto; }

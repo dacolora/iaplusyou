@@ -118,7 +118,7 @@ def test_qa_en_ingles(base_temporal, monkeypatch, tmp_path):
     assert "Notas de máximo 20 palabras, en inglés," in capturado["c"][0]["text"]
 
 
-def test_personas_sugeridas_en_ingles(monkeypatch):
+def test_personas_sugeridas_en_ingles(base_temporal, monkeypatch):
     import catalogo_productos
     import marca
     import proyectos

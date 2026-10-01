@@ -1659,7 +1659,17 @@ def ver_cliente(cliente):
     activos_producto = _productos_con_uso(cliente)
     productos_catalogo = catalogo_productos.listar_productos(cliente, "producto")
     _asegurar_filas_producto(cliente, productos_catalogo)
-    n_por_categoria = {cid: (len(productos_catalogo) if cid == "producto" else len(catalogo_productos.listar_productos(cliente, cid)))
+    # Un producto archivado (2026-10-01) no se ofrece en Crear ni en Cambiar
+    # producto ni cuenta en la pestaña, salvo el que la precarga ya marca.
+    # `_prefill_para` consume la precarga: se lee UNA vez, aquí.
+    fp_prefill = _prefill_para(cliente)
+    archivados = tiendas.activos_archivados(cliente)
+    activos_producto = catalogo_productos.sin_archivados(
+        activos_producto, archivados,
+        conservar=[v.split(":", 1)[1] for v in ((fp_prefill or {}).get("productos_catalogo") or [])
+                   if isinstance(v, str) and v.startswith("producto:")])
+    n_por_categoria = {cid: (sum(1 for p in productos_catalogo if p["id"] not in archivados) if cid == "producto"
+                             else len(catalogo_productos.listar_productos(cliente, cid)))
                        for cid in catalogo_productos.CATEGORIAS}
     # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
     atribucion_sug = experimentos.atribucion_sugerida(cliente)
@@ -1709,7 +1719,7 @@ def ver_cliente(cliente):
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         aviso_saldo=saldo.vigente("wavespeed"),
-        fp_prefill=_prefill_para(cliente),
+        fp_prefill=fp_prefill,
         logos=_logos(cliente),
         referencias_bandeja=referencias_flowplus.listar(cliente),
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
@@ -2798,6 +2808,33 @@ def catalogo_crear_con(cliente, producto_id):
     # La precarga vale una vez y solo en este proyecto (_prefill_para).
     session["fp_prefill"] = {"cliente": cliente, "productos_catalogo": [f"producto:{activo['id']}"]}
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/catalogo/producto/<producto_id>/archivar", methods=["POST"])
+def catalogo_archivar(cliente, producto_id):
+    """«Archivar» / «Desarchivar» de la ficha (archivado=0): el producto
+    entero, todas sus filas (`tiendas.archivar_activo`). No borra nada —
+    carpeta, fotos, regla, colores e historial quedan—: sale de la galería
+    (sigue en «Archivados») y de los selectores de Crear, Cambiar producto,
+    Sprints, Nicho, Recrear y Flow Plus, salvo donde ya estaba elegido.
+    Vuelve a la ficha, que ofrece deshacerlo."""
+    if not _mismo_origen():
+        abort(403)
+    pid = catalogo_productos.producto_base(producto_id)
+    producto = catalogo_productos.encontrar_producto(cliente, pid, "producto")
+    if not producto:
+        flash(gettext("No encontré ese producto."), "error")
+        return _volver_catalogo(cliente)
+    archivar = (request.form.get("archivado") or "1") not in ("0", "false", "off")
+    tiendas.asegurar_manual(cliente, pid, producto["nombre"], producto.get("descripcion") or "")
+    tiendas.archivar_activo(cliente, pid, archivado=archivar)
+    if archivar:
+        flash(gettext("Archivaste «%(nombre)s»: ya no sale en la galería ni al elegir producto en Crear, Sprints o "
+                      "Nicho. No se borró nada y lo recuperas en Catálogo › Archivados.", nombre=producto["nombre"]), "ok")
+    else:
+        flash(gettext("Recuperaste «%(nombre)s»: vuelve a salir en la galería y al elegir producto.",
+                      nombre=producto["nombre"]), "ok")
+    return _volver_catalogo(cliente, "producto", pid)
 
 
 def _pagina(valor):

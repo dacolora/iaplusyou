@@ -415,13 +415,15 @@ viejo). «Adaptar con IA» reescribe los textos alineados (misma cantidad; marca
 pestaña tiene dos `<script>` con su propio `cargarEnDialogo`: el de la ficha avisa con el evento `ref:fragmento` para
 que el otro pida la lectura. Enter en un campo no envía. El Blueprint de Referentes rechaza los POST cross-site
 (`Sec-Fetch-Site`).
-**Como video** (spec §12, 2026-10-01): las mismas casillas; «igual» crea la sesión de IMAGEN fiel con
+**Como video** (spec §12 y §12.1, 2026-10-01): las mismas casillas; «igual» Y «variación» crean cada una su sesión
+de IMAGEN (la fiel o la variación, con el prompt de imagen) con
 `extra.animar_despues = {modelo, duracion, formato, prompt, con_sonido, titulo}` y, cuando el worker la termina
 (`tareas/flowplus.ejecutar_imagen` → `_animar_imagen`), `recrear.lanzar_animacion` crea y lanza UN video con esa imagen
-como única referencia (`recrear_modo="fiel_video"`, `imagen_origen`; idempotente por `animar_despues.cf_video`; si falla,
+como única referencia (`recrear_modo="fiel_video"|"libre_video"`, `imagen_origen`; idempotente por `animar_despues.cf_video`; si falla,
 la imagen queda lista con `animar_error`, que su detalle muestra). El modelo lo elige la persona en «Animar con»
 (`MODELOS_ANIMAR`: Seedance 2.5 por defecto, el único que arranca desde la imagen; Wan 3.0); `armar_prompt_animar` dice
-«Image 1 es el primer fotograma, no cambies nada». La variación es el video de siempre. El formato de video va al más
+«Image 1 es el primer fotograma, no cambies nada» (el mismo para los dos). La variación hecha directo con Wan arrancaba
+con el subtítulo viejo de la referencia y cortaba a la foto del producto con manos: por eso también va por imagen. El formato de video va al más
 parecido que el modelo admite (`_formato_video`: 4:5 → 3:4 en Wan). Un formulario de video sin `modos_vista` (abierto
 antes de esto) sigue haciendo un solo video.
 
@@ -678,6 +680,21 @@ escena no lleva se nombra en palabras — un número suelto haría que el modelo
 image = last frame of Clip N»), la duración de `DURACIONES_CREAR` que alcanza y el formato, y abre `#referencias` (hash
 nuevo de `cliente.html`/`_tab_flowplus.html` que fuerza «Desde referencias»). Sin imagen en alguna referencia de la escena
 o sin prompt en el chat, el botón queda apagado y la ruta responde 409. Nada se genera.
+**Cadena de escenas** («Generar todas las escenas», spec `docs/superpowers/specs/2026-09-30-flowplus-cadena-escenas-design.md`,
+plan `docs/superpowers/plans/2026-09-30-flowplus-cadena-escenas.md`; Etapa 0 real verificada el 2026-10-01): la escena 1 va
+por Kling O3 Pro `reference-to-video` con sus imágenes y cada siguiente por `image-to-video` desde el último cuadro de la
+anterior (`final_edition.cortes.ultimo_fotograma`) con hasta 3 «elementos» de Kling (`flowplus_modelos.crear_elemento`:
+la API exige 1–3 `refer_images`, va la misma ficha; caché en `kv` `kling_elemento:<cliente>:<sha>`, gasto tipo `video`
+US$ 0,01). Cada escena es una pieza de Crear (`tareas.cadena.lanzar_escena` → `flowplus_lanzar.lanzar`, prioridad 3;
+la sesión lleva `imagen_inicial`/`elementos`/`cadena`), así hereda recuperación, gasto y tarjeta. `guiones/cadena.py` es
+puro (revisión previa —imágenes, prompts, ≤ 7 imágenes en la 1, ≤ 3 elementos en las demás—, avisos de cambio de lugar,
+precio con `estimate_video` + elementos nuevos, `prompt_escena`, transiciones con `preparando`/`detener`); el estado en
+`guion_video.extra["cadena"]`, único escritor `datos.modificar_cadena` (candado; mientras corre, las imágenes por escena
+quedan bloqueadas). Worker `tareas/cadena.py`: `cadena_elementos` (max_intentos=1), periódica `cadena_vigilar` (60 s:
+escena lista → fotograma a R2 → siguiente; falló → `detenida`; al final `cadena_unir`, que arma la edición con
+`edicion_clon.crear_de_piezas`). Rutas `POST /videos/<id>/cadena` `{desde, total_visto}` (409 si el precio recalculado no
+coincide o falta algo) y `/cadena/detener`; UI `_gpg_cadena.html` dentro de `_gpg_escenas.html` (el panel sondea mientras
+corre, con el tope de 12 min de siempre).
 
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
@@ -1032,7 +1049,18 @@ filters live in the hash `#catalogo?cat=&filtro=&q=&orden=`) with a side-panel f
 experimento», Eliminar) that closes when the hash leaves `#catalogo` (hashchange or a sidebar click) — but with an
 unsaved edit (`data-sucio`) it is only hidden, content kept, and comes back when Catálogo is active again;
 Escape/backdrop/✕ (and opening another ficha) ask before discarding unsaved edits, and Escape with the delete modal
-open closes only the modal. Grid and ficha read Crear sessions and experiments once per request:
+open closes only the modal. «Archivar» in the ficha's footer (`catalogo_archivar`, 2026-10-01, for happyflops' old
+hand-made products) hides the WHOLE product without deleting anything: `tiendas.archivar_activo` turns every live or
+sync-archived row of that activo into a manual archive marked `extra.archivado_con_producto` (an `EXTRA_INTERNO` key,
+so the sync keeps it archived), and «Desarchivar» (the ficha's notice) restores only those — never a row archived by
+hand for another reason, like 0025's duplicates, which would change which row wins; with none, it restores the row the
+gallery shows. `tiendas.activos_archivados` (products whose rows are ALL archived, one query) is what the gallery's
+«Archivados» shows and what `catalogo_productos.sin_archivados(entradas, archivados, conservar)` drops from every
+product picker — Crear and Cambiar producto (`ver_cliente`, also the tab's count), the Sprints panel and new-campaign
+form, Nicho, Recrear, Flow Plus (`_catalogo_para_elegir`) and the «Sugerir personas» prompt — except what is already
+chosen (the Crear prefill, the campaign's, the study's or the requested product, the version's references), so no
+selection is ever lost silently. Lookups (`encontrar`, `producto_base`, usos, history) still see archived products.
+Grid and ficha read Crear sessions and experiments once per request:
 `_experimentos_por_activo`, `_productos_tienda_contexto` and `_usos_por_producto` take them preloaded
 (`experimentos_exp`, `sesiones_cf`, `por_clave`). Every catalog POST returns to `#catalogo`, to that ficha when it
 still exists (`_volver_catalogo`/`_volver_fila`), except by design «Crear con este producto» (`#creativeflowplus`)

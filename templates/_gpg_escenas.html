@@ -89,3 +89,5 @@
   </div>
   {% endfor %}
 </section>
+{% set cadena_primera = (E.filas | first).indice if E.filas else 1 %}
+{% include "_gpg_cadena.html" %}

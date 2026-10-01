@@ -69,7 +69,7 @@ def test_analizar_video_usa_fotogramas_locales(monkeypatch, tmp_path):
         analisis.analizar({"tipo": "imagen", "url": "", "intencion": [], "descripcion": ""})
 
 
-def test_sugerir_personas_arma_prompt_y_colores(monkeypatch):
+def test_sugerir_personas_arma_prompt_y_colores(base_temporal, monkeypatch):
     from sprints import analisis, sugerencias
     import catalogo_productos, marca, proyectos
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "Luz natural, sin saturar.")
@@ -91,7 +91,7 @@ def test_sugerir_personas_arma_prompt_y_colores(monkeypatch):
     assert capturado["tope"] == 6000     # pensamiento adaptativo + doctrina: el tope viejo (1500) volvía sin texto
 
 
-def test_sugerir_personas_lista_cada_producto_una_vez_no_cada_color(monkeypatch, tmp_path):
+def test_sugerir_personas_lista_cada_producto_una_vez_no_cada_color(base_temporal, monkeypatch, tmp_path):
     """Revisión final (catálogo por colores): `listar()` da una entrada por
     COLOR; el prompt de personas lista PRODUCTOS, uno por producto con su
     descripción (`listar_productos`), no los 14 colores de una chancla."""
@@ -116,7 +116,7 @@ def test_sugerir_personas_lista_cada_producto_una_vez_no_cada_color(monkeypatch,
     assert "Pink" not in texto and "Beige" not in texto
 
 
-def test_sugerir_personas_rechaza_json_malo(monkeypatch):
+def test_sugerir_personas_rechaza_json_malo(base_temporal, monkeypatch):
     from sprints import analisis, sugerencias
     import catalogo_productos, marca, proyectos
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
@@ -149,7 +149,7 @@ def test_llamar_pasa_el_system_solo_si_viene(monkeypatch):
     assert vistos[1]["system"] == [{"type": "text", "text": "S"}]
 
 
-def test_sugerir_personas_coerciona_nombre_no_string(monkeypatch):
+def test_sugerir_personas_coerciona_nombre_no_string(base_temporal, monkeypatch):
     from sprints import analisis, sugerencias
     import catalogo_productos, marca, proyectos
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
@@ -194,7 +194,7 @@ def test_analizar_manda_la_doctrina_de_clasificar(monkeypatch):
     assert '"lead"' in content[0]["text"] and '"prueba"' in content[0]["text"] and '"gancho"' in content[0]["text"]
 
 
-def test_sugerir_personas_pide_la_consciencia_y_la_normaliza(monkeypatch):
+def test_sugerir_personas_pide_la_consciencia_y_la_normaliza(base_temporal, monkeypatch):
     import catalogo_productos, doctrina, marca, proyectos
     from sprints import analisis, sugerencias
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")

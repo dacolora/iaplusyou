@@ -6,18 +6,28 @@
    etiquetas_fuente, tipos_producto, zonas_cuerpo, presets_cuerpo,
    etiquetas_presets, categorias, con_mapa, swaps_usos. #}
 {% set prefijo_color = p.nombre ~ ' — ' %}
+{# Archivado (2026-10-01): todas sus filas archivadas (tiendas.activos_archivados). #}
+{% set archivado = cat == 'producto' and comercial and comercial.archivado %}
 <div class="cat-ficha" data-cat="{{ cat }}" data-id="{{ p.id }}">
   <header class="panel-campana-cab">
     <div>
       <h2>{{ p.nombre }}</h2>
       <small class="vacio" style="padding:0;">{{ categorias[cat].nombre|traducir }}
         {% if comercial %} · <span class="tag-estado badge-fuente badge-fuente-{{ comercial.fuente }}">{{ etiquetas_fuente.get(comercial.fuente, comercial.fuente)|traducir }}</span>
+        {% if archivado %}<span class="tag-estado">{{ _('archivado') }}</span>{% endif %}
         {% if comercial.en_prueba %}<span class="tag-estado tag-en-uso">{{ _('en prueba') }}</span>{% endif %}
         {% if comercial.prioridad %}<span class="tag-estado">{{ _('prioridad %(n)s', n=comercial.prioridad) }}</span>{% endif %}{% endif %}
       </small>
     </div>
     <button type="button" class="btn-xs" data-panel-cerrar aria-label="{{ _('Cerrar') }}">✕</button>
   </header>
+
+  {% if archivado %}
+  <div class="cat-ficha-archivado">
+    <p>{{ _('Archivado: no sale en la galería ni al elegir producto en Crear, Sprints o Nicho. Sus fotos, colores e historial siguen intactos.') }}</p>
+    <form method="post" action="{{ url_for('catalogo_archivar', cliente=cliente, producto_id=p.id) }}"><input type="hidden" name="archivado" value="0"><button type="submit" class="btn-generar btn-sm">{{ _('Desarchivar') }}</button></form>
+  </div>
+  {% endif %}
 
   {% if comercial %}
   <p class="cat-ficha-precio">
@@ -155,7 +165,7 @@
 
   <footer class="panel-campana-pie">
     <div class="panel-acciones">
-      {% if cat == 'producto' %}
+      {% if cat == 'producto' and not archivado %}
       <form method="post" action="{{ url_for('catalogo_crear_con', cliente=cliente, producto_id=p.id) }}" class="inline cat-crear-con">
         {% if p.tiene_colores %}<select name="variante" data-busqueda aria-label="{{ _('Color') }}">{% for c in p.colores if not c.sin_fotos %}<option value="{{ c.color_id }}" {% if c.color_id == color_inicial %}selected{% endif %}>{{ c.nombre | replace(prefijo_color, '') }}</option>{% endfor %}</select>{% endif %}
         <button type="submit" class="btn-generar btn-sm">{{ _('Crear con este producto') }}</button>
@@ -165,6 +175,11 @@
       {% endif %}
       {% endif %}
     </div>
-    <button type="button" class="btn-eliminar-producto btn-sm" data-producto-id="{{ p.id }}" data-producto-nombre="{{ p.nombre }}" data-fotos="{{ p.n_fotos }}" data-usos="{{ swaps_usos or 0 }}" data-accion="{{ url_for('eliminar_producto', cliente=cliente, producto_id=p.id) }}" data-categoria="{{ cat }}">{{ _('Eliminar') }}</button>
+    <div class="cat-pie-quitar">
+      {% if cat == 'producto' and comercial and not archivado %}
+      <form method="post" action="{{ url_for('catalogo_archivar', cliente=cliente, producto_id=p.id) }}" title="{{ _('Lo saca de la galería y de los selectores de Crear, Sprints y Nicho sin borrar nada. Se deshace con «Desarchivar».') }}"><input type="hidden" name="archivado" value="1"><button type="submit" class="btn-sm">{{ _('Archivar') }}</button></form>
+      {% endif %}
+      <button type="button" class="btn-eliminar-producto btn-sm" data-producto-id="{{ p.id }}" data-producto-nombre="{{ p.nombre }}" data-fotos="{{ p.n_fotos }}" data-usos="{{ swaps_usos or 0 }}" data-accion="{{ url_for('eliminar_producto', cliente=cliente, producto_id=p.id) }}" data-categoria="{{ cat }}">{{ _('Eliminar') }}</button>
+    </div>
   </footer>
 </div>

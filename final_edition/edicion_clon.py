@@ -42,6 +42,46 @@ def documento(clon, formato, idioma=None, pais=None):
     return documento_mod.validar(doc)
 
 
+def documento_varios(clones, formato, idioma=None, pais=None):
+    """Varias piezas seguidas en la pista principal (contiguas, en el orden
+    dado) con su sonido de escena espejado — la edición que arma la cadena de
+    escenas de Flow Plus al terminar. Con una sola pieza es lo mismo que
+    `documento`."""
+    idioma = idioma or (tipos.PAISES.get(pais) or {}).get("idioma") or "es"
+    doc = documento_mod.nuevo_video(formato, idioma_base=idioma)
+    principal, sonido, t = [], [], 0
+    for i, clon in enumerate(clones):
+        dur = int(clon["duracion_ms"])
+        principal.append({
+            "id": f"v{i}", "inicio_ms": t, "duracion_ms": dur, "material_id": int(clon["id"]),
+            "recorte": {"desde_ms": 0, "hasta_ms": dur}, "velocidad": 1.0, "ken_burns": None, "transicion": None,
+            "transform": dict(_TRANSFORM), "keyframes": [], "animacion": None, "audio": dict(_AUDIO)})
+        if (clon.get("extra") or {}).get("tiene_audio"):
+            sonido.append({"id": f"s_v{i}", "inicio_ms": t, "duracion_ms": dur, "material_id": int(clon["id"]),
+                           "rol_audio": "sonido", "recorte": {"desde_ms": 0, "hasta_ms": dur},
+                           "velocidad": 1.0, "audio": dict(_AUDIO)})
+        t += dur
+    doc["pistas"][0]["clips"] = principal
+    if sonido:
+        doc["pistas"].append({"id": "p_sonido", "tipo": "audio", "bloqueada": False, "silenciada": False,
+                              "oculta": False, "clips": sonido})
+    doc["miniatura_ms"] = min(1000, t // 2)
+    doc["origen"] = {"tipo": "flowplus", **({"pais": pais} if pais else {})}
+    return documento_mod.validar(doc)
+
+
+def crear_de_piezas(cliente, cf_ids, carpeta, nombre):
+    """Edición con varias piezas de Crear listas, en orden (cada una pasa a
+    material con `biblioteca.materializar_pieza`, gratis). Devuelve su id."""
+    from final_edition import biblioteca  # import tardío: biblioteca arrastra tareas.edicion y el worker
+    clones, primera = [], None
+    for i, cf_id in enumerate(cf_ids):
+        clones.append(biblioteca.materializar_pieza(cliente, cf_id, os.path.join(carpeta, f"p{i}")))
+        primera = primera or creative_flow.cargar(cliente).get(cf_id)
+    doc = documento_varios(clones, borrador.formato_de((primera or {}).get("aspect_ratio")), pais=proyectos.pais(cliente))
+    return ediciones.crear(cliente, "video", nombre[:120], doc, cf_id=cf_ids[0], creada_por="flowplus")["id"]
+
+
 def crear(cliente, cf_id, carpeta):
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry or entry.get("estado") != "video_listo" or (entry.get("tipo") or "video") == "imagen":

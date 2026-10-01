@@ -138,3 +138,19 @@ def _ejecutar(cmd, timeout):
         detalle = "\n".join((proc.stderr or "").strip().splitlines()[-8:])
         raise RuntimeError(f"{os.path.basename(cmd[0])} falló (código {proc.returncode}): {detalle}")
     return proc
+
+
+def ultimo_fotograma(video, destino):
+    """El último cuadro de `video` como JPG: se lee el último medio segundo
+    (`-sseof`) y `-update 1` sobrescribe el archivo con cada cuadro, así queda
+    el último. Lo usa la cadena de escenas de Flow Plus como imagen de arranque
+    de la escena siguiente. `RuntimeError` si no salió nada."""
+    if os.path.exists(destino):
+        os.remove(destino)
+    try:
+        ffmpeg(["-sseof", "-0.5", "-i", video, "-update", "1", "-q:v", "2", destino], timeout=120)
+    except Exception as e:  # noqa: BLE001 — se informa con un mensaje propio
+        raise RuntimeError(f"No se pudo sacar el último fotograma: {e}") from e
+    if not (os.path.isfile(destino) and os.path.getsize(destino) > 0):
+        raise RuntimeError("ffmpeg no escribió el último fotograma.")
+    return destino

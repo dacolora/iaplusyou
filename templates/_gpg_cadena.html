@@ -1,0 +1,75 @@
+{# «Generar todas las escenas» (spec 2026-09-30; fragmento dentro de _gpg_escenas.html, versión armada).
+   Una aprobación con el precio total; el worker (tareas/cadena.py) genera escena tras escena con Kling O3 Pro,
+   cada una desde el último cuadro de la anterior, y frena si una falla. Botones por data-gpg-accion +
+   data-gpg-cuerpo + data-gpg-confirmar (_crear_flowplus_guiones.html). #}
+{% set C = cadena_vista %}
+{% set est = C.estado %}
+{% macro etiqueta_estado(e) -%}
+  {%- if e == 'lista' %}{{ _('Lista') }}{% elif e == 'generando' %}{{ _('Generando…') }}{% elif e == 'fallo' %}{{ _('Falló') }}{% elif e == 'espera' %}{{ _('En espera') }}{% endif -%}
+{%- endmacro %}
+<section class="gpg-cadena" data-gpg-caja aria-label="{{ _('Generar todas las escenas') }}">
+  <h5>{{ _('Generar todas las escenas') }}</h5>
+  <p class="gp-ayuda">{{ _('Una tras otra con Kling O3 Pro: la primera con sus imágenes y cada siguiente arranca en el último cuadro de la anterior, con los mismos personajes. Corre sola (unos 5 minutos por escena); puedes cerrar la página. Si una escena falla, la cadena se detiene y no cobra lo que sigue.') }}</p>
+  <div class="gpg-error flash error" hidden></div>
+
+  {% if C.corriendo %}
+    <p class="gpg-cadena-estado">
+      {% if est.preparando %}{{ _('Preparando los personajes en Kling…') }}
+      {% elif est.detener %}{{ _('Se detiene al terminar la escena en curso.') }}
+      {% else %}{{ ngettext('Generando: %(num)s de %(total)s escena lista.', 'Generando: %(num)s de %(total)s escenas listas.',
+                           C.filas | selectattr('estado', 'equalto', 'lista') | list | length, total=C.total) }}{% endif %}
+    </p>
+    {% if not est.detener %}
+    <div class="gp-botones">
+      <button type="button" class="btn-sm" data-gpg-accion="/videos/{{ video.id }}/cadena/detener"
+              data-gpg-confirmar="{{ _('La escena que se está generando termina (ya se cobró); después la cadena se detiene. ¿Detener?') }}">{{ _('Detener') }}</button>
+    </div>
+    {% endif %}
+  {% elif est and est.estado == 'terminada' %}
+    <p class="gpg-cadena-estado">{{ _('Todas las escenas están listas.') }}</p>
+    <div class="gp-botones">
+      {% if est.edicion_id %}
+      <a class="btn-generar btn-sm" href="/cliente/{{ cliente | urlencode }}/ediciones/{{ est.edicion_id }}">{{ _('Abrir en el editor') }}</a>
+      {% else %}
+      <span class="gp-ayuda">{{ _('Armando la edición con todas las escenas…') }}</span>
+      {% endif %}
+    </div>
+  {% elif est and est.estado == 'detenida' %}
+    <p class="gpg-cadena-estado">{{ _('La cadena está detenida.') }}{% if est.error %} {{ est.error }}{% endif %}</p>
+  {% endif %}
+
+  {% if not C.corriendo %}
+    {% if C.revision %}
+      <p class="gp-ayuda">{{ _('Antes de generar falta resolver esto:') }}</p>
+      <ul class="gpg-cadena-faltan">
+        {% for p in C.revision %}<li>{% if p.indice %}{{ _('Escena %(n)s: ', n=p.indice) }}{% endif %}{{ p.motivo }}</li>{% endfor %}
+      </ul>
+      <div class="gp-botones"><button type="button" class="btn-generar btn-sm" disabled>{{ ngettext('Generar %(num)s escena', 'Generar las %(num)s escenas', C.total) }}</button></div>
+    {% elif C.precio is not none %}
+      <div class="gp-botones">
+        <button type="button" class="btn-generar btn-sm" data-gpg-accion="/videos/{{ video.id }}/cadena"
+                data-gpg-cuerpo='{{ {"desde": cadena_primera, "total_visto": C.precio}|tojson }}'
+                data-gpg-confirmar="{{ ngettext('Se genera %(num)s escena con Kling O3 Pro por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?', 'Se generan %(num)s escenas con Kling O3 Pro, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?', C.total, precio='%.2f' % C.precio) }}">
+          {{ ngettext('Generar %(num)s escena', 'Generar las %(num)s escenas', C.total) }} · ≈ US$ {{ '%.2f' % C.precio }}</button>
+      </div>
+    {% endif %}
+  {% endif %}
+  {% for a in C.avisos %}<p class="gp-ayuda gpg-cadena-aviso">{{ _('Escena %(n)s: ', n=a.indice) }}{{ a.motivo }}</p>{% endfor %}
+
+  {% if est %}
+  <ol class="gpg-cadena-escenas">
+    {% for f in C.filas %}
+    <li class="gpg-cadena-escena {{ f.estado or '' }}">
+      <span><strong>{{ _('Escena %(n)s', n=f.indice) }}</strong> · {{ f.titulo }}</span>
+      <span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>
+      {% if f.error %}<span class="gpg-cadena-error">{{ f.error }}</span>{% endif %}
+      {% if f.rehacer_precio is not none %}
+      <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/cadena"
+              data-gpg-cuerpo='{{ {"desde": f.indice, "total_visto": f.rehacer_precio}|tojson }}'
+              data-gpg-confirmar="{{ _('Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?', n=f.indice, precio='%.2f' % f.rehacer_precio) }}">{{ _('Rehacer desde aquí') }} · ≈ US$ {{ '%.2f' % f.rehacer_precio }}</button>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</section>
