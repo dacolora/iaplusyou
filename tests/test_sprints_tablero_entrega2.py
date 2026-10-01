@@ -434,6 +434,22 @@ def test_estado_del_sprint_con_tilde(app):
     assert 'estado-sprint-listo_para_generar">listo para generar</span>' in html
 
 
+def test_estado_del_sprint_con_mayuscula_solo_al_principio():
+    """La etiqueta del sprint salía «Ready To Generate» (2026-10-01): el CSS
+    ponía `text-transform: capitalize` (mayúscula en cada palabra). Ahora solo
+    la primera letra (`::first-letter`, que funciona porque .tag-estado es
+    inline-block): «Ready to generate», «Listo para generar»."""
+    import os
+    import re
+    css = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "style.css"),
+               encoding="utf-8").read()
+    reglas = re.findall(r"\.estado-sprint(?![-\w])([^{]*)\{([^}]*)\}", css)
+    assert reglas, "no encontré las reglas de .estado-sprint"
+    assert not any("capitalize" in cuerpo for _, cuerpo in reglas)
+    assert any("::first-letter" in selector and "uppercase" in cuerpo for selector, cuerpo in reglas)
+    assert re.search(r"\.tag-estado\s*\{[^}]*display:\s*inline-block", css)
+
+
 def test_js_del_panel_espera_el_angulo_y_conserva_lo_escrito():
     """Verificado en Chrome sin ventana (2026-09-28): lo escrito, la tarjeta abierta y el
     cursor sobreviven a una recarga del panel; «Reescribir» sale después del guardado del

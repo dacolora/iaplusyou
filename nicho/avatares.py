@@ -33,13 +33,22 @@ TOKENS_POR_CARACTER = 1 / 3.5          # conservador para español
 # el estimado del botón la cuenta (~1,4 tokens por palabra en español).
 TOKENS_DOCTRINA = int(len(doctrina.texto("investigar").split()) * 1.4)
 TOKENS_PROMPT = 800 + TOKENS_DOCTRINA   # instrucciones + doctrina por llamada
-TOKENS_SALIDA_ESTIMADO_NUCLEOS = 1500  # lo que suele ocupar la pasada 1
-TOKENS_SALIDA_ESTIMADO_SUBS = 3000     # por núcleo, pasada 2
-MAX_TOKENS_NUCLEOS = 4000              # tope de salida real (no es costo: es el corte)
-MAX_TOKENS_SUBS = 8000
+# Medido en la prueba real del 2026-10-01 (estudio 3 de colorado_forja, 94 comentarios -> 4 núcleos,
+# 14 subs: 47 589 tokens de salida reales): el pensamiento adaptativo de claude-sonnet-5 se cobra
+# como salida y `_llamar` no manda `thinking`, así que la salida esperada de cada llamada sube con lo
+# que de verdad pasó. Con estos valores, 1 núcleo + 4 sub-avatares ya reproducen esa cifra.
+TOKENS_SALIDA_ESTIMADO_NUCLEOS = 5000  # lo que suele ocupar la pasada 1
+TOKENS_SALIDA_ESTIMADO_SUBS = 10000    # por núcleo, pasada 2
+# Los tres topes de salida de abajo son un corte, no el costo (el estimado sigue en
+# TOKENS_SALIDA_ESTIMADO_*): el pensamiento adaptativo de claude-sonnet-5 gasta del mismo tope
+# y con uno chico la respuesta llega vacía (prueba real 2026-10-01, estudio 3 de colorado_forja:
+# núcleos se cortó con 4 000 para apenas 94 comentarios). 16 000 queda bajo el límite del SDK
+# sin streaming (≈ 21 333), como en investigacion.MAX_TOKENS_SELECCION.
+MAX_TOKENS_NUCLEOS = 16000
+MAX_TOKENS_SUBS = 16000
 TOKENS_SUB_JSON = 900                  # un sub-avatar incompleto dentro del prompt de completado
-TOKENS_SALIDA_ESTIMADO_COMPLETAR = 1500  # por núcleo, pasada de completado
-MAX_TOKENS_COMPLETAR = 6000
+TOKENS_SALIDA_ESTIMADO_COMPLETAR = 5000  # por núcleo, pasada de completado (misma medición del 2026-10-01)
+MAX_TOKENS_COMPLETAR = 16000           # mismo tope y mismo motivo que arriba
 MAX_COMENTARIOS_COMPLETAR = 200        # comentarios que acompañan un completado de avatares ya guardados
 MARCA_COMPLETAR = "Estos sub-avatares quedaron incompletos"
 
@@ -73,15 +82,18 @@ def modelo_actual():
 # ----------------------------------------------------------- selección ---
 
 def seleccionar(comentarios, max_n=MAX_COMENTARIOS, max_caracteres=MAX_CARACTERES):
-    """Los que entran a Claude (spec §4.1): fuera los excluidos; dentro de
-    cada fuente por puntuación desc, fecha desc, id asc; se toman en ronda
-    entre fuentes hasta llenar el primer tope. Un comentario que no cabe en
-    los caracteres se salta (no corta la ronda)."""
+    """Los que entran a Claude (spec §4.1 y Parte 4 §3): fuera los excluidos; dentro de
+    cada fuente por puntuación desc, fecha desc, id asc; se toman en ronda entre fuentes
+    hasta llenar el primer tope, y en cada vuelta van primero las del mercado del estudio
+    (las reseñas con `extra.mercado == "otro"` hacen su propia cola, después). Un
+    comentario que no cabe en los caracteres se salta (no corta la ronda)."""
     por_fuente = {}
     for c in comentarios or []:
         if c.get("excluido"):
             continue
-        por_fuente.setdefault(c.get("fuente") or "texto", []).append(c)
+        ex = c.get("extra") if isinstance(c.get("extra"), dict) else {}
+        clave = (1 if ex.get("mercado") == "otro" else 0, c.get("fuente") or "texto")
+        por_fuente.setdefault(clave, []).append(c)
     for lista in por_fuente.values():
         # tres ordenamientos estables = (puntuación desc, fecha desc, id asc)
         lista.sort(key=lambda c: int(c.get("id") or 0))
@@ -122,18 +134,26 @@ def costo_real(tokens_entrada, tokens_salida, modelo=None):
     return round((tokens_entrada * precios["entrada"] + tokens_salida * precios["salida"]) / 1e6, 4)
 
 
+def _es_otro_mercado(c):
+    return isinstance(c.get("extra"), dict) and c["extra"].get("mercado") == "otro"
+
+
 def estimar_costo(comentarios, modelo=None):
     """Precio ANTES de gastar (spec §4.4): la entrada se cuenta dos veces
     (pasada 1 y repartida en la pasada 2) más el prompt por llamada; la
     salida es lo esperado, con MAX_NUCLEOS en la pasada 2. Redondeado hacia
     arriba al centavo. Más la pasada de completado en su peor caso: un tercer
     reparto de la entrada (los sub-avatares incompletos que vuelven al
-    prompt) y su propia salida por núcleo."""
+    prompt) y su propia salida por núcleo. Cada comentario cuenta con la línea
+    entera que va al prompt (`_linea`: id, fuente, puntuación, contexto y
+    «otro mercado»), y si alguno es de otro mercado cada llamada lleva además
+    la regla (`TOKENS_REGLA_OTRO_MERCADO`, spec Parte 4 §3)."""
     modelo = modelo or modelo_actual()
     sel = seleccionar(comentarios)
-    caracteres = sum(len(c.get("texto") or "") for c in sel)
+    caracteres = sum(len(_linea(c)) for c in sel)
     tokens_texto = int(caracteres * TOKENS_POR_CARACTER)
-    entrada = (tokens_texto * 3 + TOKENS_PROMPT * (1 + 2 * MAX_NUCLEOS)
+    por_llamada = TOKENS_PROMPT + (TOKENS_REGLA_OTRO_MERCADO if any(_es_otro_mercado(c) for c in sel) else 0)
+    entrada = (tokens_texto * 3 + por_llamada * (1 + 2 * MAX_NUCLEOS)
                + TOKENS_SUB_JSON * MAX_NUCLEOS * MAX_SUBS_POR_NUCLEO)
     salida = TOKENS_SALIDA_ESTIMADO_NUCLEOS + (TOKENS_SALIDA_ESTIMADO_SUBS + TOKENS_SALIDA_ESTIMADO_COMPLETAR) * MAX_NUCLEOS
     precios, referencia = _precios(modelo)
@@ -142,19 +162,34 @@ def estimar_costo(comentarios, modelo=None):
             "referencia": referencia, "modelo": modelo, "suficientes": len(sel) >= MIN_COMENTARIOS}
 
 
+ID_PEOR_CASO = 1_000_000          # ids de 7 cifras en las líneas falsas: cubre hasta 9 999 999 comentarios en la base
+
+
+def comentarios_peor_caso():
+    """Los comentarios falsos de `estimar_costo_maximo`: los DOS topes de
+    `seleccionar` llenos a la vez, no solo el de cantidad -- una reseña real
+    puede llegar a 2 000 caracteres, así que un lote de MAX_COMENTARIOS puede
+    alcanzar también MAX_CARACTERES. Cada uno recibe MAX_CARACTERES //
+    MAX_COMENTARIOS caracteres y los primeros MAX_CARACTERES % MAX_COMENTARIOS
+    uno más, para que la suma dé MAX_CARACTERES exacto y `seleccionar` los
+    conserve a todos (la suma corrida nunca pasa el tope). Y cada línea del
+    prompt (`_linea`) lleva lo más largo que puede llevar una reseña real: la
+    fuente de nombre más largo, puntuación, un contexto de 80 caracteres (lo que
+    `_linea` deja del título) y «otro mercado» con el país de nombre más largo
+    -- con eso cada llamada lleva además la regla de otro mercado."""
+    base, resto = divmod(MAX_CARACTERES, MAX_COMENTARIOS)
+    fuente = max(datos.FUENTES, key=len)
+    pais = max(datos.NOMBRES_PAIS, key=lambda k: len(datos.NOMBRES_PAIS[k]))
+    return [{"id": ID_PEOR_CASO + i, "texto": "x" * (base + 1 if i < resto else base), "fuente": fuente, "puntuacion": 5,
+             "fecha": None, "contexto": "x" * 80, "extra": {"mercado": "otro", "pais": pais}}
+            for i in range(MAX_COMENTARIOS)]
+
+
 def estimar_costo_maximo(modelo=None):
     """Peor caso de una generación (lo que la investigación aprueba antes de
-    tener comentarios): los DOS topes de `seleccionar` llenos a la vez, no
-    solo el de cantidad -- una reseña real puede llegar a 2 000 caracteres,
-    así que un lote de MAX_COMENTARIOS puede alcanzar también MAX_CARACTERES.
-    Cada comentario falso recibe MAX_CARACTERES // MAX_COMENTARIOS caracteres
-    y los primeros MAX_CARACTERES % MAX_COMENTARIOS reciben uno más, para que
-    la suma dé MAX_CARACTERES exacto y `seleccionar` los conserve a todos
-    (la suma corrida nunca pasa el tope)."""
-    base, resto = divmod(MAX_CARACTERES, MAX_COMENTARIOS)
-    falsos = [{"id": i, "texto": "x" * (base + 1 if i < resto else base), "fuente": "amazon", "puntuacion": 0, "fecha": None}
-              for i in range(MAX_COMENTARIOS)]
-    return estimar_costo(falsos, modelo)
+    tener comentarios): `estimar_costo` sobre `comentarios_peor_caso()`. Así
+    ningún lote real cuesta más que lo aprobado para la línea de avatares."""
+    return estimar_costo(comentarios_peor_caso(), modelo)
 
 
 # ------------------------------------------------------------- prompts ---
@@ -170,7 +205,7 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
 
 Reglas: cada comentario va en un solo núcleo, o en ninguno si no aporta; no inventes nada que los comentarios no digan; escribe todo en {idioma}. Aplica la doctrina de investigación del principio: agrupa por el deseo de fondo y prefiere los deseos con más urgencia, permanencia y alcance.
 
-COMENTARIOS:
+{regla_mercado}COMENTARIOS:
 {comentarios}"""
 
 PROMPT_SUBS = """Eres estratega de investigación de clientes para la marca {marca}.
@@ -203,12 +238,31 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
 
 Reglas: todos los campos son obligatorios y ninguno puede quedar vacío; mínimos: 2 situaciones, 1 solución probada con sus motivos de falla, 3 palabras clave y 2 citas. Escribe en {idioma}, salvo las citas, que se copian tal cual en el idioma en que la gente escribió; no inventes datos ni cifras (lo inferido va marcado «(inferido)»); cada cita debe aparecer palabra por palabra en el comentario indicado. Aplica la doctrina de investigación del principio: anota literalmente lo que ya probaron y por qué les falló, y el nivel de conciencia según lo que dicen los comentarios.
 
-COMENTARIOS:
+{regla_mercado}COMENTARIOS:
 {comentarios}"""
 
 
 def nombre_idioma(codigo):
     return IDIOMAS.get((codigo or "").lower(), codigo or "es")
+
+
+REGLA_OTRO_MERCADO = ("Mercado del estudio: {pais}. Los comentarios marcados «otro mercado: <país>» son de compradores de otro país: "
+                      "la identidad, la demografía, la edad, el momento de vida, el tono y el nivel de conciencia salen de los "
+                      "comentarios del mercado del estudio (si esos no alcanzan, infiere lo más probable y termina con «(inferido)»); "
+                      "los deseos, los dolores, las soluciones que probaron, las situaciones y momentos de uso y las palabras clave "
+                      "pueden salir de todos.")
+# Lo que la regla suma a CADA llamada cuando el lote trae otro mercado (lo cuenta `estimar_costo`): con el
+# país de nombre más largo y la línea en blanco que la separa de los comentarios, a TOKENS_POR_CARACTER.
+TOKENS_REGLA_OTRO_MERCADO = math.ceil(len(REGLA_OTRO_MERCADO.format(pais=max(datos.NOMBRES_PAIS.values(), key=len)) + "\n\n")
+                                      * TOKENS_POR_CARACTER)
+
+
+def _regla_mercado(estudio, comentarios):
+    """La regla de otro mercado (spec Parte 4 §3), solo si alguno de estos comentarios es de otro mercado."""
+    if not any(_es_otro_mercado(c) for c in comentarios or []):
+        return ""
+    pais = (estudio.get("pais") or "").upper()
+    return REGLA_OTRO_MERCADO.format(pais=datos.NOMBRES_PAIS.get(pais, pais) or "—") + "\n\n"
 
 
 def _linea(c):
@@ -217,6 +271,10 @@ def _linea(c):
         partes.append(str(c["puntuacion"]))
     if c.get("contexto"):
         partes.append(str(c["contexto"])[:80])
+    ex = c.get("extra") if isinstance(c.get("extra"), dict) else {}
+    if ex.get("mercado") == "otro":                  # spec Parte 4 §3: Claude sabe qué no es del mercado del estudio
+        pais = str(ex.get("pais") or "").upper()
+        partes.append(f"otro mercado: {datos.NOMBRES_PAIS.get(pais, pais) or '?'}")
     return f"[{c['id']}] ({' · '.join(partes)}) {c.get('texto') or ''}"
 
 
@@ -228,7 +286,8 @@ def armar_prompt_nucleos(estudio, comentarios, marca_nombre=""):
     return PROMPT_NUCLEOS.format(
         marca=marca_nombre or "este proyecto", producto=(estudio.get("producto") or "").strip() or "(sin describir)",
         tema=(estudio.get("tema") or "").strip() or "(sin describir)", n=len(comentarios), max_nucleos=MAX_NUCLEOS,
-        idioma=nombre_idioma(estudio.get("idioma")), comentarios=lineas_comentarios(comentarios))
+        idioma=nombre_idioma(estudio.get("idioma")), regla_mercado=_regla_mercado(estudio, comentarios),
+        comentarios=lineas_comentarios(comentarios))
 
 
 def armar_prompt_subs(estudio, nucleo, comentarios, guia="", marca_nombre=""):
@@ -237,7 +296,7 @@ def armar_prompt_subs(estudio, nucleo, comentarios, guia="", marca_nombre=""):
         guia=(guia or "").strip() or "(sin guía de estilo todavía)", tema=(estudio.get("tema") or "").strip() or "(sin describir)",
         nucleo_nombre=nucleo.get("nombre") or "", nucleo_deseo=nucleo.get("deseo") or "", nucleo_resumen=nucleo.get("resumen") or "",
         max_subs=MAX_SUBS_POR_NUCLEO, niveles=", ".join(datos.NIVELES_CONCIENCIA), idioma=nombre_idioma(estudio.get("idioma")),
-        comentarios=lineas_comentarios(comentarios))
+        regla_mercado=_regla_mercado(estudio, comentarios), comentarios=lineas_comentarios(comentarios))
 
 
 PROMPT_COMPLETAR = """Eres estratega de investigación de clientes para la marca {marca}.
@@ -257,7 +316,7 @@ Formas: demografia, edad_rango, emocion, comportamiento, encaje_producto, tono y
 
 Reglas: escribe en {idioma}, salvo las citas, que se copian tal cual; la demografía y la edad, si los comentarios no lo dicen, se infieren de lo que cuentan, el producto y el mercado y terminan con «(inferido)»; no inventes cifras; cada cita debe aparecer palabra por palabra en el comentario indicado.
 
-COMENTARIOS:
+{regla_mercado}COMENTARIOS:
 {comentarios}"""
 
 _PEDIDOS = {"identidad": "identidad (las tres respuestas)", "conciencia": "conciencia (nivel y detalle)",
@@ -275,7 +334,8 @@ def armar_prompt_completar(estudio, nucleo, comentarios, pendientes, guia="", ma
         marca=marca_nombre or "este proyecto", producto=(estudio.get("producto") or "").strip() or "(sin describir)",
         guia=(guia or "").strip() or "(sin guía de estilo todavía)", tema=(estudio.get("tema") or "").strip() or "(sin describir)",
         nucleo_nombre=nucleo.get("nombre") or "", nucleo_deseo=nucleo.get("deseo") or "", incompletos="\n\n".join(bloques),
-        niveles=", ".join(datos.NIVELES_CONCIENCIA), idioma=nombre_idioma(estudio.get("idioma")), comentarios=lineas_comentarios(comentarios))
+        niveles=", ".join(datos.NIVELES_CONCIENCIA), idioma=nombre_idioma(estudio.get("idioma")),
+        regla_mercado=_regla_mercado(estudio, comentarios), comentarios=lineas_comentarios(comentarios))
 
 
 def completar_subs(estudio, nucleo, comentarios, subs, guia="", marca_nombre="", tokens=None, con_evidencia=True):

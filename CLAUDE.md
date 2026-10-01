@@ -283,11 +283,17 @@ Creatv, no suyas (2026-09-27).
 **Investigación automática** (spec `docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md`,
 plan `docs/superpowers/plans/2026-09-28-nicho-investigacion-completar.md`): con el tema del estudio y UNA
 cifra aprobada (el estimado lo calcula el servidor y el POST exige `total_visto`), la cadena de tareas
-`nicho_inv_consultas` (Claude, hasta el tope aprobado de búsquedas — 1 a 4 — en el idioma del país; la
-búsqueda nunca usa más que ese tope) → `nicho_inv_buscar` por tienda
-(`nicho/fuentes/plataformas.py`: Amazon con tienda propia, Mercado Libre en 18 países, TikTok Shop; actores
-de Apify con precio por resultado, `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de
-cobro cada una) → `nicho_inv_seleccionar` (Claude marca lo del nicho; se eligen los de más reseñas) →
+`nicho_inv_consultas` (Claude, hasta el tope aprobado de búsquedas — 1 a 4 — por idioma, todas en UNA
+llamada: el del país y el de cada tienda que busca en otro, `investigacion.idiomas_necesarios`; se guardan
+`consultas` — las del país, las de Reddit/YouTube — y `consultas_por_idioma`; la búsqueda nunca usa más
+que ese tope) → `nicho_inv_buscar` por tienda, con las búsquedas de su idioma (si Claude no las escribió,
+las del país, y el paso lo avisa) (`nicho/fuentes/plataformas.py`: Amazon con tienda propia, Mercado Libre
+en 18 países, Walmart solo en EE. UU., TikTok Shop y AliExpress en todo el mundo — AliExpress busca en
+inglés —; actores de Apify con precio por resultado más el arranque por corrida que cobran algunos
+(`usd_por_corrida`), `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de cobro cada una
+(`plataformas.tope`); el estimado de una tienda es la suma de esos techos y el gasto, `plataformas.costo`)
+→ `nicho_inv_seleccionar` (Claude marca lo del nicho; se eligen los de más reseñas y, sin ese dato, los de
+más pedidos/vendidos) →
 `nicho_recolectar` por tienda y por red (Reddit/YouTube con las mismas búsquedas) → `nicho_generar_avatares`
 con `auto` y el tope restante; una investigación solo con redes, sin ninguna tienda, salta `seleccionar`
 (no hay productos que juzgar). El estado vive en `estudio.extra.investigacion` (`nicho/investigacion.py`,
@@ -297,7 +303,10 @@ puro; RMW con candado en `datos.actualizar_investigacion`) y es el del primer pa
 los productos van a `producto_nicho` (migración 0016; `resenas_traidas` evita pagar dos veces). La cifra
 aprobada cubre el peor caso de cada paso pagado, incluida la línea de avatares
 (`avatares.estimar_costo_maximo()`: los dos topes de `seleccionar` llenos a la vez — 600 comentarios que
-suman 250 000 caracteres — más la pasada de completado). Gasto: Apify como `recoleccion`, Claude de la
+suman 250 000 caracteres —, contados con la línea entera que va al prompt y la regla de otro mercado, más la
+pasada de completado). La salida de Claude cuenta el pensamiento adaptativo (se cobra como salida): consultas
+y selección por su tope de `max_tokens`, los avatares con salidas esperadas medidas en la prueba real del
+2026-10-01. Gasto: Apify como `recoleccion`, Claude de la
 investigación como `investigacion`; cada llamada a Claude de la cadena registra su gasto apenas responde,
 con la referencia del spec en el primer intento, `:i<intento>` desde el segundo y `:fallido<intento>`
 cuando el intento no sirvió (un reintento no vuelve a llamar a Claude si el paso ya quedó hecho). Los pasos
@@ -312,6 +321,21 @@ esperan (las rutas los rechazan); si un trabajo manual con el mismo job_id sigue
 cadena, `avanzar` deja la investigación `interrumpida` para que «Reanudar» funcione en cuanto termine. El
 Blueprint de Nicho rechaza los POST que el navegador marca cross-site (`Sec-Fetch-Site`), como Sprints y
 Flow Plus.
+**Otro mercado** (Parte 4, spec `docs/superpowers/specs/2026-09-30-nicho-mas-tiendas-design.md`): una tienda
+sin sitio en el país del estudio no se rechaza: `plataformas.mercado(clave, pais)` → `("otro", casa)` y busca
+y trae reseñas de su sitio principal (Amazon y Walmart → EE. UU., Mercado Libre → México); en la tarjeta va en
+«De otros mercados», desmarcada de entrada («Marcar todas» marca todas las tiendas que tienen su llave, de los
+dos grupos). Cada reseña de tienda guarda en
+`comentario.extra` su `pais` (el del comprador si el actor lo da — AliExpress —, si no el del sitio) y
+`mercado` (`local | otro`) respecto al país del estudio; si el estudio cambia de país («Investigar de nuevo»,
+«Editar estudio»), `datos.actualizar_estudio` recalcula ese `mercado` en la misma transacción. Las reseñas de
+Walmart y AliExpress se atribuyen a su producto también por el link que les mandamos (`producto_pedido`: su
+`productId` puede ser el de una variante). La página lo muestra en comentarios y citas,
+`avatares.seleccionar` pone primero las fuentes locales en cada vuelta y los prompts de avatares marcan
+«otro mercado: <país>» con la regla de que identidad, demografía, edad, momento de vida, tono y conciencia
+salen del mercado local. La selección de productos toma por turnos entre tiendas
+(`investigacion._repartir_por_plataforma`): AliExpress, que no trae número de reseñas, no queda fuera del corte
+de `MAX_FILAS_SELECCION`. eBay y Etsy se probaron con centavos y quedaron fuera (spec §1.1).
 **Avatares del proyecto** (spec `docs/superpowers/specs/2026-09-29-nicho-avatares-proyecto-design.md`):
 página `/cliente/<c>/nicho/avatares` y bloque en la pestaña. Nuevos = sub-avatares propuestos; aprobados =
 personas no archivadas (lo que ve toda la app). Los avatares escritos a mano viven en un estudio oculto
@@ -1065,7 +1089,18 @@ filters live in the hash `#catalogo?cat=&filtro=&q=&orden=`) with a side-panel f
 experimento», Eliminar) that closes when the hash leaves `#catalogo` (hashchange or a sidebar click) — but with an
 unsaved edit (`data-sucio`) it is only hidden, content kept, and comes back when Catálogo is active again;
 Escape/backdrop/✕ (and opening another ficha) ask before discarding unsaved edits, and Escape with the delete modal
-open closes only the modal. Grid and ficha read Crear sessions and experiments once per request:
+open closes only the modal. «Archivar» in the ficha's footer (`catalogo_archivar`, 2026-10-01, for happyflops' old
+hand-made products) hides the WHOLE product without deleting anything: `tiendas.archivar_activo` turns every live or
+sync-archived row of that activo into a manual archive marked `extra.archivado_con_producto` (an `EXTRA_INTERNO` key,
+so the sync keeps it archived), and «Desarchivar» (the ficha's notice) restores only those — never a row archived by
+hand for another reason, like 0025's duplicates, which would change which row wins; with none, it restores the row the
+gallery shows. `tiendas.activos_archivados` (products whose rows are ALL archived, one query) is what the gallery's
+«Archivados» shows and what `catalogo_productos.sin_archivados(entradas, archivados, conservar)` drops from every
+product picker — Crear and Cambiar producto (`ver_cliente`, also the tab's count), the Sprints panel and new-campaign
+form, Nicho, Recrear, Flow Plus (`_catalogo_para_elegir`) and the «Sugerir personas» prompt — except what is already
+chosen (the Crear prefill, the campaign's, the study's or the requested product, the version's references), so no
+selection is ever lost silently. Lookups (`encontrar`, `producto_base`, usos, history) still see archived products.
+Grid and ficha read Crear sessions and experiments once per request:
 `_experimentos_por_activo`, `_productos_tienda_contexto` and `_usos_por_producto` take them preloaded
 (`experimentos_exp`, `sesiones_cf`, `por_clave`). Every catalog POST returns to `#catalogo`, to that ficha when it
 still exists (`_volver_catalogo`/`_volver_fila`), except by design «Crear con este producto» (`#creativeflowplus`)

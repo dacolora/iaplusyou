@@ -15,6 +15,7 @@ import db
 import gastos
 import proyectos
 import referencias_flowplus
+import tiendas
 import trabajos
 import usuarios
 from final_edition import biblioteca
@@ -31,6 +32,19 @@ bp.before_request(_solo_mismo_origen)
 
 def _costo(paso, palabras=0):
     return gastos.estimar("guion_clips", paso=paso, palabras=palabras)["texto"]
+
+
+def _catalogo_para_elegir(cliente, en_uso):
+    """{tipo: activos del Catálogo} para las referencias de la configuración y
+    las fotos del Catálogo de las escenas: sin productos archivados
+    (2026-10-01), salvo los que las referencias `en_uso` ({tipo, activo_id})
+    ya nombran — si no, la versión perdería su producto al guardarse."""
+    catalogo = {t: catalogo_productos.listar(cliente, t) for t in config.TIPOS_REF}
+    if catalogo.get("producto"):
+        usados = [r.get("activo_id") for r in en_uso or () if isinstance(r, dict) and r.get("tipo") == "producto"]
+        catalogo["producto"] = catalogo_productos.sin_archivados(catalogo["producto"],
+                                                                 tiendas.activos_archivados(cliente), usados)
+    return catalogo
 
 
 def _contexto(cliente, guion_id=None, video_id=None):
@@ -51,10 +65,12 @@ def _contexto(cliente, guion_id=None, video_id=None):
            "costos": {"leer": _costo("leer", 750), "recorte": _costo("recorte")}}
     catalogo = {}
     if g and g["estado"] == "confirmado":
-        catalogo = {t: catalogo_productos.listar(cliente, t) for t in config.TIPOS_REF}
+        defecto = config.defecto(cliente)
+        en_uso = list(defecto.get("referencias") or []) + list(((v or {}).get("config") or {}).get("referencias") or [])
+        catalogo = _catalogo_para_elegir(cliente, en_uso)
         ctx["activos"] = {t: [{"id": a["id"], "nombre": a["nombre"]} for a in lista] for t, lista in catalogo.items()}
         ctx["formatos"] = flowplus_modelos.FORMATOS_NOMBRES
-        ctx["config_defecto"] = config.defecto(cliente)
+        ctx["config_defecto"] = defecto
     if v is not None:
         ctx["recorte_info"] = recorte.resumen(v)
     if g and g["estado"] == "confirmado":

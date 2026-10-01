@@ -1065,6 +1065,12 @@ msgstr[0] "%(num)s finished"
 msgstr[1] "%(num)s finished"
 
 #, python-format
+msgid "%(num)s vendido"
+msgid_plural "%(num)s vendidos"
+msgstr[0] "%(num)s sold"
+msgstr[1] "%(num)s sold"
+
+#, python-format
 msgid "%(palabras)s palabras · unos %(segundos)s s leído completo a ritmo natural."
 msgstr "%(palabras)s words · about %(segundos)s s read in full at a natural pace."
 
@@ -1075,10 +1081,6 @@ msgstr "%(pct)s new customers"
 #, python-format
 msgid "%(pct)s del gasto"
 msgstr "%(pct)s of spend"
-
-#, python-format
-msgid "%(plataforma)s no cubre el país %(pais)s."
-msgstr "%(plataforma)s does not cover country %(pais)s."
 
 #, python-format
 msgid "%(plataforma)s: no hay consultas para buscar."
@@ -1988,6 +1990,10 @@ msgid "Apify rechazó la entrada del actor: %(motivo)s"
 msgstr "Apify rejected the actor input: %(motivo)s"
 
 #, python-format
+msgid "Apify respondió sin datos legibles al arrancar la corrida (%(codigo)s); revisa en console.apify.com si arrancó."
+msgstr "Apify answered without readable data when starting the run (%(codigo)s); check at console.apify.com whether it started."
+
+#, python-format
 msgid "Apify: %(estado)s · corrida %(corrida)s"
 msgstr "Apify: %(estado)s · run %(corrida)s"
 
@@ -2081,11 +2087,18 @@ msgstr "Archived"
 msgid "Archivado el concepto de %(nombre)s: %(motivo)s."
 msgstr "Archived the concept of %(nombre)s: %(motivo)s."
 
+msgid "Archivado: no sale en la galería ni al elegir producto en Crear, Sprints o Nicho. Sus fotos, colores e historial siguen intactos."
+msgstr "Archived: it doesn't show in the gallery or when picking a product in Create, Sprints or Niche. Its photos, colors and history stay intact."
+
 msgid "Archivados"
 msgstr "Archived"
 
 msgid "Archivar"
 msgstr "Archive"
+
+#, python-format
+msgid "Archivaste «%(nombre)s»: ya no sale en la galería ni al elegir producto en Crear, Sprints o Nicho. No se borró nada y lo recuperas en Catálogo › Archivados."
+msgstr "You archived “%(nombre)s”: it no longer shows in the gallery or when picking a product in Create, Sprints or Niche. Nothing was deleted and you can bring it back from Catalog › Archived."
 
 msgid "Archivo"
 msgstr "File"
@@ -2430,6 +2443,9 @@ msgstr "Search"
 msgid "Búsqueda + reseñas"
 msgstr "Search + reviews"
 
+msgid "Búsqueda en AliExpress"
+msgstr "AliExpress search"
+
 msgid "Búsqueda en Amazon"
 msgstr "Amazon search"
 
@@ -2438,6 +2454,9 @@ msgstr "Mercado Libre search"
 
 msgid "Búsqueda en TikTok Shop"
 msgstr "TikTok Shop search"
+
+msgid "Búsqueda en Walmart"
+msgstr "Walmart search"
 
 msgid "Búsquedas"
 msgstr "Searches"
@@ -3783,6 +3802,9 @@ msgstr "Sprint data (saves on its own)"
 #, python-format
 msgid "De %(persona)s:"
 msgstr "From %(persona)s:"
+
+msgid "De otros mercados"
+msgstr "From other markets"
 
 msgid "De una marca"
 msgstr "From a brand"
@@ -8352,6 +8374,9 @@ msgstr "What it took to build this"
 msgid "Lo que vendes: calzado, ropa, decoración, comida, lo que sea."
 msgstr "What you sell: shoes, clothes, home decor, food, anything."
 
+msgid "Lo saca de la galería y de los selectores de Crear, Sprints y Nicho sin borrar nada. Se deshace con «Desarchivar»."
+msgstr "Takes it out of the gallery and the product pickers in Create, Sprints and Niche without deleting anything. Undo it with “Unarchive”."
+
 msgid "Locuciones (audios)"
 msgstr "Voice-overs (audios)"
 
@@ -8514,6 +8539,9 @@ msgstr "Marked ready to generate by hand"
 
 msgid "Marcar listo para generar"
 msgstr "Mark ready to generate"
+
+msgid "Marcar todas"
+msgstr "Select all"
 
 msgid "Marcar verificado"
 msgstr "Mark verified"
@@ -11244,6 +11272,10 @@ msgstr "Recover password"
 msgid "Recuperar el video (sin pagar de nuevo)"
 msgstr "Recover the video (without paying again)"
 
+#, python-format
+msgid "Recuperaste «%(nombre)s»: vuelve a salir en la galería y al elegir producto."
+msgstr "You restored “%(nombre)s”: it shows again in the gallery and when picking a product."
+
 msgid "Reddit"
 msgstr "Reddit"
 
@@ -11524,11 +11556,17 @@ msgstr "Rescue attempts made on this piece"
 msgid "Reseñas"
 msgstr "Reviews"
 
+msgid "Reseñas de AliExpress"
+msgstr "AliExpress reviews"
+
 msgid "Reseñas de Amazon"
 msgstr "Amazon reviews"
 
 msgid "Reseñas de TikTok Shop"
 msgstr "TikTok Shop reviews"
+
+msgid "Reseñas de Walmart"
+msgstr "Walmart reviews"
 
 msgid "Reseñas por producto"
 msgstr "Reviews per product"
@@ -12712,6 +12750,10 @@ msgstr "Store disconnected. Its products stay active because the other connectio
 
 msgid "Tiendas"
 msgstr "Stores"
+
+#, python-format
+msgid "Tiendas de %(pais)s"
+msgstr "Stores in %(pais)s"
 
 msgid "Tienes cambios sin guardar en esta ficha. ¿Cerrarla igual?"
 msgstr "You have unsaved changes here. Close the details anyway?"
@@ -14539,6 +14581,9 @@ msgstr "480p draft"
 msgid "buscando"
 msgstr "searching"
 
+msgid "buscar en AliExpress"
+msgstr "search AliExpress"
+
 msgid "buscar en Amazon"
 msgstr "search Amazon"
 
@@ -14547,6 +14592,9 @@ msgstr "search Mercado Libre"
 
 msgid "buscar en TikTok Shop"
 msgstr "search TikTok Shop"
+
+msgid "buscar en Walmart"
+msgstr "search Walmart"
 
 msgid "búsqueda"
 msgstr "search"
@@ -15896,6 +15944,10 @@ msgstr "another structure"
 msgid "otro gancho"
 msgstr "another hook"
 
+#, python-format
+msgid "otro mercado: %(pais)s"
+msgstr "other market: %(pais)s"
+
 msgid "otro: ¿qué?"
 msgstr "other: what?"
 
@@ -16218,11 +16270,17 @@ msgstr "rescue"
 msgid "reseñas"
 msgstr "reviews"
 
+msgid "reseñas de AliExpress"
+msgstr "AliExpress reviews"
+
 msgid "reseñas de Amazon"
 msgstr "Amazon reviews"
 
 msgid "reseñas de TikTok Shop"
 msgstr "TikTok Shop reviews"
+
+msgid "reseñas de Walmart"
+msgstr "Walmart reviews"
 
 msgid "reseñas ya traídas"
 msgstr "reviews already fetched"
@@ -16343,6 +16401,9 @@ msgstr "no purchase URL"
 
 msgid "sin archivo local; formato no verificado"
 msgstr "no local file; format not verified"
+
+msgid "sin búsquedas en el idioma de la tienda: se usaron las del país"
+msgstr "no searches in the store's language: the country's searches were used"
 
 msgid "sin causa clara"
 msgstr "no clear cause"

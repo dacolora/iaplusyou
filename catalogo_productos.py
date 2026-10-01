@@ -154,6 +154,21 @@ def producto_base(activo_id):
     return str(activo_id or "").split("/", 1)[0]
 
 
+def sin_archivados(entradas, archivados, conservar=()):
+    """Las entradas de `listar()`/`listar_productos()` (categoría producto)
+    que un selector puede ofrecer: sin los productos archivados (`archivados`
+    = set de pids, `tiendas.activos_archivados`) — con todos sus colores —,
+    salvo los que ya están elegidos en lo que se pinta (`conservar`: ids de
+    producto o de color; vacíos y None se ignoran). Un selector nunca debe
+    perder en silencio el producto que una campaña, un estudio o una
+    precarga ya usan."""
+    entradas = list(entradas)
+    if not archivados:
+        return entradas
+    guardar = {producto_base(c) for c in conservar or () if c}
+    return [e for e in entradas if producto_base(e["id"]) not in archivados or producto_base(e["id"]) in guardar]
+
+
 def _imagenes_en(carpeta):
     try:
         return sorted(f for f in os.listdir(carpeta) if f.lower().endswith(IMAGE_EXTS))

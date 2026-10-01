@@ -1351,7 +1351,10 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .sprint-card { display: flex; gap: 1rem; align-items: center; padding: .8rem 1rem; text-decoration: none; color: inherit; }
 .sprint-card:hover { background: var(--panel-hover); }
 .anillo text { font-family: var(--font-body); font-weight: 700; }
-.estado-sprint { text-transform: capitalize; }
+/* Mayúscula solo en la primera letra («Ready to generate», «Listo para generar»):
+   `capitalize` ponía una en cada palabra («Ready To Generate»). Las etiquetas del
+   catálogo van en minúscula porque también se usan dentro de frases. */
+.estado-sprint::first-letter { text-transform: uppercase; }
 .estado-sprint-planeando, .estado-sprint-planeada { border-color: var(--muted-2); }
 .estado-sprint-referencias { border-color: var(--accent); }
 .estado-sprint-listo_para_generar, .estado-sprint-ideas_aprobadas { border-color: var(--ok); }
@@ -2765,7 +2768,8 @@ body.panel-abierto { overflow: hidden; }
 .nicho-inv-aviso { color: var(--warn); overflow-wrap: anywhere; }
 .nicho-inv-chips { border: 0; padding: 0; margin: .4rem 0; display: flex; flex-wrap: wrap; gap: .5rem; }
 .nicho-inv-chips legend { font-weight: 600; margin-bottom: .2rem; }
-.nicho-inv-chips label.apagado { opacity: .45; }
+.nicho-inv-chips[hidden], .nicho-inv-casa[hidden] { display: none; }   /* display:flex pisaría el atributo hidden */
+#inv-marcar-todas { align-self: flex-start; }                         /* el formulario estira a sus hijos a todo el ancho */
 .nicho-inv-estimado { margin: .6rem 0; font-size: .9rem; display: flex; flex-direction: column; gap: .15rem; }
 .nicho-inv-tabla td { overflow-wrap: anywhere; }
 
@@ -2874,6 +2878,12 @@ body.panel-abierto { overflow: hidden; }
 .cat-nuevo-color form { display: grid; gap: .5rem; margin-top: .5rem; }
 .cat-crear-con { display: inline-flex; gap: .4rem; align-items: center; margin: 0; }
 .cat-crear-con select { width: auto; margin: 0; }
+/* Producto archivado (2026-10-01): aviso con «Desarchivar» arriba de la
+   ficha; «Archivar» va en el pie, junto a «Eliminar». */
+.cat-ficha-archivado { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin: .6rem 0 0; padding: .6rem .8rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); background: var(--panel-2); font-size: .84rem; }
+.cat-ficha-archivado p { margin: 0; flex: 1 1 16rem; color: var(--muted); }
+.cat-ficha-archivado form, .cat-pie-quitar form { margin: 0; }
+.cat-pie-quitar { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 /* Selector de Crear/Sprints: un producto con colores agrupa sus tiles bajo un
    encabezado en vez de listarlos sueltos (spec 2026-09-28 §10.5). */
 .producto-grupo { flex: 1 1 100%; }

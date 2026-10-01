@@ -100,7 +100,7 @@
 <div class="nicho-comentarios">
   {% for c in pagina_comentarios["items"] %}
   <div class="nicho-comentario{% if c.excluido %} excluido{% endif %}">
-    <small class="vacio">{{ fuentes_nombre.get(c.fuente, c.fuente)|traducir }}{% if c.puntuacion is not none %} · {{ c.puntuacion }}{% endif %}{% if c.contexto %} · {{ c.contexto }}{% endif %}{% if c.url %} · <a href="{{ c.url }}" target="_blank" rel="noopener">{{ _('ver original') }}</a>{% endif %}</small>
+    <small class="vacio">{{ fuentes_nombre.get(c.fuente, c.fuente)|traducir }}{% if c.puntuacion is not none %} · {{ c.puntuacion }}{% endif %}{% if c.contexto %} · {{ c.contexto }}{% endif %}{% if (c.extra or {}).get('mercado') == 'otro' %} · <span class="tag-estado">{{ _('otro mercado: %(pais)s', pais=(nombres_pais or {}).get(c.extra.pais, c.extra.pais or '?')|traducir) }}</span>{% endif %}{% if c.url %} · <a href="{{ c.url }}" target="_blank" rel="noopener">{{ _('ver original') }}</a>{% endif %}</small>
     <p>{{ c.texto }}</p>
     <form method="post" action="{{ url_for('nicho.comentario_excluir', cliente=cliente, cid=c.id) }}" class="inline">
       {% if c.excluido %}<input type="hidden" name="incluir" value="1">{% endif %}

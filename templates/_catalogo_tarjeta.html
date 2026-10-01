@@ -1,7 +1,7 @@
 {# Una tarjeta de la galería (spec §10.2). `t` viene de catalogo_vista.tarjetas;
    `cat`, `cliente`, `etiquetas_fuente`, `trabajos_prod` del contexto del grid. #}
 {% if t.tipo == 'activo' %}
-<article class="cat-tarjeta" id="producto-{{ t.id }}" data-abrir-ficha="{{ cat }}:{{ t.id }}" tabindex="0" role="button" aria-label="{{ t.nombre }}">
+<article class="cat-tarjeta{% if t.archivado %} prod-archivado{% endif %}" id="producto-{{ t.id }}" data-abrir-ficha="{{ cat }}:{{ t.id }}" tabindex="0" role="button" aria-label="{{ t.nombre }}">
   <div class="cat-tarjeta-media">
     <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=t.id, categoria=cat, w=320) }}" alt="" loading="lazy">
     {% if t.n_colores %}<span class="cat-chip">{{ ngettext('%(num)s color', '%(num)s colores', t.n_colores) }}</span>{% endif %}
@@ -18,6 +18,7 @@
     <span class="cat-tarjeta-precio">{% if t.precio is not none %}{{ t.precio | dinero(t.moneda or '') }}{% else %}<span class="vacio" style="padding:0;">{{ _('sin precio') }}</span>{% endif %}</span>
     <span class="cat-chips">
       {% if t.fuente %}<span class="tag-estado badge-fuente badge-fuente-{{ t.fuente }}">{{ etiquetas_fuente.get(t.fuente, t.fuente)|traducir }}</span>{% endif %}
+      {% if t.archivado %}<span class="tag-estado">{{ _('archivado') }}</span>{% endif %}
       {% if t.en_prueba %}<span class="tag-estado tag-en-uso">{{ _('en prueba') }}</span>{% endif %}
       {% if not t.url_compra %}<span class="tag-estado">{{ _('sin URL') }}</span>{% endif %}
       {% if t.usos %}<span class="tag-estado">{{ _('usado en %(n)s', n=t.usos) }}</span>{% endif %}
