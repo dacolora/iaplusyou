@@ -148,3 +148,45 @@ def test_color_a_mano_sin_fuente_id_se_adopta_por_nombre(entorno):
     assert list(v) == ["rojo"] and v["rojo"]["fuente_id"] == "v1"
     assert os.listdir(carpeta_rojo) == ["mano.jpg"]              # ya tenía foto: no se rebaja
     assert "https://cdn.test/rojo.png" not in entorno["descargas"]
+
+
+def _un_color(nombre, fid):
+    return (nombre, fid, (f"https://cdn.test/{fid}.png",))
+
+
+def test_color_cuyo_primer_id_de_variante_cambia_no_se_duplica(entorno):
+    """Revisión final: el `fuente_id` de un color de Shopify es el id de su
+    PRIMERA variante y cambia si la tienda borra o reordena una talla. La
+    sync siguiente reconoce el mismo color por su nombre (su fuente_id viejo
+    ya no viene de la tienda) en vez de crear `pink-2` y apagar `pink`."""
+    import importador
+    importador.importar_lista("acme", "shopify", [_prod(colores=(_un_color("Pink", "v1"),))])
+    entorno["descargas"].clear()
+    res = importador.importar_lista("acme", "shopify", [_prod(colores=(_un_color("Pink", "v9"),))])
+    assert res["colores"] == 0 and res["errores"] == []
+    v = _meta()["cojin_azul"]["variantes"]
+    assert list(v) == ["pink"]
+    assert v["pink"]["fuente_id"] == "v9" and v["pink"]["disponible"] is True
+    assert v["pink"]["url_compra"] == "https://t/p1?variant=v9"
+    assert entorno["descargas"] == []                             # sus fotos no se vuelven a bajar
+    base = entorno["tmp"] / "clientes" / "acme" / "productos" / "cojin_azul"
+    assert os.listdir(base / "pink") == ["01.png"] and not (base / "pink-2").exists()
+
+
+def test_colores_que_normalizan_igual_conservan_cada_uno_el_suyo_aunque_cambien_los_ids(entorno):
+    """«Café» y «Cafe» siguen siendo dos colores aunque los ids de sus
+    primeras variantes cambien a la vez (y aunque la tienda cambie su orden):
+    cada uno se reconoce por su propio nombre, no por el id derivado."""
+    import importador
+    importador.importar_lista("acme", "shopify", [_prod(colores=(_un_color("Café", "v1"), _un_color("Cafe", "v2")))])
+    v = _meta()["cojin_azul"]["variantes"]
+    assert list(v) == ["cafe", "cafe-2"]
+    importador.importar_lista("acme", "shopify", [_prod(colores=(_un_color("Café", "v11"), _un_color("Cafe", "v12")))])
+    v = _meta()["cojin_azul"]["variantes"]
+    assert list(v) == ["cafe", "cafe-2"]
+    assert (v["cafe"]["fuente_id"], v["cafe-2"]["fuente_id"]) == ("v11", "v12")
+    importador.importar_lista("acme", "shopify", [_prod(colores=(_un_color("Cafe", "v22"), _un_color("Café", "v21")))])
+    v = _meta()["cojin_azul"]["variantes"]
+    assert list(v) == ["cafe", "cafe-2"]
+    assert (v["cafe"]["fuente_id"], v["cafe-2"]["fuente_id"]) == ("v21", "v22")
+    assert all(d["disponible"] for d in v.values())

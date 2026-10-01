@@ -319,24 +319,43 @@ def _bajar_a(fotos, carpeta_destino, prod, errores, que=""):
         shutil.rmtree(temporal, ignore_errors=True)
 
 
-def _color_existente(meta_variantes, var):
-    """color_id ya guardado para esta variante: por fuente_id primero; si no
-    matchea ninguno, por el id derivado del nombre PERO solo contra un color
-    que no tenga fuente_id propio (hecho a mano, o el que dejó
-    `convertir_actual` al adoptar). Un color con fuente_id de la tienda
-    nunca se funde por coincidencia de nombre — si no, dos variantes de la
-    tienda con `fuente_id` distinto que normalizan igual (p. ej. "Café" y
-    "Cafe") se pisarían entre sí en vez de quedar como dos colores separados
-    (`-2` vía `_color_id_libre`)."""
+def _color_existente(meta_variantes, var, fuente_ids_entrantes, nombre_producto="", ya_usados=()):
+    """color_id ya guardado para esta variante, o None si es un color nuevo.
+
+    1. Por `fuente_id`. En Shopify es el id de la PRIMERA variante del color,
+       que cambia si la tienda borra o reordena una talla.
+    2. Si no, por nombre: primero los colores cuyo nombre guardado es el de
+       esta variante («<producto> — <color>», o solo «<color>» si se hizo a
+       mano), sin distinguir mayúsculas; luego los ids que daría su nombre
+       (`id_desde_nombre` del color solo y del nombre completo, como
+       `catalogo_productos._id_color_desde_nombre`). Se adopta el primero que
+       no tenga `fuente_id` (hecho a mano, o el que dejó `convertir_actual`)
+       o cuyo `fuente_id` YA NO venga de la tienda (`fuente_ids_entrantes`:
+       quedó viejo). Un color cuyo fuente_id sí viene en esta sync es de
+       otra variante y nunca se funde por nombre: «Café» y «Cafe» con ids
+       distintos quedan como dos colores (`-2` vía `_color_id_libre`) y
+       cada uno se reconoce luego por su propio nombre guardado.
+    `ya_usados`: colores que otra variante de esta misma sync ya tomó."""
     fid = str(var.get("fuente_id") or "")
     if fid:
         for cid, datos in meta_variantes.items():
             if str((datos or {}).get("fuente_id") or "") == fid:
                 return cid
-    cid = catalogo_productos.id_desde_nombre(var["nombre"])
-    datos = meta_variantes.get(cid)
-    if datos is not None and not (datos or {}).get("fuente_id"):
-        return cid
+    nombre = var["nombre"].strip()
+    completo = f"{nombre_producto} — {nombre}" if nombre_producto else nombre
+    nombres = {nombre.casefold(), completo.casefold()}
+    candidatos = [cid for cid, datos in meta_variantes.items()
+                  if str((datos or {}).get("nombre") or "").strip().casefold() in nombres]
+    for cid in (catalogo_productos.id_desde_nombre(nombre), catalogo_productos.id_desde_nombre(completo)):
+        if cid in meta_variantes and cid not in candidatos:
+            candidatos.append(cid)
+    entrantes = {str(f) for f in (fuente_ids_entrantes or ()) if f}
+    for cid in candidatos:
+        if cid in ya_usados:
+            continue
+        propio = str((meta_variantes.get(cid) or {}).get("fuente_id") or "")
+        if not propio or propio not in entrantes:
+            return cid
     return None
 
 
@@ -364,13 +383,14 @@ def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
         return dict(v) if isinstance(v, dict) else {}
 
     existentes = _existentes()
+    entrantes = {str(v.get("fuente_id")) for v in variantes if v.get("fuente_id")}
     nuevos, vistos = 0, set()
     for i, var in enumerate(variantes):
         nombre_color = f"{nombre_producto} — {var['nombre'].strip()}" if nombre_producto else var["nombre"].strip()
         etiqueta = gettext("color «%(nombre)s»", nombre=var["nombre"])
         datos = {"fuente_id": var.get("fuente_id"), "url_compra": var.get("url_compra"),
                  "disponible": var.get("disponible", True) is not False}
-        cid = _color_existente(existentes, var)
+        cid = _color_existente(existentes, var, entrantes, nombre_producto, ya_usados=vistos)
         if cid is None:
             try:
                 cid = catalogo_productos.agregar_color(
@@ -384,6 +404,9 @@ def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
             bajar = True
         else:
             catalogo_productos.actualizar_color(cliente, activo_id, cid, nombre=nombre_color, **datos)
+            # La copia local también: la variante siguiente de esta misma sync
+            # tiene que ver el fuente_id nuevo (ya no está «viejo»).
+            existentes[cid] = {**(existentes.get(cid) or {}), **datos, "nombre": nombre_color}
             bajar = forzar_fotos or not _tiene_imagenes(os.path.join(carpeta, cid))
         vistos.add(cid)
         destino = os.path.join(carpeta, cid)
