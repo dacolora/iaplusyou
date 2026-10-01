@@ -486,3 +486,16 @@ def test_lanzar_animacion_sin_pedido_no_hace_nada(base_temporal, monkeypatch):
     antes = set(creative_flow.cargar("acme"))
     assert recrear.lanzar_animacion("acme", cf, "https://r2/x.png") is None
     assert set(creative_flow.cargar("acme")) == antes
+
+
+
+def test_lanzar_animacion_de_la_variacion_marca_su_modo(base_temporal, monkeypatch):
+    import creative_flow
+    import flowplus_lanzar
+    from referentes import recrear
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda *a, **k: True)
+    cf_img = _sesion_imagen_con_animacion(titulo="Recrear: X · variación · video")
+    creative_flow.actualizar("acme", cf_img, recrear_modo="libre")
+    cf_vid = recrear.lanzar_animacion("acme", cf_img, "https://r2/var.png")
+    video = creative_flow.cargar("acme")[cf_vid]
+    assert video["recrear_modo"] == "libre_video" and video["accion_central"] == "Recrear: X · variación · video"

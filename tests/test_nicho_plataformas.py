@@ -16,11 +16,12 @@ def test_claves_paises_idioma_y_dominio():
     from nicho import datos
     from nicho.fuentes import plataformas as pl
     from nicho.fuentes.base import ErrorFuente
-    assert pl.claves() == ("amazon", "meli", "tiktok_shop") and set(pl.claves()) == set(datos.FUENTES_PLATAFORMA)
-    assert pl.nombre("meli") == "Mercado Libre"
-    assert pl.disponibles("SE") == ["amazon", "tiktok_shop"] and pl.disponibles("MX") == ["amazon", "meli", "tiktok_shop"]
-    assert pl.disponibles("CO") == ["meli", "tiktok_shop"]                             # Amazon solo donde tiene tienda propia
-    assert pl.disponibles("ZZ") == ["tiktok_shop"]
+    assert pl.claves() == ("amazon", "meli", "tiktok_shop", "walmart", "aliexpress") and set(pl.claves()) == set(datos.FUENTES_PLATAFORMA)
+    assert pl.nombre("meli") == "Mercado Libre" and pl.nombre("aliexpress") == "AliExpress"
+    assert pl.disponibles("SE") == ["amazon", "tiktok_shop", "aliexpress"] and pl.disponibles("MX") == ["amazon", "meli", "tiktok_shop", "aliexpress"]
+    assert pl.disponibles("CO") == ["meli", "tiktok_shop", "aliexpress"]               # Amazon solo donde tiene tienda propia
+    assert pl.disponibles("ZZ") == ["tiktok_shop", "aliexpress"] and pl.disponibles("US") == ["amazon", "tiktok_shop", "walmart", "aliexpress"]
+    assert pl.dominio("walmart", "US") == "https://www.walmart.com/" and pl.dominio("walmart", "CO") is None and pl.dominio("aliexpress", "CO") is None
     assert pl.dominio("amazon", "SE") == "se" and pl.dominio("amazon", "MX") == "com.mx" and pl.dominio("amazon", "US") == "com"
     assert pl.dominio("meli", "CO") == "https://listado.mercadolibre.com.co/" and pl.dominio("meli", "BR") == "https://lista.mercadolivre.com.br/"
     assert pl.dominio("tiktok_shop", "SE") is None and pl.dominio("meli", "SE") is None
@@ -39,6 +40,13 @@ def test_estimados_redondean_al_centavo_hacia_arriba():
     assert pl.estimar_resenas("amazon", 15, 100) == 1.35         # 1500 × 0.0009
     assert pl.estimar_busqueda("meli", 3, 20) == 0.12 and pl.estimar_resenas("meli", 15, 100) == 1.05
     assert pl.estimar_busqueda("tiktok_shop", 3, 20) == 0.27 and pl.estimar_resenas("tiktok_shop", 15, 100) == 6.75
+    # con arranque por corrida: Walmart busca UNA consulta por corrida (20 × 0.001 + 0.001 → 0.03 cada una)
+    assert pl.estimar_busqueda("walmart", 3, 20) == 0.09 and pl.estimar_resenas("walmart", 15, 100) == 1.5
+    assert pl.estimar_busqueda("aliexpress", 3, 20) == 0.03 and pl.estimar_resenas("aliexpress", 15, 100) == 4.51
+    actor = pl.actor_resenas("aliexpress")
+    assert actor["usd_por_corrida"] == 0.01 and pl.tope(5, actor) == 0.03 and pl.costo(5, 1, actor) == 0.03
+    assert pl.costo(0, 1, actor) == 0.01 and pl.costo(0, 0, actor) == 0.0 and pl.costo(1500, 1, actor) == 4.51   # el arranque cobra aunque no traiga nada
+    assert pl.tope(20, {"usd_por_resultado": 0.003}) == 0.06                                                    # sin la clave = sin arranque
 
 
 def test_entradas_de_busqueda():
@@ -56,8 +64,8 @@ def test_entradas_de_busqueda():
     assert [x["max_items"] for x in e] == [10, 10] and [x["etiqueta"] for x in e] == ["pantuflas ortopédicas", "pantuflas memory foam"]
     e = pl.entradas_busqueda("tiktok_shop", ["cloud slippers"], "US", 20)
     assert e == [{"entrada": {"mode": "shop_search", "searchKeywords": ["cloud slippers"], "maxResults": 20}, "max_items": 20, "max_usd": 0.09, "etiqueta": "búsqueda"}]
-    with pytest.raises(ErrorFuente):
-        pl.entradas_busqueda("meli", ["x"], "SE", 10)                 # Mercado Libre no cubre Suecia
+    otro = pl.entradas_busqueda("meli", ["x"], "SE", 10)              # Mercado Libre no está en Suecia: busca en su casa (México)
+    assert otro[0]["entrada"]["country"] == "https://listado.mercadolibre.com.mx/"
     with pytest.raises(ErrorFuente):
         pl.entradas_busqueda("amazon", [], "SE", 10)                  # sin consultas no hay búsqueda
 
@@ -167,3 +175,112 @@ def test_lectores_con_la_forma_real_de_los_actores():
 def test_precios_con_coma_o_punto(texto, esperado):
     from nicho.fuentes import plataformas as pl
     assert pl._flotante(texto) == esperado
+
+
+def test_mercado_sitio_e_idioma_de_busqueda():
+    """Spec Parte 4 §2: una tienda que no está en el país busca en su sitio principal, en el idioma de ese sitio."""
+    from nicho.fuentes import plataformas as pl
+    assert pl.mercado("amazon", "MX") == ("local", "MX") and pl.mercado("amazon", "co") == ("otro", "US")
+    assert pl.mercado("meli", "US") == ("otro", "MX") and pl.mercado("walmart", "CO") == ("otro", "US") and pl.mercado("walmart", "US") == ("local", "US")
+    assert pl.mercado("aliexpress", "CO") == ("local", "CO") and pl.mercado("tiktok_shop", "SE") == ("local", "SE")
+    assert pl.sitio("amazon", "CO") == "US" and pl.sitio("meli", "SE") == "MX" and pl.sitio("meli", "CO") == "CO"
+    assert pl.idioma_busqueda("amazon", "CO") == "en" and pl.idioma_busqueda("meli", "US") == "es" and pl.idioma_busqueda("meli", "BR") == "pt"
+    assert pl.idioma_busqueda("aliexpress", "CO") == "en" and pl.idioma_busqueda("walmart", "SE") == "en"
+    assert pl.idioma_busqueda("tiktok_shop", "SE") == "sv" and pl.idioma_busqueda("amazon", "SE") == "sv"
+    for clave in pl.claves():
+        p = pl.PLATAFORMAS[clave]
+        assert p["paises"] == pl.TODOS or p["casa"] in p["paises"]          # la casa de una tienda por países es uno de sus sitios
+        assert "usd_por_corrida" in p["busqueda"] and {"usd_por_corrida", "necesita_link", "por_producto"} <= set(p["resenas"])
+
+
+def test_entradas_de_walmart_y_aliexpress():
+    from nicho.fuentes import plataformas as pl
+    e = pl.entradas_busqueda("walmart", ["water bottle time marker", "motivational water bottle"], "CO", 20)
+    assert [x["entrada"] for x in e] == [{"mode": "search", "query": "water bottle time marker", "limit": 20, "fetch_prices": False},
+                                         {"mode": "search", "query": "motivational water bottle", "limit": 20, "fetch_prices": False}]
+    assert [x["max_items"] for x in e] == [20, 20] and [x["max_usd"] for x in e] == [0.03, 0.03] and e[0]["etiqueta"] == "water bottle time marker"
+    e = pl.entradas_busqueda("aliexpress", ["water bottle time marker"], "CO", 20)
+    assert e == [{"entrada": {"searchQueries": ["water bottle time marker"], "maxItems": 20, "country": "US", "currency": "USD", "language": "en_US"},
+                  "max_items": 20, "max_usd": 0.01, "etiqueta": "water bottle time marker"}]
+    productos = [{"fuente_id": "17345973281", "url": None, "titulo": "A"},
+                 {"fuente_id": "19948220116", "url": "https://www.walmart.com/ip/x/19948220116", "titulo": "B"}]
+    e = pl.entradas_resenas("walmart", productos, "CO", 50)                # sin link también: se arma con el id
+    assert e == [{"entrada": {"products": ["https://www.walmart.com/ip/17345973281", "https://www.walmart.com/ip/19948220116"],
+                              "maxReviewsPerProduct": 50, "includeProductSummary": False}, "max_items": 100, "max_usd": 0.1, "etiqueta": "reseñas"}]
+    e = pl.entradas_resenas("aliexpress", [{"fuente_id": "3256806541493299", "url": None, "titulo": "A"}], "CO", 30)
+    assert e == [{"entrada": {"productUrls": ["https://www.aliexpress.com/item/3256806541493299.html"], "maxReviewsPerProduct": 30, "language": "en_US"},
+                  "max_items": 30, "max_usd": 0.1, "etiqueta": "reseñas"}]
+
+
+def test_otro_mercado_busca_y_trae_resenas_en_su_casa():
+    from nicho.fuentes import plataformas as pl
+    e = pl.entradas_busqueda("amazon", ["botella"], "CO", 10)               # Amazon no está en Colombia: amazon.com
+    assert e[0]["entrada"]["categoryOrProductUrls"] == [{"url": "https://www.amazon.com/s?k=botella"}] and e[0]["entrada"]["proxyCountry"] == "US"
+    assert pl.entradas_resenas("amazon", [{"fuente_id": "B0X", "url": None, "titulo": "t"}], "CO", 10)[0]["entrada"]["domainCode"] == "com"
+    e = pl.entradas_resenas("meli", [{"fuente_id": "MLM1", "url": "https://www.mercadolibre.com.mx/p/MLM1", "titulo": "t"}], "US", 10)
+    assert e[0]["entrada"]["productUrls"] == ["https://www.mercadolibre.com.mx/p/MLM1"]
+
+
+def test_lectores_de_walmart_y_aliexpress_con_datos_reales():
+    """Salida real de la verificación con centavos del 2026-09-30 (spec Parte 4 §1.1), sin autores."""
+    from nicho.fuentes import plataformas as pl
+    w = [pl.leer_producto("walmart", i, "US") for i in _fixture("walmart_busqueda.json")]
+    assert w[2] is None
+    assert w[0]["fuente_id"] == "17345973281" and w[0]["titulo"].startswith("OFEFE 3-Piece") and w[0]["estrellas"] == 5.0 and w[0]["n_resenas"] == 1
+    assert w[0]["precio"] is None and w[0]["moneda"] is None and w[0]["marca"] is None            # el buscador no trae precio (no se pide)
+    assert w[0]["url"].startswith("https://www.walmart.com/ip/") and w[0]["imagen"].startswith("https://i5.walmartimages.com/")
+    assert w[0]["extra"] == {"vendedor": "Bo Yue Xing", "en_stock": True} and w[1]["n_resenas"] == 17 and w[1]["estrellas"] == 4.6
+    r = [pl.leer_resena("walmart", i) for i in _fixture("walmart_resenas.json")]
+    assert r[2] is None
+    assert r[0]["fuente_id"] == "425493703" and r[0]["texto"].startswith("Still has plastic. I bought this because") and r[0]["puntuacion"] == 3
+    assert r[0]["fecha"] == "2026-05-14T00:00:00.000Z" and r[0]["producto"] == "5394318269" and r[0]["url"] is None and "pais" not in r[0]
+    assert r[1]["texto"].startswith("I got it as a gift") and r[1]["puntuacion"] == 1
+    assert pl.leer_resena("walmart", {**_fixture("walmart_resenas.json")[0], "rowType": "summary"}) is None     # otra fila no es reseña
+    a = [pl.leer_producto("aliexpress", i) for i in _fixture("aliexpress_busqueda.json")]
+    assert a[2] is None
+    assert a[0] == {"fuente_id": "3256806541493299", "titulo": a[0]["titulo"], "marca": None, "precio": 4.03, "moneda": "USD", "estrellas": 4.9,
+                    "n_resenas": None, "url": "https://www.aliexpress.com/item/3256806541493299.html",
+                    "imagen": "https://ae-pic-a1.aliexpress-media.com/kf/Sdd3e9bee0890460997c845cd8748643db.png", "extra": {"vendidos": 4025}}
+    assert a[0]["titulo"].startswith("1000ML Bottle With Time Marker") and a[1]["precio"] == 1.09 and a[1]["extra"] == {"vendidos": 1123}
+    r = [pl.leer_resena("aliexpress", i) for i in _fixture("aliexpress_resenas.json")]
+    assert r[2] is None
+    assert r[0]["fuente_id"] == "60097578940521292" and r[0]["pais"] == "BR" and r[0]["fecha"] == "2026-06-30" and r[0]["puntuacion"] == 4
+    assert r[0]["producto"] == "3256806541493299" and r[0]["texto"].startswith("É a segunda que compro")
+    assert r[1]["pais"] == "ES" and r[1]["fecha"] == "2026-01-03" and r[1]["puntuacion"] == 5
+    assert pl.leer_resena("aliexpress", {**_fixture("aliexpress_resenas.json")[0], "buyer_country": "Brazil"})["pais"] is None
+
+
+def test_resenas_traen_el_producto_del_link_pedido():
+    """Ola final F5: Walmart y AliExpress devuelven el link que les mandamos; de ahí sale el id del producto
+    pedido aunque `productId` sea el de una variante."""
+    from nicho.fuentes import plataformas as pl
+    w = _fixture("walmart_resenas.json")[0]
+    assert pl.leer_resena("walmart", w)["producto_pedido"] == "5394318269"
+    sin_eco = {k: v for k, v in w.items() if k != "requestedInput"}
+    assert pl.leer_resena("walmart", sin_eco)["producto_pedido"] == "5394318269"                  # cae a productUrl
+    assert pl.leer_resena("walmart", {**sin_eco, "productUrl": "https://www.walmart.com/ip/Botella-Azul/17345973281?classType=VARIANT"}
+                          )["producto_pedido"] == "17345973281"
+    assert pl.leer_resena("walmart", {k: v for k, v in sin_eco.items() if k != "productUrl"})["producto_pedido"] is None
+    a = _fixture("aliexpress_resenas.json")[0]
+    assert pl.leer_resena("aliexpress", a)["producto_pedido"] == "3256806541493299"
+    assert pl.leer_resena("aliexpress", {**a, "product_url": "https://es.aliexpress.com/item/1005006.html?spm=x"})["producto_pedido"] == "1005006"
+    assert pl.leer_resena("aliexpress", {k: v for k, v in a.items() if k != "product_url"})["producto_pedido"] is None
+    assert pl.leer_resena("aliexpress", {**a, "product_url": "javascript:alert(1)"})["producto_pedido"] is None
+
+
+def test_precio_de_aliexpress_siempre_en_dolares():
+    """Ola final F6: AliExpress busca con country=US y currency=USD: un «$» es dólar aunque el estudio sea de Colombia."""
+    from nicho.fuentes import plataformas as pl
+    base = {"productId": "3256806541493299", "title": "Botella 1L", "productUrl": "https://www.aliexpress.com/item/3256806541493299.html"}
+    p = pl.leer_producto("aliexpress", {**base, "price": "$4.03"}, "CO")
+    assert p["precio"] == 4.03 and p["moneda"] == "USD"
+    assert pl.leer_producto("aliexpress", {**base, "price": 4.03}, "MX")["moneda"] == "USD"                # número sin moneda
+    assert pl.leer_producto("aliexpress", {**base, "price": 4.03, "currency": "EUR"}, "CO")["moneda"] == "EUR"
+    assert pl.leer_producto("aliexpress", base, "CO")["moneda"] is None                                   # sin precio, sin moneda
+
+
+def test_pais_del_comprador_uk_es_gb():
+    """Ola final F8: AliExpress llama «UK» al Reino Unido; el ISO es GB."""
+    from nicho.fuentes import plataformas as pl
+    assert pl._pais_iso("UK") == "GB" and pl._pais_iso("uk") == "GB" and pl._pais_iso("BR") == "BR" and pl._pais_iso("Brazil") is None
+    assert pl.leer_resena("aliexpress", {**_fixture("aliexpress_resenas.json")[0], "buyer_country": "UK"})["pais"] == "GB"

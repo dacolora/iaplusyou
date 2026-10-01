@@ -212,3 +212,14 @@ de Recrear. Daniel eligió que el modelo que anima la versión fiel se elija en 
 - «Ver o editar los prompts» en video: `prompt_fiel` (la imagen), `prompt_animar` (la animación) y `prompt` (la
   variación), cada uno con su `<campo>_editado`.
 - Prueba real: VIVAIA con «igual» animada con Wan 3.0 + variación (≈ US$ 1,70).
+
+### 12.1 La variación en video también pasa por una imagen (2026-10-01)
+
+La prueba real de §12 mostró que la variación hecha directo con Wan 3.0 (referencia + fotos del producto) arrancaba con
+el subtítulo VIEJO de la referencia, lo deformaba a mitad y cortaba a una mano sosteniendo la chancla (de la foto del
+producto). Daniel aprobó arreglarla igual que «igual»: en video, la variación es una IMAGEN (Seedream, `armar_prompt`
+de imagen: estructura de la referencia + guía de marca + línea de textos) con el mismo `animar_despues`; el worker la
+anima con el mismo `lanzar_animacion` (video `recrear_modo="libre_video"`, título «… · variación · video»). «Animar con»
+aplica a los dos videos y cada uno cuesta imagen + animación (≈ US$ 0,90 con Wan 3.0, ≈ US$ 2,98 con Seedance 2.5, 8 s).
+El prompt de animación es el mismo para los dos. El formulario viejo de video (sin `modos_vista`) sigue haciendo un
+solo video directo con el prompt de video (`libre_como_video`).

@@ -16,6 +16,7 @@ enseguida, aunque el worker todavía no lo haya marcado `en_curso` -- y pasa a
 `lista` cuando todos los pasos son finales, o a `detenida`/`interrumpida`.
 Las claves guardadas no se traducen; las etiquetas sí (`|traducir`).
 """
+import json
 import math
 from datetime import datetime
 
@@ -27,8 +28,8 @@ from nicho.fuentes import plataformas
 
 ESTADOS_CADENA = ("consultas", "buscando", "seleccionando", "resenas", "redes", "generando", "lista", "detenida", "interrumpida")
 REDES = ("reddit", "youtube")
-PASOS_CADENA = ("consultas", "buscar:amazon", "buscar:meli", "buscar:tiktok_shop", "seleccionar", "resenas:amazon", "resenas:meli",
-                "resenas:tiktok_shop", "redes:reddit", "redes:youtube", "generar")
+PASOS_CADENA = (("consultas",) + tuple(f"buscar:{c}" for c in plataformas.PLATAFORMAS) + ("seleccionar",)
+                + tuple(f"resenas:{c}" for c in plataformas.PLATAFORMAS) + tuple(f"redes:{r}" for r in REDES) + ("generar",))
 FINALES = ("hecho", "vacio", "saltado", "error")
 ETIQUETAS_ESTADO = {"consultas": N_("consultas"), "buscando": N_("buscando"), "seleccionando": N_("seleccionando"),
                     "resenas": N_("reseñas"), "redes": N_("redes"), "generando": N_("generando"), "lista": N_("lista"),
@@ -36,15 +37,23 @@ ETIQUETAS_ESTADO = {"consultas": N_("consultas"), "buscando": N_("buscando"), "s
 ETIQUETAS_ESTADO_PASO = {"hecho": N_("hecho"), "en_curso": N_("en curso"), "error": N_("error"), "vacio": N_("sin resultados"),
                          "pendiente": N_("pendiente"), "saltado": N_("saltado")}
 ETIQUETAS_PASO = {"consultas": N_("consultas"), "buscar:amazon": N_("buscar en Amazon"), "buscar:meli": N_("buscar en Mercado Libre"),
-                  "buscar:tiktok_shop": N_("buscar en TikTok Shop"), "seleccionar": N_("elegir productos"),
+                  "buscar:tiktok_shop": N_("buscar en TikTok Shop"), "buscar:walmart": N_("buscar en Walmart"),
+                  "buscar:aliexpress": N_("buscar en AliExpress"), "seleccionar": N_("elegir productos"),
                   "resenas:amazon": N_("reseñas de Amazon"), "resenas:meli": N_("opiniones de Mercado Libre"),
-                  "resenas:tiktok_shop": N_("reseñas de TikTok Shop"), "redes:reddit": N_("Reddit"), "redes:youtube": N_("YouTube"),
+                  "resenas:tiktok_shop": N_("reseñas de TikTok Shop"), "resenas:walmart": N_("reseñas de Walmart"),
+                  "resenas:aliexpress": N_("reseñas de AliExpress"), "redes:reddit": N_("Reddit"), "redes:youtube": N_("YouTube"),
                   "generar": N_("avatares")}
 TOPES_DEFECTO = {"consultas": 3, "productos_por_consulta": 20, "productos_elegidos": 15, "resenas_por_producto": 100}
 LIMITES = {"consultas": (1, 4), "productos_por_consulta": (5, 40), "productos_elegidos": (3, 30), "resenas_por_producto": (20, 200)}
 MAX_FILAS_SELECCION = 300
-MAX_TOKENS_CONSULTAS = 400
-MAX_TOKENS_SELECCION = 6000
+# Topes de salida de las dos llamadas -- y también la salida que cuenta el estimado
+# (`_tokens_claude`): el pensamiento adaptativo de claude-sonnet-5 se cobra como salida y nunca
+# puede pasar de `max_tokens` (medido en la prueba real del 2026-10-01), así que el tope ES el peor
+# caso, no una cota aparte. Van con margen: las consultas traen una lista por idioma en la misma
+# respuesta (Parte 4 §2), y la selección, 300 productos × ~25 tokens, que ya pasan de 6 000. Ninguno
+# llega al límite del SDK para una llamada sin streaming (≈ 21 333).
+MAX_TOKENS_CONSULTAS = 6000
+MAX_TOKENS_SELECCION = 16000
 IDIOMAS = plataformas.IDIOMA_POR_PAIS
 PLATAFORMAS_POR_PAIS = {clave: plataformas.PLATAFORMAS[clave]["paises"] for clave in plataformas.PLATAFORMAS}
 
@@ -81,6 +90,19 @@ def orden_pasos(plataformas_elegidas, redes_elegidas):
     p = [x for x in (plataformas_elegidas or []) if x in plataformas.PLATAFORMAS]
     r = [x for x in (redes_elegidas or []) if x in REDES]
     return ["consultas"] + [f"buscar:{x}" for x in p] + ["seleccionar"] + [f"resenas:{x}" for x in p] + [f"redes:{x}" for x in r] + ["generar"]
+
+
+def idiomas_necesarios(pais, plataformas_elegidas):
+    """Idiomas en que se escriben las búsquedas (spec Parte 4 §2): primero el
+    del país (Reddit, YouTube y las tiendas locales), después el de cada tienda
+    que busca en otro (de otro mercado, o AliExpress en inglés); sin repetir."""
+    salida = [plataformas.idioma(pais)]
+    for clave in plataformas_elegidas or []:
+        if clave in plataformas.PLATAFORMAS:
+            codigo = plataformas.idioma_busqueda(clave, pais)
+            if codigo not in salida:
+                salida.append(codigo)
+    return salida
 
 
 def estado_por_paso(paso):
@@ -198,15 +220,17 @@ def resumen(inv):
             "detenida_por": inv.get("detenida_por"), "pasos": pasos, "orden": _orden(inv) if inv else [], "estado": inv.get("estado"),
             "ultimo_error": inv.get("ultimo_error"), "pais": inv.get("pais"), "plataformas": inv.get("plataformas") or [],
             "redes": inv.get("redes") or [], "topes": inv.get("topes") or {}, "estimado": inv.get("estimado") or {},
+            "consultas_por_idioma": inv.get("consultas_por_idioma") or {}, "idioma_consultas": inv.get("idioma_consultas") or "",
             "iniciada_en": inv.get("iniciada_en"), "terminada_en": inv.get("terminada_en")}
 
 
 # ------------------------------------------------------------ estimado ---
 
-def _tokens_claude(n_plataformas, topes):
+def _tokens_claude(n_plataformas, topes, n_idiomas=1):
     productos = n_plataformas * topes["consultas"] * topes["productos_por_consulta"]
-    entrada = 1500 + 100 + 600 + 80 * productos
-    salida = 100 + 25 * productos
+    de_mas = max(0, int(n_idiomas) - 1)              # cada idioma de más: su lista de búsquedas en la misma llamada
+    entrada = 1500 + 100 + 600 + 80 * productos + 60 * de_mas
+    salida = MAX_TOKENS_CONSULTAS + MAX_TOKENS_SELECCION  # el peor caso real: la salida nunca pasa su tope (pensamiento incluido)
     return entrada, salida
 
 
@@ -215,20 +239,21 @@ def costo_claude(tokens_entrada, tokens_salida):
 
 
 def estimar(estudio, pais, plataformas_elegidas, redes_elegidas, topes):
-    """Desglose del peor caso: búsquedas y reseñas por plataforma (registro),
-    Claude (consultas + selección) y avatares (`estimar_costo_maximo`).
-    ErrorFuente si una plataforma no cubre el país."""
+    """Desglose del peor caso: búsquedas y reseñas por tienda (la suma de los
+    techos de sus corridas, en el sitio que toca), Claude (consultas +
+    selección) y avatares (`estimar_costo_maximo`). Una tienda que no está en
+    el país NO se rechaza: su fila dice `mercado: "otro"` y el `sitio` donde
+    busca (spec Parte 4 §2)."""
     topes = {**TOPES_DEFECTO, **(topes or {})}
     filas, total = [], 0.0
     for clave in plataformas_elegidas or []:
-        if not plataformas.cubre(clave, pais):
-            raise plataformas.ErrorFuente(gettext("%(plataforma)s no cubre el país %(pais)s.", plataforma=plataformas.nombre(clave), pais=pais))
-        busqueda = plataformas.estimar_busqueda(clave, topes["consultas"], topes["productos_por_consulta"])
-        resenas = plataformas.estimar_resenas(clave, topes["productos_elegidos"], topes["resenas_por_producto"])
-        filas.append({"clave": clave, "nombre": plataformas.nombre(clave), "busqueda_usd": busqueda, "resenas_usd": resenas,
-                      "texto": gettext("Búsqueda + reseñas")})
+        mercado, sitio = plataformas.mercado(clave, pais)
+        busqueda = plataformas.estimar_busqueda(clave, topes["consultas"], topes["productos_por_consulta"], pais)
+        resenas = plataformas.estimar_resenas(clave, topes["productos_elegidos"], topes["resenas_por_producto"], pais)
+        filas.append({"clave": clave, "nombre": plataformas.nombre(clave), "mercado": mercado, "sitio": sitio,
+                      "busqueda_usd": busqueda, "resenas_usd": resenas, "texto": gettext("Búsqueda + reseñas")})
         total += busqueda + resenas
-    entrada, salida = _tokens_claude(len(filas), topes)
+    entrada, salida = _tokens_claude(len(filas), topes, len(idiomas_necesarios(pais, plataformas_elegidas)))
     claude_usd = _centavos(costo_claude(entrada, salida))
     avatares_usd = _centavos(avatares.estimar_costo_maximo()["usd"])
     total = _centavos(total + claude_usd + avatares_usd)
@@ -254,9 +279,45 @@ def crear_inicial(tema, pais, plataformas_elegidas, redes_elegidas, topes, estim
 
 # ---------------------------------------------------------- selección ---
 
+def _vendidos(p):
+    try:
+        return int(((p.get("extra") or {}).get("vendidos")) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _mas_resenado(p):
+    """Más reseñas primero; sin ese dato (AliExpress) desempatan los pedidos o
+    vendidos (spec Parte 4 §1.1); luego el id."""
+    return (-(p.get("n_resenas") or 0), -_vendidos(p), int(p.get("id") or 0))
+
+
+def _repartir_por_plataforma(productos, maximo):
+    """Hasta `maximo` productos tomados por turnos entre plataformas (en orden
+    de clave), cada una en su orden de `_mas_resenado`. Un corte global por
+    reseñas dejaría fuera a AliExpress, que no trae ese número, aunque sus
+    productos ya se pagaron; con una sola plataforma es el mismo orden de siempre."""
+    grupos = {}
+    for p in productos or []:
+        grupos.setdefault(str(p.get("plataforma") or ""), []).append(p)
+    colas = [iter(sorted(grupos[clave], key=_mas_resenado)) for clave in sorted(grupos)]
+    salida = []
+    while colas and len(salida) < maximo:
+        siguientes = []
+        for cola in colas:
+            if len(salida) >= maximo:
+                break
+            p = next(cola, None)
+            if p is not None:
+                salida.append(p)
+                siguientes.append(cola)
+        colas = siguientes
+    return salida
+
+
 def elegir(productos, decisiones, productos_elegidos):
     """Por plataforma, los `productos_elegidos` relevantes con más reseñas (sin
-    dato = 0; empate por id). -> {plataforma: [fuente_id, …]} solo con
+    dato = 0; empate por vendidos y luego por id). -> {plataforma: [fuente_id, …]} solo con
     plataformas que tengan alguno."""
     por_plataforma = {}
     for p in productos or []:
@@ -266,7 +327,7 @@ def elegir(productos, decisiones, productos_elegidos):
         por_plataforma.setdefault(p.get("plataforma"), []).append(p)
     salida = {}
     for clave, lista in por_plataforma.items():
-        lista.sort(key=lambda p: (-(p.get("n_resenas") or 0), int(p.get("id") or 0)))
+        lista.sort(key=_mas_resenado)
         salida[clave] = [p["fuente_id"] for p in lista[:max(1, int(productos_elegidos))]]
     return salida
 
@@ -282,13 +343,13 @@ def params_redes(red, inv):
 
 # --------------------------------------------------------------- Claude ---
 
-PROMPT_CONSULTAS = """Eres un comprador experto que busca productos en tiendas en línea (Amazon, Mercado Libre, TikTok Shop).
+PROMPT_CONSULTAS = """Eres un comprador experto que busca productos en tiendas en línea (Amazon, Mercado Libre, Walmart, AliExpress, TikTok Shop).
 Nicho o tema a investigar: {tema}
 Producto que vendemos (solo como referencia; NO busques nuestra marca): {producto}
-Mercado: {pais}. Idioma de las búsquedas: {idioma}.
+Mercado: {pais}. Idiomas de las búsquedas: {idiomas}.
 
-Escribe de {minimo} a {maximo} búsquedas cortas (2 a 6 palabras cada una), en {idioma}, tal como las escribiría un comprador en el buscador de una tienda para encontrar los productos de ese nicho y de su competencia. Sin marcas nuestras, sin comillas, sin explicaciones.
-Responde SOLO con JSON: {{"consultas": ["...", "..."]}}"""
+Para cada idioma, escribe de {minimo} a {maximo} búsquedas cortas (2 a 6 palabras cada una), en ese idioma, tal como las escribiría un comprador en el buscador de una tienda para encontrar los productos de ese nicho y de su competencia. Sin marcas nuestras, sin comillas, sin explicaciones.
+Responde SOLO con JSON, una lista por código de idioma: {formato}"""
 
 PROMPT_SELECCION = """Eres un analista de mercado. Tema del nicho: {tema}
 Producto que vendemos: {producto}
@@ -313,32 +374,67 @@ def _con_tokens(e, entrada, salida):
     return e
 
 
-def consultas_con_claude(estudio, pais, n=None):
-    """-> (consultas, tokens_entrada, tokens_salida). Entre min(2, n) y n
-    consultas limpias y sin repetir, con n = el tope aprobado (la búsqueda nunca
-    gasta más que su línea del estimado); AnalisisInvalido (con tokens) si Claude
-    no devuelve eso."""
+def _limpiar_consultas(lista, n):
+    salida, vistas = [], set()
+    for c in lista if isinstance(lista, list) else []:
+        c = " ".join(str(c or "").split()).strip(' "“”')[:80]
+        if c and c.lower() not in vistas:
+            vistas.add(c.lower())
+            salida.append(c)
+    return salida[:n]
+
+
+def _por_codigo(bruto):
+    """{código de 2 letras: [consultas]}: «ES», «en-US» o « en » cuentan como
+    «es»/«en»; dos claves del mismo idioma suman sus listas."""
+    salida = {}
+    for clave, lista in bruto.items():
+        if isinstance(lista, list):
+            salida.setdefault(str(clave).strip().lower()[:2], []).extend(lista)
+    return salida
+
+
+def consultas_por_idioma_con_claude(estudio, pais, n=None, idiomas=None):
+    """-> ({idioma: [consultas]}, tokens_entrada, tokens_salida), todo en UNA
+    llamada (spec Parte 4 §2): hasta n consultas limpias y sin repetir por
+    idioma, con n = el tope aprobado (la búsqueda nunca gasta más que su línea
+    del estimado). `idiomas[0]` (por defecto el del país) es obligatorio y pide
+    min(2, n): sin eso, AnalisisInvalido con tokens. Un idioma de más vale con
+    una sola; si no llega, queda fuera y su tienda usa las del país. Una lista
+    suelta (`{"consultas": [...]}`, la forma de la Parte 3) cuenta como la del
+    primer idioma; una respuesta sin «consultas» (`{"es": [...], …}`) también se
+    lee, y las claves se comparan por sus dos primeras letras («ES», «en-US»)."""
     minimo_tope, maximo_tope = LIMITES["consultas"]
     n = max(minimo_tope, min(int(n or TOPES_DEFECTO["consultas"]), maximo_tope))
     minimo = min(2, n)
-    idioma = plataformas.idioma(pais)
+    idiomas = list(dict.fromkeys(idiomas or [plataformas.idioma(pais)]))
+    formato = json.dumps({"consultas": {c: ["...", "..."] for c in idiomas}}, ensure_ascii=False)
     prompt = PROMPT_CONSULTAS.format(tema=(estudio.get("tema") or "").strip(), producto=(estudio.get("producto") or "").strip() or "—",
-                                     pais=pais, idioma=_idioma_texto(idioma), minimo=minimo, maximo=n)
+                                     pais=pais, idiomas=", ".join(_idioma_texto(c) for c in idiomas), minimo=minimo, maximo=n, formato=formato)
     texto, entrada, salida = avatares._llamar(prompt, MAX_TOKENS_CONSULTAS)
     try:
         data = avatares._json_objeto(texto)
     except avatares.AnalisisInvalido as e:
         raise _con_tokens(e, entrada, salida)
-    consultas, vistas = [], set()
-    for c in (data.get("consultas") or []) if isinstance(data.get("consultas"), list) else []:
-        c = " ".join(str(c or "").split()).strip(' "“”')[:80]
-        if c and c.lower() not in vistas:
-            vistas.add(c.lower())
-            consultas.append(c)
-    consultas = consultas[:n]
-    if len(consultas) < minimo:
+    bruto = data.get("consultas") if "consultas" in data else data
+    if isinstance(bruto, list):
+        bruto = {idiomas[0]: bruto}
+    bruto = _por_codigo(bruto) if isinstance(bruto, dict) else {}
+    por_idioma = {}
+    for k, codigo in enumerate(idiomas):
+        lista = _limpiar_consultas(bruto.get(str(codigo).strip().lower()[:2]), n)
+        if len(lista) >= (minimo if k == 0 else 1):
+            por_idioma[codigo] = lista
+    if idiomas[0] not in por_idioma:
         raise _con_tokens(avatares.AnalisisInvalido(gettext("Claude devolvió menos de %(n)s consultas.", n=minimo)), entrada, salida)
-    return consultas, entrada, salida
+    return por_idioma, entrada, salida
+
+
+def consultas_con_claude(estudio, pais, n=None):
+    """Las búsquedas en el idioma del país (la forma de la Parte 3) -> (consultas, tokens_entrada, tokens_salida)."""
+    codigo = plataformas.idioma(pais)
+    por_idioma, entrada, salida = consultas_por_idioma_con_claude(estudio, pais, n, [codigo])
+    return por_idioma[codigo], entrada, salida
 
 
 def _fila_producto(p):
@@ -349,9 +445,10 @@ def _fila_producto(p):
 
 def seleccion_con_claude(estudio, productos):
     """-> ({id: {"relevante", "motivo"}}, tokens_entrada, tokens_salida) para
-    los productos dados (máximo MAX_FILAS_SELECCION, los de más reseñas
-    primero); ids que Claude no menciona quedan fuera del dict."""
-    lista = sorted(productos or [], key=lambda p: (-(p.get("n_resenas") or 0), int(p.get("id") or 0)))[:MAX_FILAS_SELECCION]
+    los productos dados: máximo MAX_FILAS_SELECCION, por turnos entre
+    plataformas y en cada una los de más reseñas primero
+    (`_repartir_por_plataforma`); ids que Claude no menciona quedan fuera del dict."""
+    lista = _repartir_por_plataforma(productos, MAX_FILAS_SELECCION)
     validos = {int(p["id"]) for p in lista}
     prompt = PROMPT_SELECCION.format(tema=(estudio.get("tema") or "").strip(), producto=(estudio.get("producto") or "").strip() or "—",
                                      pais=(estudio.get("pais") or ""),

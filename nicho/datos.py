@@ -19,7 +19,7 @@ from sprints import datos as sprints_datos
 from sprints.sugerencias import COLORES
 
 ESTADOS_ESTUDIO = ("armando", "generando", "revisando")
-FUENTES_PLATAFORMA = ("amazon", "meli", "tiktok_shop")   # claves de nicho.fuentes.plataformas (Parte 3)
+FUENTES_PLATAFORMA = ("amazon", "meli", "tiktok_shop", "walmart", "aliexpress")   # claves de nicho.fuentes.plataformas (Partes 3 y 4)
 FUENTES = ("texto", "csv", "reddit", "youtube", "apify") + FUENTES_PLATAFORMA
 PAISES_ESTUDIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE", "UY", "EC", "SE", "GB", "DE", "FR", "IT", "NL", "CA", "AU", "IN", "JP", "AE")
 NOMBRES_PAIS = {"CO": N_("Colombia"), "MX": N_("México"), "US": N_("Estados Unidos"), "ES": N_("España"), "BR": N_("Brasil"),
@@ -161,7 +161,28 @@ def actualizar_estudio(cliente, estudio_id, /, **campos):
     if "catalogo_id" in campos:
         campos["catalogo_id"] = _texto(campos["catalogo_id"], 80) or None
     with db.conectar() as con:
-        return _actualizar(con, db.estudio, estudio_id, cliente, _ESTUDIO_COLS, campos)
+        ok = _actualizar(con, db.estudio, estudio_id, cliente, _ESTUDIO_COLS, campos)
+        if ok and "pais" in campos:
+            _remarcar_mercado(con, cliente, estudio_id, campos["pais"])
+        return ok
+
+
+def _remarcar_mercado(con, cliente, estudio_id, pais):
+    """`extra.mercado` de un comentario es relativo al país del estudio (spec
+    Parte 4 §3): si el estudio cambia de país («Investigar de nuevo», «Editar
+    estudio»), en la misma transacción cada comentario con `extra.pais` queda
+    `local` si es el país nuevo y si no `otro` (la regla de
+    `FuentePlataforma.recolectar`). Solo se escriben las filas que cambian."""
+    c = db.comentario
+    pais, ahora = (pais or "").upper(), db.ahora()
+    filas = con.execute(sa.select(c.c.id, c.c.extra).where(c.c.cliente == cliente, c.c.estudio_id == estudio_id)).all()
+    for f in filas:
+        ex = f.extra if isinstance(f.extra, dict) else {}
+        if not ex.get("pais"):
+            continue
+        mercado = "local" if str(ex["pais"]).upper() == pais else "otro"
+        if ex.get("mercado") != mercado:
+            con.execute(c.update().where(c.c.id == f.id).values(actualizado_en=ahora, extra={**ex, "mercado": mercado}))
 
 
 def archivar_estudio(cliente, estudio_id, archivado=True):
@@ -370,6 +391,27 @@ def urls_de_comentarios(cliente, ids):
     c = db.comentario
     with db.conectar() as con:
         return {int(f.id): f.url for f in con.execute(sa.select(c.c.id, c.c.url).where(c.c.cliente == cliente, c.c.id.in_(ids)))}
+
+
+def _paises_de_filas(filas):
+    salida = {}
+    for f in filas:
+        ex = f.extra if isinstance(f.extra, dict) else {}
+        if ex.get("mercado") == "otro" and ex.get("pais"):
+            salida[int(f.id)] = str(ex["pais"])[:2].upper()
+    return salida
+
+
+def paises_otro_mercado_de(cliente, ids):
+    """{id: país} de esos comentarios (de cualquier estudio del proyecto) que son
+    de otro mercado (`extra.mercado == "otro"`, spec Parte 4 §3), para la etiqueta
+    de las citas que los usan."""
+    ids = [int(i) for i in ids or []]
+    if not ids:
+        return {}
+    c = db.comentario
+    with db.conectar() as con:
+        return _paises_de_filas(con.execute(sa.select(c.c.id, c.c.extra).where(c.c.cliente == cliente, c.c.id.in_(ids))))
 
 
 # ----------------------------------------------------------- avatares ---

@@ -14,8 +14,9 @@ con la API v2 de Apify. API v2 verificada 2026-09-20:
   GET  /v2/datasets/<id> -> data.itemCount
 Una corrida se paga aunque termine mal, así que después de `arrancar()` nada
 se abandona: se sondea hasta un estado terminal (o hasta que vence el reloj
-local) y el dataset se lee igual, tolerando fallos pasajeros — perder la
-lectura de un dataset ya pagado sería peor que reintentarla.
+local) y el dataset se lee igual, tolerando fallos pasajeros (un 200 cuyo
+cuerpo no es JSON es uno más) — perder la lectura de un dataset ya pagado
+sería peor que reintentarla.
 
 Los mensajes se muestran a la persona (nunca van a Claude): pasan por
 `gettext` y salen en el idioma del contexto (el del proyecto en el worker).
@@ -46,6 +47,24 @@ def _mensaje_apify(r):
         return str(((r.json() or {}).get("error") or {}).get("message") or "")[:200]
     except (ValueError, AttributeError):
         return ""
+
+
+def _cuerpo(r):
+    """El JSON de una respuesta como dict: `{}` si es JSON pero no un objeto
+    (`null`, una lista). Un cuerpo que no es JSON sube ValueError y quien llama
+    decide: nunca debe tumbar el sondeo de una corrida que ya pudo cobrar."""
+    cuerpo = r.json()
+    return cuerpo if isinstance(cuerpo, dict) else {}
+
+
+def _leer_estado(r):
+    """(status o None, "") de un sondeo que respondió 200, o (None, motivo) si
+    el cuerpo no es JSON: cuenta como una lectura mala más, igual que un error HTTP."""
+    try:
+        data = _cuerpo(r).get("data")
+    except ValueError:
+        return None, gettext("respuesta ilegible")
+    return (data if isinstance(data, dict) else {}).get("status") or None, ""
 
 
 def frase_estado(estado):
@@ -81,7 +100,8 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
     SIEMPRE antes de decidir si hace falta lanzar el error de "sin ids". No
     es una señal exclusiva de error: sirve para que quien llama guarde el id
     de una corrida que ya pudo cobrar, tanto si `arrancar` devuelve como si
-    termina lanzando."""
+    termina lanzando. Un 2xx cuyo cuerpo no es JSON no trae ids: ErrorFuente
+    sin llamar a `on_ids` (la corrida no consta como lanzada)."""
     r = _http.pedir(sesion, "POST", f"{URL_API}/actors/{actor}/runs", "Apify", headers=cabeceras(token),
                     params={"timeout": MAX_ESPERA_S, "maxItems": max_items, "maxTotalChargeUsd": max_total_charge_usd},
                     json=entrada)
@@ -92,7 +112,14 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
         raise ErrorFuente(gettext("Apify rechazó la entrada del actor: %(motivo)s", motivo=motivo))
     if r.status_code not in (200, 201):
         raise ErrorFuente(gettext("Apify no arrancó la corrida (%(codigo)s).", codigo=r.status_code))
-    corrida = (r.json() or {}).get("data") or {}
+    try:
+        corrida = _cuerpo(r).get("data")
+    except ValueError:
+        # Sin cuerpo legible no hay ids que guardar (no se llama a `on_ids`): para quien llama, la corrida no
+        # consta como lanzada; si Apify sí la arrancó, solo la consola lo dice.
+        raise ErrorFuente(gettext("Apify respondió sin datos legibles al arrancar la corrida (%(codigo)s); "
+                                  "revisa en console.apify.com si arrancó.", codigo=r.status_code))
+    corrida = corrida if isinstance(corrida, dict) else {}
     run_id, dataset_id = corrida.get("id") or None, corrida.get("defaultDatasetId") or None
     if on_ids:
         on_ids(run_id, dataset_id)
@@ -124,6 +151,9 @@ def sondear(sesion, token, run_id, estado, etapa_leyendo, avanzar=None):
             malo = "" if r.status_code == 200 else f"HTTP {r.status_code}"
         except ErrorFuente as e:                            # sin URL ni cabeceras: nunca lleva el token
             r, malo = None, e.usuario or gettext("sin respuesta")
+        status = None
+        if not malo:
+            status, malo = _leer_estado(r)                  # un 200 que no es JSON también es una lectura mala
         if malo:
             fallos, ultimo = fallos + 1, malo
             if fallos >= MAX_FALLOS_SONDEO:
@@ -132,7 +162,7 @@ def sondear(sesion, token, run_id, estado, etapa_leyendo, avanzar=None):
                                           n=MAX_FALLOS_SONDEO, ultimo=ultimo, corrida=run_id))
             continue
         fallos = 0
-        estado = ((r.json() or {}).get("data") or {}).get("status") or estado
+        estado = status or estado
         avanzar(etapa_leyendo, gettext("Apify: %(estado)s · corrida %(corrida)s", estado=estado, corrida=run_id))
     return estado
 
@@ -238,6 +268,10 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
                 malo = "" if r.status_code == 200 else f"HTTP {r.status_code}"
             except ErrorFuente as e:                            # sin URL ni cabeceras: nunca lleva el token
                 r, malo = None, e.usuario or gettext("sin respuesta")
+            status = None
+            if not malo:
+                # un 200 que no es JSON es una lectura mala más: nunca una excepción que pierda el gasto del lote
+                status, malo = _leer_estado(r)
             if malo:
                 v["fallos"] += 1
                 if v["fallos"] >= MAX_FALLOS_SONDEO:
@@ -245,7 +279,7 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
                     del vivas[i]
                 continue
             v["fallos"] = 0
-            reg["estado"] = ((r.json() or {}).get("data") or {}).get("status") or reg["estado"]
+            reg["estado"] = status or reg["estado"]
             hechas = total - len(vivas) - len(pendientes)
             avanzar(etapa, gettext("Apify: %(estado)s · corrida %(corrida)s (%(hechas)s/%(total)s)",
                                    estado=reg["estado"], corrida=reg["run_id"], hechas=hechas, total=total))
