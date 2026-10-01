@@ -16,14 +16,15 @@ FIX = os.path.join(os.path.dirname(__file__), "fixtures", "documentos", "video_b
 def medios(tmp_path_factory):
     carpeta = tmp_path_factory.mktemp("medios_editor")
     clon = str(carpeta / "clon.mp4"); voz = str(carpeta / "voz.wav"); musica = str(carpeta / "musica.wav")
-    png = str(carpeta / "t1.png"); foto = str(carpeta / "foto.png")
+    png = str(carpeta / "t1.png"); foto = str(carpeta / "foto.png"); horizontal = str(carpeta / "horizontal.mp4")
     base = [cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y"]
     subprocess.run(base + ["-f", "lavfi", "-i", "testsrc2=size=540x960:rate=30", "-t", "8", "-pix_fmt", "yuv420p", clon], check=True)
+    subprocess.run(base + ["-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30", "-t", "4", "-pix_fmt", "yuv420p", horizontal], check=True)
     subprocess.run(base + ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "7", voz], check=True)
     subprocess.run(base + ["-f", "lavfi", "-i", "sine=frequency=220:sample_rate=44100", "-t", "4", musica], check=True)
     Image.new("RGBA", (400, 200), (255, 0, 0, 200)).save(png)
     Image.new("RGB", (800, 600), (0, 128, 255)).save(foto)
-    return {1: clon, 2: voz, 3: musica, "png:t1": png, "foto": foto}
+    return {1: clon, 2: voz, 3: musica, 4: horizontal, "png:t1": png, "foto": foto}
 
 
 def _doc():
@@ -64,6 +65,21 @@ def test_sin_libass_se_omiten_subtitulos_y_avisa(tmp_path, medios, monkeypatch):
     etapas = []
     out = motor.renderizar(_doc(), {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"), on_etapa=etapas.append)
     assert out["con_ass"] is False and any("libass" in e for e in etapas)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("transicion", [None, {"tipo": "fundido", "duracion_ms": 500}])
+def test_un_video_horizontal_entre_verticales_se_renderiza(tmp_path, medios, transicion):
+    # Un video horizontal subido a una edición vertical: al llevarlo al
+    # cuadro, el `scale` deja una proporción de píxel apenas distinta de 1
+    # (3413:3414) y `concat` rechazaba el corte seco («Nothing was written»).
+    doc = _doc()
+    doc["pistas"][0]["clips"][0]["transicion"] = transicion
+    doc["pistas"][0]["clips"][1].update(material_id=4, recorte={"desde_ms": 0, "hasta_ms": 3500})
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 7.0) <= 0.3 and "audio" in streams
 
 
 @pytest.mark.slow

@@ -313,12 +313,15 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             # Entrada propia con búsqueda de entrada: `-ss` antes de `-i` es
             # exacto al transcodificar (ffmpeg descarta los cuadros previos
             # al punto pedido) y `-t` acota lo que se lee.
+            # `setsar=1`: un video de otra proporción (horizontal en una
+            # edición vertical) sale del scale+crop con píxeles de 3413:3414
+            # y `concat` rechaza el corte seco con el clip vecino.
             idx = len(plan.entradas)
             plan.entradas.append({"ruta": rutas[cl["material_id"]], "opciones": ["-ss", _s(desde), "-t", _s(hasta - desde)]})
             setpts = "setpts=PTS-STARTPTS" if vel == 1.0 else f"setpts=(PTS-STARTPTS)/{vel}"
             partes.append(f"[{idx}:v]{setpts},"
                           f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},fps={fps}"
-                          f"{_zoompan(cl, corte_ini, fps, ancho, alto)},format=yuv420p[v{i}]")
+                          f"{_zoompan(cl, corte_ini, fps, ancho, alto)},setsar=1,format=yuv420p[v{i}]")
         etiquetas.append((f"[v{i}]", cl))
     # Relleno: si la principal termina antes que el tramo (la voz sigue), el
     # último cuadro se clona hasta `dur_tramo`. Cero para una imagen.
