@@ -36,11 +36,23 @@ def test_las_operaciones_del_navegador_dejan_documentos_validos():
             pytest.fail(f"{caso['nombre']}: {e}")
         assert json.dumps(normal["pistas"][0]["clips"], sort_keys=True) == antes, (
             f"{caso['nombre']}: el navegador no normalizó las transiciones como el compilador")
-        # lo que se agrega (y, capa 4c, lo que se mueve, alarga o duplica)
-        # nunca alarga el video: termina con la principal
-        if caso["nombre"].startswith(("agregar_", "no_alarga_")):
+        # lo que se agrega (y, capa 4c, lo que se mueve, alarga o duplica;
+        # capa 5b, lo que sigue a su clip o se recorta por D10.5) nunca
+        # alarga el video: termina con la principal
+        if caso["nombre"].startswith(("agregar_", "no_alarga_", "vinculado_")):
             fin_principal = sum(c["duracion_ms"] for c in doc["pistas"][0]["clips"])
             assert documento.duracion_ms(doc) == fin_principal, f"{caso['nombre']}: el video quedó más largo"
+        # capa 5b (D10.6): una capa movida que pisaba a otra de su misma fila
+        # se reparte a una fila libre — ningún clip de una pista de texto
+        # pisa a otro de su misma pista.
+        if caso["nombre"].startswith("vinculado_"):
+            for p in doc["pistas"]:
+                if p["tipo"] != "texto":
+                    continue
+                ordenados = sorted(p["clips"], key=lambda c: c["inicio_ms"])
+                for a, b in zip(ordenados, ordenados[1:]):
+                    assert a["inicio_ms"] + a["duracion_ms"] <= b["inicio_ms"], (
+                        f"{caso['nombre']}: {a['id']} pisa a {b['id']} en la pista {p['id']}")
         # capa 4c: los fundidos de cada audio caben en su clip (si no, el
         # render pide `afade ... st=<negativo>` y ffmpeg falla)
         for p in doc["pistas"]:

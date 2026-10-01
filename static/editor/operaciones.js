@@ -135,22 +135,22 @@ export function idNuevo(doc, base) {
 }
 
 // La raíz de un id generado por idNuevo (quita el "_N" final): "v0_2" -> "v0".
-function raizId(id) {
+export function raizId(id) {
   return String(id).replace(/_\d+$/, "");
 }
 
 // El fin del video: donde termina la principal (0 si no hay principal de
 // video). Más allá, el render congela el último cuadro, así que nada de lo
 // que se agrega, mueve, alarga o duplica pasa de ahí (capa 4b §2, capa 4c).
-function finPrincipal(doc) {
+export function finPrincipal(doc) {
   const p = pistaPrincipal(doc);
   return p && p.tipo === "video" ? p.clips.reduce((m, c) => Math.max(m, c.inicio_ms + c.duracion_ms), 0) : 0;
 }
 
 // La primera pista de cada tipo que crea una capa nueva (agregarImagen/
 // Audio/Texto usan las mismas).
-const BASE_PISTA = { texto: "p_texto", imagen: "p_imagen", audio: "p_audio", superpuesto: "p_superpuesto" };
-const mismoRolQue = (rol) => (p) => p.clips.every((c) => (c.rol_audio ?? "subida") === rol);
+export const BASE_PISTA = { texto: "p_texto", imagen: "p_imagen", audio: "p_audio", superpuesto: "p_superpuesto" };
+export const mismoRolQue = (rol) => (p) => p.clips.every((c) => (c.rol_audio ?? "subida") === rol);
 
 // Id de una pista nueva: `base` si está libre, si no `base_2`, `base_3`...
 // (mismo estilo que idNuevo, pero en el espacio de ids de PISTA, separado
@@ -171,7 +171,7 @@ function pistaNueva(doc, tipo, base) {
 // sincronizarSonido en cada normalizar); `acepta(pista)` pone otra condición
 // (el audio: solo una pista con clips de su mismo rol — una música nunca cae
 // en el hueco de la voz, que en la línea de tiempo dice «Voz»).
-function pistaLibre(doc, tipo, base, tMs, dMs, excluir = [], acepta = () => true) {
+export function pistaLibre(doc, tipo, base, tMs, dMs, excluir = [], acepta = () => true) {
   for (const p of doc.pistas) {
     if (p.tipo !== tipo || excluir.includes(p.id) || !acepta(p)) continue;
     const ocupado = p.clips.some((c) => tMs < c.inicio_ms + c.duracion_ms && c.inicio_ms < tMs + dMs);

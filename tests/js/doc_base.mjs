@@ -47,3 +47,24 @@ export function docConVozYPalabras() {
   return d;
 }
 export const INFO_PALABRAS = { ...DURACIONES, 2: { duracion_ms: 3000, palabras: [{ t_ms: 0, dur_ms: 400, texto: "Hola" }] } };
+
+// Capa 5b (Tarea 2, D10): la misma base, más un segundo texto (t2, en la
+// MISMA pista que t1: lo normal, para forzar colisiones al seguir) y una
+// música (m1, su propia pista p_musica) — para probar que una capa
+// SIGUE a su clip, que la música se recorta por la regla «nada alarga» y
+// que dos capas de la misma fila que terminan en el mismo sitio se
+// reparten entre filas.
+export function docVinculos() {
+  const d = docBase();
+  d.pistas[1].clips.push({
+    id: "t2", inicio_ms: 5000, duracion_ms: 1000, texto: { literal: "Precio" }, estilo: { fuente: "Inter-Bold" },
+    transform: { ...T }, keyframes: [], animacion: null,
+  });
+  d.pistas.push({
+    id: "p_musica", tipo: "audio", bloqueada: false, silenciada: false, oculta: false, clips: [
+      { id: "m1", inicio_ms: 0, duracion_ms: 8000, material_id: 2, rol_audio: "musica",
+        recorte: { desde_ms: 0, hasta_ms: 8000 }, velocidad: 1, audio: { ...A } },
+    ],
+  });
+  return d;
+}
