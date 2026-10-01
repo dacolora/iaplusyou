@@ -183,7 +183,10 @@ def test_fallo_a_mitad_de_tramos_no_deja_parciales(tmp_path, monkeypatch):
     monkeypatch.setattr(r, "ejecutar", _ejecutar_falso)
     # ejecutar() está mockeado (nunca toca ffmpeg ni disco salvo el archivo
     # falso de arriba), así que las rutas no necesitan existir de verdad.
-    rutas = {1: "/fake/clon.mp4", 2: "/fake/voz.wav", 3: "/fake/musica.wav", "png:t1": "/fake/t1.png"}
+    # "ass": con libass (el VPS) el compilador escribe ahí los subtítulos; sin
+    # esta ruta la prueba fallaba con KeyError solo en el servidor.
+    rutas = {1: "/fake/clon.mp4", 2: "/fake/voz.wav", 3: "/fake/musica.wav", "png:t1": "/fake/t1.png",
+             "ass": str(tmp_path / "s.ass")}
     salida = str(tmp_path / "f.mp4")
     with pytest.raises(RuntimeError, match="ffmpeg murió"):
         motor.renderizar(_doc(), rutas, salida)
