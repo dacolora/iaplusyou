@@ -256,7 +256,11 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
             costo += float(c or 0.0)
             _capa(capas, "guion", "anthropic", params, c)
             voces = None
-            hay_pista_voz = any(p["tipo"] == "audio" and any(cl.get("rol_audio") == "voz" for cl in p["clips"]) for p in doc["pistas"])
+            # D11 (capa 5a): solo cuentan las voces DEL GUION (con `bloque`)
+            # — una voz agregada en el editor no debe pagarse ni traducirse
+            # aquí.
+            hay_pista_voz = any(p["tipo"] == "audio" and any(borrador.es_voz_de_guion(cl) for cl in p["clips"])
+                               for p in doc["pistas"])
             if con_voz and hay_pista_voz:
                 carpeta = _carpeta_borrador(cliente, edicion.get("cf_id") or f"ed{edicion['id']}")
                 try:

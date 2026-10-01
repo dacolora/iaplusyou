@@ -460,3 +460,101 @@ def test_resolver_quita_el_png_del_clip_de_precio_que_desaparece():
     con_precio = d.resolver(v, "es", "CO")
     assert con_precio["pngs"] == {"t1": 55}
     assert 55 in con_precio["materiales"]
+
+
+# --- subtítulos (editor, capa 5a, spec §2.1) --------------------------------
+
+def test_subtitulos_defaults_para_un_documento_viejo():
+    sub = d.validar(cargar("video_basico.json"))["subtitulos"]
+    assert sub["escala"] == 1.0 and sub["resaltado"] is None and sub["visibles"] is True
+    assert sub["fuentes"] == {} and sub["correcciones"] == {} and sub["estilo_id"] == "karaoke"
+
+
+def test_subtitulos_estilo_desconocido_se_normaliza_a_karaoke():
+    doc = cargar("video_basico.json")
+    doc["subtitulos"]["estilo_id"] = "raro"
+    assert d.validar(doc)["subtitulos"]["estilo_id"] == "karaoke"
+
+
+def test_subtitulos_escala_resaltado_y_visibles_validan_tipo():
+    doc = cargar("video_basico.json")
+    doc["subtitulos"]["escala"] = 2.0
+    with pytest.raises(d.DocumentoInvalido, match="escala"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["subtitulos"]["resaltado"] = "#FFD40080"      # con alfa: no se admite aquí (D7)
+    with pytest.raises(d.DocumentoInvalido, match="resaltado"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["subtitulos"]["visibles"] = "si"
+    with pytest.raises(d.DocumentoInvalido, match="visibles"):
+        d.validar(doc)
+
+
+def test_subtitulos_fuentes_validan_tipo_material_id_y_repetidas():
+    doc = cargar("video_basico.json")
+    doc["subtitulos"]["fuentes"] = {"es": [{"tipo": "otro"}]}
+    with pytest.raises(d.DocumentoInvalido, match="fuentes"):
+        d.validar(doc)
+    doc["subtitulos"]["fuentes"] = {"es": [{"tipo": "material"}]}
+    with pytest.raises(d.DocumentoInvalido, match="material_id"):
+        d.validar(doc)
+    doc["subtitulos"]["fuentes"] = {"es": [{"tipo": "voz", "material_id": 3}]}
+    with pytest.raises(d.DocumentoInvalido, match="material_id"):
+        d.validar(doc)
+    doc["subtitulos"]["fuentes"] = {"es": [{"tipo": "voz"}, {"tipo": "voz"}]}
+    with pytest.raises(d.DocumentoInvalido, match="repetida"):
+        d.validar(doc)
+    doc["subtitulos"]["fuentes"] = {"es": [{"tipo": "material", "material_id": i} for i in range(1, 10)]}
+    with pytest.raises(d.DocumentoInvalido, match="8 fuentes"):
+        d.validar(doc)
+    doc["subtitulos"]["fuentes"] = {"es": [{"tipo": "voz"}],
+                                    "en": [{"tipo": "sonido"}, {"tipo": "material", "material_id": 2}]}
+    v = d.validar(doc)
+    assert v["subtitulos"]["fuentes"]["en"][1] == {"tipo": "material", "material_id": 2}
+
+
+def test_subtitulos_correcciones_validan_clave_indice_y_largo():
+    doc = cargar("video_basico.json")
+    doc["subtitulos"]["correcciones"] = {"0": {}}
+    with pytest.raises(d.DocumentoInvalido, match="correcciones"):
+        d.validar(doc)
+    doc["subtitulos"]["correcciones"] = {"4": {"x": "a"}}
+    with pytest.raises(d.DocumentoInvalido, match="índice"):
+        d.validar(doc)
+    doc["subtitulos"]["correcciones"] = {"4": {"0": "x" * 121}}
+    with pytest.raises(d.DocumentoInvalido, match="120"):
+        d.validar(doc)
+    doc["subtitulos"]["correcciones"] = {"4": {"0": "Creatv", "1": ""}}
+    v = d.validar(doc)
+    assert v["subtitulos"]["correcciones"] == {"4": {"0": "Creatv", "1": ""}}
+
+
+def test_subtitulos_palabra_con_texto_no_str_es_invalido():
+    doc = cargar("video_basico.json")
+    doc["subtitulos"]["palabras"]["es"][0]["texto"] = 5
+    with pytest.raises(d.DocumentoInvalido, match="texto"):
+        d.validar(doc)
+
+
+def test_idioma_de_clip_de_audio_valida_forma_y_no_va_en_otros_tipos():
+    doc = cargar("video_basico.json")
+    doc["pistas"][2]["clips"][0]["idioma"] = "esp"
+    with pytest.raises(d.DocumentoInvalido, match="idioma"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pistas"][2]["clips"][0]["idioma"] = "en"
+    assert d.validar(doc)["pistas"][2]["clips"][0]["idioma"] == "en"
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["idioma"] = "en"            # p_texto: no es audio
+    with pytest.raises(d.DocumentoInvalido, match="idioma"):
+        d.validar(doc)
+
+
+def test_resolver_quita_clip_de_audio_de_otro_idioma():
+    doc = cargar("video_basico.json")
+    doc["pistas"][2]["clips"][0]["idioma"] = "en"
+    v = d.validar(doc)
+    assert d.resolver(v, "es", "CO")["pistas"][2]["clips"] == []
+    en = d.resolver(v, "en", "US")
+    assert en["pistas"][2]["clips"][0]["material_id"] == 2

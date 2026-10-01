@@ -147,6 +147,31 @@ def test_receta_cambia_con_guion_voz_musica_o_formato_y_no_con_el_precio():
     assert r == b.receta({**GUION, "precio_base": 999}, o, "9:16")     # precio_base no compone
 
 
+def test_armar_documento_con_voces_deja_la_fuente_voz_y_agregar_destino_suma_el_idioma():
+    doc = b.armar_documento(GUION, SEGMENTOS, CLON, _voces(), {"id": 20}, MARCA, "9:16", OPCIONES)
+    assert doc["subtitulos"]["fuentes"] == {"es": [{"tipo": "voz"}]}
+    g_en = {**GUION, "idioma": "en", "pais": "US",
+            "bloques": [{**bl, "texto_pantalla": bl["texto_pantalla"] + " EN", "texto_voz": bl["texto_voz"] + " EN"} for bl in GUION["bloques"]]}
+    doc2 = b.agregar_destino(doc, g_en, _voces(base=50, dur=1100, idioma="en"), 24.99)
+    assert doc2["subtitulos"]["fuentes"] == {"es": [{"tipo": "voz"}], "en": [{"tipo": "voz"}]}
+
+
+def test_voz_del_editor_sin_bloque_no_le_pone_por_destino_y_no_estorba_tiene_destino():
+    doc = b.armar_documento(GUION, SEGMENTOS, CLON, _voces(), {"id": 20}, MARCA, "9:16", OPCIONES)
+    doc["pistas"].append({"id": "p_voz_editor", "tipo": "audio", "bloqueada": False, "silenciada": False, "oculta": False,
+                          "clips": [{"id": "voz_editor", "inicio_ms": 0, "duracion_ms": 500, "material_id": 99,
+                                     "rol_audio": "voz", "recorte": {"desde_ms": 0, "hasta_ms": 500}, "velocidad": 1.0,
+                                     "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}}]})
+    doc = d.validar(doc)
+    assert b.tiene_destino(doc, "es", "CO")
+    g_en = {**GUION, "idioma": "en", "pais": "US",
+            "bloques": [{**bl, "texto_pantalla": bl["texto_pantalla"] + " EN", "texto_voz": bl["texto_voz"] + " EN"} for bl in GUION["bloques"]]}
+    doc2 = b.agregar_destino(doc, g_en, _voces(base=50, dur=1100, idioma="en"), 24.99)
+    editor_clip = [c for p in doc2["pistas"] if p["id"] == "p_voz_editor" for c in p["clips"]][0]
+    assert "por_destino" not in editor_clip
+    assert b.tiene_destino(doc2, "en", "US")
+
+
 def test_formato_y_color_de_marca():
     assert b.formato_de("9:16") == "9:16" and b.formato_de("4:3") == "16:9" and b.formato_de("3:4") == "4:5"
     assert b.formato_de(None) == "9:16" and b.formato_de("raro") == "9:16"

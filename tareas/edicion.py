@@ -29,7 +29,7 @@ import ediciones
 import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, mezcla, motor, rasterizar
+from final_edition import cortes, mezcla, motor, rasterizar, subtitulos_fuente
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from idiomas import N_
@@ -86,6 +86,21 @@ def _carpeta(cliente, nombre):
     c = os.path.join(raiz, cliente, "ediciones", nombre)
     os.makedirs(c, exist_ok=True)
     return c
+
+
+def _palabras_por_material(cliente, resuelto):
+    """`{material_id: palabras}` (D1/D5, capa 5a) solo para los materiales
+    del documento RESUELTO que ya tienen `extra.palabras` (una lista: una
+    transcripción vacía cuenta como hecha). Lo que usa
+    `subtitulos_fuente.derivar` antes de renderizar."""
+    salida = {}
+    for mid in resuelto.get("materiales") or []:
+        mat = materiales.obtener(cliente, mid)
+        palabras = (mat or {}).get("extra") or {}
+        palabras = palabras.get("palabras")
+        if isinstance(palabras, list):
+            salida[int(mid)] = palabras
+    return salida
 
 
 def preparar_rutas(cliente, doc, carpeta):
@@ -170,6 +185,10 @@ def renderizar_final(cliente, final_id, version_id, idioma, pais, avisar=None):
     os.makedirs(carpeta, exist_ok=True)
     avisar(ETAPAS_EDICION[0][0])
     doc = documento_mod.resolver(documento_mod.validar(documento_mod.migrar(v["documento"])), idioma, pais)
+    # D1 (capa 5a): los subtítulos se derivan del audio AQUÍ, sobre el
+    # documento ya resuelto para este destino — nunca antes (`resolver` ya
+    # aplicó `por_destino` y quitó los audios de otro idioma).
+    doc = subtitulos_fuente.aplicar(doc, _palabras_por_material(cliente, doc))
     rutas = preparar_rutas(cliente, doc, carpeta)
     avisar(ETAPAS_EDICION[1][0])
     es_imagen = documento_mod.duracion_ms(doc) == 0

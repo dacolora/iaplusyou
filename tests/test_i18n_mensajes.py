@@ -42,6 +42,7 @@ WORKER += ["worker.py", "cola.py", "organico.py", "experimentos.py", "derivacion
            "importador.py", "nicho/fuentes/reddit.py", "nicho/fuentes/youtube.py", "nicho/fuentes/apify.py",
            "providers/apify.py"]
 WORKER += ["providers/wavespeed_common.py", "nicho/fuentes/plataformas.py", "nicho/fuentes/plataforma.py"]   # Task 7, fix 1
+WORKER += ["final_edition/subtitulos_fuente.py"]   # Editor capa 5a, Task 1 (puro: sin texto para una persona)
 
 
 def _nombre(llamada):

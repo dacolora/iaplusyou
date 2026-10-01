@@ -60,6 +60,38 @@ def test_renderizar_final_devuelve_urls_versionadas_y_limpia_la_carpeta(entorno,
         entorno.renderizar_final("acme", "cf_1__es_CO", 999, "es", "CO")
 
 
+def test_renderizar_final_deriva_los_subtitulos_del_audio_antes_de_renderizar(entorno, monkeypatch):
+    # D1 (capa 5a): las palabras guardadas en el documento NO son las que
+    # llegan al motor cuando el idioma tiene `fuentes` — se derivan de
+    # `material.extra.palabras` sobre el documento YA resuelto.
+    import ediciones
+    import materiales
+    from final_edition import motor
+    doc = _doc()
+    doc["subtitulos"]["fuentes"] = {"es": [{"tipo": "sonido"}]}
+    materiales.actualizar_extra("acme", 1, palabras=[
+        {"t_ms": 0, "dur_ms": 400, "texto": "Hola"},
+        {"t_ms": 4000, "dur_ms": 400, "texto": "Mundo"},
+    ])
+    ed = ediciones.crear("acme", "video", "e", doc, cf_id="cf_2")
+    v = ediciones.versionar("acme", ed["id"], "producir")
+    recibido = {}
+
+    def fake_render(doc, rutas, salida, on_etapa=None, nucleos=1):
+        recibido["palabras"] = doc["subtitulos"]["palabras"]
+        open(salida, "wb").write(b"mp4")
+        mini = salida.replace(".mp4", "_miniatura.png"); open(mini, "wb").write(b"png")
+        return {"archivo": salida, "miniatura": mini, "duracion_s": 7.0, "tramos": 1, "con_ass": False}
+    monkeypatch.setattr(motor, "renderizar", fake_render)
+    entorno.renderizar_final("acme", "cf_2__es_CO", v["id"], "es", "CO")
+    # las derivadas (del material 1), no las guardadas (la segunda palabra
+    # del fixture original es "mundo" a 400 ms, no "Mundo" a 4000 ms)
+    assert recibido["palabras"] == [
+        {"t_ms": 0, "dur_ms": 400, "texto": "Hola"},
+        {"t_ms": 4000, "dur_ms": 400, "texto": "Mundo"},
+    ]
+
+
 def test_producir_renderiza_con_el_documento_de_la_version_y_actualiza_la_final(entorno, monkeypatch):
     import creative_flow, ediciones, db
     from final_edition import motor
