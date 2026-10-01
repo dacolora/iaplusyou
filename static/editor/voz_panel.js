@@ -31,7 +31,7 @@ import { t } from "./textos.js";
 import {
   avisoAgregada, botonCrear, corteGrabacion, elegirGrabacion, encargoVozGuardado, estadoTexto, extensionDeMime,
   filtrarVoces, FILTROS_VOZ, firmaPedido, horaLocal, idiomaDeVoz, idiomaInicial, MAX_GRABACION_MS, mensajeGrabacionSubida,
-  mensajeMicrofono, motivoSinGrabar, nivelDe, nombreArchivo, textoReloj,
+  mensajeMicrofono, motivoSinGrabar, nivelDe, nombreArchivo, textoReloj, tiempoDeEntrada,
 } from "./voz_modelo.js";
 
 export const ESPERA_ESTIMAR_MS = 400;
@@ -608,6 +608,7 @@ export class VozPanel {
   async crear() {
     if (this.trabajo || this.enviando) return;
     if (this._enConflicto()) return this._decir(mensajeConflicto(), true);
+    const tMs = this.editor.tiempo?.() ?? null;          // el cabezal del clic: se guarda con el trabajo
     const pedido = this._pedido();
     if (!estadoTexto(pedido.texto, this.maxCaracteres).valido) return this.texto.focus();
     const e = this.estimado;
@@ -642,7 +643,7 @@ export class VozPanel {
       this._pintarCrear();
       return this._decir(mensajeSesion(), true);
     }
-    if (r.status === 202 && j?.job_id && j?.clave) return this.seguir(j.job_id, { clave: j.clave, idioma, habla });
+    if (r.status === 202 && j?.job_id && j?.clave) return this.seguir(j.job_id, { clave: j.clave, idioma, habla, tMs });
     this._pintarCrear();
     if (r.ok && j?.material) {                                             // ya existía con sus palabras: gratis
       this._agregar(j.material, { tipo: "ia", idioma, habla });
@@ -656,11 +657,15 @@ export class VozPanel {
   // Sigue el trabajo de la voz (el que se acaba de encolar o el que ya
   // corría al abrir la página) preguntando cada 1,5 s; `encargo` dice qué
   // traer al terminar (null si no se sabe: se pidió en otra pestaña).
-  // `nuevo`: recién encolado (se guarda con su sello).
+  // `nuevo`: recién encolado (se guarda con su sello y con `tMs`, el cabezal
+  // del clic, para que al retomar tras recargar la voz entre ahí y no en
+  // 0:00; mientras la página sigue abierta entra en el cabezal de ese momento,
+  // como siempre).
   seguir(jobId, encargo = null, { nuevo = true } = {}) {
     if (!jobId) return;
     clearTimeout(this.relojTrabajo);
-    this.trabajo = { job: jobId, encargo, etapa: "", progreso: 0, fallos: 0, sinRespuestaDesde: null };
+    const enVista = encargo && nuevo ? { ...encargo, tMs: null } : encargo;
+    this.trabajo = { job: jobId, encargo: enVista, etapa: "", progreso: 0, fallos: 0, sinRespuestaDesde: null };
     if (encargo && nuevo) this._guardarEncargo(jobId, encargo);
     this._pintarCrear();
     void this._sondear();
@@ -737,14 +742,17 @@ export class VozPanel {
       this._detalle(`HTTP ${r.status}`);
       return false;
     }
-    return this._agregar(j.material, { tipo: "ia", idioma: encargo.idioma ?? null, habla: encargo.habla ?? null });
+    return this._agregar(j.material, { tipo: "ia", idioma: encargo.idioma ?? null, habla: encargo.habla ?? null,
+                                       tMs: encargo.tMs ?? null });
   }
 
   // Pone una voz (o una grabación) en el cabezal, en una pista de voz, con su
   // idioma (idiomaDeVoz: el del destino que se veía, o null si la voz habla
   // otro — `habla` —; D10), como una operación sobre el documento de AHORA;
-  // dice si no cupo entera o si quedó sonando en todos los idiomas.
-  _agregar(material, { tipo, idioma = null, habla = null }) {
+  // dice si no cupo entera o si quedó sonando en todos los idiomas. `tMs`:
+  // dónde entra una voz retomada tras recargar (tiempoDeEntrada); sin él, el
+  // cabezal de ahora.
+  _agregar(material, { tipo, idioma = null, habla = null, tMs = null }) {
     const ed = this.editor;
     if (!material || material.id === undefined || material.id === null) return false;
     if (this._enConflicto()) {
@@ -753,7 +761,7 @@ export class VozPanel {
     }
     ed.agregarMateriales({ [material.id]: material });       // antes de operar
     const antes = ed.doc();
-    const args = [material, ed.tiempo(), { rol: "voz", idioma }];
+    const args = [material, tiempoDeEntrada({ tMs }, ed.tiempo()), { rol: "voz", idioma }];
     if (!ed.operar("agregarAudio", ...args)) {
       this._decir(mensajeRechazo(ed.doc(), "agregarAudio", args, ed.info(), { conflicto: this._enConflicto() }), true);
       return false;

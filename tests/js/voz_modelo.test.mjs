@@ -10,7 +10,7 @@ import {
   avisoAgregada, botonCrear, corteGrabacion, elegirGrabacion, idiomaDeVoz, encargoVozGuardado, ENCARGO_VOZ_MAX_MS, estadoTexto, extensionDeMime, filtrarVoces,
   FILTROS_VOZ,
   firmaPedido, FORMATOS_GRABACION, horaLocal, idiomaInicial, MAX_GRABACION_MS, mensajeGrabacionSubida, mensajeMicrofono,
-  motivoSinGrabar, nivelDe, nombreArchivo, relojTexto, textoReloj,
+  motivoSinGrabar, nivelDe, nombreArchivo, relojTexto, textoReloj, tiempoDeEntrada,
 } from "../../static/editor/voz_modelo.js";
 
 const soporta = (lista) => (mime) => lista.includes(mime);
@@ -144,9 +144,9 @@ test("encargoVozGuardado: solo el de ESE trabajo, con su forma y de hace menos d
   const clave = "a".repeat(64);
   const ahora = 1_000_000_000;
   const bueno = { job: "acme__ed7__voz", sello: ahora - 1000, clave, idioma: "es" };
-  assert.deepEqual(encargoVozGuardado(bueno, "acme__ed7__voz", ahora), { clave, idioma: "es", habla: null });
+  assert.deepEqual(encargoVozGuardado(bueno, "acme__ed7__voz", ahora), { clave, idioma: "es", habla: null, tMs: null });
   assert.deepEqual(encargoVozGuardado({ ...bueno, idioma: null, habla: "en" }, "acme__ed7__voz", ahora),
-    { clave, idioma: null, habla: "en" });
+    { clave, idioma: null, habla: "en", tMs: null });
   assert.equal(encargoVozGuardado({ ...bueno, habla: "ingles" }, "acme__ed7__voz", ahora), null);
   assert.equal(encargoVozGuardado(bueno, "otro", ahora), null);
   assert.equal(encargoVozGuardado({ ...bueno, sello: ahora - ENCARGO_VOZ_MAX_MS - 1 }, "acme__ed7__voz", ahora), null);
@@ -155,6 +155,25 @@ test("encargoVozGuardado: solo el de ESE trabajo, con su forma y de hace menos d
   assert.equal(encargoVozGuardado({ ...bueno, idioma: "esp" }, "acme__ed7__voz", ahora), null);
   assert.equal(encargoVozGuardado(null, "acme__ed7__voz", ahora), null);
   assert.equal(encargoVozGuardado("x", "acme__ed7__voz", ahora), null);
+});
+
+// Revisión final (m11): una voz que termina mientras la página se recargaba
+// entra donde estaba el cabezal al pedirla (guardado con el trabajo), no en
+// 0:00 (el cabezal al abrir); un registro viejo sin `tMs` usa el cabezal.
+test("encargoVozGuardado guarda el cabezal del clic; tiempoDeEntrada lo usa al retomar", () => {
+  const clave = "b".repeat(64);
+  const ahora = 1_000_000_000;
+  const bueno = { job: "acme__ed7__voz", sello: ahora - 1000, clave, idioma: "es", tMs: 12345 };
+  assert.deepEqual(encargoVozGuardado(bueno, bueno.job, ahora), { clave, idioma: "es", habla: null, tMs: 12345 });
+  assert.equal(encargoVozGuardado({ ...bueno, tMs: 12345.6 }, bueno.job, ahora).tMs, 12346);
+  for (const raro of [-5, "12", null, Number.NaN, Infinity, {}]) {
+    assert.equal(encargoVozGuardado({ ...bueno, tMs: raro }, bueno.job, ahora).tMs, null, String(raro));
+  }
+  assert.equal(tiempoDeEntrada(encargoVozGuardado(bueno, bueno.job, ahora), 0), 12345);
+  const viejo = { job: bueno.job, sello: ahora - 1000, clave, idioma: "es" };       // de antes de este arreglo
+  assert.equal(tiempoDeEntrada(encargoVozGuardado(viejo, bueno.job, ahora), 4000), 4000);
+  assert.equal(tiempoDeEntrada(null, 4000), 4000);
+  assert.equal(tiempoDeEntrada({ tMs: 0 }, 4000), 0);                              // 0 es un cabezal válido
 });
 
 test("nivelDe: el nivel del micrófono (0 en silencio, 1 a tope) desde los bytes del AnalyserNode", () => {
@@ -315,7 +334,7 @@ test("VozPanel._retomar: retoma la barra de la voz que se creaba, o pone la que 
     _traerYAgregar: (encargo, opciones) => llamadas.push(["traer", encargo, opciones]),
   });
   VozPanel.prototype._retomar.call(falsa("acme__ed7__voz"));
-  assert.deepEqual(llamadas, [["seguir", "acme__ed7__voz", { clave, idioma: "es", habla: null }, { nuevo: false }]]);
+  assert.deepEqual(llamadas, [["seguir", "acme__ed7__voz", { clave, idioma: "es", habla: null, tMs: null }, { nuevo: false }]]);
 });
 
 test("VozPanel._retomar: el encargo guardado se borra solo DESPUÉS de que la voz entró", async () => {
@@ -334,11 +353,66 @@ test("VozPanel._retomar: el encargo guardado se borra solo DESPUÉS de que la vo
       },
     };
     const espera = VozPanel.prototype._retomar.call(falsa);
-    assert.deepEqual(llamadas, [["traer", { clave, idioma: "es", habla: null }, { callado: true }]]);   // todavía no se olvida
+    assert.deepEqual(llamadas, [["traer", { clave, idioma: "es", habla: null, tMs: null }, { callado: true }]]);   // todavía no se olvida
     terminar(entro);
     await espera;
     assert.deepEqual(llamadas.slice(1), entro ? ["olvidar"] : []);
   }
+});
+
+// Revisión final (m11): al retomar, la voz entra donde estaba el cabezal al
+// pedirla (el de ahora es 0:00: la página recién abrió).
+test("VozPanel: la voz retomada entra en el cabezal guardado al pedirla, no en 0:00", async () => {
+  const clave = "c".repeat(64);
+  const editor = editorFalso({ tiempo: 0 });
+  const panel = {
+    ...panelFalso(editor),
+    datos: { trabajos_vivos: { voz: null } },
+    olvidado: false,
+    _leerEncargo: () => ({ job: "acme__ed7__voz", sello: Date.now(), clave, idioma: "es", tMs: 2500 }),
+    _olvidarEncargo() { this.olvidado = true; },
+    urls: { voz_material: "/voz/__CLAVE__" },
+    _pedirJSON: async () => ({ r: { ok: true, status: 200 }, j: { material: { ...VOZ_IA, id: 32, picos: [0.1] } }, sesion: false }),
+  };
+  panel._traerYAgregar = VozPanel.prototype._traerYAgregar.bind(panel);
+  panel._agregar = VozPanel.prototype._agregar.bind(panel);
+  await VozPanel.prototype._retomar.call(panel);
+  const clip = editor.e.doc.pistas.flatMap((p) => p.clips).find((c) => c.material_id === 32);
+  assert.equal(clip.inicio_ms, 2500);
+  assert.equal(panel.olvidado, true);
+  // un registro de antes (sin tMs): el cabezal de ahora, como siempre
+  const e2 = editorFalso({ tiempo: 1200 });
+  const p2 = panelFalso(e2);
+  assert.equal(VozPanel.prototype._agregar.call(p2, { ...VOZ_IA, id: 33 }, { tipo: "ia", idioma: "es", tMs: null }), true);
+  assert.equal(e2.e.doc.pistas.flatMap((p) => p.clips).find((c) => c.material_id === 33).inicio_ms, 1200);
+});
+
+test("VozPanel.crear guarda con el trabajo el cabezal del clic", async () => {
+  const editor = editorFalso({ tiempo: 4321 });
+  const seguidos = [];
+  const panel = {
+    ...panelFalso(editor),
+    trabajo: null, enviando: false, maxCaracteres: 3000, urls: { voz: "/voz" },
+    estimado: null,
+    _pedido: () => ({ texto: "Hola mundo", voz: "Rachel", idioma: "es", velocidad: "normal" }),
+    _pintarCrear: () => {},
+    _detalle: () => {},
+    _pedirJSON: async () => ({ r: { ok: false, status: 202 }, j: { job_id: "acme__ed7__voz", clave: "d".repeat(64) }, sesion: false }),
+    seguir: (job, encargo) => seguidos.push([job, encargo]),
+  };
+  panel.estimado = { firma: firmaPedido(panel._pedido()), precio: "US$ 0,01 aprox." };
+  editor.destino = () => "es_CO";
+  await VozPanel.prototype.crear.call(panel);
+  assert.deepEqual(seguidos, [["acme__ed7__voz", { clave: "d".repeat(64), idioma: "es", habla: null, tMs: 4321 }]]);
+  // seguir: el cabezal del clic va a lo guardado (para retomar); con la página
+  // abierta la voz entra en el cabezal del momento en que termina, como siempre
+  const guardados = [];
+  const sigue = { _pintarCrear() {}, _sondear: async () => {}, _guardarEncargo: (job, e) => guardados.push([job, e]) };
+  VozPanel.prototype.seguir.call(sigue, "acme__ed7__voz", seguidos[0][1]);
+  assert.equal(guardados[0][1].tMs, 4321);
+  assert.equal(sigue.trabajo.encargo.tMs, null);
+  VozPanel.prototype.seguir.call(sigue, "acme__ed7__voz", { ...seguidos[0][1] }, { nuevo: false });   // retomado
+  assert.equal(sigue.trabajo.encargo.tMs, 4321);
 });
 
 // ---- Fix round 1 ----
@@ -434,7 +508,8 @@ test("crear(): sin el precio vigente no hay POST a urls.voz; con precio (o grati
       await VozPanel.prototype.crear.call(falsa);
       assert.equal(pedidos.length, 1);
       assert.deepEqual(pedidos[0], ["/voz", "POST", { texto: "Hola mundo", voz: "Rachel", velocidad: "normal", idioma: "es" }]);
-      assert.deepEqual(llamadas.seguir, [["acme__ed7__voz", { clave: "c".repeat(64), idioma: "es", habla: null }]]);
+      // (este editor falso no tiene cabezal: tMs null — al retomar se usará el de ese momento)
+      assert.deepEqual(llamadas.seguir, [["acme__ed7__voz", { clave: "c".repeat(64), idioma: "es", habla: null, tMs: null }]]);
       pedidos.length = 0;
     }
   } finally {

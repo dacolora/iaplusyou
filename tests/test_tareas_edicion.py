@@ -654,7 +654,8 @@ def test_editor_voz_whisper_falla_devuelve_mensaje_sin_palabras_y_el_gasto_de_la
         raise RuntimeError("fal caído")
     monkeypatch.setattr(transcripcion_mod, "transcribir", _revienta)
     msg = entorno.ejecutar_voz(_tarea_voz(texto="Un secreto que nadie debe leer en un mensaje"))
-    assert msg == "Voz lista; sus subtítulos se generan después (no se pudieron preparar ahora)."
+    # revisión final (m12): nada genera los subtítulos solo — el mensaje dice dónde hacerlo
+    assert msg == "La voz quedó lista, pero no se pudieron sacar sus subtítulos: puedes generarlos desde «Subtítulos»."
     assert "secreto" not in msg.lower()                      # el mensaje nunca lleva el texto de la persona
     gastos_ = _gastos("acme")
     assert len(gastos_) == 1 and gastos_[0]["tipo"] == "locucion"    # la voz (ya pagada) quedó

@@ -8124,6 +8124,9 @@ msgstr "The voice is longer than what's left of the video: it was cut to {tiempo
 msgid "La voz habla {idioma}: quedó sonando en todos los idiomas. Usa «Suena en» para dejarla solo en uno."
 msgstr "The voice speaks {idioma}: it now plays in all languages. Use “Plays in” to keep it in just one."
 
+msgid "La voz quedó lista, pero no se pudieron sacar sus subtítulos: puedes generarlos desde «Subtítulos»."
+msgstr "The voice is ready, but its subtitles couldn't be made: you can generate them from “Subtitles”."
+
 msgid "La voz se ajusta sola a cada país."
 msgstr "The voice adjusts itself to each country."
 
@@ -14261,9 +14264,6 @@ msgstr "Voice-over: the voice is added afterward"
 
 msgid "Voz lista."
 msgstr "Voice ready."
-
-msgid "Voz lista; sus subtítulos se generan después (no se pudieron preparar ahora)."
-msgstr "Voice ready; its subtitles will be generated later (they couldn't be prepared now)."
 
 msgid "Voz primero"
 msgstr "Voice first"

@@ -54,7 +54,8 @@ ETAPAS_VOZ = ((N_("Creando la voz"), 60), (N_("Preparando sus subtítulos"), 30)
 MENSAJES_AUDIO_EDITOR = {
     "subtitulos_listos": N_("Subtítulos listos."),
     "voz_lista": N_("Voz lista."),
-    "voz_sin_palabras": N_("Voz lista; sus subtítulos se generan después (no se pudieron preparar ahora)."),
+    # nada los genera solo después: se dice dónde hacerlo (revisión final)
+    "voz_sin_palabras": N_("La voz quedó lista, pero no se pudieron sacar sus subtítulos: puedes generarlos desde «Subtítulos»."),
 }
 _EXT = {"video": "mp4", "imagen": "png", "audio": "wav", "png_texto": "png", "proxy": "mp4"}
 _IDIOMA_RE = re.compile(r"[a-z]{2}")

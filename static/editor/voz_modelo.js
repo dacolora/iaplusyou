@@ -166,10 +166,12 @@ const RELOJ_ADELANTADO_MS = 60 * 1000;
 const CLAVE_VOZ_RE = /^[0-9a-f]{64}$/;
 const IDIOMA_RE = /^[a-z]{2}$/;
 
-// Lo guardado (ya leído del almacenamiento): {clave, idioma, habla} si es de
-// ese trabajo, tiene su forma y su sello es reciente; si no, null. `idioma` es
-// el del clip (idiomaDeVoz: null = suena en todos) y `habla`, el de la voz
-// cuando no es el del destino (para avisarlo).
+// Lo guardado (ya leído del almacenamiento): {clave, idioma, habla, tMs} si es
+// de ese trabajo, tiene su forma y su sello es reciente; si no, null. `idioma`
+// es el del clip (idiomaDeVoz: null = suena en todos) y `habla`, el de la voz
+// cuando no es el del destino (para avisarlo). `tMs` (revisión final): el
+// cabezal cuando se pidió la voz — al retomar tras recargar, la voz entra ahí
+// y no en 0:00; null en un registro viejo o raro (entonces, el cabezal).
 export function encargoVozGuardado(valor, job, ahoraMs = Date.now()) {
   if (!valor || typeof valor !== "object" || valor.job !== job) return null;
   const sello = Number(valor.sello);
@@ -178,7 +180,14 @@ export function encargoVozGuardado(valor, job, ahoraMs = Date.now()) {
   const idioma = valor.idioma ?? null;
   const habla = valor.habla ?? null;
   if ([idioma, habla].some((i) => i !== null && !IDIOMA_RE.test(String(i)))) return null;
-  return { clave: valor.clave, idioma, habla };
+  const tMs = typeof valor.tMs === "number" && Number.isFinite(valor.tMs) && valor.tMs >= 0 ? Math.round(valor.tMs) : null;
+  return { clave: valor.clave, idioma, habla, tMs };
+}
+
+// Dónde entra una voz retomada: el cabezal guardado con su trabajo, o el de
+// ahora si no hay uno (registro viejo, o un trabajo pedido en esta misma vista).
+export function tiempoDeEntrada(encargo, cabezalMs) {
+  return typeof encargo?.tMs === "number" && Number.isFinite(encargo.tMs) && encargo.tMs >= 0 ? encargo.tMs : cabezalMs;
 }
 
 // ---- Grabar ----
