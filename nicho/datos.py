@@ -402,16 +402,10 @@ def _paises_de_filas(filas):
     return salida
 
 
-def paises_otro_mercado(cliente, estudio_id):
-    """{id: país} de los comentarios del estudio que son de otro mercado
-    (`extra.mercado == "otro"`, spec Parte 4 §3), para su etiqueta y la de sus citas."""
-    c = db.comentario
-    with db.conectar() as con:
-        return _paises_de_filas(con.execute(sa.select(c.c.id, c.c.extra).where(c.c.cliente == cliente, c.c.estudio_id == estudio_id)))
-
-
 def paises_otro_mercado_de(cliente, ids):
-    """Lo mismo para esos comentarios, de cualquier estudio del proyecto."""
+    """{id: país} de esos comentarios (de cualquier estudio del proyecto) que son
+    de otro mercado (`extra.mercado == "otro"`, spec Parte 4 §3), para la etiqueta
+    de las citas que los usan."""
     ids = [int(i) for i in ids or []]
     if not ids:
         return {}

@@ -214,6 +214,8 @@ def ver(cliente, eid):
     for n in nucleos:
         for s in n["subs"]:
             s["faltantes"] = calidad.faltantes(s, con_evidencia=not datos.es_manual(est))
+    # «otro mercado» de las citas: solo los comentarios citados (la lista de comentarios lee su propio `extra`)
+    citados = [e.get("comentario_id") for n in nucleos for s in n["subs"] for e in (s.get("evidencia") or [])]
     completar_e = avatares.estimar_completar(cliente, eid)
     job_comp = datos.job_id_completar(cliente, eid)
     pais_inv = est.get("pais") or proyectos.pais(cliente)
@@ -222,7 +224,7 @@ def ver(cliente, eid):
         conteos=datos.contar_por_fuente(cliente, eid), fuente_filtro=fuente,
         pagina_comentarios=datos.comentarios(cliente, eid, fuente=fuente, pagina=pagina, por_pagina=POR_PAGINA),
         nucleos=nucleos, urls_comentarios=datos.urls_comentarios(cliente, eid),
-        paises_comentarios=datos.paises_otro_mercado(cliente, eid), nombres_pais=datos.NOMBRES_PAIS,
+        paises_comentarios=datos.paises_otro_mercado_de(cliente, citados), nombres_pais=datos.NOMBRES_PAIS,
         estimado=estimado, precio_texto=gastos.formatear(estimado["usd"]), min_comentarios=avatares.MIN_COMENTARIOS,
         trabajo_generar=({"job_id": job} if trabajos.en_curso(job) else None),
         completar_estimado={**completar_e, "texto": gastos.formatear(completar_e["usd"])},

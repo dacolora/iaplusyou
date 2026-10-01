@@ -2769,7 +2769,7 @@ body.panel-abierto { overflow: hidden; }
 .nicho-inv-chips { border: 0; padding: 0; margin: .4rem 0; display: flex; flex-wrap: wrap; gap: .5rem; }
 .nicho-inv-chips legend { font-weight: 600; margin-bottom: .2rem; }
 .nicho-inv-chips[hidden], .nicho-inv-casa[hidden] { display: none; }   /* display:flex pisaría el atributo hidden */
-.nicho-inv-chips label.apagado { opacity: .45; }
+#inv-marcar-todas { align-self: flex-start; }                         /* el formulario estira a sus hijos a todo el ancho */
 .nicho-inv-estimado { margin: .6rem 0; font-size: .9rem; display: flex; flex-direction: column; gap: .15rem; }
 .nicho-inv-tabla td { overflow-wrap: anywhere; }
 

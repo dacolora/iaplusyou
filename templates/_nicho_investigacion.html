@@ -1,6 +1,7 @@
 {# Tarjeta «Investigar el nicho» (spec 2026-09-21 Parte 3 §8). Contexto de nicho.rutas.ver:
    investigacion (resumen), trabajo_inv, productos_investigados, paises_estudio, plataformas_inv,
-   redes_inv, topes_inv, limites_inv, pais_inv, etiquetas_inv, etiquetas_paso, etiquetas_paso_estado.
+   redes_inv, topes_inv, limites_inv, pais_inv, nombre_pais_inv, etiquetas_inv, etiquetas_paso,
+   etiquetas_paso_estado, fuentes_nombre (N_, con |traducir), idiomas (avatares.IDIOMAS: código → nombre, N_).
    La barra de progreso lleva data-poll-job (base.html la sondea y recarga al terminar cada paso). #}
 {% macro chip_tienda(p) %}
 <label class="fe-destino"><input type="checkbox" name="plataformas" value="{{ p.clave }}" data-paises="{{ p.paises }}" data-orden="{{ p.orden }}"{% if p.faltan %} disabled data-sin-llave="1"{% elif p.mercado == 'local' %} checked{% endif %}> {{ p.nombre }}<span class="nicho-inv-casa"{% if p.mercado == 'local' %} hidden{% endif %}> ({{ p.casa_nombre|traducir }})</span>{% if p.faltan %} <small class="vacio">({{ _('falta %(llaves)s', llaves=p.faltan|join(', ')) }})</small>{% endif %}</label>
@@ -21,7 +22,7 @@
     {% if inv.relevantes %} · {{ _('%(n)s del nicho', n=inv.relevantes) }}{% endif %}
     {% if inv.resenas %} · {{ _('%(n)s comentario(s) nuevos', n=inv.resenas) }}{% endif %}
   </p>
-  {% if inv.consultas %}<p class="vacio">{{ _('Búsquedas:') }} {% for c in inv.consultas %}<span class="tag-estado">{{ c }}</span> {% endfor %}{% for codigo, lista in inv.consultas_por_idioma.items() if codigo != inv.idioma_consultas %}<small>({{ codigo }})</small> {% for c in lista %}<span class="tag-estado">{{ c }}</span> {% endfor %}{% endfor %}</p>{% endif %}
+  {% if inv.consultas %}<p class="vacio">{{ _('Búsquedas:') }} {% for c in inv.consultas %}<span class="tag-estado">{{ c }}</span> {% endfor %}{% for codigo, lista in inv.consultas_por_idioma.items() if codigo != inv.idioma_consultas %}<small>({{ idiomas.get(codigo, codigo)|traducir }})</small> {% for c in lista %}<span class="tag-estado">{{ c }}</span> {% endfor %}{% endfor %}</p>{% endif %}
   <ol class="nicho-inv-pasos">
     {% for paso in inv.orden %}
     {% set info = inv.pasos.get(paso, {}) %}
@@ -66,7 +67,7 @@
         <td>{% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.titulo }}</a>{% else %}{{ p.titulo }}{% endif %}{% if p.marca %} <small class="vacio">{{ p.marca }}</small>{% endif %}</td>
         <td>{% if p.precio is not none %}{{ p.precio }} {{ p.moneda or '' }}{% else %}—{% endif %}</td>
         <td>{{ p.estrellas if p.estrellas is not none else '—' }}</td>
-        <td>{% if p.n_resenas is not none %}{{ p.n_resenas }}{% elif (p.extra or {}).get('vendidos') %}<small class="vacio">{{ _('%(n)s vendidos', n=p.extra.vendidos) }}</small>{% else %}—{% endif %}</td>
+        <td>{% if p.n_resenas is not none %}{{ p.n_resenas }}{% elif (p.extra or {}).get('vendidos') %}<small class="vacio">{{ ngettext('%(num)s vendido', '%(num)s vendidos', p.extra.vendidos) }}</small>{% else %}—{% endif %}</td>
         <td>{% if p.relevante is none %}—{% elif p.relevante %}✓{% else %}✗{% endif %}{% if p.motivo %} <small class="vacio">{{ p.motivo }}</small>{% endif %}</td>
         <td>{{ p.resenas_traidas }}</td>
       </tr>
@@ -198,7 +199,9 @@
       chips.forEach(function (x) { if (!x.disabled) x.checked = true; });
       pintar();
     });
-    form.addEventListener('change', function () { porPais(); pintar(); });
+    // Solo el país reagrupa las tiendas: porPais() vuelve a colgar cada chip y le quitaría el foco a la casilla
+    // que se acaba de marcar con el teclado.
+    form.addEventListener('change', function (ev) { if (ev.target === form.elements.pais) porPais(); pintar(); });
     form.addEventListener('input', function (ev) { if (ev.target.type === 'number') pintar(); });
     form.addEventListener('submit', function (ev) {
       if (!ultimo || ultimo.clave !== params()) { ev.preventDefault(); ev.stopPropagation(); alert(TXT_SIN); pintar(); return; }

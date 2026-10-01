@@ -680,8 +680,8 @@ def test_pagina_muestra_las_busquedas_por_idioma(app, llaves_inv):
     datos.iniciar_investigacion("acme", eid, i)
     html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
     linea = html.split("Búsquedas:")[1].split("</p>")[0]
-    assert "botella con horario" in linea and "<small>(en)</small>" in linea and "water bottle time marker" in linea
-    assert "<small>(es)</small>" not in linea                                   # las del país no se repiten
+    assert "botella con horario" in linea and "<small>(inglés)</small>" in linea and "water bottle time marker" in linea
+    assert "(español)" not in linea and "<small>(en)</small>" not in linea       # las del país no se repiten; el idioma, con su nombre
 
 
 def _chip(html, clave):
@@ -719,9 +719,13 @@ def test_tiendas_agrupadas_por_mercado(app, llaves_inv):
     html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
     tabla = html.split('class="tabla-apilada nicho-inv-tabla"')[1].split("</table>")[0]
     assert "<td>AliExpress</td>" in tabla and "4025 vendidos" in tabla
+    datos.guardar_productos_nicho("acme", eid, "aliexpress", [{"fuente_id": "1005", "titulo": "Botella 2L", "n_resenas": None,
+                                                                "extra": {"vendidos": 1}, "url": "https://www.aliexpress.com/item/1005.html"}])
+    tabla = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode().split('class="tabla-apilada nicho-inv-tabla"')[1].split("</table>")[0]
+    assert "1 vendido</small>" in tabla and "1 vendidos" not in tabla and "4025 vendidos" in tabla      # singular (ola final B7)
 
 
-def test_comentarios_y_citas_de_otro_mercado_llevan_su_pais(app, llaves_inv):
+def test_comentarios_y_citas_de_otro_mercado_llevan_su_pais(app, llaves_inv, monkeypatch):
     from nicho import datos
     eid = datos.crear_estudio("acme", "Botellas", producto="Botella", tema="t", pais="CO")
     datos.agregar_comentarios("acme", eid, "walmart", [
@@ -729,13 +733,16 @@ def test_comentarios_y_citas_de_otro_mercado_llevan_su_pais(app, llaves_inv):
         {"fuente_id": "w2", "texto": "Too heavy for me", "extra": {"producto": "1", "plataforma": "walmart", "pais": "PL", "mercado": "otro"}}])
     datos.agregar_comentarios("acme", eid, "meli", [{"fuente_id": "m1", "texto": "Me encanta la botella", "extra": {"pais": "CO", "mercado": "local"}}])
     ids = {c["fuente_id"]: c["id"] for c in datos.comentarios_para_generar("acme", eid)}
-    assert datos.paises_otro_mercado("acme", eid) == {ids["w1"]: "US", ids["w2"]: "PL"}
+    assert datos.paises_otro_mercado_de("acme", [ids["w1"], ids["w2"], ids["m1"]]) == {ids["w1"]: "US", ids["w2"]: "PL"}
     assert datos.paises_otro_mercado_de("acme", [ids["w1"], ids["m1"]]) == {ids["w1"]: "US"} and datos.paises_otro_mercado_de("acme", []) == {}
     html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
     assert "otro mercado: Estados Unidos" in html and "otro mercado: PL" in html and html.count("otro mercado:") == 2
     sub = {**SUB, "evidencia": [{"comentario_id": ids["w1"], "cita": "la garrafa pesa demasiado"}]}
     datos.guardar_generacion("acme", eid, [{"nombre": "Sin peso", "deseo": "Quiero", "resumen": "r", "sub_avatares": [sub]}])
+    pedidos, real = [], datos.paises_otro_mercado_de
+    monkeypatch.setattr(datos, "paises_otro_mercado_de", lambda cliente, lista: pedidos.append(list(lista)) or real(cliente, lista))
     html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
     assert "otro mercado: Estados Unidos" in html.split("«la garrafa pesa demasiado»")[1].split("</blockquote>")[0]
+    assert pedidos == [[ids["w1"]]]                       # la página solo mira el extra de los comentarios citados (ola final B6)
     html = app["c"].get("/cliente/acme/nicho/avatares").data.decode()
     assert "otro mercado: Estados Unidos" in html.split("«la garrafa pesa demasiado»")[1].split("</blockquote>")[0]

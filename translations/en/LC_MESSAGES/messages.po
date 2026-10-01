@@ -17211,8 +17211,10 @@ msgstr "Select all"
 msgid "otro mercado: %(pais)s"
 msgstr "other market: %(pais)s"
 
-msgid "%(n)s vendidos"
-msgstr "%(n)s sold"
-
 msgid "Apify respondió sin datos legibles al arrancar la corrida (%(codigo)s); revisa en console.apify.com si arrancó."
 msgstr "Apify answered without readable data when starting the run (%(codigo)s); check at console.apify.com whether it started."
+
+msgid "%(num)s vendido"
+msgid_plural "%(num)s vendidos"
+msgstr[0] "%(num)s sold"
+msgstr[1] "%(num)s sold"
