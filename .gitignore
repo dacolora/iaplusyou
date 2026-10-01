@@ -71,3 +71,7 @@ static/editor_demo/
 # Candado de estado.modificar (flock): varios hilos del worker y Flask escriben estado_videos.json.
 clientes/*/estado_videos.json.lock
 estado_videos.json.lock
+
+# Grabaciones de voz y canciones subidas, de paso por el disco (se borran solas al terminar).
+clientes/*/tmp_voces/
+clientes/*/tmp_musica/
