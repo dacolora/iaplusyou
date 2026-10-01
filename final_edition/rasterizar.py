@@ -52,6 +52,8 @@ def ruta_fuente(nombre):
 # que ninguna fuente trae (el mismo glifo .notdef).
 _SIN_ASIGNAR = "\u0378"
 _TAMANO_PRUEBA = 24
+# Uni\u00f3n de ancho cero, selectores de variante y el tecla-encerrada de 1\ufe0f\u20e3.
+_UNIONES_EMOJI = frozenset("\u200d\ufe0e\ufe0f\u20e3")
 
 
 @functools.lru_cache(maxsize=None)
@@ -77,7 +79,15 @@ def sin_glifos_faltantes(texto, fuente):
     _f, falta = _fuente_prueba(ruta)
     if not any(falta):                # esa fuente no dibuja caja: no hay nada que arreglar
         return texto
-    quedan = [ch for ch in texto if ch.isspace() or _tiene_glifo(ruta, ch)]
+    quedan, quitado = [], False
+    for ch in texto:
+        # La unión (ZWJ) y los selectores de variante no ocupan ancho: desde
+        # Pillow 12.3 no salen como caja, así que se quitan junto con el
+        # emoji que va antes de ellos (👨‍👩‍👧 se va entero).
+        conservar = (not quitado if ch in _UNIONES_EMOJI else True) and (ch.isspace() or _tiene_glifo(ruta, ch))
+        if conservar:
+            quedan.append(ch)
+        quitado = not conservar
     if len(quedan) == len(texto):
         return texto
     return "\n".join(re.sub(r"[ \t]{2,}", " ", linea).strip() for linea in "".join(quedan).split("\n"))
