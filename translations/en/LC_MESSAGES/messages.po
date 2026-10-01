@@ -2046,10 +2046,6 @@ msgid "Apify %(actor)s: %(n)s resultado(s) aprox."
 msgstr "Apify %(actor)s: about %(n)s result(s)"
 
 #, python-format
-msgid "Apify %(estado)s (corrida %(corrida)s); se guardaron %(n)s resultados."
-msgstr "Apify %(estado)s (run %(corrida)s); %(n)s results were saved."
-
-#, python-format
 msgid "Apify %(estado)s sin resultados (corrida %(corrida)s); revísala en console.apify.com."
 msgstr "Apify %(estado)s with no results (run %(corrida)s); check it at console.apify.com."
 
@@ -2074,12 +2070,20 @@ msgid "Apify no arrancó la corrida (%(codigo)s)."
 msgstr "Apify didn't start the run (%(codigo)s)."
 
 #, python-format
+msgid "Apify no arrancó la corrida: %(motivo)s"
+msgstr "Apify did not start the run: %(motivo)s"
+
+#, python-format
 msgid "Apify no devolvió los ids de la corrida (corrida %(corrida)s, dataset %(dataset)s); revísala en console.apify.com."
 msgstr "Apify didn't return the run ids (run %(corrida)s, dataset %(dataset)s); check it at console.apify.com."
 
 #, python-format
 msgid "Apify no entregó los resultados (%(motivo)s); corrida %(corrida)s, dataset %(dataset)s: revísalos en console.apify.com."
 msgstr "Apify didn't deliver the results (%(motivo)s); run %(corrida)s, dataset %(dataset)s: check them at console.apify.com."
+
+#, python-format
+msgid "Apify no entregó resultados (%(aviso)s); revísalos en console.apify.com."
+msgstr "Apify didn't deliver results (%(aviso)s); check them at console.apify.com."
 
 msgid "Apify no está configurado (falta APIFY_TOKEN)."
 msgstr "Apify isn't set up (APIFY_TOKEN is missing)."
@@ -8043,10 +8047,6 @@ msgstr "The password must be at least %(minimo)d characters long."
 
 msgid "La corrección falló."
 msgstr "The correction failed."
-
-#, python-format
-msgid "La corrida de Apify %(estado)s sin resultados (corrida %(corrida)s); revísala en console.apify.com."
-msgstr "The Apify run %(estado)s with no results (run %(corrida)s); check it at console.apify.com."
 
 msgid "La credencial de agencia es ilegible (¿cambió FLASK_SECRET_KEY?): un admin tiene que volver a conectarla."
 msgstr "The agency credential is unreadable (did FLASK_SECRET_KEY change?): an admin has to connect it again."
@@ -16347,6 +16347,9 @@ msgstr "Italian"
 
 msgid "la consciencia"
 msgstr "awareness"
+
+msgid "la cuenta llegó a un límite de su plan"
+msgstr "the account reached a limit of its plan"
 
 msgid "la estructura de la referencia, más libre y con la guía de tu marca"
 msgstr "the reference's structure, freer and with your brand guide"

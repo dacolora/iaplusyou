@@ -101,10 +101,15 @@ def probar_token(sesion, token):
     return {"ok": True, "detalle": gettext("Apify aceptó el token.")}
 
 
-def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_ids=None):
+def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_ids=None, memoria_mb=None):
     """POST de la corrida. `max_items`/`max_total_charge_usd` son el tope de
     cobro del lado de Apify — lo que se le mostró a la persona antes de
-    lanzar, nada más. Devuelve (run_id, dataset_id, estado). `on_ids(run_id,
+    lanzar, nada más. `memoria_mb`, si se da, va como `memory` (MB de RAM que
+    pide la corrida): algunos actores (junglee en el plan FREE) necesitan un
+    techo bajo para que quepan varias corridas a la vez dentro del límite de
+    RAM de la cuenta (`correr_lote`, `MAX_SIMULTANEAS`); sin él no se manda
+    ese parámetro (se deja el default del actor), igual que antes de que
+    existiera. Devuelve (run_id, dataset_id, estado). `on_ids(run_id,
     dataset_id)`, si se da, se llama en TODA respuesta 2xx ya parseada —
     traiga ambos ids, uno solo o ninguno, incluida una corrida exitosa — y
     SIEMPRE antes de decidir si hace falta lanzar el error de "sin ids". No
@@ -112,9 +117,11 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
     de una corrida que ya pudo cobrar, tanto si `arrancar` devuelve como si
     termina lanzando. Un 2xx cuyo cuerpo no es JSON no trae ids: ErrorFuente
     sin llamar a `on_ids` (la corrida no consta como lanzada)."""
+    params = {"timeout": MAX_ESPERA_S, "maxItems": max_items, "maxTotalChargeUsd": max_total_charge_usd}
+    if memoria_mb:
+        params["memory"] = memoria_mb
     r = _http.pedir(sesion, "POST", f"{URL_API}/actors/{actor}/runs", "Apify", headers=cabeceras(token),
-                    params={"timeout": MAX_ESPERA_S, "maxItems": max_items, "maxTotalChargeUsd": max_total_charge_usd},
-                    json=entrada)
+                    params=params, json=entrada)
     if r.status_code == 403 and _tipo_apify(r) == "full-permission-actor-not-approved":
         # No es un problema de token (2026-10-01: `axesso_data~amazon-reviews-scraper` empezó a
         # pedir esto): el mensaje de siempre manda a revisar APIFY_TOKEN y no hay nada que revisar
@@ -126,6 +133,11 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
     if r.status_code == 400:
         motivo = _mensaje_apify(r) or gettext("entrada inválida")
         raise ErrorFuente(gettext("Apify rechazó la entrada del actor: %(motivo)s", motivo=motivo))
+    if r.status_code == 402:
+        # La cuenta llegó a un límite de su plan (uso mensual, memoria, corridas simultáneas): el
+        # mensaje de Apify dice cuál; sin cuerpo legible, un aviso genérico de límite de plan.
+        raise ErrorFuente(gettext("Apify no arrancó la corrida: %(motivo)s", motivo=_mensaje_apify(r) or
+                                  gettext("la cuenta llegó a un límite de su plan")))
     if r.status_code not in (200, 201):
         raise ErrorFuente(gettext("Apify no arrancó la corrida (%(codigo)s).", codigo=r.status_code))
     try:
@@ -226,8 +238,10 @@ def contar_dataset(sesion, token, dataset_id):
 
 def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simultaneas=MAX_SIMULTANEAS):
     """Varias corridas del mismo actor, hasta `max_simultaneas` a la vez.
-    `corridas` = [{"entrada", "max_items", "max_usd", "etiqueta"}]. Cada una
-    lleva su propio techo de cobro. Se sondean todas en una misma vuelta (una
+    `corridas` = [{"entrada", "max_items", "max_usd", "etiqueta"[, "memoria_mb"]}].
+    Cada una lleva su propio techo de cobro y, si la trae, su propia `memoria_mb`
+    (MB de RAM pedidos, `arrancar`) — para que varias corridas del mismo actor
+    quepan a la vez dentro del límite de RAM de la cuenta. Se sondean todas en una misma vuelta (una
     pausa por vuelta, no por corrida); una lectura mala no tumba a las demás;
     cuando una termina arranca la siguiente. Al final se lee el dataset de
     TODAS las que arrancaron, cualquiera sea su estado (una corrida se paga
@@ -254,7 +268,8 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
             def _ids(run_id, dataset_id, reg=reg):
                 reg["run_id"], reg["dataset_id"] = run_id, dataset_id
             try:
-                _, _, estado = arrancar(sesion, token, actor, c["entrada"], c["max_items"], c["max_usd"], on_ids=_ids)
+                _, _, estado = arrancar(sesion, token, actor, c["entrada"], c["max_items"], c["max_usd"], on_ids=_ids,
+                                        memoria_mb=c.get("memoria_mb"))
             except ErrorFuente as e:
                 if reg["run_id"]:                       # arrancó pero sin dataset: se sondea igual, ya pudo cobrar
                     reg["estado"], reg["motivo"] = "READY", e.usuario

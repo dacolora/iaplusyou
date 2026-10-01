@@ -9,9 +9,10 @@ def test_estimar_no_rechaza_otro_mercado(monkeypatch):
     assert [(f["clave"], f["mercado"], f["sitio"]) for f in e["filas"]] == [("meli", "local", "CO"), ("amazon", "otro", "US"),
                                                                             ("walmart", "otro", "US"), ("aliexpress", "local", "CO")]
     # precios del plan FREE de Apify, verificados 2026-10-01: meli reseñas 1500 × 0.0015 = 2.25; amazon búsqueda 60 × 0.005 = 0.3;
-    # amazon reseñas (junglee desde 2026-10-01) 15 × 40 (tope por producto) × 0.006 = 3.6
-    assert [(f["busqueda_usd"], f["resenas_usd"]) for f in e["filas"]] == [(0.12, 2.25), (0.3, 3.6), (0.09, 1.5), (0.03, 4.51)]
-    assert e["total_usd"] == round(0.12 + 2.25 + 0.3 + 3.6 + 0.09 + 1.5 + 0.03 + 4.51 + e["claude_usd"] + 0.4, 2)
+    # amazon reseñas (junglee, fix 3 2026-10-01): una corrida por producto, 10 reseñas por corrida (tope real
+    # del plan FREE) -- 15 × (10 × 0.006) = 0.9, el peor caso REAL, sin el mínimo de US$ 0,50 de la corrida
+    assert [(f["busqueda_usd"], f["resenas_usd"]) for f in e["filas"]] == [(0.12, 2.25), (0.3, 0.9), (0.09, 1.5), (0.03, 4.51)]
+    assert e["total_usd"] == round(0.12 + 2.25 + 0.3 + 0.9 + 0.09 + 1.5 + 0.03 + 4.51 + e["claude_usd"] + 0.4, 2)
 
 
 def test_mas_resenados_desempatan_por_vendidos(monkeypatch):

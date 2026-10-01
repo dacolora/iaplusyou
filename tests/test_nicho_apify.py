@@ -26,12 +26,39 @@ def test_registro_de_actores_y_estimado():
 
 def test_estimar_minimo_de_junglee_y_precios_reales():
     """Precios reales del plan FREE verificados 2026-10-01: junglee US$ 0,006 por reseña con un
-    techo mínimo de US$ 0,50 por corrida (Apify rechaza `maxTotalChargeUsd` menor con 400
-    `max-total-charge-usd-below-minimum`); clockworks US$ 0,00125 por comentario, sin mínimo."""
+    techo mínimo de US$ 0,50 POR CORRIDA (Apify rechaza `maxTotalChargeUsd` menor con 400
+    `max-total-charge-usd-below-minimum`) -- pero desde la prueba real en producción del mismo
+    día (run `wpny9jQYLztteag8Z`, el plan FREE solo lee 1 link y 10 reseñas por corrida) ese
+    mínimo YA NO infla lo que `estimar()` muestra antes del clic (eso exageraría el costo de una
+    corrida chica que nunca lo iba a cobrar): solo entra al armar la corrida de verdad
+    (`corridas()`, ver ese test). clockworks US$ 0,00125 por comentario, sin mínimo."""
     from nicho.fuentes import apify_actores as aa
-    assert aa.estimar("amazon_resenas", 10)["usd"] == 0.5             # 10 × 0.006 = 0.06 < el mínimo 0.50
-    assert aa.estimar("amazon_resenas", 500)["usd"] == 3.0            # 500 × 0.006 = 3.0, ya sobre el mínimo
+    assert aa.estimar("amazon_resenas", 10)["usd"] == 0.06            # 10 × 0.006, el peor caso real
+    assert aa.estimar("amazon_resenas", 500)["usd"] == 3.0            # 500 × 0.006 = 3.0, ya sobre el mínimo igual
     assert aa.estimar("tiktok_comentarios", 1000)["usd"] == 1.25      # sin mínimo: 1000 × 0.00125
+
+
+def test_corridas_amazon_una_por_link_con_el_minimo_y_memoria():
+    """Fix 3 (2026-10-01): junglee en el plan FREE solo lee 1 link y entrega 10 reseñas por
+    corrida, así que `corridas()` manda UNA corrida POR LINK (nunca junta varios productUrls),
+    recortada al tope del actor, a 2048 MB y con el mínimo de Apify en lo que SÍ se manda
+    (`max_usd`) -- nunca en el estimado de la puerta."""
+    from nicho.fuentes import apify_actores as aa
+    links = ["https://www.amazon.com/dp/B0TEST0001", "https://www.amazon.com/dp/B0TEST0002"]
+    cs = aa.corridas("amazon_resenas", links, 500)
+    assert len(cs) == 2
+    assert cs[0]["entrada"] == {"productUrls": [{"url": links[0]}], "maxReviews": 10, "includeGdprSensitive": False}
+    assert cs[1]["entrada"]["productUrls"] == [{"url": links[1]}]
+    assert [c["max_items"] for c in cs] == [10, 10] and [c["max_usd"] for c in cs] == [0.5, 0.5]
+    assert [c["memoria_mb"] for c in cs] == [2048, 2048] and [c["etiqueta"] for c in cs] == links
+    # un solo link: una sola corrida, igual de recortada
+    uno = aa.corridas("amazon_resenas", links[:1], 5)
+    assert len(uno) == 1 and uno[0]["max_items"] == 5 and uno[0]["max_usd"] == 0.5     # 5 × 0.006 = 0.03 < el mínimo
+    # TikTok sigue con UNA corrida para todos los links, como siempre (sin mínimo ni memoria)
+    tiktok = ["https://www.tiktok.com/@a/video/1", "https://www.tiktok.com/@a/video/2"]
+    ct = aa.corridas("tiktok_comentarios", tiktok, 150)
+    assert len(ct) == 1 and ct[0]["entrada"]["postURLs"] == tiktok and ct[0]["max_items"] == 150
+    assert ct[0]["max_usd"] == 0.19 and "memoria_mb" not in ct[0]                       # 150 × 0.00125 = 0.1875 -> 0.19
 
 
 def test_validar_links_y_entradas():
@@ -152,17 +179,43 @@ def test_recolectar_corre_sondea_y_baja_el_dataset(entorno_apify, monkeypatch):
 
 
 def test_el_post_de_la_corrida_lleva_los_topes_de_cobro(entorno_apify, monkeypatch):
-    """C1: además del tope por link, la corrida lleva los topes de cobro del lado
-    de Apify (maxItems y maxTotalChargeUsd = lo que mostró la puerta). 30 reseñas × 0.006 = 0.18,
-    bajo el mínimo de junglee: lo que se manda es el mínimo (0.50), nunca menos."""
+    """C1: además del tope por link, la corrida lleva los topes de cobro del lado de Apify
+    (maxItems y maxTotalChargeUsd) y, para junglee, la memoria (2048 MB). El plan FREE solo
+    entrega 10 reseñas por corrida (`max_por_link`): aunque se aprueben 30, la corrida pide como
+    mucho 10; 10 × 0.006 = 0.06, bajo el mínimo de junglee, así que lo que se manda es el mínimo
+    (0.50), nunca menos -- el estimado de la puerta (`estimar`), en cambio, es el peor caso real
+    de las 30, sin ese mínimo."""
     from nicho.fuentes import _http, apify, apify_actores
     s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_t", "status": "SUCCEEDED", "defaultDatasetId": "ds_t"}}),
                  "/datasets/ds_t/items": _Resp(200, [])})
     monkeypatch.setattr(_http, "sesion", lambda: s)
     list(apify.FuenteApify().recolectar({"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 30}))
     assert s.llamadas[0][2]["params"]["maxTotalChargeUsd"] >= 0.5
-    assert s.llamadas[0][2]["params"] == {"timeout": apify.MAX_ESPERA_S, "maxItems": 30, "maxTotalChargeUsd": 0.5}
-    assert apify_actores.estimar("amazon_resenas", 30)["usd"] == 0.5           # el mismo número de la puerta
+    assert s.llamadas[0][2]["params"] == {"timeout": apify.MAX_ESPERA_S, "maxItems": 10, "maxTotalChargeUsd": 0.5, "memory": 2048}
+    assert apify_actores.estimar("amazon_resenas", 30)["usd"] == 0.18          # 30 × 0.006, el peor caso real (sin el mínimo)
+
+
+def test_recolectar_amazon_dos_links_son_dos_corridas(entorno_apify, monkeypatch):
+    """Fix 3: con varios links de Amazon, `FuenteApify.recolectar` lanza UNA corrida POR LINK (el
+    plan FREE de junglee solo lee 1 link por corrida) y junta los comentarios de los dos datasets;
+    `corridas` (NEW) trae los dos registros con sus run ids, para rastrear el cobro. TikTok, en
+    cambio, sigue mandando los links de a uno en UNA sola corrida (`test_recolectar_corre_sondea_y_baja_el_dataset`)."""
+    from nicho.fuentes import _http, apify
+    links = ["https://www.amazon.com/dp/B0TEST0001", "https://www.amazon.com/dp/B0TEST0002"]
+    s = _Sesion({"/actors/junglee~amazon-reviews-scraper/runs": [_Resp(201, {"data": {"id": "run_1", "status": "SUCCEEDED", "defaultDatasetId": "ds_1"}}),
+                                                                 _Resp(201, {"data": {"id": "run_2", "status": "SUCCEEDED", "defaultDatasetId": "ds_2"}})],
+                 "/datasets/ds_1/items": _Resp(200, _fixture("apify_amazon_items.json")[:1]),
+                 "/datasets/ds_2/items": _Resp(200, _fixture("apify_amazon_items.json")[2:])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = apify.FuenteApify()
+    lista = list(f.recolectar({"actor": "amazon_resenas", "links": links, "max_resultados": 20}))
+    assert len(lista) == 2 and f.resultados == 2                              # 1 ítem de cada dataset, los dos con texto
+    posts = [(u, kw) for m, u, kw in s.llamadas if m == "POST"]
+    assert len(posts) == 2
+    assert posts[0][1]["json"]["productUrls"] == [{"url": links[0]}] and posts[1][1]["json"]["productUrls"] == [{"url": links[1]}]
+    assert all(kw["params"]["memory"] == 2048 for _, kw in posts)
+    assert [c["run_id"] for c in f.corridas] == ["run_1", "run_2"] and f.run_id == "run_1"
+    assert f.aviso == ""
 
 
 def test_recolectar_amazon_exito_salta_basura_y_vacios(entorno_apify, monkeypatch):
@@ -216,20 +269,25 @@ def test_recolectar_corrida_fallida_y_llave_rechazada(entorno_apify, monkeypatch
 
 
 def test_corrida_sin_dataset_conserva_el_id(entorno_apify, monkeypatch):
-    """C2: si Apify arrancó la corrida pero no dijo el dataset, el id igual queda en
-    la fuente (la corrida pudo cobrar) y sale en el mensaje."""
+    """C2: si Apify arrancó la corrida pero no dijo el dataset, el id igual queda en la fuente (la
+    corrida pudo cobrar) y sale en el mensaje -- aunque el lote la siga sondeando (ya con el id) y
+    esta SÍ termine en SUCCEEDED, sin dataset no hay nada que leer: sigue siendo el "sin
+    resultados" de siempre, pero `resultados` ahora cae al tope de ESA corrida (10, el máximo de
+    junglee en el plan FREE) en vez de perderse en 0, para no subregistrar un cobro."""
     from nicho.fuentes import _http, apify, base
-    s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_x", "status": "READY"}})})
+    s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_x", "status": "READY"}}),
+                 "/actor-runs/run_x": _Resp(200, {"data": {"status": "SUCCEEDED"}})})
     monkeypatch.setattr(_http, "sesion", lambda: s)
     f = apify.FuenteApify()
     with pytest.raises(base.ErrorFuente) as e:
         list(f.recolectar({"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 10}))
-    assert "run_x" in str(e.value) and f.run_id == "run_x" and f.resultados == 0
+    assert "run_x" in str(e.value) and f.run_id == "run_x" and f.resultados == 10
 
 
 def test_recolectar_vence_por_tiempo(entorno_apify, monkeypatch):
     """C2: al vencer el reloj local el dataset se lee igual (la corrida ya se pagó);
-    vacío, el error dice los 20 min y la corrida."""
+    vacío, el error dice los 20 min y la corrida. El lote (`correr_lote`) sondea una corrida
+    hasta pasar el tope local (no al llegar a él): una vuelta más que el `sondear()` viejo."""
     from nicho.fuentes import _http, apify, base
     corriendo = _Resp(200, {"data": {"id": "run3", "status": "RUNNING", "defaultDatasetId": "ds3"}})
     s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run3", "status": "READY", "defaultDatasetId": "ds3"}}), "/actor-runs/run3": corriendo,
@@ -239,7 +297,7 @@ def test_recolectar_vence_por_tiempo(entorno_apify, monkeypatch):
     with pytest.raises(base.ErrorFuente) as e:
         list(f.recolectar({"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 10}))
     assert "20 min" in str(e.value) and "run3" in str(e.value) and f.resultados == 0
-    assert len(entorno_apify) == int(apify.MAX_ESPERA_S / apify.PAUSA_SONDEO)
+    assert len(entorno_apify) == int(apify.MAX_ESPERA_S // apify.PAUSA_SONDEO) + 1
     assert s.llamadas[-1][1] == apify.URL_API + "/datasets/ds3/items"
 
 
@@ -254,7 +312,7 @@ def test_recolectar_estado_fallido_con_items_guarda_lo_leido_y_avisa(entorno_api
     f = apify.FuenteApify()
     lista = list(f.recolectar({"actor": "tiktok_comentarios", "links": ["https://www.tiktok.com/@shop/video/7399000000000000000"], "max_resultados": 50}))
     assert len(lista) == 2 and f.resultados == 2
-    assert "FAILED" in f.aviso and "run_f" in f.aviso and "2 resultados" in f.aviso
+    assert "FAILED" in f.aviso and "run_f" in f.aviso and "2 resultado(s)" in f.aviso
 
 
 def test_recolectar_dataset_ilegible_cae_al_itemcount(entorno_apify, monkeypatch):
@@ -274,8 +332,10 @@ def test_recolectar_dataset_ilegible_cae_al_itemcount(entorno_apify, monkeypatch
 
 
 def test_recolectar_sin_itemcount_registra_el_tope_aprobado(entorno_apify, monkeypatch):
-    """C2 (b): ni ítems ni itemCount -> `resultados` cae al tope aprobado (registrar
-    de más es mejor que perder el registro de un cobro)."""
+    """C2 (b): ni ítems ni itemCount -> `resultados` cae al tope de la corrida (registrar
+    de más es mejor que perder el registro de un cobro). Con junglee en el plan FREE esa
+    corrida pide como mucho 10 (`max_por_link`), no los 50 aprobados -- ese es el tope real
+    que Apify pudo llegar a cobrar en ESA corrida."""
     from nicho.fuentes import _http, apify, base
     s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_e", "status": "SUCCEEDED", "defaultDatasetId": "ds_e"}}),
                  "/datasets/ds_e/items": [_Resp(503)] * (2 * apify.INTENTOS_DATASET),
@@ -284,12 +344,16 @@ def test_recolectar_sin_itemcount_registra_el_tope_aprobado(entorno_apify, monke
     f = apify.FuenteApify()
     with pytest.raises(base.ErrorFuente):
         list(f.recolectar({"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 50}))
-    assert f.resultados == 50
+    assert f.resultados == 10
 
 
 def test_sondeo_tolera_fallos_pasajeros_y_se_rinde_con_la_corrida(entorno_apify, monkeypatch):
     """C2 (c)/I4: un 503 pasajero leyendo el estado no abandona una corrida pagada;
-    MAX_FALLOS_SONDEO seguidos sí, diciendo cuál corrida revisar."""
+    MAX_FALLOS_SONDEO seguidos sí se rinde del sondeo -- pero el lote (`correr_lote`) igual
+    intenta leer el dataset de una corrida ya pagada aunque no se sepa cómo terminó (nunca se
+    abandona lo que ya pudo cobrar), así que si el dataset SÍ se puede leer no es error, queda
+    como aviso (`test_apify_lote.test_lote_sondeo_tolera_fallos_y_se_rinde_por_corrida` prueba
+    ya el mecanismo; acá solo se confirma que `FuenteApify` lo expone igual)."""
     from nicho.fuentes import _http, apify, base
     s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_s", "status": "READY", "defaultDatasetId": "ds_s"}}),
                  "/actor-runs/run_s": [_Resp(503), _Resp(503), _Resp(503), _Resp(503),          # dos lecturas malas seguidas
@@ -301,12 +365,13 @@ def test_sondeo_tolera_fallos_pasajeros_y_se_rinde_con_la_corrida(entorno_apify,
     lista = list(f.recolectar({"actor": "tiktok_comentarios", "links": ["https://www.tiktok.com/@shop/video/7399000000000000000"], "max_resultados": 50}))
     assert len(lista) == 2 and f.resultados == 3 and f.aviso == ""
     s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_s2", "status": "READY", "defaultDatasetId": "ds_s2"}}),
-                 "/actor-runs/run_s2": [_Resp(503)] * (2 * (apify.MAX_FALLOS_SONDEO + 1))})
+                 "/actor-runs/run_s2": [_Resp(503)] * (2 * (apify.MAX_FALLOS_SONDEO + 1)),
+                 "/datasets/ds_s2/items": _Resp(200, _fixture("apify_tiktok_items.json"))})
     monkeypatch.setattr(_http, "sesion", lambda: s)
     f = apify.FuenteApify()
-    with pytest.raises(base.ErrorFuente) as e:
-        list(f.recolectar({"actor": "tiktok_comentarios", "links": ["https://www.tiktok.com/@shop/video/7399000000000000000"], "max_resultados": 50}))
-    assert "run_s2" in str(e.value) and str(apify.MAX_FALLOS_SONDEO) in str(e.value) and "apify_secreto" not in str(e.value)
+    lista = list(f.recolectar({"actor": "tiktok_comentarios", "links": ["https://www.tiktok.com/@shop/video/7399000000000000000"], "max_resultados": 50}))
+    assert len(lista) == 2 and f.resultados == 3                     # el dataset se pudo leer aunque el sondeo se rindiera
+    assert "run_s2" in f.aviso and "no se pudo saber cómo terminó" in f.aviso and "apify_secreto" not in f.aviso
     assert len([1 for _, u, _ in s.llamadas if "/actor-runs/" in u]) == 2 * apify.MAX_FALLOS_SONDEO
 
 

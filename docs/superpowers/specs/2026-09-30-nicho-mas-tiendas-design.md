@@ -123,3 +123,17 @@ pruebas son la salida real recortada (sin autores): `walmart_busqueda/resenas.js
 Implementado con el plan `docs/superpowers/plans/2026-09-30-nicho-mas-tiendas.md` (rulings R1–R11 allí): el
 arranque por corrida entra en techos, estimados y gasto; Walmart y AliExpress piden reseñas con el link armado
 desde el id; el tono va con lo que sale del mercado local; los nombres de país son los de `datos.NOMBRES_PAIS`.
+
+## Enmienda 2026-10-01
+
+Prueba real en producción (run `wpny9jQYLztteag8Z`, 3 productos de amazon.com.mx): junglee en el plan FREE de
+Apify solo lee 1 link y entrega 10 reseñas por corrida (su propio aviso lo dice; Starter lo sube a 40) — una
+corrida con los `productUrls` de varios productos deja sin leer a todos menos el primero. Ruling (controlador):
+una corrida POR PRODUCTO (o por link, en la fuente manual de Apify), a 2048 MB para que quepan 5 a la vez
+dentro del límite de 16 GB de la cuenta FREE. El techo mínimo de US$ 0,50 por corrida que Apify exige para
+aceptar el POST sigue existiendo, pero YA NO infla el estimado que se le muestra a la persona antes de
+aprobar: `estimar()`/`plataformas.estimar_busqueda`/`estimar_resenas` ahora suman el PEOR CASO REAL de cada
+corrida (`peor_usd` = resultados × precio + arranque, sin piso); el mínimo solo entra al armar la corrida de
+verdad (`corridas()`/`_con_tope`, campo `max_usd`), porque ahí Apify sí lo exige. Para un actor sin mínimo los
+dos valores son iguales, así que sus estimados no cambiaron. Un 402 de Apify (límite de plan: uso mensual,
+memoria, corridas simultáneas) muestra el mensaje de Apify, nunca el de token.
