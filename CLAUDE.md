@@ -415,6 +415,15 @@ viejo). «Adaptar con IA» reescribe los textos alineados (misma cantidad; marca
 pestaña tiene dos `<script>` con su propio `cargarEnDialogo`: el de la ficha avisa con el evento `ref:fragmento` para
 que el otro pida la lectura. Enter en un campo no envía. El Blueprint de Referentes rechaza los POST cross-site
 (`Sec-Fetch-Site`).
+**Como video** (spec §12, 2026-10-01): las mismas casillas; «igual» crea la sesión de IMAGEN fiel con
+`extra.animar_despues = {modelo, duracion, formato, prompt, con_sonido, titulo}` y, cuando el worker la termina
+(`tareas/flowplus.ejecutar_imagen` → `_animar_imagen`), `recrear.lanzar_animacion` crea y lanza UN video con esa imagen
+como única referencia (`recrear_modo="fiel_video"`, `imagen_origen`; idempotente por `animar_despues.cf_video`; si falla,
+la imagen queda lista con `animar_error`, que su detalle muestra). El modelo lo elige la persona en «Animar con»
+(`MODELOS_ANIMAR`: Seedance 2.5 por defecto, el único que arranca desde la imagen; Wan 3.0); `armar_prompt_animar` dice
+«Image 1 es el primer fotograma, no cambies nada». La variación es el video de siempre. El formato de video va al más
+parecido que el modelo admite (`_formato_video`: 4:5 → 3:4 en Wan). Un formulario de video sin `modos_vista` (abierto
+antes de esto) sigue haciendo un solo video.
 
 **Crear (FlowPlus)**. Two paths from the same form (`cf_crear_video`, field
 `modo_prompt`). **Default = direct generation** (the "generación tradicional" clients rely
