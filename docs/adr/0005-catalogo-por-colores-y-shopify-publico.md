@@ -13,8 +13,10 @@ cada variante, sin pedirle ninguna llave al cliente.
 ## Decisión
 
 1. Un color es una subcarpeta del producto con su entrada en `variantes` de `productos.json`; su id es `pid/color`.
-   `listar()` sigue devolviendo una entrada por color (lo que Crear, Sprints y los swaps guardan) y
-   `listar_productos()` agrupa. No hay tabla de colores en SQLite: las fotos ya viven en disco.
+   `listar()` sigue devolviendo una entrada por color y `listar_productos()` agrupa. Ese id es lo que se elige en
+   Crear (casilla y `fp_prefill`) y lo que guardan `campana.catalogo_id` y el `producto_id` de un swap; las sesiones
+   de Crear guardan en `productos_ids` el nombre visible, por eso `claves_de()` devuelve también nombres. No hay
+   tabla de colores en SQLite: las fotos ya viven en disco.
 2. La fila `producto` es del producto, no del color: precio, URL, en prueba, prioridad y la doctrina son del
    producto. La migración 0025 (solo datos, sin vuelta atrás) dobló las filas por color en la del producto.
 3. `shopify_publico` es un conector de primera clase (sin llaves, `fuente = "shopify"`): el catálogo se trae con el
@@ -31,4 +33,4 @@ cada variante, sin pedirle ninguna llave al cliente.
 - Desconectar una tienda archiva sus productos por la `fuente` de su conector, no por su `tipo`.
 - Un proyecto no puede tener a la vez una Shopify por Admin API y otra pública distinta (por API ya tenía una sola).
 - Las tallas se guardan (`extra.tallas`) y no se muestran; los precios por país (Shopify Markets) quedan para después.
-- Un CSV con columna «color» puede entregar `extra.variantes` con la misma forma.
+- Un importador CSV futuro con columna «color» podría entregar `extra.variantes` con la misma forma.

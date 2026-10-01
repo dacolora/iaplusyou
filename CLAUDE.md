@@ -906,50 +906,56 @@ store (ROAS forced to 0 when order and account currencies differ, with one event
 `meta_conexion.estado_pixel` (cached 10 min, computed only by the Configuración button —
 never on page load) feeds `experimentos.atribucion_sugerida`: pixel > tienda > ninguna.
 Since 2026-09-30 (spec `docs/superpowers/specs/2026-09-28-catalogo-por-colores-design.md`, ADR 0005) a **product has
-colors**. On disk `productos.json` keeps `variantes: {color_id: {nombre, descripcion, fuente_id, url_compra,
-disponible}}` (store order) and each color is a subfolder `productos/<pid>/<color_id>/` with its own reference
-photos (the root holds the «fotos de ambiente», `fotos_generales`, when there are colors, or the reference photos of
-a plain product); a `color_id` is `id_desde_nombre` of the color name minus a «<producto> — » prefix
-(`_id_color_desde_nombre`). `catalogo_productos.listar()` still yields one entry per color (`pid/color`, the ids
-Crear, Sprints and swaps store) plus `producto_id/variante/nombre_producto`; `listar_productos()` yields one entry
-per product with `colores` and `fotos_generales`; `encontrar(pid)` falls back to the first color with photos;
-`producto_base()` strips the color (every `tiendas.por_activo(...)` lookup by activo id goes through it);
-`claves_de()`/`claves_de_producto()` give every id and name a product can be referred by (doctrina pedidos, usos,
-experiment counts). ONE `producto` row per product (`activo_catalogo_id = pid`; a hand-made product's `manual` row,
-`fuente_id = pid`, is created on the fly by `tiendas.asegurar_manual`, never for an id with «/»); data migration
-0025 (`downgrade` a no-op) folded the old per-color rows into the product's (empty ones deleted, non-empty
-duplicates archived by hand). `conectores/shopify_publico.py` (`tipo shopify_publico`, `fuente shopify`, only a
+colors**. On disk `productos.json` keeps
+`variantes: {color_id: {nombre, descripcion, fuente_id, url_compra, disponible}}` (store order) and each color
+is a subfolder `productos/<pid>/<color_id>/` with its own reference photos (the root holds the «fotos de ambiente»,
+`fotos_generales`, when there are colors, or the reference photos of a plain product); a `color_id` is
+`id_desde_nombre` of the color name minus a «<producto> — » prefix (`_id_color_desde_nombre`).
+`catalogo_productos.listar()` still yields one entry per color plus `producto_id/variante/nombre_producto`; its id
+`pid/color` is the value of Crear's checkbox and of `fp_prefill` (as `<cat>:<id>`), `campana.catalogo_id` and a
+swap's `producto_id`, while Crear's `productos_ids` keeps the visible name (which is why `claves_de()` also returns
+names); `listar_productos()` yields one entry per product with `colores` and `fotos_generales`; `encontrar(pid)`
+falls back to the first color with photos; `producto_base()` strips the color (every `tiendas.por_activo(...)`
+lookup by activo id goes through it); `claves_de()`/`claves_de_producto()` give every id and name a product can be
+referred by (doctrina pedidos, usos, experiment counts). ONE `producto` row per product
+(`activo_catalogo_id = pid`; a hand-made product's `manual` row, `fuente_id = pid`, is created on the fly by
+`tiendas.asegurar_manual`, never for an id with «/»); data migration 0025 (`downgrade` a no-op) folded the old
+per-color rows into the product's (empty ones deleted, non-empty duplicates archived as manual,
+`extra.archivado_por="manual"`). `conectores/shopify_publico.py` (tipo `shopify_publico`, fuente `shopify`, only a
 `dominio`) reads a store's public `/meta.json` + `/products.json`: the color option (`OPCIONES_COLOR`, or the first
 option whose values have distinct featured images), one variante per color (`normalizar_variante`, in
-`extra.variantes`) with its studio photo(s) (`width=1000`), unassigned images as generales, price = mode of the
-variants (`extra.precios` when they differ), currency from meta.json, services skipped (`PALABRAS_SERVICIO`); rows
-are saved under the connector's `fuente` (`Conector.fuente`, None = `tipo`; `tareas.tiendas` uses it). One Shopify
-per project: connecting the Admin-API `shopify` disconnects every `shopify_publico` of the project with
-`tiendas.desconectar(..., archivar=False)` (same `fuente`: rows stay alive and the API sync refreshes them; domains
-are not compared, the API connects with the `.myshopify.com` one), connecting `shopify_publico` while an Admin-API
-store exists is refused, and `desconectar(..., archivar=True)` archives by the connector's `fuente`, not the store's
-`tipo`. `importador.vincular_activo` creates/refreshes colors (`_colocar_colores`: new colors always download,
-existing ones only with `forzar_fotos` or when empty, colors gone from the store become `disponible=False`; an
-existing color is matched by `fuente_id` first and adopted by name only when it has none, `_color_existente`, so two
-store variants whose names normalize alike get `-2`), pays the regla once per product and never leaves an activo
-without photos. UI: there is NO Productos tab — products live in **Catálogo › Productos** (`_tab_catalogo.html`), a
-gallery fetched from `catalogo_grid` (`_catalogo_grid.html` + `_catalogo_tarjeta.html`, 60 cards per «Ver más»;
-`catalogo_vista.py` is the pure filter/sort/paginate/usos layer; filters live in the hash
-`#catalogo?cat=&filtro=&q=&orden=`) with a side-panel ficha fetched from `catalogo_ficha` (`_catalogo_ficha.html`,
-`#catalogo?ficha=<cat>:<pid>`; colors strip, per-color photos, lifestyle photos with «Asignar a color», datos +
-comercial fields, doctrina, usos, «Crear con este producto» → `fp_prefill.productos_catalogo`, «Crear experimento»,
-Eliminar) that closes as soon as the hash leaves `#catalogo` (hashchange or a sidebar click). Grid and ficha read
-Crear sessions and experiments once per request: `_experimentos_por_activo`, `_productos_tienda_contexto` and
-`_usos_por_producto` take them preloaded (`experimentos_exp`, `sesiones_cf`, `por_clave`). Every catalog POST
-returns to `#catalogo`, to that ficha when it still exists (`_volver_catalogo`/`_volver_fila`); image routes are
-`<path:producto_id>` (ids with «/»); controls that never hold an unsaved edit (the orden select, the one-action
-selects «Asignar a color» and the color of «Crear con») carry `data-busqueda` so the «Sin guardar» guard ignores
-them. «Traer de mi tienda» (`_catalogo_importar.html`, `details#cat-traer`: Shopify sin llaves first, then CSV/Excel
-and URL) connects a `shopify_publico` store from the catalog (`tienda_conectar`/`tienda_sync` with
-`volver=catalogo`; its sync banner is `id="cat-sync-<job>"`, because Configuración paints its own `trabajo-<job>`
-bar for the same job); Configuración › Conexiones offers «Shopify (sin llaves)» first
-(`conectores.TIPOS_CONECTABLES`). Crear's picker (`_selector_productos.html`) groups colors under their product and
-the Sprints panel select (`_sprint_panel_armar.html`) uses `<optgroup>`, both through the Jinja filter
+`extra.variantes`) with its studio photo(s) (`width=1000`), unassigned images as fotos de ambiente
+(`fotos_generales`), price = mode of the variants (`extra.precios` when they differ), currency from meta.json,
+services skipped (`PALABRAS_SERVICIO`); rows are saved under the connector's `fuente` (`Conector.fuente`, None =
+`tipo`; `tareas.tiendas` uses it). One Shopify per project: connecting the Admin-API `shopify` disconnects every
+`shopify_publico` of the project with `tiendas.desconectar(..., archivar=False)` (same `fuente`: rows stay alive
+and the API sync refreshes them; domains are not compared, the API connects with the `.myshopify.com` one),
+connecting `shopify_publico` while an Admin-API store exists is refused, and `desconectar(..., archivar=True)`
+archives by the connector's `fuente`, not the store's `tipo`. `importador.vincular_activo` creates/refreshes colors
+(`_colocar_colores`: new colors always download, existing ones only with `forzar_fotos` or when empty, colors gone
+from the store become `disponible=False`; an existing color is matched by `fuente_id` first and adopted by name only
+when it has none, `_color_existente`, so two store variants whose names normalize alike get `-2`), pays the regla
+once per product and never leaves an activo without photos. UI: there is NO Productos tab — products live in
+**Catálogo › Productos** (`_tab_catalogo.html`), a gallery fetched from `catalogo_grid` (`_catalogo_grid.html` +
+`_catalogo_tarjeta.html`, 60 cards per «Ver más»; `catalogo_vista.py` is the pure filter/sort/paginate/usos layer;
+filters live in the hash `#catalogo?cat=&filtro=&q=&orden=`) with a side-panel ficha fetched from `catalogo_ficha`
+(`_catalogo_ficha.html`, `#catalogo?ficha=<cat>:<pid>`; colors strip, per-color photos, lifestyle photos with
+«Asignar a color», datos + comercial fields, doctrina, usos, «Crear con este producto» →
+`fp_prefill.productos_catalogo`, «Crear experimento», Eliminar) that closes as soon as the hash leaves `#catalogo`
+(hashchange or a sidebar click). Grid and ficha read Crear sessions and experiments once per request:
+`_experimentos_por_activo`, `_productos_tienda_contexto` and `_usos_por_producto` take them preloaded
+(`experimentos_exp`, `sesiones_cf`, `por_clave`). Every catalog POST returns to `#catalogo`, to that ficha when it
+still exists (`_volver_catalogo`/`_volver_fila`), except by design «Crear con este producto» (`#creativeflowplus`)
+and «Crear experimento» (`#experimentos`); only the two GET photo routes (`imagen_producto`,
+`imagen_producto_archivo`) take `<path:producto_id>` (ids with «/»), the POST photo routes take `<producto_id>` plus
+a `variante` form field; controls that never hold an unsaved edit (the orden select, the one-action selects «Asignar
+a color» and the color of «Crear con») carry `data-busqueda` so the «Sin guardar» guard ignores them. «Traer de mi
+tienda» (`_catalogo_importar.html`, `details#cat-traer`: Shopify sin llaves first, then CSV/Excel and URL) connects
+a `shopify_publico` store from the catalog (`tienda_conectar`/`tienda_sync` with `volver=catalogo`; its sync banner
+is `id="cat-sync-<job>"`, because Configuración paints its own `trabajo-<job>` bar for the same job); Configuración
+› Conexiones offers «Shopify (sin llaves)» first (`conectores.TIPOS_CONECTABLES`). Crear's picker
+(`_selector_productos.html`) groups colors under their product and the Sprints panel select
+(`_sprint_panel_armar.html`) uses `<optgroup>`, both through the Jinja filter
 `catalogo_productos.agrupar_por_producto` (registered in `dashboard.py`; not `groupby`, which sorts first and breaks
 on entries without `producto_id`). Rows without an activo (imported without photos) are cards in the same gallery
 («Sin fotos» filter) with Subir fotos / Crear activo / Archivar. Configuración (`_tab_settings.html`) shows one
@@ -1285,8 +1291,10 @@ MutationObserver de `data-precarga`) arranca el sondeo de lo que aparezca; los c
 van delegados sobre la cuadrícula (las agregadas por «Ver más» funcionan igual); el sondeo se pausa
 con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minuto → 5 s a los 5 min).
 `tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto. Fuera de
-alcance (anotado en el spec §7): el JS embebido a estáticos, Catálogo/Experimentos por fragmentos,
-el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos, el flujo viejo «Nueva idea».
+alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por fragmentos (Catálogo
+ya carga su galería y su ficha por fragmento desde 2026-09-30: ver «Catálogo ecommerce y
+conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos, el flujo viejo
+«Nueva idea».
 
 ## Agent skills
 
