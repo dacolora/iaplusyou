@@ -44,6 +44,11 @@ sanity check before committing.
 The alternate CLI entry points (`run_batch.py`, `revisar.py`, `subir_personaje.py`)
 predate the dashboard and still work, but `dashboard.py` is the primary interface —
 prefer extending it over the CLI scripts unless asked for a batch/scriptable path.
+`comparar_seedance_turbo.py` (2026-10-01) is a research CLI for the VPS, like `comparar_modelos.py`: it
+regenerates existing Seedance 2.5 pieces through WaveSpeed's Turbo routes with the worker's same inputs
+(`tareas.flowplus._preparar`) for a side-by-side page, asks «si» before spending and registers the gasto
+(`docs/investigacion/2026-10-01-seedance-turbo.md`). Crear keeps the standard route until that comparison
+says otherwise.
 See `SETUP.md` for the full human-facing setup walkthrough (registering apps with
 Google/Meta/TikTok, Cloudflare R2, etc.).
 
