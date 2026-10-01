@@ -240,6 +240,27 @@ export const ES = {
   "sub.ir_a": "Ir a {tiempo}",
   "sub.quitar_todos": "Quitar los subtítulos de este idioma",
   "sub.confirmar_quitar": "¿Quitar los subtítulos de este idioma? Lo transcrito se guarda: volver a ponerlos es gratis.",
+  "voz.texto_vacio": "Escribe lo que va a decir la voz.",
+  "voz.texto_largo": "Es demasiado largo: hasta {max} caracteres.",
+  "voz.filtro_todas": "Todas",
+  "voz.filtro_mujer": "Mujer",
+  "voz.filtro_hombre": "Hombre",
+  "voz.crear_precio": "Crear la voz ({precio})",
+  "voz.crear_gratis": "Agregar la voz (ya la tienes, gratis)",
+  "voz.calculando": "Calculando el precio…",
+  "voz.sin_precio": "No se pudo calcular el precio: vuelve a intentar.",
+  "voz.creando": "Creando la voz… {etapa}",
+  "voz.agregada_subtitulos": "Voz agregada en el cabezal. Sus subtítulos ya están listos: ponlos gratis en «Subtítulos».",
+  "voz.agregada_sin_subtitulos": "Voz agregada en el cabezal. Sus subtítulos no se pudieron preparar: genéralos en «Subtítulos».",
+  "voz.cortada": "La voz dura más que lo que queda del video: quedó de {tiempo}.",
+  "grab.reloj": "{actual} de {max}",
+  "grab.agregada": "Grabación agregada en el cabezal.",
+  "grab.permiso": "Da permiso al micrófono en tu navegador para grabar.",
+  "grab.sin_micro": "No encontramos un micrófono.",
+  "grab.no_soporta": "Este navegador no graba audio: prueba con Chrome, Edge, Firefox o Safari al día.",
+  "grab.inseguro": "Para grabar, abre el editor desde su dirección segura (https).",
+  "grab.error": "No se pudo usar el micrófono.",
+  "grab.error_subir": "No se pudo subir la grabación (error {status}).",
   "prop.ayuda_vacia": "Elige algo en la línea de tiempo o en el video para cambiarlo.",
   "prop.mezcla_equilibrada": "Equilibrada",
   "prop.mezcla_voz": "Voz primero",
@@ -319,7 +340,9 @@ export const ES = {
   "prop.volver_oir": "Volver a oír",
   "prop.nota_sonido": "Es el sonido del video: su volumen se cambia desde el clip de video.",
   "prop.elegir_video": "Elegir el video",
-  "prop.nota_otro": "El video final no muestra este clip: aquí solo se puede borrar."
+  "prop.nota_otro": "El video final no muestra este clip: aquí solo se puede borrar.",
+  "prop.solo_idioma": "Solo en {idioma}",
+  "prop.todos_idiomas": "Todos los idiomas"
 };
 
 let actuales = ES;

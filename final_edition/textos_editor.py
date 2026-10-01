@@ -255,6 +255,28 @@ TEXTOS = {
     "sub.quitar_todos": N_("Quitar los subtítulos de este idioma"),
     "sub.confirmar_quitar": N_("¿Quitar los subtítulos de este idioma? Lo transcrito se guarda: volver a ponerlos es gratis."),
     # propiedades_modelo.js y propiedades.js
+    # voz_panel.js / voz_modelo.js (capa 5a, Task 8): voz con IA y grabar con el micrófono
+    "voz.texto_vacio": N_("Escribe lo que va a decir la voz."),
+    "voz.texto_largo": N_("Es demasiado largo: hasta {max} caracteres."),
+    "voz.filtro_todas": N_("Todas"),
+    "voz.filtro_mujer": N_("Mujer"),
+    "voz.filtro_hombre": N_("Hombre"),
+    "voz.crear_precio": N_("Crear la voz ({precio})"),
+    "voz.crear_gratis": N_("Agregar la voz (ya la tienes, gratis)"),
+    "voz.calculando": N_("Calculando el precio…"),
+    "voz.sin_precio": N_("No se pudo calcular el precio: vuelve a intentar."),
+    "voz.creando": N_("Creando la voz… {etapa}"),
+    "voz.agregada_subtitulos": N_("Voz agregada en el cabezal. Sus subtítulos ya están listos: ponlos gratis en «Subtítulos»."),
+    "voz.agregada_sin_subtitulos": N_("Voz agregada en el cabezal. Sus subtítulos no se pudieron preparar: genéralos en «Subtítulos»."),
+    "voz.cortada": N_("La voz dura más que lo que queda del video: quedó de {tiempo}."),
+    "grab.reloj": N_("{actual} de {max}"),
+    "grab.agregada": N_("Grabación agregada en el cabezal."),
+    "grab.permiso": N_("Da permiso al micrófono en tu navegador para grabar."),
+    "grab.sin_micro": N_("No encontramos un micrófono."),
+    "grab.no_soporta": N_("Este navegador no graba audio: prueba con Chrome, Edge, Firefox o Safari al día."),
+    "grab.inseguro": N_("Para grabar, abre el editor desde su dirección segura (https)."),
+    "grab.error": N_("No se pudo usar el micrófono."),
+    "grab.error_subir": N_("No se pudo subir la grabación (error {status})."),
     "prop.ayuda_vacia": N_("Elige algo en la línea de tiempo o en el video para cambiarlo."),
     "prop.mezcla_equilibrada": N_("Equilibrada"),
     "prop.mezcla_voz": N_("Voz primero"),
@@ -335,6 +357,9 @@ TEXTOS = {
     "prop.nota_sonido": N_("Es el sonido del video: su volumen se cambia desde el clip de video."),
     "prop.elegir_video": N_("Elegir el video"),
     "prop.nota_otro": N_("El video final no muestra este clip: aquí solo se puede borrar."),
+    # propiedades.js (capa 5a, Task 8): «Suena en» y los subtítulos de un audio
+    "prop.solo_idioma": N_("Solo en {idioma}"),
+    "prop.todos_idiomas": N_("Todos los idiomas"),
 }
 
 

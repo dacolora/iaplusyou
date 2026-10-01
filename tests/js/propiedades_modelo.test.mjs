@@ -327,3 +327,55 @@ test("el panel del texto avisa en llano cuando el texto tiene emojis", () => {
   assert.equal(m.avisoEmoji, avisoEmoji());
   assert.match(avisoEmoji(), /^Los emojis no salen en el video final/);
 });
+
+// ---- Capa 5a (Task 8): «Suena en» y «Subtítulos de este audio» ----
+import { cambioSuenaEn } from "../../static/editor/propiedades_modelo.js";
+
+const NOMBRES_IDIOMA = { es: "Español", en: "English", pt: "Português" };
+
+test("modelo de un audio de voz: «Suena en» con su idioma; la música no lo trae", () => {
+  const { doc, musica } = docCompleto();
+  // una voz agregada en el editor (D8/D9) con el idioma del destino que se veía
+  const conVoz = op.agregarAudio(doc, { id: 3 }, 0, { rol: "voz", idioma: "es" }, INFO);
+  const m = modelo(conVoz.doc, conVoz.seleccion, { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA });
+  assert.equal(m.forma, "audio");
+  assert.deepEqual(m.suena_en, {
+    valor: "es",
+    opciones: [{ valor: "es", texto: "Solo en Español" }, { valor: "", texto: "Todos los idiomas" }],
+  });
+  assert.equal(m.subtitulos, true);
+  // viendo otro destino, también se puede pasar a ese idioma
+  const enOtro = modelo(conVoz.doc, conVoz.seleccion, { destino: "en_US", nombresIdioma: NOMBRES_IDIOMA });
+  assert.deepEqual(enOtro.suena_en.opciones.map((o) => o.valor), ["es", "en", ""]);
+  assert.equal(enOtro.suena_en.opciones[1].texto, "Solo en English");
+  // sin idioma: suena en todos, y ofrece el del destino que se ve
+  const todos = op.agregarAudio(doc, { id: 3 }, 0, { rol: "voz" }, INFO);
+  const mt = modelo(todos.doc, todos.seleccion, { destino: "pt_BR", nombresIdioma: NOMBRES_IDIOMA });
+  assert.deepEqual(mt.suena_en, {
+    valor: "", opciones: [{ valor: "pt", texto: "Solo en Português" }, { valor: "", texto: "Todos los idiomas" }],
+  });
+  // un idioma sin nombre conocido se escribe con su código
+  assert.equal(modelo(todos.doc, todos.seleccion, { destino: "fr_FR" }).suena_en.opciones[0].texto, "Solo en fr");
+  // la música (y un efecto) no dicen en qué idioma hablan, pero sí ofrecen sus subtítulos
+  const mm = modelo(doc, musica, { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA });
+  assert.equal(mm.suena_en, null);
+  assert.equal(mm.subtitulos, true);
+  // la voz del guion ya se ajusta sola a cada país (por_destino): no lleva «Suena en»
+  const guion = structuredClone(doc);
+  guion.pistas.find((p) => p.id === "p_voz").clips[0].por_destino = { es_CO: { material_id: 2, duracion_ms: 3000 } };
+  assert.equal(modelo(guion, "a1", { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA }).suena_en, null);
+  // la voz del borrador sin por_destino sí lo lleva
+  assert.equal(modelo(doc, "a1", { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA }).suena_en.valor, "");
+});
+
+test("cambioSuenaEn: lo que pide «Suena en» a operaciones.cambiar", () => {
+  assert.deepEqual(cambioSuenaEn("es"), { idioma: "es" });
+  assert.deepEqual(cambioSuenaEn(""), { idioma: null });
+  assert.deepEqual(cambioSuenaEn(null), { idioma: null });
+  const { doc } = docCompleto();
+  const conVoz = op.agregarAudio(doc, { id: 3 }, 0, { rol: "voz", idioma: "es" }, INFO);
+  const r = op.cambiar(conVoz.doc, conVoz.seleccion, cambioSuenaEn(""), INFO);
+  assert.equal(clipDe(r.doc, conVoz.seleccion).idioma, undefined);
+  const r2 = op.cambiar(r.doc, conVoz.seleccion, cambioSuenaEn("en"), INFO);
+  assert.equal(clipDe(r2.doc, conVoz.seleccion).idioma, "en");
+});

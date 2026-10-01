@@ -1699,6 +1699,9 @@ msgstr "Add comments"
 msgid "Agregar este referente a la campaña"
 msgstr "Add this reference to the campaign"
 
+msgid "Agregar la voz (ya la tienes, gratis)"
+msgstr "Add the voice (you already have it, free)"
+
 msgid "Agregar las marcadas"
 msgstr "Add the checked ones"
 
@@ -3571,6 +3574,10 @@ msgstr "Creating the voice"
 msgid "Creando la voz…"
 msgstr "Creating the voice…"
 
+#, python-brace-format
+msgid "Creando la voz… {etapa}"
+msgstr "Creating the voice… {etapa}"
+
 msgid "Crear"
 msgstr "Create"
 
@@ -3604,6 +3611,10 @@ msgstr "Create study"
 
 msgid "Crear experimento"
 msgstr "Create experiment"
+
+#, python-brace-format
+msgid "Crear la voz ({precio})"
+msgstr "Create the voice ({precio})"
 
 msgid "Crear mi proyecto"
 msgstr "Create my project"
@@ -3762,6 +3773,9 @@ msgstr "What each prop looks like"
 
 msgid "Cópiala como YOUTUBE_API_KEY en el .env del servidor y reinicia los dos servicios."
 msgstr "Copy it as YOUTUBE_API_KEY in the server's .env and restart both services."
+
+msgid "Da permiso al micrófono en tu navegador para grabar."
+msgstr "Allow microphone access in your browser to record."
 
 msgid "Dato del producto"
 msgstr "Product fact"
@@ -5199,6 +5213,10 @@ msgstr "Error: %(detalle)s"
 msgid "Es demasiado audio para una sola vez: hasta 10 minutos."
 msgstr "That's too much audio at once: up to 10 minutes."
 
+#, python-brace-format
+msgid "Es demasiado largo: hasta {max} caracteres."
+msgstr "It's too long: up to {max} characters."
+
 msgid "Es el precio de cada país: sale de los precios de la edición y no se escribe aquí."
 msgstr "It's each country's price: it comes from the edit's prices and isn't typed here."
 
@@ -5493,6 +5511,9 @@ msgstr "Enter the total cap."
 
 msgid "Escribe la idea y elige un personaje."
 msgstr "Write the idea and choose a character."
+
+msgid "Escribe lo que va a decir la voz."
+msgstr "Write what the voice will say."
 
 msgid "Escribe los 5 prompts por idea y los guiones de las finales."
 msgstr "Writes the 5 prompts per idea and the scripts for the final cuts."
@@ -5938,6 +5959,9 @@ msgstr "This month"
 #, python-format
 msgid "Este mes: %(gasto)s"
 msgstr "This month: %(gasto)s"
+
+msgid "Este navegador no graba audio: prueba con Chrome, Edge, Firefox o Safari al día."
+msgstr "This browser can't record audio: try an up-to-date Chrome, Edge, Firefox or Safari."
 
 #, python-format
 msgid "Este núcleo quedó sin sub-avatares: %(error)s"
@@ -6820,6 +6844,9 @@ msgstr "Recording"
 #, python-format
 msgid "Grabación %(hora)s"
 msgstr "Recording %(hora)s"
+
+msgid "Grabación agregada en el cabezal."
+msgstr "Recording added at the playhead."
 
 msgid "Grabación: de 10 segundos a 5 minutos, mp3, wav, m4a, aac u ogg"
 msgstr "Recording: 10 seconds to 5 minutes, mp3, wav, m4a, aac or ogg"
@@ -7969,6 +7996,10 @@ msgstr "The preview has no sound: {mensaje}"
 msgid "La voz"
 msgstr "The voice"
 
+#, python-brace-format
+msgid "La voz dura más que lo que queda del video: quedó de {tiempo}."
+msgstr "The voice is longer than what's left of the video: it was cut to {tiempo}."
+
 msgid "La voz se ajusta sola a cada país."
 msgstr "The voice adjusts itself to each country."
 
@@ -8988,6 +9019,9 @@ msgstr "You didn't choose any photo."
 msgid "No elegiste ningún archivo."
 msgstr "You didn't pick a file."
 
+msgid "No encontramos un micrófono."
+msgstr "We couldn't find a microphone."
+
 #, python-format
 msgid "No encontré %(video)s"
 msgstr "I couldn't find %(video)s"
@@ -9732,6 +9766,10 @@ msgstr "Couldn't upload (error {status})."
 msgid "No se pudo subir la foto del producto: %(error)s"
 msgstr "Couldn't upload the product photo: %(error)s"
 
+#, python-brace-format
+msgid "No se pudo subir la grabación (error {status})."
+msgstr "Couldn't upload the recording (error {status})."
+
 #, python-format
 msgid "No se pudo sugerir (%(tipo)s)."
 msgstr "Couldn't suggest anything (%(tipo)s)."
@@ -9744,6 +9782,9 @@ msgid "No se pudo transcribir %(num)s archivo."
 msgid_plural "No se pudieron transcribir %(num)s archivos."
 msgstr[0] "Couldn't transcribe %(num)s file."
 msgstr[1] "Couldn't transcribe %(num)s files."
+
+msgid "No se pudo usar el micrófono."
+msgstr "Couldn't use the microphone."
 
 msgid "No se subió"
 msgstr "Not uploaded"
@@ -10033,6 +10074,9 @@ msgstr "To connect MercadoLibre, <code>FLASK_SECRET_KEY</code> is missing in the
 #, python-format
 msgid "Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>%(redirect)s</code>)."
 msgstr "To connect MercadoLibre, <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code> (app at developers.mercadolibre.com with <code>offline_access</code> permission and redirect <code>%(redirect)s</code>)."
+
+msgid "Para grabar, abre el editor desde su dirección segura (https)."
+msgstr "To record, open the editor from its secure address (https)."
 
 msgid "Para producir una variante hay que indicar `variante` (número) y `variante_tipo` (hook | estructura) a la vez."
 msgstr "To produce a variant you must give `variante` (number) and `variante_tipo` (hook | estructura) together."
@@ -12172,6 +12216,10 @@ msgstr ""
 msgid "Solo el catálogo público: productos, colores con su foto, precios y URL de compra, sin ninguna llave. Los pedidos y la atribución necesitan la Admin API (pestaña Shopify)."
 msgstr "Only the public catalog: products, colors with their photo, prices and purchase URL, with no key at all. Orders and attribution need the Admin API (Shopify tab)."
 
+#, python-brace-format
+msgid "Solo en {idioma}"
+msgstr "Only in {idioma}"
+
 msgid "Solo esta campaña (bórralas para volver a las del sprint)."
 msgstr "Only this campaign (delete them to go back to the sprint's)."
 
@@ -12974,6 +13022,9 @@ msgstr "All the ads from a Facebook page"
 
 msgid "Todos los avatares del proyecto"
 msgstr "All the project's avatars"
+
+msgid "Todos los idiomas"
+msgstr "All languages"
 
 msgid "Todos los países"
 msgstr "All countries"
@@ -13936,6 +13987,12 @@ msgstr "Voice"
 
 msgid "Voz (solo en diálogo)"
 msgstr "Voice (dialogue mode only)"
+
+msgid "Voz agregada en el cabezal. Sus subtítulos no se pudieron preparar: genéralos en «Subtítulos»."
+msgstr "Voice added at the playhead. Its subtitles couldn't be prepared: generate them in “Subtitles”."
+
+msgid "Voz agregada en el cabezal. Sus subtítulos ya están listos: ponlos gratis en «Subtítulos»."
+msgstr "Voice added at the playhead. Its subtitles are ready: add them for free in “Subtitles”."
 
 msgid "Voz clonada: ya está en Mis voces."
 msgstr "Voice cloned: it is in My voices."
@@ -16717,6 +16774,10 @@ msgstr "already published"
 
 msgid "ya usamos Kling O1 (vía fal.ai) y Kling O3 Pro (más nuevo, vía WaveSpeed); no suma nada nuevo probar las versiones intermedias"
 msgstr "we already use Kling O1 (via fal.ai) and Kling O3 Pro (newer, via WaveSpeed); testing the intermediate versions doesn't add anything new"
+
+#, python-brace-format
+msgid "{actual} de {max}"
+msgstr "{actual} of {max}"
 
 #, python-brace-format
 msgid "{mensaje} Elige otro destino."

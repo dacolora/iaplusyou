@@ -123,15 +123,16 @@ export function claveForma(m) {
 
 // `destino`: "<idioma>_<PAIS>" que se está viendo (editor.destino()); `info`:
 // {material_id: {duracion_ms, tiene_audio}} (editor.info()); `materiales`:
-// los de la vista previa (para las medidas de una imagen).
-export function modelo(doc, id, { destino = null, info = {}, materiales = {} } = {}) {
+// los de la vista previa (para las medidas de una imagen); `nombresIdioma`:
+// {es: "Español", …} (datos.voz.nombres_idioma), para «Suena en».
+export function modelo(doc, id, { destino = null, info = {}, materiales = {}, nombresIdioma = {} } = {}) {
   const h = buscar(doc, id);
   const forma = formaDeHallado(doc, h);
   switch (forma) {
     case "video": return modeloVideo(doc, h, info);
     case "texto": return modeloTexto(doc, h, destino);
     case "imagen": return modeloImagen(doc, h, materiales);
-    case "audio": return modeloAudio(h);
+    case "audio": return modeloAudio(h, destino, nombresIdioma);
     case "sonido": return modeloSonido(doc, h);
     case "otro": return { forma, clipId: h.clip.id, nombre: t(h.pista.tipo === "superpuesto" ? "fila.superpuesto" : "prop.clip") };
     default: return modeloDocumento(doc);
@@ -331,7 +332,27 @@ function modeloImagen(doc, { clip }, materiales) {
   };
 }
 
-function modeloAudio({ clip }) {
+// D10: «Suena en» — en qué idioma habla una voz (`idioma` del clip; sin él,
+// suena en todos los destinos). Las opciones: el idioma que ya tiene, el del
+// destino que se ve (si es otro) y «Todos los idiomas» (valor ""). La voz del
+// guion (`por_destino`) ya se ajusta sola a cada país: no lo lleva, ni la
+// música ni un efecto (no dicen nada en un idioma).
+const IDIOMA_RE = /^[a-z]{2}$/;
+
+function suenaEn(clip, destino, nombresIdioma) {
+  if (clip.rol_audio !== "voz" || cambiaPorDestino(clip)) return null;
+  const propio = IDIOMA_RE.test(clip.idioma ?? "") ? clip.idioma : null;
+  const delDestino = String(destino ?? "").split("_")[0];
+  const idiomas = [...new Set([propio, IDIOMA_RE.test(delDestino) ? delDestino : null].filter(Boolean))];
+  const nombre = (i) => nombresIdioma?.[i] ?? i;
+  return {
+    valor: propio ?? "",
+    opciones: [...idiomas.map((i) => ({ valor: i, texto: t("prop.solo_idioma", { idioma: nombre(i) }) })),
+      { valor: "", texto: t("prop.todos_idiomas") }],
+  };
+}
+
+function modeloAudio({ clip }, destino = null, nombresIdioma = {}) {
   const a = clip.audio ?? {};
   const rol = clip.rol_audio ?? "subida";
   const volumen = Number(a.volumen ?? 1);
@@ -348,6 +369,9 @@ function modeloAudio({ clip }) {
       paso: FUNDIDO_PASO_MS,
     },
     nota: cambiaPorDestino(clip) ? t("prop.nota_voz") : null,
+    suena_en: suenaEn(clip, destino, nombresIdioma),
+    // «Subtítulos de este audio»: cualquier audio puede ser la fuente (D4, D12)
+    subtitulos: true,
   };
 }
 
@@ -386,6 +410,11 @@ export function cambioFondo(tipo, fondoActual) {
   if (!(tipo in RADIO_FONDO)) throw new Error(`Forma de fondo desconocida: ${tipo}`);
   const radio = RADIO_FONDO[tipo];
   return { estilo: { fondo: fondoActual ? { radio } : { ...FONDO_NUEVO, radio } } };
+}
+
+// «Suena en» (D10): "" es «Todos los idiomas» (sin `idioma` en el clip).
+export function cambioSuenaEn(valor) {
+  return { idioma: valor ? String(valor) : null };
 }
 
 // «Silenciar» baja a 0 y recuerda cuánto tenía; «Volver a oír» lo devuelve
