@@ -74,6 +74,10 @@ PLANTILLAS_TRADUCIDAS = [
     # tarjetas y la ficha del producto reemplazan a _catalogo_lista.html y
     # _catalogo_sin_fotos.html (borradas); ya vienen con _() y su inglés en el catálogo.
     "_catalogo_grid.html", "_catalogo_tarjeta.html", "_catalogo_ficha.html",
+    # Flujo viejo «Nueva idea» (pedido de Daniel, 2026-10-01): sin pantalla viva,
+    # pero traducido igual; tests/test_i18n_nueva_idea.py lo pinta en los dos idiomas.
+    "_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html", "_imagen_row.html",
+    "_progreso_row.html", "_seccion_videos.html", "_video_card.html", "_seccion_bitacora.html",
 ]
 
 
@@ -124,13 +128,9 @@ def test_tojson_no_dentro_de_atributo_con_comillas_dobles():
         "atributo:\n" + "\n".join(hallazgos))
 
 
-LEGADO_NUEVA_IDEA = ("_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html",
-                     "_imagen_row.html", "_progreso_row.html", "_seccion_videos.html", "_video_card.html",
-                     "_seccion_bitacora.html")
 EXCLUIDAS = {
     "mapa_codigo.html": "documentación interna en español, como los textos de la doctrina; su barra de arriba "
                         "(id mapa-barra) sí está traducida y la cubre test_barra_del_mapa_en_ingles",
-    **{nombre: "flujo viejo sin pantalla viva; destino pendiente de Daniel" for nombre in LEGADO_NUEVA_IDEA},
 }
 
 
@@ -142,13 +142,7 @@ def test_todas_las_plantillas_estan_en_la_guardia():
     assert not set(EXCLUIDAS) & set(PLANTILLAS_TRADUCIDAS)
 
 
-def test_flujo_viejo_nueva_idea_excluido():
-    """El flujo «Nueva idea» no tiene ningún include vivo
-    (tests/test_configuracion_apartados.py::test_crear_ya_no_muestra_nueva_idea):
-    sus 9 plantillas siguen en disco, sin traducir y fuera de la guardia,
-    hasta que Daniel decida qué pasa con ese flujo. Sus rutas sí pasan sus
-    mensajes por el catálogo (tests/test_i18n_mensajes.py)."""
-    for nombre in LEGADO_NUEVA_IDEA:
-        assert os.path.exists(os.path.join(RAIZ, "templates", nombre)), nombre
-        assert EXCLUIDAS.get(nombre) == "flujo viejo sin pantalla viva; destino pendiente de Daniel", nombre
-        assert nombre not in PLANTILLAS_TRADUCIDAS, nombre
+def test_solo_el_mapa_queda_fuera_de_la_guardia():
+    """Desde 2026-10-01 las 9 plantillas del flujo viejo «Nueva idea» también
+    están traducidas: la única plantilla en español a propósito es el mapa."""
+    assert set(EXCLUIDAS) == {"mapa_codigo.html"}

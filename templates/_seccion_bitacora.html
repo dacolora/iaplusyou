@@ -1,8 +1,8 @@
-<h2>Bitácora reciente</h2>
+<h2>{{ _('Bitácora reciente') }}</h2>
 {% if log %}
 <table>
   <thead>
-    <tr><th>Fecha</th><th>Video</th><th>Etapa</th><th>Estado</th><th>Detalle</th></tr>
+    <tr><th>{{ _('Fecha') }}</th><th>{{ _('Video') }}</th><th>{{ _('Etapa') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Detalle') }}</th></tr>
   </thead>
   <tbody>
     {% for fila in log %}
@@ -17,5 +17,5 @@
   </tbody>
 </table>
 {% else %}
-<p class="vacio">Sin actividad registrada todavía.</p>
+<p class="vacio">{{ _('Sin actividad registrada todavía.') }}</p>
 {% endif %}
