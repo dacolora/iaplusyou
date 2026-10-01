@@ -50,6 +50,19 @@ clientes/*/marca/*
 !clientes/*/marca/root.json
 !clientes/*/marca/schema.json
 
+# Catálogo de Crear (productos con sus colores, personajes y entornos): una
+# sync de tienda baja cientos de fotos por proyecto y el worker reescribe las
+# metas, así que nada NUEVO de aquí entra a git. OJO: lo de happyflops que ya
+# estaba comprometido (productos.json y las fotos de horiginal/happyblanket)
+# sigue rastreado a propósito — sacarlo del índice (git rm --cached) lo
+# borraría del VPS en el próximo `git pull`.
+clientes/*/productos/
+clientes/*/productos.json
+clientes/*/personajes_catalogo/
+clientes/*/personajes_catalogo.json
+clientes/*/entornos/
+clientes/*/entornos.json
+
 data/
 
 # Archivos CSV/XLSX subidos para importar (precios del cliente); la tarea los borra al terminar

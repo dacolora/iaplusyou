@@ -100,8 +100,10 @@ def _lineas(texto):
 
 
 def _productos(cliente):
+    """Uno por PRODUCTO (id = pid), no uno por color: un estudio investiga el
+    producto. `catalogo_productos.encontrar(pid)` resuelve a su primer color."""
     return [{"id": p["id"], "nombre": p["nombre"], "descripcion": p.get("descripcion") or ""}
-            for p in catalogo_productos.listar(cliente, "producto")]
+            for p in catalogo_productos.listar_productos(cliente, "producto")]
 
 
 _NORMALIZAR = {"reddit": fuente_reddit.normalizar_params, "youtube": fuente_youtube.normalizar_params,

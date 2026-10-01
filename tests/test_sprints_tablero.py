@@ -3,6 +3,14 @@ from datetime import date
 
 from sprints import tablero
 
+# La única prueba de ruta de este archivo (abajo, catálogo agrupado por color)
+# reusa el catálogo real de tests/test_rutas_catalogo.py: su `app` monkeypatchea
+# catalogo_productos.BASE_DIR a un tmp_path (a diferencia del `app` de
+# tests/test_rutas_sprints.py, que reemplaza catalogo_productos.listar por una
+# lista fija sin producto_id/variante) y sigue siendo el mismo dashboard.app
+# donde vive el Blueprint de sprints.
+from tests.test_rutas_catalogo import _con_colores, app  # noqa: F401
+
 
 def _c(**kw):
     base = {"referencias_objetivo": 5, "referencias_listas": 5, "n_videos": 1, "n_imagenes": 1, "ideas": [], "piezas": []}
@@ -90,3 +98,19 @@ def test_pestanas_cuentan_lo_de_cada_paso():
     assert tablero.pestanas(_c(referencias_listas=3, ideas=ideas, piezas=piezas)) == \
         {"armar": "3/5", "ideas": "1/2", "piezas": "1/2"}
     assert tablero.pestanas(_c())["armar"] == "✓"
+
+
+# --------------------------------------------------------- panel (ruta) ---
+
+def test_panel_agrupa_los_colores_del_producto(app):
+    """El <select> de producto del panel «Armar» agrupa los colores de un
+    mismo producto en un <optgroup> (spec 2026-09-28 §10.5), igual que el
+    selector de Crear."""
+    from sprints import datos
+    _con_colores(app)                          # Original: pink + beige, en el catálogo temporal
+    sid = datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31")
+    pid = datos.crear_persona("acme", "Premium", resumen="Busca calidad")
+    cid = datos.agregar_campana("acme", sid, pid, "original/pink", None, 2, 1)
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel",
+                        headers={"X-Requested-With": "fetch"}).data.decode()
+    assert '<optgroup label="Original">' in html and '<option value="original/pink"' in html and ">Pink<" in html

@@ -1447,6 +1447,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 
 .badge-fuente { text-transform: lowercase; }
 .badge-fuente-shopify { color: #8bc36a; background: rgba(94, 142, 62, .12); }
+.badge-fuente-shopify_publico { color: #8bc36a; background: rgba(94, 142, 62, .12); }
 .badge-fuente-woo { color: #b48be0; background: rgba(127, 84, 179, .12); }
 .badge-fuente-meli { color: #e0b33a; background: rgba(255, 230, 0, .22); }
 .badge-fuente-csv { color: var(--muted); background: rgba(120, 120, 120, .12); }
@@ -2815,6 +2816,73 @@ body.panel-abierto { overflow: hidden; }
 .gpg-ficha-mas { opacity: 1; border-style: dashed; text-align: center; }
 @media (max-width: 760px) { .gpg-img { width: calc(50% - .25rem); } }
 .gpg-escena-cab .gpg-a-crear { margin-left: auto; }
+
+/* ============================================================
+   Catálogo: galería y ficha (spec 2026-09-28 §10)
+   ============================================================ */
+.cat-sync { margin-bottom: .8rem; }
+.cat-toolbar { display: flex; flex-wrap: wrap; gap: .5rem .8rem; align-items: center; margin: 0 0 1rem; }
+.cat-toolbar .cat-buscador { flex: 1 1 14rem; max-width: 22rem; margin: 0; }
+.cat-chips-filtro { display: flex; flex-wrap: wrap; gap: .35rem; }
+.cat-chips-filtro .chip { border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 999px; padding: .3rem .7rem; font: inherit; font-size: .8rem; cursor: pointer; }
+.cat-chips-filtro .chip:hover { color: var(--text); border-color: var(--muted-2); }
+.cat-chips-filtro .chip.activo { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cat-chips-filtro .chip span { opacity: .8; margin-left: .2rem; }
+.cat-chips-filtro .chip span:empty { display: none; }
+.cat-orden { width: auto; margin: 0; font-size: .82rem; }
+.cat-grid-wrap { min-height: 6rem; }
+.cat-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: .8rem; }
+.cat-tarjeta { display: flex; flex-direction: column; gap: .4rem; border-radius: 12px; padding: .5rem; background: var(--panel-2); border: 1px solid var(--border); cursor: pointer; transition: border-color .15s, box-shadow .15s; min-width: 0; }
+.cat-tarjeta:hover, .cat-tarjeta:focus-visible { border-color: var(--accent); box-shadow: var(--shadow-soft); outline: none; }
+.cat-tarjeta-sinfotos { cursor: default; border-style: dashed; }
+.cat-tarjeta-media { position: relative; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; background: var(--panel); }
+.cat-tarjeta-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cat-tarjeta-vacia { display: block; width: 100%; height: 100%; background: repeating-linear-gradient(45deg, var(--panel-hover), var(--panel-hover) 6px, var(--panel) 6px, var(--panel) 12px); }
+.cat-chip { position: absolute; left: .4rem; bottom: .4rem; font-size: .68rem; padding: .15rem .45rem; border-radius: 999px; background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+.cat-tarjeta-texto { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+.cat-tarjeta-texto strong { font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-colores { display: flex; align-items: center; gap: .25rem; }
+.cat-color-punto { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); background: var(--panel); display: inline-block; flex: none; }
+.cat-color-sin-fotos { border-style: dashed; }
+.cat-colores small { color: var(--muted); font-size: .7rem; }
+.cat-tarjeta-precio { font-size: .84rem; }
+.cat-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.cat-chips .tag-estado { margin: 0; font-size: .68rem; }
+.cat-tarjeta-acciones { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.cat-tarjeta-acciones form.inline { margin: 0; }
+.cat-mas { text-align: center; margin: .8rem 0; }
+.cat-nuevo { margin-top: 1rem; }
+/* ficha */
+.cat-panel-lateral { width: min(640px, 100%); }
+.cat-ficha-precio { margin: .4rem 0 0; font-size: .95rem; }
+.cat-colores-tira { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: .3rem; }
+.cat-color-ficha { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: .25rem; width: 72px; padding: .3rem; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); color: var(--muted); font: inherit; font-size: .7rem; cursor: pointer; }
+.cat-color-ficha img, .cat-color-vacio { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; display: block; background: var(--panel); border: 1px dashed transparent; }
+.cat-color-ficha.sin-fotos .cat-color-vacio { border-color: var(--border); }
+.cat-color-ficha.no-disponible { opacity: .55; }
+.cat-color-ficha[aria-selected="true"] { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 1px var(--accent); }
+.cat-color-ficha span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-color-fotos { margin-top: .6rem; }
+/* Foto de ambiente: la celda es más ancha que una foto de referencia (92 px)
+   para que «Asignar a color…» se lea entero; la foto y el select la llenan. */
+.cat-foto-general { width: 8.5rem; }
+.cat-foto-general img { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+.cat-foto-general .cat-form-mover { position: static; margin: .3rem 0 0; }
+.cat-foto-general .cat-form-mover select { font-size: .7rem; padding: .2rem .3rem; width: 100%; }
+.cat-nuevo-color { margin-top: .6rem; }
+.cat-nuevo-color form { display: grid; gap: .5rem; margin-top: .5rem; }
+.cat-crear-con { display: inline-flex; gap: .4rem; align-items: center; margin: 0; }
+.cat-crear-con select { width: auto; margin: 0; }
+/* Selector de Crear/Sprints: un producto con colores agrupa sus tiles bajo un
+   encabezado en vez de listarlos sueltos (spec 2026-09-28 §10.5). */
+.producto-grupo { flex: 1 1 100%; }
+.producto-grupo-nombre { margin: .4rem 0 .2rem; font-size: .8rem; color: var(--muted); }
+.producto-grupo-nombre small { margin-left: .3rem; }
+.producto-grupo-tiles { display: flex; flex-wrap: wrap; gap: .5rem; }
+@media (max-width: 640px) {
+  .cat-tarjetas { grid-template-columns: repeat(2, 1fr); }
+  .cat-toolbar .cat-buscador { max-width: 100%; }
+}
 
 /* Mis voces (2026-09-30): voces propias arriba de la galería, con su ✕ a la
    izquierda del ▶, y el panel para clonar o diseñar. */

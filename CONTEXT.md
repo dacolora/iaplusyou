@@ -138,3 +138,42 @@ Una línea por prueba decidida («Ganó en CO: …», «Perdió en MX: … Diagn
 proyecto (40 como máximo, las más nuevas primero) y leída como DATOS por las ideas de sprint, el guion base y las
 variantes. Nunca obliga a nada.
 _Avoid_: regla, insight
+
+### Catálogo
+
+**Producto**:
+Lo que se vende: una carpeta `clientes/<c>/productos/<pid>/`, su entrada en `productos.json` y UNA fila comercial.
+_Avoid_: activo (a secas), item
+
+**Color**:
+Una versión visual de un producto (en Shopify «Colour», «Patterns»…) con sus propias fotos de referencia: una
+subcarpeta `<pid>/<color_id>/` con el id compuesto `pid/color`.
+_Avoid_: variante (es el nombre técnico en `productos.json`), colorway, SKU
+
+**Producto plano**:
+Un producto sin colores; sus fotos de referencia van en la raíz de su carpeta.
+
+**Foto de estudio**:
+La foto de referencia de un color: la que Shopify liga a la variante.
+
+**Foto de ambiente**:
+Una foto del producto sin color asignado (lifestyle). En un producto con colores vive en la raíz de su carpeta y no es
+referencia.
+_Avoid_: foto general (nombre interno: `fotos_generales`)
+
+**Activo del catálogo**:
+Cualquier cosa del catálogo que se elige como referencia en Crear, Sprints o «Cambiar producto»: un color, un
+producto plano, un personaje o un entorno (cada entrada de `catalogo_productos.listar()`). Distinto del «Activo» de Meta.
+
+**Fila comercial**:
+La fila `producto` de un producto, una sola aunque tenga colores: precio, moneda, URL de compra, en prueba, prioridad,
+sofisticación, pruebas y pedidos.
+
+**Tienda pública**:
+Una tienda Shopify conectada solo con su dominio, sin llaves («Shopify (sin llaves)», `shopify_publico`): lee el
+catálogo público y guarda sus filas con la fuente `shopify`, la misma de la conexión por Admin API. Es la fuente del
+catálogo: si la Admin API también está conectada, esa solo suma pedidos y atribución.
+
+**Ficha**:
+El panel lateral de un producto, un personaje o un entorno en la pestaña Catálogo.
+_Avoid_: detalle, modal

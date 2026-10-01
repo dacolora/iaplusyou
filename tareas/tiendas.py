@@ -163,21 +163,42 @@ def _nombre(tienda):
     return tienda.get("nombre") or tienda.get("dominio") or gettext("tienda %(id)s", id=tienda["id"])
 
 
+def catalogo_desde_tienda_publica(cliente, tienda):
+    """True si `tienda` es la Shopify por Admin API y el proyecto también
+    tiene la tienda sin llaves (`shopify_publico`): el catálogo llega de esa
+    (trae los colores con su foto; el conector de la Admin API no) y esta
+    solo trae pedidos y atribución (ruling final-5 del catálogo por colores).
+    Si las dos sincronizaran productos, la de la Admin API congelaría los
+    colores y cada una archivaría lo que solo ve la otra (misma `fuente`)."""
+    return tienda.get("tipo") == "shopify" and any(
+        t["tipo"] == "shopify_publico" for t in tiendas.listar(cliente))
+
+
 # --- sync productos ----------------------------------------------------------
 
 @registrar("tienda_sync_productos")
 def tienda_sync_productos(tarea):
     """Baja el catálogo de la tienda, lo guarda/actualiza (importador),
-    liga activos, archiva lo que ya no está y marca `ultima_sync_productos`."""
+    liga activos, archiva lo que ya no está y marca `ultima_sync_productos`.
+    La Admin API de Shopify con una tienda sin llaves en el proyecto no toca
+    productos (`catalogo_desde_tienda_publica`): solo marca la hora."""
     p = tarea["payload"]
     cliente, tid = p["cliente"], p["tienda_id"]
     job_id = tarea.get("job_id") or job_id_sync_productos(cliente, tid)
     tienda = tiendas.obtener(cliente, tid)
     if tienda is None:
         return gettext("Esa tienda no existe.")
+    if catalogo_desde_tienda_publica(cliente, tienda):
+        tiendas.actualizar(cliente, tid, ultima_sync_productos=db.ahora())
+        return gettext("El catálogo llega desde la conexión sin llaves; esta conexión trae los pedidos.")
     try:
+        # Lee la fuente del conector: si el conector tiene un atributo `fuente`,
+        # úsalo; si no, usa el tipo de tienda. Esto permite conectores como
+        # `shopify_publico` que guardan productos con fuente `shopify`.
+        cls = conectores.por_tipo(tienda["tipo"])
+        fuente = getattr(cls, "fuente", None) or tienda["tipo"]
         # Primera importación de esta fuente: vale la pena pedir descripciones.
-        primera = not any(pr["fuente"] == tienda["tipo"]
+        primera = not any(pr["fuente"] == fuente
                           for pr in tiendas.productos(cliente, incluir_archivados=True))
         con = _conector(cliente, tienda, cargar_descripciones=primera)
     except _ERRORES_TIENDA as error:
@@ -197,13 +218,18 @@ def tienda_sync_productos(tarea):
     _guardar_credenciales(cliente, tienda, con)
 
     resumen = importador.importar_lista(
-        cliente, tienda["tipo"], lista, max_activos=MAX_ACTIVOS_SYNC,
+        cliente, fuente, lista, max_activos=MAX_ACTIVOS_SYNC,
         on_progreso=lambda etapa, detalle: trabajos.reportar(job_id, etapa=etapa, detalle=detalle))
-    archivados = tiendas.archivar_faltantes(cliente, tienda["tipo"], [pr["fuente_id"] for pr in lista])
+    archivados = tiendas.archivar_faltantes(cliente, fuente, [pr["fuente_id"] for pr in lista])
     tiendas.actualizar(cliente, tid, estado="conectada", error=None, ultima_sync_productos=db.ahora())
     texto = importador.resumen_texto(resumen)
     if archivados:
         texto += " " + gettext("%(n)s archivado(s) por no estar ya en la tienda.", n=archivados)
+    # Si el conector tiene omitidos, añádelos al resumen
+    omitidos = getattr(con, "omitidos", [])
+    if omitidos:
+        texto += " " + gettext("%(n)s omitido(s) por no ser productos: %(lista)s",
+                              n=len(omitidos), lista=", ".join(omitidos[:5]))
     if resumen.get("pendientes"):
         _encolar_continuacion("tienda_sync_productos", {"cliente": cliente, "tienda_id": tid}, cliente, job_id, 120)
     return texto
@@ -398,4 +424,4 @@ __all__ = ["ETAPAS_IMPORTAR", "ETAPAS_VINCULAR", "CADA_SYNC_PRODUCTOS", "CADA_SY
            "tienda_sync_productos", "tienda_sync_pedidos", "catalogo_importar", "producto_vincular",
            "tienda_sync_productos_todas", "tienda_sync_pedidos_todas",
            "job_id_sync_productos", "job_id_sync_pedidos", "job_id_importar_archivo", "job_id_importar_url",
-           "job_id_vincular", "job_id_continuacion"]
+           "job_id_vincular", "job_id_continuacion", "catalogo_desde_tienda_publica"]

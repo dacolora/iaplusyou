@@ -196,9 +196,10 @@ def _referencias_texto(refs):
 
 
 def _producto_fila(cliente, catalogo_id):
-    """Fila `producto` del activo (precio, moneda, url_compra); {} si no hay."""
+    """Fila `producto` del producto de `catalogo_id` (o de uno de sus
+    colores); {} si no hay."""
     try:
-        return tiendas.por_activo(cliente).get(catalogo_id) or {}
+        return tiendas.por_activo(cliente).get(catalogo_productos.producto_base(catalogo_id)) or {}
     except Exception:  # noqa: BLE001 — precio y URL son un extra del prompt, nunca lo tumban
         return {}
 

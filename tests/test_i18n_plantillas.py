@@ -22,7 +22,7 @@ PLANTILLAS_TRADUCIDAS = [
     "_crear_flowplus.html", "_crear_flowplus_guiones.html", "_gpg_panel.html", "_gpg_notion.html",
     "_gpg_guion.html", "_gpg_video.html", "_gpg_clips.html", "_gpg_imagenes.html", "_gpg_macros.html",
     "_tab_catalogo.html", "_catalogo_campos_comerciales.html", "_catalogo_importar.html",
-    "_catalogo_lista.html", "_catalogo_sin_fotos.html", "_maniqui.html", "_seccion_personajes.html",
+    "_maniqui.html", "_seccion_personajes.html",
     "_tab_experimentos.html", "_form_reglas.html", "_anuncios_sueltos.html", "_organico_publicar.html",
     "_tab_tablero.html", "landing_cliente.html",
     # Merge de main (2026-09-27): parciales nuevos dentro de pantallas ya traducidas
@@ -70,6 +70,14 @@ PLANTILLAS_TRADUCIDAS = [
     # Merge de main (2026-09-30, Flow Plus: imágenes por escena): ya viene con _()
     # (0 hallazgos del detector), como el resto de los _gpg_*.
     "_gpg_escenas.html",
+    # Catálogo por colores (rama catalogo-colores, spec 2026-09-28): la galería, sus
+    # tarjetas y la ficha del producto reemplazan a _catalogo_lista.html y
+    # _catalogo_sin_fotos.html (borradas); ya vienen con _() y su inglés en el catálogo.
+    "_catalogo_grid.html", "_catalogo_tarjeta.html", "_catalogo_ficha.html",
+    # Flujo viejo «Nueva idea» (pedido de Daniel, 2026-10-01): sin pantalla viva,
+    # pero traducido igual; tests/test_i18n_nueva_idea.py lo pinta en los dos idiomas.
+    "_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html", "_imagen_row.html",
+    "_progreso_row.html", "_seccion_videos.html", "_video_card.html", "_seccion_bitacora.html",
     "_audios_mis_voces.html",   # Audios Europa (2026-09-30): Crear › Audios › Mis voces, ya con _()
 ]
 
@@ -121,13 +129,9 @@ def test_tojson_no_dentro_de_atributo_con_comillas_dobles():
         "atributo:\n" + "\n".join(hallazgos))
 
 
-LEGADO_NUEVA_IDEA = ("_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html",
-                     "_imagen_row.html", "_progreso_row.html", "_seccion_videos.html", "_video_card.html",
-                     "_seccion_bitacora.html")
 EXCLUIDAS = {
     "mapa_codigo.html": "documentación interna en español, como los textos de la doctrina; su barra de arriba "
                         "(id mapa-barra) sí está traducida y la cubre test_barra_del_mapa_en_ingles",
-    **{nombre: "flujo viejo sin pantalla viva; destino pendiente de Daniel" for nombre in LEGADO_NUEVA_IDEA},
 }
 
 
@@ -139,13 +143,7 @@ def test_todas_las_plantillas_estan_en_la_guardia():
     assert not set(EXCLUIDAS) & set(PLANTILLAS_TRADUCIDAS)
 
 
-def test_flujo_viejo_nueva_idea_excluido():
-    """El flujo «Nueva idea» no tiene ningún include vivo
-    (tests/test_configuracion_apartados.py::test_crear_ya_no_muestra_nueva_idea):
-    sus 9 plantillas siguen en disco, sin traducir y fuera de la guardia,
-    hasta que Daniel decida qué pasa con ese flujo. Sus rutas sí pasan sus
-    mensajes por el catálogo (tests/test_i18n_mensajes.py)."""
-    for nombre in LEGADO_NUEVA_IDEA:
-        assert os.path.exists(os.path.join(RAIZ, "templates", nombre)), nombre
-        assert EXCLUIDAS.get(nombre) == "flujo viejo sin pantalla viva; destino pendiente de Daniel", nombre
-        assert nombre not in PLANTILLAS_TRADUCIDAS, nombre
+def test_solo_el_mapa_queda_fuera_de_la_guardia():
+    """Desde 2026-10-01 las 9 plantillas del flujo viejo «Nueva idea» también
+    están traducidas: la única plantilla en español a propósito es el mapa."""
+    assert set(EXCLUIDAS) == {"mapa_codigo.html"}
