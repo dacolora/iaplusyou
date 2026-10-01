@@ -764,7 +764,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
 
-**Editor (capas 1–4c, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–5a, 2026-09/10):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -901,6 +901,32 @@ stretching or duplicating a layer stops at the principal's end, load warnings ar
 (`editor.borrar_material` → `biblioteca.borrar`, 409 names the edición), «Editar» prefers the person's edición over
 the «Borrador automático» (`ediciones.para_editar`/`nombre_visible`), and `rasterizar.sin_glifos_faltantes` strips
 glyphs the font lacks (emojis) while the panel warns.
+Capa 5a (2026-10-01, automatic subtitles + voice-over, spec `2026-09-30-editor-capa5a-subtitulos-voz-design.md`):
+subtitles are no longer stored with absolute times. The document says WHAT is subtitled per language
+(`subtitulos.fuentes`: `voz` | `sonido` | `material:<id>`, ≤ 8; `[]` = none; absent = the old absolute `palabras`
+stay) plus `correcciones[material_id][índice]`; the words live on the material (`extra.palabras`, material time,
+`[]` counts as transcribed) and the pure `final_edition/subtitulos_fuente.py` (mirror `static/editor/subtitulos_fuente.js`,
+parity table `subtitulos_fuente_casos.json`) maps them onto the timeline when each destino is resolved: a word belongs
+to the clip that holds its midpoint, through recorte/velocidad/inicio (`mapear` in quarters, half-to-even), capped at the
+clip and principal ends — so subtitles follow every cut, trim, reorder, delete and speed change, and corrections survive
+cuts. `tareas.edicion.renderizar_final` derives before `preparar_rutas`; `vista.js` derives after `resolver`. Audio clips
+may carry `idioma` (`resolver` drops them in other languages); `subtitulos.visibles`, `escala` (0.6–1.6) and
+`resaltado` (`#RRGGBB`) are new. Four styles (`karaoke`, `caja`, `palabra_grande`, `minimal`, table `ESTILOS_ASS`) come
+from ONE event list (`motor/subtitulos.eventos`, mirror `subtitulos.js`, table `subtitulos_eventos_casos.json`): the ASS
+writes one `Dialogue` per event (highlight with `\1c`, no `\k`), `generar_ass(ventana=)` crops per render window, and the
+canvas draws the same events. Paid, always behind a button with the server's price and `max_intentos=1`: task
+`material_transcribir` (`final_edition/transcripcion.py`, Whisper via fal, a video's audio goes to a temp R2 key deleted
+in a `finally`, gasto `transcripcion` registered before saving; price `fal_audio.costo_whisper`, US$0.002/min, an
+ESTIMATE until checked against fal's billing) and task `editor_voz` (`audios.voz_cruda`, the Crear › Audios cache by
+`hash_voz`, then its Whisper words; errors are sanitized so the text never reaches the unauthenticated job status).
+Free: the mic recording (`biblioteca.guardar_grabacion`: webm/m4a/ogg/wav → mp3, ≤ 5 min with a 2 s margin, duration-less
+webm transcoded with a bound and trimmed). `edicion_proxy` now MERGES `extra`. Automatic drafts write `fuentes = {idioma:
+[voz]}` (`borrador.es_voz_de_guion`: a voice with `bloque`); an old draft adopts its voice as source on open when every
+voice material has words (`avisos_carga.arreglarAlAbrir`). UI: a «Subtítulos» library tab (`subtitulos_modelo.js` +
+`subtitulos_panel.js`: source, generate, styles, highlight, height/size, word-by-word correction, quitar línea) with a
+read-only row at the top of the timeline; voice-over at the top of «Audio» (`voz_modelo.js` + `voz_panel.js`: AI voice
+with the 22-voice gallery and samples, mic recording with a level meter), «Suena en» on a voice clip (not on guion
+voices) and recordings/AI voices listed in the library and re-added as VOICE (`escala.rolDeMaterial`).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
@@ -1302,6 +1328,8 @@ Trampa: `_('…', x=dato)` con variables devuelve `Markup`, que ya escapó `x` c
 o usa `|tojson` solo sobre texto fijo y une los datos en JS; y nunca metas `|tojson` dentro de un
 atributo con comillas dobles (`onsubmit="…"`), porque emite `"` que cierra el atributo a la mitad —
 usa comillas simples o un `data-*`.
+Otra trampa (Babel 2.18): `gettext(DICCIONARIO["clave"])` hace que la extracción tome la clave como msgid; con
+constantes `N_` en un diccionario, escribe `mensaje = DICCIONARIO["clave"]` y después `gettext(mensaje)`.
 
 **Doctrina de venta y ángulo** (`doctrina/`, spec `docs/superpowers/specs/2026-09-25-doctrina-copywriting-design.md`,
 ADR 0004): los principios de seis libros de copywriting (Kennedy, Hopkins, Ogilvy, Great Leads, Schwartz, Theriot)

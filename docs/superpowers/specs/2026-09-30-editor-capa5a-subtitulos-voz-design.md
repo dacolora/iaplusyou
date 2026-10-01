@@ -1,7 +1,13 @@
 # Editor capa 5a — subtítulos automáticos y voz en off — diseño
 
-Fecha: 2026-09-30. Estado: diseño para implementar (plan
-`docs/superpowers/plans/2026-09-30-editor-capa5a-subtitulos-voz.md`). Base de código: `main` **después** de
+Fecha: 2026-09-30. Estado: **implementado** 2026-10-01 (plan
+`docs/superpowers/plans/2026-09-30-editor-capa5a-subtitulos-voz.md`; decisiones de la ejecución en su registro:
+el botón dice «Generar subtítulos (US$ … aprox.)» sin «≈» porque el precio del servidor ya dice «aprox.»;
+con el precio caído el botón queda activo pero solo vuelve a pedir el precio, nunca paga; una fuente que no da
+palabras no se aplica; nunca hay más de 8 fuentes por idioma; la voz de guion no aparece como fuente aparte ni
+lleva «Suena en»; la voz con IA se marca con el idioma del destino que se ve solo si es el que habla, si no
+suena en todos y se avisa; la grabación corta a los 4:59 y el servidor recorta hasta 5:02 en vez de rechazar;
+las grabaciones y las voces con IA aparecen en la biblioteca y vuelven como voz). Base de código: `main` **después** de
 fusionar la rama `worktree-idioma-oscuro` (fase 6 del idioma: el editor ya habla inglés con
 `final_edition/textos_editor.py` + `static/editor/textos.js`). Nace de:
 
@@ -36,7 +42,7 @@ en la vía automática, y la voz en off (IA y micrófono) que hoy solo existe en
 7. Un audio de voz sabe en qué idioma habla (`idioma` del clip) y solo suena en los destinos de ese idioma.
 
 **No entra** (queda anotado para otras capas): cambiar a mano los TIEMPOS de una palabra o agregar palabras
-nuevas; volver a transcribir un archivo en otro idioma (D5); traducir subtítulos a otro idioma (capa 5b,
+nuevas; volver a transcribir un archivo en otro idioma (D5); traducir subtítulos a otro idioma (capa 5d,
 «Producir e idiomas»); apagar subtítulos por tramo (se cubre con «Quitar la línea»); arrastrar los subtítulos
 sobre el video; más estilos, fuentes o animaciones de subtítulos; emojis en subtítulos (se avisa, como en los
 textos: `rasterizar.sin_glifos_faltantes`); vincular la voz y los textos a su clip de video (auditoría #7: otra
