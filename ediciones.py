@@ -5,6 +5,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import db
+import idiomas
 import materiales
 from final_edition import documento as documento_mod
 
@@ -48,10 +49,26 @@ def cargar(cliente, edicion_id):
 # y «Editar» prefiere siempre una edición suya.
 AUTOMATICA = "final_edition"
 _PREFIJO_BORRADOR = "Borrador · "
+_PREFIJOS_BORRADOR_CACHE = None
 
 
 def es_automatica(edicion):
     return (edicion or {}).get("creada_por") == AUTOMATICA
+
+
+def _prefijos_borrador():
+    """`"Borrador" + " · "` en cada idioma de `idiomas.IDIOMAS` (el nombre
+    guardado queda en el idioma del proyecto que lo creó; quien mira puede
+    tener otro) más el literal en español, aunque el catálogo cambie. Se
+    calcula una sola vez por proceso, con el catálogo ya cargado."""
+    global _PREFIJOS_BORRADOR_CACHE
+    if _PREFIJOS_BORRADOR_CACHE is None:
+        prefijos = {_PREFIJO_BORRADOR}
+        for idioma in idiomas.IDIOMAS:
+            with idiomas.en_idioma(idioma):
+                prefijos.add(gettext("Borrador") + " · ")
+        _PREFIJOS_BORRADOR_CACHE = prefijos
+    return _PREFIJOS_BORRADOR_CACHE
 
 
 def nombre_visible(edicion):
@@ -60,8 +77,10 @@ def nombre_visible(edicion):
     nombre = (edicion or {}).get("nombre") or gettext("Sin nombre")
     if not es_automatica(edicion):
         return nombre
-    if nombre.startswith(_PREFIJO_BORRADOR):
-        nombre = nombre[len(_PREFIJO_BORRADOR):]
+    for prefijo in _prefijos_borrador():
+        if nombre.startswith(prefijo):
+            nombre = nombre[len(prefijo):]
+            break
     return gettext("Borrador automático · %(nombre)s", nombre=nombre)
 
 

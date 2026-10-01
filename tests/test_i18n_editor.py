@@ -200,3 +200,21 @@ def test_capa_4c_en_el_idioma_de_quien_mira():
         assert idiomas.traducir(rutas_editor.ERROR_GUARDAR) == "Couldn't save this change; undo it and try again."
     assert ediciones.nombre_visible(auto) == "Borrador automático · gira"
     assert rutas_editor.ERROR_GUARDAR == "No se pudo guardar este cambio; deshazlo y vuelve a intentar."
+
+
+def test_borrador_automatico_sin_doble_etiqueta_en_ingles():
+    """Bug confirmado tras la fusión de la capa 4c: un proyecto en inglés
+    guarda el nombre con el prefijo YA en inglés ("Draft · …"); antes
+    `nombre_visible` solo reconocía el literal español y mostraba
+    «Automatic draft · Draft · gira» en vez de quitar el prefijo guardado."""
+    import ediciones
+    auto_en = {"nombre": "Draft · gira", "creada_por": ediciones.AUTOMATICA}
+    with idiomas.en_idioma("en"):
+        assert ediciones.nombre_visible(auto_en) == "Automatic draft · gira"
+    assert ediciones.nombre_visible(auto_en) == "Borrador automático · gira"
+    # Una edición normal (no automática) nunca pierde su nombre literal, ni
+    # aunque empiece igual que el prefijo del borrador.
+    manual = {"nombre": "Draft · gira", "creada_por": "editor"}
+    with idiomas.en_idioma("en"):
+        assert ediciones.nombre_visible(manual) == "Draft · gira"
+    assert ediciones.nombre_visible(manual) == "Draft · gira"
