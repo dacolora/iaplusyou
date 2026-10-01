@@ -7,10 +7,12 @@
 // punto y qué pide soltar ahí algo de la biblioteca, y qué corta «Cortar»;
 // qué operación pide agregar algo de la biblioteca («+» o soltar), a qué
 // unión va una transición y dónde se marcan las uniones con transición.
+// Capa 5a: los bloques de la fila de solo lectura «Subtítulos».
 // Puro: lo prueba Node (linea_tiempo.js y biblioteca.js solo ponen esto en el DOM).
 import { cambiaPorDestino, ID_SONIDO } from "./operaciones.js";
 import { formatearPrecio, SIMBOLOS } from "./precio.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
+import { ventanas } from "./subtitulos.js";
 import { separadorDecimal, t } from "./textos.js";
 import { pistaPrincipal } from "./tiempo.js";
 
@@ -450,4 +452,20 @@ export function unionesConTransicion(doc) {
       clipId: c.id, ms: c.inicio_ms + c.duracion_ms, tipo: c.transicion.tipo, duracion_ms: c.transicion.duracion_ms,
       nombre: `${nombreTransicion(c.transicion.tipo)} · ${segundosTexto(c.transicion.duracion_ms)}`,
     }));
+}
+
+// ---- Capa 5a (Task 7): la fila «Subtítulos» de la línea de tiempo ----------
+
+// Los bloques de la fila de solo lectura «Subtítulos» (arriba de todas): una
+// línea de `ventanas()` por bloque, con los topes del estilo elegido (tabla
+// D7 que manda el servidor: «Palabra grande» va de a una palabra). Un estilo
+// desconocido es karaoke; sin la tabla, de a 4 como siempre. `palabras`: las
+// del destino ya resuelto y derivado (vacías con «Mostrar» apagado).
+export function bloquesSubtitulos(palabras, estilos, estiloId) {
+  const lista = Array.isArray(palabras) ? palabras : [];
+  if (!lista.length) return [];
+  const e = estilos?.[estiloId] ?? estilos?.karaoke ?? {};
+  return ventanas(lista, e.max_palabras ?? 4, 1800, e.max_caracteres ?? null).map((v) => ({
+    t_ms: v.t_ms, dur_ms: v.dur_ms, texto: v.palabras.map((p) => p.texto).join(" "),
+  }));
 }

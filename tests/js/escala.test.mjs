@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  avisoTransicion, barrasOnda, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, estiloArrastre, etiquetaClip,
+  avisoTransicion, barrasOnda, bloquesSubtitulos, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, estiloArrastre, etiquetaClip,
   filaEnY, filasVisuales, fondoTira, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables, marcasRegla, msAPx,
   msInsercion, nombreFila, nombreTransicion, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar, pedidoTransicion, puntoSoltar,
   pxAMs, soltar, unionesConTransicion, VENTANA_PICOS_MS,
 } from "../../static/editor/escala.js";
+import { readFileSync } from "node:fs";
 import { TRANSICIONES } from "../../static/editor/operaciones.js";
 import { docBase } from "./doc_base.mjs";
 
@@ -422,4 +423,29 @@ test("unionesConTransicion: dónde marcar en la línea las uniones con transici�
   doc.pistas[0].clips[2].transicion = { tipo: "zoom", duracion_ms: 400 };  // el último: no tiene unión
   assert.deepEqual(unionesConTransicion(doc), [{ clipId: "v0", ms: 4000, tipo: "fundido", duracion_ms: 500, nombre: "Fundido · 0,5 s" }]);
   assert.deepEqual(unionesConTransicion(docBase()), []);
+});
+
+// ---- Capa 5a (Task 7): la fila de solo lectura «Subtítulos» -----------------
+
+const ESTILOS_SUB = JSON.parse(readFileSync(new URL("../fixtures/subtitulos_eventos_casos.json", import.meta.url), "utf8")).estilos;
+const PALABRAS_SUB = ["Hola", "esto", "es", "Creatv", "hoy"].map((texto, i) => ({ t_ms: i * 300, dur_ms: 300, texto }));
+
+test("bloquesSubtitulos: las líneas de ventanas() con los topes del estilo", () => {
+  assert.deepEqual(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "karaoke"), [
+    { t_ms: 0, dur_ms: 1200, texto: "Hola esto es Creatv" }, { t_ms: 1200, dur_ms: 300, texto: "hoy" },
+  ]);
+  // palabra grande: una palabra por bloque (max_palabras 1)
+  assert.deepEqual(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "palabra_grande").map((b) => b.texto),
+    ["Hola", "esto", "es", "Creatv", "hoy"]);
+  assert.deepEqual(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "palabra_grande")[3], { t_ms: 900, dur_ms: 300, texto: "Creatv" });
+  // mínimo: hasta 5 palabras
+  assert.equal(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "minimal").length, 1);
+});
+
+test("bloquesSubtitulos: un estilo desconocido es karaoke; sin palabras (u ocultas), ningún bloque", () => {
+  assert.deepEqual(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "raro"), bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "karaoke"));
+  assert.deepEqual(bloquesSubtitulos([], ESTILOS_SUB, "karaoke"), []);
+  assert.deepEqual(bloquesSubtitulos(null, ESTILOS_SUB, "karaoke"), []);
+  // sin la tabla de estilos (datos viejos): de a 4, como siempre
+  assert.equal(bloquesSubtitulos(PALABRAS_SUB, null, "karaoke").length, 2);
 });
