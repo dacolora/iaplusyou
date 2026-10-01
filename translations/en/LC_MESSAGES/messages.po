@@ -14734,7 +14734,7 @@ msgid "idioma inválido: %(idioma)s (se esperan dos letras minúsculas)."
 msgstr "invalid language: %(idioma)s (two lowercase letters expected)."
 
 msgid "igual"
-msgstr "same"
+msgstr "faithful"
 
 msgid "imagen"
 msgstr "image"
