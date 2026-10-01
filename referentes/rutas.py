@@ -27,12 +27,24 @@ import proyectos
 import tiendas
 from nicho.avatares import costo_real, modelo_actual
 from providers import flowplus_modelos
-from referentes import datos, fuentes, recrear, traducir
+from referentes import datos, fuentes, lectura, recrear, traducir
 from referentes.fuentes.base import ErrorFuente
 from sprints import datos as sprints_datos
 from tareas import referentes as tareas_referentes
 
 bp = Blueprint("referentes", __name__, url_prefix="/cliente/<cliente>/referentes")
+
+
+@bp.before_request
+def _solo_mismo_origen():
+    """Barrera CSRF (como Sprints, Nicho y Flow Plus): un POST que el navegador
+    declara de otro sitio (Sec-Fetch-Site) no toca nada — leer, adaptar,
+    generar y traer gastan (spec 2026-09-30-recrear-fiel §7)."""
+    sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
+    if request.method == "POST" and sitio and sitio not in ("same-origin", "none"):
+        if request.is_json or request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
+        abort(403)
 _FILTROS = ("etapa", "consciencia", "familia", "dolor", "marca", "fuente", "q")
 # El placeholder del campo "Marca / link del Ad Library" invita a pegar la URL
 # completa (spec §4.1 idem UI), pero solo el id numérico sirve para armar la
@@ -190,6 +202,41 @@ def traer_post(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
 
 
+MODOS_RECREAR = ("fiel", "libre")
+
+
+def _familia_de(cliente, r, idioma):
+    familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
+    return dict(familia, descripcion=datos.descripcion_familia(familia, idioma)) if familia else None
+
+
+def _contexto_recrear(cliente, r, producto, formato, tipo, campos, idioma):
+    """Lectura, textos y los dos prompts (fiel y variación/video) armados con
+    los campos del formulario: lo mismo al pintarlo y al generar (spec
+    2026-09-30-recrear-fiel §4-§5). Sin `campos_vista=1` (primera vez) los
+    textos son los leídos y la casilla «traer» va prendida."""
+    lec = lectura.de(r)
+    con_campos = campos.get("campos_vista") == "1"
+    traer = campos.get("traer_textos") == "1" if con_campos else True
+    textos = lectura.valores_de(campos, lec) if con_campos else lectura.valores_iniciales(lec)
+    linea = recrear.instruccion_textos(lec, textos, traer, idioma)
+    prefs_sonido = proyectos.preferencias_sonido(cliente)
+    libre = recrear.armar_prompt(datos.localizado(r, idioma), _familia_de(cliente, r, idioma), producto,
+                                 marca_mod.guia_efectiva(cliente), "", formato, tipo=tipo,
+                                 con_sonido=prefs_sonido["con_sonido"], idioma=idioma, linea_textos=linea)
+    fiel = recrear.armar_prompt_fiel(lec, producto, linea, formato, idioma=idioma)
+    return {"lectura": lec, "traer": traer, "textos": textos, "prompt": libre, "prompt_fiel": fiel}
+
+
+def _modos_de(campos):
+    """Las imágenes marcadas («igual» y/o «variación»); sin `modos_vista=1`
+    (primera vez, o un formulario de video) van las dos."""
+    if campos.get("modos_vista") != "1":
+        return list(MODOS_RECREAR)
+    pedidos = campos.getlist("modo")
+    return [m for m in MODOS_RECREAR if m in pedidos]
+
+
 @bp.get("/<int:rid>/recrear")
 def recrear_form(cliente, rid):
     r = datos.referente(cliente, rid)
@@ -197,32 +244,64 @@ def recrear_form(cliente, rid):
         abort(404)
     productos, producto = _producto_para(cliente, request.args)
     tipo = request.args.get("tipo") if request.args.get("tipo") in ("imagen", "video") else "imagen"
-    formato = request.args.get("formato") or flowplus_modelos.FORMATO_DEFECTO
-    titular = request.args.get("titular")
-    if titular is None:
-        titular = r.get("titular") or ""
-    familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
+    formatos = flowplus_modelos.IMAGEN[flowplus_modelos.IMAGEN_POR_DEFECTO]["formatos"]
+    lec = lectura.de(r)
+    formato = (request.args.get("formato")
+               or (lectura.formato_cercano(lec.get("ancho"), lec.get("alto"), formatos) if lec else None)
+               or flowplus_modelos.FORMATO_DEFECTO)
     idioma = idiomas.de_proyecto(cliente)
-    if familia:
-        familia = dict(familia, descripcion=datos.descripcion_familia(familia, idioma))
-    prefs_sonido = proyectos.preferencias_sonido(cliente)
-    prompt = precio = None
+    ctx = {"lectura": lec, "traer": True, "textos": lectura.valores_iniciales(lec), "prompt": "", "prompt_fiel": ""}
+    precio = None
     if producto:
-        guia = marca_mod.guia_efectiva(cliente)
-        prompt = recrear.armar_prompt(datos.localizado(r, idioma), familia, producto, guia, titular, formato, tipo=tipo,
-                                      con_sonido=prefs_sonido["con_sonido"], idioma=idioma)
+        ctx = _contexto_recrear(cliente, r, producto, formato, tipo, request.args, idioma)
         n_refs = 1 + max(1, min(2, len(producto.get("referencias") or [1])))
         if tipo == "imagen":
             precio = gastos.estimar("imagen", modelo=flowplus_modelos.IMAGEN_POR_DEFECTO, n_referencias=n_refs)
         else:
             duracion = proyectos.preferencias_flowplus(cliente)["duracion_defecto"]
             precio = gastos.estimar("video", modelo=flowplus_modelos.VIDEO_POR_DEFECTO, duracion=duracion,
-                                    con_sonido=prefs_sonido["con_sonido"])
+                                    con_sonido=proyectos.preferencias_sonido(cliente)["con_sonido"])
     return render_template(
         "_referente_recrear.html", cliente=cliente, r=r, productos=productos, producto=producto, tipo=tipo,
-        formato=formato, titular=titular, prompt=prompt or "", precio=precio,
-        precio_adaptar=gastos.estimar("adaptar_referente"),
-        formatos=flowplus_modelos.IMAGEN[flowplus_modelos.IMAGEN_POR_DEFECTO]["formatos"])
+        formato=formato, formatos=formatos, formato_elegido=request.args.get("formato_elegido") == "1",
+        lectura=ctx["lectura"], traer_textos=ctx["traer"], textos=ctx["textos"], prompt=ctx["prompt"],
+        prompt_fiel=ctx["prompt_fiel"], modos=_modos_de(request.args), etiquetas_rol=lectura.ETIQUETAS_ROL,
+        precio=precio, precio_adaptar=gastos.estimar("adaptar_referente"),
+        precio_leer=gastos.estimar("leer_referente"))
+
+
+def _registrar_lectura(cliente, rid, r, ent, sal, fallo=False):
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):     # el detalle se GUARDA: idioma del proyecto
+        if fallo:
+            detalle = gettext("lectura · %(familia)s · respuesta inválida", familia=r.get("familia") or "")
+        else:
+            detalle = gettext("lectura · %(familia)s", familia=r.get("familia") or "")
+    gastos.registrar_seguro(cliente, "adaptar_referente", costo_real(ent, sal), f"referentes:leer:{rid}:{uuid4().hex[:12]}",
+                            detalle=detalle, proveedor="anthropic",
+                            extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+
+
+@bp.post("/<int:rid>/recrear/leer")
+def recrear_leer(cliente, rid):
+    """La lectura de la referencia (spec 2026-09-30-recrear-fiel §3): la pide
+    el formulario al abrirse; una vez guardada, no se vuelve a pagar."""
+    r = datos.referente(cliente, rid)
+    if not r or r.get("estado_imagen") != "ok":
+        return jsonify({"error": gettext("Ese referente no existe.")}), 404
+    if lectura.de(r):
+        return jsonify({"ok": True, "cobrado": False})
+    try:
+        lec, ent, sal = lectura.leer(r)
+    except lectura.LecturaInvalida as e:
+        if e.tokens_entrada or e.tokens_salida:
+            _registrar_lectura(cliente, rid, r, e.tokens_entrada, e.tokens_salida, fallo=True)
+        return jsonify({"error": str(e)}), 502
+    except Exception as e:
+        return jsonify({"error": gettext("No se pudo leer la referencia (%(tipo)s).", tipo=type(e).__name__)}), 502
+    _registrar_lectura(cliente, rid, r, ent, sal)
+    lec["ancho"], lec["alto"] = lectura.medir(r["imagen_url"])
+    datos.guardar_lectura(rid, lec)
+    return jsonify({"ok": True, "cobrado": True})
 
 
 @bp.post("/<int:rid>/recrear/adaptar")
@@ -242,13 +321,16 @@ def recrear_adaptar(cliente, rid):
     sof = (fila.get("extra") or {}).get("sofisticacion")
     producto = dict(producto, sofisticacion=sof if sof in doctrina.SOFISTICACIONES else None,
                     pruebas=doctrina_producto.pruebas(fila))
-    familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
     idioma = idiomas.de_proyecto(cliente)
-    if familia:
-        familia = dict(familia, descripcion=datos.descripcion_familia(familia, idioma))
+    familia = _familia_de(cliente, r, idioma)
+    lec = lectura.de(r)
+    crudos = cuerpo.get("textos")
+    campos = {f"texto_{i}": str(v or "") for i, v in enumerate(crudos)} if isinstance(crudos, list) else {}
     try:
-        resultado, ent, sal = recrear.adaptar(datos.localizado(r, idioma), familia, producto, str(cuerpo.get("titular") or ""),
-                                              marca_mod.guia_efectiva(cliente), idioma=idioma)
+        resultado, ent, sal = recrear.adaptar(datos.localizado(r, idioma), familia, producto,
+                                              str(cuerpo.get("titular") or ""), marca_mod.guia_efectiva(cliente),
+                                              idioma=idioma, textos=lectura.valores_de(campos, lec),
+                                              traer=cuerpo.get("traer_textos") is not False, lectura=lec)
     except recrear.AdaptacionInvalida as e:
         ent = getattr(e, "tokens_entrada", 0) or 0
         sal = getattr(e, "tokens_salida", 0) or 0
@@ -284,16 +366,7 @@ def recrear_generar(cliente, rid):
         flash(gettext("Elige un producto con fotos."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     titular = (request.form.get("titular") or "").strip()[:200]
-    prompt = (request.form.get("prompt") or "").strip()
-    if not prompt:
-        flash(gettext("El prompt no puede quedar vacío."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     formato_pedido = request.form.get("formato") or flowplus_modelos.FORMATO_DEFECTO
-    try:
-        referencias_urls = recrear.referencias_para(cliente, r, producto)
-    except Exception as e:
-        flash(gettext("No se pudieron preparar las referencias (%(tipo)s).", tipo=type(e).__name__), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     prefs_sonido = proyectos.preferencias_sonido(cliente)
     if tipo == "imagen":
         modelo = flowplus_modelos.IMAGEN_POR_DEFECTO
@@ -304,6 +377,40 @@ def recrear_generar(cliente, rid):
         duracion_objetivo = flowplus_modelos.ajustar_duracion(
             modelo, proyectos.preferencias_flowplus(cliente)["duracion_defecto"])
         formato = flowplus_modelos.ajustar_formato(modelo, formato_pedido)
+    idioma = idiomas.de_proyecto(cliente)
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    # Spec 2026-09-30-recrear-fiel §5: el formulario nuevo manda `campos_vista=1`
+    # y el servidor arma cada prompt con lo que trae, salvo el que la persona
+    # editó a mano. Sin esa marca (scripts, pruebas viejas) se usa `prompt` tal cual.
+    nuevo = request.form.get("campos_vista") == "1"
+    if nuevo:
+        ctx = _contexto_recrear(cliente, r, producto, formato, tipo, request.form, idioma)
+        modos = _modos_de(request.form) if tipo == "imagen" else ["libre"]
+        if not modos:
+            flash(gettext("Elige al menos una imagen."), "error")
+            return volver
+        prompts = {}
+        for m in modos:
+            campo = "prompt_fiel" if m == "fiel" else "prompt"
+            if request.form.get(f"{campo}_editado") == "1":
+                prompts[m] = (request.form.get(campo) or "").strip()
+                if not prompts[m]:
+                    flash(gettext("El prompt no puede quedar vacío."), "error")
+                    return volver
+            else:
+                prompts[m] = ctx[campo]
+        textos = ctx["textos"] if ctx["traer"] else []
+    else:
+        prompt = (request.form.get("prompt") or "").strip()
+        if not prompt:
+            flash(gettext("El prompt no puede quedar vacío."), "error")
+            return volver
+        modos, prompts, textos = ["libre"], {"libre": prompt}, []
+    try:
+        referencias_urls = recrear.referencias_para(cliente, r, producto)
+    except Exception as e:
+        flash(gettext("No se pudieron preparar las referencias (%(tipo)s).", tipo=type(e).__name__), "error")
+        return volver
     angulo = None
     try:
         crudo = json.loads(request.form.get("angulo") or "null")
@@ -312,20 +419,35 @@ def recrear_generar(cliente, rid):
     if isinstance(crudo, dict):
         angulo, _errores = doctrina.validar_angulo(crudo)
         angulo["origen"] = "recrear"
-    if not titular:
-        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-            titular = gettext("Recrear: %(titular)s", titular=r.get("titular") or r["id"])
-    cf_id = creative_flow.crear(cliente, [], [producto["nombre"]], [], titular,
-                                duracion_objetivo, "", "A", referencias_urls=referencias_urls, platforms=[])
-    campos = dict(prompt_relleno=prompt, aspect_ratio=formato, tipo=tipo, modelo=modelo,
-                  con_sonido=prefs_sonido["con_sonido"], sonido_texto="", musica_estilo="",
-                  calidad="final", referente_id=rid)
-    if angulo:
-        campos["angulo"] = angulo
-    creative_flow.actualizar(cliente, cf_id, **campos)
-    entry = creative_flow.cargar(cliente)[cf_id]
-    if flowplus_lanzar.lanzar(cliente, cf_id, entry):
-        flash(gettext("Generando desde el referente…"), "ok")
+    with idiomas.en_idioma(idioma):     # el título se GUARDA: idioma del proyecto
+        if nuevo:
+            base = next((x for x in textos if x), "") or r.get("titular") or r["id"]
+            titulo = gettext("Recrear: %(titular)s", titular=base)
+            sufijos = {"fiel": gettext("igual"), "libre": gettext("variación")}
+        else:
+            titulo = titular or gettext("Recrear: %(titular)s", titular=r.get("titular") or r["id"])
+            sufijos = {}
+    lanzados = 0
+    for m in modos:
+        nombre = f"{titulo} · {sufijos[m]}" if nuevo and tipo == "imagen" else titulo
+        cf_id = creative_flow.crear(cliente, [], [producto["nombre"]], [], nombre,
+                                    duracion_objetivo, "", "A", referencias_urls=referencias_urls, platforms=[])
+        campos = dict(prompt_relleno=prompts[m], aspect_ratio=formato, tipo=tipo, modelo=modelo,
+                      con_sonido=prefs_sonido["con_sonido"], sonido_texto="", musica_estilo="",
+                      calidad="final", referente_id=rid)
+        if nuevo:
+            campos["recrear_modo"] = m
+        if angulo:
+            campos["angulo"] = dict(angulo)
+        creative_flow.actualizar(cliente, cf_id, **campos)
+        entry = creative_flow.cargar(cliente)[cf_id]
+        if flowplus_lanzar.lanzar(cliente, cf_id, entry):
+            lanzados += 1
+    if lanzados == len(modos):
+        if len(modos) > 1:
+            flash(gettext("Generando %(n)s imágenes desde el referente…", n=len(modos)), "ok")
+        else:
+            flash(gettext("Generando desde el referente…"), "ok")
     else:
         flash(gettext("Ya había algo generándose para esta sesión."), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
