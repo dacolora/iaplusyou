@@ -223,6 +223,12 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   voz con IA se pagan con el precio en el botón; grabar con el micrófono es gratis. Siguen fuera:
 >   cambiar tiempos de una palabra, traducir subtítulos (capa 5d), más estilos y animaciones
 >   (capa 5c), arrastrar los subtítulos sobre el video.
+> - **Capa 5b implementada** (2026-10-01, spec `2026-09-30-editor-capa5b-fotos-encuadre-design.md`): ajusta la letra
+>   de §4: la foto es un clip de la pista principal (no una pista aparte), el «fondo desenfocado» es una opción por
+>   clip («Ajustar con fondo desenfocado»; al agregar uno que no llena el marco entra así) y no algo automático del
+>   formato, el paneo manual es el encuadre (arrastrar y acercar sobre el video), las transiciones nuevas juntan los
+>   dos clips (el video queda tan corto como la transición) y lo de encima sigue a su clip (vínculos derivados en la
+>   página, interruptor «Vincular»). Siguen fuera: PIP (video sobre video), filtros, rotación y el Producir por país.
 >
 > Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
 > - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,

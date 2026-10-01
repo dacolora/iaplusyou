@@ -1,6 +1,6 @@
 # Editor capa 5b — fotos y encuadre, y todo sigue a su clip — diseño
 
-Fecha: 2026-09-30. Estado: diseño para implementar (plan
+Fecha: 2026-09-30. Estado: **implementado** 2026-10-01 (plan
 `docs/superpowers/plans/2026-09-30-editor-capa5b-fotos-encuadre.md`). Base de código: `main` **después** de fusionar
 la capa 5a (`editor-capa5a`: subtítulos derivados y voz en off), que a su vez va sobre la fase 6 del idioma
 (`worktree-idioma-oscuro`). Nace de:
@@ -16,6 +16,13 @@ la capa 5a (`editor-capa5a`: subtítulos derivados y voz en off), que a su vez v
 Pedido de Daniel: «todo, el mejor editor». Esta capa deja armar un anuncio de producto con fotos (la mayoría de los
 clientes de ecommerce tiene más fotos que videos), elegir qué parte del cuadro se ve, unir dos clips enteros con una
 transición de verdad, y que lo que está encima de un clip de video (textos, imágenes, voces, efectos) se mueva con él.
+
+
+**Ajustes de la ejecución (2026-10-01):** `setsar=1` va al FINAL de cada cadena de la principal, después del zoompan (como
+el arreglo 25edb51 que ya estaba en producción), no antes de `fps`; las etiquetas de «Editar» son «Duración de la foto» y
+«Acercar el cuadro» (claves propias, no `prop.duracion`: en el mismo panel ya hay otra «Duración» y otro «Acercar»); un
+toque sobre el video elige su clip y lo de encima se toma primero (salvo el asa del video elegido); `vocesJuntas` no
+cuenta dos voces de idiomas distintos (nunca suenan a la vez); «Corte» elegido a propósito nunca es un aviso rojo.
 
 ---
 
@@ -44,8 +51,7 @@ encuadre); fondo de color liso o de imagen en «Ajustar» (solo desenfocado); pe
 asa y con el deslizador); vincular o desvincular un clip suelto (el interruptor es de toda la página); que la música
 se estire cuando el video crece; cruzar el sonido de la escena en una transición (sigue en corte, como hoy); el
 carrusel de la edición de imagen (capa 6: la pista `imagen` principal sigue con una sola fuente); fotos del Catálogo
-dentro de la biblioteca (auditoría #8); cambiar la intensidad del zoom lento; «Producir e idiomas» (que la 5a llamaba
-«capa 5b»: pasa a llamarse **5c**, §6).
+dentro de la biblioteca (auditoría #8); cambiar la intensidad del zoom lento; «Producir e idiomas» (capa **5d**; la 5c es textos y gráficos, §6).
 
 ---
 
@@ -488,6 +494,6 @@ video.»), `biblioteca._medir` (D6), `vista_previa.pendientes` (D13).
 - **5a**: se construye encima; D11 cubre los tres puntos de contacto (derivados que siguen a su audio, fotos fuera de
   «El sonido del video», `solape` y la regla del centro). El `idioma` de un clip de audio (5a D10) viaja con el clip.
 - **Nombre de la siguiente**: el spec de la 5a llama «capa 5b, Producir e idiomas» a la traducción de subtítulos y la
-  pantalla de destinos. Con esta entrega esa pasa a **5c**; el controlador corrige esa mención al cerrar (Tarea 9).
+  pantalla de destinos. Quedó como **5d** (la 5c es textos y gráficos); la mención de la 5a ya dice 5d.
 - **PIP**: entrega propia después de medir en el VPS y en teléfonos (D14), con sus cuatro requisitos: tramos que cuenten
   y respeten los PIP, límite de videos a la vez en la vista previa, sonido del PIP, y encuadre/tamaño sobre el video.

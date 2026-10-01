@@ -7,7 +7,7 @@ description: "Editor de video: el documento JSON (documento.validar), el motor q
 
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
-**Editor (capas 1–5a, 2026-09/10):** the editor's source of truth is a JSON document
+**Editor (capas 1–5b, 2026-09/10):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -170,3 +170,27 @@ voice material has words (`avisos_carga.arreglarAlAbrir`). UI: a «Subtítulos»
 read-only row at the top of the timeline; voice-over at the top of «Audio» (`voz_modelo.js` + `voz_panel.js`: AI voice
 with the 22-voice gallery and samples, mic recording with a level meter), «Suena en» on a voice clip (not on guion
 voices) and recordings/AI voices listed in the library and re-added as VOICE (`escala.rolDeMaterial`).
+Capa 5b (2026-10-01, photos and framing, «todo sigue a su clip», spec `2026-09-30-editor-capa5b-fotos-encuadre-design.md`):
+a photo is a clip of the principal `video` track with `foto: true` (velocidad 1, 0.1–60 s, `recorte {0, dur}`, never a
+`p_sonido` mirror, skipped by `verificar_recortes` and by «El sonido del video»); the render prepares it once per material
+(`final_edition/fotos.py::preparar`: EXIF, transparency over black, ≤ 4096, JPEG 92 → `rutas["foto:<mid>"]`) and repeats one
+frame with `loop`; a photo counts as one input in `PRESUPUESTO_VIDEOS` (427 MB measured on the Mac for 6 framed photos at
+`-threads 1`; still unmeasured on the VPS). `encuadre = {modo: llenar|ajustar, zoom 1–4, x, y}` per principal clip, ONE
+integer formula in `final_edition/encuadre.py` and `static/editor/encuadre.js` (`caja`, `fondo`, `par`, parity table
+`encuadre_casos.json`): the compiler turns it into `scale/crop` or `split` + `boxblur` background + `overlay`, the preview
+into `drawImage` (`lienzo.dibujarPrincipal`); no `encuadre` = the old chain; EVERY principal chain ends in
+`setsar=1,format=yuv420p`. `preparar_rutas` stamps `ancho_px/alto_px` from the prepared photo or from
+`encuadre.medidas_visibles` (rotation-aware ffprobe) and refuses a photo clip whose material isn't an image (and the
+reverse). New transitions are `modo: "solape"`: A cedes `d` ms (so the video gets shorter by the transition) and the old
+tail path does the rest; old tail transitions are untouched; a `solape` on the last clip is undone by `normalizar`.
+Layers follow their clip: `static/editor/vinculos.js::seguirPrincipal(antes, despues)` re-anchors texts, images, voices
+and effects to the moment of the principal clip under their start (music is only cut, `por_destino` voices never move),
+and `pagina_editor.operarCon` wraps EVERY operation with `vinculos.operar` behind the «Vincular» toggle (`#h-vincular`,
+default on, `localStorage` `creatv.editor.vincular`); one action = one undo. Lightweight photo copies for the preview:
+`fotos.ligera` (≤ 1920, PNG if transparent) in the image branch of the free `edicion_proxy`, images without `url_proxy`
+are `pendientes`, and `biblioteca.faltaPreparar` asks for them. UI: «+» on an image asks «Como clip del video» /
+«Encima del video» (`.ed-bib-como`), a photo shows its image in the timeline's video row (`escala.fondoFoto`), dragging on
+the player moves the framing and its corner zooms (`seleccion.gestoEn` → `encuadre`/`asa_encuadre`,
+`encuadre.moverEncuadre/zoomEncuadre/cajaVisible`), «Editar» has the «Encuadre» block and the «foto» form (duration,
+slow zoom, transition), and `avisos_carga.vocesJuntas` warns when two voices sound at once. Still out: PIP (video over
+video, D14), per-clip «Vincular», filters and rotation (capa 5c), Producir per country (capa 5d).
