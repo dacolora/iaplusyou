@@ -376,7 +376,14 @@ export const ES = {
   "prop.solo_idioma": "Solo en {idioma}",
   "prop.todos_idiomas": "Todos los idiomas",
   "prop.suena_en": "Suena en",
-  "prop.subtitulos_audio": "Subtítulos de este audio"
+  "prop.subtitulos_audio": "Subtítulos de este audio",
+  "prop.foto": "Foto",
+  "prop.encuadre_llenar": "Llenar",
+  "prop.encuadre_ajustar": "Ajustar con fondo desenfocado",
+  "prop.encuadre_ayuda": "Arrastra el video para elegir qué parte se ve; la esquina lo acerca.",
+  "prop.encuadre_sin_margen": "Acerca el video para poder moverlo.",
+  "prop.nota_foto": "Una foto no tiene sonido ni velocidad: cambia cuánto dura.",
+  "prop.ayuda_solape": "Junta los dos clips: el video queda tan corto como dure la transición."
 };
 
 let actuales = ES;

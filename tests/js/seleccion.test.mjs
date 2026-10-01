@@ -215,3 +215,104 @@ test("en una capa chica el asa no se come la caja: tocar adentro mueve", () => {
   g = gestoEn(doc, 1500, 820, 1000, { ...op, seleccion: "t1" });
   assert.deepEqual([g.tipo, g.id], ["asa", "t1"]);
 });
+
+// ---- Capa 5b (Tarea 7, D8): tocar el video elige el clip de la principal;
+// arrastrar mueve su encuadre y el asa lo acerca ----
+import { cajaEncuadreElegida, clipPrincipalEn } from "../../static/editor/seleccion.js";
+
+const MEDIDAS_400 = () => [400, 200];
+const conPrincipal = (seleccion, extra = {}) => ({
+  seleccion, materiales: MATS, medidasTexto: MEDIDAS, radioAsa: 30, margenAsa: 8, medidasPrincipal: MEDIDAS_400, ...extra,
+});
+
+test("el clip de la principal que suena en el cabezal (en una transición, el que entra)", () => {
+  const doc = docBase();
+  assert.equal(clipPrincipalEn(doc, 1000).id, "v0");
+  assert.equal(clipPrincipalEn(doc, 4000).id, "v1");
+  assert.equal(clipPrincipalEn(doc, 9000), null);                       // después del video
+  const imagen = { ...docBase(), pistas: [{ id: "p_img", tipo: "imagen", clips: [{ id: "i0", inicio_ms: 0, duracion_ms: 0, material_id: 3 }] }] };
+  assert.equal(clipPrincipalEn(imagen, 0), null);                       // la edición de imagen no tiene encuadre
+  assert.equal(clipPrincipalEn(null, 0), null);
+});
+
+test("tocar el video (fuera de textos e imágenes) es el encuadre del clip del cabezal; fuera del lienzo, nada", () => {
+  const doc = docBase();
+  let g = gestoEn(doc, 1000, 540, 300, conPrincipal(null));
+  assert.deepEqual([g.tipo, g.id, g.alTocar], ["encuadre", "v0", "v0"]);
+  assert.deepEqual(g.caja, { x: 0, y: 0, ancho: 1080, alto: 1920, ancla: "centro" });
+  assert.deepEqual(g.medidas, [400, 200]);
+  assert.deepEqual(g.encuadre, { modo: "llenar", zoom: 1, x: 0.5, y: 0.5 });
+  assert.equal(gestoEn(doc, 1000, -20, 300, conPrincipal(null)).tipo, "vacio");
+  assert.equal(gestoEn(doc, 1000, 540, 1930, conPrincipal(null)).tipo, "vacio");
+  // sobre el texto: su caja, como hoy
+  g = gestoEn(doc, 1000, 540, 960, conPrincipal(null));
+  assert.deepEqual([g.tipo, g.id, g.alTocar], ["caja", "t1", "t1"]);
+  // con el texto elegido, tocar el video fuera de él elige el video
+  g = gestoEn(doc, 1000, 540, 300, conPrincipal("t1"));
+  assert.deepEqual([g.tipo, g.id, g.alTocar], ["encuadre", "v0", "v0"]);
+  // después del video (la voz sigue) no hay clip que tocar
+  assert.equal(gestoEn(doc, 9000, 540, 300, conPrincipal(null)).tipo, "vacio");
+  // sin medidasPrincipal (quien no sabe medir la principal): lo de antes
+  assert.equal(gestoEn(doc, 1000, 540, 300, { ...conPrincipal(null), medidasPrincipal: null }).tipo, "vacio");
+});
+
+test("con el clip de la principal elegido, su asa (la esquina, dentro del lienzo) lo acerca", () => {
+  const doc = docBase();
+  let g = gestoEn(doc, 1000, 1072, 1912, conPrincipal("v0"));
+  assert.deepEqual([g.tipo, g.id, g.alTocar], ["asa_encuadre", "v0", "v0"]);
+  assert.deepEqual(g.asa, { x: 1072, y: 1912, sx: 1, sy: 1 });
+  assert.deepEqual(g.caja, { x: 0, y: 0, ancho: 1080, alto: 1920, ancla: "centro" });
+  // sin elegirlo, la esquina es encuadre (mover)
+  assert.equal(gestoEn(doc, 1000, 1072, 1912, conPrincipal(null)).tipo, "encuadre");
+  // con otro clip de la principal elegido (fuera del cabezal), tampoco hay asa
+  assert.equal(gestoEn(doc, 1000, 1072, 1912, conPrincipal("v1")).tipo, "encuadre");
+  // en «ajustar» el asa va en la esquina de lo que se ve (400×200: 0..1080 × 690..1230)
+  const ajustado = docBase();
+  ajustado.pistas[0].clips[0].encuadre = { modo: "ajustar", zoom: 1, x: 0.5, y: 0.5 };
+  g = gestoEn(ajustado, 1000, 1072, 1230, conPrincipal("v0"));
+  assert.deepEqual([g.tipo, g.asa.x, g.asa.y], ["asa_encuadre", 1072, 1230]);
+  assert.deepEqual(g.caja, { x: 0, y: 690, ancho: 1080, alto: 540, ancla: "centro" });
+  assert.equal(gestoEn(ajustado, 1000, 1072, 1912, conPrincipal("v0")).tipo, "encuadre");   // abajo de lo que se ve
+});
+
+test("el asa del video elegido gana a una capa que la tape; su caja no (tocar una capa la elige)", () => {
+  const doc = conFoto();
+  const mats = { 3: { ancho: 1080, alto: 1920 } };                     // la foto tapa todo el video
+  let g = gestoEn(doc, 1500, 1072, 1912, conPrincipal("v0", { materiales: mats }));
+  assert.equal(g.tipo, "asa_encuadre");
+  g = gestoEn(doc, 1500, 540, 300, conPrincipal("v0", { materiales: mats }));
+  assert.deepEqual([g.tipo, g.id], ["caja", "foto"]);
+});
+
+test("la caja del clip de la principal elegido: lo que se ve, solo si suena en el cabezal", () => {
+  const doc = docBase();
+  assert.deepEqual(cajaEncuadreElegida(doc, 1000, "v0", MEDIDAS_400), { x: 0, y: 0, ancho: 1080, alto: 1920, ancla: "centro" });
+  assert.equal(cajaEncuadreElegida(doc, 5000, "v0", MEDIDAS_400), null);       // el cabezal está en v1
+  assert.equal(cajaEncuadreElegida(doc, 1000, "t1", MEDIDAS_400), null);       // un texto no
+  assert.equal(cajaEncuadreElegida(doc, 1000, null, MEDIDAS_400), null);
+  assert.equal(cajaEncuadreElegida(doc, 1000, "v0", null), null);              // sin quien mida
+  doc.pistas[0].clips[0].encuadre = { modo: "ajustar" };
+  assert.deepEqual(cajaEncuadreElegida(doc, 1000, "v0", MEDIDAS_400), { x: 0, y: 690, ancho: 1080, alto: 540, ancla: "centro" });
+  // medidas que todavía no llegaron: el lienzo entero
+  assert.deepEqual(cajaEncuadreElegida(doc, 1000, "v0", () => null), { x: 0, y: 0, ancho: 1080, alto: 1920, ancla: "centro" });
+});
+
+test("arrastrar el video da el encuadre listo para operaciones.cambiar; el asa, el zoom", () => {
+  const g = gestoEn(docBase(), 1000, 540, 300, conPrincipal(null));
+  const base = { ...g, formato: "9:16" };
+  assert.deepEqual(cambiosArrastre(base, 276, 0),
+    { cambios: { encuadre: { x: 0.4, y: 0.5 } }, guias: { vertical: false, horizontal: false } });
+  assert.deepEqual(cambiosArrastre({ ...base, iman: 40 }, 30, 0),
+    { cambios: { encuadre: { x: 0.5, y: 0.5 } }, guias: { vertical: true, horizontal: false } });
+  // sin medidas no se sabe cuánto mover: nada
+  assert.deepEqual(cambiosArrastre({ ...base, medidas: null }, 276, 0).cambios, null);
+  const asa = gestoEn(docBase(), 1000, 1072, 1912, conPrincipal("v0"));
+  assert.deepEqual(cambiosArrastre({ ...asa, formato: "9:16" }, 532, 952),
+    { cambios: { encuadre: { zoom: 2 } }, guias: { vertical: false, horizontal: false } });
+  assert.deepEqual(cambiosArrastre({ ...asa, formato: "9:16" }, -532, -952).cambios, { encuadre: { zoom: 1 } });
+});
+
+test("el cursor sobre el video: mover, y el de agrandar en el asa", () => {
+  assert.equal(cursorEn({ tipo: "encuadre" }), "move");
+  assert.equal(cursorEn({ tipo: "asa_encuadre", asa: { sx: 1, sy: 1 } }), "nwse-resize");
+});

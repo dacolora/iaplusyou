@@ -6,13 +6,16 @@
 // el DOM; lo prueba tests/js/propiedades_modelo.test.mjs.
 //
 // Formas: "documento" (nada elegido: la mezcla de toda la edición), "video"
-// (un clip de la principal), "texto", "imagen", "audio" (música, efecto, voz…),
+// (un clip de la principal), "foto" (capa 5b: una foto como clip de la
+// principal), "texto", "imagen", "audio" (música, efecto, voz…),
 // "sonido" (el espejo de p_sonido: no se edita, se cambia desde su video) y
 // "otro" (un video encima u otra pista que el render no hace: solo borrar).
+import { caja as cajaEncuadre, completo as encuadreCompleto, MODOS as MODOS_ENCUADRE } from "./encuadre.js";
 import { FORMATOS } from "./formatos.js";
 import { etiquetaClip, nombreTransicion } from "./escala.js";
 import {
-  cambiaPorDestino, esVozDeGuion, FUENTES, ID_SONIDO, MEZCLAS, sincronizarSonido, TRANSICIONES, VELOCIDADES,
+  cambiaPorDestino, esVozDeGuion, FOTO_MAX_MS, FUENTES, ID_SONIDO, MEZCLAS, MIN_CLIP_MS, sincronizarSonido, TRANSICIONES,
+  VELOCIDADES,
 } from "./operaciones.js";
 import * as operaciones from "./operaciones.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
@@ -30,6 +33,11 @@ const AYUDAS_MEZCLA = {
 
 // La duración de una transición (ms): el deslizador del formulario del video.
 export const TRANSICION_MS = { min: 200, max: 1500, paso: 100, defecto: 500 };
+// Cuánto dura una foto (ms): el campo «Duración de la foto» (capa 5b; los
+// topes de operaciones.cambiarDuracionFoto), de a 100 ms.
+export const DURACION_FOTO_MS = { min: MIN_CLIP_MS, max: FOTO_MAX_MS, paso: 100 };
+// «Encuadre» (D4): los dos modos con la clave del nombre que se lee.
+const NOMBRES_ENCUADRE = { llenar: "prop.encuadre_llenar", ajustar: "prop.encuadre_ajustar" };
 // Tamaño de un texto en px del lienzo: el mismo tope que aplica operaciones.cambiar.
 export const TAMANO_TEXTO_PX = { min: 12, max: 200 };
 // Grosor del contorno en px del lienzo (el preset «Título» usa 4).
@@ -85,6 +93,21 @@ export function textoVelocidad(v) {
   return `${decimal(Number(v), 2)}×`;
 }
 
+// «Duración de la foto»: los segundos sin la unidad («3», «2,5»), de a
+// décimas — lo que muestra el campo; `msDeDuracionFoto` lo lee de vuelta.
+export function textoDuracionFoto(ms) {
+  return decimal(Math.round((Number(ms) || 0) / 100) / 10, 1);
+}
+
+// Lo escrito en «Duración de la foto» en ms de a 100 (con coma o punto, con
+// o sin « s»), o null si no es un número positivo — el panel vuelve a
+// mostrar lo que había. Los topes los pone operaciones.cambiarDuracionFoto.
+export function msDeDuracionFoto(texto) {
+  const limpio = String(texto ?? "").trim().replace(/\s*s$/i, "").replace(",", ".");
+  if (!/^(\d+(\.\d*)?|\.\d+)$/.test(limpio)) return null;
+  return Math.round(Number(limpio) * 10) * 100;
+}
+
 // ---- Qué está elegido ----
 
 export function buscar(doc, id) {
@@ -101,7 +124,7 @@ function formaDeHallado(doc, h) {
   const { pista } = h;
   if (pista.id === ID_SONIDO) return "sonido";
   const principal = pistaPrincipal(doc);
-  if (pista.tipo === "video") return pista === principal ? "video" : "otro";
+  if (pista.tipo === "video") return pista !== principal ? "otro" : h.clip.foto ? "foto" : "video";
   if (pista.tipo === "texto") return "texto";
   if (pista.tipo === "imagen") return pista === principal ? "otro" : "imagen";
   if (pista.tipo === "audio") return "audio";
@@ -124,12 +147,21 @@ export function claveForma(m) {
 // `destino`: "<idioma>_<PAIS>" que se está viendo (editor.destino()); `info`:
 // {material_id: {duracion_ms, tiene_audio}} (editor.info()); `materiales`:
 // los de la vista previa (para las medidas de una imagen); `nombresIdioma`:
-// {es: "Español", …} (datos.voz.nombres_idioma), para «Suena en».
-export function modelo(doc, id, { destino = null, info = {}, materiales = {}, nombresIdioma = {} } = {}) {
+// {es: "Español", …} (datos.voz.nombres_idioma), para «Suena en»;
+// `medidasPrincipal(clipId)`: [ancho, alto] que se ven del cuadro de un clip
+// de la principal (vista.medidasPrincipal; sin ella, las del material) — si
+// el cuadro no tiene margen, «Encuadre» lo dice.
+export function modelo(doc, id, {
+  destino = null, info = {}, materiales = {}, nombresIdioma = {}, medidasPrincipal = null,
+} = {}) {
   const h = buscar(doc, id);
   const forma = formaDeHallado(doc, h);
+  const encuadre = () => modeloEncuadre(h.clip, {
+    medidas: medidasDeClip(h.clip, materiales, medidasPrincipal), formato: doc.formato,
+  });
   switch (forma) {
-    case "video": return modeloVideo(doc, h, info);
+    case "video": return { ...modeloVideo(doc, h, info), encuadre: encuadre() };
+    case "foto": return modeloFoto(h, encuadre());
     case "texto": return modeloTexto(doc, h, destino);
     case "imagen": return modeloImagen(doc, h, materiales);
     case "audio": return modeloAudio(h, destino, nombresIdioma);
@@ -177,31 +209,95 @@ function sonidoDeVideo(doc, clip, info) {
            motivo: velocidad !== 1 ? t("prop.velocidad_sin_sonido") : t("prop.video_sin_sonido") };
 }
 
-function modeloVideo(doc, { pista, clip, indice }, info) {
-  const velocidad = Number(clip.velocidad ?? 1);
-  const sonido = sonidoDeVideo(doc, clip, info);
+// La transición al siguiente clip de la principal (videos y fotos). D9:
+// una que nace ahora (o una «solape») junta los dos clips y acorta el
+// video: `ayuda` lo dice; una de «cola» (un borrador automático) no.
+function transicionDe(pista, clip, indice) {
   const ultimo = indice === pista.clips.length - 1;
   const tr = clip.transicion;
   const conTransicion = Boolean(tr) && (tr.tipo ?? "corte") !== "corte" && Number(tr.duracion_ms) > 0;
+  const junta = !ultimo && (!conTransicion || (tr.modo ?? null) === "solape");
+  return {
+    disponible: !ultimo,
+    motivo: ultimo ? t("prop.ultimo_video") : null,
+    tipo: conTransicion ? tr.tipo : "corte",
+    duracionMs: conTransicion ? Number(tr.duracion_ms) : TRANSICION_MS.defecto,
+    min: TRANSICION_MS.min, max: TRANSICION_MS.max, paso: TRANSICION_MS.paso,
+    ayuda: junta ? t("prop.ayuda_solape") : null,
+  };
+}
+
+// Lo que comparten el video y la foto: zoom lento, transición y borrar.
+function comunPrincipal({ pista, clip, indice }) {
   const soloUno = pista.clips.length <= 1;
+  return {
+    kenBurns: clip.ken_burns === "in" || clip.ken_burns === "out" ? clip.ken_burns : null,
+    transicion: transicionDe(pista, clip, indice),
+    transiciones: TRANSICIONES.map((tipo) => ({ valor: tipo, texto: nombreTransicion(tipo) })),
+    puedeBorrar: !soloUno,
+    motivoBorrar: soloUno ? t("op.un_clip") : null,
+  };
+}
+
+function modeloVideo(doc, h, info) {
+  const { clip } = h;
   return {
     forma: "video",
     clipId: clip.id,
     nombre: t("fila.video"),
-    velocidad,
+    velocidad: Number(clip.velocidad ?? 1),
     velocidades: VELOCIDADES.map((v) => ({ valor: v, texto: textoVelocidad(v) })),
-    sonido,
-    kenBurns: clip.ken_burns === "in" || clip.ken_burns === "out" ? clip.ken_burns : null,
-    transicion: {
-      disponible: !ultimo,
-      motivo: ultimo ? t("prop.ultimo_video") : null,
-      tipo: conTransicion ? tr.tipo : "corte",
-      duracionMs: conTransicion ? Number(tr.duracion_ms) : TRANSICION_MS.defecto,
-      min: TRANSICION_MS.min, max: TRANSICION_MS.max, paso: TRANSICION_MS.paso,
-    },
-    transiciones: TRANSICIONES.map((tipo) => ({ valor: tipo, texto: nombreTransicion(tipo) })),
-    puedeBorrar: !soloUno,
-    motivoBorrar: soloUno ? t("op.un_clip") : null,
+    sonido: sonidoDeVideo(doc, clip, info),
+    ...comunPrincipal(h),
+  };
+}
+
+// Capa 5b (D1, D8): una foto como clip de la principal. Cuánto dura en vez
+// de velocidad y sonido (una foto no tiene ninguno de los dos: lo dice `nota`).
+function modeloFoto(h, encuadre) {
+  const { clip } = h;
+  return {
+    forma: "foto",
+    clipId: clip.id,
+    nombre: t("prop.foto"),
+    duracionMs: Number(clip.duracion_ms),
+    duracion: { ...DURACION_FOTO_MS },
+    nota: t("prop.nota_foto"),
+    encuadre,
+    ...comunPrincipal(h),
+  };
+}
+
+// [ancho, alto] que se ven del cuadro de un clip de la principal: los de
+// quien lo dibuja (vista.medidasPrincipal: el navegador ya enderezó un video
+// grabado de pie) o, si todavía no cargó, los del material; null si no hay.
+function medidasDeClip(clip, materiales, medidasPrincipal) {
+  const propias = medidasPrincipal?.(clip.id);
+  if (propias && propias[0] > 0 && propias[1] > 0) return propias;
+  const m = materiales?.[clip.material_id];
+  return m && Number(m.ancho) > 0 && Number(m.alto) > 0 ? [Number(m.ancho), Number(m.alto)] : null;
+}
+
+// «Encuadre» (D4, D8) de un clip de la principal: el modo, el zoom en %, si
+// está centrado y si el cuadro tiene margen para moverse — sin margen (mide
+// justo el lienzo: llenar, sin acercar y con su misma proporción) arrastrar
+// no hace nada y el panel pide acercarlo. Sin `medidas` no se sabe: no lo dice.
+export function modeloEncuadre(clip, { medidas = null, formato = "9:16" } = {}) {
+  const e = encuadreCompleto(clip?.encuadre);
+  let sinMargen = false;
+  if (medidas && medidas[0] > 0 && medidas[1] > 0) {
+    const [ancho, alto] = lienzo(formato);
+    const c = cajaEncuadre(medidas[0], medidas[1], ancho, alto, e);
+    sinMargen = c.sw === ancho && c.sh === alto;
+  }
+  return {
+    modo: MODOS_ENCUADRE.includes(e.modo) ? e.modo : "llenar",
+    zoomPct: Math.round(Number(e.zoom) * 100),
+    centrado: casi(e.x, 0.5) && casi(e.y, 0.5),
+    sinMargen,
+    ayuda: t("prop.encuadre_ayuda"),
+    aviso: sinMargen ? t("prop.encuadre_sin_margen") : null,
+    opciones: MODOS_ENCUADRE.map((valor) => ({ valor, texto: t(NOMBRES_ENCUADRE[valor]) })),
   };
 }
 
@@ -412,6 +508,21 @@ export function cambioFondo(tipo, fondoActual) {
   if (!(tipo in RADIO_FONDO)) throw new Error(`Forma de fondo desconocida: ${tipo}`);
   const radio = RADIO_FONDO[tipo];
   return { estilo: { fondo: fondoActual ? { radio } : { ...FONDO_NUEVO, radio } } };
+}
+
+// «Encuadre» (D4): cada control pide solo SU campo; operaciones.cambiar lo
+// fusiona sobre el encuadre de ese clip (y vuelve a «sin encuadre» si queda
+// el de siempre).
+export function cambioModoEncuadre(modo) {
+  return { encuadre: { modo } };
+}
+
+export function cambioZoomEncuadre(pct) {
+  return { encuadre: { zoom: Number(pct) / 100 } };
+}
+
+export function cambioCentrarEncuadre() {
+  return { encuadre: { x: 0.5, y: 0.5 } };
 }
 
 // «Suena en» (D10): "" es «Todos los idiomas» (sin `idioma` en el clip).

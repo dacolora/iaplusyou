@@ -395,6 +395,14 @@ TEXTOS = {
     "prop.todos_idiomas": N_("Todos los idiomas"),
     "prop.suena_en": N_("Suena en"),
     "prop.subtitulos_audio": N_("Subtítulos de este audio"),
+    # propiedades.js (capa 5b, Tarea 7): la foto y el bloque «Encuadre»
+    "prop.foto": N_("Foto"),
+    "prop.encuadre_llenar": N_("Llenar"),
+    "prop.encuadre_ajustar": N_("Ajustar con fondo desenfocado"),
+    "prop.encuadre_ayuda": N_("Arrastra el video para elegir qué parte se ve; la esquina lo acerca."),
+    "prop.encuadre_sin_margen": N_("Acerca el video para poder moverlo."),
+    "prop.nota_foto": N_("Una foto no tiene sonido ni velocidad: cambia cuánto dura."),
+    "prop.ayuda_solape": N_("Junta los dos clips: el video queda tan corto como dure la transición."),
 }
 
 

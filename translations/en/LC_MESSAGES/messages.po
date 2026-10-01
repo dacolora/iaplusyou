@@ -1673,6 +1673,9 @@ msgstr "Unknown action."
 msgid "Acción desconocida: %(accion)s."
 msgstr "Unknown action: %(accion)s."
 
+msgid "Acerca el video para poder moverlo."
+msgstr "Zoom in on the video to be able to move it."
+
 msgid "Acercar"
 msgstr "Zoom in"
 
@@ -1852,6 +1855,9 @@ msgstr "This is now done with an experiment: create one (or use one being drafte
 
 msgid "Ahora se usa el de fábrica."
 msgstr "The default one is being used now."
+
+msgid "Ajustar con fondo desenfocado"
+msgstr "Fit with a blurred background"
 
 msgid "Ajustes"
 msgstr "Settings"
@@ -2257,6 +2263,9 @@ msgstr "Lead"
 
 msgid "Arrastra aquí imágenes o videos, o toca <strong>+</strong> para sumar referencias o elegir del catálogo. Son opcionales: sin nada, se genera solo con tu texto."
 msgstr "Drag images or videos here, or tap <strong>+</strong> to add references or pick from the catalog. They're optional: with nothing, it generates from your text alone."
+
+msgid "Arrastra el video para elegir qué parte se ve; la esquina lo acerca."
+msgstr "Drag the video to choose which part shows; the corner zooms it in."
 
 msgid "Arrastra imágenes o videos aquí"
 msgstr "Drag images or videos here"
@@ -6823,6 +6832,9 @@ msgstr "Format:"
 msgid "Formato: %(f)s"
 msgstr "Format: %(f)s"
 
+msgid "Foto"
+msgstr "Photo"
+
 #, python-format
 msgid "Foto asignada al color (%(nombre)s)."
 msgstr "Photo assigned to the color (%(nombre)s)."
@@ -7936,6 +7948,9 @@ msgstr "Japan"
 msgid "Jornadas de trabajo"
 msgstr "Work days"
 
+msgid "Junta los dos clips: el video queda tan corto como dure la transición."
+msgstr "Joins the two clips: the video gets shorter by the length of the transition."
+
 msgid "Karaoke"
 msgstr "Karaoke"
 
@@ -8661,6 +8676,9 @@ msgstr "Reaching people is expensive (high CPM): the audience is saturated or th
 
 msgid "Llegaste a los 5 minutos: la grabación se detuvo."
 msgstr "You reached 5 minutes: the recording stopped."
+
+msgid "Llenar"
+msgstr "Fill"
 
 msgid "Llenar la pantalla"
 msgstr "Fill the screen"
@@ -14265,6 +14283,9 @@ msgstr "One of the pieces is not available (or not ready)."
 #, python-format
 msgid "Una escena puede llevar hasta %(n)s imágenes."
 msgstr "A scene can have up to %(n)s images."
+
+msgid "Una foto no tiene sonido ni velocidad: cambia cuánto dura."
+msgstr "A photo has no sound or speed: change how long it lasts."
 
 msgid "Una foto no tiene velocidad: cambia cuánto dura."
 msgstr "A photo has no speed: change how long it lasts."

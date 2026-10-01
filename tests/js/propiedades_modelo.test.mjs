@@ -73,7 +73,7 @@ test("modelo de un video: velocidad, sonido de la escena, zoom lento, transició
   assert.equal(m.kenBurns, "in");
   assert.equal(modelo(d, "v1", { info: INFO }).kenBurns, "out");
   assert.deepEqual(m.transicion, { disponible: true, motivo: null, tipo: "corte", duracionMs: TRANSICION_MS.defecto,
-    min: 200, max: 1500, paso: 100 });
+    min: 200, max: 1500, paso: 100, ayuda: "Junta los dos clips: el video queda tan corto como dure la transición." });
   assert.deepEqual(m.transiciones.map((t) => t.texto), ["Corte", "Fundido", "Deslizar", "Zoom", "Fundido a negro"]);
   assert.equal(m.puedeBorrar, true);
   // el último video no tiene transición hacia el siguiente
@@ -385,4 +385,120 @@ test("cambioSuenaEn: lo que pide «Suena en» a operaciones.cambiar", () => {
   assert.equal(clipDe(r.doc, conVoz.seleccion).idioma, undefined);
   const r2 = op.cambiar(r.doc, conVoz.seleccion, cambioSuenaEn("en"), INFO);
   assert.equal(clipDe(r2.doc, conVoz.seleccion).idioma, "en");
+});
+
+// ---- Capa 5b (Tarea 7): la foto en «Editar» y el bloque «Encuadre» ----
+import {
+  cambioCentrarEncuadre, cambioModoEncuadre, cambioZoomEncuadre, modeloEncuadre, msDeDuracionFoto, textoDuracionFoto,
+} from "../../static/editor/propiedades_modelo.js";
+
+const FOTO = { id: 4, tipo: "imagen", ancho: 600, alto: 400 };
+function docConFoto() {
+  const r = op.agregarFoto(docBase(), FOTO, { despuesDe: "v0" }, INFO);
+  return { doc: r.doc, foto: r.seleccion };
+}
+
+test("una foto de la principal tiene su formulario: duración, encuadre, zoom lento, transición y borrar", () => {
+  const { doc, foto } = docConFoto();
+  assert.equal(formaDe(doc, foto), "foto");
+  const m = modelo(doc, foto, { info: INFO });
+  assert.equal(m.forma, "foto");
+  assert.equal(m.clipId, foto);
+  assert.equal(claveForma(m), `foto:${foto}`);
+  assert.equal(m.nombre, "Foto");
+  assert.equal(m.duracionMs, 3000);
+  assert.deepEqual(m.duracion, { min: 100, max: op.FOTO_MAX_MS, paso: 100 });
+  assert.equal(m.nota, "Una foto no tiene sonido ni velocidad: cambia cuánto dura.");
+  assert.equal("velocidad" in m, false);
+  assert.equal("sonido" in m, false);
+  assert.equal(m.kenBurns, null);
+  assert.equal(m.encuadre.modo, "ajustar");                // 600×400 en 9:16: entra con el fondo desenfocado (D7)
+  assert.equal(m.transicion.disponible, true);              // va antes de v1
+  assert.equal(m.transicion.tipo, "corte");
+  assert.match(m.transicion.ayuda, /Junta los dos clips/);
+  assert.deepEqual(m.transiciones.map((x) => x.valor), op.TRANSICIONES);
+  assert.equal(m.puedeBorrar, true);
+  assert.equal(m.motivoBorrar, null);
+  // con zoom lento y otra duración
+  const larga = op.cambiarDuracionFoto(op.cambiar(doc, foto, { ken_burns: "out" }, INFO).doc, foto, 4500, INFO).doc;
+  const m2 = modelo(larga, foto, { info: INFO });
+  assert.equal(m2.duracionMs, 4500);
+  assert.equal(m2.kenBurns, "out");
+  // la última foto no tiene transición hacia el siguiente
+  const ultima = op.agregarFoto(docBase(), FOTO, { despuesDe: "v1" }, INFO);
+  const m3 = modelo(ultima.doc, ultima.seleccion, { info: INFO });
+  assert.equal(m3.transicion.disponible, false);
+  assert.equal(m3.transicion.ayuda, null);
+});
+
+test("el video también trae su encuadre (por defecto: llenar, sin acercar, centrado)", () => {
+  const d = docBase();
+  const m = modelo(d, "v0", { info: INFO });
+  assert.equal(m.encuadre.modo, "llenar");
+  assert.equal(m.encuadre.zoomPct, 100);
+  assert.equal(m.encuadre.centrado, true);
+  assert.equal(m.encuadre.sinMargen, false);               // sin medidas no se sabe: no lo dice
+  assert.deepEqual(m.encuadre.opciones, [
+    { valor: "llenar", texto: "Llenar" }, { valor: "ajustar", texto: "Ajustar con fondo desenfocado" }]);
+  const ajustado = op.cambiar(d, "v0", { encuadre: { modo: "ajustar", zoom: 1.5 } }, INFO).doc;
+  const e = modelo(ajustado, "v0", { info: INFO }).encuadre;
+  assert.deepEqual([e.modo, e.zoomPct, e.centrado], ["ajustar", 150, true]);
+  const corrido = op.cambiar(d, "v0", { encuadre: { x: 0.3 } }, INFO).doc;
+  assert.equal(modelo(corrido, "v0", { info: INFO }).encuadre.centrado, false);
+});
+
+test("modeloEncuadre: sin margen solo si el cuadro mide justo el lienzo (llenar, sin acercar, misma proporción)", () => {
+  const clip = { encuadre: null };
+  assert.equal(modeloEncuadre(clip, { medidas: [1080, 1920], formato: "9:16" }).sinMargen, true);
+  assert.equal(modeloEncuadre(clip, { medidas: [540, 960], formato: "9:16" }).sinMargen, true);
+  assert.equal(modeloEncuadre(clip, { medidas: [400, 200], formato: "9:16" }).sinMargen, false);
+  assert.equal(modeloEncuadre({ encuadre: { zoom: 1.5 } }, { medidas: [1080, 1920], formato: "9:16" }).sinMargen, false);
+  assert.equal(modeloEncuadre(clip).sinMargen, false);
+  assert.deepEqual(modeloEncuadre({ encuadre: { modo: "ajustar", zoom: 2.25 } }).zoomPct, 225);
+  // el modelo del panel toma las medidas de quien dibuja; si no, las del material
+  const d = docBase();
+  assert.equal(modelo(d, "v0", { info: INFO, medidasPrincipal: () => [1080, 1920] }).encuadre.sinMargen, true);
+  assert.equal(modelo(d, "v0", { info: INFO, materiales: { 1: { ancho: 1080, alto: 1920 } } }).encuadre.sinMargen, true);
+  assert.equal(modelo(d, "v0", { info: INFO, materiales: { 1: { ancho: 1920, alto: 1080 } } }).encuadre.sinMargen, false);
+});
+
+test("los cambios del bloque «Encuadre» son los que acepta operaciones.cambiar", () => {
+  assert.deepEqual(cambioModoEncuadre("ajustar"), { encuadre: { modo: "ajustar" } });
+  assert.deepEqual(cambioZoomEncuadre(150), { encuadre: { zoom: 1.5 } });
+  assert.deepEqual(cambioCentrarEncuadre(), { encuadre: { x: 0.5, y: 0.5 } });
+  let d = docBase();
+  for (const c of [cambioModoEncuadre("ajustar"), cambioZoomEncuadre(150), { encuadre: { x: 0.2 } }, cambioCentrarEncuadre()]) {
+    d = op.cambiar(d, "v0", c, INFO).doc;
+  }
+  assert.deepEqual(clipDe(d, "v0").encuadre, { modo: "ajustar", zoom: 1.5, x: 0.5, y: 0.5 });
+  // de vuelta a llenar y sin acercar: sin encuadre (el de siempre)
+  d = op.cambiar(op.cambiar(d, "v0", cambioModoEncuadre("llenar"), INFO).doc, "v0", cambioZoomEncuadre(100), INFO).doc;
+  assert.equal(clipDe(d, "v0").encuadre, null);
+});
+
+test("la transición dice que junta los dos clips cuando no hay una o es «solape»; una de cola no", () => {
+  const d = docBase();
+  assert.match(modelo(d, "v0", { info: INFO }).transicion.ayuda, /queda tan corto/);
+  const solape = op.ponerTransicion(d, "v0", "fundido", 500, INFO).doc;
+  assert.equal(clipDe(solape, "v0").transicion.modo, "solape");
+  assert.match(modelo(solape, "v0", { info: INFO }).transicion.ayuda, /queda tan corto/);
+  const cola = docBase();
+  clipDe(cola, "v0").transicion = { tipo: "fundido", duracion_ms: 500 };   // la de un borrador automático
+  assert.equal(modelo(cola, "v0", { info: INFO }).transicion.ayuda, null);
+  assert.equal(modelo(d, "v1", { info: INFO }).transicion.ayuda, null);     // el último: no hay transición
+});
+
+test("la duración de la foto se escribe en segundos con la coma y se lee con coma o punto", () => {
+  assert.equal(textoDuracionFoto(3000), "3");
+  assert.equal(textoDuracionFoto(2500), "2,5");
+  assert.equal(textoDuracionFoto(100), "0,1");
+  assert.equal(textoDuracionFoto(60000), "60");
+  assert.equal(msDeDuracionFoto("2,5"), 2500);
+  assert.equal(msDeDuracionFoto("2.5"), 2500);
+  assert.equal(msDeDuracionFoto(" 3 s "), 3000);
+  assert.equal(msDeDuracionFoto("0,1"), 100);
+  assert.equal(msDeDuracionFoto("1,26"), 1300);            // de a 100 ms
+  assert.equal(msDeDuracionFoto(""), null);
+  assert.equal(msDeDuracionFoto("tres"), null);
+  assert.equal(msDeDuracionFoto("-2"), null);
 });

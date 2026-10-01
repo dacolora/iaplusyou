@@ -117,3 +117,64 @@ export function rectConZoom({ x, y, w, h }, zoom, dx, lienzoW, lienzoH) {
     h: h * zoom,
   };
 }
+
+// ---- Mover y acercar sobre el video (D8, Tarea 7; solo navegador: el
+// render recibe el encuadre ya guardado, nunca un arrastre) ----
+
+const acotar = (v, min, max) => Math.min(max, Math.max(min, v));
+
+// Un eje del arrastre: `margen` es lo que el cuadro escalado pasa del
+// lienzo en ese eje (`sw − W`; negativo en «ajustar», donde el cuadro es más
+// chico y se mueve DENTRO del lienzo). Con margen 0 el eje no se mueve ni
+// pega al centro (no hay nada que mover).
+function ejeArrastre(v, d, margen, iman) {
+  if (margen === 0) return { v, guia: false };
+  const nuevo = acotar(v - d / margen, 0, 1);
+  if (Math.abs((nuevo - 0.5) * margen) < iman) return { v: 0.5, guia: true };
+  return { v: nuevo, guia: false };
+}
+
+// La imagen sigue al dedo: un arrastre de (dxPx, dyPx) px del LIENZO desde
+// donde estaba `enc` mueve el cuadro escalado lo mismo (con `c = caja(…)`,
+// `x' = x − dx / (c.sw − W)`, acotado a 0–1; igual en `y`). Imán al centro:
+// a menos de `iman` px del lienzo del cuadro centrado pega en 0,5 y lo dice
+// en `guias` (vertical = el eje x, como las capas). A 4 decimales. `medidas`:
+// [ancho, alto] que se VEN del clip.
+export function moverEncuadre(enc, [w, h], lienzoW, lienzoH, dxPx, dyPx, { iman = 12 } = {}) {
+  const c0 = completo(enc);
+  const c = caja(w, h, lienzoW, lienzoH, c0);
+  const ex = ejeArrastre(Number(c0.x), dxPx, c.sw - lienzoW, iman);
+  const ey = ejeArrastre(Number(c0.y), dyPx, c.sh - lienzoH, iman);
+  return { x: redondear4(ex.v), y: redondear4(ey.v), guias: { vertical: ex.guia, horizontal: ey.guia } };
+}
+
+// El asa de la esquina acerca o aleja: `zoom0 · distancia(centro, asa0 + d)
+// / distancia(centro, asa0)`, con el centro del LIENZO (el zoom de D4 crece
+// desde ahí cuando el cuadro está centrado), acotado a ZOOM_MIN–ZOOM_MAX y a
+// 4 decimales. El arrastre no pasa del centro: más allá la distancia
+// volvería a crecer y el cuadro se agrandaría al revés (como
+// seleccion.escalarDesdeAsa).
+export function zoomEncuadre(enc, asa0, dxPx, dyPx, lienzoW, lienzoH) {
+  const zoom0 = Number(completo(enc).zoom);
+  const vx = asa0.x - lienzoW / 2;
+  const vy = asa0.y - lienzoH / 2;
+  const distancia = Math.hypot(vx, vy);
+  if (!distancia) return redondear4(acotar(zoom0, ZOOM_MIN, ZOOM_MAX));
+  const hastaCentro = (v, d) => (v > 0 ? Math.max(d, -v) : v < 0 ? Math.min(d, -v) : d);
+  const dx = hastaCentro(vx, dxPx);
+  const dy = hastaCentro(vy, dyPx);
+  return redondear4(acotar(zoom0 * Math.hypot(vx + dx, vy + dy) / distancia, ZOOM_MIN, ZOOM_MAX));
+}
+
+// El rectángulo del cuadro colocado (la caja de D4) recortado al lienzo:
+// lo que se ve del clip, `{x, y, ancho, alto}` en px del lienzo — la caja de
+// selección del clip de la principal. En «llenar» es el lienzo entero. Sin
+// medidas (el cuadro todavía no cargó) no se sabe: el lienzo entero.
+export function cajaVisible(enc, medidas, lienzoW, lienzoH) {
+  const [w, h] = medidas ?? [0, 0];
+  if (!(w > 0) || !(h > 0)) return { x: 0, y: 0, ancho: lienzoW, alto: lienzoH };
+  const { sw, sh, px, py } = caja(w, h, lienzoW, lienzoH, enc);
+  const x = Math.max(0, px);
+  const y = Math.max(0, py);
+  return { x, y, ancho: Math.min(lienzoW, px + sw) - x, alto: Math.min(lienzoH, py + sh) - y };
+}
