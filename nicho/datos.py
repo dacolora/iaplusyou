@@ -19,7 +19,7 @@ from sprints import datos as sprints_datos
 from sprints.sugerencias import COLORES
 
 ESTADOS_ESTUDIO = ("armando", "generando", "revisando")
-FUENTES_PLATAFORMA = ("amazon", "meli", "tiktok_shop")   # claves de nicho.fuentes.plataformas (Parte 3)
+FUENTES_PLATAFORMA = ("amazon", "meli", "tiktok_shop", "walmart", "aliexpress")   # claves de nicho.fuentes.plataformas (Partes 3 y 4)
 FUENTES = ("texto", "csv", "reddit", "youtube", "apify") + FUENTES_PLATAFORMA
 PAISES_ESTUDIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE", "UY", "EC", "SE", "GB", "DE", "FR", "IT", "NL", "CA", "AU", "IN", "JP", "AE")
 NOMBRES_PAIS = {"CO": N_("Colombia"), "MX": N_("México"), "US": N_("Estados Unidos"), "ES": N_("España"), "BR": N_("Brasil"),

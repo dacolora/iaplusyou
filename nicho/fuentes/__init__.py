@@ -4,8 +4,8 @@ Registro de fuentes de comentarios por `tipo`, con carga perezosa (como
 (reddit, youtube, apify) corren en el worker (`nicho_recolectar`) y cada una
 necesita sus llaves del `.env` raíz (`LLAVES`); `llaves_faltantes` solo mira
 `bool(os.environ.get(var))`, nunca el valor. `PLATAFORMAS` (amazon, meli,
-tiktok_shop) corren solo dentro de la investigación automática del nicho, no
-como una fuente manual más.
+tiktok_shop, walmart, aliexpress) corren solo dentro de la investigación
+automática del nicho, no como una fuente manual más.
 """
 import importlib
 import os
@@ -27,9 +27,9 @@ LLAVES = {
     "youtube": ("YOUTUBE_API_KEY",),
     "apify": ("APIFY_TOKEN",),
 }
-PLATAFORMAS = ("amazon", "meli", "tiktok_shop")     # claves de nicho.fuentes.plataformas (corren solo dentro de la investigación)
+PLATAFORMAS = ("amazon", "meli", "tiktok_shop", "walmart", "aliexpress")   # claves de nicho.fuentes.plataformas (corren solo dentro de la investigación)
 EN_WORKER = CONECTADAS + PLATAFORMAS                 # lo que nicho_recolectar acepta como `fuente`
-NOMBRES.update({"amazon": "Amazon", "meli": "Mercado Libre", "tiktok_shop": "TikTok Shop"})
+NOMBRES.update({"amazon": "Amazon", "meli": "Mercado Libre", "tiktok_shop": "TikTok Shop", "walmart": "Walmart", "aliexpress": "AliExpress"})
 LLAVES.update({clave: ("APIFY_TOKEN",) for clave in PLATAFORMAS})
 
 

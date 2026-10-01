@@ -29,13 +29,17 @@ def test_registro_y_tarifas(entorno):
     from nicho import fuentes
     from nicho.fuentes.plataforma import FuentePlataforma
     from nicho.fuentes.base import ErrorFuente
-    assert fuentes.PLATAFORMAS == ("amazon", "meli", "tiktok_shop") and fuentes.EN_WORKER == fuentes.CONECTADAS + fuentes.PLATAFORMAS
+    assert fuentes.PLATAFORMAS == ("amazon", "meli", "tiktok_shop", "walmart", "aliexpress") and fuentes.EN_WORKER == fuentes.CONECTADAS + fuentes.PLATAFORMAS
+    assert fuentes.NOMBRES["walmart"] == "Walmart" and fuentes.NOMBRES["aliexpress"] == "AliExpress" and fuentes.LLAVES["aliexpress"] == ("APIFY_TOKEN",)
+    assert fuentes.por_tipo("aliexpress")().tarifa() == {"actor": "axlymxp~aliexpress-reviews-scraper", "nombre": "Reseñas de AliExpress",
+                                                         "usd_por_resultado": 0.003, "usd_por_corrida": 0.01}
     f = fuentes.por_tipo("amazon")()
     assert isinstance(f, FuentePlataforma) and f.tipo == "amazon" and f.de_pago is True
     assert fuentes.NOMBRES["meli"] == "Mercado Libre" and fuentes.LLAVES["tiktok_shop"] == ("APIFY_TOKEN",) and fuentes.llaves_faltantes("amazon") == []
     assert f.tarifa()["actor"] == "axesso_data~amazon-reviews-scraper" and f.tarifa_busqueda()["usd_por_resultado"] == 0.003
     with pytest.raises(ErrorFuente):
         FuentePlataforma("magia")
+    assert f.tarifa()["usd_por_corrida"] == 0.0
 
 
 def test_buscar_amazon_guarda_consulta_y_dedup(entorno, monkeypatch):

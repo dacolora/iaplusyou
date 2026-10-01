@@ -505,5 +505,15 @@ def test_consultas_respetan_el_tope_aprobado(monkeypatch):
     assert inv.consultas_con_claude(est, "SE", 1)[0] == ["sola"]                                   # con tope 1, una sirve
 
 
+def test_pasos_y_etiquetas_de_las_tiendas_nuevas():
+    from nicho import investigacion as inv
+    assert inv.PASOS_CADENA == ("consultas", "buscar:amazon", "buscar:meli", "buscar:tiktok_shop", "buscar:walmart", "buscar:aliexpress",
+                                "seleccionar", "resenas:amazon", "resenas:meli", "resenas:tiktok_shop", "resenas:walmart", "resenas:aliexpress",
+                                "redes:reddit", "redes:youtube", "generar")
+    assert set(inv.ETIQUETAS_PASO) == set(inv.PASOS_CADENA)
+    assert inv.orden_pasos(["walmart", "aliexpress"], []) == ["consultas", "buscar:walmart", "buscar:aliexpress", "seleccionar",
+                                                             "resenas:walmart", "resenas:aliexpress", "generar"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

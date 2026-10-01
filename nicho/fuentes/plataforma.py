@@ -3,7 +3,7 @@ Fuente genérica de una plataforma del registro (spec Parte 3 §4): busca
 productos por palabra clave y trae reseñas de productos elegidos con los
 actores de `nicho/fuentes/plataformas.py`, corriendo varias corridas de Apify
 a la vez con `providers.apify.correr_lote`. `tipo` es la clave de la
-plataforma (`amazon`, `meli`, `tiktok_shop`): los comentarios entran a la
+plataforma (`amazon`, `meli`, `tiktok_shop`, `walmart`, `aliexpress`): los comentarios entran a la
 base con esa `fuente`, `contexto` = título del producto y `extra.producto` =
 su id, para que la página cuente reseñas por plataforma y los avatares citen
 el producto. `resultados` son ítems crudos (lo que Apify cobra); `corridas`

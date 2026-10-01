@@ -17172,3 +17172,26 @@ msgstr "🔊 Sound"
 msgid "🖼 Imagen"
 msgstr "🖼 Image"
 
+msgid "buscar en Walmart"
+msgstr "search Walmart"
+
+msgid "buscar en AliExpress"
+msgstr "search AliExpress"
+
+msgid "reseñas de Walmart"
+msgstr "Walmart reviews"
+
+msgid "reseñas de AliExpress"
+msgstr "AliExpress reviews"
+
+msgid "Búsqueda en Walmart"
+msgstr "Walmart search"
+
+msgid "Reseñas de Walmart"
+msgstr "Walmart reviews"
+
+msgid "Búsqueda en AliExpress"
+msgstr "AliExpress search"
+
+msgid "Reseñas de AliExpress"
+msgstr "AliExpress reviews"

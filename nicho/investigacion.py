@@ -27,8 +27,8 @@ from nicho.fuentes import plataformas
 
 ESTADOS_CADENA = ("consultas", "buscando", "seleccionando", "resenas", "redes", "generando", "lista", "detenida", "interrumpida")
 REDES = ("reddit", "youtube")
-PASOS_CADENA = ("consultas", "buscar:amazon", "buscar:meli", "buscar:tiktok_shop", "seleccionar", "resenas:amazon", "resenas:meli",
-                "resenas:tiktok_shop", "redes:reddit", "redes:youtube", "generar")
+PASOS_CADENA = (("consultas",) + tuple(f"buscar:{c}" for c in plataformas.PLATAFORMAS) + ("seleccionar",)
+                + tuple(f"resenas:{c}" for c in plataformas.PLATAFORMAS) + tuple(f"redes:{r}" for r in REDES) + ("generar",))
 FINALES = ("hecho", "vacio", "saltado", "error")
 ETIQUETAS_ESTADO = {"consultas": N_("consultas"), "buscando": N_("buscando"), "seleccionando": N_("seleccionando"),
                     "resenas": N_("reseñas"), "redes": N_("redes"), "generando": N_("generando"), "lista": N_("lista"),
@@ -36,9 +36,11 @@ ETIQUETAS_ESTADO = {"consultas": N_("consultas"), "buscando": N_("buscando"), "s
 ETIQUETAS_ESTADO_PASO = {"hecho": N_("hecho"), "en_curso": N_("en curso"), "error": N_("error"), "vacio": N_("sin resultados"),
                          "pendiente": N_("pendiente"), "saltado": N_("saltado")}
 ETIQUETAS_PASO = {"consultas": N_("consultas"), "buscar:amazon": N_("buscar en Amazon"), "buscar:meli": N_("buscar en Mercado Libre"),
-                  "buscar:tiktok_shop": N_("buscar en TikTok Shop"), "seleccionar": N_("elegir productos"),
+                  "buscar:tiktok_shop": N_("buscar en TikTok Shop"), "buscar:walmart": N_("buscar en Walmart"),
+                  "buscar:aliexpress": N_("buscar en AliExpress"), "seleccionar": N_("elegir productos"),
                   "resenas:amazon": N_("reseñas de Amazon"), "resenas:meli": N_("opiniones de Mercado Libre"),
-                  "resenas:tiktok_shop": N_("reseñas de TikTok Shop"), "redes:reddit": N_("Reddit"), "redes:youtube": N_("YouTube"),
+                  "resenas:tiktok_shop": N_("reseñas de TikTok Shop"), "resenas:walmart": N_("reseñas de Walmart"),
+                  "resenas:aliexpress": N_("reseñas de AliExpress"), "redes:reddit": N_("Reddit"), "redes:youtube": N_("YouTube"),
                   "generar": N_("avatares")}
 TOPES_DEFECTO = {"consultas": 3, "productos_por_consulta": 20, "productos_elegidos": 15, "resenas_por_producto": 100}
 LIMITES = {"consultas": (1, 4), "productos_por_consulta": (5, 40), "productos_elegidos": (3, 30), "resenas_por_producto": (20, 200)}

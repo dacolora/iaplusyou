@@ -1,15 +1,22 @@
 """
-Registro de plataformas para la investigación automática del nicho (spec
-Parte 3 §3): por plataforma, los países que cubre y cómo se arma su dominio,
-el actor de Apify que BUSCA productos por palabra clave y el que trae
-RESEÑAS por producto, con precio por resultado (verificado 2026-09-20 en la
-tienda de Apify; ver docs/nicho/apify-inventario-2026-09-20.md), cómo se
-arman las entradas y cómo se lee un producto o una reseña de su salida.
+Registro de tiendas para la investigación automática del nicho (spec Parte 3
+§3 y Parte 4 `docs/superpowers/specs/2026-09-30-nicho-mas-tiendas-design.md`):
+por tienda, los países donde tiene sitio y su `casa` (el sitio principal), el
+actor de Apify que BUSCA productos por palabra clave y el que trae RESEÑAS por
+producto, con su precio por resultado y el arranque que algunos cobran por
+corrida (`usd_por_corrida`; precios verificados en Apify: Parte 3 el
+2026-09-20, Walmart y AliExpress con centavos el 2026-09-30), cómo se arman
+las entradas y cómo se lee un producto o una reseña de su salida.
+
+Otro mercado (Parte 4 §2): una tienda sin sitio en el país del estudio no se
+rechaza; `mercado()` dice ("otro", casa) y busca y trae reseñas de su sitio
+principal (`sitio()`), en el idioma de ese sitio (`idioma_busqueda()`;
+AliExpress siempre en inglés). El techo de cada corrida (`tope`) es lo que va
+en `maxTotalChargeUsd` y lo que suma el estimado; `costo` es lo cobrado.
 
 Solo datos y funciones puras: nada de red ni de base. Los lectores son
-tolerantes (varias claves candidatas por campo) porque la forma exacta de
-salida de cada actor se confirma con la corrida de centavos; un ítem sin id o
-sin texto se descarta (None). Nunca se lee el nombre del autor.
+tolerantes (varias claves candidatas por campo); un ítem sin id o sin texto
+se descarta (None). Nunca se lee el nombre del autor ni del comprador.
 
   amazon      búsqueda `junglee~amazon-crawler` (US$ 3 / 1 000): no acepta
               palabras sueltas, así que la entrada lleva la URL de búsqueda
@@ -23,6 +30,16 @@ sin texto se descarta (None). Nunca se lee el nombre del autor.
               0,70 / 1 000): `productUrls` + `maxReviewsPerProduct`.
   tiktok_shop `unseenuser~tiktok-shop-scraper` (US$ 4,50 / 1 000) en modo
               `shop_search` y `product_reviews`; sin lista de países.
+  walmart     búsqueda `s-r~walmart-scraper` (US$ 1 / 1 000 + US$ 0,001 por
+              corrida; UNA `query` por corrida; sin precios: `fetch_prices`
+              cobra US$ 0,003 por producto y no se pide). reseñas
+              `apt_marble~walmart-reviews-scraper` (US$ 1 / 1 000): links
+              `walmart.com/ip/<id>`, varios por corrida. Solo EE. UU.
+  aliexpress  búsqueda `dami_studio~aliexpress-products-scraper` (US$ 0,12 /
+              1 000 + US$ 0,001 por corrida; trae pedidos, no número de
+              reseñas). reseñas `axlymxp~aliexpress-reviews-scraper` (US$ 3 /
+              1 000 + US$ 0,01 por corrida; cada reseña trae el país del
+              comprador). Vende en todo el mundo; busca en inglés desde EE. UU.
 """
 import math
 import re
@@ -45,6 +62,7 @@ PAISES_MELI = {"AR": "https://listado.mercadolibre.com.ar/", "BO": "https://list
                "PA": "https://listado.mercadolibre.com.pa/", "PE": "https://listado.mercadolibre.com.pe/",
                "PY": "https://listado.mercadolibre.com.py/", "SV": "https://listado.mercadolibre.com.sv/",
                "UY": "https://listado.mercadolibre.com.uy/", "VE": "https://listado.mercadolibre.com.ve/"}
+PAISES_WALMART = {"US": "https://www.walmart.com/"}
 IDIOMA_POR_PAIS = {"SE": "sv", "CO": "es", "MX": "es", "ES": "es", "AR": "es", "CL": "es", "PE": "es", "UY": "es", "EC": "es", "BO": "es",
                    "PY": "es", "VE": "es", "CR": "es", "PA": "es", "DO": "es", "GT": "es", "HN": "es", "NI": "es", "SV": "es",
                    "US": "en", "GB": "en", "CA": "en", "AU": "en", "IN": "en", "AE": "en", "BR": "pt", "DE": "de", "FR": "fr",
@@ -59,6 +77,7 @@ _RE_HTTP = re.compile(r"^https?://", re.IGNORECASE)      # la misma regla que ba
 # Amazon México devuelve {"value": 149.99, "currency": "$"} y son pesos)
 _DOLAR_LOCAL = {"MX": "MXN", "CO": "COP", "AR": "ARS", "CL": "CLP", "UY": "UYU", "DO": "DOP", "CA": "CAD", "AU": "AUD",
                 "US": "USD", "EC": "USD", "SV": "USD", "PA": "USD"}
+_MESES_EN = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 
 
 # ------------------------------------------------------------ helpers ---
@@ -133,6 +152,22 @@ def usd(n, precio):
     """n resultados × precio por resultado, hacia arriba al centavo (round antes
     de ceil: 30 × 0.003 × 100 no es 9 exacto en binario)."""
     return math.ceil(round(max(0, int(n or 0)) * precio * 100, 6)) / 100
+
+
+def tope(max_items, actor):
+    """Techo de cobro de UNA corrida: `max_items` × precio por resultado + el
+    arranque de la corrida (`usd_por_corrida`), hacia arriba al centavo. Es lo
+    que va en `maxTotalChargeUsd` y lo que suma el estimado (spec Parte 4 §2)."""
+    bruto = max(0, int(max_items or 0)) * actor["usd_por_resultado"] + float(actor.get("usd_por_corrida") or 0)
+    return math.ceil(round(bruto * 100, 6)) / 100
+
+
+def costo(n_resultados, n_corridas, actor):
+    """Lo cobrado: resultados × precio + corridas lanzadas × arranque, hacia
+    arriba al centavo (una corrida con arranque cobra aunque no traiga nada)."""
+    bruto = (max(0, int(n_resultados or 0)) * actor["usd_por_resultado"]
+             + max(0, int(n_corridas or 0)) * float(actor.get("usd_por_corrida") or 0))
+    return math.ceil(round(bruto * 100, 6)) / 100
 
 
 def _texto(v, largo):
@@ -261,29 +296,133 @@ def _resena_tiktok_shop(item):
             "producto": _texto(_primero(item, "productId"), 120) or None}
 
 
+# ------------------------------------------------------------ walmart ---
+
+def _busqueda_walmart(consultas, pais, productos_por_consulta):
+    # UNA `query` por corrida (verificado 2026-09-30); `fetch_prices` cobraría US$ 0,003 por producto: no se pide
+    return [{"entrada": {"mode": "search", "query": c, "limit": productos_por_consulta, "fetch_prices": False},
+             "max_items": productos_por_consulta, "etiqueta": c} for c in consultas]
+
+
+def _producto_walmart(item):
+    precio, moneda = _precio_moneda(item)
+    extra = {}
+    if _primero(item, "seller"):
+        extra["vendedor"] = _texto(_primero(item, "seller"), 120)
+    if item.get("availability"):
+        extra["en_stock"] = str(item.get("availability")).upper() == "IN_STOCK"
+    # Claves del actor real (verificación 2026-09-30): item_id, title, rating, reviews_count, url, image, seller,
+    # availability, currency; sin precio (no se pide `fetch_prices`), así que tampoco moneda.
+    return {"fuente_id": _texto(_primero(item, "item_id", "usItemId", "id"), 120), "titulo": _texto(_primero(item, "title"), 300),
+            "marca": _texto(_primero(item, "brand"), 120) or None, "precio": precio, "moneda": moneda if precio is not None else None,
+            "estrellas": _flotante(_primero(item, "rating")), "n_resenas": _entero(_primero(item, "reviews_count", "reviewsCount")),
+            "url": _url(_primero(item, "url")), "imagen": _url(_primero(item, "image", "thumbnail")), "extra": extra}
+
+
+def _resenas_walmart(productos, pais, resenas_por_producto):
+    # el link se arma con el id (la forma verificada), no con el que trajo la búsqueda
+    return [{"entrada": {"products": [f"https://www.walmart.com/ip/{p['fuente_id']}" for p in productos],
+                         "maxReviewsPerProduct": resenas_por_producto, "includeProductSummary": False},
+             "max_items": resenas_por_producto * len(productos), "etiqueta": "reseñas"}]
+
+
+def _resena_walmart(item):
+    es_resena = item.get("rowType") in (None, "", "review")          # otra fila (p. ej. el resumen del producto) no es reseña
+    partes = [_texto(item.get("title"), 300), _texto(item.get("text"), 2000)]
+    return {"fuente_id": _texto(_primero(item, "reviewId", "id"), 120) if es_resena else "", "texto": ". ".join(x for x in partes if x),
+            "puntuacion": _entero(_primero(item, "rating")), "fecha": _primero(item, "date"), "url": None,
+            "producto": _texto(_primero(item, "productId"), 120) or None}
+
+
+# --------------------------------------------------------- aliexpress ---
+
+def _busqueda_aliexpress(consultas, pais, productos_por_consulta):
+    # una corrida por consulta (`maxItems` es de toda la corrida); en inglés y desde EE. UU., como se verificó
+    return [{"entrada": {"searchQueries": [c], "maxItems": productos_por_consulta, "country": "US", "currency": "USD", "language": "en_US"},
+             "max_items": productos_por_consulta, "etiqueta": c} for c in consultas]
+
+
+def _producto_aliexpress(item):
+    precio, moneda = _precio_moneda(item)
+    extra = {}
+    vendidos = _entero(_primero(item, "orders", "sold"))
+    if vendidos is not None:
+        extra["vendidos"] = vendidos                  # el buscador no trae número de reseñas: desempata por pedidos
+    return {"fuente_id": _texto(_primero(item, "productId", "id"), 120), "titulo": _texto(_primero(item, "title"), 300),
+            "marca": None, "precio": precio, "moneda": moneda, "estrellas": _flotante(_primero(item, "rating")),
+            "n_resenas": _entero(_primero(item, "reviewsCount", "reviewCount")),
+            "url": _url(_primero(item, "productUrl", "url")), "imagen": _url(_primero(item, "imageUrl", "image")), "extra": extra}
+
+
+def _resenas_aliexpress(productos, pais, resenas_por_producto):
+    return [{"entrada": {"productUrls": [f"https://www.aliexpress.com/item/{p['fuente_id']}.html" for p in productos],
+                         "maxReviewsPerProduct": resenas_por_producto, "language": "en_US"},
+             "max_items": resenas_por_producto * len(productos), "etiqueta": "reseñas"}]
+
+
+def _fecha_dia_mes(v):
+    """«30 Jun 2026» -> «2026-06-30» (meses en inglés, sin depender del locale);
+    cualquier otra forma vuelve tal cual (normalizar_comentario la lee o la deja en None)."""
+    partes = str(v or "").replace(",", " ").split()
+    if len(partes) == 3 and partes[0].isdigit() and partes[2].isdigit() and partes[1][:3].lower() in _MESES_EN:
+        return f"{int(partes[2]):04d}-{_MESES_EN[partes[1][:3].lower()]:02d}-{int(partes[0]):02d}"
+    return v or None
+
+
+def _pais_iso(v):
+    s = _texto(v, 10).upper()
+    return s if len(s) == 2 and s.isalpha() else None
+
+
+def _resena_aliexpress(item):
+    return {"fuente_id": _texto(_primero(item, "review_id", "reviewId", "id"), 120),
+            "texto": _texto(_primero(item, "review_text", "text"), 2000),
+            "puntuacion": _entero(_primero(item, "rating")), "fecha": _fecha_dia_mes(_primero(item, "review_date", "date")), "url": None,
+            "producto": _texto(_primero(item, "product_id", "productId"), 120) or None,
+            "pais": _pais_iso(_primero(item, "buyer_country", "country"))}
+
+
 # ----------------------------------------------------------- registro ---
 
 PLATAFORMAS = {
     "amazon": {
-        "nombre": "Amazon", "paises": PAISES_AMAZON,
-        "busqueda": {"actor": "junglee~amazon-crawler", "nombre": N_("Búsqueda en Amazon"), "usd_por_resultado": 0.003,
+        "nombre": "Amazon", "paises": PAISES_AMAZON, "casa": "US",
+        "busqueda": {"actor": "junglee~amazon-crawler", "nombre": N_("Búsqueda en Amazon"), "usd_por_resultado": 0.003, "usd_por_corrida": 0.0,
                      "armar_entradas": _busqueda_amazon, "leer_producto": _producto_amazon},
-        "resenas": {"actor": "axesso_data~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.0009,
-                    "por_producto": True, "armar_entradas": _resenas_amazon, "leer_resena": _resena_amazon},
+        "resenas": {"actor": "axesso_data~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.0009, "usd_por_corrida": 0.0,
+                    "por_producto": True, "necesita_link": False, "armar_entradas": _resenas_amazon, "leer_resena": _resena_amazon},
     },
     "meli": {
-        "nombre": "Mercado Libre", "paises": PAISES_MELI,
+        "nombre": "Mercado Libre", "paises": PAISES_MELI, "casa": "MX",
         "busqueda": {"actor": "karamelo~mercado-libre-listings-scraper", "nombre": N_("Búsqueda en Mercado Libre"), "usd_por_resultado": 0.002,
-                     "armar_entradas": _busqueda_meli, "leer_producto": _producto_meli},
+                     "usd_por_corrida": 0.0, "armar_entradas": _busqueda_meli, "leer_producto": _producto_meli},
         "resenas": {"actor": "karamelo~mercadolibre-review-scraper", "nombre": N_("Opiniones de Mercado Libre"), "usd_por_resultado": 0.0007,
-                    "por_producto": False, "armar_entradas": _resenas_meli, "leer_resena": _resena_meli},
+                    "usd_por_corrida": 0.0, "por_producto": False, "necesita_link": True, "armar_entradas": _resenas_meli,
+                    "leer_resena": _resena_meli},
     },
     "tiktok_shop": {
-        "nombre": "TikTok Shop", "paises": TODOS,
+        "nombre": "TikTok Shop", "paises": TODOS, "casa": None,
         "busqueda": {"actor": "unseenuser~tiktok-shop-scraper", "nombre": N_("Búsqueda en TikTok Shop"), "usd_por_resultado": 0.0045,
-                     "armar_entradas": _busqueda_tiktok_shop, "leer_producto": _producto_tiktok_shop},
+                     "usd_por_corrida": 0.0, "armar_entradas": _busqueda_tiktok_shop, "leer_producto": _producto_tiktok_shop},
         "resenas": {"actor": "unseenuser~tiktok-shop-scraper", "nombre": N_("Reseñas de TikTok Shop"), "usd_por_resultado": 0.0045,
-                    "por_producto": False, "armar_entradas": _resenas_tiktok_shop, "leer_resena": _resena_tiktok_shop},
+                    "usd_por_corrida": 0.0, "por_producto": False, "necesita_link": True, "armar_entradas": _resenas_tiktok_shop,
+                    "leer_resena": _resena_tiktok_shop},
+    },
+    "walmart": {
+        "nombre": "Walmart", "paises": PAISES_WALMART, "casa": "US",
+        "busqueda": {"actor": "s-r~walmart-scraper", "nombre": N_("Búsqueda en Walmart"), "usd_por_resultado": 0.001, "usd_por_corrida": 0.001,
+                     "armar_entradas": _busqueda_walmart, "leer_producto": _producto_walmart},
+        "resenas": {"actor": "apt_marble~walmart-reviews-scraper", "nombre": N_("Reseñas de Walmart"), "usd_por_resultado": 0.001,
+                    "usd_por_corrida": 0.0, "por_producto": False, "necesita_link": False, "armar_entradas": _resenas_walmart,
+                    "leer_resena": _resena_walmart},
+    },
+    "aliexpress": {
+        "nombre": "AliExpress", "paises": TODOS, "casa": None, "idioma": "en",
+        "busqueda": {"actor": "dami_studio~aliexpress-products-scraper", "nombre": N_("Búsqueda en AliExpress"), "usd_por_resultado": 0.00012,
+                     "usd_por_corrida": 0.001, "armar_entradas": _busqueda_aliexpress, "leer_producto": _producto_aliexpress},
+        "resenas": {"actor": "axlymxp~aliexpress-reviews-scraper", "nombre": N_("Reseñas de AliExpress"), "usd_por_resultado": 0.003,
+                    "usd_por_corrida": 0.01, "por_producto": False, "necesita_link": False, "armar_entradas": _resenas_aliexpress,
+                    "leer_resena": _resena_aliexpress},
     },
 }
 
@@ -324,38 +463,62 @@ def idioma(pais):
     return IDIOMA_POR_PAIS.get((pais or "").upper(), "en")
 
 
+def mercado(clave, pais):
+    """("local", PAIS) si la tienda tiene sitio en ese país o vende en todo el
+    mundo; ("otro", casa) si no: busca y trae reseñas de su sitio principal
+    (spec Parte 4 §2). Nunca rechaza por país."""
+    pais = (pais or "").upper()
+    if cubre(clave, pais):
+        return "local", pais
+    return "otro", _plataforma(clave)["casa"]
+
+
+def sitio(clave, pais):
+    """El país del sitio donde busca esa tienda para un estudio de `pais`."""
+    return mercado(clave, pais)[1]
+
+
+def idioma_busqueda(clave, pais):
+    """El idioma de las búsquedas en esa tienda: el fijo de la tienda
+    (AliExpress busca en inglés) o el del sitio donde busca."""
+    return _plataforma(clave).get("idioma") or idioma(sitio(clave, pais))
+
+
 def actor_busqueda(clave):
     a = _plataforma(clave)["busqueda"]
-    return {"actor": a["actor"], "nombre": a["nombre"], "usd_por_resultado": a["usd_por_resultado"]}
+    return {"actor": a["actor"], "nombre": a["nombre"], "usd_por_resultado": a["usd_por_resultado"], "usd_por_corrida": a["usd_por_corrida"]}
 
 
 def actor_resenas(clave):
     a = _plataforma(clave)["resenas"]
-    return {"actor": a["actor"], "nombre": a["nombre"], "usd_por_resultado": a["usd_por_resultado"]}
+    return {"actor": a["actor"], "nombre": a["nombre"], "usd_por_resultado": a["usd_por_resultado"], "usd_por_corrida": a["usd_por_corrida"]}
 
 
-def estimar_busqueda(clave, n_consultas, productos_por_consulta):
-    return usd(int(n_consultas) * int(productos_por_consulta), _plataforma(clave)["busqueda"]["usd_por_resultado"])
+def estimar_busqueda(clave, n_consultas, productos_por_consulta, pais=None):
+    """Peor caso de la búsqueda: la suma de los techos de las corridas que se
+    lanzarían (cada una con su arranque), en el sitio que toca."""
+    consultas = [f"consulta {k + 1}" for k in range(max(1, int(n_consultas)))]
+    return round(sum(e["max_usd"] for e in entradas_busqueda(clave, consultas, pais, productos_por_consulta)), 2)
 
 
-def estimar_resenas(clave, n_productos, resenas_por_producto):
-    return usd(int(n_productos) * int(resenas_por_producto), _plataforma(clave)["resenas"]["usd_por_resultado"])
+def estimar_resenas(clave, n_productos, resenas_por_producto, pais=None):
+    """Peor caso de las reseñas de `n_productos` elegidos, igual que la búsqueda."""
+    productos = [{"fuente_id": f"p{k + 1}", "url": f"https://ejemplo.invalid/p{k + 1}", "titulo": ""} for k in range(max(1, int(n_productos)))]
+    return round(sum(e["max_usd"] for e in entradas_resenas(clave, productos, pais, resenas_por_producto)), 2)
 
 
-def _con_tope(entradas, precio):
-    return [{**e, "max_usd": usd(e["max_items"], precio)} for e in entradas]
+def _con_tope(entradas, actor):
+    return [{**e, "max_usd": tope(e["max_items"], actor)} for e in entradas]
 
 
 def entradas_busqueda(clave, consultas, pais, productos_por_consulta):
-    """Lista de corridas: `{"entrada", "max_items", "max_usd", "etiqueta"}`."""
+    """Lista de corridas `{"entrada", "max_items", "max_usd", "etiqueta"}` en el
+    sitio que toca (`sitio`: el del país o, de otro mercado, el principal)."""
     p = _plataforma(clave)
     consultas = [c.strip() for c in (consultas or []) if (c or "").strip()]
     if not consultas:
         raise ErrorFuente(gettext("%(plataforma)s: no hay consultas para buscar.", plataforma=p["nombre"]))
-    if not cubre(clave, pais):
-        raise ErrorFuente(gettext("%(plataforma)s no cubre el país %(pais)s.", plataforma=p["nombre"], pais=pais))
-    return _con_tope(p["busqueda"]["armar_entradas"](consultas, (pais or "").upper(), max(1, int(productos_por_consulta))),
-                     p["busqueda"]["usd_por_resultado"])
+    return _con_tope(p["busqueda"]["armar_entradas"](consultas, sitio(clave, pais), max(1, int(productos_por_consulta))), p["busqueda"])
 
 
 def leer_producto(clave, item, pais=None):
@@ -374,20 +537,17 @@ def entradas_resenas(clave, productos, pais, resenas_por_producto):
     productos = [x for x in (productos or []) if (x or {}).get("fuente_id")]
     if not productos:
         raise ErrorFuente(gettext("%(plataforma)s: no hay productos de los que traer reseñas.", plataforma=p["nombre"]))
-    if not p["resenas"]["por_producto"]:
-        # Estas tiendas piden las reseñas por link: un producto sin link (o con uno
-        # que no es http(s)) se salta; solo se para si ninguno lo tiene.
+    if p["resenas"]["necesita_link"]:
+        # Estas tiendas piden las reseñas por el link de la búsqueda: un producto sin
+        # link (o con uno que no es http(s)) se salta; solo se para si ninguno lo tiene.
         productos = [x for x in productos if x.get("url")]
         if not productos:
             raise ErrorFuente(gettext("%(plataforma)s: un producto elegido no tiene link.", plataforma=p["nombre"]))
-    if not cubre(clave, pais):
-        raise ErrorFuente(gettext("%(plataforma)s no cubre el país %(pais)s.", plataforma=p["nombre"], pais=pais))
-    return _con_tope(p["resenas"]["armar_entradas"](productos, (pais or "").upper(), max(1, int(resenas_por_producto))),
-                     p["resenas"]["usd_por_resultado"])
+    return _con_tope(p["resenas"]["armar_entradas"](productos, sitio(clave, pais), max(1, int(resenas_por_producto))), p["resenas"])
 
 
 def leer_resena(clave, item):
-    """`{fuente_id, texto, puntuacion, fecha, url, producto}` o None sin id o sin
+    """`{fuente_id, texto, puntuacion, fecha, url, producto[, pais]}` o None sin id o sin
     texto. `producto` es el id del producto en la plataforma (para el título y
     el link); el autor nunca se lee."""
     d = _plataforma(clave)["resenas"]["leer_resena"](item if isinstance(item, dict) else {})

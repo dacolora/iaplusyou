@@ -21,7 +21,7 @@ def test_pais_del_estudio_y_constantes(base_temporal):
         datos.actualizar_estudio("acme", eid, pais="ZZ")
     assert "SE" in datos.PAISES_ESTUDIO and "CO" in datos.PAISES_ESTUDIO
     assert datos.job_id_inv("acme", eid, "buscar:amazon") == f"nicho:acme:{eid}:inv:buscar:amazon"
-    assert set(datos.FUENTES_PLATAFORMA) <= set(datos.FUENTES) and datos.FUENTES_PLATAFORMA == ("amazon", "meli", "tiktok_shop")
+    assert set(datos.FUENTES_PLATAFORMA) <= set(datos.FUENTES) and datos.FUENTES_PLATAFORMA == ("amazon", "meli", "tiktok_shop", "walmart", "aliexpress")
 
 
 def test_productos_nicho_upsert_y_lectura(base_temporal):
