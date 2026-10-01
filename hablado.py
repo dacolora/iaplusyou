@@ -101,16 +101,26 @@ def voz_existente(cliente, h):
     return m
 
 
-def voz_info(m):
+def voz_info(m, segundos=None):
     """Lo que la página necesita de una voz ya hecha. `precio_video`: US$ del
     video a 720p (segundos de la voz hacia arriba × tarifa), o None si la voz
     pasa de MAX_SEGUNDOS — entonces `aviso` dice cuánto dura y qué hacer.
-    `duracion_s` se redondea para mostrar; el precio sale de los ms exactos."""
-    segundos = int(m["duracion_ms"]) / 1000.0
+    `duracion_s` se redondea para mostrar; el precio sale de los ms exactos.
+    `segundos`: ya calculado por quien llama (crear_pieza), para no sacar la
+    cuenta dos veces; sin él, se calcula de `m["duracion_ms"]`."""
+    if segundos is None:
+        segundos = int(m["duracion_ms"]) / 1000.0
     info = {"material_id": m["id"], "url": m["url"], "duracion_s": round(segundos, 2), "hash": m["hash"],
             "precio_video": None, "aviso": None}
     if segundos > MAX_SEGUNDOS:
-        info["aviso"] = gettext(MENSAJES["larga"], n=flowplus_modelos.segundos_facturables(segundos))
+        # El msgid va a una variable ANTES de gettext(): el extractor de Babel
+        # (basado en tokens, no en AST) confunde un subíndice como
+        # MENSAJES["larga"] dentro de la llamada con un mensaje literal "larga"
+        # (visto con catalogo_i18n.extraer(); el mismo defecto ya vive, sin
+        # romper nada porque coincide con un msgid real, en
+        # dashboard.py gettext(info_modelo["nombre"])).
+        msgid = MENSAJES["larga"]
+        info["aviso"] = gettext(msgid, n=flowplus_modelos.segundos_facturables(segundos))
     else:
         info["precio_video"] = flowplus_modelos.estimate_hablado(
             flowplus_modelos.HABLADO_POR_DEFECTO, segundos, flowplus_modelos.RESOLUCION_HABLADO)["usd"]
@@ -198,8 +208,8 @@ def crear_pieza(cliente, foto_ficha, voz_hash, movimiento, precio_visto):
     m = voz_existente(cliente, voz_hash)
     if not m:
         raise EntradaInvalida(MENSAJES["voz_otra_vez"])
-    info = voz_info(m)
     segundos = int(m["duracion_ms"]) / 1000.0
+    info = voz_info(m, segundos)
     if info["precio_video"] is None:
         raise EntradaInvalida(MENSAJES["larga"], n=flowplus_modelos.segundos_facturables(segundos))
     movimiento = (movimiento or "").strip()
