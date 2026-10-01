@@ -111,11 +111,16 @@ def _cf_id_de(pz):
 
 def _rechazar_imagen(cliente, cf_id):
     """Una sesión de imagen no tiene video que cortar: `producir` fallaría
-    después de gastar el guion. Se rechaza antes de planificar nada."""
+    después de gastar el guion. Un anuncio hablado ya trae su voz: una
+    re-edición le pondría otra encima (spec 2026-10-01 §6). Se rechazan antes
+    de planificar nada."""
     sesion = creative_flow.cargar(cliente).get(cf_id) or {}
     if sesion.get("tipo") == "imagen":
         raise ValueError(gettext(
             "Esa pieza viene de una sesión de imagen: no se puede derivar ni rescatar (no hay video)."))
+    if flowplus_modelos.es_sesion_hablada(sesion):
+        raise ValueError(gettext(
+            "Esa pieza es un anuncio hablado: no se puede derivar ni rescatar (pondría otra voz encima)."))
 
 
 def _idiomas(pz, paises_ex, solo=None):
