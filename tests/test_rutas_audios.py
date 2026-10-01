@@ -141,3 +141,93 @@ def test_descargar_entrega_el_mp3_como_adjunto(app, monkeypatch):
     assert r.status_code == 200 and r.data == b"MP3" and r.mimetype == "audio/mpeg"
     assert r.headers["Content-Disposition"] == 'attachment; filename="Audio 1.mp3"'
     assert app["c"].get("/cliente/acme/audios/999/descargar").status_code == 404
+
+
+def _voz_propia(cliente="acme", voice_id="mmx_1", nombre="Ana"):
+    return materiales.registrar(cliente, tipo="audio", origen="voz_propia",
+                                url=f"https://r2/clientes/{cliente}/materiales/voz_propia_{voice_id}.mp3",
+                                hash=materiales.hash_clave("voz_propia", "minimax", voice_id), bytes=1, duracion_ms=3000,
+                                extra={"nombre": nombre, "forma": "disenada", "proveedor": "minimax", "voice_id": voice_id,
+                                       "idioma_muestra": "es", "estrenada": True})
+
+
+def test_mis_voces_devuelve_el_fragmento(app):
+    v = _voz_propia()
+    d = app["c"].get("/cliente/acme/audios/voces", headers=FETCH).get_json()
+    assert d["ok"] and [x["nombre"] for x in d["voces"]] == ["Ana"] and d["trabajo"] is None
+    assert f'data-voz="vp:{v["id"]}"' in d["html"] and "au-vp-borrar" in d["html"] and 'id="au-vp-crear"' in d["html"]
+
+
+def test_disenar_encola_una_sola_creacion_sin_reintentos(app):
+    r = app["c"].post("/cliente/acme/audios/voces/disenar",
+                      data={"nombre": "Ana", "descripcion": "Mujer cálida de 30", "idioma": "sv"}, headers=FETCH)
+    d = r.get_json()
+    assert r.status_code == 200 and d["ok"] and d["job_id"] == "acme__voz_propia"
+    assert 'data-job="acme__voz_propia"' in d["html"] and "data-poll-job" not in d["html"]
+    (t,) = app["encolados"]
+    assert t["tipo"] == "voz_propia_crear" and t["max_intentos"] == 1 and t["cliente"] == "acme"
+    assert t["payload"] == {"cliente": "acme", "forma": "disenar", "nombre": "Ana",
+                            "descripcion": "Mujer cálida de 30", "idioma": "sv"}
+    r2 = app["c"].post("/cliente/acme/audios/voces/disenar",
+                       data={"nombre": "Eva", "descripcion": "Hombre de voz grave", "idioma": "es"}, headers=FETCH)
+    assert r2.status_code == 400 and "espera" in r2.get_json()["error"] and len(app["encolados"]) == 1
+    r3 = app["c"].post("/cliente/acme/audios/voces/disenar", data={"nombre": "", "descripcion": "x", "idioma": "es"}, headers=FETCH)
+    assert r3.status_code == 400
+
+
+def test_clonar_exige_permiso_y_guarda_la_grabacion(app, monkeypatch):
+    import io
+
+    import voces_propias
+    monkeypatch.setattr(voces_propias, "_duracion_ms", lambda path: 15000)
+    sin_permiso = {"nombre": "Daniel", "idioma": "cs", "grabacion": (io.BytesIO(b"audio falso"), "voz.wav")}
+    r = app["c"].post("/cliente/acme/audios/voces/clonar", data=sin_permiso, content_type="multipart/form-data", headers=FETCH)
+    assert r.status_code == 400 and r.get_json()["error"] == voces_propias.MENSAJES["permiso"]
+    assert app["subidos"] == [] and app["encolados"] == []
+    sin_archivo = {"nombre": "Daniel", "idioma": "cs", "consentimiento": "si"}
+    r = app["c"].post("/cliente/acme/audios/voces/clonar", data=sin_archivo, content_type="multipart/form-data", headers=FETCH)
+    assert r.status_code == 400 and app["encolados"] == []
+    bien = {"nombre": "Daniel", "idioma": "cs", "consentimiento": "si", "grabacion": (io.BytesIO(b"audio falso"), "voz.wav")}
+    r = app["c"].post("/cliente/acme/audios/voces/clonar", data=bien, content_type="multipart/form-data", headers=FETCH)
+    assert r.status_code == 200 and r.get_json()["job_id"] == "acme__voz_propia"
+    (t,) = app["encolados"]
+    p = t["payload"]
+    assert (p["forma"], p["nombre"], p["idioma"]) == ("clonar", "Daniel", "cs") and p["consentimiento"]["usuario"] == "admin"
+    assert materiales.obtener("acme", p["grabacion_id"])["origen"] == "grabacion"
+    assert app["subidos"][0].startswith("clientes/acme/materiales/grabacion_")
+
+
+def test_borrar_voz_propia(app):
+    v = _voz_propia()
+    d = app["c"].post(f"/cliente/acme/audios/voces/{v['id']}/borrar", headers=FETCH).get_json()
+    assert d["ok"] and d["voces"] == [] and app["borrados"] == ["clientes/acme/materiales/voz_propia_mmx_1.mp3"]
+
+
+def test_muestra_de_voz_propia(app, monkeypatch):
+    import voces_propias
+    v = _voz_propia()
+    llamadas = []
+    monkeypatch.setattr(voces_propias, "muestra", lambda cliente, voz, idioma:
+                        llamadas.append((cliente, voz, idioma)) or "https://r2/mp.mp3")
+    d = app["c"].post("/cliente/acme/audios/muestra", data={"voz": f"vp:{v['id']}", "idioma": "fi"}, headers=FETCH).get_json()
+    assert d == {"ok": True, "url": "https://r2/mp.mp3"} and llamadas == [("acme", f"vp:{v['id']}", "fi")]
+    ajena = _voz_propia(cliente="otro", voice_id="mmx_2")
+    r = app["c"].post("/cliente/acme/audios/muestra", data={"voz": f"vp:{ajena['id']}", "idioma": "fi"}, headers=FETCH)
+    assert r.status_code == 400 and len(llamadas) == 1
+
+
+def test_crear_audio_con_voz_propia(app):
+    v = _voz_propia()
+    r = app["c"].post("/cliente/acme/audios/crear", data=_datos(voz=f"vp:{v['id']}", idioma="no"), headers=FETCH)
+    assert r.status_code == 200 and app["encolados"][0]["payload"]["voz"] == f"vp:{v['id']}"
+
+
+def test_los_post_de_mis_voces_de_otro_sitio_dan_403(app):
+    ajeno = {**FETCH, "Sec-Fetch-Site": "cross-site"}
+    for url in ("/cliente/acme/audios/voces/disenar", "/cliente/acme/audios/voces/clonar", "/cliente/acme/audios/voces/1/borrar"):
+        assert app["c"].post(url, data={}, headers=ajeno).status_code == 403
+    assert app["encolados"] == []
+
+
+def test_el_gasto_de_voces_propias_tiene_nombre(app):
+    assert app["dashboard"].NOMBRES_TIPO_GASTO["voz_propia"] == "Voces propias"

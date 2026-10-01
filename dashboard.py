@@ -56,6 +56,7 @@ import materiales
 import ediciones
 import mi_musica
 import audios
+import voces_propias
 import referencias_link
 import generador_prompts
 from providers import image_provider
@@ -100,6 +101,7 @@ from tareas import tiendas as tareas_tiendas
 from tareas import doctrina as tareas_doctrina
 from tareas import musica as tareas_musica
 from tareas import audios as tareas_audios
+from tareas import voces_propias as tareas_voces
 from tareas import edicion as tareas_edicion
 from tareas import triple_whale as tareas_tw
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
@@ -1729,6 +1731,7 @@ def ver_cliente(cliente):
         meta_redirect_uri=os.environ.get("META_REDIRECT_URI", ""),
         **fe_ctx,
         **_contexto_audios(cliente),
+        **_contexto_mis_voces(cliente),
         experimentos=experimentos_exp,
         experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],
         elegibles_exp=experimentos.elegibles(cliente),
@@ -4359,7 +4362,7 @@ NOMBRES_TIPO_GASTO = {
     "video": idiomas.N_("Videos"), "imagen": idiomas.N_("Imágenes"), "swap": idiomas.N_("Cambios de producto"),
     "guion": idiomas.N_("Guiones"), "final": idiomas.N_("Finales"), "regla_producto": idiomas.N_("Reglas de producto (IA)"),
     "caption_organico": idiomas.N_("Textos orgánicos (IA)"), "musica": idiomas.N_("Música"),
-    "locucion": idiomas.N_("Locuciones (audios)"),
+    "locucion": idiomas.N_("Locuciones (audios)"), "voz_propia": idiomas.N_("Voces propias"),
     "refinar_prompt": idiomas.N_("Correcciones de prompt (Flow Plus)"), "guion_clips": idiomas.N_("Guiones a clips (Flow Plus)"),
     "ideas": idiomas.N_("Ideas de sprint (IA)"), "pedidos": idiomas.N_("Pedidos al cliente (IA)"),
     "revision": idiomas.N_("Revisión de la doctrina (IA)"),
@@ -6716,15 +6719,18 @@ def au_borrar(cliente, aid):
 
 @app.route("/cliente/<cliente>/audios/muestra", methods=["POST"])
 def au_muestra(cliente):
-    """Muestra corta de una voz (se sintetiza una vez para toda la plataforma,
-    la paga Creatv). En línea: fal tarda 2–4 s."""
+    """Muestra corta de una voz: una voz de la galería se sintetiza una vez
+    para toda la plataforma y la paga Creatv; una voz propia, una vez por
+    idioma y la paga el proyecto. En línea: fal tarda 2–4 s."""
     if not _mismo_origen():
         abort(403)
     voz, idioma = (request.form.get("voz") or "").strip(), (request.form.get("idioma") or "").strip()
-    if voz not in audios.voces() or idioma not in audios.IDIOMAS:
+    propia = audios.es_propia(voz)
+    valida = voces_propias.resolver(cliente, voz) if propia else voz in audios.voces()
+    if not valida or idioma not in audios.IDIOMAS:
         return jsonify({"ok": False, "error": gettext("Elige una voz y un idioma de la lista.")}), 400
     try:
-        url = audios.muestra(voz, idioma)
+        url = voces_propias.muestra(cliente, voz, idioma) if propia else audios.muestra(voz, idioma)
     except Exception as e:
         bitacora.registrar(cliente, voz, "audios", "muestra_error", str(e))
         return jsonify({"ok": False, "error": gettext("No pude generar la muestra (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__)}), 502
@@ -6752,6 +6758,96 @@ def au_descargar(cliente, aid):
     if r.headers.get("Content-Length"):
         resp.headers["Content-Length"] = r.headers["Content-Length"]
     return resp
+
+
+# ------------------------------------------------------ Audios › Mis voces ---
+# (spec 2026-09-30) Voces propias con MiniMax: mismo patrón JSON que Audios.
+
+def _contexto_mis_voces(cliente):
+    jid = tareas_voces.job_id(cliente)
+    return {"voces_propias": voces_propias.listar(cliente),
+            "trabajo_voz": {"job_id": jid} if trabajos.en_curso(jid) else None,
+            "nombres_forma_voz": voces_propias.NOMBRES_FORMA,
+            "precio_voz_clonada": gastos.estimar("voz_clonada"), "precio_voz_disenada": gastos.estimar("voz_disenada"),
+            "texto_consentimiento": voces_propias.TEXTO_CONSENTIMIENTO}
+
+
+def _respuesta_mis_voces(cliente, error=None, mensaje=None, job_id=None):
+    ctx = _contexto_mis_voces(cliente)
+    html = render_template("_audios_mis_voces.html", cliente=cliente, **ctx)
+    return jsonify({"ok": error is None, "html": html, "voces": ctx["voces_propias"], "trabajo": ctx["trabajo_voz"],
+                    "error": error, "mensaje": mensaje, "job_id": job_id}), (400 if error else 200)
+
+
+def _encolar_voz(cliente, payload):
+    """Una creación de voz a la vez por proyecto; paga, así que sin reintentos."""
+    jid = tareas_voces.job_id(cliente)
+    if trabajos.encolar(jid, "voz_propia_crear", {"cliente": cliente, **payload}, duracion_estimada=90,
+                        etapas=list(tareas_voces.ETAPAS), cliente=cliente, max_intentos=1):
+        return jid
+    return None
+
+
+@app.route("/cliente/<cliente>/audios/voces")
+def vp_lista(cliente):
+    return _respuesta_mis_voces(cliente)
+
+
+@app.route("/cliente/<cliente>/audios/voces/disenar", methods=["POST"])
+def vp_disenar(cliente):
+    if not _mismo_origen():
+        abort(403)
+    try:
+        payload = voces_propias.validar_disenar(request.form)
+    except voces_propias.EntradaInvalida as e:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(str(e)))
+    jid = _encolar_voz(cliente, payload)
+    if not jid:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["en_curso"]))
+    return _respuesta_mis_voces(cliente, mensaje=gettext("Creando la voz…"), job_id=jid)
+
+
+@app.route("/cliente/<cliente>/audios/voces/clonar", methods=["POST"])
+def vp_clonar(cliente):
+    """Primero la casilla y los campos; después la grabación a R2; al final la
+    tarea. Sin permiso no se guarda nada."""
+    if not _mismo_origen():
+        abort(403)
+    try:
+        payload = voces_propias.validar_clonar(request.form, session.get("usuario"))
+    except voces_propias.EntradaInvalida as e:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(str(e)))
+    if trabajos.en_curso(tareas_voces.job_id(cliente)):
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["en_curso"]))
+    archivo = request.files.get("grabacion")
+    if not archivo or not archivo.filename:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["archivo"]))
+    try:
+        g = voces_propias.guardar_grabacion(cliente, archivo, os.path.join(_client_dir(cliente), "tmp_voces"))
+    except voces_propias.EntradaInvalida as e:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(str(e)))
+    except Exception as e:
+        bitacora.registrar(cliente, archivo.filename, "voces_propias", "error", str(e))
+        return _respuesta_mis_voces(cliente, error=gettext("No pude subir la grabación (%(tipo)s).", tipo=type(e).__name__))
+    payload["grabacion_id"] = g["id"]
+    jid = _encolar_voz(cliente, payload)
+    if not jid:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["en_curso"]))
+    return _respuesta_mis_voces(cliente, mensaje=gettext("Clonando la voz…"), job_id=jid)
+
+
+@app.route("/cliente/<cliente>/audios/voces/<int:vid>/borrar", methods=["POST"])
+def vp_borrar(cliente, vid):
+    if not _mismo_origen():
+        abort(403)
+    try:
+        voces_propias.borrar(cliente, vid)
+    except materiales.MaterialEnUso as e:
+        return _respuesta_mis_voces(cliente, error=str(e))
+    except Exception as e:
+        bitacora.registrar(cliente, str(vid), "voces_propias", "error", str(e))
+        return _respuesta_mis_voces(cliente, error=gettext("No pude borrarla (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__))
+    return _respuesta_mis_voces(cliente)
 
 
 @app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
