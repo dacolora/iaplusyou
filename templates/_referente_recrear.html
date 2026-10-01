@@ -2,9 +2,10 @@
    el mismo <dialog> que la ficha. Spec 2026-09-30-recrear-fiel. Contexto:
    cliente, r, productos, producto (o None), tipo (imagen|video), formato,
    formatos, formato_elegido, lectura (dict o None: aún no leída), traer_textos,
-   textos (valor de cada campo), modos (["fiel","libre"]), prompt (variación o
-   video), prompt_fiel, etiquetas_rol, precio (por imagen o del video),
-   precio_adaptar, precio_leer. Todo el JS vive en _tab_referentes.html (los
+   textos (valor de cada campo), modos (["fiel","libre"]), prompt (variación),
+   prompt_fiel, prompt_animar (video), etiquetas_rol, precio (por imagen),
+   precios_video (spec §12: imagen, animar{modelo}, libre, duracion{modelo}),
+   modelos_animar, modelo_animar, nombres_video, precio_adaptar, precio_leer. Todo el JS vive en _tab_referentes.html (los
    <script> de un fragmento cargado por fetch nunca corren). #}
 <div class="ref-recrear">
   <p class="ref-recrear-titulo"><strong>{{ _('Recrear «%(titular)s» con mi producto', titular=r.titular or r.id) }}</strong></p>
@@ -53,25 +54,53 @@
       {% endif %}
     </fieldset>
 
+    {# Precios del botón por combinación (spec §12): en imagen «igual» y «variación»
+       cuestan lo mismo; en video «igual» = imagen fiel + su animación. #}
     {% if tipo == "imagen" %}
+      {% set usd_fiel = precio.usd if precio and precio.usd is not none else none %}
+      {% set usd_libre = usd_fiel %}
+    {% else %}
+      {% set pv = precios_video or {} %}
+      {% set usd_fiel = (pv.imagen.usd + pv.animar[modelo_animar].usd) if pv and pv.imagen.usd is not none and pv.animar[modelo_animar].usd is not none else none %}
+      {% set usd_libre = pv.libre.usd if pv and pv.libre.usd is not none else none %}
+    {% endif %}
+    {% set p_fiel = (' ≈ ' ~ (usd_fiel | usd)) if usd_fiel is not none else '' %}
+    {% set p_libre = (' ≈ ' ~ (usd_libre | usd)) if usd_libre is not none else '' %}
+    {% set p_dos = (' ≈ ' ~ ((usd_fiel + usd_libre) | usd)) if usd_fiel is not none and usd_libre is not none else '' %}
+    {% if tipo == "imagen" %}
+      {% set texto_0, texto_fiel, texto_libre, texto_2 = _('Elige al menos una imagen'), _('Generar imagen') ~ p_fiel, _('Generar imagen') ~ p_libre, _('Generar 2 imágenes') ~ p_dos %}
+    {% else %}
+      {% set texto_0, texto_fiel, texto_libre, texto_2 = _('Elige al menos un video'), _('Generar el video igual') ~ p_fiel, _('Generar la variación') ~ p_libre, _('Generar 2 videos') ~ p_dos %}
+    {% endif %}
+
     <fieldset class="ref-recrear-bloque">
-      <legend>{{ _('Imágenes') }}</legend>
+      <legend>{% if tipo == "imagen" %}{{ _('Imágenes') }}{% else %}{{ _('Videos') }}{% endif %}</legend>
       <input type="hidden" name="modos_vista" value="1">
-      <label class="modal-form-check"><input type="checkbox" name="modo" value="fiel" data-recrear-modo {% if 'fiel' in modos %}checked{% endif %}><span>{{ _('Igual a la referencia') }} · <small>{{ _('mismas posiciones, ángulo y fondo; solo cambia el producto') }}</small></span></label>
+      <label class="modal-form-check"><input type="checkbox" name="modo" value="fiel" data-recrear-modo {% if 'fiel' in modos %}checked{% endif %}><span>{{ _('Igual a la referencia') }} · <small>{% if tipo == "imagen" %}{{ _('mismas posiciones, ángulo y fondo; solo cambia el producto') }}{% else %}{{ _('primero la imagen igual a la referencia y después se anima') }}{% endif %}</small></span></label>
+      {% if tipo == "video" %}
+      <label class="ref-recrear-animar">{{ _('Animar con') }}
+        <select name="modelo_animar" data-recrear-campo="modelo_animar">
+          {% for m in modelos_animar %}<option value="{{ m }}" {% if m == modelo_animar %}selected{% endif %}>{{ nombres_video[m]|traducir }}{% if precios_video and precios_video.animar[m].usd is not none %} · ≈ {{ precios_video.animar[m].usd | usd }} ({{ precios_video.duracion[m] }} s){% endif %}{% if m == 'seedance25' %} · {{ _('arranca exactamente desde la imagen') }}{% endif %}</option>{% endfor %}
+        </select>
+      </label>
+      {% endif %}
       <label class="modal-form-check"><input type="checkbox" name="modo" value="libre" data-recrear-modo {% if 'libre' in modos %}checked{% endif %}><span>{{ _('Variación') }} · <small>{{ _('la estructura de la referencia, más libre y con la guía de tu marca') }}</small></span></label>
     </fieldset>
-    {% endif %}
 
     <details class="ref-recrear-prompts">
       <summary>{{ _('Ver o editar los prompts') }}</summary>
       <p class="ayuda">{{ _('Se arman con lo de arriba al generar. Si escribes aquí, se usa tal cual.') }}</p>
-      {% if tipo == "imagen" %}
-      <label>{{ _('Igual a la referencia') }}
+      <label>{% if tipo == "imagen" %}{{ _('Igual a la referencia') }}{% else %}{{ _('Igual: la imagen') }}{% endif %}
         <textarea name="prompt_fiel" rows="6" data-recrear-prompt="prompt_fiel">{{ prompt_fiel }}</textarea>
       </label>
       <input type="hidden" name="prompt_fiel_editado" value="" data-recrear-editado="prompt_fiel">
+      {% if tipo == "video" %}
+      <label>{{ _('Igual: la animación') }}
+        <textarea name="prompt_animar" rows="4" data-recrear-prompt="prompt_animar">{{ prompt_animar }}</textarea>
+      </label>
+      <input type="hidden" name="prompt_animar_editado" value="" data-recrear-editado="prompt_animar">
       {% endif %}
-      <label>{% if tipo == "imagen" %}{{ _('Variación') }}{% else %}{{ _('Prompt') }}{% endif %}
+      <label>{{ _('Variación') }}
         <textarea name="prompt" rows="6" data-recrear-campo="prompt" data-recrear-prompt="prompt">{{ prompt }}</textarea>
       </label>
       <input type="hidden" name="prompt_editado" value="" data-recrear-editado="prompt">
@@ -79,16 +108,12 @@
 
     <div class="ref-recrear-acciones">
       <button type="button" class="btn-guardar btn-sm" data-recrear-adaptar>{{ _('Adaptar con IA') }}{% if precio_adaptar.usd is not none %} ≈ {{ precio_adaptar.usd | usd }}{% endif %}</button>
-      {% if tipo == "imagen" %}
-      {% set p1 = (' ≈ ' ~ (precio.usd | usd)) if precio and precio.usd is not none else '' %}
-      {% set p2 = (' ≈ ' ~ ((precio.usd * 2) | usd)) if precio and precio.usd is not none else '' %}
       <button type="submit" class="btn-generar btn-sm" data-recrear-generar
-              data-texto-0="{{ _('Elige al menos una imagen') }}"
-              data-texto-1="{{ _('Generar imagen') }}{{ p1 }}"
-              data-texto-2="{{ _('Generar 2 imágenes') }}{{ p2 }}" {% if not modos %}disabled{% endif %}>{% if modos|length == 2 %}{{ _('Generar 2 imágenes') }}{{ p2 }}{% elif modos %}{{ _('Generar imagen') }}{{ p1 }}{% else %}{{ _('Elige al menos una imagen') }}{% endif %}</button>
+              data-texto-0="{{ texto_0 }}" data-texto-fiel="{{ texto_fiel }}" data-texto-libre="{{ texto_libre }}"
+              data-texto-2="{{ texto_2 }}" {% if not modos %}disabled{% endif %}>{% if modos|length == 2 %}{{ texto_2 }}{% elif 'fiel' in modos %}{{ texto_fiel }}{% elif modos %}{{ texto_libre }}{% else %}{{ texto_0 }}{% endif %}</button>
+      {% if tipo == "imagen" %}
       <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="video">{{ _('Como video ▸') }}</button>
       {% else %}
-      <button type="submit" class="btn-generar btn-sm">{{ _('Generar video') }}{% if precio and precio.usd is not none %} ≈ {{ precio.usd | usd }}{% endif %}</button>
       <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="imagen">{{ _('← Como imagen') }}</button>
       {% endif %}
     </div>

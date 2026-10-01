@@ -211,7 +211,7 @@ def test_recrear_formulario_precio_y_prompt(app):
     assert "Image 1" in html and "Image 2 y 3" in html and "Titular 0" in html
     assert "Generar imagen" in html and "Como video" in html and "Adaptar con IA" in html
     html_video = c.get(f"/cliente/acme/referentes/{ids[0]}/recrear?tipo=video").data.decode()
-    assert "Generar video" in html_video and "Cámara fija" in html_video
+    assert "Generar 2 videos" in html_video and "Cámara fija" in html_video
     assert c.get(f"/cliente/acme/referentes/{ids[0]}/recrear?producto_id=espejo_led").status_code == 200
 
 
@@ -1418,3 +1418,102 @@ def test_pestana_referentes_trae_el_js_de_recrear_fiel():
     for marca in ("data-recrear-leer", "data-recrear-modo", "data-recrear-editado", "data-recrear-texto",
                   "lecturasEnCurso", "formato_elegido", "modos_vista", "traer_textos", "ref:fragmento"):
         assert marca in texto, marca
+
+
+# --- Recrear como video: igual (imagen fiel animada) y variación (spec §12) ---
+
+def test_recrear_formulario_video_ofrece_igual_variacion_y_modelo(app):
+    ids = _sembrar()
+    _con_lectura(ids[0])
+    html = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear?tipo=video").data.decode()
+    assert 'name="modo" value="fiel"' in html and 'name="modo" value="libre"' in html
+    assert 'name="modelo_animar"' in html and 'value="seedance25" selected' in html and 'value="wan3"' in html
+    assert 'name="prompt_fiel"' in html and 'name="prompt_animar"' in html and "primer fotograma" in html
+    assert "Generar 2 videos" in html and 'data-texto-fiel="' in html and 'data-texto-libre="' in html
+    con_wan = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear?tipo=video&modelo_animar=wan3").data.decode()
+    assert 'value="wan3" selected' in con_wan
+
+
+def test_recrear_video_igual_crea_la_imagen_que_se_anima_y_la_variacion(app, monkeypatch):
+    import creative_flow
+    ids = _sembrar()
+    _con_lectura(ids[0])
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                      data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1",
+                            "traer_textos": "1", "texto_0": "40% OFF", "texto_1": "", "modos_vista": "1",
+                            "modo": ["fiel", "libre"], "modelo_animar": "wan3"})
+    assert r.status_code == 302 and len(lanzados) == 2
+    sesiones = creative_flow.cargar("acme")
+    imagen, variacion = sesiones[lanzados[0]], sesiones[lanzados[1]]
+    assert imagen["tipo"] == "imagen" and imagen["modelo"] == "seedream_v5_pro" and imagen["recrear_modo"] == "fiel"
+    assert "Edita Image 1" in imagen["prompt_relleno"] and "cambia «50% OFF» por «40% OFF»" in imagen["prompt_relleno"]
+    animar = imagen["animar_despues"]
+    assert animar["modelo"] == "wan3" and animar["duracion"] == 8 and animar["formato"] == "9:16"
+    assert "primer fotograma" in animar["prompt"] and animar["titulo"] == "Recrear: 40% OFF · igual · video"
+    assert imagen["accion_central"] == "Recrear: 40% OFF · igual"
+    assert variacion["tipo"] == "video" and variacion["modelo"] == "wan3" and variacion["recrear_modo"] == "libre"
+    assert variacion["accion_central"] == "Recrear: 40% OFF · variación" and "Cámara fija" in variacion["prompt_relleno"]
+
+
+def test_recrear_video_modelo_desconocido_usa_seedance_y_respeta_el_prompt_editado(app, monkeypatch):
+    import creative_flow
+    ids = _sembrar()
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1",
+                        "modos_vista": "1", "modo": "fiel", "modelo_animar": "otro",
+                        "prompt_animar": "MI ANIMACION", "prompt_animar_editado": "1"})
+    assert len(lanzados) == 1
+    animar = creative_flow.cargar("acme")[lanzados[0]]["animar_despues"]
+    assert animar["modelo"] == "seedance25" and animar["prompt"] == "MI ANIMACION"
+
+
+def test_recrear_video_con_el_formulario_viejo_sigue_siendo_un_solo_video(app, monkeypatch):
+    """Un formulario de video abierto antes del despliegue no manda
+    `modos_vista`: hace un solo video, como antes, y nunca la animación
+    (nadie paga una imagen + Seedance sin haberlo visto)."""
+    import creative_flow
+    ids = _sembrar()
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1"})
+    assert len(lanzados) == 1
+    entry = creative_flow.cargar("acme")[lanzados[0]]
+    assert entry["tipo"] == "video" and "animar_despues" not in entry
+
+
+def test_pestana_referentes_trae_el_js_de_recrear_como_video():
+    import pathlib
+    texto = pathlib.Path("templates/_tab_referentes.html").read_text(encoding="utf-8")
+    for marca in ('modelo_animar', "'data-texto-' + clave"):
+        assert marca in texto, marca
+
+
+def test_detalle_de_crear_dice_que_la_imagen_se_anima(app, monkeypatch):
+    import creative_flow
+    import trabajos
+    monkeypatch.setattr(trabajos, "en_curso", lambda job_id: False)
+    cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "Recrear: X · igual", 0, "", "A")
+    creative_flow.actualizar("acme", cf, tipo="imagen", estado="video_generando",
+                             animar_despues={"modelo": "wan3", "titulo": "Recrear: X · igual · video"})
+    html = app["c"].get(f"/cliente/acme/creative_flow/{cf}/detalle").data.decode()
+    assert "se anima sola en video" in html
+    creative_flow.actualizar("acme", cf, estado="video_listo",
+                             animar_despues={"modelo": "wan3", "titulo": "Recrear: X · igual · video", "cf_video": "cf_2"})
+    assert "Recrear: X · igual · video" in app["c"].get(f"/cliente/acme/creative_flow/{cf}/detalle").data.decode()
+    creative_flow.actualizar("acme", cf, animar_error="La imagen está lista, pero no se pudo lanzar su video (X).")
+    assert "no se pudo lanzar su video" in app["c"].get(f"/cliente/acme/creative_flow/{cf}/detalle").data.decode()
+
+
+def test_recrear_video_usa_el_formato_mas_parecido_que_admite_el_modelo(app, monkeypatch):
+    """Wan 3.0 no tiene 4:5: va a 3:4 (el más parecido), no al 9:16 por defecto."""
+    import creative_flow
+    ids = _sembrar()
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "4:5", "tipo": "video", "campos_vista": "1",
+                        "modos_vista": "1", "modo": ["fiel", "libre"], "modelo_animar": "wan3"})
+    imagen, variacion = (creative_flow.cargar("acme")[c] for c in lanzados)
+    assert imagen["aspect_ratio"] == "4:5" and imagen["animar_despues"]["formato"] == "3:4"
+    assert variacion["aspect_ratio"] == "3:4"

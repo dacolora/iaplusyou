@@ -1830,6 +1830,9 @@ msgstr "Analyze references and generate style guide"
 msgid "Animación de entrada"
 msgstr "Entrance animation"
 
+msgid "Animar con"
+msgstr "Animate with"
+
 msgid "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS)."
 msgstr "Note the server and the port (Gmail: smtp.gmail.com and 587, STARTTLS)."
 
@@ -3602,6 +3605,9 @@ msgstr "Any awareness"
 msgid "Cualquier dolor"
 msgstr "Any pain point"
 
+msgid "Cuando esta imagen esté lista, se anima sola en video."
+msgstr "When this image is ready, it's animated into a video on its own."
+
 msgid "Cuando las variables estén, aquí aparece el botón <em>Conectar con MercadoLibre</em>."
 msgstr "Once the variables are set, the <em>Connect with MercadoLibre</em> button shows up here."
 
@@ -4730,6 +4736,9 @@ msgstr "ElevenLabs · %(n)s characters · %(voz)s"
 
 msgid "Elige al menos un destino de esta edición."
 msgstr "Choose at least one market of this edit."
+
+msgid "Elige al menos un video"
+msgstr "Pick at least one video"
 
 msgid "Elige al menos una imagen"
 msgstr "Pick at least one image"
@@ -6572,6 +6581,9 @@ msgstr "Generating with the model"
 msgid "Generando desde el referente…"
 msgstr "Generating from the reference…"
 
+msgid "Generando desde el referente… el video «igual» arranca solo cuando su imagen esté lista."
+msgstr "Generating from the reference… the “same” video starts on its own once its image is ready."
+
 msgid "Generando el swap…"
 msgstr "Generating the swap…"
 
@@ -6627,17 +6639,26 @@ msgstr "Generate %(n)s piece(s) — USD %(usd)s"
 msgid "Generar 2 imágenes"
 msgstr "Generate 2 images"
 
+msgid "Generar 2 videos"
+msgstr "Generate 2 videos"
+
 msgid "Generar 5 prompts"
 msgstr "Generate 5 prompts"
 
 msgid "Generar avatares"
 msgstr "Generate avatars"
 
+msgid "Generar el video igual"
+msgstr "Generate the same-as-reference video"
+
 msgid "Generar imagen"
 msgstr "Generate image"
 
 msgid "Generar imágenes (5 escenas × 2 motores)"
 msgstr "Generate images (5 scenes × 2 engines)"
+
+msgid "Generar la variación"
+msgstr "Generate the variation"
 
 msgid "Generar lote"
 msgstr "Generate batch"
@@ -7073,6 +7094,12 @@ msgstr "Same as YouTube, <strong>on your Mac</strong>: <code>venv/bin/python aut
 
 msgid "Igual que «Traer referentes» de un proyecto, pero sin dueño: quedan visibles para todos los proyectos."
 msgstr "Same as a project's “Bring in references”, but with no owner: they stay visible to every project."
+
+msgid "Igual: la animación"
+msgstr "Same: the animation"
+
+msgid "Igual: la imagen"
+msgstr "Same: the image"
 
 msgid "Iluminación"
 msgstr "Lighting"
@@ -7604,6 +7631,10 @@ msgstr "The idea already has a generated piece; it wasn't rewritten."
 
 msgid "La imagen es chica: quedó lo más grande posible, pero no llega a llenar toda la pantalla."
 msgstr "The image is small: it's as large as possible, but it doesn't fill the whole screen."
+
+#, python-format
+msgid "La imagen está lista, pero no se pudo lanzar su video (%(tipo)s). Usa «Editar y crear otra a partir de esta» para animarla."
+msgstr "The image is ready, but its video couldn't be launched (%(tipo)s). Use “Edit and create another one from this” to animate it."
 
 #, python-brace-format
 msgid "La imagen pesa más de {mb} MB."
@@ -12031,6 +12062,10 @@ msgid "Su propia conexión:"
 msgstr "Its own connection:"
 
 #, python-format
+msgid "Su video ya se lanzó: búscalo como «%(titulo)s»."
+msgstr "Its video was already launched: look for it as “%(titulo)s”."
+
+#, python-format
 msgid "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
 msgstr "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
 
@@ -14059,6 +14094,9 @@ msgstr "build the return URL from Meta (it must match the one registered in the 
 msgid "armar_documento: sin segmentos no hay pista principal."
 msgstr "armar_documento: no segments, so no main track."
 
+msgid "arranca exactamente desde la imagen"
+msgstr "starts exactly from the image"
+
 msgid "arrancando"
 msgstr "starting"
 
@@ -15555,6 +15593,9 @@ msgstr "brand presence"
 
 msgid "presupuesto"
 msgstr "budget"
+
+msgid "primero la imagen igual a la referencia y después se anima"
+msgstr "first the image same as the reference, then it's animated"
 
 #, python-format
 msgid "prioridad %(n)s"

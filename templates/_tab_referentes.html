@@ -255,6 +255,8 @@
       var traer = form.querySelector('input[name="traer_textos"]');
       if (traer && (traer.type === 'hidden' || traer.checked)) u.searchParams.set('traer_textos', '1');
       form.querySelectorAll('[data-recrear-texto]').forEach(function (el) { u.searchParams.set(el.name, el.value); });
+      var animar = form.querySelector('[data-recrear-campo="modelo_animar"]');
+      if (animar && animar.value) u.searchParams.set('modelo_animar', animar.value);
       var modos = form.querySelectorAll('[data-recrear-modo]');
       if (modos.length) {
         u.searchParams.set('modos_vista', '1');
@@ -305,9 +307,10 @@
     function actualizarBotonGenerar(form) {
       var boton = form.querySelector('[data-recrear-generar]');
       if (!boton) return;
-      var n = form.querySelectorAll('[data-recrear-modo]:checked').length;
-      boton.textContent = boton.getAttribute('data-texto-' + n);
-      boton.disabled = n === 0;
+      var marcadas = form.querySelectorAll('[data-recrear-modo]:checked');
+      var clave = marcadas.length === 2 ? '2' : (marcadas.length ? marcadas[0].value : '0');
+      boton.textContent = boton.getAttribute('data-texto-' + clave);
+      boton.disabled = marcadas.length === 0;
     }
 
     function leerHash() {
@@ -432,7 +435,7 @@
         if (campos) campos.hidden = !ev.target.checked;
         return;
       }
-      var campo = ev.target.closest('[data-recrear-campo="producto_id"], [data-recrear-campo="formato"]');
+      var campo = ev.target.closest('[data-recrear-campo="producto_id"], [data-recrear-campo="formato"], [data-recrear-campo="modelo_animar"]');
       if (!campo) return;
       recargarFormularioRecrear(form, null, { formatoElegido: campo.dataset.recrearCampo === 'formato' });
     });

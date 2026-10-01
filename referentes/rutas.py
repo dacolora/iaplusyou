@@ -203,6 +203,9 @@ def traer_post(cliente):
 
 
 MODOS_RECREAR = ("fiel", "libre")
+# Como video (spec §12): con qué se anima la imagen fiel. Seedance 2.5 primero:
+# es el único que usa la imagen como primer fotograma.
+MODELOS_ANIMAR = ("seedance25", "wan3")
 
 
 def _familia_de(cliente, r, idioma):
@@ -225,7 +228,45 @@ def _contexto_recrear(cliente, r, producto, formato, tipo, campos, idioma):
                                  marca_mod.guia_efectiva(cliente), "", formato, tipo=tipo,
                                  con_sonido=prefs_sonido["con_sonido"], idioma=idioma, linea_textos=linea)
     fiel = recrear.armar_prompt_fiel(lec, producto, linea, formato, idioma=idioma)
-    return {"lectura": lec, "traer": traer, "textos": textos, "prompt": libre, "prompt_fiel": fiel}
+    animar = recrear.armar_prompt_animar(producto, con_sonido=prefs_sonido["con_sonido"], idioma=idioma)
+    return {"lectura": lec, "traer": traer, "textos": textos, "prompt": libre, "prompt_fiel": fiel,
+            "prompt_animar": animar}
+
+
+def _modelo_animar(campos):
+    m = campos.get("modelo_animar")
+    return m if m in MODELOS_ANIMAR else MODELOS_ANIMAR[0]
+
+
+def _formato_video(modelo, formato_pedido):
+    """El formato de video más parecido al pedido (spec §12): Wan 3.0 no tiene
+    4:5 y `ajustar_formato` caería al de por defecto (9:16, que recorta mucho);
+    aquí va al más cercano (3:4). Seedance sigue a la imagen (None)."""
+    formatos = flowplus_modelos.VIDEO[modelo].get("formatos") or ()
+    if not formatos or formato_pedido in formatos:
+        return flowplus_modelos.ajustar_formato(modelo, formato_pedido)
+    try:
+        ancho, alto = (int(x) for x in str(formato_pedido).split(":"))
+    except ValueError:
+        return flowplus_modelos.ajustar_formato(modelo, formato_pedido)
+    return lectura.formato_cercano(ancho, alto, formatos) or flowplus_modelos.ajustar_formato(modelo, formato_pedido)
+
+
+def _duracion_video(cliente, modelo):
+    return flowplus_modelos.ajustar_duracion(modelo, proyectos.preferencias_flowplus(cliente)["duracion_defecto"])
+
+
+def _precios_video(cliente, n_refs_imagen):
+    """Lo que cuesta cada parte de «Como video» (spec §12): la imagen fiel, su
+    animación con cada modelo y la variación, con la duración del proyecto."""
+    con_sonido = proyectos.preferencias_sonido(cliente)["con_sonido"]
+
+    def video(modelo):
+        return gastos.estimar("video", modelo=modelo, duracion=_duracion_video(cliente, modelo), con_sonido=con_sonido)
+    return {"imagen": gastos.estimar("imagen", modelo=flowplus_modelos.IMAGEN_POR_DEFECTO, n_referencias=n_refs_imagen),
+            "animar": {m: video(m) for m in MODELOS_ANIMAR},
+            "libre": video(flowplus_modelos.VIDEO_POR_DEFECTO),
+            "duracion": {m: _duracion_video(cliente, m) for m in MODELOS_ANIMAR + (flowplus_modelos.VIDEO_POR_DEFECTO,)}}
 
 
 def _modos_de(campos):
@@ -250,23 +291,24 @@ def recrear_form(cliente, rid):
                or (lectura.formato_cercano(lec.get("ancho"), lec.get("alto"), formatos) if lec else None)
                or flowplus_modelos.FORMATO_DEFECTO)
     idioma = idiomas.de_proyecto(cliente)
-    ctx = {"lectura": lec, "traer": True, "textos": lectura.valores_iniciales(lec), "prompt": "", "prompt_fiel": ""}
-    precio = None
+    ctx = {"lectura": lec, "traer": True, "textos": lectura.valores_iniciales(lec), "prompt": "", "prompt_fiel": "",
+           "prompt_animar": ""}
+    precio = precios_video = None
     if producto:
         ctx = _contexto_recrear(cliente, r, producto, formato, tipo, request.args, idioma)
         n_refs = 1 + max(1, min(2, len(producto.get("referencias") or [1])))
         if tipo == "imagen":
             precio = gastos.estimar("imagen", modelo=flowplus_modelos.IMAGEN_POR_DEFECTO, n_referencias=n_refs)
         else:
-            duracion = proyectos.preferencias_flowplus(cliente)["duracion_defecto"]
-            precio = gastos.estimar("video", modelo=flowplus_modelos.VIDEO_POR_DEFECTO, duracion=duracion,
-                                    con_sonido=proyectos.preferencias_sonido(cliente)["con_sonido"])
+            precios_video = _precios_video(cliente, n_refs)
     return render_template(
         "_referente_recrear.html", cliente=cliente, r=r, productos=productos, producto=producto, tipo=tipo,
         formato=formato, formatos=formatos, formato_elegido=request.args.get("formato_elegido") == "1",
         lectura=ctx["lectura"], traer_textos=ctx["traer"], textos=ctx["textos"], prompt=ctx["prompt"],
-        prompt_fiel=ctx["prompt_fiel"], modos=_modos_de(request.args), etiquetas_rol=lectura.ETIQUETAS_ROL,
-        precio=precio, precio_adaptar=gastos.estimar("adaptar_referente"),
+        prompt_fiel=ctx["prompt_fiel"], prompt_animar=ctx["prompt_animar"], modos=_modos_de(request.args),
+        etiquetas_rol=lectura.ETIQUETAS_ROL, modelos_animar=MODELOS_ANIMAR, modelo_animar=_modelo_animar(request.args),
+        nombres_video={m: flowplus_modelos.VIDEO[m]["nombre"] for m in flowplus_modelos.VIDEO},
+        precio=precio, precios_video=precios_video, precio_adaptar=gastos.estimar("adaptar_referente"),
         precio_leer=gastos.estimar("leer_referente"))
 
 
@@ -376,7 +418,7 @@ def recrear_generar(cliente, rid):
         modelo = flowplus_modelos.VIDEO_POR_DEFECTO
         duracion_objetivo = flowplus_modelos.ajustar_duracion(
             modelo, proyectos.preferencias_flowplus(cliente)["duracion_defecto"])
-        formato = flowplus_modelos.ajustar_formato(modelo, formato_pedido)
+        formato = _formato_video(modelo, formato_pedido)
     idioma = idiomas.de_proyecto(cliente)
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     # Spec 2026-09-30-recrear-fiel §5: el formulario nuevo manda `campos_vista=1`
@@ -385,7 +427,10 @@ def recrear_generar(cliente, rid):
     nuevo = request.form.get("campos_vista") == "1"
     if nuevo:
         ctx = _contexto_recrear(cliente, r, producto, formato, tipo, request.form, idioma)
-        modos = _modos_de(request.form) if tipo == "imagen" else ["libre"]
+        # En video, solo el formulario que muestra las casillas (`modos_vista`)
+        # pide «igual»: uno abierto antes de §12 sigue haciendo un solo video.
+        modos = (_modos_de(request.form) if tipo == "imagen" or request.form.get("modos_vista") == "1"
+                 else ["libre"])
         if not modos:
             flash(gettext("Elige al menos una imagen."), "error")
             return volver
@@ -399,6 +444,12 @@ def recrear_generar(cliente, rid):
                     return volver
             else:
                 prompts[m] = ctx[campo]
+        prompt_animar = ctx["prompt_animar"]
+        if tipo == "video" and "fiel" in modos and request.form.get("prompt_animar_editado") == "1":
+            prompt_animar = (request.form.get("prompt_animar") or "").strip()
+            if not prompt_animar:
+                flash(gettext("El prompt no puede quedar vacío."), "error")
+                return volver
         textos = ctx["textos"] if ctx["traer"] else []
     else:
         prompt = (request.form.get("prompt") or "").strip()
@@ -429,12 +480,27 @@ def recrear_generar(cliente, rid):
             sufijos = {}
     lanzados = 0
     for m in modos:
-        nombre = f"{titulo} · {sufijos[m]}" if nuevo and tipo == "imagen" else titulo
+        nombre = f"{titulo} · {sufijos[m]}" if nuevo and (tipo == "imagen" or len(modos) > 1 or m == "fiel") else titulo
+        tipo_m, modelo_m, formato_m, duracion_m = tipo, modelo, formato, duracion_objetivo
+        if tipo == "video" and m == "fiel":
+            # «Igual» en video (spec §12): primero la imagen fiel; el worker la
+            # anima en cuanto queda lista (`recrear.lanzar_animacion`).
+            tipo_m, modelo_m, duracion_m = "imagen", flowplus_modelos.IMAGEN_POR_DEFECTO, 0
+            formato_m = flowplus_modelos.ajustar_formato(modelo_m, formato_pedido, tipo="imagen")
         cf_id = creative_flow.crear(cliente, [], [producto["nombre"]], [], nombre,
-                                    duracion_objetivo, "", "A", referencias_urls=referencias_urls, platforms=[])
-        campos = dict(prompt_relleno=prompts[m], aspect_ratio=formato, tipo=tipo, modelo=modelo,
+                                    duracion_m, "", "A", referencias_urls=referencias_urls, platforms=[])
+        campos = dict(prompt_relleno=prompts[m], aspect_ratio=formato_m, tipo=tipo_m, modelo=modelo_m,
                       con_sonido=prefs_sonido["con_sonido"], sonido_texto="", musica_estilo="",
                       calidad="final", referente_id=rid)
+        if tipo == "video" and m == "fiel":
+            animar_con = _modelo_animar(request.form)
+            with idiomas.en_idioma(idioma):     # el título se GUARDA: idioma del proyecto
+                palabra_video = gettext("video")
+            titulo_video = f"{nombre} · {palabra_video}"
+            campos["animar_despues"] = {
+                "modelo": animar_con, "duracion": _duracion_video(cliente, animar_con),
+                "formato": _formato_video(animar_con, formato_pedido),
+                "prompt": prompt_animar, "con_sonido": prefs_sonido["con_sonido"], "titulo": titulo_video}
         if nuevo:
             campos["recrear_modo"] = m
         if angulo:
@@ -444,7 +510,10 @@ def recrear_generar(cliente, rid):
         if flowplus_lanzar.lanzar(cliente, cf_id, entry):
             lanzados += 1
     if lanzados == len(modos):
-        if len(modos) > 1:
+        if tipo == "video" and "fiel" in modos:
+            flash(gettext("Generando desde el referente… el video «igual» arranca solo cuando su imagen esté lista."),
+                  "ok")
+        elif tipo == "imagen" and len(modos) > 1:
             flash(gettext("Generando %(n)s imágenes desde el referente…", n=len(modos)), "ok")
         else:
             flash(gettext("Generando desde el referente…"), "ok")
