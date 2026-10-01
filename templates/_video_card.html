@@ -9,7 +9,7 @@
         {% set pest = v.plataformas_estado.get(p) if v.plataformas_estado else None %}
         <span class="plataforma-chip {{ pest or '' }}">{{ p }}{% if pest %} · {{ pest }}{% endif %}</span>
       {% else %}
-        <span class="plataforma-chip">sin plataformas asignadas</span>
+        <span class="plataforma-chip">{{ _('sin plataformas asignadas') }}</span>
       {% endfor %}
     </div>
 
@@ -17,22 +17,22 @@
     <div class="barra-progreso" id="trabajo-{{ v.trabajo.job_id }}">
       <div class="barra-progreso-fill" style="width:0%"></div>
     </div>
-    <div class="progreso-texto">Publicando… 0% · 0s</div>
+    <div class="progreso-texto">{{ _('Publicando… 0%% · 0s') }}</div>
     <script>iniciarPolling({{ v.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ v.trabajo.job_id) | tojson }});</script>
     {% elif v.estado == 'pendiente' %}
     <div class="acciones">
-      <form method="post" action="{{ url_for('aprobar', cliente=cliente, brief_id=v.id) }}" onsubmit="return confirm('¿Publicar {{ v.id }} en: {{ v.platforms | join(', ') }}?');">
-        <button class="btn-aprobar" type="submit">Aprobar y publicar</button>
+      <form method="post" action="{{ url_for('aprobar', cliente=cliente, brief_id=v.id) }}" onsubmit='return confirm({{ _("¿Publicar %(id)s en: %(plataformas)s?", id="__I__", plataformas="__P__")|tojson }}.replace("__I__", {{ v.id|tojson }}).replace("__P__", {{ (v.platforms | join(", "))|tojson }}));'>
+        <button class="btn-aprobar" type="submit">{{ _('Aprobar y publicar') }}</button>
       </form>
-      <form method="post" action="{{ url_for('rechazar', cliente=cliente, brief_id=v.id) }}" onsubmit="return confirm('¿Rechazar {{ v.id }}? No se publicará.');">
-        <button class="btn-rechazar" type="submit">Rechazar</button>
+      <form method="post" action="{{ url_for('rechazar', cliente=cliente, brief_id=v.id) }}" onsubmit='return confirm({{ _("¿Rechazar %(id)s? No se publicará.", id="__I__")|tojson }}.replace("__I__", {{ v.id|tojson }}));'>
+        <button class="btn-rechazar" type="submit">{{ _('Rechazar') }}</button>
       </form>
     </div>
     {% endif %}
 
     {% if v.video_url %}
     <form method="post" action="{{ url_for('enviar_video_a_publicidad', cliente=cliente, brief_id=v.id) }}" style="display:inline;">
-      <button type="submit" class="btn-guardar btn-sm">Enviar a Publicidad</button>
+      <button type="submit" class="btn-guardar btn-sm">{{ _('Enviar a Publicidad') }}</button>
     </form>
     {% endif %}
   </div>

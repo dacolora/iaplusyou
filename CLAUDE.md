@@ -77,9 +77,9 @@ clobber each other's credentials mid-flight.
 read/write wrappers, one file per client, no database. `prompts.py` nests prompts
 under an `idea_id`; each prompt's `estado` field drives which template renders it
 (`pendiente` -> `_prompt_row.html`, `imagen_pendiente` -> `_imagen_row.html`). These
-old «Nueva idea» templates are kept on disk but have no live screen, so they are excluded
-from the language guard (`tests/test_i18n_plantillas.py::EXCLUIDAS`) until Daniel decides
-what happens to that flow; their routes' messages do go through the catalog. When a
+old «Nueva idea» templates are kept on disk but have no live screen; since 2026-10-01 they
+are translated like the rest (in the language guard, rendered in both languages by
+`tests/test_i18n_nueva_idea.py`), and their routes' messages go through the catalog. When a
 video finally generates, its entry is deleted from `prompts_pendientes.json` and
 created fresh in `estado_videos.json` — the two files together are the full pipeline
 state for a client. `creative_flow.py` and `ads.py` present the same read/write API
@@ -1126,8 +1126,8 @@ Desde la fase 6 (2026-09) toda la app pasa por el catálogo (excepciones a prop�
 (`doctrina/textos/*.md`), documentación interna en español; los mensajes de contrato de
 `final_edition/documento.validar` y los de `static/editor/operaciones.js` (`INTERNOS` en `tests/test_i18n_editor.py`);
 los prompts para los modelos de video e imagen y sus tokens `Image N`/`Video N`/`@Imagen N` (`prompt_swap.py`,
-`flowplus_prompt`); y las 9 plantillas del flujo viejo «Nueva idea», en `EXCLUIDAS` hasta que Daniel decida qué pasa
-con ese flujo. Una excepción a §B8: «Escribe aquí» y «Escribe el precio» (capa 4c), el texto inicial editable de un
+`flowplus_prompt`); las 9 plantillas del flujo viejo «Nueva idea» se tradujeron el 2026-10-01 y `EXCLUIDAS` ya solo
+tiene el mapa. Una excepción a §B8: «Escribe aquí» y «Escribe el precio» (capa 4c), el texto inicial editable de un
 clip de texto nuevo del editor, salen en el idioma de quien mira). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
 del spec): cada final sale en el idioma de su país destino (`<idioma>_<PAIS>`); el guion base, que no es por destino,
 en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. El editor

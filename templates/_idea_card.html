@@ -7,20 +7,20 @@
   <summary class="idea-header">
     <span class="idea-chevron">▸</span>
     {% if idea.prompts %}
-    <img class="idea-ref" src="{{ idea.prompts[0].image_url }}" alt="referencia">
+    <img class="idea-ref" src="{{ idea.prompts[0].image_url }}" alt="{{ _('referencia') }}">
     {% endif %}
     <div>
-      <span class="idea-label">Idea</span>
+      <span class="idea-label">{{ _('Idea') }}</span>
       <div class="idea-texto">{{ idea.idea }}</div>
     </div>
     <form
       method="post"
       action="{{ url_for('eliminar_idea', cliente=cliente, idea_id=idea.id) }}"
-      onsubmit="return confirm('¿Eliminar esta idea completa y sus {{ idea.prompts | length }} prompts? No se puede deshacer.');"
+      onsubmit='return confirm({{ _("¿Eliminar esta idea completa y sus %(n)s prompts? No se puede deshacer.", n=idea.prompts | length)|tojson }});'
       onclick="event.stopPropagation();"
       class="idea-eliminar"
     >
-      <button type="submit" class="btn-rechazar btn-sm" title="Eliminar idea completa">Eliminar idea</button>
+      <button type="submit" class="btn-rechazar btn-sm" title="{{ _('Eliminar idea completa') }}">{{ _('Eliminar idea') }}</button>
     </form>
   </summary>
   <div class="prompts-lista">
