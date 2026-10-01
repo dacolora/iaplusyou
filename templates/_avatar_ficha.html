@@ -1,6 +1,7 @@
 {# Ficha de un avatar: la misma en el estudio y en «Avatares del proyecto».
    Importar con {% from "_avatar_ficha.html" import ficha_avatar, evidencia_avatar, acciones_avatar, chip_faltantes, tarjeta_avatar with context %}:
-   usan cliente, niveles_conciencia, bases, consciencias_nombre, urls_comentarios y `abrir` del contexto.
+   usan cliente, niveles_conciencia, bases, consciencias_nombre, urls_comentarios, paises_comentarios,
+   nombres_pais (los dos últimos opcionales) y `abrir` del contexto.
    `s` = None dibuja la ficha vacía de «+ Nuevo avatar». `volver` = "lista" hace que cada acción
    vuelva a la lista del proyecto en vez de al estudio. #}
 
@@ -40,7 +41,8 @@
 <div class="nicho-evidencia">
   <strong>{{ _('Citas textuales') }}</strong>
   {% for e in s.evidencia %}
-  <blockquote class="nicho-cita">«{{ e.cita }}»{% if urls_comentarios.get(e.comentario_id) %} <a href="{{ urls_comentarios.get(e.comentario_id) }}" target="_blank" rel="noopener">{{ _('ver original') }}</a>{% endif %}</blockquote>
+  {% set pais_cita = (paises_comentarios or {}).get(e.comentario_id) %}
+  <blockquote class="nicho-cita">«{{ e.cita }}»{% if pais_cita %} <small class="tag-estado">{{ _('otro mercado: %(pais)s', pais=(nombres_pais or {}).get(pais_cita, pais_cita)|traducir) }}</small>{% endif %}{% if urls_comentarios.get(e.comentario_id) %} <a href="{{ urls_comentarios.get(e.comentario_id) }}" target="_blank" rel="noopener">{{ _('ver original') }}</a>{% endif %}</blockquote>
   {% else %}
   <p class="vacio">{{ _('Ninguna cita sobrevivió a la verificación: decide tú si este avatar vale.') }}</p>
   {% endfor %}

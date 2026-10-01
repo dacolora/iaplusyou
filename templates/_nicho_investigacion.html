@@ -2,6 +2,9 @@
    investigacion (resumen), trabajo_inv, productos_investigados, paises_estudio, plataformas_inv,
    redes_inv, topes_inv, limites_inv, pais_inv, etiquetas_inv, etiquetas_paso, etiquetas_paso_estado.
    La barra de progreso lleva data-poll-job (base.html la sondea y recarga al terminar cada paso). #}
+{% macro chip_tienda(p) %}
+<label class="fe-destino"><input type="checkbox" name="plataformas" value="{{ p.clave }}" data-paises="{{ p.paises }}" data-orden="{{ p.orden }}"{% if p.faltan %} disabled data-sin-llave="1"{% elif p.mercado == 'local' %} checked{% endif %}> {{ p.nombre }}<span class="nicho-inv-casa"{% if p.mercado == 'local' %} hidden{% endif %}> ({{ p.casa_nombre|traducir }})</span>{% if p.faltan %} <small class="vacio">({{ _('falta %(llaves)s', llaves=p.faltan|join(', ')) }})</small>{% endif %}</label>
+{% endmacro %}
 {% set inv = investigacion %}
 {% set viva = inv.estado and inv.estado not in ('lista', 'detenida', 'interrumpida') %}
 <section class="swap-card nicho-inv" id="investigacion">
@@ -59,11 +62,11 @@
       <tbody>
       {% for p in productos_investigados %}
       <tr>
-        <td>{{ p.plataforma }}</td>
+        <td>{{ fuentes_nombre.get(p.plataforma, p.plataforma)|traducir }}</td>
         <td>{% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.titulo }}</a>{% else %}{{ p.titulo }}{% endif %}{% if p.marca %} <small class="vacio">{{ p.marca }}</small>{% endif %}</td>
         <td>{% if p.precio is not none %}{{ p.precio }} {{ p.moneda or '' }}{% else %}—{% endif %}</td>
         <td>{{ p.estrellas if p.estrellas is not none else '—' }}</td>
-        <td>{{ p.n_resenas if p.n_resenas is not none else '—' }}</td>
+        <td>{% if p.n_resenas is not none %}{{ p.n_resenas }}{% elif (p.extra or {}).get('vendidos') %}<small class="vacio">{{ _('%(n)s vendidos', n=p.extra.vendidos) }}</small>{% else %}—{% endif %}</td>
         <td>{% if p.relevante is none %}—{% elif p.relevante %}✓{% else %}✗{% endif %}{% if p.motivo %} <small class="vacio">{{ p.motivo }}</small>{% endif %}</td>
         <td>{{ p.resenas_traidas }}</td>
       </tr>
@@ -86,14 +89,23 @@
           <select name="pais">{% for codigo, nombre in paises_estudio %}<option value="{{ codigo }}"{% if codigo == pais_inv %} selected{% endif %}>{{ nombre|traducir }}</option>{% endfor %}</select>
         </label>
       </div>
+      {% if plataformas_inv %}
+      {% set otras_inv = plataformas_inv|selectattr('mercado', 'equalto', 'otro')|list %}
+      <fieldset class="nicho-inv-chips" id="inv-tiendas-locales">
+        <legend>{{ _('Tiendas de %(pais)s', pais=nombre_pais_inv|traducir) }}</legend>
+        {% for p in plataformas_inv if p.mercado == 'local' %}{{ chip_tienda(p) }}{% endfor %}
+      </fieldset>
+      <fieldset class="nicho-inv-chips" id="inv-tiendas-otras"{% if not otras_inv %} hidden{% endif %}>
+        <legend>{{ _('De otros mercados') }}</legend>
+        {% for p in otras_inv %}{{ chip_tienda(p) }}{% endfor %}
+      </fieldset>
+      <button type="button" class="btn-sm" id="inv-marcar-todas">{{ _('Marcar todas') }}</button>
+      {% else %}
       <fieldset class="nicho-inv-chips">
         <legend>{{ _('Tiendas') }}</legend>
-        {% for p in plataformas_inv %}
-        <label class="fe-destino"><input type="checkbox" name="plataformas" value="{{ p.clave }}" data-paises="{{ p.paises }}"{% if p.faltan %} disabled data-sin-llave="1"{% else %} checked{% endif %}> {{ p.nombre }}{% if p.faltan %} <small class="vacio">({{ _('falta %(llaves)s', llaves=p.faltan|join(', ')) }})</small>{% endif %}</label>
-        {% else %}
         <p class="vacio">{{ _('Todavía no hay tiendas disponibles.') }}</p>
-        {% endfor %}
       </fieldset>
+      {% endif %}
       <fieldset class="nicho-inv-chips">
         <legend>{{ _('Redes') }}</legend>
         {% for r in redes_inv %}
@@ -122,12 +134,17 @@
     var base = {{ url_for('nicho.investigacion_estimar', cliente=cliente, eid=estudio.id)|tojson }};
     var out = document.getElementById('inv-estimado'), boton = document.getElementById('inv-enviar');
     var visto = form.querySelector('input[name="total_visto"]');
+    var locales = document.getElementById('inv-tiendas-locales'), otras = document.getElementById('inv-tiendas-otras');
     var sinTema = {{ (not (estudio.tema or '').strip())|tojson }};
     var TXT_BOTON = {{ _('Investigar (≈ %(costo)s)', costo='__C__')|tojson }};
     var TXT_CONFIRMA = {{ _('La investigación cobra hasta %(costo)s (búsquedas, reseñas y Claude). ¿Seguimos?', costo='__C__')|tojson }};
     var TXT_SIN = {{ _('Todavía no hay estimado; espera un momento y vuelve a intentar.')|tojson }};
     var TXT_BUSQUEDA = {{ _('búsqueda')|tojson }}, TXT_RESENAS = {{ _('reseñas')|tojson }};
     var TXT_AVATARES = {{ _('Avatares')|tojson }}, TXT_TOTAL = {{ _('Total')|tojson }};
+    var TXT_TIENDAS_DE = {{ _('Tiendas de %(pais)s', pais='__P__')|tojson }};
+    // Las tiendas en el orden del registro: cambiar de país las mueve de grupo sin desordenarlas.
+    var chips = Array.prototype.slice.call(form.querySelectorAll('input[name="plataformas"]'))
+      .sort(function (a, b) { return Number(a.dataset.orden) - Number(b.dataset.orden); });
     var pedidas = 0, ultimo = null;
     function params() {
       var q = new URLSearchParams();
@@ -138,12 +155,21 @@
       return q.toString();
     }
     function porPais() {
-      var p = form.elements.pais.value;
-      form.querySelectorAll('input[name="plataformas"]').forEach(function (x) {
+      // «Tiendas de <país>» (tienen sitio ahí o venden en todo el mundo) y «De otros mercados» (buscan en su
+      // sitio principal). Solo la tienda que cambia de grupo vuelve a lo de entrada: las del país marcadas,
+      // las de otros mercados no (spec Parte 4 §4).
+      if (!locales || !otras) return;
+      var sel = form.elements.pais, p = sel.value;
+      locales.querySelector('legend').textContent = TXT_TIENDAS_DE.replace('__P__', sel.options[sel.selectedIndex].text);
+      chips.forEach(function (x) {
         var cubre = x.dataset.paises === '*' || (' ' + x.dataset.paises + ' ').indexOf(' ' + p + ' ') >= 0;
-        x.disabled = !cubre || x.dataset.sinLlave === '1';
-        x.closest('label').classList.toggle('apagado', !cubre);
+        var label = x.closest('label'), destino = cubre ? locales : otras;
+        if (label.parentNode !== destino && x.dataset.sinLlave !== '1') x.checked = cubre;
+        destino.appendChild(label);
+        var casa = label.querySelector('.nicho-inv-casa');
+        if (casa) casa.hidden = cubre;
       });
+      otras.hidden = !otras.querySelector('input[name="plataformas"]');
     }
     function fila(texto) { var d = document.createElement('div'); d.textContent = texto; out.appendChild(d); }
     function pintar() {
@@ -156,7 +182,7 @@
           out.textContent = '';
           if (!res.ok) { fila(res.d.error || '≈ ?'); return; }
           var d = res.d;
-          d.filas.forEach(function (f) { fila(f.nombre + ': ' + f.busqueda_texto + ' ' + TXT_BUSQUEDA + ' + ' + f.resenas_texto + ' ' + TXT_RESENAS); });
+          d.filas.forEach(function (f) { fila((f.etiqueta || f.nombre) + ': ' + f.busqueda_texto + ' ' + TXT_BUSQUEDA + ' + ' + f.resenas_texto + ' ' + TXT_RESENAS); });
           fila('Claude: ' + d.claude_texto);
           fila(TXT_AVATARES + ': ' + d.avatares_texto);
           fila(TXT_TOTAL + ': ' + d.texto);
@@ -167,6 +193,11 @@
         })
         .catch(function () { if (mia === pedidas) out.textContent = '≈ ?'; });
     }
+    var todas = document.getElementById('inv-marcar-todas');
+    if (todas) todas.addEventListener('click', function () {
+      chips.forEach(function (x) { if (!x.disabled) x.checked = true; });
+      pintar();
+    });
     form.addEventListener('change', function () { porPais(); pintar(); });
     form.addEventListener('input', function (ev) { if (ev.target.type === 'number') pintar(); });
     form.addEventListener('submit', function (ev) {

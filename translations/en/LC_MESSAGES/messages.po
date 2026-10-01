@@ -17198,3 +17198,18 @@ msgstr "AliExpress reviews"
 
 msgid "sin búsquedas en el idioma de la tienda: se usaron las del país"
 msgstr "no searches in the store's language: the country's searches were used"
+
+msgid "Tiendas de %(pais)s"
+msgstr "Stores in %(pais)s"
+
+msgid "De otros mercados"
+msgstr "From other markets"
+
+msgid "Marcar todas"
+msgstr "Select all"
+
+msgid "otro mercado: %(pais)s"
+msgstr "other market: %(pais)s"
+
+msgid "%(n)s vendidos"
+msgstr "%(n)s sold"

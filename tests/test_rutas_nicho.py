@@ -682,3 +682,60 @@ def test_pagina_muestra_las_busquedas_por_idioma(app, llaves_inv):
     linea = html.split("Búsquedas:")[1].split("</p>")[0]
     assert "botella con horario" in linea and "<small>(en)</small>" in linea and "water bottle time marker" in linea
     assert "<small>(es)</small>" not in linea                                   # las del país no se repiten
+
+
+def _chip(html, clave):
+    """Lo que sigue a `value="<clave>"` dentro de su <input> (atributos)."""
+    return html.split(f'value="{clave}"')[1].split(">")[0]
+
+
+def _grupo(html, id_):
+    return html.split(f'id="{id_}"')[1].split("</fieldset>")[0]
+
+
+def test_tiendas_agrupadas_por_mercado(app, llaves_inv):
+    from nicho import datos, investigacion as inv
+    eid = datos.crear_estudio("acme", "X", tema="t", pais="CO")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    locales, otras = _grupo(html, "inv-tiendas-locales"), _grupo(html, "inv-tiendas-otras")
+    assert "Tiendas de Colombia" in locales and "De otros mercados" in otras
+    for clave in ("meli", "tiktok_shop", "aliexpress"):
+        assert f'value="{clave}"' in locales and f'value="{clave}"' not in otras and " checked" in _chip(locales, clave)
+    for clave in ("amazon", "walmart"):
+        assert f'value="{clave}"' in otras and f'value="{clave}"' not in locales and " checked" not in _chip(otras, clave)
+    assert "(Estados Unidos)" in otras and 'data-orden="0"' in _chip(otras, "amazon")
+    assert 'id="inv-marcar-todas"' in html and "Marcar todas" in html
+    r = app["c"].get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=CO&plataformas=meli&plataformas=walmart")
+    assert r.status_code == 200 and [f["etiqueta"] for f in r.get_json()["filas"]] == ["Mercado Libre", "Walmart (Estados Unidos)"]
+    eid_us = datos.crear_estudio("acme", "Y", tema="t", pais="US")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid_us}").data.decode()
+    locales, otras = _grupo(html, "inv-tiendas-locales"), _grupo(html, "inv-tiendas-otras")
+    assert all(f'value="{c}"' in locales for c in ("amazon", "walmart", "tiktok_shop", "aliexpress"))
+    assert 'value="meli"' in otras and "(México)" in otras
+    # la tabla de productos: nombre de la tienda y, sin número de reseñas, los vendidos
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("t", "CO", ["aliexpress"], [], inv.TOPES_DEFECTO, estimado={"total_usd": 1.0}))
+    datos.guardar_productos_nicho("acme", eid, "aliexpress", [{"fuente_id": "3256806541493299", "titulo": "Botella 1L", "n_resenas": None,
+                                                                "extra": {"vendidos": 4025}, "url": "https://www.aliexpress.com/item/3256806541493299.html"}])
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    tabla = html.split('class="tabla-apilada nicho-inv-tabla"')[1].split("</table>")[0]
+    assert "<td>AliExpress</td>" in tabla and "4025 vendidos" in tabla
+
+
+def test_comentarios_y_citas_de_otro_mercado_llevan_su_pais(app, llaves_inv):
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "Botellas", producto="Botella", tema="t", pais="CO")
+    datos.agregar_comentarios("acme", eid, "walmart", [
+        {"fuente_id": "w1", "texto": "la garrafa pesa demasiado, I returned it", "extra": {"producto": "1", "plataforma": "walmart", "pais": "US", "mercado": "otro"}},
+        {"fuente_id": "w2", "texto": "Too heavy for me", "extra": {"producto": "1", "plataforma": "walmart", "pais": "PL", "mercado": "otro"}}])
+    datos.agregar_comentarios("acme", eid, "meli", [{"fuente_id": "m1", "texto": "Me encanta la botella", "extra": {"pais": "CO", "mercado": "local"}}])
+    ids = {c["fuente_id"]: c["id"] for c in datos.comentarios_para_generar("acme", eid)}
+    assert datos.paises_otro_mercado("acme", eid) == {ids["w1"]: "US", ids["w2"]: "PL"}
+    assert datos.paises_otro_mercado_de("acme", [ids["w1"], ids["m1"]]) == {ids["w1"]: "US"} and datos.paises_otro_mercado_de("acme", []) == {}
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "otro mercado: Estados Unidos" in html and "otro mercado: PL" in html and html.count("otro mercado:") == 2
+    sub = {**SUB, "evidencia": [{"comentario_id": ids["w1"], "cita": "la garrafa pesa demasiado"}]}
+    datos.guardar_generacion("acme", eid, [{"nombre": "Sin peso", "deseo": "Quiero", "resumen": "r", "sub_avatares": [sub]}])
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "otro mercado: Estados Unidos" in html.split("«la garrafa pesa demasiado»")[1].split("</blockquote>")[0]
+    html = app["c"].get("/cliente/acme/nicho/avatares").data.decode()
+    assert "otro mercado: Estados Unidos" in html.split("«la garrafa pesa demasiado»")[1].split("</blockquote>")[0]

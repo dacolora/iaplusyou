@@ -372,6 +372,33 @@ def urls_de_comentarios(cliente, ids):
         return {int(f.id): f.url for f in con.execute(sa.select(c.c.id, c.c.url).where(c.c.cliente == cliente, c.c.id.in_(ids)))}
 
 
+def _paises_de_filas(filas):
+    salida = {}
+    for f in filas:
+        ex = f.extra if isinstance(f.extra, dict) else {}
+        if ex.get("mercado") == "otro" and ex.get("pais"):
+            salida[int(f.id)] = str(ex["pais"])[:2].upper()
+    return salida
+
+
+def paises_otro_mercado(cliente, estudio_id):
+    """{id: país} de los comentarios del estudio que son de otro mercado
+    (`extra.mercado == "otro"`, spec Parte 4 §3), para su etiqueta y la de sus citas."""
+    c = db.comentario
+    with db.conectar() as con:
+        return _paises_de_filas(con.execute(sa.select(c.c.id, c.c.extra).where(c.c.cliente == cliente, c.c.estudio_id == estudio_id)))
+
+
+def paises_otro_mercado_de(cliente, ids):
+    """Lo mismo para esos comentarios, de cualquier estudio del proyecto."""
+    ids = [int(i) for i in ids or []]
+    if not ids:
+        return {}
+    c = db.comentario
+    with db.conectar() as con:
+        return _paises_de_filas(con.execute(sa.select(c.c.id, c.c.extra).where(c.c.cliente == cliente, c.c.id.in_(ids))))
+
+
 # ----------------------------------------------------------- avatares ---
 
 def _lista_textos(v, n=8, largo=300):
