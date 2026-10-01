@@ -296,6 +296,22 @@ def test_la_pestana_trae_el_js_del_panel_y_el_css(app):
         assert clase in bloque, clase
 
 
+def test_el_select_asignar_a_color_ocupa_el_ancho_de_su_foto():
+    """Revisión final (prueba real, T17): «Asignar a color…» se cortaba a 92 px.
+    La celda de una foto de ambiente es más ancha, la foto la llena y el select
+    ocupa todo el ancho de su celda."""
+    import os
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    css = open(os.path.join(raiz, "static", "style.css"), encoding="utf-8").read()
+    bloque = css[css.index("Catálogo: galería y ficha"):]
+    celda = bloque.split(".cat-foto-general {", 1)[1].split("}", 1)[0]
+    assert "width: 8.5rem" in celda
+    foto = bloque.split(".cat-foto-general img {", 1)[1].split("}", 1)[0]
+    assert "width: 100%" in foto and "aspect-ratio: 1 / 1" in foto
+    select = bloque.split(".cat-foto-general .cat-form-mover select {", 1)[1].split("}", 1)[0]
+    assert "width: 100%" in select and "92px" not in select
+
+
 def test_cerrar_la_ficha_o_cambiar_de_pestana_no_pierde_lo_escrito(app):
     """Ruling I-7: Escape, el fondo y la ✕ preguntan si la ficha tiene campos
     sin guardar (data-sucio, base.html); salir de la pestaña con cambios solo

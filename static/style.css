@@ -2863,8 +2863,12 @@ body.panel-abierto { overflow: hidden; }
 .cat-color-ficha[aria-selected="true"] { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 1px var(--accent); }
 .cat-color-ficha span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-color-fotos { margin-top: .6rem; }
+/* Foto de ambiente: la celda es más ancha que una foto de referencia (92 px)
+   para que «Asignar a color…» se lea entero; la foto y el select la llenan. */
+.cat-foto-general { width: 8.5rem; }
+.cat-foto-general img { width: 100%; height: auto; aspect-ratio: 1 / 1; }
 .cat-foto-general .cat-form-mover { position: static; margin: .3rem 0 0; }
-.cat-foto-general .cat-form-mover select { font-size: .7rem; padding: .2rem .3rem; width: 92px; }
+.cat-foto-general .cat-form-mover select { font-size: .7rem; padding: .2rem .3rem; width: 100%; }
 .cat-nuevo-color { margin-top: .6rem; }
 .cat-nuevo-color form { display: grid; gap: .5rem; margin-top: .5rem; }
 .cat-crear-con { display: inline-flex; gap: .4rem; align-items: center; margin: 0; }
