@@ -100,7 +100,67 @@ PALABRAS_VENTANAS = (
 
 def casos_ventanas():
     from final_edition.motor import subtitulos
-    return [{"palabras": p, "esperado": subtitulos.ventanas(p)} for p in PALABRAS_VENTANAS]
+    casos = [{"palabras": p, "esperado": subtitulos.ventanas(p)} for p in PALABRAS_VENTANAS]
+    # D7: casos con `max_caracteres` (los tres parámetros van EXPLÍCITOS
+    # cuando no son los de por defecto, para que quien los consuma sepa con
+    # qué llamar a `ventanas`).
+    extra_parametros = (
+        [{"t_ms": 0, "dur_ms": 300, "texto": "Hola"}, {"t_ms": 300, "dur_ms": 300, "texto": "mundo"},
+         {"t_ms": 600, "dur_ms": 300, "texto": "extraordinario"}],
+        [{"t_ms": 0, "dur_ms": 300, "texto": "a" * 30}],
+    )
+    for p in extra_parametros:
+        casos.append({"palabras": p, "max_palabras": 4, "max_ms": 1800, "max_caracteres": 22,
+                     "esperado": subtitulos.ventanas(p, max_palabras=4, max_ms=1800, max_caracteres=22)})
+    return casos
+
+
+# --- eventos/estilos (D7, Tarea 2): la Tarea 3 escribe el espejo
+# static/editor/subtitulos.js (`eventos`/`estiloEfectivo`) contra esta tabla.
+_EV_PAL = [{"t_ms": 0, "dur_ms": 400, "texto": "Hola"}, {"t_ms": 400, "dur_ms": 500, "texto": "mundo"},
+          {"t_ms": 900, "dur_ms": 300, "texto": "esto"}, {"t_ms": 1200, "dur_ms": 300, "texto": "es"},
+          {"t_ms": 1500, "dur_ms": 400, "texto": "una"}, {"t_ms": 3000, "dur_ms": 400, "texto": "prueba"}]
+
+
+def _ev_sub(estilo_id, palabras, **extra):
+    return {"estilo_id": estilo_id, "posicion": 0.78, "palabras": palabras, **extra}
+
+
+def casos_eventos():
+    from final_edition.motor import subtitulos as sub_mod
+    casos = []
+
+    def agregar(nombre, sub):
+        casos.append({"nombre": nombre, "subtitulos": sub,
+                     "esperado": {"estilo": sub_mod.estilo_efectivo(sub), "eventos": sub_mod.eventos(sub)}})
+
+    agregar("karaoke por defecto: una palabra resaltada a la vez", _ev_sub("karaoke", _EV_PAL))
+    agregar("caja: una línea por ventana, sin resaltar", _ev_sub("caja", _EV_PAL))
+    agregar("minimal: tope de 5 palabras por línea",
+           _ev_sub("minimal", [{"t_ms": i * 100, "dur_ms": 50, "texto": c} for i, c in enumerate("abcdef")]))
+    agregar("palabra_grande: una palabra por línea, en mayúsculas, estirada", _ev_sub("palabra_grande", _EV_PAL))
+    agregar("escala 0.6 achica el tamaño", _ev_sub("karaoke", _EV_PAL[:2], escala=0.6))
+    agregar("escala 1.5 agranda el tamaño", _ev_sub("karaoke", _EV_PAL[:2], escala=1.5))
+    agregar("resaltado propio del documento", _ev_sub("karaoke", _EV_PAL[:1], resaltado="#3DDC84"))
+    agregar("caja no resalta aunque el documento pida un color", _ev_sub("caja", _EV_PAL[:1], resaltado="#3DDC84"))
+    agregar("palabra más larga que el tope achica SU línea (palabra_grande)",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 500, "texto": "extraordinariamente"}]))
+    agregar("mayúsculas con tildes, eñe y la ß alemana",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 300, "texto": "ñandú"},
+                                       {"t_ms": 2000, "dur_ms": 300, "texto": "acción"},
+                                       {"t_ms": 4000, "dur_ms": 300, "texto": "straße"}]))
+    agregar("líneas que se solapan: la primera termina donde empieza la segunda",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 1000, "texto": "Hola"},
+                                       {"t_ms": 800, "dur_ms": 200, "texto": "mundo"}]))
+    agregar("hueco de exactamente 600 ms: se estira hasta la siguiente",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 300, "texto": "Hola"},
+                                       {"t_ms": 900, "dur_ms": 200, "texto": "mundo"}]))
+    agregar("hueco de 601 ms: no se estira",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 300, "texto": "Hola"},
+                                       {"t_ms": 901, "dur_ms": 200, "texto": "mundo"}]))
+    agregar("sin palabras: sin eventos", _ev_sub("karaoke", []))
+    agregar("estilo desconocido cae a karaoke", _ev_sub("inventado", _EV_PAL[:1]))
+    return {"estilos": sub_mod.ESTILOS_ASS, "casos": casos}
 
 
 # --- subtitulos_fuente (editor, capa 5a, D1-D4): la Tarea 3 escribe el espejo
@@ -243,6 +303,7 @@ ARCHIVOS = {
     "ajuste_casos.json": casos_ajuste,
     "ventanas_casos.json": casos_ventanas,
     "subtitulos_fuente_casos.json": casos_subtitulos_fuente,
+    "subtitulos_eventos_casos.json": casos_eventos,
 }
 
 

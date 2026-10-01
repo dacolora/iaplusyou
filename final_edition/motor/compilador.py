@@ -397,11 +397,14 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
     plan.overlays = n_png
 
     # ---- subtítulos ASS ---------------------------------------------------
+    # Los eventos se calculan con TODO el documento y SOLO se recortan a la
+    # ventana del tramo adentro de `generar_ass` (D7): una línea que cruza la
+    # unión de dos tramos sale igual que sin tramos, completa desde 0 en el
+    # tramo donde continúa.
     if con_ass and (doc.get("subtitulos") or {}).get("palabras"):
-        palabras = [{**w, "t_ms": w["t_ms"] - desplaz} for w in doc["subtitulos"]["palabras"]
-                    if w["t_ms"] + w["dur_ms"] > desplaz and w["t_ms"] < ventana[1]]
-        if palabras:
-            plan.ass_texto = sub_mod.generar_ass({**doc["subtitulos"], "palabras": palabras}, doc["formato"])
+        ass_texto = sub_mod.generar_ass(doc["subtitulos"], doc["formato"], ventana=(desplaz, ventana[1]))
+        if ass_texto:
+            plan.ass_texto = ass_texto
             partes.append(f"{actual}subtitles='{_ruta_filtro(rutas['ass'])}':fontsdir='{_ruta_filtro(FONTSDIR)}'[os]")
             actual = "[os]"
     partes.append(f"{actual}format=yuv420p[vout]")

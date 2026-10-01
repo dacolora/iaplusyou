@@ -10,20 +10,27 @@ function limpiar(texto) {
   return String(texto ?? "").replaceAll("{", "(").replaceAll("}", ")").replace(/\s+/g, " ").trim();
 }
 
-export function ventanas(palabras, maxPalabras = 4, maxMs = 1800) {
+// maxCaracteres (D7, capa 5a): la ventana también se cierra si la palabra
+// siguiente la haría pasar de ese largo (las palabras limpias, unidas por un
+// espacio); una palabra sola siempre entra. `null`/`undefined` = sin tope,
+// como antes de esta regla (espejo de motor/subtitulos.ventanas).
+export function ventanas(palabras, maxPalabras = 4, maxMs = 1800, maxCaracteres = null) {
   const out = [];
   let actual = [];
   for (const p of [...palabras].sort((a, b) => Number(a.t_ms) - Number(b.t_ms))) {
+    const textoP = limpiar(p.texto);
     if (actual.length) {
       const ult = actual[actual.length - 1];
       const finPrev = ult.t_ms + ult.dur_ms;
       const durSiEntra = p.t_ms + p.dur_ms - actual[0].t_ms;
-      if (actual.length >= maxPalabras || p.t_ms - finPrev > HUECO_MAX_MS || durSiEntra >= maxMs) {
+      const cierraPorCaracteres = maxCaracteres != null &&
+        `${actual.map((a) => a.texto).join(" ")} ${textoP}`.length > maxCaracteres;
+      if (actual.length >= maxPalabras || p.t_ms - finPrev > HUECO_MAX_MS || durSiEntra >= maxMs || cierraPorCaracteres) {
         out.push(actual);
         actual = [];
       }
     }
-    actual.push({ t_ms: Number(p.t_ms), dur_ms: Number(p.dur_ms), texto: limpiar(p.texto) });
+    actual.push({ t_ms: Number(p.t_ms), dur_ms: Number(p.dur_ms), texto: textoP });
   }
   if (actual.length) out.push(actual);
   return out.map((v) => ({ t_ms: v[0].t_ms, dur_ms: v[v.length - 1].t_ms + v[v.length - 1].dur_ms - v[0].t_ms, palabras: v }));

@@ -1,0 +1,1129 @@
+{
+ "casos": [
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "contorno": "&H00000000&",
+     "fondo": "&H66000000&",
+     "grosor": 0,
+     "id": "karaoke",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 0,
+     "tam_base_px": 64
+    },
+    "eventos": [
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "Hola"
+       },
+       {
+        "resaltada": false,
+        "texto": "mundo"
+       },
+       {
+        "resaltada": false,
+        "texto": "esto"
+       },
+       {
+        "resaltada": false,
+        "texto": "es"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 64
+     },
+     {
+      "dur_ms": 500,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "Hola"
+       },
+       {
+        "resaltada": true,
+        "texto": "mundo"
+       },
+       {
+        "resaltada": false,
+        "texto": "esto"
+       },
+       {
+        "resaltada": false,
+        "texto": "es"
+       }
+      ],
+      "t_ms": 400,
+      "tam_px": 64
+     },
+     {
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "Hola"
+       },
+       {
+        "resaltada": false,
+        "texto": "mundo"
+       },
+       {
+        "resaltada": true,
+        "texto": "esto"
+       },
+       {
+        "resaltada": false,
+        "texto": "es"
+       }
+      ],
+      "t_ms": 900,
+      "tam_px": 64
+     },
+     {
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "Hola"
+       },
+       {
+        "resaltada": false,
+        "texto": "mundo"
+       },
+       {
+        "resaltada": false,
+        "texto": "esto"
+       },
+       {
+        "resaltada": true,
+        "texto": "es"
+       }
+      ],
+      "t_ms": 1200,
+      "tam_px": 64
+     },
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "una"
+       }
+      ],
+      "t_ms": 1500,
+      "tam_px": 64
+     },
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "prueba"
+       }
+      ],
+      "t_ms": 3000,
+      "tam_px": 64
+     }
+    ]
+   },
+   "nombre": "karaoke por defecto: una palabra resaltada a la vez",
+   "subtitulos": {
+    "estilo_id": "karaoke",
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 500,
+      "t_ms": 400,
+      "texto": "mundo"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 900,
+      "texto": "esto"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 1200,
+      "texto": "es"
+     },
+     {
+      "dur_ms": 400,
+      "t_ms": 1500,
+      "texto": "una"
+     },
+     {
+      "dur_ms": 400,
+      "t_ms": 3000,
+      "texto": "prueba"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "contorno": "&H00000000&",
+     "fondo": "&H4D000000&",
+     "grosor": 0,
+     "id": "caja",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": null,
+     "sombra": 0,
+     "tam_base_px": 60
+    },
+    "eventos": [
+     {
+      "dur_ms": 1500,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "Hola"
+       },
+       {
+        "resaltada": false,
+        "texto": "mundo"
+       },
+       {
+        "resaltada": false,
+        "texto": "esto"
+       },
+       {
+        "resaltada": false,
+        "texto": "es"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 60
+     },
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "una"
+       }
+      ],
+      "t_ms": 1500,
+      "tam_px": 60
+     },
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "prueba"
+       }
+      ],
+      "t_ms": 3000,
+      "tam_px": 60
+     }
+    ]
+   },
+   "nombre": "caja: una línea por ventana, sin resaltar",
+   "subtitulos": {
+    "estilo_id": "caja",
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 500,
+      "t_ms": 400,
+      "texto": "mundo"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 900,
+      "texto": "esto"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 1200,
+      "texto": "es"
+     },
+     {
+      "dur_ms": 400,
+      "t_ms": 1500,
+      "texto": "una"
+     },
+     {
+      "dur_ms": 400,
+      "t_ms": 3000,
+      "texto": "prueba"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 1,
+     "contorno": "&H00000000&",
+     "fondo": "&H00000000&",
+     "grosor": 2,
+     "id": "minimal",
+     "mayusculas": false,
+     "negrita": 0,
+     "primario": "&H00FFFFFF&",
+     "resaltado": null,
+     "sombra": 0,
+     "tam_base_px": 52
+    },
+    "eventos": [
+     {
+      "dur_ms": 500,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "a"
+       },
+       {
+        "resaltada": false,
+        "texto": "b"
+       },
+       {
+        "resaltada": false,
+        "texto": "c"
+       },
+       {
+        "resaltada": false,
+        "texto": "d"
+       },
+       {
+        "resaltada": false,
+        "texto": "e"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 52
+     },
+     {
+      "dur_ms": 50,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "f"
+       }
+      ],
+      "t_ms": 500,
+      "tam_px": 52
+     }
+    ]
+   },
+   "nombre": "minimal: tope de 5 palabras por línea",
+   "subtitulos": {
+    "estilo_id": "minimal",
+    "palabras": [
+     {
+      "dur_ms": 50,
+      "t_ms": 0,
+      "texto": "a"
+     },
+     {
+      "dur_ms": 50,
+      "t_ms": 100,
+      "texto": "b"
+     },
+     {
+      "dur_ms": 50,
+      "t_ms": 200,
+      "texto": "c"
+     },
+     {
+      "dur_ms": 50,
+      "t_ms": 300,
+      "texto": "d"
+     },
+     {
+      "dur_ms": 50,
+      "t_ms": 400,
+      "texto": "e"
+     },
+     {
+      "dur_ms": 50,
+      "t_ms": 500,
+      "texto": "f"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 1,
+     "contorno": "&H00000000&",
+     "fondo": "&H80000000&",
+     "grosor": 5,
+     "id": "palabra_grande",
+     "mayusculas": true,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 3,
+     "tam_base_px": 110
+    },
+    "eventos": [
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "HOLA"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 500,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "MUNDO"
+       }
+      ],
+      "t_ms": 400,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "ESTO"
+       }
+      ],
+      "t_ms": 900,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "ES"
+       }
+      ],
+      "t_ms": 1200,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "UNA"
+       }
+      ],
+      "t_ms": 1500,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "PRUEBA"
+       }
+      ],
+      "t_ms": 3000,
+      "tam_px": 110
+     }
+    ]
+   },
+   "nombre": "palabra_grande: una palabra por línea, en mayúsculas, estirada",
+   "subtitulos": {
+    "estilo_id": "palabra_grande",
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 500,
+      "t_ms": 400,
+      "texto": "mundo"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 900,
+      "texto": "esto"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 1200,
+      "texto": "es"
+     },
+     {
+      "dur_ms": 400,
+      "t_ms": 1500,
+      "texto": "una"
+     },
+     {
+      "dur_ms": 400,
+      "t_ms": 3000,
+      "texto": "prueba"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "contorno": "&H00000000&",
+     "fondo": "&H66000000&",
+     "grosor": 0,
+     "id": "karaoke",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 0,
+     "tam_base_px": 38
+    },
+    "eventos": [
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "Hola"
+       },
+       {
+        "resaltada": false,
+        "texto": "mundo"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 38
+     },
+     {
+      "dur_ms": 500,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "Hola"
+       },
+       {
+        "resaltada": true,
+        "texto": "mundo"
+       }
+      ],
+      "t_ms": 400,
+      "tam_px": 38
+     }
+    ]
+   },
+   "nombre": "escala 0.6 achica el tamaño",
+   "subtitulos": {
+    "escala": 0.6,
+    "estilo_id": "karaoke",
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 500,
+      "t_ms": 400,
+      "texto": "mundo"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "contorno": "&H00000000&",
+     "fondo": "&H66000000&",
+     "grosor": 0,
+     "id": "karaoke",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 0,
+     "tam_base_px": 96
+    },
+    "eventos": [
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "Hola"
+       },
+       {
+        "resaltada": false,
+        "texto": "mundo"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 96
+     },
+     {
+      "dur_ms": 500,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "Hola"
+       },
+       {
+        "resaltada": true,
+        "texto": "mundo"
+       }
+      ],
+      "t_ms": 400,
+      "tam_px": 96
+     }
+    ]
+   },
+   "nombre": "escala 1.5 agranda el tamaño",
+   "subtitulos": {
+    "escala": 1.5,
+    "estilo_id": "karaoke",
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 500,
+      "t_ms": 400,
+      "texto": "mundo"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "contorno": "&H00000000&",
+     "fondo": "&H66000000&",
+     "grosor": 0,
+     "id": "karaoke",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#3DDC84",
+     "sombra": 0,
+     "tam_base_px": 64
+    },
+    "eventos": [
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "Hola"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 64
+     }
+    ]
+   },
+   "nombre": "resaltado propio del documento",
+   "subtitulos": {
+    "estilo_id": "karaoke",
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     }
+    ],
+    "posicion": 0.78,
+    "resaltado": "#3DDC84"
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "contorno": "&H00000000&",
+     "fondo": "&H4D000000&",
+     "grosor": 0,
+     "id": "caja",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": null,
+     "sombra": 0,
+     "tam_base_px": 60
+    },
+    "eventos": [
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": false,
+        "texto": "Hola"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 60
+     }
+    ]
+   },
+   "nombre": "caja no resalta aunque el documento pida un color",
+   "subtitulos": {
+    "estilo_id": "caja",
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     }
+    ],
+    "posicion": 0.78,
+    "resaltado": "#3DDC84"
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 1,
+     "contorno": "&H00000000&",
+     "fondo": "&H80000000&",
+     "grosor": 5,
+     "id": "palabra_grande",
+     "mayusculas": true,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 3,
+     "tam_base_px": 110
+    },
+    "eventos": [
+     {
+      "dur_ms": 500,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "EXTRAORDINARIAMENTE"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 58
+     }
+    ]
+   },
+   "nombre": "palabra más larga que el tope achica SU línea (palabra_grande)",
+   "subtitulos": {
+    "estilo_id": "palabra_grande",
+    "palabras": [
+     {
+      "dur_ms": 500,
+      "t_ms": 0,
+      "texto": "extraordinariamente"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 1,
+     "contorno": "&H00000000&",
+     "fondo": "&H80000000&",
+     "grosor": 5,
+     "id": "palabra_grande",
+     "mayusculas": true,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 3,
+     "tam_base_px": 110
+    },
+    "eventos": [
+     {
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "ÑANDÚ"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "ACCIÓN"
+       }
+      ],
+      "t_ms": 2000,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "STRASSE"
+       }
+      ],
+      "t_ms": 4000,
+      "tam_px": 110
+     }
+    ]
+   },
+   "nombre": "mayúsculas con tildes, eñe y la ß alemana",
+   "subtitulos": {
+    "estilo_id": "palabra_grande",
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "ñandú"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 2000,
+      "texto": "acción"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 4000,
+      "texto": "straße"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 1,
+     "contorno": "&H00000000&",
+     "fondo": "&H80000000&",
+     "grosor": 5,
+     "id": "palabra_grande",
+     "mayusculas": true,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 3,
+     "tam_base_px": 110
+    },
+    "eventos": [
+     {
+      "dur_ms": 800,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "HOLA"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 200,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "MUNDO"
+       }
+      ],
+      "t_ms": 800,
+      "tam_px": 110
+     }
+    ]
+   },
+   "nombre": "líneas que se solapan: la primera termina donde empieza la segunda",
+   "subtitulos": {
+    "estilo_id": "palabra_grande",
+    "palabras": [
+     {
+      "dur_ms": 1000,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 200,
+      "t_ms": 800,
+      "texto": "mundo"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 1,
+     "contorno": "&H00000000&",
+     "fondo": "&H80000000&",
+     "grosor": 5,
+     "id": "palabra_grande",
+     "mayusculas": true,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 3,
+     "tam_base_px": 110
+    },
+    "eventos": [
+     {
+      "dur_ms": 900,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "HOLA"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 200,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "MUNDO"
+       }
+      ],
+      "t_ms": 900,
+      "tam_px": 110
+     }
+    ]
+   },
+   "nombre": "hueco de exactamente 600 ms: se estira hasta la siguiente",
+   "subtitulos": {
+    "estilo_id": "palabra_grande",
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 200,
+      "t_ms": 900,
+      "texto": "mundo"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 1,
+     "contorno": "&H00000000&",
+     "fondo": "&H80000000&",
+     "grosor": 5,
+     "id": "palabra_grande",
+     "mayusculas": true,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 3,
+     "tam_base_px": 110
+    },
+    "eventos": [
+     {
+      "dur_ms": 300,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "HOLA"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 110
+     },
+     {
+      "dur_ms": 200,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "MUNDO"
+       }
+      ],
+      "t_ms": 901,
+      "tam_px": 110
+     }
+    ]
+   },
+   "nombre": "hueco de 601 ms: no se estira",
+   "subtitulos": {
+    "estilo_id": "palabra_grande",
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 200,
+      "t_ms": 901,
+      "texto": "mundo"
+     }
+    ],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "contorno": "&H00000000&",
+     "fondo": "&H66000000&",
+     "grosor": 0,
+     "id": "karaoke",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 0,
+     "tam_base_px": 64
+    },
+    "eventos": []
+   },
+   "nombre": "sin palabras: sin eventos",
+   "subtitulos": {
+    "estilo_id": "karaoke",
+    "palabras": [],
+    "posicion": 0.78
+   }
+  },
+  {
+   "esperado": {
+    "estilo": {
+     "borde": 3,
+     "contorno": "&H00000000&",
+     "fondo": "&H66000000&",
+     "grosor": 0,
+     "id": "karaoke",
+     "mayusculas": false,
+     "negrita": -1,
+     "primario": "&H00FFFFFF&",
+     "resaltado": "#FFD400",
+     "sombra": 0,
+     "tam_base_px": 64
+    },
+    "eventos": [
+     {
+      "dur_ms": 400,
+      "palabras": [
+       {
+        "resaltada": true,
+        "texto": "Hola"
+       }
+      ],
+      "t_ms": 0,
+      "tam_px": 64
+     }
+    ]
+   },
+   "nombre": "estilo desconocido cae a karaoke",
+   "subtitulos": {
+    "estilo_id": "inventado",
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     }
+    ],
+    "posicion": 0.78
+   }
+  }
+ ],
+ "estilos": {
+  "caja": {
+   "borde": 3,
+   "contorno": "&H00000000&",
+   "fondo": "&H4D000000&",
+   "grosor": 0,
+   "max_caracteres": 22,
+   "max_palabras": 4,
+   "mayusculas": false,
+   "negrita": -1,
+   "primario": "&H00FFFFFF&",
+   "resalta": false,
+   "resaltado": null,
+   "sombra": 0,
+   "tam": 60
+  },
+  "karaoke": {
+   "borde": 3,
+   "contorno": "&H00000000&",
+   "fondo": "&H66000000&",
+   "grosor": 0,
+   "max_caracteres": 22,
+   "max_palabras": 4,
+   "mayusculas": false,
+   "negrita": -1,
+   "primario": "&H00FFFFFF&",
+   "resalta": true,
+   "resaltado": "#FFD400",
+   "sombra": 0,
+   "tam": 64
+  },
+  "minimal": {
+   "borde": 1,
+   "contorno": "&H00000000&",
+   "fondo": "&H00000000&",
+   "grosor": 2,
+   "max_caracteres": 28,
+   "max_palabras": 5,
+   "mayusculas": false,
+   "negrita": 0,
+   "primario": "&H00FFFFFF&",
+   "resalta": false,
+   "resaltado": null,
+   "sombra": 0,
+   "tam": 52
+  },
+  "palabra_grande": {
+   "borde": 1,
+   "contorno": "&H00000000&",
+   "fondo": "&H80000000&",
+   "grosor": 5,
+   "max_caracteres": 10,
+   "max_palabras": 1,
+   "mayusculas": true,
+   "negrita": -1,
+   "primario": "&H00FFFFFF&",
+   "resalta": true,
+   "resaltado": "#FFD400",
+   "sombra": 3,
+   "tam": 110
+  }
+ }
+}

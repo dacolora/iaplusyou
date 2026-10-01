@@ -6,7 +6,10 @@ import { colorAss, estadoKaraoke, ventanaEn, ventanas } from "../../static/edito
 const CASOS = JSON.parse(readFileSync(new URL("../fixtures/ventanas_casos.json", import.meta.url), "utf8"));
 
 test("ventanas agrupa igual que motor/subtitulos.ventanas", () => {
-  for (const c of CASOS) assert.deepEqual(ventanas(c.palabras), c.esperado, JSON.stringify(c.palabras));
+  for (const c of CASOS) {
+    const v = ventanas(c.palabras, c.max_palabras ?? 4, c.max_ms ?? 1800, c.max_caracteres ?? null);
+    assert.deepEqual(v, c.esperado, JSON.stringify(c.palabras));
+  }
 });
 
 test("ventanaEn es [t, t + dur)", () => {

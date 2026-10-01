@@ -45,6 +45,7 @@ def test_config_navegador_sale_de_los_modulos():
     assert cfg["mezcla"]["ducking_sonido"] == mezcla.DUCKING_VOZ_SOBRE_SONIDO
     assert (cfg["mezcla"]["vol_musica_sola"], cfg["mezcla"]["vol_musica_con_sonido"]) == (mezcla.VOL_MUSICA_SOLA, mezcla.VOL_MUSICA_CON_SONIDO)
     assert cfg["subtitulos"]["estilos"] == subtitulos.ESTILOS_ASS
+    assert cfg["subtitulos"]["estilos"]["palabra_grande"]["max_palabras"] == 1
     assert cfg["subtitulos"]["em_por_tam"] == subtitulos.escala_libass()
     assert {"Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"} <= set(cfg["fuentes"])
     json.dumps(cfg)
