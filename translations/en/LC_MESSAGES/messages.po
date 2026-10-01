@@ -11342,7 +11342,7 @@ msgid "Sin conexión: no se pudo subir. Vuelve a intentar."
 msgstr "No connection: couldn't upload. Try again."
 
 msgid "Sin conexión: se guarda con el próximo cambio."
-msgstr "No connection: it saves with the next change."
+msgstr "No connection: it'll be saved with your next change."
 
 msgid "Sin datos suficientes"
 msgstr "Not enough data"
@@ -14211,7 +14211,7 @@ msgstr "the product can only be described to it in text, not shown to it"
 
 #, python-brace-format
 msgid "el servidor falló (error {status}): se guarda con el próximo cambio."
-msgstr "the server failed (error {status}): it saves with the next change."
+msgstr "the server failed (error {status}): it'll be saved with your next change."
 
 msgid "el video"
 msgstr "the video"
@@ -15962,7 +15962,7 @@ msgstr "Delete “%(nombre)s” from My music? Videos already made keep their au
 
 #, python-brace-format
 msgid "¿Borrar «{nombre}»? Sale de tus archivos y no se puede deshacer."
-msgstr "Delete “{nombre}”? It leaves your files and can't be undone."
+msgstr "Delete “{nombre}”? It's removed from your files and can't be undone."
 
 msgid "¿Cambiar de forma? Tu conexión actual sigue viva hasta que conectes por la agencia; ahí queda guardada como respaldo."
 msgstr "Change form? Your current connection stays alive until you connect through the agency; then it's kept as a backup."
