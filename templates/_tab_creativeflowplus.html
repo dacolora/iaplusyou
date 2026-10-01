@@ -190,7 +190,18 @@
       {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
          cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
          quien tiene una idea pero quiere que la IA arme los planos. Nunca obligatorio. #}
-      <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('¿No sabes qué escribir?') }} <strong>{{ _('Crear super prompt con IA (gratis)') }}</strong></button>
+      <div class="crear-super" data-solo-video>
+        <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('¿No sabes qué escribir?') }} <strong>{{ _('Crear super prompt con IA (gratis)') }}</strong></button>
+        {# Receta de tomas (Etapa 3 del director, 2026-09-30): solo la usa «Crear
+           super prompt»; «Generar video» manda el texto tal cual. #}
+        <label class="crear-receta"><span>{{ _('Receta de tomas') }}</span>
+          <select name="plantilla" id="fp-plantilla">
+            <option value="">{{ _('Sin receta') }}</option>
+            {% for p in plantillas_anuncio %}<option value="{{ p.id }}" data-desc="{{ p.descripcion|traducir }}"{% if p.requiere_video %} data-requiere-video{% endif %}>{{ p.nombre|traducir }}</option>{% endfor %}
+          </select>
+        </label>
+        <p class="crear-nota crear-receta-desc" id="fp-plantilla-desc" hidden></p>
+      </div>
       {# Sin variables quemadas (2026-09-28): todo vuelve a los valores del proyecto y la bandeja se vacía. #}
       <button type="button" class="crear-enlace crear-enlace-gris" id="fp-empezar" title="{{ _('Vacía el texto, el sonido, la música, la bandeja y el catálogo; la duración, el modelo y el formato vuelven a los del proyecto.') }}">{{ _('Empezar de cero') }}</button>
     </div>
@@ -378,6 +389,7 @@
       if (inicioInput && prefill.musica_inicio_s) inicioInput.value = prefill.musica_inicio_s;
       var ca = document.getElementById('fp-calidad'); if (ca) ca.checked = prefill.calidad === 'borrador';
       var me = document.getElementById('fp-mejorar'); if (me) me.checked = !!prefill.mejorar_prompt;
+      var pl = document.getElementById('fp-plantilla'); if (pl && prefill.plantilla) pl.value = prefill.plantilla;
       setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
     }
     // Lo que el modelo admite manda: duraciones fuera de su rango y formatos que
@@ -440,6 +452,23 @@
       var total = segs.reduce(function (a, d) { return a + Math.min(15, Math.max(1, d)); }, 0);
       return Math.ceil(Math.min(15, total) - 1e-9);
     }
+    // Receta de tomas: «Recrear mi video de referencia» necesita un video en la
+    // bandeja y Wan 3.0 (el único que recibe el video como video); el servidor
+    // lo vuelve a revisar. La descripción de la receta elegida va debajo.
+    var receta = document.getElementById('fp-plantilla');
+    var recetaDesc = document.getElementById('fp-plantilla-desc');
+    function pintarReceta(m, esImagen) {
+      if (!receta) return;
+      var conVideo = !!(m && m.value === 'wan3' && document.querySelector('#fp-bandeja-wrap #fp-bandeja figure.es-video'));
+      Array.prototype.forEach.call(receta.options, function (o) {
+        if (o.hasAttribute('data-requiere-video')) o.disabled = !conVideo;
+      });
+      if (receta.selectedOptions.length && receta.selectedOptions[0].disabled) receta.value = '';
+      var o = receta.selectedOptions[0];
+      var elegida = !!(o && o.value) && !esImagen;
+      recetaDesc.hidden = !elegida;
+      recetaDesc.textContent = elegida ? o.dataset.desc + ' ' + {{ _('Se usa al crear el super prompt; «Generar video» manda tu texto tal cual.')|tojson }} : '';
+    }
     function refrescar() {
       var esImagen = tipoActual() === 'imagen';
       comp.querySelectorAll('[data-solo-video]').forEach(function (el) { el.hidden = esImagen; });
@@ -447,6 +476,7 @@
       var m = modeloActual();
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
+      pintarReceta(m, esImagen);
       var usd = 0;
       var conSonido = document.getElementById('fp-check-sonido');
       if (m) {
@@ -474,7 +504,7 @@
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
     form.addEventListener('change', function (e) { if (e.target.name === 'productos_catalogo') refrescar(); });
-    ['fp-check-sonido', 'fp-musica', 'fp-calidad', 'fp-mejorar'].forEach(function (id) {
+    ['fp-check-sonido', 'fp-musica', 'fp-calidad', 'fp-mejorar', 'fp-plantilla'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', refrescar);
     });

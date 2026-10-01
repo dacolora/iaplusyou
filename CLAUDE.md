@@ -427,7 +427,15 @@ the whole tray is used and emptied, as before.
 Las referencias se nombran `Image N` / `Video N` (`flowplus_prompt.asignar_tokens`,
 por modelo: Wan recibe los videos aparte). Spec:
 `docs/superpowers/specs/2026-09-18-director-prompts-crear-design.md` (Etapa 1 hecha;
-presets de cámara y plantillas de anuncio son las Etapas 2 y 3).
+presets de cámara, Etapa 2, pendiente). **Etapa 3, recetas de tomas (2026-09-30):**
+`plantillas_anuncio.py` (8 recetas: «Antes y después» + las 7 del spec §9; datos puros +
+`actos_en_segundos`, `n_planos`, `bloque_director`) y el selector «Receta de tomas» pegado a «Crear super
+prompt» en Crear (`name="plantilla"`). Solo cuenta con `modo_prompt=director`: el «Generar video» directo la
+ignora y guarda `plantilla=None`. Con receta, el enfoque lo fija la receta (si tiene; una pieza sin
+referencias sigue `libre`), `director._mensaje` recibe los actos ya en segundos y `director.compilar` pide al
+menos un plano por acto (nunca más de uno cada 2 s); «Recrear mi video de referencia» exige un `Video N`
+(video en la bandeja con Wan 3.0) en el navegador y otra vez en `cf_crear_video`. Sprints sigue con
+`banco_prompts.py`.
 **Menciones y recuperación (incidente 2026-09-28,** 6 de 12 videos del día fallaron y los buenos traían
 personajes dobles y el dibujo de otro clip**):** `flowplus_prompt.sustituir_tokens` entiende todo lo que la
 gente pega de otras herramientas (`@Image1`, `@Image 1`, `@[Image 1](image_1)`, `@image_4`, cualquier
