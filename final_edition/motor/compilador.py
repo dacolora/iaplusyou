@@ -24,13 +24,34 @@ Si la pista principal termina antes que el tramo (la voz sigue después del
 el video nunca acaba antes que el audio.
 
 Ken Burns: `ken_burns` en un clip de la principal agrega `zoompan`
-(1.0→1.08) tras `fps=`; `on` se desplaza por la ventana del tramo.
+(1.0→1.08) tras `fps=`; `on` se desplaza por la ventana del tramo. Va
+DESPUÉS del encuadre, sobre el cuadro ya compuesto.
+
+Fotos en la principal (capa 5b, D2): un clip con `foto: true` entra con la
+copia preparada `rutas["foto:<material_id>"]` (`final_edition.fotos`), SIN
+`-ss/-t` ni `-loop 1` (con `-loop 1` el demuxer decodifica el archivo en
+cada cuadro): se encuadra una vez y el filtro `loop` repite en memoria ese
+cuadro ya escalado tantas veces como cuadros se ven en el tramo más la cola
+de su transición. Su cola nunca se acaba, así que `verificar_recortes` la
+salta.
+
+Encuadre (capa 5b, D4/D5, `final_edition.encuadre`): sin `encuadre`, el
+llenado de siempre (`scale=…:force_original_aspect_ratio=increase,crop=…`,
+el mismo texto de antes); en «llenar», `scale` a la caja y `crop` donde se
+ve; en «ajustar», `split`: una copia llena un lienzo chico, se desenfoca
+(`boxblur`) y se agranda al lienzo, y la otra (el cuadro entero, a la caja)
+va encima con `overlay`. La caja sale de `ancho_px`/`alto_px` del clip (las
+medidas que se VEN, estampadas por `tareas.edicion.preparar_rutas`). Toda
+cadena de la principal termina en `setsar=1` (D3): `scale`/`crop` dejan la
+proporción de píxel que compensa el redondeo y `concat` exige la misma en
+sus dos entradas.
 
 Capas (PNG de texto e imágenes): cada una se escala a la caja que da
 `geometria.caja` (`scale=w:h`, misma regla de píxeles que el navegador) y,
 con `opacidad < 1`, se atenúa el alfa (`format=rgba,colorchannelmixer=aa=`).
 `rotacion` NO se renderiza en la capa 1 (ni `superpuesto`, el PIP: `compilar`
-lo rechaza con un error explícito; ni `marca.marca_de_agua`).
+lo rechaza con un error explícito — se aplaza, spec 5b D14 —; ni
+`marca.marca_de_agua`).
 
 Keyframes: solo x/y se interpretan aquí (expresiones lineales por tramos en
 t); escala, opacidad y rotación por keyframe quedan para cuando las
@@ -56,7 +77,7 @@ from dataclasses import dataclass, field
 from flask_babel import gettext
 
 import final_edition
-from final_edition import geometria, mezcla
+from final_edition import encuadre as encuadre_mod, geometria, mezcla
 from final_edition.documento import FORMATOS, duracion_ms, pista_principal
 from final_edition.motor import subtitulos as sub_mod
 
@@ -201,6 +222,41 @@ def _expr_posicion(cl, keyframes, capa_w, capa_h, formato, desplaz, caja_defecto
     return _expr_piecewise(pts_x), _expr_piecewise(pts_y)
 
 
+def _encuadre(cabeza, cl, i, ancho, alto):
+    """Las sentencias del encuadre del clip `i` de la principal (spec 5b
+    §2.3). `cabeza` es el comienzo de su cadena (`[idx:v]` y, en un video,
+    su `setpts=…,`); la última sentencia queda ABIERTA para que quien llama
+    siga la cadena (`,fps=…` o el `loop` de una foto). Sin `encuadre`, el
+    llenado de siempre — el mismo texto que antes de la capa 5b."""
+    enc = cl.get("encuadre")
+    if not enc:
+        return [f"{cabeza}scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto}"]
+    w, h = cl.get("ancho_px"), cl.get("alto_px")
+    if not w or not h:
+        raise ValueError(gettext("Falta el tamaño del clip «%(clip)s» para su encuadre.", clip=cl["id"]))
+    k = encuadre_mod.caja(int(w), int(h), ancho, alto, enc)
+    if encuadre_mod.completo(enc)["modo"] == "llenar":
+        return [f"{cabeza}scale={k['sw']}:{k['sh']},crop={ancho}:{alto}:{-k['px']}:{-k['py']}"]
+    fw, fh = encuadre_mod.fondo(ancho, alto)
+    return [f"{cabeza}split=2[f{i}a][f{i}b]",
+            f"[f{i}a]scale={fw}:{fh}:force_original_aspect_ratio=increase,crop={fw}:{fh},"
+            f"boxblur=luma_radius={encuadre_mod.FONDO_RADIO}:luma_power={encuadre_mod.FONDO_PASADAS},"
+            f"scale={ancho}:{alto},setsar=1[f{i}c]",
+            f"[f{i}b]scale={k['sw']}:{k['sh']},setsar=1[f{i}d]",
+            f"[f{i}c][f{i}d]overlay=x={k['px']}:y={k['py']}"]
+
+
+def _cadena_principal(sentencias, resto):
+    """Cierra la última sentencia (abierta) del encuadre con `resto`."""
+    return sentencias[:-1] + [sentencias[-1] + resto]
+
+
+def _clave_ruta(cl):
+    """La clave de `rutas` de un clip de la principal: la copia preparada
+    `foto:<material_id>` para una foto, el material tal cual para un video."""
+    return f"foto:{cl['material_id']}" if cl.get("foto") else cl["material_id"]
+
+
 def _clips_en(pista, ventana):
     a, b = ventana
     return [cl for cl in pista.get("clips") or [] if cl["inicio_ms"] < b and cl["inicio_ms"] + cl["duracion_ms"] > a]
@@ -221,7 +277,9 @@ def verificar_recortes(doc, duraciones):
       - un clip de video/audio que pide más fuente de la que hay
         (`recorte.desde_ms + duracion_ms × velocidad > material`) →
         ValueError con el nombre del clip; la música no cuenta (entra con
-        `-stream_loop -1`, así que nunca se acaba);
+        `-stream_loop -1`, así que nunca se acaba), ni una foto de la
+        principal (capa 5b: no tiene tiempo de fuente y su cola sale del
+        mismo `loop`);
       - la cola de una transición de la pista principal (`+ d × velocidad`
         de fuente) que no cabe se recorta a lo que queda, en ms de SALIDA;
         si no queda nada, la transición pasa a corte seco (`None`)."""
@@ -234,6 +292,8 @@ def verificar_recortes(doc, duraciones):
             clips = sorted(clips, key=lambda c: c["inicio_ms"])
         for i, cl in enumerate(clips):
             if p["tipo"] == "audio" and (cl.get("rol_audio") or "subida") == "musica":
+                continue
+            if cl.get("foto"):
                 continue
             mid = cl.get("material_id")
             if mid not in duraciones or duraciones[mid] is None:
@@ -268,7 +328,7 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
     partes = []
     pistas = [p for p in doc["pistas"] if not p.get("oculta")]
     if any(p["tipo"] == "superpuesto" and p.get("clips") for p in pistas):
-        raise ValueError("El video superpuesto (PIP) llega en la capa 4.")
+        raise ValueError(gettext("El video encima de otro video todavía no se puede producir."))
 
     # ---- pista principal (video o imagen) ---------------------------------
     principal = pista_principal(doc)
@@ -281,8 +341,8 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
     if not clips_v:
         raise ValueError("El documento no tiene nada en la pista principal en este tramo.")
     for cl in clips_v:
-        if cl["material_id"] not in rutas:
-            raise ValueError(f"Falta la ruta del material '{cl['material_id']}' de la pista principal.")
+        if _clave_ruta(cl) not in rutas:
+            raise ValueError(f"Falta la ruta del material '{_clave_ruta(cl)}' de la pista principal.")
     if principal["tipo"] == "imagen":
         # Una imagen no tiene línea de tiempo: una sola fuente, una sola
         # entrada (el carrusel de varias páginas llega en la capa 6).
@@ -311,6 +371,19 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             hasta += round(tr_siguiente.get("duracion_ms", 0) * vel)
         if principal["tipo"] == "imagen":
             partes.append(f"[0:v]scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},format=yuv420p[v{i}]")
+        elif cl.get("foto"):
+            # Foto (capa 5b, D2): una entrada sin tiempo; se encuadra UNA vez
+            # y `loop` repite ese cuadro los que se ven en el tramo más la
+            # cola de su transición; el zoom lento va después (cambia en
+            # cada cuadro). `setsar=1` al final, como un video (D3).
+            idx = len(plan.entradas)
+            plan.entradas.append({"ruta": rutas[_clave_ruta(cl)], "opciones": []})
+            cola = int(tr_siguiente.get("duracion_ms", 0)) if tr_siguiente else 0
+            n = max(1, round((corte_fin - corte_ini + cola) * fps / 1000))
+            partes += _cadena_principal(
+                _encuadre(f"[{idx}:v]", cl, i, ancho, alto),
+                f",format=yuv420p,loop=loop={n - 1}:size=1:start=0,setpts=N/({fps}*TB),fps={fps}"
+                f"{_zoompan(cl, corte_ini, fps, ancho, alto)},setsar=1,format=yuv420p[v{i}]")
         else:
             # Entrada propia con búsqueda de entrada: `-ss` antes de `-i` es
             # exacto al transcodificar (ffmpeg descarta los cuadros previos
@@ -321,9 +394,9 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             idx = len(plan.entradas)
             plan.entradas.append({"ruta": rutas[cl["material_id"]], "opciones": ["-ss", _s(desde), "-t", _s(hasta - desde)]})
             setpts = "setpts=PTS-STARTPTS" if vel == 1.0 else f"setpts=(PTS-STARTPTS)/{vel}"
-            partes.append(f"[{idx}:v]{setpts},"
-                          f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},fps={fps}"
-                          f"{_zoompan(cl, corte_ini, fps, ancho, alto)},setsar=1,format=yuv420p[v{i}]")
+            partes += _cadena_principal(
+                _encuadre(f"[{idx}:v]{setpts},", cl, i, ancho, alto),
+                f",fps={fps}{_zoompan(cl, corte_ini, fps, ancho, alto)},setsar=1,format=yuv420p[v{i}]")
         etiquetas.append((f"[v{i}]", cl))
     # Relleno: si la principal termina antes que el tramo (la voz sigue), el
     # último cuadro se clona hasta `dur_tramo`. Cero para una imagen.

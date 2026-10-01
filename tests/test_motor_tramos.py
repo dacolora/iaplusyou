@@ -217,3 +217,14 @@ def test_la_edicion_de_32_cortes_que_se_quedo_sin_memoria():
         assert tr.videos(doc, a, b) <= tr.PRESUPUESTO_VIDEOS
     for ini, fin in tr._intervalos_transicion(doc):
         assert not any(ini <= b < fin for _a, b in cortes[:-1])
+
+
+def test_cada_foto_de_la_principal_cuenta_como_una_entrada():
+    # Capa 5b (D2): una foto es una entrada más del render (sin -ss/-t, pero
+    # decodificada y escalada): cuenta 1 en PRESUPUESTO_VIDEOS como un video.
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [{"id": f"f{i}", "inicio_ms": i * 1000, "duracion_ms": 1000, "material_id": 4, "foto": True}
+                                 for i in range(8)]
+    doc = d.resolver(d.validar(doc), "es", "CO")
+    assert tr.videos(doc, 0, 8000) == 8
+    assert tr.partir(doc) == [(0, 6000), (6000, 8000)]

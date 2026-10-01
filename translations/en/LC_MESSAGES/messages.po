@@ -4844,6 +4844,9 @@ msgstr "The video is %(total)s s long and the target is %(objetivo)s s."
 msgid "El video dura más de 2 min."
 msgstr "The video is longer than 2 min."
 
+msgid "El video encima de otro video todavía no se puede producir."
+msgstr "A video on top of another video can't be produced yet."
+
 msgid "El video final no muestra este clip: aquí solo se puede borrar."
 msgstr "The final video doesn't show this clip: here you can only delete it."
 
@@ -6450,6 +6453,10 @@ msgstr "File %(mid)s of this project is missing."
 
 msgid "Falta el país del guion."
 msgstr "The script's country is missing."
+
+#, python-format
+msgid "Falta el tamaño del clip «%(clip)s» para su encuadre."
+msgstr "The size of clip “%(clip)s” is missing for its framing."
 
 #, python-format
 msgid "Falta el texto fijo «%(fragmento)s»: tiene que ir tal cual."
@@ -9606,6 +9613,10 @@ msgstr "I couldn't read that audio file."
 
 msgid "No pude leer ese video."
 msgstr "I couldn't read that video."
+
+#, python-format
+msgid "No pude leer la foto %(archivo)s."
+msgstr "I couldn't read the photo %(archivo)s."
 
 #, python-format
 msgid "No pude leer los activos del Business: %(error)s"

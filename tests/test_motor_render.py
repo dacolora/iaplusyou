@@ -6,7 +6,7 @@ import subprocess
 import pytest
 from PIL import Image
 
-from final_edition import cortes, documento as d, motor
+from final_edition import cortes, documento as d, encuadre, fotos, motor
 from final_edition.motor import render as r
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures", "documentos", "video_basico.json")
@@ -17,14 +17,26 @@ def medios(tmp_path_factory):
     carpeta = tmp_path_factory.mktemp("medios_editor")
     clon = str(carpeta / "clon.mp4"); voz = str(carpeta / "voz.wav"); musica = str(carpeta / "musica.wav")
     png = str(carpeta / "t1.png"); foto = str(carpeta / "foto.png"); horizontal = str(carpeta / "horizontal.mp4")
+    vertical = str(carpeta / "vertical.mp4"); rotado = str(carpeta / "rotado.mp4")
+    roja_azul = str(carpeta / "roja_azul.png"); roja_azul_jpg = str(carpeta / "foto_7.jpg")
     base = [cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y"]
     subprocess.run(base + ["-f", "lavfi", "-i", "testsrc2=size=540x960:rate=30", "-t", "8", "-pix_fmt", "yuv420p", clon], check=True)
     subprocess.run(base + ["-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30", "-t", "4", "-pix_fmt", "yuv420p", horizontal], check=True)
+    subprocess.run(base + ["-f", "lavfi", "-i", "testsrc2=size=720x1280:rate=30", "-t", "2", "-pix_fmt", "yuv420p", vertical], check=True)
+    # grabado «de pie»: codificado 1280x720 con una marca de rotación de 90°
+    subprocess.run(base + ["-display_rotation:v:0", "90", "-i", horizontal, "-t", "2", "-c", "copy", rotado], check=True)
+    # capa 5b: una foto 400x200 roja a la izquierda y azul a la derecha,
+    # preparada como en `preparar_rutas` (rutas["foto:7"])
+    im = Image.new("RGB", (400, 200), (255, 0, 0))
+    im.paste((0, 0, 255), (200, 0, 400, 200))
+    im.save(roja_azul)
+    fotos.preparar(roja_azul, roja_azul_jpg)
     subprocess.run(base + ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "7", voz], check=True)
     subprocess.run(base + ["-f", "lavfi", "-i", "sine=frequency=220:sample_rate=44100", "-t", "4", musica], check=True)
     Image.new("RGBA", (400, 200), (255, 0, 0, 200)).save(png)
     Image.new("RGB", (800, 600), (0, 128, 255)).save(foto)
-    return {1: clon, 2: voz, 3: musica, 4: horizontal, "png:t1": png, "foto": foto}
+    return {1: clon, 2: voz, 3: musica, 4: horizontal, 5: vertical, 6: rotado, "foto:7": roja_azul_jpg,
+            "png:t1": png, "foto": foto}
 
 
 def _doc():
@@ -286,3 +298,104 @@ def test_musica_de_400_ms_con_fundido_de_1_s_renderiza(tmp_path, medios):
     out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "corto.mp4"))
     streams, dur = _streams(out["archivo"])
     assert abs(dur - 7.0) <= 0.2 and "audio" in streams
+
+
+# ---- capa 5b: fotos en la principal y encuadre (renders reales) -----------
+
+def _cuadro(video, t_ms, tmp_path):
+    """El cuadro de `video` en `t_ms`, como imagen RGB de Pillow."""
+    png = str(tmp_path / f"cuadro_{t_ms}.png")
+    r.miniatura(video, png, t_ms)
+    return Image.open(png).convert("RGB")
+
+
+def _solo_principal(clips):
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = clips
+    return d.resolver(d.validar(doc), "es", "CO")
+
+
+def _foto(clip_id="f1", inicio=0, dur=1000, **extra):
+    return {"id": clip_id, "inicio_ms": inicio, "duracion_ms": dur, "material_id": 7, "foto": True, **extra}
+
+
+@pytest.mark.slow
+def test_un_video_que_se_funde_en_una_foto_dura_lo_de_la_linea_de_tiempo(tmp_path, medios):
+    doc = _solo_principal([
+        {"id": "v0", "inicio_ms": 0, "duracion_ms": 2000, "material_id": 1, "recorte": {"desde_ms": 0, "hasta_ms": 2000},
+         "transicion": {"tipo": "fundido", "duracion_ms": 500}},
+        _foto(inicio=2000, dur=3000)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 5.0) <= 0.2 and "audio" not in streams
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("x, rojo", [(0, True), (1, False)])
+def test_encuadre_llenar_muestra_la_parte_elegida_de_la_foto(tmp_path, medios, x, rojo):
+    doc = _solo_principal([_foto(encuadre={"x": x}, ancho_px=400, alto_px=200)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    r_, _g, b = _cuadro(out["archivo"], 500, tmp_path).getpixel((540, 960))
+    if rojo:
+        assert r_ > 200 and b < 60
+    else:
+        assert b > 200 and r_ < 60
+
+
+@pytest.mark.slow
+def test_encuadre_ajustar_la_foto_entera_sobre_su_fondo_desenfocado(tmp_path, medios):
+    # 400x200 en 9:16: primer plano 1080x540 en las filas 690-1229; arriba y
+    # abajo, la misma foto llenando un lienzo chico, desenfocada y agrandada.
+    doc = _solo_principal([_foto(encuadre={"modo": "ajustar"}, ancho_px=400, alto_px=200)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    cuadro = _cuadro(out["archivo"], 500, tmp_path)
+    for punto in ((270, 960), (270, 700)):
+        r_, _g, b = cuadro.getpixel(punto)
+        assert r_ > 200 and b < 60, punto
+    for punto in ((810, 960), (810, 1220)):
+        r_, _g, b = cuadro.getpixel(punto)
+        assert b > 200 and r_ < 60, punto
+    for punto in ((540, 600), (540, 1300)):
+        r_, _g, b = cuadro.getpixel(punto)
+        assert r_ > 60 and b > 60, punto
+
+
+@pytest.mark.slow
+def test_video_grabado_de_pie_con_encuadre_se_renderiza(tmp_path, medios):
+    info = cortes.ffprobe_json(medios[6])
+    stream = next(s for s in info["streams"] if s["codec_type"] == "video")
+    assert (stream["width"], stream["height"]) == (1280, 720)
+    ancho, alto = encuadre.medidas_visibles(stream)
+    assert (ancho, alto) == (720, 1280)
+    doc = _solo_principal([{"id": "v0", "inicio_ms": 0, "duracion_ms": 2000, "material_id": 6,
+                            "recorte": {"desde_ms": 0, "hasta_ms": 2000}, "encuadre": {"modo": "ajustar"},
+                            "ancho_px": ancho, "alto_px": alto}])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 2.0) <= 0.2
+
+
+@pytest.mark.slow
+def test_corte_seco_entre_un_horizontal_ajustado_y_un_vertical(tmp_path, medios):
+    # D3 con encuadre: el overlay del «ajustar» y el scale del vertical
+    # llegan al concat con la misma proporción de píxel.
+    doc = _solo_principal([
+        {"id": "v0", "inicio_ms": 0, "duracion_ms": 2000, "material_id": 4, "recorte": {"desde_ms": 0, "hasta_ms": 2000},
+         "encuadre": {"modo": "ajustar"}, "ancho_px": 1280, "alto_px": 720},
+        {"id": "v1", "inicio_ms": 2000, "duracion_ms": 2000, "material_id": 5, "recorte": {"desde_ms": 0, "hasta_ms": 2000},
+         "encuadre": {"modo": "llenar", "zoom": 1.5, "x": 0.2}, "ancho_px": 720, "alto_px": 1280}])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 4.0) <= 0.2
+
+
+@pytest.mark.slow
+def test_ocho_fotos_sin_sonido_salen_en_dos_tramos(tmp_path, medios):
+    doc = _solo_principal([_foto(f"f{i}", inicio=i * 1000, ken_burns="in" if i % 2 else None) for i in range(8)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert out["tramos"] == 2
+    assert abs(dur - 8.0) <= 0.3 and "audio" not in streams

@@ -47,6 +47,7 @@ WORKER += ["final_edition/subtitulos_fuente.py"]   # Editor capa 5a, Task 1 (pur
 WORKER += ["voces_propias.py", "audios.py"]   # Audios Europa (2026-09-30)
 WORKER += ["final_edition/transcripcion.py"]   # Editor capa 5a, Task 5
 WORKER += ["hablado.py"]   # Anuncio hablado en Crear (2026-10-01); tareas/hablado.py ya entra por el glob
+WORKER += ["final_edition/fotos.py"]   # Editor capa 5b, Task 3 (la copia de una foto para el render)
 
 
 def _nombre(llamada):
