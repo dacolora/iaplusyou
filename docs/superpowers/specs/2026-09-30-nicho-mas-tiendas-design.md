@@ -117,3 +117,9 @@ pruebas son la salida real recortada (sin autores): `walmart_busqueda/resenas.js
   cola vacía y los dos servicios.
 - Prueba final de centavos: un estudio en colorado_forja con las tiendas nuevas y los topes mínimos. Sin
   crédito de Anthropic corren la verificación y las búsquedas; lo que necesita a Claude espera «Reanudar».
+
+## 6. Estado
+
+Implementado con el plan `docs/superpowers/plans/2026-09-30-nicho-mas-tiendas.md` (rulings R1–R11 allí): el
+arranque por corrida entra en techos, estimados y gasto; Walmart y AliExpress piden reseñas con el link armado
+desde el id; el tono va con lo que sale del mercado local; los nombres de país son los de `datos.NOMBRES_PAIS`.

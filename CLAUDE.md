@@ -283,11 +283,17 @@ Creatv, no suyas (2026-09-27).
 **Investigación automática** (spec `docs/superpowers/specs/2026-09-21-nicho-investigacion-design.md`,
 plan `docs/superpowers/plans/2026-09-28-nicho-investigacion-completar.md`): con el tema del estudio y UNA
 cifra aprobada (el estimado lo calcula el servidor y el POST exige `total_visto`), la cadena de tareas
-`nicho_inv_consultas` (Claude, hasta el tope aprobado de búsquedas — 1 a 4 — en el idioma del país; la
-búsqueda nunca usa más que ese tope) → `nicho_inv_buscar` por tienda
-(`nicho/fuentes/plataformas.py`: Amazon con tienda propia, Mercado Libre en 18 países, TikTok Shop; actores
-de Apify con precio por resultado, `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de
-cobro cada una) → `nicho_inv_seleccionar` (Claude marca lo del nicho; se eligen los de más reseñas) →
+`nicho_inv_consultas` (Claude, hasta el tope aprobado de búsquedas — 1 a 4 — por idioma, todas en UNA
+llamada: el del país y el de cada tienda que busca en otro, `investigacion.idiomas_necesarios`; se guardan
+`consultas` — las del país, las de Reddit/YouTube — y `consultas_por_idioma`; la búsqueda nunca usa más
+que ese tope) → `nicho_inv_buscar` por tienda, con las búsquedas de su idioma (si Claude no las escribió,
+las del país, y el paso lo avisa) (`nicho/fuentes/plataformas.py`: Amazon con tienda propia, Mercado Libre
+en 18 países, Walmart solo en EE. UU., TikTok Shop y AliExpress en todo el mundo — AliExpress busca en
+inglés —; actores de Apify con precio por resultado más el arranque por corrida que cobran algunos
+(`usd_por_corrida`), `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de cobro cada una
+(`plataformas.tope`); el estimado de una tienda es la suma de esos techos y el gasto, `plataformas.costo`)
+→ `nicho_inv_seleccionar` (Claude marca lo del nicho; se eligen los de más reseñas y, sin ese dato, los de
+más pedidos/vendidos) →
 `nicho_recolectar` por tienda y por red (Reddit/YouTube con las mismas búsquedas) → `nicho_generar_avatares`
 con `auto` y el tope restante; una investigación solo con redes, sin ninguna tienda, salta `seleccionar`
 (no hay productos que juzgar). El estado vive en `estudio.extra.investigacion` (`nicho/investigacion.py`,
@@ -312,6 +318,15 @@ esperan (las rutas los rechazan); si un trabajo manual con el mismo job_id sigue
 cadena, `avanzar` deja la investigación `interrumpida` para que «Reanudar» funcione en cuanto termine. El
 Blueprint de Nicho rechaza los POST que el navegador marca cross-site (`Sec-Fetch-Site`), como Sprints y
 Flow Plus.
+**Otro mercado** (Parte 4, spec `docs/superpowers/specs/2026-09-30-nicho-mas-tiendas-design.md`): una tienda
+sin sitio en el país del estudio no se rechaza: `plataformas.mercado(clave, pais)` → `("otro", casa)` y busca
+y trae reseñas de su sitio principal (Amazon y Walmart → EE. UU., Mercado Libre → México); en la tarjeta va en
+«De otros mercados», desmarcada de entrada («Marcar todas» marca todo). Cada reseña de tienda guarda en
+`comentario.extra` su `pais` (el del comprador si el actor lo da — AliExpress —, si no el del sitio) y
+`mercado` (`local | otro`) respecto al país del estudio; la página lo muestra en comentarios y citas,
+`avatares.seleccionar` pone primero las fuentes locales en cada vuelta y los prompts de avatares marcan
+«otro mercado: <país>» con la regla de que identidad, demografía, edad, momento de vida, tono y conciencia
+salen del mercado local. eBay y Etsy se probaron con centavos y quedaron fuera (spec §1.1).
 **Avatares del proyecto** (spec `docs/superpowers/specs/2026-09-29-nicho-avatares-proyecto-design.md`):
 página `/cliente/<c>/nicho/avatares` y bloque en la pestaña. Nuevos = sub-avatares propuestos; aprobados =
 personas no archivadas (lo que ve toda la app). Los avatares escritos a mano viven en un estudio oculto
