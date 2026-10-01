@@ -35,7 +35,7 @@ import ediciones
 import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, mezcla, motor, rasterizar, subtitulos_fuente, transcripcion
+from final_edition import cortes, encuadre, fotos, mezcla, motor, rasterizar, subtitulos_fuente, transcripcion
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from idiomas import N_
@@ -130,14 +130,53 @@ def _palabras_por_material(cliente, resuelto):
     return salida
 
 
+def _preparar_principal(doc, filas, rutas, carpeta):
+    """La pista principal de video (editor capa 5b, D2/D6): revisa que cada
+    clip `foto` sea una imagen y cada clip de video un video, prepara UNA vez
+    por material la copia de cada foto (`rutas["foto:<id>"]`,
+    `fotos.preparar`) y estampa en los clips con `encuadre` las medidas que
+    se VEN — siempre, pisando lo que traigan: de la foto preparada (ya
+    derecha) o del primer stream de video de ffprobe con su rotación
+    (`encuadre.medidas_visibles`, una vez por material). Un clip sin
+    `encuadre` no se mide (el compilador usa el llenado de siempre)."""
+    principal = documento_mod.pista_principal(doc)
+    if not principal or principal.get("tipo") != "video":
+        return
+    medidas = {}
+    for cl in principal.get("clips") or []:
+        mid = int(cl["material_id"])
+        tipo = filas[mid].get("tipo")
+        if cl.get("foto"):
+            if tipo != "imagen":
+                raise RuntimeError(gettext("El clip «%(clip)s» es una foto, pero su archivo no es una imagen.",
+                                           clip=cl["id"]))
+            clave = f"foto:{mid}"
+            if clave not in rutas:
+                destino = os.path.join(carpeta, f"foto_{mid}.jpg")
+                medidas[clave] = fotos.preparar(rutas[mid], destino)
+                rutas[clave] = destino
+        else:
+            if tipo != "video":
+                raise RuntimeError(gettext("El clip «%(clip)s» del video no es un video.", clip=cl["id"]))
+            clave = mid
+            if cl.get("encuadre") and clave not in medidas:
+                info = cortes.ffprobe_json(rutas[mid])
+                stream = next((st for st in info.get("streams") or [] if st.get("codec_type") == "video"), None)
+                medidas[clave] = encuadre.medidas_visibles(stream)
+        if cl.get("encuadre"):
+            cl["ancho_px"], cl["alto_px"] = (int(v) for v in medidas[clave])
+
+
 def preparar_rutas(cliente, doc, carpeta):
     """Baja los materiales del documento a `carpeta` y devuelve `rutas`
-    ({material_id: ruta, "png:<clip_id>": ruta, "ass": ruta}). De paso, con
-    las filas ya en mano: estampa `ancho_px`/`alto_px` en los clips `imagen`
-    que no los traen (tamaño natural medido al subir), rasteriza con Pillow
-    los clips de texto sin `pngs` y pasa los recortes por
-    `compilador.verificar_recortes` con las duraciones reales (`duracion_ms`
-    de la fila, cuando el proxy ya la midió) — modifica `doc` en el sitio."""
+    ({material_id: ruta, "foto:<material_id>": ruta, "png:<clip_id>": ruta,
+    "ass": ruta}). De paso, con las filas ya en mano: revisa y prepara la
+    pista principal (`_preparar_principal`: fotos y medidas del encuadre),
+    estampa `ancho_px`/`alto_px` en los clips `imagen` que no los traen
+    (tamaño natural medido al subir), rasteriza con Pillow los clips de
+    texto sin `pngs` y pasa los recortes por `compilador.verificar_recortes`
+    con las duraciones reales (`duracion_ms` de la fila, cuando el proxy ya
+    la midió) — modifica `doc` en el sitio."""
     rutas = {"ass": os.path.join(carpeta, "subtitulos.ass")}
     ids = set(int(x) for x in doc.get("materiales") or [])
     for p in doc.get("pistas") or []:
@@ -152,6 +191,7 @@ def preparar_rutas(cliente, doc, carpeta):
         filas[mid] = mat
         destino = os.path.join(carpeta, f"{mid}.{_extension(mat['tipo'])}")
         rutas[mid] = materiales.descargar(mat, destino)
+    _preparar_principal(doc, filas, rutas, carpeta)
     for clip_id, mid in (doc.get("pngs") or {}).items():
         mat = materiales.obtener(cliente, mid)
         if mat:

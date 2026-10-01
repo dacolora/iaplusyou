@@ -4439,6 +4439,14 @@ msgstr "The clip would be too short at that speed."
 msgid "El clip siguiente empieza así: %(estado)s"
 msgstr "The next clip starts like this: %(estado)s"
 
+#, python-format
+msgid "El clip «%(clip)s» del video no es un video."
+msgstr "Clip “%(clip)s” of the video is not a video."
+
+#, python-format
+msgid "El clip «%(clip)s» es una foto, pero su archivo no es una imagen."
+msgstr "Clip “%(clip)s” is a photo, but its file is not an image."
+
 msgid "El clon no da para ningún segmento."
 msgstr "The clone is too short for any segment."
 

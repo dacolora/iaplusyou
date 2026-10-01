@@ -332,6 +332,18 @@ def test_un_video_que_se_funde_en_una_foto_dura_lo_de_la_linea_de_tiempo(tmp_pat
 
 
 @pytest.mark.slow
+def test_una_foto_con_zoom_lento_que_se_funde_en_un_video(tmp_path, medios):
+    # D2: la cola del fundido sale del mismo `loop` de la foto (2 s + 2 s = 4 s)
+    doc = _solo_principal([
+        _foto(dur=2000, ken_burns="in", transicion={"tipo": "fundido", "duracion_ms": 500, "modo": "solape"}),
+        {"id": "v1", "inicio_ms": 2000, "duracion_ms": 2000, "material_id": 1, "recorte": {"desde_ms": 0, "hasta_ms": 2000}}])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 4.0) <= 0.2
+
+
+@pytest.mark.slow
 @pytest.mark.parametrize("x, rojo", [(0, True), (1, False)])
 def test_encuadre_llenar_muestra_la_parte_elegida_de_la_foto(tmp_path, medios, x, rojo):
     doc = _solo_principal([_foto(encuadre={"x": x}, ancho_px=400, alto_px=200)])

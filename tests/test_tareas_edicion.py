@@ -281,6 +281,127 @@ def test_preparar_rutas_estampa_ancho_y_alto_en_clips_imagen(entorno, tmp_path):
     assert logo["id"] in rutas
 
 
+# ---- capa 5b: fotos en la principal y medidas para el encuadre (D2, D6) ----
+
+@pytest.fixture()
+def con_foto(entorno, monkeypatch, tmp_path):
+    """Material 4: una foto de celular de 40x20 con EXIF de orientación 6
+    (se ve 20x40). `descargar` deja la foto de verdad (los demás, un byte)."""
+    import materiales
+    from PIL import Image
+    foto = str(tmp_path / "celular.jpg")
+    exif = Image.Exif()
+    exif[0x0112] = 6
+    Image.new("RGB", (40, 20), (200, 10, 10)).save(foto, exif=exif.tobytes())
+    mat = materiales.registrar("acme", tipo="imagen", origen="subida", url="https://r2/foto", hash="hf", bytes=1,
+                               ancho=20, alto=40)
+    assert mat["id"] == 4
+
+    def _descargar(m, destino):
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        if m["tipo"] == "imagen":
+            with open(foto, "rb") as f, open(destino, "wb") as g:
+                g.write(f.read())
+        else:
+            open(destino, "wb").write(b"x")
+        return destino
+    monkeypatch.setattr(materiales, "descargar", _descargar)
+    return entorno
+
+
+def _principal(*clips):
+    from final_edition import documento as d
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = list(clips)
+    return d.resolver(d.validar(doc), "es", "CO")
+
+
+def _v(clip_id, inicio, dur=1000, material_id=1, **extra):
+    return {"id": clip_id, "inicio_ms": inicio, "duracion_ms": dur, "material_id": material_id,
+            "recorte": {"desde_ms": 0, "hasta_ms": dur}, **extra}
+
+
+def _f(clip_id, inicio, dur=1000, material_id=4, **extra):
+    return {"id": clip_id, "inicio_ms": inicio, "duracion_ms": dur, "material_id": material_id, "foto": True, **extra}
+
+
+def test_preparar_rutas_prepara_cada_foto_una_vez_y_estampa_lo_que_se_ve(con_foto, tmp_path, monkeypatch):
+    from PIL import Image
+    from final_edition import cortes, fotos
+    preparadas = []
+    original = fotos.preparar
+    monkeypatch.setattr(fotos, "preparar", lambda o, dst: preparadas.append(dst) or original(o, dst))
+    monkeypatch.setattr(cortes, "ffprobe_json", lambda ruta: pytest.fail("una foto no se mide con ffprobe"))
+    doc = _principal(_f("f1", 0, encuadre={"modo": "ajustar"}), _f("f2", 1000), _f("f3", 2000, encuadre={"x": 0}))
+    doc["pistas"][0]["clips"][2].update(ancho_px=1, alto_px=1)   # lo que traiga el clip se pisa
+    carpeta = tmp_path / "trabajo"
+    carpeta.mkdir()
+    rutas = con_foto.preparar_rutas("acme", doc, str(carpeta))
+    assert rutas["foto:4"] == str(carpeta / "foto_4.jpg") and preparadas == [rutas["foto:4"]]
+    im = Image.open(rutas["foto:4"])
+    assert im.format == "JPEG" and im.mode == "RGB" and im.size == (20, 40)
+    assert rutas[4] != rutas["foto:4"]   # el original sigue ahí (una capa encima necesita su alfa)
+    f1, f2, f3 = doc["pistas"][0]["clips"]
+    assert (f1["ancho_px"], f1["alto_px"]) == (20, 40) and (f3["ancho_px"], f3["alto_px"]) == (20, 40)
+    assert "ancho_px" not in f2   # sin encuadre no hace falta
+
+
+def test_preparar_rutas_una_foto_cuyo_archivo_no_es_imagen(con_foto, tmp_path):
+    doc = _principal(_v("v0", 0), _f("f1", 1000, material_id=1))
+    with pytest.raises(RuntimeError, match="El clip «f1» es una foto, pero su archivo no es una imagen."):
+        con_foto.preparar_rutas("acme", doc, str(tmp_path / "trabajo"))
+
+
+def test_preparar_rutas_un_clip_de_video_cuyo_archivo_es_una_imagen(con_foto, tmp_path):
+    doc = _principal(_v("v0", 0), _v("v1", 1000, material_id=4))
+    with pytest.raises(RuntimeError, match="El clip «v1» del video no es un video."):
+        con_foto.preparar_rutas("acme", doc, str(tmp_path / "trabajo"))
+
+
+def test_preparar_rutas_mide_el_video_con_encuadre_como_se_ve(con_foto, tmp_path, monkeypatch):
+    # grabado de pie: ffprobe dice 1280x720 con una rotación de 90°
+    from final_edition import cortes
+    medidos = []
+
+    def _ffprobe(ruta):
+        medidos.append(ruta)
+        return {"streams": [{"codec_type": "audio"},
+                            {"codec_type": "video", "width": 1280, "height": 720, "side_data_list": [{"rotation": 90}]}]}
+    monkeypatch.setattr(cortes, "ffprobe_json", _ffprobe)
+    doc = _principal(_v("v0", 0, encuadre={"modo": "ajustar"}, ancho_px=1920, alto_px=1080), _v("v1", 1000),
+                     _v("v2", 2000, encuadre={"zoom": 2.0}))
+    rutas = con_foto.preparar_rutas("acme", doc, str(tmp_path / "trabajo"))
+    v0, v1, v2 = doc["pistas"][0]["clips"]
+    assert (v0["ancho_px"], v0["alto_px"]) == (720, 1280) and (v2["ancho_px"], v2["alto_px"]) == (720, 1280)
+    assert "ancho_px" not in v1
+    assert medidos == [rutas[1]]   # una vez por material
+
+
+@pytest.mark.slow
+def test_una_foto_de_celular_preparada_se_renderiza_de_punta_a_punta(con_foto, tmp_path):
+    # preparar_rutas + el motor real: la foto acostada con EXIF entra derecha
+    # (20x40), con su encuadre «ajustar» calculado de esas medidas.
+    from final_edition import cortes, motor
+    doc = _principal(_f("f1", 0, encuadre={"modo": "ajustar"}), _f("f2", 1000, ken_burns="in"))
+    carpeta = tmp_path / "trabajo"
+    carpeta.mkdir()
+    rutas = con_foto.preparar_rutas("acme", doc, str(carpeta))
+    out = motor.renderizar(doc, rutas, str(carpeta / "final.mp4"))
+    info = cortes.ffprobe_json(out["archivo"])
+    video = next(st for st in info["streams"] if st["codec_type"] == "video")
+    assert (video["width"], video["height"]) == (1080, 1920)
+    assert abs(float(info["format"]["duration"]) - 2.0) <= 0.2
+
+
+def test_preparar_rutas_sin_encuadre_no_mide_nada(entorno, tmp_path, monkeypatch):
+    from final_edition import cortes
+    monkeypatch.setattr(cortes, "ffprobe_json", lambda ruta: pytest.fail("sin encuadre no se mide"))
+    doc = _principal(_v("v0", 0), _v("v1", 1000))
+    rutas = entorno.preparar_rutas("acme", doc, str(tmp_path / "trabajo"))
+    assert not any(str(k).startswith("foto:") for k in rutas)
+    assert "ancho_px" not in doc["pistas"][0]["clips"][0]
+
+
 def test_proxy_genera_540p_tira_y_cortes_y_los_guarda(entorno, monkeypatch, tmp_path):
     import materiales
     from final_edition import cortes, mezcla
