@@ -2873,6 +2873,12 @@ body.panel-abierto { overflow: hidden; }
 .cat-nuevo-color form { display: grid; gap: .5rem; margin-top: .5rem; }
 .cat-crear-con { display: inline-flex; gap: .4rem; align-items: center; margin: 0; }
 .cat-crear-con select { width: auto; margin: 0; }
+/* Producto archivado (2026-10-01): aviso con «Desarchivar» arriba de la
+   ficha; «Archivar» va en el pie, junto a «Eliminar». */
+.cat-ficha-archivado { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin: .6rem 0 0; padding: .6rem .8rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); background: var(--panel-2); font-size: .84rem; }
+.cat-ficha-archivado p { margin: 0; flex: 1 1 16rem; color: var(--muted); }
+.cat-ficha-archivado form, .cat-pie-quitar form { margin: 0; }
+.cat-pie-quitar { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 /* Selector de Crear/Sprints: un producto con colores agrupa sus tiles bajo un
    encabezado en vez de listarlos sueltos (spec 2026-09-28 §10.5). */
 .producto-grupo { flex: 1 1 100%; }

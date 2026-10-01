@@ -42,7 +42,11 @@ _PRODUCTO_CAMPOS_MARCA = ("en_prueba", "prioridad", "archivado", "activo_catalog
 # por corrida del importador atienda primero lo que nunca se intentó.
 # `sofisticacion`, `pruebas` y `pedidos` son de la doctrina (bloque 2): los
 # escribe el cliente en Catálogo y una sync de tienda nunca debe borrarlos.
-EXTRA_INTERNO = ("archivado_por", "vinculo_intentado_en", "sofisticacion", "pruebas", "pedidos")
+# `archivado_con_producto` marca las filas que archivó «Archivar» de la ficha
+# (`archivar_activo`): «Desarchivar» devuelve esas y no un duplicado que ya
+# estaba archivado a mano por otra razón (migración 0025).
+EXTRA_INTERNO = ("archivado_por", "vinculo_intentado_en", "sofisticacion", "pruebas", "pedidos",
+                 "archivado_con_producto")
 
 
 # --- tiendas ---------------------------------------------------------------
@@ -208,6 +212,7 @@ def upsert_producto(cliente, fuente, fuente_id, datos):
             extra = _extra_con_internos(valores.get("extra"), extra_viejo)
             if not manual:
                 extra.pop("archivado_por", None)
+                extra.pop("archivado_con_producto", None)
             valores["extra"] = extra
             con.execute(p.update().where(p.c.id == pid)
                         .values(actualizado_en=ahora, archivado=manual, **valores))
@@ -315,9 +320,68 @@ def marcar_producto(cliente, producto_id, **campos):
                 extra["archivado_por"] = "manual"
             else:
                 extra.pop("archivado_por", None)
+                extra.pop("archivado_con_producto", None)
             campos = dict(campos, archivado=bool(campos["archivado"]), extra=extra)
         con.execute(p.update().where(p.c.id == producto_id, p.c.cliente == cliente)
                     .values(actualizado_en=db.ahora(), **campos))
+
+
+def activos_archivados(cliente):
+    """Los productos del catálogo (pid, sin color) archivados: los que tienen
+    filas y TODAS archivadas — con una viva el producto está vivo, la misma
+    regla de `por_activo`. Una consulta. La galería los pasa a «Archivados» y
+    los selectores de Crear, Sprints, Nicho, Recrear y Flow Plus los esconden
+    (`catalogo_productos.sin_archivados`)."""
+    p = db.producto
+    vivos, archivados = set(), set()
+    with db.conectar() as con:
+        filas = con.execute(sa.select(p.c.activo_catalogo_id, p.c.archivado)
+                            .where(p.c.cliente == cliente, p.c.activo_catalogo_id.isnot(None)))
+        for activo, archivado in filas:
+            (archivados if archivado else vivos).add(str(activo).split("/", 1)[0])
+    return archivados - vivos
+
+
+def archivar_activo(cliente, activo_id, archivado=True):
+    """«Archivar» / «Desarchivar» un producto entero desde su ficha. No borra
+    nada. Archivar toma TODAS sus filas vivas o archivadas por la sync (con una
+    sola viva el producto seguiría vivo) y las deja archivadas a mano con la
+    marca `archivado_con_producto`: la sync de la tienda no las desarchiva.
+    Desarchivar devuelve las marcadas y las archivadas por la sync, nunca una
+    archivada a mano por otra razón (un duplicado de la migración 0025:
+    cambiaría qué fila manda); si no queda ninguna así, devuelve la fila que
+    la galería muestra. Devuelve cuántas filas cambió."""
+    p = db.producto
+    with db.conectar() as con:
+        ids = [f[0] for f in con.execute(sa.select(p.c.id).where(
+            p.c.cliente == cliente, p.c.activo_catalogo_id == activo_id).order_by(p.c.id))]
+    cambiadas = 0
+    for fid in ids:
+        with db.conectar() as con:
+            if not _bloquear_producto(con, (p.c.id == fid, p.c.cliente == cliente)):
+                continue
+            esta, extra = con.execute(sa.select(p.c.archivado, p.c.extra).where(p.c.id == fid)).first()
+            extra = dict(extra or {})
+            a_mano_por_otra_razon = bool(esta) and extra.get("archivado_por") == "manual" \
+                and not extra.get("archivado_con_producto")
+            if archivado:
+                if a_mano_por_otra_razon or (esta and extra.get("archivado_con_producto")):
+                    continue
+                extra.update(archivado_por="manual", archivado_con_producto=True)
+            else:
+                if not esta or a_mano_por_otra_razon:
+                    continue
+                extra.pop("archivado_por", None)
+                extra.pop("archivado_con_producto", None)
+            con.execute(p.update().where(p.c.id == fid)
+                        .values(archivado=bool(archivado), actualizado_en=db.ahora(), extra=extra))
+            cambiadas += 1
+    if not archivado and not cambiadas and activo_id in activos_archivados(cliente):
+        visible = por_activo(cliente).get(activo_id)
+        if visible:
+            marcar_producto(cliente, visible["id"], archivado=False)
+            cambiadas = 1
+    return cambiadas
 
 
 def anotar_extra(cliente, producto_id, **claves):

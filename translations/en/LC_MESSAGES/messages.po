@@ -2059,11 +2059,18 @@ msgstr "Archived"
 msgid "Archivado el concepto de %(nombre)s: %(motivo)s."
 msgstr "Archived the concept of %(nombre)s: %(motivo)s."
 
+msgid "Archivado: no sale en la galería ni al elegir producto en Crear, Sprints o Nicho. Sus fotos, colores e historial siguen intactos."
+msgstr "Archived: it doesn't show in the gallery or when picking a product in Create, Sprints or Niche. Its photos, colors and history stay intact."
+
 msgid "Archivados"
 msgstr "Archived"
 
 msgid "Archivar"
 msgstr "Archive"
+
+#, python-format
+msgid "Archivaste «%(nombre)s»: ya no sale en la galería ni al elegir producto en Crear, Sprints o Nicho. No se borró nada y lo recuperas en Catálogo › Archivados."
+msgstr "You archived “%(nombre)s”: it no longer shows in the gallery or when picking a product in Create, Sprints or Niche. Nothing was deleted and you can bring it back from Catalog › Archived."
 
 msgid "Archivo"
 msgstr "File"
@@ -8186,6 +8193,9 @@ msgstr "What it took to build this"
 msgid "Lo que vendes: calzado, ropa, decoración, comida, lo que sea."
 msgstr "What you sell: shoes, clothes, home decor, food, anything."
 
+msgid "Lo saca de la galería y de los selectores de Crear, Sprints y Nicho sin borrar nada. Se deshace con «Desarchivar»."
+msgstr "Takes it out of the gallery and the product pickers in Create, Sprints and Niche without deleting anything. Undo it with “Unarchive”."
+
 msgid "Locuciones (audios)"
 msgstr "Voice-overs (audios)"
 
@@ -11045,6 +11055,10 @@ msgstr "Recover password"
 
 msgid "Recuperar el video (sin pagar de nuevo)"
 msgstr "Recover the video (without paying again)"
+
+#, python-format
+msgid "Recuperaste «%(nombre)s»: vuelve a salir en la galería y al elegir producto."
+msgstr "You restored “%(nombre)s”: it shows again in the gallery and when picking a product."
 
 msgid "Reddit"
 msgstr "Reddit"

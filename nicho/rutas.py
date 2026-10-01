@@ -18,6 +18,7 @@ import doctrina
 import gastos
 import idiomas
 import proyectos
+import tiendas
 import trabajos
 from nicho import avatares, calidad, datos, exportar, investigacion
 from nicho import fuentes as fuentes_registro
@@ -99,11 +100,13 @@ def _lineas(texto):
     return [l.strip() for l in (texto or "").splitlines() if l.strip()]
 
 
-def _productos(cliente):
+def _productos(cliente, conservar=()):
     """Uno por PRODUCTO (id = pid), no uno por color: un estudio investiga el
-    producto. `catalogo_productos.encontrar(pid)` resuelve a su primer color."""
-    return [{"id": p["id"], "nombre": p["nombre"], "descripcion": p.get("descripcion") or ""}
-            for p in catalogo_productos.listar_productos(cliente, "producto")]
+    producto. `catalogo_productos.encontrar(pid)` resuelve a su primer color.
+    Sin los archivados, salvo el que el estudio ya usa (`conservar`)."""
+    productos = catalogo_productos.sin_archivados(catalogo_productos.listar_productos(cliente, "producto"),
+                                                  tiendas.activos_archivados(cliente), conservar)
+    return [{"id": p["id"], "nombre": p["nombre"], "descripcion": p.get("descripcion") or ""} for p in productos]
 
 
 _NORMALIZAR = {"reddit": fuente_reddit.normalizar_params, "youtube": fuente_youtube.normalizar_params,
@@ -223,7 +226,8 @@ def ver(cliente, eid):
         completar_estimado={**completar_e, "texto": gastos.formatear(completar_e["usd"])},
         trabajo_completar=({"job_id": job_comp} if trabajos.en_curso(job_comp) else None),
         modos_texto=fuente_texto.NOMBRES_MODO, fuentes_nombre=fuentes_registro.NOMBRES, idiomas=avatares.IDIOMAS,
-        niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES, productos_nicho=_productos(cliente),
+        niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES,
+        productos_nicho=_productos(cliente, conservar=[est.get("catalogo_id")]),
         fuentes_conectadas=_fuentes_conectadas(cliente, eid),
         actores_apify=[{"clave": k, "nombre": a["nombre"], "usd_por_resultado": a["usd_por_resultado"], "ayuda": a["ayuda"]}
                        for k, a in apify_actores.ACTORES.items()],

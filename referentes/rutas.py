@@ -108,8 +108,12 @@ def grid(cliente):
 
 
 def _producto_para(cliente, request_args_o_form):
-    productos = catalogo_productos.listar(cliente, "producto")
-    pid = request_args_o_form.get("producto_id") or (productos[0]["id"] if productos else None)
+    """El selector de «Recrear con mi producto» y el producto elegido: sin los
+    archivados (2026-10-01), salvo el que se pidió por `producto_id`."""
+    pedido = request_args_o_form.get("producto_id")
+    productos = catalogo_productos.sin_archivados(catalogo_productos.listar(cliente, "producto"),
+                                                  tiendas.activos_archivados(cliente), conservar=[pedido])
+    pid = pedido or (productos[0]["id"] if productos else None)
     producto = catalogo_productos.encontrar(cliente, pid, categoria="producto") if pid else None
     return productos, producto
 

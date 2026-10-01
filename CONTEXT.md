@@ -177,3 +177,9 @@ catálogo: si la Admin API también está conectada, esa solo suma pedidos y atr
 **Ficha**:
 El panel lateral de un producto, un personaje o un entorno en la pestaña Catálogo.
 _Avoid_: detalle, modal
+
+**Producto archivado**:
+Un producto que la persona sacó de circulación con «Archivar» en su ficha, o que su tienda dejó de listar: no se borra
+nada, solo deja de salir en la galería (queda en «Archivados») y al elegir producto, salvo donde ya estaba elegido.
+Vuelve con «Desarchivar».
+_Avoid_: eliminado, oculto, inactivo

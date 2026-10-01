@@ -504,6 +504,9 @@ def campana_panel(cliente, sid, cid):
     sp, c = _campana_del_sprint(cliente, sid, cid)
     productos = _productos_planos(cliente)
     _campana_tablero(cliente, sp, c, {p["id"]: p for p in productos})
+    # El selector no ofrece productos archivados, salvo el de esta campaña.
+    productos = catalogo_productos.sin_archivados(productos, tiendas.activos_archivados(cliente),
+                                                  conservar=[c["catalogo_id"]])
     personas_ = datos.personas(cliente)
     if c["persona_id"] not in {p["id"] for p in personas_}:
         archivada = datos.persona(cliente, c["persona_id"])
@@ -726,7 +729,10 @@ def ver(cliente, sid):
     momento = sp.get("momento") or {}
     return render_template("sprint_detalle.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            sprint=sp, linea=tablero.linea_sprint(sp), resumen=tablero.resumen(sp),
-                           productos_sprint=productos, personas_sprint=datos.personas(cliente),
+                           # Una campaña nueva no se arma con un producto archivado.
+                           productos_sprint=catalogo_productos.sin_archivados(productos,
+                                                                              tiendas.activos_archivados(cliente)),
+                           personas_sprint=datos.personas(cliente),
                            presets=calendario.presets(pais, int(sp["inicio"][:4])),
                            momento_valor=momento.get("clave") or ("propio" if momento else ""),
                            marcas_texto=tablero.marcas_texto(sp.get("marcas")),
