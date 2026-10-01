@@ -66,6 +66,6 @@ def test_estimado_cuenta_el_redondeo_de_cada_clip():
 def test_aire_disponible():
     lineas = [(n, " ".join(["palabra"] * 8)) for n in range(1, 35)]
     hablado = 34 * 8 / 2.4
-    # 145 s de objetivo → ~13 clips de 12 s → 6,5 s se van en redondeo
-    assert duracion.aire_disponible(lineas, 2.4, 145) == round(145 - hablado - 0.5 * 13, 1)
+    # 145 s de objetivo → se cuentan 15 clips de 10 s con 1 s de redondeo cada uno (de más, a propósito)
+    assert duracion.aire_disponible(lineas, 2.4, 145) == round(145 - hablado - 15, 1)
     assert duracion.aire_disponible(lineas, 2.4, 100) == 0.0  # no entra: nada de aire

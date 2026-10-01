@@ -14,6 +14,11 @@ SEGUNDO_FINAL = 1.0
 # (2026-09-30) estimaba 132,2 s y armado dio 141–150 s.
 CLIP_PROMEDIO = 12
 REDONDEO_POR_CLIP = 0.5
+# Para el margen de aire que se le da a Claude se cuenta de más a propósito
+# (clips de 10 s, un segundo entero de redondeo cada uno): Claude usa todo el
+# margen que recibe, y la validación V6 solo rechaza pasarse del objetivo.
+CLIP_CORTO = 10
+REDONDEO_MAXIMO = 1.0
 
 
 def palabras(texto):
@@ -58,7 +63,8 @@ def aire_disponible(lineas, wps, objetivo):
     en `objetivo` después de lo hablado y del redondeo de los clips. Se le da a
     Claude al armar: con solo el objetivo repartía más aire del que cabía."""
     hablado = sum(seg_hablados(t, wps) for _, t in lineas)
-    return round(max(0.0, objetivo - hablado - REDONDEO_POR_CLIP * _clips_esperados(objetivo)), 1)
+    clips = max(1, math.ceil(objetivo / CLIP_CORTO))
+    return round(max(0.0, objetivo - hablado - REDONDEO_MAXIMO * clips), 1)
 
 
 def bloques_quitados(textos, quitadas):
