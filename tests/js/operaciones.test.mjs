@@ -700,6 +700,25 @@ test("ponerFuentesSubtitulos valida el idioma y cada fuente, y normaliza sin rep
   invalida(() => op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "otra" }], DURACIONES), /fuente de subtítulos/);
 });
 
+// Fix round 1: documento.validar rechaza una lista de más de MAX_FUENTES_SUBTITULO
+// fuentes DISTINTAS; el tope se mira DESPUÉS de quitar repetidas.
+test("ponerFuentesSubtitulos rechaza más de MAX_FUENTES_SUBTITULO fuentes distintas (contadas después de quitar repetidas)", () => {
+  const distintas = (n) => [
+    { tipo: "voz" }, { tipo: "sonido" },
+    ...Array.from({ length: n - 2 }, (_, i) => ({ tipo: "material", material_id: i + 1 })),
+  ];
+  const ocho = op.ponerFuentesSubtitulos(docBase(), "es", distintas(op.MAX_FUENTES_SUBTITULO), DURACIONES).doc;
+  assert.equal(ocho.subtitulos.fuentes.es.length, op.MAX_FUENTES_SUBTITULO);
+  invalida(
+    () => op.ponerFuentesSubtitulos(docBase(), "es", distintas(op.MAX_FUENTES_SUBTITULO + 1), DURACIONES),
+    /demasiadas fuentes/,
+  );
+  // 9 fuentes, pero una repetida: al quitar la repetida quedan 8 distintas: pasa
+  const nueveConRepetida = [...distintas(op.MAX_FUENTES_SUBTITULO), { tipo: "voz" }];
+  const pasaIgual = op.ponerFuentesSubtitulos(docBase(), "es", nueveConRepetida, DURACIONES).doc;
+  assert.equal(pasaIgual.subtitulos.fuentes.es.length, op.MAX_FUENTES_SUBTITULO);
+});
+
 const PALABRAS_A1 = [
   { t_ms: 0, dur_ms: 400, texto: "Hola" },
   { t_ms: 500, dur_ms: 300, texto: "mundo" },

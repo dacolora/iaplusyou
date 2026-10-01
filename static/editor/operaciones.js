@@ -46,6 +46,10 @@ const MAX_CORRECCION = 120;   // documento.MAX_CORRECCION (D3)
 // Lista blanca de `cambiarSubtitulos` (D7): tiene que ser la misma de
 // documento.ESTILOS_SUBTITULOS (tests/test_editor_js.py los compara).
 export const ESTILOS_SUBTITULOS = ["karaoke", "caja", "palabra_grande", "minimal"];
+// Tope de `ponerFuentesSubtitulos` (D4): tiene que ser el mismo de
+// documento.MAX_FUENTES_SUBTITULO (tests/test_editor_js.py los compara) —
+// documento.validar falla con una lista más larga.
+export const MAX_FUENTES_SUBTITULO = 8;
 
 export class OperacionInvalida extends Error {
   constructor(mensaje) {
@@ -1021,6 +1025,12 @@ export function ponerFuentesSubtitulos(doc, idioma, fuentes, info = {}) {
     if (vistas.has(marca)) continue;
     vistas.add(marca);
     limpias.push(limpia);
+  }
+  // Después de quitar repetidas: documento.validar falla con una lista de
+  // más de MAX_FUENTES_SUBTITULO fuentes — la página nunca ofrece elegir
+  // tantas (D4: una sola fuente por idioma), así que esto es de contrato.
+  if (limpias.length > MAX_FUENTES_SUBTITULO) {
+    throw new OperacionInvalida(`Son demasiadas fuentes de subtítulos para un idioma: hasta ${MAX_FUENTES_SUBTITULO}.`);
   }
   const sub = { ...(res.subtitulos || {}) };
   sub.fuentes = { ...(sub.fuentes || {}), [idioma]: limpias };

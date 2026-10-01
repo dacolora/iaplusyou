@@ -101,6 +101,11 @@ def test_estilos_subtitulos_js_iguales_a_python():
     assert _constante_js("operaciones.js", "ESTILOS_SUBTITULOS") == list(documento.ESTILOS_SUBTITULOS)
 
 
+def test_max_fuentes_subtitulo_js_igual_a_python():
+    # ponerFuentesSubtitulos rechaza lo que documento.validar rechazaría por tener más fuentes de la cuenta
+    assert _constante_js("operaciones.js", "MAX_FUENTES_SUBTITULO") == documento.MAX_FUENTES_SUBTITULO
+
+
 def _generador():
     import importlib.util
     ruta = os.path.join(RAIZ, "tests", "fixtures", "generar_casos_editor.py")

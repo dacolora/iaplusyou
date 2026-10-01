@@ -180,6 +180,12 @@ const PALABRAS_A1 = [{ t_ms: 0, dur_ms: 400, texto: "Hola" }, { t_ms: 500, dur_m
 const INFO_SUB = { ...D, 2: { duracion_ms: 3000, palabras: PALABRAS_A1 } };
 anotar("poner_fuentes_voz", () => op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "voz" }], D));
 anotar("poner_fuentes_vacias", () => op.ponerFuentesSubtitulos(docBase(), "en", [], D));
+// Fix round 1: el tope (documento.MAX_FUENTES_SUBTITULO) con justo 8 fuentes distintas.
+anotar("poner_fuentes_ocho", () => op.ponerFuentesSubtitulos(docBase(), "es", [
+  { tipo: "voz" }, { tipo: "sonido" },
+  { tipo: "material", material_id: 1 }, { tipo: "material", material_id: 2 }, { tipo: "material", material_id: 3 },
+  { tipo: "material", material_id: 4 }, { tipo: "material", material_id: 5 }, { tipo: "material", material_id: 6 },
+], D));
 anotar("corregir_palabra", () => op.corregirPalabra(docBase(), 2, 0, "  Creatv  ", INFO_SUB));
 anotar("quitar_linea", () => op.quitarLinea(docBase(), [{ material_id: 2, indice: 0 }, { material_id: 2, indice: 1 }], INFO_SUB));
 anotar("cambiar_subtitulos", () => op.cambiarSubtitulos(docBase(), {

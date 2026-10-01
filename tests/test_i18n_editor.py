@@ -39,6 +39,7 @@ INTERNOS = {
         "no es un número válido", "no se puede cambiar", "No se puede cambiar «", "Esa fuente no está disponible",
         "inválida (", "ken_burns solo se cambia", "Esa mezcla no existe",
         "Esa fuente de subtítulos no existe", "Ese estilo de subtítulos no existe", "Ese idioma no es válido",
+        "Son demasiadas fuentes de subtítulos",
     ),
 }
 # Palabras españolas del editor que MARCAS_CODIGO no trae (etiquetas de la
