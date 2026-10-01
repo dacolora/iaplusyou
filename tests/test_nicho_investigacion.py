@@ -245,7 +245,7 @@ class TestPlataformas:
     def test_estimar_busqueda_amazon(self):
         """Estimate search cost for Amazon."""
         costo = plat.estimar_busqueda("amazon", 2, 20)
-        # 2 × 20 = 40 resultados × $0.003 = $0.12
+        # 2 × 20 = 40 resultados × $0.005 = $0.20 (plan FREE de Apify, verificado 2026-10-01)
         assert costo > 0
         assert isinstance(costo, float)
 
@@ -401,11 +401,12 @@ def test_estimar_suma_plataformas_claude_y_avatares(monkeypatch):
     from nicho import avatares, investigacion as inv
     monkeypatch.setattr(avatares, "estimar_costo_maximo", lambda: {"usd": 0.4})
     e = inv.estimar({}, "SE", ["amazon", "tiktok_shop"], ["reddit"], inv.TOPES_DEFECTO)
-    assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.18 and e["filas"][0]["resenas_usd"] == 1.35
+    # amazon búsqueda 60 × 0.005 = 0.3 (plan FREE de Apify, verificado 2026-10-01)
+    assert [f["clave"] for f in e["filas"]] == ["amazon", "tiktok_shop"] and e["filas"][0]["busqueda_usd"] == 0.3 and e["filas"][0]["resenas_usd"] == 1.35
     # claude_usd sale de _tokens_claude (amazon + tiktok_shop buscan las dos en sueco: un idioma)
     entrada_cl, salida_cl = inv._tokens_claude(2, inv.TOPES_DEFECTO, 1)
     assert e["avatares_usd"] == 0.4 and e["claude_usd"] == inv._centavos(inv.costo_claude(entrada_cl, salida_cl)) > 0
-    assert e["total_usd"] == round(0.18 + 1.35 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
+    assert e["total_usd"] == round(0.3 + 1.35 + 0.27 + 6.75 + e["claude_usd"] + 0.4, 2) and e["texto"]
     otro = inv.estimar({}, "SE", ["meli"], [], inv.TOPES_DEFECTO)["filas"][0]           # MELI no está en Suecia: busca en México
     assert (otro["mercado"], otro["sitio"]) == ("otro", "MX")
 

@@ -149,6 +149,38 @@ def test_arrancar_sin_json_no_cuenta_como_lanzada(esperas):
     assert "console.apify.com" in res["aviso"]
 
 
+def test_arrancar_actor_pide_acceso_completo_no_es_token(esperas):
+    """2026-10-01: `axesso_data~amazon-reviews-scraper` empezó a responder 403 con
+    `error.type == "full-permission-actor-not-approved"` porque ahora pide acceso completo a la
+    cuenta; el mensaje de siempre («Apify no aceptó el token») es falso acá y mandó a buscar un
+    problema de APIFY_TOKEN que no existía. Nunca lleva la URL de aprobación ni el token."""
+    import providers.apify as ap
+    from nicho.fuentes.base import ErrorFuente
+    cuerpo = {"error": {"type": "full-permission-actor-not-approved",
+                        "message": "This Actor requires full access to your account. You must approve its "
+                                   "permissions before running it: https://console.apify.com/actors/x~y/permissions"}}
+    s = _Sesion({"/actors/x~y/runs": _Resp(403, cuerpo)})
+    with pytest.raises(ErrorFuente) as e:
+        ap.arrancar(s, "tok_secreto", "x~y", {}, 10, 0.01)
+    assert "acceso completo" in str(e.value) and "token" not in str(e.value).lower()
+    assert "console.apify.com" not in str(e.value) and "tok_secreto" not in str(e.value)
+
+
+def test_arrancar_403_comun_sigue_siendo_el_de_token(esperas):
+    """Un 403 sin ese `type` particular (otro motivo, o sin cuerpo legible) sigue dando el
+    mensaje de siempre: solo `full-permission-actor-not-approved` tiene su propio aviso."""
+    import providers.apify as ap
+    from nicho.fuentes.base import ErrorFuente
+    s = _Sesion({"/actors/x~y/runs": _Resp(403, {"error": {"type": "otro-motivo", "message": "nope"}})})
+    with pytest.raises(ErrorFuente) as e:
+        ap.arrancar(s, "tok", "x~y", {}, 10, 0.01)
+    assert "token" in str(e.value).lower()
+    s = _Sesion({"/actors/x~y/runs": _Resp(403, None)})           # sin cuerpo legible
+    with pytest.raises(ErrorFuente) as e:
+        ap.arrancar(s, "tok", "x~y", {}, 10, 0.01)
+    assert "token" in str(e.value).lower()
+
+
 def test_sondear_que_no_es_json_cuenta_como_lectura_mala(esperas):
     """Lo mismo en `sondear` (la fuente Apify manual de Nicho y los barridos de referentes)."""
     import providers.apify as ap

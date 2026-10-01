@@ -17218,3 +17218,6 @@ msgid "%(num)s vendido"
 msgid_plural "%(num)s vendidos"
 msgstr[0] "%(num)s sold"
 msgstr[1] "%(num)s sold"
+
+msgid "Este actor de Apify ahora pide acceso completo a la cuenta y Creatv no se lo da; hay que cambiar de actor."
+msgstr "This Apify actor now requires full account access and Creatv won't grant it; a different actor is needed."

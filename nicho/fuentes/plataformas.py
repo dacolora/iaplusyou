@@ -18,7 +18,7 @@ Solo datos y funciones puras: nada de red ni de base. Los lectores son
 tolerantes (varias claves candidatas por campo); un ítem sin id o sin texto
 se descarta (None). Nunca se lee el nombre del autor ni del comprador.
 
-  amazon      búsqueda `junglee~amazon-crawler` (US$ 3 / 1 000): no acepta
+  amazon      búsqueda `junglee~amazon-crawler` (US$ 5 / 1 000): no acepta
               palabras sueltas, así que la entrada lleva la URL de búsqueda
               del dominio del país (`https://www.amazon.<tld>/s?k=…`).
               reseñas `axesso_data~amazon-reviews-scraper` (US$ 0,90 / 1 000,
@@ -27,7 +27,7 @@ se descarta (None). Nunca se lee el nombre del autor ni del comprador.
   meli        búsqueda `karamelo~mercado-libre-listings-scraper` (US$ 2 /
               1 000, 18 países): UN `keyword` + `country` (URL del sitio) por
               corrida. reseñas `karamelo~mercadolibre-review-scraper` (US$
-              0,70 / 1 000): `productUrls` + `maxReviewsPerProduct`.
+              1,50 / 1 000): `productUrls` + `maxReviewsPerProduct`.
   tiktok_shop `unseenuser~tiktok-shop-scraper` (US$ 4,50 / 1 000) en modo
               `shop_search` y `product_reviews`; sin lista de países.
   walmart     búsqueda `s-r~walmart-scraper` (US$ 1 / 1 000 + US$ 0,001 por
@@ -40,6 +40,12 @@ se descarta (None). Nunca se lee el nombre del autor ni del comprador.
               reseñas). reseñas `axlymxp~aliexpress-reviews-scraper` (US$ 3 /
               1 000 + US$ 0,01 por corrida; cada reseña trae el país del
               comprador). Vende en todo el mundo; busca en inglés desde EE. UU.
+
+Los precios por resultado son los que cobra el plan de Apify de Creatv (FREE); un plan de pago
+puede bajar algunos de ellos. Amazon búsqueda y MELI reseñas se corrigieron el 2026-10-01 tras
+verificarlos contra el cobro real de corridas reales (antes US$ 3 y US$ 0,70 por 1 000, por debajo
+de lo que Apify cobra de verdad: un precio bajo hace que `maxTotalChargeUsd` corte la corrida antes
+de lo pedido y el gasto registrado quede por debajo del real).
 """
 import math
 import re
@@ -435,7 +441,7 @@ def _resena_aliexpress(item):
 PLATAFORMAS = {
     "amazon": {
         "nombre": "Amazon", "paises": PAISES_AMAZON, "casa": "US",
-        "busqueda": {"actor": "junglee~amazon-crawler", "nombre": N_("Búsqueda en Amazon"), "usd_por_resultado": 0.003, "usd_por_corrida": 0.0,
+        "busqueda": {"actor": "junglee~amazon-crawler", "nombre": N_("Búsqueda en Amazon"), "usd_por_resultado": 0.005, "usd_por_corrida": 0.0,
                      "armar_entradas": _busqueda_amazon, "leer_producto": _producto_amazon},
         "resenas": {"actor": "axesso_data~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.0009, "usd_por_corrida": 0.0,
                     "por_producto": True, "necesita_link": False, "armar_entradas": _resenas_amazon, "leer_resena": _resena_amazon},
@@ -444,7 +450,7 @@ PLATAFORMAS = {
         "nombre": "Mercado Libre", "paises": PAISES_MELI, "casa": "MX",
         "busqueda": {"actor": "karamelo~mercado-libre-listings-scraper", "nombre": N_("Búsqueda en Mercado Libre"), "usd_por_resultado": 0.002,
                      "usd_por_corrida": 0.0, "armar_entradas": _busqueda_meli, "leer_producto": _producto_meli},
-        "resenas": {"actor": "karamelo~mercadolibre-review-scraper", "nombre": N_("Opiniones de Mercado Libre"), "usd_por_resultado": 0.0007,
+        "resenas": {"actor": "karamelo~mercadolibre-review-scraper", "nombre": N_("Opiniones de Mercado Libre"), "usd_por_resultado": 0.0015,
                     "usd_por_corrida": 0.0, "por_producto": False, "necesita_link": True, "armar_entradas": _resenas_meli,
                     "leer_resena": _resena_meli},
     },
