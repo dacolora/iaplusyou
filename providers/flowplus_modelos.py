@@ -38,6 +38,11 @@ que la ruta con referencias): alibaba/wan-3.0/text-to-video (480p/720p,
 `sound`), bytedance/seedance-2.5/text-to-video (a diferencia de image-to-video
 SÍ elige formato: `formatos_texto`, `generate_audio`) y
 bytedance/seedream-v5.0-pro (text-to-image, sin sufijo).
+
+Anuncio hablado (spec 2026-10-01): `HABLADO` es un registro aparte (foto +
+voz → video que habla, P-Video-Avatar). Ningún selector, Sprints, derivación
+ni CIERRE_SONIDO lo recorre; `estimate_video` delega en `estimate_hablado`
+para que el gasto y «Reintentar» salgan de la misma fórmula.
 """
 import math
 
@@ -189,6 +194,47 @@ for _info in VIDEO.values():
 VIDEO_POR_DEFECTO = "wan3"
 IMAGEN_POR_DEFECTO = "seedream_v5_pro"
 
+# Anuncio hablado (spec 2026-10-01): foto + voz → un video donde la persona de
+# la foto dice la voz. Registro aparte a propósito: ningún selector de modelos,
+# Sprints, derivación ni CIERRE_SONIDO recorre HABLADO (por eso no va en
+# VIDEO). Verificado en la prueba real del 2026-09-30: pruna-ai/p-video/avatar
+# recibe `image`, `audio`, `resolution` (720p|1080p) y `video_prompt` opcional
+# («The person is talking.» por defecto); cobra US$ 0,025 por segundo de audio
+# a 720p, redondeado al segundo y sin mínimo; entrega 704×1280 con una foto 9:16.
+HABLADO = {
+    "p_video_avatar": {
+        "nombre": "P-Video-Avatar",
+        "path": "pruna-ai/p-video/avatar",
+        "usd_por_segundo": {"720p": 0.025, "1080p": 0.045},
+        "max_segundos": 30,
+    },
+}
+HABLADO_POR_DEFECTO = "p_video_avatar"
+RESOLUCION_HABLADO = "720p"
+
+
+def es_hablado(modelo_id):
+    return modelo_id in HABLADO
+
+
+def es_sesion_hablada(entry):
+    """Una sesión de Crear que es un anuncio hablado (por su modo o por su
+    modelo): no tiene director, «Editar y crear otra», final edition
+    automático ni derivaciones (spec §6)."""
+    e = entry or {}
+    return e.get("modo_crear") == "hablado" or es_hablado(e.get("modelo"))
+
+
+def nombre_modelo(modelo_id):
+    """Nombre visible del modelo (VIDEO, IMAGEN o HABLADO); None si no existe."""
+    info = VIDEO.get(modelo_id) or IMAGEN.get(modelo_id) or HABLADO.get(modelo_id)
+    return info["nombre"] if info else None
+
+
+def segundos_facturables(segundos):
+    """Segundos que cobra P-Video-Avatar: hacia arriba al segundo (7,05 s → 8)."""
+    return int(math.ceil(float(segundos) - 1e-9))
+
 # Frase de cierre del bloque de sonido, literal de cada fabricante (guías
 # oficiales de Wan 3.0, Kling y Seedance 2.5): así se apagan la voz y la
 # música nativas sin depender de cómo entienda el modelo una frase en español.
@@ -282,7 +328,10 @@ def estimate_video(modelo_id, duration, con_sonido=True, calidad="final", videos
     """Costo de la generación. `videos_ref_s`: duraciones de los videos de
     referencia; solo Wan 3.0 los factura (los segundos de entrada normalizados
     más los de salida, a la misma tarifa) — antes del 2026-09-30 el estimado y
-    el gasto los ignoraban. Los demás modelos reciben el fotograma y no cambian."""
+    el gasto los ignoraban. Los demás modelos reciben el fotograma y no cambian.
+    Un modelo de HABLADO cobra por los segundos de la voz (`estimate_hablado`)."""
+    if es_hablado(modelo_id):
+        return estimate_hablado(modelo_id, duration)
     segundos = duration
     if (VIDEO.get(modelo_id) or {}).get("max_videos") and videos_ref_s:
         segundos = duration + segundos_facturables_referencia(videos_ref_s)
@@ -292,6 +341,14 @@ def estimate_video(modelo_id, duration, con_sonido=True, calidad="final", videos
 def estimate_imagen(modelo_id, n_referencias=1):
     info = IMAGEN[modelo_id]
     return wavespeed_imagen.estimate_seedream(resolution="2k", n_imagenes=max(1, n_referencias))
+
+
+def estimate_hablado(modelo_id, segundos, resolucion=RESOLUCION_HABLADO):
+    """Precio del anuncio hablado: segundos de la voz, hacia arriba al segundo,
+    por la tarifa de la resolución (spec §9.5: la fórmula local coincidió al
+    centavo con lo cobrado; no se llama a la API de precios)."""
+    tarifa = HABLADO[modelo_id]["usd_por_segundo"][resolucion]
+    return {"credits": None, "usd": round(segundos_facturables(segundos) * tarifa, 4)}
 
 
 def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
@@ -396,6 +453,20 @@ def generar_imagen(modelo_id, prompt, referencias, on_progreso=None, aspect_rati
             resolution="2k", on_progreso=on_progreso, aspect_ratio=aspect_ratio,
         )
     raise ValueError(f"Modelo de imagen desconocido: {modelo_id}")
+
+
+def generar_hablado(modelo_id, imagen_url, audio_url, video_prompt=None, resolucion=RESOLUCION_HABLADO,
+                    on_progreso=None):
+    """Anuncio hablado: la persona de `imagen_url` dice `audio_url`. Devuelve
+    la URL pública del video. `video_prompt` («Cómo se mueve») va TAL CUAL;
+    vacío o solo espacios, no se manda y el modelo usa su «The person is
+    talking.». Mismo `_lanzar` que el resto: el id de la predicción se avisa
+    por `on_progreso` apenas existe («Recuperar el video» lo usa)."""
+    info = HABLADO[modelo_id]
+    payload = {"image": imagen_url, "audio": audio_url, "resolution": resolucion}
+    if video_prompt and video_prompt.strip():
+        payload["video_prompt"] = video_prompt
+    return _lanzar(info["path"], payload, info["nombre"], on_progreso=on_progreso)
 
 
 # «Elementos» de Kling: la identidad reutilizable de un personaje u objeto que
