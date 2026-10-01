@@ -396,6 +396,25 @@ visible del producto como en el resto de Crear): la pieza aparece en la pestaña
 con su barra de progreso y su Aprobar/Rechazar de siempre. `pieza.extra.referente_id`
 (en realidad `concepto.extra.referente_id`, por cómo `creative_flow.actualizar` guarda
 los campos que no son columnas propias) es lo que cuenta «Usado N veces» en la ficha.
+**Recrear fiel** (spec `docs/superpowers/specs/2026-09-30-recrear-fiel-design.md`, pedido de Daniel tras una imagen
+que salió con una mano y un pie en vez de las dos sandalias de la referencia: una foto del producto sostenida con las
+manos ponía su pose y la guía de marca pedía pies y manos): al abrir Recrear, el formulario pide solo
+`POST …/recrear/leer` (`referentes/lectura.py`: una llamada de visión, ≈ US$ 0,01, gasto `adaptar_referente` también si
+la respuesta no sirve) que describe la composición EN INGLÉS, el producto en singular, las unidades, si hay personas y
+los textos de DENTRO de la imagen con su rol; se guarda una vez por referente en `referente.extra.lectura`
+(`datos.guardar_lectura`, candado antes de leer) y el formato por defecto pasa a ser el más parecido
+(`lectura.formato_cercano` con las medidas de `lectura.medir`). Los textos leídos son campos editables (`texto_<i>`;
+el de rol `marca` nace vacío = se quita) bajo «Traer los textos de la referencia» (apagada = sin ningún texto,
+`recrear.instruccion_textos`); reemplazan el campo «Titular». En imagen, dos casillas (`modo=fiel|libre`) crean una
+sesión de Crear cada una (fiel primero, `extra.recrear_modo`, títulos « · igual» / « · variación»): la fiel
+(`recrear.armar_prompt_fiel`) dice «edita Image 1 y déjala idéntica, cambia solo el producto», con la composición, las
+unidades y «de Image 2 toma solo cómo es el producto», SIN guía de marca, firma ni dolor; la variación es
+`armar_prompt` con la línea de textos. El servidor arma los prompts al generar (`_contexto_recrear`, marca
+`campos_vista=1`) salvo el que la persona editó (`<campo>_editado=1`); sin la marca se usa `prompt` tal cual (camino
+viejo). «Adaptar con IA» reescribe los textos alineados (misma cantidad; marca vacía) y el prompt de la variación. La
+pestaña tiene dos `<script>` con su propio `cargarEnDialogo`: el de la ficha avisa con el evento `ref:fragmento` para
+que el otro pida la lectura. Enter en un campo no envía. El Blueprint de Referentes rechaza los POST cross-site
+(`Sec-Fetch-Site`).
 
 **Crear (FlowPlus)**. Two paths from the same form (`cf_crear_video`, field
 `modo_prompt`). **Default = direct generation** (the "generación tradicional" clients rely

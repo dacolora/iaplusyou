@@ -2821,11 +2821,11 @@ msgstr "Claude didn't return valid JSON."
 msgid "Claude no devolvió JSON."
 msgstr "Claude didn't return JSON."
 
+msgid "Claude no devolvió el prompt."
+msgstr "Claude didn't return the prompt."
+
 msgid "Claude no devolvió pedidos."
 msgstr "Claude didn't return any requests."
-
-msgid "Claude no devolvió titular y prompt."
-msgstr "Claude didn't return a headline and a prompt."
 
 msgid "Claude no devolvió título y escena."
 msgstr "Claude didn't return a title and scene."
@@ -4651,6 +4651,12 @@ msgstr "ElevenLabs · %(n)s characters · %(voz)s"
 msgid "Elige al menos un destino de esta edición."
 msgstr "Choose at least one market of this edit."
 
+msgid "Elige al menos una imagen"
+msgstr "Pick at least one image"
+
+msgid "Elige al menos una imagen."
+msgstr "Pick at least one image."
+
 msgid "Elige al menos una plataforma o una red."
 msgstr "Choose at least one platform or network."
 
@@ -5636,6 +5642,9 @@ msgstr "This piece is no longer in Create: generate a new one and add it to an e
 msgid "Esta pieza ya no existe o no tiene este detalle."
 msgstr "This piece no longer exists or has no such detail."
 
+msgid "Esta referencia no tiene textos dentro de la imagen."
+msgstr "This reference has no text inside the image."
+
 msgid "Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."
 msgstr "This session has no reference images — discard it and create a new one."
 
@@ -6416,6 +6425,10 @@ msgid "Generando %(n)s escenas x 2 proveedores (10 imágenes)…"
 msgstr "Generating %(n)s scenes x 2 providers (10 images)…"
 
 #, python-format
+msgid "Generando %(n)s imágenes desde el referente…"
+msgstr "Generating %(n)s images from the reference…"
+
+#, python-format
 msgid "Generando %(n)s swaps…"
 msgstr "Generating %(n)s swaps…"
 
@@ -6476,6 +6489,9 @@ msgstr "Generate %(n)s piece(s) — US$ %(usd)s"
 #, python-format
 msgid "Generar %(n)s pieza(s) — USD %(usd)s"
 msgstr "Generate %(n)s piece(s) — USD %(usd)s"
+
+msgid "Generar 2 imágenes"
+msgstr "Generate 2 images"
 
 msgid "Generar avatares"
 msgstr "Generate avatars"
@@ -6901,6 +6917,9 @@ msgstr "Language not available: %(v)s. Options: %(opciones)s."
 #, python-format
 msgid "Idioma no soportado: %(idioma)s (se esperan dos letras minúsculas)."
 msgstr "Unsupported language: %(idioma)s (two lowercase letters expected)."
+
+msgid "Igual a la referencia"
+msgstr "Same as the reference"
 
 msgid "Igual que YouTube, <strong>en tu Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> con la cuenta de TikTok del proyecto."
 msgstr "Same as YouTube, <strong>on your Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> with the project's TikTok account."
@@ -7738,6 +7757,9 @@ msgstr "Reading the page"
 
 msgid "Leyendo la página del producto… aparece aquí cuando termine."
 msgstr "Reading the product page… it shows up here when it's done."
+
+msgid "Leyendo la referencia…"
+msgstr "Reading the reference…"
 
 msgid "Leyendo referencias"
 msgstr "Reading references"
@@ -9208,6 +9230,13 @@ msgstr "The project couldn't be read; nothing was saved."
 
 msgid "No se pudo leer la llave guardada: vuelve a conectar Triple Whale."
 msgstr "The saved key couldn't be read: connect Triple Whale again."
+
+#, python-format
+msgid "No se pudo leer la referencia (%(tipo)s)."
+msgstr "Couldn't read the reference (%(tipo)s)."
+
+msgid "No se pudo leer la referencia."
+msgstr "Couldn't read the reference."
 
 #, python-format
 msgid "No se pudo pausar por tope: %(error)s"
@@ -11129,6 +11158,9 @@ msgstr "“{nombre}” was added."
 msgid "Se analizan dos veces (núcleos, luego subs)"
 msgstr "Analyzed twice (cores, then subs)"
 
+msgid "Se arman con lo de arriba al generar. Si escribes aquí, se usa tal cual."
+msgstr "They're built from the fields above when you generate. If you write here, it's used as is."
+
 #, python-brace-format
 msgid "Se borró «{nombre}»."
 msgstr "“{nombre}” was deleted."
@@ -12026,6 +12058,9 @@ msgstr "Text “{rol}”"
 msgid "Textos"
 msgstr "Texts"
 
+msgid "Textos de la referencia"
+msgstr "Texts from the reference"
+
 msgid "Textos orgánicos (IA)"
 msgstr "Organic captions (AI)"
 
@@ -12449,6 +12484,9 @@ msgstr "Bring in the copycoders library"
 
 msgid "Traer las fotos del producto"
 msgstr "Bring in the product's photos"
+
+msgid "Traer los textos de la referencia"
+msgstr "Bring the texts from the reference"
 
 msgid "Traer nuevos de Meta"
 msgstr "Bring in new ones from Meta"
@@ -13015,11 +13053,17 @@ msgstr "Empty = the scene's natural ambience."
 msgid "Vacío = hereda de Configuración (el valor gris es el que aplica hoy). «Sin umbral» apaga esa comparación en este experimento."
 msgstr "Empty = inherits from Settings (the gray value is the one that applies today). “No threshold” turns off that comparison in this experiment."
 
+msgid "Vacío: se quita"
+msgstr "Empty: it's removed"
+
 msgid "Validaciones"
 msgstr "Validations"
 
 msgid "Variable"
 msgstr "Variable"
+
+msgid "Variación"
+msgstr "Variation"
 
 #, python-format
 msgid "Variante %(n)s (%(tipo)s)"
@@ -13099,6 +13143,9 @@ msgstr "See the exact instruction the model gets →"
 #, python-format
 msgid "Ver más (quedan %(n)s)"
 msgstr "Show more (%(n)s left)"
+
+msgid "Ver o editar los prompts"
+msgstr "See or edit the prompts"
 
 msgid "Ver por qué usamos estos modelos (comparación completa) →"
 msgstr "See why we use these models (full comparison) →"
@@ -14686,6 +14733,9 @@ msgstr "identity"
 msgid "idioma inválido: %(idioma)s (se esperan dos letras minúsculas)."
 msgstr "invalid language: %(idioma)s (two lowercase letters expected)."
 
+msgid "igual"
+msgstr "same"
+
 msgid "imagen"
 msgstr "image"
 
@@ -14764,6 +14814,9 @@ msgstr "Italian"
 msgid "la consciencia"
 msgstr "awareness"
 
+msgid "la estructura de la referencia, más libre y con la guía de tu marca"
+msgstr "the reference's structure, freer and with your brand guide"
+
 msgid "la etapa"
 msgstr "the stage"
 
@@ -14820,6 +14873,14 @@ msgstr "launching"
 
 msgid "las familias de formato"
 msgstr "format families"
+
+#, python-format
+msgid "lectura · %(familia)s"
+msgstr "reading · %(familia)s"
+
+#, python-format
+msgid "lectura · %(familia)s · respuesta inválida"
+msgstr "reading · %(familia)s · invalid response"
 
 msgid "link"
 msgstr "link"
@@ -14904,6 +14965,9 @@ msgstr "target %(meta)s×"
 
 msgid "mezcla"
 msgstr "mix"
+
+msgid "mismas posiciones, ángulo y fondo; solo cambia el producto"
+msgstr "same positions, angle and background; only the product changes"
 
 msgid "mismo problema que Flux Kontext"
 msgstr "same problem as Flux Kontext"
@@ -15820,6 +15884,9 @@ msgstr "system user"
 msgid "uuid, solo si ya lo creaste en el panel de Higgsfield"
 msgstr "uuid, only if you already created it in the Higgsfield panel"
 
+msgid "variación"
+msgstr "variation"
+
 msgid "variantes"
 msgstr "variants"
 
@@ -16003,6 +16070,10 @@ msgstr "“%(original)s” → “%(buscado)s”"
 #, python-format
 msgid "«%(palabra)s»"
 msgstr "“%(palabra)s”"
+
+#, python-format
+msgid "«%(texto)s»: se quita"
+msgstr "“%(texto)s”: it's removed"
 
 #, python-format
 msgid "«%(titulo)s» no se pudo preparar: %(error)s"
