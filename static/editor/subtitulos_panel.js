@@ -24,16 +24,19 @@
 // subtitulos_modelo.js (puro, probado en Node); aquí solo el DOM y la red. La
 // edición se toca SOLO por `editor` (pagina_editor.js); con la edición
 // cambiada en otra pestaña (`enConflicto`) no se cambia nada ni se paga nada.
-// No hace nada al importarse (lo prueba Node).
+// Mientras la pestaña no se ve (otra pestaña de la biblioteca, la hoja del
+// celular cerrada) no se deriva ni se pide el precio: se hace al mostrarse
+// (aviso "biblioteca"); la fila de la línea de tiempo es de la página y sigue
+// al día sola. No hace nada al importarse (lo prueba Node).
 import { mensajeSesion, sesionTerminada } from "./guardado.js";
-import { ESTILOS_SUBTITULOS } from "./operaciones.js";
-import { avisoEmoji, mensajeConflicto, textoPorcentaje, tieneEmoji } from "./propiedades_modelo.js";
+import { ESTILOS_SUBTITULOS, MAX_CORRECCION } from "./operaciones.js";
+import { avisoEmoji, mensajeConflicto, mensajeRechazo, textoPorcentaje, tieneEmoji } from "./propiedades_modelo.js";
 import { valorDestino } from "./resolver.js";
 import { derivar, palabrasDe } from "./subtitulos_fuente.js";
 import {
-  alturaDePosicion, coloresResaltado, estadoPanel, estilosPanel, fuenteDeClave, fuentePorDefecto, fuentesDisponibles,
-  idiomaPorDefecto, lineaEn, lineasListado, pedido, posicionDeAltura, POSICIONES, resaltadoElegido, textoBoton, textoEstado,
-  textoTiempo,
+  alturaDePosicion, coloresResaltado, encargoGuardado, estadoPanel, estilosPanel, fuenteDeClave, fuentePorDefecto,
+  fuentesDisponibles, idiomaPorDefecto, lineaEn, lineasListado, pedido, posicionDeAltura, POSICIONES, resaltadoElegido,
+  textoBoton, textoEstado, textoTiempo,
 } from "./subtitulos_modelo.js";
 import { t } from "./textos.js";
 
@@ -41,7 +44,9 @@ export const ESPERA_ESTIMAR_MS = 300;
 export const INTERVALO_TRABAJO_MS = 1500;
 const REINTENTOS_ESTIMAR = 3;           // si el precio no se pudo calcular, se reintenta solo (gratis)
 const REINTENTO_ESTIMAR_MS = 8000;
-const MAX_CORRECCION = 120;             // operaciones.MAX_CORRECCION / documento (D3)
+// Sin ninguna respuesta del estado del trabajo durante este rato seguido, se
+// deja de preguntar y se pide recargar (la transcripción sigue en el servidor).
+export const SIN_RESPUESTA_MS = 15 * 60 * 1000;
 const PEDIDO_VACIO = { todos: [], faltan: [], mudos: [], cargar: [] };
 
 function el(tag, clase, padre, texto) {
@@ -91,16 +96,19 @@ export class SubtitulosPanel {
     this.firmaFuentes = null;
     this.firmaColores = null;
     this.lineaActual = -1;
+    this.sucio = true;                  // algo cambió mientras la pestaña no se veía
     if (!contenedor || !editor) return;
     this._construir();
     editor.escuchar((que) => {
-      if (que === "tiempo") this._marcarLinea();
+      if (que === "tiempo") {
+        if (!this.sucio) this._marcarLinea();
+      }
       else if (que === "biblioteca") this._alMostrar();
       else if (que === "documento" || que === "destino" || que === "materiales") this.pintar();
     });
     this.pintar();
     const vivo = this.datos.trabajos_vivos?.subtitulos;
-    if (vivo) this.seguir(vivo, this._pedidoGuardado(vivo));
+    if (vivo) this.seguir(vivo, this._pedidoGuardado(vivo), { nuevo: false });
   }
 
   // ---- Armar (una vez) ----
@@ -218,10 +226,13 @@ export class SubtitulosPanel {
     raiz.addEventListener("change", (e) => this._cambio(e));
     raiz.addEventListener("input", (e) => this._entrada(e));
     raiz.addEventListener("keydown", (e) => this._tecla(e));
-    // con una palabra abierta, tocar otra no le quita el foco antes del clic
-    // (si no, guardar la primera rehace la lista y el clic se pierde)
+    // con una palabra abierta, tocar otra palabra, el tiempo o la × de una
+    // línea no le quita el foco antes del clic (si no, guardar la palabra
+    // rehace la lista y el clic se pierde): el clic la guarda primero
     raiz.addEventListener("pointerdown", (e) => {
-      if (this.editando && e.target.closest?.("button.ed-sub-palabra")) e.preventDefault();
+      if (this.editando && e.target.closest?.("button.ed-sub-palabra, button.ed-sub-tiempo, button.ed-sub-quitar-linea")) {
+        e.preventDefault();
+      }
     });
   }
 
@@ -240,8 +251,20 @@ export class SubtitulosPanel {
 
   // ---- Pintar ----
 
+  // ¿Se ve la pestaña? Oculta (otro panel de la biblioteca) o en la hoja del
+  // celular cerrada (visibility: hidden), no.
+  _visible() {
+    if (!this.raiz?.isConnected || this.raiz.closest("[hidden]")) return false;
+    return typeof this.raiz.checkVisibility === "function" ? this.raiz.checkVisibility({ visibilityProperty: true }) : true;
+  }
+
   pintar() {
     if (!this.raiz) return;
+    if (!this._visible()) {             // se pinta al mostrarse (aviso "biblioteca")
+      this.sucio = true;
+      return;
+    }
+    this.sucio = false;
     const ed = this.editor;
     const doc = ed.doc();
     const r = ed.resuelto?.() ?? null;
@@ -304,7 +327,9 @@ export class SubtitulosPanel {
       corriendo, etapa: this.trabajo?.etapa ?? "", calculando: Boolean(est?.calculando), error: Boolean(est?.error),
       gratis: Boolean(est?.gratis), precio: est?.precio ?? "",
     });
-    this.generarBoton.disabled = corriendo || !est || Boolean(est.calculando) || Boolean(est.error) || this._enConflicto();
+    // con el precio sin calcular el botón queda activo, pero un clic solo vuelve
+    // a pedir el precio (generar() nunca transcribe sin él)
+    this.generarBoton.disabled = corriendo || !est || Boolean(est.calculando) || this._enConflicto();
     this.progreso.hidden = !this.trabajo;
     if (this.trabajo) this.progreso.value = Math.max(0, Math.min(100, Number(this.trabajo.progreso) || 0));
   }
@@ -411,15 +436,15 @@ export class SubtitulosPanel {
     }
   }
 
-  // La página abrió una pestaña (editor.mostrarBiblioteca): si es esta, se
-  // ve la línea del cabezal (tocar un bloque de la fila «Subtítulos» la abre
-  // en esa línea).
+  // La biblioteca cambió de pestaña (o se abrió desde otro lado, como tocar un
+  // bloque de la fila «Subtítulos»): si esta se ve, se pone al día y muestra
+  // la línea del cabezal.
   _alMostrar() {
-    requestAnimationFrame(() => {
-      if (!this.raiz || this.raiz.closest("[hidden]")) return;
-      this._marcarLinea();
-      this.listaLineas.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
-    });
+    if (!this._visible()) return;
+    if (this.sucio) this.pintar();
+    this.lineaActual = -2;
+    this._marcarLinea();
+    this.listaLineas.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
   }
 
   _decir(texto, error = false) {
@@ -448,14 +473,19 @@ export class SubtitulosPanel {
     const b = e.target.closest?.("button");
     if (!b || !this.raiz.contains(b)) return;
     if (e.detail > 0 && !b.dataset.material) b.blur();   // con el mouse el foco no se queda (Espacio lo volvería a apretar)
+    if (b.dataset.restaurar !== undefined) return this._cerrarPalabra(true, null);
+    // con una palabra abierta (solo llegan aquí el tiempo y la × de una línea:
+    // ver el pointerdown), primero se guarda — la línea se toma antes, porque
+    // guardar puede rehacer la lista
+    const refsLinea = b.dataset.quitarLinea !== undefined ? this._refsLinea(Number(b.dataset.quitarLinea)) : null;
+    if (this.editando && !b.dataset.material) this._cerrarPalabra(true);
     if (b === this.generarBoton) return void this.generar();
     if (b === this.quitarBoton) return this._quitarTodos();
     if (b.dataset.estilo) return this._operar(null, "cambiarSubtitulos", { estilo_id: b.dataset.estilo });
     if (b.dataset.color) return this._operar(null, "cambiarSubtitulos", { resaltado: b.dataset.color });
     if (b.dataset.posicion) return this._operar(null, "cambiarSubtitulos", { posicion: Number(b.dataset.posicion) });
     if (b.dataset.ir !== undefined) return this.editor.ir?.(Number(b.dataset.ir) || 0);
-    if (b.dataset.quitarLinea !== undefined) return this._quitarLinea(Number(b.dataset.quitarLinea));
-    if (b.dataset.restaurar !== undefined) return this._cerrarPalabra(true, null);
+    if (refsLinea) return void (refsLinea.length && this._operar(null, "quitarLinea", refsLinea));
     if (b.dataset.material) return this._abrirPalabra(b);
   }
 
@@ -515,9 +545,10 @@ export class SubtitulosPanel {
     }
   }
 
-  // Una operación de operaciones.js; si la página la rechaza, el porqué se
-  // dice aquí (en el celular la hoja tapa el aviso de debajo del video) y los
-  // controles vuelven a lo que de verdad quedó.
+  // Una operación de operaciones.js; si la página la rechaza, el motivo real
+  // (propiedades_modelo.mensajeRechazo) se dice aquí, en #ed-sub-aviso — en el
+  // celular la hoja tapa el aviso de debajo del video — y los controles
+  // vuelven a lo que de verdad quedó.
   _operar(clave, nombre, ...args) {
     const ed = this.editor;
     if (this._enConflicto()) {
@@ -527,17 +558,17 @@ export class SubtitulosPanel {
     }
     const ok = clave ? ed.operarCon({ clave }, nombre, ...args) : ed.operar(nombre, ...args);
     if (!ok) {
-      this._decir(this._enConflicto() ? mensajeConflicto() : t("prop.rechazo"), true);
+      this._decir(mensajeRechazo(ed.doc(), nombre, args, ed.info(), { conflicto: this._enConflicto() }), true);
       this.pintar();
     }
     return ok;
   }
 
-  _quitarLinea(i) {
+  // Las palabras de una línea del listado, para «Quitar la línea».
+  _refsLinea(i) {
     const linea = this.lineas[i];
-    if (!linea) return;
-    const refs = linea.palabras.filter((p) => p.material_id !== null).map((p) => ({ material_id: p.material_id, indice: p.indice }));
-    if (refs.length) this._operar(null, "quitarLinea", refs);
+    if (!linea) return [];
+    return linea.palabras.filter((p) => p.material_id !== null).map((p) => ({ material_id: p.material_id, indice: p.indice }));
   }
 
   _quitarTodos() {
@@ -609,13 +640,14 @@ export class SubtitulosPanel {
   // Pide el precio de lo que falta transcribir de la fuente elegida, 300 ms
   // después del último cambio; sin nada que transcribir, «(gratis)» sin
   // llamar a nadie. Una respuesta vieja (la fuente cambió) se descarta.
-  _pedirEstimado(forzar = false) {
+  // `reintentosForzados`: un clic de la persona (sin reintentos solos después).
+  _pedirEstimado(forzar = false, reintentosForzados = null) {
     const p = this.pedidoActual;
     const firma = JSON.stringify([this.clave, p.faltan]);
     if (!forzar && this.estimado?.firma === firma) return;
     clearTimeout(this.relojEstimar);
     const turno = ++this.turnoEstimar;
-    const reintentos = forzar && this.estimado?.firma === firma ? (this.estimado.reintentos ?? 0) : 0;
+    const reintentos = reintentosForzados ?? (forzar && this.estimado?.firma === firma ? (this.estimado.reintentos ?? 0) : 0);
     if (!this.clave || !p.todos.length) {
       this.estimado = null;
       return;
@@ -676,6 +708,11 @@ export class SubtitulosPanel {
     if (!p.todos.length) return;
     const encargo = { idioma: idiomaDe(ed.destino?.()), clave, ids: p.todos.filter((id) => !p.mudos.includes(id)) };
     this._decir("");
+    if (this.estimado?.error) {                              // sin precio no se paga: se vuelve a pedir el precio
+      this._pedirEstimado(true, REINTENTOS_ESTIMAR);
+      this._pintarGenerar();
+      return;
+    }
     if (!p.faltan.length || this.estimado?.gratis) {         // ya transcrito: gratis, sin llamar a nadie
       await this._aplicar(encargo);
       return;
@@ -705,19 +742,20 @@ export class SubtitulosPanel {
       return;
     }
     this._pintarGenerar();
-    this._decir(typeof j?.error === "string" && j.error ? j.error : t("sub.error", { mensaje: `HTTP ${resp.status}` }), true);
+    this._decir(typeof j?.error === "string" && j.error ? j.error : t("sub.fallo"), true);
     this._detalle(`HTTP ${resp.status}`);
   }
 
   // Sigue un trabajo de transcripción (el que se acaba de encolar o el que ya
   // corría al abrir la página) preguntando cada 1,5 s; `encargo` dice qué
   // poner al terminar (null si no se sabe: se traen las palabras y la persona
-  // elige, ya gratis).
-  seguir(jobId, encargo = null) {
+  // elige, ya gratis). `nuevo`: recién encolado (se guarda con su sello); uno
+  // retomado al abrir conserva el sello que tenía.
+  seguir(jobId, encargo = null, { nuevo = true } = {}) {
     if (!jobId) return;
     clearTimeout(this.relojTrabajo);
-    this.trabajo = { job: jobId, encargo, etapa: "", progreso: 0, fallos: 0 };
-    if (encargo) this._guardarEncargo(jobId, encargo);
+    this.trabajo = { job: jobId, encargo, etapa: "", progreso: 0, fallos: 0, sinRespuestaDesde: null };
+    if (encargo && nuevo) this._guardarEncargo(jobId, encargo);
     this._pintarGenerar();
     void this._sondear();
   }
@@ -736,10 +774,18 @@ export class SubtitulosPanel {
     if (this.trabajo !== tr) return;
     if (!j || typeof j !== "object") {                         // sin red o algo raro: se vuelve a preguntar, más lento
       tr.fallos += 1;
+      tr.sinRespuestaDesde ??= Date.now();
+      if (Date.now() - tr.sinRespuestaDesde >= SIN_RESPUESTA_MS) {   // ya no se sabe nada: se deja de preguntar
+        this.trabajo = null;
+        this._pintarGenerar();
+        this._decir(t("sub.sin_respuesta"), true);
+        return;
+      }
       this.relojTrabajo = setTimeout(() => void this._sondear(), INTERVALO_TRABAJO_MS * (tr.fallos > 3 ? 4 : 1));
       return;
     }
     tr.fallos = 0;
+    tr.sinRespuestaDesde = null;
     if (j.estado === "en_progreso") {
       tr.etapa = typeof j.etapa === "string" ? j.etapa : "";
       tr.progreso = Number(j.progreso) || 0;
@@ -751,21 +797,23 @@ export class SubtitulosPanel {
     this.trabajo = null;
     this._olvidarEncargo();
     this._pintarGenerar();
-    const error = j.estado === "error" ? String(j.mensaje || "error") : null;
-    if (error) this._detalle(String(j.mensaje || ""));
+    // el aviso, ya en palabras: el motivo del trabajo si lo dio, si no la frase general
+    let error = null;
+    if (j.estado === "error") error = j.mensaje ? t("sub.error", { mensaje: String(j.mensaje) }) : t("sub.fallo");
     if (tr.encargo) {
       await this._aplicar(tr.encargo, { error });
       return;
     }
     // un trabajo de antes de recargar: se traen las palabras; poner la fuente es gratis desde aquí
     await this._cargarPalabras(this._idsDeLaEdicion());
-    this._decir(error ? t("sub.error", { mensaje: error }) : t("sub.listos"), Boolean(error));
+    this._decir(error ?? t("sub.listos"), Boolean(error));
   }
 
   // Trae (gratis) las palabras que todavía no están en la página y pone la
   // fuente en el idioma del encargo, como una operación sobre el documento de
   // AHORA. Si ninguno de sus archivos trae palabras (música sin letra,
-  // silencio), lo dice y no cambia nada.
+  // silencio), lo dice y no cambia nada. `error`: el aviso (ya en palabras)
+  // de un trabajo que falló — lo que sí quedó transcrito igual se pone.
   async _aplicar(encargo, { error = null } = {}) {
     const mats0 = this.editor.materiales?.() ?? {};
     const traer = encargo.ids.filter((id) => !Array.isArray(mats0[id]?.palabras));
@@ -774,13 +822,13 @@ export class SubtitulosPanel {
     const mats = this.editor.materiales?.() ?? {};
     const palabras = encargo.ids.reduce((n, id) => n + (Array.isArray(mats[id]?.palabras) ? mats[id].palabras.length : 0), 0);
     if (!palabras) {
-      this._decir(error ? t("sub.error", { mensaje: error }) : t("sub.ninguna_palabra"), Boolean(error));
+      this._decir(error ?? t("sub.ninguna_palabra"), Boolean(error));
       return;
     }
     const fuente = fuenteDeClave(encargo.clave);
     if (!fuente || !this._operar(null, "ponerFuentesSubtitulos", encargo.idioma, [fuente])) return;
     this.claveElegida = null;
-    this._decir(error ? t("sub.error", { mensaje: error }) : t("sub.listos"), Boolean(error));
+    this._decir(error ?? t("sub.listos"), Boolean(error));
   }
 
   async _cargarPalabras(ids) {
@@ -794,7 +842,7 @@ export class SubtitulosPanel {
         return false;
       }
       if (!r.ok || !j || typeof j.materiales !== "object") {
-        this._decir(t("sub.error", { mensaje: `HTTP ${r.status}` }), true);
+        this._decir(t("sub.fallo"), true);
         this._detalle(`HTTP ${r.status}`);
         return false;
       }
@@ -816,22 +864,22 @@ export class SubtitulosPanel {
 
   // Qué pidió un trabajo, para ponerlo aunque la página se recargue mientras
   // corre (solo en esta pestaña; sin almacenamiento, se pierde y la persona
-  // lo pone con un clic, ya gratis).
+  // lo pone con un clic, ya gratis). Va con un sello (la hora del 202): el
+  // job_id es uno por edición, y uno guardado de hace más de media hora se
+  // descarta (subtitulos_modelo.encargoGuardado).
   _claveAlmacen() {
     return `ed-sub-trabajo:${this.datos.edicion?.id ?? ""}`;
   }
 
   _guardarEncargo(job, encargo) {
     try {
-      sessionStorage.setItem(this._claveAlmacen(), JSON.stringify({ job, ...encargo }));
+      sessionStorage.setItem(this._claveAlmacen(), JSON.stringify({ job, sello: Date.now(), ...encargo }));
     } catch { /* sin almacenamiento: no pasa nada */ }
   }
 
   _pedidoGuardado(job) {
     try {
-      const v = JSON.parse(sessionStorage.getItem(this._claveAlmacen()) ?? "null");
-      if (!v || v.job !== job || !/^[a-z]{2}$/.test(String(v.idioma)) || !fuenteDeClave(v.clave) || !Array.isArray(v.ids)) return null;
-      return { idioma: v.idioma, clave: v.clave, ids: v.ids.map(Number).filter((id) => Number.isInteger(id) && id > 0) };
+      return encargoGuardado(JSON.parse(sessionStorage.getItem(this._claveAlmacen()) ?? "null"), job, Date.now());
     } catch {
       return null;
     }

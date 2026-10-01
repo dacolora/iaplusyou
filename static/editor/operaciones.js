@@ -42,7 +42,9 @@ const MAX_PISTAS = 8;   // documento.MAX_PISTAS
 const ESCALA_MIN = 0.05;  // transform.escala: lo que acepta cambiar
 const ESCALA_MAX = 5;
 const _IDIOMA_RE = /^[a-z]{2}$/;   // documento._IDIOMA_CLIP_RE (D10): solo idioma, nunca país
-const MAX_CORRECCION = 120;   // documento.MAX_CORRECCION (D3)
+// Largo máximo de una palabra corregida: el de documento.MAX_CORRECCION (D3;
+// tests/test_editor_js.py los compara). La pestaña Subtítulos lo usa en su campo.
+export const MAX_CORRECCION = 120;
 // Lista blanca de `cambiarSubtitulos` (D7): tiene que ser la misma de
 // documento.ESTILOS_SUBTITULOS (tests/test_editor_js.py los compara).
 export const ESTILOS_SUBTITULOS = ["karaoke", "caja", "palabra_grande", "minimal"];

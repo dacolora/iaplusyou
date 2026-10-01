@@ -38,6 +38,12 @@ export function fuenteDeClave(clave) {
   return id > 0 ? { tipo: "material", material_id: id } : null;
 }
 
+// Una voz del guion de la vía automática (borrador.es_voz_de_guion: rol voz
+// y `bloque` no vacío): un clip por bloque, cada uno con su material. «La voz»
+// ya los cubre a todos; ofrecerlos sueltos daría varios «Audio «Voz»» iguales
+// que subtitulan un solo bloque (y nada en otro país del mismo idioma).
+const esVozDeGuion = (clip) => clip?.rol_audio === "voz" && Boolean(clip?.bloque);
+
 // Claves de textos.js del nombre de un audio sin nombre propio, por su rol.
 const NOMBRE_ROL = { voz: "fila.voz", musica: "fila.musica", efecto: "fila.efecto", grabacion: "fila.grabacion" };
 
@@ -51,8 +57,9 @@ function nombreAudio(m, clip = null) {
 // sonido de los videos de la principal (si alguno trae sonido: uno todavía
 // sin medir cuenta, el servidor salta los mudos) y un «Audio «…»» por cada
 // material distinto de los audios de la edición (una canción, un efecto,
-// una grabación o una voz sola). Como en la derivación, una pista oculta o
-// silenciada no cuenta. [{clave, etiqueta, disponible, motivo}].
+// una grabación o una voz con IA; nunca las voces del guion, que van en «La
+// voz»). Como en la derivación, una pista oculta o silenciada no cuenta.
+// [{clave, etiqueta, disponible, motivo}].
 export function fuentesDisponibles(resuelto, materiales = {}) {
   if (!resuelto) return [];
   const mats = materiales ?? {};
@@ -68,7 +75,7 @@ export function fuentesDisponibles(resuelto, materiales = {}) {
     if (pista.tipo !== "audio" || pista.id === ID_SONIDO || pista.oculta || pista.silenciada) continue;
     for (const clip of pista.clips ?? []) {
       const id = Number(clip.material_id);
-      if (!Number.isInteger(id) || id <= 0 || vistos.has(id)) continue;
+      if (esVozDeGuion(clip) || !Number.isInteger(id) || id <= 0 || vistos.has(id)) continue;
       vistos.add(id);
       out.push({
         clave: `material:${id}`, etiqueta: t("sub.fuente_audio", { nombre: nombreAudio(mats[id], clip) }),
@@ -214,6 +221,23 @@ export function textoTiempo(ms) {
   const min = Math.floor(decimas / 600);
   const seg = Math.floor((decimas % 600) / 10);
   return `${min}:${String(seg).padStart(2, "0")}${separadorDecimal()}${decimas % 10}`;
+}
+
+// ---- Lo que pidió un trabajo pagado (para ponerlo aunque se recargue) ----
+
+// El job_id es uno por edición: el sello (la hora del 202) dice de CUÁL vez es.
+// Pasada media hora se descarta: ese trabajo ya terminó o se colgó.
+export const ENCARGO_MAX_MS = 30 * 60 * 1000;
+const RELOJ_ADELANTADO_MS = 60 * 1000;
+
+// Lo guardado (ya leído del almacenamiento), si es de ese trabajo, tiene su
+// forma y su sello es de hace menos de ENCARGO_MAX_MS; si no, null.
+export function encargoGuardado(valor, job, ahoraMs = Date.now()) {
+  if (!valor || typeof valor !== "object" || valor.job !== job) return null;
+  const sello = Number(valor.sello);
+  if (!Number.isFinite(sello) || ahoraMs - sello > ENCARGO_MAX_MS || sello - ahoraMs > RELOJ_ADELANTADO_MS) return null;
+  if (!/^[a-z]{2}$/.test(String(valor.idioma)) || !fuenteDeClave(valor.clave) || !Array.isArray(valor.ids)) return null;
+  return { idioma: valor.idioma, clave: valor.clave, ids: valor.ids.map(Number).filter((id) => Number.isInteger(id) && id > 0) };
 }
 
 // El idioma de lo que se dice, por defecto: el del destino que se ve, si se

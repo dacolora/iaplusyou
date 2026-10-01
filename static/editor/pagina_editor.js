@@ -44,8 +44,9 @@
 //   editor.materiales()                     {id: material} de la vista previa
 //                                           (con `palabras` si se transcribió)
 //   editor.mostrarBiblioteca(panel)         abre esa pestaña de la biblioteca
-//                                           (en el celular sube su hoja) y
-//                                           avisa "biblioteca"
+//                                           (en el celular sube su hoja); como
+//                                           todo cambio de pestaña, avisa
+//                                           "biblioteca"
 //   editor.enfocarTexto()                   pide el foco para escribir el texto
 //                                           elegido (la biblioteca, al agregar
 //                                           un texto): en el celular sube la
@@ -55,7 +56,9 @@
 //   editor.escuchar(fn) -> dejar()          fn(que) después de cada cambio:
 //                                           "documento" | "seleccion" |
 //                                           "materiales" | "destino" | "tiempo"
-//                                           | "foco-texto" | "biblioteca"
+//                                           | "foco-texto" | "biblioteca" (la
+//                                           biblioteca cambió de pestaña: quien
+//                                           no pinta oculto se pone al día)
 //
 // Reglas de los avisos (avisos_editor.js, probadas en Node):
 // - «seleccion» sale solo si la selección cambió de verdad, también cuando la
@@ -455,6 +458,9 @@ function marcarPestana(boton) {
   }
   $("ed-biblioteca").dataset.panelActivo = boton.dataset.panel;
   pintarAcciones();
+  // después de que la biblioteca muestre el panel (escucha el mismo clic, más
+  // tarde) y, en el celular, de que suba la hoja: así el panel ya se ve
+  queueMicrotask(() => avisos.notificar("biblioteca"));
 }
 
 function pintarAcciones() {
@@ -522,7 +528,8 @@ const CELULAR = "(max-width: 760px)";
 // Capa 5a: abre una pestaña de la biblioteca desde otro lado (tocar un bloque
 // de la fila «Subtítulos»): en el celular sube primero su hoja; el clic en la
 // pestaña la marca y la muestra (montarDisposicion y la biblioteca lo
-// atienden); después se avisa "biblioteca" (el panel que se abrió se acomoda).
+// atienden) y marcarPestana avisa "biblioteca" (el panel que se abrió se pone
+// al día).
 function mostrarBiblioteca(panel) {
   const boton = $("ed-pestanas-biblioteca").querySelector(`[data-panel="${panel}"]`);
   if (!boton) return;
@@ -530,7 +537,6 @@ function mostrarBiblioteca(panel) {
     abrirHoja("ed-biblioteca", $(`ed-abrir-${panel}`));
   }
   boton.click();
-  avisos.notificar("biblioteca");
 }
 
 function enfocarTexto() {

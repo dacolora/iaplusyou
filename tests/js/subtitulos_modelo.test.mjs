@@ -7,9 +7,9 @@ import { readFileSync } from "node:fs";
 import { resolver } from "../../static/editor/resolver.js";
 import { derivar, palabrasDe } from "../../static/editor/subtitulos_fuente.js";
 import {
-  alturaDePosicion, claveDeFuente, coloresResaltado, estadoPanel, estilosPanel, fuenteDeClave, fuentePorDefecto,
-  fuentesDisponibles, idiomaPorDefecto, lineaEn, lineasListado, pedido, posicionDeAltura, POSICIONES, resaltadoElegido,
-  textoBoton, textoEstado, textoTiempo,
+  alturaDePosicion, claveDeFuente, coloresResaltado, ENCARGO_MAX_MS, encargoGuardado, estadoPanel, estilosPanel, fuenteDeClave,
+  fuentePorDefecto, fuentesDisponibles, idiomaPorDefecto, lineaEn, lineasListado, pedido, posicionDeAltura, POSICIONES,
+  resaltadoElegido, textoBoton, textoEstado, textoTiempo,
 } from "../../static/editor/subtitulos_modelo.js";
 import { ponerTextos } from "../../static/editor/textos.js";
 import { docBase } from "./doc_base.mjs";
@@ -66,6 +66,25 @@ test("fuentesDisponibles: dos clips del mismo audio dan UNA opción; sin nombre,
   const audios = fuentesDisponibles(resuelto(doc), mats).filter((o) => o.clave.startsWith("material:"));
   assert.deepEqual(audios.map((o) => o.clave), ["material:2", "material:3"]);
   assert.equal(audios[1].etiqueta, "Audio «Música»");
+});
+
+test("fuentesDisponibles: las voces del guion (con bloque) no salen como audio suelto; una grabación sí", () => {
+  // un borrador automático: un clip de voz por bloque del guion, sin nombre propio
+  const doc = docBase();
+  const a1 = doc.pistas[2].clips[0];
+  doc.pistas[2].clips = [
+    { ...a1, id: "b1", material_id: 2, bloque: "gancho", inicio_ms: 0, duracion_ms: 1500 },
+    { ...a1, id: "b2", material_id: 3, bloque: "cierre", inicio_ms: 1500, duracion_ms: 1500 },
+  ];
+  doc.pistas.push({ id: "p_grab", tipo: "audio", bloqueada: false, silenciada: false, oculta: false, clips: [
+    { ...a1, id: "g1", material_id: 4, rol_audio: "voz", inicio_ms: 3000, duracion_ms: 1000 },
+  ] });
+  doc.materiales = [1, 2, 3, 4];
+  const mats = { ...MATS, 3: { id: 3, tipo: "audio", duracion_ms: 1500 }, 4: { id: 4, tipo: "audio", nombre: "Grabación 14:32" } };
+  const ops = fuentesDisponibles(resuelto(doc), mats);
+  assert.deepEqual(ops.map((o) => o.clave), ["voz", "sonido", "material:4"]);
+  assert.equal(ops[0].disponible, true);                  // «La voz» cubre los bloques del guion
+  assert.equal(ops[2].etiqueta, "Audio «Grabación 14:32»");
 });
 
 test("fuentesDisponibles: una pista silenciada u oculta no se ofrece", () => {
@@ -192,7 +211,7 @@ test("textoBoton: corriendo, calculando, error, gratis y con precio (tal cual ll
   assert.equal(textoBoton({ calculando: true, precio: "US$ <0,01 aprox." }), "Calculando el precio…");
   assert.equal(textoBoton({ error: true }), "No se pudo calcular el precio: vuelve a intentar.");
   assert.equal(textoBoton({ gratis: true }), "Generar subtítulos (gratis)");
-  assert.equal(textoBoton({ precio: "US$ <0,01 aprox." }), "Generar subtítulos ≈ US$ <0,01 aprox.");
+  assert.equal(textoBoton({ precio: "US$ <0,01 aprox." }), "Generar subtítulos (US$ <0,01 aprox.)");
 });
 
 test("textoTiempo: m:ss y décimas con el separador del idioma", () => {
@@ -256,4 +275,19 @@ test("altura: más alto en el deslizador = más arriba en el video; los atajos c
   assert.equal(posicionDeAltura(90), 0.1);
   assert.deepEqual(POSICIONES.map((p) => p.valor), [0.2, 0.5, 0.78]);
   assert.equal(alturaDePosicion(undefined), 22);                                  // sin posición: la de siempre (0,78)
+});
+
+test("encargoGuardado: el de ese trabajo, con su forma y de hace menos de 30 min; si no, null", () => {
+  const ahora = 10_000_000;
+  const bueno = { job: "acme__ed7__subtitulos", sello: ahora - 60_000, idioma: "es", clave: "voz", ids: [2, "3"] };
+  assert.deepEqual(encargoGuardado(bueno, "acme__ed7__subtitulos", ahora), { idioma: "es", clave: "voz", ids: [2, 3] });
+  assert.equal(ENCARGO_MAX_MS, 30 * 60 * 1000);
+  assert.equal(encargoGuardado({ ...bueno, sello: ahora - ENCARGO_MAX_MS - 1 }, bueno.job, ahora), null);   // viejo
+  assert.equal(encargoGuardado({ ...bueno, sello: undefined }, bueno.job, ahora), null);                 // sin sello
+  assert.equal(encargoGuardado({ ...bueno, sello: ahora + 120_000 }, bueno.job, ahora), null);            // del futuro
+  assert.equal(encargoGuardado(bueno, "otro__ed8__subtitulos", ahora), null);
+  assert.equal(encargoGuardado({ ...bueno, idioma: "esp" }, bueno.job, ahora), null);
+  assert.equal(encargoGuardado({ ...bueno, clave: "nada" }, bueno.job, ahora), null);
+  assert.equal(encargoGuardado({ ...bueno, ids: "2" }, bueno.job, ahora), null);
+  assert.equal(encargoGuardado(null, bueno.job, ahora), null);
 });

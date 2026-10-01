@@ -106,6 +106,12 @@ def test_max_fuentes_subtitulo_js_igual_a_python():
     assert _constante_js("operaciones.js", "MAX_FUENTES_SUBTITULO") == documento.MAX_FUENTES_SUBTITULO
 
 
+def test_max_correccion_js_igual_a_python():
+    # corregirPalabra y el campo de la pestaña Subtítulos (maxLength) cortan
+    # donde documento.validar cortaría (capa 5a, D3)
+    assert _constante_js("operaciones.js", "MAX_CORRECCION") == documento.MAX_CORRECCION
+
+
 def _generador():
     import importlib.util
     ruta = os.path.join(RAIZ, "tests", "fixtures", "generar_casos_editor.py")

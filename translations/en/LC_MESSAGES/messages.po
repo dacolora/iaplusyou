@@ -6776,8 +6776,8 @@ msgid "Generar subtítulos (gratis)"
 msgstr "Generate subtitles (free)"
 
 #, python-brace-format
-msgid "Generar subtítulos ≈ {precio}"
-msgstr "Generate subtitles ≈ {precio}"
+msgid "Generar subtítulos ({precio})"
+msgstr "Generate subtitles ({precio})"
 
 msgid "Generar también la versión B (dos videos)"
 msgstr "Also generate version B (two videos)"
@@ -9372,6 +9372,9 @@ msgstr "Doesn't hold"
 msgid "No sabe que tiene el problema"
 msgstr "Doesn't know they have the problem"
 
+msgid "No sabemos cómo terminó: recarga la página para ver los subtítulos."
+msgstr "We don't know how it ended: reload the page to see the subtitles."
+
 msgid "No se agregó ningún referente."
 msgstr "No reference was added."
 
@@ -9408,6 +9411,9 @@ msgstr "Couldn't load {lista} (the link didn't respond or the files are gone): t
 
 msgid "No se pudieron escribir los prompts de imágenes. Vuelve a intentarlo."
 msgstr "Couldn't write the image prompts. Try again."
+
+msgid "No se pudieron generar los subtítulos. Vuelve a intentar."
+msgstr "Couldn't generate the subtitles. Try again."
 
 #, python-brace-format
 msgid "No se pudieron generar los subtítulos: {mensaje}"
