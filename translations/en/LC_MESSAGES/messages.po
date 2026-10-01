@@ -1771,6 +1771,9 @@ msgstr "Something went wrong."
 msgid "Alguien cambió este prompt; recarga."
 msgstr "Someone changed this prompt; reload the page."
 
+msgid "Alguien mira a cámara, muestra el producto y reacciona sin decir nada."
+msgstr "Someone looks at the camera, shows the product and reacts without saying a word."
+
 msgid "Alguien recibe la compra y abre la caja o bolsa hasta descubrir el producto, con la emoción de estrenarlo."
 msgstr "Someone receives their purchase and opens the box or bag until they discover the product, with the thrill of trying it for the first time."
 
@@ -1837,6 +1840,9 @@ msgstr "Before generating"
 #, python-format
 msgid "Antes de lanzarla: lo que ven las reglas (gratis) y, si la pides, la revisión de Claude con los 12 puntos de <a href=\"%(url)s#revisar\" target=\"_blank\" rel=\"noopener\">la lista</a>. Solo informa: no bloquea nada."
 msgstr "Before launching it: what the rules see (free) and, if you ask for it, Claude's review with the 12 points on <a href=\"%(url)s#revisar\" target=\"_blank\" rel=\"noopener\">the list</a>. It only informs: it doesn't block anything."
+
+msgid "Antes y después"
+msgstr "Before and after"
 
 msgid "Anthropic (guiones y prompts)"
 msgstr "Anthropic (scripts and prompts)"
@@ -3048,6 +3054,9 @@ msgstr "With an image"
 msgid "Con mi propia app de Meta"
 msgstr "With my own Meta app"
 
+msgid "Con modelo"
+msgstr "With a model"
+
 msgid "Con persona"
 msgstr "With a person"
 
@@ -3299,6 +3308,9 @@ msgstr "Copy the App ID and the Secret Key and paste them as MELI_APP_ID and MEL
 
 msgid "Copia el id (bajo el nombre de la app) como REDDIT_CLIENT_ID y el «secret» como REDDIT_CLIENT_SECRET."
 msgstr "Copy the id (under the app's name) as REDDIT_CLIENT_ID and the “secret” as REDDIT_CLIENT_SECRET."
+
+msgid "Copia el ritmo, el movimiento y el encuadre de tu video de referencia. Necesita un video en la bandeja y Wan 3.0."
+msgstr "Copies the pacing, movement and framing of your reference video. Needs a video in the tray and Wan 3.0."
 
 msgid "Copia la <em>Consumer key</em> (<code>ck_…</code>) y el <em>Consumer secret</em> (<code>cs_…</code>): también se muestran una sola vez."
 msgstr "Copy the <em>Consumer key</em> (<code>ck_…</code>) and the <em>Consumer secret</em> (<code>cs_…</code>): they're also only shown once."
@@ -4356,6 +4368,12 @@ msgstr "The logo exactly as it should look. It's attached to every generation as
 #, python-format
 msgid "El lote del sprint «%(nombre)s» terminó: %(listas)s pieza(s) lista(s) y %(errores)s con error. Entra a la bandeja de revisión para aprobar o rechazar."
 msgstr "The sprint batch “%(nombre)s” finished: %(listas)s piece(s) ready and %(errores)s with errors. Go to the review inbox to approve or reject."
+
+msgid "El lugar y la luz; el producto entra a cuadro y se ve funcionando ahí."
+msgstr "The place and the light; the product enters the frame and is seen working there."
+
+msgid "El material de cerca, un giro que muestra la forma completa y un cierre de lucimiento sobre el producto."
+msgstr "The material up close, a turn that shows the whole shape and a hero close on the product."
 
 #, python-format
 msgid "El mensaje es demasiado largo (máximo %(maximo)s caracteres)."
@@ -7236,6 +7254,9 @@ msgstr "The database isn't SQLite: no backup."
 msgid "La biblioteca no tiene anuncios nuevos que encajen"
 msgstr "The library has no new ads that fit"
 
+msgid "La caja se abre, el producto sale y se mira de cerca."
+msgstr "The box opens, the product comes out and is looked at up close."
+
 msgid "La canción dura más de 10 min."
 msgstr "The song is longer than 10 min."
 
@@ -7496,6 +7517,10 @@ msgstr "The page is over 20 MB; it doesn't look like the swipe file."
 
 msgid "La página pública de UN producto: leo nombre, precio y fotos de sus datos estructurados."
 msgstr "The public page of ONE product: I read the name, price and photos from its structured data."
+
+#, python-format
+msgid "La receta «%(receta)s» necesita un video de referencia en la bandeja y el modelo Wan 3.0. Agrégalo o elige otra receta."
+msgstr "The “%(receta)s” recipe needs a reference video in the tray and the Wan 3.0 model. Add one or pick another recipe."
 
 #, python-format
 msgid "La referencia %(i)s necesita una descripción o un activo del Catálogo."
@@ -9948,6 +9973,9 @@ msgstr "First Facebook (above): Instagram publishes through the Page."
 msgid "Primero arma los clips de esta versión."
 msgstr "First assemble this version's clips."
 
+msgid "Primero el problema, luego el producto haciendo el cambio y al final el resultado a la vista."
+msgstr "First the problem, then the product making the change, and finally the result in plain view."
+
 msgid "Primero escribe los prompts de imágenes."
 msgstr "First write the image prompts."
 
@@ -10046,6 +10074,12 @@ msgstr "Product deleted: %(nombre)s"
 
 msgid "Producto en el estilo del video"
 msgstr "Product in the video's style"
+
+msgid "Producto en estudio"
+msgstr "Product in the studio"
+
+msgid "Producto en su lugar"
+msgstr "Product in its setting"
 
 msgid "Producto recuperado."
 msgstr "Product restored."
@@ -10532,6 +10566,9 @@ msgstr "Reload now"
 msgid "Recargar el prompt"
 msgstr "Reload the prompt"
 
+msgid "Receta de tomas"
+msgstr "Shot recipe"
+
 #, python-format
 msgid "Rechazada «%(titulo)s»: %(motivo)s"
 msgstr "Rejected “%(titulo)s”: %(motivo)s"
@@ -10561,6 +10598,9 @@ msgstr "Reconnect Meta to pause."
 
 msgid "Recrear con mi producto"
 msgstr "Recreate with my product"
+
+msgid "Recrear mi video de referencia"
+msgstr "Recreate my reference video"
 
 #, python-format
 msgid "Recrear «%(titular)s» con mi producto"
@@ -11184,6 +11224,9 @@ msgstr "Reviewed from the piece in Create"
 msgid "Se suma a la regla base de la categoría:"
 msgstr "This adds to the category's base rule:"
 
+msgid "Se usa al crear el super prompt; «Generar video» manda tu texto tal cual."
+msgstr "Used when creating the super prompt; “Generate video” sends your text as is."
+
 msgid "Se usa el modelo de fotos o el de videos según lo que subas. Mejora de calidad activada (solo fotos); los valores por defecto se cambian en Configuración."
 msgstr "The photo or video model is used depending on what you upload. Quality enhancement on (photos only); the defaults are changed in Settings."
 
@@ -11221,6 +11264,9 @@ msgstr ""
 
 msgid "Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos."
 msgstr "According to the store's orders in Triple Whale; it's the product worth pushing in new ads."
+
+msgid "Selfie sin voz"
+msgstr "Silent selfie"
 
 msgid "Separados por una línea en blanco"
 msgstr "Separated by a blank line"
@@ -11431,6 +11477,9 @@ msgstr "No lightweight copy for this type."
 msgid "Sin rastreo de Triple Whale"
 msgstr "No Triple Whale tracking"
 
+msgid "Sin receta"
+msgstr "No recipe"
+
 msgid "Sin referencias de marca todavía."
 msgstr "No brand references yet."
 
@@ -11538,6 +11587,9 @@ msgstr "Only the references (the text and the settings start blank)"
 
 msgid "Solo lo ve el administrador"
 msgstr "Only the admin sees it"
+
+msgid "Solo manos y producto, como grabado con el teléfono: sacarlo, usarlo y mostrarlo."
+msgstr "Just hands and the product, as if shot on a phone: take it out, use it and show it."
 
 msgid "Solo míos"
 msgstr "Only mine"
@@ -12683,6 +12735,9 @@ msgstr "Title"
 msgid "Tú"
 msgstr "You"
 
+msgid "UGC sin cara"
+msgstr "Faceless UGC"
+
 msgid "URL"
 msgstr "URL"
 
@@ -12798,6 +12853,9 @@ msgstr "One line: what they want or what hurts them"
 
 msgid "Una marca"
 msgstr "A brand"
+
+msgid "Una persona con el producto: un gancho que llama la atención, uso natural y cierre en un gesto o un detalle."
+msgstr "A person with the product: an attention-grabbing hook, natural use and a close on a gesture or a detail."
 
 msgid "Una persona real usando el producto de forma natural; el producto sigue siendo el protagonista."
 msgstr "A real person using the product naturally; the product is still the star."

@@ -51,6 +51,7 @@ import meta_conexion
 import meta_agencia
 import meta_errores
 import flowplus_prompt
+import plantillas_anuncio
 import referencias_flowplus
 import saldo
 import materiales
@@ -1708,6 +1709,7 @@ def ver_cliente(cliente):
         modelos_flowplus_video=flowplus_modelos.VIDEO,
         duraciones_crear=flowplus_modelos.DURACIONES_CREAR,
         formatos_nombres=flowplus_modelos.FORMATOS_NOMBRES,
+        plantillas_anuncio=plantillas_anuncio.PLANTILLAS,
         modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
         ads=ads_dict,
         trabajos_ads=trabajos_ads,
@@ -7107,10 +7109,25 @@ def cf_crear_video(cliente):
                           max=problema["maxima"]), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
+    # Receta de tomas (Etapa 3 del director, 2026-09-30): solo cuenta con
+    # «Crear super prompt»; «Generar video» manda el texto tal cual y la ignora.
+    plantilla = None
+    if tipo == "video" and request.form.get("modo_prompt") == "director":
+        plantilla = plantillas_anuncio.por_id(request.form.get("plantilla"))
+    if plantilla and plantilla["requiere_video"] and not any(
+            str(r.get("token") or "").startswith("Video ") for r in referencias):
+        nombre_receta = plantilla["nombre"]
+        flash(gettext("La receta «%(receta)s» necesita un video de referencia en la bandeja y el modelo Wan 3.0. "
+                      "Agrégalo o elige otra receta.", receta=gettext(nombre_receta)), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
     if solo_texto:
         enfoque = "libre"
     else:
         enfoque = "persona" if any(r.get("categoria") == "personaje" for r in referencias) else "producto"
+        if plantilla and plantilla["enfoque"]:
+            # Con receta el enfoque lo fija la receta (spec §9); sin referencias sigue «libre».
+            enfoque = plantilla["enfoque"]
     info = flowplus_prompt.ENFOQUES[enfoque]
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [],
@@ -7122,7 +7139,7 @@ def cf_crear_video(cliente):
         con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
         con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo, musica_inicio_s=musica_inicio_s,
         prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma, mejorar_prompt=mejorar_prompt,
-        preset_camara=None, plantilla=None,
+        preset_camara=None, plantilla=plantilla["id"] if plantilla else None,
     )
     # Triple Whale: si el texto vino de «Llevar a Crear», la sesión recuerda de
     # qué idea salió (la pestaña enlaza idea → pieza → anuncio). Un valor raro

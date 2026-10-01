@@ -8,6 +8,17 @@ import math
 
 MIN_CLIP, MAX_CLIP = 5, 15
 SEGUNDO_FINAL = 1.0
+# Cada clip se redondea hacia arriba al segundo (`calcular_clip`): en promedio
+# medio segundo más por clip. Para saber cuántos clips habrá antes del plan se
+# toma uno típico de 12 s. Sin esto el estimado quedaba corto: HappyCozy
+# (2026-09-30) estimaba 132,2 s y armado dio 141–150 s.
+CLIP_PROMEDIO = 12
+REDONDEO_POR_CLIP = 0.5
+# Para el margen de aire que se le da a Claude se cuenta de más a propósito
+# (clips de 10 s, un segundo entero de redondeo cada uno): Claude usa todo el
+# margen que recibe, y la validación V6 solo rechaza pasarse del objetivo.
+CLIP_CORTO = 10
+REDONDEO_MAXIMO = 1.0
 
 
 def palabras(texto):
@@ -34,11 +45,26 @@ def conservadas(textos, quitadas=()):
     return [(n, textos[n]) for n in sorted(textos) if n not in fuera]
 
 
+def _clips_esperados(segundos):
+    return max(1, math.ceil(segundos / CLIP_PROMEDIO))
+
+
 def estimado_previo(lineas, wps, aire_por_linea):
-    """Guía para el recorte antes de que exista el plan: lo hablado, un aire por línea y el cuadro final."""
+    """Guía para el recorte antes de que exista el plan: lo hablado, un aire por
+    línea, el cuadro final y el redondeo de cada clip esperado."""
     if not lineas:
         return 0.0
-    return round(sum(seg_hablados(t, wps) for _, t in lineas) + aire_por_linea * len(lineas) + SEGUNDO_FINAL, 1)
+    base = sum(seg_hablados(t, wps) for _, t in lineas) + aire_por_linea * len(lineas) + SEGUNDO_FINAL
+    return round(base + REDONDEO_POR_CLIP * _clips_esperados(base), 1)
+
+
+def aire_disponible(lineas, wps, objetivo):
+    """Segundos sin diálogo (todas las pausas y el cuadro final juntos) que caben
+    en `objetivo` después de lo hablado y del redondeo de los clips. Se le da a
+    Claude al armar: con solo el objetivo repartía más aire del que cabía."""
+    hablado = sum(seg_hablados(t, wps) for _, t in lineas)
+    clips = max(1, math.ceil(objetivo / CLIP_CORTO))
+    return round(max(0.0, objetivo - hablado - REDONDEO_MAXIMO * clips), 1)
 
 
 def bloques_quitados(textos, quitadas):
