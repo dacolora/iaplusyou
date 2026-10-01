@@ -56,18 +56,37 @@ def _sembrar(base_temporal):
     return eid, ep
 
 
+def _seccion_tablero(html):
+    return html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
+
+
+def _mes_a_mes(tb):
+    ini = tb.index('class="tb-meses')
+    return tb[ini:tb.index("</table>", ini)]
+
+
 def test_tablero_con_datos(app, base_temporal, monkeypatch):
     eid, _ep = _sembrar(base_temporal)
     _reloj(monkeypatch)
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert "Tablero · septiembre 2026" in html
+    tb = _seccion_tablero(html)
+    assert "<h2>Tablero</h2>" in tb and "Tablero · septiembre 2026" not in tb
     assert 'id="tab-tablero"' in html
-    # Tiles del mes (deltas, no acumulados): gasto 250, compras 2, ingresos 7.000, ROAS 28.
-    assert "250 COP" in html and "7.000 COP" in html
-    assert "ROAS" in html and "28,0" in html
-    assert "Experimentos corriendo" in html and "Propuestas pendientes" in html
+    # Tiles: el total desde el inicio (el último acumulado): gasto 350, compras 3, ingresos 12.000, ROAS 34,3.
+    tiles = tb[:tb.index('class="tb-meses')]
+    assert "Gasto total" in tiles and "350 COP" in tiles and "12.000 COP" in tiles and "34,3" in tiles
+    assert "Gasto del mes" not in tiles and "250 COP" not in tiles
+    assert "Experimentos corriendo" in tiles and "Propuestas pendientes" in tiles
+    # Mes a mes: septiembre (250, 2, 7.000, ROAS 28) arriba de agosto (100, 1, 5.000, ROAS 50).
+    meses = _mes_a_mes(tb)
+    assert "Mes a mes" in tb
+    assert meses.index("septiembre 2026") < meses.index("agosto 2026")
+    sep = meses[meses.index("septiembre 2026"):meses.index("agosto 2026")]
+    assert "250 COP" in sep and "7.000 COP" in sep and "28,0" in sep and "<td" in sep
+    ago = meses[meses.index("agosto 2026"):]
+    assert "100 COP" in ago and "5.000 COP" in ago and "50,0" in ago
     # Gráfico de 30 días: SVG inline con barras (gasto) y línea (ingresos).
     assert "<svg" in html and 'class="tb-grafico"' in html
     assert "tb-barra" in html and "tb-linea" in html
@@ -83,11 +102,14 @@ def test_tablero_con_datos(app, base_temporal, monkeypatch):
 def test_tablero_vacio(app, base_temporal, monkeypatch):
     _reloj(monkeypatch)
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert "Tablero · septiembre 2026" in html
+    tb = _seccion_tablero(html)
+    assert "<h2>Tablero</h2>" in tb
     assert "Crea tu primer experimento" in html
     assert "Sin alertas" in html
     assert "sin ventas medibles" in html
     assert "tb-barra" not in html   # sin datos no se pinta un gráfico vacío
+    assert "Mes a mes" in tb and 'class="tb-meses' not in tb
+    assert "Todavía no hay gasto en ningún mes" in tb
 
 
 def test_tablero_pestana_por_defecto_y_sidebar(app, base_temporal):
@@ -328,26 +350,61 @@ def test_contexto_tablero_tolera_grafico_roto(app, base_temporal, monkeypatch):
     assert r.status_code == 200 and "250 COP" in r.get_data(as_text=True)
 
 
-def test_tile_generacion_este_mes(app, base_temporal, monkeypatch):
-    """Task 3: junto al gasto de pauta va lo pagado en generación (tabla
-    `gasto`, USD) este mes; fuera del mes no cuenta. Lleva a Configuración."""
+def test_tile_generacion_total_y_por_mes(app, base_temporal, monkeypatch):
+    """Junto al gasto de pauta va lo pagado en generación (tabla `gasto`,
+    USD): el tile es el total desde el inicio y la tabla lo abre por mes.
+    Lleva a Configuración."""
     import gastos
     _sembrar(base_temporal)
     gastos.registrar("acme", "video", 0.85, "video:cf_1", detalle="wan3 · 8 s", creado_en="2026-09-10T09:00:00")
     gastos.registrar("acme", "guion", 0.02, "guion:cf_1", creado_en="2026-09-11T09:00:00")
     gastos.registrar("acme", "video", 5.0, "video:viejo", creado_en="2026-08-20T09:00:00")
     _reloj(monkeypatch)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    tb = html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
-    ini = tb.index("Generación este mes")
+    tb = _seccion_tablero(app["c"].get("/cliente/acme").get_data(as_text=True))
+    ini = tb.index("Generación total")
     tile = tb[tb.rindex("<a", 0, ini):tb.index("</a>", ini)]
-    assert "US$ 0,87" in tile and "2 cobro(s) a proveedores" in tile
+    assert "US$ 5,87" in tile and "3 cobro(s) a proveedores" in tile
     assert 'data-ir-tab="settings"' in tile
-    assert "250 COP" in tb   # la pauta sigue en su moneda, al lado
+    assert "350 COP" in tb   # la pauta sigue en su moneda, al lado
+    meses = _mes_a_mes(tb)
+    assert "US$ 0,87" in meses[meses.index("septiembre 2026"):meses.index("agosto 2026")]
+    assert "US$ 5,00" in meses[meses.index("agosto 2026"):]
 
 
 def test_tile_generacion_sin_gasto(app, base_temporal, monkeypatch):
     _reloj(monkeypatch)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    tb = html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
-    assert "Generación este mes" in tb and "US$ 0,00" in tb and "sin generación pagada" in tb
+    tb = _seccion_tablero(app["c"].get("/cliente/acme").get_data(as_text=True))
+    assert "Generación total" in tb and "US$ 0,00" in tb and "sin generación pagada" in tb
+
+
+def test_mes_a_mes_una_fila_por_moneda(app, base_temporal, monkeypatch):
+    """Pauta en dos monedas el mismo mes: una fila por moneda, nunca se
+    convierte; la generación va una sola vez, en la primera fila del mes."""
+    import experimentos as ex
+    import gastos
+    _sembrar(base_temporal)
+    eid = ex.crear("acme", "Manta USA", PAISES, "OUTCOME_TRAFFIC", 7, 500.0, "https://t", "USD")
+    ep = ex.agregar_pieza("acme", eid, _pieza(base_temporal, legado="cf_9__es_CO"), "CO")
+    ex.snapshot(ep, {"gasto": 12.5, "impresiones": 40}, tomado_en="2026-09-05T08:00:00")
+    gastos.registrar("acme", "video", 0.85, "video:cf_1", creado_en="2026-09-10T09:00:00")
+    _reloj(monkeypatch)
+    meses = _mes_a_mes(_seccion_tablero(app["c"].get("/cliente/acme").get_data(as_text=True)))
+    sep = meses[meses.index("septiembre 2026"):meses.index("agosto 2026")]
+    assert sep.count("<tr") == 2 and "250 COP" in sep and "12,50 USD" in sep
+    assert sep.count("US$ 0,85") == 1
+
+
+def test_contexto_tablero_invalida_con_un_cobro_nuevo(app, base_temporal, monkeypatch):
+    """La generación está en el tablero cacheado: un cobro nuevo lo
+    invalida al instante, como un snapshot."""
+    import gastos
+    d = app["dashboard"]
+    _sembrar(base_temporal)
+    _reloj(monkeypatch)
+    monkeypatch.setattr(d.time, "monotonic", lambda: 1000.0)
+    ctx1 = d._contexto_tablero("acme")
+    assert ctx1["generacion_total"] == {"total": 0.0, "n": 0}
+    gastos.registrar("acme", "video", 0.85, "video:cf_1", creado_en="2026-09-10T09:00:00")
+    ctx2 = d._contexto_tablero("acme")
+    assert ctx2 is not ctx1 and ctx2["generacion_total"] == {"total": 0.85, "n": 1}
+    assert ctx2["meses"][0]["generacion"] == {"usd": 0.85, "n": 1}

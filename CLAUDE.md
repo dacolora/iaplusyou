@@ -1189,10 +1189,20 @@ is `valor_en(hasta) − valor_en(desde)`, negatives truncated to 0) grouped by a
 currency; revenue only counts snapshots attributed by Meta Pixel, store, or Triple Whale
 (`tablero.FUENTES_VENTAS`). `tablero.contexto`
 loads each piece's snapshots once (bounded by `experimentos.snapshots(ep_id, desde=)`, which
-also returns the last row before the window) and derives the month tiles, the 30-day
-series, the top-5 winners and the alerts; `dashboard._contexto_tablero` caches it 60 s per
-client keyed by the latest snapshot id and the proposal count, and degrades part by part
-(never leaking exception text). The chart is inline SVG on a single axis (spend bars,
+also returns the last row before the window) and derives the tiles, the 30-day
+series, the top-5 winners and the alerts. Since 2026-10-01 (pedido de Daniel) the tiles are the
+**total since the start** (`resumen_total`: a piece's total is its latest snapshot, already in the
+loaded window, so nothing is re-read; `resumen_total_triple_whale`; generation from
+`gastos.resumen_total`) and below them the **«Mes a mes»** table (`mes_a_mes`: one row per month,
+newest first, from the first month with ad spend or generation, a row per currency, generation only
+on the first; the month-end snapshots come from ONE query, `_cierres_de_mes`, ROW_NUMBER per piece
+and month, where a snapshot taken exactly at 00:00 of day 1 closes the previous month so the current
+month's row equals `resumen_mes` and the months add up to the total; generation per month from
+`gastos.por_mes`). `resumen_mes` (the month in progress) now only feeds the sidebar chip; the
+«Tu tienda según Triple Whale» block and the CSV are still the current month.
+`dashboard._contexto_tablero` caches it 60 s per client keyed by the latest snapshot id, the
+proposal count and the project's generation charges (count, last id, sum), and degrades part by
+part (never leaking exception text). The chart is inline SVG on a single axis (spend bars,
 revenue line, validated colorblind-safe pair). `csv_mes` escapes formula-leading cells.
 When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 `OUTCOME_SALES`; `lanzador.lanzar` then re-checks the Pixel before touching Meta and sends

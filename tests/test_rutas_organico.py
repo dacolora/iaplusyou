@@ -626,10 +626,14 @@ def test_tablero_alerta_ganadora_sin_publicar_y_tile(app, base_temporal, monkeyp
     pub_fb = org.crear("acme", pid, "facebook", "x #a #b #c")
     org.actualizar("acme", pub_fb, estado="publicada", publicado_en="2026-09-17T10:00:00")
     assert tablero.contexto("acme")["resumen"]["ganadoras_publicadas"] == 1
-    # Fuera del mes no cuenta.
+    # Fuera del mes no cuenta en el mes, pero el tile es el total desde el inicio.
     org.actualizar("acme", pub, publicado_en="2026-08-17T09:00:00")
     org.actualizar("acme", pub_fb, publicado_en="2026-08-17T10:00:00")
-    assert tablero.contexto("acme")["resumen"]["ganadoras_publicadas"] == 0
+    ctx = tablero.contexto("acme")
+    assert ctx["resumen"]["ganadoras_publicadas"] == 0 and ctx["total"]["ganadoras_publicadas"] == 1
+    tile = _seccion(_html(app), "tablero")
+    tile = tile[tile.index("Ganadoras publicadas"):]
+    assert "<strong>1</strong>" in tile[:200] and "orgánicas desde el inicio" in tile[:300]
 
 
 def test_tablero_alerta_sin_canales_manda_a_configuracion(app, base_temporal, monkeypatch):
