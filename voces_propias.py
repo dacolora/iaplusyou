@@ -109,13 +109,13 @@ def marcar_estrenada(cliente, voz_id):
     materiales.actualizar_extra(cliente, voz_id, estrenada=True)
 
 
-def sintetizar(cliente, vp, texto, idioma, velocidad=None):
+def sintetizar(cliente, vp, texto, idioma, velocidad=None, timeout=180):
     """Lee `texto` en `idioma` con la voz propia `vp` (el dict de `resolver`)
     por MiniMax y devuelve lo de `fal_audio.tts_minimax` ({"url", "costo_usd",
     "duracion_ms"}). Es una síntesis REAL: estrena la voz (MiniMax borra las que
     no se usan en 7 días). No registra gasto: lo hace quien llama apenas vuelve,
     y por eso un fallo al marcar `estrenada` (base bloqueada) no se propaga."""
-    r = fal_audio.tts_minimax(texto, vp["voice_id"], idioma, velocidad=velocidad)
+    r = fal_audio.tts_minimax(texto, vp["voice_id"], idioma, velocidad=velocidad, timeout=timeout)
     if not vp.get("estrenada"):
         try:
             marcar_estrenada(cliente, vp["id"])
@@ -338,7 +338,7 @@ def muestra(cliente, valor, idioma):
     frase = frase_muestra(vp["nombre"], idioma)
 
     def _producir():
-        t = fal_audio.tts_minimax(frase, vp["voice_id"], idioma, timeout=45)
+        t = sintetizar(cliente, vp, frase, idioma, timeout=45)
         usd = float(t["costo_usd"])
         # La pide quien mira (ruta au_muestra), pero el detalle se GUARDA: va en
         # el idioma del proyecto (spec 2026-09-26 §B8).
@@ -347,7 +347,6 @@ def muestra(cliente, valor, idioma):
         gastos.registrar_seguro(cliente, "locucion", usd,
                                 f"muestra_propia:{vp['id']}:{idioma}:{int(time.time() * 1000)}",
                                 detalle=detalle, proveedor=PROVEEDOR)
-        marcar_estrenada(cliente, vp["id"])
         url, bytes_, dur = _subir_mp3(cliente, t["url"], f"clientes/{cliente}/materiales/muestra_propia_{h[:16]}.mp3")
         return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": bytes_, "duracion_ms": dur,
                 "costo_usd": usd, "extra": {"texto": frase, "voz": vp["valor"], "idioma": idioma, "muestra": True,

@@ -42,11 +42,13 @@ nacieron en Crear › Audios; esta spec las lleva a la narración de las finales
    `voz = "vp:<id>:<voice_id>"` (una copia de las opciones, solo para la receta): un id reutilizado nunca toma
    un borrador hecho con otra voz. Las recetas de la galería no cambian, así que los borradores existentes se
    siguen reutilizando.
-7. **Variantes de gancho** (derivar y rescatar, `variante_tipo="hook"` sin voz explícita): hoy rotan a «otra»
-   voz de la galería. Con `final_edition.voz_variante_hook`, si la final original del destino usó una voz propia
-   que todavía existe, la variante la conserva; si no, rota la galería como siempre.
+7. **Variantes** (derivar y rescatar, de gancho o de estructura, sin voz explícita): hoy la de gancho rota a
+   «otra» voz de la galería y la de estructura usa la de defecto. Con `final_edition.voz_variante`, si la final
+   original del destino —o, si el destino no tiene original, la final original más reciente de la sesión
+   (`_voz_propia_de_la_sesion`; las variantes no cuentan)— usó una voz propia que todavía existe, la variante la
+   conserva, sea de gancho o de estructura; si no, lo de siempre con la galería.
 8. **Camino viejo** (`FINAL_EDITION_LEGADO=1`): `voz._sintetizar_bloque` lee una voz propia por
-   `voces_propias.sintetizar` y `producir_legado` usa `proveedor_voz`, `etiqueta_voz` y `voz_variante_hook`, para
+   `voces_propias.sintetizar` y `producir_legado` usa `proveedor_voz`, `etiqueta_voz` y `voz_variante`, para
    que el seguro de despliegue no rompa las finales con voz propia.
 
 ## 3. Decisiones (rulings)
@@ -54,7 +56,8 @@ nacieron en Crear › Audios; esta spec las lleva a la narración de las finales
 | Decisión | Por qué | Si se equivoca |
 |---|---|---|
 | La voz por defecto sigue siendo la de la galería | No cambiar lo que la gente ya conoce | La persona elige su voz a mano |
-| Variante de gancho con voz propia conserva la voz | Una voz propia es la de la marca (a menudo el dueño clonado): la variante prueba otro gancho, no otra persona | Las variantes suenan con la misma voz; basta rotar Mis voces después |
+| Una variante (de gancho o de estructura) con voz propia conserva la voz | Una voz propia es la de la marca (a menudo el dueño clonado): la variante prueba otro guion, no otra persona | Las variantes suenan con la misma voz; basta rotar Mis voces después |
+| Destino sin final original → la voz propia de la final original más reciente de la sesión | Un experimento con varios países debe sonar con una sola voz y pagar el guion variado una vez | Ese país suena con la voz propia en vez de la galería |
 | Hash del material y receta con el `voice_id` | El id de la fila se reutiliza en SQLite; el `voice_id` no | Ninguno: solo evita mezclar voces |
 | El `voice_id` no se guarda en la final, en los materiales de voz ni en la página | Vive en un solo sitio (la fila de la voz propia) | — |
 | Sin ▶ de muestra en Final edition | La persona ya conoce sus voces (las creó y escuchó en Audios) | Se agrega después reutilizando `au_muestra` |
@@ -74,7 +77,8 @@ nacieron en Crear › Audios; esta spec las lleva a la narración de las finales
   igual que antes; `insumos.voz_bloque` con voz propia (MiniMax con su `voice_id` e idioma, caché por
   `voice_id`, borrada o de otro proyecto → ValueError sin llamar a fal, la galería intacta); camino viejo
   (`voz.sintetizar` con voz propia); `produccion` (proveedor `fal/minimax`, receta nueva si cambia el
-  `voice_id`, variante de gancho conserva la voz propia o rota si se borró, nombre en el error); ruta (acepta
+  `voice_id`, una variante de gancho o de estructura conserva la voz propia —también en un destino sin
+  original— o vuelve a la galería si se borró, nombre en el error); ruta (acepta
   `vp:<id>`, rechaza borrada/ajena sin encolar), plantilla (grupo Mis voces solo si hay), contexto sin
   `voice_id`.
 - Prueba real (≤ US$ 0,10): base temporal, proyecto `pruebas_voces`, una voz propia apoyada en una voz de

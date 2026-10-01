@@ -345,11 +345,12 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         # Voz y estilo concretos ANTES de la receta (la receta los incluye).
         lista_voces = fal_audio.VOCES.get(guion_base.get("idioma") or "es") or fal_audio.VOCES["es"]
         if not o.get("voz"):
-            o["voz"] = lista_voces[0]
-            if variante_tipo == "hook":
-                # La voz propia de la final original del destino si todavía
-                # existe; si no, otra de la galería (ver `voz_variante_hook`).
-                o["voz"] = final_edition.voz_variante_hook(cliente, cf_id, idioma, pais, lista_voces)
+            # Una variante conserva la voz propia de la marca (la de la original
+            # del destino o, sin original, la de la sesión); si no hay, la de
+            # gancho rota la galería y la de estructura usa la de defecto (ver
+            # `voz_variante`).
+            o["voz"] = (final_edition.voz_variante(cliente, cf_id, idioma, pais, lista_voces, variante_tipo)
+                        if variante_tipo else lista_voces[0])
         if not o.get("estilo_musica"):
             producto = final_edition._producto(cliente, entry, None)
             estilo = musica_mod.elegir_estilo(producto.get("tipo"), entry.get("enfoque"))

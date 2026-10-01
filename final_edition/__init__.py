@@ -493,16 +493,36 @@ def etiqueta_voz(cliente, voz):
     return vp["nombre"] if vp else gettext("Mis voces")
 
 
-def voz_variante_hook(cliente, cf_id, idioma, pais, lista_voces):
-    """La voz de una variante de gancho sin voz explícita. Si la final original
-    del destino usó una voz propia que todavía existe, la misma: es la voz de la
-    marca y la variante prueba otro gancho, no otra persona. Si no, «otra» de la
-    galería: la que sigue a la original (o a la de defecto si no hay original)."""
+def _voz_propia_de_la_sesion(cliente, cf_id):
+    """La voz propia (que todavía existe) de la final ORIGINAL más reciente de
+    la sesión, o None. Las variantes no cuentan."""
+    import voces_propias   # perezoso: voces_propias importa final_edition.cortes
+    for f in reversed(creative_flow.finales(cliente, cf_id)):
+        if f.get("variante") is not None:
+            continue
+        voz = ((((f.get("capas") or {}).get("voz") or {}).get("parametros")) or {}).get("voz")
+        if voces_propias.resolver(cliente, voz):
+            return voz
+    return None
+
+
+def voz_variante(cliente, cf_id, idioma, pais, lista_voces, variante_tipo):
+    """La voz de una variante sin voz explícita (derivar y rescatar). Una voz
+    propia es la voz de la marca: si la final original de este destino —o, si
+    este destino no tiene original, la más reciente de la sesión— se narró con
+    una voz propia que todavía existe, la variante la conserva, sea de gancho o
+    de estructura (prueba otro guion, no otra persona). Si no, lo de siempre: la
+    de gancho usa «otra» de la galería (la que sigue a la original, o a la de
+    defecto si no hay original) y la de estructura, la de defecto."""
     import voces_propias
     original = _parametro_capa_original(cliente, cf_id, idioma, pais, "voz", "voz")
+    if original is None:
+        original = _voz_propia_de_la_sesion(cliente, cf_id)
     if voces_propias.resolver(cliente, original):
         return original
-    return _siguiente(lista_voces, original or lista_voces[0])
+    if variante_tipo == "hook":
+        return _siguiente(lista_voces, original or lista_voces[0])
+    return lista_voces[0]
 
 
 def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_sufijo=""):
@@ -538,9 +558,9 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
     ("hook" | "estructura"), la pieza sale como `<cf_id>__<idioma>_<pais>__v<n>`
     con un guion variado a partir del guion base (`guion.variar_guion`) — el
     guion base del concepto NO se toca. Si no se fija `voz`/`estilo_musica`,
-    `hook` cambia la voz respecto a la final original del destino (salvo una
-    voz propia que todavía existe: se conserva, `voz_variante_hook`) y
-    `estructura` cambia el estilo de música."""
+    `hook` cambia la voz respecto a la final original del destino y
+    `estructura` cambia el estilo de música; una voz propia que todavía existe
+    se conserva en las dos (`voz_variante`)."""
     o = _opciones(opciones)
     entry = _sesion(cliente, cf_id)
     avisar = on_etapa or (lambda nombre: None)
@@ -669,10 +689,12 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
         archivo_voz, palabras = None, []
         voces = fal_audio.VOCES.get(idioma) or fal_audio.VOCES["es"]
         nombre_voz = o.get("voz")
-        if not nombre_voz and variante_tipo == "hook":
-            # La voz propia de la final original del destino si todavía existe;
-            # si no, otra de la galería (ver `voz_variante_hook`).
-            nombre_voz = voz_variante_hook(cliente, cf_id, idioma, pais, voces)
+        if not nombre_voz and variante_tipo:
+            # Una variante conserva la voz propia de la marca (la de la original
+            # del destino o, sin original, la de la sesión); si no hay, la de
+            # gancho rota la galería y la de estructura usa la de defecto (ver
+            # `voz_variante`).
+            nombre_voz = voz_variante(cliente, cf_id, idioma, pais, voces, variante_tipo)
         nombre_voz = nombre_voz or voces[0]
         if not o.get("con_voz", True):
             capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, estado="omitida")

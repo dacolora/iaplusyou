@@ -377,6 +377,25 @@ def test_muestra_de_una_voz_sin_estrenar_la_estrena(base_temporal, r2, fal):
     assert fal[0][0] == "tts" and voces_propias.obtener("acme", v["id"])["estrenada"] is True
 
 
+def test_muestra_no_pierde_lo_pagado_si_no_puede_marcar_estrenada(base_temporal, r2, fal, monkeypatch):
+    # La muestra pasa por `sintetizar`: con la base bloqueada justo después de
+    # que fal cobró, la muestra se guarda igual y el siguiente ▶ no vuelve a pagar.
+    v = _voz(idioma="es", estrenada=False)
+    tts, esperas = voces_propias.fal_audio.tts_minimax, []
+
+    def _tts(texto, voice_id, idioma, velocidad=None, timeout=180):
+        esperas.append(timeout)
+        return tts(texto, voice_id, idioma, velocidad=velocidad, timeout=timeout)
+    monkeypatch.setattr(voces_propias.fal_audio, "tts_minimax", _tts)
+
+    def _falla(*a, **k):
+        raise RuntimeError("base bloqueada")
+    monkeypatch.setattr(voces_propias, "marcar_estrenada", _falla)
+    url = voces_propias.muestra("acme", f"vp:{v['id']}", "fi")
+    assert url and voces_propias.muestra("acme", f"vp:{v['id']}", "fi") == url
+    assert len(fal) == 1 and len(_gastos("acme")) == 1 and esperas == [45]
+
+
 def test_borrar_quita_voz_grabacion_y_muestras(base_temporal, r2, fal):
     g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/clientes/acme/materiales/grabacion_x.wav",
                              hash="h_grab", bytes=10, extra={})
