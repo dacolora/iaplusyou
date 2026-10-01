@@ -17757,3 +17757,14 @@ msgstr "🔊 Sound"
 msgid "🖼 Imagen"
 msgstr "🖼 Image"
 
+#, python-format
+msgid "Apify no arrancó la corrida: %(motivo)s"
+msgstr "Apify did not start the run: %(motivo)s"
+
+msgid "la cuenta llegó a un límite de su plan"
+msgstr "the account reached a limit of its plan"
+
+#, python-format
+msgid "Apify no entregó resultados (%(aviso)s); revísalos en console.apify.com."
+msgstr "Apify didn't deliver results (%(aviso)s); check them at console.apify.com."
+
