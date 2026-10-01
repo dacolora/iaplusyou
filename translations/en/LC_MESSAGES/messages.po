@@ -6778,9 +6778,6 @@ msgstr "Spent %(gastado)s of %(aprobado)s approved"
 msgid "Gasto"
 msgstr "Spend"
 
-msgid "Gasto del mes"
-msgstr "This month's spend"
-
 msgid "Gasto del mes (US$)"
 msgstr "Spend this month (US$)"
 
@@ -6796,8 +6793,8 @@ msgstr "Spend by model"
 msgid "Gasto real en APIs de IA"
 msgstr "Real spend on AI APIs"
 
-msgid "Gasto y ventas del mes en curso (Meta Pixel, tienda y Triple Whale si está conectado), tus piezas ganadoras y lo que necesita tu atención. Se actualiza con cada refresco de métricas del worker."
-msgstr "This month's spend and sales (Meta Pixel, store and Triple Whale if connected), your winning pieces and what needs your attention. Updates with every metrics refresh from the worker."
+msgid "Gasto total"
+msgstr "Total spend"
 
 #, python-format
 msgid "Gastó lo de %(n)s ventas al costo por venta de la cuenta y su ROAS es %(roas)s× (meta %(meta)s×)."
@@ -6841,6 +6838,9 @@ msgstr "Generation by month (US$)"
 
 msgid "Generación probada por la bitácora, reconstruida tras haberse eliminado. Su costo no quedó registrado."
 msgstr "Generation proven by the log, rebuilt after it was deleted. Its cost wasn't recorded."
+
+msgid "Generación total"
+msgstr "Total generation"
 
 #, python-format
 msgid "Generados (%(n)s)"
@@ -8529,6 +8529,9 @@ msgstr "What makes them lose"
 msgid "Lo que le falta a esta matriz"
 msgstr "What this matrix is missing"
 
+msgid "Lo que llevas desde el inicio y, debajo, mes a mes: gasto y ventas (Meta Pixel, tienda y Triple Whale si está conectado), tus piezas ganadoras y lo que necesita tu atención. Se actualiza con cada refresco de métricas del worker."
+msgstr "Your totals since the start and, below, month by month: spend and sales (Meta Pixel, store and Triple Whale if connected), your winning pieces and what needs your attention. Updates with every metrics refresh from the worker."
+
 msgid "Lo que más se vende"
 msgstr "What sells most"
 
@@ -8793,6 +8796,9 @@ msgstr "MercadoLibre, step by step"
 
 msgid "Mes"
 msgstr "Month"
+
+msgid "Mes a mes"
+msgstr "Month by month"
 
 msgid "Meta (Pixel/Tienda)"
 msgstr "Meta (Pixel/Store)"
@@ -9806,14 +9812,17 @@ msgstr "Couldn't delete the file. Try again."
 msgid "No se pudo calcular el costo."
 msgstr "Couldn't calculate the cost."
 
+msgid "No se pudo calcular el desglose por mes."
+msgstr "I couldn't calculate the monthly breakdown."
+
 msgid "No se pudo calcular el precio: vuelve a intentar."
 msgstr "Couldn't calculate the price: try again."
 
-msgid "No se pudo calcular el resumen del mes. El resto del tablero sigue abajo."
-msgstr "I couldn't calculate this month's summary. The rest of the dashboard is still below."
-
 msgid "No se pudo calcular el top de ganadoras."
 msgstr "I couldn't calculate the top winners."
+
+msgid "No se pudo calcular el total. El resto del tablero sigue abajo."
+msgstr "I couldn't calculate the total. The rest of the dashboard is still below."
 
 msgid "No se pudo calcular la serie de 30 días."
 msgstr "I couldn't calculate the 30-day series."
@@ -10666,8 +10675,8 @@ msgstr "Pieces"
 msgid "Piezas de Crear: %(n)s"
 msgstr "Create pieces: %(n)s"
 
-msgid "Piezas ganadoras distintas publicadas orgánicamente este mes (en una o varias plataformas)"
-msgstr "Distinct winning pieces posted organically this month (on one or more platforms)"
+msgid "Piezas ganadoras distintas publicadas orgánicamente desde el inicio (en una o varias plataformas)"
+msgstr "Distinct winning pieces posted organically since the start (on one or more platforms)"
 
 msgid "Piezas generadas"
 msgstr "Pieces generated"
@@ -12945,10 +12954,6 @@ msgstr "Yes, delete"
 msgid "Tablero"
 msgstr "Dashboard"
 
-#, python-format
-msgid "Tablero · %(mes)s %(anio)s"
-msgstr "Dashboard · %(mes)s %(anio)s"
-
 msgid "Tamaño"
 msgstr "Size"
 
@@ -13252,6 +13257,9 @@ msgstr "No final cuts yet. Open a video above, prepare the script and pick the c
 
 msgid "Todavía no hay fotos: sube una o crea una imagen en Desde referencias."
 msgstr "No photos yet: upload one or create an image in From references."
+
+msgid "Todavía no hay gasto en ningún mes. Cuando un experimento gaste o pagues una generación, aquí verás cada mes."
+msgstr "There's no spend in any month yet. Once an experiment spends or you pay for a generation, you'll see each month here."
 
 msgid "Todavía no hay gasto ni ventas en los últimos 30 días. Cuando un experimento empiece a gastar, aquí verás el día a día."
 msgstr "There's no spend or sales yet in the last 30 days. Once an experiment starts spending, you'll see the day-by-day here."
@@ -14303,8 +14311,8 @@ msgstr "Videos waiting for review (%(n)s)"
 msgid "Videos, imágenes y audios desde tus referencias, o cambia el producto de una foto o video. Nada se cobra hasta que pulses «Generar» o «Crear audio»."
 msgstr "Videos, images and audios from your references, or swap the product in a photo or video. Nothing is charged until you press \"Generate\" or \"Create audio\"."
 
-msgid "Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto"
-msgstr "Videos, images, scripts, final cuts and AI text paid for this month; detail in Settings › Spend"
+msgid "Videos, imágenes, guiones, finales y textos con IA pagados desde el inicio; detalle en Configuración › Gasto"
+msgstr "Videos, images, scripts, final cuts and AI text paid for since the start; detail in Settings › Spend"
 
 msgid "Vista previa del video"
 msgstr "Video preview"
@@ -15323,6 +15331,9 @@ msgstr "from %(nombre)s"
 msgid "desde el 1 de %(mes)s"
 msgstr "since %(mes)s 1"
 
+msgid "desde el inicio"
+msgstr "since the start"
+
 msgid "deseo"
 msgstr "desire"
 
@@ -16305,8 +16316,8 @@ msgstr "optional: one per line; if you have its Ad Library link, paste it alongs
 msgid "opiniones de Mercado Libre"
 msgstr "Mercado Libre reviews"
 
-msgid "orgánicas este mes"
-msgstr "organic this month"
+msgid "orgánicas desde el inicio"
+msgstr "organic, since the start"
 
 msgid "original"
 msgstr "original"

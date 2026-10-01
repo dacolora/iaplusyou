@@ -392,25 +392,37 @@ def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypat
     assert "Experimento creado" not in html and "Experiment created" in html
 
 
+def _cobro_de_septiembre():
+    """Un cobro de generación: la tabla «Mes a mes» tiene una fila con el
+    nombre del mes, que sale del tablero cacheado."""
+    import gastos
+    gastos.registrar("acme", "video", 0.85, "video:cf_1", creado_en="2026-09-10T09:00:00")
+
+
 def test_tablero_en_ingles(admin_en, monkeypatch):
     import dashboard
     dashboard._TABLERO_CACHE.clear()
+    _cobro_de_septiembre()
     monkeypatch.setattr(dashboard.db, "ahora", lambda: "2026-09-26T10:00:00")
     html = html_de(admin_en, "/cliente/acme")
-    assert "Dashboard · September 2026" in html
+    assert "<h2>Dashboard</h2>" in html and "Month by month" in html and "September 2026" in html
     fugas = espanol_visible(html, ("tab-tablero",))
     assert not fugas, fugas[:15]
 
 
 def test_tablero_no_mezcla_idiomas_en_la_cache(app_i18n, monkeypatch):
     app_i18n._TABLERO_CACHE.clear()
+    _cobro_de_septiembre()
     monkeypatch.setattr(app_i18n.db, "ahora", lambda: "2026-09-26T10:00:00")
     c = app_i18n.app.test_client()
     with c.session_transaction() as s:
         s["usuario"], s["rol"], s["cliente"] = "admin", "admin", None
-    assert "Tablero · septiembre 2026" in html_de(c, "/cliente/acme")
+    html = html_de(c, "/cliente/acme")
+    assert "<h2>Tablero</h2>" in html and "Mes a mes" in html and "septiembre 2026" in html
     idiomas.guardar_de_usuario("admin", "en")
-    assert "Dashboard · September 2026" in html_de(c, "/cliente/acme")
+    html = html_de(c, "/cliente/acme")
+    assert "<h2>Dashboard</h2>" in html and "Month by month" in html and "September 2026" in html
+    assert "septiembre 2026" not in html
 
 
 def test_csv_del_tablero_con_encabezados_en_ingles(admin_en):

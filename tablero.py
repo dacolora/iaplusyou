@@ -1,7 +1,9 @@
 """
 Tablero (Bloque 6): agregaciones de solo lectura sobre los experimentos del
-motor para la pestaña que el dueño abre cada mañana — gasto del mes, ventas
-atribuidas, ROAS, top de ganadoras, alertas, serie de 30 días y CSV.
+motor para la pestaña que el dueño abre cada mañana — gasto, ventas
+atribuidas y ROAS desde el inicio (`resumen_total`) y mes a mes
+(`mes_a_mes`), el mes en curso (`resumen_mes`, para el chip del menú), top
+de ganadoras, alertas, serie de 30 días y CSV.
 
 Las métricas de `metrica_snapshot` son ACUMULADAS por anuncio (Meta con
 `date_preset=maximum`; la tienda desde la activación). Por eso ningún cálculo
@@ -35,6 +37,7 @@ from flask_babel import gettext, ngettext
 
 import db
 import experimentos
+import gastos
 import idiomas
 import propuestas
 from idiomas import N_
@@ -49,6 +52,9 @@ FUENTES_VENTAS = ("meta", "tienda", "triple_whale")
 HORAS_SIN_METRICAS = 6
 DIAS_SERIE = 30
 MONEDA_POR_DEFECTO = "USD"
+# Antes de cualquier snapshot o cobro: el delta desde aquí es el acumulado de
+# cada pieza (los tiles del Tablero son el total desde el inicio).
+INICIO = "0001-01-01T00:00:00"
 ENCABEZADO_CSV = (N_("experimento"), N_("pais"), N_("pieza"), N_("veredicto"), N_("impresiones"), N_("clics"),
                   N_("gasto"), N_("compras"), N_("ingresos"), N_("roas"), N_("moneda"))
 
@@ -282,19 +288,102 @@ def resumen_mes(cliente, ahora_iso=None, datos=None):
     return out
 
 
-def resumen_mes_triple_whale(cliente, ahora_iso=None, datos=None):
-    """Resumen del mes en curso SOLO para experimentos con
-    atribucion='triple_whale'. Retorna None si no hay datos."""
+def resumen_total(cliente, ahora_iso=None, datos=None):
+    """resumen_periodo desde el inicio del proyecto hasta `ahora` (los tiles
+    del Tablero). Como los snapshots son acumulados, el total de una pieza
+    es su último snapshot hasta `ahora`, y la carga del tablero siempre lo
+    trae aunque solo pida la ventana del mes: no relee el histórico."""
     hasta = _ahora(ahora_iso)
-    desde = _inicio_mes(hasta)
-    d = _datos(cliente, hasta, datos, desde_necesario=desde)
-    # Filtrar solo experimentos con atribucion="triple_whale"
-    filas_tw = [(ex, pz, snaps) for ex, pz, snaps in d.filas
-                if ex.get("atribucion") == "triple_whale"]
+    d = _datos(cliente, hasta, datos)
+    out = _resumen_periodo(d.exps, d.filas, INICIO, hasta)
+    out["propuestas_pendientes"] = len(propuestas.pendientes(cliente))
+    out["ganadoras_publicadas"] = _ganadoras_publicadas(cliente, d.exps, INICIO, hasta)
+    out["hasta"] = hasta
+    return out
+
+
+def resumen_total_triple_whale(cliente, ahora_iso=None, datos=None):
+    """resumen_total SOLO de los experimentos con atribucion='triple_whale'.
+    None si no hay ninguno."""
+    hasta = _ahora(ahora_iso)
+    d = _datos(cliente, hasta, datos)
+    filas_tw = [(ex, pz, snaps) for ex, pz, snaps in d.filas if ex.get("atribucion") == "triple_whale"]
     if not filas_tw:
         return None
-    out = _resumen_periodo(d.exps, filas_tw, desde, hasta, atribucion_filtro=("triple_whale",))
-    out.update(desde=desde, hasta=hasta)
+    out = _resumen_periodo(d.exps, filas_tw, INICIO, hasta, atribucion_filtro=("triple_whale",))
+    out["hasta"] = hasta
+    return out
+
+
+# ---------- mes a mes ----------
+
+def _cierres_de_mes(ep_ids, hasta_iso):
+    """{ep_id: Serie} con el último snapshot de cada mes de cada pieza hasta
+    `hasta`, de UNA consulta (ROW_NUMBER por pieza y mes), y el primer mes
+    con snapshots. El mes de un snapshot es el del segundo anterior: uno
+    tomado justo a las 00:00 del día 1 cierra el mes anterior, como en
+    resumen_mes, donde es la base del mes. Con eso, en cada comienzo de mes
+    y en `hasta` la Serie de cierres da lo mismo que la de todos los
+    snapshots, sin cargar el histórico entero."""
+    if not ep_ids:
+        return {}, None
+    ms = db.metrica_snapshot
+    mes = sa.func.substr(sa.func.datetime(ms.c.tomado_en, "-1 second"), 1, 7)
+    cols = (ms.c.experimento_pieza_id, ms.c.tomado_en, ms.c.gasto, ms.c.compras, ms.c.ingresos,
+            ms.c.clics_enlace, ms.c.impresiones, ms.c.fuente_ventas)
+    orden = sa.func.row_number().over(partition_by=(ms.c.experimento_pieza_id, mes),
+                                      order_by=(ms.c.tomado_en.desc(), ms.c.id.desc()))
+    sub = (sa.select(*cols, mes.label("mes"), orden.label("n"))
+           .where(ms.c.experimento_pieza_id.in_(list(ep_ids)), ms.c.tomado_en <= hasta_iso).subquery())
+    por_pieza, primero = {}, None
+    with db.conectar() as con:
+        for f in con.execute(sa.select(sub).where(sub.c.n == 1)):
+            m = dict(f._mapping)
+            primero = min(primero or m["mes"], m["mes"])
+            por_pieza.setdefault(m["experimento_pieza_id"], []).append(m)
+    return {ep: Serie(s) for ep, s in por_pieza.items()}, primero
+
+
+def _meses_hasta(primero, ultimo):
+    """["YYYY-MM", ...] de `ultimo` a `primero`, el más reciente primero."""
+    anio, mes = int(ultimo[:4]), int(ultimo[5:7])
+    out = []
+    while f"{anio:04d}-{mes:02d}" >= primero:
+        out.append(f"{anio:04d}-{mes:02d}")
+        anio, mes = (anio - 1, 12) if mes == 1 else (anio, mes - 1)
+    return out
+
+
+def _con_actividad(por_moneda):
+    """Solo las monedas que se movieron en el período: un experimento en
+    otra moneda que ese mes no gastó no ocupa una fila."""
+    return {m: g for m, g in por_moneda.items()
+            if g["gasto"] or g["impresiones"] or g["compras"] or g["ingresos"]}
+
+
+def mes_a_mes(cliente, ahora_iso=None, datos=None):
+    """El desglose del Tablero: [{"mes": "YYYY-MM", "etiqueta": «septiembre
+    2026», "por_moneda": {moneda: grupo de resumen_periodo}, "generacion":
+    {"usd", "n"}}] desde el primer mes con pauta o generación hasta el mes
+    en curso, el más reciente primero. Un mes sin nada en medio sigue en la
+    lista; una moneda sin actividad en un mes no. La fila del mes en curso
+    es el mismo cálculo que resumen_mes y la suma de los meses, el total."""
+    hasta = _ahora(ahora_iso)
+    d = _datos(cliente, hasta, datos)
+    cierres, primero_pauta = _cierres_de_mes({pz["id"] for _ex, pz, _s in d.filas}, hasta)
+    generacion = gastos.por_mes(cliente, hasta)
+    primeros = [m for m in (primero_pauta, min(generacion, default=None)) if m]
+    if not primeros:
+        return []
+    filas = [(ex, pz, cierres[pz["id"]]) for ex, pz, _s in d.filas if pz["id"] in cierres]
+    out, fin = [], hasta
+    for mes in _meses_hasta(min(primeros), hasta[:7]):
+        inicio = mes + "-01T00:00:00"
+        por_moneda = _resumen_periodo(d.exps, filas, inicio, fin)["por_moneda"] if filas else {}
+        out.append({"mes": mes, "etiqueta": f"{idiomas.mes_largo(int(mes[5:7]))} {mes[:4]}",
+                    "por_moneda": _con_actividad(por_moneda),
+                    "generacion": generacion.get(mes) or {"usd": 0.0, "n": 0}})
+        fin = inicio
     return out
 
 
@@ -685,21 +774,24 @@ def csv_mes(cliente, ahora_iso=None, datos=None):
 
 # ---------- punto de entrada ----------
 
-PARTES = ("resumen", "serie", "top", "alertas", "csv")
+PARTES = ("resumen", "total", "meses", "serie", "top", "alertas", "csv")
 
 
 def contexto(cliente, ahora_iso=None, dias=DIAS_SERIE, datos=None):
     """Todas las partes del tablero de una sola carga: {"ahora", "resumen"
-    (resumen_mes), "resumen_triple_whale" (solo si hay experimentos con
-    atribucion=triple_whale), "serie" (serie_diaria de `dias`),
-    "serie_triple_whale" (solo si hay experimentos con atribucion=triple_whale),
-    "top" (top_ganadoras), "alertas", "csv" (csv_mes)}. Sin tolerancia a fallos:
-    eso lo pone dashboard._contexto_tablero, que llama a cada parte con
-    `datos=` y envuelve cada una en su try."""
+    (resumen_mes: el chip del menú lateral), "total" (resumen_total: los
+    tiles), "total_triple_whale" (solo si hay experimentos con
+    atribucion=triple_whale), "meses" (mes_a_mes), "serie" (serie_diaria de
+    `dias`), "serie_triple_whale" (ídem), "top" (top_ganadoras), "alertas",
+    "csv" (csv_mes)}. Sin tolerancia a fallos: eso lo pone
+    dashboard._contexto_tablero, que llama a cada parte con `datos=` y
+    envuelve cada una en su try."""
     d = datos if datos is not None else cargar_datos(cliente, ahora_iso, dias)
     return {"ahora": d.ahora,
             "resumen": resumen_mes(cliente, d.ahora, datos=d),
-            "resumen_triple_whale": resumen_mes_triple_whale(cliente, d.ahora, datos=d),
+            "total": resumen_total(cliente, d.ahora, datos=d),
+            "total_triple_whale": resumen_total_triple_whale(cliente, d.ahora, datos=d),
+            "meses": mes_a_mes(cliente, d.ahora, datos=d),
             "serie": serie_diaria(cliente, dias, d.ahora, datos=d),
             "serie_triple_whale": serie_diaria_triple_whale(cliente, dias, d.ahora, datos=d),
             "top": top_ganadoras(cliente, datos=d),

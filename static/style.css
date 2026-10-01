@@ -1502,6 +1502,14 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .tb-seccion-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: .6rem; }
 .tb-seccion h3 { margin: 0; font-family: var(--font-display); font-size: 1rem; }
 .tb-seccion .vacio { padding: .4rem 0; }
+/* Mes a mes: el desglose del total, una fila por mes (y por moneda). En el
+   celular es tabla-apilada: una tarjeta por fila. */
+.tb-meses { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.tb-meses th, .tb-meses td { padding: .45rem .6rem; border-bottom: 1px solid var(--border); text-align: left; }
+.tb-meses th { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.tb-meses .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tb-meses .tb-sin-dato { color: var(--muted-2); }
+.tb-meses tr.tb-mes-varias td { border-bottom-style: dashed; }
 
 /* Gráfico de 30 días: un solo eje (gasto e ingresos son dinero en la misma
    moneda), rejilla recesiva, barras finas con 2px de aire y tope redondeado,
