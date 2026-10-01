@@ -49,6 +49,16 @@ def _mensaje_apify(r):
         return ""
 
 
+def _tipo_apify(r):
+    """`error.type` del cuerpo de una respuesta, o "" si no es JSON o no lo trae (un 403
+    cualquiera). Hoy solo se usa para distinguir "full-permission-actor-not-approved" —
+    el actor ahora pide acceso completo a la cuenta — del 403 de siempre (token)."""
+    try:
+        return str(((r.json() or {}).get("error") or {}).get("type") or "")
+    except (ValueError, AttributeError):
+        return ""
+
+
 def _cuerpo(r):
     """El JSON de una respuesta como dict: `{}` si es JSON pero no un objeto
     (`null`, una lista). Un cuerpo que no es JSON sube ValueError y quien llama
@@ -105,6 +115,12 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
     r = _http.pedir(sesion, "POST", f"{URL_API}/actors/{actor}/runs", "Apify", headers=cabeceras(token),
                     params={"timeout": MAX_ESPERA_S, "maxItems": max_items, "maxTotalChargeUsd": max_total_charge_usd},
                     json=entrada)
+    if r.status_code == 403 and _tipo_apify(r) == "full-permission-actor-not-approved":
+        # No es un problema de token (2026-10-01: `axesso_data~amazon-reviews-scraper` empezó a
+        # pedir esto): el mensaje de siempre manda a revisar APIFY_TOKEN y no hay nada que revisar
+        # ahí. Nunca se repite la URL de aprobación de Apify ni el token.
+        raise ErrorFuente(gettext("Este actor de Apify ahora pide acceso completo a la cuenta y Creatv "
+                                  "no se lo da; hay que cambiar de actor."))
     if r.status_code in (401, 403):
         raise ErrorFuente(gettext("Apify no aceptó el token (APIFY_TOKEN)."))
     if r.status_code == 400:

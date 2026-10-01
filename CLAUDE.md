@@ -320,7 +320,11 @@ Mientras la investigación está viva, la recolección manual del estudio y «Ge
 esperan (las rutas los rechazan); si un trabajo manual con el mismo job_id sigue bloqueando un paso de la
 cadena, `avanzar` deja la investigación `interrumpida` para que «Reanudar» funcione en cuanto termine. El
 Blueprint de Nicho rechaza los POST que el navegador marca cross-site (`Sec-Fetch-Site`), como Sprints y
-Flow Plus.
+Flow Plus. Los precios por resultado del registro (`nicho/fuentes/plataformas.py`) son los del plan de
+Apify de Creatv (FREE), verificados contra el cobro real de corridas reales (Amazon búsqueda y MELI
+reseñas corregidos el 2026-10-01; un plan de pago puede bajar algunos); un actor que ahora exige acceso
+completo a la cuenta (`full-permission-actor-not-approved`) se rechaza con su propio aviso, nunca con el
+de token (`providers.apify.arrancar`).
 **Otro mercado** (Parte 4, spec `docs/superpowers/specs/2026-09-30-nicho-mas-tiendas-design.md`): una tienda
 sin sitio en el país del estudio no se rechaza: `plataformas.mercado(clave, pais)` → `("otro", casa)` y busca
 y trae reseñas de su sitio principal (Amazon y Walmart → EE. UU., Mercado Libre → México); en la tarjeta va en

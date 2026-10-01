@@ -5984,6 +5984,9 @@ msgstr "United States"
 msgid "Este activo ya no existe"
 msgstr "This item no longer exists"
 
+msgid "Este actor de Apify ahora pide acceso completo a la cuenta y Creatv no se lo da; hay que cambiar de actor."
+msgstr "This Apify actor now requires full account access and Creatv won't grant it; a different actor is needed."
+
 msgid "Este clip dura más que el video: no cabe una copia. Acórtalo primero."
 msgstr "This clip is longer than the video: a copy doesn't fit. Shorten it first."
 
