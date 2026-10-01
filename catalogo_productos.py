@@ -575,12 +575,16 @@ def _id_color_desde_nombre(cliente, categoria, pid, nombre):
 
 
 def agregar_color(cliente, pid, nombre, descripcion="", fuente_id=None, url_compra=None, disponible=True,
-                  color_id=None, convertir_actual=None):
+                  color_id=None, convertir_actual=None, conservar_raiz=False):
     """Crea el color `color_id` (derivado del nombre si no se pasa) del producto
     `pid`: entrada en `variantes` y subcarpeta. Un producto plano con fotos
     en la raíz exige `convertir_actual` (el nombre del color de esas fotos):
-    pasan a ser su primer color. Devuelve el color_id. ValueError si el
-    producto no existe, el color ya existe o hay fotos sin color dicho."""
+    pasan a ser su primer color — salvo con `conservar_raiz=True` (el
+    importador, para un activo ya ligado a la tienda: esas fotos son de la
+    tienda, no de un color), que las deja en la raíz y, como el producto ya
+    tiene colores, pasan a ser fotos de ambiente. Devuelve el color_id.
+    ValueError si el producto no existe, el color ya existe o hay fotos sin
+    color dicho."""
     categoria = "producto"
     carpeta = carpeta_de(cliente, pid, categoria)
     if not os.path.isdir(carpeta):
@@ -593,7 +597,7 @@ def agregar_color(cliente, pid, nombre, descripcion="", fuente_id=None, url_comp
     def _poner(meta):
         actual = meta.setdefault(pid, {})
         variantes = dict(_variantes_de(actual))
-        if not variantes and _imagenes_en(carpeta):
+        if not variantes and _imagenes_en(carpeta) and not conservar_raiz:
             if not (convertir_actual or "").strip():
                 raise ValueError(gettext("Este producto ya tiene fotos: dime de qué color son para poder agregar otro."))
             cid_actual = id_desde_nombre(convertir_actual)

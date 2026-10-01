@@ -26,8 +26,13 @@ nunca como referencia de un color. La regla de fidelidad se paga UNA sola
 vez por producto al crear el activo — nunca por color, nunca al refrescar.
 Un color que deja de venir de la tienda queda `disponible=False` sin borrar
 sus fotos; las fotos de un color ya existente solo se vuelven a bajar con
-`forzar_fotos` o si su subcarpeta está vacía. `resumen["colores"]` cuenta
-cuántos colores se crearon en la corrida.
+`forzar_fotos` o si su subcarpeta está vacía. Un color ya guardado se
+reconoce por su `fuente_id` y, si cambió el id de su primera variante, por
+su nombre (`_color_existente`). Las fotos de la raíz de un activo YA ligado
+son de la tienda y nunca se vuelven un color (quedan como fotos de
+ambiente); solo al ADOPTAR una carpeta hecha a mano sus fotos pasan a un
+color con el nombre del producto. `resumen["colores"]` cuenta cuántos
+colores se crearon en la corrida.
 
 `max_activos` (opcional) acota cuántos productos SIN activo se ligan por
 corrida — el paso 2 baja fotos y llama a Claude, y el worker es de un solo
@@ -368,13 +373,19 @@ def _color_id_libre(meta_variantes, nombre):
     return cid
 
 
-def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores, descargadas=None):
+def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores, descargadas=None, convertir=True):
     """Agrega los colores que falten, refresca los existentes (nombre, url,
     disponible, fuente_id) y coloca sus fotos: de `descargadas`
     ({índice: carpeta temporal}) si ya se bajaron, o descargándolas — colores
     nuevos siempre; existentes solo con `forzar_fotos` o si no tienen
     ninguna. Un color importado que ya no viene de la tienda queda
-    `disponible=False` (sus fotos no se borran). Devuelve cuántos se crearon."""
+    `disponible=False` (sus fotos no se borran). Devuelve cuántos se crearon.
+
+    `convertir`: si el activo es plano con fotos en la raíz, el primer color
+    nuevo las vuelve un color con el nombre del producto (`convertir_actual`)
+    — solo al ADOPTAR una carpeta hecha a mano. Un activo YA ligado a la
+    tienda pasa `convertir=False` (ruling I-6b): sus fotos de la raíz son de
+    la tienda y quedan como fotos de ambiente (`conservar_raiz=True`)."""
     nombre_producto = (prod.get("nombre") or "").strip()
     carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
 
@@ -395,7 +406,8 @@ def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
             try:
                 cid = catalogo_productos.agregar_color(
                     cliente, activo_id, nombre_color, color_id=_color_id_libre(existentes, var["nombre"]),
-                    convertir_actual=nombre_producto or activo_id, **datos)
+                    convertir_actual=(nombre_producto or activo_id) if convertir else None,
+                    conservar_raiz=not convertir, **datos)
             except ValueError as e:
                 errores.append(_aviso(prod, f"{etiqueta}: {e}"))
                 continue
@@ -421,13 +433,15 @@ def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
     return nuevos
 
 
-def _completar_fotos(cliente, activo_id, prod, fotos, variantes, forzar_fotos, errores):
+def _completar_fotos(cliente, activo_id, prod, fotos, variantes, forzar_fotos, errores, convertir=True):
     """Activo ya existente: colores (los nuevos siempre; los existentes según
     `forzar_fotos`) y luego las fotos de la raíz — generales si hay colores,
     la referencia si es plano — solo con `forzar_fotos` o si no hay ninguna.
+    `convertir` va a `_colocar_colores` (False para un activo ya ligado).
     Devuelve cuántos colores se crearon."""
     carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
-    nuevos = _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores) if variantes else 0
+    nuevos = _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
+                              convertir=convertir) if variantes else 0
     if fotos and (forzar_fotos or not _tiene_imagenes(carpeta)):
         _bajar_a(fotos, carpeta, prod, errores, gettext("fotos generales") if variantes else "")
     return nuevos
@@ -470,7 +484,9 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
 
     - Ya ligado y la carpeta existe → refresca nombre/descripción (NUNCA la
       regla), agrega los colores nuevos, refresca los existentes y solo
-      vuelve a bajar fotos con `forzar_fotos` o donde no haya ninguna.
+      vuelve a bajar fotos con `forzar_fotos` o donde no haya ninguna. Las
+      fotos de su raíz son de la tienda: si era plano y ahora trae colores,
+      quedan como fotos de ambiente (nunca un color inventado con ellas).
     - No ligado → si otro producto ya reclamó el id derivado del nombre, se
       desambigua (`-2`, `-3`…). Si ya existe la carpeta con ese id (subida a
       mano) se ADOPTA: sus fotos de raíz pasan a ser un color con el nombre
@@ -494,7 +510,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
     if activo_id and catalogo_productos.existe(cliente, activo_id, CATEGORIA_ACTIVO):
         catalogo_productos.actualizar(cliente, activo_id, nombre=nombre, descripcion=descripcion or None,
                                       categoria=CATEGORIA_ACTIVO)
-        _completar_fotos(cliente, activo_id, prod, fotos, variantes, forzar_fotos, errores)
+        _completar_fotos(cliente, activo_id, prod, fotos, variantes, forzar_fotos, errores, convertir=False)
         return activo_id
 
     if not fotos and not any(v.get("fotos") for v in variantes):

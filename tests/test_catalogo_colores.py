@@ -184,6 +184,23 @@ def test_agregar_color_a_producto_plano_convierte_sus_fotos(cat):
     assert list(cat.cargar_meta("acme")["gorra"]["variantes"]) == ["negra"]
 
 
+def test_agregar_color_conservando_la_raiz_deja_sus_fotos_como_de_ambiente(cat):
+    """Ruling I-6b: las fotos de la raíz de un activo ya ligado a la tienda
+    son fotos de la tienda; con `conservar_raiz=True` no se vuelven un color:
+    se quedan en la raíz y, como el producto ya tiene colores, son de ambiente."""
+    carpeta = os.path.join(str(cat.BASE_DIR), "clientes", "acme", "productos", "cojin")
+    _foto(carpeta, "01.jpg")
+    _foto(carpeta, "02.jpg")
+    cat.guardar_meta("acme", {"cojin": {"nombre": "Cojín", "descripcion": "", "tipo": "otro", "zonas": [], "regla": ""}})
+    assert cat.agregar_color("acme", "cojin", "Cojín — Rojo", conservar_raiz=True) == "rojo"
+    assert list(cat.cargar_meta("acme")["cojin"]["variantes"]) == ["rojo"]
+    assert cat._imagenes_en(carpeta) == ["01.jpg", "02.jpg"] and cat._imagenes_en(os.path.join(carpeta, "rojo")) == []
+    _foto(os.path.join(carpeta, "rojo"), "01.jpg")
+    p = cat.encontrar_producto("acme", "cojin")
+    assert p["tiene_colores"] and p["fotos_generales"] == ["01.jpg", "02.jpg"] and p["imagenes"] == []
+    assert [c["color_id"] for c in p["colores"]] == ["rojo"]
+
+
 def test_actualizar_color_solo_campos_permitidos(cat):
     _producto_con_colores(cat, colores=("Pink",))
     cat.actualizar_color("acme", "original", "pink", nombre="Rosa", disponible=False, url_compra="https://t/y")

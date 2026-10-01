@@ -150,6 +150,26 @@ def test_color_a_mano_sin_fuente_id_se_adopta_por_nombre(entorno):
     assert "https://cdn.test/rojo.png" not in entorno["descargas"]
 
 
+def test_activo_plano_ligado_que_recibe_colores_no_inventa_un_color_con_sus_fotos(entorno):
+    """Ruling I-6b: un activo creado plano por una sync anterior (fotos de la
+    tienda en la raíz: 01.png, 02.png) recibe colores en la sync siguiente.
+    Sus fotos de la raíz son de la tienda, no de un color: se quedan como
+    fotos de ambiente, sin un color «Cojín Azul» inventado con ellas."""
+    import catalogo_productos
+    import importador
+    importador.importar_lista("acme", "shopify", [_prod(colores=())])
+    base = entorno["tmp"] / "clientes" / "acme" / "productos" / "cojin_azul"
+    assert catalogo_productos.encontrar_producto("acme", "cojin_azul")["imagenes"] == ["01.png", "02.png"]
+    res = importador.importar_lista("acme", "shopify", [_prod()])
+    assert res["colores"] == 2 and res["errores"] == []
+    v = _meta()["cojin_azul"]["variantes"]
+    assert list(v) == ["rojo", "azul"]                               # ningún color con el nombre del producto
+    p = catalogo_productos.encontrar_producto("acme", "cojin_azul")
+    assert p["fotos_generales"] == ["01.png", "02.png"] and p["imagenes"] == []
+    assert sorted(os.listdir(base / "rojo")) == ["01.png"] and sorted(os.listdir(base / "azul")) == ["01.png"]
+    assert entorno["reglas"] == ["Cojín Azul"]                        # la regla no se vuelve a pedir
+
+
 def _un_color(nombre, fid):
     return (nombre, fid, (f"https://cdn.test/{fid}.png",))
 
