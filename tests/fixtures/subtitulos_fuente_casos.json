@@ -1,6 +1,23 @@
 [
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "v0",
+    "dur_ms": 200,
+    "indice": 0,
+    "material_id": 1,
+    "t_ms": 500,
+    "texto": "Hola"
+   },
+   {
+    "clip_id": "v1",
+    "dur_ms": 200,
+    "indice": 2,
+    "material_id": 1,
+    "t_ms": 4200,
+    "texto": "video"
+   }
+  ],
   "nombre": "fuente sonido: regla del centro y tope del clip",
   "palabras_por_material": {
    "1": [
@@ -165,10 +182,20 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  },
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "v0b",
+    "dur_ms": 100,
+    "indice": 0,
+    "material_id": 1,
+    "t_ms": 2000,
+    "texto": "corte"
+   }
+  ],
   "nombre": "corte a mitad de palabra: UNA sola mitad",
   "palabras_por_material": {
    "1": [
@@ -293,10 +320,28 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  },
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "v1",
+    "dur_ms": 200,
+    "indice": 2,
+    "material_id": 1,
+    "t_ms": 200,
+    "texto": "video"
+   },
+   {
+    "clip_id": "v0",
+    "dur_ms": 200,
+    "indice": 0,
+    "material_id": 1,
+    "t_ms": 3500,
+    "texto": "Hola"
+   }
+  ],
   "nombre": "reordenar la principal no rompe el mapeo",
   "palabras_por_material": {
    "1": [
@@ -461,10 +506,20 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  },
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "v0",
+    "dur_ms": 200,
+    "indice": 0,
+    "material_id": 1,
+    "t_ms": 500,
+    "texto": "Hola"
+   }
+  ],
   "nombre": "borrar el clip borra sus palabras",
   "palabras_por_material": {
    "1": [
@@ -601,10 +656,28 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  },
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "v0",
+    "dur_ms": 200,
+    "indice": 0,
+    "material_id": 1,
+    "t_ms": 500,
+    "texto": "Hola"
+   },
+   {
+    "clip_id": "v1",
+    "dur_ms": 100,
+    "indice": 2,
+    "material_id": 1,
+    "t_ms": 4100,
+    "texto": "video"
+   }
+  ],
   "nombre": "velocidad 2x en el clip escala el mapeo",
   "palabras_por_material": {
    "1": [
@@ -769,10 +842,20 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  },
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "v0a",
+    "dur_ms": 200,
+    "indice": 0,
+    "material_id": 1,
+    "t_ms": 100,
+    "texto": "¡Hola!"
+   }
+  ],
   "nombre": "correcciones por material e índice; '' quita la palabra",
   "palabras_por_material": {
    "1": [
@@ -907,10 +990,20 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  },
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "voz_a",
+    "dur_ms": 300,
+    "indice": 0,
+    "material_id": 2,
+    "t_ms": 1000,
+    "texto": "voz-es"
+   }
+  ],
   "nombre": "fuente voz: el material resuelto por destino (es)",
   "palabras_por_material": {
    "2": [
@@ -1077,10 +1170,20 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  },
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "voz_a",
+    "dur_ms": 300,
+    "indice": 0,
+    "material_id": 5,
+    "t_ms": 1000,
+    "texto": "voz-en"
+   }
+  ],
   "nombre": "fuente voz: el material resuelto por destino (en)",
   "palabras_por_material": {
    "2": [
@@ -1247,7 +1350,8 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  },
  {
   "esperado": [],
@@ -1390,7 +1494,8 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": true
  },
  {
   "esperado": [],
@@ -1555,7 +1660,8 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": true
  },
  {
   "esperado": [],
@@ -1720,10 +1826,177 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": true
  },
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "v0",
+    "dur_ms": 100,
+    "indice": 0,
+    "material_id": 1,
+    "t_ms": 1000,
+    "texto": "video_dice"
+   },
+   {
+    "clip_id": "voz_a",
+    "dur_ms": 100,
+    "indice": 0,
+    "material_id": 2,
+    "t_ms": 1000,
+    "texto": "voz_dice"
+   }
+  ],
+  "nombre": "dos palabras en el mismo t_ms: orden estable por pista/clip",
+  "palabras_por_material": {
+   "1": [
+    {
+     "dur_ms": 100,
+     "t_ms": 1000,
+     "texto": "video_dice"
+    }
+   ],
+   "2": [
+    {
+     "dur_ms": 100,
+     "t_ms": 0,
+     "texto": "voz_dice"
+    }
+   ]
+  },
+  "resuelto": {
+   "destino": {
+    "idioma": "es",
+    "pais": "CO",
+    "precio": null
+   },
+   "esquema": 1,
+   "formato": "9:16",
+   "fps": 30,
+   "guion": null,
+   "idioma_base": "es",
+   "marca": {
+    "color": "#7c3aed",
+    "logo_material_id": null,
+    "marca_de_agua": null
+   },
+   "materiales": [
+    1,
+    2
+   ],
+   "mezcla": {
+    "preset": "equilibrada",
+    "volumenes": null
+   },
+   "miniatura_ms": 0,
+   "origen": null,
+   "paginas": [],
+   "pistas": [
+    {
+     "bloqueada": false,
+     "clips": [
+      {
+       "animacion": null,
+       "audio": {
+        "ducking": true,
+        "fundido_entrada_ms": 0,
+        "fundido_salida_ms": 0,
+        "volumen": 1.0
+       },
+       "duracion_ms": 4000,
+       "id": "v0",
+       "inicio_ms": 0,
+       "keyframes": [],
+       "material_id": 1,
+       "recorte": {
+        "desde_ms": 0,
+        "hasta_ms": 4000
+       },
+       "transform": {
+        "ancla": "centro",
+        "escala": 1.0,
+        "opacidad": 1.0,
+        "rotacion": 0.0,
+        "x": 0.5,
+        "y": 0.5
+       },
+       "transicion": null,
+       "velocidad": 1.0
+      }
+     ],
+     "id": "p_video",
+     "oculta": false,
+     "silenciada": false,
+     "tipo": "video"
+    },
+    {
+     "bloqueada": false,
+     "clips": [
+      {
+       "audio": {
+        "ducking": true,
+        "fundido_entrada_ms": 0,
+        "fundido_salida_ms": 0,
+        "volumen": 1.0
+       },
+       "duracion_ms": 3000,
+       "id": "voz_a",
+       "inicio_ms": 1000,
+       "keyframes": [],
+       "material_id": 2,
+       "recorte": {
+        "desde_ms": 0,
+        "hasta_ms": 3000
+       },
+       "rol_audio": "voz",
+       "velocidad": 1.0
+      }
+     ],
+     "id": "p_voz",
+     "oculta": false,
+     "silenciada": false,
+     "tipo": "audio"
+    }
+   ],
+   "subtitulos": {
+    "correcciones": {},
+    "escala": 1.0,
+    "estilo_id": "karaoke",
+    "fuentes": {
+     "es": [
+      {
+       "tipo": "sonido"
+      },
+      {
+       "tipo": "voz"
+      }
+     ]
+    },
+    "palabras": [],
+    "posicion": 0.78,
+    "resaltado": null,
+    "visibles": true
+   },
+   "variables": {
+    "precios": {},
+    "textos": {},
+    "voz": {}
+   }
+  },
+  "vacio_a_proposito": false
+ },
+ {
+  "esperado": [
+   {
+    "clip_id": "voz_larga",
+    "dur_ms": 50,
+    "indice": 0,
+    "material_id": 2,
+    "t_ms": 950,
+    "texto": "cruza"
+   }
+  ],
   "nombre": "palabra tras el fin de la principal no sale; la que lo cruza se acota",
   "palabras_por_material": {
    "2": [
@@ -1854,10 +2127,20 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  },
  {
-  "esperado": [],
+  "esperado": [
+   {
+    "clip_id": "voz_a",
+    "dur_ms": 300,
+    "indice": 0,
+    "material_id": 2,
+    "t_ms": 1000,
+    "texto": "voz-es"
+   }
+  ],
   "nombre": "material + voz no duplican el clip; texto en blanco no sale",
   "palabras_por_material": {
    "2": [
@@ -2021,6 +2304,7 @@
     "textos": {},
     "voz": {}
    }
-  }
+  },
+  "vacio_a_proposito": false
  }
 ]

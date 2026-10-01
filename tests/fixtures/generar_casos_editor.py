@@ -147,11 +147,19 @@ _SF_PALABRAS_M2 = [{"t_ms": 0, "dur_ms": 300, "texto": "voz-es"}]
 _SF_PALABRAS_M5 = [{"t_ms": 0, "dur_ms": 300, "texto": "voz-en"}]
 
 
-def _sf_caso(nombre, doc, idioma, pais, palabras_por_material):
+def _sf_caso(nombre, doc, idioma, pais, palabras_por_material, vacio_a_proposito=False):
+    """`palabras_por_material` se guarda con las claves de texto (JSON no
+    tiene claves enteras; el JS las lee como texto) pero `derivar` busca por
+    el `material_id` ENTERO del clip — así que `esperado` se calcula con una
+    copia de claves `int`, nunca con la que se guarda. `vacio_a_proposito`
+    marca los pocos casos donde `esperado == []` es la regla (D10, pista
+    oculta/silenciada), para que la prueba de guardia (`test_subtitulos_fuente.py`)
+    distinga eso de este mismo bug (claves de texto) volviendo en silencio."""
     from final_edition import subtitulos_fuente as sf
     resuelto = documento.resolver(documento.validar(doc), idioma, pais)
+    con_enteros = {int(k): v for k, v in palabras_por_material.items()}
     return {"nombre": nombre, "resuelto": resuelto, "palabras_por_material": palabras_por_material,
-            "esperado": sf.derivar(resuelto, palabras_por_material)}
+            "vacio_a_proposito": vacio_a_proposito, "esperado": sf.derivar(resuelto, con_enteros)}
 
 
 def casos_subtitulos_fuente():
@@ -196,13 +204,25 @@ def casos_subtitulos_fuente():
     idioma_clip = _sf_doc_base(fuentes={"es": [{"tipo": "voz"}]})
     idioma_clip["pistas"][1]["clips"][0]["idioma"] = "en"
     casos.append(_sf_caso("un clip de voz con idioma no suena en otro destino", idioma_clip, "es", "CO",
-                         {"2": _SF_PALABRAS_M2, "5": _SF_PALABRAS_M5}))
+                         {"2": _SF_PALABRAS_M2, "5": _SF_PALABRAS_M5}, vacio_a_proposito=True))
 
     for campo in ("oculta", "silenciada"):
         oculta = _sf_doc_base(fuentes={"es": [{"tipo": "voz"}]})
         oculta["pistas"][1][campo] = True
         casos.append(_sf_caso(f"pista {campo} no aporta subtítulos", oculta, "es", "CO",
-                             {"2": _SF_PALABRAS_M2, "5": _SF_PALABRAS_M5}))
+                             {"2": _SF_PALABRAS_M2, "5": _SF_PALABRAS_M5}, vacio_a_proposito=True))
+
+    empate = documento.nuevo_video("9:16")
+    empate["pistas"][0]["clips"] = [_sf_clip_video("v0", 0, 4000, 0, 4000)]
+    empate["pistas"].append(_sf_pista("p_voz", "audio", [_sf_clip_audio("voz_a", 1000, 3000, 2)]))
+    empate["subtitulos"] = {**empate["subtitulos"], "fuentes": {"es": [{"tipo": "sonido"}, {"tipo": "voz"}]}}
+    # dos palabras de pistas distintas (sonido de la principal, voz) que
+    # caen en el MISMO t_ms derivado (1000): el orden es estable, por el
+    # orden del documento (la principal antes que la pista de voz) — nunca
+    # el orden en que `fuentes` las nombra ni el de las palabras originales.
+    casos.append(_sf_caso("dos palabras en el mismo t_ms: orden estable por pista/clip", empate, "es", "CO",
+                         {"1": [{"t_ms": 1000, "dur_ms": 100, "texto": "video_dice"}],
+                          "2": [{"t_ms": 0, "dur_ms": 100, "texto": "voz_dice"}]}))
 
     tope = documento.nuevo_video("9:16")
     tope["pistas"][0]["clips"] = [_sf_clip_video("v0", 0, 1000, 0, 1000)]

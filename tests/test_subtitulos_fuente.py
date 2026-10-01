@@ -3,10 +3,15 @@ mapeo exacto, cuartos de velocidad), `clips_de_fuente`/`derivar` (la regla
 del centro, correcciones, tope de la principal, orden) y `aplicar`
 (fuentes ausentes/vacías, `visibles`). Puro: documentos construidos a mano,
 sin base ni ffmpeg."""
+import json
+import os
+
 import pytest
 
 from final_edition import documento as d
 from final_edition import subtitulos_fuente as sf
+
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def _clip_video(id_, inicio_ms, duracion_ms, desde_ms, hasta_ms, material_id=1, velocidad=1.0):
@@ -218,3 +223,41 @@ def test_material_y_voz_juntas_no_duplican_el_clip_y_texto_en_blanco_no_sale():
     palabras = [{"t_ms": 0, "dur_ms": 300, "texto": "voz-es"}, {"t_ms": 400, "dur_ms": 100, "texto": "   "}]
     derivado = sf.derivar(resuelto, {2: palabras})
     assert [w["texto"] for w in derivado] == ["voz-es"]
+
+
+# --- orden estable cuando dos palabras de pistas/clips distintos caen en el
+# mismo t_ms derivado (D2 punto 6) --------------------------------------------
+
+def test_dos_palabras_en_el_mismo_t_ms_mantienen_el_orden_del_documento():
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [_clip_video("v0", 0, 4000, 0, 4000)]
+    doc["pistas"].append(_pista("p_voz", "audio", [_clip_audio("voz_a", 1000, 3000, 2)]))
+    doc["subtitulos"] = {**doc["subtitulos"], "fuentes": {"es": [{"tipo": "sonido"}, {"tipo": "voz"}]}}
+    doc = d.validar(doc)
+    resuelto = d.resolver(doc, "es", "CO")
+    palabras = {1: [{"t_ms": 1000, "dur_ms": 100, "texto": "video_dice"}],
+               2: [{"t_ms": 0, "dur_ms": 100, "texto": "voz_dice"}]}
+    derivado = sf.derivar(resuelto, palabras)
+    # las dos mapean a t_ms=1000: gana el orden del documento (la pista
+    # principal antes que `p_voz`), no el orden de `fuentes` ni el de las
+    # palabras originales.
+    assert [(w["t_ms"], w["texto"]) for w in derivado] == [(1000, "video_dice"), (1000, "voz_dice")]
+
+
+# --- la tabla de paridad (Task 3 la espeja en JS): cada caso se puede
+# reproducir desde cero, y ninguno queda vacío por accidente (incidente de la
+# ronda 1: `palabras_por_material` con claves de texto "1"/"2"/"5" contra un
+# `material_id` entero nunca encontraba nada y los 13 casos salían `[]`).
+
+def test_tabla_de_paridad_subtitulos_fuente_reproduce_lo_esperado():
+    with open(os.path.join(FIXTURES, "subtitulos_fuente_casos.json"), encoding="utf-8") as f:
+        casos = json.load(f)
+    assert len(casos) >= 10               # que no se nos haya olvidado ninguno al tocar el generador
+    vacios_inesperados = []
+    for caso in casos:
+        palabras_por_material = {int(k): v for k, v in caso["palabras_por_material"].items()}
+        derivado = sf.derivar(caso["resuelto"], palabras_por_material)
+        assert derivado == caso["esperado"], caso["nombre"]
+        if derivado == [] and not caso.get("vacio_a_proposito"):
+            vacios_inesperados.append(caso["nombre"])
+    assert vacios_inesperados == []
