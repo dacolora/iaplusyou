@@ -1,10 +1,17 @@
 """Audios en Crear (spec 2026-09-28): audios.py, el precio y el tipo de gasto."""
 import pytest
+import sqlalchemy as sa
 
 import audios
+import db
 import gastos
 import materiales
 from providers import fal_audio
+
+
+def _gastos(cliente):
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente))]
 
 
 def test_locucion_es_un_tipo_de_gasto_con_estimado_por_caracteres():
@@ -280,6 +287,54 @@ def test_sintetizar_con_voz_propia_va_por_minimax(base_temporal, monkeypatch):
     voces_propias.borrar("acme", v["id"])
     with pytest.raises(ValueError):
         audios.sintetizar("acme", f"vp:{v['id']}", "Hei", "no", "normal")
+
+
+# --- voz_cruda (editor capa 5a, Task 6): la caché compartida con el editor ---
+
+@pytest.fixture()
+def tts(monkeypatch):
+    """`audios.fal_audio.tts` falso: cada llamada factura 0,002 y devuelve una
+    url distinta — un segundo pedido con el mismo texto/voz/velocidad no debe
+    volver a llamarlo."""
+    llamadas = []
+    monkeypatch.setattr(audios.fal_audio, "tts",
+                        lambda texto, voz, idioma="es", on_progreso=None, velocidad=None, **kw:
+                        llamadas.append(texto) or {"url": "https://fal/v.mp3", "costo_usd": 0.002})
+    monkeypatch.setattr(audios, "descargar_url", lambda url, destino: (open(destino, "wb").write(b"VOZ"), destino)[1])
+    monkeypatch.setattr(audios.cortes, "duracion", lambda path: 1.5)
+    return llamadas
+
+
+def test_voz_cruda_no_paga_dos_veces_el_mismo_texto_voz_y_velocidad(base_temporal, r2, tts, tmp_path):
+    m1, creada1 = audios.voz_cruda("acme", "Hola mundo", "Rachel", "es", "normal", ":t1", carpeta=str(tmp_path))
+    assert creada1 is True and m1["costo_usd"] == 0.002 and tts == ["Hola mundo"]
+    assert m1["origen"] == audios.ORIGEN_VOZ and m1["extra"]["nombre"] == "Hola mundo"
+    m2, creada2 = audios.voz_cruda("acme", "Hola mundo", "Rachel", "es", "normal", ":t2", carpeta=str(tmp_path))
+    assert creada2 is False and tts == ["Hola mundo"]                          # no volvió a llamar a fal
+    assert m2["id"] == m1["id"]
+    (g,) = _gastos("acme")
+    assert g["tipo"] == "locucion" and g["referencia"].startswith("locucion:") and g["referencia"].endswith(":t1")
+
+
+def test_voz_cruda_compartida_entre_audio_generar_y_editor_voz(base_temporal, r2, tts, tmp_path, monkeypatch):
+    """Un audio creado desde Crear › Audios (`tareas.audios.ejecutar`) y
+    después pedido desde el editor (`audios.voz_cruda` directo, como hace
+    `tareas.edicion.ejecutar_voz`) con el mismo texto/voz/velocidad: una sola
+    llamada a fal."""
+    import tareas.audios as ta
+    from final_edition import cortes, musica as fe_musica
+    monkeypatch.setattr(ta, "carpeta_trabajo", lambda cliente, h: str(tmp_path / "audios" / h[:8]))
+    monkeypatch.setattr(ta.trabajos, "reportar", lambda *a, **k: None)
+    monkeypatch.setattr(ta.audios, "mezclar", lambda voz_path, musica_path, salida, voz_ms, volumen:
+                        (open(salida, "wb").write(b"MP3"), {"archivo": salida, "duracion_ms": voz_ms})[1])
+    tarea = {"id": 1, "job_id": "acme__audio_generar",
+            "payload": {"cliente": "acme", "texto": "Hola mundo", "voz": "Rachel", "idioma": "es",
+                        "velocidad": "normal", "musica_id": None, "inicio_s": 0, "volumen": "media"}}
+    ta.ejecutar(tarea)
+    assert tts == ["Hola mundo"]
+    m2, creada2 = audios.voz_cruda("acme", "Hola mundo", "Rachel", "es", "normal", ":t2", carpeta=str(tmp_path / "editor"))
+    assert creada2 is False and tts == ["Hola mundo"]                          # sigue sin volver a llamar a fal
+    assert len(_gastos("acme")) == 1
 
 
 def test_muestra_guarda_el_detalle_del_gasto_en_el_idioma_de_creatv(base_temporal, r2, monkeypatch):

@@ -43,7 +43,9 @@ WORKER += ["worker.py", "cola.py", "organico.py", "experimentos.py", "derivacion
            "importador.py", "nicho/fuentes/reddit.py", "nicho/fuentes/youtube.py", "nicho/fuentes/apify.py",
            "providers/apify.py"]
 WORKER += ["providers/wavespeed_common.py", "nicho/fuentes/plataformas.py", "nicho/fuentes/plataforma.py"]   # Task 7, fix 1
+WORKER += ["final_edition/subtitulos_fuente.py"]   # Editor capa 5a, Task 1 (puro: sin texto para una persona)
 WORKER += ["voces_propias.py", "audios.py"]   # Audios Europa (2026-09-30)
+WORKER += ["final_edition/transcripcion.py"]   # Editor capa 5a, Task 5
 WORKER += ["hablado.py"]   # Anuncio hablado en Crear (2026-10-01); tareas/hablado.py ya entra por el glob
 
 

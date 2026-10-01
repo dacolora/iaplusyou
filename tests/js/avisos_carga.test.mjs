@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { avisosCarga, faltantes, materialesUsados, textoPideDeMas, textoSeAcorto } from "../../static/editor/avisos_carga.js";
 import * as op from "../../static/editor/operaciones.js";
-import { docBase, DURACIONES } from "./doc_base.mjs";
+import { docBase, docConVozYPalabras, DURACIONES, INFO_PALABRAS } from "./doc_base.mjs";
 
 const MATS = { 1: { id: 1 }, 2: { id: 2 } };
 const tecnico = /\bv\d|\bs\d|\bms\b|\d{3,}|'/;
@@ -91,4 +91,16 @@ test("arreglarAlAbrir le pone su duración a un «deslizar» guardado sin ella (
   assert.deepEqual([r.guardar, r.acortado], [true, false]);
   assert.deepEqual(r.doc.pistas[1].clips[0].animacion, { entrada: "deslizar", duracion_ms: op.DURACION_ANIMACION_MS });
   assert.equal(avisosCarga(r.doc, DURACIONES, MATS, { acortado: r.acortado }).recortes, null);
+});
+
+// ---- Capa 5a (Tarea 4, D14): la voz se adopta como fuente al abrir ----
+test("arreglarAlAbrir adopta la voz como fuente de subtítulos de un borrador automático, y pide guardar", () => {
+  const doc = docConVozYPalabras();
+  const r = arreglarAlAbrir(doc, INFO_PALABRAS);
+  assert.equal(r.guardar, true);
+  assert.equal(r.acortado, false, "no hubo que acortar nada: solo adoptó");
+  assert.deepEqual(r.doc.subtitulos.fuentes, { es: [{ tipo: "voz" }] });
+  assert.equal(doc.subtitulos.fuentes, undefined, "no toca el documento de entrada");
+  const otraVez = arreglarAlAbrir(r.doc, INFO_PALABRAS);
+  assert.equal(otraVez.guardar, false, "ya adoptado: la segunda vuelta no pide guardar de nuevo");
 });

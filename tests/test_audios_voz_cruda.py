@@ -33,7 +33,8 @@ def test_sintetiza_registra_el_gasto_y_crea_la_fila(entorno):
     m, creado = audios.voz_cruda("acme", texto, "Rachel", "es", "normal", ":t9")
     assert creado and m["hash"] == h and m["origen"] == "voz" and m["tipo"] == "audio" and m["duracion_ms"] == 7050
     assert m["url"] == f"https://r2/clientes/acme/materiales/voz_{h[:16]}.mp3" and m["costo_usd"] == 0.0034
-    assert m["extra"] == {"texto": texto, "voz": "Rachel", "voz_ref": "Rachel", "idioma": "es", "velocidad": "normal"}
+    assert m["extra"] == {"texto": texto, "voz": "Rachel", "voz_ref": "Rachel", "idioma": "es", "velocidad": "normal",
+                          "nombre": texto}   # el nombre con que el editor la lista (capa 5a)
     (g,) = _gastos("acme")
     assert (g["tipo"], g["usd"], g["referencia"], g["proveedor"]) == ("locucion", 0.0034, f"locucion:{h[:12]}:t9",
                                                                       "fal/elevenlabs")

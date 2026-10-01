@@ -35,3 +35,15 @@ export function docBase() {
     materiales: [1, 2], miniatura_ms: 1000,
   };
 }
+
+// Capa 5a (Tarea 4, D14): la misma base, pero con subtítulos de LEGADO
+// («palabras» guardadas para es_CO, sin «fuentes») y la voz (a1, material 2)
+// transcrita — `info[2].palabras` trae las MISMAS palabras que ya estaban en
+// `subtitulos.palabras.es_CO` — para probar que `adoptarVozComoFuente` deja
+// los mismos subtítulos, ahora derivados.
+export function docConVozYPalabras() {
+  const d = docBase();
+  d.subtitulos = { estilo_id: "karaoke", posicion: 0.78, palabras: { es_CO: [{ t_ms: 0, dur_ms: 400, texto: "Hola" }] } };
+  return d;
+}
+export const INFO_PALABRAS = { ...DURACIONES, 2: { duracion_ms: 3000, palabras: [{ t_ms: 0, dur_ms: 400, texto: "Hola" }] } };

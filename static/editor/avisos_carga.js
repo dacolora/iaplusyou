@@ -4,7 +4,7 @@
 // no se iban aunque una edición ya lo hubiera arreglado. Ahora la página los
 // recalcula en cada refresco con `avisosCarga` sobre el documento vigente.
 // Puro, sin DOM: lo prueba Node (tests/js/avisos_carga.test.mjs).
-import { clipsQuePidenDeMas, faltaDuracionAnimacion, normalizar } from "./operaciones.js";
+import { adoptarVozComoFuente, clipsQuePidenDeMas, faltaDuracionAnimacion, normalizar } from "./operaciones.js";
 import { t } from "./textos.js";
 
 // Los materiales que la edición usa DE VERDAD: los de sus clips (y las voces
@@ -53,13 +53,32 @@ const pideDeMas = (doc, info) => clipsQuePidenDeMas(doc, info).length > 0;
 // {doc, guardar, acortado}: `guardar` solo si el documento cambió de verdad
 // (un archivo más corto que el mínimo de un clip no se arregla nunca: sin esta
 // comparación se guardaría en cada carga); `acortado` si se acortó un clip.
+//
+// Capa 5a (D14): después de eso, intenta adoptar la voz como fuente de
+// subtítulos (`operaciones.adoptarVozComoFuente`, gratis, sin transcribir ni
+// cobrar nada): un borrador automático que ya tenía subtítulos de la voz
+// pasa a seguirla por construcción. `guardar` también sale `true` si lo
+// único que cambió fue eso.
 export function arreglarAlAbrir(doc, info) {
   const deMas = pideDeMas(doc, info);
   const animaciones = (doc?.pistas ?? []).some((p) => (p.clips ?? []).some(faltaDuracionAnimacion));
-  if (!deMas && !animaciones) return { doc, guardar: false, acortado: false };
-  const arreglado = normalizar(structuredClone(doc), info);
-  if (JSON.stringify(arreglado) === JSON.stringify(doc)) return { doc, guardar: false, acortado: false };
-  return { doc: arreglado, guardar: true, acortado: deMas };
+  let actual = doc;
+  let guardar = false;
+  let acortado = false;
+  if (deMas || animaciones) {
+    const arreglado = normalizar(structuredClone(doc), info);
+    if (JSON.stringify(arreglado) !== JSON.stringify(doc)) {
+      actual = arreglado;
+      guardar = true;
+      acortado = deMas;
+    }
+  }
+  const adoptado = adoptarVozComoFuente(actual, info);
+  if (adoptado !== actual) {
+    actual = adoptado;
+    guardar = true;
+  }
+  return { doc: actual, guardar, acortado };
 }
 
 // {recortes, faltan}: cada uno `null` (no se muestra) o {texto, error}.

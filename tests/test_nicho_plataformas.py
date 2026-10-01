@@ -37,7 +37,9 @@ def test_estimados_redondean_al_centavo_hacia_arriba():
     from nicho.fuentes import plataformas as pl
     assert pl.usd(30, 0.003) == 0.09 and pl.usd(1, 0.0009) == 0.01 and pl.usd(0, 0.5) == 0.0
     assert pl.estimar_busqueda("amazon", 3, 20) == 0.3            # 60 × 0.005 (plan FREE de Apify, verificado 2026-10-01)
-    assert pl.estimar_resenas("amazon", 15, 100) == 1.35         # 1500 × 0.0009
+    # junglee (2026-10-01): tope de 40 reseñas por producto, 15 × 40 = 600 × 0.006 = 3.6
+    assert pl.estimar_resenas("amazon", 15, 100) == 3.6
+    assert pl.estimar_resenas("amazon", 3, 20) == 0.5             # 60 × 0.006 = 0.36 < el mínimo 0.50 por corrida
     assert pl.estimar_busqueda("meli", 3, 20) == 0.12 and pl.estimar_resenas("meli", 15, 100) == 2.25   # 1500 × 0.0015
     assert pl.estimar_busqueda("tiktok_shop", 3, 20) == 0.27 and pl.estimar_resenas("tiktok_shop", 15, 100) == 6.75
     # con arranque por corrida: Walmart busca UNA consulta por corrida (20 × 0.001 + 0.001 → 0.03 cada una)
@@ -94,18 +96,24 @@ def test_leer_producto_por_plataforma():
 def test_entradas_y_lectura_de_resenas():
     from nicho.fuentes import plataformas as pl
     from nicho.fuentes.base import ErrorFuente
-    productos = [{"fuente_id": "B0AMZ00001", "url": "https://www.amazon.se/dp/B0AMZ00001", "titulo": "Tofflor"},
-                 {"fuente_id": "B0AMZ00002", "url": "https://www.amazon.se/dp/B0AMZ00002", "titulo": "Mjuka"}]
-    e = pl.entradas_resenas("amazon", productos, "SE", 100)
-    assert [x["entrada"] for x in e] == [{"asin": "B0AMZ00001", "domainCode": "se", "maxPages": 10, "sortBy": "recent"},
-                                         {"asin": "B0AMZ00002", "domainCode": "se", "maxPages": 10, "sortBy": "recent"}]
-    assert [x["max_items"] for x in e] == [100, 100] and e[0]["max_usd"] == 0.09 and e[0]["etiqueta"] == "B0AMZ00001"
-    assert pl.entradas_resenas("amazon", productos[:1], "SE", 25)[0]["entrada"]["maxPages"] == 3
+    productos = [{"fuente_id": "B0AMZ00001", "url": "https://www.amazon.com.mx/dp/B0AMZ00001", "titulo": "Tofflor"},
+                 {"fuente_id": "B0AMZ00002", "url": "https://www.amazon.com.mx/dp/B0AMZ00002", "titulo": "Mjuka"}]
+    e = pl.entradas_resenas("amazon", productos, "MX", 100)                          # junglee: UNA corrida, tope 40 por producto
+    assert len(e) == 1 and e[0]["entrada"] == {"productUrls": [{"url": "https://www.amazon.com.mx/dp/B0AMZ00001"},
+                                                                {"url": "https://www.amazon.com.mx/dp/B0AMZ00002"}],
+                                               "maxReviews": 40, "sort": "recent", "includeGdprSensitive": False,
+                                               "scrapeProductDetails": False, "deduplicateRedirectedAsins": True}
+    assert e[0]["max_items"] == 80 and e[0]["max_usd"] == 0.5 and e[0]["etiqueta"] == "reseñas"   # 80 × 0.006 = 0.48 < el mínimo 0.50
+    e15 = pl.entradas_resenas("amazon", productos[:1] * 15, "MX", 100)
+    assert e15[0]["max_items"] == 600 and e15[0]["max_usd"] == 3.6
+    e_bajo = pl.entradas_resenas("amazon", productos, "MX", 15)                      # bajo el tope por producto: no se recorta
+    assert e_bajo[0]["entrada"]["maxReviews"] == 15 and e_bajo[0]["max_items"] == 30
     r = [pl.leer_resena("amazon", i) for i in _fixture("amazon_resenas.json")]
     assert r[2] is None
-    assert r[0] == {"fuente_id": "R1AMZ", "texto": "Äntligen smärtfri. Skönt stöd under hälen, går att ha hela dagen.", "puntuacion": 5,
-                    "fecha": "2025-03-01", "url": None, "producto": "B0AMZ00001"}
-    assert r[1]["texto"] == "För smala för mig, skickade tillbaka." and r[1]["fecha"] == "March 5, 2025"
+    assert r[0] == {"fuente_id": "RVZW4WM0GUOPL", "texto": "Excelente. Excelente producto, me gustó mucho, cumple con mis expectativas",
+                    "puntuacion": 5, "fecha": None, "url": None, "producto": "B095NZBLT7", "producto_pedido": "B095NZBLT7"}
+    assert r[1]["texto"] == "Llego muy bien. Bien, solo que esta un poco delgado la botella" and r[1]["puntuacion"] == 4
+    assert "userId" not in r[0] and "userProfileLink" not in r[0]                     # el actor los manda; nunca se leen
     e = pl.entradas_resenas("meli", [{"fuente_id": "MCO123456789", "url": "https://articulo.mercadolibre.com.co/MCO-123456789-p", "titulo": "P"}], "CO", 50)
     assert e == [{"entrada": {"productUrls": ["https://articulo.mercadolibre.com.co/MCO-123456789-p"], "maxReviewsPerProduct": 50, "reviewOrder": "relevance"},
                   "max_items": 50, "max_usd": 0.08, "etiqueta": "reseñas"}]        # 50 × 0.0015 (plan FREE, verificado 2026-10-01)
@@ -216,7 +224,8 @@ def test_otro_mercado_busca_y_trae_resenas_en_su_casa():
     from nicho.fuentes import plataformas as pl
     e = pl.entradas_busqueda("amazon", ["botella"], "CO", 10)               # Amazon no está en Colombia: amazon.com
     assert e[0]["entrada"]["categoryOrProductUrls"] == [{"url": "https://www.amazon.com/s?k=botella"}] and e[0]["entrada"]["proxyCountry"] == "US"
-    assert pl.entradas_resenas("amazon", [{"fuente_id": "B0X", "url": None, "titulo": "t"}], "CO", 10)[0]["entrada"]["domainCode"] == "com"
+    assert pl.entradas_resenas("amazon", [{"fuente_id": "B0X", "url": None, "titulo": "t"}], "CO", 10)[0]["entrada"]["productUrls"] == \
+        [{"url": "https://www.amazon.com/dp/B0X"}]
     e = pl.entradas_resenas("meli", [{"fuente_id": "MLM1", "url": "https://www.mercadolibre.com.mx/p/MLM1", "titulo": "t"}], "US", 10)
     assert e[0]["entrada"]["productUrls"] == ["https://www.mercadolibre.com.mx/p/MLM1"]
 

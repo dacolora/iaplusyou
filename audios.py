@@ -264,7 +264,8 @@ def voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo, carpeta=None):
         try:
             local = descargar_url(r["url"], os.path.join(destino, f"voz_{h_voz[:16]}.mp3"))
             url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h_voz[:16]}.mp3", "audio/mpeg")
-            extra = {"texto": texto, "voz": r["voz_nombre"], "voz_ref": voz, "idioma": idioma, "velocidad": velocidad}
+            extra = {"texto": texto, "voz": r["voz_nombre"], "voz_ref": voz, "idioma": idioma, "velocidad": velocidad,
+                     "nombre": nombre_de(texto)}   # el editor la lista por su nombre (capa 5a)
             if carpeta:
                 extra["local"] = local
             return {"tipo": "audio", "origen": ORIGEN_VOZ, "url": url, "bytes": os.path.getsize(local),

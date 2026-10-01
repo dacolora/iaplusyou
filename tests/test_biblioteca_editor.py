@@ -191,6 +191,207 @@ def test_subir_no_duplica_el_mismo_archivo(entorno):
     assert a["id"] == b["id"]
 
 
+# --- guardar_grabacion (editor capa 5a, Task 6, D8): el micrófono del editor ---
+
+def test_grabacion_extension_no_permitida(entorno):
+    with pytest.raises(entorno.SubidaInvalida, match=r"\.webm"):
+        entorno.guardar_grabacion("acme", _Archivo("virus.exe", b"MZ..."))
+
+
+def test_grabacion_sin_pista_de_audio_se_rechaza(entorno, monkeypatch):
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "video"}]})
+    with pytest.raises(entorno.SubidaInvalida, match="No pude leer esa grabación."):
+        entorno.guardar_grabacion("acme", _Archivo("solo_video.webm", b"x"))
+
+
+def test_grabacion_ffprobe_roto_tambien_es_no_pude_leer(entorno, monkeypatch):
+    def _revienta(path):
+        raise RuntimeError("ffprobe roto")
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", _revienta)
+    with pytest.raises(entorno.SubidaInvalida, match="No pude leer esa grabación."):
+        entorno.guardar_grabacion("acme", _Archivo("rota.webm", b"x"))
+
+
+class _FfmpegFalso:
+    """ffmpeg falso: anota los argumentos y escribe la salida (el último)."""
+    def __init__(self):
+        self.llamadas = []
+
+    def __call__(self, args, timeout=None):
+        self.llamadas.append(list(args))
+        with open(args[-1], "wb") as f:
+            f.write(b"MP3")
+
+    def tope(self, i=0):
+        """El `-t` (segundos) de la llamada i, o None."""
+        a = self.llamadas[i]
+        return float(a[a.index("-t") + 1]) if "-t" in a else None
+
+
+def test_grabacion_de_seis_minutos_con_duracion_se_rechaza_antes_de_transcodificar(entorno, monkeypatch):
+    """Fix round 1: lo que se rechaza es la ENTRADA de más de 5 min + 2 s; si
+    ffprobe la dice (m4a, wav…), ni se transcodifica."""
+    ff = _FfmpegFalso()
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json",
+                        lambda path: {"streams": [{"codec_type": "audio"}], "format": {"duration": "360.0"}})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    with pytest.raises(entorno.SubidaInvalida, match="5 minutos"):
+        entorno.guardar_grabacion("acme", _Archivo("larga.m4a", b"x"))
+    assert ff.llamadas == []
+
+
+def test_grabacion_de_cinco_minutos_y_poco_se_recorta_y_entra(entorno, monkeypatch):
+    """Fix round 1: el navegador la corta sola a los 5 min con un reloj de
+    250 ms (se pasa unos ms): con duración conocida dentro del margen se
+    transcodifica con `-t 300` y entra, nunca con más de 5 min."""
+    ff = _FfmpegFalso()
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json",
+                        lambda path: {"streams": [{"codec_type": "audio", "duration": "300.4"}], "format": {}})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 300.03)     # el relleno del mp3
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.m4a", b"x"))
+    assert m["duracion_ms"] == 300000
+    assert len(ff.llamadas) == 1 and ff.tope(0) == 300.0
+
+
+def test_grabacion_sin_duracion_en_la_entrada_se_mide_y_se_recorta(entorno, monkeypatch):
+    """El .webm de MediaRecorder no trae duración: se transcodifica con el tope
+    + margen, se mide el mp3 y, si pasa de 5 min, se recorta a 5 min."""
+    ff = _FfmpegFalso()
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    duraciones = iter([300.4, 300.0])
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: next(duraciones))
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"))
+    assert m["duracion_ms"] == 300000
+    assert len(ff.llamadas) == 2
+    assert 302.0 < ff.tope(0) <= 303.0                     # nunca transcodifica media hora
+    assert ff.tope(1) == 300.0 and "copy" in ff.llamadas[1]
+
+
+def test_grabacion_sin_duracion_en_la_entrada_y_larga_se_rechaza(entorno, monkeypatch):
+    ff = _FfmpegFalso()
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 302.5)       # cortada en el tope: era más larga
+    with pytest.raises(entorno.SubidaInvalida, match="5 minutos"):
+        entorno.guardar_grabacion("acme", _Archivo("larga.webm", b"x"))
+    assert len(ff.llamadas) == 1
+
+
+def test_grabacion_corta_no_se_recorta(entorno, monkeypatch):
+    ff = _FfmpegFalso()
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 12.3)
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"))
+    assert m["duracion_ms"] == 12300 and len(ff.llamadas) == 1
+
+
+@pytest.mark.slow
+@_sin_ffmpeg
+def test_grabacion_real_de_cinco_minutos_y_poco_entra_y_una_de_seis_no(entorno, tmp_path):
+    """Con ffmpeg de verdad: un .webm opus SIN duración en la cabecera (como el
+    de MediaRecorder: escrito a un tubo, sin poder volver atrás) de 5:00,4
+    entra recortado a 5 min; un .wav de 6 min se rechaza."""
+    webm = str(tmp_path / "grab.webm")
+    with open(webm, "wb") as salida:
+        r = subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+                            "-i", "sine=frequency=440:duration=300.4:sample_rate=16000", "-c:a", "libopus",
+                            "-b:a", "16k", "-f", "webm", "pipe:1"], stdout=salida)
+    if r.returncode != 0:
+        pytest.skip("el ffmpeg local no trae libopus")
+    with open(webm, "rb") as f:
+        m = entorno.guardar_grabacion("acme", _Archivo("grabacion.webm", f.read()))
+    assert 299000 <= m["duracion_ms"] <= 300000
+    wav = str(tmp_path / "larga.wav")
+    subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                    "-i", "sine=frequency=440:duration=360:sample_rate=8000", wav], check=True)
+    with open(wav, "rb") as f:
+        with pytest.raises(entorno.SubidaInvalida, match="5 minutos"):
+            entorno.guardar_grabacion("acme", _Archivo("larga.wav", f.read()))
+
+
+def test_grabacion_respeta_la_cuota(entorno, monkeypatch):
+    import materiales
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", lambda args: open(args[-1], "wb").write(b"MP3" * 1000))
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 1.0)
+    monkeypatch.setattr(materiales, "CUOTA_BYTES", 10)
+    with pytest.raises(entorno.SubidaInvalida, match="límite"):
+        entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"))
+
+
+def test_grabacion_hora_invalida_o_ausente_usa_la_hora_utc_del_servidor(entorno, monkeypatch):
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", lambda args: open(args[-1], "wb").write(b"MP3"))
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 1.0)
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"), hora="no es una hora")
+    assert m["nombre"].startswith("Grabación ") and m["nombre"] != "Grabación no es una hora"
+
+
+def test_grabacion_usa_la_hora_que_manda_el_navegador(entorno, monkeypatch):
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", lambda args: open(args[-1], "wb").write(b"MP3"))
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 1.0)
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"), hora="14:32")
+    assert m["nombre"] == "Grabación 14:32"
+
+
+@pytest.mark.slow
+@_sin_ffmpeg
+def test_grabacion_webm_opus_real_se_pasa_a_mp3_y_encola_el_proxy(entorno, tmp_path):
+    import trabajos
+    from tareas import edicion as te
+    clip = str(tmp_path / "grab.webm")
+    try:
+        subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                        "-i", "sine=frequency=440:duration=1", "-c:a", "libopus", clip], check=True)
+    except subprocess.CalledProcessError:
+        pytest.skip("el ffmpeg local no trae libopus")
+    with open(clip, "rb") as f:
+        datos = f.read()
+    m = entorno.guardar_grabacion("acme", _Archivo("grabacion.webm", datos))
+    assert m["tipo"] == "audio" and m["origen"] == "grabacion"
+    assert 900 <= m["duracion_ms"] <= 1200
+    assert m["nombre"].startswith("Grabación")
+    assert trabajos.en_curso(te.job_id_proxy("acme", m["id"]))
+
+
+@pytest.mark.slow
+@_sin_ffmpeg
+def test_grabacion_m4a_aac_real_se_pasa_a_mp3(entorno, tmp_path):
+    clip = str(tmp_path / "grab.m4a")
+    subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                    "-i", "sine=frequency=440:duration=1", "-c:a", "aac", clip], check=True)
+    with open(clip, "rb") as f:
+        datos = f.read()
+    m = entorno.guardar_grabacion("acme", _Archivo("grabacion.m4a", datos))
+    assert m["tipo"] == "audio" and m["origen"] == "grabacion"
+    assert 900 <= m["duracion_ms"] <= 1200
+
+
+# --- orígenes de la biblioteca (editor capa 5a, Task 6) ---
+
+def test_listar_incluye_grabacion_y_locucion(entorno):
+    import materiales
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/g.mp3", hash="h-grab",
+                             bytes=1, extra={"nombre": "Grabación 14:32"})
+    l = materiales.registrar("acme", tipo="audio", origen="locucion", url="https://r2/l.mp3", hash="h-loc",
+                             bytes=1, extra={"nombre": "Hola mundo"})
+    ids = {m["id"] for m in entorno.listar("acme")["materiales"]}
+    assert {g["id"], l["id"]} <= ids
+
+
+def test_borrar_quita_una_grabacion_del_microfono(entorno):
+    import materiales
+    g = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2/g2.mp3", hash="h-grab2",
+                             bytes=1, extra={"nombre": "Grabación 09:00"})
+    out = entorno.borrar("acme", g["id"])
+    assert out["id"] == g["id"]
+    assert materiales.obtener("acme", g["id"]) is None
+
+
 def _pieza_lista(cliente="acme", nombre="gira sobre la mesa", **extra):
     import creative_flow
     cf = creative_flow.crear(cliente, [], ["Espejo LED"], [], nombre, 8, "", "A")

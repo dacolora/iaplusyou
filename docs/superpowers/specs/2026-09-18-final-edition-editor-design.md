@@ -214,6 +214,15 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   algo que use una edición viva o congelada); «Editar» abre la edición de la persona antes que
 >   el «Borrador automático · …»; y el rasterizador quita los caracteres que la fuente no
 >   dibuja (emojis) en vez de cajas, con aviso en el panel.
+> - **Capa 5a implementada** (2026-10-01, spec `2026-09-30-editor-capa5a-subtitulos-voz-design.md`):
+>   subtítulos automáticos y voz en off. Decisiones que ajustan la letra de §4: los subtítulos se
+>   DERIVAN al resolver cada destino desde las palabras del material (la fuente elegida por idioma
+>   y las correcciones por material e índice), así que siguen todos los cortes; los cuatro estilos
+>   salen de una lista de eventos compartida (karaoke resalta con color, ya no con `\k`); tienen
+>   pestaña propia («Subtítulos») y una fila de solo lectura en la línea de tiempo; transcribir y la
+>   voz con IA se pagan con el precio en el botón; grabar con el micrófono es gratis. Siguen fuera:
+>   cambiar tiempos de una palabra, traducir subtítulos (capa 5d), más estilos y animaciones
+>   (capa 5c), arrastrar los subtítulos sobre el video.
 >
 > Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
 > - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,

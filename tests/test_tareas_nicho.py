@@ -272,7 +272,9 @@ def test_ejecutar_recolectar_apify_registra_gasto(base_temporal, monkeypatch):
     _fuente_falsa(monkeypatch, tipo="apify", programa=_comentarios_falsos(30), de_pago=True, corrida="run_ok")
     tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "apify", {"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 50}, tid=11))
     g = gastos.historial("acme")[0]
-    assert g["tipo"] == "recoleccion" and g["usd"] == 0.09 and g["proveedor"] == "apify" and g["referencia"] == f"recoleccion:{eid}:t11"
+    # el gasto real es resultados × precio (30 × 0.006 = 0.18), SIN el techo mínimo de junglee (0.50):
+    # ese mínimo es solo lo que se manda como `maxTotalChargeUsd`, nunca lo que se registra.
+    assert g["tipo"] == "recoleccion" and g["usd"] == 0.18 and g["proveedor"] == "apify" and g["referencia"] == f"recoleccion:{eid}:t11"
     assert "30 resultado(s) aprox." in g["detalle"] and g["extra"]["actor"] == "junglee~amazon-reviews-scraper"
     assert g["extra"]["corrida"] == "run_ok"                                   # se puede rastrear en console.apify.com
     assert datos.estudio("acme", eid)["extra"]["recolecciones"][-1]["corrida"] == "run_ok"

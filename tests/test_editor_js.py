@@ -58,6 +58,15 @@ def test_biblioteca_js_acepta_lo_mismo_que_el_servidor():
     assert _constante_js("biblioteca.js", "LIMITES_SUBIDA") == {t: b for t, (b, _ms) in materiales.LIMITES.items()}
 
 
+def test_grabacion_js_acepta_lo_mismo_que_el_servidor():
+    # Capa 5a (Task 8, D8): el micrófono graba en un formato que la ruta
+    # editor.grabacion acepta, y el reloj se detiene en el mismo tope.
+    from final_edition import biblioteca
+    formatos = _constante_js("voz_modelo.js", "FORMATOS_GRABACION")
+    assert {ext for _mime, ext in formatos} <= biblioteca.EXTENSIONES_GRABACION
+    assert _constante_js("voz_modelo.js", "MAX_GRABACION_MS") == biblioteca.MAX_GRABACION_MS
+
+
 def test_desplazamiento_de_deslizar_igual_a_python():
     # Capa 4c (2/10): la entrada «deslizar» baja la capa una fracción de la
     # altura del lienzo, la misma en la vista previa y en el render.
@@ -94,6 +103,22 @@ def test_pagina_editor_no_ejecuta_nada_antes_de_declararlo_todo():
 def test_transiciones_js_iguales_a_python():
     # la biblioteca ofrece solo las transiciones que el render hace
     assert _constante_js("operaciones.js", "TRANSICIONES") == list(documento.TRANSICIONES)
+
+
+def test_estilos_subtitulos_js_iguales_a_python():
+    # cambiarSubtitulos solo acepta un estilo_id que documento.validar conoce
+    assert _constante_js("operaciones.js", "ESTILOS_SUBTITULOS") == list(documento.ESTILOS_SUBTITULOS)
+
+
+def test_max_fuentes_subtitulo_js_igual_a_python():
+    # ponerFuentesSubtitulos rechaza lo que documento.validar rechazaría por tener más fuentes de la cuenta
+    assert _constante_js("operaciones.js", "MAX_FUENTES_SUBTITULO") == documento.MAX_FUENTES_SUBTITULO
+
+
+def test_max_correccion_js_igual_a_python():
+    # corregirPalabra y el campo de la pestaña Subtítulos (maxLength) cortan
+    # donde documento.validar cortaría (capa 5a, D3)
+    assert _constante_js("operaciones.js", "MAX_CORRECCION") == documento.MAX_CORRECCION
 
 
 def _generador():

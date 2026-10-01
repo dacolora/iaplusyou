@@ -299,6 +299,30 @@ def test_traducir_se_rinde_tras_dos_reintentos_y_lleva_lo_pagado(entorno, monkey
     assert exc.value.costo_pagado == pytest.approx(0.27) and exc.value.capas_pagadas["voz"]["costo_usd"] == 0.25
 
 
+def test_traducir_no_llama_voces_bloques_si_la_unica_voz_es_del_editor(entorno, monkeypatch):
+    # D11 (capa 5a): una voz agregada en el editor no tiene `bloque`, así que
+    # no debe pagarse ni traducirse al traer un destino nuevo.
+    import ediciones
+    from final_edition import produccion
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "v0", "inicio_ms": 0, "duracion_ms": 1000, "material_id": 1,
+                                  "recorte": {"desde_ms": 0, "hasta_ms": 1000}, "velocidad": 1.0,
+                                  "transform": {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"},
+                                  "keyframes": [], "animacion": None, "transicion": None,
+                                  "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}}]
+    doc["pistas"].append({"id": "p_voz_editor", "tipo": "audio", "bloqueada": False, "silenciada": False, "oculta": False,
+                          "clips": [{"id": "voz_editor", "inicio_ms": 0, "duracion_ms": 1000, "material_id": 2,
+                                     "rol_audio": "voz", "recorte": {"desde_ms": 0, "hasta_ms": 1000}, "velocidad": 1.0,
+                                     "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}}]})
+    doc["guion"] = GUION_BASE
+    ed = ediciones.crear("acme", "video", "manual", doc)
+    llamadas = []
+    monkeypatch.setattr(produccion, "_voces_bloques", lambda *a, **k: (llamadas.append(1), (None, 0.0))[1])
+    ed2, capas, costo = produccion.traducir("acme", ed, "en", "US", None, "Rachel", True)
+    assert llamadas == [] and "voz" not in capas
+    assert ed2["documento"]["pistas"][1]["clips"][0].get("por_destino") is None   # la voz del editor no se toca
+
+
 def test_producir_destino_traducido_con_voz_incompleta_queda_degradada(entorno):
     # Fin a fin (I1, capa 2): un destino TRADUCIDO cuya voz degrada también
     # debe rendirse — el render (fake) sí corre, sobre el documento con la

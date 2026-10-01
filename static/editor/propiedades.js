@@ -8,7 +8,9 @@
 //   alineación, animación de entrada, centrar y borrar.
 // - Imagen: tamaño (en % del ancho de la pantalla), opacidad, «Llenar la
 //   pantalla», «Centrar» y borrar.
-// - Audio (música, efecto, voz…): volumen, fundidos, silenciar y borrar.
+// - Audio (música, efecto, voz…): volumen, fundidos, silenciar, «Suena en»
+//   (capa 5a, D10: solo una voz agregada en el editor), «Subtítulos de este
+//   audio» (abre esa pestaña de la biblioteca) y borrar.
 // - Nada elegido: la mezcla de toda la edición y qué hacer.
 //
 // Qué formulario toca y qué valores muestra lo decide propiedades_modelo.js
@@ -23,7 +25,7 @@
 // No hace nada al importarse (lo prueba Node).
 import { avisoTransicion } from "./escala.js";
 import {
-  alternarSilencio, buscar, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, claveForma,
+  alternarSilencio, buscar, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, cambioSuenaEn, claveForma,
   escalaDePorcentaje, mensajeRechazo, modelo, textoPorcentaje, textoSegundos,
 } from "./propiedades_modelo.js";
 import { t } from "./textos.js";
@@ -63,11 +65,13 @@ const traducidas = (lista) => lista.map((o) => ({ ...o, texto: t(o.texto) }));
 export class Propiedades {
   // `contenedor`: #ed-panel-propiedades (la caja que corre hacia abajo);
   // `editor`: el de pagina_editor.js; `materiales()`: los de la vista previa
-  // (las medidas de una imagen, para su tamaño en % y «Llenar la pantalla»).
-  constructor({ contenedor, editor, materiales = () => ({}) }) {
+  // (las medidas de una imagen, para su tamaño en % y «Llenar la pantalla»);
+  // `nombresIdioma`: {es: "Español", …} para «Suena en» (capa 5a).
+  constructor({ contenedor, editor, materiales = () => ({}), nombresIdioma = {} }) {
     this.contenedor = contenedor;
     this.editor = editor;
     this.materiales = materiales;
+    this.nombresIdioma = nombresIdioma ?? {};
     this.m = null;                    // el modelo que se ve
     this.clave = null;                // forma:clipId del formulario armado
     this.pintores = [];               // (m) => pone los valores de m en un control
@@ -95,7 +99,9 @@ export class Propiedades {
 
   pintar() {
     const ed = this.editor;
-    const m = modelo(ed.doc(), ed.seleccion, { destino: ed.destino(), info: ed.info(), materiales: this.materiales() ?? {} });
+    const m = modelo(ed.doc(), ed.seleccion, {
+      destino: ed.destino(), info: ed.info(), materiales: this.materiales() ?? {}, nombresIdioma: this.nombresIdioma,
+    });
     const otra = claveForma(m) !== this.clave;
     this.m = m;
     if (otra) this._armar(m);
@@ -593,7 +599,40 @@ export class Propiedades {
       },
     });
     this._nota(this.cuerpo, (x) => x.nota);
+    this._armarSuenaEn();
+    // «Subtítulos de este audio»: la pestaña Subtítulos (ahí se elige de dónde
+    // salen y se generan, con el precio a la vista)
+    const subtitulos = el("div", "ed-prop-acciones", this.cuerpo);
+    this._boton(subtitulos, {
+      texto: t("prop.subtitulos_audio"), leer: (x) => ({ deshabilitado: !x.subtitulos }),
+      aplicar: () => this.editor.mostrarBiblioteca?.("subtitulos"),
+    }).id = "ed-prop-subtitulos-audio";
     this._botonBorrar();
+  }
+
+  // «Suena en» (capa 5a, D10): una voz agregada en el editor suena solo en su
+  // idioma o en todos. Las opciones cambian con el destino que se ve, así que
+  // se vuelven a poner cuando cambian.
+  _armarSuenaEn() {
+    const campo = el("div", "ed-prop-campo", this.cuerpo);
+    const label = el("label", "ed-prop-etiqueta", campo, t("prop.suena_en"));
+    label.htmlFor = "ed-prop-suena-en";
+    const sel = el("select", "", campo);
+    sel.id = "ed-prop-suena-en";
+    sel.addEventListener("change", () => {
+      sel.blur();                    // si no, S, Supr y Ctrl+Z irían al select
+      this._cambiar(null, cambioSuenaEn(sel.value));
+    });
+    this.pintores.push((x) => {
+      campo.hidden = !x.suena_en;
+      if (!x.suena_en) return;
+      const firma = JSON.stringify(x.suena_en.opciones);
+      if (sel.dataset.firma !== firma) {
+        sel.replaceChildren(...x.suena_en.opciones.map((o) => new Option(o.texto, o.valor)));
+        sel.dataset.firma = firma;
+      }
+      sel.value = x.suena_en.valor;
+    });
   }
 
   // El sonido de la escena sigue a su video: se cambia desde ahí.

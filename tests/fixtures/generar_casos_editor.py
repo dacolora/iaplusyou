@@ -40,11 +40,17 @@ def _doc_resolver():
                          "en_US": {"material_id": 5, "duracion_ms": 1500}, "pt_BR": None}},
         {"id": "sonido", "inicio_ms": 0, "duracion_ms": 4000, "material_id": 1, "rol_audio": "sonido",
          "recorte": {"desde_ms": 0, "hasta_ms": 4000}},
+        # D10 (capa 5a): un audio marcado para OTRO idioma no suena fuera de él.
+        {"id": "voz_en", "inicio_ms": 0, "duracion_ms": 1500, "material_id": 7, "rol_audio": "voz", "idioma": "en",
+         "recorte": {"desde_ms": 0, "hasta_ms": 1500}},
     ]})
     doc["variables"] = {"textos": {"hook": {"es_CO": "Tu piel, en 7 días", "es": "Tu piel en 7 días",
                                             "en_US": "Your skin in 7 days", "pt": "Sua pele em 7 dias"}},
                         "voz": {}, "precios": {"es_CO": 89900, "es_MX": 499.5, "en_US": 24.99}}
-    doc["subtitulos"] = {"palabras": {"es_CO": [{"t_ms": 0, "dur_ms": 400, "texto": "Tu"}],
+    # visibles: false (capa 5a, D1): apaga los subtítulos en TODO destino,
+    # aunque haya palabras guardadas para él.
+    doc["subtitulos"] = {"visibles": False,
+                         "palabras": {"es_CO": [{"t_ms": 0, "dur_ms": 400, "texto": "Tu"}],
                                       "es": [{"t_ms": 0, "dur_ms": 500, "texto": "Tu"}]}}
     doc["pngs"] = {"t_precio": 9}
     return documento.validar(doc)
@@ -94,7 +100,219 @@ PALABRAS_VENTANAS = (
 
 def casos_ventanas():
     from final_edition.motor import subtitulos
-    return [{"palabras": p, "esperado": subtitulos.ventanas(p)} for p in PALABRAS_VENTANAS]
+    casos = [{"palabras": p, "esperado": subtitulos.ventanas(p)} for p in PALABRAS_VENTANAS]
+    # D7: casos con `max_caracteres` (los tres parámetros van EXPLÍCITOS
+    # cuando no son los de por defecto, para que quien los consuma sepa con
+    # qué llamar a `ventanas`).
+    extra_parametros = (
+        [{"t_ms": 0, "dur_ms": 300, "texto": "Hola"}, {"t_ms": 300, "dur_ms": 300, "texto": "mundo"},
+         {"t_ms": 600, "dur_ms": 300, "texto": "extraordinario"}],
+        [{"t_ms": 0, "dur_ms": 300, "texto": "a" * 30}],
+        # revisión final (m3): la barra invertida pasa a «/» (libass la leería
+        # como una orden) y el largo se cuenta en caracteres, no en unidades de
+        # UTF-16: «𝔸𝔹𝔺𝔻𝔼𝔽» son 6 letras (12 unidades) — tres caben en 22.
+        [{"t_ms": 0, "dur_ms": 300, "texto": "a\\b"}, {"t_ms": 300, "dur_ms": 300, "texto": "c\\\\d"}],
+        [{"t_ms": 0, "dur_ms": 300, "texto": "\U0001D538\U0001D539\U0001D53A\U0001D53B\U0001D53C\U0001D53D"},
+         {"t_ms": 300, "dur_ms": 300, "texto": "\U0001D538\U0001D539\U0001D53A\U0001D53B\U0001D53C\U0001D53D"},
+         {"t_ms": 600, "dur_ms": 300, "texto": "\U0001D538\U0001D539\U0001D53A\U0001D53B\U0001D53C\U0001D53D"}],
+        [{"t_ms": 0, "dur_ms": 300, "texto": "acción"}, {"t_ms": 300, "dur_ms": 300, "texto": "ñandú"},
+         {"t_ms": 600, "dur_ms": 300, "texto": "pingüino"}, {"t_ms": 900, "dur_ms": 300, "texto": "ok"}],
+    )
+    for p in extra_parametros:
+        casos.append({"palabras": p, "max_palabras": 4, "max_ms": 1800, "max_caracteres": 22,
+                     "esperado": subtitulos.ventanas(p, max_palabras=4, max_ms=1800, max_caracteres=22)})
+    return casos
+
+
+# --- eventos/estilos (D7, Tarea 2): la Tarea 3 escribe el espejo
+# static/editor/subtitulos.js (`eventos`/`estiloEfectivo`) contra esta tabla.
+_EV_PAL = [{"t_ms": 0, "dur_ms": 400, "texto": "Hola"}, {"t_ms": 400, "dur_ms": 500, "texto": "mundo"},
+          {"t_ms": 900, "dur_ms": 300, "texto": "esto"}, {"t_ms": 1200, "dur_ms": 300, "texto": "es"},
+          {"t_ms": 1500, "dur_ms": 400, "texto": "una"}, {"t_ms": 3000, "dur_ms": 400, "texto": "prueba"}]
+
+
+def _ev_sub(estilo_id, palabras, **extra):
+    return {"estilo_id": estilo_id, "posicion": 0.78, "palabras": palabras, **extra}
+
+
+def casos_eventos():
+    from final_edition.motor import subtitulos as sub_mod
+    casos = []
+
+    def agregar(nombre, sub):
+        casos.append({"nombre": nombre, "subtitulos": sub,
+                     "esperado": {"estilo": sub_mod.estilo_efectivo(sub), "eventos": sub_mod.eventos(sub)}})
+
+    agregar("karaoke por defecto: una palabra resaltada a la vez", _ev_sub("karaoke", _EV_PAL))
+    agregar("caja: una línea por ventana, sin resaltar", _ev_sub("caja", _EV_PAL))
+    agregar("minimal: tope de 5 palabras por línea",
+           _ev_sub("minimal", [{"t_ms": i * 100, "dur_ms": 50, "texto": c} for i, c in enumerate("abcdef")]))
+    agregar("palabra_grande: una palabra por línea, en mayúsculas, estirada", _ev_sub("palabra_grande", _EV_PAL))
+    agregar("escala 0.6 achica el tamaño", _ev_sub("karaoke", _EV_PAL[:2], escala=0.6))
+    agregar("escala 1.5 agranda el tamaño", _ev_sub("karaoke", _EV_PAL[:2], escala=1.5))
+    agregar("resaltado propio del documento", _ev_sub("karaoke", _EV_PAL[:1], resaltado="#3DDC84"))
+    agregar("caja no resalta aunque el documento pida un color", _ev_sub("caja", _EV_PAL[:1], resaltado="#3DDC84"))
+    agregar("palabra más larga que el tope achica SU línea (palabra_grande)",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 500, "texto": "extraordinariamente"}]))
+    agregar("mayúsculas con tildes, eñe y la ß alemana",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 300, "texto": "ñandú"},
+                                       {"t_ms": 2000, "dur_ms": 300, "texto": "acción"},
+                                       {"t_ms": 4000, "dur_ms": 300, "texto": "straße"}]))
+    agregar("líneas que se solapan: la primera termina donde empieza la segunda",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 1000, "texto": "Hola"},
+                                       {"t_ms": 800, "dur_ms": 200, "texto": "mundo"}]))
+    agregar("hueco de exactamente 600 ms: se estira hasta la siguiente",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 300, "texto": "Hola"},
+                                       {"t_ms": 900, "dur_ms": 200, "texto": "mundo"}]))
+    agregar("hueco de 601 ms: no se estira",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 300, "texto": "Hola"},
+                                       {"t_ms": 901, "dur_ms": 200, "texto": "mundo"}]))
+    agregar("sin palabras: sin eventos", _ev_sub("karaoke", []))
+    agregar("estilo desconocido cae a karaoke", _ev_sub("inventado", _EV_PAL[:1]))
+    # revisión final (I2): la caja de una línea achicada se achica con ella (\\bord)
+    agregar("caja: línea más larga que el tope achica su tamaño y su margen",
+           _ev_sub("caja", [{"t_ms": 0, "dur_ms": 500, "texto": "a" * 30}]))
+    agregar("karaoke a escala 1.5: margen de la caja más grande", _ev_sub("karaoke", _EV_PAL[:1], escala=1.5))
+    # revisión final (m3): barra invertida, tildes y letras fuera del plano básico
+    agregar("barra invertida pasa a barra", _ev_sub("karaoke", [{"t_ms": 0, "dur_ms": 300, "texto": "a\\b"}]))
+    agregar("el largo de la línea se cuenta en caracteres (plano astral)",
+           _ev_sub("palabra_grande", [{"t_ms": 0, "dur_ms": 300,
+                                       "texto": "\U0001D538\U0001D539\U0001D53A\U0001D53B\U0001D53C\U0001D53D\U0001D538\U0001D539"}]))
+    return {"estilos": sub_mod.ESTILOS_ASS, "casos": casos}
+
+
+# --- subtitulos_fuente (editor, capa 5a, D1-D4): la Tarea 3 escribe el espejo
+# static/editor/subtitulos_fuente.js contra esta tabla.
+def _sf_clip_video(id_, inicio_ms, duracion_ms, desde_ms, hasta_ms, material_id=1, velocidad=1.0):
+    return {"id": id_, "inicio_ms": inicio_ms, "duracion_ms": duracion_ms, "material_id": material_id,
+            "recorte": {"desde_ms": desde_ms, "hasta_ms": hasta_ms}, "velocidad": velocidad,
+            "transform": {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"},
+            "keyframes": [], "animacion": None, "transicion": None,
+            "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}}
+
+
+def _sf_clip_audio(id_, inicio_ms, duracion_ms, material_id, desde_ms=0, hasta_ms=None, rol_audio="voz", **extra):
+    hasta_ms = duracion_ms if hasta_ms is None else hasta_ms
+    base = {"id": id_, "inicio_ms": inicio_ms, "duracion_ms": duracion_ms, "material_id": material_id,
+            "rol_audio": rol_audio, "recorte": {"desde_ms": desde_ms, "hasta_ms": hasta_ms}, "velocidad": 1.0,
+            "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}}
+    base.update(extra)
+    return base
+
+
+def _sf_pista(id_, tipo, clips):
+    return {"id": id_, "tipo": tipo, "bloqueada": False, "silenciada": False, "oculta": False, "clips": clips}
+
+
+def _sf_doc_base(fuentes=None):
+    """v0 (material 1, 0-4000, recorte 0-4000) + v1 (material 1, 4000-7000,
+    recorte 5000-8000) en la principal; voz_a (material 2, 1000-4000,
+    bloque "hook", por_destino {es: 2, en: 5}) en p_voz."""
+    doc = documento.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [_sf_clip_video("v0", 0, 4000, 0, 4000), _sf_clip_video("v1", 4000, 3000, 5000, 8000)]
+    doc["pistas"].append(_sf_pista("p_voz", "audio", [_sf_clip_audio(
+        "voz_a", 1000, 3000, 2, bloque="hook",
+        por_destino={"es": {"material_id": 2, "duracion_ms": 3000}, "en": {"material_id": 5, "duracion_ms": 3000}})]))
+    if fuentes is not None:
+        doc["subtitulos"] = {**doc["subtitulos"], "fuentes": fuentes}
+    return doc
+
+
+_SF_PALABRAS_M1 = [{"t_ms": 500, "dur_ms": 200, "texto": "Hola"},
+                   {"t_ms": 4400, "dur_ms": 200, "texto": "fuera"},
+                   {"t_ms": 5200, "dur_ms": 200, "texto": "video"}]
+_SF_PALABRAS_M2 = [{"t_ms": 0, "dur_ms": 300, "texto": "voz-es"}]
+_SF_PALABRAS_M5 = [{"t_ms": 0, "dur_ms": 300, "texto": "voz-en"}]
+
+
+def _sf_caso(nombre, doc, idioma, pais, palabras_por_material, vacio_a_proposito=False):
+    """`palabras_por_material` se guarda con las claves de texto (JSON no
+    tiene claves enteras; el JS las lee como texto) pero `derivar` busca por
+    el `material_id` ENTERO del clip — así que `esperado` se calcula con una
+    copia de claves `int`, nunca con la que se guarda. `vacio_a_proposito`
+    marca los pocos casos donde `esperado == []` es la regla (D10, pista
+    oculta/silenciada), para que la prueba de guardia (`test_subtitulos_fuente.py`)
+    distinga eso de este mismo bug (claves de texto) volviendo en silencio."""
+    from final_edition import subtitulos_fuente as sf
+    resuelto = documento.resolver(documento.validar(doc), idioma, pais)
+    con_enteros = {int(k): v for k, v in palabras_por_material.items()}
+    return {"nombre": nombre, "resuelto": resuelto, "palabras_por_material": palabras_por_material,
+            "vacio_a_proposito": vacio_a_proposito, "esperado": sf.derivar(resuelto, con_enteros)}
+
+
+def casos_subtitulos_fuente():
+    casos = []
+    casos.append(_sf_caso("fuente sonido: regla del centro y tope del clip",
+                          _sf_doc_base(fuentes={"es": [{"tipo": "sonido"}]}), "es", "CO", {"1": _SF_PALABRAS_M1}))
+
+    corte = documento.nuevo_video("9:16")
+    corte["pistas"][0]["clips"] = [_sf_clip_video("v0a", 0, 2000, 0, 2000), _sf_clip_video("v0b", 2000, 2000, 2000, 4000)]
+    corte["subtitulos"] = {**corte["subtitulos"], "fuentes": {"es": [{"tipo": "sonido"}]}}
+    casos.append(_sf_caso("corte a mitad de palabra: UNA sola mitad", corte, "es", "CO",
+                         {"1": [{"t_ms": 1900, "dur_ms": 200, "texto": "corte"}]}))
+
+    reorden = _sf_doc_base()
+    v0, v1 = reorden["pistas"][0]["clips"]
+    reorden["pistas"][0]["clips"] = [{**v1, "inicio_ms": 0}, {**v0, "inicio_ms": 3000}]
+    reorden["subtitulos"] = {**reorden["subtitulos"], "fuentes": {"es": [{"tipo": "sonido"}]}}
+    casos.append(_sf_caso("reordenar la principal no rompe el mapeo", reorden, "es", "CO", {"1": _SF_PALABRAS_M1}))
+
+    borrado = _sf_doc_base(fuentes={"es": [{"tipo": "sonido"}]})
+    borrado["pistas"][0]["clips"] = [borrado["pistas"][0]["clips"][0]]
+    casos.append(_sf_caso("borrar el clip borra sus palabras", borrado, "es", "CO", {"1": _SF_PALABRAS_M1}))
+
+    veloz = _sf_doc_base(fuentes={"es": [{"tipo": "sonido"}]})
+    veloz["pistas"][0]["clips"][1] = _sf_clip_video("v1", 4000, 1500, 5000, 8000, velocidad=2.0)
+    casos.append(_sf_caso("velocidad 2x en el clip escala el mapeo", veloz, "es", "CO", {"1": _SF_PALABRAS_M1}))
+
+    correcciones = documento.nuevo_video("9:16")
+    correcciones["pistas"][0]["clips"] = [_sf_clip_video("v0a", 0, 2000, 0, 2000), _sf_clip_video("v0b", 2000, 2000, 2000, 4000)]
+    correcciones["subtitulos"] = {**correcciones["subtitulos"], "fuentes": {"es": [{"tipo": "sonido"}]},
+                                  "correcciones": {"1": {"0": "¡Hola!", "1": ""}}}
+    casos.append(_sf_caso("correcciones por material e índice; '' quita la palabra", correcciones, "es", "CO",
+                         {"1": [{"t_ms": 100, "dur_ms": 200, "texto": "hola"}, {"t_ms": 2100, "dur_ms": 200, "texto": "adios"}]}))
+
+    casos.append(_sf_caso("fuente voz: el material resuelto por destino (es)",
+                          _sf_doc_base(fuentes={"es": [{"tipo": "voz"}], "en": [{"tipo": "voz"}]}), "es", "CO",
+                          {"2": _SF_PALABRAS_M2, "5": _SF_PALABRAS_M5}))
+    casos.append(_sf_caso("fuente voz: el material resuelto por destino (en)",
+                          _sf_doc_base(fuentes={"es": [{"tipo": "voz"}], "en": [{"tipo": "voz"}]}), "en", "US",
+                          {"2": _SF_PALABRAS_M2, "5": _SF_PALABRAS_M5}))
+
+    idioma_clip = _sf_doc_base(fuentes={"es": [{"tipo": "voz"}]})
+    idioma_clip["pistas"][1]["clips"][0]["idioma"] = "en"
+    casos.append(_sf_caso("un clip de voz con idioma no suena en otro destino", idioma_clip, "es", "CO",
+                         {"2": _SF_PALABRAS_M2, "5": _SF_PALABRAS_M5}, vacio_a_proposito=True))
+
+    for campo in ("oculta", "silenciada"):
+        oculta = _sf_doc_base(fuentes={"es": [{"tipo": "voz"}]})
+        oculta["pistas"][1][campo] = True
+        casos.append(_sf_caso(f"pista {campo} no aporta subtítulos", oculta, "es", "CO",
+                             {"2": _SF_PALABRAS_M2, "5": _SF_PALABRAS_M5}, vacio_a_proposito=True))
+
+    empate = documento.nuevo_video("9:16")
+    empate["pistas"][0]["clips"] = [_sf_clip_video("v0", 0, 4000, 0, 4000)]
+    empate["pistas"].append(_sf_pista("p_voz", "audio", [_sf_clip_audio("voz_a", 1000, 3000, 2)]))
+    empate["subtitulos"] = {**empate["subtitulos"], "fuentes": {"es": [{"tipo": "sonido"}, {"tipo": "voz"}]}}
+    # dos palabras de pistas distintas (sonido de la principal, voz) que
+    # caen en el MISMO t_ms derivado (1000): el orden es estable, por el
+    # orden del documento (la principal antes que la pista de voz) — nunca
+    # el orden en que `fuentes` las nombra ni el de las palabras originales.
+    casos.append(_sf_caso("dos palabras en el mismo t_ms: orden estable por pista/clip", empate, "es", "CO",
+                         {"1": [{"t_ms": 1000, "dur_ms": 100, "texto": "video_dice"}],
+                          "2": [{"t_ms": 0, "dur_ms": 100, "texto": "voz_dice"}]}))
+
+    tope = documento.nuevo_video("9:16")
+    tope["pistas"][0]["clips"] = [_sf_clip_video("v0", 0, 1000, 0, 1000)]
+    tope["pistas"].append(_sf_pista("p_voz", "audio", [_sf_clip_audio("voz_larga", 800, 500, 2)]))
+    tope["subtitulos"] = {**tope["subtitulos"], "fuentes": {"es": [{"tipo": "voz"}]}}
+    casos.append(_sf_caso("palabra tras el fin de la principal no sale; la que lo cruza se acota", tope, "es", "CO",
+                         {"2": [{"t_ms": 150, "dur_ms": 100, "texto": "cruza"}, {"t_ms": 300, "dur_ms": 100, "texto": "fuera"}]}))
+
+    dedup = _sf_doc_base(fuentes={"es": [{"tipo": "material", "material_id": 2}, {"tipo": "voz"}]})
+    casos.append(_sf_caso("material + voz no duplican el clip; texto en blanco no sale", dedup, "es", "CO",
+                         {"2": [{"t_ms": 0, "dur_ms": 300, "texto": "voz-es"}, {"t_ms": 400, "dur_ms": 100, "texto": "   "}]}))
+    return casos
 
 
 ARCHIVOS = {
@@ -102,6 +320,8 @@ ARCHIVOS = {
     "resolver_casos.json": casos_resolver,
     "ajuste_casos.json": casos_ajuste,
     "ventanas_casos.json": casos_ventanas,
+    "subtitulos_fuente_casos.json": casos_subtitulos_fuente,
+    "subtitulos_eventos_casos.json": casos_eventos,
 }
 
 

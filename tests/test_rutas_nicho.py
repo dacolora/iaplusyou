@@ -290,7 +290,8 @@ def test_recolectar_apify_valida_links_y_estimado(app, llaves):
     t = app["encolados"][0]
     assert t["max_intentos"] == 1 and t["payload"]["params"] == {"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 100}
     r = c.get(f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar?actor=tiktok_comentarios&max=400")
-    assert r.status_code == 200 and r.get_json() == {"actor": "clockworks~tiktok-comments-scraper", "max_resultados": 400, "usd": 0.2, "texto": "US$ 0,20"}
+    # 400 × 0.00125 = 0.5 (precio real del plan FREE, reverificado 2026-10-01)
+    assert r.status_code == 200 and r.get_json() == {"actor": "clockworks~tiktok-comments-scraper", "max_resultados": 400, "usd": 0.5, "texto": "US$ 0,50"}
     assert c.get(f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar?actor=magia&max=1").status_code == 400
     assert c.get("/cliente/acme/nicho/999/recolectar/apify/estimar?actor=tiktok_comentarios&max=1").status_code == 404
 

@@ -1520,6 +1520,9 @@ msgstr "Who it speaks to"
 msgid "API oficial, gratis para uso propio (100 llamadas por minuto). Si esto se vende como producto, Reddit pide permiso comercial."
 msgstr "Official API, free for your own use (100 calls per minute). If this is sold as a product, Reddit requires commercial permission."
 
+msgid "Abajo"
+msgstr "Bottom"
+
 msgid "Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>."
 msgstr "Below, in <em>Connect store › MercadoLibre</em>, press <em>Connect with MercadoLibre</em>."
 
@@ -1711,6 +1714,9 @@ msgstr "Add comments"
 msgid "Agregar este referente a la campaña"
 msgstr "Add this reference to the campaign"
 
+msgid "Agregar la voz (ya la tienes, gratis)"
+msgstr "Add the voice (you already have it, free)"
+
 msgid "Agregar las marcadas"
 msgstr "Add the checked ones"
 
@@ -1743,6 +1749,10 @@ msgstr "Add “{nombre}” to the edit"
 #, python-brace-format
 msgid "Agregar «{nombre}» como música desde el cabezal"
 msgstr "Add “{nombre}” as music from the playhead"
+
+#, python-brace-format
+msgid "Agregar «{nombre}» como voz desde el cabezal"
+msgstr "Add “{nombre}” as a voice from the playhead"
 
 msgid "Agrupando deseos"
 msgstr "Grouping desires"
@@ -1821,6 +1831,9 @@ msgstr "Alignment"
 
 msgid "Alta"
 msgstr "High"
+
+msgid "Altura"
+msgstr "Height"
 
 msgid "Amarillo"
 msgstr "Yellow"
@@ -2154,6 +2167,9 @@ msgstr "Drag images or videos here, or tap <strong>+</strong> to add references 
 msgid "Arrastra imágenes o videos aquí"
 msgstr "Drag images or videos here"
 
+msgid "Arriba"
+msgstr "Top"
+
 msgid "Asignar"
 msgstr "Assign"
 
@@ -2165,6 +2181,9 @@ msgstr "Assign to color…"
 
 msgid "Así le explicamos a Claude cómo escribir tus anuncios. Cada pieza que genera la app sigue estas reglas."
 msgstr "This is how we explain to Claude how to write your ads. Every piece the app generates follows these rules."
+
+msgid "Así se ven"
+msgstr "This is how they look"
 
 msgid "Atajos:"
 msgstr "Shortcuts:"
@@ -2217,6 +2236,10 @@ msgstr "Audio ready: it is in Your audios."
 
 msgid "Audio nativo del modelo, sin diálogo ni música."
 msgstr "The model's native audio, no dialogue or music."
+
+#, python-brace-format
+msgid "Audio «{nombre}»"
+msgstr "Audio “{nombre}”"
 
 msgid "Audios"
 msgstr "Audios"
@@ -2559,6 +2582,9 @@ msgstr "Box"
 
 msgid "Calculando el costo…"
 msgstr "Calculating the cost…"
+
+msgid "Calculando el precio…"
+msgstr "Calculating the price…"
 
 msgid "Calidad mínima"
 msgstr "Minimum quality"
@@ -3057,6 +3083,9 @@ msgstr "Colombia"
 msgid "Color"
 msgstr "Color"
 
+msgid "Color de la palabra que suena"
+msgstr "Color of the word being spoken"
+
 msgid "Color de marca"
 msgstr "Brand color"
 
@@ -3491,6 +3520,10 @@ msgstr "Runs Apify's actors: in Niche it brings Amazon reviews or TikTok comment
 msgid "Correcciones de prompt (Flow Plus)"
 msgstr "Prompt corrections (Flow Plus)"
 
+#, python-brace-format
+msgid "Corregida (se oyó «{original}»)"
+msgstr "Corrected (heard “{original}”)"
+
 msgid "Corregir con Claude"
 msgstr "Fix it with Claude"
 
@@ -3595,6 +3628,10 @@ msgstr "Creating the voice"
 msgid "Creando la voz…"
 msgstr "Creating the voice…"
 
+#, python-brace-format
+msgid "Creando la voz… {etapa}"
+msgstr "Creating the voice… {etapa}"
+
 msgid "Crear"
 msgstr "Create"
 
@@ -3629,6 +3666,10 @@ msgstr "Create study"
 msgid "Crear experimento"
 msgstr "Create experiment"
 
+#, python-brace-format
+msgid "Crear la voz ({precio})"
+msgstr "Create the voice ({precio})"
+
 msgid "Crear mi proyecto"
 msgstr "Create my project"
 
@@ -3658,6 +3699,9 @@ msgstr "Create and build campaigns →"
 
 msgid "Crear y usar"
 msgstr "Create and use"
+
+msgid "Crear › Audios"
+msgstr "Create › Audios"
 
 msgid "Creas una app en developers.facebook.com y la pasas a modo Live."
 msgstr "You create an app at developers.facebook.com and switch it to Live mode."
@@ -3789,6 +3833,9 @@ msgstr "What each prop looks like"
 
 msgid "Cópiala como YOUTUBE_API_KEY en el .env del servidor y reinicia los dos servicios."
 msgstr "Copy it as YOUTUBE_API_KEY in the server's .env and restart both services."
+
+msgid "Da permiso al micrófono en tu navegador para grabar."
+msgstr "Allow microphone access in your browser to record."
 
 msgid "Dato del producto"
 msgstr "Product fact"
@@ -4738,6 +4785,9 @@ msgstr "The next one slides in from the right."
 msgid "El sonido de la escena sigue a los clips de video: edita el clip de video."
 msgstr "The scene sound follows the video clips: edit the video clip."
 
+msgid "El sonido del video"
+msgstr "The video's sound"
+
 msgid "El sonido del video se oye entero y la música queda baja."
 msgstr "The video sound is heard in full and the music stays low."
 
@@ -4896,6 +4946,9 @@ msgstr "Choose the photos from your computer: the product gets created in the ca
 msgid "Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id=\"producir-tiempo\"></span>."
 msgstr "Choose the markets. It's free: it's produced with what's in this edit, without paying for anything new. It takes <span id=\"producir-tiempo\"></span>."
 
+msgid "Elige qué transcribir."
+msgstr "Choose what to transcribe."
+
 msgid "Elige tu nueva contraseña"
 msgstr "Choose your new password"
 
@@ -4970,6 +5023,9 @@ msgstr "Choose a persona (or create a quick one)."
 
 msgid "Elige una velocidad de la lista."
 msgstr "Pick a speed from the list."
+
+msgid "Elige una voz"
+msgstr "Choose a voice"
 
 msgid "Elige una voz de la lista."
 msgstr "Pick a voice from the list."
@@ -5256,6 +5312,13 @@ msgstr "Error:"
 msgid "Error: %(detalle)s"
 msgstr "Error: %(detalle)s"
 
+msgid "Es demasiado audio para una sola vez: hasta 10 minutos."
+msgstr "That's too much audio at once: up to 10 minutes."
+
+#, python-brace-format
+msgid "Es demasiado largo: hasta {max} caracteres."
+msgstr "It's too long: up to {max} characters."
+
 msgid "Es el precio de cada país: sale de los precios de la edición y no se escribe aquí."
 msgstr "It's each country's price: it comes from the edit's prices and isn't typed here."
 
@@ -5374,6 +5437,9 @@ msgstr "That brand doesn't exist in Atria."
 msgid "Esa opción todavía no está disponible: Creatv está terminando de activarla."
 msgstr "That option isn't available yet: Creatv is still finishing activating it."
 
+msgid "Esa palabra ya no está en los subtítulos."
+msgstr "That word is no longer in the subtitles."
+
 msgid "Esa persona no existe en este proyecto."
 msgstr "That persona doesn't exist in this project."
 
@@ -5491,8 +5557,14 @@ msgstr "That version doesn't exist."
 msgid "Esa versión rompe reglas que no se negocian; pídele a Claude que la corrija."
 msgstr "That version breaks non-negotiable rules; ask Claude to fix it."
 
+msgid "Esa voz no está disponible en el editor."
+msgstr "That voice isn't available in the editor."
+
 msgid "Esa voz ya no está en Mis voces."
 msgstr "That voice is no longer in My voices."
+
+msgid "Esa voz ya no existe."
+msgstr "That voice no longer exists."
 
 msgid "Esas piezas ya se estaban generando."
 msgstr "Those pieces were already being generated."
@@ -5557,6 +5629,9 @@ msgstr "Write the idea and choose a character."
 
 msgid "Escribe lo que dirá la persona de la foto, como presentador."
 msgstr "Write what the person in the photo will say, as a presenter."
+
+msgid "Escribe lo que va a decir la voz."
+msgstr "Write what the voice will say."
 
 msgid "Escribe los 5 prompts por idea y los guiones de las finales."
 msgstr "Writes the 5 prompts per idea and the scripts for the final cuts."
@@ -5651,12 +5726,19 @@ msgstr "Listen to the voice again."
 msgid "Escuchar"
 msgstr "Listen"
 
+#, python-brace-format
+msgid "Escuchar a {voz}"
+msgstr "Listen to {voz}"
+
 msgid "Escuchar la voz"
 msgstr "Listen to the voice"
 
 #, python-brace-format
 msgid "Escuchar «{nombre}»"
 msgstr "Listen to “{nombre}”"
+
+msgid "Escúchala antes de usarla:"
+msgstr "Listen to it before using it:"
 
 msgid "Ese anuncio no está en error."
 msgstr "That ad isn't in an error state."
@@ -5675,6 +5757,9 @@ msgstr "That ad no longer exists."
 
 msgid "Ese aprendizaje ya no existe."
 msgstr "That learning no longer exists."
+
+msgid "Ese archivo no es de este proyecto."
+msgstr "That file isn't from this project."
 
 msgid "Ese archivo no se borra desde aquí."
 msgstr "That file can't be deleted from here."
@@ -5756,6 +5841,9 @@ msgstr "That script doesn't exist."
 
 msgid "Ese hook no existe en el guion."
 msgstr "That hook doesn't exist in the script."
+
+msgid "Ese idioma no está disponible."
+msgstr "That language isn't available."
 
 msgid "Ese link no parece de una página de Notion."
 msgstr "That link doesn't look like a Notion page."
@@ -6003,6 +6091,9 @@ msgstr "This script was already confirmed."
 msgid "Este guion ya está confirmado; duplícalo para cambiar la lectura."
 msgstr "This script is already confirmed; duplicate it to change the reading."
 
+msgid "Este idioma todavía no tiene subtítulos."
+msgstr "This language doesn't have subtitles yet."
+
 msgid "Este mapa es documentación interna y está en español."
 msgstr "This map is internal documentation and is written in Spanish."
 
@@ -6012,6 +6103,9 @@ msgstr "This month"
 #, python-format
 msgid "Este mes: %(gasto)s"
 msgstr "This month: %(gasto)s"
+
+msgid "Este navegador no graba audio: prueba con Chrome, Edge, Firefox o Safari al día."
+msgstr "This browser can't record audio: try an up-to-date Chrome, Edge, Firefox or Safari."
 
 #, python-format
 msgid "Este núcleo quedó sin sub-avatares: %(error)s"
@@ -6080,6 +6174,9 @@ msgstr "This video already talks; for another language, make another piece with 
 msgid "Este video ya se generó o se está generando — no se puede volver a disparar."
 msgstr "This video was already generated or is being generated — it can't be triggered again."
 
+msgid "Estilo"
+msgstr "Style"
+
 msgid "Estilo del hook"
 msgstr "Hook's style"
 
@@ -6117,6 +6214,9 @@ msgstr ""
 "3. Charge approx. %(precio)s from Claude\n"
 "\n"
 "Shall we go ahead?"
+
+msgid "Estos subtítulos vienen del borrador automático y no siguen los cortes. Genéralos de nuevo para poder corregirlos."
+msgstr "These subtitles come from the automatic draft and don't follow the cuts. Generate them again to be able to correct them."
 
 msgid "Estos textos están en español: son las instrucciones internas que recibe Claude. Claude escribe tus anuncios en el idioma de tu proyecto."
 msgstr "These texts are in Spanish: they're the internal instructions Claude receives. Claude writes your ads in your project's language."
@@ -6788,6 +6888,10 @@ msgstr "Generating the image with %(modelo)s%(detalle)s…"
 msgid "Generando las versiones A y B con %(modelo)s…"
 msgstr "Generating versions A and B with %(modelo)s…"
 
+#, python-brace-format
+msgid "Generando los subtítulos… {etapa}"
+msgstr "Generating the subtitles… {etapa}"
+
 msgid "Generando video…"
 msgstr "Generating video…"
 
@@ -6860,6 +6964,13 @@ msgstr "Generate batch"
 msgid "Generar lote (%(n)s)"
 msgstr "Generate batch (%(n)s)"
 
+msgid "Generar subtítulos (gratis)"
+msgstr "Generate subtitles (free)"
+
+#, python-brace-format
+msgid "Generar subtítulos ({precio})"
+msgstr "Generate subtitles ({precio})"
+
 msgid "Generar también la versión B (dos videos)"
 msgstr "Also generate version B (two videos)"
 
@@ -6901,8 +7012,21 @@ msgstr "Record somewhere quiet, with a single person speaking and no music."
 msgid "Grabación"
 msgstr "Recording"
 
+#, python-format
+msgid "Grabación %(hora)s"
+msgstr "Recording %(hora)s"
+
+msgid "Grabación agregada en el cabezal."
+msgstr "Recording added at the playhead."
+
 msgid "Grabación: de 10 segundos a 5 minutos, mp3, wav, m4a, aac u ogg"
 msgstr "Recording: 10 seconds to 5 minutes, mp3, wav, m4a, aac or ogg"
+
+msgid "Grabar"
+msgstr "Record"
+
+msgid "Grabar tu voz"
+msgstr "Record your voice"
 
 msgid "Gracias: quedó como prueba del producto y Claude ya la puede usar."
 msgstr "Thanks: it's saved as product proof and Claude can now use it."
@@ -7271,6 +7395,9 @@ msgstr "Language"
 msgid "Idioma base"
 msgstr "Base language"
 
+msgid "Idioma de lo que se dice"
+msgstr "Language being spoken"
+
 msgid "Idioma del proyecto"
 msgstr "Project language"
 
@@ -7578,6 +7705,13 @@ msgstr "Go to Final edition"
 msgid "Ir a Ideas"
 msgstr "Go to Ideas"
 
+msgid "Ir a Subtítulos"
+msgstr "Go to Subtitles"
+
+#, python-brace-format
+msgid "Ir a {tiempo}"
+msgstr "Go to {tiempo}"
+
 msgid "Ir al inicio"
 msgstr "Go to start"
 
@@ -7602,6 +7736,9 @@ msgstr "Japan"
 
 msgid "Jornadas de trabajo"
 msgstr "Work days"
+
+msgid "Karaoke"
+msgstr "Karaoke"
 
 msgid "Kling O1"
 msgstr "Kling O1"
@@ -7846,6 +7983,9 @@ msgstr "People leave before the end: shorten the video or speed up the body."
 msgid "La grabación de esa voz ya no está."
 msgstr "That voice's recording is no longer available."
 
+msgid "La grabación dura más de 5 minutos."
+msgstr "The recording is longer than 5 minutes."
+
 msgid "La grabación pesa más de 20 MB."
 msgstr "The recording is larger than 20 MB."
 
@@ -8051,8 +8191,22 @@ msgstr "The preview had a problem drawing ({mensaje}). Reload the page; if it ha
 msgid "La vista previa va sin sonido: {mensaje}"
 msgstr "The preview has no sound: {mensaje}"
 
+msgid "La voz"
+msgstr "The voice"
+
+#, python-brace-format
+msgid "La voz dura más que lo que queda del video: quedó de {tiempo}."
+msgstr "The voice is longer than what's left of the video: it was cut to {tiempo}."
+
+#, python-brace-format
+msgid "La voz habla {idioma}: quedó sonando en todos los idiomas. Usa «Suena en» para dejarla solo en uno."
+msgstr "The voice speaks {idioma}: it now plays in all languages. Use “Plays in” to keep it in just one."
+
 msgid "La voz no quedó guardada: toca «Escuchar la voz» otra vez."
 msgstr "The voice wasn't saved: tap “Listen to the voice” again."
+
+msgid "La voz quedó lista, pero no se pudieron sacar sus subtítulos: puedes generarlos desde «Subtítulos»."
+msgstr "The voice is ready, but its subtitles couldn't be made: you can generate them from “Subtitles”."
 
 msgid "La voz quedó lista: toca «Escuchar la voz» para oírla (no se paga de nuevo)."
 msgstr "The voice is ready: tap “Listen to the voice” to hear it (no new charge)."
@@ -8294,6 +8448,9 @@ msgstr "Keys and connections for the project, your account, stores, channels and
 msgid "Llegar a la gente sale caro (CPM alto): la audiencia está saturada o el anuncio no engancha."
 msgstr "Reaching people is expensive (high CPM): the audience is saturated or the ad doesn't hook."
 
+msgid "Llegaste a los 5 minutos: la grabación se detuvo."
+msgstr "You reached 5 minutes: the recording stopped."
+
 msgid "Llenar la pantalla"
 msgstr "Fill the screen"
 
@@ -8333,6 +8490,9 @@ msgstr "What Claude knows about this prompt"
 
 msgid "Lo que costaría producir lo que pide esta propuesta (precio aproximado de los proveedores)"
 msgstr "What it would cost to produce what this proposal is asking for (approximate provider price)"
+
+msgid "Lo que dicen los subtítulos"
+msgstr "What the subtitles say"
 
 msgid ""
 "Lo que el generador recibe como imagen, en este orden. Elige un activo del Catálogo o describe\n"
@@ -8374,6 +8534,9 @@ msgstr "What's coming out:"
 msgid "Lo que tomó construirlo"
 msgstr "What it took to build this"
 
+msgid "Lo que va a decir"
+msgstr "What it will say"
+
 msgid "Lo que vendes: calzado, ropa, decoración, comida, lo que sea."
 msgstr "What you sell: shoes, clothes, home decor, food, anything."
 
@@ -8407,6 +8570,9 @@ msgstr "The ones with higher priority go first in the test loop"
 msgid "Los emojis no salen en el video final: se quitan al producirlo."
 msgstr "Emojis don't show in the final video: they're removed when it's produced."
 
+msgid "Los emojis no salen en los subtítulos: escribe la palabra con letras."
+msgstr "Emojis don't show in subtitles: type the word with letters."
+
 msgid "Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final."
 msgstr "Models perform best up to 15 s; for something longer, generate two pieces and join them later in the final edition."
 
@@ -8421,6 +8587,9 @@ msgstr "This version's image prompts are already done or in progress."
 
 msgid "Los prompts de imágenes quedaron escritos pero no se pudieron pasar todos al chat. Vuelve a escribirlos en una versión nueva."
 msgstr "The image prompts were written but not all of them could be sent to chat. Write them again in a new version."
+
+msgid "Los videos de esta edición no traen sonido."
+msgstr "The videos in this edit have no sound."
 
 #, python-format
 msgid "Lote de %(encoladas)s pieza(s) encolado: %(videos)s video(s), %(imagenes)s imagen(es), USD %(usd)s estimado"
@@ -8881,6 +9050,9 @@ msgstr "Currency of the figures"
 msgid "Monto"
 msgstr "Amount"
 
+msgid "Mostrar los subtítulos"
+msgstr "Show the subtitles"
+
 msgid "Mostrar más"
 msgstr "Show more"
 
@@ -8949,6 +9121,9 @@ msgstr "Metrics updated (%(n)s ads)."
 
 msgid "México"
 msgstr "Mexico"
+
+msgid "Mínimo"
+msgstr "Minimal"
 
 msgid "Mínimo 8 caracteres. Al guardarla se cierran las sesiones abiertas con la anterior."
 msgstr "At least 8 characters. Saving it closes the sessions open with the previous one."
@@ -9064,6 +9239,9 @@ msgstr "No sub-avatar came complete."
 msgid "Nivel de conciencia"
 msgstr "Awareness level"
 
+msgid "Nivel del micrófono"
+msgstr "Microphone level"
+
 msgid "No aplica"
 msgstr "Not applicable"
 
@@ -9085,6 +9263,9 @@ msgstr "You didn't choose any photo."
 
 msgid "No elegiste ningún archivo."
 msgstr "You didn't pick a file."
+
+msgid "No encontramos un micrófono."
+msgstr "We couldn't find a microphone."
 
 #, python-format
 msgid "No encontré %(video)s"
@@ -9277,6 +9458,9 @@ msgstr "There's no stopped research to resume."
 msgid "No hay videos esperando aprobación."
 msgstr "No videos waiting for approval."
 
+msgid "No hay voz en este destino."
+msgstr "There's no voice in this market."
+
 msgid "No hubo conexión con el servidor. Revisa tu internet y vuelve a intentar."
 msgstr "Could not connect to the server. Check your internet and try again."
 
@@ -9405,6 +9589,9 @@ msgstr "I couldn't reach Triple Whale (%(tipo)s)."
 msgid "No pude leer el archivo como texto (¿es un CSV?)."
 msgstr "I couldn't read the file as text (is it a CSV?)."
 
+msgid "No pude leer esa grabación."
+msgstr "I couldn't read that recording."
+
 msgid "No pude leer esa imagen."
 msgstr "I couldn't read that image."
 
@@ -9477,6 +9664,12 @@ msgstr "Doesn't hold"
 msgid "No sabe que tiene el problema"
 msgstr "Doesn't know they have the problem"
 
+msgid "No sabemos cómo terminó la voz: recarga la página; si ya está lista, se agrega sola."
+msgstr "We lost track of the voice: reload the page; if it's ready, it gets added on its own."
+
+msgid "No sabemos cómo terminó: recarga la página para ver los subtítulos."
+msgstr "We don't know how it ended: reload the page to see the subtitles."
+
 msgid "No se agregó ningún referente."
 msgstr "No reference was added."
 
@@ -9486,6 +9679,9 @@ msgstr "The original photo of this generation wasn't kept."
 #, python-format
 msgid "No se creó la publicación en %(plataformas)s: %(error)s"
 msgstr "The post on %(plataformas)s was not created: %(error)s"
+
+msgid "No se encontraron palabras en ese audio."
+msgstr "No words were found in that audio."
 
 msgid "No se encontró. Puede que ya no exista."
 msgstr "Not found. It may no longer exist."
@@ -9513,6 +9709,13 @@ msgstr "The elements couldn't be created."
 
 msgid "No se pudieron escribir los prompts de imágenes. Vuelve a intentarlo."
 msgstr "Couldn't write the image prompts. Try again."
+
+msgid "No se pudieron generar los subtítulos. Vuelve a intentar."
+msgstr "Couldn't generate the subtitles. Try again."
+
+#, python-brace-format
+msgid "No se pudieron generar los subtítulos: {mensaje}"
+msgstr "Couldn't generate the subtitles: {mensaje}"
 
 #, python-brace-format
 msgid "No se pudieron preparar las copias livianas de {n} archivo(s): la vista previa sigue con los originales (se ve igual, solo tarda más en cargar)."
@@ -9581,6 +9784,9 @@ msgstr "Couldn't delete the file. Try again."
 
 msgid "No se pudo calcular el costo."
 msgstr "Couldn't calculate the cost."
+
+msgid "No se pudo calcular el precio: vuelve a intentar."
+msgstr "Couldn't calculate the price: try again."
 
 msgid "No se pudo calcular el resumen del mes. El resto del tablero sigue abajo."
 msgstr "I couldn't calculate this month's summary. The rest of the dashboard is still below."
@@ -9682,6 +9888,13 @@ msgstr "Couldn't create version B: %(error)s. Nothing was generated."
 msgid "No se pudo crear la voz."
 msgstr "The voice could not be created."
 
+msgid "No se pudo crear la voz. Vuelve a intentar."
+msgstr "Couldn't create the voice. Try again."
+
+#, python-brace-format
+msgid "No se pudo crear la voz: {mensaje}"
+msgstr "Couldn't create the voice: {mensaje}"
+
 msgid "No se pudo describir (red)."
 msgstr "Couldn't describe it (network)."
 
@@ -9694,6 +9907,9 @@ msgstr "Couldn't queue the follow-up task (%(error)s)"
 
 msgid "No se pudo encolar la regeneración."
 msgstr "Couldn't queue the regeneration."
+
+msgid "No se pudo escuchar esa voz."
+msgstr "Couldn't play that voice."
 
 msgid "No se pudo escuchar ese audio."
 msgstr "Couldn't play that audio."
@@ -9834,12 +10050,25 @@ msgstr "Couldn't upload (error {status})."
 msgid "No se pudo subir la foto del producto: %(error)s"
 msgstr "Couldn't upload the product photo: %(error)s"
 
+#, python-brace-format
+msgid "No se pudo subir la grabación (error {status})."
+msgstr "Couldn't upload the recording (error {status})."
+
 #, python-format
 msgid "No se pudo sugerir (%(tipo)s)."
 msgstr "Couldn't suggest anything (%(tipo)s)."
 
 msgid "No se pudo sugerir."
 msgstr "Couldn't suggest anything."
+
+#, python-format
+msgid "No se pudo transcribir %(num)s archivo."
+msgid_plural "No se pudieron transcribir %(num)s archivos."
+msgstr[0] "Couldn't transcribe %(num)s file."
+msgstr[1] "Couldn't transcribe %(num)s files."
+
+msgid "No se pudo usar el micrófono."
+msgstr "Couldn't use the microphone."
 
 msgid "No se subió"
 msgstr "Not uploaded"
@@ -10084,6 +10313,9 @@ msgstr "Other"
 msgid "Palabra clave"
 msgstr "Keyword"
 
+msgid "Palabra grande"
+msgstr "Big word"
+
 msgid "Palabras"
 msgstr "Words"
 
@@ -10126,6 +10358,9 @@ msgstr "To connect MercadoLibre, <code>FLASK_SECRET_KEY</code> is missing in the
 #, python-format
 msgid "Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>%(redirect)s</code>)."
 msgstr "To connect MercadoLibre, <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code> (app at developers.mercadolibre.com with <code>offline_access</code> permission and redirect <code>%(redirect)s</code>)."
+
+msgid "Para grabar, abre el editor desde su dirección segura (https)."
+msgstr "To record, open the editor from its secure address (https)."
 
 msgid "Para producir una variante hay que indicar `variante` (número) y `variante_tipo` (hook | estructura) a la vez."
 msgstr "To produce a variant you must give `variante` (number) and `variante_tipo` (hook | estructura) together."
@@ -10552,6 +10787,9 @@ msgstr "Asking WaveSpeed for the video… if it already finished, it shows up he
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
 
+msgid "Preparando el audio"
+msgstr "Preparing the audio"
+
 msgid "Preparando el video"
 msgstr "Preparing the video"
 
@@ -10572,6 +10810,9 @@ msgstr "Preparing files"
 
 msgid "Preparando para el editor…"
 msgstr "Preparing for the editor…"
+
+msgid "Preparando sus subtítulos"
+msgstr "Preparing its subtitles"
 
 #, python-brace-format
 msgid "Preparando {n} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales."
@@ -11074,6 +11315,12 @@ msgstr "Remove this reference"
 msgid "Quitar la biblioteca"
 msgstr "Remove the library"
 
+msgid "Quitar la línea"
+msgstr "Remove the line"
+
+msgid "Quitar los subtítulos de este idioma"
+msgstr "Remove the subtitles for this language"
+
 msgid "Quitar todas"
 msgstr "Remove all"
 
@@ -11083,6 +11330,9 @@ msgstr "Remove all from this source"
 #, python-brace-format
 msgid "Quitar «{nombre}» de la lista"
 msgstr "Remove “{nombre}” from the list"
+
+msgid "Quitaste los subtítulos de este idioma."
+msgstr "You removed the subtitles for this language."
 
 msgid "Quién sostiene qué"
 msgstr "Who holds what"
@@ -12069,6 +12319,9 @@ msgstr "No connection: it wasn't saved. Try again."
 msgid "Sin conexión: no se pudo borrar. Vuelve a intentar."
 msgstr "No connection: couldn't delete. Try again."
 
+msgid "Sin conexión: no se pudo pedir. Vuelve a intentar."
+msgstr "No connection: the request couldn't be sent. Try again."
+
 msgid "Sin conexión: no se pudo preparar ese video. Vuelve a intentar."
 msgstr "No connection: couldn't prepare that video. Try again."
 
@@ -12279,6 +12532,10 @@ msgstr ""
 msgid "Solo el catálogo público: productos, colores con su foto, precios y URL de compra, sin ninguna llave. Los pedidos y la atribución necesitan la Admin API (pestaña Shopify)."
 msgstr "Only the public catalog: products, colors with their photo, prices and purchase URL, with no key at all. Orders and attribution need the Admin API (Shopify tab)."
 
+#, python-brace-format
+msgid "Solo en {idioma}"
+msgstr "Only in {idioma}"
+
 msgid "Solo esta campaña (bórralas para volver a las del sprint)."
 msgstr "Only this campaign (delete them to go back to the sprint's)."
 
@@ -12341,6 +12598,12 @@ msgstr "Solutions they tried and why they failed (one per line: “what they use
 
 msgid "Sombra"
 msgstr "Shadow"
+
+msgid "Son demasiados archivos en un solo pedido."
+msgstr "Too many files in a single request."
+
+msgid "Son demasiados archivos para una vez: hasta 20."
+msgstr "That's too many files at once: up to 20."
 
 msgid ""
 "Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta\n"
@@ -12468,6 +12731,9 @@ msgstr "Upload a video, an image or an audio file."
 msgid "Sube una foto jpg, png o webp."
 msgstr "Upload a jpg, png or webp photo."
 
+msgid "Sube una grabación .webm, .m4a, .mp4, .ogg o .wav."
+msgstr "Upload a .webm, .m4a, .mp4, .ogg, or .wav recording."
+
 msgid "Sube una imagen JPG, PNG o WEBP."
 msgstr "Upload a JPG, PNG or WEBP image."
 
@@ -12556,11 +12822,38 @@ msgstr "Subreddits (comma-separated; empty = all of Reddit)"
 msgid "Subtítulo"
 msgstr "Subtitle"
 
+msgid "Subtítulos"
+msgstr "Subtitles"
+
+msgid "Subtítulos (transcripción)"
+msgstr "Subtitles (transcription)"
+
+msgid "Subtítulos de este audio"
+msgstr "Subtitles for this audio"
+
+#, python-brace-format
+msgid "Subtítulos de la voz · {n} palabras."
+msgstr "Subtitles from the voice · {n} words."
+
+#, python-brace-format
+msgid "Subtítulos de «{nombre}» · {n} palabras."
+msgstr "Subtitles from “{nombre}” · {n} words."
+
+#, python-brace-format
+msgid "Subtítulos del sonido del video · {n} palabras."
+msgstr "Subtitles from the video's sound · {n} words."
+
+msgid "Subtítulos listos."
+msgstr "Subtitles ready."
+
 msgid "Subtítulos sin libass: omitidos"
 msgstr "Subtitles without libass: skipped"
 
 msgid "Suecia"
 msgstr "Sweden"
+
+msgid "Suena en"
+msgstr "Plays in"
 
 #, python-format
 msgid "Sugeridas para %(etapa)s:"
@@ -12666,6 +12959,9 @@ msgstr "Finish or close first: %(partes)s"
 
 msgid "Terminó con error."
 msgstr "Finished with an error."
+
+msgid "Terminó la voz que se estaba creando: escribe el mismo texto y agrégala gratis."
+msgstr "The voice that was being created is done: write the same text and add it for free."
 
 msgid "Textil de hogar (cobija, manta, cojín)"
 msgstr "Home textile (blanket, throw, cushion)"
@@ -12827,6 +13123,9 @@ msgstr "Headline"
 
 msgid "Toca dónde va el producto"
 msgstr "Tap where the product goes"
+
+msgid "Toca una palabra para corregirla: Enter guarda, Esc la deja como estaba y vacía se quita."
+msgstr "Tap a word to correct it: Enter saves, Esc leaves it as it was, and an empty word is removed."
 
 msgid "Toca una para ponerla en el video que elegiste o, si no, en el corte más cercano al cabezal. Dura medio segundo; con el mouse también puedes arrastrarla a un corte."
 msgstr "Tap one to put it on the video you selected or, if none, on the cut closest to the playhead. It lasts half a second; with the mouse you can also drag it to a cut."
@@ -12999,6 +13298,9 @@ msgstr "No global sweep has been brought in yet outside copycoders."
 msgid "Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>%(redirect)s</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>."
 msgstr "Not yet possible: <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code>. Whoever administers it creates the app at developers.mercadolibre.com (<code>offline_access</code> permission, redirect <code>%(redirect)s</code>) — see the MercadoLibre card in <em>Setup</em>."
 
+msgid "Todavía no se sabe cuánto dura uno de los archivos: espera un momento y vuelve a intentarlo."
+msgstr "We don't know yet how long one of the files lasts: wait a moment and try again."
+
 msgid "Todavía no tiene ángulo"
 msgstr "Doesn't have an angle yet"
 
@@ -13070,6 +13372,9 @@ msgstr "All the ads from a Facebook page"
 
 msgid "Todos los avatares del proyecto"
 msgstr "All the project's avatars"
+
+msgid "Todos los idiomas"
+msgstr "All languages"
 
 msgid "Todos los países"
 msgstr "All countries"
@@ -13199,6 +13504,9 @@ msgstr "Bring in and classify ≈ US$ %(total)s"
 
 msgid "Traer y leer"
 msgstr "Fetch and read"
+
+msgid "Transcribiendo"
+msgstr "Transcribing"
 
 msgid "Transiciones"
 msgstr "Transitions"
@@ -13619,6 +13927,9 @@ msgstr "One line: what they want or what hurts them"
 msgid "Una marca"
 msgstr "A brand"
 
+msgid "Una palabra corregida puede tener hasta 120 letras."
+msgstr "A corrected word can be up to 120 letters long."
+
 msgid "Una persona con el producto: un gancho que llama la atención, uso natural y cierre en un gesto o un detalle."
 msgstr "A person with the product: an attention-grabbing hook, natural use and a close on a gesture or a detail."
 
@@ -13687,6 +13998,9 @@ msgstr "Use this image as a reference"
 
 msgid "Usar esta versión"
 msgstr "Use this version"
+
+msgid "Usar la grabación"
+msgstr "Use the recording"
 
 #, python-format
 msgid "Usar «%(titular)s» en un sprint"
@@ -13866,6 +14180,9 @@ msgstr "See all sources"
 msgid "Ver todos los avatares"
 msgstr "View all avatars"
 
+msgid "Verde"
+msgstr "Green"
+
 msgid "Veredicto"
 msgstr "Verdict"
 
@@ -14006,6 +14323,9 @@ msgstr "Back to log in"
 msgid "Volver a intentar"
 msgstr "Try again"
 
+msgid "Volver a lo que se oyó"
+msgstr "Back to what was heard"
+
 msgid "Volver a lo sugerido"
 msgstr "Back to the suggestion"
 
@@ -14030,8 +14350,17 @@ msgstr "Voice"
 msgid "Voz (solo en diálogo)"
 msgstr "Voice (dialogue mode only)"
 
+msgid "Voz agregada en el cabezal. Sus subtítulos no se pudieron preparar: genéralos en «Subtítulos»."
+msgstr "Voice added at the playhead. Its subtitles couldn't be prepared: generate them in “Subtitles”."
+
+msgid "Voz agregada en el cabezal. Sus subtítulos ya están listos: ponlos gratis en «Subtítulos»."
+msgstr "Voice added at the playhead. Its subtitles are ready: add them for free in “Subtitles”."
+
 msgid "Voz clonada: ya está en Mis voces."
 msgstr "Voice cloned: it is in My voices."
+
+msgid "Voz con IA"
+msgstr "AI voice"
 
 msgid "Voz creada, pero no pude estrenarla: tócale ▶ antes de 7 días para que no se pierda."
 msgstr "Voice created, but I couldn't try it out: press ▶ within 7 days so it isn't lost."
@@ -14047,6 +14376,9 @@ msgstr "Voice-over (ElevenLabs), word-level subtitles (Whisper) and music (Stabl
 
 msgid "Voz en off: la voz se agrega después"
 msgstr "Voice-over: the voice is added afterward"
+
+msgid "Voz lista."
+msgstr "Voice ready."
 
 msgid "Voz lista: escúchala y genera el video."
 msgstr "Voice ready: listen to it and generate the video."
@@ -14103,6 +14435,10 @@ msgstr "What are some of the characteristics your prospect wants others to see i
 
 msgid "What does the prospect want to achieve in society?"
 msgstr "What does the prospect want to achieve in society?"
+
+#, python-format
+msgid "Whisper · %(s)s s de audio"
+msgstr "Whisper · %(s)s s of audio"
 
 msgid "WooCommerce"
 msgstr "WooCommerce"
@@ -14285,6 +14621,9 @@ msgstr "An audio is already being created — wait for it to finish."
 msgid "Ya se está creando una canción — espera a que termine."
 msgstr "A song is already being created — wait for it to finish."
 
+msgid "Ya se está creando una voz en esta edición: espera a que termine."
+msgstr "A voice is already being created for this edit: wait for it to finish."
+
 msgid "Ya se está creando una voz — espera a que termine."
 msgstr "A voice is already being created — wait for it to finish."
 
@@ -14334,6 +14673,9 @@ msgstr "This study's avatars are already being completed."
 
 msgid "Ya se están escribiendo las descripciones en inglés."
 msgstr "The English descriptions are already being written."
+
+msgid "Ya se están generando subtítulos en esta edición: espera a que terminen."
+msgstr "Subtitles are already being generated for this edit: wait for them to finish."
 
 msgid "Ya se están trayendo las métricas de Triple Whale."
 msgstr "The Triple Whale metrics are already being pulled."
@@ -16818,12 +17160,20 @@ msgid "ya usamos Kling O1 (vía fal.ai) y Kling O3 Pro (más nuevo, vía WaveSpe
 msgstr "we already use Kling O1 (via fal.ai) and Kling O3 Pro (newer, via WaveSpeed); testing the intermediate versions doesn't add anything new"
 
 #, python-brace-format
+msgid "{actual} de {max}"
+msgstr "{actual} of {max}"
+
+#, python-brace-format
 msgid "{mensaje} Elige otro destino."
 msgstr "{mensaje} Choose another market."
 
 #, python-brace-format
 msgid "{n} %"
 msgstr "{n}%"
+
+#, python-brace-format
+msgid "{n} de {max} caracteres"
+msgstr "{n} of {max} characters"
 
 #, python-brace-format
 msgid "{tipo} «{archivo}»"
@@ -16992,6 +17342,9 @@ msgstr "How many?"
 msgid "¿Cómo quieres conectar Meta?"
 msgstr "How do you want to connect Meta?"
 
+msgid "¿De dónde salen?"
+msgstr "Where do they come from?"
+
 msgid "¿De qué color son las fotos actuales?"
 msgstr "What color are the current photos?"
 
@@ -17133,6 +17486,9 @@ msgstr "Remove this project's Meta app? You'll have to register it again to reco
 #, python-format
 msgid "¿Quitar los %(n)s comentarios de %(fuente)s?"
 msgstr "Remove the %(n)s comments from %(fuente)s?"
+
+msgid "¿Quitar los subtítulos de este idioma? Lo transcrito se guarda: volver a ponerlos es gratis."
+msgstr "Remove the subtitles for this language? The transcription is kept: putting them back is free."
 
 msgid "¿Quitar todas las referencias?"
 msgstr "Remove all references?"

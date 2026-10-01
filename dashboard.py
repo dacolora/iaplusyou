@@ -4669,7 +4669,8 @@ NOMBRES_TIPO_GASTO = {
     "refinar_prompt": idiomas.N_("Correcciones de prompt (Flow Plus)"), "guion_clips": idiomas.N_("Guiones a clips (Flow Plus)"),
     "ideas": idiomas.N_("Ideas de sprint (IA)"), "pedidos": idiomas.N_("Pedidos al cliente (IA)"),
     "revision": idiomas.N_("Revisión de la doctrina (IA)"),
-    "evaluacion": idiomas.N_("Evaluación de anuncios (IA)"), "otro": idiomas.N_("Otros"),
+    "evaluacion": idiomas.N_("Evaluación de anuncios (IA)"),
+    "transcripcion": idiomas.N_("Subtítulos (transcripción)"), "otro": idiomas.N_("Otros"),
 }
 
 
