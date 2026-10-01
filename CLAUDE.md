@@ -274,7 +274,9 @@ gasto como tipo `recoleccion`; Reddit/YouTube `max_intentos=2`). Reddit usa el
 token de solo lectura (`client_credentials`, 100 llamadas/min, solo uso no
 comercial); YouTube una llave simple (`search.list` tiene cupo de 100
 llamadas/día, una por recolección); Apify solo actores con precio por resultado
-(`nicho/fuentes/apify_actores.py`) y el token siempre en cabecera. Las llaves
+(`nicho/fuentes/apify_actores.py`, precios del plan FREE reverificados el 2026-10-01; junglee
+—reseñas de Amazon— pide un techo mínimo de US$ 0,50 por corrida, que `estimar()` ya suma) y
+el token siempre en cabecera. Las llaves
 (`REDDIT_*`, `YOUTUBE_API_KEY`, `APIFY_TOKEN`) viven en el `.env` raíz y se
 muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada — y solo
 la ve el admin: al cliente no se le muestra una fuente sin llave ni instrucciones del `.env`
