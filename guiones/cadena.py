@@ -8,7 +8,8 @@ nombres y prompts de cada escena, y los cambios de estado. El estado vive en
 `datos.modificar_cadena`; el worker (`tareas/cadena.py`) lo avanza.
 
 Estado: {"estado": corriendo|detenida|terminada, "desde", "modelo", "aprobado_usd",
-"aprobado_por", "aprobado_en", "detener", "escenas": {"<k>": {"cf_id", "estado":
+"aprobado_por", "aprobado_en", "detener", "preparando" (creando los elementos de
+Kling: todavía no se lanza ninguna escena), "escenas": {"<k>": {"cf_id", "estado":
 generando|lista|fallo, "frame_url", "error"}}, "elementos": {"<id imagen>": element_id},
 "edicion_id", "error"}.
 """
@@ -218,7 +219,7 @@ def aprobar(video, desde, usd, usuario, ahora, previo=None):
     antes = {k: dict(v) for k, v in (previo.get("escenas") or {}).items()
              if int(k) < desde and v.get("estado") == "lista"}
     return {"estado": "corriendo", "desde": desde, "modelo": MODELO, "aprobado_usd": round(float(usd), 2),
-            "aprobado_por": usuario, "aprobado_en": ahora, "detener": False, "escenas": antes,
+            "aprobado_por": usuario, "aprobado_en": ahora, "detener": False, "preparando": True, "escenas": antes,
             "elementos": dict(previo.get("elementos") or {}), "edicion_id": None, "error": None}
 
 
@@ -257,13 +258,14 @@ def con_edicion(est, edicion_id):
     return dict(est, edicion_id=edicion_id)
 
 
-def con_elementos(est, elementos):
-    return dict(est, elementos=dict(est.get("elementos") or {}, **elementos))
+def preparada(est, elementos):
+    """Los elementos de Kling ya existen: la cadena puede lanzar escenas."""
+    return dict(est, preparando=False, elementos=dict(est.get("elementos") or {}, **elementos))
 
 
 def siguiente(est, ks):
     """La escena que toca lanzar, o None (esperando, detenida o terminada)."""
-    if not est or est.get("estado") != "corriendo" or est.get("detener"):
+    if not est or est.get("estado") != "corriendo" or est.get("detener") or est.get("preparando"):
         return None
     for k in ks:
         if k < est.get("desde", ks[0]):

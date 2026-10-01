@@ -83,7 +83,9 @@ def test_transiciones_de_punta_a_punta():
     v = _completo()
     ks = [1, 2]
     est = cadena.aprobar(v, 1, 3.5, "admin", "2026-10-01T00:00:00")
-    assert est["estado"] == "corriendo" and cadena.siguiente(est, ks) == 1
+    assert est["estado"] == "corriendo" and est["preparando"] and cadena.siguiente(est, ks) is None
+    est = cadena.preparada(est, {"catalogo:producto:hf": "111"})
+    assert cadena.siguiente(est, ks) == 1 and est["elementos"] == {"catalogo:producto:hf": "111"}
     est = cadena.lanzada(est, 1, "cf_1")
     assert cadena.siguiente(est, ks) is None  # la 1 está generando
     est = cadena.lista(est, 1, "https://f1.jpg")
@@ -97,19 +99,20 @@ def test_transiciones_de_punta_a_punta():
 
 def test_fallo_detiene_y_rehacer_conserva_lo_anterior():
     v = _completo()
-    est = cadena.lista(cadena.lanzada(cadena.aprobar(v, 1, 3.5, "admin", "t"), 1, "cf_1"), 1, "https://f1.jpg")
+    est = cadena.lista(cadena.lanzada(cadena.preparada(cadena.aprobar(v, 1, 3.5, "admin", "t"), {}), 1, "cf_1"),
+                       1, "https://f1.jpg")
     est = cadena.fallo(cadena.lanzada(est, 2, "cf_2"), 2, "Kling 1200")
     assert est["estado"] == "detenida" and est["escenas"]["2"] == {"cf_id": "cf_2", "estado": "fallo",
                                                                    "frame_url": None, "error": "Kling 1200"}
     assert cadena.puede_rehacer(est, 2) and not cadena.puede_rehacer(est, 3)
     est2 = cadena.aprobar(v, 2, 1.0, "admin", "t2", previo=est)
     assert est2["escenas"] == {"1": est["escenas"]["1"]} and est2["desde"] == 2
-    assert cadena.siguiente(est2, [1, 2]) == 2
+    assert cadena.siguiente(cadena.preparada(est2, {}), [1, 2]) == 2
 
 
 def test_detener():
     v = _completo()
-    est = cadena.pedir_detener(cadena.lanzada(cadena.aprobar(v, 1, 3.5, "admin", "t"), 1, "cf_1"))
+    est = cadena.pedir_detener(cadena.lanzada(cadena.preparada(cadena.aprobar(v, 1, 3.5, "admin", "t"), {}), 1, "cf_1"))
     assert est["detener"] and est["estado"] == "corriendo"
     est = cadena.lista(est, 1, "https://f1.jpg")
     assert cadena.siguiente(est, [1, 2]) is None
