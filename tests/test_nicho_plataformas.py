@@ -37,9 +37,12 @@ def test_estimados_redondean_al_centavo_hacia_arriba():
     from nicho.fuentes import plataformas as pl
     assert pl.usd(30, 0.003) == 0.09 and pl.usd(1, 0.0009) == 0.01 and pl.usd(0, 0.5) == 0.0
     assert pl.estimar_busqueda("amazon", 3, 20) == 0.3            # 60 × 0.005 (plan FREE de Apify, verificado 2026-10-01)
-    # junglee (2026-10-01): tope de 40 reseñas por producto, 15 × 40 = 600 × 0.006 = 3.6
-    assert pl.estimar_resenas("amazon", 15, 100) == 3.6
-    assert pl.estimar_resenas("amazon", 3, 20) == 0.5             # 60 × 0.006 = 0.36 < el mínimo 0.50 por corrida
+    # junglee en el plan FREE (2026-10-01, prueba real en producción): UNA corrida POR PRODUCTO, 10
+    # reseñas por corrida (el tope real del plan) -- el estimado es el peor caso REAL de cada corrida
+    # (10 × 0.006 = 0.06), nunca el mínimo de US$ 0,50 que solo se manda a Apify para que acepte la
+    # corrida (`_con_tope`/`tope_minimo_usd`).
+    assert pl.estimar_resenas("amazon", 15, 100) == 0.9           # 15 corridas × 0.06
+    assert pl.estimar_resenas("amazon", 3, 20) == 0.18            # 3 corridas × 0.06
     assert pl.estimar_busqueda("meli", 3, 20) == 0.12 and pl.estimar_resenas("meli", 15, 100) == 2.25   # 1500 × 0.0015
     assert pl.estimar_busqueda("tiktok_shop", 3, 20) == 0.27 and pl.estimar_resenas("tiktok_shop", 15, 100) == 6.75
     # con arranque por corrida: Walmart busca UNA consulta por corrida (20 × 0.001 + 0.001 → 0.03 cada una)
@@ -65,7 +68,8 @@ def test_entradas_de_busqueda():
                                          {"keyword": "pantuflas memory foam", "country": "https://listado.mercadolibre.com.co/", "sort": "relevance", "maxPages": 1, "extractProductDetails": False}]
     assert [x["max_items"] for x in e] == [10, 10] and [x["etiqueta"] for x in e] == ["pantuflas ortopédicas", "pantuflas memory foam"]
     e = pl.entradas_busqueda("tiktok_shop", ["cloud slippers"], "US", 20)
-    assert e == [{"entrada": {"mode": "shop_search", "searchKeywords": ["cloud slippers"], "maxResults": 20}, "max_items": 20, "max_usd": 0.09, "etiqueta": "búsqueda"}]
+    assert e == [{"entrada": {"mode": "shop_search", "searchKeywords": ["cloud slippers"], "maxResults": 20}, "max_items": 20, "max_usd": 0.09,
+                  "peor_usd": 0.09, "etiqueta": "búsqueda"}]
     otro = pl.entradas_busqueda("meli", ["x"], "SE", 10)              # Mercado Libre no está en Suecia: busca en su casa (México)
     assert otro[0]["entrada"]["country"] == "https://listado.mercadolibre.com.mx/"
     with pytest.raises(ErrorFuente):
@@ -98,16 +102,20 @@ def test_entradas_y_lectura_de_resenas():
     from nicho.fuentes.base import ErrorFuente
     productos = [{"fuente_id": "B0AMZ00001", "url": "https://www.amazon.com.mx/dp/B0AMZ00001", "titulo": "Tofflor"},
                  {"fuente_id": "B0AMZ00002", "url": "https://www.amazon.com.mx/dp/B0AMZ00002", "titulo": "Mjuka"}]
-    e = pl.entradas_resenas("amazon", productos, "MX", 100)                          # junglee: UNA corrida, tope 40 por producto
-    assert len(e) == 1 and e[0]["entrada"] == {"productUrls": [{"url": "https://www.amazon.com.mx/dp/B0AMZ00001"},
-                                                                {"url": "https://www.amazon.com.mx/dp/B0AMZ00002"}],
-                                               "maxReviews": 40, "sort": "recent", "includeGdprSensitive": False,
-                                               "scrapeProductDetails": False, "deduplicateRedirectedAsins": True}
-    assert e[0]["max_items"] == 80 and e[0]["max_usd"] == 0.5 and e[0]["etiqueta"] == "reseñas"   # 80 × 0.006 = 0.48 < el mínimo 0.50
+    # junglee en el plan FREE (2026-10-01): UNA corrida POR PRODUCTO (el plan solo lee 1 link por
+    # corrida), tope 10 reseñas por producto (el real del plan; Starter lo sube a 40), 2048 MB.
+    e = pl.entradas_resenas("amazon", productos, "MX", 100)
+    assert len(e) == 2
+    assert e[0]["entrada"] == {"productUrls": [{"url": "https://www.amazon.com.mx/dp/B0AMZ00001"}],
+                               "maxReviews": 10, "sort": "recent", "includeGdprSensitive": False,
+                               "scrapeProductDetails": False, "deduplicateRedirectedAsins": True}
+    assert e[1]["entrada"]["productUrls"] == [{"url": "https://www.amazon.com.mx/dp/B0AMZ00002"}]
+    assert e[0]["max_items"] == 10 and e[0]["max_usd"] == 0.5 and e[0]["peor_usd"] == 0.06 and e[0]["memoria_mb"] == 2048
+    assert e[0]["etiqueta"] == "B0AMZ00001" and e[1]["etiqueta"] == "B0AMZ00002"
     e15 = pl.entradas_resenas("amazon", productos[:1] * 15, "MX", 100)
-    assert e15[0]["max_items"] == 600 and e15[0]["max_usd"] == 3.6
-    e_bajo = pl.entradas_resenas("amazon", productos, "MX", 15)                      # bajo el tope por producto: no se recorta
-    assert e_bajo[0]["entrada"]["maxReviews"] == 15 and e_bajo[0]["max_items"] == 30
+    assert len(e15) == 15 and all(x["max_items"] == 10 and x["max_usd"] == 0.5 and x["peor_usd"] == 0.06 for x in e15)
+    e_bajo = pl.entradas_resenas("amazon", productos, "MX", 5)                      # bajo el tope por producto: no se recorta
+    assert e_bajo[0]["entrada"]["maxReviews"] == 5 and e_bajo[0]["max_items"] == 5 and e_bajo[0]["peor_usd"] == 0.03
     r = [pl.leer_resena("amazon", i) for i in _fixture("amazon_resenas.json")]
     assert r[2] is None
     assert r[0] == {"fuente_id": "RVZW4WM0GUOPL", "texto": "Excelente. Excelente producto, me gustó mucho, cumple con mis expectativas",
@@ -116,7 +124,7 @@ def test_entradas_y_lectura_de_resenas():
     assert "userId" not in r[0] and "userProfileLink" not in r[0]                     # el actor los manda; nunca se leen
     e = pl.entradas_resenas("meli", [{"fuente_id": "MCO123456789", "url": "https://articulo.mercadolibre.com.co/MCO-123456789-p", "titulo": "P"}], "CO", 50)
     assert e == [{"entrada": {"productUrls": ["https://articulo.mercadolibre.com.co/MCO-123456789-p"], "maxReviewsPerProduct": 50, "reviewOrder": "relevance"},
-                  "max_items": 50, "max_usd": 0.08, "etiqueta": "reseñas"}]        # 50 × 0.0015 (plan FREE, verificado 2026-10-01)
+                  "max_items": 50, "max_usd": 0.08, "peor_usd": 0.08, "etiqueta": "reseñas"}]        # 50 × 0.0015 (plan FREE, verificado 2026-10-01)
     r = [pl.leer_resena("meli", i) for i in _fixture("meli_resenas.json")]
     assert r[2] is None and r[0]["fuente_id"] == "rv1" and r[0]["puntuacion"] == 5 and r[0]["producto"] == "MCO123456789"   # sin guion
     assert r[1]["producto"] == "MCO123456789" and r[1]["fecha"] == "2025-01-22"
@@ -209,15 +217,16 @@ def test_entradas_de_walmart_y_aliexpress():
     assert [x["max_items"] for x in e] == [20, 20] and [x["max_usd"] for x in e] == [0.03, 0.03] and e[0]["etiqueta"] == "water bottle time marker"
     e = pl.entradas_busqueda("aliexpress", ["water bottle time marker"], "CO", 20)
     assert e == [{"entrada": {"searchQueries": ["water bottle time marker"], "maxItems": 20, "country": "US", "currency": "USD", "language": "en_US"},
-                  "max_items": 20, "max_usd": 0.01, "etiqueta": "water bottle time marker"}]
+                  "max_items": 20, "max_usd": 0.01, "peor_usd": 0.01, "etiqueta": "water bottle time marker"}]
     productos = [{"fuente_id": "17345973281", "url": None, "titulo": "A"},
                  {"fuente_id": "19948220116", "url": "https://www.walmart.com/ip/x/19948220116", "titulo": "B"}]
     e = pl.entradas_resenas("walmart", productos, "CO", 50)                # sin link también: se arma con el id
     assert e == [{"entrada": {"products": ["https://www.walmart.com/ip/17345973281", "https://www.walmart.com/ip/19948220116"],
-                              "maxReviewsPerProduct": 50, "includeProductSummary": False}, "max_items": 100, "max_usd": 0.1, "etiqueta": "reseñas"}]
+                              "maxReviewsPerProduct": 50, "includeProductSummary": False}, "max_items": 100, "max_usd": 0.1, "peor_usd": 0.1,
+                  "etiqueta": "reseñas"}]
     e = pl.entradas_resenas("aliexpress", [{"fuente_id": "3256806541493299", "url": None, "titulo": "A"}], "CO", 30)
     assert e == [{"entrada": {"productUrls": ["https://www.aliexpress.com/item/3256806541493299.html"], "maxReviewsPerProduct": 30, "language": "en_US"},
-                  "max_items": 30, "max_usd": 0.1, "etiqueta": "reseñas"}]
+                  "max_items": 30, "max_usd": 0.1, "peor_usd": 0.1, "etiqueta": "reseñas"}]
 
 
 def test_otro_mercado_busca_y_trae_resenas_en_su_casa():

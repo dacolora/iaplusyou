@@ -161,7 +161,10 @@ def _fila_producto(cliente, activo_id):
     """Fila `producto` del producto de `activo_id` (o de uno de sus colores);
     {} si no hay."""
     try:
-        return tiendas.por_activo(cliente).get(catalogo_productos.producto_base(activo_id)) or {}
+        # Una lectura por petición en las páginas que pintan muchas tarjetas
+        # (catalogo_productos.lecturas_memorizadas): antes, una por producto.
+        por_activo = catalogo_productos.recordado(("por_activo", cliente), lambda: tiendas.por_activo(cliente))
+        return dict(por_activo.get(catalogo_productos.producto_base(activo_id)) or {})
     except Exception:  # noqa: BLE001 — precio y URL son un extra del guion, nunca lo tumban
         return {}
 

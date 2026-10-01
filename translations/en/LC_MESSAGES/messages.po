@@ -283,6 +283,24 @@ msgid "%(listas)s/%(objetivo)s referentes · %(videos)s videos · %(imagenes)s i
 msgstr "%(listas)s/%(objetivo)s references · %(videos)s videos · %(imagenes)s images"
 
 #, python-format
+msgid ""
+"%(mensaje)s\n"
+"\n"
+"Dónde: %(donde)s\n"
+"Ruta: %(ruta)s\n"
+"Veces: %(veces)s\n"
+"\n"
+"Detalle: %(url)s"
+msgstr ""
+"%(mensaje)s\n"
+"\n"
+"Where: %(donde)s\n"
+"Route: %(ruta)s\n"
+"Times: %(veces)s\n"
+"\n"
+"Details: %(url)s"
+
+#, python-format
 msgid "%(mensaje)s (propuesta #%(id)s aprobada a mano)"
 msgstr "%(mensaje)s (proposal #%(id)s approved by hand)"
 
@@ -433,6 +451,10 @@ msgid "%(n)s comentario(s) nuevos"
 msgstr "%(n)s new comment(s)"
 
 #, python-format
+msgid "%(n)s con 5xx"
+msgstr "%(n)s with 5xx"
+
+#, python-format
 msgid "%(n)s con activo en el catálogo"
 msgstr "%(n)s with an asset in the catalog"
 
@@ -463,6 +485,18 @@ msgstr "%(n)s selected"
 #, python-format
 msgid "%(n)s elegidos"
 msgstr "%(n)s selected"
+
+#, python-format
+msgid "%(n)s en error sin más reintentos"
+msgstr "%(n)s failed with no retries left"
+
+#, python-format
+msgid "%(n)s en la última hora"
+msgstr "%(n)s in the last hour"
+
+#, python-format
+msgid "%(n)s errores viejos borrados."
+msgstr "%(n)s old errors deleted."
 
 #, python-format
 msgid "%(n)s excluidos"
@@ -507,6 +541,10 @@ msgstr "%(n)s photo(s) couldn't be downloaded."
 #, python-format
 msgid "%(n)s ganador(es)"
 msgstr "%(n)s winner(s)"
+
+#, python-format
+msgid "%(n)s hace más de 30 min"
+msgstr "%(n)s for more than 30 min"
 
 #, python-format
 msgid "%(n)s idea(s) aprobada(s)."
@@ -837,6 +875,12 @@ msgid "%(nuevos)s nuevo(s), %(repetidos)s repetido(s)"
 msgstr "%(nuevos)s new, %(repetidos)s duplicate(s)"
 
 #, python-format
+msgid "%(num)d CPU"
+msgid_plural "%(num)d CPU"
+msgstr[0] "%(num)d CPU"
+msgstr[1] "%(num)d CPUs"
+
+#, python-format
 msgid "%(num)d anuncio"
 msgid_plural "%(num)d anuncios"
 msgstr[0] "%(num)d ad"
@@ -873,6 +917,24 @@ msgstr[0] "%(num)d day running"
 msgstr[1] "%(num)d days running"
 
 #, python-format
+msgid "%(num)d entrada, la más nueva primero."
+msgid_plural "%(num)d entradas, la más nueva primero."
+msgstr[0] "%(num)d entry, newest first."
+msgstr[1] "%(num)d entries, newest first."
+
+#, python-format
+msgid "%(num)d error abierto en las últimas 24 h."
+msgid_plural "%(num)d errores abiertos en las últimas 24 h."
+msgstr[0] "%(num)d open error in the last 24 h."
+msgstr[1] "%(num)d open errors in the last 24 h."
+
+#, python-format
+msgid "%(num)d error en 24 h"
+msgid_plural "%(num)d errores en 24 h"
+msgstr[0] "%(num)d error in 24 h"
+msgstr[1] "%(num)d errors in 24 h"
+
+#, python-format
 msgid "%(num)d final"
 msgid_plural "%(num)d finales"
 msgstr[0] "%(num)d final cut"
@@ -893,6 +955,12 @@ msgid "%(num)d llamada del plan de Atria"
 msgid_plural "%(num)d llamadas del plan de Atria"
 msgstr[0] "%(num)d call from the Atria plan"
 msgstr[1] "%(num)d calls from the Atria plan"
+
+#, python-format
+msgid "%(num)d petición"
+msgid_plural "%(num)d peticiones"
+msgstr[0] "%(num)d request"
+msgstr[1] "%(num)d requests"
 
 #, python-format
 msgid "%(num)d pieza planeada"
@@ -981,6 +1049,12 @@ msgid "%(num)s color"
 msgid_plural "%(num)s colores"
 msgstr[0] "%(num)s color"
 msgstr[1] "%(num)s colors"
+
+#, python-format
+msgid "%(num)s error marcado como resuelto."
+msgid_plural "%(num)s errores marcados como resueltos."
+msgstr[0] "%(num)s error marked as resolved."
+msgstr[1] "%(num)s errors marked as resolved."
 
 #, python-format
 msgid "%(num)s experimento mide"
@@ -1409,6 +1483,9 @@ msgstr "3-6, different angles"
 msgid "3. Escucha y genera"
 msgstr "3. Listen and generate"
 
+msgid "5xx"
+msgstr "5xx"
+
 msgid "60 s de música a medida. No nombres artistas, canciones ni sellos: ElevenLabs lo rechaza."
 msgstr "60 s of custom music. Don't name artists, songs, or labels: ElevenLabs rejects it."
 
@@ -1440,6 +1517,10 @@ msgstr "<a href=\"%(url)s\">Meta (agency) →</a> connect Creatv's Business and 
 #, python-format
 msgid "<a href=\"%(url)s\">Referentes →</a> importar el swipe file de copycoders y ver la biblioteca global."
 msgstr "<a href=\"%(url)s\">Swipe file →</a> import copycoders' swipe file and see the global library."
+
+#, python-format
+msgid "<a href=\"%(url)s\">Salud y errores →</a> errores de la plataforma, registros, peticiones lentas, el worker y el servidor."
+msgstr "<a href=\"%(url)s\">Health and errors →</a> platform errors, logs, slow requests, the worker and the server."
 
 #, python-format
 msgid "<em>Generar nuevo token</em>: elige la app de Creatv, caducidad <strong>nunca</strong>, y marca los permisos <code>%(permisos)s</code> (los que la app tenga aprobados; mientras esté en modo desarrollo solo sirven cuentas y Páginas de prueba o de los roles de la app)."
@@ -1508,6 +1589,9 @@ msgstr ""
 msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Experimentos aceptando todos los permisos que pide, y reintenta."
 msgstr "The Meta connection is missing a permission for this: reconnect Meta in Experiments, accepting every permission it asks for, and try again."
 
+msgid "A la vez (máximo)"
+msgstr "At once (peak)"
+
 msgid "A otra velocidad el video va sin su sonido."
 msgstr "At another speed the video plays without its sound."
 
@@ -1531,6 +1615,9 @@ msgstr "Below, in <em>Connect store › Shopify</em>, paste the token along with
 
 msgid "Abajo, en <em>Conectar tienda › WooCommerce</em>, pégalos con la URL de la tienda, que tiene que ir por <code>https://</code>."
 msgstr "Below, in <em>Connect store › WooCommerce</em>, paste them with the store's URL, which has to be over <code>https://</code>."
+
+msgid "Abierto"
+msgstr "Open"
 
 msgid "Abre <a href=\"https://business.facebook.com/settings/system-users\" target=\"_blank\" rel=\"noopener\">Business Manager › Configuración del negocio › Usuarios › Usuarios del sistema</a> y crea uno llamado <strong>creatv</strong> con rol <strong>administrador</strong>."
 msgstr "Open <a href=\"https://business.facebook.com/settings/system-users\" target=\"_blank\" rel=\"noopener\">Business Manager › Business settings › Users › System users</a> and create one called <strong>creatv</strong> with the <strong>admin</strong> role."
@@ -1575,6 +1662,9 @@ msgstr "Boredom"
 
 msgid "Acciones"
 msgstr "Actions"
+
+msgid "Acción"
+msgstr "Action"
 
 msgid "Acción desconocida."
 msgstr "Unknown action."
@@ -1956,10 +2046,6 @@ msgid "Apify %(actor)s: %(n)s resultado(s) aprox."
 msgstr "Apify %(actor)s: about %(n)s result(s)"
 
 #, python-format
-msgid "Apify %(estado)s (corrida %(corrida)s); se guardaron %(n)s resultados."
-msgstr "Apify %(estado)s (run %(corrida)s); %(n)s results were saved."
-
-#, python-format
 msgid "Apify %(estado)s sin resultados (corrida %(corrida)s); revísala en console.apify.com."
 msgstr "Apify %(estado)s with no results (run %(corrida)s); check it at console.apify.com."
 
@@ -1984,12 +2070,20 @@ msgid "Apify no arrancó la corrida (%(codigo)s)."
 msgstr "Apify didn't start the run (%(codigo)s)."
 
 #, python-format
+msgid "Apify no arrancó la corrida: %(motivo)s"
+msgstr "Apify did not start the run: %(motivo)s"
+
+#, python-format
 msgid "Apify no devolvió los ids de la corrida (corrida %(corrida)s, dataset %(dataset)s); revísala en console.apify.com."
 msgstr "Apify didn't return the run ids (run %(corrida)s, dataset %(dataset)s); check it at console.apify.com."
 
 #, python-format
 msgid "Apify no entregó los resultados (%(motivo)s); corrida %(corrida)s, dataset %(dataset)s: revísalos en console.apify.com."
 msgstr "Apify didn't deliver the results (%(motivo)s); run %(corrida)s, dataset %(dataset)s: check them at console.apify.com."
+
+#, python-format
+msgid "Apify no entregó resultados (%(aviso)s); revísalos en console.apify.com."
+msgstr "Apify didn't deliver results (%(aviso)s); check them at console.apify.com."
 
 msgid "Apify no está configurado (falta APIFY_TOKEN)."
 msgstr "Apify isn't set up (APIFY_TOKEN is missing)."
@@ -2188,6 +2282,9 @@ msgstr "This is how they look"
 msgid "Atajos:"
 msgstr "Shortcuts:"
 
+msgid "Atrasadas"
+msgstr "Overdue"
+
 msgid "Atria (Ad Library de Meta)"
 msgstr "Atria (Meta Ad Library)"
 
@@ -2322,6 +2419,9 @@ msgstr "Notice: %(aviso)s"
 msgid "Avisos por correo desactivados."
 msgstr "Email notifications turned off."
 
+msgid "Avisos y errores"
+msgstr "Warnings and errors"
+
 msgid "Baja"
 msgstr "Low"
 
@@ -2344,6 +2444,9 @@ msgstr "Based on: %(anuncios)s"
 
 msgid "Base"
 msgstr "Base"
+
+msgid "Base de datos"
+msgstr "Database"
 
 msgid "Beliefs about self"
 msgstr "Beliefs about self"
@@ -2778,6 +2881,9 @@ msgstr "Layers"
 
 msgid "Cara de frente y sin tapar, producto por debajo de la cara, foto vertical. Las fotos nuevas se hacen en Desde referencias."
 msgstr "Face forward and uncovered, product below the face, vertical photo. New photos are made in From references."
+
+msgid "Carga (1 · 5 · 15 min)"
+msgstr "Load (1 · 5 · 15 min)"
 
 msgid "Carga su prompt e imágenes en Crear › Desde referencias. No genera nada."
 msgstr "Loads its prompt and images into Create › From references. Nothing is generated."
@@ -3334,6 +3440,9 @@ msgstr "You connect Creatv's Business Manager ONCE and assign each project an ad
 msgid "Conexiones"
 msgstr "Connections"
 
+msgid "Conexiones a la base"
+msgstr "Database connections"
+
 msgid "Conexión actual"
 msgstr "Current connection"
 
@@ -3413,6 +3522,9 @@ msgstr "Query"
 
 msgid "Consultas"
 msgstr "Queries"
+
+msgid "Consultas por petición"
+msgstr "Queries per request"
 
 #, python-format
 msgid "Consultas: %(consultas)s"
@@ -3962,6 +4074,9 @@ msgstr "Download document (.md)"
 msgid "Descargar documento de imágenes (.md)"
 msgstr "Download image document (.md)"
 
+msgid "Descargar el archivo"
+msgstr "Download the file"
+
 msgid "Descartada."
 msgstr "Discarded."
 
@@ -4096,6 +4211,12 @@ msgstr "Diagnosis: %(causas)s — next: %(que)s"
 msgid "Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;"
 msgstr "Tell Claude what’s wrong, for example: &quot;clip 3 is 16 seconds long&quot;"
 
+msgid "Dirección"
+msgstr "Path"
+
+msgid "Disco libre"
+msgstr "Free disk"
+
 msgid "Diseñada"
 msgstr "Designed"
 
@@ -4159,6 +4280,9 @@ msgstr "Lasts {s} s."
 msgid "Duración"
 msgstr "Duration"
 
+msgid "Duración media"
+msgstr "Average duration"
+
 msgid "Duración objetivo en segundos (vacío = guion completo)"
 msgstr "Target duration in seconds (empty = full script)"
 
@@ -4176,6 +4300,9 @@ msgstr "Father's Day"
 
 msgid "Días"
 msgstr "Days"
+
+msgid "Dónde"
+msgstr "Where"
 
 msgid ""
 "Dónde sale la ganadora de un experimento (o cualquier final que elijas) como\n"
@@ -4270,6 +4397,10 @@ msgstr "%(pct)s%% of spend went to losing ads: pausing them frees budget for the
 msgid "El %(tipo)s pesa más de %(mb)s MB."
 msgstr "The %(tipo)s is larger than %(mb)s MB."
 
+#, python-format
+msgid "El 95 %% de las peticiones tardó esto o menos (aproximado)"
+msgstr "95%% of the requests took this long or less (approximate)"
+
 msgid "El Buen Fin"
 msgstr "El Buen Fin"
 
@@ -4324,6 +4455,10 @@ msgstr "The Pixel exists but has never fired."
 
 msgid "El Pixel lleva más de 7 días sin disparar."
 msgstr "The Pixel hasn't fired in more than 7 days."
+
+#, python-format
+msgid "El WAL de la base pesa %(peso)s: algo mantiene una lectura abierta y no deja hacer checkpoint."
+msgstr "The database WAL is %(peso)s: something is holding a read open and blocking the checkpoint."
 
 msgid "El acceso fue revocado o expiró"
 msgstr "Access was revoked or expired"
@@ -4795,6 +4930,9 @@ msgstr "The server returned something unexpected. If your session ended, reload 
 
 msgid "El siguiente entra desde la derecha."
 msgstr "The next one slides in from the right."
+
+msgid "El sitio es https pero falta DETRAS_DE_PROXY=1: detrás de nginx la app ve la IP de nginx, no la de cada persona (los límites por IP no sirven)."
+msgstr "The site is https but DETRAS_DE_PROXY=1 is missing: behind nginx the app sees nginx's IP, not each person's (per-IP limits don't work)."
 
 msgid "El sonido de la escena sigue a los clips de video: edita el clip de video."
 msgstr "The scene sound follows the video clips: edit the video clip."
@@ -5325,12 +5463,19 @@ msgstr "Error fetching Triple Whale metrics: %(error)s"
 msgid "Error de red al subir."
 msgstr "Network error while uploading."
 
+#, python-format
+msgid "Error en Creatv: %(tipo)s"
+msgstr "Error in Creatv: %(tipo)s"
+
 msgid "Error:"
 msgstr "Error:"
 
 #, python-format
 msgid "Error: %(detalle)s"
 msgstr "Error: %(detalle)s"
+
+msgid "Errores"
+msgstr "Errors"
 
 msgid "Es demasiado audio para una sola vez: hasta 10 minutos."
 msgstr "That's too much audio at once: up to 10 minutes."
@@ -6453,6 +6598,9 @@ msgstr "Missing FLASK_SECRET_KEY in the server's .env: without it a store's cred
 msgid "Falta FLASK_SECRET_KEY en el .env: sin ella no se puede guardar el token de la agencia."
 msgstr "FLASK_SECRET_KEY is missing from the .env: without it the agency token can't be saved."
 
+msgid "Falta PLATAFORMA_URL en el .env: los enlaces de los correos y el host aceptado no están fijos."
+msgstr "PLATAFORMA_URL is missing from .env: email links and the accepted host are not pinned."
+
 msgid "Falta WAVESPEED_API_KEY en tu .env. Consíguela en wavespeed.ai (API Keys)."
 msgstr "WAVESPEED_API_KEY is missing from your .env. Get it at wavespeed.ai (API Keys)."
 
@@ -7268,6 +7416,18 @@ msgid "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realis
 msgstr "Up to 7 images. From a video it only uses one frame. Very good movement and realism for people. Up to 15 s. The scene sound costs USD 0.028/s more (already included in the estimate)."
 
 #, python-format
+msgid "Hay %(num)d tarea en curso hace más de 30 min."
+msgid_plural "Hay %(num)d tareas en curso hace más de 30 min."
+msgstr[0] "%(num)d task has been running for more than 30 min."
+msgstr[1] "%(num)d tasks have been running for more than 30 min."
+
+#, python-format
+msgid "Hay %(num)d tarea que debía empezar hace más de 10 min: ¿está corriendo el worker?"
+msgid_plural "Hay %(num)d tareas que debían empezar hace más de 10 min: ¿está corriendo el worker?"
+msgstr[0] "%(num)d task should have started more than 10 min ago: is the worker running?"
+msgstr[1] "%(num)d tasks should have started more than 10 min ago: is the worker running?"
+
+#, python-format
 msgid "Hay %(usos)s resultado(s) ya generado(s) con este producto: no se borran, pero dejarán de mostrar su nombre y su foto."
 msgstr "There are %(usos)s result(s) already generated with this product: they won't be deleted, but they'll stop showing its name and photo."
 
@@ -7286,6 +7446,9 @@ msgstr "There's a saved connection but it can't be read (did FLASK_SECRET_KEY ch
 
 msgid "Hay una investigación en curso en este estudio: espera a que termine o cancélala."
 msgstr "There's research in progress on this study: wait for it to finish or cancel it."
+
+msgid "Hechas"
+msgstr "Done"
 
 msgid "Hecho con Creatv Machine"
 msgstr "Made with Creatv Machine"
@@ -7900,10 +8063,6 @@ msgstr "The password must be at least %(minimo)d characters long."
 msgid "La corrección falló."
 msgstr "The correction failed."
 
-#, python-format
-msgid "La corrida de Apify %(estado)s sin resultados (corrida %(corrida)s); revísala en console.apify.com."
-msgstr "The Apify run %(estado)s with no results (run %(corrida)s); check it at console.apify.com."
-
 msgid "La credencial de agencia es ilegible (¿cambió FLASK_SECRET_KEY?): un admin tiene que volver a conectarla."
 msgstr "The agency credential is unreadable (did FLASK_SECRET_KEY change?): an admin has to connect it again."
 
@@ -8087,6 +8246,9 @@ msgstr "Line 1 (the hook) can't be removed."
 #, python-format
 msgid "La misma gente ya lo vio %(n)s veces en promedio."
 msgstr "The same people have already seen it %(n)s times on average."
+
+msgid "La mitad de las peticiones tardó esto o menos (aproximado)"
+msgstr "Half the requests took this long or less (approximate)"
 
 msgid "La moneda va en código de 3 letras (COP, MXN, USD…)."
 msgstr "Currency goes as a 3-letter code (COP, MXN, USD…)."
@@ -8327,6 +8489,9 @@ msgstr "The product's photos were already there."
 msgid "Las fotos que ya tiene pasan a ser ese color; el nuevo color lleva las suyas."
 msgstr "The photos it already has become that color; the new color gets its own."
 
+msgid "Las imágenes y los videos salen de r2.dev: tiene límite de tráfico, no pasa por el CDN de Cloudflare y no es para producción. Conecta un dominio propio al bucket y ponlo en R2_PUBLIC_BASE_URL."
+msgstr "Images and videos are served from r2.dev: it is rate-limited, does not go through Cloudflare's CDN and is not meant for production. Connect a custom domain to the bucket and put it in R2_PUBLIC_BASE_URL."
+
 msgid "Las líneas a quitar tienen que ser números."
 msgstr "The lines to remove have to be numbers."
 
@@ -8339,6 +8504,9 @@ msgstr "The lines don't cover the script: %(partes)s."
 
 msgid "Las marcas deben ser una lista."
 msgstr "Brands must be a list."
+
+msgid "Las más lentas (más de 1 s)"
+msgstr "The slowest (over 1 s)"
 
 msgid "Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí."
 msgstr "Whoever administers the server sets them in the <code>.env</code> file; they're not written from here."
@@ -8356,6 +8524,9 @@ msgid "Leer guion"
 msgstr "Read script"
 
 msgid "Lenta"
+msgstr "Slow"
+
+msgid "Lentas"
 msgstr "Slow"
 
 msgid "Leo el catálogo público de tu tienda: productos, colores con su foto de estudio, precio y URL de compra. No necesita ninguna llave y se actualiza solo cada 6 h. Para pedidos y atribución conecta después con la Admin API en Configuración."
@@ -8556,6 +8727,9 @@ msgstr "What makes them win"
 msgid "Lo que hace perder"
 msgstr "What makes them lose"
 
+msgid "Lo que la app y el worker escriben mientras trabajan (data/logs). Los errores ya vienen agrupados en Salud; aquí está todo, con su contexto."
+msgstr "What the app and the worker write while they work (data/logs). Errors are already grouped in Health; everything is here, with its context."
+
 msgid "Lo que le falta a esta matriz"
 msgstr "What this matrix is missing"
 
@@ -8619,6 +8793,9 @@ msgstr "Emojis don't show in the final video: they're removed when it's produced
 
 msgid "Los emojis no salen en los subtítulos: escribe la palabra con letras."
 msgstr "Emojis don't show in subtitles: type the word with letters."
+
+msgid "Los errores de la app (páginas, worker y trabajos en segundo plano) agrupados, qué tan rápido responde cada página, el worker y el servidor. Un error nuevo te llega por correo si hay SMTP."
+msgstr "The app's errors (pages, worker and background jobs) grouped, how fast each page responds, the worker and the server. A new error is emailed to you if SMTP is set up."
 
 msgid "Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final."
 msgstr "Models perform best up to 15 s; for something longer, generate two pieces and join them later in the final edition."
@@ -8762,6 +8939,9 @@ msgstr "Mark ready to generate"
 msgid "Marcar todas"
 msgstr "Select all"
 
+msgid "Marcar todos como resueltos"
+msgstr "Mark all as resolved"
+
 msgid "Marcar verificado"
 msgstr "Mark verified"
 
@@ -8799,6 +8979,9 @@ msgstr "Improving the image quality"
 
 msgid "Mejorar la calidad al final (+$0.04, solo aplica a fotos)"
 msgstr "Improve quality at the end (+$0.04, photos only)"
+
+msgid "Memoria disponible"
+msgstr "Available memory"
 
 #, python-format
 msgid "Menos de %(n)s impresiones: todavía no dice nada."
@@ -9147,6 +9330,9 @@ msgstr "Cheaper than 2.5"
 msgid "Más opciones de referencias →"
 msgstr "More reference options →"
 
+msgid "Máximo"
+msgstr "Max"
+
 #, python-format
 msgid "Máximo %(n)s familias de formato por campaña."
 msgstr "Maximum %(n)s format families per campaign."
@@ -9206,6 +9392,9 @@ msgstr "Born from the idea “%(idea)s” of the AI evaluation"
 
 msgid "Nada coincide con ese filtro"
 msgstr "Nothing matches that filter"
+
+msgid "Nada con ese filtro en lo más reciente del archivo."
+msgstr "Nothing matches that filter in the most recent part of the file."
 
 msgid "Nada elegido todavía."
 msgstr "Nothing chosen yet."
@@ -9270,6 +9459,9 @@ msgstr "No store connected yet."
 msgid "Ninguno"
 msgstr "None"
 
+msgid "Ningún error en esta lista."
+msgstr "No errors in this list."
+
 #, python-format
 msgid "Ningún núcleo produjo sub-avatares: %(errores)s"
 msgstr "No core produced sub-avatars: %(errores)s"
@@ -9288,6 +9480,9 @@ msgstr "No reference matches those filters."
 
 msgid "Ningún sub-avatar venía completo."
 msgstr "No sub-avatar came complete."
+
+msgid "Nivel"
+msgstr "Level"
 
 msgid "Nivel de conciencia"
 msgstr "Awareness level"
@@ -9426,6 +9621,9 @@ msgstr "There were no pending posts."
 msgid "No hace falta generar imágenes: todas las referencias vienen del Catálogo."
 msgstr "No need to generate images: all the references come from the Catalog."
 
+msgid "No hay SMTP: los avisos de errores nuevos no salen por correo, solo quedan aquí."
+msgstr "There is no SMTP: alerts about new errors are not emailed, they only show up here."
+
 msgid "No hay avatares incompletos que completar."
 msgstr "There are no incomplete avatars to complete."
 
@@ -9498,6 +9696,9 @@ msgstr "There are no products in the catalog: add them in Catalog › Products."
 
 msgid "No hay referentes para sugerir"
 msgstr "There are no references to suggest"
+
+msgid "No hay un respaldo de la base de las últimas 48 h (data/respaldos). Revisa que el worker esté corriendo la tarea diaria db_respaldar."
+msgstr "There is no database backup from the last 48 h (data/respaldos). Check that the worker is running the daily db_respaldar task."
 
 msgid "No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\"."
 msgstr "There's no Meta authorization in progress — start again with “Connect with Meta”."
@@ -9669,6 +9870,9 @@ msgstr "Couldn't read the Business assets: %(error)s"
 #, python-format
 msgid "No pude leer los activos: %(error)s"
 msgstr "Couldn't read the assets: %(error)s"
+
+msgid "No pude leer los errores. ¿Falta correr «alembic upgrade head» en el servidor?"
+msgstr "I couldn't read the errors. Is “alembic upgrade head” still pending on the server?"
 
 msgid "No pude leer tus activos:"
 msgstr "Couldn't read your assets:"
@@ -10674,6 +10878,12 @@ msgstr "Development period"
 msgid "Perú"
 msgstr "Peru"
 
+msgid "Peticiones"
+msgstr "Requests"
+
+msgid "Peticiones por minuto, última hora"
+msgstr "Requests per minute, last hour"
+
 #, python-format
 msgid "Pide un fundido a negro («%(frase)s»); ningún clip puede terminar en negro."
 msgstr "It asks for a fade to black (“%(frase)s”); no clip can end in black."
@@ -10805,6 +11015,9 @@ msgstr "By keyword"
 msgid "Por prioridad"
 msgstr "By priority"
 
+msgid "Por página o ruta (las que más tiempo suman)"
+msgstr "By page or route (the ones that add up the most time)"
+
 msgid "Por qué"
 msgstr "Why"
 
@@ -10917,6 +11130,10 @@ msgstr "Daily budget per country in %(moneda)s (your Meta account's currency; mi
 msgid "Primera fila = nombres de columna. Reconozco: <code>%(columnas)s</code>. Máximo 5 MB."
 msgstr "First row = column names. I recognize: <code>%(columnas)s</code>. 5 MB max."
 
+#, python-format
+msgid "Primera vez: %(fecha)s"
+msgstr "First seen: %(fecha)s"
+
 msgid "Primero Facebook (arriba): Instagram publica a través de la Página."
 msgstr "First Facebook (above): Instagram publishes through the Page."
 
@@ -10963,11 +11180,17 @@ msgstr "Test on Meta"
 msgid "Probar en Meta →"
 msgstr "Test on Meta →"
 
+msgid "Problema"
+msgstr "Problem"
+
 msgid "Procesando (fotogramas y almacenamiento)…"
 msgstr "Processing (frames and storage)…"
 
 msgid "Procesando…"
 msgstr "Processing…"
+
+msgid "Proceso"
+msgstr "Process"
 
 #, python-format
 msgid "Produciendo %(n)s finales… cada una aparece aquí, en Finales, cuando termina."
@@ -11275,6 +11498,9 @@ msgstr "Page %(pagina)s"
 msgid "Página de Facebook"
 msgstr "Facebook Page"
 
+msgid "Página o ruta"
+msgstr "Page or route"
+
 msgid "Páginas"
 msgstr "Pages"
 
@@ -11347,6 +11573,14 @@ msgstr "Let Creatv manage it: follow the steps on the Meta card."
 msgid "Que Wan mejore mi prompt"
 msgstr "Let Wan enhance my prompt"
 
+#, python-format
+msgid "Queda poca memoria (%(libre)s disponibles)."
+msgstr "Memory is running low (%(libre)s available)."
+
+#, python-format
+msgid "Queda poco disco (%(libre)s libres). Borra salidas/ viejas o amplía el disco."
+msgstr "Disk is running low (%(libre)s free). Delete old salidas/ files or grow the disk."
+
 msgid "Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."
 msgstr "It's now in Experiments › Standalone ads — create an experiment with that piece."
 
@@ -11406,6 +11640,9 @@ msgstr "Who holds what"
 
 msgid "Qué agregar"
 msgstr "What to add"
+
+msgid "Qué arreglar"
+msgstr "What to fix"
 
 msgid "Qué desea"
 msgstr "What they want"
@@ -11482,6 +11719,9 @@ msgstr "Re-edits per derivation"
 
 msgid "Reabierto: ya puedes seguir corrigiéndolo con Claude."
 msgstr "Reopened: you can keep fixing it with Claude now."
+
+msgid "Reabrir"
+msgstr "Reopen"
 
 msgid "Reabrir a revisión"
 msgstr "Reopen for review"
@@ -11761,6 +12001,18 @@ msgstr "Regenerate image"
 msgid "Registra tu app de Meta"
 msgstr "Register your Meta app"
 
+msgid "Registro (log.error)"
+msgstr "Log (log.error)"
+
+msgid "Registros"
+msgstr "Logs"
+
+msgid "Registros (logs) →"
+msgstr "Logs →"
+
+msgid "Registros."
+msgstr "Logs."
+
 msgid "Región"
 msgstr "Region"
 
@@ -11802,6 +12054,9 @@ msgstr "Redo (Ctrl/Cmd+Shift+Z)"
 
 msgid "Rehacer desde aquí"
 msgstr "Redo from here"
+
+msgid "Reiniciar los contadores"
+msgstr "Reset the counters"
 
 msgid "Reino Unido"
 msgstr "United Kingdom"
@@ -11895,9 +12150,15 @@ msgstr "Reviews per product"
 msgid "Respaldo en %(ruta)s."
 msgstr "Backup at %(ruta)s."
 
+msgid "Respuestas 5xx"
+msgstr "5xx responses"
+
 #, python-format
 msgid "Restablece tu contraseña de %(plataforma)s"
 msgstr "Reset your password at %(plataforma)s"
+
+msgid "Resuelto"
+msgstr "Resolved"
 
 msgid "Resultado"
 msgstr "Result"
@@ -12032,6 +12293,9 @@ msgstr "Role"
 msgid "Rol inválido: %(rol)s. Opciones: %(opciones)s"
 msgstr "Invalid role: %(rol)s. Options: %(opciones)s"
 
+msgid "Ruta"
+msgstr "Route"
+
 msgid "Rápida"
 msgstr "Fast"
 
@@ -12056,6 +12320,12 @@ msgstr "Output (tokens):"
 
 msgid "Salir"
 msgstr "Log out"
+
+msgid "Salud de la plataforma"
+msgstr "Platform health"
+
+msgid "Salud de la plataforma."
+msgstr "Platform health."
 
 msgid "Salud del sistema"
 msgstr "System health"
@@ -12276,6 +12546,9 @@ msgstr "Silent selfie"
 msgid "Separados por una línea en blanco"
 msgstr "Separated by a blank line"
 
+msgid "Servidor"
+msgstr "Server"
+
 msgid "Sesión cerrada."
 msgstr "Session closed."
 
@@ -12325,6 +12598,9 @@ msgstr ""
 "    paste it, tell it what's wrong, and pick the version you want to use. Nothing generates\n"
 "    from here; each message to Claude has a small cost shown on the button."
 
+msgid "Sigue contando, pero no vuelve a avisar ni a abrirse."
+msgstr "Keeps counting, but never alerts or reopens again."
+
 msgid "Sigue los pasos para registrar tu app y conectar."
 msgstr "Follow the steps to register your app and connect."
 
@@ -12338,6 +12614,9 @@ msgstr "Next: %(paso)s"
 #, python-format
 msgid "Siguiente: %(texto)s →"
 msgstr "Next: %(texto)s →"
+
+msgid "Silenciado"
+msgstr "Muted"
 
 msgid "Silenciar"
 msgstr "Mute"
@@ -12602,6 +12881,9 @@ msgstr "Only the public catalog: products, colors with their photo, prices and p
 #, python-brace-format
 msgid "Solo en {idioma}"
 msgstr "Only in {idioma}"
+
+msgid "Solo errores"
+msgstr "Errors only"
 
 msgid "Solo esta campaña (bórralas para volver a las del sprint)."
 msgstr "Only this campaign (delete them to go back to the sprint's)."
@@ -12997,6 +13279,12 @@ msgstr "Size (of the screen width)"
 msgid "Tarea"
 msgstr "Task"
 
+msgid "Tarea del worker"
+msgstr "Worker task"
+
+msgid "Tareas de las últimas 24 h por tipo"
+msgstr "Tasks in the last 24 h by type"
+
 msgid "Tareas en espera"
 msgstr "Tasks waiting"
 
@@ -13337,6 +13625,9 @@ msgstr "No references yet. Upload the ones that inspire this campaign."
 msgid "Todavía no hay referentes"
 msgstr "No references yet"
 
+msgid "Todavía no hay registro de este proceso. Se escribe en data/logs cuando la app corre en el servidor (no en las pruebas); el worker empieza a escribirlo al reiniciarse con esta versión."
+msgstr "There is no log for this process yet. It is written to data/logs when the app runs on the server (not in tests); the worker starts writing it once it restarts with this version."
+
 msgid "Todavía no hay sprints"
 msgstr "No sprints yet"
 
@@ -13404,6 +13695,9 @@ msgstr "No clear signal yet, good or bad."
 
 msgid "Todo"
 msgstr "All"
+
+msgid "Todo en orden: nada que arreglar ahora."
+msgstr "All good: nothing to fix right now."
 
 msgid "Todo listo."
 msgstr "All set."
@@ -13500,6 +13794,9 @@ msgstr "Total ≈ US$ %(total)s"
 
 msgid "Totales"
 msgstr "Totals"
+
+msgid "Trabajo en segundo plano"
+msgstr "Background job"
 
 msgid "Trabajo interno de Creatv sobre la biblioteca de referentes: importaciones, barridos globales, pruebas — no es de ningún proyecto"
 msgstr "Creatv's internal work on the swipe file library: imports, global sweeps, tests — not part of any project"
@@ -13619,6 +13916,9 @@ msgstr "Getting references; they'll show up in “My sweeps” as it moves along
 #, python-format
 msgid "Trayendo… %(traidos)s/%(tope)s."
 msgstr "Getting… %(traidos)s/%(tope)s."
+
+msgid "Traza y detalle"
+msgstr "Traceback and details"
 
 msgid "Traídas"
 msgstr "Fetched"
@@ -14167,6 +14467,9 @@ msgstr "Go to “API keys” › “Create key”, give it a name (for example �
 msgid "Ve a «Keys» › «Add key», elige alcance «API» y copia la llave."
 msgstr "Go to “Keys” › “Add key”, choose scope “API” and copy the key."
 
+msgid "Veces"
+msgstr "Times"
+
 msgid "Velocidad"
 msgstr "Speed"
 
@@ -14477,6 +14780,10 @@ msgstr "Send your message again whenever you like."
 msgid "Vuelves a conectar cada 60 días."
 msgstr "You reconnect every 60 days."
 
+#, python-format
+msgid "WAL: %(peso)s"
+msgstr "WAL: %(peso)s"
+
 msgid "Wan 2.7 Video Edit"
 msgstr "Wan 2.7 Video Edit"
 
@@ -14500,6 +14807,9 @@ msgstr "WaveSpeed is still working on prediction %(id)s; try again in a few minu
 msgid "WaveSpeed sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."
 msgstr "WaveSpeed is still working: we keep waiting for the same video, without paying again."
 
+msgid "Web (páginas)"
+msgstr "Web (pages)"
+
 msgid "What are other solutions they have tried and failed at?"
 msgstr "What are other solutions they have tried and failed at?"
 
@@ -14518,6 +14828,12 @@ msgstr "WooCommerce"
 
 msgid "WooCommerce, paso a paso"
 msgstr "WooCommerce, step by step"
+
+msgid "Worker (tareas)"
+msgstr "Worker (tasks)"
+
+msgid "Worker y cola"
+msgstr "Worker and queue"
 
 #, python-format
 msgid "Y %(n)s anuncio(s) más con poco gasto que no se muestran."
@@ -14947,6 +15263,9 @@ msgstr "barbecue"
 msgid "aspecto %(aspecto)s, se pedía %(pedido)s"
 msgstr "aspect %(aspecto)s, %(pedido)s was requested"
 
+msgid "atendiéndose ahora"
+msgstr "being served now"
+
 #, python-format
 msgid "atribución %(atribucion)s"
 msgstr "attribution %(atribucion)s"
@@ -15124,6 +15443,9 @@ msgstr "purchases · ROAS %(roas)s"
 msgid "con 3 personas en cuadro (2 con calzado puesto), edita bien a la más prominente pero deja a la segunda con su calzado original, incluso pidiéndole explícitamente contar y editar a todas. El mejor de los 3 disponibles hoy, no perfecto"
 msgstr "with 3 people in frame (2 wearing shoes), it edits the most prominent one well but leaves the second one with their original footwear, even when explicitly asked to count and edit everyone. The best of the 3 available today, not perfect"
 
+msgid "con avisos"
+msgstr "with warnings"
+
 msgid "con error"
 msgstr "with error"
 
@@ -15272,6 +15594,13 @@ msgid "cálida, nocturna, luces"
 msgstr "warm, nighttime, lights"
 
 #, python-format
+msgid "data/logs · Python %(v)s"
+msgstr "data/logs · Python %(v)s"
+
+msgid "data/respaldos (diario)"
+msgstr "data/respaldos (daily)"
+
+#, python-format
 msgid "dataset %(dataset)s no leído (%(motivo)s)"
 msgstr "dataset %(dataset)s not read (%(motivo)s)"
 
@@ -15286,11 +15615,22 @@ msgid "de %(planeadas)s"
 msgstr "of %(planeadas)s"
 
 #, python-format
+msgid "de %(total)s"
+msgstr "of %(total)s"
+
+#, python-format
+msgid "de %(total)s · la app usa %(app)s"
+msgstr "of %(total)s · the app uses %(app)s"
+
+#, python-format
 msgid "de %(valor)s/día"
 msgstr "of %(valor)s/day"
 
 msgid "de los pedidos"
 msgstr "of orders"
+
+msgid "de más de 1 s (las últimas 50)"
+msgstr "over 1 s (the last 50)"
 
 msgid "de un cliente (socio)"
 msgstr "a client's (partner)"
@@ -15298,6 +15638,9 @@ msgstr "a client's (partner)"
 #, python-format
 msgid "de «%(estudio)s»"
 msgstr "from “%(estudio)s”"
+
+msgid "debían empezar hace más de 10 min"
+msgstr "should have started more than 10 min ago"
 
 msgid "decidido"
 msgstr "decided"
@@ -15370,6 +15713,10 @@ msgstr "since %(mes)s 1"
 
 msgid "desde el inicio"
 msgstr "since the start"
+
+#, python-format
+msgid "desde que arrancó el proceso web (%(fecha)s); se reinician con cada despliegue"
+msgstr "since the web process started (%(fecha)s); they reset on every deploy"
 
 msgid "deseo"
 msgstr "desire"
@@ -15606,6 +15953,9 @@ msgstr "error"
 
 msgid "error desconocido"
 msgstr "unknown error"
+
+msgid "errores en 24 h"
+msgstr "errors in 24 h"
 
 msgid "escalado"
 msgstr "scaling"
@@ -15888,6 +16238,9 @@ msgstr ""
 "  were provider rejections (error 400 or insufficient credits), where the model\n"
 "  never ran and so was never billed."
 
+msgid "hay problemas"
+msgstr "there are problems"
+
 msgid "hecho"
 msgstr "done"
 
@@ -15896,6 +16249,9 @@ msgstr "built specifically to replace an element in a real video, without even n
 
 msgid "herramientas para otra cosa (retakes de un plano, lip-sync/diálogo, extender el encuadre), no para reemplazar un objeto en el video"
 msgstr "tools for something else (shot retakes, lip-sync/dialogue, extending the frame), not for replacing an object in the video"
+
+msgid "hilos de gunicorn ocupados en el pico"
+msgstr "gunicorn threads busy at the peak"
 
 msgid "historia"
 msgstr "story"
@@ -16010,6 +16366,9 @@ msgstr "Italian"
 msgid "la consciencia"
 msgstr "awareness"
 
+msgid "la cuenta llegó a un límite de su plan"
+msgstr "the account reached a limit of its plan"
+
 msgid "la estructura de la referencia, más libre y con la guía de tu marca"
 msgstr "the reference's structure, freer and with your brand guide"
 
@@ -16092,6 +16451,12 @@ msgstr "ready to generate"
 
 msgid "lo de este mes, proyecto por proyecto"
 msgstr "this month's numbers, project by project"
+
+msgid "lo grave primero"
+msgstr "most serious first"
+
+msgid "lo que ve el proceso web en esta máquina"
+msgstr "what the web process sees on this machine"
 
 msgid "lo usa la próxima versión"
 msgstr "the next version uses it"
@@ -16428,6 +16793,12 @@ msgstr "loser"
 msgid "perdió"
 msgstr "lost"
 
+msgid "peticiones"
+msgstr "requests"
+
+msgid "peticiones en la última hora"
+msgstr "requests in the last hour"
+
 msgid "pies fríos en casa"
 msgstr "cold feet at home"
 
@@ -16464,6 +16835,10 @@ msgstr "price not available"
 
 msgid "presencia marca"
 msgstr "brand presence"
+
+#, python-format
+msgid "prestadas ahora / del pool · %(n)s hilos"
+msgstr "checked out now / in the pool · %(n)s threads"
 
 msgid "presupuesto"
 msgstr "budget"
@@ -16805,6 +17180,9 @@ msgstr "confident, British"
 msgid "seleccionando"
 msgstr "selecting"
 
+msgid "si una tarea espera más de 10 min para empezar, el worker no está corriendo"
+msgstr "if a task waits more than 10 min to start, the worker is not running"
+
 msgid "sin Instagram vinculado"
 msgstr "no Instagram linked"
 
@@ -17038,6 +17416,9 @@ msgstr "text"
 msgid "texto para %(plataformas)s de la pieza %(pieza)s"
 msgstr "text for %(plataformas)s of piece %(pieza)s"
 
+msgid "texto, tarea, proyecto…"
+msgstr "text, task, project…"
+
 msgid "tienda"
 msgstr "store"
 
@@ -17064,6 +17445,9 @@ msgstr "results haven't been pulled yet"
 
 msgid "todo el experimento"
 msgstr "the whole experiment"
+
+msgid "todo en orden"
+msgstr "all good"
 
 msgid "todos"
 msgstr "all"
@@ -17097,6 +17481,9 @@ msgstr "a single system-user token, encrypted on the server; it never comes back
 msgid "una por línea; con el link de su Ad Library si lo tienes"
 msgstr "one per line; with its Ad Library link if you have it"
 
+msgid "uno por sitio donde pasa; «Resuelto» vuelve a abrirse solo si el error pasa otra vez"
+msgstr "one per place where it happens; “Resolved” reopens on its own only if the error happens again"
+
 #, python-brace-format
 msgid "unos {n} minutos por destino"
 msgstr "about {n} minutes per market"
@@ -17110,6 +17497,10 @@ msgstr "used in %(n)s"
 
 msgid "usuario del sistema"
 msgstr "system user"
+
+#, python-format
+msgid "usuario: %(u)s"
+msgstr "user: %(u)s"
 
 msgid "uuid, solo si ya lo creaste en el panel de Higgsfield"
 msgstr "uuid, only if you already created it in the Higgsfield panel"
@@ -17514,6 +17905,9 @@ msgstr "Mark %(usuario)s as verified without them opening the email link?"
 msgid "¿Marcar el sprint como listo para generar aunque falten referentes?"
 msgstr "Mark the sprint as ready to generate even though references are missing?"
 
+msgid "¿Marcar todos los abiertos como resueltos? Los que vuelvan a pasar se reabren solos."
+msgstr "Mark all open errors as resolved? The ones that happen again reopen on their own."
+
 msgid "¿No sabes qué escribir?"
 msgstr "Not sure what to write?"
 
@@ -17633,6 +18027,9 @@ msgstr "Last import:"
 msgid "Última terminada"
 msgstr "Last one done"
 
+msgid "Última vez"
+msgstr "Last seen"
+
 msgid "Últimas sincronizaciones"
 msgstr "Latest syncs"
 
@@ -17643,6 +18040,9 @@ msgstr "Last changed: %(fecha)s"
 #, python-format
 msgid "Último error: %(error)s"
 msgstr "Last error: %(error)s"
+
+msgid "Último respaldo"
+msgstr "Last backup"
 
 #, python-format
 msgid "Últimos %(n)s días"
@@ -17684,6 +18084,9 @@ msgstr "← As an image"
 
 msgid "← Final edition"
 msgstr "← Final edition"
+
+msgid "← Volver a Salud"
+msgstr "← Back to Health"
 
 msgid "← Volver al panel"
 msgstr "← Back to the panel"

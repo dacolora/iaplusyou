@@ -1,0 +1,18 @@
+[Unit]
+Description=Creatv Machine web (gunicorn, dashboard.py)
+After=network.target
+
+[Service]
+User=deploy
+WorkingDirectory=/home/deploy/iaplusyou
+Environment=TZ=America/Bogota
+EnvironmentFile=/home/deploy/iaplusyou/.env
+ExecStart=/home/deploy/iaplusyou/venv/bin/gunicorn -c deploy/gunicorn.conf.py dashboard:app
+Restart=always
+RestartSec=5
+# Un despliegue espera a que terminen las peticiones en curso (graceful_timeout).
+KillSignal=SIGTERM
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

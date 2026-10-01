@@ -45,7 +45,7 @@ def test_proyecto_entero_en_ingles_sin_idioma_guardado(produccion, usuario, rol,
     assert not fugas, fugas[:20]
 
 
-@pytest.mark.parametrize("url", ["/panel", "/admin/meta", "/admin/referentes"])
+@pytest.mark.parametrize("url", ["/panel", "/admin/meta", "/admin/referentes", "/admin/salud", "/admin/salud/registros"])
 def test_paginas_de_admin_en_ingles_sin_idioma_guardado(produccion, url):
     fugas = espanol_visible(html_de(_sesion(produccion, "admin", "admin", None), url))
     assert not fugas, (url, fugas[:15])
