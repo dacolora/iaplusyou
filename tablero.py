@@ -437,14 +437,21 @@ def _productos_en_prueba_sin_experimento(cliente, exps):
     """Productos `en_prueba` (no archivados) que ningún experimento abierto
     está probando. Una pieza apunta a su sesión de Crear por el prefijo de
     `legado_id` (`<cf_id>` o `<cf_id>__<idioma>_<pais>`) y la sesión guarda
-    en `productos_ids` el id del activo o su nombre visible — así que un
-    producto está «en experimento» si su `activo_catalogo_id` o su `nombre`
-    aparece en los `productos_ids` de alguna sesión con pieza en un
-    experimento no cerrado. Todo con diccionarios: una pasada por sesiones,
-    una por piezas, una por productos."""
+    en `productos_ids` el id del activo o su nombre visible — el de un COLOR
+    («Original — Pink») cuando el producto tiene colores. Un producto está
+    «en experimento» si alguna de sus claves (`catalogo_productos.claves_de`:
+    el pid, cada `pid/color` y sus nombres; más el `activo_catalogo_id` y el
+    `nombre` de la fila), en minúsculas (casefold), aparece en los
+    `productos_ids` de alguna sesión con pieza en un experimento no cerrado.
+    Todo con diccionarios: una pasada por sesiones, una por piezas, una por
+    productos (y una por el catálogo en disco solo si hay algo que comparar)."""
+    import catalogo_productos  # noqa: PLC0415 — lee el catálogo en disco
     import creative_flow  # noqa: PLC0415 — arrastra el resto del pipeline de Crear
     import tiendas  # noqa: PLC0415
 
+    en_prueba = [p for p in tiendas.productos(cliente) if p.get("en_prueba")]
+    if not en_prueba:
+        return []
     cf_usados = {str(pz.get("legado_id") or "").split("__")[0]
                  for ex in exps if ex["estado"] != "cerrado" for pz in ex.get("piezas") or []}
     cf_usados.discard("")
@@ -452,11 +459,22 @@ def _productos_en_prueba_sin_experimento(cliente, exps):
     if cf_usados:
         for cf_id, entry in creative_flow.cargar(cliente).items():
             if cf_id in cf_usados:
-                referenciados |= {str(x) for x in (entry.get("productos_ids") or []) if x}
-    return [p for p in tiendas.productos(cliente)
-            if p.get("en_prueba")
-            and str(p.get("activo_catalogo_id") or "") not in referenciados
-            and str(p.get("nombre") or "") not in referenciados]
+                referenciados |= {str(x).casefold() for x in (entry.get("productos_ids") or []) if x}
+    if not referenciados:
+        return en_prueba
+    claves_por_pid = {p["id"]: catalogo_productos.claves_de(p)
+                      for p in catalogo_productos.listar_productos(cliente, "producto")}
+    sueltos = []
+    for p in en_prueba:
+        activo = str(p.get("activo_catalogo_id") or "")
+        claves = {activo.casefold(), str(p.get("nombre") or "").casefold()}
+        del_catalogo = claves_por_pid.get(catalogo_productos.producto_base(activo)) if activo else None
+        if del_catalogo:
+            claves |= del_catalogo["ids"] | del_catalogo["nombres"]
+        claves.discard("")
+        if not claves & referenciados:
+            sueltos.append(p)
+    return sueltos
 
 
 def _alertas_ganadoras_sin_publicar(cliente, exps, out):

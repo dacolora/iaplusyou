@@ -420,6 +420,38 @@ def test_alertas_tienda_rota_pixel_y_productos(base_temporal, sin_red):
     assert len(px) == 1 and "no tiene Pixel" in px[0]["texto"]
 
 
+def test_alerta_productos_cuenta_los_colores_del_producto(base_temporal, sin_red, tmp_path):
+    """Revisión final (catálogo por colores): Crear guarda en `productos_ids`
+    el NOMBRE del color («Original — Pink»), no el del producto; un producto
+    en prueba cuyo color está en un experimento corriendo NO debe alertar."""
+    import catalogo_productos
+    import creative_flow
+    import experimentos as ex
+    import tablero
+    import tiendas
+    sin_red.setattr(catalogo_productos, "BASE_DIR", str(tmp_path))
+    carpeta = tmp_path / "clientes" / "acme" / "productos" / "original"
+    for color in ("pink", "beige"):
+        (carpeta / color).mkdir(parents=True)
+        (carpeta / color / "01.jpg").write_bytes(b"\xff\xd8\xff\xe0fake-jpg")
+    catalogo_productos.guardar_meta("acme", {"original": {
+        "nombre": "Original", "variantes": {
+            "pink": {"nombre": "Original — Pink", "fuente_id": "v1"},
+            "beige": {"nombre": "Original — Beige", "fuente_id": "v2"}}}})
+    fila = tiendas.upsert_producto("acme", "shopify", "123", {"nombre": "Original"})
+    tiendas.marcar_producto("acme", fila, en_prueba=True, activo_catalogo_id="original")
+    creative_flow.crear("acme", [], ["Original — Pink"], [], "abrazo", 15, "cálido", "A", legado_id="cf_1")
+
+    def tipos():
+        return [x["tipo"] for x in tablero.alertas("acme", ahora_iso=AHORA)]
+
+    assert "productos_sin_experimento" in tipos()          # sin experimento: alerta
+    eid = _experimento(base_temporal, "Pink")
+    ep = _pieza_en(base_temporal, eid, legado="cf_1__es_CO")
+    ex.snapshot(ep, {"gasto": 1}, tomado_en="2026-09-16T09:30:00")
+    assert "productos_sin_experimento" not in tipos()      # su color está en un experimento corriendo
+
+
 # ---------- csv_mes ----------
 
 def test_csv_mes_cabecera_y_fila(base_temporal, sin_red):
