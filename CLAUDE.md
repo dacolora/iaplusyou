@@ -601,6 +601,13 @@ tarea `voz_propia_crear` (`max_intentos=1`, job `<cliente>__voz_propia`): clonar
 obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripción (US$ 3,00); el gasto (tipo
 `voz_propia`) se registra apenas fal responde y la tarea ESTRENA la voz leyendo su muestra, porque MiniMax borra
 una voz sin uso real en 7 días (la vista previa no cuenta). En el formulario una voz propia es `vp:<id>`.
+Desde 2026-10-01 (spec `docs/superpowers/specs/2026-10-01-mis-voces-en-final-edition-design.md`) Mis voces
+también narran finales: grupo «Mis voces» en el selector «Voz» de «Producir finales» (`mis_voces_fe`, solo
+valor y nombre), `fe_producir` rechaza una voz propia ajena o borrada sin encolar, `insumos.voz_bloque` (y el
+legado `voz._sintetizar_bloque`) la leen con `voces_propias.sintetizar` (MiniMax, la estrena) con caché por
+`voice_id`, la receta del borrador lleva `vp:<id>:<voice_id>`, la capa `voz` anota `fal/minimax`
+(`final_edition.proveedor_voz`) y una variante de gancho conserva la voz propia de la original
+(`final_edition.voz_variante_hook`). Mismo precio por carácter que ElevenLabs.
 
 Fuera: efectos, subtítulos, usar el audio en
 un video o el editor, ElevenLabs v3.
