@@ -12,7 +12,7 @@
 import { FORMATOS } from "./formatos.js";
 import { etiquetaClip, nombreTransicion } from "./escala.js";
 import {
-  cambiaPorDestino, FUENTES, ID_SONIDO, MEZCLAS, sincronizarSonido, TRANSICIONES, VELOCIDADES,
+  cambiaPorDestino, esVozDeGuion, FUENTES, ID_SONIDO, MEZCLAS, sincronizarSonido, TRANSICIONES, VELOCIDADES,
 } from "./operaciones.js";
 import * as operaciones from "./operaciones.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
@@ -335,12 +335,14 @@ function modeloImagen(doc, { clip }, materiales) {
 // D10: «Suena en» — en qué idioma habla una voz (`idioma` del clip; sin él,
 // suena en todos los destinos). Las opciones: el idioma que ya tiene, el del
 // destino que se ve (si es otro) y «Todos los idiomas» (valor ""). La voz del
-// guion (`por_destino`) ya se ajusta sola a cada país: no lo lleva, ni la
-// música ni un efecto (no dicen nada en un idioma).
+// guion (`bloque` o `por_destino`) ya se ajusta sola a cada país: no lo lleva
+// — al sumar un destino la vía automática le pone `por_destino`, y un
+// `idioma` dejaría fuera la voz pagada del otro país —; ni la música ni un
+// efecto (no dicen nada en un idioma).
 const IDIOMA_RE = /^[a-z]{2}$/;
 
 function suenaEn(clip, destino, nombresIdioma) {
-  if (clip.rol_audio !== "voz" || cambiaPorDestino(clip)) return null;
+  if (clip.rol_audio !== "voz" || cambiaPorDestino(clip) || esVozDeGuion(clip)) return null;
   const propio = IDIOMA_RE.test(clip.idioma ?? "") ? clip.idioma : null;
   const delDestino = String(destino ?? "").split("_")[0];
   const idiomas = [...new Set([propio, IDIOMA_RE.test(delDestino) ? delDestino : null].filter(Boolean))];

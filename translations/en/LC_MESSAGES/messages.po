@@ -1735,6 +1735,10 @@ msgstr "Add “{nombre}” to the edit"
 msgid "Agregar «{nombre}» como música desde el cabezal"
 msgstr "Add “{nombre}” as music from the playhead"
 
+#, python-brace-format
+msgid "Agregar «{nombre}» como voz desde el cabezal"
+msgstr "Add “{nombre}” as a voice from the playhead"
+
 msgid "Agrupando deseos"
 msgstr "Grouping desires"
 
@@ -3645,6 +3649,9 @@ msgstr "Create and build campaigns →"
 
 msgid "Crear y usar"
 msgstr "Create and use"
+
+msgid "Crear › Audios"
+msgstr "Create › Audios"
 
 msgid "Creas una app en developers.facebook.com y la pasas a modo Live."
 msgstr "You create an app at developers.facebook.com and switch it to Live mode."
@@ -8018,6 +8025,10 @@ msgstr "The voice"
 #, python-brace-format
 msgid "La voz dura más que lo que queda del video: quedó de {tiempo}."
 msgstr "The voice is longer than what's left of the video: it was cut to {tiempo}."
+
+#, python-brace-format
+msgid "La voz habla {idioma}: quedó sonando en todos los idiomas. Usa «Suena en» para dejarla solo en uno."
+msgstr "The voice speaks {idioma}: it now plays in all languages. Use “Plays in” to keep it in just one."
 
 msgid "La voz se ajusta sola a cada país."
 msgstr "The voice adjusts itself to each country."
@@ -12673,8 +12684,8 @@ msgstr "Finish or close first: %(partes)s"
 msgid "Terminó con error."
 msgstr "Finished with an error."
 
-msgid "Terminó una voz que se pidió en otra pestaña: escribe el mismo texto y agrégala gratis."
-msgstr "A voice requested in another tab is done: write the same text and add it for free."
+msgid "Terminó la voz que se estaba creando: escribe el mismo texto y agrégala gratis."
+msgstr "The voice that was being created is done: write the same text and add it for free."
 
 msgid "Textil de hogar (cobija, manta, cojín)"
 msgstr "Home textile (blanket, throw, cushion)"

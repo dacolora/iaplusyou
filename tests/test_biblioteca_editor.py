@@ -212,12 +212,104 @@ def test_grabacion_ffprobe_roto_tambien_es_no_pude_leer(entorno, monkeypatch):
         entorno.guardar_grabacion("acme", _Archivo("rota.webm", b"x"))
 
 
-def test_grabacion_mas_de_cinco_minutos_se_rechaza(entorno, monkeypatch):
+class _FfmpegFalso:
+    """ffmpeg falso: anota los argumentos y escribe la salida (el último)."""
+    def __init__(self):
+        self.llamadas = []
+
+    def __call__(self, args, timeout=None):
+        self.llamadas.append(list(args))
+        with open(args[-1], "wb") as f:
+            f.write(b"MP3")
+
+    def tope(self, i=0):
+        """El `-t` (segundos) de la llamada i, o None."""
+        a = self.llamadas[i]
+        return float(a[a.index("-t") + 1]) if "-t" in a else None
+
+
+def test_grabacion_de_seis_minutos_con_duracion_se_rechaza_antes_de_transcodificar(entorno, monkeypatch):
+    """Fix round 1: lo que se rechaza es la ENTRADA de más de 5 min + 2 s; si
+    ffprobe la dice (m4a, wav…), ni se transcodifica."""
+    ff = _FfmpegFalso()
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json",
+                        lambda path: {"streams": [{"codec_type": "audio"}], "format": {"duration": "360.0"}})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    with pytest.raises(entorno.SubidaInvalida, match="5 minutos"):
+        entorno.guardar_grabacion("acme", _Archivo("larga.m4a", b"x"))
+    assert ff.llamadas == []
+
+
+def test_grabacion_de_cinco_minutos_y_poco_se_recorta_y_entra(entorno, monkeypatch):
+    """Fix round 1: el navegador la corta sola a los 5 min con un reloj de
+    250 ms (se pasa unos ms): con duración conocida dentro del margen se
+    transcodifica con `-t 300` y entra, nunca con más de 5 min."""
+    ff = _FfmpegFalso()
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json",
+                        lambda path: {"streams": [{"codec_type": "audio", "duration": "300.4"}], "format": {}})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 300.03)     # el relleno del mp3
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.m4a", b"x"))
+    assert m["duracion_ms"] == 300000
+    assert len(ff.llamadas) == 1 and ff.tope(0) == 300.0
+
+
+def test_grabacion_sin_duracion_en_la_entrada_se_mide_y_se_recorta(entorno, monkeypatch):
+    """El .webm de MediaRecorder no trae duración: se transcodifica con el tope
+    + margen, se mide el mp3 y, si pasa de 5 min, se recorta a 5 min."""
+    ff = _FfmpegFalso()
     monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
-    monkeypatch.setattr(entorno.cortes, "ffmpeg", lambda args: open(args[-1], "wb").write(b"MP3"))
-    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 301.0)
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    duraciones = iter([300.4, 300.0])
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: next(duraciones))
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"))
+    assert m["duracion_ms"] == 300000
+    assert len(ff.llamadas) == 2
+    assert 302.0 < ff.tope(0) <= 303.0                     # nunca transcodifica media hora
+    assert ff.tope(1) == 300.0 and "copy" in ff.llamadas[1]
+
+
+def test_grabacion_sin_duracion_en_la_entrada_y_larga_se_rechaza(entorno, monkeypatch):
+    ff = _FfmpegFalso()
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 302.5)       # cortada en el tope: era más larga
     with pytest.raises(entorno.SubidaInvalida, match="5 minutos"):
         entorno.guardar_grabacion("acme", _Archivo("larga.webm", b"x"))
+    assert len(ff.llamadas) == 1
+
+
+def test_grabacion_corta_no_se_recorta(entorno, monkeypatch):
+    ff = _FfmpegFalso()
+    monkeypatch.setattr(entorno.cortes, "ffprobe_json", lambda path: {"streams": [{"codec_type": "audio"}]})
+    monkeypatch.setattr(entorno.cortes, "ffmpeg", ff)
+    monkeypatch.setattr(entorno.cortes, "duracion", lambda path: 12.3)
+    m = entorno.guardar_grabacion("acme", _Archivo("audio.webm", b"x"))
+    assert m["duracion_ms"] == 12300 and len(ff.llamadas) == 1
+
+
+@pytest.mark.slow
+@_sin_ffmpeg
+def test_grabacion_real_de_cinco_minutos_y_poco_entra_y_una_de_seis_no(entorno, tmp_path):
+    """Con ffmpeg de verdad: un .webm opus SIN duración en la cabecera (como el
+    de MediaRecorder: escrito a un tubo, sin poder volver atrás) de 5:00,4
+    entra recortado a 5 min; un .wav de 6 min se rechaza."""
+    webm = str(tmp_path / "grab.webm")
+    with open(webm, "wb") as salida:
+        r = subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+                            "-i", "sine=frequency=440:duration=300.4:sample_rate=16000", "-c:a", "libopus",
+                            "-b:a", "16k", "-f", "webm", "pipe:1"], stdout=salida)
+    if r.returncode != 0:
+        pytest.skip("el ffmpeg local no trae libopus")
+    with open(webm, "rb") as f:
+        m = entorno.guardar_grabacion("acme", _Archivo("grabacion.webm", f.read()))
+    assert 299000 <= m["duracion_ms"] <= 300000
+    wav = str(tmp_path / "larga.wav")
+    subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                    "-i", "sine=frequency=440:duration=360:sample_rate=8000", wav], check=True)
+    with open(wav, "rb") as f:
+        with pytest.raises(entorno.SubidaInvalida, match="5 minutos"):
+            entorno.guardar_grabacion("acme", _Archivo("larga.wav", f.read()))
 
 
 def test_grabacion_respeta_la_cuota(entorno, monkeypatch):

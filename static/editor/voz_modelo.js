@@ -20,6 +20,15 @@ export const FORMATOS_GRABACION = [["audio/webm;codecs=opus", ".webm"], ["audio/
 // Tope de una grabación: 5 minutos (biblioteca.MAX_GRABACION_MS).
 export const MAX_GRABACION_MS = 300000;
 
+// El navegador la corta sola UN segundo antes del tope: el reloj pregunta cada
+// 250 ms y se pasaría unos ms (fix round 1; el servidor además recorta lo que
+// se pase por menos de 2 s, biblioteca.MARGEN_GRABACION_MS).
+export const MARGEN_CORTE_MS = 1000;
+
+export function corteGrabacion(maxMs = MAX_GRABACION_MS) {
+  return Math.max(0, Number(maxMs) - MARGEN_CORTE_MS);
+}
+
 // `esSoportado`: MediaRecorder.isTypeSupported (o null si no existe).
 export function elegirGrabacion(esSoportado) {
   if (typeof esSoportado !== "function") return null;
@@ -136,6 +145,18 @@ export function firmaPedido({ texto = "", voz = "", velocidad = "", idioma = "" 
   return JSON.stringify([limpio, String(voz ?? ""), String(velocidad ?? ""), String(idioma ?? "")]);
 }
 
+// En qué idioma suena una voz que entra (D10, fix round 1): con el del
+// destino que se ve SOLO si la voz habla ese idioma (`idiomaVoz`); si habla
+// otro, sin idioma (suena en todos) y `habla` dice cuál, para avisarlo. Una
+// grabación no dice su idioma: el del destino. Sin destino, sin etiqueta.
+export function idiomaDeVoz(idiomaVoz, destino) {
+  const delDestino = String(destino ?? "").split("_")[0];
+  if (!IDIOMA_RE.test(delDestino)) return { idioma: null, habla: null };
+  const habla = IDIOMA_RE.test(String(idiomaVoz ?? "")) ? idiomaVoz : null;
+  if (habla && habla !== delDestino) return { idioma: null, habla };
+  return { idioma: delDestino, habla: null };
+}
+
 // ---- Retomar un trabajo si la página se recarga ----
 
 // El job_id de la voz es uno por edición: el sello (la hora del 202) dice de
@@ -145,17 +166,19 @@ const RELOJ_ADELANTADO_MS = 60 * 1000;
 const CLAVE_VOZ_RE = /^[0-9a-f]{64}$/;
 const IDIOMA_RE = /^[a-z]{2}$/;
 
-// Lo guardado (ya leído del almacenamiento): {clave, idioma} si es de ese
-// trabajo, tiene su forma y su sello es reciente; si no, null. `idioma` es el
-// del destino que se veía (o null: la voz suena en todos).
+// Lo guardado (ya leído del almacenamiento): {clave, idioma, habla} si es de
+// ese trabajo, tiene su forma y su sello es reciente; si no, null. `idioma` es
+// el del clip (idiomaDeVoz: null = suena en todos) y `habla`, el de la voz
+// cuando no es el del destino (para avisarlo).
 export function encargoVozGuardado(valor, job, ahoraMs = Date.now()) {
   if (!valor || typeof valor !== "object" || valor.job !== job) return null;
   const sello = Number(valor.sello);
   if (!Number.isFinite(sello) || ahoraMs - sello > ENCARGO_VOZ_MAX_MS || sello - ahoraMs > RELOJ_ADELANTADO_MS) return null;
   if (!CLAVE_VOZ_RE.test(String(valor.clave))) return null;
   const idioma = valor.idioma ?? null;
-  if (idioma !== null && !IDIOMA_RE.test(String(idioma))) return null;
-  return { clave: valor.clave, idioma };
+  const habla = valor.habla ?? null;
+  if ([idioma, habla].some((i) => i !== null && !IDIOMA_RE.test(String(i)))) return null;
+  return { clave: valor.clave, idioma, habla };
 }
 
 // ---- Grabar ----
@@ -199,14 +222,16 @@ export function mensajeGrabacionSubida({ status = 0, cuerpo = null, redirigido =
 
 // Qué se dice cuando la voz (`tipo` "ia") o la grabación entra en el cabezal:
 // si no cupo entera (operaciones.vozCortada dio un número), hasta dónde quedó
-// (un aviso: `error`); si no, que entró. Una voz con IA ofrece ir a
-// «Subtítulos» (sus palabras ya vienen: ponerlos es gratis; si Whisper falló,
-// ahí se generan).
-export function avisoAgregada({ tipo = "ia", conPalabras = false, cortadaMs = null } = {}) {
+// (un aviso: `error`); si habla otro idioma que el del destino
+// (`hablaNombre`), que quedó sonando en todos; si no, que entró. Una voz con
+// IA ofrece ir a «Subtítulos» (sus palabras ya vienen: ponerlos es gratis; si
+// Whisper falló, ahí se generan).
+export function avisoAgregada({ tipo = "ia", conPalabras = false, cortadaMs = null, hablaNombre = null } = {}) {
   const ia = tipo === "ia";
   if (Number.isFinite(cortadaMs) && cortadaMs !== null) {
     return { texto: t("voz.cortada", { tiempo: relojTexto(cortadaMs) }), irSubtitulos: ia, error: true };
   }
+  if (hablaNombre) return { texto: t("voz.todos_idiomas", { idioma: hablaNombre }), irSubtitulos: ia, error: false };
   if (!ia) return { texto: t("grab.agregada"), irSubtitulos: false, error: false };
   return { texto: t(conPalabras ? "voz.agregada_subtitulos" : "voz.agregada_sin_subtitulos"), irSubtitulos: true, error: false };
 }

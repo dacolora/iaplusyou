@@ -6,7 +6,7 @@
 // (tests/js/subtitulos_modelo.test.mjs); subtitulos_panel.js lo pone en la
 // página. Los textos con t() (se traducen al usarse, nunca al cargar). El
 // dinero nunca se formatea aquí: el servidor manda `precio` ya escrito.
-import { ESTILOS_SUBTITULOS, ID_SONIDO } from "./operaciones.js";
+import { esVozDeGuion, ESTILOS_SUBTITULOS, ID_SONIDO } from "./operaciones.js";
 import { colorBase } from "./propiedades_modelo.js";
 import { valorDestino } from "./resolver.js";
 import { derivar, fuentesDe, materialesDeFuente } from "./subtitulos_fuente.js";
@@ -38,11 +38,10 @@ export function fuenteDeClave(clave) {
   return id > 0 ? { tipo: "material", material_id: id } : null;
 }
 
-// Una voz del guion de la vía automática (borrador.es_voz_de_guion: rol voz
-// y `bloque` no vacío): un clip por bloque, cada uno con su material. «La voz»
-// ya los cubre a todos; ofrecerlos sueltos daría varios «Audio «Voz»» iguales
-// que subtitulan un solo bloque (y nada en otro país del mismo idioma).
-const esVozDeGuion = (clip) => clip?.rol_audio === "voz" && Boolean(clip?.bloque);
+// Una voz del guion de la vía automática (operaciones.esVozDeGuion): un clip
+// por bloque, cada uno con su material. «La voz» ya los cubre a todos;
+// ofrecerlos sueltos daría varios «Audio «Voz»» iguales que subtitulan un solo
+// bloque (y nada en otro país del mismo idioma).
 
 // Claves de textos.js del nombre de un audio sin nombre propio, por su rol.
 const NOMBRE_ROL = { voz: "fila.voz", musica: "fila.musica", efecto: "fila.efecto", grabacion: "fila.grabacion" };

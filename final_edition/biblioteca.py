@@ -248,7 +248,26 @@ def _guardar(cliente, local, ext, tipo, content_type, nombre_archivo):
 # .ogg. Nunca .mp3: el micrófono no lo produce directamente.
 EXTENSIONES_GRABACION = {".webm", ".m4a", ".mp4", ".ogg", ".wav"}
 MAX_GRABACION_MS = 300000   # 5 min
+# El navegador corta sola una grabación a los 5 min con un reloj de 250 ms
+# (y un segundo antes, voz_modelo.corteGrabacion): puede pasarse unos ms. Se
+# rechaza solo lo que pasa este margen; lo de en medio se recorta a 5 min.
+MARGEN_GRABACION_MS = 2000
 _HORA_RE = re.compile(r"^\d{2}:\d{2}$")
+
+
+def _duracion_entrada_ms(info):
+    """La duración de la ENTRADA según ffprobe (la del formato o la de su
+    pista de audio), en ms, o None: el .webm de MediaRecorder no la trae."""
+    candidatos = [(info.get("format") or {}).get("duration")]
+    candidatos += [s.get("duration") for s in info.get("streams") or [] if (s or {}).get("codec_type") == "audio"]
+    for valor in candidatos:
+        try:
+            ms = float(valor) * 1000
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(ms) and ms > 0:
+            return int(round(ms))
+    return None
 
 
 def _hora_de_grabacion(hora):
@@ -264,9 +283,13 @@ def guardar_grabacion(cliente, archivo, hora=None):
     pasada a mp3 (`-vn -ac 1 -ar 44100 -c:a libmp3lame -b:a 128k`) — el
     .webm de Chrome no trae duración y Safari viejo no decodifica opus con
     `decodeAudioData` —, con tope de 5 minutos, 20 MB y la cuota del
-    proyecto. `archivo`: FileStorage de Flask (o algo con `.filename` y
-    `.save`). Encola el proxy (picos) como cualquier audio nuevo. Los
-    temporales (el original y el mp3) se borran en un `finally`."""
+    proyecto. Fix round 1: se rechaza solo una ENTRADA de más de 5 min +
+    MARGEN_GRABACION_MS; la que se pasa por menos se recorta a 5 min (con
+    duración conocida, `-t 300` al transcodificar; sin ella, se transcodifica
+    hasta el tope + margen, se mide el mp3 y se recorta). `archivo`:
+    FileStorage de Flask (o algo con `.filename` y `.save`). Encola el proxy
+    (picos) como cualquier audio nuevo. Los temporales (el original, el mp3 y
+    su recorte) se borran en un `finally`."""
     nombre_archivo = os.path.basename(archivo.filename or "")
     ext = os.path.splitext(nombre_archivo)[1].lower()
     if ext not in EXTENSIONES_GRABACION:
@@ -283,18 +306,29 @@ def guardar_grabacion(cliente, archivo, hora=None):
             tiene_audio = False
         if not tiene_audio:
             raise SubidaInvalida(gettext("No pude leer esa grabación."))
+        entrada_ms = _duracion_entrada_ms(info)
+        if entrada_ms is not None and entrada_ms > MAX_GRABACION_MS + MARGEN_GRABACION_MS:
+            raise SubidaInvalida(gettext("La grabación dura más de 5 minutos."))
+        # sin duración conocida, el tope deja ver si se pasaba del margen (y
+        # nunca transcodifica más que eso)
+        tope_ms = MAX_GRABACION_MS if entrada_ms is not None else MAX_GRABACION_MS + MARGEN_GRABACION_MS + 500
         try:
-            cortes.ffmpeg(["-i", local, "-vn", "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k", mp3])
+            cortes.ffmpeg(["-i", local, "-vn", "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k",
+                           "-t", f"{tope_ms / 1000:.3f}", mp3])
+            dur_ms = int(round(cortes.duracion(mp3) * 1000))
+            if dur_ms > MAX_GRABACION_MS + MARGEN_GRABACION_MS:
+                raise SubidaInvalida(gettext("La grabación dura más de 5 minutos."))
+            if entrada_ms is None and dur_ms > MAX_GRABACION_MS:
+                recortado = mp3 + ".tope.mp3"     # mismo nombre que borra el finally
+                cortes.ffmpeg(["-i", mp3, "-t", f"{MAX_GRABACION_MS / 1000:.3f}", "-c", "copy", recortado])
+                os.replace(recortado, mp3)
+                dur_ms = int(round(cortes.duracion(mp3) * 1000))
         except SubidaInvalida:
             raise
         except Exception:
             raise SubidaInvalida(gettext("No pude leer esa grabación."))
-        try:
-            dur_ms = int(round(cortes.duracion(mp3) * 1000))
-        except Exception:
-            raise SubidaInvalida(gettext("No pude leer esa grabación."))
-        if dur_ms > MAX_GRABACION_MS:
-            raise SubidaInvalida(gettext("La grabación dura más de 5 minutos."))
+        # el relleno del mp3 (unos ms) no la hace pasar de 5 min
+        dur_ms = min(dur_ms, MAX_GRABACION_MS)
         tam = os.path.getsize(mp3)
         try:
             materiales.validar_subida("audio", tam)
@@ -312,7 +346,7 @@ def guardar_grabacion(cliente, archivo, hora=None):
                          cliente=cliente, max_intentos=3, prioridad=1)
         return vista_previa.material_para(m)
     finally:
-        for ruta in (local, mp3):
+        for ruta in (local, mp3, mp3 + ".tope.mp3"):
             try:
                 os.remove(ruta)
             except OSError:

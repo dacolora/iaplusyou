@@ -16,9 +16,10 @@
 //   micrófono se suelta al parar, al descartar y al dejar la pestaña.
 //
 // Las dos entran como VOZ (agacha la música) con el idioma del destino que se
-// ve (D10; «Suena en», en propiedades, lo cambia). Lo que se decide es de
-// voz_modelo.js (puro, probado en Node); aquí solo el DOM, la red y el
-// micrófono. La edición se toca SOLO por `editor` (pagina_editor.js); con la
+// ve (D10; «Suena en», en propiedades, lo cambia) — salvo una voz con IA que
+// habla otro idioma: entra sonando en todos y se avisa (voz_modelo.idiomaDeVoz).
+// Lo que se decide es de voz_modelo.js (puro, probado en Node); aquí solo el
+// DOM, la red y el micrófono. La edición se toca SOLO por `editor` (pagina_editor.js); con la
 // edición cambiada en otra pestaña (`enConflicto`) no se paga ni se agrega
 // nada. Mientras la pestaña no se ve no se pide el precio (se pide al
 // mostrarse: aviso "biblioteca"). No hace nada al importarse (lo prueba Node).
@@ -28,9 +29,9 @@ import { vozCortada } from "./operaciones.js";
 import { mensajeConflicto, mensajeRechazo } from "./propiedades_modelo.js";
 import { t } from "./textos.js";
 import {
-  avisoAgregada, botonCrear, elegirGrabacion, encargoVozGuardado, estadoTexto, extensionDeMime, filtrarVoces,
-  FILTROS_VOZ, firmaPedido, horaLocal, idiomaInicial, MAX_GRABACION_MS, mensajeGrabacionSubida, mensajeMicrofono,
-  motivoSinGrabar, nivelDe, nombreArchivo, textoReloj,
+  avisoAgregada, botonCrear, corteGrabacion, elegirGrabacion, encargoVozGuardado, estadoTexto, extensionDeMime,
+  filtrarVoces, FILTROS_VOZ, firmaPedido, horaLocal, idiomaDeVoz, idiomaInicial, MAX_GRABACION_MS, mensajeGrabacionSubida,
+  mensajeMicrofono, motivoSinGrabar, nivelDe, nombreArchivo, textoReloj,
 } from "./voz_modelo.js";
 
 export const ESPERA_ESTIMAR_MS = 400;
@@ -72,12 +73,6 @@ function icono(nombre) {
   return s;
 }
 
-// "es_CO" -> "es"; sin destino (o uno raro), null: la voz suena en todos.
-const idiomaDe = (destino) => {
-  const i = String(destino ?? "").split("_")[0];
-  return /^[a-z]{2}$/.test(i) ? i : null;
-};
-
 export class VozPanel {
   // `contenedor`: la zona de arriba de «Audio» (biblioteca.zona("audio"));
   // `editor`: el de pagina_editor.js; `datos`: los de la página (urls, voces,
@@ -102,7 +97,7 @@ export class VozPanel {
     this.trabajo = null;                // {job, encargo: {clave, idioma} | null, etapa, progreso, fallos, sinRespuestaDesde}
     this.relojTrabajo = null;
     this.relojMensaje = null;
-    this.muestra = null;                // {voz, boton, audio}: la muestra que suena
+    this.muestra = null;                // {voz, boton}: la muestra que suena (en this.reproductor)
     this.turnoMuestra = 0;              // la última muestra pedida gana
     this.grab = { estado: "listo" };    // listo | pidiendo | grabando | grabada | subiendo
     this.esperando = new Map();         // material_id -> desde: sus picos (la onda y la agachada de la música)
@@ -116,7 +111,7 @@ export class VozPanel {
     });
     if (typeof window !== "undefined") window.addEventListener("pagehide", () => this._soltarMicrofono());
     this.pintar();
-    this._retomar();
+    void this._retomar();
   }
 
   // ---- Armar (una vez) ----
@@ -224,6 +219,14 @@ export class VozPanel {
     const nombres = this.cfg.nombres_idioma ?? {};
     for (const i of this.cfg.idiomas ?? []) this.selIdioma.append(new Option(nombres[i] ?? i, i));
     this._ponerIdiomaInicial();
+    // las muestras suenan en UN solo <audio> (Safari solo deja sonar el que ya
+    // sonó con un toque); si el navegador no lo deja sonar solo, se muestran
+    // sus controles para tocar ▶ ahí
+    this.reproductor = el("audio", "ed-voz-muestra", s);
+    this.reproductor.id = "ed-voz-muestra";
+    this.reproductor.preload = "none";
+    this.reproductor.hidden = true;
+    this.reproductor.addEventListener("ended", () => this._pararMuestra());
     // «Crear la voz» y su barra
     this.crearBoton = boton("btn-generar ed-voz-crear", s);
     this.crearBoton.id = "ed-voz-crear";
@@ -509,16 +512,17 @@ export class VozPanel {
       this._decir(typeof j?.error === "string" && j.error ? j.error : t("voz.no_muestra"), true);
       return this._detalle(`HTTP ${r.status}`);
     }
-    const audio = new Audio(j.url);
-    this.muestra = { voz, boton, audio };
+    const audio = this.reproductor;
+    this.muestra = { voz, boton };
     boton.setAttribute("aria-pressed", "true");
-    audio.addEventListener("ended", () => {
-      if (this.muestra?.audio === audio) this._pararMuestra();
-    });
+    audio.src = j.url;
+    audio.setAttribute("aria-label", boton.getAttribute("aria-label") ?? "");
     audio.play().catch(() => {
-      if (this.muestra?.audio !== audio) return;
-      this._pararMuestra();
-      this._decir(t("voz.no_muestra"), true);
+      // el navegador no la deja sonar sola (Safari, si la muestra tardó): sus
+      // controles, para tocar ▶ ahí mismo
+      if (this.muestra?.voz !== voz) return;
+      audio.controls = true;
+      audio.hidden = false;
     });
   }
 
@@ -528,9 +532,12 @@ export class VozPanel {
     if (!m) return;
     this.muestra = null;
     m.boton.setAttribute("aria-pressed", "false");
-    m.audio.pause();
-    m.audio.removeAttribute("src");
-    m.audio.load();
+    const audio = this.reproductor;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    audio.controls = false;
+    audio.hidden = true;
   }
 
   // ---- El precio (D6: ningún pago sin un clic en un botón con el precio) ----
@@ -614,7 +621,8 @@ export class VozPanel {
       this._pintarCrear();
       return;
     }
-    const idioma = idiomaDe(this.editor.destino?.());
+    // en qué idioma suena: el del destino solo si la voz lo habla (si no, en todos)
+    const { idioma, habla } = idiomaDeVoz(pedido.idioma, this.editor.destino?.());
     this._decir("");
     this.enviando = true;
     this._pintarCrear();
@@ -634,10 +642,10 @@ export class VozPanel {
       this._pintarCrear();
       return this._decir(mensajeSesion(), true);
     }
-    if (r.status === 202 && j?.job_id && j?.clave) return this.seguir(j.job_id, { clave: j.clave, idioma });
+    if (r.status === 202 && j?.job_id && j?.clave) return this.seguir(j.job_id, { clave: j.clave, idioma, habla });
     this._pintarCrear();
     if (r.ok && j?.material) {                                             // ya existía con sus palabras: gratis
-      this._agregar(j.material, { tipo: "ia", idioma });
+      this._agregar(j.material, { tipo: "ia", idioma, habla });
       this._pedirEstimado(true);
       return;
     }
@@ -691,16 +699,18 @@ export class VozPanel {
       this.relojTrabajo = setTimeout(() => void this._sondear(), INTERVALO_TRABAJO_MS);
       return;
     }
-    // terminó: bien, con error o ya no se sabe de él
+    // terminó: bien, con error o ya no se sabe de él. Lo guardado para retomar
+    // se borra solo cuando la voz entró en la edición: si algo falla antes, al
+    // recargar se vuelve a intentar (gratis: la voz ya está creada).
     this.trabajo = null;
-    this._olvidarEncargo();
     this._pintarCrear();
     if (j.estado === "error") {
       this._decir(j.mensaje ? t("voz.error", { mensaje: String(j.mensaje) }) : t("voz.fallo"), true);
       return;
     }
-    if (!tr.encargo) return this._decir(t("voz.otra_pestana"));
-    await this._traerYAgregar(tr.encargo);
+    // sin lo que pidió (otra pestaña, o sin almacenamiento) no se sabe qué voz traer
+    if (!tr.encargo) return this._decir(t("voz.terminada"));
+    if (await this._traerYAgregar(tr.encargo)) this._olvidarEncargo();
     if (this.abierto === "ia") this._pedirEstimado(true);              // esa voz ya existe: «gratis»
   }
 
@@ -727,13 +737,14 @@ export class VozPanel {
       this._detalle(`HTTP ${r.status}`);
       return false;
     }
-    return this._agregar(j.material, { tipo: "ia", idioma: encargo.idioma ?? null });
+    return this._agregar(j.material, { tipo: "ia", idioma: encargo.idioma ?? null, habla: encargo.habla ?? null });
   }
 
-  // Pone una voz (o una grabación) en el cabezal, en una pista de voz, con el
-  // idioma del destino que se veía (D10), como una operación sobre el
-  // documento de AHORA; dice si no cupo entera.
-  _agregar(material, { tipo, idioma = null }) {
+  // Pone una voz (o una grabación) en el cabezal, en una pista de voz, con su
+  // idioma (idiomaDeVoz: el del destino que se veía, o null si la voz habla
+  // otro — `habla` —; D10), como una operación sobre el documento de AHORA;
+  // dice si no cupo entera o si quedó sonando en todos los idiomas.
+  _agregar(material, { tipo, idioma = null, habla = null }) {
     const ed = this.editor;
     if (!material || material.id === undefined || material.id === null) return false;
     if (this._enConflicto()) {
@@ -749,7 +760,8 @@ export class VozPanel {
     }
     const cortadaMs = vozCortada(antes, ed.doc(), ed.seleccion, ed.info());
     const conPalabras = Array.isArray(material.palabras) && material.palabras.length > 0;
-    const aviso = avisoAgregada({ tipo, conPalabras, cortadaMs });
+    const hablaNombre = habla ? (this.cfg?.nombres_idioma?.[habla] ?? habla) : null;
+    const aviso = avisoAgregada({ tipo, conPalabras, cortadaMs, hablaNombre });
     this._decir(aviso.texto, aviso.error, { irSubtitulos: aviso.irSubtitulos });
     if (faltaPreparar(material)) this._esperarPicos(material.id);
     return true;
@@ -827,18 +839,17 @@ export class VozPanel {
   }
 
   // Al abrir: si la voz de esta edición se sigue creando, se retoma su barra;
-  // si terminó justo mientras la página se recargaba, se trae y se pone.
-  _retomar() {
+  // si terminó justo mientras la página se recargaba, se trae y se pone (lo
+  // guardado se borra solo cuando entró; si no, vence a la media hora).
+  async _retomar() {
     const vivo = this.datos.trabajos_vivos?.voz;
     const guardado = this._leerEncargo();
     if (vivo) {
       this.seguir(vivo, encargoVozGuardado(guardado, vivo, Date.now()), { nuevo: false });
       return;
     }
-    if (!guardado) return;
-    const encargo = encargoVozGuardado(guardado, guardado?.job, Date.now());
-    this._olvidarEncargo();
-    if (encargo) void this._traerYAgregar(encargo, { callado: true });
+    const encargo = guardado ? encargoVozGuardado(guardado, guardado.job, Date.now()) : null;
+    if (encargo && await this._traerYAgregar(encargo, { callado: true })) this._olvidarEncargo();
   }
 
   // ---- Grabar con el micrófono (gratis) ----
@@ -929,7 +940,9 @@ export class VozPanel {
     if (!this._visible()) return this.parar();                   // la hoja se cerró o se fue a otra pestaña: se suelta el micrófono
     const ms = Math.min(this.maxGrabacionMs, performance.now() - g.inicio);
     this.reloj.textContent = textoReloj(ms, this.maxGrabacionMs);
-    if (ms >= this.maxGrabacionMs) this.parar({ tope: true });
+    // un segundo antes del tope: este reloj se pasa unos ms (y el servidor
+    // rechaza lo que pasa de 5 min con margen)
+    if (ms >= corteGrabacion(this.maxGrabacionMs)) this.parar({ tope: true });
   }
 
   // El nivel del micrófono con un AnalyserNode (no se guarda nada): una barra
@@ -938,6 +951,7 @@ export class VozPanel {
     try {
       const Contexto = window.AudioContext || window.webkitAudioContext;
       g.ctx = new Contexto();
+      g.ctx.resume?.()?.catch?.(() => {});          // Safari lo crea suspendido
       const analizador = g.ctx.createAnalyser();
       analizador.fftSize = 1024;
       g.ctx.createMediaStreamSource(g.stream).connect(analizador);
@@ -963,7 +977,7 @@ export class VozPanel {
     if (g.estado !== "grabando") return;
     g.estado = "parando";
     g.tope = tope;
-    g.duracionMs = Math.min(this.maxGrabacionMs, performance.now() - g.inicio);
+    g.duracionMs = Math.min(corteGrabacion(this.maxGrabacionMs), performance.now() - g.inicio);
     try {
       if (g.recorder.state !== "inactive") g.recorder.stop();
       else this._grabacionLista(g);
@@ -1031,7 +1045,7 @@ export class VozPanel {
     if (g.estado !== "grabada" || !g.blob) return;
     if (this._enConflicto()) return this._decir(mensajeConflicto(), true);
     if (g.blob.size > this.maxBytes) return this._decir(t("bib.pesa_audio", { mb: Math.floor(this.maxBytes / MIB) }), true);
-    const idioma = idiomaDe(this.editor.destino?.());
+    const { idioma } = idiomaDeVoz(null, this.editor.destino?.());   // una grabación: el idioma del destino
     this._decir("");
     g.estado = "subiendo";
     this._pintarSubida(0);

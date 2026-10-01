@@ -174,3 +174,18 @@ def test_datos_pagina_traduce_las_voces_al_idioma_de_quien_mira(base_temporal):
         datos = vista_previa.datos_pagina("acme", ed, {})
     por_nombre = {v["nombre"]: v for v in datos["voces"]}
     assert por_nombre["Rachel"]["genero_nombre"] == "Female" and por_nombre["Rachel"]["tono"] == "calm"
+
+
+def test_material_para_dice_el_idioma_que_habla_una_voz(base_temporal):
+    """Capa 5a (Task 8, fix round 1): la biblioteca decide con qué idioma entra
+    una voz con IA o una locución por el que habla (`extra.idioma`); lo que no
+    es un idioma de dos letras no se manda."""
+    import materiales
+    voz = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/i1.mp3", hash="hi1", bytes=1,
+                               extra={"nombre": "Hola", "idioma": "en"})
+    raro = materiales.registrar("acme", tipo="audio", origen="locucion", url="https://r2.test/i2.mp3", hash="hi2", bytes=1,
+                                extra={"idioma": "english"})
+    grab = materiales.registrar("acme", tipo="audio", origen="grabacion", url="https://r2.test/i3.mp3", hash="hi3", bytes=1)
+    assert vista_previa.material_para(voz)["idioma"] == "en"
+    assert vista_previa.material_para(raro)["idioma"] is None
+    assert vista_previa.material_para(grab)["idioma"] is None

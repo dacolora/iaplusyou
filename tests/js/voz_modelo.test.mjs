@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ponerTextos } from "../../static/editor/textos.js";
 import {
-  avisoAgregada, botonCrear, elegirGrabacion, encargoVozGuardado, ENCARGO_VOZ_MAX_MS, estadoTexto, extensionDeMime, filtrarVoces,
+  avisoAgregada, botonCrear, corteGrabacion, elegirGrabacion, idiomaDeVoz, encargoVozGuardado, ENCARGO_VOZ_MAX_MS, estadoTexto, extensionDeMime, filtrarVoces,
   FILTROS_VOZ,
   firmaPedido, FORMATOS_GRABACION, horaLocal, idiomaInicial, MAX_GRABACION_MS, mensajeGrabacionSubida, mensajeMicrofono,
   motivoSinGrabar, nivelDe, nombreArchivo, relojTexto, textoReloj,
@@ -144,8 +144,10 @@ test("encargoVozGuardado: solo el de ESE trabajo, con su forma y de hace menos d
   const clave = "a".repeat(64);
   const ahora = 1_000_000_000;
   const bueno = { job: "acme__ed7__voz", sello: ahora - 1000, clave, idioma: "es" };
-  assert.deepEqual(encargoVozGuardado(bueno, "acme__ed7__voz", ahora), { clave, idioma: "es" });
-  assert.deepEqual(encargoVozGuardado({ ...bueno, idioma: null }, "acme__ed7__voz", ahora), { clave, idioma: null });
+  assert.deepEqual(encargoVozGuardado(bueno, "acme__ed7__voz", ahora), { clave, idioma: "es", habla: null });
+  assert.deepEqual(encargoVozGuardado({ ...bueno, idioma: null, habla: "en" }, "acme__ed7__voz", ahora),
+    { clave, idioma: null, habla: "en" });
+  assert.equal(encargoVozGuardado({ ...bueno, habla: "ingles" }, "acme__ed7__voz", ahora), null);
   assert.equal(encargoVozGuardado(bueno, "otro", ahora), null);
   assert.equal(encargoVozGuardado({ ...bueno, sello: ahora - ENCARGO_VOZ_MAX_MS - 1 }, "acme__ed7__voz", ahora), null);
   assert.equal(encargoVozGuardado({ ...bueno, sello: ahora + 5 * 60 * 1000 }, "acme__ed7__voz", ahora), null);
@@ -313,8 +315,129 @@ test("VozPanel._retomar: retoma la barra de la voz que se creaba, o pone la que 
     _traerYAgregar: (encargo, opciones) => llamadas.push(["traer", encargo, opciones]),
   });
   VozPanel.prototype._retomar.call(falsa("acme__ed7__voz"));
-  assert.deepEqual(llamadas, [["seguir", "acme__ed7__voz", { clave, idioma: "es" }, { nuevo: false }]]);
-  llamadas.length = 0;
-  VozPanel.prototype._retomar.call(falsa(null));
-  assert.deepEqual(llamadas, [["olvidar"], ["traer", { clave, idioma: "es" }, { callado: true }]]);
+  assert.deepEqual(llamadas, [["seguir", "acme__ed7__voz", { clave, idioma: "es", habla: null }, { nuevo: false }]]);
+});
+
+test("VozPanel._retomar: el encargo guardado se borra solo DESPUÉS de que la voz entró", async () => {
+  const clave = "b".repeat(64);
+  const guardado = { job: "acme__ed7__voz", sello: Date.now(), clave, idioma: "es" };
+  for (const entro of [true, false]) {
+    const llamadas = [];
+    let terminar;
+    const falsa = {
+      datos: { trabajos_vivos: { voz: null } },
+      _leerEncargo: () => guardado,
+      _olvidarEncargo: () => llamadas.push("olvidar"),
+      _traerYAgregar: (encargo, opciones) => {
+        llamadas.push(["traer", encargo, opciones]);
+        return new Promise((r) => { terminar = r; });
+      },
+    };
+    const espera = VozPanel.prototype._retomar.call(falsa);
+    assert.deepEqual(llamadas, [["traer", { clave, idioma: "es", habla: null }, { callado: true }]]);   // todavía no se olvida
+    terminar(entro);
+    await espera;
+    assert.deepEqual(llamadas.slice(1), entro ? ["olvidar"] : []);
+  }
+});
+
+// ---- Fix round 1 ----
+
+test("corteGrabacion: el navegador corta un segundo antes del tope (el reloj de 250 ms se pasa unos ms)", () => {
+  assert.equal(corteGrabacion(MAX_GRABACION_MS), 299000);
+  assert.equal(corteGrabacion(60000), 59000);
+  assert.equal(corteGrabacion(500), 0);
+});
+
+test("idiomaDeVoz: el clip se etiqueta con el destino solo si la voz habla ese idioma", () => {
+  assert.deepEqual(idiomaDeVoz("es", "es_CO"), { idioma: "es", habla: null });
+  // habla otro idioma: suena en todos (se avisa con `habla`)
+  assert.deepEqual(idiomaDeVoz("en", "es_CO"), { idioma: null, habla: "en" });
+  // una grabación no dice su idioma: el del destino
+  assert.deepEqual(idiomaDeVoz(null, "es_CO"), { idioma: "es", habla: null });
+  assert.deepEqual(idiomaDeVoz(undefined, "pt"), { idioma: "pt", habla: null });
+  // sin destino que comparar: sin etiqueta ni aviso
+  assert.deepEqual(idiomaDeVoz("es", null), { idioma: null, habla: null });
+  assert.deepEqual(idiomaDeVoz(null, "raro"), { idioma: null, habla: null });
+  // un idioma que no es de dos letras no cuenta
+  assert.deepEqual(idiomaDeVoz("espanol", "es_CO"), { idioma: "es", habla: null });
+});
+
+test("avisoAgregada: una voz en otro idioma queda sonando en todos y se dice", () => {
+  assert.deepEqual(avisoAgregada({ tipo: "ia", conPalabras: true, cortadaMs: null, hablaNombre: "English" }),
+    { texto: "La voz habla English: quedó sonando en todos los idiomas. Usa «Suena en» para dejarla solo en uno.",
+      irSubtitulos: true, error: false });
+  // cortada manda (es lo más importante de saber)
+  assert.equal(avisoAgregada({ tipo: "ia", conPalabras: true, cortadaMs: 2000, hablaNombre: "English" }).error, true);
+});
+
+test("VozPanel._agregar: una voz que habla otro idioma entra sin idioma y lo dice", () => {
+  const editor = editorFalso({ tiempo: 0 });
+  const panel = panelFalso(editor);
+  panel.cfg = { nombres_idioma: { en: "English" } };
+  assert.equal(VozPanel.prototype._agregar.call(panel, { ...VOZ_IA, picos: [0.1] }, { tipo: "ia", idioma: null, habla: "en" }), true);
+  const clip = editor.e.doc.pistas.flatMap((p) => p.clips).find((c) => c.id === editor.e.seleccion);
+  assert.equal("idioma" in clip, false);
+  assert.match(panel.dichos[0].texto, /^La voz habla English: quedó sonando en todos los idiomas/);
+});
+
+// El guard de pago de crear(): ningún POST a urls.voz sin el precio vigente a la vista.
+function crearFalso({ estimado, texto = "Hola mundo" }) {
+  const pedido = { texto, voz: "Rachel", velocidad: "normal", idioma: "es" };
+  const llamadas = { estimar: 0, seguir: [], agregar: [], dichos: [] };
+  const falsa = {
+    trabajo: null, enviando: false, estimado, maxCaracteres: 3000,
+    urls: { voz: "/voz", voz_estimar: "/voz/estimar" },
+    editor: { destino: () => "es_CO", enConflicto: () => false },
+    texto: { focus() {} },
+    _enConflicto: VozPanel.prototype._enConflicto,
+    _pedido: () => pedido,
+    _pedirEstimado: () => { llamadas.estimar += 1; },
+    _pintarCrear() {},
+    _decir: (texto, error) => llamadas.dichos.push([texto, error]),
+    _detalle() {},
+    _pedirJSON: VozPanel.prototype._pedirJSON,
+    seguir: (job, encargo) => llamadas.seguir.push([job, encargo]),
+    _agregar: (m, opciones) => { llamadas.agregar.push([m, opciones]); return true; },
+    cfg: { nombres_idioma: {} },
+  };
+  return { falsa, llamadas, firma: firmaPedido(pedido) };
+}
+
+test("crear(): sin el precio vigente no hay POST a urls.voz; con precio (o gratis) y la firma de ahora, sí", async () => {
+  const original = globalThis.fetch;
+  const pedidos = [];
+  globalThis.fetch = async (url, opciones) => {
+    pedidos.push([url, opciones?.method, JSON.parse(opciones?.body ?? "null")]);
+    return { ok: true, status: 202, redirected: false, url, headers: { get: () => "application/json" },
+             json: async () => ({ job_id: "acme__ed7__voz", clave: "c".repeat(64) }) };
+  };
+  try {
+    const firmaVieja = crearFalso({ estimado: null }).firma.replace("Hola", "Chao");
+    const sinPagar = [
+      null,                                                    // nunca se pidió el precio
+      { firma: "x", calculando: true },
+      { firma: null, error: true },                            // el precio no se pudo calcular
+      { firma: firmaVieja, precio: "US$ 0,03 aprox." },        // el precio es de otro texto
+    ];
+    for (const e of sinPagar) {
+      const { falsa, llamadas, firma } = crearFalso({ estimado: e });
+      if (e && e.firma === null) e.firma = firma;
+      if (e?.calculando) e.firma = firma;
+      await VozPanel.prototype.crear.call(falsa);
+      assert.equal(pedidos.length, 0, JSON.stringify(e));
+      assert.equal(llamadas.estimar, 1);                      // en vez de pagar, vuelve a pedir el precio
+    }
+    for (const vigente of [{ precio: "US$ 0,03 aprox." }, { gratis: true }]) {
+      const { falsa, llamadas, firma } = crearFalso({ estimado: null });
+      falsa.estimado = { firma, ...vigente };
+      await VozPanel.prototype.crear.call(falsa);
+      assert.equal(pedidos.length, 1);
+      assert.deepEqual(pedidos[0], ["/voz", "POST", { texto: "Hola mundo", voz: "Rachel", velocidad: "normal", idioma: "es" }]);
+      assert.deepEqual(llamadas.seguir, [["acme__ed7__voz", { clave: "c".repeat(64), idioma: "es", habla: null }]]);
+      pedidos.length = 0;
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
 });

@@ -103,6 +103,13 @@ export function cambiaPorDestino(clip) {
   return Boolean(clip?.por_destino) && Object.keys(clip.por_destino).length > 0;
 }
 
+// Una voz del guion de la vía automática (borrador.es_voz_de_guion, D11: rol
+// voz y `bloque` no vacío). Una voz agregada en el editor (voz con IA,
+// grabación) no tiene `bloque`.
+export function esVozDeGuion(clip) {
+  return clip?.rol_audio === "voz" && Boolean(clip?.bloque);
+}
+
 function noSonido(pista) {
   if (pista.id === ID_SONIDO) {
     throw new OperacionInvalida(t("op.sonido_sigue"));

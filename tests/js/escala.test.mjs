@@ -449,3 +449,31 @@ test("bloquesSubtitulos: un estilo desconocido es karaoke; sin palabras (u ocult
   // sin la tabla de estilos (datos viejos): de a 4, como siempre
   assert.equal(bloquesSubtitulos(PALABRAS_SUB, null, "karaoke").length, 2);
 });
+
+// ---- Capa 5a (Task 8, fix round 1): las voces vuelven desde la biblioteca ----
+import { rolDeMaterial } from "../../static/editor/escala.js";
+
+test("rolDeMaterial: una grabación, una voz con IA o una locución entran como voz; lo demás, como música", () => {
+  for (const origen of ["grabacion", "voz", "locucion"]) assert.equal(rolDeMaterial({ tipo: "audio", origen }), "voz", origen);
+  for (const origen of ["subida", "musica", "crear", undefined]) assert.equal(rolDeMaterial({ tipo: "audio", origen }), "musica", String(origen));
+  assert.equal(rolDeMaterial(null), "musica");
+});
+
+test("pedidoAgregar de un audio de voz: rol voz y el idioma según el destino que se ve (nunca como música)", () => {
+  const doc = docBase();
+  const en = (destino) => ({ cabezalMs: 2500, destino });
+  const grab = { id: 20, tipo: "audio", origen: "grabacion", idioma: null };
+  const vozEs = { id: 21, tipo: "audio", origen: "voz", idioma: "es" };
+  const locEn = { id: 22, tipo: "audio", origen: "locucion", idioma: "en" };
+  // una grabación no dice su idioma: el del destino que se ve
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: grab }, en("es_CO")), ["agregarAudio", grab, 2500, { rol: "voz", idioma: "es" }]);
+  // la voz habla el idioma del destino: se etiqueta
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: vozEs }, en("es_CO")), ["agregarAudio", vozEs, 2500, { rol: "voz", idioma: "es" }]);
+  // habla otro: suena en todos (la biblioteca lo avisa)
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: locEn }, en("es_CO")), ["agregarAudio", locEn, 2500, { rol: "voz", idioma: null }]);
+  // sin destino todavía: sin etiqueta
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: grab }, en(null)), ["agregarAudio", grab, 2500, { rol: "voz", idioma: null }]);
+  // la música no cambia
+  const cancion = { id: 23, tipo: "audio", origen: "musica" };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: cancion }, en("es_CO")), ["agregarAudio", cancion, 2500, { rol: "musica" }]);
+});

@@ -15,6 +15,7 @@ import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
 import { ventanas } from "./subtitulos.js";
 import { separadorDecimal, t } from "./textos.js";
 import { pistaPrincipal } from "./tiempo.js";
+import { idiomaDeVoz } from "./voz_modelo.js";
 
 export const PPS_MIN = 20;
 export const PPS_MAX = 400;
@@ -393,6 +394,15 @@ export function pedidoTransicion(doc, seleccionId, tMs, tipo, duracionMs = DURAC
   return id ? ["ponerTransicion", id, tipo, duracionMs] : null;
 }
 
+// Con qué rol entra un audio de la biblioteca (capa 5a, fix round 1): una
+// grabación del micrófono, una voz con IA (del editor o de Crear › Audios) o
+// una locución de Crear › Audios es una VOZ; nunca música.
+const ORIGENES_VOZ = ["grabacion", "voz", "locucion"];
+
+export function rolDeMaterial(material) {
+  return ORIGENES_VOZ.includes(material?.origen) ? "voz" : "musica";
+}
+
 // Qué operación pide agregar algo de la biblioteca: [nombre, ...args] para
 // `editor.operar` (sin el documento ni info), o null si no hay dónde.
 // `cosa`: {tipo: "video" | "imagen" | "audio", material}, {tipo: "texto",
@@ -402,8 +412,11 @@ export function pedidoTransicion(doc, seleccionId, tMs, tipo, duracionMs = DURAC
 // una imagen, como capa en ese instante aunque caiga en la fila del video; una
 // transición, en el corte más cercano al dedo. Sin `punto` («+» o tocar), en
 // el cabezal: el video después del clip bajo el cabezal (indiceAgregarVideo),
-// la transición como pedidoTransicion. El audio entra como música.
-export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccion = null } = {}) {
+// la transición como pedidoTransicion. El audio entra con rolDeMaterial: una
+// grabación, una voz con IA o una locución como VOZ (agacha la música), con
+// el idioma del destino que se ve si habla ese idioma (`destino`,
+// voz_modelo.idiomaDeVoz); lo demás como música.
+export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccion = null, destino = null } = {}) {
   const ms = Math.max(0, Math.round(Number(punto ? punto.tMs : cabezalMs) || 0));
   switch (cosa?.tipo) {
     case "video": {
@@ -413,8 +426,10 @@ export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccio
     }
     case "imagen":
       return ["agregarImagen", cosa.material, ms, {}];
-    case "audio":
-      return ["agregarAudio", cosa.material, ms, { rol: "musica" }];
+    case "audio": {
+      if (rolDeMaterial(cosa.material) !== "voz") return ["agregarAudio", cosa.material, ms, { rol: "musica" }];
+      return ["agregarAudio", cosa.material, ms, { rol: "voz", idioma: idiomaDeVoz(cosa.material?.idioma, destino).idioma }];
+    }
     case "texto":
       return ["agregarTexto", ms, cosa.preset];
     case "transicion": {

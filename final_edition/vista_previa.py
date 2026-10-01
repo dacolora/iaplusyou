@@ -7,6 +7,7 @@ documento ni paga nada; encolar proxies es gratis (edicion_proxy)."""
 import copy
 import glob
 import os
+import re
 
 import audios
 import idiomas
@@ -45,6 +46,9 @@ def config_navegador():
     }
 
 
+_IDIOMA_RE = re.compile(r"^[a-z]{2}$")
+
+
 def material_para(m, con_palabras=False):
     """La forma que el navegador necesita de UN material: original + proxy +
     lo medido + lo derivado del proxy (picos, tira), más lo que la
@@ -62,7 +66,10 @@ def material_para(m, con_palabras=False):
          "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
          "tira_url": extra.get("tira_url"), "tiene_audio": extra.get("tiene_audio"),
          "nombre": extra.get("nombre"), "origen": m["origen"], "mi_musica": es_de_mi_musica(m),
-         "tiene_palabras": isinstance(extra.get("palabras"), list)}
+         "tiene_palabras": isinstance(extra.get("palabras"), list),
+         # capa 5a (Task 8, fix round 1): el idioma que habla una voz con IA o
+         # una locución, para decidir con qué idioma entra al agregarla
+         "idioma": extra["idioma"] if _IDIOMA_RE.fullmatch(str(extra.get("idioma") or "")) else None}
     if con_palabras:
         d["palabras"] = extra.get("palabras")
     return d

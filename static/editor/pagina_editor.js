@@ -576,8 +576,10 @@ const editor = Object.freeze({
 function montarPaneles() {
   // la biblioteca (Medios · Audio · Texto · Subtítulos · Transiciones): carga
   // lo del proyecto mientras la vista previa arranca
+  const nombresIdioma = datos.voz?.nombres_idioma ?? datos.subtitulos?.nombres_idioma ?? {};
   const biblioteca = new Biblioteca({
     contenedor: $("ed-panel-biblioteca"), pestanas: $("ed-pestanas-biblioteca"), urls: datos.urls, editor, linea,
+    nombresIdioma,
   });
   // capa 5a: la pestaña «Subtítulos» (si al abrir ya corría una transcripción
   // de esta edición, retoma su barra)
@@ -589,7 +591,7 @@ function montarPaneles() {
   // o la mezcla de la edición si no hay nada elegido; «Suena en» nombra los
   // idiomas como la galería de voces)
   new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () => vista.materiales,
-                    nombresIdioma: datos.voz?.nombres_idioma ?? datos.subtitulos?.nombres_idioma ?? {} });
+                    nombresIdioma });
   // tocar, mover y agrandar los textos y las imágenes sobre el video (necesita
   // la vista previa: el documento que se dibuja y las medidas de los textos)
   new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });

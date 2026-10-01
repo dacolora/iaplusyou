@@ -364,7 +364,14 @@ test("modelo de un audio de voz: «Suena en» con su idioma; la música no lo tr
   const guion = structuredClone(doc);
   guion.pistas.find((p) => p.id === "p_voz").clips[0].por_destino = { es_CO: { material_id: 2, duracion_ms: 3000 } };
   assert.equal(modelo(guion, "a1", { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA }).suena_en, null);
-  // la voz del borrador sin por_destino sí lo lleva
+  // una voz de guion (`bloque`) tampoco, aunque todavía no tenga por_destino: la vía
+  // automática se lo pone al sumar un destino, y un `idioma` dejaría fuera la voz
+  // pagada del otro país (esVozDeGuion, la misma prueba de la pestaña Subtítulos)
+  const conBloque = structuredClone(doc);
+  conBloque.pistas.find((p) => p.id === "p_voz").clips[0].bloque = "b1";
+  assert.equal(modelo(conBloque, "a1", { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA }).suena_en, null);
+  assert.equal(op.esVozDeGuion(conBloque.pistas.find((p) => p.id === "p_voz").clips[0]), true);
+  // una voz sin bloque ni por_destino (agregada a mano) sí lo lleva
   assert.equal(modelo(doc, "a1", { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA }).suena_en.valor, "");
 });
 

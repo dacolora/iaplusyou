@@ -5,7 +5,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  aceptarPara, duracionTexto, faltaPreparar, miniatura, mensajeSubida, nombreDe, repartir, revisarArchivo, tipoDeArchivo,
+  aceptarPara, detalleAudio, duracionTexto, etiquetaMas, faltaPreparar, miniatura, mensajeSubida, nombreDe, repartir,
+  revisarArchivo, tipoDeArchivo,
   textosBiblioteca, transicionesBiblioteca, urlPieza,
 } from "../../static/editor/biblioteca.js";
 import * as op from "../../static/editor/operaciones.js";
@@ -277,4 +278,39 @@ test("quitarMaterial lo saca de la lista y suelta la pieza de Crear que lo tení
   assert.deepEqual(out.materiales.map((m) => m.id), [1]);
   assert.deepEqual(out.piezas, [{ cf_id: "cf1", material_id: null }, { cf_id: "cf2", material_id: null }]);
   assert.equal(datos.materiales.length, 2, "no toca lo de entrada");
+});
+
+// ---- Capa 5a (Task 8, fix round 1): grabaciones, voces con IA y locuciones ----
+
+test("repartir: «Audio» lista también las grabaciones, las voces con IA y las locuciones de Crear › Audios", () => {
+  const bib = {
+    materiales: [
+      { id: 1, tipo: "audio", origen: "grabacion", nombre: "Grabación 14:32", duracion_ms: 5000 },
+      { id: 2, tipo: "audio", origen: "voz", nombre: "Hola, esto es una voz…", idioma: "es", duracion_ms: 3000 },
+      { id: 3, tipo: "audio", origen: "voz", nombre: null, duracion_ms: 3000 },        // un bloque del guion: no
+      { id: 4, tipo: "audio", origen: "locucion", nombre: "Promo de verano", idioma: "en", duracion_ms: 9000 },
+      { id: 5, tipo: "audio", origen: "subida", nombre: "Risa" },
+    ],
+    piezas: [],
+  };
+  assert.deepEqual(repartir(bib).audios.map((m) => m.id), [1, 2, 4, 5]);
+});
+
+test("nombreDe y detalleAudio: su nombre; sin nombre, qué es", () => {
+  assert.equal(nombreDe({ tipo: "audio", origen: "grabacion", nombre: "Grabación 09:00" }), "Grabación 09:00");
+  assert.equal(nombreDe({ tipo: "audio", origen: "grabacion" }), "Grabación");
+  assert.equal(nombreDe({ tipo: "audio", origen: "locucion" }), "Voz");
+  assert.equal(nombreDe({ tipo: "audio", origen: "voz" }), "Voz");
+  assert.equal(detalleAudio({ tipo: "audio", origen: "grabacion", duracion_ms: 65000 }), "1:05 · Grabación");
+  assert.equal(detalleAudio({ tipo: "audio", origen: "voz", duracion_ms: 3000 }), "0:03 · Voz con IA");
+  assert.equal(detalleAudio({ tipo: "audio", origen: "locucion", duracion_ms: 3000 }), "0:03 · Crear › Audios");
+  assert.equal(detalleAudio({ tipo: "audio", origen: "musica", duracion_ms: 3000 }), "0:03 · Mi música");
+  assert.equal(detalleAudio({ tipo: "audio", origen: "subida", mi_musica: true }), "Mi música");
+  assert.equal(detalleAudio({ tipo: "audio", origen: "subida", duracion_ms: 3000 }), "0:03 · Subido");
+  assert.equal(etiquetaMas({ tipo: "audio", origen: "grabacion" }, "Grabación 09:00"), "Agregar «Grabación 09:00» como voz desde el cabezal");
+  assert.equal(etiquetaMas({ tipo: "audio", origen: "subida" }, "Risa"), "Agregar «Risa» como música desde el cabezal");
+  // una grabación se borra desde aquí (el servidor ya lo permite); una voz o una locución no
+  assert.equal(puedeBorrarse({ origen: "grabacion" }), true);
+  assert.equal(puedeBorrarse({ origen: "voz" }), false);
+  assert.equal(puedeBorrarse({ origen: "locucion" }), false);
 });

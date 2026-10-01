@@ -5,8 +5,10 @@
 //   error en llano debajo), los videos e imágenes del proyecto y, debajo,
 //   «Videos de Crear» (las piezas listas; la que todavía no es material se
 //   prepara al tocar «+» — gratis — y se agrega sola cuando está).
-// - Audio: «Subir audio» y los audios del proyecto (subidos y de Mi música),
-//   con «Escuchar» y «+» (entra como música desde el cabezal). Arriba, en
+// - Audio: «Subir audio» y los audios del proyecto (subidos, de Mi música y,
+//   capa 5a, las grabaciones, las voces con IA y las locuciones de Crear ›
+//   Audios), con «Escuchar» y «+» (desde el cabezal: una voz como voz, lo
+//   demás como música — escala.rolDeMaterial). Arriba, en
 //   `zona("audio")`, la voz en off de voz_panel.js (capa 5a: voz con IA y
 //   grabar con el micrófono).
 // - Texto: cuatro muestras (Título, Subtítulo, Precio, Llamado) con su estilo;
@@ -39,7 +41,7 @@
 // edición por `editor`. No hace nada al importarse (lo prueba Node).
 import { materialesUsados } from "./avisos_carga.js";
 import {
-  avisoTransicion, DURACION_TRANSICION_MS, nombreTransicion, pedidoAgregar,
+  avisoTransicion, DURACION_TRANSICION_MS, nombreTransicion, pedidoAgregar, rolDeMaterial,
 } from "./escala.js";
 import * as operaciones from "./operaciones.js";
 import { TRANSICIONES } from "./operaciones.js";
@@ -47,6 +49,7 @@ import { mensajeSesion, sesionTerminada } from "./guardado.js";
 import { evaluarRespuesta } from "./pendientes.js";
 import { mensajeConflicto } from "./propiedades_modelo.js";
 import { t } from "./textos.js";
+import { idiomaDeVoz } from "./voz_modelo.js";
 
 // ---- Lo puro (lo prueba tests/js/biblioteca.test.mjs) ---------------------
 
@@ -92,15 +95,20 @@ export function mensajeSubida({ status = 0, cuerpo = null, redirigido = false, r
 }
 
 // Qué va en cada lista: Medios (videos e imágenes, sin los que ya son una
-// pieza de Crear: esos están en su sección), Audio (subidos y de Mi música;
-// una voz de guion no se agrega a mano) y las piezas de Crear.
+// pieza de Crear: esos están en su sección), Audio (subidos, de Mi música y,
+// capa 5a, las grabaciones, las voces con IA y las locuciones de Crear ›
+// Audios; una voz de guion — sin nombre: un bloque por destino — no se agrega
+// a mano) y las piezas de Crear.
+const ORIGENES_AUDIO = ["subida", "musica", "grabacion", "locucion"];
+const esAudioDeLista = (m) => m.tipo === "audio" && (ORIGENES_AUDIO.includes(m.origen) || (m.origen === "voz" && Boolean(m.nombre)));
+
 export function repartir(bib) {
   const materiales = Array.isArray(bib?.materiales) ? bib.materiales.filter(Boolean) : [];
   const piezas = Array.isArray(bib?.piezas) ? bib.piezas.filter(Boolean) : [];
   const dePieza = new Set(piezas.map((p) => p.material_id).filter((id) => id !== null && id !== undefined));
   return {
     medios: materiales.filter((m) => (m.tipo === "video" || m.tipo === "imagen") && !dePieza.has(m.id)),
-    audios: materiales.filter((m) => m.tipo === "audio" && (m.origen === "subida" || m.origen === "musica")),
+    audios: materiales.filter(esAudioDeLista),
     piezas,
   };
 }
@@ -267,16 +275,35 @@ const tieneArchivos = (e) => [...(e.dataTransfer?.types ?? [])].includes("Files"
 export function nombreDe(m) {
   if (m?.nombre) return String(m.nombre);
   if (m?.tipo === "imagen") return t(m.origen === "marca" ? "bib.logo" : "clip.imagen");
-  if (m?.tipo === "audio") return t(m.origen === "musica" ? "bib.cancion" : "fila.audio");
+  if (m?.tipo === "audio") {
+    if (m.origen === "musica") return t("bib.cancion");
+    if (m.origen === "grabacion") return t("fila.grabacion");
+    return t(rolDeMaterial(m) === "voz" ? "fila.voz" : "fila.audio");
+  }
   return t(m?.origen === "crear" ? "bib.video_crear" : "fila.video");
+}
+
+// Lo que dice debajo del nombre de un audio: su duración y de dónde viene.
+const DE_DONDE_AUDIO = { grabacion: "fila.grabacion", voz: "voz.titulo_ia", locucion: "bib.locucion", musica: "bib.mi_musica" };
+
+export function detalleAudio(m) {
+  const de = m?.mi_musica ? "bib.mi_musica" : DE_DONDE_AUDIO[m?.origen] ?? "bib.subido";
+  return [duracionTexto(m?.duracion_ms), t(de)].filter(Boolean).join(" · ");
+}
+
+// El «+» de un audio: como voz o como música (rolDeMaterial).
+export function etiquetaMas(m, nombre) {
+  return t(rolDeMaterial(m) === "voz" ? "bib.agregar_voz" : "bib.agregar_musica", { nombre });
 }
 
 export class Biblioteca {
   // `contenedor`: #ed-panel-biblioteca (la caja que corre hacia abajo);
   // `pestanas`: la lista de pestañas (la página ya marca la elegida; aquí se
-  // muestra su panel); `urls`: las de datos-editor; `linea`: la LineaTiempo.
-  constructor({ contenedor, pestanas, urls, editor, linea }) {
+  // muestra su panel); `urls`: las de datos-editor; `linea`: la LineaTiempo;
+  // `nombresIdioma`: {es: "Español", …} (el aviso de una voz en otro idioma).
+  constructor({ contenedor, pestanas, urls, editor, linea, nombresIdioma = {} }) {
     this.contenedor = contenedor;
+    this.nombresIdioma = nombresIdioma ?? {};
     this.pestanas = pestanas;
     this.urls = urls ?? {};
     this.editor = editor;
@@ -289,6 +316,7 @@ export class Biblioteca {
     this.preparando = new Map();        // cf_id -> {desde, pedido: {punto} | null}; pedido = agregarla al tenerla
     this.esperando = new Map();         // material_id -> desde: su copia liviana (video) o sus picos (audio)
     this.pedidosPreparar = new Set();   // material_id ya pedido al servidor (`preparar=`): se pide una vez
+    this.borrados = new Set();          // material_id borrado desde aquí: no vuelve a la lista
     this.relojPiezas = null;
     this.relojMateriales = null;
     this.arrastre = null;               // {clave, cosa, pointerId, x0, y0, x, y, activo, fantasma, origen, cuadro}
@@ -316,6 +344,7 @@ export class Biblioteca {
     });
     editor.escuchar((que) => {
       if (que === "documento") this._pintarMarca();
+      else if (que === "materiales") this._sumarDeLaVista();
     });
     this._pintarMarca();
     this.cargar();
@@ -511,6 +540,22 @@ export class Biblioteca {
     return this.datos.materiales.find((m) => m.id === id) ?? null;
   }
 
+  // Capa 5a: una voz o una grabación que otro panel acaba de poner en la
+  // edición (voz_panel.js) entra a la lista sin recargar. Solo audios de la
+  // lista que todavía no estaban, y nunca uno que se borró desde aquí (la vista
+  // previa conserva sus materiales).
+  _sumarDeLaVista() {
+    if (this.carga !== "lista") return;
+    let cambio = false;
+    for (const m of Object.values(this.editor.materiales?.() ?? {})) {
+      if (!m || this._material(m.id) || this.borrados.has(m.id) || !esAudioDeLista(m)) continue;
+      const { palabras: _p, ...sinPalabras } = m;          // la lista no carga palabras
+      this.datos.materiales = [sinPalabras, ...this.datos.materiales];
+      cambio = true;
+    }
+    if (cambio) this._pintarListas();
+  }
+
   // Suma (o reemplaza, por id) un material a la lista; true si cambió algo.
   _ponerMaterial(m) {
     const i = this.datos.materiales.findIndex((x) => x.id === m.id);
@@ -679,13 +724,12 @@ export class Biblioteca {
     el("span", "ed-bib-audio-icono", fila).append(icono("nota", 18));
     const txt = el("span", "ed-bib-audio-texto", fila);
     el("span", "ed-bib-nombre", txt, nombre);
-    el("span", "ed-bib-audio-detalle", txt, [duracionTexto(m.duracion_ms), m.origen === "musica" || m.mi_musica ? t("bib.mi_musica") : t("bib.subido")]
-      .filter(Boolean).join(" · "));
+    el("span", "ed-bib-audio-detalle", txt, detalleAudio(m));
     const oir = el("button", "btn-sm ed-bib-escuchar", fila);
     oir.type = "button";
     oir.dataset.escuchar = clave;
     this._pintarBotonEscucha(oir, nombre);
-    fila.append(this._botonMas(clave, t("bib.agregar_musica", { nombre })));
+    fila.append(this._botonMas(clave, etiquetaMas(m, nombre)));
     if (puedeBorrarse(m) && this.urls.borrar_material) fila.append(this._botonBorrar(m, nombre));
     return fila;
   }
@@ -725,7 +769,8 @@ export class Biblioteca {
   _operar(cosa, punto) {
     const ed = this.editor;
     if (cosa.material) ed.agregarMateriales({ [cosa.material.id]: cosa.material });   // antes de operar
-    const pedido = pedidoAgregar(ed.doc(), cosa, { punto, cabezalMs: ed.tiempo(), seleccion: ed.seleccion });
+    const destino = ed.destino?.() ?? null;
+    const pedido = pedidoAgregar(ed.doc(), cosa, { punto, cabezalMs: ed.tiempo(), seleccion: ed.seleccion, destino });
     if (!pedido) {
       this._decir(t("bib.sin_videos"), true);
       return false;
@@ -742,6 +787,11 @@ export class Biblioteca {
     } else if (cosa.tipo === "texto") {
       this._decir(t("bib.texto_agregado"));
       ed.enfocarTexto();
+    } else if (cosa.tipo === "audio" && rolDeMaterial(cosa.material) === "voz"
+      && idiomaDeVoz(cosa.material.idioma, destino).habla) {
+      // habla otro idioma que el destino: quedó sonando en todos (D10)
+      const habla = idiomaDeVoz(cosa.material.idioma, destino).habla;
+      this._decir(t("voz.todos_idiomas", { idioma: this.nombresIdioma[habla] ?? habla }));
     } else {
       this._decir(t("bib.agregado", { nombre: cosa.nombre }));
     }
@@ -846,6 +896,7 @@ export class Biblioteca {
     }
     if (this.escucha?.clave === `m:${id}`) this._pararEscucha();
     this.esperando.delete(id);
+    this.borrados.add(id);
     this.datos = quitarMaterial(this.datos, id);
     this._pintarListas();
     this._decir(t("bib.borrado", { nombre }));
