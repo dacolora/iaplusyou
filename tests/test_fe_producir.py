@@ -750,3 +750,19 @@ def test_decision_b_la_final_co_de_un_proyecto_en_ingles_se_localiza_en_espanol(
     final_id, _ = final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"precios": {"es_CO": 89900}})
     assert final_id.endswith("__es_CO")
     assert entorno["localizar"][:2] == ("es", "CO")
+
+
+def _voz_propia(cliente="acme", nombre="Ana", voice_id="mmx_1"):
+    import materiales
+    import voces_propias
+    return materiales.registrar(
+        cliente, tipo="audio", origen=voces_propias.ORIGEN, url=f"https://r2/vp_{voice_id}.mp3",
+        hash=materiales.hash_clave("voz_propia", "minimax", voice_id), bytes=10, duracion_ms=3000, costo_usd=3.0,
+        extra={"nombre": nombre, "forma": "disenada", "proveedor": "minimax", "voice_id": voice_id,
+               "idioma_muestra": "es", "estrenada": True})
+
+
+def test_legado_voz_propia_anota_minimax(entorno):
+    v = _voz_propia()
+    _, r = final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"voz": f"vp:{v['id']}"})
+    assert entorno["voz"]["voz"] == f"vp:{v['id']}" and r["capas"]["voz"]["proveedor"] == "fal/minimax"
