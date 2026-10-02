@@ -239,6 +239,6 @@ def test_capa_5c_claves_borradas_y_plantillas_en_ingles():
     with idiomas.en_idioma("en"):
         t = textos_editor.textos()
     assert [t[f"op.plantilla_{p}"] for p in ("oferta", "nuevo", "envio", "ultimas", "mas_vendido")] == [
-        "SALE", "NEW", "FREE SHIPPING", "LAST UNITS LEFT!", "BEST SELLER"]
+        "SALE", "NEW", "FREE SHIPPING", "ONLY A FEW LEFT!", "BEST SELLER"]
     assert t["op.plantilla_descuento"] == "-50 %" == textos_editor.TEXTOS["op.plantilla_descuento"]
     assert t["prop.ancho"] == "Text width" and t["prop.mostrar_emojis"] == "Show the emojis"

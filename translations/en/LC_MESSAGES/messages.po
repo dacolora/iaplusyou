@@ -17807,7 +17807,7 @@ msgid "¡Listo! Tienes cambios sin guardar en esta página."
 msgstr "Done! You have unsaved changes on this page."
 
 msgid "¡ÚLTIMAS UNIDADES!"
-msgstr "LAST UNITS LEFT!"
+msgstr "ONLY A FEW LEFT!"
 
 #, python-format
 msgid "«%(accion)s» gasta en Meta o en generación. ¿Aprobar?"

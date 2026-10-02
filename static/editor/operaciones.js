@@ -1130,7 +1130,8 @@ const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion", "
 // como los presets de agregarTexto) y se guarda como fracción de la altura
 // del lienzo. Cambiar el estilo de un texto invalida su png en caché. Capa 5c
 // (D3): cambiar el estilo o el tamaño (`transform.escala`) de un texto lo pasa
-// a v2; moverlo (x, y) o cambiarle la opacidad, no.
+// a v2 — solo si de verdad cambió: poner el valor que ya tenía no lo toca —;
+// moverlo (x, y) o cambiarle la opacidad, no.
 export function cambiar(doc, clipId, cambios, info = {}) {
   const res = structuredClone(doc);
   const { pista, clip } = buscar(res, clipId);
@@ -1143,6 +1144,7 @@ export function cambiar(doc, clipId, cambios, info = {}) {
   let tocaEstilo = false;
   if (cambios.estilo !== undefined) {
     if (pista.tipo !== "texto") throw new OperacionInvalida(t("op.estilo_solo_texto"));
+    const estiloAntes = JSON.stringify(clip.estilo);
     const e = cambios.estilo;
     if (typeof e !== "object" || Array.isArray(e) || e === null) throw new OperacionInvalida("estilo debe ser un objeto.");
     for (const clave of Object.keys(e)) {
@@ -1171,8 +1173,12 @@ export function cambiar(doc, clipId, cambios, info = {}) {
     if (e.ancho_max !== undefined) {
       clip.estilo.ancho_max = e.ancho_max === null ? null : acotar(numeroCambio(e.ancho_max, "estilo.ancho_max"), 0, 1);
     }
-    aV2(clip);
-    tocaEstilo = true;
+    // ruling (Tarea 7, arreglo): solo un estilo que de verdad cambió lo pasa a v2 (tocar el color que
+    // ya tiene no convierte, no guarda ni mueve los saltos de línea de un anuncio que ya existe)
+    if (JSON.stringify(clip.estilo) !== estiloAntes) {
+      aV2(clip);
+      tocaEstilo = true;
+    }
   }
   if (cambios.transform !== undefined) {
     if (!["video", "superpuesto", "imagen", "texto"].includes(pista.tipo)) {
@@ -1186,8 +1192,9 @@ export function cambiar(doc, clipId, cambios, info = {}) {
     if (tf.x !== undefined) clip.transform.x = acotar(numeroCambio(tf.x, "transform.x"), 0, 1);
     if (tf.y !== undefined) clip.transform.y = acotar(numeroCambio(tf.y, "transform.y"), 0, 1);
     if (tf.escala !== undefined) {
+      const escalaAntes = clip.transform.escala ?? TRANSFORM.escala;
       clip.transform.escala = acotar(numeroCambio(tf.escala, "transform.escala"), ESCALA_MIN, ESCALA_MAX);
-      if (pista.tipo === "texto") {
+      if (pista.tipo === "texto" && clip.transform.escala !== escalaAntes) {
         aV2(clip);
         tocaEstilo = true;      // lo dibujado como v1 ya no vale
       }

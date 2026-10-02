@@ -91,7 +91,12 @@ export class Propiedades {
     this.materiales = materiales;
     this.catalogoFuentes = Array.isArray(catalogoFuentes) ? catalogoFuentes : [];
     this.tabla = tabla ?? null;
-    this.fuentesPedidas = false;      // la lista de fuentes ya pidió bajarlas todas (D9.3)
+    // D9.3: las fuentes de la lista se piden la primera vez que la lista SE VE (una vez por panel) y
+    // cada nombre toma su letra recién cuando la suya bajó (`_letrasListas`)
+    this.fuentesPedidas = false;
+    this.fuentesListas = new Set();   // las que ya bajaron
+    this.muestrasFuente = [];         // [{id, span}] de la lista armada ahora
+    this.vigiaFuentes = null;         // el IntersectionObserver de esa lista
     this.medidasPrincipal = typeof medidasPrincipal === "function" ? medidasPrincipal : null;
     this.nombresIdioma = nombresIdioma ?? {};
     this.m = null;                    // el modelo que se ve
@@ -254,7 +259,7 @@ export class Propiedades {
   }
 
   // Opciones excluyentes (radios con la forma de .segmentado de style.css).
-  // `opciones`: [{valor, texto, fuente?}]; `leer(m)` da {valor, deshabilitado?}.
+  // `opciones`: [{valor, texto}]; `leer(m)` da {valor, deshabilitado?}.
   _opciones(padre, { nombre, etiqueta, opciones, leer, aplicar, lista = false }) {
     const fs = el("fieldset", "ed-prop-campo", padre);
     el("legend", "ed-prop-etiqueta", fs, etiqueta);
@@ -263,8 +268,7 @@ export class Propiedades {
       const l = el("label", "", grupo);
       const r = el("input", "", l);
       Object.assign(r, { type: "radio", name: nombre, value: String(o.valor) });
-      const s = el("span", "", l, o.texto);
-      if (o.fuente) s.style.fontFamily = `"${o.fuente}", var(--font-body)`;
+      el("span", "", l, o.texto);
       r.addEventListener("change", () => {
         if (r.checked) aplicar(o.valor);
       });
@@ -626,13 +630,17 @@ export class Propiedades {
   // Capa 5c (D9.4): la lista de fuentes por familia de estilo (un encabezado
   // por familia, solo las que tienen fuentes), cada nombre escrito en su
   // fuente. La página baja al abrir solo las fuentes que usa el documento
-  // (D9.3): la primera vez que se pinta esta lista pide las demás, para que
-  // cada nombre se vea en su letra (vista.cargarFuentes no pide dos veces la
-  // misma).
+  // (D9.3), y armar este formulario no puede bajar nada: en el celular la hoja
+  // «Editar» está cerrada pero maquetada (visibility + translateY), y un span
+  // con `fontFamily` de una @font-face declarada ya la bajaría. Así que los
+  // nombres nacen en la letra de la página, la lista pide sus fuentes la
+  // primera vez que se ve (`_alVerse`; una vez por panel) y cada nombre toma su
+  // letra cuando la suya bajó.
   _armarFuentes(m) {
     const fs = el("fieldset", "ed-prop-campo ed-fuentes", this.cuerpo);
     el("legend", "ed-prop-etiqueta", fs, t("prop.fuente"));
     const radios = [];
+    const muestras = [];
     for (const g of m.fuentes) {
       const grupo = el("div", "ed-fuentes-grupo", fs);
       const titulo = el("p", "ed-fuentes-familia", grupo, g.texto);
@@ -646,7 +654,7 @@ export class Propiedades {
         const r = el("input", "", l);
         Object.assign(r, { type: "radio", name: "ed-prop-fuente", value: f.valor });
         r.setAttribute("aria-label", f.texto);
-        el("span", "", l, f.texto).style.fontFamily = `"${f.valor}", var(--font-body)`;
+        muestras.push({ id: f.valor, span: el("span", "", l, f.texto) });
         r.addEventListener("change", () => {
           if (r.checked) this._cambiar(null, { estilo: { fuente: f.valor } });
         });
@@ -656,10 +664,52 @@ export class Propiedades {
     this.pintores.push((x) => {
       for (const r of radios) r.checked = r.value === String(x.fuente);
     });
-    const ids = m.fuentes.flatMap((g) => g.fuentes.map((f) => f.valor));
-    if (!this.fuentesPedidas && ids.length) {
-      this.fuentesPedidas = true;
-      this.editor.cargarFuentes?.(ids);
+    this.vigiaFuentes?.disconnect();       // la lista anterior se fue con su formulario
+    this.vigiaFuentes = null;
+    this.muestrasFuente = muestras;
+    this._letrasListas();
+    const ids = muestras.map((x) => x.id);
+    if (!this.fuentesPedidas && ids.length) this._alVerse(fs, () => this._pedirFuentes(ids));
+  }
+
+  // `hacer()` la primera vez que `nodo` se ve: con IntersectionObserver (en el
+  // escritorio, cuando la columna lo muestra; en el celular, cuando la hoja
+  // sube); sin él, cuando se lo toca o recibe el foco.
+  _alVerse(nodo, hacer) {
+    const Vigia = globalThis.IntersectionObserver;
+    if (typeof Vigia !== "function") {
+      nodo.addEventListener("pointerdown", hacer);
+      nodo.addEventListener("focusin", hacer);
+      return;
+    }
+    const vigia = new Vigia((entradas) => {
+      if (!entradas.some((e) => e.isIntersecting)) return;
+      vigia.disconnect();
+      if (this.vigiaFuentes === vigia) this.vigiaFuentes = null;
+      hacer();
+    });
+    vigia.observe(nodo);
+    this.vigiaFuentes = vigia;
+  }
+
+  // Pide cada fuente de la lista (vista.cargarFuentes no baja dos veces la
+  // misma) y, cuando una bajó, le da su letra a su nombre; la que no baja deja
+  // su nombre en la letra de la página.
+  _pedirFuentes(ids) {
+    if (this.fuentesPedidas) return;
+    this.fuentesPedidas = true;
+    for (const id of ids) {
+      Promise.resolve(this.editor.cargarFuentes?.([id])).then((r) => {
+        if (Array.isArray(r) && r.includes(false)) return;
+        this.fuentesListas.add(id);
+        this._letrasListas();
+      }, () => {});
+    }
+  }
+
+  _letrasListas() {
+    for (const { id, span } of this.muestrasFuente) {
+      if (this.fuentesListas.has(id)) span.style.fontFamily = `"${id}", var(--font-body)`;
     }
   }
 

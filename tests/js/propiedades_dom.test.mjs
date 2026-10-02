@@ -101,9 +101,12 @@ const CATALOGO_4 = [
 ];
 
 // Un `editor` (pagina_editor.js) que anota lo que se le pide y nunca rechaza.
+// `cargarFuentes` devuelve una promesa por pedido que la prueba cumple a mano
+// (`bajada[id](resultado)`: [true] bajó, [false] no), como vista.cargarFuentes.
 function editorFalso(doc, seleccion) {
   const llamadas = [];
   const pedidas = [];
+  const bajada = {};
   const editor = {
     doc: () => editor.actual,
     actual: doc,
@@ -114,10 +117,33 @@ function editorFalso(doc, seleccion) {
     operar: (...a) => { llamadas.push(["operar", ...a]); return true; },
     operarCon: (o, ...a) => { llamadas.push(["operarCon", o, ...a]); return true; },
     escuchar: () => () => {},
-    cargarFuentes: (ids) => { pedidas.push(ids); return Promise.resolve([]); },
+    cargarFuentes: (ids) => {
+      pedidas.push(ids);
+      return new Promise((cumplir) => { for (const id of ids) bajada[id] = cumplir; });
+    },
   };
-  return { editor, llamadas, pedidas };
+  return { editor, llamadas, pedidas, bajada };
 }
+
+// Un IntersectionObserver de mentira: la prueba decide cuándo «se ve» lo observado.
+const vigias = [];
+class VigiaFalso {
+  constructor(alVer) {
+    this.alVer = alVer;
+    this.nodos = [];
+    this.desconectado = false;
+    vigias.push(this);
+  }
+
+  observe(nodo) { this.nodos.push(nodo); }
+
+  disconnect() { this.desconectado = true; }
+
+  ver(si = true) { this.alVer(this.nodos.map((target) => ({ target, isIntersecting: si })), this); }
+}
+const conVigia = () => { vigias.length = 0; globalThis.IntersectionObserver = VigiaFalso; };
+const sinVigia = () => { vigias.length = 0; delete globalThis.IntersectionObserver; };
+const vuelta = () => new Promise((r) => setImmediate(r));
 
 function panel(doc, seleccion) {
   const falso = editorFalso(doc, seleccion);
@@ -133,27 +159,90 @@ function textoViejoConEmoji() {
   return d;
 }
 
-test("la lista de fuentes va por familia, cada nombre en su letra, y pide las fuentes una sola vez", () => {
-  const { p, editor, buscar, llamadas, pedidas } = panel(textoViejoConEmoji(), "t1");
-  assert.deepEqual(pedidas, [["Inter-Bold", "SpaceGrotesk-Bold", "Anton-Regular", "DMSerifDisplay-Regular"]]);   // en el orden de la lista
+test("la lista de fuentes va por familia, con su nombre y su aria-label; elegir una la cambia", () => {
+  sinVigia();
+  const { buscar, llamadas } = panel(textoViejoConEmoji(), "t1");
   const familias = buscar((n) => n.classList.contains("ed-fuentes-familia"));
   assert.deepEqual(familias.map((n) => n.textContent), ["Clásicas", "De impacto", "Con serifa"]);
   const radios = buscar((n) => n.tagName === "INPUT" && n.type === "radio" && n.name === "ed-prop-fuente");
   assert.deepEqual(radios.map((r) => r.value), ["Inter-Bold", "SpaceGrotesk-Bold", "Anton-Regular", "DMSerifDisplay-Regular"]);
   assert.deepEqual(radios.filter((r) => r.checked).map((r) => r.value), ["Inter-Bold"]);
   const anton = radios.find((r) => r.value === "Anton-Regular");
-  assert.match(anton.padre.hijos[1].style.fontFamily, /^"Anton-Regular"/);
   assert.equal(anton.getAttribute("aria-label"), "Anton");
+  assert.equal(anton.padre.hijos[1].textContent, "Anton");
   anton.checked = true;
   anton.disparar("change");
   assert.deepEqual(llamadas.at(-1), ["operar", "cambiar", "t1", { estilo: { fuente: "Anton-Regular" } }]);
-  // otra pintada, u otro texto y de vuelta: no se vuelven a pedir
-  p.pintar();
-  editor.seleccion = null;
-  p.pintar();
-  editor.seleccion = "t1";
-  p.pintar();
-  assert.equal(pedidas.length, 1);
+});
+
+// D9.3: armar «Editar» no baja nada (en el celular la hoja está cerrada, pero
+// maquetada: un span con `fontFamily` de una @font-face declarada ya la baja).
+// Las fuentes se piden la primera vez que la lista SE VE, una vez por panel, y
+// cada nombre se escribe en su letra recién cuando la suya bajó.
+test("las fuentes de la lista se piden recién cuando la lista se ve, una vez, y cada nombre toma su letra al bajar", async () => {
+  conVigia();
+  try {
+    const { p, editor, buscar, pedidas, bajada } = panel(textoViejoConEmoji(), "t1");
+    const spans = () => buscar((n) => n.tagName === "SPAN" && n.padre?.hijos[0]?.name === "ed-prop-fuente");
+    const letra = (id) => spans().find((n) => n.padre.hijos[0].value === id).style.fontFamily;
+    assert.deepEqual(pedidas, [], "armar el formulario no baja nada");
+    assert.ok(spans().every((n) => n.style.fontFamily === undefined), "ningún nombre pide su fuente antes de verse");
+    assert.equal(vigias.length, 1);
+    assert.ok(vigias[0].nodos[0].classList.contains("ed-fuentes"), "se vigila la lista de fuentes");
+    vigias[0].ver(false);                                   // el aviso inicial de «no se ve»
+    assert.deepEqual(pedidas, []);
+    // otro texto y de vuelta, sin que la lista se haya visto: tampoco baja nada
+    editor.seleccion = null;
+    p.pintar();
+    editor.seleccion = "t1";
+    p.pintar();
+    assert.deepEqual(pedidas, []);
+    assert.equal(vigias[0].desconectado, true, "el vigía de la lista que se fue se suelta");
+    const vigia = vigias.at(-1);
+    vigia.ver(true);
+    assert.deepEqual(pedidas.flat(), ["Inter-Bold", "SpaceGrotesk-Bold", "Anton-Regular", "DMSerifDisplay-Regular"]);
+    assert.equal(vigia.desconectado, true);
+    vigia.ver(true);                                        // otro aviso: nada nuevo
+    assert.equal(pedidas.flat().length, 4);
+    // nadie tiene su letra hasta que la suya baja
+    assert.ok(spans().every((n) => n.style.fontFamily === undefined));
+    bajada["Anton-Regular"]([true]);
+    bajada["SpaceGrotesk-Bold"]([false]);                   // no bajó: su nombre queda en la letra de la página
+    await vuelta();
+    assert.match(letra("Anton-Regular"), /^"Anton-Regular"/);
+    assert.equal(letra("SpaceGrotesk-Bold"), undefined);
+    assert.equal(letra("Inter-Bold"), undefined);
+    // la lista armada de nuevo: lo que ya bajó sale en su letra al momento; nada se vuelve a pedir ni a vigilar
+    const vigiasAntes = vigias.length;
+    editor.seleccion = null;
+    p.pintar();
+    editor.seleccion = "t1";
+    p.pintar();
+    assert.match(letra("Anton-Regular"), /^"Anton-Regular"/);
+    assert.equal(letra("DMSerifDisplay-Regular"), undefined);
+    assert.equal(vigias.length, vigiasAntes);
+    bajada["DMSerifDisplay-Regular"]([true]);               // la que llega después le da su letra a la lista de ahora
+    await vuelta();
+    assert.match(letra("DMSerifDisplay-Regular"), /^"DMSerifDisplay-Regular"/);
+    assert.equal(pedidas.flat().length, 4);
+  } finally {
+    sinVigia();
+  }
+});
+
+test("sin IntersectionObserver, la lista pide sus fuentes al tocarla o al recibir el foco (una vez)", () => {
+  sinVigia();
+  const { buscar, pedidas } = panel(textoViejoConEmoji(), "t1");
+  const lista = buscar((n) => n.classList.contains("ed-fuentes"))[0];
+  assert.deepEqual(pedidas, []);
+  lista.disparar("pointerdown");
+  assert.deepEqual(pedidas.flat(), ["Inter-Bold", "SpaceGrotesk-Bold", "Anton-Regular", "DMSerifDisplay-Regular"]);
+  lista.disparar("focusin");
+  lista.disparar("pointerdown");
+  assert.equal(pedidas.flat().length, 4);
+  const otra = panel(textoViejoConEmoji(), "t1");
+  otra.buscar((n) => n.classList.contains("ed-fuentes"))[0].disparar("focusin");
+  assert.equal(otra.pedidas.flat().length, 4, "el foco también la abre");
 });
 
 test("«Ancho del texto»: un arrastre es un deshacer (clave <id>:ancho); «Sin límite» lo apaga", () => {

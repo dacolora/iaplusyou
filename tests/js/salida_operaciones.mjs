@@ -292,7 +292,17 @@ anotar("texto_emoji", () => op.agregarTexto(docBase(), 500, "emoji", { literal: 
 anotar("texto_editado_pasa_a_v2", () => op.editarTexto(docBase(), "t1", "Hola 🔥", "es", INFO));
 anotar("texto_actualizado", () => op.actualizarTexto(docBase(), "t1", INFO));
 anotar("texto_ancho_desde_propiedades", () => op.cambiar(docBase(), "t1", prop.cambioAncho(50), INFO));
-anotar("texto_sin_limite_desde_propiedades", () => op.cambiar(docBase(), "t1", prop.cambioSinLimite(true), INFO));
+anotar("texto_sin_limite_desde_propiedades", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].estilo.ancho_max = 0.5;              // un texto viejo con ancho (como los del borrador)
+  return op.cambiar(d, "t1", prop.cambioSinLimite(true), INFO);
+});
+// Ruling del controlador: tocar el color que ya tiene no lo pasa a v2 (Python: sigue v1 byte a byte).
+anotar("mismo_color_sigue_v1", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].estilo.color = "#FFFFFF";
+  return op.cambiar(d, "t1", { estilo: { color: "#FFFFFF" }, transform: { escala: 1 } }, INFO);
+});
 anotar("imagen_con_tinte", () => op.agregarImagen(docBase(), STICKER, 1000, { fraccion: 0.35, tinte: "#FFD400" }, INFO));
 anotar("imagen_tinte_cambiado", () => {
   const con = op.agregarImagen(docBase(), STICKER, 1000, { fraccion: 0.35, tinte: "#FFD400" }, INFO);

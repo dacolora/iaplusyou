@@ -1092,6 +1092,24 @@ test("agregarTexto: la fuente de una plantilla es la preferida si está en FUENT
   assert.throws(() => { op.PRESETS_TEXTO.oferta.fuente = "Pacifico-Regular"; }, TypeError);
 });
 
+test("agregarTexto: una plantilla cuya fuente no está en FUENTES nace con su respaldo (Inter-Bold)", () => {
+  // como si Daniel no hubiera aprobado Anton ni Lilita One: el controlador las saca del catálogo
+  const quitadas = ["Anton-Regular", "LilitaOne-Regular"];
+  const antes = [...op.FUENTES];
+  op.FUENTES.splice(0, op.FUENTES.length, ...antes.filter((f) => !quitadas.includes(f)));
+  try {
+    for (const preset of ["oferta", "mas_vendido"]) {
+      const r = op.agregarTexto(docBase(), 0, preset, {}, INFO);
+      assert.equal(clipDe(r.doc, r.seleccion).estilo.fuente, "Inter-Bold", preset);
+    }
+    const nuevo = op.agregarTexto(docBase(), 0, "nuevo", {}, INFO);
+    assert.equal(clipDe(nuevo.doc, nuevo.seleccion).estilo.fuente, "BebasNeue-Regular", "la que sí está, se queda");
+  } finally {
+    op.FUENTES.splice(0, op.FUENTES.length, ...antes);
+  }
+  assert.deepEqual(op.FUENTES, antes);
+});
+
 test("agregarTexto «emoji»: pide el emoji; nace a 160 px, sin fondo, contorno ni sombra y sin límite de ancho (D12.2)", async () => {
   invalida(() => op.agregarTexto(docBase(), 0, "emoji", {}, INFO), /^Elige un emoji\.$/);
   invalida(() => op.agregarTexto(docBase(), 0, "emoji", { literal: "  " }, INFO), /^Elige un emoji\.$/);
@@ -1181,7 +1199,7 @@ test("cambiar(tinte): solo en imágenes; el color en mayúsculas, null lo quita 
 });
 
 test("cambiar(estilo.fuente) acepta todo el catálogo y rechaza lo demás con el mensaje de contrato", () => {
-  for (const f of op.FUENTES) {
+  for (const f of op.FUENTES.filter((x) => x !== "Inter-Bold")) {          // t1 ya está en Inter-Bold
     const d = op.cambiar(docBase(), "t1", { estilo: { fuente: f } }, INFO).doc;
     assert.deepEqual([clipDe(d, "t1").estilo.fuente, clipDe(d, "t1").estilo.version], [f, 2]);
   }
@@ -1204,4 +1222,42 @@ test("agregarImagen: `fraccion` del ancho del lienzo y `tinte` (un sticker); sin
   // `llenar` sigue mandando sobre `fraccion`
   const llena = op.agregarImagen(docBase(), STICKER, 0, { llenar: true, fraccion: 0.35 }, INFO);
   assert.equal(clipDe(llena.doc, llena.seleccion).transform.escala, 3.75);   // 1920 / 512
+});
+
+// Ruling del controlador (Tarea 7, arreglo): un cambio que no cambia nada no
+// convierte. Tocar el color que un texto viejo ya tiene (o soltar el asa en la
+// misma escala) no lo pasa a v2: no se guarda nada ni se mueven los saltos de
+// línea de un anuncio que ya existe.
+test("cambiar con el mismo estilo o la misma escala no pasa a v2 un texto viejo (ni toca su png)", () => {
+  const viejo = () => {
+    const d = docBase();
+    Object.assign(clipDe(d, "t1").estilo, { tamano: 72 / 1920, color: "#FFFFFF", alineacion: "centro", ancho_max: 0.8889,
+      contorno: { color: "#000000", grosor: 4 / 1920 }, sombra: null, fondo: null });
+    d.pngs = { t1: 20 };
+    return d;
+  };
+  for (const [nombre, cambios] of [
+    ["el mismo color", { estilo: { color: "#FFFFFF" } }],
+    ["la misma fuente", { estilo: { fuente: "Inter-Bold" } }],
+    ["el mismo tamaño", { estilo: { tamano: 72 } }],
+    ["la misma alineación", { estilo: { alineacion: "centro" } }],
+    ["el mismo ancho", { estilo: { ancho_max: 0.8889 } }],
+    ["el mismo contorno", { estilo: { contorno: { color: "#000000" } } }],
+    ["sin fondo otra vez", { estilo: { fondo: null } }],
+    ["nada", { estilo: {} }],
+    ["la misma escala", { transform: { escala: 1 } }],
+    ["la misma escala y otra x", { transform: { escala: 1, x: 0.3 } }],
+  ]) {
+    const antes = viejo();
+    const d = op.cambiar(antes, "t1", cambios, INFO).doc;
+    assert.ok(sinVersion(d), `${nombre}: no cambió nada que se dibuje`);
+    assert.deepEqual(clipDe(d, "t1").estilo, clipDe(antes, "t1").estilo, `${nombre}: el estilo queda byte a byte`);
+    assert.deepEqual(d.pngs, { t1: 20 }, `${nombre}: lo dibujado sigue valiendo`);
+  }
+  // y lo que sí cambia, convierte (y suelta el png)
+  for (const cambios of [{ estilo: { color: "#FFFFFE" } }, { estilo: { ancho_max: 0.5 } }, { transform: { escala: 1.01 } }]) {
+    const d = op.cambiar(viejo(), "t1", cambios, INFO).doc;
+    assert.equal(clipDe(d, "t1").estilo.version, 2, JSON.stringify(cambios));
+    assert.deepEqual(d.pngs, {}, JSON.stringify(cambios));
+  }
 });

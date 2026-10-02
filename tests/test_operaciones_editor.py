@@ -115,9 +115,9 @@ _TEXTO_VIEJO = re.compile(r"^t\d+(_\d+)?$")
 _T1_PASA_A_V2 = ("texto_editado_pasa_a_v2", "texto_actualizado", "texto_ancho_desde_propiedades",
                  "texto_sin_limite_desde_propiedades", "cambiar_estilo_y_transform", "cambiar_estilo_parcial",
                  "cambiar_fondo_ancho_automatico")
-# Los que solo lo mueven, lo alargan o lo duplican: sigue v1, byte a byte.
+# Los que solo lo mueven, lo alargan o lo duplican (o le ponen lo que ya tenía): sigue v1, byte a byte.
 _T1_SIGUE_V1 = ("mover_texto", "duplicar_texto", "no_alarga_mover_texto", "no_alarga_alargar_texto",
-                "animacion_deslizar", "borrar_principal", "vinculado_mover_v1")
+                "animacion_deslizar", "borrar_principal", "vinculado_mover_v1", "mismo_color_sigue_v1")
 
 
 def _revisar_v2_y_tinte(caso):
