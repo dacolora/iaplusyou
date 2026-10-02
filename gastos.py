@@ -16,7 +16,7 @@ tumbar la tarea que ya pagó: los llamadores envuelven en try/except.
 `TARIFAS` y los `estimate_*` de los proveedores; cuando no hay tarifa
 devuelve `usd=None` y el texto "precio no disponible" — nunca se inventa.
 
-Lecturas: `resumen_mes`, `resumen_total`, `por_mes`, `historial`,
+Lecturas: `resumen_mes`, `resumen_total`, `total_entre`, `por_mes`, `historial`,
 `serie_diaria`, `csv_mes`, `por_proyecto_mes`; `formatear(usd)` -> "US$ 0,07".
 """
 import csv
@@ -436,6 +436,17 @@ def resumen_total(cliente, ahora_iso=None):
     with db.conectar() as con:
         suma, n = con.execute(q).first()
     return {"total": round(float(suma or 0.0), 4), "n": int(n or 0)}
+
+
+def total_entre(cliente, desde_iso, hasta_iso):
+    """Generación pagada en [desde, hasta): {"usd", "n"} (centro de resultados;
+    mismo origen que `resumen_mes`)."""
+    g = db.gasto
+    q = (sa.select(sa.func.coalesce(sa.func.sum(g.c.usd), 0.0), sa.func.count())
+         .where(g.c.cliente == cliente, g.c.creado_en >= desde_iso[:19], g.c.creado_en < hasta_iso[:19]))
+    with db.conectar() as con:
+        usd, n = con.execute(q).one()
+    return {"usd": round(float(usd or 0.0), 4), "n": int(n or 0)}
 
 
 def por_mes(cliente, ahora_iso=None):

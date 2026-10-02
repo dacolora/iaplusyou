@@ -360,8 +360,8 @@ def test_snapshots_con_desde_trae_la_ventana_y_la_base(base_temporal):
 
 def test_cargar_datos_una_vez_y_contexto(base_temporal, sin_red, monkeypatch):
     """`contexto` deriva todas las partes de UNA carga: experimentos.cargar
-    y experimentos.snapshots se llaman una vez (por proyecto / por pieza),
-    y el resultado coincide con las funciones sueltas."""
+    y experimentos.snapshots_de se llaman una vez (por proyecto / para todas
+    las piezas), y el resultado coincide con las funciones sueltas."""
     import experimentos as ex
     import tablero
     eid = _experimento(base_temporal, "Cojín")
@@ -374,20 +374,21 @@ def test_cargar_datos_una_vez_y_contexto(base_temporal, sin_red, monkeypatch):
                "top": tablero.top_ganadoras("acme"), "alertas": tablero.alertas("acme", AHORA),
                "csv": tablero.csv_mes("acme", AHORA)}
     llamadas = {"cargar": 0, "snapshots": []}
-    cargar, snapshots = ex.cargar, ex.snapshots
+    cargar, snapshots_de = ex.cargar, ex.snapshots_de
 
     def _cargar(cliente):
         llamadas["cargar"] += 1
         return cargar(cliente)
 
-    def _snapshots(ep_id, desde=None):
+    def _snapshots_de(ep_ids, desde):
         llamadas["snapshots"].append(desde)
-        return snapshots(ep_id, desde=desde)
+        return snapshots_de(ep_ids, desde)
     monkeypatch.setattr(ex, "cargar", _cargar)
-    monkeypatch.setattr(ex, "snapshots", _snapshots)
+    monkeypatch.setattr(ex, "snapshots_de", _snapshots_de)
     ctx = tablero.contexto("acme", AHORA)
     assert llamadas["cargar"] == 1
-    # Una consulta por pieza, acotada a lo más temprano entre el mes y los 30 días.
+    # Una llamada para todas las piezas (dos consultas), acotada a lo más temprano
+    # entre el mes y los 30 días.
     assert llamadas["snapshots"] == ["2026-08-18T00:00:00"]
     assert ctx["ahora"] == AHORA
     for parte, valor in sueltas.items():
