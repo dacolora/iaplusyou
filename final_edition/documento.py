@@ -4,7 +4,7 @@ proyecto del editor. Puro: sin base, sin ffmpeg, sin red.
 Reglas: tiempos en milisegundos enteros; posiciones en fracción del lienzo
 (0–1) y tamaños de texto en fracción de la altura; un texto es literal o
 variable; el precio de un país es el número escrito para ese país o no
-existe (nunca se convierte); máximo 8 pistas.
+existe (nunca se convierte); máximo 20 pistas.
 
 Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
   - la pista principal `video` es contigua desde 0 (el primer clip arranca en
@@ -95,7 +95,11 @@ ESQUEMA_ACTUAL = 1
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 FORMATOS = {"9:16": (1080, 1920), "4:5": (1080, 1350), "1:1": (1080, 1080), "16:9": (1920, 1080)}
 TIPOS_PISTA = ("video", "superpuesto", "imagen", "texto", "subtitulos", "audio")
-MAX_PISTAS = 8
+# Capa 5c (prueba en vivo): eran 8, y un borrador automático ya usa 7 — con un
+# título y un sticker no cabía otro emoji ni otra plantilla. El render no depende
+# del número de pistas (motor/tramos.py reparte por capas y por clips de la
+# principal). Espejo: static/editor/operaciones.js (MAX_PISTAS).
+MAX_PISTAS = 20
 ANCLAS = ("centro", "sup_izq", "sup_der", "inf_izq", "inf_der")
 ROLES_AUDIO = ("voz", "musica", "sonido", "efecto", "subida", "grabacion")
 ESTILOS_SUBTITULOS = ("karaoke", "caja", "palabra_grande", "minimal")   # D7; motor/subtitulos los toma de aquí

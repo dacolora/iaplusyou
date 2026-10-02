@@ -8,7 +8,7 @@ import * as op from "../../static/editor/operaciones.js";
 import * as vinc from "../../static/editor/vinculos.js";
 import { duracionMs } from "../../static/editor/tiempo.js";
 import { vocesJuntas } from "../../static/editor/avisos_carga.js";
-import { docVinculos, DURACIONES as D } from "./doc_base.mjs";
+import { conLasPistasLlenas, docVinculos, DURACIONES as D } from "./doc_base.mjs";
 
 function buscar(doc, id) {
   for (const pista of doc.pistas) {
@@ -287,25 +287,37 @@ test("guardarVincular nunca lanza, aunque el almacén falle", () => {
   assert.equal(almacen.get(vinc.CLAVE_VINCULAR), "0");
 });
 
-// Revisión final de la capa 5b (D10.6): con las 8 pistas ocupadas, una capa
+// Revisión final de la capa 5b (D10.6): con TODAS las pistas ocupadas
+// (`MAX_PISTAS`: 8 hasta la capa 5c, 20 desde la prueba en vivo), una capa
 // movida que pisa a otra de su fila «se queda en la suya» — antes
 // `pistaLibre` → `pistaNueva` lanzaba «demasiadas pistas» y un borrado o un
 // reordenamiento corriente se rechazaba con «Vincular» prendido.
-function docOchoPistas() {
-  let d = docVinculos();
-  for (let i = 0; i < 3; i++) d = op.agregarImagen(d, { id: 4, ancho: 600, alto: 400 }, 0, { duracionMs: 1000 }, D).doc;
-  assert.equal(d.pistas.length, 8);
+function docPistasLlenas() {
+  const d = conLasPistasLlenas(docVinculos());
+  assert.equal(d.pistas.length, op.MAX_PISTAS);
   return d;
 }
 
-test("con 8 pistas, una capa que pisa a otra se queda en su fila en vez de rechazar la operación (D10.6)", () => {
-  const antes = docOchoPistas();
+test("con todas las pistas ocupadas, una capa que pisa a otra se queda en su fila en vez de rechazar la operación (D10.6)", () => {
+  const antes = docPistasLlenas();
   const res = vinc.operar(op.borrar, antes, ["v0"], D).doc;
-  assert.equal(res.pistas.length, 8);
+  assert.equal(res.pistas.length, op.MAX_PISTAS);
   assert.deepEqual([inicioDe(res, "t1"), pistaDe(res, "t1")], [1000, "p_texto"]);
   assert.deepEqual([inicioDe(res, "t2"), pistaDe(res, "t2")], [1000, "p_texto"], "sin filas libres, t2 se queda en la suya");
   const reordenado = vinc.operar(op.moverPrincipal, antes, ["v1", 0], D).doc;
   assert.equal(reordenado.pistas[0].clips[0].id, "v1");
+});
+
+test("con pistas de sobra (9 a 19), la capa que pisa a otra pasa a una fila nueva — el tope ya no es 8 (capa 5c, prueba en vivo)", () => {
+  // docVinculos tiene 5 pistas; con 8 las filas se acababan y t2 se quedaba pegada a t1
+  let antes = docVinculos();
+  for (let i = 0; i < 5; i++) antes = op.agregarImagen(antes, { id: 4, ancho: 600, alto: 400 }, 0, { duracionMs: 1000 }, D).doc;
+  assert.ok(antes.pistas.length > 8 && antes.pistas.length < op.MAX_PISTAS, `${antes.pistas.length} pistas`);
+  const res = vinc.operar(op.borrar, antes, ["v0"], D).doc;
+  assert.equal(res.pistas.length, antes.pistas.length + 1, "t2 abre una fila de texto nueva");
+  assert.deepEqual([inicioDe(res, "t1"), pistaDe(res, "t1")], [1000, "p_texto"]);
+  assert.equal(inicioDe(res, "t2"), 1000);
+  assert.notEqual(pistaDe(res, "t2"), "p_texto", "ya no se queda pegada a t1");
 });
 
 // ---- Revisión final de la capa 5b: el deslizador de la duración de una

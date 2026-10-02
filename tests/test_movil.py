@@ -235,3 +235,53 @@ def test_editor_las_plantillas_para_vender_se_parten_en_vez_de_cortarse():
     base = re.search(r"\.ed-bib-texto-muestra \{([^}]*)\}", css).group(1)
     assert "white-space: nowrap" in base                                        # las muestras de siempre, intactas
     assert 'el("div", "ed-bib-textos ed-bib-plantillas", p)' in open("static/editor/biblioteca.js", encoding="utf-8").read()
+
+
+def test_editor_la_linea_de_tiempo_con_veinte_pistas_corre_en_su_caja_y_no_empuja_de_lado():
+    """Capa 5c (9/9, prueba en vivo): con el tope en 20 pistas la línea de tiempo tiene que dejar llegar a las
+    pistas 9 a 20. Medido en Chrome con una edición de 20 filas (740 px de filas): en el escritorio la caja
+    (`.linea-scroll`, `overflow: auto`, dentro de un `#linea` con `max-height: 38vh`) mide 261 px y corre hacia abajo
+    — la última fila se alcanza, con la regla y las cabeceras pegadas arriba y a la izquierda —; a 500 px (≤ 760: el
+    celular) la caja no tiene tope y crece con sus filas, así que lo que corre es la página (1429 px en 725 de
+    pantalla), nunca de lado (`scrollWidth` = `clientWidth`). Lo que esto vigila: ningún alto fijo ni `overflow:
+    hidden` en la cadena de la línea que esconda filas, y que lo ancho (los segundos) corra solo dentro de su caja."""
+    import re
+    html = open("templates/editor.html", encoding="utf-8").read()
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+
+    def regla(selector, texto=css):
+        m = re.search(r"(?:^|\n|\})\s*" + re.escape(selector) + r" \{([^}]*)\}", texto)
+        assert m, selector
+        return m.group(1)
+
+    def alto_fijo(declaraciones):
+        return re.search(r"(?<![-\w])(?:height|max-height):", declaraciones)
+
+    # la caja corre hacia abajo Y de lado dentro de sí misma; la tira entera mide lo de sus filas
+    assert re.search(r"overflow:\s*auto", regla(".linea-scroll"))
+    assert "min-width: 0" in regla(".linea")
+    assert "width: max-content" in regla(".ed-linea-marco") and "min-width: 100%" in regla(".ed-linea-marco")
+    for cadena in (".linea-scroll", ".ed-linea-marco", ".ed-cabeceras", ".ed-cabeceras-filas", ".linea-lienzo", ".linea-filas", ".linea-fila"):
+        decl = regla(cadena)
+        assert not alto_fijo(decl), f"{cadena} tiene un alto fijo que escondería las pistas 9 a 20"
+        assert "overflow: hidden" not in decl and "overflow-y: hidden" not in decl, cadena
+    assert "position: sticky" in regla(".linea-regla") and "top: 0" in regla(".linea-regla")
+    assert "position: sticky" in regla(".ed-cabeceras") and "left: 0" in regla(".ed-cabeceras")
+
+    # escritorio: la caja de la línea tiene TOPE (max-height, nunca height) y su contenido corre dentro
+    escritorio = css[css.index("@media not all and (max-width: 760px)"):css.index("@media (max-width: 760px)")]
+    linea = regla("#linea", escritorio)
+    assert "max-height: 38vh" in linea and "display: flex" in linea and "flex-direction: column" in linea
+    assert not re.search(r"(?<![-\w])height:", linea) and "overflow" not in linea
+    assert "min-height: 0" in regla("#linea .linea-scroll", escritorio)       # sin él, la caja no se achica y la línea se sale
+
+    # celular: ninguna regla de la línea le pone tope ni la corta — crece y la página corre
+    celular = css[css.index("@media (max-width: 760px)"):]
+    celular = celular[:celular.index("@media (prefers-reduced-motion")]
+    for m in re.finditer(r"(#linea|\.linea-scroll|\.linea-lienzo|\.linea-filas|\.ed-linea-marco)[^{,]*\{([^}]*)\}", celular):
+        assert not alto_fijo(m.group(2)) and "overflow" not in m.group(2), m.group(0)
+
+    # y el JS no le fija alto a ninguna de las cajas: solo a cada fila
+    js = open("static/editor/linea_tiempo.js", encoding="utf-8").read()
+    assert not re.search(r"this\.(scroll|marco|cabeceras|listaCabeceras|lienzo|filas)\.style\.(height|maxHeight|overflow)", js)
+    assert "fila.style.height = `${alto}px`" in js

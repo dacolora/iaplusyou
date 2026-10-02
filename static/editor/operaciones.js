@@ -55,7 +55,10 @@ export const ANCHO_TEXTO = { min: 0.3, max: 1, defecto: 0.86 };
 // Cuánto dura la entrada «deslizar» elegida en el panel (capa 4c): sin
 // `duracion_ms` ni la vista previa ni el render la aplican.
 export const DURACION_ANIMACION_MS = 400;
-const MAX_PISTAS = 8;   // documento.MAX_PISTAS
+// Tope de pistas de una edición: el de documento.MAX_PISTAS (tests/test_editor_js.py
+// los compara) — agregar* abre una fila nueva solo mientras quepa. Eran 8 hasta la
+// capa 5c: un borrador ya usa 7 y no dejaba sumar otro emoji ni otra plantilla.
+export const MAX_PISTAS = 20;
 const ESCALA_MIN = 0.05;  // transform.escala: lo que acepta cambiar
 const ESCALA_MAX = 5;
 const _IDIOMA_RE = /^[a-z]{2}$/;   // documento._IDIOMA_CLIP_RE (D10): solo idioma, nunca país

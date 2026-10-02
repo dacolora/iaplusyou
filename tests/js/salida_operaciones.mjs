@@ -2,7 +2,7 @@
 // resultan, para que tests/test_operaciones_editor.py los pase por
 // documento.validar y compilador.verificar_recortes (la referencia es Python).
 import * as op from "../../static/editor/operaciones.js";
-import { docBase, docConVozYPalabras, docVinculos, DURACIONES as D, INFO_PALABRAS } from "./doc_base.mjs";
+import { conLasPistasLlenas, docBase, docConVozYPalabras, docVinculos, DURACIONES as D, INFO_PALABRAS } from "./doc_base.mjs";
 import * as prop from "../../static/editor/propiedades_modelo.js";
 import * as vinc from "../../static/editor/vinculos.js";
 
@@ -262,12 +262,26 @@ anotarSolape("solape_ultimo_se_deshace",
   () => op.moverPrincipal(op.ponerTransicion(docBase(), "v0", "fundido", 500, D).doc, "v0", 1, D), 8000);
 
 anotar("vinculado_solape", () => vincular((d) => op.ponerTransicion(d, "v0", "fundido", 500, D)));
-// Revisión final (D10.6): con las 8 pistas ocupadas (docVinculos + tres
-// filas de imagen), t2 pisa a t1 al seguir y se queda en su fila.
-anotar("vinculado_ocho_pistas", () => {
-  let antes = docVinculos();
-  for (let i = 0; i < 3; i++) antes = op.agregarImagen(antes, { id: 4, ancho: 600, alto: 400 }, 0, { duracionMs: 1000 }, D).doc;
+// Revisión final (D10.6): con TODAS las pistas ocupadas (docVinculos + filas
+// de imagen hasta `op.MAX_PISTAS`), t2 pisa a t1 al seguir y se queda en su fila.
+anotar("vinculado_pistas_llenas", () => {
+  const antes = conLasPistasLlenas(docVinculos());
   return { doc: vinc.seguirPrincipal(antes, op.borrar(antes, "v0", D).doc, D) };
+});
+
+// Capa 5c (prueba en vivo): títulos, stickers, emojis y plantillas que se
+// pisan en el tiempo abren una fila cada uno hasta `op.MAX_PISTAS` (20): Python
+// valida el documento de 20 pistas que sale.
+anotar("agregar_capas_hasta_el_tope", () => {
+  const pasos = [
+    (x) => op.agregarTexto(x, 500, "titulo", {}, INFO),
+    (x) => op.agregarImagen(x, { id: 4, ancho: 600, alto: 400 }, 500, { duracionMs: 1500 }, INFO),
+    (x) => op.agregarTexto(x, 500, "emoji", { literal: "🔥" }, INFO),
+    (x) => op.agregarTexto(x, 500, "oferta", {}, INFO),
+  ];
+  let d = docVinculos();
+  for (let i = 0; d.pistas.length < op.MAX_PISTAS && i < 4 * op.MAX_PISTAS; i++) d = pasos[i % pasos.length](d).doc;
+  return { doc: d };
 });
 
 // Revisión final de la capa 5b: una foto de 60 s con 500 ms cedidos a un

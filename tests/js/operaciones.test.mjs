@@ -1261,3 +1261,46 @@ test("cambiar con el mismo estilo o la misma escala no pasa a v2 un texto viejo 
     assert.deepEqual(d.pngs, {}, JSON.stringify(cambios));
   }
 });
+
+// ---- Capa 5c (prueba en vivo): el tope de pistas es 20, no 8 ----
+// Un borrador automático ya usa 7 pistas; con un título en fila nueva y un sticker,
+// el siguiente sticker, emoji o plantilla que se pisara fallaba con «demasiadas pistas».
+const PNG = { id: 4, ancho: 600, alto: 400 };
+
+test("MAX_PISTAS es 20 (el espejo de documento.MAX_PISTAS)", () => {
+  assert.equal(op.MAX_PISTAS, 20);
+});
+
+test("cada capa que se pisa abre su fila hasta el tope; la siguiente se rechaza con «demasiadas pistas»", () => {
+  let d = docBase();
+  const antes = d.pistas.length;
+  assert.ok(antes < 8);
+  for (let i = antes; i < op.MAX_PISTAS; i++) {
+    d = op.agregarImagen(d, PNG, 0, { duracionMs: 1000 }, INFO).doc;
+    assert.equal(d.pistas.length, i + 1, `la capa ${i - antes + 1} abre su fila`);
+  }
+  assert.equal(d.pistas.length, op.MAX_PISTAS);
+  invalida(() => op.agregarImagen(d, PNG, 0, { duracionMs: 1000 }, INFO), /demasiadas pistas/);
+  invalida(() => op.agregarTexto(d, 1500, "titulo", {}, INFO), /demasiadas pistas/);   // pisa a t1
+  // `pistaLibre` → `pistaNueva`: lo que sí cabe en una fila existente no abre otra
+  assert.equal(op.pistaLibre(d, "texto", "p_texto", 3500, 500).id, "p_texto");
+  invalida(() => op.pistaLibre(d, "texto", "p_texto", 1000, 500), /demasiadas pistas/);
+  assert.equal(d.pistas.length, op.MAX_PISTAS, "el rechazo no deja una pista a medias");
+});
+
+test("un borrador de 7 pistas con un título y un sticker acepta otro emoji y otra plantilla", () => {
+  // el borrador: video, texto, voz, sonido (docBase) + música + logo + efecto = 7 pistas
+  let d = docBase();
+  d = op.agregarAudio(d, { id: 2 }, 0, { rol: "musica" }, INFO).doc;
+  d = op.agregarImagen(d, PNG, 0, { duracionMs: 1000 }, INFO).doc;
+  d = op.agregarAudio(d, { id: 2 }, 0, { rol: "efecto" }, INFO).doc;
+  assert.equal(d.pistas.length, 7);
+  d = op.agregarTexto(d, 1500, "titulo", {}, INFO).doc;                 // un título sobre el texto: fila nueva
+  d = op.agregarImagen(d, PNG, 0, { duracionMs: 1000 }, INFO).doc;      // un sticker sobre el logo: fila nueva
+  const ocho = d.pistas.length;
+  assert.ok(ocho >= 8, `${ocho} pistas`);
+  d = op.agregarTexto(d, 1500, "emoji", { literal: "🔥" }, INFO).doc;   // lo que con 8 pistas fallaba
+  d = op.agregarTexto(d, 1500, "oferta", {}, INFO).doc;
+  assert.ok(d.pistas.length > ocho, `de ${ocho} a ${d.pistas.length} pistas`);
+  assert.ok(d.pistas.length <= op.MAX_PISTAS);
+});

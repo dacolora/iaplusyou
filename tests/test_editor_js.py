@@ -123,6 +123,14 @@ def test_fuentes_js_iguales_al_catalogo():
     assert _constante_js("propiedades_modelo.js", "CATEGORIAS_FUENTE") == list(fuentes.CATEGORIAS)
 
 
+def test_max_pistas_js_igual_a_python():
+    # agregar*/pistaNueva rechazan con «demasiadas pistas» donde documento.validar
+    # rechazaría: ni antes (con 8 un borrador con título y stickers ya no aceptaba
+    # otro emoji) ni después (la edición guardaría un documento que el servidor no
+    # acepta). Capa 5c, prueba en vivo: 20 en los dos motores.
+    assert _constante_js("operaciones.js", "MAX_PISTAS") == documento.MAX_PISTAS == 20
+
+
 def test_max_correccion_js_igual_a_python():
     # corregirPalabra y el campo de la pestaña Subtítulos (maxLength) cortan
     # donde documento.validar cortaría (capa 5a, D3)

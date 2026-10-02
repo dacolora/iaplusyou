@@ -4,7 +4,7 @@ import os
 import pytest
 
 from final_edition import documento as d, mezcla
-from final_edition.motor import compilador as c
+from final_edition.motor import compilador as c, tramos
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures", "documentos")
 
@@ -630,3 +630,39 @@ def test_el_tinte_va_antes_de_la_opacidad():
 def test_sin_tinte_la_capa_de_imagen_sale_como_siempre(capa):
     grafo = _imagen_con_capa(**capa)
     assert "[1:v]scale=256:256[l1]" in grafo and "lutrgb" not in grafo
+
+
+# ---- Capa 5c (9/9, prueba en vivo): el tope de pistas sube de 8 a 20 ----
+
+def test_catorce_pistas_con_doce_textos_a_la_vez_validan_y_compilan_dentro_del_presupuesto():
+    """El render no depende del número de pistas: `tramos` reparte por capas (PRESUPUESTO_OVERLAYS) y
+    por clips de la principal, no por filas. Un 9:16 con 14 pistas (video, voz y doce de texto con un clip
+    corto cada una, todos sobre el mismo tramo de tiempo — títulos, emojis y plantillas a la vez) valida,
+    pasa `verificar_recortes` y compila en un tramo con sus doce capas, lejos del presupuesto."""
+    with open(os.path.join(FIX, "video_basico.json"), encoding="utf-8") as f:
+        crudo = json.load(f)
+    principal, voz = crudo["pistas"][0], crudo["pistas"][2]
+    modelo = crudo["pistas"][1]["clips"][0]
+    textos = []
+    for i in range(12):
+        clip = json.loads(json.dumps(modelo))
+        clip.update({"id": f"t{i}", "inicio_ms": 1000, "duracion_ms": 1500, "texto": {"literal": f"Capa {i}"}})
+        clip["transform"]["y"] = round(0.1 + i * 0.07, 2)
+        textos.append({"id": f"p_texto_{i}", "tipo": "texto", "bloqueada": False, "silenciada": False,
+                       "oculta": False, "clips": [clip]})
+    crudo["pistas"] = [principal, *textos, voz]
+    crudo["subtitulos"] = None
+    assert len(crudo["pistas"]) == 14 > 8
+
+    doc = d.validar(crudo)                                              # el tope es 20: 14 pasan
+    doc = c.verificar_recortes(doc, {1: 7000, 2: 7000})                 # nada pide material de más
+    doc = d.resolver(doc, "es", "CO")
+    rutas = {1: "/m/clon.mp4", 2: "/m/voz.wav", **{f"png:t{i}": f"/m/t{i}.png" for i in range(12)}}
+
+    ventanas = tramos.partir(doc)
+    assert ventanas == [(0, 7000)], "doce capas no obligan a partir el render"
+    for a, b in ventanas:
+        assert tramos.contar(doc, a, b) == 12 <= tramos.PRESUPUESTO_OVERLAYS
+        plan = c.compilar(doc, rutas, ventana=(a, b), con_ass=False)
+        assert plan.overlays == 12 <= tramos.PRESUPUESTO_OVERLAYS
+        assert plan.filtergraph.count("overlay") >= 12

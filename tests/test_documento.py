@@ -32,14 +32,32 @@ def test_rechaza_formato_desconocido():
         d.validar(doc)
 
 
-def test_rechaza_mas_de_ocho_pistas():
+def _con_pistas(n):
+    """El fixture básico con `n` pistas en total: las que le faltan, vacías."""
     doc = cargar("video_basico.json")
     base = doc["pistas"][1]
-    for i in range(6):
+    for i in range(n - len(doc["pistas"])):
         p = copy.deepcopy(base); p["id"] = f"extra{i}"; p["clips"] = []
         doc["pistas"].append(p)
-    with pytest.raises(d.DocumentoInvalido, match="8 pistas"):
-        d.validar(doc)
+    assert len(doc["pistas"]) == n
+    return doc
+
+
+def test_el_limite_de_pistas_es_veinte():
+    # capa 5c (prueba en vivo): con 8, un borrador automático (7 pistas) al que se
+    # le suma un título y un sticker ya no aceptaba otro emoji ni otra plantilla;
+    # el render no depende del número de pistas (tramos reparte por capas)
+    assert d.MAX_PISTAS == 20
+
+
+@pytest.mark.parametrize("n", [9, 12, 19, 20])
+def test_acepta_hasta_veinte_pistas(n):
+    assert len(d.validar(_con_pistas(n))["pistas"]) == n
+
+
+def test_rechaza_mas_de_veinte_pistas():
+    with pytest.raises(d.DocumentoInvalido, match="20 pistas"):
+        d.validar(_con_pistas(d.MAX_PISTAS + 1))
 
 
 def test_rechaza_tiempos_no_enteros_y_negativos():

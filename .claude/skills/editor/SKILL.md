@@ -197,7 +197,7 @@ the player moves the framing and its corner zooms (`seleccion.gestoEn` → `encu
 slow zoom, transition), and `avisos_carga.vocesJuntas` warns when two voices sound at once. Final-review fixes
 (2026-10-01): a photo never passes `FOTO_MAX_MS` when a solape gives its ms back (`devolverASolape`, plus `acotarFotos` in
 `normalizar` as the last barrier); a transparent photo gets black under its foreground at the same alpha and the small
-blurred-background canvas is filled black before every draw (the render flattens on black); with all 8 tracks taken a
+blurred-background canvas is filled black before every draw (the render flattens on black); with every track taken (`MAX_PISTAS`: 8 until capa 5c, 20 since its live check — `documento.py` and `operaciones.js` mirror it, and the render does not depend on the number of tracks: `tramos` splits by layers and principal clips) a
 followed layer stays in its own row instead of refusing the operation (D10.6); a KEYED gesture (`operarCon({clave})`)
 derives from its base through `vinculos.operarGesto` (`crudo = fn(crudoPrevio ?? base)`, `seguirPrincipal(base, crudo)`,
 restarted when `historial.fusionaria(clave)` is false, on undo/redo, save, conflict or a «Vincular» change), and a layer
