@@ -361,6 +361,18 @@ def test_una_escritura_que_sale_bien_vacia_la_cache(app, monkeypatch):
     assert len(llamadas) == 2                                       # uno que falló, no
 
 
+def test_un_post_sin_acceso_al_proyecto_no_vacia_su_cache(app, monkeypatch):
+    llamadas = []
+    _fijas(app, monkeypatch, [_alerta(app, "proyecto:logo", "info")], llamadas)
+    c = app["c"]
+    _html(c)
+    assert len(llamadas) == 1
+    ajeno = app["dashboard"].app.test_client()                      # sin sesión: el guard responde 302 al login
+    assert ajeno.post("/cliente/acme/nombre", data={"nombre": "X"}).status_code == 302
+    _html(c)
+    assert len(llamadas) == 1                                       # la caché sigue caliente
+
+
 def test_subir_un_logo_quita_su_alerta_enseguida(app, monkeypatch):
     """Con la caché caliente, «Sin logos oficiales» se va en la página siguiente a la subida, no a los 60 s."""
     import io

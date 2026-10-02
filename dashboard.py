@@ -4979,7 +4979,9 @@ def _alertas_tras_escribir(resp):
     try:
         if request.method in METODOS_QUE_ESCRIBEN and resp.status_code < 400:
             cliente = request.view_args.get("cliente") if request.view_args else None
-            if cliente:
+            # El 302 de `_guard_por_cliente` también es < 400: sin acceso al
+            # proyecto no se vacía su caché (si no, cualquiera la mantendría fría).
+            if cliente and usuarios.puede_acceder(_sesion(), cliente):
                 invalidar_alertas(cliente)
     except Exception as e:  # noqa: BLE001 — una caché vieja 60 s es mejor que una respuesta caída
         print(f"[aviso] Alertas: no pude invalidar tras escribir: {type(e).__name__}")
