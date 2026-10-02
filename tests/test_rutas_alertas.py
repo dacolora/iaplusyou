@@ -207,19 +207,39 @@ def test_descartar_y_restaurar(app, monkeypatch):
 
 
 def test_descartar_invalida_la_cache_antes_de_redirigir(app, monkeypatch):
-    """Una lista cacheada vieja (sin la alerta) podaría el descarte recién hecho: `visibles` borra los descartes
-    cuya alerta no está en la lista. Descartar vacía la caché, así el redirect calcula la lista real."""
+    """Descartar (y restaurar) vacía la caché antes de redirigir: la página siguiente se calcula con lo real y no con
+    una lista de hace unos segundos. Aquí la caché caliente trae la alerta; tras descartarla la realidad cambia (una
+    alerta nueva) y el redirect ya la muestra."""
+    d = app["dashboard"]
+    a = _alerta(app, "crear:prompt_listo", grupo="decision", tab="creativeflowplus")
+    nueva = _alerta(app, "proyecto:logo", "info")
+    _fijas(app, monkeypatch, [a])
+    with d.app.test_request_context("/cliente/acme"):
+        assert d._contexto_alertas("acme", "admin")["resumen"]["n"] == 1     # caché caliente, con la alerta
+    monkeypatch.setattr(app["alertas"], "calcular", lambda cliente, ahora_iso=None: [dict(a), dict(nueva)])  # la realidad cambió
+    r = app["c"].post("/cliente/acme/alertas/descartar", data={"clave": a["clave"], "huella": a["huella"]})
+    assert r.status_code == 302
+    tab = _tab(_html(app["c"]))
+    assert "Descartadas (1)" in tab and "Título proyecto:logo" in tab        # la lista nueva, no la cacheada
+    assert _descartes() == [("acme", "crear:prompt_listo", a["huella"])]
+
+
+def test_descartar_una_alerta_que_la_cache_vieja_no_trae_no_guarda_nada_y_renueva_la_cache(app, monkeypatch):
+    """La clave tiene que estar en el cálculo actual. Si la caché (que es de donde salió la página que la persona vio)
+    ya no trae la alerta, nada se escribe: no hay descarte huérfano que `visibles` tenga que podar. El POST igual
+    vacía la caché y la página siguiente se calcula con lo real."""
     d = app["dashboard"]
     a = _alerta(app, "crear:prompt_listo", grupo="decision", tab="creativeflowplus")
     _fijas(app, monkeypatch, [])
     with d.app.test_request_context("/cliente/acme"):
         assert d._contexto_alertas("acme", "admin")["resumen"]["n"] == 0     # caché caliente SIN la alerta
     monkeypatch.setattr(app["alertas"], "calcular", lambda cliente, ahora_iso=None: [dict(a)])  # la realidad cambió
-    r = app["c"].post("/cliente/acme/alertas/descartar", data={"clave": a["clave"], "huella": a["huella"]})
-    assert r.status_code == 302
-    tab = _tab(_html(app["c"]))
-    assert "Descartadas (1)" in tab
-    assert _descartes() == [("acme", "crear:prompt_listo", a["huella"])]
+    c = app["c"]
+    r = c.post("/cliente/acme/alertas/descartar", data={"clave": a["clave"], "huella": a["huella"]})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#alertas")
+    assert _flashes(c) == ["Esa alerta ya no está."] and _descartes() == []
+    tab = _tab(_html(c))
+    assert 'id="alertas-decision"' in tab and "Descartadas (" not in tab      # ya sale la real, y sin descartar
 
 
 @pytest.mark.parametrize("datos", [
@@ -244,10 +264,28 @@ def test_restaurar_valida_la_clave(app, monkeypatch, clave):
     assert app["c"].post("/cliente/acme/alertas/restaurar", data={"clave": clave}).status_code == 400
 
 
-def test_descartar_una_clave_valida_sin_alerta_redirige(app, monkeypatch):
-    _fijas(app, monkeypatch, [])
-    r = app["c"].post("/cliente/acme/alertas/descartar", data={"clave": "llave:r2", "huella": H64})
-    assert r.status_code == 302 and _descartes() == [("acme", "llave:r2", H64)]
+def test_descartar_una_clave_valida_pero_inventada_redirige_sin_escribir(app, monkeypatch):
+    """Seguridad (CWE-770): sin esta regla cualquiera con sesión llenaría `alerta_descartada` de claves que nunca
+    existieron. La respuesta es un redirect normal (con un aviso neutro), no un error."""
+    a = _alerta(app, "proyecto:guia_marca", ancla="config-marca")
+    _fijas(app, monkeypatch, [a])
+    c = app["c"]
+    r = c.post("/cliente/acme/alertas/descartar", data={"clave": "llave:r2", "huella": H64})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#alertas")
+    assert _flashes(c) == ["Esa alerta ya no está."] and _descartes() == []
+    for i in range(30):                                                       # y tampoco con muchas: ninguna fila
+        assert c.post("/cliente/acme/alertas/descartar", data={"clave": f"inventada:x{i}", "huella": H64}).status_code == 302
+    assert _descartes() == []
+
+
+def test_descartar_una_alerta_real_si_escribe_entre_varias(app, monkeypatch):
+    lista = [_alerta(app, "proyecto:guia_marca"), _alerta(app, "proyecto:logo", "info"),
+             _alerta(app, "crear:prompt_listo", grupo="decision")]
+    _fijas(app, monkeypatch, lista)
+    c = app["c"]
+    r = c.post("/cliente/acme/alertas/descartar", data={"clave": "proyecto:logo", "huella": lista[1]["huella"]})
+    assert r.status_code == 302 and _flashes(c) == ["Alerta descartada."]
+    assert _descartes() == [("acme", "proyecto:logo", lista[1]["huella"])]
 
 
 def test_rutas_respetan_el_guard_por_cliente(app, monkeypatch):
@@ -314,10 +352,14 @@ def test_un_cliente_si_descarta_las_suyas(app, monkeypatch):
 @pytest.mark.parametrize("clave, status", [("llave:r2", 403), ("worker:parado", 403), ("revision:tablero", 403),
                                            ("saldo:wavespeed_recarga", 403), ("proyecto:logo", 302)])
 def test_una_clave_de_admin_que_ya_no_esta_decide_por_su_prefijo(app, monkeypatch, clave, status):
+    """Una clave de admin que ya no está calculada se frena por su prefijo (403); una de cliente que ya no está pasa
+    el guard y la ruta no guarda nada (302, «Esa alerta ya no está.»). En ningún caso queda una fila."""
     _fijas(app, monkeypatch, [])
-    r = _cliente_rol_cliente(app).post("/cliente/acme/alertas/descartar", data={"clave": clave, "huella": H64})
+    c = _cliente_rol_cliente(app)
+    r = c.post("/cliente/acme/alertas/descartar", data={"clave": clave, "huella": H64})
     assert r.status_code == status
-    assert _descartes() == ([] if status == 403 else [("acme", clave, H64)])
+    assert _descartes() == []
+    assert _flashes(c) == ([] if status == 403 else ["Esa alerta ya no está."])
 
 
 def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monkeypatch):

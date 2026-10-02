@@ -23,7 +23,7 @@ en el idioma de quien mira); los nombres de grupo, nivel y pestaña son
 constantes `idiomas.N_` que la plantilla traduce con `|traducir`.
 
 Ningún valor de llave sale de aquí; los textos de error que llegan a una
-alerta pasan por `_limpio` (cola.sin_token + cola.recortar). Nada de aquí
+alerta pasan por `_limpio` (monitoreo.limpiar_texto: tokens, Bearer, sk-…, secret=, password=…). Nada de aquí
 gasta, encola, publica ni llama a un proveedor. Sin rutas ni app de Flask
 (solo `gettext`, que fuera de una petición devuelve el español): lo importan
 dashboard.py y los tests. El ÚNICO escritor de `alerta_descartada` es este
@@ -42,6 +42,7 @@ from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 import cola
 import db
 import idiomas
+import monitoreo
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -105,8 +106,10 @@ def _minutos(desde_iso, ahora_iso):
 
 
 def _limpio(texto, n=200):
-    """Texto de error apto para una alerta: sin tokens y recortado."""
-    return cola.recortar(cola.sin_token(texto), n)
+    """Texto de error apto para una alerta: sin tokens ni llaves y recortado a `n` (sin recorte si `n` es None; None
+    es vacío). Lo limpia `monitoreo.limpiar_texto`, que además de los tokens en URLs de `cola.sin_token` cubre
+    `Bearer …`, `sk-…`, `secret=`, `password=`…: el error de un proveedor llega aquí tal cual."""
+    return monitoreo.limpiar_texto(texto, n)
 
 
 def _hace(ahora_iso, **tiempo):
@@ -159,7 +162,10 @@ def _fuente_llaves(cliente, ahora):
 def _fuente_cuentas(cliente, ahora):
     """Cuentas rol cliente del proyecto sin correo o con el correo sin
     confirmar: sin él no se conecta Meta ni una tienda
-    (`_requiere_correo_verificado`). La ve la propia persona: es su cuenta."""
+    (`_requiere_correo_verificado`). Son TODAS las cuentas del proyecto, no solo la de quien mira: cada cuenta del
+    proyecto ve las alertas, el correo y el nombre de las demás cuentas cliente y puede descartarlas (los descartes
+    son del proyecto). Hoy el alta web crea una cuenta por proyecto, así que solo afecta a las agregadas por la
+    línea de comandos; filtrar por quien mira es una decisión pendiente (PND-123)."""
     import usuarios  # noqa: PLC0415
     out = []
     for u in usuarios.por_cliente(cliente):
@@ -275,8 +281,11 @@ def _fuente_tablero(cliente, ahora):
     for a in tablero.alertas(cliente, ahora_iso=ahora):
         eid = a.get("experimento_id")
         texto = _limpio(a["texto"], 400)
+        # Los números salen del texto entero y limpio, no del recortado a 400: un texto que se corta en un idioma y
+        # en el otro no tiene que cambiar la huella.
+        numeros = re.findall(r"\d+", _limpio(a["texto"], None))
         situacion = huella() if a["tipo"] == "sin_metricas" else huella(
-            a["tipo"], eid if eid is not None else "-", *re.findall(r"\d+", texto))
+            a["tipo"], eid if eid is not None else "-", *numeros)
         out.append(_alerta(f"tablero:{a['tipo']}:{eid if eid is not None else '-'}", situacion,
                            _NIVEL_TABLERO.get(a["nivel"], "info"), _GRUPO_TABLERO.get(a["tipo"], "decision"),
                            texto, "", a["tab"], url=(f"?exp={eid}#experimentos" if eid is not None else None),

@@ -5823,6 +5823,9 @@ msgstr "That Page has no Instagram linked: Reels won't publish until it's linked
 msgid "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."
 msgstr "That Page has no Instagram linked: Reels won't publish until you link it on Facebook."
 
+msgid "Esa alerta ya no está."
+msgstr "That alert is no longer there."
+
 msgid "Esa campaña no existe."
 msgstr "That campaign doesn't exist."
 

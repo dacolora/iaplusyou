@@ -382,6 +382,29 @@ def test_tablero_la_huella_no_depende_del_idioma(monkeypatch):
     assert otra[0]["huella"] == es[0]["huella"] and otra[1]["huella"] != es[1]["huella"]
 
 
+def test_tablero_la_huella_toma_los_numeros_del_texto_entero_no_del_recortado(monkeypatch):
+    """El título se recorta a 400, pero los números de la huella salen del texto completo: si en un idioma el texto se
+    corta antes del último número y en el otro no, la huella no puede cambiar."""
+    import alertas
+    import idiomas
+    import tablero
+    # El español es más largo y su último número cae después del carácter 400; el inglés cabe entero.
+    largo = {"es": "Aviso largo del Tablero. " + "x" * 575 + " Código final 777", "en": "Dashboard notice. " + "x" * 280 + " Final code 777"}
+
+    def falso(cliente, ahora_iso=None, datos=None):
+        return [{"tipo": "tienda_rota", "nivel": "media", "tab": "settings", "experimento_id": None,
+                 "texto": largo[idiomas.activo()]}]
+    monkeypatch.setattr(tablero, "alertas", falso)
+    with idiomas.en_idioma("es"):
+        es, = alertas._fuente_tablero("acme", AHORA)
+    with idiomas.en_idioma("en"):
+        en, = alertas._fuente_tablero("acme", AHORA)
+    assert len(largo["es"]) > 600 and len(es["titulo"]) == 400 and "777" not in es["titulo"]    # el 777 queda fuera del recorte
+    assert len(en["titulo"]) < 400 and en["titulo"].endswith("777")                              # en inglés sí cabe
+    assert es["huella"] == alertas.huella("tienda_rota", "-", "777")                             # y aun así entra en la huella
+    assert en["huella"] == es["huella"]
+
+
 def test_tablero_un_error_larguisimo_queda_acotado(monkeypatch):
     import alertas
     _texto_tablero(monkeypatch, [
@@ -739,6 +762,26 @@ def test_crear_el_error_sale_sin_tokens_y_acotado_a_200(base_temporal):
     assert x["huella"] == alertas.huella(x["detalle"][: -len(" Rearma el prompt o vuelve a generar.")])
 
 
+def test_crear_el_error_sale_sin_bearer_ni_password_ni_llaves_sk(base_temporal):
+    """El error de un proveedor llega tal cual a la alerta: `_limpio` usa `monitoreo.limpiar_texto`, que además de los
+    tokens en URLs de `cola.sin_token` cubre cabeceras `Bearer`, llaves `sk-…` y `password=`."""
+    import alertas
+    _sesion("cf_b", "error", HACE_30_MIN,
+            error="401 de WaveSpeed. Authorization: Bearer abc.def.ghi-0123456789 password=hunter2 sk-abcdefghijklmnop1234")
+    x, = alertas._fuente_crear("acme", AHORA)
+    for secreto in ("abc.def.ghi", "0123456789", "hunter2", "sk-abcdefghijkl"):
+        assert secreto not in x["detalle"] and secreto not in x["titulo"]
+    assert "password=***" in x["detalle"] and x["detalle"].startswith("401 de WaveSpeed. Authorization:")
+    assert x["huella"] == alertas.huella(x["detalle"][: -len(" Rearma el prompt o vuelve a generar.")])   # la huella, del texto limpio
+
+
+def test_limpio_sin_texto_es_vacio_y_recorta(base_temporal):
+    import alertas
+    assert alertas._limpio(None) == "" and alertas._limpio("") == ""
+    assert len(alertas._limpio("p" * 500)) == 200 and len(alertas._limpio("p" * 500, 50)) == 50
+    assert len(alertas._limpio("p" * 500, None)) == 500                               # None: sin recorte
+
+
 def test_crear_no_mezcla_proyectos_ni_cuenta_las_finales(base_temporal):
     import alertas
     import creative_flow
@@ -882,40 +925,40 @@ def test_organico_corre_una_sola_consulta_sin_importar_cuantas_publicaciones(bas
 
 # ---------- Sprints ----------
 
-def _sprint(nombre="Octubre", estado=None, archivado=False, inicio="2026-10-01"):
+def _sprint(nombre="Octubre", estado=None, archivado=False, inicio="2026-10-01", cliente="acme"):
     from sprints import datos
-    sid = datos.crear_sprint("acme", nombre, inicio, "2026-10-31")
+    sid = datos.crear_sprint(cliente, nombre, inicio, "2026-10-31")
     if estado:
-        datos.actualizar_sprint("acme", sid, estado=estado)
+        datos.actualizar_sprint(cliente, sid, estado=estado)
     if archivado:
-        datos.archivar_sprint("acme", sid)
+        datos.archivar_sprint(cliente, sid)
     return sid
 
 
-def _campana(sid, estado=None):
+def _campana(sid, estado=None, cliente="acme"):
     from sprints import datos
-    personas = datos.personas("acme")
-    pid = personas[0]["id"] if personas else datos.crear_persona("acme", "Carla")
-    cid = datos.agregar_campana("acme", sid, pid, "pantuflas")
+    personas = datos.personas(cliente)
+    pid = personas[0]["id"] if personas else datos.crear_persona(cliente, "Carla")
+    cid = datos.agregar_campana(cliente, sid, pid, "pantuflas")
     if estado:
-        datos.actualizar_campana("acme", cid, estado=estado)
+        datos.actualizar_campana(cliente, cid, estado=estado)
     return cid
 
 
-def _idea(cid, estado_idea=None, cf_estado=None, revision="pendiente", qa=None, pieza_estado=None):
+def _idea(cid, estado_idea=None, cf_estado=None, revision="pendiente", qa=None, pieza_estado=None, cliente="acme"):
     """Una idea de la campaña (propuesta, o aprobada si ya tiene sesión); con `cf_estado` tiene su sesión de Crear
     (y `pieza_estado` fuerza el estado de su pieza)."""
     import db
     from sprints import datos
     estado_idea = estado_idea or ("aprobada" if cf_estado else "propuesta")
-    cp = datos.crear_idea("acme", cid, "video", f"Idea {cid}-{estado_idea}", "escena", estado_idea=estado_idea)
+    cp = datos.crear_idea(cliente, cid, "video", f"Idea {cid}-{estado_idea}", "escena", estado_idea=estado_idea)
     if cf_estado:
         cf = f"cf_sp_{cp}"
-        _sesion(cf, cf_estado, HACE_5_DIAS)
+        _sesion(cf, cf_estado, HACE_5_DIAS, cliente=cliente)
         if pieza_estado:
             with db.conectar() as con:
                 con.execute(db.pieza.update().where(db.pieza.c.legado_id == cf).values(estado=pieza_estado))
-        datos.actualizar_idea("acme", cp, cf_id=cf, revision=revision, qa=qa)
+        datos.actualizar_idea(cliente, cp, cf_id=cf, revision=revision, qa=qa)
     return cp
 
 
@@ -999,7 +1042,7 @@ def test_sprint_referencias_con_el_analisis_en_error(base_temporal):
     assert x["url"] == f"/cliente/acme/sprints/{sid}" and x["entidad"] == sid
 
 
-def test_sprint_completado_o_archivado_no_alerta_y_otro_proyecto_tampoco(base_temporal):
+def test_sprint_completado_o_archivado_no_alerta(base_temporal):
     import alertas
     from sprints import datos
     for kw in ({"estado": "completado"}, {"archivado": True}):
@@ -1009,7 +1052,27 @@ def test_sprint_completado_o_archivado_no_alerta_y_otro_proyecto_tampoco(base_te
         r = datos.agregar_referencia("acme", cid, "imagen", "https://x/1.png")
         datos.actualizar_referencia("acme", r, analisis_estado="error")
     assert alertas._fuente_sprints("acme", AHORA) == []
-    assert alertas._fuente_sprints("otro", AHORA) == []
+
+
+def test_sprint_un_sprint_vivo_de_otro_proyecto_no_se_mezcla(base_temporal):
+    """Un sprint VIVO de `otro` (ideas propuestas, una pieza en error y una referencia en error) alerta en `otro` y
+    no en `acme`, que tiene el suyo. (Con solo sprints cerrados la prueba no probaba nada: no habría alertas en
+    ningún proyecto.)"""
+    import alertas
+    from sprints import datos
+    propio = _sprint("Propio")
+    _idea(_campana(propio, estado="ideas_propuestas"))
+    ajeno = _sprint("Ajeno", cliente="otro")
+    cid = _campana(ajeno, estado="ideas_propuestas", cliente="otro")
+    _idea(cid, cliente="otro")
+    _idea(cid, cf_estado="error", pieza_estado="error", cliente="otro")
+    r = datos.agregar_referencia("otro", cid, "imagen", "https://x/otro.png")
+    datos.actualizar_referencia("otro", r, analisis_estado="error")
+    assert _claves(alertas._fuente_sprints("acme", AHORA)) == [f"sprint:ideas:{propio}"]
+    de_otro = alertas._fuente_sprints("otro", AHORA)
+    assert sorted(_claves(de_otro)) == sorted([f"sprint:ideas:{ajeno}", f"sprint:fallos:{ajeno}",
+                                               f"sprint:referencias:{ajeno}"])
+    assert all(a["titulo"].endswith("«Ajeno»") and a["url"] == f"/cliente/otro/sprints/{ajeno}" for a in de_otro)
 
 
 def test_sprint_las_alertas_siguen_el_orden_de_la_lista_de_sprints(base_temporal):
@@ -1055,11 +1118,11 @@ def test_sprints_corre_las_mismas_consultas_con_1_o_con_6_sprints(base_temporal)
 
 # ---------- Nicho ----------
 
-def _estudio(nombre="Pantuflas", archivado=False):
+def _estudio(nombre="Pantuflas", archivado=False, cliente="acme"):
     from nicho import datos
-    eid = datos.crear_estudio("acme", nombre, tema="t")
+    eid = datos.crear_estudio(cliente, nombre, tema="t")
     if archivado:
-        datos.archivar_estudio("acme", eid)
+        datos.archivar_estudio(cliente, eid)
     return eid
 
 
@@ -1199,6 +1262,23 @@ def test_nicho_el_error_de_generacion_tambien_sale_sin_tokens_y_acotado(base_tem
     x, = alertas._fuente_nicho("acme", AHORA)
     assert "SECRETO" not in x["detalle"] and "key=***" in x["detalle"]
     assert len(x["detalle"]) <= 200 + len(" Vuelve a generar desde el estudio.")
+
+
+def test_nicho_los_errores_de_otro_proyecto_no_se_mezclan(base_temporal):
+    """Los estudios de `otro` (uno con el error de su última generación y otro con la investigación interrumpida)
+    alertan en `otro` y no en `acme`, que tiene el suyo."""
+    import alertas
+    from nicho import datos
+    propio = _estudio("Propio")
+    datos.actualizar_extra_estudio("acme", propio, lambda x: {**x, "ultimo_error": "falló aquí"})
+    con_error = _estudio("Ajeno con error", cliente="otro")
+    datos.actualizar_extra_estudio("otro", con_error, lambda x: {**x, "ultimo_error": "falló allá"})
+    interrumpido = _estudio("Ajeno interrumpido", cliente="otro")
+    datos.iniciar_investigacion("otro", interrumpido, {"estado": "interrumpida", "ultimo_error": "se cortó allá"})
+    assert _claves(alertas._fuente_nicho("acme", AHORA)) == [f"nicho:error:{propio}"]
+    de_otro = alertas._fuente_nicho("otro", AHORA)
+    assert sorted(_claves(de_otro)) == sorted([f"nicho:error:{con_error}", f"nicho:error:{interrumpido}"])
+    assert all(a["url"].startswith("/cliente/otro/nicho/") for a in de_otro)
 
 
 def test_nicho_corre_las_mismas_consultas_con_1_o_con_6_estudios(base_temporal):

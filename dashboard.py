@@ -4991,11 +4991,18 @@ def _alertas_tras_escribir(resp):
 @app.route("/cliente/<cliente>/alertas/descartar", methods=["POST"])
 def alertas_descartar(cliente):
     """Oculta una alerta mientras su situación (huella) no cambie. Solo
-    escribe el descarte: no calcula, no gasta, no lanza nada."""
+    escribe el descarte, y solo de una alerta que existe en el cálculo actual
+    (una clave inventada no se guarda); no gasta, no lanza nada."""
     huella = request.form.get("huella") or ""
     if not _HUELLA_ALERTA.fullmatch(huella):
         abort(400)
     clave = _clave_alerta_del_form(cliente)
+    if not any(a["clave"] == clave for a in _alertas_calculadas(cliente)):
+        # Solo se descarta lo que existe: con una clave válida pero inventada, cualquiera con sesión llenaría
+        # `alerta_descartada` de filas que nunca se podrían podar (auditoría de seguridad, CWE-770). Si la alerta
+        # se resolvió entre que se pintó la página y el clic, tampoco hay nada que ocultar.
+        flash(gettext("Esa alerta ya no está."), "warn")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
     alertas.descartar(cliente, clave, huella)
     invalidar_alertas(cliente)
     flash(gettext("Alerta descartada."), "ok")
