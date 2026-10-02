@@ -868,3 +868,33 @@ test("medidasTexto pide el mismo dibujo que lienzo.js: con la tabla, la escala d
   assert.deepEqual(VistaPrevia.prototype.medidasTexto.call(falsa, 100, rasterizar), { t1: [221, 125] });
   assert.deepEqual(opciones, [{ tabla: T0, escala: 3, generacion: 6 }]);
 });
+
+// ---- Capa 5c (Tarea 5): las zonas seguras ----
+
+test("zonas.js carga sin tocar la página y pagina_editor.js lo engancha (el selector, las guías y el aviso)", async () => {
+  assert.equal(typeof globalThis.document, "undefined");
+  const zonas = await import("../../static/editor/zonas.js");
+  for (const f of ["zonasEnPx", "choque", "fuera", "revisar", "textoAviso", "leerZonas", "guardarZonas", "medidasDeTextos",
+    "eleccionValida", "tieneZonas", "franjaSubtitulos"]) {
+    assert.equal(typeof zonas[f], "function", `zonas.${f}`);
+  }
+  assert.equal(typeof globalThis.document, "undefined");          // importarlo no tocó la página
+  const ruta = new URL("../../static/editor/pagina_editor.js", import.meta.url);
+  const fuente = readFileSync(ruta, "utf-8");
+  for (const uso of [
+    'import { porcentaje } from "./seleccion.js";',
+    "let zonasElegidas = leerZonas(almacenSeguro());",
+    // el aviso: como los de carga, en cada refresco y sobre el documento RESUELTO del destino que se ve
+    "pintarAvisoZonas();\n}",
+    'pintarAvisoCarga("aviso-zonas", avisoZonas());',
+    "const doc = vista.resuelto;",
+    "medidasDeTextos(doc, (ms) => vista.medidasTexto(ms))",
+    "revisar(doc, { plataforma: zonasElegidas, medidasTexto, materiales: vista.materiales, cfg: datos.config })",
+    // las guías: un div.ed-zona por rectángulo, en % del lienzo, y el selector avisa que son para el 9:16
+    'franja.className = "ed-zona";',
+    "const p = porcentaje(z, formato);",
+    'selector.title = t("vista.zonas_solo_vertical");',
+    "guardarZonas(almacenSeguro(), zonasElegidas);",
+    "montarZonas();",
+  ]) assert.ok(fuente.includes(uso), uso);
+});

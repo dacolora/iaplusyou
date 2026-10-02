@@ -137,3 +137,26 @@ def test_editor_la_barra_de_herramientas_con_vincular_cabe_a_375():
     assert "text-overflow: ellipsis" in nombre and "white-space: nowrap" in nombre
     celular = css[css.index("@media (max-width: 760px)"):]
     assert re.search(r"\.ed-herramientas \.btn-sm \{[^}]*padding:", celular)
+
+
+def test_editor_la_barra_de_herramientas_con_zonas_cabe_a_375():
+    """Capa 5c (Tarea 5, D10): el selector «Zonas» se suma a la barra de herramientas
+    del editor (que ya lleva Deshacer · Rehacer, Cortar · Duplicar · Borrar · Vincular y
+    el zoom). A 375 px la barra baja de línea en vez de empujar la página de lado: la
+    etiqueta con su selector se envuelve y se puede achicar, y el selector nunca pasa
+    del ancho de su caja."""
+    import re
+    html = open("templates/editor.html", encoding="utf-8").read()
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    herramientas = re.search(r"\.ed-herramientas \{([^}]*)\}", css).group(1)
+    assert "flex-wrap: wrap" in herramientas                      # la barra entera envuelve
+    elegir = re.search(r"\.ed-zonas-elegir \{([^}]*)\}", css).group(1)
+    assert "flex-wrap: wrap" in elegir                            # etiqueta y selector bajan de línea si no caben
+    assert "min-width: 0" in elegir and "max-width: 100%" in elegir
+    selector = re.search(r"\.ed-zonas-elegir select \{([^}]*)\}", css).group(1)
+    assert "max-width: 100%" in selector and "min-width: 0" in selector
+    assert "width: auto" in selector                              # no el 100 % de los campos de la app: cabe junto a su etiqueta
+    # el selector está en la barra, con los botones angostos del celular, y las guías no empujan nada:
+    assert re.search(r'<section id="ed-herramientas".*?id="zonas".*?</section>', html, re.S)
+    guias = re.search(r"\.ed-zonas \{([^}]*)\}", css).group(1)
+    assert "position: absolute" in guias and "overflow: hidden" in guias and "inset: 0" in guias

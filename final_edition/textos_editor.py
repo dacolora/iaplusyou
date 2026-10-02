@@ -416,6 +416,18 @@ TEXTOS = {
     "editar.vincular_si": N_("Lo de encima se mueve con su video. Toca para soltarlo."),
     "editar.vincular_no": N_("Lo de encima se queda donde está. Toca para que siga a su video."),
     "vista.voces_juntas": N_("Dos voces suenan al mismo tiempo en {tiempo}: muévelas o borra una."),
+    # zonas.js y pagina_editor.js (capa 5c, Tarea 5): las zonas que la interfaz de TikTok, Reels y Shorts tapa
+    "vista.zona_texto": N_("El texto «{texto}» queda bajo la interfaz de {plataforma} ({zona})."),
+    "vista.zona_imagen": N_("Una imagen queda bajo la interfaz de {plataforma} ({zona})."),
+    "vista.zona_subtitulos": N_("Los subtítulos quedan bajo la interfaz de {plataforma}: súbelos en «Subtítulos»."),
+    "vista.fuera_texto": N_("El texto «{texto}» se sale del video: achícalo o baja su ancho."),
+    "vista.fuera_imagen": N_("Una imagen se sale del video."),
+    "vista.y_mas": N_("(y {n} más)"),
+    "vista.zona_arriba": N_("arriba"),
+    "vista.zona_abajo": N_("abajo"),
+    "vista.zona_lados": N_("a los lados"),
+    "vista.zona_botones": N_("junto a los botones"),
+    "vista.zonas_solo_vertical": N_("Las zonas son para videos verticales (9:16)."),
 }
 
 

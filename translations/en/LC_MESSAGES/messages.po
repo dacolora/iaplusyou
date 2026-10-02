@@ -1355,6 +1355,10 @@ msgstr "(suggested)"
 msgid "(sugerido)"
 msgstr "(suggested)"
 
+#, python-brace-format
+msgid "(y {n} más)"
+msgstr "(and {n} more)"
+
 msgid "(ya producida — se reemplaza)"
 msgstr "(already produced — will be replaced)"
 
@@ -5000,6 +5004,14 @@ msgstr "The text is over 3,000 characters."
 msgid "El texto que se dice en los clips no es idéntico al guion con las líneas quitadas."
 msgstr "The text spoken in the clips doesn't match the script with the removed lines."
 
+#, python-brace-format
+msgid "El texto «{texto}» queda bajo la interfaz de {plataforma} ({zona})."
+msgstr "The text “{texto}” ends up under the {plataforma} interface ({zona})."
+
+#, python-brace-format
+msgid "El texto «{texto}» se sale del video: achícalo o baja su ancho."
+msgstr "The text “{texto}” goes off the video: shrink it or reduce its width."
+
 #, python-format
 msgid "El token no ve el Business %(business)s (%(error)s). Revisa que el usuario del sistema pertenezca a ese Business Manager y tenga permiso business_management."
 msgstr "The token can't see the Business %(business)s (%(error)s). Check that the system user belongs to that Business Manager and has the business_management permission."
@@ -8558,6 +8570,9 @@ msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.
 msgid "Las reglas no encontraron nada."
 msgstr "The rules found nothing."
 
+msgid "Las zonas son para videos verticales (9:16)."
+msgstr "Zones are for vertical videos (9:16)."
+
 msgid "Leer anuncios ajenos"
 msgstr "Reading other brands' ads"
 
@@ -8861,6 +8876,10 @@ msgstr "This version's image prompts are already done or in progress."
 
 msgid "Los prompts de imágenes quedaron escritos pero no se pudieron pasar todos al chat. Vuelve a escribirlos en una versión nueva."
 msgstr "The image prompts were written but not all of them could be sent to chat. Write them again in a new version."
+
+#, python-brace-format
+msgid "Los subtítulos quedan bajo la interfaz de {plataforma}: súbelos en «Subtítulos»."
+msgstr "The subtitles end up under the {plataforma} interface: move them up in “Subtitles”."
 
 msgid "Los videos de esta edición no traen sonido."
 msgstr "The videos in this edit have no sound."
@@ -9539,6 +9558,9 @@ msgstr "Awareness level"
 
 msgid "Nivel del micrófono"
 msgstr "Microphone level"
+
+msgid "No"
+msgstr "No"
 
 msgid "No aplica"
 msgstr "Not applicable"
@@ -14344,6 +14366,13 @@ msgstr "An idea wasn't saved (see the notice on its card). Try again."
 msgid "Una imagen fija en 2k"
 msgstr "A still image in 2k"
 
+#, python-brace-format
+msgid "Una imagen queda bajo la interfaz de {plataforma} ({zona})."
+msgstr "An image ends up under the {plataforma} interface ({zona})."
+
+msgid "Una imagen se sale del video."
+msgstr "An image goes off the video."
+
 msgid "Una línea por comentario"
 msgstr "One line per comment"
 
@@ -15177,6 +15206,9 @@ msgstr "Zip from %(fecha)s (%(n)s pieces)"
 msgid "Zip listo con %(n)s pieza(s)."
 msgstr "Zip ready with %(n)s piece(s)."
 
+msgid "Zonas"
+msgstr "Zones"
+
 msgid "Zoom"
 msgstr "Zoom"
 
@@ -15192,8 +15224,14 @@ msgstr "__MODELO__ only uses the first reference (__PRIMERA__): it would not use
 msgid "__MODELO__ usa hasta __N__ referencias: no usaría __SOBRAN__. Quita las que sobran o cambia de modelo."
 msgstr "__MODELO__ uses up to __N__ references: it would not use __SOBRAN__. Remove the extra ones or change the model."
 
+msgid "a los lados"
+msgstr "on the sides"
+
 msgid "a quién le habla"
 msgstr "who it speaks to"
+
+msgid "abajo"
+msgstr "bottom"
 
 msgid "abajo del funnel"
 msgstr "bottom of the funnel"
@@ -15305,6 +15343,9 @@ msgstr "starting"
 #, python-format
 msgid "arranque %(lead)s"
 msgstr "%(lead)s lead"
+
+msgid "arriba"
+msgstr "top"
 
 msgid "arriba del funnel"
 msgstr "top of the funnel"
@@ -16418,6 +16459,9 @@ msgstr "research: %(estado)s"
 
 msgid "italiano"
 msgstr "Italian"
+
+msgid "junto a los botones"
+msgstr "next to the buttons"
 
 msgid "la consciencia"
 msgstr "awareness"

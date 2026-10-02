@@ -75,6 +75,14 @@
 // deshacer y UN guardado (es el mismo documento). Apagado, todo es como antes.
 // Si después dos voces suenan a la vez, se avisa bajo el video (#aviso-voces).
 //
+// Capa 5c (D10): zonas seguras. El selector #zonas (No · TikTok · Reels ·
+// Shorts, lo que eligió quien mira, recordado en localStorage; Reels sin nada
+// guardado) pinta en #ed-zonas las franjas que la interfaz de esa app tapa en
+// un 9:16, y #aviso-zonas dice cuando un texto, una imagen o los subtítulos
+// caen ahí o una capa se sale del video (zonas.js, puro, probado en Node). Es
+// solo de la página: nada se dibuja en el lienzo ni cambia el documento, y el
+// aviso se recalcula en cada refresco sobre el documento del destino que se ve.
+//
 // Reglas de los avisos (avisos_editor.js, probadas en Node):
 // - «seleccion» sale solo si la selección cambió de verdad, también cuando la
 //   cambió una operación (duplicar elige la copia: "documento" y después
@@ -94,12 +102,14 @@ import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
 import { respuestaProducir } from "./producir.js";
 import { Propiedades } from "./propiedades.js";
+import { porcentaje } from "./seleccion.js";
 import { PalabrasPendientes } from "./subtitulos_modelo.js";
 import { SubtitulosPanel } from "./subtitulos_panel.js";
 import { listaY, ponerTextos, t } from "./textos.js";
 import { infoDe, VistaPrevia } from "./vista.js";
 import * as vinculos from "./vinculos.js";
 import { VozPanel } from "./voz_panel.js";
+import { eleccionValida, guardarZonas, leerZonas, medidasDeTextos, revisar, textoAviso, tieneZonas, zonasEnPx } from "./zonas.js";
 
 // Los textos en el idioma de quien mira (ruta editor.ver), antes de construir
 // nada: ningún módulo llama a t() al cargarse. Se ponen al leer `datos`, dentro
@@ -128,6 +138,8 @@ let seleccion = null;
 // «Vincular» (D10.9): lo que eligió quien mira; sin nada guardado (o si el
 // navegador no deja leerlo), prendido.
 let vincular = vinculos.leerVincular(almacenSeguro());
+// Las zonas seguras que eligió quien mira: "no" o una plataforma (zonas.js).
+let zonasElegidas = leerZonas(almacenSeguro());
 // El gesto con clave en curso (vinculos.operarGesto): su base y la cadena
 // sin seguir. Se olvida al deshacer/rehacer, al guardar, en conflicto (y al
 // recargar, claro); cambiar de clave empieza otro.
@@ -252,6 +264,62 @@ function pintarAvisosCarga() {
   pintarAvisoCarga("aviso-recortes", a.recortes);
   pintarAvisoCarga("aviso-faltan", a.faltan);
   pintarAvisoCarga("aviso-voces", a.voces);
+  pintarAvisoZonas();
+}
+
+// Zonas seguras (capa 5c, D10). El aviso sale del documento RESUELTO del destino
+// que se ve (vista.resuelto: los textos variables y el precio miden distinto por
+// país) con la medida de cada texto en su inicio, no solo de los que se ven en
+// el cabezal. Antes de que la vista previa arranque no hay documento: sin aviso.
+// Una falla al medir nunca rompe el refresco: se anota y se calla el aviso.
+function avisoZonas() {
+  const doc = vista.resuelto;
+  if (!doc) return null;
+  try {
+    const medidasTexto = medidasDeTextos(doc, (ms) => vista.medidasTexto(ms));
+    const lista = revisar(doc, { plataforma: zonasElegidas, medidasTexto, materiales: vista.materiales, cfg: datos.config });
+    return textoAviso(lista, zonasElegidas);
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function pintarAvisoZonas() {
+  pintarAvisoCarga("aviso-zonas", avisoZonas());
+}
+
+// Las franjas, en % del lienzo (como la caja de selección: siguen al lienzo en
+// cualquier tamaño); ninguna con «No» ni fuera del 9:16 — y entonces el
+// selector lo explica. Lo elegido se respeta para cuando el formato sí sea 9:16.
+function pintarZonas() {
+  const capa = $("ed-zonas");
+  const selector = $("zonas");
+  if (!capa || !selector) return;
+  const formato = historial.actual.formato;
+  capa.replaceChildren(...zonasEnPx(formato, zonasElegidas).map((z) => {
+    const franja = document.createElement("div");
+    franja.className = "ed-zona";
+    franja.dataset.zona = z.zona;
+    const p = porcentaje(z, formato);
+    Object.assign(franja.style, { left: `${p.left}%`, top: `${p.top}%`, width: `${p.width}%`, height: `${p.height}%` });
+    return franja;
+  }));
+  selector.value = zonasElegidas;
+  if (tieneZonas(formato)) selector.removeAttribute("title");
+  else selector.title = t("vista.zonas_solo_vertical");
+}
+
+function montarZonas() {
+  const selector = $("zonas");
+  if (!selector) return;
+  selector.addEventListener("change", () => {
+    zonasElegidas = eleccionValida(selector.value);
+    guardarZonas(almacenSeguro(), zonasElegidas);
+    pintarZonas();
+    pintarAvisoZonas();
+  });
+  pintarZonas();
 }
 
 function buscarClip(id) {
@@ -700,6 +768,7 @@ function montarPaneles() {
 montarHerramientas();
 montarProducir();
 montarDisposicion();
+montarZonas();
 montarPaneles();
 refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
 // lo arreglado al abrir también se guarda (ya con todo declarado y montado:

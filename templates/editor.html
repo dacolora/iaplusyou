@@ -64,6 +64,14 @@
   .ed-guia { position: absolute; pointer-events: none; }
   .ed-guia-v { top: 0; bottom: 0; left: 50%; border-left: 1px dashed var(--accent-texto); }
   .ed-guia-h { left: 0; right: 0; top: 50%; border-top: 1px dashed var(--accent-texto); }
+  /* Zonas seguras (capa 5c, D10): lo que la interfaz de TikTok, Reels o Shorts
+     tapa en un 9:16. Solo guías de la página (nada se dibuja en el lienzo ni
+     en el video): un rectángulo rayado y translúcido por zona, en % del lienzo,
+     debajo de la capa de toques — no recibe ni un toque. */
+  .ed-zonas { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: var(--radius-sm); }
+  .ed-zona { position: absolute; box-sizing: border-box; pointer-events: none;
+    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--error) 18%, transparent) 0 6px, transparent 6px 14px);
+    border: 1px dashed color-mix(in srgb, var(--error) 55%, transparent); }
   .editor-avisos { display: grid; gap: .3rem; justify-items: center; padding: 0 1rem; }
   .editor-aviso { margin: 0; font-size: .88rem; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
   .editor-aviso.error { color: var(--error); }
@@ -111,6 +119,11 @@
   .ed-vincular[aria-pressed="false"] .ed-icono { opacity: .5; }
   .ed-zoom { display: inline-flex; flex-direction: row; align-items: center; gap: .35rem; font-size: .82rem; color: var(--muted); }
   .ed-zoom { margin-left: auto; }
+  /* «Zonas» (capa 5c, D10): etiqueta y selector en una fila; en el celular la barra baja de línea,
+     así que la etiqueta con su selector se envuelve y se puede achicar en vez de empujar la página */
+  .ed-zonas-elegir { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .25rem .35rem; min-width: 0; max-width: 100%;
+    font-size: .82rem; color: var(--muted); }
+  .ed-zonas-elegir select { width: auto; min-width: 0; max-width: 100%; padding: .3rem .45rem; }
   .ed-zoom input[type="range"] { width: 9rem; max-width: 36vw; min-width: 0; }
 
   /* Línea de tiempo (capas 4a y 4b): corre DENTRO de su caja, de lado y hacia
@@ -658,6 +671,7 @@
     <div class="ed-escena">
       <div id="ed-escenario" class="ed-escenario" style="--ed-ancho: {{ fmt[0] }}; --ed-alto: {{ fmt[1] }}">
         <canvas id="lienzo" aria-label="{{ _('Vista previa del video') }}"></canvas>
+        <div id="ed-zonas" class="ed-zonas" aria-hidden="true"></div>
         <div id="ed-interaccion" class="ed-interaccion" aria-hidden="true"></div>
       </div>
     </div>
@@ -666,6 +680,7 @@
       <p id="aviso-faltan" class="editor-aviso" hidden></p>
       <p id="aviso-recortes" class="editor-aviso" hidden></p>
       <p id="aviso-voces" class="editor-aviso" hidden></p>
+      <p id="aviso-zonas" class="editor-aviso" hidden></p>
       <p id="aviso-preparando" class="editor-aviso" hidden></p>
       <p id="aviso-audio" class="editor-aviso" hidden></p>
       <p id="aproximada" class="editor-aviso" hidden>{{ _('Transición vista de forma aproximada: el video final la hace completa.') }}</p>
@@ -702,6 +717,7 @@
     <button id="h-borrar" type="button" class="btn-sm" title="{{ _('Borrar el clip elegido (Supr)') }}">{{ _('Borrar') }}</button>
     <button id="h-vincular" type="button" class="btn-sm ed-vincular" aria-pressed="true">{{ icono("vinculo") }}<span>{{ _('Vincular') }}</span></button>
   </div>
+  <label class="ed-zonas-elegir">{{ _('Zonas') }} <select id="zonas"><option value="no">{{ _('No') }}</option><option value="tiktok">TikTok</option><option value="reels">Reels</option><option value="shorts">Shorts</option></select></label>
   <label class="ed-zoom">{{ _('Zoom') }} <input id="linea-zoom" type="range"></label>
 </section>
 <section id="linea" class="linea" aria-label="{{ _('Línea de tiempo') }}"></section>

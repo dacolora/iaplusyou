@@ -1504,3 +1504,50 @@ def test_vincular_en_las_herramientas_y_el_aviso_de_voces_juntas(dashboard, enco
     # el menú de una imagen flota sobre la columna (no lo corta su scroll) y nunca la empuja de lado
     como = re.search(r"\.ed-bib-como \{([^}]*)\}", css).group(1)
     assert "position: fixed" in como and "max-width" in como
+
+
+def test_las_zonas_seguras_tienen_sus_guias_su_selector_y_su_aviso(dashboard, encolados):
+    """Capa 5c (Tarea 5, D10): las guías de las zonas van DENTRO del escenario, encima
+    del lienzo y debajo de la capa de toques (sin recibir ni un toque, `aria-hidden`);
+    el selector «Zonas» (No · TikTok · Reels · Shorts) va en la barra de herramientas
+    con su etiqueta, y el aviso con los demás avisos bajo el video. Las guías son solo
+    de la página: rayadas y translúcidas, en % del lienzo (las pinta pagina_editor.js)."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    arbol = _ancestros(html)
+    assert arbol["ed-zonas"][0] == "ed-escenario"
+    assert html.index('id="lienzo"') < html.index('id="ed-zonas"') < html.index('id="ed-interaccion"')
+    capa = re.search(r'<div[^>]*id="ed-zonas"[^>]*>', html).group(0)
+    assert 'aria-hidden="true"' in capa and 'class="ed-zonas"' in capa
+    # el selector: con etiqueta visible, en la barra de herramientas, las cuatro opciones en su orden
+    etiqueta = re.search(r'<label class="ed-zonas-elegir">(.*?)</label>', html, re.S)
+    assert etiqueta and etiqueta.group(1).lstrip().startswith("Zonas")
+    assert '<select id="zonas">' in etiqueta.group(1)
+    assert re.findall(r'<option value="([^"]*)">([^<]*)</option>', etiqueta.group(1)) == [
+        ("no", "No"), ("tiktok", "TikTok"), ("reels", "Reels"), ("shorts", "Shorts")]
+    assert "ed-herramientas" in arbol["zonas"]
+    # el aviso: oculto al empezar, con los demás avisos (bajo el video, aria-live) y nunca en rojo
+    aviso = re.search(r'<p id="aviso-zonas"[^>]*>', html)
+    assert aviso and "editor-aviso" in aviso.group(0) and "hidden" in aviso.group(0) and "error" not in aviso.group(0)
+    assert "ed-centro" in arbol["aviso-zonas"]
+    avisos = re.search(r'<div class="editor-avisos"[^>]*>.*?</div>', html, re.S).group(0)
+    assert 'id="aviso-zonas"' in avisos
+    # el estilo: encima del lienzo y de lado a lado, sin tocar el dedo, y rayado y translúcido
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    regla = re.search(r"\.ed-zonas \{([^}]*)\}", css).group(1)
+    for decl in ("position: absolute", "inset: 0", "pointer-events: none"):
+        assert decl in regla, decl
+    franja = re.search(r"\.ed-zona \{([^}]*)\}", css).group(1)
+    assert "position: absolute" in franja and "pointer-events: none" in franja
+    assert "repeating-linear-gradient" in franja and "var(--error)" in franja and "18%" in franja
+    assert "--danger" not in css, "ese token no existe en la app: el de error es --error"
+    # los textos de la página en el diccionario del servidor, con todos sus marcadores
+    datos = _datos(html)
+    for clave in ("vista.zona_texto", "vista.zona_imagen", "vista.zona_subtitulos", "vista.fuera_texto", "vista.fuera_imagen",
+                  "vista.y_mas", "vista.zona_arriba", "vista.zona_abajo", "vista.zona_lados", "vista.zona_botones",
+                  "vista.zonas_solo_vertical"):
+        assert datos["textos"][clave], clave
+    assert "{plataforma}" in datos["textos"]["vista.zona_texto"] and "{zona}" in datos["textos"]["vista.zona_texto"]
+    assert "{texto}" in datos["textos"]["vista.fuera_texto"] and "{n}" in datos["textos"]["vista.y_mas"]
+    js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
+    assert 'from "./zonas.js";' in js and "montarZonas();" in js

@@ -394,7 +394,18 @@ export const ES = {
   "bib.foto_agregada": "Foto agregada al video: dura {duracion}. Cámbialo en «Editar».",
   "editar.vincular_si": "Lo de encima se mueve con su video. Toca para soltarlo.",
   "editar.vincular_no": "Lo de encima se queda donde está. Toca para que siga a su video.",
-  "vista.voces_juntas": "Dos voces suenan al mismo tiempo en {tiempo}: muévelas o borra una."
+  "vista.voces_juntas": "Dos voces suenan al mismo tiempo en {tiempo}: muévelas o borra una.",
+  "vista.zona_texto": "El texto «{texto}» queda bajo la interfaz de {plataforma} ({zona}).",
+  "vista.zona_imagen": "Una imagen queda bajo la interfaz de {plataforma} ({zona}).",
+  "vista.zona_subtitulos": "Los subtítulos quedan bajo la interfaz de {plataforma}: súbelos en «Subtítulos».",
+  "vista.fuera_texto": "El texto «{texto}» se sale del video: achícalo o baja su ancho.",
+  "vista.fuera_imagen": "Una imagen se sale del video.",
+  "vista.y_mas": "(y {n} más)",
+  "vista.zona_arriba": "arriba",
+  "vista.zona_abajo": "abajo",
+  "vista.zona_lados": "a los lados",
+  "vista.zona_botones": "junto a los botones",
+  "vista.zonas_solo_vertical": "Las zonas son para videos verticales (9:16)."
 };
 
 let actuales = ES;
