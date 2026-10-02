@@ -97,6 +97,31 @@ def test_leer_producto_por_plataforma():
     assert t[1]["precio"] == 19.5 and t[1]["estrellas"] == 4.5 and t[1]["extra"] == {"vendidos": 120}
 
 
+def test_amazon_guarda_las_variantes_del_anuncio():
+    """La búsqueda real de Amazon trae `variantAsins`: las variantes del mismo anuncio, que comparten reseñas.
+    Se guardan normalizadas (mayúsculas, sin repetidas, solo ASIN válidos) para no elegir dos variantes del mismo
+    anuncio (prueba real 2026-10-01: B0CQRG7MDY y B0CQRG9M6R trajeron las mismas reseñas, pagadas dos veces)."""
+    from nicho.fuentes import plataformas as pl
+    base = _fixture("amazon_busqueda.json")[0]
+    p = pl.leer_producto("amazon", {**base, "variantAsins": ["B0AMZ00009", "b0amz00007", "B0AMZ00009", "no-es-asin", 7]})
+    assert p["extra"]["variantes"] == ["B0AMZ00001", "B0AMZ00007", "B0AMZ00009"]
+    solo = pl.leer_producto("amazon", {**base, "variantAsins": ["B0AMZ00001"]})        # sin otras variantes: nada que agrupar
+    assert "variantes" not in solo["extra"]
+    assert "variantes" not in pl.leer_producto("amazon", base)["extra"]
+
+
+def test_amazon_variantes_tolera_formas_raras():
+    """La lista puede no traer el ASIN propio (un anuncio de 2 variantes = 1 en la lista) o no ser una lista:
+    nunca rompe la lectura de un dataset que ya se pagó; `MAX_VARIANTES` acota lo que se guarda."""
+    from nicho.fuentes import plataformas as pl
+    base = _fixture("amazon_busqueda.json")[0]                                          # ASIN B0AMZ00001
+    assert pl.leer_producto("amazon", {**base, "variantAsins": ["B0AMZ00002"]})["extra"]["variantes"] == ["B0AMZ00001", "B0AMZ00002"]
+    for raro in (5, True, 3.5, "B0AMZ00002", {"B0AMZ00002": 1}):
+        assert "variantes" not in pl.leer_producto("amazon", {**base, "variantAsins": raro})["extra"]
+    muchas = [f"B0X{n:07d}" for n in range(250)]
+    assert len(pl.leer_producto("amazon", {**base, "variantAsins": muchas})["extra"]["variantes"]) == pl.MAX_VARIANTES
+
+
 def test_entradas_y_lectura_de_resenas():
     from nicho.fuentes import plataformas as pl
     from nicho.fuentes.base import ErrorFuente

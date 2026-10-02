@@ -142,3 +142,5 @@ the audio track, mixes the chosen music underneath with `final_edition/mezcla.py
 degradable (the paid video is never lost) — it only reports, never regenerates. Spec:
 `docs/superpowers/specs/2026-09-16-final-edition-estudio-design.md` S1 (done except
 `proveedor_v2a` and style previews, which belong to S3/S5).
+
+**Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «WaveSpeed no aceptó el pedido y no se cobró nada: <motivo>…» (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.

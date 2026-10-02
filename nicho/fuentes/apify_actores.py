@@ -22,7 +22,10 @@ investigación automática):
     del run lo dice; Starter sube ese tope a 40) -- con varios links en una
     corrida, solo el primero se lee. Por eso `una_corrida_por_link` (`corridas()`)
     manda UN link por corrida, a 2048 MB (`memoria_mb`) para que quepan 5 a la
-    vez dentro del límite de RAM de la cuenta.
+    vez dentro del límite de RAM de la cuenta. Actor, precio, techo mínimo,
+    memoria y reseñas por corrida NO se escriben aquí: salen del registro de
+    la investigación automática (`_junglee()` lee `nicho/fuentes/plataformas.py`),
+    así un cambio de plan de Apify se hace en un solo sitio.
   clockworks~tiktok-comments-scraper — US$ 1.25 por 1 000 comentarios (antes
     se creía US$ 0.50). Entrada `postURLs` (lista de urls), `commentsPerPost`,
     `maxRepliesPerComment`. Salida `text`, `diggCount`, `createTimeISO`,
@@ -52,6 +55,7 @@ from flask_babel import gettext
 
 import idiomas
 from idiomas import N_
+from nicho.fuentes import plataformas
 from nicho.fuentes.base import ErrorFuente
 
 MAX_RESULTADOS = 1000
@@ -108,12 +112,19 @@ def _item_tiktok(item):
             "puntuacion": item.get("diggCount"), "fecha": item.get("createTimeISO"), "extra": {"video": video}}
 
 
+def _junglee():
+    """junglee es el mismo actor que usan las reseñas de Amazon de la investigación automática: actor, precio,
+    techo mínimo (Apify rechaza la corrida si se manda menos), memoria (5 corridas a la vez en el límite de RAM
+    del plan) y reseñas por corrida (el plan FREE: 1 link y 10 reseñas) salen de ESE registro, para que un
+    cambio de plan de Apify se haga en un solo sitio."""
+    r = plataformas.PLATAFORMAS["amazon"]["resenas"]
+    return {"actor": r["actor"], "usd_por_resultado": r["usd_por_resultado"], "tope_minimo_usd": r["tope_minimo_usd"],
+            "memoria_mb": r["memoria_mb"], "max_por_link": r["max_resenas_por_producto"]}
+
+
 ACTORES = {
     "amazon_resenas": {
-        "actor": "junglee~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.006,
-        "tope_minimo_usd": 0.5,          # Apify rechaza la corrida si se manda menos (ver docstring del módulo)
-        "una_corrida_por_link": True, "max_por_link": 10,     # el plan FREE: 1 link y 10 reseñas por corrida
-        "memoria_mb": 2048,              # para que quepan 5 corridas a la vez en el límite de RAM del plan FREE
+        **_junglee(), "nombre": N_("Reseñas de Amazon"), "una_corrida_por_link": True,
         "ayuda": N_("Links de producto de Amazon (con /dp/ o /gp/product/), uno por línea."),
         "patron_link": _RE_AMAZON, "armar_entrada": _entrada_amazon, "leer_item": _item_amazon,
     },

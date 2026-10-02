@@ -576,7 +576,7 @@ def test_pedir_derivar_y_rescatar_llevan_precio_estimado(ent):
     assert ac.pedir("acme", eid, "rescatar", {"ep_id": ep}, "perdedor")[0] == "propuesta"
     prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "rescatar"][0]
     precio = prop["payload"]["precio_estimado"]
-    assert precio["usd"] == gastos.TARIFAS["final"] and precio["texto"] == "US$ 0,10 aprox."
+    assert precio["usd"] == gastos.TARIFAS["final"] and precio["texto"] == "US$ 0,20 aprox."
 
 
 def test_pedir_precio_no_disponible_no_bloquea(ent):

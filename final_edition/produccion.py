@@ -300,7 +300,13 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
     except Exception as e:
         # Lo pagado y las capas construidas viajan con cualquier fallo (un
         # Conflicto al guardar, un proveedor caído) para que `producir` lo registre.
-        e.costo_pagado = round(costo, 4)
+        # Un guion que salió inválido (o una API que se cortó a mitad) trae además lo que
+        # cobraron sus llamadas, y su capa lo dice: sin ella el gasto decía «nada cobrado» (PND-001).
+        usd_guion = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+        if usd_guion:
+            _capa(capas, "guion", "anthropic", {"idioma": idioma, "pais": pais, "precio": precio}, usd_guion,
+                  estado="error", error=_mensaje(e))
+        e.costo_pagado = round(costo + usd_guion, 4)
         e.capas_pagadas = capas
         raise
 
@@ -370,9 +376,17 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             # Doctrina, bloque 4: la variante recibe el ángulo de la sesión y el
             # contexto de la derivación (arranque objetivo, ganchos usados,
             # diagnóstico, aprendizajes). Antes iba sin ángulo.
-            guion_trabajo, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, final_edition._guia_marca(cliente),
-                                                                   angulo=entry.get("angulo"),
-                                                                   contexto=o.get("contexto_variante"))
+            try:
+                guion_trabajo, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo,
+                                                                       final_edition._guia_marca(cliente),
+                                                                       angulo=entry.get("angulo"),
+                                                                       contexto=o.get("contexto_variante"))
+            except Exception as e:
+                # Las llamadas que no sirvieron (guion inválido o API cortada a mitad) ya
+                # se cobraron: viajan al `except` de abajo, que las anota en el gasto de
+                # la final (PND-001).
+                e.costo_pagado = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+                raise
             costo += float(costo_variante or 0.0)
             # El arranque y el gancho que la variante eligió quedan dentro del
             # guion del borrador (doc["guion"]): los otros destinos de la misma
@@ -384,9 +398,16 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             _capa(capas, "guion", "anthropic",
                   {"idioma": idioma, "pais": pais, "precio": None, "variante_tipo": variante_tipo}, costo_variante)
     except Exception as e:
-        _capa(capas, "guion", "anthropic", {"variante_tipo": variante_tipo} if variante_tipo else {},
+        # Una variante que salió inválida ya cobró sus llamadas (`costo_pagado`): se anota en el
+        # gasto de la final. El guion base no entra aquí: `preparar_guion` anota el suyo (PND-001).
+        pagado = round(float(getattr(e, "costo_pagado", 0.0) or 0.0), 4)
+        _capa(capas, "guion", "anthropic", {"variante_tipo": variante_tipo} if variante_tipo else {}, pagado,
               estado="error", error=_mensaje(e))
-        creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas))
+        creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas),
+                                       costo_usd=round(costo + pagado, 4))
+        if pagado:
+            final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, pagado, _ordenar(capas),
+                                                fallo=True, ref_sufijo=ref_sufijo)
         raise
 
     try:

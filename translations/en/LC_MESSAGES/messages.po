@@ -911,10 +911,22 @@ msgstr[0] "%(num)d charge · not part of any project"
 msgstr[1] "%(num)d charges · not part of any project"
 
 #, python-format
+msgid "%(num)d con error"
+msgid_plural "%(num)d con error"
+msgstr[0] "%(num)d failed"
+msgstr[1] "%(num)d failed"
+
+#, python-format
 msgid "%(num)d día corriendo"
 msgid_plural "%(num)d días corriendo"
 msgstr[0] "%(num)d day running"
 msgstr[1] "%(num)d days running"
+
+#, python-format
+msgid "%(num)d edición"
+msgid_plural "%(num)d ediciones"
+msgstr[0] "%(num)d edit"
+msgstr[1] "%(num)d edits"
 
 #, python-format
 msgid "%(num)d entrada, la más nueva primero."
@@ -939,6 +951,12 @@ msgid "%(num)d final"
 msgid_plural "%(num)d finales"
 msgstr[0] "%(num)d final cut"
 msgstr[1] "%(num)d final cuts"
+
+#, python-format
+msgid "%(num)d final con error"
+msgid_plural "%(num)d finales con error"
+msgstr[0] "%(num)d final cut failed"
+msgstr[1] "%(num)d final cuts failed"
 
 #, python-format
 msgid "%(num)d hechas en total"
@@ -973,6 +991,12 @@ msgid "%(num)d por revisar"
 msgstr "%(num)d to review"
 
 #, python-format
+msgid "%(num)d produciéndose"
+msgid_plural "%(num)d produciéndose"
+msgstr[0] "%(num)d in production"
+msgstr[1] "%(num)d in production"
+
+#, python-format
 msgid "%(num)d publicado"
 msgid_plural "%(num)d publicados"
 msgstr[0] "%(num)d published"
@@ -1001,6 +1025,12 @@ msgid "%(num)d video"
 msgid_plural "%(num)d videos"
 msgstr[0] "%(num)d video"
 msgstr[1] "%(num)d videos"
+
+#, python-format
+msgid "%(num)d video listo en Crear"
+msgid_plural "%(num)d videos listos en Crear"
+msgstr[0] "%(num)d ready video in Create"
+msgstr[1] "%(num)d ready videos in Create"
 
 #, python-format
 msgid "%(num)s anuncio"
@@ -1634,6 +1664,9 @@ msgstr "Open the “API” (or “Developers”) section of your account and cre
 
 msgid "Abre «Traer referentes» ya prellenado con el producto y país de esta campaña — sigue siendo tu decisión lanzarlo y aprobar el costo"
 msgstr "Opens “Bring references” already filled in with this campaign's product and country — it's still your call to launch it and approve the cost"
+
+msgid "Abriendo el editor…"
+msgstr "Opening the editor…"
 
 msgid "Abrir el menú"
 msgstr "Open the menu"
@@ -2765,6 +2798,9 @@ msgstr "Changes saved to %(prompt)s."
 msgid "Cambios sin guardar…"
 msgstr "Unsaved changes…"
 
+msgid "Cambios sin producir →"
+msgstr "Unproduced changes →"
+
 msgid "Camisa manga corta"
 msgstr "Short-sleeve shirt"
 
@@ -3690,6 +3726,9 @@ msgstr "Email saved: %(correo)s. Wait a moment before requesting the confirmatio
 msgid "Correo nuevo"
 msgstr "New email"
 
+msgid "Corta, textos y música, gratis"
+msgstr "Cuts, text and music, free"
+
 msgid "Cortar donde está el cabezal: el clip elegido o, si no eliges ninguno, el video (S)"
 msgstr "Split at the playhead: the selected clip or, if you select none, the video (S)"
 
@@ -3698,6 +3737,9 @@ msgstr "Cut"
 
 msgid "Cortes"
 msgstr "Cuts"
+
+msgid "Costaron las finales listas"
+msgstr "Ready final cuts cost"
 
 msgid "Costo"
 msgstr "Cost"
@@ -3929,6 +3971,9 @@ msgstr "How Creatv writes →"
 msgid "Cómo escribir para que el video salga como lo imaginas"
 msgstr "How to write so the video comes out the way you picture it"
 
+msgid "Cómo funciona"
+msgstr "How it works"
+
 msgid "Cómo instalar el Pixel según tu plataforma"
 msgstr "How to install the Pixel depending on your platform"
 
@@ -3976,6 +4021,9 @@ msgstr "Sprint data (saves on its own)"
 #, python-format
 msgid "De %(persona)s:"
 msgstr "From %(persona)s:"
+
+msgid "De los listos en Crear"
+msgstr "From the ready ones in Create"
 
 msgid "De otros mercados"
 msgstr "From other markets"
@@ -4406,6 +4454,9 @@ msgstr "Edit and create another one from this"
 
 msgid "Editor"
 msgstr "Editor"
+
+msgid "Edítalo"
+msgstr "Edit it"
 
 msgid "Efecto"
 msgstr "Effect"
@@ -5176,6 +5227,12 @@ msgstr "Choose a prompt from the list or paste a new one."
 msgid "Elige un usuario y una contraseña para entrar a tu proyecto."
 msgstr "Choose a username and a password to enter your project."
 
+msgid "Elige un video"
+msgstr "Pick a video"
+
+msgid "Elige un video listo de Crear y se abre en el editor, gratis. El guion con IA y cada final muestran su precio antes de cobrar."
+msgstr "Pick a ready video from Create and it opens in the editor, for free. The AI script and each final cut show their price before charging."
+
 msgid "Elige un volumen de la lista."
 msgstr "Pick a volume from the list."
 
@@ -5335,6 +5392,9 @@ msgstr "In dash.cloudflare.com go to “R2” and create a bucket (that name is 
 
 msgid "En developers.mercadolibre.com entra con la cuenta de la tienda y ve a «Mis aplicaciones» › «Crear nueva aplicación»."
 msgstr "In developers.mercadolibre.com log in with the store's account and go to “My apps” › “Create new application”."
+
+msgid "En edición"
+msgstr "Editing"
 
 msgid "En el admin de Shopify ve a <em>Configuración › Apps y canales de venta › Desarrollar apps</em> y pulsa <em>Crear una app</em> (ponle un nombre, por ejemplo «creatv»)."
 msgstr "In the Shopify admin go to <em>Settings › Apps and sales channels › Develop apps</em> and press <em>Create an app</em> (give it a name, for example “creatv”)."
@@ -6821,12 +6881,14 @@ msgstr "Final edition needs a finished video (not an image or a session that has
 msgid "Finales"
 msgstr "Final cuts"
 
-#, python-format
-msgid "Finales (%(n)s)"
-msgstr "Final cuts (%(n)s)"
-
 msgid "Finales de esta pieza"
 msgstr "This piece's final cuts"
+
+msgid "Finales listas para publicar, una por país."
+msgstr "Final cuts ready to publish, one per country."
+
+msgid "Finalizados"
+msgstr "Finished"
 
 msgid "Firma vacía."
 msgstr "Empty “why it works”."
@@ -7032,6 +7094,9 @@ msgstr "Generates the candidate image and the video for each piece."
 
 msgid "Genera un video o una imagen en Crear o en un sprint y vuelve aquí para probarlo en Meta."
 msgstr "Generate a video or an image in Create or in a sprint and come back here to test it on Meta."
+
+msgid "Genera uno en Crear y vuelve aquí para terminarlo."
+msgstr "Generate one in Create and come back here to finish it."
 
 msgid "Genera y publica"
 msgstr "Generate and publish"
@@ -7409,6 +7474,9 @@ msgstr "Script saved. Now pick the markets and produce the final cuts."
 msgid "Guion inválido: %(errores)s"
 msgstr "Invalid script: %(errores)s"
 
+msgid "Guion listo"
+msgstr "Script ready"
+
 msgid "Guion listo — revísalo y produce las finales."
 msgstr "Script ready — review it and produce the final cuts."
 
@@ -7419,6 +7487,9 @@ msgid ""
 msgstr ""
 "Script «%(titulo)s», %(version)s. Lines of the video, in order:\n"
 "%(lineas)s"
+
+msgid "Guion, voz y precio por país"
+msgstr "Script, voice and price per country"
 
 msgid "Guiones"
 msgstr "Scripts"
@@ -7891,9 +7962,6 @@ msgstr "Engagement"
 
 msgid "Interno (Creatv)"
 msgstr "Internal (Creatv)"
-
-msgid "Interrumpida"
-msgstr "Interrupted"
 
 msgid "Interrumpido"
 msgstr "Interrupted"
@@ -8657,6 +8725,9 @@ msgstr "Ready, with warnings"
 msgid "Listo"
 msgstr "Done"
 
+msgid "Listo para Meta o redes"
+msgstr "Ready for Meta or social"
+
 msgid "Listo para volver a publicar."
 msgstr "Ready to publish again."
 
@@ -8821,6 +8892,9 @@ msgstr "What you sell: shoes, clothes, home decor, food, anything."
 
 msgid "Lo saca de la galería y de los selectores de Crear, Sprints y Nicho sin borrar nada. Se deshace con «Desarchivar»."
 msgstr "Takes it out of the gallery and the product pickers in Create, Sprints and Niche without deleting anything. Undo it with “Unarchive”."
+
+msgid "Localízalo"
+msgstr "Localize it"
 
 msgid "Locuciones (audios)"
 msgstr "Voice-overs (audios)"
@@ -10168,6 +10242,9 @@ msgstr "Couldn't load {lista} (the link didn't respond or the file is gone): tha
 msgid "No se pudo cargar."
 msgstr "Couldn't load."
 
+msgid "No se pudo cargar. Cierra y vuelve a intentar."
+msgstr "Couldn't load. Close and try again."
+
 #, python-format
 msgid "No se pudo completar (error %(status)s)."
 msgstr "Couldn't complete (error %(status)s)."
@@ -10511,6 +10588,9 @@ msgstr "New campaign"
 msgid "Nueva contraseña"
 msgstr "New password"
 
+msgid "Nueva final edition"
+msgstr "New final edition"
+
 msgid "Nueva idea"
 msgstr "New idea"
 
@@ -10815,6 +10895,9 @@ msgstr "Country not supported: %(pais)s"
 #, python-format
 msgid "País no soportado: %(pais)s. Opciones: %(opciones)s"
 msgstr "Unsupported country: %(pais)s. Options: %(opciones)s"
+
+msgid "Países"
+msgstr "Countries"
 
 msgid "Países Bajos"
 msgstr "Netherlands"
@@ -11269,6 +11352,9 @@ msgstr "Producing {n} final cut. You'll see it in Final edition when it's done."
 msgid "Produciendo {n} finales. Las vas a ver en Final edition cuando terminen."
 msgstr "Producing {n} final cuts. You'll see them in Final edition when they're done."
 
+msgid "Produciendo…"
+msgstr "Producing…"
+
 #, python-format
 msgid "Produciendo… 0%% · 0s"
 msgstr "Producing… 0%% · 0s"
@@ -11282,9 +11368,15 @@ msgstr "Produce 1 final cut"
 msgid "Producir finales"
 msgstr "Produce final cuts"
 
+msgid "Producir finales →"
+msgstr "Produce final cuts →"
+
 #, python-brace-format
 msgid "Producir {n} finales"
 msgstr "Produce {n} final cuts"
+
+msgid "Produciéndose"
+msgstr "In production"
 
 msgid "Producto"
 msgstr "Product"
@@ -11349,6 +11441,9 @@ msgstr "Products per search"
 
 msgid "Productos, personajes, entornos y logos con su regla de fidelidad. La IA reproduce exactamente tu marca, sin inventar letras ni logotipos."
 msgstr "Products, characters, environments and logos with their fidelity rule. The AI reproduces your brand exactly, without inventing text or logos."
+
+msgid "Prodúcelo"
+msgstr "Produce it"
 
 msgid "Promesa"
 msgstr "Promise"
@@ -11537,6 +11632,9 @@ msgstr "Publish"
 
 msgid "Publicar orgánico"
 msgstr "Publish organic"
+
+msgid "Publícalo"
+msgstr "Publish it"
 
 msgid "Pudo borrarse en otra pestaña."
 msgstr "It may have been deleted in another tab."
@@ -12238,6 +12336,9 @@ msgstr "Results (%(n)s)"
 msgid "Resultados actualizados."
 msgstr "Results updated."
 
+msgid "Resumen"
+msgstr "Summary"
+
 msgid "Retención"
 msgstr "Hold"
 
@@ -12263,6 +12364,9 @@ msgstr "Check the worker or refresh the experiment."
 #, python-format
 msgid "Revisa estos valores, deben ser números: %(nombres)s. No se guardó nada."
 msgstr "Check these values, they must be numbers: %(nombres)s. Nothing was saved."
+
+msgid "Revisa lo que falló →"
+msgstr "Check what failed →"
 
 msgid "Revisa los números del formulario."
 msgstr "Check the numbers in the form."
@@ -13639,8 +13743,8 @@ msgstr "No studies yet"
 msgid "Todavía no hay experimentos. Marca piezas en la galería de arriba y pulsa «Probar en Meta»."
 msgstr "There are no experiments yet. Select pieces in the gallery above and press “Test on Meta”."
 
-msgid "Todavía no hay finales. Abre un video de arriba, prepara el guion y elige los países."
-msgstr "No final cuts yet. Open a video above, prepare the script and pick the countries."
+msgid "Todavía no hay finales listas. Aparecen aquí apenas una termina de producirse."
+msgstr "No final cuts ready yet. They show up here as soon as one finishes producing."
 
 msgid "Todavía no hay fotos: sube una o crea una imagen en Desde referencias."
 msgstr "No photos yet: upload one or create an image in From references."
@@ -13702,8 +13806,8 @@ msgstr "No stores available yet."
 msgid "Todavía no hay usuarios."
 msgstr "No users yet."
 
-msgid "Todavía no hay videos listos. Genera uno en <a href=\"#creativeflowplus\">Crear</a> y vuelve aquí para terminarlo."
-msgstr "No ready videos yet. Generate one in <a href=\"#creativeflowplus\">Create</a> and come back here to finish it."
+msgid "Todavía no hay videos listos"
+msgstr "No ready videos yet"
 
 msgid "Todavía no hay videos ni imágenes en este proyecto. Súbelos con «Subir» (o arrástralos aquí desde tu computadora)."
 msgstr "There are no videos or images in this project yet. Upload them with “Upload” (or drag them here from your computer)."
@@ -14653,6 +14757,9 @@ msgstr "Chosen version"
 msgid "Vertical 9:16 (Reels, TikTok, Shorts)"
 msgstr "Vertical 9:16 (Reels, TikTok, Shorts)"
 
+msgid "Ves el precio antes de cobrar"
+msgstr "See the price before you're charged"
+
 msgid "Vestido"
 msgstr "Dress"
 
@@ -14709,15 +14816,14 @@ msgid "Videos de este guion"
 msgstr "This script's videos"
 
 #, python-format
-msgid "Videos listos (%(n)s)"
-msgstr "Ready videos (%(n)s)"
-
-#, python-format
 msgid "Videos pendientes de revisión (%(n)s)"
 msgstr "Videos waiting for review (%(n)s)"
 
-msgid "Videos, imágenes y audios desde tus referencias, o cambia el producto de una foto o video. Nada se cobra hasta que pulses «Generar» o «Crear audio»."
-msgstr "Videos, images and audios from your references, or swap the product in a photo or video. Nothing is charged until you press \"Generate\" or \"Create audio\"."
+msgid "Videos que ya empezaste: guion, editor o finales en camino."
+msgstr "Videos you've started: script, editor or final cuts on the way."
+
+msgid "Videos, imágenes y audios desde tus referencias, o cambia el producto de una foto o video. Todo botón que cobra muestra su precio antes del clic."
+msgstr "Videos, images and audios from your references, or swap the product in a photo or video. Every button that charges shows its price before you click."
 
 msgid "Videos, imágenes, guiones, finales y textos con IA pagados desde el inicio; detalle en Configuración › Gasto"
 msgstr "Videos, images, scripts, final cuts and AI text paid for since the start; detail in Settings › Spend"
@@ -14867,6 +14973,21 @@ msgstr "Wan 3.0 (reference, no editing)"
 msgid "Wan-2.2 Animate Replace"
 msgstr "Wan-2.2 Animate Replace"
 
+msgid "WaveSpeed está recibiendo demasiados pedidos (respuesta 429): no se generó ni se cobró nada. Vuelve a intentarlo en unos minutos."
+msgstr "WaveSpeed is receiving too many requests (response 429): nothing was generated or charged. Try again in a few minutes."
+
+#, python-format
+msgid "WaveSpeed no aceptó el pedido (respuesta %(status)s) y no se cobró nada. Vuelve a intentarlo en unos minutos; si se repite, cambia de modelo."
+msgstr "WaveSpeed did not accept the request (response %(status)s) and nothing was charged. Try again in a few minutes; if it happens again, switch models."
+
+#, python-format
+msgid "WaveSpeed no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el formato o las referencias y vuelve a generar."
+msgstr "WaveSpeed did not accept the request and nothing was charged: %(motivo)s. Adjust the duration, the format or the references and generate again."
+
+#, python-format
+msgid "WaveSpeed rechazó la llave de Creatv (respuesta %(status)s): no se generó ni se cobró nada. Avísale al administrador."
+msgstr "WaveSpeed rejected Creatv's key (response %(status)s): nothing was generated or charged. Let the administrator know."
+
 #, python-format
 msgid "WaveSpeed seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). El video suele terminar igual y se cobra: espera unos minutos y toca «Recuperar el video» — no se paga de nuevo."
 msgstr "WaveSpeed was still working on %(modelo)s after %(min)s min (prediction %(id)s). The video usually finishes anyway and is charged: wait a few minutes and tap “Recover the video” — you don't pay again."
@@ -14877,6 +14998,10 @@ msgstr "WaveSpeed is still working on prediction %(id)s; try again in a few minu
 
 msgid "WaveSpeed sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."
 msgstr "WaveSpeed is still working: we keep waiting for the same video, without paying again."
+
+#, python-format
+msgid "WaveSpeed tuvo una falla de su lado (respuesta %(status)s) y no confirmó el pedido. Espera unos minutos antes de volver a generar; si se repite, cambia de modelo."
+msgstr "WaveSpeed had a failure on its side (response %(status)s) and did not confirm the request. Wait a few minutes before generating again; if it happens again, switch models."
 
 msgid "Web (páginas)"
 msgstr "Web (pages)"
@@ -15994,9 +16119,6 @@ msgstr "queued"
 msgid "en curso"
 msgstr "in progress"
 
-msgid "en el editor"
-msgstr "in the editor"
-
 msgid "en la cola"
 msgstr "in the queue"
 
@@ -16265,6 +16387,14 @@ msgstr "base script %(idioma)s"
 #, python-format
 msgid "guion base %(idioma)s + transcripción de la referencia"
 msgstr "base script %(idioma)s + reference transcription"
+
+#, python-format
+msgid "guion base %(idioma)s · no salió válido"
+msgstr "base script %(idioma)s · came out invalid"
+
+#, python-format
+msgid "guion base %(idioma)s · se cortó después de cobrar"
+msgstr "base script %(idioma)s · cut off after being charged"
 
 #, python-format
 msgid "hace %(n)s h"
@@ -16938,6 +17068,9 @@ msgstr "producing final cuts"
 
 msgid "produciendo…"
 msgstr "producing…"
+
+msgid "produciéndose"
+msgstr "in production"
 
 msgid "producto"
 msgstr "product"

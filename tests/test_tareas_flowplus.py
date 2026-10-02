@@ -754,6 +754,74 @@ def test_video_sin_saldo_se_explica_avisa_y_no_persigue_una_prediccion_vieja(bas
     assert marcas == [("wavespeed", "acme")]
 
 
+def test_un_pedido_rechazado_al_lanzar_se_cuenta_en_palabras(base_temporal, monkeypatch, tmp_path):
+    """PND-107: un 400/1405 de WaveSpeed al lanzar salía en la tarjeta como su JSON crudo."""
+    import json as _json
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path)
+    cuerpo = {"code": 1405, "message": "The total duration of reference videos must not exceed 15 seconds."}
+
+    def _gen(*a, **k):
+        raise wc.PedidoRechazado("alibaba/wan-3.0/reference-to-video", 400, cuerpo["message"], _json.dumps(cuerpo))
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 23, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "error"
+    assert "no aceptó el pedido" in e["error"] and "no se cobró" in e["error"]
+    assert "must not exceed 15 seconds" in e["error"]          # el motivo del proveedor, legible
+    assert "{" not in e["error"] and "alibaba/" not in e["error"]
+
+
+def _rechazo(status, mensaje=""):
+    from providers import wavespeed_common as wc
+    return wc.PedidoRechazado("alibaba/wan-3.0/reference-to-video", status, mensaje, mensaje or "<html>error</html>")
+
+
+@pytest.mark.parametrize("status, esperado, promete_no_cobro", [
+    (400, "no aceptó el pedido (respuesta 400)", True),          # sin mensaje legible
+    (401, "rechazó la llave de Creatv", True),
+    (403, "rechazó la llave de Creatv", True),
+    (429, "demasiados pedidos", True),
+    (502, "falla de su lado", False),                          # un 5xx no garantiza que no se cobró
+])
+def test_cada_rechazo_de_wavespeed_dice_lo_que_paso(base_temporal, monkeypatch, tmp_path, status, esperado,
+                                                     promete_no_cobro):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path)
+
+    def _gen(*a, **k):
+        raise _rechazo(status)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 24, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    error = cf.cargar("acme")[cid]["error"]
+    assert esperado in error and "<html>" not in error and "alibaba/" not in error
+    assert ("se cobró nada" in error) is promete_no_cobro   # «no se cobró nada» o «ni se cobró nada»
+    assert ("Ajusta la duración" in error) is False        # solo para un motivo del proveedor que lo diga
+
+
+def test_un_rechazo_al_lanzar_no_persigue_una_prediccion_vieja(base_temporal, monkeypatch, tmp_path):
+    """Revisión de PND-107: con una predicción de un intento anterior en la sesión, un rechazo nuevo se
+    iba a esperar ESA predicción y la cerraba como si fuera este video (y anotaba su gasto otra vez)."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from datetime import datetime
+    vieja = {"id": "vieja", "modelo": "wan3", "en": datetime.now().isoformat(timespec="seconds")}
+    cid = _sesion_video(cf, monkeypatch, tmp_path, prediccion=vieja)
+
+    def _gen(*a, **k):
+        raise _rechazo(422, "duration must be <= 15")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 25, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "error" and "duration must be <= 15" in e["error"]
+
+
 def test_imagen_sin_saldo_se_explica_y_avisa(base_temporal, monkeypatch, tmp_path):
     import creative_flow as cf
     import tareas.flowplus as fp
