@@ -240,7 +240,9 @@ def test_capa_5c_claves_borradas_y_plantillas_en_ingles():
         t = textos_editor.textos()
     assert [t[f"op.plantilla_{p}"] for p in ("oferta", "nuevo", "envio", "ultimas", "mas_vendido")] == [
         "SALE", "NEW", "FREE SHIPPING", "ONLY A FEW LEFT!", "BEST SELLER"]
-    assert t["op.plantilla_descuento"] == "-50 %" == textos_editor.TEXTOS["op.plantilla_descuento"]
+    # en inglés un descuento se escribe «50% OFF» (revisión final de la 5c); con espacio duro, como el «-50 %» del
+    # español: el ajuste de línea solo parte por U+0020 y la plantilla no se separa en dos renglones
+    assert t["op.plantilla_descuento"] == "50%\u00a0OFF" and textos_editor.TEXTOS["op.plantilla_descuento"] == "-50\u00a0%"
     assert t["prop.ancho"] == "Text width" and t["prop.mostrar_emojis"] == "Show the emojis"
 
 
@@ -271,7 +273,7 @@ def test_capa_5c_los_20_stickers_y_la_pestana_en_los_dos_idiomas():
     assert {sid: t[f"bib.sticker_{sid}"] for sid in EN} == EN
     assert len({t[f"bib.sticker_{sid}"] for sid in EN}) == 20, "ningún nombre repetido: cada uno se oye distinto"
     assert [t[c] for c in ("bib.stickers", "bib.flechas", "bib.marcas", "bib.formas", "bib.emojis", "bib.para_vender", "prop.color_sticker")] == [
-        "Stickers", "Arrows", "Hand-drawn marks", "Shapes", "Emojis", "Made to sell", "Color"]
+        "Stickers", "Arrows", "Hand-drawn marks", "Shapes", "Emojis", "Promo labels", "Color"]
     assert t["bib.sticker_agregado"] == "Sticker added: change its color in “Edit”."
     assert t["bib.sticker_error"] == "Couldn't add the sticker ({error})."
     assert t["bib.sticker_sin_conexion"] == "no connection" and t["bib.sticker_error_http"] == "error {status}"
@@ -282,3 +284,20 @@ def test_capa_5c_los_20_stickers_y_la_pestana_en_los_dos_idiomas():
     with open(catalogo_i18n.PO, "rb") as f:
         po = read_po(f, locale="en")
     assert po.get("Stickers").string == "Stickers"
+
+
+def test_capa_5c_el_selector_de_zonas_dice_off_en_ingles():
+    """Revisión final de la 5c: la opción «No» del selector de zonas (`#zonas`) en inglés es «Off» (un selector que
+    se apaga), no «No». El msgid «No» solo lo usa ese selector: si otra pantalla lo usara, cambiar su inglés la
+    cambiaría también, y tendría que ir con su propio msgid."""
+    import catalogo_i18n
+    from babel.messages.pofile import read_po
+    assert catalogo_i18n.extraer().get("No").locations == [("templates/editor.html", _linea_de_zonas())]
+    with open(catalogo_i18n.PO, "rb") as f:
+        po = read_po(f, locale="en")
+    assert po.get("No").string == "Off"
+
+
+def _linea_de_zonas():
+    with open(os.path.join(RAIZ, "templates", "editor.html"), encoding="utf-8") as f:
+        return next(i for i, linea in enumerate(f, 1) if '<select id="zonas">' in linea)

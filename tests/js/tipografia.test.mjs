@@ -171,6 +171,18 @@ test("sinGlifosV1 deja lo que dejaba rasterizar.sin_glifos_faltantes (Python lo 
   assert.equal(sinGlifosV1("a 🔥  b", "Inter-Bold", T0), "a b");
 });
 
+test("limpiar y sinGlifosV1 unen la tilde escrita aparte a su letra (NFC, como Python)", () => {
+  const pegado = "ENVÍO GRATIS a todo el país, ñ";
+  for (const fuente of ["Inter-Bold", "Poppins-ExtraBold", "Pacifico-Regular"]) {
+    assert.deepEqual(limpiar(pegado, fuente, T0),
+      { texto: "ENVÍO GRATIS a todo el país, ñ", quitados: [], simplificado: false }, fuente);
+  }
+  assert.deepEqual(limpiar("q́", "Inter-Bold", T0), { texto: "q", quitados: ["́"], simplificado: false });
+  assert.deepEqual(maquetar("ENVÍO", V2, "9:16", T0), maquetar("ENVÍO", V2, "9:16", T0));
+  assert.equal(sinGlifosV1("ENVÍO país ñ", "Poppins-ExtraBold", T0), "ENVÍO país ñ");
+  assert.equal(sinGlifosV1("ENVÍO  doble", "Inter-Bold", T0), "ENVÍO  doble");
+});
+
 test("sinGlifosV1 recorta con la lista de espacios de Python, no con trim()", () => {
   // \x1c y \x85 son espacio para str.strip() y no para el trim() de JS
   assert.equal(sinGlifosV1("\x1c🔥 a\x85", "Inter-Bold", T0), "a");

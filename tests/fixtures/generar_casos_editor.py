@@ -392,6 +392,9 @@ TIPOGRAFIA_LIMPIAR = (
     "✓ Envío", "🔥 50% OFF", "❤️ Amor ❤️", "a\tb\r\nc", "a\rb", "  a   b  \n  c ", "a\u00a0\u00a0b \u00a0",
     "👍🏽 Listo 🇨🇴", "Precio\u00a0$\u00a089.900", "→ ★ ✓ ✗ ♥ ⚡", "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥", "日本語 и кириллица", "🔥✓🔥 a ✓ 🚀",
     "", "\x00\x07 raro",
+    # tildes escritas aparte (letra + U+0301/U+0303, como llegan pegadas de un PDF o de Finder): los dos motores
+    # pasan a NFC antes que nada y la tilde sale (revisión final de la capa 5c, 2026-10-02)
+    "ENVI\u0301O GRATIS", "a todo el pai\u0301s", "n\u0303 N\u0303", "q\u0301 sin letra con tilde",
 )
 TIPOGRAFIA_FUENTES = ("Inter-Bold", "SpaceGrotesk-Bold", "Anton-Regular")
 TIPOGRAFIA_FUENTES_V1 = ("Inter-Bold", "SpaceGrotesk-Bold", "Poppins-ExtraBold")
@@ -426,6 +429,7 @@ TIPOGRAFIA_MAQUETAS = (
     # `tam` impar (0.0172 × 1920 = 33.02 → 33) el interlineado 1.5 da 0.5 × 33 = 16.5 → 16 entre líneas
     ("Hola", {**_V2, "tamano": 0.0375}, "16:9", 1),
     ("Envío gratis a todo el país en 24 horas", {**_V2, "tamano": 0.0172, "interlineado": 1.5, "ancho_max": 0.3}, "9:16", 1),
+    ("ENVI\u0301O GRATIS a todo el pai\u0301s, n\u0303", {**_V2, "fuente": "Poppins-ExtraBold", "ancho_max": 0.6}, "9:16", 2),
     ("Sí", {**_V2, "tamano": 0.03, "fondo": {"color": "#FF0000", "opacidad": 1, "radio": 0.5, "relleno_x": 0.01, "relleno_y": 0.005,
                                               "ancho": 0.3}}, "1:1", 1),
 )

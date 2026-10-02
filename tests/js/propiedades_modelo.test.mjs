@@ -595,6 +595,20 @@ test("avisosTexto: lo que no sale en el video (v2), lo simplificado y el texto d
   assert.deepEqual(avisosTexto({}, "Hola 🔥", T0), []);
 });
 
+test("avisosTexto: una tilde escrita aparte (pegada de un PDF) no es algo que no sale, ni en v1 ni en v2", () => {
+  // «ENVÍO GRATIS a todo el país» con cada tilde como letra + U+0301 (y «ñ» como n + U+0303): los dos motores
+  // pasan a NFC; antes la tabla, que no trae las marcas sueltas, las quitaba y el aviso mostraba una «́» sola.
+  const pegado = "ENVÍO GRATIS a todo el país, ñ";
+  assert.notEqual(pegado, pegado.normalize("NFC"));
+  for (const fuente of ["Inter-Bold", "Poppins-ExtraBold"]) {
+    assert.deepEqual(avisosTexto(v1(fuente), pegado, T0), [], `v1 ${fuente}: no es «Este texto es de antes…»`);
+    assert.deepEqual(avisosTexto(v2(fuente), pegado, T0), [], `v2 ${fuente}`);
+  }
+  // un emoji de verdad en un texto de antes sigue avisando, aunque lleve tildes escritas aparte
+  assert.deepEqual(avisosTexto(v1("Inter-Bold"), `${pegado} 🔥`, T0),
+    [{ texto: "Este texto es de antes: sus emojis no salen en el video.", accion: "actualizar" }]);
+});
+
 test("modelo de un texto: los avisos van con el texto que se ve, y el de antes ofrece «Mostrar los emojis»", () => {
   const conEmoji = op.editarTexto(docBase(), "t1", "Hola 🔥", "es", INFO).doc;      // al escribir, pasa a v2
   assert.deepEqual(modelo(conEmoji, "t1", { tabla: T0 }).avisos,

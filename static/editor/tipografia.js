@@ -138,10 +138,11 @@ export function simplificar(texto) {
 // Los espacios repetidos de una línea en uno y ninguno en los bordes (solo U+0020).
 const juntar = (linea) => linea.split(SEPARADOR).filter((p) => p !== "").join(SEPARADOR);
 
-// {texto, quitados, simplificado} (D5.2): ver final_edition/tipografia.limpiar.
+// {texto, quitados, simplificado} (D5.2): ver final_edition/tipografia.limpiar. Primero NFC (el
+// unicodedata.normalize("NFC") de Python): una tilde escrita aparte se une a su letra.
 export function limpiar(texto, fuente, tabla) {
   const ctx = contexto(tabla, fuente);
-  let t = String(texto ?? "").split("\t").join(" ").split("\r\n").join("\n").split("\r").join("\n");
+  let t = String(texto ?? "").normalize("NFC").split("\t").join(" ").split("\r\n").join("\n").split("\r").join("\n");
   let simplificado;
   [t, simplificado] = simplificar(t);
   const quedan = [];
@@ -187,9 +188,10 @@ function juntarV1(linea) {
 }
 
 // El texto sin lo que la fuente del texto no trae (v1 no conoce la de emojis): lo que
-// rasterizar.sin_glifos_faltantes deja, con la cobertura de la tabla.
+// rasterizar.sin_glifos_faltantes deja, con la cobertura de la tabla. En NFC, como limpiar: la
+// tabla no trae las tildes sueltas y una escrita aparte no se quita (ver sin_glifos_v1).
 export function sinGlifosV1(texto, fuente, tabla) {
-  texto = String(texto ?? "");
+  texto = String(texto ?? "").normalize("NFC");
   const av = contexto(tabla, fuente).avT;
   const quedan = [];
   let quitado = false;

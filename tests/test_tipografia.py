@@ -8,6 +8,7 @@ Las tablas de estas pruebas no dependen de la descarga de la fuente de emojis:
 `T0` es la tabla del repo SIN emojis y `T_E` le suma una fuente de emojis
 falsa de cuatro caracteres."""
 import math
+import unicodedata
 
 import pytest
 
@@ -228,6 +229,19 @@ def test_limpiar_espacios_y_saltos():
     assert limpiar(None, "Inter-Bold", T0) == {"texto": "", "quitados": [], "simplificado": False}
 
 
+def test_limpiar_une_la_tilde_escrita_aparte_a_su_letra():
+    # Texto pegado de un PDF, de Finder o de algunas páginas: «Í» llega como «I» + U+0301. La tabla no trae las
+    # marcas sueltas: sin NFC la tilde se quitaba («ENVIO … pais») y el aviso mostraba una «́» sola.
+    for fuente in ("Inter-Bold", "Poppins-ExtraBold", "Pacifico-Regular"):
+        r = limpiar("ENVI\u0301O GRATIS a todo el pai\u0301s, n\u0303", fuente, T0)
+        assert r == {"texto": "ENVÍO GRATIS a todo el país, ñ", "quitados": [], "simplificado": False}, fuente
+    m = maquetar("ENVI\u0301O", V2, "9:16", T0)
+    assert [chr(l["cp"]) for l in m["letras"]] == list("ENVÍO")
+    assert m == maquetar("ENVÍO", V2, "9:16", T0)
+    # una marca que no se une a nada (no hay «q» con tilde) sigue sin salir, y el aviso la nombra
+    assert limpiar("q\u0301", "Inter-Bold", T0) == {"texto": "q", "quitados": ["\u0301"], "simplificado": False}
+
+
 def test_limpiar_marca_lo_simplificado_y_deja_el_emoji_base():
     r = limpiar("👍🏽 Listo", "Inter-Bold", T_E)
     assert r == {"texto": "👍 Listo", "quitados": [], "simplificado": True}
@@ -235,13 +249,52 @@ def test_limpiar_marca_lo_simplificado_y_deja_el_emoji_base():
     assert r["texto"] == "Envíos" and r["simplificado"] is True
 
 
+# U+FE0E, U+FE0F, U+200D y U+20E3 no se ven. Sin Raqm (Pillow de aquí) `sin_glifos_faltantes` los ve como la caja
+# de «falta» y los quita; con Raqm (el Pillow 12.3 del VPS) salen sin tinta, cuentan como dibujables y se quedan
+# («❤️» sigue con su U+FE0F, «1️⃣» con su U+20E3 en Poppins). La vista previa los quita siempre. Por eso se compara lo
+# que se VE: sin esos cuatro y, como quitar uno cuenta como «quitó algo» y eso junta los espacios dobles de la línea
+# («1️⃣ paso  doble» en Poppins con Raqm sale con los dos espacios), con los espacios juntados. Un texto sin ninguno de
+# los cuatro se compara exacto. Los dos lados van en NFC: la vista previa trabaja en NFC (una tilde escrita aparte
+# no se pierde, revisión final de la capa 5c) y el render v1 la deja tal cual llega.
+_INVISIBLES = {0xFE0E: None, 0xFE0F: None, 0x200D: None, 0x20E3: None}
+
+
+def _lo_que_se_ve(s):
+    s = unicodedata.normalize("NFC", s).translate(_INVISIBLES)
+    return "\n".join(" ".join(p for p in linea.split(" ") if p) for linea in s.split("\n"))
+
+
+def _igual_al_render(texto, fuente, vista):
+    render = rasterizar.sin_glifos_faltantes(texto, fuente)
+    if any(ord(c) in _INVISIBLES for c in texto):
+        return _lo_que_se_ve(vista) == _lo_que_se_ve(render)
+    return vista == unicodedata.normalize("NFC", render)
+
+
 @pytest.mark.parametrize("fuente", ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold", "Poppins-ExtraBold"])
 @pytest.mark.parametrize("texto", ["Hola 🔥 mundo", "👨‍👩‍👧 Familia", "✓ listo", "❤️ Amor", "sin nada", "1️⃣ paso  doble",
                                    "a  b", "🔥🔥 dos\n🚀 tres", "  🔥  ", "a🔥\u200d b", "\x1c🔥 a\x85"])
 def test_sin_glifos_v1_es_lo_mismo_que_el_rasterizador_de_hoy(texto, fuente):
-    assert sin_glifos_v1(texto, fuente, T_E) == rasterizar.sin_glifos_faltantes(texto, fuente)
+    vista = sin_glifos_v1(texto, fuente, T_E)
+    assert _igual_al_render(texto, fuente, vista), (vista, rasterizar.sin_glifos_faltantes(texto, fuente))
     # v1 no conoce la fuente de emojis: con o sin ella da lo mismo
-    assert sin_glifos_v1(texto, fuente, T0) == sin_glifos_v1(texto, fuente, T_E)
+    assert sin_glifos_v1(texto, fuente, T0) == vista
+
+
+# Las fuentes v1 que traen las marcas sueltas (U+0301, U+0303): el render v1 deja la secuencia tal cual y la dibuja
+# con su tilde. Poppins no las trae: ahí el render v1 quita la marca («ENVIO»), la vista previa enseña la tilde (lo
+# que la persona escribió) y el aviso no salta; pasar el texto a v2 lo arregla en el video (`limpiar` va en NFC).
+@pytest.mark.parametrize("fuente", ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"])
+@pytest.mark.parametrize("texto", ["ENVI\u0301O GRATIS a todo el pai\u0301s", "n\u0303 y N\u0303", "🔥 ENVI\u0301O  ya"])
+def test_sin_glifos_v1_con_tildes_escritas_aparte_es_lo_que_dibuja_el_render(texto, fuente):
+    vista = sin_glifos_v1(texto, fuente, T_E)
+    assert vista == unicodedata.normalize("NFC", vista)
+    assert _igual_al_render(texto, fuente, vista), (vista, rasterizar.sin_glifos_faltantes(texto, fuente))
+
+
+def test_sin_glifos_v1_no_quita_la_tilde_escrita_aparte():
+    assert sin_glifos_v1("ENVI\u0301O pai\u0301s n\u0303", "Poppins-ExtraBold", T0) == "ENVÍO país ñ"
+    assert sin_glifos_v1("ENVI\u0301O  doble", "Inter-Bold", T0) == "ENVÍO  doble"     # nada quitado: tal cual, en NFC
 
 
 def test_sin_glifos_v1_recorta_con_la_lista_de_espacios_de_python():

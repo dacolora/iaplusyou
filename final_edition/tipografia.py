@@ -23,6 +23,7 @@ red: es aritmética sobre la tabla."""
 import collections
 import math
 import threading
+import unicodedata
 
 from final_edition.documento import FORMATOS
 
@@ -190,9 +191,12 @@ def limpiar(texto, fuente, tabla):
     fuente del texto ni la de emojis cubren (menos el espacio, el espacio duro y `\\n`) y, en
     cada línea, se juntan los espacios repetidos y se quitan los de los bordes. `quitados`
     son los caracteres quitados por falta de cobertura, sin repetir y en orden de aparición
-    (para el aviso de la página)."""
+    (para el aviso de la página). Antes que nada, NFC: una tilde escrita aparte (letra +
+    U+0301, como llega pegada de un PDF o de Finder) se une a su letra; la tabla no trae las
+    marcas sueltas y «ENVÍO» salía «ENVIO» (revisión final de la capa 5c, 2026-10-02). JS:
+    `normalize("NFC")`, la misma operación."""
     ctx = _Contexto(tabla, fuente)
-    t = str(texto or "").replace("\t", " ").replace("\r\n", "\n").replace("\r", "\n")
+    t = unicodedata.normalize("NFC", str(texto or "")).replace("\t", " ").replace("\r\n", "\n").replace("\r", "\n")
     t, simplificado = simplificar(t)
     quedan, quitados = [], []
     for ch in t:
@@ -244,8 +248,13 @@ def sin_glifos_v1(texto, fuente, tabla):
     si quitó algo, sin los espacios dobles ni los de los bordes de cada línea; si no, el
     texto tal cual. Un carácter fuera del repertorio de la tabla cuenta como no cubierto
     (Pillow sí dibujaría uno de otro bloque que la fuente tenga: v1 solo lo usa para
-    textos en español, inglés y portugués)."""
-    texto = str(texto or "")
+    textos en español, inglés y portugués). Trabaja sobre el texto en NFC, como `limpiar`:
+    la tabla no trae las tildes sueltas (U+0301…) y una escrita aparte se habría quitado
+    (si no quitó nada, devuelve el texto tal cual, en NFC). El render v1 deja la secuencia
+    tal cual llega y la dibuja con su tilde si la fuente trae la marca suelta (Inter, Space
+    Grotesk); en una que no la trae (Poppins) la quita: ahí la vista previa enseña la tilde
+    que la persona escribió y el video no, hasta que el texto pase a v2."""
+    texto = unicodedata.normalize("NFC", str(texto or ""))
     av = _Contexto(tabla, fuente).av_t
     quedan, quitado = [], False
     for ch in texto:

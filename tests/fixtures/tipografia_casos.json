@@ -298,12 +298,27 @@
    "fuente": "Inter-Bold"
   },
   {
+   "cp": 71,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
    "cp": 72,
    "esperado": "texto",
    "fuente": "Inter-Bold"
   },
   {
+   "cp": 73,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
    "cp": 76,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 78,
    "esperado": "texto",
    "fuente": "Inter-Bold"
   },
@@ -319,6 +334,26 @@
   },
   {
    "cp": 81,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 82,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 83,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 84,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 86,
    "esperado": "texto",
    "fuente": "Inter-Bold"
   },
@@ -379,6 +414,16 @@
   },
   {
    "cp": 111,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 112,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 113,
    "esperado": "texto",
    "fuente": "Inter-Bold"
   },
@@ -460,6 +505,16 @@
   {
    "cp": 250,
    "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 769,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 771,
+   "esperado": null,
    "fuente": "Inter-Bold"
   },
   {
@@ -743,12 +798,27 @@
    "fuente": "SpaceGrotesk-Bold"
   },
   {
+   "cp": 71,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
    "cp": 72,
    "esperado": "texto",
    "fuente": "SpaceGrotesk-Bold"
   },
   {
+   "cp": 73,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
    "cp": 76,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 78,
    "esperado": "texto",
    "fuente": "SpaceGrotesk-Bold"
   },
@@ -764,6 +834,26 @@
   },
   {
    "cp": 81,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 82,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 83,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 84,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 86,
    "esperado": "texto",
    "fuente": "SpaceGrotesk-Bold"
   },
@@ -824,6 +914,16 @@
   },
   {
    "cp": 111,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 112,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 113,
    "esperado": "texto",
    "fuente": "SpaceGrotesk-Bold"
   },
@@ -905,6 +1005,16 @@
   {
    "cp": 250,
    "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 769,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 771,
+   "esperado": null,
    "fuente": "SpaceGrotesk-Bold"
   },
   {
@@ -1188,12 +1298,27 @@
    "fuente": "Anton-Regular"
   },
   {
+   "cp": 71,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
    "cp": 72,
    "esperado": "texto",
    "fuente": "Anton-Regular"
   },
   {
+   "cp": 73,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
    "cp": 76,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 78,
    "esperado": "texto",
    "fuente": "Anton-Regular"
   },
@@ -1209,6 +1334,26 @@
   },
   {
    "cp": 81,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 82,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 83,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 84,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 86,
    "esperado": "texto",
    "fuente": "Anton-Regular"
   },
@@ -1269,6 +1414,16 @@
   },
   {
    "cp": 111,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 112,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 113,
    "esperado": "texto",
    "fuente": "Anton-Regular"
   },
@@ -1350,6 +1505,16 @@
   {
    "cp": 250,
    "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 769,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 771,
+   "esperado": null,
    "fuente": "Anton-Regular"
   },
   {
@@ -1689,6 +1854,44 @@
   },
   {
    "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "ENVÍO GRATIS"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "ENVÍO GRATIS"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a todo el país"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "a todo el país"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "ñ Ñ"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "ñ Ñ"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "́"
+    ],
+    "simplificado": false,
+    "texto": "q sin letra con tilde"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "q́ sin letra con tilde"
+  },
+  {
+   "esperado": {
     "quitados": [
      "✓"
     ],
@@ -1845,6 +2048,44 @@
   },
   {
    "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "ENVÍO GRATIS"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "ENVÍO GRATIS"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a todo el país"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "a todo el país"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "ñ Ñ"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "ñ Ñ"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "́"
+    ],
+    "simplificado": false,
+    "texto": "q sin letra con tilde"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "q́ sin letra con tilde"
+  },
+  {
+   "esperado": {
     "quitados": [
      "✓"
     ],
@@ -1998,6 +2239,44 @@
    },
    "fuente": "Anton-Regular",
    "texto": "\u0000\u0007 raro"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "ENVÍO GRATIS"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "ENVÍO GRATIS"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a todo el país"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "a todo el país"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "ñ Ñ"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "ñ Ñ"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "́"
+    ],
+    "simplificado": false,
+    "texto": "q sin letra con tilde"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "q́ sin letra con tilde"
   }
  ],
  "maquetar": [
@@ -3971,6 +4250,203 @@
   },
   {
    "esperado": {
+    "alto_px": 461,
+    "ancho_px": 610,
+    "caja_h": 453,
+    "caja_w": 602,
+    "factor": 2,
+    "letras": [
+     {
+      "base": 104.8,
+      "cp": 69,
+      "fuente": "texto",
+      "x": 153.56
+     },
+     {
+      "base": 104.8,
+      "cp": 78,
+      "fuente": "texto",
+      "x": 206.168
+     },
+     {
+      "base": 104.8,
+      "cp": 86,
+      "fuente": "texto",
+      "x": 279.608
+     },
+     {
+      "base": 104.8,
+      "cp": 205,
+      "fuente": "texto",
+      "x": 351.32
+     },
+     {
+      "base": 104.8,
+      "cp": 79,
+      "fuente": "texto",
+      "x": 380.888
+     },
+     {
+      "base": 210.8,
+      "cp": 71,
+      "fuente": "texto",
+      "x": 85.35200000000003
+     },
+     {
+      "base": 210.8,
+      "cp": 82,
+      "fuente": "texto",
+      "x": 158.02400000000003
+     },
+     {
+      "base": 210.8,
+      "cp": 65,
+      "fuente": "texto",
+      "x": 221.48000000000002
+     },
+     {
+      "base": 210.8,
+      "cp": 84,
+      "fuente": "texto",
+      "x": 293.96000000000004
+     },
+     {
+      "base": 210.8,
+      "cp": 73,
+      "fuente": "texto",
+      "x": 351.944
+     },
+     {
+      "base": 210.8,
+      "cp": 83,
+      "fuente": "texto",
+      "x": 381.512
+     },
+     {
+      "base": 210.8,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 459.368
+     },
+     {
+      "base": 316.8,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 4.135999999999967
+     },
+     {
+      "base": 316.8,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 44.551999999999964
+     },
+     {
+      "base": 316.8,
+      "cp": 100,
+      "fuente": "texto",
+      "x": 105.60799999999996
+     },
+     {
+      "base": 316.8,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 170.88799999999998
+     },
+     {
+      "base": 316.8,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 250.27999999999997
+     },
+     {
+      "base": 316.8,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 309.416
+     },
+     {
+      "base": 316.8,
+      "cp": 112,
+      "fuente": "texto",
+      "x": 357.32
+     },
+     {
+      "base": 316.8,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 422.6
+     },
+     {
+      "base": 316.8,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 487.88
+     },
+     {
+      "base": 316.8,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 521.192
+     },
+     {
+      "base": 316.8,
+      "cp": 44,
+      "fuente": "texto",
+      "x": 575.72
+     },
+     {
+      "base": 422.8,
+      "cp": 241,
+      "fuente": "texto",
+      "x": 272.072
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 302.88,
+      "base": 104.8,
+      "texto": "ENVÍO",
+      "x": 153.56
+     },
+     {
+      "ancho": 439.29599999999994,
+      "base": 210.8,
+      "texto": "GRATIS a",
+      "x": 85.35200000000003
+     },
+     {
+      "ancho": 601.7280000000001,
+      "base": 316.8,
+      "texto": "todo el país,",
+      "x": 4.135999999999967
+     },
+     {
+      "ancho": 65.856,
+      "base": 422.8,
+      "texto": "ñ",
+      "x": 272.072
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 96,
+    "texto": "ENVÍO GRATIS a todo el país, ñ"
+   },
+   "estilo": {
+    "ancho_max": 0.6,
+    "color": "#FFFFFF",
+    "fuente": "Poppins-ExtraBold",
+    "tamano": 0.05,
+    "version": 2
+   },
+   "factor": 2,
+   "formato": "9:16",
+   "texto": "ENVÍO GRATIS a todo el país, ñ"
+  },
+  {
+   "esperado": {
     "alto_px": 57,
     "ancho_px": 332,
     "caja_h": 49,
@@ -4215,6 +4691,26 @@
    "texto": "\u0000\u0007 raro"
   },
   {
+   "esperado": "ENVÍO GRATIS",
+   "fuente": "Inter-Bold",
+   "texto": "ENVÍO GRATIS"
+  },
+  {
+   "esperado": "a todo el país",
+   "fuente": "Inter-Bold",
+   "texto": "a todo el país"
+  },
+  {
+   "esperado": "ñ Ñ",
+   "fuente": "Inter-Bold",
+   "texto": "ñ Ñ"
+  },
+  {
+   "esperado": "q sin letra con tilde",
+   "fuente": "Inter-Bold",
+   "texto": "q́ sin letra con tilde"
+  },
+  {
    "esperado": "Familia",
    "fuente": "Inter-Bold",
    "texto": "👨‍👩‍👧 Familia"
@@ -4320,6 +4816,26 @@
    "texto": "\u0000\u0007 raro"
   },
   {
+   "esperado": "ENVÍO GRATIS",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "ENVÍO GRATIS"
+  },
+  {
+   "esperado": "a todo el país",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "a todo el país"
+  },
+  {
+   "esperado": "ñ Ñ",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "ñ Ñ"
+  },
+  {
+   "esperado": "q sin letra con tilde",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "q́ sin letra con tilde"
+  },
+  {
    "esperado": "Familia",
    "fuente": "SpaceGrotesk-Bold",
    "texto": "👨‍👩‍👧 Familia"
@@ -4423,6 +4939,26 @@
    "esperado": "raro",
    "fuente": "Poppins-ExtraBold",
    "texto": "\u0000\u0007 raro"
+  },
+  {
+   "esperado": "ENVÍO GRATIS",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "ENVÍO GRATIS"
+  },
+  {
+   "esperado": "a todo el país",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "a todo el país"
+  },
+  {
+   "esperado": "ñ Ñ",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "ñ Ñ"
+  },
+  {
+   "esperado": "q sin letra con tilde",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "q́ sin letra con tilde"
   },
   {
    "esperado": "Familia",

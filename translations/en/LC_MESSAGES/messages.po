@@ -1425,7 +1425,7 @@ msgid "- %(plataforma)s: subida, confirmación pendiente (id %(id)s)"
 msgstr "- %(plataforma)s: uploaded, confirmation pending (id %(id)s)"
 
 msgid "-50 %"
-msgstr "-50 %"
+msgstr "50% OFF"
 
 #, python-format
 msgid ". Diagnóstico: %(a)s"
@@ -9662,7 +9662,7 @@ msgid "Nivel del micrófono"
 msgstr "Microphone level"
 
 msgid "No"
-msgstr "No"
+msgstr "Off"
 
 msgid "No aplica"
 msgstr "Not applicable"
@@ -10843,7 +10843,7 @@ msgid "Para rehacer desde esa escena hace falta el último cuadro de la anterior
 msgstr "To redo from that scene, the last frame of the previous one is needed."
 
 msgid "Para vender"
-msgstr "Made to sell"
+msgstr "Promo labels"
 
 msgid "Para volver a tu propia app,"
 msgstr "To go back to your own app,"

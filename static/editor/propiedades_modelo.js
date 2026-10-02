@@ -382,14 +382,16 @@ function anchoDe(estilo) {
 // las banderas, tonos y emojis compuestos, que salen simplificados. v1 (un
 // texto de antes): si su fuente no trae algo (los emojis), lo dice y ofrece
 // pasarlo a v2 (`accion: "actualizar"` → operaciones.actualizarTexto). Sin
-// tabla, o con una fuente que la tabla no trae, no se sabe: nada.
+// tabla, o con una fuente que la tabla no trae, no se sabe: nada. sinGlifosV1
+// devuelve el texto en NFC: se compara con el escrito en NFC, así una tilde
+// escrita aparte (pegada de un PDF) no cuenta como algo que no sale.
 export function avisosTexto(clip, texto, tabla) {
   if (!tabla || typeof texto !== "string") return [];
   const estilo = clip?.estilo ?? {};
   const fuente = estilo.fuente;
   if (typeof fuente !== "string" || !Object.hasOwn(tabla.fuentes ?? {}, fuente)) return [];
   if (!esV2(estilo)) {
-    return sinGlifosV1(texto, fuente, tabla) !== texto ? [{ texto: t("prop.texto_antiguo"), accion: "actualizar" }] : [];
+    return sinGlifosV1(texto, fuente, tabla) !== texto.normalize("NFC") ? [{ texto: t("prop.texto_antiguo"), accion: "actualizar" }] : [];
   }
   const { quitados, simplificado } = limpiar(texto, fuente, tabla);
   const avisos = [];

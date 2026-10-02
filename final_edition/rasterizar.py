@@ -200,8 +200,11 @@ _AIRE = 2                        # px transparentes alrededor de la capa de cada
 
 @functools.lru_cache(maxsize=32)
 def _fuente_v2(ruta, tam):
-    """La fuente de texto `ruta` abierta a `tam` px, una vez por (ruta, tamaño)."""
-    return ImageFont.truetype(ruta, tam)
+    """La fuente de texto `ruta` abierta a `tam` px, una vez por (ruta, tamaño).
+    Con `Layout.BASIC` siempre: el Pillow del VPS trae Raqm, que aplica las formas
+    contextuales aun a una letra sola (Pacifico salía en «forma final», 2026-10-02),
+    y el lienzo dibuja el glifo base."""
+    return ImageFont.truetype(ruta, tam, layout_engine=ImageFont.Layout.BASIC)
 
 
 @functools.lru_cache(maxsize=8)
@@ -209,8 +212,9 @@ def _fuente_emoji_v2(tam):
     """La copia de la fuente de emojis sin color y con cada glifo en `PUA_CAPAS +
     glifo` (`fuentes.fuente_emoji_capas`) abierta a `tam` px. Caché propia y
     chica: abierta desde bytes, cada tamaño guarda su copia (≈ 1,5 MB) y el
-    worker del VPS tiene 2 GB."""
-    return ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), tam)
+    worker del VPS tiene 2 GB. `Layout.BASIC` por lo mismo que `_fuente_v2`
+    (Raqm en el VPS, 2026-10-02)."""
+    return ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), tam, layout_engine=ImageFont.Layout.BASIC)
 
 
 def _componer(im, origen, ch, fuente, fill, stroke_width=0, stroke_fill=None):

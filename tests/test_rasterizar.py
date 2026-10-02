@@ -395,3 +395,73 @@ def test_la_sombra_translucida_se_compone_sobre_el_fondo(tmp_path):
     px = im.getpixel(solo_sombra)
     assert px[3] == 255, px
     assert all(abs(a - b) <= 2 for a, b in zip(px[:3], (0, 55, 0))), px    # negro al 78 % sobre verde
+
+
+# ---- Capa 5c (revisión final, 2026-10-02) ----
+
+def test_las_fuentes_v2_se_abren_sin_raqm_aunque_pillow_lo_traiga(monkeypatch):
+    # C1: con Raqm (el Pillow 12.3 del VPS) Pillow aplica las formas contextuales aun a una letra sola: Pacifico
+    # salía en «forma final» (la «a» de 55 px en vez de 72) y la vista previa dibuja el glifo base. Aquí no hay
+    # Raqm: se simula que sí (`HAVE_RAQM`), que es lo que decide el motor por defecto, y las dos cachés de v2
+    # tienen que abrir igual con `Layout.BASIC`. El efecto en los píxeles solo se ve con Raqm (la comprobación
+    # del VPS, sección 3, lo mira letra por letra).
+    monkeypatch.setattr(ImageFont.core, "HAVE_RAQM", True)
+    r._fuente_v2.cache_clear()
+    r._fuente_emoji_v2.cache_clear()
+    try:
+        assert ImageFont.truetype(r.ruta_fuente("Pacifico-Regular"), 40).layout_engine == ImageFont.Layout.RAQM
+        assert r._fuente_v2(r.ruta_fuente("Pacifico-Regular"), 40).layout_engine == ImageFont.Layout.BASIC
+        if fuentes.hay_emoji():
+            assert r._fuente_emoji_v2(40).layout_engine == ImageFont.Layout.BASIC
+    finally:
+        r._fuente_v2.cache_clear()
+        r._fuente_emoji_v2.cache_clear()
+
+
+@pytest.mark.parametrize("alineacion, escala_max", [("derecha", 1), ("centro", 2)])
+def test_el_origen_de_una_letra_en_medio_pixel_redondea_hacia_arriba(tmp_path, alineacion, escala_max):
+    # D5.7: el origen de cada letra es `redondear(x·f)` (medio hacia arriba, como el lienzo), no `round()` (al par).
+    # «Hoy» en Space Grotesk a 125 px: alineado a la derecha su «H» empieza en x = 4,5 (a factor 1), y centrado en
+    # x = 4,25 (8,5 a factor 2). `round()` daría 4 y 8; el lienzo, 5 y 9: la tinta de la «H» se corre un píxel.
+    estilo = {**V2, "fuente": "SpaceGrotesk-Bold", "tamano": 0.0651, "alineacion": alineacion}
+    m = tipografia.maquetar("Hoy", estilo, "9:16", fuentes.cargar_tabla())
+    f = tipografia.factor_nitidez(escala_max, m["ancho_px"], m["alto_px"])
+    assert (m["tam"], f) == (125, escala_max)
+    x = m["letras"][0]["x"] * f
+    assert x % 1 == 0.5 and round(x) != tipografia.redondear(x)          # el caso en que los dos redondeos difieren
+    ruta = str(tmp_path / "hoy.png")
+    r.png_texto("Hoy", estilo, "9:16", ruta, escala_max=escala_max)
+    fuente = ImageFont.truetype(r.ruta_fuente("SpaceGrotesk-Bold"), m["tam"] * f, layout_engine=ImageFont.Layout.BASIC)
+    mascara, (dx, _dy) = fuente.getmask2("H", anchor="ls")
+    tinta_h = dx + mascara.getbbox()[0]                                    # de su origen a su primera columna con tinta
+    assert Image.open(ruta).getbbox()[0] == tipografia.redondear(x) + tinta_h
+
+
+def test_con_editor_sin_emoji_el_render_quita_el_emoji_con_la_misma_tabla_que_la_pagina(tmp_path, monkeypatch):
+    # La válvula `EDITOR_SIN_EMOJI=1` (si la fuente de emojis diera problemas en el servidor): la tabla sale sin
+    # emojis para la página (`vista_previa.config_navegador`) y para el render, así que el 🔥 se quita en los dos
+    # y el PNG no lleva nada naranja.
+    from final_edition import vista_previa
+    monkeypatch.setenv("EDITOR_SIN_EMOJI", "1")
+    fuentes.cargar_tabla.cache_clear()
+    try:
+        tabla_pagina = vista_previa.config_navegador()["tipografia"]
+        assert tabla_pagina["emoji"] is None
+        m = tipografia.maquetar("🔥 hola", V2, "9:16", tabla_pagina)
+        assert m["texto"] == "hola" and m["quitados"] == ["🔥"]
+        assert all(l["fuente"] == "texto" and l["cp"] != 0x1F525 for l in m["letras"])
+        ruta = str(tmp_path / "sin.png")
+        assert r.png_texto("🔥 hola", V2, "9:16", ruta) == {"ancho_px": m["ancho_px"], "alto_px": m["alto_px"]}
+        px = Image.open(ruta).convert("RGBA").tobytes()
+        naranjas = [i for i in range(0, len(px), 4) if px[i + 3] > 0 and px[i] > 180 and px[i + 2] < 90]
+        assert naranjas == []
+        assert _pixeles(ruta) == _pixeles_de(tmp_path, "hola")
+    finally:
+        monkeypatch.delenv("EDITOR_SIN_EMOJI")
+        fuentes.cargar_tabla.cache_clear()
+
+
+def _pixeles_de(tmp_path, texto):
+    ruta = str(tmp_path / "referencia.png")
+    r.png_texto(texto, V2, "9:16", ruta)
+    return _pixeles(ruta)
