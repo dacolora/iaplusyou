@@ -76,7 +76,8 @@ def test_los_nombres_cubren_todos_los_grupos_niveles_y_pestañas(alertas):
     assert set(alertas.NOMBRES_GRUPO) == set(alertas.GRUPOS)
     assert set(alertas.NOMBRES_NIVEL) == set(alertas.NIVELES)
     assert {"settings", "catalogo", "creativeflowplus", "experimentos", "sprints", "nicho"} <= set(alertas.NOMBRES_TAB)
-    assert alertas.FUENTES == [] or all(callable(fn) for _n, fn in alertas.FUENTES)
+    assert isinstance(alertas.FUENTES, list)
+    assert all(isinstance(n, str) and callable(fn) for n, fn in alertas.FUENTES)
 
 
 # ---------- calcular ----------
@@ -180,7 +181,7 @@ def test_descartar_oculta_la_misma_clave_y_huella_y_la_muestra_con_otra_huella(a
     assert v["resumen"]["atencion"] == 1
 
 
-def test_descartar_dos_veces_reemplaza_el_descarte_en_una_sola_fila(alertas, monkeypatch):
+def test_descartar_dos_veces_reemplaza_el_descarte_en_una_sola_fila(alertas):
     t = alertas.db.alerta_descartada
     alertas.descartar("acme", "faltante:logo", alertas.huella("v1"))
     alertas.descartar("acme", "faltante:logo", alertas.huella("v2"))

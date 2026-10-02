@@ -26,7 +26,7 @@ def test_migracion_0028_sube_y_baja(tmp_path, monkeypatch):
     assert not any(c["nullable"] for c in cols.values())
     assert insp.get_pk_constraint("alerta_descartada")["constrained_columns"] == ["cliente", "clave"]
     db._reset_para_tests()
-    command.downgrade(cfg, "-1")
+    command.downgrade(cfg, "0027")
     assert "alerta_descartada" not in sa.inspect(db.engine()).get_table_names()
     assert "error_app" in sa.inspect(db.engine()).get_table_names()      # solo bajó la 0028
     db._reset_para_tests()
