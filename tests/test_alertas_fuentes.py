@@ -622,6 +622,21 @@ def test_crear_un_prompt_listo_reciente_no_molesta_y_uno_de_2_horas_si(base_temp
     assert "generar cuesta lo que dice el botón" in x["detalle"]                    # nada se cobra sin ver el precio
 
 
+def test_crear_una_sesion_con_dos_piezas_cuenta_una_vez(base_temporal):
+    import alertas
+    import db
+    for cf, estado in (("cf_20261002_080000_000002", "prompt_listo"), ("cf_20261002_070000_000003", "error")):
+        _sesion(cf, estado, HACE_2_H, error="falló" if estado == "error" else None)
+        with db.conectar() as con:
+            pz = con.execute(db.pieza.select().where(db.pieza.c.legado_id == cf)).mappings().first()
+            fila = {k: v for k, v in pz.items() if k != "id"}
+            con.execute(db.pieza.insert().values(**fila))                         # una segunda pieza clon igual
+    listos, fallo = alertas._fuente_crear("acme", AHORA)
+    assert listos["titulo"] == "1 prompt listo sin generar en Crear"
+    assert listos["huella"] == alertas.huella("cf_20261002_080000_000002")
+    assert fallo["clave"] == "crear:error:cf_20261002_070000_000003"
+
+
 def test_crear_el_umbral_de_prompt_listo_es_estrictamente_mas_de_60_minutos(base_temporal):
     import alertas
     _sesion("cf_20261002_090000_000001", "prompt_listo", "2026-10-02T09:00:00")      # justo 60 min

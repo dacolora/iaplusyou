@@ -355,11 +355,14 @@ def _fuente_crear(cliente, ahora):
          .order_by(co.c.id.desc()))
     with db.conectar() as con:
         filas = con.execute(q).fetchall()
-    listos, out = [], []
-    for f in filas:
+    listos, con_error, out = set(), set(), []
+    for f in filas:  # una sesión con dos piezas no se cuenta dos veces
         if f.estado == "prompt_listo":
-            listos.append(f.legado_id)
+            listos.add(f.legado_id)
             continue
+        if f.legado_id in con_error:
+            continue
+        con_error.add(f.legado_id)
         error = _limpio(f.error)
         nombre = " ".join(str(f.accion or "").split())[:60] or f.legado_id
         out.append(_alerta(f"crear:error:{f.legado_id}", huella(error), "atencion", "fallos",
@@ -367,7 +370,7 @@ def _fuente_crear(cliente, ahora):
                            _con_error(error, gettext("Rearma el prompt o vuelve a generar.")),
                            "creativeflowplus", ancla=f"cf-{f.legado_id}", entidad=f.legado_id))
     if listos:
-        listos.sort()
+        listos = sorted(listos)
         out.insert(0, _alerta("crear:prompt_listo", huella(*listos), "atencion", "decision",
                               ngettext("%(num)s prompt listo sin generar en Crear",
                                        "%(num)s prompts listos sin generar en Crear", len(listos)),
