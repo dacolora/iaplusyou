@@ -110,6 +110,18 @@ def test_amazon_guarda_las_variantes_del_anuncio():
     assert "variantes" not in pl.leer_producto("amazon", base)["extra"]
 
 
+def test_amazon_variantes_tolera_formas_raras():
+    """La lista puede no traer el ASIN propio (un anuncio de 2 variantes = 1 en la lista) o no ser una lista:
+    nunca rompe la lectura de un dataset que ya se pagó; `MAX_VARIANTES` acota lo que se guarda."""
+    from nicho.fuentes import plataformas as pl
+    base = _fixture("amazon_busqueda.json")[0]                                          # ASIN B0AMZ00001
+    assert pl.leer_producto("amazon", {**base, "variantAsins": ["B0AMZ00002"]})["extra"]["variantes"] == ["B0AMZ00001", "B0AMZ00002"]
+    for raro in (5, True, 3.5, "B0AMZ00002", {"B0AMZ00002": 1}):
+        assert "variantes" not in pl.leer_producto("amazon", {**base, "variantAsins": raro})["extra"]
+    muchas = [f"B0X{n:07d}" for n in range(250)]
+    assert len(pl.leer_producto("amazon", {**base, "variantAsins": muchas})["extra"]["variantes"]) == pl.MAX_VARIANTES
+
+
 def test_entradas_y_lectura_de_resenas():
     from nicho.fuentes import plataformas as pl
     from nicho.fuentes.base import ErrorFuente

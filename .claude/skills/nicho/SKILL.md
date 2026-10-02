@@ -52,9 +52,11 @@ vienen de `junglee~amazon-reviews-scraper` desde 2026-10-01 — US$ 0,006 por re
 PRODUCTO con 2048 MB: el plan FREE de Apify solo lee 1 link y entrega 10 reseñas por corrida — Starter lo
 sube a 40 —, techo mínimo US$ 0,50 por corrida solo en lo que se manda a Apify, nunca en el estimado;
 axesso se dejó de usar porque exige acceso completo a la cuenta; la búsqueda guarda las variantes del
-anuncio — `variantAsins` → `extra.variantes` — y `FuentePlataforma.buscar` deja un solo producto por
-anuncio, porque las variantes comparten reseñas: el 2026-10-01 dos variantes elegidas trajeron las mismas,
-pagadas dos veces), Mercado Libre en 18 países, Walmart solo
+anuncio — `variantAsins` → `extra.variantes`, con el ASIN propio y tolerando una lista rara — y tanto
+`FuentePlataforma.buscar` como `investigacion.elegir` dejan un solo producto por anuncio, porque las
+variantes comparten reseñas: el 2026-10-01 dos variantes elegidas trajeron las mismas, pagadas dos veces;
+`elegir` tampoco toma una variante de un anuncio cuyas reseñas ya trajo otro producto del estudio),
+Mercado Libre en 18 países, Walmart solo
 en EE. UU., TikTok Shop y AliExpress en todo el mundo — AliExpress busca en inglés —; actores de Apify con
 precio por resultado más el arranque por corrida que cobran algunos (`usd_por_corrida`),
 `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de cobro cada una (`plataformas.tope`);

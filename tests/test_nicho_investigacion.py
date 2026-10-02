@@ -440,6 +440,22 @@ def test_elegir_y_params_redes():
                                               "max_comentarios_por_video": 100, "idioma": "sv", "region": "SE"}
 
 
+def test_elegir_un_producto_por_anuncio():
+    """Las variantes de un anuncio comparten reseñas: `elegir` toma una sola, y ninguna variante de un anuncio
+    cuyas reseñas ya trajo otro producto (una investigación nueva no las paga dos veces). Un producto ya traído
+    se sigue eligiendo como antes: el paso de reseñas lo salta."""
+    from nicho import investigacion as inv
+    si = {"relevante": True}
+    productos = [{"id": 1, "plataforma": "amazon", "fuente_id": "A1", "n_resenas": 106, "extra": {"variantes": ["A1", "A2"]}},
+                 {"id": 2, "plataforma": "amazon", "fuente_id": "A2", "n_resenas": 106, "extra": {"variantes": ["A1", "A2"]}},
+                 {"id": 3, "plataforma": "amazon", "fuente_id": "C", "n_resenas": 24}]
+    assert inv.elegir(productos, {1: si, 2: si, 3: si}, 2) == {"amazon": ["A1", "C"]}
+    viejo = {"id": 4, "plataforma": "amazon", "fuente_id": "V1", "n_resenas": 50, "resenas_traidas": 10, "extra": {}}
+    nuevo = {"id": 5, "plataforma": "amazon", "fuente_id": "V2", "n_resenas": 50, "extra": {"variantes": ["V1", "V2"]}}
+    assert inv.elegir([viejo, nuevo], {5: si}, 2) == {}
+    assert inv.elegir([viejo, nuevo], {4: si, 5: si}, 2) == {"amazon": ["V1"]}
+
+
 def test_consultas_y_seleccion_con_claude(monkeypatch):
     from nicho import avatares, investigacion as inv
     llamadas = []

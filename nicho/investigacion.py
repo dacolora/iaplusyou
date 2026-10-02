@@ -315,12 +315,22 @@ def _repartir_por_plataforma(productos, maximo):
     return salida
 
 
+def _anuncio(p):
+    """El producto y las variantes de su anuncio (`extra.variantes`, Amazon): comparten reseñas."""
+    return {p.get("fuente_id")} | set((p.get("extra") or {}).get("variantes") or ())
+
+
 def elegir(productos, decisiones, productos_elegidos):
     """Por plataforma, los `productos_elegidos` relevantes con más reseñas (sin
-    dato = 0; empate por vendidos y luego por id). -> {plataforma: [fuente_id, …]} solo con
-    plataformas que tengan alguno."""
-    por_plataforma = {}
+    dato = 0; empate por vendidos y luego por id), uno por anuncio: nunca dos
+    variantes del mismo anuncio, ni una variante de un anuncio cuyas reseñas ya
+    trajo otro producto (comparten reseñas: pagarlas dos veces no trae nada). Un
+    producto ya traído se sigue eligiendo; el paso de reseñas lo salta.
+    -> {plataforma: [fuente_id, …]} solo con plataformas que tengan alguno."""
+    por_plataforma, traidos = {}, {}
     for p in productos or []:
+        if p.get("resenas_traidas"):
+            traidos.setdefault(p.get("plataforma"), []).append(p)
         d = (decisiones or {}).get(p.get("id"))
         if not d or not d.get("relevante"):
             continue
@@ -328,7 +338,17 @@ def elegir(productos, decisiones, productos_elegidos):
     salida = {}
     for clave, lista in por_plataforma.items():
         lista.sort(key=_mas_resenado)
-        salida[clave] = [p["fuente_id"] for p in lista[:max(1, int(productos_elegidos))]]
+        cubiertos, elegidos = set(), []
+        for p in lista:
+            anuncio = _anuncio(p)
+            if anuncio & cubiertos or any(anuncio & _anuncio(t) for t in traidos.get(clave, ()) if t.get("fuente_id") != p.get("fuente_id")):
+                continue
+            elegidos.append(p["fuente_id"])
+            cubiertos |= anuncio
+            if len(elegidos) >= max(1, int(productos_elegidos)):
+                break
+        if elegidos:
+            salida[clave] = elegidos
     return salida
 
 
