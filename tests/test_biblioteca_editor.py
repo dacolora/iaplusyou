@@ -534,3 +534,51 @@ def test_preparaciones_simultaneas_conservan_todas_las_asociaciones(entorno, tmp
     assert set(actual["extra"]["cf_ids"]) == set(piezas)
     assert actual["extra"]["nombre"] == "Original" and actual["extra"]["picos"] == [0.5]
     assert all(entorno.material_de_pieza("acme", cf)["id"] == mat["id"] for cf in piezas)
+
+
+# --- Stickers propios (capa 5c, D11): gratis, un material del proyecto por sticker ---
+
+def test_sticker_se_vuelve_material_gratis_una_sola_vez_y_no_sale_en_medios(entorno, r2):
+    """El PNG de `static/stickers/` se sube a R2 la PRIMERA vez que un proyecto lo usa (clave propia, bajo
+    `materiales/`) y queda como material `tipo imagen`, `origen sticker`, teñible, sin copia liviana aparte
+    (`url_proxy == url`). La segunda vez lo encuentra por su hash: el mismo id y ninguna subida más. No aparece en
+    «Medios» (`listar`) ni se puede borrar desde ahí."""
+    from final_edition import stickers
+    import materiales
+    m = entorno.sticker("acme", "estrella")
+    ficha = stickers.por_id("estrella")
+    assert m["tipo"] == "imagen" and m["origen"] == "sticker" and m["cliente"] == "acme"
+    assert m["url"] == "https://r2/clientes/acme/materiales/sticker_estrella.png" and m["url_proxy"] == m["url"]
+    assert (m["ancho"], m["alto"]) == (ficha["ancho"], ficha["alto"])
+    assert m["bytes"] == os.path.getsize(stickers.ruta("estrella")) > 0
+    assert m["extra"] == {"nombre": "estrella", "sticker": "estrella", "tenible": True}
+    assert m["hash"] == materiales.hash_archivo(stickers.ruta("estrella"))
+    assert r2 == [("clientes/acme/materiales/sticker_estrella.png", "image/png")]
+    otra = entorno.sticker("acme", "estrella")
+    assert otra["id"] == m["id"] and len(r2) == 1                  # la segunda vez no sube nada
+    assert entorno.sticker("acme", "corazon")["id"] != m["id"] and len(r2) == 2
+    assert not [x for x in entorno.listar("acme")["materiales"] if x["origen"] == "sticker"]
+    assert "sticker" not in entorno.ORIGENES_BIBLIOTECA and "sticker" not in entorno.ORIGENES_BORRABLES
+    with pytest.raises(entorno.NoSePuedeBorrar) as e:
+        entorno.borrar("acme", m["id"])
+    assert e.value.codigo == 400 and materiales.obtener("acme", m["id"])      # sigue ahí
+
+
+def test_sticker_es_por_proyecto_y_el_material_lo_manda_como_tenible(entorno, r2):
+    """Cada proyecto tiene su propio material (UNIQUE por cliente + hash) y su propia subida; la vista que ve el
+    navegador (`material_para`) trae `tenible` y el origen."""
+    from final_edition import vista_previa
+    a = entorno.sticker("acme", "chulo")
+    b = entorno.sticker("otro", "chulo")
+    assert a["id"] != b["id"] and a["cliente"] == "acme" and b["cliente"] == "otro"
+    assert [k for k, _ct in r2] == ["clientes/acme/materiales/sticker_chulo.png",
+                                    "clientes/otro/materiales/sticker_chulo.png"]
+    vista = vista_previa.material_para(a)
+    assert vista["tenible"] is True and vista["origen"] == "sticker" and vista["tipo"] == "imagen"
+    assert vista["url"] == vista["url_proxy"]
+
+
+@pytest.mark.parametrize("malo", ["../x", "Flecha", "nope", "", "estrella.png", "../../etc/passwd", "x" * 41])
+def test_sticker_desconocido_o_mal_escrito_es_none_y_no_sube_nada(entorno, r2, malo):
+    assert entorno.sticker("acme", malo) is None
+    assert r2 == []

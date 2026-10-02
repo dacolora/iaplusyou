@@ -1551,3 +1551,77 @@ def test_las_zonas_seguras_tienen_sus_guias_su_selector_y_su_aviso(dashboard, en
     assert "{texto}" in datos["textos"]["vista.fuera_texto"] and "{n}" in datos["textos"]["vista.y_mas"]
     js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
     assert 'from "./zonas.js";' in js and "controlZonas.montar();" in js
+
+
+# --- Stickers propios (capa 5c, D11) ---
+
+@pytest.fixture()
+def r2_parchado(monkeypatch):
+    subidos = []
+    monkeypatch.setattr(materiales.r2_uploader, "upload_file",
+                        lambda local, key, ct: subidos.append((key, ct)) or f"https://r2.test/{key}")
+    return subidos
+
+
+def test_agregar_sticker_es_gratis_y_devuelve_el_material_tenible(dashboard, encolados, r2_parchado):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/biblioteca/sticker/estrella")
+    assert r.status_code == 200
+    m = r.get_json()["material"]
+    assert m["tenible"] is True and m["origen"] == "sticker" and m["tipo"] == "imagen"
+    assert m["url"] == m["url_proxy"] == "https://r2.test/clientes/acme/materiales/sticker_estrella.png"
+    assert r2_parchado == [("clientes/acme/materiales/sticker_estrella.png", "image/png")]
+    again = c.post("/cliente/acme/ediciones/biblioteca/sticker/estrella").get_json()["material"]
+    assert again["id"] == m["id"] and len(r2_parchado) == 1       # idempotente: el mismo material, ninguna subida más
+    assert encolados == []                                         # nada va al worker: no cuesta ni se encola
+
+
+def test_agregar_sticker_rechaza_otro_sitio_y_un_id_que_no_existe(dashboard, encolados, r2_parchado):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/biblioteca/sticker/estrella", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403          # el guardia del servidor lo corta antes (y la ruta lo repite por si acaso)
+    r = c.post("/cliente/acme/ediciones/biblioteca/sticker/nope")
+    assert r.status_code == 404 and r.get_json() == {"error": "Ese sticker no existe."}
+    for malo in ("..%2Fx", "Estrella", "estrella.png", "x" * 41):
+        assert c.post(f"/cliente/acme/ediciones/biblioteca/sticker/{malo}").status_code == 404, malo
+    assert r2_parchado == [] and encolados == []                   # lo que no pasa el manifiesto nunca toca disco ni R2
+
+
+def test_agregar_sticker_solo_sirve_al_proyecto_de_la_url(dashboard, encolados, r2_parchado):
+    """Un cliente solo entra a su proyecto (el guardia por cliente de la app); el sticker queda en el proyecto de la URL."""
+    propio = _cliente(dashboard, "user_acme", "acme")
+    assert propio.post("/cliente/acme/ediciones/biblioteca/sticker/corazon").status_code == 200
+    ajeno = _cliente(dashboard, "otro", "otro")
+    r = ajeno.post("/cliente/acme/ediciones/biblioteca/sticker/corazon")
+    assert r.status_code in (302, 403) and "/cliente/acme/" not in (r.headers.get("Location") or "")
+    anonimo = dashboard.app.test_client().post("/cliente/acme/ediciones/biblioteca/sticker/corazon")
+    assert anonimo.status_code in (302, 401, 403)
+    assert [k for k, _ct in r2_parchado] == ["clientes/acme/materiales/sticker_corazon.png"]
+    assert materiales.obtener("otro", 1) is None
+
+
+def test_la_pagina_trae_los_20_stickers_con_su_url_estatica(dashboard, encolados):
+    from final_edition import stickers
+    ed, _clon, _voz = _edicion()
+    r = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}")
+    datos = _datos(r.get_data(as_text=True))
+    assert [s["id"] for s in datos["stickers"]] == list(stickers.IDS) and len(datos["stickers"]) == 20
+    for s in datos["stickers"]:
+        assert set(s) == {"id", "categoria", "archivo", "ancho", "alto", "color", "url"}
+        assert s["url"].split("?")[0] == f"/static/stickers/{s['id']}.png"
+        assert s["color"] in ("#FFD400", "#E11D48") and s["categoria"] in ("flechas", "marcas", "formas")
+    assert {s["categoria"] for s in datos["stickers"]} == {"flechas", "marcas", "formas"}
+    # y cada URL se sirve de verdad (los PNG están commiteados)
+    primero = _cliente_admin(dashboard).get(datos["stickers"][0]["url"])
+    assert primero.status_code == 200 and primero.mimetype == "image/png"
+
+
+def test_agregar_sticker_repite_el_guardia_de_otro_sitio_por_si_el_global_falla(dashboard, encolados, r2_parchado):
+    """Defensa en profundidad: la vista misma rechaza lo que el navegador marca de otro sitio, sin pasar por el
+    guardia global (se la llama en un contexto de pedido, como las demás rutas del editor que repiten `_mismo_origen`)."""
+    from final_edition import rutas_editor
+    with dashboard.app.test_request_context("/cliente/acme/ediciones/biblioteca/sticker/estrella", method="POST",
+                                            headers={"Sec-Fetch-Site": "cross-site"}):
+        respuesta, codigo = rutas_editor.agregar_sticker("acme", "estrella")
+    assert codigo == 403 and respuesta.get_json()["error"]
+    assert r2_parchado == [] and materiales.obtener("acme", 1) is None

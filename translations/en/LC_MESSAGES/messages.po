@@ -6132,6 +6132,9 @@ msgstr "That reference doesn't exist."
 msgid "Ese sprint no existe."
 msgstr "That sprint doesn't exist."
 
+msgid "Ese sticker no existe."
+msgstr "That sticker doesn't exist."
+
 msgid "Ese swap todavía no tiene un resultado listo."
 msgstr "That swap doesn't have a finished result yet."
 
