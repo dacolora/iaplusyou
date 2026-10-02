@@ -351,3 +351,18 @@ def test_desde_para_que_falla_anota_interno_no_llama_meta(con_meta, monkeypatch)
     r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
     assert "interno" in r["errores"] and r["dias"] == 0 and r["desgloses"] == 0
     assert con_meta["llamadas"] == []  # no Meta calls made
+
+
+def test_tarea_exp_detalle_y_encolar_todos(con_meta, monkeypatch):
+    import cola
+    import tareas
+    from tareas import experimentos as t_exp
+    md, eid = con_meta["md"], con_meta["eid"]
+    encoladas = []
+    monkeypatch.setattr(md.cola, "encolar", lambda tipo, payload, **kw: encoladas.append((tipo, payload, kw)) or 1)
+    assert md.encolar_todos() == 1
+    tipo, payload, kw = encoladas[0]
+    assert tipo == "exp_detalle" and payload == {"cliente": "acme", "experimento_id": eid}
+    assert kw["job_id"] == t_exp.job_id_detalle("acme", eid) and kw["max_intentos"] == 2 and kw["cliente"] == "acme"
+    texto = tareas.REGISTRO["exp_detalle"]({"payload": payload, "job_id": kw["job_id"]})
+    assert "2" in texto   # «Detalle de Meta al día (2 días de anuncios…)»

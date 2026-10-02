@@ -896,3 +896,21 @@ def test_url_tags_solo_viaja_cuando_hay_triple_whale(monkeypatch):
     assert triple_whale_tiendas.kw_url_tags("acme") == {}
     monkeypatch.setattr(triple_whale_tiendas, "url_tags", lambda cliente: "tw_source=x&tw_adid=y")
     assert triple_whale_tiendas.kw_url_tags("acme") == {"url_tags": "tw_source=x&tw_adid=y"}
+
+
+def test_exp_refrescar_sigue_aunque_el_detalle_reviente(entorno, monkeypatch):
+    import meta_detalle
+    import tareas
+    from tareas import experimentos as _t_exp  # noqa: F401 — registra las tareas de experimentos
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    llamado = []
+
+    def explota(cliente, experimento_id, hoy=None):
+        llamado.append(experimento_id)
+        raise RuntimeError("no debería pasar, pero si pasa no tumba nada")
+
+    monkeypatch.setattr(meta_detalle, "refrescar_detalle", explota)
+    texto = tareas.REGISTRO["exp_refrescar"]({"payload": {"cliente": "acme", "experimento_id": eid}, "job_id": "j"})
+    assert llamado == [eid] and "3" in texto
+    assert ex.obtener("acme", eid)["gasto_acumulado"] == 6.0

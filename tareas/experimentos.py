@@ -27,6 +27,7 @@ import experimentos
 import gastos
 import idiomas
 import lanzador
+import meta_detalle
 import notificaciones
 import organico
 import propuestas
@@ -52,6 +53,10 @@ def job_id_decidir(cliente, experimento_id):
     return f"{cliente}__exp{experimento_id}__decidir"
 
 
+def job_id_detalle(cliente, experimento_id):
+    return f"{cliente}__exp{experimento_id}__detalle"
+
+
 @al_interrumpir("exp_lanzar")
 def interrumpida(tarea, mensaje):
     p = tarea["payload"]
@@ -72,7 +77,26 @@ def exp_lanzar(tarea):
 def exp_refrescar(tarea):
     p = tarea["payload"]
     n = lanzador.refrescar(p["cliente"], p["experimento_id"])
+    # Detalle para el centro de resultados (spec 2026-10-02 §3.3): después del
+    # refresco de siempre y en su propio try — el decisor depende de lo de arriba,
+    # no de esto, y un fallo aquí nunca debe tumbar la tarea.
+    try:
+        meta_detalle.refrescar_detalle(p["cliente"], p["experimento_id"])
+    except Exception:  # noqa: BLE001
+        log.exception("Detalle de Meta falló en exp_refrescar (%s, exp %s)", p["cliente"], p["experimento_id"])
     return gettext("Métricas actualizadas (%(n)s anuncios).", n=n)
+
+
+@registrar("exp_detalle")
+def exp_detalle(tarea):
+    """Solo el detalle de Meta (carga inicial al desplegar E1, o de un
+    experimento que ya no corre). Lectura: no cobra."""
+    p = tarea["payload"]
+    r = meta_detalle.refrescar_detalle(p["cliente"], p["experimento_id"])
+    if r["limite"]:
+        return gettext("Meta pidió esperar; el detalle se completa en la próxima pasada.")
+    return gettext("Detalle de Meta al día (%(dias)s días de anuncios, %(desgloses)s filas de desglose).",
+                   dias=r["dias"], desgloses=r["desgloses"])
 
 
 def _experimentos_en(estados):

@@ -287,3 +287,17 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
         log.warning("Detalle de Meta (%s, exp %s, actualizar_extra): %s", cliente, experimento_id, texto)
 
     return r
+
+
+def encolar_todos():
+    """Carga inicial (al desplegar E1): una tarea exp_detalle por experimento
+    con campaña en Meta. Idempotente por job_id. En el VPS correr con
+    TZ=America/Bogota (nota de despliegue)."""
+    from tareas.experimentos import job_id_detalle
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.experimento.c.id, db.experimento.c.cliente).where(
+            db.experimento.c.legado.is_(False), db.experimento.c.meta_campaign_id.isnot(None))).all()
+    for eid, cliente in filas:
+        cola.encolar("exp_detalle", {"cliente": cliente, "experimento_id": eid}, cliente=cliente,
+                     job_id=job_id_detalle(cliente, eid), duracion_estimada=60, max_intentos=2)
+    return len(filas)
