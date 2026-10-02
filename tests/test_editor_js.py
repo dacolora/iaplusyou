@@ -189,3 +189,22 @@ def test_tipografia_js_constantes_iguales_a_python():
     assert _constante_js("tipografia.js", "ETIQUETAS") == list(tipografia.ETIQUETAS)
     assert _constante_js("tipografia.js", "REGIONALES") == list(tipografia.REGIONALES)
     assert _constante_js("tipografia.js", "ESPACIOS") == list(tipografia.ESPACIOS)
+
+
+def test_la_familia_de_emojis_es_la_misma_en_la_plantilla_el_js_y_la_config():
+    # Capa 5c (4/9): el lienzo dibuja los emojis con `font = "<tam>px "CreatvEmoji""`; la @font-face que la
+    # declara y la config que la ofrece tienen que decir lo mismo, o el emoji cae a la fuente de respaldo.
+    from final_edition import vista_previa
+    familia = _constante_js("texto_canvas.js", "FAMILIA_EMOJI")
+    assert familia == vista_previa.EMOJI_NAVEGADOR["familia"] == vista_previa.config_navegador()["emoji"]["familia"]
+    with open(os.path.join(RAIZ, "templates", "editor.html"), encoding="utf-8") as f:
+        plantilla = f.read()
+    bloque = re.search(r"\{% if datos\.config\.emoji %\}(.*?)\{% endif %\}", plantilla, re.S)
+    assert bloque, "la plantilla declara la @font-face de emojis solo si hay fuente"
+    assert f'@font-face {{ font-family: "{familia}";' in bloque.group(1)
+    assert "filename=datos.config.emoji.archivo" in bloque.group(1)
+    # los demás módulos la importan: ningún otro escribe el nombre
+    for ruta in glob.glob(os.path.join(RAIZ, "static", "editor", "*.js")):
+        if os.path.basename(ruta) != "texto_canvas.js":
+            with open(ruta, encoding="utf-8") as f:
+                assert f'"{familia}"' not in f.read(), os.path.basename(ruta)

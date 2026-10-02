@@ -230,13 +230,16 @@ def escribir_tabla():
 
 @functools.lru_cache(maxsize=None)
 def cargar_tabla():
-    """La tabla guardada, leída una vez. Con `EDITOR_SIN_EMOJI=1` la copia sale
-    con `emoji: None`: la válvula si la fuente de emojis diera problemas en el
-    servidor (el navegador y el render dejan de ofrecer emojis). Lo que
-    devuelve es compartido: no se modifica."""
+    """La tabla guardada, leída una vez. La copia sale con `emoji: None` con
+    `EDITOR_SIN_EMOJI=1` (la válvula si la fuente de emojis diera problemas en
+    el servidor) y cuando el archivo de la fuente no está (`hay_emoji()`: un
+    despliegue que lo perdió): así la maqueta del render y la de la página, que
+    leen la misma tabla, coinciden — los dos dejan de ofrecer emojis. Lo que
+    devuelve es compartido: no se modifica. Quien parche `RUTA_EMOJI` o la
+    válvula tiene que vaciar la caché (`cargar_tabla.cache_clear()`)."""
     with open(RUTA_TABLA, encoding="utf-8") as f:
         tabla = json.load(f)
-    if os.environ.get("EDITOR_SIN_EMOJI") == "1":
+    if os.environ.get("EDITOR_SIN_EMOJI") == "1" or not hay_emoji():
         tabla = {**tabla, "emoji": None}
     return tabla
 

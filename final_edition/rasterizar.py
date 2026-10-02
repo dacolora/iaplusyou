@@ -254,10 +254,12 @@ def _png_v2(texto, estilo, formato, ruta, escala_max):
     medidas = tipografia.medidas_texto(estilo, formato)
     im = Image.new("RGBA", (m["ancho_px"] * f, m["alto_px"] * f), (0, 0, 0, 0))
     fondo = estilo.get("fondo") or None
-    if fondo:
+    if fondo and m["caja_w"] > 0 and m["caja_h"] > 0:
         margen = m["margen"]
+        # El rectángulo de Pillow es INCLUSIVO (x1, y1 son píxeles pintados): para medir lo mismo que el
+        # `fillRect` del lienzo (caja_w·f × caja_h·f) acaba un píxel antes. Solo v2: v1 sale como siempre.
         ImageDraw.Draw(im).rounded_rectangle(
-            [margen * f, margen * f, (margen + m["caja_w"]) * f, (margen + m["caja_h"]) * f],
+            [margen * f, margen * f, (margen + m["caja_w"]) * f - 1, (margen + m["caja_h"]) * f - 1],
             radius=m["radio"] * f, fill=color(fondo["color"], fondo.get("opacidad")))
     letras = [(l, (tipografia.redondear(l["x"] * f), tipografia.redondear(l["base"] * f))) for l in m["letras"]]
     de_texto = [(chr(l["cp"]), origen) for l, origen in letras if l["fuente"] == "texto"]

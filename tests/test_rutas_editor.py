@@ -77,13 +77,19 @@ def test_la_pagina_declara_la_fuente_de_emojis_y_la_tabla_solo_si_el_archivo_est
     assert datos["config"]["tipografia"]["emoji"]["id"] == fuentes.EMOJI_ID
     assert datos["config"]["tipografia"]["fuentes"]["Inter-Bold"]["upem"] == 2048
     assert datos["config"]["fuentes"][0] == "Inter-Bold"                   # las @font-face de siempre
-    monkeypatch.setattr(fuentes, "RUTA_EMOJI", str(tmp_path / "no_existe.ttf"))
-    html = cliente.get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    try:
+        with monkeypatch.context() as m:
+            m.setattr(fuentes, "RUTA_EMOJI", str(tmp_path / "no_existe.ttf"))
+            fuentes.cargar_tabla.cache_clear()          # la tabla se lee una vez: sin esto seguiría con la fuente
+            html = cliente.get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    finally:
+        fuentes.cargar_tabla.cache_clear()
     assert "CreatvEmoji" not in html
     datos = _datos(html)
     assert datos["config"]["emoji"] is None and datos["config"]["tipografia"]["emoji"] is None
     assert datos["config"]["tipografia"]["fuentes"]["Inter-Bold"]["upem"] == 2048      # lo demás sigue
     assert 'font-family: "Inter-Bold"' in html
+    assert "CreatvEmoji" in cliente.get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)   # y con el archivo, vuelve
 
 
 def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):

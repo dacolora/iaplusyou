@@ -188,6 +188,24 @@ def test_cargar_tabla_con_editor_sin_emoji_quita_solo_la_fuente_de_emojis(tabla_
     assert sin["fuentes"] == normal["fuentes"] and sin["repertorio"] == normal["repertorio"]
 
 
+def test_cargar_tabla_sin_el_archivo_de_emojis_tambien_deja_emoji_en_none(tabla_limpia, monkeypatch, tmp_path):
+    # un despliegue que pierde la TTF: la maqueta del render y la de la página leen LA MISMA tabla, así que
+    # los dos dejan de ofrecer emojis (antes la tabla decía que sí y el render saltaba las letras)
+    normal = fuentes.cargar_tabla()
+    assert normal["emoji"] is not None
+    fuentes.cargar_tabla.cache_clear()
+    with monkeypatch.context() as m:
+        m.setattr(fuentes, "RUTA_EMOJI", str(tmp_path / "no_existe.ttf"))
+        sin = fuentes.cargar_tabla()
+    assert sin["emoji"] is None
+    assert sin["fuentes"] == normal["fuentes"] and sin["repertorio"] == normal["repertorio"]
+    from final_edition import tipografia
+    maqueta = tipografia.maquetar("🔥 hola", {"fuente": "Inter-Bold", "tamano": 0.05, "color": "#FFFFFF", "version": 2}, "9:16", sin)
+    assert "🔥" in maqueta["quitados"] and all(letra["fuente"] == "texto" for letra in maqueta["letras"])
+    # y la tabla de disco sigue con la fuente: `generar_tabla`/`test_tabla_al_dia` no la ven distinta
+    assert fuentes.generar_tabla()["emoji"] is not None
+
+
 # --- emojis por capas (R1) --------------------------------------------------
 
 def test_emoji_capas_de_la_llama_tiene_dos_capas_con_color_rgba():

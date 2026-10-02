@@ -25,7 +25,8 @@ class CtxFalso {
   strokeText(s, x, y) {
     this.ops.push({ op: "strokeText", s, x, y, font: this.font, color: this.strokeStyle, ancho: this.lineWidth, alfa: this.globalAlpha });
   }
-  clearRect(...a) { this.ops.push({ op: "clearRect", a }); }
+  // `lienzo` = el <canvas> de este contexto: la limpieza anota cuánto medía en ese momento
+  clearRect(...a) { this.ops.push({ op: "clearRect", a, dims: [this.lienzo.width, this.lienzo.height] }); }
   drawImage(img, ...a) { this.ops.push({ op: "drawImage", img, a, alfa: this.globalAlpha, dims: [img.width, img.height] }); }
 }
 
@@ -37,12 +38,14 @@ globalThis.document = {
     const ctx = new CtxFalso(conRoundRect);
     contextos.push(ctx);
     const lienzo = { width: 0, height: 0, getContext: () => ctx };
+    ctx.lienzo = lienzo;
     lienzos.push(lienzo);
     return lienzo;
   },
 };
 
-const { TOPE_CACHE, rasterizarTexto, tamanoCache } = await import("../../static/editor/texto_canvas.js");
+const { MARGEN_COPIA_EM, TOPE_AREA_CACHE, TOPE_CACHE, areaCache, rasterizarTexto, tamanoCache } =
+  await import("../../static/editor/texto_canvas.js");
 const { factorNitidez, maquetar } = await import("../../static/editor/tipografia.js");
 const TABLA = JSON.parse(readFileSync(new URL("../../static/editor/tipografia.json", import.meta.url), "utf8"));
 const T0 = { ...TABLA, emoji: null };
@@ -89,6 +92,7 @@ test("v2 «Hola»: lienzo 221×125, cada letra en el origen redondeado de la maq
   const { r, ctx } = rasterizar("Hola", V2, "9:16", { tabla: T0 });
   assert.deepEqual([r.lienzo.width, r.lienzo.height], [221, 125]);
   assert.equal(ctx.fontKerning, "none");
+  assert.equal(ctx.textRendering, "optimizeSpeed", "sin las alternativas contextuales de la fuente (Pacifico), como Pillow");
   assert.equal(ctx.textBaseline, "alphabetic");
   assert.equal(ctx.lineJoin, "round");
   assert.deepEqual(rellenos(ctx).map((o) => [o.s, o.x, o.y]), [["H", 4, 97], ["o", 76, 97], ["l", 135, 97], ["a", 161, 97]]);
@@ -230,11 +234,83 @@ test("sombra y contorno translúcidos: cada letra se dibuja OPACA en una copia y
   assert.deepEqual([dH.a[0] + sH.x, dH.a[1] + sH.y], [22, 115]);      // «H» (16, 109) + la sombra (6, 6)
   assert.deepEqual([dI.a[0] + sI.x, dI.a[1] + sI.y], [94, 115]);
   const [anchoCopia, altoCopia] = dH.dims;
-  assert.ok(sH.x > 0 && sH.x < anchoCopia && sH.y > 0 && sH.y < altoCopia, "el origen de la letra cae dentro de la copia");
-  assert.ok(anchoCopia > 96 && altoCopia > 96, "la copia le cabe a una letra de 96 px (con su trazo)");
+  assert.deepEqual([anchoCopia, altoCopia, sH.x, sH.y], [339, 214, 64, 150], "la copia de una letra de 96 px con su trazo de 6");
   // la copia se suelta al terminar (Safari no devuelve la memoria de un lienzo olvidado)
   assert.deepEqual([lienzoCopia.width, lienzoCopia.height], [0, 0]);
   assert.deepEqual([r.lienzo.width, r.lienzo.height], [130, 149]);
+});
+
+// La copia que usa cada letra translúcida: su tamaño y el punto donde cae el origen de la letra salen de
+// `tam·f` y `grosor·f` (margen 0,6 em a la izquierda, 1,5 arriba, 0,6 abajo y 2,8 a la derecha, más el trazo
+// por los cuatro lados); su contexto lleva el mismo ajuste que el del lienzo.
+const COPIA = (tamPx, grosor) => {
+  const ax = Math.ceil(0.6 * tamPx) + grosor;
+  const ay = Math.ceil(1.5 * tamPx) + grosor;
+  return { ax, ay, ancho: ax + Math.ceil(2.8 * tamPx) + grosor, alto: ay + Math.ceil(0.6 * tamPx) + grosor };
+};
+
+for (const [escala, f, tamPx, grosor] of [[1, 1, 96, 6], [2, 2, 192, 12], [4, 4, 384, 24]]) {
+  test(`la copia translúcida a escala ${escala}: tamaño, origen, estado del contexto y limpieza completa`, () => {
+    const estilo = { ...V2, contorno: { color: "#000000DC", grosor: 0.003 }, sombra: { color: "#000000C8", dx: 0.003, dy: 0.003 } };
+    const texto = `Hi copia ${escala}`;
+    const letras = texto.replace(" ", "").replace(" ", "").length;                      // sin los espacios
+    const { r, nuevos, lienzosNuevos } = rasterizar(texto, estilo, "9:16", { tabla: T0, escala });
+    assert.equal(r.factor, f);
+    const [principal, copia] = nuevos;
+    const esperado = COPIA(tamPx, grosor);
+    // el estado que `preparar` le deja a la copia: lo mismo que al lienzo (letra por letra, trazo redondo, grosor ×f)
+    assert.equal(copia.lineJoin, "round");
+    assert.equal(copia.fontKerning, "none");
+    assert.equal(copia.textRendering, "optimizeSpeed");
+    assert.equal(copia.textBaseline, "alphabetic");
+    assert.equal(copia.textAlign, "left");
+    assert.equal(copia.lineWidth, 2 * grosor, "2 · grosor · f");
+    assert.equal(copia.font, `${tamPx}px "Inter-Bold"`);
+    // el lienzo principal, igual
+    assert.deepEqual([principal.lineJoin, principal.fontKerning, principal.textBaseline, principal.textAlign, principal.lineWidth],
+      ["round", "none", "alphabetic", "left", 2 * grosor]);
+    // lo que se dibuja en la copia cae en (ax, ay) con la fuente a tam·f y el trazo ×f
+    const sobre = [...trazos(copia), ...rellenos(copia)];
+    assert.equal(sobre.length, 2 * letras * 2, "sombra y contorno, cada letra con su trazo y su relleno");
+    for (const o of sobre) {
+      assert.deepEqual([o.x, o.y], [esperado.ax, esperado.ay]);
+      assert.equal(o.font, `${tamPx}px "Inter-Bold"`);
+    }
+    for (const o of trazos(copia)) assert.equal(o.ancho, 2 * grosor);
+    // la copia entera se limpia antes de CADA letra, y mide lo que dice la fórmula
+    const limpiezas = copia.ops.filter((o) => o.op === "clearRect");
+    assert.equal(limpiezas.length, 2 * letras);
+    for (const o of limpiezas) {
+      assert.deepEqual(o.dims, [esperado.ancho, esperado.alto]);
+      assert.deepEqual(o.a, [0, 0, esperado.ancho, esperado.alto], "se limpia todo, no un pedazo");
+    }
+    // y cae sobre el mismo píxel: destino + origen en la copia = origen de la letra (corrido por la sombra)
+    const dibujos = principal.ops.filter((o) => o.op === "drawImage");
+    for (const o of dibujos) assert.deepEqual(o.dims, [esperado.ancho, esperado.alto]);
+    const H = maquetar(texto, estilo, "9:16", T0).letras[0];
+    const origen = [Math.floor(H.x * f + 0.5), Math.floor(H.base * f + 0.5)];
+    assert.deepEqual([dibujos[0].a[0] + esperado.ax, dibujos[0].a[1] + esperado.ay], [origen[0] + 6 * f, origen[1] + 6 * f]);
+    assert.deepEqual([lienzosNuevos[1].width, lienzosNuevos[1].height], [0, 0], "y se suelta al terminar");
+  });
+}
+
+test("la copia cabe la tinta más extrema de las fuentes del catálogo (Anton «Ǻ», Inter U+1F850, Pacifico)", () => {
+  assert.deepEqual({ ...MARGEN_COPIA_EM }, { izq: 0.6, arr: 1.5, aba: 0.6, der: 2.8 });
+  // medido con Pillow en todo el repertorio de las 11 fuentes (em, desde el origen de la letra)
+  const TINTA = { izq: 0.227, arr: 1.404, aba: 0.457, der: 2.682 };
+  const estilo = { ...V2, sombra: { color: "#00000080", dx: 0.003, dy: 0.003 }, contorno: { color: "#00000080", grosor: 0.003 } };
+  for (const escala of [1, 2, 4]) {
+    const { nuevos } = rasterizar(`Margen ${escala}`, estilo, "9:16", { tabla: T0, escala });
+    const [principal, copia] = nuevos;
+    const [anchoCopia, altoCopia] = principal.ops.find((o) => o.op === "drawImage").dims;
+    const { x: ax, y: ay } = trazos(copia)[0];
+    const tam = 96 * escala;
+    const g = 6 * escala;
+    assert.ok(ax >= TINTA.izq * tam + g, `izquierda ${escala}`);
+    assert.ok(ay >= TINTA.arr * tam + g, `arriba ${escala}`);
+    assert.ok(altoCopia - ay >= TINTA.aba * tam + g, `abajo ${escala}`);
+    assert.ok(anchoCopia - ax >= TINTA.der * tam + g, `derecha ${escala}`);
+  }
 });
 
 test("solo la sombra es translúcida: el contorno y el relleno opacos se dibujan directo", () => {
@@ -308,10 +384,64 @@ test("la caché guarda los últimos TOPE_CACHE textos: el 201.º saca al más vi
   assert.equal(dibujar(0), primero, "un acierto devuelve el mismo resultado");     // y lo vuelve a poner al final
   dibujar(TOPE_CACHE);                                                              // el 201.º: sale el más viejo, que ahora es el segundo
   assert.equal(tamanoCache(), TOPE_CACHE);
+  assert.deepEqual([segundo.lienzo.width, segundo.lienzo.height], [0, 0], "el que sale se vacía (Safari no suelta la memoria de un lienzo olvidado)");
+  assert.ok(primero.lienzo.width > 0 && primero.lienzo.height > 0, "el que tuvo un acierto no se toca");
   assert.equal(dibujar(0), primero, "el que tuvo un acierto sigue");
   assert.notEqual(dibujar(1), segundo, "el más viejo se rasterizó de nuevo");
   for (let n = TOPE_CACHE + 1; n < TOPE_CACHE + 50; n++) dibujar(n);
   assert.equal(tamanoCache(), TOPE_CACHE, "nunca pasa del tope");
+});
+
+test("la caché tiene tope de área: pasados 24 millones de píxeles sale el más viejo y su lienzo se vacía", () => {
+  assert.equal(TOPE_AREA_CACHE, 24_000_000);
+  const estilo = { ...V2, tamano: 0.2 };                 // 384 px: una línea de ≈ 7000 × 480 (≈ 3 millones de píxeles)
+  const grandes = [];
+  const areas = [];
+  for (let n = 0; n < 12; n++) {
+    const r = rasterizarTexto(`área ${n} Compra hoy y recibe mañana`, estilo, "9:16", { tabla: T0, generacion: 11 });
+    grandes.push(r);
+    areas.push(r.lienzo.width * r.lienzo.height);
+    assert.ok(areaCache() <= TOPE_AREA_CACHE, `después del ${n}: ${areaCache()}`);
+    assert.ok(r.lienzo.width > 0, "el recién dibujado nunca se vacía");
+  }
+  assert.ok(areas.every((a) => a > 2_000_000), "cada texto pesa millones de píxeles");
+  assert.ok(areas.reduce((a, b) => a + b, 0) > TOPE_AREA_CACHE, "juntos pasan del tope");
+  const vacios = grandes.map((r) => r.lienzo.width === 0 && r.lienzo.height === 0);
+  assert.ok(vacios[0], "el más viejo salió y se vació");
+  assert.equal(vacios.at(-1), false, "el más nuevo sigue");
+  const primeroVivo = vacios.indexOf(false);
+  assert.ok(vacios.slice(0, primeroVivo).every(Boolean) && vacios.slice(primeroVivo).every((v) => !v), "salen en orden: primero los más viejos");
+  // los que siguen en la caché son los mismos objetos (un acierto), y los que salieron se rasterizan de nuevo
+  const vivo = grandes.at(-1);
+  assert.equal(rasterizarTexto("área 11 Compra hoy y recibe mañana", estilo, "9:16", { tabla: T0, generacion: 11 }), vivo);
+  const otra = rasterizarTexto("área 0 Compra hoy y recibe mañana", estilo, "9:16", { tabla: T0, generacion: 11 });
+  assert.notEqual(otra, grandes[0]);
+  assert.ok(otra.lienzo.width > 0);
+});
+
+test("un lienzo que él solo pasa del tope de área se devuelve entero (nunca se vacía el recién dibujado) y sale con el siguiente", () => {
+  const estilo = { fuente: "Inter-Bold", tamano: 0.04, color: "#FFFFFF" };
+  // v1 mide con el navegador (aquí 10 px por letra): 100 000 letras en una línea son ≈ 1 000 000 × 50 px
+  const enorme = rasterizarTexto("x".repeat(100_000), estilo, "9:16", { tabla: T0, generacion: 21 });
+  assert.ok(enorme.lienzo.width * enorme.lienzo.height > TOPE_AREA_CACHE);
+  assert.ok(enorme.lienzo.width > 0 && enorme.lienzo.height > 0, "el que se devuelve nunca se vacía");
+  assert.equal(tamanoCache(), 1, "todo lo demás salió para hacerle lugar");
+  assert.equal(rasterizarTexto("x".repeat(100_000), estilo, "9:16", { tabla: T0, generacion: 21 }), enorme);
+  const chico = rasterizarTexto("chico", estilo, "9:16", { tabla: T0, generacion: 21 });
+  assert.deepEqual([enorme.lienzo.width, enorme.lienzo.height], [0, 0], "con el siguiente sale y se vacía");
+  assert.ok(chico.lienzo.width > 0);
+  assert.ok(areaCache() <= TOPE_AREA_CACHE);
+});
+
+test("un texto v1 con otra generación de fuentes tiene otro lienzo (con y sin tabla)", () => {
+  const estilo = { fuente: "Inter-Bold", tamano: 0.04, color: "#FFFFFF" };
+  for (const opciones of [{ tabla: T0 }, {}]) {
+    const a = rasterizarTexto("v1 generación", estilo, "9:16", { ...opciones, generacion: 0 });
+    const b = rasterizarTexto("v1 generación", estilo, "9:16", { ...opciones, generacion: 1 });
+    assert.notEqual(b.lienzo, a.lienzo, "una fuente que terminó de bajar redibuja también a v1");
+    assert.equal(rasterizarTexto("v1 generación", estilo, "9:16", { ...opciones, generacion: 1 }), b);
+    assert.equal(rasterizarTexto("v1 generación", estilo, "9:16", { ...opciones, generacion: 0 }), a);
+  }
 });
 
 test("la caché distingue la generación de fuentes y el factor, pero no la escala que da el mismo factor", () => {

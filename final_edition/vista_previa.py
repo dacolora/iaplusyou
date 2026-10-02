@@ -31,10 +31,6 @@ def fuentes():
 
 def config_navegador():
     tipografia = catalogo_fuentes.cargar_tabla()
-    if tipografia["emoji"] and not catalogo_fuentes.hay_emoji():
-        # el archivo de la fuente de emojis no está (el despliegue lo perdió): la página no declara una
-        # `@font-face` que daría 404 ni mide emojis que no puede dibujar
-        tipografia = {**tipografia, "emoji": None}
     return {
         "formatos": {k: list(v) for k, v in FORMATOS.items()},
         "fps": 30,

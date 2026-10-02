@@ -421,3 +421,18 @@ test("al subir la generación de fuentes el texto se rehace (lo que se dibujó c
     assert.notEqual(ctx.llamadas[2].img, ctx.llamadas[0].img);
   });
 });
+
+test("un texto v2 con escala 1 y un fotograma clave a escala 3 se dibuja en un lienzo a factor 3 (la mayor escala del clip)", () => {
+  conDocumentoFalso(() => {
+    const doc = docConTexto({ ...CENTRO, escala: 1 });
+    doc.pistas[1].clips[0].keyframes = [{ t_ms: 500, transform: { escala: 3 } }];
+    const ctx = ctxFalso();
+    dibujarCuadro(ctx, doc, 1000, { ...recursosVacios(), tabla: T0, generacionFuentes: 0 }, CFG);
+    const [d] = ctx.llamadas;
+    assert.deepEqual([d.img.width, d.img.height], [663, 375], "natural 221×125 × factor 3");
+    // sin el fotograma clave, a escala 1: el lienzo natural (no es un efecto de la escala del transform)
+    const sin = ctxFalso();
+    dibujarCuadro(sin, docConTexto({ ...CENTRO, escala: 1 }), 1000, { ...recursosVacios(), tabla: T0, generacionFuentes: 0 }, CFG);
+    assert.deepEqual([sin.llamadas[0].img.width, sin.llamadas[0].img.height], [221, 125]);
+  });
+});

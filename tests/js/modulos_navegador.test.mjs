@@ -817,6 +817,32 @@ test("imagenTenida: la caché tiene tope (cada color de la paleta guarda un lien
   }
 });
 
+test("imagenTenida: un acierto pasa al final de la caché y sobrevive a la expulsión del más viejo (LRU)", async () => {
+  const { VistaPrevia, TOPE_TENIDAS } = await import("../../static/editor/vista.js");
+  const { restaurar } = lienzoTenido();
+  const img = { complete: true, naturalWidth: 8, naturalHeight: 8 };
+  const falsa = {
+    ctx: {}, cfg: { tipografia: T0 }, generacionFuentes: 0, materialesVigentes: { 9: { id: 9, tipo: "imagen" } },
+    imagenes: new Map([[9, img]]), imagenesFallidas: new Set(), imagenesTenidas: new Map(),
+  };
+  const color = (n) => `#${String(n).padStart(6, "0")}`;
+  try {
+    const recursos = VistaPrevia.prototype.crearRecursos.call(falsa);
+    const viejo = recursos.imagenTenida(9, color(0));
+    for (let n = 1; n < TOPE_TENIDAS; n++) recursos.imagenTenida(9, color(n));
+    assert.equal(falsa.imagenesTenidas.size, TOPE_TENIDAS);
+    assert.equal(recursos.imagenTenida(9, color(0)), viejo, "un acierto devuelve el mismo lienzo");
+    assert.equal([...falsa.imagenesTenidas.keys()].at(-1), `9:${color(0)}`, "y lo pasa al final");
+    recursos.imagenTenida(9, "#FFFFFF");                          // una nueva: sale el más viejo, que ahora es color(1)
+    assert.equal(falsa.imagenesTenidas.size, TOPE_TENIDAS);
+    assert.equal(falsa.imagenesTenidas.has(`9:${color(0)}`), true, "el que tuvo un acierto sobrevive");
+    assert.equal(falsa.imagenesTenidas.has(`9:${color(1)}`), false, "salió el siguiente más viejo");
+    assert.equal(recursos.imagenTenida(9, color(0)), viejo);
+  } finally {
+    restaurar();
+  }
+});
+
 test("renovarPendientes suelta los lienzos teñidos del material cuyo archivo cambió (y solo los suyos)", async () => {
   const { VistaPrevia } = await import("../../static/editor/vista.js");
   const falsa = {

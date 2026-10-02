@@ -273,11 +273,43 @@ def test_a_factor_2_el_contorno_la_sombra_y_el_fondo_tambien_se_multiplican(tmp_
     # fondo: la caja llega a (margen + caja_w)·f, con radio 40 (a 1× la esquina a 9 px sería fondo)
     margen, caja_w, caja_h = m["margen"] * f, m["caja_w"] * f, m["caja_h"] * f
     medio = margen + caja_h // 2
-    assert im.getpixel((margen + caja_w - 3, medio)) == verde
-    assert im.getpixel((margen + caja_w + 3, medio))[3] == 0
+    assert im.getpixel((margen + caja_w - 1, medio)) == verde          # el último píxel de la caja…
+    assert im.getpixel((margen + caja_w, medio))[3] == 0               # …y el siguiente ya no (el rectángulo de Pillow es inclusivo)
     assert m["radio"] == 20
     assert im.getpixel((margen + 9, margen + 9))[3] == 0                 # fuera del arco de radio 40
     assert im.getpixel((margen + 20, margen + 20)) == verde              # dentro
+
+
+@pytest.mark.parametrize("f", [1, 2, 3])
+@pytest.mark.parametrize("radio", [0.0105, 1.0])
+def test_el_fondo_v2_mide_caja_por_f_exacto_como_el_fillrect_del_lienzo(tmp_path, f, radio):
+    # Pillow pinta INCLUSIVO hasta (x1, y1); el lienzo del navegador (`fillRect` de caja_w·f × caja_h·f) acaba
+    # un píxel antes. El PNG de v2 acaba donde acaba el del navegador, en las cuatro orillas y a cualquier f
+    # (también con la píldora, de radio igual a media altura).
+    estilo = {**V2, "fondo": {**ADORNOS["fondo"], "radio": radio}}
+    ruta = str(tmp_path / "f.png")
+    r.png_texto("Hola", estilo, "9:16", ruta, escala_max=f)
+    im = Image.open(ruta)
+    m = tipografia.maquetar("Hola", estilo, "9:16", fuentes.cargar_tabla())
+    assert im.size == (m["ancho_px"] * f, m["alto_px"] * f)
+    x0, y0 = m["margen"] * f, m["margen"] * f
+    x1, y1 = x0 + m["caja_w"] * f, y0 + m["caja_h"] * f           # la primera columna / fila FUERA de la caja
+    cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+    verde = (0, 255, 0, 255)
+    assert im.getpixel((x1 - 1, cy)) == verde and im.getpixel((x1, cy))[3] == 0          # derecha
+    assert im.getpixel((x0, cy)) == verde and im.getpixel((x0 - 1, cy))[3] == 0          # izquierda
+    assert im.getpixel((cx, y1 - 1)) == verde and im.getpixel((cx, y1))[3] == 0          # abajo
+    assert im.getpixel((cx, y0)) == verde and im.getpixel((cx, y0 - 1))[3] == 0          # arriba
+    pintados = sum(1 for px in im.getdata() if px == verde)
+    assert pintados <= m["caja_w"] * f * m["caja_h"] * f                                  # nunca más que la caja
+
+
+def test_un_fondo_v2_sin_caja_no_falla(tmp_path):
+    # texto vacío y sin relleno: la caja mide 0 y no hay nada que pintar (con el último píxel -1 Pillow lanzaría)
+    estilo = {**V2, "fondo": {**ADORNOS["fondo"], "relleno_x": 0.0, "relleno_y": 0.0}}
+    medidas = r.png_texto("", estilo, "9:16", str(tmp_path / "v.png"))
+    assert Image.open(str(tmp_path / "v.png")).getbbox() is None
+    assert medidas["ancho_px"] > 0
 
 
 @pytest.mark.skipif(not fuentes.hay_emoji(), reason="sin la fuente de emojis (D6.5)")

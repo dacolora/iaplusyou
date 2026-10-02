@@ -227,6 +227,22 @@ def test_config_navegador_sin_fuente_de_emojis_manda_emoji_none(monkeypatch):
     assert vista_previa.config_navegador()["emoji"] is not None
 
 
+def test_config_navegador_sin_el_archivo_de_emojis_manda_emoji_none(monkeypatch, tmp_path):
+    # el despliegue perdió la TTF: la tabla (`cargar_tabla`) ya sale sin emoji y la página no declara nada
+    from final_edition import fuentes
+    fuentes.cargar_tabla.cache_clear()
+    try:
+        with monkeypatch.context() as m:
+            m.setattr(fuentes, "RUTA_EMOJI", str(tmp_path / "no_existe.ttf"))
+            fuentes.cargar_tabla.cache_clear()
+            cfg = vista_previa.config_navegador()
+            assert cfg["emoji"] is None and cfg["tipografia"]["emoji"] is None
+            assert cfg["tipografia"]["fuentes"] == fuentes.generar_tabla()["fuentes"]
+    finally:
+        fuentes.cargar_tabla.cache_clear()
+    assert vista_previa.config_navegador()["emoji"] is not None
+
+
 def test_material_para_dice_si_se_puede_tenir(base_temporal):
     import materiales
     con = materiales.registrar("acme", tipo="imagen", origen="sticker", url="https://r2.test/s1.png", hash="hs1", bytes=1,

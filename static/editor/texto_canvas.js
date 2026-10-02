@@ -8,19 +8,40 @@
 //    `factor` veces su tamaño natural para que no se vea borroso agrandado (D8);
 //  - un texto v1 se dibuja como siempre (la métrica de la fuente es la del
 //    navegador), salvo que pierde lo que el render también quita.
-// Caché por texto + estilo + formato + factor + generación de fuentes, con tope.
+// Caché por texto + estilo + formato + factor + generación de fuentes, con tope de textos y de área.
 import { ajustarLineas, cajaTexto, colorCss, medidasTexto } from "./texto.js";
 import { esV2, factorNitidez, maquetar, medidasTexto as medidasV2, redondear, sinGlifosV1 } from "./tipografia.js";
 
 // Cuántos textos se guardan (los últimos usados): sin tope la caché crecía con cada
 // letra que se escribía (auditoría #19).
 export const TOPE_CACHE = 200;
+// Y cuántos píxeles suman sus lienzos (≈ 96 MB de RGBA): 200 textos a factor 4 pesarían cientos
+// de MB y Safari en el iPhone mata la página. Sale el más viejo hasta que quepan.
+export const TOPE_AREA_CACHE = 24_000_000;
 // La familia de la @font-face de la fuente de emojis (templates/editor.html; la misma
 // que manda `vista_previa.EMOJI_NAVEGADOR`).
 export const FAMILIA_EMOJI = "CreatvEmoji";
 
-const cache = new Map();
+const cache = new Map();                 // clave → {res, area}, en orden de uso (el más viejo primero)
+let areaTotal = 0;                       // lo que suman las áreas de la caché
 export const tamanoCache = () => cache.size;
+export const areaCache = () => areaTotal;
+
+// Safari no devuelve la memoria de un lienzo que solo se olvida: se vacía.
+function vaciar(lienzo) {
+  lienzo.width = 0;
+  lienzo.height = 0;
+}
+
+// Saca los más viejos hasta que quepan en los dos topes; nunca el recién dibujado (se devuelve).
+function recortarCache(reciente) {
+  for (const [clave, e] of cache) {
+    if (clave === reciente || (cache.size <= TOPE_CACHE && areaTotal <= TOPE_AREA_CACHE)) break;
+    cache.delete(clave);
+    areaTotal -= e.area;
+    vaciar(e.res.lienzo);
+  }
+}
 
 // Una tabla vale por su identidad: el mismo texto con otra tabla (con o sin la fuente de
 // emojis) no es el mismo dibujo.
@@ -118,6 +139,11 @@ function dibujarV1(literal, estilo, formato, tabla) {
 function preparar(ctx, fuente, anchoTrazo) {
   ctx.font = fuente;
   ctx.fontKerning = "none";              // una letra por vez: sin kerning ni ligaduras, como Pillow sin Raqm
+  // Pillow sin Raqm dibuja el glifo base de cada letra, sin ninguna regla de la fuente. El navegador, por su cuenta,
+  // aplica las alternativas contextuales (`calt`) aun a una letra suelta: en Pacifico dibuja la «forma final», más
+  // corta (a 230 px la tinta de la «o» mide 94 y la de la «p» 131, contra los 128 y 169 de Pillow). «optimizeSpeed»
+  // las apaga y las medidas coinciden.
+  ctx.textRendering = "optimizeSpeed";
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";                // «start» sería la derecha en una página de derecha a izquierda
   ctx.lineJoin = "round";
@@ -134,16 +160,22 @@ function tinta(hex) {
   };
 }
 
+// Lo que mide la tinta más extrema de una letra alrededor de su origen, en em, con holgura
+// (medido con Pillow en las 11 fuentes del catálogo, en todo su repertorio): hacia la izquierda
+// llega a 0,227 (Pacifico «j»), hacia arriba a 1,404 (Anton «Ǻ», U+01FA), hacia abajo a 0,457
+// (Pacifico «p») y hacia la derecha a 2,682 (Inter U+1F850, un avance de 2,68 em).
+export const MARGEN_COPIA_EM = Object.freeze({ izq: 0.6, arr: 1.5, aba: 0.6, der: 2.8 });
+
 // La copia de trabajo de las letras translúcidas: un lienzo del tamaño de UNA letra (y su
 // trazo) con el origen siempre en el mismo punto (ax, ay), que se reusa en todas las
-// letras y pasadas. Margen de sobra a cada lado: 0,6 em a la izquierda, 1,8 a la derecha,
-// 1,3 arriba y 0,6 abajo del origen, más el trazo.
+// letras y pasadas. Cabe lo más ancho y alto que dibuja una fuente del catálogo: una tinta
+// que se saliera de la copia se cortaría solo cuando la pasada es translúcida.
 function crearCopia(tamPx, grosor, fuente) {
-  const ax = Math.ceil(0.6 * tamPx) + grosor;
-  const ay = Math.ceil(1.3 * tamPx) + grosor;
+  const ax = Math.ceil(MARGEN_COPIA_EM.izq * tamPx) + grosor;
+  const ay = Math.ceil(MARGEN_COPIA_EM.arr * tamPx) + grosor;
   const canvas = document.createElement("canvas");
-  canvas.width = ax + Math.ceil(1.8 * tamPx) + grosor;
-  canvas.height = ay + Math.ceil(0.6 * tamPx) + grosor;
+  canvas.width = ax + Math.ceil(MARGEN_COPIA_EM.der * tamPx) + grosor;
+  canvas.height = ay + Math.ceil(MARGEN_COPIA_EM.aba * tamPx) + grosor;
   const ctx = canvas.getContext("2d");
   preparar(ctx, fuente, 2 * grosor);
   return { canvas, ctx, ax, ay };
@@ -249,10 +281,12 @@ export function rasterizarTexto(literal, estilo, formato, { tabla = null, escala
   if (hecho) {
     cache.delete(clave);                 // un acierto vuelve a ponerlo al final: sale el que hace más que no se usa
     cache.set(clave, hecho);
-    return hecho;
+    return hecho.res;
   }
   const res = v2 ? dibujarV2(literal, estilo, formato, tabla, escala) : dibujarV1(literal, estilo, formato, conTabla ? tabla : null);
-  cache.set(clave, res);
-  if (cache.size > TOPE_CACHE) cache.delete(cache.keys().next().value);
+  const area = res.lienzo.width * res.lienzo.height;
+  cache.set(clave, { res, area });
+  areaTotal += area;
+  recortarCache(clave);
   return res;
 }
