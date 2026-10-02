@@ -13,8 +13,15 @@ tumbar lanzador.refrescar ni el decisor.
 """
 import json
 import logging
+from datetime import date, timedelta
+
+import sqlalchemy as sa
+from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 from meta_ads import auth
+
+import db
+import experimentos
 
 log = logging.getLogger("creatv.meta_detalle")
 
@@ -142,3 +149,69 @@ def pedir_desglose(campaign_id, dimension):
 def pedir_rankings(campaign_id):
     return _paginas({"level": "ad", "fields": CAMPOS_RANKINGS, "filtering": _filtro_campana(campaign_id),
                      "date_preset": "maximum"})
+
+
+# Días hacia atrás que se vuelven a pedir aunque ya estén: Meta corrige los últimos días.
+DIAS_REPASO = 2
+
+
+def guardar_dias(ep_por_ad, filas):
+    """Upsert por (anuncio, fecha). Filas de anuncios fuera de `ep_por_ad` se ignoran."""
+    n = 0
+    ahora = db.ahora()
+    with db.conectar() as con:
+        for fila in filas:
+            ep_id = ep_por_ad.get(str(fila.get("ad_id") or ""))
+            valores = fila_diaria(fila)
+            if not ep_id or not valores["fecha"]:
+                continue
+            valores.update(experimento_pieza_id=ep_id, actualizado_en=ahora)
+            stmt = insert_sqlite(db.metrica_dia).values(**valores)
+            con.execute(stmt.on_conflict_do_update(
+                index_elements=["experimento_pieza_id", "fecha"],
+                set_={k: v for k, v in valores.items() if k not in ("experimento_pieza_id", "fecha")}))
+            n += 1
+    return n
+
+
+def guardar_desglose(ep_por_ad, dimension, filas):
+    """Reemplaza, en una transacción, el juego (anuncio, dimensión) de cada anuncio que vino en `filas`."""
+    por_ep = {}
+    for fila in filas:
+        ep_id = ep_por_ad.get(str(fila.get("ad_id") or ""))
+        if ep_id:
+            clave, valores = fila_desglose(fila, dimension)
+            por_ep.setdefault(ep_id, {})[clave] = valores
+    ahora = db.ahora()
+    t = db.metrica_desglose
+    with db.conectar() as con:
+        for ep_id, por_clave in por_ep.items():
+            con.execute(t.delete().where(t.c.experimento_pieza_id == ep_id, t.c.dimension == dimension))
+            for clave, valores in por_clave.items():
+                con.execute(t.insert().values(experimento_pieza_id=ep_id, dimension=dimension, clave=clave[:120],
+                                              actualizado_en=ahora, **valores))
+    return sum(len(v) for v in por_ep.values())
+
+
+def guardar_rankings(cliente, ep_por_ad, filas):
+    n = 0
+    for fila in filas:
+        ep_id = ep_por_ad.get(str(fila.get("ad_id") or ""))
+        if ep_id:
+            experimentos.marcar_pieza(cliente, ep_id, rankings_meta=rankings_de(fila))
+            n += 1
+    return n
+
+
+def desde_para(ep_ids, creado_en, hoy):
+    """Desde qué día pedir: el último guardado menos DIAS_REPASO (se cura solo si
+    el worker estuvo parado), o el día en que se creó el experimento. Nunca
+    después de hoy."""
+    with db.conectar() as con:
+        ultimo = con.execute(sa.select(sa.func.max(db.metrica_dia.c.fecha))
+                             .where(db.metrica_dia.c.experimento_pieza_id.in_(list(ep_ids) or [-1]))).scalar()
+    if ultimo:
+        desde = date.fromisoformat(ultimo) - timedelta(days=DIAS_REPASO)
+    else:
+        desde = date.fromisoformat((creado_en or hoy.isoformat())[:10])
+    return min(desde, hoy).isoformat()

@@ -2,6 +2,8 @@
 paginación, guardar sin cruzar proyectos y refrescar sin tumbar nada."""
 import json
 import pytest
+from datetime import date
+import sqlalchemy as sa
 
 FILA_DIA = {
     "ad_id": "ad_1", "date_start": "2026-09-30", "date_stop": "2026-09-30",
@@ -118,3 +120,83 @@ def test_pedir_desglose_y_rankings(monkeypatch):
     md.pedir_rankings("cmp")
     _, _, p2 = falso.llamadas[1]
     assert "quality_ranking" in p2["fields"] and p2["date_preset"] == "maximum"
+
+
+@pytest.fixture()
+def dos_piezas(base_temporal):
+    """Experimento de acme con dos anuncios (ad_1 en CO, ad_2 en MX)."""
+    import experimentos as ex
+    from tests.test_experimentos_db import PAISES, _pieza
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
+    eid = ex.crear("acme", "Prueba", PAISES, "OUTCOME_TRAFFIC", 7, 500000.0, "https://t.co/p", "COP")
+    ep1 = ex.agregar_pieza("acme", eid, clon, "CO")
+    ep2 = ex.agregar_pieza("acme", eid, clon, "MX")
+    ex.actualizar_pieza("acme", ep1, meta_ad_id="ad_1")
+    ex.actualizar_pieza("acme", ep2, meta_ad_id="ad_2")
+    ex.actualizar("acme", eid, meta_campaign_id="cmp_1")
+    return {"db": base_temporal, "ex": ex, "eid": eid, "ep1": ep1, "ep2": ep2}
+
+
+def _filas(db, tabla):
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(sa.select(tabla).order_by(tabla.c.id))]
+
+
+def test_guardar_dias_reemplaza_el_dia_e_ignora_anuncios_ajenos(dos_piezas):
+    import meta_detalle as md
+    db, ep1 = dos_piezas["db"], dos_piezas["ep1"]
+    mapa = {"ad_1": ep1, "ad_2": dos_piezas["ep2"]}
+    n = md.guardar_dias(mapa, [{**FILA_DIA, "ad_id": "ad_1"}, {**FILA_DIA, "ad_id": "ad_de_otro_proyecto"}])
+    assert n == 1
+    md.guardar_dias(mapa, [{**FILA_DIA, "ad_id": "ad_1", "impressions": "1500"}])   # Meta corrigió el día
+    filas = _filas(db, db.metrica_dia)
+    assert len(filas) == 1 and filas[0]["experimento_pieza_id"] == ep1 and filas[0]["impresiones"] == 1500
+    assert filas[0]["fecha"] == "2026-09-30" and filas[0]["actualizado_en"]
+
+
+def test_guardar_desglose_reemplaza_el_juego_completo(dos_piezas):
+    import meta_detalle as md
+    db, ep1 = dos_piezas["db"], dos_piezas["ep1"]
+    mapa = {"ad_1": ep1}
+    md.guardar_desglose(mapa, "edad_genero", [{**FILA_DIA, "ad_id": "ad_1", "age": "18-24", "gender": "male"},
+                                             {**FILA_DIA, "ad_id": "ad_1", "age": "25-34", "gender": "female"}])
+    md.guardar_desglose(mapa, "dispositivo", [{**FILA_DIA, "ad_id": "ad_1", "device_platform": "mobile_app"}])
+    md.guardar_desglose(mapa, "edad_genero", [{**FILA_DIA, "ad_id": "ad_1", "age": "25-34", "gender": "female"}])
+    claves = sorted((f["dimension"], f["clave"]) for f in _filas(db, db.metrica_desglose))
+    assert claves == [("dispositivo", "mobile_app"), ("edad_genero", "25-34|female")]
+
+
+def test_guardar_rankings_en_extra_de_la_pieza(dos_piezas):
+    import meta_detalle as md
+    ex, ep1 = dos_piezas["ex"], dos_piezas["ep1"]
+    ex.marcar_pieza("acme", ep1, archivado=False)   # lo que ya había en extra se conserva
+    md.guardar_rankings("acme", {"ad_1": ep1}, [{"ad_id": "ad_1", "quality_ranking": "ABOVE_AVERAGE"},
+                                                {"ad_id": "ajeno", "quality_ranking": "BELOW_AVERAGE_10"}])
+    extra = [p for p in ex.obtener("acme", dos_piezas["eid"])["piezas"] if p["id"] == ep1][0]["extra"]
+    assert extra["rankings_meta"]["calidad"] == "ABOVE_AVERAGE" and extra["archivado"] is False
+
+
+def test_desde_para_sin_datos_y_con_datos(dos_piezas):
+    import meta_detalle as md
+    ep1 = dos_piezas["ep1"]
+    assert md.desde_para([ep1], "2026-09-10T08:00:00", date(2026, 10, 2)) == "2026-09-10"
+    md.guardar_dias({"ad_1": ep1}, [{**FILA_DIA, "ad_id": "ad_1"}])   # último día guardado: 30 sep
+    assert md.desde_para([ep1], "2026-09-10T08:00:00", date(2026, 10, 2)) == "2026-09-28"
+    # nunca después de hoy
+    assert md.desde_para([ep1], "2026-12-01T00:00:00", date(2026, 10, 2)) == "2026-09-28"
+
+
+def test_fk_metrica_dia_no_impide_borrar_con_delete_statements(dos_piezas):
+    """Verifica que la FK de metrica_dia permite borrar experimento_pieza si
+    borramos primero los detalles."""
+    import meta_detalle as md
+    import db
+    ep1 = dos_piezas["ep1"]
+    mapa = {"ad_1": ep1}
+    md.guardar_dias(mapa, [{**FILA_DIA, "ad_id": "ad_1"}])
+
+    # Borrar los detalles y luego la pieza debe funcionar sin IntegrityError
+    with db.conectar() as con:
+        con.execute(db.metrica_dia.delete().where(db.metrica_dia.c.experimento_pieza_id == ep1))
+        con.execute(db.metrica_desglose.delete().where(db.metrica_desglose.c.experimento_pieza_id == ep1))
+        con.execute(db.experimento_pieza.delete().where(db.experimento_pieza.c.id == ep1))
