@@ -5,8 +5,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  choque, CLAVE_ZONAS, DEFECTO, eleccionValida, franjaSubtitulos, fuera, guardarZonas, leerZonas, medidasDeTextos, MIN_PX, NOMBRES,
-  PLATAFORMAS, revisar, textoAviso, tieneZonas, ZONAS, zonasEnPx,
+  choque, CLAVE_ZONAS, ControlZonas, CUBRE_FONDO, DEFECTO, eleccionValida, esFondo, franjaSubtitulos, fuera, guardarZonas, guiasDe,
+  leerZonas, medidasDeTextos, MIN_PX, NOMBRES, PLATAFORMAS, revisar, textoAviso, tieneZonas, ZONAS, zonasEnPx,
 } from "../../static/editor/zonas.js";
 import { eventos } from "../../static/editor/subtitulos.js";
 import { ponerTextos } from "../../static/editor/textos.js";
@@ -121,6 +121,33 @@ test("choque: la caja se mete al menos 8 px en los dos ejes", () => {
   assert.equal(choque({ x: 0, y: 0, ancho: 10, alto: 10 }, abajo), false, "lejos");
 });
 
+test("choque: justo 8 px cuenta y 7 no, en cada eje y por cada lado (con una zona de números enteros)", () => {
+  const zona = { zona: "abajo", x: 100, y: 100, ancho: 100, alto: 100 };
+  const caja = (x, y, ancho, alto) => ({ x, y, ancho, alto });
+  // por la izquierda, por la derecha, por arriba y por abajo de la zona, con el otro eje bien metido
+  assert.equal(choque(caja(92, 120, 16, 10), zona), true, "izquierda: 8 px de ancho adentro");
+  assert.equal(choque(caja(92, 120, 15, 10), zona), false, "izquierda: 7 px");
+  assert.equal(choque(caja(192, 120, 50, 10), zona), true, "derecha: 8 px");
+  assert.equal(choque(caja(193, 120, 50, 10), zona), false, "derecha: 7 px");
+  assert.equal(choque(caja(120, 92, 10, 16), zona), true, "arriba: 8 px");
+  assert.equal(choque(caja(120, 92, 10, 15), zona), false, "arriba: 7 px");
+  assert.equal(choque(caja(120, 192, 10, 50), zona), true, "abajo: 8 px");
+  assert.equal(choque(caja(120, 193, 10, 50), zona), false, "abajo: 7 px");
+  // con la zona real de Reels (el lado izquierdo, que empieza en 0): 8 px justos
+  const lado = zonasEnPx("9:16", "reels")[2];
+  assert.equal(choque({ x: -56, y: 400, ancho: 64, alto: 50 }, lado), true);
+  assert.equal(choque({ x: -56, y: 400, ancho: 63, alto: 50 }, lado), false);
+});
+
+test("fuera: justo 8 px cuenta y 7 no, por la derecha, por abajo y por arriba", () => {
+  assert.equal(fuera({ x: 800, y: 100, ancho: 288, alto: 80 }, "9:16"), true, "derecha: pasa 1080 por 8");
+  assert.equal(fuera({ x: 800, y: 100, ancho: 287, alto: 80 }, "9:16"), false, "derecha: por 7");
+  assert.equal(fuera({ x: 100, y: 1850, ancho: 300, alto: 78 }, "9:16"), true, "abajo: pasa 1920 por 8");
+  assert.equal(fuera({ x: 100, y: 1850, ancho: 300, alto: 77 }, "9:16"), false, "abajo: por 7");
+  assert.equal(fuera({ x: 100, y: -8, ancho: 300, alto: 80 }, "9:16"), true, "arriba: justo 8");
+  assert.equal(fuera({ x: 100, y: -7, ancho: 300, alto: 80 }, "9:16"), false, "arriba: 7");
+});
+
 test("fuera: la caja se sale al menos 8 px por algún borde", () => {
   assert.equal(fuera({ x: -20, y: 100, ancho: 300, alto: 80 }, "9:16"), true);
   assert.equal(fuera({ x: -5, y: 100, ancho: 300, alto: 80 }, "9:16"), false);
@@ -181,7 +208,7 @@ test("revisar: un solo aviso de zona por capa (la primera de la tabla), no uno p
   assert.deepEqual(lista.map((h) => [h.id, h.zona]), [["t1", "abajo"]]);
 });
 
-test("revisar: usa la caja de la capa AL EMPEZAR, con los keyframes", () => {
+test("revisar: con keyframes la caja es la de al empezar (el camino que sigue después no se revisa)", () => {
   const clip = texto("t1", "Hola", 0.5, 0.4, {
     inicio_ms: 1000, keyframes: [
       { t_ms: 0, transform: { y: 0.4 } }, { t_ms: 1000, transform: { y: 0.95 } },
@@ -189,7 +216,45 @@ test("revisar: usa la caja de la capa AL EMPEZAR, con los keyframes", () => {
   });
   const doc = documento({ textos: [clip] });
   assert.deepEqual(revisar(doc, { plataforma: "reels", medidasTexto: { t1: [400, 80] } }), [],
-    "empieza en 0,4 aunque después baje");
+    "empieza en 0,4 aunque después baje a 0,95 (límite: no se revisa el camino)");
+  // con keyframes la entrada animada no cuenta (posicionCapa la ignora): no se espera a que «termine»
+  const conEntrada = texto("t1", "Hola", 0.5, 0.4, {
+    animacion: { entrada: "deslizar", duracion_ms: 1000 },
+    keyframes: [{ t_ms: 0, transform: { y: 0.4 } }, { t_ms: 1000, transform: { y: 0.95 } }],
+  });
+  assert.deepEqual(revisar(documento({ textos: [conEntrada] }), { plataforma: "reels", medidasTexto: { t1: [400, 80] } }), [],
+    "con 2 keyframes se mira al empezar, no donde terminaría la entrada");
+});
+
+test("revisar: con una entrada «deslizar» la caja es la de cuando la entrada termina (ahí se queda la capa)", () => {
+  const desliza = { entrada: "deslizar", duracion_ms: 400 };
+  const medidas = { t1: [400, 80] };
+  // y 0,05: al empezar la capa está 154 px más arriba (se saldría del video), pero llega a 56–136 y se queda ahí
+  const arriba = documento({ textos: [texto("t1", "Hola", 0.5, 0.05, { animacion: desliza })] });
+  assert.deepEqual(revisar(arriba, { plataforma: "no", medidasTexto: medidas }), [], "no se sale: el 154 px de la entrada no cuenta");
+  assert.deepEqual(revisar(arriba, { plataforma: "reels", medidasTexto: medidas }).map((h) => [h.tipo, h.zona]), [["zona", "arriba"]]);
+  // sin la entrada, la misma capa tampoco avisa «fuera»: es el mismo resultado
+  const quieta = documento({ textos: [texto("t1", "Hola", 0.5, 0.05)] });
+  assert.deepEqual(revisar(arriba, { plataforma: "reels", medidasTexto: medidas }),
+    revisar(quieta, { plataforma: "reels", medidasTexto: medidas }));
+  // y 0,70: al empezar está en 1150–1230 (arriba del 65 % de abajo, que empieza en 1248), pero queda en 1304–1384: abajo
+  const abajo = documento({ textos: [texto("t1", "Hola", 0.5, 0.7, { animacion: desliza })] });
+  assert.deepEqual(revisar(abajo, { plataforma: "reels", medidasTexto: medidas }),
+    [{ tipo: "zona", id: "t1", clase: "texto", zona: "abajo", texto: "Hola" }]);
+  // una entrada que empieza tarde termina tarde: se mide en su inicio + la duración de la entrada
+  const tarde = documento({ textos: [texto("t1", "Hola", 0.5, 0.7, { inicio_ms: 3000, animacion: desliza })] });
+  assert.deepEqual(revisar(tarde, { plataforma: "reels", medidasTexto: medidas }).map((h) => h.zona), ["abajo"]);
+});
+
+test("revisar: una entrada sin duración (o que no se mueve) se mide al empezar, como siempre", () => {
+  // «deslizar» sin duración no se mueve (posicionCapa la ignora) y «fundido» no cambia la posición: en todos
+  // estos casos la capa está donde dice su transform, 1304–1384 con y 0,7: abajo con Reels
+  const medidas = { t1: [400, 80] };
+  for (const animacion of [{ entrada: "deslizar" }, { entrada: "deslizar", duracion_ms: 0 }, { entrada: "fundido", duracion_ms: 300 },
+    { entrada: null, duracion_ms: 400 }, null]) {
+    const doc = documento({ textos: [texto("t1", "Hola", 0.5, 0.7, { animacion })] });
+    assert.deepEqual(revisar(doc, { plataforma: "reels", medidasTexto: medidas }).map((h) => h.zona), ["abajo"], JSON.stringify(animacion));
+  }
 });
 
 test("revisar: sin medida, un texto usa 400×200 como el resto del editor", () => {
@@ -237,8 +302,53 @@ test("revisar: una imagen junto a los botones avisa «botones» con TikTok y Sho
 test("revisar: el tamaño de una imagen sin ancho_px sale de su material", () => {
   const doc = documento({ imagenes: [{ ...imagen("i1", 0.5, 0.9, 0, 0), ancho_px: undefined, alto_px: undefined }] });
   assert.deepEqual(revisar(doc, { plataforma: "reels", materiales: { 3: { ancho: 300, alto: 300 } } }).map((h) => h.zona), ["abajo"]);
-  assert.deepEqual(revisar(doc, { plataforma: "no", materiales: { 3: { ancho: 3000, alto: 3000 } } }).map((h) => [h.tipo, h.clase]),
-    [["fuera", "imagen"]]);
+  assert.deepEqual(revisar(doc, { plataforma: "no", materiales: { 3: { ancho: 3000, alto: 600 } } }).map((h) => [h.tipo, h.clase]),
+    [["fuera", "imagen"]], "3000 de ancho y 600 de alto: se sale y no cubre el alto, no es un fondo");
+});
+
+test("esFondo: lo que se ve DENTRO del lienzo cubre el 95 % del ancho y del alto", () => {
+  assert.equal(CUBRE_FONDO, 0.95);
+  assert.equal(esFondo({ x: 0, y: 0, ancho: 1080, alto: 1920 }, "9:16"), true, "exacta");
+  assert.equal(esFondo({ x: -960, y: -540, ancho: 3000, alto: 3000 }, "9:16"), true, "cover: pasa por todos lados");
+  assert.equal(esFondo({ x: 27, y: 48, ancho: 1026, alto: 1824 }, "9:16"), true, "justo 95 %");
+  assert.equal(esFondo({ x: 27, y: 48, ancho: 1025, alto: 1824 }, "9:16"), false, "ancho a 94,9 %");
+  assert.equal(esFondo({ x: 27, y: 48, ancho: 1026, alto: 1823 }, "9:16"), false, "alto a 94,9 %");
+  assert.equal(esFondo({ x: 0, y: 400, ancho: 1080, alto: 1920 }, "9:16"), false, "corrida 400 px: se ve el 79 % del alto");
+  assert.equal(esFondo({ x: 400, y: 0, ancho: 1920, alto: 1920 }, "9:16"), false, "corrida a un lado: se ve el 63 % del ancho");
+  assert.equal(esFondo({ x: 0, y: 0, ancho: 1920, alto: 1080 }, "16:9"), true, "el lienzo es el del formato");
+  assert.equal(esFondo({ x: 0, y: 0, ancho: 1080, alto: 1920 }, "x"), false);
+});
+
+test("revisar: un fondo (una imagen que cubre el lienzo) no avisa de zonas ni de salirse", () => {
+  const con = (ancho, alto, x = 0.5, y = 0.5) => documento({ imagenes: [imagen("fondo", x, y, ancho, alto)] });
+  for (const plataforma of ["no", ...PLATAFORMAS]) {
+    assert.deepEqual(revisar(con(3000, 3000), { plataforma }), [], `cover de 3000×3000 con ${plataforma}`);
+    assert.deepEqual(revisar(con(1080, 1920), { plataforma }), [], `exacta de 1080×1920 con ${plataforma}`);
+  }
+});
+
+test("revisar: a 94 % ya no es un fondo y avisa", () => {
+  const con = (ancho, alto) => documento({ imagenes: [imagen("img", 0.5, 0.5, ancho, alto)] });
+  assert.deepEqual(revisar(con(1015, 1920), { plataforma: "reels" }),
+    [{ tipo: "zona", id: "img", clase: "imagen", zona: "arriba", texto: null }], "94 % del ancho");
+  assert.deepEqual(revisar(con(1080, 1805), { plataforma: "reels" }),
+    [{ tipo: "zona", id: "img", clase: "imagen", zona: "arriba", texto: null }], "94 % del alto");
+  assert.deepEqual(revisar(con(1026, 1824), { plataforma: "reels" }), [], "95 % justo sí es un fondo");
+});
+
+test("revisar: un fondo corrido 400 px hacia abajo se sale del video y avisa «fuera»", () => {
+  const doc = documento({ imagenes: [imagen("fondo", 0.5, 1360 / 1920, 1080, 1920)] });
+  assert.deepEqual(revisar(doc, { plataforma: "no" }), [{ tipo: "fuera", id: "fondo", clase: "imagen", zona: null, texto: null }]);
+  assert.deepEqual(revisar(doc, { plataforma: "reels" }).map((h) => [h.tipo, h.zona]), [["fuera", null], ["zona", "abajo"]]);
+});
+
+test("revisar: el fondo no tapa los avisos de verdad, y un texto grande nunca es un fondo", () => {
+  const doc = documento({ textos: [texto("t1", FRASE, 0.5, 0.9)], imagenes: [imagen("fondo", 0.5, 0.5, 3000, 3000)] });
+  assert.deepEqual(revisar(doc, { plataforma: "reels", medidasTexto: { t1: [600, 80] } }),
+    [{ tipo: "zona", id: "t1", clase: "texto", zona: "abajo", texto: FRASE }]);
+  const grande = documento({ textos: [texto("t1", "Hola", 0.5, 0.5)] });
+  assert.deepEqual(revisar(grande, { plataforma: "no", medidasTexto: { t1: [3000, 3000] } }),
+    [{ tipo: "fuera", id: "t1", clase: "texto", zona: null, texto: "Hola" }], "un texto que cubre todo avisa igual");
 });
 
 test("revisar: una imagen que se sale del video avisa «fuera»", () => {
@@ -267,10 +377,12 @@ test("franjaSubtitulos: nada si no hay palabras, están apagados o no hay tabla 
 test("franjaSubtitulos: manda el tam_px más grande de todos los eventos; sin posicion cae a 0,78", () => {
   const estilos = { karaoke: { ...CFG.subtitulos.estilos.karaoke, tam: 100, max_caracteres: 8 } };
   // «Hi» sale a 100 px; «extraordinario» pasa de 8 letras y se achica
-  const palabras = [{ t_ms: 0, dur_ms: 300, texto: "Hi" }, { t_ms: 2000, dur_ms: 500, texto: "extraordinario" }];
+  // el evento CHICO va primero: la franja no es la del primer evento
+  const palabras = [{ t_ms: 0, dur_ms: 500, texto: "extraordinario" }, { t_ms: 2000, dur_ms: 300, texto: "Hi" }];
   const doc = documento({ subtitulos: { palabras, posicion: undefined } });
   const tamanos = eventos(doc.subtitulos, estilos).map((ev) => ev.tam_px);
   assert.equal(tamanos.length, 2);
+  assert.ok(tamanos[0] < tamanos[1], "el primero es el chico");
   assert.equal(Math.max(...tamanos), 100);
   assert.ok(Math.min(...tamanos) < 100);
   const franja = franjaSubtitulos(doc, { subtitulos: { estilos } });
@@ -486,4 +598,109 @@ test("medidasDeTextos no vuelve a pedir lo que otro instante ya midió (textos q
   const juntos = [];
   assert.deepEqual(medidasDeTextos(doc, (ms) => { juntos.push(ms); return { a: [1, 2], b: [3, 4] }; }), { a: [1, 2], b: [3, 4] });
   assert.deepEqual(juntos, [0], "a salió medido con b: b ya no se pide");
+});
+
+// ---- las guías y el selector ----
+
+test("guiasDe: un rectángulo por zona, en % del lienzo", () => {
+  assert.deepEqual(guiasDe("9:16", "reels"), [
+    { zona: "arriba", left: 0, top: 0, width: 100, height: 14 },
+    { zona: "abajo", left: 0, top: 65, width: 100, height: 35 },
+    { zona: "lados", left: 0, top: 0, width: 6, height: 100 },
+    { zona: "lados", left: 94, top: 0, width: 6, height: 100 },
+  ]);
+  assert.deepEqual(guiasDe("9:16", "tiktok").find((g) => g.zona === "botones"), { zona: "botones", left: 87, top: 40, width: 13, height: 40 });
+  assert.deepEqual(guiasDe("9:16", "shorts").find((g) => g.zona === "botones"), { zona: "botones", left: 87, top: 45, width: 13, height: 36 });
+  assert.deepEqual(guiasDe("9:16", "no"), []);
+  assert.deepEqual(guiasDe("4:5", "reels"), []);
+});
+
+// Dobles de la página: un selector, la capa de las guías, un almacén y cómo se crea un div.
+function pagina({ guardado = {}, formato = "9:16", almacen } = {}) {
+  const escuchas = {};
+  const selector = {
+    value: "", title: "", quitados: [],
+    addEventListener(evento, fn) { escuchas[evento] = fn; },
+    removeAttribute(nombre) { this.quitados.push(nombre); if (nombre === "title") this.title = ""; },
+  };
+  const capa = { hijos: [], replaceChildren(...hijos) { this.hijos = hijos; } };
+  const almacenamiento = almacen ?? { guardado, getItem(clave) { return this.guardado[clave] ?? null; }, setItem(clave, valor) { this.guardado[clave] = valor; } };
+  const estado = { formato };
+  const avisos = [];
+  const control = new ControlZonas({
+    selector, capa, almacen: almacenamiento, formato: () => estado.formato,
+    crear: () => ({ className: "", dataset: {}, style: {} }), alCambiar: (eleccion) => avisos.push(eleccion),
+  });
+  const elegir = (valor) => { selector.value = valor; escuchas.change(); };
+  return { control, selector, capa, avisos, estado, almacen: almacenamiento, elegir, escuchas };
+}
+const resumen = (capa) => capa.hijos.map((d) => [d.dataset.zona, d.className, d.style.left, d.style.top, d.style.width, d.style.height]);
+
+test("ControlZonas: el selector muestra lo que quien mira dejó guardado y las guías son las de esa plataforma", () => {
+  const p = pagina({ guardado: { [CLAVE_ZONAS]: "shorts" } });
+  p.control.montar();
+  assert.equal(p.selector.value, "shorts", "el selector muestra la elección guardada");
+  assert.deepEqual(resumen(p.capa), [
+    ["arriba", "ed-zona", "0%", "0%", "100%", "7%"],
+    ["abajo", "ed-zona", "0%", "81%", "100%", "19%"],
+    ["botones", "ed-zona", "87%", "45%", "13%", "36%"],
+  ]);
+  assert.deepEqual(p.selector.quitados, ["title"], "en un 9:16 no hay nada que explicar");
+  assert.equal(typeof p.escuchas.change, "function", "el selector escucha su cambio");
+  assert.deepEqual(p.avisos, [], "montar no avisa: la página ya repinta sus avisos al arrancar");
+});
+
+test("ControlZonas: sin nada guardado es Reels; con «no», sin guías", () => {
+  const sin = pagina();
+  sin.control.montar();
+  assert.equal(sin.selector.value, "reels");
+  assert.equal(sin.capa.hijos.length, 4);
+  const no = pagina({ guardado: { [CLAVE_ZONAS]: "no" } });
+  no.control.montar();
+  assert.equal(no.selector.value, "no");
+  assert.deepEqual(no.capa.hijos, []);
+  assert.equal(no.control.eleccion, "no");
+});
+
+test("ControlZonas: cambiar de plataforma se recuerda, repinta las guías y pone al día el aviso", () => {
+  const p = pagina();
+  p.control.montar();
+  p.elegir("tiktok");
+  assert.equal(p.control.eleccion, "tiktok");
+  assert.equal(p.almacen.guardado[CLAVE_ZONAS], "tiktok", "se recuerda");
+  assert.deepEqual(resumen(p.capa).map((g) => g[0]), ["arriba", "abajo", "botones"], "guías de TikTok, no las de Reels");
+  assert.deepEqual(p.capa.hijos.map((g) => g.style.top), ["0%", "80%", "40%"]);
+  assert.deepEqual(p.avisos, ["tiktok"], "el aviso se repinta con la plataforma nueva");
+  p.elegir("no");
+  assert.deepEqual(p.capa.hijos, [], "sin guías");
+  assert.equal(p.almacen.guardado[CLAVE_ZONAS], "no");
+  p.elegir("shorts");
+  assert.deepEqual(p.avisos, ["tiktok", "no", "shorts"], "cada cambio repinta el aviso");
+  assert.equal(p.capa.hijos.length, 3);
+  p.elegir("cualquier cosa");
+  assert.equal(p.control.eleccion, "reels", "lo que no es del selector cae a Reels");
+  assert.equal(p.selector.value, "reels", "y el selector lo muestra");
+});
+
+test("ControlZonas: fuera del 9:16 no hay guías, el selector lo explica y la elección se respeta para después", () => {
+  const p = pagina({ guardado: { [CLAVE_ZONAS]: "tiktok" }, formato: "4:5" });
+  p.control.montar();
+  assert.deepEqual(p.capa.hijos, []);
+  assert.equal(p.selector.title, "Las zonas son para videos verticales (9:16).");
+  assert.equal(p.selector.value, "tiktok", "sigue mostrando lo elegido");
+  p.estado.formato = "9:16";
+  p.control.pintar();
+  assert.equal(p.capa.hijos.length, 3, "con un formato vertical las guías de TikTok vuelven");
+  assert.equal(p.selector.title, "");
+  assert.deepEqual(p.selector.quitados, ["title"]);
+});
+
+test("ControlZonas: un almacén que lanza no rompe nada y la elección vale en esta sesión", () => {
+  const p = pagina({ almacen: almacenQueLanza });
+  p.control.montar();
+  assert.equal(p.selector.value, "reels");
+  assert.doesNotThrow(() => p.elegir("tiktok"));
+  assert.equal(p.control.eleccion, "tiktok");
+  assert.equal(p.capa.hijos.length, 3);
+  assert.deepEqual(p.avisos, ["tiktok"]);
 });

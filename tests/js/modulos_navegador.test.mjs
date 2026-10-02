@@ -874,27 +874,30 @@ test("medidasTexto pide el mismo dibujo que lienzo.js: con la tabla, la escala d
 test("zonas.js carga sin tocar la página y pagina_editor.js lo engancha (el selector, las guías y el aviso)", async () => {
   assert.equal(typeof globalThis.document, "undefined");
   const zonas = await import("../../static/editor/zonas.js");
-  for (const f of ["zonasEnPx", "choque", "fuera", "revisar", "textoAviso", "leerZonas", "guardarZonas", "medidasDeTextos",
-    "eleccionValida", "tieneZonas", "franjaSubtitulos"]) {
+  for (const f of ["zonasEnPx", "choque", "fuera", "esFondo", "revisar", "textoAviso", "leerZonas", "guardarZonas", "medidasDeTextos",
+    "eleccionValida", "tieneZonas", "franjaSubtitulos", "guiasDe"]) {
     assert.equal(typeof zonas[f], "function", `zonas.${f}`);
   }
+  assert.equal(typeof zonas.ControlZonas, "function");
+  for (const m of ["pintar", "elegir", "montar"]) assert.equal(typeof zonas.ControlZonas.prototype[m], "function", `ControlZonas.${m}`);
   assert.equal(typeof globalThis.document, "undefined");          // importarlo no tocó la página
   const ruta = new URL("../../static/editor/pagina_editor.js", import.meta.url);
   const fuente = readFileSync(ruta, "utf-8");
   for (const uso of [
-    'import { porcentaje } from "./seleccion.js";',
-    "let zonasElegidas = leerZonas(almacenSeguro());",
+    'import { ControlZonas, medidasDeTextos, revisar, textoAviso } from "./zonas.js";',
+    // el selector y las guías los lleva ControlZonas (probado en Node con dobles); la página le da sus piezas
+    "const controlZonas = new ControlZonas({",
+    'selector: $("zonas"), capa: $("ed-zonas"), almacen: almacenSeguro(), formato: () => historial.actual.formato,',
+    'crear: () => document.createElement("div"), alCambiar: pintarAvisoZonas,',
+    "controlZonas.montar();",
     // el aviso: como los de carga, en cada refresco y sobre el documento RESUELTO del destino que se ve
     "pintarAvisoZonas();\n}",
     'pintarAvisoCarga("aviso-zonas", avisoZonas());',
     "const doc = vista.resuelto;",
     "medidasDeTextos(doc, (ms) => vista.medidasTexto(ms))",
-    "revisar(doc, { plataforma: zonasElegidas, medidasTexto, materiales: vista.materiales, cfg: datos.config })",
-    // las guías: un div.ed-zona por rectángulo, en % del lienzo, y el selector avisa que son para el 9:16
-    'franja.className = "ed-zona";',
-    "const p = porcentaje(z, formato);",
-    'selector.title = t("vista.zonas_solo_vertical");',
-    "guardarZonas(almacenSeguro(), zonasElegidas);",
-    "montarZonas();",
+    "revisar(doc, { plataforma: controlZonas.eleccion, medidasTexto, materiales: vista.materiales, cfg: datos.config })",
+    "return textoAviso(lista, controlZonas.eleccion);",
   ]) assert.ok(fuente.includes(uso), uso);
+  // lo que ya no está en la página porque se fue a zonas.js
+  for (const viejo of ["let zonasElegidas", "function pintarZonas", "function montarZonas"]) assert.ok(!fuente.includes(viejo), viejo);
 });

@@ -1550,4 +1550,4 @@ def test_las_zonas_seguras_tienen_sus_guias_su_selector_y_su_aviso(dashboard, en
     assert "{plataforma}" in datos["textos"]["vista.zona_texto"] and "{zona}" in datos["textos"]["vista.zona_texto"]
     assert "{texto}" in datos["textos"]["vista.fuera_texto"] and "{n}" in datos["textos"]["vista.y_mas"]
     js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
-    assert 'from "./zonas.js";' in js and "montarZonas();" in js
+    assert 'from "./zonas.js";' in js and "controlZonas.montar();" in js

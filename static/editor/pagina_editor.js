@@ -102,14 +102,13 @@ import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
 import { respuestaProducir } from "./producir.js";
 import { Propiedades } from "./propiedades.js";
-import { porcentaje } from "./seleccion.js";
 import { PalabrasPendientes } from "./subtitulos_modelo.js";
 import { SubtitulosPanel } from "./subtitulos_panel.js";
 import { listaY, ponerTextos, t } from "./textos.js";
 import { infoDe, VistaPrevia } from "./vista.js";
 import * as vinculos from "./vinculos.js";
 import { VozPanel } from "./voz_panel.js";
-import { eleccionValida, guardarZonas, leerZonas, medidasDeTextos, revisar, textoAviso, tieneZonas, zonasEnPx } from "./zonas.js";
+import { ControlZonas, medidasDeTextos, revisar, textoAviso } from "./zonas.js";
 
 // Los textos en el idioma de quien mira (ruta editor.ver), antes de construir
 // nada: ningún módulo llama a t() al cargarse. Se ponen al leer `datos`, dentro
@@ -138,8 +137,13 @@ let seleccion = null;
 // «Vincular» (D10.9): lo que eligió quien mira; sin nada guardado (o si el
 // navegador no deja leerlo), prendido.
 let vincular = vinculos.leerVincular(almacenSeguro());
-// Las zonas seguras que eligió quien mira: "no" o una plataforma (zonas.js).
-let zonasElegidas = leerZonas(almacenSeguro());
+// Las zonas seguras (zonas.js): el selector #zonas, las guías de #ed-zonas y lo que
+// eligió quien mira ("no" o una plataforma, recordado). Al elegir otra, repinta
+// el aviso. Se monta abajo, con lo demás.
+const controlZonas = new ControlZonas({
+  selector: $("zonas"), capa: $("ed-zonas"), almacen: almacenSeguro(), formato: () => historial.actual.formato,
+  crear: () => document.createElement("div"), alCambiar: pintarAvisoZonas,
+});
 // El gesto con clave en curso (vinculos.operarGesto): su base y la cadena
 // sin seguir. Se olvida al deshacer/rehacer, al guardar, en conflicto (y al
 // recargar, claro); cambiar de clave empieza otro.
@@ -277,8 +281,8 @@ function avisoZonas() {
   if (!doc) return null;
   try {
     const medidasTexto = medidasDeTextos(doc, (ms) => vista.medidasTexto(ms));
-    const lista = revisar(doc, { plataforma: zonasElegidas, medidasTexto, materiales: vista.materiales, cfg: datos.config });
-    return textoAviso(lista, zonasElegidas);
+    const lista = revisar(doc, { plataforma: controlZonas.eleccion, medidasTexto, materiales: vista.materiales, cfg: datos.config });
+    return textoAviso(lista, controlZonas.eleccion);
   } catch (error) {
     console.error(error);
     return null;
@@ -287,39 +291,6 @@ function avisoZonas() {
 
 function pintarAvisoZonas() {
   pintarAvisoCarga("aviso-zonas", avisoZonas());
-}
-
-// Las franjas, en % del lienzo (como la caja de selección: siguen al lienzo en
-// cualquier tamaño); ninguna con «No» ni fuera del 9:16 — y entonces el
-// selector lo explica. Lo elegido se respeta para cuando el formato sí sea 9:16.
-function pintarZonas() {
-  const capa = $("ed-zonas");
-  const selector = $("zonas");
-  if (!capa || !selector) return;
-  const formato = historial.actual.formato;
-  capa.replaceChildren(...zonasEnPx(formato, zonasElegidas).map((z) => {
-    const franja = document.createElement("div");
-    franja.className = "ed-zona";
-    franja.dataset.zona = z.zona;
-    const p = porcentaje(z, formato);
-    Object.assign(franja.style, { left: `${p.left}%`, top: `${p.top}%`, width: `${p.width}%`, height: `${p.height}%` });
-    return franja;
-  }));
-  selector.value = zonasElegidas;
-  if (tieneZonas(formato)) selector.removeAttribute("title");
-  else selector.title = t("vista.zonas_solo_vertical");
-}
-
-function montarZonas() {
-  const selector = $("zonas");
-  if (!selector) return;
-  selector.addEventListener("change", () => {
-    zonasElegidas = eleccionValida(selector.value);
-    guardarZonas(almacenSeguro(), zonasElegidas);
-    pintarZonas();
-    pintarAvisoZonas();
-  });
-  pintarZonas();
 }
 
 function buscarClip(id) {
@@ -768,7 +739,7 @@ function montarPaneles() {
 montarHerramientas();
 montarProducir();
 montarDisposicion();
-montarZonas();
+controlZonas.montar();
 montarPaneles();
 refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
 // lo arreglado al abrir también se guarda (ya con todo declarado y montado:

@@ -119,10 +119,12 @@
   .ed-vincular[aria-pressed="false"] .ed-icono { opacity: .5; }
   .ed-zoom { display: inline-flex; flex-direction: row; align-items: center; gap: .35rem; font-size: .82rem; color: var(--muted); }
   .ed-zoom { margin-left: auto; }
-  /* «Zonas» (capa 5c, D10): etiqueta y selector en una fila; en el celular la barra baja de línea,
-     así que la etiqueta con su selector se envuelve y se puede achicar en vez de empujar la página */
-  .ed-zonas-elegir { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .25rem .35rem; min-width: 0; max-width: 100%;
-    font-size: .82rem; color: var(--muted); }
+  /* «Zonas» (capa 5c, D10): etiqueta y selector en una fila (style.css pone en columna toda
+     <label> que envuelve un <select>: aquí se pide la fila a propósito); en el celular la barra
+     baja de línea, así que la etiqueta con su selector se envuelve y se puede achicar en vez de
+     empujar la página */
+  .ed-zonas-elegir { display: inline-flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: .25rem .35rem; min-width: 0;
+    max-width: 100%; font-size: .82rem; color: var(--muted); }
   .ed-zonas-elegir select { width: auto; min-width: 0; max-width: 100%; padding: .3rem .45rem; }
   .ed-zoom input[type="range"] { width: 9rem; max-width: 36vw; min-width: 0; }
 

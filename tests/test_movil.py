@@ -152,6 +152,9 @@ def test_editor_la_barra_de_herramientas_con_zonas_cabe_a_375():
     assert "flex-wrap: wrap" in herramientas                      # la barra entera envuelve
     elegir = re.search(r"\.ed-zonas-elegir \{([^}]*)\}", css).group(1)
     assert "flex-wrap: wrap" in elegir                            # etiqueta y selector bajan de línea si no caben
+    # en una fila: style.css pone en columna toda <label> que envuelve un <select> (con :where, especificidad 0)
+    # y sin pedir la fila la etiqueta quedaría ENCIMA de su selector
+    assert "flex-direction: row" in elegir
     assert "min-width: 0" in elegir and "max-width: 100%" in elegir
     selector = re.search(r"\.ed-zonas-elegir select \{([^}]*)\}", css).group(1)
     assert "max-width: 100%" in selector and "min-width: 0" in selector
