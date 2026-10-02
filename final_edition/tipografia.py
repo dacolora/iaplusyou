@@ -405,12 +405,19 @@ def maquetar(texto, estilo, formato, tabla, factor=1):
 
 def escala_max(clip):
     """La mayor escala que toma el clip: la de `transform.escala` (1.0 si no la trae) y la de
-    cada `keyframes[k].transform.escala` que la trae (los demás keyframes heredan la base)."""
+    cada `keyframes[k].transform.escala` que la trae (los demás keyframes heredan la base). Un
+    valor que no es un número finito (nan, infinito) cuenta como «no la trae»."""
     clip = clip or {}
 
     def _escala(transform):
         v = (transform or {}).get("escala")
-        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+        if not isinstance(v, (int, float)) or isinstance(v, bool):
+            return None
+        try:
+            v = float(v)
+        except OverflowError:              # un entero de cientos de dígitos: JS lo lee como infinito
+            return None
+        return v if math.isfinite(v) else None    # nan e infinito no son una escala (JS los descarta igual)
 
     mayor = _escala(clip.get("transform"))
     if mayor is None:

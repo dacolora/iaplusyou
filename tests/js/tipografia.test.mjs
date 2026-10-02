@@ -61,6 +61,11 @@ test("el espacio duro usa el avance del espacio si la fuente no trae el suyo", (
 
 test("una fuente que no está en la tabla falla con su nombre", () => {
   assert.throws(() => ancho("Hola", "Inexistente", 100, T0), /Inexistente/);
+  // los nombres de los métodos de un objeto tampoco son una ficha (sin `hasOwn` daban un TypeError)
+  for (const nombre of ["constructor", "__proto__", "toString", "hasOwnProperty", undefined, null]) {
+    assert.throws(() => ancho("Hola", nombre, 100, T0), { message: /no está en la tabla tipográfica/ }, String(nombre));
+    assert.throws(() => limpiar("Hola", nombre, T0), { message: /no está en la tabla tipográfica/ }, String(nombre));
+  }
 });
 
 test("ajustar parte donde la tabla dice", () => {
@@ -103,6 +108,8 @@ test("simplificar: los casos del contrato", () => {
     ["a\u{E0067}\u{E007F}b", ["ab", true]],
     ["👩🏿‍🦰 y 👩🏻", ["👩 y 👩", true]],
     ["❤️‍🔥", ["❤", true]],
+    ["a\u200d\u3000b", ["a\u3000b", false]],        // tras la unión, un espacio (U+3000 pasa de U+2190) no es un pictograma
+    ["a\u200d\u3000", ["a\u3000", false]],
   ];
   for (const [texto, esperado] of casos) assert.deepEqual(simplificar(texto), esperado, JSON.stringify(texto));
 });
@@ -164,6 +171,12 @@ test("sinGlifosV1 deja lo que dejaba rasterizar.sin_glifos_faltantes (Python lo 
   assert.equal(sinGlifosV1("a 🔥  b", "Inter-Bold", T0), "a b");
 });
 
+test("sinGlifosV1 recorta con la lista de espacios de Python, no con trim()", () => {
+  // \x1c y \x85 son espacio para str.strip() y no para el trim() de JS
+  assert.equal(sinGlifosV1("\x1c🔥 a\x85", "Inter-Bold", T0), "a");
+  assert.equal(sinGlifosV1("\u3000🔥\u2003 a \u00a0", "Inter-Bold", T0), "a");
+});
+
 test("sinGlifosV1 quita la unión junto con el carácter quitado aunque la fuente la traiga", () => {
   const tabla = { fuentes: { X: { upem: 1000, asc: 800, desc: 200,
     avances: [[0x20, [300]], [0x61, [600]], [0x62, [600]], [0x200D, [0]], [0xFE0F, [0]], [0x20E3, [0]]] } }, emoji: null };
@@ -187,6 +200,18 @@ test("medidasTexto y cajaTexto con las claves de Python", () => {
   assert.deepEqual(cajaTexto(m, 500, 80), { caja_w: 864, caja_h: 208, margen: 4, radio: 48, ancho: 872, alto: 216 });
   const h = cajaTexto(medidasTexto(HOOK, "9:16"), 700, 100);
   assert.deepEqual([h.margen, h.ancho, h.alto], [10, 720, 120]);
+});
+
+test("las medidas redondean al par como round() de Python", () => {
+  assert.equal(medidasTexto({ tamano: 0.0375 }, "16:9").tam, 40);                 // 0.0375 × 1080 = 40.5 → 40
+  assert.equal(maquetar("Hola", { ...V2, tamano: 0.0375 }, "16:9", T0).tam, 40);
+  const m = medidasTexto({ tamano: 0.0172, interlineado: 1.5 }, "9:16");          // tam 33 (impar): 16.5 → 16
+  assert.deepEqual([m.tam, m.espaciado], [33, 16]);
+  const n = medidasTexto({ tamano: 35 / 1920, interlineado: 1.5 }, "9:16");        // 17.5 → 18
+  assert.deepEqual([n.tam, n.espaciado], [35, 18]);
+  const mq = maquetar("Envío gratis a todo el país en 24 horas", { ...V2, tamano: 0.0172, interlineado: 1.5, ancho_max: 0.3 }, "9:16", T0);
+  assert.ok(mq.lineas.length >= 2);
+  assert.equal(mq.lineas[1].base - mq.lineas[0].base, 33 + 16);
 });
 
 test("cajaTexto acota el radio a la mitad de la caja", () => {
@@ -215,6 +240,14 @@ test("maquetar: alineaciones y el factor, que solo se anota", () => {
   assert.equal(maquetar("Hola", { ...V2, alineacion: "izquierda" }, "9:16", T0).lineas[0].x, 4);
   assert.equal(maquetar("Hola", { ...V2, alineacion: "derecha" }, "9:16", T0).lineas[0].x, 4.65625);
   assert.equal(maquetar("Hola", { ...V2, alineacion: "centro" }, "9:16", T0).lineas[0].x, 4.328125);
+  // con contorno (grosor = round(0.002 × 1920) = 4) la caja crece 8 px y el texto se corre grosor
+  const contorno = { color: "#000000", grosor: 0.002 };
+  for (const [alineacion, x] of [["izquierda", 8], ["centro", 8.328125], ["derecha", 8.65625]]) {
+    const m = maquetar("Hola", { ...V2, alineacion, contorno }, "9:16", T0);
+    assert.equal(m.lineas[0].x, x, alineacion);
+    assert.equal(m.lineas[0].base, 101);
+    assert.deepEqual([m.caja_w, m.caja_h, m.ancho_px], [221, 125, 229]);
+  }
   const uno = maquetar("Hola", V2, "9:16", T0);
   const dos = maquetar("Hola", V2, "9:16", T0, 2);
   assert.equal(dos.factor, 2);
@@ -256,6 +289,12 @@ test("escalaMax y factorNitidez", () => {
   assert.equal(escalaMax({ transform: { x: 0.5 } }), 1);
   assert.equal(escalaMax({ transform: { escala: 0.5 }, keyframes: [{ t_ms: 0, transform: { x: 0.1 } }] }), 0.5);
   assert.equal(escalaMax({ transform: { escala: 3 }, keyframes: [{ t_ms: 0, transform: { escala: 0.5 } }] }), 3);
+  // lo que no es un número finito no es una escala (Python lo descarta igual)
+  assert.equal(escalaMax({ transform: { escala: NaN }, keyframes: [{ t_ms: 0, transform: { escala: 2.5 } }] }), 2.5);
+  assert.equal(escalaMax({ transform: { escala: 1.5 }, keyframes: [{ t_ms: 0, transform: { escala: Infinity } }] }), 1.5);
+  assert.equal(escalaMax({ transform: { escala: -Infinity }, keyframes: [{ t_ms: 0, transform: { escala: NaN } }] }), 1);
+  assert.equal(escalaMax({ transform: { escala: Infinity } }), 1);
+  assert.equal(escalaMax({ transform: { escala: true } }), 1);
   assert.equal(factorNitidez(1.0, 221, 125), 1);
   assert.equal(factorNitidez(1.2, 221, 125), 2);
   assert.equal(factorNitidez(2.0, 221, 125), 2);

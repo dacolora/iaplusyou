@@ -109,6 +109,10 @@ def test_el_espacio_duro_usa_el_avance_del_espacio_si_la_fuente_no_lo_trae():
 def test_una_fuente_que_no_esta_en_la_tabla_falla_con_su_nombre():
     with pytest.raises(ValueError, match="Inexistente"):
         ancho("Hola", "Inexistente", 100, T0)
+    # los nombres de los métodos de un objeto tampoco son una ficha (en JS lo eran antes de `hasOwn`)
+    for nombre in ("constructor", "__proto__", "toString", "hasOwnProperty", None):
+        with pytest.raises(ValueError, match="no está en la tabla tipográfica"):
+            ancho("Hola", nombre, 100, T0)
 
 
 # --- ajustar --------------------------------------------------------------------
@@ -160,6 +164,8 @@ def test_ajustar_solo_separa_por_el_espacio_normal():
     ("a\U000E0067\U000E007Fb", ("ab", True)),    # etiquetas (las banderas de Inglaterra o Escocia)
     ("👩🏿‍🦰 y 👩🏻", ("👩 y 👩", True)),
     ("❤️‍🔥", ("❤", True)),
+    ("a\u200d\u3000b", ("a\u3000b", False)),        # tras la unión, un espacio (U+3000 pasa de U+2190) no es un pictograma
+    ("a\u200d\u3000", ("a\u3000", False)),
 ])
 def test_simplificar(texto, esperado):
     assert simplificar(texto) == esperado
@@ -229,13 +235,19 @@ def test_limpiar_marca_lo_simplificado_y_deja_el_emoji_base():
     assert r["texto"] == "Envíos" and r["simplificado"] is True
 
 
-@pytest.mark.parametrize("fuente", ["Inter-Bold", "SpaceGrotesk-Bold"])
+@pytest.mark.parametrize("fuente", ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold", "Poppins-ExtraBold"])
 @pytest.mark.parametrize("texto", ["Hola 🔥 mundo", "👨‍👩‍👧 Familia", "✓ listo", "❤️ Amor", "sin nada", "1️⃣ paso  doble",
-                                   "a  b", "🔥🔥 dos\n🚀 tres", "  🔥  "])
+                                   "a  b", "🔥🔥 dos\n🚀 tres", "  🔥  ", "a🔥\u200d b", "\x1c🔥 a\x85"])
 def test_sin_glifos_v1_es_lo_mismo_que_el_rasterizador_de_hoy(texto, fuente):
     assert sin_glifos_v1(texto, fuente, T_E) == rasterizar.sin_glifos_faltantes(texto, fuente)
     # v1 no conoce la fuente de emojis: con o sin ella da lo mismo
     assert sin_glifos_v1(texto, fuente, T0) == sin_glifos_v1(texto, fuente, T_E)
+
+
+def test_sin_glifos_v1_recorta_con_la_lista_de_espacios_de_python():
+    # \x1c y \x85 son espacio para `str.strip()` y no para el `trim()` de JS: el recorte es el de `ESPACIOS` en los dos
+    assert sin_glifos_v1("\x1c🔥 a\x85", "Inter-Bold", T0) == "a"
+    assert sin_glifos_v1("\u3000🔥\u2003 a \u00a0", "Inter-Bold", T0) == "a"
 
 
 def test_sin_glifos_v1_sin_nada_que_quitar_deja_el_texto_tal_cual():
@@ -280,6 +292,22 @@ def test_caja_texto_del_hook_y_del_cta():
     assert (h["margen"], h["ancho"], h["alto"]) == (10, 720, 120)
 
 
+def test_las_medidas_redondean_al_par_como_round_de_python():
+    # 0.0375 × 1080 = 40.5 → 40 (al par; «medio hacia arriba» daría 41)
+    assert medidas_texto({"tamano": 0.0375}, "16:9")["tam"] == 40
+    assert maquetar("Hola", {**V2, "tamano": 0.0375}, "16:9", T0)["tam"] == 40
+    # con un `tam` impar (0.0172 × 1920 = 33.02 → 33), interlineado 1.5: 0.5 × 33 = 16.5 → 16 (no 17)
+    m = medidas_texto({"tamano": 0.0172, "interlineado": 1.5}, "9:16")
+    assert (m["tam"], m["espaciado"]) == (33, 16)
+    # y 17.5 → 18 (al par de arriba): 0.5 × 35
+    m = medidas_texto({"tamano": 35 / 1920, "interlineado": 1.5}, "9:16")
+    assert (m["tam"], m["espaciado"]) == (35, 18)
+    # el paso entre líneas de la maqueta es tam + espaciado
+    mq = maquetar("Envío gratis a todo el país en 24 horas", {**V2, "tamano": 0.0172, "interlineado": 1.5, "ancho_max": 0.3},
+                  "9:16", T0)
+    assert len(mq["lineas"]) >= 2 and mq["lineas"][1]["base"] - mq["lineas"][0]["base"] == 33 + 16
+
+
 def test_caja_texto_acota_el_radio_a_la_mitad_de_la_caja():
     m = {"tam": 50, "espaciado": 5, "grosor": 0, "sdx": 0, "sdy": 0, "pad_x": 10, "pad_y": 10, "ancho_max_px": None,
          "fondo_ancho_px": 0, "radio": 500}
@@ -313,6 +341,16 @@ def test_maquetar_alineaciones():
     assert der["lineas"][0]["x"] == 4.65625
     cen = maquetar("Hola", {**V2, "alineacion": "centro"}, "9:16", T0)
     assert cen["lineas"][0]["x"] == 4.328125
+
+
+def test_maquetar_alineaciones_con_contorno():
+    # grosor = round(0.002 × 1920) = 4: la caja crece 8 px y el texto se corre grosor
+    contorno = {"color": "#000000", "grosor": 0.002}
+    for alineacion, x in (("izquierda", 8), ("centro", 8.328125), ("derecha", 8.65625)):
+        m = maquetar("Hola", {**V2, "alineacion": alineacion, "contorno": contorno}, "9:16", T0)
+        assert m["lineas"][0]["x"] == x, alineacion
+        assert m["lineas"][0]["base"] == 101.0           # margen 4 + grosor 4 + asc 93
+        assert (m["caja_w"], m["caja_h"], m["ancho_px"]) == (221, 125, 229)
 
 
 def test_maquetar_el_factor_no_cambia_la_maqueta():
@@ -387,6 +425,16 @@ def test_escala_max():
     assert escala_max({"transform": {"escala": 0.5}, "keyframes": [{"t_ms": 0, "transform": {"x": 0.1}}]}) == 0.5
     assert escala_max({"transform": {"escala": 3}, "keyframes": [{"t_ms": 0, "transform": {"escala": 0.5}}]}) == 3.0
     assert isinstance(escala_max({"transform": {"escala": 2}}), float)
+
+
+def test_escala_max_ignora_lo_que_no_es_un_numero_finito():
+    nan, inf = float("nan"), float("inf")
+    assert escala_max({"transform": {"escala": nan}, "keyframes": [{"t_ms": 0, "transform": {"escala": 2.5}}]}) == 2.5
+    assert escala_max({"transform": {"escala": 1.5}, "keyframes": [{"t_ms": 0, "transform": {"escala": inf}}]}) == 1.5
+    assert escala_max({"transform": {"escala": -inf}, "keyframes": [{"t_ms": 0, "transform": {"escala": nan}}]}) == 1.0
+    assert escala_max({"transform": {"escala": inf}}) == 1.0
+    assert escala_max({"transform": {"escala": 10 ** 400}}) == 1.0          # un entero que no cabe en un float
+    assert escala_max({"transform": {"escala": True}}) == 1.0
 
 
 def test_factor_nitidez():

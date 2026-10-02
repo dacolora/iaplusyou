@@ -386,6 +386,7 @@ def casos_encuadre():
 TIPOGRAFIA_SIMPLIFICAR = (
     "👍🏽 Listo", "🇨🇴 Envíos", "❤️ Amor", "👨‍👩‍👧 Familia", "1️⃣ Paso", "Hola",
     "", "🔥🔥 doble", "a\u200db", "🔥\u200d", "👩🏿‍🦰 y 👩🏻", "❤️\u200d🔥 fuego", "x🇨", "\U000E0067\U000E007Fb", "\u3000👍",
+    "a\u200d\u3000b",                      # tras una unión, un espacio (U+3000) no es un pictograma: se queda
 )
 TIPOGRAFIA_LIMPIAR = (
     "✓ Envío", "🔥 50% OFF", "❤️ Amor ❤️", "a\tb\r\nc", "a\rb", "  a   b  \n  c ", "a\u00a0\u00a0b \u00a0",
@@ -394,7 +395,8 @@ TIPOGRAFIA_LIMPIAR = (
 )
 TIPOGRAFIA_FUENTES = ("Inter-Bold", "SpaceGrotesk-Bold", "Anton-Regular")
 TIPOGRAFIA_FUENTES_V1 = ("Inter-Bold", "SpaceGrotesk-Bold", "Poppins-ExtraBold")
-TIPOGRAFIA_V1 = TIPOGRAFIA_LIMPIAR + ("👨‍👩‍👧 Familia", "a🔥\u200d b", "1️⃣ paso  doble", "Hola 🔥 mundo", "🔥🔥 dos\n🚀 tres")
+TIPOGRAFIA_V1 = TIPOGRAFIA_LIMPIAR + ("👨‍👩‍👧 Familia", "a🔥\u200d b", "1️⃣ paso  doble", "Hola 🔥 mundo", "🔥🔥 dos\n🚀 tres", "\x1c🔥 a\x85")
+# el último: el recorte de los bordes es el de `ESPACIOS` (\x1c y \x85 son espacio para Python y no para `trim()` de JS)
 TIPOGRAFIA_FRASES = ("Envío gratis a todo el país en 24 horas", "Precio\u00a0$\u00a089.900 hoy en toda la tienda con descuento")
 TIPOGRAFIA_ANCHOS = (None, 540, 929)
 
@@ -420,6 +422,10 @@ TIPOGRAFIA_MAQUETAS = (
     ("Envío gratis a todo el país", {**_V2, "fuente": "DMSerifDisplay-Regular", "tamano": 0.08, "ancho_max": 0.5}, "16:9", 1),
     ("OFERTA\nSOLO HOY", {**_V2, "fuente": "BebasNeue-Regular", "tamano": 0.09, "interlineado": 1.0}, "16:9", 2),
     # un radio mayor que la mitad de la caja se acota a ella; un fondo con ancho mínimo y relleno pequeño
+    # el redondeo es al PAR como `round()` de Python (y no «medio hacia arriba»): 0.0375 × 1080 = 40.5 → 40, y con un
+    # `tam` impar (0.0172 × 1920 = 33.02 → 33) el interlineado 1.5 da 0.5 × 33 = 16.5 → 16 entre líneas
+    ("Hola", {**_V2, "tamano": 0.0375}, "16:9", 1),
+    ("Envío gratis a todo el país en 24 horas", {**_V2, "tamano": 0.0172, "interlineado": 1.5, "ancho_max": 0.3}, "9:16", 1),
     ("Sí", {**_V2, "tamano": 0.03, "fondo": {"color": "#FF0000", "opacidad": 1, "radio": 0.5, "relleno_x": 0.01, "relleno_y": 0.005,
                                               "ancho": 0.3}}, "1:1", 1),
 )

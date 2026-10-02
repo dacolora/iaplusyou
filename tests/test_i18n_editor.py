@@ -31,6 +31,7 @@ CLAVE = re.compile(
 INTERNOS = {
     "audio.js": ("Preset de mezcla desconocido",),
     "subtitulos.js": ("color ASS inválido",),
+    "tipografia.js": ("no está en la tabla tipográfica",),     # capa 5c: una fuente que la tabla no trae (un bug de quien llama)
     "avisos_editor.js": ("Un módulo del editor vuelve a cambiar la edición",),       # solo a la consola
     "propiedades_modelo.js": ("Forma de fondo desconocida",),
     "operaciones.js": (

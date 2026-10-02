@@ -66,9 +66,10 @@ function avances(tabla, clave, ficha) {
 
 // Lo que hace falta para medir con una fuente de texto y, si la hay, la de emojis.
 function contexto(tabla, fuente) {
-  const ficha = (tabla.fuentes || {})[fuente];
-  // mensaje para quien programa (nadie lo lee en la página): en inglés, así no entra al catálogo
-  if (!ficha) throw new Error(`font ${JSON.stringify(fuente)} is not in the typography table`);
+  const fuentes = tabla.fuentes || {};
+  // `hasOwn`: una fuente llamada «constructor» o «__proto__» no es una ficha
+  if (!Object.hasOwn(fuentes, fuente)) throw new Error(`La fuente ${JSON.stringify(fuente)} no está en la tabla tipográfica.`);
+  const ficha = fuentes[fuente];
   const emoji = tabla.emoji || null;
   const ctx = {
     upem: ficha.upem, asc: ficha.asc, desc: ficha.desc,

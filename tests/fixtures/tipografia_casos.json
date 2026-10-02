@@ -3686,6 +3686,292 @@
   {
    "esperado": {
     "alto_px": 57,
+    "ancho_px": 97,
+    "caja_h": 49,
+    "caja_w": 89,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 42.75,
+      "cp": 72,
+      "fuente": "texto",
+      "x": 4.26171875
+     },
+     {
+      "base": 42.75,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 34.14453125
+     },
+     {
+      "base": 42.75,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 58.67578125
+     },
+     {
+      "base": 42.75,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 69.515625
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 88.4765625,
+      "base": 42.75,
+      "texto": "Hola",
+      "x": 4.26171875
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 40,
+    "texto": "Hola"
+   },
+   "estilo": {
+    "color": "#FFFFFF",
+    "fuente": "Inter-Bold",
+    "tamano": 0.0375,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "16:9",
+   "texto": "Hola"
+  },
+  {
+   "esperado": {
+    "alto_px": 97,
+    "ancho_px": 311,
+    "caja_h": 89,
+    "caja_w": 303,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 35.96875,
+      "cp": 69,
+      "fuente": "texto",
+      "x": 6.2587890625
+     },
+     {
+      "base": 35.96875,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 26.3037109375
+     },
+     {
+      "base": 35.96875,
+      "cp": 118,
+      "fuente": "texto",
+      "x": 46.84814453125
+     },
+     {
+      "base": 35.96875,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 66.63525390625
+     },
+     {
+      "base": 35.96875,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 75.578125
+     },
+     {
+      "base": 35.96875,
+      "cp": 103,
+      "fuente": "texto",
+      "x": 103.63134765625
+     },
+     {
+      "base": 35.96875,
+      "cp": 114,
+      "fuente": "texto",
+      "x": 124.48193359375
+     },
+     {
+      "base": 35.96875,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 137.92041015625
+     },
+     {
+      "base": 35.96875,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 157.0791015625
+     },
+     {
+      "base": 35.96875,
+      "cp": 105,
+      "fuente": "texto",
+      "x": 169.1640625
+     },
+     {
+      "base": 35.96875,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 178.10693359375
+     },
+     {
+      "base": 35.96875,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 204.40380859375
+     },
+     {
+      "base": 35.96875,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 231.37744140625
+     },
+     {
+      "base": 35.96875,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 243.46240234375
+     },
+     {
+      "base": 35.96875,
+      "cp": 100,
+      "fuente": "texto",
+      "x": 263.70068359375
+     },
+     {
+      "base": 35.96875,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 284.5029296875
+     },
+     {
+      "base": 84.96875,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 4.29296875
+     },
+     {
+      "base": 84.96875,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 23.951171875
+     },
+     {
+      "base": 84.96875,
+      "cp": 112,
+      "fuente": "texto",
+      "x": 40.708984375
+     },
+     {
+      "base": 84.96875,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 61.51123046875
+     },
+     {
+      "base": 84.96875,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 80.669921875
+     },
+     {
+      "base": 84.96875,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 89.61279296875
+     },
+     {
+      "base": 84.96875,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 115.90966796875
+     },
+     {
+      "base": 84.96875,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 135.56787109375
+     },
+     {
+      "base": 84.96875,
+      "cp": 50,
+      "fuente": "texto",
+      "x": 163.92724609375
+     },
+     {
+      "base": 84.96875,
+      "cp": 52,
+      "fuente": "texto",
+      "x": 184.71337890625
+     },
+     {
+      "base": 84.96875,
+      "cp": 104,
+      "fuente": "texto",
+      "x": 214.84521484375
+     },
+     {
+      "base": 84.96875,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 235.3896484375
+     },
+     {
+      "base": 84.96875,
+      "cp": 114,
+      "fuente": "texto",
+      "x": 255.6279296875
+     },
+     {
+      "base": 84.96875,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 269.06640625
+     },
+     {
+      "base": 84.96875,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 288.22509765625
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 298.482421875,
+      "base": 35.96875,
+      "texto": "Envío gratis a todo",
+      "x": 6.2587890625
+     },
+     {
+      "ancho": 302.4140625,
+      "base": 84.96875,
+      "texto": "el país en 24 horas",
+      "x": 4.29296875
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 33,
+    "texto": "Envío gratis a todo el país en 24 horas"
+   },
+   "estilo": {
+    "ancho_max": 0.3,
+    "color": "#FFFFFF",
+    "fuente": "Inter-Bold",
+    "interlineado": 1.5,
+    "tamano": 0.0172,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "9:16",
+   "texto": "Envío gratis a todo el país en 24 horas"
+  },
+  {
+   "esperado": {
+    "alto_px": 57,
     "ancho_px": 332,
     "caja_h": 49,
     "caja_w": 324,
@@ -3843,6 +4129,13 @@
     false
    ],
    "texto": "　👍"
+  },
+  {
+   "esperado": [
+    "a　b",
+    false
+   ],
+   "texto": "a‍　b"
   }
  ],
  "sin_glifos_v1": [
@@ -3947,6 +4240,11 @@
    "texto": "🔥🔥 dos\n🚀 tres"
   },
   {
+   "esperado": "a",
+   "fuente": "Inter-Bold",
+   "texto": "\u001c🔥 a"
+  },
+  {
    "esperado": "Envío",
    "fuente": "SpaceGrotesk-Bold",
    "texto": "✓ Envío"
@@ -4047,6 +4345,11 @@
    "texto": "🔥🔥 dos\n🚀 tres"
   },
   {
+   "esperado": "a",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "\u001c🔥 a"
+  },
+  {
    "esperado": "Envío",
    "fuente": "Poppins-ExtraBold",
    "texto": "✓ Envío"
@@ -4145,6 +4448,11 @@
    "esperado": "dos\ntres",
    "fuente": "Poppins-ExtraBold",
    "texto": "🔥🔥 dos\n🚀 tres"
+  },
+  {
+   "esperado": "a",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "\u001c🔥 a"
   }
  ]
 }
