@@ -174,3 +174,18 @@ def test_encuadre_js_constantes_iguales_a_python():
     assert _constante_js("encuadre.js", "DEFECTO") == encuadre.DEFECTO
     assert _constante_js("encuadre.js", "FONDO_DIVISOR") == encuadre.FONDO_DIVISOR
     assert _constante_js("encuadre.js", "UMBRAL_AJUSTE") == list(encuadre.UMBRAL_AJUSTE)
+
+
+def test_tipografia_js_constantes_iguales_a_python():
+    # capa 5c (D5): la maqueta del texto comparte constantes con final_edition/tipografia.py
+    from final_edition import tipografia
+    assert _constante_js("tipografia.js", "SEPARADOR") == tipografia.SEPARADOR
+    assert _constante_js("tipografia.js", "FACTOR_MAX") == tipografia.FACTOR_MAX
+    assert _constante_js("tipografia.js", "LADO_MAX_PNG") == tipografia.LADO_MAX_PNG
+    assert _constante_js("tipografia.js", "SELECTORES") == list(tipografia.SELECTORES)
+    assert _constante_js("tipografia.js", "TONOS") == list(tipografia.TONOS)
+    assert _constante_js("tipografia.js", "KEYCAP") == tipografia.KEYCAP
+    assert _constante_js("tipografia.js", "ZWJ") == tipografia.ZWJ
+    assert _constante_js("tipografia.js", "ETIQUETAS") == list(tipografia.ETIQUETAS)
+    assert _constante_js("tipografia.js", "REGIONALES") == list(tipografia.REGIONALES)
+    assert _constante_js("tipografia.js", "ESPACIOS") == list(tipografia.ESPACIOS)

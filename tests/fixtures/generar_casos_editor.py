@@ -383,6 +383,91 @@ def casos_encuadre():
     return {"cajas": cajas, "fondos": fondos, "automaticos": automaticos}
 
 
+TIPOGRAFIA_SIMPLIFICAR = (
+    "👍🏽 Listo", "🇨🇴 Envíos", "❤️ Amor", "👨‍👩‍👧 Familia", "1️⃣ Paso", "Hola",
+    "", "🔥🔥 doble", "a\u200db", "🔥\u200d", "👩🏿‍🦰 y 👩🏻", "❤️\u200d🔥 fuego", "x🇨", "\U000E0067\U000E007Fb", "\u3000👍",
+)
+TIPOGRAFIA_LIMPIAR = (
+    "✓ Envío", "🔥 50% OFF", "❤️ Amor ❤️", "a\tb\r\nc", "a\rb", "  a   b  \n  c ", "a\u00a0\u00a0b \u00a0",
+    "👍🏽 Listo 🇨🇴", "Precio\u00a0$\u00a089.900", "→ ★ ✓ ✗ ♥ ⚡", "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥", "日本語 и кириллица", "🔥✓🔥 a ✓ 🚀",
+    "", "\x00\x07 raro",
+)
+TIPOGRAFIA_FUENTES = ("Inter-Bold", "SpaceGrotesk-Bold", "Anton-Regular")
+TIPOGRAFIA_FUENTES_V1 = ("Inter-Bold", "SpaceGrotesk-Bold", "Poppins-ExtraBold")
+TIPOGRAFIA_V1 = TIPOGRAFIA_LIMPIAR + ("👨‍👩‍👧 Familia", "a🔥\u200d b", "1️⃣ paso  doble", "Hola 🔥 mundo", "🔥🔥 dos\n🚀 tres")
+TIPOGRAFIA_FRASES = ("Envío gratis a todo el país en 24 horas", "Precio\u00a0$\u00a089.900 hoy en toda la tienda con descuento")
+TIPOGRAFIA_ANCHOS = (None, 540, 929)
+
+_V2 = {"fuente": "Inter-Bold", "tamano": 0.05, "color": "#FFFFFF", "version": 2}
+TIPOGRAFIA_MAQUETAS = (
+    ("Hola", _V2, "9:16", 1),
+    ("Hola", {**_V2, "alineacion": "izquierda"}, "9:16", 1),
+    ("Hola", {**_V2, "alineacion": "derecha"}, "9:16", 2),
+    ("Envío gratis a todo el país en 24 horas", {**_V2, "ancho_max": 0.6, "interlineado": 1.2}, "9:16", 1),
+    ("Compra hoy\ny llévate el segundo\n\ncon 50 % menos",
+     {**_V2, "fuente": "SpaceGrotesk-Bold", "alineacion": "izquierda", "ancho_max": 0.8, "interlineado": 1.3}, "4:5", 1),
+    ("Compra ya", {**_V2, "fuente": "Poppins-ExtraBold", "tamano": 0.04, "ancho_max": 0.6815, "interlineado": 1.194,
+                    "fondo": {"color": "#121218", "opacidad": 0.92, "radio": 0.025, "relleno_x": 0.0333, "relleno_y": 0.0333,
+                              "ancho": 0.8}}, "9:16", 1),
+    ("Tu piel, en 7 días", {**_V2, "fuente": "Anton-Regular", "tamano": 0.07,
+                            "contorno": {"color": "#000000", "grosor": 0.004}, "ancho_max": 0.9}, "9:16", 3),
+    ("Última oferta del mes", {**_V2, "fuente": "Pacifico-Regular", "ancho_max": 0.5, "alineacion": "derecha",
+                               "sombra": {"color": "#000000C8", "dx": 0.0031, "dy": 0.0031},
+                               "contorno": {"color": "#000000DC", "grosor": 0.0016}}, "1:1", 1),
+    ("Precio\u00a0$\u00a089.900 hoy", {**_V2, "ancho_max": 0.4}, "9:16", 1),
+    ("🔥 50% OFF ❤️", {**_V2, "fuente": "LilitaOne-Regular", "tamano": 0.06}, "9:16", 1),
+    ("Hola 👍🏽 ✓ → ¡Envío!", {**_V2, "fuente": "SpaceGrotesk-Bold", "alineacion": "izquierda", "ancho_max": 0.7}, "9:16", 3),
+    ("Envío gratis a todo el país", {**_V2, "fuente": "DMSerifDisplay-Regular", "tamano": 0.08, "ancho_max": 0.5}, "16:9", 1),
+    ("OFERTA\nSOLO HOY", {**_V2, "fuente": "BebasNeue-Regular", "tamano": 0.09, "interlineado": 1.0}, "16:9", 2),
+    # un radio mayor que la mitad de la caja se acota a ella; un fondo con ancho mínimo y relleno pequeño
+    ("Sí", {**_V2, "tamano": 0.03, "fondo": {"color": "#FF0000", "opacidad": 1, "radio": 0.5, "relleno_x": 0.01, "relleno_y": 0.005,
+                                              "ancho": 0.3}}, "1:1", 1),
+)
+
+TIPOGRAFIA_CLIPS = (
+    {"transform": {"escala": 1.5}, "keyframes": [{"t_ms": 0, "transform": {"escala": 2.5}}]},
+    {"transform": {"escala": 1.5}},
+    {},
+    {"transform": {"x": 0.5}},
+    {"transform": {"escala": 0.5}, "keyframes": [{"t_ms": 0, "transform": {"x": 0.1}}, {"t_ms": 500, "transform": {"escala": 0.8}}]},
+    {"transform": {"escala": 3.0}, "keyframes": [{"t_ms": 0, "transform": {"escala": 0.5}}]},
+)
+TIPOGRAFIA_FACTORES = ((1.0, 221, 125), (1.2, 221, 125), (2.0, 221, 125), (3.5, 221, 125), (9, 221, 125), (3.5, 1500, 200),
+                       (0.4, 100, 100), (4, 5000, 100), (2, 100, 2048), (2, 100, 2049))
+
+
+def _tabla_real():
+    """La tabla del repo tal como está en disco: sin la válvula `EDITOR_SIN_EMOJI` de `cargar_tabla` (la tabla de paridad no
+    puede cambiar según el entorno de quien la regenera)."""
+    from final_edition import fuentes
+    with open(fuentes.RUTA_TABLA, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def casos_tipografia():
+    from final_edition import tipografia as tp
+    tabla = _tabla_real()
+    fuentes_ = [f for f in TIPOGRAFIA_FUENTES if f in tabla["fuentes"]]
+    cps = sorted({ord(c) for t in TIPOGRAFIA_LIMPIAR + TIPOGRAFIA_SIMPLIFICAR for c in t} | {0x20, 0xA0, 0x0A, 0x2190, 0x2713, 0x2764, 0x1F525})
+    return {
+        "simplificar": [{"texto": t, "esperado": tp.simplificar(t)} for t in TIPOGRAFIA_SIMPLIFICAR],
+        "limpiar": [{"texto": t, "fuente": f, "esperado": tp.limpiar(t, f, tabla)} for f in fuentes_ for t in TIPOGRAFIA_LIMPIAR],
+        "fuente_de": [{"cp": cp, "fuente": f, "esperado": tp.fuente_de(cp, f, tabla)} for f in fuentes_ for cp in cps],
+        # v1 con las dos fuentes de hoy y con Poppins, que SÍ trae la unión ZWJ (U+200D): ahí la regla «la unión se
+        # va con el carácter quitado» no es redundante con la cobertura
+        "sin_glifos_v1": [{"texto": t, "fuente": f, "esperado": tp.sin_glifos_v1(t, f, tabla)}
+                          for f in [x for x in TIPOGRAFIA_FUENTES_V1 if x in tabla["fuentes"]] for t in TIPOGRAFIA_V1],
+        "ajustar": [{"texto": t, "fuente": "Inter-Bold", "tam": 72, "ancho_max_px": a,
+                     "esperado": tp.ajustar(t, "Inter-Bold", 72, a, tabla)}
+                    for t in TIPOGRAFIA_FRASES for a in TIPOGRAFIA_ANCHOS],
+        "maquetar": [{"texto": t, "estilo": e, "formato": fmt, "factor": f, "esperado": tp.maquetar(t, e, fmt, tabla, f)}
+                     for t, e, fmt, f in TIPOGRAFIA_MAQUETAS],
+        "escala_max": [{"clip": c, "esperado": tp.escala_max(c)} for c in TIPOGRAFIA_CLIPS],
+        "factor": [{"escala": e, "ancho_px": w, "alto_px": h, "esperado": tp.factor_nitidez(e, w, h)}
+                   for e, w, h in TIPOGRAFIA_FACTORES],
+    }
+
+
 ARCHIVOS = {
     "precios_casos.json": casos_precios,
     "resolver_casos.json": casos_resolver,
@@ -391,6 +476,7 @@ ARCHIVOS = {
     "subtitulos_fuente_casos.json": casos_subtitulos_fuente,
     "subtitulos_eventos_casos.json": casos_eventos,
     "encuadre_casos.json": casos_encuadre,
+    "tipografia_casos.json": casos_tipografia,
 }
 
 

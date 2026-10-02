@@ -1,0 +1,4150 @@
+{
+ "ajustar": [
+  {
+   "ancho_max_px": null,
+   "esperado": [
+    "Envío gratis a todo el país en 24 horas"
+   ],
+   "fuente": "Inter-Bold",
+   "tam": 72,
+   "texto": "Envío gratis a todo el país en 24 horas"
+  },
+  {
+   "ancho_max_px": 540,
+   "esperado": [
+    "Envío gratis a",
+    "todo el país en",
+    "24 horas"
+   ],
+   "fuente": "Inter-Bold",
+   "tam": 72,
+   "texto": "Envío gratis a todo el país en 24 horas"
+  },
+  {
+   "ancho_max_px": 929,
+   "esperado": [
+    "Envío gratis a todo el país",
+    "en 24 horas"
+   ],
+   "fuente": "Inter-Bold",
+   "tam": 72,
+   "texto": "Envío gratis a todo el país en 24 horas"
+  },
+  {
+   "ancho_max_px": null,
+   "esperado": [
+    "Precio $ 89.900 hoy en toda la tienda con descuento"
+   ],
+   "fuente": "Inter-Bold",
+   "tam": 72,
+   "texto": "Precio $ 89.900 hoy en toda la tienda con descuento"
+  },
+  {
+   "ancho_max_px": 540,
+   "esperado": [
+    "Precio $ 89.900",
+    "hoy en toda la",
+    "tienda con",
+    "descuento"
+   ],
+   "fuente": "Inter-Bold",
+   "tam": 72,
+   "texto": "Precio $ 89.900 hoy en toda la tienda con descuento"
+  },
+  {
+   "ancho_max_px": 929,
+   "esperado": [
+    "Precio $ 89.900 hoy en",
+    "toda la tienda con",
+    "descuento"
+   ],
+   "fuente": "Inter-Bold",
+   "tam": 72,
+   "texto": "Precio $ 89.900 hoy en toda la tienda con descuento"
+  }
+ ],
+ "escala_max": [
+  {
+   "clip": {
+    "keyframes": [
+     {
+      "t_ms": 0,
+      "transform": {
+       "escala": 2.5
+      }
+     }
+    ],
+    "transform": {
+     "escala": 1.5
+    }
+   },
+   "esperado": 2.5
+  },
+  {
+   "clip": {
+    "transform": {
+     "escala": 1.5
+    }
+   },
+   "esperado": 1.5
+  },
+  {
+   "clip": {},
+   "esperado": 1.0
+  },
+  {
+   "clip": {
+    "transform": {
+     "x": 0.5
+    }
+   },
+   "esperado": 1.0
+  },
+  {
+   "clip": {
+    "keyframes": [
+     {
+      "t_ms": 0,
+      "transform": {
+       "x": 0.1
+      }
+     },
+     {
+      "t_ms": 500,
+      "transform": {
+       "escala": 0.8
+      }
+     }
+    ],
+    "transform": {
+     "escala": 0.5
+    }
+   },
+   "esperado": 0.8
+  },
+  {
+   "clip": {
+    "keyframes": [
+     {
+      "t_ms": 0,
+      "transform": {
+       "escala": 0.5
+      }
+     }
+    ],
+    "transform": {
+     "escala": 3.0
+    }
+   },
+   "esperado": 3.0
+  }
+ ],
+ "factor": [
+  {
+   "alto_px": 125,
+   "ancho_px": 221,
+   "escala": 1.0,
+   "esperado": 1
+  },
+  {
+   "alto_px": 125,
+   "ancho_px": 221,
+   "escala": 1.2,
+   "esperado": 2
+  },
+  {
+   "alto_px": 125,
+   "ancho_px": 221,
+   "escala": 2.0,
+   "esperado": 2
+  },
+  {
+   "alto_px": 125,
+   "ancho_px": 221,
+   "escala": 3.5,
+   "esperado": 4
+  },
+  {
+   "alto_px": 125,
+   "ancho_px": 221,
+   "escala": 9,
+   "esperado": 4
+  },
+  {
+   "alto_px": 200,
+   "ancho_px": 1500,
+   "escala": 3.5,
+   "esperado": 2
+  },
+  {
+   "alto_px": 100,
+   "ancho_px": 100,
+   "escala": 0.4,
+   "esperado": 1
+  },
+  {
+   "alto_px": 100,
+   "ancho_px": 5000,
+   "escala": 4,
+   "esperado": 1
+  },
+  {
+   "alto_px": 2048,
+   "ancho_px": 100,
+   "escala": 2,
+   "esperado": 2
+  },
+  {
+   "alto_px": 2049,
+   "ancho_px": 100,
+   "escala": 2,
+   "esperado": 1
+  }
+ ],
+ "fuente_de": [
+  {
+   "cp": 0,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 7,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 9,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 10,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 13,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 32,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 33,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 36,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 37,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 46,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 48,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 49,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 53,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 56,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 57,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 63,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 65,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 69,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 70,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 72,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 76,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 79,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 80,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 81,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 97,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 98,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 99,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 100,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 101,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 102,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 103,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 105,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 108,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 109,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 110,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 111,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 114,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 115,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 116,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 117,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 118,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 120,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 121,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 160,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 161,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 163,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 165,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 191,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 209,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 233,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 237,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 250,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 1072,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 1080,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 1082,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 1083,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 1088,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 1094,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 8205,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 8212,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 8364,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 8419,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 8592,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 8594,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 9733,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 9829,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 9889,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 10003,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 10007,
+   "esperado": "texto",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 10084,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 12288,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 26085,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 26412,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 35486,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 65039,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 127464,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 127476,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 127995,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 127997,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 127999,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 128077,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 128103,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 128104,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 128105,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 128293,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 128640,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 129456,
+   "esperado": "emoji",
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 917607,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 917631,
+   "esperado": null,
+   "fuente": "Inter-Bold"
+  },
+  {
+   "cp": 0,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 7,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 9,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 10,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 13,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 32,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 33,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 36,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 37,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 46,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 48,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 49,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 53,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 56,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 57,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 63,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 65,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 69,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 70,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 72,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 76,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 79,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 80,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 81,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 97,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 98,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 99,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 100,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 101,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 102,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 103,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 105,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 108,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 109,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 110,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 111,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 114,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 115,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 116,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 117,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 118,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 120,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 121,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 160,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 161,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 163,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 165,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 191,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 209,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 233,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 237,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 250,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 1072,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 1080,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 1082,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 1083,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 1088,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 1094,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 8205,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 8212,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 8364,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 8419,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 8592,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 8594,
+   "esperado": "texto",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 9733,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 9829,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 9889,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 10003,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 10007,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 10084,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 12288,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 26085,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 26412,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 35486,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 65039,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 127464,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 127476,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 127995,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 127997,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 127999,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 128077,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 128103,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 128104,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 128105,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 128293,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 128640,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 129456,
+   "esperado": "emoji",
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 917607,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 917631,
+   "esperado": null,
+   "fuente": "SpaceGrotesk-Bold"
+  },
+  {
+   "cp": 0,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 7,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 9,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 10,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 13,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 32,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 33,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 36,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 37,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 46,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 48,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 49,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 53,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 56,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 57,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 63,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 65,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 69,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 70,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 72,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 76,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 79,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 80,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 81,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 97,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 98,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 99,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 100,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 101,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 102,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 103,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 105,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 108,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 109,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 110,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 111,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 114,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 115,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 116,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 117,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 118,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 120,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 121,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 160,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 161,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 163,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 165,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 191,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 209,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 233,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 237,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 250,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 1072,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 1080,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 1082,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 1083,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 1088,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 1094,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 8205,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 8212,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 8364,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 8419,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 8592,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 8594,
+   "esperado": "texto",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 9733,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 9829,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 9889,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 10003,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 10007,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 10084,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 12288,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 26085,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 26412,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 35486,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 65039,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 127464,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 127476,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 127995,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 127997,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 127999,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 128077,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 128103,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 128104,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 128105,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 128293,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 128640,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 129456,
+   "esperado": "emoji",
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 917607,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  },
+  {
+   "cp": 917631,
+   "esperado": null,
+   "fuente": "Anton-Regular"
+  }
+ ],
+ "limpiar": [
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "✓ Envío"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "✓ Envío"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "🔥 50% OFF"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "🔥 50% OFF"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "❤ Amor ❤"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "❤️ Amor ❤️"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a b\nc"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "a\tb\r\nc"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a\nb"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "a\rb"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a b\nc"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "  a   b  \n  c "
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a  b  "
+   },
+   "fuente": "Inter-Bold",
+   "texto": "a  b  "
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": true,
+    "texto": "👍 Listo"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "👍🏽 Listo 🇨🇴"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "Precio $ 89.900"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "Precio $ 89.900"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "→ ★ ✓ ✗ ♥ ⚡"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "→ ★ ✓ ✗ ♥ ⚡"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "日",
+     "本",
+     "語",
+     "и",
+     "к",
+     "р",
+     "л",
+     "ц",
+     "а"
+    ],
+    "simplificado": false,
+    "texto": ""
+   },
+   "fuente": "Inter-Bold",
+   "texto": "日本語 и кириллица"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "🔥✓🔥 a ✓ 🚀"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "🔥✓🔥 a ✓ 🚀"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": ""
+   },
+   "fuente": "Inter-Bold",
+   "texto": ""
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "\u0000",
+     "\u0007"
+    ],
+    "simplificado": false,
+    "texto": "raro"
+   },
+   "fuente": "Inter-Bold",
+   "texto": "\u0000\u0007 raro"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "✓"
+    ],
+    "simplificado": false,
+    "texto": "Envío"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "✓ Envío"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "🔥 50% OFF"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "🔥 50% OFF"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "❤ Amor ❤"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "❤️ Amor ❤️"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a b\nc"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "a\tb\r\nc"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a\nb"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "a\rb"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a b\nc"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "  a   b  \n  c "
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a  b  "
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "a  b  "
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": true,
+    "texto": "👍 Listo"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "👍🏽 Listo 🇨🇴"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "Precio $ 89.900"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "Precio $ 89.900"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "★",
+     "✓",
+     "✗"
+    ],
+    "simplificado": false,
+    "texto": "→ ♥ ⚡"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "→ ★ ✓ ✗ ♥ ⚡"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "日",
+     "本",
+     "語",
+     "и",
+     "к",
+     "р",
+     "л",
+     "ц",
+     "а"
+    ],
+    "simplificado": false,
+    "texto": ""
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "日本語 и кириллица"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "✓"
+    ],
+    "simplificado": false,
+    "texto": "🔥🔥 a 🚀"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "🔥✓🔥 a ✓ 🚀"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": ""
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": ""
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "\u0000",
+     "\u0007"
+    ],
+    "simplificado": false,
+    "texto": "raro"
+   },
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "\u0000\u0007 raro"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "✓"
+    ],
+    "simplificado": false,
+    "texto": "Envío"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "✓ Envío"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "🔥 50% OFF"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "🔥 50% OFF"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "❤ Amor ❤"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "❤️ Amor ❤️"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a b\nc"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "a\tb\r\nc"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a\nb"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "a\rb"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a b\nc"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "  a   b  \n  c "
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "a  b  "
+   },
+   "fuente": "Anton-Regular",
+   "texto": "a  b  "
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": true,
+    "texto": "👍 Listo"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "👍🏽 Listo 🇨🇴"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "Precio $ 89.900"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "Precio $ 89.900"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "★",
+     "✓",
+     "✗"
+    ],
+    "simplificado": false,
+    "texto": "→ ♥ ⚡"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "→ ★ ✓ ✗ ♥ ⚡"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "日",
+     "本",
+     "語",
+     "и",
+     "к",
+     "р",
+     "л",
+     "ц",
+     "а"
+    ],
+    "simplificado": false,
+    "texto": ""
+   },
+   "fuente": "Anton-Regular",
+   "texto": "日本語 и кириллица"
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "✓"
+    ],
+    "simplificado": false,
+    "texto": "🔥🔥 a 🚀"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "🔥✓🔥 a ✓ 🚀"
+  },
+  {
+   "esperado": {
+    "quitados": [],
+    "simplificado": false,
+    "texto": ""
+   },
+   "fuente": "Anton-Regular",
+   "texto": ""
+  },
+  {
+   "esperado": {
+    "quitados": [
+     "\u0000",
+     "\u0007"
+    ],
+    "simplificado": false,
+    "texto": "raro"
+   },
+   "fuente": "Anton-Regular",
+   "texto": "\u0000\u0007 raro"
+  }
+ ],
+ "maquetar": [
+  {
+   "esperado": {
+    "alto_px": 125,
+    "ancho_px": 221,
+    "caja_h": 117,
+    "caja_w": 213,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 97.0,
+      "cp": 72,
+      "fuente": "texto",
+      "x": 4.328125
+     },
+     {
+      "base": 97.0,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 76.046875
+     },
+     {
+      "base": 97.0,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 134.921875
+     },
+     {
+      "base": 97.0,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 160.9375
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 212.34375,
+      "base": 97.0,
+      "texto": "Hola",
+      "x": 4.328125
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 96,
+    "texto": "Hola"
+   },
+   "estilo": {
+    "color": "#FFFFFF",
+    "fuente": "Inter-Bold",
+    "tamano": 0.05,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "9:16",
+   "texto": "Hola"
+  },
+  {
+   "esperado": {
+    "alto_px": 125,
+    "ancho_px": 221,
+    "caja_h": 117,
+    "caja_w": 213,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 97.0,
+      "cp": 72,
+      "fuente": "texto",
+      "x": 4
+     },
+     {
+      "base": 97.0,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 75.71875
+     },
+     {
+      "base": 97.0,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 134.59375
+     },
+     {
+      "base": 97.0,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 160.609375
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 212.34375,
+      "base": 97.0,
+      "texto": "Hola",
+      "x": 4
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 96,
+    "texto": "Hola"
+   },
+   "estilo": {
+    "alineacion": "izquierda",
+    "color": "#FFFFFF",
+    "fuente": "Inter-Bold",
+    "tamano": 0.05,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "9:16",
+   "texto": "Hola"
+  },
+  {
+   "esperado": {
+    "alto_px": 125,
+    "ancho_px": 221,
+    "caja_h": 117,
+    "caja_w": 213,
+    "factor": 2,
+    "letras": [
+     {
+      "base": 97.0,
+      "cp": 72,
+      "fuente": "texto",
+      "x": 4.65625
+     },
+     {
+      "base": 97.0,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 76.375
+     },
+     {
+      "base": 97.0,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 135.25
+     },
+     {
+      "base": 97.0,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 161.265625
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 212.34375,
+      "base": 97.0,
+      "texto": "Hola",
+      "x": 4.65625
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 96,
+    "texto": "Hola"
+   },
+   "estilo": {
+    "alineacion": "derecha",
+    "color": "#FFFFFF",
+    "fuente": "Inter-Bold",
+    "tamano": 0.05,
+    "version": 2
+   },
+   "factor": 2,
+   "formato": "9:16",
+   "texto": "Hola"
+  },
+  {
+   "esperado": {
+    "alto_px": 355,
+    "ancho_px": 641,
+    "caja_h": 347,
+    "caja_w": 633,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 97.0,
+      "cp": 69,
+      "fuente": "texto",
+      "x": 4.421875
+     },
+     {
+      "base": 97.0,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 62.734375
+     },
+     {
+      "base": 97.0,
+      "cp": 118,
+      "fuente": "texto",
+      "x": 122.5
+     },
+     {
+      "base": 97.0,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 180.0625
+     },
+     {
+      "base": 97.0,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 206.078125
+     },
+     {
+      "base": 97.0,
+      "cp": 103,
+      "fuente": "texto",
+      "x": 287.6875
+     },
+     {
+      "base": 97.0,
+      "cp": 114,
+      "fuente": "texto",
+      "x": 348.34375
+     },
+     {
+      "base": 97.0,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 387.4375
+     },
+     {
+      "base": 97.0,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 443.171875
+     },
+     {
+      "base": 97.0,
+      "cp": 105,
+      "fuente": "texto",
+      "x": 478.328125
+     },
+     {
+      "base": 97.0,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 504.34375
+     },
+     {
+      "base": 97.0,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 580.84375
+     },
+     {
+      "base": 212.0,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 51.4375
+     },
+     {
+      "base": 212.0,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 86.59375
+     },
+     {
+      "base": 212.0,
+      "cp": 100,
+      "fuente": "texto",
+      "x": 145.46875
+     },
+     {
+      "base": 212.0,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 205.984375
+     },
+     {
+      "base": 212.0,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 287.59375
+     },
+     {
+      "base": 212.0,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 344.78125
+     },
+     {
+      "base": 212.0,
+      "cp": 112,
+      "fuente": "texto",
+      "x": 393.53125
+     },
+     {
+      "base": 212.0,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 454.046875
+     },
+     {
+      "base": 212.0,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 509.78125
+     },
+     {
+      "base": 212.0,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 535.796875
+     },
+     {
+      "base": 327.0,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 42.9765625
+     },
+     {
+      "base": 327.0,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 100.1640625
+     },
+     {
+      "base": 327.0,
+      "cp": 50,
+      "fuente": "texto",
+      "x": 182.6640625
+     },
+     {
+      "base": 327.0,
+      "cp": 52,
+      "fuente": "texto",
+      "x": 243.1328125
+     },
+     {
+      "base": 327.0,
+      "cp": 104,
+      "fuente": "texto",
+      "x": 330.7890625
+     },
+     {
+      "base": 327.0,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 390.5546875
+     },
+     {
+      "base": 327.0,
+      "cp": 114,
+      "fuente": "texto",
+      "x": 449.4296875
+     },
+     {
+      "base": 327.0,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 488.5234375
+     },
+     {
+      "base": 327.0,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 544.2578125
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 632.15625,
+      "base": 97.0,
+      "texto": "Envío gratis a",
+      "x": 4.421875
+     },
+     {
+      "ancho": 538.125,
+      "base": 212.0,
+      "texto": "todo el país",
+      "x": 51.4375
+     },
+     {
+      "ancho": 555.046875,
+      "base": 327.0,
+      "texto": "en 24 horas",
+      "x": 42.9765625
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 96,
+    "texto": "Envío gratis a todo el país en 24 horas"
+   },
+   "estilo": {
+    "ancho_max": 0.6,
+    "color": "#FFFFFF",
+    "fuente": "Inter-Bold",
+    "interlineado": 1.2,
+    "tamano": 0.05,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "9:16",
+   "texto": "Envío gratis a todo el país en 24 horas"
+  },
+  {
+   "esperado": {
+    "alto_px": 359,
+    "ancho_px": 669,
+    "caja_h": 351,
+    "caja_w": 661,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 70.912,
+      "cp": 67,
+      "fuente": "texto",
+      "x": 4
+     },
+     {
+      "base": 70.912,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 47.792
+     },
+     {
+      "base": 70.912,
+      "cp": 109,
+      "fuente": "texto",
+      "x": 89.408
+     },
+     {
+      "base": 70.912,
+      "cp": 112,
+      "fuente": "texto",
+      "x": 147.48000000000002
+     },
+     {
+      "base": 70.912,
+      "cp": 114,
+      "fuente": "texto",
+      "x": 190.86400000000003
+     },
+     {
+      "base": 70.912,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 217.79200000000003
+     },
+     {
+      "base": 70.912,
+      "cp": 104,
+      "fuente": "texto",
+      "x": 274.368
+     },
+     {
+      "base": 70.912,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 316.256
+     },
+     {
+      "base": 70.912,
+      "cp": 121,
+      "fuente": "texto",
+      "x": 357.87199999999996
+     },
+     {
+      "base": 158.912,
+      "cp": 121,
+      "fuente": "texto",
+      "x": 4
+     },
+     {
+      "base": 158.912,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 63.16
+     },
+     {
+      "base": 158.912,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 81.24799999999999
+     },
+     {
+      "base": 158.912,
+      "cp": 233,
+      "fuente": "texto",
+      "x": 99.33599999999998
+     },
+     {
+      "base": 158.912,
+      "cp": 118,
+      "fuente": "texto",
+      "x": 138.57199999999997
+     },
+     {
+      "base": 158.912,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 175.83599999999998
+     },
+     {
+      "base": 158.912,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 215.14
+     },
+     {
+      "base": 158.912,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 246.148
+     },
+     {
+      "base": 158.912,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 302.656
+     },
+     {
+      "base": 158.912,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 341.892
+     },
+     {
+      "base": 158.912,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 377.252
+     },
+     {
+      "base": 158.912,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 412.884
+     },
+     {
+      "base": 158.912,
+      "cp": 103,
+      "fuente": "texto",
+      "x": 452.12
+     },
+     {
+      "base": 158.912,
+      "cp": 117,
+      "fuente": "texto",
+      "x": 495.504
+     },
+     {
+      "base": 158.912,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 537.392
+     },
+     {
+      "base": 158.912,
+      "cp": 100,
+      "fuente": "texto",
+      "x": 579.2800000000001
+     },
+     {
+      "base": 158.912,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 622.6640000000001
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 99,
+      "fuente": "texto",
+      "x": 4
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 43.848
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 85.464
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 53,
+      "fuente": "texto",
+      "x": 144.624
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 48,
+      "fuente": "texto",
+      "x": 185.42399999999998
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 37,
+      "fuente": "texto",
+      "x": 246.75999999999996
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 109,
+      "fuente": "texto",
+      "x": 315.57599999999996
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 373.64799999999997
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 412.88399999999996
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 454.77199999999993
+     },
+     {
+      "base": 334.91200000000003,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 496.3879999999999
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 395.76,
+      "base": 70.912,
+      "texto": "Compra hoy",
+      "x": 4
+     },
+     {
+      "ancho": 660.2800000000001,
+      "base": 158.912,
+      "texto": "y llévate el segundo",
+      "x": 4
+     },
+     {
+      "ancho": 0.0,
+      "base": 246.912,
+      "texto": "",
+      "x": 4
+     },
+     {
+      "ancho": 528.0199999999999,
+      "base": 334.91200000000003,
+      "texto": "con 50 % menos",
+      "x": 4
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 68,
+    "texto": "Compra hoy\ny llévate el segundo\n\ncon 50 % menos"
+   },
+   "estilo": {
+    "alineacion": "izquierda",
+    "ancho_max": 0.8,
+    "color": "#FFFFFF",
+    "fuente": "SpaceGrotesk-Bold",
+    "interlineado": 1.3,
+    "tamano": 0.05,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "4:5",
+   "texto": "Compra hoy\ny llévate el segundo\n\ncon 50 % menos"
+  },
+  {
+   "esperado": {
+    "alto_px": 244,
+    "ancho_px": 872,
+    "caja_h": 236,
+    "caja_w": 864,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 148.85,
+      "cp": 67,
+      "fuente": "texto",
+      "x": 212.93099999999998
+     },
+     {
+      "base": 148.85,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 271.29699999999997
+     },
+     {
+      "base": 148.85,
+      "cp": 109,
+      "fuente": "texto",
+      "x": 320.26899999999995
+     },
+     {
+      "base": 148.85,
+      "cp": 112,
+      "fuente": "texto",
+      "x": 402.42799999999994
+     },
+     {
+      "base": 148.85,
+      "cp": 114,
+      "fuente": "texto",
+      "x": 454.78799999999995
+     },
+     {
+      "base": 148.85,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 489.20699999999994
+     },
+     {
+      "base": 148.85,
+      "cp": 121,
+      "fuente": "texto",
+      "x": 556.2739999999999
+     },
+     {
+      "base": 148.85,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 606.7089999999998
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 446.13800000000003,
+      "base": 148.85,
+      "texto": "Compra ya",
+      "x": 212.93099999999998
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 48,
+    "simplificado": false,
+    "tam": 77,
+    "texto": "Compra ya"
+   },
+   "estilo": {
+    "ancho_max": 0.6815,
+    "color": "#FFFFFF",
+    "fondo": {
+     "ancho": 0.8,
+     "color": "#121218",
+     "opacidad": 0.92,
+     "radio": 0.025,
+     "relleno_x": 0.0333,
+     "relleno_y": 0.0333
+    },
+    "fuente": "Poppins-ExtraBold",
+    "interlineado": 1.194,
+    "tamano": 0.04,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "9:16",
+   "texto": "Compra ya"
+  },
+  {
+   "esperado": {
+    "alto_px": 226,
+    "ancho_px": 925,
+    "caja_h": 218,
+    "caja_w": 917,
+    "factor": 3,
+    "letras": [
+     {
+      "base": 169.6201171875,
+      "cp": 84,
+      "fuente": "texto",
+      "x": 12.1474609375
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 117,
+      "fuente": "texto",
+      "x": 65.1455078125
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 112,
+      "fuente": "texto",
+      "x": 163.4208984375
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 105,
+      "fuente": "texto",
+      "x": 230.6171875
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 263.201171875
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 328.630859375
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 44,
+      "fuente": "texto",
+      "x": 361.869140625
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 424.943359375
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 490.373046875
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 55,
+      "fuente": "texto",
+      "x": 588.5830078125
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 100,
+      "fuente": "texto",
+      "x": 686.2041015625
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 752.9423828125
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 784.4794921875
+     },
+     {
+      "base": 169.6201171875,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 849.2548828125
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 900.705078125,
+      "base": 169.6201171875,
+      "texto": "Tu piel, en 7 días",
+      "x": 12.1474609375
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 134,
+    "texto": "Tu piel, en 7 días"
+   },
+   "estilo": {
+    "ancho_max": 0.9,
+    "color": "#FFFFFF",
+    "contorno": {
+     "color": "#000000",
+     "grosor": 0.004
+    },
+    "fuente": "Anton-Regular",
+    "tamano": 0.07,
+    "version": 2
+   },
+   "factor": 3,
+   "formato": "9:16",
+   "texto": "Tu piel, en 7 días"
+  },
+  {
+   "esperado": {
+    "alto_px": 113,
+    "ancho_px": 515,
+    "caja_h": 99,
+    "caja_w": 501,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 79.362,
+      "cp": 218,
+      "fuente": "texto",
+      "x": 9.470000000000084
+     },
+     {
+      "base": 79.362,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 57.530000000000086
+     },
+     {
+      "base": 79.362,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 75.13400000000009
+     },
+     {
+      "base": 79.362,
+      "cp": 105,
+      "fuente": "texto",
+      "x": 96.35600000000008
+     },
+     {
+      "base": 79.362,
+      "cp": 109,
+      "fuente": "texto",
+      "x": 109.64000000000009
+     },
+     {
+      "base": 79.362,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 149.8160000000001
+     },
+     {
+      "base": 79.362,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 189.50600000000009
+     },
+     {
+      "base": 79.362,
+      "cp": 102,
+      "fuente": "texto",
+      "x": 213.86000000000007
+     },
+     {
+      "base": 79.362,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 233.89400000000006
+     },
+     {
+      "base": 79.362,
+      "cp": 114,
+      "fuente": "texto",
+      "x": 255.11600000000007
+     },
+     {
+      "base": 79.362,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 279.6860000000001
+     },
+     {
+      "base": 79.362,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 300.9080000000001
+     },
+     {
+      "base": 79.362,
+      "cp": 100,
+      "fuente": "texto",
+      "x": 340.59800000000007
+     },
+     {
+      "base": 79.362,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 368.4080000000001
+     },
+     {
+      "base": 79.362,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 389.63000000000005
+     },
+     {
+      "base": 79.362,
+      "cp": 109,
+      "fuente": "texto",
+      "x": 421.54400000000004
+     },
+     {
+      "base": 79.362,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 461.72
+     },
+     {
+      "base": 79.362,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 482.942
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 496.5299999999999,
+      "base": 79.362,
+      "texto": "Última oferta del mes",
+      "x": 9.470000000000084
+     }
+    ],
+    "margen": 7,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 54,
+    "texto": "Última oferta del mes"
+   },
+   "estilo": {
+    "alineacion": "derecha",
+    "ancho_max": 0.5,
+    "color": "#FFFFFF",
+    "contorno": {
+     "color": "#000000DC",
+     "grosor": 0.0016
+    },
+    "fuente": "Pacifico-Regular",
+    "sombra": {
+     "color": "#000000C8",
+     "dx": 0.0031,
+     "dy": 0.0031
+    },
+    "tamano": 0.05,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "1:1",
+   "texto": "Última oferta del mes"
+  },
+  {
+   "esperado": {
+    "alto_px": 231,
+    "ancho_px": 765,
+    "caja_h": 223,
+    "caja_w": 757,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 97.0,
+      "cp": 80,
+      "fuente": "texto",
+      "x": 4.0546875
+     },
+     {
+      "base": 97.0,
+      "cp": 114,
+      "fuente": "texto",
+      "x": 66.2578125
+     },
+     {
+      "base": 97.0,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 105.3515625
+     },
+     {
+      "base": 97.0,
+      "cp": 99,
+      "fuente": "texto",
+      "x": 162.5390625
+     },
+     {
+      "base": 97.0,
+      "cp": 105,
+      "fuente": "texto",
+      "x": 219.0234375
+     },
+     {
+      "base": 97.0,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 245.0390625
+     },
+     {
+      "base": 97.0,
+      "cp": 36,
+      "fuente": "texto",
+      "x": 326.6484375
+     },
+     {
+      "base": 97.0,
+      "cp": 56,
+      "fuente": "texto",
+      "x": 412.2421875
+     },
+     {
+      "base": 97.0,
+      "cp": 57,
+      "fuente": "texto",
+      "x": 474.7265625
+     },
+     {
+      "base": 97.0,
+      "cp": 46,
+      "fuente": "texto",
+      "x": 537.0703125
+     },
+     {
+      "base": 97.0,
+      "cp": 57,
+      "fuente": "texto",
+      "x": 569.1328125
+     },
+     {
+      "base": 97.0,
+      "cp": 48,
+      "fuente": "texto",
+      "x": 631.4765625
+     },
+     {
+      "base": 97.0,
+      "cp": 48,
+      "fuente": "texto",
+      "x": 696.2109375
+     },
+     {
+      "base": 203.0,
+      "cp": 104,
+      "fuente": "texto",
+      "x": 294.28125
+     },
+     {
+      "base": 203.0,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 354.046875
+     },
+     {
+      "base": 203.0,
+      "cp": 121,
+      "fuente": "texto",
+      "x": 412.921875
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 756.890625,
+      "base": 97.0,
+      "texto": "Precio $ 89.900",
+      "x": 4.0546875
+     },
+     {
+      "ancho": 176.4375,
+      "base": 203.0,
+      "texto": "hoy",
+      "x": 294.28125
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 96,
+    "texto": "Precio $ 89.900 hoy"
+   },
+   "estilo": {
+    "ancho_max": 0.4,
+    "color": "#FFFFFF",
+    "fuente": "Inter-Bold",
+    "tamano": 0.05,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "9:16",
+   "texto": "Precio $ 89.900 hoy"
+  },
+  {
+   "esperado": {
+    "alto_px": 140,
+    "ancho_px": 717,
+    "caja_h": 132,
+    "caja_w": 709,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 110.145,
+      "cp": 128293,
+      "fuente": "emoji",
+      "x": 4.012499999999989
+     },
+     {
+      "base": 110.145,
+      "cp": 53,
+      "fuente": "texto",
+      "x": 140.6325
+     },
+     {
+      "base": 110.145,
+      "cp": 48,
+      "fuente": "texto",
+      "x": 200.89249999999998
+     },
+     {
+      "base": 110.145,
+      "cp": 37,
+      "fuente": "texto",
+      "x": 274.3775
+     },
+     {
+      "base": 110.145,
+      "cp": 79,
+      "fuente": "texto",
+      "x": 387.7675
+     },
+     {
+      "base": 110.145,
+      "cp": 70,
+      "fuente": "texto",
+      "x": 467.8075
+     },
+     {
+      "base": 110.145,
+      "cp": 70,
+      "fuente": "texto",
+      "x": 522.0875
+     },
+     {
+      "base": 110.145,
+      "cp": 10084,
+      "fuente": "emoji",
+      "x": 597.9875
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 708.975,
+      "base": 110.145,
+      "texto": "🔥 50% OFF ❤",
+      "x": 4.012499999999989
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 115,
+    "texto": "🔥 50% OFF ❤"
+   },
+   "estilo": {
+    "color": "#FFFFFF",
+    "fuente": "LilitaOne-Regular",
+    "tamano": 0.06,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "9:16",
+   "texto": "🔥 50% OFF ❤️"
+  },
+  {
+   "esperado": {
+    "alto_px": 131,
+    "ancho_px": 764,
+    "caja_h": 123,
+    "caja_w": 756,
+    "factor": 3,
+    "letras": [
+     {
+      "base": 98.464,
+      "cp": 72,
+      "fuente": "texto",
+      "x": 4
+     },
+     {
+      "base": 98.464,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 66.976
+     },
+     {
+      "base": 98.464,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 125.72800000000001
+     },
+     {
+      "base": 98.464,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 151.264
+     },
+     {
+      "base": 98.464,
+      "cp": 128077,
+      "fuente": "emoji",
+      "x": 231.13600000000002
+     },
+     {
+      "base": 98.464,
+      "cp": 8594,
+      "fuente": "texto",
+      "x": 351.52000000000004
+     },
+     {
+      "base": 98.464,
+      "cp": 161,
+      "fuente": "texto",
+      "x": 452.70400000000006
+     },
+     {
+      "base": 98.464,
+      "cp": 69,
+      "fuente": "texto",
+      "x": 481.31200000000007
+     },
+     {
+      "base": 98.464,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 534.4960000000001
+     },
+     {
+      "base": 98.464,
+      "cp": 118,
+      "fuente": "texto",
+      "x": 593.6320000000001
+     },
+     {
+      "base": 98.464,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 646.24
+     },
+     {
+      "base": 98.464,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 671.7760000000001
+     },
+     {
+      "base": 98.464,
+      "cp": 33,
+      "fuente": "texto",
+      "x": 730.528
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 755.136,
+      "base": 98.464,
+      "texto": "Hola 👍 → ¡Envío!",
+      "x": 4
+     }
+    ],
+    "margen": 4,
+    "quitados": [
+     "✓"
+    ],
+    "radio": 0,
+    "simplificado": true,
+    "tam": 96,
+    "texto": "Hola 👍 → ¡Envío!"
+   },
+   "estilo": {
+    "alineacion": "izquierda",
+    "ancho_max": 0.7,
+    "color": "#FFFFFF",
+    "fuente": "SpaceGrotesk-Bold",
+    "tamano": 0.05,
+    "version": 2
+   },
+   "factor": 3,
+   "formato": "9:16",
+   "texto": "Hola 👍🏽 ✓ → ¡Envío!"
+  },
+  {
+   "esperado": {
+    "alto_px": 221,
+    "ancho_px": 805,
+    "caja_h": 213,
+    "caja_w": 797,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 93.096,
+      "cp": 69,
+      "fuente": "texto",
+      "x": 4.190999999999974
+     },
+     {
+      "base": 93.096,
+      "cp": 110,
+      "fuente": "texto",
+      "x": 51.92099999999997
+     },
+     {
+      "base": 93.096,
+      "cp": 118,
+      "fuente": "texto",
+      "x": 101.62899999999996
+     },
+     {
+      "base": 93.096,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 147.20899999999995
+     },
+     {
+      "base": 93.096,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 171.28899999999993
+     },
+     {
+      "base": 93.096,
+      "cp": 103,
+      "fuente": "texto",
+      "x": 236.90699999999993
+     },
+     {
+      "base": 93.096,
+      "cp": 114,
+      "fuente": "texto",
+      "x": 282.5729999999999
+     },
+     {
+      "base": 93.096,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 320.4989999999999
+     },
+     {
+      "base": 93.096,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 365.0469999999999
+     },
+     {
+      "base": 93.096,
+      "cp": 105,
+      "fuente": "texto",
+      "x": 396.0929999999999
+     },
+     {
+      "base": 93.096,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 420.1729999999999
+     },
+     {
+      "base": 93.096,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 476.41699999999986
+     },
+     {
+      "base": 93.096,
+      "cp": 116,
+      "fuente": "texto",
+      "x": 539.713
+     },
+     {
+      "base": 93.096,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 570.759
+     },
+     {
+      "base": 93.096,
+      "cp": 100,
+      "fuente": "texto",
+      "x": 617.629
+     },
+     {
+      "base": 93.096,
+      "cp": 111,
+      "fuente": "texto",
+      "x": 666.993
+     },
+     {
+      "base": 93.096,
+      "cp": 101,
+      "fuente": "texto",
+      "x": 732.6110000000001
+     },
+     {
+      "base": 93.096,
+      "cp": 108,
+      "fuente": "texto",
+      "x": 776.2130000000001
+     },
+     {
+      "base": 188.096,
+      "cp": 112,
+      "fuente": "texto",
+      "x": 324.584
+     },
+     {
+      "base": 188.096,
+      "cp": 97,
+      "fuente": "texto",
+      "x": 374.29200000000003
+     },
+     {
+      "base": 188.096,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 418.84000000000003
+     },
+     {
+      "base": 188.096,
+      "cp": 115,
+      "fuente": "texto",
+      "x": 442.92
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 796.618,
+      "base": 93.096,
+      "texto": "Envío gratis a todo el",
+      "x": 4.190999999999974
+     },
+     {
+      "ancho": 155.832,
+      "base": 188.096,
+      "texto": "país",
+      "x": 324.584
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 86,
+    "texto": "Envío gratis a todo el país"
+   },
+   "estilo": {
+    "ancho_max": 0.5,
+    "color": "#FFFFFF",
+    "fuente": "DMSerifDisplay-Regular",
+    "tamano": 0.08,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "16:9",
+   "texto": "Envío gratis a todo el país"
+  },
+  {
+   "esperado": {
+    "alto_px": 222,
+    "ancho_px": 289,
+    "caja_h": 214,
+    "caja_w": 281,
+    "factor": 2,
+    "letras": [
+     {
+      "base": 91.3,
+      "cp": 79,
+      "fuente": "texto",
+      "x": 34.16250000000001
+     },
+     {
+      "base": 91.3,
+      "cp": 70,
+      "fuente": "texto",
+      "x": 72.9625
+     },
+     {
+      "base": 91.3,
+      "cp": 69,
+      "fuente": "texto",
+      "x": 106.3305
+     },
+     {
+      "base": 91.3,
+      "cp": 82,
+      "fuente": "texto",
+      "x": 141.54149999999998
+     },
+     {
+      "base": 91.3,
+      "cp": 84,
+      "fuente": "texto",
+      "x": 180.6325
+     },
+     {
+      "base": 91.3,
+      "cp": 65,
+      "fuente": "texto",
+      "x": 215.9405
+     },
+     {
+      "base": 188.3,
+      "cp": 83,
+      "fuente": "texto",
+      "x": 4.3349999999999795
+     },
+     {
+      "base": 188.3,
+      "cp": 79,
+      "fuente": "texto",
+      "x": 40.41899999999998
+     },
+     {
+      "base": 188.3,
+      "cp": 76,
+      "fuente": "texto",
+      "x": 79.21899999999998
+     },
+     {
+      "base": 188.3,
+      "cp": 79,
+      "fuente": "texto",
+      "x": 112.58699999999999
+     },
+     {
+      "base": 188.3,
+      "cp": 72,
+      "fuente": "texto",
+      "x": 166.907
+     },
+     {
+      "base": 188.3,
+      "cp": 79,
+      "fuente": "texto",
+      "x": 207.64700000000002
+     },
+     {
+      "base": 188.3,
+      "cp": 89,
+      "fuente": "texto",
+      "x": 246.447
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 220.67499999999998,
+      "base": 91.3,
+      "texto": "OFERTA",
+      "x": 34.16250000000001
+     },
+     {
+      "ancho": 280.33000000000004,
+      "base": 188.3,
+      "texto": "SOLO HOY",
+      "x": 4.3349999999999795
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 0,
+    "simplificado": false,
+    "tam": 97,
+    "texto": "OFERTA\nSOLO HOY"
+   },
+   "estilo": {
+    "color": "#FFFFFF",
+    "fuente": "BebasNeue-Regular",
+    "interlineado": 1.0,
+    "tamano": 0.09,
+    "version": 2
+   },
+   "factor": 2,
+   "formato": "16:9",
+   "texto": "OFERTA\nSOLO HOY"
+  },
+  {
+   "esperado": {
+    "alto_px": 57,
+    "ancho_px": 332,
+    "caja_h": 49,
+    "caja_w": 324,
+    "factor": 1,
+    "letras": [
+     {
+      "base": 40.0,
+      "cp": 83,
+      "fuente": "texto",
+      "x": 151.1875
+     },
+     {
+      "base": 40.0,
+      "cp": 237,
+      "fuente": "texto",
+      "x": 172.140625
+     }
+    ],
+    "lineas": [
+     {
+      "ancho": 29.625,
+      "base": 40.0,
+      "texto": "Sí",
+      "x": 151.1875
+     }
+    ],
+    "margen": 4,
+    "quitados": [],
+    "radio": 24,
+    "simplificado": false,
+    "tam": 32,
+    "texto": "Sí"
+   },
+   "estilo": {
+    "color": "#FFFFFF",
+    "fondo": {
+     "ancho": 0.3,
+     "color": "#FF0000",
+     "opacidad": 1,
+     "radio": 0.5,
+     "relleno_x": 0.01,
+     "relleno_y": 0.005
+    },
+    "fuente": "Inter-Bold",
+    "tamano": 0.03,
+    "version": 2
+   },
+   "factor": 1,
+   "formato": "1:1",
+   "texto": "Sí"
+  }
+ ],
+ "simplificar": [
+  {
+   "esperado": [
+    "👍 Listo",
+    true
+   ],
+   "texto": "👍🏽 Listo"
+  },
+  {
+   "esperado": [
+    " Envíos",
+    true
+   ],
+   "texto": "🇨🇴 Envíos"
+  },
+  {
+   "esperado": [
+    "❤ Amor",
+    false
+   ],
+   "texto": "❤️ Amor"
+  },
+  {
+   "esperado": [
+    "👨 Familia",
+    true
+   ],
+   "texto": "👨‍👩‍👧 Familia"
+  },
+  {
+   "esperado": [
+    "1 Paso",
+    true
+   ],
+   "texto": "1️⃣ Paso"
+  },
+  {
+   "esperado": [
+    "Hola",
+    false
+   ],
+   "texto": "Hola"
+  },
+  {
+   "esperado": [
+    "",
+    false
+   ],
+   "texto": ""
+  },
+  {
+   "esperado": [
+    "🔥🔥 doble",
+    false
+   ],
+   "texto": "🔥🔥 doble"
+  },
+  {
+   "esperado": [
+    "ab",
+    false
+   ],
+   "texto": "a‍b"
+  },
+  {
+   "esperado": [
+    "🔥",
+    false
+   ],
+   "texto": "🔥‍"
+  },
+  {
+   "esperado": [
+    "👩 y 👩",
+    true
+   ],
+   "texto": "👩🏿‍🦰 y 👩🏻"
+  },
+  {
+   "esperado": [
+    "❤ fuego",
+    true
+   ],
+   "texto": "❤️‍🔥 fuego"
+  },
+  {
+   "esperado": [
+    "x",
+    true
+   ],
+   "texto": "x🇨"
+  },
+  {
+   "esperado": [
+    "b",
+    true
+   ],
+   "texto": "󠁧󠁿b"
+  },
+  {
+   "esperado": [
+    "　👍",
+    false
+   ],
+   "texto": "　👍"
+  }
+ ],
+ "sin_glifos_v1": [
+  {
+   "esperado": "✓ Envío",
+   "fuente": "Inter-Bold",
+   "texto": "✓ Envío"
+  },
+  {
+   "esperado": "50% OFF",
+   "fuente": "Inter-Bold",
+   "texto": "🔥 50% OFF"
+  },
+  {
+   "esperado": "❤ Amor ❤",
+   "fuente": "Inter-Bold",
+   "texto": "❤️ Amor ❤️"
+  },
+  {
+   "esperado": "a\tb\r\nc",
+   "fuente": "Inter-Bold",
+   "texto": "a\tb\r\nc"
+  },
+  {
+   "esperado": "a\rb",
+   "fuente": "Inter-Bold",
+   "texto": "a\rb"
+  },
+  {
+   "esperado": "  a   b  \n  c ",
+   "fuente": "Inter-Bold",
+   "texto": "  a   b  \n  c "
+  },
+  {
+   "esperado": "a  b  ",
+   "fuente": "Inter-Bold",
+   "texto": "a  b  "
+  },
+  {
+   "esperado": "Listo",
+   "fuente": "Inter-Bold",
+   "texto": "👍🏽 Listo 🇨🇴"
+  },
+  {
+   "esperado": "Precio $ 89.900",
+   "fuente": "Inter-Bold",
+   "texto": "Precio $ 89.900"
+  },
+  {
+   "esperado": "→ ★ ✓ ✗ ♥",
+   "fuente": "Inter-Bold",
+   "texto": "→ ★ ✓ ✗ ♥ ⚡"
+  },
+  {
+   "esperado": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥",
+   "fuente": "Inter-Bold",
+   "texto": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥"
+  },
+  {
+   "esperado": "",
+   "fuente": "Inter-Bold",
+   "texto": "日本語 и кириллица"
+  },
+  {
+   "esperado": "✓ a ✓",
+   "fuente": "Inter-Bold",
+   "texto": "🔥✓🔥 a ✓ 🚀"
+  },
+  {
+   "esperado": "",
+   "fuente": "Inter-Bold",
+   "texto": ""
+  },
+  {
+   "esperado": "raro",
+   "fuente": "Inter-Bold",
+   "texto": "\u0000\u0007 raro"
+  },
+  {
+   "esperado": "Familia",
+   "fuente": "Inter-Bold",
+   "texto": "👨‍👩‍👧 Familia"
+  },
+  {
+   "esperado": "a b",
+   "fuente": "Inter-Bold",
+   "texto": "a🔥‍ b"
+  },
+  {
+   "esperado": "1 paso doble",
+   "fuente": "Inter-Bold",
+   "texto": "1️⃣ paso  doble"
+  },
+  {
+   "esperado": "Hola mundo",
+   "fuente": "Inter-Bold",
+   "texto": "Hola 🔥 mundo"
+  },
+  {
+   "esperado": "dos\ntres",
+   "fuente": "Inter-Bold",
+   "texto": "🔥🔥 dos\n🚀 tres"
+  },
+  {
+   "esperado": "Envío",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "✓ Envío"
+  },
+  {
+   "esperado": "50% OFF",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "🔥 50% OFF"
+  },
+  {
+   "esperado": "Amor",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "❤️ Amor ❤️"
+  },
+  {
+   "esperado": "a\tb\r\nc",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "a\tb\r\nc"
+  },
+  {
+   "esperado": "a\rb",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "a\rb"
+  },
+  {
+   "esperado": "  a   b  \n  c ",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "  a   b  \n  c "
+  },
+  {
+   "esperado": "a  b  ",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "a  b  "
+  },
+  {
+   "esperado": "Listo",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "👍🏽 Listo 🇨🇴"
+  },
+  {
+   "esperado": "Precio $ 89.900",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "Precio $ 89.900"
+  },
+  {
+   "esperado": "→",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "→ ★ ✓ ✗ ♥ ⚡"
+  },
+  {
+   "esperado": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥"
+  },
+  {
+   "esperado": "",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "日本語 и кириллица"
+  },
+  {
+   "esperado": "a",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "🔥✓🔥 a ✓ 🚀"
+  },
+  {
+   "esperado": "",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": ""
+  },
+  {
+   "esperado": "raro",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "\u0000\u0007 raro"
+  },
+  {
+   "esperado": "Familia",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "👨‍👩‍👧 Familia"
+  },
+  {
+   "esperado": "a b",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "a🔥‍ b"
+  },
+  {
+   "esperado": "1 paso doble",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "1️⃣ paso  doble"
+  },
+  {
+   "esperado": "Hola mundo",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "Hola 🔥 mundo"
+  },
+  {
+   "esperado": "dos\ntres",
+   "fuente": "SpaceGrotesk-Bold",
+   "texto": "🔥🔥 dos\n🚀 tres"
+  },
+  {
+   "esperado": "Envío",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "✓ Envío"
+  },
+  {
+   "esperado": "50% OFF",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "🔥 50% OFF"
+  },
+  {
+   "esperado": "Amor",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "❤️ Amor ❤️"
+  },
+  {
+   "esperado": "a\tb\r\nc",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "a\tb\r\nc"
+  },
+  {
+   "esperado": "a\rb",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "a\rb"
+  },
+  {
+   "esperado": "  a   b  \n  c ",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "  a   b  \n  c "
+  },
+  {
+   "esperado": "a  b  ",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "a  b  "
+  },
+  {
+   "esperado": "Listo",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "👍🏽 Listo 🇨🇴"
+  },
+  {
+   "esperado": "Precio $ 89.900",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "Precio $ 89.900"
+  },
+  {
+   "esperado": "",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "→ ★ ✓ ✗ ♥ ⚡"
+  },
+  {
+   "esperado": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "Ñandú ¡Hola! ¿Qué tal? 50 % — € £ ¥"
+  },
+  {
+   "esperado": "",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "日本語 и кириллица"
+  },
+  {
+   "esperado": "a",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "🔥✓🔥 a ✓ 🚀"
+  },
+  {
+   "esperado": "",
+   "fuente": "Poppins-ExtraBold",
+   "texto": ""
+  },
+  {
+   "esperado": "raro",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "\u0000\u0007 raro"
+  },
+  {
+   "esperado": "Familia",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "👨‍👩‍👧 Familia"
+  },
+  {
+   "esperado": "a b",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "a🔥‍ b"
+  },
+  {
+   "esperado": "1 paso doble",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "1️⃣ paso  doble"
+  },
+  {
+   "esperado": "Hola mundo",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "Hola 🔥 mundo"
+  },
+  {
+   "esperado": "dos\ntres",
+   "fuente": "Poppins-ExtraBold",
+   "texto": "🔥🔥 dos\n🚀 tres"
+  }
+ ]
+}
