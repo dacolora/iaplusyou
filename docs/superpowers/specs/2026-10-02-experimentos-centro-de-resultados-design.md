@@ -99,15 +99,28 @@ No se toca el submódulo `meta_ads` (vive en otro repo): se usa `meta_ads.auth.l
   `filtering=[{campaign.id EQUAL <id>}]`, `time_increment=1`, `time_range`, campos de §3.1, `limit=500`;
   sigue `paging.next` (hasta 20 páginas; si hay más, lo anota y para). Una llamada por experimento, no una por
   anuncio.
-- `pedir_desglose(campaign_id, dimension)`: igual con `date_preset=maximum` y `breakdowns=<dims>`; una
-  llamada por dimensión (4). Si Meta rechaza una combinación de campos con un desglose, esa dimensión
-  queda en `experimento.extra["detalle_meta"]["errores"]` (sin inundar la bitácora cada 2 h) y las otras siguen.
-- `pedir_rankings(campaign_id)`: `level=ad`, `date_preset=maximum`, los tres rankings.
-- `refrescar_detalle(cliente, experimento_id, desde=None)`: junta todo, mapea `ad_id → experimento_pieza.id`
+- `pedir_desglose(campaign_id, dimension, desde, hasta)`: igual pero con `time_range` desde la creación del
+  experimento hasta hoy (no `date_preset=maximum`: pedir lo de por vida con desgloses es caro y Meta lo
+  restringe) y `breakdowns=<dims>`; una llamada por dimensión (4). Pide **solo los campos que se guardan**
+  (`ad_id`, `impressions`, `inline_link_clicks`, `spend`, `actions`, `action_values`,
+  `video_thruplay_watched_actions`): sin `reach`, `frequency`, `cpm` ni `clicks`, porque el alcance con desgloses
+  es lo más caro y Meta lo limita a 13 meses. Si Meta rechaza una combinación de campos con un desglose, esa
+  dimensión queda en `experimento.extra["detalle_meta"]["errores"]` (sin inundar la bitácora cada 2 h) y las
+  otras siguen.
+- `pedir_rankings(campaign_id, desde, hasta)`: `level=ad`, `time_range` desde la creación hasta hoy, los tres
+  rankings.
+- `refrescar_detalle(cliente, experimento_id, hoy=None)`: junta todo, mapea `ad_id → experimento_pieza.id`
   (los ids de anuncio que no son de este experimento se ignoran: aislamiento entre proyectos) y escribe.
-  El rango se cura solo: desde el último día guardado menos 2, o desde la creación del experimento.
+  El rango del día a día se cura solo: desde el último día guardado menos 2, o desde la creación del
+  experimento; el de los desgloses y los rankings es siempre la creación del experimento (acotada a hoy) hasta
+  hoy.
 - Errores: el texto pasa por `cola.sin_token` antes de un evento o un log (regla 6). Un fallo de detalle
-  **nunca** tumba el refresco de siempre ni el decisor.
+  **nunca** tumba el refresco de siempre ni el decisor (`refrescar_detalle` no lanza). Dos clases de fallo cortan
+  la pasada entera para no seguir golpeando a Meta: un **límite de llamadas** (`limite = True`, §3.3) y un
+  **fallo de red o un HTTP 5xx** (el texto trae «falló en red» o «respondió 5…», el formato de
+  `meta_ads.auth.llamar`; `cortado = True`, sin marcar `limite`). La parte que falló queda en `errores`.
+  El estado se guarda en `experimento.extra["detalle_meta"]`: `actualizado_en`, `desde`, `errores` (sin token),
+  `limite` y `cortado`.
 
 ### 3.3 Cuándo se pide
 
@@ -116,16 +129,28 @@ No se toca el submódulo `meta_ads` (vive en otro repo): se usa `meta_ads.auth.l
 - Carga inicial: tarea nueva `exp_detalle` (job `<cliente>__exp<id>__detalle`, `max_intentos=2`, no cobra)
   que pide desde la creación del experimento. Se encola una vez por experimento con `meta_campaign_id`: al
   desplegar (un comando de §7, carga inicial con `meta_detalle.encolar_todos()`); uno nuevo lo cubre su primer
-  `exp_refrescar`, que ya parte de la creación del experimento.
+  `exp_refrescar`, que ya parte de la creación del experimento. Como `exp_refrescar` ahora también pide el
+  detalle, su `duracion_estimada` es 90 (antes 30), tanto en la periódica como en el botón «Actualizar».
 - Costo: cero (Meta no cobra lecturas). Límite de Meta: 1 + 4 + 1 llamadas por experimento cada 2 h; hoy son
-  2 por anuncio. Con un código de límite de llamadas (4/17/32/613/80004, `meta_errores._LIMITE`) se para la
-  pasada de detalle y se reintenta en la siguiente.
+  2 por anuncio. Un **código de límite** es cualquiera de la familia de `meta_errores._LIMITE` (4, 17, 32, 613 y
+  los límites «por caso de uso de negocio» 80000, 80001, 80002, 80003, 80004, 80005, 80006, 80008, 80009 y
+  80014; 80000 es el de Ads Insights); `meta_errores.es_limite(texto)` lo dice y `meta_detalle.es_limite`
+  delega en ella. Con uno se corta la pasada de detalle. En `exp_refrescar` se reintenta en la siguiente
+  (2 h); `exp_detalle` **no dice «al día» si Meta pidió esperar**: devuelve `Continuar("exp_detalle", …)` con
+  `vuelta + 1` y `ejecutar_desde` a 30 minutos (mismo `job_id`), hasta 3 vueltas (`payload["vuelta"]`, 0 si no
+  viene); a la tercera termina con un mensaje que dice que Meta siguió pidiendo esperar y que el detalle quedó
+  incompleto. Si no hubo límite pero alguna parte falló, el mensaje nombra las partes que fallaron
+  («Detalle de Meta incompleto: falló region, rankings») y solo sin errores dice «al día».
 
 ### 3.4 Pruebas de E1
 
 `tests/test_meta_detalle.py` con respuestas de Meta grabadas a mano (sin red): mapeo de campos y `actions`,
 paginación, reemplazo del día, desglose borrar+insertar, rankings en `extra`, anuncio ajeno ignorado, un
-desglose que falla no tumba los otros, un fallo de detalle no tumba `exp_refrescar`, token nunca en el evento.
+desglose que falla no tumba los otros, un fallo de detalle no tumba `exp_refrescar`, token nunca en el evento
+(ni en el log de `exp_refrescar`), la familia de códigos de límite, una red caída o un 5xx que corta la pasada
+sin marcar límite, los desgloses y rankings con `time_range` y solo los campos que se guardan, `exp_detalle` con
+`Continuar` (vuelta 1 con `ejecutar_desde` en el futuro; a la vuelta 3 termina; con errores nombra la parte) y el
+aislamiento de `guardar_desglose` entre experimentos.
 
 ## 4. E2 · Centro de resultados
 
@@ -151,9 +176,13 @@ desglose que falla no tumba los otros, un fallo de detalle no tumba `exp_refresc
   (deltas de `metrica_snapshot`, `tablero.resumen_periodo` / `serie_diaria`), que respeta la atribución
   (Pixel, tienda, Triple Whale) y ya tiene pruebas. Así los totales, el mes a mes y lo que Daniel ya veía
   cuadran.
-- **Todo lo demás** (impresiones, alcance, clics, CTR, CPC, CPM, gancho, retención, embudo, desgloses):
-  `metrica_dia` y `metrica_desglose`. Los cocientes se calculan dentro de la misma fuente (CPC =
+- **Todo lo demás** (impresiones, clics, CTR, CPC, CPM, gancho, retención, embudo, desgloses; el alcance y la
+  frecuencia, con la regla del siguiente punto): `metrica_dia` y `metrica_desglose`. Los cocientes se calculan dentro de la misma fuente (CPC =
   gasto_dia / clics_dia de `metrica_dia`), nunca mezclando fuentes en una fracción.
+- **Alcance y frecuencia no se suman entre días.** `alcance` y `frecuencia` de `metrica_dia` son del día (las
+  personas únicas de un día no se suman a las de otro, y la frecuencia de un día no es la del periodo). La
+  frecuencia del periodo o de la pieza sale del **último `metrica_snapshot`** (acumulada de por vida, la que
+  Meta ya calcula) y se rotula «acumulada»; el alcance del periodo tampoco se arma sumando días.
 - Moneda: se agrupa por la moneda del experimento y nunca se convierte. Con más de una moneda en el
   proyecto, aparece un filtro de moneda (por defecto la de más gasto).
 - Sin datos diarios (experimento viejo sin la carga inicial todavía) la sección dice «cargando el detalle
@@ -176,7 +205,8 @@ nueva con la identidad de §2), y cambia los enlaces de §5.4. E3 rehace esa pá
    alertas de `tablero.alertas`, con Aprobar/Rechazar en línea (mismas rutas y los mismos `confirm()` cuando
    gasta). Sin nada pendiente, una línea «Nada por decidir».
 1. **01 Resumen del periodo**: 12 indicadores en 3 filas — Gasto, Compras, Ingresos, ROAS · CTR del enlace,
-   Costo por clic, CPM, Frecuencia · Impresiones, Gancho (3 s), ThruPlay, Costo por compra. Cada uno con
+   Costo por clic, CPM, Frecuencia (rotulada «acumulada»: del último `metrica_snapshot`, nunca la suma ni el
+   promedio de las diarias) · Impresiones, Gancho (3 s), ThruPlay, Costo por compra. Cada uno con
    valor, variación ▲/▼ contra el periodo anterior (verde = mejor, rojo = peor según la métrica: un CPC que
    baja es verde) y una curva mínima de 14 puntos. Debajo, en línea aparte: «Generación con IA» (gasto de
    proveedores del periodo, `gastos`) y, con Triple Whale conectado, la fila «Tu tienda según Triple Whale»
@@ -193,7 +223,8 @@ nueva con la identidad de §2), y cambia los enlaces de §5.4. E3 rehace esa pá
    todas»), con la métrica principal día a día contra el promedio del experimento (línea punteada), el
    veredicto con nombre humano y la historia en una línea armada **sin llamar a Claude** (cero costo):
    tramos del veredicto en el tiempo (de los eventos y `veredicto_en`), tendencia de los últimos 5 días
-   (sube/baja/estable por pendiente), fatiga (frecuencia > 2,5 con la métrica cayendo), gancho bajo (< 25 %),
+   (sube/baja/estable por pendiente), fatiga (frecuencia **acumulada** — la del último `metrica_snapshot`, no la
+   diaria de `metrica_dia` — > 2,5 con la métrica cayendo), gancho bajo (< 25 %),
    el rescate en curso (`escalon_rescate`) y las causas del diagnóstico de la doctrina si existen. La
    métrica principal sale del objetivo: ventas → ROAS; tráfico → CTR del enlace.
    Nombres de veredicto: `ganador` → «Ganadora», `perdedor` → «Perdiendo», `inconcluso` → «Sin diferencia
@@ -335,8 +366,20 @@ total; se adaptan las pruebas de la galería y de los enlaces desde Crear/Catál
 
 ## 7. Despliegue (cada entrega, con la skill `despliegue`)
 
-- E1: reinician worker y Flask; `alembic upgrade head` (0028) ensayado en una copia; luego encolar
-  la carga inicial con `meta_detalle.encolar_todos()` (una tarea `exp_detalle` por experimento con campaña en
-  Meta; un comando de una línea en el VPS, con `TZ=America/Bogota`).
+- E1: reinician worker y Flask; `alembic upgrade head` (0028) ensayado en una copia; luego la carga inicial,
+  en este orden («lo real manda»: lectura gratis, se mira antes de repetirla en todos):
+  1. **Uno primero.** Se encola `exp_detalle` solo para el experimento 3 de Forja (`colorado_forja`):
+     `cola.encolar("exp_detalle", {"cliente": "colorado_forja", "experimento_id": 3}, cliente="colorado_forja",
+     job_id=job_id_detalle("colorado_forja", 3), duracion_estimada=60, max_intentos=2)` (con `job_id_detalle` de
+     `tareas.experimentos`), corrido a mano en el VPS con `TZ=America/Bogota`. Se espera a que el worker la termine
+     y se mira el mensaje de la tarea, las filas nuevas de `metrica_dia` y
+     `experimento.extra.detalle_meta.errores` de ese experimento. Si Meta rechaza algo (un desglose, un campo), se
+     arregla antes de seguir.
+  2. **Todos.** `ssh deploy@app.creatvmachine.com 'cd /home/deploy/iaplusyou && TZ=America/Bogota
+     venv/bin/python3 -c "import meta_detalle; print(meta_detalle.encolar_todos())"'` (una tarea `exp_detalle`
+     por experimento con campaña en Meta, idempotente por `job_id`; imprime cuántos encoló).
+  3. **Humo.** Cuando la cola termine: contar las filas de `metrica_dia` y revisar
+     `experimento.extra.detalle_meta.errores` de cada experimento (vacío = bien; un límite de Meta se reintenta
+     solo hasta 3 vueltas de 30 min, y el resto lo completa el siguiente `exp_refrescar`).
 - E2 y E3: solo Flask (salvo que toquen tareas).
 - Daniel aprueba cada despliegue antes de hacerlo.
