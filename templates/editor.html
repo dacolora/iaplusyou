@@ -274,9 +274,12 @@
   .ed-bib-texto-envio .ed-bib-texto-muestra { padding: .2rem .65rem; font-family: "Poppins-ExtraBold", var(--font-body); font-size: .74rem;
     color: #fff; background: #16A34A; border-radius: 999px; }
   .ed-bib-texto-ultimas .ed-bib-texto-muestra { padding: .25rem .5rem; font-family: "Poppins-ExtraBold", var(--font-body); font-size: .68rem;
-    color: #fff; background: #111; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .4); white-space: normal; text-align: center; }
+    color: #fff; background: #111; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .4); }
   .ed-bib-texto-mas_vendido .ed-bib-texto-muestra { padding: .1rem .75rem; font-family: "LilitaOne-Regular", var(--font-body); font-size: 1.05rem;
     color: var(--ed-muestra-tinta); background: var(--ed-muestra-amarillo); border-radius: 999px; }
+  /* una plantilla larga («MÁS VENDIDO», «ENVÍO GRATIS», «¡ÚLTIMAS UNIDADES!») pasa a la línea de abajo en vez de terminar
+     en «…» (en una columna de escritorio la muestra mide 118–146 px); las cuatro muestras de siempre siguen en una línea */
+  .ed-bib-plantillas .ed-bib-texto-muestra { white-space: normal; text-align: center; }
   /* «Stickers» (capa 5c, D11 y D12.2): una cuadrícula por sección. Los stickers son BLANCOS (se tiñen al agregarlos): su
      miniatura va sobre un fondo oscuro; el emoji, con su propia cara (la fuente de emojis de la página). Nunca más
      ancho que su hoja: el mínimo de la columna es min(100%, 64px). */
@@ -642,13 +645,17 @@
       transition: transform .2s ease, visibility 0s linear .2s; }
     .ed-hoja.ed-hoja-abierta { transform: none; visibility: visible; transition: transform .2s ease; }
     .ed-listo { display: inline-flex; flex: none; }
-    /* seis botones (capa 5a: «Subtítulos») en 375 px: todos del mismo ancho y
-       ninguno empuja la página de lado; un nombre que no cabe termina en «…»
-       (entero en su `title`) */
+    /* siete botones (capa 5c: «Stickers») en 375 px: cada uno parte de lo que mide su nombre
+       (`flex: 1 1 auto`: con la misma base para todos, «Subtítulos» y «Transiciones» salían
+       cortados) y lo que sobra se reparte. Medido en la página con la letra de verdad, los
+       siete suman 301 px, así que se ven enteros desde 320 px; con .1rem de relleno a cada lado
+       sumaban 312,5 px y a 320 px todos terminaban en «…» por menos de un píxel. Ninguno empuja
+       la página de lado (`min-width: 0`): un nombre que no cupiera termina en «…» (entero en
+       su `title`) */
     .ed-acciones-movil { position: sticky; bottom: 0; z-index: 20; display: flex; gap: 0;
       padding: .3rem .25rem calc(.3rem + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--border); }
-    .ed-accion { display: flex; flex: 1 1 0; flex-direction: column; align-items: center; gap: .15rem; min-width: 0;
-      padding: .35rem .1rem; background: transparent; color: var(--muted); border: 1px solid transparent;
+    .ed-accion { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; gap: .15rem; min-width: 0;
+      padding: .35rem .05rem; background: transparent; color: var(--muted); border: 1px solid transparent;
       border-radius: var(--radius-sm); font-size: .66rem; }
     .ed-accion.ed-activa { color: var(--accent-texto); background: var(--panel-2); border-color: var(--border); }
     /* la galería de voces corre con la hoja (una caja que corre dentro de otra se pelea con el dedo) */

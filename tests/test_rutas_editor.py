@@ -644,10 +644,11 @@ def test_la_pestana_subtitulos_en_la_biblioteca_y_en_el_celular(dashboard, encol
     css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
     for regla in (".ed-sub-lineas", ".ed-sub-palabra", ".ed-sub-estilo", ".ed-sub-fila", ".ed-sub-bloque"):
         assert regla in css, regla
-    # siete botones en 375 px (capa 5c: «Stickers»): cada uno se achica (nunca empuja la página de lado)
+    # siete botones en 375 px (capa 5c: «Stickers»): cada uno parte de lo que mide su nombre (se ven enteros) y se
+    # puede achicar (nunca empuja la página de lado)
     celular = css[css.index("@media (max-width: 760px)"):]
     accion = re.search(r"\.ed-accion \{([^}]*)\}", celular).group(1)
-    assert "flex: 1 1 0" in accion and "min-width: 0" in accion
+    assert "flex: 1 1 auto" in accion and "min-width: 0" in accion
 
 
 def test_la_voz_en_off_arriba_de_la_pestana_audio(dashboard, encolados, monkeypatch):

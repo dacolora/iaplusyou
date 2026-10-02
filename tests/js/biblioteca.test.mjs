@@ -528,10 +528,14 @@ test("un sticker se pide una vez a la vez: otro toque mientras el primero se pid
     return respuesta({ json: { material: MATERIAL_ESTRELLA } });
   };
   await conFetch(async () => {
+    // los dos toques salen ANTES de que el servidor conteste, y se espera a los dos DESPUÉS de soltarlo: sin la guardia el
+    // segundo también pediría y terminaría en `true` (la prueba falla); esperar al segundo antes de soltar lo colgaría
     const primero = falsa.agregar("s:estrella");
-    assert.equal(await falsa.agregar("s:estrella"), false, "el segundo toque no hace nada");
+    const segundo = falsa.agregar("s:estrella");
+    assert.equal(pedidos, 1, "el segundo toque no pide nada mientras el primero se pide");
     liberar();
-    assert.equal(await primero, true);
+    assert.deepEqual(await Promise.all([primero, segundo]), [true, false], "el segundo toque no hace nada");
+    assert.equal(operadas.length, 1, "un sticker, no dos");
     // ya terminó: otro toque agrega otro sticker (cada toque, un deshacer)
     assert.equal(await falsa.agregar("s:estrella"), true);
   }, fetchLento);

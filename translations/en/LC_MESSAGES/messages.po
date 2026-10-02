@@ -5542,7 +5542,7 @@ msgid "Equilibrada"
 msgstr "Balanced"
 
 msgid "Equis"
-msgstr "Cross"
+msgstr "X mark"
 
 msgid "Error"
 msgstr "Error"
@@ -10843,7 +10843,7 @@ msgid "Para rehacer desde esa escena hace falta el último cuadro de la anterior
 msgstr "To redo from that scene, the last frame of the previous one is needed."
 
 msgid "Para vender"
-msgstr "For selling"
+msgstr "Made to sell"
 
 msgid "Para volver a tu propia app,"
 msgstr "To go back to your own app,"
@@ -13474,7 +13474,7 @@ msgid "Tablero"
 msgstr "Dashboard"
 
 msgid "Tachado"
-msgstr "Strike-through"
+msgstr "Strikethrough"
 
 msgid "Tamaño"
 msgstr "Size"

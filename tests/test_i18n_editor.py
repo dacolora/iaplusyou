@@ -257,8 +257,8 @@ def test_capa_5c_los_20_stickers_y_la_pestana_en_los_dos_idiomas():
     }
     EN = {
         "flecha_recta": "Arrow", "flecha_curva": "Curved arrow", "flecha_mano": "Hand-drawn arrow", "flecha_abajo": "Down arrow",
-        "circulo_mano": "Hand-drawn circle", "subrayado_mano": "Underline", "tachado_mano": "Strike-through", "chulo": "Check mark",
-        "equis": "Cross", "exclamacion": "Exclamation", "estallido": "Burst", "estrella": "Star",
+        "circulo_mano": "Hand-drawn circle", "subrayado_mano": "Underline", "tachado_mano": "Strikethrough", "chulo": "Check mark",
+        "equis": "X mark", "exclamacion": "Exclamation", "estallido": "Burst", "estrella": "Star",
         "estrellas_5": "Five stars", "corazon": "Heart", "etiqueta": "Price tag", "cinta": "Ribbon",
         "circulo": "Circle", "burbuja": "Speech bubble", "rayo": "Lightning", "destellos": "Sparkles",
     }
@@ -271,7 +271,7 @@ def test_capa_5c_los_20_stickers_y_la_pestana_en_los_dos_idiomas():
     assert {sid: t[f"bib.sticker_{sid}"] for sid in EN} == EN
     assert len({t[f"bib.sticker_{sid}"] for sid in EN}) == 20, "ningún nombre repetido: cada uno se oye distinto"
     assert [t[c] for c in ("bib.stickers", "bib.flechas", "bib.marcas", "bib.formas", "bib.emojis", "bib.para_vender", "prop.color_sticker")] == [
-        "Stickers", "Arrows", "Hand-drawn marks", "Shapes", "Emojis", "For selling", "Color"]
+        "Stickers", "Arrows", "Hand-drawn marks", "Shapes", "Emojis", "Made to sell", "Color"]
     assert t["bib.sticker_agregado"] == "Sticker added: change its color in “Edit”."
     assert t["bib.sticker_error"] == "Couldn't add the sticker ({error})."
     assert t["bib.sticker_sin_conexion"] == "no connection" and t["bib.sticker_error_http"] == "error {status}"

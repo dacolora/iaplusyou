@@ -184,10 +184,12 @@ def test_editor_el_ancho_del_texto_y_las_fuentes_caben_a_375():
 
 def test_editor_la_barra_de_acciones_con_stickers_cabe_a_375():
     """Capa 5c (Tarea 8, D13): «Stickers» es el séptimo botón de la barra de abajo del celular (Medios · Audio · Texto ·
-    Stickers · Subtítulos · Transiciones · Editar). A 375 px caben sin empujar la página de lado: cada botón mide lo
-    mismo (`flex: 1 1 0`) y se puede achicar (`min-width: 0`), su nombre termina en «…» (entero en su `title`) en vez
-    de ensanchar la barra, y las cuadrículas de stickers y emojis usan `minmax(min(100%, 64px), 1fr)` — nunca un
-    mínimo fijo que a 375 px pase de la hoja."""
+    Stickers · Subtítulos · Transiciones · Editar). Con siete botones iguales (`flex: 1 1 0`, 52 px a 375 px) «Subtítulos»
+    y «Transiciones» salían cortados con «…»: cada botón parte de lo que mide su nombre (`flex: 1 1 auto`: medidos en la página con la
+    letra de verdad, los siete suman 301 px con .05rem de relleno a cada lado y caben enteros a 375, 360 y 320 px; con
+    .1rem sumaban 312,5 px y a 320 px todos terminaban en «…» por menos de un píxel) y se puede achicar (`min-width: 0`:
+    si un idioma trae nombres más largos, termina en «…» antes que empujar la página de lado). Las cuadrículas de stickers y
+    emojis usan `minmax(min(100%, 64px), 1fr)` — nunca un mínimo fijo que a 375 px pase de la hoja."""
     import re
     html = open("templates/editor.html", encoding="utf-8").read()
     css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
@@ -207,7 +209,8 @@ def test_editor_la_barra_de_acciones_con_stickers_cabe_a_375():
     # cada botón se achica y su nombre se corta con «…»
     celular = css[css.index("@media (max-width: 760px)"):]
     accion = re.search(r"\.ed-accion \{([^}]*)\}", celular).group(1)
-    assert "flex: 1 1 0" in accion and "min-width: 0" in accion
+    assert "flex: 1 1 auto" in accion and "flex: 1 1 0" not in accion and "min-width: 0" in accion
+    assert re.search(r"padding: \.35rem \.05rem;", accion)          # con .1rem a cada lado, a 320 px sobraban 0,46 px: todos con «…»
     nombre = re.search(r"\.ed-pestana span, \.ed-accion span \{([^}]*)\}", css).group(1)
     assert "text-overflow: ellipsis" in nombre and "overflow: hidden" in nombre and "white-space: nowrap" in nombre
     # las cuadrículas de la pestaña
@@ -217,3 +220,18 @@ def test_editor_la_barra_de_acciones_con_stickers_cabe_a_375():
     sticker = re.search(r"\.ed-sticker \{([^}]*)\}", css).group(1)
     assert "min-width: 0" in sticker and "aspect-ratio" in sticker
     assert re.search(r"\.ed-sticker img \{([^}]*)\}", css).group(1).count("max-width: 100%") == 1
+
+
+def test_editor_las_plantillas_para_vender_se_parten_en_vez_de_cortarse():
+    """Capa 5c (Tarea 8, ronda de arreglo 1): en una columna de escritorio de 118–146 px por muestra, «MÁS VENDIDO»
+    salía como «MÁS VEN…» y «ENVÍO GRATIS» también: la palabra de una plantilla pasa a la línea de abajo (centrada, como
+    «¡ÚLTIMAS UNIDADES!») en vez de terminar en «…». El gancho es `.ed-bib-plantillas`, la cuadrícula de «Para vender»;
+    las cuatro muestras de siempre siguen en una línea."""
+    import re
+    html = open("templates/editor.html", encoding="utf-8").read()
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    regla = re.search(r"\.ed-bib-plantillas \.ed-bib-texto-muestra \{([^}]*)\}", css).group(1)
+    assert "white-space: normal" in regla and "text-align: center" in regla
+    base = re.search(r"\.ed-bib-texto-muestra \{([^}]*)\}", css).group(1)
+    assert "white-space: nowrap" in base                                        # las muestras de siempre, intactas
+    assert 'el("div", "ed-bib-textos ed-bib-plantillas", p)' in open("static/editor/biblioteca.js", encoding="utf-8").read()
