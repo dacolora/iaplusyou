@@ -252,6 +252,16 @@ def _busqueda_amazon(consultas, pais, productos_por_consulta):
              "max_items": len(consultas) * productos_por_consulta, "etiqueta": "búsqueda"}]
 
 
+_RE_ASIN = re.compile(r"[A-Z0-9]{10}")
+MAX_VARIANTES = 200          # un anuncio de Amazon puede tener cientos de combinaciones de color y talla
+
+
+def _asin(v):
+    """Un ASIN válido en mayúsculas, o None."""
+    v = v.strip().upper() if isinstance(v, str) else ""
+    return v if _RE_ASIN.fullmatch(v) else None
+
+
 def _producto_amazon(item):
     precio, moneda = _precio_moneda(item)
     extra = {}
@@ -262,7 +272,18 @@ def _producto_amazon(item):
         extra["vendedor"] = _texto(vendedor, 120)
     if item.get("inStock") is not None:
         extra["en_stock"] = bool(item.get("inStock"))
-    return {"fuente_id": _texto(_primero(item, "asin"), 120), "titulo": _texto(_primero(item, "title"), 300),
+    asin = _texto(_primero(item, "asin"), 120)
+    # Las variantes del mismo anuncio (colores, tallas) comparten reseñas: `FuentePlataforma.buscar` e
+    # `investigacion.elegir` dejan una sola (prueba real 2026-10-01: dos variantes elegidas trajeron las mismas
+    # reseñas, pagadas dos veces). La lista del actor trae el ASIN propio; si no lo trae, se suma. Lo que no sea
+    # una lista se ignora: la lectura de un dataset ya pagado nunca se rompe por un campo raro.
+    crudas = item.get("variantAsins")
+    variantes = {_asin(v) for v in crudas} - {None} if isinstance(crudas, (list, tuple)) else set()
+    if variantes and _asin(asin):
+        variantes.add(_asin(asin))
+    if len(variantes) > 1:
+        extra["variantes"] = sorted(variantes)[:MAX_VARIANTES]
+    return {"fuente_id": asin, "titulo": _texto(_primero(item, "title"), 300),
             "marca": _texto(_primero(item, "brand"), 120) or None, "precio": precio, "moneda": moneda,
             "estrellas": _flotante(_primero(item, "stars", "rating")), "n_resenas": _entero(_primero(item, "reviewsCount", "reviewCount")),
             "url": _url(_primero(item, "url")), "imagen": _url(_primero(item, "thumbnailImage", "image")),

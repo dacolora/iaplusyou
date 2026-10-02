@@ -184,6 +184,28 @@ def test_seleccionar_marca_elige_y_encola_resenas(base_temporal, cola_falsa, mon
     assert i["estado"] == "resenas"
 
 
+def test_seleccionar_con_dos_variantes_ya_traidas_no_se_detiene(base_temporal, cola_falsa, monkeypatch):
+    """Dos variantes del mismo anuncio, ya traídas en una investigación anterior, son lo único del nicho: la
+    selección elige una (no se detiene con «no se encontraron productos del nicho») y el paso de reseñas queda
+    vacío, sin encolar ninguna recolección ni pagar de nuevo."""
+    import json
+    from nicho import datos
+    from tareas import investigacion as ti
+    eid = _estudio(datos, pais="MX", n_comentarios=5)
+    _iniciar(datos, eid, plataformas=("amazon",), redes=())
+    datos.guardar_productos_nicho("acme", eid, "amazon", [{**p, "n_resenas": 106, "extra": {"variantes": ["P0", "P1"]}} for p in _productos(2)])
+    datos.sumar_resenas_traidas("acme", eid, "amazon", {"P0": 10, "P1": 10})
+    datos.actualizar_investigacion("acme", eid, lambda x: {**x, "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}, "buscar:amazon": {"estado": "hecho"}}})
+    ids = {p["fuente_id"]: p["id"] for p in datos.productos_nicho("acme", eid)}
+    _claude(monkeypatch, [(json.dumps({"productos": [{"id": ids["P0"], "relevante": True, "motivo": "sí"},
+                                                     {"id": ids["P1"], "relevante": True, "motivo": "sí"}]}), 900, 60)])
+    ti.ejecutar_seleccionar(_tarea("acme", eid, "nicho_inv_seleccionar"))
+    i = datos.investigacion("acme", eid)
+    assert i["elegidos"] == {"amazon": ["P0"]} and "productos del nicho" not in (i.get("detenida_por") or "")
+    assert i["pasos"]["resenas:amazon"]["estado"] == "vacio"
+    assert not [t for t in cola_falsa if t["tipo"] == "nicho_recolectar"]
+
+
 def test_seleccionar_sin_relevantes_detiene(base_temporal, cola_falsa, monkeypatch):
     from nicho import datos
     from tareas import investigacion as ti
