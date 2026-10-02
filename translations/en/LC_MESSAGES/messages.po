@@ -161,6 +161,10 @@ msgstr[0] "%(capas)s charged"
 msgstr[1] "%(capas)s charged"
 
 #, python-format
+msgid "%(correo)s: abre el enlace que te mandamos o pide uno nuevo en Configuración › Cuenta. Sin correo confirmado no puedes conectar Meta ni una tienda."
+msgstr "%(correo)s: open the link we sent you or ask for a new one in Settings › Account. Without a confirmed email you can't connect Meta or a store."
+
+#, python-format
 msgid ""
 "%(corto)s\n"
 "\n"
@@ -3388,8 +3392,14 @@ msgstr "What this experiment's sales are measured with"
 msgid "Con tu propia app: sigue los pasos de la tarjeta de Meta."
 msgstr "With your own app: follow the steps on the Meta card."
 
+msgid "Con un logo el modelo no se lo inventa: súbelo en Configuración › Logos oficiales."
+msgstr "With a logo the model doesn't make one up: upload it in Settings › Official logos."
+
 msgid "Con una imagen de referencia este modelo no elige formato: sigue el de esa imagen."
 msgstr "With a reference image this model doesn't choose a format: it follows that image's."
+
+msgid "Con una tienda los experimentos atribuyen ventas reales. Conéctala en Configuración › Conectar tu tienda."
+msgstr "With a store, experiments attribute real sales. Connect it in Settings › Connect your store."
 
 msgid "Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30."
 msgstr "With reference videos (Wan 3.0), their seconds plus the result's can't add up to more than 30."
@@ -3518,6 +3528,10 @@ msgstr "Settings › Organic channels"
 
 msgid "Configurando"
 msgstr "Configuring"
+
+#, python-format
+msgid "Confirma el correo de la cuenta %(usuario)s"
+msgstr "Confirm the email of the account %(usuario)s"
 
 msgid "Confirma el guion antes de armar un video."
 msgstr "Confirm the script before assembling a video."
@@ -3854,6 +3868,9 @@ msgstr "Create a quick persona"
 msgid "Crear producto"
 msgstr "Create product"
 
+msgid "Crear solo hará videos de producto. Sube un personaje en Catálogo › Personajes si quieres gente en los videos."
+msgstr "Create will only make product videos. Upload a character in Catalog › Characters if you want people in the videos."
+
 msgid "Crear super prompt con IA (gratis)"
 msgstr "Create super prompt with AI (free)"
 
@@ -3865,6 +3882,9 @@ msgstr "Create new version"
 
 msgid "Crear video"
 msgstr "Create video"
+
+msgid "Crear y Sprints necesitan al menos uno: súbelo en Catálogo › Productos."
+msgstr "Create and Sprints need at least one: upload it in Catalog › Products."
 
 msgid "Crear y armar campañas →"
 msgstr "Create and build campaigns →"
@@ -4216,6 +4236,10 @@ msgstr "From"
 
 msgid "Desde Notion"
 msgstr "From Notion"
+
+#, python-format
+msgid "Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación que salga bien."
+msgstr "Since %(desde)s, generations in Create and Change product fail (without charging). Top up the account at %(recarga)s; this alert goes away on its own with the next generation that works."
 
 #, python-format
 msgid "Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). Recarga la cuenta; este aviso se quita solo con la próxima generación que salga bien."
@@ -4862,6 +4886,9 @@ msgstr "The market has already seen similar promises (sophistication %(sof)s) an
 msgid "El momento del mes no es válido."
 msgstr "The moment of the month isn't valid."
 
+msgid "El motor no tiene a quién avisarle de propuestas, ganadores y rechazos: escríbelo en Configuración › Correo de avisos."
+msgstr "The engine has nobody to notify about proposals, winners and rejections: enter one in Settings › Notification email."
+
 msgid "El objetivo de referencias debe ser al menos 1."
 msgstr "The reference target must be at least 1."
 
@@ -4983,6 +5010,9 @@ msgstr "The project reached its storage limit (2 GB): delete something before up
 msgid "El proyecto llegó a su límite de espacio (2 GB): borra en «Tus archivos» lo que ya no uses antes de subir más."
 msgstr "The project reached its storage limit (2 GB): delete what you no longer use in “Your files” before uploading more."
 
+msgid "El proyecto no tiene guía de marca"
+msgstr "The project has no brand guide"
+
 #, python-format
 msgid "El punto %(n)s dice «mejorar» sin decir qué."
 msgstr "Point %(n)s says “mejorar” without saying what."
@@ -5093,6 +5123,9 @@ msgstr "The video takes the shape of the photo."
 
 msgid "El video trae el sonido de la escena"
 msgstr "The video comes with the scene's sound"
+
+msgid "El worker no está corriendo"
+msgstr "The worker isn't running"
 
 msgid "El ángulo"
 msgstr "The angle"
@@ -6767,6 +6800,10 @@ msgstr "Image missing"
 msgid "Falta la imagen de %(lista)s: súbela antes de llevar la escena a Crear."
 msgstr "The image for %(lista)s is missing: upload it before taking the scene to Create."
 
+#, python-format
+msgid "Falta la llave de %(nombre)s"
+msgstr "The %(nombre)s key is missing"
+
 msgid "Falta la página de Notion."
 msgstr "Missing the Notion page."
 
@@ -8198,6 +8235,10 @@ msgstr "The agency credential is unreadable (did FLASK_SECRET_KEY change?): an a
 msgid "La cuenta %(que)s: %(cuenta)s ventas por Pixel y no verán compras. Compruébalo en Configuración."
 msgstr "The account %(que)s: %(cuenta)s sales through the Pixel and won't see purchases. Check it in Settings."
 
+#, python-format
+msgid "La cuenta %(usuario)s no tiene correo"
+msgstr "The account %(usuario)s has no email"
+
 msgid "La cuenta de Instagram no está vinculada a la Página"
 msgstr "The Instagram account isn't linked to the Page"
 
@@ -8287,6 +8328,9 @@ msgstr "Final cut %(final_id)s does not exist in pieza; the route must create it
 #, python-format
 msgid "La final %(final_id)s no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar."
 msgstr "Final cut %(final_id)s does not exist; the route must create it with creative_flow.crear_final before queuing."
+
+msgid "La generación de videos e imágenes está en pausa"
+msgstr "Video and image generation is paused"
 
 msgid "La generación de videos e imágenes está en pausa."
 msgstr "Video and image generation is paused."
@@ -8617,6 +8661,9 @@ msgstr "The product's photos were already there."
 msgid "Las fotos que ya tiene pasan a ser ese color; el nuevo color lleva las suyas."
 msgstr "The photos it already has become that color; the new color gets its own."
 
+msgid "Las ganadoras no se pueden publicar en Instagram, Facebook, TikTok ni YouTube: conecta un canal en Configuración › Canales orgánicos."
+msgstr "Winners can't be published on Instagram, Facebook, TikTok or YouTube: connect a channel in Settings › Organic channels."
+
 msgid "Las imágenes y los videos salen de r2.dev: tiene límite de tráfico, no pasa por el CDN de Cloudflare y no es para producción. Conecta un dominio propio al bucket y ponlo en R2_PUBLIC_BASE_URL."
 msgstr "Images and videos are served from r2.dev: it is rate-limited, does not go through Cloudflare's CDN and is not meant for production. Connect a custom domain to the bucket and put it in R2_PUBLIC_BASE_URL."
 
@@ -8783,6 +8830,10 @@ msgstr "Triple Whale API key"
 
 msgid "Llave de la integración"
 msgstr "Integration key"
+
+#, python-format
+msgid "Llave incompleta de %(nombre)s"
+msgstr "The %(nombre)s key is incomplete"
 
 msgid "Llaves y conexiones del proyecto, tu cuenta, tiendas, canales y gasto."
 msgstr "Keys and connections for the project, your account, stores, channels and spend."
@@ -9827,6 +9878,9 @@ msgstr "There is nothing to recover in this piece."
 
 msgid "No hay nada que recuperar: genera de nuevo."
 msgstr "There is nothing to recover: generate again."
+
+msgid "No hay ningún producto con foto en el catálogo"
+msgstr "There is no product with a photo in the catalog"
 
 msgid "No hay piezas aprobadas que entregar."
 msgstr "There are no approved pieces to deliver."
@@ -11152,6 +11206,9 @@ msgstr "Give the color a name."
 
 msgid "Ponle un nombre."
 msgstr "Give it a name."
+
+msgid "Ponlo en Configuración › Cuenta para poder confirmarla y recuperar la contraseña. Sin correo confirmado no puedes conectar Meta ni una tienda."
+msgstr "Add one in Settings › Account so you can confirm it and recover the password. Without a confirmed email you can't connect Meta or a store."
 
 msgid "Ponlo para poder confirmarla y recuperar la contraseña si la olvidas."
 msgstr "Add one so you can confirm it and recover your password if you forget it."
@@ -12842,6 +12899,9 @@ msgstr "No channel connected: %(canales)s. Turn it on in Settings › Organic ch
 msgid "Sin canal orgánico disponible: conecta un canal en"
 msgstr "No organic channel available: connect a channel at"
 
+msgid "Sin canales orgánicos"
+msgstr "No organic channels"
+
 msgid "Sin canales para publicar:"
 msgstr "No channels to publish to:"
 
@@ -12869,8 +12929,14 @@ msgstr "No connection: couldn't upload. Try again."
 msgid "Sin conexión: se guarda con el próximo cambio."
 msgstr "No connection: it'll be saved with your next change."
 
+msgid "Sin correo de avisos"
+msgstr "No notification email"
+
 msgid "Sin datos suficientes"
 msgstr "Not enough data"
+
+msgid "Sin ella cada prompt sale sin el estilo de la marca: súbela o genérala en Configuración › Identidad de marca."
+msgstr "Without it every prompt comes out without the brand's style: upload it or generate it in Settings › Brand identity."
 
 msgid "Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token."
 msgstr "Without it the Atria source stays off in “Fetch references” (per project and in the admin panel); Apify is still available if it has its own token."
@@ -12924,6 +12990,9 @@ msgstr "No alternate hooks."
 msgid "Sin imagen: Claude juzgó por texto y números"
 msgstr "No image: Claude judged by text and numbers"
 
+msgid "Sin logos oficiales"
+msgstr "No official logos"
+
 msgid "Sin música"
 msgstr "No music"
 
@@ -12932,6 +13001,9 @@ msgstr "Untitled"
 
 msgid "Sin pedidos atribuidos en el periodo: los veredictos se apoyan solo en el tráfico (gancho, retención, clic), así que no hay ganadores ni perdedores todavía."
 msgstr "No attributed orders in the period: verdicts rely only on traffic (hook, hold, click), so there are no winners or losers yet."
+
+msgid "Sin personaje en el catálogo"
+msgstr "No character in the catalog"
 
 msgid "Sin personajes."
 msgstr "No characters."
@@ -12977,6 +13049,9 @@ msgstr "No sub-avatars in this core."
 msgid "Sin texto: se redacta con IA al aprobar (o escríbelo aquí)"
 msgstr "No text: it's written with AI on approval (or write it here)"
 
+msgid "Sin tienda conectada"
+msgstr "No store connected"
+
 msgid "Sin transición: pasa de golpe."
 msgstr "No transition: it switches at once."
 
@@ -12994,6 +13069,10 @@ msgstr "No zones: the product doesn't go on a person (a blanket, a scene object)
 
 msgid "Sin él la tarjeta Amazon / TikTok de cada estudio queda apagada. Zona gris de términos de uso de esas plataformas: es responsabilidad de quien pone el token."
 msgstr "Without it the Amazon / TikTok card of each study stays off. Gray area of those platforms' terms of use: it's the responsibility of whoever sets the token."
+
+#, python-format
+msgid "Sin él no se genera, no se lanza ni se publica nada. Última actividad: %(cuando)s. Revisa el servicio creatv-worker en el servidor."
+msgstr "Nothing is generated, launched or published without it. Last activity: %(cuando)s. Check the creatv-worker service on the server."
 
 #, python-format
 msgid "Sincronizado de %(fuente)s: la tienda manda sobre el nombre, la descripción y los colores; el precio, la URL de compra, «en prueba» y la prioridad que pongas aquí se respetan."
@@ -14638,6 +14717,10 @@ msgstr "Validations"
 
 msgid "Variable"
 msgstr "Variable"
+
+#, python-format
+msgid "Variables que faltan en el .env del servidor: %(variables)s. %(nota)s"
+msgstr "Variables missing from the server's .env: %(variables)s. %(nota)s"
 
 msgid "Variación"
 msgstr "Variation"
