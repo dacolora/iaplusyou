@@ -255,3 +255,79 @@ def test_fk_impide_borrar_pieza_con_metrica_dia_huerfana(base_temporal):
     with pytest.raises(sa.exc.IntegrityError):
         with db_mod.conectar() as con:
             con.execute(db_mod.experimento_pieza.delete().where(db_mod.experimento_pieza.c.id == ep_id))
+
+
+@pytest.fixture()
+def con_meta(dos_piezas, monkeypatch):
+    """Credenciales de mentira y un auth.llamar que responde por tipo de consulta."""
+    import lanzador
+    import meta_detalle as md
+    monkeypatch.setattr(lanzador.meta_conexion, "credenciales_ads",
+                        lambda c: {"token": "TOKEN-SECRETO", "ad_account_id": "123", "page_id": "2"})
+    respuestas = {"diario": {"data": [{**FILA_DIA, "ad_id": "ad_1"}, {**FILA_DIA, "ad_id": "ad_2"}]},
+                  "rankings": {"data": [{"ad_id": "ad_1", "quality_ranking": "AVERAGE"}]}}
+    fallar = {}
+    llamadas = []
+
+    def llamar(metodo, edge, payload=None, params=None, dry_run=False):
+        params = params or {}
+        parte = (params.get("breakdowns") and [k for k, v in md.DIMENSIONES.items() if v == params["breakdowns"]][0]
+                 or ("diario" if "time_increment" in params else "rankings"))
+        llamadas.append(parte)
+        if parte in fallar:
+            raise RuntimeError(fallar[parte])
+        if parte in md.DIMENSIONES:
+            return {"data": [{**FILA_DIA, "ad_id": "ad_1", "age": "25-34", "gender": "female",
+                              "publisher_platform": "instagram", "platform_position": "feed",
+                              "device_platform": "mobile_app", "region": "Antioquia"}]}
+        return respuestas[parte]
+
+    monkeypatch.setattr(md.auth, "llamar", llamar)
+    return {**dos_piezas, "md": md, "fallar": fallar, "llamadas": llamadas}
+
+
+def test_refrescar_detalle_guarda_todo_y_anota_en_extra(con_meta):
+    md, ex, eid = con_meta["md"], con_meta["ex"], con_meta["eid"]
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert r["dias"] == 2 and r["desgloses"] == 4 and r["rankings"] == 1 and r["errores"] == {} and not r["limite"]
+    assert con_meta["llamadas"] == ["diario", "ubicacion", "edad_genero", "dispositivo", "region", "rankings"]
+    det = ex.obtener("acme", eid)["extra"]["detalle_meta"]
+    assert det["errores"] == {} and det["limite"] is False and det["actualizado_en"]
+
+
+def test_un_desglose_que_falla_no_tumba_los_otros_ni_filtra_el_token(con_meta):
+    md, ex, eid = con_meta["md"], con_meta["ex"], con_meta["eid"]
+    con_meta["fallar"]["region"] = 'Meta Ads (act_123/insights) respondió 400: {"error":{"code":100,"message":"bad access_token=TOKEN-SECRETO"}}'
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert r["desgloses"] == 3 and r["rankings"] == 1 and "region" in r["errores"]
+    det = ex.obtener("acme", eid)["extra"]["detalle_meta"]
+    assert "TOKEN-SECRETO" not in json.dumps(det) and "region" in det["errores"]
+
+
+def test_limite_de_meta_para_la_pasada(con_meta):
+    md, eid = con_meta["md"], con_meta["eid"]
+    con_meta["fallar"]["ubicacion"] = 'Meta Ads (act_123/insights) respondió 400: {"error":{"code":17,"message":"User request limit reached"}}'
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert r["limite"] is True and r["dias"] == 2
+    assert con_meta["llamadas"] == ["diario", "ubicacion"]   # no sigue golpeando a Meta
+
+
+def test_falla_el_diario_no_lanza(con_meta):
+    md, eid = con_meta["md"], con_meta["eid"]
+    con_meta["fallar"]["diario"] = "Meta Ads (act_123/insights) falló en red: ConnectionError"
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert "diario" in r["errores"] and r["dias"] == 0
+
+
+def test_sin_campana_o_de_otro_proyecto_no_llama(con_meta):
+    md, ex, eid = con_meta["md"], con_meta["ex"], con_meta["eid"]
+    assert md.refrescar_detalle("otro", eid)["dias"] == 0
+    ex.actualizar("acme", eid, meta_campaign_id=None)
+    assert md.refrescar_detalle("acme", eid)["dias"] == 0
+    assert con_meta["llamadas"] == []
+
+
+def test_es_limite():
+    import meta_detalle as md
+    assert md.es_limite('respondió 400: {"error":{"code":613}}')
+    assert not md.es_limite('respondió 400: {"error":{"code":100}}') and not md.es_limite("")

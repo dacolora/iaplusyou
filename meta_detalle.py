@@ -20,8 +20,11 @@ from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 from meta_ads import auth
 
+import cola
 import db
 import experimentos
+import lanzador
+import meta_errores
 
 log = logging.getLogger("creatv.meta_detalle")
 
@@ -215,3 +218,58 @@ def desde_para(ep_ids, creado_en, hoy):
     else:
         desde = date.fromisoformat((creado_en or hoy.isoformat())[:10])
     return min(desde, hoy).isoformat()
+
+
+class _Limite(Exception):
+    """Meta pidió esperar (códigos de límite): se corta la pasada entera."""
+
+
+def es_limite(texto):
+    return meta_errores._numero(str(texto or ""), "code") in meta_errores._LIMITE
+
+
+def _con_detalle(resultado):
+    def fn(extra):
+        return {**extra, "detalle_meta": {"actualizado_en": db.ahora(), "desde": resultado.get("desde"),
+                                           "errores": resultado["errores"], "limite": resultado["limite"]}}
+    return fn
+
+
+def refrescar_detalle(cliente, experimento_id, hoy=None):
+    """Pide y guarda el detalle de un experimento. Nunca lanza: los errores
+    (sin token) quedan en el resultado y en experimento.extra["detalle_meta"]."""
+    r = {"dias": 0, "desgloses": 0, "rankings": 0, "limite": False, "errores": {}}
+    ex = experimentos.obtener(cliente, experimento_id)
+    if not ex or not ex.get("meta_campaign_id"):
+        return r
+    ep_por_ad = {str(p["meta_ad_id"]): p["id"] for p in ex["piezas"] if p.get("meta_ad_id")}
+    if not ep_por_ad:
+        return r
+    hoy = hoy or date.today()
+    r["desde"] = desde_para(list(ep_por_ad.values()), ex.get("creado_en"), hoy)
+    campana = ex["meta_campaign_id"]
+
+    def _parte(nombre, fn):
+        try:
+            fn()
+        except Exception as e:  # noqa: BLE001 — una parte no tumba las otras
+            texto = cola.sin_token(str(e))
+            r["errores"][nombre] = cola.recortar(texto)
+            log.warning("Detalle de Meta (%s, exp %s, %s): %s", cliente, experimento_id, nombre, texto)
+            if es_limite(texto):
+                raise _Limite() from None
+
+    def _correr(_creds):
+        _parte("diario", lambda: r.__setitem__("dias", guardar_dias(ep_por_ad, pedir_diario(campana, r["desde"], hoy.isoformat()))))
+        for dim in DIMENSIONES:
+            _parte(dim, lambda dim=dim: r.__setitem__("desgloses", r["desgloses"] + guardar_desglose(ep_por_ad, dim, pedir_desglose(campana, dim))))
+        _parte("rankings", lambda: r.__setitem__("rankings", guardar_rankings(cliente, ep_por_ad, pedir_rankings(campana))))
+
+    try:
+        lanzador._con_credenciales(cliente, _correr)
+    except _Limite:
+        r["limite"] = True
+    except Exception as e:  # noqa: BLE001 — p. ej. Meta sin conectar
+        r["errores"]["credenciales"] = cola.recortar(cola.sin_token(str(e)))
+    experimentos.actualizar_extra(cliente, experimento_id, _con_detalle(r))
+    return r
