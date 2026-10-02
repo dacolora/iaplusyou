@@ -230,13 +230,16 @@ _NIVEL_TABLERO = {"alta": "bloquea", "media": "atencion", "baja": "info"}
 def _fuente_tablero(cliente, ahora):
     """`tablero.alertas` traducida a alertas: el texto del Tablero es el
     título, sin tokens (el de una tienda rota arrastra el error de su
-    conector). `sin_metricas` lleva huella vacía: su texto dice «lleva N h» y
-    cambiaría cada hora, así que un descarte nunca serviría."""
+    conector). Tope de 400 y no de 200: la guía de Meta en modo Desarrollo
+    ronda los 330 caracteres y su llamado a la acción va al final; el error
+    crudo de un conector sí queda acotado. `sin_metricas` lleva huella vacía:
+    su texto dice «lleva N h» y cambiaría cada hora, así que un descarte nunca
+    serviría."""
     import tablero  # noqa: PLC0415
     out = []
     for a in tablero.alertas(cliente, ahora_iso=ahora):
         eid = a.get("experimento_id")
-        texto = cola.sin_token(a["texto"])
+        texto = _limpio(a["texto"], 400)
         out.append(_alerta(f"tablero:{a['tipo']}:{eid if eid is not None else '-'}",
                            huella() if a["tipo"] == "sin_metricas" else huella(texto),
                            _NIVEL_TABLERO.get(a["nivel"], "info"), _GRUPO_TABLERO.get(a["tipo"], "decision"),

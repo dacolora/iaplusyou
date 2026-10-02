@@ -346,6 +346,15 @@ def test_tablero_ningun_token_sale_en_el_texto(monkeypatch):
     assert x["huella"] == alertas.huella(x["titulo"])
 
 
+def test_tablero_un_error_larguisimo_queda_acotado(monkeypatch):
+    import alertas
+    _texto_tablero(monkeypatch, [
+        {"tipo": "tienda_rota", "nivel": "media", "texto": "La tienda X falló: " + "<html>" * 500,
+         "tab": "settings", "experimento_id": None}])
+    x, = alertas._fuente_tablero("acme", AHORA)
+    assert len(x["titulo"]) == 400 and x["titulo"].startswith("La tienda X falló: ")
+
+
 def test_tablero_sin_alertas_no_devuelve_nada(monkeypatch):
     import alertas
     _texto_tablero(monkeypatch, [])
