@@ -32,7 +32,7 @@ Tres entregas, cada una se mezcla y se despliega sola, en este orden:
 
 | Entrega | Qué | Por qué en este orden |
 |---|---|---|
-| **E1 · Datos completos de Meta** | tablas `metrica_dia` y `metrica_desglose`, módulo `meta_detalle.py`, carga histórica | todo lo demás se dibuja con esto; desplegada primero, los datos se acumulan mientras se construye E2 |
+| **E1 · Datos completos de Meta** | tablas `metrica_dia` y `metrica_desglose`, módulo `meta_detalle.py`, carga inicial | todo lo demás se dibuja con esto; desplegada primero, los datos se acumulan mientras se construye E2 |
 | **E2 · Centro de resultados** | la pestaña Experimentos nueva (con el Tablero adentro), el panel de cada pieza, la gestión de cada experimento, la identidad visual | es lo que Daniel mira cada día |
 | **E3 · Nuevo experimento** | página propia a pantalla completa: piezas → dónde → cuánto (total + días) → revisar | saca la galería de la pestaña y arregla el presupuesto |
 
@@ -113,13 +113,13 @@ No se toca el submódulo `meta_ads` (vive en otro repo): se usa `meta_ads.auth.l
 
 - `tareas/experimentos.exp_refrescar` llama `lanzador.refrescar` (como hoy, el decisor depende de eso) y
   **después** `meta_detalle.refrescar_detalle`, en su propio `try`.
-- Carga histórica: tarea nueva `exp_detalle` (job `<cliente>__exp<id>__detalle`, `max_intentos=2`, no cobra)
+- Carga inicial: tarea nueva `exp_detalle` (job `<cliente>__exp<id>__detalle`, `max_intentos=2`, no cobra)
   que pide desde la creación del experimento. Se encola una vez por experimento con `meta_campaign_id`: al
   desplegar (un comando de §7, carga inicial con `meta_detalle.encolar_todos()`); uno nuevo lo cubre su primer
   `exp_refrescar`, que ya parte de la creación del experimento.
 - Costo: cero (Meta no cobra lecturas). Límite de Meta: 1 + 4 + 1 llamadas por experimento cada 2 h; hoy son
-  2 por anuncio. Con el código 17/613 (límite de llamadas) se para la pasada de detalle y se reintenta en la
-  siguiente.
+  2 por anuncio. Con un código de límite de llamadas (4/17/32/613/80004, `meta_errores._LIMITE`) se para la
+  pasada de detalle y se reintenta en la siguiente.
 
 ### 3.4 Pruebas de E1
 
@@ -156,7 +156,7 @@ desglose que falla no tumba los otros, un fallo de detalle no tumba `exp_refresc
   gasto_dia / clics_dia de `metrica_dia`), nunca mezclando fuentes en una fracción.
 - Moneda: se agrupa por la moneda del experimento y nunca se convierte. Con más de una moneda en el
   proyecto, aparece un filtro de moneda (por defecto la de más gasto).
-- Sin datos diarios (experimento viejo sin carga histórica todavía) la sección dice «cargando el detalle
+- Sin datos diarios (experimento viejo sin la carga inicial todavía) la sección dice «cargando el detalle
   de Meta» en vez de ceros.
 
 ### 4.3 Filtros (fila de chips arriba)
@@ -336,6 +336,7 @@ total; se adaptan las pruebas de la galería y de los enlaces desde Crear/Catál
 ## 7. Despliegue (cada entrega, con la skill `despliegue`)
 
 - E1: reinician worker y Flask; `alembic upgrade head` (0028) ensayado en una copia; luego encolar
-  `exp_detalle_historico` para cada experimento con campaña (un comando de una línea en el VPS).
+  la carga inicial con `meta_detalle.encolar_todos()` (una tarea `exp_detalle` por experimento con campaña en
+  Meta; un comando de una línea en el VPS, con `TZ=America/Bogota`).
 - E2 y E3: solo Flask (salvo que toquen tareas).
 - Daniel aprueba cada despliegue antes de hacerlo.
