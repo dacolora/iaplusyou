@@ -9,6 +9,9 @@
   {% for f in datos.config.fuentes %}
   @font-face { font-family: "{{ f }}"; src: url("{{ url_for('static', filename='fonts/' ~ f ~ '.ttf') }}") format("truetype"); font-display: block; }
   {% endfor %}
+  {% if datos.config.emoji %}
+  @font-face { font-family: "CreatvEmoji"; src: url("{{ url_for('static', filename=datos.config.emoji.archivo) }}") format("truetype"); font-display: block; }
+  {% endif %}
   /* Disposición tipo CapCut (capa 4b): barra arriba; biblioteca | reproductor
      | propiedades en el medio; herramientas y línea de tiempo abajo, a todo
      el ancho. En el celular: reproductor, herramientas y línea de tiempo, y

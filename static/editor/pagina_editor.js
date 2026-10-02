@@ -43,6 +43,12 @@
 //                                           derivados (null antes de arrancar)
 //   editor.materiales()                     {id: material} de la vista previa
 //                                           (con `palabras` si se transcribió)
+//   editor.cargarFuentes(ids) -> Promise    baja las fuentes `ids` que falten
+//                                           (capa 5c, D9.3: la página solo baja
+//                                           las que usa el documento; el
+//                                           selector de fuentes pide el resto
+//                                           para escribir cada nombre en su
+//                                           letra) y redibuja cuando llegan
 //   editor.mostrarBiblioteca(panel)         abre esa pestaña de la biblioteca
 //                                           (en el celular sube su hoja); como
 //                                           todo cambio de pestaña, avisa
@@ -659,6 +665,7 @@ const editor = Object.freeze({
   ir,
   resuelto: () => vista.resuelto,
   materiales: () => vista.materiales,
+  cargarFuentes: (ids) => vista.cargarFuentes(ids),
   mostrarBiblioteca,
   enfocarTexto,
   escuchar: (fn) => avisos.escuchar(fn),

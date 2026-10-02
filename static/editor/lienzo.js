@@ -12,6 +12,7 @@ import { caja as cajaEncuadre, completo as encuadreCompleto, fondo as fondoEncua
 import { colorAss, estiloEfectivo, eventoEn, eventos } from "./subtitulos.js";
 import { rasterizarTexto } from "./texto_canvas.js";
 import { capasEn, posicionCapa, principalEn, tamanoCapaImagen, zoomKenBurns } from "./tiempo.js";
+import { escalaMax } from "./tipografia.js";
 
 // Los eventos de TODO el documento (no dependen de tMs): se recalculan solo
 // cuando cambia el documento resuelto. Como `aplicarFuentes` (subtitulos_fuente.js)
@@ -131,10 +132,18 @@ function dibujarDentro(ctx, doc, tMs, recursos, cfg, W, H) {
     if (pista.tipo === "texto") {
       const literal = clip.texto?.literal;
       if (literal === undefined) continue;
-      const r = rasterizarTexto(literal, clip.estilo ?? {}, doc.formato);
+      // Capa 5c (D5.7, D8): un texto v2 sale de la maqueta compartida con el render, en un
+      // lienzo a `factor` veces su tamaño natural (el de la mayor escala del clip); el
+      // `drawImage` de abajo lo achica a la caja natural × escala. `r.ancho`/`r.alto`
+      // son siempre los naturales.
+      const r = rasterizarTexto(literal, clip.estilo ?? {}, doc.formato, {
+        tabla: recursos.tabla, escala: escalaMax(clip), generacion: recursos.generacionFuentes,
+      });
       [src, w, h] = [r.lienzo, r.ancho, r.alto];
     } else {
-      src = recursos.imagen(clip.material_id);
+      // Capa 5c (D11): un sticker con `tinte` se dibuja del color elegido (el lienzo teñido
+      // que arma la vista: el color y el alfa de la imagen); sin `tinte`, la imagen tal cual.
+      src = clip.tinte ? recursos.imagenTenida(clip.material_id, clip.tinte) : recursos.imagen(clip.material_id);
       if (!src) continue;
       [w, h] = tamanoCapaImagen(clip, recursos.material(clip.material_id));
     }

@@ -62,6 +62,30 @@ def _datos(html):
     return json.loads(m.group(1))
 
 
+def test_la_pagina_declara_la_fuente_de_emojis_y_la_tabla_solo_si_el_archivo_esta(dashboard, encolados, monkeypatch, tmp_path):
+    """Capa 5c (D6, D9): el lienzo dibuja los emojis con la familia `CreatvEmoji` (la TTF de Twemoji, que el
+    navegador compone por capas él mismo) y mide con la tabla tipográfica. Sin el archivo, ni la `@font-face`
+    ni `config.emoji` ni la fuente en la tabla: la página no promete lo que no puede dibujar."""
+    from final_edition import fuentes
+    ed, _clon, _voz = _edicion()
+    cliente = _cliente_admin(dashboard)
+    html = cliente.get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    assert re.search(r'@font-face \{ font-family: "CreatvEmoji"; src: url\("/static/fonts/emoji/TwemojiMozilla\.ttf(\?v=\d+)?"\) '
+                     r'format\("truetype"\); font-display: block; \}', html)
+    datos = _datos(html)
+    assert datos["config"]["emoji"] == {"familia": "CreatvEmoji", "archivo": "fonts/emoji/TwemojiMozilla.ttf"}
+    assert datos["config"]["tipografia"]["emoji"]["id"] == fuentes.EMOJI_ID
+    assert datos["config"]["tipografia"]["fuentes"]["Inter-Bold"]["upem"] == 2048
+    assert datos["config"]["fuentes"][0] == "Inter-Bold"                   # las @font-face de siempre
+    monkeypatch.setattr(fuentes, "RUTA_EMOJI", str(tmp_path / "no_existe.ttf"))
+    html = cliente.get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    assert "CreatvEmoji" not in html
+    datos = _datos(html)
+    assert datos["config"]["emoji"] is None and datos["config"]["tipografia"]["emoji"] is None
+    assert datos["config"]["tipografia"]["fuentes"]["Inter-Bold"]["upem"] == 2048      # lo demás sigue
+    assert 'font-family: "Inter-Bold"' in html
+
+
 def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     ed, clon, voz = _edicion()
     r = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}")
