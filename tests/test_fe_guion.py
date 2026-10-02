@@ -9,9 +9,20 @@ class _Bloque:
         self.text = texto
 
 
+class _Uso:
+    """`usage` de Anthropic. Por defecto 1 000 de entrada y 800 de salida, que con los precios de
+    claude-sonnet-5 (US$ 2 y 10 por millón) dan US$ 0,01 justos por llamada."""
+    def __init__(self, entrada=1000, salida=800, cache_escrita=0, cache_leida=0):
+        self.input_tokens = entrada
+        self.output_tokens = salida
+        self.cache_creation_input_tokens = cache_escrita
+        self.cache_read_input_tokens = cache_leida
+
+
 class _Resp:
-    def __init__(self, texto):
+    def __init__(self, texto, uso=None):
         self.content = [_Bloque(texto)]
+        self.usage = uso or _Uso()
 
 
 class _Llamadas:
@@ -30,7 +41,8 @@ def _instalar_fake(monkeypatch, respuestas):
             registro.kwargs.append(kw)
             if not registro.respuestas:
                 raise AssertionError("Claude recibió más llamadas de las esperadas")
-            return _Resp(registro.respuestas.pop(0))
+            respuesta = registro.respuestas.pop(0)
+            return _Resp(*respuesta) if isinstance(respuesta, tuple) else _Resp(respuesta)
 
     class FakeAnthropic:
         def __init__(self, api_key=None):
@@ -193,6 +205,59 @@ def test_generar_guion_base_dos_invalidas_lanza(monkeypatch):
         guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
     assert len(reg.kwargs) == 2
     assert any("supera la duración objetivo" in e for e in exc.value.errores)
+
+
+def test_el_costo_sale_de_los_tokens_que_cobra_anthropic(monkeypatch):
+    """PND-001: era US$ 0,01 fijo por llamada y un guion real cuesta ≈ 0,04–0,05: el gasto del proyecto
+    quedaba en un cuarto de lo cobrado. Ahora sale del `usage`, con la caché como en guiones.claude."""
+    from final_edition import guion
+    uso = _Uso(entrada=3000, salida=4000, cache_leida=10000)
+    _instalar_fake(monkeypatch, [(json.dumps(dict(_guion_valido(), angulo=ANG)), uso)])
+    _, costo = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    # (3 000 + 10 000 × 0,1) × US$ 2/M + 4 000 × US$ 10/M
+    assert costo == pytest.approx(0.048)
+
+
+def test_guion_invalido_lleva_lo_que_ya_se_pago(monkeypatch):
+    """Las dos llamadas se cobraron aunque el guion no sirva: quien atrapa el error tiene que poder anotarlas."""
+    from final_edition import guion
+    malo = _guion_valido()
+    malo["bloques"][-1]["fin_s"] = 14.0
+    _instalar_fake(monkeypatch, [(json.dumps(malo), _Uso(2000, 3000)), (json.dumps(malo), _Uso(2500, 3500))])
+    with pytest.raises(guion.GuionInvalido) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert exc.value.costo_usd == pytest.approx((2000 * 2 + 3000 * 10 + 2500 * 2 + 3500 * 10) / 1e6)
+
+
+def test_si_la_correccion_se_corta_viaja_lo_que_cobro_la_primera(monkeypatch):
+    from final_edition import guion
+    malo = _guion_valido()
+    malo["bloques"][-1]["fin_s"] = 14.0
+    reg = _instalar_fake(monkeypatch, [(json.dumps(malo), _Uso(2000, 3000))])
+    original = reg.respuestas
+
+    class Cortada(Exception):
+        pass
+
+    from final_edition import guion as mod
+    cliente_real = mod.anthropic.Anthropic
+
+    class ConCorte:
+        def __init__(self, api_key=None):
+            self._real = cliente_real(api_key=api_key)
+            self.messages = self
+            self.n = 0
+
+        def create(self, **kw):
+            self.n += 1
+            if self.n == 2:
+                raise Cortada("529 overloaded")
+            return self._real.messages.create(**kw)
+    monkeypatch.setattr(mod.anthropic, "Anthropic", ConCorte)
+    with pytest.raises(Cortada) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert exc.value.costo_usd == pytest.approx((2000 * 2 + 3000 * 10) / 1e6)
+    assert original == []
 
 
 def test_localizar_guion_a_en_us(monkeypatch):

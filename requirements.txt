@@ -6,8 +6,9 @@ google-auth-oauthlib
 boto3
 Flask>=3.1.3
 Flask-Babel>=4,<5
-# servidor del VPS (deploy/gunicorn.conf.py)
-gunicorn>=22,<24
+# servidor del VPS (deploy/gunicorn.conf.py). El VPS corre 26.2.0: el techo <24 de antes hacía que un
+# `pip install -r` normal BAJARA gunicorn (despliegue del 2026-10-01, PND-067).
+gunicorn>=22,<27
 anthropic
 jsonschema
 Pillow>=12.3.0

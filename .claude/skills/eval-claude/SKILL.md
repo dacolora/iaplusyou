@@ -26,7 +26,7 @@ Antes de cerrar cualquier cambio en el prompt, la doctrina que recibe, `max_toke
 |---|---|
 | Director de Crear | `director.compilar` (`director.py:249`) |
 | Ideas de sprint | `sprints.ideas.proponer` (`sprints/ideas.py:405`), tope `max_tokens_para` (`:348`) |
-| Guion base de final edition | `final_edition.guion.generar_guion_base` (`final_edition/guion.py:432`) |
+| Guion base de final edition | `final_edition.guion.generar_guion_base` (`final_edition/guion.py:453`) |
 | Flow Plus (leer, recorte, clips, imágenes, refinador) | `guiones.claude.pedir_json` (`guiones/claude.py:95`) |
 | Avatares | `nicho/avatares.py` (`_llamar`, `:516`) |
 | Lectura de Recrear / clasificar referentes | `referentes.lectura.leer` (`:125`) / `referentes.clasificar.clasificar` (`:206`) |

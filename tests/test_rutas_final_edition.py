@@ -72,7 +72,9 @@ def test_preparar_encola_final_guion(base_temporal, monkeypatch):
     t = llamadas[0]
     assert t["tipo"] == "final_guion"
     assert t["job_id"] == f"acme__{cf_id}__final_guion"
-    assert t["max_intentos"] == 2 and t["duracion_estimada"] == 25 and t["cliente"] == "acme"
+    # Un solo intento: el guion cobra (Whisper + Claude) y un reintento automático pagaba otra vez y
+    # sobrescribía el gasto del primero con la misma referencia (revisión de PND-001, 2026-10-02).
+    assert t["max_intentos"] == 1 and t["duracion_estimada"] == 25 and t["cliente"] == "acme"
     assert t["payload"] == {"cliente": "acme", "cf_id": cf_id,
                             "opciones": {"precio": 89900.0, "idioma_base": "es"}}
 

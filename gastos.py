@@ -39,13 +39,19 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
 #    salida, lista pública 2026): una regla de producto (~600 tokens) o un
-#    caption (~1.500 tokens) cuestan < US$ 0,01; un guion base/localizado
-#    (~4.000 tokens con la guía de marca) ~US$ 0,02. Se redondea HACIA ARRIBA
-#    a un tope redondo: el estimado nunca queda por debajo del real.
+#    caption (~1.500 tokens) cuestan < US$ 0,01. Un guion (base, localizado o
+#    variante) se paga ahora por su `usage` real (PND-001, 2026-10-02: antes se
+#    anotaba US$ 0,01 fijo y lo real es ≈ 0,04–0,05 por llamada). Su peor caso:
+#    dos llamadas (la corrección) con la salida al tope de 4 000 tokens
+#    (2 × US$ 0,04) más ≈ 10 000 de entrada cada una (2 × US$ 0,02) y Whisper
+#    de la referencia (US$ 0,01) = US$ 0,13. Se redondea HACIA ARRIBA a un
+#    tope redondo: el estimado nunca queda por debajo del real.
 #  - fal.ai: ElevenLabs multilingual-v2 ~US$ 0,05 por pieza de 15-20 s de
 #    voz (por carácter); Stable Audio ~US$ 0,02 por pista (cacheada por
 #    estilo+duración, así que suele salir 0); whisper ~US$ 0,01 por clip.
-#  - final = guion localizado + voz + música + whisper ≈ US$ 0,10 por país.
+#  - final = guion localizado (peor caso US$ 0,12: dos llamadas al tope) + voz
+#    (0,05) + música (0,02, casi siempre en caché) + whisper (0,01) ≈ US$ 0,20
+#    por país (era 0,10 con el guion a 0,01 fijo; 2026-10-02).
 #    `derivaciones._avanzar_finales` encola un `final_producir` POR país
 #    (guion localizado, voz vía fal/ElevenLabs y whisper propios; solo la
 #    música se cachea y a veces sale gratis) — no hay descuento por país
@@ -71,7 +77,7 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    US$ 0,21; con el tope viejo de 16 000 no terminaba. Se estima 0,07 por
 #    cada 100 palabras sobre 0,06, sin pasar del peor caso del tope (48 000).
 TARIFAS = {
-    "guion": 0.02,
+    "guion": 0.13,
     "regla_producto": 0.01,
     "caption_organico": 0.01,
     "adaptar_referente": 0.01,
@@ -90,7 +96,7 @@ TARIFAS = {
     "musica": 0.02,
     "musica_elevenlabs": 0.60,   # canción de 60 s con ElevenLabs vía fal (US$ 0,60 por minuto empezado)
     "whisper": 0.01,
-    "final": 0.10,
+    "final": 0.20,
     # Doctrina, bloque 2: una llamada con la doctrina en el system y pensamiento
     # adaptativo. Medido en la prueba real (2026-09-27) con la caché fría, el
     # peor caso: reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007. Redondeado hacia arriba.
@@ -286,7 +292,7 @@ _ESTIMADORES = {
     "swap": _estimar_swap,
     "final": _estimar_final,
     "reedicion": _estimar_final,
-    "guion": lambda **_: (TARIFAS["guion"], "una llamada a Claude"),
+    "guion": lambda **_: (TARIFAS["guion"], "hasta dos llamadas a Claude y la transcripción de la referencia"),
     "regla_producto": lambda **_: (TARIFAS["regla_producto"], "una llamada corta a Claude"),
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),

@@ -77,6 +77,7 @@ Para encolar a mano usa `trabajos.encolar` con el mismo `job_id` que usaría la 
   parseando un diff (desalineó «Empezar de cero»).
 - **`requirements.txt` y gunicorn** (2026-10-01): el pin `gunicorn>=22,<24` de «Escala y salud» bajaba el 26.2.0 que
   corre en el VPS; ese despliegue instaló sin esa línea. Revisa qué baja `pip` antes de aceptar un downgrade.
+  Corregido el 2026-10-02 (`gunicorn>=22,<27`, PND-067); la regla sigue: mira qué baja `pip` antes de aceptarlo.
 - **Un reinicio de systemd que no fue tuyo**: otra sesión puede haber reiniciado el worker segundos antes; mira
   `journalctl` antes de culparte de un `KeyboardInterrupt`.
 - **nginx**: `deploy/nginx-creatv.conf` es un EJEMPLO; la configuración real vive en el VPS (`/etc/nginx/…`, con los
