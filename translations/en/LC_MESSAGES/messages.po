@@ -7355,8 +7355,8 @@ msgstr "Gemini Omni Flash Edit"
 msgid "Genera cada video (Wan 3.0, Kling O3 Pro, Seedance 2.5) e imagen (Seedream) de Crear y de los lotes de Sprints."
 msgstr "Generates every video (Wan 3.0, Kling O3 Pro, Seedance 2.5) and image (Seedream) in Create and in the Sprints batches."
 
-msgid "Genera la imagen candidata y el video de cada pieza."
-msgstr "Generates the candidate image and the video for each piece."
+msgid "Genera la imagen y el video del flujo viejo «Nueva idea»."
+msgstr "Generates the image and the video of the old “New idea” flow."
 
 msgid "Genera un video o una imagen en Crear o en un sprint y vuelve aquí para probarlo en Meta."
 msgstr "Generate a video or an image in Create or in a sprint and come back here to test it on Meta."

@@ -20,7 +20,7 @@ cookie's `sv` on each request and rejects sessions whose usuario no longer exist
 Configuración › Cuenta (change correo → re-verify; change password → current required).
 Without a verified correo a cliente cannot connect Meta or a store (`_requiere_correo_verificado`;
 admins exempt); the «sin correo / confirma tu correo» notice (`#cuenta-banner`) shows only at the
-top of Configuración (`_tab_settings.html`), not on every tab (removed from `base.html` 2026-09-26); admins can mark a user verified from the panel. Rate limits (`cuentas.limite_ok`,
+top of Configuración (`_tab_settings.html`), not on every tab (removed from `base.html` 2026-09-26; since 2026-10-02 the same case is also the alert `cuenta:correo:<usuario>` in the Alertas tab, skill `alertas`); admins can mark a user verified from the panel. Rate limits (`cuentas.limite_ok`,
 `kv`, 5/h) per correo and per IP on registration, resend and recovery. Links are built from
 `PLATAFORMA_URL` (never from the `Host` header) and the app 404s requests whose host isn't that
 one (or localhost); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are HttpOnly, SameSite
@@ -47,6 +47,6 @@ cada redirección; `host_permitido` rechaza todo lo que no sea `is_global`, tamb
 dirección del cliente con `_http.pedir_tienda` (sin redirecciones: las claves irían al destino) y los links de video sin
 el extractor genérico de yt-dlp. (7) Meta agencia en autoservicio: un portafolio que ya usa otro proyecto (conectado o
 con solicitud) no se lista (`meta_agencia.portafolio_de_otro`), una Página asignada a otro proyecto tampoco, y una Página
-escrita a mano va por «Avisar a Creatv». (8) Tokens de YouTube/TikTok en disco con 0600 (`_json_store.escribir_privado`).
+escrita a mano va por «Avisar a Creatv». (8) Tokens de YouTube/TikTok en disco con 0600 (`_json_store.escribir_privado`). (9) Alertas (2026-10-02): `POST /cliente/<c>/alertas/descartar|restaurar` validan clave y huella con `fullmatch` (400) y responden 403 a quien no es admin si la clave es de una alerta `solo_admin` (`alertas.es_solo_admin`, prefijos `llave:`, `worker:`, `revision:`, `saldo:wavespeed_recarga`): los descartes son del proyecto y un cliente se los escondería al admin; nunca solo ocultar el botón. Ninguna alerta lleva un valor de llave ni un texto de error sin `cola.sin_token`.
 Dependencias: `requirements.txt` trae pisos verificados con `pip-audit` (`venv/bin/pip install pip-audit && venv/bin/pip-audit`); en el VPS,
 `pip install -U -r requirements.txt` los aplica.

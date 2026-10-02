@@ -80,3 +80,5 @@ alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por 
 ya carga su galería y su ficha por fragmento desde 2026-09-30: ver «Catálogo ecommerce y
 conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos, el flujo viejo
 «Nueva idea».
+
+**Alertas en pantalla** (2026-10-02, skill `alertas`): el Tablero ya no lista alertas, solo una línea («N alertas necesitan tu atención → Ver Alertas», `.tb-aviso-alertas` en `_tab_tablero.html`); la lista vive en la pestaña Alertas (`_tab_alertas.html`, `#alertas`) y la burbuja del sidebar sale de `alertas_ctx`, el mismo dato del context processor `_alertas_sidebar`, que se calcula en cada página (caché de 60 s): una consulta por tarjeta ahí cuesta en todas las pantallas.

@@ -76,7 +76,7 @@ SERVICIOS = (
     {
         "id": "higgsfield",
         "nombre": idiomas.N_("Higgsfield (video e imagen)"),
-        "para_que": idiomas.N_("Genera la imagen candidata y el video de cada pieza."),
+        "para_que": idiomas.N_("Genera la imagen y el video del flujo viejo «Nueva idea»."),
         "costo": idiomas.N_("Por créditos: ~1.5 por imagen y ~8 por video; se compran por paquetes."),
         "url": "https://higgsfield.ai/",
         "url_texto": "higgsfield.ai › API",

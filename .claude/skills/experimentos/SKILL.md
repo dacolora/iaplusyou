@@ -86,7 +86,7 @@ currency; revenue only counts snapshots attributed by Meta Pixel, store, or Trip
 (`tablero.FUENTES_VENTAS`). `tablero.contexto`
 loads each piece's snapshots once (bounded by `experimentos.snapshots(ep_id, desde=)`, which
 also returns the last row before the window) and derives the tiles, the 30-day
-series, the top-5 winners and the alerts. Since 2026-10-01 (pedido de Daniel) the tiles are the
+series and the top-5 winners (the alerts are no longer part of `_calcular_tablero` since 2026-10-02: the Tablero shows ONE line, «N alertas necesitan tu atención → Ver Alertas», and the list lives in the Alertas tab, whose `alertas.py` still reads `tablero.alertas` — skill `alertas`; changing a `tipo` or the numbers in an alert's text changes its dismissal huella). Since 2026-10-01 (pedido de Daniel) the tiles are the
 **total since the start** (`resumen_total`: a piece's total is its latest snapshot, already in the
 loaded window, so nothing is re-read; `resumen_total_triple_whale`; generation from
 `gastos.resumen_total`) and below them the **«Mes a mes»** table (`mes_a_mes`: one row per month,
