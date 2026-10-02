@@ -620,7 +620,6 @@ def test_tablero_alerta_ganadora_sin_publicar_y_tile(app, base_temporal, monkeyp
     ctx = tablero.contexto("acme")
     assert ctx["resumen"]["ganadoras_publicadas"] == 1
     assert not [a for a in ctx["alertas"] if a["tipo"] == "ganador_sin_publicar"]
-    app["dashboard"].invalidar_alertas()          # las alertas se cachean 60 s; publicar no las invalida
     pagina = _html(app)
     assert "sin publicar orgánicamente" not in _seccion(pagina, "alertas")
     html = _seccion(pagina, "tablero")

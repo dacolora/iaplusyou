@@ -28,7 +28,7 @@ import sqlalchemy as sa
 
 from dotenv import load_dotenv
 from PIL import Image
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context, g, got_request_exception
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context, g, got_request_exception, has_request_context
 from flask_babel import Babel, format_decimal, get_locale, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
@@ -4714,6 +4714,16 @@ def _filtro_dinero(valor, moneda):
     return tablero.dinero(valor, moneda)
 
 
+@app.template_filter("fecha_corta")
+def _filtro_fecha_corta(valor):
+    """«2 oct» / «2 Oct» de una fecha ISO guardada (idiomas.fecha_corta, en el
+    idioma de quien mira); vacío si no se puede leer."""
+    try:
+        return idiomas.fecha_corta(datetime.fromisoformat(str(valor)[:19]))
+    except (TypeError, ValueError):
+        return ""
+
+
 @app.template_filter("roas")
 def _filtro_roas(valor):
     """ROAS con un decimal: 28,0 en español, 28.0 en inglés (idiomas.numero)."""
@@ -4830,12 +4840,25 @@ def invalidar_tablero(cliente=None):
     invalidar_alertas(cliente)
 
 
+def _clave_tablero_de_la_peticion(cliente):
+    """`_clave_tablero` una sola vez por petición y proyecto: la leen el
+    Tablero (ver_cliente, el chip del sidebar) y la caché de alertas, y son 7
+    consultas. Se lee al pintar, después de lo que la ruta haya escrito. Fuera
+    de una petición (pruebas, scripts) se consulta cada vez."""
+    if not has_request_context():
+        return _clave_tablero(cliente)
+    memo = g.setdefault("_claves_tablero", {})
+    if cliente not in memo:
+        memo[cliente] = _clave_tablero(cliente)
+    return memo[cliente]
+
+
 def _contexto_tablero(cliente):
     """`_calcular_tablero` con caché de `TABLERO_TTL_S` por proyecto e
     idioma, invalidada antes si cambia `_clave_tablero`. Si la clave no se
     puede consultar, se calcula sin caché."""
     try:
-        clave = _clave_tablero(cliente)
+        clave = _clave_tablero_de_la_peticion(cliente)
     except Exception as e:  # noqa: BLE001 — sin clave no hay caché, pero sí tablero
         print(f"[aviso] Tablero de {cliente}: no pude leer la clave de caché: {type(e).__name__}")
         return _calcular_tablero(cliente)
@@ -4857,11 +4880,16 @@ def _contexto_tablero(cliente):
 # guarda ALERTAS_TTL_S por (proyecto, idioma): los títulos salen traducidos al
 # calcular. La caché guarda el cálculo COMPLETO y el rol se filtra al leer
 # (`alertas.visibles(..., calculadas=)`, que además lee los descartes en vivo:
-# una consulta por página). Descartar y restaurar la vacían antes de redirigir
-# (una lista vieja sin la alerta podaría el descarte recién hecho);
-# invalidar_tablero también. Como el tablero, es por proceso: aceptable.
+# una consulta por página). Se vacía antes del TTL cuando (1) cambia
+# `_clave_tablero` (un snapshot, una propuesta, una publicación orgánica: lo
+# que hace el worker, sin pasar por una ruta; la misma clave del Tablero, leída
+# una vez por petición), (2) la persona escribe algo en el proyecto (cualquier
+# POST/PUT/PATCH/DELETE que salga bien: `_alertas_tras_escribir`), y (3) al
+# descartar o restaurar, antes de redirigir (una lista vieja sin la alerta
+# podaría el descarte recién hecho). Así una alerta resuelta no se queda
+# hasta 60 s (revisión de la Task 5, 2026-10-02). Por proceso: aceptable.
 ALERTAS_TTL_S = 60
-_ALERTAS_CACHE = {}          # (cliente, idioma) -> (monotonic, lista de alertas.calcular)
+_ALERTAS_CACHE = {}          # (cliente, idioma) -> (monotonic, clave del tablero, lista de alertas.calcular)
 _ALERTAS_LOCK = threading.Lock()
 
 
@@ -4877,16 +4905,23 @@ def invalidar_alertas(cliente=None):
 
 
 def _alertas_calculadas(cliente):
-    """`alertas.calcular(cliente)` con caché de ALERTAS_TTL_S por proyecto e idioma."""
+    """`alertas.calcular(cliente)` con caché de ALERTAS_TTL_S por proyecto e
+    idioma, invalidada antes si cambia `_clave_tablero`. Si la clave no se
+    puede leer, manda solo el TTL."""
+    try:
+        clave = _clave_tablero_de_la_peticion(cliente)
+    except Exception as e:  # noqa: BLE001 — sin clave, la caché vive su TTL
+        print(f"[aviso] Alertas de {cliente}: no pude leer la clave del tablero: {type(e).__name__}")
+        clave = None
     clave_cache = (cliente, idiomas.activo())
     ahora = time.monotonic()
     with _ALERTAS_LOCK:
         entrada = _ALERTAS_CACHE.get(clave_cache)
-        if entrada and ahora - entrada[0] < ALERTAS_TTL_S:
-            return entrada[1]
+        if entrada and entrada[1] == clave and ahora - entrada[0] < ALERTAS_TTL_S:
+            return entrada[2]
     lista = alertas.calcular(cliente)
     with _ALERTAS_LOCK:
-        _ALERTAS_CACHE[clave_cache] = (ahora, lista)
+        _ALERTAS_CACHE[clave_cache] = (ahora, clave, lista)
     return lista
 
 
@@ -4921,21 +4956,44 @@ _HUELLA_ALERTA = re.compile(alertas.HUELLA_VALIDA)
 LARGO_MAX_CLAVE_ALERTA = 200
 
 
-def _clave_alerta_del_form():
+def _clave_alerta_del_form(cliente):
+    """La clave del formulario, validada. Un no-admin no puede tocar una
+    alerta `solo_admin` (403, nada se escribe): los descartes son del proyecto,
+    y si un cliente descartara `saldo:wavespeed_recarga` o una `llave:*` se la
+    escondería al admin. Nunca solo ocultar el botón en la plantilla."""
     clave = request.form.get("clave") or ""
     if len(clave) > LARGO_MAX_CLAVE_ALERTA or not _CLAVE_ALERTA.fullmatch(clave):
         abort(400)
+    if session.get("rol") != "admin" and alertas.es_solo_admin(clave, _alertas_calculadas(cliente)):
+        abort(403)
     return clave
+
+
+@app.after_request
+def _alertas_tras_escribir(resp):
+    """Tras una escritura que salió bien (POST/PUT/PATCH/DELETE con status
+    < 400) en una ruta con <cliente>, las alertas de ese proyecto se vuelven a
+    calcular en la próxima página: subir un logo, conectar una tienda o
+    aprobar una propuesta quita su alerta enseguida, no a los 60 s. Corre
+    también para los Blueprints. Nunca toca la respuesta ni lanza."""
+    try:
+        if request.method in METODOS_QUE_ESCRIBEN and resp.status_code < 400:
+            cliente = request.view_args.get("cliente") if request.view_args else None
+            if cliente:
+                invalidar_alertas(cliente)
+    except Exception as e:  # noqa: BLE001 — una caché vieja 60 s es mejor que una respuesta caída
+        print(f"[aviso] Alertas: no pude invalidar tras escribir: {type(e).__name__}")
+    return resp
 
 
 @app.route("/cliente/<cliente>/alertas/descartar", methods=["POST"])
 def alertas_descartar(cliente):
     """Oculta una alerta mientras su situación (huella) no cambie. Solo
     escribe el descarte: no calcula, no gasta, no lanza nada."""
-    clave = _clave_alerta_del_form()
     huella = request.form.get("huella") or ""
     if not _HUELLA_ALERTA.fullmatch(huella):
         abort(400)
+    clave = _clave_alerta_del_form(cliente)
     alertas.descartar(cliente, clave, huella)
     invalidar_alertas(cliente)
     flash(gettext("Alerta descartada."), "ok")
@@ -4945,7 +5003,7 @@ def alertas_descartar(cliente):
 @app.route("/cliente/<cliente>/alertas/restaurar", methods=["POST"])
 def alertas_restaurar(cliente):
     """Vuelve a mostrar una alerta descartada."""
-    clave = _clave_alerta_del_form()
+    clave = _clave_alerta_del_form(cliente)
     alertas.restaurar(cliente, clave)
     invalidar_alertas(cliente)
     flash(gettext("Alerta restaurada."), "ok")

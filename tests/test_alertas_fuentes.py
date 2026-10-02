@@ -333,17 +333,53 @@ def test_tablero_las_horas_de_sin_metricas_no_entran_en_la_huella(monkeypatch):
         {"tipo": "propuestas_pendientes", "nivel": "media", "texto": "«X» tiene 2 propuestas.", "tab": "experimentos", "experimento_id": 7}])
     sin_metricas, propuestas = alertas._fuente_tablero("acme", AHORA)
     assert sin_metricas["huella"] == alertas.huella()                              # el texto cambia cada hora: no puede entrar
-    assert propuestas["huella"] == alertas.huella("«X» tiene 2 propuestas.")      # las demás sí: otro texto, otra huella
+    # Las demás: tipo, experimento y los números del texto (no el texto, que viene traducido).
+    assert propuestas["huella"] == alertas.huella("propuestas_pendientes", 7, "2")
 
 
 def test_tablero_ningun_token_sale_en_el_texto(monkeypatch):
     import alertas
     _texto_tablero(monkeypatch, [
-        {"tipo": "tienda_rota", "nivel": "media", "texto": "La tienda X falló: access_token=SECRETO&x=1. Vuelve a conectarla.",
+        {"tipo": "tienda_rota", "nivel": "media", "texto": "La tienda X falló: access_token=SECRETO987&x=1. Vuelve a conectarla.",
          "tab": "settings", "experimento_id": None}])
     x, = alertas._fuente_tablero("acme", AHORA)
     assert "SECRETO" not in x["titulo"] and "access_token=***" in x["titulo"]
-    assert x["huella"] == alertas.huella(x["titulo"])
+    assert x["huella"] == alertas.huella("tienda_rota", "-", "1")          # los dígitos del token tampoco entran
+
+
+def test_tablero_la_huella_no_depende_del_idioma(monkeypatch):
+    """Un descarte es del proyecto y lo comparten personas que miran en idiomas distintos: la misma alerta del
+    Tablero, calculada en español y en inglés (textos distintos, miles con punto o con coma), tiene la misma
+    huella; si cambia un número, cambia la huella."""
+    import alertas
+    import idiomas
+    import tablero
+    from flask_babel import gettext, ngettext
+    gastado = {"valor": 1250000.5}
+
+    def falso(cliente, ahora_iso=None, datos=None):
+        cuenta = ngettext("%(num)s propuesta", "%(num)s propuestas", 2)
+        return [
+            {"tipo": "propuestas_pendientes", "nivel": "media", "tab": "experimentos", "experimento_id": 7,
+             "texto": gettext("«%(nombre)s» tiene %(cuenta)s del motor esperando tu aprobación.", nombre="Cojín 3",
+                              cuenta=cuenta)},
+            {"tipo": "tope_alcanzado", "nivel": "media", "tab": "experimentos", "experimento_id": 7,
+             "texto": gettext("«%(nombre)s» alcanzó su tope: %(gastado)s gastados de %(tope)s. Ciérralo o súbele el tope.",
+                              nombre="Cojín 3", gastado=tablero.dinero(gastado["valor"], "COP"),
+                              tope=tablero.dinero(1000000, "COP"))},
+        ]
+    monkeypatch.setattr(tablero, "alertas", falso)
+    with idiomas.en_idioma("es"):
+        es = alertas._fuente_tablero("acme", AHORA)
+    with idiomas.en_idioma("en"):
+        en = alertas._fuente_tablero("acme", AHORA)
+    assert "esperando tu aprobación" in es[0]["titulo"] and "waiting for your approval" in en[0]["titulo"]
+    assert "1.250.000,50 COP" in es[1]["titulo"] and "1,250,000.50 COP" in en[1]["titulo"]
+    assert [(a["clave"], a["huella"]) for a in es] == [(a["clave"], a["huella"]) for a in en]
+    gastado["valor"] = 1300000
+    with idiomas.en_idioma("en"):
+        otra = alertas._fuente_tablero("acme", AHORA)
+    assert otra[0]["huella"] == es[0]["huella"] and otra[1]["huella"] != es[1]["huella"]
 
 
 def test_tablero_un_error_larguisimo_queda_acotado(monkeypatch):

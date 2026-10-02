@@ -77,7 +77,7 @@
     <li class="alerta alerta-descartada">
       <div class="alerta-cuerpo">
         <strong class="alerta-titulo">{{ a.titulo }}</strong>
-        <p class="alerta-detalle">{{ _('Descartada el %(fecha)s.', fecha=(a.descartada_en or '')[:10]) }}</p>
+        <p class="alerta-detalle">{{ _('Descartada el %(fecha)s.', fecha=a.descartada_en | fecha_corta) }}</p>
       </div>
       <div class="alerta-acciones">
         <form method="post" action="{{ url_for('alertas_restaurar', cliente=cliente) }}" class="alerta-form">

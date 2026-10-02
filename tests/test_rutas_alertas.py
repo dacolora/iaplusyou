@@ -274,6 +274,163 @@ def test_post_de_otro_sitio_se_rechaza(app, monkeypatch):
     assert _descartes() == []
 
 
+def _saldo(app):
+    """Las dos alertas del saldo como las arma `_fuente_saldo`: MISMA huella, la del cliente está en su página."""
+    al = app["alertas"]
+    h = al.huella("2026-10-01T10:00:00")
+    return [al._alerta("saldo:wavespeed", h, "bloquea", "puesta_a_punto", "La generación está en pausa", "d",
+                       "creativeflowplus"),
+            al._alerta("saldo:wavespeed_recarga", h, "bloquea", "puesta_a_punto", "WaveSpeed se quedó sin saldo", "d",
+                       "creativeflowplus", solo_admin=True)]
+
+
+@pytest.mark.parametrize("clave", ["saldo:wavespeed_recarga", "llave:wavespeed"])
+def test_un_cliente_no_descarta_ni_restaura_una_alerta_solo_admin(app, monkeypatch, clave):
+    """Los descartes son del proyecto: si un cliente pudiera descartar una alerta `solo_admin` (la huella del saldo
+    de admin es la misma que la del suyo, que sí ve), se la escondería al admin. El servidor lo frena con 403 y no
+    escribe nada; ocultar el botón no basta."""
+    lista = _saldo(app) + [_alerta(app, "llave:wavespeed", "bloquea", "puesta_a_punto", solo_admin=True)]
+    _fijas(app, monkeypatch, lista)
+    huella = next(a["huella"] for a in lista if a["clave"] == clave)
+    c = _cliente_rol_cliente(app)
+    assert c.post("/cliente/acme/alertas/descartar", data={"clave": clave, "huella": huella}).status_code == 403
+    assert _descartes() == []
+    r = app["c"].post("/cliente/acme/alertas/descartar", data={"clave": clave, "huella": huella})
+    assert r.status_code == 302 and _descartes() == [("acme", clave, huella)]     # el admin sí
+    assert c.post("/cliente/acme/alertas/restaurar", data={"clave": clave}).status_code == 403
+    assert _descartes() == [("acme", clave, huella)]
+    assert app["c"].post("/cliente/acme/alertas/restaurar", data={"clave": clave}).status_code == 302
+    assert _descartes() == []
+
+
+def test_un_cliente_si_descarta_las_suyas(app, monkeypatch):
+    lista = _saldo(app)
+    _fijas(app, monkeypatch, lista)
+    r = _cliente_rol_cliente(app).post("/cliente/acme/alertas/descartar",
+                                       data={"clave": "saldo:wavespeed", "huella": lista[0]["huella"]})
+    assert r.status_code == 302 and _descartes() == [("acme", "saldo:wavespeed", lista[0]["huella"])]
+
+
+@pytest.mark.parametrize("clave, status", [("llave:r2", 403), ("worker:parado", 403), ("revision:tablero", 403),
+                                           ("saldo:wavespeed_recarga", 403), ("proyecto:logo", 302)])
+def test_una_clave_de_admin_que_ya_no_esta_decide_por_su_prefijo(app, monkeypatch, clave, status):
+    _fijas(app, monkeypatch, [])
+    r = _cliente_rol_cliente(app).post("/cliente/acme/alertas/descartar", data={"clave": clave, "huella": H64})
+    assert r.status_code == status
+    assert _descartes() == ([] if status == 403 else [("acme", clave, H64)])
+
+
+def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monkeypatch):
+    """`PREFIJOS_SOLO_ADMIN` decide cuando la alerta ya no está calculada: tiene que cubrir toda alerta `solo_admin`
+    que producen las fuentes de verdad (llaves, worker, recarga del saldo, una fuente caída), y ninguna otra."""
+    import llaves
+    import saldo
+    al = app["alertas"]
+    for s_ in llaves.SERVICIOS:
+        for v in s_["variables"]:
+            monkeypatch.delenv(v, raising=False)
+    monkeypatch.setattr(saldo, "vigente", lambda p: {"proveedor": p, "nombre": "WaveSpeed", "desde": "2026-10-01T10:00:00",
+                                                     "recarga": "https://wavespeed.ai/top-up"} if p == "wavespeed" else None)
+
+    def rota(cliente, ahora):
+        raise RuntimeError("x")
+    monkeypatch.setattr(al, "FUENTES", al.FUENTES + [("rota", rota)])
+    lista = al.calcular("acme")
+    de_admin = [a["clave"] for a in lista if a["solo_admin"]]
+    assert all(c.startswith(al.PREFIJOS_SOLO_ADMIN) for c in de_admin), de_admin
+    assert not [a["clave"] for a in lista if not a["solo_admin"] and a["clave"].startswith(al.PREFIJOS_SOLO_ADMIN)]
+    for prefijo in al.PREFIJOS_SOLO_ADMIN:
+        assert any(c.startswith(prefijo) for c in de_admin), prefijo
+        assert al.es_solo_admin(prefijo + ("x" if prefijo.endswith(":") else ""), [])
+    assert not al.es_solo_admin("saldo:wavespeed", lista) and al.es_solo_admin("saldo:wavespeed_recarga", lista)
+
+
+# ---------- la caché se vacía al escribir y cuando cambia el Tablero ----------
+
+def test_una_escritura_que_sale_bien_vacia_la_cache(app, monkeypatch):
+    llamadas = []
+    _fijas(app, monkeypatch, [_alerta(app, "proyecto:logo", "info")], llamadas)
+    c = app["c"]
+    _html(c); _html(c)
+    assert len(llamadas) == 1                                       # GET: la caché manda
+    assert c.post("/cliente/acme/nombre", data={"nombre": "Acme 2"}).status_code == 302
+    _html(c)
+    assert len(llamadas) == 2                                       # un POST que salió bien la vació
+    assert c.post("/cliente/acme/alertas/descartar", data={"clave": "x", "huella": H64}).status_code == 400
+    _html(c)
+    assert len(llamadas) == 2                                       # uno que falló, no
+
+
+def test_subir_un_logo_quita_su_alerta_enseguida(app, monkeypatch):
+    """Con la caché caliente, «Sin logos oficiales» se va en la página siguiente a la subida, no a los 60 s."""
+    import io
+    from tests.conftest import JPG_VALIDO
+    monkeypatch.setattr(app["dashboard"].r2_uploader, "upload_image", lambda ruta, key: f"https://r2/{key}")
+    c = app["c"]
+    assert "Sin logos oficiales" in _tab(_html(c))
+    r = c.post("/cliente/acme/logos/subir", data={"imagen": (io.BytesIO(JPG_VALIDO), "logo.jpg")},
+               content_type="multipart/form-data")
+    assert r.status_code == 302
+    assert "Sin logos oficiales" not in _tab(_html(c))
+
+
+def test_invalidar_tras_escribir_nunca_tumba_la_respuesta(app, monkeypatch, capsys):
+    d = app["dashboard"]
+    _fijas(app, monkeypatch, [])
+
+    def explota(cliente=None):
+        raise RuntimeError("token=SECRETO")
+    monkeypatch.setattr(d, "invalidar_alertas", explota)
+    r = app["c"].post("/cliente/acme/nombre", data={"nombre": "Acme 2"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#settings")
+    salida = capsys.readouterr().out
+    assert "[aviso] Alertas: no pude invalidar tras escribir: RuntimeError" in salida and "SECRETO" not in salida
+
+
+def test_la_cache_se_renueva_cuando_cambia_la_clave_del_tablero(app, monkeypatch):
+    """Lo que cambia el worker (un snapshot, una propuesta, una publicación) no pasa por una ruta: la caché de
+    alertas lleva la misma clave del Tablero y se renueva en cuanto cambia, sin esperar el TTL."""
+    d = app["dashboard"]
+    llamadas, clave = [], {"v": (1,)}
+    _fijas(app, monkeypatch, [], llamadas)
+    monkeypatch.setattr(d, "_clave_tablero", lambda cliente: clave["v"])
+    for _ in range(2):
+        with d.app.test_request_context("/cliente/acme"):
+            d._alertas_calculadas("acme")
+    assert len(llamadas) == 1
+    clave["v"] = (2,)
+    with d.app.test_request_context("/cliente/acme"):
+        d._alertas_calculadas("acme")
+    assert len(llamadas) == 2
+
+
+def test_la_clave_del_tablero_se_lee_una_vez_por_pagina(app, monkeypatch):
+    """El Tablero y las alertas comparten `_clave_tablero` (7 consultas) dentro de la misma petición."""
+    d = app["dashboard"]
+    _fijas(app, monkeypatch, [])
+    leidas = []
+    original = d._clave_tablero
+    monkeypatch.setattr(d, "_clave_tablero", lambda cliente: leidas.append(cliente) or original(cliente))
+    _html(app["c"])
+    assert leidas == ["acme"]
+    from sprints import datos
+    sid = datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31")
+    leidas.clear()
+    _html(app["c"], f"/cliente/acme/sprints/{sid}")             # el chip del sidebar y la burbuja
+    assert leidas == ["acme"]
+
+
+def test_la_fecha_del_descarte_sale_en_el_idioma_de_quien_mira(app, monkeypatch):
+    import db
+    a = _alerta(app, "proyecto:logo", "info", "faltantes", "Sin logos oficiales")
+    _fijas(app, monkeypatch, [a])
+    monkeypatch.setattr(db, "ahora", lambda: "2026-10-02T10:00:00")
+    app["alertas"].descartar("acme", a["clave"], a["huella"])
+    assert "Descartada el 2 oct." in _tab(_html(app["c"]))
+    idiomas.guardar_de_usuario("admin", "en")
+    assert "Discarded on 2 Oct." in _tab(_html(app["c"]))
+
+
 # ---------- pestaña ----------
 
 def test_pestana_pinta_grupos_resumen_botones_y_descartar(app, monkeypatch):
@@ -401,7 +558,11 @@ def _anclas_de_alertas():
     with open(os.path.join(RAIZ, "alertas.py"), encoding="utf-8") as f:
         fuente = f.read()
     literales, prefijos = set(), set()
-    for es_f, valor in re.findall(r'ancla=(f?)"([^"]+)"', fuente):
+    encontradas = re.findall(r'ancla=(f?)"([^"]+)"', fuente)
+    # Toda `ancla=` (menos el `ancla=None` de la firma de _alerta) tiene que calzar con el patrón: una forma nueva
+    # (una variable, comillas simples) no puede colarse sin que esta prueba la mire.
+    assert len(re.findall(r"\bancla=(?!None\b)", fuente)) == len(encontradas)
+    for es_f, valor in encontradas:
         if es_f:
             prefijos.add(valor.split("{", 1)[0])
         else:

@@ -63,6 +63,14 @@ IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")      # lo que cuenta como logo e
 CLAVE_VALIDA = r"^[a-z_]+:[A-Za-z0-9_:.\-]{1,180}$"
 HUELLA_VALIDA = r"^[0-9a-f]{64}$"
 
+# Claves de las alertas `solo_admin` (llaves del .env, worker, el enlace de
+# recarga del saldo, fuentes caídas). Los descartes son del proyecto: si un
+# cliente pudiera descartarlas, se las escondería al admin. Las rutas lo
+# frenan con `es_solo_admin` (fix de la revisión de la Task 5, 2026-10-02);
+# `tests/test_rutas_alertas.py` comprueba que toda alerta `solo_admin` que
+# producen las fuentes empiece por uno de estos prefijos.
+PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga")
+
 # (nombre, función(cliente, ahora_iso) -> lista de alertas), en el orden en
 # que se muestran dentro de un mismo grupo y nivel. Las fuentes reales se
 # registran aquí; los tests lo reemplazan con fuentes falsas.
@@ -252,16 +260,24 @@ def _fuente_tablero(cliente, ahora):
     título, sin tokens (el de una tienda rota arrastra el error de su
     conector). Tope de 400 y no de 200: la guía de Meta en modo Desarrollo
     ronda los 330 caracteres y su llamado a la acción va al final; el error
-    crudo de un conector sí queda acotado. `sin_metricas` lleva huella vacía:
-    su texto dice «lleva N h» y cambiaría cada hora, así que un descarte nunca
-    serviría."""
+    crudo de un conector sí queda acotado.
+
+    La huella NO sale del texto: el texto viene traducido al idioma de quien
+    mira, y un descarte es del proyecto (lo comparten un admin en español y un
+    cliente en inglés): con el texto, el «Descartar» de uno no valdría para el
+    otro y cada uno pisaría el del otro. Sale del tipo, el experimento y los
+    números del texto en el orden en que aparecen (cuántas propuestas, cuánto
+    gastado, el código de un error): «1.250» y «1,250» dan los mismos
+    números. `sin_metricas` lleva huella vacía: su texto dice «lleva N h» y
+    cambiaría cada hora, así que un descarte nunca serviría."""
     import tablero  # noqa: PLC0415
     out = []
     for a in tablero.alertas(cliente, ahora_iso=ahora):
         eid = a.get("experimento_id")
         texto = _limpio(a["texto"], 400)
-        out.append(_alerta(f"tablero:{a['tipo']}:{eid if eid is not None else '-'}",
-                           huella() if a["tipo"] == "sin_metricas" else huella(texto),
+        situacion = huella() if a["tipo"] == "sin_metricas" else huella(
+            a["tipo"], eid if eid is not None else "-", *re.findall(r"\d+", texto))
+        out.append(_alerta(f"tablero:{a['tipo']}:{eid if eid is not None else '-'}", situacion,
                            _NIVEL_TABLERO.get(a["nivel"], "info"), _GRUPO_TABLERO.get(a["tipo"], "decision"),
                            texto, "", a["tab"], url=(f"?exp={eid}#experimentos" if eid is not None else None),
                            entidad=eid))
@@ -555,6 +571,16 @@ def calcular(cliente, ahora_iso=None):
     orden_grupo = {g: i for i, g in enumerate(GRUPOS)}
     orden_nivel = {n: i for i, n in enumerate(NIVELES)}
     return sorted(out, key=lambda a: (orden_grupo[a["grupo"]], orden_nivel[a["nivel"]]))
+
+
+def es_solo_admin(clave, calculadas):
+    """¿`clave` es de una alerta que solo puede tocar un admin? Manda la lista
+    ya calculada (`calcular`); si la alerta no está en ella (ya se resolvió, o
+    la clave es inventada), decide el prefijo."""
+    for a in calculadas:
+        if a["clave"] == clave:
+            return bool(a.get("solo_admin"))
+    return clave.startswith(PREFIJOS_SOLO_ADMIN)
 
 
 def resumen(lista):
