@@ -6225,6 +6225,9 @@ msgstr "Wait for Claude's response before approving."
 msgid "Espera un momento antes de pedir otro correo de verificación."
 msgstr "Wait a moment before requesting another verification email."
 
+msgid "Esperan tu decisión"
+msgstr "Waiting for your decision"
+
 msgid "Esta campaña ya no existe"
 msgstr "This campaign no longer exists"
 
@@ -6630,8 +6633,15 @@ msgstr "Skirt"
 msgid "Fallaron %(n)s pieza(s) al crear su anuncio: %(nombres)s"
 msgstr "%(n)s piece(s) failed to create their ad: %(nombres)s"
 
+msgid "Fallos y errores"
+msgstr "Failures and errors"
+
 msgid "Falló"
 msgstr "Failed"
+
+#, python-format
+msgid "Falló el cálculo (%(error)s). El resto de alertas sigue abajo."
+msgstr "The check failed (%(error)s). The rest of the alerts are below."
 
 #, python-format
 msgid "Falló el lanzamiento de «%(experimento)s»"
@@ -6815,6 +6825,9 @@ msgstr "{n} files of this edit are missing (they were deleted or aren't from thi
 
 msgid "Faltan:"
 msgstr "Missing:"
+
+msgid "Faltantes del proyecto"
+msgstr "Missing from the project"
 
 msgid "Familia"
 msgstr "Family"
@@ -10440,6 +10453,10 @@ msgstr "Couldn't write the text (%(error)s); it will be written again on approva
 msgid "No se pudo refrescar %(nombre)s (%(pais)s): %(error)s"
 msgstr "Could not refresh %(nombre)s (%(pais)s): %(error)s"
 
+#, python-format
+msgid "No se pudo revisar %(fuente)s"
+msgstr "Couldn't check %(fuente)s"
+
 msgid "No se pudo sacar ningún fotograma del video."
 msgstr "Couldn't get a single frame from the video."
 
@@ -11635,6 +11652,9 @@ msgstr "It may have been deleted in another tab."
 
 msgid "Puesta a punto"
 msgstr "Setup"
+
+msgid "Puesta a punto pendiente"
+msgstr "Setup pending"
 
 msgid "Pulsa <em>Instalar app</em> y confirma."
 msgstr "Press <em>Install app</em> and confirm."
@@ -15468,6 +15488,9 @@ msgstr "barbecue"
 msgid "aspecto %(aspecto)s, se pedía %(pedido)s"
 msgstr "aspect %(aspecto)s, %(pedido)s was requested"
 
+msgid "atención"
+msgstr "attention"
+
 msgid "atendiéndose ahora"
 msgstr "being served now"
 
@@ -15513,6 +15536,9 @@ msgstr "library"
 
 msgid "bien"
 msgstr "good"
+
+msgid "bloquea"
+msgstr "blocks"
 
 msgid "borrador"
 msgstr "draft"
@@ -16532,6 +16558,9 @@ msgstr "inconclusive"
 
 msgid "inconsciente"
 msgstr "unaware"
+
+msgid "info"
+msgstr "info"
 
 msgid "inglés"
 msgstr "English"

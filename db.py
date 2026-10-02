@@ -595,6 +595,19 @@ kv = Table("kv", metadata,
     Column("actualizado_en", String(19), nullable=False),
 )
 
+# Alertas (docs/superpowers/specs/2026-09-20-alertas-design.md §4 y §12): lo
+# ÚNICO que se guarda de ellas. Cada alerta se calcula al vuelo; esta tabla
+# solo recuerda qué descartó una persona y con qué huella (la «situación» de
+# la alerta): si la situación cambia, la alerta vuelve a verse. PK compuesta
+# para que el upsert sea atómico entre procesos (un blob en `kv` perdería
+# descartes). Solo la escribe alertas.py (migración 0028).
+alerta_descartada = Table("alerta_descartada", metadata,
+    Column("cliente", String(80), primary_key=True),
+    Column("clave", String(200), primary_key=True),
+    Column("huella", String(64), nullable=False),
+    Column("descartada_en", String(19), nullable=False),
+)
+
 # --- Cuentas (docs/superpowers/plans/2026-09-19-cuentas-correo-verificado.md) ---
 # Tokens de verificación de correo y de restablecimiento de contraseña. El
 # usuario sigue viviendo en usuarios.json; acá solo va el sha256 del token
