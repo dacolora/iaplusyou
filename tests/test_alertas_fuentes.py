@@ -565,3 +565,682 @@ def test_los_textos_salen_en_ingles_cuando_quien_mira_lee_en_ingles(monkeypatch,
     assert en["saldo:wavespeed"]["titulo"] == "Video and image generation is paused"
     assert en["saldo:wavespeed_recarga"]["titulo"] == "WaveSpeed ran out of credit"
     assert en["proyecto:logo"]["titulo"] == "No official logos"
+
+
+# =====================================================================================
+# Tarea 4: fuentes de «decisión» y de «fallos» — Crear, orgánico, Sprints y Nicho
+# (spec 2026-09-20-alertas-design.md §2.3, §2.4 y §12.7–8). Con filas reales en la base temporal.
+# =====================================================================================
+
+HACE_30_MIN = "2026-10-02T09:30:00"
+HACE_2_H = "2026-10-02T08:00:00"
+HACE_5_DIAS = "2026-09-27T10:00:00"
+HACE_40_DIAS = "2026-08-23T10:00:00"
+
+
+def _consultas(db, fn, *a, **k):
+    """(resultado, número de sentencias SQL) de llamar a fn."""
+    vistas = []
+
+    def contar(conn, cursor, statement, parameters, context, executemany):
+        vistas.append(statement)
+    event.listen(db.engine(), "before_cursor_execute", contar)
+    try:
+        return fn(*a, **k), len(vistas)
+    finally:
+        event.remove(db.engine(), "before_cursor_execute", contar)
+
+
+# ---------- Crear ----------
+
+def _sesion(cf_id, estado, creado_en, error=None, accion="Zapatillas bajo la lluvia", cliente="acme"):
+    import creative_flow
+    creative_flow.crear(cliente, [], [], [], accion, 8, "tono", "A", legado_id=cf_id, creado_en=creado_en)
+    campos = {"estado": estado}
+    if error is not None:
+        campos["error"] = error
+    creative_flow.actualizar(cliente, cf_id, **campos)
+    return cf_id
+
+
+def test_las_diez_fuentes_se_registran_en_su_orden():
+    import alertas
+    assert [n for n, _ in alertas.FUENTES][:10] == ["llaves", "cuentas", "worker", "saldo", "tablero", "proyecto",
+                                                    "crear", "organico", "sprints", "nicho"]
+
+
+def test_crear_un_prompt_listo_reciente_no_molesta_y_uno_de_2_horas_si(base_temporal):
+    import alertas
+    _sesion("cf_20261002_093000_000001", "prompt_listo", HACE_30_MIN)
+    assert alertas._fuente_crear("acme", AHORA) == []                               # la persona sigue trabajando
+    _sesion("cf_20261002_080000_000002", "prompt_listo", HACE_2_H)
+    x, = alertas._fuente_crear("acme", AHORA)
+    assert x["clave"] == "crear:prompt_listo" and x["nivel"] == "atencion" and x["grupo"] == "decision"
+    assert x["titulo"] == "1 prompt listo sin generar en Crear" and x["tab"] == "creativeflowplus"
+    assert x["ancla"] == "cf-cf_20261002_080000_000002" and x["url"] is None and x["solo_admin"] is False
+    assert x["huella"] == alertas.huella("cf_20261002_080000_000002")
+    assert "generar cuesta lo que dice el botón" in x["detalle"]                    # nada se cobra sin ver el precio
+
+
+def test_crear_el_umbral_de_prompt_listo_es_estrictamente_mas_de_60_minutos(base_temporal):
+    import alertas
+    _sesion("cf_20261002_090000_000001", "prompt_listo", "2026-10-02T09:00:00")      # justo 60 min
+    assert alertas._fuente_crear("acme", AHORA) == []
+    _sesion("cf_20261002_085900_000002", "prompt_listo", "2026-10-02T08:59:00")      # 61 min
+    x, = alertas._fuente_crear("acme", AHORA)
+    assert x["huella"] == alertas.huella("cf_20261002_085900_000002")
+
+
+def test_crear_los_prompts_listos_son_una_sola_alerta_con_el_conteo_y_ids_ordenados(base_temporal):
+    import alertas
+    _sesion("cf_20261002_080000_000009", "prompt_listo", HACE_2_H)
+    _sesion("cf_20261001_080000_000003", "prompt_listo", "2026-10-01T08:00:00")
+    _sesion("cf_20261001_090000_000004", "prompt_listo", "2026-10-01T09:00:00")
+    x, = alertas._fuente_crear("acme", AHORA)
+    assert x["titulo"] == "3 prompts listos sin generar en Crear"
+    ids = ["cf_20261001_080000_000003", "cf_20261001_090000_000004", "cf_20261002_080000_000009"]
+    assert x["huella"] == alertas.huella(*ids) and x["ancla"] == "cf-cf_20261001_080000_000003"
+    _sesion("cf_20261002_050000_000010", "prompt_listo", "2026-10-02T05:00:00")      # otro más: otra huella
+    assert alertas._fuente_crear("acme", AHORA)[0]["huella"] != x["huella"]
+
+
+def test_crear_solo_cuentan_los_prompt_listo_viejos_de_los_ultimos_30_dias(base_temporal):
+    """Un prompt_pendiente (sin armar), un video listo o generando no son «prompt listo»; uno de hace 40 días tampoco."""
+    import alertas
+    _sesion("cf_a", "prompt_pendiente", HACE_2_H)
+    _sesion("cf_b", "video_listo", HACE_2_H)
+    _sesion("cf_c", "video_generando", HACE_2_H)
+    _sesion("cf_d", "prompt_listo", HACE_40_DIAS)
+    assert alertas._fuente_crear("acme", AHORA) == []
+
+
+def test_crear_una_sesion_en_error_es_una_alerta_por_sesion(base_temporal):
+    import alertas
+    _sesion("cf_e1", "error", HACE_5_DIAS, error="WaveSpeed rechazó el prompt: contenido no permitido",
+            accion="  Zapatillas\n bajo   la lluvia ")
+    _sesion("cf_e2", "error", HACE_30_MIN, error=None, accion="x" * 100)
+    por = _por_clave(alertas._fuente_crear("acme", AHORA))
+    assert set(por) == {"crear:error:cf_e1", "crear:error:cf_e2"}
+    e1, e2 = por["crear:error:cf_e1"], por["crear:error:cf_e2"]
+    assert e1["nivel"] == "atencion" and e1["grupo"] == "fallos" and e1["tab"] == "creativeflowplus"
+    assert e1["ancla"] == "cf-cf_e1" and e1["entidad"] == "cf_e1" and e1["solo_admin"] is False
+    assert e1["titulo"] == "Falló «Zapatillas bajo la lluvia» en Crear"            # una línea, sin saltos
+    assert e1["detalle"] == "WaveSpeed rechazó el prompt: contenido no permitido Rearma el prompt o vuelve a generar."
+    assert e1["huella"] == alertas.huella("WaveSpeed rechazó el prompt: contenido no permitido")
+    assert e2["titulo"] == "Falló «" + "x" * 60 + "» en Crear"                      # la acción central, recortada a 60
+    assert e2["detalle"] == "Rearma el prompt o vuelve a generar." and e2["huella"] == alertas.huella("")
+
+
+def test_crear_un_error_de_hace_40_dias_es_historia_y_el_de_30_dias_justos_todavia_cuenta(base_temporal):
+    import alertas
+    _sesion("cf_viejo", "error", HACE_40_DIAS, error="viejo")
+    _sesion("cf_justo", "error", "2026-09-02T10:00:00", error="justo")                # 30 días exactos
+    _sesion("cf_pasado", "error", "2026-09-02T09:59:00", error="pasado")              # 30 días y un minuto
+    assert _claves(alertas._fuente_crear("acme", AHORA)) == ["crear:error:cf_justo"]
+
+
+def test_crear_el_error_sale_sin_tokens_y_acotado_a_200(base_temporal):
+    import alertas
+    _sesion("cf_t", "error", HACE_30_MIN, error="Falló: https://api.x/y?access_token=SECRETO&z=1 " + "<html>" * 100)
+    x, = alertas._fuente_crear("acme", AHORA)
+    assert "SECRETO" not in x["detalle"] and "access_token=***" in x["detalle"]
+    assert len(x["detalle"]) <= 200 + len(" Rearma el prompt o vuelve a generar.")
+    assert x["huella"] == alertas.huella(x["detalle"][: -len(" Rearma el prompt o vuelve a generar.")])
+
+
+def test_crear_no_mezcla_proyectos_ni_cuenta_las_finales(base_temporal):
+    import alertas
+    import creative_flow
+    _sesion("cf_otro", "error", HACE_30_MIN, error="de otro", cliente="otro")
+    _sesion("cf_base", "video_listo", HACE_5_DIAS)
+    fid = creative_flow.crear_final("acme", "cf_base", "es", "CO")
+    creative_flow.actualizar_final("acme", fid, estado="error")                      # una final en error NO es una sesión de Crear
+    assert alertas._fuente_crear("acme", AHORA) == []
+    assert _claves(alertas._fuente_crear("otro", AHORA)) == ["crear:error:cf_otro"]
+
+
+def test_crear_las_finales_de_una_sesion_no_la_duplican(base_temporal):
+    """Una final cuelga del mismo concepto que su sesión: sin filtrar `tipo != final` cada final repetiría la alerta."""
+    import alertas
+    import creative_flow
+    _sesion("cf_con_finales", "error", HACE_5_DIAS, error="falló")
+    _sesion("cf_listo_con_finales", "prompt_listo", HACE_2_H)
+    for cf in ("cf_con_finales", "cf_listo_con_finales"):
+        for pais in ("CO", "MX"):
+            creative_flow.crear_final("acme", cf, "es", pais)
+    a = alertas._fuente_crear("acme", AHORA)
+    assert sorted(_claves(a)) == ["crear:error:cf_con_finales", "crear:prompt_listo"]
+    assert _por_clave(a)["crear:prompt_listo"]["titulo"] == "1 prompt listo sin generar en Crear"
+
+
+def test_crear_el_estado_sale_igual_que_creative_flow_cargar(base_temporal):
+    """El estado se deriva como `creative_flow._a_dict` (estado_legado, o el de la pieza), sin cargar nada."""
+    import alertas
+    import creative_flow
+    for i, (estado, creado) in enumerate([("prompt_listo", HACE_2_H), ("error", HACE_5_DIAS), ("video_listo", HACE_2_H),
+                                          ("prompt_pendiente", HACE_2_H), ("video_generando", HACE_2_H)]):
+        _sesion(f"cf_{i}", estado, creado, error="falló" if estado == "error" else None)
+    cargadas = creative_flow.cargar("acme")
+    esperadas = {f"crear:error:{c}" for c, s in cargadas.items() if s["estado"] == "error"}
+    esperadas |= {"crear:prompt_listo"} if any(s["estado"] == "prompt_listo" for s in cargadas.values()) else set()
+    assert set(_claves(alertas._fuente_crear("acme", AHORA))) == esperadas == {"crear:error:cf_1", "crear:prompt_listo"}
+
+
+def test_crear_una_sesion_sin_estado_legado_usa_el_estado_de_su_pieza(base_temporal):
+    """Las sesiones anteriores al `estado_legado` solo traen el estado de la pieza: `pendiente` es un prompt listo
+    (`creative_flow._PIEZA_A_ESTADO`) y `error` es un error, igual que en `creative_flow.cargar`."""
+    import alertas
+    import creative_flow
+    import db
+    _sesion("cf_vieja_listo", "prompt_listo", HACE_2_H)
+    _sesion("cf_vieja_error", "error", HACE_5_DIAS, error="falló")
+    _sesion("cf_vieja_video", "video_listo", HACE_2_H)
+    with db.conectar() as con:
+        for f in con.execute(db.concepto.select().where(db.concepto.c.cliente == "acme")).fetchall():
+            extra = {k: v for k, v in (f.extra or {}).items() if k != "estado_legado"}
+            con.execute(db.concepto.update().where(db.concepto.c.id == f.id).values(extra=extra))
+    estados = {cf: s["estado"] for cf, s in creative_flow.cargar("acme").items()}
+    assert estados == {"cf_vieja_listo": "prompt_listo", "cf_vieja_error": "error", "cf_vieja_video": "video_listo"}
+    assert sorted(_claves(alertas._fuente_crear("acme", AHORA))) == ["crear:error:cf_vieja_error", "crear:prompt_listo"]
+
+
+def test_crear_corre_una_sola_consulta_y_nunca_carga_las_sesiones(base_temporal, monkeypatch):
+    import alertas
+    import creative_flow
+    monkeypatch.setattr(creative_flow, "cargar", lambda *a, **k: (_ for _ in ()).throw(AssertionError("cargó todo")))
+    for i in range(12):
+        _sesion(f"cf_{i:02d}", ["prompt_listo", "error", "video_listo"][i % 3], HACE_2_H, error="falló")
+    lista, n = _consultas(base_temporal, alertas._fuente_crear, "acme", AHORA)
+    assert n == 1 and len(lista) == 5                                                  # 1 de prompts listos + 4 errores
+
+
+def test_calcular_no_crece_con_las_sesiones_de_crear(base_temporal, monkeypatch, tmp_path):
+    """3 sesiones o 30: las mismas sentencias SQL (la pestaña se calcula en cada carga de página)."""
+    import alertas
+    _proyecto(monkeypatch, tmp_path)
+
+    def sembrar(desde, hasta):
+        for i in range(desde, hasta):
+            _sesion(f"cf_{i:03d}", ["prompt_listo", "error", "video_listo"][i % 3], HACE_2_H, error="falló")
+    sembrar(0, 3)
+    alertas.calcular("acme", AHORA)                                                    # calienta cachés de módulos
+    _, con_3 = _consultas(base_temporal, alertas.calcular, "acme", AHORA)
+    sembrar(3, 30)
+    todas, con_30 = _consultas(base_temporal, alertas.calcular, "acme", AHORA)
+    assert con_30 == con_3
+    assert sum(1 for a in todas if a["clave"].startswith("crear:error:")) == 10        # y de verdad vio las 30
+
+
+# ---------- orgánico ----------
+
+def _publicacion(estado, actualizado_en, error=None, plataforma="instagram", accion="Pantuflas de lana", cliente="acme",
+                 cf_id=None):
+    """Una publicación de la pieza de una sesión de Crear; devuelve su id."""
+    import creative_flow
+    import db
+    cf_id = cf_id or f"cf_pub_{db.ahora()}_{plataforma}_{estado}_{actualizado_en}"
+    if not creative_flow.pieza_id_por_legado(cliente, cf_id):
+        _sesion(cf_id, "video_listo", HACE_5_DIAS, accion=accion, cliente=cliente)
+    pid = creative_flow.pieza_id_por_legado(cliente, cf_id)
+    with db.conectar() as con:
+        return con.execute(db.publicacion.insert().values(
+            cliente=cliente, creado_en=actualizado_en, actualizado_en=actualizado_en, pieza_id=pid, plataforma=plataforma,
+            estado=estado, caption="texto", error=error, origen="manual", extra={})).inserted_primary_key[0]
+
+
+def test_organico_una_publicacion_en_error_es_una_alerta(base_temporal):
+    import alertas
+    pid = _publicacion("error", HACE_5_DIAS, error="TikTok: el video dura más del máximo permitido", plataforma="tiktok")
+    x, = alertas._fuente_organico("acme", AHORA)
+    assert x["clave"] == f"organico:error:{pid}" and x["nivel"] == "atencion" and x["grupo"] == "fallos"
+    assert x["titulo"] == "Falló la publicación en TikTok de «Pantuflas de lana»" and x["tab"] == "experimentos"
+    assert x["detalle"] == "TikTok: el video dura más del máximo permitido Reintenta desde la pieza."
+    assert x["huella"] == alertas.huella("TikTok: el video dura más del máximo permitido")
+    assert x["entidad"] == pid and x["ancla"] is None and x["url"] is None and x["solo_admin"] is False
+
+
+def test_organico_solo_cuentan_los_errores_de_los_ultimos_30_dias(base_temporal):
+    import alertas
+    _publicacion("error", HACE_40_DIAS, error="viejo", plataforma="facebook")
+    _publicacion("publicada", HACE_5_DIAS, plataforma="instagram")
+    _publicacion("en_cola", HACE_5_DIAS, plataforma="youtube")
+    _publicacion("publicando", HACE_5_DIAS, plataforma="tiktok")
+    _publicacion("error", "2026-09-02T10:00:00", error="justo", plataforma="youtube", accion="Otra")      # 30 días exactos
+    _publicacion("error", "2026-09-02T09:59:00", error="pasado", plataforma="facebook", accion="Otra más")
+    _publicacion("error", HACE_5_DIAS, error="de otro", cliente="otro")
+    a = alertas._fuente_organico("acme", AHORA)
+    assert [x["huella"] for x in a] == [alertas.huella("justo")]
+
+
+def test_organico_error_sin_tokens_y_sin_nombre_de_pieza(base_temporal):
+    import alertas
+    _publicacion("error", HACE_5_DIAS, error="Meta: access_token=SECRETO&x=1 " + "z" * 400, plataforma="facebook", accion="")
+    x, = alertas._fuente_organico("acme", AHORA)
+    assert "SECRETO" not in x["detalle"] and "access_token=***" in x["detalle"]
+    assert x["titulo"].startswith("Falló la publicación en Facebook (Página) de «pieza ")
+    assert len(x["detalle"]) <= 200 + len(" Reintenta desde la pieza.")
+
+
+def test_organico_corre_una_sola_consulta_sin_importar_cuantas_publicaciones(base_temporal):
+    import alertas
+    for i in range(8):
+        _publicacion("error", HACE_5_DIAS, error=f"falló {i}", plataforma="instagram", accion=f"Pieza {i}", cf_id=f"cf_p{i}")
+    lista, n = _consultas(base_temporal, alertas._fuente_organico, "acme", AHORA)
+    assert n == 1 and len(lista) == 8
+
+
+# ---------- Sprints ----------
+
+def _sprint(nombre="Octubre", estado=None, archivado=False, inicio="2026-10-01"):
+    from sprints import datos
+    sid = datos.crear_sprint("acme", nombre, inicio, "2026-10-31")
+    if estado:
+        datos.actualizar_sprint("acme", sid, estado=estado)
+    if archivado:
+        datos.archivar_sprint("acme", sid)
+    return sid
+
+
+def _campana(sid, estado=None):
+    from sprints import datos
+    personas = datos.personas("acme")
+    pid = personas[0]["id"] if personas else datos.crear_persona("acme", "Carla")
+    cid = datos.agregar_campana("acme", sid, pid, "pantuflas")
+    if estado:
+        datos.actualizar_campana("acme", cid, estado=estado)
+    return cid
+
+
+def _idea(cid, estado_idea=None, cf_estado=None, revision="pendiente", qa=None, pieza_estado=None):
+    """Una idea de la campaña (propuesta, o aprobada si ya tiene sesión); con `cf_estado` tiene su sesión de Crear
+    (y `pieza_estado` fuerza el estado de su pieza)."""
+    import db
+    from sprints import datos
+    estado_idea = estado_idea or ("aprobada" if cf_estado else "propuesta")
+    cp = datos.crear_idea("acme", cid, "video", f"Idea {cid}-{estado_idea}", "escena", estado_idea=estado_idea)
+    if cf_estado:
+        cf = f"cf_sp_{cp}"
+        _sesion(cf, cf_estado, HACE_5_DIAS)
+        if pieza_estado:
+            with db.conectar() as con:
+                con.execute(db.pieza.update().where(db.pieza.c.legado_id == cf).values(estado=pieza_estado))
+        datos.actualizar_idea("acme", cp, cf_id=cf, revision=revision, qa=qa)
+    return cp
+
+
+def test_sprint_ideas_propuestas_en_una_campana_en_ideas_propuestas(base_temporal):
+    import alertas
+    sid = _sprint("Octubre")
+    cid = _campana(sid, estado="ideas_propuestas")
+    a1, a2 = _idea(cid), _idea(cid)
+    _idea(cid, estado_idea="aprobada")
+    _idea(cid, estado_idea="descartada")
+    otra = _campana(sid, estado="ideas_aprobadas")
+    _idea(otra)                                                                       # propuesta, pero su campaña no espera ideas
+    x, = alertas._fuente_sprints("acme", AHORA)
+    assert x["clave"] == f"sprint:ideas:{sid}" and x["nivel"] == "atencion" and x["grupo"] == "decision"
+    assert x["titulo"] == "2 ideas por aprobar en el sprint «Octubre»" and x["tab"] == "sprints"
+    assert x["url"] == f"/cliente/acme/sprints/{sid}" and x["entidad"] == sid and x["ancla"] is None
+    assert x["huella"] == alertas.huella(a1, a2)
+    assert "para poder generar el lote" in x["detalle"]
+
+
+def test_sprint_ideas_en_singular(base_temporal):
+    import alertas
+    cid = _campana(_sprint("Octubre"), estado="ideas_propuestas")
+    _idea(cid)
+    x, = alertas._fuente_sprints("acme", AHORA)
+    assert x["titulo"] == "1 idea por aprobar en el sprint «Octubre»"
+
+
+def test_sprint_revision_piezas_terminadas_sin_revisar_igual_que_el_resumen(base_temporal):
+    import alertas
+    from sprints import revision
+    sid = _sprint("Octubre")
+    cid = _campana(sid, estado="revision")
+    p1 = _idea(cid, cf_estado="video_listo", revision="pendiente")
+    p2 = _idea(cid, cf_estado="video_listo", revision="pendiente", pieza_estado="degradada")
+    _idea(cid, cf_estado="video_listo", revision="aprobada")
+    _idea(cid, cf_estado="video_listo", revision="rechazada")
+    _idea(cid, cf_estado="video_generando", revision="pendiente")                     # todavía no terminó
+    _idea(cid, cf_estado="error", revision="pendiente", pieza_estado="error")         # fallida: no se revisa
+    _idea(cid, estado_idea="descartada", cf_estado="video_listo", revision="pendiente")   # descartada: no es una pieza
+    x, = [a for a in alertas._fuente_sprints("acme", AHORA) if a["clave"].startswith("sprint:revision:")]
+    assert x["clave"] == f"sprint:revision:{sid}" and x["nivel"] == "atencion" and x["grupo"] == "decision"
+    assert x["titulo"] == "2 piezas por revisar en el sprint «Octubre»" and x["huella"] == alertas.huella(2)
+    assert x["url"] == f"/cliente/acme/sprints/{sid}" and x["tab"] == "sprints"
+    assert revision.resumen("acme", sid)["sin_revisar"] == 2                           # la misma cuenta que el resumen del sprint
+    assert p1 != p2
+
+
+def test_sprint_fallos_piezas_en_error_o_con_qa_que_falla(base_temporal):
+    import alertas
+    from sprints import revision
+    sid = _sprint("Octubre")
+    cid = _campana(sid, estado="revision")
+    e = _idea(cid, cf_estado="error", pieza_estado="error")
+    q = _idea(cid, cf_estado="video_listo", qa={"veredicto": "falla", "puntaje": 40})
+    _idea(cid, cf_estado="video_listo", qa={"veredicto": "pasa", "puntaje": 90})
+    _idea(cid, cf_estado="video_listo")
+    _idea(cid, estado_idea="descartada", cf_estado="error", pieza_estado="error")
+    x, = [a for a in alertas._fuente_sprints("acme", AHORA) if a["clave"].startswith("sprint:fallos:")]
+    assert x["clave"] == f"sprint:fallos:{sid}" and x["nivel"] == "atencion" and x["grupo"] == "fallos"
+    assert x["titulo"] == "2 piezas fallidas en el sprint «Octubre»" and x["huella"] == alertas.huella(*sorted([e, q]))
+    assert x["url"] == f"/cliente/acme/sprints/{sid}" and "vuelve a pasar por el costo" in x["detalle"]
+    assert revision.resumen("acme", sid)["error"] == 1                                 # el error del resumen es una de las dos
+
+
+def test_sprint_referencias_con_el_analisis_en_error(base_temporal):
+    import alertas
+    from sprints import datos
+    sid = _sprint("Octubre")
+    cid = _campana(sid)
+    r1 = datos.agregar_referencia("acme", cid, "imagen", "https://x/1.png")
+    r2 = datos.agregar_referencia("acme", cid, "imagen", "https://x/2.png")
+    r3 = datos.agregar_referencia("acme", cid, "imagen", "https://x/3.png")
+    datos.actualizar_referencia("acme", r1, analisis_estado="error")
+    datos.actualizar_referencia("acme", r2, analisis_estado="error")
+    datos.actualizar_referencia("acme", r3, analisis_estado="listo")
+    datos.agregar_referencia("acme", cid, "imagen", "https://x/4.png")                 # sin analizar todavía: no es un error
+    x, = alertas._fuente_sprints("acme", AHORA)
+    assert x["clave"] == f"sprint:referencias:{sid}" and x["nivel"] == "info" and x["grupo"] == "fallos"
+    assert x["titulo"] == "2 referencias sin analizar en el sprint «Octubre»" and x["huella"] == alertas.huella(r1, r2)
+    assert x["url"] == f"/cliente/acme/sprints/{sid}" and x["entidad"] == sid
+
+
+def test_sprint_completado_o_archivado_no_alerta_y_otro_proyecto_tampoco(base_temporal):
+    import alertas
+    from sprints import datos
+    for kw in ({"estado": "completado"}, {"archivado": True}):
+        cid = _campana(_sprint(f"Cerrado {kw}", **kw), estado="ideas_propuestas")
+        _idea(cid)
+        _idea(cid, cf_estado="error", pieza_estado="error")
+        r = datos.agregar_referencia("acme", cid, "imagen", "https://x/1.png")
+        datos.actualizar_referencia("acme", r, analisis_estado="error")
+    assert alertas._fuente_sprints("acme", AHORA) == []
+    assert alertas._fuente_sprints("otro", AHORA) == []
+
+
+def test_sprint_las_alertas_siguen_el_orden_de_la_lista_de_sprints(base_temporal):
+    import alertas
+    viejo = _sprint("Septiembre", inicio="2026-09-01")
+    nuevo = _sprint("Octubre", inicio="2026-10-01")
+    for sid in (viejo, nuevo):
+        _idea(_campana(sid, estado="ideas_propuestas"))
+    assert _claves(alertas._fuente_sprints("acme", AHORA)) == [f"sprint:ideas:{nuevo}", f"sprint:ideas:{viejo}"]
+
+
+def test_sprint_una_reserva_vencida_no_es_una_pieza(base_temporal):
+    """Una idea reservada para generar cuyo proceso murió (placeholder vencido) no cuenta como pieza."""
+    import alertas
+    from sprints import datos
+    sid = _sprint("Octubre")
+    cid = _campana(sid, estado="ideas_aprobadas")
+    cp = _idea(cid, estado_idea="aprobada")
+    datos.actualizar_idea("acme", cp, cf_id=datos.reserva_placeholder(cp, ahora=1_000), qa={"veredicto": "falla"})
+    assert alertas._fuente_sprints("acme", AHORA) == []
+
+
+def test_sprints_corre_las_mismas_consultas_con_1_o_con_6_sprints(base_temporal):
+    import alertas
+    from sprints import datos
+
+    def sembrar(n):
+        for i in range(n):
+            sid = _sprint(f"Sprint {i}", inicio=f"2026-0{1 + i % 9}-01")
+            for _ in range(2):
+                cid = _campana(sid, estado="ideas_propuestas")
+                _idea(cid)
+                _idea(cid, cf_estado="video_listo")
+                _idea(cid, cf_estado="error", pieza_estado="error")
+                datos.actualizar_referencia("acme", datos.agregar_referencia("acme", cid, "imagen", f"https://x/{i}.png"),
+                                            analisis_estado="error")
+    sembrar(1)
+    a1, con_1 = _consultas(base_temporal, alertas._fuente_sprints, "acme", AHORA)
+    sembrar(5)
+    a6, con_6 = _consultas(base_temporal, alertas._fuente_sprints, "acme", AHORA)
+    assert con_1 == con_6 == 2 and len(a1) == 4 and len(a6) == 24
+
+
+# ---------- Nicho ----------
+
+def _estudio(nombre="Pantuflas", archivado=False):
+    from nicho import datos
+    eid = datos.crear_estudio("acme", nombre, tema="t")
+    if archivado:
+        datos.archivar_estudio("acme", eid)
+    return eid
+
+
+def _proponer(eid, n, nombre="Sub"):
+    """n sub-avatares propuestos en el estudio."""
+    from nicho import datos
+    datos.guardar_generacion("acme", eid, [{"nombre": "Núcleo", "deseo": "d", "resumen": "r",
+                                            "sub_avatares": [{"nombre": f"{nombre} {i}", "deseo": "d", "base": "emocion"}
+                                                             for i in range(n)]}])
+
+
+def test_nicho_avatares_propuestos_son_una_sola_alerta_del_proyecto(base_temporal):
+    import alertas
+    assert alertas._fuente_nicho("acme", AHORA) == []
+    _proponer(_estudio("Uno"), 2)
+    _proponer(_estudio("Dos"), 1)
+    x, = alertas._fuente_nicho("acme", AHORA)
+    assert x["clave"] == "nicho:avatares" and x["nivel"] == "atencion" and x["grupo"] == "decision"
+    assert x["titulo"] == "3 avatares propuestos por aprobar" and x["tab"] == "nicho"
+    assert x["url"] == "/cliente/acme/nicho/avatares" and x["huella"] == alertas.huella(3)
+    assert "cada uno se vuelve una persona de Sprints" in x["detalle"] and x["entidad"] is None
+
+
+def test_nicho_un_avatar_en_singular_y_los_de_un_estudio_archivado_no_cuentan(base_temporal):
+    import alertas
+    _proponer(_estudio("Viejo", archivado=True), 4)
+    _proponer(_estudio("Nuevo"), 1)
+    x, = alertas._fuente_nicho("acme", AHORA)
+    assert x["titulo"] == "1 avatar propuesto por aprobar"
+
+
+def test_nicho_aprobar_un_avatar_baja_el_conteo_y_aprobarlos_todos_quita_la_alerta(base_temporal):
+    import alertas
+    from nicho import datos
+    eid = _estudio()
+    _proponer(eid, 2)
+    antes, = alertas._fuente_nicho("acme", AHORA)
+    subs = datos.avatares("acme", eid)[0]["subs"]
+    datos.descartar_avatar("acme", subs[0]["id"])
+    despues, = alertas._fuente_nicho("acme", AHORA)
+    assert despues["titulo"] == "1 avatar propuesto por aprobar" and despues["huella"] != antes["huella"]
+    datos.descartar_avatar("acme", subs[1]["id"])
+    assert alertas._fuente_nicho("acme", AHORA) == []
+
+
+def test_nicho_una_investigacion_interrumpida_es_un_fallo(base_temporal):
+    import alertas
+    from nicho import datos
+    eid = _estudio("Pantuflas")
+    datos.iniciar_investigacion("acme", eid, {"estado": "interrumpida", "ultimo_error": "Apify: límite del plan alcanzado"})
+    x, = alertas._fuente_nicho("acme", AHORA)
+    assert x["clave"] == f"nicho:error:{eid}" and x["nivel"] == "atencion" and x["grupo"] == "fallos"
+    assert x["titulo"] == "Se interrumpió la investigación de «Pantuflas»" and x["tab"] == "nicho"
+    assert x["url"] == f"/cliente/acme/nicho/{eid}" and x["entidad"] == eid
+    assert x["detalle"] == "Apify: límite del plan alcanzado Ábrela y pulsa «Reanudar» para retomarla donde quedó."
+    assert x["huella"] == alertas.huella("Apify: límite del plan alcanzado")
+    datos.actualizar_investigacion("acme", eid, lambda i: {**i, "estado": "lista"})                    # se resolvió: desaparece
+    assert alertas._fuente_nicho("acme", AHORA) == []
+
+
+def test_nicho_una_investigacion_detenida_es_un_fallo_salvo_que_la_persona_la_cancelara(base_temporal):
+    import alertas
+    from nicho import datos
+    eid = _estudio("Pantuflas")
+    datos.iniciar_investigacion("acme", eid, {"estado": "detenida", "detenida_por": "cancelada"})
+    assert alertas._fuente_nicho("acme", AHORA) == []                                                  # lo decidió la persona
+    datos.actualizar_investigacion("acme", eid, lambda i: {**i, "detenida_por": "sin consultas"})
+    x, = alertas._fuente_nicho("acme", AHORA)
+    assert x["clave"] == f"nicho:error:{eid}" and x["titulo"] == "Se detuvo la investigación de «Pantuflas»"
+    assert x["detalle"] == "Detenida: sin consultas. Ábrela en el estudio para reanudarla o investigar de nuevo."
+    assert x["huella"] == alertas.huella("sin consultas")
+
+
+def test_nicho_la_huella_de_una_investigacion_detenida_no_depende_del_idioma_de_quien_mira(base_temporal):
+    """El motivo se guarda como msgid (`N_`) y se traduce al mostrarlo; la huella usa lo guardado, así un descarte
+    hecho en inglés sigue valiendo en español."""
+    import alertas
+    import idiomas
+    from nicho import datos
+    eid = _estudio("Pantuflas")
+    datos.iniciar_investigacion("acme", eid, {"estado": "detenida", "detenida_por": "sin consultas"})
+    es, = alertas._fuente_nicho("acme", AHORA)
+    with idiomas.en_idioma("en"):
+        en, = alertas._fuente_nicho("acme", AHORA)
+    assert en["huella"] == es["huella"] == alertas.huella("sin consultas")
+    assert en["detalle"] != es["detalle"] and "sin consultas" not in en["detalle"]          # lo que se ve sí se traduce
+
+
+def test_nicho_un_error_de_generacion_en_el_estudio_es_un_fallo(base_temporal):
+    import alertas
+    from nicho import datos
+    eid = _estudio("Pantuflas")
+    datos.actualizar_extra_estudio("acme", eid, lambda x: {**x, "ultimo_error": "Claude devolvió una respuesta vacía"})
+    x, = alertas._fuente_nicho("acme", AHORA)
+    assert x["clave"] == f"nicho:error:{eid}" and x["titulo"] == "Falló la generación de avatares en «Pantuflas»"
+    assert x["detalle"] == "Claude devolvió una respuesta vacía Vuelve a generar desde el estudio."
+    assert x["huella"] == alertas.huella("Claude devolvió una respuesta vacía") and x["url"] == f"/cliente/acme/nicho/{eid}"
+
+
+def test_nicho_una_sola_alerta_de_error_por_estudio_y_la_investigacion_manda(base_temporal):
+    import alertas
+    from nicho import datos
+    eid = _estudio("Pantuflas")
+    datos.actualizar_extra_estudio("acme", eid, lambda x: {**x, "ultimo_error": "viejo"})
+    datos.iniciar_investigacion("acme", eid, {"estado": "interrumpida", "ultimo_error": "nuevo"})
+    x, = alertas._fuente_nicho("acme", AHORA)
+    assert x["titulo"].startswith("Se interrumpió la investigación") and x["huella"] == alertas.huella("nuevo")
+
+
+def test_nicho_estudios_archivados_ocultos_y_sin_error_no_alertan(base_temporal):
+    import alertas
+    from nicho import datos
+    sano = _estudio("Sano")
+    datos.iniciar_investigacion("acme", sano, {"estado": "consultas"})                                  # viva: no es un fallo
+    viejo = _estudio("Archivado", archivado=True)
+    datos.actualizar_extra_estudio("acme", viejo, lambda x: {**x, "ultimo_error": "falló"})
+    oculto, _ = datos.estudio_manual("acme")                                                              # el de avatares a mano
+    datos.actualizar_extra_estudio("acme", oculto, lambda x: {**x, "ultimo_error": "falló"})
+    assert alertas._fuente_nicho("acme", AHORA) == []
+
+
+def test_nicho_el_error_sale_sin_tokens_y_acotado_a_200(base_temporal):
+    import alertas
+    from nicho import datos
+    eid = _estudio()
+    datos.iniciar_investigacion("acme", eid, {"estado": "interrumpida", "ultimo_error": "Apify: token=SECRETO&x=1 " + "p" * 400})
+    x, = alertas._fuente_nicho("acme", AHORA)
+    assert "SECRETO" not in x["detalle"] and "token=***" in x["detalle"]
+    assert len(x["detalle"]) <= 200 + len(" Ábrela y pulsa «Reanudar» para retomarla donde quedó.")
+
+
+def test_nicho_el_error_de_generacion_tambien_sale_sin_tokens_y_acotado(base_temporal):
+    import alertas
+    from nicho import datos
+    eid = _estudio()
+    datos.actualizar_extra_estudio("acme", eid, lambda x: {**x, "ultimo_error": "Claude: key=SECRETO&x=1 " + "p" * 400})
+    x, = alertas._fuente_nicho("acme", AHORA)
+    assert "SECRETO" not in x["detalle"] and "key=***" in x["detalle"]
+    assert len(x["detalle"]) <= 200 + len(" Vuelve a generar desde el estudio.")
+
+
+def test_nicho_corre_las_mismas_consultas_con_1_o_con_6_estudios(base_temporal):
+    import alertas
+    from nicho import datos
+
+    def sembrar(n):
+        for i in range(n):
+            eid = _estudio(f"Estudio {i}")
+            _proponer(eid, 2)
+            datos.iniciar_investigacion("acme", eid, {"estado": "interrumpida", "ultimo_error": f"falló {i}"})
+    sembrar(1)
+    a1, con_1 = _consultas(base_temporal, alertas._fuente_nicho, "acme", AHORA)
+    sembrar(5)
+    a6, con_6 = _consultas(base_temporal, alertas._fuente_nicho, "acme", AHORA)
+    assert con_1 == con_6 == 4 and len(a1) == 2 and len(a6) == 7                                        # 1 de errores + 3 de avatares
+
+
+# ---------- las rutas armadas sin Flask ----------
+
+def test_las_rutas_armadas_sin_flask_son_las_reales(base_temporal):
+    """`alertas` no puede usar `url_for` (nunca importa `dashboard`): si una ruta cambia, esto avisa."""
+    import alertas
+    import dashboard
+    from flask import url_for
+    with dashboard.app.test_request_context():
+        assert alertas._url_proyecto("acme", "sprints", 7) == url_for("sprints.ver", cliente="acme", sid=7)
+        assert alertas._url_proyecto("acme", "nicho", 5) == url_for("nicho.ver", cliente="acme", eid=5)
+        assert alertas._url_proyecto("acme", "nicho", "avatares") == url_for("nicho.avatares_proyecto", cliente="acme")
+        assert alertas._url_proyecto("a b", "nicho", 5) == url_for("nicho.ver", cliente="a b", eid=5)      # también escapa
+
+
+# ---------- las diez juntas, con lo real ----------
+
+def test_las_diez_fuentes_reales_corren_juntas_y_el_cliente_ve_lo_suyo(base_temporal, monkeypatch, tmp_path):
+    import alertas
+    from nicho import datos as nicho
+    _proyecto(monkeypatch, tmp_path)
+    _sesion("cf_listo", "prompt_listo", HACE_2_H)
+    _sesion("cf_error", "error", HACE_5_DIAS, error="falló")
+    _publicacion("error", HACE_5_DIAS, error="falló", plataforma="tiktok")
+    sid = _sprint("Octubre")
+    _idea(_campana(sid, estado="ideas_propuestas"))
+    eid = _estudio()
+    _proponer(eid, 1)
+    nicho.iniciar_investigacion("acme", eid, {"estado": "interrumpida", "ultimo_error": "falló"})
+    todas = alertas.calcular("acme", AHORA)
+    assert not [a for a in todas if a["clave"].startswith("revision:")]
+    claves = set(_claves(todas))
+    assert {"crear:prompt_listo", "crear:error:cf_error", f"sprint:ideas:{sid}", "nicho:avatares",
+            f"nicho:error:{eid}"} <= claves
+    assert any(c.startswith("organico:error:") for c in claves)
+    ve = alertas.visibles("acme", AHORA, rol="cliente")["visibles"]
+    assert {"crear:prompt_listo", f"sprint:ideas:{sid}", "nicho:avatares"} <= set(_claves(ve))
+    por_grupo = {a["clave"]: a["grupo"] for a in todas}
+    assert por_grupo["crear:prompt_listo"] == por_grupo["nicho:avatares"] == "decision"
+    assert por_grupo["crear:error:cf_error"] == por_grupo[f"nicho:error:{eid}"] == "fallos"
+    import re
+    assert all(re.match(alertas.CLAVE_VALIDA, a["clave"]) and re.match(alertas.HUELLA_VALIDA, a["huella"]) for a in todas)
+
+
+def test_los_textos_nuevos_salen_en_ingles_cuando_quien_mira_lee_en_ingles(base_temporal):
+    """Todo título y detalle de las cuatro fuentes pasa por el catálogo, con su plural."""
+    import alertas
+    import idiomas
+    from nicho import datos as nicho
+    from sprints import datos
+    _sesion("cf_a", "prompt_listo", HACE_2_H)
+    _sesion("cf_b", "prompt_listo", HACE_2_H)
+    _sesion("cf_e", "error", HACE_5_DIAS, error="falló", accion="Zapatillas")
+    fb = _publicacion("error", HACE_5_DIAS, error="falló", plataforma="facebook", accion="Pantuflas")
+    _publicacion("error", HACE_5_DIAS, error="", plataforma="tiktok", accion="")
+    sid = _sprint("Octubre")
+    cid = _campana(sid, estado="ideas_propuestas")
+    _idea(cid)
+    _idea(cid)
+    _idea(cid, cf_estado="video_listo")
+    _idea(cid, cf_estado="error", pieza_estado="error")
+    datos.actualizar_referencia("acme", datos.agregar_referencia("acme", cid, "imagen", "https://x/1.png"), analisis_estado="error")
+    e1, e2, e3 = _estudio("Uno"), _estudio("Dos"), _estudio("Tres")
+    _proponer(e1, 3)
+    nicho.iniciar_investigacion("acme", e1, {"estado": "interrumpida", "ultimo_error": "falló"})
+    nicho.iniciar_investigacion("acme", e2, {"estado": "detenida", "detenida_por": "sin consultas"})
+    nicho.actualizar_extra_estudio("acme", e3, lambda x: {**x, "ultimo_error": "falló"})
+    fuentes = (alertas._fuente_crear, alertas._fuente_organico, alertas._fuente_sprints, alertas._fuente_nicho)
+    es = {a["clave"]: a for f in fuentes for a in f("acme", AHORA)}
+    with idiomas.en_idioma("en"):
+        en = {a["clave"]: a for f in fuentes for a in f("acme", AHORA)}
+    assert set(en) == set(es) and len(en) >= 10
+    assert [(c, campo) for c, a in en.items() for campo in ("titulo", "detalle") if a[campo] == es[c][campo]] == []
+    assert en["crear:prompt_listo"]["titulo"] == "2 ready prompts not yet generated in Create"
+    assert en["crear:error:cf_e"]["titulo"] == "“Zapatillas” failed in Create"
+    assert en[f"sprint:ideas:{sid}"]["titulo"] == "2 ideas to approve in the sprint “Octubre”"
+    assert en[f"organico:error:{fb}"]["titulo"] == "Publishing “Pantuflas” to Facebook (Page) failed"
+    assert en["nicho:avatares"]["titulo"] == "3 proposed avatars to approve"
+    assert en[f"nicho:error:{e1}"]["titulo"] == "The research of “Uno” was interrupted"

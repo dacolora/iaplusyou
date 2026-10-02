@@ -32,10 +32,11 @@ módulo.
 import hashlib
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
+from urllib.parse import quote
 
 import sqlalchemy as sa
-from flask_babel import gettext
+from flask_babel import gettext, ngettext
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import cola
@@ -53,6 +54,8 @@ NOMBRES_TAB = {"settings": idiomas.N_("Configuración"), "catalogo": idiomas.N_(
                "experimentos": idiomas.N_("Experimentos"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho")}
 
 MINUTOS_WORKER = 30                                  # más de esto sin señal de vida y el worker está parado
+MINUTOS_PROMPT_LISTO = 60                            # un prompt listo más nuevo que esto no molesta: la persona sigue trabajando
+DIAS_FALLOS = 30                                     # un fallo más viejo que esto es historia, no una alerta
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")      # lo que cuenta como logo en clientes/<c>/logos/
 
 # Lo que las rutas aceptan al descartar/restaurar (una clave o huella que no
@@ -96,6 +99,23 @@ def _minutos(desde_iso, ahora_iso):
 def _limpio(texto, n=200):
     """Texto de error apto para una alerta: sin tokens y recortado."""
     return cola.recortar(cola.sin_token(texto), n)
+
+
+def _hace(ahora_iso, **tiempo):
+    """El ISO de 19 caracteres de `tiempo` (days=, minutes=) antes de `ahora_iso`: el borde con el que se compara,
+    como texto, una columna de fecha de la base (todas guardan `YYYY-MM-DDTHH:MM:SS`)."""
+    return (datetime.fromisoformat(str(ahora_iso)[:19]) - timedelta(**tiempo)).isoformat(timespec="seconds")
+
+
+def _url_proyecto(cliente, *partes):
+    """Ruta de una página propia del proyecto (`/cliente/<c>/…`) armada sin Flask: este módulo nunca importa
+    `dashboard`, así que no puede usar `url_for`. `tests/test_alertas_fuentes.py` la compara con la ruta real."""
+    return "/".join(("/cliente", quote(str(cliente), safe=""), *(str(p) for p in partes)))
+
+
+def _con_error(error, accion):
+    """«<error> <qué hacer>», o solo lo que hay que hacer si la fila no guardó el error."""
+    return f"{error} {accion}" if error else accion
 
 
 # ---------- fuentes: puesta a punto ----------
@@ -309,6 +329,209 @@ def _fuente_proyecto(cliente, ahora):
     return out
 
 
+# ---------- fuentes: decisión y fallos ----------
+# Una consulta acotada por fuente (nunca una por tarjeta ni `creative_flow.cargar`): la pestaña se calcula en cada
+# carga de página (con caché de 60 s), y `tests/test_alertas_fuentes.py` vigila que las sentencias no crezcan con
+# el número de sesiones, sprints o estudios.
+
+def _fuente_crear(cliente, ahora):
+    """Sesiones de Crear que esperan o fallaron, de los últimos DIAS_FALLOS días, en UNA consulta. Los prompts
+    listos son UNA alerta con el conteo (solo los de hace más de MINUTOS_PROMPT_LISTO: las recién armadas no
+    molestan mientras la persona trabaja; huella = ids ordenados, ancla = la más vieja); cada sesión en error es
+    una alerta. El estado sale como en `creative_flow._a_dict` (el `estado_legado` guardado, o el de la pieza), pero
+    calculado en SQL: así solo vuelven las filas que sirven, sin cargar las sesiones."""
+    co, pz = db.concepto, db.pieza
+    legado = sa.func.coalesce(sa.func.json_extract(pz.c.extra, "$.estado_legado"),
+                              sa.func.json_extract(co.c.extra, "$.estado_legado"))
+    estado = sa.func.coalesce(legado, sa.case((pz.c.estado == "pendiente", "prompt_listo"), else_=pz.c.estado))
+    accion = sa.func.coalesce(sa.func.json_extract(pz.c.extra, "$.accion_central"),
+                              sa.func.json_extract(co.c.extra, "$.accion_central"))
+    q = (sa.select(co.c.legado_id, estado.label("estado"), accion.label("accion"), pz.c.error)
+         .select_from(co.join(pz, pz.c.concepto_id == co.c.id))
+         .where(co.c.cliente == cliente, co.c.legado_id.isnot(None), pz.c.tipo != "final",
+                co.c.creado_en >= _hace(ahora, days=DIAS_FALLOS),
+                sa.or_(sa.and_(estado == "prompt_listo", co.c.creado_en < _hace(ahora, minutes=MINUTOS_PROMPT_LISTO)),
+                       estado == "error"))
+         .order_by(co.c.id.desc()))
+    with db.conectar() as con:
+        filas = con.execute(q).fetchall()
+    listos, out = [], []
+    for f in filas:
+        if f.estado == "prompt_listo":
+            listos.append(f.legado_id)
+            continue
+        error = _limpio(f.error)
+        nombre = " ".join(str(f.accion or "").split())[:60] or f.legado_id
+        out.append(_alerta(f"crear:error:{f.legado_id}", huella(error), "atencion", "fallos",
+                           gettext("Falló «%(nombre)s» en Crear", nombre=nombre),
+                           _con_error(error, gettext("Rearma el prompt o vuelve a generar.")),
+                           "creativeflowplus", ancla=f"cf-{f.legado_id}", entidad=f.legado_id))
+    if listos:
+        listos.sort()
+        out.insert(0, _alerta("crear:prompt_listo", huella(*listos), "atencion", "decision",
+                              ngettext("%(num)s prompt listo sin generar en Crear",
+                                       "%(num)s prompts listos sin generar en Crear", len(listos)),
+                              gettext("Revisa y genera (o descarta): el prompt ya está armado y generar cuesta lo que "
+                                      "dice el botón."),
+                              "creativeflowplus", ancla=f"cf-{listos[0]}"))
+    return out
+
+
+def _fuente_organico(cliente, ahora):
+    """Publicaciones orgánicas en error de los últimos DIAS_FALLOS días, en UNA consulta (con el nombre de la pieza
+    sacado del concepto). Reintentar es una acción de la persona sobre la pieza: aquí solo se avisa."""
+    import organico  # noqa: PLC0415 — arrastra requests
+    pub, pz, co = db.publicacion, db.pieza, db.concepto
+    q = (sa.select(pub.c.id, pub.c.plataforma, pub.c.error, pub.c.pieza_id,
+                   sa.func.json_extract(co.c.extra, "$.accion_central").label("accion"))
+         .select_from(pub.join(pz, pz.c.id == pub.c.pieza_id).outerjoin(co, co.c.id == pz.c.concepto_id))
+         .where(pub.c.cliente == cliente, pub.c.estado == "error",
+                pub.c.actualizado_en >= _hace(ahora, days=DIAS_FALLOS))
+         .order_by(pub.c.id.desc()))
+    with db.conectar() as con:
+        filas = con.execute(q).fetchall()
+    out = []
+    for f in filas:
+        nombre = " ".join(str(f.accion or "").split())[:60] or gettext("pieza %(n)s", n=f.pieza_id)
+        plataforma = idiomas.traducir(organico.PLATAFORMAS.get(f.plataforma, {}).get("nombre", f.plataforma))
+        error = _limpio(f.error)
+        out.append(_alerta(f"organico:error:{f.id}", huella(error), "atencion", "fallos",
+                           gettext("Falló la publicación en %(plataforma)s de «%(nombre)s»",
+                                   plataforma=plataforma, nombre=nombre),
+                           _con_error(error, gettext("Reintenta desde la pieza.")),
+                           "experimentos", entidad=f.id))
+    return out
+
+
+def _fuente_sprints(cliente, ahora):
+    """Por sprint vivo (ni archivado ni completado): ideas propuestas sin aprobar (en campañas que esperan ideas),
+    piezas terminadas por revisar, piezas fallidas (error o QA «falla») y referencias cuyo análisis falló. Enlaza
+    a la página del sprint. DOS consultas en total, sin importar cuántos sprints ni campañas haya
+    (`sprints.datos.sprint` haría una por campaña): una trae las ideas de todos los sprints vivos con su pieza de
+    Crear, otra las referencias en error. Una «pieza» es una idea con sesión (no una reserva vencida) que no se
+    descartó, la misma cuenta que `datos._campanas` y `sprints.revision.resumen`."""
+    from sprints import datos, revision  # noqa: PLC0415
+    sp, c, cp, pz, r = db.sprint, db.campana, db.campana_pieza, db.pieza, db.referencia
+    vivo = sa.and_(sp.c.cliente == cliente, c.c.cliente == cliente, sp.c.archivado.is_(False),
+                   sp.c.estado != "completado")
+    ideas_q = (sa.select(sp.c.id.label("sid"), sp.c.nombre, sp.c.inicio, c.c.estado.label("campana_estado"),
+                         cp.c.id.label("cp_id"), cp.c.estado_idea, cp.c.revision, cp.c.cf_id,
+                         sa.func.json_extract(cp.c.qa, "$.veredicto").label("veredicto"),
+                         pz.c.estado.label("pieza_estado"))
+               .select_from(sp.join(c, c.c.sprint_id == sp.c.id).join(cp, cp.c.campana_id == c.c.id)
+                            .outerjoin(pz, sa.and_(pz.c.legado_id == cp.c.cf_id, pz.c.cliente == cp.c.cliente,
+                                                   pz.c.tipo.in_(datos.TIPOS_PIEZA))))
+               .where(vivo, cp.c.cliente == cliente))
+    refs_q = (sa.select(sp.c.id.label("sid"), sp.c.nombre, sp.c.inicio, r.c.id.label("ref_id"))
+              .select_from(sp.join(c, c.c.sprint_id == sp.c.id).join(r, r.c.campana_id == c.c.id))
+              .where(vivo, r.c.cliente == cliente, r.c.analisis_estado == "error"))
+    por_sprint = {}
+
+    def _de(f):
+        return por_sprint.setdefault(f.sid, {"nombre": f.nombre or f"#{f.sid}", "inicio": f.inicio, "ideas": set(),
+                                             "por_revisar": set(), "fallidas": set(), "refs": set()})
+    with db.conectar() as con:
+        ideas, refs = con.execute(ideas_q).fetchall(), con.execute(refs_q).fetchall()
+    for f in ideas:
+        s = _de(f)
+        if f.campana_estado == "ideas_propuestas" and f.estado_idea == "propuesta":
+            s["ideas"].add(f.cp_id)
+        if f.estado_idea == "descartada" or not f.cf_id or datos.reserva_vencida(f.cf_id):
+            continue                                       # sin sesión que la represente: todavía no es una pieza
+        if f.revision == "pendiente" and f.pieza_estado in revision.TERMINADAS:
+            s["por_revisar"].add(f.cp_id)
+        if f.pieza_estado == "error" or f.veredicto == "falla":
+            s["fallidas"].add(f.cp_id)
+    for f in refs:
+        _de(f)["refs"].add(f.ref_id)
+    out = []
+    # El orden de la lista de sprints (el más nuevo primero), sin importar de qué consulta salió cada uno.
+    for sid, s in sorted(por_sprint.items(), key=lambda kv: (kv[1]["inicio"], kv[0]), reverse=True):
+        nombre, url = s["nombre"], _url_proyecto(cliente, "sprints", sid)
+        if s["ideas"]:
+            out.append(_alerta(f"sprint:ideas:{sid}", huella(*sorted(s["ideas"])), "atencion", "decision",
+                               ngettext("%(num)s idea por aprobar en el sprint «%(nombre)s»",
+                                        "%(num)s ideas por aprobar en el sprint «%(nombre)s»", len(s["ideas"]),
+                                        nombre=nombre),
+                               gettext("Aprueba o descarta las ideas propuestas para poder generar el lote."),
+                               "sprints", url=url, entidad=sid))
+        if s["por_revisar"]:
+            out.append(_alerta(f"sprint:revision:{sid}", huella(len(s["por_revisar"])), "atencion", "decision",
+                               ngettext("%(num)s pieza por revisar en el sprint «%(nombre)s»",
+                                        "%(num)s piezas por revisar en el sprint «%(nombre)s»", len(s["por_revisar"]),
+                                        nombre=nombre),
+                               gettext("Aprueba o rechaza cada una desde el sprint; las aprobadas entran a la entrega."),
+                               "sprints", url=url, entidad=sid))
+        if s["fallidas"]:
+            out.append(_alerta(f"sprint:fallos:{sid}", huella(*sorted(s["fallidas"])), "atencion", "fallos",
+                               ngettext("%(num)s pieza fallida en el sprint «%(nombre)s»",
+                                        "%(num)s piezas fallidas en el sprint «%(nombre)s»", len(s["fallidas"]),
+                                        nombre=nombre),
+                               gettext("Regenera las que quieras desde el sprint; cada una vuelve a pasar por el costo."),
+                               "sprints", url=url, entidad=sid))
+        if s["refs"]:
+            out.append(_alerta(f"sprint:referencias:{sid}", huella(*sorted(s["refs"])), "info", "fallos",
+                               ngettext("%(num)s referencia sin analizar en el sprint «%(nombre)s»",
+                                        "%(num)s referencias sin analizar en el sprint «%(nombre)s»", len(s["refs"]),
+                                        nombre=nombre),
+                               gettext("El análisis con Claude falló: vuelve a intentarlo desde la campaña."),
+                               "sprints", url=url, entidad=sid))
+    return out
+
+
+def _fuente_nicho(cliente, ahora):
+    """Nicho: UNA alerta de decisión por proyecto con los avatares propuestos por aprobar
+    (`nicho.datos.resumen_avatares`, la misma cuenta de la pestaña; lleva a la página de avatares) y, por estudio,
+    un fallo si su investigación quedó `interrumpida` o `detenida` (salvo que la persona la cancelara) o si su
+    última generación de avatares falló (`extra.ultimo_error`). Una consulta trae solo los estudios con algo roto
+    (los archivados y el oculto de avatares a mano no cuentan). Un estudio, una alerta: la investigación manda
+    sobre el error de generación. Reanudar o volver a generar la quita sola."""
+    from nicho import datos  # noqa: PLC0415
+    out = []
+    nuevos = datos.resumen_avatares(cliente)["nuevos"]
+    if nuevos > 0:
+        out.append(_alerta("nicho:avatares", huella(nuevos), "atencion", "decision",
+                           ngettext("%(num)s avatar propuesto por aprobar", "%(num)s avatares propuestos por aprobar",
+                                    nuevos),
+                           gettext("Aprueba los que sirvan (cada uno se vuelve una persona de Sprints) y descarta "
+                                   "el resto."),
+                           "nicho", url=_url_proyecto(cliente, "nicho", "avatares")))
+    t = db.estudio
+    q = (sa.select(t.c.id, t.c.nombre, t.c.extra)
+         .where(t.c.cliente == cliente, t.c.archivado.is_(False),
+                sa.or_(sa.func.json_extract(t.c.extra, "$.ultimo_error").isnot(None),
+                       sa.func.json_extract(t.c.extra, "$.investigacion.estado").in_(("detenida", "interrumpida"))))
+         .order_by(t.c.id.desc()))
+    with db.conectar() as con:
+        filas = con.execute(q).fetchall()
+    for f in filas:
+        extra = f.extra if isinstance(f.extra, dict) else {}
+        if datos.es_manual({"extra": extra}):
+            continue
+        eid, nombre, url = f.id, f.nombre, _url_proyecto(cliente, "nicho", f.id)
+        inv = extra.get("investigacion") if isinstance(extra.get("investigacion"), dict) else {}
+        motivo = inv.get("detenida_por")
+        if inv.get("estado") == "interrumpida":
+            error = _limpio(inv.get("ultimo_error"))
+            titulo = gettext("Se interrumpió la investigación de «%(estudio)s»", estudio=nombre)
+            detalle = _con_error(error, gettext("Ábrela y pulsa «Reanudar» para retomarla donde quedó."))
+        elif inv.get("estado") == "detenida" and motivo and motivo != "cancelada":
+            # Lo que se guardó, no su traducción: la huella no puede depender del idioma de quien mira.
+            error = _limpio(motivo)
+            titulo = gettext("Se detuvo la investigación de «%(estudio)s»", estudio=nombre)
+            detalle = gettext("Detenida: %(motivo)s. Ábrela en el estudio para reanudarla o investigar de nuevo.",
+                              motivo=idiomas.traducir(error))
+        elif extra.get("ultimo_error"):
+            error = _limpio(extra["ultimo_error"])
+            titulo = gettext("Falló la generación de avatares en «%(estudio)s»", estudio=nombre)
+            detalle = _con_error(error, gettext("Vuelve a generar desde el estudio."))
+        else:
+            continue                          # nada que avisar: la persona canceló la investigación, o no hay texto de error
+        out.append(_alerta(f"nicho:error:{eid}", huella(error), "atencion", "fallos", titulo, detalle, "nicho",
+                           url=url, entidad=eid))
+    return out
+
+
 # ---------- cálculo ----------
 
 def calcular(cliente, ahora_iso=None):
@@ -413,4 +636,8 @@ FUENTES.extend([
     ("saldo", _fuente_saldo),
     ("tablero", _fuente_tablero),
     ("proyecto", _fuente_proyecto),
+    ("crear", _fuente_crear),
+    ("organico", _fuente_organico),
+    ("sprints", _fuente_sprints),
+    ("nicho", _fuente_nicho),
 ])

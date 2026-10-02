@@ -1067,6 +1067,12 @@ msgstr[0] "%(num)s approved"
 msgstr[1] "%(num)s approved"
 
 #, python-format
+msgid "%(num)s avatar propuesto por aprobar"
+msgid_plural "%(num)s avatares propuestos por aprobar"
+msgstr[0] "%(num)s proposed avatar to approve"
+msgstr[1] "%(num)s proposed avatars to approve"
+
+#, python-format
 msgid "%(num)s cobro(s) a proveedores"
 msgid_plural "%(num)s cobro(s) a proveedores"
 msgstr[0] "%(num)s charge to providers"
@@ -1109,6 +1115,12 @@ msgstr[0] "%(num)s winner"
 msgstr[1] "%(num)s winners"
 
 #, python-format
+msgid "%(num)s idea por aprobar en el sprint «%(nombre)s»"
+msgid_plural "%(num)s ideas por aprobar en el sprint «%(nombre)s»"
+msgstr[0] "%(num)s idea to approve in the sprint “%(nombre)s”"
+msgstr[1] "%(num)s ideas to approve in the sprint “%(nombre)s”"
+
+#, python-format
 msgid "%(num)s lista"
 msgid_plural "%(num)s listas"
 msgstr[0] "%(num)s ready"
@@ -1127,6 +1139,18 @@ msgstr[0] "%(num)s piece"
 msgstr[1] "%(num)s pieces"
 
 #, python-format
+msgid "%(num)s pieza fallida en el sprint «%(nombre)s»"
+msgid_plural "%(num)s piezas fallidas en el sprint «%(nombre)s»"
+msgstr[0] "%(num)s failed piece in the sprint “%(nombre)s”"
+msgstr[1] "%(num)s failed pieces in the sprint “%(nombre)s”"
+
+#, python-format
+msgid "%(num)s pieza por revisar en el sprint «%(nombre)s»"
+msgid_plural "%(num)s piezas por revisar en el sprint «%(nombre)s»"
+msgstr[0] "%(num)s piece to review in the sprint “%(nombre)s”"
+msgstr[1] "%(num)s pieces to review in the sprint “%(nombre)s”"
+
+#, python-format
 msgid "%(num)s pieza(s) activa(s)"
 msgid_plural "%(num)s pieza(s) activa(s)"
 msgstr[0] "%(num)s active piece"
@@ -1137,6 +1161,12 @@ msgid "%(num)s producto marcado"
 msgid_plural "%(num)s productos marcados"
 msgstr[0] "%(num)s product marked"
 msgstr[1] "%(num)s products marked"
+
+#, python-format
+msgid "%(num)s prompt listo sin generar en Crear"
+msgid_plural "%(num)s prompts listos sin generar en Crear"
+msgstr[0] "%(num)s ready prompt not yet generated in Create"
+msgstr[1] "%(num)s ready prompts not yet generated in Create"
 
 #, python-format
 msgid "%(num)s propuesta"
@@ -1165,6 +1195,12 @@ msgid "%(num)s referencia"
 msgid_plural "%(num)s referencias"
 msgstr[0] "%(num)s reference"
 msgstr[1] "%(num)s references"
+
+#, python-format
+msgid "%(num)s referencia sin analizar en el sprint «%(nombre)s»"
+msgid_plural "%(num)s referencias sin analizar en el sprint «%(nombre)s»"
+msgstr[0] "%(num)s reference not yet analyzed in the sprint “%(nombre)s”"
+msgstr[1] "%(num)s references not yet analyzed in the sprint “%(nombre)s”"
 
 #, python-format
 msgid "%(num)s terminada"
@@ -2223,6 +2259,15 @@ msgstr "Approve → persona"
 
 msgid "Aprueba ideas y genéralas desde la pestaña Ideas."
 msgstr "Approve ideas and generate them from the Ideas tab."
+
+msgid "Aprueba los que sirvan (cada uno se vuelve una persona de Sprints) y descarta el resto."
+msgstr "Approve the ones that work (each becomes a Sprints persona) and discard the rest."
+
+msgid "Aprueba o descarta las ideas propuestas para poder generar el lote."
+msgstr "Approve or discard the proposed ideas so you can generate the batch."
+
+msgid "Aprueba o rechaza cada una desde el sprint; las aprobadas entran a la entrega."
+msgstr "Approve or reject each one from the sprint; the approved ones go into the delivery."
 
 msgid "Apruebas una cifra y el sistema busca productos del nicho en las tiendas del país, elige los que son del nicho, trae sus reseñas y arma los avatares. Nadie marca nada a mano."
 msgstr "You approve a figure and the system searches for niche products in the country's stores, picks out the ones that are really in the niche, pulls their reviews and builds the avatars. Nobody marks anything by hand."
@@ -4288,6 +4333,10 @@ msgstr "Stop"
 msgid "Detenida: %(motivo)s"
 msgstr "Stopped: %(motivo)s"
 
+#, python-format
+msgid "Detenida: %(motivo)s. Ábrela en el estudio para reanudarla o investigar de nuevo."
+msgstr "Stopped: %(motivo)s. Open it in the study to resume it or research again."
+
 msgid "Detergente en cápsulas · Suecia"
 msgstr "Detergent pods · Sweden"
 
@@ -4577,6 +4626,9 @@ msgstr "The ad needs an anuncio_id."
 
 msgid "El anuncio necesita imagen_origen."
 msgstr "The ad needs an imagen_origen."
+
+msgid "El análisis con Claude falló: vuelve a intentarlo desde la campaña."
+msgstr "The analysis with Claude failed: try again from the campaign."
 
 msgid "El archivo es demasiado grande."
 msgstr "The file is too large."
@@ -6687,6 +6739,18 @@ msgstr "Launch failed: %(mensaje)s"
 #, python-format
 msgid "Falló la descarga del video de TrendTrack (%(tipo)s)."
 msgstr "Downloading the TrendTrack video failed (%(tipo)s)."
+
+#, python-format
+msgid "Falló la generación de avatares en «%(estudio)s»"
+msgstr "Avatar generation failed in “%(estudio)s”"
+
+#, python-format
+msgid "Falló la publicación en %(plataforma)s de «%(nombre)s»"
+msgstr "Publishing “%(nombre)s” to %(plataforma)s failed"
+
+#, python-format
+msgid "Falló «%(nombre)s» en Crear"
+msgstr "“%(nombre)s” failed in Create"
 
 #, python-format
 msgid "Falta %(campo)s."
@@ -11972,6 +12036,9 @@ msgstr "Re-analyze"
 msgid "Reanudar"
 msgstr "Resume"
 
+msgid "Rearma el prompt o vuelve a generar."
+msgstr "Rebuild the prompt or generate again."
+
 msgid "Rearmando el prompt con IA…"
 msgstr "Rebuilding the prompt with AI…"
 
@@ -12207,6 +12274,9 @@ msgstr "Useful, characterful gifts for dad; a warm tone, a bit of humor."
 msgid "Regalos, reuniones familiares y decoración; mucha demanda, envíos con plazo."
 msgstr "Gifts, family gatherings and decorations; high demand, shipping deadlines."
 
+msgid "Regenera las que quieras desde el sprint; cada una vuelve a pasar por el costo."
+msgstr "Regenerate the ones you want from the sprint; each one goes through the cost step again."
+
 msgid "Regeneraciones por derivación"
 msgstr "Regenerations per derivation"
 
@@ -12300,6 +12370,9 @@ msgstr "Reset the counters"
 
 msgid "Reino Unido"
 msgstr "United Kingdom"
+
+msgid "Reintenta desde la pieza."
+msgstr "Retry from the piece."
 
 #, python-format
 msgid "Reintentando en %(plataforma)s."
@@ -12453,6 +12526,9 @@ msgstr "Check the numbers: priority between 0 and 100, positive price."
 
 msgid "Revisa que las líneas sean exactamente las del guion: de aquí salen los diálogos de cada clip, palabra por palabra."
 msgstr "Check that the lines are exactly the script's: this is where each clip's dialogue comes from, word for word."
+
+msgid "Revisa y genera (o descarta): el prompt ya está armado y generar cuesta lo que dice el botón."
+msgstr "Review and generate (or discard): the prompt is already built and generating costs what the button says."
 
 msgid "Revisa, edita si quieres y haz clic en «Generar video»."
 msgstr "Review it, edit if you want, and click “Generate video”."
@@ -12637,6 +12713,10 @@ msgid "Se detuvo de traer más anuncios: se acabó el cupo mensual de Atria."
 msgstr "Stopped getting more ads: Atria's monthly quota ran out."
 
 #, python-format
+msgid "Se detuvo la investigación de «%(estudio)s»"
+msgstr "The research of “%(estudio)s” was stopped"
+
+#, python-format
 msgid "Se ejecutan las %(n)s propuestas en orden. Las que escalan, derivan, rescatan o activan gastan; las de publicar orgánico publican en tus redes con el texto tal como está. ¿Seguimos?"
 msgstr "The %(n)s proposals will run in order. The ones that scale, derive, rescue or activate spend money; the ones that publish organically post to your channels with the text exactly as it is. Continue?"
 
@@ -12677,6 +12757,10 @@ msgstr "Interrupted (it had been running for more than %(min)s min). Check the r
 
 msgid "Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."
 msgstr "The launch was interrupted; check Ads Manager and try again."
+
+#, python-format
+msgid "Se interrumpió la investigación de «%(estudio)s»"
+msgstr "The research of “%(estudio)s” was interrupted"
 
 msgid "Se interrumpió la publicación; revisa Ads Manager antes de volver a intentar."
 msgstr "Publishing was interrupted; check Ads Manager before trying again."
@@ -15063,6 +15147,9 @@ msgstr "Reconnect Meta so the linked account's <code>ig_user_id</code> gets save
 msgid "Vuelve a enviar tu mensaje cuando quieras."
 msgstr "Send your message again whenever you like."
 
+msgid "Vuelve a generar desde el estudio."
+msgstr "Generate again from the study."
+
 msgid "Vuelves a conectar cada 60 días."
 msgstr "You reconnect every 60 days."
 
@@ -17127,6 +17214,10 @@ msgstr "cold feet at home"
 msgid "pieza"
 msgstr "piece"
 
+#, python-format
+msgid "pieza %(n)s"
+msgstr "piece %(n)s"
+
 msgid "piscina"
 msgstr "pool"
 
@@ -18328,6 +18419,9 @@ msgstr "Go back to using your own Meta app? Creatv stops operating this project;
 #, python-format
 msgid "¿Ya tienes uno? <a href=\"%(url)s\">Iniciar sesión</a>"
 msgstr "Already have one? <a href=\"%(url)s\">Log in</a>"
+
+msgid "Ábrela y pulsa «Reanudar» para retomarla donde quedó."
+msgstr "Open it and press “Resume” to pick it up where it left off."
 
 msgid "Ángulo"
 msgstr "Angle"
