@@ -124,9 +124,11 @@ holding `id`): Puesta a punto (admin only), Conexiones (store, Pixel, organic ch
 2026-09-28 the Meta connection card is NOT here: it lives only in Experimentos,
 `_meta_conectar.html`; the Triple Whale form left the same day for the Triple Whale tab,
 `_triple_whale_conectar.html`), Marca, Generación, Cuenta y avisos,
-Gasto. The key cards (`_llave_tarjeta.html`,
-`dashboard._estado_llaves`) list every
-paid key (Anthropic, fal, Higgsfield, R2, Meta, SMTP, MELI) with configured/missing badges —
+Gasto. The key cards (`_llave_tarjeta.html`;
+the list and its state live in `llaves.py`: `llaves.SERVICIOS` / `llaves.estado`, aliased in `dashboard.py` as
+`SERVICIOS_LLAVES` / `_estado_llaves`) list every
+paid key (Anthropic, WaveSpeed, fal, Higgsfield — optional, only the old «Nueva idea» flow —, R2, SMTP, MELI,
+Nicho and Referentes sources) with configured/missing badges —
 computed from `bool(os.environ.get(...))` only, values are never rendered. Since 2026-09-20 that
 full list is admin-only: `dashboard._llaves_visibles` gives a cliente just the `por_proyecto`
 cards (Meta), and the template hides `.env` variables, the server note and the "Cómo

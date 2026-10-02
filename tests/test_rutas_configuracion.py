@@ -1,6 +1,6 @@
-"""Configuración = puesta a punto (Task 4): las 7 tarjetas de servicios
-(dashboard._estado_llaves) con el badge según las variables de entorno, sin
-que NINGÚN valor de llave llegue al HTML; el paso a paso de Conectar tu
+"""Configuración = puesta a punto (Task 4): las tarjetas de servicios
+(llaves.estado; dashboard._estado_llaves es su alias) con el badge según las variables de
+entorno, sin que NINGÚN valor de llave llegue al HTML; el paso a paso de Conectar tu
 tienda por plataforma (Shopify / WooCommerce / MercadoLibre, con el aviso de
 qué falta cuando MELI no está configurado); el orden de las secciones; y el
 enlace a Experimentos para las reglas del motor."""
@@ -13,6 +13,7 @@ from tests.test_rutas_productos import _cliente_admin
 # (variable, valor distintivo que NUNCA debe aparecer en el HTML)
 VALORES_FALSOS = {
     "ANTHROPIC_API_KEY": "sk-ant-PRUEBA123",
+    "WAVESPEED_API_KEY": "wsp-PRUEBA321",
     "FAL_KEY": "fal-PRUEBA456",
     "HF_API_KEY_ID": "hfid-PRUEBA789",
     "HF_API_KEY_SECRET": "hfsecret-PRUEBA000",
@@ -23,7 +24,7 @@ VALORES_FALSOS = {
     "SMTP_PASS": "smtppass-PRUEBA555",
 }
 TODAS = [
-    "ANTHROPIC_API_KEY", "FAL_KEY", "HF_API_KEY_ID", "HF_API_KEY_SECRET",
+    "ANTHROPIC_API_KEY", "WAVESPEED_API_KEY", "FAL_KEY", "HF_API_KEY_ID", "HF_API_KEY_SECRET",
     "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL",
     "META_APP_ID", "META_APP_SECRET",
     "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "PLATAFORMA_URL",
@@ -75,12 +76,15 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
     monkeypatch.setenv("HF_API_KEY_ID", "solo-el-id")          # secreto ausente → parcial
     monkeypatch.setenv("R2_ACCOUNT_ID", "   ")                  # solo espacios = ausente
     llaves = d._estado_llaves()
-    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria", "trendtrack"]
+    assert [l["id"] for l in llaves] == ["anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria", "trendtrack"]
     por_id = {l["id"]: l for l in llaves}
     assert por_id["anthropic"]["estado"] == "configurada" and por_id["anthropic"]["faltan"] == []
     assert por_id["higgsfield"]["estado"] == "parcial" and por_id["higgsfield"]["faltan"] == ["HF_API_KEY_SECRET"]
     assert por_id["r2"]["estado"] == "falta" and por_id["fal"]["estado"] == "falta"
     assert por_id["smtp"]["opcional"] and por_id["meli"]["opcional"] and not por_id["anthropic"]["opcional"]
+    # WaveSpeed paga todo Crear (obligatoria); Higgsfield solo el flujo viejo «Nueva idea» (opcional).
+    assert por_id["wavespeed"]["estado"] == "falta" and not por_id["wavespeed"]["opcional"]
+    assert por_id["higgsfield"]["opcional"]
     # Sin request: el paso de MELI lleva el texto genérico; con URL, la real.
     assert any("<url del sitio>/meli/callback" in p for p in por_id["meli"]["pasos"])
     con_url = {l["id"]: l for l in d._estado_llaves("https://app.test/meli/callback")}
@@ -104,7 +108,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
     assert "Puesta a punto" in cfg
-    esperado = {"anthropic": "configurada", "fal": "configurada", "higgsfield": "configurada",
+    esperado = {"anthropic": "configurada", "wavespeed": "configurada", "fal": "configurada", "higgsfield": "configurada",
                 "r2": "parcial", "smtp": "parcial", "meli": "falta"}
     for sid, estado in esperado.items():
         t = _tarjeta(cfg, sid)
@@ -112,10 +116,10 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
         assert 'target="_blank" rel="noopener"' in t
         assert "Cómo conseguirla" in t
         assert "no se escriben desde aquí" in t
-    assert cfg.count('class="llave-tarjeta') == 11
+    assert cfg.count('class="llave-tarjeta') == 12
     # Orden de las tarjetas: todas las del servidor en «Puesta a punto»;
     # ninguna en «Conexiones».
-    pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli")]
+    pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli")]
     assert pos == sorted(pos)
     assert cfg.index('id="config-ap-puesta"') < pos[0] and pos[-1] < cfg.index('id="config-ap-conexiones"')
     assert 'id="llave-meta"' not in cfg
@@ -135,7 +139,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
 
 def test_render_todo_falta(app):
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli"):
+    for sid in ("anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli"):
         assert _badge(_tarjeta(cfg, sid)) == "falta", sid
     assert "configurada</span>" not in cfg.split('id="config-tienda"')[0]
 
@@ -147,7 +151,7 @@ def test_render_todo_configurado(app, monkeypatch):
     monkeypatch.setattr(app["dashboard"].meta_conexion, "app_publica", lambda c: {"app_id": "1", "login_config_id": "2"})
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli"):
+    for sid in ("anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli"):
         assert _badge(_tarjeta(cfg, sid)) == "configurada", sid
     assert "Faltan:" not in cfg.split('id="config-tienda"')[0]
     for v in TODAS:
@@ -557,7 +561,7 @@ def test_atria_tiene_tarjeta_en_puesta_a_punto(app, monkeypatch):
 
 
 # ---- Qué ve un cliente en Puesta a punto -----------------------------------
-# Las llaves de Anthropic, fal, Higgsfield, R2, SMTP, MELI y las fuentes de
+# Las llaves de Anthropic, WaveSpeed, fal, Higgsfield, R2, SMTP, MELI y las fuentes de
 # Nicho las pone Creatv en el .env del servidor: un cliente no puede hacer
 # nada con ellas. Lo único que se configura por proyecto es Meta.
 
@@ -597,10 +601,10 @@ def test_cliente_no_ve_llaves_ni_variables_del_servidor(app, monkeypatch):
 
 
 def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
-    # Desde 2026-09-28 las 11 tarjetas del servidor van en «Puesta a punto»
+    # Desde 2026-09-28 las tarjetas del servidor (12 con la de WaveSpeed) van en «Puesta a punto»
     # (solo admin); la de Meta ya no se pinta: la conexión vive en Experimentos.
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
     puesta = cfg[cfg.index('id="config-ap-puesta"'):cfg.index('id="config-ap-conexiones"')]
-    assert puesta.count('class="llave-tarjeta') == 11
+    assert puesta.count('class="llave-tarjeta') == 12
     assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 0
     assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")

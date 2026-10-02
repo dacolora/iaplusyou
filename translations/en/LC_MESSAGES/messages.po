@@ -2930,6 +2930,9 @@ msgstr "Face forward and uncovered, product below the face, vertical photo. New 
 msgid "Carga (1 · 5 · 15 min)"
 msgstr "Load (1 · 5 · 15 min)"
 
+msgid "Carga saldo en «Billing»: sin saldo la llave existe pero cada generación falla."
+msgstr "Add balance in “Billing”: without balance the key exists but every generation fails."
+
 msgid "Carga su prompt e imágenes en Crear › Desde referencias. No genera nada."
 msgstr "Loads its prompt and images into Create › From references. Nothing is generated."
 
@@ -3759,6 +3762,9 @@ msgstr "Create the account at apify.com (it comes with free monthly credit) and 
 
 msgid "Crea la cuenta en tryatria.com y elige un plan."
 msgstr "Create the account at tryatria.com and choose a plan."
+
+msgid "Crea la cuenta en wavespeed.ai."
+msgstr "Create the account at wavespeed.ai."
 
 msgid "Crea tu primer experimento"
 msgstr "Create your first experiment"
@@ -7077,6 +7083,9 @@ msgstr "It spent the cost of %(n)s sales at the account's cost per sale and its 
 
 msgid "Gemini Omni Flash Edit"
 msgstr "Gemini Omni Flash Edit"
+
+msgid "Genera cada video (Wan 3.0, Kling O3 Pro, Seedance 2.5) e imagen (Seedream) de Crear y de los lotes de Sprints."
+msgstr "Generates every video (Wan 3.0, Kling O3 Pro, Seedance 2.5) and image (Seedream) in Create and in the Sprints batches."
 
 msgid "Genera la imagen candidata y el video de cada pieza."
 msgstr "Generates the candidate image and the video for each piece."
@@ -11157,6 +11166,9 @@ msgstr "Why it works:"
 msgid "Por revisar"
 msgstr "To review"
 
+msgid "Por segundo de video y por imagen: el precio se muestra antes de cada generación."
+msgstr "Per second of video and per image: the price is shown before each generation."
+
 msgid "Por tipo"
 msgstr "By type"
 
@@ -11660,6 +11672,9 @@ msgstr "Paste it as FAL_KEY in the server's .env and restart."
 
 msgid "Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."
 msgstr "Paste it as TRENDTRACK_API_KEY in the server's .env and restart both services."
+
+msgid "Pégala como WAVESPEED_API_KEY en el .env del servidor."
+msgstr "Paste it as WAVESPEED_API_KEY in the server's .env."
 
 msgid "Pégalo aquí y pulsa <strong>Buscar mis activos</strong>."
 msgstr "Paste it here and press <strong>Search my assets</strong>."
@@ -12199,6 +12214,9 @@ msgstr "Redo (Ctrl/Cmd+Shift+Z)"
 
 msgid "Rehacer desde aquí"
 msgstr "Redo from here"
+
+msgid "Reinicia los dos servicios (iaplusyou y creatv-worker): el worker es el que la usa al generar."
+msgstr "Restart both services (iaplusyou and creatv-worker): the worker is the one that uses it when generating."
 
 msgid "Reiniciar los contadores"
 msgstr "Reset the counters"
@@ -12852,8 +12870,8 @@ msgstr "Without it the videos have no public URL and Meta can't use them."
 msgid "Sin ella no hay prompts ni guiones."
 msgstr "Without it there are no prompts or scripts."
 
-msgid "Sin ella no se generan piezas."
-msgstr "Without it no pieces get generated."
+msgid "Sin ella no se genera ningún video ni imagen en Crear ni en Sprints."
+msgstr "Without it no video or image is generated in Create or in Sprints."
 
 msgid "Sin ellas la tarjeta Reddit de cada estudio queda apagada; el resto de Nicho funciona."
 msgstr "Without them the Reddit card of each study stays off; the rest of Niche still works."
@@ -13038,6 +13056,9 @@ msgstr "Errors only"
 
 msgid "Solo esta campaña (bórralas para volver a las del sprint)."
 msgstr "Only this campaign (delete them to go back to the sprint's)."
+
+msgid "Solo la usa el flujo viejo «Nueva idea»; Crear no la necesita."
+msgstr "Only the old “New idea” flow uses it; Create doesn't need it."
 
 msgid "Solo las referencias (el texto y los ajustes quedan en blanco)"
 msgstr "Only the references (the text and the settings start blank)"
@@ -14615,6 +14636,9 @@ msgstr "Variant %(n)s of final cut %(id)s"
 msgid "Vas a iniciar sesión en MercadoLibre y autorizar la app: traemos tus publicaciones activas y tus ventas. No se pega ningún token."
 msgstr "You're going to log in to MercadoLibre and authorize the app: we bring in your active listings and your sales. No token gets pasted."
 
+msgid "Ve a «API Keys», crea una llave nueva y cópiala: solo se muestra una vez."
+msgstr "Go to “API Keys”, create a new key and copy it: it's only shown once."
+
 msgid "Ve a «API keys» › «Create key», ponle un nombre (por ejemplo «creatv») y cópiala: solo se muestra una vez."
 msgstr "Go to “API keys” › “Create key”, give it a name (for example “creatv”) and copy it: it's only shown once."
 
@@ -14954,6 +14978,9 @@ msgstr "Wan 3.0 (reference, no editing)"
 
 msgid "Wan-2.2 Animate Replace"
 msgstr "Wan-2.2 Animate Replace"
+
+msgid "WaveSpeed (videos e imágenes de Crear)"
+msgstr "WaveSpeed (videos and images in Create)"
 
 msgid "WaveSpeed está recibiendo demasiados pedidos (respuesta 429): no se generó ni se cobró nada. Vuelve a intentarlo en unos minutos."
 msgstr "WaveSpeed is receiving too many requests (response 429): nothing was generated or charged. Try again in a few minutes."

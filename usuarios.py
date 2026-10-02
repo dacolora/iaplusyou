@@ -210,6 +210,24 @@ def obtener(usuario):
     return entry
 
 
+def por_cliente(cliente):
+    """Las cuentas rol «cliente» de ese proyecto, ordenadas por usuario, como
+    [{usuario, correo, correo_verificado}]. Lo único que hace falta para saber
+    a quién le falta confirmar el correo (las alertas del proyecto lo leen de
+    aquí): se arma campo por campo, así que ni el hash de la contraseña ni
+    nada más del registro puede colarse. El admin no entra: no tiene proyecto."""
+    if not cliente:
+        return []
+    cuentas = []
+    for usuario, entry in sorted(cargar().items()):
+        if entry.get("rol") != "cliente" or entry.get("cliente") != cliente:
+            continue
+        entry = _completar(dict(entry))
+        cuentas.append({"usuario": usuario, "correo": entry["correo"],
+                        "correo_verificado": bool(entry["correo_verificado"])})
+    return cuentas
+
+
 def obtener_hash(usuario):
     """Como obtener(), pero con password_hash incluido — solo para el lector
     interno que de verdad lo necesita (verificar ya lee directo de cargar()
