@@ -256,6 +256,13 @@ def _mensaje_error(e, cliente):
                                modelo=e.nombre_modelo, detalle=e.detalle or e.estado, codigo=e.codigo)
             return gettext("%(modelo)s no pudo generar: %(detalle)s. Un intento fallido normalmente no se cobra.",
                            modelo=e.nombre_modelo, detalle=e.detalle or e.estado)
+        if isinstance(e, wavespeed_common.PedidoRechazado):
+            # PND-107: antes salía el JSON crudo de WaveSpeed en la tarjeta.
+            if e.mensaje:
+                return gettext("WaveSpeed no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el "
+                               "formato o las referencias y vuelve a generar.", motivo=e.mensaje)
+            return gettext("WaveSpeed no aceptó el pedido (respuesta %(status)s) y no se cobró nada. Vuelve a "
+                           "intentarlo en unos minutos; si se repite, cambia de modelo.", status=e.status)
         return str(e)
 
 

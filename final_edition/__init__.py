@@ -409,11 +409,22 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     # Un ángulo a medio llenar a mano (sin promesa o sin gancho) no manda: Claude
     # decide uno completo y reemplaza el borrador (doctrina, bloque 2, §3.4).
     angulo_sesion = entry.get("angulo") if _angulo_con_contenido(entry.get("angulo")) else None
-    guion_base, costo_guion = guion_mod.generar_guion_base(
-        producto, referencia, enfoque, float(duracion_s), idioma_base,
-        _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion,
-        aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente),
-                                                             producto=(producto or {}).get("nombre")))
+    try:
+        guion_base, costo_guion = guion_mod.generar_guion_base(
+            producto, referencia, enfoque, float(duracion_s), idioma_base,
+            _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion,
+            aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente),
+                                                                 producto=(producto or {}).get("nombre")))
+    except guion_mod.GuionInvalido as e:
+        # Claude ya cobró sus dos vueltas (y la referencia su transcripción) aunque
+        # el guion no sirva: se anota antes de devolver el error (PND-001).
+        pagado = round(costo + e.costo_usd, 4)
+        if pagado:
+            gastos.registrar_seguro(
+                cliente, "guion", pagado, f"guion:{cf_id}{ref_sufijo}", proveedor="anthropic",
+                detalle=gettext("guion base %(idioma)s · no salió válido", idioma=idioma_base),
+                extra={"usd_guion": e.costo_usd, "usd_whisper": round(costo, 4)})
+        raise
     costo += float(costo_guion or 0.0)
     # Sin ángulo en la sesión, Claude ya lo decidió, corrigió y limpió junto
     # con el guion (B: `guion_mod.generar_guion_base` reusa su propia vuelta

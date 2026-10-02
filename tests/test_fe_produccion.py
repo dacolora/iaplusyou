@@ -288,6 +288,41 @@ def test_traducir_solo_precio_con_autoguardado_en_el_medio_reaplica_el_precio(en
     assert ed2["documento"]["variables"]["precios"] == {"es_CO": 89900.0} and ed2["documento"]["miniatura_ms"] == 1235
 
 
+def test_traducir_con_guion_invalido_lleva_lo_que_cobro_claude(entorno, monkeypatch):
+    """PND-001: localizar a otro país puede cobrar dos llamadas y aun así salir inválido; ese cobro
+    viaja en `costo_pagado` para que `producir` lo anote, igual que una voz que falla."""
+    from final_edition import guion as guion_mod, produccion
+    ed, *_ = produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
+
+    def invalido(guion_base, idioma, pais, precio, angulo=None):
+        raise guion_mod.GuionInvalido(["el hook no cabe"], costo_usd=0.035)
+    monkeypatch.setattr(guion_mod, "localizar_guion", invalido)
+    with pytest.raises(guion_mod.GuionInvalido) as exc:
+        produccion.traducir("acme", ed, "en", "US", 24.99, "Rachel", True)
+    assert exc.value.costo_pagado == pytest.approx(0.035)
+
+
+def test_variante_invalida_anota_lo_que_cobro_claude(entorno, monkeypatch):
+    """Una variante que sale inválida tras cobrar sus dos llamadas deja la final en error y su
+    cobro anotado en el gasto de la final (antes se perdía)."""
+    import sqlalchemy as sa
+    import db
+    from final_edition import guion as guion_mod, produccion
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {"precio": 89900}, ref_sufijo=":t1")
+
+    def invalido(guion_base, tipo, marca, angulo=None, **kw):
+        raise guion_mod.GuionInvalido(["la variante repite el hook"], costo_usd=0.042)
+    monkeypatch.setattr(guion_mod, "variar_guion", invalido)
+    with pytest.raises(guion_mod.GuionInvalido):
+        produccion.producir("acme", cf_id, "es", "CO", {"precio": 89900, "variante": 1, "variante_tipo": "hook"},
+                            ref_sufijo=":t2")
+    with db.conectar() as con:
+        filas = [dict(f._mapping) for f in con.execute(
+            sa.select(db.gasto).where(db.gasto.c.cliente == "acme", db.gasto.c.referencia.like("%:t2"))).fetchall()]
+    assert len(filas) == 1 and filas[0]["usd"] == pytest.approx(0.042)
+
+
 def test_traducir_se_rinde_tras_dos_reintentos_y_lleva_lo_pagado(entorno, monkeypatch):
     import ediciones
     from final_edition import produccion

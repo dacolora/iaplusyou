@@ -58,3 +58,5 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 «Producir finales» and their finals, plus each piece's ediciones with «Abrir en el editor»; Crear
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
+
+**Gasto real del guion (2026-10-02, PND-001):** `final_edition/guion.py::_llamar` devuelve `(texto, usd)` con el costo sacado del `usage` de Anthropic (caché contada como en `guiones.claude.tokens_entrada_equivalentes`, precios de `nicho.avatares.costo_real`); antes era un US$ 0,01 fijo y el gasto quedaba en un cuarto de lo cobrado. `GuionInvalido.costo_usd` lleva lo que cobraron las llamadas que no sirvieron: `preparar_guion` lo anota antes de relanzar (detalle «guion base … · no salió válido»), `produccion.traducir` lo suma a `costo_pagado` y una variante inválida en `produccion.producir` lo anota en el gasto de la final (`registrar_gasto_final(..., fallo=True)`).

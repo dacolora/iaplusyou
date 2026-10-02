@@ -754,6 +754,27 @@ def test_video_sin_saldo_se_explica_avisa_y_no_persigue_una_prediccion_vieja(bas
     assert marcas == [("wavespeed", "acme")]
 
 
+def test_un_pedido_rechazado_al_lanzar_se_cuenta_en_palabras(base_temporal, monkeypatch, tmp_path):
+    """PND-107: un 400/1405 de WaveSpeed al lanzar salía en la tarjeta como su JSON crudo."""
+    import json as _json
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path)
+    cuerpo = {"code": 1405, "message": "The total duration of reference videos must not exceed 15 seconds."}
+
+    def _gen(*a, **k):
+        raise wc.PedidoRechazado("alibaba/wan-3.0/reference-to-video", 400, cuerpo["message"], _json.dumps(cuerpo))
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 23, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "error"
+    assert "no aceptó el pedido" in e["error"] and "no se cobró" in e["error"]
+    assert "must not exceed 15 seconds" in e["error"]          # el motivo del proveedor, legible
+    assert "{" not in e["error"] and "alibaba/" not in e["error"]
+
+
 def test_imagen_sin_saldo_se_explica_y_avisa(base_temporal, monkeypatch, tmp_path):
     import creative_flow as cf
     import tareas.flowplus as fp

@@ -32,7 +32,6 @@ MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 # Sonnet 5 piensa antes de responder y eso sale del mismo tope; con la
 # doctrina y el ángulo en la salida, 1500 se quedaba corto.
 MAX_TOKENS = 4000
-COSTO_LLAMADA_USD = 0.01
 
 PALABRAS_POR_SEGUNDO = 2.5
 MAX_PALABRAS_PANTALLA = 6
@@ -41,9 +40,11 @@ MAX_PALABRAS_PANTALLA = 6
 class GuionInvalido(Exception):
     """El guion sigue inválido después de pedir corrección a Claude. Su texto
     es el `error` que ve la persona en la final: se arma con gettext (el
-    worker corre en el idioma del proyecto)."""
-    def __init__(self, errores):
+    worker corre en el idioma del proyecto). `costo_usd` es lo que ya cobraron
+    las llamadas que no sirvieron: quien la atrapa lo anota como gasto."""
+    def __init__(self, errores, costo_usd=0.0):
         self.errores = list(errores)
+        self.costo_usd = round(float(costo_usd or 0.0), 4)
         super().__init__(gettext("Guion inválido: %(errores)s", errores="; ".join(self.errores)))
 
 
@@ -304,13 +305,26 @@ def _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto, angulo=No
 # ---------------------------------------------------------------- Claude ---
 
 def _llamar(client, system, mensajes):
+    """(texto, usd). El costo sale del `usage` que devuelve Anthropic, con la
+    caché de la doctrina contada como en `guiones.claude` (PND-001: era un
+    US$ 0,01 fijo por llamada y un guion real cuesta ≈ 0,04–0,05, así que el
+    gasto del proyecto quedaba en un cuarto de lo cobrado)."""
     resp = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         system=system,
         messages=mensajes,
     )
-    return "".join(block.text for block in resp.content if block.type == "text").strip()
+    texto = "".join(block.text for block in resp.content if block.type == "text").strip()
+    return texto, _usd(getattr(resp, "usage", None))
+
+
+def _usd(uso):
+    from guiones.claude import tokens_entrada_equivalentes
+    from nicho.avatares import costo_real
+    if uso is None:
+        return 0.0
+    return costo_real(tokens_entrada_equivalentes(uso), int(getattr(uso, "output_tokens", 0) or 0), modelo=MODEL)
 
 
 def _parsear(texto):
@@ -396,8 +410,8 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
     errores = []
     guion_sin_bloqueo = None
     for intento in range(2):
-        texto = _llamar(client, system, mensajes)
-        costo += COSTO_LLAMADA_USD
+        texto, usd = _llamar(client, system, mensajes)
+        costo += usd
         guion = _parsear(texto)
         extra = []
         if guion is None:
@@ -424,7 +438,7 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
             ]
     if guion_sin_bloqueo is not None:
         return guion_sin_bloqueo, costo
-    raise GuionInvalido(errores)
+    raise GuionInvalido(errores, costo_usd=costo)
 
 
 # ---------------------------------------------------------------- API ---

@@ -156,6 +156,23 @@ def test_preparar_guion_guarda_guion_base(entorno):
     assert args["idioma_base"] == "es"
 
 
+def test_preparar_guion_anota_lo_pagado_aunque_el_guion_salga_invalido(entorno, monkeypatch):
+    """PND-001: un GuionInvalido llega después de pagar dos llamadas a Claude (y la transcripción de la
+    referencia); antes ese cobro no se anotaba en ningún lado."""
+    import sqlalchemy as sa
+    import db
+
+    def invalido(*a, **k):
+        raise guion_mod.GuionInvalido(["el bloque cta supera la duración"], costo_usd=0.047)
+    monkeypatch.setattr(guion_mod, "generar_guion_base", invalido)
+    with pytest.raises(guion_mod.GuionInvalido):
+        final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+    with db.conectar() as con:
+        filas = [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == "acme"))]
+    assert len(filas) == 1 and filas[0]["tipo"] == "guion"
+    assert filas[0]["usd"] == pytest.approx(0.048)  # 0,047 de Claude + 0,001 de la transcripción
+
+
 def test_guia_marca_corrupta_no_tumba_el_guion(entorno, monkeypatch):
     """M6/Task 8: un root.json de marca corrupto (JSON inválido) es un extra
     que se degrada a "" en vez de reventar `preparar_guion`."""

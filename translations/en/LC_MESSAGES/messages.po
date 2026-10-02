@@ -14701,8 +14701,8 @@ msgstr "Ready videos (%(n)s)"
 msgid "Videos pendientes de revisión (%(n)s)"
 msgstr "Videos waiting for review (%(n)s)"
 
-msgid "Videos, imágenes y audios desde tus referencias, o cambia el producto de una foto o video. Nada se cobra hasta que pulses «Generar» o «Crear audio»."
-msgstr "Videos, images and audios from your references, or swap the product in a photo or video. Nothing is charged until you press \"Generate\" or \"Create audio\"."
+msgid "Videos, imágenes y audios desde tus referencias, o cambia el producto de una foto o video. Todo botón que cobra muestra su precio antes del clic."
+msgstr "Videos, images and audios from your references, or swap the product in a photo or video. Every button that charges shows its price before you click."
 
 msgid "Videos, imágenes, guiones, finales y textos con IA pagados desde el inicio; detalle en Configuración › Gasto"
 msgstr "Videos, images, scripts, final cuts and AI text paid for since the start; detail in Settings › Spend"
@@ -14851,6 +14851,14 @@ msgstr "Wan 3.0 (reference, no editing)"
 
 msgid "Wan-2.2 Animate Replace"
 msgstr "Wan-2.2 Animate Replace"
+
+#, python-format
+msgid "WaveSpeed no aceptó el pedido (respuesta %(status)s) y no se cobró nada. Vuelve a intentarlo en unos minutos; si se repite, cambia de modelo."
+msgstr "WaveSpeed did not accept the request (response %(status)s) and nothing was charged. Try again in a few minutes; if it happens again, switch models."
+
+#, python-format
+msgid "WaveSpeed no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el formato o las referencias y vuelve a generar."
+msgstr "WaveSpeed did not accept the request and nothing was charged: %(motivo)s. Adjust the duration, the format or the references and generate again."
 
 #, python-format
 msgid "WaveSpeed seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). El video suele terminar igual y se cobra: espera unos minutos y toca «Recuperar el video» — no se paga de nuevo."
@@ -16250,6 +16258,10 @@ msgstr "base script %(idioma)s"
 #, python-format
 msgid "guion base %(idioma)s + transcripción de la referencia"
 msgstr "base script %(idioma)s + reference transcription"
+
+#, python-format
+msgid "guion base %(idioma)s · no salió válido"
+msgstr "base script %(idioma)s · came out invalid"
 
 #, python-format
 msgid "hace %(n)s h"
