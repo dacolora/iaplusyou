@@ -1,5 +1,6 @@
 """meta_detalle (spec 2026-10-02 §3): traducir filas de Meta, pedir con
 paginación, guardar sin cruzar proyectos y refrescar sin tumbar nada."""
+import json
 import pytest
 
 FILA_DIA = {
@@ -62,3 +63,58 @@ def test_rankings_de():
     r = md.rankings_de({"quality_ranking": "ABOVE_AVERAGE", "engagement_rate_ranking": "AVERAGE",
                         "conversion_rate_ranking": "UNKNOWN"})
     assert r == {"calidad": "ABOVE_AVERAGE", "interaccion": "AVERAGE", "conversion": None}
+
+
+class LlamarFalso:
+    """Reemplaza meta_ads.auth.llamar: responde por edge/params y anota las llamadas."""
+    def __init__(self, paginas):
+        self.paginas = list(paginas)   # cada una: {"data": [...], "paging": {...}}
+        self.llamadas = []
+
+    def __call__(self, metodo, edge, payload=None, params=None, dry_run=False):
+        self.llamadas.append((metodo, edge, dict(params or {})))
+        return self.paginas.pop(0)
+
+
+def _con_llamar(monkeypatch, paginas):
+    import meta_detalle as md
+    falso = LlamarFalso(paginas)
+    monkeypatch.setattr(md.auth, "llamar", falso)
+    monkeypatch.setattr(md.auth, "ad_account_id", lambda: "123")
+    return md, falso
+
+
+def test_pedir_diario_arma_la_consulta_y_sigue_paginas(monkeypatch):
+    md, falso = _con_llamar(monkeypatch, [
+        {"data": [{"ad_id": "a"}], "paging": {"cursors": {"after": "C1"}, "next": "https://graph/next"}},
+        {"data": [{"ad_id": "b"}], "paging": {"cursors": {"after": "C2"}}},
+    ])
+    filas = md.pedir_diario("cmp_9", "2026-09-01", "2026-09-30")
+    assert [f["ad_id"] for f in filas] == ["a", "b"]
+    metodo, edge, params = falso.llamadas[0]
+    assert metodo == "GET" and edge == "act_123/insights"
+    assert params["level"] == "ad" and params["time_increment"] == 1
+    assert json.loads(params["time_range"]) == {"since": "2026-09-01", "until": "2026-09-30"}
+    assert json.loads(params["filtering"]) == [{"field": "campaign.id", "operator": "EQUAL", "value": "cmp_9"}]
+    assert "video_p25_watched_actions" in params["fields"] and "ad_id" in params["fields"]
+    assert "after" not in params and falso.llamadas[1][2]["after"] == "C1"
+
+
+def test_pedir_para_en_max_paginas(monkeypatch):
+    import meta_detalle as md
+    pagina = {"data": [{"ad_id": "x"}], "paging": {"cursors": {"after": "C"}, "next": "https://graph/next"}}
+    md2, falso = _con_llamar(monkeypatch, [dict(pagina) for _ in range(md.MAX_PAGINAS + 5)])
+    assert len(md2.pedir_rankings("cmp")) == md.MAX_PAGINAS
+    assert len(falso.llamadas) == md.MAX_PAGINAS
+
+
+def test_pedir_desglose_y_rankings(monkeypatch):
+    md, falso = _con_llamar(monkeypatch, [{"data": [{"ad_id": "a", "age": "25-34", "gender": "female"}]},
+                                          {"data": [{"ad_id": "a", "quality_ranking": "AVERAGE"}]}])
+    assert md.pedir_desglose("cmp", "edad_genero")[0]["age"] == "25-34"
+    _, _, p1 = falso.llamadas[0]
+    assert p1["breakdowns"] == "age,gender" and p1["date_preset"] == "maximum" and "time_increment" not in p1
+    assert "video_p25_watched_actions" not in p1["fields"]   # sin campos de video en desgloses
+    md.pedir_rankings("cmp")
+    _, _, p2 = falso.llamadas[1]
+    assert "quality_ranking" in p2["fields"] and p2["date_preset"] == "maximum"

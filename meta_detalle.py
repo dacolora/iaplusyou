@@ -11,9 +11,22 @@ anuncio) usando meta_ads.auth.llamar; no toca el submódulo meta_ads. Leer de
 Meta no cuesta: nada de aquí registra gasto. Un fallo de aquí nunca debe
 tumbar lanzador.refrescar ni el decisor.
 """
+import json
 import logging
 
+from meta_ads import auth
+
 log = logging.getLogger("creatv.meta_detalle")
+
+MAX_PAGINAS = 20
+_BASE = "ad_id,impressions,reach,frequency,clicks,inline_link_clicks,spend,cpm,actions,action_values"
+CAMPOS_DIA = (_BASE + ",video_play_actions,video_p25_watched_actions,video_p50_watched_actions"
+              ",video_p75_watched_actions,video_p95_watched_actions,video_p100_watched_actions"
+              ",video_thruplay_watched_actions,video_avg_time_watched_actions")
+# Desgloses: sin los campos de retención (Meta rechaza algunas combinaciones de
+# video con desgloses); el gancho sale de actions[video_view].
+CAMPOS_DESGLOSE = _BASE + ",video_thruplay_watched_actions"
+CAMPOS_RANKINGS = "ad_id,impressions,quality_ranking,engagement_rate_ranking,conversion_rate_ranking"
 
 # Dimensión -> breakdowns de la Graph API (la clave guardada une sus valores con «|»).
 DIMENSIONES = {"ubicacion": "publisher_platform,platform_position", "edad_genero": "age,gender",
@@ -93,3 +106,39 @@ def rankings_de(fila):
     return {"calidad": _ranking(fila.get("quality_ranking")),
             "interaccion": _ranking(fila.get("engagement_rate_ranking")),
             "conversion": _ranking(fila.get("conversion_rate_ranking"))}
+
+
+def _filtro_campana(campaign_id):
+    return json.dumps([{"field": "campaign.id", "operator": "EQUAL", "value": str(campaign_id)}])
+
+
+def _paginas(params):
+    """GET act_<cuenta>/insights siguiendo el cursor `after` hasta MAX_PAGINAS."""
+    filas, after = [], None
+    for _ in range(MAX_PAGINAS):
+        p = dict(params, limit=500)
+        if after:
+            p["after"] = after
+        data = auth.llamar("GET", f"act_{auth.ad_account_id()}/insights", params=p) or {}
+        filas.extend(data.get("data") or [])
+        paging = data.get("paging") or {}
+        after = (paging.get("cursors") or {}).get("after")
+        if not paging.get("next") or not after:
+            return filas
+    log.warning("Detalle de Meta: se cortó en %s páginas", MAX_PAGINAS)
+    return filas
+
+
+def pedir_diario(campaign_id, desde, hasta):
+    return _paginas({"level": "ad", "fields": CAMPOS_DIA, "filtering": _filtro_campana(campaign_id),
+                     "time_increment": 1, "time_range": json.dumps({"since": desde, "until": hasta})})
+
+
+def pedir_desglose(campaign_id, dimension):
+    return _paginas({"level": "ad", "fields": CAMPOS_DESGLOSE, "filtering": _filtro_campana(campaign_id),
+                     "date_preset": "maximum", "breakdowns": DIMENSIONES[dimension]})
+
+
+def pedir_rankings(campaign_id):
+    return _paginas({"level": "ad", "fields": CAMPOS_RANKINGS, "filtering": _filtro_campana(campaign_id),
+                     "date_preset": "maximum"})
