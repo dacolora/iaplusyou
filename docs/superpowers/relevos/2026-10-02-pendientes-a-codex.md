@@ -11,8 +11,8 @@ prueba y commitea en su rama, y nada más.
 | Paso | Quién |
 |---|---|
 | Elegir el lote y escribir su encargo | Claude |
-| Leer, arreglar, probar, commitear, actualizar `docs/pendientes.md` | Codex, en su worktree |
-| Suite completa, revisión (con `guardian-gasto` si el lote toca plata), merge a `main` | Claude |
+| Leer, arreglar, probar, actualizar `docs/pendientes.md` | Codex, en su worktree (sin commitear: ver «Hechos») |
+| Commit del lote, suite completa, revisión (con `guardian-gasto` si el lote toca plata), merge a `main` | Claude |
 | Desplegar (respaldo, migración, cola vacía, reinicio) | Claude, con la skill `despliegue` |
 | Lo `bloqueado por Daniel` (llaves, pagos, decisiones, clics en Meta) | Daniel |
 
@@ -30,9 +30,10 @@ por su cuenta. Además valen todas las de `AGENTS.md` (enlace a `CLAUDE.md`) y l
    prueba real que gasta, déjalo `hecho sin probar en real` y anota qué prueba falta.
 4. **Git:** `git add <rutas>` explícitas; nunca `git add -A`, `git stash`, `git reset --hard`, `git checkout .`,
    `push`, `merge` ni `rebase`. Nunca `ssh` al VPS.
-5. **Un commit por pendiente**, mensaje en español: `PND-NNN: <qué cambió>`. En el mismo commit, su fila pasa de
-   «Abiertos» a «Cerrados al revisar» con la evidencia (`archivo:línea` y la prueba que lo vigila). Si no lo cierras,
-   actualiza su estado y su columna «Dónde» con lo que encontraste.
+5. **No commitees** (tu sandbox no puede escribir en `.git`; lo commitea Claude). Por cada pendiente que cierres, su
+   fila pasa de «Abiertos» a «Cerrados al revisar» con la evidencia (`archivo:línea` y la prueba que lo vigila); si no
+   lo cierras, actualiza su estado y su columna «Dónde» con lo que encontraste. En tu informe final, la lista de
+   archivos que tocó cada pendiente.
 6. **Pruebas:** el venv es el del checkout principal:
    `/Users/colorado/Documents/GitHub/iaplusyou/venv/bin/python3 -m pytest <archivos> -q -p no:cacheprovider`. Cada
    arreglo lleva una prueba que falla sin él. Al terminar el lote, la suite completa (unos 5 minutos, 5 781 pruebas
@@ -57,8 +58,8 @@ por su cuenta. Además valen todas las de `AGENTS.md` (enlace a `CLAUDE.md`) y l
 | — | No se tocan: los 27 `bloqueado por Daniel` y los 5 `hecho sin probar en real` (piden gastar de verdad) | |
 
 ## La siguiente acción concreta
-Lanzar el lote 0 (Claude), desde un worktree nuevo sobre `origin/main`:
-`/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex exec -C <worktree> -s workspace-write --add-dir /Users/colorado/Documents/GitHub/iaplusyou/.git -o <informe> - < <encargo>`
+Lote 0 HECHO el 2026-10-02 (1 cerrado, 20 confirmados, 5 que solo se ven en pantalla o en real; PND-029 y PND-103 los verificó Claude y quedaron para Daniel). Sigue el lote 1, desde un worktree nuevo sobre `origin/main`:
+`/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex exec -C <worktree> -s workspace-write -c model_reasoning_effort="high" -o <informe> - < <encargo>`
 
 ## Decisiones ya tomadas (no reabrir)
 | Decisión | Respuesta | Quién | Fecha |
@@ -70,10 +71,13 @@ Lanzar el lote 0 (Claude), desde un worktree nuevo sobre `origin/main`:
 ## Hechos que no están escritos en otro lado
 - La CLI de Codex no está en el PATH: viene dentro de la app, en `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex`
   (versión 0.159.2 el 2026-10-02). `codex login status` → «Logged in using ChatGPT».
-- `-s workspace-write` deja escribir solo en el worktree; un commit de un worktree escribe en `.git` del checkout
-  principal, por eso va `--add-dir /Users/colorado/Documents/GitHub/iaplusyou/.git`. Ese sandbox corta la red: así
-  ninguna prueba puede llamar a un proveedor por error.
-- Un worktree nuevo necesita `git submodule update --init meta_ads` o la suite no colecciona.
+- `-s workspace-write` deja escribir solo en el worktree y corta la red: ninguna prueba puede llamar a un proveedor
+  por error. **No deja escribir en `.git`** aunque se pase `--add-dir` (lote 0, 2026-10-02: «Operation not permitted»
+  al crear `index.lock`), así que Codex deja los cambios sin commitear y Claude los commitea por lote.
+- El modelo por defecto el 2026-10-02 era `gpt-6.1-sol` con esfuerzo «none»; para lotes que cambian código va
+  `-c model_reasoning_effort="high"`.
+- Un worktree nuevo necesita `git submodule update --init meta_ads` o la suite no colecciona; para lo de la marca de
+  happyflops, también `clientes/happyflops/marca`.
 - Las pruebas no hacen red.
 
 ## Trampas de esta zona
