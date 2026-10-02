@@ -331,3 +331,23 @@ def test_es_limite():
     import meta_detalle as md
     assert md.es_limite('respondió 400: {"error":{"code":613}}')
     assert not md.es_limite('respondió 400: {"error":{"code":100}}') and not md.es_limite("")
+
+
+def test_actualizar_extra_que_falla_no_lanza(con_meta, monkeypatch):
+    md, ex, eid = con_meta["md"], con_meta["ex"], con_meta["eid"]
+    def actualizar_falla(*args, **kwargs):
+        raise RuntimeError("database is locked")
+    monkeypatch.setattr(md.experimentos, "actualizar_extra", actualizar_falla)
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert r["dias"] == 2 and r["desgloses"] == 4 and r["rankings"] == 1
+    # no exception raised, result still returned normally
+
+
+def test_desde_para_que_falla_anota_interno_no_llama_meta(con_meta, monkeypatch):
+    md, eid = con_meta["md"], con_meta["eid"]
+    def desde_para_falla(*args, **kwargs):
+        raise ValueError("invalid date format")
+    monkeypatch.setattr(md, "desde_para", desde_para_falla)
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert "interno" in r["errores"] and r["dias"] == 0 and r["desgloses"] == 0
+    assert con_meta["llamadas"] == []  # no Meta calls made
