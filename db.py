@@ -294,6 +294,45 @@ metrica_snapshot = Table("metrica_snapshot", metadata,
     sa.Index("ix_metrica_snapshot_pieza_tomado", "experimento_pieza_id", "tomado_en"),
 )
 
+# Detalle diario de Meta por anuncio (spec 2026-10-02 §3.1). Único escritor:
+# meta_detalle.py. Una fila por anuncio y día de la cuenta de Meta; se reemplaza
+# al volver a pedir el día (Meta corrige los últimos días).
+metrica_dia = Table("metrica_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("experimento_pieza_id", Integer, sa.ForeignKey("experimento_pieza.id"), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("impresiones", Integer, default=0), Column("alcance", Integer, default=0),
+    Column("frecuencia", Float, default=0.0), Column("clics", Integer, default=0),
+    Column("clics_enlace", Integer, default=0), Column("gasto", Float, default=0.0),
+    Column("cpm", Float, default=0.0), Column("vistas_3s", Integer, default=0),
+    Column("reproducciones", Integer, default=0), Column("p25", Integer, default=0),
+    Column("p50", Integer, default=0), Column("p75", Integer, default=0),
+    Column("p95", Integer, default=0), Column("p100", Integer, default=0),
+    Column("thruplay", Integer, default=0), Column("tiempo_medio_s", Float, default=0.0),
+    Column("visitas_pagina", Integer, default=0), Column("carrito", Integer, default=0),
+    Column("pago_iniciado", Integer, default=0), Column("compras_meta", Integer, default=0),
+    Column("ingresos_meta", Float, default=0.0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("experimento_pieza_id", "fecha", name="uq_metrica_dia_pieza_fecha"),
+    sa.Index("ix_metrica_dia_fecha", "fecha"),
+)
+
+# Totales desde el inicio por anuncio y valor de una dimensión (ubicacion,
+# edad_genero, dispositivo, region). Único escritor: meta_detalle.py; se
+# reemplaza el juego completo de (anuncio, dimensión) en cada pasada.
+metrica_desglose = Table("metrica_desglose", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("experimento_pieza_id", Integer, sa.ForeignKey("experimento_pieza.id"), nullable=False),
+    Column("dimension", String(20), nullable=False),
+    Column("clave", String(120), nullable=False),
+    Column("impresiones", Integer, default=0), Column("clics_enlace", Integer, default=0),
+    Column("gasto", Float, default=0.0), Column("vistas_3s", Integer, default=0),
+    Column("thruplay", Integer, default=0), Column("compras_meta", Integer, default=0),
+    Column("ingresos_meta", Float, default=0.0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("experimento_pieza_id", "dimension", "clave", name="uq_metrica_desglose_pieza_dim_clave"),
+)
+
 evento = Table("evento", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False, index=True),
@@ -600,7 +639,7 @@ kv = Table("kv", metadata,
 # solo recuerda qué descartó una persona y con qué huella (la «situación» de
 # la alerta): si la situación cambia, la alerta vuelve a verse. PK compuesta
 # para que el upsert sea atómico entre procesos (un blob en `kv` perdería
-# descartes). Solo la escribe alertas.py (migración 0028).
+# descartes). Solo la escribe alertas.py (migración 0029).
 alerta_descartada = Table("alerta_descartada", metadata,
     Column("cliente", String(80), primary_key=True),
     Column("clave", String(200), primary_key=True),

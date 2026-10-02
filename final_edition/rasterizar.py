@@ -14,14 +14,25 @@ fracción de la ALTURA; `estilo.ancho_max` y `fondo.ancho`, del ANCHO. El PNG
 mide exactamente su caja (texto + relleno del fondo + margen para contorno y
 sombra) y NO se recorta al contenido: esa caja es la que `geometria.caja`
 coloca con el `transform` del clip, así que su tamaño tiene que ser
-predecible para navegador y servidor por igual."""
+predecible para navegador y servidor por igual.
+
+Dos motores (capa 5c, D3): un texto sin `estilo.version` (v1) sale EXACTAMENTE
+como antes (`multiline_text`, medida de Pillow; `tests/fixtures/rasterizar_v1.json`
+guarda sus huellas). Un texto v2 (`estilo.version: 2`) se dibuja sobre la
+maqueta compartida con la vista previa (`tipografia.maquetar`, D5): letra por
+letra, cada una en su origen, con los emojis a color capa por capa (D6.8) y a
+`factor_nitidez` veces su tamaño (D8), para que no se vea borroso agrandado. El
+PNG de v2 mide `natural × factor`, pero lo que se devuelve (y se estampa en el
+clip) es el tamaño NATURAL: la caja que coloca `geometria.caja` no cambia y el
+`scale=w:h` del compilador achica en vez de estirar."""
 import functools
+import io
 import os
 import re
 
 from PIL import Image, ImageDraw, ImageFont
 
-from final_edition import tipos
+from final_edition import fuentes, tipografia, tipos
 from final_edition.documento import FORMATOS
 
 FONTS_DIR = os.path.join(tipos.BASE_DIR, "static", "fonts")
@@ -126,10 +137,14 @@ def ajustar_lineas(medidor, texto, fuente, ancho_max_px):
     return lineas or [""]
 
 
-def png_texto(texto, estilo, formato, ruta):
+def png_texto(texto, estilo, formato, ruta, escala_max=1.0):
     """Escribe el PNG (RGBA) de `texto` con `estilo` (ya normalizado por
     documento.validar) para un lienzo `formato` y devuelve
-    {"ancho_px", "alto_px"}: el tamaño natural de la capa."""
+    {"ancho_px", "alto_px"}: el tamaño natural de la capa. Un texto v2 se
+    dibuja a `factor_nitidez(escala_max, …)` veces ese tamaño (`_png_v2`);
+    uno v1, como siempre (`escala_max` no se usa)."""
+    if tipografia.es_v2(estilo):
+        return _png_v2(texto, estilo, formato, ruta, escala_max)
     ancho_l, alto_l = FORMATOS[formato]
     tam = max(TAMANO_MIN_PX, _px(estilo.get("tamano", 0.04), alto_l))
     fuente = ImageFont.truetype(ruta_fuente(estilo.get("fuente")), tam)
@@ -176,3 +191,107 @@ def png_texto(texto, estilo, formato, ruta):
                      stroke_width=grosor, stroke_fill=color(contorno["color"]) if contorno else None)
     im.save(ruta)
     return {"ancho_px": im.width, "alto_px": im.height}
+
+
+# --- texto v2 (capa 5c, D5.7, D6.8, D8) ------------------------------------------
+
+_AIRE = 2                        # px transparentes alrededor de la capa de cada letra
+
+
+@functools.lru_cache(maxsize=32)
+def _fuente_v2(ruta, tam):
+    """La fuente de texto `ruta` abierta a `tam` px, una vez por (ruta, tamaño).
+    Con `Layout.BASIC` siempre: el Pillow del VPS trae Raqm, que aplica las formas
+    contextuales aun a una letra sola (Pacifico salía en «forma final», 2026-10-02),
+    y el lienzo dibuja el glifo base."""
+    return ImageFont.truetype(ruta, tam, layout_engine=ImageFont.Layout.BASIC)
+
+
+@functools.lru_cache(maxsize=8)
+def _fuente_emoji_v2(tam):
+    """La copia de la fuente de emojis sin color y con cada glifo en `PUA_CAPAS +
+    glifo` (`fuentes.fuente_emoji_capas`) abierta a `tam` px. Caché propia y
+    chica: abierta desde bytes, cada tamaño guarda su copia (≈ 1,5 MB) y el
+    worker del VPS tiene 2 GB. `Layout.BASIC` por lo mismo que `_fuente_v2`
+    (Raqm en el VPS, 2026-10-02)."""
+    return ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), tam, layout_engine=ImageFont.Layout.BASIC)
+
+
+def _componer(im, origen, ch, fuente, fill, stroke_width=0, stroke_fill=None):
+    """Dibuja `ch` con `anchor="ls"` en `origen` (enteros) y lo compone ENCIMA de
+    `im`, como el lienzo del navegador. `draw.text` directo sobre un RGBA no
+    compone: reemplaza el alfa del lienzo por el de la tinta (la capa al 20 % de
+    🎯 dejaría un agujero al 20 % en lo que tapa; una sombra translúcida, uno en
+    el fondo). Por eso cada letra va en una capa propia del tamaño de su caja y
+    entra con `alpha_composite`; con un origen entero la máscara es la misma
+    que sobre el lienzo grande."""
+    izq, arr, der, aba = fuente.getbbox(ch, anchor="ls", stroke_width=stroke_width)
+    if der <= izq or aba <= arr:
+        return                               # sin tinta (un espacio de ancho cero)
+    izq, arr, der, aba = izq - _AIRE, arr - _AIRE, der + _AIRE, aba + _AIRE
+    capa = Image.new("RGBA", (der - izq, aba - arr), (0, 0, 0, 0))
+    ImageDraw.Draw(capa).text((-izq, -arr), ch, font=fuente, fill=fill, anchor="ls",
+                              stroke_width=stroke_width, stroke_fill=stroke_fill)
+    x, y = origen[0] + izq, origen[1] + arr
+    desde_x, desde_y = max(0, -x), max(0, -y)      # `alpha_composite` no acepta destinos negativos
+    if desde_x >= capa.width or desde_y >= capa.height:
+        return
+    im.alpha_composite(capa, dest=(max(0, x), max(0, y)), source=(desde_x, desde_y))
+
+
+def _png_v2(texto, estilo, formato, ruta, escala_max):
+    """El PNG de un texto v2 sobre la maqueta (D5.7): lienzo de natural × f, el
+    fondo, y tres pasadas sobre las letras — sombra, contorno y relleno —, cada
+    letra en `(redondear(x·f), redondear(base·f))` a `tam·f` px. Pasada por
+    pasada: el contorno de una letra nunca tapa el relleno de la anterior. Los
+    emojis solo en la de relleno, capa por capa en el color de cada una (`None`
+    = el del texto), nunca con `embedded_color` (R1). Devuelve las medidas
+    NATURALES."""
+    nombre = estilo.get("fuente")
+    ruta_ttf = ruta_fuente(nombre)               # nombre inválido o sin TTF: los mensajes de siempre
+    tabla = fuentes.cargar_tabla()
+    if nombre not in (tabla.get("fuentes") or {}):
+        # `maquetar` lanzaría un ValueError pelado; quien llama espera este.
+        raise FuenteNoDisponible(f"La fuente {nombre} no está en static/fonts.")
+    m = tipografia.maquetar(texto, estilo, formato, tabla)
+    f = tipografia.factor_nitidez(escala_max, m["ancho_px"], m["alto_px"])
+    medidas = tipografia.medidas_texto(estilo, formato)
+    im = Image.new("RGBA", (m["ancho_px"] * f, m["alto_px"] * f), (0, 0, 0, 0))
+    fondo = estilo.get("fondo") or None
+    if fondo and m["caja_w"] > 0 and m["caja_h"] > 0:
+        margen = m["margen"]
+        # El rectángulo de Pillow es INCLUSIVO (x1, y1 son píxeles pintados): para medir lo mismo que el
+        # `fillRect` del lienzo (caja_w·f × caja_h·f) acaba un píxel antes. Solo v2: v1 sale como siempre.
+        ImageDraw.Draw(im).rounded_rectangle(
+            [margen * f, margen * f, (margen + m["caja_w"]) * f - 1, (margen + m["caja_h"]) * f - 1],
+            radius=m["radio"] * f, fill=color(fondo["color"], fondo.get("opacidad")))
+    letras = [(l, (tipografia.redondear(l["x"] * f), tipografia.redondear(l["base"] * f))) for l in m["letras"]]
+    de_texto = [(chr(l["cp"]), origen) for l, origen in letras if l["fuente"] == "texto"]
+    fuente_t = _fuente_v2(ruta_ttf, m["tam"] * f)
+    grosor = medidas["grosor"] * f
+    sombra = estilo.get("sombra") or None
+    if sombra:
+        c = color(sombra["color"])
+        dx, dy = medidas["sdx"] * f, medidas["sdy"] * f
+        for ch, (x, y) in de_texto:
+            _componer(im, (x + dx, y + dy), ch, fuente_t, c, grosor, c)
+    contorno = estilo.get("contorno") or None
+    if contorno:
+        c = color(contorno["color"])
+        for ch, origen in de_texto:
+            _componer(im, origen, ch, fuente_t, c, grosor, c)
+    relleno = color(estilo.get("color"))
+    fuente_e = None
+    for l, origen in letras:
+        if l["fuente"] != "emoji":
+            _componer(im, origen, chr(l["cp"]), fuente_t, relleno)
+            continue
+        capas = fuentes.emoji_capas(l["cp"])
+        if not capas:
+            continue                             # no debería llegar: la maqueta solo manda lo que la tabla cubre
+        if fuente_e is None:
+            fuente_e = _fuente_emoji_v2(m["tam"] * f)
+        for glifo, c in capas:
+            _componer(im, origen, chr(fuentes.PUA_CAPAS + glifo), fuente_e, c or relleno)
+    im.save(ruta)
+    return {"ancho_px": m["ancho_px"], "alto_px": m["alto_px"]}

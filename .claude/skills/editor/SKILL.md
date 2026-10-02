@@ -197,7 +197,7 @@ the player moves the framing and its corner zooms (`seleccion.gestoEn` → `encu
 slow zoom, transition), and `avisos_carga.vocesJuntas` warns when two voices sound at once. Final-review fixes
 (2026-10-01): a photo never passes `FOTO_MAX_MS` when a solape gives its ms back (`devolverASolape`, plus `acotarFotos` in
 `normalizar` as the last barrier); a transparent photo gets black under its foreground at the same alpha and the small
-blurred-background canvas is filled black before every draw (the render flattens on black); with all 8 tracks taken a
+blurred-background canvas is filled black before every draw (the render flattens on black); with every track taken (`MAX_PISTAS`: 8 until capa 5c, 20 since its live check — `documento.py` and `operaciones.js` mirror it, and the render does not depend on the number of tracks: `tramos` splits by layers and principal clips) a
 followed layer stays in its own row instead of refusing the operation (D10.6); a KEYED gesture (`operarCon({clave})`)
 derives from its base through `vinculos.operarGesto` (`crudo = fn(crudoPrevio ?? base)`, `seguirPrincipal(base, crudo)`,
 restarted when `historial.fusionaria(clave)` is false, on undo/redo, save, conflict or a «Vincular» change), and a layer
@@ -207,4 +207,52 @@ never see `title`); an image edition adds an image straight as a layer; a framin
 canvas px) counts as «sin margen» in the drag and the panel (`encuadre.sinMargen`) and the magnet never takes more than a
 quarter of the margin; the menu's deferred repaint waits for the closing tap's click (`biblioteca.despuesDelToque`); and
 a second tap on the already selected principal clip deselects it (`seleccion.eleccionTrasToque`). Still out: PIP (video
-over video, D14), per-clip «Vincular», filters and rotation (capa 5c), Producir per country (capa 5d).
+over video, D14), per-clip «Vincular», filters and rotation (capa 5c-2), Producir per country (capa 5d).
+Capa 5c-1 (2026-10-02, «textos y gráficos que venden», spec `2026-10-01-editor-capa5c-textos-graficos-design.md`):
+the SERVER still rasterizes every text; the preview imitates it through a SHARED LAYOUT. `final_edition/fuentes.py` reads
+the TTFs with `struct` (no new dependency) into `static/editor/tipografia.json` (`generar_tabla`/`escribir_tabla`, run
+`PY -m final_edition.fuentes`; `test_tabla_al_dia` fails when stale): advances per code point of `REPERTORIO`, asc/desc,
+for the 11 fonts of `fuentes.CATALOGO` (`CATEGORIAS` clasicas/impacto/redondeadas/manuscritas/serifa; 8 OFL fonts added
+2026-10-01 with their licences in `static/fonts/licencias/`) plus Twemoji Mozilla (`static/fonts/emoji/`, CC-BY 4.0 — the
+attribution is shown under «Stickers › Emojis»). `cargar_tabla()` (process-wide cache) returns `emoji: None` with
+`EDITOR_SIN_EMOJI=1` OR when the emoji TTF is missing, and BOTH engines read that same table (the valve needs BOTH
+services restarted). `final_edition/tipografia.py` ↔ `static/editor/tipografia.js` (parity table
+`tipografia_casos.json`, compared EXACTLY): `simplificar` (skin tones, flags, keycaps, ZWJ families simplified the same in
+both), `limpiar` (NFC first; what neither the text font nor the emoji font covers is dropped and listed), `fuente_de` (from
+U+2190 the emoji font wins; only it decides «emoji», never `fuentes.emoji_capas`), `ajustar` (greedy, words split ONLY on
+U+0020 — a no-break space keeps «$ 89.900» together), `maquetar` (box, lines and each letter's origin; letters rounded half
+UP), `escala_max`/`factor_nitidez` (the PNG is drawn at ceil(scale) ≤ 4×, ≤ 4096 px, but the box stays NATURAL so the
+compiler doesn't change). A text with `estilo.version: 2` is drawn from that layout: Pillow letter by letter in
+`rasterizar._png_v2` (three passes shadow → contour → fill, each glyph `alpha_composite`d like the canvas, background ending
+at `(margen+caja)·f − 1` because Pillow's rectangle is inclusive, fonts opened with `layout_engine=BASIC` — the VPS Pillow
+12.3 has Raqm and would draw Pacifico's contextual «final forms»), the canvas in `texto_canvas.js` (`fontKerning none`,
+`textRendering optimizeSpeed`, a translucent pass drawn opaque on a scratch canvas and composited once with `globalAlpha`;
+cache capped at 200 texts AND `TOPE_AREA_CACHE` 24 MP, evicted canvases emptied for Safari). EMOJI: Pillow's
+`embedded_color` clips COLRv0 to the base glyph's empty box, so the render draws each COLR layer as a plain glyph from an
+in-memory copy of Twemoji without COLR/CPAL whose cmap puts glyph g at `PUA_CAPAS + g` (`fuentes.fuente_emoji_capas`,
+`emoji_capas`, palette index 0xFFFF = the text colour; zero-area layers dropped); the browser composes COLR itself from the
+`@font-face` «CreatvEmoji» (declared only when the table has the emoji font). Old texts (no `version`) render exactly as
+before (fingerprints `tests/fixtures/rasterizar_v1.json`, Pillow 11.3 only; checked byte-identical under 12.3 in the
+`render-vps` Docker image); the v1 preview draws `sinGlifosV1`. A text becomes v2 when it is added, or when its content,
+style or SCALE really changes (`operaciones.aV2`; a no-op change and moving it don't convert); «Mostrar los emojis»
+(`actualizarTexto`) converts on purpose. Automatic drafts (`borrador.py`) still write v1. New text ops: `estilo.ancho_max`
+slider «Ancho del texto» + «Sin límite» (`ANCHO_TEXTO` 0.3–1, default 0.86), fonts grouped by family and loaded only when
+the list is visible (IntersectionObserver), warnings `avisosTexto` («No sale en el video: …», simplified emoji, «Este texto
+es de antes…»), presets `oferta nuevo descuento envio ultimas mas_vendido` («Para vender», born in the viewer's language,
+editable) and `emoji` — `agregarTexto(doc, tMs, preset, opciones, info)`: callers ALWAYS pass the options object (`{}` /
+`{literal}`), otherwise `info` lands in its slot. Stickers: `final_edition/stickers.py` draws 20 white word-free stickers
+(deterministic, committed in `static/stickers/` with `stickers.json`); `POST editor.agregar_sticker` turns one into a free
+project material (origin `sticker`, `extra.tenible`, `url_proxy = url`, R2 `clientes/<c>/materiales/sticker_<id>.png`,
+deduped by hash, never in «Medios», never deletable); an image clip may carry `tinte: "#RRGGBB"` (only on `imagen` tracks):
+`[n:v]format=rgba,lutrgb=r=R:g=G:b=B` in the compiler, `destination-in` in the preview (`vista.imagenTenida`), «Color»
+in «Editar» only for a `tenible` material. Library tab «Stickers» (`stickers_modelo.js`: flechas, marcas, formas, and 39
+emoji when the table has the font) and the 7th phone button. Safe zones (`static/editor/zonas.js`, page only):
+`ZONAS["9:16"]` for TikTok/Reels/Shorts (Reels from Meta's published margins; TikTok/Shorts are starting values),
+striped guides `#ed-zonas` (`ControlZonas`, remembered in `localStorage` `creatv.editor.zonas`, default Reels) and
+`#aviso-zonas` (a layer inside a zone ≥ 8 px or off the frame; an image covering ≥ 95 % of the frame is a background and
+never warns; a layer with an entry animation is measured where the entry ends). `MAX_PISTAS` went from 8 to 20 in the live
+check (a draft already uses 7). Test anything that touches Pillow ALSO in the `render-vps:latest` image (VPS Pillow and
+ffmpeg): the local venv has Pillow 11.3 without Raqm. Before restarting the VPS after a change to text rendering, run
+the pre-restart check (scratchpad script of the 5c deploy: emoji layers, a v2 text with every style at factor 3, base glyphs
+under Raqm, v1 against `main`, `lutrgb`). Still out (capa 5c-2): text animations beyond «deslizar», rotation, scale/opacity
+keyframes, colour filters; widening `REPERTORIO` (Cyrillic, ẞ, ⅓, ① — the v1 preview drops them while the v1 render draws them).

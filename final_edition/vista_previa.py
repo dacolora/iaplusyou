@@ -5,35 +5,43 @@ configuración que el motor del navegador comparte con el de ffmpeg — sacada
 de los módulos de Python, nunca copiada a mano. Solo lectura: no cambia el
 documento ni paga nada; encolar proxies es gratis (edicion_proxy)."""
 import copy
-import glob
-import os
 import re
 
 import audios
 import idiomas
 import materiales
 import trabajos
-from final_edition import estimar, mezcla
+from final_edition import estimar, fuentes as catalogo_fuentes, mezcla
 from final_edition.documento import FORMATOS
 from final_edition.motor import compilador, subtitulos
 from tareas import edicion as tareas_edicion
 
 VENTANA_PICOS_MS = 50   # tareas.edicion._picos(ventana_ms=50): un pico cada 50 ms
-_FUENTES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "fonts")
+# `@font-face` de la fuente de emojis en la página (capa 5c): la familia que
+# usa el lienzo y el archivo, relativo a `static/`.
+EMOJI_NAVEGADOR = {"familia": "CreatvEmoji", "archivo": "fonts/emoji/TwemojiMozilla.ttf"}
 
 
 def fuentes():
-    """Nombres de las TTF de static/fonts (sin extensión): son los nombres
-    que usan `estilo.fuente` y las @font-face de la página."""
-    return sorted(os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(_FUENTES_DIR, "*.ttf")))
+    """Ids de las fuentes del catálogo (`final_edition.fuentes.catalogo`): son
+    los nombres que usan `estilo.fuente` y las @font-face de la página. La
+    fuente de emojis, que vive en una subcarpeta, nunca aparece aquí."""
+    return [f["id"] for f in catalogo_fuentes.catalogo()]
 
 
 def config_navegador():
+    tipografia = catalogo_fuentes.cargar_tabla()
     return {
         "formatos": {k: list(v) for k, v in FORMATOS.items()},
         "fps": 30,
         "ventana_picos_ms": VENTANA_PICOS_MS,
         "fuentes": fuentes(),
+        # capa 5c: el catálogo con nombre y categoría (el selector de fuentes),
+        # la tabla tipográfica leída de las TTF (con la que el navegador mide
+        # igual que Python) y la fuente de emojis, o None si no hay.
+        "catalogo_fuentes": catalogo_fuentes.catalogo(),
+        "tipografia": tipografia,
+        "emoji": dict(EMOJI_NAVEGADOR) if tipografia["emoji"] else None,
         "mezcla": {
             "presets": mezcla.PRESETS,
             "preset_defecto": mezcla.PRESET_DEFECTO,
@@ -67,6 +75,8 @@ def material_para(m, con_palabras=False):
          "tira_url": extra.get("tira_url"), "tiene_audio": extra.get("tiene_audio"),
          "nombre": extra.get("nombre"), "origen": m["origen"], "mi_musica": es_de_mi_musica(m),
          "tiene_palabras": isinstance(extra.get("palabras"), list),
+         # capa 5c: una imagen de un solo color que se puede teñir (un sticker)
+         "tenible": bool(extra.get("tenible")),
          # capa 5a (Task 8, fix round 1): el idioma que habla una voz con IA o
          # una locución, para decidir con qué idioma entra al agregarla
          "idioma": extra["idioma"] if _IDIOMA_RE.fullmatch(str(extra.get("idioma") or "")) else None}

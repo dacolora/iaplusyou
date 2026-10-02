@@ -5496,7 +5496,7 @@ def exp_refrescar(cliente, eid):
     # M10: max_intentos=2 como la periódica (tareas/experimentos.py) — refrescar
     # nunca gasta, así que no hay razón para ser más estricto acá que allá.
     arranco = trabajos.encolar(job_id, "exp_refrescar", {"cliente": cliente, "experimento_id": eid},
-                               cliente=cliente, duracion_estimada=30, max_intentos=2)
+                               cliente=cliente, duracion_estimada=90, max_intentos=2)
     if arranco:
         flash(gettext("Actualizando resultados…"), "ok")
     else:

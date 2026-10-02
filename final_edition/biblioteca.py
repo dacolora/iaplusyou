@@ -7,6 +7,9 @@ edición. Único módulo que decide esto: la ruta (`final_edition/rutas_editor.p
 solo traduce multipart/JSON y el worker (`tareas/edicion.py`) solo valida
 `cf_id` y llama a `materializar_pieza`.
 
+Los stickers propios (capa 5c, `final_edition/stickers.py`) también pasan por aquí: `sticker` vuelve material,
+gratis y una sola vez por proyecto, el PNG blanco del paquete.
+
 Idioma (fase 6): `subir` corre en la ruta, así que sus mensajes salen en el
 idioma de quien sube; `materializar_pieza` corre en el worker, en el del
 proyecto (`worker.ejecutar`). El nombre de respaldo de un archivo sin
@@ -28,7 +31,8 @@ import final_edition
 import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, encuadre, insumos, mezcla, vista_previa
+from final_edition import cortes, encuadre, insumos, mezcla, stickers, vista_previa
+from storage import r2_uploader
 from tareas import edicion as tareas_edicion
 
 # video/imagen/audio (spec §11): extensión -> (tipo de material, content-type
@@ -242,6 +246,29 @@ def _guardar(cliente, local, ext, tipo, content_type, nombre_archivo):
                          {"cliente": cliente, "material_id": m["id"]}, duracion_estimada=60,
                          cliente=cliente, max_intentos=3, prioridad=1)
     return vista_previa.material_para(m)
+
+
+# --- Stickers propios (editor capa 5c, D11): un PNG del paquete, un material por proyecto, gratis ---
+
+def sticker(cliente, sticker_id):
+    """El material de este proyecto para el sticker `sticker_id` del paquete (`static/stickers/`), o None si ese id no
+    existe (`stickers.por_id` valida la forma Y que esté en el manifiesto: un id raro nunca arma una ruta). La primera
+    vez que el proyecto lo usa sube el PNG de 512 px a su carpeta de materiales y registra la fila (`origen
+    "sticker"`, `extra.tenible`, `url_proxy == url`: un PNG tan chico no necesita copia liviana); las siguientes lo
+    encuentran por su hash y no suben nada (`materiales.obtener_o_crear`). Gratis: ni `gastos` ni worker. No entra en
+    `ORIGENES_BIBLIOTECA` (no sale en «Medios») ni en `ORIGENES_BORRABLES`."""
+    ficha = stickers.por_id(sticker_id)
+    if ficha is None:
+        return None
+    ruta = stickers.ruta(ficha["id"])
+
+    def _producir():
+        url = r2_uploader.upload_file(ruta, f"clientes/{cliente}/materiales/sticker_{ficha['id']}.png", "image/png")
+        return {"tipo": "imagen", "origen": "sticker", "url": url, "url_proxy": url,
+                "bytes": os.path.getsize(ruta), "ancho": ficha["ancho"], "alto": ficha["alto"],
+                "extra": {"nombre": ficha["id"], "sticker": ficha["id"], "tenible": True}}
+    material, _creado = materiales.obtener_o_crear(cliente, materiales.hash_archivo(ruta), _producir)
+    return material
 
 
 # --- Grabación del micrófono (editor capa 5a, D8/Task 6): gratis, siempre a mp3 ---

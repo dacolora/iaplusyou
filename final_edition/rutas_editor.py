@@ -17,7 +17,7 @@ import materiales
 import trabajos
 from final_edition import biblioteca
 from final_edition import documento as documento_mod
-from final_edition import estimar, textos_editor, transcripcion, vista_previa
+from final_edition import estimar, stickers, textos_editor, transcripcion, vista_previa
 from final_edition.documento import DocumentoInvalido
 from final_edition.motor import compilador
 from tareas import edicion as tareas_edicion
@@ -72,6 +72,10 @@ def ver(cliente, edicion_id):
     # los pone con ponerTextos antes de construir nada).
     datos["textos"] = textos_editor.textos()
     datos["idioma_ui"] = idiomas.activo()
+    # capa 5c: los 20 stickers propios (el paquete de `static/stickers/`); la biblioteca de stickers los pinta y
+    # `editor.agregar_sticker` los vuelve material la primera vez que se usan
+    datos["stickers"] = [{**s, "url": url_for("static", filename=f"stickers/{s['archivo']}")}
+                         for s in stickers.manifiesto()["stickers"]]
     vista_previa.encolar_proxies(cliente, datos["pendientes"])
     # capa 4c: el borrador de la vía automática se nombra «Borrador automático · …»
     return render_template("editor.html", cliente=cliente, edicion=ed, datos=datos,
@@ -547,6 +551,19 @@ def agregar_pieza(cliente, cf_id):
     trabajos.encolar(tareas_edicion.job_id_material_de_pieza(cliente, cf_id), "material_de_pieza",
                      {"cliente": cliente, "cf_id": cf_id}, duracion_estimada=30, cliente=cliente, max_intentos=2)
     return jsonify({"preparando": True}), 202
+
+
+@bp.post("/biblioteca/sticker/<sticker_id>", endpoint="agregar_sticker")
+def agregar_sticker(cliente, sticker_id):
+    """Un sticker propio como material del proyecto (capa 5c, gratis: sube a R2 un PNG de 512 px una vez por
+    proyecto, sin tarea ni gasto). El id se valida contra el manifiesto (`biblioteca.sticker`): lo que no está ahí
+    es 404 y nunca toca el disco ni R2. Idempotente por el hash del PNG."""
+    if not _mismo_origen():
+        return jsonify({"error": gettext("Pedido rechazado: no viene de esta página.")}), 403
+    material = biblioteca.sticker(cliente, sticker_id)
+    if material is None:
+        return jsonify({"error": gettext("Ese sticker no existe.")}), 404
+    return jsonify({"material": vista_previa.material_para(material)})
 
 
 def _ids_de(texto):

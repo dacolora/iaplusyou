@@ -386,3 +386,18 @@ test("respuestaEstimado: gratis, precio, sin precio o error", () => {
   assert.deepEqual(respuestaEstimado(true, null), { error: true });
   assert.deepEqual(respuestaEstimado(true, [1]), { error: true });
 });
+
+// ---- Capa 4c (10/10), movido aquí en la capa 5c (Tarea 7): los emojis de los subtítulos ----
+// Los subtítulos salen con libass y Inter, sin emojis (operaciones.sinEmojis
+// los quita al corregir): la pestaña lo avisa mientras se escribe. Los textos
+// sí los muestran desde la capa 5c (sus avisos son otros: propiedades_modelo.avisosTexto).
+import { avisoEmojiSubtitulos, tieneEmoji } from "../../static/editor/subtitulos_modelo.js";
+
+test("tieneEmoji: los emojis sí; letras, acentos y ® ™ © no", () => {
+  for (const s of ["🔥 50% OFF", "✅ Envío gratis", "⭐⭐⭐⭐⭐", "Hecho en 🇨🇴", "Te ❤️", "👨‍👩‍👧 en familia"]) assert.equal(tieneEmoji(s), true, s);
+  for (const s of ["¡Envío gratis! ñ á é ü", "Marca® ™ ©", "$ 89.900 – 50 %", "", null]) assert.equal(tieneEmoji(s), false, String(s));
+});
+
+test("el aviso de emojis de los subtítulos dice que en los subtítulos no salen", () => {
+  assert.equal(avisoEmojiSubtitulos(), "Los emojis no salen en los subtítulos del video final: se quitan al producirlo.");
+});

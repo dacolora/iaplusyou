@@ -1455,6 +1455,10 @@ msgstr "(suggested)"
 msgid "(sugerido)"
 msgstr "(suggested)"
 
+#, python-brace-format
+msgid "(y {n} más)"
+msgstr "(and {n} more)"
+
 msgid "(ya producida — se reemplaza)"
 msgstr "(already produced — will be replaced)"
 
@@ -1519,6 +1523,9 @@ msgstr "- %(plataforma)s: published%(detalle)s"
 #, python-format
 msgid "- %(plataforma)s: subida, confirmación pendiente (id %(id)s)"
 msgstr "- %(plataforma)s: uploaded, confirmation pending (id %(id)s)"
+
+msgid "-50 %"
+msgstr "50% OFF"
 
 #, python-format
 msgid ". Diagnóstico: %(a)s"
@@ -1734,6 +1741,9 @@ msgstr "Open the “API” (or “Developers”) section of your account and cre
 
 msgid "Abre «Traer referentes» ya prellenado con el producto y país de esta campaña — sigue siendo tu decisión lanzarlo y aprobar el costo"
 msgstr "Opens “Bring references” already filled in with this campaign's product and country — it's still your call to launch it and approve the cost"
+
+msgid "Abriendo el editor…"
+msgstr "Opening the editor…"
 
 msgid "Abrir el menú"
 msgstr "Open the menu"
@@ -2066,6 +2076,9 @@ msgstr "Analyzing references…"
 
 msgid "Analizar referencias y generar guía de estilo"
 msgstr "Analyze references and generate style guide"
+
+msgid "Ancho del texto"
+msgstr "Text width"
 
 msgid "Animación de entrada"
 msgstr "Entrance animation"
@@ -3097,8 +3110,14 @@ msgstr "Chile"
 msgid "Cierre"
 msgstr "Close"
 
+msgid "Cinco estrellas"
+msgstr "Five stars"
+
 msgid "Cinco minutos. No creas nada en Meta."
 msgstr "Five minutes. You don't create anything on Meta."
+
+msgid "Cinta"
+msgstr "Ribbon"
 
 msgid "Citas textuales"
 msgstr "Verbatim quotes"
@@ -3316,6 +3335,9 @@ msgstr "Clone voice"
 msgid "Cloudflare R2 (almacenamiento)"
 msgstr "Cloudflare R2 (storage)"
 
+msgid "Clásicas"
+msgstr "Classic"
+
 msgid "Colombia"
 msgstr "Colombia"
 
@@ -3469,6 +3491,9 @@ msgstr "With a person"
 
 msgid "Con qué se miden las ventas de este experimento"
 msgstr "What this experiment's sales are measured with"
+
+msgid "Con serifa"
+msgstr "Serif"
 
 msgid "Con tu propia app: sigue los pasos de la tarjeta de Meta."
 msgstr "With your own app: follow the steps on the Meta card."
@@ -3766,6 +3791,9 @@ msgstr "Copy links"
 msgid "Copy del anuncio"
 msgstr "Ad copy"
 
+msgid "Corazón"
+msgstr "Heart"
+
 msgid "Corona de la cabeza"
 msgstr "Crown of the head"
 
@@ -4057,6 +4085,12 @@ msgstr ""
 msgid "Cápsulas de detergente sin plástico, dosis exacta, olor suave"
 msgstr "Plastic-free detergent pods, exact dose, mild scent"
 
+msgid "Círculo"
+msgstr "Circle"
+
+msgid "Círculo a mano"
+msgstr "Hand-drawn circle"
+
 msgid "Código entregado"
 msgstr "Code delivered"
 
@@ -4125,6 +4159,9 @@ msgstr "Sprint data (saves on its own)"
 #, python-format
 msgid "De %(persona)s:"
 msgstr "From %(persona)s:"
+
+msgid "De impacto"
+msgstr "Display"
 
 msgid "De los listos en Crear"
 msgstr "From the ready ones in Create"
@@ -4358,11 +4395,22 @@ msgstr "Slide"
 msgid "Después, un análisis con IA mira tus ganadores y tus perdedores, explica qué patrón se repite y propone anuncios nuevos que puedes llevar a Crear con un clic."
 msgstr "Then an AI analysis looks at your winners and your losers, explains which pattern repeats and suggests new ads you can take to Create with one click."
 
+msgid "Destellos"
+msgstr "Sparkles"
+
 msgid "Destino"
 msgstr "Market"
 
 msgid "Detalle"
 msgstr "Detail"
+
+#, python-format
+msgid "Detalle de Meta al día (%(dias)s días de anuncios, %(desgloses)s filas de desglose)."
+msgstr "Meta detail up to date (%(dias)s days of ad data, %(desgloses)s breakdown rows)."
+
+#, python-format
+msgid "Detalle de Meta incompleto: falló %(partes)s."
+msgstr "Meta detail incomplete: %(partes)s failed."
 
 msgid "Detalle técnico"
 msgstr "Technical detail"
@@ -4525,6 +4573,9 @@ msgstr "E3 environments"
 
 msgid "E4 hooks alternativos"
 msgstr "E4 alternate hooks"
+
+msgid "ENVÍO GRATIS"
+msgstr "FREE SHIPPING"
 
 msgid "Ecuador"
 msgstr "Ecuador"
@@ -4789,6 +4840,9 @@ msgstr "The clone is too short for any segment."
 
 msgid "El color debe ser hexadecimal, como #4d8dff."
 msgstr "The color must be hexadecimal, like #4d8dff."
+
+msgid "El color se cambia solo en los stickers."
+msgstr "Color can only be changed on stickers."
 
 msgid "El correo no es válido."
 msgstr "The email isn't valid."
@@ -5180,6 +5234,14 @@ msgstr "The text is over 3,000 characters."
 msgid "El texto que se dice en los clips no es idéntico al guion con las líneas quitadas."
 msgstr "The text spoken in the clips doesn't match the script with the removed lines."
 
+#, python-brace-format
+msgid "El texto «{texto}» queda bajo la interfaz de {plataforma} ({zona})."
+msgstr "The text “{texto}” ends up under the {plataforma} interface ({zona})."
+
+#, python-brace-format
+msgid "El texto «{texto}» se sale del video: achícalo o baja su ancho."
+msgstr "The text “{texto}” goes off the video: shrink it or reduce its width."
+
 #, python-format
 msgid "El token no ve el Business %(business)s (%(error)s). Revisa que el usuario del sistema pertenezca a ese Business Manager y tenga permiso business_management."
 msgstr "The token can't see the Business %(business)s (%(error)s). Check that the system user belongs to that Business Manager and has the business_management permission."
@@ -5327,6 +5389,9 @@ msgstr "Choose an audio file."
 msgid "Elige un archivo."
 msgstr "Choose a file."
 
+msgid "Elige un emoji."
+msgstr "Pick an emoji."
+
 msgid "Elige un idioma de la lista."
 msgstr "Pick a language from the list."
 
@@ -5354,8 +5419,8 @@ msgstr "Choose a username and a password to enter your project."
 msgid "Elige un video"
 msgstr "Pick a video"
 
-msgid "Elige un video listo de Crear. Editarlo es gratis; el guion con IA y cada final muestran su precio antes de cobrar."
-msgstr "Pick a ready video from Create. Editing it is free; the AI script and each final cut show their price before charging."
+msgid "Elige un video listo de Crear y se abre en el editor, gratis. El guion con IA y cada final muestran su precio antes de cobrar."
+msgstr "Pick a ready video from Create and it opens in the editor, for free. The AI script and each final cut show their price before charging."
 
 msgid "Elige un volumen de la lista."
 msgstr "Pick a volume from the list."
@@ -5444,6 +5509,12 @@ msgstr "United Arab Emirates"
 
 msgid "Emoción"
 msgstr "Emotion"
+
+msgid "Emojis"
+msgstr "Emojis"
+
+msgid "Emojis: Twemoji (CC-BY 4.0)."
+msgstr "Emojis: Twemoji (CC-BY 4.0)."
 
 msgid "Empezar de cero"
 msgstr "Start from scratch"
@@ -5672,6 +5743,9 @@ msgstr "Send me the link"
 
 msgid "Equilibrada"
 msgstr "Balanced"
+
+msgid "Equis"
+msgstr "X mark"
 
 msgid "Error"
 msgstr "Error"
@@ -6312,6 +6386,9 @@ msgstr "That reference doesn't exist."
 msgid "Ese sprint no existe."
 msgstr "That sprint doesn't exist."
 
+msgid "Ese sticker no existe."
+msgstr "That sticker doesn't exist."
+
 msgid "Ese swap todavía no tiene un resultado listo."
 msgstr "That swap doesn't have a finished result yet."
 
@@ -6475,6 +6552,9 @@ msgstr "Status not allowed."
 msgid "Estados Unidos"
 msgstr "United States"
 
+msgid "Estallido"
+msgstr "Burst"
+
 msgid "Este activo ya no existe"
 msgstr "This item no longer exists"
 
@@ -6571,6 +6651,9 @@ msgstr "This sprint doesn't have campaigns yet"
 msgid "Este texto cambia según el país: lo que escribas aquí vale para {destino}."
 msgstr "This text changes by country: what you type here applies to {destino}."
 
+msgid "Este texto es de antes: sus emojis no salen en el video."
+msgstr "This is an older text: its emojis don't show in the video."
+
 msgid "Este video no trae sonido."
 msgstr "This video has no sound."
 
@@ -6627,6 +6710,9 @@ msgstr "These subtitles come from the automatic draft and don't follow the cuts.
 msgid "Estos textos están en español: son las instrucciones internas que recibe Claude. Claude escribe tus anuncios en el idioma de tu proyecto."
 msgstr "These texts are in Spanish: they're the internal instructions Claude receives. Claude writes your ads in your project's language."
 
+msgid "Estrella"
+msgstr "Star"
+
 msgid "Estrellas"
 msgstr "Stars"
 
@@ -6668,6 +6754,9 @@ msgstr "Stage"
 msgid "Etapa inválida: %(etapa)s"
 msgstr "Invalid stage: %(etapa)s"
 
+msgid "Etiqueta de precio"
+msgstr "Price tag"
+
 msgid "Evaluación con IA"
 msgstr "AI evaluation"
 
@@ -6704,6 +6793,9 @@ msgstr "Evaluate now"
 
 msgid "Eventos en bitácora"
 msgstr "Log events"
+
+msgid "Exclamación"
+msgstr "Exclamation"
 
 msgid "Excluir"
 msgstr "Exclude"
@@ -7046,11 +7138,29 @@ msgstr "Finished"
 msgid "Firma vacía."
 msgstr "Empty “why it works”."
 
+msgid "Flecha"
+msgstr "Arrow"
+
+msgid "Flecha a mano"
+msgstr "Hand-drawn arrow"
+
+msgid "Flecha curva"
+msgstr "Curved arrow"
+
+msgid "Flecha hacia abajo"
+msgstr "Down arrow"
+
+msgid "Flechas"
+msgstr "Arrows"
+
 msgid "Flux Kontext Pro"
 msgstr "Flux Kontext Pro"
 
 msgid "Fondo"
 msgstr "Background"
+
+msgid "Formas"
+msgstr "Shapes"
 
 msgid "Formato"
 msgstr "Format"
@@ -7446,6 +7556,9 @@ msgstr "Managed by Creatv"
 
 msgid "Gestionar la conexión de agencia →"
 msgstr "Manage the agency connection →"
+
+msgid "Globo de diálogo"
+msgstr "Speech bubble"
 
 msgid "Google permite 100 búsquedas por día por proyecto; cada recolección usa una. Los links no gastan búsqueda."
 msgstr "Google allows 100 searches per day per project; each collection uses one. Links don't use up searches."
@@ -8107,12 +8220,6 @@ msgstr "Unknown intent: %(malas)s"
 msgid "Intención inicial (se puede cambiar por referencia):"
 msgstr "Initial intent (can be changed per reference):"
 
-msgid "Inter gruesa"
-msgstr "Inter bold"
-
-msgid "Inter media"
-msgstr "Inter semibold"
-
 msgid "Interacción"
 msgstr "Engagement"
 
@@ -8736,6 +8843,9 @@ msgstr "Launching…"
 msgid "Lanzar a Meta (en pausa)"
 msgstr "Launch to Meta (paused)"
 
+msgid "Las banderas, los tonos de piel y los emojis compuestos salen simplificados."
+msgstr "Flags, skin tones and combined emojis come out simplified."
+
 msgid "Las campañas del asistente no se pudieron leer."
 msgstr "The wizard's campaigns couldn't be read."
 
@@ -8799,6 +8909,9 @@ msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.
 
 msgid "Las reglas no encontraron nada."
 msgstr "The rules found nothing."
+
+msgid "Las zonas son para videos verticales (9:16)."
+msgstr "Zones are for vertical videos (9:16)."
 
 msgid "Leer anuncios ajenos"
 msgstr "Reading other brands' ads"
@@ -9093,8 +9206,8 @@ msgstr "The clips were assembled but couldn't be sent to chat. Create a new vers
 msgid "Los de mayor prioridad van primero al loop de prueba"
 msgstr "The ones with higher priority go first in the test loop"
 
-msgid "Los emojis no salen en el video final: se quitan al producirlo."
-msgstr "Emojis don't show in the final video: they're removed when it's produced."
+msgid "Los emojis no salen en los subtítulos del video final: se quitan al producirlo."
+msgstr "Emojis don't show in the final video's subtitles: they're removed when it's produced."
 
 msgid "Los emojis no salen en los subtítulos: escribe la palabra con letras."
 msgstr "Emojis don't show in subtitles: type the word with letters."
@@ -9116,6 +9229,10 @@ msgstr "This version's image prompts are already done or in progress."
 
 msgid "Los prompts de imágenes quedaron escritos pero no se pudieron pasar todos al chat. Vuelve a escribirlos en una versión nueva."
 msgstr "The image prompts were written but not all of them could be sent to chat. Write them again in a new version."
+
+#, python-brace-format
+msgid "Los subtítulos quedan bajo la interfaz de {plataforma}: súbelos en «Subtítulos»."
+msgstr "The subtitles end up under the {plataforma} interface: move them up in “Subtitles”."
 
 msgid "Los videos de esta edición no traen sonido."
 msgstr "The videos in this edit have no sound."
@@ -9177,6 +9294,9 @@ msgstr "Hands"
 
 msgid "Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar se hacen solos. Auto: todo solo salvo con el tope alcanzado. Compras exige el Pixel activo y atribución pixel; Tráfico sirve siempre. La atribución sugerida sale de lo conectado en Configuración: pulsa «Comprobar Pixel» allí para que la tenga en cuenta."
 msgstr "Manual: the engine only proposes and you approve. Semi: pausing and archiving happen on their own. Auto: everything happens on its own except when the cap is reached. Purchases requires an active Pixel and pixel attribution; Traffic always works. The suggested attribution comes from what's connected in Settings: press “Check Pixel” there so it's taken into account."
+
+msgid "Manuscritas"
+msgstr "Handwritten"
 
 msgid "Mapa corporal"
 msgstr "Body map"
@@ -9255,6 +9375,9 @@ msgstr "Brands"
 
 msgid "Marcas a imitar"
 msgstr "Brands to imitate"
+
+msgid "Marcas a mano"
+msgstr "Hand-drawn marks"
 
 #, python-format
 msgid "Material %(id)s listo."
@@ -9382,6 +9505,10 @@ msgstr "Meta didn't tell us who owns each shared Page. Connect without a Page, o
 msgid "Meta no termina de paginar %(edge)s después de %(n)s páginas — parece un bucle; revisa el Business o avisa a soporte."
 msgstr "Meta doesn't finish paging %(edge)s after %(n)s pages — it looks like a loop; check the Business or tell support."
 
+#, python-format
+msgid "Meta pidió esperar: el detalle se reintenta en 30 minutos (reintento %(n)s de %(total)s)."
+msgstr "Meta asked us to wait: the detail will be retried in 30 minutes (retry %(n)s of %(total)s)."
+
 msgid "Meta quedó conectado en Creatv"
 msgstr "Meta is now connected in Creatv"
 
@@ -9423,6 +9550,9 @@ msgstr "Meta replied: %(mensaje)s"
 
 msgid "Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras."
 msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once it starts running, “Update metrics” brings in the numbers."
+
+msgid "Meta siguió pidiendo esperar después de varios intentos: el detalle quedó incompleto. Actualiza el experimento más tarde para completarlo."
+msgstr "Meta kept asking us to wait after several attempts: the detail is incomplete. Update the experiment later to complete it."
 
 msgid "Meta tuvo una falla temporal: reintenta en unos minutos."
 msgstr "Meta had a temporary failure: try again in a few minutes."
@@ -9591,6 +9721,9 @@ msgstr "Currency of the figures"
 msgid "Monto"
 msgstr "Amount"
 
+msgid "Mostrar los emojis"
+msgstr "Show the emojis"
+
 msgid "Mostrar los subtítulos"
 msgstr "Show the subtitles"
 
@@ -9625,6 +9758,9 @@ msgstr "Too close to the edge of the clip to split there."
 
 msgid "Muy cerca del borde del clip para cortarlo."
 msgstr "Too close to the edge of the clip to split it."
+
+msgid "MÁS VENDIDO"
+msgstr "BEST SELLER"
 
 msgid "Más"
 msgstr "More"
@@ -9690,6 +9826,9 @@ msgstr "Music when created: %(estilo)s"
 
 msgid "Música de fondo"
 msgstr "Background music"
+
+msgid "NUEVO"
+msgstr "NEW"
 
 #, python-format
 msgid "Nació de la idea «%(idea)s» de la evaluación con IA"
@@ -9797,6 +9936,9 @@ msgstr "Awareness level"
 
 msgid "Nivel del micrófono"
 msgstr "Microphone level"
+
+msgid "No"
+msgstr "Off"
 
 msgid "No aplica"
 msgstr "Not applicable"
@@ -10246,6 +10388,10 @@ msgstr "We lost track of the voice: reload the page; if it's ready, it gets adde
 msgid "No sabemos cómo terminó: recarga la página para ver los subtítulos."
 msgstr "We don't know how it ended: reload the page to see the subtitles."
 
+#, python-brace-format
+msgid "No sale en el video: «{caracteres}» (esta fuente no los tiene)."
+msgstr "Won't show in the video: “{caracteres}” (this font doesn't have them)."
+
 msgid "No se agregó ningún referente."
 msgstr "No reference was added."
 
@@ -10337,6 +10483,10 @@ msgstr "Couldn't adapt it (%(tipo)s)."
 
 msgid "No se pudo adaptar."
 msgstr "Couldn't adapt it."
+
+#, python-brace-format
+msgid "No se pudo agregar el sticker ({error})."
+msgstr "Couldn't add the sticker ({error})."
 
 msgid "No se pudo agregar ese referente."
 msgstr "Couldn't add that reference."
@@ -10817,6 +10967,9 @@ msgstr "Or paste a link (TikTok, Instagram, YouTube)"
 msgid "O un link (Instagram, TikTok, YouTube…)"
 msgstr "Or a link (Instagram, TikTok, YouTube…)"
 
+msgid "OFERTA"
+msgstr "SALE"
+
 msgid "Objetivo"
 msgstr "Objective"
 
@@ -10983,6 +11136,9 @@ msgstr "For whom"
 
 msgid "Para rehacer desde esa escena hace falta el último cuadro de la anterior."
 msgstr "To redo from that scene, the last frame of the previous one is needed."
+
+msgid "Para vender"
+msgstr "Promo labels"
 
 msgid "Para volver a tu propia app,"
 msgstr "To go back to your own app,"
@@ -12071,6 +12227,9 @@ msgstr "ROAS (Pixel)"
 msgid "ROAS mínimo"
 msgstr "Minimum ROAS"
 
+msgid "Rayo"
+msgstr "Lightning"
+
 msgid "Re-ediciones por derivación"
 msgstr "Re-edits per derivation"
 
@@ -12238,6 +12397,9 @@ msgstr "Reddit responded %(codigo)s."
 
 msgid "Redes"
 msgstr "Networks"
+
+msgid "Redondeadas"
+msgstr "Rounded"
 
 msgid "Redundante"
 msgstr "Redundant"
@@ -13136,6 +13298,9 @@ msgstr "No image: Claude judged by text and numbers"
 msgid "Sin logos oficiales"
 msgstr "No official logos"
 
+msgid "Sin límite"
+msgstr "No limit"
+
 msgid "Sin música"
 msgstr "No music"
 
@@ -13387,9 +13552,6 @@ msgstr "Scene sound"
 msgid "Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)"
 msgstr "Scene sound (the model's native audio; Kling charges USD 0.028/s more)"
 
-msgid "Space Grotesk"
-msgstr "Space Grotesk"
-
 #, python-format
 msgid "Sprint %(nombre)s · Campaña %(n)s"
 msgstr "Sprint %(nombre)s · Campaign %(n)s"
@@ -13437,6 +13599,12 @@ msgstr "Sprint · Campaign %(n)s"
 
 msgid "Sprints"
 msgstr "Sprints"
+
+msgid "Sticker agregado: cámbiale el color en «Editar»."
+msgstr "Sticker added: change its color in “Edit”."
+
+msgid "Stickers"
+msgstr "Stickers"
 
 msgid "Storytelling"
 msgstr "Storytelling"
@@ -13583,6 +13751,9 @@ msgstr "Upload a photo"
 msgid "Subir · link · fotos del producto"
 msgstr "Upload · link · product photos"
 
+msgid "Subrayado"
+msgstr "Underline"
+
 msgid "Subreddits (separados por coma; vacío = toda Reddit)"
 msgstr "Subreddits (comma-separated; empty = all of Reddit)"
 
@@ -13683,6 +13854,9 @@ msgstr "Yes, delete"
 
 msgid "Tablero"
 msgstr "Dashboard"
+
+msgid "Tachado"
+msgstr "Strikethrough"
 
 msgid "Tamaño"
 msgstr "Size"
@@ -14711,6 +14885,13 @@ msgstr "An idea wasn't saved (see the notice on its card). Try again."
 msgid "Una imagen fija en 2k"
 msgstr "A still image in 2k"
 
+#, python-brace-format
+msgid "Una imagen queda bajo la interfaz de {plataforma} ({zona})."
+msgstr "An image ends up under the {plataforma} interface ({zona})."
+
+msgid "Una imagen se sale del video."
+msgstr "An image goes off the video."
+
 msgid "Una línea por comentario"
 msgstr "One line per comment"
 
@@ -15088,6 +15269,9 @@ msgstr "Link"
 
 msgid "Vista previa del video"
 msgstr "Video preview"
+
+msgid "Visto bueno"
+msgstr "Check mark"
 
 msgid "Visuales"
 msgstr "Visuals"
@@ -15578,6 +15762,9 @@ msgstr "Zip from %(fecha)s (%(n)s pieces)"
 msgid "Zip listo con %(n)s pieza(s)."
 msgstr "Zip ready with %(n)s piece(s)."
 
+msgid "Zonas"
+msgstr "Zones"
+
 msgid "Zoom"
 msgstr "Zoom"
 
@@ -15593,8 +15780,14 @@ msgstr "__MODELO__ only uses the first reference (__PRIMERA__): it would not use
 msgid "__MODELO__ usa hasta __N__ referencias: no usaría __SOBRAN__. Quita las que sobran o cambia de modelo."
 msgstr "__MODELO__ uses up to __N__ references: it would not use __SOBRAN__. Remove the extra ones or change the model."
 
+msgid "a los lados"
+msgstr "on the sides"
+
 msgid "a quién le habla"
 msgstr "who it speaks to"
+
+msgid "abajo"
+msgstr "bottom"
 
 msgid "abajo del funnel"
 msgstr "bottom of the funnel"
@@ -15706,6 +15899,9 @@ msgstr "starting"
 #, python-format
 msgid "arranque %(lead)s"
 msgstr "%(lead)s lead"
+
+msgid "arriba"
+msgstr "top"
 
 msgid "arriba del funnel"
 msgstr "top of the funnel"
@@ -16411,6 +16607,10 @@ msgstr "error"
 msgid "error desconocido"
 msgstr "unknown error"
 
+#, python-brace-format
+msgid "error {status}"
+msgstr "error {status}"
+
 msgid "errores en 24 h"
 msgstr "errors in 24 h"
 
@@ -16831,6 +17031,9 @@ msgstr "research: %(estado)s"
 msgid "italiano"
 msgstr "Italian"
 
+msgid "junto a los botones"
+msgstr "next to the buttons"
+
 msgid "la consciencia"
 msgstr "awareness"
 
@@ -17104,6 +17307,9 @@ msgstr "aren't"
 
 msgid "no gasta: la regla la escribes tú"
 msgstr "costs nothing: you write the rule"
+
+msgid "no hay conexión"
+msgstr "no connection"
 
 msgid "no indicada"
 msgstr "not given"
@@ -18131,6 +18337,9 @@ msgstr "~%(cr)s cr video ($%(usd)s)"
 
 msgid "¡Listo! Tienes cambios sin guardar en esta página."
 msgstr "Done! You have unsaved changes on this page."
+
+msgid "¡ÚLTIMAS UNIDADES!"
+msgstr "ONLY A FEW LEFT!"
 
 #, python-format
 msgid "«%(accion)s» gasta en Meta o en generación. ¿Aprobar?"

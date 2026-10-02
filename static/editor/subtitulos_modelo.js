@@ -297,6 +297,23 @@ export function textoTiempo(ms) {
   return `${min}:${String(seg).padStart(2, "0")}${separadorDecimal()}${decimas % 10}`;
 }
 
+// ---- Emojis (capa 4c; aquí desde la capa 5c, Tarea 7) ----
+
+// Los subtítulos del video final salen con libass e Inter, que no traen
+// emojis (operaciones.sinEmojis los quita al corregir una palabra), pero el
+// campo los deja escribir: la pestaña lo avisa. ® ™ © no cuentan (Inter los
+// trae). Los textos sí los muestran desde la capa 5c: lo que no sale de un
+// texto lo dice propiedades_modelo.avisosTexto.
+const EMOJI_RE = /(?![\u00A9\u00AE\u2122])\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
+
+export function tieneEmoji(texto) {
+  return typeof texto === "string" && EMOJI_RE.test(texto);
+}
+
+export function avisoEmojiSubtitulos() {
+  return t("sub.aviso_emoji");
+}
+
 // ---- Lo que pidió un trabajo pagado (para ponerlo aunque se recargue) ----
 
 // El job_id es uno por edición: el sello (la hora del 202) dice de CUÁL vez es.

@@ -14,13 +14,14 @@ import { completo as encuadreCompleto, MODOS as MODOS_ENCUADRE, sinMargen as enc
 import { FORMATOS } from "./formatos.js";
 import { etiquetaClip, nombreTransicion } from "./escala.js";
 import {
-  cambiaPorDestino, esVozDeGuion, FOTO_MAX_MS, FUENTES, ID_SONIDO, MEZCLAS, MIN_CLIP_MS, sincronizarSonido, TRANSICIONES,
+  ANCHO_TEXTO, cambiaPorDestino, esVozDeGuion, FOTO_MAX_MS, ID_SONIDO, MEZCLAS, MIN_CLIP_MS, sincronizarSonido, TRANSICIONES,
   VELOCIDADES,
 } from "./operaciones.js";
 import * as operaciones from "./operaciones.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
 import { separadorDecimal, t } from "./textos.js";
 import { pistaPrincipal, tamanoCapaImagen } from "./tiempo.js";
+import { esV2, limpiar, sinGlifosV1 } from "./tipografia.js";
 
 // Los nombres que ve la persona son CLAVES de textos.js: se traducen donde se
 // usan (ningún módulo llama a t() al cargarse).
@@ -53,8 +54,22 @@ const FUNDIDO_PASO_MS = 100;
 // El tope de transform.escala en operaciones.cambiar.
 export const ESCALA = { min: 0.05, max: 5 };
 
-// Las tres fuentes de static/fonts (operaciones.FUENTES), con la clave del nombre que se lee.
-export const NOMBRES_FUENTE = { "Inter-Bold": "prop.fuente_inter_gruesa", "Inter-SemiBold": "prop.fuente_inter_media", "SpaceGrotesk-Bold": "prop.fuente_space" };
+// Capa 5c (D9.4): las familias de fuentes, en el orden de
+// final_edition/fuentes.CATEGORIAS (tests/test_editor_js.py los compara), con
+// la clave del nombre que se lee (escrita entera). Los nombres de las fuentes
+// son nombres propios: vienen del catálogo (config.catalogo_fuentes), no del
+// de textos.
+export const CATEGORIAS_FUENTE = ["clasicas", "impacto", "redondeadas", "manuscritas", "serifa"];
+const NOMBRES_FAMILIA = {
+  clasicas: "prop.fuentes_clasicas",
+  impacto: "prop.fuentes_impacto",
+  redondeadas: "prop.fuentes_redondeadas",
+  manuscritas: "prop.fuentes_manuscritas",
+  serifa: "prop.fuentes_serifa",
+};
+// «Ancho del texto» (D7.2) en % del ancho del lienzo: los topes de operaciones.ANCHO_TEXTO.
+const ANCHO_PCT = { min: Math.round(ANCHO_TEXTO.min * 100), max: Math.round(ANCHO_TEXTO.max * 100),
+                    defecto: Math.round(ANCHO_TEXTO.defecto * 100) };
 // La paleta del color del texto; el color de marca entra tercero (`paletaDe`).
 export const COLORES = [
   { nombre: "prop.color_blanco", color: "#FFFFFF" },
@@ -137,9 +152,12 @@ export function formaDe(doc, id) {
 
 // Qué decide si el formulario se ARMA de nuevo (otra forma u otro clip) o
 // solo se le ponen los valores nuevos (mientras se arrastra un deslizador, el
-// formulario no se puede rehacer: se perdería el arrastre).
+// formulario no se puede rehacer: se perdería el arrastre). Capa 5c: una
+// imagen cuyo material se tiñe (un sticker) lleva su bloque «Color», así que
+// es otro formulario — si el material llega a la vista previa después de
+// pintar el panel, el formulario se arma de nuevo con su color.
 export function claveForma(m) {
-  return `${m.forma}:${m.clipId ?? ""}`;
+  return `${m.forma}:${m.clipId ?? ""}${m.tinte ? ":tinte" : ""}`;
 }
 
 // ---- Los valores de cada formulario ----
@@ -151,8 +169,13 @@ export function claveForma(m) {
 // `medidasPrincipal(clipId)`: [ancho, alto] que se ven del cuadro de un clip
 // de la principal (vista.medidasPrincipal; sin ella, las del material) — si
 // el cuadro no tiene margen, «Encuadre» lo dice.
+//
+// Capa 5c: `catalogoFuentes` — [{id, nombre, categoria}] de las fuentes que
+// la página tiene (config.catalogo_fuentes): la lista de fuentes de un texto,
+// por familia —; `tabla` — la tabla tipográfica (config.tipografia): qué no
+// sale en el video de un texto (`avisosTexto`); sin ella, ningún aviso.
 export function modelo(doc, id, {
-  destino = null, info = {}, materiales = {}, nombresIdioma = {}, medidasPrincipal = null,
+  destino = null, info = {}, materiales = {}, nombresIdioma = {}, medidasPrincipal = null, catalogoFuentes = [], tabla = null,
 } = {}) {
   const h = buscar(doc, id);
   const forma = formaDeHallado(doc, h);
@@ -162,7 +185,7 @@ export function modelo(doc, id, {
   switch (forma) {
     case "video": return { ...modeloVideo(doc, h, info), encuadre: encuadre() };
     case "foto": return modeloFoto(h, encuadre());
-    case "texto": return modeloTexto(doc, h, destino);
+    case "texto": return modeloTexto(doc, h, destino, { catalogoFuentes, tabla });
     case "imagen": return modeloImagen(doc, h, materiales);
     case "audio": return modeloAudio(h, destino, nombresIdioma);
     case "sonido": return modeloSonido(doc, h);
@@ -329,21 +352,55 @@ export function paletaDe(doc, color) {
   return lista.map((c) => ({ ...c, nombre: t(c.nombre), elegido: c.color === color }));
 }
 
-// Capa 4c: el video final dibuja los textos con Inter / Space Grotesk, que no
-// traen emojis — el rasterizador del servidor los quita
-// (rasterizar.sin_glifos_faltantes) en vez de dibujar cajas —, pero la vista
-// previa sí los muestra (el navegador cae a la fuente de emojis del equipo):
-// el panel lo avisa. ® ™ © no cuentan (las fuentes los traen).
-const EMOJI_RE = /(?![\u00A9\u00AE\u2122])\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
-export function avisoEmoji() {
-  return t("prop.aviso_emoji");
+// Capa 5c (D9.4): las fuentes del catálogo agrupadas por familia, en el
+// orden de las familias; una familia sin fuentes (o una categoría que no se
+// conoce) no sale.
+export function fuentesPorFamilia(catalogo) {
+  const lista = Array.isArray(catalogo) ? catalogo : [];
+  return CATEGORIAS_FUENTE.map((categoria) => ({
+    categoria,
+    texto: t(NOMBRES_FAMILIA[categoria]),
+    fuentes: lista.filter((f) => f?.categoria === categoria).map((f) => ({ valor: f.id, texto: f.nombre })),
+  })).filter((g) => g.fuentes.length > 0);
 }
 
-export function tieneEmoji(texto) {
-  return typeof texto === "string" && EMOJI_RE.test(texto);
+// «Ancho del texto» (D7.2): el % del deslizador (acotado a lo que ofrece) y
+// si no tiene límite (ancho_max null o ausente: el deslizador queda en el de
+// un texto nuevo, quieto).
+function anchoDe(estilo) {
+  const v = estilo?.ancho_max;
+  const sinLimite = v === null || v === undefined || !Number.isFinite(Number(v));
+  return {
+    pct: sinLimite ? ANCHO_PCT.defecto : Math.round(acotar(Number(v) * 100, ANCHO_PCT.min, ANCHO_PCT.max)),
+    sinLimite, min: ANCHO_PCT.min, max: ANCHO_PCT.max,
+  };
 }
 
-function modeloTexto(doc, { pista, clip }, destino) {
+// Capa 5c (D7.5): qué del texto NO sale como se escribió en el video, en
+// llano, bajo el campo. v2: lo que ninguna fuente trae («No sale en el
+// video: «…»», los `quitados` de tipografia.limpiar unidos sin separador) y
+// las banderas, tonos y emojis compuestos, que salen simplificados. v1 (un
+// texto de antes): si su fuente no trae algo (los emojis), lo dice y ofrece
+// pasarlo a v2 (`accion: "actualizar"` → operaciones.actualizarTexto). Sin
+// tabla, o con una fuente que la tabla no trae, no se sabe: nada. sinGlifosV1
+// devuelve el texto en NFC: se compara con el escrito en NFC, así una tilde
+// escrita aparte (pegada de un PDF) no cuenta como algo que no sale.
+export function avisosTexto(clip, texto, tabla) {
+  if (!tabla || typeof texto !== "string") return [];
+  const estilo = clip?.estilo ?? {};
+  const fuente = estilo.fuente;
+  if (typeof fuente !== "string" || !Object.hasOwn(tabla.fuentes ?? {}, fuente)) return [];
+  if (!esV2(estilo)) {
+    return sinGlifosV1(texto, fuente, tabla) !== texto.normalize("NFC") ? [{ texto: t("prop.texto_antiguo"), accion: "actualizar" }] : [];
+  }
+  const { quitados, simplificado } = limpiar(texto, fuente, tabla);
+  const avisos = [];
+  if (quitados.length) avisos.push({ texto: t("prop.no_sale", { caracteres: quitados.join("") }), accion: null });
+  if (simplificado) avisos.push({ texto: t("prop.emoji_simplificado"), accion: null });
+  return avisos;
+}
+
+function modeloTexto(doc, { pista, clip }, destino, { catalogoFuentes = [], tabla = null } = {}) {
   const [, alto] = lienzo(doc.formato);
   const e = clip.estilo ?? {};
   const color = colorBase(e.color);
@@ -355,9 +412,11 @@ function modeloTexto(doc, { pista, clip }, destino) {
     clipId: clip.id,
     nombre: t("fila.texto"),
     texto,
-    avisoEmoji: tieneEmoji(texto.valor) ? avisoEmoji() : null,
+    avisos: avisosTexto(clip, texto.valor, tabla),
+    v2: esV2(e),
     fuente: typeof e.fuente === "string" ? e.fuente : null,
-    fuentes: FUENTES.map((f) => ({ valor: f, texto: NOMBRES_FUENTE[f] ? t(NOMBRES_FUENTE[f]) : f })),
+    fuentes: fuentesPorFamilia(catalogoFuentes),
+    ancho: anchoDe(e),
     tamano: { px: Math.round(acotar(Number(e.tamano ?? 0.04) * alto, TAMANO_TEXTO_PX.min, TAMANO_TEXTO_PX.max)),
               min: TAMANO_TEXTO_PX.min, max: TAMANO_TEXTO_PX.max },
     color,
@@ -403,6 +462,16 @@ export function cambioLlenar(clip, material, formato) {
   return { transform: { escala: Math.min(ESCALA.max, Math.max(ancho / w, alto / h)), x: 0.5, y: 0.5 } };
 }
 
+// El color de un sticker (capa 5c, D11): solo si su material se tiñe
+// (`tenible`); sin `tinte` se ve blanco (su PNG es blanco). La paleta es la
+// de los textos.
+function tinteDe(doc, clip, material) {
+  if (!material?.tenible) return null;
+  const activo = typeof clip.tinte === "string" && COLOR_RE.test(clip.tinte);
+  const color = activo ? colorBase(clip.tinte) : "#FFFFFF";
+  return { activo, color, paleta: paletaDe(doc, color) };
+}
+
 function modeloImagen(doc, { clip }, materiales) {
   const material = materiales?.[clip.material_id] ?? null;
   const tf = clip.transform ?? {};
@@ -425,6 +494,7 @@ function modeloImagen(doc, { clip }, materiales) {
     centrada,
     llena: centrada && casi(escala, llenar.escala),
     llenar: { alcanza: cubrir <= ESCALA.max },
+    tinte: tinteDe(doc, clip, material),
   };
 }
 
@@ -523,6 +593,17 @@ export function cambioZoomEncuadre(pct) {
 
 export function cambioCentrarEncuadre() {
   return { encuadre: { x: 0.5, y: 0.5 } };
+}
+
+// «Ancho del texto» (D7.2): el % del deslizador, acotado a 30–100, como
+// fracción del ancho del lienzo; «Sin límite» es null, y quitarlo vuelve al
+// ancho de un texto nuevo.
+export function cambioAncho(pct) {
+  return { estilo: { ancho_max: acotar(Number(pct) || 0, ANCHO_PCT.min, ANCHO_PCT.max) / 100 } };
+}
+
+export function cambioSinLimite(si) {
+  return { estilo: { ancho_max: si ? null : ANCHO_TEXTO.defecto } };
 }
 
 // «Suena en» (D10): "" es «Todos los idiomas» (sin `idioma` en el clip).

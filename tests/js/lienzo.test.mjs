@@ -300,3 +300,139 @@ test("un video no lleva negro debajo (no tiene transparencia)", () => {
   dibujarPrincipal(ctx, capaDe({ encuadre: { modo: "ajustar" } }), FUENTE, [400, 200], W, H, recursosEncuadre());
   assert.deepEqual(ctx.orden.map((l) => l[0]), ["drawImage", "drawImage"]);
 });
+
+
+// ---- Capa 5c (Tarea 4): stickers del color elegido y texto v2 a su factor -------------------------------------
+
+function docConCapa(pista) {
+  return { formato: "9:16", pistas: [
+    { id: "p", tipo: "video", clips: [{ id: "v0", material_id: 7, inicio_ms: 0, duracion_ms: 4000, recorte: { desde_ms: 0, hasta_ms: 4000 } }] },
+    pista,
+  ] };
+}
+
+const CENTRO = { x: 0.5, y: 0.5, escala: 1, rotacion: 0, opacidad: 1, ancla: "centro" };
+
+test("una imagen con tinte pide recursos.imagenTenida(material, color) y dibuja lo que devuelve", () => {
+  const tenida = { tenida: true };
+  const pedidos = [];
+  const rec = {
+    ...recursosVacios(),
+    material: (id) => ({ id, tipo: "imagen", ancho: 512, alto: 256 }),
+    imagen: () => { throw new Error("una imagen con tinte no pide la imagen sin teñir"); },
+    imagenTenida: (mid, color) => { pedidos.push([mid, color]); return tenida; },
+  };
+  const doc = docConCapa({ id: "p_img", tipo: "imagen", clips: [
+    { id: "s1", inicio_ms: 0, duracion_ms: 3000, material_id: 9, tinte: "#FFD400", transform: { ...CENTRO } }] });
+  const ctx = ctxFalso();
+  dibujarCuadro(ctx, doc, 1000, rec, CFG);
+  assert.deepEqual(pedidos, [[9, "#FFD400"]]);
+  assert.deepEqual(ctx.llamadas.filter((l) => l.img === tenida).map(({ x, y, w, h }) => [x, y, w, h]), [[284, 832, 512, 256]]);
+});
+
+test("una imagen sin tinte sigue pidiendo la imagen de siempre", () => {
+  const img = { nat: true };
+  const pedidos = [];
+  const rec = {
+    ...recursosVacios(),
+    material: (id) => ({ id, tipo: "imagen", ancho: 512, alto: 256 }),
+    imagen: (mid) => { pedidos.push(mid); return img; },
+    imagenTenida: () => { throw new Error("sin tinte no se tiñe"); },
+  };
+  const doc = docConCapa({ id: "p_img", tipo: "imagen", clips: [
+    { id: "s1", inicio_ms: 0, duracion_ms: 3000, material_id: 9, transform: { ...CENTRO } }] });
+  const ctx = ctxFalso();
+  dibujarCuadro(ctx, doc, 1000, rec, CFG);
+  assert.deepEqual(pedidos, [9]);
+  assert.equal(ctx.llamadas.filter((l) => l.img === img).length, 1);
+});
+
+test("una imagen con tinte cuyo archivo todavía no cargó no se dibuja (y no lanza)", () => {
+  const rec = { ...recursosVacios(), material: () => ({ id: 9, tipo: "imagen" }), imagenTenida: () => null };
+  const doc = docConCapa({ id: "p_img", tipo: "imagen", clips: [
+    { id: "s1", inicio_ms: 0, duracion_ms: 3000, material_id: 9, tinte: "#E11D48", transform: { ...CENTRO } }] });
+  const ctx = ctxFalso();
+  dibujarCuadro(ctx, doc, 1000, rec, CFG);
+  assert.equal(ctx.llamadas.length, 0);
+});
+
+// Un <canvas> de mentira para rasterizarTexto (el del navegador no existe en Node).
+function conDocumentoFalso(fn) {
+  const antes = globalThis.document;
+  const lienzos = [];
+  globalThis.document = {
+    createElement: () => {
+      const ctx = { measureText: (s) => ({ width: s.length * 10, actualBoundingBoxAscent: 30, actualBoundingBoxDescent: 8 }),
+        beginPath() {}, moveTo() {}, arcTo() {}, closePath() {}, fill() {}, fillText() {}, strokeText() {}, clearRect() {}, drawImage() {} };
+      const lienzo = { width: 0, height: 0, getContext: () => ctx };
+      lienzos.push(lienzo);
+      return lienzo;
+    },
+  };
+  try {
+    return fn(lienzos);
+  } finally {
+    globalThis.document = antes;
+  }
+}
+
+const TABLA = JSON.parse(readFileSync(new URL("../../static/editor/tipografia.json", import.meta.url), "utf8"));
+const T0 = { ...TABLA, emoji: null };
+
+function docConTexto(transform) {
+  return docConCapa({ id: "p_texto", tipo: "texto", clips: [
+    { id: "t1", inicio_ms: 0, duracion_ms: 3000, texto: { literal: "Hola" },
+      estilo: { fuente: "Inter-Bold", tamano: 0.05, color: "#FFFFFF", version: 2 }, transform } ] });
+}
+
+test("un texto v2 con escala 2 dibuja un lienzo de 442×250 en una caja de 442×250 (natural × escala)", () => {
+  conDocumentoFalso(() => {
+    const rec = { ...recursosVacios(), tabla: T0, generacionFuentes: 0 };
+    const ctx = ctxFalso();
+    dibujarCuadro(ctx, docConTexto({ ...CENTRO, escala: 2 }), 1000, rec, CFG);
+    const [d] = ctx.llamadas;
+    assert.deepEqual([d.img.width, d.img.height], [442, 250], "el lienzo a factor 2");
+    assert.deepEqual([d.w, d.h], [442, 250], "natural 221×125 × la escala 2");
+    assert.deepEqual([d.x, d.y], [540 - 221, 960 - 125]);
+  });
+});
+
+test("un texto v2 a escala 1 dibuja el lienzo natural; sin la tabla (recursos viejos) se dibuja como v1", () => {
+  conDocumentoFalso(() => {
+    const ctx = ctxFalso();
+    dibujarCuadro(ctx, docConTexto({ ...CENTRO }), 1000, { ...recursosVacios(), tabla: T0 }, CFG);
+    assert.deepEqual([ctx.llamadas[0].img.width, ctx.llamadas[0].img.height, ctx.llamadas[0].w, ctx.llamadas[0].h], [221, 125, 221, 125]);
+    const sin = ctxFalso();
+    dibujarCuadro(sin, docConTexto({ ...CENTRO }), 1000, recursosVacios(), CFG);
+    assert.equal(sin.llamadas.length, 1, "no lanza sin recursos.tabla");
+  });
+});
+
+test("al subir la generación de fuentes el texto se rehace (lo que se dibujó con la fuente de respaldo ya no vale)", () => {
+  conDocumentoFalso(() => {
+    const rec = { ...recursosVacios(), tabla: T0, generacionFuentes: 0 };
+    const ctx = ctxFalso();
+    const doc = docConTexto({ ...CENTRO });
+    dibujarCuadro(ctx, doc, 1000, rec, CFG);
+    dibujarCuadro(ctx, doc, 1000, rec, CFG);
+    assert.equal(ctx.llamadas[1].img, ctx.llamadas[0].img, "mismo cuadro, mismo lienzo");
+    rec.generacionFuentes = 1;
+    dibujarCuadro(ctx, doc, 1000, rec, CFG);
+    assert.notEqual(ctx.llamadas[2].img, ctx.llamadas[0].img);
+  });
+});
+
+test("un texto v2 con escala 1 y un fotograma clave a escala 3 se dibuja en un lienzo a factor 3 (la mayor escala del clip)", () => {
+  conDocumentoFalso(() => {
+    const doc = docConTexto({ ...CENTRO, escala: 1 });
+    doc.pistas[1].clips[0].keyframes = [{ t_ms: 500, transform: { escala: 3 } }];
+    const ctx = ctxFalso();
+    dibujarCuadro(ctx, doc, 1000, { ...recursosVacios(), tabla: T0, generacionFuentes: 0 }, CFG);
+    const [d] = ctx.llamadas;
+    assert.deepEqual([d.img.width, d.img.height], [663, 375], "natural 221×125 × factor 3");
+    // sin el fotograma clave, a escala 1: el lienzo natural (no es un efecto de la escala del transform)
+    const sin = ctxFalso();
+    dibujarCuadro(sin, docConTexto({ ...CENTRO, escala: 1 }), 1000, { ...recursosVacios(), tabla: T0, generacionFuentes: 0 }, CFG);
+    assert.deepEqual([sin.llamadas[0].img.width, sin.llamadas[0].img.height], [221, 125]);
+  });
+});

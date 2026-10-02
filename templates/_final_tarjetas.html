@@ -97,8 +97,17 @@
 
 {% macro tarjeta_elegir_fe(item, r) %}
     {# Selector «+ Nueva final edition»: un video listo de Crear. Sin barras
-       (las lleva su tarjeta de «En edición»: un id de barra no se repite). #}
-    <div class="generado fe-elegible" data-cf="{{ item.id }}" data-detalle="{{ url_for('fe_detalle_video', cliente=cliente, cf_id=item.id) }}" tabindex="0" role="button">
+       (las lleva su tarjeta de «En edición»: un id de barra no se repite).
+       Elegirlo va directo al editor (pedido de Daniel, 2026-10-02), por el
+       mismo camino que «Editar» del detalle: con una edición, la abre
+       (data-editor-url, la misma que elige «Editar»); sin ninguna, la
+       prepara gratis (POST a editor.desde_clon, data-desde-clon) y entra
+       sola al terminar; si ya se está preparando, espera esa
+       (data-preparando). #}
+    {% set _eds = ediciones_por_cf.get(item.id) or [] %}
+    <div class="generado fe-elegible" data-cf="{{ item.id }}" data-detalle="{{ url_for('fe_detalle_video', cliente=cliente, cf_id=item.id) }}"
+         {% if item.trabajo_editor %}data-preparando="1"{% elif _eds %}data-editor-url="{{ url_for('editor.ver', cliente=cliente, edicion_id=_eds[0].id) }}"{% else %}data-desde-clon="{{ url_for('editor.desde_clon', cliente=cliente, cf_id=item.id) }}"{% endif %}
+         tabindex="0" role="button">
       <div class="generado-media">
         <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
         <span class="generado-tipo">{{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}</span>

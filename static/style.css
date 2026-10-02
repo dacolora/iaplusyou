@@ -3142,6 +3142,12 @@ body.panel-abierto { overflow: hidden; }
 .fe-banderas .fe-bandera-error { border-color: rgba(255, 95, 122, .65); }
 #tab-final .generado-pie .fe-siguiente { margin-top: .35rem; font-size: .72rem; font-weight: 600; color: var(--accent-texto); }
 @keyframes fe-pulso { 50% { opacity: .45; } }
+/* Elegir en «+ Nueva» va al editor: la tarjeta avisa al instante, y en el
+   tablero la que se está preparando para el editor se resalta. */
+#tab-final .generado-velo.fe-abriendo { justify-content: center; align-items: center; background: rgba(5, 13, 31, .78); }
+#tab-final .fe-abriendo .generado-estado { color: var(--fe-cian); }
+#tab-final .generado.fe-resaltada { border-color: var(--accent-2); box-shadow: var(--shadow-glow), 0 0 32px rgba(47, 140, 255, .45); animation: fe-resalte 1.8s ease-in-out 3; }
+@keyframes fe-resalte { 50% { box-shadow: var(--shadow-glow), 0 0 8px rgba(47, 140, 255, .2); } }
 
 /* «+ Nueva final edition»: la primera tarjeta de «En edición». */
 #tab-final .fe-nueva {
@@ -3195,7 +3201,7 @@ body.panel-abierto { overflow: hidden; }
   .fe-elegir-cuerpo { padding: 1rem .8rem 1.2rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .fe-chips .fe-chip-vivo::before, .fe-banderas .fe-bandera-vivo { animation: none; }
+  .fe-chips .fe-chip-vivo::before, .fe-banderas .fe-bandera-vivo, #tab-final .generado.fe-resaltada { animation: none; }
 }
 
 /* ============================================================

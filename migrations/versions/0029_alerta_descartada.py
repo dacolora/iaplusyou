@@ -1,13 +1,13 @@
 """alertas descartadas por proyecto
 
-Revision ID: 0028
-Revises: 0027
+Revision ID: 0029
+Revises: 0028
 Create Date: 2026-10-02 00:00:00.000000
 
 Alertas (spec 2026-09-20-alertas-design.md §4 y §12; el rescate de la rama
-`worktree-alertas`, que la había numerado 0014): lo único que se guarda de una
-alerta es que una persona la descartó, con la huella de la situación de ese
-momento. PK (cliente, clave): un descarte nuevo sobre la misma clave reemplaza
+`worktree-alertas`, que la había numerado 0014; la 0028 la tomó E1 el mismo
+día): lo único que se guarda de una alerta es que una persona la descartó, con
+la huella de la situación de ese momento. PK (cliente, clave): un descarte nuevo sobre la misma clave reemplaza
 al anterior con un upsert atómico. Lo escribe solo alertas.py.
 """
 from typing import Sequence, Union
@@ -16,8 +16,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '0028'
-down_revision: Union[str, Sequence[str], None] = '0027'
+revision: str = '0029'
+down_revision: Union[str, Sequence[str], None] = '0028'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

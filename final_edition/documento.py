@@ -4,7 +4,7 @@ proyecto del editor. Puro: sin base, sin ffmpeg, sin red.
 Reglas: tiempos en milisegundos enteros; posiciones en fracción del lienzo
 (0–1) y tamaños de texto en fracción de la altura; un texto es literal o
 variable; el precio de un país es el número escrito para ese país o no
-existe (nunca se convierte); máximo 8 pistas.
+existe (nunca se convierte); máximo 20 pistas.
 
 Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
   - la pista principal `video` es contigua desde 0 (el primer clip arranca en
@@ -95,7 +95,11 @@ ESQUEMA_ACTUAL = 1
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 FORMATOS = {"9:16": (1080, 1920), "4:5": (1080, 1350), "1:1": (1080, 1080), "16:9": (1920, 1080)}
 TIPOS_PISTA = ("video", "superpuesto", "imagen", "texto", "subtitulos", "audio")
-MAX_PISTAS = 8
+# Capa 5c (prueba en vivo): eran 8, y un borrador automático ya usa 7 — con un
+# título y un sticker no cabía otro emoji ni otra plantilla. El render no depende
+# del número de pistas (motor/tramos.py reparte por capas y por clips de la
+# principal). Espejo: static/editor/operaciones.js (MAX_PISTAS).
+MAX_PISTAS = 20
 ANCLAS = ("centro", "sup_izq", "sup_der", "inf_izq", "inf_der")
 ROLES_AUDIO = ("voz", "musica", "sonido", "efecto", "subida", "grabacion")
 ESTILOS_SUBTITULOS = ("karaoke", "caja", "palabra_grande", "minimal")   # D7; motor/subtitulos los toma de aquí
@@ -238,6 +242,14 @@ def _validar_texto(clip, ruta):
     if tiene_lit == tiene_var:
         _fallar(f"{ruta}.texto debe ser literal o variable, no ambos ni ninguno.")
     estilo = {**_ESTILO_DEFECTO, **(clip.get("estilo") or {})}
+    # `version` (capa 5c, D1): ausente es el texto de siempre (v1, mismo PNG);
+    # 2 es el texto nuevo (el render y la maqueta lo componen con la tabla
+    # tipográfica). Nada más: no entra a `_ESTILO_DEFECTO`, así un documento
+    # de hoy no gana clave nueva al validarse.
+    if "version" in estilo:
+        v = estilo["version"]
+        if not isinstance(v, int) or isinstance(v, bool) or v != 2:
+            _fallar(f"{ruta}.estilo.version debe ser 2 o no estar (vino {v!r}).")
     if not isinstance(estilo.get("fuente"), str) or not _FUENTE_RE.match(estilo["fuente"]):
         # termina en static/fonts/<fuente>.ttf (rasterizar.py): ni vacío ni con rutas
         _fallar(f"{ruta}.estilo.fuente debe ser el nombre de una fuente de static/fonts (p. ej. Inter-Bold).")
@@ -362,6 +374,14 @@ def _validar_clip(clip, pista, i):
             y = _fraccion(enc.get("y", encuadre.DEFECTO["y"]), f"{ruta}.encuadre.y")
             lleno = {"modo": modo, "zoom": zoom, "x": x, "y": y}
             clip["encuadre"] = None if lleno == encuadre.DEFECTO else lleno
+    # `tinte` (capa 5c, D8): el color con que se pinta una imagen de un solo
+    # color (un sticker `tenible`); `null`/ausente = la imagen tal cual.
+    if "tinte" in clip:
+        if tipo != "imagen":
+            _fallar(f"{ruta}.tinte solo va en clips de imagen.")
+        v = clip["tinte"]
+        if v is not None and (not isinstance(v, str) or not _COLOR_SIN_ALFA_RE.match(v)):
+            _fallar(f"{ruta}.tinte debe ser un color #RRGGBB (vino {v!r}).")
     if tipo != "audio":
         clip["transform"] = _validar_transform(clip.get("transform"), ruta)
         for k in ("ancho_px", "alto_px"):

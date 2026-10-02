@@ -382,7 +382,7 @@ La rama del 2026-09-20 (11 commits, `worktree-alertas`) quedó 955 commits atrá
 Daniel pidió rescatarla (PND-102). Se rehace sobre `main` reusando el núcleo (`git show worktree-alertas:alertas.py`,
 `llaves.py`, plantillas y pruebas como punto de partida) con estos cambios al diseño, decididos al rescatar:
 
-1. **Migración 0028** `alerta_descartada` (misma tabla de §4).
+1. **Migración 0029** `alerta_descartada` (misma tabla de §4; la 0028 la tomó E1 el mismo día).
 2. **Idioma**: todo título, detalle, nombre de grupo, nivel y pestaña pasa por el catálogo (`gettext` al calcular,
    `idiomas.N_` en las constantes, `|traducir` en la plantilla). La caché del context processor es por
    `(cliente, idiomas.activo())`, como la del Tablero.

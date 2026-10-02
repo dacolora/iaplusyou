@@ -9,6 +9,9 @@
   {% for f in datos.config.fuentes %}
   @font-face { font-family: "{{ f }}"; src: url("{{ url_for('static', filename='fonts/' ~ f ~ '.ttf') }}") format("truetype"); font-display: block; }
   {% endfor %}
+  {% if datos.config.emoji %}
+  @font-face { font-family: "CreatvEmoji"; src: url("{{ url_for('static', filename=datos.config.emoji.archivo) }}") format("truetype"); font-display: block; }
+  {% endif %}
   /* Disposición tipo CapCut (capa 4b): barra arriba; biblioteca | reproductor
      | propiedades en el medio; herramientas y línea de tiempo abajo, a todo
      el ancho. En el celular: reproductor, herramientas y línea de tiempo, y
@@ -61,6 +64,14 @@
   .ed-guia { position: absolute; pointer-events: none; }
   .ed-guia-v { top: 0; bottom: 0; left: 50%; border-left: 1px dashed var(--accent-texto); }
   .ed-guia-h { left: 0; right: 0; top: 50%; border-top: 1px dashed var(--accent-texto); }
+  /* Zonas seguras (capa 5c, D10): lo que la interfaz de TikTok, Reels o Shorts
+     tapa en un 9:16. Solo guías de la página (nada se dibuja en el lienzo ni
+     en el video): un rectángulo rayado y translúcido por zona, en % del lienzo,
+     debajo de la capa de toques — no recibe ni un toque. */
+  .ed-zonas { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: var(--radius-sm); }
+  .ed-zona { position: absolute; box-sizing: border-box; pointer-events: none;
+    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--error) 18%, transparent) 0 6px, transparent 6px 14px);
+    border: 1px dashed color-mix(in srgb, var(--error) 55%, transparent); }
   .editor-avisos { display: grid; gap: .3rem; justify-items: center; padding: 0 1rem; }
   .editor-aviso { margin: 0; font-size: .88rem; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
   .editor-aviso.error { color: var(--error); }
@@ -108,6 +119,13 @@
   .ed-vincular[aria-pressed="false"] .ed-icono { opacity: .5; }
   .ed-zoom { display: inline-flex; flex-direction: row; align-items: center; gap: .35rem; font-size: .82rem; color: var(--muted); }
   .ed-zoom { margin-left: auto; }
+  /* «Zonas» (capa 5c, D10): etiqueta y selector en una fila (style.css pone en columna toda
+     <label> que envuelve un <select>: aquí se pide la fila a propósito); en el celular la barra
+     baja de línea, así que la etiqueta con su selector se envuelve y se puede achicar en vez de
+     empujar la página */
+  .ed-zonas-elegir { display: inline-flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: .25rem .35rem; min-width: 0;
+    max-width: 100%; font-size: .82rem; color: var(--muted); }
+  .ed-zonas-elegir select { width: auto; min-width: 0; max-width: 100%; padding: .3rem .45rem; }
   .ed-zoom input[type="range"] { width: 9rem; max-width: 36vw; min-width: 0; }
 
   /* Línea de tiempo (capas 4a y 4b): corre DENTRO de su caja, de lado y hacia
@@ -207,7 +225,7 @@
   .ed-bib-mas { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
     color: #fff; background: var(--accent); border: 1px solid transparent; border-radius: 50%; box-shadow: var(--shadow-soft); }
   .ed-bib-mas:hover:not(:disabled) { filter: brightness(1.15); }
-  .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible, .ed-sticker:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
   /* «Borrar» (capa 4c): el tacho arriba a la derecha de la miniatura; siempre visible (con el dedo no hay hover) */
   .ed-bib-borrar { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
     color: #fff; background: rgba(0, 0, 0, .6); border: 1px solid transparent; border-radius: 50%; }
@@ -230,7 +248,7 @@
   .ed-bib-escuchar[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto); }
   .ed-bib-audio .ed-bib-mas { position: static; flex: none; }
   /* textos de muestra: cada uno escrito con el estilo con que entra */
-  .ed-bib-textos { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: .5rem; }
+  .ed-bib-textos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 118px), 1fr)); gap: .5rem; }
   .ed-bib-texto { display: grid; place-items: center; min-width: 0; min-height: 64px; padding: .5rem; color: #fff; font-weight: 400;
     background: linear-gradient(160deg, var(--panel-hover), var(--bg)); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }
   .ed-bib-texto:hover { border-color: var(--muted-2); }
@@ -242,6 +260,39 @@
   /* «Llamado» entra en el video como texto negro en una caja blanca: la muestra lo imita con los tokens (claro/oscuro) */
   .ed-bib-texto-llamado .ed-bib-texto-muestra { padding: .25rem .6rem; font-family: "Inter-Bold", var(--font-body); font-size: .95rem;
     color: var(--bg); background: var(--text); border-radius: 4px; }
+  /* «Para vender» (capa 5c, D12.1): cada plantilla escrita en la fuente y con el fondo con que entra al video. Sus colores
+     son los del documento (operaciones.PRESETS_TEXTO), no los del tema: así se ven en el video. Los dos claros viven en
+     variables (la guardia del modo oscuro pide que los colores de la interfaz sean variables) y el emoji lleva su
+     fondo claro por lo mismo: algunos de sus dibujos, como ✔, son oscuros. */
+  #ed-panel-biblioteca { --ed-muestra-amarillo: #FFD400; --ed-muestra-tinta: #111111; --ed-emoji-fondo: #eef0f4; }
+  .ed-bib-texto-oferta .ed-bib-texto-muestra { padding: .15rem .55rem; font-family: "Anton-Regular", var(--font-body); font-size: 1.2rem;
+    letter-spacing: .02em; color: #fff; background: #E11D48; border-radius: 3px; }
+  .ed-bib-texto-nuevo .ed-bib-texto-muestra { padding: .05rem .75rem; font-family: "BebasNeue-Regular", var(--font-body); font-size: 1.45rem;
+    color: var(--ed-muestra-tinta); background: var(--ed-muestra-amarillo); border-radius: 999px; }
+  .ed-bib-texto-descuento .ed-bib-texto-muestra { font-family: "ArchivoBlack-Regular", var(--font-body); font-size: 1.4rem; color: var(--ed-muestra-amarillo);
+    -webkit-text-stroke: 3px #111; paint-order: stroke fill; }
+  .ed-bib-texto-envio .ed-bib-texto-muestra { padding: .2rem .65rem; font-family: "Poppins-ExtraBold", var(--font-body); font-size: .74rem;
+    color: #fff; background: #16A34A; border-radius: 999px; }
+  .ed-bib-texto-ultimas .ed-bib-texto-muestra { padding: .25rem .5rem; font-family: "Poppins-ExtraBold", var(--font-body); font-size: .68rem;
+    color: #fff; background: #111; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .4); }
+  .ed-bib-texto-mas_vendido .ed-bib-texto-muestra { padding: .1rem .75rem; font-family: "LilitaOne-Regular", var(--font-body); font-size: 1.05rem;
+    color: var(--ed-muestra-tinta); background: var(--ed-muestra-amarillo); border-radius: 999px; }
+  /* una plantilla larga («MÁS VENDIDO», «ENVÍO GRATIS», «¡ÚLTIMAS UNIDADES!») pasa a la línea de abajo en vez de terminar
+     en «…» (en una columna de escritorio la muestra mide 118–146 px); las cuatro muestras de siempre siguen en una línea */
+  .ed-bib-plantillas .ed-bib-texto-muestra { white-space: normal; text-align: center; }
+  /* «Stickers» (capa 5c, D11 y D12.2): una cuadrícula por sección. Los stickers son BLANCOS (se tiñen al agregarlos): su
+     miniatura va sobre un fondo oscuro; el emoji, con su propia cara (la fuente de emojis de la página). Nunca más
+     ancho que su hoja: el mínimo de la columna es min(100%, 64px). */
+  .ed-stickers-cuadricula { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 64px), 1fr)); gap: .45rem; }
+  .ed-sticker { position: relative; display: block; min-width: 0; margin: 0; padding: 0; aspect-ratio: 1; overflow: hidden; cursor: grab;
+    background: #000; border: 1px solid var(--border); border-radius: var(--radius-sm); user-select: none; -webkit-user-select: none; }
+  .ed-sticker:hover { border-color: var(--muted-2); }
+  .ed-sticker img { position: absolute; inset: .4rem; display: block; width: calc(100% - .8rem); height: calc(100% - .8rem);
+    max-width: 100%; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
+  .ed-sticker-emoji { display: grid; place-items: center; background: var(--ed-emoji-fondo); color: var(--ed-muestra-tinta); font-size: 1.7rem; line-height: 1;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+  {% if datos.config.emoji %}.ed-sticker-emoji { font-family: "CreatvEmoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }{% endif %}
+  .ed-stickers-atribucion { margin-top: .35rem; font-size: .72rem; }
   /* transiciones: una muestra quieta de cada una (A violeta, B verde) con su nombre y qué hace */
   .ed-bib-transiciones { display: grid; gap: .4rem; }
   .ed-bib-transicion { display: flex; align-items: center; gap: .6rem; min-width: 0; padding: .45rem .55rem; text-align: left; color: var(--text);
@@ -284,7 +335,7 @@
   @media (pointer: coarse) {
     /* con el dedo no se arrastra desde la biblioteca: se toca «+» */
     .ed-bib-ayuda-arrastre { display: none; }
-    .ed-bib-item, .ed-bib-audio, .ed-bib-texto, .ed-bib-transicion { cursor: default; }
+    .ed-bib-item, .ed-bib-audio, .ed-bib-texto, .ed-bib-transicion, .ed-sticker { cursor: default; }
   }
 
   /* Propiedades (capa 4b): propiedades.js arma lo de adentro de #ed-panel-propiedades,
@@ -345,6 +396,15 @@
   .ed-foto-campo { display: flex; align-items: center; gap: .4rem; min-width: 0; }
   .ed-prop .ed-foto-campo input { flex: 0 1 6.5rem; width: 6.5rem; min-width: 0; font-variant-numeric: tabular-nums; }
   .ed-foto-unidad { flex: none; font-size: .8rem; color: var(--muted); }
+  /* Capa 5c (Tarea 7): «Ancho del texto» con «Sin límite» al lado — en la
+     columna angosta o en la hoja del celular la casilla baja a su línea (se
+     envuelve, nunca empuja de lado) — y la lista de fuentes por familia,
+     cada nombre en su letra (propiedades.js). */
+  .ed-prop-ancho-fila { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .7rem; min-width: 0; }
+  .ed-prop .ed-prop-ancho-fila input[type="range"] { flex: 1 1 8rem; width: auto; }
+  .ed-prop-ancho-fila .ed-prop-casilla { flex: none; font-weight: 400; color: var(--muted); }
+  .ed-fuentes-grupo { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+  .ed-fuentes-familia { margin: .3rem 0 0; font-size: .72rem; font-weight: 600; color: var(--muted); }
 
   /* Subtítulos (capa 5a): subtitulos_panel.js arma lo de adentro de la pestaña
      «Subtítulos» (dentro de .ed-bib-zona) y linea_tiempo.js la fila de solo
@@ -585,13 +645,17 @@
       transition: transform .2s ease, visibility 0s linear .2s; }
     .ed-hoja.ed-hoja-abierta { transform: none; visibility: visible; transition: transform .2s ease; }
     .ed-listo { display: inline-flex; flex: none; }
-    /* seis botones (capa 5a: «Subtítulos») en 375 px: todos del mismo ancho y
-       ninguno empuja la página de lado; un nombre que no cabe termina en «…»
-       (entero en su `title`) */
+    /* siete botones (capa 5c: «Stickers») en 375 px: cada uno parte de lo que mide su nombre
+       (`flex: 1 1 auto`: con la misma base para todos, «Subtítulos» y «Transiciones» salían
+       cortados) y lo que sobra se reparte. Medido en la página con la letra de verdad, los
+       siete suman 301 px, así que se ven enteros desde 320 px; con .1rem de relleno a cada lado
+       sumaban 312,5 px y a 320 px todos terminaban en «…» por menos de un píxel. Ninguno empuja
+       la página de lado (`min-width: 0`): un nombre que no cupiera termina en «…» (entero en
+       su `title`) */
     .ed-acciones-movil { position: sticky; bottom: 0; z-index: 20; display: flex; gap: 0;
       padding: .3rem .25rem calc(.3rem + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--border); }
-    .ed-accion { display: flex; flex: 1 1 0; flex-direction: column; align-items: center; gap: .15rem; min-width: 0;
-      padding: .35rem .1rem; background: transparent; color: var(--muted); border: 1px solid transparent;
+    .ed-accion { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; gap: .15rem; min-width: 0;
+      padding: .35rem .05rem; background: transparent; color: var(--muted); border: 1px solid transparent;
       border-radius: var(--radius-sm); font-size: .66rem; }
     .ed-accion.ed-activa { color: var(--accent-texto); background: var(--panel-2); border-color: var(--border); }
     /* la galería de voces corre con la hoja (una caja que corre dentro de otra se pelea con el dedo) */
@@ -610,6 +674,7 @@
   "medios": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>',
   "audio": '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
   "texto": '<path d="M5 7V5h14v2M12 5v14M9 19h6"/>',
+  "stickers": '<path d="M15.5 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V8.5L15.5 3z"/><path d="M15 3.5V7a1.5 1.5 0 0 0 1.5 1.5H21"/><path d="M11.2 9.1l1.1 2.8 3 .2-2.3 1.9.7 2.9-2.5-1.6-2.5 1.6.7-2.9-2.3-1.9 3-.2z"/>',
   "subtitulos": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12.5h6M15 12.5h2M7 15.5h3M12 15.5h5"/>',
   "transiciones": '<path d="M4 6l8 6-8 6zM20 6l-8 6 8 6z"/>',
   "editar": '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
@@ -618,8 +683,8 @@
 {% macro icono(nombre) -%}
 <svg class="ed-icono" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{{ ICONOS[nombre]|safe }}</svg>
 {%- endmacro %}
-{% set PANELES = [("medios", _("Medios")), ("audio", _("Audio")), ("texto", _("Texto")), ("subtitulos", _("Subtítulos")),
-                  ("transiciones", _("Transiciones"))] %}
+{% set PANELES = [("medios", _("Medios")), ("audio", _("Audio")), ("texto", _("Texto")), ("stickers", _("Stickers")),
+                  ("subtitulos", _("Subtítulos")), ("transiciones", _("Transiciones"))] %}
 <body class="editor">
 <header id="ed-barra" class="ed-barra">
   <a class="btn-sm" href="{{ datos.urls.final }}">{{ _('← Final edition') }}</a>
@@ -655,6 +720,7 @@
     <div class="ed-escena">
       <div id="ed-escenario" class="ed-escenario" style="--ed-ancho: {{ fmt[0] }}; --ed-alto: {{ fmt[1] }}">
         <canvas id="lienzo" aria-label="{{ _('Vista previa del video') }}"></canvas>
+        <div id="ed-zonas" class="ed-zonas" aria-hidden="true"></div>
         <div id="ed-interaccion" class="ed-interaccion" aria-hidden="true"></div>
       </div>
     </div>
@@ -663,6 +729,7 @@
       <p id="aviso-faltan" class="editor-aviso" hidden></p>
       <p id="aviso-recortes" class="editor-aviso" hidden></p>
       <p id="aviso-voces" class="editor-aviso" hidden></p>
+      <p id="aviso-zonas" class="editor-aviso" hidden></p>
       <p id="aviso-preparando" class="editor-aviso" hidden></p>
       <p id="aviso-audio" class="editor-aviso" hidden></p>
       <p id="aproximada" class="editor-aviso" hidden>{{ _('Transición vista de forma aproximada: el video final la hace completa.') }}</p>
@@ -699,6 +766,7 @@
     <button id="h-borrar" type="button" class="btn-sm" title="{{ _('Borrar el clip elegido (Supr)') }}">{{ _('Borrar') }}</button>
     <button id="h-vincular" type="button" class="btn-sm ed-vincular" aria-pressed="true">{{ icono("vinculo") }}<span>{{ _('Vincular') }}</span></button>
   </div>
+  <label class="ed-zonas-elegir">{{ _('Zonas') }} <select id="zonas"><option value="no">{{ _('No') }}</option><option value="tiktok">TikTok</option><option value="reels">Reels</option><option value="shorts">Shorts</option></select></label>
   <label class="ed-zoom">{{ _('Zoom') }} <input id="linea-zoom" type="range"></label>
 </section>
 <section id="linea" class="linea" aria-label="{{ _('Línea de tiempo') }}"></section>

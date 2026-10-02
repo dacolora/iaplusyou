@@ -43,6 +43,12 @@
 //                                           derivados (null antes de arrancar)
 //   editor.materiales()                     {id: material} de la vista previa
 //                                           (con `palabras` si se transcribió)
+//   editor.cargarFuentes(ids) -> Promise    baja las fuentes `ids` que falten
+//                                           (capa 5c, D9.3: la página solo baja
+//                                           las que usa el documento; el
+//                                           selector de fuentes pide el resto
+//                                           para escribir cada nombre en su
+//                                           letra) y redibuja cuando llegan
 //   editor.mostrarBiblioteca(panel)         abre esa pestaña de la biblioteca
 //                                           (en el celular sube su hoja); como
 //                                           todo cambio de pestaña, avisa
@@ -69,6 +75,14 @@
 // deshacer y UN guardado (es el mismo documento). Apagado, todo es como antes.
 // Si después dos voces suenan a la vez, se avisa bajo el video (#aviso-voces).
 //
+// Capa 5c (D10): zonas seguras. El selector #zonas (No · TikTok · Reels ·
+// Shorts, lo que eligió quien mira, recordado en localStorage; Reels sin nada
+// guardado) pinta en #ed-zonas las franjas que la interfaz de esa app tapa en
+// un 9:16, y #aviso-zonas dice cuando un texto, una imagen o los subtítulos
+// caen ahí o una capa se sale del video (zonas.js, puro, probado en Node). Es
+// solo de la página: nada se dibuja en el lienzo ni cambia el documento, y el
+// aviso se recalcula en cada refresco sobre el documento del destino que se ve.
+//
 // Reglas de los avisos (avisos_editor.js, probadas en Node):
 // - «seleccion» sale solo si la selección cambió de verdad, también cuando la
 //   cambió una operación (duplicar elige la copia: "documento" y después
@@ -94,6 +108,7 @@ import { listaY, ponerTextos, t } from "./textos.js";
 import { infoDe, VistaPrevia } from "./vista.js";
 import * as vinculos from "./vinculos.js";
 import { VozPanel } from "./voz_panel.js";
+import { ControlZonas, medidasDeTextos, revisar, textoAviso } from "./zonas.js";
 
 // Los textos en el idioma de quien mira (ruta editor.ver), antes de construir
 // nada: ningún módulo llama a t() al cargarse. Se ponen al leer `datos`, dentro
@@ -122,6 +137,13 @@ let seleccion = null;
 // «Vincular» (D10.9): lo que eligió quien mira; sin nada guardado (o si el
 // navegador no deja leerlo), prendido.
 let vincular = vinculos.leerVincular(almacenSeguro());
+// Las zonas seguras (zonas.js): el selector #zonas, las guías de #ed-zonas y lo que
+// eligió quien mira ("no" o una plataforma, recordado). Al elegir otra, repinta
+// el aviso. Se monta abajo, con lo demás.
+const controlZonas = new ControlZonas({
+  selector: $("zonas"), capa: $("ed-zonas"), almacen: almacenSeguro(), formato: () => historial.actual.formato,
+  crear: () => document.createElement("div"), alCambiar: pintarAvisoZonas,
+});
 // El gesto con clave en curso (vinculos.operarGesto): su base y la cadena
 // sin seguir. Se olvida al deshacer/rehacer, al guardar, en conflicto (y al
 // recargar, claro); cambiar de clave empieza otro.
@@ -246,6 +268,29 @@ function pintarAvisosCarga() {
   pintarAvisoCarga("aviso-recortes", a.recortes);
   pintarAvisoCarga("aviso-faltan", a.faltan);
   pintarAvisoCarga("aviso-voces", a.voces);
+  pintarAvisoZonas();
+}
+
+// Zonas seguras (capa 5c, D10). El aviso sale del documento RESUELTO del destino
+// que se ve (vista.resuelto: los textos variables y el precio miden distinto por
+// país) con la medida de cada texto en su inicio, no solo de los que se ven en
+// el cabezal. Antes de que la vista previa arranque no hay documento: sin aviso.
+// Una falla al medir nunca rompe el refresco: se anota y se calla el aviso.
+function avisoZonas() {
+  const doc = vista.resuelto;
+  if (!doc) return null;
+  try {
+    const medidasTexto = medidasDeTextos(doc, (ms) => vista.medidasTexto(ms));
+    const lista = revisar(doc, { plataforma: controlZonas.eleccion, medidasTexto, materiales: vista.materiales, cfg: datos.config });
+    return textoAviso(lista, controlZonas.eleccion);
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function pintarAvisoZonas() {
+  pintarAvisoCarga("aviso-zonas", avisoZonas());
 }
 
 function buscarClip(id) {
@@ -659,6 +704,7 @@ const editor = Object.freeze({
   ir,
   resuelto: () => vista.resuelto,
   materiales: () => vista.materiales,
+  cargarFuentes: (ids) => vista.cargarFuentes(ids),
   mostrarBiblioteca,
   enfocarTexto,
   escuchar: (fn) => avisos.escuchar(fn),
@@ -667,12 +713,14 @@ const editor = Object.freeze({
 // Los paneles que se enganchan por `editor` (dentro de una función: lo de
 // nivel superior que ejecuta algo va después de declararlo todo).
 function montarPaneles() {
-  // la biblioteca (Medios · Audio · Texto · Subtítulos · Transiciones): carga
+  // la biblioteca (Medios · Audio · Texto · Stickers · Subtítulos · Transiciones): carga
   // lo del proyecto mientras la vista previa arranca
   const nombresIdioma = datos.voz?.nombres_idioma ?? datos.subtitulos?.nombres_idioma ?? {};
+  // capa 5c: la pestaña «Stickers» pinta los 20 de la casa (datos.stickers) y, si la tabla tipográfica trae la
+  // fuente de emojis, los emojis de anuncio que esa fuente cubre
   const biblioteca = new Biblioteca({
     contenedor: $("ed-panel-biblioteca"), pestanas: $("ed-pestanas-biblioteca"), urls: datos.urls, editor, linea,
-    nombresIdioma,
+    nombresIdioma, stickers: datos.stickers ?? [], tabla: datos.config?.tipografia ?? null,
   });
   // capa 5a: la pestaña «Subtítulos» (si al abrir ya corría una transcripción
   // de esta edición, retoma su barra)
@@ -682,9 +730,12 @@ function montarPaneles() {
   new VozPanel({ contenedor: biblioteca.zona("audio"), editor, datos });
   // las propiedades de lo elegido («Editar»: un formulario por clase de clip,
   // o la mezcla de la edición si no hay nada elegido; «Suena en» nombra los
-  // idiomas como la galería de voces; «Encuadre» mide el cuadro que se dibuja)
+  // idiomas como la galería de voces; «Encuadre» mide el cuadro que se dibuja;
+  // capa 5c: la lista de fuentes por familia sale del catálogo de la página, y
+  // lo que no sale en el video de un texto, de la tabla tipográfica)
   new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () => vista.materiales,
-                    nombresIdioma, medidasPrincipal: (id) => vista.medidasPrincipal(id) });
+                    nombresIdioma, medidasPrincipal: (id) => vista.medidasPrincipal(id),
+                    catalogoFuentes: datos.config?.catalogo_fuentes ?? [], tabla: datos.config?.tipografia ?? null });
   // tocar, mover y agrandar los textos y las imágenes sobre el video (necesita
   // la vista previa: el documento que se dibuja y las medidas de los textos)
   new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });
@@ -693,6 +744,7 @@ function montarPaneles() {
 montarHerramientas();
 montarProducir();
 montarDisposicion();
+controlZonas.montar();
 montarPaneles();
 refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
 // lo arreglado al abrir también se guarda (ya con todo declarado y montado:

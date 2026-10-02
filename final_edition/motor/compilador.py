@@ -49,6 +49,8 @@ sus dos entradas.
 Capas (PNG de texto e imágenes): cada una se escala a la caja que da
 `geometria.caja` (`scale=w:h`, misma regla de píxeles que el navegador) y,
 con `opacidad < 1`, se atenúa el alfa (`format=rgba,colorchannelmixer=aa=`).
+Una capa de imagen con `tinte` (un sticker, capa 5c D11.3) cambia su color
+antes de escalarse (`format=rgba,lutrgb=r=R:g=G:b=B`) y conserva su alfa.
 `rotacion` NO se renderiza en la capa 1 (ni `superpuesto`, el PIP: `compilar`
 lo rechaza con un error explícito — se aplaza, spec 5b D14 —; ni
 `marca.marca_de_agua`).
@@ -316,6 +318,11 @@ def verificar_recortes(doc, duraciones):
     return doc
 
 
+def _rgb(color):
+    """'#RRGGBB' -> (r, g, b) en decimal (lo que `lutrgb` recibe)."""
+    return int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+
+
 def compilar(doc, rutas, ventana=None, con_ass=True):
     ancho, alto = FORMATOS[doc["formato"]]
     fps = int(doc.get("fps") or 30)
@@ -453,8 +460,13 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             caja_defecto = geometria.caja(t, capa_w, capa_h, doc["formato"])
             x, y = _expr_posicion(cl, kfs, capa_w, capa_h, doc["formato"], desplaz, caja_defecto, fps)
             # la capa se lleva al tamaño de su caja (escala del transform) y,
-            # si es translúcida, se atenúa su alfa antes del overlay.
-            capa = f"[{idx}:v]scale={caja_defecto['w']}:{caja_defecto['h']}"
+            # si es translúcida, se atenúa su alfa antes del overlay. Un
+            # sticker con `tinte` (capa 5c, D11.3) toma ese color y conserva
+            # su alfa; `lutrgb` corre una vez (la entrada es un solo cuadro).
+            capa = f"[{idx}:v]"
+            if p["tipo"] == "imagen" and cl.get("tinte"):
+                capa += "format=rgba,lutrgb=r={}:g={}:b={},".format(*_rgb(cl["tinte"]))
+            capa += f"scale={caja_defecto['w']}:{caja_defecto['h']}"
             if caja_defecto["opacidad"] < 1.0:
                 capa += f",format=rgba,colorchannelmixer=aa={caja_defecto['opacidad']:g}"
             partes.append(f"{capa}[l{n_png}]")
