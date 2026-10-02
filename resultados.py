@@ -415,3 +415,223 @@ def marcas(carga):
             texto = texto[:LARGO_MARCA - 1] + "…"
         out.append({"dia": creado_en[:10], "texto": texto})
     return out
+
+
+# ---------- embudo ----------
+
+PASOS_EMBUDO = (("impresiones", N_("Impresiones")), ("clics_enlace", N_("Clics en el enlace")),
+                ("visitas_pagina", N_("Visitas a la página")), ("carrito", N_("Agregaron al carrito")),
+                ("pago_iniciado", N_("Iniciaron el pago")), ("compras_meta", N_("Compras")))
+_PASOS_PIXEL = ("carrito", "pago_iniciado", "compras_meta")   # sin el Pixel de Meta llegan en cero
+UMBRAL_CAIDA = 0.8        # un paso por debajo del 80 % de lo que suele rendir en el proyecto es «la caída»
+MIN_EXPERIMENTOS_PROMEDIO = 2
+
+
+def _sumas_embudo(filas):
+    """Suma de los pasos del embudo en filas de metrica_dia. Sin filas, {} (el detalle de Meta aún no llegó)."""
+    if not filas:
+        return {}
+    return {clave: sum(f[clave] or 0 for f in filas) for clave, _etiqueta in PASOS_EMBUDO}
+
+
+def embudo_desde_sumas(sumas, promedio):
+    """El embudo desde las sumas de cada paso ({clave: total}; un paso ausente = sin dato) y el promedio del
+    proyecto ({clave: tasa en %} de cada paso menos el primero, o None). `pct` es la tasa contra el paso
+    anterior (None en el primero o con el anterior en 0); `prom`, la del proyecto; `sin_datos`, un paso del
+    Pixel en 0 cuando el anterior no lo está (casi siempre es que Meta no lo mide, no que nadie compró).
+    La frase nombra el paso de mayor caída contra el promedio (o dice que todo está en él) y solo existe con
+    promedio; un paso sin Pixel nunca cuenta como caída."""
+    pasos, anterior = [], None
+    for i, (clave, etiqueta) in enumerate(PASOS_EMBUDO):
+        valor = sumas.get(clave)
+        pct = valor / anterior * 100 if i and valor is not None and anterior else None
+        pasos.append({"clave": clave, "etiqueta": gettext(etiqueta), "valor": valor, "pct": pct,
+                      "prom": _f((promedio or {}).get(clave)) if i else None,
+                      "sin_datos": clave in _PASOS_PIXEL and valor == 0 and bool(anterior)})
+        anterior = valor
+    return {"pasos": pasos, "frase": _frase_embudo(pasos) if promedio else None}
+
+
+def _frase_embudo(pasos):
+    candidatos = [(p["pct"] / p["prom"], p) for p in pasos[1:]
+                  if p["pct"] is not None and (p["prom"] or 0) > 0 and not p["sin_datos"]]
+    if not candidatos:
+        return None
+    razon, peor = min(candidatos, key=lambda c: c[0])
+    if razon >= UMBRAL_CAIDA:
+        return gettext("Todos los pasos están en tu promedio o mejor.")
+    return gettext("La caída más grande está en «%(paso)s»: %(pct)s %% contra %(prom)s %% de tu promedio.",
+                   paso=peor["etiqueta"], pct=idiomas.numero(peor["pct"], 1), prom=idiomas.numero(peor["prom"], 1))
+
+
+def embudo(carga, promedio):
+    """El embudo del periodo y los filtros de la carga (metrica_dia), comparado con `promedio_embudo`."""
+    return embudo_desde_sumas(_sumas_embudo(carga.dias_act), promedio)
+
+
+def promedio_embudo(cliente):
+    """{paso: tasa en % contra el paso anterior} de TODOS los experimentos del proyecto (sin filtros ni periodo),
+    sin el primer paso; un paso cuyo anterior es 0 no trae tasa. None con menos de MIN_EXPERIMENTOS_PROMEDIO
+    experimentos con impresiones (no se inventan promedios de mercado). `metrica_dia` no tiene `cliente`: se
+    une con experimento_pieza, que sí, y se agrupa por experimento. Una consulta."""
+    md, ep = db.metrica_dia, db.experimento_pieza
+    claves = [c for c, _e in PASOS_EMBUDO]
+    q = (sa.select(ep.c.experimento_id, *[sa.func.coalesce(sa.func.sum(md.c[c]), 0).label(c) for c in claves])
+         .select_from(md.join(ep, ep.c.id == md.c.experimento_pieza_id))
+         .where(ep.c.cliente == cliente).group_by(ep.c.experimento_id))
+    with db.conectar() as con:
+        filas = [dict(f._mapping) for f in con.execute(q)]
+    filas = [f for f in filas if f["impresiones"] > 0]
+    if len(filas) < MIN_EXPERIMENTOS_PROMEDIO:
+        return None
+    total = {c: sum(f[c] for f in filas) for c in claves}
+    return {claves[i]: total[claves[i]] / total[claves[i - 1]] * 100
+            for i in range(1, len(claves)) if total[claves[i - 1]] > 0}
+
+
+# ---------- desgloses ----------
+
+DIMENSIONES = ("ubicacion", "edad_genero", "dispositivo", "region")
+MAX_REGIONES = 10
+SEPARADOR_UBICACION = " · "
+SIN_DATO = N_("Sin dato")
+_PLATAFORMAS = {"facebook": N_("Facebook"), "instagram": N_("Instagram"), "messenger": N_("Messenger"),
+                "audience_network": N_("Audience Network"), "threads": N_("Threads")}
+_POSICIONES = {"feed": N_("Feed"), "marketplace": N_("Marketplace"), "video_feeds": N_("Videos"),
+               "instream_video": N_("En el video"), "search": N_("Búsqueda"),
+               "right_hand_column": N_("Columna derecha")}
+_POSICION_REELS, _POSICION_HISTORIAS, _POSICION_EXPLORAR = N_("Reels"), N_("Historias"), N_("Explorar")
+_GENEROS = {"female": N_("Mujeres"), "male": N_("Hombres")}
+_DISPOSITIVOS = {"mobile_app": N_("Celular (app)"), "mobile_web": N_("Celular (web)"), "desktop": N_("Computador")}
+
+
+def _etiqueta_plataforma(clave):
+    if clave.lower() == "unknown":
+        return gettext(SIN_DATO)
+    texto = _PLATAFORMAS.get(clave)
+    return gettext(texto) if texto else clave.replace("_", " ")
+
+
+def _etiqueta_posicion(clave):
+    k = clave.lower()
+    if k == "unknown":
+        return gettext(SIN_DATO)
+    texto = _POSICIONES.get(k)
+    if texto is None:
+        texto = (_POSICION_REELS if k.endswith("reels") else _POSICION_HISTORIAS if k.endswith("stories")
+                 else _POSICION_EXPLORAR if "explore" in k else None)
+    return gettext(texto) if texto else clave.replace("_", " ")
+
+
+def _etiqueta_ubicacion(clave):
+    plataforma, _sep, posicion = clave.partition("|")
+    return SEPARADOR_UBICACION.join(t for t in (_etiqueta_plataforma(plataforma) if plataforma else "",
+                                                _etiqueta_posicion(posicion) if posicion else "") if t)
+
+
+def _etiqueta_edad(clave):
+    return gettext(SIN_DATO) if clave.lower() == "unknown" else clave
+
+
+def _etiqueta_genero(clave):
+    texto = _GENEROS.get(clave.lower())
+    return gettext(texto) if texto else gettext(SIN_DATO)
+
+
+def _etiqueta_dispositivo(clave):
+    k = clave.lower()
+    if k == "unknown":
+        return gettext(SIN_DATO)
+    texto = _DISPOSITIVOS.get(k)
+    return gettext(texto) if texto else clave.replace("_", " ")
+
+
+def _etiqueta_region(clave):
+    return clave or gettext(SIN_DATO)
+
+
+def _leer_desglose(ids):
+    """Filas de metrica_desglose de esas piezas (una consulta por trozos de 500 ids)."""
+    ids = sorted(ids)
+    mg = db.metrica_desglose
+    out = []
+    with db.conectar() as con:
+        for i in range(0, len(ids), 500):
+            out.extend(dict(f._mapping) for f in con.execute(
+                sa.select(mg).where(mg.c.experimento_pieza_id.in_(ids[i:i + 500]),
+                                    mg.c.dimension.in_(DIMENSIONES))))
+    return out
+
+
+def _filas_desglose(acumulado, etiqueta, maximo=None):
+    """De {clave: sumas} a las filas ordenadas por gasto. `pct_gasto` es la parte del gasto de TODA la
+    dimensión (también cuando se recorta a `maximo`). El ROAS es el de Meta del mismo desglose (ingresos
+    de Meta / gasto), nunca mezclado con el del motor del Tablero."""
+    total = sum(a["gasto"] for a in acumulado.values())
+    filas = [{"clave": clave, "etiqueta": etiqueta(clave), "gasto": a["gasto"],
+              "pct_gasto": a["gasto"] / total * 100 if total > 0 else 0.0, "impresiones": a["impresiones"],
+              "ctr": a["clics_enlace"] / a["impresiones"] * 100 if a["impresiones"] else None,
+              "roas": a["ingresos_meta"] / a["gasto"] if a["gasto"] > 0 else None}
+             for clave, a in acumulado.items()]
+    filas.sort(key=lambda f: (-f["gasto"], -f["impresiones"], f["clave"]))
+    return filas[:maximo] if maximo else filas
+
+
+def desgloses(carga):
+    """Quién compra y dónde lo ve: ubicación, edad, género, dispositivo y región (máx. MAX_REGIONES), desde el
+    inicio del experimento (Meta no filtra los desgloses por periodo), solo de las piezas de la carga. `metrica`
+    es «roas» si Meta reportó ingresos en algún desglose y «ctr» si no."""
+    ids = [pz["id"] for _ex, pz, _s in carga.datos.filas]
+    por = {"ubicacion": {}, "edad": {}, "genero": {}, "dispositivo": {}, "region": {}}
+    ingresos = 0.0
+    for f in _leer_desglose(ids) if ids else []:
+        valores = {"impresiones": f["impresiones"] or 0, "clics_enlace": f["clics_enlace"] or 0,
+                   "gasto": float(f["gasto"] or 0.0), "ingresos_meta": float(f["ingresos_meta"] or 0.0)}
+        ingresos += valores["ingresos_meta"]
+        if f["dimension"] == "edad_genero":
+            edad, _sep, genero = f["clave"].partition("|")
+            destinos = (("edad", edad), ("genero", genero))
+        else:
+            destinos = ((f["dimension"], f["clave"]),)
+        for dimension, clave in destinos:
+            a = por[dimension].setdefault(clave, dict.fromkeys(valores, 0))
+            for k, v in valores.items():
+                a[k] += v
+    return {"ubicacion": _filas_desglose(por["ubicacion"], _etiqueta_ubicacion),
+            "edad": _filas_desglose(por["edad"], _etiqueta_edad),
+            "genero": _filas_desglose(por["genero"], _etiqueta_genero),
+            "dispositivo": _filas_desglose(por["dispositivo"], _etiqueta_dispositivo),
+            "region": _filas_desglose(por["region"], _etiqueta_region, MAX_REGIONES),
+            "metrica": "roas" if ingresos > 0 else "ctr"}
+
+
+# ---------- países ----------
+
+def paises(carga):
+    """Una fila por país de las piezas de la carga: gasto y ROAS del motor del Tablero (deltas de los snapshots,
+    con la misma ventana y la misma atribución que los indicadores); impresiones, clics y CTR de metrica_dia.
+    Sin filas de detalle del país, lo de Meta queda en None («cargando», no ceros). Ordenados por gasto."""
+    per = carga.per
+    desde = tablero.INICIO if per["es_todo"] else per["desde"]
+    por_pais, pais_de = {}, {}
+    for _ex, pz, serie in carga.datos.filas:
+        pais = pz.get("pais")
+        if not pais:
+            continue
+        pais_de[pz["id"]] = pais
+        d = tablero._deltas_pieza(serie, desde, per["hasta"])
+        m = por_pais.setdefault(pais, {"gasto": 0.0, "ingresos": 0.0, "dias": []})
+        m["gasto"] += d["gasto"]
+        m["ingresos"] += d["ingresos"]
+    for f in carga.dias_act:
+        if f["experimento_pieza_id"] in pais_de:
+            por_pais[pais_de[f["experimento_pieza_id"]]]["dias"].append(f)
+    out = []
+    for pais, m in por_pais.items():
+        a = _agregado(m["dias"], carga.es_imagen)
+        r = _ratios(a)
+        gasto = round(m["gasto"], 2)
+        out.append({"pais": pais, "impresiones": r["impresiones"], "clics_enlace": a["clics_enlace"] if a["n"] else None,
+                    "gasto": gasto, "ctr": r["ctr"], "roas": m["ingresos"] / gasto if gasto > 0 else None})
+    out.sort(key=lambda x: (-x["gasto"], x["pais"]))
+    return out

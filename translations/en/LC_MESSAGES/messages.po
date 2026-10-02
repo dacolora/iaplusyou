@@ -1960,6 +1960,9 @@ msgstr "Add “{nombre}” as music from the playhead"
 msgid "Agregar «{nombre}» como voz desde el cabezal"
 msgstr "Add “{nombre}” as a voice from the playhead"
 
+msgid "Agregaron al carrito"
+msgstr "Added to cart"
+
 msgid "Agrupando deseos"
 msgstr "Grouping desires"
 
@@ -2458,6 +2461,9 @@ msgstr "Attribution"
 #, python-format
 msgid "Atribución no válida: %(atribucion)s (usa pixel, tienda o ninguna)."
 msgstr "Invalid attribution: %(atribucion)s (use pixel, store or none)."
+
+msgid "Audience Network"
+msgstr "Audience Network"
 
 msgid "Audiencia y producto"
 msgstr "Audience and product"
@@ -3082,6 +3088,12 @@ msgstr "Catalog"
 msgid "Catálogo universal"
 msgstr "Universal catalog"
 
+msgid "Celular (app)"
+msgstr "Mobile (app)"
+
+msgid "Celular (web)"
+msgstr "Mobile (web)"
+
 msgid "Centrar"
 msgstr "Center"
 
@@ -3297,6 +3309,9 @@ msgstr "Clicks without sales"
 msgid "Clics"
 msgstr "Clicks"
 
+msgid "Clics en el enlace"
+msgstr "Link clicks"
+
 msgid "Clientes nuevos"
 msgstr "New customers"
 
@@ -3368,6 +3383,9 @@ msgstr "Color removed."
 #, python-format
 msgid "Color «%(nombre)s» agregado (%(n)s foto(s))."
 msgstr "Color “%(nombre)s” added (%(n)s photo(s))."
+
+msgid "Columna derecha"
+msgstr "Right column"
 
 msgid "Comentario real de un comprador"
 msgstr "Real buyer comment"
@@ -3451,6 +3469,9 @@ msgstr "Purchases (requires Pixel)"
 
 msgid "Comprobar Pixel"
 msgstr "Check Pixel"
+
+msgid "Computador"
+msgstr "Desktop"
 
 #, python-format
 msgid "Con %(n)s comentarios pegados a mano ya salen avatares: el formulario está justo abajo."
@@ -5615,6 +5636,9 @@ msgstr "In the Google Cloud project where “YouTube Data API v3” is already e
 msgid "En el sprint, la fecha de inicio debe ser anterior a la de fin."
 msgstr "In the sprint, the start date must be before the end date."
 
+msgid "En el video"
+msgstr "In-stream video"
+
 msgid "En error"
 msgstr "Failed"
 
@@ -6853,11 +6877,17 @@ msgstr "Experiments running"
 msgid "Experimentos: %(n)s"
 msgstr "Experiments: %(n)s"
 
+msgid "Explorar"
+msgstr "Explore"
+
 msgid "Exportar .md"
 msgstr "Export .md"
 
 msgid "Exportar Excel"
 msgstr "Export Excel"
+
+msgid "Facebook"
+msgstr "Facebook"
 
 msgid "Facebook (Página)"
 msgstr "Facebook (Page)"
@@ -7090,6 +7120,9 @@ msgstr "Families (%(n)s)"
 
 msgid "Fecha"
 msgstr "Date"
+
+msgid "Feed"
+msgstr "Feed"
 
 msgid "Ficha"
 msgstr "Details"
@@ -7879,6 +7912,9 @@ msgstr "Higgsfield (video and image)"
 msgid "Historial"
 msgstr "History"
 
+msgid "Historias"
+msgstr "Stories"
+
 msgid "Hoja de personaje"
 msgstr "Character sheet"
 
@@ -7904,6 +7940,9 @@ msgstr ""
 
 msgid "Hombre"
 msgstr "Male"
+
+msgid "Hombres"
+msgstr "Men"
 
 msgid "Hook"
 msgstr "Hook"
@@ -8222,11 +8261,17 @@ msgstr "Log in to resend the verification."
 msgid "Iniciar sesión"
 msgstr "Log in"
 
+msgid "Iniciaron el pago"
+msgstr "Started checkout"
+
 msgid "Inicias sesión con la cuenta de la tienda y autorizas la app: no se pega ningún token."
 msgstr "You log in with the store's account and authorize the app: no token gets pasted."
 
 msgid "Inicio"
 msgstr "Start"
+
+msgid "Instagram"
+msgstr "Instagram"
 
 msgid "Instrumental (sin voz cantada)"
 msgstr "Instrumental (no sung vocals)"
@@ -8428,6 +8473,10 @@ msgstr "The song is longer than 10 min."
 
 msgid "La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre."
 msgstr "The face of the brand: a real person, an ambassador or a created character that has to look the same every time."
+
+#, python-format
+msgid "La caída más grande está en «%(paso)s»: %(pct)s %% contra %(prom)s %% de tu promedio."
+msgstr "The biggest drop is at “%(paso)s”: %(pct)s %% vs %(prom)s %% of your average."
 
 #, python-format
 msgid "La cifra «%(cifra)s» del bloque %(rol)s no está en los datos: reescríbelo sin ella o con el dato real."
@@ -9400,6 +9449,9 @@ msgstr "Brands to imitate"
 msgid "Marcas a mano"
 msgstr "Hand-drawn marks"
 
+msgid "Marketplace"
+msgstr "Marketplace"
+
 #, python-format
 msgid "Material %(id)s listo."
 msgstr "File %(id)s ready."
@@ -9461,6 +9513,9 @@ msgstr "Month"
 
 msgid "Mes a mes"
 msgstr "Month by month"
+
+msgid "Messenger"
+msgstr "Messenger"
 
 msgid "Meta (Pixel/Tienda)"
 msgstr "Meta (Pixel/Store)"
@@ -9770,6 +9825,9 @@ msgstr "Lots of clicks"
 
 msgid "Mujer"
 msgstr "Female"
+
+msgid "Mujeres"
+msgstr "Women"
 
 msgid "Muslos"
 msgstr "Thighs"
@@ -12428,6 +12486,9 @@ msgstr "Rounded"
 msgid "Redundante"
 msgstr "Redundant"
 
+msgid "Reels"
+msgstr "Reels"
+
 msgid "Reemplazar el token"
 msgstr "Replace the token"
 
@@ -13261,6 +13322,9 @@ msgstr "No connection: it'll be saved with your next change."
 msgid "Sin correo de avisos"
 msgstr "No notification email"
 
+msgid "Sin dato"
+msgstr "No data"
+
 msgid "Sin datos suficientes"
 msgstr "Not enough data"
 
@@ -13979,6 +14043,9 @@ msgstr "Texts from the reference"
 msgid "Textos orgánicos (IA)"
 msgstr "Organic captions (AI)"
 
+msgid "Threads"
+msgstr "Threads"
+
 msgid "ThruPlay"
 msgstr "ThruPlay"
 
@@ -14357,6 +14424,9 @@ msgstr "All the project's avatars"
 
 msgid "Todos los idiomas"
 msgstr "All languages"
+
+msgid "Todos los pasos están en tu promedio o mejor."
+msgstr "Every step is at your average or better."
 
 msgid "Todos los países"
 msgstr "All countries"
@@ -15293,6 +15363,9 @@ msgstr "Videos, images, scripts, final cuts and AI text paid for since the start
 
 msgid "Vincular"
 msgstr "Link"
+
+msgid "Visitas a la página"
+msgstr "Page visits"
 
 msgid "Vista previa del video"
 msgstr "Video preview"

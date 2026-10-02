@@ -268,3 +268,244 @@ def test_desde_el_inicio_suma_todo_el_historial_del_detalle(sembrado):
     assert k["impresiones"]["tendencia"][:-4] == [None] * 10            # el 2025 no entra en las curvas
     siete = {i["clave"]: i for i in r.indicadores(r.cargar("acme", r.Filtro(dias=7), AHORA))}
     assert siete["impresiones"]["valor"] == 8000                         # los demás periodos no cambian
+
+
+# ---- embudo, desgloses y países (tarea 3) ----
+
+def _desglose(db, ep, dimension, clave, **v):
+    base = dict(impresiones=100, clics_enlace=2, gasto=0.0, vistas_3s=0, thruplay=0, compras_meta=0, ingresos_meta=0.0)
+    base.update(v)
+    with db.conectar() as con:
+        con.execute(db.metrica_desglose.insert().values(experimento_pieza_id=ep, dimension=dimension, clave=clave,
+                                                         actualizado_en=AHORA, **base))
+
+
+def test_embudo_con_frase_solo_con_dos_experimentos(sembrado):
+    import resultados as r
+    c = r.cargar("acme", r.Filtro(dias=7), AHORA)
+    assert r.promedio_embudo("acme") is None                    # un solo experimento con datos
+    e = r.embudo(c, None)
+    assert [p["clave"] for p in e["pasos"]] == [x[0] for x in r.PASOS_EMBUDO]
+    assert e["pasos"][0]["valor"] == 8000 and e["pasos"][0]["pct"] is None and e["frase"] is None
+    assert e["pasos"][3]["pct"] == pytest.approx(16 / e["pasos"][2]["valor"] * 100)
+
+
+def test_embudo_frase_nombra_la_peor_caida():
+    import resultados as r
+    pasos = {"impresiones": 1000, "clics_enlace": 20, "visitas_pagina": 15, "carrito": 1, "pago_iniciado": 1, "compras_meta": 1}
+    prom = {"clics_enlace": 2.0, "visitas_pagina": 70.0, "carrito": 12.0, "pago_iniciado": 40.0, "compras_meta": 50.0}
+    e = r.embudo_desde_sumas(pasos, prom)
+    assert "carrito" in e["frase"].lower() or "Agregaron al carrito" in e["frase"]
+    assert e["frase"] == "La caída más grande está en «Agregaron al carrito»: 6,7 % contra 12,0 % de tu promedio."
+    p = {x["clave"]: x for x in e["pasos"]}
+    assert p["carrito"]["pct"] == pytest.approx(1 / 15 * 100) and p["carrito"]["prom"] == 12.0
+    assert p["impresiones"]["prom"] is None and p["impresiones"]["pct"] is None
+
+
+def test_embudo_sin_pixel_se_apaga_y_no_se_nombra_como_caida():
+    import resultados as r
+    pasos = {"impresiones": 1000, "clics_enlace": 20, "visitas_pagina": 15, "carrito": 0, "pago_iniciado": 0, "compras_meta": 0}
+    prom = {"clics_enlace": 2.0, "visitas_pagina": 70.0, "carrito": 12.0, "pago_iniciado": 40.0, "compras_meta": 50.0}
+    e = r.embudo_desde_sumas(pasos, prom)
+    p = {x["clave"]: x for x in e["pasos"]}
+    assert p["carrito"]["sin_datos"] is True                    # 0 con visitas antes: el Pixel no lo mide
+    assert p["pago_iniciado"]["sin_datos"] is False and p["pago_iniciado"]["pct"] is None   # anterior 0: nada que dividir
+    assert p["clics_enlace"]["sin_datos"] is False and p["visitas_pagina"]["sin_datos"] is False
+    assert e["frase"] == "Todos los pasos están en tu promedio o mejor."     # lo sin Pixel no es «la peor caída»
+
+
+def test_embudo_sin_promedio_ni_detalle_no_inventa(sembrado):
+    import resultados as r
+    pasos = {"impresiones": 1000, "clics_enlace": 20, "visitas_pagina": 15, "carrito": 1, "pago_iniciado": 1, "compras_meta": 1}
+    assert r.embudo_desde_sumas(pasos, None)["frase"] is None
+    assert all(p["prom"] is None for p in r.embudo_desde_sumas(pasos, None)["pasos"])
+    db = sembrado["db"]
+    with db.conectar() as con:
+        con.execute(db.metrica_dia.delete())
+    e = r.embudo(r.cargar("acme", r.Filtro(dias=7), AHORA), {"clics_enlace": 2.0})
+    assert [p["valor"] for p in e["pasos"]] == [None] * 6 and e["frase"] is None     # «cargando», no ceros
+    assert not any(p["sin_datos"] for p in e["pasos"])
+
+
+def test_promedio_embudo_es_del_proyecto_y_pide_dos_experimentos(sembrado):
+    import experimentos as ex
+    import resultados as r
+    db = sembrado["db"]
+    clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_dos")
+    e2 = ex.crear("acme", "Dos", PAISES, "OUTCOME_TRAFFIC", 7, 1.0, "https://t.co/p", "COP")
+    ep = ex.agregar_pieza("acme", e2, clon, "CO")
+    assert r.promedio_embudo("acme") is None                    # e2 todavía sin impresiones
+    _dia(db, ep, "2026-10-01", impresiones=1000, clics_enlace=10, visitas_pagina=5, carrito=2, pago_iniciado=1,
+         compras_meta=1)
+    p = r.promedio_embudo("acme")
+    # e1 suma 8000 / 132 / 60 / 16 / 8 / 8 y e2 1000 / 10 / 5 / 2 / 1 / 1: nada del experimento de «otro»
+    assert set(p) == {"clics_enlace", "visitas_pagina", "carrito", "pago_iniciado", "compras_meta"}
+    assert p["clics_enlace"] == pytest.approx(142 / 9000 * 100) and p["visitas_pagina"] == pytest.approx(65 / 142 * 100)
+    assert p["carrito"] == pytest.approx(18 / 65 * 100) and p["pago_iniciado"] == pytest.approx(9 / 18 * 100)
+    assert p["compras_meta"] == pytest.approx(100.0)
+    assert r.promedio_embudo("otro") is None and r.promedio_embudo("nadie") is None
+
+
+def test_embudo_contra_el_promedio_en_una_carga_real(sembrado):
+    import experimentos as ex
+    import resultados as r
+    db = sembrado["db"]
+    clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_dos")
+    e2 = ex.crear("acme", "Dos", PAISES, "OUTCOME_TRAFFIC", 7, 1.0, "https://t.co/p", "COP")
+    ep = ex.agregar_pieza("acme", e2, clon, "CO")
+    _dia(db, ep, "2026-10-01", impresiones=1000, clics_enlace=10, visitas_pagina=5, carrito=2, pago_iniciado=1,
+         compras_meta=1)
+    prom = r.promedio_embudo("acme")
+    uno = r.embudo(r.cargar("acme", r.Filtro(dias=7, experimento_id=sembrado["e1"]), AHORA), prom)
+    assert {p["clave"]: p["prom"] for p in uno["pasos"]}["clics_enlace"] == pytest.approx(142 / 9000 * 100)
+    assert uno["frase"] == "Todos los pasos están en tu promedio o mejor."           # e1 pesa casi todo el promedio
+    dos = r.embudo(r.cargar("acme", r.Filtro(dias=7, experimento_id=e2), AHORA), prom)
+    assert dos["pasos"][0]["valor"] == 1000 and dos["pasos"][1]["pct"] == pytest.approx(1.0)
+    assert dos["frase"] == "La caída más grande está en «Clics en el enlace»: 1,0 % contra 1,6 % de tu promedio."
+    todo = r.embudo(r.cargar("acme", r.Filtro(dias=7), AHORA), None)
+    assert todo["frase"] is None and todo["pasos"][0]["valor"] == 9000        # sin promedio, sin frase
+
+
+def test_embudo_en_ingles():
+    import idiomas
+    import resultados as r
+    pasos = {"impresiones": 1000, "clics_enlace": 20, "visitas_pagina": 15, "carrito": 1, "pago_iniciado": 1, "compras_meta": 1}
+    prom = {"clics_enlace": 2.0, "visitas_pagina": 70.0, "carrito": 12.0, "pago_iniciado": 40.0, "compras_meta": 50.0}
+    with idiomas.en_idioma("en"):
+        e = r.embudo_desde_sumas(pasos, prom)
+        assert e["pasos"][3]["etiqueta"] == "Added to cart"
+        assert e["frase"] == "The biggest drop is at “Added to cart”: 6.7 % vs 12.0 % of your average."
+        todo = r.embudo_desde_sumas(pasos, {"clics_enlace": 2.0, "visitas_pagina": 70.0})
+        assert todo["frase"] == "Every step is at your average or better."
+
+
+def test_desgloses_suman_solo_lo_del_proyecto(sembrado):
+    import resultados as r
+    db = sembrado["db"]
+    with db.conectar() as con:
+        for ep, dim, clave, gasto in ((sembrado["ep_v"], "ubicacion", "instagram|instagram_reels", 30.0),
+                                      (sembrado["ep_v"], "ubicacion", "facebook|feed", 10.0),
+                                      (sembrado["ep_v"], "edad_genero", "25-34|female", 40.0),
+                                      (sembrado["ep_o"], "ubicacion", "instagram|instagram_reels", 999.0)):
+            con.execute(db.metrica_desglose.insert().values(experimento_pieza_id=ep, dimension=dim, clave=clave,
+                        impresiones=100, clics_enlace=2, gasto=gasto, vistas_3s=0, thruplay=0, compras_meta=0,
+                        ingresos_meta=0.0, actualizado_en=AHORA))
+    d = r.desgloses(r.cargar("acme", r.Filtro(dias=7), AHORA))
+    assert [u["gasto"] for u in d["ubicacion"]] == [30.0, 10.0]
+    assert d["ubicacion"][0]["pct_gasto"] == pytest.approx(75.0) and "Reels" in d["ubicacion"][0]["etiqueta"]
+    assert d["edad"][0]["clave"] == "25-34" and d["genero"][0]["clave"] == "female" and d["metrica"] == "ctr"
+
+
+def test_desgloses_edad_genero_dispositivo_region_y_roas(sembrado):
+    import resultados as r
+    db, ep = sembrado["db"], sembrado["ep_v"]
+    _desglose(db, ep, "edad_genero", "25-34|female", gasto=40.0, impresiones=1000, clics_enlace=20, ingresos_meta=120.0)
+    _desglose(db, ep, "edad_genero", "25-34|male", gasto=20.0, impresiones=500, clics_enlace=5)
+    _desglose(db, ep, "edad_genero", "35-44|female", gasto=10.0, impresiones=200, clics_enlace=2, ingresos_meta=30.0)
+    _desglose(db, ep, "edad_genero", "Unknown|unknown", gasto=1.0)
+    _desglose(db, ep, "dispositivo", "mobile_app", gasto=50.0)
+    _desglose(db, ep, "dispositivo", "desktop", gasto=20.0)
+    _desglose(db, ep, "dispositivo", "mobile_web", gasto=5.0)
+    for i in range(12):
+        _desglose(db, ep, "region", f"Region {i:02d}", gasto=float(i + 1))
+    d = r.desgloses(r.cargar("acme", r.Filtro(dias=7), AHORA))
+    assert d["metrica"] == "roas"
+    assert [(x["clave"], x["gasto"]) for x in d["edad"]] == [("25-34", 60.0), ("35-44", 10.0), ("Unknown", 1.0)]
+    primera = d["edad"][0]
+    assert primera["impresiones"] == 1500 and primera["ctr"] == pytest.approx(25 / 1500 * 100)
+    assert primera["roas"] == pytest.approx(120.0 / 60.0) and primera["pct_gasto"] == pytest.approx(60 / 71 * 100)
+    assert d["edad"][2]["etiqueta"] == "Sin dato" and d["edad"][0]["etiqueta"] == "25-34"
+    assert [(x["clave"], x["etiqueta"]) for x in d["genero"]] == [("female", "Mujeres"), ("male", "Hombres"),
+                                                                    ("unknown", "Sin dato")]
+    assert [x["etiqueta"] for x in d["dispositivo"]] == ["Celular (app)", "Computador", "Celular (web)"]
+    assert len(d["region"]) == 10 and d["region"][0]["clave"] == "Region 11" and d["region"][0]["etiqueta"] == "Region 11"
+    assert d["region"][0]["pct_gasto"] == pytest.approx(12 / 78 * 100)       # la parte sobre TODAS las regiones
+    assert d["ubicacion"] == []                                              # sin datos: lista vacía, no error
+
+
+def test_desgloses_etiquetas_de_ubicacion(sembrado):
+    import resultados as r
+    db, ep = sembrado["db"], sembrado["ep_v"]
+    for i, clave in enumerate(("facebook|feed", "instagram|instagram_reels", "instagram|instagram_stories",
+                               "facebook|facebook_stories", "instagram|instagram_explore", "facebook|marketplace",
+                               "facebook|video_feeds", "facebook|instream_video", "facebook|search",
+                               "facebook|right_hand_column", "audience_network|an_classic", "messenger|messenger_inbox",
+                               "threads|threads_stream", "instagram|", "|feed")):
+        _desglose(db, ep, "ubicacion", clave, gasto=float(100 - i))
+    d = r.desgloses(r.cargar("acme", r.Filtro(dias=7), AHORA))
+    et = {u["clave"]: u["etiqueta"] for u in d["ubicacion"]}
+    assert et["facebook|feed"] == "Facebook · Feed" and et["instagram|instagram_reels"] == "Instagram · Reels"
+    assert et["instagram|instagram_stories"] == "Instagram · Historias" and et["facebook|facebook_stories"] == "Facebook · Historias"
+    assert et["instagram|instagram_explore"] == "Instagram · Explorar" and et["facebook|marketplace"] == "Facebook · Marketplace"
+    assert et["facebook|video_feeds"] == "Facebook · Videos" and et["facebook|instream_video"] == "Facebook · En el video"
+    assert et["facebook|search"] == "Facebook · Búsqueda" and et["facebook|right_hand_column"] == "Facebook · Columna derecha"
+    assert et["audience_network|an_classic"] == "Audience Network · an classic"          # sin regla: la clave con espacios
+    assert et["messenger|messenger_inbox"] == "Messenger · messenger inbox" and et["threads|threads_stream"] == "Threads · threads stream"
+    assert et["instagram|"] == "Instagram" and et["|feed"] == "Feed"
+
+
+def test_desgloses_respetan_el_filtro_y_el_idioma(sembrado):
+    import idiomas
+    import resultados as r
+    db = sembrado["db"]
+    _desglose(db, sembrado["ep_v"], "ubicacion", "instagram|instagram_reels", gasto=30.0)
+    _desglose(db, sembrado["ep_i"], "ubicacion", "facebook|feed", gasto=7.0)
+    _desglose(db, sembrado["ep_i"], "edad_genero", "25-34|female", gasto=7.0)
+    solo_mx = r.desgloses(r.cargar("acme", r.Filtro(dias=7, pais="MX"), AHORA))
+    assert [u["clave"] for u in solo_mx["ubicacion"]] == ["facebook|feed"] and solo_mx["ubicacion"][0]["pct_gasto"] == 100.0
+    nada = r.desgloses(r.cargar("acme", r.Filtro(dias=7, experimento_id=999999), AHORA))
+    assert nada == {"ubicacion": [], "edad": [], "genero": [], "dispositivo": [], "region": [], "metrica": "ctr"}
+    c = r.cargar("acme", r.Filtro(dias=7), AHORA)
+    with idiomas.en_idioma("en"):
+        d = r.desgloses(c)
+        assert d["genero"][0]["etiqueta"] == "Women"
+        assert [u["etiqueta"] for u in d["ubicacion"]] == ["Instagram · Reels", "Facebook · Feed"]
+    assert r.desgloses(c)["genero"][0]["etiqueta"] == "Mujeres"
+
+
+def test_paises(sembrado):
+    import resultados as r
+    p = {x["pais"]: x for x in r.paises(r.cargar("acme", r.Filtro(dias=7), AHORA))}
+    assert set(p) == {"CO", "MX"} and p["CO"]["impresiones"] == 4000 and p["CO"]["gasto"] == 40.0
+
+
+def test_paises_dinero_del_motor_y_detalle_de_meta(sembrado):
+    import resultados as r
+    lista = r.paises(r.cargar("acme", r.Filtro(dias=7), AHORA))
+    assert [x["pais"] for x in lista] == ["CO", "MX"]                      # mismo gasto: por código
+    co = lista[0]
+    assert set(co) == {"pais", "impresiones", "clics_enlace", "gasto", "ctr", "roas"}
+    assert co["clics_enlace"] == 86 and co["ctr"] == pytest.approx(86 / 4000 * 100)      # metrica_dia
+    assert co["roas"] == pytest.approx(120.0 / 40.0)                                      # el motor (snapshots)
+    assert lista[1]["clics_enlace"] == 46 and lista[1]["ctr"] == pytest.approx(46 / 4000 * 100)
+    una = r.paises(r.cargar("acme", r.Filtro(dias=7, pais="MX"), AHORA))
+    assert [x["pais"] for x in una] == ["MX"] and una[0]["gasto"] == 40.0
+    assert r.paises(r.cargar("acme", r.Filtro(dias=7, experimento_id=999999), AHORA)) == []
+    todo = {x["pais"]: x for x in r.paises(r.cargar("acme", r.Filtro(dias=0), AHORA))}
+    assert todo["CO"]["gasto"] == 40.0 and todo["CO"]["impresiones"] == 4000
+
+
+def test_paises_desde_el_inicio_cuentan_todo_el_historial(sembrado):
+    """Con un snapshot de 2025 (fuera de los 180 días que se dibujan) el gasto sigue siendo todo el historial,
+    la misma ventana de los indicadores."""
+    import experimentos as ex
+    import resultados as r
+    ex.snapshot(sembrado["ep_v"], {"impresiones": 100, "gasto": 1.0, "clics_enlace": 10}, tomado_en="2025-01-15T12:00:00")
+    c = r.cargar("acme", r.Filtro(dias=0), AHORA)
+    gasto = {i["clave"]: i for i in r.indicadores(c)}["gasto"]["valor"]
+    p = {x["pais"]: x for x in r.paises(c)}
+    assert p["CO"]["gasto"] == 40.0 and p["MX"]["gasto"] == 40.0 and gasto == 80.0 == p["CO"]["gasto"] + p["MX"]["gasto"]
+
+
+def test_paises_sin_gasto_ni_detalle_no_inventan(sembrado):
+    import experimentos as ex
+    import resultados as r
+    db = sembrado["db"]
+    clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_br")
+    e2 = ex.crear("acme", "Brasil", [{"pais": "BR", "idioma": "pt", "presupuesto_dia": 10.0}], "OUTCOME_TRAFFIC", 7,
+                  1.0, "https://t.co/p", "COP")
+    ex.agregar_pieza("acme", e2, clon, "BR")
+    p = {x["pais"]: x for x in r.paises(r.cargar("acme", r.Filtro(dias=7), AHORA))}
+    assert p["BR"]["gasto"] == 0.0 and p["BR"]["roas"] is None             # nunca un ROAS de 0 contra 0
+    assert p["BR"]["impresiones"] is None and p["BR"]["ctr"] is None and p["BR"]["clics_enlace"] is None   # «cargando»
+    assert list(p)[-1] == "BR"                                              # ordenado por gasto
