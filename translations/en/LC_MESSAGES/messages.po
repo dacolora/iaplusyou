@@ -2744,6 +2744,9 @@ msgstr "CPC %(cpc)s > %(cpc_max)s"
 msgid "CPC máximo"
 msgstr "Maximum CPC"
 
+msgid "CPM"
+msgstr "CPM"
+
 #, python-format
 msgid "CPM %(cpm)s"
 msgstr "CPM %(cpm)s"
@@ -2765,6 +2768,9 @@ msgstr "CTR %(ctr)s %%"
 #, python-format
 msgid "CTR %(ctr)s%% < %(ctr_min)s%%"
 msgstr "CTR %(ctr)s%% < %(ctr_min)s%%"
+
+msgid "CTR del enlace"
+msgstr "Link CTR"
 
 msgid "CTR mínimo (%)"
 msgstr "Minimum CTR (%)"
@@ -3870,6 +3876,12 @@ msgstr "Cost"
 #, python-format
 msgid "Costo estimado: %(precio)s"
 msgstr "Estimated cost: %(precio)s"
+
+msgid "Costo por clic"
+msgstr "Cost per click"
+
+msgid "Costo por compra"
+msgstr "Cost per purchase"
 
 msgid "Costo por venta"
 msgstr "Cost per sale"
@@ -7239,6 +7251,9 @@ msgstr "Phrases that can't be changed"
 msgid "Frases que no se pueden cambiar (opcional)"
 msgstr "Phrases that can't be changed (optional)"
 
+msgid "Frecuencia acumulada"
+msgstr "Cumulative frequency"
+
 msgid "Fuente"
 msgstr "Source"
 
@@ -7302,6 +7317,9 @@ msgstr "Winners that are fatiguing (time to make variants)"
 
 msgid "Gancho"
 msgstr "Hook"
+
+msgid "Gancho (3 s)"
+msgstr "Hook (3 s)"
 
 msgid "Gancho débil"
 msgstr "Weak hook"
@@ -12208,6 +12226,9 @@ msgstr "What we sell"
 msgid "Qwen Image Edit Plus"
 msgstr "Qwen Image Edit Plus"
 
+msgid "ROAS"
+msgstr "ROAS"
+
 #, python-format
 msgid "ROAS %(roas)s"
 msgstr "ROAS %(roas)s"
@@ -13957,6 +13978,9 @@ msgstr "Texts from the reference"
 
 msgid "Textos orgánicos (IA)"
 msgstr "Organic captions (AI)"
+
+msgid "ThruPlay"
+msgstr "ThruPlay"
 
 #, python-format
 msgid "ThruPlay %(t)s %%"
