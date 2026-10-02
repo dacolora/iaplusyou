@@ -195,18 +195,22 @@ def png_texto(texto, estilo, formato, ruta, escala_max=1.0):
 
 # --- texto v2 (capa 5c, D5.7, D6.8, D8) ------------------------------------------
 
-_EMOJI_CAPAS = "emoji_capas"     # clave de la fuente de emojis derivada en `_fuente_v2`
 _AIRE = 2                        # px transparentes alrededor de la capa de cada letra
 
 
 @functools.lru_cache(maxsize=32)
 def _fuente_v2(ruta, tam):
-    """La fuente abierta a `tam` px, una vez por (ruta, tamaño). Con `ruta ==
-    _EMOJI_CAPAS`, la copia de la fuente de emojis sin color y con cada glifo en
-    `PUA_CAPAS + glifo` (`fuentes.fuente_emoji_capas`)."""
-    if ruta == _EMOJI_CAPAS:
-        return ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), tam)
+    """La fuente de texto `ruta` abierta a `tam` px, una vez por (ruta, tamaño)."""
     return ImageFont.truetype(ruta, tam)
+
+
+@functools.lru_cache(maxsize=8)
+def _fuente_emoji_v2(tam):
+    """La copia de la fuente de emojis sin color y con cada glifo en `PUA_CAPAS +
+    glifo` (`fuentes.fuente_emoji_capas`) abierta a `tam` px. Caché propia y
+    chica: abierta desde bytes, cada tamaño guarda su copia (≈ 1,5 MB) y el
+    worker del VPS tiene 2 GB."""
+    return ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), tam)
 
 
 def _componer(im, origen, ch, fuente, fill, stroke_width=0, stroke_fill=None):
@@ -280,7 +284,7 @@ def _png_v2(texto, estilo, formato, ruta, escala_max):
         if not capas:
             continue                             # no debería llegar: la maqueta solo manda lo que la tabla cubre
         if fuente_e is None:
-            fuente_e = _fuente_v2(_EMOJI_CAPAS, m["tam"] * f)
+            fuente_e = _fuente_emoji_v2(m["tam"] * f)
         for glifo, c in capas:
             _componer(im, origen, chr(fuentes.PUA_CAPAS + glifo), fuente_e, c or relleno)
     im.save(ruta)

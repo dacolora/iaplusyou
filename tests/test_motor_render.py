@@ -603,3 +603,22 @@ def test_un_emoji_v2_sale_a_color_en_la_final(tmp_path, monkeypatch):
     centro_y = caja["y"] + letra["base"] - (e["asc"] - e["desc"]) * tam / e["upem"] / 2
     r_, _g, b_ = final.getpixel((int(centro_x), int(centro_y)))
     assert r_ > 180 and b_ < 90, (r_, _g, b_)
+    # y es el color de la capa de MÁS ARRIBA que cubre ese punto (las capas van en su orden; al
+    # revés, la llama naranja de afuera taparía la amarilla de adentro: G 144 en vez de 204). El
+    # margen es el de la ida y vuelta por yuv420p del render (medido: 252, 203, 76 por 255,
+    # 204, 77); en el PNG del rasterizador es exacto (test_rasterizar).
+    import io
+    from PIL import ImageDraw, ImageFont
+    fuente = ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), tam)
+    local = (int(letra["x"] + tipografia.ancho("🔥", "Inter-Bold", tam, tabla) / 2),
+             int(letra["base"] - (e["asc"] - e["desc"]) * tam / e["upem"] / 2))
+    cubren = []
+    for gid, c in fuentes.emoji_capas(letra["cp"]):
+        capa = Image.new("L", (clip["ancho_px"], clip["alto_px"]), 0)
+        ImageDraw.Draw(capa).text((tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"])),
+                                  chr(fuentes.PUA_CAPAS + gid), font=fuente, fill=255, anchor="ls")
+        if capa.getpixel(local) == 255:
+            cubren.append(c)
+    arriba = cubren[-1][:3]
+    print(f"\n🔥 en la final: {(r_, _g, b_)}; capa de arriba: {arriba}")
+    assert all(abs(a - b) <= 6 for a, b in zip((r_, _g, b_), arriba)), ((r_, _g, b_), arriba)

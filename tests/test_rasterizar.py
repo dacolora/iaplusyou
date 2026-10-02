@@ -224,3 +224,142 @@ def test_una_capa_translucida_del_emoji_se_compone_encima_de_la_anterior(tmp_pat
     assert len(huecos) > 100                                  # la capa al 20 % sí cae sobre algo opaco
     pix = list(render.getdata())
     assert all(pix[i][3] == 255 for i in huecos)              # compuesta: ahí sigue opaco
+
+
+# ---- Capa 5c (3/9, arreglo): lo que la revisión vio sin prueba ----
+
+ADORNOS = {"contorno": {"color": "#FF0000", "grosor": 0.003},                  # 6 px
+           "sombra": {"color": "#0000FF", "dx": 0.005, "dy": 0.005},          # 10 px
+           "fondo": {"color": "#00FF00", "opacidad": 1.0, "radio": 0.0105,    # radio 20 px
+                     "relleno_x": 0.02, "relleno_y": 0.02, "ancho": None}}
+
+
+def _palo_de_la_h(tam, fila_rel):
+    """(izquierda, derecha) de la tinta del primer palo de la «H» de Inter Bold a `tam` px en
+    la fila `fila_rel` (relativa a la línea de base), medidos desde el origen de la letra."""
+    mascara, (dx, dy) = ImageFont.truetype(r.ruta_fuente("Inter-Bold"), tam).getmask2("H", anchor="ls")
+    fila = fila_rel - dy
+    xs = [x for x in range(mascara.size[0]) if mascara.getpixel((x, fila)) > 128]
+    izq = xs[0]
+    der = izq
+    while der + 1 < mascara.size[0] and mascara.getpixel((der + 1, fila)) > 128:
+        der += 1
+    return dx + izq, dx + der
+
+
+def test_a_factor_2_el_contorno_la_sombra_y_el_fondo_tambien_se_multiplican(tmp_path):
+    # D5.7/D8: a f = 2 todo se dibuja ×2 — el trazo del contorno (12 px, no 6), el
+    # desplazamiento de la sombra (20 px, no 10), la caja del fondo y su radio (40 px, no 20).
+    estilo = {**V2, **ADORNOS}
+    ruta = str(tmp_path / "h.png")
+    assert r.png_texto("H", estilo, "9:16", ruta, escala_max=2) == {"ancho_px": 188, "alto_px": 233}
+    im = Image.open(ruta)
+    assert im.size == (376, 466)
+    f = 2
+    m = tipografia.maquetar("H", estilo, "9:16", fuentes.cargar_tabla())
+    g, s = 6 * f, 10 * f
+    letra = m["letras"][0]
+    x0, base = tipografia.redondear(letra["x"] * f), tipografia.redondear(letra["base"] * f)
+    izq, der = _palo_de_la_h(m["tam"] * f, -40)
+    verde, rojo, azul = (0, 255, 0, 255), (255, 0, 0, 255), (0, 0, 255, 255)
+    # contorno: 12 px por fuera del palo (a 1×, a 9 px ya estaría el fondo)
+    assert im.getpixel((x0 + izq - g + 3, base - 40)) == rojo
+    assert im.getpixel((x0 + izq - g - 3, base - 40)) == verde
+    # sombra: el palo corrido 20 px y engordado 12; su borde de abajo, en base + 20 + 12
+    # (a 1× acabaría en base + 10 + 6 y ahí ya estaría el fondo)
+    centro = x0 + (izq + der) // 2 + s
+    assert im.getpixel((centro, base + s + g - 4)) == azul
+    assert im.getpixel((centro, base + s + g + 3)) == verde
+    # fondo: la caja llega a (margen + caja_w)·f, con radio 40 (a 1× la esquina a 9 px sería fondo)
+    margen, caja_w, caja_h = m["margen"] * f, m["caja_w"] * f, m["caja_h"] * f
+    medio = margen + caja_h // 2
+    assert im.getpixel((margen + caja_w - 3, medio)) == verde
+    assert im.getpixel((margen + caja_w + 3, medio))[3] == 0
+    assert m["radio"] == 20
+    assert im.getpixel((margen + 9, margen + 9))[3] == 0                 # fuera del arco de radio 40
+    assert im.getpixel((margen + 20, margen + 20)) == verde              # dentro
+
+
+@pytest.mark.skipif(not fuentes.hay_emoji(), reason="sin la fuente de emojis (D6.5)")
+def test_un_emoji_v2_no_lleva_sombra_ni_contorno(tmp_path):
+    # D5.7: las letras de emoji van solo en la pasada de relleno. El 🔥 con contorno y sombra y
+    # el 🔥 sin nada dan los mismos píxeles en el área del emoji (corrida por lo que el contorno
+    # y la sombra agrandan la caja) más 12 px de aire, que alcanzan a la sombra (10 + 6).
+    tabla = fuentes.cargar_tabla()
+    e = tabla["emoji"]
+    recortes = []
+    for i, est in enumerate(({**V2, "tamano": 0.1042},
+                             {**V2, "tamano": 0.1042, "contorno": ADORNOS["contorno"], "sombra": ADORNOS["sombra"]})):
+        ruta = str(tmp_path / f"{i}.png")
+        r.png_texto("🔥", est, "9:16", ruta)
+        m = tipografia.maquetar("🔥", est, "9:16", tabla)
+        letra, tam = m["letras"][0], m["tam"]
+        ox, oy = tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"])
+        av = tipografia.ancho("🔥", "Inter-Bold", tam, tabla)
+        aire = 12
+        caja = (ox - aire, oy - int(e["asc"] * tam / e["upem"]) - aire - 1,
+                ox + int(av) + aire + 1, oy + int(e["desc"] * tam / e["upem"]) + aire + 1)
+        recortes.append(Image.open(ruta).convert("RGBA").crop(caja))
+    assert recortes[1].getbbox() is not None
+    assert recortes[0].tobytes() == recortes[1].tobytes()
+
+
+def _emoji_de_referencia(texto, estilo):
+    """El PNG que debería salir para un texto v2 de UN emoji: sus capas compuestas en orden,
+    cada una en una capa del lienzo entero, con la fuente derivada; y el color de la capa
+    de más arriba que cubre (alfa 255) cada píxel."""
+    from PIL import ImageDraw
+    tabla = fuentes.cargar_tabla()
+    m = tipografia.maquetar(texto, estilo, "9:16", tabla)
+    letra = m["letras"][0]
+    origen = (tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"]))
+    fuente = ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), m["tam"])
+    lienzo = Image.new("RGBA", (m["ancho_px"], m["alto_px"]), (0, 0, 0, 0))
+    mascaras = []
+    for gid, c in fuentes.emoji_capas(letra["cp"]):
+        capa = Image.new("RGBA", lienzo.size, (0, 0, 0, 0))
+        ImageDraw.Draw(capa).text(origen, chr(fuentes.PUA_CAPAS + gid), font=fuente, fill=c or r.color(estilo["color"]),
+                                  anchor="ls")
+        lienzo.alpha_composite(capa)
+        mascaras.append((capa.getchannel("A"), c or r.color(estilo["color"])))
+
+    def arriba(xy):
+        cubre = [c for alfa, c in mascaras if alfa.getpixel(xy) == 255]
+        return cubre[-1] if cubre else None
+    return lienzo, arriba, m
+
+
+@pytest.mark.skipif(not fuentes.hay_emoji(), reason="sin la fuente de emojis (D6.5)")
+def test_las_capas_del_emoji_van_en_su_orden(tmp_path):
+    # D6.8: de abajo hacia arriba, como las da `emoji_capas`. Al revés, la llama amarilla de
+    # adentro quedaría tapada por la naranja de afuera.
+    estilo = {**V2, "tamano": 0.1042}
+    ruta = str(tmp_path / "f.png")
+    r.png_texto("🔥", estilo, "9:16", ruta)
+    render = Image.open(ruta).convert("RGBA")
+    referencia, arriba, m = _emoji_de_referencia("🔥", estilo)
+    tabla = fuentes.cargar_tabla()
+    e, letra, tam = tabla["emoji"], m["letras"][0], m["tam"]
+    centro = (int(letra["x"] + tipografia.ancho("🔥", "Inter-Bold", tam, tabla) / 2),
+              int(letra["base"] - (e["asc"] - e["desc"]) * tam / e["upem"] / 2))
+    esperado = arriba(centro)
+    assert esperado == (255, 204, 77, 255)                               # el centro es de la llama de adentro
+    assert all(abs(a - b) <= 2 for a, b in zip(render.getpixel(centro), esperado)), (render.getpixel(centro), esperado)
+    assert render.tobytes() == referencia.tobytes()
+
+
+def test_la_sombra_translucida_se_compone_sobre_el_fondo(tmp_path):
+    # D5.7: cada letra se COMPONE sobre lo que hay debajo. Con `draw.text` directo, la sombra
+    # al 78 % (#000000C8) reemplazaría el alfa del fondo opaco y dejaría ver el video por ahí.
+    estilo = {**V2, "sombra": {"color": "#000000C8", "dx": 0.005, "dy": 0.005}, "fondo": ADORNOS["fondo"]}
+    ruta = str(tmp_path / "s.png")
+    r.png_texto("H", estilo, "9:16", ruta)
+    im = Image.open(ruta)
+    m = tipografia.maquetar("H", estilo, "9:16", fuentes.cargar_tabla())
+    letra = m["letras"][0]
+    x0, base = tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"])
+    izq, der = _palo_de_la_h(m["tam"], -10)
+    solo_sombra = (x0 + (izq + der) // 2 + 10, base + 6)       # debajo de la línea de base: el relleno no llega
+    px = im.getpixel(solo_sombra)
+    assert px[3] == 255, px
+    assert all(abs(a - b) <= 2 for a, b in zip(px[:3], (0, 55, 0))), px    # negro al 78 % sobre verde
