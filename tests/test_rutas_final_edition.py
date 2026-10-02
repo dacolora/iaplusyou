@@ -561,6 +561,10 @@ def test_plantilla_con_guion_y_finales_renderiza():
     # «Finalizados» (el selector del JS no cuenta).
     assert len(re.findall(r'data-cf="[\w-]+"', tarjetas)) == 2
     assert "1 produciéndose" in tarjetas and "1 con error" in tarjetas
+    # Cada final, una bandera con su estado (la lista en verde, la viva
+    # brillando, la de error en rojo).
+    assert 'class="fe-bandera-ok" title="es_CO' in tarjetas and 'class="fe-bandera-vivo" title="en_US' in tarjetas
+    assert 'class="fe-bandera-error" title="pt_BR' in tarjetas
     assert "Final de Producto" in tarjetas
     # I4: es_CO ya tiene una final -> hint + checkbox marcado para confirm(); en_US y pt_BR no.
     assert "ya producida — se reemplaza" in html
@@ -597,6 +601,21 @@ def test_plantilla_ofrece_mis_voces_solo_si_hay():
     assert '<option value="vp:7">Astrid</option>' in selector_voz     # en el selector «Voz», no en otro
     sin = env.get_template("_final_detalle_respuesta.html").render(**ctx, mis_voces_fe=[])
     assert "Mis voces" not in sin
+
+
+def test_tablero_final_degradada_es_finalizada_y_su_bandera_va_en_verde():
+    """Una «degradada» (sin voz o sin música) es un video terminado: va a
+    Finalizados con su aviso, y en la tarjeta de su video que sigue en edición
+    (otra final con error) su bandera es «lista», no roja."""
+    env = _entorno_plantilla()
+    base = {"video_url": "https://r2/f.mp4", "url_miniatura": None, "duracion_s": 8.0, "costo_usd": None,
+            "capas": {}, "guion": None, "trabajo": None}
+    finales = [dict(base, id="cf_1__es_CO", idioma="es", pais="CO", estado="degradada", error=None),
+               dict(base, id="cf_1__en_US", idioma="en", pais="US", estado="error", error="ffmpeg", video_url=None)]
+    tarjetas = _tab_final(env, [_item_video_listo(finales=finales)])
+    assert 'class="fe-bandera-ok" title="es_CO' in tarjetas and 'class="fe-bandera-error" title="en_US' in tarjetas
+    assert 'data-cf="cf_1__es_CO"' in tarjetas and "Sin voz/música" in tarjetas
+    assert 'data-cf="cf_1__en_US"' not in tarjetas
 
 
 def test_plantilla_imagen_no_muestra_final_edition():

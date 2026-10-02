@@ -52,10 +52,10 @@
           {% if r.con_error %}<li class="fe-chip-error">{{ ngettext('%(num)d con error', '%(num)d con error', r.con_error) }}</li>{% endif %}
         </ul>
         {% if item.finales %}
-        <ul class="fe-destinos">
+        <ul class="fe-banderas">
           {% for f in item.finales %}
           {% set _estado = 'ok' if f.estado in ('listo', 'degradada') else ('vivo' if (f.estado == 'generando' and f.trabajo) else 'error') %}
-          <li class="fe-destino-{{ _estado }}" title="{{ f.idioma }}_{{ f.pais }} · {% if _estado == 'ok' %}{{ _('lista') }}{% elif _estado == 'vivo' %}{{ _('produciéndose') }}{% else %}{{ _('con error') }}{% endif %}">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else f.pais }}</li>
+          <li class="fe-bandera-{{ _estado }}" title="{{ f.idioma }}_{{ f.pais }} · {% if _estado == 'ok' %}{{ _('lista') }}{% elif _estado == 'vivo' %}{{ _('produciéndose') }}{% else %}{{ _('con error') }}{% endif %}">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else f.pais }}</li>
           {% endfor %}
         </ul>
         {% endif %}

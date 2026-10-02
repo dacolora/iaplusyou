@@ -114,3 +114,12 @@ def test_cifras_del_tablero():
     assert t["cifras"] == {"en_edicion": 1, "produciendo": 1, "finalizados": 3, "paises": 2, "costo_usd": 0.75,
                            "elegibles": 3}
     assert tablero.armar([c], {})["cifras"]["costo_usd"] is None
+
+
+def test_lo_que_tiene_un_trabajo_vivo_va_primero():
+    """Su barra tiene que quedar entre las tarjetas pintadas (24) para que la
+    página se recargue sola, aunque el video sea viejo (revisión, 2026-10-02)."""
+    viejo = _video("cf_viejo", creado_en="2026-08-01T10:00:00", trabajo_editor={"job_id": "j_ed"})
+    nuevo = _video("cf_nuevo", creado_en="2026-09-20T10:00:00", guion_base={"bloques": []})
+    en, _, _ = _columna([nuevo, viejo], {"cf_nuevo": [_edicion("2026-10-01T08:00:00")]})
+    assert en == ["cf_viejo", "cf_nuevo"]

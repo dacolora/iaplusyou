@@ -89,7 +89,11 @@ def armar(items, ediciones_por_cf):
         if r["en_edicion"]:
             en_edicion.append((item, r))
         finalizados += [(item, f) for f in item.get("finales") or [] if f.get("estado") in LISTAS]
-    en_edicion.sort(key=lambda par: par[1]["actividad"], reverse=True)
+    # Lo que tiene un trabajo vivo va primero: su barra (data-poll-job) tiene
+    # que quedar entre las tarjetas pintadas para que la página se recargue
+    # sola al terminar, y «&abrir=editor» encuentre la tarjeta (revisión
+    # del tablero, 2026-10-02). Después, lo último que se movió.
+    en_edicion.sort(key=lambda par: (bool(par[1]["trabajos"]), par[1]["actividad"]), reverse=True)
     finalizados.sort(key=lambda par: _fecha_final(par[1]), reverse=True)
     costo = sum(f.get("costo_usd") or 0 for _, f in finalizados)
     cifras = {

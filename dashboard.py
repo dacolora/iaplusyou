@@ -3351,6 +3351,34 @@ def _ctx_items_cf(cliente):
     }
 
 
+def _job_final_vivo(cliente, cf_id, f, ctx):
+    """El trabajo vivo que está produciendo esa final, o None. Hay dos: el de
+    la vía automática (`tareas_fe.job_id_final`) y el «Producir» del editor
+    (`tareas_edicion.job_id_producir`, uno por edición). Sin mirar el segundo,
+    una final que se producía desde el editor parecía interrumpida («con
+    error» en el tablero, sin barra que recargue la página; revisión del
+    tablero, 2026-10-02). Las ediciones del proyecto se leen una sola vez y
+    solo si hace falta (una final «generando» sin trabajo automático)."""
+    if f.get("estado") != "generando":
+        return None
+    jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
+    if trabajos.en_curso(jid):
+        return jid
+    if f.get("variante"):
+        return None          # el editor no produce variantes
+    if "ediciones_ids_por_cf" not in ctx:
+        ids = {}
+        for e in ediciones.listar(cliente):
+            if e.get("cf_id"):
+                ids.setdefault(e["cf_id"], []).append(e["id"])
+        ctx["ediciones_ids_por_cf"] = ids
+    for eid in ctx["ediciones_ids_por_cf"].get(cf_id, []):
+        jid_editor = tareas_edicion.job_id_producir(cliente, eid, f["idioma"], f["pais"])
+        if trabajos.en_curso(jid_editor):
+            return jid_editor
+    return None
+
+
 def _hijas_b(data):
     """cf_ids que ya tienen una hija de versión B (creative_flow.duplicar la
     crea con derivado_de=cf_id, variante="B"), en UNA pasada: antes cada
@@ -3424,8 +3452,8 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx, ligero=False):
         jid_editor = tareas_edicion.job_id_desde_clon(cliente, cf_id)
         item["trabajo_editor"] = {"job_id": jid_editor} if trabajos.en_curso(jid_editor) else None
         for f in ctx["finales_por_cf"].get(cf_id, []):
-            jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
-            f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
+            jid = _job_final_vivo(cliente, cf_id, f, ctx)
+            f["trabajo"] = {"job_id": jid} if jid else None
             item["finales"].append(f)
     # Doctrina, bloque 3: revisión de la pieza terminada (video o imagen).
     # Las reglas son gratis y se calculan al renderizar; la revisión de

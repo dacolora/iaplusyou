@@ -3735,8 +3735,8 @@ msgstr "Cut"
 msgid "Cortes"
 msgstr "Cuts"
 
-msgid "Costaron las finales"
-msgstr "Final cuts cost"
+msgid "Costaron las finales listas"
+msgstr "Ready final cuts cost"
 
 msgid "Costo"
 msgstr "Cost"

@@ -227,6 +227,11 @@ def test_final_js_abre_por_enlace_aunque_la_tarjeta_no_este():
     js = _plantilla("_tab_final.html")
     assert "template.generado-detalle" not in js and "data-detalle" in _plantilla("_final_tarjetas.html")
     assert "fe_detalle_video" in js and "URL_DETALLE" in js and "abrirDetalleRemoto(" in js and "iniciarEditoresAngulo" in js
+    # Tablero (2026-10-02): «&abrir=editor» busca la tarjeta en «En edición»,
+    # y elegir un video del selector lo cierra antes de abrir el detalle.
+    assert "panel.querySelector('#fe-editando .generado[data-cf=\"' + CSS.escape(cf)" in js
+    assert "if (elegir.contains(card)) elegir.close();" in js
+    assert "if (e.target.closest('[data-fe-elegir]')) { abrirElegir(); return; }" in js
 
 
 def test_detalle_muestra_el_estado_en_palabras(app):
@@ -235,3 +240,89 @@ def test_detalle_muestra_el_estado_en_palabras(app):
     cf = _sembrar(1)[0]
     html = c.get(f"/cliente/acme/creative_flow/{cf}/detalle").get_data(as_text=True)
     assert '<span class="tag-estado">Lista</span>' in html and ">video_listo<" not in html
+
+
+# ------------------------------------------------- Tablero de Final edition (2026-10-02)
+
+def _vivo(tipo, job_id):
+    import cola
+    cola.encolar(tipo, {"cliente": "acme"}, cliente="acme", job_id=job_id)
+    return job_id
+
+
+def test_final_tablero_cada_barra_una_sola_vez_y_el_selector_sin_barras(app):
+    """Con guion, editor y una final vivos a la vez, cada `trabajo-<job>` sale
+    una sola vez en la página (una tapa visible y las demás ocultas), y el
+    selector «+ Nueva» no pinta barras: un id repetido confunde al sondeo."""
+    import creative_flow
+    from tareas import edicion as tareas_edicion
+    from tareas import final_edition as tareas_fe
+    (cf,) = _sembrar(1, guion=True)
+    _sembrar(2, desde=1)
+    creative_flow.crear_final("acme", cf, "en", "US")
+    jobs = [_vivo("final_guion", tareas_fe.job_id_guion("acme", cf)),
+            _vivo("edicion_desde_clon", tareas_edicion.job_id_desde_clon("acme", cf)),
+            _vivo("final_producir", tareas_fe.job_id_final("acme", cf, "en", "US"))]
+    c = app["c"]
+    html = c.get("/cliente/acme").get_data(as_text=True)
+    for jid in jobs:
+        assert html.count(f'id="trabajo-{jid}"') == 1, jid
+        assert html.count(f'data-poll-job="{jid}"') == 1, jid
+    elegir = c.get("/cliente/acme/final/tarjetas?lista=elegir").get_data(as_text=True)
+    assert elegir.count('class="generado fe-elegible"') == 3 and "data-poll-job" not in elegir
+
+
+def test_final_producida_desde_el_editor_cuenta_como_produciendose(app):
+    """«Producir» del editor encola `edicion_producir` con su propio job_id
+    (uno por edición): la final no es «con error» mientras se produce, lleva
+    su barra y suma en «Produciéndose» (revisión del tablero, 2026-10-02)."""
+    import creative_flow
+    import ediciones
+    from final_edition import documento
+    from final_edition import tablero
+    from tareas import edicion as tareas_edicion
+    (cf,) = _sembrar(1)
+    ed = ediciones.crear("acme", "video", "Mi corte", documento.nuevo_video("9:16"), cf_id=cf, creada_por="editor")
+    creative_flow.crear_final("acme", cf, "es", "CO")
+    jid = _vivo("edicion_producir", tareas_edicion.job_id_producir("acme", ed["id"], "es", "CO"))
+    dashboard = app["dashboard"]
+    t = tablero.armar(dashboard._creative_flow_items("acme"), dashboard._ediciones_por_cf("acme"))
+    (_item, r), = t["en_edicion"]
+    assert r["produciendo"] == 1 and r["con_error"] == 0 and r["siguiente"] == "produciendo"
+    assert t["cifras"]["produciendo"] == 1
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert html.count(f'data-poll-job="{jid}"') == 1
+    # Sin el trabajo vivo sí es una final interrumpida.
+    (cf2,) = _sembrar(1, desde=1)
+    creative_flow.crear_final("acme", cf2, "es", "CO")
+    t = tablero.armar(dashboard._creative_flow_items("acme"), dashboard._ediciones_por_cf("acme"))
+    assert {i["id"]: r["con_error"] for i, r in t["en_edicion"]} == {cf: 0, cf2: 1}
+
+
+def test_final_editar_despues_y_volver_a_producir_lo_saca_de_en_edicion(app, monkeypatch):
+    """Una edición guardada después de la última final devuelve el video a
+    «En edición»; volver a producir ese destino lo saca (la final lleva su
+    `actualizado_en`: `crear_final` conserva el `creado_en`)."""
+    import creative_flow
+    import db
+    import ediciones
+    from final_edition import documento
+    from final_edition import tablero
+    reloj = iter(f"2026-10-02T10:{m:02d}:00" for m in range(60))
+    monkeypatch.setattr(db, "ahora", lambda: next(reloj))
+    dashboard = app["dashboard"]
+
+    def en_edicion():
+        t = tablero.armar(dashboard._creative_flow_items("acme"), dashboard._ediciones_por_cf("acme"))
+        return [i["id"] for i, _ in t["en_edicion"]]
+
+    (cf,) = _sembrar(1)
+    fid = creative_flow.crear_final("acme", cf, "es", "CO")
+    creative_flow.actualizar_final("acme", fid, estado="listo", url_video="https://r2/f1.mp4")
+    assert en_edicion() == []
+    ed = ediciones.crear("acme", "video", "Mi corte", documento.nuevo_video("9:16"), cf_id=cf, creada_por="editor")
+    ediciones.guardar("acme", ed["id"], documento.nuevo_video("9:16"), ed["version_n"])
+    assert en_edicion() == [cf]
+    creative_flow.crear_final("acme", cf, "es", "CO")
+    creative_flow.actualizar_final("acme", fid, estado="listo", url_video="https://r2/f2.mp4")
+    assert en_edicion() == []
