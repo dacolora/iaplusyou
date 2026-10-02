@@ -2,13 +2,13 @@
    ver_cliente: `tablero` (dashboard._contexto_tablero: total,
    total_triple_whale, meses, generacion_total, resumen (el mes en curso, solo
    para el chip del menú), serie, serie_triple_whale, grafico,
-   grafico_triple_whale, top, alertas, errores — cada parte puede venir None si
-   su cálculo explotó), `experimentos`, `moneda_exp`, `paises_fe`. Arriba el
+   grafico_triple_whale, top, errores — cada parte puede venir None si su
+   cálculo explotó), `experimentos`, `moneda_exp`, `paises_fe`, y `alertas_ctx`
+   (context processor _alertas_sidebar) para la línea de alertas. Arriba el
    total desde el inicio y debajo el mes a mes. Solo lectura: nada de acá gasta
-   ni publica; los botones llevan a la pestaña que sí. #}
+   ni publica; los botones llevan a la pestaña que sí (data-ir-tab: el script
+   vive en cliente.html). #}
 {% set tb = tablero %}
-{% set nombres_tab = {"settings": _("Configuración"), "experimentos": _("Experimentos"),
-                      "creativeflowplus": _("Crear"), "catalogo": _("Catálogo")} %}
 
 {# Gasto real de generación (tabla `gasto`, USD) desde el inicio: al lado de
    la pauta, en su propia moneda. Lleva a Configuración › Gasto, donde está el
@@ -315,7 +315,6 @@
 </section>
 
 {# ---------- top 5 ganadoras ---------- #}
-{% set nombres_nivel = {"alta": _("alta"), "media": _("media"), "baja": _("baja")} %}
 <section class="tb-seccion">
   <div class="tb-seccion-cab"><h3>{{ _('Top 5 ganadoras') }}</h3></div>
   {% if tb.top is none %}
@@ -350,42 +349,14 @@
   {% endif %}
 </section>
 
-{# ---------- alertas ---------- #}
+{# ---------- alertas: la lista vive en la pestaña Alertas; aquí solo el conteo (spec alertas §7, §12.9) ---------- #}
 <section class="tb-seccion">
   <div class="tb-seccion-cab"><h3>{{ _('Alertas') }}</h3></div>
-  {% if tb.alertas is none %}
+  {% if alertas_ctx is not defined or not alertas_ctx %}
   <p class="tag-error">{{ _('No se pudo calcular las alertas.') }}</p>
-  {% elif not tb.alertas %}
+  {% elif alertas_ctx.resumen.n == 0 %}
   <p class="vacio tb-sin-alertas">{{ _('Sin alertas. Todo en orden.') }}</p>
   {% else %}
-  <ul class="tb-alertas">
-    {% for a in tb.alertas %}
-    <li class="tb-alerta tb-alerta-{{ a.nivel }}">
-      <span class="tb-alerta-nivel">{{ nombres_nivel.get(a.nivel, a.nivel) }}</span>
-      <span class="tb-alerta-texto">{{ a.texto }}</span>
-      {% if a.tab == "experimentos" and a.experimento_id %}
-      <a class="tb-alerta-ir" href="?exp={{ a.experimento_id }}#experimentos" data-ir-tab="experimentos">{{ _('Ver experimento →') }}</a>
-      {% else %}
-      <a class="tb-alerta-ir" href="#{{ a.tab }}" data-ir-tab="{{ a.tab }}">{{ _('Ir a %(tab)s →', tab=nombres_tab.get(a.tab, a.tab)) }}</a>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
+  <p class="tb-aviso-alertas">{{ ngettext('%(num)s alerta necesita tu atención', '%(num)s alertas necesitan tu atención', alertas_ctx.resumen.n) }} → <a href="#alertas" data-ir-tab="alertas">{{ _('Ver Alertas') }}</a></p>
   {% endif %}
 </section>
-
-<script>
-  // Los enlaces del tablero a otra pestaña (#experimentos, ?exp=<id>#experimentos)
-  // activan la pestaña sin recargar cuando la URL solo cambia de hash; si
-  // llevan query (?exp=) el navegador recarga y el script de cliente.html
-  // resuelve el hash como siempre.
-  (function () {
-    document.querySelectorAll('#tab-tablero [data-ir-tab]').forEach(function (a) {
-      a.addEventListener('click', function () {
-        if (a.getAttribute('href').indexOf('?') === 0) return;
-        var btn = document.querySelector('.sidebar-item[data-tab="' + a.dataset.irTab + '"]');
-        if (btn) btn.click();
-      });
-    });
-  })();
-</script>

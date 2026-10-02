@@ -50,6 +50,7 @@ import trabajos
 import usuarios
 import idiomas
 import llaves
+import alertas
 import cuentas
 import meta_conexion
 import meta_agencia
@@ -2073,6 +2074,12 @@ def ver_cliente(cliente):
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         aviso_saldo=saldo.vigente("wavespeed"),
+        # Pestaña Alertas: las alertas llegan en `alertas_ctx` (context
+        # processor _alertas_sidebar); aquí solo los nombres, constantes N_.
+        alertas_grupos=alertas.GRUPOS,
+        alertas_nombres_grupo=alertas.NOMBRES_GRUPO,
+        alertas_nombres_nivel=alertas.NOMBRES_NIVEL,
+        alertas_nombres_tab=alertas.NOMBRES_TAB,
         fp_prefill=fp_prefill,
         logos=_logos(cliente),
         referencias_bandeja=referencias_flowplus.listar(cliente),
@@ -4716,12 +4723,14 @@ def _filtro_roas(valor):
 def _calcular_tablero(cliente):
     """Todo lo que pinta la pestaña Tablero, de UNA carga de la base
     (`tablero.cargar_datos`). Cada parte (resumen del mes, serie de 30 días,
-    top de ganadoras, alertas, CSV, gráfico) va en su propio try/except: si
+    top de ganadoras, CSV, gráfico) va en su propio try/except: si
     una explota (Meta caída, tienda rota) llega como None con el nombre y la
     clase del error en `errores` — nunca el mensaje, que podría arrastrar un
     token — y la plantilla muestra «No se pudo calcular X» para esa parte y
     pinta el resto. Si la carga misma falla, cada parte carga por su cuenta
-    (más lento, mismo resultado)."""
+    (más lento, mismo resultado). Las alertas ya no son una parte: las calcula
+    alertas.py (que sigue leyendo `tablero.alertas`) y el Tablero solo pinta
+    su conteo, de `alertas_ctx` (spec alertas §7 y §12.9)."""
     ahora = db.ahora()
     out = {"ahora": ahora, "mes": idiomas.mes_largo(int(ahora[5:7])), "anio": ahora[:4], "errores": []}
     try:
@@ -4742,7 +4751,6 @@ def _calcular_tablero(cliente):
         "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
         "serie_triple_whale": lambda: tablero.serie_diaria_triple_whale(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
         "top": lambda: tablero.top_ganadoras(cliente, datos=datos),
-        "alertas": lambda: tablero.alertas(cliente, ahora, datos=datos),
         "csv": lambda: tablero.csv_mes(cliente, ahora, datos=datos),
     }
     for nombre, fn in partes.items():
@@ -4812,13 +4820,14 @@ def _clave_tablero(cliente):
 
 def invalidar_tablero(cliente=None):
     """Olvida el tablero cacheado de un proyecto, en todos los idiomas (o de
-    todos los proyectos)."""
+    todos los proyectos), y con él sus alertas (spec alertas §5)."""
     with _TABLERO_LOCK:
         if cliente is None:
             _TABLERO_CACHE.clear()
         else:
             for clave_cache in [k for k in _TABLERO_CACHE if k[0] == cliente]:
                 _TABLERO_CACHE.pop(clave_cache, None)
+    invalidar_alertas(cliente)
 
 
 def _contexto_tablero(cliente):
@@ -4840,6 +4849,107 @@ def _contexto_tablero(cliente):
     with _TABLERO_LOCK:
         _TABLERO_CACHE[clave_cache] = (ahora, clave, ctx)
     return ctx
+
+
+# Alertas (spec docs/superpowers/specs/2026-09-20-alertas-design.md §5 y §12):
+# el context processor las pinta en TODA página con <cliente> (burbuja del
+# sidebar, línea del Tablero, pestaña Alertas), así que `alertas.calcular` se
+# guarda ALERTAS_TTL_S por (proyecto, idioma): los títulos salen traducidos al
+# calcular. La caché guarda el cálculo COMPLETO y el rol se filtra al leer
+# (`alertas.visibles(..., calculadas=)`, que además lee los descartes en vivo:
+# una consulta por página). Descartar y restaurar la vacían antes de redirigir
+# (una lista vieja sin la alerta podaría el descarte recién hecho);
+# invalidar_tablero también. Como el tablero, es por proceso: aceptable.
+ALERTAS_TTL_S = 60
+_ALERTAS_CACHE = {}          # (cliente, idioma) -> (monotonic, lista de alertas.calcular)
+_ALERTAS_LOCK = threading.Lock()
+
+
+def invalidar_alertas(cliente=None):
+    """Olvida las alertas calculadas de un proyecto en todos los idiomas (o
+    las de todos los proyectos)."""
+    with _ALERTAS_LOCK:
+        if cliente is None:
+            _ALERTAS_CACHE.clear()
+        else:
+            for clave_cache in [k for k in _ALERTAS_CACHE if k[0] == cliente]:
+                _ALERTAS_CACHE.pop(clave_cache, None)
+
+
+def _alertas_calculadas(cliente):
+    """`alertas.calcular(cliente)` con caché de ALERTAS_TTL_S por proyecto e idioma."""
+    clave_cache = (cliente, idiomas.activo())
+    ahora = time.monotonic()
+    with _ALERTAS_LOCK:
+        entrada = _ALERTAS_CACHE.get(clave_cache)
+        if entrada and ahora - entrada[0] < ALERTAS_TTL_S:
+            return entrada[1]
+    lista = alertas.calcular(cliente)
+    with _ALERTAS_LOCK:
+        _ALERTAS_CACHE[clave_cache] = (ahora, lista)
+    return lista
+
+
+def _contexto_alertas(cliente, rol):
+    """{visibles, descartadas, resumen} para quien mira: el cálculo cacheado,
+    sin las `solo_admin` salvo para un admin y sin lo descartado."""
+    return alertas.visibles(cliente, rol=rol, calculadas=_alertas_calculadas(cliente))
+
+
+@app.context_processor
+def _alertas_sidebar():
+    """`alertas_ctx` para toda página con <cliente> en la URL y sesión: la
+    burbuja del sidebar (también en las páginas de Sprints y Nicho, que no
+    pasan por ver_cliente), la línea del Tablero y la pestaña Alertas. Fuera
+    para los parciales JSON/fetch (sin sidebar) y la landing pública. Si el
+    cálculo revienta, la página sale sin alertas y el log dice solo la clase
+    del error (el mensaje podría arrastrar un token)."""
+    cliente = request.view_args.get("cliente") if request.view_args else None
+    if not cliente or "usuario" not in session or request.endpoint == "landing_cliente" or _quiere_json():
+        return {}
+    try:
+        return {"alertas_ctx": _contexto_alertas(cliente, session.get("rol"))}
+    except Exception as e:  # noqa: BLE001 — sin alertas, pero con página
+        print(f"[aviso] Alertas de {cliente}: {type(e).__name__}")
+        return {}
+
+
+# Lo que llega por formulario (spec alertas §5): fullmatch, no match — con
+# «$» un salto de línea al final pasaría —, y la clave con tope de largo.
+_CLAVE_ALERTA = re.compile(alertas.CLAVE_VALIDA)
+_HUELLA_ALERTA = re.compile(alertas.HUELLA_VALIDA)
+LARGO_MAX_CLAVE_ALERTA = 200
+
+
+def _clave_alerta_del_form():
+    clave = request.form.get("clave") or ""
+    if len(clave) > LARGO_MAX_CLAVE_ALERTA or not _CLAVE_ALERTA.fullmatch(clave):
+        abort(400)
+    return clave
+
+
+@app.route("/cliente/<cliente>/alertas/descartar", methods=["POST"])
+def alertas_descartar(cliente):
+    """Oculta una alerta mientras su situación (huella) no cambie. Solo
+    escribe el descarte: no calcula, no gasta, no lanza nada."""
+    clave = _clave_alerta_del_form()
+    huella = request.form.get("huella") or ""
+    if not _HUELLA_ALERTA.fullmatch(huella):
+        abort(400)
+    alertas.descartar(cliente, clave, huella)
+    invalidar_alertas(cliente)
+    flash(gettext("Alerta descartada."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
+
+
+@app.route("/cliente/<cliente>/alertas/restaurar", methods=["POST"])
+def alertas_restaurar(cliente):
+    """Vuelve a mostrar una alerta descartada."""
+    clave = _clave_alerta_del_form()
+    alertas.restaurar(cliente, clave)
+    invalidar_alertas(cliente)
+    flash(gettext("Alerta restaurada."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
 
 
 @app.route("/cliente/<cliente>/tablero/mes.csv")

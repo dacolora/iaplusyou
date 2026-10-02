@@ -54,7 +54,7 @@ def test_clases_de_encabezado_y_estado_vacio():
         assert clase in bloque
 
 
-PESTANAS = [("tablero", "Tablero"), ("nicho", "Nicho"), ("referentes", "Referentes"),
+PESTANAS = [("tablero", "Tablero"), ("alertas", "Alertas"), ("nicho", "Nicho"), ("referentes", "Referentes"),
             ("creativeflowplus", "Crear"), ("final", "Final edition"), ("experimentos", "Experimentos"), ("sprints", "Sprints"),
             ("catalogo", "Catálogo"), ("settings", "Configuración")]
 

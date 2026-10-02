@@ -60,6 +60,16 @@ def _seccion_tablero(html):
     return html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
 
 
+def _solo_tablero(html):
+    """El panel del Tablero sin el de Alertas, que va justo después."""
+    return html[html.index('<section id="tab-tablero"'):html.index('<section id="tab-alertas"')]
+
+
+def _seccion_alertas(html):
+    ini = html.index('<section id="tab-alertas"')
+    return html[ini:html.index('<section id="tab-', ini + 10)]
+
+
 def _mes_a_mes(tb):
     ini = tb.index('class="tb-meses')
     return tb[ini:tb.index("</table>", ini)]
@@ -94,22 +104,45 @@ def test_tablero_con_datos(app, base_temporal, monkeypatch):
     assert "Final es_CO" in html and "🇨🇴" in html
     assert "ROAS por encima del umbral" in html
     assert f"?exp={eid}#experimentos" in html
-    # Alertas: no hay ninguna que urja salvo que el experimento corriendo lleva 11 h sin métricas.
-    assert "11 h sin métricas nuevas de Meta" in html
+    # Alertas: el experimento corriendo lleva 11 h sin métricas. La lista vive en la pestaña Alertas; el
+    # Tablero solo dice cuántas hay.
+    al = _seccion_alertas(html)
+    assert "11 h sin métricas nuevas de Meta" in al
+    assert "11 h sin métricas nuevas de Meta" not in _solo_tablero(html)
     assert "Descargar CSV del mes" in html and "/cliente/acme/tablero/mes.csv" in html
 
 
 def test_tablero_vacio(app, base_temporal, monkeypatch):
+    import alertas
+    monkeypatch.setattr(alertas, "calcular", lambda cliente, ahora_iso=None: [])
+    app["dashboard"].invalidar_alertas()
     _reloj(monkeypatch)
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     tb = _seccion_tablero(html)
     assert "<h2>Tablero</h2>" in tb
     assert "Crea tu primer experimento" in html
-    assert "Sin alertas" in html
+    assert "Sin alertas. Todo en orden." in _solo_tablero(html)
     assert "sin ventas medibles" in html
     assert "tb-barra" not in html   # sin datos no se pinta un gráfico vacío
     assert "Mes a mes" in tb and 'class="tb-meses' not in tb
     assert "Todavía no hay gasto en ningún mes" in tb
+
+
+def test_tablero_resume_las_alertas_en_una_linea(app, base_temporal, monkeypatch):
+    """Spec alertas §7 y §12.9: la lista vive en la pestaña Alertas; el Tablero dice cuántas hay y enlaza allá."""
+    import alertas
+    lista = [alertas._alerta("llave:r2", alertas.huella(), "bloquea", "puesta_a_punto", "Falta R2", "d", "settings"),
+             alertas._alerta("proyecto:logo", alertas.huella(), "info", "faltantes", "Sin logos", "d", "settings")]
+    monkeypatch.setattr(alertas, "calcular", lambda cliente, ahora_iso=None: [dict(a) for a in lista])
+    app["dashboard"].invalidar_alertas()
+    tb = _solo_tablero(app["c"].get("/cliente/acme").get_data(as_text=True))
+    assert "2 alertas necesitan tu atención" in tb
+    assert 'href="#alertas" data-ir-tab="alertas">Ver Alertas' in tb
+    assert "tb-alerta" not in tb and "Falta R2" not in tb and "Sin logos" not in tb
+    monkeypatch.setattr(alertas, "calcular", lambda cliente, ahora_iso=None: [dict(lista[1])])
+    app["dashboard"].invalidar_alertas()
+    tb = _solo_tablero(app["c"].get("/cliente/acme").get_data(as_text=True))
+    assert "1 alerta necesita tu atención" in tb
 
 
 def test_tablero_pestana_por_defecto_y_sidebar(app, base_temporal):
@@ -154,13 +187,15 @@ def test_contexto_tablero_tolera_una_parte_rota(app, base_temporal, monkeypatch)
         raise RuntimeError("token=SECRETO Meta caída")
     monkeypatch.setattr(tablero, "alertas", _explota)
     ctx = d._contexto_tablero("acme")
-    assert ctx["alertas"] is None
+    assert "alertas" not in ctx                          # el Tablero ya no calcula alertas: lo hace alertas.py
     assert ctx["resumen"] is not None and ctx["serie"] is not None and ctx["top"]
-    assert ctx["errores"] == ["alertas: RuntimeError"]   # sin el mensaje: podría traer un token
+    assert ctx["errores"] == []
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert "No se pudo calcular las alertas" in html
+    # La fuente `tablero` de alertas.py falló: sale en Alertas con solo el nombre de la clase.
+    al = _seccion_alertas(html)
+    assert "No se pudo revisar tablero" in al and "RuntimeError" in al
     assert "SECRETO" not in html
     assert "250 COP" in html and "Final es_CO" in html   # el resto se sigue mostrando
 

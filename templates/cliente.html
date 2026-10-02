@@ -5,6 +5,10 @@
   {% include "_tab_tablero.html" %}
 </section>
 
+<section id="tab-alertas" class="tab-panel" role="tabpanel">
+  {% include "_tab_alertas.html" %}
+</section>
+
 <section id="tab-triplewhale" class="tab-panel" role="tabpanel">
   {% include "_tab_triple_whale.html" %}
 </section>
@@ -53,6 +57,7 @@
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
     var paneles = {
       tablero: document.getElementById('tab-tablero'),
+      alertas: document.getElementById('tab-alertas'),
       triplewhale: document.getElementById('tab-triplewhale'),
       nicho: document.getElementById('tab-nicho'),
       referentes: document.getElementById('tab-referentes'),
@@ -138,6 +143,26 @@
     window.addEventListener('hashchange', function () {
       var t = resolver(location.hash.replace('#', '').split('?')[0]);
       if (paneles[t]) activar(t, true);
+    });
+
+    // «Ir a …» del Tablero y de Alertas (data-ir-tab, y data-ancla opcional):
+    // activan la pestaña sin recargar y, con ancla, llevan a ese elemento — en
+    // Configuración con irAConfig, que además abre su apartado. Sin
+    // preventDefault el hashchange de arriba volvería a subir la página. Con
+    // query (?exp=<id>#experimentos) el navegador recarga y el hash se
+    // resuelve como siempre. Una sola copia para las dos pestañas.
+    document.addEventListener('click', function (ev) {
+      var a = ev.target.closest('#tab-tablero [data-ir-tab], #tab-alertas [data-ir-tab]');
+      if (!a || (a.getAttribute('href') || '').indexOf('?') === 0) return;
+      var btn = document.querySelector('.sidebar-item[data-tab="' + a.dataset.irTab + '"]');
+      if (!btn) return;
+      ev.preventDefault();
+      btn.click();
+      var ancla = a.dataset.ancla;
+      if (!ancla) return;
+      if (a.dataset.irTab === 'settings' && window.irAConfig) { window.irAConfig(ancla); return; }
+      var el = document.getElementById(ancla);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     // Botón que abre un <details> de la página (estado vacío / encabezado:

@@ -4,7 +4,7 @@
    barras llevan data-poll-job y base.html arranca el sondeo. Se importa
    `with context` (usa cliente, url_for y _). #}
 {% macro tarjeta_crear(item) %}
-    <div class="generado" data-cf="{{ item.id }}" data-detalle="{{ url_for('cf_detalle', cliente=cliente, cf_id=item.id) }}" tabindex="0" role="button">
+    <div class="generado" id="cf-{{ item.id }}" data-cf="{{ item.id }}" data-detalle="{{ url_for('cf_detalle', cliente=cliente, cf_id=item.id) }}" tabindex="0" role="button">
       <div class="generado-media">
         {% if item.estado == "video_listo" and item.tipo == "imagen" %}
         <img src="{{ item.video_url }}" alt="" loading="lazy">

@@ -609,8 +609,10 @@ def test_tablero_alerta_ganadora_sin_publicar_y_tile(app, base_temporal, monkeyp
     assert len(al) == 1 and al[0]["nivel"] == "media" and al[0]["tab"] == "experimentos" and al[0]["experimento_id"] == eid
     assert "sin publicar orgánicamente" in al[0]["texto"]
     assert ctx["resumen"]["ganadoras_publicadas"] == 0
-    html = _seccion(_html(app), "tablero")
-    assert "Ganadoras publicadas" in html and "sin publicar orgánicamente" in html
+    pagina = _html(app)
+    # El tile sigue en el Tablero; la alerta vive en la pestaña Alertas (spec alertas §7).
+    assert "Ganadoras publicadas" in _seccion(pagina, "tablero")
+    assert "sin publicar orgánicamente" in _seccion(pagina, "alertas")
     # Publicada este mes → tile 1 y sin alerta.
     org = app["organico"]
     pub = org.crear("acme", pid, "instagram", "x #a #b #c")
@@ -618,8 +620,10 @@ def test_tablero_alerta_ganadora_sin_publicar_y_tile(app, base_temporal, monkeyp
     ctx = tablero.contexto("acme")
     assert ctx["resumen"]["ganadoras_publicadas"] == 1
     assert not [a for a in ctx["alertas"] if a["tipo"] == "ganador_sin_publicar"]
-    html = _seccion(_html(app), "tablero")
-    assert "sin publicar orgánicamente" not in html
+    app["dashboard"].invalidar_alertas()          # las alertas se cachean 60 s; publicar no las invalida
+    pagina = _html(app)
+    assert "sin publicar orgánicamente" not in _seccion(pagina, "alertas")
+    html = _seccion(pagina, "tablero")
     tile = html[html.index("Ganadoras publicadas"):]
     assert "<strong>1</strong>" in tile[:200]
     # Minor #2: la misma ganadora en otra plataforma sigue contando 1 (ganadoras, no publicaciones).
@@ -646,7 +650,7 @@ def test_tablero_alerta_sin_canales_manda_a_configuracion(app, base_temporal, mo
     al = [a for a in tablero.alertas("acme") if a["tipo"] == "ganador_sin_publicar"]
     assert len(al) == 1 and al[0]["tab"] == "settings"
     assert "configura un canal orgánico en Configuración" in al[0]["texto"]
-    html = _seccion(_html(app), "tablero")
+    html = _seccion(_html(app), "alertas")
     assert "configura un canal orgánico en Configuración" in html
     # Sin ganadoras: nada.
     import experimentos as ex

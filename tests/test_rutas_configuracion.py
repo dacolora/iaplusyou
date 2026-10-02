@@ -192,7 +192,7 @@ def test_orden_de_secciones_y_enlace_a_reglas(app):
     # (tienda, Pixel) → Marca (nombre, logos) → Generación (modelos) → Cuenta y
     # avisos (correo) → Gasto.
     orden = ['id="config-puesta-a-punto"', 'id="config-tienda"', 'id="config-pixel"',
-             "<h2>Nombre del proyecto</h2>", "<h2>Logos oficiales</h2>", "Modelos por defecto — Cambiar producto",
+             "<h2>Nombre del proyecto</h2>", 'id="config-logos"', "Modelos por defecto — Cambiar producto",
              "Modelos por defecto — FlowPlus", 'id="config-correo"', 'id="config-gasto"']
     pos = [cfg.index(x) for x in orden]
     assert pos == sorted(pos), list(zip(orden, pos))

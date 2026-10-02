@@ -1,0 +1,470 @@
+"""Pestaña Alertas en dashboard.py (spec docs/superpowers/specs/2026-09-20-alertas-design.md §5-§7 y §12):
+caché de `alertas.calcular` por (proyecto, idioma) con el filtro por rol al leer, el context processor
+`alertas_ctx` (toda página con <cliente>, nunca un parcial JSON ni la landing), las rutas descartar/restaurar,
+la pestaña, la burbuja del sidebar, la navegación «Ir a …» con ancla y que cada ancla que usa alertas.py exista
+en la página. Sin red."""
+import os
+import re
+
+import pytest
+
+import idiomas
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+H64 = "a" * 64
+
+
+@pytest.fixture()
+def app(base_temporal, tmp_path, monkeypatch):
+    import alertas
+    import catalogo_productos
+    import dashboard
+    import estado as estado_mod
+    import proyectos
+    monkeypatch.setenv("FLASK_SECRET_KEY", "clave-de-prueba-larga-1234567890")
+    monkeypatch.setattr(dashboard, "_client_dir", lambda cliente: str(tmp_path / "clientes" / cliente))
+    for mod in (alertas, proyectos, estado_mod, catalogo_productos):
+        monkeypatch.setattr(mod, "BASE_DIR", str(tmp_path))
+    (tmp_path / "clientes" / "acme").mkdir(parents=True)
+    (tmp_path / "clientes" / "otro").mkdir(parents=True)
+    monkeypatch.setattr(dashboard.meta_conexion, "cargar", lambda c: {"moneda": "COP"})
+    monkeypatch.setattr(dashboard.meta_conexion, "estado", lambda c: {"estado": "sin_conectar", "verificado": True, "detalle": {}})
+    monkeypatch.setattr(dashboard.meta_conexion, "estado_pixel", lambda c, solo_cache=False: None)
+    monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda job_id: False)
+    return {"dashboard": dashboard, "alertas": alertas, "c": _sesion(dashboard, "admin", "admin", None), "tmp": tmp_path}
+
+
+def _sesion(dashboard, usuario, rol, cliente):
+    dashboard.app.config["TESTING"] = True
+    c = dashboard.app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = usuario; s["rol"] = rol; s["cliente"] = cliente
+    return c
+
+
+def _cliente_rol_cliente(app):
+    return _sesion(app["dashboard"], "user_acme", "cliente", "acme")
+
+
+def _fijas(app, monkeypatch, lista, llamadas=None):
+    """Reemplaza el cálculo por una lista fija (copias nuevas en cada llamada) y vacía la caché."""
+    def calcular(cliente, ahora_iso=None):
+        if llamadas is not None:
+            llamadas.append(cliente)
+        return [dict(a) for a in lista]
+    monkeypatch.setattr(app["alertas"], "calcular", calcular)
+    app["dashboard"].invalidar_alertas()
+
+
+def _alerta(app, clave, nivel="atencion", grupo="faltantes", titulo=None, detalle="Detalle de prueba.", **kw):
+    al = app["alertas"]
+    return al._alerta(clave, kw.pop("huella", al.huella(clave)), nivel, grupo, titulo or f"Título {clave}", detalle,
+                      kw.pop("tab", "settings"), **kw)
+
+
+def _flashes(c):
+    with c.session_transaction() as s:
+        return [m for _cat, m in s.get("_flashes", [])]
+
+
+def _descartes():
+    import db
+    with db.conectar() as con:
+        return [(f.cliente, f.clave, f.huella) for f in con.execute(db.alerta_descartada.select()).fetchall()]
+
+
+def _html(c, url="/cliente/acme"):
+    r = c.get(url)
+    assert r.status_code == 200, r.status_code
+    return r.get_data(as_text=True)
+
+
+def _tab(html):
+    """El panel de Alertas completo: tiene <section> por grupo, así que se corta en el panel siguiente."""
+    ini = html.index('<section id="tab-alertas"')
+    return html[ini:html.index('<section id="tab-', ini + 10)]
+
+
+def _sidebar(html):
+    ini = html.index('<aside class="sidebar"')
+    return html[ini:html.index("</aside>", ini)]
+
+
+# ---------- caché y context processor ----------
+
+def test_contexto_alertas_cachea_60s_por_proyecto_e_idioma(app, monkeypatch):
+    d = app["dashboard"]
+    llamadas = []
+    _fijas(app, monkeypatch, [], llamadas)
+    reloj = {"t": 1000.0}
+    monkeypatch.setattr(d.time, "monotonic", lambda: reloj["t"])
+    assert d.ALERTAS_TTL_S == 60
+    with d.app.test_request_context("/cliente/acme"):
+        assert d._contexto_alertas("acme", "admin")["resumen"]["n"] == 0 and llamadas == ["acme"]
+        reloj["t"] += 59
+        d._contexto_alertas("acme", "cliente")
+        assert llamadas == ["acme"]                       # dentro del TTL no recalcula, tampoco con otro rol
+        d._contexto_alertas("otro", "admin")
+        assert llamadas == ["acme", "otro"]               # por proyecto
+        with idiomas.en_idioma("en"):
+            d._contexto_alertas("acme", "admin")
+        assert llamadas == ["acme", "otro", "acme"]       # y por idioma: los títulos salen traducidos al calcular
+        reloj["t"] += 1
+        d._contexto_alertas("acme", "admin")
+        assert llamadas == ["acme", "otro", "acme", "acme"]   # pasados 60 s se recalcula
+        d.invalidar_alertas("acme")
+        d._contexto_alertas("acme", "admin"); d._contexto_alertas("otro", "admin")
+        assert llamadas[-1] == "acme" and len(llamadas) == 5  # invalidar un proyecto no toca el otro
+        d.invalidar_tablero()                             # invalidar el tablero también vacía las alertas
+        d._contexto_alertas("otro", "admin")
+        assert llamadas[-1] == "otro" and len(llamadas) == 6
+
+
+def test_contexto_filtra_por_rol_al_leer_sin_recalcular(app, monkeypatch):
+    d = app["dashboard"]
+    llamadas = []
+    _fijas(app, monkeypatch, [_alerta(app, "llave:r2", "bloquea", "puesta_a_punto", solo_admin=True),
+                              _alerta(app, "proyecto:logo", "info")], llamadas)
+    with d.app.test_request_context("/cliente/acme"):
+        admin = d._contexto_alertas("acme", "admin")
+        cliente = d._contexto_alertas("acme", "cliente")
+    assert [a["clave"] for a in admin["visibles"]] == ["llave:r2", "proyecto:logo"]
+    assert admin["resumen"] == {"n": 2, "bloquea": 1, "atencion": 0, "info": 1}
+    assert [a["clave"] for a in cliente["visibles"]] == ["proyecto:logo"]
+    assert cliente["resumen"] == {"n": 1, "bloquea": 0, "atencion": 0, "info": 1}
+    assert llamadas == ["acme"]
+
+
+def test_context_processor_expone_alertas_ctx_y_no_en_json_ni_landing(app, monkeypatch):
+    from flask import session
+    d = app["dashboard"]
+    _fijas(app, monkeypatch, [_alerta(app, "proyecto:logo", "info")])
+    with d.app.test_request_context("/cliente/acme"):
+        session["usuario"] = "admin"; session["rol"] = "admin"
+        assert d._alertas_sidebar()["alertas_ctx"]["resumen"] == {"n": 1, "bloquea": 0, "atencion": 0, "info": 1}
+    with d.app.test_request_context("/cliente/acme", headers={"X-Requested-With": "fetch"}):
+        session["usuario"] = "admin"; session["rol"] = "admin"
+        assert d._alertas_sidebar() == {}                       # parcial por fetch
+    with d.app.test_request_context("/cliente/acme", headers={"Accept": "application/json"}):
+        session["usuario"] = "admin"; session["rol"] = "admin"
+        assert d._alertas_sidebar() == {}                       # JSON
+    with d.app.test_request_context("/cliente/acme"):
+        assert d._alertas_sidebar() == {}                       # sin sesión
+    with d.app.test_request_context("/l/acme"):
+        session["usuario"] = "admin"; session["rol"] = "admin"
+        assert d._alertas_sidebar() == {}                       # landing pública
+    with d.app.test_request_context("/"):
+        session["usuario"] = "admin"; session["rol"] = "admin"
+        assert d._alertas_sidebar() == {}                       # sin <cliente> en la URL
+
+
+def test_una_peticion_json_no_calcula_alertas(app, monkeypatch):
+    llamadas = []
+    _fijas(app, monkeypatch, [_alerta(app, "proyecto:logo", "info")], llamadas)
+    r = app["c"].get("/cliente/acme", headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200 and llamadas == []
+    assert "sidebar-burbuja" not in r.get_data(as_text=True)
+
+
+def test_si_el_calculo_revienta_la_pagina_sale_sin_alertas(app, monkeypatch, capsys):
+    def explota(cliente, ahora_iso=None):
+        raise RuntimeError("token=SECRETO")
+    monkeypatch.setattr(app["alertas"], "calcular", explota)
+    app["dashboard"].invalidar_alertas()
+    html = _html(app["c"])
+    assert "SECRETO" not in html and "sidebar-burbuja" not in html
+    assert "No se pudieron calcular las alertas" in _tab(html)
+    tablero = html[html.index('<section id="tab-tablero"'):html.index('<section id="tab-alertas"')]
+    assert "No se pudo calcular las alertas" in tablero
+    salida = capsys.readouterr().out
+    assert "[aviso] Alertas de acme: RuntimeError" in salida and "SECRETO" not in salida
+
+
+# ---------- rutas descartar / restaurar ----------
+
+def test_descartar_y_restaurar(app, monkeypatch):
+    d = app["dashboard"]
+    llamadas = []
+    a = _alerta(app, "proyecto:guia_marca", ancla="config-marca")
+    _fijas(app, monkeypatch, [a], llamadas)
+    c = app["c"]
+    _html(c)
+    assert len(llamadas) == 1
+    r = c.post("/cliente/acme/alertas/descartar", data={"clave": a["clave"], "huella": a["huella"]})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#alertas")
+    assert _flashes(c) == ["Alerta descartada."]
+    assert _descartes() == [("acme", "proyecto:guia_marca", a["huella"])]
+    tab = _tab(_html(c))
+    assert len(llamadas) == 2                               # descartar vació la caché
+    assert 'id="alertas-faltantes"' not in tab and "Descartadas (1)" in tab and "Título proyecto:guia_marca" in tab
+    r = c.post("/cliente/acme/alertas/restaurar", data={"clave": a["clave"]})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#alertas")
+    assert _flashes(c) == ["Alerta restaurada."]
+    assert _descartes() == []
+    tab = _tab(_html(c))
+    assert len(llamadas) == 3                               # restaurar también
+    assert 'id="alertas-faltantes"' in tab and "Descartadas (" not in tab
+
+
+def test_descartar_invalida_la_cache_antes_de_redirigir(app, monkeypatch):
+    """Una lista cacheada vieja (sin la alerta) podaría el descarte recién hecho: `visibles` borra los descartes
+    cuya alerta no está en la lista. Descartar vacía la caché, así el redirect calcula la lista real."""
+    d = app["dashboard"]
+    a = _alerta(app, "crear:prompt_listo", grupo="decision", tab="creativeflowplus")
+    _fijas(app, monkeypatch, [])
+    with d.app.test_request_context("/cliente/acme"):
+        assert d._contexto_alertas("acme", "admin")["resumen"]["n"] == 0     # caché caliente SIN la alerta
+    monkeypatch.setattr(app["alertas"], "calcular", lambda cliente, ahora_iso=None: [dict(a)])  # la realidad cambió
+    r = app["c"].post("/cliente/acme/alertas/descartar", data={"clave": a["clave"], "huella": a["huella"]})
+    assert r.status_code == 302
+    tab = _tab(_html(app["c"]))
+    assert "Descartadas (1)" in tab
+    assert _descartes() == [("acme", "crear:prompt_listo", a["huella"])]
+
+
+@pytest.mark.parametrize("datos", [
+    {"clave": "sin dos puntos", "huella": H64},
+    {"clave": "llave:r2", "huella": "zz"},
+    {"clave": "llave:r2\n", "huella": H64},                 # re.match con «$» dejaría pasar el salto de línea
+    {"clave": "llave:r2", "huella": H64 + "\n"},
+    {"clave": "llave:r2", "huella": "A" * 64},              # sha256 hex en minúsculas
+    {"clave": "a" * 30 + ":" + "b" * 175, "huella": H64},   # calza con el patrón pero pasa de 200 caracteres
+    {"clave": "llave:r2"},
+    {},
+])
+def test_descartar_valida_clave_y_huella(app, monkeypatch, datos):
+    _fijas(app, monkeypatch, [])
+    assert app["c"].post("/cliente/acme/alertas/descartar", data=datos).status_code == 400
+    assert _descartes() == []
+
+
+@pytest.mark.parametrize("clave", ["<script>", "llave:r2\n", "", "a" * 30 + ":" + "b" * 175])
+def test_restaurar_valida_la_clave(app, monkeypatch, clave):
+    _fijas(app, monkeypatch, [])
+    assert app["c"].post("/cliente/acme/alertas/restaurar", data={"clave": clave}).status_code == 400
+
+
+def test_descartar_una_clave_valida_sin_alerta_redirige(app, monkeypatch):
+    _fijas(app, monkeypatch, [])
+    r = app["c"].post("/cliente/acme/alertas/descartar", data={"clave": "llave:r2", "huella": H64})
+    assert r.status_code == 302 and _descartes() == [("acme", "llave:r2", H64)]
+
+
+def test_rutas_respetan_el_guard_por_cliente(app, monkeypatch):
+    _fijas(app, monkeypatch, [])
+    c = _cliente_rol_cliente(app)
+    r = c.post("/cliente/otro/alertas/descartar", data={"clave": "llave:r2", "huella": H64})
+    assert r.status_code == 302 and "/cliente/acme" in r.headers["Location"]
+    r = c.post("/cliente/otro/alertas/restaurar", data={"clave": "llave:r2"})
+    assert r.status_code == 302 and "/cliente/acme" in r.headers["Location"]
+    assert _descartes() == []
+    sin_sesion = app["dashboard"].app.test_client()
+    r = sin_sesion.post("/cliente/acme/alertas/descartar", data={"clave": "llave:r2", "huella": H64})
+    assert r.status_code == 302 and "/login" in r.headers["Location"] and _descartes() == []
+
+
+def test_post_de_otro_sitio_se_rechaza(app, monkeypatch):
+    _fijas(app, monkeypatch, [])
+    r = app["c"].post("/cliente/acme/alertas/descartar", data={"clave": "llave:r2", "huella": H64},
+                      headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    r = app["c"].post("/cliente/acme/alertas/restaurar", data={"clave": "llave:r2"},
+                      headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert _descartes() == []
+
+
+# ---------- pestaña ----------
+
+def test_pestana_pinta_grupos_resumen_botones_y_descartar(app, monkeypatch):
+    lista = [
+        _alerta(app, "llave:wavespeed", "bloquea", "puesta_a_punto", "Falta la llave de WaveSpeed",
+                ancla="llave-wavespeed", solo_admin=True),
+        _alerta(app, "proyecto:guia_marca", "atencion", "faltantes", "El proyecto no tiene guía de marca", ancla="config-marca"),
+        _alerta(app, "tablero:propuestas_pendientes:7", "atencion", "decision", "«X» tiene 2 propuestas del motor",
+                tab="experimentos", url="?exp=7#experimentos", entidad=7),
+        _alerta(app, "crear:error:cf_1", "atencion", "fallos", "Falló «Sandalia» en Crear", tab="creativeflowplus",
+                ancla="cf-cf_1"),
+        _alerta(app, "proyecto:logo", "info", "faltantes", "Sin logos oficiales", ancla="config-logos"),
+    ]
+    _fijas(app, monkeypatch, lista)
+    html = _html(app["c"])
+    tab = _tab(html)
+    # Panel justo después del Tablero y antes de Configuración (los tests de Configuración recortan desde ahí).
+    assert html.index('<section id="tab-tablero"') < html.index('<section id="tab-alertas"') \
+        < html.index('<section id="tab-triplewhale"') < html.index('<section id="tab-settings"')
+    assert "<h2>Alertas</h2>" in tab and 'class="panel-cabecera-desc"' in tab
+    assert "1 bloquea · 3 piden atención · 1 informativa" in tab
+    pos = []
+    for gid, nombre in (("puesta_a_punto", "Puesta a punto pendiente"), ("faltantes", "Faltantes del proyecto"),
+                        ("decision", "Esperan tu decisión"), ("fallos", "Fallos y errores")):
+        assert f'id="alertas-{gid}"' in tab and nombre in tab
+        pos.append(tab.index(f'id="alertas-{gid}"'))
+    assert pos == sorted(pos)
+    assert tab.count('<li class="alerta alerta-bloquea">') == 1 and tab.count('<li class="alerta alerta-atencion">') == 3
+    assert tab.count('<li class="alerta alerta-info">') == 1
+    assert '<span class="alerta-nivel">bloquea</span>' in tab and '<span class="alerta-nivel">atención</span>' in tab
+    assert "Falta la llave de WaveSpeed" in tab and "Detalle de prueba." in tab
+    # «Ir a …»: pestaña + ancla, o la URL tal cual.
+    assert 'href="#settings" data-ir-tab="settings" data-ancla="llave-wavespeed">Ir a Configuración →' in tab
+    assert 'href="?exp=7#experimentos">Ir a Experimentos →' in tab
+    assert 'href="#creativeflowplus" data-ir-tab="creativeflowplus" data-ancla="cf-cf_1">Ir a Crear →' in tab
+    # Un form de descartar por alerta con su clave y su huella.
+    assert tab.count('action="/cliente/acme/alertas/descartar"') == 5
+    assert f'<input type="hidden" name="huella" value="{lista[0]["huella"]}">' in tab
+    assert '<input type="hidden" name="clave" value="tablero:propuestas_pendientes:7">' in tab
+    assert "Descartadas (" not in tab and "estado-vacio" not in tab
+    assert "<script" not in tab                       # la navegación vive una sola vez en cliente.html
+
+
+def test_pestana_vacia_y_descartadas_con_restaurar(app, monkeypatch):
+    a = _alerta(app, "proyecto:logo", "info", "faltantes", "Sin logos oficiales", ancla="config-logos")
+    _fijas(app, monkeypatch, [a])
+    app["alertas"].descartar("acme", a["clave"], a["huella"])
+    tab = _tab(_html(app["c"]))
+    assert 'class="estado-vacio"' in tab and "Todo en orden" in tab and 'id="alertas-faltantes"' not in tab
+    assert "Descartadas (1)" in tab and "Sin logos oficiales" in tab
+    assert 'action="/cliente/acme/alertas/restaurar"' in tab and 'name="clave" value="proyecto:logo"' in tab
+    assert "Restaurar" in tab
+    _fijas(app, monkeypatch, [])
+    tab = _tab(_html(app["c"]))
+    assert "Todo en orden" in tab and "Descartadas (" not in tab
+
+
+def test_el_detalle_se_pinta_como_texto(app, monkeypatch):
+    """`saldo:wavespeed_recarga` lleva la URL de recarga dentro del detalle, sin `url`: se pinta escapado, nunca
+    como HTML, y el «Ir a …» va a la pestaña."""
+    a = _alerta(app, "saldo:wavespeed_recarga", "bloquea", "puesta_a_punto", "WaveSpeed se quedó sin saldo",
+                detalle='Recarga en https://wavespeed.ai/top-up <b>ya</b>', tab="creativeflowplus", solo_admin=True)
+    _fijas(app, monkeypatch, [a])
+    tab = _tab(_html(app["c"]))
+    assert "Recarga en https://wavespeed.ai/top-up &lt;b&gt;ya&lt;/b&gt;" in tab and "<b>ya</b>" not in tab
+    assert 'href="https://wavespeed.ai' not in tab
+    assert 'href="#creativeflowplus" data-ir-tab="creativeflowplus">Ir a Crear →' in tab
+
+
+def test_un_cliente_no_ve_las_alertas_solo_admin(app, monkeypatch):
+    _fijas(app, monkeypatch, [
+        _alerta(app, "llave:wavespeed", "bloquea", "puesta_a_punto", "Falta la llave de WaveSpeed", solo_admin=True),
+        _alerta(app, "worker:parado", "bloquea", "puesta_a_punto", "El worker no está corriendo", solo_admin=True),
+        _alerta(app, "proyecto:logo", "info", "faltantes", "Sin logos oficiales"),
+    ])
+    html = _html(_cliente_rol_cliente(app))
+    tab = _tab(html)
+    assert "Falta la llave de WaveSpeed" not in html and "El worker no está corriendo" not in html
+    assert "Sin logos oficiales" in tab and "1 informativa" in tab and 'name="clave" value="llave:' not in tab
+    assert '<span class="sidebar-burbuja atencion"' in _sidebar(html)
+    html = _html(app["c"])
+    assert "Falta la llave de WaveSpeed" in _tab(html) and '<span class="sidebar-burbuja bloquea"' in _sidebar(html)
+
+
+# ---------- sidebar ----------
+
+def test_burbuja_del_sidebar_roja_ambar_u_oculta(app, monkeypatch):
+    _fijas(app, monkeypatch, [_alerta(app, "llave:r2", "bloquea", "puesta_a_punto"), _alerta(app, "proyecto:logo", "info")])
+    sb = _sidebar(_html(app["c"]))
+    assert sb.index('data-tab="tablero"') < sb.index('data-tab="alertas"') < sb.index('data-tab="triplewhale"')
+    item = sb[sb.index('data-tab="alertas"'):sb.index('data-tab="triplewhale"')]
+    assert re.search(r'<span class="sidebar-burbuja bloquea"[^>]*>2</span>', item)
+    _fijas(app, monkeypatch, [_alerta(app, "proyecto:logo", "info")])
+    sb = _sidebar(_html(app["c"]))
+    assert re.search(r'<span class="sidebar-burbuja atencion"[^>]*>1</span>', sb) and "sidebar-burbuja bloquea" not in sb
+    _fijas(app, monkeypatch, [_alerta(app, "proyecto:guia_marca", "atencion")])
+    assert '<span class="sidebar-burbuja atencion"' in _sidebar(_html(app["c"]))
+    _fijas(app, monkeypatch, [])
+    html = _html(app["c"])
+    assert "sidebar-burbuja" not in html and 'data-tab="alertas"' in html
+
+
+def test_burbuja_tambien_en_una_pagina_de_sprints(app, monkeypatch):
+    from sprints import datos
+    sid = datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31")
+    _fijas(app, monkeypatch, [_alerta(app, "llave:r2", "bloquea", "puesta_a_punto")])
+    html = _html(app["c"], f"/cliente/acme/sprints/{sid}")
+    assert '<span class="sidebar-burbuja bloquea"' in _sidebar(html) and 'data-tab="alertas"' in html
+
+
+# ---------- navegación y anclas ----------
+
+def test_navegacion_con_ancla_vive_una_vez_en_cliente_html(app, monkeypatch):
+    _fijas(app, monkeypatch, [])
+    html = _html(app["c"])
+    assert "alertas: document.getElementById('tab-alertas')" in html
+    assert html.count("#tab-tablero [data-ir-tab], #tab-alertas [data-ir-tab]") == 1
+    assert "a.dataset.ancla" in html and "scrollIntoView" in html and "window.irAConfig(ancla)" in html
+    tablero = html[html.index('<section id="tab-tablero"'):html.index('<section id="tab-alertas"')]
+    assert "<script" not in tablero                   # el script viejo del Tablero se fue
+
+
+def _anclas_de_alertas():
+    """(literales, prefijos de f-string) de cada `ancla=` de alertas.py."""
+    with open(os.path.join(RAIZ, "alertas.py"), encoding="utf-8") as f:
+        fuente = f.read()
+    literales, prefijos = set(), set()
+    for es_f, valor in re.findall(r'ancla=(f?)"([^"]+)"', fuente):
+        if es_f:
+            prefijos.add(valor.split("{", 1)[0])
+        else:
+            literales.add(valor)
+    return literales, prefijos
+
+
+# Anclas que solo usan alertas `solo_admin` (worker parado): no existen en la página de un cliente.
+SOLO_ADMIN = {"config-puesta-a-punto"}
+
+
+def test_cada_ancla_de_alertas_existe_en_la_pagina(app, monkeypatch):
+    """Una alerta con `ancla` hace scroll hasta ese id: si el id no existe, el botón «Ir a …» deja a la persona
+    arriba de la pestaña sin saber dónde mirar. Cada ancla de alertas.py (literal o de f-string) tiene que estar en
+    la página que ve quien recibe la alerta."""
+    import creative_flow
+    import llaves
+    literales, prefijos = _anclas_de_alertas()
+    assert {"config-cuenta", "config-marca", "config-logos", "config-tienda", "config-correo",
+            "config-canales-organicos", "config-puesta-a-punto"} <= literales
+    # Un prefijo nuevo necesita su comprobación aquí abajo.
+    assert prefijos == {"llave-", "cf-"}, prefijos
+    creative_flow.crear("acme", [], [], [], "Sandalia", 8, "", "A", legado_id="cf_ancla")
+    _fijas(app, monkeypatch, [])
+    admin = _html(app["c"])
+    for ancla in literales:
+        assert f'id="{ancla}"' in admin, ancla
+    for s in llaves.SERVICIOS:
+        if s["id"] != "meta":
+            assert f'id="llave-{s["id"]}"' in admin, s["id"]
+    assert 'id="cf-cf_ancla"' in admin
+    cliente = _html(_cliente_rol_cliente(app))
+    for ancla in literales - SOLO_ADMIN:
+        assert f'id="{ancla}"' in cliente, ancla
+    assert 'id="cf-cf_ancla"' in cliente
+
+
+def test_las_anclas_nuevas_estan_en_su_sitio(app, monkeypatch):
+    _fijas(app, monkeypatch, [])
+    html = _html(app["c"])
+    assert re.search(r'<h2 id="config-marca"[^>]*>Identidad de marca</h2>', html)
+    assert re.search(r'<h2 id="config-logos"[^>]*>Logos oficiales</h2>', html)
+
+
+# ---------- rendimiento ----------
+
+def test_en_frio_las_alertas_no_crecen_con_las_piezas(base_temporal, monkeypatch, tmp_path):
+    """La pestaña Alertas se calcula en cada carga de página (con caché de 60 s). Con la caché fría, 12 piezas
+    más no pueden costar más consultas que el tope de test_perf_pagina_proyecto (con la caché caliente lo vigila
+    esa prueba)."""
+    import dashboard
+    import proyectos
+    from tests.test_perf_pagina_proyecto import _Contador, _sembrar
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
+    (tmp_path / "clientes" / "acme").mkdir(parents=True)
+    c = _sesion(dashboard, "admin", "admin", None)
+    _sembrar(3)
+    dashboard.invalidar_tablero()
+    with _Contador() as pocas:
+        assert c.get("/cliente/acme").status_code == 200
+    _sembrar(12, desde=3)
+    dashboard.invalidar_tablero()
+    with _Contador() as muchas:
+        html = c.get("/cliente/acme").data.decode()
+    assert 'id="tab-alertas"' in html
+    assert muchas.total - pocas.total <= 6, (pocas.total, muchas.total)

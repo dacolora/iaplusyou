@@ -1037,6 +1037,18 @@ msgstr[0] "%(num)d ready video in Create"
 msgstr[1] "%(num)d ready videos in Create"
 
 #, python-format
+msgid "%(num)s alerta"
+msgid_plural "%(num)s alertas"
+msgstr[0] "%(num)s alert"
+msgstr[1] "%(num)s alerts"
+
+#, python-format
+msgid "%(num)s alerta necesita tu atención"
+msgid_plural "%(num)s alertas necesitan tu atención"
+msgstr[0] "%(num)s alert needs your attention"
+msgstr[1] "%(num)s alerts need your attention"
+
+#, python-format
 msgid "%(num)s anuncio"
 msgid_plural "%(num)s anuncios"
 msgstr[0] "%(num)s ad"
@@ -1071,6 +1083,12 @@ msgid "%(num)s avatar propuesto por aprobar"
 msgid_plural "%(num)s avatares propuestos por aprobar"
 msgstr[0] "%(num)s proposed avatar to approve"
 msgstr[1] "%(num)s proposed avatars to approve"
+
+#, python-format
+msgid "%(num)s bloquea"
+msgid_plural "%(num)s bloquean"
+msgstr[0] "%(num)s blocking"
+msgstr[1] "%(num)s blocking"
 
 #, python-format
 msgid "%(num)s cobro(s) a proveedores"
@@ -1121,6 +1139,12 @@ msgstr[0] "%(num)s idea to approve in the sprint “%(nombre)s”"
 msgstr[1] "%(num)s ideas to approve in the sprint “%(nombre)s”"
 
 #, python-format
+msgid "%(num)s informativa"
+msgid_plural "%(num)s informativas"
+msgstr[0] "%(num)s informational"
+msgstr[1] "%(num)s informational"
+
+#, python-format
 msgid "%(num)s lista"
 msgid_plural "%(num)s listas"
 msgstr[0] "%(num)s ready"
@@ -1131,6 +1155,12 @@ msgid "%(num)s país"
 msgid_plural "%(num)s países"
 msgstr[0] "%(num)s country"
 msgstr[1] "%(num)s countries"
+
+#, python-format
+msgid "%(num)s pide atención"
+msgid_plural "%(num)s piden atención"
+msgstr[0] "%(num)s needs attention"
+msgstr[1] "%(num)s need attention"
 
 #, python-format
 msgid "%(num)s pieza"
@@ -1971,6 +2001,12 @@ msgstr "Zoom out"
 
 msgid "Alemania"
 msgstr "Germany"
+
+msgid "Alerta descartada."
+msgstr "Alert discarded."
+
+msgid "Alerta restaurada."
+msgstr "Alert restored."
 
 msgid "Alertas"
 msgstr "Alerts"
@@ -4208,8 +4244,16 @@ msgstr "Download image document (.md)"
 msgid "Descargar el archivo"
 msgstr "Download the file"
 
+#, python-format
+msgid "Descartada el %(fecha)s."
+msgstr "Discarded on %(fecha)s."
+
 msgid "Descartada."
 msgstr "Discarded."
+
+#, python-format
+msgid "Descartadas (%(n)s)"
+msgstr "Discarded (%(n)s)"
 
 msgid "Descartado"
 msgstr "Discarded"
@@ -8997,6 +9041,9 @@ msgstr "What sells most"
 msgid "Lo que necesita tu atención"
 msgstr "What needs your attention"
 
+msgid "Lo que necesita tu atención en este proyecto, revisado cada vez que entras. Una alerta descartada vuelve sola si su situación cambia."
+msgstr "What needs your attention in this project, checked every time you come in. A discarded alert comes back on its own if its situation changes."
+
 msgid "Lo que nunca debe cambiar en este activo"
 msgstr "What must never change in this asset"
 
@@ -9657,6 +9704,9 @@ msgstr "Nothing matches that filter in the most recent part of the file."
 msgid "Nada elegido todavía."
 msgstr "Nothing chosen yet."
 
+msgid "Nada necesita tu atención ahora mismo."
+msgstr "Nothing needs your attention right now."
+
 msgid "Nada que generar"
 msgstr "Nothing to generate"
 
@@ -10223,6 +10273,9 @@ msgstr "Not saved: {mensaje}"
 msgid "No se pudieron armar los clips. Vuelve a intentarlo."
 msgstr "Couldn't assemble the clips. Try again."
 
+msgid "No se pudieron calcular las alertas. Recarga la página; si sigue, avisa a Creatv."
+msgstr "Couldn't work out the alerts. Reload the page; if it keeps happening, let Creatv know."
+
 msgid "No se pudieron cargar los sugeridos."
 msgstr "Couldn't load the suggestions."
 
@@ -10769,6 +10822,9 @@ msgstr "Objective"
 
 msgid "Ocultar el original"
 msgstr "Hide the original"
+
+msgid "Ocultarla hasta que su situación cambie"
+msgstr "Hide it until its situation changes"
 
 msgid "Oferta"
 msgstr "Offer"
@@ -12470,6 +12526,9 @@ msgstr "5xx responses"
 msgid "Restablece tu contraseña de %(plataforma)s"
 msgstr "Reset your password at %(plataforma)s"
 
+msgid "Restaurar"
+msgstr "Restore"
+
 msgid "Resuelto"
 msgstr "Resolved"
 
@@ -14051,6 +14110,9 @@ msgstr "No clear signal yet, good or bad."
 msgid "Todo"
 msgstr "All"
 
+msgid "Todo en orden"
+msgstr "All good"
+
 msgid "Todo en orden: nada que arreglar ahora."
 msgstr "All good: nothing to fix right now."
 
@@ -14857,6 +14919,9 @@ msgstr "Sales in %(monedas)s, account in %(moneda)s: ROAS not comparable, using 
 msgid "Venían de la pestaña Campañas. Se siguen midiendo y se pueden pausar/activar; para lanzar algo nuevo crea un experimento."
 msgstr "These came from the Campaigns tab. They're still measured and can be paused/activated; to launch something new, create an experiment."
 
+msgid "Ver Alertas"
+msgstr "See Alerts"
+
 msgid "Ver análisis completo"
 msgstr "View full analysis"
 
@@ -14880,9 +14945,6 @@ msgstr "See in Ad Library →"
 
 msgid "Ver experimento"
 msgstr "View experiment"
-
-msgid "Ver experimento →"
-msgstr "View experiment →"
 
 msgid "Ver ficha"
 msgstr "See details"
@@ -15693,9 +15755,6 @@ msgstr "avatars"
 #, python-format
 msgid "avatares en %(idioma)s"
 msgstr "avatars in %(idioma)s"
-
-msgid "baja"
-msgstr "low"
 
 #, python-format
 msgid "barrido %(barrido)s"

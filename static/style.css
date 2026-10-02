@@ -3197,3 +3197,65 @@ body.panel-abierto { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .fe-chips .fe-chip-vivo::before, .fe-banderas .fe-bandera-vivo { animation: none; }
 }
+
+/* ============================================================
+   Alertas (2026-10-02) — spec docs/superpowers/specs/2026-09-20-alertas-design.md
+   §6 y §12: la burbuja del sidebar (roja si alguna alerta bloquea, ámbar si
+   no; con la barra plegada, encima del ícono), la pestaña (un grupo por
+   sección, una fila por alerta con el borde del color de su nivel) y la línea
+   del Tablero. Textos largos (un error, una URL de recarga) parten la línea
+   en vez de empujar la página de lado a 375 px. La letra de la burbuja es
+   --bg: sobre --error o --warn el blanco no se lee.
+   ============================================================ */
+.sidebar-item { position: relative; }
+.sidebar-burbuja {
+  margin-left: auto; flex: none; min-width: 1.35rem; height: 1.35rem; padding: 0 .4rem; border-radius: 999px;
+  font-size: .68rem; font-weight: 700; line-height: 1.35rem; text-align: center; color: var(--bg); background: var(--warn);
+}
+.sidebar-burbuja.bloquea { background: var(--error); }
+.sidebar-plegada .sidebar-burbuja {
+  position: absolute; top: .15rem; right: .45rem; margin: 0; min-width: 1.05rem; height: 1.05rem;
+  padding: 0 .25rem; font-size: .58rem; line-height: 1.05rem;
+}
+@media (max-width: 760px) {
+  /* En el menú del celular la barra va siempre con nombres: la burbuja vuelve a su sitio, a la derecha. */
+  .con-sidebar.sidebar-plegada .sidebar-burbuja {
+    position: static; margin-left: auto; min-width: 1.35rem; height: 1.35rem; padding: 0 .4rem;
+    font-size: .68rem; line-height: 1.35rem;
+  }
+}
+
+.alertas-resumen strong { color: var(--text); }
+.alertas-grupo { margin-top: 1.4rem; }
+.alertas-grupo h3 { display: flex; align-items: center; gap: .5rem; margin: 0 0 .6rem; font-size: 1rem; }
+.alertas-n { font-size: .7rem; font-weight: 700; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: .05rem .45rem; }
+.alertas-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.alerta {
+  display: flex; align-items: flex-start; gap: .5rem .8rem; flex-wrap: wrap; padding: .7rem .9rem;
+  border-radius: 10px; background: var(--bg); border: 1px solid var(--border); border-left: 4px solid var(--muted-2);
+  font-size: .86rem; line-height: 1.45;
+}
+.alerta-nivel {
+  flex: none; min-width: 4.2rem; padding-top: .15rem; font-size: .66rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+.alerta-cuerpo { flex: 1 1 18rem; min-width: 0; overflow-wrap: anywhere; }
+.alerta-titulo { display: block; color: var(--text); }
+.alerta-detalle { margin: .2rem 0 0; color: var(--muted); }
+.alerta-acciones { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; max-width: 100%; }
+.alerta-form { margin: 0; }
+.alerta-ir { color: var(--accent-texto); text-decoration: none; font-size: .8rem; white-space: nowrap; }
+.alerta-ir:hover { text-decoration: underline; }
+.alerta-bloquea { border-left-color: var(--error); }
+.alerta-bloquea .alerta-nivel { color: var(--error); }
+.alerta-atencion { border-left-color: var(--tb-warn); }
+.alerta-atencion .alerta-nivel { color: var(--tb-warn); }
+.alerta-descartada { opacity: .75; }
+.alertas-descartadas { margin-top: 1.6rem; }
+.alertas-descartadas summary { color: var(--muted); font-size: .86rem; }
+.alertas-descartadas .alertas-lista { margin-top: .6rem; }
+.tb-aviso-alertas { margin: 0; font-size: .9rem; color: var(--text); }
+.tb-aviso-alertas a { color: var(--accent-texto); }
+@media (max-width: 760px) {
+  .alerta-nivel { min-width: 0; flex-basis: 100%; padding-top: 0; }
+}
