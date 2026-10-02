@@ -599,3 +599,34 @@ def test_verificar_recortes_salta_las_fotos():
     doc = d.validar(doc)
     out = c.verificar_recortes(doc, {4: 10, 1: 5000})
     assert out["pistas"][0]["clips"][0]["transicion"] == {"tipo": "fundido", "duracion_ms": 500}
+
+
+# ---- Capa 5c (3/9): el color de un sticker (`tinte`, spec D11.3) ----
+
+def _imagen_con_capa(**capa):
+    """Un documento imagen 9:16: la principal (material 9, entrada 0) y una capa de imagen de
+    512 × 512 a escala 0,5 (material 5, entrada 1)."""
+    doc = d.nuevo_imagen("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "i1", "inicio_ms": 0, "duracion_ms": 0, "material_id": 9}]
+    transform = {**_TRANSFORM, "escala": 0.5, **capa.pop("transform", {})}
+    doc["pistas"].append({"id": "p_sticker", "tipo": "imagen", "clips": [
+        {"id": "s1", "inicio_ms": 0, "duracion_ms": 0, "material_id": 5, "ancho_px": 512, "alto_px": 512,
+         "transform": transform, "keyframes": [], **capa}]})
+    doc = d.resolver(d.validar(doc), "es", "CO")
+    return c.compilar(doc, {9: "/m/fondo.png", 5: "/m/sticker.png"}).filtergraph
+
+
+def test_una_capa_de_imagen_con_tinte_cambia_el_color_y_conserva_el_alfa():
+    assert "[1:v]format=rgba,lutrgb=r=255:g=212:b=0,scale=256:256[l1]" in _imagen_con_capa(tinte="#FFD400")
+    assert "[1:v]format=rgba,lutrgb=r=225:g=29:b=72,scale=256:256[l1]" in _imagen_con_capa(tinte="#e11d48")
+
+
+def test_el_tinte_va_antes_de_la_opacidad():
+    grafo = _imagen_con_capa(tinte="#FFD400", transform={"opacidad": 0.5})
+    assert "[1:v]format=rgba,lutrgb=r=255:g=212:b=0,scale=256:256,format=rgba,colorchannelmixer=aa=0.5[l1]" in grafo
+
+
+@pytest.mark.parametrize("capa", [{}, {"tinte": None}])
+def test_sin_tinte_la_capa_de_imagen_sale_como_siempre(capa):
+    grafo = _imagen_con_capa(**capa)
+    assert "[1:v]scale=256:256[l1]" in grafo and "lutrgb" not in grafo

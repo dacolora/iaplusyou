@@ -6,7 +6,7 @@ import subprocess
 import pytest
 from PIL import Image
 
-from final_edition import cortes, documento as d, encuadre, fotos, motor
+from final_edition import cortes, documento as d, encuadre, fotos, geometria, motor
 from final_edition.motor import render as r
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures", "documentos", "video_basico.json")
@@ -436,3 +436,170 @@ def test_tres_videos_con_zoom_2_salen_cada_uno_en_su_tramo(tmp_path, medios):
     assert out["tramos"] == 3
     assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
     assert abs(dur - 3.0) <= 0.2
+
+
+# ---- Capa 5c (3/9): el texto v2 y el tinte en una edición de IMAGEN real ----
+# La principal es una imagen negra de 1080 × 1920 hecha con Pillow; el documento pasa por
+# `preparar_rutas` (rasteriza los textos y estampa sus medidas, como la tarea) y `motor.renderizar`
+# lo saca como PNG (sin pérdidas: los píxeles se pueden medir).
+
+_CENTRO = {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"}
+
+
+def _producir_imagen(carpeta, monkeypatch, capas, archivos=None):
+    """(imagen RGB de la final, documento con las medidas estampadas)."""
+    import shutil
+    import materiales
+    import tareas.edicion as te
+    carpeta.mkdir(parents=True, exist_ok=True)
+    negra = str(carpeta / "negra.png")
+    Image.new("RGB", (1080, 1920), (0, 0, 0)).save(negra)
+    archivos = {9: negra, **(archivos or {})}
+
+    def _obtener(cliente, mid, con=None):
+        with Image.open(archivos[mid]) as im:
+            return {"id": mid, "tipo": "imagen", "ancho": im.width, "alto": im.height}
+
+    def _descargar(mat, destino, *a, **k):
+        shutil.copyfile(archivos[mat["id"]], destino)
+        return destino
+    monkeypatch.setattr(materiales, "obtener", _obtener)
+    monkeypatch.setattr(materiales, "descargar", _descargar)
+    doc = d.nuevo_imagen("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "i1", "inicio_ms": 0, "duracion_ms": 0, "material_id": 9}]
+    doc["pistas"] += capas
+    doc = d.resolver(d.validar(doc), "es", "CO")
+    (carpeta / "trabajo").mkdir(exist_ok=True)
+    rutas = te.preparar_rutas("acme", doc, str(carpeta / "trabajo"))
+    out = motor.renderizar(doc, rutas, str(carpeta / "arte.png"))
+    with Image.open(out["archivo"]) as im:
+        return im.convert("RGB"), doc
+
+
+def _pista_texto(literal, estilo, **transform):
+    return {"id": "p_texto", "tipo": "texto", "clips": [
+        {"id": "t1", "inicio_ms": 0, "duracion_ms": 0, "texto": {"literal": literal}, "estilo": estilo,
+         "transform": {**_CENTRO, **transform}, "keyframes": []}]}
+
+
+def _caja_tinta(gris, umbral=128):
+    return gris.point(lambda v: 255 if v > umbral else 0).getbbox()
+
+
+def _grises_del_primer_borde(gris):
+    """En la fila del centro de la primera letra, los píxeles de luminancia intermedia
+    (40 < Y < 215) de la primera subida de fondo a letra, de izquierda a derecha."""
+    izq, arriba, _der, abajo = _caja_tinta(gris)
+    fila = (arriba + abajo) // 2
+    x = 0
+    while gris.getpixel((x, fila)) <= 40:
+        x += 1
+    grises = 0
+    while gris.getpixel((x, fila)) < 215:
+        grises += 1
+        x += 1
+    return grises
+
+
+@pytest.mark.slow
+def test_un_texto_v2_agrandado_sale_nitido_y_en_el_mismo_lugar(tmp_path, monkeypatch):
+    # D8, bug #8: «HHHH» de 38 px a escala 3. En v1 el PNG de 38 px se estira ×3 y el borde
+    # del palo se reparte en varios grises; en v2 el PNG se dibuja a 3× y el borde queda en 1–2.
+    # Con el código de antes las dos ediciones darían el número de v1.
+    estilo = {"fuente": "Inter-Bold", "tamano": 0.02, "color": "#FFFFFF"}
+    finales, clips = {}, {}
+    for nombre, est in (("v1", estilo), ("v2", {**estilo, "version": 2})):
+        final, doc = _producir_imagen(tmp_path / nombre, monkeypatch, [_pista_texto("HHHH", est, escala=3.0)])
+        finales[nombre] = final.convert("L")
+        clips[nombre] = doc["pistas"][1]["clips"][0]
+    grises = {k: _grises_del_primer_borde(g) for k, g in finales.items()}
+    print(f"\ngrises en el primer borde: v1={grises['v1']} v2={grises['v2']}")
+    assert grises["v2"] <= 2
+    assert grises["v1"] >= 3 and grises["v1"] > grises["v2"]
+    # v2 estampa su tamaño natural: la caja es natural × 3, del tamaño exacto del PNG (factor 3),
+    # así que `scale` no estira nada.
+    v2 = clips["v2"]
+    caja = geometria.caja(v2["transform"], v2["ancho_px"], v2["alto_px"], "9:16")
+    assert (caja["w"], caja["h"]) == (3 * v2["ancho_px"], 3 * v2["alto_px"])
+    # y el texto queda donde estaba en v1: la caja de v1 es la tinta medida por Pillow y la de v2
+    # la maqueta (avances, ascendente y descendente), y el borde de v1 está difuminado; las dos
+    # tintas coinciden a 2 px.
+    tinta = {k: _caja_tinta(g) for k, g in finales.items()}
+    print(f"tinta: v1={tinta['v1']} v2={tinta['v2']}")
+    for a, b in zip(tinta["v1"], tinta["v2"]):
+        assert abs(a - b) <= 2, tinta
+
+
+def _sticker_con_hueco(ruta):
+    """Un cuadrado blanco de 200 × 200 (opaco) con un círculo transparente en el medio."""
+    from PIL import ImageDraw
+    im = Image.new("RGBA", (200, 200), (255, 255, 255, 255))
+    ImageDraw.Draw(im).ellipse([50, 50, 150, 150], fill=(0, 0, 0, 0))
+    im.save(ruta)
+    return ruta
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("tinte, esquina", [("#FF0000", "roja"), (None, "blanca")])
+def test_un_sticker_con_tinte_sale_del_color_elegido_y_conserva_su_hueco(tmp_path, monkeypatch, tinte, esquina):
+    # D11.3: `lutrgb` reemplaza el color y conserva el alfa: la esquina del cuadrado sale del
+    # color del tinte y el círculo transparente deja ver el fondo negro.
+    tmp_path.mkdir(exist_ok=True)
+    sticker = _sticker_con_hueco(str(tmp_path / "sticker.png"))
+    capa = {"id": "s1", "inicio_ms": 0, "duracion_ms": 0, "material_id": 5, "transform": dict(_CENTRO),
+            "keyframes": []}
+    if tinte:
+        capa["tinte"] = tinte
+    final, _doc = _producir_imagen(tmp_path / "r", monkeypatch, [{"id": "p_sticker", "tipo": "imagen", "clips": [capa]}],
+                                   {5: sticker})
+    r_, g_, b_ = final.getpixel((440 + 5, 860 + 5))       # la caja va de (440, 860) a (640, 1060)
+    if esquina == "roja":
+        assert r_ > 200 and g_ < 40 and b_ < 40, (r_, g_, b_)
+    else:
+        assert min(r_, g_, b_) > 215, (r_, g_, b_)
+    assert max(final.getpixel((540, 960))) < 20                 # el hueco: el fondo negro
+
+
+@pytest.mark.slow
+def test_las_lineas_de_un_texto_v2_salen_donde_dice_la_maqueta(tmp_path, monkeypatch):
+    # D5.6: la maqueta parte la frase en 3 líneas; en la final, la fila de cada línea (0,3 × tam
+    # por encima de su base, a media altura de las minúsculas) tiene tinta blanca dentro de su
+    # tramo [x, x + ancho] y ninguna fuera de la caja del texto.
+    from final_edition import fuentes, tipografia
+    texto = "Envío gratis a todo el país en 24 horas"
+    estilo = {"fuente": "Inter-Bold", "tamano": 0.0375, "color": "#FFFFFF", "ancho_max": 0.5, "version": 2}
+    final, doc = _producir_imagen(tmp_path, monkeypatch, [_pista_texto(texto, estilo)])
+    clip = doc["pistas"][1]["clips"][0]
+    maqueta = tipografia.maquetar(texto, clip["estilo"], "9:16", fuentes.cargar_tabla())
+    assert len(maqueta["lineas"]) == 3
+    caja = geometria.caja(clip["transform"], clip["ancho_px"], clip["alto_px"], "9:16")
+    assert (caja["w"], caja["h"]) == (maqueta["ancho_px"], maqueta["alto_px"])
+    gris = final.convert("L")
+    for linea in maqueta["lineas"]:
+        fila = caja["y"] + int(linea["base"] - 0.3 * maqueta["tam"])
+        tinta = [x for x in range(1080) if gris.getpixel((x, fila)) > 128]
+        assert tinta, linea["texto"]
+        desde, hasta = caja["x"] + linea["x"], caja["x"] + linea["x"] + linea["ancho"]
+        assert desde - 1 <= min(tinta) and max(tinta) <= hasta + 1, (linea, min(tinta), max(tinta))
+        assert caja["x"] <= min(tinta) and max(tinta) < caja["x"] + caja["w"]
+
+
+@pytest.mark.slow
+def test_un_emoji_v2_sale_a_color_en_la_final(tmp_path, monkeypatch):
+    # D6.8 (R1), el riesgo 1 de la spec: el 🔥 de 200 px sale naranja/amarillo en la final, no
+    # como la silueta blanca. La Tarea 9 corre esta prueba en el VPS antes de desplegar.
+    from final_edition import fuentes, tipografia
+    if not fuentes.hay_emoji():
+        pytest.skip("sin la fuente de emojis (D6.5)")
+    estilo = {"fuente": "Inter-Bold", "tamano": 0.1042, "color": "#FFFFFF", "version": 2}
+    final, doc = _producir_imagen(tmp_path, monkeypatch, [_pista_texto("🔥", estilo)])
+    clip = doc["pistas"][1]["clips"][0]
+    tabla = fuentes.cargar_tabla()
+    maqueta = tipografia.maquetar("🔥", clip["estilo"], "9:16", tabla)
+    letra, e, tam = maqueta["letras"][0], tabla["emoji"], maqueta["tam"]
+    assert letra["fuente"] == "emoji" and tam == 200
+    caja = geometria.caja(clip["transform"], clip["ancho_px"], clip["alto_px"], "9:16")
+    centro_x = caja["x"] + letra["x"] + tipografia.ancho("🔥", "Inter-Bold", tam, tabla) / 2
+    centro_y = caja["y"] + letra["base"] - (e["asc"] - e["desc"]) * tam / e["upem"] / 2
+    r_, _g, b_ = final.getpixel((int(centro_x), int(centro_y)))
+    assert r_ > 180 and b_ < 90, (r_, _g, b_)
