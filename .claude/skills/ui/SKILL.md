@@ -23,6 +23,17 @@ from them —, so the POST to `cf_crear_video` is unchanged; upload/link inputs 
 `form=`, the catalog opens as a `<dialog>` (`_selector_productos.html` with `sel_dialogo=True`; «Cambiar producto»
 keeps its `<details>`), and Enter in a one-line input never submits it (it used to generate and charge).
 
+**Una sección con su propio aspecto** (Final edition, 2026-10-02: Daniel pidió «un branding de este estilo» con una
+referencia de presentación tecnológica — azul marino, azul eléctrico con brillo, números en círculos, íconos en
+recuadros, flujo con flechas): se hace redefiniendo las variables de la base visual DENTRO del panel (`#tab-final {
+--bg; --panel; --accent; … }`, bloque «Final edition: tablero» al final de `style.css`), nunca con copias de los
+componentes; así el detalle (`<dialog>` dentro de la pestaña) y sus formularios cambian solos. Las superficies siguen
+oscuras (`test_modo_oscuro`: luminancia ≤ 0,05) y un color que pase de 0,4 (`--fe-cian`) va solo en texto, trazos
+SVG y sombras. Íconos: macro `icono_fe(nombre)` de `_final_macros.html` (SVG en línea, `currentColor`). Ojo con los
+nombres de selectores en el JS de una plantilla: `tests/i18n_util.py` lee como español suelto un literal con «en»,
+«nueva», «de»… (por eso `#fe-editando` y `data-fe-elegir`). Un panel oculto del navegador integrado no pinta cuadros
+de `<video>` en las capturas: miniaturas negras ahí no son un error (comprobar `readyState`).
+
 **Rendimiento y almacenamiento (auditoría 2026-09-28, tras el incidente de la página que se
 quedaba cargando):** `/cliente/<c>` trae todas las pestañas en un solo HTML (3 MB en happyflops:
 Crear, Final edition y Experimentos repiten las mismas piezas con sus `<template>` de detalle), así
@@ -49,10 +60,11 @@ pendiente (no se hizo): borrar en R2 lo rechazado/descartado y las versiones vie
 `docs/superpowers/specs/2026-09-28-tarjetas-ligeras-detalle-bajo-demanda-design.md`): el 61 % de
 la página eran los `<template class="generado-detalle">` de Crear y Final edition (1,86 MB de 3,03).
 Ya no existen: las tarjetas son macros (`_crear_tarjetas.html`: `tarjeta_crear`/`lista_crear`;
-`_final_tarjetas.html`: `tarjeta_video_fe`/`tarjeta_final_fe`/`lista_videos_fe`/`lista_finales_fe`),
-la página pinta las 24 más recientes por lista (`TARJETAS_POR_PAGINA`, `_listas_crear_final`; los
-contadores muestran el total) y «Ver más» pide las siguientes a `crear_tarjetas` /
-`final_tarjetas?lista=videos|finales` (`?desde=N`, `_pagina_desde`). El detalle llega por fetch al
+`_final_tarjetas.html`, desde el tablero del 2026-10-02: `tarjeta_pieza_fe`/`tarjeta_final_fe`/
+`tarjeta_elegir_fe` y sus `lista_*_fe`), la página pinta las 24 más recientes por lista
+(`TARJETAS_POR_PAGINA`, `_listas_crear` y `_tablero_final`; los contadores muestran el total) y «Ver más»
+pide las siguientes a `crear_tarjetas` / `final_tarjetas?lista=en_edicion|finalizados|elegir`
+(`?desde=N`, `_pagina_desde`). El detalle llega por fetch al
 abrir la tarjeta (`data-detalle` → `cf_detalle`, `fe_detalle_video`, `fe_detalle_final`; macros en
 `_crear_detalle.html` / `_final_detalle.html`, armadas con `_creative_flow_item(cliente, cf_id)` y
 `_contexto_final_edition(cliente)`, que incluye `_contexto_organico`), nunca se cachea, y

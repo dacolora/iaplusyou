@@ -1,10 +1,17 @@
-{# Tarjetas de Final edition (spec 2026-09-28 «tarjetas ligeras»): la página
-   y /final/tarjetas («Ver más») pintan lo mismo. Sin <template> de detalle
-   (lo traen /creative_flow/<id>/final/detalle y .../final/<final_id>/detalle
-   al abrir) y sin script embebido: las barras llevan data-poll-job y
-   base.html arranca el sondeo. Se importa `with context` (cliente, paises_fe,
-   ediciones_por_cf, url_for, _). #}
-{% macro tarjeta_video_fe(item) %}
+{# Tarjetas del tablero de Final edition (2026-10-02, `final_edition.tablero`;
+   antes, spec 2026-09-28 «tarjetas ligeras»): la página y /final/tarjetas
+   («Ver más» y el selector «+ Nueva») pintan lo mismo. Sin <template> de
+   detalle (lo traen /creative_flow/<id>/final/detalle y
+   .../final/<final_id>/detalle al abrir) y sin script embebido: las barras
+   llevan data-poll-job y base.html arranca el sondeo. Se importa `with
+   context` (cliente, paises_fe, ediciones_por_cf, url_for, _). #}
+
+{% macro nombre_pieza(item) -%}
+{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}
+{%- endmacro %}
+
+{% macro tarjeta_pieza_fe(item, r) %}
+    {# Columna «En edición»: un video de Crear ya empezado. #}
     {% set _eds = ediciones_por_cf.get(item.id) or [] %}
     {# Editor capa 4b (9/9): data-editor-url alimenta el desdeHash() de
        _tab_final.html — vacío mientras trabajo_editor sigue en curso, para
@@ -15,50 +22,61 @@
          tabindex="0" role="button">
       <div class="generado-media">
         <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
-        <span class="generado-tipo">{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}</span>
-        {% if item.trabajo_guion %}
-        {# El guion se escribe en el worker: la barra va en la TARJETA (no en el
-           detalle, que llega por fetch al abrirla) para que el sondeo
-           (data-poll-job) arranque al cargar la página y un fallo se vea. #}
+        <span class="generado-tipo">{{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}</span>
+        {% if r.trabajos %}
+        {# Cada trabajo vivo (guion, editor, cada final) necesita su barra con
+           data-poll-job para que la página se recargue sola al terminar; solo
+           cabe UNA tapa visible, la del primero. Las demás van en un
+           contenedor oculto, cada una con su .progreso-texto hermano. #}
+        {% set _t = r.trabajos[0] %}
         <div class="generado-velo">
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}" data-poll-job="{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Escribiendo el guion…') }}</div>
+          <div class="barra-progreso" id="trabajo-{{ _t.job_id }}" data-poll-job="{{ _t.job_id }}"><div class="barra-progreso-fill{% if _t.tipo != 'final' %} barra-progreso-indeterminada{% endif %}" style="width:0%"></div></div>
+          <div class="progreso-texto">{% if _t.tipo == 'guion' %}{{ _('Escribiendo el guion…') }}{% elif _t.tipo == 'editor' %}{{ _('Preparando para el editor…') }}{% else %}{{ _('Produciendo… 0%% · 0s') }}{% endif %}</div>
         </div>
-        {% if item.trabajo_editor %}
-        {# Fix round 1 (Important): el guion y «Editar este video» son dos
-           formularios independientes sin exclusión mutua — pueden estar los
-           dos en curso a la vez. Solo cabe UNA tapa visible (la de arriba,
-           la del guion), pero el trabajo del editor igual necesita su
-           barra con data-poll-job: sin ella nada sondea su estado y la
-           página nunca se recarga sola cuando termina. Va contra un
-           contenedor oculto (mismo hermano .progreso-texto que espera el
-           sondeo) para no mostrar una segunda tapa encima. #}
+        {% for _o in r.trabajos[1:] %}
         <div style="display:none;">
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo_editor.job_id }}" data-poll-job="{{ item.trabajo_editor.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="barra-progreso" id="trabajo-{{ _o.job_id }}" data-poll-job="{{ _o.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
           <div class="progreso-texto"></div>
         </div>
-        {% endif %}
-        {% elif item.trabajo_editor %}
-        {# Mismo motivo que el guion: la barra de «Editar este video» corre en
-           el worker y necesita arrancar su polling en la tarjeta. #}
-        <div class="generado-velo">
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo_editor.job_id }}" data-poll-job="{{ item.trabajo_editor.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Preparando para el editor…') }}</div>
-        </div>
+        {% endfor %}
+        {% elif r.con_error %}
+        <div class="generado-velo"><span class="generado-estado error">{{ ngettext('%(num)d final con error', '%(num)d finales con error', r.con_error) }}</span></div>
         {% endif %}
       </div>
       <div class="generado-pie">
-        <strong>{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}</strong>
-        <small>{{ ngettext('%(num)d final', '%(num)d finales', item.finales | length) }}{% if _eds %} · {{ _('en el editor') }}{% endif %}</small>
+        <strong>{{ nombre_pieza(item) }}</strong>
+        <ul class="fe-chips">
+          {% if r.guion == 'listo' %}<li>{{ _('Guion listo') }}</li>{% endif %}
+          {% if r.ediciones %}<li>{{ ngettext('%(num)d edición', '%(num)d ediciones', r.ediciones) }}</li>{% endif %}
+          {% if r.produciendo %}<li class="fe-chip-vivo">{{ ngettext('%(num)d produciéndose', '%(num)d produciéndose', r.produciendo) }}</li>{% endif %}
+          {% if r.con_error %}<li class="fe-chip-error">{{ ngettext('%(num)d con error', '%(num)d con error', r.con_error) }}</li>{% endif %}
+        </ul>
+        {% if item.finales %}
+        <ul class="fe-destinos">
+          {% for f in item.finales %}
+          {% set _estado = 'ok' if f.estado in ('listo', 'degradada') else ('vivo' if (f.estado == 'generando' and f.trabajo) else 'error') %}
+          <li class="fe-destino-{{ _estado }}" title="{{ f.idioma }}_{{ f.pais }} · {% if _estado == 'ok' %}{{ _('lista') }}{% elif _estado == 'vivo' %}{{ _('produciéndose') }}{% else %}{{ _('con error') }}{% endif %}">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else f.pais }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <small class="fe-siguiente">
+          {%- if r.siguiente == 'error' %}{{ _('Revisa lo que falló →') }}
+          {%- elif r.siguiente == 'produciendo' %}{{ _('Produciendo…') }}
+          {%- elif r.siguiente == 'guion' %}{{ _('Escribiendo el guion…') }}
+          {%- elif r.siguiente == 'editor' %}{{ _('Preparando para el editor…') }}
+          {%- elif r.siguiente == 'producir_otra_vez' %}{{ _('Cambios sin producir →') }}
+          {%- else %}{{ _('Producir finales →') }}{% endif -%}
+        </small>
       </div>
     </div>
 {% endmacro %}
 
 {% macro tarjeta_final_fe(item, f) %}
+    {# Columna «Finalizados»: una final lista (o «degradada»), una por país. #}
     {% set _bandera = paises_fe[f.pais].bandera if f.pais in paises_fe else "" %}
     <div class="generado generado-final" data-cf="{{ f.id }}" data-detalle="{{ url_for('fe_detalle_final', cliente=cliente, cf_id=item.id, final_id=f.id) }}" tabindex="0" role="button">
       <div class="generado-media">
-        {% if f.estado in ("listo", "degradada") and f.video_url %}
+        {% if f.video_url %}
         <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" muted playsinline preload="none" data-precarga></video>
         {% elif f.url_miniatura %}
         <img src="{{ f.url_miniatura }}" alt="" loading="lazy" class="generado-portada">
@@ -66,38 +84,58 @@
         <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga class="generado-portada"></video>
         {% endif %}
         <span class="generado-badge">{{ _bandera }} <span translate="no">{{ f.idioma }}</span></span>
-        {% if f.estado == "generando" %}
-        <div class="generado-velo">
-          {% if f.trabajo %}
-          <div class="barra-progreso" id="trabajo-{{ f.trabajo.job_id }}" data-poll-job="{{ f.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Produciendo… 0%% · 0s') }}</div>
-          {% else %}
-          <span class="generado-estado">{{ _('Interrumpida') }}</span>
-          {% endif %}
-        </div>
-        {% elif f.estado == "error" %}
-        <div class="generado-velo"><span class="generado-estado error">{{ _('Error') }}</span></div>
-        {% elif f.estado == "degradada" %}
+        {% if f.estado == "degradada" %}
         <div class="generado-velo"><span class="generado-estado">{{ _('Sin voz/música') }}</span></div>
         {% endif %}
       </div>
       <div class="generado-pie">
         <strong>{{ _('Final %(id)s', id=(f.idioma ~ '_' ~ f.pais)) }}</strong>
-        <small>{{ _('Final de %(enfoque)s', enfoque=((item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')))) }}{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}</small>
+        <small>{{ _('Final de %(enfoque)s', enfoque=nombre_pieza(item)) }}{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}</small>
       </div>
     </div>
 {% endmacro %}
 
-{% macro lista_videos_fe(items, desde, total) %}
-    {% for item in items %}{{ tarjeta_video_fe(item) }}{% endfor %}
-    {% if desde + (items | length) < total %}
-    <button type="button" class="btn-sm generados-mas" data-siguiente="{{ desde + (items | length) }}">{{ _('Ver más (quedan %(n)s)', n=total - desde - (items | length)) }}</button>
+{% macro tarjeta_elegir_fe(item, r) %}
+    {# Selector «+ Nueva final edition»: un video listo de Crear. Sin barras
+       (las lleva su tarjeta de «En edición»: un id de barra no se repite). #}
+    <div class="generado fe-elegible" data-cf="{{ item.id }}" data-detalle="{{ url_for('fe_detalle_video', cliente=cliente, cf_id=item.id) }}" tabindex="0" role="button">
+      <div class="generado-media">
+        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
+        <span class="generado-tipo">{{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}</span>
+        {% if r.en_edicion %}<span class="generado-badge">{{ _('En edición') }}</span>
+        {% elif r.listas %}<span class="generado-badge">{{ ngettext('%(num)d final', '%(num)d finales', r.listas) }}</span>{% endif %}
+      </div>
+      <div class="generado-pie">
+        <strong>{{ nombre_pieza(item) }}</strong>
+        {% if item.accion_central %}<small class="fe-elegible-accion">{{ item.accion_central }}</small>{% endif %}
+      </div>
+    </div>
+{% endmacro %}
+
+{% macro ver_mas(desde, n, total) %}
+    {% if desde + n < total %}
+    <button type="button" class="btn-sm generados-mas" data-siguiente="{{ desde + n }}">{{ _('Ver más (quedan %(n)s)', n=total - desde - n) }}</button>
     {% endif %}
 {% endmacro %}
 
-{% macro lista_finales_fe(pares, desde, total) %}
+{% macro lista_en_edicion_fe(pares, desde, total) %}
+    {% for item, r in pares %}{{ tarjeta_pieza_fe(item, r) }}{% endfor %}
+    {{ ver_mas(desde, pares | length, total) }}
+{% endmacro %}
+
+{% macro lista_finalizados_fe(pares, desde, total) %}
     {% for item, f in pares %}{{ tarjeta_final_fe(item, f) }}{% endfor %}
-    {% if desde + (pares | length) < total %}
-    <button type="button" class="btn-sm generados-mas" data-siguiente="{{ desde + (pares | length) }}">{{ _('Ver más (quedan %(n)s)', n=total - desde - (pares | length)) }}</button>
+    {{ ver_mas(desde, pares | length, total) }}
+{% endmacro %}
+
+{% macro lista_elegir_fe(pares, desde, total) %}
+    {% if not total %}
+    <div class="estado-vacio fe-elegir-vacio">
+      <p class="estado-vacio-titulo">{{ _('Todavía no hay videos listos') }}</p>
+      <p class="estado-vacio-texto">{{ _('Genera uno en Crear y vuelve aquí para terminarlo.') }}</p>
+      <a class="btn-generar btn-sm" href="#creativeflowplus">{{ _('Ir a Crear') }}</a>
+    </div>
     {% endif %}
+    {% for item, r in pares %}{{ tarjeta_elegir_fe(item, r) }}{% endfor %}
+    {{ ver_mas(desde, pares | length, total) }}
 {% endmacro %}

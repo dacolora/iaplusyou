@@ -441,11 +441,13 @@ def _item_video_listo(**extra):
 # tarjeta. Acá se renderizan las dos piezas por separado, con el mismo
 # contexto que reciben en dashboard.
 def _listas(items):
-    """Lo que dashboard._listas_crear_final le da a las pestañas."""
-    videos = [i for i in items if i.get("estado") == "video_listo" and (i.get("tipo") or "video") != "imagen"]
-    finales = [(i, f) for i in items for f in (i.get("finales") or [])]
-    return dict(crear=items, crear_total=len(items), final_videos=videos, final_videos_total=len(videos),
-                finales=finales, finales_total=len(finales))
+    """Lo que dashboard._listas_crear y dashboard._tablero_final le dan a las
+    pestañas (el tablero de Final edition, 2026-10-02)."""
+    from final_edition import tablero
+    t = tablero.armar(items, {})
+    return dict(crear=items, crear_total=len(items),
+                fe_en_edicion=t["en_edicion"], fe_en_edicion_total=len(t["en_edicion"]),
+                fe_finalizados=t["finalizados"], fe_finalizados_total=len(t["finalizados"]), fe_cifras=t["cifras"])
 
 
 def _tab_final(env, items):
@@ -554,8 +556,11 @@ def test_plantilla_con_guion_y_finales_renderiza():
     assert "trabajo-acme__cf_1__en_US__final" in tarjetas
     assert "generado-badge" in tarjetas
     assert "ffmpeg murió" in html
-    # la clon + 3 finales en las cuadrículas (el selector del JS no cuenta)
-    assert len(re.findall(r'data-cf="[\w-]+"', tarjetas)) == 4
+    # Tablero (2026-10-02): la clon en «En edición» (una final produciéndose
+    # y otra con error, con sus banderas) y solo la final lista en
+    # «Finalizados» (el selector del JS no cuenta).
+    assert len(re.findall(r'data-cf="[\w-]+"', tarjetas)) == 2
+    assert "1 produciéndose" in tarjetas and "1 con error" in tarjetas
     assert "Final de Producto" in tarjetas
     # I4: es_CO ya tiene una final -> hint + checkbox marcado para confirm(); en_US y pt_BR no.
     assert "ya producida — se reemplaza" in html
@@ -601,7 +606,7 @@ def test_plantilla_imagen_no_muestra_final_edition():
     imagen = _item_video_listo(tipo="imagen")
     html = _tab_final(env, [imagen])
     assert 'data-cf="cf_1"' not in html and "Preparar guion con IA" not in html
-    assert "Videos listos (0)" in html
+    assert "0 videos listos en Crear" in html
     crear = _tab_crear(env, [imagen]) + _detalle_crear(env, imagen)    # la tarjeta y su detalle (por fetch)
     marcado = re.sub(r"<script>.*?</script>", "", crear, flags=re.S)   # lo que se ve, sin los comentarios del JS
     assert "Llevar a final edition" not in marcado and "Final edition" not in marcado

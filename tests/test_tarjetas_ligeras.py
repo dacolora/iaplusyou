@@ -73,15 +73,17 @@ def test_pagina_desde_y_listas(app):
     _sembrar(30, con_final=True)
     _sembrar(2, desde=30, tipo="imagen")
     items = dashboard._creative_flow_items("acme")
-    listas = dashboard._listas_crear_final(items)
+    listas = dashboard._listas_crear(items)
     assert len(listas["crear"]) == 24 and listas["crear_total"] == 32
     assert listas["crear"][0]["id"] == "cf_20260901_000000_000031"          # la más nueva primero
-    assert len(listas["final_videos"]) == 24 and listas["final_videos_total"] == 30
-    assert all(i["tipo"] == "video" for i in listas["final_videos"])
-    assert len(listas["finales"]) == 24 and listas["finales_total"] == 30
-    assert listas["finales"][0][1]["idioma"] == "es"
-    completas = dashboard._listas_crear_final(items, n=None)
-    assert len(completas["crear"]) == 32 and len(completas["finales"]) == 30
+    assert len(dashboard._listas_crear(items, n=None)["crear"]) == 32
+    # Tablero de Final edition (2026-10-02): 30 videos con su final lista y
+    # nada pendiente van todos a Finalizados; las imágenes no se pueden elegir.
+    t = dashboard._tablero_final(items, {})
+    assert t["fe_en_edicion"] == [] and t["fe_en_edicion_total"] == 0
+    assert len(t["fe_finalizados"]) == 24 and t["fe_finalizados_total"] == 30
+    assert t["fe_finalizados"][0][1]["idioma"] == "es"
+    assert t["fe_cifras"]["elegibles"] == 30 and t["fe_cifras"]["finalizados"] == 30
 
 
 def test_contexto_final_edition_tiene_lo_que_usan_los_detalles(app):
@@ -168,25 +170,40 @@ def test_tarjeta_con_trabajo_vivo_usa_data_poll_job(app):
 
 # ------------------------------------------------------------ Task 4: Final edition
 
-def test_final_pinta_24_videos_y_finales_sin_detalle_embebido(app):
-    _sembrar(30, con_final=True, guion=True)
+def test_final_pinta_el_tablero_sin_repetir_la_lista_de_crear(app):
+    """Tablero (2026-10-02): «En edición» (videos empezados) y «Finalizados»
+    (finales listas), 24 por columna; los videos listos de Crear no se pintan:
+    el selector «+ Nueva» los pide por fetch al abrirse."""
+    _sembrar(30, con_final=True, guion=True)          # terminados: a Finalizados
+    _sembrar(26, desde=30, guion=True)                 # con guion y sin finales: en edición
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     final = _pestana(html, "tab-final", "tab-experimentos")
     assert "<template" not in final and "<script>iniciarPolling" not in final
-    videos = final.split('id="fe-videos"')[1].split('id="fe-finales"')[0]
-    finales = final.split('id="fe-finales"')[1].split('id="fe-modal"')[0]
-    assert videos.count('class="generado"') == 24 and 'data-siguiente="24"' in videos
-    assert finales.count('class="generado generado-final"') == 24 and 'data-siguiente="24"' in finales
-    assert "Videos listos (30)" in final and "Finales (30)" in final
-    assert videos.count('/final/detalle"') == 24 and finales.count('__es_CO/detalle"') == 24
+    assert 'id="fe-videos"' not in final and "Videos listos" not in final
+    en_edicion = final.split('id="fe-editando"')[1].split("</section>")[0]
+    finalizados = final.split('id="fe-finalizados"')[1].split("</section>")[0]
+    assert en_edicion.count('class="generado"') == 24 and 'data-siguiente="24"' in en_edicion
+    assert finalizados.count('class="generado generado-final"') == 24 and 'data-siguiente="24"' in finalizados
+    assert 'fe-contador">26<' in final and 'fe-contador">30<' in final
+    assert en_edicion.count('/final/detalle"') == 24 and finalizados.count('__es_CO/detalle"') == 24
+    assert "data-fe-elegir" in en_edicion and "56 videos listos en Crear" in en_edicion
+    selector = final.split('id="fe-elegibles"')[1].split("</dialog>")[0]
+    assert 'class="generado' not in selector          # vacío hasta que se abre
 
 
-def test_final_ver_mas_y_lista_invalida(app):
+def test_final_ver_mas_selector_y_lista_invalida(app):
     _sembrar(26, con_final=True)
+    _sembrar(27, desde=26, guion=True)
     c = app["c"]
-    assert c.get("/cliente/acme/final/tarjetas?lista=videos&desde=24").get_data(as_text=True).count('class="generado"') == 2
-    assert c.get("/cliente/acme/final/tarjetas?lista=finales&desde=24").get_data(as_text=True).count("generado-final") == 2
-    assert c.get("/cliente/acme/final/tarjetas?lista=x").status_code == 400
+    assert c.get("/cliente/acme/final/tarjetas?lista=finalizados&desde=24").get_data(as_text=True).count("generado-final") == 2
+    assert c.get("/cliente/acme/final/tarjetas?lista=en_edicion&desde=24").get_data(as_text=True).count('class="generado"') == 3
+    elegir = c.get("/cliente/acme/final/tarjetas?lista=elegir").get_data(as_text=True)
+    assert elegir.count('class="generado fe-elegible"') == 24 and 'data-siguiente="24"' in elegir
+    assert "data-poll-job" not in elegir             # las barras van solo en «En edición»
+    assert c.get("/cliente/acme/final/tarjetas?lista=elegir&desde=48").get_data(as_text=True).count('class="generado fe-elegible"') == 5
+    assert "Todavía no hay videos listos" in c.get("/cliente/otro/final/tarjetas?lista=elegir").get_data(as_text=True)
+    for invalida in ("videos", "finales", "x"):
+        assert c.get(f"/cliente/acme/final/tarjetas?lista={invalida}").status_code == 400
 
 
 def test_detalle_de_video_y_de_final(app):

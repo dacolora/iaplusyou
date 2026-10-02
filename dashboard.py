@@ -112,6 +112,7 @@ from tareas import voces_propias as tareas_voces
 from tareas import edicion as tareas_edicion
 from tareas import triple_whale as tareas_tw
 from final_edition import ETAPAS_FINAL, cortes as fe_cortes, mezcla as fe_mezcla, tipos as fe_tipos
+from final_edition import tablero as fe_tablero
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
 from publicador import publicar_brief
@@ -2066,7 +2067,8 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=cf_items,
-        **_listas_crear_final(cf_items),
+        **_listas_crear(cf_items),
+        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"]),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         aviso_saldo=saldo.vigente("wavespeed"),
@@ -3480,17 +3482,21 @@ def _creative_flow_item(cliente, cf_id):
     return _armar_item_cf(cliente, cf_id, entry, data, _ctx_items_cf(cliente))
 
 
-def _listas_crear_final(items, n=TARJETAS_POR_PAGINA):
-    """Lo que pintan Crear y Final edition (spec 2026-09-28 «tarjetas
-    ligeras»): las primeras `n` de cada lista y los totales para los
-    contadores de cabecera. `n=None` devuelve las listas completas (las rutas
-    de «Ver más» recortan ellas)."""
-    videos = [i for i in items if i.get("estado") == "video_listo" and (i.get("tipo") or "video") != "imagen"]
-    finales = [(i, f) for i in items for f in (i.get("finales") or [])]
-    corte = slice(0, n) if n else slice(None)
-    return {"crear": items[corte], "crear_total": len(items),
-            "final_videos": videos[corte], "final_videos_total": len(videos),
-            "finales": finales[corte], "finales_total": len(finales)}
+def _listas_crear(items, n=TARJETAS_POR_PAGINA):
+    """Lo que pinta Crear (spec 2026-09-28 «tarjetas ligeras»): las primeras
+    `n` piezas y el total para el contador de cabecera."""
+    return {"crear": items[:n], "crear_total": len(items)}
+
+
+def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA):
+    """Lo que pinta el tablero de Final edition (2026-10-02,
+    `final_edition.tablero`): las primeras `n` tarjetas de «En edición» y de
+    «Finalizados», sus totales y las cifras de la cabecera. Los videos listos
+    de Crear no van en la página: los trae el selector «+ Nueva» por fetch."""
+    t = fe_tablero.armar(items, ediciones_por_cf)
+    return {"fe_en_edicion": t["en_edicion"][:n], "fe_en_edicion_total": len(t["en_edicion"]),
+            "fe_finalizados": t["finalizados"][:n], "fe_finalizados_total": len(t["finalizados"]),
+            "fe_cifras": t["cifras"]}
 
 
 def _contexto_organico(cliente):
@@ -6960,17 +6966,18 @@ def cf_detalle(cliente, cf_id):
 @trabajos.con_vivos_precargados
 @catalogo_productos.con_lecturas_memorizadas
 def final_tarjetas(cliente):
-    """«Ver más» de Final edition: `lista=videos` (videos listos) o
-    `lista=finales`; las TARJETAS_POR_PAGINA siguientes desde `desde`."""
+    """«Ver más» del tablero de Final edition (`lista=en_edicion` o
+    `lista=finalizados`) y el selector «+ Nueva» (`lista=elegir`, los videos
+    listos de Crear): las TARJETAS_POR_PAGINA siguientes desde `desde`."""
     lista = request.args.get("lista")
-    if lista not in ("videos", "finales"):
+    if lista not in ("en_edicion", "finalizados", "elegir"):
         abort(400)
     desde = _pagina_desde(request.args.get("desde"))
-    completas = _listas_crear_final(_creative_flow_items(cliente, ligero=True), n=None)
-    todos = completas["final_videos"] if lista == "videos" else completas["finales"]
+    ctx = _contexto_final_edition(cliente)
+    t = fe_tablero.armar(_creative_flow_items(cliente, ligero=True), ctx["ediciones_por_cf"])
+    todos = t["elegibles" if lista == "elegir" else lista]
     return render_template("_final_tarjetas_respuesta.html", cliente=cliente, lista=lista,
-                           items=todos[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(todos),
-                           **_contexto_final_edition(cliente))
+                           items=todos[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(todos), **ctx)
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/detalle")

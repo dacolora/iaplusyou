@@ -706,7 +706,9 @@ def test_pestana_final_edition_en_ingles(admin_en):
     html = html_de(admin_en, "/cliente/acme")
     fugas = espanol_visible(html, ("tab-final",))
     assert not fugas, fugas[:15]
-    assert "Ready videos (1)" in html and "Final cuts (1)" in html
+    # Tablero (2026-10-02): la final lista va a «Finished»; nada en edición.
+    assert ">Editing <" in html and ">Finished <" in html and "New final edition" in html
+    assert 'fe-contador">1<' in html and "1 ready video in Create" in html
 
 
 @pytest.mark.parametrize("ruta", ["final/detalle", "final/{fid}/detalle"])
@@ -719,8 +721,9 @@ def test_detalles_de_final_edition_en_ingles(admin_en, ruta):
         assert crudo not in html, crudo
 
 
-@pytest.mark.parametrize("url", ["/cliente/acme/final/tarjetas?lista=videos&desde=0",
-                                 "/cliente/acme/final/tarjetas?lista=finales&desde=0",
+@pytest.mark.parametrize("url", ["/cliente/acme/final/tarjetas?lista=elegir&desde=0",
+                                 "/cliente/acme/final/tarjetas?lista=en_edicion&desde=0",
+                                 "/cliente/acme/final/tarjetas?lista=finalizados&desde=0",
                                  "/cliente/acme/crear/tarjetas?desde=0",
                                  "/cliente/acme/creative_flow/{cf}/detalle"])
 def test_tarjetas_y_detalle_por_fetch_en_ingles(admin_en, url):
