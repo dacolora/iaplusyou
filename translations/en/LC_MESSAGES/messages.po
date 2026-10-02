@@ -4202,7 +4202,11 @@ msgstr "Detail"
 
 #, python-format
 msgid "Detalle de Meta al día (%(dias)s días de anuncios, %(desgloses)s filas de desglose)."
-msgstr "Meta detail up to date (%(dias)s ad-days, %(desgloses)s breakdown rows)."
+msgstr "Meta detail up to date (%(dias)s days of ad data, %(desgloses)s breakdown rows)."
+
+#, python-format
+msgid "Detalle de Meta incompleto: falló %(partes)s."
+msgstr "Meta detail incomplete: %(partes)s failed."
 
 msgid "Detalle técnico"
 msgstr "Technical detail"
@@ -9131,8 +9135,9 @@ msgstr "Meta didn't tell us who owns each shared Page. Connect without a Page, o
 msgid "Meta no termina de paginar %(edge)s después de %(n)s páginas — parece un bucle; revisa el Business o avisa a soporte."
 msgstr "Meta doesn't finish paging %(edge)s after %(n)s pages — it looks like a loop; check the Business or tell support."
 
-msgid "Meta pidió esperar; el detalle se completa en la próxima pasada."
-msgstr "Meta asked us to wait; the detail will finish on the next pass."
+#, python-format
+msgid "Meta pidió esperar: el detalle se reintenta en 30 minutos (reintento %(n)s de %(total)s)."
+msgstr "Meta asked us to wait: the detail will be retried in 30 minutes (retry %(n)s of %(total)s)."
 
 msgid "Meta quedó conectado en Creatv"
 msgstr "Meta is now connected in Creatv"
@@ -9175,6 +9180,9 @@ msgstr "Meta replied: %(mensaje)s"
 
 msgid "Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras."
 msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once it starts running, “Update metrics” brings in the numbers."
+
+msgid "Meta siguió pidiendo esperar después de varios intentos: el detalle quedó incompleto. Actualiza el experimento más tarde para completarlo."
+msgstr "Meta kept asking us to wait after several attempts: the detail is incomplete. Update the experiment later to complete it."
 
 msgid "Meta tuvo una falla temporal: reintenta en unos minutos."
 msgstr "Meta had a temporary failure: try again in a few minutes."
