@@ -6,6 +6,7 @@ import io
 import json
 import os
 import struct
+from pathlib import Path
 
 import pytest
 from PIL import Image, ImageDraw, ImageFont
@@ -197,6 +198,21 @@ def test_emoji_capas_de_la_llama_tiene_dos_capas_con_color_rgba():
         assert len(color) == 4 and all(isinstance(c, int) and 0 <= c <= 255 for c in color)
 
 
+def test_emoji_capas_de_la_llama_van_en_el_orden_del_archivo():
+    """El orden es el de los LayerRecords de COLR, de abajo hacia arriba: el
+    render las apila así (la última queda encima), así que invertirlas pinta
+    la llama al revés."""
+    assert fuentes.emoji_capas(0x1F525) == [(7830, (244, 144, 12, 255)), (7831, (255, 204, 77, 255))]
+
+
+def test_emoji_capas_conserva_el_alfa_de_la_paleta():
+    """🎯 trae una sombra de alfa 51 (negro al 20 %): el alfa de CPAL no se
+    redondea a 255 ni se pierde al pasar de BGRA a RGBA."""
+    capas = fuentes.emoji_capas(0x1F3AF)
+    assert any(color[3] < 255 for _gid, color in capas)
+    assert (0, 0, 0, 51) in [color for _gid, color in capas]
+
+
 def test_emoji_capas_del_corazon_rojo_tiene_una_capa_de_color_conocido():
     capas = fuentes.emoji_capas(0x2764)
     assert len(capas) == 1
@@ -227,7 +243,7 @@ def test_la_fuente_derivada_no_trae_color_y_dibuja_las_capas():
 def test_la_fuente_derivada_conserva_las_demas_tablas():
     """Todas las tablas menos COLR, CPAL y cmap pasan tal cual, y el cmap
     nuevo es de formato 12 con un solo grupo U+F0000 + glifo."""
-    original = open(fuentes.RUTA_EMOJI, "rb").read()
+    original = Path(fuentes.RUTA_EMOJI).read_bytes()
     datos = fuentes.fuente_emoji_capas()
     t0, t1 = fuentes._directorio(original), fuentes._directorio(datos)
     assert set(t0) - set(t1) == {"COLR", "CPAL"}
@@ -263,7 +279,7 @@ def test_ninguna_capa_sin_area_llega_al_render():
 def test_el_indice_de_paleta_0xFFFF_es_el_color_del_texto():
     """El archivo real no trae capas «del color del texto»: se le pone una a
     mano (en memoria) a la capa del corazón y sale `None`, no un color."""
-    datos = bytearray(open(fuentes.RUTA_EMOJI, "rb").read())
+    datos = bytearray(Path(fuentes.RUTA_EMOJI).read_bytes())
     colr = fuentes._directorio(bytes(datos))["COLR"][0]
     _v, n_bases, desde_bases, desde_capas, _n = struct.unpack_from(">HHIIH", datos, colr)
     cmap, _bases = fuentes._indice_capas(fuentes.RUTA_EMOJI)
@@ -275,3 +291,16 @@ def test_el_indice_de_paleta_0xFFFF_es_el_color_del_texto():
     struct.pack_into(">H", datos, colr + desde_capas + 4 * primera + 2, 0xFFFF)
     _cmap, bases = fuentes._leer_indice(bytes(datos))
     assert bases[glifo][0][1] is None and bases[glifo][0][0] == fuentes.emoji_capas(0x2764)[0][0]
+
+
+def test_el_cmap_de_la_fuente_derivada_cubre_todos_los_glifos():
+    """El `cmap` nuevo se lee con el mismo lector que la TTF original: cada
+    glifo g (de 1 a numGlyphs - 1; el 0 es «sin glifo» y el lector no lo
+    cuenta) es el código PUA_CAPAS + g. Si el grupo terminara un glifo antes,
+    la última capa de la fuente (13722, de U+E50A) no se podría dibujar."""
+    datos = fuentes.fuente_emoji_capas()
+    tablas = fuentes._directorio(datos)
+    n_glifos = struct.unpack_from(">H", datos, tablas["maxp"][0] + 4)[0]
+    assert n_glifos == 13723
+    assert fuentes._cmap(datos, tablas) == {fuentes.PUA_CAPAS + g: g for g in range(1, n_glifos)}
+    assert n_glifos - 1 in [g for g, _c in fuentes.emoji_capas(0xE50A)]
