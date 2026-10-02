@@ -62,6 +62,17 @@ def test_la_tabla_del_contrato_y_las_skills_coinciden():
                                       "fila sin skill": en_tabla - set(areas())}
 
 
+def test_cada_subagente_esta_en_el_contrato():
+    carpeta = os.path.join(RAIZ, ".claude", "agents")
+    agentes = sorted(f[:-3] for f in os.listdir(carpeta) if f.endswith(".md"))
+    assert agentes, "no hay subagentes"
+    for agente in agentes:
+        datos = frontmatter(os.path.join(carpeta, agente + ".md"))
+        assert datos.get("name") == agente, agente
+        assert len(datos.get("description") or "") >= 80, agente
+        assert "`%s`" % agente in contrato(), "%s no está en la tabla de subagentes de CLAUDE.md" % agente
+
+
 def test_los_hooks_configurados_existen():
     ajustes = json.load(open(os.path.join(RAIZ, ".claude", "settings.json"), encoding="utf-8"))
     comandos = [h["command"] for grupo in ajustes["hooks"].values() for g in grupo for h in g["hooks"]]
