@@ -57,6 +57,35 @@ def test_buscar_amazon_guarda_consulta_y_dedup(entorno, monkeypatch):
     assert kw["params"] == {"timeout": 1200, "maxItems": 40, "maxTotalChargeUsd": 0.2} and kw["json"]["proxyCountry"] == "SE"
 
 
+def test_buscar_amazon_deja_un_producto_por_anuncio(entorno, monkeypatch):
+    """Dos variantes del mismo anuncio de Amazon comparten reseñas: la búsqueda deja solo la primera que aparece,
+    aunque otra variante llegue sin su lista (prueba real 2026-10-01: B0CQRG7MDY y B0CQRG9M6R trajeron las mismas
+    reseñas, pagadas dos veces). Lo que Apify cobró no cambia: se cobran los ítems crudos."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    base = _fixture("amazon_busqueda.json")[0]
+    grupo = ["B0VAR00001", "B0VAR00002", "B0VAR00003"]
+    items = [{**base, "asin": "B0VAR00001", "variantAsins": grupo}, {**base, "asin": "B0VAR00002", "variantAsins": grupo},
+             {**base, "asin": "B0OTRO0001"}, {**base, "asin": "B0VAR00003"}]
+    s = _Sesion({"/actors/junglee~amazon-crawler/runs": [_corrida("SUCCEEDED", "rv", "dv")], "/datasets/dv/items": _Resp(200, items)})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = FuentePlataforma("amazon")
+    lista = list(f.buscar(["botella de agua"], "MX", 20))
+    assert [p["fuente_id"] for p in lista] == ["B0VAR00001", "B0OTRO0001"]
+    assert f.resultados == 4
+
+
+def test_buscar_amazon_una_variante_que_lista_a_otra_ya_elegida(entorno, monkeypatch):
+    """Al revés: el primero llega sin lista de variantes y el segundo lo nombra entre las suyas: también se descarta."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    base = _fixture("amazon_busqueda.json")[0]
+    items = [{**base, "asin": "B0VAR00001"}, {**base, "asin": "B0VAR00002", "variantAsins": ["B0VAR00001", "B0VAR00002"]}]
+    s = _Sesion({"/actors/junglee~amazon-crawler/runs": [_corrida("SUCCEEDED", "rw", "dw")], "/datasets/dw/items": _Resp(200, items)})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    assert [p["fuente_id"] for p in FuentePlataforma("amazon").buscar(["botella de agua"], "MX", 20)] == ["B0VAR00001"]
+
+
 def test_buscar_meli_una_corrida_por_consulta(entorno, monkeypatch):
     from nicho.fuentes import _http
     from nicho.fuentes.plataforma import FuentePlataforma

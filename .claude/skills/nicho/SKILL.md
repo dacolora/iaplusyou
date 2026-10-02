@@ -30,7 +30,10 @@ FREE de Apify solo lee 1 link y entrega 10 reseñas por corrida (Starter lo sube
 corrida POR LINK (`corridas()`, nunca junta varios `productUrls`), 2048 MB (`memoria_mb`, para
 que quepan 5 a la vez en el límite de 16 GB de la cuenta) y un techo mínimo de US$ 0,50 por
 corrida que solo va en lo que se MANDA a Apify, nunca en lo que `estimar()` muestra antes del
-clic (el peor caso real)) y el token siempre en cabecera. La cuenta de Apify de Creatv es FREE:
+clic (el peor caso real); actor, precio, techo mínimo, memoria y reseñas por corrida de junglee no se
+escriben en `apify_actores`: `_junglee()` los lee del registro de la investigación,
+`nicho/fuentes/plataformas.py`, un solo sitio que cambiar) y el token siempre en cabecera. La cuenta de
+Apify de Creatv es FREE:
 US$ 5 de uso al mes para toda la cuenta, 16 GB y 5 corridas a la vez. Las llaves
 (`REDDIT_*`, `YOUTUBE_API_KEY`, `APIFY_TOKEN`) viven en el `.env` raíz y se
 muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada — y solo
@@ -48,7 +51,10 @@ las del país, y el paso lo avisa) (`nicho/fuentes/plataformas.py`: Amazon con t
 vienen de `junglee~amazon-reviews-scraper` desde 2026-10-01 — US$ 0,006 por reseña, una corrida POR
 PRODUCTO con 2048 MB: el plan FREE de Apify solo lee 1 link y entrega 10 reseñas por corrida — Starter lo
 sube a 40 —, techo mínimo US$ 0,50 por corrida solo en lo que se manda a Apify, nunca en el estimado;
-axesso se dejó de usar porque exige acceso completo a la cuenta), Mercado Libre en 18 países, Walmart solo
+axesso se dejó de usar porque exige acceso completo a la cuenta; la búsqueda guarda las variantes del
+anuncio — `variantAsins` → `extra.variantes` — y `FuentePlataforma.buscar` deja un solo producto por
+anuncio, porque las variantes comparten reseñas: el 2026-10-01 dos variantes elegidas trajeron las mismas,
+pagadas dos veces), Mercado Libre en 18 países, Walmart solo
 en EE. UU., TikTok Shop y AliExpress en todo el mundo — AliExpress busca en inglés —; actores de Apify con
 precio por resultado más el arranque por corrida que cobran algunos (`usd_por_corrida`),
 `providers.apify.correr_lote` hasta 5 corridas a la vez con techo de cobro cada una (`plataformas.tope`);

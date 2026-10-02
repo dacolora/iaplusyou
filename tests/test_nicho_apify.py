@@ -24,6 +24,16 @@ def test_registro_de_actores_y_estimado():
         aa.estimar("magia", 10)
 
 
+def test_junglee_tiene_un_solo_precio():
+    """La fuente manual corre el mismo actor que la investigación automática: actor, precio, techo mínimo,
+    memoria y reseñas por corrida salen de UN registro (`nicho/fuentes/plataformas.py`), para que un cambio
+    de plan de Apify se haga en un solo sitio (el 2026-10-01 el arreglo de precios tuvo que hacerse dos veces)."""
+    from nicho.fuentes import apify_actores as aa, plataformas
+    r, a = plataformas.PLATAFORMAS["amazon"]["resenas"], aa.ACTORES["amazon_resenas"]
+    assert (a["actor"], a["usd_por_resultado"], a["tope_minimo_usd"], a["memoria_mb"], a["max_por_link"]) == \
+           (r["actor"], r["usd_por_resultado"], r["tope_minimo_usd"], r["memoria_mb"], r["max_resenas_por_producto"])
+
+
 def test_estimar_minimo_de_junglee_y_precios_reales():
     """Precios reales del plan FREE verificados 2026-10-01: junglee US$ 0,006 por reseña con un
     techo mínimo de US$ 0,50 POR CORRIDA (Apify rechaza `maxTotalChargeUsd` menor con 400

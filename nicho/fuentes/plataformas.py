@@ -95,6 +95,8 @@ _MESES_EN = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 
 # El id del producto dentro del link que le mandamos al actor de reseñas (y que devuelve con cada una):
 # amazon.<tld>/dp/<asin>, walmart.com/ip/<id> (o /ip/<nombre>/<id>) y aliexpress.com/item/<id>.html.
 _RE_ID_AMAZON = re.compile(r"/dp/([A-Z0-9]{10})")
+_RE_ASIN = re.compile(r"[A-Z0-9]{10}")
+MAX_VARIANTES = 200          # un anuncio de Amazon puede tener cientos de combinaciones de color y talla
 _RE_ID_WALMART = re.compile(r"/ip/(?:[^/?#]+/)*(\d+)/?(?:[?#]|$)")
 _RE_ID_ALIEXPRESS = re.compile(r"/item/(\d+)\.html")
 # Mercado Libre: la ficha de catálogo que agrupa publicaciones (`/p/MCO59691162`, sin guion) o,
@@ -262,6 +264,12 @@ def _producto_amazon(item):
         extra["vendedor"] = _texto(vendedor, 120)
     if item.get("inStock") is not None:
         extra["en_stock"] = bool(item.get("inStock"))
+    # Las variantes del mismo anuncio (colores, tallas) comparten reseñas: `FuentePlataforma.buscar` deja una sola
+    # (prueba real 2026-10-01: dos variantes elegidas trajeron las mismas reseñas, pagadas dos veces).
+    variantes = sorted({v.strip().upper() for v in (item.get("variantAsins") or []) if isinstance(v, str)
+                        and _RE_ASIN.fullmatch(v.strip().upper())})
+    if len(variantes) > 1:
+        extra["variantes"] = variantes[:MAX_VARIANTES]
     return {"fuente_id": _texto(_primero(item, "asin"), 120), "titulo": _texto(_primero(item, "title"), 300),
             "marca": _texto(_primero(item, "brand"), 120) or None, "precio": precio, "moneda": moneda,
             "estrellas": _flotante(_primero(item, "stars", "rating")), "n_resenas": _entero(_primero(item, "reviewsCount", "reviewCount")),

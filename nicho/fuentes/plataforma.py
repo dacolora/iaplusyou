@@ -70,21 +70,26 @@ class FuentePlataforma(Fuente):
         return res
 
     def buscar(self, consultas, pais, productos_por_consulta, avanzar=None):
-        """Itera productos normalizados (con `consulta`), sin repetir ids.
-        Busca en el sitio que toca (`plataformas.sitio`): un «$» a secas se
-        lee con la moneda de ese sitio."""
+        """Itera productos normalizados (con `consulta`), sin repetir ids ni
+        variantes de un mismo anuncio (`extra.variantes`: comparten reseñas, y
+        pagarlas dos veces no trae nada nuevo). Busca en el sitio que toca
+        (`plataformas.sitio`): un «$» a secas se lee con la moneda de ese sitio."""
         avanzar = avanzar or (lambda etapa, detalle=None: None)
         corridas = plataformas.entradas_busqueda(self.clave, consultas, pais, productos_por_consulta)
         avanzar(N_("Buscando"), idiomas.traducir(plataformas.actor_busqueda(self.clave)["nombre"]))
         res = self._correr(plataformas.actor_busqueda(self.clave)["actor"], corridas, N_("Buscando"), avanzar)
         conjunta = " | ".join(c for c in consultas if c)[:200]
         donde = plataformas.sitio(self.clave, pais) or None
-        vistos = set()
+        cubiertos = set()                      # ids ya entregados y todas sus variantes
         for indice, item in res["items"]:
             p = plataformas.leer_producto(self.clave, item, donde)
-            if not p or p["fuente_id"] in vistos:
+            if not p:
                 continue
-            vistos.add(p["fuente_id"])
+            variantes = set((p.get("extra") or {}).get("variantes") or ())
+            if p["fuente_id"] in cubiertos or variantes & cubiertos:
+                continue
+            cubiertos.add(p["fuente_id"])
+            cubiertos |= variantes
             etiqueta = corridas[indice].get("etiqueta") if indice < len(corridas) else None
             p["consulta"] = (etiqueta if etiqueta and etiqueta != "búsqueda" else conjunta)[:200]
             yield p
