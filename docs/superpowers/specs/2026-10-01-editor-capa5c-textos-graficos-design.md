@@ -1,6 +1,38 @@
 # Editor capa 5c — textos y gráficos que venden — diseño
 
-Fecha: 2026-10-01. Estado: **diseño** (plan de la 5c-1: `docs/superpowers/plans/2026-10-01-editor-capa5c-textos-graficos.md`).
+Fecha: 2026-10-01. Estado: **5c-1 implementada** (2026-10-02; plan `docs/superpowers/plans/2026-10-01-editor-capa5c-textos-graficos.md`).
+La 5c-2 (§9) sigue en esbozo.
+
+> **Lo que cambió en la ejecución** (manda sobre el texto de abajo; detalle en la guía `.claude/skills/editor/SKILL.md`):
+> - **Emojis por capas (D6):** `embedded_color` no sirve (Pillow recorta COLRv0 a la caja vacía del glifo base): el
+>   render dibuja cada capa con una copia de Twemoji armada en memoria (sin `COLR`/`CPAL`, glifo g en `U+F0000 + g`;
+>   `fuentes.fuente_emoji_capas`/`emoji_capas`); el índice de paleta `0xFFFF` usa el color del texto. Probado con
+>   Pillow 11.3 y 12.3.
+> - **Raqm (D5.4, D5.7, D6.4, riesgo 6, §8):** el Pillow del VPS (12.3) SÍ trae Raqm. El render v2 abre sus fuentes con
+>   `layout_engine=BASIC` (si no, Pacifico sale en «forma final»); el lienzo pone además `textRendering =
+>   "optimizeSpeed"` (Safari lo ignora: mirar Pacifico en un iPhone). Un texto v1 en producción sí lleva el kerning
+>   GPOS de Raqm, así que al pasar a v2 pares como «AV» o «To» se abren un poco (al revés de lo que decía el riesgo 6).
+> - **D5.1/D5.2:** tras un ZWJ se quita solo el pictograma siguiente (el código), y `limpiar` normaliza a NFC primero
+>   (una tilde pegada descompuesta no se pierde) y recorta solo U+0020.
+> - **D5.7:** cada letra se compone en su propia capa (`alpha_composite`), como el lienzo; la pasada translúcida del
+>   lienzo se dibuja opaca en una copia y entra una vez con `globalAlpha` (`MARGEN_COPIA_EM` medido en las 11
+>   fuentes); el fondo del servidor termina en `(margen + caja)·f − 1` (el rectángulo de Pillow es inclusivo).
+> - **D4/riesgo 1:** `cargar_tabla` deja `emoji: None` con la válvula `EDITOR_SIN_EMOJI=1` **o** si falta el archivo; se
+>   lee una vez por proceso (reiniciar los dos servicios). El riesgo 1 (capas COLR en el VPS) quedó verificado; el
+>   nuevo era Raqm, ya resuelto.
+> - **D9.3:** al abrir bajan también Inter Bold/SemiBold si hay subtítulos; la lista de fuentes baja las suyas cuando
+>   se ve (IntersectionObserver). La caché de textos tiene además un tope de área (24 MP).
+> - **D10.4:** una imagen que cubre ≥ 95 % del lienzo es fondo y no avisa; con animación de entrada la caja se mide donde
+>   la entrada termina (con keyframes, al empezar).
+> - **D12:** «‼» no se ofrece (Inter lo trae como texto): 39 emojis. Inglés de las plantillas: SALE, NEW, 50% OFF, FREE
+>   SHIPPING, ONLY A FEW LEFT!, BEST SELLER; «Para vender» → "Promo labels".
+> - **§2.2/§2.5:** `config.emoji = {familia, archivo}` (ruta relativa a `static/`); la ruta del sticker usa
+>   `materiales.obtener_o_crear`. **§3:** entre v1 y v2 la tolerancia de posición es 2 px (sus cajas miden distinto).
+> - **D14:** las cachés de fuentes son del proceso (8 tamaños de la de emojis, 32 de texto).
+> - **Límite de pistas:** `MAX_PISTAS` pasó de 8 a 20 en la prueba en vivo (un borrador ya usa 7 y no cabía otro emoji).
+> - **Pendiente (no entra):** la vista v1 quita lo que está fuera del `REPERTORIO` (cirílico, ẞ, ⅓, ①…) y el render v1 lo
+>   dibuja (los 10 idiomas de la app son latinos); ampliar el repertorio queda para después. `FuenteNoDisponible` sigue
+>   sin `gettext` (ya era así).
 Base de código: `main` en e6e38a9 (capa 5b en producción). Nace de:
 
 - spec del editor `2026-09-18-final-edition-editor-design.md` §4 («Texto: … ~20 fuentes»; «zonas seguras de

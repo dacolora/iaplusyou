@@ -37,7 +37,8 @@ Desde la fase 6 (2026-09) toda la app pasa por el catálogo (excepciones a prop�
 los prompts para los modelos de video e imagen y sus tokens `Image N`/`Video N`/`@Imagen N` (`prompt_swap.py`,
 `flowplus_prompt`); las 9 plantillas del flujo viejo «Nueva idea» se tradujeron el 2026-10-01 y `EXCLUIDAS` ya solo
 tiene el mapa. Una excepción a §B8: «Escribe aquí» y «Escribe el precio» (capa 4c), el texto inicial editable de un
-clip de texto nuevo del editor, salen en el idioma de quien mira). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
+clip de texto nuevo del editor, salen en el idioma de quien mira; desde la capa 5c también las seis plantillas «Para vender» —
+OFERTA, NUEVO, -50 %, ENVÍO GRATIS, ¡ÚLTIMAS UNIDADES!, MÁS VENDIDO—: textos editables que nacen en su idioma y se quedan así). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
 del spec): cada final sale en el idioma de su país destino (`<idioma>_<PAIS>`); el guion base, que no es por destino,
 en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. El editor
 no es Jinja: sus textos viven en `static/editor/textos.js` (`ES`, la fuente) y la ruta `editor.ver` manda los
