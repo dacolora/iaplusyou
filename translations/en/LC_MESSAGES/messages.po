@@ -14852,6 +14852,9 @@ msgstr "Wan 3.0 (reference, no editing)"
 msgid "Wan-2.2 Animate Replace"
 msgstr "Wan-2.2 Animate Replace"
 
+msgid "WaveSpeed está recibiendo demasiados pedidos (respuesta 429): no se generó ni se cobró nada. Vuelve a intentarlo en unos minutos."
+msgstr "WaveSpeed is receiving too many requests (response 429): nothing was generated or charged. Try again in a few minutes."
+
 #, python-format
 msgid "WaveSpeed no aceptó el pedido (respuesta %(status)s) y no se cobró nada. Vuelve a intentarlo en unos minutos; si se repite, cambia de modelo."
 msgstr "WaveSpeed did not accept the request (response %(status)s) and nothing was charged. Try again in a few minutes; if it happens again, switch models."
@@ -14859,6 +14862,10 @@ msgstr "WaveSpeed did not accept the request (response %(status)s) and nothing w
 #, python-format
 msgid "WaveSpeed no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el formato o las referencias y vuelve a generar."
 msgstr "WaveSpeed did not accept the request and nothing was charged: %(motivo)s. Adjust the duration, the format or the references and generate again."
+
+#, python-format
+msgid "WaveSpeed rechazó la llave de Creatv (respuesta %(status)s): no se generó ni se cobró nada. Avísale al administrador."
+msgstr "WaveSpeed rejected Creatv's key (response %(status)s): nothing was generated or charged. Let the administrator know."
 
 #, python-format
 msgid "WaveSpeed seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). El video suele terminar igual y se cobra: espera unos minutos y toca «Recuperar el video» — no se paga de nuevo."
@@ -14870,6 +14877,10 @@ msgstr "WaveSpeed is still working on prediction %(id)s; try again in a few minu
 
 msgid "WaveSpeed sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."
 msgstr "WaveSpeed is still working: we keep waiting for the same video, without paying again."
+
+#, python-format
+msgid "WaveSpeed tuvo una falla de su lado (respuesta %(status)s) y no confirmó el pedido. Espera unos minutos antes de volver a generar; si se repite, cambia de modelo."
+msgstr "WaveSpeed had a failure on its side (response %(status)s) and did not confirm the request. Wait a few minutes before generating again; if it happens again, switch models."
 
 msgid "Web (páginas)"
 msgstr "Web (pages)"
@@ -16262,6 +16273,10 @@ msgstr "base script %(idioma)s + reference transcription"
 #, python-format
 msgid "guion base %(idioma)s · no salió válido"
 msgstr "base script %(idioma)s · came out invalid"
+
+#, python-format
+msgid "guion base %(idioma)s · se cortó después de cobrar"
+msgstr "base script %(idioma)s · cut off after being charged"
 
 #, python-format
 msgid "hace %(n)s h"

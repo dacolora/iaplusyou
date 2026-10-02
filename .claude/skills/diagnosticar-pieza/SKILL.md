@@ -20,33 +20,33 @@ Muchos textos son FIJOS del código, no del modelo. Busca la frase antes de culp
 
 | Lo que ve la persona | Sale de | Lo dispara | Qué hacer |
 |---|---|---|---|
-| «…el proveedor de videos e imágenes, se quedó sin saldo: no se generó ni se cobró nada…» | `saldo.py:134` (vía `_mensaje_error`, `tareas/flowplus.py:242`) | `SinSaldo`: 402, «insufficient credit/balance» o «top up» (`providers/wavespeed_common.py:60`) | Recargar WaveSpeed; la franja `_aviso_sin_saldo.html` se limpia sola con la próxima generación que salga bien |
-| «WaveSpeed seguía trabajando en %(modelo)s después de %(min)s min (predicción …)… «Recuperar el video»» | `tareas/flowplus.py:244` | `EsperaAgotada` (en la práctica, la predicción pasó de 2 h, `:521`) | «Recuperar el video» (`cf_recuperar`, sin pagar de nuevo) |
+| «…el proveedor de videos e imágenes, se quedó sin saldo: no se generó ni se cobró nada…» | `saldo.py:134` (vía `_mensaje_error`, `tareas/flowplus.py:242`) | `SinSaldo`: 402, «insufficient credit/balance» o «top up» (`providers/wavespeed_common.py:73`) | Recargar WaveSpeed; la franja `_aviso_sin_saldo.html` se limpia sola con la próxima generación que salga bien |
+| «WaveSpeed seguía trabajando en %(modelo)s después de %(min)s min (predicción …)… «Recuperar el video»» | `tareas/flowplus.py:244` | `EsperaAgotada` (en la práctica, la predicción pasó de 2 h, `:544`) | «Recuperar el video» (`cf_recuperar`, sin pagar de nuevo) |
 | «WaveSpeed sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo.» | `tareas/flowplus.py:158` | `_seguir_esperando` encadenó `flowplus_recuperar` | Nada: se retoma solo cada 60 s hasta 2 h |
 | «%(modelo)s rechazó el contenido por sensible…» | `tareas/flowplus.py:250` | `ErrorProveedor` con código 1200 o «sensitive» | Cambiar texto o imágenes; no se cobró |
 | «%(modelo)s no pudo generar: %(detalle)s (código …)» | `tareas/flowplus.py:254` / `:257` sin código | `ErrorProveedor` | Leer el detalle; un intento fallido normalmente no se cobra |
 | «WaveSpeed no aceptó el pedido y no se cobró nada: <motivo>…» (antes del 2026-10-02: el JSON crudo «WaveSpeed (<ruta>) respondió <status>: …») | `tareas/flowplus.py` (`_mensaje_error`, rama `PedidoRechazado`); el texto técnico sigue en `tarea.error` | respuesta no-2xx al lanzar que NO es de saldo (400, 1405…), `wavespeed_common.PedidoRechazado` | Leer el motivo: casi siempre una duración, un formato o una referencia que el modelo no acepta |
 | «WaveSpeed no devolvió un id de predicción…» / «…no devolvió ninguna salida…» | `providers/flowplus_modelos.py:363` / `:370` | lanzamiento sin id / predicción sin outputs | Reintentar; si se repite, es del proveedor |
-| «No hay nada que recuperar: genera de nuevo.» | `tareas/flowplus.py:500` | `recuperar_video` sin `prediccion.id` | Generar de nuevo (con precio a la vista) |
-| «La pieza se descartó antes de generar; no se cobró nada.» | `tareas/flowplus.py:347` / `:423` | la sesión se borró mientras esperaba en la cola | Nada |
-| «La imagen está lista, pero no se pudo lanzar su video…» | `tareas/flowplus.py:407` | falló «Recrear como video» (`concepto.extra.animar_error`) | Ver `animar_error`; la imagen ya pagada sigue ahí |
-| texto crudo de `requests` + gasto «falló al descargar; el modelo ya cobró» | `tareas/flowplus.py:581` / `:585` | falló la descarga de un video ya pagado | «Recuperar el video»: la predicción se conservó |
-| «Tu texto menciona %(menciones)s, pero en la bandeja solo hay…» | `dashboard.py:7930` | `flowplus_prompt.menciones_sin_referencia` (`flowplus_prompt.py:106`) | Agregar la referencia o quitar la mención; no se creó nada |
-| «%(modelo)s solo usa la primera referencia…» / «…usa hasta %(n)s referencias…» | `dashboard.py:7944` / `:7948` | `flowplus_modelos.referencias_de_mas` (`providers/flowplus_modelos.py:163`) | Quitar referencias o cambiar de modelo (Seedance usa solo 1) |
-| «Tus videos de referencia duran %(s)s s en total…» / «…no pasa de %(total)s s sumando…» | `dashboard.py:7961` / `:7965` | `flowplus_modelos.problema_duracion` (`:297`, `:300`) | Recortar los videos o la duración pedida |
-| «%(modelo)s llega a %(aviso)s s: se generará de %(aviso)s s.» | `dashboard.py:8040` | `ajustar_duracion` recortó (aviso, no error) | Nada |
-| «Tu bandeja de referencias cambió (alguien más del proyecto la usó…)» | `dashboard.py:7857` | un `ref_ids` del formulario ya no está en la bandeja (bandeja compartida por proyecto) | Volver a cargar la bandeja |
-| «Ya se estaba generando eso — espera a que termine.» | `dashboard.py:8022` / `:8043` | `trabajos.encolar` encontró el mismo job vivo | Nada: es el freno contra el doble clic |
-| «La generación se interrumpió porque el servidor se reinició — vuelve a intentarlo.» | `dashboard.py:8219` | `_reconciliar_huerfanos` al arrancar: sesión `video_generando` sin job vivo | Si hay `prediccion`, «Recuperar»; si no, regenerar |
+| «No hay nada que recuperar: genera de nuevo.» | `tareas/flowplus.py:523` | `recuperar_video` sin `prediccion.id` | Generar de nuevo (con precio a la vista) |
+| «La pieza se descartó antes de generar; no se cobró nada.» | `tareas/flowplus.py:366` / `:442` | la sesión se borró mientras esperaba en la cola | Nada |
+| «La imagen está lista, pero no se pudo lanzar su video…» | `tareas/flowplus.py:426` | falló «Recrear como video» (`concepto.extra.animar_error`) | Ver `animar_error`; la imagen ya pagada sigue ahí |
+| texto crudo de `requests` + gasto «falló al descargar; el modelo ya cobró» | `tareas/flowplus.py:604` / `:608` | falló la descarga de un video ya pagado | «Recuperar el video»: la predicción se conservó |
+| «Tu texto menciona %(menciones)s, pero en la bandeja solo hay…» | `dashboard.py:7932` | `flowplus_prompt.menciones_sin_referencia` (`flowplus_prompt.py:106`) | Agregar la referencia o quitar la mención; no se creó nada |
+| «%(modelo)s solo usa la primera referencia…» / «…usa hasta %(n)s referencias…» | `dashboard.py:7946` / `:7950` | `flowplus_modelos.referencias_de_mas` (`providers/flowplus_modelos.py:163`) | Quitar referencias o cambiar de modelo (Seedance usa solo 1) |
+| «Tus videos de referencia duran %(s)s s en total…» / «…no pasa de %(total)s s sumando…» | `dashboard.py:7963` / `:7967` | `flowplus_modelos.problema_duracion` (`:297`, `:300`) | Recortar los videos o la duración pedida |
+| «%(modelo)s llega a %(aviso)s s: se generará de %(aviso)s s.» | `dashboard.py:8042` | `ajustar_duracion` recortó (aviso, no error) | Nada |
+| «Tu bandeja de referencias cambió (alguien más del proyecto la usó…)» | `dashboard.py:7859` | un `ref_ids` del formulario ya no está en la bandeja (bandeja compartida por proyecto) | Volver a cargar la bandeja |
+| «Ya se estaba generando eso — espera a que termine.» | `dashboard.py:8024` / `:8045` | `trabajos.encolar` encontró el mismo job vivo | Nada: es el freno contra el doble clic |
+| «La generación se interrumpió porque el servidor se reinició — vuelve a intentarlo.» | `dashboard.py:8221` | `_reconciliar_huerfanos` al arrancar: sesión `video_generando` sin job vivo | Si hay `prediccion`, «Recuperar»; si no, regenerar |
 
 ### Final edition y editor
 
 | Lo que ve la persona | Sale de | Lo dispara |
 |---|---|---|
-| «No se pudo generar la voz (revisa la voz elegida, '%(voz)s')…» | `final_edition/produccion.py:166` y `:287` (`VozFatal`, `:42`); `final_edition/__init__.py:718` | falló el PRIMER bloque de voz |
+| «No se pudo generar la voz (revisa la voz elegida, '%(voz)s')…» | `final_edition/produccion.py:166` y `:287` (`VozFatal`, `:42`); `final_edition/__init__.py:742` | falló el PRIMER bloque de voz |
 | «%(nombre)s lista (sin voz/música).» | `tareas/final_edition.py:71` | final degradada: falló la voz (no el primero) o la música |
-| `str(e)` crudo del guion o del render | `final_edition/__init__.py:621` / `:783` | excepción en guion, cortes, texto o render (en `pieza.error` de la final) |
-| «El clon no da para ningún segmento.» | `final_edition/__init__.py:670`; `final_edition/produccion.py:140` | `planificar_segmentos` vacío |
+| `str(e)` crudo del guion o del render | `final_edition/__init__.py:640` / `:807` | excepción en guion, cortes, texto o render (en `pieza.error` de la final) |
+| «El clon no da para ningún segmento.» | `final_edition/__init__.py:694`; `final_edition/produccion.py:140` | `planificar_segmentos` vacío |
 | «No pude crear la voz; intenta de nuevo…» / «La voz quedó lista, pero no se pudieron sacar sus subtítulos…» | `tareas/edicion.py:455` / `:58` | voz en off del editor |
 | «interrumpido: …» · «Falta el material %(mid)s…» | `tareas/edicion.py:314` · `:190` | render del editor interrumpido · material roto |
 

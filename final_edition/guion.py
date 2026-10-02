@@ -41,7 +41,8 @@ class GuionInvalido(Exception):
     """El guion sigue inválido después de pedir corrección a Claude. Su texto
     es el `error` que ve la persona en la final: se arma con gettext (el
     worker corre en el idioma del proyecto). `costo_usd` es lo que ya cobraron
-    las llamadas que no sirvieron: quien la atrapa lo anota como gasto."""
+    las llamadas que no sirvieron: quien la atrapa lo anota como gasto. Una
+    excepción de la API después de una llamada pagada lleva el mismo atributo."""
     def __init__(self, errores, costo_usd=0.0):
         self.errores = list(errores)
         self.costo_usd = round(float(costo_usd or 0.0), 4)
@@ -410,7 +411,13 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
     errores = []
     guion_sin_bloqueo = None
     for intento in range(2):
-        texto, usd = _llamar(client, system, mensajes)
+        try:
+            texto, usd = _llamar(client, system, mensajes)
+        except Exception as e:
+            # La corrección falló (timeout, 529, conexión) después de que la primera
+            # llamada YA se cobró: lo pagado viaja con el error para que se anote.
+            e.costo_usd = round(costo, 4)
+            raise
         costo += usd
         guion = _parsear(texto)
         extra = []

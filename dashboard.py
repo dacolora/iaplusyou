@@ -7135,7 +7135,9 @@ def fe_preparar(cliente, cf_id):
     encolado = trabajos.encolar(
         tareas_fe.job_id_guion(cliente, cf_id), "final_guion",
         {"cliente": cliente, "cf_id": cf_id, "opciones": opciones},
-        cliente=cliente, duracion_estimada=25, max_intentos=2,
+        # Un solo intento: el guion cobra (Whisper + Claude); un reintento automático pagaba
+        # otra vez y pisaba el gasto del primero con la misma referencia (2026-10-02).
+        cliente=cliente, duracion_estimada=25, max_intentos=1,
     )
     flash(gettext("Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises.") if encolado
           else gettext("Ya se estaba escribiendo el guion de esta pieza."), "ok")

@@ -166,13 +166,14 @@ def test_estimar_sin_tarifa_no_inventa(monkeypatch):
 
 def test_estimar_tarifas_fijas_y_final_por_pais():
     import gastos
-    assert gastos.estimar("guion") == {"usd": 0.02, "texto": "US$ 0,02 aprox.", "detalle": "una llamada a Claude"}
+    assert gastos.estimar("guion") == {"usd": 0.13, "texto": "US$ 0,13 aprox.",
+                                       "detalle": "hasta dos llamadas a Claude y la transcripción de la referencia"}
     assert gastos.estimar("regla_producto")["usd"] == 0.01
     assert gastos.estimar("caption_organico")["usd"] == 0.01
-    assert gastos.estimar("final")["usd"] == 0.10
-    assert gastos.estimar("final", paises=3)["usd"] == 0.30
-    assert gastos.estimar("reedicion", paises=2)["usd"] == 0.20
-    assert gastos.TARIFAS["final"] == 0.10 and "final_pais_extra" not in gastos.TARIFAS
+    assert gastos.estimar("final")["usd"] == 0.20
+    assert gastos.estimar("final", paises=3)["usd"] == pytest.approx(0.60)
+    assert gastos.estimar("reedicion", paises=2)["usd"] == 0.40
+    assert gastos.TARIFAS["final"] == 0.20 and "final_pais_extra" not in gastos.TARIFAS
 
 
 def test_estimar_swap_por_proveedor():

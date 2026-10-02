@@ -300,6 +300,27 @@ def test_traducir_con_guion_invalido_lleva_lo_que_cobro_claude(entorno, monkeypa
     with pytest.raises(guion_mod.GuionInvalido) as exc:
         produccion.traducir("acme", ed, "en", "US", 24.99, "Rachel", True)
     assert exc.value.costo_pagado == pytest.approx(0.035)
+    # Su capa lo dice: sin ella, el gasto de la final decía «nada cobrado» con usd 0,035.
+    capa = exc.value.capas_pagadas["guion"]
+    assert capa["costo_usd"] == pytest.approx(0.035) and capa["estado"] == "error"
+
+
+def test_guion_base_invalido_dentro_de_producir_se_anota_una_sola_vez(entorno, monkeypatch):
+    """M9 de la revisión: el guion base que sale inválido al producir lo anota `preparar_guion`
+    (fila `guion:`); la final no lo vuelve a sumar."""
+    import sqlalchemy as sa
+    import db
+    from final_edition import guion as guion_mod, produccion
+
+    def invalido(*a, **k):
+        raise guion_mod.GuionInvalido(["el cta no cabe"], costo_usd=0.04)
+    monkeypatch.setattr(guion_mod, "generar_guion_base", invalido)
+    with pytest.raises(guion_mod.GuionInvalido):
+        produccion.producir("acme", entorno["cf_id"], "es", "CO", {"precio": 89900}, ref_sufijo=":t9")
+    with db.conectar() as con:
+        filas = [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == "acme"))]
+    assert [f["referencia"].split(":")[0] for f in filas] == ["guion"]
+    assert filas[0]["usd"] == pytest.approx(0.04)
 
 
 def test_variante_invalida_anota_lo_que_cobro_claude(entorno, monkeypatch):

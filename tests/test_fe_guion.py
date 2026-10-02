@@ -229,6 +229,37 @@ def test_guion_invalido_lleva_lo_que_ya_se_pago(monkeypatch):
     assert exc.value.costo_usd == pytest.approx((2000 * 2 + 3000 * 10 + 2500 * 2 + 3500 * 10) / 1e6)
 
 
+def test_si_la_correccion_se_corta_viaja_lo_que_cobro_la_primera(monkeypatch):
+    from final_edition import guion
+    malo = _guion_valido()
+    malo["bloques"][-1]["fin_s"] = 14.0
+    reg = _instalar_fake(monkeypatch, [(json.dumps(malo), _Uso(2000, 3000))])
+    original = reg.respuestas
+
+    class Cortada(Exception):
+        pass
+
+    from final_edition import guion as mod
+    cliente_real = mod.anthropic.Anthropic
+
+    class ConCorte:
+        def __init__(self, api_key=None):
+            self._real = cliente_real(api_key=api_key)
+            self.messages = self
+            self.n = 0
+
+        def create(self, **kw):
+            self.n += 1
+            if self.n == 2:
+                raise Cortada("529 overloaded")
+            return self._real.messages.create(**kw)
+    monkeypatch.setattr(mod.anthropic, "Anthropic", ConCorte)
+    with pytest.raises(Cortada) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert exc.value.costo_usd == pytest.approx((2000 * 2 + 3000 * 10) / 1e6)
+    assert original == []
+
+
 def test_localizar_guion_a_en_us(monkeypatch):
     from final_edition import guion
     base = _guion_valido()

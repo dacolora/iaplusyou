@@ -257,7 +257,19 @@ def _mensaje_error(e, cliente):
             return gettext("%(modelo)s no pudo generar: %(detalle)s. Un intento fallido normalmente no se cobra.",
                            modelo=e.nombre_modelo, detalle=e.detalle or e.estado)
         if isinstance(e, wavespeed_common.PedidoRechazado):
-            # PND-107: antes salía el JSON crudo de WaveSpeed en la tarjeta.
+            # PND-107: antes salía el JSON crudo de WaveSpeed en la tarjeta. Cada tipo de
+            # rechazo dice lo suyo; un 5xx NO promete que no se cobró (WaveSpeed pudo
+            # haber creado la predicción sin devolver su id).
+            if e.status in (401, 403):
+                return gettext("WaveSpeed rechazó la llave de Creatv (respuesta %(status)s): no se generó ni se cobró "
+                               "nada. Avísale al administrador.", status=e.status)
+            if e.status == 429:
+                return gettext("WaveSpeed está recibiendo demasiados pedidos (respuesta 429): no se generó ni se "
+                               "cobró nada. Vuelve a intentarlo en unos minutos.")
+            if e.status >= 500:
+                return gettext("WaveSpeed tuvo una falla de su lado (respuesta %(status)s) y no confirmó el pedido. "
+                               "Espera unos minutos antes de volver a generar; si se repite, cambia de modelo.",
+                               status=e.status)
             if e.mensaje:
                 return gettext("WaveSpeed no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el "
                                "formato o las referencias y vuelve a generar.", motivo=e.mensaje)
@@ -470,13 +482,17 @@ def ejecutar_video(tarea):
             # El lanzamiento se rechazó: no hay predicción nueva que esperar (una
             # vieja de un intento anterior no es este video) y nada se cobró.
             saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
-        if (not isinstance(e, wavespeed_common.ErrorProveedor) and not sin_saldo
+        # Un pedido que WaveSpeed rechazó al lanzar no creó ninguna predicción: una que
+        # haya en la sesión es de un intento anterior y no es este video (revisión de PND-107).
+        rechazado = isinstance(e, wavespeed_common.PedidoRechazado)
+        if (not isinstance(e, wavespeed_common.ErrorProveedor) and not sin_saldo and not rechazado
                 and (actual.get("prediccion") or {}).get("id")):
             # Ya se lanzó y se paga: un corte de red o un 5xx mientras se
             # esperaba no borra la predicción; se la sigue esperando.
             return _seguir_esperando(cliente, cf_id, actual["prediccion"]["id"], modelo, actual)
         campos = {"estado": "error", "error": _mensaje_error(e, cliente)}
-        if not isinstance(e, (wavespeed_common.EsperaAgotada, wavespeed_common.SinSaldo)):
+        if not isinstance(e, (wavespeed_common.EsperaAgotada, wavespeed_common.SinSaldo,
+                              wavespeed_common.PedidoRechazado)):
             # Un rechazo del proveedor no deja nada que recuperar; el tiempo
             # agotado sí: la predicción sigue viva y su id ya está en la sesión.
             campos["prediccion"] = None
