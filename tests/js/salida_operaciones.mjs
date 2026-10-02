@@ -39,7 +39,7 @@ anotar("agregar_imagen_llenar", () => op.agregarImagen(docBase(), { id: 4, ancho
 anotar("agregar_audio_musica", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO));
 anotar("agregar_audio_efecto", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "efecto" }, INFO));
 for (const preset of ["titulo", "subtitulo", "precio", "llamado"]) {
-  anotar(`agregar_texto_${preset}`, () => op.agregarTexto(docBase(), 500, preset, INFO));
+  anotar(`agregar_texto_${preset}`, () => op.agregarTexto(docBase(), 500, preset, {}, INFO));
 }
 anotar("cortar_audio", () => op.cortarClip(docBase(), "a1", 1000, INFO));
 anotar("cortar_imagen", () => {
@@ -71,7 +71,7 @@ anotar("volumen_sonido", () => op.volumenSonido(op.normalizar(docBase(), INFO), 
 anotar("volumen_sonido_espejo_del_borrador", () => op.volumenSonido(docBase(), "v1", 0.3, INFO));
 for (const preset of op.MEZCLAS) anotar(`cambiar_mezcla_${preset}`, () => op.cambiarMezcla(docBase(), preset, INFO));
 anotar("cambiar_desde_propiedades", () => {
-  let d = op.agregarTexto(docBase(), 500, "titulo", INFO).doc;
+  let d = op.agregarTexto(docBase(), 500, "titulo", {}, INFO).doc;
   const id = "titulo_2";
   for (const cambios of [prop.cambioFondo("pildora", null), prop.cambioFondo("caja", { radio: 1 }), prop.cambioGrosor(12, d.formato),
     prop.cambioSombra(true, d.formato), { estilo: { color: "#FFD60A", alineacion: "izquierda", fuente: "SpaceGrotesk-Bold", tamano: 90 } },
@@ -104,7 +104,7 @@ const INFO_LARGO = { ...INFO, 6: { duracion_ms: 60000 } };
 anotar("agregar_musica_larga_cerca_del_final", () => op.agregarAudio(docBase(), { id: 6 }, 7000, { rol: "musica" }, INFO_LARGO), { ...D, 6: 60000 });
 anotar("agregar_musica_larga_al_final", () => op.agregarAudio(docBase(), { id: 6 }, 8000, { rol: "musica" }, INFO_LARGO), { ...D, 6: 60000 });
 anotar("agregar_efecto_cerca_del_final", () => op.agregarAudio(docBase(), { id: 2 }, 6000, { rol: "efecto" }, INFO));
-anotar("agregar_titulo_al_final", () => op.agregarTexto(docBase(), 8000, "titulo", INFO));
+anotar("agregar_titulo_al_final", () => op.agregarTexto(docBase(), 8000, "titulo", {}, INFO));
 anotar("agregar_imagen_despues_del_final", () => op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 9000, { duracionMs: 12000 }, INFO));
 // Fixes finales (8, 10, 12): fondo.ancho automático, escala inicial acotada, la música no cae en la voz.
 anotar("cambiar_fondo_ancho_automatico", () => {
@@ -280,5 +280,28 @@ const foto60ConSolape = () => {
 };
 anotar("foto_60_solape_ida_y_vuelta", () => op.ponerTransicion(foto60ConSolape(), "foto_2", "corte", 0, D));
 anotar("foto_60_borrar_siguiente", () => op.borrar(foto60ConSolape(), "v1", D));
+
+// ---- Capa 5c (Tarea 7): textos v2, plantillas para vender, emojis y el tinte de un sticker ----
+// Python revisa además (prefijo texto_ e imagen_/vinculado_sticker) que todo
+// texto nacido aquí sea v2 y que validar conserve `version` y `tinte`.
+const STICKER = { id: 9, tipo: "imagen", ancho: 512, alto: 512 };
+anotar("texto_v2_titulo", () => op.agregarTexto(docBase(), 500, "titulo", {}, INFO));
+anotar("texto_plantilla_oferta", () => op.agregarTexto(docBase(), 500, "oferta", {}, INFO));
+anotar("texto_plantilla_descuento", () => op.agregarTexto(docBase(), 500, "descuento", {}, INFO));
+anotar("texto_emoji", () => op.agregarTexto(docBase(), 500, "emoji", { literal: "🔥" }, INFO));
+anotar("texto_editado_pasa_a_v2", () => op.editarTexto(docBase(), "t1", "Hola 🔥", "es", INFO));
+anotar("texto_actualizado", () => op.actualizarTexto(docBase(), "t1", INFO));
+anotar("texto_ancho_desde_propiedades", () => op.cambiar(docBase(), "t1", prop.cambioAncho(50), INFO));
+anotar("texto_sin_limite_desde_propiedades", () => op.cambiar(docBase(), "t1", prop.cambioSinLimite(true), INFO));
+anotar("imagen_con_tinte", () => op.agregarImagen(docBase(), STICKER, 1000, { fraccion: 0.35, tinte: "#FFD400" }, INFO));
+anotar("imagen_tinte_cambiado", () => {
+  const con = op.agregarImagen(docBase(), STICKER, 1000, { fraccion: 0.35, tinte: "#FFD400" }, INFO);
+  return op.cambiar(con.doc, con.seleccion, { tinte: "#e11d48" }, INFO);
+});
+// D13: un sticker sobre v1 se mueve con él al reordenar (vincular).
+anotar("vinculado_sticker", () => {
+  const antes = op.agregarImagen(docVinculos(), STICKER, 5000, { fraccion: 0.35, tinte: "#FFD400" }, D).doc;
+  return { doc: vinc.seguirPrincipal(antes, op.moverPrincipal(antes, "v1", 0, D).doc, D) };
+});
 
 process.stdout.write(JSON.stringify(casos));

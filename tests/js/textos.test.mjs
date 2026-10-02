@@ -45,13 +45,13 @@ test("capa 4c: sesión vencida, «Producir», avisos de carga, borrar y emojis e
   const { respuestaProducir } = await import("../../static/editor/producir.js");
   const { avisosCarga } = await import("../../static/editor/avisos_carga.js");
   const { motivoNoBorrar } = await import("../../static/editor/biblioteca.js");
-  const { avisoEmoji } = await import("../../static/editor/propiedades_modelo.js");
+  const { avisoEmojiSubtitulos } = await import("../../static/editor/subtitulos_modelo.js");
   ponerTextos({
     "guardado.sesion": "Your session ended: reload the page and log in.",
     "producir.fallo_servidor": "Couldn't produce: the server failed (error {status}). Try again in a moment.",
     "vista.carga_faltan": "{n} files of this edit are missing (they were deleted or aren't from this project): those parts won't show.",
     "bib.no_se_borra": "That file can't be deleted from here.",
-    "prop.aviso_emoji": "Emojis don't show in the final video: they're removed when it's produced.",
+    "sub.aviso_emoji": "Emojis don't show in the final video's subtitles: they're removed when it's produced.",
   }, "en");
   assert.equal(mensajeSesion(), "Your session ended: reload the page and log in.");
   assert.equal(respuestaProducir({ ok: false, status: 502, headers: { get: () => "text/html" } }, null).texto,
@@ -59,5 +59,5 @@ test("capa 4c: sesión vencida, «Producir», avisos de carga, borrar y emojis e
   const doc = { pistas: [{ id: "p_video", tipo: "video", clips: [{ id: "a", material_id: 7 }, { id: "b", material_id: 8 }] }] };
   assert.match(avisosCarga(doc, {}, {}).faltan.texto, /^2 files of this edit are missing/);
   assert.equal(motivoNoBorrar({ id: 1, origen: "musica" }, doc), "That file can't be deleted from here.");
-  assert.equal(avisoEmoji(), "Emojis don't show in the final video: they're removed when it's produced.");
+  assert.equal(avisoEmojiSubtitulos(), "Emojis don't show in the final video's subtitles: they're removed when it's produced.");
 });

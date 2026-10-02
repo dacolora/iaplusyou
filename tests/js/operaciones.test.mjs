@@ -293,7 +293,7 @@ test("agregarAudio toma la duración de la fuente entera y distingue el fundido 
 
 test("agregarTexto usa tamaños fraccionarios del lienzo y el fondo de marca en el preset precio", () => {
   for (const [preset, px, y] of [["titulo", 72, 0.2], ["subtitulo", 48, 0.75], ["precio", 56, 0.6], ["llamado", 52, 0.85]]) {
-    const r = puro((d) => op.agregarTexto(d, 500, preset, INFO));
+    const r = puro((d) => op.agregarTexto(d, 500, preset, {}, INFO));
     const c = clipDe(r.doc, r.seleccion);
     assert.equal(c.estilo.tamano, px / 1920);
     assert.equal(c.transform.y, y);
@@ -302,7 +302,7 @@ test("agregarTexto usa tamaños fraccionarios del lienzo y el fondo de marca en 
     assert.doesNotMatch(c.texto.literal, /\d|\$/);
     if (preset === "precio") assert.equal(c.estilo.fondo.color, "#7c3aed");
   }
-  invalida(() => op.agregarTexto(docBase(), 0, "otro", INFO), /texto/i);
+  invalida(() => op.agregarTexto(docBase(), 0, "otro", {}, INFO), /texto/i);
 });
 
 test("cortarClip parte el recorte en audio, solo el tiempo en texto (y copia el png), sin tocar la principal aparte", () => {
@@ -455,7 +455,7 @@ test("normalizar nunca crea p_sonido: cualquier edición de un documento sin son
   assert.ok(!tienePista(normalizar(structuredClone(d), INFO), "p_sonido"));
   for (const r of [
     op.moverA(d, "t1", 2500, INFO), op.cambiar(d, "t1", { transform: { x: 0.3 } }, INFO), op.cortarEn(d, 2000, INFO),
-    op.duplicar(d, "v0", INFO), op.cambiarVelocidad(d, "v1", 1, INFO), op.agregarTexto(d, 0, "titulo", INFO),
+    op.duplicar(d, "v0", INFO), op.cambiarVelocidad(d, "v1", 1, INFO), op.agregarTexto(d, 0, "titulo", {}, INFO),
     op.agregarVideo(d, { id: 3 }, {}, INFO),                     // un video sin sonido tampoco la abre
   ]) assert.ok(!tienePista(r.doc, "p_sonido"), "apareció el sonido de la escena");
 });
@@ -507,10 +507,10 @@ test("agregarAudio: la música y los efectos terminan donde termina el video", (
 });
 
 test("agregarTexto y agregarImagen con el cabezal al final: 3 s que terminan al final; más adentro, se acortan", () => {
-  const titulo = op.agregarTexto(docBase(), 8000, "titulo", INFO);
+  const titulo = op.agregarTexto(docBase(), 8000, "titulo", {}, INFO);
   const t = clipDe(titulo.doc, titulo.seleccion);
   assert.deepEqual([t.inicio_ms, t.duracion_ms], [5000, 3000]);
-  const casi = op.agregarTexto(docBase(), 7950, "subtitulo", INFO);            // a menos de MIN_CLIP_MS del final
+  const casi = op.agregarTexto(docBase(), 7950, "subtitulo", {}, INFO);            // a menos de MIN_CLIP_MS del final
   assert.deepEqual([clipDe(casi.doc, casi.seleccion).inicio_ms, clipDe(casi.doc, casi.seleccion).duracion_ms], [5000, 3000]);
   const img = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 7000, {}, INFO);
   assert.deepEqual([clipDe(img.doc, img.seleccion).inicio_ms, clipDe(img.doc, img.seleccion).duracion_ms], [7000, 1000]);
@@ -1021,4 +1021,187 @@ test("normalizar acota a FOTO_MAX_MS cualquier foto de la principal y la recoloc
   const n = op.normalizar(d, DURACIONES);
   assert.deepEqual([n.pistas[0].clips[1].duracion_ms, n.pistas[0].clips[1].recorte, n.pistas[0].clips[2].inicio_ms],
     [60000, { desde_ms: 0, hasta_ms: 60000 }, 64000]);
+});
+
+// ---- Capa 5c (Tarea 7): textos v2, ancho, plantillas para vender y el tinte de un sticker ----
+const STICKER = { id: 9, tipo: "imagen", ancho: 512, alto: 512 };
+const estiloDe = (r) => clipDe(r.doc, r.seleccion).estilo;
+const sinVersion = (doc, id = "t1") => !("version" in clipDe(doc, id).estilo);
+
+test("FUENTES es el catálogo de fuentes (D9) y ANCHO_TEXTO el ancho del texto (D7)", () => {
+  assert.deepEqual(op.FUENTES, ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold", "Poppins-ExtraBold", "ArchivoBlack-Regular",
+    "Anton-Regular", "BebasNeue-Regular", "LilitaOne-Regular", "Pacifico-Regular", "CaveatBrush-Regular", "DMSerifDisplay-Regular"]);
+  assert.deepEqual(op.ANCHO_TEXTO, { min: 0.3, max: 1, defecto: 0.86 });
+});
+
+test("agregarTexto: todo texto nuevo nace v2 y con su ancho (D3, D7.1)", () => {
+  for (const [preset, ancho] of [["titulo", 0.86], ["subtitulo", 0.86], ["llamado", 0.8], ["precio", null]]) {
+    const e = estiloDe(puro((d) => op.agregarTexto(d, 0, preset, {}, INFO)));
+    assert.equal(e.version, 2, preset);
+    assert.equal(e.ancho_max, ancho, preset);
+  }
+});
+
+test("agregarTexto: las plantillas para vender, con su fuente, su palabra, su color y su fondo (D12.1)", () => {
+  const ALTO = 1920;
+  const tabla = [
+    ["oferta", "Anton-Regular", 96, "#FFFFFF", "OFERTA", { color: "#E11D48", radio: 0.01 }, null],
+    ["nuevo", "BebasNeue-Regular", 110, "#111111", "NUEVO", { color: "#FFD400", radio: 1 }, null],
+    ["descuento", "ArchivoBlack-Regular", 120, "#FFD400", "-50 %", null, { color: "#111111", grosor: 6 / ALTO }],
+    ["envio", "Poppins-ExtraBold", 56, "#FFFFFF", "ENVÍO GRATIS", { color: "#16A34A", radio: 1 }, null],
+    ["ultimas", "Poppins-ExtraBold", 52, "#FFFFFF", "¡ÚLTIMAS UNIDADES!", { color: "#111111", radio: 0.01 }, null],
+    ["mas_vendido", "LilitaOne-Regular", 64, "#111111", "MÁS VENDIDO", { color: "#FFD400", radio: 1 }, null],
+  ];
+  for (const [preset, fuente, px, color, literal, fondo, contorno] of tabla) {
+    const r = puro((d) => op.agregarTexto(d, 0, preset, {}, INFO));
+    const c = clipDe(r.doc, r.seleccion);
+    assert.equal(c.texto.literal, literal, preset);
+    assert.equal(c.estilo.fuente, fuente, preset);
+    assert.equal(c.estilo.tamano, px / ALTO, preset);
+    assert.equal(c.estilo.color, color, preset);
+    assert.equal(c.estilo.version, 2, preset);
+    assert.equal(c.estilo.ancho_max, null, preset);
+    assert.equal(c.transform.y, 0.35, preset);
+    assert.equal(c.estilo.sombra, null, preset);
+    if (fondo) {
+      assert.equal(c.estilo.fondo.color, fondo.color, preset);
+      assert.equal(c.estilo.fondo.radio, fondo.radio, preset);
+      assert.equal(c.estilo.fondo.opacidad, 1, preset);
+    } else {
+      assert.equal(c.estilo.fondo, null, preset);
+    }
+    assert.deepEqual(c.estilo.contorno, contorno, preset);
+  }
+  // «-50 %» lleva espacio duro (U+00A0): nunca se parte
+  const descuento = op.agregarTexto(docBase(), 0, "descuento", {}, INFO);
+  assert.deepEqual([...clipDe(descuento.doc, descuento.seleccion).texto.literal].map((ch) => ch.codePointAt(0)),
+    [0x2D, 0x35, 0x30, 0xA0, 0x25]);
+});
+
+test("agregarTexto: la fuente de una plantilla es la preferida si está en FUENTES; si no, su respaldo (Inter-Bold)", () => {
+  for (const [preset, def] of Object.entries(op.PRESETS_TEXTO)) {
+    assert.ok(op.FUENTES.includes(def.fuente), `${preset}: ${def.fuente}`);
+    if (def.respaldo !== undefined) assert.equal(def.respaldo, "Inter-Bold", preset);
+  }
+  assert.equal(op.fuenteDePreset(op.PRESETS_TEXTO.oferta), "Anton-Regular");
+  const sinAnton = op.FUENTES.filter((f) => f !== "Anton-Regular");
+  assert.equal(op.fuenteDePreset(op.PRESETS_TEXTO.oferta, sinAnton), "Inter-Bold");
+  assert.equal(op.fuenteDePreset({ ...op.PRESETS_TEXTO.mas_vendido, fuente: "Inexistente-Regular" }), "Inter-Bold");
+  assert.equal(op.fuenteDePreset(op.PRESETS_TEXTO.titulo), "Inter-Bold");
+  // los presets no se cambian desde afuera
+  assert.throws(() => { op.PRESETS_TEXTO.oferta.fuente = "Pacifico-Regular"; }, TypeError);
+});
+
+test("agregarTexto «emoji»: pide el emoji; nace a 160 px, sin fondo, contorno ni sombra y sin límite de ancho (D12.2)", async () => {
+  invalida(() => op.agregarTexto(docBase(), 0, "emoji", {}, INFO), /^Elige un emoji\.$/);
+  invalida(() => op.agregarTexto(docBase(), 0, "emoji", { literal: "  " }, INFO), /^Elige un emoji\.$/);
+  const r = puro((d) => op.agregarTexto(d, 0, "emoji", { literal: "🔥" }, INFO));
+  const c = clipDe(r.doc, r.seleccion);
+  assert.equal(c.texto.literal, "🔥");
+  assert.equal(c.estilo.tamano, 160 / 1920);
+  assert.deepEqual([c.estilo.fondo, c.estilo.contorno, c.estilo.sombra, c.estilo.ancho_max], [null, null, null, null]);
+  assert.deepEqual([c.estilo.fuente, c.estilo.version, c.transform.y], ["Inter-Bold", 2, 0.4]);
+  // `literal` también reemplaza la palabra de otra plantilla
+  const sale = op.agregarTexto(docBase(), 0, "oferta", { literal: "SALE" }, INFO);
+  assert.equal(clipDe(sale.doc, sale.seleccion).texto.literal, "SALE");
+  // la página agrega `info` al final (vinculos.operar): las opciones van antes, como en agregarImagen
+  const vinc = await import("../../static/editor/vinculos.js");
+  const pagina = vinc.operar(op.agregarTexto, docBase(), [0, "emoji", { literal: "🔥" }], INFO);
+  assert.equal(clipDe(pagina.doc, pagina.seleccion).texto.literal, "🔥");
+  const sinOpciones = vinc.operar(op.agregarTexto, docBase(), [0, "titulo", {}], INFO);
+  assert.equal(clipDe(sinOpciones.doc, sinOpciones.seleccion).texto.literal, "Escribe aquí");
+});
+
+test("un texto viejo (v1) pasa a v2 al cambiarle el contenido, el estilo o el tamaño; moverlo no (D3)", () => {
+  assert.ok(sinVersion(docBase()));
+  assert.equal(clipDe(puro((d) => op.editarTexto(d, "t1", "Hola 🔥", "es", INFO)).doc, "t1").estilo.version, 2);
+  assert.equal(clipDe(op.cambiar(docBase(), "t1", { estilo: { color: "#000000" } }, INFO).doc, "t1").estilo.version, 2);
+  assert.equal(clipDe(op.cambiar(docBase(), "t1", { transform: { escala: 2 } }, INFO).doc, "t1").estilo.version, 2);
+  for (const [nombre, hacer] of [
+    ["x", (d) => op.cambiar(d, "t1", { transform: { x: 0.3 } }, INFO)],
+    ["x, y y opacidad", (d) => op.cambiar(d, "t1", { transform: { x: 0.3, y: 0.2, opacidad: 0.5 } }, INFO)],
+    ["moverA", (d) => op.moverA(d, "t1", 2000, INFO)],
+    ["recortar", (d) => op.recortar(d, "t1", "fin", -500, INFO)],
+    ["animación", (d) => op.cambiar(d, "t1", { animacion: { entrada: "deslizar" } }, INFO)],
+  ]) {
+    const doc = hacer(docBase()).doc;
+    assert.ok(sinVersion(doc), nombre);
+    assert.deepEqual(clipDe(doc, "t1").estilo, clipDe(docBase(), "t1").estilo, `${nombre}: el estilo queda byte a byte`);
+  }
+  // el estilo que ya tenía se conserva al pasar a v2
+  const v2 = clipDe(op.cambiar(docBase(), "t1", { transform: { escala: 2 } }, INFO).doc, "t1").estilo;
+  assert.deepEqual(v2, { fuente: "Inter-Bold", version: 2 });
+  // una imagen agrandada no gana estilo
+  const img = op.agregarImagen(docBase(), STICKER, 0, {}, INFO);
+  assert.equal(clipDe(op.cambiar(img.doc, img.seleccion, { transform: { escala: 2 } }, INFO).doc, img.seleccion).estilo, undefined);
+});
+
+test("editarTexto de una variable pasa a v2 todos los textos que la muestran (todos cambiaron de contenido)", () => {
+  const base = docBase();
+  base.pistas[1].clips[0].texto = { variable: "gancho" };
+  base.variables.textos = { gancho: { es: "Hola" } };
+  const dup = duplicar(base, "t1", INFO).doc;
+  assert.ok(sinVersion(dup, "t1") && sinVersion(dup, "t1_2"));
+  const r = op.editarTexto(dup, "t1", "Hola 🔥", "es", INFO).doc;
+  assert.equal(clipDe(r, "t1").estilo.version, 2);
+  assert.equal(clipDe(r, "t1_2").estilo.version, 2);
+});
+
+test("actualizarTexto: un texto viejo pasa a v2 en un paso; uno v2 queda igual; solo en textos", () => {
+  const base = docBase();
+  base.pngs = { t1: 20 };
+  const r = puro((d) => op.actualizarTexto(d, "t1", INFO), base);
+  assert.equal(r.seleccion, "t1");
+  assert.equal(clipDe(r.doc, "t1").estilo.version, 2);
+  assert.equal(clipDe(r.doc, "t1").texto.literal, "Hola");
+  assert.deepEqual(r.doc.pngs, {}, "lo que se dibujó como v1 ya no vale");
+  assert.deepEqual(op.actualizarTexto(r.doc, "t1", INFO).doc, r.doc);
+  const yaV2 = docBase();
+  yaV2.pistas[1].clips[0].estilo.version = 2;
+  const igual = op.actualizarTexto(yaV2, "t1", INFO);
+  assert.deepEqual(igual.doc, yaV2, "igual en contenido (ni siquiera se normaliza)");
+  assert.equal(igual.seleccion, "t1");
+  invalida(() => op.actualizarTexto(docBase(), "v0", INFO), /^El estilo solo se cambia en clips de texto\.$/);
+  invalida(() => op.actualizarTexto(docBase(), "nada", INFO), /ya no existe/);
+});
+
+test("cambiar(tinte): solo en imágenes; el color en mayúsculas, null lo quita y lo demás es de contrato", () => {
+  const { doc, seleccion: img } = op.agregarImagen(docBase(), STICKER, 0, {}, INFO);
+  const r = puro((d) => op.cambiar(d, img, { tinte: "#ff0000" }, INFO), doc);
+  assert.equal(clipDe(r.doc, img).tinte, "#FF0000");
+  assert.equal(r.seleccion, img);
+  const sin = op.cambiar(r.doc, img, { tinte: null }, INFO).doc;
+  assert.ok(!("tinte" in clipDe(sin, img)));
+  for (const malo of ["rojo", "#FF000080", "#F00", 7, true]) {
+    invalida(() => op.cambiar(doc, img, { tinte: malo }, INFO), /^tinte debe ser un color #RRGGBB\.$/);
+  }
+  invalida(() => op.cambiar(docBase(), "t1", { tinte: "#FF0000" }, INFO), /^El color se cambia solo en los stickers\.$/);
+  invalida(() => op.cambiar(docBase(), "v0", { tinte: "#FF0000" }, INFO), /^El color se cambia solo en los stickers\.$/);
+  invalida(() => op.cambiar(docBase(), "a1", { tinte: null }, INFO), /^El color se cambia solo en los stickers\.$/);
+});
+
+test("cambiar(estilo.fuente) acepta todo el catálogo y rechaza lo demás con el mensaje de contrato", () => {
+  for (const f of op.FUENTES) {
+    const d = op.cambiar(docBase(), "t1", { estilo: { fuente: f } }, INFO).doc;
+    assert.deepEqual([clipDe(d, "t1").estilo.fuente, clipDe(d, "t1").estilo.version], [f, 2]);
+  }
+  invalida(() => op.cambiar(docBase(), "t1", { estilo: { fuente: "Comic" } }, INFO), /^Esa fuente no está disponible \(Comic\)\.$/);
+});
+
+test("agregarImagen: `fraccion` del ancho del lienzo y `tinte` (un sticker); sin opciones, lo de siempre", () => {
+  const r = puro((d) => op.agregarImagen(d, STICKER, 0, { fraccion: 0.35, tinte: "#FFD400" }, INFO));
+  const c = clipDe(r.doc, r.seleccion);
+  assert.equal(c.transform.escala, 0.73828125);              // 0,35 × 1080 / 512
+  assert.equal(c.tinte, "#FFD400");
+  const sin = op.agregarImagen(docBase(), STICKER, 0, {}, INFO);
+  assert.equal(clipDe(sin.doc, sin.seleccion).transform.escala, 1.265625);   // 0,6 × 1080 / 512
+  assert.ok(!("tinte" in clipDe(sin.doc, sin.seleccion)));
+  const nulo = op.agregarImagen(docBase(), STICKER, 0, { tinte: null }, INFO);
+  assert.ok(!("tinte" in clipDe(nulo.doc, nulo.seleccion)));
+  const minusculas = op.agregarImagen(docBase(), STICKER, 0, { tinte: "#ffd400" }, INFO);
+  assert.equal(clipDe(minusculas.doc, minusculas.seleccion).tinte, "#FFD400");
+  invalida(() => op.agregarImagen(docBase(), STICKER, 0, { tinte: "amarillo" }, INFO), /^tinte debe ser un color #RRGGBB\.$/);
+  // `llenar` sigue mandando sobre `fraccion`
+  const llena = op.agregarImagen(docBase(), STICKER, 0, { llenar: true, fraccion: 0.35 }, INFO);
+  assert.equal(clipDe(llena.doc, llena.seleccion).transform.escala, 3.75);   // 1920 / 512
 });

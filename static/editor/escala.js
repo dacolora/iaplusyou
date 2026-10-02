@@ -450,7 +450,8 @@ export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccio
       return ["agregarAudio", cosa.material, ms, { rol: "voz", idioma: idiomaDeVoz(cosa.material?.idioma, destino).idioma }];
     }
     case "texto":
-      return ["agregarTexto", ms, cosa.preset];
+      // las opciones de agregarTexto (capa 5c: `literal`) van antes de `info`, que la página agrega al final
+      return ["agregarTexto", ms, cosa.preset, {}];
     case "transicion": {
       if (!punto) return pedidoTransicion(doc, seleccion, ms, cosa.transicion);
       const id = corteCercano(doc, ms);

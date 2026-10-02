@@ -1424,6 +1424,9 @@ msgstr "- %(plataforma)s: published%(detalle)s"
 msgid "- %(plataforma)s: subida, confirmación pendiente (id %(id)s)"
 msgstr "- %(plataforma)s: uploaded, confirmation pending (id %(id)s)"
 
+msgid "-50 %"
+msgstr "-50 %"
+
 #, python-format
 msgid ". Diagnóstico: %(a)s"
 msgstr ". Diagnosis: %(a)s"
@@ -1964,6 +1967,9 @@ msgstr "Analyzing references…"
 
 msgid "Analizar referencias y generar guía de estilo"
 msgstr "Analyze references and generate style guide"
+
+msgid "Ancho del texto"
+msgstr "Text width"
 
 msgid "Animación de entrada"
 msgstr "Entrance animation"
@@ -3199,6 +3205,9 @@ msgstr "Clone voice"
 msgid "Cloudflare R2 (almacenamiento)"
 msgstr "Cloudflare R2 (storage)"
 
+msgid "Clásicas"
+msgstr "Classic"
+
 msgid "Colombia"
 msgstr "Colombia"
 
@@ -3352,6 +3361,9 @@ msgstr "With a person"
 
 msgid "Con qué se miden las ventas de este experimento"
 msgstr "What this experiment's sales are measured with"
+
+msgid "Con serifa"
+msgstr "Serif"
 
 msgid "Con tu propia app: sigue los pasos de la tarjeta de Meta."
 msgstr "With your own app: follow the steps on the Meta card."
@@ -3981,6 +3993,9 @@ msgstr "Sprint data (saves on its own)"
 msgid "De %(persona)s:"
 msgstr "From %(persona)s:"
 
+msgid "De impacto"
+msgstr "Display"
+
 msgid "De otros mercados"
 msgstr "From other markets"
 
@@ -4362,6 +4377,9 @@ msgstr "E3 environments"
 msgid "E4 hooks alternativos"
 msgstr "E4 alternate hooks"
 
+msgid "ENVÍO GRATIS"
+msgstr "FREE SHIPPING"
+
 msgid "Ecuador"
 msgstr "Ecuador"
 
@@ -4619,6 +4637,9 @@ msgstr "The clone is too short for any segment."
 
 msgid "El color debe ser hexadecimal, como #4d8dff."
 msgstr "The color must be hexadecimal, like #4d8dff."
+
+msgid "El color se cambia solo en los stickers."
+msgstr "Color can only be changed on stickers."
 
 msgid "El correo no es válido."
 msgstr "The email isn't valid."
@@ -5155,6 +5176,9 @@ msgstr "Choose an audio file."
 
 msgid "Elige un archivo."
 msgstr "Choose a file."
+
+msgid "Elige un emoji."
+msgstr "Pick an emoji."
 
 msgid "Elige un idioma de la lista."
 msgstr "Pick a language from the list."
@@ -6390,6 +6414,9 @@ msgstr "This sprint doesn't have campaigns yet"
 #, python-brace-format
 msgid "Este texto cambia según el país: lo que escribas aquí vale para {destino}."
 msgstr "This text changes by country: what you type here applies to {destino}."
+
+msgid "Este texto es de antes: sus emojis no salen en el video."
+msgstr "This is an older text: its emojis don't show in the video."
 
 msgid "Este video no trae sonido."
 msgstr "This video has no sound."
@@ -7887,12 +7914,6 @@ msgstr "Unknown intent: %(malas)s"
 msgid "Intención inicial (se puede cambiar por referencia):"
 msgstr "Initial intent (can be changed per reference):"
 
-msgid "Inter gruesa"
-msgstr "Inter bold"
-
-msgid "Inter media"
-msgstr "Inter semibold"
-
 msgid "Interacción"
 msgstr "Engagement"
 
@@ -8512,6 +8533,9 @@ msgstr "Launching…"
 msgid "Lanzar a Meta (en pausa)"
 msgstr "Launch to Meta (paused)"
 
+msgid "Las banderas, los tonos de piel y los emojis compuestos salen simplificados."
+msgstr "Flags, skin tones and combined emojis come out simplified."
+
 msgid "Las campañas del asistente no se pudieron leer."
 msgstr "The wizard's campaigns couldn't be read."
 
@@ -8856,8 +8880,8 @@ msgstr "The clips were assembled but couldn't be sent to chat. Create a new vers
 msgid "Los de mayor prioridad van primero al loop de prueba"
 msgstr "The ones with higher priority go first in the test loop"
 
-msgid "Los emojis no salen en el video final: se quitan al producirlo."
-msgstr "Emojis don't show in the final video: they're removed when it's produced."
+msgid "Los emojis no salen en los subtítulos del video final: se quitan al producirlo."
+msgstr "Emojis don't show in the final video's subtitles: they're removed when it's produced."
 
 msgid "Los emojis no salen en los subtítulos: escribe la palabra con letras."
 msgstr "Emojis don't show in subtitles: type the word with letters."
@@ -8944,6 +8968,9 @@ msgstr "Hands"
 
 msgid "Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar se hacen solos. Auto: todo solo salvo con el tope alcanzado. Compras exige el Pixel activo y atribución pixel; Tráfico sirve siempre. La atribución sugerida sale de lo conectado en Configuración: pulsa «Comprobar Pixel» allí para que la tenga en cuenta."
 msgstr "Manual: the engine only proposes and you approve. Semi: pausing and archiving happen on their own. Auto: everything happens on its own except when the cap is reached. Purchases requires an active Pixel and pixel attribution; Traffic always works. The suggested attribution comes from what's connected in Settings: press “Check Pixel” there so it's taken into account."
+
+msgid "Manuscritas"
+msgstr "Handwritten"
 
 msgid "Mapa corporal"
 msgstr "Body map"
@@ -9358,6 +9385,9 @@ msgstr "Currency of the figures"
 msgid "Monto"
 msgstr "Amount"
 
+msgid "Mostrar los emojis"
+msgstr "Show the emojis"
+
 msgid "Mostrar los subtítulos"
 msgstr "Show the subtitles"
 
@@ -9392,6 +9422,9 @@ msgstr "Too close to the edge of the clip to split there."
 
 msgid "Muy cerca del borde del clip para cortarlo."
 msgstr "Too close to the edge of the clip to split it."
+
+msgid "MÁS VENDIDO"
+msgstr "BEST SELLER"
 
 msgid "Más"
 msgstr "More"
@@ -9457,6 +9490,9 @@ msgstr "Music when created: %(estilo)s"
 
 msgid "Música de fondo"
 msgstr "Background music"
+
+msgid "NUEVO"
+msgstr "NEW"
 
 #, python-format
 msgid "Nació de la idea «%(idea)s» de la evaluación con IA"
@@ -10009,6 +10045,10 @@ msgstr "We lost track of the voice: reload the page; if it's ready, it gets adde
 
 msgid "No sabemos cómo terminó: recarga la página para ver los subtítulos."
 msgstr "We don't know how it ended: reload the page to see the subtitles."
+
+#, python-brace-format
+msgid "No sale en el video: «{caracteres}» (esta fuente no los tiene)."
+msgstr "Won't show in the video: “{caracteres}” (this font doesn't have them)."
 
 msgid "No se agregó ningún referente."
 msgstr "No reference was added."
@@ -10567,6 +10607,9 @@ msgstr "Or paste a link (TikTok, Instagram, YouTube)"
 
 msgid "O un link (Instagram, TikTok, YouTube…)"
 msgstr "Or a link (Instagram, TikTok, YouTube…)"
+
+msgid "OFERTA"
+msgstr "SALE"
 
 msgid "Objetivo"
 msgstr "Objective"
@@ -11954,6 +11997,9 @@ msgstr "Reddit responded %(codigo)s."
 msgid "Redes"
 msgstr "Networks"
 
+msgid "Redondeadas"
+msgstr "Rounded"
+
 msgid "Redundante"
 msgstr "Redundant"
 
@@ -12810,6 +12856,9 @@ msgstr "No alternate hooks."
 msgid "Sin imagen: Claude juzgó por texto y números"
 msgstr "No image: Claude judged by text and numbers"
 
+msgid "Sin límite"
+msgstr "No limit"
+
 msgid "Sin música"
 msgstr "No music"
 
@@ -13047,9 +13096,6 @@ msgstr "Scene sound"
 
 msgid "Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)"
 msgstr "Scene sound (the model's native audio; Kling charges USD 0.028/s more)"
-
-msgid "Space Grotesk"
-msgstr "Space Grotesk"
 
 #, python-format
 msgid "Sprint %(nombre)s · Campaña %(n)s"
@@ -17759,6 +17805,9 @@ msgstr "~%(cr)s cr video ($%(usd)s)"
 
 msgid "¡Listo! Tienes cambios sin guardar en esta página."
 msgstr "Done! You have unsaved changes on this page."
+
+msgid "¡ÚLTIMAS UNIDADES!"
+msgstr "LAST UNITS LEFT!"
 
 #, python-format
 msgid "«%(accion)s» gasta en Meta o en generación. ¿Aprobar?"

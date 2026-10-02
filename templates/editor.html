@@ -363,6 +363,15 @@
   .ed-foto-campo { display: flex; align-items: center; gap: .4rem; min-width: 0; }
   .ed-prop .ed-foto-campo input { flex: 0 1 6.5rem; width: 6.5rem; min-width: 0; font-variant-numeric: tabular-nums; }
   .ed-foto-unidad { flex: none; font-size: .8rem; color: var(--muted); }
+  /* Capa 5c (Tarea 7): «Ancho del texto» con «Sin límite» al lado — en la
+     columna angosta o en la hoja del celular la casilla baja a su línea (se
+     envuelve, nunca empuja de lado) — y la lista de fuentes por familia,
+     cada nombre en su letra (propiedades.js). */
+  .ed-prop-ancho-fila { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .7rem; min-width: 0; }
+  .ed-prop .ed-prop-ancho-fila input[type="range"] { flex: 1 1 8rem; width: auto; }
+  .ed-prop-ancho-fila .ed-prop-casilla { flex: none; font-weight: 400; color: var(--muted); }
+  .ed-fuentes-grupo { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+  .ed-fuentes-familia { margin: .3rem 0 0; font-size: .72rem; font-weight: 600; color: var(--muted); }
 
   /* Subtítulos (capa 5a): subtitulos_panel.js arma lo de adentro de la pestaña
      «Subtítulos» (dentro de .ed-bib-zona) y linea_tiempo.js la fila de solo

@@ -41,6 +41,7 @@ INTERNOS = {
         "inválida (", "ken_burns solo se cambia", "Esa mezcla no existe",
         "Esa fuente de subtítulos no existe", "Ese estilo de subtítulos no existe", "Ese idioma no es válido",
         "Son demasiadas fuentes de subtítulos", "Ese encuadre no existe",
+        "tinte debe ser un color #RRGGBB",          # capa 5c (D15): el tinte de un sticker que no es un color
     ),
 }
 # Palabras españolas del editor que MARCAS_CODIGO no trae (etiquetas de la
@@ -222,3 +223,22 @@ def test_borrador_automatico_sin_doble_etiqueta_en_ingles():
     with idiomas.en_idioma("en"):
         assert ediciones.nombre_visible(manual) == "Draft · gira"
     assert ediciones.nombre_visible(manual) == "Draft · gira"
+
+
+def test_capa_5c_claves_borradas_y_plantillas_en_ingles():
+    """Capa 5c (Tarea 7, D15): los nombres de las fuentes salen del catálogo
+    (nombres propios, sin traducir) y los avisos del texto reemplazan al aviso
+    de emojis de la capa 4c: esas cuatro claves ya no están en ningún lado.
+    Las plantillas para vender nacen en el idioma de quien edita (como
+    «Escribe aquí»): en inglés, su palabra en inglés."""
+    for clave in ("prop.fuente_inter_gruesa", "prop.fuente_inter_media", "prop.fuente_space", "prop.aviso_emoji"):
+        assert clave not in textos_editor.TEXTOS
+        for ruta in glob.glob(os.path.join(EDITOR, "*.js")):
+            with open(ruta, encoding="utf-8") as f:
+                assert clave not in f.read(), f"{os.path.basename(ruta)} todavía usa {clave}"
+    with idiomas.en_idioma("en"):
+        t = textos_editor.textos()
+    assert [t[f"op.plantilla_{p}"] for p in ("oferta", "nuevo", "envio", "ultimas", "mas_vendido")] == [
+        "SALE", "NEW", "FREE SHIPPING", "LAST UNITS LEFT!", "BEST SELLER"]
+    assert t["op.plantilla_descuento"] == "-50 %" == textos_editor.TEXTOS["op.plantilla_descuento"]
+    assert t["prop.ancho"] == "Text width" and t["prop.mostrar_emojis"] == "Show the emojis"

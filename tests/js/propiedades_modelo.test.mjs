@@ -20,7 +20,7 @@ const clipDe = (d, id) => d.pistas.flatMap((p) => p.clips).find((c) => c.id === 
 function docCompleto() {
   const conImagen = op.agregarImagen(docBase(), IMAGEN, 0, {}, INFO);
   const conMusica = op.agregarAudio(conImagen.doc, { id: 2 }, 0, { rol: "musica" }, INFO);
-  const conTexto = op.agregarTexto(conMusica.doc, 4000, "titulo", INFO);
+  const conTexto = op.agregarTexto(conMusica.doc, 4000, "titulo", {}, INFO);
   return { doc: conTexto.doc, imagen: conImagen.seleccion, musica: conMusica.seleccion, titulo: conTexto.seleccion };
 }
 
@@ -112,8 +112,7 @@ test("modelo de un texto: el texto del destino, fuente, tamaño en px, color con
   assert.equal(m.forma, "texto");
   assert.deepEqual(m.texto, { valor: "Escribe aquí", editable: true, destino: "es_CO", nota: null });
   assert.equal(m.fuente, "Inter-Bold");
-  assert.deepEqual(m.fuentes.map((f) => f.valor), ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"]);
-  assert.ok(m.fuentes.every((f) => f.texto));
+  assert.deepEqual(m.fuentes, [], "sin el catálogo de la página no hay fuentes que ofrecer");
   assert.deepEqual(m.tamano, { px: 72, min: 12, max: 200 });
   assert.equal(m.color, "#FFFFFF");
   // la paleta: blanco, negro, el color de marca, amarillo y rojo; marcado el que tiene
@@ -127,12 +126,12 @@ test("modelo de un texto: el texto del destino, fuente, tamaño en px, color con
   assert.equal(m.animacion, "ninguna");
   assert.deepEqual(m.centrado, { x: true, y: false });     // el título entra arriba (y = 0.2)
   // el precio entra en píldora del color de marca; el llamado, en caja blanca
-  const precio = op.agregarTexto(docBase(), 0, "precio", INFO);
+  const precio = op.agregarTexto(docBase(), 0, "precio", {}, INFO);
   assert.deepEqual(modelo(precio.doc, precio.seleccion).fondo, { tipo: "pildora", color: "#7C3AED", opacidad: 100 });
-  const llamado = op.agregarTexto(docBase(), 0, "llamado", INFO);
+  const llamado = op.agregarTexto(docBase(), 0, "llamado", {}, INFO);
   assert.deepEqual(modelo(llamado.doc, llamado.seleccion).fondo, { tipo: "caja", color: "#FFFFFF", opacidad: 90 });
   assert.equal(modelo(llamado.doc, llamado.seleccion).paleta.find((c) => c.elegido).nombre, "Negro");
-  const sub = op.agregarTexto(docBase(), 0, "subtitulo", INFO);
+  const sub = op.agregarTexto(docBase(), 0, "subtitulo", {}, INFO);
   assert.deepEqual(modelo(sub.doc, sub.seleccion).sombra, { activo: true });
   // un texto con lo mínimo (el de docBase): los valores por defecto del documento
   const t1 = modelo(docBase(), "t1");
@@ -309,23 +308,6 @@ test("Propiedades: una operación rechazada vuelve a pintar el control con el va
     if (typeof esperado === "string") assert.equal(dichos[0][0], esperado);
     else assert.match(dichos[0][0], esperado);
   }
-});
-
-// ---- Capa 4c (10/10): emojis ----
-import { avisoEmoji, tieneEmoji } from "../../static/editor/propiedades_modelo.js";
-
-test("tieneEmoji: los emojis sí; letras, acentos y ® ™ © no", () => {
-  for (const t of ["🔥 50% OFF", "✅ Envío gratis", "⭐⭐⭐⭐⭐", "Hecho en 🇨🇴", "Te ❤️", "👨‍👩‍👧 en familia"]) assert.equal(tieneEmoji(t), true, t);
-  for (const t of ["¡Envío gratis! ñ á é ü", "Marca® ™ ©", "$ 89.900 – 50 %", "", null]) assert.equal(tieneEmoji(t), false, String(t));
-});
-
-test("el panel del texto avisa en llano cuando el texto tiene emojis", () => {
-  const r = op.agregarTexto(docBase(), 500, "titulo", {});
-  assert.equal(modelo(r.doc, r.seleccion, { destino: "es_CO" }).avisoEmoji, null);
-  const conEmoji = op.editarTexto(r.doc, r.seleccion, "🔥 50% OFF", "es_CO", {}).doc;
-  const m = modelo(conEmoji, r.seleccion, { destino: "es_CO" });
-  assert.equal(m.avisoEmoji, avisoEmoji());
-  assert.match(avisoEmoji(), /^Los emojis no salen en el video final/);
 });
 
 // ---- Capa 5a (Task 8): «Suena en» y «Subtítulos de este audio» ----
@@ -513,4 +495,136 @@ test("la duración de la foto se escribe en segundos con la coma y se lee con co
   assert.equal(msDeDuracionFoto(""), null);
   assert.equal(msDeDuracionFoto("tres"), null);
   assert.equal(msDeDuracionFoto("-2"), null);
+});
+
+// ---- Capa 5c (Tarea 7): ancho del texto, fuentes por familia, avisos de lo que no sale y el color de un sticker ----
+import { readFileSync } from "node:fs";
+import {
+  avisosTexto, CATEGORIAS_FUENTE, cambioAncho, cambioSinLimite,
+} from "../../static/editor/propiedades_modelo.js";
+
+const TABLA = JSON.parse(readFileSync(new URL("../../static/editor/tipografia.json", import.meta.url), "utf8"));
+const T0 = { ...TABLA, emoji: null };
+const T_E = { ...T0, emoji: { id: "E", upem: 1000, asc: 900, desc: 200,
+  avances: [[0x2764, [1000]], [0x1F44D, [1000]], [0x1F468, [1000]], [0x1F525, [1000]]] } };
+// Un catálogo de 4 (dos clásicas, una de impacto, una con serifa), desordenado a propósito.
+const CATALOGO_4 = [
+  { id: "Inter-Bold", nombre: "Inter Bold", categoria: "clasicas" },
+  { id: "DMSerifDisplay-Regular", nombre: "DM Serif Display", categoria: "serifa" },
+  { id: "Anton-Regular", nombre: "Anton", categoria: "impacto" },
+  { id: "SpaceGrotesk-Bold", nombre: "Space Grotesk", categoria: "clasicas" },
+];
+const STICKER = { id: 9, tipo: "imagen", ancho: 512, alto: 512, tenible: true };
+const v2 = (fuente) => ({ estilo: { fuente, version: 2 } });
+const v1 = (fuente) => ({ estilo: { fuente } });
+
+test("modelo de un texto: «Ancho del texto» en % y «Sin límite» (D7.2)", () => {
+  const titulo = op.agregarTexto(docBase(), 0, "titulo", {}, INFO);
+  assert.deepEqual(modelo(titulo.doc, titulo.seleccion).ancho, { pct: 86, sinLimite: false, min: 30, max: 100 });
+  const precio = op.agregarTexto(docBase(), 0, "precio", {}, INFO);
+  assert.deepEqual(modelo(precio.doc, precio.seleccion).ancho, { pct: 86, sinLimite: true, min: 30, max: 100 });
+  const llamado = op.agregarTexto(docBase(), 0, "llamado", {}, INFO);
+  assert.equal(modelo(llamado.doc, llamado.seleccion).ancho.pct, 80);
+  // un texto de antes sin ancho (el de docBase) no tiene límite; el del borrador (0,8889) se ve redondeado
+  assert.deepEqual(modelo(docBase(), "t1").ancho, { pct: 86, sinLimite: true, min: 30, max: 100 });
+  const borrador = docBase();
+  clipDe(borrador, "t1").estilo.ancho_max = 0.8889;
+  assert.deepEqual(modelo(borrador, "t1").ancho, { pct: 89, sinLimite: false, min: 30, max: 100 });
+  clipDe(borrador, "t1").estilo.ancho_max = 0.1;                 // más angosto de lo que ofrece el deslizador
+  assert.equal(modelo(borrador, "t1").ancho.pct, 30);
+  // v2: si el texto ya es nuevo
+  assert.equal(modelo(titulo.doc, titulo.seleccion).v2, true);
+  assert.equal(modelo(docBase(), "t1").v2, false);
+});
+
+test("cambioAncho y cambioSinLimite: el % del deslizador acotado a 30–100, «Sin límite» es null", () => {
+  assert.deepEqual(cambioAncho(50), { estilo: { ancho_max: 0.5 } });
+  assert.deepEqual(cambioAncho(120), { estilo: { ancho_max: 1 } });
+  assert.deepEqual(cambioAncho(5), { estilo: { ancho_max: 0.3 } });
+  assert.deepEqual(cambioAncho(86), { estilo: { ancho_max: 0.86 } });
+  assert.deepEqual(cambioSinLimite(true), { estilo: { ancho_max: null } });
+  assert.deepEqual(cambioSinLimite(false), { estilo: { ancho_max: op.ANCHO_TEXTO.defecto } });
+  // y operaciones.cambiar los aplica (y pasa el texto a v2)
+  const d = op.cambiar(docBase(), "t1", cambioAncho(50), INFO).doc;
+  assert.deepEqual([clipDe(d, "t1").estilo.ancho_max, clipDe(d, "t1").estilo.version], [0.5, 2]);
+});
+
+test("modelo de un texto: las fuentes agrupadas por familia, en el orden de las familias y solo las que tienen fuentes (D9.4)", () => {
+  assert.deepEqual(CATEGORIAS_FUENTE, ["clasicas", "impacto", "redondeadas", "manuscritas", "serifa"]);
+  const titulo = op.agregarTexto(docBase(), 0, "titulo", {}, INFO);
+  const m = modelo(titulo.doc, titulo.seleccion, { catalogoFuentes: CATALOGO_4, tabla: T0 });
+  assert.deepEqual(m.fuentes, [
+    { categoria: "clasicas", texto: "Clásicas",
+      fuentes: [{ valor: "Inter-Bold", texto: "Inter Bold" }, { valor: "SpaceGrotesk-Bold", texto: "Space Grotesk" }] },
+    { categoria: "impacto", texto: "De impacto", fuentes: [{ valor: "Anton-Regular", texto: "Anton" }] },
+    { categoria: "serifa", texto: "Con serifa", fuentes: [{ valor: "DMSerifDisplay-Regular", texto: "DM Serif Display" }] },
+  ]);
+  // el catálogo entero (el de la página): cinco familias con sus nombres, ninguna vacía
+  const todas = op.FUENTES.map((id) => ({ id, nombre: id, categoria: null }));
+  const reales = [["clasicas", 4], ["impacto", 3], ["redondeadas", 1], ["manuscritas", 2], ["serifa", 1]];
+  let i = 0;
+  for (const [cat, n] of reales) for (let k = 0; k < n; k++) todas[i++].categoria = cat;
+  const completo = modelo(titulo.doc, titulo.seleccion, { catalogoFuentes: todas });
+  assert.deepEqual(completo.fuentes.map((g) => [g.categoria, g.texto, g.fuentes.length]), [
+    ["clasicas", "Clásicas", 4], ["impacto", "De impacto", 3], ["redondeadas", "Redondeadas", 1],
+    ["manuscritas", "Manuscritas", 2], ["serifa", "Con serifa", 1]]);
+  // una categoría que no se conoce no se ofrece (no sale un grupo sin nombre)
+  const rara = modelo(titulo.doc, titulo.seleccion, { catalogoFuentes: [...CATALOGO_4, { id: "X-Bold", nombre: "X", categoria: "rara" }] });
+  assert.equal(rara.fuentes.length, 3);
+});
+
+test("avisosTexto: lo que no sale en el video (v2), lo simplificado y el texto de antes con emojis (v1)", () => {
+  assert.deepEqual(avisosTexto(v2("SpaceGrotesk-Bold"), "✓ Envío", T0),
+    [{ texto: "No sale en el video: «✓» (esta fuente no los tiene).", accion: null }]);
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "👍🏽 listo", T_E),
+    [{ texto: "Las banderas, los tonos de piel y los emojis compuestos salen simplificados.", accion: null }]);
+  assert.deepEqual(avisosTexto(v1("Inter-Bold"), "Hola 🔥", T0),
+    [{ texto: "Este texto es de antes: sus emojis no salen en el video.", accion: "actualizar" }]);
+  assert.deepEqual(avisosTexto(v1("Inter-Bold"), "Hola, ¿qué tal? Ñandú", T0), []);
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "Hola 🔥", T_E), [], "con la fuente de emojis, el 🔥 sale");
+  // varios que faltan: unidos sin separador, cada uno una vez y en el orden en que aparecen
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "🔥 hola 🍕 🔥", T0),
+    [{ texto: "No sale en el video: «🔥🍕» (esta fuente no los tiene).", accion: null }]);
+  // los dos avisos juntos: lo que falta primero
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "👍🏽 🍕", T_E).map((a) => a.texto), [
+    "No sale en el video: «🍕» (esta fuente no los tiene).",
+    "Las banderas, los tonos de piel y los emojis compuestos salen simplificados."]);
+  // sin tabla, o con una fuente que la tabla no trae: nada (y no lanza)
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "Hola 🔥", null), []);
+  assert.deepEqual(avisosTexto(v2("Inexistente-Bold"), "Hola 🔥", T0), []);
+  assert.deepEqual(avisosTexto({}, "Hola 🔥", T0), []);
+});
+
+test("modelo de un texto: los avisos van con el texto que se ve, y el de antes ofrece «Mostrar los emojis»", () => {
+  const conEmoji = op.editarTexto(docBase(), "t1", "Hola 🔥", "es", INFO).doc;      // al escribir, pasa a v2
+  assert.deepEqual(modelo(conEmoji, "t1", { tabla: T0 }).avisos,
+    [{ texto: "No sale en el video: «🔥» (esta fuente no los tiene).", accion: null }]);
+  assert.deepEqual(modelo(conEmoji, "t1", { tabla: T_E }).avisos, []);
+  const viejo = docBase();
+  clipDe(viejo, "t1").texto = { literal: "Hola 🔥" };                               // un borrador de antes
+  assert.deepEqual(modelo(viejo, "t1", { tabla: T_E }).avisos,
+    [{ texto: "Este texto es de antes: sus emojis no salen en el video.", accion: "actualizar" }]);
+  assert.deepEqual(modelo(viejo, "t1").avisos, [], "sin la tabla, nada que decir");
+  const actualizado = op.actualizarTexto(viejo, "t1", INFO).doc;
+  assert.deepEqual(modelo(actualizado, "t1", { tabla: T_E }).avisos, []);
+});
+
+test("modelo de una imagen: el color solo si su material se tiñe (un sticker)", () => {
+  const r = op.agregarImagen(docBase(), STICKER, 0, { fraccion: 0.35, tinte: "#FFD400" }, INFO);
+  const m = modelo(r.doc, r.seleccion, { materiales: { 9: STICKER } });
+  assert.equal(m.tinte.activo, true);
+  assert.equal(m.tinte.color, "#FFD400");
+  assert.deepEqual(m.tinte.paleta.map((c) => c.color), ["#FFFFFF", "#000000", "#7C3AED", "#FFD60A", "#E53935"]);
+  assert.deepEqual(m.tinte.paleta.filter((c) => c.elegido), []);
+  const blanco = op.cambiar(r.doc, r.seleccion, { tinte: "#FFFFFF" }, INFO).doc;
+  assert.deepEqual(modelo(blanco, r.seleccion, { materiales: { 9: STICKER } }).tinte.paleta.filter((c) => c.elegido).map((c) => c.nombre),
+    ["Blanco"]);
+  // sin tinte: el sticker se ve blanco (su PNG es blanco)
+  const sin = op.cambiar(r.doc, r.seleccion, { tinte: null }, INFO).doc;
+  assert.deepEqual([modelo(sin, r.seleccion, { materiales: { 9: STICKER } }).tinte.activo,
+    modelo(sin, r.seleccion, { materiales: { 9: STICKER } }).tinte.color], [false, "#FFFFFF"]);
+  // una foto (no se tiñe) o un material que no se conoce: sin color
+  const { doc, imagen } = docCompleto();
+  assert.equal(modelo(doc, imagen, { materiales: { 4: IMAGEN } }).tinte, null);
+  assert.equal(modelo(r.doc, r.seleccion).tinte, null);
 });

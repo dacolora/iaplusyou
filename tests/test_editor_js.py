@@ -115,6 +115,14 @@ def test_max_fuentes_subtitulo_js_igual_a_python():
     assert _constante_js("operaciones.js", "MAX_FUENTES_SUBTITULO") == documento.MAX_FUENTES_SUBTITULO
 
 
+def test_fuentes_js_iguales_al_catalogo():
+    # capa 5c (D9.2): operaciones.cambiar acepta toda fuente del catálogo, en
+    # su orden; el panel agrupa por las mismas familias, en el mismo orden
+    from final_edition import fuentes
+    assert _constante_js("operaciones.js", "FUENTES") == [c[0] for c in fuentes.CATALOGO]
+    assert _constante_js("propiedades_modelo.js", "CATEGORIAS_FUENTE") == list(fuentes.CATEGORIAS)
+
+
 def test_max_correccion_js_igual_a_python():
     # corregirPalabra y el campo de la pestaña Subtítulos (maxLength) cortan
     # donde documento.validar cortaría (capa 5a, D3)

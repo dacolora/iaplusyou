@@ -366,10 +366,10 @@ test("pedidoAgregar con «+»: todo en el cabezal (el video, después del clip b
   assert.deepEqual(pedidoAgregar(doc, { tipo: "video", material: video }, en), ["agregarVideo", video, { indice: 1 }]);
   assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: imagen }, en), ["agregarImagen", imagen, 2500, {}]);
   assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: audio }, en), ["agregarAudio", audio, 2500, { rol: "musica" }]);
-  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "titulo" }, en), ["agregarTexto", 2500, "titulo"]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "titulo" }, en), ["agregarTexto", 2500, "titulo", {}]);
   assert.deepEqual(pedidoAgregar(doc, { tipo: "transicion", transicion: "fundido" }, { cabezalMs: 3000, seleccion: null }),
     ["ponerTransicion", "v0", "fundido", 500]);
-  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "precio" }, { cabezalMs: 1234.6 }), ["agregarTexto", 1235, "precio"]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "precio" }, { cabezalMs: 1234.6 }), ["agregarTexto", 1235, "precio", {}]);
   assert.equal(pedidoAgregar(doc, { tipo: "otra" }, en), null);
 });
 
@@ -392,7 +392,7 @@ test("pedidoAgregar al soltar: el video en su lugar de la principal, lo demás e
   assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: imagen }, { punto: sobreTexto, cabezalMs: 6000 }),
     ["agregarImagen", imagen, 5000, {}]);
   assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "llamado" }, { punto: sobreTexto, cabezalMs: 100 }),
-    ["agregarTexto", 5000, "llamado"]);
+    ["agregarTexto", 5000, "llamado", {}]);
   // una transición soltada: el corte más cercano al dedo (la selección no cuenta)
   assert.deepEqual(pedidoAgregar(tresClips(), { tipo: "transicion", transicion: "zoom" },
     { punto: { ...sobreTexto, tMs: 7500 }, seleccion: "v0" }), ["ponerTransicion", "v1", "zoom", 500]);

@@ -317,9 +317,6 @@ TEXTOS = {
     "prop.ayuda_equilibrada": N_("Voz, sonido del video y música, cada uno en su punto."),
     "prop.ayuda_voz": N_("El sonido del video y la música bajan para que la voz se entienda."),
     "prop.ayuda_ambiente": N_("El sonido del video se oye entero y la música queda baja."),
-    "prop.fuente_inter_gruesa": N_("Inter gruesa"),
-    "prop.fuente_inter_media": N_("Inter media"),
-    "prop.fuente_space": N_("Space Grotesk"),
     "prop.color_blanco": N_("Blanco"),
     "prop.color_negro": N_("Negro"),
     "prop.color_amarillo": N_("Amarillo"),
@@ -336,7 +333,6 @@ TEXTOS = {
     "prop.nota_voz": N_("La voz se ajusta sola a cada país."),
     "prop.conflicto": N_("La edición cambió en otra pestaña: recarga la página para seguir."),
     "prop.rechazo": N_("No se pudo hacer ese cambio: el aviso está debajo del video."),
-    "prop.aviso_emoji": N_("Los emojis no salen en el video final: se quitan al producirlo."),
     "prop.detalle_tecnico": N_("Detalle técnico"),
     "prop.ninguno": N_("Ninguno"),
     "prop.acercar": N_("Acercar"),
@@ -428,6 +424,30 @@ TEXTOS = {
     "vista.zona_lados": N_("a los lados"),
     "vista.zona_botones": N_("junto a los botones"),
     "vista.zonas_solo_vertical": N_("Las zonas son para videos verticales (9:16)."),
+    # operaciones.js (capa 5c, Tarea 7): las plantillas para vender (nacen en el idioma de quien edita,
+    # como «Escribe aquí»; «-50 %» lleva espacio duro, U+00A0) y los errores del emoji y del color
+    "op.plantilla_oferta": N_("OFERTA"),
+    "op.plantilla_nuevo": N_("NUEVO"),
+    "op.plantilla_descuento": N_("-50\u00a0%"),
+    "op.plantilla_envio": N_("ENVÍO GRATIS"),
+    "op.plantilla_ultimas": N_("¡ÚLTIMAS UNIDADES!"),
+    "op.plantilla_mas_vendido": N_("MÁS VENDIDO"),
+    "op.emoji_sin_literal": N_("Elige un emoji."),
+    "op.tinte_solo_imagen": N_("El color se cambia solo en los stickers."),
+    # propiedades_modelo.js (capa 5c, Tarea 7): el ancho del texto, las familias de fuentes y los avisos del texto
+    "prop.ancho": N_("Ancho del texto"),
+    "prop.sin_limite": N_("Sin límite"),
+    "prop.fuentes_clasicas": N_("Clásicas"),
+    "prop.fuentes_impacto": N_("De impacto"),
+    "prop.fuentes_redondeadas": N_("Redondeadas"),
+    "prop.fuentes_manuscritas": N_("Manuscritas"),
+    "prop.fuentes_serifa": N_("Con serifa"),
+    "prop.no_sale": N_("No sale en el video: «{caracteres}» (esta fuente no los tiene)."),
+    "prop.emoji_simplificado": N_("Las banderas, los tonos de piel y los emojis compuestos salen simplificados."),
+    "prop.texto_antiguo": N_("Este texto es de antes: sus emojis no salen en el video."),
+    "prop.mostrar_emojis": N_("Mostrar los emojis"),
+    # subtitulos_modelo.js (capa 5c, Tarea 7): el aviso de emojis de la capa 4c, ahora solo de los subtítulos
+    "sub.aviso_emoji": N_("Los emojis no salen en los subtítulos del video final: se quitan al producirlo."),
 }
 
 

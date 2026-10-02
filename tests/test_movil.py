@@ -163,3 +163,20 @@ def test_editor_la_barra_de_herramientas_con_zonas_cabe_a_375():
     assert re.search(r'<section id="ed-herramientas".*?id="zonas".*?</section>', html, re.S)
     guias = re.search(r"\.ed-zonas \{([^}]*)\}", css).group(1)
     assert "position: absolute" in guias and "overflow: hidden" in guias and "inset: 0" in guias
+
+
+def test_editor_el_ancho_del_texto_y_las_fuentes_caben_a_375():
+    """Capa 5c (Tarea 7, D7.2/D13): «Ancho del texto» y «Sin límite» van en una fila
+    que baja de línea en la hoja del celular (375 px) en vez de empujar la página de
+    lado: el deslizador se achica hasta su base y la casilla no se parte; la lista de
+    fuentes por familia es una columna que no pasa de su caja."""
+    import re
+    html = open("templates/editor.html", encoding="utf-8").read()
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    fila = re.search(r"\.ed-prop-ancho-fila \{([^}]*)\}", css).group(1)
+    assert "flex-wrap: wrap" in fila and "min-width: 0" in fila
+    deslizador = re.search(r'\.ed-prop \.ed-prop-ancho-fila input\[type="range"\] \{([^}]*)\}', css).group(1)
+    assert "flex: 1 1 " in deslizador and "width: auto" in deslizador
+    casilla = re.search(r"\.ed-prop-ancho-fila \.ed-prop-casilla \{([^}]*)\}", css).group(1)
+    assert "flex: none" in casilla
+    assert "min-width: 0" in re.search(r"\.ed-fuentes-grupo \{([^}]*)\}", css).group(1)
