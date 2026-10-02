@@ -129,7 +129,7 @@ the list and its state live in `llaves.py`: `llaves.SERVICIOS` / `llaves.estado`
 `SERVICIOS_LLAVES` / `_estado_llaves`) list every
 paid key (Anthropic, WaveSpeed, fal, Higgsfield — optional, only the old «Nueva idea» flow —, R2, SMTP, MELI,
 Nicho and Referentes sources) with configured/missing badges —
-computed from `bool(os.environ.get(...))` only, values are never rendered (`alertas.py` reads the same `llaves.estado()`: every card not configured, except Meta's, is also an admin-only alert `llave:<id>` — `info` if the card is `opcional` —, skill `alertas`). Since 2026-09-20 that
+computed from `bool(os.environ.get(...))` only, values are never rendered (`alertas.py` reads the same `llaves.estado()`: every card not configured is also an admin-only alert `llave:<id>` — `info` if the card is `opcional` —, skill `alertas`). Since 2026-09-20 that
 full list is admin-only: `dashboard._llaves_visibles` gives a cliente just the `por_proyecto`
 cards (Meta), and the template hides `.env` variables, the server note and the "Cómo
 conseguirla" steps for them (the client sees `cliente_hace`: billing + the connect block).

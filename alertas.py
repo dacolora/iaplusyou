@@ -129,7 +129,7 @@ def _con_error(error, accion):
 # ---------- fuentes: puesta a punto ----------
 # Cada fuente es `fn(cliente, ahora_iso) -> lista de alertas`. Sus dependencias
 # se importan adentro (como `tablero` o `organico`, que arrastran requests y el
-# motor de experimentos): este módulo lo importan el worker y los tests, y nunca
+# motor de experimentos): este módulo lo importan dashboard.py y los tests, y nunca
 # debe importar `dashboard` (círculo).
 
 def _fuente_llaves(cliente, ahora):
