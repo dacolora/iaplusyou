@@ -179,7 +179,7 @@ recibe en `datos.config.tipografia`):
    mismo color) y **relleno**. Las letras de emoji van solo en la pasada de relleno (un emoji a color no tiene
    sombra ni contorno en ningún motor: el lienzo pintaría el emoji entero en la sombra y Pillow lo ignoraría). Letra
    por letra en las tres pasadas: el contorno de la letra siguiente nunca tapa el relleno de la anterior.
-   Pillow dibuja con `anchor="ls"` (izquierda, línea de base) y, en las de emoji, `embedded_color=True`; el lienzo con
+   Pillow dibuja con `anchor="ls"` (izquierda, línea de base) y, en las de emoji, capa por capa (D6.8); el lienzo con
    `textBaseline = "alphabetic"`, `fontKerning = "none"` y `ctx.font = "<tam·f>px \"<fuente>\""` (la de emojis:
    `"CreatvEmoji"`), sin lista de respaldo: lo que la tabla no cubre ya no está.
 
@@ -213,6 +213,7 @@ recibe en `datos.config.tipografia`):
 7. **Safari y COLRv0**: Chrome y Firefox dibujan COLRv0 desde `@font-face`; Safari, según la documentación pública,
    también — se comprueba en un iPhone en la prueba en vivo (riesgo 2). Si un navegador no la dibujara, ese navegador
    muestra su propio emoji en el mismo lugar y del mismo ancho (la maqueta no cambia): solo cambia el dibujo.
+8. **Cómo las dibuja Pillow (corregido en la ejecución, 2026-10-02).** `embedded_color=True` no sirve: Pillow 11.3 dimensiona el lienzo con la caja del glifo base de COLRv0, que está vacía, y el emoji sale recortado o no sale. El render dibuja cada capa como un glifo normal en su color, con una copia de la fuente armada en memoria sin `COLR`/`CPAL` y con un `cmap` que pone cada glifo en `U+F0000 + gid` (`fuentes.fuente_emoji_capas`, `fuentes.emoji_capas`); el índice de paleta `0xFFFF` usa el color del texto, como el navegador. No depende del soporte de color de FreeType.
 
 ### D7. Ajuste de línea y ancho del texto
 
