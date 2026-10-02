@@ -100,12 +100,12 @@ No se toca el submódulo `meta_ads` (vive en otro repo): se usa `meta_ads.auth.l
   sigue `paging.next` (hasta 20 páginas; si hay más, lo anota y para). Una llamada por experimento, no una por
   anuncio.
 - `pedir_desglose(campaign_id, dimension)`: igual con `date_preset=maximum` y `breakdowns=<dims>`; una
-  llamada por dimensión (4). Si Meta rechaza una combinación de campos con un desglose, esa dimensión se
-  registra como evento `error` y las otras siguen.
+  llamada por dimensión (4). Si Meta rechaza una combinación de campos con un desglose, esa dimensión
+  queda en `experimento.extra["detalle_meta"]["errores"]` (sin inundar la bitácora cada 2 h) y las otras siguen.
 - `pedir_rankings(campaign_id)`: `level=ad`, `date_preset=maximum`, los tres rankings.
 - `refrescar_detalle(cliente, experimento_id, desde=None)`: junta todo, mapea `ad_id → experimento_pieza.id`
   (los ids de anuncio que no son de este experimento se ignoran: aislamiento entre proyectos) y escribe.
-  Por defecto pide los últimos 3 días; con `desde` (carga histórica) desde esa fecha.
+  El rango se cura solo: desde el último día guardado menos 2, o desde la creación del experimento.
 - Errores: el texto pasa por `cola.sin_token` antes de un evento o un log (regla 6). Un fallo de detalle
   **nunca** tumba el refresco de siempre ni el decisor.
 
@@ -113,9 +113,10 @@ No se toca el submódulo `meta_ads` (vive en otro repo): se usa `meta_ads.auth.l
 
 - `tareas/experimentos.exp_refrescar` llama `lanzador.refrescar` (como hoy, el decisor depende de eso) y
   **después** `meta_detalle.refrescar_detalle`, en su propio `try`.
-- Carga histórica: tarea nueva `exp_detalle_historico` (`job_id=exp_detalle_historico__<cliente>__<eid>`,
-  `max_intentos=2`, no cobra) que pide desde la fecha de lanzamiento. Se encola una vez por experimento con
-  `meta_campaign_id`: al desplegar (un comando de §7) y al lanzar uno nuevo.
+- Carga histórica: tarea nueva `exp_detalle` (job `<cliente>__exp<id>__detalle`, `max_intentos=2`, no cobra)
+  que pide desde la creación del experimento. Se encola una vez por experimento con `meta_campaign_id`: al
+  desplegar (un comando de §7, carga inicial con `meta_detalle.encolar_todos()`); uno nuevo lo cubre su primer
+  `exp_refrescar`, que ya parte de la creación del experimento.
 - Costo: cero (Meta no cobra lecturas). Límite de Meta: 1 + 4 + 1 llamadas por experimento cada 2 h; hoy son
   2 por anuncio. Con el código 17/613 (límite de llamadas) se para la pasada de detalle y se reintenta en la
   siguiente.

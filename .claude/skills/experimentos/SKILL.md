@@ -1,6 +1,6 @@
 ---
 name: experimentos
-description: "Experimentos en Meta y el tablero: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, y el Tablero (totales, mes a mes, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py o _tab_experimentos.html."
+description: "Experimentos en Meta y el tablero: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, y el Tablero (totales, mes a mes, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py, meta_detalle.py o _tab_experimentos.html."
 ---
 
 # Experimentos, decisor y tablero
@@ -104,3 +104,14 @@ When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 `OUTCOME_SALES`; `lanzador.lanzar` then re-checks the Pixel before touching Meta and sends
 `promoted_object={pixel_id, PURCHASE}` on every adset (`meta_ads/adset.py` refuses SALES
 without it). The objective is fixed at creation — Meta doesn't allow changing it.
+
+**Detalle de Meta** (`meta_detalle.py`, spec `2026-10-02-experimentos-centro-de-resultados` §3, E1 2026-10-02): único escritor de
+`metrica_dia` (una fila por anuncio y día: tráfico, embudo `visitas_pagina`/`carrito`/`pago_iniciado`/`compras_meta`,
+retención `vistas_3s`/`p25…p100`/`thruplay`/`tiempo_medio_s`) y `metrica_desglose` (desde el inicio por
+`ubicacion`/`edad_genero`/`dispositivo`/`region`), y de `experimento_pieza.extra["rankings_meta"]`. Pide a nivel
+campaña con `level=ad` (1 diario + 4 desgloses + 1 rankings por experimento) con `meta_ads.auth.llamar`, sin tocar
+el submódulo. Corre al final de `exp_refrescar` en su propio `try` (el decisor no depende de esto) y como tarea
+`exp_detalle` (`max_intentos=2`, no cobra; `meta_detalle.encolar_todos()` hace la carga inicial). El rango se cura
+solo: desde el último día guardado menos 2 (Meta corrige días recientes) o desde la creación del experimento. Un
+desglose que Meta rechaza no tumba los otros; un código de límite (4/17/32/613/80004) corta la pasada. El estado
+queda en `experimento.extra["detalle_meta"]` (`actualizado_en`, `errores` sin token, `limite`).

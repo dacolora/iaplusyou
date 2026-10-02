@@ -137,6 +137,7 @@ además cobra.
 | PND-105 | Ideas de Vendro sin hacer: marca desde la URL de la tienda, quitar fondo, revisión del embudo y chat sobre los datos. | sin módulo todavía | sin empezar | higiene | solo nosotros | 2026-09-27 | competencia-vendro.md |
 | PND-106 | Confirmar a ojo, en un Chrome visible, que las miniaturas de video se pintan. | `templates/base.html` (cargador `data-precarga`) | sin verificar | higiene | solo nosotros | 2026-09-28 | incidente-pagina-cargando-2026-09-28.md |
 | PND-107 | Crear: cuando WaveSpeed rechaza al lanzar por algo que no es saldo (400, 1405…), la tarjeta muestra su JSON crudo («WaveSpeed (<ruta>) respondió <status>: …») en vez de una frase en palabras. | `providers/wavespeed_common.py:63`, `tareas/flowplus.py:259` (`return str(e)`) | sin empezar | lo que ve el cliente | clientes en producción | 2026-10-02 | inventario de la skill `diagnosticar-pieza` |
+| PND-108 | Un conjunto de Meta termina a los N días desde el lanzamiento, no desde la activación. `crear_adset` pone `end_time = ahora + dias` al lanzar (en pausa): si la persona activa días después, el experimento corre menos días de los que eligió (gasta menos, no más). Arreglo posible: al activar, mover `end_time` a `ahora + días restantes`. | `meta_ads/adset.py:54` (`crear_adset`), `lanzador.py` | sin empezar | lo que ve el cliente | clientes en producción | 2026-10-02 | spec 2026-10-02-experimentos-centro-de-resultados-design.md §5.3 |
 
 ## Cerrados al revisar
 

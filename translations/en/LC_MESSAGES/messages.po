@@ -4200,6 +4200,10 @@ msgstr "Market"
 msgid "Detalle"
 msgstr "Detail"
 
+#, python-format
+msgid "Detalle de Meta al día (%(dias)s días de anuncios, %(desgloses)s filas de desglose)."
+msgstr "Meta detail up to date (%(dias)s ad-days, %(desgloses)s breakdown rows)."
+
 msgid "Detalle técnico"
 msgstr "Technical detail"
 
@@ -9126,6 +9130,9 @@ msgstr "Meta didn't tell us who owns each shared Page. Connect without a Page, o
 #, python-format
 msgid "Meta no termina de paginar %(edge)s después de %(n)s páginas — parece un bucle; revisa el Business o avisa a soporte."
 msgstr "Meta doesn't finish paging %(edge)s after %(n)s pages — it looks like a loop; check the Business or tell support."
+
+msgid "Meta pidió esperar; el detalle se completa en la próxima pasada."
+msgstr "Meta asked us to wait; the detail will finish on the next pass."
 
 msgid "Meta quedó conectado en Creatv"
 msgstr "Meta is now connected in Creatv"
