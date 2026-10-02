@@ -323,14 +323,15 @@ def _anuncio(p):
 def elegir(productos, decisiones, productos_elegidos):
     """Por plataforma, los `productos_elegidos` relevantes con más reseñas (sin
     dato = 0; empate por vendidos y luego por id), uno por anuncio: nunca dos
-    variantes del mismo anuncio, ni una variante de un anuncio cuyas reseñas ya
-    trajo otro producto (comparten reseñas: pagarlas dos veces no trae nada). Un
-    producto ya traído se sigue eligiendo; el paso de reseñas lo salta.
+    variantes del mismo anuncio (comparten reseñas: pagarlas dos veces no trae
+    nada). Un producto ya traído se sigue eligiendo como cualquiera — el paso de
+    reseñas lo salta — y de dos ya traídos del mismo anuncio sale el primero; uno
+    sin traer no se elige si su anuncio ya trajo reseñas por otro producto.
     -> {plataforma: [fuente_id, …]} solo con plataformas que tengan alguno."""
     por_plataforma, traidos = {}, {}
     for p in productos or []:
         if p.get("resenas_traidas"):
-            traidos.setdefault(p.get("plataforma"), []).append(p)
+            traidos.setdefault(p.get("plataforma"), set()).update(_anuncio(p))
         d = (decisiones or {}).get(p.get("id"))
         if not d or not d.get("relevante"):
             continue
@@ -341,7 +342,7 @@ def elegir(productos, decisiones, productos_elegidos):
         cubiertos, elegidos = set(), []
         for p in lista:
             anuncio = _anuncio(p)
-            if anuncio & cubiertos or any(anuncio & _anuncio(t) for t in traidos.get(clave, ()) if t.get("fuente_id") != p.get("fuente_id")):
+            if anuncio & cubiertos or (not p.get("resenas_traidas") and anuncio & traidos.get(clave, set())):
                 continue
             elegidos.append(p["fuente_id"])
             cubiertos |= anuncio
