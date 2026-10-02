@@ -659,3 +659,88 @@ def test_transicion_modo_solape_pasa_y_modo_desconocido_falla():
     assert v["pistas"][0]["clips"][0]["transicion"]["modo"] == "solape"
     with pytest.raises(d.DocumentoInvalido, match="transicion"):
         d.validar(_doc_foto(transicion={"tipo": "fundido", "duracion_ms": 500, "modo": "otro"}))
+
+
+# --- texto v2 y tinte (editor, capa 5c, D1/D8) -------------------------------
+
+def _doc_con_imagen(**sobre_clip):
+    """El video básico con una pista de imagen de un solo clip."""
+    doc = cargar("video_basico.json")
+    clip = {"id": "i0", "inicio_ms": 0, "duracion_ms": 1000, "material_id": 1}
+    clip.update(sobre_clip)
+    doc["pistas"].append({"id": "p_img", "tipo": "imagen", "clips": [clip]})
+    return doc
+
+
+def _sin_version_ni_tinte(doc):
+    for p in doc["pistas"]:
+        for c in p["clips"]:
+            assert "tinte" not in c, c["id"]
+            assert "version" not in (c.get("estilo") or {}), c["id"]
+
+
+def test_documentos_de_hoy_validan_igual_sin_version_ni_tinte():
+    """Sin `estilo.version` ni `tinte` el contrato no cambia ni un byte: ni
+    el fixture básico, ni el de `resolver` de la paridad, ni uno armado por el
+    borrador automático (que sigue creando textos v1)."""
+    import importlib.util
+    from final_edition import borrador
+    ruta = os.path.join(os.path.dirname(__file__), "fixtures", "generar_casos_editor.py")
+    spec = importlib.util.spec_from_file_location("generar_casos_editor", ruta)
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    guion = {"idioma": "es", "pais": "CO", "moneda": None, "precio_texto": None, "bloques": [
+        {"rol": "hook", "texto_pantalla": "Hola", "texto_voz": "Hola a todos", "inicio_s": 0, "fin_s": 1.5},
+        {"rol": "producto", "texto_pantalla": "Chanclas", "texto_voz": "Estas chanclas", "inicio_s": 1.5, "fin_s": 3},
+        {"rol": "cta", "texto_pantalla": "Pide hoy", "texto_voz": "Pide las tuyas", "inicio_s": 3, "fin_s": 4.5}]}
+    borrador_doc = borrador.armar_documento(
+        guion, [{"inicio": 0.0, "fin": 4.5, "zoom": "in"}], {"id": 1, "duracion_ms": 4500, "ancho": 540, "alto": 960, "tiene_audio": True},
+        {}, None, {"color": "#ff0000", "logo": None}, "9:16", {"con_sonido": False, "mezcla": "equilibrada", "volumenes": None})
+    for doc in (cargar("video_basico.json"), gen._doc_resolver(), borrador_doc):
+        antes = copy.deepcopy(doc)
+        v = d.validar(doc)
+        assert d.validar(copy.deepcopy(v)) == v                  # idempotente
+        assert doc == antes                                      # y no toca lo que recibe
+        _sin_version_ni_tinte(v)
+    assert any(c["id"].startswith("t_") for p in borrador_doc["pistas"] for c in p["clips"])
+
+
+def test_estilo_version_2_se_conserva_y_lo_demas_de_la_version_no():
+    v = d.validar(_doc_texto({"literal": "x"}, {"version": 2}))
+    assert v["pistas"][1]["clips"][0]["estilo"]["version"] == 2
+    assert d.validar(copy.deepcopy(v)) == v
+    # ausente queda ausente: ni el defecto ni la validación la inventan
+    assert "version" not in d.validar(_doc_texto({"literal": "x"}))["pistas"][1]["clips"][0]["estilo"]
+    assert "version" not in d._ESTILO_DEFECTO
+
+
+@pytest.mark.parametrize("version", [1, 3, 0, "2", True, 2.0, None, [2]])
+def test_estilo_version_distinta_de_2_falla(version):
+    with pytest.raises(d.DocumentoInvalido, match=r"estilo\.version"):
+        d.validar(_doc_texto({"literal": "x"}, {"version": version}))
+
+
+def test_tinte_en_clip_de_imagen_se_conserva_y_none_tambien():
+    c = d.validar(_doc_con_imagen(tinte="#FFD400"))["pistas"][-1]["clips"][0]
+    assert c["tinte"] == "#FFD400"
+    c = d.validar(_doc_con_imagen(tinte=None))["pistas"][-1]["clips"][0]
+    assert "tinte" in c and c["tinte"] is None
+    sin = d.validar(_doc_con_imagen())["pistas"][-1]["clips"][0]
+    assert "tinte" not in sin                                    # ausente queda ausente
+
+
+@pytest.mark.parametrize("tinte", ["#FFD40080", "amarillo", "#FFF", "FFD400", "", 0xFFD400, True, ["#FFD400"]])
+def test_tinte_invalido_falla(tinte):
+    with pytest.raises(d.DocumentoInvalido, match=r"tinte debe ser un color #RRGGBB"):
+        d.validar(_doc_con_imagen(tinte=tinte))
+
+
+def test_tinte_solo_va_en_clips_de_imagen():
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["tinte"] = "#FFD400"           # un clip de texto
+    with pytest.raises(d.DocumentoInvalido, match="tinte solo va en clips de imagen"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pistas"][0]["clips"][0]["tinte"] = "#FFD400"           # un clip de video
+    with pytest.raises(d.DocumentoInvalido, match="tinte solo va en clips de imagen"):
+        d.validar(doc)

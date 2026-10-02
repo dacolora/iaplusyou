@@ -238,6 +238,14 @@ def _validar_texto(clip, ruta):
     if tiene_lit == tiene_var:
         _fallar(f"{ruta}.texto debe ser literal o variable, no ambos ni ninguno.")
     estilo = {**_ESTILO_DEFECTO, **(clip.get("estilo") or {})}
+    # `version` (capa 5c, D1): ausente es el texto de siempre (v1, mismo PNG);
+    # 2 es el texto nuevo (el render y la maqueta lo componen con la tabla
+    # tipográfica). Nada más: no entra a `_ESTILO_DEFECTO`, así un documento
+    # de hoy no gana clave nueva al validarse.
+    if "version" in estilo:
+        v = estilo["version"]
+        if not isinstance(v, int) or isinstance(v, bool) or v != 2:
+            _fallar(f"{ruta}.estilo.version debe ser 2 o no estar (vino {v!r}).")
     if not isinstance(estilo.get("fuente"), str) or not _FUENTE_RE.match(estilo["fuente"]):
         # termina en static/fonts/<fuente>.ttf (rasterizar.py): ni vacío ni con rutas
         _fallar(f"{ruta}.estilo.fuente debe ser el nombre de una fuente de static/fonts (p. ej. Inter-Bold).")
@@ -362,6 +370,14 @@ def _validar_clip(clip, pista, i):
             y = _fraccion(enc.get("y", encuadre.DEFECTO["y"]), f"{ruta}.encuadre.y")
             lleno = {"modo": modo, "zoom": zoom, "x": x, "y": y}
             clip["encuadre"] = None if lleno == encuadre.DEFECTO else lleno
+    # `tinte` (capa 5c, D8): el color con que se pinta una imagen de un solo
+    # color (un sticker `tenible`); `null`/ausente = la imagen tal cual.
+    if "tinte" in clip:
+        if tipo != "imagen":
+            _fallar(f"{ruta}.tinte solo va en clips de imagen.")
+        v = clip["tinte"]
+        if v is not None and (not isinstance(v, str) or not _COLOR_SIN_ALFA_RE.match(v)):
+            _fallar(f"{ruta}.tinte debe ser un color #RRGGBB (vino {v!r}).")
     if tipo != "audio":
         clip["transform"] = _validar_transform(clip.get("transform"), ruta)
         for k in ("ancho_px", "alto_px"):
