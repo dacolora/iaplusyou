@@ -1,11 +1,27 @@
 # Relevo — sistema de estilos (toda la plataforma con el look azul de la referencia)
 
-**Escrito:** 2026-10-02 18:40 (hora de Bogotá) · **Rama:** `estilos-plataforma` (solo documentos; ya en `main`) ·
+**Escrito:** 2026-10-02 18:40 (hora de Bogotá) · **Rama / worktree:** `estilos-plataforma` (solo documentos, ya en `main`);
+el trabajo va en `.claude/worktrees/codex-estilos-e<N>` ·
 **Spec:** `docs/superpowers/specs/2026-10-02-sistema-de-estilos-design.md` ·
 **Plan de la entrega 1:** `docs/superpowers/plans/2026-10-02-sistema-de-estilos-entrega-1.md`
 
-**Quién sigue:** ChatGPT Pro (Codex), por decisión de Daniel, para no gastar sus tokens de Claude. Si lo retoma una sesión de
-Claude, vale lo mismo.
+**Quién sigue:** Codex con el plan ChatGPT Pro de Daniel (decisión de Daniel, 2026-10-02: que el gasto salga de ese plan y no
+de sus tokens de Claude), con el MISMO contrato que `docs/superpowers/relevos/2026-10-02-pendientes-a-codex.md`:
+
+| Paso | Quién |
+|---|---|
+| Preparar el worktree `.claude/worktrees/codex-estilos-e<N>` (rama `codex-estilos-e<N>` desde `origin/main`, `git submodule update --init meta_ads`) y lanzar `codex exec` con el plan como encargo | una sesión de Claude (el orquestador) |
+| Implementar, probar y commitear, tarea por tarea, SOLO en ese worktree | Codex |
+| Revisar (agente `revisor`), capturas en escritorio y celular, suite completa, mezclar a `main` | el orquestador |
+| Desplegar con la skill `despliegue` | el orquestador |
+| Decisiones de diseño que el spec no cubra | Daniel |
+
+Lanzar (desde el orquestador; la CLI viene dentro de la app de ChatGPT):
+`/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex exec -C <worktree> -s workspace-write --add-dir /Users/colorado/Documents/GitHub/iaplusyou/.git -o <informe> - < <encargo>`
+El encargo: «Lee `docs/superpowers/relevos/2026-10-02-sistema-de-estilos.md`, el spec y el plan de la entrega <N>, y ejecuta
+el plan tarea por tarea con sus reglas globales. Termina con el informe final del plan.» No se corre en paralelo con un lote
+de pendientes: los dos tocan `translations/en/LC_MESSAGES/messages.po` (y los de pantallas, `static/estilos/`); en serie, con
+`main` mezclado antes de empezar.
 
 ## En un párrafo
 
@@ -34,11 +50,12 @@ app entera en azul) está listo para ejecutarse tarea por tarea. **No se ha escr
 
 ## Falta, en el orden en que conviene hacerlo
 
-1. **Entrega 1** — ejecutar `docs/superpowers/plans/2026-10-02-sistema-de-estilos-entrega-1.md` (7 tareas) en la rama
-   `estilos-entrega-1`, y abrir un PR a `main`.
+1. **Entrega 1** — ejecutar `docs/superpowers/plans/2026-10-02-sistema-de-estilos-entrega-1.md` (7 tareas) en el worktree
+   `codex-estilos-e1`; el orquestador revisa, mezcla y despliega.
 2. **Entrega 2** — escribir su plan desde el spec (§6.2 componentes nuevos, §7 íconos Lucide, §10), con el MISMO formato del
    plan de la entrega 1 (tareas chicas, prueba primero, código completo, comandos exactos), y ejecutarlo. Final edition es la
-   primera en usar los componentes: sus clases `fe-*` se vuelven las comunes.
+   primera en usar los componentes: sus clases `fe-*` se vuelven las comunes. Como Codex no tiene red, **el orquestador baja
+   antes** los SVG de Lucide que pida el plan (https://lucide.dev, licencia ISC) al worktree, con su licencia.
 3. **Entrega 3** — un plan por grupo de pantallas, en este orden: (a) Tablero y Triple Whale; (b) Crear; (c) Experimentos y
    Catálogo; (d) Nicho, Referentes y Sprints; (e) Configuración, admin, portada e inicio de sesión; (f) el editor, sobrio
    alrededor del video. Cada grupo muda sus reglas de `legado/` a `componentes/`/`pantallas/`, cambia emojis por íconos y baja
@@ -47,7 +64,8 @@ app entera en azul) está listo para ejecutarse tarea por tarea. **No se ha escr
 
 ## La siguiente acción concreta
 
-Crear la rama `estilos-entrega-1` desde `main` y hacer la **tarea 1** del plan: escribir `tests/test_estilos_sistema.py`
+El orquestador prepara el worktree `.claude/worktrees/codex-estilos-e1` sobre `origin/main` (con `meta_ads`) y lanza
+`codex exec` con el encargo de arriba; Codex empieza por la **tarea 1** del plan: escribir `tests/test_estilos_sistema.py`
 (prueba primero), verla fallar y escribir `estilos.py`.
 
 ## Decisiones ya tomadas (no reabrir)
@@ -57,7 +75,7 @@ Crear la rama `estilos-entrega-1` desde `main` y hacer la **tarea 1** del plan: 
 | Color de la plataforma | Azul en todo; el morado desaparece; gráficos revalidados | Daniel | 2026-10-02 |
 | Editor de video | Azul, pero el fondo detrás del reproductor gris neutro (`--fondo-video #121417`) y sin brillos | Daniel | 2026-10-02 |
 | Cómo se organiza | Carpeta por capas `static/estilos/` + Guía en `/admin/estilos` + pruebas que obligan a usar tokens | Daniel | 2026-10-02 |
-| Quién ejecuta | ChatGPT Pro (Codex) con este relevo; despliega Daniel o una sesión de Claude con la skill `despliegue` | Daniel | 2026-10-02 |
+| Quién ejecuta | Codex (plan ChatGPT Pro) con `codex exec` en su worktree; una sesión de Claude orquesta, revisa, mezcla y despliega | Daniel (el reparto, igual que en `2026-10-02-pendientes-a-codex.md`) | 2026-10-02 |
 | Cómo llega al navegador | `static/style.css` GENERADO por `python3 estilos.py construir` y commiteado (como el `.mo`) | Claude, al escribir el plan | 2026-10-02 |
 | Mudanza inicial | En pedazos contiguos a `legado/NN-<tema>.css`, sin reordenar; `legado/` solo se vacía | Claude, al escribir el plan | 2026-10-02 |
 | Par del gráfico del Tablero | Ingresos `--serie-1` azul (línea), gasto `--serie-2` naranja (barras) | Claude (validado) | 2026-10-02 |
@@ -111,13 +129,16 @@ Crear la rama `estilos-entrega-1` desde `main` y hacer la **tarea 1** del plan: 
   traducir → `python3 catalogo_i18n.py compilar`. `actualizar` puede marcar entradas `#, fuzzy`: esas no se usan en tiempo de
   ejecución; corrígelas y quita la marca (`.claude/skills/idioma/SKILL.md`). Si `main` se mueve y hay conflicto en el
   `.po`/`.mo`, rellena el `.po` leyendo el de `main` completo (nunca un diff) y vuelve a compilar.
-- **Git**: nunca `git stash`, `git checkout .`, `git reset --hard` ni `git push --force`; no subas a `main` directo: PR.
-- **Submódulo `meta_ads`** (repo privado `dacolora/CreaTvMetaAds`): las pruebas lo importan. El entorno de Codex necesita
-  acceso a ese repo además de `dacolora/iaplusyou` y correr `git submodule update --init meta_ads`. Si no lo tiene, pídeselo a
-  Daniel antes de empezar.
-- **Entorno de pruebas**: Python 3 + `pip install -r requirements.txt`. Las pruebas `slow` necesitan `ffmpeg`; las del editor
-  (`tests/test_editor_js.py`) necesitan `node`. Si tu entorno no los tiene, corre `python3 -m pytest -q -m "not slow"` y dilo
-  en el PR con el conteo.
+- **Git (Codex)**: `git add <rutas>` explícitas; nunca `git add -A`, `git stash`, `git checkout .`, `git reset --hard`,
+  `push`, `merge` ni `rebase`; nunca `ssh` al VPS. Mezclar y desplegar es del orquestador.
+- **Submódulo `meta_ads`**: un worktree nuevo necesita `git submodule update --init meta_ads` o la suite no colecciona (lo hace
+  el orquestador al preparar el worktree).
+- **Sin red** en el sandbox de Codex: nada de `pip install` ni descargas. Pruebas con el venv del checkout principal:
+  `/Users/colorado/Documents/GitHub/iaplusyou/venv/bin/python3 -m pytest <archivos> -q -p no:cacheprovider` (ese venv tiene
+  todo; la Mac tiene `ffmpeg` y `node` para las pruebas `slow` y las del editor). No hay navegador: las capturas las toma el
+  orquestador.
+- **Nada de llaves**: no leas ni imprimas `.env`, `data/`, `usuarios.json`, `clientes/*/meta*.json` ni `clientes/*/token_*.json`
+  (lo impreso queda en el historial de ChatGPT).
 - **La página del proyecto pesa 3 MB** (todas las pestañas en un HTML): no sumes nada pesado ahí; reglas en
   `.claude/skills/ui/SKILL.md`. La hoja generada no puede pasar de 217 842 bytes en la entrega 1.
 - **Celular**: nada puede correr la página de lado; las rejillas usan `minmax(min(100%, X), 1fr)` (`tests/test_movil.py`).
@@ -130,13 +151,16 @@ Crear la rama `estilos-entrega-1` desde `main` y hacer la **tarea 1** del plan: 
 ## Estado del árbol
 
 - Commits: el spec, el plan y este relevo, en la rama `estilos-plataforma`, subidos a `main` (solo documentos: no hace falta
-  desplegar). Pruebas: no se corrieron (no hubo código). VPS: `ee6f83b` en producción a las 05:52 UTC del 2026-10-02; estos
-  documentos no cambian nada allá.
+  desplegar). Pruebas: no se corrieron, salvo `tests/test_guia_agentes.py` y `tests/test_hooks_agentes.py` (100 passed): no
+  hubo código. Estos documentos no cambian nada en el VPS.
 
 ## Cómo devolver el trabajo
 
-- Un PR por entrega (o por grupo de pantallas en la entrega 3), con: qué cambió, cómo se verificó (conteos y comandos
-  textuales), lo que NO se pudo verificar (p. ej. capturas) y el enlace al spec.
-- Al terminar cada PR, actualiza este relevo (secciones «Hecho», «Falta», «La siguiente acción concreta») en el mismo PR.
-- Dudas que el spec no responde: decide lo más conservador, anótalo en el PR como «decisión tomada» con su costo si estuviera
-  mal, y sigue; solo para si algo cobra, publica o borra datos.
+- Codex: un commit por tarea en su rama, este relevo actualizado (secciones «Hecho», «Falta», «La siguiente acción concreta»)
+  en el último commit, y el informe final del plan en su último mensaje (por tarea: hecha o no, commit, prueba que la vigila;
+  conteos de la suite; lo que NO se pudo verificar; decisiones que tomó sin que el plan las dijera, con su costo si estuvieran
+  mal).
+- El orquestador: revisa (agente `revisor`; `guardian-gasto` no hace falta, aquí no hay plata), toma las capturas, corre la
+  suite completa, mezcla a `main`, despliega con la skill `despliegue` y le cuenta a Daniel en llano.
+- Dudas que el spec no responde: lo más conservador, anotado en el informe como «decisión tomada» con su costo si estuviera
+  mal; solo se para si algo cobraría, publicaría o borraría datos.

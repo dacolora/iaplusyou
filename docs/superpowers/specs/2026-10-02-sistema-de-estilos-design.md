@@ -1,7 +1,8 @@
 # Sistema de estilos de Creatv: la carpeta de estilos y la paleta azul en toda la plataforma
 
 **Fecha:** 2026-10-02 · **Pedido de:** Daniel · **Estado:** diseño aprobado por Daniel (partes 1, 2 y 3, 2026-10-02).
-**Ejecuta:** ChatGPT Pro (Codex), siguiendo `docs/superpowers/relevos/2026-10-02-sistema-de-estilos.md`.
+**Ejecuta:** Codex (plan ChatGPT Pro de Daniel), orquestado por una sesión de Claude, siguiendo
+`docs/superpowers/relevos/2026-10-02-sistema-de-estilos.md`.
 **Primer plan:** `docs/superpowers/plans/2026-10-02-sistema-de-estilos-entrega-1.md`.
 
 **Referencias visuales:**
@@ -34,7 +35,7 @@
 | Color | **Azul en toda la plataforma.** El morado desaparece de la app; los gráficos se revalidan para daltonismo. |
 | Editor de video | **Azul, pero sobrio alrededor del video:** paneles y línea de tiempo con la paleta; el fondo detrás del reproductor gris neutro y sin brillos (un marco azul engaña el ojo al juzgar los colores del video). |
 | Enfoque | **Carpeta por capas** (`static/estilos/`) + página **Guía de estilos** + pruebas que obligan a usar los tokens. |
-| Ejecución | ChatGPT Pro, siguiendo el relevo. Despliega Daniel (o una sesión de Claude con la skill `despliegue`). |
+| Ejecución | Codex (plan ChatGPT Pro) con `codex exec` en su worktree, siguiendo el relevo; una sesión de Claude orquesta, revisa, mezcla a `main` y despliega con la skill `despliegue`. |
 
 ## 4. Tokens: la paleta y las escalas
 
@@ -257,9 +258,9 @@ hoja generada tiene las mismas reglas.
 | **3. Pantallas, por grupos** | (a) Tablero y Triple Whale: cifras, anillos, gráfico; (b) Crear; (c) Experimentos y Catálogo; (d) Nicho, Referentes y Sprints; (e) Configuración, admin, portada e inicio de sesión; (f) editor, sobrio alrededor del video. Cada grupo reemplaza emojis por íconos y usa los componentes | Cada grupo, con la cara de la referencia |
 | **4. Limpieza** | los estilos en línea a clases, hasta `TECHO_ESTILOS_EN_LINEA = 0` salvo excepciones con motivo escrito en la prueba; lo que quede en `legado/` mudado y la carpeta borrada (`TECHO_COLORES_LEGADO = 0`) | Nada nuevo a la vista; deuda en cero |
 
-Cada entrega: su propio plan (el ejecutor lo escribe con el formato del plan de la entrega 1, desde este spec), suite en verde,
-capturas en escritorio (1440 px) y celular (375 px) de las pantallas tocadas, revisión en la Guía, un PR, y el despliegue lo
-hace Daniel (o una sesión de Claude con la skill `despliegue`).
+Cada entrega: su propio plan (con el formato del plan de la entrega 1, desde este spec), suite en verde, capturas en
+escritorio (1440 px) y celular (375 px) de las pantallas tocadas (las toma el orquestador: Codex no tiene navegador), revisión
+en la Guía, y el orquestador mezcla a `main` y despliega con la skill `despliegue`.
 
 ## 11. Criterios de aceptación
 

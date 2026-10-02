@@ -18,8 +18,16 @@ muda a `static/estilos/legado/` en pedazos contiguos y sin reordenar; luego camb
 
 ## Reglas globales (valen para cada tarea)
 
-- Rama `estilos-entrega-1` desde `main`; un PR a `main` al final. **No** hagas push a `main` ni despliegues: el despliegue lo
-  hace Daniel o una sesión de Claude con `.claude/skills/despliegue/SKILL.md`.
+- **Cómo se trabaja con Codex** (el mismo contrato que `docs/superpowers/relevos/2026-10-02-pendientes-a-codex.md`): una
+  sesión de Claude orquesta; prepara el worktree `.claude/worktrees/codex-estilos-e1` (rama `codex-estilos-e1`, desde
+  `origin/main`, con `git submodule update --init meta_ads`) y lanza `codex exec` con este plan como encargo. Codex trabaja
+  SOLO en ese worktree: implementa, prueba y commitea (un commit por tarea, `git add <rutas>` explícitas). Nunca `push`,
+  `merge`, `rebase`, `git stash`, `git add -A`, `git reset --hard`, `git checkout .`, `ssh` ni desplegar. El orquestador
+  revisa, corre la suite, mezcla a `main` y despliega con `.claude/skills/despliegue/SKILL.md`.
+- **Sin red** (el sandbox de Codex la corta): nada de `pip install` ni descargas; las pruebas corren con el venv del
+  checkout principal: `/Users/colorado/Documents/GitHub/iaplusyou/venv/bin/python3 -m pytest <archivos> -q -p no:cacheprovider`
+  (en esta guía, `python3` quiere decir ese intérprete).
+- **Nada de llaves:** no leas ni imprimas `.env`, `data/`, `usuarios.json`, `clientes/*/meta*.json` ni `clientes/*/token_*.json`.
 - Desde la tarea 2, **nunca** se edita `static/style.css` a mano: se edita `static/estilos/` y se corre
   `python3 estilos.py construir` antes de cada commit que toque CSS.
 - Nombres, comentarios y mensajes de commit en español, como el resto del repo. Mensajes de commit que digan el porqué.
@@ -27,9 +35,10 @@ muda a `static/estilos/legado/` en pedazos contiguos y sin reordenar; luego camb
   `python3 catalogo_i18n.py actualizar`, traducir las entradas nuevas al inglés en
   `translations/en/LC_MESSAGES/messages.po` (quitar cualquier marca `fuzzy` que deje) y `python3 catalogo_i18n.py compilar`.
   Reglas finas: `.claude/skills/idioma/SKILL.md`.
-- Pruebas: `python3 -m pytest -q` (la suite completa tarda ~4 min; `-m "not slow"` salta las que renderizan video con ffmpeg
-  para un ciclo rápido, pero antes de cada commit corre la completa si tu entorno tiene ffmpeg y node; si no, anota en el
-  PR cuáles no pudiste correr).
+- Pruebas: `python3 -m pytest -q -p no:cacheprovider` (la suite completa tarda ~5 min y tenía 5 781 pruebas el
+  2026-10-02; `-m "not slow"` salta las que renderizan video con ffmpeg para un ciclo rápido). La completa, al final de cada
+  tarea que toque CSS o Python; si algo no puede correr en tu entorno, dilo en el informe con el conteo.
+- Dos intentos por paso: si a la segunda no sale, para, anota qué probaste y qué viste, y deja el resto para el orquestador.
 - No toques nada fuera de lo que dice cada tarea: ni rutas de dinero, ni tareas del worker, ni textos existentes.
 
 ---
@@ -753,8 +762,10 @@ def test_base_reduce_movimiento_y_animaciones_permitidas():
   en `templates/_componentes.html` + sección `data-componente` en `/admin/estilos` + línea en esta skill; el editor lleva
   `--fondo-video` detrás del reproductor. Y corrige donde la skill diga «el bloque Base visual común al FINAL de
   `static/style.css`»: ahora vive en `static/estilos/legado/` (o en su componente cuando se mude).
-- [ ] **Paso 2:** en el spec, bajo el título, agrega `**Entrega 1:** hecha en el PR <número> (<fecha>).`
-- [ ] **Paso 3: commit** — `git commit -am "Estilos: la skill de pantallas cuenta el sistema de estilos"`.
+- [ ] **Paso 2:** en el spec, bajo el título, agrega `**Entrega 1:** hecha en la rama codex-estilos-e1 (2026-10-…, con la
+  fecha del día).`
+- [ ] **Paso 3: commit** — `git add .claude/skills/ui/SKILL.md docs/superpowers/specs/2026-10-02-sistema-de-estilos-design.md` y
+  `git commit -m "Estilos: la skill de pantallas cuenta el sistema de estilos"`.
 
 ---
 
@@ -763,14 +774,15 @@ def test_base_reduce_movimiento_y_animaciones_permitidas():
 - [ ] **Paso 1:** `python3 -m pytest -q` completa → anota el conteo exacto (p. ej. `5280 passed, 1 skipped`).
 - [ ] **Paso 2:** `python3 estilos.py comprobar` → al día. Tamaño: `wc -c static/style.css` debe ser ≤ 217 842 bytes
   (202 842 de hoy + 15 000; spec §11).
-- [ ] **Paso 3: capturas** (si tu entorno tiene un navegador sin cabeza, p. ej. Playwright con Chromium): sirve la app con
-  `FLASK_SECRET_KEY=dev python3 dashboard.py` (puerto 5050) y, con una sesión de admin, captura `/admin/estilos`, `/login` y
-  la página de un proyecto de prueba a 1440 px y a 375 px de ancho. Si tu entorno no puede, escribe en el PR «capturas
-  pendientes: hacerlas en la revisión antes de desplegar» — nunca digas que se vio bien si no se vio.
-- [ ] **Paso 4: PR** a `main` titulado «Sistema de estilos — entrega 1: carpeta, Guía y la app en azul», con: qué cambió (las 6
-  tareas), cómo se verificó (los conteos y comandos de arriba, textuales), lo que NO se pudo verificar, y el enlace al spec.
-- [ ] **Paso 5:** actualiza el relevo `docs/superpowers/relevos/2026-10-02-sistema-de-estilos.md` («Hecho, y cómo se
-  verificó» y «La siguiente acción concreta» = escribir el plan de la entrega 2 desde el spec §6.2, §7 y §10) en el mismo PR.
+- [ ] **Paso 3: capturas** — Codex no tiene navegador ni red: escribe en el informe «capturas pendientes». Las toma el
+  orquestador al revisar (la app en el panel del navegador de Claude, `/admin/estilos`, `/login` y la página de un proyecto a
+  1440 px y a 375 px), antes de mezclar. Nunca digas que se vio bien si no se vio.
+- [ ] **Paso 4:** actualiza el relevo `docs/superpowers/relevos/2026-10-02-sistema-de-estilos.md` («Hecho, y cómo se
+  verificó» con los conteos textuales, y «La siguiente acción concreta» = escribir el plan de la entrega 2 desde el spec
+  §6.2, §7 y §10) y commitéalo (`git add docs/superpowers/relevos/2026-10-02-sistema-de-estilos.md`).
+- [ ] **Paso 5: informe final**, en tu último mensaje: por tarea, hecha / no hecha, su commit y la prueba que la vigila; los
+  conteos de la suite; lo que NO se pudo verificar; y cualquier decisión que tomaste sin que el plan la dijera, con su costo si
+  estuviera mal. El orquestador revisa, mezcla a `main` y despliega.
 
 ## Revisión propia del plan (hecha al escribirlo)
 
