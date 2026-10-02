@@ -145,10 +145,10 @@ const conVigia = () => { vigias.length = 0; globalThis.IntersectionObserver = Vi
 const sinVigia = () => { vigias.length = 0; delete globalThis.IntersectionObserver; };
 const vuelta = () => new Promise((r) => setImmediate(r));
 
-function panel(doc, seleccion) {
+function panel(doc, seleccion, materiales = {}) {
   const falso = editorFalso(doc, seleccion);
   const contenedor = new Nodo("div");
-  const p = new Propiedades({ contenedor, editor: falso.editor, catalogoFuentes: CATALOGO_4, tabla: T_E });
+  const p = new Propiedades({ contenedor, editor: falso.editor, materiales: () => materiales, catalogoFuentes: CATALOGO_4, tabla: T_E });
   const buscar = (fn) => contenedor.todos().filter(fn);
   return { p, contenedor, buscar, porId: (id) => buscar((n) => n.id === id)[0], ...falso };
 }
@@ -293,4 +293,81 @@ test("un texto de antes con emojis: el aviso y «Mostrar los emojis» (una opera
   p.pintar();
   assert.deepEqual(avisos().map((n) => n.textContent), ["No sale en el video: «🍕» (esta fuente no los tiene)."]);
   assert.equal(porId("ed-prop-mostrar-emojis"), undefined);
+});
+
+// ---- Capa 5c (Tarea 8): «Color» de un sticker ----
+
+const STICKER = { id: 9, tipo: "imagen", ancho: 512, alto: 512, tenible: true };
+const FOTO = { id: 10, tipo: "imagen", ancho: 600, alto: 400 };
+
+function panelDeSticker(tinte = "#FFD400", material = STICKER) {
+  const r = op.agregarImagen(docBase(), material, 0, { fraccion: 0.35, ...(tinte ? { tinte } : {}) }, INFO);
+  return { ...panel(r.doc, r.seleccion, { [material.id]: material }), id: r.seleccion };
+}
+const bloqueColor = (buscar) => buscar((n) => n.tagName === "LEGEND" && n.textContent === "Color");
+
+test("«Color» de un sticker: la paleta de los textos y un color libre; una muestra cambia el tinte (un deshacer) y el color libre fusiona su arrastre", () => {
+  const { buscar, llamadas, id, editor, p } = panelDeSticker("#FFD400");
+  assert.equal(bloqueColor(buscar).length, 1, "un bloque «Color»");
+  const muestras = buscar((n) => n.classList.contains("ed-prop-muestra"));
+  assert.deepEqual(muestras.map((n) => n.getAttribute("aria-label")), ["Blanco", "Negro", "Color de marca", "Amarillo", "Rojo"]);
+  assert.deepEqual(muestras.map((n) => n.style.background), ["#FFFFFF", "#000000", "#7C3AED", "#FFD60A", "#E53935"]);
+  assert.deepEqual(muestras.map((n) => n.getAttribute("aria-pressed")), ["false", "false", "false", "false", "false"],
+    "el amarillo del sticker (#FFD400) no es el de la paleta: ninguna muestra");
+  const libre = buscar((n) => n.tagName === "INPUT" && n.type === "color");
+  assert.equal(libre.length, 1);
+  assert.equal(libre[0].value, "#ffd400");
+  // una muestra: una operación, sin clave
+  muestras[4].disparar("click");
+  assert.deepEqual(llamadas.at(-1), ["operar", "cambiar", id, { tinte: "#E53935" }]);
+  // el color libre mientras se arrastra: la clave <id>:tinte (un solo deshacer)
+  libre[0].value = "#10b981";
+  libre[0].disparar("input");
+  libre[0].value = "#10b982";
+  libre[0].disparar("input");
+  assert.deepEqual(llamadas.slice(-2), [
+    ["operarCon", { clave: `${id}:tinte` }, "cambiar", id, { tinte: "#10B981" }],
+    ["operarCon", { clave: `${id}:tinte` }, "cambiar", id, { tinte: "#10B982" }],
+  ]);
+  // el blanco elegido queda marcado y el color libre lo sigue
+  editor.actual = op.cambiar(editor.actual, id, { tinte: "#FFFFFF" }, INFO).doc;
+  p.pintar();
+  assert.deepEqual(muestras.map((n) => n.getAttribute("aria-pressed")), ["true", "false", "false", "false", "false"]);
+  assert.equal(libre[0].value, "#ffffff");
+});
+
+test("«Color»: un sticker sin tinte se ve blanco (la muestra «Blanco»); una foto o una imagen que no se tiñe no lo trae", () => {
+  const blanco = panelDeSticker(null);
+  assert.equal(bloqueColor(blanco.buscar).length, 1);
+  assert.deepEqual(blanco.buscar((n) => n.classList.contains("ed-prop-muestra")).map((n) => n.getAttribute("aria-pressed")),
+    ["true", "false", "false", "false", "false"]);
+  const foto = panelDeSticker(null, FOTO);
+  assert.deepEqual(bloqueColor(foto.buscar), [], "una foto no se tiñe (sería una silueta)");
+  assert.deepEqual(foto.buscar((n) => n.classList.contains("ed-prop-muestra")), []);
+  // sin conocer el material (todavía no llegó a la vista previa): sin bloque
+  const r = op.agregarImagen(docBase(), STICKER, 0, { fraccion: 0.35, tinte: "#FFD400" }, INFO);
+  assert.deepEqual(bloqueColor(panel(r.doc, r.seleccion, {}).buscar), []);
+});
+
+test("«Color»: el bloque está entre la opacidad y las acciones de la imagen, y el texto sigue con su propio «Color»", () => {
+  const { buscar } = panelDeSticker("#FFD400");
+  const orden = buscar((n) => n.id === "ed-prop-imagen-opacidad" || (n.tagName === "LEGEND" && n.textContent === "Color")
+    || (n.tagName === "BUTTON" && n.textContent === "Centrar"));
+  assert.deepEqual(orden.map((n) => n.id || n.textContent), ["ed-prop-imagen-opacidad", "Color", "Centrar"]);
+  // un texto: su «Color» de siempre (una sola paleta, con el cambio de estilo.color)
+  const titulo = op.agregarTexto(docBase(), 0, "titulo", {}, INFO);
+  const t = panel(titulo.doc, titulo.seleccion);
+  assert.equal(bloqueColor(t.buscar).length, 1);
+  t.buscar((n) => n.classList.contains("ed-prop-muestra"))[1].disparar("click");
+  assert.deepEqual(t.llamadas.at(-1), ["operar", "cambiar", titulo.seleccion, { estilo: { color: "#000000" } }]);
+});
+
+test("el formulario de una imagen se rehace si su material pasa a poder teñirse (llegó tarde a la vista previa)", () => {
+  const r = op.agregarImagen(docBase(), STICKER, 0, { fraccion: 0.35, tinte: "#FFD400" }, INFO);
+  const materiales = {};
+  const { buscar, p } = panel(r.doc, r.seleccion, materiales);
+  assert.deepEqual(bloqueColor(buscar), []);
+  materiales[9] = STICKER;
+  p.pintar();
+  assert.equal(bloqueColor(buscar).length, 1);
 });

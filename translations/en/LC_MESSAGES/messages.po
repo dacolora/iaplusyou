@@ -2986,8 +2986,14 @@ msgstr "Chile"
 msgid "Cierre"
 msgstr "Close"
 
+msgid "Cinco estrellas"
+msgstr "Five stars"
+
 msgid "Cinco minutos. No creas nada en Meta."
 msgstr "Five minutes. You don't create anything on Meta."
+
+msgid "Cinta"
+msgstr "Ribbon"
 
 msgid "Citas textuales"
 msgstr "Verbatim quotes"
@@ -3651,6 +3657,9 @@ msgstr "Copy links"
 msgid "Copy del anuncio"
 msgstr "Ad copy"
 
+msgid "Corazón"
+msgstr "Heart"
+
 msgid "Corona de la cabeza"
 msgstr "Crown of the head"
 
@@ -3926,6 +3935,12 @@ msgstr ""
 
 msgid "Cápsulas de detergente sin plástico, dosis exacta, olor suave"
 msgstr "Plastic-free detergent pods, exact dose, mild scent"
+
+msgid "Círculo"
+msgstr "Circle"
+
+msgid "Círculo a mano"
+msgstr "Hand-drawn circle"
 
 msgid "Código entregado"
 msgstr "Code delivered"
@@ -4212,6 +4227,9 @@ msgstr "Slide"
 
 msgid "Después, un análisis con IA mira tus ganadores y tus perdedores, explica qué patrón se repite y propone anuncios nuevos que puedes llevar a Crear con un clic."
 msgstr "Then an AI analysis looks at your winners and your losers, explains which pattern repeats and suggests new ads you can take to Create with one click."
+
+msgid "Destellos"
+msgstr "Sparkles"
 
 msgid "Destino"
 msgstr "Market"
@@ -5292,6 +5310,12 @@ msgstr "United Arab Emirates"
 msgid "Emoción"
 msgstr "Emotion"
 
+msgid "Emojis"
+msgstr "Emojis"
+
+msgid "Emojis: Twemoji (CC-BY 4.0)."
+msgstr "Emojis: Twemoji (CC-BY 4.0)."
+
 msgid "Empezar de cero"
 msgstr "Start from scratch"
 
@@ -5516,6 +5540,9 @@ msgstr "Send me the link"
 
 msgid "Equilibrada"
 msgstr "Balanced"
+
+msgid "Equis"
+msgstr "Cross"
 
 msgid "Error"
 msgstr "Error"
@@ -6319,6 +6346,9 @@ msgstr "Status not allowed."
 msgid "Estados Unidos"
 msgstr "United States"
 
+msgid "Estallido"
+msgstr "Burst"
+
 msgid "Este activo ya no existe"
 msgstr "This item no longer exists"
 
@@ -6474,6 +6504,9 @@ msgstr "These subtitles come from the automatic draft and don't follow the cuts.
 msgid "Estos textos están en español: son las instrucciones internas que recibe Claude. Claude escribe tus anuncios en el idioma de tu proyecto."
 msgstr "These texts are in Spanish: they're the internal instructions Claude receives. Claude writes your ads in your project's language."
 
+msgid "Estrella"
+msgstr "Star"
+
 msgid "Estrellas"
 msgstr "Stars"
 
@@ -6515,6 +6548,9 @@ msgstr "Stage"
 msgid "Etapa inválida: %(etapa)s"
 msgstr "Invalid stage: %(etapa)s"
 
+msgid "Etiqueta de precio"
+msgstr "Price tag"
+
 msgid "Evaluación con IA"
 msgstr "AI evaluation"
 
@@ -6551,6 +6587,9 @@ msgstr "Evaluate now"
 
 msgid "Eventos en bitácora"
 msgstr "Log events"
+
+msgid "Exclamación"
+msgstr "Exclamation"
 
 msgid "Excluir"
 msgstr "Exclude"
@@ -6865,11 +6904,29 @@ msgstr "This piece's final cuts"
 msgid "Firma vacía."
 msgstr "Empty “why it works”."
 
+msgid "Flecha"
+msgstr "Arrow"
+
+msgid "Flecha a mano"
+msgstr "Hand-drawn arrow"
+
+msgid "Flecha curva"
+msgstr "Curved arrow"
+
+msgid "Flecha hacia abajo"
+msgstr "Down arrow"
+
+msgid "Flechas"
+msgstr "Arrows"
+
 msgid "Flux Kontext Pro"
 msgstr "Flux Kontext Pro"
 
 msgid "Fondo"
 msgstr "Background"
+
+msgid "Formas"
+msgstr "Shapes"
 
 msgid "Formato"
 msgstr "Format"
@@ -7259,6 +7316,9 @@ msgstr "Managed by Creatv"
 
 msgid "Gestionar la conexión de agencia →"
 msgstr "Manage the agency connection →"
+
+msgid "Globo de diálogo"
+msgstr "Speech bubble"
 
 msgid "Google permite 100 búsquedas por día por proyecto; cada recolección usa una. Los links no gastan búsqueda."
 msgstr "Google allows 100 searches per day per project; each collection uses one. Links don't use up searches."
@@ -9050,6 +9110,9 @@ msgstr "Brands"
 msgid "Marcas a imitar"
 msgstr "Brands to imitate"
 
+msgid "Marcas a mano"
+msgstr "Hand-drawn marks"
+
 #, python-format
 msgid "Material %(id)s listo."
 msgstr "File %(id)s ready."
@@ -10139,6 +10202,10 @@ msgstr "Couldn't adapt it (%(tipo)s)."
 msgid "No se pudo adaptar."
 msgstr "Couldn't adapt it."
 
+#, python-brace-format
+msgid "No se pudo agregar el sticker ({error})."
+msgstr "Couldn't add the sticker ({error})."
+
 msgid "No se pudo agregar ese referente."
 msgstr "Couldn't add that reference."
 
@@ -10774,6 +10841,9 @@ msgstr "For whom"
 
 msgid "Para rehacer desde esa escena hace falta el último cuadro de la anterior."
 msgstr "To redo from that scene, the last frame of the previous one is needed."
+
+msgid "Para vender"
+msgstr "For selling"
 
 msgid "Para volver a tu propia app,"
 msgstr "To go back to your own app,"
@@ -11831,6 +11901,9 @@ msgstr "ROAS (Pixel)"
 
 msgid "ROAS mínimo"
 msgstr "Minimum ROAS"
+
+msgid "Rayo"
+msgstr "Lightning"
 
 msgid "Re-ediciones por derivación"
 msgstr "Re-edits per derivation"
@@ -13145,6 +13218,12 @@ msgstr "Sprint · Campaign %(n)s"
 msgid "Sprints"
 msgstr "Sprints"
 
+msgid "Sticker agregado: cámbiale el color en «Editar»."
+msgstr "Sticker added: change its color in “Edit”."
+
+msgid "Stickers"
+msgstr "Stickers"
+
 msgid "Storytelling"
 msgstr "Storytelling"
 
@@ -13290,6 +13369,9 @@ msgstr "Upload a photo"
 msgid "Subir · link · fotos del producto"
 msgstr "Upload · link · product photos"
 
+msgid "Subrayado"
+msgstr "Underline"
+
 msgid "Subreddits (separados por coma; vacío = toda Reddit)"
 msgstr "Subreddits (comma-separated; empty = all of Reddit)"
 
@@ -13390,6 +13472,9 @@ msgstr "Yes, delete"
 
 msgid "Tablero"
 msgstr "Dashboard"
+
+msgid "Tachado"
+msgstr "Strike-through"
 
 msgid "Tamaño"
 msgstr "Size"
@@ -14791,6 +14876,9 @@ msgstr "Link"
 msgid "Vista previa del video"
 msgstr "Video preview"
 
+msgid "Visto bueno"
+msgstr "Check mark"
+
 msgid "Visuales"
 msgstr "Visuals"
 
@@ -16100,6 +16188,10 @@ msgstr "error"
 msgid "error desconocido"
 msgstr "unknown error"
 
+#, python-brace-format
+msgid "error {status}"
+msgstr "error {status}"
+
 msgid "errores en 24 h"
 msgstr "errors in 24 h"
 
@@ -16785,6 +16877,9 @@ msgstr "aren't"
 
 msgid "no gasta: la regla la escribes tú"
 msgstr "costs nothing: you write the rule"
+
+msgid "no hay conexión"
+msgstr "no connection"
 
 msgid "no indicada"
 msgstr "not given"

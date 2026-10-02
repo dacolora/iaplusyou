@@ -216,3 +216,14 @@ def test_la_familia_de_emojis_es_la_misma_en_la_plantilla_el_js_y_la_config():
         if os.path.basename(ruta) != "texto_canvas.js":
             with open(ruta, encoding="utf-8") as f:
                 assert f'"{familia}"' not in f.read(), os.path.basename(ruta)
+
+
+def test_la_pagina_le_pasa_a_la_biblioteca_los_stickers_y_la_tabla_de_emojis():
+    """Capa 5c (Tarea 8): pagina_editor.js no se puede importar en Node (toca el DOM), así que se mira el texto: la
+    biblioteca pinta la pestaña «Stickers» con `datos.stickers` (los 20 de la casa) y decide si hay emojis con la tabla
+    tipográfica de la página (`datos.config.tipografia.emoji`). Sin esos dos argumentos la pestaña salía vacía."""
+    with open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8") as f:
+        texto = f.read()
+    llamada = re.search(r"new Biblioteca\(\{(.*?)\}\);", texto, re.S).group(1)
+    assert "stickers: datos.stickers" in llamada
+    assert "tabla: datos.config?.tipografia" in llamada

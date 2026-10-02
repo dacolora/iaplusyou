@@ -713,12 +713,14 @@ const editor = Object.freeze({
 // Los paneles que se enganchan por `editor` (dentro de una función: lo de
 // nivel superior que ejecuta algo va después de declararlo todo).
 function montarPaneles() {
-  // la biblioteca (Medios · Audio · Texto · Subtítulos · Transiciones): carga
+  // la biblioteca (Medios · Audio · Texto · Stickers · Subtítulos · Transiciones): carga
   // lo del proyecto mientras la vista previa arranca
   const nombresIdioma = datos.voz?.nombres_idioma ?? datos.subtitulos?.nombres_idioma ?? {};
+  // capa 5c: la pestaña «Stickers» pinta los 20 de la casa (datos.stickers) y, si la tabla tipográfica trae la
+  // fuente de emojis, los emojis de anuncio que esa fuente cubre
   const biblioteca = new Biblioteca({
     contenedor: $("ed-panel-biblioteca"), pestanas: $("ed-pestanas-biblioteca"), urls: datos.urls, editor, linea,
-    nombresIdioma,
+    nombresIdioma, stickers: datos.stickers ?? [], tabla: datos.config?.tipografia ?? null,
   });
   // capa 5a: la pestaña «Subtítulos» (si al abrir ya corría una transcripción
   // de esta edición, retoma su barra)

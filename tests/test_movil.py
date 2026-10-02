@@ -180,3 +180,40 @@ def test_editor_el_ancho_del_texto_y_las_fuentes_caben_a_375():
     casilla = re.search(r"\.ed-prop-ancho-fila \.ed-prop-casilla \{([^}]*)\}", css).group(1)
     assert "flex: none" in casilla
     assert "min-width: 0" in re.search(r"\.ed-fuentes-grupo \{([^}]*)\}", css).group(1)
+
+
+def test_editor_la_barra_de_acciones_con_stickers_cabe_a_375():
+    """Capa 5c (Tarea 8, D13): «Stickers» es el séptimo botón de la barra de abajo del celular (Medios · Audio · Texto ·
+    Stickers · Subtítulos · Transiciones · Editar). A 375 px caben sin empujar la página de lado: cada botón mide lo
+    mismo (`flex: 1 1 0`) y se puede achicar (`min-width: 0`), su nombre termina en «…» (entero en su `title`) en vez
+    de ensanchar la barra, y las cuadrículas de stickers y emojis usan `minmax(min(100%, 64px), 1fr)` — nunca un
+    mínimo fijo que a 375 px pase de la hoja."""
+    import re
+    html = open("templates/editor.html", encoding="utf-8").read()
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    # la barra: un botón por pestaña de la biblioteca (el nombre y el icono de cada una) y «Editar»
+    paneles = re.search(r"\{% set PANELES = \[(.*?)\] %\}", html, re.S).group(1)
+    nombres = re.findall(r'\("([a-z]+)", _\("([^"]+)"\)\)', paneles)
+    assert [n for n, _ in nombres] == ["medios", "audio", "texto", "stickers", "subtitulos", "transiciones"]
+    assert ("stickers", "Stickers") in nombres
+    barra = re.search(r'<nav id="ed-acciones-movil".*?</nav>', html, re.S).group(0)
+    assert "{% for panel, nombre in PANELES %}" in barra and 'id="ed-abrir-propiedades"' in barra
+    assert len(nombres) + 1 == 7                      # las seis pestañas + «Editar»
+    # el icono de la pestaña: una forma propia (la macro `icono(panel)` la busca en ICONOS)
+    iconos = re.search(r"\{% set ICONOS = \{(.*?)\} %\}", html, re.S).group(1)
+    assert '"stickers": \'<' in iconos
+    for panel, _nombre in nombres:
+        assert f'"{panel}": ' in iconos, panel
+    # cada botón se achica y su nombre se corta con «…»
+    celular = css[css.index("@media (max-width: 760px)"):]
+    accion = re.search(r"\.ed-accion \{([^}]*)\}", celular).group(1)
+    assert "flex: 1 1 0" in accion and "min-width: 0" in accion
+    nombre = re.search(r"\.ed-pestana span, \.ed-accion span \{([^}]*)\}", css).group(1)
+    assert "text-overflow: ellipsis" in nombre and "overflow: hidden" in nombre and "white-space: nowrap" in nombre
+    # las cuadrículas de la pestaña
+    cuadricula = re.search(r"\.ed-stickers-cuadricula \{([^}]*)\}", css).group(1)
+    assert "display: grid" in cuadricula and "minmax(min(100%, 64px), 1fr)" in cuadricula
+    assert not re.search(r"minmax\(\d+px,\s*1fr\)", cuadricula)
+    sticker = re.search(r"\.ed-sticker \{([^}]*)\}", css).group(1)
+    assert "min-width: 0" in sticker and "aspect-ratio" in sticker
+    assert re.search(r"\.ed-sticker img \{([^}]*)\}", css).group(1).count("max-width: 100%") == 1

@@ -242,3 +242,43 @@ def test_capa_5c_claves_borradas_y_plantillas_en_ingles():
         "SALE", "NEW", "FREE SHIPPING", "ONLY A FEW LEFT!", "BEST SELLER"]
     assert t["op.plantilla_descuento"] == "-50 %" == textos_editor.TEXTOS["op.plantilla_descuento"]
     assert t["prop.ancho"] == "Text width" and t["prop.mostrar_emojis"] == "Show the emojis"
+
+
+def test_capa_5c_los_20_stickers_y_la_pestana_en_los_dos_idiomas():
+    """Capa 5c (Tarea 8, D11.4/D15): los 20 stickers no tienen palabras, así que su nombre (el del lector de pantalla y el
+    `title`) sale de una clave `bib.sticker_<id>` escrita entera; cada uno, en español e inglés; y la atribución de
+    Twemoji (CC-BY 4.0, que la licencia exige) sale igual en los dos idiomas."""
+    ES = {
+        "flecha_recta": "Flecha", "flecha_curva": "Flecha curva", "flecha_mano": "Flecha a mano", "flecha_abajo": "Flecha hacia abajo",
+        "circulo_mano": "Círculo a mano", "subrayado_mano": "Subrayado", "tachado_mano": "Tachado", "chulo": "Visto bueno",
+        "equis": "Equis", "exclamacion": "Exclamación", "estallido": "Estallido", "estrella": "Estrella",
+        "estrellas_5": "Cinco estrellas", "corazon": "Corazón", "etiqueta": "Etiqueta de precio", "cinta": "Cinta",
+        "circulo": "Círculo", "burbuja": "Globo de diálogo", "rayo": "Rayo", "destellos": "Destellos",
+    }
+    EN = {
+        "flecha_recta": "Arrow", "flecha_curva": "Curved arrow", "flecha_mano": "Hand-drawn arrow", "flecha_abajo": "Down arrow",
+        "circulo_mano": "Hand-drawn circle", "subrayado_mano": "Underline", "tachado_mano": "Strike-through", "chulo": "Check mark",
+        "equis": "Cross", "exclamacion": "Exclamation", "estallido": "Burst", "estrella": "Star",
+        "estrellas_5": "Five stars", "corazon": "Heart", "etiqueta": "Price tag", "cinta": "Ribbon",
+        "circulo": "Circle", "burbuja": "Speech bubble", "rayo": "Lightning", "destellos": "Sparkles",
+    }
+    from final_edition import stickers
+    assert sorted(ES) == sorted(stickers.IDS) == sorted(EN)
+    for sid, nombre in ES.items():
+        assert textos_editor.TEXTOS[f"bib.sticker_{sid}"] == nombre
+    with idiomas.en_idioma("en"):
+        t = textos_editor.textos()
+    assert {sid: t[f"bib.sticker_{sid}"] for sid in EN} == EN
+    assert len({t[f"bib.sticker_{sid}"] for sid in EN}) == 20, "ningún nombre repetido: cada uno se oye distinto"
+    assert [t[c] for c in ("bib.stickers", "bib.flechas", "bib.marcas", "bib.formas", "bib.emojis", "bib.para_vender", "prop.color_sticker")] == [
+        "Stickers", "Arrows", "Hand-drawn marks", "Shapes", "Emojis", "For selling", "Color"]
+    assert t["bib.sticker_agregado"] == "Sticker added: change its color in “Edit”."
+    assert t["bib.sticker_error"] == "Couldn't add the sticker ({error})."
+    assert t["bib.sticker_sin_conexion"] == "no connection" and t["bib.sticker_error_http"] == "error {status}"
+    assert t["bib.atribucion_emoji"] == textos_editor.TEXTOS["bib.atribucion_emoji"] == "Emojis: Twemoji (CC-BY 4.0)."
+    # la pestaña de la plantilla (`_('Stickers')`) también está en el catálogo, y las 20 traducciones llenas
+    import catalogo_i18n
+    from babel.messages.pofile import read_po
+    with open(catalogo_i18n.PO, "rb") as f:
+        po = read_po(f, locale="en")
+    assert po.get("Stickers").string == "Stickers"

@@ -403,3 +403,175 @@ test("despuesDelToque: un toque cancelado (el dedo corrió la lista) también pi
   reloj.correr();
   assert.equal(pintadas, 1);
 });
+
+// ---- Capa 5c (Tarea 8): la pestaña «Stickers», los emojis y las plantillas de «Texto» ----
+import { mensajeSticker, urlSticker } from "../../static/editor/biblioteca.js";
+
+test("urlSticker: la ruta de la biblioteca más /sticker/<id> (el id nunca arma otra ruta)", () => {
+  assert.equal(urlSticker("/cliente/acme/ediciones/biblioteca", "estrella"), "/cliente/acme/ediciones/biblioteca/sticker/estrella");
+  assert.equal(urlSticker("/b", "../x"), "/b/sticker/..%2Fx");
+});
+
+test("mensajeSticker: lo que el servidor dijo; si no, el número del error; sin red, «no hay conexión»; con la sesión vencida, eso", () => {
+  assert.equal(mensajeSticker({ status: 404, cuerpo: { error: "Ese sticker no existe." } }), "No se pudo agregar el sticker (Ese sticker no existe).");
+  assert.equal(mensajeSticker({ status: 500, cuerpo: null }), "No se pudo agregar el sticker (error 500).");
+  assert.equal(mensajeSticker({ status: 502, cuerpo: { error: "" } }), "No se pudo agregar el sticker (error 502).");
+  assert.equal(mensajeSticker({ red: true }), "No se pudo agregar el sticker (no hay conexión).");
+  assert.equal(mensajeSticker({ redirigido: true, status: 200 }), "Tu sesión terminó: recarga la página e inicia sesión.");
+});
+
+const MATERIAL_ESTRELLA = { id: 21, tipo: "imagen", url: "https://r2/sticker_estrella.png", url_proxy: "https://r2/sticker_estrella.png",
+  ancho: 512, alto: 512, tenible: true, origen: "sticker", nombre: "estrella" };
+const ESTRELLA = { id: "estrella", categoria: "formas", archivo: "estrella.png", ancho: 512, alto: 512, color: "#FFD400", url: "/static/stickers/estrella.png" };
+
+// Una respuesta de fetch (lo que biblioteca.js lee de ella).
+const respuesta = ({ status = 200, json = null, redirected = false, html = false, url = "" } = {}) => ({
+  ok: status >= 200 && status < 300, status, redirected, url,
+  headers: { get: () => (html ? "text/html" : "application/json") },
+  json: async () => {
+    if (html || json === null) throw new SyntaxError("Unexpected token <");
+    return json;
+  },
+});
+
+// Una biblioteca de mentira para los métodos que no tocan el DOM: el editor anota lo que se le pide.
+async function bibliotecaFalsa({ operar = () => true, tiempo = 2500 } = {}) {
+  const { Biblioteca } = await import("../../static/editor/biblioteca.js");
+  const operadas = [];
+  const dichos = [];
+  const agregados = [];
+  const enfocados = [];
+  const falsa = {
+    urls: { biblioteca: "/cliente/acme/ediciones/biblioteca" },
+    cosas: new Map(),
+    editor: {
+      doc: () => docBase(), tiempo: () => tiempo, seleccion: null, destino: () => "es_CO", info: () => ({}),
+      agregarMateriales: (m) => agregados.push(Object.keys(m).map(Number)),
+      operar: (...a) => { operadas.push(a); return operar(...a); },
+      enfocarTexto: () => enfocados.push(true),
+      enConflicto: () => false,
+    },
+    _decir: (texto, error = false) => dichos.push([texto, error]),
+    _motivo: () => null,
+    _esperar: () => { throw new Error("un sticker no espera ninguna copia liviana"); },
+  };
+  for (const m of ["_operar", "agregar", "_agregarSticker"]) falsa[m] = Biblioteca.prototype[m];
+  return { falsa, operadas, dichos, agregados, enfocados };
+}
+
+async function conFetch(fn, fetchFalso) {
+  const antes = globalThis.fetch;
+  globalThis.fetch = fetchFalso;
+  try {
+    return await fn();
+  } finally {
+    if (antes === undefined) delete globalThis.fetch;
+    else globalThis.fetch = antes;
+  }
+}
+
+test("un sticker: POST a <biblioteca>/sticker/<id> y, con su material, una capa de imagen al 35 % del color del sticker (un deshacer)", async () => {
+  const { falsa, operadas, dichos, agregados } = await bibliotecaFalsa();
+  const pedidos = [];
+  falsa.cosas.set("s:estrella", { tipo: "sticker", sticker: ESTRELLA, nombre: "Estrella" });
+  const hecho = await conFetch(() => falsa.agregar("s:estrella"), async (url, opciones) => {
+    pedidos.push([url, opciones]);
+    return respuesta({ json: { material: MATERIAL_ESTRELLA } });
+  });
+  assert.equal(hecho, true);
+  assert.deepEqual(pedidos, [["/cliente/acme/ediciones/biblioteca/sticker/estrella", {
+    method: "POST", credentials: "same-origin", headers: { Accept: "application/json", "X-Requested-With": "fetch" },
+  }]]);
+  assert.deepEqual(agregados, [[21]], "el material entra a la vista previa ANTES de operar");
+  assert.deepEqual(operadas, [["agregarImagen", MATERIAL_ESTRELLA, 2500, { fraccion: 0.35, tinte: "#FFD400" }]]);
+  assert.deepEqual(dichos, [["Sticker agregado: cámbiale el color en «Editar».", false]]);
+});
+
+test("un sticker soltado en la línea de tiempo se agrega donde se soltó (después de pedirlo)", async () => {
+  const { falsa, operadas } = await bibliotecaFalsa();
+  falsa.cosas.set("s:estrella", { tipo: "sticker", sticker: ESTRELLA, nombre: "Estrella" });
+  const punto = { pistaId: "p_texto", tipo: "texto", tMs: 3300, indicePrincipal: null };
+  await conFetch(() => falsa.agregar("s:estrella", punto), async () => respuesta({ json: { material: MATERIAL_ESTRELLA } }));
+  assert.deepEqual(operadas, [["agregarImagen", MATERIAL_ESTRELLA, 3300, { fraccion: 0.35, tinte: "#FFD400" }]]);
+});
+
+test("un sticker que el servidor no pudo dar: lo dice (con el motivo) y no toca la edición", async () => {
+  const casos = [
+    [async () => respuesta({ status: 404, json: { error: "Ese sticker no existe." } }), "No se pudo agregar el sticker (Ese sticker no existe)."],
+    [async () => respuesta({ status: 403, json: { error: "Pedido rechazado: no viene de esta página." } }), "No se pudo agregar el sticker (Pedido rechazado: no viene de esta página)."],
+    [async () => respuesta({ status: 500, html: true }), "No se pudo agregar el sticker (error 500)."],       // R2 falló: el cuerpo es HTML
+    [async () => respuesta({ status: 200, json: {} }), "No se pudo agregar el sticker (error 200)."],       // sin `material`
+    [async () => { throw new TypeError("Failed to fetch"); }, "No se pudo agregar el sticker (no hay conexión)."],
+    // la sesión venció: llega la página de entrar (el servidor redirige a /login y fetch la sigue)
+    [async () => respuesta({ status: 200, redirected: true, url: "https://app.test/login?next=%2Fcliente", html: true }),
+      "Tu sesión terminó: recarga la página e inicia sesión."],
+    [async () => respuesta({ status: 200, html: true }), "Tu sesión terminó: recarga la página e inicia sesión."],
+  ];
+  for (const [fetchFalso, esperado] of casos) {
+    const { falsa, operadas, dichos, agregados } = await bibliotecaFalsa();
+    falsa.cosas.set("s:estrella", { tipo: "sticker", sticker: ESTRELLA, nombre: "Estrella" });
+    assert.equal(await conFetch(() => falsa.agregar("s:estrella"), fetchFalso), false, esperado);
+    assert.deepEqual(dichos, [[esperado, true]]);
+    assert.deepEqual([operadas, agregados], [[], []], esperado);
+  }
+});
+
+test("un sticker se pide una vez a la vez: otro toque mientras el primero se pide no suma uno más", async () => {
+  const { falsa, operadas } = await bibliotecaFalsa();
+  falsa.cosas.set("s:estrella", { tipo: "sticker", sticker: ESTRELLA, nombre: "Estrella" });
+  let pedidos = 0;
+  let liberar;
+  const espera = new Promise((r) => { liberar = r; });
+  const fetchLento = async () => {
+    pedidos += 1;
+    await espera;
+    return respuesta({ json: { material: MATERIAL_ESTRELLA } });
+  };
+  await conFetch(async () => {
+    const primero = falsa.agregar("s:estrella");
+    assert.equal(await falsa.agregar("s:estrella"), false, "el segundo toque no hace nada");
+    liberar();
+    assert.equal(await primero, true);
+    // ya terminó: otro toque agrega otro sticker (cada toque, un deshacer)
+    assert.equal(await falsa.agregar("s:estrella"), true);
+  }, fetchLento);
+  assert.equal(pedidos, 2);
+  assert.equal(operadas.length, 2);
+});
+
+test("si la edición rechaza el sticker (cambió en otra pestaña), la biblioteca lo dice", async () => {
+  const { falsa, dichos } = await bibliotecaFalsa({ operar: () => false });
+  falsa.cosas.set("s:estrella", { tipo: "sticker", sticker: ESTRELLA, nombre: "Estrella" });
+  const hecho = await conFetch(() => falsa.agregar("s:estrella"), async () => respuesta({ json: { material: MATERIAL_ESTRELLA } }));
+  assert.equal(hecho, false);
+  assert.deepEqual(dichos, [["No se pudo agregar: el aviso está debajo del video.", true]]);
+});
+
+test("un emoji: un texto con ese emoji solo en el cabezal, sin pedir foco para escribirlo", async () => {
+  const { falsa, operadas, dichos, enfocados } = await bibliotecaFalsa();
+  falsa.cosas.set("e:🔥", { tipo: "texto", preset: "emoji", literal: "🔥", nombre: "🔥" });
+  assert.equal(falsa.agregar("e:🔥"), true);
+  assert.deepEqual(operadas, [["agregarTexto", 2500, "emoji", { literal: "🔥" }]]);
+  assert.deepEqual(dichos, [["Se agregó «🔥».", false]]);
+  assert.deepEqual(enfocados, [], "un emoji no se escribe: el teclado no sube");
+});
+
+test("una plantilla para vender: un texto de ese preset en el cabezal, con su palabra elegida para escribir encima", async () => {
+  const { falsa, operadas, dichos, enfocados } = await bibliotecaFalsa();
+  falsa.cosas.set("t:oferta", { tipo: "texto", preset: "oferta", nombre: "OFERTA" });
+  assert.equal(falsa.agregar("t:oferta"), true);
+  assert.deepEqual(operadas, [["agregarTexto", 2500, "oferta", {}]]);
+  assert.deepEqual(dichos, [["Texto agregado: escríbelo en «Editar».", false]]);
+  assert.deepEqual(enfocados, [true]);
+});
+
+test("las plantillas y los emojis, por la página (vinculos.operar) nacen v2 con su preset: el pedido de la biblioteca es el que agregarTexto espera", () => {
+  const { doc } = op.agregarTexto(docBase(), 2500, "oferta", {}, DURACIONES);
+  const nuevo = doc.pistas.flatMap((p) => p.clips).find((c) => c.id.startsWith("oferta"));
+  assert.equal(nuevo.texto.literal, "OFERTA");
+  assert.equal(nuevo.estilo.version, 2);
+  const emoji = op.agregarTexto(docBase(), 2500, "emoji", { literal: "🔥" }, DURACIONES).doc.pistas.flatMap((p) => p.clips).find((c) => c.id.startsWith("emoji"));
+  assert.equal(emoji.texto.literal, "🔥");
+  // sin el `{}` de opciones, `info` caería en su lugar: el pedido de una plantilla siempre lo lleva (escala.pedidoAgregar)
+  assert.throws(() => op.agregarTexto(docBase(), 2500, "emoji", {}, DURACIONES), /Elige un emoji\./);
+});

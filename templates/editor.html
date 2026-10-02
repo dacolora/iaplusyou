@@ -225,7 +225,7 @@
   .ed-bib-mas { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
     color: #fff; background: var(--accent); border: 1px solid transparent; border-radius: 50%; box-shadow: var(--shadow-soft); }
   .ed-bib-mas:hover:not(:disabled) { filter: brightness(1.15); }
-  .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible, .ed-sticker:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
   /* «Borrar» (capa 4c): el tacho arriba a la derecha de la miniatura; siempre visible (con el dedo no hay hover) */
   .ed-bib-borrar { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
     color: #fff; background: rgba(0, 0, 0, .6); border: 1px solid transparent; border-radius: 50%; }
@@ -248,7 +248,7 @@
   .ed-bib-escuchar[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto); }
   .ed-bib-audio .ed-bib-mas { position: static; flex: none; }
   /* textos de muestra: cada uno escrito con el estilo con que entra */
-  .ed-bib-textos { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: .5rem; }
+  .ed-bib-textos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 118px), 1fr)); gap: .5rem; }
   .ed-bib-texto { display: grid; place-items: center; min-width: 0; min-height: 64px; padding: .5rem; color: #fff; font-weight: 400;
     background: linear-gradient(160deg, var(--panel-hover), var(--bg)); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }
   .ed-bib-texto:hover { border-color: var(--muted-2); }
@@ -260,6 +260,36 @@
   /* «Llamado» entra en el video como texto negro en una caja blanca: la muestra lo imita con los tokens (claro/oscuro) */
   .ed-bib-texto-llamado .ed-bib-texto-muestra { padding: .25rem .6rem; font-family: "Inter-Bold", var(--font-body); font-size: .95rem;
     color: var(--bg); background: var(--text); border-radius: 4px; }
+  /* «Para vender» (capa 5c, D12.1): cada plantilla escrita en la fuente y con el fondo con que entra al video. Sus colores
+     son los del documento (operaciones.PRESETS_TEXTO), no los del tema: así se ven en el video. Los dos claros viven en
+     variables (la guardia del modo oscuro pide que los colores de la interfaz sean variables) y el emoji lleva su
+     fondo claro por lo mismo: algunos de sus dibujos, como ✔, son oscuros. */
+  #ed-panel-biblioteca { --ed-muestra-amarillo: #FFD400; --ed-muestra-tinta: #111111; --ed-emoji-fondo: #eef0f4; }
+  .ed-bib-texto-oferta .ed-bib-texto-muestra { padding: .15rem .55rem; font-family: "Anton-Regular", var(--font-body); font-size: 1.2rem;
+    letter-spacing: .02em; color: #fff; background: #E11D48; border-radius: 3px; }
+  .ed-bib-texto-nuevo .ed-bib-texto-muestra { padding: .05rem .75rem; font-family: "BebasNeue-Regular", var(--font-body); font-size: 1.45rem;
+    color: var(--ed-muestra-tinta); background: var(--ed-muestra-amarillo); border-radius: 999px; }
+  .ed-bib-texto-descuento .ed-bib-texto-muestra { font-family: "ArchivoBlack-Regular", var(--font-body); font-size: 1.4rem; color: var(--ed-muestra-amarillo);
+    -webkit-text-stroke: 3px #111; paint-order: stroke fill; }
+  .ed-bib-texto-envio .ed-bib-texto-muestra { padding: .2rem .65rem; font-family: "Poppins-ExtraBold", var(--font-body); font-size: .74rem;
+    color: #fff; background: #16A34A; border-radius: 999px; }
+  .ed-bib-texto-ultimas .ed-bib-texto-muestra { padding: .25rem .5rem; font-family: "Poppins-ExtraBold", var(--font-body); font-size: .68rem;
+    color: #fff; background: #111; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .4); white-space: normal; text-align: center; }
+  .ed-bib-texto-mas_vendido .ed-bib-texto-muestra { padding: .1rem .75rem; font-family: "LilitaOne-Regular", var(--font-body); font-size: 1.05rem;
+    color: var(--ed-muestra-tinta); background: var(--ed-muestra-amarillo); border-radius: 999px; }
+  /* «Stickers» (capa 5c, D11 y D12.2): una cuadrícula por sección. Los stickers son BLANCOS (se tiñen al agregarlos): su
+     miniatura va sobre un fondo oscuro; el emoji, con su propia cara (la fuente de emojis de la página). Nunca más
+     ancho que su hoja: el mínimo de la columna es min(100%, 64px). */
+  .ed-stickers-cuadricula { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 64px), 1fr)); gap: .45rem; }
+  .ed-sticker { position: relative; display: block; min-width: 0; margin: 0; padding: 0; aspect-ratio: 1; overflow: hidden; cursor: grab;
+    background: #000; border: 1px solid var(--border); border-radius: var(--radius-sm); user-select: none; -webkit-user-select: none; }
+  .ed-sticker:hover { border-color: var(--muted-2); }
+  .ed-sticker img { position: absolute; inset: .4rem; display: block; width: calc(100% - .8rem); height: calc(100% - .8rem);
+    max-width: 100%; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
+  .ed-sticker-emoji { display: grid; place-items: center; background: var(--ed-emoji-fondo); color: var(--ed-muestra-tinta); font-size: 1.7rem; line-height: 1;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+  {% if datos.config.emoji %}.ed-sticker-emoji { font-family: "CreatvEmoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }{% endif %}
+  .ed-stickers-atribucion { margin-top: .35rem; font-size: .72rem; }
   /* transiciones: una muestra quieta de cada una (A violeta, B verde) con su nombre y qué hace */
   .ed-bib-transiciones { display: grid; gap: .4rem; }
   .ed-bib-transicion { display: flex; align-items: center; gap: .6rem; min-width: 0; padding: .45rem .55rem; text-align: left; color: var(--text);
@@ -302,7 +332,7 @@
   @media (pointer: coarse) {
     /* con el dedo no se arrastra desde la biblioteca: se toca «+» */
     .ed-bib-ayuda-arrastre { display: none; }
-    .ed-bib-item, .ed-bib-audio, .ed-bib-texto, .ed-bib-transicion { cursor: default; }
+    .ed-bib-item, .ed-bib-audio, .ed-bib-texto, .ed-bib-transicion, .ed-sticker { cursor: default; }
   }
 
   /* Propiedades (capa 4b): propiedades.js arma lo de adentro de #ed-panel-propiedades,
@@ -637,6 +667,7 @@
   "medios": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>',
   "audio": '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
   "texto": '<path d="M5 7V5h14v2M12 5v14M9 19h6"/>',
+  "stickers": '<path d="M15.5 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V8.5L15.5 3z"/><path d="M15 3.5V7a1.5 1.5 0 0 0 1.5 1.5H21"/><path d="M11.2 9.1l1.1 2.8 3 .2-2.3 1.9.7 2.9-2.5-1.6-2.5 1.6.7-2.9-2.3-1.9 3-.2z"/>',
   "subtitulos": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12.5h6M15 12.5h2M7 15.5h3M12 15.5h5"/>',
   "transiciones": '<path d="M4 6l8 6-8 6zM20 6l-8 6 8 6z"/>',
   "editar": '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
@@ -645,8 +676,8 @@
 {% macro icono(nombre) -%}
 <svg class="ed-icono" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{{ ICONOS[nombre]|safe }}</svg>
 {%- endmacro %}
-{% set PANELES = [("medios", _("Medios")), ("audio", _("Audio")), ("texto", _("Texto")), ("subtitulos", _("Subtítulos")),
-                  ("transiciones", _("Transiciones"))] %}
+{% set PANELES = [("medios", _("Medios")), ("audio", _("Audio")), ("texto", _("Texto")), ("stickers", _("Stickers")),
+                  ("subtitulos", _("Subtítulos")), ("transiciones", _("Transiciones"))] %}
 <body class="editor">
 <header id="ed-barra" class="ed-barra">
   <a class="btn-sm" href="{{ datos.urls.final }}">{{ _('← Final edition') }}</a>

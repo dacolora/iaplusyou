@@ -749,26 +749,50 @@ export class Propiedades {
   // Color del texto: blanco, negro, el de la marca, amarillo, rojo y uno libre.
   _paleta(m) {
     const id = m.clipId;
+    this._paletaColor({
+      etiqueta: t("prop.color"), paleta: m.paleta, leer: (x) => x.color,
+      elegir: (color) => this._cambiar(null, { estilo: { color } }),
+      libre: (color) => this._cambiar(`${id}:color`, { estilo: { color } }),
+    });
+  }
+
+  // Capa 5c (D11): el color de un sticker, con la misma paleta que el del
+  // texto; la muestra es un toque, el color libre fusiona su arrastre en UN
+  // deshacer (`<id>:tinte`). Sin color elegido, el sticker se ve blanco.
+  _armarColorSticker(m) {
+    const id = m.clipId;
+    this._paletaColor({
+      etiqueta: t("prop.color_sticker"), paleta: m.tinte.paleta, leer: (x) => x.tinte?.color ?? "#FFFFFF",
+      elegir: (tinte) => this._cambiar(null, { tinte }),
+      libre: (tinte) => this._cambiar(`${id}:tinte`, { tinte }),
+    });
+  }
+
+  // La paleta de colores con su color libre: `leer(m)` da el color que se ve
+  // ahora (la muestra igual queda marcada); `elegir(color)` y `libre(color)`
+  // operan al tocar una muestra y al mover el color libre.
+  _paletaColor({ etiqueta, paleta, leer, elegir, libre }) {
     const fs = el("fieldset", "ed-prop-campo", this.cuerpo);
-    el("legend", "ed-prop-etiqueta", fs, t("prop.color"));
+    el("legend", "ed-prop-etiqueta", fs, etiqueta);
     const fila = el("div", "ed-prop-colores", fs);
-    const muestras = m.paleta.map((c) => {
+    const muestras = paleta.map((c) => {
       const b = el("button", "ed-prop-muestra", fila);
       b.type = "button";
       b.style.background = c.color;
       b.title = c.nombre;
       b.setAttribute("aria-label", c.nombre);
-      b.addEventListener("click", () => this._cambiar(null, { estilo: { color: c.color } }));
+      b.addEventListener("click", () => elegir(c.color));
       return { b, color: c.color };
     });
     const otro = el("label", "ed-prop-otro", fila);
     const input = el("input", "ed-prop-color", otro);
     input.type = "color";
     otro.append(t("prop.otro"));
-    input.addEventListener("input", () => this._cambiar(`${id}:color`, { estilo: { color: input.value.toUpperCase() } }));
+    input.addEventListener("input", () => libre(input.value.toUpperCase()));
     this.pintores.push((x) => {
-      for (const { b, color } of muestras) b.setAttribute("aria-pressed", String(color === x.color));
-      const v = x.color.toLowerCase();
+      const actual = leer(x);
+      for (const { b, color } of muestras) b.setAttribute("aria-pressed", String(color === actual));
+      const v = actual.toLowerCase();
       if (input.value !== v) input.value = v;
     });
   }
@@ -793,6 +817,7 @@ export class Propiedades {
       leer: (x) => ({ valor: x.opacidad }),
       aplicar: (v) => this._cambiar(`${id}:opacidad`, { transform: { opacidad: v / 100 } }),
     });
+    if (m.tinte) this._armarColorSticker(m);              // solo un material que se tiñe (un sticker)
     const acciones = el("div", "ed-prop-acciones", this.cuerpo);
     this._boton(acciones, {
       texto: t("prop.llenar"), leer: (x) => ({ deshabilitado: x.llena }),

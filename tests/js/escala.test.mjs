@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   avisoTransicion, barrasOnda, bloquesSubtitulos, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, efectoTransicion,
-  estiloArrastre, etiquetaClip, filaEnY, filasVisuales, fondoFoto, fondoTira, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables,
+  estiloArrastre, etiquetaClip, filaEnY, filasVisuales, fondoFoto, fondoTira, FRACCION_STICKER, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables,
   marcasRegla, msAPx, msInsercion, nombreFila, nombreTransicion, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar,
   pedidoTransicion, puntoSoltar, pxAMs, soltar, textoEfectoTransicion, unionesConTransicion, VENTANA_PICOS_MS,
 } from "../../static/editor/escala.js";
@@ -546,4 +546,26 @@ test("efectoTransicion: cambiar el tipo o volver a poner la misma no «junta» n
   assert.deepEqual(efectoTransicion(con500, con800, "v0"), { tipo: "junta", ms: 300 });
   assert.equal(efectoTransicion(con800, ponerTransicion(con800, "v0", "fundido", 500, DURACIONES).doc, "v0"), null,
     "más corta a propósito: el video quedó más LARGO, nada que avisar");
+});
+
+// ---- Capa 5c (Tarea 8): stickers, emojis y plantillas desde la biblioteca ----
+
+test("pedidoAgregar de un sticker: una capa de imagen al 35 % y del color que trae; nunca una foto del video", () => {
+  const doc = docBase();
+  const sticker = { id: 21, tipo: "imagen", ancho: 512, alto: 351, tenible: true, origen: "sticker" };
+  const cosa = { tipo: "sticker", material: sticker, tinte: "#FFD400" };
+  assert.deepEqual(pedidoAgregar(doc, cosa, { cabezalMs: 2500 }), ["agregarImagen", sticker, 2500, { fraccion: 0.35, tinte: "#FFD400" }]);
+  assert.equal(FRACCION_STICKER, 0.35);
+  // soltado en el instante del dedo, aunque caiga en la fila del video y aunque se pida «como clip»
+  const sobreVideo = { pistaId: "p_video", tipo: "video", tMs: 1800, indicePrincipal: 1 };
+  assert.deepEqual(pedidoAgregar(doc, cosa, { punto: sobreVideo, cabezalMs: 6000, como: "clip" }),
+    ["agregarImagen", sticker, 1800, { fraccion: 0.35, tinte: "#FFD400" }]);
+});
+
+test("pedidoAgregar de un texto: lleva su `literal` solo si la cosa lo trae (un emoji); las muestras de siempre, nada", () => {
+  const doc = docBase();
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "emoji", literal: "🔥" }, { cabezalMs: 2500 }),
+    ["agregarTexto", 2500, "emoji", { literal: "🔥" }]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "oferta" }, { cabezalMs: 2500 }), ["agregarTexto", 2500, "oferta", {}]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "titulo" }, { cabezalMs: 2500 }), ["agregarTexto", 2500, "titulo", {}]);
 });

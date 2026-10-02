@@ -628,3 +628,14 @@ test("modelo de una imagen: el color solo si su material se tiñe (un sticker)",
   assert.equal(modelo(doc, imagen, { materiales: { 4: IMAGEN } }).tinte, null);
   assert.equal(modelo(r.doc, r.seleccion).tinte, null);
 });
+
+test("claveForma de una imagen: distinta si su material se tiñe (el formulario se rehace cuando llega tarde a la vista previa)", () => {
+  const r = op.agregarImagen(docBase(), STICKER, 0, { fraccion: 0.35, tinte: "#FFD400" }, INFO);
+  const sin = claveForma(modelo(r.doc, r.seleccion));
+  const con = claveForma(modelo(r.doc, r.seleccion, { materiales: { 9: STICKER } }));
+  assert.equal(sin, `imagen:${r.seleccion}`);
+  assert.notEqual(con, sin);
+  assert.equal(con, `imagen:${r.seleccion}:tinte`);
+  // lo demás sigue como estaba
+  assert.equal(claveForma(modelo(r.doc, null)), "documento:");
+});

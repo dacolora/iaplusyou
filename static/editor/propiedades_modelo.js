@@ -152,9 +152,12 @@ export function formaDe(doc, id) {
 
 // Qué decide si el formulario se ARMA de nuevo (otra forma u otro clip) o
 // solo se le ponen los valores nuevos (mientras se arrastra un deslizador, el
-// formulario no se puede rehacer: se perdería el arrastre).
+// formulario no se puede rehacer: se perdería el arrastre). Capa 5c: una
+// imagen cuyo material se tiñe (un sticker) lleva su bloque «Color», así que
+// es otro formulario — si el material llega a la vista previa después de
+// pintar el panel, el formulario se arma de nuevo con su color.
 export function claveForma(m) {
-  return `${m.forma}:${m.clipId ?? ""}`;
+  return `${m.forma}:${m.clipId ?? ""}${m.tinte ? ":tinte" : ""}`;
 }
 
 // ---- Los valores de cada formulario ----

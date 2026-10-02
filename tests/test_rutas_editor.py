@@ -576,9 +576,9 @@ def test_la_pagina_tiene_la_disposicion_de_capcut(dashboard, encolados):
     # (propiedades.js lo arma y conserva el id h-velocidad)
     assert 'id="h-velocidad"' not in html
     assert "ed-cuerpo" not in arbol["ed-herramientas"] and "ed-cuerpo" not in arbol["linea"]
-    # la biblioteca: cinco pestañas con su icono (capa 5a: «Subtítulos» entre Texto y Transiciones)
+    # la biblioteca: seis pestañas con su icono (capa 5a: «Subtítulos» entre Texto y Transiciones; capa 5c: «Stickers» tras Texto)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    for panel in ("medios", "audio", "texto", "subtitulos", "transiciones"):
+    for panel in ("medios", "audio", "texto", "stickers", "subtitulos", "transiciones"):
         boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
         assert boton and "<svg" in boton.group(1), panel
     assert pestanas.count('aria-selected="true"') == 1
@@ -606,8 +606,8 @@ def test_las_pestanas_de_la_biblioteca_dicen_su_nombre(dashboard, encolados):
     ed, _c, _v = _edicion()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    for panel, nombre in (("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("subtitulos", "Subtítulos"),
-                          ("transiciones", "Transiciones")):
+    for panel, nombre in (("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("stickers", "Stickers"),
+                          ("subtitulos", "Subtítulos"), ("transiciones", "Transiciones")):
         boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
         assert boton and f'title="{nombre}"' in boton.group(0) and f"<span>{nombre}</span>" in boton.group(1), panel
     css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
@@ -627,11 +627,11 @@ def test_la_pestana_subtitulos_en_la_biblioteca_y_en_el_celular(dashboard, encol
     ed, _c, _v = _edicion()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    assert re.findall(r'data-panel="([a-z]+)"', pestanas) == ["medios", "audio", "texto", "subtitulos", "transiciones"]
+    assert re.findall(r'data-panel="([a-z]+)"', pestanas) == ["medios", "audio", "texto", "stickers", "subtitulos", "transiciones"]
     movil = re.search(r'id="ed-acciones-movil".*?</nav>', html, re.S).group(0)
     assert re.findall(r'id="(ed-abrir-[a-z]+)"', movil) == [
-        "ed-abrir-medios", "ed-abrir-audio", "ed-abrir-texto", "ed-abrir-subtitulos", "ed-abrir-transiciones",
-        "ed-abrir-propiedades"]
+        "ed-abrir-medios", "ed-abrir-audio", "ed-abrir-texto", "ed-abrir-stickers", "ed-abrir-subtitulos",
+        "ed-abrir-transiciones", "ed-abrir-propiedades"]
     abrir = re.search(r'<button[^>]*id="ed-abrir-subtitulos"[^>]*>(.*?)</button>', html, re.S)
     assert 'data-abrir-hoja="ed-biblioteca"' in abrir.group(0) and 'data-abrir-panel="subtitulos"' in abrir.group(0)
     assert "<svg" in abrir.group(1) and "<span>Subtítulos</span>" in abrir.group(1)
@@ -644,7 +644,7 @@ def test_la_pestana_subtitulos_en_la_biblioteca_y_en_el_celular(dashboard, encol
     css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
     for regla in (".ed-sub-lineas", ".ed-sub-palabra", ".ed-sub-estilo", ".ed-sub-fila", ".ed-sub-bloque"):
         assert regla in css, regla
-    # seis botones en 375 px: cada uno se achica (nunca empuja la página de lado)
+    # siete botones en 375 px (capa 5c: «Stickers»): cada uno se achica (nunca empuja la página de lado)
     celular = css[css.index("@media (max-width: 760px)"):]
     accion = re.search(r"\.ed-accion \{([^}]*)\}", celular).group(1)
     assert "flex: 1 1 0" in accion and "min-width: 0" in accion
@@ -1625,3 +1625,35 @@ def test_agregar_sticker_repite_el_guardia_de_otro_sitio_por_si_el_global_falla(
         respuesta, codigo = rutas_editor.agregar_sticker("acme", "estrella")
     assert codigo == 403 and respuesta.get_json()["error"]
     assert r2_parchado == [] and materiales.obtener("acme", 1) is None
+
+
+def test_la_pestana_stickers_en_la_biblioteca_y_en_el_celular(dashboard, encolados):
+    """Capa 5c (Tarea 8, D11/D13): «Stickers» es una pestaña de la biblioteca (tras Texto) con su icono y, en el
+    celular, el séptimo botón de la barra de abajo, que abre la hoja en esa pestaña. La página trae lo que la
+    pestaña pinta: los 20 stickers con su URL, la tabla con (o sin) la fuente de emojis y la ruta de la biblioteca
+    de la que sale la del sticker; y la fuente de emojis se declara solo si hay."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
+    boton = re.search(r'<button[^>]*data-panel="stickers"[^>]*>(.*?)</button>', pestanas, re.S)
+    assert boton and 'title="Stickers"' in boton.group(0) and "<span>Stickers</span>" in boton.group(1)
+    assert "<svg" in boton.group(1) and "ed-icono" in boton.group(1)
+    assert pestanas.count('aria-selected="true"') == 1       # la primera sigue siendo «Medios»
+    abrir = re.search(r'<button[^>]*id="ed-abrir-stickers"[^>]*>(.*?)</button>', html, re.S)
+    assert 'data-abrir-hoja="ed-biblioteca"' in abrir.group(0) and 'data-abrir-panel="stickers"' in abrir.group(0)
+    assert 'aria-controls="ed-biblioteca"' in abrir.group(0) and 'aria-expanded="false"' in abrir.group(0)
+    assert "<svg" in abrir.group(1) and "<span>Stickers</span>" in abrir.group(1)
+    # el icono del sticker no es el de otra pestaña
+    iconos = re.findall(r'data-panel="([a-z]+)"[^>]*>\s*<svg[^>]*>(.*?)</svg>', pestanas, re.S)
+    formas = [f for _p, f in iconos]
+    assert len(iconos) == 6 and len(set(formas)) == 6
+    datos = _datos(html)
+    assert len(datos["stickers"]) == 20
+    assert datos["urls"]["biblioteca"].endswith("/ediciones/biblioteca")
+    assert datos["textos"]["bib.stickers"] == "Stickers" and datos["textos"]["bib.sticker_estrella"] == "Estrella"
+    assert datos["textos"]["bib.atribucion_emoji"] == "Emojis: Twemoji (CC-BY 4.0)."
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    assert ".ed-stickers-cuadricula" in css and ".ed-sticker {" in css
+    assert re.search(r"\.ed-stickers-cuadricula \{[^}]*minmax\(min\(100%, 64px\), 1fr\)", css)
+    # el emoji de la página: su fuente se declara solo si la hay (la tabla dice lo mismo)
+    assert ("CreatvEmoji" in css) == bool(datos["config"]["emoji"]) == bool(datos["config"]["tipografia"]["emoji"])

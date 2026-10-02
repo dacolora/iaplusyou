@@ -901,3 +901,20 @@ test("zonas.js carga sin tocar la página y pagina_editor.js lo engancha (el sel
   // lo que ya no está en la página porque se fue a zonas.js
   for (const viejo of ["let zonasElegidas", "function pintarZonas", "function montarZonas"]) assert.ok(!fuente.includes(viejo), viejo);
 });
+
+// ---- Capa 5c (Tarea 8): la pestaña «Stickers» y las plantillas de «Texto» ----
+
+test("stickers_modelo.js y biblioteca.js cargan sin tocar la página y exportan lo de los stickers", async () => {
+  assert.equal(typeof globalThis.document, "undefined");
+  assert.equal(typeof globalThis.window, "undefined");
+  const sm = await import("../../static/editor/stickers_modelo.js");
+  const bib = await import("../../static/editor/biblioteca.js");
+  for (const f of ["seccionesStickers", "plantillasTexto"]) assert.equal(typeof sm[f], "function", `stickers_modelo.${f}`);
+  assert.equal(sm.EMOJIS.length, 40);
+  assert.equal(Object.keys(sm.NOMBRES_STICKER).length, 20);
+  assert.deepEqual(Object.keys(sm.TITULOS), ["flechas", "marcas", "formas", "emojis"]);
+  for (const f of ["urlSticker", "mensajeSticker"]) assert.equal(typeof bib[f], "function", `biblioteca.${f}`);
+  assert.equal(typeof bib.Biblioteca.prototype._agregarSticker, "function");
+  assert.equal(typeof globalThis.document, "undefined");
+  assert.equal(typeof globalThis.window, "undefined");
+});
