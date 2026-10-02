@@ -68,7 +68,13 @@ does not count; that is why `_final_a_dict` carries `actualizado_en`). **Finaliz
 = one card per final `listo` or `degradada`; failed finals are seen inside their video. Order: cards with a live job first (their bar must be among the 24 painted), then
 the last movement. The ready videos only appear in the **«+ Nueva final edition»** selector (`#fe-elegir`
 dialog), fetched the first time it opens (`final_tarjetas?lista=elegir`, cards without progress bars so a
-`trabajo-<job>` id never repeats); picking one closes it and opens the usual detail. `fe_cifras` feeds
+`trabajo-<job>` id never repeats); picking one goes STRAIGHT TO THE EDITOR (Daniel, 2026-10-02: «de una lo
+debería mandar al dashboard de edición»), the same way «Editar» in the detail does: its edición if it has one
+(`data-editor-url`, `_eds[0]`), otherwise a free POST to `editor.desde_clon` (`data-desde-clon`; it comes back with
+`#final?cf=<id>&abrir=editor` and enters the editor by itself when the job ends), or waits for the one already being
+prepared (`data-preparando`). While it is being prepared, `desdeHash` highlights its En edición card
+(`.fe-resaltada`) instead of opening the detail on top. The guion with AI and «Producir finales» are reached by
+clicking the card in En edición. `fe_cifras` feeds
 the header (en edición, produciéndose, finalizados, países, what the READY finals cost — which number to
 show is Daniel's call, PND-111). Every live job of a video keeps its `data-poll-job` bar on its En edición
 card (one visible, the rest hidden, each with its own `.progreso-texto`), so the page still reloads by

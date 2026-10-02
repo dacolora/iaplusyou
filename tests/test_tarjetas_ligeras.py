@@ -230,8 +230,16 @@ def test_final_js_abre_por_enlace_aunque_la_tarjeta_no_este():
     # Tablero (2026-10-02): «&abrir=editor» busca la tarjeta en «En edición»,
     # y elegir un video del selector lo cierra antes de abrir el detalle.
     assert "panel.querySelector('#fe-editando .generado[data-cf=\"' + CSS.escape(cf)" in js
-    assert "if (elegir.contains(card)) elegir.close();" in js
     assert "if (e.target.closest('[data-fe-elegir]')) { abrirElegir(); return; }" in js
+    # Elegir en «+ Nueva» va directo al editor (2026-10-02): la edición que
+    # ya tiene, la preparación gratis por POST, o esperar la que va en curso;
+    # mientras se prepara, el tablero resalta la tarjeta en vez de abrir el
+    # detalle encima.
+    assert "if (elegir.contains(card)) { irAlEditor(card); return; }" in js
+    assert "if (card.dataset.editorUrl) { location.href = card.dataset.editorUrl; return; }" in js
+    assert "form.method = 'post';" in js and "form.action = card.dataset.desdeClon;" in js
+    assert "if (card.dataset.abriendo) return;" in js
+    assert "card.classList.add('fe-resaltada');" in js
 
 
 def test_detalle_muestra_el_estado_en_palabras(app):
@@ -270,6 +278,34 @@ def test_final_tablero_cada_barra_una_sola_vez_y_el_selector_sin_barras(app):
         assert html.count(f'data-poll-job="{jid}"') == 1, jid
     elegir = c.get("/cliente/acme/final/tarjetas?lista=elegir").get_data(as_text=True)
     assert elegir.count('class="generado fe-elegible"') == 3 and "data-poll-job" not in elegir
+
+
+def test_final_elegir_un_video_lleva_directo_al_editor(app):
+    """«+ Nueva final edition» (pedido de Daniel, 2026-10-02): cada video del
+    selector sabe cómo llegar al editor sin pasar por el detalle, por el
+    mismo camino que «Editar»: su edición (la que abre «Editar»), la
+    preparación gratis (POST a editor.desde_clon) o esperar la que va."""
+    import ediciones
+    from final_edition import documento
+    from tareas import edicion as tareas_edicion
+    sin_edicion, con_edicion, preparando = _sembrar(3)
+    ed = ediciones.crear("acme", "video", "Mi corte", documento.nuevo_video("9:16"), cf_id=con_edicion,
+                         creada_por="editor")
+    _vivo("edicion_desde_clon", tareas_edicion.job_id_desde_clon("acme", preparando))
+    html = app["c"].get("/cliente/acme/final/tarjetas?lista=elegir").get_data(as_text=True)
+
+    def tarjeta(cf):
+        return html.split(f'data-cf="{cf}"')[1].split("</video>")[0]
+
+    assert f'data-desde-clon="/cliente/acme/ediciones/desde/{sin_edicion}"' in tarjeta(sin_edicion)
+    assert "data-editor-url" not in tarjeta(sin_edicion)
+    assert f'data-editor-url="/cliente/acme/ediciones/{ed["id"]}"' in tarjeta(con_edicion)
+    assert "data-desde-clon" not in tarjeta(con_edicion)
+    assert 'data-preparando="1"' in tarjeta(preparando)
+    assert "data-editor-url" not in tarjeta(preparando) and "data-desde-clon" not in tarjeta(preparando)
+    # El POST es el mismo de «Editar»: prepara gratis y vuelve con «&abrir=editor».
+    r = app["c"].post(f"/cliente/acme/ediciones/desde/{sin_edicion}", headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"#final?cf={sin_edicion}&abrir=editor")
 
 
 def test_final_producida_desde_el_editor_cuenta_como_produciendose(app):

@@ -1665,6 +1665,9 @@ msgstr "Open the “API” (or “Developers”) section of your account and cre
 msgid "Abre «Traer referentes» ya prellenado con el producto y país de esta campaña — sigue siendo tu decisión lanzarlo y aprobar el costo"
 msgstr "Opens “Bring references” already filled in with this campaign's product and country — it's still your call to launch it and approve the cost"
 
+msgid "Abriendo el editor…"
+msgstr "Opening the editor…"
+
 msgid "Abrir el menú"
 msgstr "Open the menu"
 
@@ -5219,8 +5222,8 @@ msgstr "Choose a username and a password to enter your project."
 msgid "Elige un video"
 msgstr "Pick a video"
 
-msgid "Elige un video listo de Crear. Editarlo es gratis; el guion con IA y cada final muestran su precio antes de cobrar."
-msgstr "Pick a ready video from Create. Editing it is free; the AI script and each final cut show their price before charging."
+msgid "Elige un video listo de Crear y se abre en el editor, gratis. El guion con IA y cada final muestran su precio antes de cobrar."
+msgstr "Pick a ready video from Create and it opens in the editor, for free. The AI script and each final cut show their price before charging."
 
 msgid "Elige un volumen de la lista."
 msgstr "Pick a volume from the list."

@@ -96,7 +96,7 @@
       <span class="fe-numero" aria-hidden="true">{{ icono_fe("mas") }}</span>
       <div>
         <h3 id="fe-elegir-titulo">{{ _('Nueva final edition') }}</h3>
-        <p>{{ _('Elige un video listo de Crear. Editarlo es gratis; el guion con IA y cada final muestran su precio antes de cobrar.') }}</p>
+        <p>{{ _('Elige un video listo de Crear y se abre en el editor, gratis. El guion con IA y cada final muestran su precio antes de cobrar.') }}</p>
       </div>
     </header>
     <div class="generados-grid fe-grid" id="fe-elegibles" data-tarjetas="{{ url_for('final_tarjetas', cliente=cliente, lista='elegir') }}"></div>
@@ -185,8 +185,33 @@
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); elegirOAbrir(card); }
     });
     function elegirOAbrir(card) {
-      if (elegir.contains(card)) elegir.close();
+      if (elegir.contains(card)) { irAlEditor(card); return; }
       abrir(card);
+    }
+    // Elegir en «+ Nueva» va directo al editor (pedido de Daniel,
+    // 2026-10-02), por el mismo camino que «Editar» del detalle: la edición
+    // que ya tiene, o la preparación gratis (POST a editor.desde_clon, que
+    // vuelve acá con «&abrir=editor» y entra sola al terminar), o esperar la
+    // que ya está en curso. Un segundo clic no hace nada.
+    function irAlEditor(card) {
+      if (card.dataset.abriendo) return;
+      card.dataset.abriendo = '1';
+      var velo = document.createElement('div');
+      velo.className = 'generado-velo fe-abriendo';
+      velo.appendChild(Object.assign(document.createElement('span'), { className: 'generado-estado', textContent: {{ _('Abriendo el editor…')|tojson }} }));
+      card.querySelector('.generado-media').appendChild(velo);
+      if (card.dataset.editorUrl) { location.href = card.dataset.editorUrl; return; }
+      if (card.dataset.desdeClon) {
+        var form = document.createElement('form');
+        form.method = 'post';
+        form.action = card.dataset.desdeClon;
+        document.body.appendChild(form);
+        form.submit();
+        return;
+      }
+      elegir.close();
+      var destino = '#final?cf=' + encodeURIComponent(card.dataset.cf) + '&abrir=editor';
+      if (location.hash === destino) desdeHash(); else location.hash = destino;
     }
     panel.addEventListener('mouseover', function (e) {
       var card = e.target.closest('.generado');
@@ -252,9 +277,18 @@
       // trabajo_editor sigue en curso), se entra directo al editor en vez
       // de abrir el detalle. Si la tarjeta no llegó a pintarse (paginada
       // fuera de las primeras 24), se cae al detalle remoto de siempre.
-      if (card && /[?&]abrir=editor(?:&|$)/.test(location.hash) && card.dataset.editorUrl) {
+      var aEditor = /[?&]abrir=editor(?:&|$)/.test(location.hash);
+      if (card && aEditor && card.dataset.editorUrl) {
         history.replaceState(null, '', location.pathname + location.search + '#final?cf=' + encodeURIComponent(cf));
         location.href = card.dataset.editorUrl;
+        return;
+      }
+      // Mientras se prepara para el editor no se abre el detalle encima del
+      // tablero (tablero, 2026-10-02): la tarjeta ya muestra su barra
+      // («Preparando para el editor…»); se la lleva a la vista y se resalta.
+      if (card && aEditor) {
+        card.classList.add('fe-resaltada');
+        card.scrollIntoView({ block: 'center', behavior: 'smooth' });
         return;
       }
       if (card) { abrir(card); return; }
