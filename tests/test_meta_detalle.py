@@ -186,17 +186,72 @@ def test_desde_para_sin_datos_y_con_datos(dos_piezas):
     assert md.desde_para([ep1], "2026-12-01T00:00:00", date(2026, 10, 2)) == "2026-09-28"
 
 
-def test_fk_metrica_dia_no_impide_borrar_con_delete_statements(dos_piezas):
-    """Verifica que la FK de metrica_dia permite borrar experimento_pieza si
-    borramos primero los detalles."""
+def test_ads_eliminar_limpia_metrica_dia_y_desglose(base_temporal):
+    """Verifica que ads.eliminar borra metrica_dia y metrica_desglose además de
+    metrica_snapshot y experimento_pieza."""
+    import ads
     import meta_detalle as md
     import db
-    ep1 = dos_piezas["ep1"]
-    mapa = {"ad_1": ep1}
-    md.guardar_dias(mapa, [{**FILA_DIA, "ad_id": "ad_1"}])
 
-    # Borrar los detalles y luego la pieza debe funcionar sin IntegrityError
+    # Crear un ad en la base (crea una fila experimento_pieza con legado_id)
+    ad_id = ads.crear("test", "flowplus", "cf_1", "https://r2/v.mp4", "video", "Test Ad")
+
+    # Obtener el experimento_pieza id del ad
     with db.conectar() as con:
-        con.execute(db.metrica_dia.delete().where(db.metrica_dia.c.experimento_pieza_id == ep1))
-        con.execute(db.metrica_desglose.delete().where(db.metrica_desglose.c.experimento_pieza_id == ep1))
-        con.execute(db.experimento_pieza.delete().where(db.experimento_pieza.c.id == ep1))
+        ep_row = con.execute(sa.select(db.experimento_pieza).where(
+            db.experimento_pieza.c.cliente == "test", db.experimento_pieza.c.legado_id == ad_id)).first()
+        ep_id = ep_row._mapping[db.experimento_pieza.c.id]
+
+    # Insertar metrica_dia y metrica_desglose para este ad
+    md.guardar_dias({"ad_" + ad_id: ep_id}, [{**FILA_DIA, "ad_id": "ad_" + ad_id}])
+    md.guardar_desglose({"ad_" + ad_id: ep_id}, "edad_genero",
+                        [{**FILA_DIA, "ad_id": "ad_" + ad_id, "age": "25-34", "gender": "female"}])
+
+    # Verificar que hay datos antes del delete
+    with db.conectar() as con:
+        n_dias = con.execute(sa.select(sa.func.count()).select_from(db.metrica_dia)
+                            .where(db.metrica_dia.c.experimento_pieza_id == ep_id)).scalar()
+        n_desgloses = con.execute(sa.select(sa.func.count()).select_from(db.metrica_desglose)
+                                 .where(db.metrica_desglose.c.experimento_pieza_id == ep_id)).scalar()
+        assert n_dias == 1 and n_desgloses == 1
+
+    # Eliminar el ad (debe limpiar metrica_dia, metrica_desglose, metrica_snapshot y experimento_pieza)
+    ads.eliminar("test", ad_id)
+
+    # Verificar que no quedan filas de metrica_dia ni metrica_desglose para este ep
+    with db.conectar() as con:
+        n_dias = con.execute(sa.select(sa.func.count()).select_from(db.metrica_dia)
+                            .where(db.metrica_dia.c.experimento_pieza_id == ep_id)).scalar()
+        n_desgloses = con.execute(sa.select(sa.func.count()).select_from(db.metrica_desglose)
+                                 .where(db.metrica_desglose.c.experimento_pieza_id == ep_id)).scalar()
+        n_pieza = con.execute(sa.select(sa.func.count()).select_from(db.experimento_pieza)
+                             .where(db.experimento_pieza.c.id == ep_id)).scalar()
+        assert n_dias == 0 and n_desgloses == 0 and n_pieza == 0
+
+
+def test_fk_impide_borrar_pieza_con_metrica_dia_huerfana(base_temporal):
+    """Verifica que la FK de metrica_dia a experimento_pieza está activa:
+    intentar borrar experimento_pieza mientras tiene metrica_dia hijos levanta
+    IntegrityError. Esto documenta por qué ads.eliminar y rendimiento.sembrar.limpiar
+    deben borrar metrica_dia/metrica_desglose antes de borrar experimento_pieza."""
+    import db
+
+    # Crear pieza y detalles
+    db_mod = base_temporal
+    with db_mod.conectar() as con:
+        eid = con.execute(db_mod.experimento.insert().values(
+            cliente="fk_test", creado_en=db_mod.ahora(), actualizado_en=db_mod.ahora(),
+            nombre="Test", modo="manual", estado="corriendo")).inserted_primary_key[0]
+        ep_id = con.execute(db_mod.experimento_pieza.insert().values(
+            cliente="fk_test", creado_en=db_mod.ahora(), actualizado_en=db_mod.ahora(),
+            experimento_id=eid, estado="en_cola")).inserted_primary_key[0]
+        # Insertar metrica_dia manualmente
+        con.execute(db_mod.metrica_dia.insert().values(
+            experimento_pieza_id=ep_id, fecha="2026-10-01", impresiones=100,
+            actualizado_en=db_mod.ahora()))
+
+    # Intentar borrar solo experimento_pieza sin borrar metrica_dia primero
+    import pytest
+    with pytest.raises(sa.exc.IntegrityError):
+        with db_mod.conectar() as con:
+            con.execute(db_mod.experimento_pieza.delete().where(db_mod.experimento_pieza.c.id == ep_id))
