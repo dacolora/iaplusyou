@@ -80,8 +80,8 @@ Cada una apunta a la skill que trae el detalle y el incidente que la originó.
    lado. Los `<video>` de listas nacen `preload="none" data-precarga` y las `<img>` con `loading="lazy"`. Las barras
    de progreso van con `data-poll-job`, nunca con `<script>`. Nada de una consulta por tarjeta. → `ui`
 9. **Producción** (`app.creatvmachine.com`): el VPS tiene datos de happyflops versionados en `clientes/`. Ahí nunca
-   `git checkout .`, `reset --hard` ni `stash` sin respaldarlos primero. El worker solo se reinicia con la cola vacía,
-   comprobada en un `ssh` propio y encadenada con `&&`. → `catalogo` y los hooks
+   `git checkout .`, `reset --hard` ni `stash` sin respaldarlos primero. El worker solo se reinicia con la cola vacía
+   (`deploy/cola_vacia.py`), comprobada en un `ssh` propio y encadenada con `&&`. → `despliegue` y los hooks
 
 ## Qué skill cargar
 
@@ -109,10 +109,46 @@ incidente. Si la tarea cruza dos áreas, carga las dos.
 | cualquier texto visible, `messages.po`, `idiomas.py` | [`idioma`](.claude/skills/idioma/SKILL.md) |
 | una llamada a Claude que escribe copy, el ángulo, el revisor, el diagnóstico | [`doctrina`](.claude/skills/doctrina/SKILL.md) |
 
+Y para un proceso, no un área:
+
+| Si vas a… | Skill |
+|---|---|
+| desplegar a producción o tocar el VPS | [`despliegue`](.claude/skills/despliegue/SKILL.md) |
+| entender por qué falló una pieza (de la captura de Daniel a la línea de código) | [`diagnosticar-pieza`](.claude/skills/diagnosticar-pieza/SKILL.md) |
+| cambiar un prompt, un tope o la validación de una llamada a Claude | [`eval-claude`](.claude/skills/eval-claude/SKILL.md) |
+| dejar un trabajo a medias para que otra conversación siga | [`relevo`](.claude/skills/relevo/SKILL.md) |
+
+## Subagentes (`.claude/agents/`)
+
+| Subagente | Cuándo |
+|---|---|
+| `explorador` (Haiku, solo lectura) | reconocimiento barato antes de un spec: uno por zona, en paralelo, cada dato con `archivo:línea` |
+| `guardian-gasto` | todo cambio que toque un proveedor que cobra, una tarea del worker o un botón que genera |
+| `revisor` (contexto limpio) | antes de mezclar a main un cambio grande: revisa contra el spec y rompe a propósito lo prometido (mutaciones) |
+| `auditor-seguridad` | una ruta, subida o URL ajena nueva, o texto ajeno (reseñas, anuncios, Notion) que llega a un prompt de Claude |
+
+## Cómo se trabaja
+
+1. **Dos rondas de arreglo por problema.** Si a la segunda sigue fallando, se para y se le cuenta a Daniel qué se probó,
+   en vez de relanzar otra vuelta (en naia-app, seis rondas en cuatro horas relanzando sin preguntar, 2026-09-11).
+2. **Rediseñar no es arreglar.** Si arreglar exige otro diseño (otro flujo, otro proveedor, otra frontera entre
+   módulos), se pregunta antes; con «ejecuta todo», se anota como decisión y se cuenta al final. Lo que toque plata o lo
+   publicado se pregunta siempre antes.
+3. **La gravedad la decide lo que toca.** Plata, lo que ve el cliente y el aislamiento entre proyectos se reportan aparte
+   y arriba, nunca como un punto más de una lista.
+4. **Lo real manda sobre lo simulado.** Una pantalla se mira (captura o navegador) antes de darla por buena: las tarjetas
+   «en escalera» de 2026-09-28 pasaron todas las pruebas. Una llamada a Claude se mide con `eval-claude`.
+5. **Un punto de retorno por tarea.** Cada tarea cierra con su commit antes de empezar otra. Antes de commitear, mira si
+   hay un merge o rebase a medias (`.git/MERGE_HEAD`, `.git/REBASE_HEAD`), que `git status --porcelain` no muestra
+   (2026-09-27: un merge de doctrina a medias de otra conversación en el checkout principal).
+6. **Un solo registro de pendientes:** `docs/pendientes.md`. Lo que encuentres de paso y no arregles va ahí con su ID;
+   si no está ahí, no está.
+
 ## Al terminar un cambio
 
 - Lo nuevo de un área se escribe en **su** skill, no aquí. `tests/test_guia_agentes.py` falla si este archivo pasa
-  de 250 líneas o si una skill no tiene su fila en la tabla. Un área nueva lleva una skill nueva y una fila.
+  de 250 líneas, si una skill no tiene su fila en una tabla o si un subagente no está en la suya. Un área nueva
+  lleva una skill nueva y una fila.
 - Fechas absolutas. Cada regla lleva su motivo al lado (el incidente o el pedido que la trajo): una regla sin su
   motivo se borra en tres meses.
 - Si el código y una skill no coinciden, manda el código: corrige la skill en el mismo cambio.
@@ -126,8 +162,9 @@ incidente. Si la tarea cruza dos áreas, carga las dos.
   - `git stash` sin nombre, `pop` o `clear` (la pila es compartida entre todos los worktrees);
   - un push forzado a `main`;
   - en el VPS: `git stash`, `reset --hard` o `checkout .`, y un `;` junto a un reinicio de servicios;
-  - un commit con marcas de conflicto, con un submódulo que el merge devolvió a un commit viejo o con entradas
-    `fuzzy` en el catálogo.
+  - un commit con marcas de conflicto, con algo con forma de llave (Anthropic, Google, Shopify, Meta, Apify, una URL
+    con usuario y clave, un `.env`), con un submódulo que el merge devolvió a un commit viejo o con entradas `fuzzy`
+    en el catálogo. Un valor falso de una prueba se marca con `llave-de-prueba` en esa línea.
 - `verificar_edicion.py` corre después de Edit y Write sobre el archivo tocado:
   - un `.py` tiene que compilar;
   - una plantilla tiene que leerse con Jinja y tener sus `<div>` en pareja, por macro y contra HEAD;

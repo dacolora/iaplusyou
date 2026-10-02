@@ -299,19 +299,46 @@ def revisar_push(args):
         )
 
 
-def conflictos_staged(cwd):
+# Formas de llave de los proveedores que usa Creatv. Una línea agregada que calce frena el
+# commit: lo que se sube a GitHub ya no se puede «des-subir» (habría que rotar la llave).
+FORMAS_DE_LLAVE = [
+    ("llave de Anthropic", re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}")),
+    ("llave de Google/YouTube", re.compile(r"AIza[0-9A-Za-z_-]{35}")),
+    ("token de Shopify", re.compile(r"shp(?:at|ca|pa|ss)_[0-9a-fA-F]{32}")),
+    ("token de Meta", re.compile(r"\bEAA[A-Za-z0-9]{40,}")),
+    ("token de Apify", re.compile(r"apify_api_[A-Za-z0-9]{30,}")),
+    ("token de GitHub", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}")),
+    ("llave de AWS", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("llave privada", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    ("URL con usuario y clave", re.compile(r"://[^/\s:@'\"]+:[^/\s@'\"]{6,}@")),
+    ("llave escrita a mano", re.compile(
+        r"(?i)\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD)\s*[:=]\s*['\"][A-Za-z0-9+/_\-]{24,}['\"]")),
+]
+
+
+def revisar_staged(cwd):
+    """(archivos con marcas de conflicto, [(archivo, tipo de llave)]) en lo que se va a commitear."""
     diff = git(cwd, "diff", "--cached", "-U0", "--no-color")
+    conflictos, llaves = [], []
     if not diff:
-        return []
-    malos = []
+        return conflictos, llaves
     archivo = None
     for linea in diff.splitlines():
         if linea.startswith("+++ "):
             archivo = linea[6:] if linea.startswith("+++ b/") else linea[4:]
-        elif re.match(r"^\+(<{7} |>{7} |<{7}$|>{7}$)", linea):
-            if archivo not in malos:
-                malos.append(archivo)
-    return malos
+            if archivo != "/dev/null" and es_secreto(archivo):
+                llaves.append((archivo, "un archivo de llaves completo"))
+            continue
+        if not linea.startswith("+"):
+            continue
+        if re.match(r"^\+(<{7} |>{7} |<{7}$|>{7}$)", linea) and archivo not in conflictos:
+            conflictos.append(archivo)
+        if "llave-de-prueba" in linea:
+            continue
+        for tipo, forma in FORMAS_DE_LLAVE:
+            if forma.search(linea) and (archivo, tipo) not in llaves:
+                llaves.append((archivo, tipo))
+    return conflictos, llaves
 
 
 def puntero(cwd, ref, ruta):
@@ -363,10 +390,18 @@ def po_con_fuzzy(cwd):
 
 
 def revisar_commit(cwd, comando):
-    conflictos = conflictos_staged(cwd)
+    conflictos, llaves = revisar_staged(cwd)
     if conflictos:
         bloquear("Hay marcas de conflicto (<<<<<<< / >>>>>>>) en lo que vas a commitear:\n  "
                  + "\n  ".join(conflictos))
+    if llaves and "llaves-revisadas" not in comando:
+        bloquear(
+            "Lo que vas a commitear parece llevar una llave:\n"
+            + "".join("  %s: %s\n" % ll for ll in llaves)
+            + "Lo que llega a GitHub no se puede borrar: habría que rotar la llave. Sácala del archivo (va en .env).\n"
+            "Si es un valor falso de una prueba, marca esa línea con `llave-de-prueba` en un comentario; si ya lo\n"
+            "revisaste todo, agrega `# llaves-revisadas` al final del comando."
+        )
     if "submodulo-intencional" not in comando:
         revertidos = submodulos_revertidos(cwd)
         if revertidos:

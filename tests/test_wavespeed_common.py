@@ -116,12 +116,16 @@ def test_un_402_tambien_es_sin_saldo():
 
 
 def test_los_demas_errores_siguen_con_el_texto_de_siempre():
+    """El texto técnico (lo que va a la bitácora y a `tarea.error`) no cambia; ahora además es un
+    `PedidoRechazado` con el mensaje del proveedor aparte, para contarlo en palabras (PND-107)."""
     cuerpo = {"code": 422, "message": "duration must be <= 30"}
     e = wc.error_de_respuesta(_RespPost(422, cuerpo), "x/y")
-    assert type(e) is RuntimeError
+    assert isinstance(e, wc.PedidoRechazado) and isinstance(e, RuntimeError)
     assert str(e) == "WaveSpeed (x/y) respondió 422: " + _json.dumps(cuerpo)
+    assert e.status == 422 and e.mensaje == "duration must be <= 30"
     e = wc.error_de_respuesta(_RespPost(500, "<html>caído</html>"), "x/y")
-    assert type(e) is RuntimeError and str(e) == "WaveSpeed (x/y) respondió 500: <html>caído</html>"
+    assert isinstance(e, wc.PedidoRechazado) and str(e) == "WaveSpeed (x/y) respondió 500: <html>caído</html>"
+    assert e.mensaje == ""   # sin JSON no hay un mensaje legible que mostrar
 
 
 def test_todos_los_lanzadores_de_wavespeed_reconocen_el_saldo(monkeypatch):

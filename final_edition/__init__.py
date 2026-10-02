@@ -400,20 +400,34 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
         else:
             producto = dict(producto, precio=None, moneda=None)
     referencia, costo = _referencia(entry, idioma_base)
-    duracion_s = o.get("duracion_s") or cortes.duracion(_clon_local(cliente, cf_id, entry))
-    enfoque = entry.get("enfoque") or "producto"
-
     costo_whisper = costo
-    # Detectar canal óptimo de Triple Whale si existe
-    canal_optimo = _canal_optimo_triple_whale(cliente, cf_id)
-    # Un ángulo a medio llenar a mano (sin promesa o sin gancho) no manda: Claude
-    # decide uno completo y reemplaza el borrador (doctrina, bloque 2, §3.4).
-    angulo_sesion = entry.get("angulo") if _angulo_con_contenido(entry.get("angulo")) else None
-    guion_base, costo_guion = guion_mod.generar_guion_base(
-        producto, referencia, enfoque, float(duracion_s), idioma_base,
-        _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion,
-        aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente),
-                                                             producto=(producto or {}).get("nombre")))
+    try:
+        duracion_s = o.get("duracion_s") or cortes.duracion(_clon_local(cliente, cf_id, entry))
+        enfoque = entry.get("enfoque") or "producto"
+        # Detectar canal óptimo de Triple Whale si existe
+        canal_optimo = _canal_optimo_triple_whale(cliente, cf_id)
+        # Un ángulo a medio llenar a mano (sin promesa o sin gancho) no manda: Claude
+        # decide uno completo y reemplaza el borrador (doctrina, bloque 2, §3.4).
+        angulo_sesion = entry.get("angulo") if _angulo_con_contenido(entry.get("angulo")) else None
+        guion_base, costo_guion = guion_mod.generar_guion_base(
+            producto, referencia, enfoque, float(duracion_s), idioma_base,
+            _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion,
+            aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente),
+                                                                 producto=(producto or {}).get("nombre")))
+    except Exception as e:
+        # La transcripción de la referencia y las llamadas a Claude que ya se cobraron
+        # se anotan antes de devolver el error, sea un guion inválido o un fallo de la
+        # API a mitad de camino (PND-001). `costo_usd` lo pone `guion_mod`.
+        usd_guion = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+        pagado = round(costo + usd_guion, 4)
+        if pagado:
+            gastos.registrar_seguro(
+                cliente, "guion", pagado, f"guion:{cf_id}{ref_sufijo}", proveedor="anthropic",
+                detalle=(gettext("guion base %(idioma)s · no salió válido", idioma=idioma_base)
+                         if isinstance(e, guion_mod.GuionInvalido)
+                         else gettext("guion base %(idioma)s · se cortó después de cobrar", idioma=idioma_base)),
+                extra={"usd_guion": usd_guion, "usd_whisper": round(costo, 4)})
+        raise
     costo += float(costo_guion or 0.0)
     # Sin ángulo en la sesión, Claude ya lo decidió, corrigió y limpió junto
     # con el guion (B: `guion_mod.generar_guion_base` reusa su propia vuelta
@@ -595,6 +609,7 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
     degradada = False
 
     avisar(ETAPAS_FINAL[0][0])
+    variando = False
     try:
         # Guion base (una vez por sesión) — si aún no existe se escribe aquí.
         guion_base = creative_flow.guion_base(cliente, cf_id)
@@ -610,15 +625,21 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
         costo_variante = 0.0
         angulo_variante = None
         if variante_tipo:
+            variando = True
             guion_base, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, _guia_marca(cliente),
                                                                 angulo=entry.get("angulo"),
                                                                 contexto=o.get("contexto_variante"))
             costo += float(costo_variante or 0.0)
             angulo_variante = guion_base.pop("angulo_variante", None)
     except Exception as e:
+        # Lo que cobró una variante que no sirvió se anota en el gasto de la final; el
+        # guion base no entra aquí: `preparar_guion` anota el suyo (PND-001).
+        pagado = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4) if variando else 0.0
         capas["guion"] = {"proveedor": "anthropic", "parametros": {"variante_tipo": variante_tipo} if variante_tipo else {},
-                          "costo_usd": 0.0, "estado": "error", "error": str(e)}
+                          "costo_usd": pagado, "estado": "error", "error": str(e)}
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas)
+        if pagado:
+            _registrar_gasto_final(cliente, final_id, idioma, pais, pagado, capas, fallo=True, ref_sufijo=ref_sufijo)
         raise
     carpeta = _carpeta_final(cliente, final_id)
     shutil.rmtree(carpeta, ignore_errors=True)
@@ -653,7 +674,10 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
         try:
             guion, c = guion_mod.localizar_guion(guion_base, idioma, pais, precio, angulo=entry.get("angulo"))
         except Exception as e:
-            capa("guion", "anthropic", params_guion, costo_variante, estado="error", error=str(e))
+            # Lo que cobró una localización que no sirvió entra al gasto de la final (PND-001).
+            usd_loc = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+            costo += usd_loc
+            capa("guion", "anthropic", params_guion, costo_variante + usd_loc, estado="error", error=str(e))
             raise
         costo += float(c or 0.0)
         capa("guion", "anthropic", params_guion, float(c or 0.0) + costo_variante)

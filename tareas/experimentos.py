@@ -11,7 +11,7 @@ Bloque 7: un ganador, además de escalar y derivar, pide `publicar_organico`
 canal orgánico conectado y la pieza no tiene ya una publicación viva.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -27,6 +27,7 @@ import experimentos
 import gastos
 import idiomas
 import lanzador
+import meta_detalle
 import notificaciones
 import organico
 import propuestas
@@ -35,7 +36,7 @@ import trabajos
 from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import diagnostico as doctrina_diagnostico
 from nicho.avatares import costo_real, modelo_actual
-from tareas import al_interrumpir, ref_sufijo, registrar
+from tareas import Continuar, al_interrumpir, ref_sufijo, registrar
 
 log = logging.getLogger("creatv.tareas.experimentos")
 
@@ -50,6 +51,10 @@ def job_id_refrescar(cliente, experimento_id):
 
 def job_id_decidir(cliente, experimento_id):
     return f"{cliente}__exp{experimento_id}__decidir"
+
+
+def job_id_detalle(cliente, experimento_id):
+    return f"{cliente}__exp{experimento_id}__detalle"
 
 
 @al_interrumpir("exp_lanzar")
@@ -72,7 +77,43 @@ def exp_lanzar(tarea):
 def exp_refrescar(tarea):
     p = tarea["payload"]
     n = lanzador.refrescar(p["cliente"], p["experimento_id"])
+    # Detalle para el centro de resultados (spec 2026-10-02 §3.3): después del
+    # refresco de siempre y en su propio try — el decisor depende de lo de arriba,
+    # no de esto, y un fallo aquí nunca debe tumbar la tarea.
+    try:
+        meta_detalle.refrescar_detalle(p["cliente"], p["experimento_id"])
+    except Exception as e:  # noqa: BLE001
+        # warning y no exception: la traza completa podría traer el token de Meta; el texto va sin token.
+        log.warning("Detalle de Meta falló en exp_refrescar (%s, exp %s): %s", p["cliente"], p["experimento_id"],
+                    cola.sin_token(str(e)))
     return gettext("Métricas actualizadas (%(n)s anuncios).", n=n)
+
+
+# Vueltas que se reintenta el detalle cuando Meta pide esperar, y cuánto se espera entre una y otra.
+VUELTAS_DETALLE = 3
+ESPERA_DETALLE = timedelta(minutes=30)
+
+
+@registrar("exp_detalle")
+def exp_detalle(tarea):
+    """Solo el detalle de Meta (carga inicial al desplegar E1, o de un
+    experimento que ya no corre). Lectura: no cobra. Si Meta pide esperar (límite
+    de llamadas) sigue con otra `exp_detalle` en media hora, hasta 3 vueltas
+    (`payload["vuelta"]`): nada de decir «al día» con lo que falta."""
+    p = tarea["payload"]
+    r = meta_detalle.refrescar_detalle(p["cliente"], p["experimento_id"])
+    vuelta = int(p.get("vuelta") or 0)
+    if r["limite"]:
+        if vuelta < VUELTAS_DETALLE:
+            return Continuar("exp_detalle", {**p, "vuelta": vuelta + 1}, ejecutar_desde=datetime.now() + ESPERA_DETALLE,
+                             mensaje=gettext("Meta pidió esperar: el detalle se reintenta en 30 minutos (reintento %(n)s de %(total)s).",
+                                             n=vuelta + 1, total=VUELTAS_DETALLE))
+        return gettext("Meta siguió pidiendo esperar después de varios intentos: el detalle quedó incompleto. "
+                       "Actualiza el experimento más tarde para completarlo.")
+    if r["errores"]:
+        return gettext("Detalle de Meta incompleto: falló %(partes)s.", partes=", ".join(sorted(r["errores"])))
+    return gettext("Detalle de Meta al día (%(dias)s días de anuncios, %(desgloses)s filas de desglose).",
+                   dias=r["dias"], desgloses=r["desgloses"])
 
 
 def _experimentos_en(estados):
@@ -89,7 +130,7 @@ def exp_refrescar_todos(tarea):
     filas = _experimentos_en(("corriendo", "decidido"))
     for eid, cliente in filas:
         cola.encolar("exp_refrescar", {"cliente": cliente, "experimento_id": eid}, cliente=cliente,
-                     job_id=job_id_refrescar(cliente, eid), duracion_estimada=30, max_intentos=2)
+                     job_id=job_id_refrescar(cliente, eid), duracion_estimada=90, max_intentos=2)
     return gettext("%(n)s experimentos en cola.", n=len(filas))
 
 

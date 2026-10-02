@@ -226,6 +226,44 @@ def test_commit_con_po_fuzzy(repos):
     assert codigo == 2 and "fuzzy" in err
 
 
+# Las llaves de prueba se arman en tiempo de ejecución: escritas enteras, este mismo
+# archivo no se podría commitear (el hook las frenaría, con razón).
+LLAVE_ANTHROPIC = "sk-" + "ant-" + "api03-" + "Q" * 40
+LLAVE_SHOPIFY = "shp" + "at_" + "a1" * 16
+
+
+@pytest.mark.parametrize("contenido", [
+    "ANTHROPIC = '%s'\n" % LLAVE_ANTHROPIC,
+    "tienda = {'token': '%s'}\n" % LLAVE_SHOPIFY,
+    "URL = 'postgresql://creatv:" + "clave_de_verdad" + "@db.ejemplo.com/creatv'\n",
+    "WAVESPEED_API_KEY = '" + "k9" * 20 + "'\n",
+])
+def test_commit_con_una_llave(repos, contenido):
+    _, worktree = repos
+    (worktree / "config_local.py").write_text(contenido)
+    git(worktree, "add", "config_local.py")
+    codigo, _, err = bash("git commit -m 'config'", cwd=str(worktree))
+    assert codigo == 2 and "llave" in err
+    assert "Q" * 40 not in err and "a1" * 16 not in err  # el aviso nunca repite el valor
+    assert bash("git commit -m 'config'  # llaves-revisadas", cwd=str(worktree))[0] == 0
+
+
+def test_llave_falsa_marcada_en_una_prueba(repos):
+    _, worktree = repos
+    (worktree / "test_x.py").write_text("FALSA = '%s'  # llave-de-prueba\n" % LLAVE_ANTHROPIC)
+    git(worktree, "add", "test_x.py")
+    codigo, _, err = bash("git commit -m 'prueba'", cwd=str(worktree))
+    assert codigo == 0, err
+
+
+def test_commit_de_un_env_forzado(repos):
+    _, worktree = repos
+    (worktree / ".env").write_text("NADA=1\n")
+    git(worktree, "add", "-f", ".env")
+    codigo, _, err = bash("git commit -m 'env'", cwd=str(worktree))
+    assert codigo == 2 and ".env" in err
+
+
 def test_commit_normal_pasa(repos):
     _, worktree = repos
     (worktree / "notas.txt").write_text("chao\n")

@@ -245,6 +245,8 @@ def limpiar(prefijo=PREFIJO):
     with db.conectar() as con:
         ep = sa.select(db.experimento_pieza.c.id).where(db.experimento_pieza.c.cliente.like(patron))
         con.execute(db.metrica_snapshot.delete().where(db.metrica_snapshot.c.experimento_pieza_id.in_(ep)))
+        con.execute(db.metrica_dia.delete().where(db.metrica_dia.c.experimento_pieza_id.in_(ep)))
+        con.execute(db.metrica_desglose.delete().where(db.metrica_desglose.c.experimento_pieza_id.in_(ep)))
         con.execute(db.evento.delete().where(db.evento.c.cliente.like(patron)))
         con.execute(db.experimento_pieza.delete().where(db.experimento_pieza.c.cliente.like(patron)))
         con.execute(db.experimento.delete().where(db.experimento.c.cliente.like(patron)))

@@ -1,1 +1,1 @@
-{% from "_final_tarjetas.html" import lista_videos_fe, lista_finales_fe with context %}{% if lista == "videos" %}{{ lista_videos_fe(items, desde, total) }}{% else %}{{ lista_finales_fe(items, desde, total) }}{% endif %}
+{% from "_final_tarjetas.html" import lista_en_edicion_fe, lista_finalizados_fe, lista_elegir_fe with context %}{% if lista == "en_edicion" %}{{ lista_en_edicion_fe(items, desde, total) }}{% elif lista == "finalizados" %}{{ lista_finalizados_fe(items, desde, total) }}{% else %}{{ lista_elegir_fe(items, desde, total) }}{% endif %}

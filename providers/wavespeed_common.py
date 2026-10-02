@@ -43,11 +43,24 @@ class SinSaldo(RuntimeError):
         super().__init__(f"WaveSpeed ({path}) respondió {status}: sin saldo en la cuenta ({detalle})")
 
 
+class PedidoRechazado(RuntimeError):
+    """WaveSpeed rechazó el pedido al lanzarlo (400, 422, 1405…) por algo que no
+    es el saldo: un parámetro que el modelo no acepta, una duración, una
+    referencia. Nada se lanzó, así que nada se cobró. `str(e)` sigue siendo el
+    texto técnico de siempre (bitácora, `tarea.error`); `mensaje` es lo que dijo
+    el proveedor, para contarlo en palabras en la tarjeta (PND-107: antes la
+    tarjeta mostraba el JSON crudo)."""
+
+    def __init__(self, path, status, mensaje, texto):
+        self.path, self.status, self.mensaje = path, status, mensaje
+        super().__init__(f"WaveSpeed ({path}) respondió {status}: {texto[:500]}")
+
+
 def error_de_respuesta(resp, path):
     """La excepción para una respuesta no-ok al lanzar una predicción:
     `SinSaldo` si WaveSpeed dice que la cuenta no tiene saldo (402, o su
-    mensaje de «insufficient credits» / «top up»), y el RuntimeError de
-    siempre — mismo texto — en cualquier otro caso."""
+    mensaje de «insufficient credits» / «top up»), y `PedidoRechazado` — un
+    RuntimeError con el mismo texto de siempre — en cualquier otro caso."""
     texto = resp.text or ""
     mensaje = ""
     try:
@@ -60,7 +73,7 @@ def error_de_respuesta(resp, path):
     if (resp.status_code == 402 or ("insufficient" in minusculas and ("credit" in minusculas or "balance" in minusculas))
             or "top up" in minusculas):
         return SinSaldo(path, resp.status_code, (mensaje or texto)[:300])
-    return RuntimeError(f"WaveSpeed ({path}) respondió {resp.status_code}: {texto[:500]}")
+    return PedidoRechazado(path, resp.status_code, mensaje[:300], texto)
 
 
 class ErrorProveedor(RuntimeError):

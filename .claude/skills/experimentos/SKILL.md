@@ -1,6 +1,6 @@
 ---
 name: experimentos
-description: "Experimentos en Meta y el tablero: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, y el Tablero (totales, mes a mes, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py o _tab_experimentos.html."
+description: "Experimentos en Meta y el tablero: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, y el Tablero (totales, mes a mes, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py, meta_detalle.py o _tab_experimentos.html."
 ---
 
 # Experimentos, decisor y tablero
@@ -23,7 +23,7 @@ appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
 states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
-launch (resumable). Meta's raw errors («Meta Ads (<edge>) respondió 400: {JSON cut at 500 chars}») are stored as-is but shown through `meta_errores.explicar` (filter `error_meta`, also used by `tablero.alertas` and `lanzador.traducir_error_meta`): known codes become what to do (1885183 app in Development mode — also recognized in the already-explained text, so it re-renders in the viewer's language —, 190 reconnect, 10/200/294 permissions, 4/17/32/613/80004 rate limit, 368 policy block, 1/2 temporary), otherwise Meta's own `error_user_title/msg`, otherwise the code; the experiment card keeps the raw text in a folded «Detalle técnico». UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
+launch (resumable). Meta's raw errors («Meta Ads (<edge>) respondió 400: {JSON cut at 500 chars}») are stored as-is but shown through `meta_errores.explicar` (filter `error_meta`, also used by `tablero.alertas` and `lanzador.traducir_error_meta`): known codes become what to do (1885183 app in Development mode — also recognized in the already-explained text, so it re-renders in the viewer's language —, 190 reconnect, 10/200/294 permissions, 4/17/32/613 and the 80000…80014 business-use-case family (`meta_errores._LIMITE`, `es_limite`) rate limit, 368 policy block, 1/2 temporary), otherwise Meta's own `error_user_title/msg`, otherwise the code; the experiment card keeps the raw text in a folded «Detalle técnico». UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
 every piece with a public URL (`experimentos.elegibles`: Crear videos AND images, sprint
 pieces, finals; `origen`, `formato`, `en_experimentos`), the user ticks pieces and a 3-step
 form appears (where: countries + daily budget; how much: cap + days with a live count;
@@ -104,3 +104,28 @@ When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 `OUTCOME_SALES`; `lanzador.lanzar` then re-checks the Pixel before touching Meta and sends
 `promoted_object={pixel_id, PURCHASE}` on every adset (`meta_ads/adset.py` refuses SALES
 without it). The objective is fixed at creation — Meta doesn't allow changing it.
+
+**Detalle de Meta** (`meta_detalle.py`, spec `2026-10-02-experimentos-centro-de-resultados` §3, E1 2026-10-02): único escritor de
+`metrica_dia` (una fila por anuncio y día: tráfico, embudo `visitas_pagina`/`carrito`/`pago_iniciado`/`compras_meta`,
+retención `vistas_3s`/`p25…p100`/`thruplay`/`tiempo_medio_s`) y `metrica_desglose` (desde la creación del experimento por
+`ubicacion`/`edad_genero`/`dispositivo`/`region`), y de `experimento_pieza.extra["rankings_meta"]`. Pide a nivel
+campaña con `level=ad` (1 diario + 4 desgloses + 1 rankings por experimento) con `meta_ads.auth.llamar`, sin tocar
+el submódulo; los desgloses y los rankings van con `time_range` (creación → hoy, nunca `date_preset=maximum`) y los
+desgloses piden solo lo que `fila_desglose` guarda (`CAMPOS_DESGLOSE`: sin `reach`/`frequency`/`cpm`/`clicks`).
+Corre al final de `exp_refrescar` en su propio `try` (el decisor no depende de esto; su log lleva el error sin token) y como
+tarea `exp_detalle` (`max_intentos=2`, no cobra; `meta_detalle.encolar_todos()` hace la carga inicial). El rango del
+día a día se cura solo: desde el último día guardado menos 2 (Meta corrige días recientes) o desde la creación del
+experimento. Un desglose que Meta rechaza no tumba los otros. Cortan la pasada entera dos cosas: un **código de
+límite** (la familia de `meta_errores._LIMITE`: 4/17/32/613 y 80000…80014 por caso de uso de negocio;
+`meta_errores.es_limite`, a la que delega `meta_detalle.es_limite`) y un **fallo de red o HTTP 5xx** (texto
+«falló en red» / «respondió 5…» de `meta_ads.auth.llamar`; marca `cortado`, no `limite`). `exp_detalle` no dice «al
+día» con lo que falta: con límite devuelve `Continuar("exp_detalle", {…, "vuelta": n+1}, ejecutar_desde=ahora+30 min)`
+hasta 3 vueltas y a la tercera termina diciendo que quedó incompleto; con errores nombra las partes que fallaron. El
+estado queda en `experimento.extra["detalle_meta"]` (`actualizado_en`, `desde`, `errores` sin token, `limite`,
+`cortado`).
+Reglas para quien lea o muestre esos datos: (a) `metrica_dia` y `metrica_desglose` **no tienen columna `cliente`**:
+todo lector las une con `experimento_pieza` y filtra por `cliente` y `experimento_id`, nunca con un id que venga del
+navegador sin ese join (si no, un proyecto lee las cifras de otro). (b) `detalle_meta.errores` guarda texto crudo de
+Meta (ya sin token): se muestra con `meta_errores.explicar` y con el autoescape de Jinja, nunca con `|safe`. (c) El
+alcance y la frecuencia **diarios no se suman** entre días: la frecuencia del periodo o de la pieza sale del último
+`metrica_snapshot` (acumulada de por vida) y se rotula «acumulada»; la regla de fatiga usa esa, no la diaria.
