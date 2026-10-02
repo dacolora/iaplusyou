@@ -33,9 +33,10 @@ _BASE = "ad_id,impressions,reach,frequency,clicks,inline_link_clicks,spend,cpm,a
 CAMPOS_DIA = (_BASE + ",video_play_actions,video_p25_watched_actions,video_p50_watched_actions"
               ",video_p75_watched_actions,video_p95_watched_actions,video_p100_watched_actions"
               ",video_thruplay_watched_actions,video_avg_time_watched_actions")
-# Desgloses: sin los campos de retención (Meta rechaza algunas combinaciones de
-# video con desgloses); el gancho sale de actions[video_view].
-CAMPOS_DESGLOSE = _BASE + ",video_thruplay_watched_actions"
+# Desgloses: solo lo que fila_desglose guarda (sin reach/frequency/cpm/clicks: el alcance con desgloses
+# es caro y Meta lo restringe a 13 meses) y sin los campos de retención (Meta rechaza algunas
+# combinaciones de video con desgloses); el gancho sale de actions[video_view].
+CAMPOS_DESGLOSE = "ad_id,impressions,inline_link_clicks,spend,actions,action_values,video_thruplay_watched_actions"
 CAMPOS_RANKINGS = "ad_id,impressions,quality_ranking,engagement_rate_ranking,conversion_rate_ranking"
 
 # Dimensión -> breakdowns de la Graph API (la clave guardada une sus valores con «|»).
@@ -139,19 +140,24 @@ def _paginas(params):
     return filas
 
 
+def _rango(desde, hasta):
+    return json.dumps({"since": desde, "until": hasta})
+
+
 def pedir_diario(campaign_id, desde, hasta):
     return _paginas({"level": "ad", "fields": CAMPOS_DIA, "filtering": _filtro_campana(campaign_id),
-                     "time_increment": 1, "time_range": json.dumps({"since": desde, "until": hasta})})
+                     "time_increment": 1, "time_range": _rango(desde, hasta)})
 
 
-def pedir_desglose(campaign_id, dimension):
+def pedir_desglose(campaign_id, dimension, desde, hasta):
+    """Total del periodo desde-hasta (no día a día) por dimensión; `desde` es la creación del experimento."""
     return _paginas({"level": "ad", "fields": CAMPOS_DESGLOSE, "filtering": _filtro_campana(campaign_id),
-                     "date_preset": "maximum", "breakdowns": DIMENSIONES[dimension]})
+                     "time_range": _rango(desde, hasta), "breakdowns": DIMENSIONES[dimension]})
 
 
-def pedir_rankings(campaign_id):
+def pedir_rankings(campaign_id, desde, hasta):
     return _paginas({"level": "ad", "fields": CAMPOS_RANKINGS, "filtering": _filtro_campana(campaign_id),
-                     "date_preset": "maximum"})
+                     "time_range": _rango(desde, hasta)})
 
 
 # Días hacia atrás que se vuelven a pedir aunque ya estén: Meta corrige los últimos días.
@@ -224,21 +230,38 @@ class _Limite(Exception):
     """Meta pidió esperar (códigos de límite): se corta la pasada entera."""
 
 
+class _Corte(Exception):
+    """Fallo de red o HTTP 5xx: se corta la pasada entera, pero no es un límite (no se reintenta con espera)."""
+
+
 def es_limite(texto):
-    return meta_errores._numero(str(texto or ""), "code") in meta_errores._LIMITE
+    return meta_errores.es_limite(texto)
+
+
+def _es_corte_de_red(texto):
+    """Formato de meta_ads.auth.llamar cuando Meta no contesta o responde con un error del servidor:
+    «Meta Ads (<edge>) respondió <status>: …» / «Meta Ads (<edge>) falló en red: <Tipo>»."""
+    return "falló en red" in texto or "respondió 5" in texto
+
+
+def desde_creacion(creado_en, hoy):
+    """Día en que se creó el experimento (nunca después de hoy): desde dónde se piden los desgloses y los rankings."""
+    d = date.fromisoformat((creado_en or hoy.isoformat())[:10])
+    return min(d, hoy).isoformat()
 
 
 def _con_detalle(resultado):
     def fn(extra):
         return {**extra, "detalle_meta": {"actualizado_en": db.ahora(), "desde": resultado.get("desde"),
-                                           "errores": resultado["errores"], "limite": resultado["limite"]}}
+                                           "errores": resultado["errores"], "limite": resultado["limite"],
+                                           "cortado": resultado["cortado"]}}
     return fn
 
 
 def refrescar_detalle(cliente, experimento_id, hoy=None):
     """Pide y guarda el detalle de un experimento. Nunca lanza: los errores
     (sin token) quedan en el resultado y en experimento.extra["detalle_meta"]."""
-    r = {"dias": 0, "desgloses": 0, "rankings": 0, "limite": False, "errores": {}}
+    r = {"dias": 0, "desgloses": 0, "rankings": 0, "limite": False, "cortado": False, "errores": {}}
 
     try:
         ex = experimentos.obtener(cliente, experimento_id)
@@ -249,6 +272,7 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
             return r
         hoy = hoy or date.today()
         r["desde"] = desde_para(list(ep_por_ad.values()), ex.get("creado_en"), hoy)
+        desde_total = desde_creacion(ex.get("creado_en"), hoy)   # desgloses y rankings: de la creación a hoy
         campana = ex["meta_campaign_id"]
 
         def _parte(nombre, fn):
@@ -260,17 +284,21 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
                 log.warning("Detalle de Meta (%s, exp %s, %s): %s", cliente, experimento_id, nombre, texto)
                 if es_limite(texto):
                     raise _Limite() from None
+                if _es_corte_de_red(texto):   # Meta caída o con error 5xx: no seguir golpeándola
+                    raise _Corte() from None
 
         def _correr(_creds):
             _parte("diario", lambda: r.__setitem__("dias", guardar_dias(ep_por_ad, pedir_diario(campana, r["desde"], hoy.isoformat()))))
             for dim in DIMENSIONES:
-                _parte(dim, lambda dim=dim: r.__setitem__("desgloses", r["desgloses"] + guardar_desglose(ep_por_ad, dim, pedir_desglose(campana, dim))))
-            _parte("rankings", lambda: r.__setitem__("rankings", guardar_rankings(cliente, ep_por_ad, pedir_rankings(campana))))
+                _parte(dim, lambda dim=dim: r.__setitem__("desgloses", r["desgloses"] + guardar_desglose(ep_por_ad, dim, pedir_desglose(campana, dim, desde_total, hoy.isoformat()))))
+            _parte("rankings", lambda: r.__setitem__("rankings", guardar_rankings(cliente, ep_por_ad, pedir_rankings(campana, desde_total, hoy.isoformat()))))
 
         try:
             lanzador._con_credenciales(cliente, _correr)
         except _Limite:
             r["limite"] = True
+        except _Corte:
+            r["cortado"] = True
         except Exception as e:  # noqa: BLE001 — p. ej. Meta sin conectar
             texto = cola.sin_token(str(e))
             r["errores"]["credenciales"] = cola.recortar(texto)

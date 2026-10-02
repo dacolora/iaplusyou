@@ -106,20 +106,30 @@ def test_pedir_para_en_max_paginas(monkeypatch):
     import meta_detalle as md
     pagina = {"data": [{"ad_id": "x"}], "paging": {"cursors": {"after": "C"}, "next": "https://graph/next"}}
     md2, falso = _con_llamar(monkeypatch, [dict(pagina) for _ in range(md.MAX_PAGINAS + 5)])
-    assert len(md2.pedir_rankings("cmp")) == md.MAX_PAGINAS
+    assert len(md2.pedir_rankings("cmp", "2026-09-01", "2026-09-30")) == md.MAX_PAGINAS
     assert len(falso.llamadas) == md.MAX_PAGINAS
 
 
 def test_pedir_desglose_y_rankings(monkeypatch):
     md, falso = _con_llamar(monkeypatch, [{"data": [{"ad_id": "a", "age": "25-34", "gender": "female"}]},
                                           {"data": [{"ad_id": "a", "quality_ranking": "AVERAGE"}]}])
-    assert md.pedir_desglose("cmp", "edad_genero")[0]["age"] == "25-34"
+    assert md.pedir_desglose("cmp", "edad_genero", "2026-09-10", "2026-10-02")[0]["age"] == "25-34"
     _, _, p1 = falso.llamadas[0]
-    assert p1["breakdowns"] == "age,gender" and p1["date_preset"] == "maximum" and "time_increment" not in p1
+    assert p1["breakdowns"] == "age,gender" and "time_increment" not in p1
+    # desde la creación del experimento hasta hoy, no «maximum» (Meta restringe lo de por vida con desgloses)
+    assert json.loads(p1["time_range"]) == {"since": "2026-09-10", "until": "2026-10-02"} and "date_preset" not in p1
     assert "video_p25_watched_actions" not in p1["fields"]   # sin campos de video en desgloses
-    md.pedir_rankings("cmp")
+    md.pedir_rankings("cmp", "2026-09-10", "2026-10-02")
     _, _, p2 = falso.llamadas[1]
-    assert "quality_ranking" in p2["fields"] and p2["date_preset"] == "maximum"
+    assert "quality_ranking" in p2["fields"] and "date_preset" not in p2
+    assert json.loads(p2["time_range"]) == {"since": "2026-09-10", "until": "2026-10-02"}
+
+
+def test_campos_desglose_son_solo_lo_que_se_guarda():
+    """reach/frequency/cpm/clicks no se guardan en metrica_desglose y reach con desgloses es caro."""
+    import meta_detalle as md
+    assert md.CAMPOS_DESGLOSE.split(",") == ["ad_id", "impressions", "inline_link_clicks", "spend", "actions",
+                                              "action_values", "video_thruplay_watched_actions"]
 
 
 @pytest.fixture()
@@ -268,12 +278,14 @@ def con_meta(dos_piezas, monkeypatch):
                   "rankings": {"data": [{"ad_id": "ad_1", "quality_ranking": "AVERAGE"}]}}
     fallar = {}
     llamadas = []
+    params_por_parte = {}
 
     def llamar(metodo, edge, payload=None, params=None, dry_run=False):
         params = params or {}
         parte = (params.get("breakdowns") and [k for k, v in md.DIMENSIONES.items() if v == params["breakdowns"]][0]
                  or ("diario" if "time_increment" in params else "rankings"))
         llamadas.append(parte)
+        params_por_parte[parte] = dict(params)
         if parte in fallar:
             raise RuntimeError(fallar[parte])
         if parte in md.DIMENSIONES:
@@ -283,7 +295,7 @@ def con_meta(dos_piezas, monkeypatch):
         return respuestas[parte]
 
     monkeypatch.setattr(md.auth, "llamar", llamar)
-    return {**dos_piezas, "md": md, "fallar": fallar, "llamadas": llamadas}
+    return {**dos_piezas, "md": md, "fallar": fallar, "llamadas": llamadas, "params": params_por_parte}
 
 
 def test_refrescar_detalle_guarda_todo_y_anota_en_extra(con_meta):
@@ -293,6 +305,21 @@ def test_refrescar_detalle_guarda_todo_y_anota_en_extra(con_meta):
     assert con_meta["llamadas"] == ["diario", "ubicacion", "edad_genero", "dispositivo", "region", "rankings"]
     det = ex.obtener("acme", eid)["extra"]["detalle_meta"]
     assert det["errores"] == {} and det["limite"] is False and det["actualizado_en"]
+
+
+def test_refrescar_detalle_pide_desgloses_y_rankings_desde_la_creacion_hasta_hoy(con_meta):
+    md, ex, eid = con_meta["md"], con_meta["ex"], con_meta["eid"]
+    creado = ex.obtener("acme", eid)["creado_en"][:10]
+    hoy = date(2026, 10, 2)
+    md.refrescar_detalle("acme", eid, hoy=hoy)
+    esperado = {"since": min(creado, hoy.isoformat()), "until": "2026-10-02"}
+    for parte in ("ubicacion", "edad_genero", "dispositivo", "region", "rankings"):
+        p = con_meta["params"][parte]
+        assert json.loads(p["time_range"]) == esperado and "date_preset" not in p, parte
+    # un experimento «creado en el futuro» (reloj distinto) nunca pide desde después de hoy
+    con_meta["params"].clear()
+    md.refrescar_detalle("acme", eid, hoy=date(2000, 1, 1))
+    assert json.loads(con_meta["params"]["region"]["time_range"]) == {"since": "2000-01-01", "until": "2000-01-01"}
 
 
 def test_un_desglose_que_falla_no_tumba_los_otros_ni_filtra_el_token(con_meta):
@@ -319,6 +346,28 @@ def test_falla_el_diario_no_lanza(con_meta):
     assert "diario" in r["errores"] and r["dias"] == 0
 
 
+def test_red_caida_corta_la_pasada_sin_marcar_limite(con_meta):
+    md, ex, eid = con_meta["md"], con_meta["ex"], con_meta["eid"]
+    con_meta["fallar"]["diario"] = "Meta Ads (act_123/insights) falló en red: ConnectionError"
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert con_meta["llamadas"] == ["diario"]   # no sigue golpeando a Meta
+    assert r["cortado"] is True and r["limite"] is False and "diario" in r["errores"]
+    det = ex.obtener("acme", eid)["extra"]["detalle_meta"]
+    assert det["cortado"] is True and det["limite"] is False and "diario" in det["errores"]
+
+
+def test_http_5xx_corta_la_pasada_pero_un_4xx_no(con_meta):
+    md, eid = con_meta["md"], con_meta["eid"]
+    con_meta["fallar"]["ubicacion"] = 'Meta Ads (act_123/insights) respondió 503: {"error":{"message":"Service Unavailable"}}'
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert con_meta["llamadas"] == ["diario", "ubicacion"] and r["cortado"] is True and r["limite"] is False
+    # un 400 (código 100) sigue su camino: las otras partes se piden
+    con_meta["llamadas"].clear()
+    con_meta["fallar"]["ubicacion"] = 'Meta Ads (act_123/insights) respondió 400: {"error":{"code":100,"message":"x"}}'
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert len(con_meta["llamadas"]) == 6 and r["cortado"] is False and "ubicacion" in r["errores"]
+
+
 def test_sin_campana_o_de_otro_proyecto_no_llama(con_meta):
     md, ex, eid = con_meta["md"], con_meta["ex"], con_meta["eid"]
     assert md.refrescar_detalle("otro", eid)["dias"] == 0
@@ -330,7 +379,18 @@ def test_sin_campana_o_de_otro_proyecto_no_llama(con_meta):
 def test_es_limite():
     import meta_detalle as md
     assert md.es_limite('respondió 400: {"error":{"code":613}}')
+    assert md.es_limite('respondió 400: {"error":{"code":80000,"message":"There have been too many calls"}}')
     assert not md.es_limite('respondió 400: {"error":{"code":100}}') and not md.es_limite("")
+
+
+def test_es_limite_cubre_la_familia_de_limites_por_caso_de_uso():
+    import meta_detalle as md
+    import meta_errores
+    for codigo in (4, 17, 32, 613, 80000, 80001, 80002, 80003, 80004, 80005, 80006, 80008, 80009, 80014):
+        texto = 'respondió 400: {"error":{"code":%d}}' % codigo
+        assert meta_errores.es_limite(texto) and md.es_limite(texto), codigo
+    assert not meta_errores.es_limite('respondió 400: {"error":{"code":80007}}')   # no es de la familia
+    assert not meta_errores.es_limite(None)
 
 
 def test_actualizar_extra_que_falla_no_lanza(con_meta, monkeypatch):
@@ -366,3 +426,63 @@ def test_tarea_exp_detalle_y_encolar_todos(con_meta, monkeypatch):
     assert kw["job_id"] == t_exp.job_id_detalle("acme", eid) and kw["max_intentos"] == 2 and kw["cliente"] == "acme"
     texto = tareas.REGISTRO["exp_detalle"]({"payload": payload, "job_id": kw["job_id"]})
     assert "2" in texto   # «Detalle de Meta al día (2 días de anuncios…)»
+
+
+# --- exp_detalle: honesto y con reintento real --------------------------------
+
+def _resultado(**kw):
+    return {"dias": 2, "desgloses": 4, "rankings": 1, "limite": False, "errores": {}, "cortado": False, **kw}
+
+
+def _correr_exp_detalle(monkeypatch, resultado, **payload):
+    import tareas
+    from tareas import experimentos as t_exp  # noqa: F401 — registra exp_detalle
+    import meta_detalle as md
+    monkeypatch.setattr(md, "refrescar_detalle", lambda cliente, experimento_id, hoy=None: resultado)
+    return tareas.REGISTRO["exp_detalle"]({"payload": {"cliente": "acme", "experimento_id": 7, **payload}, "job_id": "j"})
+
+
+def test_exp_detalle_con_limite_sigue_con_continuar_en_media_hora(monkeypatch):
+    from datetime import datetime, timedelta
+    import tareas
+    antes = datetime.now()
+    r = _correr_exp_detalle(monkeypatch, _resultado(limite=True, errores={"ubicacion": "code 17"}))
+    assert isinstance(r, tareas.Continuar) and r.tipo == "exp_detalle"
+    assert r.payload == {"cliente": "acme", "experimento_id": 7, "vuelta": 1} and r.mensaje
+    assert isinstance(r.ejecutar_desde, datetime) and r.ejecutar_desde >= antes + timedelta(minutes=29)
+    # la vuelta crece de una en una
+    r2 = _correr_exp_detalle(monkeypatch, _resultado(limite=True), vuelta=2)
+    assert isinstance(r2, tareas.Continuar) and r2.payload["vuelta"] == 3
+
+
+def test_exp_detalle_a_la_tercera_vuelta_con_limite_termina_y_lo_dice(monkeypatch):
+    import tareas
+    r = _correr_exp_detalle(monkeypatch, _resultado(limite=True, errores={"region": "code 17"}), vuelta=3)
+    assert isinstance(r, str) and not isinstance(r, tareas.Continuar)
+    assert "siguió pidiendo esperar" in r and "al día" not in r
+
+
+def test_exp_detalle_con_errores_nombra_las_partes_y_no_dice_al_dia(monkeypatch):
+    r = _correr_exp_detalle(monkeypatch, _resultado(errores={"region": "x", "rankings": "y"}))
+    assert isinstance(r, str) and "incompleto" in r and "region" in r and "rankings" in r and "al día" not in r
+
+
+def test_exp_detalle_sin_errores_dice_al_dia(monkeypatch):
+    r = _correr_exp_detalle(monkeypatch, _resultado())
+    assert "al día" in r and "2" in r and "4" in r
+
+
+# --- aislamiento de guardar_desglose entre experimentos -----------------------
+
+def test_guardar_desglose_ignora_un_ad_ajeno_y_no_toca_el_juego_de_otra_pieza(dos_piezas):
+    import meta_detalle as md
+    db, ep1, ep2 = dos_piezas["db"], dos_piezas["ep1"], dos_piezas["ep2"]
+    fila = lambda ad, edad: {**FILA_DIA, "ad_id": ad, "age": edad, "gender": "female"}  # noqa: E731
+    md.guardar_desglose({"ad_1": ep1, "ad_2": ep2}, "edad_genero", [fila("ad_1", "18-24"), fila("ad_2", "25-34")])
+    # reemplazar el juego de ep1, con una fila de un anuncio que no es de este mapa: se ignora
+    n = md.guardar_desglose({"ad_1": ep1}, "edad_genero", [fila("ad_1", "35-44"), fila("ad_2", "55-64"), fila("ad_ajeno", "65+")])
+    assert n == 1
+    por_ep = {}
+    for f in _filas(db, db.metrica_desglose):
+        por_ep.setdefault(f["experimento_pieza_id"], []).append(f["clave"])
+    assert por_ep == {ep1: ["35-44|female"], ep2: ["25-34|female"]}   # ep2 intacto, ep1 reemplazado
