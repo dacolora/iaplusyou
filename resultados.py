@@ -111,13 +111,15 @@ def _iso(d):
 def periodo(ahora_iso, dias, primer_dia=None):
     """El periodo que termina hoy (días naturales, hoy incluido): `lista` de fechas, `desde`/`hasta`
     ([desde, hasta) como los del Tablero) y el periodo anterior de igual largo. `dias == 0` es «desde el
-    inicio»: arranca en `primer_dia` (tope DIAS_MAX_INICIO) y no tiene anterior."""
+    inicio»: arranca en `primer_dia` (tope DIAS_MAX_INICIO) y no tiene anterior. El tope solo recorta lo que se
+    DIBUJA (`lista`: día a día, curvas, marcas); los totales de «desde el inicio» suman todo el historial."""
     hoy = datetime.fromisoformat(ahora_iso[:19]).date()
     if dias == 0:
         inicio = max(primer_dia or hoy, hoy - timedelta(days=DIAS_MAX_INICIO - 1))
         n = (hoy - inicio).days + 1
     else:
         n = dias
+    n = max(n, 1)          # un primer día posterior a hoy no deja el periodo vacío
     lista = [hoy - timedelta(days=i) for i in range(n - 1, -1, -1)]
     out = {"n": n, "lista": lista, "desde": _iso(lista[0]), "hasta": _iso(hoy + timedelta(days=1)),
            "es_todo": dias == 0, "anterior_desde": None, "anterior_hasta": None}
@@ -133,7 +135,8 @@ class Carga:
     """Lo que el centro de resultados lee de la base en una petición. `datos`: el filtro ya aplicado
     (tablero.Datos); `todo`: el proyecto entero; `monedas`: las del proyecto; `moneda`: la que se muestra;
     `per`: el periodo; `dias_act`/`dias_ant`: filas de metrica_dia (dicts) del periodo y del anterior, solo de
-    las piezas de `datos`; `es_imagen`: {ep_id: bool} de esas piezas."""
+    las piezas de `datos` (con «desde el inicio», `dias_act` es TODO el historial, sin el tope de 180 días de
+    `per["lista"]`, y `dias_ant` está vacío); `es_imagen`: {ep_id: bool} de esas piezas."""
     __slots__ = ("datos", "todo", "moneda", "monedas", "per", "dias_act", "dias_ant", "es_imagen", "_memo")
 
     def __init__(self, datos, todo, moneda, monedas, per, dias_act, dias_ant, es_imagen):
@@ -170,15 +173,16 @@ def _elegir_moneda(pedida, monedas, base, todo, desde, hasta):
 
 
 def _leer_dias(ids, desde, hasta):
-    """Filas de metrica_dia de esas piezas con `desde <= fecha <= hasta` (YYYY-MM-DD). Una consulta (por
-    trozos de 500 ids), nunca una por pieza."""
+    """Filas de metrica_dia de esas piezas con `desde <= fecha <= hasta` (YYYY-MM-DD; `desde=None` = sin cota
+    inferior). Una consulta (por trozos de 500 ids), nunca una por pieza."""
     ids = sorted(ids)
     md = db.metrica_dia
     out = []
     with db.conectar() as con:
         for i in range(0, len(ids), 500):
-            q = sa.select(md).where(md.c.experimento_pieza_id.in_(ids[i:i + 500]),
-                                    md.c.fecha >= desde, md.c.fecha <= hasta)
+            q = sa.select(md).where(md.c.experimento_pieza_id.in_(ids[i:i + 500]), md.c.fecha <= hasta)
+            if desde is not None:
+                q = q.where(md.c.fecha >= desde)
             out.extend(dict(f._mapping) for f in con.execute(q))
     out.sort(key=lambda f: (f["fecha"], f["experimento_pieza_id"]))
     return out
@@ -200,11 +204,13 @@ def cargar(cliente, filtro, ahora_iso=None):
     datos = tablero.filtrar(todo, experimento_id=filtro.experimento_id, pais=filtro.pais, ep_id=filtro.ep_id,
                             tipo=filtro.tipo, moneda=moneda)
     es_imagen = {pz["id"]: bool(pz.get("es_imagen")) for _ex, pz, _s in datos.filas}
-    primero = per["lista"][0].isoformat() if per["es_todo"] else per["anterior_desde"][:10]
-    filas = _leer_dias(list(es_imagen), primero, per["lista"][-1].isoformat()) if es_imagen else []
     ini, fin = per["lista"][0].isoformat(), per["lista"][-1].isoformat()
-    dias_act = [f for f in filas if ini <= f["fecha"] <= fin]
-    dias_ant = [f for f in filas if f["fecha"] < ini]
+    # «Desde el inicio»: todo el historial (misma ventana que el dinero, que parte de tablero.INICIO); el tope
+    # de DIAS_MAX_INICIO solo recorta lo que se dibuja (`_por_dia` mira solo los días de `per["lista"]`).
+    primero = None if per["es_todo"] else per["anterior_desde"][:10]
+    filas = _leer_dias(list(es_imagen), primero, fin) if es_imagen else []
+    dias_act = filas if per["es_todo"] else [f for f in filas if f["fecha"] >= ini]
+    dias_ant = [] if per["es_todo"] else [f for f in filas if f["fecha"] < ini]
     return Carga(datos, todo, moneda, monedas, per, dias_act, dias_ant, es_imagen)
 
 
@@ -308,10 +314,14 @@ def _fecha_a_filas(filas):
 
 
 def _por_dia(carga):
-    """{dia: ratios de ese día} de metrica_dia (solo los días que tienen filas), con `frecuencia_dia`."""
+    """{dia: ratios de ese día} de metrica_dia (solo los días de `per["lista"]` que tienen filas), con
+    `frecuencia_dia`."""
     if "por_dia" not in carga._memo:
         out = {}
+        dibujados = {d.isoformat() for d in carga.per["lista"]}
         for dia, filas in _fecha_a_filas(carga.dias_act).items():
+            if dia not in dibujados:
+                continue
             a = _agregado(filas, carga.es_imagen)
             out[dia] = {**_ratios(a), "frecuencia_dia": _frecuencia_dia(a)}
         carga._memo["por_dia"] = out

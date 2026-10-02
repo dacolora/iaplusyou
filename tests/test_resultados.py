@@ -72,6 +72,8 @@ def test_periodo():
     t = r.periodo(AHORA, 0, primer_dia=date(2026, 9, 29))
     assert t["es_todo"] and t["n"] == 4 and t["anterior_desde"] is None
     assert r.periodo(AHORA, 0, primer_dia=date(2020, 1, 1))["n"] == r.DIAS_MAX_INICIO
+    futuro = r.periodo(AHORA, 0, primer_dia=date(2026, 10, 5))      # un primer día posterior a hoy: nunca vacío
+    assert futuro["n"] == 1 and futuro["lista"] == [date(2026, 10, 2)]
 
 
 def test_indicadores_dinero_y_detalle(sembrado):
@@ -239,3 +241,30 @@ def test_etiquetas_y_numeros_en_el_idioma_de_quien_mira(sembrado):
     assert k["ctr"] == "Link CTR" and k["gasto"] == "Spend" and k["cpa"] == "Cost per purchase"
     assert {i["clave"]: i["etiqueta"] for i in r.indicadores(c)}["ctr"] == "CTR del enlace"
     assert r.cambio(10.0, 8.0, "baja", "dinero")["texto"] == "+25,0%"
+
+
+def test_desde_el_inicio_suma_todo_el_historial_del_detalle(sembrado):
+    """El tope de 180 días solo recorta lo que se dibuja: los indicadores de metrica_dia cubren la misma ventana
+    que el dinero (todo el historial)."""
+    import experimentos as ex
+    import resultados as r
+    db, ep = sembrado["db"], sembrado["ep_v"]
+    ex.snapshot(ep, {"impresiones": 100, "gasto": 1.0, "clics_enlace": 10}, tomado_en="2025-01-15T12:00:00")
+    _dia(db, ep, "2025-01-15", impresiones=1000, clics_enlace=100, gasto=5.0, vistas_3s=500)
+    c = r.cargar("acme", r.Filtro(dias=0), AHORA)
+    assert c.per["n"] == r.DIAS_MAX_INICIO and c.per["lista"][0] == date(2026, 4, 6)
+    assert len(c.dias_act) == 9 and c.dias_ant == []
+    k = {i["clave"]: i for i in r.indicadores(c)}
+    assert k["impresiones"]["valor"] == 9000
+    assert k["ctr"]["valor"] == pytest.approx((132 + 100) / 9000 * 100)
+    assert k["gancho"]["valor"] == pytest.approx((1200 + 500) / 5000 * 100)
+    assert k["cpc"]["valor"] == pytest.approx(85.0 / 232)
+    assert k["gasto"]["valor"] == 80.0                                  # el dinero: la misma ventana (todo)
+    assert all(i["cambio"] is None for i in k.values())
+    s = r.serie(c)
+    assert len(s["dias"]) == 180 and s["dias"][0] == "2026-04-06"       # lo dibujado sí queda en 180 días
+    assert s["ctr"][:-4] == [None] * 176 and s["ctr"][-1] == pytest.approx((23 + 13) / 2000 * 100)   # sin el 2025
+    assert all(len(i["tendencia"]) == 14 for i in k.values())
+    assert k["impresiones"]["tendencia"][:-4] == [None] * 10            # el 2025 no entra en las curvas
+    siete = {i["clave"]: i for i in r.indicadores(r.cargar("acme", r.Filtro(dias=7), AHORA))}
+    assert siete["impresiones"]["valor"] == 8000                         # los demás periodos no cambian
