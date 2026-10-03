@@ -47,10 +47,10 @@ def sembrado(base_temporal):
     return {"db": db, "e1": e1, "ep_v": ep_v, "ep_i": ep_i, "ep_o": ep_o}
 
 
-def _evento(db, cliente, experimento_id, tipo, mensaje, creado_en, ep_id=None):
+def _evento(db, cliente, experimento_id, tipo, mensaje, creado_en, ep_id=None, datos=None):
     with db.conectar() as con:
         con.execute(db.evento.insert().values(cliente=cliente, experimento_id=experimento_id, experimento_pieza_id=ep_id,
-                                              tipo=tipo, mensaje=mensaje, datos={}, creado_en=creado_en))
+                                              tipo=tipo, mensaje=mensaje, datos=datos or {}, creado_en=creado_en))
 
 
 def test_filtro_de_y_a_query():
@@ -509,3 +509,490 @@ def test_paises_sin_gasto_ni_detalle_no_inventan(sembrado):
     assert p["BR"]["gasto"] == 0.0 and p["BR"]["roas"] is None             # nunca un ROAS de 0 contra 0
     assert p["BR"]["impresiones"] is None and p["BR"]["ctr"] is None and p["BR"]["clics_enlace"] is None   # «cargando»
     assert list(p)[-1] == "BR"                                              # ordenado por gasto
+
+
+# ---- piezas, historia, tarjetas, detalle y contexto (tarea 4) ----
+
+def test_tendencia():
+    import resultados as r
+    assert r.tendencia([1.0, 1.1, 1.3, 1.5, 1.7]) == "sube"
+    assert r.tendencia([2.0, 1.8, 1.5, 1.2, 1.0]) == "baja"
+    assert r.tendencia([1.0, 1.02, 0.99, 1.01, 1.0]) == "estable"
+    assert r.tendencia([1.0, None]) is None
+
+
+def test_tendencia_bordes():
+    import resultados as r
+    assert r.tendencia([None, 1.0, None, 1.5, 2.0]) == "sube"            # solo cuentan los que tienen dato
+    assert r.tendencia([9.0, 9.0, 1.0, 1.0, 1.0, 1.0, 1.0]) == "estable"  # los últimos 5 con dato
+    assert r.tendencia([1.0, 2.0, 3.0, None, None]) == "sube" and r.tendencia([]) is None
+    assert r.tendencia([1.0, 1.0, 1.1]) == "estable"                      # exactamente +10 % no es «sube»
+    assert r.tendencia([0.0, 0.0, 0.0]) == "estable" and r.tendencia([0.0, 0.0, 2.0]) == "sube"
+
+
+def test_faltan_impresiones_y_horas(sembrado):
+    import experimentos as ex
+    import resultados as r
+    from decisor import REGLAS_DEFECTO
+    e = ex.obtener("acme", sembrado["e1"])
+    pz = dict(e["piezas"][0], veredicto="pendiente", metricas={"impresiones": 620, "gasto": 1.0})
+    assert r.faltan(pz, e, REGLAS_DEFECTO, AHORA) == {"impresiones": 380}
+    pz2 = dict(pz, metricas={"impresiones": 5000, "gasto": 1.0})
+    e2 = dict(e, extra={"activado_en": "2026-10-02T00:00:00"})
+    assert r.faltan(pz2, e2, REGLAS_DEFECTO, AHORA) == {"horas": 36}
+    assert r.faltan(dict(pz, veredicto="ganador"), e, REGLAS_DEFECTO, AHORA) is None
+
+
+def test_faltan_sigue_la_evidencia_del_decisor(sembrado):
+    """Las dos vías del decisor (impresiones + gasto, o la ventana de horas con impresiones) y sus bordes."""
+    import experimentos as ex
+    import resultados as r
+    from decisor import REGLAS_DEFECTO
+    e = dict(ex.obtener("acme", sembrado["e1"]), extra={"activado_en": "2026-10-02T00:00:00"})
+    base = dict(e["piezas"][0], veredicto="pendiente")                        # país CO: presupuesto diario 20 000
+    # vía 1: impresiones ≥ 1 000 y gasto ≥ 2 × 20 000
+    assert r.faltan(dict(base, metricas={"impresiones": 1000, "gasto": 40000.0}), e, REGLAS_DEFECTO, AHORA) is None
+    assert r.faltan(dict(base, metricas={"impresiones": 1000, "gasto": 39999.0}), e, REGLAS_DEFECTO, AHORA) == {"horas": 36}
+    # vía 2: la ventana de 48 h cumplida con impresiones
+    tarde = dict(e, extra={"activado_en": "2026-09-30T12:00:00"})
+    assert r.faltan(dict(base, metricas={"impresiones": 1500, "gasto": 1.0}), tarde, REGLAS_DEFECTO, AHORA) is None
+    assert r.faltan(dict(base, metricas={"impresiones": 0, "gasto": 0.0}), tarde, REGLAS_DEFECTO, AHORA) == {"impresiones": 1000}
+    # reglas propias: ventana de 24 h y 5 000 impresiones
+    reglas = dict(REGLAS_DEFECTO, ventana_horas=24, impresiones_min=5000)
+    assert r.faltan(dict(base, metricas={"impresiones": 4200, "gasto": 1.0}), e, reglas, AHORA) == {"impresiones": 800}
+    assert r.faltan(dict(base, metricas={"impresiones": 5200, "gasto": 1.0}), e, reglas, AHORA) == {"horas": 12}
+    # sin gasto de referencia (país sin presupuesto) el gasto mínimo es 0, como en el decisor
+    sin_presupuesto = dict(e, paises=[{"pais": "CO", "presupuesto_dia": 0}])
+    assert r.faltan(dict(base, metricas={"impresiones": 1000, "gasto": 0.0}), sin_presupuesto, REGLAS_DEFECTO, AHORA) is None
+    # sin cuándo se activó no se inventan horas
+    assert r.faltan(dict(base, metricas={"impresiones": 5000, "gasto": 1.0}), dict(e, extra={}), REGLAS_DEFECTO, AHORA) is None
+    # la fecha de la pieza (la que lee el decisor) manda sobre la del experimento
+    con_pieza = dict(base, metricas={"impresiones": 5000, "gasto": 1.0}, extra={"activado_en": "2026-10-02T06:00:00"})
+    assert r.faltan(con_pieza, e, REGLAS_DEFECTO, AHORA) == {"horas": 42}
+    # una hora a medias cuenta como hora entera que falta (19,5 h de 48 → 29)
+    media = dict(base, metricas={"impresiones": 5000, "gasto": 1.0}, extra={"activado_en": "2026-10-01T16:30:00"})
+    assert r.faltan(media, e, REGLAS_DEFECTO, AHORA) == {"horas": 29}
+
+
+def test_historia_fatiga_gancho_y_promedio():
+    import resultados as r
+    h = r.historia(serie=[2.0, 1.8, 1.5, 1.2, 1.0], promedio=[1.0] * 5, frecuencia=3.1, gancho=18.0, es_imagen=False,
+                   faltan=None, escalon=0, causas=[], tramos=[])
+    texto = " · ".join(h)
+    assert "fatiga" in texto and "18" in texto and "baja" in texto
+
+
+def test_historia_frases_en_su_orden():
+    import idiomas
+    import resultados as r
+    tramos = [("pendiente", "2026-09-28T10:00:00"), ("perdedor", "2026-09-30T08:00:00")]
+    h = r.historia(tramos=tramos, serie=[2.0, 1.8, 1.5, 1.2, 1.0], promedio=[1.0] * 5, frecuencia=3.1, gancho=18.0,
+                   es_imagen=False, faltan={"horas": 12}, escalon=2, causas=["gancho", "repeticion"])
+    assert h[0] == (f"Aprendiendo desde el {idiomas.fecha_corta(date(2026, 9, 28))} → "
+                    f"Perdiendo desde el {idiomas.fecha_corta(date(2026, 9, 30))}")
+    assert h[1:] == ["1,5× el promedio", "baja", "fatiga: frecuencia 3,1", "el gancho no detiene: 18 %",
+                     "12 h más para que el motor decida", "rescate 2/3",
+                     "posibles causas: el gancho no retiene, repetición: ya lo vieron"]
+
+
+def test_historia_no_dice_lo_que_no_aplica():
+    import resultados as r
+    estable = [1.0] * 5
+    assert r.historia(serie=estable, promedio=estable) == ["estable"]                   # ni 1,0× ni fatiga ni nada
+    assert r.historia(serie=[1.0, 1.0], promedio=[1.0, 1.0]) == []                      # menos de 3 días: sin tendencia
+    # una imagen no tiene gancho; con la métrica estable no hay fatiga aunque la frecuencia sea alta
+    assert r.historia(serie=estable, promedio=estable, frecuencia=4.0, gancho=5.0, es_imagen=True) == ["estable"]
+    assert r.historia(serie=estable, promedio=estable, frecuencia=2.5, gancho=25.0) == ["estable"]    # los bordes no cuentan
+    assert r.historia(serie=[], promedio=[], faltan={"impresiones": 380}) == [
+        "le faltan 380 impresiones para que el motor decida"]
+    assert r.historia(serie=[1.2, 1.2, 1.2, 1.2, 1.2], promedio=[1.0] * 5)[0] == "1,2× el promedio"
+    assert r.historia(serie=[0.8] * 5, promedio=[1.0] * 5)[0] == "0,8× el promedio"
+    assert r.historia(serie=[None, 3.0, None, 3.0, 3.0], promedio=[1.0, 1.0, 1.0, 1.0, None])[0] == "3,0× el promedio"
+    assert r.historia(tramos=[("ganador", None)])[0] == "Ganadora"                         # sin fecha, solo el nombre
+
+
+def test_historia_en_ingles():
+    import idiomas
+    import resultados as r
+    with idiomas.en_idioma("en"):
+        h = r.historia(serie=[2.0, 1.8, 1.5, 1.2, 1.0], promedio=[1.0] * 5, frecuencia=3.1, gancho=18.0,
+                       faltan={"impresiones": 1380}, escalon=1, causas=["gancho"], tramos=[("perdedor", None)])
+    assert h == ["Losing", "1.5× the average", "down", "fatigue: frequency 3.1", "the hook isn't stopping people: 18 %",
+                 "1,380 impressions to go before the engine decides", "rescue 1/3", "likely causes: the hook doesn't hold attention"]
+
+
+def test_piezas_ranking_veredicto_y_aislamiento(sembrado):
+    import experimentos as ex
+    import resultados as r
+    ex.actualizar_pieza("acme", sembrado["ep_v"], veredicto="ganador")
+    ps = r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {})
+    assert {p["ep_id"] for p in ps} == {sembrado["ep_v"], sembrado["ep_i"]}
+    v = [p for p in ps if p["ep_id"] == sembrado["ep_v"]][0]
+    assert v["veredicto"]["etiqueta"] == "Ganadora" and v["metrica"] == "ctr" and len(v["serie"]) == 7
+    assert v["gancho"] == pytest.approx(30.0) and [p for p in ps if p["es_imagen"]][0]["gancho"] is None
+
+
+def test_piezas_campos_serie_y_promedio_del_experimento(sembrado):
+    import resultados as r
+    ps = r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {})
+    v, i = ps                                           # mismo gasto: por id (la de video se creó antes)
+    assert v["ep_id"] == sembrado["ep_v"] and v["experimento_id"] == sembrado["e1"] and v["pais"] == "CO"
+    assert v["nombre"] == "cf_1" and v["es_imagen"] is False and v["url_video"] == "https://r2/f.mp4"
+    assert i["es_imagen"] is True and i["pais"] == "MX"
+    assert v["gasto"] == pytest.approx(40.0) and v["compras"] == 4 and v["roas"] == pytest.approx(3.0)
+    assert v["ctr"] == pytest.approx(86 / 4000 * 100) and v["cpc"] == pytest.approx(40.0 / 86)
+    assert i["ctr"] == pytest.approx(46 / 4000 * 100)
+    assert v["serie"][:3] == [None] * 3 and v["serie"][3:] == pytest.approx([2.0, 2.1, 2.2, 2.3])
+    assert i["serie"][3:] == pytest.approx([1.0, 1.1, 1.2, 1.3])
+    # el promedio es el del experimento (las dos piezas juntas), la misma línea para las dos
+    assert v["promedio"][3:] == pytest.approx([1.5, 1.6, 1.7, 1.8]) and v["promedio"] == i["promedio"]
+    assert v["delta_roas"] is None                       # el periodo anterior no tuvo gasto
+    assert v["veredicto"] == {"etiqueta": "Aprendiendo", "clase": "aprendiendo"}
+    assert v["historia"][0] == "1,3× el promedio"        # 8,6 contra 6,6 de promedio los mismos 4 días
+
+
+def test_piezas_ordenadas_por_gasto_y_sin_otro_proyecto(sembrado):
+    import experimentos as ex
+    import resultados as r
+    db = sembrado["db"]
+    clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_gasta_mas")
+    ep = ex.agregar_pieza("acme", sembrado["e1"], clon, "CO")
+    ex.snapshot(ep, {"impresiones": 500, "gasto": 100.0, "clics_enlace": 5}, tomado_en="2026-10-02T10:00:00")
+    ps = r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {})
+    assert [p["ep_id"] for p in ps] == [ep, sembrado["ep_v"], sembrado["ep_i"]]
+    assert sembrado["ep_o"] not in {p["ep_id"] for p in ps}
+    assert ps[0]["ctr"] is None and ps[0]["serie"] == [None] * 7          # sin detalle de Meta: «cargando», no ceros
+    uno = r.piezas(r.cargar("acme", r.Filtro(dias=7, ep_id=sembrado["ep_v"]), AHORA), {})
+    assert [p["ep_id"] for p in uno] == [sembrado["ep_v"]]
+    # filtrada a una pieza, la línea del experimento sigue siendo la de TODO el experimento
+    assert uno[0]["promedio"][3:] == pytest.approx([1.5, 1.6, 1.7, 1.8])
+
+
+def _experimento_de_ventas(sembrado, tope=1000.0):
+    import experimentos as ex
+    from tests.test_experimentos_db import PAISES as P
+    db = sembrado["db"]
+    clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_ventas")
+    e2 = ex.crear("acme", "Ventas", P, "OUTCOME_SALES", 7, tope, "https://t.co/p", "COP")
+    ep = ex.agregar_pieza("acme", e2, clon, "CO")
+    for f, gasto, ing in (("2026-09-28T12:00:00", 5.0, 5.0), ("2026-09-30T23:00:00", 10.0, 20.0),
+                          ("2026-10-01T23:00:00", 20.0, 60.0), ("2026-10-02T11:00:00", 30.0, 90.0)):
+        ex.snapshot(ep, {"impresiones": 1000, "gasto": gasto, "clics_enlace": 10, "compras": 1, "ingresos": ing,
+                         "fuente_ventas": "meta"}, tomado_en=f)
+    return e2, ep
+
+
+def test_metrica_principal_roas_con_objetivo_de_ventas(sembrado):
+    import resultados as r
+    e2, ep = _experimento_de_ventas(sembrado)
+    c = r.cargar("acme", r.Filtro(dias=3, experimento_id=e2), AHORA)
+    p = r.piezas(c, {})[0]
+    assert p["metrica"] == "roas" and p["serie"] == pytest.approx([3.0, 4.0, 3.0])      # 30-sep, 1-oct, 2-oct
+    assert p["promedio"] == pytest.approx([3.0, 4.0, 3.0])                               # él solo es el experimento
+    assert p["gasto"] == pytest.approx(25.0) and p["roas"] == pytest.approx(85.0 / 25.0)
+    assert p["delta_roas"] == pytest.approx(85.0 / 25.0 - 1.0)                           # contra 27..29-sep (5 / 5)
+    todo = r.cargar("acme", r.Filtro(dias=0, experimento_id=e2), AHORA)
+    assert r.piezas(todo, {})[0]["delta_roas"] is None                                   # «desde el inicio» no compara
+
+
+def test_veredictos_con_nombre_humano_y_recuperandose(sembrado):
+    import experimentos as ex
+    import resultados as r
+    ep_v, ep_i = sembrado["ep_v"], sembrado["ep_i"]
+    c = lambda: {p["ep_id"]: p["veredicto"] for p in r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {})}   # noqa: E731
+    ex.actualizar_pieza("acme", ep_v, veredicto="perdedor")
+    ex.actualizar_pieza("acme", ep_i, veredicto="inconcluso")
+    assert c()[ep_v] == {"etiqueta": "Perdiendo", "clase": "perdiendo"}
+    assert c()[ep_i] == {"etiqueta": "Sin diferencia clara", "clase": "neutra"}
+    ex.actualizar_pieza("acme", ep_v, escalon_rescate=2)                       # en rescate y no ganadora
+    assert c()[ep_v] == {"etiqueta": "Recuperándose", "clase": "recuperandose"}
+    ex.actualizar_pieza("acme", ep_v, veredicto="ganador")                     # una ganadora sigue siendo ganadora
+    assert c()[ep_v] == {"etiqueta": "Ganadora", "clase": "ganadora"}
+    ex.actualizar_pieza("acme", ep_v, veredicto="algo raro", escalon_rescate=0)
+    assert c()[ep_v] == {"etiqueta": "Aprendiendo", "clase": "aprendiendo"}
+
+
+def test_historia_de_la_pieza_con_tramos_rescate_y_causas(sembrado):
+    import experimentos as ex
+    import resultados as r
+    db, e1, ep_v = sembrado["db"], sembrado["e1"], sembrado["ep_v"]
+    ex.marcar_pieza("acme", ep_v, activado_en="2026-09-29T10:00:00",
+                    diagnostico={"causas": [{"codigo": "gancho", "detalle": "d", "evidencia": "e"},
+                                            {"codigo": "no_existe"}], "siguiente": {"que": "gancho", "porque": "p"}})
+    ex.actualizar_pieza("acme", ep_v, veredicto="perdedor", escalon_rescate=1)
+    _evento(db, "acme", e1, "veredicto", "uno", "2026-10-01T09:00:00", ep_id=ep_v, datos={"veredicto": "perdedor"})
+    _evento(db, "acme", e1, "veredicto", "repetido", "2026-10-01T09:05:00", ep_id=ep_v, datos={"veredicto": "perdedor"})
+    _evento(db, "acme", e1, "veredicto", "de otra pieza", "2026-09-30T09:00:00", ep_id=sembrado["ep_i"],
+            datos={"veredicto": "ganador"})
+    _evento(db, "otro", e1, "veredicto", "de otro proyecto", "2026-09-30T10:00:00", ep_id=ep_v,
+            datos={"veredicto": "ganador"})
+    _evento(db, "acme", e1, "accion", "no es un veredicto", "2026-09-30T11:00:00", ep_id=ep_v, datos={"veredicto": "ganador"})
+    p = [x for x in r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {}) if x["ep_id"] == ep_v][0]
+    h = p["historia"]
+    assert h[0].startswith("Aprendiendo desde el ") and h[0].count("→") == 1 and "Perdiendo desde el " in h[0]
+    assert "Ganadora" not in " ".join(h)
+    assert "rescate 1/3" in h and h[-1] == "posibles causas: el gancho no retiene"
+    assert p["veredicto"]["clase"] == "recuperandose"
+
+
+def test_historia_le_faltan_solo_si_el_motor_la_esta_juzgando(sembrado):
+    import experimentos as ex
+    import resultados as r
+    e1, ep_v = sembrado["e1"], sembrado["ep_v"]
+    ex.actualizar(("acme"), e1, estado="corriendo")
+    ex.actualizar_pieza("acme", ep_v, estado="activo")
+    ex.actualizar_extra("acme", e1, lambda extra: dict(extra, activado_en="2026-10-02T00:00:00"))
+    # 4 000 impresiones y 40 de gasto contra un presupuesto de 20 000: falta la ventana de 48 h (van 12)
+    ps = {p["ep_id"]: p for p in r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {})}
+    assert "36 h más para que el motor decida" in ps[ep_v]["historia"]
+    assert not any("motor" in f for f in ps[sembrado["ep_i"]]["historia"])      # la imagen no está activa
+    # las reglas del proyecto cuentan: una ventana de 24 h
+    ps = {p["ep_id"]: p for p in r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {"ventana_horas": 24})}
+    assert "12 h más para que el motor decida" in ps[ep_v]["historia"]
+    ex.actualizar(("acme"), e1, estado="pausado")
+    ps = {p["ep_id"]: p for p in r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {})}
+    assert not any("motor" in f for f in ps[ep_v]["historia"])
+
+
+def test_fatiga_usa_la_frecuencia_acumulada_y_no_la_diaria(sembrado):
+    """Spec §4.4: la fatiga mira la frecuencia ACUMULADA (el último metrica_snapshot), no la diaria de metrica_dia."""
+    import experimentos as ex
+    import resultados as r
+    db, ep_v = sembrado["db"], sembrado["ep_v"]
+    with db.conectar() as con:                                          # el CTR del video va cayendo: 2,3 → 2,0 %
+        for fecha, clics in (("2026-09-29", 23), ("2026-09-30", 22), ("2026-10-01", 21), ("2026-10-02", 20)):
+            con.execute(db.metrica_dia.update().where(db.metrica_dia.c.experimento_pieza_id == ep_v,
+                                                      db.metrica_dia.c.fecha == fecha).values(clics_enlace=clics, frecuencia=4.0))
+
+    def historia_de_video():
+        return [p for p in r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {}) if p["ep_id"] == ep_v][0]["historia"]
+    assert "baja" in historia_de_video()
+    assert not any("fatiga" in f for f in historia_de_video())          # diaria 4,0 pero acumulada 1,5: no hay fatiga
+    ex.snapshot(ep_v, {"impresiones": 5000, "gasto": 50.0, "clics_enlace": 100, "frecuencia": 3.0}, tomado_en="2026-10-02T11:30:00")
+    assert "fatiga: frecuencia 3,0" in historia_de_video()              # acumulada 3,0 con la métrica cayendo
+
+
+def test_piezas_leen_los_veredictos_en_una_consulta(sembrado):
+    import experimentos as ex
+    import resultados as r
+    from sqlalchemy import event
+    db = sembrado["db"]
+    for k in range(6):
+        clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado=f"cf_muchas{k}")
+        ep = ex.agregar_pieza("acme", sembrado["e1"], clon, "CO")
+        _evento(db, "acme", sembrado["e1"], "veredicto", "x", "2026-10-01T09:00:00", ep_id=ep, datos={"veredicto": "ganador"})
+    c = r.cargar("acme", r.Filtro(dias=7), AHORA)
+    consultas = []
+
+    def cuenta(conn, cursor, statement, parameters, context, executemany):
+        consultas.append(statement)
+    event.listen(sa.engine.Engine, "before_cursor_execute", cuenta)
+    try:
+        r.piezas(c, {})
+    finally:
+        event.remove(sa.engine.Engine, "before_cursor_execute", cuenta)
+    assert len([q for q in consultas if "FROM evento" in q]) == 1, consultas       # una, no una por pieza
+    assert len(consultas) <= 2, consultas                                            # y nada más (todo lo demás ya estaba cargado)
+
+
+def test_detalle_de_pieza_y_otro_proyecto(sembrado):
+    import resultados as r
+    d = r.pieza("acme", sembrado["ep_v"], r.Filtro(dias=7), AHORA)
+    assert d["curva"][0][0] == "3 s" and d["curva"][0][1] == pytest.approx(30.0)
+    assert r.pieza("acme", sembrado["ep_o"], r.Filtro(), AHORA) is None
+    assert r.pieza("otro", sembrado["ep_v"], r.Filtro(), AHORA) is None
+
+
+def test_detalle_de_pieza_completo(sembrado):
+    import json
+    import experimentos as ex
+    import resultados as r
+    db, e1, ep_v = sembrado["db"], sembrado["e1"], sembrado["ep_v"]
+    ex.marcar_pieza("acme", ep_v, rankings_meta={"calidad": "ABOVE_AVERAGE", "interaccion": None, "conversion": "AVERAGE"},
+                    diagnostico={"causas": [{"codigo": "gancho"}], "siguiente": {"que": "gancho"}})
+    _evento(db, "acme", e1, "accion", "Se pausó", "2026-10-01T09:00:00", ep_id=ep_v)
+    _evento(db, "acme", e1, "accion", "de la imagen", "2026-10-01T10:00:00", ep_id=sembrado["ep_i"])
+    _evento(db, "otro", e1, "accion", "ajeno", "2026-10-01T11:00:00", ep_id=ep_v)
+    with db.conectar() as con:
+        con.execute(db.metrica_dia.update().where(db.metrica_dia.c.experimento_pieza_id == ep_v,
+                                                  db.metrica_dia.c.fecha == "2026-10-02").values(p25=500, p50=250, p75=100, p95=50, p100=10))
+    # los otros filtros (país, tipo, experimento…) no esconden la pieza que se abre
+    d = r.pieza("acme", ep_v, r.Filtro(dias=7, pais="MX", tipo="imagen", experimento_id=999, moneda="USD"), AHORA)
+    assert d["ep_id"] == ep_v and d["experimento"] == {"id": e1, "nombre": "Uno"} and d["moneda"] == "COP"
+    assert [c[0] for c in d["curva"]] == ["3 s", "25 %", "50 %", "75 %", "95 %", "100 %"]
+    assert [c[1] for c in d["curva"]] == pytest.approx([30.0, 12.5, 6.25, 2.5, 1.25, 0.25])      # % de las 4 000 impresiones
+    assert d["series"]["dias"][-1] == "2026-10-02" and len(d["series"]["dias"]) == 7
+    assert d["series"]["ctr"][3:] == pytest.approx([2.0, 2.1, 2.2, 2.3]) and d["series"]["gancho"][-1] == pytest.approx(30.0)
+    assert d["series"]["cpc"][-1] == pytest.approx(10.0 / 23) and d["series"]["frecuencia"][-1] == pytest.approx(1.2)
+    assert d["rankings"] == {"calidad": "ABOVE_AVERAGE", "interaccion": None, "conversion": "AVERAGE"}
+    assert d["diagnostico"]["causas"][0]["codigo"] == "gancho"
+    assert [e["mensaje"] for e in d["eventos"]] == ["Se pausó"] and d["eventos"][0]["tipo"] == "accion"
+    assert d["eventos"][0]["creado_en"] == "2026-10-01T09:00:00"
+    k = {i["clave"]: i for i in d["indicadores"]}
+    assert k["gasto"]["valor"] == 40.0 and k["impresiones"]["valor"] == 4000 and k["gancho"]["valor"] == pytest.approx(30.0)
+    assert d["periodo"]["n"] == 7 and "lista" not in d["periodo"]
+    assert d["desgloses"]["ubicacion"] == [] and d["desgloses"]["metrica"] == "ctr"
+    assert d["promedio"][3:] == pytest.approx([1.5, 1.6, 1.7, 1.8])                  # el del experimento, no el de ella sola
+    json.dumps({k2: d[k2] for k2 in ("curva", "series", "serie", "promedio", "historia", "eventos", "periodo")})
+
+
+def test_detalle_de_una_imagen_sin_curva_ni_gancho(sembrado):
+    import resultados as r
+    d = r.pieza("acme", sembrado["ep_i"], r.Filtro(dias=7), AHORA)
+    assert d["es_imagen"] is True and d["curva"] == [] and d["gancho"] is None
+    assert d["series"]["gancho"] == [None] * 7 and d["rankings"] == {} and d["diagnostico"] is None
+    assert d["eventos"] == []
+
+
+def test_detalle_con_los_desgloses_de_solo_esa_pieza(sembrado):
+    import resultados as r
+    db = sembrado["db"]
+    _desglose(db, sembrado["ep_v"], "ubicacion", "facebook|feed", gasto=30.0)
+    _desglose(db, sembrado["ep_i"], "ubicacion", "instagram|instagram_reels", gasto=7.0)
+    d = r.pieza("acme", sembrado["ep_v"], r.Filtro(dias=7), AHORA)
+    assert [u["clave"] for u in d["desgloses"]["ubicacion"]] == ["facebook|feed"]
+
+
+def test_detalle_sin_detalle_de_meta_no_inventa_ceros(sembrado):
+    import resultados as r
+    db = sembrado["db"]
+    with db.conectar() as con:
+        con.execute(db.metrica_dia.delete())
+    d = r.pieza("acme", sembrado["ep_v"], r.Filtro(dias=7), AHORA)
+    assert d["curva"] == [] and d["ctr"] is None and d["series"]["ctr"] == [None] * 7 and d["gasto"] == 40.0
+
+
+def test_tarjetas_de_experimentos(sembrado):
+    import experimentos as ex
+    import resultados as r
+    ex.actualizar_pieza("acme", sembrado["ep_v"], veredicto="ganador")
+    ex.actualizar_extra("acme", sembrado["e1"], lambda extra: dict(extra, activado_en="2026-09-30T08:00:00"))
+    c = r.cargar("acme", r.Filtro(dias=7, pais="MX", tipo="imagen"), AHORA)          # el filtro no toca las tarjetas
+    t = r.experimentos_tarjetas(c)
+    assert [x["nombre"] for x in t] == ["Uno"]                                           # nada de «otro»
+    u = t[0]
+    assert u["id"] == sembrado["e1"] and u["estado"] == "armando" and u["n_piezas"] == 2 and u["dias"] == 14
+    assert u["paises"] == ["CO", "MX"] and u["ganadoras"] == 1 and u["seleccionado"] is False
+    assert u["gasto"] == pytest.approx(80.0) and u["tope"] == 500000.0 and u["pct_tope"] == pytest.approx(80 / 500000 * 100)
+    assert u["dia"] == 3                                                                 # 2,2 días desde el 30-sep 08:00
+    assert u["metrica"] == "ctr" and u["valor"] == pytest.approx(132 / 8000 * 100) and u["mejor"] == "cf_1"
+    c = r.cargar("acme", r.Filtro(dias=7, experimento_id=sembrado["e1"]), AHORA)
+    assert r.experimentos_tarjetas(c)[0]["seleccionado"] is True
+
+
+def test_tarjetas_dia_tope_y_moneda(sembrado):
+    import experimentos as ex
+    import resultados as r
+    db, e1 = sembrado["db"], sembrado["e1"]
+    assert r.experimentos_tarjetas(r.cargar("acme", r.Filtro(dias=7), AHORA))[0]["dia"] is None    # no se activó
+    ex.actualizar_extra("acme", e1, lambda extra: dict(extra, activado_en="2026-09-01T08:00:00"))
+    assert r.experimentos_tarjetas(r.cargar("acme", r.Filtro(dias=7), AHORA))[0]["dia"] == 14       # nunca pasa de «de 14»
+    ex.actualizar("acme", e1, tope_total=0)
+    assert r.experimentos_tarjetas(r.cargar("acme", r.Filtro(dias=7), AHORA))[0]["pct_tope"] is None
+    clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_usd")
+    e2 = ex.crear("acme", "Dolares", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t.co/p", "USD")
+    ep = ex.agregar_pieza("acme", e2, clon, "CO")
+    ex.snapshot(ep, {"impresiones": 10, "gasto": 500.0, "clics_enlace": 1}, tomado_en="2026-10-01T10:00:00")
+    t = {x["nombre"]: x for x in r.experimentos_tarjetas(r.cargar("acme", r.Filtro(dias=7, moneda="USD"), AHORA))}
+    assert list(t) == ["Dolares"] and t["Dolares"]["pct_tope"] == 100.0                  # el gasto pasa del tope: 100 %
+    assert t["Dolares"]["valor"] is None and t["Dolares"]["mejor"] is None               # sin detalle de Meta
+    assert list(r.experimentos_tarjetas(r.cargar("acme", r.Filtro(dias=7, moneda="COP"), AHORA))) != []
+    assert [x["nombre"] for x in r.experimentos_tarjetas(r.cargar("acme", r.Filtro(dias=7, moneda="COP"), AHORA))] == ["Uno"]
+
+
+def test_tarjeta_de_ventas_con_roas_y_su_mejor_pieza(sembrado):
+    import resultados as r
+    e2, _ep = _experimento_de_ventas(sembrado)
+    t = {x["nombre"]: x for x in r.experimentos_tarjetas(r.cargar("acme", r.Filtro(dias=7, pais="MX"), AHORA))}
+    assert t["Ventas"]["metrica"] == "roas" and t["Ventas"]["valor"] == pytest.approx(90.0 / 30.0)
+    assert t["Ventas"]["mejor"] == "cf_ventas" and t["Ventas"]["dia"] is None
+
+
+def test_contexto_completo_y_json(sembrado):
+    import json
+    import resultados as r
+    c = r.contexto("acme", r.Filtro(dias=7), AHORA)
+    for k in ("filtro", "query", "opciones", "periodo", "moneda", "indicadores", "serie", "marcas", "embudo",
+              "piezas", "evolucion", "desgloses", "paises", "experimentos", "generacion", "detalle_meta",
+              "hay_detalle", "datos_graficos"):
+        assert k in c, k
+    json.dumps(c["datos_graficos"])
+    assert c["experimentos"][0]["nombre"] == "Uno" and c["moneda"] == "COP"
+    assert all(p["ep_id"] != sembrado["ep_o"] for p in c["piezas"])
+
+
+def test_contexto_forma_de_cada_parte(sembrado):
+    import json
+    import experimentos as ex
+    import resultados as r
+    db, e1 = sembrado["db"], sembrado["e1"]
+    ex.actualizar_extra("acme", e1, lambda extra: dict(extra, detalle_meta={"actualizado_en": AHORA, "errores": []}))
+    _evento(db, "acme", e1, "accion", "Se pausó", "2026-10-01T09:00:00", ep_id=sembrado["ep_v"])
+    _desglose(db, sembrado["ep_v"], "ubicacion", "facebook|feed", gasto=30.0)
+    with db.conectar() as con:
+        con.execute(db.gasto.insert().values(cliente="acme", creado_en="2026-10-01T12:00:00", tipo="video", usd=1.5,
+                                             referencia="video:1"))
+        con.execute(db.gasto.insert().values(cliente="acme", creado_en="2026-09-01T12:00:00", tipo="video", usd=9.0,
+                                             referencia="video:2"))
+        con.execute(db.gasto.insert().values(cliente="otro", creado_en="2026-10-01T12:00:00", tipo="video", usd=70.0,
+                                             referencia="video:3"))
+    f = r.Filtro(dias=7, pais="CO")
+    c = r.contexto("acme", f, AHORA)
+    assert c["filtro"] == f and c["query"] == {"dias": 7, "pais": "CO"}
+    assert c["periodo"] == {"n": 7, "desde": "2026-09-26T00:00:00", "hasta": "2026-10-03T00:00:00", "es_todo": False}
+    assert [i["clave"] for i in c["indicadores"]] == [k[0] for k in r.KPIS] and c["serie"]["moneda"] == "COP"
+    assert c["marcas"] == [{"dia": "2026-10-01", "texto": "Se pausó"}] and c["embudo"]["pasos"][0]["valor"] == 4000
+    assert [p["ep_id"] for p in c["piezas"]] == [sembrado["ep_v"]] and c["evolucion"] == c["piezas"]
+    assert c["desgloses"]["ubicacion"][0]["clave"] == "facebook|feed" and [p["pais"] for p in c["paises"]] == ["CO"]
+    assert c["generacion"] == {"usd": 1.5, "n": 1}
+    assert c["detalle_meta"] == {e1: {"actualizado_en": AHORA, "errores": []}} and c["hay_detalle"] is True
+    o = c["opciones"]
+    assert o["experimentos"] == [{"id": e1, "nombre": "Uno", "estado": "armando", "moneda": "COP"}] and o["monedas"] == ["COP"]
+    assert o["paises"] == ["CO", "MX"]                                                    # el filtro no recorta las opciones
+    assert {x["ep_id"] for x in o["piezas"]} == {sembrado["ep_v"], sembrado["ep_i"]}
+    assert all(set(x) >= {"ep_id", "nombre"} for x in o["piezas"])
+    g = c["datos_graficos"]
+    assert set(g) == {"serie", "marcas", "evolucion", "ubicacion", "tendencias"}
+    assert g["evolucion"] == [{"ep_id": sembrado["ep_v"], "serie": c["piezas"][0]["serie"], "promedio": c["piezas"][0]["promedio"]}]
+    assert g["ubicacion"] == c["desgloses"]["ubicacion"] and set(g["tendencias"]) == {k[0] for k in r.KPIS}
+    assert g["tendencias"]["gasto"] == c["indicadores"][0]["tendencia"]
+    json.dumps(g)
+
+
+def test_contexto_evolucion_son_las_ocho_primeras_y_todo_es_json(sembrado):
+    import json
+    import experimentos as ex
+    import resultados as r
+    db = sembrado["db"]
+    for k in range(8):
+        clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado=f"cf_mas{k}")
+        ex.agregar_pieza("acme", sembrado["e1"], clon, "CO")
+    c = r.contexto("acme", r.Filtro(dias=7), AHORA)
+    assert len(c["piezas"]) == 10 and len(c["evolucion"]) == 8 and c["evolucion"] == c["piezas"][:8]
+    assert len(c["datos_graficos"]["evolucion"]) == 8
+    json.dumps(c["datos_graficos"])
+    json.dumps(c["periodo"])
+
+
+def test_contexto_sin_detalle_ni_gasto(sembrado):
+    import resultados as r
+    db = sembrado["db"]
+    with db.conectar() as con:
+        con.execute(db.metrica_dia.delete())
+    c = r.contexto("acme", r.Filtro(dias=7), AHORA)
+    assert c["hay_detalle"] is False and c["generacion"] == {"usd": 0.0, "n": 0}
+    assert c["detalle_meta"] == {sembrado["e1"]: None}
+    vacio = r.contexto("nadie", r.Filtro(dias=7), AHORA)
+    assert vacio["piezas"] == [] and vacio["experimentos"] == [] and vacio["opciones"]["experimentos"] == []
+    assert vacio["hay_detalle"] is False and vacio["datos_graficos"]["evolucion"] == []
+
+
+def test_contexto_desde_el_inicio_cuenta_toda_la_generacion(sembrado):
+    import resultados as r
+    db = sembrado["db"]
+    with db.conectar() as con:
+        con.execute(db.gasto.insert().values(cliente="acme", creado_en="2025-01-01T12:00:00", tipo="video", usd=4.0,
+                                             referencia="video:viejo"))
+    assert r.contexto("acme", r.Filtro(dias=7), AHORA)["generacion"]["usd"] == 0.0
+    c = r.contexto("acme", r.Filtro(dias=0), AHORA)
+    assert c["generacion"]["usd"] == 4.0 and c["periodo"]["es_todo"] is True

@@ -255,6 +255,10 @@ msgid "%(generando)s generando · %(encoladas)s en cola · %(error)s con error"
 msgstr "%(generando)s generating · %(encoladas)s queued · %(error)s with errors"
 
 #, python-format
+msgid "%(h)s h más para que el motor decida"
+msgstr "%(h)s h to go before the engine decides"
+
+#, python-format
 msgid "%(hechas)s propuesta(s) ejecutada(s)."
 msgstr "%(hechas)s proposal(s) executed."
 
@@ -1309,6 +1313,10 @@ msgid "%(r)s producto(s) del nicho; %(e)s elegido(s) para traer reseñas"
 msgstr "%(r)s niche product(s); %(e)s chosen to fetch reviews"
 
 #, python-format
+msgid "%(r)s× el promedio"
+msgstr "%(r)s× the average"
+
+#, python-format
 msgid "%(sin_revisar)s sin revisar · %(error)s con error · USD %(usd)s"
 msgstr "%(sin_revisar)s unreviewed · %(error)s with errors · USD %(usd)s"
 
@@ -1355,6 +1363,10 @@ msgstr "%(valor)s %(moneda)s per result"
 #, python-format
 msgid "%(valor)s%%"
 msgstr "%(valor)s%%"
+
+#, python-format
+msgid "%(veredicto)s desde el %(fecha)s"
+msgstr "%(veredicto)s since %(fecha)s"
 
 #, python-format
 msgid "%(video)s rechazado, no se publica."
@@ -2250,6 +2262,9 @@ msgstr "Meta app registered for this project. Now: Connect with Meta."
 
 msgid "App propia registrada, sin conectar"
 msgstr "Own app registered, not connected"
+
+msgid "Aprendiendo"
+msgstr "Learning"
 
 msgid "Aprendizaje guardado."
 msgstr "Learning saved."
@@ -7342,6 +7357,9 @@ msgstr "Winner in “%(experimento)s”: %(pieza)s (%(pais)s)"
 msgid "Ganador: CTR %(ctr)s%%, CPC %(cpc)s, %(thruplay_txt)s%(motivo_ventas)s."
 msgstr "Winner: CTR %(ctr)s%%, CPC %(cpc)s, %(thruplay_txt)s%(motivo_ventas)s."
 
+msgid "Ganadora"
+msgstr "Winning"
+
 msgid "Ganadoras publicadas"
 msgstr "Winners posted"
 
@@ -11402,6 +11420,9 @@ msgstr "Thinking…"
 msgid "Perdedor"
 msgstr "Loser"
 
+msgid "Perdiendo"
+msgstr "Losing"
+
 #, python-format
 msgid "Perdió en %(pais)s: %(quien)s"
 msgstr "Lost in %(pais)s: %(quien)s"
@@ -12437,6 +12458,9 @@ msgstr "Recover the video (without paying again)"
 msgid "Recuperaste «%(nombre)s»: vuelve a salir en la galería y al elegir producto."
 msgstr "You restored “%(nombre)s”: it shows again in the gallery and when picking a product."
 
+msgid "Recuperándose"
+msgstr "Recovering"
+
 msgid "Reddit"
 msgstr "Reddit"
 
@@ -13327,6 +13351,9 @@ msgstr "No data"
 
 msgid "Sin datos suficientes"
 msgstr "Not enough data"
+
+msgid "Sin diferencia clara"
+msgstr "No clear difference"
 
 msgid "Sin ella cada prompt sale sin el estilo de la marca: súbela o genérala en Configuración › Identidad de marca."
 msgstr "Without it every prompt comes out without the brand's style: upload it or generate it in Settings › Brand identity."
@@ -16052,6 +16079,9 @@ msgstr "avatars"
 msgid "avatares en %(idioma)s"
 msgstr "avatars in %(idioma)s"
 
+msgid "baja"
+msgstr "down"
+
 #, python-format
 msgid "barrido %(barrido)s"
 msgstr "sweep %(barrido)s"
@@ -16613,6 +16643,10 @@ msgstr "the desire"
 msgid "el gancho"
 msgstr "the hook"
 
+#, python-format
+msgid "el gancho no detiene: %(g)s %%"
+msgstr "the hook isn't stopping people: %(g)s %%"
+
 msgid "el gancho no retiene"
 msgstr "the hook doesn't hold attention"
 
@@ -16747,6 +16781,9 @@ msgid_plural "esperar %(num)d piezas en producción"
 msgstr[0] "wait for %(num)d piece in production"
 msgstr[1] "wait for %(num)d pieces in production"
 
+msgid "estable"
+msgstr "steady"
+
 msgid "estacionalidad"
 msgstr "seasonality"
 
@@ -16853,6 +16890,10 @@ msgstr "families in English"
 #, python-format
 msgid "familias en inglés (respuesta inutilizable: %(error)s)"
 msgstr "families in English (unusable response: %(error)s)"
+
+#, python-format
+msgid "fatiga: frecuencia %(f)s"
+msgstr "fatigue: frequency %(f)s"
 
 msgid "fecha;tipo;proveedor;referencia;detalle;usd"
 msgstr "date;type;provider;reference;detail;usd"
@@ -17199,6 +17240,10 @@ msgstr "launching"
 
 msgid "las familias de formato"
 msgstr "format families"
+
+#, python-format
+msgid "le faltan %(n)s impresiones para que el motor decida"
+msgstr "%(n)s impressions to go before the engine decides"
 
 #, python-format
 msgid "lectura · %(familia)s"
@@ -17601,6 +17646,10 @@ msgstr "to review"
 msgid "portugués"
 msgstr "Portuguese"
 
+#, python-format
+msgid "posibles causas: %(causas)s"
+msgstr "likely causes: %(causas)s"
+
 msgid "posicionamiento equivocado"
 msgstr "wrong positioning"
 
@@ -17843,6 +17892,10 @@ msgstr "repetition: they've already seen it"
 
 msgid "rescatar"
 msgstr "rescue"
+
+#, python-format
+msgid "rescate %(n)s/3"
+msgstr "rescue %(n)s/3"
 
 msgid "reseñas"
 msgstr "reviews"
@@ -18163,6 +18216,9 @@ msgstr "soft"
 
 msgid "suave y cálida"
 msgstr "soft and warm"
+
+msgid "sube"
+msgstr "up"
 
 #, python-format
 msgid "subida, confirmando (id %(id)s)"

@@ -10,6 +10,10 @@ Aislamiento entre proyectos: toda fila sale de las piezas que `tablero.cargar_da
 trae (solo las de ese proyecto); `metrica_dia` no tiene columna `cliente`, así que solo se
 consulta con ids de pieza tomados de esas filas.
 
+Piezas (`piezas`, `pieza`) y tarjetas de experimentos: la historia de cada pieza se arma con reglas fijas,
+sin Claude (cero costo); la métrica principal es el ROAS en un experimento de ventas (OUTCOME_SALES) y el CTR del
+enlace en los demás, siempre contra la misma métrica del experimento ENTERO aunque un filtro esconda piezas.
+
 Trampa del motor: `tablero._datos` (por dentro de `resumen_periodo` y `serie_diaria`) recarga
 el proyecto ENTERO si se le pide una ventana que empieza antes de `datos.desde`, y el filtro
 se pierde. Por eso `cargar` trae los datos desde el inicio del periodo anterior (o
@@ -17,6 +21,7 @@ se pierde. Por eso `cargar` trae los datos desde el inicio del periodo anterior 
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -25,7 +30,11 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import db
+import decisor
+import doctrina
+import gastos
 import idiomas
+import proyectos
 import tablero
 from idiomas import N_
 
@@ -136,12 +145,12 @@ class Carga:
     (tablero.Datos); `todo`: el proyecto entero; `monedas`: las del proyecto; `moneda`: la que se muestra;
     `per`: el periodo; `dias_act`/`dias_ant`: filas de metrica_dia (dicts) del periodo y del anterior, solo de
     las piezas de `datos` (con «desde el inicio», `dias_act` es TODO el historial, sin el tope de 180 días de
-    `per["lista"]`, y `dias_ant` está vacío); `es_imagen`: {ep_id: bool} de esas piezas."""
-    __slots__ = ("datos", "todo", "moneda", "monedas", "per", "dias_act", "dias_ant", "es_imagen", "_memo")
+    `per["lista"]`, y `dias_ant` está vacío); `es_imagen`: {ep_id: bool} de esas piezas; `filtro`: el que se pidió."""
+    __slots__ = ("datos", "todo", "moneda", "monedas", "per", "dias_act", "dias_ant", "es_imagen", "filtro", "_memo")
 
-    def __init__(self, datos, todo, moneda, monedas, per, dias_act, dias_ant, es_imagen):
+    def __init__(self, datos, todo, moneda, monedas, per, dias_act, dias_ant, es_imagen, filtro=None):
         self.datos, self.todo, self.moneda, self.monedas, self.per = datos, todo, moneda, monedas, per
-        self.dias_act, self.dias_ant, self.es_imagen = dias_act, dias_ant, es_imagen
+        self.dias_act, self.dias_ant, self.es_imagen, self.filtro = dias_act, dias_ant, es_imagen, filtro
         self._memo = {}
 
 
@@ -211,7 +220,7 @@ def cargar(cliente, filtro, ahora_iso=None):
     filas = _leer_dias(list(es_imagen), primero, fin) if es_imagen else []
     dias_act = filas if per["es_todo"] else [f for f in filas if f["fecha"] >= ini]
     dias_ant = [] if per["es_todo"] else [f for f in filas if f["fecha"] < ini]
-    return Carga(datos, todo, moneda, monedas, per, dias_act, dias_ant, es_imagen)
+    return Carga(datos, todo, moneda, monedas, per, dias_act, dias_ant, es_imagen, filtro)
 
 
 # ---------- indicadores ----------
@@ -635,3 +644,433 @@ def paises(carga):
                     "gasto": gasto, "ctr": r["ctr"], "roas": m["ingresos"] / gasto if gasto > 0 else None})
     out.sort(key=lambda x: (-x["gasto"], x["pais"]))
     return out
+
+
+# ---------- piezas: veredicto, historia y ranking ----------
+
+VEREDICTOS = {"ganador": (N_("Ganadora"), "ganadora"), "perdedor": (N_("Perdiendo"), "perdiendo"),
+              "inconcluso": (N_("Sin diferencia clara"), "neutra"), "pendiente": (N_("Aprendiendo"), "aprendiendo")}
+RECUPERANDOSE = (N_("Recuperándose"), "recuperandose")   # rescate en curso y no ganadora
+OBJETIVO_VENTAS = "OUTCOME_SALES"                        # ahí la métrica principal es el ROAS; en lo demás, el CTR
+EVOLUCION_PIEZAS = 8
+PUNTOS_TENDENCIA = 5
+UMBRAL_TENDENCIA = 0.1
+RAZON_ALTA, RAZON_BAJA = 1.2, 0.8                         # contra el promedio del experimento
+FRECUENCIA_FATIGA = 2.5                                   # acumulada de por vida (último metrica_snapshot)
+GANCHO_BAJO = 25.0
+MAX_EVENTOS_PIEZA = 30
+_RUMBOS = {"sube": N_("sube"), "baja": N_("baja"), "estable": N_("estable")}
+CURVA = (("3 s", "vistas_3s"), ("25 %", "p25"), ("50 %", "p50"), ("75 %", "p75"), ("95 %", "p95"), ("100 %", "p100"))
+
+
+def _veredicto(codigo, escalon=0):
+    """{"etiqueta", "clase"} de una pieza: el nombre humano del veredicto (en rescate y sin ganar,
+    «Recuperándose»)."""
+    etiqueta, clase = RECUPERANDOSE if escalon > 0 and codigo != "ganador" else (
+        VEREDICTOS.get(codigo) or VEREDICTOS["pendiente"])
+    return {"etiqueta": gettext(etiqueta), "clase": clase}
+
+
+def tendencia(valores):
+    """«sube» / «baja» / «estable» según los últimos PUNTOS_TENDENCIA valores con dato: (último − primero) /
+    primero, más de 10 % arriba o abajo. None con menos de 3 valores con dato."""
+    utiles = [v for v in valores if v is not None][-PUNTOS_TENDENCIA:]
+    if len(utiles) < 3:
+        return None
+    primero, ultimo = utiles[0], utiles[-1]
+    if primero == 0:
+        return "sube" if ultimo > 0 else "estable"
+    variacion = round((ultimo - primero) / abs(primero), 6)
+    return "sube" if variacion > UMBRAL_TENDENCIA else "baja" if variacion < -UMBRAL_TENDENCIA else "estable"
+
+
+def _a_datetime(iso):
+    try:
+        return datetime.fromisoformat(str(iso)[:19])
+    except ValueError:
+        return None
+
+
+def faltan(pz, ex, reglas, ahora_iso):
+    """Lo que le falta a una pieza «pendiente» para que el decisor la juzgue, con LA MISMA evidencia que
+    decisor.decidir: (impresiones ≥ impresiones_min y gasto ≥ gasto_min_x_presupuesto × el presupuesto diario
+    de su país) o (horas desde que se activó ≥ ventana_horas e impresiones > 0). {"impresiones": n} o
+    {"horas": n}; None con evidencia, con un veredicto ya dado o sin saber cuándo se activó (la fecha de la
+    pieza, que es la que lee el decisor, o la del experimento: no se inventan horas)."""
+    if (pz.get("veredicto") or "pendiente") != "pendiente":
+        return None
+    r = dict(decisor.REGLAS_DEFECTO, **(reglas or {}))
+    m = pz.get("metricas") or {}
+    impresiones, gasto = int(float(m.get("impresiones") or 0)), float(m.get("gasto") or 0)
+    presupuesto = float(next((p.get("presupuesto_dia") for p in ex.get("paises") or [] if p.get("pais") == pz.get("pais")),
+                             0) or 0)
+    gasto_min = r["gasto_min_x_presupuesto"] * presupuesto if presupuesto else 0
+    activado = _a_datetime((pz.get("extra") or {}).get("activado_en") or (ex.get("extra") or {}).get("activado_en"))
+    ahora = _a_datetime(ahora_iso)
+    horas = max(0.0, (ahora - activado).total_seconds() / 3600) if activado and ahora else None
+    if (impresiones >= r["impresiones_min"] and gasto >= gasto_min) or (
+            horas is not None and horas >= r["ventana_horas"] and impresiones > 0):
+        return None
+    if impresiones < r["impresiones_min"] or impresiones <= 0:
+        return {"impresiones": max(int(r["impresiones_min"]), 1) - impresiones}
+    return None if horas is None else {"horas": max(1, math.ceil(r["ventana_horas"] - horas))}
+
+
+def _frase_tramos(tramos):
+    partes = []
+    for codigo, desde in tramos:
+        nombre = gettext((VEREDICTOS.get(codigo) or VEREDICTOS["pendiente"])[0])
+        cuando = _a_datetime(desde) if desde else None
+        partes.append(gettext("%(veredicto)s desde el %(fecha)s", veredicto=nombre, fecha=idiomas.fecha_corta(cuando))
+                      if cuando else nombre)
+    return " → ".join(partes)
+
+
+def _razon_promedio(serie_, promedio):
+    """Cuánto rinde la pieza contra el promedio de su experimento en sus últimos PUNTOS_TENDENCIA días con dato
+    de las dos (suma contra suma); None sin con qué comparar."""
+    pares = [(a, b) for a, b in zip(serie_, promedio) if a is not None and b is not None][-PUNTOS_TENDENCIA:]
+    total_promedio = sum(b for _a, b in pares)
+    return round(sum(a for a, _b in pares) / total_promedio, 4) if total_promedio > 0 else None
+
+
+def historia(*, tramos=(), serie=(), promedio=(), frecuencia=None, gancho=None, es_imagen=False, faltan=None,
+             escalon=0, causas=()):
+    """La historia de una pieza en frases cortas, con reglas fijas (cero costo, ninguna llamada a Claude), en este
+    orden: los tramos del veredicto ([(código, fecha ISO | None)]), cuánto rinde contra el promedio (≥ 1,2× o
+    ≤ 0,8×), el rumbo de la métrica, la fatiga (frecuencia acumulada > 2,5 con la métrica cayendo), el gancho bajo
+    (solo video, < 25 %), lo que le falta al motor (`faltan`), el rescate en curso y las causas del diagnóstico
+    (códigos de la doctrina)."""
+    frases = []
+    if tramos:
+        frases.append(_frase_tramos(tramos))
+    razon = _razon_promedio(serie, promedio)
+    if razon is not None and (razon >= RAZON_ALTA or razon <= RAZON_BAJA):
+        frases.append(gettext("%(r)s× el promedio", r=idiomas.numero(razon, 1)))
+    rumbo = tendencia(serie)
+    if rumbo:
+        frases.append(gettext(_RUMBOS[rumbo]))
+    if frecuencia is not None and frecuencia > FRECUENCIA_FATIGA and rumbo == "baja":
+        frases.append(gettext("fatiga: frecuencia %(f)s", f=idiomas.numero(frecuencia, 1)))
+    if not es_imagen and gancho is not None and gancho < GANCHO_BAJO:
+        frases.append(gettext("el gancho no detiene: %(g)s %%", g=idiomas.numero(gancho, 0)))
+    if faltan and "impresiones" in faltan:
+        frases.append(gettext("le faltan %(n)s impresiones para que el motor decida", n=idiomas.numero(faltan["impresiones"])))
+    elif faltan and "horas" in faltan:
+        frases.append(gettext("%(h)s h más para que el motor decida", h=faltan["horas"]))
+    if escalon and escalon > 0:      # a los 3 escalones el decisor archiva (decisor.decidir)
+        frases.append(gettext("rescate %(n)s/3", n=escalon))
+    nombres = [gettext(doctrina.CAUSAS_NOMBRE.get(c, c)) for c in causas]
+    if nombres:
+        frases.append(gettext("posibles causas: %(causas)s", causas=", ".join(nombres)))
+    return frases
+
+
+# ---------- piezas: lo que se lee de la carga ----------
+
+def _filas_por_pieza(filas):
+    out = {}
+    for f in filas:
+        out.setdefault(f["experimento_pieza_id"], []).append(f)
+    return out
+
+
+def _filas_por_experimento(carga):
+    """{experimento_id: [(pieza, Serie)]} de TODO el proyecto (sin filtros de país, pieza ni tipo)."""
+    if "por_experimento" not in carga._memo:
+        out = {}
+        for ex, pz, serie_ in carga.todo.filas:
+            out.setdefault(ex["id"], []).append((pz, serie_))
+        carga._memo["por_experimento"] = out
+    return carga._memo["por_experimento"]
+
+
+def _dias_del_proyecto(carga):
+    """{ep_id: filas de metrica_dia del periodo} de TODAS las piezas de los experimentos de la moneda elegida:
+    el promedio de un experimento y sus tarjetas ignoran el filtro de país, pieza y tipo. Solo consulta las
+    piezas que ese filtro dejó fuera (sin filtro, ninguna consulta; los ids salen de `carga.todo`, solo de este
+    proyecto)."""
+    if "dias_proyecto" not in carga._memo:
+        ids = {pz["id"] for ex, pz, _s in carga.todo.filas if tablero._moneda(ex) == carga.moneda}
+        out = _filas_por_pieza(carga.dias_act)
+        fuera = sorted(ids - set(carga.es_imagen))
+        if fuera:
+            ini, fin = carga.per["lista"][0].isoformat(), carga.per["lista"][-1].isoformat()
+            out.update(_filas_por_pieza(_leer_dias(fuera, None if carga.per["es_todo"] else ini, fin)))
+        carga._memo["dias_proyecto"] = {i: out.get(i, []) for i in ids}
+    return carga._memo["dias_proyecto"]
+
+
+def _gasto_ingresos_dia(carga, ep_id, serie_):
+    """[(gasto, ingresos)] por día del periodo de una pieza, del motor del Tablero (deltas de snapshots)."""
+    memo = carga._memo.setdefault("gi_dia", {})
+    if ep_id not in memo:
+        memo[ep_id] = [(dd["gasto"], dd["ingresos"]) for dd in (
+            tablero._deltas_pieza(serie_, _iso(d), _iso(d + timedelta(days=1))) for d in carga.per["lista"])]
+    return memo[ep_id]
+
+
+def _serie_roas(pares):
+    return [ingresos / gasto if gasto > 0 else None for gasto, ingresos in pares]
+
+
+def _serie_ctr(carga, filas):
+    por_dia = _fecha_a_filas(filas)
+    out = []
+    for d in carga.per["lista"]:
+        fs = por_dia.get(d.isoformat()) or []
+        impresiones = sum(f["impresiones"] or 0 for f in fs)
+        out.append(sum(f["clics_enlace"] or 0 for f in fs) / impresiones * 100 if impresiones else None)
+    return out
+
+
+def _metrica_principal(ex):
+    return "roas" if ex.get("objetivo_meta") == OBJETIVO_VENTAS else "ctr"
+
+
+def _serie_metrica(carga, metrica, ep_id, serie_, filas):
+    if metrica == "roas":
+        return _serie_roas(_gasto_ingresos_dia(carga, ep_id, serie_))
+    return _serie_ctr(carga, filas)
+
+
+def _promedio_experimento(carga, ex, metrica):
+    """La métrica del experimento ENTERO por día (todas sus piezas, también las que un filtro esconde)."""
+    memo = carga._memo.setdefault("promedios", {})
+    if (ex["id"], metrica) not in memo:
+        piezas_ex = _filas_por_experimento(carga).get(ex["id"], [])
+        if metrica == "roas":
+            pares = [_gasto_ingresos_dia(carga, pz["id"], serie_) for pz, serie_ in piezas_ex]
+            memo[(ex["id"], metrica)] = _serie_roas([(sum(p[i][0] for p in pares), sum(p[i][1] for p in pares))
+                                                     for i in range(len(carga.per["lista"]))])
+        else:
+            dias_pieza = _dias_del_proyecto(carga)
+            memo[(ex["id"], metrica)] = _serie_ctr(carga, [f for pz, _s in piezas_ex for f in dias_pieza.get(pz["id"], [])])
+    return memo[(ex["id"], metrica)]
+
+
+def _veredictos_por_pieza(carga):
+    """{ep_id: [(veredicto, creado_en)]} en orden cronológico, de los eventos «veredicto» de los experimentos de
+    la carga. Una consulta para todas las piezas, nunca una por pieza."""
+    if "veredictos" not in carga._memo:
+        ids = sorted({ex["id"] for ex, _pz, _s in carga.datos.filas})
+        out = {}
+        if ids:
+            ev = db.evento
+            with db.conectar() as con:
+                filas = con.execute(sa.select(ev.c.experimento_pieza_id, ev.c.datos, ev.c.creado_en).where(
+                    ev.c.cliente == carga.datos.cliente, ev.c.tipo == "veredicto", ev.c.experimento_id.in_(ids),
+                    ev.c.experimento_pieza_id.isnot(None)).order_by(ev.c.creado_en, ev.c.id)).all()
+            for ep_id, datos, creado_en in filas:
+                codigo = (datos or {}).get("veredicto")
+                if codigo in VEREDICTOS:
+                    out.setdefault(ep_id, []).append((codigo, creado_en))
+        carga._memo["veredictos"] = out
+    return carga._memo["veredictos"]
+
+
+def _tramos(pz, ex, eventos):
+    """[(veredicto, desde ISO)]: los veredictos que tuvo la pieza (los eventos, sin repetir el mismo seguido), el
+    actual si su evento no quedó (`veredicto_en`) y, delante, «Aprendiendo» desde que se activó. Sin ningún
+    veredicto dado, vacío (lo que le falta lo dice otra frase)."""
+    pasos = []
+    for codigo, desde in eventos:
+        if not pasos or pasos[-1][0] != codigo:
+            pasos.append((codigo, desde))
+    actual = pz.get("veredicto") or "pendiente"
+    if actual != "pendiente" and pz.get("veredicto_en") and (not pasos or pasos[-1][0] != actual):
+        pasos.append((actual, pz["veredicto_en"]))
+    activado = (pz.get("extra") or {}).get("activado_en") or (ex.get("extra") or {}).get("activado_en")
+    if pasos and activado and pasos[0][0] != "pendiente":
+        pasos.insert(0, ("pendiente", activado))
+    return pasos
+
+
+def _codigos_causas(pz):
+    diagnostico = (pz.get("extra") or {}).get("diagnostico")
+    if not isinstance(diagnostico, dict) or diagnostico.get("error"):
+        return []
+    codigos = [c.get("codigo") for c in diagnostico.get("causas") or [] if isinstance(c, dict)]
+    return [c for c in codigos if c in doctrina.CAUSAS_NOMBRE]
+
+
+def _dividir(numerador, denominador):
+    return numerador / denominador if denominador > 0 else None
+
+
+def _roas_pieza(serie_, desde, hasta):
+    dd = tablero._deltas_pieza(serie_, desde, hasta)
+    return _dividir(dd["ingresos"], dd["gasto"])
+
+
+def piezas(carga, reglas_cliente):
+    """Una fila por pieza de `carga.datos`, la de más gasto primero: lo del ranking (gasto, CTR, gancho, CPC,
+    ROAS, compras y Δ ROAS contra el periodo anterior), la métrica principal día a día contra la del experimento
+    entero (`serie`/`promedio`: ROAS en un experimento de ventas, CTR del enlace en los demás), el veredicto con
+    su nombre humano y la `historia`. El dinero sale del motor del Tablero, lo demás de metrica_dia. «Le faltan…»
+    solo se dice de una pieza activa de un experimento corriendo (las únicas que el motor evalúa)."""
+    per, ahora = carga.per, carga.datos.ahora
+    desde = tablero.INICIO if per["es_todo"] else per["desde"]
+    dias_pieza, veredictos, reglas_exp, out = _dias_del_proyecto(carga), _veredictos_por_pieza(carga), {}, []
+    for ex, pz, serie_ in carga.datos.filas:
+        ep_id, metrica, es_imagen = pz["id"], _metrica_principal(ex), bool(pz.get("es_imagen"))
+        filas_dia = dias_pieza.get(ep_id, [])
+        dinero = tablero._deltas_pieza(serie_, desde, per["hasta"])
+        roas = _dividir(dinero["ingresos"], dinero["gasto"])
+        roas_previo = None if per["es_todo"] else _roas_pieza(serie_, per["anterior_desde"], per["anterior_hasta"])
+        detalle = _ratios(_agregado(filas_dia, carga.es_imagen))
+        serie_p, promedio = _serie_metrica(carga, metrica, ep_id, serie_, filas_dia), _promedio_experimento(carga, ex, metrica)
+        falta = None
+        if ex.get("estado") == "corriendo" and pz.get("estado") == "activo":
+            if ex["id"] not in reglas_exp:
+                reglas_exp[ex["id"]] = decisor.reglas_efectivas(reglas_cliente, ex.get("reglas"))
+            falta = faltan(pz, ex, reglas_exp[ex["id"]], ahora)
+        escalon = pz.get("escalon_rescate") or 0
+        out.append({
+            "ep_id": ep_id, "experimento_id": ex["id"], "nombre": pz["nombre"], "pais": pz["pais"], "es_imagen": es_imagen,
+            "url_miniatura": pz.get("url_miniatura"), "url_video": pz.get("url_video"),
+            "metrica": metrica, "serie": serie_p, "promedio": promedio,
+            "gasto": round(dinero["gasto"], 2), "ctr": detalle["ctr"], "gancho": detalle["gancho"], "cpc": detalle["cpc"],
+            "roas": roas, "compras": dinero["compras"],
+            "delta_roas": None if roas is None or roas_previo is None else roas - roas_previo,
+            "veredicto": _veredicto(pz.get("veredicto"), escalon),
+            "historia": historia(
+                tramos=_tramos(pz, ex, veredictos.get(ep_id, [])), serie=serie_p, promedio=promedio,
+                frecuencia=float((serie_.en(per["hasta"]) or {}).get("frecuencia") or 0) or None,   # acumulada, no la diaria
+                gancho=detalle["gancho"], es_imagen=es_imagen, faltan=falta, escalon=escalon, causas=_codigos_causas(pz))})
+    out.sort(key=lambda p: (-p["gasto"], p["ep_id"]))
+    return out
+
+
+# ---------- tarjetas de experimentos ----------
+
+def _dia_del_experimento(ex, ahora_iso):
+    """«día x» de «x de y»: desde que se activó (extra.activado_en), sin pasar de los días del experimento; None
+    si no se sabe cuándo se activó."""
+    activado, ahora = _a_datetime((ex.get("extra") or {}).get("activado_en")), _a_datetime(ahora_iso)
+    if not activado or not ahora:
+        return None
+    dia = max(0, int((ahora - activado).total_seconds() // 86400)) + 1
+    dias = int(ex.get("dias") or 0)
+    return min(dia, dias) if dias else dia
+
+
+def _numerador_denominador(carga, metrica, serie_, filas, desde):
+    """(ingresos, gasto) del motor del Tablero para ROAS; (clics al enlace, impresiones) de metrica_dia para CTR."""
+    if metrica == "roas":
+        dd = tablero._deltas_pieza(serie_, desde, carga.per["hasta"])
+        return dd["ingresos"], dd["gasto"]
+    return sum(f["clics_enlace"] or 0 for f in filas), sum(f["impresiones"] or 0 for f in filas)
+
+
+def experimentos_tarjetas(carga):
+    """Una tarjeta por experimento del proyecto en la moneda elegida, SIN los filtros de experimento, país, pieza
+    ni tipo (el filtro de experimento solo marca `seleccionado`). El presupuesto usado (`gasto`, `tope`,
+    `pct_tope`) es el de toda la vida del experimento; `valor` (ROAS en ventas, CTR del enlace en los demás) y
+    `mejor` (la pieza que más rinde en esa métrica) son del periodo, del mismo motor y las mismas fuentes que el
+    resto de la pantalla."""
+    per, dias_pieza = carga.per, _dias_del_proyecto(carga)
+    desde = tablero.INICIO if per["es_todo"] else per["desde"]
+    elegido = carga.filtro.experimento_id if carga.filtro else None
+    out = []
+    for ex in carga.todo.exps:
+        if tablero._moneda(ex) != carga.moneda:
+            continue
+        metrica = _metrica_principal(ex)
+        escala = 1 if metrica == "roas" else 100
+        total, candidatas = [0, 0], []
+        for pz, serie_ in _filas_por_experimento(carga).get(ex["id"], []):
+            num, den = _numerador_denominador(carga, metrica, serie_, dias_pieza.get(pz["id"], []), desde)
+            total[0], total[1] = total[0] + num, total[1] + den
+            if den > 0:
+                candidatas.append((num / den, den, pz["nombre"]))      # a igual valor, la que tiene más volumen
+        tope, gasto = float(ex.get("tope_total") or 0), float((ex.get("resumen") or {}).get("gasto") or 0)
+        out.append({"id": ex["id"], "nombre": ex["nombre"], "estado": ex["estado"], "gasto": gasto, "tope": tope,
+                    "pct_tope": min(100.0, gasto / tope * 100) if tope > 0 else None,
+                    "dia": _dia_del_experimento(ex, carga.datos.ahora), "dias": ex.get("dias"),
+                    "n_piezas": len(ex.get("piezas") or []), "paises": [p["pais"] for p in ex.get("paises") or []],
+                    "ganadoras": sum(1 for pz in ex.get("piezas") or [] if pz.get("veredicto") == "ganador"),
+                    "metrica": metrica, "valor": total[0] / total[1] * escala if total[1] > 0 else None,
+                    "mejor": max(candidatas, key=lambda c: (c[0], c[1]))[2] if candidatas else None,
+                    "seleccionado": ex["id"] == elegido})
+    return out
+
+
+# ---------- detalle de una pieza ----------
+
+def _curva(filas, es_imagen):
+    """La retención del video: [[«3 s», % de las impresiones], [«25 %», …], …]; vacía en una imagen o sin detalle."""
+    impresiones = sum(f["impresiones"] or 0 for f in filas)
+    if es_imagen or not impresiones:
+        return []
+    return [[etiqueta, sum(f[columna] or 0 for f in filas) / impresiones * 100] for etiqueta, columna in CURVA]
+
+
+def _eventos_pieza(cliente, ep_id):
+    ev = db.evento
+    with db.conectar() as con:
+        filas = con.execute(sa.select(ev.c.tipo, ev.c.mensaje, ev.c.creado_en).where(
+            ev.c.cliente == cliente, ev.c.experimento_pieza_id == ep_id)
+            .order_by(ev.c.creado_en.desc(), ev.c.id.desc()).limit(MAX_EVENTOS_PIEZA)).all()
+    return [{"tipo": tipo, "mensaje": mensaje, "creado_en": creado_en} for tipo, mensaje, creado_en in filas]
+
+
+def _periodo_json(per):
+    return {k: per[k] for k in ("n", "desde", "hasta", "es_todo")}
+
+
+def pieza(cliente, ep_id, filtro, ahora_iso=None):
+    """El detalle de una pieza: su fila de `piezas` más sus indicadores y series diarias (CTR, CPC, frecuencia
+    diaria y gancho), la curva de retención, sus desgloses, los rankings de Meta, el diagnóstico de la doctrina,
+    sus eventos y su experimento. Solo se busca entre las piezas de `cliente` (el de otro proyecto da None) y
+    solo cuenta el periodo del filtro: país, tipo, experimento y moneda no esconden la pieza que se abre."""
+    carga = cargar(cliente, Filtro(dias=filtro.dias, ep_id=ep_id), ahora_iso)
+    if not carga.datos.filas:
+        return None
+    ex, pz, _serie = carga.datos.filas[0]
+    s = serie(carga)
+    extra = pz.get("extra") or {}
+    return dict(piezas(carga, proyectos.reglas_defecto(cliente))[0], moneda=carga.moneda, periodo=_periodo_json(carga.per),
+                indicadores=indicadores(carga), series={k: s[k] for k in ("dias", "ctr", "cpc", "frecuencia", "gancho")},
+                curva=_curva(carga.dias_act, bool(pz.get("es_imagen"))), desgloses=desgloses(carga),
+                rankings=dict(extra.get("rankings_meta") or {}),
+                diagnostico=extra.get("diagnostico") if isinstance(extra.get("diagnostico"), dict) else None,
+                eventos=_eventos_pieza(cliente, ep_id), experimento={"id": ex["id"], "nombre": ex["nombre"]})
+
+
+# ---------- todo junto ----------
+
+def _opciones(carga):
+    """Lo que ofrecen los filtros: los experimentos de la moneda elegida (y el elegido, esté donde esté), los países
+    y las piezas de los que entran, las monedas del proyecto. No dependen de los filtros de país, pieza ni tipo."""
+    elegido = carga.filtro.experimento_id if carga.filtro else None
+    exps = [ex for ex in carga.todo.exps if tablero._moneda(ex) == carga.moneda or ex["id"] == elegido]
+    piezas_ex = [pz for ex in exps if elegido is None or ex["id"] == elegido
+                 for pz, _s in _filas_por_experimento(carga).get(ex["id"], [])]
+    return {"experimentos": [{"id": ex["id"], "nombre": ex["nombre"], "estado": ex["estado"], "moneda": tablero._moneda(ex)}
+                             for ex in exps],
+            "paises": sorted({pz["pais"] for pz in piezas_ex if pz.get("pais")}),
+            "piezas": [{"ep_id": pz["id"], "nombre": pz["nombre"], "pais": pz.get("pais")} for pz in piezas_ex],
+            "monedas": list(carga.monedas)}
+
+
+def contexto(cliente, filtro, ahora_iso=None):
+    """Todo lo que pinta el centro de resultados para un filtro. `datos_graficos` es apto para JSON (listas, sin
+    fechas): lo que dibuja el JS de la pantalla."""
+    carga = cargar(cliente, filtro, ahora_iso)
+    per = carga.per
+    lista, indic = piezas(carga, proyectos.reglas_defecto(cliente)), indicadores(carga)
+    serie_dia, marcas_dia, desglose = serie(carga), marcas(carga), desgloses(carga)
+    return {
+        "filtro": filtro, "query": a_query(filtro), "opciones": _opciones(carga), "periodo": _periodo_json(per),
+        "moneda": carga.moneda, "indicadores": indic, "serie": serie_dia, "marcas": marcas_dia,
+        "embudo": embudo(carga, promedio_embudo(cliente)), "piezas": lista, "evolucion": lista[:EVOLUCION_PIEZAS],
+        "desgloses": desglose, "paises": paises(carga), "experimentos": experimentos_tarjetas(carga),
+        "generacion": gastos.total_entre(cliente, tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"]),
+        "detalle_meta": {ex["id"]: (ex.get("extra") or {}).get("detalle_meta") for ex in carga.datos.exps},
+        "hay_detalle": bool(carga.dias_act),
+        "datos_graficos": {
+            "serie": serie_dia, "marcas": marcas_dia, "ubicacion": desglose["ubicacion"],
+            "evolucion": [{"ep_id": p["ep_id"], "serie": p["serie"], "promedio": p["promedio"]}
+                          for p in lista[:EVOLUCION_PIEZAS]],
+            "tendencias": {i["clave"]: i["tendencia"] for i in indic}}}
