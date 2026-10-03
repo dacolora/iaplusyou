@@ -45,7 +45,11 @@ por su cuenta. Además valen todas las de `AGENTS.md` (enlace a `CLAUDE.md`) y l
 9. **No decidas por Daniel.** Lo `bloqueado por Daniel`, lo que pida rediseñar (otro flujo, otro proveedor, otra
    frontera entre módulos) y lo que cambie cómo se cobra o qué se publica: no lo hagas; anótalo como pregunta en la
    fila.
-10. **Al final**, un informe en tu último mensaje: por cada pendiente, cerrado / sigue abierto / no se tocó, con el
+10. **Nada de Computer Use ni navegadores**, y nada de `~/.codex/` (lote 1, 2026-10-02: intentó abrir Chrome y leyó una
+    skill de `~/.codex/`). Lo que haya que mirar en pantalla lo mira Claude.
+11. **Las pruebas vigilan el código, no el texto de los documentos**: nada de pruebas que lean `docs/pendientes.md` o una
+    skill (lote 1: una así se rompía en cuanto alguien cerraba un pendiente; se quitó).
+12. **Al final**, un informe en tu último mensaje: por cada pendiente, cerrado / sigue abierto / no se tocó, con el
     commit y la prueba.
 
 ## Lotes, en este orden
@@ -57,8 +61,14 @@ por su cuenta. Además valen todas las de `AGENTS.md` (enlace a `CLAUDE.md`) y l
 | 3 | Bloqueo de uso, `decidido sin hacer` e higiene | PND-049 051 056 · 082 · y los 29 de higiene `sin empezar` |
 | — | No se tocan: los 27 `bloqueado por Daniel` y los 5 `hecho sin probar en real` (piden gastar de verdad) | |
 
+## Cómo fue el lote 1 (plata), para calibrar los siguientes
+- Codex cerró 10 de 14 a la primera; el guardián del gasto y el revisor encontraron una regresión que tiraba un guion
+  pagado (PND-108), un caso de doble anotación (PND-109), precios que seguían sin la música (PND-003) y seis promesas
+  sin prueba que las sostuviera. Una segunda pasada de Codex (`codex exec resume <sesión>`) los arregló todos; Claude
+  cerró cinco menores. **Conclusión:** en lotes de plata, la revisión con `guardian-gasto` + `revisor` no es opcional.
+
 ## La siguiente acción concreta
-Lote 0 HECHO el 2026-10-02 (1 cerrado, 20 confirmados, 5 que solo se ven en pantalla o en real; PND-029 y PND-103 los verificó Claude y quedaron para Daniel). Sigue el lote 1, desde un worktree nuevo sobre `origin/main`:
+Lotes 0 y 1 HECHOS el 2026-10-02 (el 1 desplegado con la migración 0030). Lote 0: (1 cerrado, 20 confirmados, 5 que solo se ven en pantalla o en real; PND-029 y PND-103 los verificó Claude y quedaron para Daniel). Sigue el lote 2, desde un worktree nuevo sobre `origin/main`:
 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex exec -C <worktree> -s workspace-write -c model_reasoning_effort="high" -o <informe> - < <encargo>`
 
 ## Decisiones ya tomadas (no reabrir)

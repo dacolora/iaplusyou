@@ -402,6 +402,18 @@ def test_propia_oculta_global_en_todos_los_listados(base_temporal):
     assert d.referente('acme', global_id)['id'] == global_id
 
 
+def test_una_copia_propia_sin_imagen_no_esconde_la_global(base_temporal):
+    """Mientras la imagen de la copia del proyecto está pendiente (o falló), la global sigue en la grilla:
+    si no, el anuncio desaparecería del proyecto hasta reintentar la imagen (re-revisión del lote 1, 2026-10-02)."""
+    from referentes import datos as d
+    global_id, _ = d.guardar_referente(_anuncio(anuncio_id='Y', fuente='atria'), cliente=None)
+    d.marcar_imagen(global_id, 'ok', 'https://r2/referentes/Y.jpg')
+    propia, _ = d.guardar_referente(_anuncio(anuncio_id='Y', fuente='apify'), cliente='acme')
+    assert global_id in [r['id'] for r in d.listar('acme')['items']]
+    d.marcar_imagen(propia, 'ok', f'https://r2/referentes/Y_r{propia}.jpg')
+    assert [r['id'] for r in d.listar('acme')['items']] == [propia]
+
+
 def test_guardar_mismo_anuncio_simultaneo_no_duplica(base_temporal, monkeypatch):
     from referentes import datos as d
     from concurrent.futures import ThreadPoolExecutor

@@ -333,6 +333,13 @@ def test_pedido_vencido_con_id_de_pieza_antigua_avisa(base_temporal, tienda):
     assert tiendas.pedidos_vencidos_sin_resolver("otro") == 0
 
 
+def test_pedido_vencido_con_id_de_pieza_de_otro_proyecto_no_avisa(base_temporal, tienda):
+    import tiendas
+    ajena = _pieza(base_temporal, cliente="otro")
+    _pedidos(tienda, (str(ajena), 20), fecha="2000-01-01T00:00:00")
+    assert tiendas.pedidos_vencidos_sin_resolver("acme") == 0
+
+
 @pytest.mark.parametrize('externo', ['999999999999999999999999', '²'])
 def test_utm_externo_inconvertible_no_rompe_aviso(base_temporal, tienda, externo):
     import tiendas

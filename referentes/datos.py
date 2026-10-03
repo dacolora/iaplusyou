@@ -81,7 +81,8 @@ def _visible_listado(t, cliente):
     if cliente is not None:
         propio = t.alias("referente_propio")
         existe_propio = sa.exists(sa.select(propio.c.id).where(
-            propio.c.cliente == cliente, propio.c.anuncio_id == t.c.anuncio_id).correlate(t))
+            propio.c.cliente == cliente, propio.c.anuncio_id == t.c.anuncio_id,
+            propio.c.estado_imagen == "ok").correlate(t))   # una copia sin imagen no deja la grilla vacía
         visible = sa.and_(visible, sa.or_(t.c.cliente == cliente, ~existe_propio))
         if not proyectos.referentes_copycoders(cliente):
             visible = sa.and_(visible, sa.or_(t.c.cliente == cliente, t.c.fuente != "copycoders"))
