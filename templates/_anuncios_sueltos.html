@@ -67,9 +67,9 @@
     {% set trabajo_ad = trabajos_ads.get(ad_id) if trabajos_ads else none %}
     {% if trabajo_ad %}
     {# El worker está publicando o trayendo métricas: barra + recarga sola al terminar. #}
-    <div class="barra-progreso" id="trabajo-{{ trabajo_ad.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+    {# Sin <script>: llega dentro del fragmento de resultados (innerHTML no lo corre); arrancarSondeos lee data-poll-job. #}
+    <div class="barra-progreso" id="trabajo-{{ trabajo_ad.job_id }}" data-poll-job="{{ trabajo_ad.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
     <div class="progreso-texto">{% if entry.estado == "publicando" %}{{ _('Publicando en Meta…') }}{% else %}{{ _('Actualizando métricas…') }}{% endif %} {{ _('0%% · 0s') }}</div>
-    <script>iniciarPolling({{ trabajo_ad.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_ad.job_id) | tojson }});</script>
     {% endif %}
 
     <div class="exp-acciones">

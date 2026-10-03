@@ -354,13 +354,23 @@
         return;
       }
       var query = new URLSearchParams(corte < 0 ? '' : hash.slice(corte + 1));
-      var exp = new URLSearchParams(location.search).get('exp');      // compatibilidad: ?exp=<id>#experimentos
-      if (!query.has('exp') && exp) query.set('exp', exp);
       if (query.has('piezas') && raiz.getAttribute('data-url-nuevo')) {
         location.replace(raiz.getAttribute('data-url-nuevo') + '?piezas=' + encodeURIComponent(query.get('piezas')));
         return;
       }
       cargar(query.toString());
+    }
+    // Compatibilidad con los enlaces viejos ?exp=<id>#experimentos (p. ej. _tw_panel.html): se pasa UNA vez al hash y
+    // se quita de la dirección. Si navegar() lo releyera de location.search, el filtro no se podría quitar nunca
+    // (ni con su «×», ni con «Todos los experimentos», ni con el menú lateral). Revisión de R2, 2026-10-03.
+    function consumirExpViejo() {
+      var busqueda = new URLSearchParams(location.search), exp = busqueda.get('exp');
+      var hash = location.hash.slice(1), nombre = hash.split('?')[0];
+      if (!exp || hash.indexOf('?') >= 0) return;
+      if (['experimentos', 'tablero', 'ads'].indexOf(nombre) < 0 && !(nombre === '' && pestanaActiva())) return;
+      busqueda.delete('exp');
+      var resto = busqueda.toString();
+      history.replaceState(null, '', location.pathname + (resto ? '?' + resto : '') + '#experimentos?exp=' + encodeURIComponent(exp));
     }
     function abrir(url, origen) {
       if (!panel || !cuerpo) return;
@@ -410,7 +420,7 @@
       if (!b || (!raiz.contains(b) && !enPanel)) {
         // Un enlace del panel que lleva a otra pestaña («Ver en Crear»): el panel se cierra.
         var a = ev.target.closest('a[href]');
-        if (a && panel && panel.open && panel.contains(a)) panel.close();
+        if (a && panel && panel.open && panel.contains(a) && a.target !== '_blank') panel.close();   // «¿Por qué?» abre otra pestaña
         return;
       }
       if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey || ev.button > 0) return;
@@ -455,6 +465,7 @@
     window.addEventListener('hashchange', navegar);
     window.addEventListener('popstate', navegar);
     window.addEventListener('cr:tab', navegar);
+    consumirExpViejo();
     navegar();
   }
 

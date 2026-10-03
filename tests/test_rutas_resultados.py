@@ -440,3 +440,76 @@ def test_armazon_y_js_del_centro_de_resultados(app):
     asignaciones = re.findall(r"(\w+)\.innerHTML\s*=\s*([^;]+);", js)
     assert asignaciones and all(valor.strip() == "html" for _el, valor in asignaciones), asignaciones
     assert "textContent" in js
+
+
+# ---------- revisión de R2 (2026-10-03) ----------
+
+import shutil
+import subprocess
+
+_ARNES_JS = r"""
+const fs = require('fs');
+const g = globalThis; g.window = g;
+const oyentes = {};
+g.addEventListener = (t, f) => { (oyentes[t] = oyentes[t] || []).push(f); };
+g.innerWidth = 1280;
+const ubic = {pathname: '/cliente/acme', search: '?exp=7', hash: '#experimentos', replace: (u) => pedidos.push('replace:' + u)};
+g.location = ubic;
+const reemplazos = [], pedidos = [];
+function ir(url) {
+  const m = url.match(/^([^?#]*)(\?[^#]*)?(#.*)?$/);
+  ubic.pathname = m[1] || ubic.pathname; ubic.search = m[2] || ''; ubic.hash = m[3] || '';
+}
+g.history = {replaceState: (s, t, u) => { reemplazos.push(u); ir(u); }, pushState: (s, t, u) => ir(u)};
+function nodo(atributos) {
+  return {atributos: atributos || {}, firstChild: null, classList: {add() {}, remove() {}, toggle() {}, contains: () => true},
+          getAttribute(n) { return this.atributos[n] === undefined ? null : this.atributos[n]; },
+          setAttribute(n, v) { this.atributos[n] = v; }, querySelector: () => null, querySelectorAll: () => [],
+          addEventListener() {}, appendChild() {}, scrollIntoView() {}, set innerHTML(v) { this.html = v; }};
+}
+const raiz = nodo({'data-url': '/cliente/acme/experimentos/resultados', 'data-url-nuevo': '/cliente/acme/experimentos/nuevo'});
+const pestana = nodo();
+g.document = {readyState: 'complete', documentElement: {lang: 'es'}, addEventListener() {},
+  createElement: () => nodo(), createElementNS: () => nodo(),
+  getElementById: (id) => id === 'cr-resultados' ? raiz : id === 'tab-experimentos' ? pestana :
+                          id === 'cr-textos' ? {textContent: '{}'} : null};
+g.fetch = (url) => { pedidos.push(url); return Promise.resolve({ok: true, redirected: false,
+  text: () => Promise.resolve('<div class="cr-resultados-fragmento"></div>')}); };
+eval(fs.readFileSync('static/exp_resultados.js', 'utf8'));
+setTimeout(() => {
+  // La persona quita el filtro («×» o «Todos los experimentos»): el hash queda sin exp.
+  g.history.pushState(null, '', '#experimentos');
+  (oyentes.hashchange || []).forEach((f) => f());
+  setTimeout(() => console.log(JSON.stringify({reemplazos, pedidos, search: ubic.search, hash: ubic.hash})), 20);
+}, 20);
+"""
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="sin Node no se corre el JS (el VPS no lo tiene)")
+def test_el_exp_de_un_enlace_viejo_se_consume_una_vez_y_se_puede_quitar():
+    """`?exp=<id>#experimentos` (el enlace viejo de _tw_panel.html) se pasa UNA vez al hash y sale de la dirección;
+    después, quitar el filtro de verdad lo quita (antes navegar() lo volvía a leer de location.search)."""
+    import json
+    r = subprocess.run([shutil.which("node"), "-e", _ARNES_JS], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    salida = json.loads(r.stdout.strip().splitlines()[-1])
+    assert salida["reemplazos"] == ["/cliente/acme#experimentos?exp=7"] and salida["search"] == ""
+    assert salida["pedidos"] == ["/cliente/acme/experimentos/resultados?exp=7", "/cliente/acme/experimentos/resultados"]
+    js = open("static/exp_resultados.js", encoding="utf-8").read()
+    navegar = js[js.index("function navegar()"):js.index("function consumirExpViejo()")]
+    assert "location.search" not in re.sub(r"//[^\n]*", "", navegar)          # sin contar los comentarios
+
+
+def test_la_barra_de_un_anuncio_suelto_avanza_dentro_del_fragmento(app, base_temporal, monkeypatch):
+    """Revisión de R2: la barra de un anuncio suelto con trabajo vivo traía un <script>iniciarPolling…</script>, que
+    dentro del fragmento (innerHTML) nunca corre: ahora lleva data-poll-job y arrancarSondeos la arranca."""
+    import ads
+    aid = ads.crear("acme", "flowplus", "cf_9", "https://r2/suelto.mp4", "video", "Anuncio viejo")
+    ads.actualizar("acme", aid, estado="activo", meta_ids={"campaign_id": "c1", "adset_id": "s1", "ad_id": "a1"})
+    jid = f"acme__{aid}__metricas"
+    monkeypatch.setattr(app["dashboard"].trabajos, "en_curso", lambda job_id: job_id == jid)
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    assert "Anuncio viejo" in html
+    assert f'<div class="barra-progreso" id="trabajo-{jid}" data-poll-job="{jid}">' in html
+    assert "iniciarPolling" not in html
+    assert all("application/json" in s for s in _scripts(html)), _scripts(html)

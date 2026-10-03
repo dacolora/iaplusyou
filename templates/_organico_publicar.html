@@ -55,9 +55,10 @@
      puede pintarse en Experimentos y en Final edition a la vez, y con ids iguales
      getElementById solo actualizaría la primera barra. #}
   {% set contenedor_id = "trabajo-" ~ trabajo.job_id ~ "-" ~ volver %}
+  {# Sin <script> (2026-10-03): el bloque llega por fetch (detalle de una final, panel de una pieza) y arrancarSondeos
+     arranca la barra por su data-poll-job, también en la carga de la página. #}
   <div class="barra-progreso" id="{{ contenedor_id }}" data-poll-job="{{ trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
   <div class="progreso-texto">{{ _('Publicando… 0%% · 0s') }}</div>
-  <script>iniciarPolling({{ trabajo.job_id | tojson }}, {{ contenedor_id | tojson }});</script>
   {% else %}
   <details class="org-publicar">
     <summary>{{ _('Publicar orgánico') }}</summary>
