@@ -391,6 +391,8 @@ def _fase_trayendo(tarea, p, bid, avanzar):
 
     try:
         for pagina, cursor_siguiente, meta in fuente_mod.traer(consulta, tope - traidos_total, avanzar_trayendo, cursor=cursor):
+            if (meta or {}).get("aviso"):
+                aviso_parcial = meta["aviso"]
             costo_real = (meta or {}).get("costo_real")
             # La referencia no varía por página dentro de esta misma tarea: si una
             # fuente futura reportara costo_real en MÁS de una página en una sola

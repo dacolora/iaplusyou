@@ -22,7 +22,16 @@ import idiomas
 # key / token: la URI que googleapiclient mete en su HttpError lleva
 # key=<llave de YouTube>, y "token=" cubre cualquier otra variante. El ")" queda
 # fuera del valor para no comerse el cierre de un paréntesis del mensaje.
-_RE_TOKEN = re.compile(r"((?:access_token|upload_token|key|token)=)[^&\s\"')]+")
+# Desde 2026-10-03 (PND-115, auditoría del lote 3) también la forma JSON
+# («"access_token":"X"», escapada «\"access_token\":\"X\"»), el repr de Python
+# y «clave: valor», sin distinguir mayúsculas. Sin «\b» delante de la clave a
+# propósito: «page_access_token=» tiene que seguir tapado. El separador no cruza
+# saltos de línea y el valor no se come una «\» (no deja una comilla suelta que
+# rompa el JSON del error que lee meta_errores).
+_RE_TOKEN = re.compile(
+    r"((?:access_token|upload_token|key|token)\\?[\"']?[ \t]*[:=][ \t]*\\?[\"']?)[^&\s\"'\\)]+",
+    re.IGNORECASE,
+)
 
 # Dedupe de encolar dentro del proceso (gunicorn con hilos). Entre procesos
 # manda el índice único parcial uq_tarea_job_viva (db.py / migración 0003).

@@ -80,7 +80,7 @@ def test_auto_lanzar_encola_la_generacion_con_la_prioridad_del_payload(base_temp
     assert lanzados == [(cid, 3, "PROMPT A")]
 
 
-def test_interrumpida_deja_el_prompt_basico_con_aviso(base_temporal, monkeypatch):
+def test_pnd034_interrumpida_continua_solo_generacion_aprobada(base_temporal, monkeypatch):
     import creative_flow as cf
     import tareas
     import tareas.director as td
@@ -95,7 +95,7 @@ def test_interrumpida_deja_el_prompt_basico_con_aviso(base_temporal, monkeypatch
     assert "ESCENA: Image 1 gira despacio" in e["prompt_relleno"]
     assert e["director"]["estado"] == "fallback"
     assert "reinicio" in e["director"]["aviso"]
-    assert lanzados == []
+    assert lanzados == [(cid, 5)]
 
 
 def test_interrumpida_no_pisa_una_sesion_que_ya_avanzo(base_temporal, monkeypatch):
@@ -151,3 +151,19 @@ def test_director_fallback_registra_costo_pagado(base_temporal, monkeypatch):
     monkeypatch.setattr(td.director, "compilar", fallar)
     td.ejecutar({"id": 89, "payload": {"cliente": "acme", "cf_id": cid}})
     assert gastos.historial("_creatv")[0]["usd"] == 0.035
+
+
+def test_pnd034_interrumpida_no_relanza_y_respeta_clic(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import tareas.director as td
+    llamadas = []
+    monkeypatch.setattr(td.trabajos, 'encolar', lambda *a, **kw: llamadas.append((a, kw)))
+    cid = _sesion(cf)
+    p = {'cliente': 'acme', 'cf_id': cid, 'auto_lanzar': False, 'prioridad': 3}
+    td.interrumpida({'payload': p}, 'reinicio')
+    assert llamadas == []
+    p['auto_lanzar'] = True
+    td.interrumpida({'payload': p}, 'reinicio')
+    td.interrumpida({'payload': p}, 'reinicio')
+    assert len(llamadas) == 1
+    assert llamadas[0][1]['max_intentos'] == 1 and llamadas[0][1]['prioridad'] == 3

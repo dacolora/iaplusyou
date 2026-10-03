@@ -131,3 +131,5 @@ alcance y la frecuencia **diarios no se suman** entre días: la frecuencia del p
 `metrica_snapshot` (acumulada de por vida) y se rotula «acumulada»; la regla de fatiga usa esa, no la diaria.
 
 PND-003 (revisión 2026-10-02): el precio de rescatar/derivar pasa musica_estilo de la sesión a gastos.estimar para cada regeneración; no cambia decisiones ni autorizaciones de pauta.
+
+PND-039/044/113 (2026-10-03): regenerar conserva las voces originales por destino en el item; un destino nuevo hereda la última voz original conocida. El payload explícito mantiene esa elección al producir. La cuadrícula conserva desmarcadas por combinación. Antes de la primera activación (experimento, país o pieza), lanzador reserva fin_primera_activacion bajo el escritor de extra y envía end_time a todos los conjuntos; solo después activa. Reanudar no extiende el plazo ni cambia presupuestos. Una reserva tras un fallo conserva la misma fecha en el próximo intento; los experimentos ya activados mantienen su fecha previa. PND-043 sigue esperando la decisión de reserva de arranques entre experimentos.

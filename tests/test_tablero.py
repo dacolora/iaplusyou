@@ -654,3 +654,15 @@ def test_alerta_de_experimento_en_error_explica_el_json_de_meta(base_temporal, s
     assert a[0]["tipo"] == "experimento_error"
     assert "modo Desarrollo" in texto and "Live" in texto and "{" not in texto and "OAuthException" not in texto
     assert ".." not in texto
+
+
+def test_pnd118_tiendas_rotas_conservan_identidad(base_temporal, sin_red):
+    import tiendas
+    import alertas
+    sin_red.setattr(tiendas, 'listar', lambda c: [dict(id=i, tipo='shopify', nombre='tienda', estado='rota', error='falló') for i in (21, 22)])
+    avisos = [a for a in alertas._fuente_tablero('acme', AHORA) if a['clave'].startswith('tablero:tienda_rota')]
+    assert {a['clave'] for a in avisos} == {'tablero:tienda_rota:21', 'tablero:tienda_rota:22'}
+    assert len({a['huella'] for a in avisos}) == 2
+    alertas.descartar('acme', avisos[0]['clave'], avisos[0]['huella'])
+    # El descarte de una tienda no coincide con la identidad de la otra.
+    assert avisos[0]['clave'] != avisos[1]['clave']

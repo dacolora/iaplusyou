@@ -315,7 +315,8 @@
       var filas = marcadas().map(function (c) {
         var celdas = ps.map(function (p) {
           var cabe = c.dataset.final !== '1' || c.dataset.pais === p;
-          return '<td>' + (cabe ? '<input type="checkbox" name="combinaciones" value="' + c.value + ':' + p + '" checked>' : '<span class="vacio">—</span>') + '</td>';
+          // PND-044 (lote 2): una casilla que la persona desmarcó sigue desmarcada al rearmar la cuadrícula.
+          return '<td>' + (cabe ? '<input type="checkbox" name="combinaciones" value="' + c.value + ':' + p + '"' + (previas[c.value + ':' + p] === false ? '' : ' checked') + '>' : '<span class="vacio">—</span>') + '</td>';
         }).join('');
         var nombreSeguro = document.createElement('div'); nombreSeguro.textContent = c.dataset.nombre;
         var nDoctrina = parseInt(c.dataset.doctrinaN || '0', 10);

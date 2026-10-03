@@ -280,16 +280,17 @@ def _fuente_tablero(cliente, ahora):
     out = []
     for a in tablero.alertas(cliente, ahora_iso=ahora):
         eid = a.get("experimento_id")
+        entidad = a.get("tienda_id") if a["tipo"] == "tienda_rota" else eid
         texto = _limpio(a["texto"], 400)
         # Los números salen del texto entero y limpio, no del recortado a 400: un texto que se corta en un idioma y
         # en el otro no tiene que cambiar la huella.
         numeros = re.findall(r"\d+", _limpio(a["texto"], None))
         situacion = huella() if a["tipo"] == "sin_metricas" else huella(
-            a["tipo"], eid if eid is not None else "-", *numeros)
-        out.append(_alerta(f"tablero:{a['tipo']}:{eid if eid is not None else '-'}", situacion,
+            a["tipo"], entidad if entidad is not None else "-", *numeros)
+        out.append(_alerta(f"tablero:{a['tipo']}:{entidad if entidad is not None else '-'}", situacion,
                            _NIVEL_TABLERO.get(a["nivel"], "info"), _GRUPO_TABLERO.get(a["tipo"], "decision"),
                            texto, "", a["tab"], url=(f"?exp={eid}#experimentos" if eid is not None else None),
-                           entidad=eid))
+                           entidad=entidad))
     return out
 
 
@@ -410,10 +411,15 @@ def _fuente_organico(cliente, ahora):
     sacado del concepto). Reintentar es una acción de la persona sobre la pieza: aquí solo se avisa."""
     import organico  # noqa: PLC0415 — arrastra requests
     pub, pz, co = db.publicacion, db.pieza, db.concepto
+    posterior = pub.alias("posterior")
+    resuelta = sa.exists(sa.select(posterior.c.id).where(
+        posterior.c.cliente == pub.c.cliente, posterior.c.pieza_id == pub.c.pieza_id,
+        posterior.c.plataforma == pub.c.plataforma, posterior.c.id > pub.c.id,
+        posterior.c.estado.in_(("en_cola", "publicando", "publicada"))))
     q = (sa.select(pub.c.id, pub.c.plataforma, pub.c.error, pub.c.pieza_id,
                    sa.func.json_extract(co.c.extra, "$.accion_central").label("accion"))
          .select_from(pub.join(pz, pz.c.id == pub.c.pieza_id).outerjoin(co, co.c.id == pz.c.concepto_id))
-         .where(pub.c.cliente == cliente, pub.c.estado == "error",
+         .where(pub.c.cliente == cliente, pub.c.estado == "error", ~resuelta,
                 pub.c.actualizado_en >= _hace(ahora, days=DIAS_FALLOS))
          .order_by(pub.c.id.desc()))
     with db.conectar() as con:

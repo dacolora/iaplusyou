@@ -1375,3 +1375,21 @@ def test_los_textos_nuevos_salen_en_ingles_cuando_quien_mira_lee_en_ingles(base_
     assert en[f"organico:error:{fb}"]["titulo"] == "Publishing “Pantuflas” to Facebook (Page) failed"
     assert en["nicho:avatares"]["titulo"] == "3 proposed avatars to approve"
     assert en[f"nicho:error:{e1}"]["titulo"] == "The research of “Uno” was interrupted"
+
+
+def test_pnd119_error_desaparece_solo_con_republicacion_posterior(base_temporal):
+    import alertas
+    cf = 'cf_republicado'
+    fallida = _publicacion('error', HACE_5_DIAS, 'falló', cf_id=cf)
+    _publicacion('publicada', AHORA, cf_id=cf)
+    otra = _publicacion('error', HACE_5_DIAS, 'falló', plataforma='youtube', cf_id=cf)
+    claves = _claves(alertas._fuente_organico('acme', AHORA))
+    assert f'organico:error:{fallida}' not in claves
+    assert f'organico:error:{otra}' in claves
+
+
+def test_pnd119_publicacion_anterior_no_oculta_error_nuevo(base_temporal):
+    import alertas
+    _publicacion('publicada', HACE_5_DIAS, cf_id='cf_antes')
+    fallida = _publicacion('error', AHORA, 'falló', cf_id='cf_antes')
+    assert f'organico:error:{fallida}' in _claves(alertas._fuente_organico('acme', AHORA))

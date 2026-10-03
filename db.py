@@ -227,6 +227,7 @@ material = Table("material", metadata,
     Column("extra", JSON, default=dict),                    # palabras con tiempos, picos, cortes detectados
     Column("usado_en", String(19)),
     sa.UniqueConstraint("cliente", "hash", name="uq_material_hash"),
+    sqlite_autoincrement=True,  # PND-040: una voz borrada nunca presta su identidad.
 )
 
 experimento = Table("experimento", metadata,

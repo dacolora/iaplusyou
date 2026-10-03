@@ -280,3 +280,13 @@ def test_normalizacion_fallida_conserva_cobro(monkeypatch):
         next(apify_adlibrary.traer({'modo': 'palabra', 'palabra': 'shoes'}, 10, lambda **k: None))
     assert exc.value.costo_real == pytest.approx(apify_actores_precio())
     assert exc.value.extra_gasto == {'run_id': 'run', 'dataset_id': 'ds'}
+
+
+@pytest.mark.parametrize('estado', ['TIMED-OUT', 'ABORTED', 'FAILED'])
+def test_pnd045_resultados_parciales_llevan_aviso(monkeypatch, estado):
+    monkeypatch.setenv('APIFY_TOKEN', 'tok_test')
+    sesion = _Sesion([_Resp({'data': {'id': 'run1', 'defaultDatasetId': 'ds1', 'status': estado}}, 201), _Resp([FIXTURE_ITEM])])
+    monkeypatch.setattr(apify_adlibrary, '_sesion', lambda: sesion)
+    pagina, cursor, meta = next(apify_adlibrary.traer({'modo': 'marca', 'pagina_id': '1', 'pais': 'ALL'}, 10, lambda **kw: None))
+    assert pagina and cursor is None
+    assert meta.get('estado') == estado and meta.get('incompleto') is True and meta.get('aviso')
