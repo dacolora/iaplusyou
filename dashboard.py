@@ -1955,10 +1955,10 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
     contexto de Experimentos que hasta E2 armaba `ver_cliente`, sacado a una función para que lo compartan la
     página del proyecto, el fragmento de resultados y «Nuevo experimento».
 
-    `con_elegibles` agrega `elegibles_exp` (todo lo que se puede probar en Meta: la galería y el «Agregar pieza»
-    de un experimento en armado); también se agrega, aunque no se pida, cuando queda algún anuncio suelto en cola,
-    que ofrece «Meter en experimento» o «Probar en Meta» con esas mismas piezas. `con_organico=False` es para
-    quien ya trae lo orgánico por otro lado (`_contexto_final_edition`): dos veces la misma clave no se puede
+    `con_elegibles` agrega `elegibles_exp` (todo lo que se puede probar en Meta: la galería de «Nuevo experimento»).
+    La página del proyecto NO lo pide (la pestaña es un armazón: no pinta piezas); el fragmento de resultados lo suma
+    él mismo cuando su gestión o un anuncio suelto en cola lo necesitan (`exp_resultados`). `con_organico=False` es
+    para quien ya trae lo orgánico por otro lado (`_contexto_final_edition`): dos veces la misma clave no se puede
     pasar a `render_template`."""
     # Anuncios sueltos (lo que quedó de Campañas, dentro de Experimentos): qué
     # tarjetas tienen un trabajo del worker en curso (publicar o refrescar
@@ -2022,7 +2022,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
         "atribuciones_exp": experimentos.ATRIBUCIONES,
         "pedidos_por_exp": tiendas.pedidos_por_experimento(cliente),
     }
-    if con_elegibles or any(a.get("estado") == "en_cola" for a in ads_dict.values()):
+    if con_elegibles:
         ctx["elegibles_exp"] = experimentos.elegibles(cliente)
     if con_organico:
         ctx.update(_contexto_organico(cliente))
@@ -5243,17 +5243,21 @@ def exp_resultados(cliente):
     r = resultados.contexto(cliente, filtro)
     ctx = _contexto_experimentos(cliente)
     elegido = next((e for e in ctx["experimentos"] if e["id"] == filtro.experimento_id), None)
-    if elegido and _acepta_piezas(elegido):
-        ctx["elegibles_exp"] = experimentos.elegibles(cliente)      # el «Agregar pieza» de su gestión
+    # Las piezas elegibles solo viajan cuando algo del fragmento las pinta: el «Agregar pieza» de la gestión de un
+    # experimento en armado, o el «Meter en experimento» / «Probar en Meta» de un anuncio suelto que sigue en cola.
+    if (elegido and _acepta_piezas(elegido)) or any(a.get("estado") == "en_cola" for a in ctx["ads"].values()):
+        ctx["elegibles_exp"] = experimentos.elegibles(cliente)
     try:
         # La burbuja de alertas de la página no viaja en un fetch (_alertas_sidebar): la línea «N alertas…» sí.
         alertas_ctx = _contexto_alertas(cliente, session.get("rol"))
     except Exception as e:  # noqa: BLE001 — sin alertas, pero con fragmento
         print(f"[aviso] Alertas de {cliente}: {type(e).__name__}")
         alertas_ctx = None
+    # `precios`: el botón «Escribir texto con IA» de «Publicar orgánico» (en la gestión) muestra su precio ANTES de
+    # cobrar (regla 1); en la página venía de `_contexto_gasto`, y el fragmento ya no pasa por ahí.
     return render_template("_exp_resultados.html", cliente=cliente, r=r, ex=elegido, tablero=_contexto_tablero(cliente),
                            alertas_ctx=alertas_ctx, paises_fe=fe_tipos.PAISES, capacidades_meta=meta_conexion.estado(cliente),
-                           modo_meta=_modo_de(meta_conexion.cargar(cliente)), **ctx)
+                           modo_meta=_modo_de(meta_conexion.cargar(cliente)), precios=_precios_pagina(), **ctx)
 
 
 @app.route("/cliente/<cliente>/experimentos/pieza/<int:ep_id>")
@@ -5265,7 +5269,8 @@ def exp_pieza(cliente, ep_id):
         abort(404)
     return render_template("_exp_pieza.html", cliente=cliente, p=p, paises_fe=fe_tipos.PAISES,
                            etiquetas_exp=_etiquetas_exp(), capacidades_meta=meta_conexion.estado(cliente),
-                           modo_meta=_modo_de(meta_conexion.cargar(cliente)), **_contexto_organico(cliente))
+                           modo_meta=_modo_de(meta_conexion.cargar(cliente)), precios=_precios_pagina(),
+                           **_contexto_organico(cliente))
 
 
 @app.route("/cliente/<cliente>/experimentos/nuevo")

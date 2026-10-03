@@ -10,6 +10,22 @@
   </div>
 </div>
 {% include "_meta_conectar.html" %}
+{# Reglas del motor de TODO el proyecto (antes «Reglas por defecto» en Configuración): valen para todos los
+   experimentos; cada uno puede sobreescribir una en su gestión. Va en el armazón y no en el fragmento para que el
+   enlace de Configuración (`#reglas-motor`) la encuentre sin esperar al fetch. Mismo formulario y misma ruta
+   (cfg_reglas); el contexto (`reglas_cliente`, `reglas_defecto_exp`…) lo trae ver_cliente. #}
+<details class="swap-card exp-reglas-motor" id="reglas-motor">
+  <summary class="swap-card-resumen">{{ _('Reglas del motor (valen para todos los experimentos)') }}</summary>
+  <p class="vacio">
+    {{ _('Con estas reglas el motor decide ganadores y perdedores en todos los
+    experimentos del proyecto. Cada experimento puede sobreescribir una regla en
+    su propio panel. Vacío = valor de fábrica (en gris). «Sin umbral» apaga esa comparación.') }}
+  </p>
+  <form method="post" action="{{ url_for('cfg_reglas', cliente=cliente) }}" class="form-nueva-idea exp-reglas-form">
+    {% with reglas_valores=reglas_cliente, reglas_placeholder=reglas_defecto_exp, prefijo="cfg" %}{% include "_form_reglas.html" %}{% endwith %}
+    <button class="btn-guardar btn-sm" type="submit">{{ _('Guardar reglas del motor') }}</button>
+  </form>
+</details>
 <div id="cr-resultados" class="cr-resultados" data-url="{{ url_for('exp_resultados', cliente=cliente) }}" data-url-nuevo="{{ url_for('exp_nuevo', cliente=cliente) }}" aria-live="polite"><p class="cr-cargando">{{ _('Cargando resultados…') }}</p></div>
 <dialog id="cr-panel" class="cr-panel" aria-label="{{ _('Detalle de la pieza') }}"><button type="button" class="cr-panel-cerrar" aria-label="{{ _('Cerrar') }}">×</button><div class="cr-panel-cuerpo"></div></dialog>
 <script type="application/json" id="cr-textos">{{ {'cargando': _('Cargando resultados…'), 'cargandoPieza': _('Cargando la pieza…'), 'error': _('No se pudieron cargar los resultados'), 'errorPieza': _('No se pudo cargar la pieza'), 'piezaNoExiste': _('Esta pieza ya no está en el proyecto'), 'reintentar': _('Reintentar'), 'gasto': _('Gasto'), 'ctr': _('CTR'), 'roas': _('ROAS'), 'cpc': _('CPC'), 'cpm': _('CPM'), 'frecuencia': _('Frecuencia'), 'gancho': _('Gancho'), 'promedio': _('Promedio del experimento'), 'sinDatos': _('Sin datos'), 'cerrar': _('Cerrar')}|tojson }}</script>

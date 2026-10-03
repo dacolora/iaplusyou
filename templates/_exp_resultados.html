@@ -93,6 +93,8 @@
   {% if not decision.n %}<p class="cr-nada"><span aria-hidden="true">✓</span> {{ _('Nada por decidir') }}</p>{% endif %}
   {% if alertas_ctx and alertas_ctx.resumen.n %}
   <p class="cr-alertas-linea">{{ ngettext('%(num)s alerta necesita tu atención', '%(num)s alertas necesitan tu atención', alertas_ctx.resumen.n) }} → <a href="#alertas" data-ir-tab="alertas">{{ _('Ver Alertas') }}</a></p>
+  {% elif alertas_ctx is none %}
+  <p class="cr-alertas-linea tag-error">{{ _('No se pudo calcular las alertas.') }}</p>
   {% endif %}
 </section>
 
