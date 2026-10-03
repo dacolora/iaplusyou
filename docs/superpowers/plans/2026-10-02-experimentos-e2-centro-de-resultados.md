@@ -862,3 +862,47 @@ def test_contexto_completo_y_json(sembrado):
 - Captura real en el navegador integrado, escritorio (1280) y celular (375), con datos sembrados (lanzador temporal según la memoria `verificar-ui-sin-contrasena`), comparando con la maqueta: filtros, cada sección, el panel de una pieza, la gestión de un experimento, «Nuevo experimento» y el Tablero fuera del menú.
 - Revisión final de toda la rama (modelo más capaz) + `auditor-seguridad` (rutas GET nuevas, aislamiento, autoescape del texto de Meta).
 - Mezcla con `origin/main` (catálogo con Babel, submódulo), push fast-forward, despliegue solo de `iaplusyou` (y del worker si el diff toca `tareas/` o un módulo que el worker importe: `tablero.py` y `gastos.py` lo importan → los dos), humo.
+
+---
+
+## Reanudación tras Codex (2026-10-03)
+
+Estado al retomar (rama `exp-centro`, 36dedfe sobre main 1b01c430):
+- Tareas 1–4 hechas y aprobadas.
+- La tarea 5 está commiteada por otra pasada (5f64e6c), en main y en PRODUCCIÓN, y SIN revisar.
+- Codex avanzó a medias las tareas 6–9 y el presupuesto de E3 (15efe30): `_exp_resultados.html`, `_exp_historial.html`, `_exp_gestionar.html`, `exp_resultados.js`, `_exp_probar.html` con «total + días» y `presupuesto_experimentos.py`, el menú sin Tablero y las reglas en palabras. Quedaron 60 pruebas rojas.
+- Desde el 2026-10-02 hay un **sistema de estilos**: `static/estilos/` es la fuente y `static/style.css` se GENERA con `python3 estilos.py construir`. Todo CSS de Experimentos va en `static/estilos/pantallas/experimentos.css` (y `experimento-nuevo.css`), nombrado en `static/estilos/ORDEN`. La paleta azul ya es global (`static/estilos/tokens.css`): el punto «tokens `#tab-final, .zona-exp`» de la tarea 7 se reemplaza por «usar los tokens globales». La skill `ui` explica el sistema.
+
+Tareas que siguen (cada una «completa y verifica» lo que dejó Codex, contra las tareas originales que nombra):
+
+### R1 · Revisión de la tarea 5 (ya en producción)
+Revisar `5f64e6c` contra la tarea 5 (rutas `exp_resultados`, `exp_pieza`, `exp_nuevo`, `_contexto_experimentos`, redirecciones, enlaces, acceso, prueba de consultas con el ruling «delta_fragmento ≤ delta_cargar»). Arreglar lo que la revisión encuentre.
+
+### R2 · Pantalla completa (tareas 6 y 7)
+Completar `_exp_resultados.html`, `_exp_pieza.html`, `_exp_gestionar.html`, `_exp_historial.html`, `_tab_experimentos.html` y `static/exp_resultados.js` hasta cumplir TODO lo de las tareas 6 y 7, fieles a la maqueta.
+- Los estilos van en `static/estilos/pantallas/experimentos.css` con los tokens globales, y luego `estilos.py construir`.
+- Deben pasar `test_estilos_sistema`, `test_modo_oscuro`, `test_detalles_visuales`, `test_movil` y `test_base_visual`.
+
+### R3 · Tablero fundido y pruebas viejas adaptadas (tarea 8)
+Terminar la tarea 8 y adaptar todas las pruebas que buscaban el HTML viejo en `/cliente/<c>`: `test_rutas_organico`, `test_rutas_tablero`, `test_rutas_experimentos`, `test_rutas_alertas`, `test_rutas_productos`, `test_rutas_bloque4`, `test_rutas_triple_whale`, `test_outcome_sales`, `test_meta_errores` y `test_lote2_ui`.
+- Cada prueba conserva lo que afirmaba, apuntado a donde vive ahora: el fragmento `exp_resultados`, el panel `exp_pieza` o la página `exp_nuevo`.
+
+### R4 · Presupuesto «total + días» (adelanto de E3 que hizo Codex) y reglas en palabras (tarea 9)
+- **Presupuesto:** revisar y completar lo de `_exp_probar.html` + `presupuesto_experimentos.py` contra el spec §5.1–5.3. Tiene que cumplir:
+  - atajos;
+  - reparto por anuncios;
+  - aviso de mínimo con «Usar ese total»;
+  - «Máximo que puede gastar» a la vista;
+  - `exp_probar` rechaza `suma(diario) × días > tope_total` (+1 %);
+  - prueba de paridad Python↔JS del reparto;
+  - `PRESUPUESTO_MINIMO_DIARIO` en un solo lugar.
+- Lo revisa `guardian-gasto`.
+- **Reglas en palabras:** verificar la tarea 9 tal como la dejó Codex.
+
+### R5 · Idioma y documentos (tarea 10)
+Los 92 textos sin inglés, las pruebas `test_i18n_*`, las skills `experimentos`, `ui` y `escala-y-salud`, el spec (§2 y §4.3, más los estilos globales) y `docs/pendientes.md`. Suite completa verde.
+
+Después, el controlador:
+- mira la pantalla en el navegador (escritorio y celular, con datos sembrados) contra la maqueta;
+- hace la revisión final (modelo más capaz) y la de `auditor-seguridad`;
+- mezcla, sube a main y despliega.
