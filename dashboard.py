@@ -2118,7 +2118,10 @@ def ver_cliente(cliente):
     # sueltos y lo de Meta salen de contextos que comparten el fragmento de resultados (`exp_resultados`) y
     # «Nuevo experimento» (`exp_nuevo`). Lo orgánico ya viene en `fe_ctx`, y las piezas elegibles (la galería) ya
     # no viajan en esta página: las pide `exp_nuevo`.
-    ctx_exp = _contexto_experimentos(cliente, con_organico=False)
+    # Hotfix 2026-10-03: la pestaña Experimentos que corre hoy todavía pinta la galería y el «Agregar pieza»
+    # de cada borrador, así que la página sigue pasando las piezas elegibles hasta que el centro de
+    # resultados (E2) reemplace la pestaña. Sin esto decía «Todavía no hay piezas para probar».
+    ctx_exp = _contexto_experimentos(cliente, con_elegibles=True, con_organico=False)
     ctx_meta = _contexto_meta(cliente, ctx_exp["experimentos"])
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)

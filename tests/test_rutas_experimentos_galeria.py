@@ -131,3 +131,19 @@ def test_galeria_muestra_la_doctrina_y_el_paso_3_la_avisa(app, base_temporal):
     # que escapa los no-ASCII («según» sale como según).
     assert 'id="exp-doctrina-aviso"' in html and "AVISO_DOCTRINA_VARIAS" in html
     assert "puntos para mejorar seg\\u00fan la doctrina" in html
+
+
+def test_la_pestana_actual_lista_las_piezas_y_el_agregar_de_un_borrador(app, base_temporal):
+    """Hotfix 2026-10-03 (revisión de la tarea 5 de E2): mientras la pestaña Experimentos siga pintando la
+    galería, la página del proyecto le pasa las piezas elegibles; si no, decía «Todavía no hay piezas
+    para probar» con piezas listas y el «Agregar pieza» de un borrador salía vacío. E2 reemplaza la
+    pestaña y adapta esta prueba."""
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_hotfix")
+    ex.crear("acme", "Borrador", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    tab = html[html.index('id="tab-experimentos"'):]
+    assert f'name="piezas" value="{clon}"' in tab
+    assert "Todavía no hay piezas para probar" not in tab
+    agregar = tab[tab.index('class="exp-agregar"'):]
+    assert f'<option value="{clon}"' in agregar[:agregar.index("</form>")]
