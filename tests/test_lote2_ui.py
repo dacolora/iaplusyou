@@ -1,5 +1,6 @@
 """Regresiones de lote 2: JavaScript renderizado, sin navegador ni red."""
 import json
+import os
 import re
 import subprocess
 
@@ -26,20 +27,32 @@ def test_pnd044_conserva_desmarcadas_y_cuenta_cero(app):
     # La cuadrícula de «Probar en Meta» vive en «Nuevo experimento» (E2: su propia ruta, ya no la pestaña).
     html = app['c'].get('/cliente/acme/experimentos/nuevo').get_data(as_text=True)
     code = html.split('    var MESES =', 1)[1].split("    abrir.addEventListener", 1)[0]
+    cuenta_js = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'presupuesto_exp.js')
     node(r"""
 const assert=require('assert');
 let checks=[], selected=[{value:'1',checked:true,dataset:{nombre:'a'}},{value:'2',checked:true,dataset:{nombre:'b'}}];
-const marcadas=()=>selected, paises=[{value:'CO',checked:true}], nombre=null, cuenta={};
-const moneda='COP', minimo=1000, form={querySelector:()=>({value:'1'}),querySelectorAll:()=>[]};
-// «Total + días» (E3 adelantado): el trozo también arma el reparto del presupuesto (sus campos salen de `form` y
-// `document`); lo que declara antes de `MESES` y lo que define después de `abrir` va aquí.
+const marcadas=()=>selected, paises=[{value:'CO',checked:true,dataset:{bandera:'CO',nombre:'Colombia'}}], nombre=null;
+const moneda='COP', minimo=4000;
+// El trozo que se evalúa es el de «Cuánto» y la cuadrícula: la cuenta viene de static/presupuesto_exp.js y sus campos
+// salen de `form` y `document`, que aquí son de mentira (un nodo por selector, para poder leer lo que se pintó).
+var window={}; window.PresupuestoExp=require(""" + json.dumps(cuenta_js) + r""");
+const nodo=()=>{const hijos={}; return {value:'', hidden:false, textContent:'', dataset:{}, addEventListener:()=>{},
+  querySelector:s=>hijos[s]||(hijos[s]=nodo()), querySelectorAll:()=>[]};};
+const campos={'[name=tope_total]':Object.assign(nodo(),{value:'400000'}), '[name=dias]':Object.assign(nodo(),{value:'7'})};
+const form={querySelector:s=>campos[s]||(campos[s]=Object.assign(nodo(),{value:'4000'})),querySelectorAll:()=>[],dataset:{minimo:'4000',moneda:'COP'}};
 const pasoVisible=()=>3;
-const document={getElementById:()=>({addEventListener:()=>{}}),createElement:()=>({innerHTML:'a'}),documentElement:{lang:'es'}};
+const ids={}; const document={getElementById:i=>ids[i]||(ids[i]=nodo()),createElement:()=>({innerHTML:'a'}),documentElement:{lang:'es'}};
 const cuadricula={querySelectorAll:s=>s.includes(':checked')?checks.filter(c=>c.checked):checks,
 set innerHTML(h){checks=[...h.matchAll(/name="combinaciones" value="([^"]+)"([^>]*)/g)].map(m=>({value:m[1],checked:m[2].includes('checked'),addEventListener:()=>{}}));}};
 var MESES = """ + code + r"""
-armarCuadricula(); checks.forEach(c=>c.checked=false); refrescarCuenta();
-assert(cuenta.textContent.includes('0 anuncios'),cuenta.textContent);
+armarCuadricula(); refrescarCuenta();
+assert.strictEqual(estadoActual.anuncios,2,'dos piezas en un país son dos anuncios');
+assert(ids['exp-resumen-final'].querySelector('.exp-maximo').textContent.includes('400.000'),ids['exp-resumen-final'].querySelector('.exp-maximo').textContent);
+checks.forEach(c=>c.checked=false); refrescarCuenta();
+assert.strictEqual(estadoActual.anuncios,0,'sin casillas marcadas no hay anuncios');
+assert.strictEqual(ids['exp-resumen-final'].querySelector('.exp-anuncios').textContent,'');
+assert.strictEqual(ids['exp-resumen-final'].querySelector('.exp-maximo').textContent,'','sin anuncios no hay máximo que mostrar');
+assert.notStrictEqual(problema(),'','sin casillas marcadas no se puede lanzar');
 armarCuadricula(); assert(checks.every(c=>!c.checked),'se marcaron otra vez');
 selected.push({value:'3',checked:true,dataset:{nombre:'c'}}); armarCuadricula();
 assert.deepStrictEqual(checks.map(c=>c.checked),[false,false,true]);

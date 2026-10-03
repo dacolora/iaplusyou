@@ -1,11 +1,29 @@
-{# «Nuevo experimento» (E2, 2026-10-02): la galería de piezas, la barra y los tres pasos de «Probar en Meta»
-   que hasta E2 vivían arriba de la lista de experimentos en `_tab_experimentos.html`, movidos tal cual
-   a su propia página (exp_nuevo.html). Contexto de `exp_nuevo`: elegibles_exp, capacidades_meta, paises_fe,
-   minimo_diario_exp, moneda_exp, objetivos_exp, objetivo_exp_sugerido, nombres_objetivo_exp, atribuciones_exp,
-   atribucion_sugerida, etiquetas_exp, modos_exp y meses_cortos. Llega con ?piezas=1,2 (Crear, Final edition,
-   anuncios sueltos: las marca y abre el paso 1) o con ?exp_nombre=&exp_destino= (Catálogo › «Crear experimento»:
-   los pone en el paso 3). Termina en un POST a exp_probar que crea el experimento y lo lanza EN PAUSA; nada
-   gasta hasta «Activar». #}
+{# «Nuevo experimento» (E2, 2026-10-02): la galería de piezas, la barra y los pasos de «Probar en Meta» que hasta E2
+   vivían arriba de la lista de experimentos en `_tab_experimentos.html`, movidos a su propia página (exp_nuevo.html).
+   Contexto de `exp_nuevo`: elegibles_exp, capacidades_meta, paises_fe, minimo_diario_exp, tope_campana_min_exp,
+   moneda_exp, objetivos_exp, objetivo_exp_sugerido, nombres_objetivo_exp, atribuciones_exp, atribucion_sugerida,
+   etiquetas_exp, modos_exp y meses_cortos. Llega con ?piezas=1,2 (Crear, Final edition, anuncios sueltos: las marca y
+   abre el paso 1) o con ?exp_nombre=&exp_destino= (Catálogo › «Crear experimento»: los pone en el paso 4). Termina en
+   un POST a exp_probar que crea el experimento y lo lanza EN PAUSA; nada gasta hasta «Activar».
+
+   El presupuesto se pide como UN total y los días (paso 3): Creatv reparte entre los países
+   (`presupuesto_experimentos.repartir`, que `static/presupuesto_exp.js` replica; una prueba exige que den lo mismo) y
+   el servidor lo vuelve a comprobar (`presupuesto_experimentos.validar`). El POST no cambia: presupuesto_<país>,
+   tope_total (= el total), dias, combinaciones… Sin multiplicador a la vista: lo grande es «Máximo que puede gastar». #}
+{% macro resumen_presupuesto(id) %}
+<div class="exp-resumen" id="{{ id }}" aria-live="polite">
+  <p class="exp-maximo"></p>
+  <p class="exp-dia"></p>
+  <p class="exp-anuncios"></p>
+  <p class="exp-nada">{{ _('Nada gasta hasta que pulses Activar') }}</p>
+</div>
+{% endmacro %}
+{% macro nota_presupuesto() %}
+<div class="exp-nota">
+  <p>{{ _('Los días empiezan a contar cuando actives el experimento por primera vez, no cuando lo lances; si lo pausas y lo reanudas, la fecha de cierre no se mueve.') }}</p>
+  <p>{{ _('Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre.', minimo=tope_campana_min_exp|dinero(moneda_exp)) }}</p>
+</div>
+{% endmacro %}
 {# ---- La galería primero (spec 2026-09-20): todo lo generado, marcas y pruebas ---- #}
 <nav class="exp-recorrido" aria-label="{{ _('Pasos del experimento') }}"><span>{{ _('01 · Piezas') }}</span><span>{{ _('02 · Dónde') }}</span><span>{{ _('03 · Total y días') }}</span><span>{{ _('04 · Revisar') }}</span></nav>
 <section id="exp-galeria" class="exp-galeria">
@@ -72,8 +90,7 @@
     <fieldset class="exp-paises">
       {% for codigo, p in paises_fe.items() %}
       <label class="fe-destino">
-        <input type="checkbox" name="paises" value="{{ codigo }}" class="exp-pais-check"> {{ p.bandera }} {{ p.nombre|traducir }}
-        
+        <input type="checkbox" name="paises" value="{{ codigo }}" class="exp-pais-check" data-bandera="{{ p.bandera }}" data-nombre="{{ p.nombre|traducir }}"> {{ p.bandera }} {{ p.nombre|traducir }}
       </label>
       {% endfor %}
     </fieldset>
@@ -83,27 +100,31 @@
 
   <section data-paso="2" hidden>
     <h4>{{ _('¿Cuánto y por cuánto tiempo?') }}</h4>
-    <p>{{ _('Moneda de tu cuenta de Meta: %(moneda)s.', moneda=moneda_exp) }}</p>
+    <p class="vacio">{{ _('Pon el total que estás dispuesto a gastar y los días: Creatv lo reparte entre los países según sus anuncios. Moneda de tu cuenta de Meta: %(moneda)s.', moneda=moneda_exp) }}</p>
     <div class="exp-atajos">
       {% for texto in [_('Prueba rápida'), _('Estándar'), _('Fuerte')] %}<button type="button" class="btn-sm" data-atajo="{{ loop.index0 }}">{{ texto }} <strong></strong><small>{{ _('Sugerencia') }}</small></button>{% endfor %}
     </div>
-    <div class="fe-opciones">
-      <label>{{ _('Presupuesto total planificado (%(moneda)s)', moneda=moneda_exp) }} <input type="number" name="tope_total" min="0" step="any" required></label>
+    <div class="fe-opciones exp-total-dias">
+      <label>{{ _('Total (%(moneda)s)', moneda=moneda_exp) }} <input type="number" name="tope_total" min="0" step="any" required></label>
       <label>{{ _('Días') }} <input type="number" name="dias" value="7" min="1" max="90"></label>
     </div>
-    <p class="exp-resumen" id="exp-resumen" aria-live="polite"></p>
-    <p id="exp-minimo" aria-live="polite"></p><button type="button" class="btn-sm" id="exp-usar-minimo" hidden>{{ _('Usar ese total') }}</button>
-    <details><summary>{{ _('Ajustar reparto diario por país') }}</summary>
-      <label><input type="checkbox" id="exp-manual"> {{ _('Editar el reparto; el total se recalcula') }}</label>
+    <input type="range" id="exp-total-barra" class="exp-total-barra" aria-label="{{ _('Ajustar el total') }}">
+    {{ resumen_presupuesto('exp-resumen') }}
+    <p id="exp-minimo" class="exp-aviso" aria-live="polite" hidden></p>
+    <button type="button" class="btn-sm" id="exp-usar-minimo" hidden>{{ _('Usar ese total') }}</button>
+    <details class="exp-ajuste"><summary>{{ _('Ajustar reparto') }}</summary>
+      <p class="vacio">{{ _('Cambia el presupuesto diario de cada país: el total se recalcula (suma × días).') }}</p>
       <div class="exp-reparto">{% for codigo, p in paises_fe.items() %}<label data-reparto="{{ codigo }}" hidden>{{ p.bandera }} {{ p.nombre|traducir }}
-      <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" value="{{ minimo_diario_exp }}" readonly></label>{% endfor %}</div>
+      <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" value="{{ minimo_diario_exp }}"></label>{% endfor %}</div>
+      <button type="button" class="btn-sm" id="exp-reparto-auto" hidden>{{ _('Volver al reparto automático') }}</button>
     </details>
+    {{ nota_presupuesto() }}
     <div class="exp-pasos-botones"><button type="button" class="btn-sm" data-ir="1">{{ _('← Atrás') }}</button> <button type="button" class="btn-guardar btn-sm" data-ir="3">{{ _('Siguiente →') }}</button></div>
   </section>
 
-  <p class="exp-control">{{ _('Nada gasta hasta que pulses Activar. Este es un presupuesto planificado, no un máximo garantizado: Creatv revisa el gasto periódicamente y puede haber gasto adicional antes de pausar. Meta aplica su límite de campaña cuando está disponible. Los días cuentan desde el lanzamiento, no desde la activación.') }}</p>
   <section data-paso="3" hidden>
-    <h4>{{ _('Revisar') }}</h4><p class="exp-resumen" id="exp-resumen-final"></p>
+    <h4>{{ _('Revisar') }}</h4>
+    {{ resumen_presupuesto('exp-resumen-final') }}
     <p class="vacio">{{ _('Cada casilla es un anuncio (pieza × país). Las finales solo van a su país.') }}</p>
     <p class="vacio" id="exp-doctrina-aviso" hidden></p>
     <div id="exp-cuadricula" class="exp-cuadricula"></div>
@@ -126,6 +147,7 @@
       </div>
       <p class="vacio exp-ayuda-modo">{{ _('Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar se hacen solos. Auto: todo solo salvo con el tope alcanzado. Compras exige el Pixel activo y atribución pixel; Tráfico sirve siempre. La atribución sugerida sale de lo conectado en Configuración: pulsa «Comprobar Pixel» allí para que la tenga en cuenta.') }}</p>
     </details>
+    {{ nota_presupuesto() }}
     <div class="exp-pasos-botones">
       <button type="button" class="btn-sm" data-ir="2">{{ _('← Atrás') }}</button>
       <button type="submit" class="btn-generar" id="exp-lanzar">{{ _('Lanzar a Meta (en pausa)') }}</button>
@@ -134,6 +156,7 @@
 </form>
 {% endif %}
 
+<script src="{{ url_for('static', filename='presupuesto_exp.js') }}"></script>
 <script>
   // La galería primero (spec 2026-09-20): marcar piezas -> barra «Probar en
   // Meta» -> tres pasos (dónde, cuánto, revisar) -> un POST a exp_probar que
@@ -185,7 +208,6 @@
 
     var abrir = document.getElementById('exp-abrir-pasos');
     var paises = Array.prototype.slice.call(form.querySelectorAll('.exp-pais-check'));
-    var cuenta = document.getElementById('exp-resumen');
     var cuadricula = document.getElementById('exp-cuadricula');
     var nombre = document.getElementById('exp-nombre');
     var minimo = parseFloat(form.dataset.minimo || '0'), moneda = form.dataset.moneda || '';
@@ -197,17 +219,20 @@
     var VARIOS_PAISES = {{ ngettext('%(num)s país', '%(num)s países', 2, num='{n}')|tojson }};
     var UN_ANUNCIO = {{ ngettext('%(num)s anuncio', '%(num)s anuncios', 1, num='{n}')|tojson }};
     var VARIOS_ANUNCIOS = {{ ngettext('%(num)s anuncio', '%(num)s anuncios', 2, num='{n}')|tojson }};
-    var CONECTOR_X = {{ _(' × ')|tojson }};
-    var CONECTOR_IGUAL = {{ _(' = ')|tojson }};
-    var CONECTOR_HASTA = {{ _(' · hasta ')|tojson }};
-    var SUFIJO_DIA = {{ _('/día')|tojson }};
-    var CONECTOR_TOPE = {{ _(' · tope ')|tojson }};
-    var CONECTOR_PUNTO = {{ _(' · ')|tojson }};
     var SUFIJO_DIAS = {{ _(' días')|tojson }};
+    var AL_DIA = {{ _('≈ %(dia)s al día', dia='{dia}')|tojson }};
+    var MAXIMO_UN_DIA = {{ ngettext('Máximo que puede gastar: %(total)s en %(num)s día', 'Máximo que puede gastar: %(total)s en %(num)s días', 1, total='{total}', num='{n}')|tojson }};
+    var MAXIMO_VARIOS_DIAS = {{ ngettext('Máximo que puede gastar: %(total)s en %(num)s día', 'Máximo que puede gastar: %(total)s en %(num)s días', 2, total='{total}', num='{n}')|tojson }};
+    var PLANTILLA_ANUNCIOS = {{ _('%(anuncios)s (%(piezas)s en %(paises)s)', anuncios='{anuncios}', piezas='{piezas}', paises='{paises}')|tojson }};
+    var PLANTILLA_MINIMO = {{ _('Con este reparto no se llega al mínimo diario de Meta (%(minimo)s al día) en: %(paises)s. Con un total de al menos %(total)s alcanza.', paises='{paises}', minimo='{minimo}', total='{total}')|tojson }};
     var AVISO_MARCA_PAIS = {{ _('Marca al menos un país.')|tojson }};
     var PLANTILLA_PRESUPUESTO_BAJO = {{ _('El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s', minimo='{minimo}', moneda='{moneda}', paises='{paises}')|tojson }};
     var PLANTILLA_PAIS_SIN_PIEZAS = {{ _('El país %(pais)s quedó sin piezas: quita el país o marca una pieza para él.', pais='{pais}')|tojson }};
-    var AVISO_TOPE = {{ _('Escribe el tope total.')|tojson }};
+    var AVISO_TOPE = {{ _('Escribe el total.')|tojson }};
+    var AVISO_DIAS = {{ _('Los días van de 1 a 90.')|tojson }};
+    var AVISO_ENTEROS = {{ _('El presupuesto diario de cada país va en cifras enteras en %(moneda)s.', moneda='{moneda}')|tojson }};
+    var AVISO_CENTAVOS = {{ _('El presupuesto diario de cada país no lleva más de dos decimales en %(moneda)s.', moneda='{moneda}')|tojson }};
+    var AVISO_SUPERA = {{ _('El reparto supera el total: baja el presupuesto de algún país o sube el total.')|tojson }};
     var AVISO_CUADRICULA_VACIA = {{ _('Deja al menos una casilla marcada en la cuadrícula.')|tojson }};
     var PLANTILLA_CONFIRMAR_LANZAR = {{ _('Se crean la campaña, los conjuntos y los anuncios en Meta, EN PAUSA (no gasta hasta que actives). %(resumen)s ¿Seguimos?', resumen='{resumen}')|tojson }};
     var TEXTO_LANZANDO = {{ _('Lanzando…')|tojson }};
@@ -249,66 +274,127 @@
     function paisSinPiezas(paisesConPieza) {
       return paisesMarcados().filter(function (p) { return paisesConPieza.indexOf(p) === -1; })[0] || null;
     }
-    function avisarPaisSinPiezas(pais) {
-      alert(PLANTILLA_PAIS_SIN_PIEZAS.replace('{pais}', pais));
-    }
-    // Función pura: misma fórmula y unidad monetaria que presupuesto_experimentos.repartir.
-    function repartir(total, dias, pesos, moneda, minimo) {
-      var factor = ['JPY','CLP','HUF','ISK','KRW','TWD','VND','PYG','UGX','XAF','XOF'].includes(moneda) ? 1 : 100;
-      var suma = Object.values(pesos).reduce(function(a,b) { return a+b; }, 0);
-      var diarios = {}, bajos = [], totalMinimo = 0;
-      Object.keys(pesos).forEach(function(p) {
-        diarios[p] = Math.floor((total * pesos[p] / suma / dias) * factor + 1e-7) / factor;
-        if (diarios[p] < minimo) bajos.push(p);
-        totalMinimo = Math.max(totalMinimo, Math.ceil(minimo * suma * dias / pesos[p] * factor - 1e-7) / factor);
-      });
-      return {presupuestos: diarios, bajos: bajos, total_minimo: totalMinimo};
-    }
+    // La cuenta vive en static/presupuesto_exp.js (réplica de presupuesto_experimentos.py: una prueba exige que den lo
+    // mismo). Aquí solo se lee la pantalla y se pinta el resultado.
+    var P = window.PresupuestoExp;
     var totalInput = form.querySelector('[name=tope_total]'), diasInput = form.querySelector('[name=dias]');
-    var manual = document.getElementById('exp-manual'), ultimoMinimo = 0, valido = false;
-    function dinero(n) { return n.toLocaleString(document.documentElement.lang || 'es', {maximumFractionDigits: 2}) + ' ' + moneda; }
-    function pesosActuales() {
-      var pares = pasoVisible() === 3 ? Array.from(cuadricula.querySelectorAll('input:checked')).map(function(i) { return i.value.split(':')[1]; }) : combinaciones().map(function(p) { return p[1]; });
-      var pesos = {}; pares.forEach(function(p) { pesos[p] = (pesos[p] || 0) + 1; }); return pesos;
+    var barra = document.getElementById('exp-total-barra'), aviso = document.getElementById('exp-minimo');
+    var usarMinimo = document.getElementById('exp-usar-minimo'), repartoAuto = document.getElementById('exp-reparto-auto');
+    var resumenes = [document.getElementById('exp-resumen'), document.getElementById('exp-resumen-final')];
+    var enteros = P.EN_ENTEROS.indexOf(moneda) !== -1;
+    // `manual`: la persona editó el diario de algún país («Ajustar reparto»); el total se recalcula de ahí.
+    var manual = false, ultimoMinimo = 0, estadoActual = {}, textoMaximo = '';
+    // useGrouping «always»: «4.000», no «4000» (en español un número de cuatro cifras no se agrupa solo; el servidor sí lo hace).
+    function numeroLocal(n) { return Number.isFinite(n) ? n.toLocaleString(document.documentElement.lang || 'es', {maximumFractionDigits: 2, useGrouping: "always"}) : ''; }
+    function dinero(n) { return numeroLocal(n) + ' ' + moneda; }
+    function campoPais(p) { return form.querySelector('[name=presupuesto_' + p + ']'); }
+    function casillaPais(p) { return paises.filter(function (c) { return c.value === p; })[0]; }
+    function suma(pesos) { return Object.keys(pesos).reduce(function (a, p) { return a + pesos[p]; }, 0); }
+    // Lo que se va a lanzar: anuncios por país (en Revisar, los que siguen marcados en la cuadrícula), piezas y países.
+    function estado() {
+      var pares = pasoVisible() === 3
+        ? Array.prototype.slice.call(cuadricula.querySelectorAll('input[name=combinaciones]:checked')).map(function (i) { return i.value.split(':'); })
+        : combinaciones().map(function (par) { return [par[0].value, par[1]]; });
+      var cuentas = {}, piezas = {}, pesos = {};
+      pares.forEach(function (par) { cuentas[par[1]] = (cuentas[par[1]] || 0) + 1; piezas[par[0]] = 1; });
+      paisesMarcados().forEach(function (p) { if (cuentas[p]) pesos[p] = cuentas[p]; });
+      return {pesos: pesos, piezas: Object.keys(piezas).length};
     }
-    function opciones(pesos) {
-      var n = Object.values(pesos).reduce(function(a,b) { return a+b; }, 0);
-      return [[4,4],[8,7],[15,10]].map(function(par) {
-        var bruto = minimo * n * par[0] * par[1], paso = Math.pow(10, Math.floor(Math.log10(bruto || 1))-1);
-        return {total: Math.ceil(bruto / paso) * paso, dias: par[1]};
+    function etiquetaPais(p) { var c = casillaPais(p); return c ? (c.dataset.bandera + ' ' + c.dataset.nombre).trim() : p; }
+    function pintarResumen(d) {
+      resumenes.forEach(function (r) {
+        r.querySelector('.exp-maximo').textContent = d.maximo;
+        r.querySelector('.exp-dia').textContent = d.dia;
+        r.querySelector('.exp-anuncios').textContent = d.anuncios;
       });
     }
     function refrescarCuenta() {
-      var n = marcadas().length, ps = paisesMarcados(), pesos = pesosActuales();
-      var anuncios = Object.values(pesos).reduce(function(a,b) { return a+b; }, 0);
-      var dias = Number(diasInput.value), total = Number(totalInput.value);
-      form.querySelectorAll('[data-atajo]').forEach(function(b,i) { var o = opciones(pesos)[i]; b.querySelector('strong').textContent = dinero(o.total) + ' · ' + o.dias + SUFIJO_DIAS; });
-      if (!totalInput.value && anuncios) { total = opciones(pesos)[1].total; totalInput.value = total; }
-      var calculo = repartir(total, dias, pesos, moneda, minimo), dia = 0;
-      ps.forEach(function(p) {
-        var campo = form.querySelector('[name=presupuesto_' + p + ']');
-        campo.readOnly = !manual.checked;
-        if (!manual.checked) campo.value = Number.isFinite(calculo.presupuestos[p]) ? calculo.presupuestos[p] : 0;
-        dia += Number(campo.value);
+      var ps = paisesMarcados(), est = estado(), pesos = est.pesos, anuncios = suma(pesos);
+      var dias = Number(diasInput.value), diasOk = Number.isInteger(dias) && dias >= 1 && dias <= 90;
+      var sugerencias = anuncios ? P.atajos(pesos, minimo) : [];
+      form.querySelectorAll('[data-atajo]').forEach(function (b, i) {
+        b.querySelector('strong').textContent = sugerencias[i] ? dinero(sugerencias[i].total) + ' · ' + sugerencias[i].dias + SUFIJO_DIAS : '';
       });
-      form.querySelectorAll('[data-reparto]').forEach(function(l) { l.hidden = !ps.includes(l.dataset.reparto); });
-      if (manual.checked && Number.isFinite(dia * dias)) { total = Math.round(dia * dias * 100) / 100; totalInput.value = total; }
-      var bajos = ps.filter(function(p) { return Number(form.querySelector('[name=presupuesto_' + p + ']').value) < minimo; });
-      valido = anuncios > 0 && ps.length > 0 && !paisSinPiezas(Object.keys(pesos)) && Number.isFinite(total) && total > 0 && Number.isInteger(dias) && dias >= 1 && dias <= 90 && !bajos.length && Number.isFinite(dia) && dia * dias <= total + .000001;
-      ultimoMinimo = calculo.total_minimo;
-      document.getElementById('exp-minimo').textContent = bajos.length ? {{ _('Para respetar el mínimo diario de Meta, usa al menos este total:')|tojson }} + ' ' + dinero(ultimoMinimo) : '';
-      document.getElementById('exp-usar-minimo').hidden = !bajos.length;
-      cuenta.textContent = {{ _('Presupuesto planificado:')|tojson }} + ' ' + dinero(total) + ' · ' + dias + SUFIJO_DIAS + ' · ' + dinero(dia) + SUFIJO_DIA + ' · ' + (anuncios === 1 ? UN_ANUNCIO : VARIOS_ANUNCIOS).replace('{n}', anuncios);
-      document.getElementById('exp-resumen-final').textContent = cuenta.textContent;
+      // Sin cifra todavía, la sugerencia «Estándar» (la persona la cambia: es solo un punto de partida).
+      if (!totalInput.value && anuncios) totalInput.value = sugerencias[1].total;
+      var total = Number(totalInput.value);
+      var conTotal = Number.isFinite(total) && total > 0;
+      var calculo = anuncios && diasOk ? P.repartir(conTotal ? total : 1, dias, pesos, moneda, minimo) : null;
+      var factor = P.factor(moneda), diario = 0, precisionMal = false;
+      ps.forEach(function (p) {
+        var campo = campoPais(p);
+        if (!manual) campo.value = calculo && calculo.presupuestos[p] !== undefined && conTotal ? calculo.presupuestos[p] : 0;
+        var v = Number(campo.value);
+        if (!Number.isFinite(v) || v < 0 || Math.abs(v * factor - Math.round(v * factor)) > 1e-6) precisionMal = true;
+        diario += Number.isFinite(v) ? v : 0;
+      });
+      campoPaisesVisibles(ps);
+      // Con el reparto a mano, el total es lo que da: suma de los diarios × días (a la unidad de la moneda).
+      if (manual && diasOk && !precisionMal) { total = Math.round(diario * dias * factor) / factor; totalInput.value = total; conTotal = total > 0; }
+      var bajos = ps.filter(function (p) { return Number(campoPais(p).value) < minimo; });
+      var supera = diario * dias > total * 1.01 + 1e-6;
+      ultimoMinimo = calculo ? calculo.total_minimo : 0;
+      estadoActual = {ps: ps, pesos: pesos, anuncios: anuncios, total: total, dias: dias, diasOk: diasOk, conTotal: conTotal, precisionMal: precisionMal, bajos: bajos, supera: supera};
+      var hayCifras = anuncios > 0 && conTotal && diasOk;
+      var porPais = ps.length > 1 ? ps.map(function (p) { return (casillaPais(p).dataset.bandera || p) + ' ' + numeroLocal(Number(campoPais(p).value)); }) : [];
+      var nPaises = Object.keys(pesos).length;
+      var anunciosTxt = (anuncios === 1 ? UN_ANUNCIO : VARIOS_ANUNCIOS).replace('{n}', anuncios);
+      var piezasTxt = (est.piezas === 1 ? UNA_PIEZA : VARIAS_PIEZAS).replace('{n}', est.piezas);
+      var paisesTxt = (nPaises === 1 ? UN_PAIS : VARIOS_PAISES).replace('{n}', nPaises);
+      textoMaximo = hayCifras ? (dias === 1 ? MAXIMO_UN_DIA : MAXIMO_VARIOS_DIAS).replace('{total}', dinero(total)).replace('{n}', dias) : '';
+      pintarResumen({
+        maximo: textoMaximo,
+        dia: hayCifras ? [AL_DIA.replace('{dia}', dinero(diario))].concat(porPais).join(' · ') : '',
+        // «6 anuncios (3 piezas en 2 países)»; un solo anuncio no necesita el paréntesis.
+        anuncios: !anuncios ? '' : anuncios === 1 ? anunciosTxt
+          : PLANTILLA_ANUNCIOS.replace('{anuncios}', anunciosTxt).replace('{piezas}', piezasTxt).replace('{paises}', paisesTxt)
+      });
+      // País bajo el mínimo de Meta: se dice en palabras, con el total mínimo que lo arregla.
+      var bajo = conTotal && bajos.length && calculo;
+      aviso.hidden = !bajo; usarMinimo.hidden = !bajo;
+      aviso.textContent = bajo ? PLANTILLA_MINIMO.replace('{paises}', bajos.map(etiquetaPais).join(', ')).replace('{minimo}', dinero(minimo)).replace('{total}', dinero(ultimoMinimo)) : '';
+      repartoAuto.hidden = !manual;
+      afinarBarra(sugerencias, calculo, total);
+      var n = est.piezas;
       if (nombre && !nombre.dataset.tocado) {
         var hoy = new Date();
         nombre.value = PLANTILLA_NOMBRE.replace('{fecha}', hoy.getDate() + ' ' + MESES[hoy.getMonth()])
           .replace('{piezas}', (n === 1 ? UNA_PIEZA : VARIAS_PIEZAS).replace('{n}', n)).replace('{paises}', ps.slice().sort().join(', '));
       }
     }
-    form.querySelectorAll('[data-atajo]').forEach(function(b,i) { b.addEventListener('click', function() { var o = opciones(pesosActuales())[i]; manual.checked = false; totalInput.value = o.total; diasInput.value = o.dias; refrescarCuenta(); }); });
-    manual.addEventListener('change', refrescarCuenta);
-    document.getElementById('exp-usar-minimo').addEventListener('click', function() { manual.checked = false; totalInput.value = ultimoMinimo; refrescarCuenta(); });
+    function campoPaisesVisibles(ps) { form.querySelectorAll('[data-reparto]').forEach(function (l) { l.hidden = !ps.includes(l.dataset.reparto); }); }
+    // La barra del total: va del total mínimo que respeta a Meta hasta el doble de la sugerencia «Fuerte».
+    function afinarBarra(sugerencias, calculo, total) {
+      if (!sugerencias.length || !calculo) { barra.hidden = true; return; }
+      barra.hidden = false;
+      var tope = Math.max(sugerencias[2].total * 2, total || 0, calculo.total_minimo);
+      var paso = Math.max(1 / P.factor(moneda), Math.pow(10, String(Math.floor(tope)).length - 3));
+      barra.min = calculo.total_minimo; barra.max = tope; barra.step = paso;
+      barra.value = Number.isFinite(total) ? total : calculo.total_minimo;
+    }
+    // Lo que impide seguir, dicho en palabras (vacío = todo bien). Lo mismo lo dice el servidor si alguien se salta esto.
+    function problema() {
+      refrescarCuenta();
+      var e = estadoActual;
+      if (!e.ps.length) return AVISO_MARCA_PAIS;
+      var huerfano = paisSinPiezas(Object.keys(e.pesos));
+      if (huerfano) return PLANTILLA_PAIS_SIN_PIEZAS.replace('{pais}', huerfano);
+      if (!e.conTotal) return AVISO_TOPE;
+      if (!e.diasOk) return AVISO_DIAS;
+      if (e.precisionMal) return (enteros ? AVISO_ENTEROS : AVISO_CENTAVOS).replace('{moneda}', moneda);
+      if (e.bajos.length) return PLANTILLA_PRESUPUESTO_BAJO.replace('{minimo}', minimo).replace('{moneda}', moneda).replace('{paises}', e.bajos.join(', '));
+      if (e.supera) return AVISO_SUPERA;
+      return '';
+    }
+    form.querySelectorAll('[data-atajo]').forEach(function (b, i) {
+      b.addEventListener('click', function () {
+        var o = P.atajos(estado().pesos, minimo)[i];
+        manual = false; totalInput.value = o.total; diasInput.value = o.dias; refrescarCuenta();
+      });
+    });
+    usarMinimo.addEventListener('click', function () { manual = false; totalInput.value = ultimoMinimo; refrescarCuenta(); });
+    repartoAuto.addEventListener('click', function () { manual = false; refrescarCuenta(); });
+    barra.addEventListener('input', function () { manual = false; totalInput.value = barra.value; refrescarCuenta(); });
     function armarCuadricula() {
       var previas = {}; cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function(i) { previas[i.value] = i.checked; });
       var ps = paisesMarcados();
@@ -336,17 +422,7 @@
       b.addEventListener('click', function () {
         var destino = parseInt(b.dataset.ir, 10);
         if (destino >= 2 && paisesMarcados().length === 0) { alert(AVISO_MARCA_PAIS); return; }
-        if (destino >= 3) {
-          var bajos = paisesMarcados().filter(function (p) { return parseFloat(form.querySelector('[name=presupuesto_' + p + ']').value || '0') < minimo; });
-          if (bajos.length) {
-            alert(PLANTILLA_PRESUPUESTO_BAJO.replace('{minimo}', minimo).replace('{moneda}', moneda).replace('{paises}', bajos.join(', ')));
-            return;
-          }
-          var huerfano = paisSinPiezas(combinaciones().map(function (par) { return par[1]; }));
-          if (huerfano) { avisarPaisSinPiezas(huerfano); return; }
-        }
-        if (destino >= 3 && !(parseFloat(form.querySelector('[name=tope_total]').value || '0') > 0)) { alert(AVISO_TOPE); return; }
-        if (destino >= 3) { refrescarCuenta(); if (!valido) { alert(AVISO_TOPE); return; } }
+        if (destino >= 3) { var motivo = problema(); if (motivo) { alert(motivo); return; } }
         irA(destino);
       });
     });
@@ -365,16 +441,19 @@
         refrescarCuenta();
       });
     });
-    form.querySelectorAll('[name=tope_total], [name=dias], [name^=presupuesto_], .exp-pais-check').forEach(function (i) { i.addEventListener('input', refrescarCuenta); });
+    // Escribir un total vuelve al reparto automático; editar el diario de un país lo pasa a mano (y el total se recalcula).
+    totalInput.addEventListener('input', function () { manual = false; refrescarCuenta(); });
+    diasInput.addEventListener('input', refrescarCuenta);
+    form.querySelectorAll('[name^=presupuesto_]').forEach(function (i) { i.addEventListener('input', function () { manual = true; refrescarCuenta(); }); });
+    paises.forEach(function (i) { i.addEventListener('input', refrescarCuenta); });
     if (nombre) nombre.addEventListener('input', function () { nombre.dataset.tocado = '1'; });
     form.addEventListener('submit', function (ev) {
-      refrescarCuenta();
-      if (!valido) { ev.preventDefault(); alert(AVISO_TOPE); return; }
+      var motivo = problema();
+      if (motivo) { ev.preventDefault(); alert(motivo); return; }
       var marcadasCuadricula = Array.prototype.slice.call(cuadricula.querySelectorAll('input[name=combinaciones]:checked'));
       if (!marcadasCuadricula.length) { ev.preventDefault(); alert(AVISO_CUADRICULA_VACIA); return; }
-      var huerfano = paisSinPiezas(marcadasCuadricula.map(function (i) { return i.value.split(':')[1]; }));
-      if (huerfano) { ev.preventDefault(); avisarPaisSinPiezas(huerfano); return; }
-      if (!confirm(PLANTILLA_CONFIRMAR_LANZAR.replace('{resumen}', cuenta.textContent))) { ev.preventDefault(); return; }
+      // La confirmación repite lo que puede costar: el máximo, en cifras.
+      if (!confirm(PLANTILLA_CONFIRMAR_LANZAR.replace('{resumen}', textoMaximo + '.'))) { ev.preventDefault(); return; }
       // Los países deshabilitados por una final igual deben viajar: se
       // rehabilitan solo cuando el envío sigue adelante.
       paises.forEach(function (p) { p.disabled = false; });

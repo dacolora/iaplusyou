@@ -26,16 +26,27 @@ _UMBRALES_DESACTIVABLES = {"cpc_max", "ctr_min", "thruplay_min", "cpa_max", "roa
 # Alias públicos para los formularios (dashboard) — misma tupla de claves.
 ENTEROS = frozenset(_ENTEROS)
 UMBRALES_DESACTIVABLES = frozenset(_UMBRALES_DESACTIVABLES)
-# Texto corto de cada regla para la UI (misma clave que REGLAS_DEFECTO). N_:
-# se traduce donde se muestra (|traducir en la plantilla), no acá.
+# Cada regla dicha en palabras para «Cómo decide el motor» (misma clave que REGLAS_DEFECTO; sin claves de código a la
+# vista, spec 2026-10-02 §4.7). N_: se traduce donde se muestra (|traducir en la plantilla), no acá.
 ETIQUETAS = {
-    "ventana_horas": N_("Horas de espera antes de evaluar el tráfico"), "impresiones_min": N_("Veces que debe mostrarse el anuncio antes de evaluarlo"),
-    "gasto_min_x_presupuesto": N_("Gasto necesario para evaluar (veces el presupuesto diario)"), "cpc_max": N_("Costo máximo por clic (moneda de la cuenta)"),
-    "ctr_min": N_("Porcentaje mínimo de clics sobre impresiones (%)"), "thruplay_min": N_("Proporción mínima de reproducciones completas o de 15 segundos (0–1)"),
-    "ventana_ventas_horas": N_("Horas de espera antes de evaluar las ventas"), "cpa_max": N_("Costo máximo por compra (moneda de la cuenta)"), "roas_min": N_("Ingresos mínimos por cada unidad gastada"),
-    "n_reediciones": N_("Versiones nuevas de edición por pieza ganadora"), "n_regeneraciones": N_("Videos nuevos por pieza ganadora"),
-    "escalar_pct_dia": N_("Aumento diario del presupuesto (%)"), "escalar_tope_dia": N_("Límite diario después de aumentar (moneda de la cuenta)"),
+    "ventana_horas": N_("Horas mínimas corriendo"), "impresiones_min": N_("Impresiones mínimas"),
+    "gasto_min_x_presupuesto": N_("Días de su presupuesto diario que debe haber gastado"),
+    "cpc_max": N_("Costo por clic máximo"), "ctr_min": N_("CTR mínimo (%)"),
+    "thruplay_min": N_("Parte mínima que ve el video completo (0–1)"),
+    "ventana_ventas_horas": N_("Horas para esperar ventas"), "cpa_max": N_("Costo por compra máximo"),
+    "roas_min": N_("ROAS mínimo"),
+    "escalar_pct_dia": N_("Cuánto sube el presupuesto por día (%)"),
+    "escalar_tope_dia": N_("Tope del presupuesto diario al escalar"),
+    "n_reediciones": N_("Versiones nuevas del guion al derivar"), "n_regeneraciones": N_("Clones nuevos al derivar"),
 }
+# Cómo se agrupan en el formulario: (título del grupo, reglas en el orden en que se leen). Toda clave de
+# REGLAS_DEFECTO está en un solo grupo (una prueba lo exige): una regla que no esté aquí no se vería en el formulario.
+GRUPOS_REGLAS = (
+    (N_("Antes de juzgar una pieza"), ("ventana_horas", "impresiones_min", "gasto_min_x_presupuesto")),
+    (N_("Cuándo pierde por tráfico"), ("cpc_max", "ctr_min", "thruplay_min")),
+    (N_("Cuándo gana o pierde por ventas"), ("ventana_ventas_horas", "cpa_max", "roas_min")),
+    (N_("Qué hace con una ganadora"), ("escalar_pct_dia", "escalar_tope_dia", "n_reediciones", "n_regeneraciones")),
+)
 
 
 def reglas_desde_formulario(form):

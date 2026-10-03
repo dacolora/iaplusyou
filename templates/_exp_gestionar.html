@@ -204,8 +204,8 @@
   <details class="exp-reglas"><summary>{{ _('Cómo decide el motor') }}{% if e.reglas %} {{ _('(%(n)s propia(s))', n=e.reglas|length) }}{% endif %}</summary>
     <form method="post" action="{{ url_for('exp_reglas', cliente=cliente, eid=e.id) }}" class="exp-reglas-form">
       {% set efectivas = reglas_efectivas_exp.get(e.id, reglas_defecto_exp) %}
-      {% with reglas_valores=e.reglas, reglas_placeholder=efectivas, prefijo="exp" ~ e.id %}{% include "_form_reglas.html" %}{% endwith %}
-      <p class="vacio">{{ _('Vacío = hereda de Configuración (el valor gris es el que aplica hoy). «Sin umbral» apaga esa comparación en este experimento.') }}</p>
+      {% with reglas_valores=e.reglas, reglas_placeholder=efectivas, prefijo="exp" ~ e.id, reglas_de_experimento=true %}{% include "_form_reglas.html" %}{% endwith %}
+      <p class="vacio">{{ _('El valor gris es el que aplica hoy en este experimento. «Sin umbral» apaga esa comparación solo aquí.') }}</p>
       <button class="btn-guardar btn-sm">{{ _('Guardar reglas') }}</button>
     </form>
   </details>

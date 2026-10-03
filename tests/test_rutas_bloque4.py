@@ -1,6 +1,6 @@
 """Rutas del Bloque 4 en dashboard: modo, reglas, propuestas (aprobar /
 rechazar / aprobar todas), evaluar ahora, las reglas por defecto del motor
-(que viven en Experimentos › «Reglas del motor», ruta cfg_reglas) y en
+(que viven en Experimentos › «Cómo decide el motor», ruta cfg_reglas) y en
 Configuración el correo de avisos. Las rutas validan y delegan;
 acciones.ejecutar (que toca Meta) se reemplaza por un fake."""
 import pytest
@@ -253,7 +253,7 @@ def test_render_pestana_con_propuesta_y_veredicto(app, base_temporal):
     # Experimentos (en su armazón, para que el enlace de Configuración lo
     # encuentre sin esperar al fetch), y ni rastro en Configuración, que solo enlaza.
     exp, cfg = _seccion(pagina, "experimentos"), _seccion(pagina, "settings")
-    assert "Reglas del motor (valen para todos los experimentos)" in exp
+    assert "Cómo decide el motor" in exp and "Reglas del motor (valen" not in exp
     assert "/cliente/acme/config/reglas" in exp and 'id="cfg-ctr_min"' in exp
     assert "/cliente/acme/config/reglas" not in cfg and 'id="cfg-ctr_min"' not in cfg
     assert "Reglas por defecto de los experimentos" not in cfg
@@ -298,3 +298,74 @@ def test_propuesta_muestra_precio_estimado(app, base_temporal):
     assert "precio no disponible" in rescatar and "≈" not in rescatar
     pausar = props[props.index('exp-propuesta-pausar'):props.index("</li>", props.index('exp-propuesta-pausar'))]
     assert "exp-propuesta-precio" not in pausar
+
+
+# ---- «Cómo decide el motor»: las reglas en palabras (E2 R4, spec 2026-10-02 §4.7) --------------------------------
+
+import re  # noqa: E402
+
+CAMPOS_DE_REGLAS = ["ventana_horas", "impresiones_min", "gasto_min_x_presupuesto", "cpc_max", "ctr_min", "thruplay_min",
+                    "ventana_ventas_horas", "cpa_max", "roas_min", "escalar_pct_dia", "escalar_tope_dia", "n_reediciones",
+                    "n_regeneraciones"]
+
+
+def _texto_visible(html):
+    """Lo que ve la persona: el HTML sin etiquetas (los `name=`, `id=` y `for=` quedan en los atributos, no aquí)."""
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))
+
+
+def _formulario_de_reglas(html, prefijo):
+    ini = html.index('<p class="vacio reglas-intro">', html.index(f'id="{prefijo}-ventana_horas"') - 4000)
+    return html[ini:html.index("</fieldset>", html.index(f'id="{prefijo}-n_regeneraciones"')) + len("</fieldset>")]
+
+
+def test_cada_regla_del_decisor_esta_en_un_solo_grupo_y_tiene_su_frase():
+    import decisor
+    en_grupos = [k for _titulo, claves in decisor.GRUPOS_REGLAS for k in claves]
+    assert sorted(en_grupos) == sorted(decisor.REGLAS_DEFECTO) == sorted(CAMPOS_DE_REGLAS)     # ninguna se pierde ni se repite
+    assert set(decisor.ETIQUETAS) == set(decisor.REGLAS_DEFECTO)
+    assert [t for t, _ in decisor.GRUPOS_REGLAS] == ["Antes de juzgar una pieza", "Cuándo pierde por tráfico",
+                                                      "Cuándo gana o pierde por ventas", "Qué hace con una ganadora"]
+    # las frases del brief, tal cual: sin claves de código ni siglas sueltas
+    assert decisor.ETIQUETAS["gasto_min_x_presupuesto"] == "Días de su presupuesto diario que debe haber gastado"
+    assert decisor.ETIQUETAS["ventana_horas"] == "Horas mínimas corriendo"
+    assert decisor.ETIQUETAS["cpa_max"] == "Costo por compra máximo" and decisor.ETIQUETAS["thruplay_min"] == "Parte mínima que ve el video completo (0–1)"
+    assert all("_" not in str(v) for v in decisor.ETIQUETAS.values())
+
+
+def test_el_cajon_del_proyecto_dice_las_reglas_en_palabras_y_en_cuatro_grupos(app):
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    exp = _seccion(html, "experimentos")
+    assert '<summary class="swap-card-resumen">Cómo decide el motor</summary>' in exp
+    form = _formulario_de_reglas(exp, "cfg")
+    assert form.count("<fieldset") == 4
+    for titulo in ("Antes de juzgar una pieza", "Cuándo pierde por tráfico", "Cuándo gana o pierde por ventas", "Qué hace con una ganadora"):
+        assert f"<legend>{titulo}</legend>" in form
+    assert "El motor espera a tener evidencia y después compara cada pieza con estas reglas. Vacío = el valor de fábrica (en gris)." in form
+    visible = _texto_visible(form)
+    assert "Días de su presupuesto diario que debe haber gastado" in visible
+    for clave in CAMPOS_DE_REGLAS:
+        assert clave not in visible, clave                       # ninguna clave de código a la vista...
+        assert f'name="{clave}"' in form                         # ...y cada campo conserva su name: el POST no cambia
+    assert "<code>" not in form
+    assert 'action="/cliente/acme/config/reglas"' in exp
+
+
+def test_la_gestion_de_un_experimento_usa_las_mismas_reglas_en_palabras_y_su_misma_ruta(app):
+    eid = _experimento()
+    html = _resultados(app["c"], exp=eid)
+    assert "<summary>Cómo decide el motor</summary>" in html
+    form = _formulario_de_reglas(html, f"exp{eid}")
+    assert form.count("<fieldset") == 4 and "Vacío = la regla del proyecto (en gris)." in form
+    assert "Días de su presupuesto diario que debe haber gastado" in _texto_visible(form)
+    assert all(clave not in _texto_visible(form) for clave in CAMPOS_DE_REGLAS)
+    assert all(f'name="{clave}"' in form for clave in CAMPOS_DE_REGLAS)
+    assert f'action="/cliente/acme/experimentos/{eid}/reglas"' in html
+
+
+def test_guardar_las_reglas_en_palabras_sigue_guardando_por_clave(app):
+    """El POST no cambió: los mismos `name`, las mismas rutas, el mismo resultado."""
+    import experimentos as ex
+    eid = _experimento()
+    app["c"].post(f"/cliente/acme/experimentos/{eid}/reglas", data={"gasto_min_x_presupuesto": "3", "sin_cpc_max": "1"})
+    assert ex.obtener("acme", eid)["reglas"] == {"gasto_min_x_presupuesto": 3.0, "cpc_max": None}

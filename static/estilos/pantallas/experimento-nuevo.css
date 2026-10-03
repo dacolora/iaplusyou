@@ -1,19 +1,35 @@
-/* E3: pantalla propia, conserva los tokens azules globales. */
+/* «Nuevo experimento» (E3): pantalla propia a pantalla completa, sin el menú lateral; conserva los tokens azules globales.
+   La salida es «← Volver a resultados» (.exp-volver). El paso «Cuánto» pide UN total y los días: lo grande es el máximo. */
 body:has(#exp-nuevo) .sidebar, body:has(#exp-nuevo) .menu-movil { display: none; }
 body.con-sidebar:has(#exp-nuevo) { padding-left: 0; }
 body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 #exp-nuevo { min-width: 0; padding: clamp(12px, 3vw, 40px); }
+#exp-nuevo .exp-volver { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); color: var(--accent-texto); font-weight: 600; text-decoration: none; }
+#exp-nuevo .exp-volver:hover, #exp-nuevo .exp-volver:focus-visible { background: var(--panel-hover); color: var(--text); }
 #exp-nuevo .exp-recorrido, #exp-nuevo .exp-atajos { display: flex; flex-wrap: wrap; gap: 16px; margin: 24px 0; }
 #exp-nuevo .exp-recorrido span { color: var(--accent-texto); padding: 12px; border-bottom: 2px solid var(--border); }
 #exp-nuevo .exp-pasos { max-width: none; }
 #exp-nuevo .exp-pasos section { padding: 24px 0; }
 #exp-nuevo .exp-atajos button { flex: 1 1 180px; display: grid; gap: 8px; text-align: left; padding: 18px; }
 #exp-nuevo .exp-atajos strong { font-size: 1.2rem; }
+#exp-nuevo .exp-atajos small { color: var(--muted); }
+#exp-nuevo .exp-total-dias { align-items: end; }
 #exp-nuevo [name=tope_total] { font-size: clamp(24px, 4vw, 40px); width: 100%; }
-#exp-nuevo .exp-resumen { color: var(--accent-texto); font-size: clamp(18px, 2vw, 26px); padding: 20px; border: 1px solid var(--border); border-radius: 12px; }
-#exp-nuevo .exp-reparto { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 16px; }
-#exp-nuevo .exp-control { padding: 18px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; line-height: 1.6; }
+#exp-nuevo .exp-total-barra { display: block; width: 100%; margin: 12px 0 0; accent-color: var(--accent-2); }
+#exp-nuevo .exp-resumen { display: grid; gap: 8px; margin: 20px 0; padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
+#exp-nuevo .exp-resumen p { margin: 0; }
+#exp-nuevo .exp-maximo { color: var(--accent-texto); font-size: clamp(22px, 3.4vw, 38px); font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+#exp-nuevo .exp-dia { color: var(--text); font-size: clamp(16px, 2vw, 22px); overflow-wrap: anywhere; }
+#exp-nuevo .exp-anuncios { color: var(--muted); font-size: clamp(15px, 1.8vw, 18px); }
+#exp-nuevo .exp-nada { color: var(--ok); font-weight: 600; }
+#exp-nuevo .exp-maximo:empty, #exp-nuevo .exp-dia:empty, #exp-nuevo .exp-anuncios:empty { display: none; }
+#exp-nuevo .exp-aviso { margin: 0 0 8px; padding: 14px 16px; border: 1px solid var(--warn); border-radius: var(--radius-sm); background: var(--warn-fondo); color: var(--text); line-height: 1.5; }
+#exp-nuevo .exp-ajuste { margin: 16px 0; }
+#exp-nuevo .exp-reparto { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 16px; margin: 12px 0; }
+#exp-nuevo .exp-nota p { margin: 0; }
+#exp-nuevo .exp-nota p + p { margin-top: 8px; }
+#exp-nuevo .exp-nota { margin: 16px 0 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; color: var(--muted); font-size: var(--t-chico); line-height: 1.6; }
 #exp-nuevo .exp-cuadricula { max-width: 100%; overflow-x: auto; }
 #exp-nuevo input { max-width: 100%; box-sizing: border-box; }
 #exp-nuevo [hidden] { display: none !important; }
-@media (max-width: 760px) { #exp-nuevo .exp-recorrido { gap: 4px; } #exp-nuevo .exp-recorrido span { flex: 1 1 40%; } #exp-nuevo .fe-opciones { flex-wrap: wrap; } }
+@media (max-width: 760px) { #exp-nuevo .exp-recorrido { gap: 4px; } #exp-nuevo .exp-recorrido span { flex: 1 1 40%; } #exp-nuevo .fe-opciones { flex-wrap: wrap; } #exp-nuevo .exp-resumen { padding: 16px; } }

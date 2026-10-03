@@ -366,6 +366,13 @@ a.cr-cab-nota:hover { text-decoration: underline; }
 .cr-gestion .swap-card { margin-top: .8rem; background: var(--panel-2); }
 .cr-gestion .tag-error { margin: .6rem 0 0; }
 
+/* «Cómo decide el motor»: las reglas en palabras, en cuatro grupos (spec §4.7). */
+.reglas-intro { margin: .4rem 0 .6rem; line-height: 1.5; }
+.reglas-grupo { margin: .7rem 0; padding: .5rem .9rem .8rem; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); min-width: 0; }
+.reglas-grupo legend { padding: 0 .4rem; color: var(--accent-texto); font-weight: 700; font-size: var(--t-chico); }
+.reglas-grupo .reglas-grid { margin: .2rem 0 0; }
+.reglas-grupo .regla { font-size: var(--t-chico); }
+
 /* ---------- 08 y 09 ---------- */
 .cr-aprendizajes .aprendizajes { margin-top: 0; padding-top: 0; border-top: 0; }
 .cr-aprendizajes .aprendizajes > .panel-cabecera { margin-bottom: .6rem; padding-bottom: 0; border-bottom: 0; }

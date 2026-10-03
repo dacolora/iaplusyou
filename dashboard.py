@@ -2011,6 +2011,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
         "reglas_enteras_exp": decisor.ENTEROS,
         "reglas_desactivables_exp": decisor.UMBRALES_DESACTIVABLES,
         "etiquetas_reglas_exp": decisor.ETIQUETAS,
+        "grupos_reglas_exp": decisor.GRUPOS_REGLAS,
         "reglas_cliente": reglas_cliente,
         "reglas_efectivas_exp": {e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in experimentos_exp},
         "correo_notificaciones": proyectos.correo_notificaciones(cliente) or "",
