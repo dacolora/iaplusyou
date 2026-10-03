@@ -318,7 +318,7 @@ def test_tablero_se_traduce_sin_reescribir_reglas(monkeypatch):
     assert [x["grupo"] for x in a] == ["puesta_a_punto", "puesta_a_punto", "decision", "decision", "fallos", "fallos",
                                        "faltantes"]
     por = _por_clave(a)
-    assert por["tablero:propuestas_pendientes:7"]["url"] == "?exp=7#experimentos"
+    assert por["tablero:propuestas_pendientes:7"]["url"] == "#experimentos?exp=7"   # el filtro va en el hash (E2)
     assert por["tablero:propuestas_pendientes:7"]["entidad"] == 7
     assert por["tablero:meta_roto:-"]["url"] is None and por["tablero:meta_roto:-"]["tab"] == "settings"
     assert por["tablero:productos_sin_experimento:-"]["tab"] == "catalogo"

@@ -289,7 +289,7 @@ def _fuente_tablero(cliente, ahora):
             a["tipo"], entidad if entidad is not None else "-", *numeros)
         out.append(_alerta(f"tablero:{a['tipo']}:{entidad if entidad is not None else '-'}", situacion,
                            _NIVEL_TABLERO.get(a["nivel"], "info"), _GRUPO_TABLERO.get(a["tipo"], "decision"),
-                           texto, "", a["tab"], url=(f"?exp={eid}#experimentos" if eid is not None else None),
+                           texto, "", a["tab"], url=(f"#experimentos?exp={eid}" if eid is not None else None),
                            entidad=entidad))
     return out
 

@@ -26,7 +26,7 @@ PLANTILLAS_TRADUCIDAS = [
     "_tab_experimentos.html", "_form_reglas.html", "_anuncios_sueltos.html", "_organico_publicar.html",
     "_exp_gestionar.html", "_exp_pieza.html", "_exp_probar.html", "_exp_resultados.html", "exp_nuevo.html",
     "_exp_historial.html", "_exp_macros.html",
-    "_tab_tablero.html", "_tab_alertas.html", "landing_cliente.html",
+    "_tab_alertas.html", "landing_cliente.html",   # _tab_tablero.html se fue: el Tablero se fundió en Experimentos (E2)
     # Merge de main (2026-09-27): parciales nuevos dentro de pantallas ya traducidas
     # (Crear › detalle de la pieza; Catálogo › ficha del producto).
     "_revision_doctrina.html", "_producto_doctrina.html",
