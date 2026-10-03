@@ -204,6 +204,66 @@ def test_moneda_por_defecto_y_filtro_de_moneda(sembrado):
     assert c.moneda == "COP"                                                 # el experimento elegido manda sobre el gasto
 
 
+def test_las_monedas_son_las_de_los_experimentos_aunque_no_tengan_piezas(base_temporal):
+    """Un borrador sin piezas (o con la última quitada) todavía no tiene filas pieza×snapshot, pero su moneda cuenta:
+    el proyecto abre en ella, su tarjeta sale y está en el filtro de experimentos (revisión de R3)."""
+    import experimentos as ex
+    import resultados as r
+    vacio = r.cargar("acme", r.Filtro(dias=7), AHORA)
+    assert vacio.monedas == [] and vacio.moneda == "USD"                      # sin experimentos: el valor de fábrica
+    borrador = ex.crear("acme", "Borrador", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t.co/p", "COP")
+    c = r.cargar("acme", r.Filtro(dias=7), AHORA)
+    assert c.datos.filas == [] and c.monedas == ["COP"] and c.moneda == "COP"        # ya no cae en USD
+    assert [t["id"] for t in r.experimentos_tarjetas(c)] == [borrador]
+    assert r.experimentos_tarjetas(c)[0]["n_piezas"] == 0 and r.experimentos_tarjetas(c)[0]["valor"] is None
+    o = r.contexto("acme", r.Filtro(dias=7), AHORA)["opciones"]
+    assert [e["id"] for e in o["experimentos"]] == [borrador] and o["monedas"] == ["COP"]
+    # Una moneda pedida que el proyecto no tiene cae en la suya, no en USD.
+    assert r.cargar("acme", r.Filtro(dias=7, moneda="EUR"), AHORA).moneda == "COP"
+    # Una pieza que se agrega y se quita deja el borrador igual de visible.
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_q")
+    ep = ex.agregar_pieza("acme", borrador, clon, "CO")
+    assert [t["n_piezas"] for t in r.experimentos_tarjetas(r.cargar("acme", r.Filtro(dias=7), AHORA))] == [1]
+    ex.quitar_pieza("acme", borrador, ep)
+    c = r.cargar("acme", r.Filtro(dias=7), AHORA)
+    assert c.datos.filas == [] and c.moneda == "COP" and [t["id"] for t in r.experimentos_tarjetas(c)] == [borrador]
+    # Otro proyecto no se mezcla.
+    assert r.cargar("otro", r.Filtro(dias=7), AHORA).monedas == []
+
+
+def test_un_borrador_sin_piezas_en_otra_moneda_no_cambia_la_moneda_con_datos(sembrado):
+    """«Uno» (COP, con gasto) + un borrador en USD sin piezas: la moneda por defecto sigue siendo la que tiene
+    datos (COP); la del borrador se ofrece y, pedida o con su experimento elegido, es la que se muestra."""
+    import experimentos as ex
+    import resultados as r
+    borrador = ex.crear("acme", "Borrador USD", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t.co/p", "USD")
+    c = r.cargar("acme", r.Filtro(dias=7), AHORA)
+    assert c.monedas == ["COP", "USD"] and c.moneda == "COP"
+    assert [t["nombre"] for t in r.experimentos_tarjetas(c)] == ["Uno"]
+    o = r.contexto("acme", r.Filtro(dias=7), AHORA)["opciones"]
+    assert [e["nombre"] for e in o["experimentos"]] == ["Uno"] and o["monedas"] == ["COP", "USD"]
+    c = r.cargar("acme", r.Filtro(dias=7, moneda="USD"), AHORA)
+    assert c.moneda == "USD" and [t["id"] for t in r.experimentos_tarjetas(c)] == [borrador]
+    assert [e["id"] for e in r.contexto("acme", r.Filtro(dias=7, moneda="USD"), AHORA)["opciones"]["experimentos"]] == [borrador]
+    # Con el borrador elegido y sin moneda pedida, manda su moneda aunque no tenga filas que midan gasto.
+    c = r.cargar("acme", r.Filtro(dias=7, experimento_id=borrador), AHORA)
+    assert c.moneda == "USD" and [t["seleccionado"] for t in r.experimentos_tarjetas(c)] == [True]
+    # Un experimento elegido que no existe en el proyecto (o es de otro) no mueve la moneda.
+    assert r.cargar("acme", r.Filtro(dias=7, experimento_id=999999), AHORA).moneda == "COP"
+
+
+def test_con_filas_en_una_moneda_y_sin_gasto_gana_la_de_las_filas(base_temporal):
+    """Sin gasto en ninguna parte, la moneda por defecto es la de las piezas (empate: orden alfabético), no la de un
+    borrador sin piezas que sale antes en el abecedario."""
+    import experimentos as ex
+    import resultados as r
+    ex.crear("acme", "Borrador COP", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t.co/p", "COP")
+    dolares = ex.crear("acme", "Dolares", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t.co/p", "USD")
+    ex.agregar_pieza("acme", dolares, _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_d"), "CO")
+    c = r.cargar("acme", r.Filtro(dias=7), AHORA)
+    assert c.monedas == ["COP", "USD"] and c.moneda == "USD"
+
+
 def test_marcas_solo_las_del_proyecto_y_del_periodo(sembrado):
     import resultados as r
     db, e1 = sembrado["db"], sembrado["e1"]

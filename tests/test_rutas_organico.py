@@ -8,6 +8,7 @@ fake + tokens en un BASE_DIR temporal, Claude y acciones.ejecutar fakes,
 trabajos.encolar capturado."""
 import json
 import os
+import re
 
 import pytest
 
@@ -587,7 +588,11 @@ def test_experimentos_muestra_barra_si_hay_trabajo(app, base_temporal, monkeypat
     assert f'id="trabajo-acme__pieza{pid}__organico-experimentos"' in html
     # E2: la barra se arranca por su `data-poll-job` (ya no hay `<script>` con `iniciarPolling(...)` en el fragmento,
     # que llega por fetch y no ejecuta scripts: tras pintarlo, `static/exp_resultados.js` llama a `arrancarSondeos`).
-    assert f'data-poll-job="acme__pieza{pid}__organico"' in html and "iniciarPolling(" not in html
+    assert "iniciarPolling(" not in html
+    # El id de la barra y su job van en el MISMO elemento (el viejo `iniciarPolling(job, id)` los emparejaba).
+    barra = re.search(r'<div\b[^>]*\bid="trabajo-acme__pieza%d__organico-experimentos"[^>]*>' % pid, html).group(0)
+    assert f'data-poll-job="acme__pieza{pid}__organico"' in barra and 'class="barra-progreso"' in barra
+    assert html.count(f'data-poll-job="acme__pieza{pid}__organico"') == 1
     assert f'id="trabajo-acme__pieza{pid}__organico"' not in html
     assert 'name="caption_facebook"' not in html   # mientras publica no hay formulario
 

@@ -142,7 +142,7 @@ def periodo(ahora_iso, dias, primer_dia=None):
 
 class Carga:
     """Lo que el centro de resultados lee de la base en una petición. `datos`: el filtro ya aplicado
-    (tablero.Datos); `todo`: el proyecto entero; `monedas`: las del proyecto; `moneda`: la que se muestra;
+    (tablero.Datos); `todo`: el proyecto entero; `monedas`: las de los experimentos del proyecto (con o sin piezas); `moneda`: la que se muestra;
     `per`: el periodo; `dias_act`/`dias_ant`: filas de metrica_dia (dicts) del periodo y del anterior, solo de
     las piezas de `datos` (con «desde el inicio», `dias_act` es TODO el historial, sin el tope de 180 días de
     `per["lista"]`, y `dias_ant` está vacío); `es_imagen`: {ep_id: bool} de esas piezas; `filtro`: el que se pidió."""
@@ -168,17 +168,23 @@ def _gasto_por_moneda(filas, desde, hasta):
     return out
 
 
-def _elegir_moneda(pedida, monedas, base, todo, desde, hasta):
-    """La pedida si el proyecto la tiene; si no, la de más gasto del periodo entre las filas que dejan los
-    demás filtros (así un experimento en otra moneda no queda vacío), y si ahí no hay filas, entre las del
-    proyecto."""
+def _elegir_moneda(pedida, monedas, base, todo, desde, hasta, experimento_id=None):
+    """La pedida si el proyecto la tiene; si no, la del experimento elegido cuando ninguna fila lo representa (un
+    borrador sin piezas); si no, la de más gasto del periodo entre las filas que dejan los demás filtros (así un
+    experimento en otra moneda no queda vacío), y si ahí no hay filas, entre las del proyecto. Un proyecto sin
+    una sola fila (solo borradores sin piezas) usa la primera de `monedas`, que sale de sus experimentos: nunca un
+    USD inventado mientras el proyecto tenga una moneda propia."""
     if pedida in monedas:
         return pedida
+    if experimento_id is not None and not base.filas:
+        propia = next((tablero._moneda(ex) for ex in todo.exps if ex["id"] == experimento_id), None)
+        if propia:
+            return propia
     for filas in (base.filas, todo.filas):
         gasto = _gasto_por_moneda(filas, desde, hasta)
         if gasto:
             return max(sorted(gasto), key=lambda m: gasto[m])
-    return tablero.MONEDA_POR_DEFECTO
+    return monedas[0] if monedas else tablero.MONEDA_POR_DEFECTO
 
 
 def _leer_dias(ids, desde, hasta):
@@ -205,11 +211,13 @@ def cargar(cliente, filtro, ahora_iso=None):
     else:
         todo = tablero.cargar_datos(cliente, ahora, desde=tablero.INICIO)
         per = periodo(ahora, 0, primer_dia=_primer_dia(todo))
-    monedas = sorted({tablero._moneda(ex) for ex, _pz, _s in todo.filas})
+    # Las monedas del proyecto son las de sus experimentos (con o sin piezas): un borrador sin piezas todavía no
+    # tiene filas, pero tiene que poder verse y gestionarse desde el centro, en su moneda.
+    monedas = sorted({tablero._moneda(ex) for ex in todo.exps} | {tablero._moneda(ex) for ex, _pz, _s in todo.filas})
     base = tablero.filtrar(todo, experimento_id=filtro.experimento_id, pais=filtro.pais, ep_id=filtro.ep_id,
                            tipo=filtro.tipo)
     moneda = _elegir_moneda(filtro.moneda, monedas, base, todo,
-                            tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"])
+                            tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"], filtro.experimento_id)
     datos = tablero.filtrar(todo, experimento_id=filtro.experimento_id, pais=filtro.pais, ep_id=filtro.ep_id,
                             tipo=filtro.tipo, moneda=moneda)
     es_imagen = {pz["id"]: bool(pz.get("es_imagen")) for _ex, pz, _s in datos.filas}

@@ -89,6 +89,22 @@ def test_panel_con_datos_muestra_tienda_veredictos_diagnostico_e_ia(app):  # noq
     assert '<option value="7" selected>' in solo_tt
 
 
+def test_el_anuncio_hecho_en_creatv_enlaza_a_su_experimento_por_el_hash(app, base_temporal):  # noqa: F811
+    """«Hecho en Creatv · …» lleva a `#experimentos?exp=<id>` (el filtro va en el hash y no recarga la página, E2);
+    la forma vieja `?exp=<id>#experimentos` ya no se pinta."""
+    import experimentos as ex
+    from tests.test_experimentos_db import PAISES, _pieza
+    _conectar()
+    _sembrar()
+    eid = ex.crear("acme", "Cojín otoño", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "USD")
+    ep = ex.agregar_pieza("acme", eid, _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None,
+                                              legado="cf_tw"), "CO")
+    ex.actualizar_pieza("acme", ep, meta_ad_id="g1")                    # el anuncio g1 de Triple Whale lo lanzó Creatv
+    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    assert f'<a href="#experimentos?exp={eid}">Hecho en Creatv · Cojín otoño</a>' in html
+    assert f"?exp={eid}#experimentos" not in html
+
+
 def test_panel_recien_conectado_sin_copia(app, monkeypatch):  # noqa: F811
     _conectar()
     html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()

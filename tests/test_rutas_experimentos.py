@@ -198,14 +198,41 @@ def test_estado_presupuesto_refrescar_cerrar(app, base_temporal, monkeypatch):
 
 def test_ver_cliente_incluye_experimentos(app, base_temporal):
     import experimentos as ex
+    # Un borrador SIN piezas (como el que deja exp_crear o una pieza quitada): tiene que verse en el centro.
     eid = ex.crear("acme", "Visible", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
-    ex.agregar_pieza("acme", eid, _pieza(base_temporal), "CO")
     r = app["c"].get("/cliente/acme")
     # E2: la página trae el armazón (su contenido llega por fetch de exp_resultados) y el fragmento trae el experimento
     # (su tarjeta en la sección 07 y, con `exp=<id>`, su gestión).
     assert r.status_code == 200 and b"Experimentos" in r.data and b'id="cr-resultados"' in r.data
     assert b"/cliente/acme/experimentos/resultados" in r.data
-    assert "Visible" in _resultados(app["c"]) and "Visible" in _resultados(app["c"], exp=eid)
+    html = _resultados(app["c"])
+    assert "Visible" in html and "Todavía no hay experimentos" not in html
+    assert f'href="#experimentos?exp={eid}"' in html[html.index('aria-labelledby="cr-s07"'):]      # su tarjeta (07)
+    gestion = _resultados(app["c"], exp=eid)
+    assert "Visible" in gestion and f'id="exp-{eid}"' in gestion and "Agregar pieza" in gestion  # y su gestión
+
+
+def test_un_borrador_sin_piezas_se_alcanza_junto_a_un_experimento_en_otra_moneda(app, base_temporal):
+    """Borrador en COP sin piezas + experimento en USD con piezas: el centro abre en la moneda con datos (USD) y
+    ofrece COP en el filtro de moneda; con COP elegida, el borrador sale en la lista de experimentos (07) y en el
+    filtro de experimentos; y con su gestión abierta la moneda es la suya, con su «Agregar pieza»."""
+    import experimentos as ex
+    borrador = ex.crear("acme", "Borrador COP", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    dolares = ex.crear("acme", "Dolares", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "USD")
+    ex.agregar_pieza("acme", dolares, _pieza(base_temporal), "CO")
+    libre = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_libre")
+    por_defecto = _resultados(app["c"])
+    lista = por_defecto[por_defecto.index('aria-labelledby="cr-s07"'):]
+    assert 'class="cr-chip-texto">USD<' in por_defecto and "Dolares" in lista and "Borrador COP" not in lista
+    assert 'href="#experimentos?moneda=COP"' in por_defecto                       # la moneda del borrador se ofrece
+    en_cop = _resultados(app["c"], moneda="COP")
+    lista = en_cop[en_cop.index('aria-labelledby="cr-s07"'):]
+    assert "Borrador COP" in lista and "Dolares" not in lista
+    assert f'href="#experimentos?moneda=COP&amp;exp={borrador}"' in lista         # su tarjeta lleva a su gestión
+    assert f'<a data-cr-filtro href="#experimentos?moneda=COP&amp;exp={borrador}">Borrador COP</a>' in en_cop  # y el filtro
+    gestion = _resultados(app["c"], exp=borrador)
+    assert 'class="cr-chip-texto">COP<' in gestion and f'id="exp-{borrador}"' in gestion
+    assert f'<option value="{libre}"' in gestion[gestion.index('class="exp-agregar"'):]
 
 
 def test_reconciliar_lanzando_huerfano(app, base_temporal):
