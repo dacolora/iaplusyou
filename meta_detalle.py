@@ -328,12 +328,21 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
                     raise _Corte() from None
 
         def _correr(_creds):
+            # El plazo corre desde que se tiene el candado de Meta (auditoría del
+            # lote 3): esperar a que termine la subida de un video no gasta el
+            # tiempo de esta pasada.
+            plazo_token = _PLAZO.set(time.monotonic() + PLAZO_S)
+            try:
+                _pasada()
+            finally:
+                _PLAZO.reset(plazo_token)
+
+        def _pasada():
             _parte("diario", lambda: r.__setitem__("dias", guardar_dias(ep_por_ad, pedir_diario(campana, r["desde"], hoy.isoformat()))))
             for dim in DIMENSIONES:
                 _parte(dim, lambda dim=dim: r.__setitem__("desgloses", r["desgloses"] + guardar_desglose(ep_por_ad, dim, pedir_desglose(campana, dim, desde_total, hoy.isoformat()))))
             _parte("rankings", lambda: r.__setitem__("rankings", guardar_rankings(cliente, ep_por_ad, pedir_rankings(campana, desde_total, hoy.isoformat()))))
 
-        plazo_token = _PLAZO.set(time.monotonic() + PLAZO_S)
         try:
             lanzador._con_credenciales(cliente, _correr)
         except _Limite:
@@ -344,8 +353,6 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
             texto = cola.sin_token(str(e))
             r["errores"]["credenciales"] = cola.recortar(texto)
             log.warning("Detalle de Meta (%s, exp %s, credenciales): %s", cliente, experimento_id, texto)
-        finally:
-            _PLAZO.reset(plazo_token)
     except Exception as e:  # noqa: BLE001 — desde_para, obtener, etc.
         texto = cola.sin_token(str(e))
         r["errores"]["interno"] = cola.recortar(texto)
