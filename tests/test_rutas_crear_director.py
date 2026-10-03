@@ -455,3 +455,14 @@ def test_compositor_toma_tarifa_musica_del_servidor(app, monkeypatch):
     monkeypatch.setattr(fal_audio, 'COSTO_USD_POR_PISTA_MUSICA', .037)
     html = app['c'].get('/cliente/acme').get_data(as_text=True)
     assert _precio_js_compositor(html) == pytest.approx(.4 + .037)
+
+
+def test_prompt_b_sin_hija_no_etiqueta_tarjeta_como_version_a(app):
+    """PND-028: proponer otro prompt no significa haber creado dos versiones."""
+    import creative_flow as cf
+    cid = _lista(app)
+    html = app["c"].get("/cliente/acme/crear/tarjetas").get_data(as_text=True)
+    assert "Versión A" not in html
+    cf.duplicar("acme", cid, prompt_relleno="B", variante="B")
+    html = app["c"].get("/cliente/acme/crear/tarjetas").get_data(as_text=True)
+    assert "Versión A" in html and "Versión B" in html

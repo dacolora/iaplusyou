@@ -70,3 +70,5 @@ before each batch) closes it later. TikTok is asynchronous: `check_status` decid
 `id_externo` are never retried. Tokens never reach `error`/eventos (`cola.sin_token`).
 
 **Candado común (2026-10-02, PND-114):** la ruta legado `cambiar_estado_ad` opera campaña, conjunto y anuncio mediante `lanzador._con_credenciales`, con `tareas.meta._LOCK`; `_ENV_LOCK` queda para el entorno del flujo viejo, no para configurar las credenciales globales de Meta.
+
+PND-036 (2026-10-03): organico.crear rechaza tipo imagen antes de insertar una publicación; protege también un POST manual. PND-113: la primera activación del lanzador ajusta end_time antes de activar; se conserva el presupuesto y nunca se activa por actualizar fechas. Ver experimentos para reintentos y reanudación.

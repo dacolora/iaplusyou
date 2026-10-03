@@ -74,3 +74,5 @@ Otra trampa (Babel 2.18): `gettext(DICCIONARIO["clave"])` hace que la extracció
 constantes `N_` en un diccionario, escribe `mensaje = DICCIONARIO["clave"]` y después `gettext(mensaje)`.
 
 Pruebas de idioma (revisión del lote 1, 2026-10-02): app_i18n fija CREATV_LOGS en tmp_path/logs. El fallo de /admin/salud/registros al leer registros locales mostró que el fixture debe aislar también esa lectura.
+
+PND-042 (2026-10-03): guardar_de_proyecto delega en proyectos.actualizar_campos, bajo el mismo flock que los ajustes y aprendizajes, para no pisarlos al guardar el idioma. Lote 2: mensajes de voz ausente, fotos faltantes, barrido parcial y grupos del chat incluidos en el catálogo inglés.

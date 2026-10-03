@@ -88,3 +88,5 @@ escena lista → fotograma a R2 → siguiente; falló → `detenida`; al final `
 `edicion_clon.crear_de_piezas`). Rutas `POST /videos/<id>/cadena` `{desde, total_visto}` (409 si el precio recalculado no
 coincide o falta algo) y `/cadena/detener`; UI `_gpg_cadena.html` dentro de `_gpg_escenas.html` (el panel sondea mientras
 corre, con el tope de 12 min de siempre).
+
+PND-027 (2026-10-03): listar ya no trunca por defecto en 200; agrupa manual/pipeline y ordena cada grupo por actividad. El chat muestra «Escritos a mano» y «Del guion», también al incorporar un prompt nuevo. El parámetro limite sigue disponible para lectores que lo pidan. Esta corrección no agrega paginación: una biblioteca muy grande aún se carga completa.

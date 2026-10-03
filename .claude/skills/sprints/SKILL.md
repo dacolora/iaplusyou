@@ -81,3 +81,5 @@ browser marks as cross-site (`Sec-Fetch-Site`), like Flow Plus and the editor.
 Director de Crear en lotes (2026-10-02, PND-014): también se encola con max_intentos=1 y registra el usage real bajo _creatv; sigue siendo una ayuda gratis para la persona.
 
 PND-003 (revisión 2026-10-02): el estimado del lote usa gastos.estimar con musica_al_crear como musica_estilo, igual que la sesión generada.
+
+PND-034 (2026-10-03): si se interrumpe el director de un lote con auto_lanzar aprobado, el fallback continúa por flowplus_lanzar con su prioridad original; una pieza que ya avanzó no se relanza. Se prueba con cola simulada, sin proveedores.

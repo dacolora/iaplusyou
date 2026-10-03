@@ -160,6 +160,10 @@ msgstr[0] "%(capas)s charged"
 msgstr[1] "%(capas)s charged"
 
 #, python-format
+msgid "%(color)s: sin fotos en la tienda; revisa el catálogo."
+msgstr "%(color)s: no photos in the store; check the catalog."
+
+#, python-format
 msgid "%(correo)s: abre el enlace que te mandamos o pide uno nuevo en Configuración › Cuenta. Sin correo confirmado no puedes conectar Meta ni una tienda."
 msgstr "%(correo)s: open the link we sent you or ask for a new one in Settings › Account. Without a confirmed email you can't connect Meta or a store."
 
@@ -2234,6 +2238,10 @@ msgid "Apify respondió sin datos legibles al arrancar la corrida (%(codigo)s); 
 msgstr "Apify answered without readable data when starting the run (%(codigo)s); check at console.apify.com whether it started."
 
 #, python-format
+msgid "Apify terminó %(estado)s; los resultados son parciales (corrida %(corrida)s)."
+msgstr "Apify finished %(estado)s; results are partial (run %(corrida)s)."
+
+#, python-format
 msgid "Apify: %(estado)s · corrida %(corrida)s"
 msgstr "Apify: %(estado)s · run %(corrida)s"
 
@@ -4194,6 +4202,9 @@ msgstr "From the catalog"
 msgid "Del catálogo (opcional, %(n)s) →"
 msgstr "From the catalog (optional, %(n)s) →"
 
+msgid "Del guion"
+msgstr "From the script"
+
 #, python-format
 msgid "Del sprint: %(marcas)s. Escribe aquí para cambiarlas solo en esta campaña."
 msgstr "From the sprint: %(marcas)s. Write here to change them only for this campaign."
@@ -6032,6 +6043,9 @@ msgstr "That voice isn't available in the editor."
 
 msgid "Esa voz ya no está en Mis voces."
 msgstr "That voice is no longer in My voices."
+
+msgid "Esa voz ya no está en Mis voces. Elige otra voz."
+msgstr "That voice is no longer in My voices. Choose another voice."
 
 msgid "Esa voz ya no existe."
 msgstr "That voice no longer exists."
@@ -13510,6 +13524,9 @@ msgstr "Imports only come from go.copycoders.ai."
 
 msgid "Solo se puede revisar una pieza terminada."
 msgstr "Only a finished piece can be reviewed."
+
+msgid "Solo se pueden publicar videos por este camino."
+msgstr "Only videos can be published this way."
 
 msgid "Solo se reabre un sprint completado."
 msgstr "Only a completed sprint can be reopened."

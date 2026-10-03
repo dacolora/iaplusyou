@@ -117,11 +117,8 @@ def de_proyecto(cliente):
 
 
 def guardar_de_proyecto(cliente, idioma):
-    import _json_store
     import proyectos
-    datos = proyectos.cargar(cliente)
-    datos["idioma"] = _validar(idioma)
-    _json_store.guardar(proyectos._path(cliente), datos)
+    proyectos.actualizar_campos(cliente, idioma=_validar(idioma))
 
 
 def de_tarea(tarea):

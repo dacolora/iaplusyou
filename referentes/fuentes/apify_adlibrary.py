@@ -273,4 +273,9 @@ def traer(consulta, tope, avanzar, cursor=None):
         raise ErrorFuente(str(e), costo_real=costo_real,
                           extra_gasto={"run_id": run_id, "dataset_id": dataset_id}) from e
     avanzar(etapa=ETAPA_BUSCAR, detalle=ngettext("%(num)d anuncio", "%(num)d anuncios", len(crudos)))
-    yield pagina, None, {"costo_real": costo_real, "run_id": run_id, "dataset_id": dataset_id}
+    meta = {"costo_real": costo_real, "run_id": run_id, "dataset_id": dataset_id}
+    if estado != "SUCCEEDED":
+        meta.update(estado=estado, incompleto=True, aviso=gettext(
+            "Apify terminó %(estado)s; los resultados son parciales (corrida %(corrida)s).",
+            estado=apify_api.frase_estado(estado), corrida=run_id))
+    yield pagina, None, meta

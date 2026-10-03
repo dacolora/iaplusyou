@@ -442,3 +442,23 @@ def test_muestra_propia_guarda_el_detalle_del_gasto_en_el_idioma_del_proyecto(ba
         voces_propias.muestra("acme", f"vp:{v['id']}", "fi")
     (g,) = _gastos("acme")
     assert g["detalle"] == "custom voice sample · Ana · fi"
+
+
+@pytest.mark.parametrize('mensaje', ['voice not found', 'voice_id does not exist', 'invalid voice id'])
+def test_pnd038_voz_remota_borrada_es_error_publico_fijo(base_temporal, monkeypatch, mensaje):
+    from tareas.errores_voz import publico
+    def fallar(*a, **kw):
+        raise RuntimeError(mensaje)
+    monkeypatch.setattr(voces_propias.fal_audio, 'tts_minimax', fallar)
+    with pytest.raises(ValueError, match='Esa voz ya no está en Mis voces') as exc:
+        voces_propias.sintetizar('acme', {'voice_id': 'remota', 'id': 1}, 'hola', 'es')
+    assert 'Esa voz ya no está en Mis voces' in str(publico(exc.value, {'id': 1}, 'voz', 'Error %(tipo)s'))
+
+
+def test_pnd040_borrar_ultima_voz_no_reutiliza_su_id(base_temporal):
+    vieja = _voz(voice_id='vieja')
+    with db.conectar() as con:
+        con.execute(db.material.delete().where(db.material.c.id == vieja['id']))
+    nueva = _voz(voice_id='nueva')
+    assert nueva['id'] > vieja['id']
+    assert voces_propias.resolver('acme', f"vp:{vieja['id']}") is None

@@ -417,7 +417,7 @@
     // ---- Arranque: el hash manda; si no, la categoría recordada. La galería
     // solo se pide cuando la pestaña Catálogo está (o entra) a la vista.
     function enCatalogo() {
-      if ((location.hash || '').indexOf('#catalogo') === 0) return true;
+      if ((location.hash || '').indexOf('#catalogo') === 0 || /^#productos(?:\?|$)/.test(location.hash || '')) return true;
       if (location.hash && location.hash !== '#') return false;
       try { return localStorage.getItem(KEY_TAB) === 'catalogo'; } catch (e) { return false; }
     }

@@ -580,3 +580,15 @@ def test_sync_productos_admin_api_no_toca_el_catalogo_si_hay_tienda_sin_llaves(e
     Falso.pedidos = [normalizar_pedido({"fuente_id": "o1", "fecha": "2026-09-15T10:00:00Z", "total": 50, "moneda": "USD"})]
     msg = tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid}})
     assert "1 pedido(s)" in msg and "1 nuevo(s)" in msg
+
+
+def test_pnd030_admin_con_catalogo_publico_limpia_error(entorno):
+    import tiendas
+    from tareas.tiendas import tienda_sync_productos
+    tid = _tienda()
+    _tienda(tipo='shopify_publico')
+    tiendas.actualizar('acme', tid, estado='rota', error='error viejo')
+    tienda_sync_productos({'payload': {'cliente': 'acme', 'tienda_id': tid}})
+    t = tiendas.obtener('acme', tid)
+    assert t['estado'] == 'conectada' and t['error'] is None
+    assert Falso.instancias == []

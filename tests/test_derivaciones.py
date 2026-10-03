@@ -746,3 +746,16 @@ def test_el_rescate_excluye_el_arranque_de_la_pieza_que_perdio(ent, monkeypatch)
     item = _derivacion(ex, eid)["items"][0]
     assert item["variante_tipo"] == "hook" and item["contexto_variante"]["lead_objetivo"] is None
     assert "S" in item["contexto_variante"]["ganchos_usados"] or item["contexto_variante"]["ganchos_usados"] == ["¿Pies fríos?"]
+
+
+def test_pnd039_regeneracion_conserva_voz_por_destino(ent):
+    dv, cf, ex = ent['dv'], ent['cf'], ent['ex']
+    cf.actualizar_final('acme', ent['final_id'], capas={'voz': {'parametros': {'voz': 'vp:85'}}})
+    ex.actualizar('acme', ent['eid'], reglas={'n_reediciones': 0, 'n_regeneraciones': 1})
+    hijo = dv.planificar('acme', ent['eid'], 'derivar', {'ep_id': ent['ep']})
+    item = _derivacion(ex, hijo)['items'][0]
+    cf.actualizar('acme', item['cf_id'], estado='video_listo', video_url='https://r2/n.mp4')
+    dv.avanzar('acme', hijo)
+    finales = [x['payload'] for x in ent['encolados'] if x['tipo'] == 'final_producir']
+    assert len(finales) == 2
+    assert all(f['opciones'].get('voz') == 'vp:85' for f in finales)

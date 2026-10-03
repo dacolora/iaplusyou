@@ -309,6 +309,8 @@ def _bajar_a(fotos, carpeta_destino, prod, errores, que=""):
     numeradas de `carpeta_destino`. True si colocó al menos una. `que` (ya
     pasado por gettext: el color o «fotos de ambiente») va antes del aviso."""
     if not fotos:
+        if que:
+            errores.append(_aviso(prod, gettext("%(color)s: sin fotos en la tienda; revisa el catálogo.", color=que)))
         return False
     temporal = tempfile.mkdtemp(prefix="creatv_fotos_")
     try:
