@@ -17,6 +17,7 @@ import creative_flow
 import flowplus_lanzar
 import flowplus_prompt
 import idiomas
+import gastos
 import marca
 import proyectos
 import tareas.director as tareas_director
@@ -108,11 +109,13 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
     mv, mi = modelos(cliente, modelo_video, modelo_imagen)
     videos = imagenes = 0
     usd = 0.0
-    con_sonido = bool(proyectos.preferencias_sonido(cliente)["con_sonido"])
+    preferencias_sonido = proyectos.preferencias_sonido(cliente)
+    con_sonido = bool(preferencias_sonido["con_sonido"])
     for c, i in pendientes(cliente, sprint_id, campana_id):
         if i["tipo"] == "video":
             videos += 1
-            usd += float((flowplus_modelos.estimate_video(mv, _duracion(i, mv), con_sonido=con_sonido) or {}).get("usd") or 0.0)
+            usd += float((gastos.estimar("video", modelo=mv, duracion=_duracion(i, mv), con_sonido=con_sonido,
+                                         musica_estilo=preferencias_sonido["musica_al_crear"]) or {}).get("usd") or 0.0)
         else:
             imagenes += 1
             usd += float((flowplus_modelos.estimate_imagen(mi, n_referencias=_n_referencias(cliente, c)) or {}).get("usd") or 0.0)

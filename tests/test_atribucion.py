@@ -305,15 +305,38 @@ def test_crear_usa_la_sugerida_y_valida(base_temporal, monkeypatch, tienda):
 
 
 def test_pedidos_vencidos_avisan_sin_cambiar_atribucion(base_temporal, tienda, monkeypatch):
-    import tablero
-    import tiendas
-    import meta_conexion
-    import alertas
-    _pedidos(tienda, ("no-ligado", 20), fecha="2000-01-01T00:00:00")
-    _pedidos(tienda, ("reciente", 10))
+    import tablero, tiendas, meta_conexion, alertas
+    import experimentos as ex
+    _pedidos(tienda, ("no-ligado", 20), ("99999999", 20), fecha="2000-01-01T00:00:00")
     monkeypatch.setattr(meta_conexion, "estado", lambda *a, **k: {"estado": "conectado"})
+    assert tiendas.pedidos_vencidos_sin_resolver("acme") == 0
+    assert not any(a["tipo"] == "pedidos_sin_atribuir" for a in tablero.alertas("acme"))
+    pid = _pieza(base_temporal)
+    eid = ex.crear("acme", "Cerrado", PAISES, "OUTCOME_TRAFFIC", 7, 100, "https://t", "COP")
+    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    ex.actualizar("acme", eid, estado="cerrado")
+    _pedidos(tienda, (f" 00{ep} ", 20), fecha="2000-01-01T00:00:00")
+    _pedidos(tienda, ("reciente", 10))
     avisos = [a for a in tablero.alertas("acme") if a["tipo"] == "pedidos_sin_atribuir"]
     assert len(avisos) == 1 and "1" in avisos[0]["texto"]
+    assert tiendas.pedidos_vencidos_sin_resolver("otro") == 0
     assert not any(a["tipo"] == "pedidos_sin_atribuir" for a in tablero.alertas("otro"))
     assert len(tiendas.pedidos_sin_resolver("acme")) == 1
     assert any(a["clave"].startswith("tablero:pedidos_sin_atribuir:") for a in alertas._fuente_tablero("acme", None))
+
+
+def test_pedido_vencido_con_id_de_pieza_antigua_avisa(base_temporal, tienda):
+    import tiendas
+    pid = _pieza(base_temporal)
+    _pedidos(tienda, (str(pid), 20), fecha="2000-01-01T00:00:00")
+    assert tiendas.pedidos_vencidos_sin_resolver("acme") == 1
+    assert tiendas.pedidos_vencidos_sin_resolver("otro") == 0
+
+
+@pytest.mark.parametrize('externo', ['999999999999999999999999', '²'])
+def test_utm_externo_inconvertible_no_rompe_aviso(base_temporal, tienda, externo):
+    import tiendas
+    pid = _pieza(base_temporal)
+    _pedidos(tienda, (externo, 20), (str(pid), 20), fecha='2000-01-01T00:00:00')
+    assert tiendas.pedidos_vencidos_sin_resolver('acme') == 1
+    assert tiendas.pedidos_vencidos_sin_resolver('otro') == 0

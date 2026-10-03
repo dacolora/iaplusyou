@@ -336,14 +336,17 @@ def test_borrar_de_barrido_quita_sus_referentes_y_las_familias_de_claude_que_que
     datos.familia_asegurar("EMERGING: de A y B", origen="claude")
 
     def guardar(aid, fam, bid):
-        datos.guardar_referente(_anuncio(anuncio_id=aid, fuente="atria", familia=fam, imagen_origen=f"https://cdn/{aid}.jpg"),
+        rid, _ = datos.guardar_referente(_anuncio(anuncio_id=aid, fuente="atria", familia=fam, imagen_origen=f"https://cdn/{aid}.jpg"),
                                 cliente="acme", barrido_id=bid)
+        # Una clave histórica y dos privadas nuevas; la URL manda.
+        clave = f"referentes/{aid}.jpg" if aid == "a1" else f"referentes/{aid}_r{rid}.jpg"
+        datos.marcar_imagen(rid, "ok", f"https://r2/{clave}")
     for aid, fam in (("a1", "Price Slash Hero"), ("a2", "EMERGING: solo de A"), ("a3", "EMERGING: de A y B")):
         guardar(aid, fam, a)
     guardar("b1", "EMERGING: de A y B", b)
     r = datos.borrar_de_barrido(a)
     assert r["referentes"] == 3 and r["familias"] == ["EMERGING: solo de A"]
-    assert sorted(r["anuncio_ids"]) == ["a1", "a2", "a3"]
+    assert sorted(r["claves_r2"]) == ["referentes/a1.jpg", "referentes/a2_r2.jpg", "referentes/a3_r3.jpg"]
     nombres = [f["nombre"] for f in datos.familias("acme")]
     assert "EMERGING: solo de A" not in nombres and "Price Slash Hero" in nombres and "EMERGING: de A y B" in nombres
     with db.conectar() as con:
@@ -380,3 +383,45 @@ def test_mismo_anuncio_en_dos_proyectos_no_se_pisa(base_temporal):
     assert datos.referente("otro", b)["dias"] == 99
     assert datos.referente("acme", b) is None
     assert datos.guardar_referente(_anuncio(dias=11, fuente="apify"), cliente="acme") == (a, False)
+
+
+def test_propia_oculta_global_en_todos_los_listados(base_temporal):
+    from referentes import datos as d
+    global_id, _ = d.guardar_referente(_anuncio(anuncio_id='X', fuente='atria', familia='GLOBAL', marca='Global'), cliente=None)
+    propia, _ = d.guardar_referente(_anuncio(anuncio_id='X', fuente='apify', familia='PROPIA', marca='Propia'), cliente='acme')
+    for rid in (global_id, propia): d.marcar_imagen(rid, 'ok', f'https://r2/referentes/X_r{rid}.jpg')
+    d.familia_asegurar('GLOBAL')
+    d.familia_asegurar('PROPIA')
+    assert [r['id'] for r in d.listar('acme')['items']] == [propia]
+    assert [r['id'] for r in d.listar('otro')['items']] == [global_id]
+    assert d.opciones('acme')['total'] == 1
+    assert d.opciones('acme')['marcas'] == [('Propia', 1)]
+    assert {f['nombre']: f['n'] for f in d.familias('acme')} == {'GLOBAL': 0, 'PROPIA': 1}
+    assert d.familias_frecuentes('acme') == ['PROPIA']
+    assert [r['id'] for r in d.listar('acme', filtros={'familia': 'GLOBAL'})['items']] == []
+    assert d.referente('acme', global_id)['id'] == global_id
+
+
+def test_guardar_mismo_anuncio_simultaneo_no_duplica(base_temporal, monkeypatch):
+    from referentes import datos as d
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier, BrokenBarrierError
+    from types import SimpleNamespace
+    ventana, juntos = Barrier(2), Barrier(2)
+    original = sa.engine.Connection.execute
+    def leer(self, sentencia, *a, **kw):
+        r = original(self, sentencia, *a, **kw)
+        if isinstance(sentencia, sa.sql.Select) and str(sentencia).startswith('SELECT referente.id,') and 'anuncio_id' in str(sentencia.whereclause):
+            fila = r.first()
+            if fila is None:
+                try: ventana.wait(timeout=.5)
+                except BrokenBarrierError: pass
+            return SimpleNamespace(first=lambda: fila)
+        return r
+    monkeypatch.setattr(sa.engine.Connection, 'execute', leer)
+    def guardar(_):
+        juntos.wait(timeout=5)
+        return d.guardar_referente(_anuncio(anuncio_id='simultaneo'), cliente='acme')
+    with ThreadPoolExecutor(max_workers=2) as pool: resultados = list(pool.map(guardar, range(2)))
+    assert resultados[0][0] == resultados[1][0]
+    assert sorted(r[1] for r in resultados) == [False, True]

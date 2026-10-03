@@ -20,7 +20,7 @@ import subprocess
 import sys
 import threading
 import time
-from functools import wraps
+from functools import lru_cache, wraps
 from urllib.parse import urlsplit
 
 import requests
@@ -2085,6 +2085,7 @@ def ver_cliente(cliente):
         referencias_bandeja=referencias_flowplus.listar(cliente),
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
         modelos_flowplus_video=flowplus_modelos.VIDEO,
+        tarifa_musica_crear=gastos.costo_musica_estimada("generada"),
         tarifas_flowplus_borrador={m: flowplus_modelos.usd_por_segundo(m, calidad="borrador") for m in flowplus_modelos.VIDEO},
         duraciones_crear=flowplus_modelos.DURACIONES_CREAR,
         formatos_nombres=flowplus_modelos.FORMATOS_NOMBRES,
@@ -7590,12 +7591,18 @@ def au_descargar(cliente, aid):
 # ------------------------------------------------------ Audios › Mis voces ---
 # (spec 2026-09-30) Voces propias con MiniMax: mismo patrón JSON que Audios.
 
+@lru_cache(maxsize=1)
+def _precios_clon():
+    """Tarifas por longitud e idioma: tabla pura, compartida por el proceso."""
+    return {idioma: [gastos.estimar("voz_clonada", nombre="x" * n, idioma=idioma)["usd"]
+                    for n in range(voces_propias.MAX_NOMBRE + 1)] for idioma in audios.IDIOMAS}
+
+
 def _contexto_mis_voces(cliente):
     jid = tareas_voces.job_id(cliente)
     return {"voces_propias": voces_propias.listar(cliente),
             "trabajo_voz": {"job_id": jid} if trabajos.en_curso(jid) else None,
-            "precios_clon": {idioma: [gastos.estimar("voz_clonada", nombre="x" * n, idioma=idioma)["usd"]
-                                      for n in range(voces_propias.MAX_NOMBRE + 1)] for idioma in audios.IDIOMAS},
+            "precios_clon": _precios_clon(),
             "precio_voz_clonada": gastos.estimar("voz_clonada"), "precio_voz_disenada": gastos.estimar("voz_disenada"),
             "texto_consentimiento": voces_propias.TEXTO_CONSENTIMIENTO}
 

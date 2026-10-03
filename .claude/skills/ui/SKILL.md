@@ -83,4 +83,4 @@ conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos, 
 
 **Alertas en pantalla** (2026-10-02, skill `alertas`): el Tablero ya no lista alertas, solo una línea («N alertas necesitan tu atención → Ver Alertas», `.tb-aviso-alertas` en `_tab_tablero.html`); la lista vive en la pestaña Alertas (`_tab_alertas.html`, `#alertas`) y la burbuja del sidebar sale de `alertas_ctx`, el mismo dato del context processor `_alertas_sidebar`, que se calcula en cada página (caché de 60 s): una consulta por tarjeta ahí cuesta en todas las pantallas.
 
-Precios del compositor y clon (2026-10-02, PND-011/016): el JS recibe tarifas y tablas calculadas en servidor; no duplica el precio del proveedor. La tabla de clon varía con nombre e idioma antes del clic.
+Precios del compositor y clon (2026-10-02, PND-011/016): el JS recibe tarifas y tablas calculadas en servidor; no duplica el precio del proveedor. La tarifa de música viene del servidor, desde gastos.costo_musica_estimada. La tabla de clon se cachea por proceso y varía con nombre e idioma antes del clic; se refresca también al vaciar el nombre después de clonar (revisión 2026-10-02).

@@ -499,3 +499,23 @@ def test_crear_sesion_sin_angulo_no_inventa_uno(escenario):
     cf_id = produccion.crear_sesion("acme", sp, sp["campanas"][0], datos.idea("acme", escenario["iv"]), "wan3", "seedream_v5_pro")
     e = creative_flow.cargar("acme")[cf_id]
     assert "angulo" not in e and e["contexto"]["persona"]["tono"] == "cercano"
+
+
+def test_estimado_lote_incluye_musica_generada(escenario):
+    import proyectos
+    from sprints import produccion
+    base = produccion.estimar('acme', escenario['sid'])['usd']
+    proyectos.guardar_preferencias_sonido('acme', True, 'calmado')
+    assert produccion.estimar('acme', escenario['sid'])['usd'] == pytest.approx(base + .02)
+    proyectos.guardar_preferencias_sonido('acme', True, 'mat:3')
+    assert produccion.estimar('acme', escenario['sid'])['usd'] == pytest.approx(base)
+
+
+def test_director_sprint_no_reintenta_tarea_pagada(escenario, monkeypatch):
+    import creative_flow
+    from sprints import produccion
+    cid = creative_flow.crear('acme', [], [], [], 'camina', 8, '', 'A')
+    cola = []
+    monkeypatch.setattr(produccion.trabajos, 'encolar', lambda *a, **kw: cola.append(kw) or True)
+    assert produccion.encolar_director('acme', cid)
+    assert cola[0]['max_intentos'] == 1

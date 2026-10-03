@@ -410,10 +410,12 @@ def _entorno_plantilla():
 
 
 def _contexto_minimo(items, activos_por_categoria=None, categorias=None, productos=None):
+    import gastos
     from final_edition import tipos
     from providers import fal_audio
     return dict(
         creative_flow_items=items, cliente="acme", logos=[],
+        tarifa_musica_crear=gastos.costo_musica_estimada("generada"),
         modelos_flowplus_video={}, modelos_flowplus_imagen={}, preferencias_flowplus={},
         preferencias_sonido={"con_sonido": True, "musica_al_crear": ""},
         fp_prefill=None, activos_por_categoria=activos_por_categoria if activos_por_categoria is not None else {},
@@ -949,3 +951,9 @@ def test_decision_b_un_proyecto_en_ingles_produce_co_en_espanol(base_temporal, m
     assert (t["payload"]["idioma"], t["payload"]["pais"]) == ("es", "CO")
     assert t["payload"]["opciones"]["precios"] == {"es_CO": 89900.0}
     assert cf.final_por_legado("acme", f"{cf_id}__es_CO")["estado"] == "generando"
+
+
+def test_contexto_minimo_pasa_tarifa_musica_del_servidor(monkeypatch):
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio, 'COSTO_USD_POR_PISTA_MUSICA', .037)
+    assert _contexto_minimo([])['tarifa_musica_crear'] == .037

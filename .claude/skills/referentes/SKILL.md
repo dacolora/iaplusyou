@@ -48,7 +48,7 @@ no se puede traducir el barrido no se lanza. Atria va con `order=best_match` (si
 `newest` y su `query` acepta cualquier palabra); Apify, con varias palabras, pide la frase exacta
 (`keyword_exact_phrase` con comillas). `datos.borrar_de_barrido` quita los referentes de un barrido
 y las familias `claude` que quedan vacías (el barrido queda por el historial del gasto; las
-imágenes R2 las borra el llamador).
+imágenes R2 las borra el llamador con `claves_r2`, extraídas de imagen_url; no reconstruye la clave desde anuncio_id, porque las filas privadas llevan `_r<id>`).
 `traer()` ahora entrega `(pagina, cursor_siguiente, meta)`: `meta` es `{}`
 para Atria (solo consume cupo del plan) o `{"costo_real": ...}` para una
 fuente que cobra por resultado real. Bloque 6: panel admin completo
@@ -100,3 +100,5 @@ parecido que el modelo admite (`_formato_video`: 4:5 → 3:4 en Wan). Un formula
 antes de esto) sigue haciendo un solo video.
 
 **Cobros e aislamiento (2026-10-02, PND-006/007/008):** `guardar_referente` toma `BEGIN IMMEDIATE` y hace upsert por `(cliente, anuncio_id)`; una corrida de otro proyecto crea su propia fila, sin modificar las de la biblioteca global o de otro proyecto. La migración 0030 conserva ids y rechaza bajar si habría que borrar duplicados entre proyectos. El gasto de fuente se anota antes de guardar anuncios; Apify conserva el costo contado cuando falla el sondeo y propaga `run_id`/`dataset_id`, guardados en `gasto.extra` con proveedor `apify`.
+
+Listados (revisión 2026-10-02, PND-006): si existe una copia del anuncio en el proyecto, se oculta su fila global en listar, opciones, familias, familias_frecuentes y los sugeridos que usan esos lectores. referente(cliente, id) conserva su visibilidad por id.

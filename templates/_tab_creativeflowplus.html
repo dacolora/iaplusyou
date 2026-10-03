@@ -477,6 +477,7 @@
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
       pintarReceta(m, esImagen);
+      var usdMusica = {{ tarifa_musica_crear|tojson }};
       var usd = 0;
       var conSonido = document.getElementById('fp-check-sonido');
       if (m) {
@@ -488,7 +489,7 @@
           if (conSonido && !conSonido.checked) seg -= parseFloat(m.dataset.recargo || '0');
           // Wan 3.0 factura también los segundos de sus videos de referencia (2026-09-30).
           usd = seg * (parseInt(duracion.value, 10) + facturablesEntrada(segundosVideosBandeja(m)))
-                + ((musicaSel && musicaSel.value && !esPropia(musicaSel.value)) ? 0.02 : 0);
+                + ((musicaSel && musicaSel.value && !esPropia(musicaSel.value)) ? usdMusica : 0);
         }
       }
       // «Generar» (video o imagen) cobra al generar con el texto de la persona;

@@ -382,10 +382,25 @@ def test_formulario_ofrece_generar_y_armar_prompt(app):
     assert "Tu texto va tal cual al modelo" in crear      # el pie explica el camino directo (compositor 2026-09-27)
 
 
-def test_dos_clics_simultaneos_crean_una_sola_hija_b(app):
+def test_dos_clics_simultaneos_crean_una_sola_hija_b(app, monkeypatch):
     import creative_flow as cf
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
+    import sqlalchemy as sa
+    from types import SimpleNamespace
+    from threading import BrokenBarrierError
+    ventana = Barrier(2)
+    original = sa.engine.Connection.execute
+    def leer_y_esperar(self, sentencia, *a, **kw):
+        resultado = original(self, sentencia, *a, **kw)
+        if isinstance(sentencia, sa.sql.Select) and list(sentencia.selected_columns.keys()) == ["legado_id"] and "B" in sentencia.compile().params.values():
+            valor = resultado.scalar()
+            if valor is None:
+                try: ventana.wait(timeout=.5)
+                except BrokenBarrierError: pass  # con candado, el segundo SELECT llega después
+            return SimpleNamespace(scalar=lambda: valor)
+        return resultado
+    monkeypatch.setattr(sa.engine.Connection, "execute", leer_y_esperar)
     cid = _lista(app)
     juntos = Barrier(2)
     def duplicar():
@@ -412,4 +427,31 @@ def test_compositor_toma_tarifa_borrador_del_proveedor(app, monkeypatch):
     monkeypatch.setitem(wan3_client.COSTO_USD_POR_SEGUNDO, "480p", 0.073)
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     assert 'data-usd-borrador="0.073"' in html
-    assert 'parseFloat(m.dataset.usdBorrador)' in html
+    assert _precio_js_compositor(html) == pytest.approx(.073 * 8 + .02)
+
+
+def _precio_js_compositor(html):
+    """Ejecuta el cálculo real del JS, sin navegador ni solicitudes."""
+    import json
+    import re
+    import subprocess
+    entrada = re.search(r'<input[^>]*name="modelo_video"[^>]*value="wan3"[^>]*>', html).group()
+    attrs = dict(re.findall(r'([\w-]+)="([^"]*)"', entrada))
+    dataset = {'usdSeg': attrs['data-usd-seg'], 'usdBorrador': attrs['data-usd-borrador'], 'recargo': attrs['data-recargo']}
+    codigo = html.split('var usd = 0;', 1)[1].split('// «Generar»', 1)[0]
+    tarifa = re.search(r'var usdMusica = ([^;]+);', html)
+    prefijo = ('const m = ' + json.dumps({'value': 'wan3', 'dataset': dataset}) + ';\n'
+               "const esImagen=false, duracion={value:'8'}, musicaSel={value:'calmado'};\n"
+               "const document={getElementById: id => ({checked:true})};\n"
+               "const esPropia=()=>false, facturablesEntrada=()=>0, segundosVideosBandeja=()=>0;\n"
+               'var usd=0;\n')
+    if tarifa: prefijo += 'var usdMusica = ' + tarifa.group(1) + ';\n'
+    r = subprocess.run(['node', '-e', prefijo + codigo + '\nconsole.log(usd);'], text=True, capture_output=True, check=True)
+    return float(r.stdout)
+
+
+def test_compositor_toma_tarifa_musica_del_servidor(app, monkeypatch):
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio, 'COSTO_USD_POR_PISTA_MUSICA', .037)
+    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    assert _precio_js_compositor(html) == pytest.approx(.4 + .037)

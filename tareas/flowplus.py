@@ -578,12 +578,6 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     # La predicción conserva la referencia del intento que pagó, aunque la
     # descarga se cierre desde otra tarea (PND-109, 2026-10-02).
     ref_intento = ref
-    pred = (_sesion_o_vacia(cliente, cf_id).get("prediccion") or {}).copy()
-    if pred.get("id"):
-        ref = pred.get("referencia_gasto") or ref
-        pred["referencia_gasto"] = ref
-        creative_flow.actualizar(cliente, cf_id, prediccion=pred)
-
     costo = None
     # El `detalle` del gasto se guarda (Configuración › Gasto): en el idioma del
     # proyecto, que ya puso worker.ejecutar.
@@ -599,6 +593,12 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     try:
         costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=con_sonido, calidad=calidad,
                                                 **_kw_videos(modelo, entry))
+        pred = (_sesion_o_vacia(cliente, cf_id).get("prediccion") or {}).copy()
+        if pred.get("id"):
+            if recuperado:
+                ref = pred.get("referencia_gasto") or ref
+            pred["referencia_gasto"] = ref
+            creative_flow.actualizar(cliente, cf_id, prediccion=pred)
         trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
         resp = requests.get(video_url_wan, timeout=180)
         resp.raise_for_status()
@@ -609,12 +609,12 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     except Exception as e:
         # El video existe en WaveSpeed y ya se cobró: la sesión conserva la
         # predicción, así que «Recuperar el video» puede volver a bajarlo.
-        bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
-        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
         if costo is not None:
-            # El modelo ya cobró aunque la descarga fallara: queda registrado.
+            # Registrar antes de persistir el error: esa escritura también puede fallar.
             _registrar_gasto(cliente, "video", costo, ref, modelo,
                              detalle_gasto + " · " + gettext("falló al descargar; el modelo ya cobró"))
+        bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
         raise
 
     # --- Mezcla: ¿trajo sonido? ¿pidió música? (degradable: el video ya está pagado) ---

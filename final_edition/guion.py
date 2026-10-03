@@ -421,6 +421,8 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
             # La corrección falló (timeout, 529, conexión) después de que la primera
             # llamada YA se cobró: lo pagado viaja con el error para que se anote.
             e.costo_usd = round(costo + float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+            if guion_sin_bloqueo is not None:
+                return guion_sin_bloqueo, e.costo_usd
             raise
         costo += usd
         guion = _parsear(texto)

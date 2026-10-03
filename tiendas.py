@@ -516,14 +516,31 @@ def pedidos_sin_resolver(cliente, dias=DIAS_RESOLVER_PEDIDOS):
 
 
 def pedidos_vencidos_sin_resolver(cliente, ahora=None):
-    """Cuenta pedidos con UTM fuera del plazo de atribución, sin borrarlos."""
+    """Cuenta pedidos vencidos con id numérico de una pieza propia de Creatv."""
     ahora = datetime.fromisoformat(ahora) if isinstance(ahora, str) else (ahora or datetime.now())
     limite = (ahora - timedelta(days=DIAS_RESOLVER_PEDIDOS)).isoformat(timespec="seconds")
-    pe = db.pedido
+    from atribucion import _numero
+    pe, ep, pz = db.pedido, db.experimento_pieza, db.pieza
     with db.conectar() as con:
-        return con.execute(sa.select(sa.func.count()).select_from(pe).where(
-            pe.c.cliente == cliente, pe.c.utm_content.isnot(None), pe.c.utm_content != "",
-            pe.c.experimento_pieza_id.is_(None), pe.c.fecha < limite)).scalar() or 0
+        grupos = con.execute(sa.select(pe.c.utm_content, sa.func.count()).where(
+            pe.c.cliente == cliente, pe.c.utm_content.isnot(None),
+            pe.c.experimento_pieza_id.is_(None), pe.c.fecha < limite).group_by(pe.c.utm_content)).all()
+        numericos = []
+        for utm, n in grupos:
+            try:
+                numero = _numero(utm)
+            except ValueError:
+                continue  # p. ej. ²: isdigit() no implica que int() lo acepte
+            if numero is not None and 0 <= numero <= 2 ** 63 - 1:
+                numericos.append((numero, n))
+        numeros = {numero for numero, _ in numericos}
+        if not numeros:
+            return 0
+        propios = set(con.execute(sa.union(
+            sa.select(ep.c.id).where(ep.c.cliente == cliente, ep.c.id.in_(numeros)),
+            sa.select(pz.c.id).where(pz.c.cliente == cliente, pz.c.id.in_(numeros)))).scalars())
+        return sum(n for numero, n in numericos if numero in propios)
+
 
 
 def resolver_pedido(cliente, pedido_id, ep_id):

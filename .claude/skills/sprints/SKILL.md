@@ -79,3 +79,5 @@ so its `confirm()` asks once); a reload of the SAME campaign's panel keeps what 
 browser marks as cross-site (`Sec-Fetch-Site`), like Flow Plus and the editor.
 
 Director de Crear en lotes (2026-10-02, PND-014): también se encola con max_intentos=1 y registra el usage real bajo _creatv; sigue siendo una ayuda gratis para la persona.
+
+PND-003 (revisión 2026-10-02): el estimado del lote usa gastos.estimar con musica_al_crear como musica_estilo, igual que la sesión generada.

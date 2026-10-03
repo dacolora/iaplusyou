@@ -659,3 +659,17 @@ def test_rescatar_y_activar_aprobados_a_mano_guardan_en_el_idioma_del_proyecto(e
         mensaje = ac.ejecutar("acme", eid, "activar", {"ep_ids": [ep]}, propuesta_id=2)
     assert mensaje.startswith("Activated ")
     assert vistos == [("rescatar", "es"), ("pausar", "es"), ("activar", "es")]
+
+
+@pytest.mark.parametrize('accion,payload', [('derivar', {}), ('rescatar', {'salto': 3})])
+def test_precio_regeneracion_incluye_musica(ent, accion, payload):
+    import creative_flow as cf
+    ac, eid, ep = ent['ac'], ent['eid'], ent['ep']
+    cf.crear('acme', [], [], [], 'camina', 8, '', 'A', legado_id='cf_1')
+    cf.actualizar('acme', 'cf_1', modelo='wan3', musica_estilo='')
+    ex = ent['ex'].obtener('acme', eid)
+    payload = dict(payload, ep_id=ep)
+    base = ac._precio_estimado('acme', ex, accion, payload)['usd']
+    cf.actualizar('acme', 'cf_1', musica_estilo='calmado')
+    cantidad = 2 if accion == 'derivar' else 1
+    assert ac._precio_estimado('acme', ex, accion, payload)['usd'] == pytest.approx(base + .02 * cantidad)

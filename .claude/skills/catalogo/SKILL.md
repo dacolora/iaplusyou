@@ -135,3 +135,5 @@ cards (Meta), and the template hides `.env` variables, the server note and the "
 conseguirla" steps for them (the client sees `cliente_hace`: billing + the connect block).
 
 **Pedidos sin atribuir (2026-10-02, PND-015):** pasado `DIAS_RESOLVER_PEDIDOS`, se conservan sin reintento y `tiendas.pedidos_vencidos_sin_resolver` los cuenta por proyecto. `tablero.alertas` avisa en Alertas que no entran en las ventas atribuidas; no cambia el criterio de atribución ni convierte importes.
+
+PND-015 (revisión 2026-10-02): el aviso de pedidos vencidos cuenta solo UTM numéricos según atribucion._numero que correspondan a experimento_pieza.id o pieza.id del mismo cliente; un UTM externo no genera aviso.

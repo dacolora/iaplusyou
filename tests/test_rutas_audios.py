@@ -311,3 +311,55 @@ def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
             " + '\"]')) { clearInterval(t); return; }") in html
     css = open("static/style.css", encoding="utf-8").read()
     assert ".au-voz-propia .au-voz-nombre" in css
+
+
+def test_tabla_clon_coincide_con_estimador_y_se_calcula_una_vez(app, monkeypatch):
+    import gastos
+    import voces_propias
+    d = app['dashboard']
+    limpiar = getattr(getattr(d, '_precios_clon', None), 'cache_clear', lambda: None)
+    limpiar()
+    original = gastos.estimar
+    calculos = []
+    def contar(tipo, **kw):
+        if tipo == 'voz_clonada' and 'nombre' in kw: calculos.append(kw)
+        return original(tipo, **kw)
+    monkeypatch.setattr(gastos, 'estimar', contar)
+    try:
+        contexto = d._contexto_mis_voces('acme')
+        cantidad = len(calculos)
+        for nombre, idioma in [('Ana', 'es'), ('Dániel Pérez', 'en'), ('李雷', 'de')]:
+            assert contexto['precios_clon'][idioma][len(nombre)] == original('voz_clonada', nombre=nombre, idioma=idioma)['usd']
+        html = app['c'].get('/cliente/acme').get_data(as_text=True)
+        d._contexto_mis_voces('acme')
+        assert cantidad == len(audios.IDIOMAS) * (voces_propias.MAX_NOMBRE + 1)
+        assert len(calculos) == cantidad
+        assert re.search(r"getElementById\('au-vp-nombre-c'\)\.addEventListener\('input', refrescarPrecioClon\)", html)
+        assert re.search(r"getElementById\('au-idioma'\)\.addEventListener\('change', refrescarPrecioClon\)", html)
+    finally:
+        limpiar()
+
+
+def test_clonar_refresca_precio_al_vaciar_nombre(app):
+    import json
+    import subprocess
+    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    funcion = re.search(r'function refrescarPrecioClon\(\) \{.*?\n  \}', html, re.S).group()
+    accion = html.split('enviarVoz(raiz.dataset.urlVpClonar, fd).then(function (ok) {', 1)[1].split('    });', 1)[0]
+    tabla = app['dashboard']._contexto_mis_voces('acme')['precios_clon']
+    codigo = 'var preciosClon=' + json.dumps(tabla) + ''';
+    const elementos={'au-vp-nombre-c':{value:'x'.repeat(40)},'au-idioma':{value:'es'},
+      'au-vp-clonar-precio':{textContent:''},'au-vp-permiso':{checked:true}};
+    const document={getElementById:id=>elementos[id]}, T={aprox:'≈'};
+    const fmtUsd=v=>'US$ '+v.toFixed(2), archivo={value:'a.mp3'}, botonClonar={disabled:true};
+    ''' + funcion + '''
+    refrescarPrecioClon(); const antes=elementos['au-vp-clonar-precio'].textContent;
+    function terminar(ok){''' + accion + '''}
+    terminar(true);
+    console.log(JSON.stringify({antes,despues:elementos['au-vp-clonar-precio'].textContent,nombre:elementos['au-vp-nombre-c'].value}));
+    '''
+    r = subprocess.run(['node', '-e', codigo], text=True, capture_output=True, check=True)
+    resultado = json.loads(r.stdout)
+    assert resultado['nombre'] == ''
+    assert resultado['despues'] != resultado['antes']
+    assert resultado['despues'] == f"≈ US$ {tabla['es'][0]:.2f}"

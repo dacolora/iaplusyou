@@ -196,6 +196,7 @@ def test_traer_dataset_no_entregado_registra_costo_real_por_contar_dataset(monke
     with pytest.raises(ErrorFuente) as exc:
         next(gen)
     assert exc.value.costo_real == pytest.approx(round(5 * apify_actores_precio(), 4))
+    assert exc.value.extra_gasto == {'run_id': 'run1', 'dataset_id': 'ds1'}
 
 
 def test_arrancar_401_se_traduce_al_error_fuente_de_referentes(monkeypatch):
@@ -266,6 +267,7 @@ def test_sondeo_fallido_conserva_costo_del_dataset(monkeypatch):
     with pytest.raises(ErrorFuente) as exc:
         next(apify_adlibrary.traer({"modo": "palabra", "palabra": "shoes"}, 10, lambda **k: None))
     assert exc.value.costo_real == pytest.approx(round(5 * apify_actores_precio(), 4))
+    assert exc.value.extra_gasto == {'run_id': 'run', 'dataset_id': 'ds'}
 
 
 def test_normalizacion_fallida_conserva_cobro(monkeypatch):
