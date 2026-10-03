@@ -329,21 +329,82 @@ def _experimento_sembrado():
                               7, 100000, "https://shop.example/p", "COP", atribucion="ninguna")
 
 
-def test_experimentos_admin_en_ingles(admin_en):
-    _experimento_sembrado()
-    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("tab-experimentos",))
+FRAGMENTO = "/cliente/acme/experimentos/resultados"
+
+
+def _experimento_con_pieza(base_temporal):
+    """Un experimento con una pieza de video que ya gastó: el fragmento de resultados tiene tarjetas, tabla de ranking
+    y evolución, y el panel de la pieza (`exp_pieza`) tiene algo que mostrar. Devuelve (eid, ep_id)."""
+    import experimentos as ex
+    from tests.test_experimentos_db import _pieza
+    eid = _experimento_sembrado()
+    pid = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
+    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    ex.snapshot(ep, {"impresiones": 1000, "clics_enlace": 20, "gasto": 100.0, "ctr": 2.0, "cpc": 5.0})
+    return eid, ep
+
+
+def _meta_conectada(app_i18n, monkeypatch):
+    """Con Meta conectada «Nuevo experimento» pinta sus pasos (sin conectar, solo el aviso de conectar)."""
+    monkeypatch.setattr(app_i18n.meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
+
+
+def _urls_del_centro(eid, ep):
+    """Dónde vive ahora lo que antes pintaba la pestaña de Experimentos: el fragmento (sin y con un experimento
+    elegido, con un periodo y con un filtro de tipo), el panel de una pieza y «Nuevo experimento»."""
+    return [FRAGMENTO, f"{FRAGMENTO}?exp={eid}", f"{FRAGMENTO}?dias=30&tipo=video",
+            f"/cliente/acme/experimentos/pieza/{ep}", "/cliente/acme/experimentos/nuevo"]
+
+
+def test_experimentos_admin_en_ingles(admin_en, app_i18n, base_temporal, monkeypatch):
+    _meta_conectada(app_i18n, monkeypatch)
+    eid, ep = _experimento_con_pieza(base_temporal)
+    html = html_de(admin_en, "/cliente/acme")
+    assert "Results center" in html and "Loading results…" in html and "How the engine decides" in html
+    fugas = espanol_visible(html, ("tab-experimentos",))
     assert not fugas, fugas[:15]
+    for url in _urls_del_centro(eid, ep):
+        fugas = espanol_visible(html_de(admin_en, url))
+        assert not fugas, (url, fugas[:15])
 
 
-def test_experimentos_cliente_en_ingles(cliente_en):
-    _experimento_sembrado()
+def test_experimentos_cliente_en_ingles(cliente_en, app_i18n, base_temporal, monkeypatch):
+    _meta_conectada(app_i18n, monkeypatch)
+    eid, ep = _experimento_con_pieza(base_temporal)
     fugas = espanol_visible(html_de(cliente_en, "/cliente/acme"), ("tab-experimentos",))
     assert not fugas, fugas[:15]
+    for url in _urls_del_centro(eid, ep):
+        fugas = espanol_visible(html_de(cliente_en, url))
+        assert not fugas, (url, fugas[:15])
 
 
-def test_etiquetas_de_estado_en_ingles(admin_en):
-    _experimento_sembrado()
-    html = html_de(admin_en, "/cliente/acme")
+def test_centro_de_resultados_dice_lo_suyo_en_ingles(admin_en, app_i18n, base_temporal, monkeypatch):
+    """Textos concretos del centro (no solo «sin español»: una cadena sin traducir que se lee igual en inglés, como
+    «Total» o «CPC», no la atrapa la heurística), en el fragmento, en la gestión, en el panel y en «Nuevo»."""
+    _meta_conectada(app_i18n, monkeypatch)
+    eid, ep = _experimento_con_pieza(base_temporal)
+    html = html_de(admin_en, FRAGMENTO)
+    for texto in ("Needs your decision", "Period summary", "Day by day", "Where people drop off", "Piece ranking",
+                  "By country", "What the project has already learned", "Month-by-month history",
+                  "+ New experiment", "Since the start", "All experiments", "All pieces", "Video only"):
+        assert texto in html, texto
+    assert "Resumen del periodo" not in html and "Historial mes a mes" not in html
+    gestion = html_de(admin_en, f"{FRAGMENTO}?exp={eid}")
+    assert "Selected experiment" in gestion and "See all experiments" in gestion and "How the engine decides" in gestion
+    assert "Elegido" not in gestion
+    panel = html_de(admin_en, f"/cliente/acme/experimentos/pieza/{ep}")
+    for texto in ("Key metrics", "Day by day", "Who sees it", "Activity log", "Test in another experiment", "See in Create",
+                  "See its experiment", "No events yet."):
+        assert texto in panel, texto
+    nuevo = html_de(admin_en, "/cliente/acme/experimentos/nuevo")
+    for texto in ("01 · Pieces", "02 · Where", "03 · Total and days", "04 · Review", "Back to results",
+                  "Quick test", "Standard", "Strong", "Adjust the split", "Nothing is spent until you press Activate"):
+        assert texto in nuevo, texto
+
+
+def test_etiquetas_de_estado_en_ingles(admin_en, base_temporal):
+    eid, _ep = _experimento_con_pieza(base_temporal)
+    html = html_de(admin_en, f"{FRAGMENTO}?exp={eid}")
     assert ">drafting<" in html and ">queued<" in html
     assert ">armando<" not in html and ">en_cola<" not in html
 
@@ -372,7 +433,7 @@ def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypat
     # creado con..." — el caso que el hallazgo pide comprobar explícitamente.
     admin_en.post("/cliente/acme/experimentos/nuevo", data={
         "nombre": "Test EN", "objetivo": "OUTCOME_TRAFFIC", "paises": ["CO"], "presupuesto_CO": "20000",
-        "dias": "7", "tope_total": "100000", "destino_url": "https://shop.example/p", "atribucion": "ninguna",
+        "dias": "7", "tope_total": "150000", "destino_url": "https://shop.example/p", "atribucion": "ninguna",
     }, headers=MISMO_ORIGEN)
     eid = ex.cargar("acme")[0]["id"]
     propuestas.crear("acme", eid, "escalar", {"pais": "CO"}, "ganador")
@@ -380,7 +441,9 @@ def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypat
         {"id": "d1", "tipo": "rescatar", "estado": "produciendo", "origen_ep_id": None, "motivo": "", "items": []},
     ]})
 
-    html = html_de(admin_en, "/cliente/acme")
+    # La gestión de un experimento (etiquetas, propuestas, derivaciones, eventos) vive en el fragmento del centro
+    # de resultados con el experimento elegido, ya no en la página del proyecto.
+    html = html_de(admin_en, f"{FRAGMENTO}?exp={eid}")
     # atribución (tag del experimento + <select> Avanzado)
     assert "atribución ninguna" not in html and "attribution none" in html
     assert ">ninguna<" not in html
@@ -401,14 +464,19 @@ def _cobro_de_septiembre():
 
 
 def test_tablero_en_ingles(admin_en, monkeypatch):
+    """El Tablero ya no es una pestaña (E2, 2026-10-03): su total y su «Mes a mes» viven en el «Historial» del
+    fragmento del centro de resultados."""
     import dashboard
     dashboard._TABLERO_CACHE.clear()
     _cobro_de_septiembre()
     monkeypatch.setattr(dashboard.db, "ahora", lambda: "2026-09-26T10:00:00")
-    html = html_de(admin_en, "/cliente/acme")
-    assert "<h2>Dashboard</h2>" in html and "Month by month" in html and "September 2026" in html
-    fugas = espanol_visible(html, ("tab-tablero",))
+    html = html_de(admin_en, FRAGMENTO)
+    assert "Month-by-month history" in html and "Month by month" in html and "September 2026" in html
+    assert "<h2>Tablero</h2>" not in html and "Mes a mes" not in html
+    fugas = espanol_visible(html)
     assert not fugas, fugas[:15]
+    # La página del proyecto ya no trae una pestaña Tablero.
+    assert 'id="tab-tablero"' not in html_de(admin_en, "/cliente/acme")
 
 
 def test_tablero_no_mezcla_idiomas_en_la_cache(app_i18n, monkeypatch):
@@ -418,11 +486,11 @@ def test_tablero_no_mezcla_idiomas_en_la_cache(app_i18n, monkeypatch):
     c = app_i18n.app.test_client()
     with c.session_transaction() as s:
         s["usuario"], s["rol"], s["cliente"] = "admin", "admin", None
-    html = html_de(c, "/cliente/acme")
-    assert "<h2>Tablero</h2>" in html and "Mes a mes" in html and "septiembre 2026" in html
+    html = html_de(c, FRAGMENTO)
+    assert "Historial mes a mes" in html and "Mes a mes" in html and "septiembre 2026" in html
     idiomas.guardar_de_usuario("admin", "en")
-    html = html_de(c, "/cliente/acme")
-    assert "<h2>Dashboard</h2>" in html and "Month by month" in html and "September 2026" in html
+    html = html_de(c, FRAGMENTO)
+    assert "Month-by-month history" in html and "Month by month" in html and "September 2026" in html
     assert "septiembre 2026" not in html
 
 
@@ -482,7 +550,7 @@ def test_catalogo_producto_con_doctrina_en_ingles(admin_en):
 def test_experimentos_doctrina_en_ingles(admin_en):
     """Merge de main (doctrina, bloque 3): las constantes del aviso del paso 3
     salen en inglés (el marcado lo cubre test_experimentos_admin_en_ingles)."""
-    html = html_de(admin_en, "/cliente/acme")
+    html = html_de(admin_en, "/cliente/acme/experimentos/nuevo")
     assert "Doctrine: {n} to improve" in html
     assert "chosen pieces have points to improve according to the doctrine" in html
 
