@@ -1,0 +1,17 @@
+# Orden en que estilos.py une static/style.css (spec 2026-10-02-sistema-de-estilos §5).
+# Capas: tokens.css, legado/ (solo se vacía), base.css, componentes/, pantallas/.
+tokens.css
+legado/01-sistema-de-diseno.css
+legado/02-barra-lateral-dentro-de-un-proyecto.css
+legado/03-base-visual-comun-2026-09-25-spec.css
+legado/04-crear-flow-plus-corregir-prompts-con-cla.css
+legado/05-tablero-de-sprints-2026-09-26-spec.css
+legado/06-crear-compositor-2026-09-27-spec.css
+legado/07-celular-revision-de-pantallas-2026-09-28.css
+legado/08-crear-audios-crear-audios-html-spec-2026.css
+legado/09-catalogo-galeria-y-ficha-spec-2026-09-28.css
+legado/10-crear-anuncio-hablado-2026-10-01-crear-h.css
+legado/11-final-edition-tablero-2026-10-02-daniel.css
+legado/12-alertas-2026-10-02-spec-docs-superpowers.css
+base.css
+pantallas/guia-estilos.css

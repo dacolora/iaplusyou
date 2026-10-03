@@ -1301,6 +1301,19 @@ def admin_salud():
                            tamano=monitoreo.tamano_legible, nombres=_nombres_proyectos())
 
 
+@app.route("/admin/estilos")
+@requiere_admin
+def admin_estilos():
+    """Guía de estilos (spec 2026-10-02-sistema-de-estilos §8): cada token con su valor y su contraste contra
+    --panel, y cada componente pintado con el CSS y las macros reales."""
+    import estilos
+    lista = estilos.tokens()
+    panel = dict(lista).get("--panel", "#0b1a33")
+    colores = [{"nombre": n, "valor": v, "contraste": estilos.contraste(v, panel)} for n, v in lista if estilos.es_color(v)]
+    otros = [{"nombre": n, "valor": v} for n, v in lista if not estilos.es_color(v)]
+    return render_template("admin_estilos.html", colores=colores, otros=otros)
+
+
 def _nombres_proyectos():
     try:
         return {cid: proyectos.nombre_visible(cid) for cid in estado_mod.listar_clientes()}

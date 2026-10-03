@@ -34,7 +34,7 @@
 
   /* Fila del medio (un <main>: sin el ancho máximo ni el relleno de las demás páginas) */
   .ed-cuerpo { max-width: none; margin: 0; padding: 0; min-width: 0; min-height: 0; }
-  .ed-centro { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .ed-centro { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--fondo-video); }
   .ed-escena { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; padding: .75rem; }
   /* #ed-escenario mide exactamente lo que se ve del lienzo (la proporción del
      formato): la capa para tocar y arrastrar sobre el video va encima, del
@@ -43,7 +43,7 @@
      ninguna media query cubriera dejaría el reproductor en 0×0. */
   .ed-escenario { position: relative; flex: none; max-width: 100%; aspect-ratio: var(--ed-ancho) / var(--ed-alto);
     width: min(100%, calc(42vh * var(--ed-ancho) / var(--ed-alto))); }
-  #lienzo { position: absolute; inset: 0; display: block; width: 100%; height: 100%; background: #000; border-radius: var(--radius-sm); }
+  #lienzo { position: absolute; inset: 0; display: block; width: 100%; height: 100%; background: var(--fondo-lienzo); border-radius: var(--radius-sm); }
   /* Tocar, mover y agrandar sobre el video (lienzo_interaccion.js): la capa
      transparente cubre exactamente el lienzo y escucha el puntero (el dedo no
      mueve la página ahí); la caja de lo elegido, su asa y las guías del
@@ -293,7 +293,7 @@
     font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
   {% if datos.config.emoji %}.ed-sticker-emoji { font-family: "CreatvEmoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }{% endif %}
   .ed-stickers-atribucion { margin-top: .35rem; font-size: .72rem; }
-  /* transiciones: una muestra quieta de cada una (A violeta, B verde) con su nombre y qué hace */
+  /* transiciones: una muestra quieta de cada una (A y B en dos colores) con su nombre y qué hace */
   .ed-bib-transiciones { display: grid; gap: .4rem; }
   .ed-bib-transicion { display: flex; align-items: center; gap: .6rem; min-width: 0; padding: .45rem .55rem; text-align: left; color: var(--text);
     font-family: var(--font-body); font-weight: 400; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }

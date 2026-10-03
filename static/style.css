@@ -1,51 +1,107 @@
+/* GENERADO por «python3 estilos.py construir» desde static/estilos/ — no editar a mano. */
+/* ── estilos/tokens.css ── */
 /* ============================================================
-   Sistema de diseño — Studio dashboard
+   Tokens — sistema de estilos (spec docs/superpowers/specs/2026-10-02-sistema-de-estilos-design.md §4).
+   El ÚNICO archivo con valores escritos a mano. Paleta azul: la del tablero de Final edition, ahora global.
+   Contrastes sobre --panel #0b1a33: --text 15,7:1 · --muted 7,3:1 · --muted-2 6:1 · --accent-texto 7,8:1 ·
+   --cian 9:1 · --ok 8,7:1 · --warn 9:1 · --error 5,9:1 · --serie-1 4,8:1 · --serie-2 4,5:1 · blanco sobre
+   --accent 5:1. --cian pasa de 0,4 de luminancia: SOLO texto, trazos, íconos y sombras, nunca fondo ni borde
+   (tests/test_modo_oscuro.py). Solo tema oscuro.
    ============================================================ */
 
 :root {
-  /* Tema oscuro, único (spec 2026-09-26-idioma-y-modo-oscuro, parte A). No hay
-     tema claro ni selector: tests/test_modo_oscuro.py falla ante un fondo, un
-     borde o un texto claro escrito a mano fuera de estas variables. */
   color-scheme: dark;
-  --bg: #0f1115;
-  --panel: #1a1d24;
-  --panel-2: #232733;
-  --panel-hover: #2a2f3c;
-  --border: #2c313c;
-  --border-soft: rgba(255, 255, 255, 0.08);
-  --text: #f2f3f5;
-  --muted: #9aa3b2;
-  --muted-2: #838b9b;
 
-  /* --accent para superficies llenas (letra blanca, 5.7:1); --accent-texto
-     para enlaces y textos morados sobre los paneles (6.2:1 / 5.5:1). */
-  --accent: #7c3aed;
-  --accent-2: #a855f7;
-  --accent-grad: linear-gradient(135deg, #7c3aed, #a855f7);
-  --accent-texto: #a78bfa;
+  /* Superficies y texto */
+  --bg: #050d1f;
+  --panel: #0b1a33;
+  --panel-2: #10223f;
+  --panel-hover: #152b4e;
+  --border: #1c3a66;
+  --border-soft: rgba(80, 150, 255, 0.16);
+  --text: #eef4ff;
+  --muted: #93a9cc;
+  --muted-2: #8299bd;
 
+  /* Acento azul: --accent para superficies llenas (letra blanca); --accent-texto para enlaces y textos */
+  --accent: #1d6ae0;
+  --accent-2: #2f8cff;
+  --accent-grad: linear-gradient(135deg, #1a5fd0, #2a7ff0);
+  --accent-texto: #5cb4ff;
+
+  /* Luz: solo texto, trazos, íconos y sombras */
+  --cian: #38c8ff;
+  --brillo: rgba(47, 140, 255, 0.4);
+
+  /* Estados (siempre con texto o ícono, nunca solo color) */
   --ok: #3ecf8e;
   --warn: #e8b339;
   --error: #ff5f7a;
   --ok-fondo: rgba(62, 207, 142, 0.14);
   --warn-fondo: rgba(232, 179, 57, 0.14);
   --error-fondo: rgba(255, 95, 122, 0.14);
-  /* Única superficie clara: detrás de logos de marca con fondo transparente
-     (un logo negro sobre negro desaparece). Solo miniaturas de logos. */
+
+  /* Series de gráficos, en orden fijo (dataviz, validadas sobre #0b1a33 el 2026-10-02) */
+  --serie-1: #3987e5;
+  --serie-2: #d95926;
+  --serie-3: #199e70;
+  --serie-4: #c98500;
+  --serie-5: #d55181;
+  --serie-6: #008300;
+  --serie-7: #9085e9;
+  --serie-8: #e66767;
+  --tb-gasto: var(--serie-2); --tb-ingresos: var(--serie-1); --tb-warn: #fab219;
+
+  /* Excepciones con nombre */
   --fondo-logo: #e9e9f0;
+  --fondo-video: #121417;
+  --fondo-lienzo: #000000;
 
-  --radius-sm: 8px;
-  --radius: 14px;
-  --radius-lg: 20px;
-  --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-  --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.30);
-  --shadow-glow: 0 0 0 1px rgba(124, 58, 237, 0.45), 0 8px 24px rgba(124, 58, 237, 0.28);
-  --sidebar-w: 232px;
-  --sidebar-w-plegada: 72px;
-
+  /* Tipografía */
   --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
   --font-body: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --t-sobretitulo: 0.72rem;
+  --t-chico: 0.82rem;
+  --t-base: 1rem;
+  --t-titulo: 1.35rem;
+  --t-cifra: 2rem;
+  --t-gigante: 4.5rem;
+
+  /* Espacios */
+  --esp-1: 4px;
+  --esp-2: 8px;
+  --esp-3: 12px;
+  --esp-4: 16px;
+  --esp-5: 24px;
+  --esp-6: 32px;
+  --esp-7: 48px;
+
+  /* Radios */
+  --radius-sm: 8px;
+  --radius-icono: 12px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pastilla: 999px;
+
+  /* Sombras y brillos */
+  --shadow: 0 12px 32px rgba(0, 4, 16, 0.55);
+  --shadow-soft: 0 4px 18px rgba(0, 6, 20, 0.55);
+  --shadow-glow: 0 0 0 1px rgba(47, 140, 255, 0.55), 0 8px 28px rgba(30, 120, 255, 0.35);
+  --brillo-sm: 0 0 8px var(--brillo);
+  --brillo-md: 0 0 16px var(--brillo);
+  --fondo-escena:
+    radial-gradient(900px 420px at 92% -14%, rgba(47, 140, 255, 0.22), transparent 62%),
+    radial-gradient(700px 380px at -10% 110%, rgba(56, 200, 255, 0.08), transparent 60%),
+    radial-gradient(rgba(120, 170, 255, 0.07) 1px, transparent 1.5px) 0 0 / 22px 22px;
+
+  /* Movimiento */
+  --pulso: 1.6s;
+
+  /* Disposición */
+  --sidebar-w: 232px;
+  --sidebar-w-plegada: 72px;
 }
+/* ── estilos/legado/01-sistema-de-diseno.css ── */
 
 * { box-sizing: border-box; }
 
@@ -76,7 +132,7 @@ body {
   pointer-events: none;
   background:
     radial-gradient(600px 400px at 8% -5%, rgba(77, 141, 255, 0.14), transparent 60%),
-    radial-gradient(700px 500px at 95% 10%, rgba(124, 92, 255, 0.12), transparent 60%),
+    radial-gradient(700px 500px at 95% 10%, rgba(47, 140, 255, 0.12), transparent 60%),
     radial-gradient(900px 600px at 50% 110%, rgba(77, 141, 255, 0.07), transparent 60%);
 }
 
@@ -408,7 +464,7 @@ textarea, select, input[type="number"], input[type="text"], input[type="password
    pintaba como un recuadro alrededor del circulito. Ellos usan outline. */
 textarea:focus, select:focus, input:not([type="radio"]):not([type="checkbox"]):focus {
   outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, .15);
+  box-shadow: 0 0 0 3px rgba(29, 106, 224, .15);
 }
 input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 textarea { resize: vertical; }
@@ -996,7 +1052,7 @@ td.estado-error { color: var(--error); }
   cursor: pointer;
 }
 .maniqui-preset:hover { color: var(--text); border-color: var(--accent); }
-.maniqui-preset.activo { color: var(--text); border-color: var(--accent); background: rgba(124,108,255,.15); }
+.maniqui-preset.activo { color: var(--text); border-color: var(--accent); background: rgba(47, 140, 255, .15); }
 
 .maniqui-resumen {
   margin-top: .7rem;
@@ -1017,6 +1073,7 @@ td.estado-error { color: var(--error); }
 textarea.con-error, input.con-error { border-color: var(--error) !important; box-shadow: 0 0 0 2px rgba(255, 90, 90, .25); }
 
 
+/* ── estilos/legado/02-barra-lateral-dentro-de-un-proyecto.css ── */
 /* ============================================================
    Barra lateral (dentro de un proyecto)
    ============================================================ */
@@ -1189,13 +1246,13 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .landing-tarjeta .generado-tipo { position: absolute; top: .6rem; left: .6rem; }
 .landing-tarjeta strong { font-family: var(--font-display); font-size: .95rem; }
 .landing-tarjeta small { font-size: .72rem; opacity: .85; }
-.landing-tarjeta.t1 { left: 8%; top: 40px; transform: rotate(-6deg); background: linear-gradient(160deg, #7c3aed, #4d8dff); }
-.landing-tarjeta.t2 { left: 38%; top: 0; z-index: 2; background: linear-gradient(160deg, #a855f7, #7c3aed); }
-.landing-tarjeta.t3 { left: 66%; top: 60px; transform: rotate(7deg); background: linear-gradient(160deg, #4d8dff, #a855f7); }
+.landing-tarjeta.t1 { left: 8%; top: 40px; transform: rotate(-6deg); background: linear-gradient(160deg, var(--accent), #4d8dff); }
+.landing-tarjeta.t2 { left: 38%; top: 0; z-index: 2; background: linear-gradient(160deg, var(--accent-2), var(--accent)); }
+.landing-tarjeta.t3 { left: 66%; top: 60px; transform: rotate(7deg); background: linear-gradient(160deg, #4d8dff, var(--accent-2)); }
 
 .landing-features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 1rem 0 3rem; }
 .landing-features article { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.3rem 1.2rem; }
-.landing-icono { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: 10px; background: rgba(124,58,237,.1); color: var(--accent-texto); font-size: 1.1rem; margin-bottom: .8rem; }
+.landing-icono { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: 10px; background: rgba(29, 106, 224,.1); color: var(--accent-texto); font-size: 1.1rem; margin-bottom: .8rem; }
 .landing-features h3 { margin: 0 0 .4rem; font-family: var(--font-display); font-size: 1.05rem; }
 .landing-features p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.5; }
 
@@ -1451,10 +1508,10 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .badge-fuente { text-transform: lowercase; }
 .badge-fuente-shopify { color: #8bc36a; background: rgba(94, 142, 62, .12); }
 .badge-fuente-shopify_publico { color: #8bc36a; background: rgba(94, 142, 62, .12); }
-.badge-fuente-woo { color: #b48be0; background: rgba(127, 84, 179, .12); }
+.badge-fuente-woo { color: #b48be0; background: rgba(127, 84, 179, .12); }  /* violeta de la marca WooCommerce, a propósito */
 .badge-fuente-meli { color: #e0b33a; background: rgba(255, 230, 0, .22); }
 .badge-fuente-csv { color: var(--muted); background: rgba(120, 120, 120, .12); }
-.badge-fuente-url { color: var(--accent-texto); background: rgba(108, 92, 231, .12); }
+.badge-fuente-url { color: var(--accent-texto); background: rgba(47, 140, 255, .12); }
 
 .tabla-tiendas td { vertical-align: top; }
 .tienda-acciones { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
@@ -1464,7 +1521,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .tienda-tipo-panel[hidden] { display: none; }
 .tag-atribucion { text-transform: none; }
 .tag-atribucion-pixel { color: var(--ok); background: rgba(47, 158, 110, .1); }
-.tag-atribucion-tienda { color: var(--accent-texto); background: rgba(108, 92, 231, .12); }
+.tag-atribucion-tienda { color: var(--accent-texto); background: rgba(47, 140, 255, .12); }
 .pixel-estado { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; font-size: .84rem; margin: .4rem 0; }
 .pixel-estado form.inline { margin: 0; flex-basis: 100%; }
 .pixel-ayuda { margin-top: .6rem; }
@@ -1473,12 +1530,10 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .pixel-ayuda li { margin-bottom: .4rem; }
 
 /* ---- Tablero (Bloque 6) ---- */
-/* Colores de las dos series del gráfico: par validado (colorblind-safe) sobre
-   el panel oscuro con dataviz/scripts/validate_palette.js --mode dark
-   --surface "#1a1d24" (5/5 PASS: CVD ΔE 21.5, visión normal 29.2). --tb-warn es
-   el "warning" de estado oscuro (9.5:1). El texto del gráfico nunca usa el color
-   de la serie: va en --muted / --text. */
-:root { --tb-gasto: #8b6cf0; --tb-ingresos: #19a676; --tb-warn: #fab219; }
+/* Colores de las dos series del gráfico: viven en tokens.css (--tb-ingresos =
+   --serie-1, --tb-gasto = --serie-2; serie validada sobre #0b1a33 el 2026-10-02).
+   El texto del gráfico nunca usa el color de la serie: va en --muted / --text. */
+
 .tb-cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
 .tb-cabecera .vacio { padding-bottom: 0; }
 .tb-csv { flex: none; text-decoration: none; margin-top: .3rem; }
@@ -1534,10 +1589,10 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .tb-dia:hover .tb-barra { fill: var(--accent-2); }
 
 /* Triple Whale: colores alternativos en la serie #}
-.tb-barra-tw { fill: var(--accent-3, #8b5cf6); }  /* púrpura por defecto si no existe */
-.tb-linea-tw { fill: none; stroke: var(--accent-3, #8b5cf6); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
-.tb-marcador-tw { fill: var(--accent-3, #8b5cf6); stroke: var(--panel); stroke-width: 2; opacity: 0; transition: opacity .12s; pointer-events: none; }
-.tb-dia:hover .tb-barra-tw { fill: var(--accent-1, #06b6d4); }  /* cian al hover */
+.tb-barra-tw { fill: var(--serie-3); }  /* tercera serie: aqua */
+.tb-linea-tw { fill: none; stroke: var(--serie-3); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+.tb-marcador-tw { fill: var(--serie-3); stroke: var(--panel); stroke-width: 2; opacity: 0; transition: opacity .12s; pointer-events: none; }
+.tb-dia:hover .tb-barra-tw { fill: var(--serie-1); }  /* primera serie: azul al hover */
 
 /* Top 5 ganadoras */
 .tb-top { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: .8rem; }
@@ -1752,7 +1807,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .exp-filtros .chip.activo { background:var(--accent); color:#fff; border-color:var(--accent); }
 .exp-tarjetas { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap:.8rem; margin-top:.8rem; }
 .exp-tarjeta { position:relative; display:flex; flex-direction:column; gap:.4rem; border:2px solid transparent; border-radius:10px; padding:.4rem; background:var(--panel-2); cursor:pointer; }
-.exp-tarjeta:has(input:checked) { border-color:var(--accent); background:rgba(124, 58, 237, .16); }
+.exp-tarjeta:has(input:checked) { border-color:var(--accent); background:rgba(29, 106, 224, .16); }
 .exp-tarjeta input[type=checkbox] { position:absolute; top:.6rem; left:.6rem; width:1.2rem; height:1.2rem; z-index:1; }
 .exp-tarjeta-media { aspect-ratio:9/16; max-height:220px; overflow:hidden; border-radius:8px; background:#111; }
 .exp-tarjeta-media img, .exp-tarjeta-media video { width:100%; height:100%; object-fit:cover; display:block; }
@@ -1793,7 +1848,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .estado-nicho-armando { background: rgba(77, 141, 255, .15); }
 .estado-nicho-generando { background: rgba(232, 179, 57, .15); }
 .estado-nicho-revisando, .estado-nicho-aprobado { background: rgba(62, 207, 142, .2); }
-.estado-nicho-propuesto { background: rgba(124, 92, 255, .15); }
+.estado-nicho-propuesto { background: rgba(47, 140, 255, .15); }
 .estado-nicho-descartado { background: rgba(255, 95, 122, .15); }
 
 /* Configuración › Meta: el cliente elige cómo conectar (2026-09-20) */
@@ -1894,7 +1949,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .modal-form-precio button { align-self: flex-start; margin-top: .3rem; }
 .modal-form-tabla { overflow-x: auto; margin-bottom: 1.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .modal-form > .vacio { padding-bottom: 1.6rem; }
-.tag-en-curso { color: var(--accent-texto); background: rgba(124, 58, 237, .1); }
+.tag-en-curso { color: var(--accent-texto); background: rgba(29, 106, 224, .1); }
 .barrido-fecha { white-space: nowrap; }
 .barrido-sub { display: block; margin-top: .2rem; font-size: .72rem; color: var(--muted); line-height: 1.4; }
 /* La barra del barrido en curso: su celda no tiene otro contenido, así que sin ancho mínimo se encogía a un punto. */
@@ -1917,7 +1972,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .opcion-tarjeta input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
 .opcion-tarjeta strong { font-size: .88rem; }
 .opcion-tarjeta small { font-size: .76rem; color: var(--muted); }
-.opcion-tarjeta:has(input:checked) { border-color: var(--accent); background: rgba(124, 58, 237, .05); box-shadow: 0 0 0 1px var(--accent); }
+.opcion-tarjeta:has(input:checked) { border-color: var(--accent); background: rgba(29, 106, 224, .05); box-shadow: 0 0 0 1px var(--accent); }
 .opcion-tarjeta:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Traer referentes: solo el campo del modo elegido (los dos siguen en el DOM). */
@@ -1939,6 +1994,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
   .modal-form-pie .btn-generar { width: 100%; }
 }
 
+/* ── estilos/legado/03-base-visual-comun-2026-09-25-spec.css ── */
 /* ============================================================
    Base visual común (2026-09-25) — spec:
    docs/superpowers/specs/2026-09-25-base-visual-comun-design.md
@@ -1973,12 +2029,14 @@ fieldset { border: 1px solid var(--border); border-radius: var(--radius); paddin
 legend { font-family: var(--font-display); font-size: .95rem; font-weight: 600; color: var(--text); padding: 0 .4rem; }
 
 /* Botones: secundario por defecto; las variantes van DESPUÉS con la misma
-   especificidad para ganarle. */
-button:not([class]), .btn, .btn-secondary, .btn-sm, .btn-xs {
+   especificidad para ganarle. .menu-movil y .au-filtro no pintan su fondo: sin entrar
+   aquí quedaban con el gris del navegador (2026-10-02, capturas del sistema de estilos). */
+button:not([class]), .btn, .btn-secondary, .btn-sm, .btn-xs, .menu-movil, .au-filtro {
   background: var(--panel); color: var(--text); border: 1px solid var(--border);
 }
 button:not([class]):hover:not(:disabled), .btn:hover:not(:disabled), .btn-secondary:hover:not(:disabled),
-.btn-sm:hover:not(:disabled), .btn-xs:hover:not(:disabled) { border-color: var(--muted-2); }
+.btn-sm:hover:not(:disabled), .btn-xs:hover:not(:disabled), .menu-movil:hover,
+.au-filtro:not(.activo):hover { border-color: var(--muted-2); }
 a.btn, a.btn-sm, a.btn-xs, a.btn-generar, a.btn-guardar, a.btn-secondary, a.btn-primary {
   display: inline-flex; align-items: center; text-decoration: none;
 }
@@ -2033,6 +2091,7 @@ summary { cursor: pointer; }
 .estado-vacio-texto { margin: 0; max-width: 52ch; color: var(--muted); font-size: .88rem; line-height: 1.5; }
 .estado-vacio .btn-generar, .estado-vacio .btn-sm { margin-top: .5rem; }
 
+/* ── estilos/legado/04-crear-flow-plus-corregir-prompts-con-cla.css ── */
 /* ============================================================
    Crear › Flow Plus: corregir prompts con Claude (_crear_flowplus.html)
    Prefijo gp-. Lista de prompts (1/3) + prompt elegido y chat (2/3);
@@ -2259,6 +2318,7 @@ img.img-rota { object-fit: contain; background: var(--panel-2); padding: 12%; }
 .idioma-enlaces { margin-left: auto; font-size: .8rem; color: var(--muted); white-space: nowrap; }
 .idioma-enlaces a { color: var(--accent-texto); text-decoration: none; }
 
+/* ── estilos/legado/05-tablero-de-sprints-2026-09-26-spec.css ── */
 /* =====================================================================
    Tablero de Sprints (2026-09-26) — spec
    docs/superpowers/specs/2026-09-26-sprints-tablero-design.md.
@@ -2395,6 +2455,7 @@ body.panel-abierto { overflow: hidden; }
 .panel-rechazo { display: grid; gap: .4rem; }
 .panel-rechazo[hidden] { display: none; }
 
+/* ── estilos/legado/06-crear-compositor-2026-09-27-spec.css ── */
 /* ============================================================
    Crear: compositor (2026-09-27) — spec:
    docs/superpowers/specs/2026-09-27-crear-compositor-design.md
@@ -2612,6 +2673,7 @@ body.panel-abierto { overflow: hidden; }
   .tw-controles, .tw-controles .campo-label { width: 100%; }
 }
 
+/* ── estilos/legado/07-celular-revision-de-pantallas-2026-09-28.css ── */
 /* ============================================================
    Celular: revisión de pantallas (2026-09-28). Lo que a 375 px se
    salía de la pantalla, quedaba en una sola columna eterna o
@@ -2722,6 +2784,7 @@ body.panel-abierto { overflow: hidden; }
 .detalle-tecnico { margin: .2rem 0 .6rem; font-size: .76rem; color: var(--muted); }
 .detalle-tecnico code { display: block; margin-top: .3rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* ── estilos/legado/08-crear-audios-crear-audios-html-spec-2026.css ── */
 /* ============================================================
    Crear › Audios (_crear_audios.html, spec 2026-09-28)
    Prefijo au-. Formulario (izquierda) + Tus audios (derecha) desde 900px,
@@ -2830,6 +2893,7 @@ body.panel-abierto { overflow: hidden; }
 @media (max-width: 760px) { .gpg-img { width: calc(50% - .25rem); } }
 .gpg-escena-cab .gpg-a-crear { margin-left: auto; }
 
+/* ── estilos/legado/09-catalogo-galeria-y-ficha-spec-2026-09-28.css ── */
 /* ============================================================
    Catálogo: galería y ficha (spec 2026-09-28 §10)
    ============================================================ */
@@ -2937,6 +3001,7 @@ body.panel-abierto { overflow: hidden; }
 .gpg-cadena-escena.fallo .tag-estado, .gpg-cadena-error { color: var(--error); }
 .gpg-cadena-escena .btn-xs { margin-left: auto; }
 
+/* ── estilos/legado/10-crear-anuncio-hablado-2026-10-01-crear-h.css ── */
 /* ============================================================
    Crear › Anuncio hablado (2026-10-01) (_crear_hablado.html,
    _hablado_panel.html; spec 2026-10-01). Prefijo hb-; las tarjetas de voz
@@ -3004,38 +3069,21 @@ body.panel-abierto { overflow: hidden; }
 .registro-detalle summary { cursor: pointer; list-style: none; }
 .registro-detalle summary pre { display: inline; background: none; padding: 0; }
 
+/* ── estilos/legado/11-final-edition-tablero-2026-10-02-daniel.css ── */
 /* ============================================================
    Final edition: tablero (2026-10-02). Daniel pidió el tablero y «un
    branding de este estilo» con una referencia de presentación tecnológica:
    azul marino profundo, azul eléctrico con brillo, números grandes en
    círculos, íconos en recuadros que brillan y un flujo de pasos con flechas.
-   Es SOLO de esta sección: las variables de la base visual se redefinen
-   dentro de #tab-final, así sus tarjetas, el detalle (el <dialog> vive dentro
-   de la pestaña) y sus formularios cambian de color sin estilos aparte.
+   La paleta vive ahora en tokens.css para toda la plataforma; las
+   reglas propias del tablero se conservan aquí hasta mudar sus componentes
+   (entrega 1 del sistema de estilos, 2026-10-02).
    Contrastes medidos sobre --panel #0b1a33: --text 15:1, --muted 7,3:1,
-   --accent-texto 7,8:1, letra blanca sobre --accent 5:1. --fe-cian pasa de
+   --accent-texto 7,8:1, letra blanca sobre --accent 5:1. --cian pasa de
    0,4 de luminancia: va solo en texto, trazos y sombras, nunca de fondo ni
    de borde (tests/test_modo_oscuro.py).
    ============================================================ */
-#tab-final {
-  --bg: #050d1f;
-  --panel: #0b1a33;
-  --panel-2: #10223f;
-  --panel-hover: #152b4e;
-  --border: #1c3a66;
-  --border-soft: rgba(80, 150, 255, 0.16);
-  --text: #eef4ff;
-  --muted: #93a9cc;
-  --muted-2: #8299bd;
-  --accent: #1d6ae0;
-  --accent-2: #2f8cff;
-  --accent-grad: linear-gradient(135deg, #1a5fd0, #2a7ff0);
-  --accent-texto: #5cb4ff;
-  --shadow-soft: 0 4px 18px rgba(0, 6, 20, 0.55);
-  --shadow-glow: 0 0 0 1px rgba(47, 140, 255, 0.55), 0 8px 28px rgba(30, 120, 255, 0.35);
-  --fe-cian: #38c8ff;
-  --fe-brillo: rgba(47, 140, 255, 0.4);
-}
+
 .con-sidebar #tab-final.tab-panel.activo {
   background:
     radial-gradient(900px 420px at 92% -14%, rgba(47, 140, 255, 0.22), transparent 62%),
@@ -3050,9 +3098,9 @@ body.panel-abierto { overflow: hidden; }
 #tab-final .fe-hero { position: relative; margin-bottom: 1.2rem; border-bottom-color: var(--border-soft); }
 #tab-final .fe-hero::after, .fe-columna-cab::after {
   content: ""; position: absolute; left: 0; bottom: -1px; height: 2px; width: min(240px, 45%);
-  background: linear-gradient(90deg, var(--accent-2), transparent); box-shadow: 0 0 12px var(--fe-brillo);
+  background: linear-gradient(90deg, var(--accent-2), transparent); box-shadow: 0 0 12px var(--brillo);
 }
-.fe-sobretitulo { margin: 0 0 .3rem; font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--fe-cian); }
+.fe-sobretitulo { margin: 0 0 .3rem; font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--cian); }
 #tab-final .fe-hero h2 { font-size: clamp(1.7rem, 1.25rem + 1.4vw, 2.35rem); letter-spacing: -.02em; text-shadow: 0 0 30px rgba(47, 140, 255, .4); }
 #tab-final .fe-hero .btn-generar { display: inline-flex; align-items: center; gap: .4rem; padding: .7rem 1.2rem; }
 .fe-icono { width: 1em; height: 1em; display: block; }
@@ -3070,7 +3118,7 @@ body.panel-abierto { overflow: hidden; }
 .fe-cifra strong { display: block; font-family: var(--font-display); font-size: 1.5rem; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; }
 .fe-cifra-icono, .fe-flujo-icono, .fe-vacio-icono {
   flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px;
-  border-radius: 12px; color: var(--fe-cian);
+  border-radius: 12px; color: var(--cian);
   background: linear-gradient(145deg, rgba(47, 140, 255, .3), rgba(29, 106, 224, .08));
   border: 1px solid rgba(47, 140, 255, .45);
   box-shadow: 0 0 18px rgba(47, 140, 255, .25), inset 0 1px 0 rgba(160, 210, 255, .15);
@@ -3085,7 +3133,7 @@ body.panel-abierto { overflow: hidden; }
 .fe-flujo li { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: .3rem; text-align: center; }
 .fe-flujo li + li::before {
   content: ""; position: absolute; top: 20px; right: calc(50% + 29px); width: calc(100% - 58px + .5rem); height: 2px;
-  background: linear-gradient(90deg, rgba(47, 140, 255, .1), var(--accent-2)); box-shadow: 0 0 8px var(--fe-brillo);
+  background: linear-gradient(90deg, rgba(47, 140, 255, .1), var(--accent-2)); box-shadow: 0 0 8px var(--brillo);
 }
 .fe-flujo li + li::after { content: ""; position: absolute; top: 16px; right: calc(50% + 23px); border: 5px solid transparent; border-left-color: var(--accent-2); }
 .fe-flujo strong { margin-top: .2rem; font-size: .8rem; color: var(--text); overflow-wrap: anywhere; }
@@ -3129,23 +3177,23 @@ body.panel-abierto { overflow: hidden; }
   font-size: .66rem; font-weight: 600; padding: .1rem .45rem; border-radius: 999px;
   color: var(--accent-texto); background: rgba(47, 140, 255, .12); border: 1px solid rgba(47, 140, 255, .3);
 }
-.fe-chips .fe-chip-vivo { color: var(--fe-cian); }
+.fe-chips .fe-chip-vivo { color: var(--cian); }
 .fe-chips .fe-chip-vivo::before {
   content: ""; display: inline-block; width: 6px; height: 6px; margin-right: .3rem; border-radius: 50%; vertical-align: .05em;
-  background: var(--accent-2); box-shadow: 0 0 6px var(--fe-cian); animation: fe-pulso 1.6s ease-in-out infinite;
+  background: var(--accent-2); box-shadow: 0 0 6px var(--cian); animation: fe-pulso 1.6s ease-in-out infinite;
 }
 .fe-chips .fe-chip-error { color: var(--error); background: var(--error-fondo); border-color: rgba(255, 95, 122, .4); }
 .fe-banderas { list-style: none; margin: .35rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: .25rem; }
 .fe-banderas li { font-size: .85rem; line-height: 1; padding: .16rem .22rem; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border); }
 .fe-banderas .fe-bandera-ok { border-color: rgba(62, 207, 142, .6); }
-.fe-banderas .fe-bandera-vivo { border-color: var(--accent-2); box-shadow: 0 0 8px var(--fe-brillo); animation: fe-pulso 1.6s ease-in-out infinite; }
+.fe-banderas .fe-bandera-vivo { border-color: var(--accent-2); box-shadow: 0 0 8px var(--brillo); animation: fe-pulso 1.6s ease-in-out infinite; }
 .fe-banderas .fe-bandera-error { border-color: rgba(255, 95, 122, .65); }
 #tab-final .generado-pie .fe-siguiente { margin-top: .35rem; font-size: .72rem; font-weight: 600; color: var(--accent-texto); }
 @keyframes fe-pulso { 50% { opacity: .45; } }
 /* Elegir en «+ Nueva» va al editor: la tarjeta avisa al instante, y en el
    tablero la que se está preparando para el editor se resalta. */
 #tab-final .generado-velo.fe-abriendo { justify-content: center; align-items: center; background: rgba(5, 13, 31, .78); }
-#tab-final .fe-abriendo .generado-estado { color: var(--fe-cian); }
+#tab-final .fe-abriendo .generado-estado { color: var(--cian); }
 #tab-final .generado.fe-resaltada { border-color: var(--accent-2); box-shadow: var(--shadow-glow), 0 0 32px rgba(47, 140, 255, .45); animation: fe-resalte 1.8s ease-in-out 3; }
 @keyframes fe-resalte { 50% { box-shadow: var(--shadow-glow), 0 0 8px rgba(47, 140, 255, .2); } }
 
@@ -3174,8 +3222,8 @@ body.panel-abierto { overflow: hidden; }
 #tab-final .detalle-media { background: radial-gradient(circle at 50% 40%, rgba(47, 140, 255, .14), transparent 70%), var(--bg); }
 #tab-final .generado-modal-cuerpo > .vacio { padding: 1.4rem 1.6rem; }
 #tab-final .fe-titulo { display: flex; align-items: center; gap: .5rem; }
-#tab-final .fe-titulo::before { content: ""; width: 4px; height: 1em; border-radius: 2px; background: var(--accent-2); box-shadow: 0 0 8px var(--fe-brillo); }
-#tab-final .fe-subtitulo { color: var(--fe-cian); letter-spacing: .1em; }
+#tab-final .fe-titulo::before { content: ""; width: 4px; height: 1em; border-radius: 2px; background: var(--accent-2); box-shadow: 0 0 8px var(--brillo); }
+#tab-final .fe-subtitulo { color: var(--cian); letter-spacing: .1em; }
 #tab-final .fe-elegir-modal { width: min(1040px, 94vw); }
 .fe-elegir-cuerpo { max-height: 92vh; overflow-y: auto; padding: 1.3rem 1.4rem 1.5rem; }
 .fe-elegir-cuerpo .fe-columna-cab { padding-right: 2.6rem; }
@@ -3204,6 +3252,7 @@ body.panel-abierto { overflow: hidden; }
   .fe-chips .fe-chip-vivo::before, .fe-banderas .fe-bandera-vivo, #tab-final .generado.fe-resaltada { animation: none; }
 }
 
+/* ── estilos/legado/12-alertas-2026-10-02-spec-docs-superpowers.css ── */
 /* ============================================================
    Alertas (2026-10-02) — spec docs/superpowers/specs/2026-09-20-alertas-design.md
    §6 y §12: la burbuja del sidebar (roja si alguna alerta bloquea, ámbar si
@@ -3265,3 +3314,28 @@ body.panel-abierto { overflow: hidden; }
 @media (max-width: 760px) {
   .alerta-nivel { min-width: 0; flex-basis: 100%; padding-top: 0; }
 }
+/* ── estilos/base.css ── */
+/* Base (spec 2026-10-02-sistema-de-estilos §4.6 y §9 regla 7). Lo común a toda página que se vaya mudando desde
+   legado/ vive aquí. Quien pidió «reducir movimiento» en su sistema no ve animaciones ni transiciones. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Enlaces: sin esta regla el navegador los pinta lila (#9e9eff) y morados al visitarlos (#d0adf0) en tema oscuro.
+   :where() no suma especificidad, así que cualquier clase con su propio color le gana. */
+:where(a) { color: var(--accent-texto); }
+/* ── estilos/pantallas/guia-estilos.css ── */
+/* Guía de estilos — solo /admin/estilos (spec 2026-10-02-sistema-de-estilos §8).
+   Muestras de los tokens y del marcado real de la base visual común. */
+.guia-paleta { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: var(--esp-3, 12px); }
+.guia-token { min-width: 0; overflow-wrap: anywhere; }
+.guia-muestra { height: 56px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.guia-celular { width: 100%; max-width: 375px; border: 1px dashed var(--border); padding: var(--esp-3, 12px); border-radius: var(--radius); }
+.guia-seccion { margin-bottom: var(--esp-6, 32px); min-width: 0; }
+.guia-fila { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-3, 12px); }
+.guia-campos { display: grid; gap: var(--esp-3, 12px); max-width: 100%; }
+.guia-campos input, .guia-campos select, .guia-campos textarea { max-width: 100%; }
+.guia-tabla { width: 100%; overflow-wrap: anywhere; }
+.guia-tabla td, .guia-tabla th { text-align: left; }
+.guia-tabla td:first-child { white-space: nowrap; }
+.guia-fuente { font-family: var(--font-display); }

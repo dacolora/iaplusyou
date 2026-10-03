@@ -2656,8 +2656,20 @@ msgstr "Delete this proof"
 msgid "Borrar «{nombre}» de tus archivos"
 msgstr "Delete “{nombre}” from your files"
 
+msgid "Botones"
+msgstr "Buttons"
+
 msgid "Botón"
 msgstr "Button"
+
+msgid "Botón pequeño"
+msgstr "Small button"
+
+msgid "Botón principal"
+msgstr "Primary button"
+
+msgid "Botón sin clase"
+msgstr "Button without a class"
 
 msgid "Boxer"
 msgstr "Boxers"
@@ -2773,6 +2785,9 @@ msgstr "CTR %(ctr)s%% < %(ctr_min)s%%"
 
 msgid "CTR mínimo (%)"
 msgstr "Minimum CTR (%)"
+
+msgid "Cabecera de pestaña"
+msgstr "Tab header"
 
 msgid "Cada anuncio"
 msgstr "Every ad"
@@ -2973,6 +2988,15 @@ msgstr "Sprint campaigns: %(n)s"
 msgid "Campañas ya no existe: crea un experimento con esa pieza."
 msgstr "Campaigns no longer exists: create an experiment with that piece."
 
+msgid "Campo"
+msgstr "Field"
+
+msgid "Campo deshabilitado"
+msgstr "Disabled field"
+
+msgid "Campos"
+msgstr "Fields"
+
 #, python-format
 msgid "Campos no actualizables: %(campos)s"
 msgstr "Non-updatable fields: %(campos)s"
@@ -3080,6 +3104,9 @@ msgstr "Catalog"
 
 msgid "Catálogo universal"
 msgstr "Universal catalog"
+
+msgid "Celular"
+msgstr "Mobile"
 
 msgid "Centrar"
 msgstr "Center"
@@ -3433,6 +3460,12 @@ msgstr "Completing with Claude what's missing from these avatars costs approx. %
 msgid "Completo"
 msgstr "Full"
 
+msgid "Componente"
+msgstr "Component"
+
+msgid "Componentes de hoy"
+msgstr "Current components"
+
 msgid "Componiendo con ElevenLabs"
 msgstr "Composing with ElevenLabs"
 
@@ -3733,6 +3766,12 @@ msgstr "Password changed. Log in with the new one."
 
 msgid "Contraseña cambiada. Las demás sesiones abiertas con la anterior se cerraron."
 msgstr "Password changed. Other sessions open with the previous one were closed."
+
+msgid "Contraste"
+msgstr "Contrast"
+
+msgid "Contraste contra el fondo del panel"
+msgstr "Contrast against the panel background"
 
 msgid "Control total. Media hora."
 msgstr "Full control. Half an hour."
@@ -4388,6 +4427,9 @@ msgstr "Desire (headline phrase)"
 msgid "Deseo:"
 msgstr "Desire:"
 
+msgid "Deshabilitado"
+msgstr "Disabled"
+
 msgid "Deshacer"
 msgstr "Undo"
 
@@ -4396,6 +4438,9 @@ msgstr "Undo (Ctrl/Cmd+Z)"
 
 msgid "Deslizar"
 msgstr "Slide"
+
+msgid "Desplegable"
+msgstr "Disclosure"
 
 msgid "Después, un análisis con IA mira tus ganadores y tus perdedores, explica qué patrón se repite y propone anuncios nuevos que puedes llevar a Crear con un clic."
 msgstr "Then an AI analysis looks at your winners and your losers, explains which pattern repeats and suggests new ads you can take to Create with one click."
@@ -4416,6 +4461,9 @@ msgstr "Meta detail up to date (%(dias)s days of ad data, %(desgloses)s breakdow
 #, python-format
 msgid "Detalle de Meta incompleto: falló %(partes)s."
 msgstr "Meta detail incomplete: %(partes)s failed."
+
+msgid "Detalle del componente"
+msgstr "Component details"
 
 msgid "Detalle técnico"
 msgstr "Technical detail"
@@ -4464,6 +4512,9 @@ msgstr "Design voice"
 
 msgid "Disfraces, fiestas y decoración; tono lúdico."
 msgstr "Costumes, parties and decorations; a playful tone."
+
+msgid "Disponible"
+msgstr "Available"
 
 msgid "Disponible en cuanto Creatv termine de activarlo."
 msgstr "Available as soon as Creatv finishes activating it."
@@ -7780,6 +7831,9 @@ msgstr "Style guide (hand-editable, used in every prompt generation)"
 msgid "Guía de estilo generada."
 msgstr "Style guide generated."
 
+msgid "Guía de estilos"
+msgstr "Style guide"
+
 msgid "Hace falta un <strong>token de usuario del sistema</strong> del Business Manager de Creatv (no un token personal: los del sistema no caducan ni dependen de que alguien siga en el Business) y el <strong>id del Business</strong>."
 msgstr "You need a <strong>system-user token</strong> from Creatv's Business Manager (not a personal token: system ones don't expire or depend on someone staying in the Business) and the <strong>Business id</strong>."
 
@@ -8651,6 +8705,9 @@ msgstr "Currency goes as a 3-letter code (COP, MXN, USD…)."
 msgid "La moneda va en código de 3 letras (COP, MXN, USD…); no la guardé."
 msgstr "Currency goes as a 3-letter code (COP, MXN, USD…); I didn't save it."
 
+msgid "La paleta, las medidas y los componentes reales de Creatv, en un solo lugar."
+msgstr "Creatv’s palette, dimensions and real components, all in one place."
+
 msgid "La persona necesita un nombre."
 msgstr "The persona needs a name."
 
@@ -9406,6 +9463,9 @@ msgstr "Mechanism: how the product delivers it"
 
 msgid "Media"
 msgstr "Medium"
+
+msgid "Medidas y fuentes"
+msgstr "Dimensions and fonts"
 
 msgid "Medios"
 msgstr "Media"
@@ -11003,6 +11063,12 @@ msgstr "Opacity"
 msgid "Opacidad del fondo"
 msgstr "Background opacity"
 
+msgid "Opciones excluyentes"
+msgstr "Mutually exclusive options"
+
+msgid "Opción"
+msgstr "Option"
+
 msgid "Opiniones de Mercado Libre"
 msgstr "Mercado Libre reviews"
 
@@ -11080,6 +11146,9 @@ msgstr "Keywords"
 
 msgid "Palabras clave (coma)"
 msgstr "Keywords (comma)"
+
+msgid "Paleta"
+msgstr "Palette"
 
 msgid "Paleta de color"
 msgstr "Color palette"
@@ -11324,6 +11393,9 @@ msgstr "Paste text"
 
 msgid "Pegar un link"
 msgstr "Paste a link"
+
+msgid "Peligro"
+msgstr "Danger"
 
 msgid "Pensando…"
 msgstr "Thinking…"
@@ -11629,6 +11701,9 @@ msgstr "Daily budget per country in %(moneda)s (your Meta account's currency; mi
 #, python-format
 msgid "Primera fila = nombres de columna. Reconozco: <code>%(columnas)s</code>. Máximo 5 MB."
 msgstr "First row = column names. I recognize: <code>%(columnas)s</code>. 5 MB max."
+
+msgid "Primera opción"
+msgstr "First option"
 
 #, python-format
 msgid "Primera vez: %(fecha)s"
@@ -13077,6 +13152,9 @@ msgstr "It will be published again on %(plataforma)s. Check first that it hasn't
 msgid "Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?"
 msgstr "Scene %(n)s and the ones after it will be generated again for ≈ US$ %(precio)s. The earlier ones stay as they are. Redo?"
 
+msgid "Secundario"
+msgstr "Secondary"
+
 msgid "Seedance 2.5"
 msgstr "Seedance 2.5"
 
@@ -13088,6 +13166,9 @@ msgstr "Seedream V5.0 Pro"
 
 msgid "Seedream V5.0 Pro Edit (2k)"
 msgstr "Seedream V5.0 Pro Edit (2k)"
+
+msgid "Segunda opción"
+msgstr "Second option"
 
 msgid ""
 "Segunda pasada con Bria: sube la resolución <strong>sin regenerar</strong> la\n"
@@ -13860,6 +13941,9 @@ msgstr "Yes — up to 9 images and 3 reference videos"
 msgid "Sí, eliminar"
 msgstr "Yes, delete"
 
+msgid "Tabla"
+msgstr "Table"
+
 msgid "Tablero"
 msgstr "Dashboard"
 
@@ -13946,6 +14030,9 @@ msgstr "Text is ready: review it and edit it if you like."
 
 msgid "Texto pegado"
 msgstr "Pasted text"
+
+msgid "Texto principal, espacios, radios, sombras y brillos"
+msgstr "Body text, spacing, radii, shadows and glows"
 
 msgid "Texto y render"
 msgstr "Text and render"
@@ -14347,6 +14434,9 @@ msgstr "All projects"
 
 msgid "Todos los proyectos."
 msgstr "All projects."
+
+msgid "Token"
+msgstr "Token"
 
 msgid "Token del usuario del sistema"
 msgstr "System-user token"
@@ -14774,6 +14864,12 @@ msgstr "Terms of service"
 msgid "Título"
 msgstr "Title"
 
+msgid "Título, descripción y acciones del panel."
+msgstr "Panel title, description and actions."
+
+msgid "Títulos y cifras grandes"
+msgstr "Headings and large numbers"
+
 msgid "Tú"
 msgstr "You"
 
@@ -14954,6 +15050,9 @@ msgstr "Uruguay"
 msgid "Usa SOLO la primera imagen como fotograma de arranque; el encuadre y el formato salen de esa imagen. Hasta 30 s. Calidad cinematográfica, el más caro. Sonido de la escena incluido."
 msgstr "Uses ONLY the first image as the starting frame; the framing and format come from that image. Up to 30 s. Cinematic quality, the most expensive. Scene sound included."
 
+msgid "Usa el teclado para revisar el foco de los controles."
+msgstr "Use the keyboard to check focus on the controls."
+
 #, python-format
 msgid "Usado %(num)d vez →"
 msgid_plural "Usado %(num)d veces →"
@@ -15050,6 +15149,9 @@ msgstr "Empty: it's removed"
 msgid "Validaciones"
 msgstr "Validations"
 
+msgid "Valor"
+msgstr "Value"
+
 msgid "Variable"
 msgstr "Variable"
 
@@ -15113,6 +15215,9 @@ msgstr "See Alerts"
 
 msgid "Ver análisis completo"
 msgstr "View full analysis"
+
+msgid "Ver detalle"
+msgstr "View details"
 
 msgid "Ver el detalle día por día →"
 msgstr "See the day-by-day detail →"

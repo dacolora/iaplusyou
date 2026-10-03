@@ -76,8 +76,8 @@ Cada una apunta a la skill que trae el detalle y el incidente que la originó.
    (`doctrina.bloque_system`) y el idioma del proyecto (`idiomas.de_proyecto`). Su `max_tokens` es amplio (4 000 a
    16 000 o más): el pensamiento adaptativo gasta del mismo tope y con topes chicos la respuesta llega vacía. →
    `doctrina`
-8. **Pantallas.** Se reusa la «Base visual común» de `static/style.css`. En el celular nada empuja la página de
-   lado. Los `<video>` de listas nacen `preload="none" data-precarga` y las `<img>` con `loading="lazy"`. Las barras
+8. **Pantallas.** El CSS vive en `static/estilos/` (tokens, capas y la «Base visual común»); `static/style.css` se
+   genera con `python3 estilos.py construir`, nunca a mano. En el celular nada empuja la página de lado. Los `<video>` de listas nacen `preload="none" data-precarga` y las `<img>` con `loading="lazy"`. Las barras
    de progreso van con `data-poll-job`, nunca con `<script>`. Nada de una consulta por tarjeta. → `ui`
 9. **Producción** (`app.creatvmachine.com`): el VPS tiene datos de happyflops versionados en `clientes/`. Ahí nunca
    `git checkout .`, `reset --hard` ni `stash` sin respaldarlos primero. El worker solo se reinicia con la cola vacía
