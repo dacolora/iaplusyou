@@ -331,3 +331,112 @@ def test_experimentos_cargar_memorizado_lee_una_vez_por_peticion(base_temporal):
         ex.cargar("acme")
     assert despues.n == primera.n
     assert ex.cargar("otro") == []
+
+
+# ---------- la pantalla (R2, 2026-10-03): fragmento, panel de la pieza y JS ----------
+
+import re
+from datetime import datetime, timedelta
+
+
+def _hoy(atras=0):
+    return (datetime.now() - timedelta(days=atras)).date().isoformat()
+
+
+def _scripts(html):
+    return re.findall(r"<script\b[^>]*>", html)
+
+
+def test_fragmento_trae_cada_seccion_y_solo_el_json_de_las_graficas(app, base_temporal):
+    import db
+    import propuestas
+    eid = _experimento("Con datos", estado="corriendo", meta_campaign_id="cam_1")
+    _pid, ep = _pieza_en(base_temporal, eid)
+    _dia(db, ep, _hoy())
+    pid = propuestas.crear("acme", eid, "pausar", {"ep_id": ep}, "CTR bajo")
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    assert html.count('<li class="cr-kpi') == 12 and html.count("data-cr-spark=") == 12
+    assert 'data-cr-grafico="dia"' in html and 'data-cr-metrica="roas"' in html and 'class="cr-embudo"' in html
+    assert html.count("--alto:") == 6
+    assert f'data-cr-pieza="/cliente/acme/experimentos/pieza/{ep}?' in html and "data-cr-evolucion=" in html
+    assert 'class="cr-ranking cr-tabla tabla-apilada"' in html and "data-cr-dona-pct=" in html
+    assert f'href="#experimentos?exp={eid}"' in html and "data-cr-filtro" in html
+    # «Necesita tu decisión»: los mismos formularios POST de siempre, con su confirmación
+    assert f'action="/cliente/acme/propuestas/{pid}/aprobar"' in html and f'action="/cliente/acme/propuestas/{pid}/rechazar"' in html
+    assert f'action="/cliente/acme/experimentos/{eid}/propuestas/aprobar_todas"' in html and "confirm(" in html
+    # el único <script> del fragmento es el JSON de las gráficas (innerHTML no ejecuta scripts)
+    assert _scripts(html) == ['<script type="application/json" id="cr-datos">']
+
+
+def test_fragmento_sin_pixel_atenua_cada_paso_que_sigue(app, base_temporal):
+    """Sin el Pixel, «Agregaron al carrito» llega en 0 (sin_datos) y los pasos que siguen llegan en 0 con pct None y
+    sin_datos=False: los tres se atenúan y dicen «requiere el Pixel» (revisión de la tarea 3)."""
+    import db
+    eid = _experimento("Sin pixel", estado="corriendo", meta_campaign_id="cam_1")
+    _pid, ep = _pieza_en(base_temporal, eid)
+    with db.conectar() as con:
+        con.execute(db.metrica_dia.insert().values(
+            experimento_pieza_id=ep, fecha=_hoy(), actualizado_en=db.ahora(), impresiones=500, alcance=400, frecuencia=1.2,
+            clics=12, clics_enlace=10, gasto=5.0, cpm=10.0, vistas_3s=100, reproducciones=300, p25=90, p50=60, p75=40,
+            p95=20, p100=10, thruplay=30, tiempo_medio_s=3.0, visitas_pagina=6, carrito=0, pago_iniciado=0,
+            compras_meta=0, ingresos_meta=0.0))
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    embudo = html[html.index('class="cr-embudo"'):html.index("</ol>", html.index('class="cr-embudo"'))]
+    assert embudo.count("cr-sin-pixel") == 3 and embudo.count("requiere el Pixel") == 3
+    assert "cr-caida" not in embudo
+
+
+def test_fragmento_errores_del_detalle_de_meta_en_palabras_y_escapados(app, base_temporal):
+    import db
+    import experimentos as ex
+    eid = _experimento("Con error", estado="corriendo", meta_campaign_id="cam_1")
+    _pieza_en(base_temporal, eid)
+    ex.actualizar_extra("acme", eid, lambda x: dict(x, detalle_meta={
+        "actualizado_en": db.ahora(), "errores": {"diario": "<img src=x onerror=alert(1)> se cayó"},
+        "limite": False, "cortado": False}))
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    assert "Detalle de Meta al día hace menos de 1 h" in html
+    assert "&lt;img src=x onerror=alert(1)&gt; se cayó" in html and "<img src=x" not in html
+    assert "{&#39;diario&#39;" not in html and "{'diario'" not in html        # el motivo, no el diccionario
+
+
+def test_panel_de_la_pieza_completo_y_con_autoescape(app, base_temporal):
+    import db
+    import experimentos as ex
+    eid = _experimento("Panel", estado="corriendo", meta_campaign_id="cam_1")
+    pid, ep = _pieza_en(base_temporal, eid)
+    ex.actualizar_pais("acme", eid, "CO", meta_adset_id="adset_1", estado="activo")
+    ex.marcar_pieza("acme", ep, rankings_meta={"calidad": "ABOVE_AVERAGE", "interaccion": None, "conversion": "BELOW_AVERAGE_35"},
+                    diagnostico={"causas": [{"codigo": "gancho", "detalle": "<b>detalle</b>"}],
+                                 "siguiente": {"que": "gancho", "porque": "<script>alert(2)</script>"}})
+    with db.conectar() as con:
+        con.execute(db.evento.insert().values(cliente="acme", experimento_id=eid, experimento_pieza_id=ep, tipo="accion",
+                                              mensaje="<script>alert(3)</script> pausa", datos={}, creado_en=db.ahora()))
+    html = app["c"].get(f"/cliente/acme/experimentos/pieza/{ep}?dias=14", headers=AJAX).get_data(as_text=True)
+    assert "cr-pieza-fragmento" in html and "Retención" in html and 'data-cr-grafico="pieza"' in html
+    assert html.count('<li class="cr-kpi') == 12
+    assert "Superior al promedio" in html and "Inferior al promedio" in html
+    assert "<script>alert" not in html and "&lt;script&gt;alert(2)&lt;/script&gt;" in html and "<b>detalle</b>" not in html
+    assert f'href="/cliente/acme/experimentos/nuevo?piezas={pid}"' in html and 'href="#creativeflowplus"' in html
+    assert f'action="/cliente/acme/experimentos/{eid}/estado"' in html and 'name="estado" value="PAUSED"' in html
+    assert 'preload="none" data-precarga' in html
+    assert _scripts(html) == ['<script type="application/json" class="cr-datos-pieza">']
+    # el JSON de la gráfica escapa lo que podría cerrar el <script>
+    datos = html[html.index('class="cr-datos-pieza">'):]
+    assert "</script> pausa" not in datos.split("</script>", 1)[0]
+
+
+def test_armazon_y_js_del_centro_de_resultados(app):
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    tab = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-alertas"')]
+    assert re.search(r'src="/static/exp_resultados\.js\?v=\w+" defer', tab)
+    assert 'id="cr-textos"' in tab and 'id="cr-resultados"' in tab and '<dialog id="cr-panel"' in tab
+    assert "panel-cabecera cr-cabecera" in tab and "Centro de resultados" in tab
+    js = open("static/exp_resultados.js", encoding="utf-8").read()
+    assert "getElementById(id)" in js and "textosDe('cr-textos')" in js and "dataset.crTextos" not in js
+    assert "r.redirected" in js                         # sesión vencida: el login no entra a la pestaña
+    assert not re.search(r"position\s*[:=]\s*['\"]?fixed", js)
+    # innerHTML solo con los fragmentos del servidor; los datos van con textContent
+    asignaciones = re.findall(r"(\w+)\.innerHTML\s*=\s*([^;]+);", js)
+    assert asignaciones and all(valor.strip() == "html" for _el, valor in asignaciones), asignaciones
+    assert "textContent" in js

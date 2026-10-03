@@ -285,3 +285,20 @@ def test_editor_la_linea_de_tiempo_con_veinte_pistas_corre_en_su_caja_y_no_empuj
     js = open("static/editor/linea_tiempo.js", encoding="utf-8").read()
     assert not re.search(r"this\.(scroll|marco|cabeceras|listaCabeceras|lienzo|filas)\.style\.(height|maxHeight|overflow)", js)
     assert "fila.style.height = `${alto}px`" in js
+
+
+def test_centro_de_resultados_en_el_celular():
+    """E2 (2026-10-02, maqueta aprobada): hasta 760 px los indicadores van de a 2, la evolución por pieza y las
+    tarjetas de experimentos a 1 columna, el embudo en 3 + 3, los menús de filtro a lo ancho de la barra y el panel
+    de una pieza a pantalla completa (en escritorio es un cajón de 560 px a la derecha)."""
+    import re
+    css = open("static/style.css", encoding="utf-8").read()
+    bloque = css[css.index("Experimentos: centro de resultados (E2"):]
+    escritorio = bloque[:bloque.index("@media (max-width: 760px)")]
+    celular = bloque[bloque.index("@media (max-width: 760px)"):]
+    assert ".cr-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr))" in escritorio
+    assert re.search(r"\.cr-panel \{[^}]*width: min\(560px, 100vw\)[^}]*margin: 0 0 0 auto", escritorio)
+    assert ".cr-kpis, .cr-panel .cr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }" in celular
+    assert ".cr-evolucion, .cr-experimentos, .cr-desgloses, .cr-desgloses-pieza { grid-template-columns: minmax(0, 1fr); }" in celular
+    assert ".cr-embudo { grid-template-columns: repeat(3, minmax(0, 1fr));" in celular
+    assert ".cr-filtro { position: static; }" in celular and ".cr-panel { width: 100vw;" in celular

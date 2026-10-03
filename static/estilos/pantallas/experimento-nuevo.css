@@ -4,14 +4,14 @@ body.con-sidebar:has(#exp-nuevo) { padding-left: 0; }
 body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 #exp-nuevo { min-width: 0; padding: clamp(12px, 3vw, 40px); }
 #exp-nuevo .exp-recorrido, #exp-nuevo .exp-atajos { display: flex; flex-wrap: wrap; gap: 16px; margin: 24px 0; }
-#exp-nuevo .exp-recorrido span { color: var(--accent); padding: 12px; border-bottom: 2px solid var(--border); }
+#exp-nuevo .exp-recorrido span { color: var(--accent-texto); padding: 12px; border-bottom: 2px solid var(--border); }
 #exp-nuevo .exp-pasos { max-width: none; }
 #exp-nuevo .exp-pasos section { padding: 24px 0; }
 #exp-nuevo .exp-atajos button { flex: 1 1 180px; display: grid; gap: 8px; text-align: left; padding: 18px; }
 #exp-nuevo .exp-atajos strong { font-size: 1.2rem; }
 #exp-nuevo [name=tope_total] { font-size: clamp(24px, 4vw, 40px); width: 100%; }
-#exp-nuevo .exp-resumen { color: var(--accent); font-size: clamp(18px, 2vw, 26px); padding: 20px; border: 1px solid var(--border); border-radius: 12px; }
-#exp-nuevo .exp-reparto { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+#exp-nuevo .exp-resumen { color: var(--accent-texto); font-size: clamp(18px, 2vw, 26px); padding: 20px; border: 1px solid var(--border); border-radius: 12px; }
+#exp-nuevo .exp-reparto { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 16px; }
 #exp-nuevo .exp-control { padding: 18px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; line-height: 1.6; }
 #exp-nuevo .exp-cuadricula { max-width: 100%; overflow-x: auto; }
 #exp-nuevo input { max-width: 100%; box-sizing: border-box; }
