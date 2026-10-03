@@ -1,0 +1,110 @@
+/* ============================================================
+   Celular: revisión de pantallas (2026-09-28). Lo que a 375 px se
+   salía de la pantalla, quedaba en una sola columna eterna o
+   escondía información. Nada cambia en escritorio.
+   ============================================================ */
+@media (max-width: 760px) {
+  /* Crear › Generados: dos columnas (con una sola, 126 piezas eran ~61 000 px de alto). */
+  .generados-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+  .generado-pie { padding: .45rem .55rem .55rem; }
+  .generado-pie strong, .generado-pie small { overflow-wrap: anywhere; }
+  /* Experimentos › galería: 150 px por columna no cabían dos por 4 px → 127 piezas en una columna (~37 000 px). */
+  .exp-tarjetas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+  .exp-tarjeta { min-width: 0; }
+  .exp-tarjeta .tag-estado { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  /* Resumen de un experimento o de un cambio de producto: las etiquetas bajan de línea (se salían 100+ px). */
+  .swap-card-resumen { flex-wrap: wrap; row-gap: .35rem; }
+  /* Publicar orgánico: «TikTok — falta token_tiktok.json» no cabía en una línea y se salía 40–66 px. */
+  .org-canal { max-width: 100%; flex-wrap: wrap; }
+  .org-canal small { overflow-wrap: anywhere; }
+  /* Árbol del experimento (país → pieza): menos sangría y la columna de métricas/publicar baja a su propia fila
+     (con tres columnas, «Publicar orgánico» quedaba de 160 px). */
+  .exp-pais { padding-left: .6rem; }
+  .exp-piezas { margin-left: .3rem; }
+  .exp-pieza { grid-template-columns: 48px minmax(0, 1fr); padding-left: .6rem; }
+  .exp-pieza > :nth-child(n+3) { grid-column: 1 / -1; }
+  .kpis-mini { justify-content: flex-start; }
+  /* Experimentos › paso 1: el presupuesto de cada país alineado a la derecha y sin salirse
+     («United States» + 8rem no cabían); la edad «18 – 65» en una línea, no en tres. */
+  .exp-pasos .exp-paises .fe-destino { display: flex; flex: 1 1 100%; width: 100%; white-space: normal; min-width: 0; }
+  .exp-pasos .exp-paises .fe-destino input[type=number] { flex: 0 1 7rem; min-width: 0; margin-left: auto; }
+  .exp-pasos label:has(> input[name=edad_min]) {
+    display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: .4rem; flex-wrap: wrap;
+  }
+  /* Catálogo › producto: el selector de fotos (20rem) empujaba su formulario 45 px fuera de la tarjeta. */
+  .producto-gestion-acciones > * { max-width: 100%; min-width: 0; }
+  /* Referentes: los filtros (8 pastillas, 4 selectores y la búsqueda) ocupaban toda la primera
+     pantalla; se pliegan detrás de «Filtros (n)». */
+  .ref-filtros-boton { display: inline-flex; align-self: flex-start; gap: .3rem; }
+  .ref-filtros:not(.abierto) { display: none; }
+  .ref-filtros.abierto { display: flex; flex-direction: column; gap: .6rem; }
+  /* Botones «×» de quitar (referencia en Crear, foto del catálogo, personaje): 22 px eran
+     poco para un dedo; 32 px en el celular. */
+  .crear-ref-quitar, .producto-gestion-foto button, .personaje-eliminar button {
+    width: 32px; height: 32px; min-width: 32px; min-height: 32px; font-size: .9rem;
+  }
+  /* Selector de opciones en píldora (p. ej. «Fuente» en Traer referentes): con opciones largas se
+     parte en dos líneas y la píldora redonda parecía una mancha; esquinas redondeadas normales. */
+  .segmentado { border-radius: 14px; }
+  .segmentado span { border-radius: 11px; }
+  /* Rutas y nombres técnicos largos en un párrafo (Configuración › Marca) se partían fuera de la caja. */
+  p code, li code, small code { overflow-wrap: anywhere; }
+  /* Tablero › alertas: el error crudo de Meta (JSON sin espacios) empujaba la página a 792 px. */
+  .tb-alerta { min-width: 0; }
+  .tb-alerta-texto { min-width: 0; overflow-wrap: anywhere; }
+  /* Red de seguridad: una palabra larga (URL, id, JSON) se parte en vez de salirse. */
+  main :is(p, li, small, dd, blockquote) { overflow-wrap: break-word; }
+}
+@media (max-width: 760px) {
+  /* Filas de botones y filtros: bajan de línea en vez de apretar (en «Revisar» los selectores quedaban de 32 px). */
+  .acciones { flex-wrap: wrap; }
+  .sprint-acciones label.fe-check { flex: 1 1 7rem; min-width: 0; }
+  .sprint-acciones label.fe-check select { width: 100%; }
+}
+/* Atajos de teclado y «pasa el cursor»: no aplican en pantallas táctiles. */
+@media (hover: none) { .solo-teclado { display: none; } }
+
+/* Tablas en el celular: cada fila es una tarjeta y cada dato lleva el título
+   de su columna delante (static/tablas.js copia los títulos a data-etiqueta).
+   Antes las columnas de la derecha (monto, costo, acciones) quedaban escondidas. */
+@media (max-width: 640px) {
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) {
+    display: block; width: 100%; border: 0; font-size: .86rem;
+  }
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) :is(thead, .tabla-cabecera) { display: none; }
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) :is(tbody, tfoot) { display: block; }
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) tr {
+    display: block; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: .4rem .7rem; margin-bottom: .55rem; background: var(--panel);
+  }
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) td {
+    display: block; width: auto; max-width: none; padding: .3rem 0; border: 0; text-align: right;
+    white-space: normal; word-break: normal; overflow-wrap: anywhere; min-width: 0;
+  }
+  /* El título flota a la izquierda y el dato (con todas sus partes) fluye a la derecha. */
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) td::before {
+    content: attr(data-etiqueta); float: left; max-width: 42%; margin-right: .75rem; text-align: left;
+    color: var(--muted); font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+    line-height: 1.6;
+  }
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) td::after { content: ""; display: block; clear: both; }
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) td:not([data-etiqueta]) { text-align: left; }
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) td:not([data-etiqueta])::before { content: none; }
+  :is(table.tabla-apilada, table.tabla-admin, table.tabla-tiendas, table.tabla-productos,
+      table.gasto-tabla, table.sprint-entrega, table.gpg-tabla) td:empty { display: none; }
+  .admin-scroll, .modal-form-tabla { overflow-x: visible; border: 0; background: none; }
+}
+
+/* Detalle técnico de un error (el texto crudo de Meta, para soporte): plegado y sin salirse. */
+.detalle-tecnico { margin: .2rem 0 .6rem; font-size: .76rem; color: var(--muted); }
+.detalle-tecnico code { display: block; margin-top: .3rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+

@@ -1,0 +1,14 @@
+/* Guía de estilos — solo /admin/estilos (spec 2026-10-02-sistema-de-estilos §8).
+   Muestras de los tokens y del marcado real de la base visual común. */
+.guia-paleta { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: var(--esp-3, 12px); }
+.guia-token { min-width: 0; overflow-wrap: anywhere; }
+.guia-muestra { height: 56px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.guia-celular { width: 100%; max-width: 375px; border: 1px dashed var(--border); padding: var(--esp-3, 12px); border-radius: var(--radius); }
+.guia-seccion { margin-bottom: var(--esp-6, 32px); min-width: 0; }
+.guia-fila { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-3, 12px); }
+.guia-campos { display: grid; gap: var(--esp-3, 12px); max-width: 100%; }
+.guia-campos input, .guia-campos select, .guia-campos textarea { max-width: 100%; }
+.guia-tabla { width: 100%; overflow-wrap: anywhere; }
+.guia-tabla td, .guia-tabla th { text-align: left; }
+.guia-tabla td:first-child { white-space: nowrap; }
+.guia-fuente { font-family: var(--font-display); }

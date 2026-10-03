@@ -259,7 +259,8 @@ def test_experimento_desde_producto_redirige_con_query(app):
     assert r.status_code == 302
     loc = r.headers["Location"]
     assert "exp_nombre=Espejo+redondo" in loc and "exp_destino=https://tienda.test/espejo" in loc
-    assert loc.endswith("#experimentos")
+    # «Crear experimento» lleva a «Nuevo experimento» (E2: exp_nuevo), donde está la galería con el paso 3.
+    assert loc.startswith("/cliente/acme/experimentos/nuevo?")
     r = app["c"].post(f"/cliente/acme/productos/{_producto(cliente='otro')}/experimento")
     assert "exp_nombre" not in r.headers["Location"] and r.headers["Location"].endswith("#catalogo")
 

@@ -165,14 +165,15 @@ def _desde_ventana(ahora_iso, dias=DIAS_SERIE):
 
 
 def _piezas_con_snapshots(exps, desde=None):
-    """[(experimento, pieza, Serie)] — una consulta por pieza, una sola vez
-    por carga aunque después se recorran 30 días. Con `desde` solo trae la
-    ventana más la base del delta (ver experimentos.snapshots)."""
-    out = []
-    for ex in exps:
-        for pz in ex.get("piezas") or []:
-            out.append((ex, pz, Serie(experimentos.snapshots(pz["id"], desde=desde))))
-    return out
+    """[(experimento, pieza, Serie)] con TODAS las series en dos consultas
+    (experimentos.snapshots_de), no una por pieza (centro de resultados,
+    spec 2026-10-02 §4.1). Con `desde` solo trae la ventana más la base del
+    delta (ver experimentos.snapshots)."""
+    pares = [(ex, pz) for ex in exps for pz in ex.get("piezas") or []]
+    if desde is None:  # sin cota (nadie lo hace hoy): una por pieza, como antes
+        return [(ex, pz, Serie(experimentos.snapshots(pz["id"], desde=None))) for ex, pz in pares]
+    series = experimentos.snapshots_de([pz["id"] for _ex, pz in pares], desde) if pares else {}
+    return [(ex, pz, Serie(series.get(pz["id"]) or [])) for ex, pz in pares]
 
 
 class Datos:
@@ -193,6 +194,27 @@ def cargar_datos(cliente, ahora_iso=None, dias=DIAS_SERIE, desde=None):
     desde = desde or _desde_ventana(ahora, dias)
     exps = experimentos.cargar(cliente)
     return Datos(cliente, ahora, desde, exps, _piezas_con_snapshots(exps, desde))
+
+
+def filtrar(datos, experimento_id=None, pais=None, ep_id=None, tipo=None, moneda=None):
+    """Subconjunto de `datos` para el centro de resultados: las funciones
+    públicas de este módulo aceptan el resultado como `datos=` y calculan
+    igual que con todo el proyecto. Sin filtros devuelve el mismo objeto.
+    `tipo` es "video" o "imagen" (imagen = `es_imagen` de la pieza)."""
+    if all(v is None for v in (experimento_id, pais, ep_id, tipo, moneda)):
+        return datos
+
+    def entra(ex, pz):
+        return ((experimento_id is None or ex["id"] == experimento_id)
+                and (pais is None or pz.get("pais") == pais)
+                and (ep_id is None or pz["id"] == ep_id)
+                and (tipo is None or (tipo == "imagen") == bool(pz.get("es_imagen")))
+                and (moneda is None or _moneda(ex) == moneda))
+
+    filas = [f for f in datos.filas if entra(f[0], f[1])]
+    ids = {ex["id"] for ex, _pz, _s in filas}
+    exps = [ex for ex in datos.exps if ex["id"] in ids or ex["id"] == experimento_id]
+    return Datos(datos.cliente, datos.ahora, datos.desde, exps, filas)
 
 
 def _datos(cliente, ahora_iso, datos, desde_necesario=None):

@@ -67,6 +67,15 @@ por su cuenta. Además valen todas las de `AGENTS.md` (enlace a `CLAUDE.md`) y l
   sin prueba que las sostuviera. Una segunda pasada de Codex (`codex exec resume <sesión>`) los arregló todos; Claude
   cerró cinco menores. **Conclusión:** en lotes de plata, la revisión con `guardian-gasto` + `revisor` no es opcional.
 
+## Estado al 2026-10-02 20:40 (Bogotá)
+- Lote 1 EN PRODUCCIÓN desde 2026-10-03 01:36 UTC (main 5d72fc2, alembic 0030, respaldo `data/creatv.db.bak_20261003_013528`,
+  los dos servicios; ninguna sesión vieja con «falló al descargar» en `gasto`, así que PND-109 no deja nada en riesgo).
+- Lote 2 EMPEZADO y parado por el límite de uso de ChatGPT («You've hit your usage limit… try again at 11:31 PM»). Worktree
+  `.claude/worktrees/codex-lote2` (rama `codex/lote2-cliente`, sobre 5d72fc2), sesión de Codex
+  `01a0ff66-c0e5-70f2-b200-14a4514c27af`; solo alcanzó a escribir la prueba roja de PND-028 en
+  `tests/test_rutas_crear_director.py`. Para seguir: `codex exec resume 01a0ff66-c0e5-70f2-b200-14a4514c27af -c sandbox_mode="workspace-write" -c model_reasoning_effort="high" "Sigue con el lote 2 donde quedaste"`
+  desde ese worktree, o lanzarlo de nuevo con el encargo del lote 2.
+
 ## La siguiente acción concreta
 Lotes 0 y 1 HECHOS el 2026-10-02 (el 1 desplegado con la migración 0030). Lote 0: (1 cerrado, 20 confirmados, 5 que solo se ven en pantalla o en real; PND-029 y PND-103 los verificó Claude y quedaron para Daniel). Sigue el lote 2, desde un worktree nuevo sobre `origin/main`:
 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex exec -C <worktree> -s workspace-write -c model_reasoning_effort="high" -o <informe> - < <encargo>`

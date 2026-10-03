@@ -1,5 +1,8 @@
 # Sistema de estilos de Creatv: la carpeta de estilos y la paleta azul en toda la plataforma
 
+**Entrega 1:** hecha el 2026-10-02: la implementó Codex y el orquestador la commiteó, la revisó (agente `revisor`), le
+tomó capturas a 1440 y 375 px y le sumó los arreglos que salieron de ahí (relevo, «Cierre del orquestador»).
+
 **Fecha:** 2026-10-02 · **Pedido de:** Daniel · **Estado:** diseño aprobado por Daniel (partes 1, 2 y 3, 2026-10-02).
 **Ejecuta:** Codex (plan ChatGPT Pro de Daniel), orquestado por una sesión de Claude, siguiendo
 `docs/superpowers/relevos/2026-10-02-sistema-de-estilos.md`.
@@ -264,9 +267,14 @@ en la Guía, y el orquestador mezcla a `main` y despliega con la skill `desplieg
 
 ## 11. Criterios de aceptación
 
-- Entrega 1: `git grep -n -i -E "7c3aed|a855f7|a78bfa|8b5cf6|8b6cf0" -- static templates` no devuelve nada (el morado se fue);
+- Entrega 1: `git grep -n -i -E "7c3aed|a855f7|a78bfa|8b5cf6|8b6cf0" -- static/estilos static/style.css templates ":!templates/mapa_codigo.html"`
+  no devuelve nada (el morado se fue de la interfaz);
   todas las pruebas pasan; `/admin/estilos` responde 200 al admin y redirige a otro; la hoja generada pesa como mucho
   `202 842 + 15 000` bytes (lo de hoy más los separadores y los tokens nuevos).
+- Excepción del criterio de búsqueda (2026-10-02, implementación de la entrega 1): el respaldo `#7c3aed` de
+  `static/editor/operaciones.js::fondoDePreset` pertenece al contenido que se renderiza dentro del video, fuera de
+  alcance (§12), y se conserva. La búsqueda de interfaz recorre la fuente CSS, la hoja generada y las plantillas;
+  `mapa_codigo.html` también está fuera de alcance.
 - Rendimiento: nada de `filter: blur()` ni `backdrop-filter` en elementos más grandes que una tarjeta; el brillo se hace con
   `box-shadow`/`text-shadow`; animaciones solo las de `ANIMACIONES_PERMITIDAS` (regla 7) y el pulso solo en lo vivo.
 - Celular: lo de `tests/test_movil.py` sigue (nada corre la página de lado; rejillas con `minmax(min(100%, X), 1fr)`).

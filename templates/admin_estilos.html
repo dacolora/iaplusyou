@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Guía de estilos') }}{% endblock %}
+{% macro botones() %}
+<div class="guia-fila">
+  <button type="button" class="btn-generar">{{ _('Botón principal') }}</button>
+  <button type="button" class="btn">{{ _('Secundario') }}</button>
+  <button type="button" class="btn-sm">{{ _('Botón pequeño') }}</button>
+  <button type="button">{{ _('Botón sin clase') }}</button>
+  <button type="button" class="btn-generar" disabled>{{ _('Deshabilitado') }}</button>
+  <button type="button" class="btn-peligro">{{ _('Peligro') }}</button>
+</div>
+{% endmacro %}
+{% macro tabla() %}
+<table class="tabla-apilada guia-tabla">
+  <thead><tr><th>{{ _('Componente') }}</th><th>{{ _('Estado') }}</th></tr></thead>
+  <tbody>
+    <tr><td>{{ _('Botón principal') }}</td><td>{{ _('Disponible') }}</td></tr>
+    <tr><td>{{ _('Campo') }}</td><td>{{ _('Deshabilitado') }}</td></tr>
+  </tbody>
+</table>
+{% endmacro %}
+{% block content %}
+<section class="hero aparece">
+  <div class="hero-texto">
+    <span class="eyebrow">{{ _('Panel de administrador') }}</span>
+    <h1>{{ _('Guía de estilos') }}</h1>
+    <p class="hero-sub">{{ _('La paleta, las medidas y los componentes reales de Creatv, en un solo lugar.') }}</p>
+    <p class="hero-sub"><a href="{{ url_for('panel') }}">{{ _('← Volver al panel') }}</a></p>
+  </div>
+</section>
+<section class="guia-seccion">
+  <h2>{{ _('Paleta') }}</h2>
+  <p>{{ _('Contraste contra el fondo del panel') }} (<code translate="no">--panel</code>).</p>
+  <div class="guia-paleta">
+    {% for c in colores %}
+    <div class="guia-token">
+      <div class="guia-muestra" style="background: var({{ c.nombre }})" aria-hidden="true"></div>
+      <p><code translate="no">{{ c.nombre }}</code><br><code translate="no">{{ c.valor }}</code><br>{{ _('Contraste') }}: {{ c.contraste }}:1</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+<section class="guia-seccion">
+  <h2>{{ _('Medidas y fuentes') }}</h2>
+  <p class="guia-fuente">{{ _('Títulos y cifras grandes') }}</p>
+  <p>{{ _('Texto principal, espacios, radios, sombras y brillos') }}</p>
+  <table class="tabla-apilada guia-tabla">
+    <thead><tr><th>{{ _('Token') }}</th><th>{{ _('Valor') }}</th></tr></thead>
+    <tbody>{% for t in otros %}<tr><td><code translate="no">{{ t.nombre }}</code></td><td><code translate="no">{{ t.valor }}</code></td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+<section class="guia-seccion">
+  <h2>{{ _('Componentes de hoy') }}</h2>
+  <p>{{ _('Usa el teclado para revisar el foco de los controles.') }}</p>
+  <section class="guia-seccion" data-componente="boton">
+    <h3>{{ _('Botones') }}</h3>
+    {{ botones() }}
+  </section>
+  <section class="guia-seccion" data-componente="campo">
+    <h3>{{ _('Campos') }}</h3>
+    <div class="guia-campos">
+      <label for="guia-texto">{{ _('Texto') }}</label>
+      <input id="guia-texto" type="text" placeholder="{{ _('Escribe aquí') }}">
+      <label for="guia-select">{{ _('Opción') }}</label>
+      <select id="guia-select"><option>{{ _('Primera opción') }}</option><option>{{ _('Segunda opción') }}</option></select>
+      <label for="guia-area">{{ _('Descripción') }}</label>
+      <textarea id="guia-area" rows="2" placeholder="{{ _('Descripción') }}"></textarea>
+      <label for="guia-deshabilitado">{{ _('Campo deshabilitado') }}</label>
+      <input id="guia-deshabilitado" type="text" disabled>
+    </div>
+  </section>
+  <section class="guia-seccion">
+    <h3>{{ _('Desplegable') }}</h3>
+    <details><summary>{{ _('Ver detalle') }}</summary><p>{{ _('Detalle del componente') }}</p></details>
+  </section>
+  <section class="guia-seccion" data-componente="panel-cabecera">
+    <div class="panel-cabecera">
+      <div><h2>{{ _('Cabecera de pestaña') }}</h2><p class="panel-cabecera-desc">{{ _('Título, descripción y acciones del panel.') }}</p></div>
+      <div class="panel-cabecera-acciones"><button type="button" class="btn-sm">{{ _('Acción') }}</button></div>
+    </div>
+  </section>
+  <section class="guia-seccion" data-componente="estado-vacio">
+    <div class="estado-vacio">
+      <p class="estado-vacio-titulo">{{ _('Todo en orden') }}</p>
+      <p class="estado-vacio-texto">{{ _('Nada necesita tu atención ahora mismo.') }}</p>
+    </div>
+  </section>
+  <section class="guia-seccion" data-componente="segmentado">
+    <h3>{{ _('Opciones excluyentes') }}</h3>
+    <div class="segmentado" role="radiogroup" aria-label="{{ _('Formato') }}">
+      <label><input type="radio" name="guia-formato" value="video" checked><span>{{ _('Video') }}</span></label>
+      <label><input type="radio" name="guia-formato" value="imagen"><span>{{ _('Imagen') }}</span></label>
+      <label><input type="radio" name="guia-formato" value="audio" disabled><span>{{ _('Audio') }}</span></label>
+    </div>
+  </section>
+  <section class="guia-seccion" data-componente="tabla"><h3>{{ _('Tabla') }}</h3>{{ tabla() }}</section>
+</section>
+<section class="guia-seccion">
+  <h2>{{ _('Celular') }}</h2>
+  <div class="guia-celular">{{ botones() }}{{ tabla() }}</div>
+</section>
+{% endblock %}

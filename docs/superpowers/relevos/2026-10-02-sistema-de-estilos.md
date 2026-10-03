@@ -1,12 +1,14 @@
 # Relevo — sistema de estilos (toda la plataforma con el look azul de la referencia)
 
-**Escrito:** 2026-10-02 18:40 (hora de Bogotá) · **Rama / worktree:** `estilos-plataforma` (solo documentos, ya en `main`);
-el trabajo va en `.claude/worktrees/codex-estilos-e<N>` ·
+**Escrito:** 2026-10-02 18:40 (hora de Bogotá) · **Actualizado:** 2026-10-02, tras la implementación, la reanudación y el
+cierre del orquestador (commits, revisión, capturas).
+**Rama:** `codex-estilos-e1` · **Worktree:** `.claude/worktrees/nicho-investigacion` (este es el worktree de la entrega 1) ·
 **Spec:** `docs/superpowers/specs/2026-10-02-sistema-de-estilos-design.md` ·
 **Plan de la entrega 1:** `docs/superpowers/plans/2026-10-02-sistema-de-estilos-entrega-1.md`
 
-**Quién sigue:** Codex con el plan ChatGPT Pro de Daniel (decisión de Daniel, 2026-10-02: que el gasto salga de ese plan y no
-de sus tokens de Claude), con el MISMO contrato que `docs/superpowers/relevos/2026-10-02-pendientes-a-codex.md`:
+**Quién sigue:** la sesión de Claude que orquesta: revisar, tomar capturas, crear los commits que el sandbox impidió,
+mezclar y desplegar. Codex implementó y probó sin red. Se mantiene el contrato de
+`docs/superpowers/relevos/2026-10-02-pendientes-a-codex.md`:
 
 | Paso | Quién |
 |---|---|
@@ -25,35 +27,99 @@ de pendientes: los dos tocan `translations/en/LC_MESSAGES/messages.po` (y los de
 
 ## En un párrafo
 
-Daniel quiere toda la plataforma con el estilo del tablero de Final edition (azul marino casi negro, azul eléctrico con
-brillo, cian, íconos de línea en recuadros, números en círculos, flujos de pasos, cifras grandes, anillos de porcentaje, línea
-de tiempo), que hoy existe solo dentro de `#tab-final`, y que en adelante cada cambio de look se haga en un solo lugar. El
-diseño está aprobado por Daniel en tres partes (paleta y tokens; carpeta, componentes y Guía; reglas, pruebas y migración) y
-escrito en el spec. El plan detallado de la **entrega 1** (la carpeta `static/estilos/`, la Guía de estilos, las pruebas y la
-app entera en azul) está listo para ejecutarse tarea por tarea. **No se ha escrito ni una línea de código todavía.**
+La entrega 1 está implementada, commiteada, revisada y con capturas en `codex-estilos-e1`: carpeta por capas, hoja
+generada, Guía de estilos, guardas y paleta azul global. La partición conservó los 207084 bytes originales antes de
+cambiar los tokens; salió un bloque adicional de Alertas, por eso hay 12 archivos de legado. Codex no pudo commitear (el
+sandbox no deja crear `.git/worktrees/nicho-investigacion/index.lock`); el orquestador creó los siete commits desde su
+manifiesto (`4b601c6`…`1a1bef1`, 2026-10-02) y, tras las capturas, uno más con tres arreglos que la entrega no tapaba
+(`f5fe07e`: enlaces sin clase en el lila/morado del navegador, dos botones con el gris del navegador, la tabla de la Guía).
+
+## Cierre del orquestador (2026-10-02, noche)
+
+- Commits: los siete del manifiesto + `f5fe07e`. Suite completa sobre `1a1bef1`: **5795 passed, 1 skipped, 3 warnings in
+  259 s**; tras `f5fe07e`, las de estilo (`test_estilos_sistema`, `test_estilos_guia`, `test_modo_oscuro`,
+  `test_base_visual`, `test_movil`) → 48 passed. Hoja: 211066 bytes.
+- Capturas (test client con datos sembrados, sin llaves: `scratchpad/codex/render_e1.py` de la sesión) a 1440 y 375 px de
+  `/login`, `/admin/estilos`, `/cliente/acme` (Tablero con 45 días, Crear, Final edition, Experimentos) y el editor
+  (`sembrar_edicion_demo`): todo azul, el gráfico con gasto naranja e ingresos azul, el editor gris neutro detrás del video
+  (`.ed-centro` rgb(18,20,23), `#lienzo` negro); nada corre la página de lado a 375 px. Un barrido de colores computados
+  (tono 238–320) no encontró morado en la interfaz; el único es `.ed-bib-texto-muestra`, la muestra del fondo de texto que
+  se renderiza DENTRO del video (`#7c3aed`, color de marca por defecto de `final_edition/borrador.py`, `documento.py`,
+  `texto.py` y `operaciones.js`): fuera de alcance por el §12; cambiarlo cambia los videos, lo decide Daniel.
+- Revisión (agente `revisor`, contexto limpio, sobre `1a1bef1`): **aprobado con observaciones**. La hoja unida contra
+  `953db83` tiene 17 cambios, todos los previstos; 75 mutaciones, 582 pruebas de la zona antes y después. Arreglado antes de
+  mezclar: `estilos.construir` une primero y reemplaza con un temporal (con un ORDEN roto dejaba `style.css` en 0 bytes) y
+  `OrdenInvalido` frena un ORDEN que nombra un archivo que no existe, repite uno o deja fuera un `.css`; tres tintes índigo
+  que la lista cerrada no veía (`.maniqui-preset.activo`, `.badge-fuente-url`, `.tag-atribucion-tienda`) pasan al azul y
+  entran a `MORADOS`; la decisión del editor tiene guarda (`test_editor_sobrio_detras_del_video`); CLAUDE.md regla 8, la
+  cabecera del spec y dos comentarios viejos dicen la verdad; `test_texto_morado_legible` → `test_texto_de_acento_legible`.
+  La insignia de WooCommerce (`#b48be0`) queda violeta a propósito: es su marca, como el verde de Shopify. Se mezcla con
+  squash (los commits 2–4 del manifiesto no se sostenían solos).
+- Visto y dejado para la entrega 3 (no es de la paleta): el gráfico de Triple Whale en el Tablero usa `--serie-3` en barras y
+  línea y `--serie-1` al pasar el mouse (el §4 del spec lo pide así, pero el hover toma el color de los ingresos del otro
+  gráfico); el `<h4>` «Triple Whale» de `_tab_tablero.html` usa `var(--text-secondary)`, que no existe; en Final edition a
+  375 px «Produciéndose» se parte («Produciéndos / e»).
 
 ## Hecho, y cómo se verificó
 
-- Spec y plan escritos y revisados contra el código de `main` en `d71ef5e` | verificado leyendo el código: rutas, pruebas y
-  números citados abajo, con su archivo y línea.
-- Colores de gráficos elegidos con el método de la skill `dataviz` | verificado con
-  `node scripts/validate_palette.js "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767" --mode dark --surface "#0b1a33"`
-  → ALL CHECKS PASS (peor par adyacente para daltónicos ΔE 8,4; visión normal 19,3; todos ≥ 3:1). Par del Tablero azul +
-  naranja → ΔE 26,8 daltónicos / 31,8 normal (PASS).
-- Contrastes de la paleta nueva sobre `--panel #0b1a33`, calculados (fórmula WCAG): `--text` 15,72 · `--muted` 7,26 ·
-  `--muted-2` 5,98 · `--accent-texto` 7,79 · `--cian` 8,99 · `--ok` 8,7 · `--warn` 9,04 · `--error` 5,93 · `--serie-1` 4,77 ·
-  `--serie-2` 4,47 · blanco sobre `--accent` 5,01.
-- Mediciones de hoy en `main` (`d71ef5e`): `static/style.css` 3 199 líneas y 202 842 bytes; 307 colores escritos a mano en la
-  hoja (84 hex, 169 `rgb/rgba`, 54 `white/black`), 20 de ellos morados; 413 `style="` en 54 de las 122 plantillas, ninguno con
-  color; 22 `<svg>` sueltos; 9 animaciones (`aparece-card`, `exp-pulso`, `fe-pulso`, `flash-in`, `girar`, `gp-latido`,
-  `gp-recien`, `rayas-progreso`, `shimmer`). Se midió con `grep`; los comandos están en el plan.
+Todas las pruebas usaron `/Users/colorado/Documents/GitHub/iaplusyou/venv/bin/python3`; pytest siempre con
+`-q -p no:cacheprovider`. Cada prueba nueva se vio fallar antes del cambio o ante la mutación correspondiente.
+**Commits de todas las tareas: pendientes por el bloqueo del sandbox.** El manifiesto contiene las rutas explícitas y
+los mensajes del plan. Como pidió Daniel al reanudar, un archivo compartido va en la última tarea que lo tocó.
+
+| Tarea | Implementado | Prueba que lo vigila / evidencia |
+|---|---|---|
+| 1 | `estilos.py`: unión, tokens y contraste | `tests/test_estilos_sistema.py`: 3 pruebas puras, RED `ModuleNotFoundError` → 3 passed |
+| 2 | `ORDEN`, tokens y 12 fragmentos contiguos | `test_la_hoja_es_la_generada`, `test_orden_nombra_cada_archivo_una_vez_y_por_capas`; RED 2 `FileNotFoundError` → 5 passed; unión idéntica: 207084 bytes |
+| 3 | `GET /admin/estilos`, plantilla y CSS propios, 35 traducciones | `tests/test_estilos_guia.py` (admin 200, cliente 302, cada token); las dos guardias de idioma nuevas fallaron primero por ruta/plantilla ausentes; grupo dirigido: 157 passed |
+| 4 | Azul global, series, Final edition sin redefinir, editor neutro | `tests/test_modo_oscuro.py` + `test_sin_morados`: RED 2 fallos → 15 passed; búsqueda de interfaz vacía |
+| 5 | Colores y estilos con trinquete, movimiento reducido | `tests/test_estilos_sistema.py`: RED cuatro guardas → 10 passed; techos 199 colores en legado y 414 estilos en línea; seis mutaciones detectadas, cada una 1 failed, 9 passed; bytes restaurados y 10 passed después |
+| 6 | Skill UI y estado/alcance del spec actualizados | `tests/test_guia_agentes.py tests/test_hooks_agentes.py`: 100 passed |
+| 7 | Suite final, tamaño, generado, relevo y siete parches | Suite final abajo; `estilos.py comprobar` → al día; hoja de 210542 bytes ≤ 217842; aplicación de los siete parches desde 953db83 reconstruye los mismos archivos |
+
+Suites completas (comando: `<intérprete> -m pytest -q -p no:cacheprovider`):
+
+| Momento | Resultado exacto | Registro |
+|---|---|---|
+| Tarea 1 | 5784 passed, 1 skipped, 3 warnings in 280.76s (0:04:40) | `/tmp/estilos-e1-suite1.log` |
+| Tarea 2 | 5786 passed, 1 skipped, 3 warnings in 316.85s (0:05:16) | `/tmp/estilos-e1-suite2.log` |
+| Tarea 3 | 5790 passed, 1 skipped, 3 warnings in 304.28s (0:05:04) | `/tmp/estilos-e1-suite3.log` |
+| Tarea 4 | 5791 passed, 1 skipped, 3 warnings in 265.57s (0:04:25) | `/tmp/estilos-e1-suite4.log` |
+| Tarea 5, reanudada | 5795 passed, 1 skipped, 3 warnings in 249.02s (0:04:09) | `/tmp/estilos-e1-suite5-reanudada.log` |
+| Tarea 7, final | 5795 passed, 1 skipped, 3 warnings in 247.88s (0:04:07) | `/tmp/estilos-e1-suite-final.log` |
+
+La primera ejecución de la tarea 5 (`/tmp/estilos-e1-suite5.log`) fue interrumpida por el límite de tiempo de la
+sesión a las 19:40 del 2026-10-02: **no tiene un resultado completo**. Se repitió íntegra al reanudar.
+`py_compile` pasó con `PYTHONPYCACHEPREFIX=/tmp/estilos-e1-pyc`: la ubicación habitual de caché estaba fuera del sandbox.
+Las cuatro mutaciones del plan y dos adicionales para los techos están registradas en `/tmp/estilos-e1-mutaciones.log`.
+
+No verificado: **capturas pendientes** a 1440 px y 375 px de `/admin/estilos`, `/login`, página de proyecto y editor.
+No se evaluó visualmente foco, desbordamiento ni el resultado real de movimiento reducido. La validación de daltonismo
+es la previa del spec; no se descargó ni volvió a ejecutar la herramienta externa. Revisión, commits, mezcla y despliegue
+corresponden al orquestador.
+
+## Decisiones tomadas al implementar (2026-10-02)
+
+| Decisión | Motivo | Costo si estuviera mal |
+|---|---|---|
+| Conservar 12 archivos de legado en su orden | La hoja real tiene también el bloque Alertas; el plan permite bloques adicionales | Un fragmento extra para mudar en entregas posteriores; ninguna regla reordenada |
+| Registrar `admin_estilos.html` en `PLANTILLAS_TRADUCIDAS` | La guardia existente exige registrar toda plantilla y el plan omitía este archivo de pruebas | Un caso adicional en las pruebas de idioma |
+| Retirar también dos `rgba(124, 92, 255, …)` y vigilarlos | Son morados reales fuera de la expresión enumerada en el plan; el spec exige retirarlos de la interfaz | Cambiar dos tonos de fondo a azul; revisar las capturas |
+| Excluir `white-space` del patrón de colores nombrados | El patrón del plan detectaba esa propiedad válida como color `white` en `_crear_detalle.html` | No detectaría un nombre de color con sufijo de guion, que no es un color CSS válido |
+| Conservar `#7c3aed` en `operaciones.js::fondoDePreset` y acotar la búsqueda a interfaz | El color es contenido renderizado dentro del video y está expresamente fuera de alcance (§12 del spec) | El respaldo de ese preset sigue morado; cambiarlo requeriría ampliar el alcance |
+| Restaurar las mutaciones por sus bytes y preparar parches por tarea | No hay commit previo al que volver; el sandbox impide escribir el índice Git | El orquestador debe crear los commits; los parches se verificaron contra el árbol |
 
 ## Falta, en el orden en que conviene hacerlo
 
-1. **Entrega 1** — ejecutar `docs/superpowers/plans/2026-10-02-sistema-de-estilos-entrega-1.md` (7 tareas) en el worktree
-   `codex-estilos-e1`; el orquestador revisa, mezcla y despliega.
+1. **Entrega 1** — cerrada por el orquestador (ver «Cierre del orquestador»).
 2. **Entrega 2** — escribir su plan desde el spec (§6.2 componentes nuevos, §7 íconos Lucide, §10), con el MISMO formato del
-   plan de la entrega 1 (tareas chicas, prueba primero, código completo, comandos exactos), y ejecutarlo. Final edition es la
+   plan de la entrega 1 (tareas chicas, prueba primero, código completo, comandos exactos), y ejecutarlo. El plan suma
+   una tarea con los agujeros de las guardas que encontró la revisión de la entrega 1 (todas mutaciones que hoy pasan):
+   contraste medido solo en `--accent-texto` (no en `--text`, `--muted`, `--ok`, `--warn`, `--error`); reducir movimiento
+   solo busca el texto (un bloque vacío pasa); `animation:` se lee por su primer valor, así que la legítima
+   `animation: 1.6s ease fe-pulso` FALLA y `pulso 1s, bailar 2s` pasa; `style='…'` con comillas simples y `WHITE`/`RGBA(`
+   en mayúsculas se escapan; el orden DENTRO de `legado/` no se vigila; el tope de 217 842 bytes no tiene prueba; y los
+   techos con `<=` dejan holgura cuando el legado baja (mejor `==` con un mensaje «bajó: pon el techo en N»). Final edition es la
    primera en usar los componentes: sus clases `fe-*` se vuelven las comunes. Como Codex no tiene red, **el orquestador baja
    antes** los SVG de Lucide que pida el plan (https://lucide.dev, licencia ISC) al worktree, con su licencia.
 3. **Entrega 3** — un plan por grupo de pantallas, en este orden: (a) Tablero y Triple Whale; (b) Crear; (c) Experimentos y
@@ -64,9 +130,9 @@ app entera en azul) está listo para ejecutarse tarea por tarea. **No se ha escr
 
 ## La siguiente acción concreta
 
-El orquestador prepara el worktree `.claude/worktrees/codex-estilos-e1` sobre `origin/main` (con `meta_ads`) y lanza
-`codex exec` con el encargo de arriba; Codex empieza por la **tarea 1** del plan: escribir `tests/test_estilos_sistema.py`
-(prueba primero), verla fallar y escribir `estilos.py`.
+Escribir el plan de la **entrega 2** desde el spec §6.2, §7 y §10 (la entrega 1 ya está commiteada y revisada). Codex no
+puede commitear en este Mac (sandbox sobre `.git`): el encargo debe pedirle un manifiesto por tarea desde el principio y el
+orquestador commitea, como en la entrega 1.
 
 ## Decisiones ya tomadas (no reabrir)
 
@@ -150,9 +216,14 @@ El orquestador prepara el worktree `.claude/worktrees/codex-estilos-e1` sobre `o
 
 ## Estado del árbol
 
-- Commits: el spec, el plan y este relevo, en la rama `estilos-plataforma`, subidos a `main` (solo documentos: no hace falta
-  desplegar). Pruebas: no se corrieron, salvo `tests/test_guia_agentes.py` y `tests/test_hooks_agentes.py` (100 passed): no
-  hubo código. Estos documentos no cambian nada en el VPS.
+- La entrega entra a `main` como UN commit («Estilos, entrega 1: …»), rebasado sobre `eef7d3b` (el lote 1 de pendientes):
+  los siete del manifiesto, `f5fe07e` (capturas) y `3231d54` (revisión) se juntaron con squash porque los intermedios no se
+  sostenían solos. Los originales quedan en la rama local `respaldo-estilos-e1` hasta confirmar el despliegue.
+- Al rebasar solo chocó el `.mo`: el `.po` mezclado se verificó con Babel (las 5674 entradas de `main` + las 35 de la Guía,
+  sin `fuzzy`) y se recompiló. Submódulo `meta_ads` en `b08fd214c5ca180b39f3cdd59e80fc5e3de895f3`, igual que `main`.
+- CSS al día (`estilos.py comprobar`), 211008 bytes. Pendientes que salieron de aquí: PND-128 a PND-131.
+- Producción antes de desplegar: `5d72fc2`, alembic 0030; esta entrega no trae migración ni toca el worker (solo se
+  reinicia `iaplusyou`). El registro del despliegue va en la memoria de producción.
 
 ## Cómo devolver el trabajo
 

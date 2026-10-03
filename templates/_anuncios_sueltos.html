@@ -131,8 +131,8 @@
         <button type="submit" class="btn-guardar btn-sm">{{ _('Meter en experimento') }}</button>
       </form>
       {% elif elegible and elegible.pieza_id %}
-      {# Sin experimento en armado: el mismo «Probar en Meta» de Crear (galería con la pieza marcada). #}
-      <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ elegible.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
+      {# Sin experimento en armado: el mismo «Probar en Meta» de Crear («Nuevo experimento» con la pieza marcada). #}
+      <a class="btn-guardar btn-sm" href="{{ url_for('exp_nuevo', cliente=cliente, piezas=elegible.pieza_id) }}">{{ _('Probar en Meta') }}</a>
       {% elif not elegible %}
       <small class="vacio">{{ _('Esta pieza ya no está en Crear: genera una nueva y métela en un experimento.') }}</small>
       {% endif %}
