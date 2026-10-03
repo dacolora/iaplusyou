@@ -11,7 +11,7 @@ description: "Alertas del proyecto: la pestaña que junta lo que necesita atenci
 
 ## Qué es y la regla de oro
 
-La pestaña Alertas (`_tab_alertas.html`), la burbuja del sidebar (`_sidebar.html`: roja si alguna bloquea, ámbar si no) y la línea del Tablero («N alertas necesitan tu atención → Ver Alertas», `_tab_tablero.html`) muestran lo mismo: lo que `alertas.py` calcula para el proyecto.
+La pestaña Alertas (`_tab_alertas.html`), la burbuja del sidebar (`_sidebar.html`: roja si alguna bloquea, ámbar si no) y la línea del centro de resultados de Experimentos («N alertas necesitan tu atención → Ver Alertas», `.cr-alertas-linea` en `_exp_resultados.html`; el Tablero dejó de ser pestaña el 2026-10-03) muestran lo mismo: lo que `alertas.py` calcula para el proyecto.
 
 **Se calcula al vuelo; solo se guardan los descartes** (2026-09-20). Cada alerta sale del estado real (llaves del `.env`, tablas, archivos del proyecto), así que nunca hay una alerta vieja que ya no corresponda: si algo se resuelve, desaparece sola. Lo único que se escribe es la tabla `alerta_descartada` (migración 0029, `(cliente, clave) → huella`), y su ÚNICO escritor es `alertas.py` (`descartar`, `restaurar`, la poda).
 

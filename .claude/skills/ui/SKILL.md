@@ -94,12 +94,28 @@ MutationObserver de `data-precarga`) arranca el sondeo de lo que aparezca; los c
 van delegados sobre la cuadrícula (las agregadas por «Ver más» funcionan igual); el sondeo se pausa
 con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minuto → 5 s a los 5 min).
 `tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto. Fuera de
-alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por fragmentos (Catálogo
-ya carga su galería y su ficha por fragmento desde 2026-09-30: ver «Catálogo ecommerce y
-conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos, el flujo viejo
-«Nueva idea».
+alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por fragmentos (**hecho el
+2026-10-03**: ver «Experimentos: armazón + fragmento»; Catálogo ya carga su galería y su ficha por fragmento desde
+2026-09-30: ver «Catálogo ecommerce y conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos
+(el de `experimentos.cargar` sigue: PND-134), el flujo viejo «Nueva idea».
 
-**Alertas en pantalla** (2026-10-02, skill `alertas`): el Tablero ya no lista alertas, solo una línea («N alertas necesitan tu atención → Ver Alertas», `.tb-aviso-alertas` en `_tab_tablero.html`); la lista vive en la pestaña Alertas (`_tab_alertas.html`, `#alertas`) y la burbuja del sidebar sale de `alertas_ctx`, el mismo dato del context processor `_alertas_sidebar`, que se calcula en cada página (caché de 60 s): una consulta por tarjeta ahí cuesta en todas las pantallas.
+**Experimentos: armazón + fragmento** (E2, 2026-10-03; skill `experimentos`): `#tab-experimentos` solo pinta el armazón
+(`_tab_experimentos.html`). Los resultados llegan por `fetch` a `exp_resultados` (fragmento `_exp_resultados.html`, con el filtro
+en el hash), el panel de una pieza a `exp_pieza` (`<dialog id="cr-panel">`, `_exp_pieza.html`) y «Nuevo experimento» es una
+página aparte, `exp_nuevo`, a pantalla completa con «← Volver a resultados». Por eso el HTML de `/cliente/<c>` ya NO trae las
+piezas elegibles (la galería), el tablero ni la gestión por experimento: lo que Experimentos necesite pintar se agrega al
+fragmento, no a la página (la regla de «Rendimiento y almacenamiento»: lo pesado llega por fragmento). Sus estilos viven en
+`static/estilos/pantallas/experimentos.css` (clases `cr-*`: el fragmento, el panel y la gestión) y
+`pantallas/experimento-nuevo.css` (la página nueva); las `exp-*` viejas siguen en `legado/` hasta que se vacíe.
+`static/style.css` es GENERADO: se reconstruye con `python3 estilos.py construir` y no se edita a mano. Reglas que ya cumple y
+que no hay que romper: los `<video>` nacen `preload="none" data-precarga` y las `<img>` `loading="lazy"`; la barra de progreso
+de un experimento lleva `data-poll-job` (nunca `<script>`); nada de una consulta por tarjeta (`tests/test_rutas_resultados.py`
+mide el fragmento); en el celular los gráficos SVG escalan por `viewBox` y las tablas son `tabla-apilada`; los colores van por
+tokens (`--ok`, `--error`, `--warn` y sus `-fondo` para mejor, peor y recuperándose; `--serie-N` para series; `--cian` solo en
+texto, trazos y sombras) y siempre con ▲/▼, porque el significado no puede depender del color. El JS no pasa por Jinja: sus
+textos viajan en `#cr-textos` (JSON) ya traducidos por el servidor.
+
+**Alertas en pantalla** (2026-10-02, skill `alertas`): el centro de resultados de Experimentos (que absorbió el Tablero el 2026-10-03) no lista alertas, solo una línea («N alertas necesitan tu atención → Ver Alertas», `.cr-alertas-linea` en `_exp_resultados.html`); la lista vive en la pestaña Alertas (`_tab_alertas.html`, `#alertas`) y la burbuja del sidebar sale de `alertas_ctx`, el mismo dato del context processor `_alertas_sidebar`, que se calcula en cada página (caché de 60 s): una consulta por tarjeta ahí cuesta en todas las pantallas.
 
 Precios del compositor y clon (2026-10-02, PND-011/016): el JS recibe tarifas y tablas calculadas en servidor; no duplica el precio del proveedor. La tarifa de música viene del servidor, desde gastos.costo_musica_estimada. La tabla de clon se cachea por proceso y varía con nombre e idioma antes del clic; se refresca también al vaciar el nombre después de clonar (revisión 2026-10-02).
 

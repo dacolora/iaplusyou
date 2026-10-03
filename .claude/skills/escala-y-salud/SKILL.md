@@ -24,7 +24,7 @@ catálogo de traducciones por petición (junto al objeto `babel_locale`, así `f
 0026 (`pieza.padre_pieza_id`, `publicacion.pieza_id`, `metrica_snapshot(experimento_pieza_id, tomado_en)`,
 `gasto.creado_en`, las claves foráneas que borrar recorría enteras…), vigilados por `tests/test_indices_escala.py`; una
 consulta nueva sobre una tabla que crece debe usar índice. `experimentos.snapshots_de(ids, desde)` = `snapshots` de
-muchas piezas en 2 consultas (panel del admin). Pool explícito (`db.opciones_pool`: `CREATV_DB_POOL` 10 +
+muchas piezas en 2 consultas (panel del admin y, desde el centro de resultados de E2, 2026-10-03, `tablero._piezas_con_snapshots`: antes una o dos consultas por pieza, hoy dos para todas). El fragmento de resultados (`exp_resultados`, `resultados.contexto`) no agrega consultas por pieza: lee `metrica_dia` y `metrica_desglose` con UNA consulta por tabla (ids por trozos de 500) y `promedio_embudo` con una; lo único que crece con las piezas es el N+1 `_ultima_metrica` de `experimentos.cargar` (PND-134), que se paga una vez por petición, y `tests/test_rutas_resultados.py::test_el_fragmento_no_hace_mas_consultas_por_pieza_que_experimentos_cargar` exige que el fragmento no crezca más que esa lectura. Al cerrar E2 `ver_cliente` todavía arma `_contexto_experimentos` sin pintarlo (PND-137). Pool explícito (`db.opciones_pool`: `CREATV_DB_POOL` 10 +
 `CREATV_DB_POOL_EXTRA` 10, ≥ hilos de gunicorn) y `temp_store=MEMORY`. **gunicorn se configura en el repo**
 (`deploy/gunicorn.conf.py`, unidad de ejemplo `deploy/iaplusyou.service`): UN proceso a propósito —`trabajos.iniciar`,
 `_TRABAJOS` y los cachés viven en su memoria; para usar más procesos primero hay que mover esos trabajos a la cola—,

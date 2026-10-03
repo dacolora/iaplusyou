@@ -6,6 +6,12 @@ nuevo experimento). Reemplaza la pantalla de Experimentos de `2026-09-20-experim
 y la pestaña Tablero del Bloque 6 de `2026-09-14-motor-ecommerce-design.md`. **No cambia el motor**
 (lanzador, decisor, modos, acciones, derivaciones): lee lo que ya guardan y le agrega datos nuevos de Meta.
 
+**Estado al 2026-10-03 (cierre de E2, rama `exp-centro`, aún sin mezclar a main):** E1 está en producción (2026-10-02).
+E2 está construida: el centro de resultados con su fragmento, el panel de cada pieza, la gestión por experimento y el
+Tablero fundido (§4), y además, por decisión del controlador (la dirección de E3 que Daniel aprobó), «Nuevo experimento» ya
+va a pantalla completa con «← Volver a resultados» y el presupuesto «total + días» (§5.2 y §5.3, con la validación del
+servidor y las reglas del motor en palabras, §4.7). De E3 queda solo lo que dice la nota «Estado de §5» al principio de §5.
+
 ## 0. Por qué
 
 Daniel, 2026-10-02, con dos referencias visuales (un tablero «Big Data» azul marino y azul eléctrico, y un
@@ -42,16 +48,23 @@ experimentos lado a lado, la identidad azul en el resto de la app, reescribir el
 
 ## 2. Identidad visual («centro de mando»)
 
-- Solo en Experimentos: la pestaña (`#tab-experimentos`) y las páginas nuevas (`/experimentos/nuevo`). El
-  resto de la app sigue morada. Pedido explícito: «que el estilo de la parte de experimentos tenga este
-  branding».
-- Tokens nuevos en `:root` de `static/style.css` (bloque «Experimentos: centro de mando (2026-10-02)» al
-  final): `--exp-fondo #050d1f`, `--exp-panel #0a1830`, `--exp-panel-2 #0e2040`, `--exp-borde #16305a`,
-  `--exp-rejilla #12274a`, `--exp-acento #2f8cff`, `--exp-acento-2 #3fb6ff`, `--exp-acento-hondo #1d4fa8`,
-  `--exp-texto #e8f0ff`, `--exp-tenue #8aa0c4`, `--exp-brillo` (sombra azul de las tarjetas destacadas).
-  La clase `.zona-exp` remapea `--bg`, `--panel`, `--border`, `--accent`, `--accent-texto`, `--accent-grad`
-  y `--shadow-glow` a esos tokens, así botones, campos y `summary` de la base visual común se vuelven azules
-  dentro sin estilos sueltos. Colores solo por variables (`tests/test_modo_oscuro.py`).
+- Pedido explícito de Daniel (2026-10-02): «que el estilo de la parte de experimentos tenga este branding». Este spec
+  suponía que solo Experimentos sería azul y que el resto de la app seguiría morada; el mismo día el **sistema de estilos**
+  (`2026-10-02-sistema-de-estilos-design.md`) llevó el azul a TODA la app, así que lo siguiente ya no es cierto y quedó así:
+- **No se crearon los tokens `--exp-*` ni la clase `.zona-exp` que remapeaba variables** (el bloque «Experimentos: centro de
+  mando» de `static/style.css` no existe). Se reusa la paleta azul global de `static/estilos/tokens.css` (2026-10-02), y
+  los colores de estado del centro se hacen con esos mismos tokens. Los reales, los que usa
+  `static/estilos/pantallas/experimentos.css`: fondo y superficies `--bg`, `--panel`, `--panel-2`, `--panel-hover`; bordes
+  `--border`, `--border-soft`; texto `--text`, `--muted`, `--muted-2`; acento `--accent`, `--accent-2`, `--accent-texto`;
+  `--cian` (solo texto, trazos SVG y sombras: pasa de 0,4 de luminancia); brillo y sombras `--brillo`, `--brillo-sm`,
+  `--shadow`, `--shadow-soft`, `--shadow-glow`, `--fondo-escena`; tipografía `--font-display`, `--font-body`; las series de
+  las gráficas `--serie-1` a `--serie-8`; y los **colores de estado del centro**: `--ok`, `--error`, `--warn` con sus
+  `--ok-fondo`, `--error-fondo`, `--warn-fondo` (`.cr-mejor`, `.cr-peor`, `.cr-neutro`, y el veredicto con
+  `.cr-veredicto.cr-v-ganadora` / `cr-v-perdiendo` / `cr-v-recuperandose` / `cr-v-neutra`). Colores solo por variables
+  (`tests/test_modo_oscuro.py`).
+- Los estilos del centro (fragmento, panel de pieza y gestión, clases `cr-*`) viven en
+  `static/estilos/pantallas/experimentos.css`, y los de «Nuevo experimento» en `pantallas/experimento-nuevo.css`; las
+  `exp-*` anteriores siguen en `legado/`. `static/style.css` es GENERADO (`python3 estilos.py construir`).
 - Lenguaje visual tomado de la referencia: secciones numeradas («01 Resumen del periodo», número en azul
   eléctrico con `--font-display`), tarjetas con borde fino y brillo azul en la destacada, donas de avance,
   curvas finas, iconos lineales. Verde/rojo solo para mejor/peor, siempre con ▲/▼ (no depende del color).
@@ -195,9 +208,11 @@ Periodo (7 · **14** · 30 · 90 días · desde el inicio; se compara con el per
 **«+ Nuevo experimento»** (lleva a `GET /cliente/<c>/experimentos/nuevo`, ruta `exp_nuevo`) y «Descargar CSV
 del mes».
 
-**Costura E2 → E3**: para que E2 se pueda desplegar sola, E2 crea la ruta `exp_nuevo` y muda a ella **tal
-cual** la galería, la barra «Probar en Meta» y los tres pasos de hoy (mismo HTML y JS, dentro de la página
-nueva con la identidad de §2), y cambia los enlaces de §5.4. E3 rehace esa página con el recorrido de §5.
+**Costura E2 → E3** (actualizada el 2026-10-03): para que E2 se pudiera desplegar sola, E2 crea la ruta `exp_nuevo` y muda
+a ella la galería, la barra «Probar en Meta» y los pasos de hoy, y cambia los enlaces de §5.4. **Decisión del controlador,
+2026-10-03 (la dirección de E3 que Daniel aprobó):** «Nuevo experimento» quedó ya en E2 a **pantalla completa**, sin menú
+lateral y con «← Volver a resultados» (no «tal cual» dentro de una página con la identidad de §2), y el presupuesto
+«total + días» (§5.2 y §5.3) también llegó en E2. Lo que de §5 sigue para E3 está en la nota «Estado de §5».
 
 ### 4.4 Secciones (de arriba abajo, como la maqueta aprobada)
 
@@ -295,6 +310,24 @@ volver a pedir datos. Sin librerías externas. Colores con `var(--exp-*)`.
 
 ## 5. E3 · Nuevo experimento (página propia)
 
+**Estado de §5 al 2026-10-03** (contra `templates/exp_nuevo.html` y `_exp_probar.html`):
+
+- **Ya hecho en E2:** la página a pantalla completa con «← Volver a resultados» y la barra de pasos (01 Piezas · 02 Dónde ·
+  03 Total y días · 04 Revisar); un solo `<form>` que termina en `POST exp_probar`; los países con bandera y la edad (paso 2,
+  con la línea de que las finales conservan su país); el paso 3 entero (total grande y días, los atajos Prueba rápida ·
+  Estándar · Fuerte como «Sugerencia», la barra «Ajustar el total», «Usar ese total», «Ajustar reparto» plegado con «Volver al
+  reparto automático», y debajo «Máximo que puede gastar…» o «Presupuesto planeado…», «≈ X al día», «N anuncios (P piezas en C
+  países)» y «Nada gasta hasta que pulses Activar»); el paso 4 (cuadrícula pieza × país, nombre automático editable,
+  «Avanzado», aviso de doctrina y «Lanzar a Meta (en pausa)» con `confirm()` que repite el resumen); §5.2 y §5.3 completos
+  (módulo `presupuesto_experimentos.py`, espejo `static/presupuesto_exp.js`, la validación `suma × días ≤ total × 1,01` en el
+  servidor); y los enlaces de §5.4.
+- **Queda para E3:** (a) el paso 1 sigue siendo la galería de siempre: todas las piezas elegibles van en el HTML y los
+  filtros y el buscador corren en el navegador. Falta paginarla (24 por página con «Ver más» y el fragmento
+  `GET /cliente/<c>/experimentos/nuevo/piezas?desde=N&filtro=&q=`, que **no existe**). (b) Falta el resultado de lo ya probado
+  en cada pieza («Ganadora · CTR 2,6 % en Prueba 19 sep», para replicar lo que funcionó): hoy una pieza solo dice «en prueba:
+  <nombre>» si está en un experimento vivo, y nada de lo que ya terminó. (c) Los países del paso 2 son casillas con bandera,
+  no tarjetas. (d) Las pruebas de (a) y (b), que §5.5 detalla.
+
 ### 5.1 Recorrido
 
 `GET /cliente/<c>/experimentos/nuevo` — página a pantalla completa con la identidad de §2, sin el menú
@@ -321,7 +354,7 @@ lateral, con «← Volver a resultados» y una barra de pasos arriba. Un solo `<
 
 ### 5.2 Los atajos de presupuesto
 
-Módulo nuevo `presupuesto_exp.py` (puro): `atajos(moneda, anuncios_por_pais)` → tres opciones con total y
+Módulo nuevo `presupuesto_experimentos.py` (puro; el espejo en JS es `static/presupuesto_exp.js`): `atajos(moneda, anuncios_por_pais)` → tres opciones con total y
 días, a partir del mínimo diario de Meta por moneda (`PRESUPUESTO_MINIMO_DIARIO`, que se muda aquí desde
 `dashboard.py`): diario por anuncio = 4× / 8× / 15× el mínimo, durante 4 / 7 / 10 días, total redondeado a
 2 cifras significativas. Se rotulan «sugerencia» (no son precios de un proveedor; el precio es la cifra que
@@ -335,7 +368,7 @@ prueba de paridad compara ambos (como el editor).
 redondeo); si no, rechaza con «el reparto supera el total». Así «máximo que puede gastar» es verdad aunque
 alguien arme el POST a mano. El resto de validaciones no cambia. Límite que ya existe y se dice en la
 pantalla: el conjunto de Meta termina a los N días contados desde el lanzamiento, no desde la activación
-(`meta_ads/adset.crear_adset`, `end_time`); se anota como pendiente nuevo en `docs/pendientes.md`.
+(`meta_ads/adset.crear_adset`, `end_time`); se anota como pendiente nuevo en `docs/pendientes.md`. (Después se resolvió aparte, no en E2/E3: PND-113, lote 2 de Codex, 2026-10-03; el fin de la pauta se fija en la primera activación y la pantalla dice que los días empiezan a contar cuando se activa.)
 
 ### 5.4 Qué sale de la pestaña y qué enlaces cambian (se hace en E2, ver la costura de §4.3)
 
@@ -348,10 +381,12 @@ pantalla: el conjunto de Meta termina a los N días contados desde el lanzamient
 
 ### 5.5 Pruebas de E3
 
-`tests/test_presupuesto_exp.py` (reparto, redondeo por moneda sin decimales, país bajo el mínimo, atajos),
-paridad Python↔JS del reparto, `tests/test_rutas_exp_nuevo.py` (página, piezas paginadas, llegadas con
-`piezas` y `exp_nombre`, sin Meta conectada, otro proyecto 404), `exp_probar` rechaza un reparto que supera el
-total; se adaptan las pruebas de la galería y de los enlaces desde Crear/Catálogo.
+`tests/test_presupuesto_experimentos.py` (reparto, redondeo por moneda sin decimales, país bajo el mínimo, atajos, paridad
+Python↔JS del reparto) y `tests/test_rutas_exp_nuevo_presupuesto.py` (la página y su cuenta, el «Máximo que puede gastar» o
+el «Presupuesto planeado», `exp_probar` rechaza un reparto que supera el total) **ya existen, hechas en E2**; las
+pruebas de la galería y de los enlaces desde Crear/Catálogo se adaptaron en E2 (`tests/test_rutas_resultados.py`,
+`tests/test_rutas_experimentos_galeria.py`). Para E3 faltan las de la galería paginada (`nuevo/piezas`) y las del
+resultado por pieza.
 
 ## 6. Reglas de la casa que aplican
 

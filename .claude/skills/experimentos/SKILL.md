@@ -1,9 +1,9 @@
 ---
 name: experimentos
-description: "Experimentos en Meta y el tablero: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, y el Tablero (totales, mes a mes, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py, meta_detalle.py o _tab_experimentos.html."
+description: "Experimentos en Meta y su centro de resultados: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), «Nuevo experimento» con presupuesto total + días, métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, filtros y panel de pieza (resultados.py) y el dinero del Tablero (totales, mes a mes, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py, meta_detalle.py, resultados.py, presupuesto_experimentos.py, static/exp_resultados.js, _tab_experimentos.html, exp_nuevo.html o las plantillas _exp_*."
 ---
 
-# Experimentos, decisor y tablero
+# Experimentos, decisor y centro de resultados
 
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
@@ -23,20 +23,34 @@ appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
 states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
-launch (resumable). Meta's raw errors («Meta Ads (<edge>) respondió 400: {JSON cut at 500 chars}») are stored as-is but shown through `meta_errores.explicar` (filter `error_meta`, also used by `tablero.alertas` and `lanzador.traducir_error_meta`): known codes become what to do (1885183 app in Development mode — also recognized in the already-explained text, so it re-renders in the viewer's language —, 190 reconnect, 10/200/294 permissions, 4/17/32/613 and the 80000…80014 business-use-case family (`meta_errores._LIMITE`, `es_limite`) rate limit, 368 policy block, 1/2 temporary), otherwise Meta's own `error_user_title/msg`, otherwise the code; the experiment card keeps the raw text in a folded «Detalle técnico». UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
-every piece with a public URL (`experimentos.elegibles`: Crear videos AND images, sprint
-pieces, finals; `origen`, `formato`, `en_experimentos`), the user ticks pieces and a 3-step
-form appears (where: countries + daily budget; how much: cap + days with a live count;
-review: piece × country grid, auto name «Prueba 20 sep · 3 piezas · CO, MX», "Avanzado"
-with objective/attribution/mode/URL). One `POST exp_probar` runs
-`experimentos.crear_con_piezas` (experiment + `experimento_pieza` rows in ONE transaction,
-`validar_combinacion`: a final only in its country, clones/images only in the experiment's
-countries) and enqueues `exp_lanzar` — activating is still a separate click. The old
-"+ Nuevo experimento" form is gone: `exp_crear` has no UI any more and is kept for
-tests/scripts; `exp_agregar_pieza`/`exp_meter_pieza` remain for an `armando` experiment's
-card. Crear (and the legacy "Anuncios sueltos" queue) link to `#experimentos?piezas=<pieza_id>`
-(the gallery opens with that piece ticked); Catálogo does NOT — "Crear experimento" on a
-product redirects with `?exp_nombre=&exp_destino=`, which step 3 prefills. Images are real
+launch (resumable). Meta's raw errors («Meta Ads (<edge>) respondió 400: {JSON cut at 500 chars}») are stored as-is but shown through `meta_errores.explicar` (filter `error_meta`, also used by `tablero.alertas` and `lanzador.traducir_error_meta`): known codes become what to do (1885183 app in Development mode — also recognized in the already-explained text, so it re-renders in the viewer's language —, 190 reconnect, 10/200/294 permissions, 4/17/32/613 and the 80000…80014 business-use-case family (`meta_errores._LIMITE`, `es_limite`) rate limit, 368 policy block, 1/2 temporary), otherwise Meta's own `error_user_title/msg`, otherwise the code; the experiment card keeps the raw text in a folded «Detalle técnico». UI de Experimentos («la galería primero», 2026-09-20; movida a su propia página el 2026-10-03, E2): la pestaña abre con
+RESULTADOS (ver «Centro de resultados» abajo) y ya no lista las piezas de Crear. «Nuevo experimento» es la ruta `exp_nuevo`
+(`exp_nuevo.html` + `_exp_probar.html`) a pantalla completa, sin menú lateral y con «← Volver a resultados»; sus estilos
+viven en `static/estilos/pantallas/experimento-nuevo.css`. El recorrido es 01 Piezas · 02 Dónde · 03 Total y días ·
+04 Revisar. El paso 1 es la galería de toda pieza con URL pública (`experimentos.elegibles`: videos e imágenes de Crear,
+piezas de sprints, finales; `origen`, `formato`, `en_experimentos`), con filtros y buscador en el navegador. El paso 2
+son países con bandera y edad. El paso 4 es la cuadrícula pieza × país, el nombre automático editable («Prueba 20 sep ·
+3 piezas · CO, MX»), «Avanzado» (objetivo, atribución, modo, URL) y el aviso de doctrina. Un solo `POST exp_probar` corre
+`experimentos.crear_con_piezas` (experimento + filas `experimento_pieza` en UNA transacción, `validar_combinacion`: una
+final solo en su país, clones e imágenes solo en los países del experimento) y encola `exp_lanzar`: activar sigue
+siendo otro clic. **El presupuesto se pide como UN total y los días** (Daniel, 2026-10-02: la pantalla vieja pedía
+diario + tope + días, respondía con un multiplicador y nunca decía cuánto iba a gastar, que roza la regla 1 de la casa).
+`presupuesto_experimentos.py` es el único lugar de la cuenta: `repartir` (diario de cada país = total × su parte de
+anuncios ÷ días, redondeado HACIA ABAJO a la unidad de la moneda, de modo que la suma por los días nunca pasa del
+total; devuelve los países bajo el mínimo y el total mínimo que lo arregla), `atajos` (Prueba rápida · Estándar ·
+Fuerte = 4× / 8× / 15× el mínimo diario por anuncio durante 4 / 7 / 10 días; son una «Sugerencia», no el precio de un
+proveedor), `validar` (la comprobación del servidor, que no se fía del navegador) y `PRESUPUESTO_MINIMO_DIARIO` (que
+`dashboard.py` importa de ahí); `static/presupuesto_exp.js` es su espejo para pintar al instante y
+`tests/test_presupuesto_experimentos.py` corre los dos con los mismos casos (prueba de paridad, como el editor). El POST
+no cambió (`presupuesto_<país>`, `tope_total` = el total, `dias`…), y el servidor rechaza un reparto cuya suma × días
+supere el total × 1,01 (el 1 % es el margen por redondeo): así «Máximo que puede gastar» es verdad aunque alguien arme el
+POST a mano. El titular dice **«Máximo que puede gastar» solo cuando Meta recibe `spend_cap`** (total ≥
+`lanzador.minimo_tope_campana(moneda)`); con un total menor dice «Presupuesto planeado» y una línea de que Meta no pone un
+tope duro y que el límite lo dan los diarios por país y la fecha de cierre (ronda 1 de R4, 2026-10-03: decir «máximo»
+sin tope duro prometía de más). Los días cuentan desde la PRIMERA activación, no desde el lanzamiento (ver PND-039/044/113
+al final). Llegadas a la página: Crear, Final edition, los anuncios sueltos y «Probar en otro experimento» del panel de
+una pieza enlazan a `exp_nuevo?piezas=<pieza_id>` (la pieza llega marcada); un hash viejo `#experimentos?piezas=` salta ahí
+por JS; Catálogo › «Crear experimento» redirige a `exp_nuevo?exp_nombre=&exp_destino=`, que el paso 4 trae puestos. Images are real
 Meta ads (`crear_creative_imagen`, no video upload); the decisor skips ThruPlay for them
 (`contexto["es_imagen"]`), never asks `derivar`/`rescatar` on one (a winner only scales, a
 loser is only paused — `derivaciones` refuses image sessions), and they never enter the
@@ -75,35 +89,89 @@ error_lanzamiento) go by SMTP when `SMTP_HOST` is set and the project has a
 
 There is also NO Campañas tab any more: `_tab_ads.html` is gone, `nueva_campana`/`publicar_ad`
 are no-ops that flash and redirect, and the legacy "Anuncios sueltos" (Forja's ads) render
-read-only inside Experimentos (`_anuncios_sueltos.html`: KPIs, pausar/activar, actualizar).
-The decisor's default rules (`cfg_reglas`) are edited in Experimentos ("Reglas del motor"),
-not in Configuración.
+read-only inside the centro de resultados, plegados en su «Historial» (`_anuncios_sueltos.html`: KPIs, pausar/activar,
+actualizar). Las reglas por defecto del decisor (`cfg_reglas`) se editan en el cajón **«Cómo decide el motor»** del
+armazón de la pestaña (`#reglas-motor`; antes «Reglas del motor», no en Configuración) y cada experimento puede cambiar
+una en su propia gestión (`exp_reglas`). Se muestran en palabras, sin claves de código (spec §4.7, 2026-10-03):
+`decisor.ETIQUETAS` da la frase de cada regla (`N_` + `|traducir` en la plantilla) y `decisor.GRUPOS_REGLAS` las agrupa
+en cuatro `<fieldset>` («Antes de juzgar una pieza» · «Cuándo pierde por tráfico» · «Cuándo gana o pierde por ventas» ·
+«Qué hace con una ganadora»); toda clave de `REGLAS_DEFECTO` está en UN solo grupo y una prueba lo exige (una que falte
+no se vería). `_form_reglas.html` es el mismo formulario: los `name` de los campos son las claves de `REGLAS_DEFECTO`, y
+`cfg_reglas`/`exp_reglas` no cambiaron.
 
-**Tablero y OUTCOME_SALES** (`tablero.py`): the first tab. Every figure is a **delta of
-cumulative snapshots** (`metrica_snapshot` stores Meta's lifetime totals per ad, so a period
-is `valor_en(hasta) − valor_en(desde)`, negatives truncated to 0) grouped by account
-currency; revenue only counts snapshots attributed by Meta Pixel, store, or Triple Whale
-(`tablero.FUENTES_VENTAS`). `tablero.contexto`
-loads each piece's snapshots once (bounded by `experimentos.snapshots(ep_id, desde=)`, which
-also returns the last row before the window) and derives the tiles, the 30-day
-series and the top-5 winners (the alerts are no longer part of `_calcular_tablero` since 2026-10-02: the Tablero shows ONE line, «N alertas necesitan tu atención → Ver Alertas», and the list lives in the Alertas tab, whose `alertas.py` still reads `tablero.alertas` — skill `alertas`; changing a `tipo` or the numbers in an alert's text changes its dismissal huella). Since 2026-10-01 (pedido de Daniel) the tiles are the
-**total since the start** (`resumen_total`: a piece's total is its latest snapshot, already in the
-loaded window, so nothing is re-read; `resumen_total_triple_whale`; generation from
-`gastos.resumen_total`) and below them the **«Mes a mes»** table (`mes_a_mes`: one row per month,
-newest first, from the first month with ad spend or generation, a row per currency, generation only
-on the first; the month-end snapshots come from ONE query, `_cierres_de_mes`, ROW_NUMBER per piece
-and month, where a snapshot taken exactly at 00:00 of day 1 closes the previous month so the current
-month's row equals `resumen_mes` and the months add up to the total; generation per month from
-`gastos.por_mes`). `resumen_mes` (the month in progress) now only feeds the sidebar chip; the
-«Tu tienda según Triple Whale» block and the CSV are still the current month.
-`dashboard._contexto_tablero` caches it 60 s per client keyed by the latest snapshot id, the
-proposal count and the project's generation charges (count, last id, sum), and degrades part by
-part (never leaking exception text). The chart is inline SVG on a single axis (spend bars,
-revenue line, validated colorblind-safe pair). `csv_mes` escapes formula-leading cells.
-When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
-`OUTCOME_SALES`; `lanzador.lanzar` then re-checks the Pixel before touching Meta and sends
-`promoted_object={pixel_id, PURCHASE}` on every adset (`meta_ads/adset.py` refuses SALES
-without it). The objective is fixed at creation — Meta doesn't allow changing it.
+**Centro de resultados (E2, 2026-10-03)** (spec `docs/superpowers/specs/2026-10-02-experimentos-centro-de-resultados-design.md`;
+reemplaza la pantalla de la galería y la pestaña Tablero; no cambia el motor: lee lo que ya guardan lanzador, decisor y
+detalle de Meta). La pestaña es un **armazón** (`_tab_experimentos.html`: cabecera con «+ Nuevo experimento» y «Descargar
+CSV del mes», `_meta_conectar.html`, el cajón «Cómo decide el motor», `#cr-resultados`, el `<dialog id="cr-panel">` y los
+textos del JS en `#cr-textos`) más un **fragmento** que llega por `fetch`. El HTML de la página del proyecto ya no trae las
+piezas elegibles, el tablero ni la gestión de cada experimento (la regla de `ui`: lo pesado llega por fragmento; lo que
+la página todavía calcula sin pintar, PND-137). El
+Tablero dejó de ser pestaña: `resolver('tablero')` de `cliente.html` abre Experimentos, y el hash `#tablero` o `#ads` también.
+- **Rutas** (las tres GET y solo leen: nada gasta ni publica; el acceso lo decide `_guard_por_cliente`): `exp_resultados`
+  (`/cliente/<c>/experimentos/resultados`, fragmento `_exp_resultados.html`; con `?exp=<id>` suma la gestión
+  `_exp_gestionar.html`; trae `elegibles_exp` solo cuando algo del fragmento las pinta: el «Agregar pieza» de un experimento en
+  armado o un anuncio suelto en cola), `exp_pieza` (`/experimentos/pieza/<ep_id>`, panel `_exp_pieza.html`; una pieza de
+  otro proyecto o que no existe es 404 porque `resultados.pieza` solo busca entre las del `cliente`) y `exp_nuevo`
+  (`/experimentos/nuevo`, el MISMO URL que el POST `exp_crear`, otro método). Las acciones POST de un experimento
+  redirigen a `#experimentos?exp=<id>` (`_volver_exp(cliente, eid)`; sin id, a `#experimentos`) para no perder la selección.
+- **Cliente** (`static/exp_resultados.js`, ES5, pasa `node --check`): el filtro vive en el hash
+  `#experimentos?exp=&dias=&pais=&pieza=&tipo=&moneda=`, así un enlace o un recargar lo conserva; al abrir la pestaña o
+  cambiar el filtro pide el fragmento (solo gana el último pedido; una redirección, p. ej. sesión vencida, no se pinta como
+  fragmento) y dibuja SVG desde los atributos `data-cr-*` y el JSON de `#cr-datos` / `.cr-datos-pieza` (barras + línea, curvas
+  mínimas, dona, retención, embudo), solo con `textContent`/`setAttribute`. Un `?exp=<id>` viejo de la dirección pasa UNA vez
+  al hash (`consumirExpViejo`: si se releyera, el filtro no se podría quitar).
+- **`resultados.py`** (puro: no llama a Meta ni a Claude, cero costo): `Filtro` (inmutable; `dias` 14 por defecto,
+  `experimento_id`, `pais`, `ep_id`, `tipo`, `moneda`), `filtro_de(request.args)` (lo inválido vale el defecto, nunca un
+  error), `a_query(filtro, **cambios)` (la query de un enlace: solo lo que difiere del defecto, `None` quita), `periodo`
+  (7 · 14 · 30 · 90 días o 0 = desde el inicio; se compara con el periodo anterior de igual largo, salvo desde el inicio;
+  el tope de 180 días solo recorta lo que se DIBUJA, los totales suman todo), `cargar(cliente, filtro)` → `Carga` y
+  `contexto(cliente, filtro)` → el dict que pinta el fragmento (más `datos_graficos`, JSON). No tiene caché propia; la de
+  60 s es la de `dashboard._contexto_tablero`.
+- **De dónde sale cada número**: el DINERO (gasto, compras, ingresos, ROAS, costo por compra) del motor de `tablero.py` sobre
+  los datos filtrados (`tablero.filtrar`: las mismas funciones, la misma atribución), así los totales, el mes a mes y lo
+  que ya se veía cuadran; TODO lo demás (impresiones, clics, CTR, CPC, CPM, gancho, retención, embudo, desgloses) de
+  `metrica_dia` / `metrica_desglose`. Un cociente nunca mezcla fuentes. La moneda es la del experimento y nunca se convierte
+  (con más de una aparece un filtro; por defecto, la de más gasto). Trampa: `tablero._datos` recarga el proyecto ENTERO si
+  se le pide una ventana que empieza antes de `datos.desde`, y el filtro se pierde; por eso `cargar` trae desde el inicio
+  del periodo anterior (o `tablero.INICIO`) y nada pide una ventana más vieja. `metrica_dia` solo se lee con ids de pieza que
+  salen de `tablero.cargar_datos(cliente)` (aislamiento: no tiene `cliente`).
+- **Historia por pieza**, con reglas fijas y sin Claude: tramos del veredicto en el tiempo, tendencia de los últimos 5 días
+  (sube/baja/estable con ±10 %), fatiga (frecuencia ACUMULADA > 2,5 con la métrica cayendo), gancho < 25 %, el rescate
+  en curso, las causas del diagnóstico de la doctrina y «le faltan N impresiones / h más» según las reglas efectivas. La
+  métrica principal es el ROAS en un experimento OUTCOME_SALES y el CTR del enlace en los demás, siempre contra la misma del
+  experimento ENTERO (la línea punteada) aunque el filtro esconda piezas. Los veredictos tienen nombre humano (Ganadora ·
+  Perdiendo · Sin diferencia clara · Aprendiendo · Recuperándose).
+- **Embudo** (impresiones → clics en el enlace → visitas → carrito → pago → compras): la frase compara cada paso con el
+  promedio del PROPIO proyecto (`promedio_embudo`, todos sus experimentos, sin filtros ni periodo) y solo con ≥ 2
+  experimentos con impresiones: no se inventan promedios de mercado. Un paso bajo el 80 % de su promedio es «la caída». Los
+  pasos que dependen del Pixel se apagan con «requiere el Pixel».
+- **Frecuencia**: la del periodo o la pieza sale del último `metrica_snapshot` (acumulada, ponderada por impresiones) y no se
+  suma entre días: la diaria de `metrica_dia` es del día (regla (c) de «Detalle de Meta»).
+- **Consultas**: `exp_resultados` y `exp_nuevo` corren bajo `experimentos.con_lecturas_memorizadas`;
+  `tests/test_rutas_resultados.py` vigila que el fragmento no agregue consultas por pieza más allá del N+1 conocido de
+  `experimentos.cargar` (PND-134); ahí mismo están las pruebas de aislamiento (el 404 de una pieza o un experimento de otro proyecto).
+
+**`tablero.py` y OUTCOME_SALES** (el motor del dinero; desde E2 sin pestaña propia: lo pinta el centro; `tab_descargar_csv`
+sigue como botón de la cabecera). Cada cifra es un **delta de snapshots acumulados** (`metrica_snapshot` guarda los totales
+de por vida de Meta por anuncio, así que un periodo es `valor_en(hasta) − valor_en(desde)`, negativos truncados a 0)
+agrupado por moneda de la cuenta; el ingreso solo cuenta snapshots atribuidos por Pixel de Meta, tienda o Triple Whale
+(`tablero.FUENTES_VENTAS`). `tablero.cargar_datos` lee UNA vez los experimentos y la serie de cada pieza: `_piezas_con_snapshots`
+usa `experimentos.snapshots_de(ids, desde)`, DOS consultas para todas las piezas (la ventana y la última fila anterior, la
+base del delta), no dos por pieza. Siguen vivos: `resumen_total` (el total desde el inicio: el último snapshot de cada
+pieza, ya cargado; `resumen_total_triple_whale`; la generación sale de `gastos.resumen_total`), **`mes_a_mes`** (una fila por
+mes, del más nuevo al más viejo, desde el primer mes con pauta o generación, una fila por moneda y la generación solo en la
+primera; los cierres de mes salen de UNA consulta, `_cierres_de_mes`, ROW_NUMBER por pieza y mes, y un snapshot tomado a las
+00:00 del día 1 cierra el mes anterior, así la fila del mes en curso es igual a `resumen_mes` y los meses suman el total; la
+generación por mes sale de `gastos.por_mes`), `resumen_mes` (el mes en curso: alimenta el chip del menú, la fila «Tu tienda
+según Triple Whale» y el CSV), `tablero.alertas` (la lee `alertas.py`: skill `alertas`; cambiar un `tipo` o las cifras del texto
+de una alerta cambia su huella de descarte; el centro muestra UNA línea «N alertas necesitan tu atención → Ver Alertas»,
+`.cr-alertas-linea` en `_exp_resultados.html`) y la atribución. `dashboard._contexto_tablero` lo cachea 60 s por proyecto e
+idioma, con la clave del último snapshot, el conteo de propuestas y los cobros de generación del proyecto, y degrada por
+partes sin filtrar el texto de una excepción; el total y el «Mes a mes» viven en el «Historial» plegado del centro
+(`_exp_historial.html`). `csv_mes` escapa las celdas que empiezan con fórmula. Con atribución sugerida `pixel`,
+`experimentos.objetivo_sugerido` es `OUTCOME_SALES`; `lanzador.lanzar` vuelve a comprobar el Pixel antes de tocar Meta y manda
+`promoted_object={pixel_id, PURCHASE}` en cada conjunto (`meta_ads/adset.py` rechaza SALES sin él). El objetivo queda fijo al
+crear: Meta no deja cambiarlo.
 
 **Detalle de Meta** (`meta_detalle.py`, spec `2026-10-02-experimentos-centro-de-resultados` §3, E1 2026-10-02): único escritor de
 `metrica_dia` (una fila por anuncio y día: tráfico, embudo `visitas_pagina`/`carrito`/`pago_iniciado`/`compras_meta`,
