@@ -9,6 +9,7 @@ import sqlalchemy as sa
 import db
 import triple_whale_tiendas
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
+from tests.test_rutas_experimentos import _resultados
 from tests.test_triple_whale_analisis import respuesta
 from triple_whale import analisis, datos
 
@@ -262,11 +263,16 @@ def test_pausar_y_activar_van_por_el_lanzador(app, monkeypatch):  # noqa: F811
 
 
 def test_tablero_muestra_la_tienda_segun_triple_whale(app):  # noqa: F811
-    html = app["c"].get("/cliente/acme").data.decode()
-    assert "Tu tienda según Triple Whale" not in html
+    # El Tablero se fundió en Experimentos (E2): la tienda según Triple Whale sale en el historial (sección 09) del
+    # fragmento de resultados, y en la nota de «Resumen del periodo» (01) con ingresos y MER.
+    assert "Tu tienda según Triple Whale" not in _resultados(app["c"])
     _conectar()
     _sembrar()
-    html = app["c"].get("/cliente/acme").data.decode()
-    ini = html.index('id="tab-tablero"')
-    tablero = html[ini:html.index('id="tab-triplewhale"')]
-    assert "Tu tienda según Triple Whale" in tablero and "MER" in tablero and 'data-ir-tab="triplewhale"' in tablero
+    html = _resultados(app["c"])
+    historial = html[html.index("Historial mes a mes"):]
+    assert "Tu tienda según Triple Whale" in historial and "MER" in historial and 'data-ir-tab="triplewhale"' in historial
+    resumen = html[html.index('aria-labelledby="cr-s01"'):html.index('aria-labelledby="cr-s02"')]
+    assert "Tu tienda según Triple Whale" in resumen and "MER" in resumen
+    # Y la página no trae ni panel ni botón «tablero»: abre en Experimentos.
+    pagina = app["c"].get("/cliente/acme").data.decode()
+    assert 'id="tab-tablero"' not in pagina and "Tu tienda según Triple Whale" not in pagina

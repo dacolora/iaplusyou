@@ -13,7 +13,7 @@ import pytest
 
 from tests.test_experimentos_db import PAISES, _pieza
 from tests.test_rutas_bloque4 import _flashes, _seccion
-from tests.test_rutas_experimentos import _cliente_admin
+from tests.test_rutas_experimentos import _cliente_admin, _resultados
 
 META_OK = {"moneda": "COP", "page_access_token": "T-PAG", "page_id": "123", "ig_user_id": "999"}
 
@@ -66,6 +66,13 @@ def _html(app):
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
     return r.get_data(as_text=True)
+
+
+def _html_exp(app, eid=None):
+    """Experimentos (E2): la pestaña de la página es un armazón; sus propuestas (de todos los experimentos) salen en
+    «Necesita tu decisión» del fragmento `exp_resultados`, y el bloque «Publicar orgánico» de cada pieza, con sus
+    publicaciones, en la gestión del experimento elegido (`?exp=<id>`)."""
+    return _resultados(app["c"], exp=eid) if eid is not None else _resultados(app["c"])
 
 
 FORM_OK = {"plataformas": ["instagram", "facebook"], "caption_instagram": "Hola IG #a #b #c",
@@ -348,7 +355,7 @@ def test_org_reintentar_con_otra_viva_avisa_y_no_da_500(app, base_temporal):
     assert r.status_code == 302
     assert any("Ya hay una publicación en curso o publicada" in m for m in _flashes(app["c"]))
     assert org.obtener("acme", a)["estado"] == "error" and app["encolados"] == []
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app, eid)
     assert f"/organico/{a}/reintentar" not in html and "IG dijo que no" in html
     # Carrera: la viva aparece entre el chequeo y el UPDATE → ValueError de
     # organico.actualizar, no IntegrityError/500.
@@ -375,12 +382,12 @@ def test_org_reintentar_rechaza_fila_que_ya_subio(app, base_temporal):
     r = app["c"].post(f"/cliente/acme/organico/{a}/reintentar")
     assert r.status_code == 302 and org.obtener("acme", a)["estado"] == "error" and app["encolados"] == []
     assert any("ya se subió" in m and "revisa la plataforma" in m for m in _flashes(app["c"]))
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app, eid)
     assert f"/organico/{a}/reintentar" not in html and "se cortó" in html
     # Y una `publicando` con id se pinta como subida en confirmación.
     b = org.crear("acme", pid, "tiktok", "x #a #b #c")
     org.actualizar("acme", b, estado="publicando", id_externo="v_pub.7")
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app, eid)
     assert "subida, confirmando (id v_pub.7)" in html
 
 
@@ -390,7 +397,7 @@ def test_propuesta_escapa_el_caption_en_el_textarea(app, base_temporal):
     malo = "Hola </textarea><script>alert(1)</script> #a #b #c"
     _propuesta_organica(base_temporal, captions={"instagram": {"titulo": "T", "caption": malo},
                                                  "facebook": {"titulo": 'x" onfocus="alert(1)', "caption": malo}})
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app)
     assert "</textarea><script>" not in html and "&lt;/textarea&gt;&lt;script&gt;" in html
     assert 'onfocus="alert' not in html and "onfocus=&#34;alert" in html
 
@@ -410,7 +417,7 @@ def _propuesta_organica(base_temporal, captions=None):
 
 def test_propuesta_organica_renderiza_textos_editables(app, base_temporal):
     eid, pid, ep, prid = _propuesta_organica(base_temporal)
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app)
     assert "Texto IG del motor #a #b #c" in html and "Texto FB del motor" in html
     assert 'name="caption_instagram"' in html and 'name="titulo_facebook"' in html and 'value="Título FB"' in html
     assert 'name="org_form"' in html and "Aprobar y publicar" in html
@@ -476,7 +483,7 @@ def test_propuesta_sin_plataformas_ofrece_los_canales_disponibles(app, base_temp
     eid = _experimento()
     pid, ep = _pieza_en(base_temporal, eid)
     prid = propuestas.crear("acme", eid, "publicar_organico", {"ep_id": ep, "plataformas": [], "captions": {}}, "ganador")
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app)
     form = html[html.index(f"/propuestas/{prid}/aprobar"):html.index("Aprobar y publicar")]
     assert 'value="instagram"' in form and 'value="facebook"' in form and 'value="youtube"' in form
     assert 'value="tiktok"' not in form   # sin token: no disponible
@@ -492,7 +499,7 @@ def test_propuesta_sin_plataformas_ofrece_los_canales_disponibles(app, base_temp
 
 def test_propuesta_con_plataformas_suma_los_canales_nuevos_sin_marcar(app, base_temporal):
     eid, pid, ep, prid = _propuesta_organica(base_temporal)   # instagram + facebook
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app)
     form = html[html.index(f"/propuestas/{prid}/aprobar"):html.index("Aprobar y publicar")]
     ig = form[form.index('value="instagram"'):form.index('value="facebook"')]
     yt = form[form.index('value="youtube"'):]
@@ -507,7 +514,7 @@ def test_propuesta_sin_ningun_canal_dice_como_salir(app, base_temporal):
     eid = _experimento()
     pid, ep = _pieza_en(base_temporal, eid)
     prid = propuestas.crear("acme", eid, "publicar_organico", {"ep_id": ep, "plataformas": [], "captions": {}}, "ganador")
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app)
     form = html[html.index(f"/propuestas/{prid}/aprobar"):html.index("Aprobar y publicar")]
     assert 'name="plataformas"' not in form
     assert "conecta un canal en" in form and "Canales orgánicos" in form and "para poder aprobarla" in form
@@ -545,7 +552,7 @@ def test_experimentos_muestra_bloque_publicar_y_publicaciones(app, base_temporal
     org.actualizar("acme", ok, estado="publicada", url="https://www.facebook.com/777", publicado_en="2026-09-18T10:00:00")
     mal = org.crear("acme", pid, "youtube", "falló #a #b #c")
     org.actualizar("acme", mal, estado="error", error="YouTube dijo que no")
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app, eid)
     assert "Publicar orgánico" in html and "/cliente/acme/organico/publicar" in html
     assert f'name="ep_id" value="{ep}"' in html and f'name="pieza_id" value="{pid}"' in html
     assert 'href="https://www.facebook.com/777"' in html and "YouTube dijo que no" in html
@@ -566,7 +573,7 @@ def test_experimentos_bloque_youtube_en_error_sigue_disponible(app, base_tempora
     org = app["organico"]
     mal = org.crear("acme", pid, "youtube", "falló #a #b #c")
     org.actualizar("acme", mal, estado="error", error="no")
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app, eid)
     assert 'name="titulo_youtube"' in html and 'name="caption_youtube"' in html
 
 
@@ -575,10 +582,12 @@ def test_experimentos_muestra_barra_si_hay_trabajo(app, base_temporal, monkeypat
     pid, ep = _pieza_en(base_temporal, eid)
     app["organico"].crear("acme", pid, "facebook", "x #a #b #c")
     monkeypatch.setattr(app["dashboard"].cola, "job_ids_vivos", lambda c, tipo: {f"acme__pieza{pid}__organico"} if tipo == "organico_publicar" else set())
-    html = _seccion(_html(app), "experimentos")
+    html = _html_exp(app, eid)
     # Minor #4: el id lleva el sitio para no chocar con la misma barra en Crear.
     assert f'id="trabajo-acme__pieza{pid}__organico-experimentos"' in html
-    assert f'iniciarPolling("acme__pieza{pid}__organico", "trabajo-acme__pieza{pid}__organico-experimentos")' in html
+    # E2: la barra se arranca por su `data-poll-job` (ya no hay `<script>` con `iniciarPolling(...)` en el fragmento,
+    # que llega por fetch y no ejecuta scripts: tras pintarlo, `static/exp_resultados.js` llama a `arrancarSondeos`).
+    assert f'data-poll-job="acme__pieza{pid}__organico"' in html and "iniciarPolling(" not in html
     assert f'id="trabajo-acme__pieza{pid}__organico"' not in html
     assert 'name="caption_facebook"' not in html   # mientras publica no hay formulario
 
@@ -633,8 +642,9 @@ def test_tablero_alerta_ganadora_sin_publicar_y_tile(app, base_temporal, monkeyp
     assert "sin publicar orgánicamente" in al[0]["texto"]
     assert ctx["resumen"]["ganadoras_publicadas"] == 0
     pagina = _html(app)
-    # El tile sigue en el Tablero; la alerta vive en la pestaña Alertas (spec alertas §7).
-    assert "Ganadoras publicadas" in _seccion(pagina, "tablero")
+    # El tile sigue en el Tablero, que se fundió en el historial de Experimentos (E2); la alerta vive en la pestaña
+    # Alertas (spec alertas §7).
+    assert "Ganadoras publicadas" in _html_exp(app) and "Ganadoras publicadas" not in pagina
     assert "sin publicar orgánicamente" in _seccion(pagina, "alertas")
     # Publicada este mes → tile 1 y sin alerta.
     org = app["organico"]
@@ -645,7 +655,7 @@ def test_tablero_alerta_ganadora_sin_publicar_y_tile(app, base_temporal, monkeyp
     assert not [a for a in ctx["alertas"] if a["tipo"] == "ganador_sin_publicar"]
     pagina = _html(app)
     assert "sin publicar orgánicamente" not in _seccion(pagina, "alertas")
-    html = _seccion(pagina, "tablero")
+    html = _html_exp(app)
     tile = html[html.index("Ganadoras publicadas"):]
     assert "<strong>1</strong>" in tile[:200]
     # Minor #2: la misma ganadora en otra plataforma sigue contando 1 (ganadoras, no publicaciones).
@@ -657,7 +667,7 @@ def test_tablero_alerta_ganadora_sin_publicar_y_tile(app, base_temporal, monkeyp
     org.actualizar("acme", pub_fb, publicado_en="2026-08-17T10:00:00")
     ctx = tablero.contexto("acme")
     assert ctx["resumen"]["ganadoras_publicadas"] == 0 and ctx["total"]["ganadoras_publicadas"] == 1
-    tile = _seccion(_html(app), "tablero")
+    tile = _html_exp(app)
     tile = tile[tile.index("Ganadoras publicadas"):]
     assert "<strong>1</strong>" in tile[:200] and "orgánicas desde el inicio" in tile[:300]
 
@@ -715,6 +725,9 @@ def test_rutas_organico_rechazan_cliente_cruzado(app, base_temporal):
 def test_boton_escribir_texto_con_ia_muestra_precio(app, base_temporal):
     """Task 3: precio a la vista antes de gastar — «Escribir texto con IA ≈ US$ 0,01»."""
     eid = _experimento()
-    _pieza_en(base_temporal, eid)
-    html = _seccion(_html(app), "experimentos")
+    _pid, ep = _pieza_en(base_temporal, eid)
+    html = _html_exp(app, eid)
     assert "Escribir texto con IA ≈ US$ 0,01</button>" in html
+    # El panel de la pieza (`exp_pieza`, E2) trae el mismo bloque y el mismo precio a la vista.
+    panel = app["c"].get(f"/cliente/acme/experimentos/pieza/{ep}", headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
+    assert "Escribir texto con IA ≈ US$ 0,01</button>" in panel

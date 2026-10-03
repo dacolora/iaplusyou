@@ -6,7 +6,7 @@ acciones.ejecutar (que toca Meta) se reemplaza por un fake."""
 import pytest
 
 from tests.test_experimentos_db import PAISES, _pieza
-from tests.test_rutas_experimentos import _cliente_admin
+from tests.test_rutas_experimentos import _cliente_admin, _resultados
 
 
 @pytest.fixture()
@@ -234,8 +234,14 @@ def test_render_pestana_con_propuesta_y_veredicto(app, base_temporal):
     ex.actualizar("acme", eid, reglas={"ctr_min": 1.7}, estado="corriendo", meta_campaign_id="c1")
     propuestas.crear("acme", eid, "escalar", {"pais": "CO", "ep_id": ep}, "ganador en CO")
     r = app["c"].get("/cliente/acme")
-    html = r.data.decode()
+    pagina = r.data.decode()
     assert r.status_code == 200
+    # E2: la pestaña de la página es un armazón; lo de cada experimento llega en el fragmento de resultados. La
+    # propuesta pendiente sale en «Necesita tu decisión» (sin elegir experimento); la gestión, con `?exp=<id>`.
+    assert 'id="cr-resultados"' in _seccion(pagina, "experimentos")
+    decision = _resultados(app["c"])
+    assert "Aprobar" in decision and "Aprobar todo lo pendiente" in decision and "ganador en CO" in decision
+    html = _resultados(app["c"], exp=eid)
     assert "Aprobar" in html and "Aprobar todo lo pendiente" in html
     assert "veredicto-ganador" in html and "CTR 2.1% sobre el mínimo" in html
     assert "Escalón 2/3" in html
@@ -244,8 +250,9 @@ def test_render_pestana_con_propuesta_y_veredicto(app, base_temporal):
     assert 'value="1.7"' in html   # override propio de ctr_min
     assert 'id="exp-%d"' % eid in html
     # Reglas del motor: formulario (prefijo cfg → cfg_reglas) dentro de
-    # Experimentos, y ni rastro en Configuración, que solo enlaza.
-    exp, cfg = _seccion(html, "experimentos"), _seccion(html, "settings")
+    # Experimentos (en su armazón, para que el enlace de Configuración lo
+    # encuentre sin esperar al fetch), y ni rastro en Configuración, que solo enlaza.
+    exp, cfg = _seccion(pagina, "experimentos"), _seccion(pagina, "settings")
     assert "Reglas del motor (valen para todos los experimentos)" in exp
     assert "/cliente/acme/config/reglas" in exp and 'id="cfg-ctr_min"' in exp
     assert "/cliente/acme/config/reglas" not in cfg and 'id="cfg-ctr_min"' not in cfg
@@ -266,7 +273,7 @@ def test_tab_lista_las_piezas_de_una_propuesta_activar(app, base_temporal):
     ep_co, ep_mx = [p["id"] for p in ex.piezas("acme", eid)]
     ex.actualizar("acme", eid, estado="pausado", meta_campaign_id="c1")
     propuestas.crear("acme", eid, "activar", {"ep_ids": [ep_co, ep_mx]}, "derivación d1 lista: 2 pieza(s) nueva(s)")
-    html = app["c"].get("/cliente/acme").data.decode()
+    html = _resultados(app["c"])
     assert "Final es_CO (CO), Final es_MX (MX)" in html
     assert "derivación d1 lista" in html
 
@@ -283,7 +290,7 @@ def test_propuesta_muestra_precio_estimado(app, base_temporal):
     propuestas.crear("acme", eid, "derivar", {"ep_id": ep, "precio_estimado": {"usd": 1.234, "texto": "US$ 1,23 aprox."}}, "ganador")
     propuestas.crear("acme", eid, "rescatar", {"ep_id": ep, "precio_estimado": {"usd": None, "texto": "precio no disponible"}}, "perdedor")
     propuestas.crear("acme", eid, "pausar", {"ep_id": ep}, "CTR bajo")
-    html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "experimentos")
+    html = _resultados(app["c"])
     props = html[html.index("Propuestas pendientes (3)"):]
     derivar = props[props.index('exp-propuesta-derivar'):props.index("</li>", props.index('exp-propuesta-derivar'))]
     assert 'class="exp-propuesta-precio"' in derivar and "≈ US$ 1,23" in derivar and "aprox." not in derivar

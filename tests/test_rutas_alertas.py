@@ -9,6 +9,7 @@ import re
 import pytest
 
 import idiomas
+from tests.test_rutas_experimentos import _resultados
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 H64 = "a" * 64
@@ -174,8 +175,11 @@ def test_si_el_calculo_revienta_la_pagina_sale_sin_alertas(app, monkeypatch, cap
     html = _html(app["c"])
     assert "SECRETO" not in html and "sidebar-burbuja" not in html
     assert "No se pudieron calcular las alertas" in _tab(html)
-    tablero = html[html.index('<section id="tab-tablero"'):html.index('<section id="tab-alertas"')]
-    assert "No se pudo calcular las alertas" in tablero
+    # El Tablero se fundió en Experimentos (E2): su línea de alertas vive en «Necesita tu decisión» del fragmento de
+    # resultados, que también sale sin alertas, con el aviso, y sin arrastrar el token del error.
+    fragmento = _resultados(app["c"])
+    assert "No se pudo calcular las alertas" in fragmento and "cr-alertas-linea" in fragmento
+    assert "SECRETO" not in fragmento
     salida = capsys.readouterr().out
     assert "[aviso] Alertas de acme: RuntimeError" in salida and "SECRETO" not in salida
 
@@ -493,7 +497,7 @@ def test_pestana_pinta_grupos_resumen_botones_y_descartar(app, monkeypatch):
                 ancla="llave-wavespeed", solo_admin=True),
         _alerta(app, "proyecto:guia_marca", "atencion", "faltantes", "El proyecto no tiene guía de marca", ancla="config-marca"),
         _alerta(app, "tablero:propuestas_pendientes:7", "atencion", "decision", "«X» tiene 2 propuestas del motor",
-                tab="experimentos", url="?exp=7#experimentos", entidad=7),
+                tab="experimentos", url="#experimentos?exp=7", entidad=7),
         _alerta(app, "crear:error:cf_1", "atencion", "fallos", "Falló «Sandalia» en Crear", tab="creativeflowplus",
                 ancla="cf-cf_1"),
         _alerta(app, "proyecto:logo", "info", "faltantes", "Sin logos oficiales", ancla="config-logos"),
@@ -501,8 +505,9 @@ def test_pestana_pinta_grupos_resumen_botones_y_descartar(app, monkeypatch):
     _fijas(app, monkeypatch, lista)
     html = _html(app["c"])
     tab = _tab(html)
-    # Panel justo después del Tablero y antes de Configuración (los tests de Configuración recortan desde ahí).
-    assert html.index('<section id="tab-tablero"') < html.index('<section id="tab-alertas"') \
+    # Panel justo después de Experimentos (el primero; ahí se fundió el Tablero) y antes de Configuración (los tests de
+    # Configuración recortan desde ahí).
+    assert html.index('<section id="tab-experimentos"') < html.index('<section id="tab-alertas"') \
         < html.index('<section id="tab-triplewhale"') < html.index('<section id="tab-settings"')
     assert "<h2>Alertas</h2>" in tab and 'class="panel-cabecera-desc"' in tab
     assert "1 bloquea · 3 piden atención · 1 informativa" in tab
@@ -518,7 +523,7 @@ def test_pestana_pinta_grupos_resumen_botones_y_descartar(app, monkeypatch):
     assert "Falta la llave de WaveSpeed" in tab and "Detalle de prueba." in tab
     # «Ir a …»: pestaña + ancla, o la URL tal cual.
     assert 'href="#settings" data-ir-tab="settings" data-ancla="llave-wavespeed">Ir a Configuración →' in tab
-    assert 'href="?exp=7#experimentos">Ir a Experimentos →' in tab
+    assert 'href="#experimentos?exp=7">Ir a Experimentos →' in tab
     assert 'href="#creativeflowplus" data-ir-tab="creativeflowplus" data-ancla="cf-cf_1">Ir a Crear →' in tab
     # Un form de descartar por alerta con su clave y su huella.
     assert tab.count('action="/cliente/acme/alertas/descartar"') == 5
@@ -574,7 +579,8 @@ def test_un_cliente_no_ve_las_alertas_solo_admin(app, monkeypatch):
 def test_burbuja_del_sidebar_roja_ambar_u_oculta(app, monkeypatch):
     _fijas(app, monkeypatch, [_alerta(app, "llave:r2", "bloquea", "puesta_a_punto"), _alerta(app, "proyecto:logo", "info")])
     sb = _sidebar(_html(app["c"]))
-    assert sb.index('data-tab="tablero"') < sb.index('data-tab="alertas"') < sb.index('data-tab="triplewhale"')
+    assert sb.index('data-tab="experimentos"') < sb.index('data-tab="alertas"') < sb.index('data-tab="triplewhale"')
+    assert 'data-tab="tablero"' not in sb
     item = sb[sb.index('data-tab="alertas"'):sb.index('data-tab="triplewhale"')]
     assert re.search(r'<span class="sidebar-burbuja bloquea"[^>]*>2</span>', item)
     _fijas(app, monkeypatch, [_alerta(app, "proyecto:logo", "info")])
@@ -601,10 +607,13 @@ def test_navegacion_con_ancla_vive_una_vez_en_cliente_html(app, monkeypatch):
     _fijas(app, monkeypatch, [])
     html = _html(app["c"])
     assert "alertas: document.getElementById('tab-alertas')" in html
-    assert html.count("#tab-tablero [data-ir-tab], #tab-alertas [data-ir-tab]") == 1
+    assert html.count("#tab-experimentos [data-ir-tab], #tab-alertas [data-ir-tab]") == 1
+    assert "#tab-tablero" not in html
     assert "a.dataset.ancla" in html and "scrollIntoView" in html and "window.irAConfig(ancla)" in html
-    tablero = html[html.index('<section id="tab-tablero"'):html.index('<section id="tab-alertas"')]
-    assert "<script" not in tablero                   # el script viejo del Tablero se fue
+    experimentos = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-alertas"')]
+    # El script viejo del Tablero se fue: el panel de Experimentos solo trae JSON de textos y su archivo JS.
+    scripts = re.findall(r"<script\b[^>]*>", experimentos)
+    assert scripts and all('type="application/json"' in s or " src=" in s for s in scripts)
 
 
 def _anclas_de_alertas():

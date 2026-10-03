@@ -23,14 +23,18 @@ def test_pnd031_enlaces_cierran_antes_de_cambiar(app):
 
 
 def test_pnd044_conserva_desmarcadas_y_cuenta_cero(app):
-    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    # La cuadrícula de «Probar en Meta» vive en «Nuevo experimento» (E2: su propia ruta, ya no la pestaña).
+    html = app['c'].get('/cliente/acme/experimentos/nuevo').get_data(as_text=True)
     code = html.split('    var MESES =', 1)[1].split("    abrir.addEventListener", 1)[0]
     node(r"""
 const assert=require('assert');
 let checks=[], selected=[{value:'1',checked:true,dataset:{nombre:'a'}},{value:'2',checked:true,dataset:{nombre:'b'}}];
 const marcadas=()=>selected, paises=[{value:'CO',checked:true}], nombre=null, cuenta={};
-const moneda='COP', form={querySelector:()=>({value:'1'}),querySelectorAll:()=>[]};
-const document={getElementById:()=>({}),createElement:()=>({innerHTML:'a'})};
+const moneda='COP', minimo=1000, form={querySelector:()=>({value:'1'}),querySelectorAll:()=>[]};
+// «Total + días» (E3 adelantado): el trozo también arma el reparto del presupuesto (sus campos salen de `form` y
+// `document`); lo que declara antes de `MESES` y lo que define después de `abrir` va aquí.
+const pasoVisible=()=>3;
+const document={getElementById:()=>({addEventListener:()=>{}}),createElement:()=>({innerHTML:'a'}),documentElement:{lang:'es'}};
 const cuadricula={querySelectorAll:s=>s.includes(':checked')?checks.filter(c=>c.checked):checks,
 set innerHTML(h){checks=[...h.matchAll(/name="combinaciones" value="([^"]+)"([^>]*)/g)].map(m=>({value:m[1],checked:m[2].includes('checked'),addEventListener:()=>{}}));}};
 var MESES = """ + code + r"""

@@ -14,6 +14,16 @@ def _cliente_admin(dashboard):
     return c
 
 
+def _resultados(c, cliente="acme", **filtro):
+    """El centro de resultados de Experimentos (E2): la pestaña de la página es solo un armazón y su contenido
+    (propuestas, gestión de un experimento, aprendizajes, anuncios sueltos, historial) llega por fetch de
+    `exp_resultados`, igual que lo pide `static/exp_resultados.js`. `filtro` es lo que va tras `#experimentos?`
+    (`exp=<id>` suma la gestión de ese experimento)."""
+    r = c.get(f"/cliente/{cliente}/experimentos/resultados", query_string=filtro, headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200
+    return r.get_data(as_text=True)
+
+
 @pytest.fixture()
 def app(base_temporal, monkeypatch):
     import dashboard
@@ -188,9 +198,14 @@ def test_estado_presupuesto_refrescar_cerrar(app, base_temporal, monkeypatch):
 
 def test_ver_cliente_incluye_experimentos(app, base_temporal):
     import experimentos as ex
-    ex.crear("acme", "Visible", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    eid = ex.crear("acme", "Visible", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.agregar_pieza("acme", eid, _pieza(base_temporal), "CO")
     r = app["c"].get("/cliente/acme")
-    assert r.status_code == 200 and b"Visible" in r.data and b"Experimentos" in r.data
+    # E2: la página trae el armazón (su contenido llega por fetch de exp_resultados) y el fragmento trae el experimento
+    # (su tarjeta en la sección 07 y, con `exp=<id>`, su gestión).
+    assert r.status_code == 200 and b"Experimentos" in r.data and b'id="cr-resultados"' in r.data
+    assert b"/cliente/acme/experimentos/resultados" in r.data
+    assert "Visible" in _resultados(app["c"]) and "Visible" in _resultados(app["c"], exp=eid)
 
 
 def test_reconciliar_lanzando_huerfano(app, base_temporal):
@@ -211,6 +226,10 @@ def test_ver_cliente_pasa_contexto_experimentos(app, base_temporal, monkeypatch)
     eid_armando = ex.crear("acme", "Armando", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
     eid_lanzando = ex.crear("acme", "Lanzando", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
     ex.actualizar("acme", eid_lanzando, estado="lanzando")
+    # Un anuncio suelto en cola ofrece «Meter en experimento» con las piezas elegibles, pero en el fragmento de
+    # resultados: ni así viajan en la página del proyecto (su pestaña Experimentos es un armazón).
+    import ads
+    ads.crear("acme", "flowplus", "cf_7", "https://r2/cola.mp4", "video", "En cola")
     job_id = d.tareas_exp.job_id_lanzar("acme", eid_lanzando)
     monkeypatch.setattr(d.trabajos, "en_curso", lambda jid: jid == job_id)
     capturado = {}
@@ -322,9 +341,11 @@ def test_sidebar_sin_campanas_y_sin_tab_ads(app, base_temporal):
     assert r.status_code == 200
     assert 'data-tab="ads"' not in cuerpo and 'id="tab-ads"' not in cuerpo
     assert "+ Nueva campaña" not in cuerpo and "Listos para publicar" not in cuerpo
-    # Sin anuncios sueltos, el bloque ni se pinta.
-    assert "Anuncios sueltos (anteriores)" not in cuerpo
-    assert "Un experimento con una pieza y un país es un anuncio" in cuerpo
+    # Sin anuncios sueltos, el bloque ni se pinta (ni en la página ni en el fragmento de resultados).
+    assert "Anuncios sueltos (anteriores)" not in cuerpo and "Anuncios sueltos (anteriores)" not in _resultados(app["c"])
+    # El copy que reemplaza a Campañas vive en «Nuevo experimento» (E2: la galería salió de la pestaña).
+    nuevo = app["c"].get("/cliente/acme/experimentos/nuevo").data.decode("utf-8")
+    assert "Un experimento con una pieza y un país es un anuncio" in nuevo
 
 
 def test_experimentos_muestra_anuncio_suelto_con_kpis_y_botones(app, base_temporal):
@@ -334,10 +355,10 @@ def test_experimentos_muestra_anuncio_suelto_con_kpis_y_botones(app, base_tempor
                    meta_ids={"campaign_id": "c1", "adset_id": "s1", "ad_id": "a1", "creative_id": "cr1"},
                    metricas={"impresiones": 1234, "clics": 56, "ctr": 4.54, "cpc": 321.0, "gasto_usd": 18000.0,
                              "estado_meta_texto": "Activo", "motivo_rechazo": "Texto con demasiadas mayúsculas"})
-    r = app["c"].get("/cliente/acme")
-    cuerpo = r.data.decode("utf-8")
-    assert r.status_code == 200
-    assert "Anuncios sueltos (anteriores)" in cuerpo
+    # E2: los anuncios sueltos van en el historial (sección 09) del fragmento de resultados, plegados.
+    assert app["c"].get("/cliente/acme").status_code == 200
+    cuerpo = _resultados(app["c"])
+    assert "Anuncios sueltos (de antes)" in cuerpo and "Anuncios sueltos (anteriores)" in cuerpo
     assert "Venían de la pestaña Campañas" in cuerpo
     assert "Anuncio viejo" in cuerpo and "flowplus" in cuerpo
     assert "<strong>1234</strong>" in cuerpo and "<strong>56</strong>" in cuerpo
@@ -356,7 +377,7 @@ def test_anuncio_suelto_pausado_activa_con_confirm_y_error_reintenta(app, base_t
     ads.actualizar("acme", pausado, estado="pausado", meta_ids={"campaign_id": "c1", "adset_id": "s1", "ad_id": "a1"})
     roto = ads.crear("acme", "idea_visual", "b_1", "https://r2/e.mp4", "video", "Roto")
     ads.actualizar("acme", roto, estado="error", error="Meta dijo que no.")
-    cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
+    cuerpo = _resultados(app["c"])
     assert ">Activar</button>" in cuerpo and "empieza a gastar presupuesto real" in cuerpo
     assert f"/cliente/acme/ads/{roto}/reintentar" in cuerpo and "Volver a intentar" in cuerpo
     assert "Meta dijo que no." in cuerpo
@@ -370,7 +391,7 @@ def test_anuncio_suelto_en_cola_ofrece_meter_en_experimento(app, base_temporal):
     import experimentos as ex
     pid = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_7", url="https://r2/cola.mp4")
     aid = ads.crear("acme", "flowplus", "cf_7", "https://r2/cola.mp4", "video", "En cola")
-    cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
+    cuerpo = _resultados(app["c"])
     assert "Piezas que estaban listas para publicar (1)" in cuerpo
     assert "Ahora esto se hace con un experimento" in cuerpo
     assert ">Meter en experimento</button>" not in cuerpo  # sin experimento en armado no hay adónde meterla
@@ -380,7 +401,7 @@ def test_anuncio_suelto_en_cola_ofrece_meter_en_experimento(app, base_temporal):
     assert f"/cliente/acme/ads/{aid}/eliminar" in cuerpo
 
     eid = ex.crear("acme", "Armando", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
-    cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
+    cuerpo = _resultados(app["c"])
     assert ">Meter en experimento</button>" in cuerpo
     assert 'name="legado_id" value="cf_7"' in cuerpo and 'name="volver" value="experimentos"' in cuerpo
     assert f'<option value="{eid}">Armando</option>' in cuerpo
@@ -397,7 +418,7 @@ def test_anuncio_suelto_en_cola_sin_pieza_en_crear(app, base_temporal):
     import experimentos as ex
     ex.crear("acme", "Armando", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
     ads.crear("acme", "flowplus", "cf_x", "https://r2/no-existe.mp4", "video", "Huérfano")
-    cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
+    cuerpo = _resultados(app["c"])
     assert "Huérfano" in cuerpo and ">Meter en experimento</button>" not in cuerpo
     assert "Esta pieza ya no está en Crear" in cuerpo
 
@@ -491,13 +512,13 @@ def test_aprendizajes_se_agregan_se_ven_y_se_quitan(app, tmp_path, monkeypatch):
     import proyectos
     monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
     c = app["c"]
-    html = c.get("/cliente/acme").get_data(as_text=True)
+    html = _resultados(c)   # E2: sección 08 del fragmento de resultados
     assert "Aprendizajes del proyecto" in html and "Todavía no hay aprendizajes" in html
     r = c.post("/cliente/acme/aprendizajes", data={"texto": "En MX el precio en el gancho baja el CTR"})
     assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos")
     lista = proyectos.aprendizajes("acme")
     assert len(lista) == 1 and lista[0]["origen"] == "manual"
-    html = c.get("/cliente/acme").get_data(as_text=True)
+    html = _resultados(c)
     assert "En MX el precio en el gancho baja el CTR" in html and f"/aprendizajes/{lista[0]['id']}/quitar" in html
     assert c.post("/cliente/acme/aprendizajes", data={"texto": "   "}).status_code == 302
     assert len(proyectos.aprendizajes("acme")) == 1
@@ -516,7 +537,7 @@ def test_la_fila_de_una_perdedora_muestra_su_diagnostico(app, base_temporal):
     ex.actualizar_pieza("acme", ep, veredicto="perdedor", veredicto_motivo="m")
     ex.marcar_pieza("acme", ep, diagnostico={"causas": [{"codigo": "sin_urgencia", "detalle": "no aprieta", "evidencia": "CTR 0,4 %"}],
                                              "siguiente": {"que": "oferta", "porque": "hay que dar un motivo"}})
-    html = c.get("/cliente/acme").get_data(as_text=True)
+    html = _resultados(c, exp=eid)   # el diagnóstico va en la fila de la pieza, dentro de la gestión del experimento
     assert "sin urgencia en el deseo" in html and "Siguiente: revisar la oferta — hay que dar un motivo" in html and "#diagnosticar" in html
     ex.marcar_pieza("acme", ep, diagnostico={"error": "Claude no devolvió JSON."})
-    assert "El diagnóstico no se pudo hacer: Claude no devolvió JSON." in c.get("/cliente/acme").get_data(as_text=True)
+    assert "El diagnóstico no se pudo hacer: Claude no devolvió JSON." in _resultados(c, exp=eid)

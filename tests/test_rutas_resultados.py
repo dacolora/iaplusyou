@@ -59,7 +59,7 @@ def test_resultados_pinta_las_secciones_y_lo_que_necesita_decision(app, base_tem
 def test_resultados_con_experimento_trae_su_gestion(app, base_temporal):
     eid = _experimento("Cojín armando")
     otro = _experimento("Colcha corriendo", estado="corriendo", meta_campaign_id="cam_2")
-    _pieza_en(base_temporal, eid)
+    _pid, _ep = _pieza_en(base_temporal, eid)
     sin_exp = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
     assert f'id="exp-{eid}"' not in sin_exp
     html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}", headers=AJAX).get_data(as_text=True)
@@ -68,6 +68,18 @@ def test_resultados_con_experimento_trae_su_gestion(app, base_temporal):
     assert f"/cliente/acme/experimentos/{eid}/modo" in html and f"/cliente/acme/experimentos/{eid}/reglas" in html
     # En armado se pueden agregar piezas: el formulario trae las elegibles (que salen de ex.elegibles, no de la página).
     assert f"/cliente/acme/experimentos/{eid}/piezas" in html and "Agregar pieza" in html
+    # Una pieza elegible (lista, con URL, que no está en este experimento) es una opción DENTRO del formulario
+    # `exp-agregar`: sin `elegibles_exp` en el fragmento (R1), el desplegable quedaría vacío.
+    libre = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_9")
+    html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}", headers=AJAX).get_data(as_text=True)
+    agregar = html[html.index('class="exp-agregar"'):]
+    agregar = agregar[:agregar.index("</form>")]
+    assert f'<option value="{libre}"' in agregar and f'<option value="{_pid}"' in agregar
+    # En error (con campaña a medias o sin ella) también acepta piezas; el desplegable trae las mismas.
+    fallido = _experimento("Cojín fallido", estado="error")
+    html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={fallido}", headers=AJAX).get_data(as_text=True)
+    agregar = html[html.index('class="exp-agregar"'):]
+    assert f'<option value="{libre}"' in agregar[:agregar.index("</form>")]
     # Un experimento corriendo no acepta piezas nuevas ni trae el formulario.
     corriendo = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={otro}", headers=AJAX).get_data(as_text=True)
     assert f'id="exp-{otro}"' in corriendo and "Pausar todo" in corriendo and "Agregar pieza" not in corriendo

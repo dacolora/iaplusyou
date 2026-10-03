@@ -94,7 +94,9 @@ def test_tarjeta_del_experimento_muestra_el_error_claro_y_el_crudo_plegado(base_
     monkeypatch.setattr(meta_conexion, "estado_pixel", lambda c, solo_cache=False: None)
     eid = ex.crear("acme", "Prueba 1", PAISES, "OUTCOME_TRAFFIC", 7, 500000.0, "https://t", "COP")
     ex.actualizar("acme", eid, estado="error", error=REAL_1885183)
-    html = _cliente_admin(dashboard).get("/cliente/acme").data.decode()
+    # E2: la tarjeta de gestión del experimento llega en el fragmento de resultados (`?exp=<id>`).
+    from tests.test_rutas_experimentos import _resultados
+    html = _resultados(_cliente_admin(dashboard), exp=eid)
     j = html.index('class="detalle-tecnico"')
     claro = html[html.rindex('<p class="tag-error">', 0, j):j]
     assert "modo Desarrollo" in claro and "OAuthException" not in claro
