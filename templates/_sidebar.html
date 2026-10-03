@@ -2,7 +2,7 @@
    íconos + texto; el estado se recuerda. Las claves data-tab son las mismas de
    siempre (calzado, creativeflowplus, experimentos, catalogo, settings)
    para que los redirect(_anchor=...) y los enlaces guardados sigan
-   funcionando; `tablero` (Bloque 6) va primero y es la pestaña por defecto;
+   funcionando; `experimentos` (centro de resultados) va primero y es la pestaña por defecto;
    `alertas` (2026-10-02) va justo después, con la burbuja del conteo.
    `final` (Final edition, 2026-09-27) va después de Crear: el guion, las
    finales y sus ediciones salieron de Crear a su propia pestaña.
@@ -19,9 +19,9 @@
   </a>
 
   <nav class="sidebar-nav" role="tablist">
-    <button type="button" class="sidebar-item" data-tab="tablero" role="tab" title="{{ _('Tablero') }}">
+    <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="{{ _('Experimentos') }}">
       <svg viewBox="0 0 24 24"><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="3.5" height="6" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="10.25" y="5" width="3.5" height="12" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="15.5" y="8" width="3.5" height="9" rx="1" stroke="currentColor" stroke-width="2" fill="none"/></svg>
-      <span class="sidebar-texto">{{ _('Tablero') }}</span>
+      <span class="sidebar-texto">{{ _('Experimentos') }}</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="alertas" role="tab" title="{{ _('Alertas') }}">
       <svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M10 20a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
@@ -55,10 +55,6 @@
     <button type="button" class="sidebar-item" data-tab="sprints" role="tab" title="{{ _('Sprints') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M7 17h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <span class="sidebar-texto">{{ _('Sprints') }}</span>
-    </button>
-    <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="{{ _('Experimentos') }}">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="6" cy="19" r="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="18" cy="19" r="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 7v4M12 11l-6 6M12 11l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-      <span class="sidebar-texto">{{ _('Experimentos') }}</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="catalogo" role="tab" title="{{ _('Catálogo') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 10h18M9 4v16" stroke="currentColor" stroke-width="2"/></svg>

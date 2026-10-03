@@ -3,6 +3,7 @@
 {% block title %}{{ _('Nuevo experimento') }}{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='estilos/pantallas/experimento-nuevo.css') }}">
 {# «Nuevo experimento» en su propia ruta (E2, 2026-10-02; exp_nuevo). Conserva el menú lateral en E2: los botones
    del menú, que aquí no tienen panel, llevan de vuelta al proyecto con el hash de la pestaña (igual que
    _sprint_nav.html y _nicho_nav.html). Contexto: _contexto_experimentos(con_elegibles=True) + _contexto_meta. #}

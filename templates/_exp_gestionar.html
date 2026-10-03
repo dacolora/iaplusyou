@@ -1,49 +1,6 @@
-{# La gestión de UN experimento (E2, 2026-10-02): la tarjeta que hasta E2 pintaba `_tab_experimentos.html` por
-   cada experimento (lo que hay entre su resumen y su bitácora), movida tal cual y adaptada a un solo experimento:
-   `ex` es el elegido en el filtro (`?exp=<id>`) y `e` es su alias. Los formularios, los confirm() y las rutas
-   POST son los de siempre; solo cambia a dónde vuelven (`#experimentos?exp=<id>`). Contexto: el de
-   `_contexto_experimentos` (+ `elegibles_exp` si `ex` acepta piezas), paises_fe, modo_meta y lo orgánico
-   (canales_org, publicaciones_por_pieza, trabajos_org, plataformas_org). #}
+{# Formularios existentes: conservar rutas, campos y confirmaciones. #}
 {% from "_organico_publicar.html" import bloque_organico, propuesta_organica with context %}
-{% set e = ex %}
-<details class="swap-card experimento experimento-{{ e.estado }}" id="exp-{{ e.id }}" open>
-  <summary class="swap-card-resumen">
-    <span class="semaforo semaforo-{{ e.estado }}"></span>
-    <strong>{{ e.nombre }}</strong>
-    <span class="tag-estado">{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}</span>
-    <span class="tag-estado tag-modo">{{ _('modo %(modo)s', modo=e.modo) }}</span>
-    <span class="tag-estado tag-atribucion tag-atribucion-{{ e.atribucion }}" title="{{ _('Con qué se miden las ventas de este experimento') }}">{{ _('atribución %(atribucion)s', atribucion=(etiquetas_exp.atribucion.get(e.atribucion, e.atribucion)|traducir)) }}</span>
-    {% if e.propuestas_pendientes %}<span class="tag-propuestas">{{ _('%(n)s propuesta(s)', n=e.propuestas_pendientes) }}</span>{% endif %}
-    <small>{{ _('%(activos)s/%(total)s activos · gasto %(gasto)s / %(tope)s %(moneda)s', activos=e.resumen.activos, total=e.resumen.total, gasto=("%.2f"|format(e.gasto_acumulado)), tope=e.tope_total, moneda=e.moneda) }}
-      {% if e.resumen.mejor_cpc %}· {{ _('mejor CPC %(cpc)s', cpc=("%.2f"|format(e.resumen.mejor_cpc))) }}{% endif %}
-      {% if e.atribucion == "tienda" %}· {{ _('ventas por tienda: %(n)s pedido(s)', n=pedidos_por_exp.get(e.id, 0)) }}{% endif %}</small>
-  </summary>
-  {% if e.error %}{% set error_claro = e.error|error_meta(modo_meta) %}<p class="tag-error">{{ error_claro }}</p>
-  {% if error_claro != e.error %}<details class="detalle-tecnico"><summary>{{ _('Detalle técnico (para soporte)') }}</summary><code>{{ e.error }}</code></details>{% endif %}{% endif %}
-  {% set trabajo = trabajos_exp.get(e.id) %}
-  {% if trabajo %}
-  {# Barra con data-poll-job (nada de <script>: un fragmento por fetch no los ejecuta); la arranca arrancarSondeos(). #}
-  <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}" data-poll-job="{{ trabajo.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
-  {% endif %}
-
-  {% if e.padre_experimento_id or e.hijos %}
-  <p class="exp-parentesco">
-    {% if e.padre_experimento_id %}<a href="#exp-{{ e.padre_experimento_id }}">{{ _('← padre: %(nombre)s', nombre=nombres_exp.get(e.padre_experimento_id, "#" ~ e.padre_experimento_id)) }}</a>{% endif %}
-    {% for h in e.hijos %}<a href="#exp-{{ h }}">{{ _('derivado en → %(nombre)s', nombre=nombres_exp.get(h, "#" ~ h)) }}</a>{% endfor %}
-  </p>
-  {% endif %}
-
-  {% if e.estado != "cerrado" %}
-  <form method="post" action="{{ url_for('exp_modo', cliente=cliente, eid=e.id) }}" class="exp-modo inline">
-    <label>{{ _('Modo') }}
-      <select name="modo" onchange="this.form.submit()">
-        {% for m in modos_exp %}<option value="{{ m }}" {% if m == e.modo %}selected{% endif %}>{{ m }}</option>{% endfor %}
-      </select>
-    </label>
-    <small class="vacio">{{ _('manual: todo se propone · semi: pausar/archivar solos, lo que gasta se propone · auto: todo solo (salvo tope alcanzado)') }}</small>
-  </form>
-  {% endif %}
-
+{% macro propuestas(e) %}
   {% set props = propuestas_exp.get(e.id, []) %}
   {% if props %}
   <div class="exp-propuestas">
@@ -79,6 +36,49 @@
   </div>
   {% endif %}
 
+{% endmacro %}
+{% if ex %}{% set e = ex %}
+<section class="cr-gestion">
+  <header class="cr-seccion-cab"><h3>{{ e.nombre }}</h3><span class="tag-estado">{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}</span><span class="cr-muted">{{ nombres_objetivo_exp.get(e.objetivo_meta, e.objetivo_meta)|traducir }}</span></header>
+<details class="swap-card experimento experimento-{{ e.estado }}" id="exp-{{ e.id }}" >
+  <summary class="swap-card-resumen">
+    <span class="semaforo semaforo-{{ e.estado }}"></span>
+    <strong>{{ _('Gestionar') }}</strong>
+    <span class="tag-estado">{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}</span>
+    <span class="tag-estado tag-modo">{{ _('modo %(modo)s', modo=e.modo) }}</span>
+    <span class="tag-estado tag-atribucion tag-atribucion-{{ e.atribucion }}" title="{{ _('Con qué se miden las ventas de este experimento') }}">{{ _('atribución %(atribucion)s', atribucion=(etiquetas_exp.atribucion.get(e.atribucion, e.atribucion)|traducir)) }}</span>
+    {% if e.propuestas_pendientes %}<span class="tag-propuestas">{{ _('%(n)s propuesta(s)', n=e.propuestas_pendientes) }}</span>{% endif %}
+    <small>{{ _('%(activos)s/%(total)s activos · gasto %(gasto)s / %(tope)s %(moneda)s', activos=e.resumen.activos, total=e.resumen.total, gasto=("%.2f"|format(e.gasto_acumulado)), tope=e.tope_total, moneda=e.moneda) }}
+      {% if e.resumen.mejor_cpc %}· {{ _('mejor CPC %(cpc)s', cpc=("%.2f"|format(e.resumen.mejor_cpc))) }}{% endif %}
+      {% if e.atribucion == "tienda" %}· {{ _('ventas por tienda: %(n)s pedido(s)', n=pedidos_por_exp.get(e.id, 0)) }}{% endif %}</small>
+  </summary>
+  {% if e.error %}{% set error_claro = e.error|error_meta(modo_meta) %}<p class="tag-error">{{ error_claro }}</p>
+  {% if error_claro != e.error %}<details class="detalle-tecnico"><summary>{{ _('Detalle técnico (para soporte)') }}</summary><code>{{ e.error }}</code></details>{% endif %}{% endif %}
+  {% set trabajo = trabajos_exp.get(e.id) %}
+  {% if trabajo %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}" data-poll-job="{{ trabajo.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+  
+  {% endif %}
+
+  {% if e.padre_experimento_id or e.hijos %}
+  <p class="exp-parentesco">
+    {% if e.padre_experimento_id %}<a data-cr-filtro href="#experimentos?exp={{ e.padre_experimento_id }}">{{ _('← padre: %(nombre)s', nombre=nombres_exp.get(e.padre_experimento_id, "#" ~ e.padre_experimento_id)) }}</a>{% endif %}
+    {% for h in e.hijos %}<a data-cr-filtro href="#experimentos?exp={{ h }}">{{ _('derivado en → %(nombre)s', nombre=nombres_exp.get(h, "#" ~ h)) }}</a>{% endfor %}
+  </p>
+  {% endif %}
+
+  {% if e.estado != "cerrado" %}
+  <form method="post" action="{{ url_for('exp_modo', cliente=cliente, eid=e.id) }}" class="exp-modo inline">
+    <label>{{ _('Modo') }}
+      <select name="modo" onchange="this.form.submit()">
+        {% for m in modos_exp %}<option value="{{ m }}" {% if m == e.modo %}selected{% endif %}>{{ m }}</option>{% endfor %}
+      </select>
+    </label>
+    <small class="vacio">{{ _('manual: todo se propone · semi: pausar/archivar solos, lo que gasta se propone · auto: todo solo (salvo tope alcanzado)') }}</small>
+  </form>
+  {% endif %}
+
+
   <div class="exp-acciones">
     {% if e.estado in ("armando", "error") and not e.meta_campaign_id %}
       <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se crean la campaña, los conjuntos y los anuncios en Meta, en pausa. ¿Seguimos?")|tojson }});'><button class="btn-generar btn-sm">{{ _('Lanzar a Meta (en pausa)') }}</button></form>
@@ -113,7 +113,7 @@
         </form>
         <form method="post" action="{{ url_for('exp_presupuesto', cliente=cliente, eid=e.id) }}" class="inline">
           <input type="hidden" name="pais" value="{{ p.pais }}">
-          <input type="number" name="presupuesto_dia" value="{{ p.presupuesto_dia }}" min="{{ minimo_diario_exp }}" step="any" class="exp-ancho-7" title="{{ _('En %(moneda)s, la moneda de la cuenta de Meta', moneda=e.moneda) }}">
+          <input type="number" name="presupuesto_dia" value="{{ p.presupuesto_dia }}" min="{{ minimo_diario_exp }}" step="any" title="{{ _('En %(moneda)s, la moneda de la cuenta de Meta', moneda=e.moneda) }}">
           <button class="btn-guardar btn-xs">{{ _('Cambiar presupuesto') }}</button>
         </form>
         {% endif %}
@@ -194,7 +194,7 @@
   {% endif %}
 
   {% if e.estado != "cerrado" %}
-  <details class="exp-reglas"><summary>{{ _('Reglas del decisor') }}{% if e.reglas %} {{ _('(%(n)s propia(s))', n=e.reglas|length) }}{% endif %}</summary>
+  <details class="exp-reglas"><summary>{{ _('Cómo decide el motor') }}{% if e.reglas %} {{ _('(%(n)s propia(s))', n=e.reglas|length) }}{% endif %}</summary>
     <form method="post" action="{{ url_for('exp_reglas', cliente=cliente, eid=e.id) }}" class="exp-reglas-form">
       {% set efectivas = reglas_efectivas_exp.get(e.id, reglas_defecto_exp) %}
       {% with reglas_valores=e.reglas, reglas_placeholder=efectivas, prefijo="exp" ~ e.id %}{% include "_form_reglas.html" %}{% endwith %}
@@ -208,3 +208,5 @@
     <ul>{% for ev in e.eventos %}<li><small>{{ ev.creado_en }}</small> <span class="tag-estado">{{ etiquetas_exp.evento.get(ev.tipo, ev.tipo)|traducir }}</span> {{ ev.mensaje }}</li>{% endfor %}</ul>
   </details>
 </details>
+</section>
+{% endif %}

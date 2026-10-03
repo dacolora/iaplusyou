@@ -7,6 +7,7 @@
    los pone en el paso 3). Termina en un POST a exp_probar que crea el experimento y lo lanza EN PAUSA; nada
    gasta hasta «Activar». #}
 {# ---- La galería primero (spec 2026-09-20): todo lo generado, marcas y pruebas ---- #}
+<nav class="exp-recorrido" aria-label="{{ _('Pasos del experimento') }}"><span>{{ _('01 · Piezas') }}</span><span>{{ _('02 · Dónde') }}</span><span>{{ _('03 · Total y días') }}</span><span>{{ _('04 · Revisar') }}</span></nav>
 <section id="exp-galeria" class="exp-galeria">
   <div class="exp-galeria-cab">
     <h3>{{ _('Piezas para probar') }}</h3>
@@ -23,6 +24,7 @@
     <a class="btn-generar btn-sm" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='creativeflowplus') }}">{{ _('Ir a Crear') }}</a>
   </div>
   {% endif %}
+  <label>{{ _('Buscar piezas') }} <input type="search" id="exp-buscar"></label>
   <div class="exp-tarjetas">
     {% for el in elegibles_exp %}
     <label class="exp-tarjeta" data-tipo="{{ 'imagen' if el.es_imagen else ('final' if el.tipo == 'final' else 'video') }}" data-origen="{{ el.origen }}">
@@ -62,16 +64,16 @@
    marcar) bloquearían el envío sin decir nada; el JS avisa y exp_probar valida todo. #}
 <form method="post" action="{{ url_for('exp_probar', cliente=cliente) }}" id="exp-probar" class="exp-pasos" hidden novalidate
       data-minimo="{{ minimo_diario_exp }}" data-moneda="{{ moneda_exp }}">
-  <ol class="exp-pasos-nav"><li data-ir="1" class="activo">{{ _('1 · Dónde') }}</li><li data-ir="2">{{ _('2 · Cuánto') }}</li><li data-ir="3">{{ _('3 · Revisar') }}</li></ol>
+  <ol class="exp-pasos-nav"><li data-ir="1" class="activo">{{ _('02 · Dónde') }}</li><li data-ir="2">{{ _('03 · Total y días') }}</li><li data-ir="3">{{ _('04 · Revisar') }}</li></ol>
 
   <section data-paso="1">
     <h4>{{ _('¿Dónde se prueban?') }}</h4>
-    <p class="vacio">{{ _('Presupuesto diario por país en %(moneda)s (la moneda de tu cuenta de Meta; mínimo %(minimo)s).', moneda=moneda_exp, minimo=minimo_diario_exp) }}</p>
+    <p class="vacio">{{ _('Las finales conservan su país. Las demás piezas pueden probarse en varios países.') }}</p>
     <fieldset class="exp-paises">
       {% for codigo, p in paises_fe.items() %}
       <label class="fe-destino">
         <input type="checkbox" name="paises" value="{{ codigo }}" class="exp-pais-check"> {{ p.bandera }} {{ p.nombre|traducir }}
-        <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" value="{{ minimo_diario_exp }}" class="exp-ancho-8">
+        
       </label>
       {% endfor %}
     </fieldset>
@@ -81,16 +83,27 @@
 
   <section data-paso="2" hidden>
     <h4>{{ _('¿Cuánto y por cuánto tiempo?') }}</h4>
+    <p>{{ _('Moneda de tu cuenta de Meta: %(moneda)s.', moneda=moneda_exp) }}</p>
+    <div class="exp-atajos">
+      {% for texto in [_('Prueba rápida'), _('Estándar'), _('Fuerte')] %}<button type="button" class="btn-sm" data-atajo="{{ loop.index0 }}">{{ texto }} <strong></strong><small>{{ _('Sugerencia') }}</small></button>{% endfor %}
+    </div>
     <div class="fe-opciones">
-      <label>{{ _('Tope total (%(moneda)s)', moneda=moneda_exp) }} <input type="number" name="tope_total" min="0" step="any" required></label>
+      <label>{{ _('Presupuesto total planificado (%(moneda)s)', moneda=moneda_exp) }} <input type="number" name="tope_total" min="0" step="any" required></label>
       <label>{{ _('Días') }} <input type="number" name="dias" value="7" min="1" max="90"></label>
     </div>
-    <p class="exp-resumen" id="exp-resumen"></p>
+    <p class="exp-resumen" id="exp-resumen" aria-live="polite"></p>
+    <p id="exp-minimo" aria-live="polite"></p><button type="button" class="btn-sm" id="exp-usar-minimo" hidden>{{ _('Usar ese total') }}</button>
+    <details><summary>{{ _('Ajustar reparto diario por país') }}</summary>
+      <label><input type="checkbox" id="exp-manual"> {{ _('Editar el reparto; el total se recalcula') }}</label>
+      <div class="exp-reparto">{% for codigo, p in paises_fe.items() %}<label data-reparto="{{ codigo }}" hidden>{{ p.bandera }} {{ p.nombre|traducir }}
+      <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" value="{{ minimo_diario_exp }}" readonly></label>{% endfor %}</div>
+    </details>
     <div class="exp-pasos-botones"><button type="button" class="btn-sm" data-ir="1">{{ _('← Atrás') }}</button> <button type="button" class="btn-guardar btn-sm" data-ir="3">{{ _('Siguiente →') }}</button></div>
   </section>
 
+  <p class="exp-control">{{ _('Nada gasta hasta que pulses Activar. Este es un presupuesto planificado, no un máximo garantizado: Creatv revisa el gasto periódicamente y puede haber gasto adicional antes de pausar. Meta aplica su límite de campaña cuando está disponible. Los días cuentan desde el lanzamiento, no desde la activación.') }}</p>
   <section data-paso="3" hidden>
-    <h4>{{ _('Revisar') }}</h4>
+    <h4>{{ _('Revisar') }}</h4><p class="exp-resumen" id="exp-resumen-final"></p>
     <p class="vacio">{{ _('Cada casilla es un anuncio (pieza × país). Las finales solo van a su país.') }}</p>
     <p class="vacio" id="exp-doctrina-aviso" hidden></p>
     <div id="exp-cuadricula" class="exp-cuadricula"></div>
@@ -142,14 +155,18 @@
       if (form && n === 0) form.hidden = true;
     }
     casillas.forEach(function (c) { c.addEventListener('change', refrescarBarra); });
-    // Filtros por tipo/origen.
+    var filtro = 'todo';
+    function filtrar() {
+      var q = document.getElementById('exp-buscar').value.toLocaleLowerCase();
+      galeria.querySelectorAll('.exp-tarjeta').forEach(function (t) {
+        t.hidden = !((filtro === 'todo' || t.dataset.tipo === filtro || (filtro === 'sprint' && t.dataset.origen === 'sprint')) && t.textContent.toLocaleLowerCase().includes(q));
+      });
+    }
+    document.getElementById('exp-buscar').addEventListener('input', filtrar);
     galeria.querySelectorAll('[data-filtro]').forEach(function (b) {
       b.addEventListener('click', function () {
         galeria.querySelectorAll('[data-filtro]').forEach(function (x) { x.classList.toggle('activo', x === b); });
-        var f = b.dataset.filtro;
-        galeria.querySelectorAll('.exp-tarjeta').forEach(function (t) {
-          t.hidden = !(f === 'todo' || t.dataset.tipo === f || (f === 'sprint' && t.dataset.origen === 'sprint'));
-        });
+        filtro = b.dataset.filtro; filtrar();
       });
     });
     // Llegada con piezas ya marcadas: exp_nuevo?piezas=1,2 (desde Crear, Final edition y los anuncios
@@ -235,27 +252,65 @@
     function avisarPaisSinPiezas(pais) {
       alert(PLANTILLA_PAIS_SIN_PIEZAS.replace('{pais}', pais));
     }
+    // Función pura: misma fórmula y unidad monetaria que presupuesto_experimentos.repartir.
+    function repartir(total, dias, pesos, moneda, minimo) {
+      var factor = ['JPY','CLP','HUF','ISK','KRW','TWD','VND','PYG','UGX','XAF','XOF'].includes(moneda) ? 1 : 100;
+      var suma = Object.values(pesos).reduce(function(a,b) { return a+b; }, 0);
+      var diarios = {}, bajos = [], totalMinimo = 0;
+      Object.keys(pesos).forEach(function(p) {
+        diarios[p] = Math.floor((total * pesos[p] / suma / dias) * factor + 1e-7) / factor;
+        if (diarios[p] < minimo) bajos.push(p);
+        totalMinimo = Math.max(totalMinimo, Math.ceil(minimo * suma * dias / pesos[p] * factor - 1e-7) / factor);
+      });
+      return {presupuestos: diarios, bajos: bajos, total_minimo: totalMinimo};
+    }
+    var totalInput = form.querySelector('[name=tope_total]'), diasInput = form.querySelector('[name=dias]');
+    var manual = document.getElementById('exp-manual'), ultimoMinimo = 0, valido = false;
+    function dinero(n) { return n.toLocaleString(document.documentElement.lang || 'es', {maximumFractionDigits: 2}) + ' ' + moneda; }
+    function pesosActuales() {
+      var pares = pasoVisible() === 3 ? Array.from(cuadricula.querySelectorAll('input:checked')).map(function(i) { return i.value.split(':')[1]; }) : combinaciones().map(function(p) { return p[1]; });
+      var pesos = {}; pares.forEach(function(p) { pesos[p] = (pesos[p] || 0) + 1; }); return pesos;
+    }
+    function opciones(pesos) {
+      var n = Object.values(pesos).reduce(function(a,b) { return a+b; }, 0);
+      return [[4,4],[8,7],[15,10]].map(function(par) {
+        var bruto = minimo * n * par[0] * par[1], paso = Math.pow(10, Math.floor(Math.log10(bruto || 1))-1);
+        return {total: Math.ceil(bruto / paso) * paso, dias: par[1]};
+      });
+    }
     function refrescarCuenta() {
-      var n = marcadas().length, ps = paisesMarcados();
-      var anuncios = cuadricula.querySelectorAll('input[name=combinaciones]:checked').length || combinaciones().length;
-      var dia = 0;
-      ps.forEach(function (p) { dia += parseFloat((form.querySelector('[name=presupuesto_' + p + ']') || {}).value || '0'); });
-      var tope = parseFloat((form.querySelector('[name=tope_total]') || {}).value || '0');
-      var dias = parseInt((form.querySelector('[name=dias]') || {}).value || '0', 10);
-      var piezaTxt = (n === 1 ? UNA_PIEZA : VARIAS_PIEZAS).replace('{n}', n);
-      var paisTxt = (ps.length === 1 ? UN_PAIS : VARIOS_PAISES).replace('{n}', ps.length);
-      var anuncioTxt = (anuncios === 1 ? UN_ANUNCIO : VARIOS_ANUNCIOS).replace('{n}', anuncios);
-      cuenta.textContent = piezaTxt + CONECTOR_X + paisTxt + CONECTOR_IGUAL +
-        anuncioTxt + CONECTOR_HASTA + dia.toLocaleString('es-CO') + ' ' + moneda + SUFIJO_DIA +
-        (tope ? CONECTOR_TOPE + tope.toLocaleString('es-CO') + ' ' + moneda : '') + (dias ? CONECTOR_PUNTO + dias + SUFIJO_DIAS : '');
+      var n = marcadas().length, ps = paisesMarcados(), pesos = pesosActuales();
+      var anuncios = Object.values(pesos).reduce(function(a,b) { return a+b; }, 0);
+      var dias = Number(diasInput.value), total = Number(totalInput.value);
+      form.querySelectorAll('[data-atajo]').forEach(function(b,i) { var o = opciones(pesos)[i]; b.querySelector('strong').textContent = dinero(o.total) + ' · ' + o.dias + SUFIJO_DIAS; });
+      if (!totalInput.value && anuncios) { total = opciones(pesos)[1].total; totalInput.value = total; }
+      var calculo = repartir(total, dias, pesos, moneda, minimo), dia = 0;
+      ps.forEach(function(p) {
+        var campo = form.querySelector('[name=presupuesto_' + p + ']');
+        campo.readOnly = !manual.checked;
+        if (!manual.checked) campo.value = Number.isFinite(calculo.presupuestos[p]) ? calculo.presupuestos[p] : 0;
+        dia += Number(campo.value);
+      });
+      form.querySelectorAll('[data-reparto]').forEach(function(l) { l.hidden = !ps.includes(l.dataset.reparto); });
+      if (manual.checked && Number.isFinite(dia * dias)) { total = Math.round(dia * dias * 100) / 100; totalInput.value = total; }
+      var bajos = ps.filter(function(p) { return Number(form.querySelector('[name=presupuesto_' + p + ']').value) < minimo; });
+      valido = anuncios > 0 && ps.length > 0 && !paisSinPiezas(Object.keys(pesos)) && Number.isFinite(total) && total > 0 && Number.isInteger(dias) && dias >= 1 && dias <= 90 && !bajos.length && Number.isFinite(dia) && dia * dias <= total + .000001;
+      ultimoMinimo = calculo.total_minimo;
+      document.getElementById('exp-minimo').textContent = bajos.length ? {{ _('Para respetar el mínimo diario de Meta, usa al menos este total:')|tojson }} + ' ' + dinero(ultimoMinimo) : '';
+      document.getElementById('exp-usar-minimo').hidden = !bajos.length;
+      cuenta.textContent = {{ _('Presupuesto planificado:')|tojson }} + ' ' + dinero(total) + ' · ' + dias + SUFIJO_DIAS + ' · ' + dinero(dia) + SUFIJO_DIA + ' · ' + (anuncios === 1 ? UN_ANUNCIO : VARIOS_ANUNCIOS).replace('{n}', anuncios);
+      document.getElementById('exp-resumen-final').textContent = cuenta.textContent;
       if (nombre && !nombre.dataset.tocado) {
         var hoy = new Date();
         nombre.value = PLANTILLA_NOMBRE.replace('{fecha}', hoy.getDate() + ' ' + MESES[hoy.getMonth()])
-          .replace('{piezas}', (n === 1 ? UNA_PIEZA : VARIAS_PIEZAS).replace('{n}', n))
-          .replace('{paises}', ps.slice().sort().join(', '));
+          .replace('{piezas}', (n === 1 ? UNA_PIEZA : VARIAS_PIEZAS).replace('{n}', n)).replace('{paises}', ps.slice().sort().join(', '));
       }
     }
+    form.querySelectorAll('[data-atajo]').forEach(function(b,i) { b.addEventListener('click', function() { var o = opciones(pesosActuales())[i]; manual.checked = false; totalInput.value = o.total; diasInput.value = o.dias; refrescarCuenta(); }); });
+    manual.addEventListener('change', refrescarCuenta);
+    document.getElementById('exp-usar-minimo').addEventListener('click', function() { manual.checked = false; totalInput.value = ultimoMinimo; refrescarCuenta(); });
     function armarCuadricula() {
+      var previas = {}; cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function(i) { previas[i.value] = i.checked; });
       var ps = paisesMarcados();
       var filas = marcadas().map(function (c) {
         var celdas = ps.map(function (p) {
@@ -273,14 +328,14 @@
       avisoDoctrina.hidden = !conDoctrina;
       avisoDoctrina.textContent = conDoctrina ? (conDoctrina === 1 ? AVISO_DOCTRINA_UNA : AVISO_DOCTRINA_VARIAS).replace('{n}', conDoctrina) : '';
       cuadricula.innerHTML = '<table><thead><tr><th></th>' + ps.map(function (p) { return '<th>' + p + '</th>'; }).join('') + '</tr></thead><tbody>' + filas + '</tbody></table>';
-      cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function (i) { i.addEventListener('change', refrescarCuenta); });
+      cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function (i) { if (i.value in previas) i.checked = previas[i.value]; i.addEventListener('change', refrescarCuenta); });
     }
     abrir.addEventListener('click', function () { form.hidden = false; forzarPaisesDeFinales(); irA(1); });
     form.querySelectorAll('[data-ir]').forEach(function (b) {
       b.addEventListener('click', function () {
         var destino = parseInt(b.dataset.ir, 10);
         if (destino >= 2 && paisesMarcados().length === 0) { alert(AVISO_MARCA_PAIS); return; }
-        if (destino >= 2) {
+        if (destino >= 3) {
           var bajos = paisesMarcados().filter(function (p) { return parseFloat(form.querySelector('[name=presupuesto_' + p + ']').value || '0') < minimo; });
           if (bajos.length) {
             alert(PLANTILLA_PRESUPUESTO_BAJO.replace('{minimo}', minimo).replace('{moneda}', moneda).replace('{paises}', bajos.join(', ')));
@@ -290,6 +345,7 @@
           if (huerfano) { avisarPaisSinPiezas(huerfano); return; }
         }
         if (destino >= 3 && !(parseFloat(form.querySelector('[name=tope_total]').value || '0') > 0)) { alert(AVISO_TOPE); return; }
+        if (destino >= 3) { refrescarCuenta(); if (!valido) { alert(AVISO_TOPE); return; } }
         irA(destino);
       });
     });
@@ -311,6 +367,8 @@
     form.querySelectorAll('[name=tope_total], [name=dias], [name^=presupuesto_], .exp-pais-check').forEach(function (i) { i.addEventListener('input', refrescarCuenta); });
     if (nombre) nombre.addEventListener('input', function () { nombre.dataset.tocado = '1'; });
     form.addEventListener('submit', function (ev) {
+      refrescarCuenta();
+      if (!valido) { ev.preventDefault(); alert(AVISO_TOPE); return; }
       var marcadasCuadricula = Array.prototype.slice.call(cuadricula.querySelectorAll('input[name=combinaciones]:checked'));
       if (!marcadasCuadricula.length) { ev.preventDefault(); alert(AVISO_CUADRICULA_VACIA); return; }
       var huerfano = paisSinPiezas(marcadasCuadricula.map(function (i) { return i.value.split(':')[1]; }));

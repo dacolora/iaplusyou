@@ -1,0 +1,183 @@
+{# Totales, monedas separadas, mes a mes y tienda TW del Tablero original. #}
+{% set tb = tablero %}
+{% macro tile_generacion(gen) %}
+<a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="{{ _('Videos, imágenes, guiones, finales y textos con IA pagados desde el inicio; detalle en Configuración › Gasto') }}">
+  <span>{{ _('Generación total') }}</span>
+  <strong>{{ (gen.total if gen else 0) | usd }}</strong>
+  <small>{% if gen and gen.n %}{{ ngettext('%(num)s cobro(s) a proveedores →', '%(num)s cobro(s) a proveedores →', gen.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+</a>
+{% endmacro %}
+
+<a class="btn-sm" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
+{# ---------- tiles ---------- #}
+{% if tb.total is none and tb.total_triple_whale is none %}
+<p class="tag-error">{{ _('No se pudo calcular el total. El resto del tablero sigue abajo.') }}</p>
+{# M2: el gasto de generación no depende de la pauta/Meta, así que se pinta
+   igual aunque el total de pauta haya fallado. #}
+<div class="tb-tiles">
+  {{ tile_generacion(tb.generacion_total) }}
+</div>
+{% else %}
+{# Total de Meta (todos los experimentos) desde el inicio #}
+{% if tb.total is not none %}
+{% set r = tb.total %}
+{% set grupos = r.por_moneda if r.por_moneda else {moneda_exp: {"gasto": 0, "compras": 0, "ingresos": 0, "roas": 0}} %}
+{% set varias = grupos | length > 1 %}
+{% for moneda, g in grupos.items() %}
+<div class="tb-tiles" {% if varias %}aria-label="{{ _('Meta: Resumen en %(moneda)s', moneda=moneda) }}"{% endif %}>
+  {% if varias %}<div class="tb-tiles-moneda">Meta · {{ moneda }}</div>{% else %}<div class="tb-tiles-moneda">Meta</div>{% endif %}
+  <div class="kpi-tile">
+    <span>{{ _('Gasto total') }}</span>
+    <strong>{{ g.gasto | dinero(moneda) }}</strong>
+    <small>{{ _('desde el inicio') }}</small>
+  </div>
+  <div class="kpi-tile">
+    <span>{{ _('Compras') }}</span>
+    <strong>{{ g.compras }}</strong>
+    <small>{{ _('atribuidas por Pixel o tienda') }}</small>
+  </div>
+  <div class="kpi-tile">
+    <span>{{ _('Ingresos') }}</span>
+    <strong>{{ g.ingresos | dinero(moneda) }}</strong>
+    <small>{{ _('solo ventas medibles') }}</small>
+  </div>
+  <div class="kpi-tile">
+    <span>ROAS</span>
+    {% if g.ingresos > 0 and g.roas > 0 %}
+    <strong>{{ g.roas | roas }}×</strong>
+    <small>{{ _('ingresos / gasto') }}</small>
+    {% else %}
+    <strong class="tb-sin-dato">—</strong>
+    <small>{{ _('sin ventas medibles') }}</small>
+    {% endif %}
+  </div>
+  {% if loop.last %}
+  {{ tile_generacion(tb.generacion_total) }}
+  <div class="kpi-tile">
+    <span>{{ _('Experimentos corriendo') }}</span>
+    <strong>{{ r.experimentos_corriendo }}</strong>
+    <small>{{ ngettext('%(num)s pieza(s) activa(s)', '%(num)s pieza(s) activa(s)', r.piezas_activas) }}</small>
+  </div>
+  <a class="kpi-tile kpi-tile-enlace" href="#experimentos" data-ir-tab="experimentos">
+    <span>{{ _('Propuestas pendientes') }}</span>
+    <strong>{{ r.propuestas_pendientes }}</strong>
+    <small>{% if r.propuestas_pendientes %}{{ _('esperan tu aprobación →') }}{% else %}{{ _('nada por aprobar') }}{% endif %}</small>
+  </a>
+  <a class="kpi-tile kpi-tile-enlace" href="#experimentos" data-ir-tab="experimentos" title="{{ _('Piezas ganadoras distintas publicadas orgánicamente desde el inicio (en una o varias plataformas)') }}">
+    <span>{{ _('Ganadoras publicadas') }}</span>
+    <strong>{{ r.ganadoras_publicadas or 0 }}</strong>
+    <small>{{ _('orgánicas desde el inicio') }}</small>
+  </a>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{# Total de los experimentos atribuidos a Triple Whale #}
+{% if tb.total_triple_whale is not none %}
+{% set r = tb.total_triple_whale %}
+{% set grupos = r.por_moneda if r.por_moneda else {moneda_exp: {"gasto": 0, "compras": 0, "ingresos": 0, "roas": 0}} %}
+{% set varias = grupos | length > 1 %}
+{% for moneda, g in grupos.items() %}
+<div class="tb-tiles" {% if varias %}aria-label="{{ _('Triple Whale: Resumen en %(moneda)s', moneda=moneda) }}"{% endif %}>
+  {% if varias %}<div class="tb-tiles-moneda">Triple Whale · {{ moneda }}</div>{% else %}<div class="tb-tiles-moneda">Triple Whale</div>{% endif %}
+  <div class="kpi-tile">
+    <span>{{ _('Gasto total') }}</span>
+    <strong>{{ g.gasto | dinero(moneda) }}</strong>
+    <small>{{ _('desde el inicio') }}</small>
+  </div>
+  <div class="kpi-tile">
+    <span>{{ _('Compras') }}</span>
+    <strong>{{ g.compras }}</strong>
+    <small>{{ _('atribuidas por TW') }}</small>
+  </div>
+  <div class="kpi-tile">
+    <span>{{ _('Ingresos') }}</span>
+    <strong>{{ g.ingresos | dinero(moneda) }}</strong>
+    <small>{{ _('solo ventas medibles') }}</small>
+  </div>
+  <div class="kpi-tile">
+    <span>ROAS</span>
+    {% if g.ingresos > 0 and g.roas > 0 %}
+    <strong>{{ g.roas | roas }}×</strong>
+    <small>{{ _('ingresos / gasto') }}</small>
+    {% else %}
+    <strong class="tb-sin-dato">—</strong>
+    <small>{{ _('sin ventas medibles') }}</small>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{# ---------- mes a mes ---------- #}
+{# El desglose del total: una fila por mes (el más reciente arriba) desde el
+   primer mes con pauta o generación; con pauta en dos monedas, una fila por
+   moneda (nunca se convierte) y la generación solo en la primera. En el
+   celular cada fila es una tarjeta (tabla-apilada; la celda vacía se oculta). #}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Mes a mes') }}</h3></div>
+  {% if tb.meses is none %}
+  <p class="tag-error">{{ _('No se pudo calcular el desglose por mes.') }}</p>
+  {% elif not tb.meses %}
+  <p class="vacio">{{ _('Todavía no hay gasto en ningún mes. Cuando un experimento gaste o pagues una generación, aquí verás cada mes.') }}</p>
+  {% else %}
+  <table class="tb-meses tabla-apilada">
+    <thead><tr>
+      <th>{{ _('Mes') }}</th><th class="num">{{ _('Gasto') }}</th><th class="num">{{ _('Compras') }}</th>
+      <th class="num">{{ _('Ingresos') }}</th><th class="num">ROAS</th><th class="num">{{ _('Generación') }}</th>
+    </tr></thead>
+    <tbody>
+      {% for f in tb.meses %}
+      {% set gen = f.generacion %}
+      {% for moneda, g in (f.por_moneda | dictsort) or [(none, none)] %}
+      <tr{% if loop.first and not loop.last %} class="tb-mes-varias"{% endif %}>
+        <td>{{ f.etiqueta }}</td>
+        {% if g %}
+        <td class="num">{{ g.gasto | dinero(moneda) }}</td>
+        <td class="num">{{ g.compras }}</td>
+        <td class="num">{{ g.ingresos | dinero(moneda) }}</td>
+        <td class="num">{% if g.ingresos > 0 and g.roas > 0 %}{{ g.roas | roas }}×{% else %}<span class="tb-sin-dato">—</span>{% endif %}</td>
+        {% else %}
+        <td class="num"><span class="tb-sin-dato">—</span></td><td class="num"><span class="tb-sin-dato">—</span></td>
+        <td class="num"><span class="tb-sin-dato">—</span></td><td class="num"><span class="tb-sin-dato">—</span></td>
+        {% endif %}
+        <td class="num">{% if loop.first %}{% if gen.n %}{{ gen.usd | usd }}{% else %}<span class="tb-sin-dato">—</span>{% endif %}{% endif %}</td>
+      </tr>
+      {% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{# La tienda según Triple Whale (copia local): ingresos y MER reales del mes,
+   con la variación contra los mismos días del mes anterior. Solo con
+   Triple Whale conectado y datos de tienda; el detalle vive en su pestaña. #}
+{% if tb.tienda_tw %}
+{% set t = tb.tienda_tw %}
+<div class="tb-tiles" aria-label="{{ _('Tu tienda según Triple Whale') }}">
+  <div class="tb-tiles-moneda">{{ _('Tu tienda según Triple Whale') }} · {{ t.moneda }}</div>
+  <div class="kpi-tile">
+    <span>{{ _('Ingresos del mes') }}</span>
+    <strong>{{ t.ingresos | dinero(t.moneda) }}</strong>
+    <small>{% if t.variacion.get('ingresos') is not none %}{{ t.variacion.get('ingresos') | tw_var }} {{ _('vs. mes anterior') }}{% else %}{{ _('desde el 1 de %(mes)s', mes=tb.mes) }}{% endif %}</small>
+  </div>
+  <div class="kpi-tile">
+    <span>{{ _('Pedidos') }}</span>
+    <strong>{{ t.pedidos | tw_num }}</strong>
+    <small>{{ _('%(pct)s de clientes nuevos', pct=t.pct_nuevos | tw_pct(0)) }}</small>
+  </div>
+  <div class="kpi-tile" title="{{ _('MER: ingresos de la tienda / todo el gasto en publicidad') }}">
+    <span>MER</span>
+    {% if t.mer %}<strong>{{ t.mer | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}
+    <small>{{ _('gasto %(gasto)s', gasto=t.gasto | dinero(t.moneda)) }}</small>
+  </div>
+  <a class="kpi-tile kpi-tile-enlace" href="#triplewhale" data-ir-tab="triplewhale">
+    <span>{{ _('Triple Whale') }}</span>
+    <strong>→</strong>
+    <small>{{ _('anuncio por anuncio, ganadores y evaluación con IA') }}</small>
+  </a>
+</div>
+{% endif %}
+

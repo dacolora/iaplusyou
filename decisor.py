@@ -29,12 +29,12 @@ UMBRALES_DESACTIVABLES = frozenset(_UMBRALES_DESACTIVABLES)
 # Texto corto de cada regla para la UI (misma clave que REGLAS_DEFECTO). N_:
 # se traduce donde se muestra (|traducir en la plantilla), no acá.
 ETIQUETAS = {
-    "ventana_horas": N_("Ventana de tráfico (horas)"), "impresiones_min": N_("Impresiones mínimas"),
-    "gasto_min_x_presupuesto": N_("Gasto mínimo (x presupuesto diario)"), "cpc_max": N_("CPC máximo"),
-    "ctr_min": N_("CTR mínimo (%)"), "thruplay_min": N_("ThruPlay mínimo (0–1)"),
-    "ventana_ventas_horas": N_("Ventana de ventas (horas)"), "cpa_max": N_("CPA máximo"), "roas_min": N_("ROAS mínimo"),
-    "n_reediciones": N_("Re-ediciones por derivación"), "n_regeneraciones": N_("Regeneraciones por derivación"),
-    "escalar_pct_dia": N_("Escalar (% por día)"), "escalar_tope_dia": N_("Tope diario al escalar"),
+    "ventana_horas": N_("Horas de espera antes de evaluar el tráfico"), "impresiones_min": N_("Veces que debe mostrarse el anuncio antes de evaluarlo"),
+    "gasto_min_x_presupuesto": N_("Gasto necesario para evaluar (veces el presupuesto diario)"), "cpc_max": N_("Costo máximo por clic (moneda de la cuenta)"),
+    "ctr_min": N_("Porcentaje mínimo de clics sobre impresiones (%)"), "thruplay_min": N_("Proporción mínima de reproducciones completas o de 15 segundos (0–1)"),
+    "ventana_ventas_horas": N_("Horas de espera antes de evaluar las ventas"), "cpa_max": N_("Costo máximo por compra (moneda de la cuenta)"), "roas_min": N_("Ingresos mínimos por cada unidad gastada"),
+    "n_reediciones": N_("Versiones nuevas de edición por pieza ganadora"), "n_regeneraciones": N_("Videos nuevos por pieza ganadora"),
+    "escalar_pct_dia": N_("Aumento diario del presupuesto (%)"), "escalar_tope_dia": N_("Límite diario después de aumentar (moneda de la cuenta)"),
 }
 
 

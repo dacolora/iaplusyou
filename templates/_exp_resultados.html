@@ -1,16 +1,83 @@
-{# PROVISIONAL (E2 Task 5): lo mínimo para que las rutas y sus pruebas funcionen; la Task 6 reemplaza el cuerpo con las
-   secciones de la maqueta. Fragmento del centro de resultados (ruta exp_resultados). Contexto: `r`
-   (resultados.contexto), `ex` (el experimento elegido en el filtro, o None), `tablero`, `alertas_ctx`, modo_meta,
-   capacidades_meta, paises_fe y todo `_contexto_experimentos`. Nada de <script>: un fragmento por fetch no los
-   ejecuta. #}
+{# Contrato E2: resultados.contexto. Solo JSON ejecutable por el lector de gráficas. #}
+{% macro valor(v, formato='decimal', moneda='USD') -%}
+{% if v is none %}—{% elif formato == 'dinero' %}{{ v|dinero(moneda) }}{% elif formato == 'veces' %}{{ v|roas }}×{% elif formato == 'pct' %}{{ v|tw_num(2) }}%{% elif formato == 'entero' %}{{ v|tw_num(0) }}{% else %}{{ v|tw_num(2) }}{% endif %}
+{%- endmacro %}
+{% macro cabecera(n, titulo) %}<header class="cr-seccion-cab"><span class="cr-numero">{{ n }}</span><h3>{{ titulo }}</h3></header>{% endmacro %}
+{% macro consulta(clave, v) -%}
+{%- set q = namespace(pares=[]) -%}
+{%- for k, x in r.query.items() if k != clave -%}{%- set q.pares = q.pares + [(k,x)] -%}{%- endfor -%}
+{%- if v is not none -%}{%- set q.pares = q.pares + [(clave,v)] -%}{%- endif -%}{{ q.pares|urlencode }}
+{%- endmacro %}
+{% macro kpis(indicadores, moneda) %}
+<ul class="cr-kpis">
+{% for i in indicadores %}<li class="cr-kpi{% if i.clave == 'roas' %} cr-kpi-destacado{% endif %}">
+  <span class="cr-muted">{{ i.etiqueta }}</span><strong>{{ valor(i.valor, i.formato, moneda) }}</strong>
+  <div class="cr-kpi-pie">{% if i.valor is none %}<small>{{ _('sin datos') }}</small>{% elif i.cambio %}<small class="cr-{{ i.cambio.sentido }}">{{ i.cambio.flecha }} {{ i.cambio.texto }}</small>{% else %}<small class="cr-muted">{{ _('Sin comparación') }}</small>{% endif %}
+  <svg class="cr-spark" data-cr-spark='{{ i.tendencia|tojson }}' role="img" aria-label="{{ _('Tendencia de %(indicador)s', indicador=i.etiqueta) }}" viewBox="0 0 100 30"></svg></div>
+</li>{% endfor %}
+</ul>
+{% endmacro %}
+{% macro desglose(filas, titulo, moneda, metrica='roas', barras=false) %}
+<section class="cr-tarjeta cr-desglose"><h4>{{ titulo }}</h4>
+{% if filas %}
+{% set maximo = namespace(v=0) %}{% for f in filas %}{% if f[metrica] is not none and f[metrica] > maximo.v %}{% set maximo.v = f[metrica] %}{% endif %}{% endfor %}
+<table class="cr-tabla tabla-apilada"><thead><tr><th>{{ _('Segmento') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('ROAS') if metrica == 'roas' else _('CTR') }}</th></tr></thead><tbody>
+{% for f in filas %}<tr><th scope="row">{{ f.etiqueta }}{% if barras and f[metrica] is not none %}<progress max="{{ maximo.v or 1 }}" value="{{ f[metrica] }}" aria-label="{{ f.etiqueta }}"></progress>{% endif %}</th><td>{{ f.gasto|dinero(moneda) }}</td><td>{{ valor(f[metrica], 'veces' if metrica == 'roas' else 'pct') }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="cr-vacio">{{ _('Sin datos de Meta para este desglose') }}</p>{% endif %}</section>
+{% endmacro %}
+{% macro evolucion(p) %}
+<button type="button" class="cr-tarjeta cr-evolucion-pieza cr-v-{{ p.veredicto.clase }}" data-cr-pieza="{{ url_for('exp_pieza', cliente=cliente, ep_id=p.ep_id) }}?{{ r.query|urlencode }}">
+  <span class="cr-tarjeta-cab"><strong>{{ p.nombre }}</strong><span class="cr-veredicto cr-v-{{ p.veredicto.clase }}">{{ p.veredicto.etiqueta }}</span></span>
+  <small class="cr-muted">{{ p.pais }} · {{ _('ROAS') if p.metrica == 'roas' else _('CTR del enlace') }} · {{ _('punteada: promedio del experimento') }}</small>
+  <svg data-cr-evolucion='{{ {"serie":p.serie,"promedio":p.promedio}|tojson }}' viewBox="0 0 300 65" role="img" aria-label="{{ _('Evolución de %(nombre)s', nombre=p.nombre) }}"></svg>
+  <span class="cr-historia">{{ p.historia|join(' · ') if p.historia else _('Esperando evidencia para el diagnóstico') }}</span>
+</button>
+{% endmacro %}
+{% from "_exp_gestionar.html" import propuestas with context %}
 <div class="cr-resultados-fragmento">
-  {% if ex %}{% include "_exp_gestionar.html" %}{% endif %}
-  <section class="cr-seccion" id="cr-decision"><h3 class="cr-seccion-titulo">{{ _('Necesita tu decisión') }}</h3></section>
-  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">01</span> {{ _('Resumen del periodo') }}</h3></section>
-  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">02</span> {{ _('Día a día') }}</h3></section>
-  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">03</span> {{ _('Dónde se cae la gente') }}</h3></section>
-  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">04</span> {{ _('Evolución del diagnóstico por pieza') }}</h3></section>
-  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">05</span> {{ _('Ranking de piezas') }}</h3></section>
-  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">06</span> {{ _('Quién compra y dónde lo ve') }}</h3></section>
-  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">07</span> {{ _('Experimentos') }}</h3></section>
+<nav class="cr-filtros" aria-label="{{ _('Filtrar resultados') }}">
+  <div class="cr-periodos">{% for d in [7,14,30,90,0] %}<a class="cr-chip" data-cr-filtro href="#experimentos?{{ consulta('dias',d) }}"{% if r.filtro.dias == d %} aria-current="true"{% endif %}>{{ _('%(n)s días', n=d) if d else _('Desde el inicio') }}{% if r.filtro.dias == d and d %}<small>{{ _('vs %(n)s anteriores', n=d) }}</small>{% endif %}</a>{% endfor %}</div>
+  {% for clave, titulo, opciones, campo, elegido in [('exp', _('Experimento'),r.opciones.experimentos,'id',r.filtro.experimento_id),('pais',_('País'),r.opciones.paises,none,r.filtro.pais),('pieza',_('Pieza'),r.opciones.piezas,'ep_id',r.filtro.ep_id)] %}
+  <details class="cr-menu"><summary>{{ titulo }}{% if elegido %}<span class="cr-filtro-activo"> · {% for o in opciones %}{% if (o[campo] if campo else o) == elegido %}{{ o.nombre if campo else o }}{% endif %}{% endfor %}</span>{% endif %}</summary><div class="cr-menu-opciones">
+    <a data-cr-filtro href="#experimentos?{{ consulta(clave,none) }}"{% if not elegido %} aria-current="true"{% endif %}>{{ _('Todos') }}{% if elegido %} ×{% endif %}</a>
+    {% for o in opciones %}{% set id = o[campo] if campo else o %}<a data-cr-filtro href="#experimentos?{{ consulta(clave,none if elegido == id else id) }}"{% if elegido == id %} aria-current="true"{% endif %}>{{ o.nombre if campo else (paises_fe.get(o, {}).get('nombre',o)|traducir) }}{% if elegido == id %} ×{% endif %}</a>{% endfor %}
+  </div></details>{% endfor %}
+  <details class="cr-menu"><summary>{{ _('Video + imagen') if not r.filtro.tipo else (_('Video') if r.filtro.tipo == 'video' else _('Imagen')) }}</summary><div class="cr-menu-opciones">{% for tipo, nombre in [(none,_('Video + imagen')),('video',_('Video')),('imagen',_('Imagen'))] %}<a data-cr-filtro href="#experimentos?{{ consulta('tipo', none if tipo == r.filtro.tipo else tipo) }}"{% if tipo == r.filtro.tipo %} aria-current="true"{% endif %}>{{ nombre }}{% if tipo and tipo == r.filtro.tipo %} ×{% endif %}</a>{% endfor %}</div></details>
+  {% if r.opciones.monedas|length > 1 %}<details class="cr-menu"><summary>{{ r.moneda }}</summary><div class="cr-menu-opciones">{% for m in r.opciones.monedas %}<a data-cr-filtro href="#experimentos?{{ consulta('moneda',m) }}"{% if m == r.moneda %} aria-current="true"{% endif %}>{{ m }}</a>{% endfor %}</div></details>{% else %}<span class="cr-muted">{{ r.moneda }}</span>{% endif %}
+</nav>
+<section class="cr-decisiones cr-tarjeta">
+  {{ cabecera('0', _('Necesita tu decisión')) }}
+  {% set decision = namespace(n=0) %}{% for e in experimentos if not r.filtro.experimento_id or e.id == r.filtro.experimento_id %}{% if propuestas_exp.get(e.id) %}{% set decision.n = decision.n + propuestas_exp[e.id]|length %}<h4>{{ e.nombre }}</h4>{{ propuestas(e) }}{% endif %}{% endfor %}
+  {% if not decision.n %}<p class="cr-muted">{{ _('Nada por decidir') }}</p>{% endif %}
+  {% if alertas_ctx and alertas_ctx.resumen.n %}<p>{{ ngettext('%(num)s alerta necesita tu atención', '%(num)s alertas necesitan tu atención', alertas_ctx.resumen.n) }} → <a href="#alertas" data-ir-tab="alertas">{{ _('Ver Alertas') }}</a></p>{% endif %}
+</section>
+{% if r.filtro.experimento_id %}{% if ex %}{% include "_exp_gestionar.html" %}{% else %}<p class="estado-vacio">{{ _('Ese experimento no está en este proyecto') }}</p>{% endif %}{% endif %}
+{% if not experimentos %}<div class="estado-vacio"><p class="estado-vacio-titulo">{{ _('Todavía no hay experimentos') }}</p><a class="btn-generar" href="{{ url_for('exp_nuevo',cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a></div>{% elif not r.piezas %}<div class="estado-vacio"><p>{{ _('Sin datos en este periodo') }}</p><a class="cr-chip" data-cr-filtro href="#experimentos?{{ consulta('dias',0) }}">{{ _('Desde el inicio') }}</a></div>{% endif %}
+<section>{{ cabecera('01', _('Resumen del periodo')) }}{{ kpis(r.indicadores,r.moneda) }}
+  <p class="cr-nota"><a href="#settings" data-ir-tab="settings">{{ _('Generación con IA: %(costo)s en el periodo', costo=r.generacion|usd) }}</a> · {{ _('Las cifras de pauta están en %(moneda)s', moneda=r.moneda) }}</p>
+  {% if tablero.tienda_tw %}<p class="cr-nota"><a href="#triplewhale" data-ir-tab="triplewhale">{{ _('Tu tienda según Triple Whale') }}</a> · {{ _('Ingresos del mes') }}: {{ tablero.tienda_tw.ingresos|dinero(tablero.tienda_tw.moneda) }} · {{ _('MER') }} {{ valor(tablero.tienda_tw.mer,'veces') }}</p>{% endif %}
+</section>
+<section>{{ cabecera('02', _('Día a día')) }}<div class="cr-tarjeta"><div class="cr-metricas"><span class="cr-muted">{{ _('Gasto +') }}</span>{% for k,n in [('ctr',_('CTR')),('roas',_('ROAS')),('cpc',_('CPC')),('cpm',_('CPM')),('frecuencia',_('Frecuencia diaria')),('gancho',_('Gancho'))] %}<button type="button" class="cr-chip{% if loop.first %} activo{% endif %}" data-cr-metrica="{{ k }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ n }}</button>{% endfor %}</div>
+  <div class="cr-grafico" data-cr-grafico="dia" aria-label="{{ _('Gasto y rendimiento diario') }}"></div>{% if not r.hay_detalle %}<p class="cr-muted">{{ _('Cargando el detalle de Meta…') if r.piezas else _('Sin datos en este periodo') }}</p>{% endif %}</div></section>
+<section>{{ cabecera('03', _('Dónde se cae la gente')) }}<div class="cr-tarjeta">
+  {% set peor = namespace(razon=0.8, clave=none) %}{% for paso in r.embudo.pasos %}{% if paso.pct is not none and paso.prom and not paso.sin_datos and paso.pct / paso.prom < peor.razon %}{% set peor.razon = paso.pct / paso.prom %}{% set peor.clave = paso.clave %}{% endif %}{% endfor %}
+  <div class="cr-embudo">{% for paso in r.embudo.pasos %}<div class="cr-embudo-paso{% if paso.clave == peor.clave %} cr-caida{% endif %}">
+    <progress max="{{ r.embudo.pasos[0].valor or 1 }}" value="{{ paso.valor or 0 }}" aria-label="{{ paso.etiqueta }}"></progress><strong>{{ valor(paso.valor,'entero') }}</strong><span>{{ paso.etiqueta }}</span><small>{% if paso.sin_datos %}{{ _('requiere el Pixel') }}{% elif paso.pct is not none %}{{ valor(paso.pct,'pct') }}{% else %}—{% endif %}</small>
+  </div>{% endfor %}</div>{% if r.embudo.frase %}<p class="cr-nota">{{ r.embudo.frase }}</p>{% endif %}</div></section>
+<section>{{ cabecera('04', _('Evolución del diagnóstico por pieza')) }}<div class="cr-evolucion">{% for p in r.evolucion %}{{ evolucion(p) }}{% else %}<p class="cr-vacio">{{ _('Sin piezas en este filtro') }}</p>{% endfor %}</div>
+{% if r.piezas|length > r.evolucion|length %}<details class="cr-mas"><summary>{{ _('Ver todas') }} · {{ r.piezas|length }}</summary><div class="cr-evolucion">{% for p in r.piezas[r.evolucion|length:] %}{{ evolucion(p) }}{% endfor %}</div></details>{% endif %}</section>
+<section id="cr-ranking">{{ cabecera('05', _('Ranking de piezas')) }}<div class="cr-tarjeta cr-tabla-contenedor"><table class="cr-ranking cr-tabla tabla-apilada"><thead><tr>{% for t in [_('Pieza'),_('País'),_('Gasto'),_('CTR'),_('Gancho'),_('CPC'),_('ROAS'),_('Δ ROAS')] %}<th>{{ t }}</th>{% endfor %}</tr></thead><tbody>
+{% set mayor = namespace(ctr=1) %}{% for p in r.piezas %}{% if p.ctr and p.ctr > mayor.ctr %}{% set mayor.ctr = p.ctr %}{% endif %}{% endfor %}
+{% for p in r.piezas %}<tr data-cr-pieza="{{ url_for('exp_pieza',cliente=cliente,ep_id=p.ep_id) }}?{{ r.query|urlencode }}"><td><button type="button" class="cr-pieza-enlace" data-cr-pieza="{{ url_for('exp_pieza',cliente=cliente,ep_id=p.ep_id) }}?{{ r.query|urlencode }}">{% if p.url_miniatura or p.es_imagen and p.url_video %}<img src="{{ p.url_miniatura or p.url_video }}" alt="" loading="lazy">{% endif %}<span>{{ p.nombre }}<small class="cr-v-{{ p.veredicto.clase }}">{{ p.veredicto.etiqueta }}</small></span></button></td><td>{{ paises_fe.get(p.pais,{}).get('bandera','') }} {{ p.pais }}</td><td>{{ valor(p.gasto,'dinero',r.moneda) }}</td><td>{{ valor(p.ctr,'pct') }}{% if p.ctr is not none %}<progress max="{{ mayor.ctr }}" value="{{ p.ctr }}" aria-label="{{ _('CTR') }}"></progress>{% endif %}</td><td>{{ valor(p.gancho,'pct') }}</td><td>{{ valor(p.cpc,'dinero',r.moneda) }}</td><td>{{ valor(p.roas,'veces') }}</td><td class="{{ 'cr-mejor' if p.delta_roas and p.delta_roas > 0 else 'cr-peor' if p.delta_roas and p.delta_roas < 0 else 'cr-neutro' }}">{% if p.delta_roas %}{{ '▲' if p.delta_roas > 0 else '▼' }} {% endif %}{{ valor(p.delta_roas,'decimal') }}</td></tr>{% else %}<tr><td colspan="8">{{ _('Sin piezas en este filtro') }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+<section>{{ cabecera('06', _('Quién compra y dónde lo ve')) }}<p class="cr-nota">{{ _('Desgloses de Meta desde el inicio; países en el periodo seleccionado.') }}</p><div class="cr-desgloses">
+<section class="cr-tarjeta"><h4>{{ _('Ubicación (gasto)') }}</h4>{% if r.desgloses.ubicacion %}<svg class="cr-dona" data-cr-dona='{{ r.desgloses.ubicacion|tojson }}' role="img" aria-label="{{ _('Gasto por ubicación') }}" viewBox="0 0 120 120"></svg><ul class="cr-leyenda">{% for f in r.desgloses.ubicacion %}<li><span class="cr-serie-{{ (loop.index0 % 8) + 1 }}">●</span> {{ f.etiqueta }} <strong>{{ valor(f.pct_gasto,'pct') }}</strong></li>{% endfor %}</ul>{% else %}<p class="cr-vacio">{{ _('Sin datos de Meta para este desglose') }}</p>{% endif %}</section>
+{{ desglose(r.desgloses.edad,_('Por edad'),r.moneda,r.desgloses.metrica,true) }}{{ desglose(r.desgloses.genero,_('Por género'),r.moneda,r.desgloses.metrica,true) }}
+<section class="cr-tarjeta"><h4>{{ _('Por país · periodo seleccionado') }}</h4><table class="cr-tabla tabla-apilada"><thead><tr><th>{{ _('País') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('ROAS') }}</th><th>{{ _('CTR') }}</th></tr></thead><tbody>{% for f in r.paises %}<tr><th scope="row">{{ paises_fe.get(f.pais,{}).get('bandera','') }} {{ f.pais }}</th><td>{{ f.gasto|dinero(r.moneda) }}</td><td>{{ valor(f.roas,'veces') }}</td><td>{{ valor(f.ctr,'pct') }}</td></tr>{% else %}<tr><td colspan="4">{{ _('Sin datos en este periodo') }}</td></tr>{% endfor %}</tbody></table></section>
+{{ desglose(r.desgloses.region,_('Por región'),r.moneda,r.desgloses.metrica) }}{{ desglose(r.desgloses.dispositivo,_('Por dispositivo'),r.moneda,r.desgloses.metrica) }}</div></section>
+<section>{{ cabecera('07', _('Experimentos')) }}<div class="cr-experimentos">{% for e in r.experimentos %}<a data-cr-filtro href="#experimentos?{{ consulta('exp',e.id) }}" class="cr-tarjeta cr-experimento{% if e.seleccionado %} cr-seleccionado{% endif %}"{% if e.seleccionado %} aria-current="true"{% endif %}><div class="cr-tarjeta-cab">{% if e.pct_tope is not none %}<svg class="cr-dona-tope" data-cr-dona-pct="{{ e.pct_tope }}" role="img" aria-label="{{ _('Tope utilizado: %(pct)s %%',pct=e.pct_tope|round(0)) }}" viewBox="0 0 44 44"></svg>{% endif %}<span><strong>{{ e.nombre }}</strong><small>{{ etiquetas_exp.estado.get(e.estado,e.estado)|traducir }}{% if e.dia is not none %} · {{ _('día %(dia)s de %(dias)s',dia=e.dia,dias=e.dias) }}{% endif %}</small></span></div><p>{{ _('%(n)s piezas',n=e.n_piezas) }} · {{ e.paises|join(' · ') }} · {{ _('ROAS') if e.metrica == 'roas' else _('CTR') }} {{ valor(e.valor,'veces' if e.metrica == 'roas' else 'pct') }}</p><small>{{ _('Gasto acumulado') }} {{ e.gasto|dinero(r.moneda) }} / {{ e.tope|dinero(r.moneda) }}</small>{% if e.mejor %}<small>{{ _('Mejor pieza: %(nombre)s',nombre=e.mejor) }}</small>{% endif %}</a>{% else %}<p class="cr-vacio">{{ _('Todavía no hay experimentos') }}</p>{% endfor %}</div></section>
+<section>{{ cabecera('08', _('Lo que ya aprendió el proyecto')) }}{% include "_aprendizajes.html" %}</section>
+<section>{{ cabecera('09', _('Historial')) }}<details class="cr-tarjeta cr-historial"><summary>{{ _('Historial mes a mes') }}</summary>{% include "_exp_historial.html" %}</details>{% if ads %}<details class="cr-tarjeta"><summary>{{ _('Anuncios sueltos (de antes)') }}</summary>{% include "_anuncios_sueltos.html" %}</details>{% endif %}</section>
+<details class="cr-estado-meta"><summary>{{ _('Estado del detalle de Meta') }}</summary>{% for eid, detalle in r.detalle_meta.items() %}{% if detalle %}<p>{{ nombres_exp.get(eid, '#' ~ eid) }} · {% if detalle.actualizado_en %}{{ _('Detalle de Meta actualizado: %(fecha)s',fecha=detalle.actualizado_en) }}{% else %}{{ _('Cargando el detalle de Meta…') }}{% endif %}</p>{% if detalle.errores %}<ul>{% for error in detalle.errores %}<li class="cr-peor">{{ error|error_meta(modo_meta) }}</li>{% endfor %}</ul>{% endif %}{% endif %}{% endfor %}</details>
+<script type="application/json" id="cr-datos">{{ r.datos_graficos|tojson }}</script>
 </div>

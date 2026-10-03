@@ -5414,6 +5414,14 @@ def exp_probar(cliente):
         flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
                       minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
         return volver
+    # E3: no confiar en el reparto ni en la validación del navegador.
+    import presupuesto_experimentos
+    try:
+        presupuesto_experimentos.validar(request.form.get("tope_total"), dias,
+            [request.form.get(f"presupuesto_{p}") for p in codigos], moneda)
+    except ValueError:
+        flash(gettext("Revisa el reparto: debe respetar el mínimo y los decimales de la moneda, y no superar el presupuesto total planificado."), "error")
+        return volver
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
         modo = "manual"

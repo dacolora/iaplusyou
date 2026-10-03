@@ -8,7 +8,7 @@
   {% set propio = reglas_valores.get(k) if k in reglas_valores else none %}
   {% set apagado = (k in reglas_valores) and reglas_valores.get(k) is none %}
   <label class="regla" for="{{ prefijo }}-{{ k }}">
-    <span class="regla-nombre">{{ etiquetas_reglas_exp.get(k, k)|traducir }} <code>{{ k }}</code></span>
+    <span class="regla-nombre">{{ etiquetas_reglas_exp.get(k, k)|traducir }}</span>
     <input type="number" id="{{ prefijo }}-{{ k }}" name="{{ k }}" step="{{ '1' if k in reglas_enteras_exp else 'any' }}" min="0"
            value="{{ propio if propio is not none else '' }}"
            placeholder="{{ reglas_placeholder.get(k) if reglas_placeholder.get(k) is not none else _('sin umbral') }}">
