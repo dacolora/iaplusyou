@@ -89,3 +89,5 @@ ya habla…») y derivar/rescatar en Experimentos (`pz["sin_derivar"]`, `derivac
 doctrina, «Reintentar», «Recuperar» y la publicación orgánica sí funcionan.
 
 **Precio del clon (2026-10-02, PND-011):** `gastos.estimar("voz_clonada", nombre=, idioma=)` incluye clon, vista previa y estreno con la frase que leerá la tarea. `fal_audio.costo_clonar_voz` calcula tanto el estimado como el cobro de creación; el botón recibe los precios por longitud de nombre e idioma del servidor.
+
+PND-038/039/040 (2026-10-03): sintetizar reconoce los errores voice not found / voice_id does not exist / invalid voice id y los convierte al mensaje fijo traducible de voz ausente; otros errores siguen el manejo habitual. Las regeneraciones llevan la voz original al payload de finales. material usa AUTOINCREMENT (migración 0031): borrar la última voz no permite que otra herede su vp:id. No repara identificadores que ya hubieran sido reutilizados antes de migrar.

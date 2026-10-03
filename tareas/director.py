@@ -93,7 +93,11 @@ def interrumpida(tarea, mensaje):
     p = tarea["payload"]
     cliente, cf_id = p["cliente"], p["cf_id"]
     entry = creative_flow.cargar(cliente).get(cf_id)
-    if entry is None or entry.get("estado") != "prompt_pendiente":
+    if entry is None or entry.get("estado") not in ("prompt_pendiente", "prompt_listo"):
         return
-    prompt, datos = _fallback(cliente, entry, mensaje)
-    creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos)
+    if entry.get("estado") == "prompt_pendiente":
+        prompt, datos = _fallback(cliente, entry, mensaje)
+        creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos)
+    if p.get("auto_lanzar"):
+        entry = creative_flow.cargar(cliente)[cf_id]
+        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))

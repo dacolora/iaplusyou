@@ -435,7 +435,13 @@
         ? document.activeElement.getAttribute('data-id') : null;
       vaciar(ui.lista);
       ui.listaVacia.hidden = !(estado.listaCargada && estado.prompts.length === 0);
-      estado.prompts.forEach(function (p) {
+      var ultimoOrigen = null;
+      estado.prompts.slice().sort(function (a, b) { return (a.origen || "manual").localeCompare(b.origen || "manual"); }).forEach(function (p) {
+        var origen = p.origen || "manual";
+        if (origen !== ultimoOrigen) {
+          ui.lista.appendChild(el("li", {class: "campo-label", text: origen === "pipeline" ? {{ _('Del guion')|tojson }} : {{ _('Escritos a mano')|tojson }} }));
+          ultimoOrigen = origen;
+        }
         var titulo = String(p.titulo || '').trim();
         var elegido = mismo(p.id, estado.sel);
         var boton = el('button', {

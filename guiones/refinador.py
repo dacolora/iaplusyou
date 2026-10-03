@@ -254,13 +254,15 @@ def crear(cliente, texto, titulo="", tipo="libre", contexto="", texto_fijo=(), o
         return _detalle(con, int(r.inserted_primary_key[0]))
 
 
-def listar(cliente, limite=200):
+def listar(cliente, limite=None):
     """Resumen de los prompts del proyecto, el de actividad más reciente primero."""
     p, m = db.guion_prompt, db.guion_mensaje
     n = sa.select(sa.func.count()).where(m.c.prompt_id == p.c.id).scalar_subquery()
     q = (sa.select(p.c.id, p.c.titulo, p.c.tipo, p.c.origen, p.c.estado, p.c.version_n, p.c.actualizado_en,
                    n.label("n_mensajes"))
-         .where(p.c.cliente == cliente).order_by(p.c.actualizado_en.desc(), p.c.id.desc()).limit(int(limite)))
+         .where(p.c.cliente == cliente).order_by(p.c.origen, p.c.actualizado_en.desc(), p.c.id.desc()))
+    if limite is not None:
+        q = q.limit(int(limite))
     with db.conectar() as con:
         return [{**dict(r._mapping), "titulo": r.titulo or "", "n_mensajes": int(r.n_mensajes or 0)}
                 for r in con.execute(q)]

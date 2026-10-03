@@ -6,6 +6,8 @@ Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
 nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
 y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
+import time
+
 from flask_babel import gettext
 
 import atribucion
@@ -279,6 +281,23 @@ def pieza_retirada(pz):
             or extra.get("rescatado_en_escalon") is not None)
 
 
+def _preparar_fin_primera_activacion(cliente, ex):
+    """PND-113: fija el plazo antes de activar; reanudar nunca lo extiende.
+    La reserva persistida hace idempotente un fallo parcial de Meta.
+    Corre bajo el candado de credenciales, sin cambiar presupuestos.
+    """
+    actual = experimentos.obtener(cliente, ex["id"])
+    if (actual.get("extra") or {}).get("activado_en"):
+        return
+    def reservar(extra):
+        extra.setdefault("fin_primera_activacion", int(time.time()) + int(ex.get("dias") or 7) * 86400)
+        return extra
+    extra = experimentos.actualizar_extra(cliente, ex["id"], reservar)
+    for p in actual["paises"]:
+        if p.get("meta_adset_id"):
+            meta_auth.llamar("POST", p["meta_adset_id"], payload={"end_time": extra["fin_primera_activacion"]})
+
+
 def cambiar_estado(cliente, experimento_id, status, pais=None):
     if status not in ("ACTIVE", "PAUSED"):
         raise ValueError(gettext("Estado no permitido."))
@@ -291,6 +310,10 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
     saltadas = []
 
     def _correr(_creds):
+        if status == "ACTIVE":
+            if pais is not None and not any(p["pais"] == pais and p.get("meta_adset_id") for p in ex["paises"]):
+                raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
+            _preparar_fin_primera_activacion(cliente, ex)
         if pais is None:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
             for p in ex["paises"]:
@@ -472,6 +495,7 @@ def activar_pieza(cliente, ep_id):
     pais_pausado = bool(pais) and pais["estado"] != "activo"
 
     def _correr(_creds):
+        _preparar_fin_primera_activacion(cliente, ex)
         if campaña_pausada:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], "ACTIVE")
         if pais_pausado and pais.get("meta_adset_id"):

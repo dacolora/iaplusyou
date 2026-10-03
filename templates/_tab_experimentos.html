@@ -491,9 +491,11 @@
     function avisarPaisSinPiezas(pais) {
       alert(PLANTILLA_PAIS_SIN_PIEZAS.replace('{pais}', pais));
     }
+    var seleccionCombinaciones = {};
     function refrescarCuenta() {
       var n = marcadas().length, ps = paisesMarcados();
-      var anuncios = cuadricula.querySelectorAll('input[name=combinaciones]:checked').length || combinaciones().length;
+      var entradas = cuadricula.querySelectorAll('input[name=combinaciones]');
+      var anuncios = entradas.length ? cuadricula.querySelectorAll('input[name=combinaciones]:checked').length : combinaciones().length;
       var dia = 0;
       ps.forEach(function (p) { dia += parseFloat((form.querySelector('[name=presupuesto_' + p + ']') || {}).value || '0'); });
       var tope = parseFloat((form.querySelector('[name=tope_total]') || {}).value || '0');
@@ -512,11 +514,12 @@
       }
     }
     function armarCuadricula() {
+      cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function (i) { seleccionCombinaciones[i.value] = i.checked; });
       var ps = paisesMarcados();
       var filas = marcadas().map(function (c) {
         var celdas = ps.map(function (p) {
           var cabe = c.dataset.final !== '1' || c.dataset.pais === p;
-          return '<td>' + (cabe ? '<input type="checkbox" name="combinaciones" value="' + c.value + ':' + p + '" checked>' : '<span class="vacio">—</span>') + '</td>';
+          return '<td>' + (cabe ? '<input type="checkbox" name="combinaciones" value="' + c.value + ':' + p + '"' + (seleccionCombinaciones[c.value + ':' + p] === false ? '' : ' checked') + '>' : '<span class="vacio">—</span>') + '</td>';
         }).join('');
         var nombreSeguro = document.createElement('div'); nombreSeguro.textContent = c.dataset.nombre;
         var nDoctrina = parseInt(c.dataset.doctrinaN || '0', 10);

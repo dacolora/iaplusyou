@@ -26,7 +26,7 @@
       {% if r.url_marca %}<a class="btn-guardar btn-sm" href="{{ r.url_marca }}" target="_blank" rel="noopener">{{ _('Librería viva de la marca →') }}</a>{% endif %}
     </div>
     {% if usos %}
-    <p class="vacio ref-usos"><a href="#creativeflowplus" onclick="document.querySelector('.sidebar-item[data-tab=creativeflowplus]').click(); return false;">{{ ngettext('Usado %(num)d vez →', 'Usado %(num)d veces →', usos) }}</a></p>
+    <p class="vacio ref-usos"><a href="#creativeflowplus" onclick="this.closest('dialog').close(); document.querySelector('.sidebar-item[data-tab=creativeflowplus]').click(); return false;">{{ ngettext('Usado %(num)d vez →', 'Usado %(num)d veces →', usos) }}</a></p>
     {% endif %}
   </div>
 </div>

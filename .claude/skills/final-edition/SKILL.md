@@ -90,3 +90,5 @@ Revisión del mismo día (guardián del gasto + revisor): la tarea `final_guion`
 **Precios y respuestas cortadas (2026-10-02, PND-005/108):** `_precio_form` interpreta grupos de miles (`89.900` → 89900), decimales con punto o coma y rechaza valores no finitos. `_llamar` corta ante `stop_reason=max_tokens` con `GuionInvalido.costo_usd`; no paga una corrección de la respuesta truncada. `MAX_TOKENS` sigue en 4000: falta la medición real de `eval-claude`, registrada en PND-108.
 
 PND-108 (revisión 2026-10-02): si la primera pasada es válida y solo tiene errores extra no bloqueantes, una corrección cortada o fallida devuelve esa primera pasada con el costo acumulado de ambas. El corte de la primera pasada sigue abortando sin pagar corrección.
+
+PND-039 (2026-10-03): derivaciones guarda la voz original por destino en el item de regeneración y la pasa como opción explícita al encolar final_producir; funciona tanto con la producción del editor como con la legada, que ya respetaban voz explícita.

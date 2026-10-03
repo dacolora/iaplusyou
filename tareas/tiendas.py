@@ -189,7 +189,7 @@ def tienda_sync_productos(tarea):
     if tienda is None:
         return gettext("Esa tienda no existe.")
     if catalogo_desde_tienda_publica(cliente, tienda):
-        tiendas.actualizar(cliente, tid, ultima_sync_productos=db.ahora())
+        tiendas.actualizar(cliente, tid, estado="conectada", error=None, ultima_sync_productos=db.ahora())
         return gettext("El catálogo llega desde la conexión sin llaves; esta conexión trae los pedidos.")
     try:
         # Lee la fuente del conector: si el conector tiene un atributo `fuente`,

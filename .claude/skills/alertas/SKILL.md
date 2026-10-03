@@ -99,8 +99,6 @@ El context processor `_alertas_sidebar` pinta `alertas_ctx` en TODA página con 
 ## Pendientes conocidos (`docs/pendientes.md`)
 
 - PND-075: falta la tarjeta de `GEMINI_API_KEY` en Puesta a punto (la de WaveSpeed ya está en `llaves.py`).
-- PND-118: varias tiendas rotas comparten `tablero:tienda_rota:-` y se pisan el descarte (la alerta del Tablero no trae el id de la tienda); como la huella sale de los números del texto, las que no traen números en su error comparten también la huella.
-- PND-119: `organico:error:<pub_id>` queda hasta 30 días tras republicar, porque `organico.crear` inserta una fila nueva en vez de reusar la del error.
 - PND-120: el ancla `cf-<id>` de una alerta de Crear no lleva a ningún lado si esa sesión no está entre las 24 tarjetas pintadas.
 - PND-121: lo que cambia el worker fuera de la clave del Tablero puede tardar hasta 60 s en aparecer o desaparecer.
 - PND-122: una pieza fallida de un Sprint se muestra dos veces, como `sprint:fallos:<sid>` y como `crear:error:<cf_id>` (`_fuente_crear` no excluye las sesiones de Sprints).
@@ -108,3 +106,5 @@ El context processor `_alertas_sidebar` pinta `alertas_ctx` en TODA página con 
 - PND-124 (bloqueado por Daniel, plata): los descartes son del proyecto, así que un cliente que descarta una alerta de plata (`tablero:tope_alcanzado`, `tablero:propuestas_pendientes`, `tablero:experimento_error`, `crear:prompt_listo`) se la esconde también al admin (la ve en «Descartadas» y vuelve sola si cambian los números). ¿Descartes por persona, o proteger esas claves?
 
 **Pedidos vencidos (2026-10-02, PND-015):** la fuente Tablero agrega `tablero:pedidos_sin_atribuir:-`, grupo `fallos`, nivel `atencion`, huella del conteo y del plazo fijo. Cuenta pedidos del proyecto con UTM que siguen sin atribución después de 30 días; informa, sin resolverlos ni tocar ventas.
+
+PND-118/119 (2026-10-03): Tablero entrega tienda_id y la fuente lo usa como entidad, clave y parte de la huella. Un descarte no oculta otra tienda. Orgánico excluye un error si existe una publicación posterior (id mayor) de la misma pieza, plataforma y proyecto en en_cola/publicando/publicada; sigue siendo una consulta, y un éxito anterior no tapa un error nuevo.

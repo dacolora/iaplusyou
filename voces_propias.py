@@ -46,6 +46,7 @@ VERSION_MUESTRA = 1
 TEXTO_CONSENTIMIENTO = idiomas.N_("Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios.")
 # msgids: la ruta los traduce con idiomas.traducir al responder.
 MENSAJES = {
+    "no_encontrada": idiomas.N_("Esa voz ya no está en Mis voces. Elige otra voz."),
     "nombre": idiomas.N_("Ponle un nombre a la voz (hasta 40 caracteres)."),
     "archivo": idiomas.N_("Sube un mp3, wav, m4a, aac u ogg."),
     "corta": idiomas.N_("La grabación tiene que durar al menos 10 segundos."),
@@ -118,7 +119,13 @@ def sintetizar(cliente, vp, texto, idioma, velocidad=None, timeout=180):
     "duracion_ms"}). Es una síntesis REAL: estrena la voz (MiniMax borra las que
     no se usan en 7 días). No registra gasto: lo hace quien llama apenas vuelve,
     y por eso un fallo al marcar `estrenada` (base bloqueada) no se propaga."""
-    r = fal_audio.tts_minimax(texto, vp["voice_id"], idioma, velocidad=velocidad, timeout=timeout)
+    try:
+        r = fal_audio.tts_minimax(texto, vp["voice_id"], idioma, velocidad=velocidad, timeout=timeout)
+    except Exception as e:
+        mensaje = str(e).lower().replace("_", " ")
+        if any(t in mensaje for t in ("voice not found", "voice id does not exist", "invalid voice id")):
+            raise EntradaInvalida(MENSAJES["no_encontrada"]) from e
+        raise
     if not vp.get("estrenada"):
         try:
             marcar_estrenada(cliente, vp["id"])

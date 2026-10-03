@@ -238,8 +238,14 @@ def _item_regeneracion(cliente, cf_id, k, idiomas):
         enfoque = "libre"
     else:
         enfoque = _otro(ENFOQUES, sesion.get("enfoque") or ENFOQUES[0], k)
+    voces = {}
+    for f in creative_flow.finales(cliente, cf_id):
+        if f.get("variante") is None:
+            voz = (((f.get("capas") or {}).get("voz") or {}).get("parametros") or {}).get("voz")
+            if voz:
+                voces[f"{f['idioma']}_{f['pais']}"] = voz
     nuevo = creative_flow.duplicar(cliente, cf_id, modelo=modelo, enfoque=enfoque)
-    return {"clase": "regeneracion", "variante": None, "variante_tipo": None, "cf_id": nuevo,
+    return {"clase": "regeneracion", "voces": voces, "variante": None, "variante_tipo": None, "cf_id": nuevo,
             "paises": list(idiomas), "idiomas": dict(idiomas), "estado": "produciendo_clon",
             "finales": {}, "ep_ids": [], "error": None}
 
@@ -512,7 +518,11 @@ def _avanzar_finales(cliente, experimento_id, d, item):
         if clave not in item["finales"]:
             if opciones is None:
                 opciones = _opciones_de(item, cliente)
-            item["finales"][clave] = _encolar_final(cliente, item["cf_id"], idioma, pais, opciones)
+            opciones_destino = dict(opciones)
+            voces = item.get("voces") or {}
+            if voces:
+                opciones_destino["voz"] = voces.get(clave) or list(voces.values())[-1]
+            item["finales"][clave] = _encolar_final(cliente, item["cf_id"], idioma, pais, opciones_destino)
             continue
         estado, error = _estado_final(cliente, item["finales"][clave])
         if estado in _ESTADOS_FINAL_OK:

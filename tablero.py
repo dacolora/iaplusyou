@@ -527,8 +527,8 @@ def _dinero(valor, moneda):
 dinero = _dinero
 
 
-def _alerta(tipo, nivel, texto, tab, experimento_id=None):
-    return {"tipo": tipo, "nivel": nivel, "texto": texto, "tab": tab, "experimento_id": experimento_id}
+def _alerta(tipo, nivel, texto, tab, experimento_id=None, **entidad):
+    return {"tipo": tipo, "nivel": nivel, "texto": texto, "tab": tab, "experimento_id": experimento_id, **entidad}
 
 
 def _horas_desde(iso, ahora_iso):
@@ -708,7 +708,7 @@ def alertas(cliente, ahora_iso=None, datos=None):
                                        "dejó de sincronizar%(detalle)s. Vuelve a conectarla en Configuración.",
                                        tipo=t.get("tipo") or "",
                                        nombre=t.get("nombre") or t.get("dominio") or "", detalle=detalle),
-                               "settings"))
+                               "settings", tienda_id=t["id"]))
 
     vencidos = tiendas.pedidos_vencidos_sin_resolver(cliente, ahora)
     if vencidos:

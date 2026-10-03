@@ -39,7 +39,8 @@ class MetaFalsa:
                                          {"impresiones": 100, "reach": 90, "alcance": 90, "clics_enlace": 4, "ctr": 4.0, "cpc": 0.5,
                                           "gasto_usd": 2.0, "thruplay": 10, "thruplay_rate": 0.1, "compras": 0, "ingresos": 0.0,
                                           "roas": 0.0, "estado_meta": "ACTIVE", "estado_meta_texto": "Activo", "motivo_rechazo": None})
-        auth = types.SimpleNamespace(configurar=lambda *a, **k: None, limpiar=lambda: None)
+        auth = types.SimpleNamespace(configurar=lambda *a, **k: None, limpiar=lambda: None,
+                                     llamar=lambda *a, **kw: {"success": True})
         return campaign, adset, creative, ad, insights, auth
 
 
@@ -919,3 +920,50 @@ def test_exp_refrescar_sigue_aunque_el_detalle_reviente(entorno, monkeypatch, ca
     assert avisos and all(r.levelname == "WARNING" and r.exc_info is None for r in avisos)
     assert "TOKEN-SECRETO" not in caplog.text and "no debería pasar" in caplog.text
     assert ex.obtener("acme", eid)["gasto_acumulado"] == 6.0
+
+
+@pytest.mark.parametrize('via', ['experimento', 'pais', 'pieza'])
+def test_pnd113_fin_desde_primera_activacion_sin_extender_al_reanudar(entorno, monkeypatch, via):
+    import time
+    lz, ex, eid, meta = entorno['lanzador'], entorno['ex'], entorno['eid'], entorno['meta']
+    lz.lanzar('acme', eid)
+    ahora = 1800000000
+    monkeypatch.setattr(time, 'time', lambda: ahora)
+    def llamar(metodo, oid, payload):
+        return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
+    monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
+    def activar():
+        if via == 'pieza':
+            lz.activar_pieza('acme', ex.obtener('acme', eid)['piezas'][0]['id'])
+        else:
+            lz.cambiar_estado('acme', eid, 'ACTIVE', pais='CO' if via == 'pais' else None)
+    antes = ex.obtener('acme', eid)
+    meta.llamadas.clear()
+    activar()
+    fines = [kw for t, kw in meta.llamadas if t == 'fin']
+    assert len(fines) == 2
+    assert all(kw['payload'] == {'end_time': ahora + 7 * 86400} for kw in fines)
+    assert [t for t, _ in meta.llamadas][:2] == ['fin', 'fin']
+    assert ex.obtener('acme', eid)['tope_total'] == antes['tope_total']
+    lz.cambiar_estado('acme', eid, 'PAUSED')
+    meta.llamadas.clear()
+    ahora += 86400
+    activar()
+    assert not any(t == 'fin' for t, _ in meta.llamadas)
+
+
+def test_pnd113_fallo_fecha_no_activa_y_reintento_conserva_fin(entorno, monkeypatch):
+    lz, ex, eid, meta = entorno['lanzador'], entorno['ex'], entorno['eid'], entorno['meta']
+    lz.lanzar('acme', eid)
+    meta.llamadas.clear()
+    vistos = []
+    def fallar(metodo, oid, payload):
+        vistos.append(payload)
+        raise RuntimeError('fecha rechazada')
+    monkeypatch.setattr(lz.meta_auth, 'llamar', fallar, raising=False)
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match='fecha rechazada'):
+            lz.cambiar_estado('acme', eid, 'ACTIVE')
+    assert vistos[0] == vistos[1]
+    assert meta.llamadas == []
+    assert ex.obtener('acme', eid)['estado'] == 'pausado'
