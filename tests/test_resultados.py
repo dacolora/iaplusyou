@@ -740,7 +740,7 @@ def test_historia_le_faltan_solo_si_el_motor_la_esta_juzgando(sembrado):
     import resultados as r
     e1, ep_v = sembrado["e1"], sembrado["ep_v"]
     ex.actualizar(("acme"), e1, estado="corriendo")
-    ex.actualizar_pieza("acme", ep_v, estado="activo")
+    ex.actualizar_pieza("acme", ep_v, estado="activo", meta_ad_id="ad_1")     # el decisor solo mira piezas con anuncio
     ex.actualizar_extra("acme", e1, lambda extra: dict(extra, activado_en="2026-10-02T00:00:00"))
     # 4 000 impresiones y 40 de gasto contra un presupuesto de 20 000: falta la ventana de 48 h (van 12)
     ps = {p["ep_id"]: p for p in r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {})}
@@ -752,6 +752,31 @@ def test_historia_le_faltan_solo_si_el_motor_la_esta_juzgando(sembrado):
     ex.actualizar(("acme"), e1, estado="pausado")
     ps = {p["ep_id"]: p for p in r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {})}
     assert not any("motor" in f for f in ps[ep_v]["historia"])
+
+
+def test_le_faltan_no_aparece_en_un_anuncio_rechazado_ni_sin_anuncio_en_meta(sembrado):
+    """El decisor no evalúa un anuncio DISAPPROVED / WITH_ISSUES ni una pieza sin `meta_ad_id`
+    (tareas/experimentos._rechazada_por_meta y el filtro de la pasada): no se le promete que «el motor decida»."""
+    import experimentos as ex
+    import lanzador
+    import resultados as r
+    import tablero
+    assert tablero.ESTADOS_META_RECHAZO == lanzador.ESTADOS_META_RECHAZO       # la copia local del tablero no se desvía
+    e1, ep_v = sembrado["e1"], sembrado["ep_v"]
+    ex.actualizar(("acme"), e1, estado="corriendo")
+    ex.actualizar_extra("acme", e1, lambda extra: dict(extra, activado_en="2026-10-02T00:00:00"))
+
+    def historia_de_video():
+        return [p for p in r.piezas(r.cargar("acme", r.Filtro(dias=7), AHORA), {}) if p["ep_id"] == ep_v][0]["historia"]
+    ex.actualizar_pieza("acme", ep_v, estado="activo")                          # activa pero sin anuncio en Meta
+    assert not any("motor" in f for f in historia_de_video())
+    ex.actualizar_pieza("acme", ep_v, meta_ad_id="ad_1", estado_meta="ACTIVE")  # con anuncio y aprobado: sí se evalúa
+    assert "36 h más para que el motor decida" in historia_de_video()
+    for rechazo in ("DISAPPROVED", "WITH_ISSUES"):
+        ex.actualizar_pieza("acme", ep_v, estado_meta=rechazo)
+        assert not any("motor" in f for f in historia_de_video()), rechazo
+    ex.actualizar_pieza("acme", ep_v, estado_meta="PENDING_REVIEW")             # en revisión no es un rechazo
+    assert "36 h más para que el motor decida" in historia_de_video()
 
 
 def test_fatiga_usa_la_frecuencia_acumulada_y_no_la_diaria(sembrado):

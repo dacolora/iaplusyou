@@ -903,12 +903,19 @@ def _roas_pieza(serie_, desde, hasta):
     return _dividir(dd["ingresos"], dd["gasto"])
 
 
+def _lo_juzga_el_motor(ex, pz):
+    """Solo evalúa el decisor una pieza activa, con anuncio en Meta y no rechazado, de un experimento corriendo
+    (tareas/experimentos.decidir y `_rechazada_por_meta`): a las demás no se les promete «que el motor decida»."""
+    return (ex.get("estado") == "corriendo" and pz.get("estado") == "activo" and bool(pz.get("meta_ad_id"))
+            and pz.get("estado_meta") not in tablero.ESTADOS_META_RECHAZO)
+
+
 def piezas(carga, reglas_cliente):
     """Una fila por pieza de `carga.datos`, la de más gasto primero: lo del ranking (gasto, CTR, gancho, CPC,
     ROAS, compras y Δ ROAS contra el periodo anterior), la métrica principal día a día contra la del experimento
     entero (`serie`/`promedio`: ROAS en un experimento de ventas, CTR del enlace en los demás), el veredicto con
     su nombre humano y la `historia`. El dinero sale del motor del Tablero, lo demás de metrica_dia. «Le faltan…»
-    solo se dice de una pieza activa de un experimento corriendo (las únicas que el motor evalúa)."""
+    solo se dice de una pieza que el motor evalúa (`_lo_juzga_el_motor`)."""
     per, ahora = carga.per, carga.datos.ahora
     desde = tablero.INICIO if per["es_todo"] else per["desde"]
     dias_pieza, veredictos, reglas_exp, out = _dias_del_proyecto(carga), _veredictos_por_pieza(carga), {}, []
@@ -921,7 +928,7 @@ def piezas(carga, reglas_cliente):
         detalle = _ratios(_agregado(filas_dia, carga.es_imagen))
         serie_p, promedio = _serie_metrica(carga, metrica, ep_id, serie_, filas_dia), _promedio_experimento(carga, ex, metrica)
         falta = None
-        if ex.get("estado") == "corriendo" and pz.get("estado") == "activo":
+        if _lo_juzga_el_motor(ex, pz):
             if ex["id"] not in reglas_exp:
                 reglas_exp[ex["id"]] = decisor.reglas_efectivas(reglas_cliente, ex.get("reglas"))
             falta = faltan(pz, ex, reglas_exp[ex["id"]], ahora)
