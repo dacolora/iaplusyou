@@ -31,13 +31,13 @@ UMBRALES_DESACTIVABLES = frozenset(_UMBRALES_DESACTIVABLES)
 ETIQUETAS = {
     "ventana_horas": N_("Horas mínimas corriendo"), "impresiones_min": N_("Impresiones mínimas"),
     "gasto_min_x_presupuesto": N_("Días de su presupuesto diario que debe haber gastado"),
-    "cpc_max": N_("Costo por clic máximo"), "ctr_min": N_("CTR mínimo (%)"),
+    "cpc_max": N_("Costo por clic máximo (en la moneda de la cuenta)"), "ctr_min": N_("CTR mínimo (%)"),
     "thruplay_min": N_("Parte mínima que ve el video completo (0–1)"),
-    "ventana_ventas_horas": N_("Horas para esperar ventas"), "cpa_max": N_("Costo por compra máximo"),
+    "ventana_ventas_horas": N_("Horas para esperar ventas"), "cpa_max": N_("Costo por compra máximo (en la moneda de la cuenta)"),
     "roas_min": N_("ROAS mínimo"),
     "escalar_pct_dia": N_("Cuánto sube el presupuesto por día (%)"),
-    "escalar_tope_dia": N_("Tope del presupuesto diario al escalar"),
-    "n_reediciones": N_("Versiones nuevas del guion al derivar"), "n_regeneraciones": N_("Clones nuevos al derivar"),
+    "escalar_tope_dia": N_("Tope del presupuesto diario al escalar (en la moneda de la cuenta)"),
+    "n_reediciones": N_("Versiones nuevas del guion al derivar"), "n_regeneraciones": N_("Clones nuevos al derivar (cada uno es un video nuevo que se cobra)"),
 }
 # Cómo se agrupan en el formulario: (título del grupo, reglas en el orden en que se leen). Toda clave de
 # REGLAS_DEFECTO está en un solo grupo (una prueba lo exige): una regla que no esté aquí no se vería en el formulario.

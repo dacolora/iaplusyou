@@ -329,7 +329,12 @@ def test_cada_regla_del_decisor_esta_en_un_solo_grupo_y_tiene_su_frase():
     # las frases del brief, tal cual: sin claves de código ni siglas sueltas
     assert decisor.ETIQUETAS["gasto_min_x_presupuesto"] == "Días de su presupuesto diario que debe haber gastado"
     assert decisor.ETIQUETAS["ventana_horas"] == "Horas mínimas corriendo"
-    assert decisor.ETIQUETAS["cpa_max"] == "Costo por compra máximo" and decisor.ETIQUETAS["thruplay_min"] == "Parte mínima que ve el video completo (0–1)"
+    assert decisor.ETIQUETAS["thruplay_min"] == "Parte mínima que ve el video completo (0–1)"
+    # lo que es dinero dice en qué moneda (la de la cuenta de Meta), y lo que cuesta dice que se cobra
+    for clave in ("cpc_max", "cpa_max", "escalar_tope_dia"):
+        assert decisor.ETIQUETAS[clave].endswith("(en la moneda de la cuenta)"), clave
+    assert decisor.ETIQUETAS["cpa_max"] == "Costo por compra máximo (en la moneda de la cuenta)"
+    assert "se cobra" in decisor.ETIQUETAS["n_regeneraciones"] and "video nuevo" in decisor.ETIQUETAS["n_regeneraciones"]
     assert all("_" not in str(v) for v in decisor.ETIQUETAS.values())
 
 

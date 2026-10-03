@@ -9,12 +9,15 @@
    El presupuesto se pide como UN total y los días (paso 3): Creatv reparte entre los países
    (`presupuesto_experimentos.repartir`, que `static/presupuesto_exp.js` replica; una prueba exige que den lo mismo) y
    el servidor lo vuelve a comprobar (`presupuesto_experimentos.validar`). El POST no cambia: presupuesto_<país>,
-   tope_total (= el total), dias, combinaciones… Sin multiplicador a la vista: lo grande es «Máximo que puede gastar». #}
-{% macro resumen_presupuesto(id) %}
-<div class="exp-resumen" id="{{ id }}" aria-live="polite">
+   tope_total (= el total), dias, combinaciones… Sin multiplicador a la vista: lo grande es «Máximo que puede gastar» (con el total
+   bajo lo que Meta acepta como tope de campaña, «Presupuesto planeado» y una línea que lo dice, porque ahí no hay tope duro). #}
+{# `viva`: solo UN resumen anuncia sus cambios a quien usa lector de pantalla (el del paso «Cuánto», donde se edita). #}
+{% macro resumen_presupuesto(id, viva=false) %}
+<div class="exp-resumen" id="{{ id }}"{% if viva %} aria-live="polite"{% endif %}>
   <p class="exp-maximo"></p>
   <p class="exp-dia"></p>
   <p class="exp-anuncios"></p>
+  <p class="exp-aviso-tope"></p>
   <p class="exp-nada">{{ _('Nada gasta hasta que pulses Activar') }}</p>
 </div>
 {% endmacro %}
@@ -81,7 +84,7 @@
 {# novalidate: los min/max nativos de un paso oculto (p. ej. el presupuesto de un país sin
    marcar) bloquearían el envío sin decir nada; el JS avisa y exp_probar valida todo. #}
 <form method="post" action="{{ url_for('exp_probar', cliente=cliente) }}" id="exp-probar" class="exp-pasos" hidden novalidate
-      data-minimo="{{ minimo_diario_exp }}" data-moneda="{{ moneda_exp }}">
+      data-minimo="{{ minimo_diario_exp }}" data-moneda="{{ moneda_exp }}" data-tope-campana="{{ tope_campana_min_exp }}">
   <ol class="exp-pasos-nav"><li data-ir="1" class="activo">{{ _('02 · Dónde') }}</li><li data-ir="2">{{ _('03 · Total y días') }}</li><li data-ir="3">{{ _('04 · Revisar') }}</li></ol>
 
   <section data-paso="1">
@@ -109,11 +112,12 @@
       <label>{{ _('Días') }} <input type="number" name="dias" value="7" min="1" max="90"></label>
     </div>
     <input type="range" id="exp-total-barra" class="exp-total-barra" aria-label="{{ _('Ajustar el total') }}">
-    {{ resumen_presupuesto('exp-resumen') }}
-    <p id="exp-minimo" class="exp-aviso" aria-live="polite" hidden></p>
+    {{ resumen_presupuesto('exp-resumen', true) }}
+    <p id="exp-total-aviso" class="exp-aviso" hidden>{{ _('Escribe el total.') }}</p>
+    <p id="exp-minimo" class="exp-aviso" hidden></p>
     <button type="button" class="btn-sm" id="exp-usar-minimo" hidden>{{ _('Usar ese total') }}</button>
     <details class="exp-ajuste"><summary>{{ _('Ajustar reparto') }}</summary>
-      <p class="vacio">{{ _('Cambia el presupuesto diario de cada país: el total se recalcula (suma × días).') }}</p>
+      <p class="vacio">{{ _('Cambia el presupuesto diario de cada país: el total se recalcula como la suma de los diarios por los días.') }}</p>
       <div class="exp-reparto">{% for codigo, p in paises_fe.items() %}<label data-reparto="{{ codigo }}" hidden>{{ p.bandera }} {{ p.nombre|traducir }}
       <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" value="{{ minimo_diario_exp }}"></label>{% endfor %}</div>
       <button type="button" class="btn-sm" id="exp-reparto-auto" hidden>{{ _('Volver al reparto automático') }}</button>
@@ -223,6 +227,9 @@
     var AL_DIA = {{ _('≈ %(dia)s al día', dia='{dia}')|tojson }};
     var MAXIMO_UN_DIA = {{ ngettext('Máximo que puede gastar: %(total)s en %(num)s día', 'Máximo que puede gastar: %(total)s en %(num)s días', 1, total='{total}', num='{n}')|tojson }};
     var MAXIMO_VARIOS_DIAS = {{ ngettext('Máximo que puede gastar: %(total)s en %(num)s día', 'Máximo que puede gastar: %(total)s en %(num)s días', 2, total='{total}', num='{n}')|tojson }};
+    var PLANEADO_UN_DIA = {{ ngettext('Presupuesto planeado: %(total)s en %(num)s día', 'Presupuesto planeado: %(total)s en %(num)s días', 1, total='{total}', num='{n}')|tojson }};
+    var PLANEADO_VARIOS_DIAS = {{ ngettext('Presupuesto planeado: %(total)s en %(num)s día', 'Presupuesto planeado: %(total)s en %(num)s días', 2, total='{total}', num='{n}')|tojson }};
+    var AVISO_SIN_TOPE = {{ _('Meta no pone un tope duro a la campaña por debajo de %(tope)s: Creatv reparte %(total)s en presupuestos diarios por país (≈ %(dia)s al día).', tope='{tope}', total='{total}', dia='{dia}')|tojson }};
     var PLANTILLA_ANUNCIOS = {{ _('%(anuncios)s (%(piezas)s en %(paises)s)', anuncios='{anuncios}', piezas='{piezas}', paises='{paises}')|tojson }};
     var PLANTILLA_MINIMO = {{ _('Con este reparto no se llega al mínimo diario de Meta (%(minimo)s al día) en: %(paises)s. Con un total de al menos %(total)s alcanza.', paises='{paises}', minimo='{minimo}', total='{total}')|tojson }};
     var AVISO_MARCA_PAIS = {{ _('Marca al menos un país.')|tojson }};
@@ -244,8 +251,11 @@
     function irA(n) {
       form.querySelectorAll('[data-paso]').forEach(function (s) { s.hidden = s.dataset.paso !== String(n); });
       form.querySelectorAll('.exp-pasos-nav li').forEach(function (li) { li.classList.toggle('activo', li.dataset.ir === String(n)); });
+      // Al ENTRAR a «Cuánto» un total vacío se rellena con la sugerencia «Estándar»; después, vaciarlo lo deja vacío.
+      alEntrar = true;
       if (n === 2) refrescarCuenta();
       if (n === 3) { armarCuadricula(); refrescarCuenta(); }
+      alEntrar = false;
       form.scrollIntoView({behavior: 'smooth', block: 'start'});
     }
     function paisesMarcados() { return paises.filter(function (p) { return p.checked; }).map(function (p) { return p.value; }); }
@@ -277,13 +287,17 @@
     // La cuenta vive en static/presupuesto_exp.js (réplica de presupuesto_experimentos.py: una prueba exige que den lo
     // mismo). Aquí solo se lee la pantalla y se pinta el resultado.
     var P = window.PresupuestoExp;
+    // Desde qué total se manda el tope a la campaña de Meta (lanzador.minimo_tope_campana): por debajo no hay tope duro.
+    var topeCampana = parseFloat(form.dataset.topeCampana || '0');
     var totalInput = form.querySelector('[name=tope_total]'), diasInput = form.querySelector('[name=dias]');
-    var barra = document.getElementById('exp-total-barra'), aviso = document.getElementById('exp-minimo');
+    var barraTotal = document.getElementById('exp-total-barra'), aviso = document.getElementById('exp-minimo');
+    var avisoTotal = document.getElementById('exp-total-aviso');
     var usarMinimo = document.getElementById('exp-usar-minimo'), repartoAuto = document.getElementById('exp-reparto-auto');
     var resumenes = [document.getElementById('exp-resumen'), document.getElementById('exp-resumen-final')];
     var enteros = P.EN_ENTEROS.indexOf(moneda) !== -1;
     // `manual`: la persona editó el diario de algún país («Ajustar reparto»); el total se recalcula de ahí.
-    var manual = false, ultimoMinimo = 0, estadoActual = {}, textoMaximo = '';
+    var manual = false, ultimoMinimo = 0, estadoActual = {}, textoMaximo = '', textoConfirmar = '';
+    var alEntrar = false, ultimosAnuncios = 0, rango = {anuncios: -1};
     // useGrouping «always»: «4.000», no «4000» (en español un número de cuatro cifras no se agrupa solo; el servidor sí lo hace).
     function numeroLocal(n) { return Number.isFinite(n) ? n.toLocaleString(document.documentElement.lang || 'es', {maximumFractionDigits: 2, useGrouping: "always"}) : ''; }
     function dinero(n) { return numeroLocal(n) + ' ' + moneda; }
@@ -306,6 +320,7 @@
         r.querySelector('.exp-maximo').textContent = d.maximo;
         r.querySelector('.exp-dia').textContent = d.dia;
         r.querySelector('.exp-anuncios').textContent = d.anuncios;
+        r.querySelector('.exp-aviso-tope').textContent = d.sinTope;
       });
     }
     function refrescarCuenta() {
@@ -315,8 +330,10 @@
       form.querySelectorAll('[data-atajo]').forEach(function (b, i) {
         b.querySelector('strong').textContent = sugerencias[i] ? dinero(sugerencias[i].total) + ' · ' + sugerencias[i].dias + SUFIJO_DIAS : '';
       });
-      // Sin cifra todavía, la sugerencia «Estándar» (la persona la cambia: es solo un punto de partida).
-      if (!totalInput.value && anuncios) totalInput.value = sugerencias[1].total;
+      // Sin cifra, la sugerencia «Estándar» (la persona la cambia: es solo un punto de partida) SOLO al entrar al paso o
+      // cuando cambia el número de anuncios; si la borra a mano, el campo se queda vacío y se avisa, nunca una cifra inventada.
+      if (!totalInput.value && anuncios && (alEntrar || anuncios !== ultimosAnuncios)) totalInput.value = sugerencias[1].total;
+      ultimosAnuncios = anuncios;
       var total = Number(totalInput.value);
       var conTotal = Number.isFinite(total) && total > 0;
       var calculo = anuncios && diasOk ? P.repartir(conTotal ? total : 1, dias, pesos, moneda, minimo) : null;
@@ -341,9 +358,15 @@
       var anunciosTxt = (anuncios === 1 ? UN_ANUNCIO : VARIOS_ANUNCIOS).replace('{n}', anuncios);
       var piezasTxt = (est.piezas === 1 ? UNA_PIEZA : VARIAS_PIEZAS).replace('{n}', est.piezas);
       var paisesTxt = (nPaises === 1 ? UN_PAIS : VARIOS_PAISES).replace('{n}', nPaises);
-      textoMaximo = hayCifras ? (dias === 1 ? MAXIMO_UN_DIA : MAXIMO_VARIOS_DIAS).replace('{total}', dinero(total)).replace('{n}', dias) : '';
+      // «Máximo que puede gastar» solo es verdad con un tope duro en Meta (el total llega al mínimo para un tope de campaña);
+      // por debajo, el límite son los diarios y la fecha de cierre: se dice «planeado» y se explica en una línea.
+      var sinTope = hayCifras && total < topeCampana;
+      var plantillaMaximo = sinTope ? (dias === 1 ? PLANEADO_UN_DIA : PLANEADO_VARIOS_DIAS) : (dias === 1 ? MAXIMO_UN_DIA : MAXIMO_VARIOS_DIAS);
+      textoMaximo = hayCifras ? plantillaMaximo.replace('{total}', dinero(total)).replace('{n}', dias) : '';
+      var textoSinTope = sinTope ? AVISO_SIN_TOPE.replace('{tope}', dinero(topeCampana)).replace('{total}', dinero(total)).replace('{dia}', dinero(diario)) : '';
+      textoConfirmar = textoMaximo ? textoMaximo + (textoSinTope ? '. ' + textoSinTope : '.') : '';
       pintarResumen({
-        maximo: textoMaximo,
+        maximo: textoMaximo, sinTope: textoSinTope,
         dia: hayCifras ? [AL_DIA.replace('{dia}', dinero(diario))].concat(porPais).join(' · ') : '',
         // «6 anuncios (3 piezas en 2 países)»; un solo anuncio no necesita el paréntesis.
         anuncios: !anuncios ? '' : anuncios === 1 ? anunciosTxt
@@ -354,6 +377,7 @@
       aviso.hidden = !bajo; usarMinimo.hidden = !bajo;
       aviso.textContent = bajo ? PLANTILLA_MINIMO.replace('{paises}', bajos.map(etiquetaPais).join(', ')).replace('{minimo}', dinero(minimo)).replace('{total}', dinero(ultimoMinimo)) : '';
       repartoAuto.hidden = !manual;
+      avisoTotal.hidden = !(anuncios > 0 && !conTotal && pasoVisible() === 2);
       afinarBarra(sugerencias, calculo, total);
       var n = est.piezas;
       if (nombre && !nombre.dataset.tocado) {
@@ -363,14 +387,21 @@
       }
     }
     function campoPaisesVisibles(ps) { form.querySelectorAll('[data-reparto]').forEach(function (l) { l.hidden = !ps.includes(l.dataset.reparto); }); }
-    // La barra del total: va del total mínimo que respeta a Meta hasta el doble de la sugerencia «Fuerte».
+    // El deslizador del total: del total mínimo que respeta a Meta hasta el doble de la sugerencia «Fuerte». El PASO y el tope
+    // se fijan al entrar al paso o cuando cambia el número de anuncios (no se mueven mientras se escribe o se arrastra), y el
+    // mínimo se alinea al paso para que un total redondo («390.000») caiga justo en una marca y no salte a la de al lado.
     function afinarBarra(sugerencias, calculo, total) {
-      if (!sugerencias.length || !calculo) { barra.hidden = true; return; }
-      barra.hidden = false;
-      var tope = Math.max(sugerencias[2].total * 2, total || 0, calculo.total_minimo);
-      var paso = Math.max(1 / P.factor(moneda), Math.pow(10, String(Math.floor(tope)).length - 3));
-      barra.min = calculo.total_minimo; barra.max = tope; barra.step = paso;
-      barra.value = Number.isFinite(total) ? total : calculo.total_minimo;
+      if (!sugerencias.length || !calculo) { barraTotal.hidden = true; return; }
+      barraTotal.hidden = false;
+      if (rango.anuncios !== estadoActual.anuncios) {
+        var tope = sugerencias[2].total * 2;
+        var paso = Math.max(1 / P.factor(moneda), Math.pow(10, String(Math.floor(tope)).length - 3));
+        rango = {anuncios: estadoActual.anuncios, paso: paso, max: Math.ceil(tope / paso) * paso};
+      }
+      barraTotal.step = rango.paso; barraTotal.max = rango.max;
+      barraTotal.min = Math.min(Math.ceil(calculo.total_minimo / rango.paso) * rango.paso, rango.max);
+      barraTotal.value = Number.isFinite(total) && total > 0 ? total : barraTotal.min;
+      barraTotal.setAttribute('aria-valuetext', Number.isFinite(total) ? dinero(total) : '');
     }
     // Lo que impide seguir, dicho en palabras (vacío = todo bien). Lo mismo lo dice el servidor si alguien se salta esto.
     function problema() {
@@ -394,7 +425,7 @@
     });
     usarMinimo.addEventListener('click', function () { manual = false; totalInput.value = ultimoMinimo; refrescarCuenta(); });
     repartoAuto.addEventListener('click', function () { manual = false; refrescarCuenta(); });
-    barra.addEventListener('input', function () { manual = false; totalInput.value = barra.value; refrescarCuenta(); });
+    barraTotal.addEventListener('input', function () { manual = false; totalInput.value = barraTotal.value; refrescarCuenta(); });
     function armarCuadricula() {
       var previas = {}; cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function(i) { previas[i.value] = i.checked; });
       var ps = paisesMarcados();
@@ -452,8 +483,8 @@
       if (motivo) { ev.preventDefault(); alert(motivo); return; }
       var marcadasCuadricula = Array.prototype.slice.call(cuadricula.querySelectorAll('input[name=combinaciones]:checked'));
       if (!marcadasCuadricula.length) { ev.preventDefault(); alert(AVISO_CUADRICULA_VACIA); return; }
-      // La confirmación repite lo que puede costar: el máximo, en cifras.
-      if (!confirm(PLANTILLA_CONFIRMAR_LANZAR.replace('{resumen}', textoMaximo + '.'))) { ev.preventDefault(); return; }
+      // La confirmación repite lo que puede costar, con las mismas palabras que la pantalla (máximo o planeado).
+      if (!confirm(PLANTILLA_CONFIRMAR_LANZAR.replace('{resumen}', textoConfirmar))) { ev.preventDefault(); return; }
       // Los países deshabilitados por una final igual deben viajar: se
       // rehabilitan solo cuando el envío sigue adelante.
       paises.forEach(function (p) { p.disabled = false; });

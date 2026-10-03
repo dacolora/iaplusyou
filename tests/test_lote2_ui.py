@@ -36,7 +36,7 @@ const moneda='COP', minimo=4000;
 // El trozo que se evalúa es el de «Cuánto» y la cuadrícula: la cuenta viene de static/presupuesto_exp.js y sus campos
 // salen de `form` y `document`, que aquí son de mentira (un nodo por selector, para poder leer lo que se pintó).
 var window={}; window.PresupuestoExp=require(""" + json.dumps(cuenta_js) + r""");
-const nodo=()=>{const hijos={}; return {value:'', hidden:false, textContent:'', dataset:{}, addEventListener:()=>{},
+const nodo=()=>{const hijos={}; return {value:'', hidden:false, textContent:'', dataset:{}, addEventListener:()=>{}, setAttribute:()=>{},
   querySelector:s=>hijos[s]||(hijos[s]=nodo()), querySelectorAll:()=>[]};};
 const campos={'[name=tope_total]':Object.assign(nodo(),{value:'400000'}), '[name=dias]':Object.assign(nodo(),{value:'7'})};
 const form={querySelector:s=>campos[s]||(campos[s]=Object.assign(nodo(),{value:'4000'})),querySelectorAll:()=>[],dataset:{minimo:'4000',moneda:'COP'}};
