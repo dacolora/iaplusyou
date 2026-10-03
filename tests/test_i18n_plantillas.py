@@ -24,6 +24,7 @@ PLANTILLAS_TRADUCIDAS = [
     "_tab_catalogo.html", "_catalogo_campos_comerciales.html", "_catalogo_importar.html",
     "_maniqui.html", "_seccion_personajes.html",
     "_tab_experimentos.html", "_form_reglas.html", "_anuncios_sueltos.html", "_organico_publicar.html",
+    "_exp_gestionar.html", "_exp_pieza.html", "_exp_probar.html", "_exp_resultados.html", "exp_nuevo.html",
     "_tab_tablero.html", "_tab_alertas.html", "landing_cliente.html",
     # Merge de main (2026-09-27): parciales nuevos dentro de pantallas ya traducidas
     # (Crear › detalle de la pieza; Catálogo › ficha del producto).

@@ -1,0 +1,16 @@
+{# PROVISIONAL (E2 Task 5): lo mínimo para que las rutas y sus pruebas funcionen; la Task 6 reemplaza el cuerpo con las
+   secciones de la maqueta. Fragmento del centro de resultados (ruta exp_resultados). Contexto: `r`
+   (resultados.contexto), `ex` (el experimento elegido en el filtro, o None), `tablero`, `alertas_ctx`, modo_meta,
+   capacidades_meta, paises_fe y todo `_contexto_experimentos`. Nada de <script>: un fragmento por fetch no los
+   ejecuta. #}
+<div class="cr-resultados-fragmento">
+  {% if ex %}{% include "_exp_gestionar.html" %}{% endif %}
+  <section class="cr-seccion" id="cr-decision"><h3 class="cr-seccion-titulo">{{ _('Necesita tu decisión') }}</h3></section>
+  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">01</span> {{ _('Resumen del periodo') }}</h3></section>
+  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">02</span> {{ _('Día a día') }}</h3></section>
+  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">03</span> {{ _('Dónde se cae la gente') }}</h3></section>
+  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">04</span> {{ _('Evolución del diagnóstico por pieza') }}</h3></section>
+  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">05</span> {{ _('Ranking de piezas') }}</h3></section>
+  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">06</span> {{ _('Quién compra y dónde lo ve') }}</h3></section>
+  <section class="cr-seccion"><h3 class="cr-seccion-titulo"><span class="cr-num">07</span> {{ _('Experimentos') }}</h3></section>
+</div>

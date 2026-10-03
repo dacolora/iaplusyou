@@ -223,11 +223,17 @@ def test_ver_cliente_pasa_contexto_experimentos(app, base_temporal, monkeypatch)
     assert r.status_code == 200
     assert {e["id"] for e in capturado["experimentos"]} == {eid_armando, eid_lanzando}
     assert [e["id"] for e in capturado["experimentos_armando"]] == [eid_armando]
-    assert capturado["elegibles_exp"] == ex.elegibles("acme")
+    # E2: las piezas elegibles (la galería) ya no viajan en la página del proyecto: las pide «Nuevo experimento».
+    assert "elegibles_exp" not in capturado
     assert capturado["trabajos_exp"] == {eid_lanzando: {"job_id": job_id}}
     assert capturado["objetivos_exp"] is meta_campaign.OBJETIVOS_VALIDOS_FASE1
     assert capturado["moneda_exp"] == "COP"
     assert capturado["minimo_diario_exp"] == 4000
+    capturado.clear()
+    assert app["c"].get("/cliente/acme/experimentos/nuevo").status_code == 200
+    assert capturado["elegibles_exp"] == ex.elegibles("acme")
+    assert [e["id"] for e in capturado["experimentos_armando"]] == [eid_armando]
+    assert capturado["capacidades_meta"]["estado"] == "conectado" and capturado["moneda_exp"] == "COP"
 
 
 def test_cerrar_rechaza_mientras_esta_lanzando(app, base_temporal, monkeypatch):
@@ -292,13 +298,15 @@ def test_tab_experimentos_render_estados(app, base_temporal, estado, con_campana
         ex.snapshot(ep_id, {"impresiones": 1000, "clics_enlace": 20, "ctr": 2.0, "cpc": 500.0,
                              "thruplay_rate": 0.4, "gasto": 15000.0, "compras": 3, "roas": 2.5,
                              "estado_meta_texto": "Activo"})
-    r = app["c"].get("/cliente/acme")
+    assert app["c"].get("/cliente/acme").status_code == 200
+    # La galería primero vive en «Nuevo experimento» (E2), sin el formulario viejo de «+ Nuevo experimento».
+    nuevo = app["c"].get("/cliente/acme/experimentos/nuevo").data.decode("utf-8")
+    assert 'id="exp-galeria"' in nuevo and 'action="/cliente/acme/experimentos/nuevo"' not in nuevo
+    # La gestión de ESE experimento (sus botones) llega en el fragmento del centro de resultados.
+    r = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}", headers={"X-Requested-With": "fetch"})
     assert r.status_code == 200
     cuerpo = r.data.decode("utf-8")
-    # La galería primero: la pestaña abre con las piezas, sin «+ Nuevo experimento».
-    assert 'id="exp-galeria"' in cuerpo and "+ Nuevo experimento" not in cuerpo
-    # Los botones se miran en las acciones de ESA tarjeta: el «Lanzar a Meta
-    # (en pausa)» del paso 3 de la galería está siempre en la página.
+    # Los botones se miran en las acciones de ESA tarjeta.
     acciones = cuerpo.split(f'id="exp-{eid}"')[1].split('<div class="exp-acciones">')[1].split("</div>")[0]
     for texto in esperados:
         assert texto in acciones, f"esperaba '{texto}' en estado {estado}"
@@ -367,7 +375,7 @@ def test_anuncio_suelto_en_cola_ofrece_meter_en_experimento(app, base_temporal):
     assert "Ahora esto se hace con un experimento" in cuerpo
     assert ">Meter en experimento</button>" not in cuerpo  # sin experimento en armado no hay adónde meterla
     # M6: sin experimento en armado, el mismo «Probar en Meta» de Crear (galería con la pieza marcada).
-    assert f'href="#experimentos?piezas={pid}"' in cuerpo and "Crea un experimento arriba" not in cuerpo
+    assert f'href="/cliente/acme/experimentos/nuevo?piezas={pid}"' in cuerpo and "Crea un experimento arriba" not in cuerpo
     assert "/cliente/acme/ads/publicar" not in cuerpo
     assert f"/cliente/acme/ads/{aid}/eliminar" in cuerpo
 
@@ -380,7 +388,7 @@ def test_anuncio_suelto_en_cola_ofrece_meter_en_experimento(app, base_temporal):
     # Y el formulario de verdad mete la pieza, volviendo a Experimentos.
     r = app["c"].post("/cliente/acme/experimentos/meter",
                       data={"legado_id": "cf_7", "experimento_id": str(eid), "pais": "CO", "volver": "experimentos"})
-    assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos?exp=%d" % eid)
     assert len(ex.piezas("acme", eid)) == 1
 
 

@@ -165,6 +165,29 @@ def test_org_publicar_vuelve_a_final_edition_y_guarda_ep_id(app, base_temporal):
     assert any(ev["tipo"] == "accion" and "orgánica en cola" in ev["mensaje"] for ev in e["eventos"])
 
 
+def test_org_publicar_y_reintentar_desde_un_experimento_vuelven_a_ese_experimento(app, base_temporal):
+    """E2: el bloque orgánico de la gestión de un experimento (volver=experimentos, con la pieza del experimento)
+    vuelve al centro de resultados con ese experimento abierto (`#experimentos?exp=<id>`); sin pieza de
+    experimento (la pieza suelta) vuelve a la pestaña, como siempre."""
+    eid = _experimento()
+    pid, ep = _pieza_en(base_temporal, eid)
+    r = app["c"].post("/cliente/acme/organico/publicar",
+                      data=dict(FORM_OK, ep_id=str(ep), plataformas=["instagram"], volver="experimentos"))
+    assert r.headers["Location"].endswith("#experimentos?exp=%d" % eid)
+    # Un error de validación también: la persona sigue donde estaba.
+    r = app["c"].post("/cliente/acme/organico/publicar",
+                      data=dict(FORM_OK, ep_id=str(ep), plataformas=[], volver="experimentos"))
+    assert r.headers["Location"].endswith("#experimentos?exp=%d" % eid)
+    (pub,) = app["organico"].listar("acme", pieza_id=pid)
+    app["organico"].actualizar("acme", pub["id"], estado="error", error="IG dijo que no")
+    r = app["c"].post(f"/cliente/acme/organico/{pub['id']}/reintentar", data={"volver": "experimentos"})
+    assert r.headers["Location"].endswith("#experimentos?exp=%d" % eid)
+    # La que salió de Crear no es de ningún experimento: a la pestaña.
+    suelta = _pieza(base_temporal, legado="cf_suelta")
+    r = app["c"].post("/cliente/acme/organico/publicar", data=dict(FORM_OK, pieza_id=str(suelta), volver="experimentos"))
+    assert r.headers["Location"].endswith("#experimentos")
+
+
 def test_org_publicar_duplicado_avisa_y_no_repite(app, base_temporal):
     pid = _pieza(base_temporal)
     org = app["organico"]

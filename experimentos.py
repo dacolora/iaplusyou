@@ -5,7 +5,11 @@ anuncio por pieza. Este módulo es solo datos (SQLAlchemy Core); las llamadas a
 Meta viven en lanzador.py. Campañas (ads.py) sigue usando el experimento legado
 "Anuncios sueltos" y no pasa por aquí.
 """
+import contextlib
+import copy
+import functools
 import json
+import threading
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -618,12 +622,52 @@ def _a_dict(con, f, limite_eventos):
     }
 
 
-def cargar(cliente):
+# ---- lecturas memorizadas por petición (centro de resultados, 2026-10-02) ----
+# `cargar` es la lectura pesada de la pantalla (cada experimento con sus piezas, la última métrica de cada una y
+# sus eventos) y una página la pedía varias veces: el fragmento de resultados, la gestión del experimento, el
+# Tablero del historial y las alertas lo cargan cada uno por su lado (tablero.cargar_datos →
+# experimentos.cargar). Dentro de `lecturas_memorizadas()` —solo en rutas GET que pintan y no escriben— se lee UNA
+# vez por proyecto y cada llamada recibe su copia, así quien la modifique no le cambia nada a la siguiente. Fuera
+# (rutas que escriben, el worker) todo sigue igual. No se invalida al escribir: no se usa donde se escribe.
+_MEMO = threading.local()
+
+
+@contextlib.contextmanager
+def lecturas_memorizadas():
+    if getattr(_MEMO, "d", None) is not None:
+        yield
+        return
+    _MEMO.d = {}
+    try:
+        yield
+    finally:
+        _MEMO.d = None
+
+
+def con_lecturas_memorizadas(fn):
+    """Decorador para una ruta GET que solo pinta (gunicorn reutiliza los hilos: el memo se descarta al salir)."""
+    @functools.wraps(fn)
+    def envoltura(*args, **kwargs):
+        with lecturas_memorizadas():
+            return fn(*args, **kwargs)
+    return envoltura
+
+
+def _leer_todos(cliente):
     with db.conectar() as con:
         filas = con.execute(sa.select(db.experimento).where(
             db.experimento.c.cliente == cliente, db.experimento.c.legado.is_(False))
             .order_by(db.experimento.c.id.desc()))
         return [_a_dict(con, f, 30) for f in filas]
+
+
+def cargar(cliente):
+    memo = getattr(_MEMO, "d", None)
+    if memo is None:
+        return _leer_todos(cliente)
+    if cliente not in memo:
+        memo[cliente] = _leer_todos(cliente)
+    return copy.deepcopy(memo[cliente])
 
 
 def obtener(cliente, experimento_id):

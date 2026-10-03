@@ -4604,6 +4604,9 @@ msgstr ""
 "  YouTube Shorts. Only connected channels are offered; publishing always\n"
 "  asks for your click (or the engine's proposal, with the text in view)."
 
+msgid "Dónde se cae la gente"
+msgstr "Where people drop off"
+
 msgid "Dónde se usó"
 msgstr "Where it was used"
 
@@ -6847,6 +6850,9 @@ msgstr "Evaluate now"
 
 msgid "Eventos en bitácora"
 msgstr "Log events"
+
+msgid "Evolución del diagnóstico por pieza"
+msgstr "Diagnosis over time, by piece"
 
 msgid "Exclamación"
 msgstr "Exclamation"
@@ -9961,6 +9967,9 @@ msgstr "Nano Banana Pro Ultra (4k)"
 msgid "Navidad"
 msgstr "Christmas"
 
+msgid "Necesita tu decisión"
+msgstr "Needs your decision"
+
 msgid "Negro"
 msgstr "Black"
 
@@ -11025,6 +11034,9 @@ msgstr "New version with a different configuration"
 
 msgid "Nuevo"
 msgstr "New"
+
+msgid "Nuevo experimento"
+msgstr "New experiment"
 
 msgid "Nuevo producto"
 msgstr "New product"
@@ -12248,6 +12260,9 @@ msgstr "Remove “{nombre}” from the list"
 msgid "Quitaste los subtítulos de este idioma."
 msgstr "You removed the subtitles for this language."
 
+msgid "Quién compra y dónde lo ve"
+msgstr "Who buys and where they see it"
+
 msgid "Quién sostiene qué"
 msgstr "Who holds what"
 
@@ -12329,6 +12344,9 @@ msgstr "ROAS (Pixel)"
 
 msgid "ROAS mínimo"
 msgstr "Minimum ROAS"
+
+msgid "Ranking de piezas"
+msgstr "Piece ranking"
 
 msgid "Rayo"
 msgstr "Lightning"
@@ -12818,6 +12836,9 @@ msgstr "Results updated."
 
 msgid "Resumen"
 msgstr "Summary"
+
+msgid "Resumen del periodo"
+msgstr "Period summary"
 
 msgid "Retención"
 msgstr "Hold"
@@ -18934,6 +18955,9 @@ msgstr "← Final edition"
 
 msgid "← Volver a Salud"
 msgstr "← Back to Health"
+
+msgid "← Volver a resultados"
+msgstr "← Back to results"
 
 msgid "← Volver al panel"
 msgstr "← Back to the panel"
