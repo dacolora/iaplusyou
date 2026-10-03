@@ -13,7 +13,11 @@ tumbar lanzador.refrescar ni el decisor.
 """
 import json
 import logging
-from datetime import date, timedelta
+import math
+import time
+from contextvars import ContextVar
+from flask_babel import gettext
+from datetime import date, datetime, timedelta
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
@@ -29,6 +33,19 @@ import meta_errores
 log = logging.getLogger("creatv.meta_detalle")
 
 MAX_PAGINAS = 20
+PLAZO_S = 60
+_PLAZO = ContextVar("detalle_meta_plazo", default=None)
+
+
+class Paginas(list):
+    incompleto = False
+
+
+def _comprobar_plazo():
+    plazo = _PLAZO.get()
+    if plazo is not None and time.monotonic() >= plazo:
+        raise _Corte(gettext("El detalle de Meta quedó incompleto por el límite de tiempo."))
+
 _BASE = "ad_id,impressions,reach,frequency,clicks,inline_link_clicks,spend,cpm,actions,action_values"
 CAMPOS_DIA = (_BASE + ",video_play_actions,video_p25_watched_actions,video_p50_watched_actions"
               ",video_p75_watched_actions,video_p95_watched_actions,video_p100_watched_actions"
@@ -53,8 +70,9 @@ _COMPRA = ("purchase", "omni_purchase")   # mismo orden que meta_ads/insights.ob
 
 def _num(valor):
     try:
-        return float(valor or 0)
-    except (TypeError, ValueError):
+        n = float(valor or 0)
+        return n if math.isfinite(n) and abs(n) < 2**63 else 0.0
+    except (TypeError, ValueError, OverflowError):
         return 0.0
 
 
@@ -110,7 +128,9 @@ def fila_desglose(fila, dimension):
 
 
 def _ranking(valor):
-    return None if not valor or valor == "UNKNOWN" else valor
+    return valor if isinstance(valor, str) and valor in {
+        "ABOVE_AVERAGE", "AVERAGE", "BELOW_AVERAGE_10", "BELOW_AVERAGE_20", "BELOW_AVERAGE_35"
+    } else None
 
 
 def rankings_de(fila):
@@ -125,8 +145,9 @@ def _filtro_campana(campaign_id):
 
 def _paginas(params):
     """GET act_<cuenta>/insights siguiendo el cursor `after` hasta MAX_PAGINAS."""
-    filas, after = [], None
+    filas, after = Paginas(), None
     for _ in range(MAX_PAGINAS):
+        _comprobar_plazo()
         p = dict(params, limit=500)
         if after:
             p["after"] = after
@@ -136,6 +157,7 @@ def _paginas(params):
         after = (paging.get("cursors") or {}).get("after")
         if not paging.get("next") or not after:
             return filas
+    filas.incompleto = True
     log.warning("Detalle de Meta: se cortó en %s páginas", MAX_PAGINAS)
     return filas
 
@@ -164,8 +186,14 @@ def pedir_rankings(campaign_id, desde, hasta):
 DIAS_REPASO = 2
 
 
+def _completas(filas):
+    if getattr(filas, "incompleto", False):
+        raise _Corte(gettext("El detalle de Meta quedó incompleto por el límite de páginas."))
+
+
 def guardar_dias(ep_por_ad, filas):
     """Upsert por (anuncio, fecha). Filas de anuncios fuera de `ep_por_ad` se ignoran."""
+    _completas(filas)
     n = 0
     ahora = db.ahora()
     with db.conectar() as con:
@@ -173,6 +201,10 @@ def guardar_dias(ep_por_ad, filas):
             ep_id = ep_por_ad.get(str(fila.get("ad_id") or ""))
             valores = fila_diaria(fila)
             if not ep_id or not valores["fecha"]:
+                continue
+            try:
+                valores["fecha"] = date.fromisoformat(valores["fecha"]).isoformat()
+            except (TypeError, ValueError):
                 continue
             valores.update(experimento_pieza_id=ep_id, actualizado_en=ahora)
             stmt = insert_sqlite(db.metrica_dia).values(**valores)
@@ -185,12 +217,13 @@ def guardar_dias(ep_por_ad, filas):
 
 def guardar_desglose(ep_por_ad, dimension, filas):
     """Reemplaza, en una transacción, el juego (anuncio, dimensión) de cada anuncio que vino en `filas`."""
+    _completas(filas)
     por_ep = {}
     for fila in filas:
         ep_id = ep_por_ad.get(str(fila.get("ad_id") or ""))
         if ep_id:
             clave, valores = fila_desglose(fila, dimension)
-            por_ep.setdefault(ep_id, {})[clave] = valores
+            por_ep.setdefault(ep_id, {})[clave[:120]] = valores
     ahora = db.ahora()
     t = db.metrica_desglose
     with db.conectar() as con:
@@ -203,6 +236,7 @@ def guardar_desglose(ep_por_ad, dimension, filas):
 
 
 def guardar_rankings(cliente, ep_por_ad, filas):
+    _completas(filas)
     n = 0
     for fila in filas:
         ep_id = ep_por_ad.get(str(fila.get("ad_id") or ""))
@@ -219,10 +253,10 @@ def desde_para(ep_ids, creado_en, hoy):
     with db.conectar() as con:
         ultimo = con.execute(sa.select(sa.func.max(db.metrica_dia.c.fecha))
                              .where(db.metrica_dia.c.experimento_pieza_id.in_(list(ep_ids) or [-1]))).scalar()
-    if ultimo:
-        desde = date.fromisoformat(ultimo) - timedelta(days=DIAS_REPASO)
-    else:
-        desde = date.fromisoformat((creado_en or hoy.isoformat())[:10])
+    try:
+        desde = date.fromisoformat(ultimo) - timedelta(days=DIAS_REPASO) if ultimo else date.fromisoformat((creado_en or hoy.isoformat())[:10])
+    except (TypeError, ValueError):
+        desde = date.fromisoformat(desde_creacion(creado_en, hoy))
     return min(desde, hoy).isoformat()
 
 
@@ -246,7 +280,10 @@ def _es_corte_de_red(texto):
 
 def desde_creacion(creado_en, hoy):
     """Día en que se creó el experimento (nunca después de hoy): desde dónde se piden los desgloses y los rankings."""
-    d = date.fromisoformat((creado_en or hoy.isoformat())[:10])
+    try:
+        d = date.fromisoformat((creado_en or hoy.isoformat())[:10])
+    except (TypeError, ValueError):
+        d = hoy
     return min(d, hoy).isoformat()
 
 
@@ -277,11 +314,14 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
 
         def _parte(nombre, fn):
             try:
+                _comprobar_plazo()
                 fn()
             except Exception as e:  # noqa: BLE001 — una parte no tumba las otras
                 texto = cola.sin_token(str(e))
                 r["errores"][nombre] = cola.recortar(texto)
                 log.warning("Detalle de Meta (%s, exp %s, %s): %s", cliente, experimento_id, nombre, texto)
+                if isinstance(e, _Corte):
+                    raise
                 if es_limite(texto):
                     raise _Limite() from None
                 if _es_corte_de_red(texto):   # Meta caída o con error 5xx: no seguir golpeándola
@@ -293,6 +333,7 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
                 _parte(dim, lambda dim=dim: r.__setitem__("desgloses", r["desgloses"] + guardar_desglose(ep_por_ad, dim, pedir_desglose(campana, dim, desde_total, hoy.isoformat()))))
             _parte("rankings", lambda: r.__setitem__("rankings", guardar_rankings(cliente, ep_por_ad, pedir_rankings(campana, desde_total, hoy.isoformat()))))
 
+        plazo_token = _PLAZO.set(time.monotonic() + PLAZO_S)
         try:
             lanzador._con_credenciales(cliente, _correr)
         except _Limite:
@@ -303,6 +344,8 @@ def refrescar_detalle(cliente, experimento_id, hoy=None):
             texto = cola.sin_token(str(e))
             r["errores"]["credenciales"] = cola.recortar(texto)
             log.warning("Detalle de Meta (%s, exp %s, credenciales): %s", cliente, experimento_id, texto)
+        finally:
+            _PLAZO.reset(plazo_token)
     except Exception as e:  # noqa: BLE001 — desde_para, obtener, etc.
         texto = cola.sin_token(str(e))
         r["errores"]["interno"] = cola.recortar(texto)
@@ -325,7 +368,9 @@ def encolar_todos():
     with db.conectar() as con:
         filas = con.execute(sa.select(db.experimento.c.id, db.experimento.c.cliente).where(
             db.experimento.c.legado.is_(False), db.experimento.c.meta_campaign_id.isnot(None))).all()
-    for eid, cliente in filas:
+    inicio = datetime.now()
+    for posicion, (eid, cliente) in enumerate(filas):
         cola.encolar("exp_detalle", {"cliente": cliente, "experimento_id": eid}, cliente=cliente,
-                     job_id=job_id_detalle(cliente, eid), duracion_estimada=60, max_intentos=2)
+                     job_id=job_id_detalle(cliente, eid), duracion_estimada=60, max_intentos=2,
+                     prioridad=1, ejecutar_desde=(inicio + timedelta(seconds=posicion * PLAZO_S)).isoformat(timespec="seconds"))
     return len(filas)

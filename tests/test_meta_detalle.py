@@ -486,3 +486,43 @@ def test_guardar_desglose_ignora_un_ad_ajeno_y_no_toca_el_juego_de_otra_pieza(do
     for f in _filas(db, db.metrica_desglose):
         por_ep.setdefault(f["experimento_pieza_id"], []).append(f["clave"])
     assert por_ep == {ep1: ["35-44|female"], ep2: ["25-34|female"]}   # ep2 intacto, ep1 reemplazado
+
+
+@pytest.mark.parametrize('valor', ['inf', 'nan', '1e999', '1e30'])
+def test_num_rechaza_valores_no_persistibles(valor):
+    import meta_detalle as md
+    assert md.fila_diaria({'impressions': valor})['impresiones'] == 0
+
+
+def test_ranking_rechaza_valor_ajeno():
+    import meta_detalle as md
+    assert md._ranking('inventado') is None
+
+
+def test_no_guarda_fecha_invalida(dos_piezas):
+    import meta_detalle as md
+    assert md.guardar_dias({'ad_1': dos_piezas['ep1']},
+                           [{**FILA_DIA, 'date_start': '2026-99-99'}]) == 0
+
+
+def test_desglose_deduplica_clave_ya_acotada(dos_piezas):
+    import meta_detalle as md
+    filas = [{**FILA_DIA, 'region': 'x' * 120 + sufijo} for sufijo in ('a', 'b')]
+    assert md.guardar_desglose({'ad_1': dos_piezas['ep1']}, 'region', filas) == 1
+
+
+def test_paginas_marca_resultado_incompleto(monkeypatch):
+    md, falso = _con_llamar(monkeypatch, [{'data': [], 'paging': {'next': 'x', 'cursors': {'after': 'a'}}}])
+    monkeypatch.setattr(md, 'MAX_PAGINAS', 1)
+    filas = md.pedir_rankings('cmp', '2026-09-01', '2026-10-01')
+    assert filas.incompleto
+
+
+def test_plazo_vencido_corta_la_pasada_sin_llamar_a_meta(con_meta, monkeypatch):
+    """PND-117: con el plazo de la pasada vencido, no se hace ninguna llamada,
+    la pasada queda «cortada» y el motivo se anota sin lanzar."""
+    md, eid = con_meta["md"], con_meta["eid"]
+    monkeypatch.setattr(md, "PLAZO_S", -1)
+    r = md.refrescar_detalle("acme", eid, hoy=date(2026, 10, 2))
+    assert con_meta["llamadas"] == [] and r["cortado"] is True and r["dias"] == 0
+    assert "límite de tiempo" in r["errores"]["diario"]

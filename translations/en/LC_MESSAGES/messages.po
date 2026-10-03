@@ -4988,6 +4988,12 @@ msgstr ""
 "\n"
 "Nothing is executed until you approve them in the panel."
 
+msgid "El detalle de Meta quedó incompleto por el límite de páginas."
+msgstr "The Meta detail was left incomplete by the page limit."
+
+msgid "El detalle de Meta quedó incompleto por el límite de tiempo."
+msgstr "The Meta detail was left incomplete by the time limit."
+
 #, python-format
 msgid "El diagnóstico no se pudo hacer: %(error)s"
 msgstr "The diagnosis couldn't be made: %(error)s"
