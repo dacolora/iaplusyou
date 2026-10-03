@@ -40,6 +40,13 @@ def centavos(monto, moneda):
     return int(round(float(monto) * (1 if moneda in MONEDAS_SIN_DECIMALES else 100)))
 
 
+def minimo_tope_campana(moneda):
+    """Desde qué total Creatv manda el tope (`spend_cap`) a la campaña de Meta: por debajo, Meta no lo acepta y el
+    límite lo dan solo el presupuesto diario de cada país y la fecha de cierre. «Nuevo experimento» lo dice en
+    palabras, así que se lee de aquí y no se repite."""
+    return _MIN_POR_MONEDA.get(moneda, SPEND_CAP_MINIMO_USD)
+
+
 def url_destino(base, ep_id):
     """Link del anuncio: `utm_content` lleva el id de la `experimento_pieza`
     (único por experimento+pieza+país), no el de la pieza — el mismo clon en
@@ -202,7 +209,7 @@ def lanzar(cliente, experimento_id, on_etapa=None):
         etapa(ETAPAS_LANZAR[0][0])
         campaign_id = ex["meta_campaign_id"]
         if not campaign_id:
-            cap = centavos(ex["tope_total"], moneda) if float(ex["tope_total"] or 0) >= _MIN_POR_MONEDA.get(moneda, SPEND_CAP_MINIMO_USD) else None
+            cap = centavos(ex["tope_total"], moneda) if float(ex["tope_total"] or 0) >= minimo_tope_campana(moneda) else None
             campaign_id = meta_campaign.crear_campaign(ex["nombre"], ex["objetivo_meta"], spend_cap_centavos=cap)["id"]
             experimentos.actualizar(cliente, experimento_id, meta_campaign_id=campaign_id)
             experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", gettext("Campaña creada en Meta (en pausa)"),

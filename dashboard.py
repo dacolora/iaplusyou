@@ -82,6 +82,7 @@ import db
 import derivaciones
 import experimentos
 import lanzador
+import presupuesto_experimentos
 import acciones
 import decisor
 import modos
@@ -2003,6 +2004,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
         "objetivo_exp_sugerido": experimentos.objetivo_sugerido(cliente, atribucion_sug),
         "nombres_objetivo_exp": NOMBRES_OBJETIVO_EXP,
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
+        "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
         "moneda_exp": moneda_exp,
         "propuestas_exp": propuestas_exp,
         "reglas_defecto_exp": decisor.REGLAS_DEFECTO,
@@ -3412,8 +3414,9 @@ def ver_swap(cliente):
 # Solo modelos que ven la foto de referencia del producto y clonan la foto/video
 # original — nada que solo reciba una descripción en texto del calzado (eso
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
-# Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar).
-PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
+# Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar): vive en presupuesto_experimentos
+# (un solo lugar, E2 R4); aquí se conserva el nombre para quien lo lea desde dashboard.
+PRESUPUESTO_MINIMO_DIARIO = presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO
 # Rótulos del objetivo de Meta en «Probar en Meta › Avanzado» (Bloque 6). El
 # valor sigue siendo el enum de Meta; solo cambia lo que se lee (marcado con
 # N_, traducido donde se muestra con |traducir).
@@ -5332,6 +5335,11 @@ def exp_crear(cliente):
         flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
                       minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
         return volver
+    # Misma regla que «Nuevo experimento» (exp_probar): sin UI propia, pero una ruta POST armada a mano no se salta el total.
+    error = _error_de_presupuesto(moneda, codigos, paises, dias)
+    if error:
+        flash(error, "error")
+        return volver
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
         modo = "manual"   # nunca se sube de puerta por un valor raro en el form
@@ -5371,6 +5379,39 @@ def nombre_experimento_automatico(n_piezas, paises, cuando=None):
     cuando = cuando or datetime.now().date()
     return gettext("Prueba %(fecha)s · %(piezas)s · %(paises)s", fecha=idiomas.fecha_corta(cuando),
                    piezas=ngettext("%(num)s pieza", "%(num)s piezas", n_piezas), paises=", ".join(sorted(paises)))
+
+
+def _mensaje_presupuesto(codigo, moneda, paises, dias, total):
+    """Lo que se le dice a la persona cuando `presupuesto_experimentos.validar` rechaza un presupuesto. Cada código
+    tiene su frase: «el reparto supera el total» nombra las cifras, para que se vea de dónde salió la cuenta."""
+    def cifra(v):
+        return idiomas.numero(v, 0 if float(v).is_integer() else 2)
+    if codigo == "total":
+        diario = sum(p["presupuesto_dia"] for p in paises)
+        return gettext("El reparto supera el total: %(diario)s %(moneda)s al día durante %(dias)s días son %(maximo)s %(moneda)s, "
+                       "y el total que pusiste es %(total)s %(moneda)s. Sube el total o baja el presupuesto de algún país; "
+                       "no se creó nada.", diario=cifra(diario), moneda=moneda, dias=dias, maximo=cifra(diario * dias),
+                       total=cifra(float(total or 0)))
+    if codigo == "precision":
+        if moneda in presupuesto_experimentos.EN_ENTEROS:
+            return gettext("El presupuesto diario de cada país va en cifras enteras en %(moneda)s.", moneda=moneda)
+        return gettext("El presupuesto diario de cada país no lleva más de dos decimales en %(moneda)s.", moneda=moneda)
+    if codigo == "minimo":
+        return gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en alguno de los países.",
+                       minimo=PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1), moneda=moneda)
+    return gettext("Revisa los números del presupuesto: el total, los días y el presupuesto diario de cada país.")
+
+
+def _error_de_presupuesto(moneda, codigos, paises, dias):
+    """None si el presupuesto del formulario (total, días y diario de cada país) es aceptable; si no, el aviso en
+    palabras. El servidor no se fía de lo que calculó el navegador: «Máximo que puede gastar» es verdad aunque alguien
+    arme el POST a mano, porque la suma de los diarios por los días no puede pasar del total (1 % de margen)."""
+    try:
+        presupuesto_experimentos.validar(request.form.get("tope_total"), dias,
+                                         [request.form.get(f"presupuesto_{p}") for p in codigos], moneda)
+    except presupuesto_experimentos.ErrorPresupuesto as e:
+        return _mensaje_presupuesto(e.codigo, moneda, paises, dias, request.form.get("tope_total"))
+    return None
 
 
 @app.route("/cliente/<cliente>/experimentos/probar", methods=["POST"])
@@ -5430,13 +5471,10 @@ def exp_probar(cliente):
         flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
                       minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
         return volver
-    # E3: no confiar en el reparto ni en la validación del navegador.
-    import presupuesto_experimentos
-    try:
-        presupuesto_experimentos.validar(request.form.get("tope_total"), dias,
-            [request.form.get(f"presupuesto_{p}") for p in codigos], moneda)
-    except ValueError:
-        flash(gettext("Revisa el reparto: debe respetar el mínimo y los decimales de la moneda, y no superar el presupuesto total planificado."), "error")
+    # E2 (R4): el reparto no puede pasar del total (la comprobación es del servidor, no del navegador).
+    error = _error_de_presupuesto(moneda, codigos, paises, dias)
+    if error:
+        flash(error, "error")
         return volver
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
