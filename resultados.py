@@ -1037,8 +1037,15 @@ def pieza(cliente, ep_id, filtro, ahora_iso=None):
     ex, pz, _serie = carga.datos.filas[0]
     s = serie(carga)
     extra = pz.get("extra") or {}
-    return dict(piezas(carga, proyectos.reglas_defecto(cliente))[0], moneda=carga.moneda, periodo=_periodo_json(carga.per),
-                indicadores=indicadores(carga), series={k: s[k] for k in ("dias", "ctr", "cpc", "frecuencia", "gancho")},
+    # Lo que el panel necesita para sus acciones (R2, 2026-10-03): la pieza de Crear («Probar en otro experimento»,
+    # «Publicar orgánico»), la imagen, y el estado del experimento y del país (pausar/activar ese país).
+    pais_ex = next((p for p in ex.get("paises") or [] if p.get("pais") == pz.get("pais")), {})
+    acciones = {"pieza_id": pz.get("pieza_id"), "url_imagen": pz.get("url_imagen"), "tipo": pz.get("tipo"),
+                "estado_experimento": ex.get("estado"),
+                "pais_experimento": {k: pais_ex.get(k) for k in ("pais", "estado", "meta_adset_id", "presupuesto_dia")}}
+    return dict(piezas(carga, proyectos.reglas_defecto(cliente))[0], **acciones, moneda=carga.moneda,
+                periodo=_periodo_json(carga.per), indicadores=indicadores(carga),
+                series={k: s[k] for k in ("dias", "gasto", "roas", "ctr", "cpc", "cpm", "frecuencia", "gancho", "moneda")},
                 curva=_curva(carga.dias_act, bool(pz.get("es_imagen"))), desgloses=desgloses(carga),
                 rankings=dict(extra.get("rankings_meta") or {}),
                 diagnostico=extra.get("diagnostico") if isinstance(extra.get("diagnostico"), dict) else None,

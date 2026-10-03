@@ -858,7 +858,12 @@ def test_detalle_de_pieza_completo(sembrado):
     assert d["periodo"]["n"] == 7 and "lista" not in d["periodo"]
     assert d["desgloses"]["ubicacion"] == [] and d["desgloses"]["metrica"] == "ctr"
     assert d["promedio"][3:] == pytest.approx([1.5, 1.6, 1.7, 1.8])                  # el del experimento, no el de ella sola
-    json.dumps({k2: d[k2] for k2 in ("curva", "series", "serie", "promedio", "historia", "eventos", "periodo")})
+    # lo del panel (R2): la gráfica de la pieza con su gasto, y sus acciones (la pieza de Crear, el país en Meta)
+    assert len(d["series"]["gasto"]) == 7 and d["series"]["moneda"] == "COP" and "roas" in d["series"]
+    assert d["pieza_id"] and d["estado_experimento"] == ex.obtener("acme", e1)["estado"]
+    assert d["pais_experimento"]["pais"] == d["pais"] and set(d["pais_experimento"]) == {"pais", "estado", "meta_adset_id", "presupuesto_dia"}
+    json.dumps({k2: d[k2] for k2 in ("curva", "series", "serie", "promedio", "historia", "eventos", "periodo",
+                                     "pais_experimento")})
 
 
 def test_detalle_de_una_imagen_sin_curva_ni_gancho(sembrado):

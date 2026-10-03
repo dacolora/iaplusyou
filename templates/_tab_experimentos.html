@@ -1,4 +1,6 @@
-{# Armazón ligero: los resultados y la gestión llegan por fetch. #}
+{# Armazón ligero del centro de resultados (E2): los resultados, la gestión de un experimento y el panel de una pieza
+   llegan por fetch (`static/exp_resultados.js` → exp_resultados / exp_pieza); el filtro vive en el hash
+   (#experimentos?dias=&exp=&pais=&pieza=&tipo=&moneda=). Los textos del JS van en `#cr-textos` (JSON). #}
 <div class="panel-cabecera cr-cabecera">
   <div><p class="cr-sobretitulo">{{ _('Centro de resultados') }}</p><h2>{{ _('Experimentos') }}</h2>
     <p class="panel-cabecera-desc">{{ _('De cada prueba a la siguiente decisión: resultados, piezas y aprendizajes de tu proyecto.') }}</p></div>
@@ -10,5 +12,5 @@
 {% include "_meta_conectar.html" %}
 <div id="cr-resultados" class="cr-resultados" data-url="{{ url_for('exp_resultados', cliente=cliente) }}" data-url-nuevo="{{ url_for('exp_nuevo', cliente=cliente) }}" aria-live="polite"><p class="cr-cargando">{{ _('Cargando resultados…') }}</p></div>
 <dialog id="cr-panel" class="cr-panel" aria-label="{{ _('Detalle de la pieza') }}"><button type="button" class="cr-panel-cerrar" aria-label="{{ _('Cerrar') }}">×</button><div class="cr-panel-cuerpo"></div></dialog>
+<script type="application/json" id="cr-textos">{{ {'cargando': _('Cargando resultados…'), 'cargandoPieza': _('Cargando la pieza…'), 'error': _('No se pudieron cargar los resultados'), 'errorPieza': _('No se pudo cargar la pieza'), 'piezaNoExiste': _('Esta pieza ya no está en el proyecto'), 'reintentar': _('Reintentar'), 'gasto': _('Gasto'), 'ctr': _('CTR'), 'roas': _('ROAS'), 'cpc': _('CPC'), 'cpm': _('CPM'), 'frecuencia': _('Frecuencia'), 'gancho': _('Gancho'), 'promedio': _('Promedio del experimento'), 'sinDatos': _('Sin datos'), 'cerrar': _('Cerrar')}|tojson }}</script>
 <script src="{{ url_for('static', filename='exp_resultados.js') }}" defer></script>
-<script type="application/json" id="cr-textos">{{ {'cargando': _('Cargando resultados…'), 'error': _('No se pudieron cargar los resultados'), 'reintentar': _('Reintentar'), 'gasto': _('Gasto'), 'ctr': _('CTR'), 'roas': _('ROAS'), 'cpc': _('CPC'), 'cpm': _('CPM'), 'frecuencia': _('Frecuencia'), 'gancho': _('Gancho'), 'promedio': _('Promedio'), 'sinDatos': _('Sin datos'), 'cerrar': _('Cerrar')}|tojson }}</script>

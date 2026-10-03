@@ -38,34 +38,41 @@
 
 {% endmacro %}
 {% if ex %}{% set e = ex %}
-<section class="cr-gestion">
-  <header class="cr-seccion-cab"><h3>{{ e.nombre }}</h3><span class="tag-estado">{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}</span><span class="cr-muted">{{ nombres_objetivo_exp.get(e.objetivo_meta, e.objetivo_meta)|traducir }}</span></header>
-<details class="swap-card experimento experimento-{{ e.estado }}" id="exp-{{ e.id }}" >
-  <summary class="swap-card-resumen">
-    <span class="semaforo semaforo-{{ e.estado }}"></span>
-    <strong>{{ _('Gestionar') }}</strong>
-    <span class="tag-estado">{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}</span>
-    <span class="tag-estado tag-modo">{{ _('modo %(modo)s', modo=e.modo) }}</span>
-    <span class="tag-estado tag-atribucion tag-atribucion-{{ e.atribucion }}" title="{{ _('Con qué se miden las ventas de este experimento') }}">{{ _('atribución %(atribucion)s', atribucion=(etiquetas_exp.atribucion.get(e.atribucion, e.atribucion)|traducir)) }}</span>
-    {% if e.propuestas_pendientes %}<span class="tag-propuestas">{{ _('%(n)s propuesta(s)', n=e.propuestas_pendientes) }}</span>{% endif %}
-    <small>{{ _('%(activos)s/%(total)s activos · gasto %(gasto)s / %(tope)s %(moneda)s', activos=e.resumen.activos, total=e.resumen.total, gasto=("%.2f"|format(e.gasto_acumulado)), tope=e.tope_total, moneda=e.moneda) }}
-      {% if e.resumen.mejor_cpc %}· {{ _('mejor CPC %(cpc)s', cpc=("%.2f"|format(e.resumen.mejor_cpc))) }}{% endif %}
-      {% if e.atribucion == "tienda" %}· {{ _('ventas por tienda: %(n)s pedido(s)', n=pedidos_por_exp.get(e.id, 0)) }}{% endif %}</small>
-  </summary>
+<section class="cr-gestion cr-tarjeta" aria-labelledby="cr-gestion-titulo">
+  <header class="cr-gestion-cab">
+    <div class="cr-gestion-titulo">
+      <p class="cr-sobretitulo">{{ _('Experimento elegido') }}</p>
+      <h3 id="cr-gestion-titulo"><span class="semaforo semaforo-{{ e.estado }}" aria-hidden="true"></span>{{ e.nombre }}</h3>
+      <p class="cr-gestion-etiquetas">
+        <span class="tag-estado">{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}</span>
+        <span class="tag-estado tag-modo">{{ _('modo %(modo)s', modo=e.modo) }}</span>
+        <span class="tag-estado tag-atribucion tag-atribucion-{{ e.atribucion }}" title="{{ _('Con qué se miden las ventas de este experimento') }}">{{ _('atribución %(atribucion)s', atribucion=(etiquetas_exp.atribucion.get(e.atribucion, e.atribucion)|traducir)) }}</span>
+        <span class="tag-estado">{{ nombres_objetivo_exp.get(e.objetivo_meta, e.objetivo_meta)|traducir }}</span>
+        {% if e.propuestas_pendientes %}<span class="tag-propuestas">{{ _('%(n)s propuesta(s)', n=e.propuestas_pendientes) }}</span>{% endif %}
+      </p>
+      {% if e.padre_experimento_id or e.hijos %}
+      <p class="exp-parentesco">
+        {% if e.padre_experimento_id %}<a data-cr-filtro href="#experimentos?exp={{ e.padre_experimento_id }}">{{ _('← padre: %(nombre)s', nombre=nombres_exp.get(e.padre_experimento_id, "#" ~ e.padre_experimento_id)) }}</a>{% endif %}
+        {% for h in e.hijos %}<a data-cr-filtro href="#experimentos?exp={{ h }}">{{ _('derivado en → %(nombre)s', nombre=nombres_exp.get(h, "#" ~ h)) }}</a>{% endfor %}
+      </p>
+      {% endif %}
+    </div>
+    <a class="btn-sm" data-cr-filtro href="#experimentos?{{ consulta('exp', none) if consulta is defined else '' }}">{{ _('Ver todos los experimentos') }}</a>
+  </header>
   {% if e.error %}{% set error_claro = e.error|error_meta(modo_meta) %}<p class="tag-error">{{ error_claro }}</p>
   {% if error_claro != e.error %}<details class="detalle-tecnico"><summary>{{ _('Detalle técnico (para soporte)') }}</summary><code>{{ e.error }}</code></details>{% endif %}{% endif %}
   {% set trabajo = trabajos_exp.get(e.id) %}
   {% if trabajo %}
   <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}" data-poll-job="{{ trabajo.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
-  
   {% endif %}
-
-  {% if e.padre_experimento_id or e.hijos %}
-  <p class="exp-parentesco">
-    {% if e.padre_experimento_id %}<a data-cr-filtro href="#experimentos?exp={{ e.padre_experimento_id }}">{{ _('← padre: %(nombre)s', nombre=nombres_exp.get(e.padre_experimento_id, "#" ~ e.padre_experimento_id)) }}</a>{% endif %}
-    {% for h in e.hijos %}<a data-cr-filtro href="#experimentos?exp={{ h }}">{{ _('derivado en → %(nombre)s', nombre=nombres_exp.get(h, "#" ~ h)) }}</a>{% endfor %}
-  </p>
-  {% endif %}
+{# «Gestionar» va plegado; abierto cuando falta lanzar (armando o error): ahí está la acción principal. #}
+<details class="swap-card experimento experimento-{{ e.estado }}" id="exp-{{ e.id }}"{% if e.estado in ("armando", "error") and not e.meta_campaign_id %} open{% endif %}>
+  <summary class="swap-card-resumen">
+    <strong>{{ _('Gestionar') }}</strong>
+    <small>{{ _('%(activos)s/%(total)s activos · gasto %(gasto)s / %(tope)s %(moneda)s', activos=e.resumen.activos, total=e.resumen.total, gasto=("%.2f"|format(e.gasto_acumulado)), tope=e.tope_total, moneda=e.moneda) }}
+      {% if e.resumen.mejor_cpc %}· {{ _('mejor CPC %(cpc)s', cpc=("%.2f"|format(e.resumen.mejor_cpc))) }}{% endif %}
+      {% if e.atribucion == "tienda" %}· {{ _('ventas por tienda: %(n)s pedido(s)', n=pedidos_por_exp.get(e.id, 0)) }}{% endif %}</small>
+  </summary>
 
   {% if e.estado != "cerrado" %}
   <form method="post" action="{{ url_for('exp_modo', cliente=cliente, eid=e.id) }}" class="exp-modo inline">

@@ -4784,6 +4784,17 @@ def _filtro_fecha_corta(valor):
         return ""
 
 
+@app.template_filter("horas_desde")
+def _filtro_horas_desde(valor):
+    """Horas enteras desde una fecha ISO guardada con db.ahora() (hora local, sin zona): el «al día hace N h» del
+    detalle de Meta en el centro de resultados. None si no se puede leer; nunca negativo."""
+    try:
+        antes = datetime.fromisoformat(str(valor)[:19])
+    except (TypeError, ValueError):
+        return None
+    return max(0, int((datetime.fromisoformat(db.ahora()) - antes).total_seconds() // 3600))
+
+
 @app.template_filter("roas")
 def _filtro_roas(valor):
     """ROAS con un decimal: 28,0 en español, 28.0 en inglés (idiomas.numero)."""
