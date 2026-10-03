@@ -281,16 +281,36 @@ def pieza_retirada(pz):
             or extra.get("rescatado_en_escalon") is not None)
 
 
+# Estados de un experimento que ya empezó a gastar: su `end_time` ya está en Meta.
+_ESTADOS_YA_ACTIVADO = ("corriendo", "decidido")
+
+# Margen mínimo entre "ahora" y el fin reservado: una reserva más cercana que esto
+# (o ya vencida) se recalcula, porque Meta rechaza un `end_time` pasado o casi pasado.
+_MARGEN_FIN_RESERVADO = 3600
+
+
 def _preparar_fin_primera_activacion(cliente, ex):
     """PND-113: fija el plazo antes de activar; reanudar nunca lo extiende.
-    La reserva persistida hace idempotente un fallo parcial de Meta.
+    Solo la PRIMERA activación fija `end_time` (decisión de Daniel, 2026-10-03):
+    un experimento que ya corre, o que ya tiene `activado_en`, no se toca. Que
+    esté `corriendo`/`decidido` basta aunque no tenga la marca: los activados
+    antes de que existiera `activado_en` ya tienen su pauta, y alargarla sin
+    que nadie lo apruebe es plata.
+    La reserva persistida hace idempotente un fallo parcial de Meta, salvo que
+    ya haya vencido (o esté a menos de una hora): entonces se recalcula desde
+    ahora, para no reenviar un `end_time` en el pasado.
     Corre bajo el candado de credenciales, sin cambiar presupuestos.
     """
     actual = experimentos.obtener(cliente, ex["id"])
-    if (actual.get("extra") or {}).get("activado_en"):
+    if (actual["estado"] in _ESTADOS_YA_ACTIVADO or ex.get("estado") in _ESTADOS_YA_ACTIVADO
+            or (actual.get("extra") or {}).get("activado_en")):
         return
+    ahora = int(time.time())
+
     def reservar(extra):
-        extra.setdefault("fin_primera_activacion", int(time.time()) + int(ex.get("dias") or 7) * 86400)
+        previo = extra.get("fin_primera_activacion")
+        if not previo or int(previo) < ahora + _MARGEN_FIN_RESERVADO:
+            extra["fin_primera_activacion"] = ahora + int(ex.get("dias") or 7) * 86400
         return extra
     extra = experimentos.actualizar_extra(cliente, ex["id"], reservar)
     for p in actual["paises"]:

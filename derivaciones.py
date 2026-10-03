@@ -227,6 +227,21 @@ def modelo_regeneracion(sesion, k):
     return _otro(flowplus_modelos.VIDEO, sesion.get("modelo") or flowplus_modelos.VIDEO_POR_DEFECTO, k)
 
 
+def _voz_vigente(cliente, voz):
+    """`voz` si se puede usar todavía, o None. Una voz propia (`vp:<id>`) se
+    propaga solo si `voces_propias.resolver` aún la encuentra, como en
+    `final_edition._voz_propia_de_la_sesion`: borrada, la final fallaría con
+    «esa voz ya no está» y se queda la voz por defecto de antes (sin `voz`
+    explícita). Una voz de la galería no se resuelve: pasa tal cual."""
+    import audios
+    import voces_propias   # perezoso: voces_propias importa final_edition.cortes
+    if not voz:
+        return None
+    if audios.es_propia(voz) and not voces_propias.resolver(cliente, voz):
+        return None
+    return voz
+
+
 def _item_regeneracion(cliente, cf_id, k, idiomas):
     """Sesión nueva (k-ésima regeneración, k >= 0) con otro modelo de video y
     otro enfoque que el original; el clon se genera en `avanzar`. Una pieza de
@@ -241,7 +256,7 @@ def _item_regeneracion(cliente, cf_id, k, idiomas):
     voces = {}
     for f in creative_flow.finales(cliente, cf_id):
         if f.get("variante") is None:
-            voz = (((f.get("capas") or {}).get("voz") or {}).get("parametros") or {}).get("voz")
+            voz = _voz_vigente(cliente, (((f.get("capas") or {}).get("voz") or {}).get("parametros") or {}).get("voz"))
             if voz:
                 voces[f"{f['idioma']}_{f['pais']}"] = voz
     nuevo = creative_flow.duplicar(cliente, cf_id, modelo=modelo, enfoque=enfoque)
@@ -521,7 +536,10 @@ def _avanzar_finales(cliente, experimento_id, d, item):
             opciones_destino = dict(opciones)
             voces = item.get("voces") or {}
             if voces:
-                opciones_destino["voz"] = voces.get(clave) or list(voces.values())[-1]
+                # La voz pudo borrarse entre planificar y avanzar: se revisa otra vez.
+                voz = _voz_vigente(cliente, voces.get(clave) or list(voces.values())[-1])
+                if voz:
+                    opciones_destino["voz"] = voz
             item["finales"][clave] = _encolar_final(cliente, item["cf_id"], idioma, pais, opciones_destino)
             continue
         estado, error = _estado_final(cliente, item["finales"][clave])

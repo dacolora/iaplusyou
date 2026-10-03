@@ -967,3 +967,69 @@ def test_pnd113_fallo_fecha_no_activa_y_reintento_conserva_fin(entorno, monkeypa
     assert vistos[0] == vistos[1]
     assert meta.llamadas == []
     assert ex.obtener('acme', eid)['estado'] == 'pausado'
+
+
+@pytest.mark.parametrize('estado', ['corriendo', 'decidido'])
+@pytest.mark.parametrize('via', ['experimento', 'pieza'])
+def test_pnd113_experimento_que_ya_corre_sin_activado_en_no_mueve_el_fin(entorno, monkeypatch, estado, via):
+    """Revisión del lote 2: un experimento activado antes de que existiera la
+    marca `activado_en` (estado corriendo/decidido, sin marca) ya tiene su pauta:
+    reactivarlo no manda ningún `end_time` ni fija una reserva (alargarla sin
+    que nadie lo apruebe es plata)."""
+    lz, ex, eid, meta = entorno['lanzador'], entorno['ex'], entorno['eid'], entorno['meta']
+    lz.lanzar('acme', eid)
+    ex.actualizar('acme', eid, estado=estado)
+    assert 'activado_en' not in (ex.obtener('acme', eid).get('extra') or {})
+    def llamar(metodo, oid, payload):
+        return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
+    monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
+    meta.llamadas.clear()
+    if via == 'pieza':
+        lz.activar_pieza('acme', ex.obtener('acme', eid)['piezas'][0]['id'])
+    else:
+        lz.cambiar_estado('acme', eid, 'ACTIVE')
+    assert not any(t == 'fin' for t, _ in meta.llamadas)
+    assert 'fin_primera_activacion' not in (ex.obtener('acme', eid).get('extra') or {})
+
+
+def test_pnd113_reintento_tras_pasar_la_reserva_reenvia_un_fin_futuro(entorno, monkeypatch):
+    """Revisión del lote 2: si el primer intento falló y el reintento llega
+    después del plazo reservado, el `end_time` reenviado se recalcula desde
+    ahora (uno vencido dejaría la activación bloqueada para siempre)."""
+    import time
+    lz, ex, eid, meta = entorno['lanzador'], entorno['ex'], entorno['eid'], entorno['meta']
+    lz.lanzar('acme', eid)
+    ahora = 1800000000
+    monkeypatch.setattr(time, 'time', lambda: ahora)
+    def fallar(metodo, oid, payload):
+        raise RuntimeError('fecha rechazada')
+    monkeypatch.setattr(lz.meta_auth, 'llamar', fallar, raising=False)
+    with pytest.raises(RuntimeError, match='fecha rechazada'):
+        lz.cambiar_estado('acme', eid, 'ACTIVE')
+    assert ex.obtener('acme', eid)['extra']['fin_primera_activacion'] == ahora + 7 * 86400
+
+    ahora += 8 * 86400  # el reintento llega después del plazo reservado
+    def llamar(metodo, oid, payload):
+        return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
+    monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
+    meta.llamadas.clear()
+    lz.cambiar_estado('acme', eid, 'ACTIVE')
+    fines = [kw['payload']['end_time'] for t, kw in meta.llamadas if t == 'fin']
+    assert fines and all(f == ahora + 7 * 86400 for f in fines)
+    assert all(f > ahora for f in fines)
+
+
+def test_pnd113_reserva_a_menos_de_una_hora_tambien_se_recalcula(entorno, monkeypatch):
+    import time
+    lz, ex, eid, meta = entorno['lanzador'], entorno['ex'], entorno['eid'], entorno['meta']
+    lz.lanzar('acme', eid)
+    ahora = 1800000000
+    monkeypatch.setattr(time, 'time', lambda: ahora)
+    ex.actualizar_extra('acme', eid, lambda e: {**e, 'fin_primera_activacion': ahora + 1800})
+    def llamar(metodo, oid, payload):
+        return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
+    monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
+    meta.llamadas.clear()
+    lz.cambiar_estado('acme', eid, 'ACTIVE')
+    fines = [kw['payload']['end_time'] for t, kw in meta.llamadas if t == 'fin']
+    assert fines and all(f == ahora + 7 * 86400 for f in fines)

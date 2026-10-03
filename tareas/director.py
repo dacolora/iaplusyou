@@ -89,7 +89,10 @@ def interrumpida(tarea, mensaje):
     La sesión quedaría en `prompt_pendiente` sin trabajo y sin botón: se le
     deja el prompt determinista con el aviso, en `prompt_listo`, para que la
     persona lo edite, rearme o genere. Si ya salió de `prompt_pendiente` por
-    otro camino, no se pisa."""
+    otro camino, no se pisa. Si la persona ya había aprobado el lanzamiento
+    (`auto_lanzar`, PND-034), la generación continúa igual con ese prompt:
+    interrumpir la compilación no cancela la aprobación ni deja el clic a
+    medias."""
     p = tarea["payload"]
     cliente, cf_id = p["cliente"], p["cf_id"]
     entry = creative_flow.cargar(cliente).get(cf_id)
