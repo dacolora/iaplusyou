@@ -68,3 +68,5 @@ transaction; a later bookkeeping failure leaves the row `publicando` with the id
 before each batch) closes it later. TikTok is asynchronous: `check_status` decides
 `publicada` / `error` (FAILED, id cleared, retryable) / still `publicando`. Rows with an
 `id_externo` are never retried. Tokens never reach `error`/eventos (`cola.sin_token`).
+
+**Candado común (2026-10-02, PND-114):** la ruta legado `cambiar_estado_ad` opera campaña, conjunto y anuncio mediante `lanzador._con_credenciales`, con `tareas.meta._LOCK`; `_ENV_LOCK` queda para el entorno del flujo viejo, no para configurar las credenciales globales de Meta.

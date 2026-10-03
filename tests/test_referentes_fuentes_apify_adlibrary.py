@@ -114,7 +114,7 @@ def test_traer_normaliza_el_item_real(monkeypatch):
     assert a["activo"] is True
     assert a["tipo"] == "imagen"
     assert cursor is None
-    assert meta == {"costo_real": pytest.approx(1 * apify_actores_precio())}
+    assert meta == {"costo_real": pytest.approx(1 * apify_actores_precio()), "run_id": "run1", "dataset_id": "ds1"}
 
 
 def apify_actores_precio():
@@ -254,3 +254,27 @@ def test_dias_sin_fecha_de_inicio_es_none():
     item.pop("startDateFormatted", None)
     a = apify_adlibrary._normalizar(item)
     assert a["dias"] is None
+
+
+def test_sondeo_fallido_conserva_costo_del_dataset(monkeypatch):
+    from nicho.fuentes.base import ErrorFuente as ErrorApify
+    monkeypatch.setattr(apify_adlibrary, "_token", lambda: "prueba")
+    monkeypatch.setattr(apify_adlibrary, "_sesion", lambda: object())
+    monkeypatch.setattr(apify_api, "arrancar", lambda *a, **k: ("run", "ds", "RUNNING"))
+    monkeypatch.setattr(apify_api, "sondear", lambda *a, **k: (_ for _ in ()).throw(ErrorApify("sondeo")))
+    monkeypatch.setattr(apify_api, "contar_dataset", lambda *a, **k: 5)
+    with pytest.raises(ErrorFuente) as exc:
+        next(apify_adlibrary.traer({"modo": "palabra", "palabra": "shoes"}, 10, lambda **k: None))
+    assert exc.value.costo_real == pytest.approx(round(5 * apify_actores_precio(), 4))
+
+
+def test_normalizacion_fallida_conserva_cobro(monkeypatch):
+    monkeypatch.setattr(apify_adlibrary, '_token', lambda: 'prueba')
+    monkeypatch.setattr(apify_adlibrary, '_sesion', lambda: object())
+    monkeypatch.setattr(apify_api, 'arrancar', lambda *a, **k: ('run', 'ds', 'SUCCEEDED'))
+    monkeypatch.setattr(apify_api, 'sondear', lambda *a, **k: 'SUCCEEDED')
+    monkeypatch.setattr(apify_api, 'leer_dataset', lambda *a, **k: ([{**FIXTURE_ITEM, 'startDateFormatted': 123}], None))
+    with pytest.raises(ErrorFuente) as exc:
+        next(apify_adlibrary.traer({'modo': 'palabra', 'palabra': 'shoes'}, 10, lambda **k: None))
+    assert exc.value.costo_real == pytest.approx(apify_actores_precio())
+    assert exc.value.extra_gasto == {'run_id': 'run', 'dataset_id': 'ds'}

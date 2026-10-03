@@ -328,3 +328,22 @@ def test_estimar_voz_editor_solo_subtitulos_cobra_solo_whisper():
     assert e["usd"] == fal_audio.costo_whisper(42000)
     sin_dur = gastos.estimar("voz_editor", caracteres=120, solo_subtitulos=True)
     assert sin_dur["usd"] == fal_audio.costo_whisper(10000)
+
+
+@pytest.mark.parametrize("estilo,extra", [("", 0), ("mat:3", 0), ("calmado", 0.02)])
+def test_estimar_video_suma_solo_musica_generada(monkeypatch, estilo, extra):
+    import gastos
+    from providers import flowplus_modelos
+    monkeypatch.setattr(flowplus_modelos, "estimate_video", lambda *a, **k: {"usd": 0.8})
+    assert gastos.estimar("video", modelo="wan3", duracion=8, musica_estilo=estilo)["usd"] == pytest.approx(0.8 + extra)
+
+
+def test_estimado_clon_incluye_vista_previa_y_estreno(monkeypatch):
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio.fal_client, "llamar", lambda *a, **k: {"custom_voice_id": "v", "audio": {"url": "https://x/a.mp3"}})
+    frase = voces_propias.frase_muestra("Ana", "es")
+    cobro = fal_audio.clonar_voz_minimax("https://x/g.wav", frase)["costo_usd"]
+    assert gastos.estimar("voz_clonada", nombre="Ana", idioma="es")["usd"] == pytest.approx(
+        cobro + len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER)

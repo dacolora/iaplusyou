@@ -989,3 +989,21 @@ def test_imagen_fallida_no_lanza_ningun_video(base_temporal, monkeypatch, tmp_pa
     with pytest.raises(RuntimeError):
         fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
     assert cf.cargar("acme")[cid]["estado"] == "error"
+
+
+def test_recuperar_descarga_no_duplica_cobro(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path, prediccion={"id": "pagada", "modelo": "wan3"})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("descarga")))
+    with pytest.raises(RuntimeError, match="descarga"):
+        fp.ejecutar_video({"id": 31, "payload": {"cliente": "acme", "cf_id": cid}})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(wc, "poll_hasta_listo", lambda *a, **k: {"outputs": ["https://prov/v.mp4"]})
+    fp.recuperar_video({"id": 32, "payload": {"cliente": "acme", "cf_id": cid}})
+    assert gastos.resumen_mes("acme")["total"] == pytest.approx(0.8)
+    assert [g["referencia"] for g in gastos.historial("acme")] == [f"video:{cid}:t31"]

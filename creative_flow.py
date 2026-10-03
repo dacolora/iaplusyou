@@ -293,6 +293,17 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None, prompt_relleno=None, var
     if enfoque is not None and enfoque not in flowplus_prompt.ENFOQUES:
         raise ValueError(f"Enfoque desconocido: {enfoque}. Opciones: {list(flowplus_prompt.ENFOQUES)}")
     with db.conectar() as con:
+        if variante == "B":
+            # Reserva entre procesos antes de leer (PND-004, 2026-10-02).
+            # Todas las hijas B pasan por este escritor; otro clic obtiene
+            # la misma sesión y la cola deduplica su job_id.
+            con.exec_driver_sql("BEGIN IMMEDIATE")
+            hija = con.execute(sa.select(db.concepto.c.legado_id).where(
+                db.concepto.c.cliente == cliente,
+                db.concepto.c.extra["derivado_de"].as_string() == cf_id,
+                db.concepto.c.extra["variante"].as_string() == "B")).scalar()
+            if hija:
+                return hija
         f = con.execute(sa.select(db.concepto.c.extra, db.concepto.c.enfoque, db.pieza.c.modelo,
                                   db.pieza.c.aspect_ratio, db.pieza.c.duracion_s, db.pieza.c.tipo)
                         .join(db.pieza, db.pieza.c.concepto_id == db.concepto.c.id)

@@ -12,8 +12,8 @@ description: "Biblioteca de referentes: anuncios reales clasificados (copycoders
 reales clasificados por etapa (TOF/MOF/BOF), consciencia, familia (190 de
 copycoders + las que Claude proponga como `EMERGING`), dolor y firma («por qué
 funciona»). Tablas `referente` (`anuncio_id` = id del Ad Library de Meta, UNIQUE
-global; `cliente` NULL = global de Creatv, `<cliente>` = solo ese proyecto; solo
-se lista con `estado_imagen=ok`, la copia en R2 `referentes/<anuncio_id>.jpg`),
+por proyecto (la biblioteca global NULL tiene su propia unicidad, migración 0030); `cliente` NULL = global de Creatv, `<cliente>` = solo ese proyecto; solo
+se lista con `estado_imagen=ok`, la copia global en R2 `referentes/<anuncio_id>.jpg` y las nuevas privadas `referentes/<anuncio_id>_r<id>.jpg`),
 `referente_familia` y `barrido`. `referentes/datos.py` es el único escritor. La búsqueda (`q`) y las marcas a imitar
 comparan sin tildes ni mayúsculas con `db.pliegue`, que `db.engine()` también registra como función SQL
 `pliegue(col)` en cada conexión (el `lower()` de SQLite solo baja ASCII).
@@ -98,3 +98,5 @@ la imagen queda lista con `animar_error`, que su detalle muestra). El modelo lo 
 con el subtítulo viejo de la referencia y cortaba a la foto del producto con manos: por eso también va por imagen. El formato de video va al más
 parecido que el modelo admite (`_formato_video`: 4:5 → 3:4 en Wan). Un formulario de video sin `modos_vista` (abierto
 antes de esto) sigue haciendo un solo video.
+
+**Cobros e aislamiento (2026-10-02, PND-006/007/008):** `guardar_referente` toma `BEGIN IMMEDIATE` y hace upsert por `(cliente, anuncio_id)`; una corrida de otro proyecto crea su propia fila, sin modificar las de la biblioteca global o de otro proyecto. La migración 0030 conserva ids y rechaza bajar si habría que borrar duplicados entre proyectos. El gasto de fuente se anota antes de guardar anuncios; Apify conserva el costo contado cuando falla el sondeo y propaga `run_id`/`dataset_id`, guardados en `gasto.extra` con proveedor `apify`.

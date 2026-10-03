@@ -35,7 +35,7 @@ def test_tablas_existen_y_anuncio_id_unico(base_temporal):
                                                  anuncio_id="1", fuente="copycoders", tipo="imagen",
                                                  estado_imagen="pendiente", clasificacion="fuente", extra={}))
         with pytest.raises(sa.exc.IntegrityError):
-            con.execute(db.referente.insert().values(cliente="acme", creado_en=db.ahora(), actualizado_en=db.ahora(),
+            con.execute(db.referente.insert().values(cliente=None, creado_en=db.ahora(), actualizado_en=db.ahora(),
                                                      anuncio_id="1", fuente="atria", tipo="imagen",
                                                      estado_imagen="pendiente", clasificacion="pendiente", extra={}))
 
@@ -59,9 +59,9 @@ def test_guardar_referente_crea_y_actualiza_sin_reasignar(base_temporal):
     r = datos.referente("acme", rid)
     assert r["cliente"] is None and r["estado_imagen"] == "pendiente" and r["clasificacion"] == "fuente"
     assert r["familia"] == "Price Slash Hero" and r["extra"]["sweep"] == "AUG"
-    # Un barrido de cliente encuentra el mismo anuncio: actualiza días/variantes, conserva cliente y clasificación.
+    # Otro barrido global encuentra el mismo anuncio: actualiza días/variantes, conserva cliente y clasificación.
     rid2, creado2 = datos.guardar_referente(_anuncio(dias=400, variantes=20, cuerpo="Copy nuevo", clasificacion="pendiente",
-                                                     familia=None, etapa=None), cliente="acme", barrido_id=None)
+                                                     familia=None, etapa=None), cliente=None, barrido_id=None)
     assert rid2 == rid and creado2 is False
     r = datos.referente("acme", rid)
     assert r["dias"] == 400 and r["variantes"] == 20 and r["cuerpo"] == "Copy nuevo"
@@ -369,3 +369,14 @@ def test_pliegue_quita_tildes_y_mayusculas():
     import db
     assert db.pliegue("  ÉLITE Cröcs Ñandú ") == "elite crocs nandu"
     assert db.pliegue(None) == ""
+
+
+def test_mismo_anuncio_en_dos_proyectos_no_se_pisa(base_temporal):
+    from referentes import datos
+    a, _ = datos.guardar_referente(_anuncio(dias=10, fuente="apify"), cliente="acme")
+    b, creado = datos.guardar_referente(_anuncio(dias=99, fuente="apify"), cliente="otro")
+    assert creado and a != b
+    assert datos.referente("acme", a)["dias"] == 10
+    assert datos.referente("otro", b)["dias"] == 99
+    assert datos.referente("acme", b) is None
+    assert datos.guardar_referente(_anuncio(dias=11, fuente="apify"), cliente="acme") == (a, False)

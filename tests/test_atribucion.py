@@ -302,3 +302,18 @@ def test_crear_usa_la_sugerida_y_valida(base_temporal, monkeypatch, tienda):
     # un hijo hereda la atribución del padre, no la sugerida de hoy
     hijo = ex.crear_hijo("acme", eid, "Hijo", 1)
     assert ex.obtener("acme", hijo)["atribucion"] == "ninguna"
+
+
+def test_pedidos_vencidos_avisan_sin_cambiar_atribucion(base_temporal, tienda, monkeypatch):
+    import tablero
+    import tiendas
+    import meta_conexion
+    import alertas
+    _pedidos(tienda, ("no-ligado", 20), fecha="2000-01-01T00:00:00")
+    _pedidos(tienda, ("reciente", 10))
+    monkeypatch.setattr(meta_conexion, "estado", lambda *a, **k: {"estado": "conectado"})
+    avisos = [a for a in tablero.alertas("acme") if a["tipo"] == "pedidos_sin_atribuir"]
+    assert len(avisos) == 1 and "1" in avisos[0]["texto"]
+    assert not any(a["tipo"] == "pedidos_sin_atribuir" for a in tablero.alertas("otro"))
+    assert len(tiendas.pedidos_sin_resolver("acme")) == 1
+    assert any(a["clave"].startswith("tablero:pedidos_sin_atribuir:") for a in alertas._fuente_tablero("acme", None))

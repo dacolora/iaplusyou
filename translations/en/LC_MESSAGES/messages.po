@@ -3,7 +3,6 @@
 # This file is distributed under the same license as the Creatv project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: Creatv VERSION\n"
@@ -1155,6 +1154,12 @@ msgid "%(num)s país"
 msgid_plural "%(num)s países"
 msgstr[0] "%(num)s country"
 msgstr[1] "%(num)s countries"
+
+#, python-format
+msgid "%(num)s pedido con UTM lleva más de 30 días sin atribuir y dejó de reintentarse. No cuenta en las ventas atribuidas; revisa el UTM y el experimento de la tienda."
+msgid_plural "%(num)s pedidos con UTM llevan más de 30 días sin atribuir y dejaron de reintentarse. No cuentan en las ventas atribuidas; revisa los UTM y los experimentos de la tienda."
+msgstr[0] "%(num)s order with UTM has gone unattributed for over 30 days and is no longer retried. It does not count toward attributed sales; check the UTM and the store experiment."
+msgstr[1] "%(num)s orders with UTM have gone unattributed for over 30 days and are no longer retried. They do not count toward attributed sales; check the UTMs and the store experiments."
 
 #, python-format
 msgid "%(num)s pide atención"

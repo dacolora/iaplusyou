@@ -40,7 +40,7 @@ def _instalar_fake(monkeypatch, respuestas):
             return _Resp(texto, stop_reason=stop_reason)
 
     class FakeAnthropic:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = _Messages()
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "clave-test")
@@ -103,7 +103,7 @@ def test_compilar_devuelve_prompts_a_y_b_compuestos_con_armar(monkeypatch):
     assert "ENFOQUE: producto — el producto es el protagonista" in reg.kwargs[0]["messages"][0]["content"]
     assert "No dialogue. No background music." in r["prompt_a"] and "ESTILO DE MARCA: Luz natural." in r["prompt_a"]
     assert "macro" in r["prompt_b"] and r["prompt_b"] != r["prompt_a"] and r["diferencia_b"].startswith("Arranca")
-    assert r["planos"][0]["camara"] == "dolly_in" and r["usd"] == 0.01 and r["version"] == 1
+    assert r["planos"][0]["camara"] == "dolly_in" and r["usd"] == 0.0 and r["version"] == 1
 
 
 TRES_A = ("dolly_in", "orbita_corta", "estatico")
@@ -323,3 +323,49 @@ def test_sin_angulo_el_mensaje_del_director_no_trae_bloque(monkeypatch):
     reg = _instalar_fake(monkeypatch, [_respuesta()])
     director.compilar("acme", _sesion())
     assert "ÁNGULO" not in reg.kwargs[0]["messages"][0]["content"]
+
+
+def test_compilar_cuenta_usage_incluida_cache_y_correccion(monkeypatch):
+    import director
+    from types import SimpleNamespace
+    from guiones.claude import tokens_entrada_equivalentes
+    from nicho.avatares import costo_real
+    uso = SimpleNamespace(input_tokens=1000, output_tokens=100, cache_creation_input_tokens=2000, cache_read_input_tokens=3000)
+    original = _Resp.__init__
+    def init(self, *a, **kw):
+        original(self, *a, **kw)
+        self.usage = uso
+    monkeypatch.setattr(_Resp, "__init__", init)
+    _instalar_fake(monkeypatch, ["JSON roto", _respuesta()])
+    r = director.compilar("acme", _sesion())
+    assert r["usd"] == costo_real(2 * tokens_entrada_equivalentes(uso), 200, director.MODEL)
+
+
+def test_director_error_conserva_lo_pagado_antes_de_fallo_api(monkeypatch):
+    import director
+    from types import SimpleNamespace
+    original = _Resp.__init__
+    def init(self, *a, **kw):
+        original(self, *a, **kw)
+        self.usage = SimpleNamespace(input_tokens=1000, output_tokens=100)
+    monkeypatch.setattr(_Resp, "__init__", init)
+    _instalar_fake(monkeypatch, ["JSON roto"])
+    with pytest.raises(director.DirectorError) as exc:
+        director.compilar("acme", _sesion())
+    assert exc.value.costo_usd > 0
+
+
+def test_error_inesperado_del_compositor_conserva_usage(monkeypatch):
+    import director
+    from types import SimpleNamespace
+    original = _Resp.__init__
+    def init(self, *a, **kw):
+        original(self, *a, **kw)
+        self.usage = SimpleNamespace(input_tokens=1000, output_tokens=100)
+    monkeypatch.setattr(_Resp, '__init__', init)
+    llamadas = _instalar_fake(monkeypatch, [_respuesta()])
+    monkeypatch.setattr(director, '_validar_y_componer', lambda *a: (_ for _ in ()).throw(OverflowError('n infinito')))
+    with pytest.raises(director.DirectorError) as exc:
+        director.compilar('acme', _sesion())
+    assert exc.value.costo_usd > 0
+    assert len(llamadas.kwargs) == 1

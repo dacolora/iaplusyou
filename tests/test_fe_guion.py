@@ -688,3 +688,17 @@ def test_guion_invalido_en_el_idioma_de_quien_lo_ve(monkeypatch):
             guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
         assert str(e.value) == ("Guion inválido: La cifra «3x» del bloque hook no está en los datos: reescríbelo "
                                 "sin ella o con el dato real.")
+
+
+def test_respuesta_cortada_no_paga_correccion_y_conserva_costo(monkeypatch):
+    from final_edition import guion
+    original = _Resp.__init__
+    def init(self, *a, **k):
+        original(self, *a, **k)
+        self.stop_reason = "max_tokens"
+    monkeypatch.setattr(_Resp, "__init__", init)
+    reg = _instalar_fake(monkeypatch, ['{"bloques": [', json.dumps(_guion_valido())])
+    with pytest.raises(guion.GuionInvalido) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10, "es", "", "")
+    assert len(reg.kwargs) == 1
+    assert exc.value.costo_usd == pytest.approx(0.01)

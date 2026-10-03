@@ -278,7 +278,7 @@ def encolar_director(cliente, cf_id, prioridad=PRIORIDAD_LOTE):
         tareas_director.job_id(cliente, cf_id), "flowplus_director",
         {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": True, "prioridad": int(prioridad)},
         cliente=cliente, duracion_estimada=tareas_director.DURACION_ESTIMADA, etapas=tareas_director.ETAPAS_DIRECTOR,
-        max_intentos=2, prioridad=prioridad,
+        max_intentos=1, prioridad=prioridad,
     )
     if not ok:
         creative_flow.actualizar(cliente, cf_id, estado="error", error="No se pudo encolar la compilación del prompt.")

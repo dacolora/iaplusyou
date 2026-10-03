@@ -133,3 +133,5 @@ computed from `bool(os.environ.get(...))` only, values are never rendered (`aler
 full list is admin-only: `dashboard._llaves_visibles` gives a cliente just the `por_proyecto`
 cards (Meta), and the template hides `.env` variables, the server note and the "Cómo
 conseguirla" steps for them (the client sees `cliente_hace`: billing + the connect block).
+
+**Pedidos sin atribuir (2026-10-02, PND-015):** pasado `DIAS_RESOLVER_PEDIDOS`, se conservan sin reintento y `tiendas.pedidos_vencidos_sin_resolver` los cuenta por proyecto. `tablero.alertas` avisa en Alertas que no entran en las ventas atribuidas; no cambia el criterio de atribución ni convierte importes.

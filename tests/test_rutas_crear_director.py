@@ -57,7 +57,7 @@ def test_crear_no_genera_encola_el_director_y_deja_prompt_pendiente(app):
     assert [t["tipo"] for t in app["encolados"]] == ["flowplus_director"]
     t = app["encolados"][0]
     assert t["job_id"] == f"acme__{cf_id}__director" and t["payload"] == {"cliente": "acme", "cf_id": cf_id, "auto_lanzar": False, "prioridad": 5}
-    assert t["max_intentos"] == 2
+    assert t["max_intentos"] == 1
 
 
 def test_crear_borrador_solo_en_wan_y_sin_logos_de_fondo(app, monkeypatch):
@@ -380,3 +380,36 @@ def test_formulario_ofrece_generar_y_armar_prompt(app):
     # El botón principal genera; el del director es la ayuda, no al revés.
     assert form.index('value="directo"') < form.index('value="director"')
     assert "Tu texto va tal cual al modelo" in crear      # el pie explica el camino directo (compositor 2026-09-27)
+
+
+def test_dos_clics_simultaneos_crean_una_sola_hija_b(app):
+    import creative_flow as cf
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    cid = _lista(app)
+    juntos = Barrier(2)
+    def duplicar():
+        juntos.wait(timeout=5)
+        return cf.duplicar("acme", cid, prompt_relleno="B", variante="B")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        ids = list(pool.map(lambda _: duplicar(), range(2)))
+    assert ids[0] == ids[1]
+    assert len(cf.cargar("acme")) == 2
+
+
+def test_precio_del_detalle_incluye_musica_generada(app):
+    import creative_flow as cf
+    cid = _lista(app)
+    cf.actualizar("acme", cid, musica_estilo="calmado")
+    item = app["dashboard"]._creative_flow_item("acme", cid)
+    assert item["costo_estimado"]["usd"] == pytest.approx(0.82)
+    cf.actualizar("acme", cid, musica_estilo="mat:3")
+    assert app["dashboard"]._creative_flow_item("acme", cid)["costo_estimado"]["usd"] == pytest.approx(0.8)
+
+
+def test_compositor_toma_tarifa_borrador_del_proveedor(app, monkeypatch):
+    from providers import wan3_client
+    monkeypatch.setitem(wan3_client.COSTO_USD_POR_SEGUNDO, "480p", 0.073)
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert 'data-usd-borrador="0.073"' in html
+    assert 'parseFloat(m.dataset.usdBorrador)' in html

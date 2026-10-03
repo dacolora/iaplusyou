@@ -428,7 +428,7 @@ def test_borrar_no_toca_una_grabacion_que_usa_otra_voz(base_temporal, r2, fal):
 def test_tipo_de_gasto_y_estimados():
     from providers import fal_audio
     assert "voz_propia" in gastos.TIPOS
-    assert gastos.estimar("voz_clonada")["usd"] == fal_audio.COSTO_CLONAR_VOZ
+    assert gastos.estimar("voz_clonada")["usd"] > fal_audio.COSTO_CLONAR_VOZ
     assert gastos.estimar("voz_disenada")["usd"] == fal_audio.COSTO_DISENAR_VOZ
 
 

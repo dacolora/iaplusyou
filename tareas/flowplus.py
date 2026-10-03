@@ -575,6 +575,15 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.mp4")
 
+    # La predicción conserva la referencia del intento que pagó, aunque la
+    # descarga se cierre desde otra tarea (PND-109, 2026-10-02).
+    ref_intento = ref
+    pred = (_sesion_o_vacia(cliente, cf_id).get("prediccion") or {}).copy()
+    if pred.get("id"):
+        ref = pred.get("referencia_gasto") or ref
+        pred["referencia_gasto"] = ref
+        creative_flow.actualizar(cliente, cf_id, prediccion=pred)
+
     costo = None
     # El `detalle` del gasto se guarda (Configuración › Gasto): en el idioma del
     # proyecto, que ya puso worker.ejecutar.
@@ -680,6 +689,13 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         estado_musica = (capas.get("musica") or {}).get("estado")
         detalle_gasto += " + " + gettext("música %(estilo)s", estilo=estilo_musica) + (
             (" (" + gettext("falló la mezcla; la pista ya se cobró") + ")") if estado_musica == "error" else "")
+    if ref != ref_intento and usd_musica:
+        # Una pista nueva es un cobro del intento de recuperación, separado
+        # del video que ya pagó la tarea original.
+        gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
+                               proveedor="fal", detalle=detalle_gasto,
+                               extra={"usd_musica": usd_musica})
+        usd_musica = 0.0
     _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
 
     registro = {

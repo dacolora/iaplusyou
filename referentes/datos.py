@@ -6,8 +6,8 @@ nada de Flask (salvo `gettext` de flask_babel para los mensajes de error) ni
 de proveedores.
 
 Visibilidad: un proyecto ve los referentes globales (cliente NULL) y los
-suyos. `anuncio_id` (id del Ad Library de Meta) es único global: un anuncio
-que ya existe se actualiza, nunca se duplica ni cambia de dueño.
+suyos. `anuncio_id` es único dentro de cada proyecto; NULL conserva una
+biblioteca global independiente (PND-006, 2026-10-02).
 """
 import math
 
@@ -205,7 +205,7 @@ def _validar_anuncio(a):
 
 
 def guardar_referente(anuncio, cliente=None, barrido_id=None):
-    """Upsert por anuncio_id. Devuelve (id, creado). Si ya existe: actualiza
+    """Upsert por (cliente, anuncio_id). Devuelve (id, creado). Si ya existe: actualiza
     dias/variantes/ultima_vez/activo (y cuerpo si estaba vacío); si estaba sin
     clasificar y la fuente trae clasificación, la toma; nunca cambia `cliente`."""
     a = dict(anuncio)
@@ -214,7 +214,8 @@ def guardar_referente(anuncio, cliente=None, barrido_id=None):
     ahora = db.ahora()
     t = db.referente
     with db.conectar() as con:
-        fila = con.execute(sa.select(t).where(t.c.anuncio_id == aid)).first()
+        con.exec_driver_sql("BEGIN IMMEDIATE")
+        fila = con.execute(sa.select(t).where(t.c.anuncio_id == aid, t.c.cliente == cliente)).first()
         if fila:
             cambios = {k: a[k] for k in _ACTUALIZABLES if a.get(k) is not None}
             if not (fila.cuerpo or "").strip() and _texto(a.get("cuerpo")):

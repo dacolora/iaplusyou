@@ -49,7 +49,7 @@ ElevenLabs Turbo v2.5 con `language_code`; las **voces propias** por MiniMax Spe
 `voces_propias.py` es el único escritor de las voces propias (filas `material` origen `voz_propia`, `url` = su
 muestra, `extra.voice_id` de MiniMax), de la grabación de un clon (origen `grabacion`, hash con prefijo propio para
 no chocar con Mi música) y de sus muestras por idioma (hash `muestra_propia`, las paga el proyecto). Se crean con la
-tarea `voz_propia_crear` (`max_intentos=1`, job `<cliente>__voz_propia`): clonar (US$ 1,50, casilla de permiso
+tarea `voz_propia_crear` (`max_intentos=1`, job `<cliente>__voz_propia`): clonar (base US$ 1,50 más vista previa y estreno, casilla de permiso
 obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripción (US$ 3,00); el gasto (tipo
 `voz_propia`) se registra apenas fal responde y la tarea ESTRENA la voz leyendo su muestra, porque MiniMax borra
 una voz sin uso real en 7 días (la vista previa no cuenta). En el formulario una voz propia es `vp:<id>`.
@@ -87,3 +87,5 @@ sesión de Crear (`modelo="p_video_avatar"`, `modo_crear="hablado"`, `enfoque_no
 `cf_guardar_prompt`, `fp_reusar`), el camino automático de Final edition (`fe_preparar`/`fe_producir`, nota «Este video
 ya habla…») y derivar/rescatar en Experimentos (`pz["sin_derivar"]`, `derivaciones._rechazar_imagen`); el editor, la
 doctrina, «Reintentar», «Recuperar» y la publicación orgánica sí funcionan.
+
+**Precio del clon (2026-10-02, PND-011):** `gastos.estimar("voz_clonada", nombre=, idioma=)` incluye clon, vista previa y estreno con la frase que leerá la tarea. `fal_audio.costo_clonar_voz` calcula tanto el estimado como el cobro de creación; el botón recibe los precios por longitud de nombre e idioma del servidor.

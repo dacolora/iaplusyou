@@ -142,6 +142,10 @@ def tts_minimax(texto, voice_id, idioma, velocidad=None, timeout=180):
             "duracion_ms": int(data.get("duration_ms") or 0)}
 
 
+def costo_clonar_voz(preview_text):
+    return round(COSTO_CLONAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_CLON_POR_CARACTER, 4)
+
+
 def clonar_voz_minimax(audio_url, preview_text, timeout=300):
     """Clona la voz de `audio_url` (≥ 10 s, con permiso de la persona). La
     vista previa lee `preview_text` y NO estrena la voz (voces_propias.crear la
@@ -153,7 +157,7 @@ def clonar_voz_minimax(audio_url, preview_text, timeout=300):
     if not voice_id:
         raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s",
                                    modelo=MODELO_MINIMAX_CLONAR, datos=data))
-    costo = round(COSTO_CLONAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_CLON_POR_CARACTER, 4)
+    costo = costo_clonar_voz(preview_text)
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 

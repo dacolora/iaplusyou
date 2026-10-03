@@ -77,3 +77,5 @@ save (`guardarAngulosPendientes`: «Reescribir», «Aprobar», any form submit �
 so its `confirm()` asks once); a reload of the SAME campaign's panel keeps what was being typed, which
 `<details>` were open and the cursor (`tomarEscrito`/`devolverEscrito`). The Blueprint refuses POSTs the
 browser marks as cross-site (`Sec-Fetch-Site`), like Flow Plus and the editor.
+
+Director de Crear en lotes (2026-10-02, PND-014): también se encola con max_intentos=1 y registra el usage real bajo _creatv; sigue siendo una ayuda gratis para la persona.

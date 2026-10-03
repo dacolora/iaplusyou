@@ -515,6 +515,17 @@ def pedidos_sin_resolver(cliente, dias=DIAS_RESOLVER_PEDIDOS):
         return [_pedido_a_dict(f) for f in filas]
 
 
+def pedidos_vencidos_sin_resolver(cliente, ahora=None):
+    """Cuenta pedidos con UTM fuera del plazo de atribución, sin borrarlos."""
+    ahora = datetime.fromisoformat(ahora) if isinstance(ahora, str) else (ahora or datetime.now())
+    limite = (ahora - timedelta(days=DIAS_RESOLVER_PEDIDOS)).isoformat(timespec="seconds")
+    pe = db.pedido
+    with db.conectar() as con:
+        return con.execute(sa.select(sa.func.count()).select_from(pe).where(
+            pe.c.cliente == cliente, pe.c.utm_content.isnot(None), pe.c.utm_content != "",
+            pe.c.experimento_pieza_id.is_(None), pe.c.fecha < limite)).scalar() or 0
+
+
 def resolver_pedido(cliente, pedido_id, ep_id):
     """Liga un pedido a la `experimento_pieza` que lo generó. `False` si la
     pieza no existe o no es de ese cliente (nunca atribuir un pedido a una

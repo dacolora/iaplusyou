@@ -316,8 +316,12 @@ def _llamar(client, system, mensajes):
         system=system,
         messages=mensajes,
     )
+    usd = _usd(getattr(resp, "usage", None))
+    if getattr(resp, "stop_reason", None) == "max_tokens":
+        raise GuionInvalido([gettext("La respuesta de Claude salió incompleta. Intenta con un guion más corto.")],
+                            costo_usd=usd)
     texto = "".join(block.text for block in resp.content if block.type == "text").strip()
-    return texto, _usd(getattr(resp, "usage", None))
+    return texto, usd
 
 
 def _usd(uso):
@@ -416,7 +420,7 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
         except Exception as e:
             # La corrección falló (timeout, 529, conexión) después de que la primera
             # llamada YA se cobró: lo pagado viaja con el error para que se anote.
-            e.costo_usd = round(costo, 4)
+            e.costo_usd = round(costo + float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
             raise
         costo += usd
         guion = _parsear(texto)
