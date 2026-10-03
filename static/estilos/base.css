@@ -1,0 +1,9 @@
+/* Base (spec 2026-10-02-sistema-de-estilos §4.6 y §9 regla 7). Lo común a toda página que se vaya mudando desde
+   legado/ vive aquí. Quien pidió «reducir movimiento» en su sistema no ve animaciones ni transiciones. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Enlaces: sin esta regla el navegador los pinta lila (#9e9eff) y morados al visitarlos (#d0adf0) en tema oscuro.
+   :where() no suma especificidad, así que cualquier clase con su propio color le gana. */
+:where(a) { color: var(--accent-texto); }

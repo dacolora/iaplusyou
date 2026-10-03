@@ -710,6 +710,13 @@ def alertas(cliente, ahora_iso=None, datos=None):
                                        nombre=t.get("nombre") or t.get("dominio") or "", detalle=detalle),
                                "settings"))
 
+    vencidos = tiendas.pedidos_vencidos_sin_resolver(cliente, ahora)
+    if vencidos:
+        out.append(_alerta("pedidos_sin_atribuir", "media", ngettext(
+            "%(num)s pedido con UTM lleva más de 30 días sin atribuir y dejó de reintentarse. No cuenta en las ventas atribuidas; revisa el UTM y el experimento de la tienda.",
+            "%(num)s pedidos con UTM llevan más de 30 días sin atribuir y dejaron de reintentarse. No cuentan en las ventas atribuidas; revisa los UTM y los experimentos de la tienda.",
+            vencidos), "settings"))
+
     # 7. Pixel sin datos con experimentos que dependen de él (media, settings).
     con_pixel = [ex for ex in exps if ex["estado"] != "cerrado" and ex.get("atribucion") == "pixel"]
     if con_pixel:

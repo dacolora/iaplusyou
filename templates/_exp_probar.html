@@ -71,11 +71,11 @@
       {% for codigo, p in paises_fe.items() %}
       <label class="fe-destino">
         <input type="checkbox" name="paises" value="{{ codigo }}" class="exp-pais-check"> {{ p.bandera }} {{ p.nombre|traducir }}
-        <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" value="{{ minimo_diario_exp }}" style="width:8rem;">
+        <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" value="{{ minimo_diario_exp }}" class="exp-ancho-8">
       </label>
       {% endfor %}
     </fieldset>
-    <label>{{ _('Edad') }} <input type="number" name="edad_min" value="18" min="13" max="65" style="width:4rem;"> – <input type="number" name="edad_max" value="65" min="13" max="65" style="width:4rem;"></label>
+    <label>{{ _('Edad') }} <input type="number" name="edad_min" value="18" min="13" max="65" class="exp-ancho-4"> – <input type="number" name="edad_max" value="65" min="13" max="65" class="exp-ancho-4"></label>
     <div class="exp-pasos-botones"><button type="button" class="btn-guardar btn-sm" data-ir="2">{{ _('Siguiente →') }}</button></div>
   </section>
 

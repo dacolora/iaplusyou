@@ -1,21 +1,40 @@
 ---
 name: ui
-description: "Pantallas de Creatv: la base visual común de static/style.css, el celular, las tarjetas ligeras con detalle por fetch, las barras de progreso con data-poll-job y las reglas de rendimiento de la página del proyecto. Cargar antes de agregar o cambiar una pantalla, una tarjeta, una lista, una barra de progreso, o tocar cliente.html, base.html o style.css."
+description: "Pantallas de Creatv: el sistema de static/estilos/ y la base visual común, el celular, las tarjetas ligeras con detalle por fetch, las barras de progreso con data-poll-job y las reglas de rendimiento de la página del proyecto. Cargar antes de agregar o cambiar una pantalla, una tarjeta, una lista, una barra de progreso, o tocar cliente.html, base.html o style.css."
 ---
 
 # Pantallas: base visual, celular y rendimiento de la página
 
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
+**Sistema de estilos (2026-10-02, pedido de Daniel: el azul de la referencia en toda la plataforma y un lugar
+para cambiar el diseño):** `static/estilos/` es la fuente; `static/style.css` es generado y se guarda en git.
+Edita la carpeta y corre `python3 estilos.py construir`; `test_la_hoja_es_la_generada` falla si se edita la hoja a
+mano, y `python3 estilos.py comprobar` verifica que esté al día. `ORDEN` une las capas: `tokens.css`, `legado/`
+en su número, `base.css`, `componentes/`, `pantallas/`. Los valores de diseño nuevos van en `tokens.css`; los
+colores literales restantes de `legado/` son la excepción transitoria: solo se vacía, con el trinquete
+`TECHO_COLORES_LEGADO` en `tests/test_estilos_sistema.py` (199 al cerrar la entrega 1). Los estilos en línea
+sin colores tampoco crecen (`TECHO_ESTILOS_EN_LINEA`: 414). Un componente nuevo lleva archivo en `componentes/`,
+macro en `templates/_componentes.html` si tiene marcado, sección `data-componente="<nombre>"` en la Guía
+`/admin/estilos` y una línea aquí. Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
+una sola vez en `ORDEN`; sin `@import`. `base.css` respeta `prefers-reduced-motion` y pinta los enlaces sin clase
+con `:where(a) { color: var(--accent-texto) }` (sin ella Chrome los deja lila y, visitados, morados); un `<button>`
+con clase que no pinta su fondo queda con el gris del navegador: dale fondo o súmalo al secundario de la base
+visual (como `.menu-movil` y `.au-filtro`). Las animaciones se limitan a `ANIMACIONES_PERMITIDAS` y el pulso nuevo
+a elementos vivos. El editor usa `--fondo-video` detrás del
+reproductor y `--fondo-lienzo` en el canvas, sin brillos: la paleta de la interfaz no cambia los colores que se
+renderizan dentro del video (spec §12).
+
 **UI base** (2026-09-25/26, specs `2026-09-25-base-visual-comun` and `2026-09-26-movil`): the
-block «Base visual común (2026-09-25)» at the END of `static/style.css` is the source of truth for
+block «Base visual común (2026-09-25)» in `static/estilos/legado/03-base-visual-comun-2026-09-25-spec.css`
+(or its component after migration) is the source of truth for
 fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.btn`/classless
 `button` = secondary), `summary`, the tab header (`.panel-cabecera` > text div with `h2` +
 `.panel-cabecera-desc`, plus `.panel-cabecera-acciones`) and `.estado-vacio`; new screens reuse
 those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
 top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
 screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
-(`tests/test_base_visual.py`, `tests/test_movil.py`). Phone review of every screen (2026-09-28, CSS block «Celular: revisión de pantallas» at the end of `style.css`): auto-fill grids use `minmax(min(100%, X), 1fr)` (never a bare fixed minimum — a test rejects it), card galleries (Crear, Final edition, Experimentos, Referentes) are 2 columns ≤ 760 px, button/filter rows (`.acciones`, summaries) wrap, long ids/JSON/URLs break instead of pushing the page, and data tables (`tabla-admin`, `tabla-tiendas`, `tabla-productos`, `gasto-tabla`, `sprint-entrega`, `gpg-tabla`, or opt-in `tabla-apilada`) become one card per row ≤ 640 px with each value labelled from its column header (`static/tablas.js` copies the `<th>` text to `data-etiqueta`, also for tables inserted later by fetch); `.solo-teclado` hides keyboard-only hints on touch screens. Crear's «Desde referencias» form is a **composer**
+(`tests/test_base_visual.py`, `tests/test_movil.py`). Phone review of every screen (2026-09-28, CSS block «Celular: revisión de pantallas» in `static/estilos/legado/07-celular-revision-de-pantallas-2026-09-28.css`): auto-fill grids use `minmax(min(100%, X), 1fr)` (never a bare fixed minimum — a test rejects it), card galleries (Crear, Final edition, Experimentos, Referentes) are 2 columns ≤ 760 px, button/filter rows (`.acciones`, summaries) wrap, long ids/JSON/URLs break instead of pushing the page, and data tables (`tabla-admin`, `tabla-tiendas`, `tabla-productos`, `gasto-tabla`, `sprint-entrega`, `gpg-tabla`, or opt-in `tabla-apilada`) become one card per row ≤ 640 px with each value labelled from its column header (`static/tablas.js` copies the `<th>` text to `data-etiqueta`, also for tables inserted later by fetch); `.solo-teclado` hides keyboard-only hints on touch screens. Crear's «Desde referencias» form is a **composer**
 (spec `2026-09-27-crear-compositor`, CSS block «Crear: compositor»): a card whose top half is the bandeja
 (OUTSIDE `#form-flowplus`, it carries its own `<form>`s) and whose bottom half is the form, with a bar of pills
 whose menus hold the real radios/selects — the selects stay the hidden source of truth and the menus draw chips
@@ -23,13 +42,12 @@ from them —, so the POST to `cf_crear_video` is unchanged; upload/link inputs 
 `form=`, the catalog opens as a `<dialog>` (`_selector_productos.html` with `sel_dialogo=True`; «Cambiar producto»
 keeps its `<details>`), and Enter in a one-line input never submits it (it used to generate and charge).
 
-**Una sección con su propio aspecto** (Final edition, 2026-10-02: Daniel pidió «un branding de este estilo» con una
-referencia de presentación tecnológica — azul marino, azul eléctrico con brillo, números en círculos, íconos en
-recuadros, flujo con flechas): se hace redefiniendo las variables de la base visual DENTRO del panel (`#tab-final {
---bg; --panel; --accent; … }`, bloque «Final edition: tablero» al final de `style.css`), nunca con copias de los
-componentes; así el detalle (`<dialog>` dentro de la pestaña) y sus formularios cambian solos. Las superficies siguen
-oscuras (`test_modo_oscuro`: luminancia ≤ 0,05) y un color que pase de 0,4 (`--fe-cian`) va solo en texto, trazos
-SVG y sombras. Íconos: macro `icono_fe(nombre)` de `_final_macros.html` (SVG en línea, `currentColor`). Ojo con los
+**Final edition y la paleta global** (2026-10-02: Daniel pidió «un branding de este estilo» con una
+referencia tecnológica — azul marino, azul eléctrico con brillo, números en círculos, íconos en recuadros,
+flujo con flechas): la paleta vive en `tokens.css` para TODA la app; Final edition ya no redefine variables
+dentro de `#tab-final`. Sus reglas propias siguen en `legado/11-final-edition-tablero-2026-10-02-daniel.css`
+hasta la entrega de componentes comunes. Las superficies siguen oscuras (`test_modo_oscuro`: luminancia
+≤ 0,05) y `--cian`, que pasa de 0,4, va solo en texto, trazos SVG y sombras. Íconos: macro `icono_fe(nombre)` de `_final_macros.html` (SVG en línea, `currentColor`). Ojo con los
 nombres de selectores en el JS de una plantilla: `tests/i18n_util.py` lee como español suelto un literal con «en»,
 «nueva», «de»… (por eso `#fe-editando` y `data-fe-elegir`). Un panel oculto del navegador integrado no pinta cuadros
 de `<video>` en las capturas: miniaturas negras ahí no son un error (comprobar `readyState`).
@@ -82,3 +100,5 @@ conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos, 
 «Nueva idea».
 
 **Alertas en pantalla** (2026-10-02, skill `alertas`): el Tablero ya no lista alertas, solo una línea («N alertas necesitan tu atención → Ver Alertas», `.tb-aviso-alertas` en `_tab_tablero.html`); la lista vive en la pestaña Alertas (`_tab_alertas.html`, `#alertas`) y la burbuja del sidebar sale de `alertas_ctx`, el mismo dato del context processor `_alertas_sidebar`, que se calcula en cada página (caché de 60 s): una consulta por tarjeta ahí cuesta en todas las pantallas.
+
+Precios del compositor y clon (2026-10-02, PND-011/016): el JS recibe tarifas y tablas calculadas en servidor; no duplica el precio del proveedor. La tarifa de música viene del servidor, desde gastos.costo_musica_estimada. La tabla de clon se cachea por proceso y varía con nombre e idioma antes del clic; se refresca también al vaciar el nombre después de clonar (revisión 2026-10-02).

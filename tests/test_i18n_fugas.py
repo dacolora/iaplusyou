@@ -24,6 +24,7 @@ def app_i18n(base_temporal, tmp_path, monkeypatch):
     import dashboard
     import proyectos
     monkeypatch.setenv("FLASK_SECRET_KEY", "clave-de-prueba-larga-1234567890")
+    monkeypatch.setenv("CREATV_LOGS", str(tmp_path / "logs"))
     for v in CLAVES:
         monkeypatch.delenv(v, raising=False)
     monkeypatch.setattr(dashboard, "_client_dir", lambda cliente: str(tmp_path / "clientes" / cliente))
@@ -894,3 +895,9 @@ def test_estados_de_barrido_del_admin_con_etiqueta(admin_en):
     fugas = espanol_visible(html)
     assert not fugas, fugas[:15]
     assert ">parcial<" not in html and html.count("Incomplete") == 3   # frase, historial y barridos globales
+
+
+def test_fixture_idioma_aisla_registros_locales(app_i18n, tmp_path):
+    from pathlib import Path
+    ruta = Path(app_i18n.registro_app.ruta('web'))
+    assert tmp_path in ruta.parents

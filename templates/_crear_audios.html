@@ -43,7 +43,7 @@
               <input type="file" id="au-vp-archivo" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*"></label>
             <label class="au-vp-permiso"><input type="checkbox" id="au-vp-permiso"> <span>{{ texto_consentimiento|traducir }}</span></label>
             <p class="au-ayuda">{{ _('Graba en un lugar silencioso, con una sola persona hablando y sin música.') }}</p>
-            <div><button type="button" class="btn-generar btn-sm" id="au-vp-clonar">{{ _('Clonar voz') }} ≈ {{ precio_voz_clonada.usd|usd }}</button></div>
+            <div><button type="button" class="btn-generar btn-sm" id="au-vp-clonar">{{ _('Clonar voz') }} <span id="au-vp-clonar-precio">≈ {{ precio_voz_clonada.usd|usd }}</span></button></div>
           </div>
           <div class="au-vp-form" id="au-vp-form-disenar" role="tabpanel" data-vp-form="disenar" hidden>
             <label class="campo-label" for="au-vp-nombre-d">{{ _('Nombre de la voz') }}
@@ -145,6 +145,15 @@
   var musicaAudio = document.getElementById('au-musica-audio'), inicio = document.getElementById('au-inicio');
 
   function fmtUsd(v) { return 'US$ ' + (Math.round(v * 100) / 100).toFixed(2).replace('.', sep); }
+  var preciosClon = {{ precios_clon|tojson }};
+  function refrescarPrecioClon() {
+    var n = Array.from(document.getElementById('au-vp-nombre-c').value.replace(/\s+/g, ' ').trim()).length;
+    var tabla = preciosClon[document.getElementById('au-idioma').value];
+    document.getElementById('au-vp-clonar-precio').textContent = T.aprox + ' ' + fmtUsd(tabla[Math.min(n, tabla.length - 1)]);
+  }
+  document.getElementById('au-vp-nombre-c').addEventListener('input', refrescarPrecioClon);
+  document.getElementById('au-idioma').addEventListener('change', refrescarPrecioClon);
+  refrescarPrecioClon();
   function refrescarPrecio() {
     var n = texto.value.replace(/\s+/g, ' ').trim().length;
     contador.textContent = n;
@@ -365,6 +374,7 @@
       if (!ok) return;
       archivo.value = '';
       document.getElementById('au-vp-nombre-c').value = '';
+      refrescarPrecioClon();
       document.getElementById('au-vp-permiso').checked = false;
     });
   });

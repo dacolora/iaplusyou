@@ -160,12 +160,20 @@ def _estimado(usd, detalle=""):
 
 # ------------------------------------------------------------ estimar ---
 
-def _estimar_video(modelo=None, duracion=None, con_sonido=True, **_):
+def costo_musica_estimada(estilo):
+    from mi_musica import es_propia
+    from providers.fal_audio import COSTO_USD_POR_PISTA_MUSICA
+    return COSTO_USD_POR_PISTA_MUSICA if estilo and not es_propia(estilo) else 0.0
+
+
+def _estimar_video(modelo=None, duracion=None, con_sonido=True, musica_estilo="", **_):
     from providers import flowplus_modelos
     if not modelo or not duracion:
         return None, "faltan modelo o duración"
     r = flowplus_modelos.estimate_video(modelo, float(duracion), con_sonido=bool(con_sonido))
-    return r.get("usd"), f"{modelo} · {int(float(duracion))} s" + ("" if con_sonido else " · sin sonido")
+    usd = r.get("usd")
+    usd = None if usd is None else usd + costo_musica_estimada(musica_estilo)
+    return usd, f"{modelo} · {int(float(duracion))} s" + ("" if con_sonido else " · sin sonido")
 
 
 def _estimar_imagen(modelo=None, n_referencias=1, **_):
@@ -243,12 +251,13 @@ def _estimar_locucion(caracteres=0, **_):
     return n * fal_audio.COSTO_USD_POR_CARACTER, f"{n} caracteres con ElevenLabs"
 
 
-def _estimar_voz_clonada(**_):
-    """Voces propias de Audios: clonar una voz con MiniMax vía fal. La vista
-    previa de la frase de muestra se cobra aparte (US$ 0,0003 por carácter:
-    1-3 ¢ para una frase típica) y no entra en este estimado."""
+def _estimar_voz_clonada(nombre="", idioma="es", **_):
+    """Clon, vista previa y estreno con la misma frase que usa la tarea."""
     from providers import fal_audio
-    return fal_audio.COSTO_CLONAR_VOZ, "una voz clonada con MiniMax"
+    from voces_propias import frase_muestra
+    frase = frase_muestra(nombre, idioma)
+    return (fal_audio.costo_clonar_voz(frase) + len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER,
+            "una voz clonada con MiniMax")
 
 
 def _estimar_voz_disenada(**_):

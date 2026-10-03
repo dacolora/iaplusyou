@@ -1,0 +1,182 @@
+/* ============================================================
+   Final edition: tablero (2026-10-02). Daniel pidió el tablero y «un
+   branding de este estilo» con una referencia de presentación tecnológica:
+   azul marino profundo, azul eléctrico con brillo, números grandes en
+   círculos, íconos en recuadros que brillan y un flujo de pasos con flechas.
+   La paleta vive ahora en tokens.css para toda la plataforma; las
+   reglas propias del tablero se conservan aquí hasta mudar sus componentes
+   (entrega 1 del sistema de estilos, 2026-10-02).
+   Contrastes medidos sobre --panel #0b1a33: --text 15:1, --muted 7,3:1,
+   --accent-texto 7,8:1, letra blanca sobre --accent 5:1. --cian pasa de
+   0,4 de luminancia: va solo en texto, trazos y sombras, nunca de fondo ni
+   de borde (tests/test_modo_oscuro.py).
+   ============================================================ */
+
+.con-sidebar #tab-final.tab-panel.activo {
+  background:
+    radial-gradient(900px 420px at 92% -14%, rgba(47, 140, 255, 0.22), transparent 62%),
+    radial-gradient(700px 380px at -10% 110%, rgba(56, 200, 255, 0.08), transparent 60%),
+    radial-gradient(rgba(120, 170, 255, 0.07) 1px, transparent 1.5px) 0 0 / 22px 22px,
+    var(--bg);
+  border-color: rgba(60, 130, 255, 0.3);
+  box-shadow: 0 24px 60px rgba(0, 4, 16, 0.55), inset 0 1px 0 rgba(120, 180, 255, 0.08);
+}
+
+/* Cabecera: sobretítulo, título que brilla y una línea de luz debajo. */
+#tab-final .fe-hero { position: relative; margin-bottom: 1.2rem; border-bottom-color: var(--border-soft); }
+#tab-final .fe-hero::after, .fe-columna-cab::after {
+  content: ""; position: absolute; left: 0; bottom: -1px; height: 2px; width: min(240px, 45%);
+  background: linear-gradient(90deg, var(--accent-2), transparent); box-shadow: 0 0 12px var(--brillo);
+}
+.fe-sobretitulo { margin: 0 0 .3rem; font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--cian); }
+#tab-final .fe-hero h2 { font-size: clamp(1.7rem, 1.25rem + 1.4vw, 2.35rem); letter-spacing: -.02em; text-shadow: 0 0 30px rgba(47, 140, 255, .4); }
+#tab-final .fe-hero .btn-generar { display: inline-flex; align-items: center; gap: .4rem; padding: .7rem 1.2rem; }
+.fe-icono { width: 1em; height: 1em; display: block; }
+#tab-final .fe-hero .btn-generar .fe-icono { width: 1.1em; height: 1.1em; }
+
+/* Cifras: ícono en recuadro que brilla + número grande. */
+.fe-cifras { list-style: none; margin: 0 0 1.1rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: .7rem; }
+.fe-cifra {
+  display: flex; align-items: center; gap: .75rem; min-width: 0; padding: .8rem .9rem;
+  background: linear-gradient(180deg, rgba(16, 34, 63, .9), rgba(11, 26, 51, .9));
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.fe-cifra > div { min-width: 0; }
+.fe-cifra small { display: block; font-size: .72rem; color: var(--muted); overflow-wrap: anywhere; }
+.fe-cifra strong { display: block; font-family: var(--font-display); font-size: 1.5rem; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; }
+.fe-cifra-icono, .fe-flujo-icono, .fe-vacio-icono {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px;
+  border-radius: 12px; color: var(--cian);
+  background: linear-gradient(145deg, rgba(47, 140, 255, .3), rgba(29, 106, 224, .08));
+  border: 1px solid rgba(47, 140, 255, .45);
+  box-shadow: 0 0 18px rgba(47, 140, 255, .25), inset 0 1px 0 rgba(160, 210, 255, .15);
+}
+.fe-cifra-icono .fe-icono, .fe-flujo-icono .fe-icono, .fe-vacio-icono .fe-icono { width: 22px; height: 22px; filter: drop-shadow(0 0 4px rgba(56, 200, 255, .55)); }
+
+/* Cómo funciona: cinco pasos unidos por flechas de luz. */
+.fe-flujo {
+  list-style: none; margin: 0 0 1.5rem; padding: 1rem 1rem .9rem; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem;
+  background: rgba(11, 26, 51, .55); border: 1px solid var(--border-soft); border-radius: var(--radius);
+}
+.fe-flujo li { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: .3rem; text-align: center; }
+.fe-flujo li + li::before {
+  content: ""; position: absolute; top: 20px; right: calc(50% + 29px); width: calc(100% - 58px + .5rem); height: 2px;
+  background: linear-gradient(90deg, rgba(47, 140, 255, .1), var(--accent-2)); box-shadow: 0 0 8px var(--brillo);
+}
+.fe-flujo li + li::after { content: ""; position: absolute; top: 16px; right: calc(50% + 23px); border: 5px solid transparent; border-left-color: var(--accent-2); }
+.fe-flujo strong { margin-top: .2rem; font-size: .8rem; color: var(--text); overflow-wrap: anywhere; }
+.fe-flujo small { font-size: .7rem; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
+
+/* Columnas numeradas (01 En edición · 02 Finalizados). */
+.fe-columnas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+@media (min-width: 1180px) { .fe-columnas { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+.fe-columna {
+  min-width: 0; padding: 1rem 1rem 1.15rem;
+  background: linear-gradient(180deg, rgba(16, 34, 63, .6), rgba(8, 19, 38, .6));
+  border: 1px solid var(--border-soft); border-radius: var(--radius-lg);
+}
+.fe-columna-cab { position: relative; display: flex; align-items: center; gap: .85rem; padding-bottom: .8rem; border-bottom: 1px solid var(--border-soft); }
+.fe-columna-cab::after { width: min(140px, 40%); }
+.fe-columna-cab > div { min-width: 0; }
+.fe-columna-cab h3 { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin: 0; font-size: 1.12rem; color: var(--text); }
+.fe-columna-cab p { margin: .2rem 0 0; font-size: .8rem; line-height: 1.45; color: var(--muted); }
+.fe-numero {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 50%;
+  font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; color: #fff;
+  background: radial-gradient(circle at 35% 30%, #2f8cff, #1d6ae0 55%, #123f8f);
+  border: 1px solid rgba(92, 180, 255, .6);
+  box-shadow: 0 0 0 4px rgba(47, 140, 255, .12), 0 0 22px rgba(47, 140, 255, .45);
+}
+.fe-numero .fe-icono { width: 22px; height: 22px; }
+.fe-contador {
+  font-size: .74rem; font-weight: 700; padding: .1rem .55rem; border-radius: 999px; font-variant-numeric: tabular-nums;
+  color: var(--accent-texto); background: rgba(47, 140, 255, .14); border: 1px solid rgba(47, 140, 255, .35);
+}
+
+/* Tarjetas: superficie azul y brillo al pasar. */
+#tab-final .generado { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border-color: var(--border); border-radius: 14px; }
+#tab-final .generado:hover, #tab-final .generado:focus-visible { border-color: var(--accent-2); box-shadow: var(--shadow-glow); }
+#tab-final .generado-media { background: var(--bg); }
+#tab-final .generado-velo { background: linear-gradient(to top, rgba(5, 13, 31, .95), rgba(5, 13, 31, .15)); }
+#tab-final .generado-tipo, #tab-final .generado-badge { background: rgba(5, 13, 31, .82); border: 1px solid rgba(47, 140, 255, .35); }
+.fe-chips { list-style: none; margin: .3rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: .25rem; }
+.fe-chips:empty { display: none; }
+.fe-chips li {
+  font-size: .66rem; font-weight: 600; padding: .1rem .45rem; border-radius: 999px;
+  color: var(--accent-texto); background: rgba(47, 140, 255, .12); border: 1px solid rgba(47, 140, 255, .3);
+}
+.fe-chips .fe-chip-vivo { color: var(--cian); }
+.fe-chips .fe-chip-vivo::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; margin-right: .3rem; border-radius: 50%; vertical-align: .05em;
+  background: var(--accent-2); box-shadow: 0 0 6px var(--cian); animation: fe-pulso 1.6s ease-in-out infinite;
+}
+.fe-chips .fe-chip-error { color: var(--error); background: var(--error-fondo); border-color: rgba(255, 95, 122, .4); }
+.fe-banderas { list-style: none; margin: .35rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: .25rem; }
+.fe-banderas li { font-size: .85rem; line-height: 1; padding: .16rem .22rem; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border); }
+.fe-banderas .fe-bandera-ok { border-color: rgba(62, 207, 142, .6); }
+.fe-banderas .fe-bandera-vivo { border-color: var(--accent-2); box-shadow: 0 0 8px var(--brillo); animation: fe-pulso 1.6s ease-in-out infinite; }
+.fe-banderas .fe-bandera-error { border-color: rgba(255, 95, 122, .65); }
+#tab-final .generado-pie .fe-siguiente { margin-top: .35rem; font-size: .72rem; font-weight: 600; color: var(--accent-texto); }
+@keyframes fe-pulso { 50% { opacity: .45; } }
+/* Elegir en «+ Nueva» va al editor: la tarjeta avisa al instante, y en el
+   tablero la que se está preparando para el editor se resalta. */
+#tab-final .generado-velo.fe-abriendo { justify-content: center; align-items: center; background: rgba(5, 13, 31, .78); }
+#tab-final .fe-abriendo .generado-estado { color: var(--cian); }
+#tab-final .generado.fe-resaltada { border-color: var(--accent-2); box-shadow: var(--shadow-glow), 0 0 32px rgba(47, 140, 255, .45); animation: fe-resalte 1.8s ease-in-out 3; }
+@keyframes fe-resalte { 50% { box-shadow: var(--shadow-glow), 0 0 8px rgba(47, 140, 255, .2); } }
+
+/* «+ Nueva final edition»: la primera tarjeta de «En edición». */
+#tab-final .fe-nueva {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; min-height: 230px; padding: 1.2rem .8rem;
+  text-align: center; color: var(--text); border-radius: 14px; border: 1.5px dashed rgba(47, 140, 255, .55);
+  background: radial-gradient(circle at 50% 38%, rgba(47, 140, 255, .18), transparent 65%), rgba(11, 26, 51, .5);
+}
+#tab-final .fe-nueva:hover, #tab-final .fe-nueva:focus-visible { border-color: var(--accent-2); box-shadow: var(--shadow-glow); outline: none; }
+.fe-nueva-icono {
+  display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 50%; color: #fff;
+  background: var(--accent-grad); box-shadow: 0 0 0 6px rgba(47, 140, 255, .12), 0 0 26px rgba(47, 140, 255, .55);
+}
+.fe-nueva-icono .fe-icono { width: 26px; height: 26px; }
+.fe-nueva strong { font-size: .9rem; }
+.fe-nueva small { font-size: .72rem; font-weight: 500; color: var(--muted); }
+.fe-vacio { margin-top: 1rem; }
+
+/* Selector y detalle: el mismo brillo azul alrededor. */
+#tab-final .generado-modal {
+  background: var(--panel); border: 1px solid var(--border);
+  box-shadow: 0 30px 80px rgba(0, 4, 16, .7), 0 0 0 1px rgba(47, 140, 255, .18), 0 0 70px rgba(47, 140, 255, .14);
+}
+#tab-final .generado-modal::backdrop { background: rgba(2, 6, 16, .72); }
+#tab-final .detalle-media { background: radial-gradient(circle at 50% 40%, rgba(47, 140, 255, .14), transparent 70%), var(--bg); }
+#tab-final .generado-modal-cuerpo > .vacio { padding: 1.4rem 1.6rem; }
+#tab-final .fe-titulo { display: flex; align-items: center; gap: .5rem; }
+#tab-final .fe-titulo::before { content: ""; width: 4px; height: 1em; border-radius: 2px; background: var(--accent-2); box-shadow: 0 0 8px var(--brillo); }
+#tab-final .fe-subtitulo { color: var(--cian); letter-spacing: .1em; }
+#tab-final .fe-elegir-modal { width: min(1040px, 94vw); }
+.fe-elegir-cuerpo { max-height: 92vh; overflow-y: auto; padding: 1.3rem 1.4rem 1.5rem; }
+.fe-elegir-cuerpo .fe-columna-cab { padding-right: 2.6rem; }
+.fe-elegible-accion { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fe-elegir-vacio { grid-column: 1 / -1; }
+
+@media (max-width: 760px) {
+  .fe-flujo { padding: .75rem .4rem .7rem; gap: .2rem; }
+  .fe-flujo small { display: none; }
+  .fe-flujo strong { font-size: .66rem; }
+  .fe-flujo-icono { width: 34px; height: 34px; border-radius: 10px; }
+  .fe-flujo-icono .fe-icono { width: 18px; height: 18px; }
+  .fe-flujo li + li::before { top: 16px; right: calc(50% + 21px); width: calc(100% - 42px + .2rem); }
+  .fe-flujo li + li::after { display: none; }
+  .fe-columna { padding: .8rem .65rem .9rem; }
+  .fe-numero { width: 38px; height: 38px; font-size: .92rem; }
+  .fe-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .fe-cifra:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .fe-cifra { padding: .65rem .7rem; gap: .6rem; }
+  .fe-cifra strong { font-size: 1.25rem; }
+  .fe-cifra-icono { width: 36px; height: 36px; }
+  #tab-final .fe-nueva { min-height: 200px; }
+  .fe-elegir-cuerpo { padding: 1rem .8rem 1.2rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fe-chips .fe-chip-vivo::before, .fe-banderas .fe-bandera-vivo, #tab-final .generado.fe-resaltada { animation: none; }
+}
+

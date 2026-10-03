@@ -77,7 +77,7 @@
             <div class="crear-menu crear-menu-ancho" id="fp-menu-modelo" hidden>
               <div class="crear-opciones" data-solo-video>
                 {% for id, m in modelos_flowplus_video.items() %}
-                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-max-videos="{{ m.max_videos }}" data-max-total="{{ m.max_total_con_videos or '' }}" data-max-videos-s="{{ m.max_videos_s or '' }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
+                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-usd-borrador="{{ tarifas_flowplus_borrador[id] }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-max-videos="{{ m.max_videos }}" data-max-total="{{ m.max_total_con_videos or '' }}" data-max-videos-s="{{ m.max_videos_s or '' }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
                 {% endfor %}
               </div>
               <div class="crear-opciones" data-solo-imagen hidden>
@@ -477,6 +477,7 @@
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
       pintarReceta(m, esImagen);
+      var usdMusica = {{ tarifa_musica_crear|tojson }};
       var usd = 0;
       var conSonido = document.getElementById('fp-check-sonido');
       if (m) {
@@ -484,11 +485,11 @@
           usd = parseFloat(m.dataset.usd);
         } else {
           var seg = parseFloat(m.dataset.usdSeg);
-          var calidad = document.getElementById('fp-calidad'); if (calidad && calidad.checked && m.value === 'wan3') seg = seg - parseFloat(m.dataset.usdSeg) + 0.05; // tarifa 480p de Wan (wan3_client.COSTO_USD_POR_SEGUNDO)
+          var calidad = document.getElementById('fp-calidad'); if (calidad && calidad.checked && m.value === 'wan3') seg = parseFloat(m.dataset.usdBorrador); // misma tarifa que estimate_video
           if (conSonido && !conSonido.checked) seg -= parseFloat(m.dataset.recargo || '0');
           // Wan 3.0 factura también los segundos de sus videos de referencia (2026-09-30).
           usd = seg * (parseInt(duracion.value, 10) + facturablesEntrada(segundosVideosBandeja(m)))
-                + ((musicaSel && musicaSel.value && !esPropia(musicaSel.value)) ? 0.02 : 0);
+                + ((musicaSel && musicaSel.value && !esPropia(musicaSel.value)) ? usdMusica : 0);
         }
       }
       // «Generar» (video o imagen) cobra al generar con el texto de la persona;

@@ -132,3 +132,5 @@ guessing. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via 
 shown next to generation spend in its own currency. UI: sidebar chip "Este mes: US$ X
 generación · Y pauta" (context processor, template renders only, cached), Configuración ›
 Gasto (by type, history, CSV), Tablero tile, admin panel column.
+
+**Cobros recuperados (2026-10-02, PND-109):** la identidad y la referencia del cobro original viajan en la predicción; una recuperación conserva ese id de tarea. Un gasto nuevo de música pertenece a la tarea que la obtuvo. Ver la regla de recuperación de `crear`.

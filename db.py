@@ -596,7 +596,7 @@ referente = Table("referente", metadata,
     Column("cliente", String(80), index=True),                              # NULL = global
     Column("creado_en", String(19), nullable=False),
     Column("actualizado_en", String(19), nullable=False),
-    Column("anuncio_id", String(40), nullable=False, unique=True),          # id del Ad Library de Meta
+    Column("anuncio_id", String(40), nullable=False),          # id del Ad Library de Meta
     Column("pagina_id", String(40), index=True),                            # id de página de Meta (marca)
     Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify|trendtrack|triple_whale
     Column("marca", String(160)),
@@ -627,6 +627,11 @@ referente = Table("referente", metadata,
     sa.Index("ix_referente_filtros", "cliente", "etapa", "consciencia", "familia"),
     sa.Index("ix_referente_fuente_estado", "fuente", "estado_imagen"),  # /admin/referentes (0026)
 )
+
+sa.Index("uq_referente_cliente_anuncio", referente.c.cliente, referente.c.anuncio_id,
+         unique=True, sqlite_where=referente.c.cliente.isnot(None))
+sa.Index("uq_referente_global_anuncio", referente.c.anuncio_id,
+         unique=True, sqlite_where=referente.c.cliente.is_(None))
 
 kv = Table("kv", metadata,
     Column("clave", String(120), primary_key=True),

@@ -40,7 +40,8 @@ class ErrorFuente(Exception):
     incluso cuando el barrido termina en error total, siguiendo la regla de
     CLAUDE.md: "on failure after paying, register what was paid"."""
 
-    def __init__(self, usuario, costo_real=None):
+    def __init__(self, usuario, costo_real=None, extra_gasto=None):
         self.usuario = str(usuario)
         self.costo_real = costo_real
+        self.extra_gasto = extra_gasto or {}
         super().__init__(self.usuario)

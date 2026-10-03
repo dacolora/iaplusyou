@@ -1,0 +1,5 @@
+/* Campos de presupuesto y edad de los formularios de Experimentos.
+   2026-10-03: conservar sus tamaños al extraerlos sin duplicar estilos en línea. */
+.exp-ancho-4 { width: 4rem; }
+.exp-ancho-7 { width: 7rem; }
+.exp-ancho-8 { width: 8rem; }

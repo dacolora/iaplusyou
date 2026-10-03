@@ -20,7 +20,7 @@ import subprocess
 import sys
 import threading
 import time
-from functools import wraps
+from functools import lru_cache, wraps
 from urllib.parse import urlsplit
 
 import requests
@@ -1302,6 +1302,19 @@ def admin_salud():
                            tamano=monitoreo.tamano_legible, nombres=_nombres_proyectos())
 
 
+@app.route("/admin/estilos")
+@requiere_admin
+def admin_estilos():
+    """Guía de estilos (spec 2026-10-02-sistema-de-estilos §8): cada token con su valor y su contraste contra
+    --panel, y cada componente pintado con el CSS y las macros reales."""
+    import estilos
+    lista = estilos.tokens()
+    panel = dict(lista).get("--panel", "#0b1a33")
+    colores = [{"nombre": n, "valor": v, "contraste": estilos.contraste(v, panel)} for n, v in lista if estilos.es_color(v)]
+    otros = [{"nombre": n, "valor": v} for n, v in lista if not estilos.es_color(v)]
+    return render_template("admin_estilos.html", colores=colores, otros=otros)
+
+
 def _nombres_proyectos():
     try:
         return {cid: proyectos.nombre_visible(cid) for cid in estado_mod.listar_clientes()}
@@ -2181,6 +2194,8 @@ def ver_cliente(cliente):
         referencias_bandeja=referencias_flowplus.listar(cliente),
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
         modelos_flowplus_video=flowplus_modelos.VIDEO,
+        tarifa_musica_crear=gastos.costo_musica_estimada("generada"),
+        tarifas_flowplus_borrador={m: flowplus_modelos.usd_por_segundo(m, calidad="borrador") for m in flowplus_modelos.VIDEO},
         duraciones_crear=flowplus_modelos.DURACIONES_CREAR,
         formatos_nombres=flowplus_modelos.FORMATOS_NOMBRES,
         plantillas_anuncio=plantillas_anuncio.PLANTILLAS,
@@ -3257,6 +3272,10 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx, ligero=False):
                 mid, flowplus_modelos.duracion_con_videos(mid, refs_sesion, entry["duracion_objetivo"]),
                 con_sonido=entry.get("con_sonido", True) is not False,
                 calidad=entry.get("calidad") or "final", **({"videos_ref_s": segundos_ref} if segundos_ref else {}))
+        if entry.get("tipo") != "imagen" and item["costo_estimado"].get("usd") is not None:
+            item["costo_estimado"] = dict(item["costo_estimado"])
+            item["costo_estimado"]["usd"] = round(item["costo_estimado"]["usd"] +
+                                                  gastos.costo_musica_estimada(entry.get("musica_estilo")), 4)
     item["modelo_nombre"] = flowplus_modelos.nombre_modelo(entry.get("modelo")) or "Wan 3.0"
     # Final edition: solo tiene sentido sobre un video ya listo. Cada final
     # y el guion llevan su propio trabajo del worker para la barra de la UI.
@@ -4625,25 +4644,19 @@ def cambiar_estado_ad(cliente, ad_id):
         flash(gettext("Ese anuncio todavía no está publicado en Meta."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
-    # Serializado: meta_auth.configurar() escribe credenciales globales del
-    # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
-    # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
-    with _ENV_LOCK:
-        try:
-            creds = meta_conexion.credenciales_ads(cliente)
-            meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
-            # Activar/pausar los tres niveles: Meta solo entrega si campaña,
-            # conjunto Y anuncio están ACTIVE (se crean todos en pausa).
-            ids = entry.get("meta_ids") or {}
-            for oid in (campaign_id, ids.get("adset_id"), ids.get("ad_id")):
-                if oid:
-                    meta_campaign.actualizar_estado(oid, nuevo_estado)
-            ads_mod.actualizar(cliente, ad_id, estado="activo" if nuevo_estado == "ACTIVE" else "pausado")
-            flash(gettext("Listo.") if nuevo_estado == "ACTIVE" else gettext("Pausado."), "ok")
-        except Exception as e:
-            flash(gettext("No pude cambiar el estado: %(error)s", error=e), "error")
-        finally:
-            meta_auth.limpiar()
+    def cambiar(_creds):
+        # Los tres niveles se operan con el mismo lock que el worker de Meta.
+        ids = entry.get("meta_ids") or {}
+        for oid in (campaign_id, ids.get("adset_id"), ids.get("ad_id")):
+            if oid:
+                meta_campaign.actualizar_estado(oid, nuevo_estado)
+
+    try:
+        lanzador._con_credenciales(cliente, cambiar)
+        ads_mod.actualizar(cliente, ad_id, estado="activo" if nuevo_estado == "ACTIVE" else "pausado")
+        flash(gettext("Listo.") if nuevo_estado == "ACTIVE" else gettext("Pausado."), "ok")
+    except Exception as e:
+        flash(gettext("No pude cambiar el estado: %(error)s", error=cola.sin_token(str(e))), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -7113,12 +7126,23 @@ def _ediciones_por_cf(cliente):
 
 
 def _precio_form(valor):
-    """Precio opcional del formulario -> float o None (vacío o basura = None)."""
-    valor = (valor or "").strip().replace(",", ".")
+    """Precio opcional: miles en grupos de tres y decimales con punto/coma."""
+    import math
+    import re
+    valor = (valor or "").strip()
     if not valor:
         return None
+    if "." in valor and "," in valor:
+        decimal = "." if valor.rfind(".") > valor.rfind(",") else ","
+        miles = "," if decimal == "." else "."
+        valor = valor.replace(miles, "").replace(decimal, ".")
+    elif re.fullmatch(r"[+-]?[1-9]\d{0,2}([.,]\d{3})+", valor):
+        valor = valor.replace(".", "").replace(",", "")
+    else:
+        valor = valor.replace(",", ".")
     try:
-        return float(valor)
+        precio = float(valor)
+        return precio if math.isfinite(precio) else None
     except ValueError:
         return None
 
@@ -7686,10 +7710,18 @@ def au_descargar(cliente, aid):
 # ------------------------------------------------------ Audios › Mis voces ---
 # (spec 2026-09-30) Voces propias con MiniMax: mismo patrón JSON que Audios.
 
+@lru_cache(maxsize=1)
+def _precios_clon():
+    """Tarifas por longitud e idioma: tabla pura, compartida por el proceso."""
+    return {idioma: [gastos.estimar("voz_clonada", nombre="x" * n, idioma=idioma)["usd"]
+                    for n in range(voces_propias.MAX_NOMBRE + 1)] for idioma in audios.IDIOMAS}
+
+
 def _contexto_mis_voces(cliente):
     jid = tareas_voces.job_id(cliente)
     return {"voces_propias": voces_propias.listar(cliente),
             "trabajo_voz": {"job_id": jid} if trabajos.en_curso(jid) else None,
+            "precios_clon": _precios_clon(),
             "precio_voz_clonada": gastos.estimar("voz_clonada"), "precio_voz_disenada": gastos.estimar("voz_disenada"),
             "texto_consentimiento": voces_propias.TEXTO_CONSENTIMIENTO}
 
@@ -8142,12 +8174,12 @@ def cf_crear_video(cliente):
 
 
 def _encolar_director(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
-    """Encola la compilación del prompt (gratis, idempotente: max_intentos=2)."""
+    """Encola la compilación del prompt (gratis, idempotente: max_intentos=1)."""
     return trabajos.encolar(
         tareas_director.job_id(cliente, cf_id), "flowplus_director",
         {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": bool(auto_lanzar), "prioridad": int(prioridad)},
         cliente=cliente, duracion_estimada=tareas_director.DURACION_ESTIMADA, etapas=tareas_director.ETAPAS_DIRECTOR,
-        max_intentos=2, prioridad=prioridad,
+        max_intentos=1, prioridad=prioridad,
     )
 
 

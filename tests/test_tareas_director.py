@@ -124,3 +124,30 @@ def test_idioma_viene_del_idioma_del_proyecto(base_temporal, monkeypatch, tmp_pa
     td.ejecutar({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": False}, "job_id": "j"})
     assert visto["idioma"] == "en"
     assert cf.cargar("acme")[cid]["idioma_prompt"] == "en"
+
+
+def test_director_registra_gasto_interno_aunque_falle_guardar(base_temporal, monkeypatch):
+    import pytest
+    import gastos
+    import creative_flow as cf
+    import tareas.director as td
+    cid = _sesion(cf)
+    monkeypatch.setattr(td.director, "compilar", lambda *a, **k: _resultado())
+    monkeypatch.setattr(cf, "actualizar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disco")))
+    with pytest.raises(RuntimeError, match="disco"):
+        td.ejecutar({"id": 88, "payload": {"cliente": "acme", "cf_id": cid}})
+    g, = gastos.historial("_creatv")
+    assert g["usd"] == 0.01 and g["referencia"].endswith(":t88")
+    assert g["extra"]["cliente"] == "acme"
+
+
+def test_director_fallback_registra_costo_pagado(base_temporal, monkeypatch):
+    import gastos
+    import creative_flow as cf
+    import tareas.director as td
+    cid = _sesion(cf)
+    def fallar(*a, **k):
+        raise td.director.DirectorError("inválido", costo_usd=0.035)
+    monkeypatch.setattr(td.director, "compilar", fallar)
+    td.ejecutar({"id": 89, "payload": {"cliente": "acme", "cf_id": cid}})
+    assert gastos.historial("_creatv")[0]["usd"] == 0.035

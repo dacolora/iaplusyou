@@ -129,3 +129,5 @@ navegador sin ese join (si no, un proyecto lee las cifras de otro). (b) `detalle
 Meta (ya sin token): se muestra con `meta_errores.explicar` y con el autoescape de Jinja, nunca con `|safe`. (c) El
 alcance y la frecuencia **diarios no se suman** entre días: la frecuencia del periodo o de la pieza sale del último
 `metrica_snapshot` (acumulada de por vida) y se rotula «acumulada»; la regla de fatiga usa esa, no la diaria.
+
+PND-003 (revisión 2026-10-02): el precio de rescatar/derivar pasa musica_estilo de la sesión a gastos.estimar para cada regeneración; no cambia decisiones ni autorizaciones de pauta.

@@ -257,7 +257,7 @@ def _fuente_saldo(cliente, ahora):
 _GRUPO_TABLERO = {"meta_sin_conectar": "puesta_a_punto", "meta_roto": "puesta_a_punto", "tienda_rota": "puesta_a_punto",
                   "pixel_sin_datos": "puesta_a_punto", "productos_sin_experimento": "faltantes",
                   "propuestas_pendientes": "decision", "tope_alcanzado": "decision", "ganador_sin_publicar": "decision",
-                  "experimento_error": "fallos", "anuncios_rechazados": "fallos", "sin_metricas": "fallos"}
+                  "experimento_error": "fallos", "anuncios_rechazados": "fallos", "sin_metricas": "fallos", "pedidos_sin_atribuir": "fallos"}
 _NIVEL_TABLERO = {"alta": "bloquea", "media": "atencion", "baja": "info"}
 
 
