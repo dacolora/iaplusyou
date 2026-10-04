@@ -14,10 +14,11 @@ Piezas (`piezas`, `pieza`) y tarjetas de experimentos: la historia de cada pieza
 sin Claude (cero costo); la métrica principal es el ROAS en un experimento de ventas (OUTCOME_SALES) y el CTR del
 enlace en los demás, siempre contra la misma métrica del experimento ENTERO aunque un filtro esconda piezas.
 
-Ventas medibles (2026-10-03): compras, ingresos, ROAS y costo por compra salen solo de las piezas cuyo
-snapshot de cierre mide ventas (`tablero.mide_ventas` / `tablero.ventas_medidas`, la regla del Tablero); sin
-ninguna son None y la pantalla dice «—» y «sin ventas medibles», nunca un ROAS de 0,0× por un experimento de
-tráfico.
+Ventas medibles (2026-10-03, corregido 2026-10-04): compras, ingresos, ROAS y costo por compra siguen la regla del
+Tablero (`tablero.ventas_medidas`: lo vendido y medido sobre TODO el gasto). Algo «mide ventas» si su experimento
+tiene atribución Pixel, tienda o Triple Whale (`ATRIBUCION_CON_VENTAS`, la puerta del decisor) o si su snapshot ya
+trae ventas (`tablero.mide_ventas`); sin nada que mida son None y la pantalla dice «—» y «sin ventas medibles», nunca
+un ROAS de 0,0× por un experimento de tráfico.
 
 Trampa del motor: `tablero._datos` (por dentro de `resumen_periodo` y `serie_diaria`) recarga
 el proyecto ENTERO si se le pide una ventana que empieza antes de `datos.desde`, y el filtro
@@ -299,15 +300,30 @@ def _frecuencia_acumulada(filas, instante_iso):
 _DE_VENTAS = ("compras", "ingresos", "roas", "cpa")   # existen solo si algo de lo elegido mide ventas
 
 
+# La puerta de ventas del decisor (decisor.py, `con_atribucion`): un experimento con esta atribución mide ventas
+# aunque todavía no haya vendido, y su gasto entra al ROAS (con ROAS 0,0×, como dice el decisor).
+ATRIBUCION_CON_VENTAS = ("pixel", "tienda", "triple_whale")
+
+
+def _deltas(ex, serie_, desde, hasta):
+    """`tablero._deltas_pieza` con `mide` también por la atribución del experimento: `fuente_ventas` solo se marca
+    cuando el snapshot ya tiene compras, y sin esto el gasto de lo que aún no vendió salía del ROAS (lo inflaba)."""
+    d = tablero._deltas_pieza(serie_, desde, hasta)
+    if not d["mide"] and (ex or {}).get("atribucion") in ATRIBUCION_CON_VENTAS:
+        d["mide"] = True
+    return d
+
+
 def _roas(v):
-    """ROAS de `tablero.ventas_medidas`: None si nada mide ventas o lo que mide no gastó (nunca un 0 falso)."""
-    return v["ingresos"] / v["gasto"] if v["mide"] and v["gasto"] > 0 else None
+    """ROAS de `tablero.ventas_medidas` (lo vendido sobre TODO el gasto, redondeado como el Tablero): None si nada
+    mide ventas o no hubo gasto (nunca un 0 falso de algo que no mide)."""
+    return round(v["ingresos"] / v["gasto"], 2) if v["mide"] and v["gasto"] > 0 else None
 
 
 def _con_ventas(gasto, v):
-    """El dinero de un periodo, un día, un país o una pieza: el gasto de todo y las ventas (compras, ingresos,
-    ROAS, costo por compra) solo de lo que mide ventas (`tablero.ventas_medidas`, la regla del Tablero). Sin nada
-    que mida, las ventas son None: la pantalla dice «—» y «sin ventas medibles», no 0."""
+    """El dinero de un periodo, un día, un país o una pieza con la regla del Tablero (`tablero.ventas_medidas`):
+    el gasto de todo, y compras, ingresos, ROAS y costo por compra sobre ese mismo gasto mientras algo de lo elegido
+    mida ventas. Sin nada que mida, las ventas son None: la pantalla dice «—» y «sin ventas medibles», no 0."""
     mide = v["mide"]
     return {"gasto": round(gasto, 2), "compras": v["compras"] if mide else None,
             "ingresos": round(v["ingresos"], 2) if mide else None, "roas": _roas(v),
@@ -317,7 +333,7 @@ def _con_ventas(gasto, v):
 def _dinero(carga, desde, hasta):
     """Gasto, compras, ingresos, ROAS y costo por compra de [desde, hasta) por el motor del Tablero (los deltas de
     `tablero._deltas_pieza` de cada pieza de la carga, que ya está en una sola moneda)."""
-    deltas = [tablero._deltas_pieza(s, desde, hasta) for _ex, _pz, s in carga.datos.filas]
+    deltas = [_deltas(ex, s, desde, hasta) for ex, _pz, s in carga.datos.filas]
     return _con_ventas(sum(d["gasto"] for d in deltas), tablero.ventas_medidas(deltas))
 
 
@@ -365,18 +381,18 @@ def _por_dia(carga):
     return carga._memo["por_dia"]
 
 
-def _deltas_dia(carga, ep_id, serie_):
-    """[deltas de `tablero._deltas_pieza`] de una pieza, un día del periodo por elemento (memo por pieza)."""
+def _deltas_dia(carga, ex, ep_id, serie_):
+    """[deltas de `_deltas`] de una pieza, un día del periodo por elemento (memo por pieza)."""
     memo = carga._memo.setdefault("deltas_dia", {})
     if ep_id not in memo:
-        memo[ep_id] = [tablero._deltas_pieza(serie_, _iso(d), _iso(d + timedelta(days=1))) for d in carga.per["lista"]]
+        memo[ep_id] = [_deltas(ex, serie_, _iso(d), _iso(d + timedelta(days=1))) for d in carga.per["lista"]]
     return memo[ep_id]
 
 
 def _dinero_por_dia(carga):
     """{dia: `_con_ventas` de ese día} del motor del Tablero (los deltas diarios de cada pieza de la carga)."""
     if "dinero_dia" not in carga._memo:
-        por_pieza = [_deltas_dia(carga, pz["id"], s) for _ex, pz, s in carga.datos.filas]
+        por_pieza = [_deltas_dia(carga, ex, pz["id"], s) for ex, pz, s in carga.datos.filas]
         carga._memo["dinero_dia"] = {
             d.isoformat(): _con_ventas(sum(p[i]["gasto"] for p in por_pieza),
                                        tablero.ventas_medidas(p[i] for p in por_pieza))
@@ -659,19 +675,19 @@ def desgloses(carga):
 
 def paises(carga):
     """Una fila por país de las piezas de la carga: gasto y ROAS del motor del Tablero (deltas de los snapshots,
-    con la misma ventana y la misma atribución que los indicadores; el ROAS solo de lo que mide ventas);
+    con la misma ventana y la misma atribución que los indicadores; el ROAS con la regla del Tablero);
     impresiones, clics y CTR de metrica_dia. Sin filas de detalle del país, lo de Meta queda en None
     («cargando», no ceros). Ordenados por gasto."""
     per = carga.per
     desde = tablero.INICIO if per["es_todo"] else per["desde"]
     por_pais, pais_de = {}, {}
-    for _ex, pz, serie in carga.datos.filas:
+    for ex, pz, serie in carga.datos.filas:
         pais = pz.get("pais")
         if not pais:
             continue
         pais_de[pz["id"]] = pais
         m = por_pais.setdefault(pais, {"deltas": [], "dias": []})
-        m["deltas"].append(tablero._deltas_pieza(serie, desde, per["hasta"]))
+        m["deltas"].append(_deltas(ex, serie, desde, per["hasta"]))
     for f in carga.dias_act:
         if f["experimento_pieza_id"] in pais_de:
             por_pais[pais_de[f["experimento_pieza_id"]]]["dias"].append(f)
@@ -861,9 +877,9 @@ def _metrica_principal(ex):
     return "roas" if ex.get("objetivo_meta") == OBJETIVO_VENTAS else "ctr"
 
 
-def _serie_metrica(carga, metrica, ep_id, serie_, filas):
+def _serie_metrica(carga, metrica, ex, ep_id, serie_, filas):
     if metrica == "roas":
-        return _serie_roas(carga, [_deltas_dia(carga, ep_id, serie_)])
+        return _serie_roas(carga, [_deltas_dia(carga, ex, ep_id, serie_)])
     return _serie_ctr(carga, filas)
 
 
@@ -873,7 +889,7 @@ def _promedio_experimento(carga, ex, metrica):
     if (ex["id"], metrica) not in memo:
         piezas_ex = _filas_por_experimento(carga).get(ex["id"], [])
         if metrica == "roas":
-            memo[(ex["id"], metrica)] = _serie_roas(carga, [_deltas_dia(carga, pz["id"], serie_) for pz, serie_ in piezas_ex])
+            memo[(ex["id"], metrica)] = _serie_roas(carga, [_deltas_dia(carga, ex, pz["id"], serie_) for pz, serie_ in piezas_ex])
         else:
             dias_pieza = _dias_del_proyecto(carga)
             memo[(ex["id"], metrica)] = _serie_ctr(carga, [f for pz, _s in piezas_ex for f in dias_pieza.get(pz["id"], [])])
@@ -925,9 +941,9 @@ def _codigos_causas(pz):
     return [c for c in codigos if c in doctrina.CAUSAS_NOMBRE]
 
 
-def _ventas_pieza(serie_, desde, hasta):
+def _ventas_pieza(ex, serie_, desde, hasta):
     """(deltas de la pieza en [desde, hasta), `tablero.ventas_medidas` de ellos)."""
-    dd = tablero._deltas_pieza(serie_, desde, hasta)
+    dd = _deltas(ex, serie_, desde, hasta)
     return dd, tablero.ventas_medidas([dd])
 
 
@@ -951,11 +967,11 @@ def piezas(carga, reglas_cliente):
     for ex, pz, serie_ in carga.datos.filas:
         ep_id, metrica, es_imagen = pz["id"], _metrica_principal(ex), bool(pz.get("es_imagen"))
         filas_dia = dias_pieza.get(ep_id, [])
-        dinero, ventas = _ventas_pieza(serie_, desde, per["hasta"])
+        dinero, ventas = _ventas_pieza(ex, serie_, desde, per["hasta"])
         roas = _roas(ventas)
-        roas_previo = None if per["es_todo"] else _roas(_ventas_pieza(serie_, per["anterior_desde"], per["anterior_hasta"])[1])
+        roas_previo = None if per["es_todo"] else _roas(_ventas_pieza(ex, serie_, per["anterior_desde"], per["anterior_hasta"])[1])
         detalle = _ratios(_agregado(filas_dia, carga.es_imagen))
-        serie_p, promedio = _serie_metrica(carga, metrica, ep_id, serie_, filas_dia), _promedio_experimento(carga, ex, metrica)
+        serie_p, promedio = _serie_metrica(carga, metrica, ex, ep_id, serie_, filas_dia), _promedio_experimento(carga, ex, metrica)
         falta = None
         if _lo_juzga_el_motor(ex, pz):
             if ex["id"] not in reglas_exp:
@@ -996,7 +1012,7 @@ def experimentos_tarjetas(carga):
     ni tipo (el filtro de experimento solo marca `seleccionado`). El presupuesto usado (`gasto`, `tope`,
     `pct_tope`) es el de toda la vida del experimento; `valor` (ROAS en ventas, CTR del enlace en los demás) y
     `mejor` (la pieza que más rinde en esa métrica) son del periodo, del mismo motor y las mismas fuentes que el
-    resto de la pantalla. El ROAS sale solo de las piezas que miden ventas; sin ninguna, `valor` es None y
+    resto de la pantalla. El ROAS sigue la regla del Tablero (`_con_ventas`); sin nada que mida, `valor` es None y
     `mide_ventas` False («sin ventas medibles»)."""
     per, dias_pieza = carga.per, _dias_del_proyecto(carga)
     desde = tablero.INICIO if per["es_todo"] else per["desde"]
@@ -1009,7 +1025,7 @@ def experimentos_tarjetas(carga):
         deltas, clics, impresiones, candidatas = [], 0, 0, []
         for pz, serie_ in _filas_por_experimento(carga).get(ex["id"], []):
             if metrica == "roas":
-                dd, ventas = _ventas_pieza(serie_, desde, per["hasta"])
+                dd, ventas = _ventas_pieza(ex, serie_, desde, per["hasta"])
                 deltas.append(dd)
                 valor_pz, volumen = _roas(ventas), ventas["gasto"]
             else:

@@ -57,7 +57,8 @@ def test_valor_en_y_delta_con_truncado():
 
 def test_ventas_medidas_solo_de_lo_que_mide_ventas():
     """La regla de «ventas medibles» es una sola (`mide_ventas`: Pixel, tienda o Triple Whale en el snapshot de
-    cierre) y `ventas_medidas` suma solo lo que la cumple: el centro de resultados pinta «—» sin ninguna."""
+    cierre) y `ventas_medidas` suma TODO el gasto (la regla del Tablero: lo vendido sobre todo el gasto) y dice si
+    algo mide: el centro de resultados pinta «—» sin ninguno."""
     import tablero
     assert [tablero.mide_ventas({"fuente_ventas": f}) for f in ("meta", "tienda", "triple_whale", "ninguna", None)] == [
         True, True, True, False, False]
@@ -66,8 +67,8 @@ def test_ventas_medidas_solo_de_lo_que_mide_ventas():
     trafico = [_snap("2026-09-01T08:00:00", gasto=100.0, compras=0, ingresos=0.0, fuente_ventas="ninguna")]
     a, b = (tablero._deltas_pieza(s, "2026-08-01T00:00:00", "2026-09-02T00:00:00") for s in (pixel, trafico))
     assert a["mide"] is True and b["mide"] is False
-    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 0.0, "compras": 0, "ingresos": 0.0}
-    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 100.0, "compras": 2, "ingresos": 300.0}
+    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0}
+    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0}
 
 
 def test_dinero_redondea_igual_que_main():

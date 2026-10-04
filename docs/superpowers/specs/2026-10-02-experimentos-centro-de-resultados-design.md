@@ -192,13 +192,16 @@ aislamiento de `guardar_desglose` entre experimentos.
   (deltas de `metrica_snapshot`, `tablero.resumen_periodo` / `serie_diaria`), que respeta la atribución
   (Pixel, tienda, Triple Whale) y ya tiene pruebas. Así los totales, el mes a mes y lo que Daniel ya veía
   cuadran.
-- **Sin ventas medibles, «—» y no 0** (revisión final de E2, 2026-10-03): compras, ingresos, ROAS y costo por compra
-  solo existen si algo de lo elegido mide ventas, con la MISMA regla del Tablero: el snapshot de cierre tiene
-  `fuente_ventas` en `tablero.FUENTES_VENTAS` (Pixel con compras, tienda o Triple Whale; `tablero.mide_ventas` /
-  `tablero.ventas_medidas`). Sin ninguno, la pantalla pinta «—» y «sin ventas medibles» en el indicador, en el ranking
-  (una nota bajo la tabla), en la tarjeta del experimento y en el panel de la pieza; antes un experimento de tráfico
-  con atribución «ninguna» decía ROAS 0,0×. Con unos que miden y otros no, el ROAS y el costo por compra salen de los
-  que miden (ingresos / gasto de esos); el gasto sigue siendo el de todo.
+- **Sin ventas medibles, «—» y no 0** (revisión final de E2, 2026-10-03; corregido 2026-10-04): compras, ingresos,
+  ROAS y costo por compra solo existen si algo de lo elegido mide ventas. Algo mide ventas si su experimento tiene
+  atribución Pixel, tienda o Triple Whale (`resultados.ATRIBUCION_CON_VENTAS`, la puerta de ventas del decisor) o si su
+  snapshot de cierre ya trae `fuente_ventas` en `tablero.FUENTES_VENTAS` (`tablero.mide_ventas`). Sin ninguno, la
+  pantalla pinta «—» y «sin ventas medibles» en el indicador, en el ranking (una nota bajo la tabla), en la tarjeta del
+  experimento y en el panel de la pieza; antes un experimento de tráfico con atribución «ninguna» decía ROAS 0,0×.
+  Con algo que mide, la cuenta es la del Tablero (`tablero.ventas_medidas`): lo vendido y medido sobre TODO el gasto
+  de lo elegido, igual que el total del Historial en la misma pantalla. La primera versión sacaba del denominador el
+  gasto de lo que aún no vendía (`fuente_ventas` solo se marca con compras > 0) y decía 3,0× donde el Tablero decía
+  1,0×; una pieza con Pixel que no vende dice 0,0× (mide y no vendió), como el decisor.
 - **Todo lo demás** (impresiones, clics, CTR, CPC, CPM, gancho, retención, embudo, desgloses; el alcance y la
   frecuencia, con la regla del siguiente punto): `metrica_dia` y `metrica_desglose`. Los cocientes se calculan dentro de la misma fuente (CPC =
   gasto_dia / clics_dia de `metrica_dia`), nunca mezclando fuentes en una fracción.

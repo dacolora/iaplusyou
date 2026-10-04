@@ -148,20 +148,22 @@ def _deltas_pieza(snaps, desde_iso, hasta_iso):
 
 
 def ventas_medidas(deltas):
-    """Lo que cuenta para las ventas de varios deltas de `_deltas_pieza`
-    (piezas, días o ambos): {"mide": alguno mide ventas, "gasto", "compras",
-    "ingresos"} SOLO de los que miden. Con `mide` False no hay ventas
-    medibles (un experimento de tráfico, atribución «ninguna», un Pixel que
-    no vio compras): el ROAS, las compras y el costo por compra no existen,
-    no son cero. Con algunos que miden y otros no, el ROAS sale de los que
-    miden: el gasto de los otros no tiene ventas con qué compararse."""
+    """Las ventas de varios deltas de `_deltas_pieza` (piezas, días o ambos)
+    con la regla del Tablero (`_resumen_periodo`): {"mide": alguno mide
+    ventas, "gasto", "compras", "ingresos"} sumados de TODOS, así el ROAS es
+    lo vendido y medido sobre todo el gasto. Con `mide` False (nada de lo
+    elegido mide ventas: tráfico, atribución «ninguna») el ROAS, las compras y
+    el costo por compra no existen, no son cero. Ojo: `fuente_ventas` solo se
+    marca cuando el snapshot ya tiene compras (`lanzador.refrescar`), así que
+    quien llama marca `mide` también por la atribución del experimento; sacar
+    del denominador el gasto de lo que aún no vendió inflaba el ROAS (revisión
+    final de E2, 2026-10-04: 3,0× donde el Tablero decía 1,0×)."""
     out = {"mide": False, "gasto": 0.0, "compras": 0, "ingresos": 0.0}
     for d in deltas:
-        if d["mide"]:
-            out["mide"] = True
-            out["gasto"] += d["gasto"]
-            out["compras"] += d["compras"]
-            out["ingresos"] += d["ingresos"]
+        out["mide"] = out["mide"] or bool(d["mide"])
+        out["gasto"] += d["gasto"]
+        out["compras"] += d["compras"]
+        out["ingresos"] += d["ingresos"]
     return out
 
 

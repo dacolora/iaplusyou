@@ -1054,22 +1054,54 @@ def test_sin_ventas_medibles_el_roas_y_las_compras_no_son_cero(sembrado):
     assert t["metrica"] == "roas" and t["valor"] is None and t["mide_ventas"] is False and t["mejor"] is None
 
 
-def test_con_y_sin_ventas_juntos_el_roas_sale_de_los_que_miden(sembrado):
+def test_con_y_sin_ventas_juntos_el_roas_es_la_regla_del_tablero(sembrado):
     """Un experimento con Pixel («Uno»: 80 de gasto, 240 de ingresos, 8 compras) y uno sin nada que mida ventas (100 de
-    gasto), filtrados juntos: el gasto es de los dos; el ROAS y el costo por compra, solo del que mide (no 240 / 180)."""
+    gasto), filtrados juntos: la regla del Tablero, lo vendido sobre TODO el gasto (240 / 180), igual que el total del
+    Historial en la misma pantalla. La pieza que no mide dice «—» en su fila. (Corregido 2026-10-04: antes 240 / 80.)"""
     import resultados as r
     _sin_ventas(sembrado)
     c = r.cargar("acme", r.Filtro(dias=7), AHORA)
     k = {i["clave"]: i for i in r.indicadores(c)}
     assert k["gasto"]["valor"] == 180.0
-    assert k["roas"]["valor"] == pytest.approx(240.0 / 80.0) and k["roas"]["sin_ventas"] is False
-    assert k["cpa"]["valor"] == pytest.approx(80.0 / 8) and k["compras"]["valor"] == 8 and k["ingresos"]["valor"] == 240.0
+    assert k["roas"]["valor"] == pytest.approx(1.33) and k["roas"]["sin_ventas"] is False
+    assert k["cpa"]["valor"] == pytest.approx(180.0 / 8) and k["compras"]["valor"] == 8 and k["ingresos"]["valor"] == 240.0
     p = {x["nombre"]: x for x in r.piezas(c, {})}
     assert p["cf_sin"]["roas"] is None and p["cf_sin"]["mide_ventas"] is False
     assert p["cf_1"]["roas"] == pytest.approx(3.0) and p["cf_1"]["mide_ventas"] is True
     co = {x["pais"]: x for x in r.paises(c)}["CO"]                       # CO: cf_1 (mide) y cf_sin (no)
-    assert co["gasto"] == 140.0 and co["roas"] == pytest.approx(120.0 / 40.0)
-    assert r.serie(c)["roas"][-1] == pytest.approx(60.0 / 20.0)          # el día: 20 de «Uno», 50 de cf_sin
+    assert co["gasto"] == 140.0 and co["roas"] == pytest.approx(0.86)    # 120 / 140
+    assert r.serie(c)["roas"][-1] == pytest.approx(0.86)                 # el día: 60 sobre 20 de «Uno» + 50 de cf_sin
+
+
+def test_pixel_que_aun_no_vende_cuenta_su_gasto_en_el_roas(sembrado):
+    """Revisión final de E2 (2026-10-04): `fuente_ventas` solo se marca cuando el snapshot ya trae compras, y el centro
+    sacaba del ROAS el gasto de las piezas con Pixel que aún no venden: 3 piezas de 100 y una vende 300 decía 3,0× y
+    costo por compra 50, con Gasto 300 e Ingresos 300 al lado; el Tablero dice 1,0× y 150. Ahora sale lo mismo que
+    `tablero.resumen_periodo`, y las piezas que no venden dicen 0,0× (mide ventas, no vendió), como el decisor."""
+    import experimentos as ex
+    import resultados as r
+    import tablero
+    db = sembrado["db"]
+    e = ex.crear("acme", "Pixel nuevo", PAISES, "OUTCOME_SALES", 7, 5000.0, "https://t.co/p", "COP", atribucion="pixel")
+    eps = []
+    for i in range(3):
+        clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado=f"cf_px{i}")
+        ep = ex.agregar_pieza("acme", e, clon, "CO")
+        vende = {"compras": 2, "ingresos": 300.0, "fuente_ventas": "meta"} if i == 0 else {"fuente_ventas": "ninguna"}
+        ex.snapshot(ep, {"impresiones": 1000, "gasto": 100.0, "clics_enlace": 10, **vende}, tomado_en="2026-10-02T11:00:00")
+        eps.append(ep)
+    c = r.cargar("acme", r.Filtro(dias=7, experimento_id=e), AHORA)
+    k = {i["clave"]: i["valor"] for i in r.indicadores(c)}
+    assert k["gasto"] == 300.0 and k["ingresos"] == 300.0 and k["compras"] == 2
+    assert k["roas"] == pytest.approx(1.0) and k["cpa"] == pytest.approx(150.0)
+    motor = tablero.resumen_periodo("acme", c.per["desde"], c.per["hasta"], datos=c.datos)["por_moneda"]["COP"]
+    assert (k["gasto"], k["ingresos"], k["compras"], k["roas"]) == (motor["gasto"], motor["ingresos"], motor["compras"],
+                                                                    motor["roas"])
+    p = {x["nombre"]: x for x in r.piezas(c, {})}
+    assert p["cf_px0"]["roas"] == pytest.approx(3.0)
+    assert p["cf_px1"]["roas"] == 0.0 and p["cf_px1"]["mide_ventas"] is True    # 0,0×, no «—»: el Pixel mide
+    t = {x["nombre"]: x for x in r.experimentos_tarjetas(c)}["Pixel nuevo"]
+    assert t["valor"] == pytest.approx(1.0) and t["mide_ventas"] is True
 
 
 def test_contexto_completo_y_json(sembrado):

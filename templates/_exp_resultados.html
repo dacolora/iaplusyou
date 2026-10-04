@@ -211,7 +211,7 @@
         {% endfor %}
       </tbody>
     </table>
-    {# Una pieza sin ventas medibles (ni Pixel con compras, ni tienda, ni Triple Whale) lleva ROAS «—», no 0,0×. #}
+    {# Una pieza sin ventas medibles (su experimento no tiene Pixel, tienda ni Triple Whale y no vendió) lleva ROAS «—», no 0,0×. #}
     {% if r.piezas|rejectattr('mide_ventas')|list %}<p class="cr-nota cr-nota-sin-ventas">ROAS — = {{ _('sin ventas medibles') }}</p>{% endif %}
   </div>
 </section>

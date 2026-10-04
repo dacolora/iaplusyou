@@ -474,16 +474,17 @@ def test_con_pixel_y_ventas_el_roas_sigue_siendo_el_numero(app, base_temporal):
     assert "ROAS 3,0×" in html and "(sin ventas medibles)" not in html
 
 
-def test_con_y_sin_ventas_filtrados_juntos_el_roas_sale_de_los_que_miden(app, base_temporal):
-    """Uno con Pixel (100 de gasto, 300 de ingresos) y otro sin (100 de gasto), en la misma moneda: el KPI dice 3,0×
-    (300 / 100 de lo que mide), no 1,5× (300 / 200); en el ranking el que no mide dice «—»."""
+def test_con_y_sin_ventas_filtrados_juntos_el_roas_es_la_regla_del_tablero(app, base_temporal):
+    """Uno con Pixel (100 de gasto, 300 de ingresos) y otro sin (100 de gasto), en la misma moneda: el KPI dice 1,5×
+    (300 / 200, lo vendido sobre todo el gasto, como el Tablero y el Historial), no 3,0×; en el ranking el que no mide
+    dice «—». (Corregido 2026-10-04.)"""
     con = _experimento("Con pixel", estado="corriendo", meta_campaign_id="cam_1")
     _pieza_con(base_temporal, con, "cf_pixel", compras=2, ingresos=300.0, fuente_ventas="meta")
     sin = _experimento("Sin pixel", estado="corriendo", meta_campaign_id="cam_2")
     _pieza_con(base_temporal, sin, "cf_sin")
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
     kpi, ranking = _kpi_roas(html), _ranking(html)
-    assert "3,0×" in kpi and "1,5×" not in kpi and "sin ventas medibles" not in kpi
+    assert "1,5×" in kpi and "3,0×" not in kpi and "sin ventas medibles" not in kpi
     assert '<td class="cr-cifra cr-roas">3,0×</td>' in ranking and '<td class="cr-cifra cr-roas">—</td>' in ranking
     assert "ROAS — = sin ventas medibles" in ranking
 

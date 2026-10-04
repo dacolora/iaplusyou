@@ -137,10 +137,12 @@ Tablero dejó de ser pestaña: `resolver('tablero')` de `cliente.html` abre Expe
   anterior a su ventana: por eso `cargar` trae desde el inicio del periodo anterior (o `tablero.INICIO`) y nada pide una
   ventana más vieja.
 - **Revisión final de E2 (2026-10-03), tres reglas de plata:** (1) **ROAS «—» sin ventas medibles**: compras, ingresos,
-  ROAS y costo por compra existen solo si algo de lo elegido mide ventas, con la misma regla del Tablero
-  (`tablero.mide_ventas`: `fuente_ventas` del snapshot de cierre en `FUENTES_VENTAS`; `tablero.ventas_medidas` suma solo
-  eso). Sin ninguno: «—» y «sin ventas medibles» (KPI, ranking, tarjeta, panel), nunca 0,0×; con unos sí y otros no, el
-  ROAS sale de los que miden. (2) **Todo «Activar» dice el diario**: el `confirm()` de «Activar <país>» (panel y gestión)
+  ROAS y costo por compra existen solo si algo de lo elegido mide ventas: atribución Pixel, tienda o Triple Whale
+  (`resultados.ATRIBUCION_CON_VENTAS`, la puerta del decisor) o un snapshot que ya trae ventas (`tablero.mide_ventas`).
+  Sin ninguno: «—» y «sin ventas medibles» (KPI, ranking, tarjeta, panel), nunca 0,0×. Con algo que mide, la cuenta es
+  la del Tablero (`tablero.ventas_medidas`): lo vendido sobre TODO el gasto, igual que el Historial. Ojo: `fuente_ventas`
+  solo se marca cuando hay compras; la primera versión (2026-10-03) sacaba del denominador lo que aún no vendía e
+  inflaba el ROAS (3,0× contra 1,0× del Tablero), corregido el 2026-10-04. (2) **Todo «Activar» dice el diario**: el `confirm()` de «Activar <país>» (panel y gestión)
   lleva el diario del país y la moneda de la cuenta, y el de «Activar todo» la suma de los diarios de los países con
   conjunto. (3) **Países sin repetir**: `exp_probar` y `exp_crear` quitan los repetidos (`dict.fromkeys`, en orden) antes
   de validar y de crear; `paises=CO&paises=CO` creaba un conjunto huérfano en Meta. `metrica_dia` solo se lee con ids de pieza que
