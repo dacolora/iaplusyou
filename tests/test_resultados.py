@@ -1102,6 +1102,24 @@ def test_pixel_que_aun_no_vende_cuenta_su_gasto_en_el_roas(sembrado):
     assert p["cf_px1"]["roas"] == 0.0 and p["cf_px1"]["mide_ventas"] is True    # 0,0×, no «—»: el Pixel mide
     t = {x["nombre"]: x for x in r.experimentos_tarjetas(c)}["Pixel nuevo"]
     assert t["valor"] == pytest.approx(1.0) and t["mide_ventas"] is True
+    assert t["mejor"] == "cf_px0"
+
+
+def test_pixel_sin_ventas_no_elige_mejor_a_la_que_mas_gasto(sembrado):
+    """Re-revisión de plata (2026-10-04): con un Pixel que aún no vende todas las piezas dan 0,0× y el desempate por
+    volumen elegía «mejor» a la que más gastó sin vender. Sin nada que rinda, no hay «mejor»."""
+    import experimentos as ex
+    import resultados as r
+    db = sembrado["db"]
+    e = ex.crear("acme", "Pixel quieto", PAISES, "OUTCOME_SALES", 7, 5000.0, "https://t.co/p", "COP", atribucion="pixel")
+    for i, gasto in enumerate((50.0, 400.0)):
+        clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado=f"cf_q{i}")
+        ep = ex.agregar_pieza("acme", e, clon, "CO")
+        ex.snapshot(ep, {"impresiones": 1000, "gasto": gasto, "clics_enlace": 10, "fuente_ventas": "ninguna"},
+                    tomado_en="2026-10-02T11:00:00")
+    c = r.cargar("acme", r.Filtro(dias=7, experimento_id=e), AHORA)
+    t = {x["nombre"]: x for x in r.experimentos_tarjetas(c)}["Pixel quieto"]
+    assert t["valor"] == 0.0 and t["mide_ventas"] is True and t["mejor"] is None
 
 
 def test_contexto_completo_y_json(sembrado):

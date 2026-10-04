@@ -316,8 +316,11 @@ def _deltas(ex, serie_, desde, hasta):
 
 def _roas(v):
     """ROAS de `tablero.ventas_medidas` (lo vendido sobre TODO el gasto, redondeado como el Tablero): None si nada
-    mide ventas o no hubo gasto (nunca un 0 falso de algo que no mide)."""
-    return round(v["ingresos"] / v["gasto"], 2) if v["mide"] and v["gasto"] > 0 else None
+    mide ventas o no hubo gasto (nunca un 0 falso de algo que no mide). Redondea ingresos y gasto antes de dividir,
+    como `tablero._resumen_periodo`, para que el decimal que se muestra sea siempre el mismo."""
+    if not (v["mide"] and v["gasto"] > 0):
+        return None
+    return round(round(v["ingresos"], 2) / round(v["gasto"], 2), 2) if round(v["gasto"], 2) > 0 else None
 
 
 def _con_ventas(gasto, v):
@@ -858,8 +861,8 @@ def _dias_del_proyecto(carga):
 
 
 def _serie_roas(carga, por_pieza):
-    """El ROAS día a día de una o varias piezas juntas ([`_deltas_dia` de cada una]): cada día, solo de las que
-    miden ventas ese día; None si ninguna mide o no gastaron."""
+    """El ROAS día a día de una o varias piezas juntas ([`_deltas_dia` de cada una]): cada día, lo vendido sobre
+    todo el gasto de ese día (la regla del Tablero); None si ninguna mide ventas o no gastaron."""
     return [_roas(tablero.ventas_medidas(p[i] for p in por_pieza)) for i in range(len(carga.per["lista"]))]
 
 
@@ -1033,7 +1036,9 @@ def experimentos_tarjetas(carga):
                 c, i = sum(f["clics_enlace"] or 0 for f in filas), sum(f["impresiones"] or 0 for f in filas)
                 clics, impresiones = clics + c, impresiones + i
                 valor_pz, volumen = (c / i if i else None), i
-            if valor_pz is not None:
+            # «mejor» solo entre las que rinden algo: con un Pixel que aún no vende todas dan 0,0× y el desempate por
+            # volumen elegía la que más gastó sin vender (re-revisión de plata, 2026-10-04).
+            if valor_pz is not None and valor_pz > 0:
                 candidatas.append((valor_pz, volumen, pz["nombre"]))      # a igual valor, la que tiene más volumen
         ventas_ex = tablero.ventas_medidas(deltas)
         tope, gasto = float(ex.get("tope_total") or 0), float((ex.get("resumen") or {}).get("gasto") or 0)
