@@ -1824,11 +1824,8 @@ msgid "Activar %(pais)s"
 msgstr "Activate %(pais)s"
 
 #, python-format
-msgid "Activar %(pais)s empieza a gastar."
-msgstr "Activating %(pais)s starts spending."
-
-msgid "Activar empieza a gastar en Meta. ¿Seguimos?"
-msgstr "Activating starts spending on Meta. Continue?"
+msgid "Activar %(pais)s: empieza a gastar ≈ %(diario)s al día. ¿Seguir?"
+msgstr "Activate %(pais)s: it starts spending ≈ %(diario)s a day. Continue?"
 
 msgid "Activar empieza a gastar presupuesto real en Meta. ¿Seguimos?"
 msgstr "Activating starts spending real budget on Meta. Continue?"
@@ -1841,6 +1838,10 @@ msgstr "Activate country"
 
 msgid "Activar todo"
 msgstr "Activate all"
+
+#, python-format
+msgid "Activar todo: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguir?"
+msgstr "Activate all: it starts spending ≈ %(diario)s a day across all countries. Continue?"
 
 #, python-format
 msgid "Activo del Catálogo para Image %(n)s"
@@ -4581,24 +4582,24 @@ msgstr "Detail"
 
 #, python-format
 msgid "Detalle de Meta al día (%(dias)s días de anuncios, %(desgloses)s filas de desglose)."
-msgstr "Meta detail up to date (%(dias)s days of ad data, %(desgloses)s breakdown rows)."
+msgstr "Meta details up to date (%(dias)s days of ad data, %(desgloses)s breakdown rows)."
 
 #, python-format
 msgid "Detalle de Meta al día hace %(num)s h"
 msgid_plural "Detalle de Meta al día hace %(num)s h"
-msgstr[0] "Meta details as of %(num)s h ago"
-msgstr[1] "Meta details as of %(num)s h ago"
+msgstr[0] "Meta details updated %(num)s h ago"
+msgstr[1] "Meta details updated %(num)s h ago"
 
 msgid "Detalle de Meta al día hace menos de 1 h"
-msgstr "Meta details as of less than 1 h ago"
+msgstr "Meta details updated less than 1 h ago"
 
 #, python-format
 msgid "Detalle de Meta al día: %(fecha)s"
-msgstr "Meta details as of %(fecha)s"
+msgstr "Meta details updated on %(fecha)s"
 
 #, python-format
 msgid "Detalle de Meta incompleto: falló %(partes)s."
-msgstr "Meta detail incomplete: %(partes)s failed."
+msgstr "Meta details incomplete: %(partes)s failed."
 
 msgid "Detalle de la pieza"
 msgstr "Piece details"
@@ -5088,10 +5089,10 @@ msgstr ""
 "Nothing is executed until you approve them in the panel."
 
 msgid "El detalle de Meta quedó incompleto por el límite de páginas."
-msgstr "The Meta detail was left incomplete by the page limit."
+msgstr "The Meta details were left incomplete by the page limit."
 
 msgid "El detalle de Meta quedó incompleto por el límite de tiempo."
-msgstr "The Meta detail was left incomplete by the time limit."
+msgstr "The Meta details were left incomplete by the time limit."
 
 #, python-format
 msgid "El diagnóstico no se pudo hacer: %(error)s"
@@ -7057,7 +7058,7 @@ msgstr "Log events"
 
 #, python-format
 msgid "Evolución de %(nombre)s"
-msgstr "Progress of %(nombre)s"
+msgstr "Trend of %(nombre)s"
 
 msgid "Evolución del diagnóstico por pieza"
 msgstr "Diagnosis over time, by piece"
@@ -8755,7 +8756,7 @@ msgstr "The face of the brand: a real person, an ambassador or a created charact
 
 #, python-format
 msgid "La caída más grande está en «%(paso)s»: %(pct)s %% contra %(prom)s %% de tu promedio."
-msgstr "The biggest drop is at “%(paso)s”: %(pct)s %% vs %(prom)s %% of your average."
+msgstr "The biggest drop is at “%(paso)s”: %(pct)s %% vs your average of %(prom)s %%."
 
 #, python-format
 msgid "La cifra «%(cifra)s» del bloque %(rol)s no está en los datos: reescríbelo sin ella o con el dato real."
@@ -10915,8 +10916,8 @@ msgstr "I couldn't calculate the monthly breakdown."
 msgid "No se pudo calcular el precio: vuelve a intentar."
 msgstr "Couldn't calculate the price: try again."
 
-msgid "No se pudo calcular el total. El resto del tablero sigue abajo."
-msgstr "I couldn't calculate the total. The rest of the dashboard is still below."
+msgid "No se pudo calcular el total."
+msgstr "I couldn't calculate the total."
 
 msgid "No se pudo calcular las alertas."
 msgstr "I couldn't calculate the alerts."

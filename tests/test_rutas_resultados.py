@@ -380,22 +380,128 @@ def test_fragmento_trae_cada_seccion_y_solo_el_json_de_las_graficas(app, base_te
     assert _scripts(html) == ['<script type="application/json" id="cr-datos">']
 
 
-def test_fragmento_sin_pixel_atenua_cada_paso_que_sigue(app, base_temporal):
-    """Sin el Pixel, «Agregaron al carrito» llega en 0 (sin_datos) y los pasos que siguen llegan en 0 con pct None y
-    sin_datos=False: los tres se atenúan y dicen «requiere el Pixel» (revisión de la tarea 3)."""
-    import db
-    eid = _experimento("Sin pixel", estado="corriendo", meta_campaign_id="cam_1")
-    _pid, ep = _pieza_en(base_temporal, eid)
+def _dia_embudo(db, ep, impresiones, clics, visitas, carrito, pago, compras):
     with db.conectar() as con:
         con.execute(db.metrica_dia.insert().values(
-            experimento_pieza_id=ep, fecha=_hoy(), actualizado_en=db.ahora(), impresiones=500, alcance=400, frecuencia=1.2,
-            clics=12, clics_enlace=10, gasto=5.0, cpm=10.0, vistas_3s=100, reproducciones=300, p25=90, p50=60, p75=40,
-            p95=20, p100=10, thruplay=30, tiempo_medio_s=3.0, visitas_pagina=6, carrito=0, pago_iniciado=0,
-            compras_meta=0, ingresos_meta=0.0))
+            experimento_pieza_id=ep, fecha=_hoy(), actualizado_en=db.ahora(), impresiones=impresiones, alcance=400,
+            frecuencia=1.2, clics=clics + 2, clics_enlace=clics, gasto=5.0, cpm=10.0, vistas_3s=100, reproducciones=300,
+            p25=90, p50=60, p75=40, p95=20, p100=10, thruplay=30, tiempo_medio_s=3.0, visitas_pagina=visitas,
+            carrito=carrito, pago_iniciado=pago, compras_meta=compras, ingresos_meta=0.0))
+
+
+def _embudo(html):
+    i = html.index('class="cr-embudo"')
+    return html[i:html.index("</section>", i)]
+
+
+def test_fragmento_sin_pixel_atenua_cada_paso_que_sigue(app, base_temporal):
+    """I2 (revisión final de E2): sin el Pixel llegan en 0 las visitas a la página (landing_page_view es del Pixel), el
+    carrito, el pago y las compras. Los cuatro se atenúan con «requiere el Pixel» y la frase no nombra las visitas como
+    «la caída más grande» aunque el promedio del proyecto (con Pixel) tenga visitas. Antes `visitas_pagina` no estaba
+    en `_PASOS_PIXEL`: ningún paso se atenuaba y la frase decía «…«Visitas a la página»: 0,0 % contra …»."""
+    import db
+    con_pixel = _experimento("Con pixel", estado="corriendo", meta_campaign_id="cam_1")
+    _pid, ep = _pieza_en(base_temporal, con_pixel)
+    _dia_embudo(db, ep, 1000, 20, 12, 10, 5, 5)
+    sin_pixel = _experimento("Sin pixel", estado="corriendo", meta_campaign_id="cam_2")
+    _pid, ep = _pieza_en(base_temporal, sin_pixel, n=2)
+    _dia_embudo(db, ep, 1000, 20, 0, 0, 0, 0)
+    html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={sin_pixel}", headers=AJAX).get_data(as_text=True)
+    embudo = _embudo(html)
+    assert embudo.count("cr-sin-pixel") == 4 and embudo.count("requiere el Pixel") == 4
+    assert "cr-caida" not in embudo and "Visitas a la página»" not in embudo and "La caída más grande" not in embudo
+
+
+def test_fragmento_con_pixel_nombra_la_caida(app, base_temporal):
+    """El caso bueno de I2: con el Pixel, un paso por debajo del promedio del proyecto es «la caída» y la frase lo nombra."""
+    import db
+    flojo = _experimento("Carrito flojo", estado="corriendo", meta_campaign_id="cam_1")
+    _pid, ep = _pieza_en(base_temporal, flojo)
+    _dia_embudo(db, ep, 1000, 20, 12, 2, 1, 1)
+    bueno = _experimento("Carrito bueno", estado="corriendo", meta_campaign_id="cam_2")
+    _pid, ep = _pieza_en(base_temporal, bueno, n=2)
+    _dia_embudo(db, ep, 1000, 20, 12, 10, 5, 5)
+    html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={flojo}", headers=AJAX).get_data(as_text=True)
+    embudo = _embudo(html)
+    assert "cr-sin-pixel" not in embudo and embudo.count("cr-caida") == 1
+    # carrito 2 / 12 visitas = 16,7 % contra el del proyecto: 12 / 24 = 50 %
+    assert "La caída más grande está en «Agregaron al carrito»: 16,7 % contra 50,0 % de tu promedio." in embudo
+
+
+# ---------- ventas medibles (I1) y el precio al activar (I3), revisión final de E2 ----------
+
+def _pieza_con(base_temporal, eid, legado, **snap):
+    """Una pieza en CO con UN snapshot: gasto 100 y lo que se pase (compras, ingresos, fuente_ventas…)."""
+    import experimentos as ex
+    pid = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado=legado)
+    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    ex.snapshot(ep, {"impresiones": 1000, "clics_enlace": 20, "gasto": 100.0, **snap})
+    return ep
+
+
+def _kpi_roas(html):
+    i = html.index('class="cr-kpi cr-kpi-destacado"')
+    return html[i:html.index("</li>", i)]
+
+
+def _ranking(html):
+    i = html.index('id="cr-ranking"')
+    return html[i:html.index("</section>", i)]
+
+
+def test_sin_ventas_medibles_el_roas_dice_raya_y_no_cero(app, base_temporal):
+    """I1: un experimento que gasta sin nada que mida ventas (atribución «ninguna», sin `fuente_ventas`) pintaba ROAS
+    0,0× en el KPI destacado, el ranking y su tarjeta. Ahora «—» y «sin ventas medibles», como el Tablero viejo."""
+    eid = _experimento("Ventas sin pixel", estado="corriendo", meta_campaign_id="cam_1", objetivo_meta="OUTCOME_SALES")
+    _pieza_con(base_temporal, eid, "cf_sin")
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
-    embudo = html[html.index('class="cr-embudo"'):html.index("</ol>", html.index('class="cr-embudo"'))]
-    assert embudo.count("cr-sin-pixel") == 3 and embudo.count("requiere el Pixel") == 3
-    assert "cr-caida" not in embudo
+    kpi = _kpi_roas(html)
+    assert ">ROAS<" in kpi and '<strong class="cr-cifra">—</strong>' in kpi and "sin ventas medibles" in kpi
+    assert "×" not in kpi
+    ranking = _ranking(html)
+    assert '<td class="cr-cifra cr-roas">—</td>' in ranking and "×" not in ranking
+    assert "ROAS — = sin ventas medibles" in ranking
+    assert "ROAS — (sin ventas medibles)" in html                      # la tarjeta del experimento (07)
+
+
+def test_con_pixel_y_ventas_el_roas_sigue_siendo_el_numero(app, base_temporal):
+    eid = _experimento("Con pixel", estado="corriendo", meta_campaign_id="cam_1", objetivo_meta="OUTCOME_SALES")
+    _pieza_con(base_temporal, eid, "cf_pixel", compras=2, ingresos=300.0, fuente_ventas="meta")
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    kpi, ranking = _kpi_roas(html), _ranking(html)
+    assert "3,0×" in kpi and "sin ventas medibles" not in kpi
+    assert '<td class="cr-cifra cr-roas">3,0×</td>' in ranking and "sin ventas medibles" not in ranking
+    assert "ROAS 3,0×" in html and "(sin ventas medibles)" not in html
+
+
+def test_con_y_sin_ventas_filtrados_juntos_el_roas_sale_de_los_que_miden(app, base_temporal):
+    """Uno con Pixel (100 de gasto, 300 de ingresos) y otro sin (100 de gasto), en la misma moneda: el KPI dice 3,0×
+    (300 / 100 de lo que mide), no 1,5× (300 / 200); en el ranking el que no mide dice «—»."""
+    con = _experimento("Con pixel", estado="corriendo", meta_campaign_id="cam_1")
+    _pieza_con(base_temporal, con, "cf_pixel", compras=2, ingresos=300.0, fuente_ventas="meta")
+    sin = _experimento("Sin pixel", estado="corriendo", meta_campaign_id="cam_2")
+    _pieza_con(base_temporal, sin, "cf_sin")
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    kpi, ranking = _kpi_roas(html), _ranking(html)
+    assert "3,0×" in kpi and "1,5×" not in kpi and "sin ventas medibles" not in kpi
+    assert '<td class="cr-cifra cr-roas">3,0×</td>' in ranking and '<td class="cr-cifra cr-roas">—</td>' in ranking
+    assert "ROAS — = sin ventas medibles" in ranking
+
+
+def test_activar_dice_cuanto_gasta_al_dia(app, base_temporal):
+    """I3 (regla 1, primero el precio): el confirm de «Activar CO» del panel y de la gestión dice el diario del país y la
+    moneda de la cuenta, y el de «Activar todo» la suma de los diarios. Antes solo decía «empieza a gastar»."""
+    import experimentos as ex
+    eid = _experimento("Pausado", estado="pausado", meta_campaign_id="cam_1")
+    ex.actualizar_pais("acme", eid, "CO", meta_adset_id="adset_1", estado="pausado", presupuesto_dia=32857.0)
+    ex.actualizar_pais("acme", eid, "MX", meta_adset_id="adset_2", estado="pausado", presupuesto_dia=20000.0)
+    _pid, ep = _pieza_en(base_temporal, eid)
+    panel = app["c"].get(f"/cliente/acme/experimentos/pieza/{ep}", headers=AJAX).get_data(as_text=True)
+    assert "Activar CO: empieza a gastar" in panel and "32.857 COP al d" in panel
+    gestion = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}", headers=AJAX).get_data(as_text=True)
+    assert "Activar CO: empieza a gastar" in gestion and "32.857 COP al d" in gestion
+    assert "Activar MX: empieza a gastar" in gestion and "20.000 COP al d" in gestion
+    assert "Activar todo: empieza a gastar" in gestion and "52.857 COP al d" in gestion
 
 
 def test_fragmento_errores_del_detalle_de_meta_en_palabras_y_escapados(app, base_temporal):

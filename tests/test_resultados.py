@@ -371,7 +371,25 @@ def test_embudo_sin_pixel_se_apaga_y_no_se_nombra_como_caida():
     assert p["carrito"]["sin_datos"] is True                    # 0 con visitas antes: el Pixel no lo mide
     assert p["pago_iniciado"]["sin_datos"] is False and p["pago_iniciado"]["pct"] is None   # anterior 0: nada que dividir
     assert p["clics_enlace"]["sin_datos"] is False and p["visitas_pagina"]["sin_datos"] is False
-    assert e["frase"] == "Todos los pasos están en tu promedio o mejor."     # lo sin Pixel no es «la peor caída»
+    # Lo sin Pixel no es «la peor caída», y con pasos sin medir tampoco se dice que «todos» están bien (revisión
+    # final de E2): lo medido está en su promedio, pero no hay frase.
+    assert e["frase"] is None
+
+
+def test_embudo_sin_pixel_tampoco_cuenta_las_visitas():
+    """I2 (revisión final de E2): las visitas a la página también las cuenta el Pixel. Sin él llegan en 0 después de
+    los clics; antes la frase decía «La caída más grande está en «Visitas a la página»: 0 % contra 60 %»."""
+    import resultados as r
+    pasos = {"impresiones": 1000, "clics_enlace": 20, "visitas_pagina": 0, "carrito": 0, "pago_iniciado": 0, "compras_meta": 0}
+    prom = {"clics_enlace": 2.0, "visitas_pagina": 60.0, "carrito": 12.0, "pago_iniciado": 40.0, "compras_meta": 50.0}
+    e = r.embudo_desde_sumas(pasos, prom)
+    p = {x["clave"]: x for x in e["pasos"]}
+    assert p["visitas_pagina"]["sin_datos"] is True and p["clics_enlace"]["sin_datos"] is False
+    assert e["frase"] is None                                            # los clics están en su promedio
+    # con los clics por debajo, la caída se nombra igual: es un paso que Meta sí mide sin Pixel
+    e = r.embudo_desde_sumas(pasos, dict(prom, clics_enlace=4.0))
+    assert e["frase"] == "La caída más grande está en «Clics en el enlace»: 2,0 % contra 4,0 % de tu promedio."
+    assert "Visitas" not in e["frase"]
 
 
 def test_embudo_sin_promedio_ni_detalle_no_inventa(sembrado):
@@ -434,7 +452,7 @@ def test_embudo_en_ingles():
     with idiomas.en_idioma("en"):
         e = r.embudo_desde_sumas(pasos, prom)
         assert e["pasos"][3]["etiqueta"] == "Added to cart"
-        assert e["frase"] == "The biggest drop is at “Added to cart”: 6.7 % vs 12.0 % of your average."
+        assert e["frase"] == "The biggest drop is at “Added to cart”: 6.7 % vs your average of 12.0 %."
         todo = r.embudo_desde_sumas(pasos, {"clics_enlace": 2.0, "visitas_pagina": 70.0})
         assert todo["frase"] == "Every step is at your average or better."
 
@@ -996,6 +1014,62 @@ def test_tarjeta_de_ventas_con_roas_y_su_mejor_pieza(sembrado):
     t = {x["nombre"]: x for x in r.experimentos_tarjetas(r.cargar("acme", r.Filtro(dias=7, pais="MX"), AHORA))}
     assert t["Ventas"]["metrica"] == "roas" and t["Ventas"]["valor"] == pytest.approx(90.0 / 30.0)
     assert t["Ventas"]["mejor"] == "cf_ventas" and t["Ventas"]["dia"] is None
+    assert t["Ventas"]["mide_ventas"] is True
+
+
+# ---- ventas medibles (I1 de la revisión final de E2, 2026-10-03) ----
+
+def _sin_ventas(sembrado, objetivo="OUTCOME_TRAFFIC", nombre="Sin pixel", legado="cf_sin", gasto=100.0):
+    """Un experimento que gasta sin nada que mida ventas: ningún snapshot con Pixel (con compras), tienda ni Triple
+    Whale (`fuente_ventas` queda «ninguna», como en uno de tráfico con atribución «ninguna»)."""
+    import experimentos as ex
+    db = sembrado["db"]
+    clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado=legado)
+    e = ex.crear("acme", nombre, PAISES, objetivo, 7, 1000.0, "https://t.co/p", "COP")
+    ep = ex.agregar_pieza("acme", e, clon, "CO")
+    for f, g in (("2026-09-30T23:00:00", gasto / 2), ("2026-10-02T11:00:00", gasto)):
+        ex.snapshot(ep, {"impresiones": 1000, "gasto": g, "clics_enlace": 10}, tomado_en=f)
+    return e, ep
+
+
+def test_sin_ventas_medibles_el_roas_y_las_compras_no_son_cero(sembrado):
+    """Antes el ROAS salía 0,0 siempre que hubiera gasto: el KPI destacado, el ranking, la línea del día a día, el país y
+    la tarjeta decían 0,0× en un experimento que no mide ventas. El Tablero viejo decía «—» y «sin ventas medibles»."""
+    import resultados as r
+    e, _ep = _sin_ventas(sembrado, objetivo="OUTCOME_SALES")
+    c = r.cargar("acme", r.Filtro(dias=7, experimento_id=e), AHORA)
+    k = {i["clave"]: i for i in r.indicadores(c)}
+    assert k["gasto"]["valor"] == 100.0 and k["gasto"]["sin_ventas"] is False and k["ctr"]["sin_ventas"] is False
+    for clave in ("roas", "cpa", "compras", "ingresos"):
+        assert k[clave]["valor"] is None and k[clave]["sin_ventas"] is True, clave
+        assert all(v is None for v in k[clave]["tendencia"]), clave
+    (p,) = r.piezas(c, {})
+    assert p["metrica"] == "roas" and p["roas"] is None and p["compras"] is None and p["mide_ventas"] is False
+    assert p["delta_roas"] is None and all(v is None for v in p["serie"] + p["promedio"])
+    s = r.serie(c)
+    assert all(v is None for v in s["roas"]) and s["gasto"][-1] == 50.0
+    (pais,) = r.paises(c)
+    assert pais["gasto"] == 100.0 and pais["roas"] is None
+    t = {x["nombre"]: x for x in r.experimentos_tarjetas(c)}["Sin pixel"]
+    assert t["metrica"] == "roas" and t["valor"] is None and t["mide_ventas"] is False and t["mejor"] is None
+
+
+def test_con_y_sin_ventas_juntos_el_roas_sale_de_los_que_miden(sembrado):
+    """Un experimento con Pixel («Uno»: 80 de gasto, 240 de ingresos, 8 compras) y uno sin nada que mida ventas (100 de
+    gasto), filtrados juntos: el gasto es de los dos; el ROAS y el costo por compra, solo del que mide (no 240 / 180)."""
+    import resultados as r
+    _sin_ventas(sembrado)
+    c = r.cargar("acme", r.Filtro(dias=7), AHORA)
+    k = {i["clave"]: i for i in r.indicadores(c)}
+    assert k["gasto"]["valor"] == 180.0
+    assert k["roas"]["valor"] == pytest.approx(240.0 / 80.0) and k["roas"]["sin_ventas"] is False
+    assert k["cpa"]["valor"] == pytest.approx(80.0 / 8) and k["compras"]["valor"] == 8 and k["ingresos"]["valor"] == 240.0
+    p = {x["nombre"]: x for x in r.piezas(c, {})}
+    assert p["cf_sin"]["roas"] is None and p["cf_sin"]["mide_ventas"] is False
+    assert p["cf_1"]["roas"] == pytest.approx(3.0) and p["cf_1"]["mide_ventas"] is True
+    co = {x["pais"]: x for x in r.paises(c)}["CO"]                       # CO: cf_1 (mide) y cf_sin (no)
+    assert co["gasto"] == 140.0 and co["roas"] == pytest.approx(120.0 / 40.0)
+    assert r.serie(c)["roas"][-1] == pytest.approx(60.0 / 20.0)          # el día: 20 de «Uno», 50 de cf_sin
 
 
 def test_contexto_completo_y_json(sembrado):

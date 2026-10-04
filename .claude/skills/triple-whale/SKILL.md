@@ -24,9 +24,11 @@ the project's model/window) and `tw_tienda_dia` (`blended_stats_tvf()`); the per
 `tw_sincronizar_todas` (2 h, before `exp_refrescar_todos`) re-pulls the last 7 days because Triple Whale
 re-attributes; each `triple_whale.datos.reemplazar_*` zeroes/deletes the range before writing. Changing
 store/currency/model/window or disconnecting deletes the copies (never the paid evaluations). The
-**Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Tablero) fetches its panel
+**Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is
+no Tablero tab) fetches its panel
 (`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: store KPIs (MER, AOV, new customers,
-vs. previous period), ad KPIs, alerts, the Tablero chart (`app.extensions["grafico_tablero"]`), spend by
+vs. previous period), ad KPIs, alerts, a day-by-day chart drawn by the old Tablero's `dashboard._grafico_tablero`
+(`app.extensions["grafico_tablero"]`; the Tablero itself no longer computes a chart), spend by
 verdict/channel and every ad with a verdict and a diagnosis from the pure `triple_whale/evaluacion.py`
 (compared with the account's own medians; `ganador`/`prometedor`/`en_prueba`/`perdedor`/`sin_datos`; weak
 hook, low hold, few clicks, clicks without sales, expensive CPM, fatigue 7d vs 7d, no TW tracking).
@@ -56,8 +58,10 @@ in a `finally`; `anuncio.visual`), every Meta thumbnail is copied to R2 first (`
 `tw_evaluacion`) new winners, fatiguing winners, new losers and «no attributed sales» once (state in
 `triple_whale.extra.avisados` / `aviso_sin_ventas`; first sync only seeds the baseline); «Pausar»/«Activar» on a
 Creatv piece in the tab (`triple_whale.pieza_estado` → `lanzador.pausar_pieza`/`activar_pieza`); and the
-Tablero shows «Tu tienda según Triple Whale» (`panel.resumen_mes_tienda`, part `tienda_tw`; the cache key
-includes `triple_whale.actualizado_en`). Idea → pieza → anuncio (spec §14): the prefill of «Llevar a Crear»
+Experimentos results center shows «Tu tienda según Triple Whale» (`panel.resumen_mes_tienda`, part `tienda_tw` of
+`dashboard._calcular_tablero`; the cache key includes `triple_whale.actualizado_en`) in two places: a line with the month's
+revenue and MER under «01 Resumen del periodo» (`_exp_resultados.html`) and its tiles at the end of the folded
+«Historial» (`_exp_historial.html`). Idea → pieza → anuncio (spec §14): the prefill of «Llevar a Crear»
 carries `origen_tw` («<evaluación>:<índice>»), the Crear form returns it in a hidden field and `cf_crear_video`
 stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, a bad value is ignored); the
 idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,

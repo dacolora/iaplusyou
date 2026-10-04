@@ -131,9 +131,19 @@ Tablero dejó de ser pestaña: `resolver('tablero')` de `cliente.html` abre Expe
   los datos filtrados (`tablero.filtrar`: las mismas funciones, la misma atribución), así los totales, el mes a mes y lo
   que ya se veía cuadran; TODO lo demás (impresiones, clics, CTR, CPC, CPM, gancho, retención, embudo, desgloses) de
   `metrica_dia` / `metrica_desglose`. Un cociente nunca mezcla fuentes. La moneda es la del experimento y nunca se convierte
-  (con más de una aparece un filtro; por defecto, la de más gasto). Trampa: `tablero._datos` recarga el proyecto ENTERO si
-  se le pide una ventana que empieza antes de `datos.desde`, y el filtro se pierde; por eso `cargar` trae desde el inicio
-  del periodo anterior (o `tablero.INICIO`) y nada pide una ventana más vieja. `metrica_dia` solo se lee con ids de pieza que
+  (con más de una aparece un filtro; por defecto, la de más gasto). El dinero se suma con `tablero._deltas_pieza` sobre
+  la carga (ya no llama `resumen_periodo` ni `serie_diaria`). Trampa: `tablero._datos` recarga el proyecto ENTERO si
+  se le pide una ventana que empieza antes de `datos.desde`, y el filtro se pierde; y cada delta necesita el snapshot
+  anterior a su ventana: por eso `cargar` trae desde el inicio del periodo anterior (o `tablero.INICIO`) y nada pide una
+  ventana más vieja.
+- **Revisión final de E2 (2026-10-03), tres reglas de plata:** (1) **ROAS «—» sin ventas medibles**: compras, ingresos,
+  ROAS y costo por compra existen solo si algo de lo elegido mide ventas, con la misma regla del Tablero
+  (`tablero.mide_ventas`: `fuente_ventas` del snapshot de cierre en `FUENTES_VENTAS`; `tablero.ventas_medidas` suma solo
+  eso). Sin ninguno: «—» y «sin ventas medibles» (KPI, ranking, tarjeta, panel), nunca 0,0×; con unos sí y otros no, el
+  ROAS sale de los que miden. (2) **Todo «Activar» dice el diario**: el `confirm()` de «Activar <país>» (panel y gestión)
+  lleva el diario del país y la moneda de la cuenta, y el de «Activar todo» la suma de los diarios de los países con
+  conjunto. (3) **Países sin repetir**: `exp_probar` y `exp_crear` quitan los repetidos (`dict.fromkeys`, en orden) antes
+  de validar y de crear; `paises=CO&paises=CO` creaba un conjunto huérfano en Meta. `metrica_dia` solo se lee con ids de pieza que
   salen de `tablero.cargar_datos(cliente)` (aislamiento: no tiene `cliente`).
 - **Historia por pieza**, con reglas fijas y sin Claude: tramos del veredicto en el tiempo, tendencia de los últimos 5 días
   (sube/baja/estable con ±10 %), fatiga (frecuencia ACUMULADA > 2,5 con la métrica cayendo), gancho < 25 %, el rescate
@@ -144,7 +154,9 @@ Tablero dejó de ser pestaña: `resolver('tablero')` de `cliente.html` abre Expe
 - **Embudo** (impresiones → clics en el enlace → visitas → carrito → pago → compras): la frase compara cada paso con el
   promedio del PROPIO proyecto (`promedio_embudo`, todos sus experimentos, sin filtros ni periodo) y solo con ≥ 2
   experimentos con impresiones: no se inventan promedios de mercado. Un paso bajo el 80 % de su promedio es «la caída». Los
-  pasos que dependen del Pixel se apagan con «requiere el Pixel».
+  pasos que dependen del Pixel (`_PASOS_PIXEL`: visitas a la página —`landing_page_view` es del Pixel—, carrito, pago y
+  compras) se apagan con «requiere el Pixel»; nunca son «la caída», y con alguno apagado no se dice que «todos» están en
+  el promedio.
 - **Frecuencia**: la del periodo o la pieza sale del último `metrica_snapshot` (acumulada, ponderada por impresiones) y no se
   suma entre días: la diaria de `metrica_dia` es del día (regla (c) de «Detalle de Meta»).
 - **Consultas**: `exp_resultados` y `exp_nuevo` corren bajo `experimentos.con_lecturas_memorizadas`;
@@ -163,7 +175,8 @@ mes, del más nuevo al más viejo, desde el primer mes con pauta o generación, 
 primera; los cierres de mes salen de UNA consulta, `_cierres_de_mes`, ROW_NUMBER por pieza y mes, y un snapshot tomado a las
 00:00 del día 1 cierra el mes anterior, así la fila del mes en curso es igual a `resumen_mes` y los meses suman el total; la
 generación por mes sale de `gastos.por_mes`), `resumen_mes` (el mes en curso: alimenta el chip del menú, la fila «Tu tienda
-según Triple Whale» y el CSV), `tablero.alertas` (la lee `alertas.py`: skill `alertas`; cambiar un `tipo` o las cifras del texto
+según Triple Whale» y el CSV; `dashboard._calcular_tablero` ya no calcula la serie de 30 días, el top ni los gráficos, que
+nadie pinta desde E2), `tablero.alertas` (la lee `alertas.py`: skill `alertas`; cambiar un `tipo` o las cifras del texto
 de una alerta cambia su huella de descarte; el centro muestra UNA línea «N alertas necesitan tu atención → Ver Alertas»,
 `.cr-alertas-linea` en `_exp_resultados.html`) y la atribución. `dashboard._contexto_tablero` lo cachea 60 s por proyecto e
 idioma, con la clave del último snapshot, el conteo de propuestas y los cobros de generación del proyecto, y degrada por

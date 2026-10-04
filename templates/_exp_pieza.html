@@ -32,7 +32,8 @@
       <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=p.experimento.id) }}" class="inline">
         <input type="hidden" name="pais" value="{{ p.pais }}">
         {% if pais_ex.estado == "activo" %}<input type="hidden" name="estado" value="PAUSED"><button class="btn-rechazar btn-sm">{{ _('Pausar %(pais)s', pais=p.pais) }}</button>
-        {% else %}<input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-sm" onclick='return confirm({{ _("Activar %(pais)s empieza a gastar.", pais=p.pais)|tojson }});'>{{ _('Activar %(pais)s', pais=p.pais) }}</button>{% endif %}
+        {# Regla 1 (primero el precio): el confirm dice cuánto gasta al día ese país, en la moneda de la cuenta. #}
+        {% else %}<input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-sm" onclick='return confirm({{ _("Activar %(pais)s: empieza a gastar ≈ %(diario)s al día. ¿Seguir?", pais=p.pais, diario=(pais_ex.presupuesto_dia|dinero(p.moneda)))|tojson }});'>{{ _('Activar %(pais)s', pais=p.pais) }}</button>{% endif %}
       </form>
       {% endif %}
       <a class="btn-sm" data-cr-filtro href="#experimentos?exp={{ p.experimento.id }}">{{ _('Ver su experimento') }}</a>

@@ -179,9 +179,12 @@ aislamiento de `guardar_desglose` entre experimentos.
   del mes en el menú se queda y lleva a Experimentos. `tab_descargar_csv` se queda (botón en la cabecera).
   `?exp=<id>#experimentos` (enlaces viejos, alertas, correos) se traduce al filtro `exp=<id>`.
 - Cálculo en un módulo nuevo y puro, `resultados.py` (`contexto(cliente, filtro, ahora_iso=None)`), que reusa
-  `tablero.py` para el dinero y lee `metrica_dia`/`metrica_desglose` para el resto. Caché 60 s por
-  (cliente, filtro, idioma) con la clave de `dashboard._contexto_tablero` más el último `metrica_dia.actualizado_en`.
-  Consultas acotadas: una por tabla, nunca una por tarjeta (`tests/test_perf_pagina_proyecto.py`).
+  `tablero.py` para el dinero y lee `metrica_dia`/`metrica_desglose` para el resto. **Sin caché propia** (así
+  quedó en E2, revisión final 2026-10-03): `resultados.contexto` se calcula en cada pedido del fragmento y hoy no hace
+  falta más; lo pesado que podría pedirla está anotado aparte (PND-134, el N+1 de `experimentos.cargar`; PND-137, el
+  contexto que la página calcula sin pintar). La única caché de 60 s es la de `dashboard._contexto_tablero` (historial,
+  tienda según Triple Whale, CSV del mes). Consultas acotadas: una por tabla, nunca una por tarjeta
+  (`tests/test_rutas_resultados.py::test_el_fragmento_no_hace_mas_consultas_por_pieza_que_experimentos_cargar`).
 
 ### 4.2 De dónde sale cada número
 
@@ -189,6 +192,13 @@ aislamiento de `guardar_desglose` entre experimentos.
   (deltas de `metrica_snapshot`, `tablero.resumen_periodo` / `serie_diaria`), que respeta la atribución
   (Pixel, tienda, Triple Whale) y ya tiene pruebas. Así los totales, el mes a mes y lo que Daniel ya veía
   cuadran.
+- **Sin ventas medibles, «—» y no 0** (revisión final de E2, 2026-10-03): compras, ingresos, ROAS y costo por compra
+  solo existen si algo de lo elegido mide ventas, con la MISMA regla del Tablero: el snapshot de cierre tiene
+  `fuente_ventas` en `tablero.FUENTES_VENTAS` (Pixel con compras, tienda o Triple Whale; `tablero.mide_ventas` /
+  `tablero.ventas_medidas`). Sin ninguno, la pantalla pinta «—» y «sin ventas medibles» en el indicador, en el ranking
+  (una nota bajo la tabla), en la tarjeta del experimento y en el panel de la pieza; antes un experimento de tráfico
+  con atribución «ninguna» decía ROAS 0,0×. Con unos que miden y otros no, el ROAS y el costo por compra salen de los
+  que miden (ingresos / gasto de esos); el gasto sigue siendo el de todo.
 - **Todo lo demás** (impresiones, clics, CTR, CPC, CPM, gancho, retención, embudo, desgloses; el alcance y la
   frecuencia, con la regla del siguiente punto): `metrica_dia` y `metrica_desglose`. Los cocientes se calculan dentro de la misma fuente (CPC =
   gasto_dia / clics_dia de `metrica_dia`), nunca mezclando fuentes en una fracción.
@@ -218,12 +228,14 @@ lateral y con «← Volver a resultados» (no «tal cual» dentro de una página
 
 0. **Necesita tu decisión**: propuestas pendientes (con su precio estimado cuando lo tienen, como hoy) y
    alertas de `tablero.alertas`, con Aprobar/Rechazar en línea (mismas rutas y los mismos `confirm()` cuando
-   gasta). Sin nada pendiente, una línea «Nada por decidir».
+   gasta). Sin nada pendiente, una línea «Nada por decidir» — solo si tampoco hay alertas; con alertas va solo la
+   línea «N alertas necesitan tu atención → Ver Alertas».
 1. **01 Resumen del periodo**: 12 indicadores en 3 filas — Gasto, Compras, Ingresos, ROAS · CTR del enlace,
    Costo por clic, CPM, Frecuencia (rotulada «acumulada»: del último `metrica_snapshot`, nunca la suma ni el
    promedio de las diarias) · Impresiones, Gancho (3 s), ThruPlay, Costo por compra. Cada uno con
    valor, variación ▲/▼ contra el periodo anterior (verde = mejor, rojo = peor según la métrica: un CPC que
-   baja es verde) y una curva mínima de 14 puntos. Debajo, en línea aparte: «Generación con IA» (gasto de
+   baja es verde) y una curva mínima de 14 puntos. Compras, Ingresos, ROAS y Costo por compra dicen «—» y «sin
+   ventas medibles» cuando nada de lo elegido mide ventas (§4.2). Debajo, en línea aparte: «Generación con IA» (gasto de
    proveedores del periodo, `gastos`) y, con Triple Whale conectado, la fila «Tu tienda según Triple Whale»
    del Tablero de hoy.
 2. **02 Día a día**: barras de gasto + una línea a elegir (CTR, ROAS, CPC, CPM, Frecuencia, Gancho) con
@@ -233,7 +245,10 @@ lateral y con «← Volver a resultados» (no «tal cual» dentro de una página
    pago → compras, con el porcentaje de cada paso. La frase de abajo compara cada paso con **el promedio del
    propio proyecto** (todos sus experimentos) y nombra el de mayor caída relativa; con menos de 2
    experimentos con datos no hay frase (no se inventan promedios de mercado). Pasos sin Pixel se ven
-   apagados con «requiere el Pixel».
+   apagados con «requiere el Pixel»: **las visitas a la página también son del Pixel** (`landing_page_view`), así que
+   `resultados._PASOS_PIXEL` las incluye junto al carrito, el pago y las compras (revisión final de E2: sin ellas, un
+   proyecto sin Pixel leía «la caída más grande está en las visitas»). Un paso sin Pixel nunca es «la caída», y con
+   pasos sin medir no se dice que «todos» están en el promedio.
 4. **04 Evolución del diagnóstico por pieza**: una tarjeta por pieza del filtro (las 8 de más gasto; «ver
    todas»), con la métrica principal día a día contra el promedio del experimento (línea punteada), el
    veredicto con nombre humano y la historia en una línea armada **sin llamar a Claude** (cero costo):
@@ -247,6 +262,9 @@ lateral y con «← Volver a resultados» (no «tal cual» dentro de una página
    impresiones» / «12 h más»), rescate → «Recuperándose (rescate 2/3)».
 5. **05 Ranking de piezas**: tabla ordenable (gasto, CTR, gancho, CPC, ROAS, compras, Δ ROAS) con barras en
    la celda y miniatura. Tocar una fila abre el **panel de la pieza** (§4.5).
+   **Lo que quedó en E2:** el plan lo achicó — la tabla NO se ordena (sale por gasto, de mayor a menor) y no tiene
+   columna «compras» (Pieza · País · Gasto · CTR · Gancho · CPC · ROAS · Δ ROAS). Ordenar y la columna de compras
+   van para E3 (§5, «Queda para E3» (e), y PND-136 punto 14).
 6. **06 Quién compra y dónde lo ve**: dona de ubicaciones por gasto, barras por edad (y género), tabla por
    país (de los conjuntos) y por región, dispositivo. Rótulo «desde el inicio» (v1 no filtra desgloses por
    periodo). Métrica de las barras: ROAS con ventas, CTR sin ventas.
@@ -291,7 +309,10 @@ Las etiquetas viven en `decisor.ETIQUETAS` (se reescriben ahí).
 `resultados.py` entrega series ya calculadas como JSON (`<script type="application/json">` dentro del
 fragmento); `static/exp_resultados.js` (nuevo, pasa `node --check`) dibuja SVG en línea: barras + línea,
 curvas mínimas, dona, retención y embudo, con aviso al pasar el dedo o el mouse y los chips de métrica sin
-volver a pedir datos. Sin librerías externas. Colores con `var(--exp-*)`.
+volver a pedir datos. Sin librerías externas. Colores solo por las variables del sistema de estilos (§2; los tokens
+`--exp-*` nunca existieron): barras del día a día `--accent` / `--accent-2` (la activa), línea `--cian`, series de la
+dona y la leyenda `--serie-1` a `--serie-8`, la curva de una pieza según su veredicto `--ok` / `--error` / `--warn` /
+`--muted` y la del promedio `--accent-2` (`static/estilos/pantallas/experimentos.css`).
 
 ### 4.9 Pruebas de E2
 
@@ -326,7 +347,8 @@ volver a pedir datos. Sin librerías externas. Colores con `var(--exp-*)`.
   `GET /cliente/<c>/experimentos/nuevo/piezas?desde=N&filtro=&q=`, que **no existe**). (b) Falta el resultado de lo ya probado
   en cada pieza («Ganadora · CTR 2,6 % en Prueba 19 sep», para replicar lo que funcionó): hoy una pieza solo dice «en prueba:
   <nombre>» si está en un experimento vivo, y nada de lo que ya terminó. (c) Los países del paso 2 son casillas con bandera,
-  no tarjetas. (d) Las pruebas de (a) y (b), que §5.5 detalla.
+  no tarjetas. (d) Las pruebas de (a) y (b), que §5.5 detalla. (e) Del centro (§4.4.5): ordenar el ranking de piezas
+  y su columna «compras».
 
 ### 5.1 Recorrido
 

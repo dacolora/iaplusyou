@@ -4806,16 +4806,21 @@ def _filtro_roas(valor):
 
 
 def _calcular_tablero(cliente):
-    """Todo lo que pinta la pestaña Tablero, de UNA carga de la base
-    (`tablero.cargar_datos`). Cada parte (resumen del mes, serie de 30 días,
-    top de ganadoras, CSV, gráfico) va en su propio try/except: si
-    una explota (Meta caída, tienda rota) llega como None con el nombre y la
-    clase del error en `errores` — nunca el mensaje, que podría arrastrar un
-    token — y la plantilla muestra «No se pudo calcular X» para esa parte y
-    pinta el resto. Si la carga misma falla, cada parte carga por su cuenta
-    (más lento, mismo resultado). Las alertas ya no son una parte: las calcula
-    alertas.py (que sigue leyendo `tablero.alertas`) y el Tablero solo pinta
-    su conteo, de `alertas_ctx` (spec alertas §7 y §12.9)."""
+    """Lo que el Tablero viejo aporta al centro de resultados (desde E2 ya no es
+    pestaña), de UNA carga de la base (`tablero.cargar_datos`): el resumen del
+    mes (el chip del menú, `_pauta_mes`), el total y el mes a mes (el
+    «Historial» plegado, `_exp_historial.html`), la generación, la tienda según
+    Triple Whale y el CSV del mes (lo lee `tab_descargar_csv`). Cada parte va en
+    su propio try/except: si una explota (Meta caída, tienda rota) llega como
+    None con el nombre y la clase del error en `errores` — nunca el mensaje, que
+    podría arrastrar un token — y la plantilla muestra «No se pudo calcular X»
+    para esa parte y pinta el resto. Si la carga misma falla, cada parte carga
+    por su cuenta (más lento, mismo resultado). La serie de 30 días, el top de
+    ganadoras y los dos gráficos ya no se calculan: desde E2 no los pinta nadie
+    (revisión final, 2026-10-03; el gráfico de Triple Whale lo arma su pestaña
+    con `app.extensions["grafico_tablero"]`). Las alertas tampoco son una parte:
+    las calcula alertas.py (que sigue leyendo `tablero.alertas`) y el centro
+    solo pinta su conteo, de `alertas_ctx` (spec alertas §7 y §12.9)."""
     ahora = db.ahora()
     out = {"ahora": ahora, "mes": idiomas.mes_largo(int(ahora[5:7])), "anio": ahora[:4], "errores": []}
     try:
@@ -4833,9 +4838,7 @@ def _calcular_tablero(cliente):
         "generacion_total": lambda: gastos.resumen_total(cliente, ahora),
         # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
         "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
-        "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
-        "serie_triple_whale": lambda: tablero.serie_diaria_triple_whale(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
-        "top": lambda: tablero.top_ganadoras(cliente, datos=datos),
+        # El CSV va en el contexto cacheado para que la descarga cuadre con lo que se ve (tab_descargar_csv).
         "csv": lambda: tablero.csv_mes(cliente, ahora, datos=datos),
     }
     for nombre, fn in partes.items():
@@ -4845,14 +4848,6 @@ def _calcular_tablero(cliente):
             out[nombre] = None
             out["errores"].append(f"{nombre}: {type(e).__name__}")
             print(f"[aviso] Tablero de {cliente}: no pude calcular {nombre}: {type(e).__name__}")
-    try:
-        out["grafico"] = _grafico_tablero(out["serie"]) if out["serie"] else None
-        out["grafico_triple_whale"] = _grafico_tablero(out["serie_triple_whale"]) if out["serie_triple_whale"] else None
-    except Exception as e:  # noqa: BLE001 — el gráfico es una parte más: si falla, se muestra el resto
-        out["grafico"] = None
-        out["grafico_triple_whale"] = None
-        out["errores"].append(f"grafico: {type(e).__name__}")
-        print(f"[aviso] Tablero de {cliente}: no pude dibujar el gráfico: {type(e).__name__}")
     return out
 
 
@@ -5301,7 +5296,9 @@ def exp_crear(cliente):
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     nombre = (request.form.get("nombre") or "").strip()[:200]
     objetivo = request.form.get("objetivo") or ""
-    codigos = [p for p in request.form.getlist("paises") if p in fe_tipos.PAISES]
+    # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
+    # filas del mismo país y un conjunto huérfano en Meta (revisión final de E2, 2026-10-03).
+    codigos = list(dict.fromkeys(p for p in request.form.getlist("paises") if p in fe_tipos.PAISES))
     destino = (request.form.get("destino_url") or "").strip()
     try:
         dias = int(request.form.get("dias") or 7)
@@ -5429,7 +5426,9 @@ def exp_probar(cliente):
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
-    codigos = [p for p in request.form.getlist("paises") if p in fe_tipos.PAISES]
+    # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
+    # filas del mismo país y un conjunto huérfano en Meta (revisión final de E2, 2026-10-03).
+    codigos = list(dict.fromkeys(p for p in request.form.getlist("paises") if p in fe_tipos.PAISES))
     destino = (request.form.get("destino_url") or "").strip()
     try:
         piezas_ids = [int(x) for x in request.form.getlist("piezas")]

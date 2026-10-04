@@ -111,6 +111,14 @@ def delta(snaps, desde_iso, hasta_iso, campo):
     return _delta_entre(serie.en(desde_iso), serie.en(hasta_iso), campo)
 
 
+def mide_ventas(snap):
+    """¿Este snapshot mide ventas? Solo si su `fuente_ventas` es el Pixel de
+    Meta, la tienda o Triple Whale (FUENTES_VENTAS). Es LA regla: la usan los
+    ingresos de cada delta y el «—» del centro de resultados cuando nada de lo
+    elegido mide ventas (`ventas_medidas`)."""
+    return (snap or {}).get("fuente_ventas") in FUENTES_VENTAS
+
+
 def _delta_ingresos(snaps, desde_iso, hasta_iso):
     """Ingresos del período solo si el snapshot de cierre los mide (pixel o
     tienda): `fuente_ventas` es por snapshot, así que decide el de `hasta`.
@@ -119,22 +127,42 @@ def _delta_ingresos(snaps, desde_iso, hasta_iso):
     distintas; se acepta como aproximación."""
     serie = _serie(snaps)
     cierre = serie.en(hasta_iso) or {}
-    if cierre.get("fuente_ventas") not in FUENTES_VENTAS:
+    if not mide_ventas(cierre):
         return 0.0
     return _delta_entre(serie.en(desde_iso), cierre, "ingresos")
 
 
 def _deltas_pieza(snaps, desde_iso, hasta_iso):
     """Los cinco deltas de una pieza en [desde, hasta) con solo dos
-    búsquedas (los extremos), no una por campo."""
+    búsquedas (los extremos), no una por campo, y `mide`: si el snapshot de
+    cierre mide ventas (`mide_ventas`)."""
     serie = _serie(snaps)
     a, b = serie.en(desde_iso), serie.en(hasta_iso)
-    mide = (b or {}).get("fuente_ventas") in FUENTES_VENTAS
+    mide = mide_ventas(b)
     return {"gasto": _delta_entre(a, b, "gasto"),
             "compras": int(_delta_entre(a, b, "compras")),
             "ingresos": _delta_entre(a, b, "ingresos") if mide else 0.0,
             "clics_enlace": int(_delta_entre(a, b, "clics_enlace")),
-            "impresiones": int(_delta_entre(a, b, "impresiones"))}
+            "impresiones": int(_delta_entre(a, b, "impresiones")),
+            "mide": mide}
+
+
+def ventas_medidas(deltas):
+    """Lo que cuenta para las ventas de varios deltas de `_deltas_pieza`
+    (piezas, días o ambos): {"mide": alguno mide ventas, "gasto", "compras",
+    "ingresos"} SOLO de los que miden. Con `mide` False no hay ventas
+    medibles (un experimento de tráfico, atribución «ninguna», un Pixel que
+    no vio compras): el ROAS, las compras y el costo por compra no existen,
+    no son cero. Con algunos que miden y otros no, el ROAS sale de los que
+    miden: el gasto de los otros no tiene ventas con qué compararse."""
+    out = {"mide": False, "gasto": 0.0, "compras": 0, "ingresos": 0.0}
+    for d in deltas:
+        if d["mide"]:
+            out["mide"] = True
+            out["gasto"] += d["gasto"]
+            out["compras"] += d["compras"]
+            out["ingresos"] += d["ingresos"]
+    return out
 
 
 def _roas(ingresos, gasto):

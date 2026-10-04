@@ -1,4 +1,5 @@
-{# Totales, monedas separadas, mes a mes y tienda TW del Tablero original. #}
+{# Totales, monedas separadas, mes a mes y tienda TW del Tablero original (el «Historial» plegado del centro de
+   resultados desde E2; el Tablero ya no es pestaña). #}
 {% set tb = tablero %}
 {% macro tile_generacion(gen) %}
 <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="{{ _('Videos, imágenes, guiones, finales y textos con IA pagados desde el inicio; detalle en Configuración › Gasto') }}">
@@ -8,10 +9,10 @@
 </a>
 {% endmacro %}
 
-<a class="btn-sm" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
+{# «Descargar CSV del mes» vive una sola vez, en la cabecera de la pestaña (_tab_experimentos.html). #}
 {# ---------- tiles ---------- #}
 {% if tb.total is none and tb.total_triple_whale is none %}
-<p class="tag-error">{{ _('No se pudo calcular el total. El resto del tablero sigue abajo.') }}</p>
+<p class="tag-error">{{ _('No se pudo calcular el total.') }}</p>
 {# M2: el gasto de generación no depende de la pauta/Meta, así que se pinta
    igual aunque el total de pauta haya fallado. #}
 <div class="tb-tiles">

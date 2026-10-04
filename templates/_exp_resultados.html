@@ -90,7 +90,8 @@
     {{ propuestas(e) }}
   </div>
   {% endif %}{% endfor %}
-  {% if not decision.n %}<p class="cr-nada"><span aria-hidden="true">✓</span> {{ _('Nada por decidir') }}</p>{% endif %}
+  {# «Nada por decidir» solo sin propuestas Y sin alertas (con alertas, o sin poder calcularlas, va solo su línea). #}
+  {% if not decision.n and alertas_ctx and not alertas_ctx.resumen.n %}<p class="cr-nada"><span aria-hidden="true">✓</span> {{ _('Nada por decidir') }}</p>{% endif %}
   {% if alertas_ctx and alertas_ctx.resumen.n %}
   <p class="cr-alertas-linea">{{ ngettext('%(num)s alerta necesita tu atención', '%(num)s alertas necesitan tu atención', alertas_ctx.resumen.n) }} → <a href="#alertas" data-ir-tab="alertas">{{ _('Ver Alertas') }}</a></p>
   {% elif alertas_ctx is none %}
@@ -210,6 +211,8 @@
         {% endfor %}
       </tbody>
     </table>
+    {# Una pieza sin ventas medibles (ni Pixel con compras, ni tienda, ni Triple Whale) lleva ROAS «—», no 0,0×. #}
+    {% if r.piezas|rejectattr('mide_ventas')|list %}<p class="cr-nota cr-nota-sin-ventas">ROAS — = {{ _('sin ventas medibles') }}</p>{% endif %}
   </div>
 </section>
 
@@ -246,7 +249,7 @@
         <span class="cr-experimento-titulo"><strong>{{ e.nombre }}</strong>
           <small>{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}{% if e.dia is not none and e.dias %} · {{ _('día %(dia)s de %(dias)s', dia=e.dia, dias=e.dias) }}{% endif %}</small></span>
       </span>
-      <span class="cr-experimento-linea">{{ ngettext('%(num)s pieza', '%(num)s piezas', e.n_piezas) }} · {{ e.paises|join(' · ') }} · {{ _('ROAS') if e.metrica == 'roas' else _('CTR') }} {{ valor(e.valor, 'veces' if e.metrica == 'roas' else 'pct') }}{% if e.ganadoras %} · {{ ngettext('%(num)s ganadora', '%(num)s ganadoras', e.ganadoras) }}{% endif %}</span>
+      <span class="cr-experimento-linea">{{ ngettext('%(num)s pieza', '%(num)s piezas', e.n_piezas) }} · {{ e.paises|join(' · ') }} · {{ _('ROAS') if e.metrica == 'roas' else _('CTR') }} {{ valor(e.valor, 'veces' if e.metrica == 'roas' else 'pct') }}{% if e.metrica == 'roas' and not e.mide_ventas %} ({{ _('sin ventas medibles') }}){% endif %}{% if e.ganadoras %} · {{ ngettext('%(num)s ganadora', '%(num)s ganadoras', e.ganadoras) }}{% endif %}</span>
       <small class="cr-muted">{{ _('Gastado %(gasto)s de %(tope)s', gasto=valor(e.gasto, 'dinero', corto=true), tope=e.tope|dinero(r.moneda)) }}{% if e.mejor %} · {{ _('mejor: %(nombre)s', nombre=e.mejor) }}{% endif %}</small>
     </a>
     {% else %}

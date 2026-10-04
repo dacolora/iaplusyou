@@ -401,7 +401,7 @@
       barraTotal.step = rango.paso; barraTotal.max = rango.max;
       barraTotal.min = Math.min(Math.ceil(calculo.total_minimo / rango.paso) * rango.paso, rango.max);
       barraTotal.value = Number.isFinite(total) && total > 0 ? total : barraTotal.min;
-      barraTotal.setAttribute('aria-valuetext', Number.isFinite(total) ? dinero(total) : '');
+      barraTotal.setAttribute('aria-valuetext', Number.isFinite(total) && total > 0 ? dinero(total) : '');   // vacío: nada, no «0 COP»
     }
     // Lo que impide seguir, dicho en palabras (vacío = todo bien). Lo mismo lo dice el servidor si alguien se salta esto.
     function problema() {

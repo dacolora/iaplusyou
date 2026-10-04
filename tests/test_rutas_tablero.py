@@ -141,6 +141,8 @@ def test_tablero_con_datos(app, base_temporal, monkeypatch):
     assert "11 h sin métricas nuevas de Meta" in al
     assert "11 h sin métricas nuevas de Meta" not in html and "alertas necesitan tu atención" in html
     assert "Descargar CSV del mes" in pagina and "/cliente/acme/tablero/mes.csv" in pagina
+    # m3 (revisión final de E2): una sola vez, en la cabecera; el historial del fragmento ya no lo repite
+    assert exp.count("Descargar CSV del mes") == 1 and "Descargar CSV del mes" not in html
 
 
 def test_tablero_vacio(app, base_temporal, monkeypatch):
@@ -174,6 +176,7 @@ def test_tablero_resume_las_alertas_en_una_linea(app, base_temporal, monkeypatch
     app["dashboard"].invalidar_alertas()
     tb = _resultados(app["c"])
     assert "2 alertas necesitan tu atención" in tb
+    assert "Nada por decidir" not in tb          # m1: con alertas y sin propuestas, solo la línea de alertas
     assert 'href="#alertas" data-ir-tab="alertas">Ver Alertas' in tb
     assert "tb-alerta" not in tb and "Falta R2" not in tb and "Sin logos" not in tb
     monkeypatch.setattr(alertas, "calcular", lambda cliente, ahora_iso=None: [dict(lista[1])])
@@ -230,7 +233,7 @@ def test_contexto_tablero_tolera_una_parte_rota(app, base_temporal, monkeypatch)
     monkeypatch.setattr(tablero, "alertas", _explota)
     ctx = d._contexto_tablero("acme")
     assert "alertas" not in ctx                          # el Tablero ya no calcula alertas: lo hace alertas.py
-    assert ctx["resumen"] is not None and ctx["serie"] is not None and ctx["top"]
+    assert ctx["resumen"] is not None and ctx["total"] is not None and ctx["meses"]
     assert ctx["errores"] == []
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
@@ -363,11 +366,11 @@ def test_contexto_tablero_cachea_60s_e_invalida_con_snapshot(app, base_temporal,
     ex.actualizar("acme", eid, estado="pausado")
     ctx4 = d._contexto_tablero("acme")
     assert ctx4 is not ctx3 and ctx4["resumen"]["experimentos_corriendo"] == 0
-    # Y un cambio en una pieza (veredicto): desaparece del top al instante.
+    # Y un cambio en una pieza (veredicto): el CSV del mes lo dice al instante.
     monkeypatch.setattr(d.db, "ahora", lambda: "2026-09-16T10:00:02")
     ex.actualizar_pieza("acme", ep, veredicto="perdedor")
     ctx4b = d._contexto_tablero("acme")
-    assert ctx4b is not ctx4 and ctx4b["top"] == []
+    assert ctx4b is not ctx4 and "perdedor" in ctx4b["csv"] and "perdedor" not in ctx4["csv"]
     # TTL: pasados 60 s se recalcula aunque nada cambie.
     reloj["t"] += 60
     ctx5 = d._contexto_tablero("acme")
@@ -419,22 +422,38 @@ def test_contexto_tablero_rinde_con_20_experimentos(app, base_temporal, monkeypa
     ctx = d._contexto_tablero("acme")
     duracion = time.perf_counter() - inicio
     assert ctx["errores"] == []
-    assert ctx["resumen"]["experimentos_corriendo"] == 20 and len(ctx["top"]) == 5
-    assert len(ctx["serie"]["dias"]) == 30 and ctx["csv"].count("\n") == 61
+    assert ctx["resumen"]["experimentos_corriendo"] == 20 and ctx["total"]["experimentos_corriendo"] == 20
+    assert ctx["meses"] and ctx["csv"].count("\n") == 61
     print(f"\n_contexto_tablero frío 20x3x90: {duracion * 1000:.0f} ms")
     assert duracion < 0.5, f"{duracion:.3f}s"
 
 
-def test_contexto_tablero_tolera_grafico_roto(app, base_temporal, monkeypatch):
+def test_contexto_tablero_solo_calcula_lo_que_alguien_pinta(app, base_temporal, monkeypatch):
+    """m2 de la revisión final de E2: la serie de 30 días, el top de ganadoras y los dos gráficos del Tablero viejo se
+    calculaban en cada carga y nadie los leía. El CSV se queda (lo lee `tab_descargar_csv`)."""
+    import tablero
     d = app["dashboard"]
     _sembrar(base_temporal)
     _reloj(monkeypatch)
-    monkeypatch.setattr(d, "_grafico_tablero", lambda serie: (_ for _ in ()).throw(ZeroDivisionError("x")))
+    for nombre in ("serie_diaria", "serie_diaria_triple_whale", "top_ganadoras"):
+        monkeypatch.setattr(tablero, nombre, lambda *a, **k: pytest.fail("nadie lo pinta"))
+    monkeypatch.setattr(d, "_grafico_tablero", lambda serie: pytest.fail("nadie lo pinta"))
     ctx = d._contexto_tablero("acme")
-    assert ctx["grafico"] is None and ctx["serie"] is not None
-    assert "grafico: ZeroDivisionError" in ctx["errores"]
-    r = app["c"].get("/cliente/acme")
-    assert r.status_code == 200 and "250 COP" in r.get_data(as_text=True)
+    assert not {"serie", "serie_triple_whale", "top", "grafico", "grafico_triple_whale"} & set(ctx)
+    assert ctx["errores"] == [] and ctx["csv"] and ctx["total"] is not None and ctx["meses"]
+
+
+def test_contexto_tablero_tolera_el_mes_a_mes_roto(app, base_temporal, monkeypatch):
+    import tablero
+    d = app["dashboard"]
+    _sembrar(base_temporal)
+    _reloj(monkeypatch)
+    monkeypatch.setattr(tablero, "mes_a_mes", lambda *a, **k: (_ for _ in ()).throw(ZeroDivisionError("x")))
+    ctx = d._contexto_tablero("acme")
+    assert ctx["meses"] is None and ctx["total"] is not None
+    assert "meses: ZeroDivisionError" in ctx["errores"]
+    hist = _historial(app["c"])
+    assert "No se pudo calcular el desglose por mes." in hist and "350 COP" in hist     # el total sigue
 
 
 def test_tile_generacion_total_y_por_mes(app, base_temporal, monkeypatch):

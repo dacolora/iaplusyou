@@ -96,6 +96,21 @@ def test_exp_crear_tampoco_acepta_un_reparto_que_supera_el_total(app):
     assert len(ex.cargar("acme")) == 1
 
 
+def test_paises_repetidos_en_un_post_armado_a_mano_crean_un_solo_pais(app, base_temporal):
+    """I4 (revisión final de E2): `paises=CO&paises=CO` creaba dos filas de CO y, al lanzar, un conjunto huérfano en
+    Meta. Los dos POST (exp_probar y el viejo exp_crear) quitan los repetidos, en orden, antes de validar y de crear."""
+    import experimentos as ex
+    from tests.test_rutas_experimentos import FORM
+    datos, _clon = _datos(base_temporal, paises=["CO", "CO"])
+    datos["combinaciones"] = datos["combinaciones"][:1]                  # solo CO
+    app["c"].post("/cliente/acme/experimentos/probar", data=datos)
+    (e,) = ex.cargar("acme")
+    assert [p["pais"] for p in e["paises"]] == ["CO"] and len(e["piezas"]) == 1
+    app["c"].post("/cliente/acme/experimentos/nuevo", data=dict(FORM, nombre="Dos", paises=["MX", "CO", "MX"]))
+    dos = next(x for x in ex.cargar("acme") if x["nombre"] == "Dos")
+    assert [p["pais"] for p in dos["paises"]] == ["MX", "CO"]
+
+
 def test_el_tope_de_la_campana_que_dice_la_pantalla_es_el_que_lanzador_aplica():
     import lanzador
     assert lanzador.minimo_tope_campana("COP") == 400000.0 and lanzador.minimo_tope_campana("USD") == 100.0
@@ -445,6 +460,7 @@ assert(Number(total.value) > 0, 'al entrar se sugiere el Estándar');
 const sugerido = total.value;
 escribir(total, '');                                          // la persona borra el campo
 assert.strictEqual(total.value, '', 'no se vuelve a llenar en cada tecla');
+assert.strictEqual(nodo('exp-total-barra').atributos['aria-valuetext'], '', 'el lector de pantalla no oye «0 COP»');
 assert.strictEqual(nodo('exp-total-aviso').hidden, false);
 assert.strictEqual(texto('exp-resumen', '.exp-maximo'), '');
 clic(ir3);

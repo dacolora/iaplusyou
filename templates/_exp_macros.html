@@ -23,7 +23,9 @@
 <span class="cr-veredicto cr-v-{{ v.clase }}">{{ v.etiqueta }}</span>
 {%- endmacro %}
 
-{# Los indicadores (12 en el resumen, los mismos de la pieza en su panel). La tendencia la dibuja el JS. #}
+{# Los indicadores (12 en el resumen, los mismos de la pieza en su panel). La tendencia la dibuja el JS. Compras,
+   ingresos, ROAS y costo por compra sin nada que mida ventas (`i.sin_ventas`, resultados._DE_VENTAS) dicen «—» y
+   «sin ventas medibles», como el Tablero: nunca un 0,0× falso. #}
 {% macro kpis(indicadores, moneda) %}
 <ul class="cr-kpis">
   {% for i in indicadores %}
@@ -31,7 +33,7 @@
     <span class="cr-kpi-etiqueta">{{ i.etiqueta }}</span>
     <strong class="cr-cifra">{{ valor(i.valor, i.formato, moneda) }}</strong>
     <div class="cr-kpi-pie">
-      {% if i.valor is none %}<small class="cr-neutro">{{ _('sin datos') }}</small>
+      {% if i.valor is none %}<small class="cr-neutro">{{ _('sin ventas medibles') if i.sin_ventas else _('sin datos') }}</small>
       {% elif i.cambio %}<small class="cr-cambio cr-{{ i.cambio.sentido }}">{% if i.cambio.flecha %}{{ i.cambio.flecha }} {% endif %}{{ i.cambio.texto }}</small>
       {% elif i.clave == 'frecuencia' %}<small class="cr-neutro">{{ _('sana por debajo de %(n)s', n=2.5|roas) }}</small>
       {% else %}<small class="cr-neutro">{{ _('Sin comparación') }}</small>{% endif %}

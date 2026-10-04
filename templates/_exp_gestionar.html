@@ -92,7 +92,9 @@
     {% elif e.estado == "error" %}
       <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta). ¿Seguimos?")|tojson }});'><button class="btn-generar btn-sm">{{ _('Reintentar lanzamiento') }}</button></form>
     {% elif e.estado == "pausado" %}
-      <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Activar empieza a gastar en Meta. ¿Seguimos?")|tojson }});'><input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-sm">{{ _('Activar todo') }}</button></form>
+      {# Regla 1: «Activar todo» activa cada país con conjunto en Meta (lanzador.cambiar_estado); dice la suma de sus diarios. #}
+      {% set diario_total = e.paises|selectattr('meta_adset_id')|sum(attribute='presupuesto_dia') %}
+      <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Activar todo: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguir?", diario=(diario_total|dinero(e.moneda)))|tojson }});'><input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-sm">{{ _('Activar todo') }}</button></form>
     {% elif e.estado == "corriendo" %}
       <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}"><input type="hidden" name="estado" value="PAUSED"><button class="btn-rechazar btn-sm">{{ _('Pausar todo') }}</button></form>
       <form method="post" action="{{ url_for('exp_decidir_ahora', cliente=cliente, eid=e.id) }}" title="{{ _('Corre el decisor ya, sin esperar la pasada periódica. No gasta: lo que gaste pasa por el modo.') }}"><button class="btn-guardar btn-sm">{{ _('Evaluar ahora') }}</button></form>
@@ -116,7 +118,7 @@
         <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}" class="inline">
           <input type="hidden" name="pais" value="{{ p.pais }}">
           {% if p.estado == "activo" %}<input type="hidden" name="estado" value="PAUSED"><button class="btn-rechazar btn-xs">{{ _('Pausar país') }}</button>
-          {% else %}<input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-xs" onclick='return confirm({{ _("Activar %(pais)s empieza a gastar.", pais=p.pais)|tojson }});'>{{ _('Activar país') }}</button>{% endif %}
+          {% else %}<input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-xs" onclick='return confirm({{ _("Activar %(pais)s: empieza a gastar ≈ %(diario)s al día. ¿Seguir?", pais=p.pais, diario=(p.presupuesto_dia|dinero(e.moneda)))|tojson }});'>{{ _('Activar país') }}</button>{% endif %}
         </form>
         <form method="post" action="{{ url_for('exp_presupuesto', cliente=cliente, eid=e.id) }}" class="inline">
           <input type="hidden" name="pais" value="{{ p.pais }}">
