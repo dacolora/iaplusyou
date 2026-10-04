@@ -2121,6 +2121,7 @@ def ver_cliente(cliente):
     # sueltos y lo de Meta salen de contextos que comparten el fragmento de resultados (`exp_resultados`) y
     # «Nuevo experimento» (`exp_nuevo`). Lo orgánico ya viene en `fe_ctx`, y las piezas elegibles (la galería) ya
     # no viajan en esta página: las pide `exp_nuevo`.
+    # (El hotfix e8d433a del 2026-10-03 las devolvía mientras la pestaña vieja pintaba la galería; E2 la reemplaza.)
     ctx_exp = _contexto_experimentos(cliente, con_organico=False)
     ctx_meta = _contexto_meta(cliente, ctx_exp["experimentos"])
     tiendas_cliente = tiendas.listar(cliente)

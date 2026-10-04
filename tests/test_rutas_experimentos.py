@@ -269,7 +269,8 @@ def test_ver_cliente_pasa_contexto_experimentos(app, base_temporal, monkeypatch)
     assert r.status_code == 200
     assert {e["id"] for e in capturado["experimentos"]} == {eid_armando, eid_lanzando}
     assert [e["id"] for e in capturado["experimentos_armando"]] == [eid_armando]
-    # E2: las piezas elegibles (la galería) ya no viajan en la página del proyecto: las pide «Nuevo experimento».
+    # E2: las piezas elegibles (la galería) ya no viajan en la página del proyecto: las pide «Nuevo experimento»
+    # (el hotfix e8d433a las devolvió mientras corría la pestaña vieja).
     assert "elegibles_exp" not in capturado
     assert capturado["trabajos_exp"] == {eid_lanzando: {"job_id": job_id}}
     assert capturado["objetivos_exp"] is meta_campaign.OBJETIVOS_VALIDOS_FASE1
