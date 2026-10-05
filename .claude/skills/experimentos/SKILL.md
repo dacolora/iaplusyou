@@ -102,7 +102,7 @@ no se vería). `_form_reglas.html` es el mismo formulario: los `name` de los cam
 **Centro de resultados (E2, 2026-10-03)** (spec `docs/superpowers/specs/2026-10-02-experimentos-centro-de-resultados-design.md`;
 reemplaza la pantalla de la galería y la pestaña Tablero; no cambia el motor: lee lo que ya guardan lanzador, decisor y
 detalle de Meta). La pestaña es un **armazón** (`_tab_experimentos.html`: cabecera con «+ Nuevo experimento» y «Descargar
-CSV del mes», `_meta_conectar.html`, el cajón «Cómo decide el motor», `#cr-resultados`, el `<dialog id="cr-panel">` y los
+CSV del mes», el cajón «Cómo decide el motor», `#cr-resultados`, el `<dialog id="cr-panel">` y los
 textos del JS en `#cr-textos`) más un **fragmento** que llega por `fetch`. El HTML de la página del proyecto ya no trae las
 piezas elegibles, el tablero ni la gestión de cada experimento (la regla de `ui`: lo pesado llega por fragmento; lo que
 la página todavía calcula sin pintar, PND-137). El

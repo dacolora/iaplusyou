@@ -1393,3 +1393,17 @@ def test_pnd119_publicacion_anterior_no_oculta_error_nuevo(base_temporal):
     _publicacion('publicada', HACE_5_DIAS, cf_id='cf_antes')
     fallida = _publicacion('error', AHORA, 'falló', cf_id='cf_antes')
     assert f'organico:error:{fallida}' in _claves(alertas._fuente_organico('acme', AHORA))
+
+
+def test_fuente_meta_recuerda_el_metodo_de_pago_solo_con_app_propia_conectada(monkeypatch):
+    import alertas
+    import meta_conexion
+    monkeypatch.setattr(meta_conexion, "estado", lambda c: {"estado": "conectado"})
+    monkeypatch.setattr(meta_conexion, "modo", lambda c: "propia")
+    [a] = alertas._fuente_meta("acme", "2026-10-04T10:00:00")
+    assert a["clave"] == "meta:metodo_pago" and a["nivel"] == "info" and a["tab"] == "settings"
+    monkeypatch.setattr(meta_conexion, "modo", lambda c: "agencia")
+    assert alertas._fuente_meta("acme", "2026-10-04T10:00:00") == []
+    monkeypatch.setattr(meta_conexion, "modo", lambda c: "propia")
+    monkeypatch.setattr(meta_conexion, "estado", lambda c: {"estado": "sin_conectar"})
+    assert alertas._fuente_meta("acme", "2026-10-04T10:00:00") == []

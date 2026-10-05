@@ -1,7 +1,7 @@
 {# Tarjeta de una llave/servicio de Configuración (dashboard._estado_llaves).
    Se incluye dentro de un `{% for l in llaves … %}` con `l` y `es_admin` en el
    contexto, solo en «Puesta a punto» (admin). La conexión con Meta no es una
-   llave: vive en Experimentos (_meta_conectar.html). #}
+   llave: vive en Configuración › Conexiones (_meta_conectar.html). #}
 <article class="llave-tarjeta llave-{{ l.estado }}" id="llave-{{ l.id }}">
   <header class="llave-cabecera">
     <h3>{{ l.nombre }}</h3>

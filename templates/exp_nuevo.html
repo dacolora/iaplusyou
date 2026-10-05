@@ -18,7 +18,7 @@
     </div>
   </div>
 
-  {% if capacidades_meta.estado != "conectado" %}{% include "_meta_conectar.html" %}{% endif %}
+  {% if capacidades_meta.estado != "conectado" %}<p class="tag-error">{{ _('Meta no está conectado.') }} <a href="{{ url_for('ver_cliente', cliente=cliente, _anchor='settings') }}">{{ _('Conéctalo en Configuración › Conexiones →') }}</a></p>{% endif %}
 
   {% include "_exp_probar.html" %}
 </div>

@@ -294,6 +294,21 @@ def _fuente_tablero(cliente, ahora):
     return out
 
 
+# ---------- fuentes: Meta ----------
+
+def _fuente_meta(cliente, ahora):
+    """Meta conectada por la app propia del proyecto: recordar el método de pago de la cuenta publicitaria (sin él Meta
+    no activa ningún anuncio y no hay forma de verlo desde aquí). Antes era una nota fija en Experimentos. En modo
+    agencia la cuenta es de Creatv, no de quien mira. Informativa, huella vacía: un descarte sirve mientras siga igual."""
+    import meta_conexion  # noqa: PLC0415 — arrastra requests; este módulo solo lee estado
+    if (meta_conexion.estado(cliente) or {}).get("estado") != "conectado" or meta_conexion.modo(cliente) == "agencia":
+        return []
+    return [_alerta("meta:metodo_pago", huella(), "info", "puesta_a_punto",
+                    gettext("Revisa el método de pago de tu cuenta publicitaria de Meta"),
+                    gettext("La cuenta publicitaria necesita un método de pago en business.facebook.com › Facturación: "
+                            "sin él Meta no activa ningún anuncio."), "settings")]
+
+
 # ---------- fuentes: faltantes del proyecto ----------
 
 def _fuente_proyecto(cliente, ahora):
@@ -684,4 +699,5 @@ FUENTES.extend([
     ("organico", _fuente_organico),
     ("sprints", _fuente_sprints),
     ("nicho", _fuente_nicho),
+    ("meta", _fuente_meta),
 ])

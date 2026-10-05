@@ -130,11 +130,11 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     for valor in VALORES_FALSOS.values():
         assert valor not in html, valor
     # Meta: la elección de cómo conectar (spec 2026-09-20 §1) se ve en
-    # Experimentos y ya no en Configuración (2026-09-28).
+    # Configuración › Conexiones (desde 2026-10-04) y ya no en Experimentos.
     fin = cfg.find('<section id="tab-', 10)
-    assert "¿Cómo quieres conectar Meta?" not in (cfg[:fin] if fin > 0 else cfg)
+    assert "¿Cómo quieres conectar Meta?" in (cfg[:fin] if fin > 0 else cfg)
     exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
-    assert "¿Cómo quieres conectar Meta?" in exp
+    assert "¿Cómo quieres conectar Meta?" not in exp
 
 
 def test_render_todo_falta(app):
@@ -595,9 +595,10 @@ def test_cliente_no_ve_llaves_ni_variables_del_servidor(app, monkeypatch):
     conexiones = _puesta_a_punto(cfg)
     for texto in ("ANTHROPIC_API_KEY", "SMTP_HOST", ".env", "no se escriben desde aquí", "Cómo conseguirla"):
         assert texto not in conexiones, texto
-    # Lo que sí le toca: elegir cómo conectar Meta, en Experimentos.
+    # Lo que sí le toca: elegir cómo conectar Meta, en Configuración › Conexiones.
+    assert "¿Cómo quieres conectar Meta?" in cfg
     exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
-    assert "¿Cómo quieres conectar Meta?" in exp
+    assert "¿Cómo quieres conectar Meta?" not in exp
 
 
 def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):

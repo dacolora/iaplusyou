@@ -3875,6 +3875,9 @@ msgstr "Converts"
 msgid "Convierte un video de Crear en un anuncio terminado: guion con IA, voz, música, textos y subtítulos, en el idioma y con el precio de cada país. Abre cada edición en el editor para verla antes de publicarla."
 msgstr "Turn a video from Create into a finished ad: AI script, voice, music, text and subtitles, in each country's language and price. Open each edit in the editor to see it before you publish it."
 
+msgid "Conéctalo en Configuración › Conexiones →"
+msgstr "Connect it in Settings › Connections →"
+
 #, python-format
 msgid "Copia el <code>token_tiktok.json</code> resultante a <code>clientes/%(cliente)s/</code> en el servidor."
 msgstr "Copy the resulting <code>token_tiktok.json</code> to <code>clientes/%(cliente)s/</code> on the server."
@@ -8817,8 +8820,8 @@ msgstr "The ad account changed: that project's previous experiments stop refresh
 msgid "La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse."
 msgstr "The ad account changed: previous experiments stop refreshing."
 
-msgid "La cuenta publicitaria necesita un método de pago en <a href=\"https://business.facebook.com/settings/payment-methods\" target=\"_blank\" rel=\"noopener\">business.facebook.com › Facturación ↗</a>: sin él Meta no activa ningún anuncio."
-msgstr "The ad account needs a payment method at <a href=\"https://business.facebook.com/settings/payment-methods\" target=\"_blank\" rel=\"noopener\">business.facebook.com › Billing ↗</a>: without one, Meta won't activate any ad."
+msgid "La cuenta publicitaria necesita un método de pago en business.facebook.com › Facturación: sin él Meta no activa ningún anuncio."
+msgstr "The ad account needs a payment method at business.facebook.com › Billing: without one, Meta won't activate any ad."
 
 msgid "La cuenta publicitaria no tiene ningún Pixel."
 msgstr "The ad account has no Pixel."
@@ -13207,6 +13210,9 @@ msgstr "Reuse from another campaign"
 #, python-format
 msgid "Revisa %(campo)s: ese valor no es válido."
 msgstr "Check %(campo)s: that value isn't valid."
+
+msgid "Revisa el método de pago de tu cuenta publicitaria de Meta"
+msgstr "Check the payment method of your Meta ad account"
 
 msgid "Revisa el worker o refresca el experimento."
 msgstr "Check the worker or refresh the experiment."

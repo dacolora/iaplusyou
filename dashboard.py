@@ -2048,7 +2048,7 @@ def _contexto_meta(cliente, experimentos_lista=None):
     meta_app = meta_conexion.app_publica(cliente)
     meta_conectado = capacidades_meta.get("estado") == "conectado"
     # Modo de la conexión con Meta (propia / agencia): en agencia la tarjeta
-    # de _meta_conectar.html (en Experimentos) es «Gestionado por Creatv», sin
+    # de _meta_conectar.html (en Configuración) es «Gestionado por Creatv», sin
     # app ni botón de conectar.
     datos_meta = meta_conexion.cargar(cliente) or {}
     modo_meta = _modo_de(datos_meta)
@@ -3726,8 +3726,8 @@ def enviar_video_a_publicidad(cliente, brief_id):
 # clientes/<cliente>/meta.json (meta_conexion.py).
 
 def _ir_a_flowmarketing(cliente):
-    # La conexión con Meta se muestra en Experimentos (_meta_conectar.html).
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    # La conexión con Meta se muestra en Configuración › Conexiones (_meta_conectar.html).
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
 MENSAJE_MODO_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» "
@@ -3952,7 +3952,7 @@ _RE_PORTAFOLIO = re.compile(r"^\d{5,20}$")
 
 
 def _ir_a_meta(cliente):
-    # La elección de forma y las guías viven en Experimentos (_meta_conectar.html).
+    # La elección de forma y las guías viven en Configuración › Conexiones (_meta_conectar.html).
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
