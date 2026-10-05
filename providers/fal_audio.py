@@ -161,6 +161,11 @@ def clonar_voz_minimax(audio_url, preview_text, timeout=300):
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 
+def costo_disenar_voz(preview_text):
+    """Diseño y vista previa; la estimación comparte este redondeo con el cobro."""
+    return round(COSTO_DISENAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
+
+
 def disenar_voz_minimax(prompt, preview_text, timeout=300):
     """Diseña una voz nueva desde la descripción `prompt`; la vista previa lee
     `preview_text`. Devuelve {"voice_id", "url_vista_previa", "costo_usd"}."""
@@ -170,7 +175,7 @@ def disenar_voz_minimax(prompt, preview_text, timeout=300):
     if not voice_id:
         raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s",
                                    modelo=MODELO_MINIMAX_DISENAR, datos=data))
-    costo = round(COSTO_DISENAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
+    costo = costo_disenar_voz(preview_text)
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 

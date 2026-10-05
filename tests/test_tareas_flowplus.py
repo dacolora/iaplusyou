@@ -1058,3 +1058,57 @@ def test_recuperar_con_musica_registra_componentes_una_vez(base_temporal, monkey
     fp.recuperar_video(tarea)
     fp.recuperar_video(tarea)
     assert {g['referencia']: g['usd'] for g in gastos.historial('acme')} == {f'video:{cid}:t31': .8, f'video:{cid}:t32:musica': .02}
+
+
+def test_pnd125_registra_musica_si_falla_guardar_video_listo(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+
+    cid = _sesion_video(cf, monkeypatch, tmp_path, musica_estilo='calmado', prediccion={'id': 'pagada', 'modelo': 'wan3'})
+    cf.actualizar('acme', cid, prediccion={'id': 'pagada', 'modelo': 'wan3', 'referencia_gasto': f'video:{cid}:t31'})
+    _fakes_de_cierre(monkeypatch)
+    gastos.registrar_seguro('acme', 'video', .8, f'video:{cid}:t31', proveedor='wavespeed')
+    monkeypatch.setattr(fp.cortes, 'duracion', lambda *a: 8)
+    monkeypatch.setattr(fp.musica, 'obtener_pista', lambda *a: ({'archivo': 'pista', 'url': 'https://r2/m.mp3'}, .02))
+    monkeypatch.setattr(fp.mezcla, 'mezclar_musica', lambda *a: {'volumenes': {}})
+    original = cf.actualizar
+
+    def falla_video_listo(cliente, cf_id, **campos):
+        if campos.get('estado') == 'video_listo':
+            raise RuntimeError('falló persistencia final')
+        return original(cliente, cf_id, **campos)
+
+    monkeypatch.setattr(cf, 'actualizar', falla_video_listo)
+    with pytest.raises(RuntimeError, match='persistencia final'):
+        fp._terminar_video('acme', cid, 'j32', f'video:{cid}:t32', cf.cargar('acme')[cid], [], 8,
+                           'P', [], 'wan3', 'final', 'https://prov/v.mp4', recuperado=True)
+
+    por_ref = {g['referencia']: g['usd'] for g in gastos.historial('acme')}
+    assert por_ref == {f'video:{cid}:t31': pytest.approx(.8), f'video:{cid}:t32:musica': pytest.approx(.02)}
+
+
+def test_pnd125_recuperar_cache_no_reduce_el_cobro_original(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path, musica_estilo='calmado', prediccion={'id':'pagada','modelo':'wan3'})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(fp.cortes, 'duracion', lambda *a: 8)
+    costos = iter([.02, 0])  # pista obtenida y luego la misma pista en caché
+    monkeypatch.setattr(fp.musica, 'obtener_pista', lambda *a: ({'archivo':'pista','url':'https://r2/m.mp3'}, next(costos)))
+    monkeypatch.setattr(fp.mezcla, 'mezclar_musica', lambda *a: {'volumenes':{}})
+    original = cf.actualizar
+    def fallo(cliente, cf_id, **campos):
+        if campos.get('estado') == 'video_listo':
+            raise RuntimeError('persistencia final')
+        return original(cliente, cf_id, **campos)
+    monkeypatch.setattr(cf, 'actualizar', fallo)
+    with pytest.raises(RuntimeError):
+        fp._terminar_video('acme',cid,'j31',f'video:{cid}:t31',cf.cargar('acme')[cid],[],8,'P',[],'wan3','final','https://prov/v.mp4')
+    monkeypatch.setattr(cf, 'actualizar', original)
+    fp._terminar_video('acme',cid,'j32',f'video:{cid}:t32',cf.cargar('acme')[cid],[],8,'P',[],'wan3','final','https://prov/v.mp4',recuperado=True)
+    fila, = gastos.historial('acme')
+    assert fila['usd'] == pytest.approx(.82)
+    assert fila['extra']['usd_musica'] == .02
+    assert cf.cargar('acme')[cid]['capas']['musica']['url'] == 'https://r2/m.mp3'

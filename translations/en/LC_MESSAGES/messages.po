@@ -3394,6 +3394,10 @@ msgstr "Claude is still answering your previous message."
 msgid "Claude vio los fotogramas del video"
 msgstr "Claude saw the video's frames"
 
+#, python-format
+msgid "Claude · %(origen)s"
+msgstr "Claude · %(origen)s"
+
 msgid "Clave secreta de la app"
 msgstr "App secret"
 
@@ -9087,6 +9091,10 @@ msgstr "Claude's answer came back incomplete. Ask for a smaller change."
 msgid "La respuesta de Claude se cortó por largo (max_tokens)."
 msgstr "Claude's answer was cut off for length (max_tokens)."
 
+#, python-format
+msgid "La respuesta de Shopify pesa más de %(mb)s MB."
+msgstr "The Shopify response exceeds %(mb)s MB."
+
 msgid "La revisión guardada es de una versión anterior de esta pieza."
 msgstr "The saved review is from an earlier version of this piece."
 
@@ -11208,6 +11216,12 @@ msgstr "Not uploaded"
 msgid "No son referencia del producto: asígnalas a un color para que el modelo las use."
 msgstr "They are not product references: assign them to a color so the model uses them."
 
+msgid "No sumamos ingresos de otra moneda"
+msgstr "Revenue in another currency is not included"
+
+msgid "No sumamos ingresos de otra moneda; el costo por compra sigue usando las ventas y el gasto en la moneda de la cuenta."
+msgstr "Revenue in another currency is not included; cost per purchase still uses sales and spend in the account currency."
+
 #, python-format
 msgid "No sé formatear precios de %(pais)s."
 msgstr "I don't know how to format prices for %(pais)s."
@@ -12703,6 +12717,9 @@ msgstr "Daily ROAS"
 msgid "ROAS mínimo"
 msgstr "Minimum ROAS"
 
+msgid "ROAS no comparable"
+msgstr "ROAS not comparable"
+
 msgid "Ranking de piezas"
 msgstr "Piece ranking"
 
@@ -13384,6 +13401,9 @@ msgstr "“{nombre}” was deleted."
 
 msgid "Se cobra por resultado (aprox.: Apify suma cómputo). Cada clic es una corrida y no se reintenta sola. Usar estos datos es responsabilidad de quien pone el token."
 msgstr "Charged per result (approx.: Apify adds compute). Each click is one run and doesn't retry on its own. Using this data is the responsibility of whoever provides the token."
+
+msgid "Se cortó la descarga de Shopify. Intenta de nuevo."
+msgstr "The Shopify download was interrupted. Try again."
 
 #, python-format
 msgid "Se cortó la espera de %(modelo)s porque el worker se está reiniciando (predicción %(id)s); se retoma sola."
@@ -17583,6 +17603,10 @@ msgstr "images to download"
 
 msgid "inactiva"
 msgstr "inactive"
+
+#, python-format
+msgid "incluye %(gasto)s de gasto sin ventas medibles"
+msgstr "includes %(gasto)s in spend without measurable sales"
 
 #, python-format
 msgid "incompleto: falta %(faltan)s"

@@ -33,10 +33,12 @@
     <span class="cr-kpi-etiqueta">{{ i.etiqueta }}</span>
     <strong class="cr-cifra">{{ valor(i.valor, i.formato, moneda) }}</strong>
     <div class="cr-kpi-pie">
-      {% if i.valor is none %}<small class="cr-neutro">{{ _('sin ventas medibles') if i.sin_ventas else _('sin datos') }}</small>
+      {% if i.roas_no_comparable %}<small class="cr-neutro">{{ _('ROAS no comparable') }}</small>
+      {% elif i.valor is none %}<small class="cr-neutro">{{ _('sin ventas medibles') if i.sin_ventas else _('sin datos') }}</small>
       {% elif i.cambio %}<small class="cr-cambio cr-{{ i.cambio.sentido }}">{% if i.cambio.flecha %}{{ i.cambio.flecha }} {% endif %}{{ i.cambio.texto }}</small>
       {% elif i.clave == 'frecuencia' %}<small class="cr-neutro">{{ _('sana por debajo de %(n)s', n=2.5|roas) }}</small>
       {% else %}<small class="cr-neutro">{{ _('Sin comparación') }}</small>{% endif %}
+      {% if i.gasto_sin_ventas %}<small class="cr-neutro">{{ _('incluye %(gasto)s de gasto sin ventas medibles', gasto=i.gasto_sin_ventas|dinero(moneda)) }}</small>{% endif %}
       <svg class="cr-spark" data-cr-spark='{{ i.tendencia|tojson }}' viewBox="0 0 72 24" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg>
     </div>
   </li>

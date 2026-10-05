@@ -280,7 +280,7 @@ def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
     assert 'id="au-vp-wrap"' in html and f'data-voz="vp:{v["id"]}"' in html and 'id="au-vp-panel"' in html
     assert 'data-vp-pestana="clonar"' in html and 'data-vp-pestana="disenar"' in html
     assert 'id="au-vp-permiso"' in html and "tengo permiso escrito de la persona" in html
-    assert 'id="au-vp-descripcion"' in html and "US$ 1,52" in html and "US$ 3,00" in html
+    assert 'id="au-vp-descripcion"' in html and "US$ 1,52" in html and "US$ 3,01" in html
     assert "data-url-vp-clonar=" in html and "data-url-vp-lista=" in html
     sel = html.split('id="au-idioma"')[1].split("</select>")[0]
     assert sel.count("<option") == 10 and "Norsk" in sel and "Čeština" in sel and "Suomi" in sel
@@ -363,3 +363,25 @@ def test_clonar_refresca_precio_al_vaciar_nombre(app):
     assert resultado['nombre'] == ''
     assert resultado['despues'] != resultado['antes']
     assert resultado['despues'] == f"≈ US$ {tabla['es'][0]:.2f}"
+
+
+def test_diseno_refresca_precio_por_nombre_e_idioma_en_node(app):
+    import json
+    import subprocess
+    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    assert 'id="au-vp-disenar-precio"' in html
+    tabla = app['dashboard']._contexto_mis_voces('acme')['precios_disenar']
+    funcion = html[html.index('function refrescarPrecioDisenar('):html.index('function refrescarPrecioClon(')]
+    codigo = 'var preciosDisenar=' + json.dumps(tabla) + ''';
+    var nombre={value:'Ana',addEventListener(e,f){this[e]=f;}}, idioma={value:'en',addEventListener(e,f){this[e]=f;}}, precio={textContent:''};
+    var document={getElementById:id=>({'au-vp-nombre-d':nombre,'au-idioma':idioma,'au-vp-disenar-precio':precio}[id])};
+    var T={aprox:'≈'}, sep='.', fmtUsd=v=>'US$ '+v.toFixed(2);
+    ''' + funcion + '''
+    refrescarPrecioDisenar();
+    if (precio.textContent !== '≈ ' + fmtUsd(preciosDisenar.en[3])) throw Error(precio.textContent);
+    nombre.value='x'.repeat(40); nombre.input();
+    if (precio.textContent !== '≈ ' + fmtUsd(preciosDisenar.en[40])) throw Error(precio.textContent);
+    idioma.value='sv'; idioma.change();
+    if (precio.textContent !== '≈ ' + fmtUsd(preciosDisenar.sv[40])) throw Error(precio.textContent);
+    '''
+    subprocess.run(['node', '-e', codigo], check=True, capture_output=True, text=True)

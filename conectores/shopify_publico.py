@@ -18,6 +18,10 @@ redirecciones se siguen A MANO (máximo 3) validando cada salto; una tienda
 ese dominio para guardarlo. Una tienda con contraseña (HTML en vez de JSON)
 sale como ErrorConector con un mensaje claro. Nunca se registran cuerpos.
 """
+import json
+import requests
+from flask_babel import gettext
+
 import collections
 import re
 import unicodedata
@@ -35,6 +39,7 @@ MAX_FOTOS = 6
 MAX_FOTOS_GENERALES = 6
 ANCHO_FOTO = 1000
 MAX_REDIRECCIONES = 3
+MAX_RESPUESTA_BYTES = 8 * 1024 * 1024
 _CODIGOS_REDIRECCION = (301, 302, 303, 307, 308)
 OPCIONES_COLOR = {"colour", "color", "colores", "colors", "pattern", "patterns", "estampado", "estampados",
                   "diseno", "design", "print", "estilo", "style", "acabado", "finish", "modelo"}
@@ -166,7 +171,7 @@ class ShopifyPublico(Conector):
         url = f"https://{self.dominio}{ruta}"
         nombre = f"la tienda {self.dominio}"
         s = sesion()
-        kw = {"headers": _CABECERAS, "allow_redirects": False}
+        kw = {"headers": _CABECERAS, "allow_redirects": False, "stream": True}
         if params:
             kw["params"] = params
         if timeout:
@@ -176,24 +181,42 @@ class ShopifyPublico(Conector):
             if not host_permitido(url):
                 raise ErrorConector("Ese dominio no está permitido (apunta a una red interna o local).")
             r = pedir(s, "GET", url, nombre=nombre, reintentar=reintentar, **kw)
-            if r.status_code in _CODIGOS_REDIRECCION:
-                ubicacion = (getattr(r, "headers", None) or {}).get("Location")
-                if not ubicacion or saltos >= MAX_REDIRECCIONES:
+            try:
+                if r.status_code in _CODIGOS_REDIRECCION:
+                    ubicacion = (r.headers or {}).get("Location")
+                    if not ubicacion or saltos >= MAX_REDIRECCIONES:
+                        raise ErrorConector(_MSG_NO_SHOPIFY % self.dominio)
+                    saltos += 1
+                    url = urljoin(url, ubicacion)
+                    kw.pop("params", None)       # la Location ya trae la query
+                    continue
+                if r.status_code == 429 or r.status_code >= 500:
+                    raise error_generico(r, nombre)
+                if 400 <= r.status_code < 500:
                     raise ErrorConector(_MSG_NO_SHOPIFY % self.dominio)
-                saltos += 1
-                url = urljoin(url, ubicacion)
-                kw.pop("params", None)       # la Location ya trae la query
-                continue
-            break
-        if r.status_code == 429 or r.status_code >= 500:
-            raise error_generico(r, nombre)
-        if 400 <= r.status_code < 500:
-            raise ErrorConector(_MSG_NO_SHOPIFY % self.dominio)
-        try:
-            datos = r.json()
-        except ValueError:
-            raise ErrorConector(_MSG_NO_SHOPIFY % self.dominio)
-        return datos, (urlsplit(url).hostname or self.dominio)
+                def demasiado_grande():
+                    return ErrorConector(gettext("La respuesta de Shopify pesa más de %(mb)s MB.",
+                                                  mb=MAX_RESPUESTA_BYTES // (1024 * 1024)))
+                try:
+                    anunciado = int((r.headers or {}).get("Content-Length") or 0)
+                except (ValueError, TypeError):
+                    anunciado = 0
+                if anunciado > MAX_RESPUESTA_BYTES:
+                    raise demasiado_grande()
+                cuerpo = bytearray()
+                for trozo in r.iter_content(chunk_size=65536):
+                    if len(cuerpo) + len(trozo) > MAX_RESPUESTA_BYTES:
+                        raise demasiado_grande()
+                    cuerpo.extend(trozo)
+                try:
+                    datos = json.loads(cuerpo)
+                except ValueError:
+                    raise ErrorConector(_MSG_NO_SHOPIFY % self.dominio)
+                return datos, (urlsplit(url).hostname or self.dominio)
+            except requests.RequestException:
+                raise ErrorConector(gettext("Se cortó la descarga de Shopify. Intenta de nuevo."))
+            finally:
+                r.close()
 
     def _meta(self, **kw_http):
         try:

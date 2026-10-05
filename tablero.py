@@ -122,15 +122,24 @@ def mide_ventas(snap):
 def _delta_ingresos(snaps, desde_iso, hasta_iso):
     """Ingresos del período solo si el snapshot de cierre los mide (pixel o
     tienda): `fuente_ventas` es por snapshot, así que decide el de `hasta`.
-    Si la fuente cambió dentro del período (la atribución se fija al crear
-    el experimento, así que es raro) el delta resta acumulados de fuentes
-    distintas; se acepta como aproximación."""
+    No resta fuentes con ventas diferentes; una base sin ventas vale cero.
+    Si la fuente cambia y vuelve, el total de los extremos puede diferir de
+    sumar los días: PND-142 requiere definir cómo atribuir ese intervalo."""
     serie = _serie(snaps)
     cierre = serie.en(hasta_iso) or {}
+    base = serie.en(desde_iso)
     if not mide_ventas(cierre):
         return 0.0
-    return _delta_entre(serie.en(desde_iso), cierre, "ingresos")
+    if not _ventas_comparables(base, cierre):
+        return 0.0
+    return _delta_entre(base, cierre, "ingresos")
 
+
+def _ventas_comparables(base, cierre):
+    # El lanzador marca «ninguna» hasta la primera compra: una base sin ventas
+    # vale cero para cualquier fuente. Dos fuentes con ventas no se restan.
+    return (not (base and cierre) or base.get("fuente_ventas") == cierre.get("fuente_ventas")
+            or (not mide_ventas(base) and not base.get("compras") and not base.get("ingresos")))
 
 def _deltas_pieza(snaps, desde_iso, hasta_iso):
     """Los cinco deltas de una pieza en [desde, hasta) con solo dos
@@ -139,9 +148,10 @@ def _deltas_pieza(snaps, desde_iso, hasta_iso):
     serie = _serie(snaps)
     a, b = serie.en(desde_iso), serie.en(hasta_iso)
     mide = mide_ventas(b)
+    misma_fuente = _ventas_comparables(a, b)
     return {"gasto": _delta_entre(a, b, "gasto"),
-            "compras": int(_delta_entre(a, b, "compras")),
-            "ingresos": _delta_entre(a, b, "ingresos") if mide else 0.0,
+            "compras": int(_delta_entre(a, b, "compras")) if misma_fuente else 0,
+            "ingresos": _delta_entre(a, b, "ingresos") if mide and misma_fuente else 0.0,
             "clics_enlace": int(_delta_entre(a, b, "clics_enlace")),
             "impresiones": int(_delta_entre(a, b, "impresiones")),
             "mide": mide}
@@ -158,12 +168,16 @@ def ventas_medidas(deltas):
     quien llama marca `mide` también por la atribución del experimento; sacar
     del denominador el gasto de lo que aún no vendió inflaba el ROAS (revisión
     final de E2, 2026-10-04: 3,0× donde el Tablero decía 1,0×)."""
-    out = {"mide": False, "gasto": 0.0, "compras": 0, "ingresos": 0.0}
+    out = {"mide": False, "gasto": 0.0, "compras": 0, "ingresos": 0.0, "roas_comparable": True,
+           "gasto_sin_ventas": 0.0}
     for d in deltas:
         out["mide"] = out["mide"] or bool(d["mide"])
         out["gasto"] += d["gasto"]
         out["compras"] += d["compras"]
         out["ingresos"] += d["ingresos"]
+        out["roas_comparable"] = out["roas_comparable"] and d.get("roas_comparable", True)
+        if not d["mide"]:
+            out["gasto_sin_ventas"] += d["gasto"]
     return out
 
 
@@ -259,8 +273,8 @@ def _datos(cliente, ahora_iso, datos, desde_necesario=None):
 # ---------- resumen ----------
 
 def _grupo_vacio():
-    return {"gasto": 0.0, "compras": 0, "ingresos": 0.0, "roas": 0.0, "clics_enlace": 0, "impresiones": 0,
-            "anuncios": 0}
+    return {"gasto": 0.0, "compras": 0, "ingresos": 0.0, "roas": 0.0, "roas_comparable": True,
+            "mide_ventas": False, "clics_enlace": 0, "impresiones": 0, "anuncios": 0}
 
 
 def _resumen_periodo(exps, filas, desde_iso, hasta_iso, atribucion_filtro=None):
@@ -274,6 +288,13 @@ def _resumen_periodo(exps, filas, desde_iso, hasta_iso, atribucion_filtro=None):
             continue
         d = _deltas_pieza(snaps, desde_iso, hasta_iso)
         g = por_moneda.setdefault(_moneda(ex), _grupo_vacio())
+        if ex.get("atribucion") in ("pixel", "tienda", "triple_whale"):
+            d["mide"] = True
+        g["mide_ventas"] = g["mide_ventas"] or d["mide"]
+        if (ex.get("extra") or {}).get("aviso_moneda"):
+            d["ingresos"] = 0.0
+            d["roas_comparable"] = False
+            g["roas_comparable"] = False
         for k in ("gasto", "compras", "ingresos", "clics_enlace", "impresiones"):
             g[k] += d[k]
         if d["gasto"] > 0 or d["impresiones"] > 0:
@@ -281,7 +302,7 @@ def _resumen_periodo(exps, filas, desde_iso, hasta_iso, atribucion_filtro=None):
     for g in por_moneda.values():
         g["gasto"] = round(g["gasto"], 2)
         g["ingresos"] = round(g["ingresos"], 2)
-        g["roas"] = _roas(g["ingresos"], g["gasto"])
+        g["roas"] = _roas(g["ingresos"], g["gasto"]) if g["roas_comparable"] else None
     # Contar experimentos y piezas activas solo del filtro
     exps_filtrados = exps if atribucion_filtro is None else [ex for ex in exps
                                                               if ex.get("atribucion") in atribucion_filtro]
@@ -459,7 +480,7 @@ def _serie_diaria_con_filtro(filas, lista_dias, moneda, atribucion_filtro=None):
             dd = _deltas_pieza(snaps, a, b)
             gasto += dd["gasto"]
             compras += dd["compras"]
-            ingresos += dd["ingresos"]
+            ingresos += dd["ingresos"] if not (ex.get("extra") or {}).get("aviso_moneda") else 0.0
         salida.append({"dia": d.isoformat(), "gasto": round(gasto, 2), "compras": int(compras),
                        "ingresos": round(ingresos, 2)})
     return salida
@@ -825,9 +846,11 @@ def csv_mes(cliente, ahora_iso=None, datos=None):
     w.writerow([gettext(c) for c in ENCABEZADO_CSV])
     for ex, pz, snaps in _datos(cliente, hasta, datos, desde_necesario=desde).filas:
         d = _deltas_pieza(snaps, desde, hasta)
+        comparable = not (ex.get("extra") or {}).get("aviso_moneda")
         w.writerow([_celda(ex["nombre"]), _celda(pz["pais"]), _celda(pz["nombre"]), _celda(pz.get("veredicto")),
                     _num(d["impresiones"]), _num(d["clics_enlace"]), _num(d["gasto"]), _num(d["compras"]),
-                    _num(d["ingresos"]), _num(_roas(d["ingresos"], d["gasto"])), _celda(_moneda(ex))])
+                    _num(d["ingresos"]) if comparable else "",
+                    _num(_roas(d["ingresos"], d["gasto"])) if comparable else "", _celda(_moneda(ex))])
     return "﻿" + buf.getvalue()
 
 

@@ -67,11 +67,16 @@ def pedir(sesion, metodo, url, nombre="la tienda", reintentar=True, **kw):
             raise ErrorConector(f"Error de red al hablar con {nombre}.")
         if r.status_code >= 500 and not reintento_5xx:
             reintento_5xx = True
+            if kw.get("stream"):
+                r.close()
             time.sleep(ESPERA_5XX)
             continue
         if r.status_code == 429 and not reintento_429:
             reintento_429 = True
-            time.sleep(_espera_429(r))
+            espera = _espera_429(r)
+            if kw.get("stream"):
+                r.close()
+            time.sleep(espera)
             continue
         return r
 

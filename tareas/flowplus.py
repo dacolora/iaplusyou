@@ -104,6 +104,7 @@ def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musi
     usd_modelo = float((costo or {}).get("usd") or 0.0)
     gastos.registrar_seguro(
         cliente, tipo, round(usd_modelo + float(usd_musica or 0.0), 4), referencia, detalle=detalle,
+        conservar_mayor=True,
         proveedor=PROVEEDOR,
         extra={"modelo": modelo, "usd_modelo": round(usd_modelo, 4), "usd_musica": round(float(usd_musica or 0.0), 4),
                "credits": (costo or {}).get("credits")},
@@ -672,6 +673,21 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         except Exception:
             video_url_crudo = video_url_wan
 
+    if estilo_musica and not musica.es_propia(estilo_musica):
+        estado_musica = (capas.get("musica") or {}).get("estado")
+        detalle_gasto += " + " + gettext("música %(estilo)s", estilo=estilo_musica) + (
+            (" (" + gettext("falló la mezcla; la pista ya se cobró") + ")") if estado_musica == "error" else "")
+    if ref != ref_intento and usd_musica:
+        # Una pista nueva es un cobro del intento de recuperación, separado
+        # del video que ya pagó la tarea original.
+        gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
+                               proveedor="fal", detalle=detalle_gasto,
+                               extra={"usd_musica": usd_musica})
+        usd_musica = 0.0
+    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
+
+    # El gasto de la pista ya quedó anotado si fallara persistir video_listo.
+    # Las referencias hacen idempotente una recuperación de esta misma tarea.
     creative_flow.actualizar(
         cliente, cf_id, estado="video_listo", video_url=video_url, video_local=archivo_final,
         video_url_crudo=video_url_crudo, video_local_crudo=out_path,
@@ -685,18 +701,6 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     )
     if not recuperado:
         saldo.limpiar("wavespeed")   # un video nuevo salió bien: hay saldo (uno recuperado ya estaba pagado)
-    if estilo_musica and not musica.es_propia(estilo_musica):
-        estado_musica = (capas.get("musica") or {}).get("estado")
-        detalle_gasto += " + " + gettext("música %(estilo)s", estilo=estilo_musica) + (
-            (" (" + gettext("falló la mezcla; la pista ya se cobró") + ")") if estado_musica == "error" else "")
-    if ref != ref_intento and usd_musica:
-        # Una pista nueva es un cobro del intento de recuperación, separado
-        # del video que ya pagó la tarea original.
-        gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
-                               proveedor="fal", detalle=detalle_gasto,
-                               extra={"usd_musica": usd_musica})
-        usd_musica = 0.0
-    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
 
     registro = {
         "prompt": prompt_texto,

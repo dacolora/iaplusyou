@@ -347,3 +347,26 @@ def test_estimado_clon_incluye_vista_previa_y_estreno(monkeypatch):
     cobro = fal_audio.clonar_voz_minimax("https://x/g.wav", frase)["costo_usd"]
     assert gastos.estimar("voz_clonada", nombre="Ana", idioma="es")["usd"] == pytest.approx(
         cobro + len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER)
+
+
+def test_estimado_diseno_incluye_diseno_vista_previa_y_estreno():
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    frase = voces_propias.frase_muestra("Ana", "es")
+    esperado = round(round(fal_audio.COSTO_DISENAR_VOZ
+                           + len(frase) * fal_audio.COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
+                     + round(len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER, 4), 4)
+    assert gastos.estimar("voz_disenada", nombre="Ana", idioma="es")["usd"] == pytest.approx(esperado)
+
+
+@pytest.mark.parametrize('idioma,n', [('es',2),('en',26),('sv',23)])
+def test_pnd126_estimado_iguala_redondeos_del_cobro(monkeypatch, idioma, n):
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio.fal_client,'llamar',lambda *a,**kw:{'custom_voice_id':'v','audio':{'url':'https://r2/a.mp3'}})
+    frase = voces_propias.frase_muestra('x'*n,idioma)
+    diseno = fal_audio.disenar_voz_minimax('Descripción',frase)['costo_usd']
+    estreno = fal_audio.tts_minimax(frase,'v',idioma)['costo_usd']
+    assert gastos.estimar('voz_disenada',nombre='x'*n,idioma=idioma)['usd'] == round(diseno+estreno,4)

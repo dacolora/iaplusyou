@@ -386,6 +386,18 @@ def test_precio_de_regenerar_respeta_el_sonido_de_la_sesion(con_ideas, monkeypat
     assert "Regenerar (US$ %.2f)" % sin in piezas and "Regenerar (US$ %.2f)" % con not in piezas
 
 
+def test_pnd127_precio_de_regenerar_suma_musica_generada(con_ideas, monkeypatch, tmp_path):
+    import creative_flow
+    from providers import flowplus_modelos
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    creative_flow.actualizar('acme', cfs[iv], modelo='kling_o3_pro', musica_estilo='calmado')
+    datos.actualizar_idea('acme', iv, duracion_s=15)
+    base = flowplus_modelos.estimate_video('kling_o3_pro', 15, con_sonido=True)['usd']
+    html = con_ideas['c'].get(f'/cliente/acme/sprints/{sid}/campanas/{cid}/piezas').data.decode()
+    assert 'Regenerar (US$ %.2f)' % (base + .02) in html
+
+
 def test_contadores_de_piezas_en_singular_y_plural(con_ideas, monkeypatch, tmp_path):
     """«1 aprobadas» / «1 listas»: con uno va en singular (panel, revisión y entrega)."""
     from sprints import datos

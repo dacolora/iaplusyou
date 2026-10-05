@@ -437,7 +437,7 @@ def _contexto_ideas(cliente, c):
     }
 
 
-def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen):
+def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen, musica_estilo=""):
     """Lo que cuesta reintentar o regenerar la pieza: con SU modelo (reintentar
     relanza su sesión y regenerar la duplica con el mismo modelo), con la
     duración recortada al rango de ese modelo. Si el modelo de la pieza ya no
@@ -450,7 +450,8 @@ def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen):
         if es_video:
             # Con el sonido que eligió la sesión (Kling cobra aparte el audio nativo).
             con_sonido = True if p.get("con_sonido") is None else bool(p["con_sonido"])
-            est = flowplus_modelos.estimate_video(modelo, produccion._duracion(p, modelo), con_sonido=con_sonido)
+            est = gastos.estimar("video", modelo=modelo, duracion=produccion._duracion(p, modelo),
+                                 con_sonido=con_sonido, musica_estilo=musica_estilo)
         else:
             est = flowplus_modelos.estimate_imagen(modelo, n_referencias=produccion._n_referencias(cliente, c))
         usd = float((est or {}).get("usd") or 0.0)
@@ -472,7 +473,8 @@ def _piezas_de(cliente, c, modelo_video, modelo_imagen, sesiones=None):
         salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
                        "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
                        "funnel": c.get("funnel") or "tof",
-                       "costo_regenerar": _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen),
+                       "costo_regenerar": _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen,
+                                                            entry.get("musica_estilo") or ""),
                        "doctrina": doctrina_revisor.resumen_galeria(entry.get("revision_doctrina"),
                                                                     entry.get("video_url"))})
     return salida

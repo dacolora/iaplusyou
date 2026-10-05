@@ -139,3 +139,5 @@ conseguirla" steps for them (the client sees `cliente_hace`: billing + the conne
 PND-015 (revisión 2026-10-02): el aviso de pedidos vencidos cuenta solo UTM numéricos según atribucion._numero que correspondan a experimento_pieza.id o pieza.id del mismo cliente; un UTM externo no genera aviso.
 
 PND-030 (2026-10-03): una descarga solicitada sin fotos informa qué color falta, sin borrar fotos locales. La salida temprana de la Admin API cuando el catálogo viene de Shopify público limpia estado/error y marca la fecha, sin pedir productos. El hash antiguo #productos activa también la carga del Catálogo.
+
+PND-056 (2026-10-05): Shopify público pide stream=True y limita cada respuesta a 8 MB de bytes descomprimidos, antes de parsear JSON. Content-Length puede adelantar el rechazo, pero no sustituye contar los trozos. Cierra respuestas en éxito, error, redirecciones y reintentos HTTP.

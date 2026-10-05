@@ -15,17 +15,19 @@ PROMPT = (
 )
 
 
-def _llamar(texto, max_tokens=200):
+def _llamar(texto, max_tokens=200, on_usage=None):
     """Una llamada de texto a Claude; devuelve el texto de la respuesta."""
     import anthropic
     from generador_prompts import MODEL, _api_key
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": texto}])
+    if on_usage:
+        on_usage(getattr(resp, "usage", None))
     return "".join(b.text for b in resp.content if b.type == "text").strip()
 
 
-def sugerir_descripcion(escena, enfoque, persona=None, idioma="es"):
+def sugerir_descripcion(escena, enfoque, persona=None, idioma="es", on_usage=None):
     """Descripción corta del sonido de la escena, en el idioma del proyecto.
     `persona` (opcional, del sprint): {resumen, descripcion, tono}. Con escena
     vacía no llama."""
@@ -44,6 +46,7 @@ def sugerir_descripcion(escena, enfoque, persona=None, idioma="es"):
     # en medio la arrastra.
     orden = idiomas.orden_idioma(idioma)
     texto = f"{orden}\n\n{cuerpo}\n\n{orden}"
-    respuesta = (_llamar(texto) or "").strip().strip('"').strip("'").strip()
+    respuesta_llamada = _llamar(texto, on_usage=on_usage) if on_usage else _llamar(texto)
+    respuesta = (respuesta_llamada or "").strip().strip('"').strip("'").strip()
     respuesta = " ".join(respuesta.split())
     return respuesta[:MAX_CARACTERES]

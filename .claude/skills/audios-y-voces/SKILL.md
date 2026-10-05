@@ -50,7 +50,7 @@ ElevenLabs Turbo v2.5 con `language_code`; las **voces propias** por MiniMax Spe
 muestra, `extra.voice_id` de MiniMax), de la grabación de un clon (origen `grabacion`, hash con prefijo propio para
 no chocar con Mi música) y de sus muestras por idioma (hash `muestra_propia`, las paga el proyecto). Se crean con la
 tarea `voz_propia_crear` (`max_intentos=1`, job `<cliente>__voz_propia`): clonar (base US$ 1,50 más vista previa y estreno, casilla de permiso
-obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripción (US$ 3,00); el gasto (tipo
+obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripción (base US$ 3,00 más vista previa y estreno; el precio del botón varía según nombre e idioma); el gasto (tipo
 `voz_propia`) se registra apenas fal responde y la tarea ESTRENA la voz leyendo su muestra, porque MiniMax borra
 una voz sin uso real en 7 días (la vista previa no cuenta). En el formulario una voz propia es `vp:<id>`.
 Desde 2026-10-01 (spec `docs/superpowers/specs/2026-10-01-mis-voces-en-final-edition-design.md`) Mis voces

@@ -152,11 +152,19 @@ def _token(sesion, ll):
 
 
 def _get(sesion, token, ll, ruta, params):
-    """GET a oauth.reddit.com. None si 404; ErrorFuente en 401/403 u otro código."""
+    """None ante un recurso inválido/no disponible; permisos globales siguen siendo error."""
     r = _http.pedir(sesion, "GET", URL_API + ruta, "Reddit", params={**params, "raw_json": 1},
                     headers={"Authorization": f"bearer {token}", "User-Agent": ll["REDDIT_USER_AGENT"]})
-    if r.status_code == 404:
+    recurso = ruta.startswith(("/r/", "/comments/"))
+    if r.status_code == 404 or (recurso and r.status_code in (400, 410, 422)):
         return None
+    if recurso and r.status_code == 403:
+        try:
+            motivo = (r.json() or {}).get("reason")
+        except (ValueError, AttributeError):
+            motivo = None
+        if motivo in ("private", "banned", "quarantined"):
+            return None
     if r.status_code in (401, 403):
         raise ErrorFuente(gettext("Reddit rechazó la llamada (¿la app perdió permisos o el user agent no describe la app?)."))
     if r.status_code != 200:

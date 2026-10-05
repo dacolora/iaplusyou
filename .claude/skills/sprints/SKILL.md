@@ -83,3 +83,5 @@ Director de Crear en lotes (2026-10-02, PND-014): también se encola con max_int
 PND-003 (revisión 2026-10-02): el estimado del lote usa gastos.estimar con musica_al_crear como musica_estilo, igual que la sesión generada.
 
 PND-034 (2026-10-03): si se interrumpe el director de un lote con auto_lanzar aprobado, el fallback continúa por flowplus_lanzar con su prioridad original; una pieza que ya avanzó no se relanza. Se prueba con cola simulada, sin proveedores.
+
+PND-127 (2026-10-05): _costo_regenerar pasa el musica_estilo de la sesión a gastos.estimar("video"); música generada suma su tarifa, Mi música no. La estimación comparte cálculo con la generación.

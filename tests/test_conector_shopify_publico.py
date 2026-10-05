@@ -232,3 +232,53 @@ def test_dominio_interno_no_se_consulta(sesion):
     with pytest.raises(ErrorConector):
         _conector("interna.example").probar()
     assert s.llamadas == []
+
+
+@pytest.mark.parametrize('longitud', [None, '1', '1000'])
+def test_pnd056_corta_stream_al_superar_tope_y_cierra(monkeypatch, longitud):
+    from conectores import shopify_publico as sp
+    monkeypatch.setattr(sp,'MAX_RESPUESTA_BYTES',16,raising=False)
+    class Streaming:
+        status_code = 200
+        headers = {} if longitud is None else {'Content-Length':longitud}
+        leidos = 0
+        cerrado = False
+        def iter_content(self, chunk_size):
+            for trozo in [b'x'*8,b'x'*8,b'x',b'no debe leerse']:
+                self.leidos += 1
+                yield trozo
+        def json(self):
+            return {'products':[]}
+        def close(self):
+            self.cerrado = True
+    resp = Streaming()
+    llamadas = []
+    def pedir(*a,**kw):
+        llamadas.append(kw)
+        return resp
+    monkeypatch.setattr(sp,'pedir',pedir)
+    with pytest.raises(ErrorConector, match='pesa más'):
+        _conector()._get('/products.json')
+    assert llamadas[0]['stream'] is True
+    assert resp.leidos == (0 if longitud == '1000' else 3)
+    assert resp.cerrado
+
+
+def test_pnd056_acepta_json_justo_en_el_tope_y_cierra(monkeypatch):
+    from conectores import shopify_publico as sp
+    cuerpo = b'{"products": []}'
+    monkeypatch.setattr(sp,'MAX_RESPUESTA_BYTES',len(cuerpo),raising=False)
+    class Streaming:
+        status_code = 200
+        headers = {}
+        cerrado = False
+        def iter_content(self, chunk_size):
+            yield cuerpo[:4]
+            yield b''
+            yield cuerpo[4:]
+        def close(self):
+            self.cerrado = True
+    resp = Streaming()
+    monkeypatch.setattr(sp,'pedir',lambda *a,**kw:resp)
+    assert _conector()._get('/products.json')[0] == {'products':[]}
+    assert resp.cerrado

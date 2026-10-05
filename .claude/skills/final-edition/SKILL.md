@@ -92,3 +92,5 @@ Revisión del mismo día (guardián del gasto + revisor): la tarea `final_guion`
 PND-108 (revisión 2026-10-02): si la primera pasada es válida y solo tiene errores extra no bloqueantes, una corrección cortada o fallida devuelve esa primera pasada con el costo acumulado de ambas. El corte de la primera pasada sigue abortando sin pagar corrección.
 
 PND-039 (2026-10-03): derivaciones guarda la voz original por destino en el item de regeneración y la pasa como opción explícita al encolar final_producir; funciona tanto con la producción del editor como con la legada, que ya respetaban voz explícita.
+
+PND-014 (2026-10-05): sugerir_descripcion acepta on_usage; lo llama después de recibir Claude y antes de leer content. La ayuda de Crear registra con ese callback bajo _creatv y usa max_retries=0. Topes existentes requieren evaluación real (PND-141), sin cambiar el botón.

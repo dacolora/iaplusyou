@@ -136,3 +136,5 @@ Gasto (by type, history, CSV), Tablero tile, admin panel column.
 **Cobros recuperados (2026-10-02, PND-109):** la identidad y la referencia del cobro original viajan en la predicción; una recuperación conserva ese id de tarea. Un gasto nuevo de música pertenece a la tarea que la obtuvo. Ver la regla de recuperación de `crear`.
 
 PND-040/042 (2026-10-03): migración 0031 reconstruye material con AUTOINCREMENT conservando filas e ids. Todos los escritores de proyectos.py toman flock de proyecto.json.lock antes de leer; el idioma usa actualizar_campos y comparte el candado. Las escrituras rechazan un JSON ilegible en vez de sobrescribir ajustes. El generador de fixtures rendimiento/sembrar.py sigue siendo una inicialización fuera del flujo concurrente de producción.
+
+PND-125 (2026-10-05): el cierre de Crear registra antes de persistir video_listo; _registrar_gasto activa conservar_mayor en gastos.registrar_seguro. La condición SQL impide que una recuperación con música de caché reduzca un cobro original con música; las recuperaciones que pagan una pista nueva conservan su referencia de tarea separada.

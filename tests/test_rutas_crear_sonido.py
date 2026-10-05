@@ -86,12 +86,34 @@ def test_formulario_de_crear_trae_sonido_musica_y_sugerir(app, monkeypatch, tmp_
 
 
 def test_sugerir_sonido_ruta(app, monkeypatch):
+    import gastos
     from final_edition import sonido
-    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None, idioma=None: f"{enfoque}: pasos y risas")
+    from types import SimpleNamespace
+    def sugerir(escena, enfoque, persona=None, idioma=None, on_usage=None):
+        on_usage(SimpleNamespace(input_tokens=120, output_tokens=30))
+        return f"{enfoque}: pasos y risas"
+    monkeypatch.setattr(sonido, "sugerir_descripcion", sugerir)
     r = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "una niña salta", "enfoque": "persona"})
     assert r.status_code == 200 and r.get_json() == {"sonido": "persona: pasos y risas"}
+    assert len(gastos.historial("_creatv")) == 1
+    assert gastos.historial("_creatv")[0]["tipo"] == "otro"
     assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": ""}).status_code == 400
     assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json=[1]).status_code == 400
+
+
+def test_describir_referencias_registra_usage_en_proyecto_interno(app, monkeypatch):
+    import gastos
+    from types import SimpleNamespace
+    d = app["dashboard"]
+    monkeypatch.setattr(d.referencias_flowplus, "listar", lambda cliente: [{"tipo": "imagen", "url": "https://r2/ref.jpg"}])
+    def describir(refs, cliente_hint="", idioma="es", on_usage=None):
+        on_usage(SimpleNamespace(input_tokens=200, output_tokens=40))
+        return "Una escena breve."
+    monkeypatch.setattr(d.referencias_link, "describir", describir)
+    r = app["c"].post("/cliente/acme/flowplus/describir")
+    assert r.status_code == 200 and r.get_json() == {"ok": True, "texto": "Una escena breve."}
+    gasto, = gastos.historial("_creatv")
+    assert gasto["tipo"] == "otro" and gasto["proveedor"] == "anthropic"
 
 
 def test_sugerir_sonido_ruta_hardening(app, monkeypatch):
@@ -99,13 +121,45 @@ def test_sugerir_sonido_ruta_hardening(app, monkeypatch):
     ruta con un 500 — cae a "producto". Y un 502 nunca repite el texto de la
     excepción en el body (puede traer detalles internos)."""
     from final_edition import sonido
-    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None, idioma=None: f"{enfoque}: pasos y risas")
+    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None, idioma=None, on_usage=None: f"{enfoque}: pasos y risas")
     r = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "x", "enfoque": ["a"]})
     assert r.status_code == 200 and r.get_json() == {"sonido": "producto: pasos y risas"}
 
-    def _boom(escena, enfoque, persona=None, idioma=None):
+    def _boom(escena, enfoque, persona=None, idioma=None, on_usage=None):
         raise RuntimeError("secreto")
     monkeypatch.setattr(sonido, "sugerir_descripcion", _boom)
     r2 = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "x", "enfoque": "producto"})
     assert r2.status_code == 502
     assert "secreto" not in r2.get_data(as_text=True)
+
+
+@pytest.mark.parametrize('origen,ruta', [('referencias','/cliente/acme/flowplus/describir'),
+                                       ('sonido','/cliente/acme/creative_flow/sugerir_sonido')])
+@pytest.mark.parametrize('falla_al_leer', [False, True])
+def test_pnd014_sdk_registra_antes_de_leer_respuesta(app, monkeypatch, origen, ruta, falla_al_leer):
+    import anthropic
+    import generador_prompts
+    import gastos
+    from types import SimpleNamespace
+    from nicho.avatares import costo_real
+    cliente_kw = []
+    class RespuestaClaude:
+        usage = SimpleNamespace(input_tokens=200, output_tokens=40)
+        @property
+        def content(self):
+            if falla_al_leer:
+                raise RuntimeError('respuesta mal formada después de pagar')
+            return [SimpleNamespace(type='text', text='Una escena con pasos.')]
+    def cliente(**kw):
+        cliente_kw.append(kw)
+        return SimpleNamespace(messages=SimpleNamespace(create=lambda **kw: RespuestaClaude()))
+    monkeypatch.setattr(anthropic, 'Anthropic', cliente)
+    monkeypatch.setattr(generador_prompts, '_api_key', lambda: 'llave-de-prueba')
+    monkeypatch.setattr(app['dashboard'].referencias_flowplus, 'listar', lambda c: [
+        {'etiqueta':'@Imagen 1', 'tipo':'imagen','url':'https://r2/ref.jpg'}])
+    r = app['c'].post(ruta, json={'escena':'Una persona camina'})
+    assert r.status_code == (502 if falla_al_leer else 200)
+    fila, = gastos.historial('_creatv')
+    assert fila['usd'] == pytest.approx(costo_real(200,40))
+    assert fila['proveedor'] == 'anthropic'
+    assert cliente_kw[0]['max_retries'] == 0
