@@ -139,7 +139,11 @@ def _deltas_pieza(snaps, desde_iso, hasta_iso):
     mide = mide_ventas(b)
     hubo = bool(serie.primera_venta and serie.primera_venta <= desde_iso)
     comparable = _ventas_comparables(a, b, hubo)
-    if comparable and not hubo:
+    hubo_al_cierre = bool(serie.primera_venta and serie.primera_venta <= hasta_iso)
+    if not mide and not ((b or {}).get("compras") or 0) and hubo_al_cierre:
+        # Un cierre ciego después de medir ventas tampoco representa ventas cero.
+        comparable = False
+    if comparable and not hubo and hubo_al_cierre:
         # Al empezar sin base, varios acumulados de fuentes distintas tampoco son un total comparable.
         fuentes = {s.get("fuente_ventas") for s in serie.snaps
                    if s["tomado_en"] <= hasta_iso and mide_ventas(s)}
@@ -155,7 +159,7 @@ def _deltas_pieza(snaps, desde_iso, hasta_iso):
 def _moneda_del_delta(ex, d):
     """Una moneda ajena invalida solo los ingresos de un período con actividad."""
     if ((ex.get("extra") or {}).get("aviso_moneda")
-            and any((d[k] or 0) > 0 for k in ("gasto", "compras", "impresiones"))):
+            and any((d[k] or 0) > 0 for k in ("gasto", "compras", "impresiones", "ingresos"))):
         d["ingresos"] = None
         d["roas_comparable"] = False
     return d
