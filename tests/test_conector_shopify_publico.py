@@ -282,3 +282,64 @@ def test_pnd056_acepta_json_justo_en_el_tope_y_cierra(monkeypatch):
     monkeypatch.setattr(sp,'pedir',lambda *a,**kw:resp)
     assert _conector()._get('/products.json')[0] == {'products':[]}
     assert resp.cerrado
+
+
+def test_pnd056_pagina_real_grande_se_importa_en_lotes_menores(sesion):
+    import copy
+    productos = []
+    semilla = fixture("shopify_publico_products.json")["products"][0]
+    for i in range(250):
+        p = copy.deepcopy(semilla)
+        p["id"] = 1000 + i
+        p["variants"] = [dict(semilla["variants"][0], id=i * 36 + j, sku="x" * 900) for j in range(36)]
+        productos.append(p)
+    assert len(json.dumps({"products": productos}).encode()) > 8 * 1024 * 1024
+    def pagina(m, url, kw):
+        if url.endswith("/meta.json"):
+            return Respuesta(200, {"currency": "USD"})
+        limit, page = kw["params"]["limit"], kw["params"]["page"]
+        desde = (page - 1) * limit
+        return Respuesta(200, {"products": productos[desde:desde + limit]})
+    sesion(pagina)
+    r = _conector().listar_productos()
+    assert len(r) == 250
+    assert {p["fuente_id"] for p in r} == {str(1000 + i) for i in range(250)}
+
+
+def test_pnd056_lotes_menores_conservan_alcance_y_posicion(sesion, monkeypatch):
+    from conectores import shopify_publico as sp
+    # La segunda página de 250 pesa de más: debe seguir en el producto 250.
+    pedidos = []
+    def pagina(m, url, kw):
+        if url.endswith("/meta.json"):
+            return Respuesta(200, {"currency": "USD"})
+        limit, page = kw["params"]["limit"], kw["params"]["page"]
+        desde = (page - 1) * limit
+        pedidos.append((desde, limit))
+        if desde == 250 and limit == 250:
+            return Respuesta(200, {"products": [], "relleno": "x" * sp.MAX_RESPUESTA_BYTES})
+        return Respuesta(200, {"products": [dict(id=i, published_at="2026-01-01", title="Producto")
+                                          for i in range(desde, min(desde + limit, 10000))]})
+    sesion(pagina)
+    monkeypatch.setattr(sp.ShopifyPublico, "_producto", lambda self, p, moneda: p["id"])
+    assert _conector().listar_productos() == list(range(10000))
+    assert pedidos[:3] == [(0, 250), (250, 250), (250, 125)]
+
+
+@pytest.mark.parametrize("codigo", [500, 429])
+def test_pnd056_reintento_http_cierra_respuesta(monkeypatch, codigo):
+    primera = Respuesta(codigo, {}, headers={"Retry-After": "0"})
+    ultima = Respuesta(200, {})
+    primera.cerrada = False
+    primera.close = lambda: setattr(primera, "cerrada", True)
+    respuestas = iter([primera, ultima])
+    llamadas = []
+    def responder(*a):
+        if llamadas:
+            assert primera.cerrada, "la respuesta debe cerrarse antes del siguiente request"
+        llamadas.append(1)
+        return next(respuestas)
+    s = SesionFalsa(responder)
+    monkeypatch.setattr(_http.time, "sleep", lambda *a: None)
+    assert _http.pedir(s, "GET", "https://tienda.example/products.json", stream=True) is ultima
+    assert primera.cerrada

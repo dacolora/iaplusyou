@@ -126,7 +126,7 @@
   <p class="cr-nota">
     <a href="#settings" data-ir-tab="settings">{{ _('Generación con IA: %(costo)s en el periodo', costo=r.generacion.usd|usd) }}</a>
     · {{ _('Las cifras de pauta están en %(moneda)s', moneda=r.moneda) }}
-    {% if r.indicadores|selectattr('roas_no_comparable')|list %} · {{ _('ROAS no comparable') }} · {{ _('No sumamos ingresos de otra moneda; el costo por compra sigue usando las ventas y el gasto en la moneda de la cuenta.') }}{% endif %}
+    {% if r.indicadores|selectattr('ventas_cambiaron')|list %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% elif r.indicadores|selectattr('roas_no_comparable')|list %} · {{ _('ROAS no comparable') }} · {{ _('No sumamos ingresos de otra moneda; el costo por compra sigue usando las ventas y el gasto en la moneda de la cuenta.') }}{% endif %}
     {% if tablero.tienda_tw %}· <a href="#triplewhale" data-ir-tab="triplewhale">{{ _('Tu tienda según Triple Whale') }}</a>: {{ _('ingresos del mes %(ingresos)s · MER %(mer)s', ingresos=tablero.tienda_tw.ingresos|dinero(tablero.tienda_tw.moneda), mer=valor(tablero.tienda_tw.mer, 'veces')) }}{% endif %}
   </p>
 </section>

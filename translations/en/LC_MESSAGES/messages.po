@@ -9278,6 +9278,9 @@ msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.
 msgid "Las reglas no encontraron nada."
 msgstr "The rules found nothing."
 
+msgid "Las ventas cambiaron de fuente en este período"
+msgstr "Sales changed source during this period"
+
 msgid "Las zonas son para videos verticales (9:16)."
 msgstr "Zones are for vertical videos (9:16)."
 

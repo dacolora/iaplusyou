@@ -162,4 +162,5 @@ def test_pnd014_sdk_registra_antes_de_leer_respuesta(app, monkeypatch, origen, r
     fila, = gastos.historial('_creatv')
     assert fila['usd'] == pytest.approx(costo_real(200,40))
     assert fila['proveedor'] == 'anthropic'
+    assert fila['extra']['cliente'] == 'acme'
     assert cliente_kw[0]['max_retries'] == 0

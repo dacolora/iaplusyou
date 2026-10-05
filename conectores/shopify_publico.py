@@ -40,6 +40,10 @@ MAX_FOTOS_GENERALES = 6
 ANCHO_FOTO = 1000
 MAX_REDIRECCIONES = 3
 MAX_RESPUESTA_BYTES = 8 * 1024 * 1024
+class _RespuestaGrande(ErrorConector):
+    """Permite reducir solo páginas de productos, sin repetir otros errores."""
+
+
 _CODIGOS_REDIRECCION = (301, 302, 303, 307, 308)
 OPCIONES_COLOR = {"colour", "color", "colores", "colors", "pattern", "patterns", "estampado", "estampados",
                   "diseno", "design", "print", "estilo", "style", "acabado", "finish", "modelo"}
@@ -195,7 +199,7 @@ class ShopifyPublico(Conector):
                 if 400 <= r.status_code < 500:
                     raise ErrorConector(_MSG_NO_SHOPIFY % self.dominio)
                 def demasiado_grande():
-                    return ErrorConector(gettext("La respuesta de Shopify pesa más de %(mb)s MB.",
+                    return _RespuestaGrande(gettext("La respuesta de Shopify pesa más de %(mb)s MB.",
                                                   mb=MAX_RESPUESTA_BYTES // (1024 * 1024)))
                 try:
                     anunciado = int((r.headers or {}).get("Content-Length") or 0)
@@ -247,10 +251,20 @@ class ShopifyPublico(Conector):
     def listar_productos(self):
         meta, _host = self._meta()
         moneda = str(meta.get("currency") or "").upper() or None
-        productos, pagina = [], 1
+        productos, posicion, limite = [], 0, LIMITE_PAGINA
         self.omitidos = []
-        while pagina <= MAX_PAGINAS:
-            datos, _host = self._get("/products.json", params={"limit": LIMITE_PAGINA, "page": pagina})
+        # El alcance cuenta productos, no peticiones: reducir la página no lo reduce.
+        alcance = LIMITE_PAGINA * MAX_PAGINAS
+        while posicion < alcance:
+            pagina = posicion // limite + 1
+            try:
+                datos, _host = self._get("/products.json", params={"limit": limite, "page": pagina})
+            except _RespuestaGrande:
+                # Divisores exactos de 250: la posición sigue en una frontera de página.
+                if limite == 1:
+                    raise
+                limite = next(n for n in (125, 25, 5, 1) if n < limite)
+                continue
             lote = datos.get("products") if isinstance(datos, dict) else None
             if not isinstance(lote, list):
                 raise ErrorConector(_MSG_NO_SHOPIFY % self.dominio)
@@ -261,9 +275,9 @@ class ShopifyPublico(Conector):
                     self.omitidos.append(str(p.get("title") or ""))
                     continue
                 productos.append(self._producto(p, moneda))
-            if len(lote) < LIMITE_PAGINA:
+            if len(lote) < limite:
                 break
-            pagina += 1
+            posicion += len(lote)
         return productos
 
     # --- armado de un producto ------------------------------------------------

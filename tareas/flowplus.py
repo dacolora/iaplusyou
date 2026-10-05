@@ -606,6 +606,7 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         os.makedirs(out_dir, exist_ok=True)     # por si la limpieza diaria la borró mientras bajaba
         with open(out_path, "wb") as f:
             f.write(resp.content)
+        _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto)
         bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
     except Exception as e:
         # El video existe en WaveSpeed y ya se cobró: la sesión conserva la
@@ -640,6 +641,14 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
             else:
                 pista, c = musica.obtener_pista(estilo_musica, float(duracion))
             usd_musica = float(c or 0.0)  # ya se cobró al obtener la pista, se cuenta aunque falle la mezcla
+            if usd_musica > 0:
+                if ref != ref_intento:
+                    gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
+                                           proveedor="fal", detalle=detalle_gasto,
+                                           extra={"usd_musica": usd_musica})
+                else:
+                    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto,
+                                     usd_musica=usd_musica)
             mezclado = os.path.join(out_dir, f"{cf_id}_musica.mp4")
             resultado = mezcla.mezclar_musica(out_path, pista["archivo"], mezclado, duracion_real)
             archivo_final = mezclado

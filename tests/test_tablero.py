@@ -68,9 +68,9 @@ def test_ventas_medidas_solo_de_lo_que_mide_ventas():
     a, b = (tablero._deltas_pieza(s, "2026-08-01T00:00:00", "2026-09-02T00:00:00") for s in (pixel, trafico))
     assert a["mide"] is True and b["mide"] is False
     assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0,
-                                           "roas_comparable": True, "gasto_sin_ventas": 100.0}
+                                           "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
     assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0,
-                                              "roas_comparable": True, "gasto_sin_ventas": 100.0}
+                                              "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
 
 
 def test_pnd139_delta_no_resta_ingresos_de_fuentes_distintas():
@@ -78,8 +78,8 @@ def test_pnd139_delta_no_resta_ingresos_de_fuentes_distintas():
     snaps = [_snap("2026-09-01T08:00:00", gasto=100, compras=1, ingresos=300, fuente_ventas="meta"),
              _snap("2026-09-02T08:00:00", gasto=200, compras=2, ingresos=600, fuente_ventas="triple_whale")]
     d = tablero._deltas_pieza(snaps, "2026-09-01T12:00:00", "2026-09-03T00:00:00")
-    assert d["gasto"] == 100 and d["compras"] == 0
-    assert d["ingresos"] == 0
+    assert d["gasto"] == 100 and d["compras"] is None
+    assert d["ingresos"] is None and d["roas_comparable"] is False
 
 
 def test_dinero_redondea_igual_que_main():
@@ -714,4 +714,6 @@ def test_pnd138_csv_y_serie_no_mezclan_monedas(base_temporal, sin_red):
     ex.snapshot(ep, {'gasto':100,'compras':2,'ingresos':400000,'fuente_ventas':'tienda'}, tomado_en='2026-09-15T23:00:00')
     fila = list(csv.reader(io.StringIO(tablero.csv_mes('acme', ahora_iso=AHORA).lstrip('\ufeff')), delimiter=';'))[1]
     assert fila[6:11] == ['100','2','','','USD']
-    assert sum(d['ingresos'] for d in tablero.serie_diaria('acme', ahora_iso=AHORA)['dias']) == 0
+    dias = tablero.serie_diaria('acme', ahora_iso=AHORA)['dias']
+    assert dias[-1]['ingresos'] == 0
+    assert next(d for d in dias if d['dia'] == '2026-09-15')['ingresos'] is None

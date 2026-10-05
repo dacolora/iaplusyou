@@ -385,3 +385,25 @@ def test_diseno_refresca_precio_por_nombre_e_idioma_en_node(app):
     if (precio.textContent !== '≈ ' + fmtUsd(preciosDisenar.sv[40])) throw Error(precio.textContent);
     '''
     subprocess.run(['node', '-e', codigo], check=True, capture_output=True, text=True)
+
+
+def test_tabla_diseno_por_nombre_e_idioma_contra_cobro(app, monkeypatch):
+    from providers import fal_audio
+    import voces_propias
+    d = app['dashboard']
+    monkeypatch.setattr(fal_audio.fal_client, 'llamar', lambda *a, **kw: {
+        'custom_voice_id': 'voz', 'audio': {'url': 'https://r2/a.mp3'}})
+    d._precios_disenar.cache_clear()
+    try:
+        tabla = d._precios_disenar()
+        precios = []
+        for idioma, n in [('es', 3), ('es', 40), ('sv', 40), ('en', 3)]:
+            frase = voces_propias.frase_muestra('x' * n, idioma)
+            pagado = round(fal_audio.disenar_voz_minimax('Descripción', frase)['costo_usd']
+                           + fal_audio.tts_minimax(frase, 'voz', idioma)['costo_usd'], 4)
+            assert tabla[idioma][n] == pagado
+            precios.append(pagado)
+        assert precios[0] != precios[1]  # largo
+        assert precios[1] != precios[2]  # idioma
+    finally:
+        d._precios_disenar.cache_clear()

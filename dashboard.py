@@ -7954,7 +7954,7 @@ def _prefill_para(cliente):
     return pre
 
 
-def _registrar_usage_claude_interno(origen, uso):
+def _registrar_usage_claude_interno(cliente, origen, uso):
     """Las ayudas inmediatas de Claude las paga el proyecto interno de Creatv."""
     if not uso:
         return
@@ -7962,7 +7962,8 @@ def _registrar_usage_claude_interno(origen, uso):
         from nicho.avatares import costo_real
         usd = costo_real(getattr(uso, "input_tokens", 0) or 0, getattr(uso, "output_tokens", 0) or 0)
         gastos.registrar_seguro("_creatv", "otro", usd, f"claude:{origen}:{secrets.token_hex(6)}",
-                                detalle=gettext("Claude · %(origen)s", origen=origen), proveedor="anthropic")
+                                detalle=gettext("Claude · %(origen)s", origen=origen), proveedor="anthropic",
+                                extra={"cliente": cliente})
     except Exception:
         # El registro nunca debe convertir una sugerencia utilizable en error.
         logging.getLogger(__name__).warning("No pude registrar el gasto interno de Claude (%s)", origen)
@@ -7978,7 +7979,7 @@ def fp_describir(cliente):
     try:
         texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente),
                                            idioma=idiomas.de_proyecto(cliente),
-                                           on_usage=lambda uso: _registrar_usage_claude_interno("describir_referencias", uso))
+                                           on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "describir_referencias", uso))
     except Exception as e:
         bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
         return jsonify({"ok": False, "error": gettext("No pude describir las referencias (%(tipo)s).", tipo=type(e).__name__)}), 502
@@ -8363,7 +8364,7 @@ def fp_sugerir_sonido(cliente):
     try:
         texto = sonido_mod.sugerir_descripcion(
             escena, enfoque, idioma=idiomas.de_proyecto(cliente),
-            on_usage=lambda uso: _registrar_usage_claude_interno("sugerir_sonido", uso))
+            on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "sugerir_sonido", uso))
     except Exception as e:
         return jsonify({"error": gettext("No se pudo sugerir (%(tipo)s).", tipo=type(e).__name__)}), 502
     return jsonify({"sonido": texto})

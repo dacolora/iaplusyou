@@ -151,4 +151,4 @@ Director (revisión 2026-10-02, PND-014): Anthropic usa max_retries=0; un 529 ca
 
 PND-028/034 (2026-10-03): el rótulo A usa tiene_hija_b. El gancho interrumpida del director continúa la generación solo con auto_lanzar ya aprobado, también si alcanzó prompt_listo antes de cortarse; respeta prioridad y max_intentos=1. No vuelve a lanzar sesiones que ya salieron de esos estados.
 
-PND-014/125 (2026-10-05): describir referencias y sugerir sonido anotan usage bajo _creatv antes de leer el texto, sin retries del SDK; no cambia el botón de sugerencia. El gasto del cierre del video se registra antes de persistir video_listo, conservando un cobro mayor cuando recuperar usa caché.
+PND-014/125 (2026-10-05): describir referencias y sugerir sonido anotan usage bajo _creatv antes de leer el texto, sin retries del SDK; no cambia el botón de sugerencia. extra.cliente identifica al proyecto que pidió la ayuda. El gasto del video se registra apenas se descarga y el de la pista antes de mezclar, conservando un cobro mayor cuando recuperar usa caché.
