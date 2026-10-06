@@ -106,7 +106,7 @@ def prompt_mensaje(cliente, pid):
     except refinador.ErrorRefinador as e:
         return _error(e)
     job_id = f"guion_refinar_{mensaje_id}"
-    trabajos.iniciar(job_id, lambda: refinador.responder(mensaje_id), duracion_estimada=40)
+    trabajos.iniciar(job_id, lambda: refinador.responder(mensaje_id), duracion_estimada=40, cliente=cliente)
     return jsonify({"mensaje_id": mensaje_id, "job_id": job_id}), 202
 
 

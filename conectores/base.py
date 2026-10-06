@@ -14,8 +14,10 @@ dashboard/worker: `.usuario` (== `str(e)`) es un mensaje en español apto
 para mostrar tal cual y NUNCA lleva credenciales ni HTML ajeno.
 """
 import html
+import io
 import re
 import unicodedata
+import zipfile
 from datetime import datetime
 
 CLAVES_PRODUCTO = ("fuente_id", "nombre", "descripcion", "precio", "moneda", "url_compra", "fotos",
@@ -40,6 +42,23 @@ class ErrorConector(Exception):
     def __init__(self, usuario):
         self.usuario = str(usuario)
         super().__init__(self.usuario)
+
+
+# Un .xlsx es un zip: el tope de bytes de la subida mide lo comprimido, y unos
+# pocos MB pueden descomprimirse a gigas (openpyxl carga sharedStrings.xml
+# entero aunque sea read_only). Auditoría de seguridad 2026-10-01.
+MAX_XLSX_DESCOMPRIMIDO = 100 * 1024 * 1024
+
+
+def xlsx_demasiado_grande(datos, tope=MAX_XLSX_DESCOMPRIMIDO):
+    """True si el .xlsx `datos` (bytes) declara más de `tope` bytes
+    descomprimidos (zipfile nunca entrega más de lo declarado). Un zip
+    ilegible da False: que openpyxl dé su propio error."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(datos)) as z:
+            return sum(i.file_size for i in z.infolist()) > tope
+    except (zipfile.BadZipFile, ValueError, OSError):
+        return False
 
 
 # --- helpers de normalización ----------------------------------------------
@@ -180,6 +199,26 @@ def normalizar_producto(d):
     }
 
 
+def normalizar_variante(d):
+    """Un color/variante visual de un producto (`extra["variantes"]`):
+    {id, nombre, fuente_id, url_compra, fotos, disponible}. `nombre` es
+    obligatorio; `id` cae al slug del nombre; `disponible` es True salvo
+    que venga en falso explícito."""
+    d = dict(d or {})
+    nombre = _nombre(d.get("nombre"))
+    if not nombre:
+        raise ErrorConector("La variante no tiene nombre.")
+    disponible = d.get("disponible")
+    return {
+        "id": _texto(d.get("id")) and slug(d.get("id")) or slug(nombre),
+        "nombre": nombre,
+        "fuente_id": _texto_o_none(d.get("fuente_id")),
+        "url_compra": _texto_o_none(d.get("url_compra")),
+        "fotos": _fotos(d.get("fotos")),
+        "disponible": True if disponible is None else bool(disponible),
+    }
+
+
 def _fecha_iso(valor):
     """ISO con zona/Z, `YYYY-MM-DD` o `YYYY-MM-DD HH:MM:SS` -> 'YYYY-MM-DDTHH:MM:SS'
     (19 caracteres, sin zona: se conserva la hora tal cual la reportó la tienda)."""
@@ -239,6 +278,10 @@ class Conector:
     y `soporta_utm` (si esas ventas traen `utm_content` para atribuir a una
     pieza). Nunca guardan credenciales fuera de `self.credenciales`."""
     tipo = None
+    # `fuente` con la que se guardan las filas `producto` (tiendas.upsert_producto);
+    # None = el propio `tipo`. Dos conectores de la misma tienda (Shopify con
+    # API y Shopify público) comparten `fuente` y por tanto las filas.
+    fuente = None
     tiene_pedidos = False
     soporta_utm = False
 

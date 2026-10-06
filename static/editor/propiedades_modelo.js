@@ -6,29 +6,39 @@
 // el DOM; lo prueba tests/js/propiedades_modelo.test.mjs.
 //
 // Formas: "documento" (nada elegido: la mezcla de toda la edición), "video"
-// (un clip de la principal), "texto", "imagen", "audio" (música, efecto, voz…),
+// (un clip de la principal), "foto" (capa 5b: una foto como clip de la
+// principal), "texto", "imagen", "audio" (música, efecto, voz…),
 // "sonido" (el espejo de p_sonido: no se edita, se cambia desde su video) y
 // "otro" (un video encima u otra pista que el render no hace: solo borrar).
+import { completo as encuadreCompleto, MODOS as MODOS_ENCUADRE, sinMargen as encuadreSinMargen } from "./encuadre.js";
 import { FORMATOS } from "./formatos.js";
-import { etiquetaClip, NOMBRES_TRANSICION } from "./escala.js";
+import { etiquetaClip, nombreTransicion } from "./escala.js";
 import {
-  cambiaPorDestino, FUENTES, ID_SONIDO, MEZCLAS, sincronizarSonido, TRANSICIONES, VELOCIDADES,
+  ANCHO_TEXTO, cambiaPorDestino, esVozDeGuion, FOTO_MAX_MS, ID_SONIDO, MEZCLAS, MIN_CLIP_MS, sincronizarSonido, TRANSICIONES,
+  VELOCIDADES,
 } from "./operaciones.js";
 import * as operaciones from "./operaciones.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
+import { separadorDecimal, t } from "./textos.js";
 import { pistaPrincipal, tamanoCapaImagen } from "./tiempo.js";
+import { esV2, limpiar, sinGlifosV1 } from "./tipografia.js";
 
-export const AYUDA_VACIA = "Elige algo en la línea de tiempo o en el video para cambiarlo.";
-
-export const NOMBRES_MEZCLA = { equilibrada: "Equilibrada", voz_protagonista: "Voz primero", ambiente_protagonista: "Ambiente primero" };
+// Los nombres que ve la persona son CLAVES de textos.js: se traducen donde se
+// usan (ningún módulo llama a t() al cargarse).
+export const NOMBRES_MEZCLA = { equilibrada: "prop.mezcla_equilibrada", voz_protagonista: "prop.mezcla_voz", ambiente_protagonista: "prop.mezcla_ambiente" };
 const AYUDAS_MEZCLA = {
-  equilibrada: "Voz, sonido del video y música, cada uno en su punto.",
-  voz_protagonista: "El sonido del video y la música bajan para que la voz se entienda.",
-  ambiente_protagonista: "El sonido del video se oye entero y la música queda baja.",
+  equilibrada: "prop.ayuda_equilibrada",
+  voz_protagonista: "prop.ayuda_voz",
+  ambiente_protagonista: "prop.ayuda_ambiente",
 };
 
 // La duración de una transición (ms): el deslizador del formulario del video.
 export const TRANSICION_MS = { min: 200, max: 1500, paso: 100, defecto: 500 };
+// Cuánto dura una foto (ms): el campo «Duración de la foto» (capa 5b; los
+// topes de operaciones.cambiarDuracionFoto), de a 100 ms.
+export const DURACION_FOTO_MS = { min: MIN_CLIP_MS, max: FOTO_MAX_MS, paso: 100 };
+// «Encuadre» (D4): los dos modos con la clave del nombre que se lee.
+const NOMBRES_ENCUADRE = { llenar: "prop.encuadre_llenar", ajustar: "prop.encuadre_ajustar" };
 // Tamaño de un texto en px del lienzo: el mismo tope que aplica operaciones.cambiar.
 export const TAMANO_TEXTO_PX = { min: 12, max: 200 };
 // Grosor del contorno en px del lienzo (el preset «Título» usa 4).
@@ -44,17 +54,31 @@ const FUNDIDO_PASO_MS = 100;
 // El tope de transform.escala en operaciones.cambiar.
 export const ESCALA = { min: 0.05, max: 5 };
 
-// Las tres fuentes de static/fonts (operaciones.FUENTES), con un nombre que se lee.
-export const NOMBRES_FUENTE = { "Inter-Bold": "Inter gruesa", "Inter-SemiBold": "Inter media", "SpaceGrotesk-Bold": "Space Grotesk" };
+// Capa 5c (D9.4): las familias de fuentes, en el orden de
+// final_edition/fuentes.CATEGORIAS (tests/test_editor_js.py los compara), con
+// la clave del nombre que se lee (escrita entera). Los nombres de las fuentes
+// son nombres propios: vienen del catálogo (config.catalogo_fuentes), no del
+// de textos.
+export const CATEGORIAS_FUENTE = ["clasicas", "impacto", "redondeadas", "manuscritas", "serifa"];
+const NOMBRES_FAMILIA = {
+  clasicas: "prop.fuentes_clasicas",
+  impacto: "prop.fuentes_impacto",
+  redondeadas: "prop.fuentes_redondeadas",
+  manuscritas: "prop.fuentes_manuscritas",
+  serifa: "prop.fuentes_serifa",
+};
+// «Ancho del texto» (D7.2) en % del ancho del lienzo: los topes de operaciones.ANCHO_TEXTO.
+const ANCHO_PCT = { min: Math.round(ANCHO_TEXTO.min * 100), max: Math.round(ANCHO_TEXTO.max * 100),
+                    defecto: Math.round(ANCHO_TEXTO.defecto * 100) };
 // La paleta del color del texto; el color de marca entra tercero (`paletaDe`).
 export const COLORES = [
-  { nombre: "Blanco", color: "#FFFFFF" },
-  { nombre: "Negro", color: "#000000" },
-  { nombre: "Amarillo", color: "#FFD60A" },
-  { nombre: "Rojo", color: "#E53935" },
+  { nombre: "prop.color_blanco", color: "#FFFFFF" },
+  { nombre: "prop.color_negro", color: "#000000" },
+  { nombre: "prop.color_amarillo", color: "#FFD60A" },
+  { nombre: "prop.color_rojo", color: "#E53935" },
 ];
 
-const NOMBRES_ROL = { musica: "Música", efecto: "Efecto", voz: "Voz", grabacion: "Grabación", sonido: "Sonido", subida: "Audio" };
+const NOMBRES_ROL = { musica: "fila.musica", efecto: "fila.efecto", voz: "fila.voz", grabacion: "fila.grabacion", sonido: "fila.sonido", subida: "fila.audio" };
 const CLAVE_DESTINO = /^[a-z]{2}(_[A-Z]{2})?$/;   // lo que acepta operaciones.editarTexto
 const COLOR_RE = /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/;
 
@@ -70,10 +94,10 @@ export function colorBase(c, defecto = "#FFFFFF") {
 
 // ---- Cómo se escriben los valores ----
 
-const decimal = (n, max) => String(Number(n.toFixed(max))).replace(".", ",");
+const decimal = (n, max) => String(Number(n.toFixed(max))).replace(".", separadorDecimal());
 
 export function textoPorcentaje(n) {
-  return `${Math.round(Number(n) || 0)} %`;
+  return t("prop.porcentaje", { n: Math.round(Number(n) || 0) });
 }
 
 export function textoSegundos(ms) {
@@ -82,6 +106,21 @@ export function textoSegundos(ms) {
 
 export function textoVelocidad(v) {
   return `${decimal(Number(v), 2)}×`;
+}
+
+// «Duración de la foto»: los segundos sin la unidad («3», «2,5»), de a
+// décimas — lo que muestra el campo; `msDeDuracionFoto` lo lee de vuelta.
+export function textoDuracionFoto(ms) {
+  return decimal(Math.round((Number(ms) || 0) / 100) / 10, 1);
+}
+
+// Lo escrito en «Duración de la foto» en ms de a 100 (con coma o punto, con
+// o sin « s»), o null si no es un número positivo — el panel vuelve a
+// mostrar lo que había. Los topes los pone operaciones.cambiarDuracionFoto.
+export function msDeDuracionFoto(texto) {
+  const limpio = String(texto ?? "").trim().replace(/\s*s$/i, "").replace(",", ".");
+  if (!/^(\d+(\.\d*)?|\.\d+)$/.test(limpio)) return null;
+  return Math.round(Number(limpio) * 10) * 100;
 }
 
 // ---- Qué está elegido ----
@@ -100,7 +139,7 @@ function formaDeHallado(doc, h) {
   const { pista } = h;
   if (pista.id === ID_SONIDO) return "sonido";
   const principal = pistaPrincipal(doc);
-  if (pista.tipo === "video") return pista === principal ? "video" : "otro";
+  if (pista.tipo === "video") return pista !== principal ? "otro" : h.clip.foto ? "foto" : "video";
   if (pista.tipo === "texto") return "texto";
   if (pista.tipo === "imagen") return pista === principal ? "otro" : "imagen";
   if (pista.tipo === "audio") return "audio";
@@ -113,26 +152,44 @@ export function formaDe(doc, id) {
 
 // Qué decide si el formulario se ARMA de nuevo (otra forma u otro clip) o
 // solo se le ponen los valores nuevos (mientras se arrastra un deslizador, el
-// formulario no se puede rehacer: se perdería el arrastre).
+// formulario no se puede rehacer: se perdería el arrastre). Capa 5c: una
+// imagen cuyo material se tiñe (un sticker) lleva su bloque «Color», así que
+// es otro formulario — si el material llega a la vista previa después de
+// pintar el panel, el formulario se arma de nuevo con su color.
 export function claveForma(m) {
-  return `${m.forma}:${m.clipId ?? ""}`;
+  return `${m.forma}:${m.clipId ?? ""}${m.tinte ? ":tinte" : ""}`;
 }
 
 // ---- Los valores de cada formulario ----
 
 // `destino`: "<idioma>_<PAIS>" que se está viendo (editor.destino()); `info`:
 // {material_id: {duracion_ms, tiene_audio}} (editor.info()); `materiales`:
-// los de la vista previa (para las medidas de una imagen).
-export function modelo(doc, id, { destino = null, info = {}, materiales = {} } = {}) {
+// los de la vista previa (para las medidas de una imagen); `nombresIdioma`:
+// {es: "Español", …} (datos.voz.nombres_idioma), para «Suena en»;
+// `medidasPrincipal(clipId)`: [ancho, alto] que se ven del cuadro de un clip
+// de la principal (vista.medidasPrincipal; sin ella, las del material) — si
+// el cuadro no tiene margen, «Encuadre» lo dice.
+//
+// Capa 5c: `catalogoFuentes` — [{id, nombre, categoria}] de las fuentes que
+// la página tiene (config.catalogo_fuentes): la lista de fuentes de un texto,
+// por familia —; `tabla` — la tabla tipográfica (config.tipografia): qué no
+// sale en el video de un texto (`avisosTexto`); sin ella, ningún aviso.
+export function modelo(doc, id, {
+  destino = null, info = {}, materiales = {}, nombresIdioma = {}, medidasPrincipal = null, catalogoFuentes = [], tabla = null,
+} = {}) {
   const h = buscar(doc, id);
   const forma = formaDeHallado(doc, h);
+  const encuadre = () => modeloEncuadre(h.clip, {
+    medidas: medidasDeClip(h.clip, materiales, medidasPrincipal), formato: doc.formato,
+  });
   switch (forma) {
-    case "video": return modeloVideo(doc, h, info);
-    case "texto": return modeloTexto(doc, h, destino);
+    case "video": return { ...modeloVideo(doc, h, info), encuadre: encuadre() };
+    case "foto": return modeloFoto(h, encuadre());
+    case "texto": return modeloTexto(doc, h, destino, { catalogoFuentes, tabla });
     case "imagen": return modeloImagen(doc, h, materiales);
-    case "audio": return modeloAudio(h);
+    case "audio": return modeloAudio(h, destino, nombresIdioma);
     case "sonido": return modeloSonido(doc, h);
-    case "otro": return { forma, clipId: h.clip.id, nombre: h.pista.tipo === "superpuesto" ? "Video encima" : "Clip" };
+    case "otro": return { forma, clipId: h.clip.id, nombre: t(h.pista.tipo === "superpuesto" ? "fila.superpuesto" : "prop.clip") };
     default: return modeloDocumento(doc);
   }
 }
@@ -143,10 +200,10 @@ function modeloDocumento(doc) {
   return {
     forma: "documento",
     clipId: null,
-    ayuda: AYUDA_VACIA,
+    ayuda: t("prop.ayuda_vacia"),
     mezcla: MEZCLAS.includes(mz.preset) ? mz.preset : "equilibrada",
     aMedida: Object.values(volumenes).some((v) => v !== null && v !== undefined),
-    opcionesMezcla: MEZCLAS.map((valor) => ({ valor, texto: NOMBRES_MEZCLA[valor], ayuda: AYUDAS_MEZCLA[valor] })),
+    opcionesMezcla: MEZCLAS.map((valor) => ({ valor, texto: t(NOMBRES_MEZCLA[valor]), ayuda: t(AYUDAS_MEZCLA[valor]) })),
   };
 }
 
@@ -168,38 +225,102 @@ function sonidoDeVideo(doc, clip, info) {
   if (espejo) return { disponible: true, porcentaje: Math.round(Number(espejo.audio?.volumen ?? 1) * 100), motivo: null };
   const sinPista = !(doc?.pistas ?? []).some((p) => p.id === ID_SONIDO);
   if (sinPista && motivoRechazo(doc, "volumenSonido", [clip.id, 0], info) === null) {
-    return { disponible: true, porcentaje: 0, motivo: "Sin sonido: súbelo para oír el sonido de este video." };
+    return { disponible: true, porcentaje: 0, motivo: t("prop.sin_sonido") };
   }
   const velocidad = Number(clip.velocidad ?? 1);
   return { disponible: false, porcentaje: 0,
-           motivo: velocidad !== 1 ? "A otra velocidad el video va sin su sonido." : "Este video no trae sonido." };
+           motivo: velocidad !== 1 ? t("prop.velocidad_sin_sonido") : t("prop.video_sin_sonido") };
 }
 
-function modeloVideo(doc, { pista, clip, indice }, info) {
-  const velocidad = Number(clip.velocidad ?? 1);
-  const sonido = sonidoDeVideo(doc, clip, info);
+// La transición al siguiente clip de la principal (videos y fotos). D9:
+// una que nace ahora (o una «solape») junta los dos clips y acorta el
+// video: `ayuda` lo dice; una de «cola» (un borrador automático) no.
+function transicionDe(pista, clip, indice) {
   const ultimo = indice === pista.clips.length - 1;
   const tr = clip.transicion;
   const conTransicion = Boolean(tr) && (tr.tipo ?? "corte") !== "corte" && Number(tr.duracion_ms) > 0;
+  const junta = !ultimo && (!conTransicion || (tr.modo ?? null) === "solape");
+  return {
+    disponible: !ultimo,
+    motivo: ultimo ? t("prop.ultimo_video") : null,
+    tipo: conTransicion ? tr.tipo : "corte",
+    duracionMs: conTransicion ? Number(tr.duracion_ms) : TRANSICION_MS.defecto,
+    min: TRANSICION_MS.min, max: TRANSICION_MS.max, paso: TRANSICION_MS.paso,
+    ayuda: junta ? t("prop.ayuda_solape") : null,
+  };
+}
+
+// Lo que comparten el video y la foto: zoom lento, transición y borrar.
+function comunPrincipal({ pista, clip, indice }) {
   const soloUno = pista.clips.length <= 1;
+  return {
+    kenBurns: clip.ken_burns === "in" || clip.ken_burns === "out" ? clip.ken_burns : null,
+    transicion: transicionDe(pista, clip, indice),
+    transiciones: TRANSICIONES.map((tipo) => ({ valor: tipo, texto: nombreTransicion(tipo) })),
+    puedeBorrar: !soloUno,
+    motivoBorrar: soloUno ? t("op.un_clip") : null,
+  };
+}
+
+function modeloVideo(doc, h, info) {
+  const { clip } = h;
   return {
     forma: "video",
     clipId: clip.id,
-    nombre: "Video",
-    velocidad,
+    nombre: t("fila.video"),
+    velocidad: Number(clip.velocidad ?? 1),
     velocidades: VELOCIDADES.map((v) => ({ valor: v, texto: textoVelocidad(v) })),
-    sonido,
-    kenBurns: clip.ken_burns === "in" || clip.ken_burns === "out" ? clip.ken_burns : null,
-    transicion: {
-      disponible: !ultimo,
-      motivo: ultimo ? "Es el último video: no tiene transición hacia el siguiente." : null,
-      tipo: conTransicion ? tr.tipo : "corte",
-      duracionMs: conTransicion ? Number(tr.duracion_ms) : TRANSICION_MS.defecto,
-      min: TRANSICION_MS.min, max: TRANSICION_MS.max, paso: TRANSICION_MS.paso,
-    },
-    transiciones: TRANSICIONES.map((t) => ({ valor: t, texto: NOMBRES_TRANSICION[t] ?? t })),
-    puedeBorrar: !soloUno,
-    motivoBorrar: soloUno ? "La edición necesita al menos un clip de video." : null,
+    sonido: sonidoDeVideo(doc, clip, info),
+    ...comunPrincipal(h),
+  };
+}
+
+// Capa 5b (D1, D8): una foto como clip de la principal. Cuánto dura en vez
+// de velocidad y sonido (una foto no tiene ninguno de los dos: lo dice `nota`).
+function modeloFoto(h, encuadre) {
+  const { clip } = h;
+  return {
+    forma: "foto",
+    clipId: clip.id,
+    nombre: t("prop.foto"),
+    duracionMs: Number(clip.duracion_ms),
+    duracion: { ...DURACION_FOTO_MS },
+    nota: t("prop.nota_foto"),
+    encuadre,
+    ...comunPrincipal(h),
+  };
+}
+
+// [ancho, alto] que se ven del cuadro de un clip de la principal: los de
+// quien lo dibuja (vista.medidasPrincipal: el navegador ya enderezó un video
+// grabado de pie) o, si todavía no cargó, los del material; null si no hay.
+function medidasDeClip(clip, materiales, medidasPrincipal) {
+  const propias = medidasPrincipal?.(clip.id);
+  if (propias && propias[0] > 0 && propias[1] > 0) return propias;
+  const m = materiales?.[clip.material_id];
+  return m && Number(m.ancho) > 0 && Number(m.alto) > 0 ? [Number(m.ancho), Number(m.alto)] : null;
+}
+
+// «Encuadre» (D4, D8) de un clip de la principal: el modo, el zoom en %, si
+// está centrado y si el cuadro tiene margen para moverse — sin margen (en
+// ningún eje pasa del lienzo en IMAN_ENCUADRE_PX o más: encuadre.sinMargen,
+// el mismo criterio que el arrastre) arrastrar no hace nada y el panel pide
+// acercarlo. Sin `medidas` no se sabe: no lo dice.
+export function modeloEncuadre(clip, { medidas = null, formato = "9:16" } = {}) {
+  const e = encuadreCompleto(clip?.encuadre);
+  let sinMargen = false;
+  if (medidas && medidas[0] > 0 && medidas[1] > 0) {
+    const [ancho, alto] = lienzo(formato);
+    sinMargen = encuadreSinMargen(e, medidas, ancho, alto);
+  }
+  return {
+    modo: MODOS_ENCUADRE.includes(e.modo) ? e.modo : "llenar",
+    zoomPct: Math.round(Number(e.zoom) * 100),
+    centrado: casi(e.x, 0.5) && casi(e.y, 0.5),
+    sinMargen,
+    ayuda: t("prop.encuadre_ayuda"),
+    aviso: sinMargen ? t("prop.encuadre_sin_margen") : null,
+    opciones: MODOS_ENCUADRE.map((valor) => ({ valor, texto: t(NOMBRES_ENCUADRE[valor]) })),
   };
 }
 
@@ -212,38 +333,90 @@ function claveTexto(doc, destino) {
 
 function textoDe(doc, pista, clip, destino) {
   const clave = claveTexto(doc, destino);
-  const t = clip.texto ?? {};
-  if (!("variable" in t)) return { valor: String(t.literal ?? ""), editable: true, destino: clave, nota: null };
-  if (t.variable === VARIABLE_PRECIO) {
+  const tx = clip.texto ?? {};
+  if (!("variable" in tx)) return { valor: String(tx.literal ?? ""), editable: true, destino: clave, nota: null };
+  if (tx.variable === VARIABLE_PRECIO) {
     return { valor: etiquetaClip(pista, clip, doc, destino), editable: false, destino: clave,
-             nota: "Es el precio de cada país: sale de los precios de la edición y no se escribe aquí." };
+             nota: t("prop.nota_precio") };
   }
   const [idioma, pais] = clave.split("_");
-  const valor = valorDestino(doc.variables?.textos?.[t.variable], idioma, pais);
+  const valor = valorDestino(doc.variables?.textos?.[tx.variable], idioma, pais);
   return { valor: valor === null || valor === undefined ? "" : String(valor), editable: true, destino: clave,
-           nota: `Este texto cambia según el país: lo que escribas aquí vale para ${clave.replace("_", " · ")}.` };
+           nota: t("prop.nota_por_pais", { destino: clave.replace("_", " · ") }) };
 }
 
 export function paletaDe(doc, color) {
   const marca = typeof doc?.marca?.color === "string" && COLOR_RE.test(doc.marca.color)
-    ? [{ nombre: "Color de marca", color: colorBase(doc.marca.color) }] : [];
+    ? [{ nombre: "prop.color_marca", color: colorBase(doc.marca.color) }] : [];
   const lista = [...COLORES.slice(0, 2), ...marca, ...COLORES.slice(2)];
-  return lista.map((c) => ({ ...c, elegido: c.color === color }));
+  return lista.map((c) => ({ ...c, nombre: t(c.nombre), elegido: c.color === color }));
 }
 
-function modeloTexto(doc, { pista, clip }, destino) {
+// Capa 5c (D9.4): las fuentes del catálogo agrupadas por familia, en el
+// orden de las familias; una familia sin fuentes (o una categoría que no se
+// conoce) no sale.
+export function fuentesPorFamilia(catalogo) {
+  const lista = Array.isArray(catalogo) ? catalogo : [];
+  return CATEGORIAS_FUENTE.map((categoria) => ({
+    categoria,
+    texto: t(NOMBRES_FAMILIA[categoria]),
+    fuentes: lista.filter((f) => f?.categoria === categoria).map((f) => ({ valor: f.id, texto: f.nombre })),
+  })).filter((g) => g.fuentes.length > 0);
+}
+
+// «Ancho del texto» (D7.2): el % del deslizador (acotado a lo que ofrece) y
+// si no tiene límite (ancho_max null o ausente: el deslizador queda en el de
+// un texto nuevo, quieto).
+function anchoDe(estilo) {
+  const v = estilo?.ancho_max;
+  const sinLimite = v === null || v === undefined || !Number.isFinite(Number(v));
+  return {
+    pct: sinLimite ? ANCHO_PCT.defecto : Math.round(acotar(Number(v) * 100, ANCHO_PCT.min, ANCHO_PCT.max)),
+    sinLimite, min: ANCHO_PCT.min, max: ANCHO_PCT.max,
+  };
+}
+
+// Capa 5c (D7.5): qué del texto NO sale como se escribió en el video, en
+// llano, bajo el campo. v2: lo que ninguna fuente trae («No sale en el
+// video: «…»», los `quitados` de tipografia.limpiar unidos sin separador) y
+// las banderas, tonos y emojis compuestos, que salen simplificados. v1 (un
+// texto de antes): si su fuente no trae algo (los emojis), lo dice y ofrece
+// pasarlo a v2 (`accion: "actualizar"` → operaciones.actualizarTexto). Sin
+// tabla, o con una fuente que la tabla no trae, no se sabe: nada. sinGlifosV1
+// devuelve el texto en NFC: se compara con el escrito en NFC, así una tilde
+// escrita aparte (pegada de un PDF) no cuenta como algo que no sale.
+export function avisosTexto(clip, texto, tabla) {
+  if (!tabla || typeof texto !== "string") return [];
+  const estilo = clip?.estilo ?? {};
+  const fuente = estilo.fuente;
+  if (typeof fuente !== "string" || !Object.hasOwn(tabla.fuentes ?? {}, fuente)) return [];
+  if (!esV2(estilo)) {
+    return sinGlifosV1(texto, fuente, tabla) !== texto.normalize("NFC") ? [{ texto: t("prop.texto_antiguo"), accion: "actualizar" }] : [];
+  }
+  const { quitados, simplificado } = limpiar(texto, fuente, tabla);
+  const avisos = [];
+  if (quitados.length) avisos.push({ texto: t("prop.no_sale", { caracteres: quitados.join("") }), accion: null });
+  if (simplificado) avisos.push({ texto: t("prop.emoji_simplificado"), accion: null });
+  return avisos;
+}
+
+function modeloTexto(doc, { pista, clip }, destino, { catalogoFuentes = [], tabla = null } = {}) {
   const [, alto] = lienzo(doc.formato);
   const e = clip.estilo ?? {};
   const color = colorBase(e.color);
-  const t = clip.transform ?? {};
+  const tf = clip.transform ?? {};
   const fondo = e.fondo && typeof e.fondo === "object" ? e.fondo : null;
+  const texto = textoDe(doc, pista, clip, destino);
   return {
     forma: "texto",
     clipId: clip.id,
-    nombre: "Texto",
-    texto: textoDe(doc, pista, clip, destino),
+    nombre: t("fila.texto"),
+    texto,
+    avisos: avisosTexto(clip, texto.valor, tabla),
+    v2: esV2(e),
     fuente: typeof e.fuente === "string" ? e.fuente : null,
-    fuentes: FUENTES.map((f) => ({ valor: f, texto: NOMBRES_FUENTE[f] ?? f })),
+    fuentes: fuentesPorFamilia(catalogoFuentes),
+    ancho: anchoDe(e),
     tamano: { px: Math.round(acotar(Number(e.tamano ?? 0.04) * alto, TAMANO_TEXTO_PX.min, TAMANO_TEXTO_PX.max)),
               min: TAMANO_TEXTO_PX.min, max: TAMANO_TEXTO_PX.max },
     color,
@@ -262,7 +435,7 @@ function modeloTexto(doc, { pista, clip }, destino) {
     },
     alineacion: ["izquierda", "centro", "derecha"].includes(e.alineacion) ? e.alineacion : "centro",
     animacion: clip.animacion?.entrada ?? "ninguna",
-    centrado: { x: casi(t.x ?? 0.5, 0.5), y: casi(t.y ?? 0.5, 0.5) },
+    centrado: { x: casi(tf.x ?? 0.5, 0.5), y: casi(tf.y ?? 0.5, 0.5) },
   };
 }
 
@@ -289,39 +462,72 @@ export function cambioLlenar(clip, material, formato) {
   return { transform: { escala: Math.min(ESCALA.max, Math.max(ancho / w, alto / h)), x: 0.5, y: 0.5 } };
 }
 
+// El color de un sticker (capa 5c, D11): solo si su material se tiñe
+// (`tenible`); sin `tinte` se ve blanco (su PNG es blanco). La paleta es la
+// de los textos.
+function tinteDe(doc, clip, material) {
+  if (!material?.tenible) return null;
+  const activo = typeof clip.tinte === "string" && COLOR_RE.test(clip.tinte);
+  const color = activo ? colorBase(clip.tinte) : "#FFFFFF";
+  return { activo, color, paleta: paletaDe(doc, color) };
+}
+
 function modeloImagen(doc, { clip }, materiales) {
   const material = materiales?.[clip.material_id] ?? null;
-  const t = clip.transform ?? {};
-  const escala = Number(t.escala ?? 1);
+  const tf = clip.transform ?? {};
+  const escala = Number(tf.escala ?? 1);
   const [ancho, alto] = lienzo(doc.formato);
   const [w, h] = tamanoCapaImagen(clip, material);
   const cubrir = Math.max(ancho / w, alto / h);
   const llenar = cambioLlenar(clip, material, doc.formato).transform;
-  const centrada = casi(t.x ?? 0.5, 0.5) && casi(t.y ?? 0.5, 0.5);
+  const centrada = casi(tf.x ?? 0.5, 0.5) && casi(tf.y ?? 0.5, 0.5);
   return {
     forma: "imagen",
     clipId: clip.id,
-    nombre: "Imagen",
+    nombre: t("clip.imagen"),
     tamano: {
       porcentaje: Math.round(porcentajeDe(escala, clip, material, doc.formato)),
       min: Math.max(1, Math.ceil(porcentajeDe(ESCALA.min, clip, material, doc.formato))),
       max: Math.floor(porcentajeDe(ESCALA.max, clip, material, doc.formato)),
     },
-    opacidad: Math.round(Number(t.opacidad ?? 1) * 100),
+    opacidad: Math.round(Number(tf.opacidad ?? 1) * 100),
     centrada,
     llena: centrada && casi(escala, llenar.escala),
     llenar: { alcanza: cubrir <= ESCALA.max },
+    tinte: tinteDe(doc, clip, material),
   };
 }
 
-function modeloAudio({ clip }) {
+// D10: «Suena en» — en qué idioma habla una voz (`idioma` del clip; sin él,
+// suena en todos los destinos). Las opciones: el idioma que ya tiene, el del
+// destino que se ve (si es otro) y «Todos los idiomas» (valor ""). La voz del
+// guion (`bloque` o `por_destino`) ya se ajusta sola a cada país: no lo lleva
+// — al sumar un destino la vía automática le pone `por_destino`, y un
+// `idioma` dejaría fuera la voz pagada del otro país —; ni la música ni un
+// efecto (no dicen nada en un idioma).
+const IDIOMA_RE = /^[a-z]{2}$/;
+
+function suenaEn(clip, destino, nombresIdioma) {
+  if (clip.rol_audio !== "voz" || cambiaPorDestino(clip) || esVozDeGuion(clip)) return null;
+  const propio = IDIOMA_RE.test(clip.idioma ?? "") ? clip.idioma : null;
+  const delDestino = String(destino ?? "").split("_")[0];
+  const idiomas = [...new Set([propio, IDIOMA_RE.test(delDestino) ? delDestino : null].filter(Boolean))];
+  const nombre = (i) => nombresIdioma?.[i] ?? i;
+  return {
+    valor: propio ?? "",
+    opciones: [...idiomas.map((i) => ({ valor: i, texto: t("prop.solo_idioma", { idioma: nombre(i) }) })),
+      { valor: "", texto: t("prop.todos_idiomas") }],
+  };
+}
+
+function modeloAudio({ clip }, destino = null, nombresIdioma = {}) {
   const a = clip.audio ?? {};
   const rol = clip.rol_audio ?? "subida";
   const volumen = Number(a.volumen ?? 1);
   return {
     forma: "audio",
     clipId: clip.id,
-    nombre: NOMBRES_ROL[rol] ?? "Audio",
+    nombre: t(NOMBRES_ROL[rol] ?? "fila.audio"),
     volumen: Math.round(volumen * 100),
     silenciado: volumen === 0,
     fundidos: {
@@ -330,7 +536,10 @@ function modeloAudio({ clip }) {
       max: Math.min(FUNDIDO_MAX_MS, Math.floor(Number(clip.duracion_ms) / 2 / FUNDIDO_PASO_MS) * FUNDIDO_PASO_MS),
       paso: FUNDIDO_PASO_MS,
     },
-    nota: cambiaPorDestino(clip) ? "La voz se ajusta sola a cada país." : null,
+    nota: cambiaPorDestino(clip) ? t("prop.nota_voz") : null,
+    suena_en: suenaEn(clip, destino, nombresIdioma),
+    // «Subtítulos de este audio»: cualquier audio puede ser la fuente (D4, D12)
+    subtitulos: true,
   };
 }
 
@@ -371,6 +580,37 @@ export function cambioFondo(tipo, fondoActual) {
   return { estilo: { fondo: fondoActual ? { radio } : { ...FONDO_NUEVO, radio } } };
 }
 
+// «Encuadre» (D4): cada control pide solo SU campo; operaciones.cambiar lo
+// fusiona sobre el encuadre de ese clip (y vuelve a «sin encuadre» si queda
+// el de siempre).
+export function cambioModoEncuadre(modo) {
+  return { encuadre: { modo } };
+}
+
+export function cambioZoomEncuadre(pct) {
+  return { encuadre: { zoom: Number(pct) / 100 } };
+}
+
+export function cambioCentrarEncuadre() {
+  return { encuadre: { x: 0.5, y: 0.5 } };
+}
+
+// «Ancho del texto» (D7.2): el % del deslizador, acotado a 30–100, como
+// fracción del ancho del lienzo; «Sin límite» es null, y quitarlo vuelve al
+// ancho de un texto nuevo.
+export function cambioAncho(pct) {
+  return { estilo: { ancho_max: acotar(Number(pct) || 0, ANCHO_PCT.min, ANCHO_PCT.max) / 100 } };
+}
+
+export function cambioSinLimite(si) {
+  return { estilo: { ancho_max: si ? null : ANCHO_TEXTO.defecto } };
+}
+
+// «Suena en» (D10): "" es «Todos los idiomas» (sin `idioma` en el clip).
+export function cambioSuenaEn(valor) {
+  return { idioma: valor ? String(valor) : null };
+}
+
 // «Silenciar» baja a 0 y recuerda cuánto tenía; «Volver a oír» lo devuelve
 // (o 100 % si no hay nada que recordar: se silenció en otra visita).
 export function alternarSilencio(volumen, recordado) {
@@ -393,13 +633,15 @@ export function motivoRechazo(doc, nombre, args, info = {}) {
 // Lo que dicen el panel y la biblioteca cuando otra pestaña guardó antes (el
 // guardado quedó en «conflicto» y la página ya no deja editar): el aviso de
 // debajo del video no sirve de nada si la hoja del celular lo tapa.
-export const MENSAJE_CONFLICTO = "La edición cambió en otra pestaña: recarga la página para seguir.";
+export function mensajeConflicto() {
+  return t("prop.conflicto");
+}
 
 // El mensaje para una operación que la página no aplicó: el conflicto si lo
 // hay; si no, el porqué de la operación (motivoRechazo) o `otro`.
 export function mensajeRechazo(doc, nombre, args, info = {}, {
-  conflicto = false, otro = "No se pudo hacer ese cambio: el aviso está debajo del video.",
+  conflicto = false, otro = t("prop.rechazo"),
 } = {}) {
-  if (conflicto) return MENSAJE_CONFLICTO;
+  if (conflicto) return mensajeConflicto();
   return motivoRechazo(doc, nombre, args, info) ?? otro;
 }

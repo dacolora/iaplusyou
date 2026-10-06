@@ -1,0 +1,89 @@
+{# Ficha de un avatar: la misma en el estudio y en «Avatares del proyecto».
+   Importar con {% from "_avatar_ficha.html" import ficha_avatar, evidencia_avatar, acciones_avatar, chip_faltantes, tarjeta_avatar with context %}:
+   usan cliente, niveles_conciencia, bases, consciencias_nombre, urls_comentarios, paises_comentarios,
+   nombres_pais (los dos últimos opcionales) y `abrir` del contexto.
+   `s` = None dibuja la ficha vacía de «+ Nuevo avatar». `volver` = "lista" hace que cada acción
+   vuelva a la lista del proyecto en vez de al estudio. #}
+
+{% macro chip_faltantes(faltantes) %}{% if faltantes %}<span class="tag-estado sprint-aviso nicho-faltantes">{{ _('incompleto: falta %(faltan)s', faltan=faltantes|faltantes_texto) }}</span>{% endif %}{% endmacro %}
+
+{% macro ficha_avatar(s, volver='') %}
+{% set ident = (s.identidad if s else {}) or {} %}
+{% set conc = (s.conciencia if s else {}) or {} %}
+<form method="post" action="{{ url_for('nicho.avatar_editar', cliente=cliente, aid=s.id) if s else url_for('nicho.avatar_crear', cliente=cliente) }}" class="form-experimento">
+  {% if volver %}<input type="hidden" name="volver" value="{{ volver }}">{% endif %}
+  <div class="fe-opciones">
+    <label>{{ _('Nombre / arquetipo') }} <input name="nombre" value="{{ s.nombre if s else '' }}" required maxlength="120"></label>
+    <label>{{ _('Base') }} <select name="base">{% for b in bases %}<option value="{{ b }}" {% if s and b == s.base %}selected{% endif %}>{{ _('emoción') if b == 'emocion' else _('experiencia con el producto') }}</option>{% endfor %}</select></label>
+    <label>{{ _('Edad') }} <input name="edad_rango" value="{{ (s.edad_rango if s else '') or '' }}" placeholder="30-45" class="mini-input"></label>
+  </div>
+  <label>{{ _('Deseo (frase de cabecera)') }} <input name="deseo" value="{{ (s.deseo if s else '') or '' }}" maxlength="300"></label>
+  <label>Demographics (ASL) <textarea name="demografia" rows="2">{{ (s.demografia if s else '') or '' }}</textarea></label>
+  <label>{{ _('Emoción') }} <input name="emocion" value="{{ (s.emocion if s else '') or '' }}"></label>
+  <label>{{ _('Qué quiere que los demás vean en ella') }} <textarea name="identidad_quiere_que_vean" rows="2">{{ ident.quiere_que_vean or '' }}</textarea></label>
+  <label>Beliefs about self <textarea name="identidad_cree_de_si" rows="2">{{ ident.cree_de_si or '' }}</textarea></label>
+  <label>{{ _('Qué quiere lograr en la sociedad') }} <textarea name="identidad_quiere_lograr" rows="2">{{ ident.quiere_lograr or '' }}</textarea></label>
+  <label>{{ _('Cómo nuestro producto la ayuda a lograrlo') }} <textarea name="encaje_producto" rows="2">{{ (s.encaje_producto if s else '') or '' }}</textarea></label>
+  <label>{{ _('Soluciones que probó y por qué fallaron (una por línea: «qué usó :: problema; problema»)') }} <textarea name="soluciones_previas" rows="3">{{ ((s.soluciones_previas if s else []) or []) | soluciones_texto }}</textarea></label>
+  <label>{{ _('Su día a día (una situación por línea)') }} <textarea name="situaciones" rows="3">{{ ((s.situaciones if s else []) or []) | join('\n') }}</textarea></label>
+  <label>{{ _('Comportamiento') }} <textarea name="comportamiento" rows="2">{{ (s.comportamiento if s else '') or '' }}</textarea></label>
+  <div class="fe-opciones">
+    <label>{{ _('Nivel de conciencia') }} <select name="conciencia_nivel"><option value="">{{ _('(sin señales)') }}</option>{% for niv in niveles_conciencia %}<option value="{{ niv }}" {% if niv == conc.nivel %}selected{% endif %}>{{ consciencias_nombre.get(niv, niv | replace('_', ' '))|traducir }}</option>{% endfor %}</select></label>
+    <label>{{ _('Por qué') }} <input name="conciencia_detalle" value="{{ conc.detalle or '' }}"></label>
+  </div>
+  <label>{{ _('Tono de voz') }} <input name="tono" value="{{ (s.tono if s else '') or '' }}"></label>
+  <label>{{ _('Palabras clave (coma)') }} <input name="palabras_clave" value="{{ ((s.palabras_clave if s else []) or []) | join(', ') }}"></label>
+  <div class="acciones"><button type="submit" class="btn-generar btn-sm">{{ _('Guardar') if s else _('Crear avatar') }}</button></div>
+</form>
+{% endmacro %}
+
+{% macro evidencia_avatar(s) %}
+<div class="nicho-evidencia">
+  <strong>{{ _('Citas textuales') }}</strong>
+  {% for e in s.evidencia %}
+  {% set pais_cita = (paises_comentarios or {}).get(e.comentario_id) %}
+  <blockquote class="nicho-cita">«{{ e.cita }}»{% if pais_cita %} <small class="tag-estado">{{ _('otro mercado: %(pais)s', pais=(nombres_pais or {}).get(pais_cita, pais_cita)|traducir) }}</small>{% endif %}{% if urls_comentarios.get(e.comentario_id) %} <a href="{{ urls_comentarios.get(e.comentario_id) }}" target="_blank" rel="noopener">{{ _('ver original') }}</a>{% endif %}</blockquote>
+  {% else %}
+  <p class="vacio">{{ _('Ninguna cita sobrevivió a la verificación: decide tú si este avatar vale.') }}</p>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro acciones_avatar(s, volver='') %}
+<div class="acciones">
+  {% if s.estado != 'aprobado' %}
+  <form method="post" action="{{ url_for('nicho.avatar_aprobar', cliente=cliente, aid=s.id) }}" class="inline">{% if volver %}<input type="hidden" name="volver" value="{{ volver }}">{% endif %}<button type="submit" class="btn-generar btn-sm">{{ _('Aprobar → persona') }}</button></form>
+  {% endif %}
+  {% if s.estado != 'descartado' %}
+  <form method="post" action="{{ url_for('nicho.avatar_descartar', cliente=cliente, aid=s.id) }}" class="inline">{% if volver %}<input type="hidden" name="volver" value="{{ volver }}">{% endif %}<button type="submit" class="btn-sm btn-peligro">{{ _('Descartar') }}</button></form>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro tarjeta_avatar(x) %}
+{% set a = x.avatar %}{% set p = x.persona %}
+{% set nombre = p.nombre if p else a.nombre %}
+<details class="nicho-sub estado-{{ a.estado if a else ('descartado' if p.archivada else 'aprobado') }}" id="avatar-{{ x.clave }}" {% if abrir == x.clave %}open{% endif %}>
+  <summary>
+    <strong>{{ nombre }}</strong>
+    <span class="tag-estado">{% if x.grupo == 'nuevo' %}{{ _('Nuevo') }}{% elif x.grupo == 'aprobado' %}{{ _('Aprobado') }}{% elif p and p.archivada %}{{ _('Archivado') }}{% else %}{{ _('Descartado') }}{% endif %}</span>
+    <small class="vacio">{% if x.estudio and not x.estudio.manual %}{{ _('de «%(estudio)s»', estudio=x.estudio.nombre) }}{% if x.nucleo %} · {{ x.nucleo }}{% endif %}{% elif x.estudio %}{{ _('escrito a mano') }}{% else %}{{ _('creado en Sprints') }}{% endif %}</small>
+    {{ chip_faltantes(x.faltantes) }}
+    {% if (a and a.deseo) or (p and p.resumen) %}<br><small class="vacio">{{ a.deseo if a else p.resumen }}</small>{% endif %}
+  </summary>
+  {% if a %}
+  {{ ficha_avatar(a, 'lista') }}
+  {% if x.estudio and not x.estudio.manual %}{{ evidencia_avatar(a) }}{% endif %}
+  {{ acciones_avatar(a, 'lista') }}
+  {% else %}
+  {% if p.descripcion %}<p>{{ p.descripcion }}</p>{% endif %}
+  <div class="acciones">
+    <form method="post" action="{{ url_for('nicho.persona_ficha', cliente=cliente, pid=p.id) }}" class="inline"><button type="submit" class="btn-generar btn-sm">{{ _('Editar ficha') }}</button></form>
+    <form method="post" action="{{ url_for('nicho.persona_archivar', cliente=cliente, pid=p.id) }}" class="inline">
+      {% if p.archivada %}<input type="hidden" name="desarchivar" value="1">{% endif %}
+      <button type="submit" class="btn-sm">{{ _('Desarchivar') if p.archivada else _('Archivar') }}</button>
+    </form>
+  </div>
+  {% endif %}
+</details>
+{% endmacro %}

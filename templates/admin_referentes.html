@@ -1,91 +1,95 @@
 {% extends "base.html" %}
-{% block title %}Referentes (admin){% endblock %}
+{% block title %}{{ _('Referentes (admin)') }}{% endblock %}
 {% block content %}
 {# Panel admin de la biblioteca de referentes (dashboard.admin_referentes).
    Contexto: url_swipe, trabajo ({job_id}|None), ultimo (barrido|None),
    historial, imagenes ({ok,pendiente,error}), total (referentes globales con
-   imagen), familias. #}
+   imagen), familias, familias_en_error (texto del último error de la tanda de
+   descripciones en inglés, o None), etiquetas_barrido (clave de estado ->
+   (etiqueta N_, tono), la misma de «Mis barridos»). fuentes_nombres son N_: se muestran con
+   |traducir. Los montos siguen con '%.2f' (punto decimal), como antes: el
+   español que se ve no cambia. #}
 <section class="hero aparece">
   <div class="hero-texto">
-    <span class="eyebrow">Panel de administrador</span>
-    <h1>Biblioteca de referentes.</h1>
-    <p class="hero-sub">La semilla es el swipe file de copycoders: se importa desde su página pública, las imágenes se copian a nuestro R2 y las firmas se traducen (≈ US$1 una sola vez). Se puede volver a importar cuando ellos publiquen un barrido nuevo: solo entra lo nuevo.</p>
-    <p class="hero-sub"><a href="{{ url_for('panel') }}">← Volver al panel</a></p>
+    <span class="eyebrow">{{ _('Panel de administrador') }}</span>
+    <h1>{{ _('Biblioteca de referentes.') }}</h1>
+    <p class="hero-sub">{{ _('La semilla es el swipe file de copycoders: se importa desde su página pública, las imágenes se copian a nuestro R2 y las firmas se traducen (≈ US$1 una sola vez). Se puede volver a importar cuando ellos publiquen un barrido nuevo: solo entra lo nuevo.') }}</p>
+    <p class="hero-sub"><a href="{{ url_for('panel') }}">{{ _('← Volver al panel') }}</a></p>
   </div>
   <div class="hero-stats">
-    <div class="stat"><span class="stat-num">{{ total }}</span><span class="stat-label">referente{{ 's' if total != 1 }} con imagen</span></div>
-    <div class="stat"><span class="stat-num">{{ familias | length }}</span><span class="stat-label">familia{{ 's' if familias | length != 1 }}</span></div>
-    <div class="stat"><span class="stat-num">{{ imagenes.pendiente }}</span><span class="stat-label">imágenes por bajar</span></div>
-    <div class="stat"><span class="stat-num">{{ imagenes.error }}</span><span class="stat-label">imágenes fallidas</span></div>
+    <div class="stat"><span class="stat-num">{{ total }}</span><span class="stat-label">{{ ngettext('referente con imagen', 'referentes con imagen', total) }}</span></div>
+    <div class="stat"><span class="stat-num">{{ familias | length }}</span><span class="stat-label">{{ ngettext('familia', 'familias', familias | length) }}</span></div>
+    <div class="stat"><span class="stat-num">{{ imagenes.pendiente }}</span><span class="stat-label">{{ _('imágenes por bajar') }}</span></div>
+    <div class="stat"><span class="stat-num">{{ imagenes.error }}</span><span class="stat-label">{{ _('imágenes fallidas') }}</span></div>
   </div>
 </section>
 
 <section class="admin-bloque">
-  <div class="admin-cabecera"><h2>Swipe file de copycoders</h2></div>
+  <div class="admin-cabecera"><h2>{{ _('Swipe file de copycoders') }}</h2></div>
   <form method="post" action="{{ url_for('admin_referentes_importar') }}" class="agencia-form">
     <label>URL <input type="url" name="url" value="{{ url_swipe }}" style="width:100%"></label>
-    <button type="submit" class="btn-generar btn-sm" {% if trabajo %}disabled{% endif %}>Importar</button>
+    <button type="submit" class="btn-generar btn-sm" {% if trabajo %}disabled{% endif %}>{{ _('Importar') }}</button>
   </form>
-  <p class="vacio">Última importación:
-    {% if ultimo %}{{ ultimo.creado_en }} · estado <strong>{{ ultimo.estado }}</strong> · {{ ultimo.traidos }} leídos · {{ ultimo.nuevos }} nuevos · {{ ultimo.con_imagen }} con imagen{% if ultimo.usd_real %} · US$ {{ '%.2f' | format(ultimo.usd_real) }}{% endif %}{% if ultimo.aviso %} · {{ ultimo.aviso }}{% endif %}
-    {% else %}nunca{% endif %}</p>
+  <p class="vacio">{{ _('Última importación:') }}
+    {% if ultimo %}{{ _('%(fecha)s · estado <strong>%(estado)s</strong> · %(leidos)s leídos · %(nuevos)s nuevos · %(con_imagen)s con imagen', fecha=ultimo.creado_en, estado=(etiquetas_barrido.get(ultimo.estado) or (ultimo.estado,))[0]|traducir, leidos=ultimo.traidos, nuevos=ultimo.nuevos, con_imagen=ultimo.con_imagen) }}{% if ultimo.usd_real %} · US$ {{ '%.2f' | format(ultimo.usd_real) }}{% endif %}{% if ultimo.aviso %} · {{ ultimo.aviso }}{% endif %}
+    {% else %}{{ _('nunca') }}{% endif %}</p>
   {% if trabajo %}
   <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}"><div class="barra-progreso-fill"></div></div>
   <div class="progreso-texto"></div>
   <script>iniciarPolling({{ trabajo.job_id | tojson }}, {{ ("trabajo-" ~ trabajo.job_id) | tojson }});</script>
   {% endif %}
   {% if historial | length > 1 %}
-  <details><summary>Importaciones anteriores</summary>
+  <details><summary>{{ _('Importaciones anteriores') }}</summary>
     <div class="admin-scroll"><table class="tabla-admin">
-      <tr><th>Fecha</th><th>Estado</th><th>Leídos</th><th>Nuevos</th><th>Con imagen</th><th>Aviso</th></tr>
-      {% for b in historial[1:] %}<tr><td>{{ b.creado_en }}</td><td>{{ b.estado }}</td><td>{{ b.traidos }}</td><td>{{ b.nuevos }}</td><td>{{ b.con_imagen }}</td><td>{{ b.aviso or '' }}</td></tr>{% endfor %}
+      <tr><th>{{ _('Fecha') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Leídos') }}</th><th>{{ _('Nuevos') }}</th><th>{{ _('Con imagen') }}</th><th>{{ _('Aviso') }}</th></tr>
+      {% for b in historial[1:] %}<tr><td>{{ b.creado_en }}</td><td>{{ (etiquetas_barrido.get(b.estado) or (b.estado,))[0]|traducir }}</td><td>{{ b.traidos }}</td><td>{{ b.nuevos }}</td><td>{{ b.con_imagen }}</td><td>{{ b.aviso or '' }}</td></tr>{% endfor %}
     </table></div>
   </details>
   {% endif %}
 </section>
 
 <section class="admin-bloque">
-  <div class="admin-cabecera"><h2>Traer referentes globales</h2></div>
-  <p class="vacio">Igual que «Traer referentes» de un proyecto, pero sin dueño: quedan visibles para todos los proyectos.</p>
+  <div class="admin-cabecera"><h2>{{ _('Traer referentes globales') }}</h2></div>
+  <p class="vacio">{{ _('Igual que «Traer referentes» de un proyecto, pero sin dueño: quedan visibles para todos los proyectos.') }}</p>
   <form method="get" action="{{ url_for('admin_referentes') }}" class="agencia-form">
     <div class="fe-opciones">
       {% for t in fuentes_tipos %}
       <label class="fe-check">
         <input type="radio" name="fuente" value="{{ t }}" {% if t == fuente %}checked{% endif %} {% if fuente_llaves_faltantes.get(t) %}disabled{% endif %}>
-        {{ fuentes_nombres.get(t, t) }}{% if fuente_llaves_faltantes.get(t) %} (falta {{ fuente_llaves_faltantes[t] | join(', ') }}){% endif %}
+        {{ fuentes_nombres.get(t, t) | traducir }}{% if fuente_llaves_faltantes.get(t) %} {{ _('(falta %(llaves)s)', llaves=fuente_llaves_faltantes[t] | join(', ')) }}{% endif %}
       </label>
       {% endfor %}
     </div>
     <div class="fe-opciones">
-      <label><input type="radio" name="modo" value="palabra" {% if consulta_traer.modo == 'palabra' %}checked{% endif %}> Palabra clave</label>
-      <label><input type="radio" name="modo" value="marca" {% if consulta_traer.modo == 'marca' %}checked{% endif %}> Marca (link del Ad Library)</label>
+      <label><input type="radio" name="modo" value="palabra" {% if consulta_traer.modo == 'palabra' %}checked{% endif %}> {{ _('Palabra clave') }}</label>
+      <label><input type="radio" name="modo" value="marca" {% if consulta_traer.modo == 'marca' %}checked{% endif %}> {{ _('Marca (link del Ad Library)') }}</label>
     </div>
     <div class="fe-opciones">
-      <label>Palabra clave <input type="text" name="palabra" value="{{ consulta_traer.palabra or '' }}" maxlength="120"></label>
-      <label>Marca / link del Ad Library <input type="text" name="pagina_id" value="{{ consulta_traer.pagina_id or '' }}" placeholder="id de página o view_all_page_id"></label>
+      <label>{{ _('Palabra clave') }} <input type="text" name="palabra" value="{{ consulta_traer.palabra or '' }}" maxlength="120"></label>
+      <label>{{ _('Marca / link del Ad Library') }} <input type="text" name="pagina_id" value="{{ consulta_traer.pagina_id or '' }}" placeholder="{{ _('id de página o view_all_page_id') }}"></label>
     </div>
     <div class="fe-opciones">
-      <label>País (solo Apify) <input type="text" name="pais" value="{{ consulta_traer.pais or 'ALL' }}" maxlength="5" style="width:5rem"></label>
-      <label>Formato
+      <label>{{ _('País (solo Apify)') }} <input type="text" name="pais" value="{{ consulta_traer.pais or 'ALL' }}" maxlength="5" style="width:5rem"></label>
+      <label>{{ _('Formato') }}
         <select name="formato">
-          <option value="imagen" {% if consulta_traer.formato != 'video' %}selected{% endif %}>Imagen</option>
-          <option value="video" {% if consulta_traer.formato == 'video' %}selected{% endif %}>Video</option>
+          <option value="imagen" {% if consulta_traer.formato != 'video' %}selected{% endif %}>{{ _('Imagen') }}</option>
+          <option value="video" {% if consulta_traer.formato == 'video' %}selected{% endif %}>{{ _('Video') }}</option>
         </select>
       </label>
-      <label class="fe-check"><input type="checkbox" name="solo_activos" {% if consulta_traer.solo_activos %}checked{% endif %}> Solo activos</label>
+      <label class="fe-check"><input type="checkbox" name="solo_activos" {% if consulta_traer.solo_activos %}checked{% endif %}> {{ _('Solo activos') }}</label>
     </div>
     <div class="fe-opciones">
-      <label>Mínimo de días (solo Atria) <input type="number" name="min_dias" value="{{ consulta_traer.min_dias or '' }}" min="0" style="width:5rem"></label>
-      <label>Mínimo de variantes (solo Atria) <input type="number" name="min_variantes" value="{{ consulta_traer.min_variantes or '' }}" min="0" style="width:5rem"></label>
-      <label>Tope <input type="number" name="tope" value="{{ tope_traer }}" min="1" max="2000" style="width:6rem"></label>
+      <label>{{ _('Mínimo de días (solo Atria)') }} <input type="number" name="min_dias" value="{{ consulta_traer.min_dias or '' }}" min="0" style="width:5rem"></label>
+      <label>{{ _('Mínimo de variantes (solo Atria)') }} <input type="number" name="min_variantes" value="{{ consulta_traer.min_variantes or '' }}" min="0" style="width:5rem"></label>
+      <label>{{ _('Tope') }} <input type="number" name="tope" value="{{ tope_traer }}" min="1" max="2000" style="width:6rem"></label>
     </div>
     {% if precio_traer %}
-    <p class="vacio">Fuente: {{ precio_traer.fuente.detalle }} · Clasificar {{ tope_traer }} con Claude: {{ precio_traer.clasificacion.texto }} ·
-      <strong>Total ≈ US$ {{ '%.2f' | format(precio_traer.total_usd) }}</strong></p>
+    <p class="vacio">{{ _('Fuente: %(detalle)s · Clasificar %(n)s con Claude: %(precio)s ·', detalle=precio_traer.fuente.detalle, n=tope_traer, precio=precio_traer.clasificacion.texto) }}
+      <strong>{{ _('Total ≈ US$ %(total)s', total='%.2f' % precio_traer.total_usd) }}</strong></p>
     {% else %}
-    <p class="vacio">Completa los datos y pulsa «Ver precio» para calcular el costo antes de traer.</p>
+    <p class="vacio">{{ _('Completa los datos y pulsa «Ver precio» para calcular el costo antes de traer.') }}</p>
     {% endif %}
-    <button type="submit" class="btn-xs">Ver precio</button>
+    <button type="submit" class="btn-xs">{{ _('Ver precio') }}</button>
   </form>
   {% if precio_traer %}
   <form method="post" action="{{ url_for('admin_referentes_traer') }}" class="agencia-form">
@@ -99,34 +103,37 @@
     <input type="hidden" name="min_dias" value="{{ consulta_traer.min_dias or '' }}">
     <input type="hidden" name="min_variantes" value="{{ consulta_traer.min_variantes or '' }}">
     <input type="hidden" name="tope" value="{{ tope_traer }}">
-    <button type="submit" class="btn-generar btn-sm">Traer y clasificar ≈ US$ {{ '%.2f' | format(precio_traer.total_usd) }}</button>
+    <button type="submit" class="btn-generar btn-sm">{{ _('Traer y clasificar ≈ US$ %(total)s', total='%.2f' % precio_traer.total_usd) }}</button>
   </form>
   {% endif %}
 </section>
 
 <section class="admin-bloque">
-  <div class="admin-cabecera"><h2>Totales</h2></div>
+  <div class="admin-cabecera"><h2>{{ _('Totales') }}</h2></div>
   <div class="hero-stats">
     {% for f, n in fuentes_totales %}
-    <div class="stat"><span class="stat-num">{{ n }}</span><span class="stat-label">{{ fuentes_nombres.get(f, f) }}</span></div>
+    <div class="stat"><span class="stat-num">{{ n }}</span><span class="stat-label">{{ fuentes_nombres.get(f, f) | traducir }}</span></div>
     {% endfor %}
   </div>
-  <p class="vacio">Atria: {{ atria_llamadas }}/{{ atria_limite }} llamadas este mes.</p>
+  <p class="vacio">{{ _('Atria: %(llamadas)s/%(limite)s llamadas este mes.', llamadas=atria_llamadas, limite=atria_limite) }}</p>
+  {% if 'trendtrack' in fuentes_tipos and not fuente_llaves_faltantes.get('trendtrack') %}
+  <p class="vacio">{% if trendtrack_saldo %}{{ _('TrendTrack: %(creditos)s créditos gastados desde aquí este mes · le quedaban %(restantes)s créditos al %(fecha)s.', creditos=trendtrack_creditos, restantes=trendtrack_saldo.restantes, fecha=trendtrack_saldo.fecha) }}{% else %}{{ _('TrendTrack: %(creditos)s créditos gastados desde aquí este mes.', creditos=trendtrack_creditos) }}{% endif %}</p>
+  {% endif %}
 </section>
 
 <section class="admin-bloque">
-  <div class="admin-cabecera"><h2>Barridos globales (Atria, Apify)</h2></div>
+  <div class="admin-cabecera"><h2>{{ _('Barridos globales (Atria, Apify, TrendTrack)') }}</h2></div>
   {% if not barridos_otras_fuentes %}
-  <p class="vacio">Todavía no se ha traído ningún barrido global fuera de copycoders.</p>
+  <p class="vacio">{{ _('Todavía no se ha traído ningún barrido global fuera de copycoders.') }}</p>
   {% else %}
   <div class="admin-scroll"><table class="tabla-admin">
-    <tr><th>Fecha</th><th>Fuente</th><th>Consulta</th><th>Estado</th><th>Traídos</th><th>Clasificados</th><th>Costo</th><th>Acciones</th></tr>
+    <tr><th>{{ _('Fecha') }}</th><th>{{ _('Fuente') }}</th><th>{{ _('Consulta') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Traídos') }}</th><th>{{ _('Clasificados') }}</th><th>{{ _('Costo') }}</th><th>{{ _('Acciones') }}</th></tr>
     {% for b in barridos_otras_fuentes %}
     <tr>
       <td>{{ b.creado_en }}</td>
-      <td>{{ fuentes_nombres.get(b.fuente, b.fuente) }}</td>
+      <td>{{ fuentes_nombres.get(b.fuente, b.fuente) | traducir }}</td>
       <td>{{ b.consulta.palabra or b.consulta.pagina_id or '' }}</td>
-      <td>{{ b.estado }}{% if b.aviso %} · {{ b.aviso }}{% endif %}</td>
+      <td>{{ (etiquetas_barrido.get(b.estado) or (b.estado,))[0]|traducir }}{% if b.aviso %} · {{ b.aviso }}{% endif %}</td>
       <td>{{ b.traidos }}/{{ b.tope }}</td>
       <td>{{ b.clasificados }}</td>
       <td>{% if b.usd_real %}US$ {{ '%.2f' | format(b.usd_real) }}{% else %}—{% endif %}</td>
@@ -148,12 +155,12 @@
         {% else %}
           {% if b.pendientes %}
           <form method="post" action="{{ url_for('admin_referentes_clasificar', barrido_id=b.id) }}" class="inline">
-            <button type="submit" class="btn-xs">Clasificar pendientes{% if b.precio_clasificar %} ({{ b.precio_clasificar }}){% endif %}</button>
+            <button type="submit" class="btn-xs">{{ _('Clasificar pendientes') }}{% if b.precio_clasificar %} ({{ b.precio_clasificar }}){% endif %}</button>
           </form>
           {% endif %}
           {% if b.imagenes_error %}
           <form method="post" action="{{ url_for('admin_referentes_reintentar_imagenes', barrido_id=b.id) }}" class="inline">
-            <button type="submit" class="btn-xs">Reintentar imágenes</button>
+            <button type="submit" class="btn-xs">{{ _('Reintentar imágenes') }}</button>
           </form>
           {% endif %}
         {% endif %}
@@ -165,7 +172,8 @@
 </section>
 
 <section class="admin-bloque">
-  <div class="admin-cabecera"><h2>Familias ({{ familias | length }})</h2></div>
+  <div class="admin-cabecera"><h2>{{ _('Familias (%(n)s)', n=familias | length) }}</h2></div>
+  {% if familias_en_error is not none %}<p class="tag-error">{{ _('La última tanda de descripciones en inglés falló: %(error)s', error=familias_en_error) }}</p>{% endif %}
   {% if familias_en_en_curso %}
   <p class="vacio">{{ _('Escribiendo en inglés las descripciones que faltan…') }}</p>
   {% elif familias_sin_en %}
@@ -174,14 +182,15 @@
   </form>
   {% endif %}
   <div class="admin-scroll"><table class="tabla-admin">
-    <tr><th>Familia</th><th>Descripción</th><th>{{ _('Descripción (inglés)') }}</th><th>Referentes</th><th>Origen</th><th></th></tr>
+    {# «Referentes» a secas ya es la pestaña («Swipe file»); aquí es cuántos anuncios tiene la familia. #}
+    <tr><th>{{ _('Familia') }}</th><th>{{ _('Descripción') }}</th><th>{{ _('Descripción (inglés)') }}</th><th>{{ pgettext('columna de familias', 'Referentes') }}</th><th>{{ _('Origen') }}</th><th></th></tr>
     {% for f in familias %}
     <tr>
       <td>{{ f.nombre }}</td>
       <td>
         <form id="familia-{{ f.id }}" method="post" action="{{ url_for('admin_referentes_familia', familia_id=f.id) }}" class="inline">
           <input type="text" name="descripcion" value="{{ f.descripcion or '' }}" style="width:22rem">
-          <button type="submit" class="btn-xs">Guardar</button>
+          <button type="submit" class="btn-xs">{{ _('Guardar') }}</button>
         </form>
       </td>
       <td><input type="text" name="descripcion_en" form="familia-{{ f.id }}" value="{{ f.descripcion_en or '' }}" style="width:22rem"></td>

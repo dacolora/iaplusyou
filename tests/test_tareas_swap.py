@@ -19,18 +19,19 @@ def test_registro_contiene_swap_generar(base_temporal):
     import tareas.swap as sw
     assert tareas.REGISTRO["swap_generar"] is sw.ejecutar
     assert sorted(tareas.REGISTRO) == [
-        "audio_generar", "catalogo_importar", "cola_limpiar", "db_respaldar", "edicion_desde_clon", "edicion_producir",
-        "edicion_proxy", "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_lanzar", "exp_refrescar",
+        "audio_generar", "cadena_elementos", "cadena_unir", "cadena_vigilar", "catalogo_importar", "cola_limpiar", "db_respaldar",
+        "edicion_desde_clon", "edicion_producir",
+        "edicion_proxy", "editor_voz", "errores_limpiar", "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_detalle", "exp_lanzar", "exp_refrescar",
         "exp_refrescar_todos", "final_guion", "final_producir", "flowplus_director", "flowplus_imagen",
-        "flowplus_recuperar", "flowplus_video", "material_de_pieza", "materiales_limpiar", "meta_publicar",
-        "meta_refrescar", "musica_generar", "nicho_generar_avatares", "nicho_inv_buscar", "nicho_inv_consultas",
+        "flowplus_recuperar", "flowplus_video", "hablado_voz", "material_de_pieza", "material_transcribir", "materiales_limpiar", "meta_publicar",
+        "meta_refrescar", "musica_generar", "nicho_completar_avatares", "nicho_generar_avatares", "nicho_inv_buscar", "nicho_inv_consultas",
         "nicho_inv_seleccionar", "nicho_recolectar", "organico_publicar", "pieza_revisar", "producto_pedidos",
         "producto_vincular", "referentes_barrer", "referentes_clasificar", "referentes_familias_en",
         "referentes_importar_copycoders", "referentes_sugerir_ia", "salidas_limpiar", "sprint_analizar_referencia",
         "sprint_empaquetar", "sprint_proponer_ideas", "sprint_qa_pendientes", "sprint_qa_pieza",
         "sprint_reescribir_idea", "sprint_referencia_link", "sprint_sugerir_personas", "swap_generar",
         "tienda_sync_pedidos", "tienda_sync_pedidos_todas", "tienda_sync_productos", "tienda_sync_productos_todas",
-        "tw_evaluar", "tw_sincronizar", "tw_sincronizar_todas",
+        "tw_evaluar", "tw_sincronizar", "tw_sincronizar_todas", "voz_propia_crear",
     ]
 
 
@@ -294,3 +295,24 @@ def test_ejecutar_foto_con_mejora_fallida_no_dice_con_mejora(base_temporal, monk
     assert g["referencia"] == "swap:swap_m2:t1"
     assert "con mejora" not in g["detalle"]
     assert g["usd"] == pytest.approx(0.039)  # el upscale nunca se cobró
+
+
+def test_swap_sin_saldo_se_explica_y_avisa(base_temporal, monkeypatch, tmp_path):
+    """Incidente 2026-09-30: sin saldo en WaveSpeed, «Cambiar producto» también
+    guardaba el JSON crudo del proveedor como error."""
+    import tareas.swap as sw
+    from providers import wavespeed_common as wc
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path)
+
+    def _boom(*a, **k):
+        raise wc.SinSaldo("bytedance/seedream-v5.0-pro/edit", 400,
+                          "Insufficient credits. Please top up your account to continue.")
+    monkeypatch.setattr(sw.nano_banana_client, "swap_producto", _boom)
+    actualizaciones, marcas = [], []
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda c, sid, **k: actualizaciones.append(k))
+    monkeypatch.setattr(sw.saldo, "marcar", lambda proveedor, detalle="", cliente="": marcas.append((proveedor, cliente)) or True)
+    with pytest.raises(RuntimeError):
+        sw.ejecutar({"id": 3, "job_id": "acme__swap_x__swap", "payload": payload})
+    (error,) = [k["error"] for k in actualizaciones if k.get("estado") == "error"]
+    assert "saldo" in error and "Insufficient" not in error
+    assert marcas == [("wavespeed", "acme")]

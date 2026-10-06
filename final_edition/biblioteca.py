@@ -5,20 +5,34 @@ pieza de Crear como material bajo pedido — la misma preparación que
 `final_edition.edicion_clon.crear` hace con el clon, sin crear ninguna
 edición. Único módulo que decide esto: la ruta (`final_edition/rutas_editor.py`)
 solo traduce multipart/JSON y el worker (`tareas/edicion.py`) solo valida
-`cf_id` y llama a `materializar_pieza`."""
+`cf_id` y llama a `materializar_pieza`.
+
+Los stickers propios (capa 5c, `final_edition/stickers.py`) también pasan por aquí: `sticker` vuelve material,
+gratis y una sola vez por proyecto, el PNG blanco del paquete.
+
+Idioma (fase 6): `subir` corre en la ruta, así que sus mensajes salen en el
+idioma de quien sube; `materializar_pieza` corre en el worker, en el del
+proyecto (`worker.ejecutar`). El nombre de respaldo de un archivo sin
+nombre se guarda en el idioma del proyecto."""
 import math
 import os
+import re
 import uuid
+from datetime import datetime, timezone
 
 import sqlalchemy as sa
+from flask_babel import gettext
 from PIL import Image, ImageOps, JpegImagePlugin
 
 import creative_flow
 import db
+import ediciones
 import final_edition
+import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, insumos, mezcla, vista_previa
+from final_edition import cortes, encuadre, insumos, mezcla, stickers, vista_previa
+from storage import r2_uploader
 from tareas import edicion as tareas_edicion
 
 # video/imagen/audio (spec §11): extensión -> (tipo de material, content-type
@@ -34,13 +48,57 @@ EXTENSIONES = {
 # Materiales que la persona puede arrastrar al lienzo: nunca los efímeros
 # (png_texto, proxy, tira, forma_onda — `materiales.EFIMEROS`) ni una voz
 # sintetizada de un guion que no le pertenece a ella todavía. El logo del
-# proyecto se guarda con origen «marca» (`insumos.logo`).
-ORIGENES_BIBLIOTECA = ("subida", "crear", "musica", "voz", "marca")
+# proyecto se guarda con origen «marca» (`insumos.logo`). Capa 5a (Task 6):
+# «grabacion» (el micrófono del editor) y «locucion» (los audios terminados
+# de Crear › Audios, voz + música) se suman a la lista.
+ORIGENES_BIBLIOTECA = ("subida", "crear", "musica", "voz", "marca", "grabacion", "locucion")
 TOPE_MATERIALES = 200
 
 
 class SubidaInvalida(ValueError):
     """El mensaje va tal cual a la persona."""
+
+
+# Lo que «Borrar» de la biblioteca puede quitar (capa 4c): lo que la persona
+# subió y los videos de Crear ya preparados como material. Nunca una voz de
+# guion, el logo (marca) ni una canción de Mi música — creada (origen musica)
+# o subida (origen subida con `extra.fuente`, `vista_previa.es_de_mi_musica`):
+# esas se borran en Crear › Mi música. Capa 5a (Task 6): una grabación del
+# micrófono SÍ se borra desde aquí (es solo suya, como una subida).
+ORIGENES_BORRABLES = ("subida", "crear", "grabacion")
+
+
+class NoSePuedeBorrar(ValueError):
+    """El mensaje va tal cual a la persona; `codigo` es el HTTP de la ruta."""
+
+    def __init__(self, mensaje, codigo):
+        super().__init__(mensaje)
+        self.codigo = codigo
+
+
+def borrar(cliente, material_id):
+    """Borra un material de la biblioteca (gratis): su fila y, si son de este
+    proyecto (`materiales.borrar` solo toca claves bajo
+    clientes/<c>/materiales/), su archivo, su copia liviana y su tira en R2
+    — la fila deja de contar para la cuota. Solo `ORIGENES_BORRABLES`, y solo
+    si ninguna edición (viva o congelada) lo usa; si una lo usa, se dice
+    cuál. Un fallo de R2 se propaga (la fila queda, para reintentar)."""
+    mat = materiales.obtener(cliente, int(material_id))
+    if not mat:
+        raise NoSePuedeBorrar(gettext("Ese archivo ya no existe."), 404)
+    if vista_previa.es_de_mi_musica(mat):
+        raise NoSePuedeBorrar(gettext("Esa canción es de Mi música: bórrala en Crear › Mi música."), 400)
+    if mat["origen"] not in ORIGENES_BORRABLES:
+        raise NoSePuedeBorrar(gettext("Ese archivo no se borra desde aquí."), 400)
+    ed = materiales.edicion_que_lo_usa(cliente, mat["id"])
+    if ed:
+        raise NoSePuedeBorrar(gettext("Está en uso en la edición «%(nombre)s»: quítalo de ahí primero.",
+                                      nombre=ediciones.nombre_visible(ed)), 409)
+    try:
+        materiales.borrar(cliente, mat["id"])
+    except materiales.MaterialEnUso:                       # una edición lo tomó recién
+        raise NoSePuedeBorrar(gettext("Está en uso en una edición: quítalo de ahí primero."), 409)
+    return {"id": mat["id"], "bytes": int(mat.get("bytes") or 0)}
 
 
 def _carpeta_tmp(cliente):
@@ -81,23 +139,25 @@ def _enderezar(local, ext):
             derecha.save(destino, format=formato, **opciones)
         return destino
     except (OSError, ValueError, SyntaxError) as e:
-        raise SubidaInvalida("No pude leer esa imagen.") from e
+        raise SubidaInvalida(gettext("No pude leer esa imagen.")) from e
 
 
 def _medir(tipo, local):
     """(duracion_ms, ancho, alto, tiene_audio) según el tipo; `SubidaInvalida`
-    si el archivo no se puede leer con ffprobe/Pillow."""
+    si el archivo no se puede leer con ffprobe/Pillow. Un video guarda las
+    medidas que se VEN (`encuadre.medidas_visibles`, D6): un grabado «de
+    pie» viene codificado acostado, con una marca de rotación."""
     if tipo == "imagen":
         try:
             with Image.open(local) as im:
                 ancho, alto = im.size
                 im.verify()
             if ancho <= 0 or alto <= 0:
-                raise ValueError("dimensiones inválidas")
+                raise ValueError(gettext("dimensiones inválidas"))
         except (OSError, ValueError):
-            raise SubidaInvalida("No pude leer esa imagen.")
+            raise SubidaInvalida(gettext("No pude leer esa imagen."))
         return None, ancho, alto, None
-    mensaje = "No pude leer ese video." if tipo == "video" else "No pude leer ese archivo de audio."
+    mensaje = gettext("No pude leer ese video.") if tipo == "video" else gettext("No pude leer ese archivo de audio.")
     try:
         info = cortes.ffprobe_json(local)
         streams = info.get("streams") or []
@@ -105,15 +165,16 @@ def _medir(tipo, local):
             v = next((s for s in streams if s.get("codec_type") == "video"
                       and not (s.get("disposition") or {}).get("attached_pic")), None)
             if not v or int(v.get("width") or 0) <= 0 or int(v.get("height") or 0) <= 0:
-                raise ValueError("falta video con dimensiones válidas")
+                raise ValueError(gettext("falta video con dimensiones válidas"))
         elif not any(s.get("codec_type") == "audio" for s in streams):
-            raise ValueError("falta audio")
+            raise ValueError(gettext("falta audio"))
         dur_s = cortes.duracion(local)
         if not math.isfinite(dur_s) or dur_s <= 0:
-            raise ValueError("duración inválida")
+            raise ValueError(gettext("duración inválida"))
         dur_ms = int(round(dur_s * 1000))
         if tipo == "video":
-            return dur_ms, int(v["width"]), int(v["height"]), mezcla.tiene_audio(local)
+            ancho, alto = encuadre.medidas_visibles(v)
+            return dur_ms, ancho, alto, mezcla.tiene_audio(local)
         return dur_ms, None, None, None
     except Exception as e:
         raise SubidaInvalida(mensaje) from e
@@ -129,7 +190,7 @@ def subir(cliente, archivo):
     ext = os.path.splitext(nombre_archivo)[1].lower()
     info = EXTENSIONES.get(ext)
     if not info:
-        raise SubidaInvalida("Sube un video, una imagen o un audio.")
+        raise SubidaInvalida(gettext("Sube un video, una imagen o un audio."))
     tipo, content_type = info
     carpeta = _carpeta_tmp(cliente)
     local = os.path.join(carpeta, f"subida_{uuid.uuid4().hex}{ext}")
@@ -165,9 +226,11 @@ def _guardar(cliente, local, ext, tipo, content_type, nombre_archivo):
     except materiales.SubidaInvalida as e:
         raise SubidaInvalida(str(e))
     if materiales.bytes_usados(cliente) + tam > materiales.CUOTA_BYTES:
-        raise SubidaInvalida("El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más.")
+        raise SubidaInvalida(gettext("El proyecto llegó a su límite de espacio (2 GB): borra en «Tus archivos» lo que ya no uses antes de subir más."))
     h = materiales.hash_archivo(local)
-    nombre = os.path.splitext(nombre_archivo)[0].strip()[:80] or "Archivo"
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):      # se guarda: el idioma del proyecto
+        respaldo = gettext("Archivo")
+    nombre = os.path.splitext(nombre_archivo)[0].strip()[:80] or respaldo
     extra = {"nombre": nombre}
     if tipo == "video":
         extra["tiene_audio"] = tiene_audio
@@ -183,6 +246,141 @@ def _guardar(cliente, local, ext, tipo, content_type, nombre_archivo):
                          {"cliente": cliente, "material_id": m["id"]}, duracion_estimada=60,
                          cliente=cliente, max_intentos=3, prioridad=1)
     return vista_previa.material_para(m)
+
+
+# --- Stickers propios (editor capa 5c, D11): un PNG del paquete, un material por proyecto, gratis ---
+
+def sticker(cliente, sticker_id):
+    """El material de este proyecto para el sticker `sticker_id` del paquete (`static/stickers/`), o None si ese id no
+    existe (`stickers.por_id` valida la forma Y que esté en el manifiesto: un id raro nunca arma una ruta). La primera
+    vez que el proyecto lo usa sube el PNG de 512 px a su carpeta de materiales y registra la fila (`origen
+    "sticker"`, `extra.tenible`, `url_proxy == url`: un PNG tan chico no necesita copia liviana); las siguientes lo
+    encuentran por su hash y no suben nada (`materiales.obtener_o_crear`). Gratis: ni `gastos` ni worker. No entra en
+    `ORIGENES_BIBLIOTECA` (no sale en «Medios») ni en `ORIGENES_BORRABLES`."""
+    ficha = stickers.por_id(sticker_id)
+    if ficha is None:
+        return None
+    ruta = stickers.ruta(ficha["id"])
+
+    def _producir():
+        url = r2_uploader.upload_file(ruta, f"clientes/{cliente}/materiales/sticker_{ficha['id']}.png", "image/png")
+        return {"tipo": "imagen", "origen": "sticker", "url": url, "url_proxy": url,
+                "bytes": os.path.getsize(ruta), "ancho": ficha["ancho"], "alto": ficha["alto"],
+                "extra": {"nombre": ficha["id"], "sticker": ficha["id"], "tenible": True}}
+    material, _creado = materiales.obtener_o_crear(cliente, materiales.hash_archivo(ruta), _producir)
+    return material
+
+
+# --- Grabación del micrófono (editor capa 5a, D8/Task 6): gratis, siempre a mp3 ---
+
+# Lo que el navegador puede mandar (D8): `audio/webm;codecs=opus` (Chrome,
+# Edge, Firefox) -> .webm, `audio/mp4` (Safari) -> .m4a/.mp4, `audio/ogg` ->
+# .ogg. Nunca .mp3: el micrófono no lo produce directamente.
+EXTENSIONES_GRABACION = {".webm", ".m4a", ".mp4", ".ogg", ".wav"}
+MAX_GRABACION_MS = 300000   # 5 min
+# El navegador corta sola una grabación a los 5 min con un reloj de 250 ms
+# (y un segundo antes, voz_modelo.corteGrabacion): puede pasarse unos ms. Se
+# rechaza solo lo que pasa este margen; lo de en medio se recorta a 5 min.
+MARGEN_GRABACION_MS = 2000
+_HORA_RE = re.compile(r"^\d{2}:\d{2}$")
+
+
+def _duracion_entrada_ms(info):
+    """La duración de la ENTRADA según ffprobe (la del formato o la de su
+    pista de audio), en ms, o None: el .webm de MediaRecorder no la trae."""
+    candidatos = [(info.get("format") or {}).get("duration")]
+    candidatos += [s.get("duration") for s in info.get("streams") or [] if (s or {}).get("codec_type") == "audio"]
+    for valor in candidatos:
+        try:
+            ms = float(valor) * 1000
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(ms) and ms > 0:
+            return int(round(ms))
+    return None
+
+
+def _hora_de_grabacion(hora):
+    """La hora HH:MM que manda el navegador (hora local de quien graba); sin
+    ella, o mal formada, la hora UTC del servidor."""
+    if isinstance(hora, str) and _HORA_RE.fullmatch(hora):
+        return hora
+    return datetime.now(timezone.utc).strftime("%H:%M")
+
+
+def guardar_grabacion(cliente, archivo, hora=None):
+    """Grabación del micrófono del editor (D8, gratis): se sube SIEMPRE
+    pasada a mp3 (`-vn -ac 1 -ar 44100 -c:a libmp3lame -b:a 128k`) — el
+    .webm de Chrome no trae duración y Safari viejo no decodifica opus con
+    `decodeAudioData` —, con tope de 5 minutos, 20 MB y la cuota del
+    proyecto. Fix round 1: se rechaza solo una ENTRADA de más de 5 min +
+    MARGEN_GRABACION_MS; la que se pasa por menos se recorta a 5 min (con
+    duración conocida, `-t 300` al transcodificar; sin ella, se transcodifica
+    hasta el tope + margen, se mide el mp3 y se recorta). `archivo`:
+    FileStorage de Flask (o algo con `.filename` y `.save`). Encola el proxy
+    (picos) como cualquier audio nuevo. Los temporales (el original, el mp3 y
+    su recorte) se borran en un `finally`."""
+    nombre_archivo = os.path.basename(archivo.filename or "")
+    ext = os.path.splitext(nombre_archivo)[1].lower()
+    if ext not in EXTENSIONES_GRABACION:
+        raise SubidaInvalida(gettext("Sube una grabación .webm, .m4a, .mp4, .ogg o .wav."))
+    carpeta = _carpeta_tmp(cliente)
+    local = os.path.join(carpeta, f"grabacion_{uuid.uuid4().hex}{ext}")
+    mp3 = local + ".mp3"
+    archivo.save(local)
+    try:
+        try:
+            info = cortes.ffprobe_json(local)
+            tiene_audio = any((s or {}).get("codec_type") == "audio" for s in info.get("streams") or [])
+        except Exception:
+            tiene_audio = False
+        if not tiene_audio:
+            raise SubidaInvalida(gettext("No pude leer esa grabación."))
+        entrada_ms = _duracion_entrada_ms(info)
+        if entrada_ms is not None and entrada_ms > MAX_GRABACION_MS + MARGEN_GRABACION_MS:
+            raise SubidaInvalida(gettext("La grabación dura más de 5 minutos."))
+        # sin duración conocida, el tope deja ver si se pasaba del margen (y
+        # nunca transcodifica más que eso)
+        tope_ms = MAX_GRABACION_MS if entrada_ms is not None else MAX_GRABACION_MS + MARGEN_GRABACION_MS + 500
+        try:
+            cortes.ffmpeg(["-i", local, "-vn", "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k",
+                           "-t", f"{tope_ms / 1000:.3f}", mp3])
+            dur_ms = int(round(cortes.duracion(mp3) * 1000))
+            if dur_ms > MAX_GRABACION_MS + MARGEN_GRABACION_MS:
+                raise SubidaInvalida(gettext("La grabación dura más de 5 minutos."))
+            if entrada_ms is None and dur_ms > MAX_GRABACION_MS:
+                recortado = mp3 + ".tope.mp3"     # mismo nombre que borra el finally
+                cortes.ffmpeg(["-i", mp3, "-t", f"{MAX_GRABACION_MS / 1000:.3f}", "-c", "copy", recortado])
+                os.replace(recortado, mp3)
+                dur_ms = int(round(cortes.duracion(mp3) * 1000))
+        except SubidaInvalida:
+            raise
+        except Exception:
+            raise SubidaInvalida(gettext("No pude leer esa grabación."))
+        # el relleno del mp3 (unos ms) no la hace pasar de 5 min
+        dur_ms = min(dur_ms, MAX_GRABACION_MS)
+        tam = os.path.getsize(mp3)
+        try:
+            materiales.validar_subida("audio", tam)
+        except materiales.SubidaInvalida as e:
+            raise SubidaInvalida(str(e))
+        if materiales.bytes_usados(cliente) + tam > materiales.CUOTA_BYTES:
+            raise SubidaInvalida(gettext("El proyecto llegó a su límite de espacio (2 GB): borra en «Tus archivos» lo que ya no uses antes de subir más."))
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):   # se guarda: el idioma del proyecto
+            nombre = gettext("Grabación %(hora)s", hora=_hora_de_grabacion(hora))
+        h = materiales.hash_archivo(mp3)
+        m = materiales.subir(cliente, mp3, f"clientes/{cliente}/materiales/grabacion_{h[:16]}.mp3", "audio/mpeg",
+                             tipo="audio", origen="grabacion", duracion_ms=dur_ms, extra={"nombre": nombre})
+        trabajos.encolar(tareas_edicion.job_id_proxy(cliente, m["id"]), "edicion_proxy",
+                         {"cliente": cliente, "material_id": m["id"]}, duracion_estimada=60,
+                         cliente=cliente, max_intentos=3, prioridad=1)
+        return vista_previa.material_para(m)
+    finally:
+        for ruta in (local, mp3, mp3 + ".tope.mp3"):
+            try:
+                os.remove(ruta)
+            except OSError:
+                pass
 
 
 def _materiales_de_piezas(cliente):
@@ -248,7 +446,7 @@ def materializar_pieza(cliente, cf_id, carpeta):
     visible de la pieza."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry or entry.get("estado") != "video_listo" or (entry.get("tipo") or "video") != "video":
-        raise ValueError(f"La pieza {cf_id} no tiene un video listo para el editor.")
+        raise ValueError(gettext("La pieza %(cf)s no tiene un video listo para el editor.", cf=cf_id))
     local = entry.get("video_local_crudo")
     if not (local and os.path.isfile(local)):
         os.makedirs(carpeta, exist_ok=True)

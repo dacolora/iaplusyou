@@ -43,7 +43,7 @@ def _solo_mismo_origen():
     sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
     if request.method == "POST" and sitio and sitio not in ("same-origin", "none"):
         if _quiere_json() or request.is_json:
-            return jsonify({"ok": False, "error": "Pedido rechazado: no viene de esta página."}), 403
+            return jsonify({"ok": False, "error": gettext("Pedido rechazado: no viene de esta página.")}), 403
         abort(403)
 
 
@@ -437,7 +437,7 @@ def _contexto_ideas(cliente, c):
     }
 
 
-def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen):
+def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen, musica_estilo=""):
     """Lo que cuesta reintentar o regenerar la pieza: con SU modelo (reintentar
     relanza su sesión y regenerar la duplica con el mismo modelo), con la
     duración recortada al rango de ese modelo. Si el modelo de la pieza ya no
@@ -450,7 +450,8 @@ def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen):
         if es_video:
             # Con el sonido que eligió la sesión (Kling cobra aparte el audio nativo).
             con_sonido = True if p.get("con_sonido") is None else bool(p["con_sonido"])
-            est = flowplus_modelos.estimate_video(modelo, produccion._duracion(p, modelo), con_sonido=con_sonido)
+            est = gastos.estimar("video", modelo=modelo, duracion=produccion._duracion(p, modelo),
+                                 con_sonido=con_sonido, musica_estilo=musica_estilo)
         else:
             est = flowplus_modelos.estimate_imagen(modelo, n_referencias=produccion._n_referencias(cliente, c))
         usd = float((est or {}).get("usd") or 0.0)
@@ -472,7 +473,8 @@ def _piezas_de(cliente, c, modelo_video, modelo_imagen, sesiones=None):
         salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
                        "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
                        "funnel": c.get("funnel") or "tof",
-                       "costo_regenerar": _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen),
+                       "costo_regenerar": _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen,
+                                                            entry.get("musica_estilo") or ""),
                        "doctrina": doctrina_revisor.resumen_galeria(entry.get("revision_doctrina"),
                                                                     entry.get("video_url"))})
     return salida
@@ -504,6 +506,9 @@ def campana_panel(cliente, sid, cid):
     sp, c = _campana_del_sprint(cliente, sid, cid)
     productos = _productos_planos(cliente)
     _campana_tablero(cliente, sp, c, {p["id"]: p for p in productos})
+    # El selector no ofrece productos archivados, salvo el de esta campaña.
+    productos = catalogo_productos.sin_archivados(productos, tiendas.activos_archivados(cliente),
+                                                  conservar=[c["catalogo_id"]])
     personas_ = datos.personas(cliente)
     if c["persona_id"] not in {p["id"] for p in personas_}:
         archivada = datos.persona(cliente, c["persona_id"])
@@ -519,7 +524,7 @@ def campana_panel(cliente, sid, cid):
     sugeridas = referentes_datos.familias_frecuentes(cliente, etapa=(c.get("funnel") or "tof").upper(),
                                                     consciencia=referentes_sugerir.consciencia_en(c.get("consciencia")))
     job = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
-    fila_producto = tiendas.por_activo(cliente).get(c["catalogo_id"]) or {}
+    fila_producto = tiendas.por_activo(cliente).get(catalogo_productos.producto_base(c["catalogo_id"])) or {}
     sof = (fila_producto.get("extra") or {}).get("sofisticacion")
     return render_template(
         "_sprint_panel.html", cliente=cliente, sprint=sp, c=c, personas=personas_, productos=productos,
@@ -726,7 +731,10 @@ def ver(cliente, sid):
     momento = sp.get("momento") or {}
     return render_template("sprint_detalle.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            sprint=sp, linea=tablero.linea_sprint(sp), resumen=tablero.resumen(sp),
-                           productos_sprint=productos, personas_sprint=datos.personas(cliente),
+                           # Una campaña nueva no se arma con un producto archivado.
+                           productos_sprint=catalogo_productos.sin_archivados(productos,
+                                                                              tiendas.activos_archivados(cliente)),
+                           personas_sprint=datos.personas(cliente),
                            presets=calendario.presets(pais, int(sp["inicio"][:4])),
                            momento_valor=momento.get("clave") or ("propio" if momento else ""),
                            marcas_texto=tablero.marcas_texto(sp.get("marcas")),

@@ -11,16 +11,27 @@ import time
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
+from flask_babel import gettext
 from sqlalchemy.exc import IntegrityError
 
 import db
+import idiomas
 
 # access_token: Meta (paging.next, mensajes de Graph). upload_token: la
 # upload_url de TikTok (PUT de chunks) — un chunk rechazado la mete en el HTTPError.
 # key / token: la URI que googleapiclient mete en su HttpError lleva
 # key=<llave de YouTube>, y "token=" cubre cualquier otra variante. El ")" queda
 # fuera del valor para no comerse el cierre de un paréntesis del mensaje.
-_RE_TOKEN = re.compile(r"((?:access_token|upload_token|key|token)=)[^&\s\"')]+")
+# Desde 2026-10-03 (PND-115, auditoría del lote 3) también la forma JSON
+# («"access_token":"X"», escapada «\"access_token\":\"X\"»), el repr de Python
+# y «clave: valor», sin distinguir mayúsculas. Sin «\b» delante de la clave a
+# propósito: «page_access_token=» tiene que seguir tapado. El separador no cruza
+# saltos de línea y el valor no se come una «\» (no deja una comilla suelta que
+# rompa el JSON del error que lee meta_errores).
+_RE_TOKEN = re.compile(
+    r"((?:access_token|upload_token|key|token)\\?[\"']?[ \t]*[:=][ \t]*\\?[\"']?)[^&\s\"'\\)]+",
+    re.IGNORECASE,
+)
 
 # Dedupe de encolar dentro del proceso (gunicorn con hilos). Entre procesos
 # manda el índice único parcial uq_tarea_job_viva (db.py / migración 0003).
@@ -171,21 +182,26 @@ def recuperar_colgadas(minutos=30, excluir=()):
     if excluir:
         condiciones.append(db.tarea.c.id.notin_(tuple(excluir)))
     with db.conectar() as con:
-        filas = con.execute(sa.select(db.tarea.c.id, db.tarea.c.intentos, db.tarea.c.max_intentos).where(
-            *condiciones)).all()
+        filas = con.execute(sa.select(db.tarea.c.id, db.tarea.c.intentos, db.tarea.c.max_intentos,
+                                      db.tarea.c.cliente, db.tarea.c.payload).where(*condiciones)).all()
         tocadas = 0
         interrumpidas = []
         for fila in filas:
+            # Lo que se guarda va en el idioma del proyecto de cada tarea (§B8),
+            # no en el del proceso que recupera.
+            idioma = idiomas.de_tarea({"cliente": fila.cliente, "payload": fila.payload or {}})
             if fila.intentos >= fila.max_intentos:
-                mensaje = recortar("Se interrumpió (llevaba más de %d min en curso). Revisa el resultado y "
-                                   "vuelve a intentar." % minutos)
+                with idiomas.en_idioma(idioma):
+                    mensaje = recortar(gettext("Se interrumpió (llevaba más de %(min)s min en curso). Revisa el "
+                                               "resultado y vuelve a intentar.", min=minutos))
                 con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
                     estado="error", terminada_en=db.ahora(), error=mensaje, mensaje=mensaje))
                 interrumpidas.append(_fila(con.execute(sa.select(db.tarea).where(db.tarea.c.id == fila.id)).first()))
             else:
+                with idiomas.en_idioma(idioma):
+                    error = recortar(gettext("recuperada: llevaba más de %(min)s min en curso", min=minutos))
                 con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
-                    estado="pendiente", ejecutar_desde=db.ahora(),
-                    error=recortar("recuperada: llevaba más de %d min en curso" % minutos)))
+                    estado="pendiente", ejecutar_desde=db.ahora(), error=error))
             tocadas += 1
         return tocadas, interrumpidas
 

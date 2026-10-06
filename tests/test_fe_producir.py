@@ -14,6 +14,13 @@ from final_edition import cortes, guion as guion_mod, musica, render, texto, voz
 # El real, antes de que el fixture `entorno` lo reemplace por uno falso.
 _GENERAR_GUION_BASE_REAL = guion_mod.generar_guion_base
 
+
+def _gastos(cliente):
+    import sqlalchemy as sa
+    import db
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente))]
+
 pytestmark = pytest.mark.skipif(
     shutil.which(cortes.FFMPEG) is None or shutil.which(cortes.FFPROBE) is None,
     reason="ffmpeg/ffprobe no instalados",
@@ -154,6 +161,59 @@ def test_preparar_guion_guarda_guion_base(entorno):
     assert args["referencia"]["transcripcion"] == "hola mundo"
     assert args["enfoque"] == "producto" and args["duracion_s"] == pytest.approx(8.0, abs=0.1)
     assert args["idioma_base"] == "es"
+
+
+def test_preparar_guion_anota_lo_pagado_aunque_el_guion_salga_invalido(entorno, monkeypatch):
+    """PND-001: un GuionInvalido llega después de pagar dos llamadas a Claude (y la transcripción de la
+    referencia); antes ese cobro no se anotaba en ningún lado."""
+    def invalido(*a, **k):
+        raise guion_mod.GuionInvalido(["el bloque cta supera la duración"], costo_usd=0.047)
+    monkeypatch.setattr(guion_mod, "generar_guion_base", invalido)
+    with pytest.raises(guion_mod.GuionInvalido):
+        final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900}, ref_sufijo=":t7")
+    filas = _gastos("acme")
+    assert len(filas) == 1 and filas[0]["tipo"] == "guion"
+    assert filas[0]["usd"] == pytest.approx(0.048)  # 0,047 de Claude + 0,001 de la transcripción
+    # Con el id de la tarea: otra tarea (otro clic) deja su propia fila en vez de pisar esta.
+    assert filas[0]["referencia"] == f"guion:{entorno['cf_id']}:t7"
+    assert "no salió válido" in filas[0]["detalle"]
+
+
+def test_preparar_guion_anota_lo_pagado_si_la_api_se_corta_a_mitad(entorno, monkeypatch):
+    """La primera llamada se cobró y la de corrección se cortó (timeout, 529): lo pagado se anota igual."""
+    def cortada(*a, **k):
+        e = RuntimeError("Error code: 529 - overloaded")
+        e.costo_usd = 0.02
+        raise e
+    monkeypatch.setattr(guion_mod, "generar_guion_base", cortada)
+    with pytest.raises(RuntimeError):
+        final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900}, ref_sufijo=":t8")
+    filas = _gastos("acme")
+    assert len(filas) == 1 and filas[0]["usd"] == pytest.approx(0.021)
+    assert "se cortó después de cobrar" in filas[0]["detalle"]
+
+
+def test_legado_variante_invalida_anota_lo_que_cobro(entorno, monkeypatch):
+    final_edition.producir("acme", entorno["cf_id"], "es", "CO", ref_sufijo=":t1")
+
+    def invalida(*a, **k):
+        raise guion_mod.GuionInvalido(["repite el hook"], costo_usd=0.03)
+    monkeypatch.setattr(guion_mod, "variar_guion", invalida)
+    with pytest.raises(guion_mod.GuionInvalido):
+        final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"variante": 1, "variante_tipo": "hook"},
+                               ref_sufijo=":t2")
+    filas = [f for f in _gastos("acme") if f["referencia"].endswith(":t2")]
+    assert len(filas) == 1 and filas[0]["usd"] == pytest.approx(0.03)
+
+
+def test_legado_localizacion_invalida_anota_lo_que_cobro(entorno, monkeypatch):
+    def invalida(guion_base, idioma, pais, precio, angulo=None):
+        raise guion_mod.GuionInvalido(["el hook no cabe"], costo_usd=0.025)
+    monkeypatch.setattr(guion_mod, "localizar_guion", invalida)
+    with pytest.raises(guion_mod.GuionInvalido):
+        final_edition.producir("acme", entorno["cf_id"], "en", "US", ref_sufijo=":t3")
+    filas = [f for f in _gastos("acme") if f["referencia"].startswith("final:")]
+    assert len(filas) == 1 and filas[0]["usd"] == pytest.approx(0.025)
 
 
 def test_guia_marca_corrupta_no_tumba_el_guion(entorno, monkeypatch):
@@ -731,3 +791,38 @@ def test_preparar_guion_le_pasa_los_aprendizajes_del_proyecto(entorno, monkeypat
     monkeypatch.setattr(guion_mod, "generar_guion_base", fake)
     final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
     assert "Perdió en CO: «¿Frío?»" in vistos["aprendizajes"]
+
+
+def test_preparar_guion_sin_idioma_base_usa_el_del_proyecto(entorno, monkeypatch):
+    """Decisión B: el guion base (también el que arma `producir` cuando falta)
+    sale en el idioma del proyecto."""
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["idioma_base"] == "en"
+
+
+def test_decision_b_la_final_co_de_un_proyecto_en_ingles_se_localiza_en_espanol(entorno, monkeypatch):
+    import creative_flow as cf
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    cf.guardar_guion_base("acme", entorno["cf_id"], dict(GUION_BASE, idioma="en", pais="US"))
+    final_id, _ = final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"precios": {"es_CO": 89900}})
+    assert final_id.endswith("__es_CO")
+    assert entorno["localizar"][:2] == ("es", "CO")
+
+
+def _voz_propia(cliente="acme", nombre="Ana", voice_id="mmx_1"):
+    import materiales
+    import voces_propias
+    return materiales.registrar(
+        cliente, tipo="audio", origen=voces_propias.ORIGEN, url=f"https://r2/vp_{voice_id}.mp3",
+        hash=materiales.hash_clave("voz_propia", "minimax", voice_id), bytes=10, duracion_ms=3000, costo_usd=3.0,
+        extra={"nombre": nombre, "forma": "disenada", "proveedor": "minimax", "voice_id": voice_id,
+               "idioma_muestra": "es", "estrenada": True})
+
+
+def test_legado_voz_propia_anota_minimax(entorno):
+    v = _voz_propia()
+    _, r = final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"voz": f"vp:{v['id']}"})
+    assert entorno["voz"]["voz"] == f"vp:{v['id']}" and r["capas"]["voz"]["proveedor"] == "fal/minimax"

@@ -22,8 +22,11 @@ import { MotorAudio } from "./motor_audio.js";
 import { evaluarRespuesta, INTERVALO_SONDEO_MS, listos, TOPE_SONDEO_MS } from "./pendientes.js";
 import { Reloj } from "./reloj.js";
 import { resolver } from "./resolver.js";
-import { rasterizarTexto } from "./texto_canvas.js";
-import { capasEn, cuadroVecino, duracionMs } from "./tiempo.js";
+import { aplicarFuentes, palabrasDe } from "./subtitulos_fuente.js";
+import { FAMILIA_EMOJI, rasterizarTexto } from "./texto_canvas.js";
+import { listaY, t } from "./textos.js";
+import { capasEn, cuadroVecino, duracionMs, pistaPrincipal } from "./tiempo.js";
+import { escalaMax, esV2, fuenteDe, limpiar } from "./tipografia.js";
 import { Videos } from "./videos.js";
 
 const $ = (id) => document.getElementById(id);
@@ -43,14 +46,6 @@ function aviso(id, texto, error = false) {
   el.classList.toggle("error", Boolean(error));
 }
 
-function enumerar(lista) {
-  try {
-    return new Intl.ListFormat("es", { type: "conjunction" }).format(lista);
-  } catch {
-    return lista.join(", ");
-  }
-}
-
 function formatoTiempo(ms) {
   const s = Math.max(0, ms) / 1000;
   return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
@@ -68,7 +63,7 @@ const archivoDe = (m) => `${m?.url ?? ""}\n${m?.url_proxy ?? ""}`;
 // picos) nunca se pierde: una copia vieja del mismo material (la de la
 // biblioteca, pintada antes de que llegara) que no lo trae se queda con lo
 // que la vista ya tenía — si no, la vista volvía al video original pesado.
-const PREPARADO = ["url_proxy", "proxy_version", "tira_url", "picos"];
+const PREPARADO = ["url_proxy", "proxy_version", "tira_url", "picos", "palabras", "tiene_palabras"];
 
 export function fusionarMateriales(vigentes, mapa) {
   const materiales = { ...vigentes };
@@ -99,9 +94,73 @@ export function infoDe(materiales) {
   const out = {};
   for (const [k, m] of Object.entries(materiales ?? {})) {
     if (!m) continue;
-    out[k] = { duracion_ms: m.duracion_ms || null, tiene_audio: m.tiene_audio ?? null };
+    out[k] = { duracion_ms: m.duracion_ms || null, tiene_audio: m.tiene_audio ?? null, palabras: m.palabras ?? null };
   }
   return out;
+}
+
+// ---- Capa 5c (D9.3): las fuentes se bajan cuando hacen falta ----------------------------------
+
+// Los subtítulos los dibuja lienzo.js con una de estas dos (`negrita` elige).
+const FUENTES_SUBTITULOS = ["Inter-Bold", "Inter-SemiBold"];
+// Cuántos lienzos teñidos se guardan (uno por material y color: cada uno pesa lo que la imagen).
+export const TOPE_TENIDAS = 24;
+
+// Lo que un texto del documento puede mostrar, en cualquier destino: su literal o, si es una
+// variable, el valor de cada destino (el documento va SIN resolver).
+function textosPosibles(doc, clip) {
+  const tx = clip.texto ?? {};
+  if (typeof tx.literal === "string") return [tx.literal];
+  if (typeof tx.variable !== "string") return [];
+  const textos = doc.variables?.textos;
+  const porDestino = textos && Object.hasOwn(textos, tx.variable) ? textos[tx.variable] : null;
+  return porDestino && typeof porDestino === "object" ? Object.values(porDestino).filter((v) => typeof v === "string") : [];
+}
+
+// ¿Alguna letra de `texto` la dibuja la fuente de emojis (tras quitar lo que el render quita)?
+function llevaEmoji(texto, fuente, tabla) {
+  for (const ch of limpiar(texto, fuente, tabla).texto) {
+    if (fuenteDe(ch.codePointAt(0), fuente, tabla) === "emoji") return true;
+  }
+  return false;
+}
+
+// Los subtítulos solo se dibujan si hay palabras o de dónde sacarlas.
+function hayPalabras(sub) {
+  if (!sub || sub.visibles === false) return false;
+  const lleno = (m) => Boolean(m) && typeof m === "object" && Object.values(m).some((l) => Array.isArray(l) && l.length > 0);
+  return lleno(sub.palabras) || lleno(sub.fuentes);
+}
+
+// Qué fuentes necesita el documento SIN resolver (la página las baja cuando hacen falta, no todas
+// al abrir): la de cada texto —en cualquier destino—, las dos de los subtítulos si los hay y
+// `CreatvEmoji` si algún texto v2 tiene una letra que `fuenteDe` manda a la fuente de emojis
+// (un texto v1 no dibuja emojis). Pura; `tabla` = `config.tipografia` (o null).
+export function fuentesDelDocumento(doc, tabla) {
+  const fuentes = new Set();
+  let emoji = false;
+  for (const pista of doc?.pistas ?? []) {
+    if (pista?.tipo !== "texto") continue;
+    for (const clip of pista.clips ?? []) {
+      const fuente = clip?.estilo?.fuente;
+      if (typeof fuente !== "string" || !fuente) continue;
+      fuentes.add(fuente);
+      if (emoji || !tabla?.emoji || !esV2(clip.estilo) || !Object.hasOwn(tabla.fuentes || {}, fuente)) continue;
+      emoji = textosPosibles(doc, clip).some((texto) => llevaEmoji(texto, fuente, tabla));
+    }
+  }
+  if (emoji) fuentes.add(FAMILIA_EMOJI);
+  if (hayPalabras(doc?.subtitulos)) for (const f of FUENTES_SUBTITULOS) fuentes.add(f);
+  return fuentes;
+}
+
+// `document.fonts.load` sin lanzar a quien llama (un navegador sin `document.fonts` rechaza la promesa).
+function bajarFuente(id) {
+  try {
+    return Promise.resolve(document.fonts.load(`32px "${id}"`));
+  } catch (e) {
+    return Promise.reject(e);
+  }
 }
 
 export class VistaPrevia {
@@ -131,6 +190,16 @@ export class VistaPrevia {
     this.audio = new MotorAudio(this.cfg, this.materialesVigentes);
     this.imagenes = new Map();
     this.imagenesFallidas = new Set();
+    // D13 (capa 5b): copia liviana (url_proxy || url) de una foto de la
+    // principal o de la imagen principal — caché APARTE de `imagenes` (que
+    // sigue siendo la original, para las capas encima, que necesitan su
+    // alfa y, en la capa 5, el canvas sin `crossOrigin` de las copias).
+    this.imagenesLigeras = new Map();
+    this.imagenesLigerasFallidas = new Set();
+    this.lienzosFondo = new Map();       // D5: el lienzo chico del fondo, por tamaño
+    this.imagenesTenidas = new Map();    // D11 (capa 5c): `${material}:${color}` → un sticker del color elegido
+    this.fuentesPedidas = new Map();     // D9.3: id → promesa (true si bajó); lo ya pedido no se pide otra vez
+    this.generacionFuentes = 0;          // sube cuando una fuente termina de bajar: texto_canvas rehace lo dibujado con la de respaldo
     this.inicioSondeo = null;
     this.recursos = this.crearRecursos();
   }
@@ -141,7 +210,32 @@ export class VistaPrevia {
     // la página editó: se re-resuelve el MISMO destino conservando el tiempo
     // (antes de iniciar() todavía no hay destino: iniciar() lo resuelve)
     this.documentoOriginal = docOriginal;
+    // las fuentes que el documento sumó (una fuente elegida, un emoji nuevo): lo ya pedido no se repite
+    this.cargarFuentes(fuentesDelDocumento(docOriginal, this.cfg.tipografia));
     if (this.destinoActual !== null) this.elegirDestino(this.destinoActual);
+  }
+
+  // Capa 5c (D9.3): baja las fuentes `ids` que falten (las que la página declara: las del catálogo y
+  // `CreatvEmoji`) y devuelve una promesa que se cumple cuando todas están. Cada una que llega sube
+  // `generacionFuentes` y pide un cuadro: texto_canvas la lleva en su clave y rehace lo que dibujó con
+  // la fuente de respaldo. Una que no baja no rompe nada ni se pide una y otra vez.
+  cargarFuentes(ids) {
+    const conocidas = new Set([...(this.cfg.fuentes ?? []), ...(this.cfg.emoji ? [FAMILIA_EMOJI] : [])]);
+    const esperas = [];
+    for (const id of new Set(ids ?? [])) {
+      if (!conocidas.has(id)) continue;
+      let pedida = this.fuentesPedidas.get(id);
+      if (!pedida) {
+        pedida = bajarFuente(id).then(() => {
+          this.generacionFuentes++;
+          this.pedirCuadro();
+          return true;
+        }, () => false);
+        this.fuentesPedidas.set(id, pedida);
+      }
+      esperas.push(pedida);
+    }
+    return Promise.all(esperas);
   }
 
   tiempo() {
@@ -167,6 +261,11 @@ export class VistaPrevia {
     this.materialesVigentes = materiales;
     this.audio.materiales = materiales;
     this.videos.materiales = materiales;
+    // las palabras pueden llegar después (la transcripción tarda): recalcular
+    // los subtítulos derivados del destino vigente, sin volver a resolver
+    // (aplicarFuentes nunca toca `this.doc` — devuelve uno nuevo, así que la
+    // caché de lienzo.js por identidad se refresca sola).
+    if (this.doc) this.doc = aplicarFuentes(this.doc, palabrasDe(materiales));
     for (const mid of cambiados) this.porRenovar.add(mid);
     if (!this.ocupado()) this.renovarPendientes();
     this.pedirCuadro();
@@ -184,6 +283,11 @@ export class VistaPrevia {
       this.audio.fallidos?.delete(mid);
       this.imagenes.delete(mid);
       this.imagenesFallidas.delete(mid);
+      this.imagenesLigeras.delete(mid);
+      this.imagenesLigerasFallidas.delete(mid);
+      for (const clave of [...this.imagenesTenidas.keys()]) {
+        if (clave.startsWith(`${mid}:`)) this.imagenesTenidas.delete(clave);     // el sticker teñido con el archivo viejo
+      }
       this.fallasCarga.delete(mid);
     }
     this.mostrarFallas();
@@ -214,10 +318,38 @@ export class VistaPrevia {
     if (!this.doc) return out;
     for (const { pista, clip } of capasEn(this.doc, tMs)) {
       if (pista.tipo !== "texto" || clip.texto?.literal === undefined) continue;
-      const r = rasterizar(clip.texto.literal, clip.estilo ?? {}, this.doc.formato);
+      // lo mismo que pide lienzo.js (la misma entrada de la caché): ancho/alto son los naturales
+      const r = rasterizar(clip.texto.literal, clip.estilo ?? {}, this.doc.formato, {
+        tabla: this.recursos?.tabla ?? null, escala: escalaMax(clip), generacion: this.recursos?.generacionFuentes ?? 0,
+      });
       out[clip.id] = [r.ancho, r.alto];
     }
     return out;
+  }
+
+  // Capa 5b (Tarea 7, D6/D8): [ancho, alto] que se VEN del cuadro de un
+  // clip de la pista principal de video — para mover y acercar su encuadre
+  // sobre el video y pintar su caja (seleccion.gestoEn): los del elemento
+  // que se dibuja (`videoWidth` del <video>, `naturalWidth` de la copia
+  // liviana de una foto — el navegador ya enderezó un video grabado de pie y
+  // la copia tiene la proporción del original) o, si todavía no cargó, los
+  // `ancho`/`alto` del material; null si no es un clip de la principal o no
+  // hay nada que medir.
+  medidasPrincipal(clipId) {
+    const doc = this.doc ?? this.documentoOriginal;
+    const p = doc ? pistaPrincipal(doc) : null;
+    const clip = p?.tipo === "video" ? p.clips.find((c) => c.id === clipId) : null;
+    if (!clip) return null;
+    const mid = Number(clip.material_id);
+    const m = this.materialesVigentes?.[mid];
+    const el = clip.foto || m?.tipo === "imagen" ? this.imagenesLigeras?.get(mid) : this.videos?.elementoDe(clip);
+    let w = 0;
+    let h = 0;
+    if (el && "videoWidth" in el) [w, h] = [el.videoWidth, el.videoHeight];
+    else if (el?.complete) [w, h] = [el.naturalWidth, el.naturalHeight];
+    if (w > 0 && h > 0) return [w, h];
+    const [mw, mh] = [Number(m?.ancho), Number(m?.alto)];
+    return mw > 0 && mh > 0 ? [mw, mh] : null;
   }
 
   // ---- Vista previa (capa 3) ----
@@ -230,13 +362,19 @@ export class VistaPrevia {
     const vista = this;
     const recursos = {
       material: (mid) => vista.materialesVigentes[mid] ?? null,
+      // D1/D13 (capa 5b): una foto (clip.foto) o la imagen principal van por
+      // la copia LIVIANA (url_proxy || url, D13) — un video sigue por su
+      // <video> de siempre.
       fuentePrincipal(clip) {
-        if (vista.materialesVigentes[clip.material_id]?.tipo === "imagen") return recursos.imagen(clip.material_id);
+        if (clip.foto || vista.materialesVigentes[clip.material_id]?.tipo === "imagen") {
+          return recursos.imagenLigera(clip.material_id);
+        }
         const el = vista.videos.elementoDe(clip);
         return el && el.readyState >= 2 ? el : null;
       },
       // un material que falló no se reintenta ni pide redibujar en cada cuadro
-      fallo: (clip) => vista.imagenesFallidas.has(Number(clip.material_id)) || vista.videos.fallo(clip),
+      fallo: (clip) => vista.imagenesFallidas.has(Number(clip.material_id)) ||
+        vista.imagenesLigerasFallidas.has(Number(clip.material_id)) || vista.videos.fallo(clip),
       medidas: (f) => (f instanceof HTMLVideoElement ? [f.videoWidth, f.videoHeight] : [f.naturalWidth, f.naturalHeight]),
       imagen(mid) {
         const id = Number(mid);
@@ -257,18 +395,90 @@ export class VistaPrevia {
         }
         return img.complete && img.naturalWidth ? img : null;
       },
+      // D13: la misma caché que `imagen`, pero con `url_proxy || url` (lado
+      // largo ≤ 1920 px: una foto de 12 MP entera tumbaría un teléfono) y
+      // guardada aparte (una capa encima de la misma imagen sigue pidiendo
+      // la original, con su alfa).
+      imagenLigera(mid) {
+        const id = Number(mid);
+        if (vista.imagenesLigerasFallidas.has(id)) return null;
+        let img = vista.imagenesLigeras.get(id);
+        if (!img) {
+          const m = vista.materialesVigentes[id];
+          if (!m) return null;
+          img = new Image();
+          img.addEventListener("load", vista.pedirCuadro);
+          img.addEventListener("error", () => {
+            vista.imagenesLigerasFallidas.add(id);
+            vista.avisarFalla(id);
+            vista.pedirCuadro();
+          });
+          img.src = m.url_proxy || m.url;
+          vista.imagenesLigeras.set(id, img);
+        }
+        return img.complete && img.naturalWidth ? img : null;
+      },
+      // Capa 5c (D11): la imagen `mid` teñida de `color` — un lienzo del tamaño natural de la imagen:
+      // el color relleno y la imagen encima con `destination-in` (color constante × el mismo alfa),
+      // lo mismo que hace `lutrgb` en el render. Es la imagen ORIGINAL (un sticker no tiene copia
+      // liviana). Caché por material y color, con tope; null si la imagen todavía no cargó.
+      imagenTenida(mid, color) {
+        const id = Number(mid);
+        const clave = `${id}:${color}`;
+        const hecha = vista.imagenesTenidas.get(clave);
+        if (hecha) {
+          vista.imagenesTenidas.delete(clave);      // un acierto lo deja al final: sale el que hace más que no se usa
+          vista.imagenesTenidas.set(clave, hecha);
+          return hecha;
+        }
+        const img = recursos.imagen(id);
+        if (!img) return null;
+        const lienzo = document.createElement("canvas");
+        lienzo.width = img.naturalWidth;
+        lienzo.height = img.naturalHeight;
+        const cx = lienzo.getContext("2d");
+        cx.fillStyle = color;
+        cx.fillRect(0, 0, lienzo.width, lienzo.height);
+        cx.globalCompositeOperation = "destination-in";
+        cx.drawImage(img, 0, 0);
+        vista.imagenesTenidas.set(clave, lienzo);
+        if (vista.imagenesTenidas.size > TOPE_TENIDAS) vista.imagenesTenidas.delete(vista.imagenesTenidas.keys().next().value);
+        return lienzo;
+      },
+      // Capa 5c (D5.7, D9.3): lo que lienzo.js le pasa a rasterizarTexto — la tabla tipográfica
+      // (la misma maqueta que el render) y la generación de fuentes, que se lee en cada cuadro.
+      tabla: vista.cfg.tipografia ?? null,
+      get generacionFuentes() {
+        return vista.generacionFuentes;
+      },
+      // D5: el lienzo chico del fondo desenfocado, reutilizado por tamaño
+      // (el formato de la edición no cambia en una sesión).
+      lienzoFondo(w, h) {
+        const clave = `${w}x${h}`;
+        let c = vista.lienzosFondo.get(clave);
+        if (!c) {
+          c = document.createElement("canvas");
+          c.width = w;
+          c.height = h;
+          vista.lienzosFondo.set(clave, c);
+        }
+        return c;
+      },
+      // D5: se mira una sola vez (Safari viejo no tiene `filter` en el
+      // lienzo: se ve blando, sin desenfoque real — se acepta, spec riesgo 3).
+      filtroFondo: typeof vista.ctx.filter === "string",
     };
     return recursos;
   }
 
   nombreMaterial(mid) {
     const m = this.materialesVigentes[mid];
-    const tipo = m?.tipo === "imagen" ? "la imagen" : m?.tipo === "video" ? "el video" : "el archivo";
+    const tipo = t(m?.tipo === "imagen" ? "vista.nombre_imagen" : m?.tipo === "video" ? "vista.nombre_video" : "vista.nombre_archivo");
     let archivo = "";
     try {
       archivo = decodeURIComponent(String(m?.url_proxy || m?.url || "").split("?")[0].split("/").pop() || "");
     } catch { /* nombre raro: solo el tipo */ }
-    return archivo ? `${tipo} «${archivo.slice(0, 40)}»` : tipo;
+    return archivo ? t("vista.nombre_con_archivo", { tipo, archivo: archivo.slice(0, 40) }) : tipo;
   }
 
   avisarFalla(mid) {
@@ -280,34 +490,37 @@ export class VistaPrevia {
     const lista = [...this.fallasCarga].map((mid) => this.nombreMaterial(mid));
     const varias = lista.length > 1;
     aviso("aviso-carga", lista.length
-      ? `No se ${varias ? "pudieron" : "pudo"} cargar ${enumerar(lista)} (el enlace no respondió o el archivo ya no está): ${varias ? "esas partes quedan vacías" : "esa parte queda vacía"} en la vista previa.`
+      ? t(varias ? "vista.carga_varias" : "vista.carga_una", { lista: listaY(lista) })
       : "", true);
   }
 
   avisoSonido() {
     const n = this.audio.fallidos.size;
     return n
-      ? `No se pudo cargar el sonido de ${n} archivo(s) (puede ser la conexión o que el almacenamiento no dé permiso de lectura): la vista previa sigue sin ese sonido.`
+      ? t("vista.sonido_fallo", { n })
       : "";
   }
 
   elegirDestino(clave) {
     this.destinoActual = clave;
-    const t = this.reloj ? this.reloj.tiempo() : 0;
+    const ms = this.reloj ? this.reloj.tiempo() : 0;
     if (this.ocupado()) this.pausar();
     const [idioma, pais] = clave.split("_");
     try {
-      this.doc = resolver(this.documentoOriginal, idioma, pais);
+      // D1 (capa 5a): el resuelto ya aplicó por_destino e idioma (D10); las
+      // palabras de los subtítulos se derivan aparte, de las fuentes que
+      // elige el documento, nunca de tiempos absolutos guardados.
+      this.doc = aplicarFuentes(resolver(this.documentoOriginal, idioma, pais), palabrasDe(this.materialesVigentes));
       aviso("aviso-destino", "");
     } catch (e) {
       this.doc = null;
-      aviso("aviso-destino", e.name === "VariableSinValor" ? `${e.message} Elige otro destino.`
-        : `No se pudo preparar este destino: ${e.message}`, true);
+      aviso("aviso-destino", e.name === "VariableSinValor" ? t("vista.destino_sin_valor", { mensaje: e.message })
+        : t("vista.destino_error", { mensaje: e.message }), true);
       return;
     }
     const dur = duracionMs(this.doc);
     this.reloj = new Reloj(() => this.audio.ahoraMs(), dur);
-    this.reloj.ir(Math.min(t, dur));
+    this.reloj.ir(Math.min(ms, dur));
     $("barra").max = String(dur);
     this.pedirCuadro();
   }
@@ -318,8 +531,8 @@ export class VistaPrevia {
     const miTurno = ++this.turno;
     this.cargando = true;
     $("reproducir").textContent = "⏸";
-    $("reproducir").setAttribute("aria-label", "Pausar");
-    aviso("aviso-audio", "Cargando el sonido…");
+    $("reproducir").setAttribute("aria-label", t("vista.pausar"));
+    aviso("aviso-audio", t("vista.cargando_sonido"));
     let inicio = null;
     let falla = null;
     try {
@@ -331,7 +544,7 @@ export class VistaPrevia {
     this.cargando = false;
     if (falla) {
       inicio = this.audio.ahoraMs();
-      aviso("aviso-audio", `La vista previa va sin sonido: ${falla.message}`, true);
+      aviso("aviso-audio", t("vista.sin_sonido", { mensaje: falla.message }), true);
     } else if (inicio === null) {      // MotorAudio la descartó por vieja
       this.pausar();
       return;
@@ -350,7 +563,7 @@ export class VistaPrevia {
     this.videos.pausarTodo();
     this.renovarPendientes();                    // lo que llegó mientras reproducía
     $("reproducir").textContent = "▶";
-    $("reproducir").setAttribute("aria-label", "Reproducir");
+    $("reproducir").setAttribute("aria-label", t("vista.reproducir"));
     this.pedirCuadro();
   }
 
@@ -359,24 +572,24 @@ export class VistaPrevia {
     requestAnimationFrame(this.cuadro);
     if (!this.doc || !this.reloj) return;
     try {
-      const t = this.reloj.tiempo();
+      const ms = this.reloj.tiempo();
       const rep = this.reloj.reproduciendo;
-      this.videos.sincronizar(this.doc, t, rep);
+      this.videos.sincronizar(this.doc, ms, rep);
       if (rep || this.pedido) {
         this.pedido = false;
-        const r = dibujarCuadro(this.ctx, this.doc, t, this.recursos, this.cfg);
+        const r = dibujarCuadro(this.ctx, this.doc, ms, this.recursos, this.cfg);
         $("aproximada").hidden = !r.aproximada;
         if (r.faltaCuadro) this.pedido = true;        // el video todavía no tiene ese cuadro
-        $("tiempo").textContent = `${formatoTiempo(t)} / ${formatoTiempo(this.reloj.dur)}`;
-        if (document.activeElement !== $("barra")) $("barra").value = String(Math.round(t));
-        this.alCambiarTiempo(t, rep);              // la línea de tiempo mueve su cabezal
+        $("tiempo").textContent = `${formatoTiempo(ms)} / ${formatoTiempo(this.reloj.dur)}`;
+        if (document.activeElement !== $("barra")) $("barra").value = String(Math.round(ms));
+        this.alCambiarTiempo(ms, rep);              // la línea de tiempo mueve su cabezal
       }
       if (rep && this.reloj.terminado()) this.pausar();
     } catch (e) {
       if (!this.errorDibujo) {
         this.errorDibujo = true;
         console.error(e);
-        aviso("aviso-dibujo", `La vista previa tuvo un problema al dibujar (${e.message}). Recarga la página; si se repite, avísanos.`, true);
+        aviso("aviso-dibujo", t("vista.dibujo", { mensaje: e.message }), true);
       }
     }
   }
@@ -388,7 +601,7 @@ export class VistaPrevia {
   // (sesión vencida, edición borrada), se deja de preguntar y se avisa.
   rendirsePendientes() {
     const n = this.datos.pendientes.length;
-    aviso("aviso-preparando", `No se ${n > 1 ? "pudieron" : "pudo"} preparar las copias livianas de ${n} archivo(s): la vista previa sigue con los originales (se ve igual, solo tarda más en cargar).`);
+    aviso("aviso-preparando", t(n > 1 ? "vista.proxies_varios" : "vista.proxies_uno", { n }));
   }
 
   usarListos(j) {
@@ -399,7 +612,14 @@ export class VistaPrevia {
     for (const mid of ids) this.materialesVigentes[mid] = j.materiales[mid];
     this.audio.materiales = this.materialesVigentes;
     this.videos.renovar(this.materialesVigentes, ids);
-    for (const mid of ids) if (this.materialesVigentes[mid]?.tipo === "video") this.fallasCarga.delete(mid);
+    for (const mid of ids) {
+      if (this.materialesVigentes[mid]?.tipo === "video") this.fallasCarga.delete(mid);
+      // D13 (capa 5b, Tarea 6): la foto o la imagen principal que acaba de
+      // recibir su `url_proxy` — si no se suelta, la <Image> ya cacheada se
+      // queda con el `src` del original para siempre (como renovarPendientes).
+      this.imagenesLigeras.delete(mid);
+      this.imagenesLigerasFallidas.delete(mid);
+    }
     this.mostrarFallas();
     this.pedirCuadro();
     this.alCambiarMateriales(this.materiales);   // llegaron proxies o tiras: la línea las usa
@@ -414,7 +634,7 @@ export class VistaPrevia {
       this.rendirsePendientes();
       return;
     }
-    aviso("aviso-preparando", `Preparando ${this.datos.pendientes.length} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales.`);
+    aviso("aviso-preparando", t("vista.preparando", { n: this.datos.pendientes.length }));
     let decision = "reintentar";                 // sin red: se vuelve a intentar
     try {
       const r = await fetch(this.datos.urls.materiales, { headers: { Accept: "application/json" } });
@@ -446,15 +666,12 @@ export class VistaPrevia {
     const sel = $("destino");
     for (const d of datos.destinos) sel.append(new Option(d.replace("_", " · "), d));
     sel.addEventListener("change", () => this.elegirDestino(sel.value));
-    if (datos.aviso_recortes) {
-      aviso("aviso-recortes", `Esta edición no se puede producir tal como está: ${datos.aviso_recortes}`, true);
-    }
-    if (datos.faltantes.length) {
-      aviso("aviso-faltan", `Faltan ${datos.faltantes.length} archivo(s) de esta edición (se borraron o no son de este proyecto): esas partes no se verán.`, true);
-    }
-    try {
-      await Promise.all(this.cfg.fuentes.map((f) => document.fonts.load(`32px "${f}"`)));
-    } catch { /* sigue con la fuente de respaldo */ }
+    // «aviso-recortes» y «aviso-faltan» los pinta la página en cada refresco
+    // (capa 4c, avisos_carga.js): con el documento vigente, no el de la carga.
+    // Capa 5c (D9.3): solo las fuentes que el documento usa (con 11 serían ~2 MB en el celular) y la
+    // de emojis si algún texto lleva uno; las demás las baja `cargarFuentes` cuando el documento
+    // las pide. Si alguna no baja, se sigue con la de respaldo.
+    await this.cargarFuentes(fuentesDelDocumento(this.documentoOriginal, this.cfg.tipografia));
     $("reproducir").addEventListener("click", () => (this.ocupado() ? this.pausar() : this.reproducir()));
     $("inicio").addEventListener("click", () => {
       this.pausar();

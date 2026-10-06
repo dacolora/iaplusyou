@@ -18,12 +18,14 @@ import smtplib
 from email.message import EmailMessage
 
 import bitacora
+import idiomas
 import proyectos
 
 log = logging.getLogger("creatv.notificaciones")
 
 TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "tienda", "sprint_lote", "publicado",
-         "meta_solicitud", "meta_conexion_cliente", "meta_cambio_forma", "meta_conectado", "tw_evaluacion")
+         "meta_solicitud", "meta_conexion_cliente", "meta_cambio_forma", "meta_conectado", "tw_evaluacion",
+         "sin_saldo", "error_app")
 
 
 def _config():
@@ -89,21 +91,36 @@ def avisar(cliente, tipo, asunto, cuerpo):
     return enviado
 
 
-def correos_admin():
-    """Correos verificados de los usuarios con rol admin (usuarios.json),
-    ordenados y sin repetir. [] si no hay o el archivo no se puede leer."""
+def admins_con_correo():
+    """(usuario, correo) de los admins con correo verificado (usuarios.json),
+    sin correos repetidos, ordenados por correo. [] si no hay o el archivo no
+    se puede leer."""
     import usuarios  # noqa: PLC0415 — import tardío: usuarios no depende de este módulo, pero así no se acoplan al cargar
     try:
         data = usuarios.cargar()
     except Exception as error:  # noqa: BLE001
         log.error("no se pudo leer usuarios.json para avisar a los admins: %s", type(error).__name__)
         return []
-    correos = set()
-    for entry in (data or {}).values():
+    por_correo = {}
+    for usuario, entry in (data or {}).items():
         correo = (entry.get("correo") or "").strip()
         if entry.get("rol") == "admin" and entry.get("correo_verificado") and correo:
-            correos.add(correo)
-    return sorted(correos)
+            por_correo.setdefault(correo, usuario)
+    return sorted(((u, c) for c, u in por_correo.items()), key=lambda uc: uc[1])
+
+
+def correos_admin():
+    """Correos verificados de los usuarios con rol admin, ordenados y sin repetir."""
+    return [c for _u, c in admins_con_correo()]
+
+
+def _textos(idioma, *valores):
+    """Cada valor tal cual si es texto; si es una función, su resultado
+    armado en `idioma`. Sin funciones no se toca el idioma (texto = como antes)."""
+    if not any(callable(v) for v in valores):
+        return valores
+    with idiomas.en_idioma(idioma):
+        return tuple(v() if callable(v) else v for v in valores)
 
 
 def avisar_admin(tipo, asunto, cuerpo, cliente=""):
@@ -111,18 +128,25 @@ def avisar_admin(tipo, asunto, cuerpo, cliente=""):
     solicitud de un cliente, una conexión hecha por un cliente, un cambio de
     forma. Un correo por admin con correo verificado; siempre queda en la
     bitácora (del proyecto que lo originó, o "_admin"). Devuelve cuántos
-    correos salieron. Nunca lanza."""
+    correos salieron. Nunca lanza.
+
+    `asunto` y `cuerpo` pueden ser texto o una función sin argumentos: si son
+    funciones se llaman una vez por admin, en el idioma de ese admin (spec
+    2026-09-26 §B8), y la bitácora guarda el asunto en el idioma por defecto."""
     if tipo not in TIPOS:
         log.warning("tipo de aviso desconocido: %r", tipo)
     enviados = 0
-    for correo in correos_admin():
+    for usuario, correo in admins_con_correo():
         try:
-            if enviar(correo, asunto, cuerpo):
+            a, c = (_textos(idiomas.de_usuario(usuario), asunto, cuerpo)
+                    if callable(asunto) or callable(cuerpo) else (asunto, cuerpo))
+            if enviar(correo, a, c):
                 enviados += 1
         except Exception as error:  # noqa: BLE001 — defensa extra; enviar ya no lanza
             log.error("aviso admin %s falló: %s", tipo, type(error).__name__)
     try:
-        bitacora.registrar(cliente or "_admin", "admin", tipo, f"enviado:{enviados}" if enviados else "sin_correo", asunto)
+        (a0,) = _textos(idiomas.DEFECTO, asunto)
+        bitacora.registrar(cliente or "_admin", "admin", tipo, f"enviado:{enviados}" if enviados else "sin_correo", a0)
     except Exception as error:  # noqa: BLE001
         log.error("no se pudo registrar el aviso admin en la bitácora: %s", type(error).__name__)
     return enviados

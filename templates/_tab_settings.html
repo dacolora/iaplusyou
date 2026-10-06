@@ -128,7 +128,7 @@
   <tbody>
     {% for t in tiendas_cliente %}
     <tr>
-      <td><span class="tag-estado badge-fuente badge-fuente-{{ t.tipo }}">{{ t.tipo }}</span></td>
+      <td><span class="tag-estado badge-fuente badge-fuente-{{ t.tipo }}">{{ {"shopify_publico": _("Shopify (sin llaves)")}.get(t.tipo, t.tipo) }}</span></td>
       <td><strong>{{ t.nombre or t.dominio or "—" }}</strong>{% if t.nombre and t.dominio %}<br><small class="vacio" style="padding:0;">{{ t.dominio }}</small>{% endif %}</td>
       <td>
         {% if t.estado == "rota" %}<span class="tag-estado tag-descartado">{{ _('rota') }}</span>{% if t.error %}<br><small class="tag-error">{{ t.error }}</small>{% endif %}
@@ -159,11 +159,21 @@
   <summary class="swap-card-resumen">+ {{ _('Conectar tienda') }}</summary>
   <div class="cat-tabs tienda-tipos" role="tablist">
     {% for tipo in tipos_tienda %}
-    <button type="button" class="cat-tab tienda-tipo-btn{% if loop.first %} activo{% endif %}" data-tienda-tipo="{{ tipo }}">{{ {"shopify": "Shopify", "woo": "WooCommerce", "meli": "MercadoLibre"}.get(tipo, tipo) }}</button>
+    <button type="button" class="cat-tab tienda-tipo-btn{% if loop.first %} activo{% endif %}" data-tienda-tipo="{{ tipo }}">{{ {"shopify_publico": _("Shopify (sin llaves)"), "shopify": "Shopify", "woo": "WooCommerce", "meli": "MercadoLibre"}.get(tipo, tipo) }}</button>
     {% endfor %}
   </div>
 
-  <div class="tienda-tipo-panel" data-tienda-panel="shopify">
+  <div class="tienda-tipo-panel" data-tienda-panel="shopify_publico">
+    <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
+      <input type="hidden" name="tipo" value="shopify_publico">
+      <label class="campo-label">{{ _('Dominio de la tienda') }}</label>
+      <input type="text" name="dominio" placeholder="mitienda.com" required {% if not cifrado_ok %}disabled{% endif %}>
+      <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('Solo el catálogo público: productos, colores con su foto, precios y URL de compra, sin ninguna llave. Los pedidos y la atribución necesitan la Admin API (pestaña Shopify).') }}</p>
+      <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Conectar Shopify (sin llaves)') }}</button>
+    </form>
+  </div>
+
+  <div class="tienda-tipo-panel" data-tienda-panel="shopify" hidden>
     <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
       <input type="hidden" name="tipo" value="shopify">
       <label class="campo-label">{{ _('Dominio de la tienda') }}</label>
@@ -239,7 +249,7 @@
   {% if estado_pixel.nombre %}<strong>{{ estado_pixel.nombre }}</strong>{% endif %}
   {% if estado_pixel.pixel_id %}<small class="vacio" style="padding:0;">id {{ estado_pixel.pixel_id }}</small>{% endif %}
   {% if estado_pixel.ultimo_disparo %}<small>· {{ _('último disparo') }} {{ estado_pixel.ultimo_disparo[:16] }}</small>{% endif %}
-  {% if estado_pixel.detalle %}<small class="vacio" style="padding:0;display:block;">{{ estado_pixel.detalle }}</small>{% endif %}
+  {% if estado_pixel.detalle %}<small class="vacio" style="padding:0;display:block;">{{ estado_pixel.detalle|traducir }}</small>{% endif %}
   <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">{{ _('Volver a comprobar') }}</button></form>
 </div>
 {% elif meta_conectado %}
@@ -323,7 +333,7 @@
   <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">{{ _('Guardar nombre') }}</button>
 </form>
 
-<h2>{{ _('Logos oficiales') }}</h2>
+<h2 id="config-logos">{{ _('Logos oficiales') }}</h2>
 <p class="vacio" style="padding-top:0;">
   {{ _('El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia
   <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.
@@ -553,7 +563,7 @@
   <div class="kpi-tile">
     <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ _('%(n)s cobro(s) a proveedores', n=gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {% for p in pauta_mes %}
   <div class="kpi-tile">

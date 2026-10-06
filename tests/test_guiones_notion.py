@@ -103,7 +103,7 @@ def test_leer_lote_de_notion_expirado_no_llama_a_claude(base_temporal, monkeypat
     from tests.fixtures_guiones import TEXTO, fake
 
     def vencido(llave, pid, http=None):
-        limite = (datetime.now() - timedelta(minutes=10)).isoformat(timespec="seconds")
+        limite = (datetime.now() - timedelta(minutes=datos.MINUTOS_TRABAJO + 4)).isoformat(timespec="seconds")
         with base_temporal.conectar() as con:
             con.execute(base_temporal.guion_lote.update().values(iniciado_en=limite))
         return "Batch", TEXTO

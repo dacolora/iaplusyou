@@ -179,8 +179,11 @@ Instagram para publicar.
 2. En el panel, ve a **R2 Object Storage** y crea un bucket, por ejemplo `higgsfield-videos`.
 3. Entra al bucket > **Settings** > **Public access**, y activa **"Allow Access"** sobre el
    dominio `r2.dev` (te da una URL pública tipo `https://pub-xxxxxxxx.r2.dev` al instante).
-   Si prefieres tu propio dominio (ej. `videos.tudominio.com`), conéctalo ahí mismo — es
-   opcional, el `r2.dev` funciona igual de bien para esto.
+   Para producción conecta ahí mismo un dominio propio (ej. `media.tudominio.com`, en
+   **Custom Domains**): el `r2.dev` sirve para probar, pero tiene límite de tráfico y no pasa
+   por el CDN de Cloudflare; con el dominio propio cada imagen y video sale del borde más
+   cercano y las finales y audios (claves que nunca cambian) se guardan un año en el
+   navegador. `/admin/salud` avisa mientras siga el `r2.dev`.
 4. Copia esa URL pública a tu `.env` como `R2_PUBLIC_BASE_URL` (sin barra al final), y el
    nombre del bucket como `R2_BUCKET_NAME`.
 5. Ve a **R2 > Manage R2 API Tokens** > **Create API Token**.
@@ -435,6 +438,44 @@ Cuota: la búsqueda (`search.list`) tiene un cupo de **100 llamadas por día** p
 2. **Settings › Integrations › Personal API token**: cópialo como `APIFY_TOKEN`.
 
 El dashboard usa dos actores de la tienda, ambos con precio por resultado: `junglee~amazon-reviews-scraper` (≈ US$ 3 por 1 000 reseñas) y `clockworks~tiktok-comments-scraper` (≈ US$ 0,50 por 1 000 comentarios). Antes de cada clic se muestra el estimado y la corrida nunca se reintenta sola; el gasto real queda en Configuración › Gasto como tipo `recoleccion`. Traer datos de Amazon o TikTok por scraping es una zona gris de sus términos de uso: es responsabilidad de quien pone el token.
+
+### 7.4 TrendTrack (biblioteca de referentes, por créditos del plan)
+
+1. En [trendtrack.io](https://www.trendtrack.io) elige el plan **Pro o superior** (el Starter no incluye la API).
+2. Crea una API key en tu workspace (guía: [docs.trendtrack.io](https://docs.trendtrack.io) › Getting Started) y cópiala como `TRENDTRACK_API_KEY`.
+3. Reinicia el dashboard y el worker. La fuente aparece en «Traer referentes» (por proyecto y en `/admin/referentes`).
+
+Solo busca por palabra clave y trae anuncios de Meta. Cada anuncio revisado cuesta **1 crédito** (US$ 1 = 1 000 créditos; el Pro incluye 20 000 al mes). Como TrendTrack no recibe el filtro de formato ni el de «solo activos» desde aquí, esos se aplican después de recibir las filas: se revisan hasta tres veces los anuncios que pidas. El uso del mes y el saldo que informa TrendTrack se ven en `/admin/referentes`. Límites del plan Pro: 20 peticiones por segundo y 1 200 por hora.
+
+**Sin verificar contra una respuesta real** (el dominio de la documentación estaba bloqueado al escribir el conector): los nombres de los campos de cada anuncio. La primera página es de solo 10 filas; si ninguna se reconoce, el barrido se detiene con un error que lista los campos recibidos y se corrige la tabla `_CLAVES` de `referentes/fuentes/trendtrack.py`.
+
+## 8. Servidor: escala, errores y monitoreo
+
+Spec `docs/superpowers/specs/2026-10-01-escala-y-monitoreo-design.md`. Al desplegar esta versión:
+
+1. `venv/bin/alembic upgrade head` (0026 agrega índices, 0027 la tabla de errores; solo
+   agregan, se puede correr con la app arriba) y reiniciar **los dos** servicios.
+2. **gunicorn**: su configuración ahora vive en el repo, `deploy/gunicorn.conf.py` (UN proceso
+   a propósito, 16 hilos, sin reciclar). Para usarla, la unidad del servicio `iaplusyou` pasa a
+   `ExecStart=… gunicorn -c deploy/gunicorn.conf.py dashboard:app` (ejemplo completo en
+   `deploy/iaplusyou.service`). Con 16 hilos, `CREATV_DB_POOL` (10 por defecto + 10 de reserva)
+   alcanza; si subes `GUNICORN_HILOS` por encima de 20, sube también `CREATV_DB_POOL`.
+3. **nginx**: `deploy/nginx-creatv.conf` es un ejemplo para comparar con el del VPS: sirve
+   `/static/` directo del disco (con las mismas cabeceras de caché que la app), comprime con
+   gzip el HTML/CSS/JS/JSON, limita el POST de `/login` y trae el bloque para poner
+   **Cloudflare** delante (DNS en «proxied» + la IP real desde `CF-Connecting-IP`).
+4. **Registros**: la app y el worker escriben `data/logs/web.log` y `data/logs/worker.log`
+   (rotan a los 5 MB, guardan 5). Se leen y descargan desde **Panel › Salud y errores ›
+   Registros**, sin entrar al servidor. `CREATV_SIN_REGISTRO=1` lo apaga.
+5. **Errores**: cada error de una página, una tarea o un trabajo en segundo plano, y cada
+   `log.error`, queda agrupado en **/admin/salud**; uno nuevo llega por correo a los admins
+   con correo verificado si hay SMTP (como mucho 10 por hora; `CREATV_AVISOS_ERRORES=0` los
+   apaga). Los resueltos y silenciados se borran a los 90 días (tarea diaria `errores_limpiar`).
+6. **Monitor externo**: `https://app.creatvmachine.com/salud` responde `{"ok": true}` (200)
+   si la app y la base contestan, 503 si no. Apúntale un monitor gratuito (UptimeRobot, Better
+   Stack) cada 1–5 min para enterarte de una caída aunque nadie esté mirando.
+7. **Medir antes de cambiar**: `rendimiento/README.md` (datos de carga, prueba de 100 usuarios
+   con Locust y la auditoría de índices). Nunca contra producción.
 
 ## Resumen de limitaciones a tener en cuenta
 

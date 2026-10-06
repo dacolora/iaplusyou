@@ -1,0 +1,36 @@
+/* Marca Creatv Galadsy (2026-10-06): el símbolo y el nombre son máscaras (PNG con alfa en static/img/galadsy-*)
+   pintadas con el color del texto, así siguen el tema sin un segundo juego de archivos. */
+.marca-mark,
+.marca-texto,
+.marca-logo {
+  display: inline-block;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: left center;
+  mask-position: left center;
+}
+.marca-mark {
+  width: 26px;
+  height: 28px;
+  -webkit-mask-image: url("img/galadsy-simbolo.png");
+  mask-image: url("img/galadsy-simbolo.png");
+}
+.marca-texto {
+  width: 80px;
+  height: 27px;
+  -webkit-mask-image: url("img/galadsy-nombre.png");
+  mask-image: url("img/galadsy-nombre.png");
+}
+/* Logo completo (símbolo + nombre) de las páginas principales: portada, login, recuperar, restablecer, legales. */
+.marca-logo {
+  width: 250px;
+  height: 68px;
+  max-width: 100%;
+  margin-bottom: var(--esp-4);
+  -webkit-mask-image: url("img/galadsy-logo.png");
+  mask-image: url("img/galadsy-logo.png");
+}

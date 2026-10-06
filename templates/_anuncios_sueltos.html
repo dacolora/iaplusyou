@@ -67,9 +67,9 @@
     {% set trabajo_ad = trabajos_ads.get(ad_id) if trabajos_ads else none %}
     {% if trabajo_ad %}
     {# El worker está publicando o trayendo métricas: barra + recarga sola al terminar. #}
-    <div class="barra-progreso" id="trabajo-{{ trabajo_ad.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+    {# Sin <script>: llega dentro del fragmento de resultados (innerHTML no lo corre); arrancarSondeos lee data-poll-job. #}
+    <div class="barra-progreso" id="trabajo-{{ trabajo_ad.job_id }}" data-poll-job="{{ trabajo_ad.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
     <div class="progreso-texto">{% if entry.estado == "publicando" %}{{ _('Publicando en Meta…') }}{% else %}{{ _('Actualizando métricas…') }}{% endif %} {{ _('0%% · 0s') }}</div>
-    <script>iniciarPolling({{ trabajo_ad.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_ad.job_id) | tojson }});</script>
     {% endif %}
 
     <div class="exp-acciones">
@@ -131,8 +131,8 @@
         <button type="submit" class="btn-guardar btn-sm">{{ _('Meter en experimento') }}</button>
       </form>
       {% elif elegible and elegible.pieza_id %}
-      {# Sin experimento en armado: el mismo «Probar en Meta» de Crear (galería con la pieza marcada). #}
-      <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ elegible.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
+      {# Sin experimento en armado: el mismo «Probar en Meta» de Crear («Nuevo experimento» con la pieza marcada). #}
+      <a class="btn-guardar btn-sm" href="{{ url_for('exp_nuevo', cliente=cliente, piezas=elegible.pieza_id) }}">{{ _('Probar en Meta') }}</a>
       {% elif not elegible %}
       <small class="vacio">{{ _('Esta pieza ya no está en Crear: genera una nueva y métela en un experimento.') }}</small>
       {% endif %}

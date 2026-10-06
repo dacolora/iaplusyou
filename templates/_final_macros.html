@@ -1,0 +1,34 @@
+{# Etiquetas de Final edition (spec idioma, fase 6): capas (nombre y estado),
+   roles del guion y presets de mezcla — el estado de una pieza o de una
+   final es de `etiqueta_estado` (_etiquetas_estado.html). La clave guardada no
+   cambia; la etiqueta en español es la clave con «_» → espacio, lo que se
+   veía antes. El diccionario va DENTRO de la macro: un {% set %} de módulo
+   en una plantilla importada se cachea en el primer idioma que la carga. #}
+{% macro etiqueta_fe(valor) -%}
+{%- set etiquetas = {
+  "error": _("error"), "ok": _("ok"), "omitida": _("omitida"), "ausente": _("ausente"), "desconocido": _("desconocido"),
+  "guion": _("guion"), "cortes": _("cortes"), "voz": _("voz"), "musica": _("musica"), "texto": _("texto"),
+  "render": _("render"), "sonido": _("sonido"), "mezcla": _("mezcla"),
+  "hook": _("hook"), "problema": _("problema"), "producto": _("producto"), "prueba": _("prueba"), "cta": _("cta"),
+  "equilibrada": _("equilibrada"), "voz_protagonista": _("voz protagonista"),
+  "ambiente_protagonista": _("ambiente protagonista")} -%}
+{{ etiquetas.get(valor, (valor or "") | replace("_", " ")) }}
+{%- endmacro %}
+
+{# Íconos del tablero de Final edition (2026-10-02): trazo con currentColor,
+   como los de la barra lateral; el color y el brillo los pone el CSS. #}
+{% macro icono_fe(nombre) -%}
+{%- set trazos = {
+  "editar": '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>',
+  "produciendo": '<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/>',
+  "listo": '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16.2 9.4"/>',
+  "paises": '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.2 3.4 3.2 14.6 0 18M12 3c-3.2 3.4-3.2 14.6 0 18"/>',
+  "costo": '<circle cx="12" cy="12" r="9"/><path d="M14.8 9.4c-.5-.9-1.5-1.4-2.8-1.4-1.6 0-2.8.8-2.8 1.9s1.2 1.6 2.8 1.9 2.8.9 2.8 2-1.2 2-2.8 2c-1.3 0-2.4-.5-2.9-1.4M12 6.5v11"/>',
+  "video": '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.3v5.4l4.6-2.7z"/>',
+  "cortar": '<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.6L20 17M8.2 15.4L20 7"/>',
+  "voz": '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+  "producir": '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
+  "publicar": '<path d="M4 12.5L20 4l-5.5 16-3.2-6.3L4 12.5z"/><path d="M11.3 13.7L20 4"/>',
+  "mas": '<path d="M12 5v14M5 12h14"/>'} -%}
+<svg class="fe-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ trazos[nombre] | safe }}</svg>
+{%- endmacro %}

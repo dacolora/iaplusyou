@@ -1,248 +1,493 @@
 """
-State machine pura para Nicho Parte 3 (spec §1, §2, §5–§6).
+Máquina de estados de la investigación automática del nicho (spec Parte 3
+§1, §2.4, §5, §6): funciones puras sobre el diccionario
+`estudio.extra.investigacion` (quien persiste es `nicho.datos`), el estimado
+que se aprueba con un clic, y las dos llamadas a Claude (consultas y
+selección) por `nicho.avatares._llamar` (modelo del proyecto, tokens reales).
 
-Funciones puras que leen/escriben el diccionario extra.investigacion.
-El worker y Flask usan estas para avanzar la cadena sin lógica duplicada.
-
-Las tres tareas principales (consultas, buscar, seleccionar) caen en
-max_intentos=2 (Claude, barato); búsquedas y reseñas en max_intentos=1
-(Apify, de pago).
+Una investigación tiene un `orden` de pasos derivado de las plataformas y
+redes elegidas: consultas → buscar:<plataforma>… → seleccionar →
+resenas:<plataforma>… → redes:<red>… → generar. Cada paso vive en
+`pasos[paso] = {"estado": pendiente|en_curso|hecho|vacio|saltado|error, …}`;
+`gastado_usd` es la suma de los `usd` de los pasos; el `estado` de la
+investigación es el del primer paso pendiente o en curso según el `orden`
+(`buscando`, `resenas`, …) -- el que está corriendo o el que se va a encolar
+enseguida, aunque el worker todavía no lo haya marcado `en_curso` -- y pasa a
+`lista` cuando todos los pasos son finales, o a `detenida`/`interrumpida`.
+Las claves guardadas no se traducen; las etiquetas sí (`|traducir`).
 """
+import json
+import math
 from datetime import datetime
-from typing import Optional, Dict, Any, List
 
 from flask_babel import gettext
 
 from idiomas import N_
+from nicho import avatares, datos
+from nicho.fuentes import plataformas
 
-# ------ Enums y constantes ------
-
-ESTADOS_CADENA = (
-    "consultas", "buscando", "seleccionando", "resenas",
-    "redes", "generando", "lista", "detenida", "interrumpida"
-)
-
-PASOS_CADENA = (
-    "consultas", "buscar:amazon", "buscar:meli", "buscar:tiktok_shop",
-    "seleccionar", "resenas:amazon", "resenas:meli", "resenas:tiktok_shop",
-    "redes:reddit", "redes:youtube", "generar"
-)
-
-# La clave guardada no cambia; la etiqueta se traduce al mostrarla (|traducir / gettext).
+ESTADOS_CADENA = ("consultas", "buscando", "seleccionando", "resenas", "redes", "generando", "lista", "detenida", "interrumpida")
+REDES = ("reddit", "youtube")
+PASOS_CADENA = (("consultas",) + tuple(f"buscar:{c}" for c in plataformas.PLATAFORMAS) + ("seleccionar",)
+                + tuple(f"resenas:{c}" for c in plataformas.PLATAFORMAS) + tuple(f"redes:{r}" for r in REDES) + ("generar",))
+FINALES = ("hecho", "vacio", "saltado", "error")
 ETIQUETAS_ESTADO = {"consultas": N_("consultas"), "buscando": N_("buscando"), "seleccionando": N_("seleccionando"),
-                    "resenas": N_("resenas"), "redes": N_("redes"), "generando": N_("generando"), "lista": N_("lista"),
+                    "resenas": N_("reseñas"), "redes": N_("redes"), "generando": N_("generando"), "lista": N_("lista"),
                     "detenida": N_("detenida"), "interrumpida": N_("interrumpida")}
-ETIQUETAS_ESTADO_PASO = {"hecho": N_("hecho"), "en_curso": N_("en_curso"), "error": N_("error"), "vacio": N_("vacio"),
-                         "pendiente": N_("pendiente")}
-ETIQUETAS_PASO = {"consultas": N_("consultas"), "buscar:amazon": N_("buscar:amazon"), "buscar:meli": N_("buscar:meli"),
-                  "buscar:tiktok_shop": N_("buscar:tiktok_shop"), "seleccionar": N_("seleccionar"),
-                  "resenas:amazon": N_("resenas:amazon"), "resenas:meli": N_("resenas:meli"),
-                  "resenas:tiktok_shop": N_("resenas:tiktok_shop"), "redes:reddit": N_("redes:reddit"),
-                  "redes:youtube": N_("redes:youtube"), "generar": N_("generar")}
+ETIQUETAS_ESTADO_PASO = {"hecho": N_("hecho"), "en_curso": N_("en curso"), "error": N_("error"), "vacio": N_("sin resultados"),
+                         "pendiente": N_("pendiente"), "saltado": N_("saltado")}
+ETIQUETAS_PASO = {"consultas": N_("consultas"), "buscar:amazon": N_("buscar en Amazon"), "buscar:meli": N_("buscar en Mercado Libre"),
+                  "buscar:tiktok_shop": N_("buscar en TikTok Shop"), "buscar:walmart": N_("buscar en Walmart"),
+                  "buscar:aliexpress": N_("buscar en AliExpress"), "seleccionar": N_("elegir productos"),
+                  "resenas:amazon": N_("reseñas de Amazon"), "resenas:meli": N_("opiniones de Mercado Libre"),
+                  "resenas:tiktok_shop": N_("reseñas de TikTok Shop"), "resenas:walmart": N_("reseñas de Walmart"),
+                  "resenas:aliexpress": N_("reseñas de AliExpress"), "redes:reddit": N_("Reddit"), "redes:youtube": N_("YouTube"),
+                  "generar": N_("avatares")}
+TOPES_DEFECTO = {"consultas": 3, "productos_por_consulta": 20, "productos_elegidos": 15, "resenas_por_producto": 100}
+LIMITES = {"consultas": (1, 4), "productos_por_consulta": (5, 40), "productos_elegidos": (3, 30), "resenas_por_producto": (20, 200)}
+MAX_FILAS_SELECCION = 300
+# Topes de salida de las dos llamadas -- y también la salida que cuenta el estimado
+# (`_tokens_claude`): el pensamiento adaptativo de claude-sonnet-5 se cobra como salida y nunca
+# puede pasar de `max_tokens` (medido en la prueba real del 2026-10-01), así que el tope ES el peor
+# caso, no una cota aparte. Van con margen: las consultas traen una lista por idioma en la misma
+# respuesta (Parte 4 §2), y la selección, 300 productos × ~25 tokens, que ya pasan de 6 000. Ninguno
+# llega al límite del SDK para una llamada sin streaming (≈ 21 333).
+MAX_TOKENS_CONSULTAS = 6000
+MAX_TOKENS_SELECCION = 16000
+IDIOMAS = plataformas.IDIOMA_POR_PAIS
+PLATAFORMAS_POR_PAIS = {clave: plataformas.PLATAFORMAS[clave]["paises"] for clave in plataformas.PLATAFORMAS}
 
-TOPES_DEFECTO = {
-    "consultas": 3,
-    "productos_por_consulta": 20,
-    "productos_elegidos": 15,
-    "resenas_por_producto": 100
-}
 
-IDIOMAS = {
-    "SE": "sv", "CO": "es", "MX": "es", "ES": "es", "AR": "es", "CL": "es",
-    "PE": "es", "US": "en", "GB": "en", "CA": "en", "AU": "en", "IN": "en",
-    "BR": "pt", "DE": "de", "FR": "fr", "IT": "it", "NL": "nl", "JP": "ja", "AE": "en"
-}
+def _ahora():
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-PLATAFORMAS_POR_PAIS = {
-    "amazon": {"US": "com", "GB": "co.uk", "DE": "de", "FR": "fr", "IT": "it",
-               "ES": "es", "NL": "nl", "SE": "se", "CA": "ca", "MX": "com.mx",
-               "BR": "com.br", "AU": "com.au", "IN": "in", "JP": "co.jp", "AE": "ae"},
-    "meli": {"AR": "com.ar", "BR": "com.br", "CL": "cl", "CO": "com.co",
-             "MX": "com.mx", "PE": "com.pe", "UY": "com.uy"},
-    "tiktok_shop": {"*": None}  # worldwide
-}
 
-# ------ API pura ------
+def _centavos(x):
+    return math.ceil(round(x * 100, 6)) / 100
 
-def siguiente_paso(investigacion: Dict[str, Any]) -> Optional[str]:
-    """
-    Lee investigacion.estado y pasos. Devuelve el próximo paso pendiente o None.
 
-    Lógica:
-    - Si estado es detenida/interrumpida/lista: None (no avanzar)
-    - Si estado es en_curso (ej "buscando"), devuelve el paso activo
-    - Si un paso de la cadena está pendiente, devuelve ése (en orden)
-    - Si todos están hechos o ausentes, devuelve None
-    """
-    estado = investigacion.get("estado")
-    pasos = investigacion.get("pasos", {})
+# --------------------------------------------------------------- topes ---
 
-    if estado in ("lista", "detenida", "interrumpida"):
+def normalizar_topes(d):
+    """Enteros dentro de LIMITES; vacío = defecto. ValueError si no es un número."""
+    salida = {}
+    for clave, (minimo, maximo) in LIMITES.items():
+        v = (d or {}).get(clave)
+        if v in (None, ""):
+            salida[clave] = TOPES_DEFECTO[clave]
+            continue
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            raise ValueError(gettext("«%(campo)s» debe ser un número entero.", campo=clave))
+        salida[clave] = max(minimo, min(maximo, n))
+    return salida
+
+
+# --------------------------------------------------------------- pasos ---
+
+def orden_pasos(plataformas_elegidas, redes_elegidas):
+    p = [x for x in (plataformas_elegidas or []) if x in plataformas.PLATAFORMAS]
+    r = [x for x in (redes_elegidas or []) if x in REDES]
+    return ["consultas"] + [f"buscar:{x}" for x in p] + ["seleccionar"] + [f"resenas:{x}" for x in p] + [f"redes:{x}" for x in r] + ["generar"]
+
+
+def idiomas_necesarios(pais, plataformas_elegidas):
+    """Idiomas en que se escriben las búsquedas (spec Parte 4 §2): primero el
+    del país (Reddit, YouTube y las tiendas locales), después el de cada tienda
+    que busca en otro (de otro mercado, o AliExpress en inglés); sin repetir."""
+    salida = [plataformas.idioma(pais)]
+    for clave in plataformas_elegidas or []:
+        if clave in plataformas.PLATAFORMAS:
+            codigo = plataformas.idioma_busqueda(clave, pais)
+            if codigo not in salida:
+                salida.append(codigo)
+    return salida
+
+
+def estado_por_paso(paso):
+    if paso == "consultas":
+        return "consultas"
+    if paso.startswith("buscar:"):
+        return "buscando"
+    if paso == "seleccionar":
+        return "seleccionando"
+    if paso.startswith("resenas:"):
+        return "resenas"
+    if paso.startswith("redes:"):
+        return "redes"
+    return "generando"
+
+
+def _orden(inv):
+    if inv.get("orden"):
+        return list(inv["orden"])
+    plat, redes = inv.get("plataformas"), inv.get("redes")
+    return [p for p in PASOS_CADENA
+            if not (p.startswith("buscar:") or p.startswith("resenas:")) or plat is None or p.split(":", 1)[1] in plat
+            if not p.startswith("redes:") or redes is None or p.split(":", 1)[1] in redes]
+
+
+def siguiente_paso(inv):
+    """El primer paso pendiente o en curso según el `orden`; None si la
+    investigación está `lista`, `detenida`, `interrumpida` o no le queda nada."""
+    if not inv or inv.get("estado") in ("lista", "detenida", "interrumpida"):
         return None
-
-    # Recorrer la cadena en orden
-    for paso in PASOS_CADENA:
-        info = pasos.get(paso, {})
-        paso_estado = info.get("estado")
-
-        if paso_estado is None:  # nunca hecho
+    pasos = inv.get("pasos") or {}
+    for paso in _orden(inv):
+        estado = (pasos.get(paso) or {}).get("estado")
+        if estado in (None, "pendiente", "en_curso"):
             return paso
-        elif paso_estado == "en_curso":  # retomar este
-            return paso
-        # else: "hecho", "error", "vacio" -> continuar
-
-    return None  # todos hechos
+    return None
 
 
-def marcar_paso(investigacion: Dict[str, Any], paso: str, estado: str, **kwargs) -> Dict[str, Any]:
-    """
-    Crea una copia con pasos[paso].estado actualizado + kwargs adicionales
-    (usd, productos, relevantes, resenas, aviso, etc).
-
-    Args:
-        investigacion: dict actual de investigacion
-        paso: nombre del paso (ej "consultas", "buscar:amazon")
-        estado: "hecho", "en_curso", "error", "vacio"
-        **kwargs: campos adicionales (usd, productos, etc)
-
-    Returns:
-        investigacion con pasos actualizado
-    """
-    inv = dict(investigacion)
-    pasos = dict(inv.get("pasos", {}))
-    pasos[paso] = {**(pasos.get(paso) or {}), "estado": estado, **kwargs}
-    inv["pasos"] = pasos
-    return inv
+def terminada(inv):
+    pasos = inv.get("pasos") or {}
+    orden = _orden(inv)
+    return bool(orden) and all((pasos.get(p) or {}).get("estado") in FINALES for p in orden)
 
 
-def resumen(investigacion: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Construye un dict con todo lo que la UI necesita para mostrar
-    el resumen: consultas usadas, productos por plataforma, etc.
-    """
-    consultas = investigacion.get("consultas", [])
-    pasos = investigacion.get("pasos", {})
-    gastado = investigacion.get("gastado_usd", 0)
-    aprobado = investigacion.get("aprobado_usd", 0)
-
-    # Contar productos y relevantes por plataforma
-    productos_total = 0
-    relevantes_total = 0
-    for paso, info in pasos.items():
-        if paso.startswith("buscar:"):
-            productos_total += info.get("productos", 0)
-        elif paso == "seleccionar":
-            relevantes_total = info.get("relevantes", 0)
-
-    return {
-        "consultas": consultas,
-        "productos": productos_total,
-        "relevantes": relevantes_total,
-        "gastado": gastado,
-        "aprobado": aprobado,
-        "detenida_por": investigacion.get("detenida_por"),
-        "pasos": pasos,
-        "estado": investigacion.get("estado"),
-        "ultimo_error": investigacion.get("ultimo_error")
-    }
+def marcar_paso(inv, paso, estado, **kw):
+    """Copia con `pasos[paso]` actualizado (+ kwargs: usd, productos, relevantes,
+    resenas, aviso…), `gastado_usd` recalculado y el `estado` de la
+    investigación derivado: el del primer paso pendiente o en curso según el
+    `orden` -- el que está corriendo, o el que `avanzar()` va a encolar
+    enseguida sin marcarlo todavía (el worker solo marca `en_curso` una vez
+    que la tarea arranca de verdad) --, o `lista` si ya no queda nada
+    pendiente. Por eso a veces coincide con `estado_por_paso(paso)` (mismo
+    paso, o el siguiente de la misma fase) y a veces salta a la fase
+    siguiente completa (p. ej. a "generando" en cuanto el último paso antes
+    de "generar" queda en un estado final)."""
+    nuevo = dict(inv or {})
+    pasos = dict(nuevo.get("pasos") or {})
+    pasos[paso] = {**(pasos.get(paso) or {}), "estado": estado, **kw}
+    nuevo["pasos"] = pasos
+    nuevo["gastado_usd"] = round(sum(float((p or {}).get("usd") or 0) for p in pasos.values()), 4)
+    if nuevo.get("estado") not in ("detenida", "interrumpida"):
+        if terminada(nuevo):
+            nuevo["estado"], nuevo["terminada_en"] = "lista", nuevo.get("terminada_en") or _ahora()
+        else:
+            siguiente = siguiente_paso({**nuevo, "estado": estado_por_paso(paso)})
+            nuevo["estado"] = estado_por_paso(siguiente or paso)
+    return nuevo
 
 
-def puede_reanudar(estado: str) -> bool:
-    """True si el estado permite reanudar."""
+def detener(inv, motivo):
+    return {**dict(inv or {}), "estado": "detenida", "detenida_por": motivo, "terminada_en": _ahora()}
+
+
+def puede_reanudar(estado):
     return estado in ("detenida", "interrumpida")
 
 
-def estimar(estudio: Dict[str, Any], pais: str, plataformas: List[str],
-            redes: List[str], topes: Dict[str, int]) -> Dict[str, Any]:
-    """
-    Devuelve desglose de costos:
-    {"filas": [{"clave", "nombre", "busqueda_usd", "resenas_usd"}],
-     "claude_usd", "avatares_usd", "total_usd", "texto"}
-
-    Args:
-        estudio: dict con el estudio (pais puede venir del estudio o del param)
-        pais: código de país (ej "SE", "CO")
-        plataformas: list["amazon", "meli", "tiktok_shop"]
-        redes: list["reddit", "youtube"]
-        topes: dict con limites (consultas, productos_por_consulta, etc)
-
-    Returns:
-        dict con estructura de costos
-    """
-    from nicho.fuentes import plataformas as plat_module
-
-    filas = []
-    total = 0.0
-
-    # Iterar plataformas y estimar costos
-    for plat_clave in plataformas:
-        busqueda_usd = plat_module.estimar_busqueda(
-            plat_clave,
-            topes.get("consultas", TOPES_DEFECTO["consultas"]),
-            topes.get("productos_por_consulta", TOPES_DEFECTO["productos_por_consulta"])
-        )
-        resenas_usd = plat_module.estimar_resenas(
-            plat_clave,
-            topes.get("productos_elegidos", TOPES_DEFECTO["productos_elegidos"]),
-            topes.get("resenas_por_producto", TOPES_DEFECTO["resenas_por_producto"])
-        )
-
-        filas.append({
-            "clave": plat_clave,
-            "nombre": plat_module.PLATAFORMAS.get(plat_clave, {}).get("nombre", plat_clave.title()),
-            "busqueda_usd": round(busqueda_usd, 2),
-            "resenas_usd": round(resenas_usd, 2),
-            "texto": gettext("Búsqueda + reseñas")
-        })
-        total += busqueda_usd + resenas_usd
-
-    # Claude: consultas (~$0.03) + selección (~$0.02)
-    claude_usd = 0.05
-    total += claude_usd
-
-    # Avatares: ~US$ 1.20
-    avatares_usd = 1.20
-    total += avatares_usd
-
-    return {
-        "filas": filas,
-        "claude_usd": round(claude_usd, 2),
-        "avatares_usd": round(avatares_usd, 2),
-        "total_usd": round(total, 2),
-        "texto": gettext("Investigación: %(plataformas)s plataforma(s), %(redes)s red(es)",
-                         plataformas=len(plataformas), redes=len(redes))
-    }
+def reanudar(inv):
+    """Reanudar (spec §7): los pasos `en_curso` (interrumpidos) vuelven a
+    `pendiente`, y también consultas y selección con `error` (Claude,
+    centavos); una búsqueda o unas reseñas con `error` NO se repiten solas
+    porque ya cobraron: para eso está «Investigar de nuevo», que aprueba otra
+    cifra."""
+    nuevo = dict(inv or {})
+    pasos = {}
+    for paso, info in (nuevo.get("pasos") or {}).items():
+        info = dict(info or {})
+        if info.get("estado") == "en_curso" or (paso in ("consultas", "seleccionar") and info.get("estado") == "error"):
+            info["estado"] = "pendiente"
+        pasos[paso] = info
+    nuevo.update(pasos=pasos, detenida_por=None, ultimo_error=None, terminada_en=None)
+    siguiente = siguiente_paso({**nuevo, "estado": "consultas"})
+    nuevo["estado"] = estado_por_paso(siguiente) if siguiente else "lista"
+    return nuevo
 
 
-def crear_inicial(tema: str, pais: str, plataformas: List[str],
-                  redes: List[str], topes: Dict[str, int]) -> Dict[str, Any]:
-    """
-    Crea el dict inicial de investigacion antes de encolar.
+def job_de_paso(cliente, estudio_id, paso):
+    """El job_id de la tarea que corre ese paso (para la barra de progreso)."""
+    if paso in ("consultas", "seleccionar") or paso.startswith("buscar:"):
+        return datos.job_id_inv(cliente, estudio_id, paso)
+    if paso.startswith("resenas:") or paso.startswith("redes:"):
+        return datos.job_id_recolectar(cliente, estudio_id, paso.split(":", 1)[1])
+    return datos.job_id_generar(cliente, estudio_id)
 
-    Args:
-        tema: descripción del nicho
-        pais: código de país
-        plataformas: list de plataformas seleccionadas
-        redes: list de redes sociales seleccionadas
-        topes: dict con limites de búsqueda
 
-    Returns:
-        dict investigacion listo para guardar en estudio.extra
-    """
-    ahora = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+def resumen(inv):
+    """Lo que la plantilla necesita; tolera `{}`."""
+    inv = inv or {}
+    pasos = inv.get("pasos") or {}
+    productos = sum(int((v or {}).get("productos") or 0) for k, v in pasos.items() if k.startswith("buscar:"))
+    resenas = sum(int((v or {}).get("nuevos") or 0) for k, v in pasos.items() if k.startswith("resenas:") or k.startswith("redes:"))
+    return {"consultas": inv.get("consultas") or [], "productos": productos, "relevantes": int((pasos.get("seleccionar") or {}).get("relevantes") or 0),
+            "elegidos": sum(len(v) for v in (inv.get("elegidos") or {}).values()), "resenas": resenas,
+            "gastado": float(inv.get("gastado_usd") or 0), "aprobado": float(inv.get("aprobado_usd") or 0),
+            "detenida_por": inv.get("detenida_por"), "pasos": pasos, "orden": _orden(inv) if inv else [], "estado": inv.get("estado"),
+            "ultimo_error": inv.get("ultimo_error"), "pais": inv.get("pais"), "plataformas": inv.get("plataformas") or [],
+            "redes": inv.get("redes") or [], "topes": inv.get("topes") or {}, "estimado": inv.get("estimado") or {},
+            "consultas_por_idioma": inv.get("consultas_por_idioma") or {}, "idioma_consultas": inv.get("idioma_consultas") or "",
+            "iniciada_en": inv.get("iniciada_en"), "terminada_en": inv.get("terminada_en")}
 
-    return {
-        "version": 1,
-        "estado": "consultas",
-        "tema": tema,
-        "pais": pais,
-        "plataformas": plataformas,
-        "redes": redes,
-        "topes": topes,
-        "consultas": [],
-        "pasos": {},
-        "creado_en": ahora,
-        "actualizado_en": ahora,
-        "gastado_usd": 0.0,
-        "aprobado_usd": estimar({}, pais, plataformas, redes, topes).get("total_usd", 0.0)
-    }
+
+# ------------------------------------------------------------ estimado ---
+
+def _tokens_claude(n_plataformas, topes, n_idiomas=1):
+    productos = n_plataformas * topes["consultas"] * topes["productos_por_consulta"]
+    de_mas = max(0, int(n_idiomas) - 1)              # cada idioma de más: su lista de búsquedas en la misma llamada
+    entrada = 1500 + 100 + 600 + 80 * productos + 60 * de_mas
+    salida = MAX_TOKENS_CONSULTAS + MAX_TOKENS_SELECCION  # el peor caso real: la salida nunca pasa su tope (pensamiento incluido)
+    return entrada, salida
+
+
+def costo_claude(tokens_entrada, tokens_salida):
+    return avatares.costo_real(tokens_entrada, tokens_salida)
+
+
+def estimar(estudio, pais, plataformas_elegidas, redes_elegidas, topes):
+    """Desglose del peor caso: búsquedas y reseñas por tienda (la suma de los
+    techos de sus corridas, en el sitio que toca), Claude (consultas +
+    selección) y avatares (`estimar_costo_maximo`). Una tienda que no está en
+    el país NO se rechaza: su fila dice `mercado: "otro"` y el `sitio` donde
+    busca (spec Parte 4 §2)."""
+    topes = {**TOPES_DEFECTO, **(topes or {})}
+    filas, total = [], 0.0
+    for clave in plataformas_elegidas or []:
+        mercado, sitio = plataformas.mercado(clave, pais)
+        busqueda = plataformas.estimar_busqueda(clave, topes["consultas"], topes["productos_por_consulta"], pais)
+        resenas = plataformas.estimar_resenas(clave, topes["productos_elegidos"], topes["resenas_por_producto"], pais)
+        filas.append({"clave": clave, "nombre": plataformas.nombre(clave), "mercado": mercado, "sitio": sitio,
+                      "busqueda_usd": busqueda, "resenas_usd": resenas, "texto": gettext("Búsqueda + reseñas")})
+        total += busqueda + resenas
+    entrada, salida = _tokens_claude(len(filas), topes, len(idiomas_necesarios(pais, plataformas_elegidas)))
+    claude_usd = _centavos(costo_claude(entrada, salida))
+    avatares_usd = _centavos(avatares.estimar_costo_maximo()["usd"])
+    total = _centavos(total + claude_usd + avatares_usd)
+    return {"filas": filas, "claude_usd": claude_usd, "avatares_usd": avatares_usd, "total_usd": total,
+            "texto": gettext("Investigación: %(plataformas)s plataforma(s), %(redes)s red(es)",
+                             plataformas=len(filas), redes=len([r for r in (redes_elegidas or []) if r in REDES]))}
+
+
+def crear_inicial(tema, pais, plataformas_elegidas, redes_elegidas, topes, estimado=None):
+    """El diccionario inicial (spec §2.4): orden y pasos prellenados, la cifra
+    aprobada = `estimado["total_usd"]` (se calcula si no se pasa)."""
+    topes = {**TOPES_DEFECTO, **(topes or {})}
+    plat = [x for x in (plataformas_elegidas or []) if x in plataformas.PLATAFORMAS]
+    redes = [x for x in (redes_elegidas or []) if x in REDES]
+    estimado = estimado or estimar({}, pais, plat, redes, topes)
+    orden = orden_pasos(plat, redes)
+    return {"version": 1, "estado": "consultas", "tema": tema or "", "pais": pais, "idioma_consultas": plataformas.idioma(pais),
+            "plataformas": plat, "redes": redes, "topes": topes, "consultas": [], "orden": orden,
+            "pasos": {p: {"estado": "pendiente"} for p in orden}, "elegidos": {}, "estimado": estimado,
+            "aprobado_usd": float(estimado.get("total_usd") or 0), "gastado_usd": 0.0,
+            "iniciada_en": _ahora(), "terminada_en": None, "detenida_por": None, "ultimo_error": None}
+
+
+# ---------------------------------------------------------- selección ---
+
+def _vendidos(p):
+    try:
+        return int(((p.get("extra") or {}).get("vendidos")) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _mas_resenado(p):
+    """Más reseñas primero; sin ese dato (AliExpress) desempatan los pedidos o
+    vendidos (spec Parte 4 §1.1); luego el id."""
+    return (-(p.get("n_resenas") or 0), -_vendidos(p), int(p.get("id") or 0))
+
+
+def _repartir_por_plataforma(productos, maximo):
+    """Hasta `maximo` productos tomados por turnos entre plataformas (en orden
+    de clave), cada una en su orden de `_mas_resenado`. Un corte global por
+    reseñas dejaría fuera a AliExpress, que no trae ese número, aunque sus
+    productos ya se pagaron; con una sola plataforma es el mismo orden de siempre."""
+    grupos = {}
+    for p in productos or []:
+        grupos.setdefault(str(p.get("plataforma") or ""), []).append(p)
+    colas = [iter(sorted(grupos[clave], key=_mas_resenado)) for clave in sorted(grupos)]
+    salida = []
+    while colas and len(salida) < maximo:
+        siguientes = []
+        for cola in colas:
+            if len(salida) >= maximo:
+                break
+            p = next(cola, None)
+            if p is not None:
+                salida.append(p)
+                siguientes.append(cola)
+        colas = siguientes
+    return salida
+
+
+def _anuncio(p):
+    """El producto y las variantes de su anuncio (`extra.variantes`, Amazon): comparten reseñas."""
+    return {p.get("fuente_id")} | set((p.get("extra") or {}).get("variantes") or ())
+
+
+def elegir(productos, decisiones, productos_elegidos):
+    """Por plataforma, los `productos_elegidos` relevantes con más reseñas (sin
+    dato = 0; empate por vendidos y luego por id), uno por anuncio: nunca dos
+    variantes del mismo anuncio (comparten reseñas: pagarlas dos veces no trae
+    nada). Un producto ya traído se sigue eligiendo como cualquiera — el paso de
+    reseñas lo salta — y de dos ya traídos del mismo anuncio sale el primero; uno
+    sin traer no se elige si su anuncio ya trajo reseñas por otro producto.
+    -> {plataforma: [fuente_id, …]} solo con plataformas que tengan alguno."""
+    por_plataforma, traidos = {}, {}
+    for p in productos or []:
+        if p.get("resenas_traidas"):
+            traidos.setdefault(p.get("plataforma"), set()).update(_anuncio(p))
+        d = (decisiones or {}).get(p.get("id"))
+        if not d or not d.get("relevante"):
+            continue
+        por_plataforma.setdefault(p.get("plataforma"), []).append(p)
+    salida = {}
+    for clave, lista in por_plataforma.items():
+        lista.sort(key=_mas_resenado)
+        cubiertos, elegidos = set(), []
+        for p in lista:
+            anuncio = _anuncio(p)
+            if anuncio & cubiertos or (not p.get("resenas_traidas") and anuncio & traidos.get(clave, set())):
+                continue
+            elegidos.append(p["fuente_id"])
+            cubiertos |= anuncio
+            if len(elegidos) >= max(1, int(productos_elegidos)):
+                break
+        if elegidos:
+            salida[clave] = elegidos
+    return salida
+
+
+def params_redes(red, inv):
+    consultas = [c for c in (inv.get("consultas") or []) if c]
+    pais = inv.get("pais") or ""
+    if red == "reddit":
+        return {"palabras_clave": " OR ".join(consultas), "subreddits": [], "links": [], "max_posts": 25, "max_comentarios_por_post": 50, "periodo": "year"}
+    return {"palabras_clave": " | ".join(consultas), "links": [], "max_videos": 10, "max_comentarios_por_video": 100,
+            "idioma": plataformas.idioma(pais), "region": pais}
+
+
+# --------------------------------------------------------------- Claude ---
+
+PROMPT_CONSULTAS = """Eres un comprador experto que busca productos en tiendas en línea (Amazon, Mercado Libre, Walmart, AliExpress, TikTok Shop).
+Nicho o tema a investigar: {tema}
+Producto que vendemos (solo como referencia; NO busques nuestra marca): {producto}
+Mercado: {pais}. Idiomas de las búsquedas: {idiomas}.
+
+Para cada idioma, escribe de {minimo} a {maximo} búsquedas cortas (2 a 6 palabras cada una), en ese idioma, tal como las escribiría un comprador en el buscador de una tienda para encontrar los productos de ese nicho y de su competencia. Sin marcas nuestras, sin comillas, sin explicaciones.
+Responde SOLO con JSON, una lista por código de idioma: {formato}"""
+
+PROMPT_SELECCION = """Eres un analista de mercado. Tema del nicho: {tema}
+Producto que vendemos: {producto}
+Mercado: {pais}.
+
+Abajo hay productos encontrados buscando ese nicho en tiendas en línea. Marca cuáles son de verdad del nicho (competencia directa o sustitutos que compra la misma persona para el mismo problema) y cuáles no (accesorios, repuestos, otra categoría, ruido de la búsqueda). Motivo de máximo 12 palabras, en {idioma_salida}.
+Productos (id · plataforma · título · marca · precio · estrellas · reseñas):
+{lista}
+
+Responde SOLO con JSON, con TODOS los ids: {{"productos": [{{"id": 12, "relevante": true, "motivo": "..."}}, ...]}}"""
+
+_NOMBRE_IDIOMA = {"sv": "sueco", "es": "español", "en": "inglés", "pt": "portugués", "de": "alemán", "fr": "francés", "it": "italiano",
+                  "nl": "neerlandés", "ja": "japonés"}
+
+
+def _idioma_texto(codigo):
+    return f"{_NOMBRE_IDIOMA.get(codigo, codigo)} ({codigo})"
+
+
+def _con_tokens(e, entrada, salida):
+    e.tokens_entrada, e.tokens_salida = entrada, salida
+    return e
+
+
+def _limpiar_consultas(lista, n):
+    salida, vistas = [], set()
+    for c in lista if isinstance(lista, list) else []:
+        c = " ".join(str(c or "").split()).strip(' "“”')[:80]
+        if c and c.lower() not in vistas:
+            vistas.add(c.lower())
+            salida.append(c)
+    return salida[:n]
+
+
+def _por_codigo(bruto):
+    """{código de 2 letras: [consultas]}: «ES», «en-US» o « en » cuentan como
+    «es»/«en»; dos claves del mismo idioma suman sus listas."""
+    salida = {}
+    for clave, lista in bruto.items():
+        if isinstance(lista, list):
+            salida.setdefault(str(clave).strip().lower()[:2], []).extend(lista)
+    return salida
+
+
+def consultas_por_idioma_con_claude(estudio, pais, n=None, idiomas=None):
+    """-> ({idioma: [consultas]}, tokens_entrada, tokens_salida), todo en UNA
+    llamada (spec Parte 4 §2): hasta n consultas limpias y sin repetir por
+    idioma, con n = el tope aprobado (la búsqueda nunca gasta más que su línea
+    del estimado). `idiomas[0]` (por defecto el del país) es obligatorio y pide
+    min(2, n): sin eso, AnalisisInvalido con tokens. Un idioma de más vale con
+    una sola; si no llega, queda fuera y su tienda usa las del país. Una lista
+    suelta (`{"consultas": [...]}`, la forma de la Parte 3) cuenta como la del
+    primer idioma; una respuesta sin «consultas» (`{"es": [...], …}`) también se
+    lee, y las claves se comparan por sus dos primeras letras («ES», «en-US»)."""
+    minimo_tope, maximo_tope = LIMITES["consultas"]
+    n = max(minimo_tope, min(int(n or TOPES_DEFECTO["consultas"]), maximo_tope))
+    minimo = min(2, n)
+    idiomas = list(dict.fromkeys(idiomas or [plataformas.idioma(pais)]))
+    formato = json.dumps({"consultas": {c: ["...", "..."] for c in idiomas}}, ensure_ascii=False)
+    prompt = PROMPT_CONSULTAS.format(tema=(estudio.get("tema") or "").strip(), producto=(estudio.get("producto") or "").strip() or "—",
+                                     pais=pais, idiomas=", ".join(_idioma_texto(c) for c in idiomas), minimo=minimo, maximo=n, formato=formato)
+    texto, entrada, salida = avatares._llamar(prompt, MAX_TOKENS_CONSULTAS)
+    try:
+        data = avatares._json_objeto(texto)
+    except avatares.AnalisisInvalido as e:
+        raise _con_tokens(e, entrada, salida)
+    bruto = data.get("consultas") if "consultas" in data else data
+    if isinstance(bruto, list):
+        bruto = {idiomas[0]: bruto}
+    bruto = _por_codigo(bruto) if isinstance(bruto, dict) else {}
+    por_idioma = {}
+    for k, codigo in enumerate(idiomas):
+        lista = _limpiar_consultas(bruto.get(str(codigo).strip().lower()[:2]), n)
+        if len(lista) >= (minimo if k == 0 else 1):
+            por_idioma[codigo] = lista
+    if idiomas[0] not in por_idioma:
+        raise _con_tokens(avatares.AnalisisInvalido(gettext("Claude devolvió menos de %(n)s consultas.", n=minimo)), entrada, salida)
+    return por_idioma, entrada, salida
+
+
+def consultas_con_claude(estudio, pais, n=None):
+    """Las búsquedas en el idioma del país (la forma de la Parte 3) -> (consultas, tokens_entrada, tokens_salida)."""
+    codigo = plataformas.idioma(pais)
+    por_idioma, entrada, salida = consultas_por_idioma_con_claude(estudio, pais, n, [codigo])
+    return por_idioma[codigo], entrada, salida
+
+
+def _fila_producto(p):
+    precio = f"{p.get('precio')} {p.get('moneda') or ''}".strip() if p.get("precio") is not None else "—"
+    return (f"{p['id']} · {p.get('plataforma')} · {(p.get('titulo') or '')[:120]} · {p.get('marca') or '—'} · {precio} · "
+            f"{p.get('estrellas') if p.get('estrellas') is not None else '—'} · {p.get('n_resenas') if p.get('n_resenas') is not None else '—'}")
+
+
+def seleccion_con_claude(estudio, productos):
+    """-> ({id: {"relevante", "motivo"}}, tokens_entrada, tokens_salida) para
+    los productos dados: máximo MAX_FILAS_SELECCION, por turnos entre
+    plataformas y en cada una los de más reseñas primero
+    (`_repartir_por_plataforma`); ids que Claude no menciona quedan fuera del dict."""
+    lista = _repartir_por_plataforma(productos, MAX_FILAS_SELECCION)
+    validos = {int(p["id"]) for p in lista}
+    prompt = PROMPT_SELECCION.format(tema=(estudio.get("tema") or "").strip(), producto=(estudio.get("producto") or "").strip() or "—",
+                                     pais=(estudio.get("pais") or ""),
+                                     idioma_salida=_idioma_texto((estudio.get("idioma") or "es")[:2]),
+                                     lista="\n".join(_fila_producto(p) for p in lista))
+    texto, entrada, salida = avatares._llamar(prompt, MAX_TOKENS_SELECCION)
+    try:
+        data = avatares._json_objeto(texto)
+    except avatares.AnalisisInvalido as e:
+        raise _con_tokens(e, entrada, salida)
+    decisiones = {}
+    for d in (data.get("productos") or []) if isinstance(data.get("productos"), list) else []:
+        try:
+            pid = int((d or {}).get("id"))
+        except (TypeError, ValueError):
+            continue
+        if pid in validos:
+            decisiones[pid] = {"relevante": bool((d or {}).get("relevante")), "motivo": str((d or {}).get("motivo") or "")[:300]}
+    if not decisiones:
+        raise _con_tokens(avatares.AnalisisInvalido(gettext("Claude no juzgó ningún producto.")), entrada, salida)
+    return decisiones, entrada, salida

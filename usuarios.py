@@ -28,6 +28,9 @@ que rellena correo=None, correo_verificado=False, session_version=1.
 """
 import os
 import re
+import secrets
+import threading
+import time
 from datetime import datetime
 
 from flask_babel import gettext
@@ -165,17 +168,64 @@ def crear(usuario, password, rol, cliente=None, correo=None):
     guardar(data)
 
 
+# Lectura recordada para `obtener` (spec 2026-10-01-escala-y-monitoreo §4): el
+# guard de sesión y el contexto de las plantillas la piden en CADA petición,
+# también en cada sondeo de una barra de progreso. Vale mientras el archivo no
+# cambie (inodo, fecha en ns y tamaño: `guardar` reemplaza el archivo entero,
+# así que cada escritura da otra firma) y como mucho _MEMO_S segundos, por si
+# dos escrituras cayeran en la misma firma. Nunca se entrega el dict recordado:
+# `obtener` copia el registro.
+_MEMO_S = 2.0
+_memo = {"firma": None, "datos": None, "en": 0.0}
+_memo_lock = threading.Lock()
+
+
+def _cargar_recordado():
+    ruta = _path()
+    try:
+        st = os.stat(ruta)
+    except OSError:
+        return cargar()
+    firma = (ruta, st.st_ino, st.st_mtime_ns, st.st_size)
+    ahora = time.monotonic()
+    with _memo_lock:
+        if _memo["firma"] == firma and ahora - _memo["en"] < _MEMO_S:
+            return _memo["datos"]
+    datos = cargar()
+    with _memo_lock:
+        _memo.update(firma=firma, datos=datos, en=ahora)
+    return datos
+
+
 def obtener(usuario):
     """Copia del registro del usuario (con defaults rellenados) SIN
     password_hash, o None. Es lo que puede llegar a session/templates sin
     riesgo; para lo que sí necesita el hash (verificar la contraseña) usa
     obtener_hash."""
-    entry = cargar().get(usuario)
+    entry = _cargar_recordado().get(usuario)
     if not entry:
         return None
     entry = _completar(dict(entry))
     entry.pop("password_hash", None)
     return entry
+
+
+def por_cliente(cliente):
+    """Las cuentas rol «cliente» de ese proyecto, ordenadas por usuario, como
+    [{usuario, correo, correo_verificado}]. Lo único que hace falta para saber
+    a quién le falta confirmar el correo (las alertas del proyecto lo leen de
+    aquí): se arma campo por campo, así que ni el hash de la contraseña ni
+    nada más del registro puede colarse. El admin no entra: no tiene proyecto."""
+    if not cliente:
+        return []
+    cuentas = []
+    for usuario, entry in sorted(cargar().items()):
+        if entry.get("rol") != "cliente" or entry.get("cliente") != cliente:
+            continue
+        entry = _completar(dict(entry))
+        cuentas.append({"usuario": usuario, "correo": entry["correo"],
+                        "correo_verificado": bool(entry["correo_verificado"])})
+    return cuentas
 
 
 def obtener_hash(usuario):
@@ -188,10 +238,23 @@ def obtener_hash(usuario):
     return _completar(dict(entry))
 
 
+_HASH_DE_RELLENO = []
+
+
+def _hash_de_relleno():
+    """Un hash cualquiera, calculado una vez, para comparar cuando el usuario
+    no existe: así esa respuesta tarda lo mismo que una contraseña equivocada
+    y el tiempo no delata qué usuarios existen."""
+    if not _HASH_DE_RELLENO:
+        _HASH_DE_RELLENO.append(_hash(secrets.token_hex(16)))
+    return _HASH_DE_RELLENO[0]
+
+
 def verificar(usuario, password):
     """Devuelve el registro del usuario si la contraseña es correcta, o None."""
     entry = cargar().get(usuario)
     if not entry:
+        check_password_hash(_hash_de_relleno(), password)
         return None
     if not check_password_hash(entry["password_hash"], password):
         return None

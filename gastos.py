@@ -16,8 +16,8 @@ tumbar la tarea que ya pagó: los llamadores envuelven en try/except.
 `TARIFAS` y los `estimate_*` de los proveedores; cuando no hay tarifa
 devuelve `usd=None` y el texto "precio no disponible" — nunca se inventa.
 
-Lecturas: `resumen_mes`, `historial`, `serie_diaria`, `csv_mes`,
-`por_proyecto_mes`; `formatear(usd)` -> "US$ 0,07".
+Lecturas: `resumen_mes`, `resumen_total`, `total_entre`, `por_mes`, `historial`,
+`serie_diaria`, `csv_mes`, `por_proyecto_mes`; `formatear(usd)` -> "US$ 0,07".
 """
 import csv
 import io
@@ -34,18 +34,24 @@ from idiomas import N_
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "voz_propia", "transcripcion", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
 #    salida, lista pública 2026): una regla de producto (~600 tokens) o un
-#    caption (~1.500 tokens) cuestan < US$ 0,01; un guion base/localizado
-#    (~4.000 tokens con la guía de marca) ~US$ 0,02. Se redondea HACIA ARRIBA
-#    a un tope redondo: el estimado nunca queda por debajo del real.
+#    caption (~1.500 tokens) cuestan < US$ 0,01. Un guion (base, localizado o
+#    variante) se paga ahora por su `usage` real (PND-001, 2026-10-02: antes se
+#    anotaba US$ 0,01 fijo y lo real es ≈ 0,04–0,05 por llamada). Su peor caso:
+#    dos llamadas (la corrección) con la salida al tope de 4 000 tokens
+#    (2 × US$ 0,04) más ≈ 10 000 de entrada cada una (2 × US$ 0,02) y Whisper
+#    de la referencia (US$ 0,01) = US$ 0,13. Se redondea HACIA ARRIBA a un
+#    tope redondo: el estimado nunca queda por debajo del real.
 #  - fal.ai: ElevenLabs multilingual-v2 ~US$ 0,05 por pieza de 15-20 s de
 #    voz (por carácter); Stable Audio ~US$ 0,02 por pista (cacheada por
 #    estilo+duración, así que suele salir 0); whisper ~US$ 0,01 por clip.
-#  - final = guion localizado + voz + música + whisper ≈ US$ 0,10 por país.
+#  - final = guion localizado (peor caso US$ 0,12: dos llamadas al tope) + voz
+#    (0,05) + música (0,02, casi siempre en caché) + whisper (0,01) ≈ US$ 0,20
+#    por país (era 0,10 con el guion a 0,01 fijo; 2026-10-02).
 #    `derivaciones._avanzar_finales` encola un `final_producir` POR país
 #    (guion localizado, voz vía fal/ElevenLabs y whisper propios; solo la
 #    música se cachea y a veces sale gratis) — no hay descuento por país
@@ -66,11 +72,19 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    sale el prompt completo revisado más el razonamiento (~4k, US$ 0,04).
 #  - guion_clips (pipeline de Flow Plus): leer/recorte/armar/imágenes; el
 #    estimado redondea hacia arriba y se revisa contra `gasto` con uso real.
+#    Armar, medido el 2026-09-30 con un guion real de 34 líneas / 266 palabras:
+#    8 157 tokens de entrada y 19 809 de salida (casi todo pensamiento) =
+#    US$ 0,21; con el tope viejo de 16 000 no terminaba. Se estima 0,07 por
+#    cada 100 palabras sobre 0,06, sin pasar del peor caso del tope (48 000).
 TARIFAS = {
-    "guion": 0.02,
+    "guion": 0.13,
     "regla_producto": 0.01,
     "caption_organico": 0.01,
     "adaptar_referente": 0.01,
+    # «Recrear» fiel (spec 2026-09-30): una llamada de visión que describe la
+    # composición y lee los textos de la referencia, una vez por referente.
+    # Inicial; se ajusta con lo medido en la prueba real.
+    "leer_referente": 0.01,
     "sugerir_ia": 0.04,
     "clasificacion": 0.012,
     # La de siempre + la salida del segundo idioma (~60 tokens más por anuncio,
@@ -82,7 +96,7 @@ TARIFAS = {
     "musica": 0.02,
     "musica_elevenlabs": 0.60,   # canción de 60 s con ElevenLabs vía fal (US$ 0,60 por minuto empezado)
     "whisper": 0.01,
-    "final": 0.10,
+    "final": 0.20,
     # Doctrina, bloque 2: una llamada con la doctrina en el system y pensamiento
     # adaptativo. Medido en la prueba real (2026-09-27) con la caché fría, el
     # peor caso: reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007. Redondeado hacia arriba.
@@ -146,12 +160,20 @@ def _estimado(usd, detalle=""):
 
 # ------------------------------------------------------------ estimar ---
 
-def _estimar_video(modelo=None, duracion=None, con_sonido=True, **_):
+def costo_musica_estimada(estilo):
+    from mi_musica import es_propia
+    from providers.fal_audio import COSTO_USD_POR_PISTA_MUSICA
+    return COSTO_USD_POR_PISTA_MUSICA if estilo and not es_propia(estilo) else 0.0
+
+
+def _estimar_video(modelo=None, duracion=None, con_sonido=True, musica_estilo="", **_):
     from providers import flowplus_modelos
     if not modelo or not duracion:
         return None, "faltan modelo o duración"
     r = flowplus_modelos.estimate_video(modelo, float(duracion), con_sonido=bool(con_sonido))
-    return r.get("usd"), f"{modelo} · {int(float(duracion))} s" + ("" if con_sonido else " · sin sonido")
+    usd = r.get("usd")
+    usd = None if usd is None else usd + costo_musica_estimada(musica_estilo)
+    return usd, f"{modelo} · {int(float(duracion))} s" + ("" if con_sonido else " · sin sonido")
 
 
 def _estimar_imagen(modelo=None, n_referencias=1, **_):
@@ -212,11 +234,11 @@ def _estimar_guion_clips(paso="armar", palabras=0, **_):
     if paso == "leer":
         return 0.02 + 0.01 * math.ceil(p / 500), "leer el guion con Claude"
     if paso == "recorte":
-        return 0.02, "proponer qué quitar con Claude"
+        return 0.05, "proponer qué quitar con Claude"
     if paso == "armar":
-        return 0.06 + 0.02 * math.ceil(p / 100), "planear los clips con Claude"
+        return min(0.50, 0.06 + 0.07 * math.ceil(p / 100)), "planear los clips con Claude"
     if paso == "imagenes":
-        return 0.04, "escribir los prompts de imágenes con Claude"
+        return 0.08, "escribir los prompts de imágenes con Claude"
     raise ValueError(f"paso desconocido: {paso}")
 
 
@@ -229,6 +251,53 @@ def _estimar_locucion(caracteres=0, **_):
     return n * fal_audio.COSTO_USD_POR_CARACTER, f"{n} caracteres con ElevenLabs"
 
 
+def _estimar_voz_clonada(nombre="", idioma="es", **_):
+    """Clon, vista previa y estreno con la misma frase que usa la tarea."""
+    from providers import fal_audio
+    from voces_propias import frase_muestra
+    frase = frase_muestra(nombre, idioma)
+    return (fal_audio.costo_clonar_voz(frase) + len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER,
+            "una voz clonada con MiniMax")
+
+
+def _estimar_voz_disenada(nombre="", idioma="es", **_):
+    from providers import fal_audio
+    from voces_propias import frase_muestra
+    frase = frase_muestra(nombre, idioma)
+    usd = (fal_audio.costo_disenar_voz(frase)
+           + round(len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER, 4))
+    return round(usd, 4), "una voz diseñada con MiniMax"
+
+
+def _estimar_transcripcion(segundos=0, sin_duracion=False, **_):
+    """Editor capa 5a: subtítulos automáticos con Whisper vía fal, por
+    duración del audio (misma fórmula del gasto real, `fal_audio.costo_whisper`).
+    `sin_duracion`: algún archivo no sabe cuánto dura — sin precio (nunca
+    «gratis»: el botón queda apagado y la ruta no transcribe)."""
+    from providers import fal_audio
+    if sin_duracion:
+        return None, "duración desconocida"
+    n = max(0, int(segundos or 0))
+    return fal_audio.costo_whisper(n * 1000), f"{n} s de audio con Whisper"
+
+
+def _estimar_voz_editor(caracteres=0, solo_subtitulos=False, duracion_ms=None, **_):
+    """Editor capa 5a (D9): voz con IA + sus subtítulos, en un solo botón —
+    la locución del texto completo más Whisper sobre ella. `ceil(N / 12)`
+    segundos: 12 caracteres por segundo, una locución lenta (el estimado
+    nunca queda por debajo del real). `solo_subtitulos` (revisión final): esa
+    voz ya existe (mismo `hash_voz`) pero sin palabras — solo se paga Whisper,
+    sobre su `duracion_ms` real si se conoce (la misma cuenta del gasto)."""
+    from providers import fal_audio
+    n = max(1, int(caracteres or 0))
+    segundos = math.ceil(n / 12)
+    if solo_subtitulos:
+        ms = int(duracion_ms) if duracion_ms else segundos * 1000
+        return fal_audio.costo_whisper(ms), f"subtítulos de una voz ya creada ({n} caracteres)"
+    usd_voz = n * fal_audio.COSTO_USD_POR_CARACTER
+    return usd_voz + fal_audio.costo_whisper(segundos * 1000), f"{n} caracteres con ElevenLabs y sus subtítulos"
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
@@ -236,10 +305,11 @@ _ESTIMADORES = {
     "swap": _estimar_swap,
     "final": _estimar_final,
     "reedicion": _estimar_final,
-    "guion": lambda **_: (TARIFAS["guion"], "una llamada a Claude"),
+    "guion": lambda **_: (TARIFAS["guion"], "hasta dos llamadas a Claude y la transcripción de la referencia"),
     "regla_producto": lambda **_: (TARIFAS["regla_producto"], "una llamada corta a Claude"),
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
+    "leer_referente": lambda **_: (TARIFAS["leer_referente"], "una llamada corta a Claude con visión"),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
     "refinar_prompt": lambda **_: (TARIFAS["refinar_prompt"], "un mensaje a Claude"),
     "clasificacion": lambda n=1, bilingue=False, **_: (
@@ -247,6 +317,10 @@ _ESTIMADORES = {
         f"{max(1, int(n))} anuncio(s) con Claude" + (", en español e inglés" if bilingue else "")),
     "musica_elevenlabs": lambda **_: (TARIFAS["musica_elevenlabs"], "una canción de 60 s con ElevenLabs"),
     "locucion": _estimar_locucion,
+    "voz_clonada": _estimar_voz_clonada,
+    "voz_disenada": _estimar_voz_disenada,
+    "transcripcion": _estimar_transcripcion,
+    "voz_editor": _estimar_voz_editor,
     "guion_clips": _estimar_guion_clips,
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),
@@ -276,11 +350,12 @@ def estimar(tipo, **params):
 
 # ----------------------------------------------------------- registrar ---
 
-def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=None, creado_en=None):
+def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=None, creado_en=None, conservar_mayor=False):
     """Guarda (o actualiza, misma `referencia`) un cobro real. `usd` None/0 se
     guarda como 0 (queda constancia de la llamada aunque no haya tarifa).
     Devuelve el id de la fila. `creado_en` solo se fija al crear (la fecha
-    del primer cobro se conserva al actualizar)."""
+    del primer cobro se conserva al actualizar). `conservar_mayor` evita reducir
+    un cobro al recuperar un componente pagado que ahora llega de caché."""
     if not cliente or not referencia:
         raise ValueError("registrar necesita cliente y referencia.")
     tipo = tipo if tipo in TIPOS else "otro"
@@ -305,7 +380,8 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
     with db.conectar() as con:
         fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
         if fila:
-            con.execute(sa.update(g).where(g.c.id == fila.id).values(**cambios))
+            con.execute(sa.update(g).where(g.c.id == fila.id,
+                g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
             return int(fila.id)
         try:
             with con.begin_nested():
@@ -316,7 +392,8 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
         except sa.exc.IntegrityError:
             # Carrera: otro proceso insertó la misma referencia entre el select y el insert.
             fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
-            con.execute(sa.update(g).where(g.c.id == fila.id).values(**cambios))
+            con.execute(sa.update(g).where(g.c.id == fila.id,
+                g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
             return int(fila.id)
 
 
@@ -365,6 +442,38 @@ def resumen_mes(cliente, ahora_iso=None):
     total = round(sum(v["usd"] for v in por_tipo.values()), 4)
     return {"desde": desde, "hasta": hasta, "total": total, "por_tipo": por_tipo,
             "n": sum(v["n"] for v in por_tipo.values())}
+
+
+def resumen_total(cliente, ahora_iso=None):
+    """{"total", "n"} de todo lo cobrado al proyecto hasta `ahora` (Tablero:
+    el total desde el inicio)."""
+    g = db.gasto
+    q = sa.select(sa.func.sum(g.c.usd), sa.func.count()).where(g.c.cliente == cliente, g.c.creado_en <= _ahora(ahora_iso))
+    with db.conectar() as con:
+        suma, n = con.execute(q).first()
+    return {"total": round(float(suma or 0.0), 4), "n": int(n or 0)}
+
+
+def total_entre(cliente, desde_iso, hasta_iso):
+    """Generación pagada en [desde, hasta): {"usd", "n"} (centro de resultados;
+    mismo origen que `resumen_mes`)."""
+    g = db.gasto
+    q = (sa.select(sa.func.coalesce(sa.func.sum(g.c.usd), 0.0), sa.func.count())
+         .where(g.c.cliente == cliente, g.c.creado_en >= desde_iso[:19], g.c.creado_en < hasta_iso[:19]))
+    with db.conectar() as con:
+        usd, n = con.execute(q).one()
+    return {"usd": round(float(usd or 0.0), 4), "n": int(n or 0)}
+
+
+def por_mes(cliente, ahora_iso=None):
+    """{"YYYY-MM": {"usd", "n"}} de todo lo cobrado al proyecto hasta `ahora`,
+    un mes por clave (Tablero: el desglose mes a mes)."""
+    g = db.gasto
+    mes = sa.func.substr(g.c.creado_en, 1, 7)
+    q = (sa.select(mes, sa.func.sum(g.c.usd), sa.func.count())
+         .where(g.c.cliente == cliente, g.c.creado_en <= _ahora(ahora_iso)).group_by(mes))
+    with db.conectar() as con:
+        return {m: {"usd": round(float(suma or 0.0), 4), "n": int(n)} for m, suma, n in con.execute(q)}
 
 
 def historial(cliente, limite=200, desde=None):
@@ -419,7 +528,9 @@ def por_proyecto_mes(clientes, ahora_iso=None):
 
 # ----------------------------------------------------------------- CSV ---
 
-ENCABEZADO_CSV = ["fecha", "tipo", "proveedor", "referencia", "detalle", "usd"]
+# La línea entera es UN msgid (una palabra suelta como «proyecto» ya existe en
+# el catálogo como plural y chocaría); `csv_mes` la traduce al escribirla.
+ENCABEZADO_CSV = N_("fecha;tipo;proveedor;referencia;detalle;usd").split(";")
 _INICIOS_FORMULA = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -434,12 +545,14 @@ def _celda(v):
 def csv_mes(cliente, ahora_iso=None):
     """CSV (`;`) con una fila por cobro del mes en curso, con BOM para que
     Excel lo abra en UTF-8. `usd` con coma decimal y 4 decimales (M5: mismo
-    separador que `tablero.csv_mes`, coherente con el `;` de delimitador)."""
+    separador que `tablero.csv_mes`, coherente con el `;` de delimitador).
+    Encabezados en el idioma activo (en la ruta, el de quien lo descarga); los
+    `detalle` guardados salen tal cual."""
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
-    w.writerow(ENCABEZADO_CSV)
+    w.writerow(idiomas.traducir(";".join(ENCABEZADO_CSV)).split(";"))
     g = db.gasto
     q = (sa.select(g).where(g.c.cliente == cliente, g.c.creado_en >= desde, g.c.creado_en <= hasta)
          .order_by(g.c.creado_en.asc(), g.c.id.asc()))

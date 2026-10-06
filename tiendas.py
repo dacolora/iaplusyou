@@ -42,7 +42,11 @@ _PRODUCTO_CAMPOS_MARCA = ("en_prueba", "prioridad", "archivado", "activo_catalog
 # por corrida del importador atienda primero lo que nunca se intentó.
 # `sofisticacion`, `pruebas` y `pedidos` son de la doctrina (bloque 2): los
 # escribe el cliente en Catálogo y una sync de tienda nunca debe borrarlos.
-EXTRA_INTERNO = ("archivado_por", "vinculo_intentado_en", "sofisticacion", "pruebas", "pedidos")
+# `archivado_con_producto` marca las filas que archivó «Archivar» de la ficha
+# (`archivar_activo`): «Desarchivar» devuelve esas y no un duplicado que ya
+# estaba archivado a mano por otra razón (migración 0025).
+EXTRA_INTERNO = ("archivado_por", "vinculo_intentado_en", "sofisticacion", "pruebas", "pedidos",
+                 "archivado_con_producto")
 
 
 # --- tiendas ---------------------------------------------------------------
@@ -111,15 +115,24 @@ def actualizar(cliente, tienda_id, **campos):
                     .values(actualizado_en=db.ahora(), **campos))
 
 
-def desconectar(cliente, tienda_id):
+def desconectar(cliente, tienda_id, archivar=True):
     """Borra la tienda. Los productos que vinieron de ella no se borran —
-    quedan con su `fuente`/`fuente_id` de siempre, solo se archivan por
-    sync (así no desaparecen de golpe de un catálogo/experimento que ya los
-    use, y una reconexión los desarchiva sola). Los pedidos tampoco se
-    borran: `pedido.tienda_id` es FK a la tienda, así que se desligan
+    quedan con su `fuente`/`fuente_id` de siempre; con `archivar=True` (el
+    valor por defecto) además se archivan por sync (así no desaparecen de
+    golpe de un catálogo/experimento que ya los use, y una reconexión los
+    desarchiva sola) — `archivar=False` los deja tal cual, para cuando OTRA
+    tienda del mismo `fuente` sigue sirviéndolos (p. ej. al desconectar la
+    Admin API mientras la Shopify sin llaves sigue conectada: mismo
+    `fuente="shopify"`, la que queda los sigue trayendo; lo decide la ruta
+    `tienda_desconectar`). El `fuente` para archivar es el del CONECTOR,
+    no el `tipo` de la tienda — `shopify_publico` y `shopify` comparten
+    `fuente="shopify"` aunque sus `tipo` difieran — con `tipo` como respaldo
+    si el tipo ya no está registrado. Los pedidos tampoco se borran:
+    `pedido.tienda_id` es FK a la tienda, así que se desligan
     (`tienda_id=NULL`) en la misma transacción conservando su atribución —
     sin esto el DELETE fallaría con IntegrityError en cuanto la tienda
     tuviera una venta."""
+    import conectores
     t, p, pe = db.tienda, db.producto, db.pedido
     ahora = db.ahora()
     with db.conectar() as con:
@@ -129,7 +142,12 @@ def desconectar(cliente, tienda_id):
         tipo = fila[0]
         con.execute(pe.update().where(pe.c.cliente == cliente, pe.c.tienda_id == tienda_id).values(tienda_id=None))
         con.execute(t.delete().where(t.c.id == tienda_id, t.c.cliente == cliente))
-        _archivar_en(con, [p.c.cliente == cliente, p.c.fuente == tipo, p.c.archivado.is_(False)], "sync", ahora)
+        if archivar:
+            try:
+                fuente = getattr(conectores.por_tipo(tipo), "fuente", None) or tipo
+            except ValueError:
+                fuente = tipo
+            _archivar_en(con, [p.c.cliente == cliente, p.c.fuente == fuente, p.c.archivado.is_(False)], "sync", ahora)
         return True
 
 
@@ -194,6 +212,7 @@ def upsert_producto(cliente, fuente, fuente_id, datos):
             extra = _extra_con_internos(valores.get("extra"), extra_viejo)
             if not manual:
                 extra.pop("archivado_por", None)
+                extra.pop("archivado_con_producto", None)
             valores["extra"] = extra
             con.execute(p.update().where(p.c.id == pid)
                         .values(actualizado_en=ahora, archivado=manual, **valores))
@@ -301,9 +320,68 @@ def marcar_producto(cliente, producto_id, **campos):
                 extra["archivado_por"] = "manual"
             else:
                 extra.pop("archivado_por", None)
+                extra.pop("archivado_con_producto", None)
             campos = dict(campos, archivado=bool(campos["archivado"]), extra=extra)
         con.execute(p.update().where(p.c.id == producto_id, p.c.cliente == cliente)
                     .values(actualizado_en=db.ahora(), **campos))
+
+
+def activos_archivados(cliente):
+    """Los productos del catálogo (pid, sin color) archivados: los que tienen
+    filas y TODAS archivadas — con una viva el producto está vivo, la misma
+    regla de `por_activo`. Una consulta. La galería los pasa a «Archivados» y
+    los selectores de Crear, Sprints, Nicho, Recrear y Flow Plus los esconden
+    (`catalogo_productos.sin_archivados`)."""
+    p = db.producto
+    vivos, archivados = set(), set()
+    with db.conectar() as con:
+        filas = con.execute(sa.select(p.c.activo_catalogo_id, p.c.archivado)
+                            .where(p.c.cliente == cliente, p.c.activo_catalogo_id.isnot(None)))
+        for activo, archivado in filas:
+            (archivados if archivado else vivos).add(str(activo).split("/", 1)[0])
+    return archivados - vivos
+
+
+def archivar_activo(cliente, activo_id, archivado=True):
+    """«Archivar» / «Desarchivar» un producto entero desde su ficha. No borra
+    nada. Archivar toma TODAS sus filas vivas o archivadas por la sync (con una
+    sola viva el producto seguiría vivo) y las deja archivadas a mano con la
+    marca `archivado_con_producto`: la sync de la tienda no las desarchiva.
+    Desarchivar devuelve las marcadas y las archivadas por la sync, nunca una
+    archivada a mano por otra razón (un duplicado de la migración 0025:
+    cambiaría qué fila manda); si no queda ninguna así, devuelve la fila que
+    la galería muestra. Devuelve cuántas filas cambió."""
+    p = db.producto
+    with db.conectar() as con:
+        ids = [f[0] for f in con.execute(sa.select(p.c.id).where(
+            p.c.cliente == cliente, p.c.activo_catalogo_id == activo_id).order_by(p.c.id))]
+    cambiadas = 0
+    for fid in ids:
+        with db.conectar() as con:
+            if not _bloquear_producto(con, (p.c.id == fid, p.c.cliente == cliente)):
+                continue
+            esta, extra = con.execute(sa.select(p.c.archivado, p.c.extra).where(p.c.id == fid)).first()
+            extra = dict(extra or {})
+            a_mano_por_otra_razon = bool(esta) and extra.get("archivado_por") == "manual" \
+                and not extra.get("archivado_con_producto")
+            if archivado:
+                if a_mano_por_otra_razon or (esta and extra.get("archivado_con_producto")):
+                    continue
+                extra.update(archivado_por="manual", archivado_con_producto=True)
+            else:
+                if not esta or a_mano_por_otra_razon:
+                    continue
+                extra.pop("archivado_por", None)
+                extra.pop("archivado_con_producto", None)
+            con.execute(p.update().where(p.c.id == fid)
+                        .values(archivado=bool(archivado), actualizado_en=db.ahora(), extra=extra))
+            cambiadas += 1
+    if not archivado and not cambiadas and activo_id in activos_archivados(cliente):
+        visible = por_activo(cliente).get(activo_id)
+        if visible:
+            marcar_producto(cliente, visible["id"], archivado=False)
+            cambiadas = 1
+    return cambiadas
 
 
 def anotar_extra(cliente, producto_id, **claves):
@@ -435,6 +513,34 @@ def pedidos_sin_resolver(cliente, dias=DIAS_RESOLVER_PEDIDOS):
             pe.c.fecha >= desde)
             .order_by(pe.c.id))
         return [_pedido_a_dict(f) for f in filas]
+
+
+def pedidos_vencidos_sin_resolver(cliente, ahora=None):
+    """Cuenta pedidos vencidos con id numérico de una pieza propia de Creatv."""
+    ahora = datetime.fromisoformat(ahora) if isinstance(ahora, str) else (ahora or datetime.now())
+    limite = (ahora - timedelta(days=DIAS_RESOLVER_PEDIDOS)).isoformat(timespec="seconds")
+    from atribucion import _numero
+    pe, ep, pz = db.pedido, db.experimento_pieza, db.pieza
+    with db.conectar() as con:
+        grupos = con.execute(sa.select(pe.c.utm_content, sa.func.count()).where(
+            pe.c.cliente == cliente, pe.c.utm_content.isnot(None),
+            pe.c.experimento_pieza_id.is_(None), pe.c.fecha < limite).group_by(pe.c.utm_content)).all()
+        numericos = []
+        for utm, n in grupos:
+            try:
+                numero = _numero(utm)
+            except ValueError:
+                continue  # p. ej. ²: isdigit() no implica que int() lo acepte
+            if numero is not None and 0 <= numero <= 2 ** 63 - 1:
+                numericos.append((numero, n))
+        numeros = {numero for numero, _ in numericos}
+        if not numeros:
+            return 0
+        propios = set(con.execute(sa.union(
+            sa.select(ep.c.id).where(ep.c.cliente == cliente, ep.c.id.in_(numeros)),
+            sa.select(pz.c.id).where(pz.c.cliente == cliente, pz.c.id.in_(numeros)))).scalars())
+        return sum(n for numero, n in numericos if numero in propios)
+
 
 
 def resolver_pedido(cliente, pedido_id, ep_id):

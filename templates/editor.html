@@ -1,14 +1,17 @@
 <!doctype html>
-<html lang="es">
+<html lang="{{ idioma_ui }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ edicion.nombre }} · Editor</title>
+<title>{{ _('%(nombre)s · Editor', nombre=nombre_edicion) }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <style>
   {% for f in datos.config.fuentes %}
   @font-face { font-family: "{{ f }}"; src: url("{{ url_for('static', filename='fonts/' ~ f ~ '.ttf') }}") format("truetype"); font-display: block; }
   {% endfor %}
+  {% if datos.config.emoji %}
+  @font-face { font-family: "CreatvEmoji"; src: url("{{ url_for('static', filename=datos.config.emoji.archivo) }}") format("truetype"); font-display: block; }
+  {% endif %}
   /* Disposición tipo CapCut (capa 4b): barra arriba; biblioteca | reproductor
      | propiedades en el medio; herramientas y línea de tiempo abajo, a todo
      el ancho. En el celular: reproductor, herramientas y línea de tiempo, y
@@ -31,7 +34,7 @@
 
   /* Fila del medio (un <main>: sin el ancho máximo ni el relleno de las demás páginas) */
   .ed-cuerpo { max-width: none; margin: 0; padding: 0; min-width: 0; min-height: 0; }
-  .ed-centro { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .ed-centro { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--fondo-video); }
   .ed-escena { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; padding: .75rem; }
   /* #ed-escenario mide exactamente lo que se ve del lienzo (la proporción del
      formato): la capa para tocar y arrastrar sobre el video va encima, del
@@ -40,7 +43,7 @@
      ninguna media query cubriera dejaría el reproductor en 0×0. */
   .ed-escenario { position: relative; flex: none; max-width: 100%; aspect-ratio: var(--ed-ancho) / var(--ed-alto);
     width: min(100%, calc(42vh * var(--ed-ancho) / var(--ed-alto))); }
-  #lienzo { position: absolute; inset: 0; display: block; width: 100%; height: 100%; background: #000; border-radius: var(--radius-sm); }
+  #lienzo { position: absolute; inset: 0; display: block; width: 100%; height: 100%; background: var(--fondo-lienzo); border-radius: var(--radius-sm); }
   /* Tocar, mover y agrandar sobre el video (lienzo_interaccion.js): la capa
      transparente cubre exactamente el lienzo y escucha el puntero (el dedo no
      mueve la página ahí); la caja de lo elegido, su asa y las guías del
@@ -54,9 +57,21 @@
     box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .45); }
   .ed-asa { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; box-sizing: border-box; border-radius: 50%;
     background: var(--accent); border: 2px solid var(--text); box-shadow: 0 1px 4px rgba(0, 0, 0, .5); pointer-events: none; }
+  /* capa 5b (D8): elegido el clip de la principal, su caja es la parte del
+     cuadro que se ve (encuadre.cajaVisible) y su asa lo acerca */
+  .ed-caja.ed-encuadre-caja { border-color: var(--accent-texto); }
+  .ed-asa.ed-encuadre-asa { border-color: var(--accent-texto); }
   .ed-guia { position: absolute; pointer-events: none; }
   .ed-guia-v { top: 0; bottom: 0; left: 50%; border-left: 1px dashed var(--accent-texto); }
   .ed-guia-h { left: 0; right: 0; top: 50%; border-top: 1px dashed var(--accent-texto); }
+  /* Zonas seguras (capa 5c, D10): lo que la interfaz de TikTok, Reels o Shorts
+     tapa en un 9:16. Solo guías de la página (nada se dibuja en el lienzo ni
+     en el video): un rectángulo rayado y translúcido por zona, en % del lienzo,
+     debajo de la capa de toques — no recibe ni un toque. */
+  .ed-zonas { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: var(--radius-sm); }
+  .ed-zona { position: absolute; box-sizing: border-box; pointer-events: none;
+    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--error) 18%, transparent) 0 6px, transparent 6px 14px);
+    border: 1px dashed color-mix(in srgb, var(--error) 55%, transparent); }
   .editor-avisos { display: grid; gap: .3rem; justify-items: center; padding: 0 1rem; }
   .editor-aviso { margin: 0; font-size: .88rem; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
   .editor-aviso.error { color: var(--error); }
@@ -75,13 +90,14 @@
   /* Pestañas de la biblioteca: solo el icono en la columna (220–300 px:
      «Transiciones» no cabe ni sola al lado de su icono); el nombre sigue ahí
      para el lector de pantalla y en el cartelito, y el panel abierto lo dice
-     en su título. Con lugar (la hoja ancha del celular) se ven los nombres. */
+     en su título. Con lugar (la hoja ancha del celular) se ven los nombres:
+     desde la capa 5a son cinco (con «Subtítulos»), así que hace falta más. */
   .ed-pestanas { display: flex; flex: 1 1 auto; gap: .2rem; min-width: 0; container: ed-pestanas / inline-size; }
   .ed-pestana { position: relative; display: flex; flex: 1 1 0; flex-direction: row; align-items: center; justify-content: center;
     gap: .35rem; min-width: 0; padding: .45rem .3rem; background: transparent; color: var(--muted); border: 1px solid transparent;
     border-radius: var(--radius-sm); font-size: .76rem; }
   .ed-pestanas .ed-pestana span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  @container ed-pestanas (min-width: 400px) {
+  @container ed-pestanas (min-width: 520px) {
     .ed-pestanas .ed-pestana span { position: static; width: auto; height: auto; clip-path: none; }
   }
   .ed-pestana:hover { color: var(--text); background: var(--panel-hover); }
@@ -93,9 +109,23 @@
   /* Herramientas (a todo el ancho) */
   .ed-herramientas { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .6rem; padding: .5rem 1rem;
     border-top: 1px solid var(--border); }
-  .ed-grupo { display: inline-flex; flex-wrap: wrap; gap: .3rem; }
+  .ed-grupo { display: inline-flex; flex-wrap: wrap; gap: .3rem; min-width: 0; max-width: 100%; }
+  /* «Vincular» (capa 5b, D10.9): con estado — prendido, en el color de acento; apagado, el eslabón tenue */
+  .ed-vincular { display: inline-flex; align-items: center; gap: .3rem; min-width: 0; max-width: 100%; }
+  .ed-vincular .ed-icono { width: 16px; height: 16px; }
+  .ed-vincular span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-vincular[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto);
+    background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+  .ed-vincular[aria-pressed="false"] .ed-icono { opacity: .5; }
   .ed-zoom { display: inline-flex; flex-direction: row; align-items: center; gap: .35rem; font-size: .82rem; color: var(--muted); }
   .ed-zoom { margin-left: auto; }
+  /* «Zonas» (capa 5c, D10): etiqueta y selector en una fila (style.css pone en columna toda
+     <label> que envuelve un <select>: aquí se pide la fila a propósito); en el celular la barra
+     baja de línea, así que la etiqueta con su selector se envuelve y se puede achicar en vez de
+     empujar la página */
+  .ed-zonas-elegir { display: inline-flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: .25rem .35rem; min-width: 0;
+    max-width: 100%; font-size: .82rem; color: var(--muted); }
+  .ed-zonas-elegir select { width: auto; min-width: 0; max-width: 100%; padding: .3rem .45rem; }
   .ed-zoom input[type="range"] { width: 9rem; max-width: 36vw; min-width: 0; }
 
   /* Línea de tiempo (capas 4a y 4b): corre DENTRO de su caja, de lado y hacia
@@ -195,7 +225,14 @@
   .ed-bib-mas { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
     color: #fff; background: var(--accent); border: 1px solid transparent; border-radius: 50%; box-shadow: var(--shadow-soft); }
   .ed-bib-mas:hover:not(:disabled) { filter: brightness(1.15); }
-  .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible, .ed-sticker:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  /* «Borrar» (capa 4c): el tacho arriba a la derecha de la miniatura; siempre visible (con el dedo no hay hover) */
+  .ed-bib-borrar { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+    color: #fff; background: rgba(0, 0, 0, .6); border: 1px solid transparent; border-radius: 50%; }
+  .ed-bib-borrar:hover { color: var(--error); background: rgba(0, 0, 0, .8); }
+  .ed-bib-borrar:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-bib-audio .ed-bib-borrar { position: static; flex: none; color: var(--muted); background: transparent; border-color: var(--border); }
+  .ed-bib-audio .ed-bib-borrar:hover { color: var(--error); border-color: var(--error); }
   .ed-bib-preparando { cursor: default; }
   .ed-bib-origen { opacity: .45; }
   /* audios: una fila con icono, nombre y duración, «Escuchar» y «+» */
@@ -211,7 +248,7 @@
   .ed-bib-escuchar[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto); }
   .ed-bib-audio .ed-bib-mas { position: static; flex: none; }
   /* textos de muestra: cada uno escrito con el estilo con que entra */
-  .ed-bib-textos { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: .5rem; }
+  .ed-bib-textos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 118px), 1fr)); gap: .5rem; }
   .ed-bib-texto { display: grid; place-items: center; min-width: 0; min-height: 64px; padding: .5rem; color: #fff; font-weight: 400;
     background: linear-gradient(160deg, var(--panel-hover), var(--bg)); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }
   .ed-bib-texto:hover { border-color: var(--muted-2); }
@@ -223,7 +260,40 @@
   /* «Llamado» entra en el video como texto negro en una caja blanca: la muestra lo imita con los tokens (claro/oscuro) */
   .ed-bib-texto-llamado .ed-bib-texto-muestra { padding: .25rem .6rem; font-family: "Inter-Bold", var(--font-body); font-size: .95rem;
     color: var(--bg); background: var(--text); border-radius: 4px; }
-  /* transiciones: una muestra quieta de cada una (A violeta, B verde) con su nombre y qué hace */
+  /* «Para vender» (capa 5c, D12.1): cada plantilla escrita en la fuente y con el fondo con que entra al video. Sus colores
+     son los del documento (operaciones.PRESETS_TEXTO), no los del tema: así se ven en el video. Los dos claros viven en
+     variables (la guardia del modo oscuro pide que los colores de la interfaz sean variables) y el emoji lleva su
+     fondo claro por lo mismo: algunos de sus dibujos, como ✔, son oscuros. */
+  #ed-panel-biblioteca { --ed-muestra-amarillo: #FFD400; --ed-muestra-tinta: #111111; --ed-emoji-fondo: #eef0f4; }
+  .ed-bib-texto-oferta .ed-bib-texto-muestra { padding: .15rem .55rem; font-family: "Anton-Regular", var(--font-body); font-size: 1.2rem;
+    letter-spacing: .02em; color: #fff; background: #E11D48; border-radius: 3px; }
+  .ed-bib-texto-nuevo .ed-bib-texto-muestra { padding: .05rem .75rem; font-family: "BebasNeue-Regular", var(--font-body); font-size: 1.45rem;
+    color: var(--ed-muestra-tinta); background: var(--ed-muestra-amarillo); border-radius: 999px; }
+  .ed-bib-texto-descuento .ed-bib-texto-muestra { font-family: "ArchivoBlack-Regular", var(--font-body); font-size: 1.4rem; color: var(--ed-muestra-amarillo);
+    -webkit-text-stroke: 3px #111; paint-order: stroke fill; }
+  .ed-bib-texto-envio .ed-bib-texto-muestra { padding: .2rem .65rem; font-family: "Poppins-ExtraBold", var(--font-body); font-size: .74rem;
+    color: #fff; background: #16A34A; border-radius: 999px; }
+  .ed-bib-texto-ultimas .ed-bib-texto-muestra { padding: .25rem .5rem; font-family: "Poppins-ExtraBold", var(--font-body); font-size: .68rem;
+    color: #fff; background: #111; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .4); }
+  .ed-bib-texto-mas_vendido .ed-bib-texto-muestra { padding: .1rem .75rem; font-family: "LilitaOne-Regular", var(--font-body); font-size: 1.05rem;
+    color: var(--ed-muestra-tinta); background: var(--ed-muestra-amarillo); border-radius: 999px; }
+  /* una plantilla larga («MÁS VENDIDO», «ENVÍO GRATIS», «¡ÚLTIMAS UNIDADES!») pasa a la línea de abajo en vez de terminar
+     en «…» (en una columna de escritorio la muestra mide 118–146 px); las cuatro muestras de siempre siguen en una línea */
+  .ed-bib-plantillas .ed-bib-texto-muestra { white-space: normal; text-align: center; }
+  /* «Stickers» (capa 5c, D11 y D12.2): una cuadrícula por sección. Los stickers son BLANCOS (se tiñen al agregarlos): su
+     miniatura va sobre un fondo oscuro; el emoji, con su propia cara (la fuente de emojis de la página). Nunca más
+     ancho que su hoja: el mínimo de la columna es min(100%, 64px). */
+  .ed-stickers-cuadricula { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 64px), 1fr)); gap: .45rem; }
+  .ed-sticker { position: relative; display: block; min-width: 0; margin: 0; padding: 0; aspect-ratio: 1; overflow: hidden; cursor: grab;
+    background: #000; border: 1px solid var(--border); border-radius: var(--radius-sm); user-select: none; -webkit-user-select: none; }
+  .ed-sticker:hover { border-color: var(--muted-2); }
+  .ed-sticker img { position: absolute; inset: .4rem; display: block; width: calc(100% - .8rem); height: calc(100% - .8rem);
+    max-width: 100%; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
+  .ed-sticker-emoji { display: grid; place-items: center; background: var(--ed-emoji-fondo); color: var(--ed-muestra-tinta); font-size: 1.7rem; line-height: 1;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+  {% if datos.config.emoji %}.ed-sticker-emoji { font-family: "CreatvEmoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }{% endif %}
+  .ed-stickers-atribucion { margin-top: .35rem; font-size: .72rem; }
+  /* transiciones: una muestra quieta de cada una (A y B en dos colores) con su nombre y qué hace */
   .ed-bib-transiciones { display: grid; gap: .4rem; }
   .ed-bib-transicion { display: flex; align-items: center; gap: .6rem; min-width: 0; padding: .45rem .55rem; text-align: left; color: var(--text);
     font-family: var(--font-body); font-weight: 400; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }
@@ -247,11 +317,25 @@
     border-radius: var(--radius-sm); box-shadow: var(--shadow); opacity: .75; pointer-events: none; }
   .ed-bib-fantasma span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .ed-bib-fantasma-dentro { opacity: 1; border-color: var(--accent-texto); }
+  /* «¿Cómo agregar?» de una imagen (capa 5b, D12): un menú chico junto a su «+», fijo en la pantalla
+     (biblioteca.js lo pone y lo mantiene dentro de ella), con las dos maneras de agregarla */
+  .ed-bib-como { position: fixed; left: 0; top: 0; z-index: 50; display: flex; flex-direction: column; gap: .25rem;
+    width: 15rem; max-width: calc(100vw - 16px); padding: .45rem; background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow); }
+  .ed-bib-como-titulo { margin: 0 0 .15rem; padding: .1rem .3rem; font-size: .74rem; line-height: 1.35; color: var(--muted);
+    overflow-wrap: anywhere; }
+  .ed-bib-como-opcion { display: flex; align-items: center; gap: .55rem; width: 100%; min-width: 0; min-height: 40px; padding: .45rem .55rem;
+    text-align: left; font-family: var(--font-body); font-size: .84rem; font-weight: 500; color: var(--text); background: transparent;
+    border: 1px solid transparent; border-radius: var(--radius-sm); }
+  .ed-bib-como-opcion:hover, .ed-bib-como-opcion:focus-visible { background: var(--panel-hover); border-color: var(--border); }
+  .ed-bib-como-opcion:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 1px; }
+  .ed-bib-como-opcion .ed-bib-icono { flex: none; color: var(--accent-texto); }
+  .ed-bib-como-opcion span { min-width: 0; }
   body.ed-bib-arrastrando, body.ed-bib-arrastrando * { cursor: grabbing !important; }
   @media (pointer: coarse) {
     /* con el dedo no se arrastra desde la biblioteca: se toca «+» */
     .ed-bib-ayuda-arrastre { display: none; }
-    .ed-bib-item, .ed-bib-audio, .ed-bib-texto, .ed-bib-transicion { cursor: default; }
+    .ed-bib-item, .ed-bib-audio, .ed-bib-texto, .ed-bib-transicion, .ed-sticker { cursor: default; }
   }
 
   /* Propiedades (capa 4b): propiedades.js arma lo de adentro de #ed-panel-propiedades,
@@ -280,6 +364,7 @@
   .ed-prop textarea[readonly] { color: var(--muted); }
   .ed-prop-nota { margin: 0; font-size: .76rem; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
   .ed-prop-error { color: var(--error); }
+  .ed-prop-aviso { color: var(--warn); }
   /* opciones excluyentes: el .segmentado de style.css, a lo ancho y envolviéndose */
   .ed-prop .ed-prop-segmentado { display: flex; width: 100%; border-radius: var(--radius-sm); }
   .ed-prop .ed-prop-segmentado label { flex: 1 1 auto; min-width: 0; }
@@ -301,6 +386,200 @@
   .ed-prop-acciones { display: flex; flex-wrap: wrap; gap: .4rem; }
   .ed-prop-acciones .btn-sm[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto); }
   .ed-prop-pie { padding-top: .4rem; border-top: 1px solid var(--border); }
+  /* Capa 5b (Tarea 7): «Encuadre» (video y foto) y la duración de una foto.
+     Los dos modos miden lo mismo y su texto se envuelve: «Ajustar con fondo
+     desenfocado» cabe en la columna de 220 px y en la hoja de 375 px. */
+  .ed-prop .ed-encuadre-modos { border-radius: var(--radius-sm); }
+  .ed-prop .ed-encuadre-modos label { display: flex; flex: 1 1 0; min-width: 0; }
+  .ed-prop .ed-encuadre-modos span { display: flex; flex: 1 1 auto; align-items: center; justify-content: center;
+    min-width: 0; line-height: 1.25; overflow-wrap: anywhere; }
+  .ed-foto-campo { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+  .ed-prop .ed-foto-campo input { flex: 0 1 6.5rem; width: 6.5rem; min-width: 0; font-variant-numeric: tabular-nums; }
+  .ed-foto-unidad { flex: none; font-size: .8rem; color: var(--muted); }
+  /* Capa 5c (Tarea 7): «Ancho del texto» con «Sin límite» al lado — en la
+     columna angosta o en la hoja del celular la casilla baja a su línea (se
+     envuelve, nunca empuja de lado) — y la lista de fuentes por familia,
+     cada nombre en su letra (propiedades.js). */
+  .ed-prop-ancho-fila { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .7rem; min-width: 0; }
+  .ed-prop .ed-prop-ancho-fila input[type="range"] { flex: 1 1 8rem; width: auto; }
+  .ed-prop-ancho-fila .ed-prop-casilla { flex: none; font-weight: 400; color: var(--muted); }
+  .ed-fuentes-grupo { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+  .ed-fuentes-familia { margin: .3rem 0 0; font-size: .72rem; font-weight: 600; color: var(--muted); }
+
+  /* Subtítulos (capa 5a): subtitulos_panel.js arma lo de adentro de la pestaña
+     «Subtítulos» (dentro de .ed-bib-zona) y linea_tiempo.js la fila de solo
+     lectura de arriba de la línea de tiempo. Todo cabe en la columna
+     (220–300 px) y en la hoja del celular, que corre sola hacia abajo. */
+  .ed-bib-zona { display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
+  .ed-sub { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+  .ed-sub-aviso { position: sticky; top: 0; z-index: 3; margin: 0; padding: .45rem 0; text-align: left; background: var(--panel); }
+  .ed-sub-detalle { font-size: .74rem; color: var(--muted); }
+  .ed-sub-detalle summary { cursor: pointer; }
+  .ed-sub-detalle pre { margin: .3rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .72rem; }
+  .ed-sub-seccion { display: flex; flex-direction: column; gap: .55rem; min-width: 0; margin: 0; padding: .7rem 0 0; border: 0;
+    border-top: 1px solid var(--border); border-radius: 0; }
+  .ed-sub-seccion.ed-sub-primera { padding-top: .2rem; border-top: 0; }
+  .ed-sub fieldset { min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; }
+  .ed-sub legend, .ed-sub-titulo { float: left; width: 100%; margin: 0; padding: 0; font-family: var(--font-display); font-size: .8rem;
+    font-weight: 600; color: var(--muted); text-transform: none; letter-spacing: 0; }
+  .ed-sub legend + * { clear: both; }
+  .ed-sub-titulo::before { display: none; }
+  .ed-sub-estado { margin: 0; font-size: .82rem; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+  .ed-sub-estado[data-tipo="legado"] { color: var(--warn); }
+  .ed-sub-casilla { display: flex; align-items: center; gap: .45rem; font-size: .8rem; font-weight: 600; color: var(--text);
+    text-transform: none; letter-spacing: 0; cursor: pointer; }
+  .ed-sub-etiqueta { min-width: 0; font-size: .8rem; font-weight: 600; color: var(--text); text-transform: none; letter-spacing: 0; }
+  .ed-sub-valor { flex: none; font-size: .76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ed-sub-campo { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+  .ed-sub-fila-rango { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-width: 0; }
+  .ed-sub input[type="range"] { display: block; width: 100%; min-width: 0; margin: 0; accent-color: var(--accent); }
+  .ed-sub select { width: 100%; padding: .45rem .6rem; }
+  .ed-sub-nota { margin: 0; font-size: .76rem; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+  .ed-sub-nota.ed-sub-advertencia { color: var(--warn); }
+  /* ¿De dónde salen? — una tarjeta por fuente (la elegida, marcada) */
+  .ed-sub-fuentes { display: grid; gap: .35rem; }
+  .ed-sub-fuente { display: flex; align-items: flex-start; gap: .5rem; min-width: 0; padding: .45rem .55rem; font-size: .8rem;
+    color: var(--text); text-transform: none; letter-spacing: 0; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); cursor: pointer; }
+  .ed-sub-fuente input { flex: none; margin: .15rem 0 0; accent-color: var(--accent); }
+  .ed-sub-fuente span { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+  .ed-sub-fuente small { font-size: .72rem; line-height: 1.35; color: var(--muted); }
+  .ed-sub-fuente:has(input:checked) { border-color: var(--accent-texto); }
+  .ed-sub-fuente:has(input:disabled) { opacity: .6; cursor: default; }
+  .ed-sub-fuente:has(input:focus-visible) { outline: 2px solid var(--accent-texto); outline-offset: 1px; }
+  .ed-sub-generar { width: 100%; }
+  .ed-sub-progreso { display: block; width: 100%; height: 6px; accent-color: var(--accent); }
+  /* Estilo: cuatro tarjetas, cada una escrita con su estilo sobre un fondo de video */
+  .ed-sub-estilos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+  .ed-sub-estilo { display: flex; flex-direction: column; gap: .3rem; min-width: 0; padding: .35rem; font-family: var(--font-body);
+    font-size: .74rem; font-weight: 400; color: var(--text); background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); }
+  .ed-sub-estilo:hover { border-color: var(--muted-2); }
+  .ed-sub-estilo[aria-pressed="true"] { border-color: var(--accent-texto); box-shadow: inset 0 0 0 1px var(--accent-texto); }
+  .ed-sub-muestra { display: grid; place-items: center; height: 52px; padding: 0 .3rem; overflow: hidden; border-radius: 5px;
+    background: linear-gradient(160deg, #3b4150, #101218); }
+  .ed-sub-muestra > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; color: #fff;
+    font-family: "Inter-Bold", var(--font-body); }
+  .ed-sub-sonando { color: var(--ed-sub-resaltado, #FFD400); }
+  .ed-sub-muestra-karaoke > span { padding: .1rem .35rem; font-size: .76rem; background: rgba(0, 0, 0, .6); border-radius: 3px; }
+  .ed-sub-muestra-caja > span { padding: .1rem .35rem; font-size: .74rem; background: rgba(0, 0, 0, .7); border-radius: 3px; }
+  .ed-sub-muestra-palabra_grande > span { font-size: 1.1rem; text-transform: uppercase; -webkit-text-stroke: 3px #000; paint-order: stroke fill;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, .5); }
+  .ed-sub-muestra-minimal > span { font-family: "Inter-SemiBold", var(--font-body); font-size: .74rem; -webkit-text-stroke: 1.5px #000;
+    paint-order: stroke fill; }
+  .ed-sub-estilo-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-sub-colores { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+  .ed-sub-color { flex: none; width: 28px; height: 28px; padding: 0; border: 2px solid var(--border); border-radius: 50%; }
+  .ed-sub-color[aria-pressed="true"] { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-sub-opciones { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .ed-sub-opciones .btn-sm { flex: 1 1 auto; min-width: 0; }
+  .ed-sub-opciones .btn-sm[aria-pressed="true"], .ed-sub .btn-sm[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto); }
+  /* Lo que dicen: una línea por fila — su tiempo (lleva el cabezal), sus palabras (tocar = corregir) y ×. */
+  .ed-sub-lineas { display: grid; gap: .3rem; margin: 0; padding: 0; list-style: none; }
+  .ed-sub-linea { display: flex; align-items: flex-start; gap: .35rem; min-width: 0; padding: .3rem .35rem; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .ed-sub-linea[aria-current="true"] { border-color: var(--accent-texto); background: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); }
+  .ed-sub-tiempo { flex: none; padding: .12rem .3rem; font-family: var(--font-body); font-size: .72rem; font-weight: 400; color: var(--muted);
+    font-variant-numeric: tabular-nums; background: transparent; border: 1px solid transparent; border-radius: 4px; }
+  .ed-sub-tiempo:hover { color: var(--text); border-color: var(--border); }
+  .ed-sub-palabras { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: .1rem .15rem; min-width: 0; }
+  .ed-sub-palabra { min-width: 0; max-width: 100%; padding: .08rem .22rem; font-family: var(--font-body); font-size: .84rem; font-weight: 400;
+    line-height: 1.35; color: var(--text); text-align: left; overflow-wrap: anywhere; background: transparent; border: 1px solid transparent;
+    border-radius: 4px; }
+  button.ed-sub-palabra:hover { border-color: var(--border); background: var(--panel-hover); }
+  .ed-sub-palabra.ed-sub-corregida { text-decoration: underline dotted var(--accent-texto); text-underline-offset: 3px; }
+  .ed-sub-palabra-fija { color: var(--muted); }
+  .ed-sub-editor { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .25rem; max-width: 100%; }
+  .ed-sub-palabra-campo { width: auto; min-width: 4ch; max-width: 100%; padding: .12rem .3rem; font-size: .84rem; }
+  .ed-sub-restaurar { padding: .15rem .45rem; font-size: .72rem; }
+  .ed-sub-quitar-linea { flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; color: var(--muted);
+    background: transparent; border: 1px solid transparent; border-radius: 6px; }
+  .ed-sub-quitar-linea:hover { color: var(--error); border-color: var(--error); }
+  .ed-sub-tiempo:focus-visible, .ed-sub-palabra:focus-visible, .ed-sub-quitar-linea:focus-visible, .ed-sub-estilo:focus-visible,
+  .ed-sub-color:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 1px; }
+  .ed-sub-pie { padding-top: .7rem; border-top: 1px solid var(--border); }
+  /* La fila «Subtítulos» de la línea de tiempo (solo lectura: tocar un bloque lleva el cabezal y abre la pestaña) */
+  .ed-sub-fila { position: relative; }
+  .ed-sub-bloque { position: absolute; top: 0; bottom: 0; display: block; min-width: 0; padding: 0 .35rem; overflow: hidden;
+    font-family: var(--font-body); font-size: .66rem; font-weight: 400; line-height: 20px; text-align: left; white-space: nowrap;
+    text-overflow: ellipsis; color: var(--text); background: color-mix(in srgb, var(--warn) 22%, var(--panel-2));
+    border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+  .ed-sub-bloque:hover { border-color: var(--muted-2); }
+  .ed-sub-bloque:active { transform: none; }
+
+  /* Voz en off (capa 5a, Task 8): voz_panel.js arma lo de arriba de la pestaña
+     «Audio» (dentro de .ed-bib-zona): «Voz con IA» y «Grabar tu voz», cada uno
+     abre su formulario ahí mismo. Las tarjetas de voz van en dos columnas en
+     la columna (220–300 px) y en la hoja del celular. */
+  .ed-voz { display: flex; flex-direction: column; gap: .6rem; min-width: 0; padding-bottom: .8rem; border-bottom: 1px solid var(--border); }
+  .ed-voz-acciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+  .ed-voz-abrir { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3rem; min-width: 0;
+    padding: .65rem .4rem; font-family: var(--font-body); font-size: .78rem; font-weight: 600; line-height: 1.25; text-align: center;
+    color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .ed-voz-abrir:hover { border-color: var(--muted-2); }
+  .ed-voz-abrir[aria-expanded="true"] { color: var(--accent-texto); border-color: var(--accent-texto); box-shadow: inset 0 0 0 1px var(--accent-texto); }
+  .ed-voz-abrir span { min-width: 0; overflow-wrap: anywhere; }
+  .ed-voz-icono { flex: none; }
+  .ed-voz-mensaje { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; min-width: 0; }
+  .ed-voz-mensaje:not(:has(> :not([hidden]))) { display: none; }
+  .ed-voz-aviso { margin: 0; text-align: left; overflow-wrap: anywhere; }
+  .ed-voz-detalle { font-size: .74rem; color: var(--muted); }
+  .ed-voz-detalle summary { cursor: pointer; }
+  .ed-voz-detalle pre { margin: .3rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .72rem; }
+  .ed-voz-bloque, .ed-grab { display: flex; flex-direction: column; gap: .65rem; min-width: 0; }
+  .ed-voz-campo { display: flex; flex-direction: column; gap: .3rem; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; }
+  .ed-voz-etiqueta, .ed-voz legend { min-width: 0; font-family: var(--font-body); font-size: .8rem; font-weight: 600; color: var(--text);
+    text-transform: none; letter-spacing: 0; }
+  .ed-voz legend { float: left; width: 100%; margin: 0 0 .3rem; padding: 0; }
+  .ed-voz legend + * { clear: both; }
+  .ed-voz textarea { width: 100%; min-height: 5.5rem; resize: vertical; }
+  .ed-voz select { width: 100%; padding: .4rem .5rem; }
+  .ed-voz-contador { font-size: .72rem; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .ed-voz-contador.error { color: var(--error); }
+  .ed-voz-filtro { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .1rem; }
+  .ed-voz-filtro .btn-sm { padding: .25rem .65rem; font-size: .74rem; border-radius: 999px; }
+  .ed-voz-filtro .btn-sm[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .ed-voz-voces { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; max-height: 16rem; padding: 2px;
+    overflow-y: auto; }
+  .ed-voz-voz { position: relative; min-width: 0; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .ed-voz-voz:hover { border-color: var(--muted-2); }
+  .ed-voz-voz:has(input:checked) { border-color: var(--accent-texto); box-shadow: inset 0 0 0 1px var(--accent-texto); }
+  .ed-voz-voz:has(input:focus-visible) { outline: 2px solid var(--accent-texto); outline-offset: 1px; }
+  .ed-voz-elegir { display: flex; flex-direction: column; gap: .1rem; min-width: 0; margin: 0; padding: .45rem 2.2rem .45rem .55rem;
+    cursor: pointer; text-transform: none; letter-spacing: 0; }
+  /* el radio se toca con la tarjeta entera (sigue andando con el teclado: flechas) */
+  .ed-voz-elegir input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+  .ed-voz-nombre { font-size: .8rem; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-voz-tono { font-size: .68rem; line-height: 1.3; color: var(--muted); overflow-wrap: anywhere; }
+  .ed-voz-play { position: absolute; top: 50%; right: .35rem; display: grid; place-items: center; width: 1.7rem; height: 1.7rem; padding: 0;
+    font-size: .66rem; line-height: 1; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 50%;
+    transform: translateY(-50%); }
+  .ed-voz-play:hover:not(:disabled) { color: var(--accent-texto); border-color: var(--accent-texto); }
+  .ed-voz-play[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .ed-voz-play[aria-busy="true"] { opacity: .55; cursor: progress; }
+  .ed-voz-play:active { transform: translateY(-50%); }
+  .ed-voz-fila { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
+  .ed-voz-crear { width: 100%; }
+  /* la muestra de una voz: oculta; con sus controles solo si el navegador no la dejó sonar sola (Safari) */
+  .ed-voz-muestra { display: block; width: 100%; max-width: 100%; }
+  .ed-voz-progreso, .ed-grab-progreso { display: block; width: 100%; height: 6px; accent-color: var(--accent); }
+  .ed-voz-nota { margin: 0; font-size: .76rem; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+  .ed-grab-motivo { color: var(--warn); }
+  .ed-grab-controles { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .ed-grab-grabar::before, .ed-grab-parar::before { content: ""; display: inline-block; flex: none; width: .6rem; height: .6rem;
+    margin-right: .4rem; vertical-align: -.05rem; background: currentColor; }
+  .ed-grab-grabar::before { border-radius: 50%; }
+  .ed-grab-parar::before { border-radius: 2px; background: var(--error); }
+  .ed-grab-reloj { font-size: .84rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .ed-grab[data-estado="grabando"] .ed-grab-reloj { color: var(--error); font-weight: 600; }
+  .ed-grab-nivel { height: 8px; overflow: hidden; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; }
+  .ed-grab-nivel-barra { display: block; width: 100%; height: 100%; background: var(--ok); transform: scaleX(0); transform-origin: left center;
+    transition: transform .08s linear; }
+  .ed-grab-resultado { display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+  .ed-grab audio { display: block; width: 100%; max-width: 100%; }
+  .ed-grab-acciones { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .ed-grab-subida { display: flex; flex-direction: column; gap: .25rem; font-size: .76rem; color: var(--muted); }
+  .ed-voz-abrir:focus-visible, .ed-voz-play:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 1px; }
 
   /* «Producir» */
   .editor-dialogo { max-width: min(92vw, 420px); padding: 1.2rem; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -354,6 +633,8 @@
     .ed-guardado { flex: none; width: 10.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ed-escena { padding: .5rem; }
     .ed-herramientas { gap: .35rem; }
+    /* Deshacer · Rehacer y Cortar · Duplicar · Borrar · Vincular en 375 px: botones más angostos */
+    .ed-herramientas .btn-sm { padding: .42rem .55rem; }
     /* cabeceras angostas: solo el icono (el nombre sigue ahí para quien lee con lector de pantalla) */
     .ed-cabeceras { width: 36px; }
     .ed-cabecera { justify-content: center; padding: 0; }
@@ -364,15 +645,27 @@
       transition: transform .2s ease, visibility 0s linear .2s; }
     .ed-hoja.ed-hoja-abierta { transform: none; visibility: visible; transition: transform .2s ease; }
     .ed-listo { display: inline-flex; flex: none; }
-    .ed-acciones-movil { position: sticky; bottom: 0; z-index: 20; display: flex; gap: 2px;
-      padding: .3rem .5rem calc(.3rem + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--border); }
+    /* siete botones (capa 5c: «Stickers») en 375 px: cada uno parte de lo que mide su nombre
+       (`flex: 1 1 auto`: con la misma base para todos, «Subtítulos» y «Transiciones» salían
+       cortados) y lo que sobra se reparte. Medido en la página con la letra de verdad, los
+       siete suman 301 px, así que se ven enteros desde 320 px; con .1rem de relleno a cada lado
+       sumaban 312,5 px y a 320 px todos terminaban en «…» por menos de un píxel. Ninguno empuja
+       la página de lado (`min-width: 0`): un nombre que no cupiera termina en «…» (entero en
+       su `title`) */
+    .ed-acciones-movil { position: sticky; bottom: 0; z-index: 20; display: flex; gap: 0;
+      padding: .3rem .25rem calc(.3rem + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--border); }
     .ed-accion { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; gap: .15rem; min-width: 0;
-      padding: .35rem .2rem; background: transparent; color: var(--muted); border: 1px solid transparent;
-      border-radius: var(--radius-sm); font-size: .7rem; }
+      padding: .35rem .05rem; background: transparent; color: var(--muted); border: 1px solid transparent;
+      border-radius: var(--radius-sm); font-size: .66rem; }
     .ed-accion.ed-activa { color: var(--accent-texto); background: var(--panel-2); border-color: var(--border); }
+    /* la galería de voces corre con la hoja (una caja que corre dentro de otra se pelea con el dedo) */
+    .ed-voz-voces { max-height: none; overflow: visible; }
+    /* la duración de una foto a 16 px: con menos, el iPhone acerca la página al escribir */
+    .ed-prop .ed-foto-campo input { font-size: 16px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .ed-hoja, .ed-hoja.ed-hoja-abierta { transition: none; }
+    .ed-grab-nivel-barra { transition: none; }
   }
 </style>
 </head>
@@ -381,48 +674,53 @@
   "medios": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>',
   "audio": '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
   "texto": '<path d="M5 7V5h14v2M12 5v14M9 19h6"/>',
+  "stickers": '<path d="M15.5 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V8.5L15.5 3z"/><path d="M15 3.5V7a1.5 1.5 0 0 0 1.5 1.5H21"/><path d="M11.2 9.1l1.1 2.8 3 .2-2.3 1.9.7 2.9-2.5-1.6-2.5 1.6.7-2.9-2.3-1.9 3-.2z"/>',
+  "subtitulos": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12.5h6M15 12.5h2M7 15.5h3M12 15.5h5"/>',
   "transiciones": '<path d="M4 6l8 6-8 6zM20 6l-8 6 8 6z"/>',
   "editar": '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  "vinculo": '<path d="M9.5 14.5l5-5"/><path d="M11 6.5l1.6-1.6a3.9 3.9 0 0 1 5.5 5.5L16.5 12"/><path d="M13 17.5l-1.6 1.6a3.9 3.9 0 0 1-5.5-5.5L7.5 12"/>',
 } %}
 {% macro icono(nombre) -%}
 <svg class="ed-icono" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{{ ICONOS[nombre]|safe }}</svg>
 {%- endmacro %}
-{% set PANELES = [("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("transiciones", "Transiciones")] %}
+{% set PANELES = [("medios", _("Medios")), ("audio", _("Audio")), ("texto", _("Texto")), ("stickers", _("Stickers")),
+                  ("subtitulos", _("Subtítulos")), ("transiciones", _("Transiciones"))] %}
 <body class="editor">
 <header id="ed-barra" class="ed-barra">
-  <a class="btn-sm" href="{{ datos.urls.final }}">← Final edition</a>
-  <h1 class="ed-nombre">{{ edicion.nombre }}</h1>
+  <a class="btn-sm" href="{{ datos.urls.final }}">{{ _('← Final edition') }}</a>
+  <h1 class="ed-nombre">{{ nombre_edicion }}</h1>
   <div class="ed-barra-acciones">
     <div class="ed-destino">
-      <label class="campo-label" for="destino">Destino</label>
+      <label class="campo-label" for="destino">{{ _('Destino') }}</label>
       <select id="destino"></select>
     </div>
-    <span id="estado-guardado" class="ed-guardado" data-estado="guardado" aria-live="polite">Guardado</span>
-    <button id="recargar" type="button" class="btn-sm" hidden>Recargar</button>
-    <button id="producir" type="button" class="btn-generar btn-sm">Producir</button>
+    <span id="estado-guardado" class="ed-guardado" data-estado="guardado" aria-live="polite">{{ _('Guardado') }}</span>
+    <button id="recargar" type="button" class="btn-sm" hidden>{{ _('Recargar') }}</button>
+    <button id="producir" type="button" class="btn-generar btn-sm">{{ _('Producir') }}</button>
   </div>
 </header>
 <main id="ed-cuerpo" class="ed-cuerpo">
-  <aside id="ed-biblioteca" class="ed-lateral ed-hoja" aria-label="Biblioteca" tabindex="-1" data-panel-activo="medios">
+  <aside id="ed-biblioteca" class="ed-lateral ed-hoja" aria-label="{{ _('Biblioteca') }}" tabindex="-1" data-panel-activo="medios">
     <div class="ed-lateral-cabecera">
-      <div id="ed-pestanas-biblioteca" class="ed-pestanas" role="tablist" aria-label="Qué agregar">
+      <div id="ed-pestanas-biblioteca" class="ed-pestanas" role="tablist" aria-label="{{ _('Qué agregar') }}">
         {% for panel, nombre in PANELES %}
         <button type="button" role="tab" class="ed-pestana" data-panel="{{ panel }}" aria-controls="ed-panel-biblioteca" title="{{ nombre }}"
                 aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}">{{ icono(panel) }}<span>{{ nombre }}</span></button>
         {% endfor %}
       </div>
-      <button id="ed-cerrar-biblioteca" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-biblioteca">Listo</button>
+      <button id="ed-cerrar-biblioteca" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-biblioteca">{{ _('Listo') }}</button>
     </div>
-    <div id="ed-panel-biblioteca" class="ed-lateral-cuerpo" role="tabpanel" aria-label="Biblioteca">
+    <div id="ed-panel-biblioteca" class="ed-lateral-cuerpo" role="tabpanel" aria-label="{{ _('Biblioteca') }}">
       <div class="estado-vacio ed-vacio">
-        <p class="estado-vacio-texto">Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición.</p>
+        <p class="estado-vacio-texto">{{ _('Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición.') }}</p>
       </div>
     </div>
   </aside>
-  <section id="ed-centro" class="ed-centro" aria-label="Reproductor">
+  <section id="ed-centro" class="ed-centro" aria-label="{{ _('Reproductor') }}">
     <div class="ed-escena">
       <div id="ed-escenario" class="ed-escenario" style="--ed-ancho: {{ fmt[0] }}; --ed-alto: {{ fmt[1] }}">
-        <canvas id="lienzo" aria-label="Vista previa del video"></canvas>
+        <canvas id="lienzo" aria-label="{{ _('Vista previa del video') }}"></canvas>
+        <div id="ed-zonas" class="ed-zonas" aria-hidden="true"></div>
         <div id="ed-interaccion" class="ed-interaccion" aria-hidden="true"></div>
       </div>
     </div>
@@ -430,64 +728,68 @@
       <p id="aviso-destino" class="editor-aviso" hidden></p>
       <p id="aviso-faltan" class="editor-aviso" hidden></p>
       <p id="aviso-recortes" class="editor-aviso" hidden></p>
+      <p id="aviso-voces" class="editor-aviso" hidden></p>
+      <p id="aviso-zonas" class="editor-aviso" hidden></p>
       <p id="aviso-preparando" class="editor-aviso" hidden></p>
       <p id="aviso-audio" class="editor-aviso" hidden></p>
-      <p id="aproximada" class="editor-aviso" hidden>Transición vista de forma aproximada: el video final la hace completa.</p>
+      <p id="aproximada" class="editor-aviso" hidden>{{ _('Transición vista de forma aproximada: el video final la hace completa.') }}</p>
       <p id="aviso-edicion" class="editor-aviso error" hidden></p>
-      <p id="producir-hecho" class="editor-aviso" hidden><span id="producir-hecho-texto"></span> <a id="producir-hecho-enlace" href="{{ datos.urls.final }}">Ir a Final edition</a></p>
+      <p id="producir-hecho" class="editor-aviso" hidden><span id="producir-hecho-texto"></span> <a id="producir-hecho-enlace" href="{{ datos.urls.final }}">{{ _('Ir a Final edition') }}</a></p>
     </div>
     <div class="ed-transporte">
-      <button id="inicio" class="btn-sm" type="button" aria-label="Ir al inicio">⏮</button>
-      <button id="reproducir" class="btn-generar" type="button" aria-label="Reproducir">▶</button>
+      <button id="inicio" class="btn-sm" type="button" aria-label="{{ _('Ir al inicio') }}">⏮</button>
+      <button id="reproducir" class="btn-generar" type="button" aria-label="{{ _('Reproducir') }}">▶</button>
       <span id="tiempo">0:00.0 / 0:00.0</span>
-      <input id="barra" type="range" min="0" max="0" step="1" value="0" aria-label="Posición en el video">
+      <input id="barra" type="range" min="0" max="0" step="1" value="0" aria-label="{{ _('Posición en el video') }}">
     </div>
   </section>
   <aside id="ed-propiedades" class="ed-lateral ed-hoja" aria-labelledby="ed-titulo-propiedades" tabindex="-1">
     <div class="ed-lateral-cabecera">
-      <h2 id="ed-titulo-propiedades" class="ed-titulo">Editar</h2>
-      <button id="ed-cerrar-propiedades" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-propiedades">Listo</button>
+      <h2 id="ed-titulo-propiedades" class="ed-titulo">{{ _('Editar') }}</h2>
+      <button id="ed-cerrar-propiedades" type="button" class="btn-sm ed-listo" data-cerrar-hoja="ed-propiedades">{{ _('Listo') }}</button>
     </div>
     <div id="ed-panel-propiedades" class="ed-lateral-cuerpo">
       <div class="estado-vacio ed-vacio">
-        <p class="estado-vacio-texto">Elige algo en la línea de tiempo o en el video para cambiarlo.</p>
+        <p class="estado-vacio-texto">{{ _('Elige algo en la línea de tiempo o en el video para cambiarlo.') }}</p>
       </div>
     </div>
   </aside>
 </main>
-<section id="ed-herramientas" class="ed-herramientas" aria-label="Herramientas de edición">
+<section id="ed-herramientas" class="ed-herramientas" aria-label="{{ _('Herramientas de edición') }}">
   <div class="ed-grupo">
-    <button id="h-deshacer" type="button" class="btn-sm" aria-label="Deshacer" title="Deshacer (Ctrl/Cmd+Z)">↶</button>
-    <button id="h-rehacer" type="button" class="btn-sm" aria-label="Rehacer" title="Rehacer (Ctrl/Cmd+Shift+Z)">↷</button>
+    <button id="h-deshacer" type="button" class="btn-sm" aria-label="{{ _('Deshacer') }}" title="{{ _('Deshacer (Ctrl/Cmd+Z)') }}">↶</button>
+    <button id="h-rehacer" type="button" class="btn-sm" aria-label="{{ _('Rehacer') }}" title="{{ _('Rehacer (Ctrl/Cmd+Shift+Z)') }}">↷</button>
   </div>
   <div class="ed-grupo">
-    <button id="h-cortar" type="button" class="btn-sm" title="Cortar donde está el cabezal: el clip elegido o, si no eliges ninguno, el video (S)">✂ Cortar</button>
-    <button id="h-duplicar" type="button" class="btn-sm" title="Duplicar el clip elegido">Duplicar</button>
-    <button id="h-borrar" type="button" class="btn-sm" title="Borrar el clip elegido (Supr)">Borrar</button>
+    <button id="h-cortar" type="button" class="btn-sm" title="{{ _('Cortar donde está el cabezal: el clip elegido o, si no eliges ninguno, el video (S)') }}">{{ _('✂ Cortar') }}</button>
+    <button id="h-duplicar" type="button" class="btn-sm" title="{{ _('Duplicar el clip elegido') }}">{{ _('Duplicar') }}</button>
+    <button id="h-borrar" type="button" class="btn-sm" title="{{ _('Borrar el clip elegido (Supr)') }}">{{ _('Borrar') }}</button>
+    <button id="h-vincular" type="button" class="btn-sm ed-vincular" aria-pressed="true">{{ icono("vinculo") }}<span>{{ _('Vincular') }}</span></button>
   </div>
-  <label class="ed-zoom">Zoom <input id="linea-zoom" type="range"></label>
+  <label class="ed-zonas-elegir">{{ _('Zonas') }} <select id="zonas"><option value="no">{{ _('No') }}</option><option value="tiktok">TikTok</option><option value="reels">Reels</option><option value="shorts">Shorts</option></select></label>
+  <label class="ed-zoom">{{ _('Zoom') }} <input id="linea-zoom" type="range"></label>
 </section>
-<section id="linea" class="linea" aria-label="Línea de tiempo"></section>
-<nav id="ed-acciones-movil" class="ed-acciones-movil" aria-label="Agregar y editar">
+<section id="linea" class="linea" aria-label="{{ _('Línea de tiempo') }}"></section>
+<nav id="ed-acciones-movil" class="ed-acciones-movil" aria-label="{{ _('Agregar y editar') }}">
   {% for panel, nombre in PANELES %}
   <button id="ed-abrir-{{ panel }}" type="button" class="ed-accion" data-abrir-hoja="ed-biblioteca" data-abrir-panel="{{ panel }}"
-          aria-controls="ed-biblioteca" aria-expanded="false">{{ icono(panel) }}<span>{{ nombre }}</span></button>
+          aria-controls="ed-biblioteca" aria-expanded="false" title="{{ nombre }}">{{ icono(panel) }}<span>{{ nombre }}</span></button>
   {% endfor %}
   <button id="ed-abrir-propiedades" type="button" class="ed-accion" data-abrir-hoja="ed-propiedades"
-          aria-controls="ed-propiedades" aria-expanded="false">{{ icono("editar") }}<span>Editar</span></button>
+          aria-controls="ed-propiedades" aria-expanded="false">{{ icono("editar") }}<span>{{ _('Editar') }}</span></button>
 </nav>
 <dialog id="producir-dialogo" class="editor-dialogo" aria-labelledby="producir-titulo">
-  <h2 id="producir-titulo">Producir</h2>
-  <p>Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id="producir-tiempo"></span>.</p>
+  <h2 id="producir-titulo">{{ _('Producir') }}</h2>
+  <p>{{ _('Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id="producir-tiempo"></span>.') }}</p>
   <div id="producir-destinos" class="checks-plataformas"></div>
   <p id="producir-aviso" class="editor-aviso error" hidden></p>
   <div id="producir-reemplazo" class="editor-reemplazo" hidden>
     <p id="producir-reemplazo-texto"></p>
   </div>
   <div class="editor-dialogo-acciones">
-    <button id="producir-cancelar" type="button" class="btn-sm">Cancelar</button>
-    <button id="producir-confirmar" type="button" class="btn-generar">Producir</button>
-    <button id="producir-reemplazar" type="button" class="btn-generar" hidden>Reemplazar y producir</button>
+    <button id="producir-cancelar" type="button" class="btn-sm">{{ _('Cancelar') }}</button>
+    <button id="producir-confirmar" type="button" class="btn-generar">{{ _('Producir') }}</button>
+    <button id="producir-reemplazar" type="button" class="btn-generar" hidden>{{ _('Reemplazar y producir') }}</button>
   </div>
 </dialog>
 <script type="application/json" id="datos-editor">{{ datos|tojson }}</script>

@@ -1,0 +1,28 @@
+{# Catálogo › galería (spec 2026-09-28 §10.2): fragmento por fetch
+   (catalogo_grid). Contexto: cliente, cat, tarjetas, hay_mas, pagina,
+   contadores, filtro, q, orden, etiquetas_fuente, trabajos_prod, categorias.
+   Sus <script> no correrían: todo el JS vive en _tab_catalogo.html. #}
+<div class="cat-grid" data-cat="{{ cat }}" data-pagina="{{ pagina }}" data-hay-mas="{{ 1 if hay_mas else 0 }}"
+     {% for k, v in contadores.items() %}data-n-{{ k }}="{{ v }}" {% endfor %}>
+  {% if not tarjetas %}
+  <div class="estado-vacio">
+    {% if q or filtro != 'todos' %}
+    <p class="estado-vacio-titulo">{{ _('Nada coincide con ese filtro') }}</p>
+    <p class="estado-vacio-texto">{{ _('Prueba con otra palabra o vuelve a «Todos».') }}</p>
+    {% elif cat == 'producto' %}
+    <p class="estado-vacio-titulo">{{ _('Todavía no hay productos') }}</p>
+    <p class="estado-vacio-texto">{{ _('Tráelos de tu tienda Shopify con solo el dominio, o crea el primero con sus fotos.') }}</p>
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="cat-traer">{{ _('Traer de mi tienda') }}</button>
+    {% else %}
+    <p class="estado-vacio-titulo">{{ _('Todavía no hay %(plural)s', plural=(categorias[cat].plural|traducir|lower)) }}</p>
+    <p class="estado-vacio-texto">{{ categorias[cat].descripcion_ui|traducir }}</p>
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-{{ cat }}">{{ _('+ Nuevo %(nombre)s', nombre=(categorias[cat].nombre|traducir|lower)) }}</button>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="cat-tarjetas">
+    {% for t in tarjetas %}{% include "_catalogo_tarjeta.html" %}{% endfor %}
+  </div>
+  {% if hay_mas %}<p class="cat-mas"><button type="button" class="btn-sm" data-cat-mas="{{ pagina + 1 }}">{{ _('Ver más') }}</button></p>{% endif %}
+  {% endif %}
+</div>

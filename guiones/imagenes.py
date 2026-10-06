@@ -12,7 +12,7 @@ from flask_babel import gettext
 
 import doctrina
 import idiomas
-from guiones import claude, datos, duracion, refinador
+from guiones import claude, datos, duracion, escenas, refinador
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +91,9 @@ def _plural(n, palabra):
     return f"{n} {palabra}{'s' if n != 1 else ''}"
 
 
-def checklist(config, lista, prompts):
+def checklist(config, lista, prompts, con_imagen=frozenset()):
+    """`con_imagen`: números de las referencias «por crear» que ya tienen su
+    imagen subida (`escenas.refs_con_imagen`); esas ya no faltan."""
     faltas = []
     por_slot = {it["slot"]: it["id"] for it in lista if it.get("slot")}
     for i, r in enumerate(config["referencias"], start=1):
@@ -102,7 +104,7 @@ def checklist(config, lista, prompts):
         elif r["tipo"] == "producto" and not r.get("fotos"):
             faltas.append(gettext("Image %(i)s: «%(nombre)s» no tiene fotos en el Catálogo.",
                                   i=i, nombre=(r.get('nombre') or r['activo_id'])))
-        elif r["tipo"] != "producto" and not r.get("activo_id"):
+        elif r["tipo"] != "producto" and not r.get("activo_id") and i not in con_imagen:
             faltas.append(gettext("Image %(i)s: genera la imagen «%(nombre)s», que está por crear.",
                                   i=i, nombre=por_slot.get(i, gettext('por crear'))))
     clips_p = sum(1 for p in prompts if p.get("tipo") == "clip" and p.get("estado") != "aprobado")
@@ -120,8 +122,10 @@ def nombre_documento(video):
     return f"batch-{video['guion']['lote_id']}-imagenes-referencia-prompts.md"
 
 
-def documento_md(video, prompts):
-    """Documento del spec del cliente §3.4, con el texto VIGENTE de cada prompt de imagen."""
+def documento_md(video, prompts, imagenes_por_clip=None):
+    """Documento del spec del cliente §3.4, con el texto VIGENTE de cada prompt de imagen.
+    `imagenes_por_clip` (`escenas.texto_por_clip`): lo elegido en cada escena; sin él, la
+    tabla sugerida que se guardó al escribir los prompts."""
     vigente = {(p.get("extra") or {}).get("imagen_id"): p["texto_vigente"] for p in prompts if p.get("tipo") == "imagen"}
     im = video.get("imagenes") or {}
     lista = im.get("lista", [])
@@ -139,9 +143,13 @@ def documento_md(video, prompts):
     if not lista:
         L.append("No hace falta generar imágenes: todas las referencias vienen del Catálogo.")
     L += ["", "## Qué imagen va en cada clip", "", "| Clip | Imágenes |", "|---|---|"]
-    L += [f"| {f['clip']} | {', '.join(f['imagenes'])} |" for f in im.get("tabla", [])]
+    if imagenes_por_clip is not None:
+        L += [f"| {c['indice']} | {'<br>'.join(imagenes_por_clip.get(c['indice'], [])).replace('|', '/')} |"
+              for c in video.get("clips") or []]
+    else:
+        L += [f"| {f['clip']} | {', '.join(f['imagenes'])} |" for f in im.get("tabla", [])]
     L += ["", "## Antes de generar", ""]
-    L += [f"- [ ] {x}" for x in checklist(video["config"], lista, prompts)] or ["Todo listo."]
+    L += [f"- [ ] {x}" for x in checklist(video["config"], lista, prompts, escenas.refs_con_imagen(video))] or ["Todo listo."]
     return "\n".join(L) + "\n"
 
 
@@ -212,7 +220,7 @@ def escribir(video_id, llamar=None):
                 data, usd, error = claude.pedir_json(
                     v["cliente"], "imagenes", video_id, _sistema(idiomas.de_proyecto(v["cliente"])), mensajes(v, lista),
                     f"Prompts de imágenes · {(v['guion']['titulo'] or '')[:50]} · v{v['version_n']}",
-                    llamar_fn=llamar, max_tokens=8000, timeout=180)
+                    llamar_fn=llamar, max_tokens=16000, timeout=180)
                 if error:
                     datos.fallar_imagenes(video_id, error, usd)
                     return

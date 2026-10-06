@@ -32,11 +32,16 @@
 
 - Sprints (regla de la fase 5): el idioma del sprint («base en inglés») decide ganchos y contenido del sprint; no se revisa. Anuncios y experimentos (fase 4) van en el idioma del proyecto; no se tocan.
 
-**Estado de partida (verificado el 2026-09-28 sobre `72e9d1a` con la fusión de `origin/main` en curso en el worktree):**
+**Rulings del controlador (2026-09-28; no son decisiones de Daniel — se apartan de la lista de la fase 6 del spec):**
+- **Contenido del mapa del código** (`mapa_codigo.html`): es documentación interna de ~630 frases que solo lee el admin, como los textos de la doctrina; se traduce solo su barra de arriba (Task 5). Su `<html lang="es">` se queda porque su contenido está en español (el §B3 pide `lang` = idioma de la interfaz en las páginas sueltas; aquí la página es un documento en español con una barra traducida).
+- **Las 9 plantillas del flujo viejo «Nueva idea»** se quedan en disco, sin traducir y en `EXCLUIDAS` (Task 6), porque Daniel no ha decidido qué pasa con ese flujo; sus rutas sí pasan los mensajes por el catálogo.
+- `etiqueta_estado` (main, `_etiquetas_estado.html`: «Lista», «Lista, con avisos», «Generando»…) sigue siendo la etiqueta del ESTADO de una pieza o una final; `etiqueta_fe` (Task 1) es solo para capas (nombre y estado), roles del guion y presets de mezcla. El español que se ve no cambia.
+
+**Estado de partida (verificado el 2026-09-28 sobre `72e9d1a`; revisado con el pre-flight contra `334a247`, con todas las fusiones hechas):**
 - Hecho y fuera de este plan: el flip a inglés por defecto (Task 5 del plan viejo); `_meta_conectar.html` y sus tres parciales, `_seccion_marca.html`, `_comparacion_modelos.html`, `_organico_publicar.html`, `_anuncios_sueltos.html`, `_aprendizajes.html`, `_revision_doctrina.html` (en `PLANTILLAS_TRADUCIDAS`); las rutas `fe_preparar`/`fe_guardar_guion`/`fe_producir`/`fe_descartar` ya pasan sus `flash` por `gettext` (fase 3); `final_edition/sonido.py` ya escribe en el idioma del proyecto; `meta_errores.py` (nuevo de main) ya usa gettext.
-- Plantillas fuera de `PLANTILLAS_TRADUCIDAS` (25): `_final_detalle.html` (24 hallazgos), `_final_tarjetas.html` (5), `_tab_final.html` (5), `editor.html` (9), `_tab_cambiar_calzado.html` (14), `admin_meta.html` (60), `admin_referentes.html` (25, fuera del bloque «Familias»), `meta_elegir.html` (10), `mapa_codigo.html` (645), `cliente.html` (0), `_crear_detalle.html` (0), `_crear_tarjetas.html` (0), los cuatro `*_respuesta.html` (0) y las 9 del flujo viejo «Nueva idea» (`_seccion_ideas.html`, `_idea_card.html`, `_idea_visual_card.html`, `_prompt_row.html`, `_imagen_row.html`, `_progreso_row.html`, `_seccion_videos.html`, `_video_card.html`, `_seccion_bitacora.html`), que ninguna plantilla viva incluye ni ninguna ruta renderiza. Los números son del detector (`tests/i18n_util.espanol_en_plantilla`): es un piso, no un techo — no ve «Descargar», «Producir», «Guardado»… (sin tildes ni palabras de `MARCAS`); se envuelve TODO texto visible, no solo lo que marca.
+- Plantillas fuera de `PLANTILLAS_TRADUCIDAS` (26): `_etiquetas_estado.html` (0 — nueva de main: `etiqueta_estado`, las etiquetas de estado de piezas y finales, ya con `_()`), `_final_detalle.html` (24 hallazgos), `_final_tarjetas.html` (5), `_tab_final.html` (5), `editor.html` (9), `_tab_cambiar_calzado.html` (14), `admin_meta.html` (60), `admin_referentes.html` (25, fuera del bloque «Familias»), `meta_elegir.html` (10), `mapa_codigo.html` (645), `cliente.html` (0), `_crear_detalle.html` (0), `_crear_tarjetas.html` (0), los cuatro `*_respuesta.html` (0) y las 9 del flujo viejo «Nueva idea» (`_seccion_ideas.html`, `_idea_card.html`, `_idea_visual_card.html`, `_prompt_row.html`, `_imagen_row.html`, `_progreso_row.html`, `_seccion_videos.html`, `_video_card.html`, `_seccion_bitacora.html`), que ninguna plantilla viva incluye ni ninguna ruta renderiza. Los números son del detector (`tests/i18n_util.espanol_en_plantilla`): es un piso, no un techo — no ve «Descargar», «Producir», «Guardado»… (sin tildes ni palabras de `MARCAS`); se envuelve TODO texto visible, no solo lo que marca.
 - `static/editor/*.js` (20 módulos) tienen ~60 textos en español: `pagina_editor.js`, `vista.js`, `guardado.js`, `operaciones.js` (12 `OperacionInvalida`), `escala.js` (nombres de fila y de clip), `resolver.js`/`precio.js` (avisos de destino). `editor.html` trae `<html lang="es">` fijo.
-- Mensajes de ruta sin gettext (medidos con la guardia de la Task 2, ya escrita y probada contra este código): 107 en `dashboard.py` (admin/Meta ~30, flujo viejo ~30, Cambiar producto ~11, Marca/Catálogo/correo 6, orgánico/lanzador guardados 4, constantes `ETAPA_*`/`_FASES_PROVEEDOR` ~17), 18 en `final_edition/rutas_editor.py`, 1 en `referentes/rutas.py` (un `detalle` de gasto); 0 en `sprints/`, `nicho/`, `guiones/`. Worker (misma guardia): `tareas/edicion.py` 18 (con `ETAPAS_EDICION`), `tareas/swap.py` 20 (constantes `ETAPA_*` y `_FASES_PROVEEDOR`), `final_edition/__init__.py` 15 (con `ETAPAS_FINAL` sin `N_`), `produccion.py` 10, `tareas/final_edition.py` 3, `meta_conexion.py` 16, `meta_agencia.py` 13, `referencias_link.py` 10, el resto de `tareas/*` + `worker.py`/`cola.py`/`organico.py`/`experimentos.py`/`lanzador.py`/`derivaciones.py` ~45 (incluido `worker.MENSAJE_INTERRUMPIDA` y los `detalle` de gastos).
+- Mensajes de ruta sin gettext (medidos con la guardia de la Task 2, ya escrita y probada contra este código): 107 en `dashboard.py` (admin/Meta ~30, flujo viejo ~30, Cambiar producto ~11, Marca/Catálogo/correo 6, orgánico/lanzador guardados 4, constantes `ETAPA_*`/`_FASES_PROVEEDOR` ~17), 18 en `final_edition/rutas_editor.py`, 1 en `referentes/rutas.py` (un `detalle` de gasto), 1 en `sprints/rutas.py` (el error JSON de `_solo_mismo_origen`, nuevo de main; su msgid ya existe); 0 en `nicho/`, `guiones/`. Uno de los 107 de `dashboard.py` era una CLAVE (`fila.get("etapa")` en `_estado_plataformas`): la guardia exime las claves (Task 2). Worker (misma guardia): `tareas/edicion.py` 18 (con `ETAPAS_EDICION`), `tareas/swap.py` 20 (constantes `ETAPA_*` y `_FASES_PROVEEDOR`), `final_edition/__init__.py` 15 (con `ETAPAS_FINAL` sin `N_`), `produccion.py` 10, `tareas/final_edition.py` 3, `meta_conexion.py` 16, `meta_agencia.py` 13, `referencias_link.py` 10, el resto de `tareas/*` + `worker.py`/`cola.py`/`organico.py`/`experimentos.py`/`lanzador.py`/`derivaciones.py` ~45 (incluido `worker.MENSAJE_INTERRUMPIDA` y los `detalle` de gastos).
 - `final_edition/edicion_clon.py` arma la edición «Editar este video» con destino `es_<país>` fijo: con la decisión B un proyecto en EE. UU. debe producir `en_US` (la misma clave que usa `fe_producir`).
 - Si la fusión de `origin/main` que está en curso cambia alguna de estas plantillas o funciones, todo se ubica por NOMBRE (`grep -n "def <nombre>"`), nunca por número de línea.
 
@@ -78,13 +83,13 @@
 
 **Files:**
 - Create: `templates/_final_macros.html`
-- Modify: `templates/_tab_final.html`, `templates/_final_tarjetas.html`, `templates/_final_detalle.html`; `dashboard.py` (`fe_preparar`); `final_edition/__init__.py` (`_OPCIONES_DEFECTO`, `preparar_guion`); `final_edition/guion.py` (helper nuevo `_orden`, `_system_generar`, `variar_guion`); `docs/i18n/glosario.md`; `translations/en/LC_MESSAGES/messages.po` + `.mo`
+- Modify: `templates/_tab_final.html`, `templates/_final_tarjetas.html`, `templates/_final_detalle.html`, `templates/_etiquetas_estado.html` (solo verificar: ya pasa sus etiquetas por `_()`); `dashboard.py` (`fe_preparar`); `final_edition/__init__.py` (`_OPCIONES_DEFECTO`, `preparar_guion`); `final_edition/guion.py` (helper nuevo `_orden`, `_system_generar`, `variar_guion`); `docs/i18n/glosario.md`; `translations/en/LC_MESSAGES/messages.po` + `.mo`
 - Modify tests: `tests/test_i18n_plantillas.py`, `tests/test_i18n_fugas.py`, `tests/test_rutas_final_edition.py` (`test_plantilla_con_guion_ofrece_reescribir` + tests nuevos), `tests/test_fe_guion.py`, `tests/test_fe_producir.py`, `tests/test_i18n_claude.py`
 
 **Interfaces:**
 - Consumes: `idiomas.de_proyecto`, `idiomas.normalizar`, `idiomas.orden_idioma`, `doctrina.bloque_system(idioma=)`, filtros `traducir` y `usd`, `final_edition.tipos.PAISES` (nombres ya con `N_`).
 - Produces:
-  - Macro `etiqueta_fe(valor)` en `templates/_final_macros.html`: etiqueta traducida de un estado de final/capa, un nombre de capa, un rol del guion o un preset de mezcla; la etiqueta en español es la clave con `_` → espacio (lo que se ve hoy).
+  - Macro `etiqueta_fe(valor)` en `templates/_final_macros.html`: etiqueta traducida de una capa (su nombre o su estado), un rol del guion o un preset de mezcla; la etiqueta en español es la clave con `_` → espacio (lo que se ve hoy). El estado de una pieza o de una final sigue con `etiqueta_estado` de `_etiquetas_estado.html` (main), que no cambia.
   - `final_edition.guion._orden(idioma) -> str | None` (el idioma para `bloque_system`, `None` si no es `es`/`en`); el guion base y las variantes llevan `idiomas.orden_idioma` al principio y al final de su bloque sin caché; `localizar_guion` no cambia (por destino, decisión B).
   - `fe_preparar` encola con `opciones["idioma_base"]` = el `idioma_base` del formulario si es uno de `IDIOMAS_FE`, si no `idiomas.de_proyecto(cliente)` (la elección explícita gana; el defecto deja de ser «es» fijo); `final_edition.preparar_guion` sin `idioma_base` usa `idiomas.de_proyecto(cliente)` (`_OPCIONES_DEFECTO["idioma_base"] = None`).
   - El selector «Idioma base» del detalle marca de entrada el idioma del proyecto (`idioma_proyecto`, del context processor; `"es"` si falta); «Volver a escribir con IA» sigue mandando en su `idioma_base` oculto el idioma del guion base actual.
@@ -102,7 +107,7 @@
     "_tab_final.html", "_final_tarjetas.html", "_final_detalle.html", "_final_macros.html",
     "_final_tarjetas_respuesta.html", "_final_detalle_respuesta.html",
     "_crear_tarjetas.html", "_crear_detalle.html", "_crear_tarjetas_respuesta.html", "_crear_detalle_respuesta.html",
-    "cliente.html",
+    "cliente.html", "_etiquetas_estado.html",
 ```
 
 `tests/test_i18n_claude.py`, debajo de `ARCHIVOS_FASE5`:
@@ -165,7 +170,7 @@ def test_detalles_de_final_edition_en_ingles(admin_en, ruta):
     html = html_de(admin_en, f"/cliente/acme/creative_flow/{cf_id}/" + ruta.format(fid=fid))
     fugas = espanol_visible(html)
     assert not fugas, (ruta, fugas[:15])
-    for crudo in (">omitida<", ">musica<", ">listo<", "2. problema<", ">equilibrada<"):   # claves que MARCAS no ve
+    for crudo in (">omitida<", ">musica<", ">Lista<", "2. problema<", ">equilibrada<"):   # lo que MARCAS no ve
         assert crudo not in html, crudo
 
 
@@ -276,14 +281,15 @@ Expected: FAIL.
 - [ ] **Step 2: `templates/_final_macros.html` (nuevo)**
 
 ```jinja
-{# Etiquetas de Final edition (spec idioma, fase 6). La clave guardada no
+{# Etiquetas de Final edition (spec idioma, fase 6): capas (nombre y estado),
+   roles del guion y presets de mezcla — el estado de una pieza o de una
+   final es de `etiqueta_estado` (_etiquetas_estado.html). La clave guardada no
    cambia; la etiqueta en español es la clave con «_» → espacio, lo que se
    veía antes. El diccionario va DENTRO de la macro: un {% set %} de módulo
    en una plantilla importada se cachea en el primer idioma que la carga. #}
 {% macro etiqueta_fe(valor) -%}
 {%- set etiquetas = {
-  "generando": _("generando"), "listo": _("listo"), "degradada": _("degradada"), "error": _("error"),
-  "ok": _("ok"), "omitida": _("omitida"), "ausente": _("ausente"), "desconocido": _("desconocido"),
+  "error": _("error"), "ok": _("ok"), "omitida": _("omitida"), "ausente": _("ausente"), "desconocido": _("desconocido"),
   "guion": _("guion"), "cortes": _("cortes"), "voz": _("voz"), "musica": _("musica"), "texto": _("texto"),
   "render": _("render"), "sonido": _("sonido"), "mezcla": _("mezcla"),
   "hook": _("hook"), "problema": _("problema"), "producto": _("producto"), "prueba": _("prueba"), "cta": _("cta"),
@@ -304,7 +310,8 @@ Patrón de la fase 2 con las lecciones de Global Constraints. Referencia de cóm
   - el `<strong>` de la tarjeta de video: `{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}` (igual que `_crear_tarjetas.html`);
   - el `<small>`: `{{ ngettext('%(num)d final', '%(num)d finales', item.finales | length) }}{% if ediciones_por_cf.get(item.id) %} · {{ _('en el editor') }}{% endif %}` (español idéntico: «0 finales», «1 final», «2 finales»);
   - la tarjeta de una final: `<strong>{{ _('Final %(id)s', id=(f.idioma ~ '_' ~ f.pais)) }}</strong>` y `<small>{{ _('Final de %(enfoque)s', enfoque=((item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')))) }}{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}</small>`.
-- `_final_detalle.html`: arriba, `{% from "_final_macros.html" import etiqueta_fe %}`.
+- `_etiquetas_estado.html`: ya envuelve cada etiqueta con `_()` y sus msgid están traducidos («Lista» → «Ready», «Lista, con avisos» → «Ready, with warnings», «Generando» → «Generating»…); si alguna quedara suelta, se envuelve. Solo entra a `PLANTILLAS_TRADUCIDAS`.
+- `_final_detalle.html`: debajo del import de `etiqueta_estado` que ya tiene, `{% from "_final_macros.html" import etiqueta_fe %}`.
   - `{{ _('Qué tenía que pasar') }}`, `{{ item.accion_central or _('(sin texto)') }}`, `{{ _('Final edition') }}` (dos veces), `{{ _('Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.') }}`;
   - `editor_angulo(…, resumen_vacio=_('Todavía no tiene ángulo: se decide al preparar el guion'))`;
   - el selector «Idioma base» **se queda** y marca de entrada el idioma del proyecto (hoy queda marcado «Español» por ser el primero). En el formulario de preparar:
@@ -334,9 +341,9 @@ Patrón de la fase 2 con las lecciones de Global Constraints. Referencia de cóm
 ```
 
   (español idéntico: « ≈ US$ 0,15 c/u»);
-  - lista de finales: `{{ _('Finales de esta pieza') }}`, `<span class="tag-estado">{{ etiqueta_fe(f.estado) }}</span>`, `{% if f.trabajo %}{{ _('produciendo…') }}{% else %}{{ _('interrumpida') }}{% endif %}`, `{{ _('Descargar') }}`, `onsubmit='return confirm({{ _("¿Descartar esta final?")|tojson }});'` (dos veces) y `{{ _('Descartar') }}`;
+  - lista de finales: `{{ _('Finales de esta pieza') }}`, el `<span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>` de main **se queda** (no pasa a `etiqueta_fe`), `{% if f.trabajo %}{{ _('produciendo…') }}{% else %}{{ _('interrumpida') }}{% endif %}`, `{{ _('Descargar') }}`, `onsubmit='return confirm({{ _("¿Descartar esta final?")|tojson }});'` (dos veces) y `{{ _('Descartar') }}`;
   - editor: `{{ _('Editor') }}`, `{{ _('Preparando el video para el editor… la página se recarga sola.') }}`, `{{ _('Empezar otra edición desde el video') if _eds else _('Editar este video') }}`, `{{ _('Gratis: una edición con el video tal cual, para cortarlo, recortarlo y reordenarlo.') }}`, `{{ _('En el editor') }}`, `{{ _('Abrir en el editor') }}`;
-  - detalle de una final: `{{ _bandera }} {{ (paises_fe[f.pais].nombre|traducir) if f.pais in paises_fe else f.pais }} · {{ f.idioma }}`; `{{ _('Final de: %(texto)s', texto=(item.accion_central or item.id)) }}`, `{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}`, `<span class="tag-estado">{{ etiqueta_fe(f.estado) }}</span>`; `{{ _('Capas') }}` y cada capa `<strong>{{ etiqueta_fe(nombre) }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ etiqueta_fe(capa.estado) }}</span>…`; `{{ _('Probar en Meta') }}`, `{{ _('Publicación orgánica') }}`.
+  - detalle de una final: `{{ _bandera }} {{ (paises_fe[f.pais].nombre|traducir) if f.pais in paises_fe else f.pais }} · {{ f.idioma }}`; `{{ _('Final de: %(texto)s', texto=(item.accion_central or item.id)) }}`, `{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}`, y el `etiqueta_estado(f.estado)` de main se queda; `{{ _('Capas') }}` y cada capa `<strong>{{ etiqueta_fe(nombre) }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ etiqueta_fe(capa.estado) }}</span>…`; `{{ _('Probar en Meta') }}`, `{{ _('Publicación orgánica') }}`.
   - `f.error` y `capa.error` son textos guardados (en el idioma del proyecto desde la Task 3): no se envuelven.
 
 - [ ] **Step 4: Python — el guion base en el idioma del proyecto**
@@ -427,7 +434,7 @@ produciendo… → producing…
 ¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones). → Rewrite the script with AI? This replaces the current script (including your edits).
 ```
 
-`msgstr` fijados por los tests: «Videos listos (%(n)s)» → «Ready videos (%(n)s)»; «Finales (%(n)s)» → «Final cuts (%(n)s)». Las etiquetas de `etiqueta_fe`: generando → generating (ya existe), listo → done (ya existe), degradada → degraded (ya existe), omitida → skipped, ausente → missing, desconocido → unknown, guion → script, cortes → cuts, voz → voice, musica → music, texto → text, render → render, sonido → sound, mezcla → mix, problema → problem, producto → product, prueba → proof, cta → CTA, equilibrada → balanced, voz protagonista → voice first, ambiente protagonista → ambience first, ok → ok. Corregir dos `msgstr` de la fase 3 al glosario: «Guion guardado. Ahora elige los destinos y produce las finales.» → «Script saved. Now pick the markets and produce the final cuts.» y «Marca al menos un destino (idioma y país) válido para producir.» → «Check at least one valid market (language and country) to produce.». Luego `venv/bin/python3 catalogo_i18n.py compilar`.
+`msgstr` fijados por los tests: «Videos listos (%(n)s)» → «Ready videos (%(n)s)»; «Finales (%(n)s)» → «Final cuts (%(n)s)». Las etiquetas de `etiqueta_fe`: omitida → skipped, ausente → missing, desconocido → unknown, guion → script, cortes → cuts, voz → voice, musica → music, texto → text, render → render, sonido → sound, mezcla → mix, problema → problem, producto → product, prueba → proof, cta → CTA, equilibrada → balanced, voz protagonista → voice first, ambiente protagonista → ambience first, ok → ok. Corregir dos `msgstr` de la fase 3 al glosario: «Guion guardado. Ahora elige los destinos y produce las finales.» → «Script saved. Now pick the markets and produce the final cuts.» y «Marca al menos un destino (idioma y país) válido para producir.» → «Check at least one valid market (language and country) to produce.». Luego `venv/bin/python3 catalogo_i18n.py compilar`.
 
 - [ ] **Step 6: Verde y commit**
 
@@ -455,16 +462,21 @@ EOF
 
 **Files:**
 - Create: `final_edition/textos_editor.py`, `static/editor/textos.js`, `tests/test_i18n_editor.py`, `tests/test_i18n_mensajes.py`, `tests/js/textos.test.mjs`
-- Modify: `templates/editor.html`; `static/editor/pagina_editor.js`, `vista.js`, `guardado.js`, `operaciones.js`, `escala.js`, `resolver.js`, `precio.js`; `final_edition/rutas_editor.py` (`ver`, `materiales_json`, `guardar`, `producir`, `desde_clon`); `final_edition/documento.py` (`resolver`: 2 mensajes); `final_edition/motor/compilador.py` (`verificar_recortes`: 1 mensaje); `final_edition/motor/__init__.py` (`renderizar`); `final_edition/edicion_clon.py` (`documento`, `crear`); `ediciones.py` (`Conflicto`: 4 mensajes); `tareas/edicion.py`; `tests/i18n_util.py` (suma `MARCAS_CODIGO`, `espanol_en_codigo`); `translations/`
-- Modify tests: `tests/test_i18n_plantillas.py`, `tests/test_i18n_fugas.py`, `tests/test_edicion_clon.py`
+- Modify: `templates/editor.html`; `static/editor/pagina_editor.js`, `vista.js`, `guardado.js`, `operaciones.js`, `escala.js`, `resolver.js`, `precio.js`, `linea_tiempo.js`, `biblioteca.js`, `propiedades.js`, `propiedades_modelo.js`; `final_edition/rutas_editor.py` (`ver`, `materiales_json`, `guardar`, `producir`, `desde_clon`, `subir_material`, `agregar_pieza`); `final_edition/biblioteca.py` (capa 4b: mensajes de subida, `materializar_pieza`, el nombre de respaldo); `final_edition/documento.py` (`resolver`: 2 mensajes); `final_edition/motor/compilador.py` (`verificar_recortes`: 1 mensaje); `final_edition/motor/__init__.py` (`renderizar`); `final_edition/edicion_clon.py` (`documento`, `crear`); `ediciones.py` (`Conflicto`: 4 mensajes, y el `ValueError` de `crear`); `tareas/edicion.py`; `tests/i18n_util.py` (suma `MARCAS_CODIGO`, `espanol_en_codigo`); `catalogo_i18n.py` (`PALABRAS` suma `pgettext`); `CLAUDE.md` (párrafo **Editor**: se quita la nota «…and the editor's i18n (phase 6)»); `docs/i18n/glosario.md` (términos de la capa 4b); `translations/`
+- Modify tests: `tests/test_i18n_plantillas.py`, `tests/test_i18n_fugas.py`, `tests/test_edicion_clon.py`, `tests/js/escala.test.mjs`, `tests/js/biblioteca.test.mjs`, `tests/js/propiedades_modelo.test.mjs`
+- Sin textos (no se tocan): `static/editor/seleccion.js`, `lienzo_interaccion.js`, `historial.js`; `avisos_editor.js` solo escribe a la consola (queda en `INTERNOS`).
 
 **Interfaces:**
-- Consumes: `idiomas.traducir`, `idiomas.activo`, `idiomas.N_`, `gettext`; `tests/test_editor_js.py::_constante_js`; `tests/test_rutas_editor.py::_edicion`, `_datos`; `tests/i18n_util._SCRIPT_TOKEN`, `_con_marca`.
+- Consumes: `idiomas.traducir`, `idiomas.activo`, `idiomas.N_`, `idiomas.en_idioma`, `idiomas.de_proyecto`, `gettext`; `tests/test_editor_js.py::_constante_js`; `tests/test_rutas_editor.py::_edicion`, `_datos`; `tests/i18n_util._SCRIPT_TOKEN`, `_con_marca`; `flask_babel.pgettext`.
+- Fuera de esta tarea: `materiales.validar_subida` («El {tipo} pesa más…») lo traduce la Task 4 con `gettext` y un dict `N_` de tipos de archivo (`idiomas.traducir(tipo)`); la subida del editor (`biblioteca._guardar` → `raise SubidaInvalida(str(e))` → la ruta) muestra ese mensaje tal cual, sin tocarlo aquí.
 - Produces:
-  - `final_edition.textos_editor.TEXTOS: dict[str, str]` (clave → msgid en español, marcado con `N_`) y `textos() -> dict[str, str]` (traducidos al idioma activo, con `idiomas.traducir`).
-  - `static/editor/textos.js`: `export const ES = {…}` (JSON, idéntico a `TEXTOS`), `ponerTextos(textos, idiomaUI)`, `t(clave, valores = {})` (reemplaza `{k}`; si falta la clave cae al español), `listaY(lista)` (`Intl.ListFormat` del idioma de la página).
+  - `final_edition.textos_editor.TEXTOS: dict[str, str]` (clave → msgid en español, marcado con `N_`; 240 claves) y `textos() -> dict[str, str]` (traducidos al idioma activo, con `idiomas.traducir`; `prop.fuente` con `pgettext("editor", "Fuente")`, el único con contexto).
+  - `static/editor/textos.js`: `export const ES = {…}` (JSON, idéntico a `TEXTOS`), `ponerTextos(textos, idiomaUI)`, `t(clave, valores = {})` (reemplaza `{k}`; si falta la clave cae al español), `listaY(lista)` (`Intl.ListFormat` del idioma de la página), `separadorDecimal()` («,» / «.», CLDR).
   - `editor.ver` agrega a los datos de la página `textos` (`textos_editor.textos()`) e `idioma_ui` (`idiomas.activo()`); `editor.html` con `<html lang="{{ idioma_ui }}">`.
-  - `OperacionInvalida` sigue siendo la misma clase; su mensaje sale de `t("op.…")`.
+  - `OperacionInvalida` sigue siendo la misma clase; su mensaje sale de `t("op.…")` (salvo los de contrato, que quedan en español).
+  - `escala.nombreTransicion(tipo)`; `escala.NOMBRES_TRANSICION` guarda claves (`tr.*`), con las mismas llaves.
+  - `biblioteca.textosBiblioteca()` y `biblioteca.transicionesBiblioteca()` reemplazan las constantes `TEXTOS_BIBLIOTECA` y `TRANSICIONES_BIBLIOTECA` (misma forma de cada elemento).
+  - `propiedades_modelo.mensajeConflicto()` reemplaza la constante `MENSAJE_CONFLICTO`; `AYUDA_VACIA` desaparece (el modelo trae `ayuda` traducida).
   - `edicion_clon.documento(clon, formato, idioma=None, pais=None)`: sin `idioma`, el del país (`final_edition.tipos.PAISES[pais]["idioma"]`), o `"es"` sin país.
   - `tests/i18n_util.MARCAS_CODIGO` (regex) y `espanol_en_codigo(texto) -> bool`.
   - `tests/test_i18n_mensajes.py`: `sueltos(ruta, modo) -> list[str]`, listas `RUTAS` y `WORKER` (las tareas siguientes les suman archivos).
@@ -521,7 +533,8 @@ CONSTANTE = re.compile(r"^_?(?:ETAPAS?|MENSAJES?|AVISOS?)(?:_|$)|^_FASES_PROVEED
 LETRAS = re.compile(r"[A-Za-zÁÉÍÓÚáéíóúÑñ]{3,}")
 
 RUTAS = ["final_edition/rutas_editor.py"]
-WORKER = ["ediciones.py", "final_edition/edicion_clon.py", "final_edition/motor/__init__.py", "tareas/edicion.py"]
+WORKER = ["ediciones.py", "final_edition/edicion_clon.py", "final_edition/motor/__init__.py", "tareas/edicion.py",
+          "final_edition/biblioteca.py"]
 
 
 def _nombre(llamada):
@@ -564,6 +577,17 @@ def sueltos(ruta, modo):
     traducidos = {id(sub) for n in ast.walk(arbol) if isinstance(n, ast.Call) and _nombre(n) in TRADUCTORES
                   for sub in ast.walk(n)}
     estricto = modo == "rutas"
+    # Las CLAVES no son mensajes (§B6): el primer argumento de `.get(...)`, el
+    # índice de un subíndice (`d["error"]`) y las claves de un dict.
+    claves = set()
+    for n in ast.walk(arbol):
+        if isinstance(n, ast.Call) and _nombre(n) == "get" and n.args:
+            claves.add(id(n.args[0]))
+        elif isinstance(n, ast.Subscript):
+            indice = n.slice.value if isinstance(n.slice, getattr(ast, "Index", ())) else n.slice   # Python 3.8/3.9
+            claves.add(id(indice))
+        elif isinstance(n, ast.Dict):
+            claves.update(id(k) for k in n.keys if k is not None)
     candidatos = []                                 # (nodo, estricto)
     for n in ast.walk(arbol):
         if isinstance(n, ast.Call):
@@ -589,7 +613,7 @@ def sueltos(ruta, modo):
                 candidatos += [(c, True) for c in _cadenas(n.value)]
     hallazgos = []
     for nodo, exigente in candidatos:
-        if id(nodo) in traducidos:
+        if id(nodo) in traducidos or id(nodo) in claves:
             continue
         texto = _texto(nodo)
         if texto and (LETRAS.search(texto) if exigente else espanol_en_codigo(texto)):
@@ -613,6 +637,24 @@ def test_la_guardia_detecta():
         os.unlink(f.name)
 
 
+def test_la_guardia_de_rutas_no_marca_claves():
+    """`dashboard._estado_plataformas` hace `etapa = fila.get("etapa")`: esa
+    «etapa» es una clave, no un mensaje (§B6); el valor por defecto de un
+    `.get` sí puede serlo."""
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as f:
+        f.write("from flask import flash, jsonify\n"
+                "def r(fila, d):\n"
+                "    etapa = fila.get('etapa')\n"
+                "    mensaje = d['mensaje']\n"
+                "    detalle = fila.get('detalle', 'sin detalle')\n"
+                "    flash('Guardado', 'ok')\n"
+                "    return jsonify({'error': 'No existe.'})\n")
+    try:
+        assert [h.split(": ", 1)[1] for h in sueltos(f.name, "rutas")] == ["'sin detalle'", "'Guardado'", "'No existe.'"]
+    finally:
+        os.unlink(f.name)
+
+
 @pytest.mark.parametrize("ruta", RUTAS)
 def test_rutas_sin_mensajes_sueltos(ruta):
     hallazgos = sueltos(ruta, "rutas")
@@ -625,21 +667,23 @@ def test_worker_sin_mensajes_sueltos(ruta):
     assert not hallazgos, "Texto en español fuera de gettext/N_:\n" + "\n".join(hallazgos[:40])
 ```
 
-(El orden de `test_la_guardia_detecta` es el de `ast.walk`, a lo ancho: primero lo del módulo, luego los cuerpos de las funciones en orden. Si al correrla el orden sale distinto, se compara con `sorted(...)` a los dos lados — lo que importa es que estén los cuatro y no el `__final_guion`.)
+(El orden de `test_la_guardia_detecta` es el de `ast.walk`, a lo ancho: primero lo del módulo, luego los cuerpos de las funciones en orden. Si al correrla el orden sale distinto, se compara con `sorted(...)` a los dos lados — lo que importa es que estén los cuatro y no el `__final_guion`.) Hoy la guardia de rutas da 23 hallazgos en `rutas_editor.py` y la de worker 5 en `ediciones.py`, 1 en `edicion_clon.py`, 4 en `motor/__init__.py`, 20 en `tareas/edicion.py` y 10 en `final_edition/biblioteca.py`.
 
 Crear `tests/test_i18n_editor.py`:
 
 ```python
-"""El editor (capas 3-4a) en el idioma de quien mira (spec 2026-09-26 §B1,
+"""El editor (capas 3-4b) en el idioma de quien mira (spec 2026-09-26 §B1,
 fase 6). static/editor/*.js no son plantillas: sus textos viven en textos.js
 (el español, la fuente, para que los módulos puros y sus pruebas de Node
 hablen como antes) y la página los reemplaza con los que arma
 final_edition/textos_editor.py con gettext. Guardias: los dos diccionarios
-dicen lo mismo, toda clave usada existe y ninguna sobra, y ningún otro módulo
-trae un texto en español suelto."""
+dicen lo mismo, toda clave usada existe y ninguna sobra, ningún otro módulo
+trae un texto en español suelto y ninguno tapa `t` con una variable local."""
 import glob
 import os
 import re
+
+import pytest
 
 import idiomas
 from final_edition import textos_editor
@@ -648,14 +692,40 @@ from tests.test_editor_js import _constante_js
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EDITOR = os.path.join(RAIZ, "static", "editor")
-CLAVE = re.compile(r"[\"']((?:guardado|editar|producir|op|vista|fila|clip|resolver|precio)\.[a-z0-9_]+)[\"']")
-# Errores de programación: solo salen con un bug y dentro de un aviso ya
-# traducido («No se pudo hacer ese cambio (…)»), nunca como texto propio.
+CLAVE = re.compile(r"[\"']((?:guardado|editar|producir|op|vista|fila|clip|resolver|precio|tr|tl|bib|prop)\.[a-z0-9_]+)[\"']")
+# Errores de programación: solo salen con un bug y nunca como texto propio de
+# la página (a la consola, o dentro de un aviso ya traducido). En
+# operaciones.js, además, los mensajes de CONTRATO de agregar*/ponerTransicion/
+# editarTexto/cambiar/cambiarMezcla: nombran un campo del documento
+# (`estilo.…`, `transform.…`, `ken_burns`, «${clave}») o repiten un valor de
+# una lista fija que la página nunca manda mal (rol, preset, tipo, fuente,
+# mezcla, destino) — como los _fallar de documento.validar, quedan en español
+# (la lista de excepciones del cierre de la fase 6, Task 8, los nombra).
 INTERNOS = {
     "audio.js": ("Preset de mezcla desconocido",),
     "subtitulos.js": ("color ASS inválido",),
-    "operaciones.js": ("No sé recortar por",),
+    "avisos_editor.js": ("Un módulo del editor vuelve a cambiar la edición",),       # solo a la consola
+    "propiedades_modelo.js": ("Forma de fondo desconocida",),
+    "operaciones.js": (
+        "No sé recortar por",
+        "no se agrega a mano", "Ese estilo de texto no existe", "Esa transición no existe", "Ese destino no es válido",
+        "no es un número válido", "no se puede cambiar", "No se puede cambiar «", "Esa fuente no está disponible",
+        "inválida (", "ken_burns solo se cambia", "Esa mezcla no existe",
+    ),
 }
+# Palabras españolas del editor que MARCAS_CODIGO no trae (etiquetas de la
+# biblioteca y del panel: «Subir», «Contorno», «Zoom lento»…). Solo para esta
+# guardia: MARCAS_CODIGO la usan también las guardias de Python de las
+# tareas 3-7 y no se toca.
+MARCAS_EDITOR = re.compile(
+    r"\b(?:subir|subido|agregar|quitar|reintentar|escuchar|parar|silenciar|volumen|opacidad|contorno|sombra|"
+    r"fondo|fundido|centrar|centro|caja|ninguno|ninguna|izquierda|derecha|acercar|alejar|llamado|corte|deslizar|"
+    r"grosor|fuente|tipo|otro|equilibrada|blanco|negro|amarillo|rojo|gruesa|ambiente|primero|espera|lento)\b", re.I)
+# `t` es la función de textos.js: una variable local con ese nombre la tapa
+# (y un `const t` más abajo en la misma función hace que `t(...)` lance
+# ReferenceError por la zona muerta de `const`).
+TAPA_T = re.compile(r"\b(?:const|let|var)\s+(?:\{[^}]*\b)?t\b(?!\s*:)|\(\s*t\s*\)\s*=>|\bt\s*=>|"
+                    r"\bfor\s*\(\s*(?:const|let)\s+t\s+of\b|return\s*\{\s*t\s*,")
 
 
 def _parece_texto(s):
@@ -666,7 +736,16 @@ def _parece_texto(s):
     return " " in s or s.endswith((".", "…", ":", "!", "?", "»")) or bool(re.fullmatch(r"[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+", s))
 
 
-_CODIGO = re.compile(r"\$\{[^}]*\}")   # lo de adentro de `${…}` es código, no texto («pista.tipo»)
+def _clases(s):
+    """Una lista de clases CSS («ed-bib-texto ed-bib-texto-…»): cada palabra lleva guion."""
+    palabras = s.split()
+    return bool(palabras) and all("-" in p for p in palabras)
+
+
+# Lo de adentro de `${…}` es código, no texto («pista.tipo»): se quita sin
+# dejar un espacio (con espacio, un selector como `[data-pista="${id}"]`
+# parecía una frase).
+_CODIGO = re.compile(r"\$\{[^}]*\}")
 
 
 def espanol_en_js(fuente, nombre="x.js"):
@@ -674,8 +753,9 @@ def espanol_en_js(fuente, nombre="x.js"):
     for tok in _SCRIPT_TOKEN.findall(fuente):
         if tok[0] not in "'\"`":
             continue
-        texto = _CODIGO.sub(" ", tok)
-        if _parece_texto(texto[1:-1]) and espanol_en_codigo(texto) \
+        texto = _CODIGO.sub("", tok)
+        if _parece_texto(texto[1:-1]) and not _clases(texto[1:-1]) \
+                and (espanol_en_codigo(texto) or MARCAS_EDITOR.search(texto)) \
                 and not any(i in tok for i in INTERNOS.get(nombre, ())):
             hallazgos.append(tok)
     return hallazgos
@@ -688,8 +768,14 @@ def _modulos():
 def test_la_guardia_de_js_detecta():
     fuente = ('const a = "Guardado"; const b = "texto"; el.className = "linea-fila linea-fila-video";\n'
               'c.className = `linea-clip linea-${pista.tipo}`; s.backgroundImage = `url("${tira.imagen}")`;\n'
-              'throw new OperacionInvalida(`Esa velocidad no está disponible (${v}×).`); t("guardado.ok");')
-    assert espanol_en_js(fuente) == ['"Guardado"', '`Esa velocidad no está disponible (${v}×).`']
+              'b.className = `ed-bib-texto ed-bib-texto-${m.preset}`; q.querySelector(`[data-pista="${CSS.escape(id)}"]`);\n'
+              'etiqueta: "Contorno", clave: "prop.contorno", t("guardado.ok");\n'
+              'throw new OperacionInvalida(`Esa velocidad no está disponible (${v}×).`);\n'
+              'throw new OperacionInvalida(`estilo.${clave} no se puede cambiar.`);')
+    assert espanol_en_js(fuente) == ['"Guardado"', '"Contorno"', '`Esa velocidad no está disponible (${v}×).`',
+                                     '`estilo.${clave} no se puede cambiar.`']
+    assert espanol_en_js(fuente, "operaciones.js") == ['"Guardado"', '"Contorno"',
+                                                       '`Esa velocidad no está disponible (${v}×).`']
 
 
 def test_textos_js_iguales_a_python():
@@ -713,12 +799,52 @@ def test_sin_espanol_suelto_en_los_modulos_del_editor():
     assert not hallazgos, "Texto en español fuera de textos.js:\n" + "\n".join(hallazgos)
 
 
+def test_nadie_tapa_t():
+    hallazgos = []
+    for ruta in _modulos():
+        with open(ruta, encoding="utf-8") as f:
+            fuente = f.read()
+        if 'from "./textos.js"' not in fuente:
+            continue
+        for n, linea in enumerate(fuente.splitlines(), 1):
+            if TAPA_T.search(linea) and not linea.lstrip().startswith("//"):
+                hallazgos.append(f"{os.path.basename(ruta)}:{n}: {linea.strip()[:80]}")
+    assert not hallazgos, "Variable local `t` en un módulo que usa t():\n" + "\n".join(hallazgos)
+
+
 def test_textos_del_editor_en_ingles():
     with idiomas.en_idioma("en"):
         t = textos_editor.textos()
     assert t["guardado.ok"] == "Saved" and t["producir.minutos"] == "about {n} minutes per market"
     assert set(t) == set(textos_editor.TEXTOS)
     assert textos_editor.textos()["guardado.ok"] == "Guardado"      # fuera de en_idioma: DEFECTO de los tests (es)
+
+
+def test_fuente_del_editor_es_tipografia():
+    """«Fuente» en el editor es la tipografía (msgctxt "editor" → Font); la de
+    Nicho, sin contexto, sigue siendo la fuente de datos (Source). El español
+    no cambia."""
+    from flask_babel import gettext
+    with idiomas.en_idioma("en"):
+        assert textos_editor.textos()["prop.fuente"] == "Font"
+        assert gettext("Fuente") == "Source"
+    assert textos_editor.textos()["prop.fuente"] == "Fuente"
+    assert textos_editor.TEXTOS["prop.fuente"] == "Fuente"          # el mismo español que ES de textos.js
+
+
+def test_la_biblioteca_rechaza_en_el_idioma_activo():
+    """La subida del editor (capa 4b) responde en el idioma de quien sube: el
+    mensaje sale de final_edition/biblioteca.py con gettext (la extensión se
+    revisa antes de tocar el disco)."""
+    from final_edition import biblioteca
+
+    class _Archivo:
+        filename = "virus.exe"
+
+    with idiomas.en_idioma("en"):
+        with pytest.raises(biblioteca.SubidaInvalida) as e:
+            biblioteca.subir("acme", _Archivo())
+    assert str(e.value) == "Upload a video, an image or an audio file."
 ```
 
 Crear `tests/js/textos.test.mjs`:
@@ -730,15 +856,18 @@ Crear `tests/js/textos.test.mjs`:
 // que ponerTextos no se filtra a las demás pruebas.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { listaY, ponerTextos, t } from "../../static/editor/textos.js";
-import { nombreFila } from "../../static/editor/escala.js";
+import { listaY, ponerTextos, separadorDecimal, t } from "../../static/editor/textos.js";
+import { cabeceraFila, nombreFila, nombreTransicion } from "../../static/editor/escala.js";
 import { cortarEn, OperacionInvalida } from "../../static/editor/operaciones.js";
+import { textosBiblioteca } from "../../static/editor/biblioteca.js";
+import { mensajeConflicto, textoSegundos, textoVelocidad } from "../../static/editor/propiedades_modelo.js";
 import { docBase, DURACIONES } from "./doc_base.mjs";
 
 test("sin los textos de la página habla en español", () => {
   assert.equal(t("guardado.ok"), "Guardado");
   assert.equal(t("producir.minutos", { n: 3 }), "unos 3 minutos por destino");
   assert.equal(listaY(["a", "b", "c"]), "a, b y c");
+  assert.equal(separadorDecimal(), ",");
 });
 
 test("con los textos de la página, los módulos puros hablan en ese idioma", () => {
@@ -749,7 +878,25 @@ test("con los textos de la página, los módulos puros hablan en ese idioma", ()
   assert.equal(t("guardado.ok"), "Guardado");           // la clave que falta cae al español
   assert.equal(listaY(["a", "b", "c"]), "a, b, and c");
 });
+
+test("capa 4b: cabeceras, transiciones, biblioteca y panel en el idioma de la página", () => {
+  ponerTextos({
+    "fila.texto": "Text", "tr.desenfoque": "Fade to black", "bib.texto_titulo": "Title",
+    "prop.conflicto": "This edit changed in another tab: reload the page to keep going.",
+  }, "en");
+  assert.deepEqual(cabeceraFila({ id: "p_t", tipo: "texto", clips: [] }, docBase()), { icono: "texto", nombre: "Text" });
+  assert.equal(nombreTransicion("desenfoque"), "Fade to black");
+  assert.equal(textosBiblioteca()[0].nombre, "Title");
+  assert.equal(mensajeConflicto(), "This edit changed in another tab: reload the page to keep going.");
+  assert.equal(textoSegundos(500), "0.5 s");            // el separador decimal del idioma de la página
+  assert.equal(textoVelocidad(0.75), "0.75×");
+});
 ```
+
+Pruebas de Node que leen constantes con texto (pasan a claves o funciones en el Step 3):
+- `tests/js/escala.test.mjs`: sumar `nombreTransicion` al `import` de `escala.js`; la línea `assert.equal(NOMBRES_TRANSICION.desenfoque, "Fundido a negro");` pasa a `assert.equal(nombreTransicion("desenfoque"), "Fundido a negro");` (la de `Object.keys(NOMBRES_TRANSICION)` queda igual).
+- `tests/js/biblioteca.test.mjs`: en el `import`, `TEXTOS_BIBLIOTECA, TRANSICIONES_BIBLIOTECA` → `textosBiblioteca, transicionesBiblioteca`; en «los textos de muestra…», `TEXTOS_BIBLIOTECA` → `textosBiblioteca()` (las dos veces); en «las transiciones de la biblioteca…», `TRANSICIONES_BIBLIOTECA` → `transicionesBiblioteca()` (las tres); en «_operar: con la edición cambiada…», `const { MENSAJE_CONFLICTO } = await import(…)` → `const { mensajeConflicto } = await import(…)` y `[true, MENSAJE_CONFLICTO]` → `[true, mensajeConflicto()]`.
+- `tests/js/propiedades_modelo.test.mjs`: en el `import`, se quita `AYUDA_VACIA` y `MENSAJE_CONFLICTO` pasa a `mensajeConflicto`; `assert.equal(m.ayuda, AYUDA_VACIA);` → `assert.equal(m.ayuda, "Elige algo en la línea de tiempo o en el video para cambiarlo.");`; en «mensajeRechazo: …», `assert.equal(MENSAJE_CONFLICTO, "La edición cambió…")` → `assert.equal(mensajeConflicto(), "La edición cambió en otra pestaña: recarga la página para seguir.")` y el `, MENSAJE_CONFLICTO);` de la línea siguiente → `, mensajeConflicto());`; en «Propiedades: una operación rechazada…», `[true, MENSAJE_CONFLICTO]` → `[true, mensajeConflicto()]`.
 
 `tests/test_i18n_plantillas.py`: `PLANTILLAS_TRADUCIDAS` suma `"editor.html",   # Fase 6, Task 2: la página del editor`.
 
@@ -772,12 +919,15 @@ def test_editor_en_ingles(admin_en):
 
 def test_mensajes_del_editor_en_ingles(admin_en):
     """`_edicion()` no está unida a un video de Crear: producir responde 400
-    con su mensaje, en el idioma de quien mira."""
+    con su mensaje, en el idioma de quien mira. La subida de la biblioteca
+    (capa 4b) sin archivo, igual."""
     from tests.test_rutas_editor import _edicion
     ed, _clon, _voz = _edicion()
     r = admin_en.post(f"/cliente/acme/ediciones/{ed['id']}/producir", json={"version_n": 1, "destinos": ["es_CO"]})
     assert r.status_code == 400
     assert r.get_json()["error"] == "This edit isn't linked to a Create video: it can't be produced from here yet."
+    r = admin_en.post("/cliente/acme/ediciones/materiales/subir", data={})
+    assert r.status_code == 400 and r.get_json()["error"] == "Choose a file."
 ```
 
 En `tests/test_edicion_clon.py`, al final:
@@ -808,11 +958,17 @@ msgid es el español de siempre; `textos()` los devuelve en el idioma activo
 static/editor/textos.js los usa con `t()`). static/editor/textos.js trae el
 MISMO diccionario en español (`ES`) para que los módulos puros y sus pruebas
 de Node hablen igual sin página: tests/test_i18n_editor.py compara los dos.
-Marcadores `{nombre}` (los reemplaza el JS), nunca `%(x)s`."""
+Marcadores `{nombre}` (los reemplaza el JS), nunca `%(x)s`. Una clave se
+escribe siempre entera en el módulo que la usa (nunca armada con `${…}`: la
+prueba de claves no la vería). «Fuente» (la tipografía) es el único texto
+con contexto: sin él saldría «Source», la fuente de datos de Nicho."""
+from flask_babel import pgettext
+
 import idiomas
 from idiomas import N_
 
 TEXTOS = {
+    # pagina_editor.js / guardado.js: el estado del guardado
     "guardado.ok": N_("Guardado"),
     "guardado.pendiente": N_("Cambios sin guardar…"),
     "guardado.guardando": N_("Guardando…"),
@@ -820,8 +976,11 @@ TEXTOS = {
     "guardado.conflicto": N_("La edición cambió en otra pestaña; recarga para seguir."),
     "guardado.fallo": N_("No se pudo guardar (error {status})."),
     "guardado.sin_conexion": N_("Sin conexión: se guarda con el próximo cambio."),
+    # pagina_editor.js: editar
     "editar.conflicto": N_("Esta edición cambió en otra pestaña: recarga la página para seguir editando."),
     "editar.fallo": N_("No se pudo hacer ese cambio ({error}). La edición quedó como estaba."),
+    "editar.cabezal_elegido": N_("Pon el cabezal sobre el clip elegido para cortarlo."),
+    # pagina_editor.js: «Producir»
     "producir.sin_clon": N_("Esta edición no está unida a un video de Crear: todavía no se puede producir desde aquí."),
     "producir.un_minuto": N_("cerca de un minuto por destino"),
     "producir.minutos": N_("unos {n} minutos por destino"),
@@ -834,11 +993,14 @@ TEXTOS = {
     "producir.hechas": N_("Produciendo {n} finales. Las vas a ver en Final edition cuando terminen."),
     "producir.ya_estaban": N_("Esos destinos ya se estaban produciendo."),
     "producir.sin_conexion": N_("Sin conexión: no se pudo producir. Vuelve a intentar."),
+    # operaciones.js: OperacionInvalida (los mensajes de contrato quedan en español: INTERNOS)
     "op.sin_principal": N_("Esta edición no tiene una pista de video principal."),
     "op.no_existe": N_("Ese clip ya no existe en la edición."),
     "op.sonido_sigue": N_("El sonido de la escena sigue a los clips de video: edita el clip de video."),
+    "op.demasiadas_pistas": N_("Esta edición ya tiene demasiadas pistas."),
     "op.cabezal_fuera": N_("Pon el cabezal dentro de un clip para cortarlo."),
     "op.muy_cerca": N_("Muy cerca del borde del clip para cortar ahí."),
+    "op.muy_cerca_clip": N_("Muy cerca del borde del clip para cortarlo."),
     "op.un_clip": N_("La edición necesita al menos un clip de video."),
     "op.voz_destino": N_("La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla."),
     "op.fuera_principal": N_("Ese clip no está en la pista principal."),
@@ -846,6 +1008,20 @@ TEXTOS = {
     "op.velocidad_video": N_("La velocidad solo se cambia en clips de video."),
     "op.velocidad_no": N_("Esa velocidad no está disponible ({v}×)."),
     "op.muy_corto": N_("El clip quedaría demasiado corto a esa velocidad."),
+    "op.video_preparando": N_("Ese video todavía se está preparando."),
+    "op.audio_preparando": N_("Ese audio todavía se está preparando."),
+    "op.texto_nuevo": N_("Escribe aquí"),
+    "op.transicion_principal": N_("Esa transición solo se pone en un clip de la pista principal."),
+    "op.transicion_ultimo": N_("El último clip no tiene transición hacia el siguiente."),
+    "op.no_es_texto": N_("Eso no es un clip de texto."),
+    "op.texto_vacio": N_("El texto no puede quedar vacío."),
+    "op.sin_cambios": N_("No hay cambios que aplicar."),
+    "op.estilo_solo_texto": N_("El estilo solo se cambia en clips de texto."),
+    "op.audio_sin_posicion": N_("Un clip de audio no tiene posición ni tamaño."),
+    "op.audio_solo_audio": N_("El audio solo se cambia en clips de audio."),
+    "op.sonido_no_cabe": N_("Esta edición ya tiene demasiadas pistas: no cabe el sonido del video."),
+    "op.sin_sonido_escena": N_("Ese clip no tiene sonido de la escena todavía."),
+    # vista.js
     "vista.nombre_imagen": N_("la imagen"),
     "vista.nombre_video": N_("el video"),
     "vista.nombre_archivo": N_("el archivo"),
@@ -864,34 +1040,204 @@ TEXTOS = {
     "vista.preparando": N_("Preparando {n} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales."),
     "vista.no_producible": N_("Esta edición no se puede producir tal como está: {aviso}"),
     "vista.faltan": N_("Faltan {n} archivo(s) de esta edición (se borraron o no son de este proyecto): esas partes no se verán."),
+    # resolver.js
     "resolver.sin_valor": N_("El texto '{rol}' no tiene valor en {idioma}."),
+    # precio.js / resolver.js
     "precio.sin_formato": N_("No sé formatear precios de {pais}."),
+    # escala.js (filas y cabeceras), propiedades*.js
     "fila.voz": N_("Voz"),
     "fila.musica": N_("Música"),
     "fila.sonido": N_("Sonido"),
     "fila.efecto": N_("Efecto"),
     "fila.audio": N_("Audio"),
     "fila.grabacion": N_("Grabación"),
+    "fila.texto": N_("Texto"),
     "fila.textos": N_("Textos"),
     "fila.imagenes": N_("Imágenes"),
     "fila.superpuesto": N_("Video encima"),
     "fila.video": N_("Video"),
     "fila.sonido_escena": N_("Sonido de la escena"),
     "fila.pista": N_("Pista"),
+    # escala.js (clips), biblioteca.js, propiedades*.js
     "clip.precio": N_("Precio"),
     "clip.texto": N_("Texto «{rol}»"),
     "clip.imagen": N_("Imagen"),
+    # escala.js: transiciones
+    "tr.corte": N_("Corte"),
+    "tr.fundido": N_("Fundido"),
+    "tr.deslizar": N_("Deslizar"),
+    "tr.zoom": N_("Zoom"),
+    "tr.desenfoque": N_("Fundido a negro"),
+    "tr.union_corte": N_("Esa unión quedó en corte: el primer clip no tiene video de sobra al final para la transición. Recorta un poco su final y vuelve a ponerla."),
+    "tr.acortada": N_("La transición quedó de {duracion}: no hay más video al final del primer clip."),
+    # linea_tiempo.js
+    "tl.transicion": N_("Transición: {nombre}"),
+    # biblioteca.js
+    "bib.tipo_no": N_("Sube un video, una imagen o un audio."),
+    "bib.pesa_video": N_("El video pesa más de {mb} MB."),
+    "bib.pesa_imagen": N_("La imagen pesa más de {mb} MB."),
+    "bib.pesa_audio": N_("El audio pesa más de {mb} MB."),
+    "bib.sin_conexion_subir": N_("Sin conexión: no se pudo subir. Vuelve a intentar."),
+    "bib.sesion_subir": N_("Tu sesión venció: vuelve a entrar y súbelo otra vez."),
+    "bib.muy_grande": N_("El archivo es demasiado grande."),
+    "bib.servidor": N_("El servidor no pudo guardar el archivo. Vuelve a intentar."),
+    "bib.error_subir": N_("No se pudo subir (error {status})."),
+    "bib.texto_titulo": N_("Título"),
+    "bib.texto_subtitulo": N_("Subtítulo"),
+    "bib.texto_llamado": N_("Llamado"),
+    "bib.tr_corte": N_("Sin transición: pasa de golpe."),
+    "bib.tr_fundido": N_("Un video se funde en el otro."),
+    "bib.tr_deslizar": N_("El siguiente entra desde la derecha."),
+    "bib.tr_zoom": N_("Se acerca y pasa al siguiente."),
+    "bib.tr_desenfoque": N_("Baja a negro y aparece el siguiente."),
+    "bib.en_espera": N_("En espera"),
+    "bib.subiendo": N_("Subiendo {n} %"),
+    "bib.listo": N_("Listo"),
+    "bib.no_subio": N_("No se subió"),
+    "bib.logo": N_("Logo"),
+    "bib.cancion": N_("Canción"),
+    "bib.video_crear": N_("Video de Crear"),
+    "bib.subir": N_("Subir"),
+    "bib.arrastra": N_("o arrastra archivos aquí"),
+    "bib.tus_archivos": N_("Tus archivos"),
+    "bib.videos_crear": N_("Videos de Crear"),
+    "bib.subir_audio": N_("Subir audio"),
+    "bib.audios": N_("Audios del proyecto"),
+    "bib.ayuda_textos": N_("Toca uno para ponerlo donde está el cabezal; con el mouse también puedes arrastrarlo a la línea de tiempo."),
+    "bib.agregar_texto": N_("Agregar un texto «{nombre}»"),
+    "bib.ayuda_transiciones": N_("Toca una para ponerla en el video que elegiste o, si no, en el corte más cercano al cabezal. Dura medio segundo; con el mouse también puedes arrastrarla a un corte."),
+    "bib.transicion": N_("Transición «{nombre}»: {descripcion}"),
+    "bib.cargando": N_("Cargando…"),
+    "bib.vacio_medios": N_("Todavía no hay videos ni imágenes en este proyecto. Súbelos con «Subir» (o arrástralos aquí desde tu computadora)."),
+    "bib.vacio_piezas": N_("Cuando un video de Crear esté listo, aparece aquí."),
+    "bib.vacio_audios": N_("Todavía no hay audios. Sube uno aquí, o crea canciones en Crear › Mi música."),
+    "bib.error_carga": N_("No se pudo cargar la biblioteca."),
+    "bib.reintentar": N_("Reintentar"),
+    "bib.agregar": N_("Agregar a la edición"),
+    "bib.agregar_nombre": N_("Agregar «{nombre}» a la edición"),
+    "bib.preparando": N_("Preparando…"),
+    "bib.se_prepara": N_("«{nombre}» se está preparando"),
+    "bib.mi_musica": N_("Mi música"),
+    "bib.subido": N_("Subido"),
+    "bib.agregar_musica": N_("Agregar «{nombre}» como música desde el cabezal"),
+    "bib.sin_videos": N_("Una transición va entre dos videos: agrega otro video primero."),
+    "bib.no_agregado": N_("No se pudo agregar: el aviso está debajo del video."),
+    "bib.union_corte": N_("Esa unión quedó en corte, sin transición."),
+    "bib.en_union": N_("«{nombre}» quedó en la unión."),
+    "bib.texto_agregado": N_("Texto agregado: escríbelo en «Editar»."),
+    "bib.agregado": N_("Se agregó «{nombre}»."),
+    "bib.se_agrega_sola": N_("«{nombre}» se está preparando: se agrega sola cuando esté."),
+    "bib.preparando_pieza": N_("Preparando «{nombre}» para el editor (gratis): se agrega sola cuando esté."),
+    "bib.sin_conexion_pieza": N_("Sin conexión: no se pudo preparar ese video. Vuelve a intentar."),
+    "bib.sesion": N_("Tu sesión venció: vuelve a entrar para seguir."),
+    "bib.error_pieza": N_("No se pudo preparar ese video (error {status})."),
+    "bib.ese_video": N_("ese video"),
+    "bib.no_preparo": N_("No se pudo preparar «{nombre}». Vuelve a intentar."),
+    "bib.tarda": N_("«{nombre}» tarda demasiado en prepararse. Vuelve a intentar en un rato."),
+    "bib.quitar": N_("Quitar"),
+    "bib.quitar_nombre": N_("Quitar «{nombre}» de la lista"),
+    "bib.subida_de": N_("Subida de «{nombre}»"),
+    "bib.parar": N_("Parar"),
+    "bib.escuchar": N_("Escuchar"),
+    "bib.parar_nombre": N_("Parar «{nombre}»"),
+    "bib.escuchar_nombre": N_("Escuchar «{nombre}»"),
+    "bib.no_escucha": N_("No se pudo escuchar ese audio."),
+    # propiedades_modelo.js y propiedades.js
+    "prop.ayuda_vacia": N_("Elige algo en la línea de tiempo o en el video para cambiarlo."),
+    "prop.mezcla_equilibrada": N_("Equilibrada"),
+    "prop.mezcla_voz": N_("Voz primero"),
+    "prop.mezcla_ambiente": N_("Ambiente primero"),
+    "prop.ayuda_equilibrada": N_("Voz, sonido del video y música, cada uno en su punto."),
+    "prop.ayuda_voz": N_("El sonido del video y la música bajan para que la voz se entienda."),
+    "prop.ayuda_ambiente": N_("El sonido del video se oye entero y la música queda baja."),
+    "prop.fuente_inter_gruesa": N_("Inter gruesa"),
+    "prop.fuente_inter_media": N_("Inter media"),
+    "prop.fuente_space": N_("Space Grotesk"),
+    "prop.color_blanco": N_("Blanco"),
+    "prop.color_negro": N_("Negro"),
+    "prop.color_amarillo": N_("Amarillo"),
+    "prop.color_rojo": N_("Rojo"),
+    "prop.color_marca": N_("Color de marca"),
+    "prop.porcentaje": N_("{n} %"),
+    "prop.clip": N_("Clip"),
+    "prop.sin_sonido": N_("Sin sonido: súbelo para oír el sonido de este video."),
+    "prop.velocidad_sin_sonido": N_("A otra velocidad el video va sin su sonido."),
+    "prop.video_sin_sonido": N_("Este video no trae sonido."),
+    "prop.ultimo_video": N_("Es el último video: no tiene transición hacia el siguiente."),
+    "prop.nota_precio": N_("Es el precio de cada país: sale de los precios de la edición y no se escribe aquí."),
+    "prop.nota_por_pais": N_("Este texto cambia según el país: lo que escribas aquí vale para {destino}."),
+    "prop.nota_voz": N_("La voz se ajusta sola a cada país."),
+    "prop.conflicto": N_("La edición cambió en otra pestaña: recarga la página para seguir."),
+    "prop.rechazo": N_("No se pudo hacer ese cambio: el aviso está debajo del video."),
+    "prop.ninguno": N_("Ninguno"),
+    "prop.acercar": N_("Acercar"),
+    "prop.alejar": N_("Alejar"),
+    "prop.pildora": N_("Píldora"),
+    "prop.caja": N_("Caja"),
+    "prop.izquierda": N_("Izquierda"),
+    "prop.centro": N_("Centro"),
+    "prop.derecha": N_("Derecha"),
+    "prop.ninguna": N_("Ninguna"),
+    "prop.anim_deslizar": N_("Deslizar"),
+    "prop.texto_vacio": N_("Escribe algo: un texto no puede quedar vacío."),
+    "prop.borrar": N_("Borrar"),
+    "prop.toda": N_("Toda la edición"),
+    "prop.mezcla": N_("Mezcla del sonido"),
+    "prop.a_medida": N_("Esta edición trae volúmenes a medida: elegir una mezcla los reemplaza."),
+    "prop.velocidad": N_("Velocidad"),
+    "prop.volumen_sonido": N_("Volumen del sonido"),
+    "prop.zoom_lento": N_("Zoom lento"),
+    "prop.transicion_siguiente": N_("Transición al siguiente"),
+    "prop.tipo": N_("Tipo"),
+    "prop.duracion": N_("Duración"),
+    "prop.fuente": "Fuente",       # sin N_: se traduce con contexto en textos() (pgettext "editor")
+    "prop.tamano": N_("Tamaño"),
+    "prop.contorno": N_("Contorno"),
+    "prop.color_contorno": N_("Color del contorno"),
+    "prop.grosor": N_("Grosor"),
+    "prop.sombra": N_("Sombra"),
+    "prop.fondo": N_("Fondo"),
+    "prop.color_fondo": N_("Color del fondo"),
+    "prop.opacidad_fondo": N_("Opacidad del fondo"),
+    "prop.alineacion": N_("Alineación"),
+    "prop.animacion": N_("Animación de entrada"),
+    "prop.posicion": N_("Posición"),
+    "prop.centrar_ancho": N_("Centrar a lo ancho"),
+    "prop.centrado_ancho": N_("Ya está centrado a lo ancho."),
+    "prop.centrar_alto": N_("Centrar a lo alto"),
+    "prop.centrado_alto": N_("Ya está centrado a lo alto."),
+    "prop.color": N_("Color"),
+    "prop.otro": N_("Otro"),
+    "prop.tamano_imagen": N_("Tamaño (del ancho de la pantalla)"),
+    "prop.opacidad": N_("Opacidad"),
+    "prop.llenar": N_("Llenar la pantalla"),
+    "prop.imagen_chica": N_("La imagen es chica: quedó lo más grande posible, pero no llega a llenar toda la pantalla."),
+    "prop.centrar": N_("Centrar"),
+    "prop.volumen": N_("Volumen"),
+    "prop.fundido_entrada": N_("Fundido de entrada"),
+    "prop.fundido_salida": N_("Fundido de salida"),
+    "prop.silenciar": N_("Silenciar"),
+    "prop.volver_oir": N_("Volver a oír"),
+    "prop.nota_sonido": N_("Es el sonido del video: su volumen se cambia desde el clip de video."),
+    "prop.elegir_video": N_("Elegir el video"),
+    "prop.nota_otro": N_("El video final no muestra este clip: aquí solo se puede borrar."),
 }
 
 
 def textos():
     """TEXTOS en el idioma activo (en una ruta: el de quien mira)."""
-    return {clave: idiomas.traducir(msgid) for clave, msgid in TEXTOS.items()}
+    salida = {clave: idiomas.traducir(msgid) for clave, msgid in TEXTOS.items()}
+    salida["prop.fuente"] = pgettext("editor", "Fuente")     # msgctxt "editor" → «Font»
+    return salida
 ```
 
-Antes de copiar, comparar cada español con el literal actual del JS (`grep -n` de la frase): tiene que ser byte-idéntico — ojo con `vista.proxies_uno` (hoy `No se ${n > 1 ? "pudieron" : "pudo"} preparar…`: con n = 1 dice «No se pudo preparar», con n > 1 «No se pudieron preparar»).
+Antes de copiar, comparar cada español con el literal actual del JS (`grep -n` de la frase): tiene que ser byte-idéntico (verificado el 2026-09-28 contra c687b99: los 240 valores están tal cual en los módulos, salvo estos armados a mano, que se parten igual que hoy se leen). Ojo:
+- `vista.proxies_uno`/`vista.proxies_varios` y `vista.carga_una`/`vista.carga_varias` (hoy `No se ${n > 1 ? "pudieron" : "pudo"} …`, `${varias ? "esas partes quedan vacías" : "esa parte queda vacía"}`), `producir.hecha_una`/`producir.hechas` (hoy `final${n === 1 ? "" : "es"}`).
+- `tr.union_corte` son HOY dos literales sumados en `escala.avisoTransicion` (`"… para la transición. " + "Recorta …"`): un solo msgid.
+- `bib.pesa_*` reemplaza a `${NOMBRE_TIPO[tipo]} pesa más de …` («El video» / «La imagen» / «El audio» + la frase): tres msgids enteros.
+- `bib.parar_nombre`/`bib.escuchar_nombre` reemplazan a `${sonando ? "Parar" : "Escuchar"} «${nombre}»`.
 
-`static/editor/textos.js`: comentario de cabecera (qué es, que `ES` debe ser idéntico a `final_edition/textos_editor.py::TEXTOS` y que lo prueba `tests/test_i18n_editor.py`), luego `export const ES = { … };` — el mismo diccionario, **en JSON estricto** (claves y valores entre comillas dobles, sin coma final: `_constante_js` lo lee con `json.loads` hasta el primer `;` seguido de salto de línea) — y:
+`static/editor/textos.js`: comentario de cabecera (qué es, que `ES` debe ser idéntico a `final_edition/textos_editor.py::TEXTOS` y que lo prueba `tests/test_i18n_editor.py`; que ningún módulo llama a `t()` al cargarse, porque `pagina_editor.js` los importa ANTES de llamar a `ponerTextos`), luego `export const ES = { … };` — el mismo diccionario, **en JSON estricto** (claves y valores entre comillas dobles, sin coma final: `_constante_js` lo lee con `json.loads` hasta el primer `;` seguido de salto de línea) — y:
 
 ```js
 let actuales = ES;
@@ -920,50 +1266,80 @@ export function listaY(lista) {
     return lista.join(", ");
   }
 }
+
+// «,» en español, «.» en inglés (CLDR, como idiomas.separador_decimal): lo
+// único que cambia al escribir «0,5 s» o «0,75×» (escala.js,
+// propiedades_modelo.js). El redondeo sigue siendo el de toFixed, así el
+// español no cambia ni una letra.
+export function separadorDecimal() {
+  try {
+    return new Intl.NumberFormat(idioma).formatToParts(1.5).find((p) => p.type === "decimal")?.value ?? ",";
+  } catch {
+    return ",";
+  }
+}
 ```
 
 - [ ] **Step 3: Los módulos del editor usan `t()`**
 
-Cada módulo importa `import { t } from "./textos.js";` (y `listaY` donde une listas). Los textos de Step 2 se reemplazan uno por uno, con los mismos valores:
-- `pagina_editor.js`: justo después de leer `datos`, `ponerTextos(datos.textos, datos.idioma_ui);` (antes de `new VistaPrevia`). `TEXTO_GUARDADO` → `guardado: () => t("guardado.ok")`, `pendiente: () => t("guardado.pendiente")`, `guardando: () => t("guardado.guardando")`, `error: (m) => t("guardado.error", { mensaje: m })`. `editable()` → `aviso(t("editar.conflicto"))`; `operar` → ``aviso(invalida ? e.message : t("editar.fallo", { error: e.message }))``; `montarProducir`: `boton.title = t("producir.sin_clon")`, `minutos === 1 ? t("producir.un_minuto") : t("producir.minutos", { n: minutos })`; `unir` se borra y `pedirReemplazo` usa `const cuales = listaY(destinos.map(nombre));` con `t(destinos.length === 1 ? "producir.reemplazo_una" : "producir.reemplazo_varias", { destinos: cuales })`; `avisar(t("producir.marca_destino"))`, ``avisar(t("producir.guardar_antes", { mensaje: guardado.mensaje }))``, `j.error || t("producir.error", { status: r.status })`, `n ? t(n === 1 ? "producir.hecha_una" : "producir.hechas", { n }) : t("producir.ya_estaban")`, `avisar(t("producir.sin_conexion"))`.
+Reglas para todos los módulos que importan `t` (`pagina_editor.js`, `vista.js`, `guardado.js`, `operaciones.js`, `escala.js`, `resolver.js`, `precio.js`, `linea_tiempo.js`, `biblioteca.js`, `propiedades.js`, `propiedades_modelo.js`):
+- `import { t } from "./textos.js";` (y `listaY` / `separadorDecimal` / `ponerTextos` donde se usan). Los textos de Step 2 se reemplazan uno por uno, con los mismos valores; una clave se escribe siempre entera (nunca `` t(`bib.${x}`) ``).
+- Ningún `t()` a nivel de módulo: una constante con texto guarda la CLAVE y se traduce donde se usa (o pasa a ser una función).
+- **Primero se renombran las variables locales `t`** (hoy 29, las marca `test_nadie_tapa_t`; nombres propuestos): `pagina_editor.js` — `alIr: (t) =>` → `(ms) =>`, `const avisar = (t) =>` → `(texto) =>`; `vista.js` — `elegirDestino` y `cuadro`: `const t = …tiempo()` → `const ms`; `operaciones.js` — `recolocar`: `let t` → `let ms`; `lugarCapa`: `let t` → `let inicio` y devuelve `{ inicio, dur }` (sus dos `return`), y `agregarImagen`/`agregarAudio`/`agregarTexto` desestructuran `const { inicio, dur } = lugarCapa(…)` y usan `inicio` donde hoy dice `t` (`pistaLibre(…, inicio, dur…)`, `inicio_ms: inicio`); `editarTexto`: `const t = clip.texto || {}` → `const tx`; `cambiar`: `const t = cambios.transform` → `const tf`; `escala.js` — `marcasRegla`: `for (let t …)` → `for (let ms …)`, `etiquetaClip`: `const t = clip.texto ?? {}` → `const tx`, `indiceAgregarVideo` y `pedidoAgregar`: `const t` → `const ms`; `resolver.js` — `resolver`: `const t = c.texto ?? {}` → `const tx`; `linea_tiempo.js` — `_arriba`: `const t = this.toque` → `const toque`; `propiedades.js` — `enfocarTexto`: `const t = this.textarea` → `const area`, `_nota`: `const t = leer(m)` → `const texto`, `_armarTransicion`: `for (const t of m.transiciones)` → `for (const tr of …)`; `propiedades_modelo.js` — `.map((t) =>` de `modeloVideo` → `.map((tipo) =>`, `textoDe`: `const t` → `const tx`, `modeloTexto` y `modeloImagen`: `const t = clip.transform ?? {}` → `const tf`; `biblioteca.js` — los dos `for (const t of …)` (ver abajo) y `_clic`: `const t = e.target` → `const objetivo`. (Tres de estos ya rompían el Step 3 del brief de la 4a: `etiquetaClip`, `resolver` y `elegirDestino` llaman a `t()` en la misma función.)
+
+Módulo por módulo:
+- `pagina_editor.js`: justo después de leer `datos`, `ponerTextos(datos.textos, datos.idioma_ui);` (antes de `new VistaPrevia`). `TEXTO_GUARDADO` → `guardado: () => t("guardado.ok")`, `pendiente: () => t("guardado.pendiente")`, `guardando: () => t("guardado.guardando")`, `error: (m) => t("guardado.error", { mensaje: m })`. `editable()` → `aviso(t("editar.conflicto"))`; en `operarCon` (el `catch`; `operar` solo delega) → ``aviso(invalida ? e.message : t("editar.fallo", { error: e.message }))``; `cortar()` → `aviso(t("editar.cabezal_elegido"))`; `montarProducir`: `boton.title = t("producir.sin_clon")`, `minutos === 1 ? t("producir.un_minuto") : t("producir.minutos", { n: minutos })`; `unir` se borra y `pedirReemplazo` usa `const cuales = listaY(destinos.map(nombre));` con `t(destinos.length === 1 ? "producir.reemplazo_una" : "producir.reemplazo_varias", { destinos: cuales })`; `avisar(t("producir.marca_destino"))`, ``avisar(t("producir.guardar_antes", { mensaje: guardado.mensaje }))``, `j.error || t("producir.error", { status: r.status })`, `n ? t(n === 1 ? "producir.hecha_una" : "producir.hechas", { n }) : t("producir.ya_estaban")`, `avisar(t("producir.sin_conexion"))`.
 - `guardado.js`: los tres fallbacks → `t("guardado.conflicto")`, `t("guardado.fallo", { status: r.status })`, `t("guardado.sin_conexion")` (el servidor ya manda su `error` traducido; estos son solo el respaldo).
-- `operaciones.js`: cada `new OperacionInvalida("…")` → `new OperacionInvalida(t("op.…"))` con la clave de Step 2 (`op.velocidad_no` con `{ v: velocidad }`); `No sé recortar por «${lado}».` se queda (interno, `INTERNOS`).
-- `escala.js`: `NOMBRE_ROL`/`NOMBRE_TIPO` pasan a guardar CLAVES (`voz: "fila.voz"`, …, `superpuesto: "fila.superpuesto"`) y las funciones traducen al usar: `nombreFila` → `t(pista.tipo === "video" ? "fila.video" : "fila.imagenes")`, `t("fila.sonido_escena")`, `t(NOMBRE_ROL[…] ?? "fila.audio")`, `t(NOMBRE_TIPO[pista.tipo] ?? "fila.pista")`; `etiquetaClip` → `t("clip.precio")`, `t("clip.texto", { rol })`, `t(NOMBRE_ROL[clip.rol_audio] ?? "fila.audio")`, `t("clip.imagen")`.
+- `operaciones.js`: cada `new OperacionInvalida("…")` que ve la persona → `new OperacionInvalida(t("op.…"))` con la clave de Step 2 (`op.velocidad_no` con `{ v: velocidad }`; «Ese clip no está en la pista principal.» sale en tres sitios: los tres con `op.fuera_principal`; «La voz se ajusta sola…» en dos: `op.voz_destino`); en `agregarTexto`, `texto: { literal: preset === "precio" ? "$ 0" : t("op.texto_nuevo") }` — «Escribe aquí» es el texto inicial, editable, de un clip nuevo: se guarda en el documento, pero va en el idioma de QUIEN MIRA (lo escribe la página para esa persona, que lo reemplaza enseguida); la Task 8 lo documenta como excepción a §B8 (contenido editable, no un mensaje del sistema). Se quedan en español (contrato, `INTERNOS`, misma regla que `documento.validar`; la Task 8 los suma a su lista de excepciones del cierre): `No sé recortar por «${lado}».`, `Ese rol de audio no se agrega a mano (${rol}).`, `Ese estilo de texto no existe (${preset}).`, `Esa transición no existe (${tipo}).`, `Ese destino no es válido (${destino}); usa …`, los de `numeroCambio`/`colorCambio`/`subCambio`, `No se puede cambiar «${clave}» aquí.`, `estilo.${clave} …`, `Esa fuente no está disponible (${e.fuente}).`, `estilo.alineacion inválida (…)`, `transform.${clave} …`, `audio.${clave} …`, `ken_burns …` (los dos), `animacion.${clave} …`, `animacion.entrada inválida (…)`, `Esa mezcla no existe (${preset}).` y los que ya no llevan marca española (`estilo debe ser un objeto.`, `transform debe ser un objeto.`, `audio debe ser un objeto.`, `animacion debe ser un objeto.`).
+- `escala.js`: `import { separadorDecimal, t } from "./textos.js";`. `NOMBRE_ROL`/`NOMBRE_TIPO` pasan a guardar CLAVES (`{ voz: "fila.voz", musica: "fila.musica", sonido: "fila.sonido", efecto: "fila.efecto", subida: "fila.audio", grabacion: "fila.grabacion" }`, `{ texto: "fila.textos", imagen: "fila.imagenes", superpuesto: "fila.superpuesto", video: "fila.video", audio: "fila.audio" }`) y las funciones traducen al usar: `nombreFila` → `t(pista.tipo === "video" ? "fila.video" : "fila.imagenes")`, `t("fila.sonido_escena")`, `t(NOMBRE_ROL[…] ?? "fila.audio")`, `t(NOMBRE_TIPO[pista.tipo] ?? "fila.pista")`; `etiquetaClip` → `t("clip.precio")`, `t("clip.texto", { rol })`, `t(NOMBRE_ROL[clip.rol_audio] ?? "fila.audio")`, `t("clip.imagen")`. `CABECERA_ROL` guarda `nombre` como clave (`"fila.voz"`, `"fila.musica"`, `"fila.sonido"`, `"fila.efecto"`, `"fila.grabacion"`) y `cabeceraFila` devuelve siempre `{ icono, nombre: t(clave) }`: principal `t("clip.imagen")` / `t("fila.video")`, `ID_SONIDO` `t("fila.sonido")`, audio `const c = CABECERA_ROL[pista.clips?.[0]?.rol_audio] ?? { icono: "musica", nombre: "fila.audio" }; return { icono: c.icono, nombre: t(c.nombre) };`, texto `t("fila.texto")`, imagen `t("clip.imagen")`, superpuesto `t("fila.superpuesto")`, el resto `t("fila.pista")`. `NOMBRES_TRANSICION = { corte: "tr.corte", fundido: "tr.fundido", deslizar: "tr.deslizar", zoom: "tr.zoom", desenfoque: "tr.desenfoque" }` (mismas llaves) y `export function nombreTransicion(tipo) { return tipo in NOMBRES_TRANSICION ? t(NOMBRES_TRANSICION[tipo]) : tipo; }`; `unionesConTransicion` → `` `${nombreTransicion(c.transicion.tipo)} · ${segundosTexto(…)}` ``. `segundosTexto` → `` `${(Math.round(ms / 100) / 10).toFixed(1).replace(".", separadorDecimal())} s` ``. `avisoTransicion` → `return t("tr.union_corte");` (la suma de dos literales se va) y `t("tr.acortada", { duracion: segundosTexto(tr.duracion_ms) })`.
 - `resolver.js` y `precio.js`: `t("precio.sin_formato", { pais })`; `new VariableSinValor(t("resolver.sin_valor", { rol, idioma }))`.
-- `vista.js`: `enumerar` se borra y se usa `listaY`; `nombreMaterial` → `t("vista.nombre_imagen" | "vista.nombre_video" | "vista.nombre_archivo")`; `mostrarFallas` → `t(varias ? "vista.carga_varias" : "vista.carga_una", { lista: listaY(lista) })`; `avisoSonido` → `t("vista.sonido_fallo", { n })`; `elegirDestino` → `e.name === "VariableSinValor" ? t("vista.destino_sin_valor", { mensaje: e.message }) : t("vista.destino_error", { mensaje: e.message })`; `t("vista.cargando_sonido")`, `t("vista.sin_sonido", { mensaje: falla.message })`, `setAttribute("aria-label", t("vista.pausar"))` / `t("vista.reproducir")`, `t("vista.dibujo", { mensaje: e.message })`, `rendirsePendientes` → `t(n > 1 ? "vista.proxies_varios" : "vista.proxies_uno", { n })`, `t("vista.preparando", { n: this.datos.pendientes.length })`, `t("vista.no_producible", { aviso: datos.aviso_recortes })`, `t("vista.faltan", { n: datos.faltantes.length })`.
-- `tests/js/modulos_navegador.test.mjs` sigue pasando: `textos.js` no toca `document` ni `window` al cargar.
+- `linea_tiempo.js`: `m.title = t("tl.transicion", { nombre: u.nombre })` (el resto de los nombres ya viene de escala.js).
+- `vista.js`: `enumerar` se borra y se usa `listaY`; el método `nombreMaterial` → `t("vista.nombre_imagen" | "vista.nombre_video" | "vista.nombre_archivo")`; `mostrarFallas` → `t(varias ? "vista.carga_varias" : "vista.carga_una", { lista: listaY(lista) })`; `avisoSonido` → `t("vista.sonido_fallo", { n })`; `elegirDestino` → `e.name === "VariableSinValor" ? t("vista.destino_sin_valor", { mensaje: e.message }) : t("vista.destino_error", { mensaje: e.message })`; `t("vista.cargando_sonido")`, `t("vista.sin_sonido", { mensaje: falla.message })`, `setAttribute("aria-label", t("vista.pausar"))` / `t("vista.reproducir")`, `t("vista.dibujo", { mensaje: e.message })`, `rendirsePendientes` → `t(n > 1 ? "vista.proxies_varios" : "vista.proxies_uno", { n })`, `t("vista.preparando", { n: this.datos.pendientes.length })`, `t("vista.no_producible", { aviso: datos.aviso_recortes })`, `t("vista.faltan", { n: datos.faltantes.length })`.
+- `biblioteca.js`: imports `import { t } from "./textos.js";`, `nombreTransicion` en lugar de `NOMBRES_TRANSICION` y `mensajeConflicto` en lugar de `MENSAJE_CONFLICTO`. `NOMBRE_TIPO` → `const PESA = { video: "bib.pesa_video", imagen: "bib.pesa_imagen", audio: "bib.pesa_audio" };` y `revisarArchivo` → `if (!tipo) return t("bib.tipo_no");` … `return t(PESA[tipo], { mb: Math.floor(tope / (1024 * 1024)) });`. `mensajeSubida` → `t("bib.sin_conexion_subir")`, `t("bib.sesion_subir")`, `t("bib.muy_grande")`, `t("bib.servidor")`, `t("bib.error_subir", { status })`. `TEXTOS_BIBLIOTECA` → `export function textosBiblioteca()` que devuelve `[{ preset: "titulo", nombre: t("bib.texto_titulo") }, { preset: "subtitulo", nombre: t("bib.texto_subtitulo") }, { preset: "precio", nombre: t("clip.precio") }, { preset: "llamado", nombre: t("bib.texto_llamado") }]`. `DESCRIPCIONES_TRANSICION` guarda claves (`bib.tr_corte`, `bib.tr_fundido`, `bib.tr_deslizar`, `bib.tr_zoom`, `bib.tr_desenfoque`) y `TRANSICIONES_BIBLIOTECA` → `export function transicionesBiblioteca()` = `TRANSICIONES.map((tipo) => ({ tipo, nombre: nombreTransicion(tipo), descripcion: DESCRIPCIONES_TRANSICION[tipo] ? t(DESCRIPCIONES_TRANSICION[tipo]) : "" }))`. `ESTADO_SUBIDA` → `espera: () => t("bib.en_espera")`, `subiendo: (s) => t("bib.subiendo", { n: Math.round(s.progreso * 100) })`, `procesando: () => t("guardado.guardando")`, `lista: () => t("bib.listo")`, `error: () => t("bib.no_subio")`. `nombreDe` → `t(m.origen === "marca" ? "bib.logo" : "clip.imagen")`, `t(m.origen === "musica" ? "bib.cancion" : "fila.audio")`, `t(m?.origen === "crear" ? "bib.video_crear" : "fila.video")`. `_barraSubir`: `t("bib.arrastra")`; `_construirMedios`: `this._barraSubir("medios", t("bib.subir"), …)`, `t("bib.tus_archivos")`, `t("bib.videos_crear")`; `_construirAudio`: `t("bib.subir_audio")`, `t("bib.audios")`; `_construirTextos`: `t("bib.ayuda_textos")`, `for (const muestra of textosBiblioteca())` (con `muestra.preset`/`muestra.nombre`), `setAttribute("aria-label", t("bib.agregar_texto", { nombre: muestra.nombre }))`; `_construirTransiciones`: `t("bib.ayuda_transiciones")`, `for (const tr of transicionesBiblioteca())`, `setAttribute("aria-label", t("bib.transicion", { nombre: tr.nombre, descripcion: tr.descripcion }))`. `_pintarListas`: `this._vacio(t("bib.cargando"))`, `t("bib.vacio_medios")`, `t("bib.vacio_piezas")`, `t("bib.vacio_audios")`; `_errorCarga`: `t("bib.error_carga")`, `t("bib.reintentar")`; `_botonMas`: `b.title = t("bib.agregar")`; `_itemMaterial`: `t("bib.agregar_nombre", { nombre })`; `_itemPieza`: `p.nombre || t("bib.video_crear")`, `t("bib.preparando")`, `preparando ? t("bib.se_prepara", { nombre }) : t("bib.agregar_nombre", { nombre })`; `_filaAudio`: `m.origen === "musica" ? t("bib.mi_musica") : t("bib.subido")`, `t("bib.agregar_musica", { nombre })`; `_operar`: `t("bib.sin_videos")`, `ed.enConflicto?.() ? mensajeConflicto() : this._motivo(pedido)`, `motivo ?? t("bib.no_agregado")`, `cosa.transicion === "corte" ? t("bib.union_corte") : t("bib.en_union", { nombre: cosa.nombre })`, `t("bib.texto_agregado")`, `t("bib.agregado", { nombre: cosa.nombre })`; `_agregarPieza`: `t("bib.se_agrega_sola", { nombre: cosa.nombre })`, `t("bib.preparando_pieza", { nombre: cosa.nombre })`, `t("bib.sin_conexion_pieza")`, `t("bib.sesion")`, `j?.error || t("bib.error_pieza", { status: r.status })`; `_revisarPiezas`: `p?.nombre || t("bib.ese_video")`, `p.nombre || t("bib.video_crear")`, `t("bib.no_preparo", { nombre })`, `t("bib.tarda", { nombre })`; `_filaSubida`: `quitar.title = t("bib.quitar")`, `t("bib.quitar_nombre", { nombre: s.nombre })`, `t("bib.subida_de", { nombre: s.nombre })`; `_pintarBotonEscucha`: `setAttribute("aria-label", t(sonando ? "bib.parar_nombre" : "bib.escuchar_nombre", { nombre }))`, `boton.title = t(sonando ? "bib.parar" : "bib.escuchar")`; `_escuchar`: `t("bib.no_escucha")`. (Los títulos de cada panel ya salen del texto de su pestaña, traducido en `editor.html`.)
+- `propiedades_modelo.js`: `import { separadorDecimal, t } from "./textos.js";` y `import { etiquetaClip, nombreTransicion } from "./escala.js";`. Se borra `AYUDA_VACIA`; `NOMBRES_MEZCLA = { equilibrada: "prop.mezcla_equilibrada", voz_protagonista: "prop.mezcla_voz", ambiente_protagonista: "prop.mezcla_ambiente" }`, `AYUDAS_MEZCLA` con `prop.ayuda_equilibrada`/`prop.ayuda_voz`/`prop.ayuda_ambiente`, `NOMBRES_FUENTE = { "Inter-Bold": "prop.fuente_inter_gruesa", "Inter-SemiBold": "prop.fuente_inter_media", "SpaceGrotesk-Bold": "prop.fuente_space" }`, `COLORES` con `nombre: "prop.color_blanco" | "prop.color_negro" | "prop.color_amarillo" | "prop.color_rojo"` (mismos colores, mismo largo), `NOMBRES_ROL` con las claves `fila.*` (`subida: "fila.audio"`). `decimal` → `String(Number(n.toFixed(max))).replace(".", separadorDecimal())`; `textoPorcentaje` → `t("prop.porcentaje", { n: Math.round(Number(n) || 0) })`. `modelo`, caso `"otro"`: `nombre: t(h.pista.tipo === "superpuesto" ? "fila.superpuesto" : "prop.clip")`. `modeloDocumento`: `ayuda: t("prop.ayuda_vacia")`, `opcionesMezcla: MEZCLAS.map((valor) => ({ valor, texto: t(NOMBRES_MEZCLA[valor]), ayuda: t(AYUDAS_MEZCLA[valor]) }))`. `sonidoDeVideo`: `t("prop.sin_sonido")`, `t("prop.velocidad_sin_sonido")`, `t("prop.video_sin_sonido")`. `modeloVideo`: `nombre: t("fila.video")`, `motivo: ultimo ? t("prop.ultimo_video") : null`, `transiciones: TRANSICIONES.map((tipo) => ({ valor: tipo, texto: nombreTransicion(tipo) }))`, `motivoBorrar: soloUno ? t("op.un_clip") : null`. `textoDe`: `nota: t("prop.nota_precio")` y `nota: t("prop.nota_por_pais", { destino: clave.replace("_", " · ") })`. `paletaDe`: la de marca `{ nombre: "prop.color_marca", … }` y `lista.map((c) => ({ ...c, nombre: t(c.nombre), elegido: c.color === color }))`. `modeloTexto`: `nombre: t("fila.texto")`, `fuentes: FUENTES.map((f) => ({ valor: f, texto: NOMBRES_FUENTE[f] ? t(NOMBRES_FUENTE[f]) : f }))`. `modeloImagen`: `nombre: t("clip.imagen")`. `modeloAudio`: `nombre: t(NOMBRES_ROL[rol] ?? "fila.audio")`, `nota: cambiaPorDestino(clip) ? t("prop.nota_voz") : null`. `MENSAJE_CONFLICTO` → `export function mensajeConflicto() { return t("prop.conflicto"); }`; `mensajeRechazo(…, { conflicto = false, otro = t("prop.rechazo") } = {})` con `if (conflicto) return mensajeConflicto();`. `cambioFondo` deja su `throw new Error(\`Forma de fondo desconocida: …\`)` (programación, `INTERNOS`).
+- `propiedades.js`: `import { t } from "./textos.js";`. `KEN_BURNS`/`FONDOS`/`ALINEACIONES`/`ANIMACIONES` guardan claves en `texto` (`prop.ninguno`, `prop.acercar`, `prop.alejar`; `prop.ninguno`, `prop.pildora`, `prop.caja`; `prop.izquierda`, `prop.centro`, `prop.derecha`; `prop.ninguna`, `prop.anim_deslizar`) y se pasan traducidas con `const traducidas = (lista) => lista.map((o) => ({ ...o, texto: t(o.texto) }));` (`opciones: traducidas(KEN_BURNS)`, etc.; las `fuentes` ya vienen traducidas del modelo); `TEXTO_VACIO = "prop.texto_vacio"` y se usa `t(TEXTO_VACIO)`. Cada etiqueta con su clave: `_botonBorrar` `t("prop.borrar")`; `_armarDocumento` `t("prop.toda")`, `t("prop.mezcla")`, `t("prop.a_medida")`; `_armarVideo` `_cabeza(t("fila.video"))`, `t("prop.velocidad")`, `t("prop.volumen_sonido")`, `t("prop.zoom_lento")`; `_armarTransicion` `t("prop.transicion_siguiente")`, `t("prop.tipo")`, `t("prop.duracion")`; `_armarTexto` `_cabeza(t("fila.texto"))`, la etiqueta del campo `t("fila.texto")`, `t("prop.fuente")`, `t("prop.tamano")`, `t("prop.contorno")`, `t("prop.color_contorno")`, `t("prop.grosor")`, `t("prop.sombra")`, `t("prop.fondo")`, `t("prop.color_fondo")`, `t("prop.opacidad_fondo")`, `t("prop.alineacion")`, `t("prop.animacion")`, `t("prop.posicion")`, `t("prop.centrar_ancho")` con `titulo: x.centrado.x ? t("prop.centrado_ancho") : ""`, `t("prop.centrar_alto")` con `t("prop.centrado_alto")`; `_paleta` `t("prop.color")`, `otro.append(t("prop.otro"))`; `_armarImagen` `_cabeza(t("clip.imagen"))`, `t("prop.tamano_imagen")`, `t("prop.opacidad")`, `t("prop.llenar")`, `t("prop.imagen_chica")`, `t("prop.centrar")`; `_armarAudio` `t("prop.volumen")`, `[["entradaMs", t("prop.fundido_entrada"), …], ["salidaMs", t("prop.fundido_salida"), …]]`, `texto: t("prop.silenciar")` y `leer: (x) => ({ texto: x.silenciado ? t("prop.volver_oir") : t("prop.silenciar"), … })`; `_armarSonido` `_cabeza(t("fila.sonido_escena"))`, `t("prop.nota_sonido")`, `t("prop.elegir_video")`; `_armarOtro` `t("prop.nota_otro")`.
+- `seleccion.js`, `lienzo_interaccion.js`, `historial.js`: no tienen textos; no se tocan. `avisos_editor.js` queda igual (su mensaje va a `console.error`; está en `INTERNOS`).
+- `tests/js/modulos_navegador.test.mjs` sigue pasando: `textos.js` no toca `document` ni `window` al cargar. Las demás pruebas de Node siguen en español (sin `ponerTextos`), salvo las líneas del Step 1.
 
 - [ ] **Step 4: La página y la ruta**
 
-- `templates/editor.html`: `<html lang="{{ idioma_ui }}">`; `<title>{{ _('%(nombre)s · Vista previa', nombre=edicion.nombre) }}</title>`; y con `_()` cada texto visible y cada `aria-label`/`title`: «← Final edition», «Destino», «Vista previa» (badge), «Producir» (botón y título y botón del diálogo), «Vista previa del video», «Transición vista de forma aproximada: el video final la hace completa.», «Ir a Final edition», «Ir al inicio», «Reproducir», «Posición en el video», «Herramientas de edición», «Deshacer», «Deshacer (Ctrl/Cmd+Z)», «Rehacer», «Rehacer (Ctrl/Cmd+Shift+Z)», «✂ Cortar», «Cortar el video donde está el cabezal (S)», «Duplicar», «Duplicar el clip elegido», «Borrar», «Borrar el clip elegido (Supr)», «Velocidad», «Guardado» (mismo msgid que `guardado.ok`), «Recargar», «Línea de tiempo», «Zoom», «Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id="producir-tiempo"></span>.» (un msgid con el `<span>` adentro), «Cancelar», «Reemplazar y producir». Ningún id cambia (los usa el JS y `tests/test_rutas_editor.py`).
-- `final_edition/rutas_editor.py`: `from flask_babel import gettext`, `import idiomas`, `from final_edition import textos_editor`; en `ver`, después de `datos_pagina`: `datos["textos"] = textos_editor.textos()` y `datos["idioma_ui"] = idiomas.activo()`. Cada `jsonify({"error": "…"})` y cada `flash` por `gettext` con el mismo español; `problemas.append(f"{d}: {e}")` queda (el `e` ya viene traducido de `documento`/`compilador`); el `error = (… if len(reemplazos) == 1 else …)` pasa a `gettext(…) if … else gettext(…)`; `desde_clon`: `etapas=[(idiomas.N_("Preparando el video"), 100)]`. `msgstr` fijado por el test: «Esta edición no está unida a un video de Crear: todavía no se puede producir desde aquí.» → «This edit isn't linked to a Create video: it can't be produced from here yet.» (el mismo msgid que `producir.sin_clon` de los textos del JS: una sola traducción).
+- `templates/editor.html`: `<html lang="{{ idioma_ui }}">`; `<title>{{ _('%(nombre)s · Editor', nombre=edicion.nombre) }}</title>`; `{% set PANELES = [("medios", _("Medios")), ("audio", _("Audio")), ("texto", _("Texto")), ("transiciones", _("Transiciones"))] %}` (plantilla que se renderiza, no se importa: el `set` se evalúa en cada página); y con `_()` cada texto visible y cada `aria-label`/`title`: «← Final edition», «Destino», «Guardado» (mismo msgid que `guardado.ok`), «Recargar», «Producir» (botón de la barra, título del diálogo y botón del diálogo), «Biblioteca» (el `aria-label` del `<aside>` y el del panel), «Qué agregar», «Listo» (los dos botones), «Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición.», «Reproductor», «Vista previa del video», «Transición vista de forma aproximada: el video final la hace completa.», «Ir a Final edition», «Ir al inicio», «Reproducir», «Posición en el video», «Editar» (el título del panel y el botón de abajo del celular), «Elige algo en la línea de tiempo o en el video para cambiarlo.» (mismo msgid que `prop.ayuda_vacia`), «Herramientas de edición», «Deshacer», «Deshacer (Ctrl/Cmd+Z)», «Rehacer», «Rehacer (Ctrl/Cmd+Shift+Z)», «✂ Cortar», «Cortar donde está el cabezal: el clip elegido o, si no eliges ninguno, el video (S)», «Duplicar», «Duplicar el clip elegido», «Borrar», «Borrar el clip elegido (Supr)», «Zoom», «Línea de tiempo», «Agregar y editar», «Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id="producir-tiempo"></span>.» (un msgid con el `<span>` adentro), «Cancelar», «Reemplazar y producir». Ningún id ni `data-*` cambia (los usan el JS y `tests/test_rutas_editor.py`); los comentarios del `<style>` no se tocan.
+- `final_edition/rutas_editor.py`: `from flask_babel import gettext`, `import idiomas`, `from final_edition import textos_editor`; en `ver`, después de `datos_pagina`: `datos["textos"] = textos_editor.textos()` y `datos["idioma_ui"] = idiomas.activo()`. Cada `jsonify({"error": "…"})` y cada `flash` por `gettext` con el mismo español (también los de `subir_material` — «Pedido rechazado: no viene de esta página.», «Elige un archivo.» — y `agregar_pieza` — «No existe esa pieza.», dos veces); `problemas.append(f"{d}: {e}")` queda (el `e` ya viene traducido de `documento`/`compilador`); `jsonify({"error": str(e)})` de `subir_material` queda (el mensaje ya viene traducido de `biblioteca`); el `error = (… if len(reemplazos) == 1 else …)` pasa a `gettext(…) if … else gettext(…)`; `desde_clon`: `etapas=[(idiomas.N_("Preparando el video"), 100)]` y `flash(gettext("Preparando el video para el editor… se abre solo en cuanto esté listo.") if encolado else gettext("Ya se estaba preparando ese video."), "ok")`. `msgstr` fijados por tests: «Esta edición no está unida a un video de Crear: todavía no se puede producir desde aquí.» → «This edit isn't linked to a Create video: it can't be produced from here yet.» (el mismo msgid que `producir.sin_clon` de los textos del JS: una sola traducción) y «Elige un archivo.» → «Choose a file.».
+- `final_edition/biblioteca.py` (capa 4b; `subir` corre en la ruta, en el idioma de quien sube, y `materializar_pieza` en el worker, en el del proyecto): `from flask_babel import gettext`, `import idiomas`; cada `SubidaInvalida("…")` → `SubidaInvalida(gettext("…"))` con el mismo español («No pude leer esa imagen.» dos veces, «Sube un video, una imagen o un audio.», «El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más.»); `mensaje = gettext("No pude leer ese video.") if tipo == "video" else gettext("No pude leer ese archivo de audio.")`; los cuatro `ValueError` internos de `_medir` («dimensiones inválidas», «falta video con dimensiones válidas», «falta audio», «duración inválida», que se cambian por la `SubidaInvalida` de arriba) también por `gettext`, como el `ValueError` de `ediciones.crear` (la guardia de worker no distingue); `materializar_pieza`: `raise ValueError(gettext("La pieza %(cf)s no tiene un video listo para el editor.", cf=cf_id))`; en `_guardar`, el nombre de respaldo se guarda en el idioma del proyecto: `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): respaldo = gettext("Archivo")` y `nombre = … or respaldo`. `raise SubidaInvalida(str(e))` (el de `materiales.validar_subida`) queda: lo traduce la Task 4. `msgstr` fijado por test: «Sube un video, una imagen o un audio.» → «Upload a video, an image or an audio file.» (mismo msgid que `bib.tipo_no`).
 - `final_edition/documento.py`: `from flask_babel import gettext`; en `resolver`, `raise DocumentoInvalido(gettext("No sé formatear precios de %(pais)s.", pais=pais))` y `raise VariableSinValor(gettext("El texto '%(rol)s' no tiene valor en %(idioma)s.", rol=rol, idioma=idioma))`. Los 55 `_fallar` de `validar` no cambian (Global Constraints).
 - `final_edition/motor/compilador.py`: `from flask_babel import gettext`; en `verificar_recortes`, `raise ValueError(gettext("El clip '%(clip)s' pide %(pide)s ms de un material de %(hay)s ms; acorta el clip o el recorte.", clip=cl["id"], pide=fin_fuente, hay=material))` (español idéntico: `tests/test_rutas_editor.py` lo compara). Los demás `raise` de `compilar` (PIP, carrusel, rutas faltantes) son internos y no cambian.
-- `ediciones.py`: `from flask_babel import gettext`; los cuatro mensajes de `Conflicto` por `gettext`.
+- `ediciones.py`: `from flask_babel import gettext`; los cinco mensajes con texto por `gettext` (los cuatro de `Conflicto` y el `ValueError("tipo debe ser video o imagen")` de `crear`).
 
 - [ ] **Step 5: El worker del editor**
 
-- `tareas/edicion.py`: `from flask_babel import gettext`, `from idiomas import N_`; `ETAPAS_EDICION = ((N_("Preparando materiales"), 15), (N_("Renderizando"), 70), (N_("Subiendo"), 15))`; cada `raise` y cada `return` con texto → `gettext` con marcadores (p. ej. `return gettext("Final %(destino)s lista.", destino=f"{p['idioma']}/{p['pais']}")`, `return gettext("%(n)s materiales efímeros borrados.", n=n)`, `return gettext("Edición %(id)s lista para editar.", id=eid)`, `return gettext("Proxy listo.")`, `return gettext("Material inexistente.")`, `return gettext("Sin proxy para este tipo.")`). El worker ya corre en el idioma del proyecto (`worker.ejecutar`).
+- `tareas/edicion.py`: `from flask_babel import gettext`, `from idiomas import N_`; `ETAPAS_EDICION = ((N_("Preparando materiales"), 15), (N_("Renderizando"), 70), (N_("Subiendo"), 15))`; cada `raise` y cada `return` con texto → `gettext` con marcadores (p. ej. `return gettext("Final %(destino)s lista.", destino=f"{p['idioma']}/{p['pais']}")`, `return gettext("%(n)s materiales efímeros borrados.", n=n)`, `return gettext("Edición %(id)s lista para editar.", id=eid)`, `return gettext("Proxy listo.")`, `return gettext("Material inexistente.")`, `return gettext("Sin proxy para este tipo.")`; de la capa 4b, en `ejecutar_material_de_pieza`, `return gettext("Material %(id)s listo.", id=mat["id"])` y `raise ValueError(gettext("cf_id inválido: %(cf)s", cf=repr(p.get("cf_id"))))`, igual que el de `ejecutar_desde_clon`). El worker ya corre en el idioma del proyecto (`worker.ejecutar`).
 - `final_edition/motor/__init__.py`: `from flask_babel import gettext`, `from idiomas import N_`; `avisar(N_("Subtítulos sin libass: omitidos"))`, `avisar(N_("Renderizando"))`, `avisar(gettext("Renderizando tramo %(i)s/%(n)s", i=i + 1, n=len(ventanas)))`, `avisar(N_("Uniendo tramos"))`.
 - `final_edition/edicion_clon.py`: `from flask_babel import gettext`, `from final_edition import tipos`; `def documento(clon, formato, idioma=None, pais=None):` con `idioma = idioma or (tipos.PAISES.get(pais) or {}).get("idioma") or "es"` al principio; en `crear`, `raise ValueError(gettext("Esa pieza no tiene un video listo para editar."))` y `nombre = gettext("Edición de %(pieza)s", pieza=entry.get("accion_central") or cf_id)[:120]`; docstring del módulo: el destino es el país del proyecto con el idioma de ese país (decisión B), ya no «es» fijo.
 
 - [ ] **Step 6: Catálogo, verde y commit**
 
-`venv/bin/python3 catalogo_i18n.py actualizar` → traducir (glosario: Edit, Preview, Timeline, Track, Playhead, Split, Trim, Segment, Market; marcadores `{…}` intactos) → `compilar`. `msgstr` fijados por tests: «Guardado» → «Saved» (ya existe), «unos {n} minutos por destino» → «about {n} minutes per market», «Pon el cabezal dentro de un clip para cortarlo.» → «Put the playhead inside a clip to split it.».
+`catalogo_i18n.py`: hoy `PALABRAS = {"_": None, "gettext": None, "ngettext": (1, 2), "N_": None}` no extrae `pgettext` (verificado el 2026-09-28); sumarle `"pgettext": ((1, "c"), 2)` (lo que en la línea de órdenes de Babel es `pgettext:1c,2`). `extraer` (`cat.add(…, context=contexto)`) y `pendientes` (`cat.get(m.id, context=m.context)`) ya pasan el contexto. Comprobar después de `actualizar`: `grep -n -B1 'msgid "Fuente"' translations/en/LC_MESSAGES/messages.po` muestra dos entradas, la de siempre (Nicho, «Source») y otra con `msgctxt "editor"`.
 
-Run: `venv/bin/python3 -m pytest tests/test_i18n_mensajes.py tests/test_i18n_editor.py tests/test_editor_js.py tests/test_rutas_editor.py tests/test_vista_previa.py tests/test_edicion_clon.py tests/test_tareas_edicion.py tests/test_ediciones.py tests/test_documento.py tests/test_motor_*.py tests/test_operaciones_editor.py tests/test_i18n_plantillas.py tests/test_i18n_fugas.py tests/test_i18n_catalogo.py -q` → PASS (con Node instalado: `tests/test_editor_js.py` corre `tests/js/*.test.mjs`, incluida `textos.test.mjs`). Suite completa → PASS.
+`CLAUDE.md`, párrafo **Editor (capas 1–4b, 2026-09)**, al final de la capa 4b: la frase «Still out: PIP (video over video), color filters, rotation, a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla») and the editor's i18n (phase 6).» (hoy partida en tres líneas) pasa a «Still out: PIP (video over video), color filters, rotation and a photo as a principal clip (it goes in as an image layer with «Llenar la pantalla»).» — nada más en ese párrafo.
+
+`docs/i18n/glosario.md`, en la tabla de Final edition (debajo de «Producir | Produce»), los términos de la capa 4b: «Biblioteca | Library», «Medios | Media», «Transición | Transition», «Corte (transición) | Cut», «Fundido | Fade» («Fundido a negro | Fade to black»), «Deslizar | Slide», «Zoom lento | Slow zoom», «Llamado (texto de muestra) | Call to action», «Contorno | Outline», «Sombra | Shadow», «Fondo (de un texto) | Background», «Subir (un archivo) | Upload», «Editar (el panel) | Edit».
+
+`venv/bin/python3 catalogo_i18n.py actualizar` → traducir (glosario: Edit, Preview, Timeline, Track, Playhead, Split, Trim, Segment, Market, Final cut y los de arriba; marcadores `{…}` intactos; « » → “ ”; «{n} %» y «Subiendo {n} %» → «{n}%», «Uploading {n}%») → `compilar`. `msgstr` fijados por tests: «Guardado» → «Saved» (ya existe), «unos {n} minutos por destino» → «about {n} minutes per market», «Pon el cabezal dentro de un clip para cortarlo.» → «Put the playhead inside a clip to split it.», «Esta edición no está unida a un video de Crear: todavía no se puede producir desde aquí.» → «This edit isn't linked to a Create video: it can't be produced from here yet.», «Elige un archivo.» → «Choose a file.», «Sube un video, una imagen o un audio.» → «Upload a video, an image or an audio file.». 34 de los msgids ya tienen traducción y se reusan (entre ellos «Listo» → Done, «Borrar» → Delete, «Editar» → Edit, «Subir» → Upload, «Velocidad» → Speed); el `msgstr` de `msgctxt "editor"` / «Fuente» es «Font» (fijado por `test_fuente_del_editor_es_tipografia`; el «Fuente» sin contexto de Nicho sigue «Source»).
+
+Run: `venv/bin/python3 -m pytest tests/test_i18n_mensajes.py tests/test_i18n_editor.py tests/test_editor_js.py tests/test_rutas_editor.py tests/test_biblioteca_editor.py tests/test_vista_previa.py tests/test_edicion_clon.py tests/test_tareas_edicion.py tests/test_ediciones.py tests/test_documento.py tests/test_motor_*.py tests/test_operaciones_editor.py tests/test_i18n_plantillas.py tests/test_i18n_fugas.py tests/test_i18n_catalogo.py -q` → PASS (con Node instalado: `tests/test_editor_js.py` corre `tests/js/*.test.mjs`, incluida `textos.test.mjs`). Suite completa → PASS.
 
 ```bash
-git add final_edition/textos_editor.py static/editor/ templates/editor.html final_edition/rutas_editor.py final_edition/documento.py final_edition/motor/ final_edition/edicion_clon.py ediciones.py tareas/edicion.py translations/ tests/
+git add final_edition/textos_editor.py final_edition/biblioteca.py static/editor/ templates/editor.html final_edition/rutas_editor.py final_edition/documento.py final_edition/motor/ final_edition/edicion_clon.py ediciones.py tareas/edicion.py catalogo_i18n.py CLAUDE.md docs/i18n/glosario.md translations/ tests/
 git commit -m "$(cat <<'EOF'
 Idioma (2/8 de la fase 6): el editor en el idioma de quien mira
 
-La página y sus módulos JS: los textos viven en static/editor/textos.js
-(español, la fuente) y la ruta manda los traducidos (textos_editor.py con
-gettext); guardias de paridad, de claves y de español suelto en los JS.
-Mensajes de las rutas del editor, de ediciones y del render; «Editar este
-video» usa el idioma del país (decisión B). Guardia nueva de mensajes de
-ruta y de worker (tests/test_i18n_mensajes.py).
+La página y sus módulos JS, con la biblioteca y el panel de propiedades de
+la capa 4b: los textos viven en static/editor/textos.js (español, la
+fuente) y la ruta manda los traducidos (textos_editor.py con gettext);
+guardias de paridad, de claves, de español suelto y de variables que tapan
+t() en los JS. Mensajes de las rutas del editor, de la subida, de ediciones
+y del render; «Editar este video» usa el idioma del país (decisión B).
+Guardia nueva de mensajes de ruta y de worker (tests/test_i18n_mensajes.py).
 
 Co-Authored-By: <model>
 EOF
@@ -971,6 +1347,7 @@ EOF
 ```
 
 ---
+
 ### Task 3: Final edition por dentro — etapas, mensajes, errores guardados y el detalle del gasto
 
 **Files:**
@@ -1167,19 +1544,34 @@ def test_cambiar_producto_en_ingles(admin_en):
     assert not fugas, fugas[:15]
 
 
+def _apartado_gasto(html):
+    """Solo Configuración › Gasto: el Tablero de la misma página ya dice
+    «1 charge to providers →» (otro msgid) y taparía lo que se prueba."""
+    ini = html.index('id="config-ap-gasto"')
+    fin = html.find('<section class="config-apartado"', ini + 1)
+    return html[ini:fin if fin != -1 else None]
+
+
 def test_un_cobro_en_singular_en_ingles(admin_en):
     import gastos
     gastos.registrar("acme", "video", 0.5, "video:x", detalle="wan3 · 5 s", proveedor="wavespeed")
-    assert "1 charge to providers" in html_de(admin_en, "/cliente/acme")
+    gasto = _apartado_gasto(html_de(admin_en, "/cliente/acme"))
+    assert "1 charge to providers" in gasto and "charge(s)" not in gasto
 
 
 def test_un_cobro_en_espanol_no_cambia(app_i18n):
+    """El plural inglés sale de ngettext con el MISMO msgid en las dos formas:
+    el español se ve igual. Falla antes del cambio por la primera línea."""
+    import os
     import gastos
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, "templates", "_tab_settings.html"), encoding="utf-8") as f:
+        assert "ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores'" in f.read()
     gastos.registrar("acme", "video", 0.5, "video:x", detalle="wan3 · 5 s", proveedor="wavespeed")
     c = app_i18n.app.test_client()
     with c.session_transaction() as s:
         s["usuario"], s["rol"], s["cliente"] = "admin", "admin", None
-    assert "1 cobro(s) a proveedores" in html_de(c, "/cliente/acme")      # admin sin idioma = es en los tests
+    assert "1 cobro(s) a proveedores" in _apartado_gasto(html_de(c, "/cliente/acme"))   # admin sin idioma = es
 
 
 def test_csv_del_gasto_con_encabezados_en_ingles(admin_en):
@@ -1226,7 +1618,7 @@ Expected: FAIL.
 
 - `_tab_cambiar_calzado.html`: patrón de la fase 2 para todo el texto visible (instrucciones, «Modelo para fotos», «Modelo para videos», estados de cada swap, avisos de la marca, el vacío «Todavía no has generado ningún swap.», botones); `{{ nombres_proveedor_swap.get(id, id)|traducir }}` (los valores ya son `N_`); `{{ _('Generando… 0%% · 0s') }}`; el `onsubmit="return confirm('¿Eliminar este resultado?');"` pasa a `onsubmit='return confirm({{ _("¿Eliminar este resultado?")|tojson }});'`. El comentario Jinja que nombra `_idea_visual_card.html` se queda (esa plantilla sigue en disco).
 - `dashboard.py`: cada `flash` de `generar_swap`, `imagen_swap_original`, `eliminar_swap`, `enviar_swap_a_publicidad`, `enviar_video_a_publicidad` por `gettext`/`ngettext` con el mismo español (`f"Generando {lanzados} swaps…"` → `gettext("Generando %(n)s swaps…", n=lanzados)`).
-- `tareas/swap.py`: `from idiomas import N_`, `import idiomas`; cada `ETAPA_* = "…"` → `N_("…")`; los valores de `_FASES_PROVEEDOR` → `N_("…")`; en `_texto_fase`, `texto = idiomas.traducir(_FASES_PROVEEDOR.get(fase, fase))` y el sufijo `gettext("%(fase)s (puesto %(n)s)", fase=texto, n=posicion)`; el `detalle` del gasto → `gettext("foto %(n)s de %(total)s", n=i + 1, total=len(referencias))`. (`tests/test_tareas_swap.py` compara etapas en español: `N_` no las cambia.)
+- `tareas/swap.py`: `from idiomas import N_`, `import idiomas`; cada `ETAPA_* = "…"` → `N_("…")`; los valores de `_FASES_PROVEEDOR` → `N_("…")`; en `_texto_fase`, `texto = idiomas.traducir(_FASES_PROVEEDOR.get(fase, fase))` y el sufijo `gettext("%(fase)s (puesto %(n)s)", fase=texto, n=posicion)`; el `detalle` del gasto → `gettext("foto %(n)s de %(total)s", n=i + 1, total=len(referencias))`. Además, lo que la guardia ve y no son constantes: el `mensaje = "El producto ya no está en el catálogo; no se generó el swap."` que se guarda como error del swap → `gettext(…)`; `return "Swap listo."` → `return gettext("Swap listo.")`; y en `_registrar_gasto`, el `detalle` («foto»/«video», «con mejora», «sin tarifa») y el `sufijo` que le pasan («· falló después de generar; el proveedor ya cobró») → `gettext` con el mismo español (el worker ya corre en el idioma del proyecto). (`tests/test_tareas_swap.py` compara etapas en español: `N_` no las cambia.)
 
 - [ ] **Step 3: Link, «Describir con IA», Mi música, materiales, Marca y Catálogo**
 
@@ -1369,6 +1761,8 @@ def test_avisar_admin_en_el_idioma_de_cada_admin(admins_falsos, monkeypatch):
 
 («Idioma guardado.» → «Language saved.» ya está en el catálogo desde la fase 2.)
 
+Con Meta «conectado», el apartado de Conexiones de Configuración puede pedir más costuras que las que ya pone `app_i18n` (`meta_conexion.cargar`, `estado`, `estado_pixel`): si `test_detalle_del_pixel_se_traduce_al_mostrarlo` no llega a 200 o se cae en la plantilla, se reemplazan también `dashboard.meta_conexion.app_publica` (`lambda c: None`) y `dashboard._bloqueo_cambio_forma` (`lambda c: None`) — el mismo estilo que `test_bloqueo_cambio_forma_en_ingles_y_espanol_intacto` —, sin cambiar lo que el test afirma.
+
 Run: `venv/bin/python3 -m pytest tests/test_i18n_plantillas.py tests/test_i18n_fugas.py tests/test_notificaciones.py tests/test_i18n_mensajes.py -q -k "admin or meta or mapa or pixel or familias or panel or notificaciones or agencia"`
 Expected: FAIL.
 
@@ -1449,7 +1843,7 @@ EOF
 
 **Files:**
 - Create: `tests/test_i18n_guardado.py`
-- Modify: `dashboard.py` (las rutas del flujo viejo: `nueva_idea`, `nueva_idea_visual`, `aprobar_concepto_imagen`, `descartar_concepto_imagen`, `generar_video_animacion`, `eliminar_idea_visual`, `guardar_prompt`, `aprobar_prompt`, `regenerar_imagen`, `aprobar_imagen`, `rechazar_prompt`, `eliminar_idea`, `aprobar`, `rechazar` y la de publicar un brief; las constantes de módulo `ETAPA_*` y `_FASES_PROVEEDOR`; `_encolar_organico`, `org_publicar`, `_reconciliar_huerfanos`; y lo que la guardia marque que no haya cubierto una tarea anterior), `referentes/rutas.py` (el `detalle` del gasto de «Adaptar con IA» cuando la respuesta no sirvió), `CLAUDE.md` (una frase en el párrafo **State machine modules**), `translations/`
+- Modify: `dashboard.py` (las rutas del flujo viejo: `nueva_idea`, `nueva_idea_visual`, `aprobar_concepto_imagen`, `descartar_concepto_imagen`, `generar_video_animacion`, `eliminar_idea_visual`, `guardar_prompt`, `aprobar_prompt`, `regenerar_imagen`, `aprobar_imagen`, `rechazar_prompt`, `eliminar_idea`, `aprobar`, `rechazar` y la de publicar un brief; las constantes de módulo `ETAPA_*` y `_FASES_PROVEEDOR`; `_encolar_organico`, `org_publicar`, `_reconciliar_huerfanos`; y lo que la guardia marque que no haya cubierto una tarea anterior), `referentes/rutas.py` (el `detalle` del gasto de «Adaptar con IA» cuando la respuesta no sirvió), `sprints/rutas.py` (el error JSON de `_solo_mismo_origen`), `CLAUDE.md` (una frase en el párrafo **State machine modules**), `translations/`
 - Modify tests: `tests/test_i18n_plantillas.py`, `tests/test_i18n_mensajes.py` (`RUTAS`)
 - No se tocan: las 9 plantillas del flujo viejo (`_seccion_ideas.html`, `_idea_card.html`, `_idea_visual_card.html`, `_prompt_row.html`, `_imagen_row.html`, `_progreso_row.html`, `_seccion_videos.html`, `_video_card.html`, `_seccion_bitacora.html`): se quedan en disco y en `EXCLUIDAS` — el destino de ese flujo lo decide Daniel.
 
@@ -1541,7 +1935,9 @@ Expected: FAIL — `EXCLUIDAS` todavía no existe; la guardia de rutas lista lo 
 - Lo que se GUARDA → armado dentro de `with idiomas.en_idioma(idiomas.de_proyecto(cliente)):`:
   - `_encolar_organico`: `error = gettext("Ya había una publicación de esta pieza en curso; reintenta cuando termine.")` dentro del `with`, antes del bucle;
   - `org_publicar`: el `error=f"No se creó la publicación en {_nombres_org([p])}: {e}"` → `gettext("No se creó la publicación en %(plataformas)s: %(error)s", plataformas=_nombres_org([p]), error=e)` dentro del `with`;
-  - `_reconciliar_huerfanos` (corre al arrancar `python dashboard.py`, sin petición): por cada `(eid, cliente)`, `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): experimentos.actualizar(cliente, eid, estado="error", error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))`;
+  - `_MENSAJE_INTERRUMPIDO` (constante de `dashboard.py` que `_reconciliar_huerfanos` guarda como `error` de swaps, sesiones de Crear y conceptos de imagen) → `idiomas.N_("La generación se interrumpió porque el servidor se reinició — vuelve a intentarlo.")`; en el bucle `for cliente in …` de `_reconciliar_huerfanos`, al principio de cada vuelta, `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): interrumpido = gettext(_MENSAJE_INTERRUMPIDO)`, y cada `entry["error"] = _MENSAJE_INTERRUMPIDO` / `img["error"] = _MENSAJE_INTERRUMPIDO` pasa a `= interrumpido`;
+  - `sprints/rutas.py::_solo_mismo_origen`: `jsonify({"ok": False, "error": gettext("Pedido rechazado: no viene de esta página.")})` (el msgid ya existe; es una respuesta: idioma de quien mira);
+  - `_reconciliar_huerfanos` (corre al arrancar `python dashboard.py`, sin petición), la parte de experimentos: por cada `(eid, cliente)`, `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): experimentos.actualizar(cliente, eid, estado="error", error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))`;
   - `referentes/rutas.py`, el `detalle` del gasto cuando la adaptación no sirvió: `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): detalle = gettext("%(producto)s · %(familia)s · respuesta inválida", producto=producto["nombre"], familia=r.get("familia") or "")` y ese `detalle` al `registrar_seguro`.
 - Los `trabajo()` de `trabajos.iniciar` del flujo viejo: un `return "…"` fijo → `return idiomas.N_("…")` (lo traduce `estado_trabajo` para quien mira).
 
@@ -1552,7 +1948,7 @@ Expected: FAIL — `EXCLUIDAS` todavía no existe; la guardia de rutas lista lo 
 Run: `venv/bin/python3 -m pytest tests/test_i18n_plantillas.py tests/test_i18n_mensajes.py tests/test_i18n_guardado.py tests/test_i18n_catalogo.py tests/test_configuracion_apartados.py tests/test_rutas_organico.py tests/test_rutas_referentes.py tests/test_rutas_mapa.py -q` → PASS. Suite completa → PASS.
 
 ```bash
-git add dashboard.py referentes/rutas.py CLAUDE.md translations/ tests/
+git add dashboard.py referentes/rutas.py sprints/rutas.py CLAUDE.md translations/ tests/
 git commit -m "$(cat <<'EOF'
 Idioma (6/8 de la fase 6): el flujo viejo excluido y guardias de rutas y plantillas
 
@@ -1574,7 +1970,7 @@ EOF
 ### Task 7: El worker y lo que se guarda — interrumpidas, etapas, `detalle`, eventos e I2
 
 **Files:**
-- Modify: `worker.py` (`MENSAJE_INTERRUMPIDA`, `recuperar_interrumpidas`, `ejecutar`), `cola.py` (`recuperar_colgadas`), `tareas/*.py` (lo que marque la guardia: al escribir este plan `tareas/experimentos.py`, `mantenimiento.py`, `meta.py`, `musica.py`, `nicho.py`, `organico.py`, `referentes.py`, `sprints.py`, `tiendas.py`), `organico.py` (`redactar` — el `detalle` del gasto —, `publicar`, `interrumpir`), `experimentos.py` (`crear_con_piezas` y los `raise` con texto), `derivaciones.py` (un `raise`), `lanzador.py` (`ETAPAS_LANZAR`), `acciones.py` (`ejecutar`), `importador.py` (el `detalle` de la regla de fidelidad), `nicho/fuentes/reddit.py`, `nicho/fuentes/youtube.py` (los `detalle` «post N de M» / «video N de M»), `translations/`
+- Modify: `worker.py` (`MENSAJE_INTERRUMPIDA`, `recuperar_interrumpidas`, `ejecutar`), `cola.py` (`recuperar_colgadas`), `tareas/*.py` (lo que marque la guardia: al escribir este plan `tareas/experimentos.py`, `mantenimiento.py`, `meta.py`, `musica.py`, `nicho.py`, `organico.py`, `referentes.py`, `sprints.py`, `tiendas.py`), `organico.py` (`redactar` — el `detalle` del gasto —, `publicar`, `interrumpir`), `experimentos.py` (`crear_con_piezas` y los `raise` con texto), `derivaciones.py` (un `raise`), `lanzador.py` (`ETAPAS_LANZAR`; `_promoted_object_para`: el `detalle` del Pixel dentro de su `ValueError`), `acciones.py` (`ejecutar`), `importador.py` (el `detalle` de la regla de fidelidad), `nicho/fuentes/reddit.py`, `nicho/fuentes/youtube.py` (los `detalle` «post N de M» / «video N de M»), `translations/`
 - Modify tests: `tests/test_i18n_mensajes.py` (`WORKER`), `tests/test_i18n_guardado.py`, `tests/test_acciones.py`
 
 **Interfaces:**
@@ -1641,6 +2037,19 @@ def test_evento_de_creacion_desde_la_galeria_en_el_idioma_del_proyecto(base_temp
     eid = ex.crear_con_piezas("acme", datos, [(f_co, "CO")])
     creado = next(e for e in ex.obtener("acme", eid)["eventos"] if e["tipo"] == "creado")
     assert creado["mensaje"].startswith("Experiment created from the gallery with 1 ad(s) in ")
+
+
+def test_detalle_del_pixel_en_el_error_de_lanzamiento_va_traducido(monkeypatch):
+    """Desde la Task 5 el `detalle` del Pixel es un msgid (N_); el error de
+    lanzamiento que lo incluye (worker → idioma del proyecto) lo traduce."""
+    import pytest
+
+    import lanzador
+    monkeypatch.setattr(lanzador.meta_conexion, "estado_pixel", lambda c, solo_cache=False: {
+        "estado": "sin_pixel", "pixel_id": None, "detalle": "La cuenta publicitaria no tiene ningún Pixel."})
+    with idiomas.en_idioma("en"), pytest.raises(ValueError) as e:
+        lanzador._promoted_object_para("acme", {"objetivo_meta": "OUTCOME_SALES"})
+    assert "(The ad account has no Pixel)" in str(e.value)
 ```
 
 En `tests/test_acciones.py`, al final:
@@ -1686,6 +2095,7 @@ Expected: FAIL (la guardia lista ~45 textos en los archivos nuevos de `WORKER`; 
 - `nicho/fuentes/reddit.py` y `youtube.py`: `avanzar(N_("Leyendo comentarios"), gettext("post %(n)s de %(total)s", n=n, total=len(pendientes)))` y `gettext("video %(n)s de %(total)s", …)`.
 - `experimentos.crear_con_piezas`: el `mensaje=` del evento «creado» se arma antes de la transacción: `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): mensaje_creado = gettext("Experimento creado desde la galería con %(anuncios)s anuncio(s) en %(paises)s país(es)", anuncios=len(finales), paises=len(paises_exp))` (`import idiomas`, `from flask_babel import gettext` si faltan); los `raise ValueError("…")` de `experimentos.py` y `derivaciones.py` → `gettext`.
 - `organico.publicar` / `interrumpir`: sus textos guardados por `gettext` (corren en el worker o en un hook ya envuelto por el worker).
+- `lanzador._promoted_object_para`: `import idiomas` y `detalle = idiomas.traducir((px or {}).get("detalle") or "")` antes de armar el `ValueError` con `gettext` (desde la Task 5 el `detalle` es el msgid en español; en el worker sale en el idioma del proyecto).
 
 - [ ] **Step 4: I2 — `acciones.ejecutar`**
 
@@ -1733,11 +2143,12 @@ EOF
 
 **Files:**
 - Create: `tests/test_i18n_app_entera.py`
-- Modify: `idiomas.py` (docstring), `CLAUDE.md` (párrafos **Idioma** y **Final edition**), `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md` (nota en §B5)
+- Modify: `idiomas.py` (docstring), `CLAUDE.md` (párrafos **Idioma** y **Final edition**), `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md` (notas en §B5, en el punto «Final edition» de §Pruebas y en la fase 6 de «Fases»)
+- Modify tests: `tests/test_rutas_final_edition.py`, `tests/test_fe_producir.py` (la decisión B fijada en un test)
 
 **Interfaces:**
 - Consumes: todo lo anterior; `tests/test_i18n_fugas.py::app_i18n`, `html_de`; `tests/i18n_util.espanol_visible`.
-- Produces: la prueba de que, con los valores de producción, una persona SIN idioma guardado ve toda la app en inglés; la documentación del cierre.
+- Produces: la prueba de que, con los valores de producción, una persona SIN idioma guardado ve toda la app en inglés; un test que fija la decisión B; la documentación del cierre con TODAS las excepciones en español a propósito.
 
 - [ ] **Step 1: La barrida (debe pasar; lo que liste es una fuga de una tarea anterior y se arregla aquí, en su plantilla o su Python)**
 
@@ -1796,17 +2207,62 @@ def test_paginas_publicas_en_ingles_sin_cookie(produccion, url):
     assert not fugas, (url, fugas[:15])
 ```
 
-Run: `venv/bin/python3 -m pytest tests/test_i18n_app_entera.py -q` → PASS. Si algo falla, la fuga se arregla en su origen (y se nombra en el commit).
+Al final de `tests/test_rutas_final_edition.py`, el test que reemplaza el punto «Final edition» de §Pruebas del spec:
+
+```python
+def test_decision_b_un_proyecto_en_ingles_produce_co_en_espanol(base_temporal, monkeypatch):
+    """Decisión B (Daniel, 2026-09-28; reemplaza §B5 y el «Final edition» de
+    §Pruebas del spec): en un proyecto en inglés el destino CO sigue siendo
+    `es_CO` — la final se localiza en español con precio en COP — y la clave
+    queda `<cf_id>__es_CO`."""
+    import creative_flow as cf
+    import dashboard
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    base_en = dict(GUION_BASE, idioma="en", pais="US")
+    item = _item_video_listo(guion_base=base_en)
+    html = _entorno_plantilla().get_template("_final_detalle_respuesta.html").render(
+        **_contexto_minimo([item]), item=item, f=None, idioma_proyecto="en")
+    assert 'name="destinos" value="es_CO"' in html
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, base_en)
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    _cliente_admin(dashboard).post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={
+        "destinos": ["es_CO"], "voz": "Rachel", "estilo_musica": "energetico", "precio_es_CO": "89900"})
+    (t,) = llamadas
+    assert t["job_id"] == f"acme__{cf_id}__es_CO__final"
+    assert (t["payload"]["idioma"], t["payload"]["pais"]) == ("es", "CO")
+    assert t["payload"]["opciones"]["precios"] == {"es_CO": 89900.0}
+    assert cf.final_por_legado("acme", f"{cf_id}__es_CO")["estado"] == "generando"
+```
+
+y al final de `tests/test_fe_producir.py`, la mitad del worker (con el `entorno` de siempre, que reemplaza `localizar_guion`):
+
+```python
+def test_decision_b_la_final_co_de_un_proyecto_en_ingles_se_localiza_en_espanol(entorno, monkeypatch):
+    import creative_flow as cf
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    cf.guardar_guion_base("acme", entorno["cf_id"], dict(GUION_BASE, idioma="en", pais="US"))
+    final_id, _ = final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"precios": {"es_CO": 89900}})
+    assert final_id.endswith("__es_CO")
+    assert entorno["localizar"][:2] == ("es", "CO")
+```
+
+(Los dos pasan desde el principio: fijan lo que ya hace el código para que nadie lo cambie siguiendo el §B5 viejo. `GUION_BASE` es el de cada archivo de tests.)
+
+Run: `venv/bin/python3 -m pytest tests/test_i18n_app_entera.py tests/test_rutas_final_edition.py tests/test_fe_producir.py -q -k "entero or admin or publicas or decision_b"` → PASS. Si algo falla, la fuga se arregla en su origen (y se nombra en el commit).
 
 - [ ] **Step 2: Documentación del cierre**
 
-- `idiomas.py`, docstring: la frase «aunque varias pantallas (Sprints, Nicho, Referentes, Final edition/editor, admin, el mapa del código) sigan solo en español hasta que cierren las fases 5-6» pasa a «Desde el cierre de la fase 6 (2026-09) toda la app pasa por el catálogo; solo el contenido del mapa del código, los textos de la doctrina y los mensajes de contrato de `final_edition/documento.validar` quedan en español a propósito».
+- `idiomas.py`, docstring: la frase «aunque varias pantallas (Sprints, Nicho, Referentes, Final edition/editor, admin, el mapa del código) sigan solo en español hasta que cierren las fases 5-6» pasa a «Desde el cierre de la fase 6 (2026-09) toda la app pasa por el catálogo. Quedan en español a propósito: el contenido del mapa del código y los textos de la doctrina (documentación interna), los mensajes de contrato de `final_edition/documento.validar`, los prompts para los modelos de video e imagen, y las 9 plantillas del flujo viejo «Nueva idea» (excluidas hasta que Daniel decida qué pasa con ese flujo)».
 - `CLAUDE.md`, párrafo **Idioma**: la oración «Sprints, Nicho, Referentes, Final edition/editor, las páginas de admin y el mapa del código siguen solo en español hasta que cierren las fases 5-6.» se reemplaza por:
 
 ```markdown
 Desde la fase 6 (2026-09) toda la app pasa por el catálogo (excepciones a propósito: el contenido de
-`mapa_codigo.html` y de la doctrina, documentación interna en español, y los mensajes de contrato de
-`final_edition/documento.validar`). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
+`mapa_codigo.html` y de la doctrina, documentación interna en español; los mensajes de contrato de
+`final_edition/documento.validar`; los prompts para los modelos de video e imagen; y las 9 plantillas del flujo
+viejo «Nueva idea», en `EXCLUIDAS` hasta que Daniel decida qué pasa con ese flujo). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
 del spec): cada final sale en el idioma de su país destino (`<idioma>_<PAIS>`); el guion base, que no es por destino,
 en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. El editor no es Jinja: sus textos viven en `static/editor/textos.js` (`ES`,
 la fuente) y la ruta `editor.ver` manda los traducidos (`final_edition/textos_editor.py`, mismas claves); todo
@@ -1817,20 +2273,21 @@ los valores de producción).
 ```
 
 - `CLAUDE.md`, párrafo **Final edition**: después de «…per idioma/país (`fe_preparar` writes one guion base with Anthropic; …)», agregar «— the base guion is written in the language picked in «Idioma base», which defaults to the project's language (`idiomas.de_proyecto`), and each destino localizes it to its country's language (decisión B, 2026-09-28)».
-- Spec `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md`, al principio de «### B5. Los anuncios: siempre en el idioma del proyecto», una nota: «> **Reemplazado para Final edition (decisión B de Daniel, 2026-09-28):** las finales salen en el idioma de cada país destino, como antes; el guion base, en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. Nicho, Crear, Sprints y orgánico siguen como dice esta sección (fases 3-5).».
+- Spec `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md`, al principio de «### B5. Los anuncios: siempre en el idioma del proyecto», una nota: «> **Reemplazado para Final edition (decisión B de Daniel, 2026-09-28):** las finales salen en el idioma de cada país destino, como antes; el guion base, en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. Nicho, Crear, Sprints y orgánico siguen como dice esta sección (fases 3-5).». Y la misma nota, en una línea, en dos sitios más que repiten la regla vieja: en §Pruebas, al final del punto «**Final edition**» («> Reemplazado por la decisión B: un proyecto en `en` que produce para CO crea `<cf_id>__es_CO` y localiza en español con precio en COP — lo fija `tests/test_rutas_final_edition.py::test_decision_b_un_proyecto_en_ingles_produce_co_en_espanol`.»), y en «Fases», punto 6, después de «final edition por país (§B5)» («— por país y en el idioma de cada país: decisión B, 2026-09-28»).
 
 - [ ] **Step 3: Suite completa y commit**
 
 Run: `venv/bin/python3 -m pytest -q` → PASS; `venv/bin/python3 catalogo_i18n.py pendientes` → sin salida.
 
 ```bash
-git add tests/test_i18n_app_entera.py idiomas.py CLAUDE.md docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md
+git add tests/test_i18n_app_entera.py tests/test_rutas_final_edition.py tests/test_fe_producir.py idiomas.py CLAUDE.md docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md
 git commit -m "$(cat <<'EOF'
 Idioma (8/8 de la fase 6): barrida de toda la app en inglés y cierre de la fase
 
 Con los valores de producción, una persona sin idioma guardado ve las
-pestañas, las páginas públicas y las de admin en inglés. CLAUDE.md y el
-spec anotan la decisión B (finales por país) y las guardias nuevas.
+pestañas, las páginas públicas y las de admin en inglés; un test fija la
+decisión B (finales por país). CLAUDE.md y el spec anotan la decisión B,
+las guardias nuevas y todas las excepciones en español a propósito.
 
 Co-Authored-By: <model>
 EOF
@@ -1847,7 +2304,7 @@ Pedir permiso antes, con el costo: «Preparar guion con IA» en un proyecto de p
 
 - [ ] **Step 6: Despliegue (solo con permiso de Daniel)**
 
-Sin migración nueva (la última es la 0022 de la fase 5: `ls migrations/versions | tail -1`). Mismas reglas de despliegue que la fase 5 (`.superpowers/sdd/2026-09-26-fase5-sprints-nicho-referentes/progress.md`: guarda de cola vacía en un ssh propio, el resto encadenado con `&&`, nunca `;` en el remoto, coordinar con otras sesiones vivas antes de tocar el VPS). En el VPS: `git pull`; reiniciar **los dos servicios** (cambiaron `worker.py`, `cola.py`, `tareas/*`, `final_edition/*`, `acciones.py`, `organico.py`…). Los módulos del editor se sirven con `Cache-Control: no-cache` (`dashboard.py`, `/static/editor/`): no hace falta vaciar caché. Comprobar en producción: un cliente sin idioma ve Final edition, el editor y Cambiar producto en inglés; un usuario en español los ve igual que antes; `/admin/meta` y `/admin/referentes` en el idioma del admin.
+Sin migración nueva de esta fase (la última en el repo es la 0024 de Triple Whale, fusionada el 2026-09-28 y ya en producción; la 0022 es la de la fase 5: `ls migrations/versions | tail -1` debe dar `0024_triple_whale_productos.py` y `alembic current` en el VPS `0024 (head)`). Mismas reglas de despliegue que la fase 5 (`.superpowers/sdd/2026-09-26-fase5-sprints-nicho-referentes/progress.md`: guarda de cola vacía en un ssh propio, el resto encadenado con `&&`, nunca `;` en el remoto, coordinar con otras sesiones vivas antes de tocar el VPS). En el VPS: `git pull`; reiniciar **los dos servicios** (cambiaron `worker.py`, `cola.py`, `tareas/*`, `final_edition/*`, `acciones.py`, `organico.py`…). Los módulos del editor se sirven con `Cache-Control: no-cache` (`dashboard.py`, `/static/editor/`): no hace falta vaciar caché. Comprobar en producción: un cliente sin idioma ve Final edition, el editor y Cambiar producto en inglés; un usuario en español los ve igual que antes; `/admin/meta` y `/admin/referentes` en el idioma del admin.
 
 ---
 
@@ -1865,6 +2322,7 @@ Sin migración nueva (la última es la 0022 de la fase 5: `ls migrations/version
 | §B10 glosario | Task 1 (términos de Final edition y del editor; «Destino» = Market) |
 | Fase 6: final edition, editor, admin, mapa, Cambiar producto, «Nueva idea», `_meta_*`/`meta_elegir`, barrido del worker | Tasks 1-3, 2, 5, 5, 4, 6, (fase 2)/5, 7 |
 | §Pruebas: guardias, fugas, visual, prueba real con gasto | Tasks 1-7 (tests por tarea), 8 (barrida con valores de producción, visual, gasto real) |
+| §Pruebas «Final edition» (regla vieja) | Task 8: `test_decision_b_…` en `tests/test_rutas_final_edition.py` y `tests/test_fe_producir.py`, y la nota en el spec |
 | Restos de las fases 2-5 | I2 y `MENSAJE_INTERRUMPIDA` (Task 7), `detalle` de gastos y de progreso (Tasks 3, 4, 6, 7), «cobro(s)» y «anuncios» (Task 4), detalle del Pixel y aviso de fallo de familias (Task 5), `_requiere_correo_verificado`/Marca/Catálogo (Task 4), encabezados de CSV (Tasks 4, 5) |
 
 Nombres que cruzan tareas (verificados): `etiqueta_fe` (Task 1, `_final_macros.html`) y `tipos.ETIQUETAS_CAPA` (Task 3) comparten msgid; `tests/test_i18n_mensajes.py::RUTAS/WORKER` (Task 2) crecen en las Tasks 3, 4, 5, 6, 7; `tests/test_i18n_guardado.py` nace en la Task 6 y crece en la 7; `ARCHIVOS_FASE6` nace en la Task 1 y crece en la 4; `tests/i18n_util.MARCAS_CODIGO`/`espanol_en_codigo` (Task 2) los usan las dos guardias de código.

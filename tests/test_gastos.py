@@ -67,6 +67,24 @@ def test_resumen_mes_por_tipo_ignora_otro_mes(base_temporal):
     assert r["total"] == 0.77 and r["n"] == 3
 
 
+def test_total_y_por_mes_desde_el_inicio(base_temporal):
+    """El Tablero muestra el total desde el inicio y el desglose mes a mes:
+    todo lo cobrado hasta `ahora`, de este proyecto, agrupado por mes."""
+    import gastos
+    gastos.registrar("acme", "video", 0.5, "video:a", creado_en="2026-09-03T10:00:00")
+    gastos.registrar("acme", "guion", 0.02, "guion:a", creado_en="2026-09-11T10:00:00")
+    gastos.registrar("acme", "video", 9.0, "video:viejo", creado_en="2026-07-30T10:00:00")
+    gastos.registrar("acme", "video", 1.25, "video:agosto", creado_en="2026-08-01T00:00:00")
+    gastos.registrar("acme", "video", 9.0, "video:futuro", creado_en="2026-09-20T10:00:00")
+    gastos.registrar("otro", "video", 9.0, "video:a", creado_en="2026-09-10T10:00:00")
+    ahora = "2026-09-18T12:00:00"
+    assert gastos.resumen_total("acme", ahora_iso=ahora) == {"total": 10.77, "n": 4}
+    assert gastos.por_mes("acme", ahora_iso=ahora) == {
+        "2026-07": {"usd": 9.0, "n": 1}, "2026-08": {"usd": 1.25, "n": 1}, "2026-09": {"usd": 0.52, "n": 2}}
+    assert gastos.resumen_total("nadie", ahora_iso=ahora) == {"total": 0.0, "n": 0}
+    assert gastos.por_mes("nadie", ahora_iso=ahora) == {}
+
+
 def test_historial_mas_nuevo_primero_con_limite_y_desde(base_temporal):
     import gastos
     gastos.registrar("acme", "video", 1, "video:1", creado_en="2026-09-01T10:00:00")
@@ -148,13 +166,14 @@ def test_estimar_sin_tarifa_no_inventa(monkeypatch):
 
 def test_estimar_tarifas_fijas_y_final_por_pais():
     import gastos
-    assert gastos.estimar("guion") == {"usd": 0.02, "texto": "US$ 0,02 aprox.", "detalle": "una llamada a Claude"}
+    assert gastos.estimar("guion") == {"usd": 0.13, "texto": "US$ 0,13 aprox.",
+                                       "detalle": "hasta dos llamadas a Claude y la transcripción de la referencia"}
     assert gastos.estimar("regla_producto")["usd"] == 0.01
     assert gastos.estimar("caption_organico")["usd"] == 0.01
-    assert gastos.estimar("final")["usd"] == 0.10
-    assert gastos.estimar("final", paises=3)["usd"] == 0.30
-    assert gastos.estimar("reedicion", paises=2)["usd"] == 0.20
-    assert gastos.TARIFAS["final"] == 0.10 and "final_pais_extra" not in gastos.TARIFAS
+    assert gastos.estimar("final")["usd"] == 0.20
+    assert gastos.estimar("final", paises=3)["usd"] == pytest.approx(0.60)
+    assert gastos.estimar("reedicion", paises=2)["usd"] == 0.40
+    assert gastos.TARIFAS["final"] == 0.20 and "final_pais_extra" not in gastos.TARIFAS
 
 
 def test_estimar_swap_por_proveedor():
@@ -263,4 +282,129 @@ def test_estimar_proponer_ideas_por_numero_de_ideas():
     tres = gastos.estimar("proponer_ideas", n=3)
     assert tres["usd"] == round(gastos.IDEAS_BASE_USD + 3 * gastos.IDEAS_POR_IDEA_USD, 4)
     assert "aprox" in tres["texto"] and tres["detalle"] == "3 idea(s) con Claude"
+
+
+def test_estimar_transcripcion_usa_costo_whisper_del_editor():
+    """Editor capa 5a, Task 5: la misma fórmula del gasto real (D6)."""
+    import dashboard
+    import gastos
+    from providers import fal_audio
+    assert "transcripcion" in gastos.TIPOS
+    assert dashboard.NOMBRES_TIPO_GASTO["transcripcion"] == "Subtítulos (transcripción)"
+    e = gastos.estimar("transcripcion", segundos=90)
+    assert e["usd"] == fal_audio.costo_whisper(90000) == 0.003
+    assert e["texto"] == "US$ <0,01 aprox." and e["detalle"] == "90 s de audio con Whisper"
+    assert gastos.estimar("transcripcion")["usd"] == 0.0        # sin segundos: nada que cobrar
     assert gastos.estimar("proponer_ideas", n=0)["usd"] == gastos.estimar("proponer_ideas", n=1)["usd"]
+
+
+def test_estimar_voz_editor_suma_locucion_y_sus_subtitulos():
+    """Editor capa 5a, Task 6 (D9): voz con IA + Whisper sobre ella, un solo
+    botón; ceil(N / 12) segundos (12 caracteres por segundo)."""
+    import gastos
+    from providers import fal_audio
+    e = gastos.estimar("voz_editor", caracteres=120)
+    assert e["usd"] == round(0.012 + fal_audio.costo_whisper(10000), 4)
+    assert e["detalle"] == "120 caracteres con ElevenLabs y sus subtítulos"
+    # sin caracteres nunca queda en 0: al menos 1 (igual que _estimar_locucion)
+    assert gastos.estimar("voz_editor")["usd"] == round(fal_audio.COSTO_USD_POR_CARACTER + fal_audio.costo_whisper(1000), 4)
+
+
+def test_estimar_transcripcion_sin_duracion_no_tiene_precio():
+    """Revisión final de la capa 5a (m9): un archivo cuya duración no se
+    conoce nunca da un precio gratis: «precio no disponible»."""
+    import gastos
+    e = gastos.estimar("transcripcion", segundos=30, sin_duracion=True)
+    assert e["usd"] is None and e["texto"] == "precio no disponible"
+
+
+def test_estimar_voz_editor_solo_subtitulos_cobra_solo_whisper():
+    """Revisión final de la capa 5a (m7): la voz ya existe (mismo hash) pero
+    sin palabras — solo se paga Whisper sobre ella, con su duración real (o
+    la estimada por los caracteres si no se conoce)."""
+    import gastos
+    from providers import fal_audio
+    e = gastos.estimar("voz_editor", caracteres=120, solo_subtitulos=True, duracion_ms=42000)
+    assert e["usd"] == fal_audio.costo_whisper(42000)
+    sin_dur = gastos.estimar("voz_editor", caracteres=120, solo_subtitulos=True)
+    assert sin_dur["usd"] == fal_audio.costo_whisper(10000)
+
+
+@pytest.mark.parametrize("estilo,extra", [("", 0), ("mat:3", 0), ("calmado", 0.02)])
+def test_estimar_video_suma_solo_musica_generada(monkeypatch, estilo, extra):
+    import gastos
+    from providers import flowplus_modelos
+    monkeypatch.setattr(flowplus_modelos, "estimate_video", lambda *a, **k: {"usd": 0.8})
+    assert gastos.estimar("video", modelo="wan3", duracion=8, musica_estilo=estilo)["usd"] == pytest.approx(0.8 + extra)
+
+
+def test_estimado_clon_incluye_vista_previa_y_estreno(monkeypatch):
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio.fal_client, "llamar", lambda *a, **k: {"custom_voice_id": "v", "audio": {"url": "https://x/a.mp3"}})
+    frase = voces_propias.frase_muestra("Ana", "es")
+    cobro = fal_audio.clonar_voz_minimax("https://x/g.wav", frase)["costo_usd"]
+    assert gastos.estimar("voz_clonada", nombre="Ana", idioma="es")["usd"] == pytest.approx(
+        cobro + len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER)
+
+
+def test_estimado_diseno_incluye_diseno_vista_previa_y_estreno():
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    frase = voces_propias.frase_muestra("Ana", "es")
+    esperado = round(round(fal_audio.COSTO_DISENAR_VOZ
+                           + len(frase) * fal_audio.COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
+                     + round(len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER, 4), 4)
+    assert gastos.estimar("voz_disenada", nombre="Ana", idioma="es")["usd"] == pytest.approx(esperado)
+
+
+@pytest.mark.parametrize('idioma,n', [('es',2),('en',26),('sv',23)])
+def test_pnd126_estimado_iguala_redondeos_del_cobro(monkeypatch, idioma, n):
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio.fal_client,'llamar',lambda *a,**kw:{'custom_voice_id':'v','audio':{'url':'https://r2/a.mp3'}})
+    frase = voces_propias.frase_muestra('x'*n,idioma)
+    diseno = fal_audio.disenar_voz_minimax('Descripción',frase)['costo_usd']
+    estreno = fal_audio.tts_minimax(frase,'v',idioma)['costo_usd']
+    assert gastos.estimar('voz_disenada',nombre='x'*n,idioma=idioma)['usd'] == round(diseno+estreno,4)
+
+
+@pytest.mark.parametrize('usd,esperado', [(.8, .82), (.84, .84)])
+def test_conservar_mayor_en_carrera_integrity_error(base_temporal, monkeypatch, usd, esperado):
+    import db
+    import gastos
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+    gid = gastos.registrar('acme', 'video', .82, 'video:cf:t31', extra={'usd_musica': .02})
+    conectar = db.conectar
+    eventos = []
+
+    class Carrera:
+        def __init__(self, con):
+            self.con = con
+        def __getattr__(self, nombre):
+            return getattr(self.con, nombre)
+        def execute(self, sentencia, *a, **kw):
+            if isinstance(sentencia, sa.sql.Select) and not eventos:
+                eventos.append('select sin fila')
+                # Otro proceso ya insertó, pero el primer SELECT aún no lo vio.
+                return SimpleNamespace(first=lambda: None)
+            try:
+                return self.con.execute(sentencia, *a, **kw)
+            except sa.exc.IntegrityError:
+                eventos.append('IntegrityError real de SQLite')
+                raise
+    @contextmanager
+    def conexion():
+        with conectar() as con:
+            yield Carrera(con)
+    monkeypatch.setattr(db, 'conectar', conexion)
+    assert gastos.registrar('acme', 'video', usd, 'video:cf:t31', conservar_mayor=True,
+                             extra={'usd_musica': .04}) == gid
+    assert eventos == ['select sin fila', 'IntegrityError real de SQLite']
+    fila, = gastos.historial('acme')
+    assert fila['usd'] == esperado
+    assert fila['extra']['usd_musica'] == (.02 if usd < .82 else .04)

@@ -9,6 +9,7 @@ import sqlalchemy as sa
 import db
 import triple_whale_tiendas
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
+from tests.test_rutas_experimentos import _resultados
 from tests.test_triple_whale_analisis import respuesta
 from triple_whale import analisis, datos
 
@@ -86,6 +87,22 @@ def test_panel_con_datos_muestra_tienda_veredictos_diagnostico_e_ia(app):  # noq
     solo_tt = app["c"].get("/cliente/acme/triple-whale/panel?canal=tiktok-ads&dias=7").data.decode()
     assert "Anuncio t1" in solo_tt and "Anuncio g1" not in solo_tt and "Tu tienda" not in solo_tt
     assert '<option value="7" selected>' in solo_tt
+
+
+def test_el_anuncio_hecho_en_creatv_enlaza_a_su_experimento_por_el_hash(app, base_temporal):  # noqa: F811
+    """«Hecho en Creatv · …» lleva a `#experimentos?exp=<id>` (el filtro va en el hash y no recarga la página, E2);
+    la forma vieja `?exp=<id>#experimentos` ya no se pinta."""
+    import experimentos as ex
+    from tests.test_experimentos_db import PAISES, _pieza
+    _conectar()
+    _sembrar()
+    eid = ex.crear("acme", "Cojín otoño", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "USD")
+    ep = ex.agregar_pieza("acme", eid, _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None,
+                                              legado="cf_tw"), "CO")
+    ex.actualizar_pieza("acme", ep, meta_ad_id="g1")                    # el anuncio g1 de Triple Whale lo lanzó Creatv
+    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    assert f'<a href="#experimentos?exp={eid}">Hecho en Creatv · Cojín otoño</a>' in html
+    assert f"?exp={eid}#experimentos" not in html
 
 
 def test_panel_recien_conectado_sin_copia(app, monkeypatch):  # noqa: F811
@@ -262,11 +279,16 @@ def test_pausar_y_activar_van_por_el_lanzador(app, monkeypatch):  # noqa: F811
 
 
 def test_tablero_muestra_la_tienda_segun_triple_whale(app):  # noqa: F811
-    html = app["c"].get("/cliente/acme").data.decode()
-    assert "Tu tienda según Triple Whale" not in html
+    # El Tablero se fundió en Experimentos (E2): la tienda según Triple Whale sale en el historial (sección 09) del
+    # fragmento de resultados, y en la nota de «Resumen del periodo» (01) con ingresos y MER.
+    assert "Tu tienda según Triple Whale" not in _resultados(app["c"])
     _conectar()
     _sembrar()
-    html = app["c"].get("/cliente/acme").data.decode()
-    ini = html.index('id="tab-tablero"')
-    tablero = html[ini:html.index('id="tab-triplewhale"')]
-    assert "Tu tienda según Triple Whale" in tablero and "MER" in tablero and 'data-ir-tab="triplewhale"' in tablero
+    html = _resultados(app["c"])
+    historial = html[html.index("Historial mes a mes"):]
+    assert "Tu tienda según Triple Whale" in historial and "MER" in historial and 'data-ir-tab="triplewhale"' in historial
+    resumen = html[html.index('aria-labelledby="cr-s01"'):html.index('aria-labelledby="cr-s02"')]
+    assert "Tu tienda según Triple Whale" in resumen and "MER" in resumen
+    # Y la página no trae ni panel ni botón «tablero»: abre en Experimentos.
+    pagina = app["c"].get("/cliente/acme").data.decode()
+    assert 'id="tab-tablero"' not in pagina and "Tu tienda según Triple Whale" not in pagina

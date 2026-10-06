@@ -56,8 +56,9 @@ from tareas import registrar
 
 log = logging.getLogger("creatv.tareas.tiendas")
 
-ETAPAS_IMPORTAR = [("Leyendo", 20), ("Guardando productos", 30), ("Creando activos", 50)]
-ETAPAS_VINCULAR = [("Bajando fotos", 60), ("Creando el activo", 40)]
+ETAPAS_IMPORTAR = [(idiomas.N_("Leyendo"), 20), (idiomas.N_("Guardando productos"), 30),
+                   (idiomas.N_("Creando activos"), 50)]
+ETAPAS_VINCULAR = [(idiomas.N_("Bajando fotos"), 60), (idiomas.N_("Creando el activo"), 40)]
 CADA_SYNC_PRODUCTOS = 21600   # 6 h
 CADA_SYNC_PEDIDOS = 7200      # 2 h
 DIAS_PEDIDOS_INICIAL = 30
@@ -123,7 +124,7 @@ QUE_SINCRONIZA = {"productos": idiomas.N_("productos"), "pedidos": idiomas.N_("p
 def _conector(cliente, tienda, cargar_descripciones=False):
     creds = tiendas.credenciales(cliente, tienda["id"])
     if not creds:
-        raise ErrorConector("La tienda no tiene credenciales guardadas. Vuelve a conectarla.")
+        raise ErrorConector(gettext("La tienda no tiene credenciales guardadas. Vuelve a conectarla."))
     cls = conectores.por_tipo(tienda["tipo"])
     if tienda["tipo"] == "meli":
         # Solo MELI cobra la descripción aparte (una llamada por ítem).
@@ -159,7 +160,18 @@ def _marcar_rota(cliente, tienda, tarea, que, error):
 
 
 def _nombre(tienda):
-    return tienda.get("nombre") or tienda.get("dominio") or f"tienda {tienda['id']}"
+    return tienda.get("nombre") or tienda.get("dominio") or gettext("tienda %(id)s", id=tienda["id"])
+
+
+def catalogo_desde_tienda_publica(cliente, tienda):
+    """True si `tienda` es la Shopify por Admin API y el proyecto también
+    tiene la tienda sin llaves (`shopify_publico`): el catálogo llega de esa
+    (trae los colores con su foto; el conector de la Admin API no) y esta
+    solo trae pedidos y atribución (ruling final-5 del catálogo por colores).
+    Si las dos sincronizaran productos, la de la Admin API congelaría los
+    colores y cada una archivaría lo que solo ve la otra (misma `fuente`)."""
+    return tienda.get("tipo") == "shopify" and any(
+        t["tipo"] == "shopify_publico" for t in tiendas.listar(cliente))
 
 
 # --- sync productos ----------------------------------------------------------
@@ -167,22 +179,32 @@ def _nombre(tienda):
 @registrar("tienda_sync_productos")
 def tienda_sync_productos(tarea):
     """Baja el catálogo de la tienda, lo guarda/actualiza (importador),
-    liga activos, archiva lo que ya no está y marca `ultima_sync_productos`."""
+    liga activos, archiva lo que ya no está y marca `ultima_sync_productos`.
+    La Admin API de Shopify con una tienda sin llaves en el proyecto no toca
+    productos (`catalogo_desde_tienda_publica`): solo marca la hora."""
     p = tarea["payload"]
     cliente, tid = p["cliente"], p["tienda_id"]
     job_id = tarea.get("job_id") or job_id_sync_productos(cliente, tid)
     tienda = tiendas.obtener(cliente, tid)
     if tienda is None:
         return gettext("Esa tienda no existe.")
+    if catalogo_desde_tienda_publica(cliente, tienda):
+        tiendas.actualizar(cliente, tid, estado="conectada", error=None, ultima_sync_productos=db.ahora())
+        return gettext("El catálogo llega desde la conexión sin llaves; esta conexión trae los pedidos.")
     try:
+        # Lee la fuente del conector: si el conector tiene un atributo `fuente`,
+        # úsalo; si no, usa el tipo de tienda. Esto permite conectores como
+        # `shopify_publico` que guardan productos con fuente `shopify`.
+        cls = conectores.por_tipo(tienda["tipo"])
+        fuente = getattr(cls, "fuente", None) or tienda["tipo"]
         # Primera importación de esta fuente: vale la pena pedir descripciones.
-        primera = not any(pr["fuente"] == tienda["tipo"]
+        primera = not any(pr["fuente"] == fuente
                           for pr in tiendas.productos(cliente, incluir_archivados=True))
         con = _conector(cliente, tienda, cargar_descripciones=primera)
     except _ERRORES_TIENDA as error:
         mensaje = _marcar_rota(cliente, tienda, tarea, "productos", error)
         raise ErrorConector(mensaje) from error
-    trabajos.reportar(job_id, etapa="Leyendo", detalle=_nombre(tienda))
+    trabajos.reportar(job_id, etapa=idiomas.N_("Leyendo"), detalle=_nombre(tienda))
     try:
         lista = con.listar_productos()
     except ErrorConector as error:
@@ -196,13 +218,18 @@ def tienda_sync_productos(tarea):
     _guardar_credenciales(cliente, tienda, con)
 
     resumen = importador.importar_lista(
-        cliente, tienda["tipo"], lista, max_activos=MAX_ACTIVOS_SYNC,
+        cliente, fuente, lista, max_activos=MAX_ACTIVOS_SYNC,
         on_progreso=lambda etapa, detalle: trabajos.reportar(job_id, etapa=etapa, detalle=detalle))
-    archivados = tiendas.archivar_faltantes(cliente, tienda["tipo"], [pr["fuente_id"] for pr in lista])
+    archivados = tiendas.archivar_faltantes(cliente, fuente, [pr["fuente_id"] for pr in lista])
     tiendas.actualizar(cliente, tid, estado="conectada", error=None, ultima_sync_productos=db.ahora())
     texto = importador.resumen_texto(resumen)
     if archivados:
         texto += " " + gettext("%(n)s archivado(s) por no estar ya en la tienda.", n=archivados)
+    # Si el conector tiene omitidos, añádelos al resumen
+    omitidos = getattr(con, "omitidos", [])
+    if omitidos:
+        texto += " " + gettext("%(n)s omitido(s) por no ser productos: %(lista)s",
+                              n=len(omitidos), lista=", ".join(omitidos[:5]))
     if resumen.get("pendientes"):
         _encolar_continuacion("tienda_sync_productos", {"cliente": cliente, "tienda_id": tid}, cliente, job_id, 120)
     return texto
@@ -323,10 +350,11 @@ def producto_vincular(tarea):
     prod = tiendas.producto(cliente, pid)
     if prod is None:
         raise ErrorConector(gettext("Ese producto ya no existe."))
-    trabajos.reportar(job_id, etapa="Bajando fotos", detalle=prod.get("nombre") or f"producto {pid}")
+    trabajos.reportar(job_id, etapa=idiomas.N_("Bajando fotos"),
+                      detalle=prod.get("nombre") or gettext("producto %(id)s", id=pid))
     errores = []
     activo_id = importador.vincular_activo(cliente, pid, forzar_fotos=True, errores=errores)
-    trabajos.reportar(job_id, etapa="Creando el activo")
+    trabajos.reportar(job_id, etapa=idiomas.N_("Creando el activo"))
     if not activo_id:
         raise ErrorConector(gettext("No pude crear el activo: %(detalle)s",
                                     detalle=" ".join(errores) or gettext("el producto no tiene fotos descargables.")))
@@ -396,4 +424,4 @@ __all__ = ["ETAPAS_IMPORTAR", "ETAPAS_VINCULAR", "CADA_SYNC_PRODUCTOS", "CADA_SY
            "tienda_sync_productos", "tienda_sync_pedidos", "catalogo_importar", "producto_vincular",
            "tienda_sync_productos_todas", "tienda_sync_pedidos_todas",
            "job_id_sync_productos", "job_id_sync_pedidos", "job_id_importar_archivo", "job_id_importar_url",
-           "job_id_vincular", "job_id_continuacion"]
+           "job_id_vincular", "job_id_continuacion", "catalogo_desde_tienda_publica"]

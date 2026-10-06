@@ -70,6 +70,39 @@ def test_arrancar_400_lanza_error_fuente_con_mensaje():
     assert "startUrls" in exc.value.usuario
 
 
+def test_arrancar_con_memoria_manda_el_parametro():
+    """Fix 3: `memoria_mb`, si se da, viaja como `memory` en el POST (junglee en el plan FREE lo
+    necesita para que quepan varias corridas a la vez dentro del límite de RAM de la cuenta)."""
+    sesion = _Sesion([_Resp({"data": {"id": "run1", "defaultDatasetId": "ds1", "status": "READY"}}, status=201)])
+    apify_api.arrancar(sesion, "tok", "apify~actor", {"a": 1}, 50, 1.23, memoria_mb=2048)
+    kw = sesion.llamadas[0][2]
+    assert kw["params"] == {"timeout": apify_api.MAX_ESPERA_S, "maxItems": 50, "maxTotalChargeUsd": 1.23, "memory": 2048}
+
+
+def test_arrancar_sin_memoria_no_manda_el_parametro():
+    """Sin `memoria_mb` (el default de siempre) no se manda `memory`: ningún actor que ya
+    funcionaba cambia de comportamiento."""
+    sesion = _Sesion([_Resp({"data": {"id": "run1", "defaultDatasetId": "ds1", "status": "READY"}}, status=201)])
+    apify_api.arrancar(sesion, "tok", "apify~actor", {"a": 1}, 50, 1.23)
+    assert "memory" not in sesion.llamadas[0][2]["params"]
+
+
+def test_arrancar_402_con_cuerpo_da_el_mensaje_de_apify():
+    """Fix 3: un 402 (la cuenta llegó a un límite de su plan -- uso mensual, memoria, corridas
+    simultáneas) muestra el mensaje de Apify, nunca el del token."""
+    sesion = _Sesion([_Resp({"error": {"message": "Monthly usage hard limit exceeded"}}, status=402)])
+    with pytest.raises(ErrorFuente) as exc:
+        apify_api.arrancar(sesion, "tok", "apify~actor", {}, 10, 0.1)
+    assert exc.value.usuario == "Apify no arrancó la corrida: Monthly usage hard limit exceeded"
+
+
+def test_arrancar_402_sin_cuerpo_da_el_aviso_de_limite_de_plan():
+    sesion = _Sesion([_Resp({}, status=402)])
+    with pytest.raises(ErrorFuente) as exc:
+        apify_api.arrancar(sesion, "tok", "apify~actor", {}, 10, 0.1)
+    assert exc.value.usuario == "Apify no arrancó la corrida: la cuenta llegó a un límite de su plan"
+
+
 def test_arrancar_sin_ids_lanza_error_fuente():
     sesion = _Sesion([_Resp({"data": {"status": "READY"}}, status=201)])
     with pytest.raises(ErrorFuente):

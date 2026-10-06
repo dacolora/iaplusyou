@@ -978,3 +978,72 @@ def test_clasificar_uno_guarda_el_lead_sin_perder_el_extra(tmp_path, monkeypatch
     ok, _, _ = tareas_ref._clasificar_uno("acme", datos.referente("acme", rid))
     r = datos.referente("acme", rid)
     assert ok and r["extra"]["lead"] == "historia" and r["extra"]["origen_barrido"] == 3
+
+
+def test_cobro_apify_queda_antes_de_fallo_al_guardar(base_temporal, monkeypatch):
+    from referentes import datos, fuentes
+    from tareas import referentes as tr
+    import gastos
+    from types import SimpleNamespace
+    bid = datos.crear_barrido("acme", "apify", {}, 1)
+    monkeypatch.setattr(fuentes, "por_tipo", lambda _: SimpleNamespace(traer=lambda *a, **k: iter([
+        ([{"anuncio_id": "1", "imagen_origen": "https://x/a.jpg"}], None, {"costo_real": 0.029})])))
+    monkeypatch.setattr(datos, "guardar_referente", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disco")))
+    with pytest.raises(RuntimeError, match="disco"):
+        tr.ejecutar_barrer({"id": 77, "payload": {"cliente": "acme", "barrido_id": bid,
+                           "consulta": {"fuente": "apify"}, "tope": 1, "fase": "trayendo"}})
+    assert gastos.historial("acme")[0]["usd"] == 0.029
+
+
+@pytest.mark.parametrize("fallar", [False, True])
+def test_gasto_apify_identifica_corrida(base_temporal, monkeypatch, fallar):
+    from referentes import datos, fuentes
+    from referentes.fuentes.base import ErrorFuente
+    from tareas import referentes as tr
+    from types import SimpleNamespace
+    import gastos
+    bid = datos.crear_barrido("acme", "apify", {}, 1)
+    def traer(*a, **k):
+        if fallar:
+            e = ErrorFuente("dataset", costo_real=0.029)
+            e.extra_gasto = {"run_id": "run-8", "dataset_id": "ds-8"}
+            raise e
+        yield [], None, {"costo_real": 0.029, "run_id": "run-8", "dataset_id": "ds-8"}
+    monkeypatch.setattr(fuentes, "por_tipo", lambda _: SimpleNamespace(traer=traer))
+    tarea = {"id": 78, "payload": {"cliente": "acme", "barrido_id": bid,
+             "consulta": {"fuente": "apify"}, "tope": 1, "fase": "trayendo"}}
+    if fallar:
+        with pytest.raises(ErrorFuente):
+            tr.ejecutar_barrer(tarea)
+    else:
+        tr.ejecutar_barrer(tarea)
+    g, = gastos.historial("acme")
+    assert g["proveedor"] == "apify" and g["extra"]["run_id"] == "run-8"
+    assert g["extra"]["dataset_id"] == "ds-8" and g["referencia"].endswith(":t78")
+
+
+def test_imagenes_del_mismo_anuncio_se_guardan_por_proyecto(base_temporal, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tr
+    claves = []
+    monkeypatch.setattr(tr.imagenes, "guardar_en_r2", lambda aid, *a: claves.append(aid) or f"https://r2/{aid}.jpg")
+    monkeypatch.setattr(tr, "_continuar_barrer", lambda *a, **k: None)
+    for cliente in ("acme", "otro"):
+        bid = datos.crear_barrido(cliente, "apify", {}, 1)
+        datos.guardar_referente({"anuncio_id": "igual", "fuente": "apify", "imagen_origen": "https://x/a.jpg"}, cliente=cliente, barrido_id=bid)
+        tr._fase_imagenes_barrer({"id": 9}, {"cliente": cliente}, bid, lambda *a, **k: None)
+    assert len(set(claves)) == 2
+
+
+def test_pnd045_aviso_fuente_llega_al_barrido(tmp_path, monkeypatch):
+    from referentes import datos, fuentes
+    from tareas import referentes as tr
+    from types import SimpleNamespace
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, 'apify', {}, 10)
+    aviso = 'Apify abortó: resultados parciales.'
+    monkeypatch.setattr(fuentes, 'por_tipo', lambda _: SimpleNamespace(traer=lambda *a, **kw: iter([([], None, {'aviso': aviso})])))
+    tr.ejecutar_barrer({'id': 1, 'payload': {'cliente': cliente, 'barrido_id': bid, 'fase': 'trayendo', 'consulta': {'fuente': 'apify'}, 'tope': 10}})
+    assert datos.barrido(bid)['extra'].get('aviso_trayendo') == aviso
+    tr.ejecutar_barrer({'id': 2, 'payload': {'cliente': cliente, 'barrido_id': bid, 'fase': 'clasificando', 'consulta': {'fuente': 'apify'}, 'tope': 10}})
+    assert datos.barrido(bid)['estado'] == 'parcial' and aviso in datos.barrido(bid)['aviso']

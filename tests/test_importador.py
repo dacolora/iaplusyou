@@ -68,7 +68,7 @@ def test_importar_lista_crea_producto_y_activo_con_fotos_y_regla(entorno):
     import tiendas
     entorno["respuestas"]["https://cdn.test/a.jpg"] = _Respuesta(content_type="image/jpeg")
     res = importador.importar_lista("acme", "shopify", [_prod()])
-    assert res == {"nuevos": 1, "actualizados": 0, "activos": 1, "pendientes": 0, "errores": []}
+    assert res == {"nuevos": 1, "actualizados": 0, "activos": 1, "colores": 0, "pendientes": 0, "errores": []}
     prod = tiendas.productos("acme")[0]
     assert prod["activo_catalogo_id"] == "cojin_azul"
     activo = catalogo_productos.encontrar("acme", "cojin_azul", "producto")
@@ -110,7 +110,7 @@ def test_segunda_importacion_no_redescarga_ni_pisa_regla_editada(entorno):
     entorno["descargas"].clear()
     entorno["reglas"].clear()
     res = importador.importar_lista("acme", "shopify", [_prod(nombre="Cojín Azul Marino", descripcion="Nueva desc")])
-    assert res == {"nuevos": 0, "actualizados": 1, "activos": 1, "pendientes": 0, "errores": []}
+    assert res == {"nuevos": 0, "actualizados": 1, "activos": 1, "colores": 0, "pendientes": 0, "errores": []}
     assert entorno["descargas"] == [] and entorno["reglas"] == []
     activo = catalogo_productos.encontrar("acme", "cojin_azul", "producto")
     assert activo["regla_propia"] == "Editada a mano."
@@ -653,3 +653,14 @@ def test_la_regla_se_pide_en_el_idioma_del_proyecto(entorno, monkeypatch):
     entorno["respuestas"]["https://cdn.test/a.jpg"] = _Respuesta(content_type="image/jpeg")
     importador.importar_lista("acme", "shopify", [_prod()])
     assert vistos == ["en"]
+
+
+def test_pnd030_color_sin_fotos_avisa_sin_borrar_fotos_locales(entorno):
+    import importador
+    destino = entorno['tmp'] / 'color'
+    destino.mkdir()
+    (destino / '01.png').write_bytes(PNG)
+    errores = []
+    importador._bajar_a([], str(destino), _prod(), errores, 'color azul')
+    assert errores and 'color azul' in str(errores) and 'sin fotos' in str(errores)
+    assert (destino / '01.png').read_bytes() == PNG

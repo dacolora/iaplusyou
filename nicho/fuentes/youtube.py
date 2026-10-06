@@ -174,7 +174,7 @@ class FuenteYouTube(Fuente):
             return {"ok": False, "detalle": e.usuario}
         except HttpError as e:
             return {"ok": False, "detalle": _error_llave(e).usuario}
-        return {"ok": True, "detalle": "YouTube aceptó la llave."}
+        return {"ok": True, "detalle": gettext("YouTube aceptó la llave.")}
 
     def recolectar(self, params, avanzar=None):
         p = normalizar_params(params)
@@ -206,7 +206,7 @@ class FuenteYouTube(Fuente):
                 pendientes.append(v)
         pendientes = pendientes[:MAX_VIDEOS]
         for n, video in enumerate(pendientes, start=1):
-            avanzar(N_("Leyendo comentarios"), f"video {n} de {len(pendientes)}")
+            avanzar(N_("Leyendo comentarios"), gettext("video %(n)s de %(total)s", n=n, total=len(pendientes)))
             hilos, error = comentarios_video(yt, video, p["max_comentarios_por_video"])
             for crudo in hilos:                        # primero lo leído: esas páginas ya gastaron cuota
                 c = normalizar_comentario(crudo)
@@ -215,7 +215,7 @@ class FuenteYouTube(Fuente):
             if error is None:
                 continue
             motivo = razon(error)                      # nunca str(error): la URI lleva key=<llave>
-            if motivo == "commentsDisabled":
+            if motivo in ("commentsDisabled", "videoNotFound", "commentThreadNotFound"):
                 continue
             if motivo in _CUOTA:
                 self.aviso = gettext("YouTube agotó la cuota diaria; se guardó lo leído hasta el video %(n)s de %(total)s. "

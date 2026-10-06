@@ -1,0 +1,130 @@
+{# Panel de una pieza (E2, ruta exp_pieza): se abre sobre el centro de resultados como cajón a la derecha (pantalla
+   completa en el celular). Contexto: `p` (resultados.pieza: su fila del ranking, indicadores, series, curva,
+   desgloses, rankings de Meta, diagnóstico, eventos y lo de sus acciones), etiquetas_exp, paises_fe, modo_meta,
+   capacidades_meta y lo orgánico (canales_org, publicaciones_por_pieza, trabajos_org, plataformas_org).
+   Todo lo de Meta y de la base (nombres, mensajes de eventos, rankings, causas) va con autoescape: nunca |safe.
+   El único <script> es el JSON de su gráfica (`.cr-datos-pieza`), que el JS lee con textContent. #}
+{% from "_exp_macros.html" import valor, veredicto, kpis, barras, dona_ubicacion with context %}
+{% from "_organico_publicar.html" import bloque_organico with context %}
+{% set pais = paises_fe.get(p.pais, {}) %}
+{% set pais_ex = p.pais_experimento or {} %}
+<div class="cr-pieza-fragmento">
+  <header class="cr-pieza-cab">
+    <div>
+      <p class="cr-sobretitulo">{{ p.experimento.nombre }}</p>
+      <h3>{{ p.nombre }}</h3>
+      <p class="cr-muted">{{ pais.bandera }} {{ pais.nombre|traducir if pais.nombre else p.pais }} · {{ _('Imagen') if p.es_imagen else _('Video') }} · {{ _('desde el inicio') if p.periodo.es_todo else _('últimos %(n)s días', n=p.periodo.n) }}</p>
+    </div>
+    {{ veredicto(p.veredicto) }}
+  </header>
+
+  {% if p.historia %}<p class="cr-historia cr-pieza-historia">{{ p.historia|join(' · ') }}</p>{% endif %}
+
+  <div class="cr-pieza-arriba">
+    <div class="cr-pieza-media">
+      {% if p.es_imagen %}{% if p.url_imagen or p.url_video or p.url_miniatura %}<img src="{{ p.url_imagen or p.url_video or p.url_miniatura }}" alt="{{ p.nombre }}" loading="lazy">{% endif %}
+      {% elif p.url_video %}<video src="{{ p.url_video }}" controls playsinline preload="none" data-precarga{% if p.url_miniatura %} poster="{{ p.url_miniatura }}"{% endif %}></video>{% endif %}
+    </div>
+    <div class="cr-pieza-acciones">
+      {% if p.pieza_id %}<a class="btn-generar btn-sm" href="{{ url_for('exp_nuevo', cliente=cliente, piezas=p.pieza_id) }}">{{ _('Probar en otro experimento') }}</a>{% endif %}
+      <a class="btn-sm" href="#creativeflowplus" data-ir-tab="creativeflowplus">{{ _('Ver en Crear') }}</a>
+      {% if pais_ex.meta_adset_id and p.estado_experimento in ("pausado", "corriendo") %}
+      <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=p.experimento.id) }}" class="inline">
+        <input type="hidden" name="pais" value="{{ p.pais }}">
+        {% if pais_ex.estado == "activo" %}<input type="hidden" name="estado" value="PAUSED"><button class="btn-rechazar btn-sm">{{ _('Pausar %(pais)s', pais=p.pais) }}</button>
+        {# Regla 1 (primero el precio): el confirm dice cuánto gasta al día ese país, en la moneda de la cuenta. #}
+        {% else %}<input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-sm" onclick='return confirm({{ _("Activar %(pais)s: empieza a gastar ≈ %(diario)s al día. ¿Seguir?", pais=p.pais, diario=(pais_ex.presupuesto_dia|dinero(p.moneda)))|tojson }});'>{{ _('Activar %(pais)s', pais=p.pais) }}</button>{% endif %}
+      </form>
+      {% endif %}
+      <a class="btn-sm" data-cr-filtro href="#experimentos?exp={{ p.experimento.id }}">{{ _('Ver su experimento') }}</a>
+    </div>
+  </div>
+
+  <section class="cr-pieza-seccion">
+    <h4>{{ _('Indicadores') }}</h4>
+    {{ kpis(p.indicadores, p.moneda) }}
+  </section>
+
+  <section class="cr-pieza-seccion">
+    <div class="cr-pieza-seccion-cab">
+      <h4>{{ _('Día a día') }}</h4>
+      <div class="cr-metricas" role="group" aria-label="{{ _('Métrica de la línea') }}">
+        <span class="cr-leyenda-barra">{{ _('Gasto') }}</span>
+        {% for k, n in [('ctr', _('CTR')), ('roas', _('ROAS')), ('cpc', _('CPC')), ('frecuencia', _('Frecuencia')), ('gancho', _('Gancho'))] if not (k == 'gancho' and p.es_imagen) %}
+        <button type="button" class="cr-chip cr-chip-metrica{% if loop.first %} activo{% endif %}" data-cr-metrica="{{ k }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ n }}</button>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="cr-tarjeta cr-grafico-caja">
+      <div class="cr-grafico" data-cr-grafico="pieza" data-metrica="ctr" role="img" aria-label="{{ _('Gasto diario de la pieza en barras y la métrica elegida en línea') }}"></div>
+    </div>
+  </section>
+
+  {% if not p.es_imagen %}
+  <section class="cr-pieza-seccion">
+    <h4>{{ _('Retención') }} <small class="cr-muted">· {{ _('qué parte de las impresiones siguió viendo') }}</small></h4>
+    {% if p.curva %}
+    <div class="cr-tarjeta"><svg class="cr-curva" data-cr-curva='{{ p.curva|tojson }}' viewBox="0 0 320 120" role="img" aria-label="{{ _('Curva de retención del video') }}"></svg></div>
+    {% else %}<p class="cr-vacio">{{ _('Todavía no hay datos de retención de Meta para este video.') }}</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {% set dg = p.diagnostico %}
+  {% if dg %}
+  <section class="cr-pieza-seccion">
+    <h4>{{ _('Diagnóstico') }}</h4>
+    <div class="cr-tarjeta cr-diagnostico">
+      {% if dg.error %}<p class="tag-error">{{ _('El diagnóstico no se pudo hacer: %(error)s', error=dg.error) }}</p>
+      {% else %}
+      <p>{% for c in dg.causas or [] %}<span class="tag-estado" title="{{ c.detalle }}{% if c.evidencia %} ({{ c.evidencia }}){% endif %}">{{ CAUSAS_NOMBRE.get(c.codigo, c.codigo)|traducir }}</span> {% endfor %}</p>
+      {% if dg.siguiente %}<p>{{ _('Siguiente: %(paso)s', paso=SIGUIENTES_NOMBRE.get(dg.siguiente.que, dg.siguiente.que)|traducir) }}{% if dg.siguiente.porque %} — {{ dg.siguiente.porque }}{% endif %}</p>{% endif %}
+      {% endif %}
+      <a href="{{ url_for('doctrina_pagina', cliente=cliente) }}#diagnosticar" target="_blank" rel="noopener">{{ _('¿Por qué?') }}</a>
+    </div>
+  </section>
+  {% endif %}
+
+  {% set rk = namespace(hay=false) %}{% for v in (p.rankings or {}).values() %}{% if v %}{% set rk.hay = true %}{% endif %}{% endfor %}
+  {% if rk.hay %}
+  <section class="cr-pieza-seccion">
+    <h4>{{ _('Rankings de Meta') }} <small class="cr-muted">· {{ _('contra anuncios que compiten por el mismo público') }}</small></h4>
+    <ul class="cr-rankings">
+      {% for clave, nombre in [('calidad', _('Calidad')), ('interaccion', _('Interacción')), ('conversion', _('Conversión'))] %}
+      {% set v = (p.rankings or {}).get(clave) %}
+      {% if v %}
+      <li class="cr-tarjeta"><span class="cr-muted">{{ nombre }}</span>
+        {% if v == 'ABOVE_AVERAGE' %}<strong class="cr-mejor">{{ _('Superior al promedio') }}</strong>
+        {% elif v == 'AVERAGE' %}<strong class="cr-neutro">{{ _('Promedio') }}</strong>
+        {% else %}<strong class="cr-peor">{{ _('Inferior al promedio') }}</strong>{% endif %}</li>
+      {% endif %}
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="cr-pieza-seccion">
+    <h4>{{ _('Quién la ve') }} <small class="cr-muted">· {{ _('desde el inicio') }}</small></h4>
+    <div class="cr-desgloses cr-desgloses-pieza">
+      {{ dona_ubicacion(p.desgloses.ubicacion) }}
+      {{ barras(p.desgloses.edad, _('Por edad'), p.desgloses.metrica) }}
+      {{ barras(p.desgloses.genero, _('Por género'), p.desgloses.metrica) }}
+    </div>
+  </section>
+
+  {% if not p.es_imagen and p.url_video and p.pieza_id %}
+  <section class="cr-pieza-seccion">{{ bloque_organico(p.pieza_id, "experimentos", ep_id=p.ep_id) }}</section>
+  {% endif %}
+
+  <section class="cr-pieza-seccion">
+    <h4>{{ _('Bitácora') }}</h4>
+    {% if p.eventos %}
+    <ul class="cr-bitacora">
+      {% for ev in p.eventos %}<li><small class="cr-muted">{{ ev.creado_en|fecha_corta }}</small> <span class="tag-estado">{{ etiquetas_exp.evento.get(ev.tipo, ev.tipo)|traducir }}</span> {{ ev.mensaje }}</li>{% endfor %}
+    </ul>
+    {% else %}<p class="cr-vacio">{{ _('Sin eventos todavía.') }}</p>{% endif %}
+  </section>
+
+  {% set marcas = namespace(lista=[]) %}
+  {% for ev in p.eventos|reverse %}{% if ev.creado_en %}{% set marcas.lista = marcas.lista + [{"dia": ev.creado_en[:10], "texto": ev.mensaje or ''}] %}{% endif %}{% endfor %}
+  <script type="application/json" class="cr-datos-pieza">{{ {"serie": p.series, "marcas": marcas.lista, "metrica": p.metrica}|tojson }}</script>
+</div>

@@ -34,6 +34,8 @@ import hashlib
 import json
 import re
 
+from flask_babel import gettext
+
 from final_edition import documento as documento_mod, tipos
 
 LOGO_MAX_PX = 240
@@ -103,6 +105,16 @@ def _pista(id_, tipo, clips):
     return {"id": id_, "tipo": tipo, "bloqueada": False, "silenciada": False, "oculta": False, "clips": clips}
 
 
+def es_voz_de_guion(clip):
+    """Clip de audio que viene del guion del borrador (D11, capa 5a):
+    `rol_audio` voz y `bloque` no vacío. Una voz agregada en el editor
+    (voz con IA, grabación) no tiene `bloque` — tratarla como una voz de
+    guion le pondría `por_destino` por destino y dejaría `tiene_destino`
+    en falso para siempre, y la vía automática pagaría voces de un guion
+    que no es el suyo."""
+    return clip.get("rol_audio") == "voz" and bool(clip.get("bloque"))
+
+
 def fin_principal(doc):
     p = documento_mod.pista_principal(doc)
     return max((c["inicio_ms"] + c["duracion_ms"] for c in (p or {}).get("clips") or []), default=0)
@@ -143,7 +155,7 @@ def _clips_voz(bloques, voces, total_ms, destinos):
 def armar_documento(guion, segmentos, clon, voces, musica, marca, formato, opciones, origen=None):
     """El documento del borrador (validado). Ver el docstring del módulo."""
     if not segmentos:
-        raise ValueError("armar_documento: sin segmentos no hay pista principal.")
+        raise ValueError(gettext("armar_documento: sin segmentos no hay pista principal."))
     idioma, pais = guion.get("idioma") or "es", guion.get("pais") or "CO"
     destino = f"{idioma}_{pais}"
     bloques = {bl["rol"]: bl for bl in guion.get("bloques") or []}
@@ -196,6 +208,9 @@ def armar_documento(guion, segmentos, clon, voces, musica, marca, formato, opcio
         clips_a, palabras = _clips_voz(bloques, voces, total_ms, (destino, idioma))
         doc["pistas"].append(_pista("p_voz", "audio", clips_a))
         doc["subtitulos"]["palabras"] = {destino: palabras, idioma: list(palabras)}
+        # D11/D4 (capa 5a): deja los subtítulos como DERIVADOS desde ya —
+        # `palabras` arriba queda como respaldo de legado nada más.
+        doc["subtitulos"]["fuentes"] = {idioma: [{"tipo": "voz"}]}
     if musica:
         doc["pistas"].append(_pista("p_musica", "audio", [
             {"id": "musica", "inicio_ms": 0, "duracion_ms": total_ms, "material_id": int(musica["id"]), "rol_audio": "musica",
@@ -238,7 +253,7 @@ def tiene_destino(doc, idioma, pais):
         if p.get("tipo") != "audio":
             continue
         for c in p.get("clips") or []:
-            if c.get("rol_audio") == "voz" and not isinstance((c.get("por_destino") or {}).get(clave), dict):
+            if es_voz_de_guion(c) and not isinstance((c.get("por_destino") or {}).get(clave), dict):
                 return False
     return True
 
@@ -266,8 +281,8 @@ def agregar_destino(doc, guion_destino, voces, precio=None):
         if p["tipo"] != "audio":
             continue
         for c in p["clips"]:
-            if c.get("rol_audio") != "voz":
-                continue
+            if not es_voz_de_guion(c):
+                continue    # una voz del editor (sin `bloque`) no es de este guion: no se toca
             v = (voces or {}).get(c.get("bloque"))
             if not v:
                 c.setdefault("por_destino", {})[clave] = None
@@ -276,6 +291,10 @@ def agregar_destino(doc, guion_destino, voces, precio=None):
             c.setdefault("por_destino", {})[clave] = {"material_id": int(v["material_id"]), "duracion_ms": dur}
             palabras += palabras_absolutas(v, c["inicio_ms"], c["inicio_ms"] + dur)
     res["subtitulos"].setdefault("palabras", {})[clave] = palabras
+    if voces:
+        # D4/D11: el editor escribe SIEMPRE bajo `<idioma>` (sin país); no
+        # pisa una fuente que la persona ya haya elegido para ese idioma.
+        res["subtitulos"].setdefault("fuentes", {}).setdefault(idioma, [{"tipo": "voz"}])
     res = fijar_precio(res, idioma, pais, precio)
     return documento_mod.validar(res)
 

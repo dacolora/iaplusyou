@@ -224,8 +224,12 @@
       actual = i;
       botones.forEach(function (b, k) {
         b.classList.toggle('activo', k === i);
+        b.classList.remove('flujo-llena');
         b.setAttribute('aria-pressed', k === i ? 'true' : 'false');
       });
+      // La barrita es una transición de ancho: se vacía y, en el cuadro siguiente, se llena durante DURACION.
+      var activo = botones[i];
+      requestAnimationFrame(function () { requestAnimationFrame(function () { activo.classList.add('flujo-llena'); }); });
       vistas.forEach(function (v, k) {
         var video = v.querySelector('video');
         v.hidden = k !== i;

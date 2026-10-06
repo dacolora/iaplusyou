@@ -2,8 +2,9 @@
 // resultan, para que tests/test_operaciones_editor.py los pase por
 // documento.validar y compilador.verificar_recortes (la referencia es Python).
 import * as op from "../../static/editor/operaciones.js";
-import { docBase, DURACIONES as D } from "./doc_base.mjs";
+import { conLasPistasLlenas, docBase, docConVozYPalabras, docVinculos, DURACIONES as D, INFO_PALABRAS } from "./doc_base.mjs";
 import * as prop from "../../static/editor/propiedades_modelo.js";
+import * as vinc from "../../static/editor/vinculos.js";
 
 const casos = [];
 const anotar = (nombre, fn, duraciones) => casos.push({ nombre, doc: fn().doc, ...(duraciones ? { duraciones } : {}) });
@@ -38,7 +39,7 @@ anotar("agregar_imagen_llenar", () => op.agregarImagen(docBase(), { id: 4, ancho
 anotar("agregar_audio_musica", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO));
 anotar("agregar_audio_efecto", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "efecto" }, INFO));
 for (const preset of ["titulo", "subtitulo", "precio", "llamado"]) {
-  anotar(`agregar_texto_${preset}`, () => op.agregarTexto(docBase(), 500, preset, INFO));
+  anotar(`agregar_texto_${preset}`, () => op.agregarTexto(docBase(), 500, preset, {}, INFO));
 }
 anotar("cortar_audio", () => op.cortarClip(docBase(), "a1", 1000, INFO));
 anotar("cortar_imagen", () => {
@@ -70,7 +71,7 @@ anotar("volumen_sonido", () => op.volumenSonido(op.normalizar(docBase(), INFO), 
 anotar("volumen_sonido_espejo_del_borrador", () => op.volumenSonido(docBase(), "v1", 0.3, INFO));
 for (const preset of op.MEZCLAS) anotar(`cambiar_mezcla_${preset}`, () => op.cambiarMezcla(docBase(), preset, INFO));
 anotar("cambiar_desde_propiedades", () => {
-  let d = op.agregarTexto(docBase(), 500, "titulo", INFO).doc;
+  let d = op.agregarTexto(docBase(), 500, "titulo", {}, INFO).doc;
   const id = "titulo_2";
   for (const cambios of [prop.cambioFondo("pildora", null), prop.cambioFondo("caja", { radio: 1 }), prop.cambioGrosor(12, d.formato),
     prop.cambioSombra(true, d.formato), { estilo: { color: "#FFD60A", alineacion: "izquierda", fuente: "SpaceGrotesk-Bold", tamano: 90 } },
@@ -103,7 +104,7 @@ const INFO_LARGO = { ...INFO, 6: { duracion_ms: 60000 } };
 anotar("agregar_musica_larga_cerca_del_final", () => op.agregarAudio(docBase(), { id: 6 }, 7000, { rol: "musica" }, INFO_LARGO), { ...D, 6: 60000 });
 anotar("agregar_musica_larga_al_final", () => op.agregarAudio(docBase(), { id: 6 }, 8000, { rol: "musica" }, INFO_LARGO), { ...D, 6: 60000 });
 anotar("agregar_efecto_cerca_del_final", () => op.agregarAudio(docBase(), { id: 2 }, 6000, { rol: "efecto" }, INFO));
-anotar("agregar_titulo_al_final", () => op.agregarTexto(docBase(), 8000, "titulo", INFO));
+anotar("agregar_titulo_al_final", () => op.agregarTexto(docBase(), 8000, "titulo", {}, INFO));
 anotar("agregar_imagen_despues_del_final", () => op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 9000, { duracionMs: 12000 }, INFO));
 // Fixes finales (8, 10, 12): fondo.ancho automático, escala inicial acotada, la música no cae en la voz.
 anotar("cambiar_fondo_ancho_automatico", () => {
@@ -116,6 +117,46 @@ anotar("agregar_imagen_diminuta", () => op.agregarImagen(docBase(), { id: 4, anc
 anotar("agregar_musica_y_efecto_en_sus_pistas", () => {
   const conMusica = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO).doc;
   return op.agregarAudio(conMusica, { id: 2 }, 0, { rol: "efecto" }, INFO);
+});
+
+// Capa 4c (1/10): un audio corto nunca lleva fundidos más largos que él.
+const INFO_CORTO = { ...INFO_LARGO, 7: { duracion_ms: 400 } };
+anotar("agregar_musica_de_400_ms", () => op.agregarAudio(docBase(), { id: 7 }, 2000, { rol: "musica" }, INFO_CORTO), { ...D, 7: 400 });
+anotar("agregar_efecto_corto_al_final", () => op.agregarAudio(docBase(), { id: 7 }, 7900, { rol: "efecto" }, INFO_CORTO), { ...D, 7: 400 });
+anotar("cortar_musica_deja_un_pedazo_corto", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "musica" }, INFO);
+  return op.cortarClip(conMusica.doc, conMusica.seleccion, 2600, INFO);
+});
+anotar("cambiar_fundidos_de_mas", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "musica" }, INFO);
+  const corto = op.recortar(conMusica.doc, conMusica.seleccion, "fin", -2700, INFO).doc;
+  return op.cambiar(corto, conMusica.seleccion, { audio: { fundido_entrada_ms: 900, fundido_salida_ms: 900 } }, INFO);
+});
+// Capa 4c (2/10): la entrada «deslizar» lleva su duración; «ninguna» la quita.
+anotar("animacion_deslizar", () => op.cambiar(docBase(), "t1", { animacion: { entrada: "deslizar" } }, INFO));
+anotar("animacion_ninguna", () => {
+  const con = op.cambiar(docBase(), "t1", { animacion: { entrada: "deslizar" } }, INFO).doc;
+  return op.cambiar(con, "t1", { animacion: { entrada: "ninguna" } }, INFO);
+});
+// Capa 4c (3/10): mover, alargar o duplicar una capa no alarga el video
+// (Python revisa que termine con la principal: prefijo no_alarga_).
+anotar("no_alarga_mover_texto", () => op.moverA(docBase(), "t1", 7500, INFO));
+anotar("no_alarga_mover_voz", () => op.moverA(docBase(), "a1", 9000, INFO));
+anotar("no_alarga_alargar_texto", () => op.recortar(docBase(), "t1", "fin", 99999, INFO));
+anotar("no_alarga_alargar_musica", () => {
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 1000, { rol: "musica" }, INFO);
+  return op.recortar(musica.doc, musica.seleccion, "fin", 99999, INFO);
+});
+anotar("no_alarga_duplicar_texto_al_final", () => op.duplicar(op.moverA(docBase(), "t1", 5000, INFO).doc, "t1", INFO));
+anotar("no_alarga_duplicar_musica_al_final", () => {
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO);
+  return op.duplicar(musica.doc, musica.seleccion, INFO);
+});
+// Arreglo 4: un «deslizar» de la capa 4b guardado sin duración la recibe al normalizar.
+anotar("animacion_vieja_sin_duracion", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].animacion = { entrada: "deslizar" };
+  return op.moverA(d, "t1", 2000, INFO);
 });
 
 const D9 = { ...D, 1: 9000 };
@@ -134,4 +175,157 @@ for (const v of op.VELOCIDADES) {
     anotar(`al_final_${v}x_corte_e_inicio_${d}`, () => op.recortar(cortado, "v1_2", "inicio", d, D9), D9);
   }
 }
+
+// ---- Capa 5a (Tarea 4): subtítulos y voz ----
+const PALABRAS_A1 = [{ t_ms: 0, dur_ms: 400, texto: "Hola" }, { t_ms: 500, dur_ms: 300, texto: "mundo" }];
+const INFO_SUB = { ...D, 2: { duracion_ms: 3000, palabras: PALABRAS_A1 } };
+anotar("poner_fuentes_voz", () => op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "voz" }], D));
+anotar("poner_fuentes_vacias", () => op.ponerFuentesSubtitulos(docBase(), "en", [], D));
+// Fix round 1: el tope (documento.MAX_FUENTES_SUBTITULO) con justo 8 fuentes distintas.
+anotar("poner_fuentes_ocho", () => op.ponerFuentesSubtitulos(docBase(), "es", [
+  { tipo: "voz" }, { tipo: "sonido" },
+  { tipo: "material", material_id: 1 }, { tipo: "material", material_id: 2 }, { tipo: "material", material_id: 3 },
+  { tipo: "material", material_id: 4 }, { tipo: "material", material_id: 5 }, { tipo: "material", material_id: 6 },
+], D));
+anotar("corregir_palabra", () => op.corregirPalabra(docBase(), 2, 0, "  Creatv  ", INFO_SUB));
+anotar("quitar_linea", () => op.quitarLinea(docBase(), [{ material_id: 2, indice: 0 }, { material_id: 2, indice: 1 }], INFO_SUB));
+anotar("cambiar_subtitulos", () => op.cambiarSubtitulos(docBase(), {
+  estilo_id: "minimal", posicion: 0.3, escala: 1.2, resaltado: "#3ddc84", visibles: true,
+}, D));
+anotar("agregar_voz", () => op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "voz", idioma: "es" }, INFO));
+anotar("cambiar_idioma_audio", () => op.cambiar(docBase(), "a1", { idioma: "en" }, INFO));
+casos.push({ nombre: "adoptar_voz", doc: op.adoptarVozComoFuente(docConVozYPalabras(), INFO_PALABRAS) });
+
+// ---- Capa 5b (Tarea 2, D10): «todo sigue a su clip» ----
+// Cada caso vincula el resultado de una operación sobre docVinculos() (que
+// trae un segundo texto, t2, para forzar una colisión de fila al seguir, y
+// una música, m1, que nunca sigue pero sí se recorta por «nada alarga»).
+const vincular = (fn, info = D) => {
+  const antes = docVinculos();
+  return { doc: vinc.seguirPrincipal(antes, fn(antes).doc, info) };
+};
+anotar("vinculado_borrar_v0", () => vincular((d) => op.borrar(d, "v0", D)));
+anotar("vinculado_mover_v1", () => vincular((d) => op.moverPrincipal(d, "v1", 0, D)));
+anotar("vinculado_recortar_inicio", () => vincular((d) => op.recortar(d, "v0", "inicio", 1000, D)));
+anotar("vinculado_velocidad", () => vincular((d) => op.cambiarVelocidad(d, "v0", 2, D)));
+const INFO_VINCULADO = { 1: { duracion_ms: 8000, tiene_audio: true }, 2: { duracion_ms: 3000 }, 3: { duracion_ms: 1500, tiene_audio: false } };
+anotar("vinculado_agregar_video_al_principio",
+  () => vincular((d) => op.agregarVideo(d, { id: 3 }, { indice: 0 }, INFO_VINCULADO), INFO_VINCULADO),
+  { ...D, 3: 1500 });
+anotar("vinculado_borrar_ultimo", () => vincular((d) => op.borrar(d, "v1", D)));
+anotar("vinculado_voces", () => {
+  const antes = docVinculos();
+  antes.pistas[2].clips.push({
+    id: "r1", inicio_ms: 4500, duracion_ms: 2000, material_id: 2, rol_audio: "voz",
+    recorte: { desde_ms: 0, hasta_ms: 2000 }, velocidad: 1, audio: { volumen: 1, fundido_entrada_ms: 0, fundido_salida_ms: 0, ducking: true },
+  });
+  return { doc: vinc.seguirPrincipal(antes, op.borrar(antes, "v0", D).doc, D) };
+});
+
+// ---- Capa 5b (Tarea 5): fotos, encuadre y transiciones que juntan ----
+const M4 = { id: 4, tipo: "imagen", ancho: 1000, alto: 1000 };
+const conFoto = () => op.agregarFoto(docBase(), M4, { indice: 1 }, D).doc;
+
+anotar("agregar_foto", () => op.agregarFoto(docBase(), M4, { indice: 1 }, D));
+anotar("agregar_foto_al_principio", () => op.agregarFoto(docBase(), M4, { indice: 0 }, D));
+anotar("foto_duracion", () => op.cambiarDuracionFoto(conFoto(), "foto_2", 5000, D));
+anotar("foto_recortar_inicio", () => op.recortar(conFoto(), "foto_2", "inicio", 500, D));
+anotar("foto_cortar", () => op.cortarClip(conFoto(), "foto_2", 5000, D));
+anotar("foto_transicion", () => op.ponerTransicion(conFoto(), "foto_2", "fundido", 500, D));
+anotar("encuadre_ajustar", () => op.cambiar(docBase(), "v0", { encuadre: { modo: "ajustar" } }, D));
+anotar("encuadre_llenar_x0", () => op.cambiar(docBase(), "v0", { encuadre: { modo: "llenar", x: 0 } }, D));
+
+// Un total previo a la operación, para que Python revise que la duración
+// total queda en la de antes menos lo que la transición tiene cedido ahora
+// (o igual si se quitó: D9).
+const anotarSolape = (nombre, fn, duracionAntes, duraciones) =>
+  casos.push({ nombre, doc: fn().doc, duracion_antes: duracionAntes, ...(duraciones ? { duraciones } : {}) });
+
+anotarSolape("solape_fundido", () => op.ponerTransicion(docBase(), "v0", "fundido", 500, D), 8000);
+anotarSolape("solape_cambiar_duracion", () => {
+  const con = op.ponerTransicion(docBase(), "v0", "fundido", 500, D).doc;
+  return op.ponerTransicion(con, "v0", "fundido", 800, D);
+}, 8000);
+anotarSolape("solape_quitar", () => {
+  const con = op.ponerTransicion(docBase(), "v0", "fundido", 500, D).doc;
+  return op.ponerTransicion(con, "v0", "corte", 0, D);
+}, 8000);
+
+function dosClipsEnteros() {
+  const sinV1 = op.borrar(docBase(), "v1", D).doc;
+  const extendido = op.recortar(sinV1, "v0", "fin", 4000, D).doc;
+  return op.agregarVideo(extendido, { id: 3 }, { despuesDe: "v0" }, { ...D, 3: 1500 }).doc;
+}
+anotarSolape("solape_clips_enteros", () => op.ponerTransicion(dosClipsEnteros(), "v0", "fundido", 500, { 1: 8000, 3: 1500 }),
+  9500, { 1: 8000, 3: 1500 });
+anotarSolape("solape_ultimo_se_deshace",
+  () => op.moverPrincipal(op.ponerTransicion(docBase(), "v0", "fundido", 500, D).doc, "v0", 1, D), 8000);
+
+anotar("vinculado_solape", () => vincular((d) => op.ponerTransicion(d, "v0", "fundido", 500, D)));
+// Revisión final (D10.6): con TODAS las pistas ocupadas (docVinculos + filas
+// de imagen hasta `op.MAX_PISTAS`), t2 pisa a t1 al seguir y se queda en su fila.
+anotar("vinculado_pistas_llenas", () => {
+  const antes = conLasPistasLlenas(docVinculos());
+  return { doc: vinc.seguirPrincipal(antes, op.borrar(antes, "v0", D).doc, D) };
+});
+
+// Capa 5c (prueba en vivo): títulos, stickers, emojis y plantillas que se
+// pisan en el tiempo abren una fila cada uno hasta `op.MAX_PISTAS` (20): Python
+// valida el documento de 20 pistas que sale.
+anotar("agregar_capas_hasta_el_tope", () => {
+  const pasos = [
+    (x) => op.agregarTexto(x, 500, "titulo", {}, INFO),
+    (x) => op.agregarImagen(x, { id: 4, ancho: 600, alto: 400 }, 500, { duracionMs: 1500 }, INFO),
+    (x) => op.agregarTexto(x, 500, "emoji", { literal: "🔥" }, INFO),
+    (x) => op.agregarTexto(x, 500, "oferta", {}, INFO),
+  ];
+  let d = docVinculos();
+  for (let i = 0; d.pistas.length < op.MAX_PISTAS && i < 4 * op.MAX_PISTAS; i++) d = pasos[i % pasos.length](d).doc;
+  return { doc: d };
+});
+
+// Revisión final de la capa 5b: una foto de 60 s con 500 ms cedidos a un
+// solape que los recupera (al quitar la transición o al borrar lo que venía
+// después) nunca pasa de documento.FOTO_MAX_MS.
+const foto60ConSolape = () => {
+  let d = op.cambiarDuracionFoto(conFoto(), "foto_2", 60000, D).doc;
+  d = op.ponerTransicion(d, "foto_2", "fundido", 500, D).doc;
+  return op.cambiarDuracionFoto(d, "foto_2", 60000, D).doc;
+};
+anotar("foto_60_solape_ida_y_vuelta", () => op.ponerTransicion(foto60ConSolape(), "foto_2", "corte", 0, D));
+anotar("foto_60_borrar_siguiente", () => op.borrar(foto60ConSolape(), "v1", D));
+
+// ---- Capa 5c (Tarea 7): textos v2, plantillas para vender, emojis y el tinte de un sticker ----
+// Python revisa además (prefijo texto_ e imagen_/vinculado_sticker) que todo
+// texto nacido aquí sea v2 y que validar conserve `version` y `tinte`.
+const STICKER = { id: 9, tipo: "imagen", ancho: 512, alto: 512 };
+anotar("texto_v2_titulo", () => op.agregarTexto(docBase(), 500, "titulo", {}, INFO));
+anotar("texto_plantilla_oferta", () => op.agregarTexto(docBase(), 500, "oferta", {}, INFO));
+anotar("texto_plantilla_descuento", () => op.agregarTexto(docBase(), 500, "descuento", {}, INFO));
+anotar("texto_emoji", () => op.agregarTexto(docBase(), 500, "emoji", { literal: "🔥" }, INFO));
+anotar("texto_editado_pasa_a_v2", () => op.editarTexto(docBase(), "t1", "Hola 🔥", "es", INFO));
+anotar("texto_actualizado", () => op.actualizarTexto(docBase(), "t1", INFO));
+anotar("texto_ancho_desde_propiedades", () => op.cambiar(docBase(), "t1", prop.cambioAncho(50), INFO));
+anotar("texto_sin_limite_desde_propiedades", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].estilo.ancho_max = 0.5;              // un texto viejo con ancho (como los del borrador)
+  return op.cambiar(d, "t1", prop.cambioSinLimite(true), INFO);
+});
+// Ruling del controlador: tocar el color que ya tiene no lo pasa a v2 (Python: sigue v1 byte a byte).
+anotar("mismo_color_sigue_v1", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].estilo.color = "#FFFFFF";
+  return op.cambiar(d, "t1", { estilo: { color: "#FFFFFF" }, transform: { escala: 1 } }, INFO);
+});
+anotar("imagen_con_tinte", () => op.agregarImagen(docBase(), STICKER, 1000, { fraccion: 0.35, tinte: "#FFD400" }, INFO));
+anotar("imagen_tinte_cambiado", () => {
+  const con = op.agregarImagen(docBase(), STICKER, 1000, { fraccion: 0.35, tinte: "#FFD400" }, INFO);
+  return op.cambiar(con.doc, con.seleccion, { tinte: "#e11d48" }, INFO);
+});
+// D13: un sticker sobre v1 se mueve con él al reordenar (vincular).
+anotar("vinculado_sticker", () => {
+  const antes = op.agregarImagen(docVinculos(), STICKER, 5000, { fraccion: 0.35, tinte: "#FFD400" }, D).doc;
+  return { doc: vinc.seguirPrincipal(antes, op.moverPrincipal(antes, "v1", 0, D).doc, D) };
+});
+
 process.stdout.write(JSON.stringify(casos));

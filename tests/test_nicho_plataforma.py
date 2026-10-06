@@ -1,0 +1,268 @@
+"""FuentePlataforma: buscar productos y traer reseñas sobre el registro de plataformas y correr_lote, sin red."""
+import json
+import os
+
+import pytest
+
+from tests.test_apify_lote import _Resp, _Sesion
+
+_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "nicho", "plataformas")
+
+
+def _fixture(nombre):
+    with open(os.path.join(_DIR, nombre), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _corrida(status, run_id, ds):
+    return _Resp(200, {"data": {"id": run_id, "status": status, "defaultDatasetId": ds}})
+
+
+@pytest.fixture()
+def entorno(monkeypatch):
+    from nicho.fuentes import _http
+    monkeypatch.setenv("APIFY_TOKEN", "apify_secreto")
+    monkeypatch.setattr(_http, "dormir", lambda s: None)
+
+
+def test_registro_y_tarifas(entorno):
+    from nicho import fuentes
+    from nicho.fuentes.plataforma import FuentePlataforma
+    from nicho.fuentes.base import ErrorFuente
+    assert fuentes.PLATAFORMAS == ("amazon", "meli", "tiktok_shop", "walmart", "aliexpress") and fuentes.EN_WORKER == fuentes.CONECTADAS + fuentes.PLATAFORMAS
+    assert fuentes.NOMBRES["walmart"] == "Walmart" and fuentes.NOMBRES["aliexpress"] == "AliExpress" and fuentes.LLAVES["aliexpress"] == ("APIFY_TOKEN",)
+    assert fuentes.por_tipo("aliexpress")().tarifa() == {"actor": "axlymxp~aliexpress-reviews-scraper", "nombre": "Reseñas de AliExpress",
+                                                         "usd_por_resultado": 0.003, "usd_por_corrida": 0.01}
+    f = fuentes.por_tipo("amazon")()
+    assert isinstance(f, FuentePlataforma) and f.tipo == "amazon" and f.de_pago is True
+    assert fuentes.NOMBRES["meli"] == "Mercado Libre" and fuentes.LLAVES["tiktok_shop"] == ("APIFY_TOKEN",) and fuentes.llaves_faltantes("amazon") == []
+    assert f.tarifa()["actor"] == "junglee~amazon-reviews-scraper" and f.tarifa_busqueda()["usd_por_resultado"] == 0.005
+    with pytest.raises(ErrorFuente):
+        FuentePlataforma("magia")
+    assert f.tarifa()["usd_por_corrida"] == 0.0
+
+
+def test_buscar_amazon_guarda_consulta_y_dedup(entorno, monkeypatch):
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    items = _fixture("amazon_busqueda.json") + [_fixture("amazon_busqueda.json")[0]]        # el mismo ASIN dos veces
+    s = _Sesion({"/actors/junglee~amazon-crawler/runs": [_corrida("SUCCEEDED", "rb", "db")], "/datasets/db/items": _Resp(200, items)})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = FuentePlataforma("amazon")
+    etapas = []
+    lista = list(f.buscar(["tofflor mot fotsmärta", "ortopediska tofflor"], "SE", 20, avanzar=lambda e, d=None: etapas.append(e)))
+    assert [p["fuente_id"] for p in lista] == ["B0AMZ00001", "B0AMZ00002"] and lista[0]["consulta"] == "tofflor mot fotsmärta | ortopediska tofflor"
+    assert f.resultados == 4 and f.run_id == "rb" and f.aviso == "" and etapas[0] == "Buscando"
+    m, u, kw = s.llamadas[0]
+    assert kw["params"] == {"timeout": 1200, "maxItems": 40, "maxTotalChargeUsd": 0.2} and kw["json"]["proxyCountry"] == "SE"
+
+
+def test_buscar_amazon_deja_un_producto_por_anuncio(entorno, monkeypatch):
+    """Dos variantes del mismo anuncio de Amazon comparten reseñas: la búsqueda deja solo la primera que aparece,
+    aunque otra variante llegue sin su lista (prueba real 2026-10-01: B0CQRG7MDY y B0CQRG9M6R trajeron las mismas
+    reseñas, pagadas dos veces). Lo que Apify cobró no cambia: se cobran los ítems crudos."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    base = _fixture("amazon_busqueda.json")[0]
+    grupo = ["B0VAR00001", "B0VAR00002", "B0VAR00003"]
+    items = [{**base, "asin": "B0VAR00001", "variantAsins": grupo}, {**base, "asin": "B0VAR00002", "variantAsins": grupo},
+             {**base, "asin": "B0OTRO0001"}, {**base, "asin": "B0VAR00003"}]
+    s = _Sesion({"/actors/junglee~amazon-crawler/runs": [_corrida("SUCCEEDED", "rv", "dv")], "/datasets/dv/items": _Resp(200, items)})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = FuentePlataforma("amazon")
+    lista = list(f.buscar(["botella de agua"], "MX", 20))
+    assert [p["fuente_id"] for p in lista] == ["B0VAR00001", "B0OTRO0001"]
+    assert f.resultados == 4
+
+
+def test_buscar_amazon_una_variante_que_lista_a_otra_ya_elegida(entorno, monkeypatch):
+    """Al revés: el primero llega sin lista de variantes y el segundo lo nombra entre las suyas: también se descarta."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    base = _fixture("amazon_busqueda.json")[0]
+    items = [{**base, "asin": "B0VAR00001"}, {**base, "asin": "B0VAR00002", "variantAsins": ["B0VAR00001", "B0VAR00002"]}]
+    s = _Sesion({"/actors/junglee~amazon-crawler/runs": [_corrida("SUCCEEDED", "rw", "dw")], "/datasets/dw/items": _Resp(200, items)})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    assert [p["fuente_id"] for p in FuentePlataforma("amazon").buscar(["botella de agua"], "MX", 20)] == ["B0VAR00001"]
+
+
+def test_buscar_meli_una_corrida_por_consulta(entorno, monkeypatch):
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    s = _Sesion({"/actors/karamelo~mercado-libre-listings-scraper/runs": [_corrida("SUCCEEDED", "r1", "d1"), _corrida("SUCCEEDED", "r2", "d2")],
+                 "/datasets/d1/items": _Resp(200, _fixture("meli_busqueda.json")[:1]), "/datasets/d2/items": _Resp(200, _fixture("meli_busqueda.json")[1:])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = FuentePlataforma("meli")
+    lista = list(f.buscar(["pantuflas ortopédicas", "pantuflas memory foam"], "CO", 10))
+    assert [p["consulta"] for p in lista] == ["pantuflas ortopédicas", "pantuflas memory foam"] and len(f.corridas) == 2
+
+
+def test_buscar_sin_resultados_y_corrida_fallida(entorno, monkeypatch):
+    from nicho.fuentes import _http
+    from nicho.fuentes.base import ErrorFuente
+    from nicho.fuentes.plataforma import FuentePlataforma
+    s = _Sesion({"/actors/unseenuser~tiktok-shop-scraper/runs": [_corrida("FAILED", "rf", "df")], "/datasets/df/items": _Resp(200, [])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = FuentePlataforma("tiktok_shop")
+    with pytest.raises(ErrorFuente) as e:
+        list(f.buscar(["cloud slippers"], "US", 5))
+    assert "rf" in str(e.value) and f.resultados == 0
+    s = _Sesion({"/actors/unseenuser~tiktok-shop-scraper/runs": [_corrida("SUCCEEDED", "rv", "dv")], "/datasets/dv/items": _Resp(200, [])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    assert list(FuentePlataforma("tiktok_shop").buscar(["x"], "US", 5)) == []            # vacío no es error
+
+
+def test_recolectar_amazon_una_corrida_por_producto(entorno, monkeypatch):
+    """junglee~amazon-reviews-scraper en el plan FREE (fix 3, 2026-10-01, prueba real en
+    producción run `wpny9jQYLztteag8Z`): UNA corrida POR PRODUCTO -- el plan FREE solo lee 1 link
+    y entrega 10 reseñas por corrida, así que una corrida con los `productUrls` de varios
+    productos deja sin leer a todos menos el primero (antes se creía que una corrida con todos
+    los links funcionaba; axesso, que sí exigía acceso completo a la cuenta, se había dejado de
+    usar por otro motivo). Cada corrida pide 2048 MB y el mínimo de Apify (US$ 0,50). Una reseña
+    se atribuye por `productOriginalAsin`, por el link pedido (`input`) cuando el ASIN es de una
+    variante que no reconocemos, y -- nuevo con `por_producto=True` -- por la corrida que la
+    trajo cuando ni lo uno ni lo otro calzan con ninguno de nuestros productos (la corrida ya es
+    de UN producto, así que esa última pista basta)."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    resenas_p1 = _fixture("amazon_resenas.json")                  # B095NZBLT7: 2 reseñas reales + 1 basura
+    variante_por_input = {"reviewId": "R9", "reviewTitle": "", "reviewDescription": "Bra.", "ratingScore": 4,
+                          "productAsin": "B0VARIANTE", "productOriginalAsin": "B0VARIANTE",
+                          "input": "https://www.amazon.com.mx/dp/B0AMZ00002"}
+    variante_sin_pista = {"reviewId": "R10", "reviewTitle": "", "reviewDescription": "Sin variante reconocible.",
+                          "ratingScore": 3, "productAsin": "B0OTRAVARIANTE", "productOriginalAsin": "B0OTRAVARIANTE",
+                          "input": "https://www.amazon.com.mx/dp/B0OTRAVARIANTE"}
+    s = _Sesion({"/actors/junglee~amazon-reviews-scraper/runs": [_corrida("SUCCEEDED", "ra1", "da1"), _corrida("SUCCEEDED", "ra2", "da2")],
+                 "/datasets/da1/items": _Resp(200, resenas_p1),
+                 "/datasets/da2/items": _Resp(200, [variante_por_input, variante_sin_pista])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    productos = [{"fuente_id": "B095NZBLT7", "url": "https://www.amazon.com.mx/dp/B095NZBLT7", "titulo": "Botella 1"},
+                 {"fuente_id": "B0AMZ00002", "url": "https://www.amazon.com.mx/dp/B0AMZ00002", "titulo": "Botella 2"}]
+    f = FuentePlataforma("amazon")
+    lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 20, "pais": "MX"}))
+    assert [c["fuente_id"] for c in lista] == ["RVZW4WM0GUOPL", "R148L690U7RG0N", "R9", "R10"]
+    assert lista[0]["contexto"] == "Botella 1" and lista[0]["url"] == "https://www.amazon.com.mx/dp/B095NZBLT7" and lista[0]["puntuacion"] == 5
+    assert lista[0]["extra"] == {"producto": "B095NZBLT7", "plataforma": "amazon", "pais": "MX", "mercado": "local"}
+    assert lista[2]["contexto"] == "Botella 2"            # R9: atribuida por el link pedido (`input`), no por el ASIN de la variante
+    assert lista[3]["contexto"] == "Botella 2"            # R10: ni productOriginalAsin ni input calzan -- se atribuye por la corrida
+    assert f.conteo_por_producto == {"B095NZBLT7": 2, "B0AMZ00002": 2} and f.resultados == 5    # 3 + 2 ítems crudos (incluida la basura)
+    posts = [(u, kw) for m, u, kw in s.llamadas if m == "POST"]
+    assert len(posts) == 2                                # UNA corrida POR PRODUCTO, nunca junta productUrls
+    assert posts[0][1]["json"] == {"productUrls": [{"url": "https://www.amazon.com.mx/dp/B095NZBLT7"}],
+                                   "maxReviews": 10, "sort": "recent", "includeGdprSensitive": False,
+                                   "scrapeProductDetails": False, "deduplicateRedirectedAsins": True}
+    assert posts[1][1]["json"]["productUrls"] == [{"url": "https://www.amazon.com.mx/dp/B0AMZ00002"}]
+    assert all(kw["params"]["memory"] == 2048 and kw["params"]["maxTotalChargeUsd"] == 0.5 for _, kw in posts)
+    assert posts[0][1]["params"]["maxItems"] == 10        # 20 pedidas, recortadas al tope real del plan FREE (10)
+
+
+def test_recolectar_meli_asocia_por_product_id(entorno, monkeypatch):
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    s = _Sesion({"/actors/karamelo~mercadolibre-review-scraper/runs": [_corrida("FAILED", "rm", "dm")], "/datasets/dm/items": _Resp(200, _fixture("meli_resenas.json"))})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    productos = [{"fuente_id": "MCO123456789", "url": "https://articulo.mercadolibre.com.co/MCO-123456789-p", "titulo": "Pantuflas"}]
+    f = FuentePlataforma("meli")
+    lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 50, "pais": "CO"}))
+    assert [c["contexto"] for c in lista] == ["Pantuflas", "Pantuflas"] and f.conteo_por_producto == {"MCO123456789": 2}
+    assert "FAILED" in f.aviso and "rm" in f.aviso and f.resultados == 3                  # falló pero entregó: aviso, no error
+
+
+def test_id_en_link():
+    """El id de un producto dentro de su propio link (no el que le pedimos al actor de reseñas):
+    la ficha de catálogo y la página de publicación de Mercado Libre, Walmart, AliExpress y
+    Amazon; None para una tienda que no lo sepa leer o un link que no sea http(s)."""
+    from nicho.fuentes.plataformas import id_en_link
+    url_catalogo = "https://www.mercadolibre.com.co/botella-de-vidrio-32oz-civago-con-popote-y-marcador-de-tiempo-negra/p/MCO59691162"
+    assert id_en_link("meli", url_catalogo) == "MCO59691162"
+    assert id_en_link("meli", "https://articulo.mercadolibre.com.co/MCO-123456789-pantuflas") == "MCO123456789"
+    assert id_en_link("walmart", "https://www.walmart.com/ip/mukoko-bottle/5394318269") == "5394318269"
+    assert id_en_link("aliexpress", "https://www.aliexpress.com/item/3256806541493299.html") == "3256806541493299"
+    assert id_en_link("amazon", "https://www.amazon.com.mx/dp/B095NZBLT7") == "B095NZBLT7"
+    assert id_en_link("meli", "/p/MCO59691162") is None                       # no es http(s)
+    assert id_en_link("magia", "https://ejemplo.invalid/p/MCO1") is None      # tienda que no se sabe leer
+
+
+def test_recolectar_meli_asocia_por_el_id_del_link_de_catalogo(entorno, monkeypatch):
+    """Prueba de centavos en producción (2026-10-01, estudio 3 de colorado_forja): el actor de
+    reseñas identifica el producto con el id de la FICHA DE CATÁLOGO del link que le mandamos
+    (`productId`), no con el `fuente_id` de la publicación que buscamos; `catalogProductId` puede
+    ser el de OTRO catálogo (otro país) y no debe usarse para la atribución."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    resenas = [
+        {"reviewId": "rv1", "reviewText": "Llegó rápido y es tal cual la foto.", "reviewRating": 5,
+         "productId": "MCO59691162", "catalogProductId": "MCO59691162"},
+        {"reviewId": "rv2", "reviewText": "Buena calidad, la recomiendo.", "reviewRating": 4,
+         "productId": "MCO24057598", "catalogProductId": "MLB23920661"},
+        {"reviewId": "rv3", "reviewText": "El popote se rompió al segundo uso.", "reviewRating": 2,
+         "productId": "MCO24057598", "catalogProductId": "MLB23920661"},
+    ]
+    s = _Sesion({"/actors/karamelo~mercadolibre-review-scraper/runs": [_corrida("SUCCEEDED", "rm", "dm")],
+                 "/datasets/dm/items": _Resp(200, resenas)})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    productos = [{"fuente_id": "MCO1735647533", "titulo": "Botella de vidrio 32oz",
+                  "url": "https://www.mercadolibre.com.co/botella-de-vidrio-32oz-civago-con-popote-y-marcador-de-tiempo-negra/p/MCO59691162"},
+                 {"fuente_id": "MCO1735648777", "titulo": "Pantuflas de memory foam",
+                  "url": "https://www.mercadolibre.com.co/pantuflas-de-memory-foam/p/MCO24057598"}]
+    f = FuentePlataforma("meli")
+    lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 50, "pais": "CO"}))
+    assert [c["contexto"] for c in lista] == ["Botella de vidrio 32oz", "Pantuflas de memory foam", "Pantuflas de memory foam"]
+    assert [c["extra"]["producto"] for c in lista] == ["MCO1735647533", "MCO1735648777", "MCO1735648777"]
+    assert f.conteo_por_producto == {"MCO1735647533": 1, "MCO1735648777": 2}
+
+
+def test_buscar_de_otro_mercado_lee_la_moneda_de_su_sitio(entorno, monkeypatch):
+    """Amazon no está en Colombia: busca en amazon.com y un «$» a secas son dólares, no pesos (Parte 4, R5)."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    item = {"asin": "B0X", "title": "Water bottle", "price": {"value": 19.99, "currency": "$"}, "url": "https://www.amazon.com/dp/B0X"}
+    s = _Sesion({"/actors/junglee~amazon-crawler/runs": [_corrida("SUCCEEDED", "rb", "db")], "/datasets/db/items": _Resp(200, [item])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    lista = list(FuentePlataforma("amazon").buscar(["water bottle"], "CO", 5))
+    assert lista[0]["moneda"] == "USD" and lista[0]["precio"] == 19.99
+    assert s.llamadas[0][2]["json"]["categoryOrProductUrls"] == [{"url": "https://www.amazon.com/s?k=water+bottle"}]
+
+
+def test_recolectar_marca_pais_y_mercado(entorno, monkeypatch):
+    """Cada reseña guarda el país del comprador (o el del sitio) y si es del mercado del estudio (Parte 4 §3)."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    s = _Sesion({"/actors/axlymxp~aliexpress-reviews-scraper/runs": [_corrida("SUCCEEDED", "ra", "da")],
+                 "/datasets/da/items": _Resp(200, _fixture("aliexpress_resenas.json"))})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    productos = [{"fuente_id": "3256806541493299", "url": None, "titulo": "Botella 1L"}]
+    lista = list(FuentePlataforma("aliexpress").recolectar({"productos": productos, "resenas_por_producto": 5, "pais": "BR"}))
+    assert [c["extra"] for c in lista] == [{"producto": "3256806541493299", "plataforma": "aliexpress", "pais": "BR", "mercado": "local"},
+                                           {"producto": "3256806541493299", "plataforma": "aliexpress", "pais": "ES", "mercado": "otro"}]
+    assert lista[0]["fecha"] == "2026-06-30T00:00:00" and lista[0]["contexto"] == "Botella 1L"
+    post = [kw for m, u, kw in s.llamadas if m == "POST"][0]
+    assert post["json"]["productUrls"] == ["https://www.aliexpress.com/item/3256806541493299.html"] and post["params"]["maxTotalChargeUsd"] == 0.03
+    s = _Sesion({"/actors/apt_marble~walmart-reviews-scraper/runs": [_corrida("SUCCEEDED", "rw", "dw")],
+                 "/datasets/dw/items": _Resp(200, _fixture("walmart_resenas.json"))})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    lista = list(FuentePlataforma("walmart").recolectar({"productos": [{"fuente_id": "5394318269", "url": None, "titulo": "Botella"}],
+                                                         "resenas_por_producto": 5, "pais": "CO"}))
+    assert len(lista) == 2 and all(c["extra"]["pais"] == "US" and c["extra"]["mercado"] == "otro" for c in lista)
+    assert lista[0]["fecha"] == "2026-05-14T00:00:00"
+
+
+def test_recolectar_atribuye_por_el_link_pedido(entorno, monkeypatch):
+    """Ola final F5: una reseña de Walmart cuyo `productId` es el de una variante (no el que pedimos) igual se
+    atribuye a nuestro producto por el link que le mandamos (`requestedInput`)."""
+    from nicho.fuentes import _http
+    from nicho.fuentes.plataforma import FuentePlataforma
+    base = _fixture("walmart_resenas.json")[0]
+    variante = {**base, "reviewId": "r-variante", "productId": "999000111"}           # requestedInput sigue siendo …/ip/5394318269
+    otra = {**base, "reviewId": "r-otra", "productId": "17345973281", "requestedInput": "https://www.walmart.com/ip/17345973281",
+            "productUrl": "https://www.walmart.com/ip/17345973281"}
+    s = _Sesion({"/actors/apt_marble~walmart-reviews-scraper/runs": [_corrida("SUCCEEDED", "rw", "dw")],
+                 "/datasets/dw/items": _Resp(200, [variante, otra])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    productos = [{"fuente_id": "5394318269", "url": None, "titulo": "Botella MUKOKO"},
+                 {"fuente_id": "17345973281", "url": None, "titulo": "Botella OFEFE"}]
+    f = FuentePlataforma("walmart")
+    lista = list(f.recolectar({"productos": productos, "resenas_por_producto": 5, "pais": "US"}))
+    assert [(c["fuente_id"], c["contexto"], c["extra"]["producto"]) for c in lista] == [
+        ("r-variante", "Botella MUKOKO", "5394318269"), ("r-otra", "Botella OFEFE", "17345973281")]
+    assert f.conteo_por_producto == {"5394318269": 1, "17345973281": 1}

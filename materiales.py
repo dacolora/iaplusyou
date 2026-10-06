@@ -8,13 +8,18 @@ from datetime import datetime, timedelta
 from urllib.parse import unquote, urlparse
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
+import idiomas
+from idiomas import N_
 from storage import r2_uploader
 
 LIMITES = {"video": (200 * 1024 * 1024, 120000), "imagen": (20 * 1024 * 1024, None), "audio": (20 * 1024 * 1024, None)}
 CUOTA_BYTES = 2 * 1024 ** 3
 EFIMEROS = ("png_texto", "proxy", "tira", "forma_onda")
+# El tipo dentro de «El %(tipo)s pesa más de…» (se muestra: N_, se traduce al armar el mensaje).
+NOMBRES_TIPO = {"video": N_("video"), "imagen": N_("imagen"), "audio": N_("audio")}
 
 
 class MaterialEnUso(RuntimeError):
@@ -132,24 +137,33 @@ def actualizar_extra(cliente, material_id, **campos):
     return obtener(cliente, mid)
 
 
-def en_uso(cliente, material_id):
-    """True si algún documento vivo (`edicion`) o congelado (`edicion_version`,
-    que se puede restaurar o volver a producir) de ese cliente lo lista en
-    `materiales` (lista que `documento.validar` deriva de los clips)."""
+def edicion_que_lo_usa(cliente, material_id):
+    """{id, nombre, creada_por} de la primera edición de ese cliente cuyo
+    documento vivo (`edicion`) o alguna versión congelada (`edicion_version`,
+    que se puede restaurar o volver a producir) lo lista en `materiales`
+    (lista que `documento.validar` deriva de los clips); None si ninguna. La
+    biblioteca del editor la nombra al negarse a borrarlo (capa 4c)."""
     mid = int(material_id)
 
     def _lo_lista(doc):
         return mid in [int(x) for x in (doc or {}).get("materiales") or []]
+    cols = (db.edicion.c.id, db.edicion.c.nombre, db.edicion.c.creada_por)
     with db.conectar() as con:
-        for (doc,) in con.execute(sa.select(db.edicion.c.documento).where(db.edicion.c.cliente == cliente)):
-            if _lo_lista(doc):
-                return True
-        for (doc,) in con.execute(sa.select(db.edicion_version.c.documento)
-                                  .join(db.edicion, db.edicion.c.id == db.edicion_version.c.edicion_id)
-                                  .where(db.edicion.c.cliente == cliente)):
-            if _lo_lista(doc):
-                return True
-    return False
+        for f in con.execute(sa.select(*cols, db.edicion.c.documento).where(db.edicion.c.cliente == cliente)):
+            if _lo_lista(f.documento):
+                return {"id": f.id, "nombre": f.nombre, "creada_por": f.creada_por}
+        for f in con.execute(sa.select(*cols, db.edicion_version.c.documento)
+                             .join(db.edicion, db.edicion.c.id == db.edicion_version.c.edicion_id)
+                             .where(db.edicion.c.cliente == cliente)):
+            if _lo_lista(f.documento):
+                return {"id": f.id, "nombre": f.nombre, "creada_por": f.creada_por}
+    return None
+
+
+def en_uso(cliente, material_id):
+    """True si algún documento vivo o congelado de ese cliente lo usa
+    (`edicion_que_lo_usa`)."""
+    return edicion_que_lo_usa(cliente, material_id) is not None
 
 
 def _key_de_url(url):
@@ -170,11 +184,12 @@ def borrar(cliente, material_id):
     if not mat:
         return False
     if en_uso(cliente, material_id):
-        raise MaterialEnUso("Ese material está en una edición; quítalo de ahí primero.")
+        raise MaterialEnUso(gettext("Ese material está en una edición; quítalo de ahí primero."))
     # La fila es el único handle al objeto en R2: si el borrado ahí falla,
     # propaga y no toca la base — mejor un material huérfano en la base
     # (reintentable) que uno huérfano en R2 (sin ninguna fila que lo recuerde).
-    for url in (mat["url"], mat.get("url_proxy")):
+    # la tira de miniaturas (extra.tira_url, de edicion_proxy) también es suya
+    for url in (mat["url"], mat.get("url_proxy"), (mat.get("extra") or {}).get("tira_url")):
         if url and url.startswith("http"):
             key = _key_de_url(url)
             if _clave_propia(cliente, key):
@@ -208,12 +223,13 @@ def limpiar_sin_uso(cliente=None, dias=30):
 
 def validar_subida(tipo, bytes_, duracion_ms=None):
     if tipo not in LIMITES:
-        raise SubidaInvalida(f"tipo de archivo no permitido: {tipo}. Acepto video, imagen y audio.")
+        raise SubidaInvalida(gettext("tipo de archivo no permitido: %(tipo)s. Acepto video, imagen y audio.", tipo=tipo))
     max_bytes, max_ms = LIMITES[tipo]
     if int(bytes_) > max_bytes:
-        raise SubidaInvalida(f"El {tipo} pesa más de {max_bytes // (1024 * 1024)} MB.")
+        nombre = idiomas.traducir(NOMBRES_TIPO[tipo])
+        raise SubidaInvalida(gettext("El %(tipo)s pesa más de %(mb)s MB.", tipo=nombre, mb=max_bytes // (1024 * 1024)))
     if max_ms and duracion_ms and int(duracion_ms) > max_ms:
-        raise SubidaInvalida("El video dura más de 2 min.")
+        raise SubidaInvalida(gettext("El video dura más de 2 min."))
 
 
 def bytes_usados(cliente):

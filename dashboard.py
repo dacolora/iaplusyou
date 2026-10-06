@@ -17,17 +17,19 @@ import unicodedata
 import secrets
 import socket
 import subprocess
+import sys
 import threading
 import time
-from functools import wraps
+from functools import lru_cache, wraps
 from urllib.parse import urlsplit
 
 import requests
 import sqlalchemy as sa
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context
-from flask_babel import Babel, get_locale, gettext, ngettext
+from PIL import Image
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context, g, got_request_exception, has_request_context
+from flask_babel import Babel, format_decimal, get_locale, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from datetime import date, datetime
@@ -37,6 +39,7 @@ import prompts as prompts_mod
 import marca as marca_mod
 import conceptos_imagen
 import catalogo_productos
+import catalogo_vista
 import swaps as swaps_mod
 import bitacora
 import informe
@@ -46,16 +49,21 @@ import proyectos
 import trabajos
 import usuarios
 import idiomas
+import llaves
+import alertas
 import cuentas
 import meta_conexion
 import meta_agencia
 import meta_errores
 import flowplus_prompt
+import plantillas_anuncio
 import referencias_flowplus
+import saldo
 import materiales
 import ediciones
 import mi_musica
 import audios
+import voces_propias
 import referencias_link
 import generador_prompts
 from providers import image_provider
@@ -74,6 +82,7 @@ import db
 import derivaciones
 import experimentos
 import lanzador
+import presupuesto_experimentos
 import acciones
 import decisor
 import modos
@@ -86,7 +95,10 @@ import tiendas
 import triple_whale
 import triple_whale_tiendas
 import tablero
+import resultados
 import admin
+import monitoreo
+import registro_app
 import gastos
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
@@ -100,9 +112,11 @@ from tareas import tiendas as tareas_tiendas
 from tareas import doctrina as tareas_doctrina
 from tareas import musica as tareas_musica
 from tareas import audios as tareas_audios
+from tareas import voces_propias as tareas_voces
 from tareas import edicion as tareas_edicion
 from tareas import triple_whale as tareas_tw
-from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
+from final_edition import ETAPAS_FINAL, cortes as fe_cortes, mezcla as fe_mezcla, tipos as fe_tipos
+from final_edition import tablero as fe_tablero
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
 from publicador import publicar_brief
@@ -124,10 +138,78 @@ ALL_PLATFORMS = ["youtube", "facebook", "instagram", "tiktok"]
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 VIDEO_EXTS = (".mp4", ".mov", ".webm")
 FRAME_SUFFIX = ".frame.jpg"
+# Tipo con el que se sirve un archivo subido, por extensión de la lista blanca
+# (nunca el que adivina send_file: un .html o .svg se abriría en este dominio).
+MIMETYPES_MEDIOS = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+    ".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
+}
+# Cada archivo de «Cambiar producto» encola una generación pagada.
+MAX_SWAPS_POR_ENVIO = 10
+# Formatos que Pillow debe reconocer en una foto subida (jpg/png/webp).
+FORMATOS_IMAGEN = frozenset(("JPEG", "PNG", "WEBP", "MPO"))
+# Tope de una foto subida (el mismo que materiales.LIMITES["imagen"]).
+MAX_BYTES_IMAGEN = 20 * 1024 * 1024
+# Tope de CUALQUIER petición (auditoría de seguridad 2026-10-01): antes no
+# había ninguno y una subida podía llenar el disco del VPS. Alcanza para el
+# video más grande que se acepta (materiales.LIMITES["video"], 200 MB) más el
+# resto del formulario; Werkzeug corta con 413 antes de guardar nada, también
+# en una subida sin Content-Length. Las rutas con un tope menor lo siguen
+# aplicando ellas mismas.
+MAX_BYTES_PETICION = 256 * 1024 * 1024
+# Pillow solo rechaza una imagen por encima del doble de esto: una "bomba"
+# de pocos KB que descomprime a cientos de MB de RAM (el VPS tiene 1 CPU).
+Image.MAX_IMAGE_PIXELS = 64_000_000
+
+
+def _ext_de(nombre):
+    """Extensión en minúsculas de un nombre de archivo ("" si no tiene)."""
+    return os.path.splitext(nombre or "")[1].lower()
+
+
+def _tamano_subida(archivo):
+    """Bytes de un FileStorage (Werkzeug ya lo guardó en memoria o en un
+    temporal); deja el stream al principio."""
+    flujo = archivo.stream
+    posicion = flujo.tell()
+    flujo.seek(0, os.SEEK_END)
+    tamano = flujo.tell()
+    flujo.seek(posicion)
+    return tamano
+
+
+def _foto_subida_invalida(archivo):
+    """None si la foto subida se puede guardar; si no, el motivo para la
+    persona. Mira el contenido (no la extensión, que la elige quien sube) y
+    el tamaño."""
+    if _tamano_subida(archivo) > MAX_BYTES_IMAGEN:
+        return gettext("La imagen %(nombre)s pesa más de %(mb)s MB.",
+                       nombre=archivo.filename, mb=MAX_BYTES_IMAGEN // (1024 * 1024))
+    if not _imagen_valida(archivo.stream):
+        return gettext("No pude leer la imagen %(nombre)s.", nombre=archivo.filename)
+    return None
+
+
+def _imagen_valida(origen):
+    """True si `origen` (ruta o stream de una subida) es de verdad una imagen
+    jpg/png/webp: la extensión la elige quien sube, el contenido no miente.
+    Un stream se deja al principio para poder guardarlo después."""
+    posicion = origen.tell() if hasattr(origen, "tell") else None
+    try:
+        with Image.open(origen) as im:
+            formato = im.format
+            im.verify()
+        return formato in FORMATOS_IMAGEN
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError):
+        return False
+    finally:
+        if posicion is not None:
+            origen.seek(posicion)
 
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = MAX_BYTES_PETICION
 # Vocabulario de la doctrina en palabras simples para los selectores de
 # persona y producto (bloque 2 de la doctrina).
 app.jinja_env.globals.update(doctrina.globales_plantilla())
@@ -137,10 +219,69 @@ app.jinja_env.globals.update(doctrina.globales_plantilla())
 app.config["BABEL_DEFAULT_LOCALE"] = "es"
 app.config["BABEL_TRANSLATION_DIRECTORIES"] = idiomas.DIR_TRADUCCIONES
 Babel(app, locale_selector=idiomas.de_peticion)
+idiomas.instalar_gettext_rapido(app)  # mismo resultado que el de Flask-Babel, sin su costo por `_()`
 app.jinja_env.filters["traducir"] = idiomas.traducir
+
+# ---------- Monitoreo (spec 2026-10-01-escala-y-monitoreo §6) ----------
+# Registro en data/logs/web.log (lo lee /admin/salud/registros) y cada petición
+# medida: ruta, estado, milisegundos y consultas a la base. Nunca en las pruebas.
+if "pytest" not in sys.modules and (os.environ.get("CREATV_SIN_REGISTRO") or "").strip() != "1":
+    registro_app.configurar("web")
+monitoreo.instalar_contador_consultas()
+
+
+def _medir_inicio():
+    """El PRIMER before_request (insertado al frente, abajo): así también se
+    mide lo que los guards cortan con un redirect o un 404."""
+    g._monitoreo_t0 = time.perf_counter()
+    monitoreo.METRICAS.empezar()
+    monitoreo.contar_consultas_en_hilo()
+
+
+app.before_request_funcs.setdefault(None, []).insert(0, _medir_inicio)
+
+
+def _medir_fin(estado):
+    t0 = g.pop("_monitoreo_t0", None)
+    if t0 is None:
+        return
+    ms = (time.perf_counter() - t0) * 1000
+    # El usuario solo se anota en las lentas, y nunca en un estático: leer la
+    # sesión agrega «Vary: Cookie» y un CSS dejaría de ser cacheable igual para todos.
+    usuario = session.get("usuario") if ms >= monitoreo.LENTA_MS and request.endpoint != "static" else None
+    monitoreo.METRICAS.terminar(request.endpoint or "(sin ruta)", estado, ms, monitoreo.consultas_del_hilo(),
+                                url=request.path, usuario=usuario)
+
+
+@app.after_request
+def _medir_respuesta(resp):
+    _medir_fin(resp.status_code)
+    return resp
+
+
+@app.teardown_request
+def _medir_sin_respuesta(_exc):
+    """Una excepción sin atrapar no pasa por after_request: cuenta como 500."""
+    if "_monitoreo_t0" in g:
+        _medir_fin(500)
+
+
+def _error_de_peticion(_sender, exception, **_extra):
+    """Excepción sin atrapar en una ruta → errores agrupados de /admin/salud
+    (el 500 que ve la persona no cambia)."""
+    monitoreo.registrar_excepcion(exception, "web", ruta=request.endpoint, metodo=request.method, url=request.path,
+                                  cliente=(request.view_args or {}).get("cliente"), usuario=session.get("usuario"))
+    registro_app.marcar_registrada(exception)
+
+
+got_request_exception.connect(_error_de_peticion, app)
 # Errores de Meta: el JSON crudo de la Graph API se muestra en palabras de persona
 # (`{{ e.error|error_meta(modo_meta) }}`); el crudo sigue en el detalle técnico.
 app.jinja_env.filters["error_meta"] = meta_errores.explicar
+# Selector de Crear y panel de Sprints agrupan los colores de un producto
+# (spec 2026-09-28 §10.5) con esto en vez de `|groupby('producto_id')`: ver
+# el docstring de la función para por qué.
+app.jinja_env.filters["agrupar_por_producto"] = catalogo_productos.agrupar_por_producto
 
 
 @app.url_defaults
@@ -224,6 +365,9 @@ app.register_blueprint(guiones_pipeline.bp)
 from final_edition import rutas_editor  # noqa: E402  (vista previa del editor, capa 3)
 app.register_blueprint(rutas_editor.bp)
 
+import hablado_rutas  # noqa: E402  (Crear › Anuncio hablado: panel, foto, voz y video)
+app.register_blueprint(hablado_rutas.bp)
+
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
 # distintos podrían solaparse y pisarse las credenciales una a la otra — este
@@ -276,6 +420,26 @@ def _verificar_host():
     abort(404)
 
 
+METODOS_QUE_ESCRIBEN = frozenset(("POST", "PUT", "PATCH", "DELETE"))
+
+
+@app.before_request
+def _solo_mismo_origen():
+    """Barrera CSRF para TODA la app (auditoría de seguridad 2026-10-01):
+    antes solo los Blueprints y ~30 rutas de este archivo miraban
+    Sec-Fetch-Site; las demás confiaban solo en SameSite=Lax, que no frena
+    un POST desde otro subdominio del mismo sitio ni el «login CSRF» (un
+    formulario ajeno que inicia sesión con la cuenta del atacante). La app no
+    recibe webhooks ni POST legítimos de otros sitios: los callbacks de OAuth
+    son GET."""
+    if request.method not in METODOS_QUE_ESCRIBEN or _mismo_origen():
+        return None
+    mensaje = gettext("Pedido rechazado: no viene de esta página.")
+    if request.is_json or request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": False, "error": mensaje}), 403
+    abort(403)
+
+
 # Rutas de cuentas que deben funcionar aunque la sesión esté vencida o el
 # usuario ya no exista (verificar el correo o restablecer la contraseña se
 # abren desde un enlace, muchas veces sin sesión): el guard de sesión no las
@@ -283,14 +447,17 @@ def _verificar_host():
 ENDPOINTS_SIN_GUARD_SESION = frozenset((
     "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
     "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
-    "cambiar_idioma",
+    "cambiar_idioma", "salud_publica",
 ))
 
 
 def _abrir_sesion(usuario, entry):
     """Escribe la sesión de Flask tras un login o un alta. `sv` es la
     session_version del usuario: cambiar la contraseña la sube y el guard
-    (_verificar_sesion) cierra cualquier sesión que traiga otra."""
+    (_verificar_sesion) cierra cualquier sesión que traiga otra. Empieza de
+    cero: nada de la sesión anterior (un OAuth a medias, una precarga de
+    Crear) pasa a la cuenta que entra."""
+    session.clear()
     session["usuario"] = usuario
     session["rol"] = entry["rol"]
     session["cliente"] = entry.get("cliente")
@@ -309,8 +476,12 @@ def _verificar_sesion():
     if request.endpoint in ENDPOINTS_SIN_GUARD_SESION or "usuario" not in session:
         return None
     entry = usuarios.obtener(session["usuario"])
+    # El rol y el proyecto de la cookie tienen que seguir siendo los del
+    # usuario: si cambiaron en usuarios.json (bajarle el rol, moverlo de
+    # proyecto), la cookie vieja no conserva el permiso anterior.
     vigente = entry is not None and (
-        "sv" not in session or int(entry.get("session_version") or 1) == int(session.get("sv") or 0))
+        "sv" not in session or int(entry.get("session_version") or 1) == int(session.get("sv") or 0)
+    ) and session.get("rol") == entry.get("rol") and session.get("cliente") == entry.get("cliente")
     if not vigente:
         session.clear()
         flash(gettext("Tu sesión se cerró; entra de nuevo."), "error")
@@ -432,7 +603,7 @@ def _requiere_correo_verificado():
     entry = usuarios.obtener(sesion["usuario"])
     if entry and entry.get("correo_verificado"):
         return None
-    flash("Confirma tu correo primero (Configuración › Cuenta).", "error")
+    flash(gettext("Confirma tu correo primero (Configuración › Cuenta)."), "error")
     if sesion.get("cliente"):
         return redirect(url_for("ver_cliente", cliente=sesion["cliente"], _anchor="settings"))
     return redirect(url_for("index"))
@@ -479,11 +650,61 @@ def _sin_cache(resp):
     return resp
 
 
+# Cabeceras de seguridad (auditoría 2026-10-01). La CSP no restringe todavía
+# de dónde salen scripts, estilos ni medios (las plantillas tienen ~80
+# <script> y ~90 manejadores en línea, y los medios vienen de R2): solo
+# cierra lo que no rompe nada — que otro sitio enmarque la app (clickjacking
+# sobre Aprobar/Publicar/Generar), <object>/<embed> y un <base> inyectado.
+CABECERAS_SEGURIDAD = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+    # El editor graba la voz con el micrófono; nada usa cámara, ubicación ni pagos.
+    "Permissions-Policy": "camera=(), geolocation=(), payment=(), microphone=(self)",
+}
+HSTS = "max-age=31536000"
+
+
+@app.after_request
+def _cabeceras_seguridad(resp):
+    for nombre, valor in CABECERAS_SEGURIDAD.items():
+        resp.headers.setdefault(nombre, valor)
+    # Solo cuando el sitio público es https (en local, http seguiría andando).
+    if app.config.get("SESSION_COOKIE_SECURE") or request.is_secure:
+        resp.headers.setdefault("Strict-Transport-Security", HSTS)
+    return resp
+
+
+@app.errorhandler(413)
+def _peticion_demasiado_grande(_error):
+    """Werkzeug corta en MAX_BYTES_PETICION: se le dice a la persona en
+    palabras (JSON a un fetch; aviso y de vuelta al proyecto a un formulario)."""
+    mensaje = gettext("Lo que subiste pesa más de %(mb)s MB.", mb=MAX_BYTES_PETICION // (1024 * 1024))
+    if _quiere_json() or request.is_json:
+        return jsonify({"ok": False, "error": mensaje}), 413
+    flash(mensaje, "error")
+    cliente = (request.view_args or {}).get("cliente")
+    if cliente and usuarios.puede_acceder(_sesion(), cliente):
+        return redirect(url_for("ver_cliente", cliente=cliente))
+    return redirect(url_for("index"))
+
+
 @app.route("/trabajo/<path:job_id>/estado")
 def estado_trabajo(job_id):
     """El navegador consulta esto cada poco tiempo para actualizar la barra de
-    progreso de una generación en curso (imagen, video, o publicación)."""
-    info = trabajos.consultar(job_id)
+    progreso de una generación en curso (imagen, video, o publicación).
+    Solo responde a quien puede entrar al proyecto dueño del trabajo (el
+    administrador, a todos): antes era pública y los job_id se adivinan
+    (`<cliente>__…`), así que cualquiera leía el error —con URLs, ids de
+    predicción o textos de proveedores— de otro proyecto. A los demás se les
+    contesta como a un trabajo que no existe."""
+    sesion = _sesion()
+    if sesion and sesion["rol"] == "admin":
+        permitido = True
+    else:
+        dueno = trabajos.dueno(job_id) if sesion else None
+        permitido = dueno is not None and usuarios.puede_acceder(sesion, dueno)
+    info = trabajos.consultar(job_id) if permitido else None
     if info is None:
         # Mismas claves que devuelve trabajos.consultar(), para que el JS no tenga
         # que distinguir casos ni leer undefined.
@@ -603,6 +824,10 @@ def _subir_asset(cliente, subcarpeta, archivo):
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
         return False, gettext("Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm.")
+    if ext in IMAGE_EXTS:
+        motivo = _foto_subida_invalida(archivo)
+        if motivo:
+            return False, motivo
 
     carpeta = os.path.join(_client_dir(cliente), subcarpeta)
     os.makedirs(carpeta, exist_ok=True)
@@ -675,7 +900,7 @@ def subir_escena(cliente):
 @app.route("/cliente/<cliente>/escena/<nombre>/eliminar", methods=["POST"])
 def eliminar_escena(cliente, nombre):
     _eliminar_asset(cliente, "escenas", secure_filename(nombre))
-    flash(f"Eliminado: {nombre}", "ok")
+    flash(gettext("Eliminado: %(nombre)s", nombre=nombre), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -689,7 +914,7 @@ def subir_producto_referencia(cliente):
 @app.route("/cliente/<cliente>/producto_referencia/<nombre>/eliminar", methods=["POST"])
 def eliminar_producto_referencia(cliente, nombre):
     _eliminar_asset(cliente, "productos_referencia", secure_filename(nombre))
-    flash(f"Eliminado: {nombre}", "ok")
+    flash(gettext("Eliminado: %(nombre)s", nombre=nombre), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -710,7 +935,7 @@ def subir_logo(cliente):
 
 @app.route("/cliente/<cliente>/logos/<nombre>/eliminar", methods=["POST"])
 def eliminar_logo(cliente, nombre):
-    ok, mensaje = _eliminar_asset(cliente, "logos", nombre)
+    ok, mensaje = _eliminar_asset(cliente, "logos", secure_filename(nombre))
     flash(mensaje, "ok" if ok else "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
@@ -732,7 +957,7 @@ def analizar_marca(cliente):
     guía de estilo — se usa automáticamente en cada generación de prompts."""
     urls = [r["url"] for r in _marca_referencias(cliente) if r.get("url")]
     if not urls:
-        flash("Sube al menos una referencia de marca (imagen o video) primero.", "error")
+        flash(gettext("Sube al menos una referencia de marca (imagen o video) primero."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     job_id = _job_id_marca(cliente)
@@ -742,12 +967,12 @@ def analizar_marca(cliente):
         data = marca_mod.cargar(cliente)
         data["guia_estilo"] = guia
         marca_mod.guardar(cliente, data)
-        return "Guía de estilo generada."
+        return idiomas.N_("Guía de estilo generada.")
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=15):
-        flash("Analizando referencias de marca…", "ok")
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=15, cliente=cliente):
+        flash(gettext("Analizando referencias de marca…"), "ok")
     else:
-        flash("Ya se está analizando — espera a que termine.", "warn")
+        flash(gettext("Ya se está analizando — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -764,7 +989,7 @@ def guardar_marca(cliente):
     except ValueError:
         pass
     marca_mod.guardar(cliente, data)
-    flash("Identidad de marca guardada.", "ok")
+    flash(gettext("Identidad de marca guardada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -985,13 +1210,13 @@ def eliminar_datos():
     """URL de instrucciones de eliminación de datos que pide Meta."""
     cuerpo = {
         "es": """<p>Para eliminar los datos que Creatv Galadsy guarda de tu cuenta de Meta:</p>
-<ol><li>Entra a tu proyecto en app.creatvmachine.com › Configuración › Conexiones › <strong>Desconectar</strong>: se borran el token
+<ol><li>Entra a tu proyecto en app.creatvmachine.com › Experimentos › <strong>Desconectar</strong>: se borran el token
 y los identificadores de tu cuenta publicitaria, Página e Instagram al instante.</li>
 <li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
 con confirmación por correo.</li></ol>
 <p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › Creatv Galadsy › Eliminar.</p>""",
         "en": """<p>To delete the data Creatv Galadsy stores about your Meta account:</p>
-<ol><li>Go to your project at app.creatvmachine.com › Settings › Connections › <strong>Disconnect</strong>: the token
+<ol><li>Go to your project at app.creatvmachine.com › Experiments › <strong>Disconnect</strong>: the token
 and the identifiers of your ad account, Page and Instagram are deleted instantly.</li>
 <li>If you prefer, write to dacoloradog@gmail.com with your project's name and we'll delete it within 7 days,
 confirmed by email.</li></ol>
@@ -1032,8 +1257,139 @@ def panel():
     except Exception as e:  # noqa: BLE001 — el panel se pinta igual, sin números, y avisa
         print(f"[aviso] Panel: no pude calcular el resumen: {type(e).__name__}: {e}")
         datos = None
+    try:
+        errores_recientes = monitoreo.contar()["recientes"]
+    except Exception:  # noqa: BLE001 — sin la tabla (migración pendiente) el enlace va sin número
+        errores_recientes = None
     return render_template("panel.html", datos=datos, nombres=nombres, nombres_tipo=NOMBRES_TIPO_GASTO,
-                           usuarios_lista=_usuarios_panel(), smtp_ok=cuentas.smtp_configurado())
+                           usuarios_lista=_usuarios_panel(), smtp_ok=cuentas.smtp_configurado(),
+                           errores_recientes=errores_recientes)
+
+
+@app.route("/salud")
+def salud_publica():
+    """Para un monitor de disponibilidad externo (UptimeRobot, Better Stack…):
+    200 {"ok": true} si la app responde y la base contesta, 503 si no. Sin
+    sesión y sin ningún detalle: lo puede pedir cualquiera."""
+    ok = monitoreo.base_responde()
+    return jsonify({"ok": ok}), (200 if ok else 503)
+
+
+ESTADOS_FILTRO_ERRORES = ("abierto", "resuelto", "silenciado", "todos")
+
+
+@app.route("/admin/salud")
+@requiere_admin
+def admin_salud():
+    """Salud de la plataforma (spec 2026-10-01-escala-y-monitoreo §6): qué
+    arreglar, errores agrupados, peticiones (en la memoria de este proceso),
+    el worker y el servidor. Cada parte que falle se omite, nunca la página."""
+    filtro = request.args.get("estado") if request.args.get("estado") in ESTADOS_FILTRO_ERRORES else "abierto"
+    datos = {"filtro": filtro, "errores": [], "conteo": None, "sistema": None, "cola": None, "avisos": []}
+    try:
+        datos["errores"] = monitoreo.listar(None if filtro == "todos" else filtro)
+        datos["conteo"] = monitoreo.contar()
+    except Exception as e:  # noqa: BLE001 — sin tabla (migración pendiente) la página sigue
+        log.warning("salud: no pude leer los errores: %s", type(e).__name__, extra={"sin_monitoreo": True})
+    try:
+        datos["sistema"] = monitoreo.sistema()
+        datos["cola"] = monitoreo.cola_salud()
+        datos["avisos"] = monitoreo.avisos(datos["sistema"], datos["cola"], datos["conteo"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("salud: no pude leer el sistema: %s", type(e).__name__, extra={"sin_monitoreo": True})
+    return render_template("admin_salud.html", **datos, metricas=monitoreo.METRICAS.resumen(),
+                           estado_general=monitoreo.estado_general(datos["avisos"]),
+                           nombres_origen=monitoreo.NOMBRES_ORIGEN, nombres_estado=monitoreo.NOMBRES_ESTADO,
+                           tamano=monitoreo.tamano_legible, nombres=_nombres_proyectos())
+
+
+@app.route("/admin/estilos")
+@requiere_admin
+def admin_estilos():
+    """Guía de estilos (spec 2026-10-02-sistema-de-estilos §8): cada token con su valor y su contraste contra
+    --panel, y cada componente pintado con el CSS y las macros reales."""
+    import estilos
+    lista = estilos.tokens()
+    panel = dict(lista).get("--panel", "#0b1a33")
+    colores = [{"nombre": n, "valor": v, "contraste": estilos.contraste(v, panel)} for n, v in lista if estilos.es_color(v)]
+    otros = [{"nombre": n, "valor": v} for n, v in lista if not estilos.es_color(v)]
+    return render_template("admin_estilos.html", colores=colores, otros=otros)
+
+
+def _nombres_proyectos():
+    try:
+        return {cid: proyectos.nombre_visible(cid) for cid in estado_mod.listar_clientes()}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+ACCIONES_ERROR = {"resolver": "resuelto", "silenciar": "silenciado", "reabrir": "abierto"}
+
+
+@app.route("/admin/salud/errores/<int:error_id>", methods=["POST"])
+@requiere_admin
+def admin_salud_error(error_id):
+    """Resolver (vuelve a abrirse solo si el error pasa otra vez), silenciar
+    (sigue contando, nunca avisa) o reabrir."""
+    if not _mismo_origen():
+        abort(403)
+    estado = ACCIONES_ERROR.get(request.form.get("accion"))
+    if estado is None or not monitoreo.cambiar_estado(error_id, estado):
+        abort(404)
+    return redirect(url_for("admin_salud", estado=request.form.get("volver") or None, _anchor="errores"))
+
+
+@app.route("/admin/salud/errores/resolver-todos", methods=["POST"])
+@requiere_admin
+def admin_salud_resolver_todos():
+    """Después de un despliegue que arregla: todos los abiertos a resuelto
+    (el que vuelva a pasar se reabre solo)."""
+    if not _mismo_origen():
+        abort(403)
+    n = 0
+    for e in monitoreo.listar("abierto", limite=monitoreo.MAX_FILAS):
+        n += monitoreo.cambiar_estado(e["id"], "resuelto")
+    flash(ngettext("%(num)s error marcado como resuelto.", "%(num)s errores marcados como resueltos.", n), "ok")
+    return redirect(url_for("admin_salud", _anchor="errores"))
+
+
+@app.route("/admin/salud/metricas/reiniciar", methods=["POST"])
+@requiere_admin
+def admin_salud_reiniciar_metricas():
+    if not _mismo_origen():
+        abort(403)
+    monitoreo.METRICAS.reiniciar()
+    return redirect(url_for("admin_salud", _anchor="peticiones"))
+
+
+@app.route("/admin/salud/registros")
+@requiere_admin
+def admin_registros():
+    """Las últimas entradas de data/logs/<proceso>.log, filtradas por nivel y
+    texto (sin tokens ni llaves)."""
+    proceso = request.args.get("proceso") if request.args.get("proceso") in registro_app.PROCESOS else "web"
+    nivel = request.args.get("nivel") if request.args.get("nivel") in registro_app.NIVELES else None
+    buscar = (request.args.get("q") or "").strip()[:200]
+    entradas = registro_app.leer(proceso, n=400, nivel=nivel, buscar=buscar)
+    return render_template("admin_registros.html", proceso=proceso, nivel=nivel, buscar=buscar, entradas=entradas,
+                           procesos=registro_app.PROCESOS, niveles=registro_app.NIVELES,
+                           existe=os.path.exists(registro_app.ruta(proceso)))
+
+
+@app.route("/admin/salud/registros/<proceso>.log")
+@requiere_admin
+def admin_registros_descargar(proceso):
+    """El archivo actual entero, ya sin tokens ni llaves."""
+    if proceso not in registro_app.PROCESOS:
+        abort(404)
+    ruta = registro_app.ruta(proceso)
+    if not os.path.exists(ruta):
+        abort(404)
+    with open(ruta, encoding="utf-8", errors="replace") as f:
+        texto = monitoreo.limpiar_texto(f.read())
+    resp = Response(texto, mimetype="text/plain; charset=utf-8")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{proceso}_{db.ahora()[:10]}.log"'
+    return resp
 
 
 @app.route("/panel/gasto.csv")
@@ -1081,6 +1437,11 @@ def mapa_codigo():
     return render_template("mapa_codigo.html")
 
 
+LOGIN_MAX_POR_USUARIO = 10
+LOGIN_MAX_POR_IP = 30
+LOGIN_VENTANA_S = 15 * 60
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -1090,8 +1451,19 @@ def login():
 
     usuario = (request.form.get("usuario") or "").strip()
     password = request.form.get("password") or ""
+    # Tope de intentos FALLIDOS (auditoría de seguridad 2026-10-01): por
+    # usuario frena adivinar una contraseña; por IP, probar muchos usuarios
+    # (y cada intento cuesta ~1 s de CPU en el VPS). Se mira antes de
+    # calcular el hash y solo se anota un intento que falló.
+    claves = (f"login:{usuario.lower()}", f"login:ip:{_ip_cliente() or 'desconocida'}")
+    topes = (LOGIN_MAX_POR_USUARIO, LOGIN_MAX_POR_IP)
+    if not all(cuentas.limite_disponible(c, maximo=m, ventana_s=LOGIN_VENTANA_S) for c, m in zip(claves, topes)):
+        flash(gettext("Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo."), "error")
+        return render_template("login.html"), 429
     entry = usuarios.verificar(usuario, password)
     if not entry:
+        for c, m in zip(claves, topes):
+            cuentas.limite_ok(c, maximo=m, ventana_s=LOGIN_VENTANA_S)
         flash(gettext("Usuario o contraseña incorrectos."), "error")
         return render_template("login.html"), 401
 
@@ -1135,6 +1507,11 @@ def crear_proyecto():
     error_password = usuarios.validar_password(password)
     if error_password:
         return _error(error_password)
+    # Las dos respuestas de abajo dicen si un usuario o un correo ya existen:
+    # con tope por IP para que no sirvan para sacar la lista de cuentas.
+    if not cuentas.limite_ok(f"alta:consulta:ip:{_ip_cliente() or 'desconocida'}", maximo=20):
+        flash(gettext("Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo."), "error")
+        return render_template("index.html", form=form), 429
     if usuarios.existe(usuario):
         return _error(gettext("Ya existe un usuario '%(usuario)s' — elige otro.", usuario=usuario))
     if usuarios.por_correo(correo):
@@ -1551,24 +1928,39 @@ def _aplicar_edicion(item, form):
     return item
 
 
-@app.route("/cliente/<cliente>")
-@trabajos.con_vivos_precargados
-def ver_cliente(cliente):
-    videos_dict = estado_mod.cargar(cliente)
-    videos = []
-    for brief_id, entry in sorted(
-        videos_dict.items(), key=lambda kv: kv[1].get("generado_en", ""), reverse=True
-    ):
-        job_id = _job_id_publicar(cliente, brief_id)
-        videos.append({
-            "id": brief_id,
-            **entry,
-            "plataformas_estado": _estado_plataformas(cliente, brief_id) if entry.get("estado") == "publicado" else {},
-            "trabajo": {"job_id": job_id} if entry.get("estado") == "pendiente" and trabajos.en_curso(job_id) else None,
-        })
+def _modo_de(datos_meta):
+    """Modo de la conexión con Meta: «agencia» (la gestiona Creatv) o «propia» (la app del proyecto)."""
+    return meta_conexion.MODO_AGENCIA if (datos_meta or {}).get("modo") == meta_conexion.MODO_AGENCIA else "propia"
 
-    log = bitacora.leer(cliente=cliente, limit=100)
 
+def _acepta_piezas(ex):
+    """Un experimento que todavía no está en Meta (armando, o en error sin campaña) acepta piezas nuevas."""
+    return ex["estado"] in ("armando", "error") and not ex["meta_campaign_id"]
+
+
+def _etiquetas_exp():
+    """Los rótulos de estados, veredictos, tipos y acciones que pintan las tarjetas de un experimento."""
+    return {
+        "estado": experimentos.ETIQUETAS_ESTADO, "pieza": experimentos.ETIQUETAS_ESTADO_PIEZA,
+        "veredicto": experimentos.ETIQUETAS_VEREDICTO, "tipo": experimentos.ETIQUETAS_TIPO_PIEZA,
+        "derivacion": derivaciones.ETIQUETAS_ESTADO, "clase": derivaciones.ETIQUETAS_CLASE,
+        "variante": derivaciones.ETIQUETAS_VARIANTE, "atribucion": experimentos.ETIQUETAS_ATRIBUCION,
+        "accion": acciones.ETIQUETAS_ACCION, "tipo_derivacion": derivaciones.ETIQUETAS_TIPO,
+        "evento": experimentos.ETIQUETAS_EVENTO,
+    }
+
+
+def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
+    """Lo que pintan la gestión de un experimento, sus propuestas y reglas, los aprendizajes y los anuncios
+    sueltos (`_exp_gestionar.html`, `_exp_probar.html`, `_anuncios_sueltos.html`, `_aprendizajes.html`): el
+    contexto de Experimentos que hasta E2 armaba `ver_cliente`, sacado a una función para que lo compartan la
+    página del proyecto, el fragmento de resultados y «Nuevo experimento».
+
+    `con_elegibles` agrega `elegibles_exp` (todo lo que se puede probar en Meta: la galería de «Nuevo experimento»).
+    La página del proyecto NO lo pide (la pestaña es un armazón: no pinta piezas); el fragmento de resultados lo suma
+    él mismo cuando su gestión o un anuncio suelto en cola lo necesitan (`exp_resultados`). `con_organico=False` es
+    para quien ya trae lo orgánico por otro lado (`_contexto_final_edition`): dos veces la misma clave no se puede
+    pasar a `render_template`."""
     # Anuncios sueltos (lo que quedó de Campañas, dentro de Experimentos): qué
     # tarjetas tienen un trabajo del worker en curso (publicar o refrescar
     # métricas), para que la tarjeta muestre la barra y se recargue sola.
@@ -1600,6 +1992,50 @@ def ver_cliente(cliente):
     # experimento con contador > 0), reglas y modos para los formularios.
     propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in experimentos_exp if e["propuestas_pendientes"]}
     reglas_cliente = proyectos.reglas_defecto(cliente)
+    # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
+    atribucion_sug = experimentos.atribucion_sugerida(cliente)
+    ctx = {
+        "ads": ads_dict,
+        "trabajos_ads": trabajos_ads,
+        "experimentos": experimentos_exp,
+        "experimentos_armando": [e for e in experimentos_exp if _acepta_piezas(e)],
+        "trabajos_exp": trabajos_exp,
+        "objetivos_exp": meta_campaign.OBJETIVOS_VALIDOS_FASE1,
+        "objetivo_exp_sugerido": experimentos.objetivo_sugerido(cliente, atribucion_sug),
+        "nombres_objetivo_exp": NOMBRES_OBJETIVO_EXP,
+        "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
+        "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
+        "moneda_exp": moneda_exp,
+        "propuestas_exp": propuestas_exp,
+        "reglas_defecto_exp": decisor.REGLAS_DEFECTO,
+        "reglas_enteras_exp": decisor.ENTEROS,
+        "reglas_desactivables_exp": decisor.UMBRALES_DESACTIVABLES,
+        "etiquetas_reglas_exp": decisor.ETIQUETAS,
+        "grupos_reglas_exp": decisor.GRUPOS_REGLAS,
+        "reglas_cliente": reglas_cliente,
+        "reglas_efectivas_exp": {e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in experimentos_exp},
+        "correo_notificaciones": proyectos.correo_notificaciones(cliente) or "",
+        "aprendizajes_exp": proyectos.aprendizajes(cliente),
+        "precio_diagnostico": gastos.estimar("diagnostico_pieza")["texto"],
+        "modos_exp": modos.MODOS,
+        "nombres_exp": {e["id"]: e["nombre"] for e in experimentos_exp},
+        "etiquetas_exp": _etiquetas_exp(),
+        "meses_cortos": idiomas.meses_cortos(),
+        "atribucion_sugerida": atribucion_sug,
+        "atribuciones_exp": experimentos.ATRIBUCIONES,
+        "pedidos_por_exp": tiendas.pedidos_por_experimento(cliente),
+    }
+    if con_elegibles:
+        ctx["elegibles_exp"] = experimentos.elegibles(cliente)
+    if con_organico:
+        ctx.update(_contexto_organico(cliente))
+    return ctx
+
+
+def _contexto_meta(cliente, experimentos_lista=None):
+    """Lo de la conexión con Meta que pintan `_meta_conectar.html` (y las tarjetas que incluye), el estado del
+    Pixel y las pestañas que preguntan si Meta está conectado. `ver_cliente` y «Nuevo experimento» lo comparten.
+    `experimentos_lista` (si ya se cargaron) evita volver a leerlos para el bloqueo de «Cambiar de forma»."""
     # Bloque 5: productos importados/sincronizados, tiendas conectadas y el
     # estado del Pixel. El Pixel se lee SOLO del caché (`solo_cache=True`):
     # la página del proyecto nunca espera una ida a Graph (hasta 30 s bajo el
@@ -1607,7 +2043,7 @@ def ver_cliente(cliente):
     # principal). Quien llena el caché es el botón «Comprobar Pixel»
     # (cfg_pixel_refrescar, POST); con Meta conectado y caché vacío la
     # plantilla muestra «sin comprobar» + el botón. atribucion_sugerida
-    # (más abajo) también mira solo caché, así que coincide con Configuración.
+    # (en _contexto_experimentos) también mira solo caché, así que coincide con Configuración.
     capacidades_meta = meta_conexion.estado(cliente)
     meta_app = meta_conexion.app_publica(cliente)
     meta_conectado = capacidades_meta.get("estado") == "conectado"
@@ -1615,7 +2051,7 @@ def ver_cliente(cliente):
     # de _meta_conectar.html (en Experimentos) es «Gestionado por Creatv», sin
     # app ni botón de conectar.
     datos_meta = meta_conexion.cargar(cliente) or {}
-    modo_meta = meta_conexion.MODO_AGENCIA if datos_meta.get("modo") == meta_conexion.MODO_AGENCIA else "propia"
+    modo_meta = _modo_de(datos_meta)
     agencia_conectada = meta_agencia.conectada() if modo_meta == meta_conexion.MODO_AGENCIA else False
     meta_detalle = meta_conexion._detalle(datos_meta)
     # El cliente elige cómo conectar (spec 2026-09-20): forma = intención,
@@ -1641,27 +2077,78 @@ def ver_cliente(cliente):
                 agencia_activos_error = cola.sin_token(str(e))
     motivo_bloqueo_forma = None
     if meta_conectado or modo_meta == meta_conexion.MODO_AGENCIA:
-        motivo_bloqueo_forma = _bloqueo_cambio_forma(cliente, experimentos_lista=experimentos_exp)
-    estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
+        motivo_bloqueo_forma = _bloqueo_cambio_forma(cliente, experimentos_lista=experimentos_lista)
+    return {
+        "capacidades_meta": capacidades_meta,
+        "meta_app": meta_app,
+        "meta_conectado": meta_conectado,
+        "modo_meta": modo_meta,
+        "agencia_conectada": agencia_conectada,
+        "meta_detalle": meta_detalle,
+        "meta_forma": meta_forma,
+        "agencia_disponible": agencia_disponible,
+        "agencia_publica": agencia_publica,
+        "agencia_solicitud": agencia_solicitud,
+        "agencia_portafolio": agencia_portafolio,
+        "agencia_activos": agencia_activos,
+        "agencia_activos_error": agencia_activos_error,
+        "motivo_bloqueo_forma": motivo_bloqueo_forma,
+        "estado_pixel": meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None,
+        "meta_redirect_uri": os.environ.get("META_REDIRECT_URI", ""),
+    }
+
+
+@app.route("/cliente/<cliente>")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
+def ver_cliente(cliente):
+    videos_dict = estado_mod.cargar(cliente)
+    videos = []
+    for brief_id, entry in sorted(
+        videos_dict.items(), key=lambda kv: kv[1].get("generado_en", ""), reverse=True
+    ):
+        job_id = _job_id_publicar(cliente, brief_id)
+        videos.append({
+            "id": brief_id,
+            **entry,
+            "plataformas_estado": _estado_plataformas(cliente, brief_id) if entry.get("estado") == "publicado" else {},
+            "trabajo": {"job_id": job_id} if entry.get("estado") == "pendiente" and trabajos.en_curso(job_id) else None,
+        })
+
+    log = bitacora.leer(cliente=cliente, limit=100)
+
+    # Experimentos (centro de resultados, E2): la gestión de cada experimento, sus propuestas y reglas, los anuncios
+    # sueltos y lo de Meta salen de contextos que comparten el fragmento de resultados (`exp_resultados`) y
+    # «Nuevo experimento» (`exp_nuevo`). Lo orgánico ya viene en `fe_ctx`, y las piezas elegibles (la galería) ya
+    # no viajan en esta página: las pide `exp_nuevo`.
+    # (El hotfix e8d433a del 2026-10-03 las devolvía mientras la pestaña vieja pintaba la galería; E2 la reemplaza.)
+    ctx_exp = _contexto_experimentos(cliente, con_organico=False)
+    ctx_meta = _contexto_meta(cliente, ctx_exp["experimentos"])
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
-    # Catálogo › Productos: cada activo tiene su fila comercial (se crea al
-    # vuelo si falta) y la fila se pinta en la tarjeta del activo.
+    # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
+    # la página solo trae contadores por categoría y lo que Crear necesita.
     activos_producto = _productos_con_uso(cliente)
-    _asegurar_filas_producto(cliente, activos_producto)
-    productos_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
-    producto_comercial = _producto_comercial_contexto(productos_tienda)
-    # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
-    atribucion_sug = experimentos.atribucion_sugerida(cliente)
-    # Bloque 7: canales orgánicos del proyecto, publicaciones por pieza (UNA
-    # consulta) y qué piezas tienen una publicación orgánica corriendo en el
-    # worker (UNA consulta a la cola, como _trabajos_productos).
+    productos_catalogo = catalogo_productos.listar_productos(cliente, "producto")
+    _asegurar_filas_producto(cliente, productos_catalogo)
+    # Un producto archivado (2026-10-01) no se ofrece en Crear ni en Cambiar
+    # producto ni cuenta en la pestaña, salvo el que la precarga ya marca.
+    # `_prefill_para` consume la precarga: se lee UNA vez, aquí.
+    fp_prefill = _prefill_para(cliente)
+    archivados = tiendas.activos_archivados(cliente)
+    activos_producto = catalogo_productos.sin_archivados(
+        activos_producto, archivados,
+        conservar=[v.split(":", 1)[1] for v in ((fp_prefill or {}).get("productos_catalogo") or [])
+                   if isinstance(v, str) and v.startswith("producto:")])
+    n_por_categoria = {cid: (sum(1 for p in productos_catalogo if p["id"] not in archivados) if cid == "producto"
+                             else len(catalogo_productos.listar_productos(cliente, cid)))
+                       for cid in catalogo_productos.CATEGORIAS}
     # Gasto real (Task 3): el tablero se calcula UNA vez (cacheado) y de ahí
     # sale la pauta por moneda; la generación viene de la tabla `gasto`.
     tablero_ctx = _contexto_tablero(cliente)
     gasto_ctx = _contexto_gasto(cliente, tablero_ctx)
 
-    cf_items = _creative_flow_items(cliente)
+    cf_items = _creative_flow_items(cliente, ligero=True)
     # `precios` ya viene en gasto_ctx (el mismo _precios_pagina()): sin quitarlo
     # render_template lo recibiría dos veces.
     fe_ctx = _contexto_final_edition(cliente)
@@ -1683,8 +2170,7 @@ def ver_cliente(cliente):
         productos=activos_producto,
         categorias=catalogo_productos.CATEGORIAS,
         activos_por_categoria={cid: (activos_producto if cid == "producto" else catalogo_productos.listar(cliente, cid)) for cid in catalogo_productos.CATEGORIAS},
-        producto_comercial=producto_comercial,
-        productos_sin_activo=[p for p in productos_tienda if not p["activo_ok"]],
+        n_por_categoria=n_por_categoria,
         monedas_catalogo=sorted(PRESUPUESTO_MINIMO_DIARIO),
         moneda_catalogo=_moneda_por_defecto(cliente),
         etiquetas_fuente=ETIQUETAS_FUENTE,
@@ -1696,83 +2182,45 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=cf_items,
-        **_listas_crear_final(cf_items),
+        **_listas_crear(cf_items),
+        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"]),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
-        fp_prefill=_prefill_para(cliente),
+        aviso_saldo=saldo.vigente("wavespeed"),
+        # Pestaña Alertas: las alertas llegan en `alertas_ctx` (context
+        # processor _alertas_sidebar); aquí solo los nombres, constantes N_.
+        alertas_grupos=alertas.GRUPOS,
+        alertas_nombres_grupo=alertas.NOMBRES_GRUPO,
+        alertas_nombres_nivel=alertas.NOMBRES_NIVEL,
+        alertas_nombres_tab=alertas.NOMBRES_TAB,
+        fp_prefill=fp_prefill,
         logos=_logos(cliente),
         referencias_bandeja=referencias_flowplus.listar(cliente),
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
         modelos_flowplus_video=flowplus_modelos.VIDEO,
+        tarifa_musica_crear=gastos.costo_musica_estimada("generada"),
+        tarifas_flowplus_borrador={m: flowplus_modelos.usd_por_segundo(m, calidad="borrador") for m in flowplus_modelos.VIDEO},
         duraciones_crear=flowplus_modelos.DURACIONES_CREAR,
         formatos_nombres=flowplus_modelos.FORMATOS_NOMBRES,
+        plantillas_anuncio=plantillas_anuncio.PLANTILLAS,
         modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
-        ads=ads_dict,
-        trabajos_ads=trabajos_ads,
         preferencias_swap=proyectos.preferencias(cliente),
         proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
         proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
         nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
-        capacidades_meta=capacidades_meta,
-        meta_app=meta_app,
-        modo_meta=modo_meta,
-        agencia_conectada=agencia_conectada,
-        meta_detalle=meta_detalle,
-        meta_forma=meta_forma,
-        agencia_disponible=agencia_disponible,
-        agencia_publica=agencia_publica,
-        agencia_solicitud=agencia_solicitud,
-        agencia_portafolio=agencia_portafolio,
-        agencia_activos=agencia_activos,
-        agencia_activos_error=agencia_activos_error,
-        motivo_bloqueo_forma=motivo_bloqueo_forma,
-        meta_redirect_uri=os.environ.get("META_REDIRECT_URI", ""),
+        **ctx_meta,
+        **ctx_exp,
         **fe_ctx,
         **_contexto_audios(cliente),
-        experimentos=experimentos_exp,
-        experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],
-        elegibles_exp=experimentos.elegibles(cliente),
-        trabajos_exp=trabajos_exp,
-        objetivos_exp=meta_campaign.OBJETIVOS_VALIDOS_FASE1,
-        objetivo_exp_sugerido=experimentos.objetivo_sugerido(cliente, atribucion_sug),
-        nombres_objetivo_exp=NOMBRES_OBJETIVO_EXP,
-        minimo_diario_exp=PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
-        moneda_exp=moneda_exp,
-        propuestas_exp=propuestas_exp,
-        reglas_defecto_exp=decisor.REGLAS_DEFECTO,
-        reglas_enteras_exp=decisor.ENTEROS,
-        reglas_desactivables_exp=decisor.UMBRALES_DESACTIVABLES,
-        etiquetas_reglas_exp=decisor.ETIQUETAS,
-        reglas_cliente=reglas_cliente,
-        reglas_efectivas_exp={e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in experimentos_exp},
-        correo_notificaciones=proyectos.correo_notificaciones(cliente) or "",
-        aprendizajes_exp=proyectos.aprendizajes(cliente),
-        precio_diagnostico=gastos.estimar("diagnostico_pieza")["texto"],
-        modos_exp=modos.MODOS,
-        nombres_exp={e["id"]: e["nombre"] for e in experimentos_exp},
-        etiquetas_exp={
-            "estado": experimentos.ETIQUETAS_ESTADO, "pieza": experimentos.ETIQUETAS_ESTADO_PIEZA,
-            "veredicto": experimentos.ETIQUETAS_VEREDICTO, "tipo": experimentos.ETIQUETAS_TIPO_PIEZA,
-            "derivacion": derivaciones.ETIQUETAS_ESTADO, "clase": derivaciones.ETIQUETAS_CLASE,
-            "variante": derivaciones.ETIQUETAS_VARIANTE, "atribucion": experimentos.ETIQUETAS_ATRIBUCION,
-            "accion": acciones.ETIQUETAS_ACCION, "tipo_derivacion": derivaciones.ETIQUETAS_TIPO,
-            "evento": experimentos.ETIQUETAS_EVENTO,
-        },
-        meses_cortos=idiomas.meses_cortos(),
-        productos_tienda=productos_tienda,
+        **_contexto_mis_voces(cliente),
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
         tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
-        trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
+        trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
-        estado_pixel=estado_pixel,
-        meta_conectado=meta_conectado,
-        atribucion_sugerida=atribucion_sug,
-        atribuciones_exp=experimentos.ATRIBUCIONES,
-        pedidos_por_exp=tiendas.pedidos_por_experimento(cliente),
         cifrado_ok=cifrado.disponible(),
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
-        tipos_tienda=conectores.TIPOS_API,
+        tipos_tienda=conectores.TIPOS_CONECTABLES,
         llaves=_llaves_visibles(_estado_llaves(url_for("meli_callback", _external=True)), session.get("rol")),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=tablero_ctx,
@@ -1783,231 +2231,11 @@ def ver_cliente(cliente):
     )
 
 
-# Configuración › Puesta a punto: una tarjeta por servicio externo. Cada
-# entrada dice para qué sirve, cómo se paga, dónde se consigue y qué variables
-# van en el .env del servidor. El estado se calcula SOLO con
-# bool(os.environ.get(var)) — el valor de una llave nunca sale de aquí ni
-# llega a la plantilla. `{callback_meli}` en un paso se reemplaza por la URL
-# real del callback cuando hay request (ver _estado_llaves).
-SERVICIOS_LLAVES = (
-    {
-        "id": "anthropic",
-        "nombre": idiomas.N_("Anthropic (guiones y prompts)"),
-        "para_que": idiomas.N_("Escribe los 5 prompts por idea y los guiones de las finales."),
-        "costo": idiomas.N_("Se paga por uso: centavos por guion."),
-        "url": "https://console.anthropic.com/settings/keys",
-        "url_texto": "console.anthropic.com › API keys",
-        "variables": ["ANTHROPIC_API_KEY"],
-        "nota": idiomas.N_("Sin ella no hay prompts ni guiones."),
-        "pasos": [
-            idiomas.N_("Entra a console.anthropic.com e inicia sesión (o crea la cuenta de la empresa)."),
-            idiomas.N_("En «Billing» carga saldo o pon una tarjeta: sin saldo la llave existe pero no responde."),
-            idiomas.N_("Ve a «API keys» › «Create key», ponle un nombre (por ejemplo «creatv») y cópiala: solo se muestra una vez."),
-            idiomas.N_("Pégala como ANTHROPIC_API_KEY en el .env del servidor y reinicia los dos servicios."),
-        ],
-    },
-    {
-        "id": "fal",
-        "nombre": idiomas.N_("fal.ai (voz y música)"),
-        "para_que": idiomas.N_("Voz en off (ElevenLabs), subtítulos por palabra (Whisper) y música (Stable Audio) de las finales."),
-        "costo": idiomas.N_("Se paga por uso: alrededor de $0.05 por final."),
-        "url": "https://fal.ai/dashboard/keys",
-        "url_texto": "fal.ai › Dashboard › Keys",
-        "variables": ["FAL_KEY"],
-        "nota": idiomas.N_("Sin ella las finales salen sin voz ni música."),
-        "pasos": [
-            idiomas.N_("Regístrate en fal.ai (con Google o GitHub; no pide verificación de negocio)."),
-            idiomas.N_("En «Billing» agrega una tarjeta o saldo prepago."),
-            idiomas.N_("Ve a «Keys» › «Add key», elige alcance «API» y copia la llave."),
-            idiomas.N_("Pégala como FAL_KEY en el .env del servidor y reinicia."),
-        ],
-    },
-    {
-        "id": "higgsfield",
-        "nombre": idiomas.N_("Higgsfield (video e imagen)"),
-        "para_que": idiomas.N_("Genera la imagen candidata y el video de cada pieza."),
-        "costo": idiomas.N_("Por créditos: ~1.5 por imagen y ~8 por video; se compran por paquetes."),
-        "url": "https://higgsfield.ai/",
-        "url_texto": "higgsfield.ai › API",
-        "variables": ["HF_API_KEY_ID", "HF_API_KEY_SECRET"],
-        "nota": idiomas.N_("Sin ella no se generan piezas."),
-        "pasos": [
-            idiomas.N_("Inicia sesión en higgsfield.ai y compra un paquete de créditos en «Billing»."),
-            idiomas.N_("Abre la sección «API» (o «Developers») de tu cuenta y crea una llave nueva."),
-            idiomas.N_("Copia los dos valores: el Key ID y el Key Secret (el secreto solo se muestra una vez)."),
-            idiomas.N_("Pégalos como HF_API_KEY_ID y HF_API_KEY_SECRET en el .env del servidor y reinicia."),
-        ],
-    },
-    {
-        "id": "r2",
-        "nombre": idiomas.N_("Cloudflare R2 (almacenamiento)"),
-        "para_que": idiomas.N_("Guarda cada imagen y video generado y les da una URL pública permanente."),
-        "costo": idiomas.N_("Casi gratis: 10 GB al mes sin costo y sin cobro por descarga."),
-        "url": "https://dash.cloudflare.com/?to=/:account/r2",
-        "url_texto": "dash.cloudflare.com › R2 › Manage API tokens",
-        "variables": ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL"],
-        "nota": idiomas.N_("Sin ella los videos no tienen URL pública y Meta no puede usarlos."),
-        "pasos": [
-            idiomas.N_("En dash.cloudflare.com entra a «R2» y crea un bucket (ese nombre es R2_BUCKET_NAME)."),
-            idiomas.N_("En «Settings» del bucket activa «Public access» (r2.dev o un dominio propio): esa URL es R2_PUBLIC_BASE_URL."),
-            idiomas.N_("Vuelve a R2 › «Manage R2 API tokens» › «Create API token» con permiso «Object Read & Write»."),
-            idiomas.N_("Copia el Access Key ID y el Secret Access Key; el Account ID está en la barra lateral de R2."),
-            idiomas.N_("Pega las cinco variables en el .env del servidor y reinicia."),
-        ],
-    },
-    {
-        "id": "smtp",
-        "nombre": idiomas.N_("Correo de la plataforma (cuentas y avisos)"),
-        "para_que": idiomas.N_("Manda el enlace para confirmar el correo de cada cuenta y el de recuperar la contraseña; "
-                    "también los avisos (propuestas pendientes, ganadores, rechazos de Meta, lanzamientos fallidos)."),
-        "costo": idiomas.N_("Depende del proveedor de correo; con una cuenta normal no cuesta."),
-        "url": "https://support.google.com/accounts/answer/185833",
-        "url_texto": idiomas.N_("Google › Contraseñas de aplicación"),
-        "variables": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "PLATAFORMA_URL"],
-        "nota": idiomas.N_("Sin esto nadie puede confirmar su correo ni recuperar la contraseña solo (el administrador "
-                "tiene que marcar las cuentas a mano en el panel) y los avisos solo quedan en la bitácora."),
-        "opcional": True,
-        "pasos": [
-            idiomas.N_("Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio)."),
-            idiomas.N_("Si es Gmail: en myaccount.google.com › Seguridad activa la «Verificación en dos pasos» y luego, "
-            "en «Contraseñas de aplicación», crea una para «Creatv»: los 16 caracteres que te da son SMTP_PASS "
-            "(no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma."),
-            idiomas.N_("Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS)."),
-            idiomas.N_("Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor, junto con "
-            "PLATAFORMA_URL (la dirección pública del sitio, p. ej. https://app.creatvmachine.com: es la base de "
-            "los enlaces que van en los correos), y reinicia los dos servicios."),
-            idiomas.N_("Prueba con «Reenviar» en Configuración › Cuenta: debe llegar el correo de confirmación. "
-            "Abajo, en «Correo de avisos», escribe a qué dirección llegan los avisos de este proyecto."),
-        ],
-    },
-    {
-        "id": "meli",
-        "nombre": idiomas.N_("MercadoLibre (opcional)"),
-        "para_que": idiomas.N_("Trae las publicaciones activas de una tienda de MercadoLibre al catálogo."),
-        "costo": idiomas.N_("Gratis: solo lectura de tus publicaciones."),
-        "url": "https://developers.mercadolibre.com/",
-        "url_texto": "developers.mercadolibre.com",
-        "variables": ["MELI_APP_ID", "MELI_SECRET"],
-        "nota": idiomas.N_("Sin esto no aparece el botón «Conectar con MercadoLibre» en Tienda."),
-        "opcional": True,
-        "pasos": [
-            idiomas.N_("En developers.mercadolibre.com entra con la cuenta de la tienda y ve a «Mis aplicaciones» › «Crear nueva aplicación»."),
-            idiomas.N_("Marca los permisos de lectura y «offline_access» (para renovar el token solo)."),
-            idiomas.N_("En «URI de redirect» pon exactamente {callback_meli}."),
-            idiomas.N_("Copia el App ID y la Secret Key y pégalos como MELI_APP_ID y MELI_SECRET en el .env del servidor; reinicia."),
-            idiomas.N_("Luego, en «Conectar tu tienda» › MercadoLibre, pulsa «Conectar con MercadoLibre»."),
-        ],
-    },
-    {
-        "id": "reddit",
-        "nombre": idiomas.N_("Reddit (Nicho: comentarios reales)"),
-        "para_que": idiomas.N_("Trae posts y comentarios de Reddit a un estudio de Nicho para armar avatares con evidencia."),
-        "costo": idiomas.N_("Gratis para uso propio (100 llamadas por minuto). Si el producto se vende, Reddit pide permiso comercial."),
-        "url": "https://www.reddit.com/prefs/apps",
-        "url_texto": "reddit.com › preferences › apps",
-        "variables": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT"],
-        "nota": idiomas.N_("Sin ellas la tarjeta Reddit de cada estudio queda apagada; el resto de Nicho funciona."),
-        "opcional": True,
-        "pasos": [
-            idiomas.N_("Entra a reddit.com/prefs/apps con la cuenta de la empresa y pulsa «create another app…»."),
-            idiomas.N_("Tipo «script», nombre «creatv-machine», redirect uri http://localhost:8080 (no se usa) y crea la app."),
-            idiomas.N_("Copia el id (bajo el nombre de la app) como REDDIT_CLIENT_ID y el «secret» como REDDIT_CLIENT_SECRET."),
-            idiomas.N_("Pon REDDIT_USER_AGENT con la forma «creatv-machine/1.0 (by u/tu_usuario)» y reinicia los dos servicios."),
-        ],
-    },
-    {
-        "id": "youtube_api",
-        "nombre": idiomas.N_("YouTube Data API (Nicho: comentarios de videos)"),
-        "para_que": idiomas.N_("Busca videos por palabras clave y trae sus comentarios a un estudio de Nicho. Es una llave distinta del OAuth de publicación."),
-        "costo": idiomas.N_("Gratis: 100 búsquedas por día por proyecto de Google y 10 000 unidades para leer comentarios."),
-        "url": "https://console.cloud.google.com/apis/credentials",
-        "url_texto": idiomas.N_("console.cloud.google.com › APIs y servicios › Credenciales"),
-        "variables": ["YOUTUBE_API_KEY"],
-        "nota": idiomas.N_("Sin ella la tarjeta YouTube de cada estudio queda apagada."),
-        "opcional": True,
-        "pasos": [
-            idiomas.N_("En el proyecto de Google Cloud donde ya está habilitada «YouTube Data API v3» (SETUP.md §2), ve a «Credenciales»."),
-            idiomas.N_("«Crear credenciales» › «Clave de API»; en «Restricciones de API» limítala a YouTube Data API v3."),
-            idiomas.N_("Cópiala como YOUTUBE_API_KEY en el .env del servidor y reinicia los dos servicios."),
-        ],
-    },
-    {
-        "id": "apify",
-        "nombre": idiomas.N_("Apify (Nicho: reseñas/comentarios · Referentes: Ad Library)"),
-        "para_que": idiomas.N_("Corre los actores de Apify: en Nicho trae reseñas de Amazon o comentarios de TikTok; en la biblioteca de referentes trae anuncios de la Ad Library de Meta (alternativa a Atria, sí cubre Latinoamérica)."),
-        "costo": idiomas.N_("Se paga por resultado (Amazon ≈ US$ 3 por 1 000 reseñas; TikTok ≈ US$ 0,50 por 1 000 comentarios) más cómputo; el estimado se muestra antes de cada clic."),
-        "url": "https://console.apify.com/account/integrations",
-        "url_texto": "console.apify.com › Settings › Integrations",
-        "variables": ["APIFY_TOKEN"],
-        "nota": idiomas.N_("Sin él la tarjeta Amazon / TikTok de cada estudio queda apagada. Zona gris de términos de uso de esas plataformas: es responsabilidad de quien pone el token."),
-        "opcional": True,
-        "pasos": [
-            idiomas.N_("Crea la cuenta en apify.com (trae crédito gratis mensual) y agrega una tarjeta si vas a pasar de ese crédito."),
-            idiomas.N_("En «Settings» › «Integrations» copia el «Personal API token»."),
-            idiomas.N_("Pégalo como APIFY_TOKEN en el .env del servidor y reinicia los dos servicios."),
-        ],
-    },
-    {
-        "id": "atria",
-        "nombre": idiomas.N_("Atria (biblioteca de referentes: Ad Library de Meta)"),
-        "para_que": idiomas.N_("Trae anuncios reales de la Ad Library de Meta para la biblioteca de referentes -- la fuente cubre la Unión Europea."),
-        "costo": idiomas.N_("Incluido en el plan mensual de Atria (1 200 llamadas/mes); no cobra por resultado. El contador de uso está en Referentes (admin)."),
-        "url": "https://tryatria.com",
-        "url_texto": "tryatria.com",
-        "variables": ["ATRIA_API_KEY"],
-        "nota": idiomas.N_("Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token."),
-        "opcional": True,
-        "pasos": [
-            idiomas.N_("Crea la cuenta en tryatria.com y elige un plan."),
-            idiomas.N_("Copia la API key desde el panel de Atria."),
-            idiomas.N_("Pégala como ATRIA_API_KEY en el .env del servidor y reinicia los dos servicios."),
-        ],
-    },
-)
-
-
-def _estado_llaves(callback_meli=None):
-    """Tarjetas de Configuración › Puesta a punto (solo admin). Devuelve una
-    lista de dicts {id, nombre, para_que, costo, estado, url, url_texto,
-    variables, faltan, nota, pasos, opcional} donde `estado` es «configurada»
-    (todas las variables presentes), «falta» (ninguna) o «parcial» (algunas).
-    Solo mira bool(os.environ.get(var)): ningún valor sale de aquí.
-    `callback_meli` es la URL real del callback de MercadoLibre para el paso
-    de la app (fuera de un request se deja el texto genérico). La conexión
-    con Meta no es una llave del servidor: vive en Experimentos
-    (_meta_conectar.html)."""
-    callback = callback_meli or "<url del sitio>/meli/callback"
-    tarjetas = []
-    for s in SERVICIOS_LLAVES:
-        nota, pasos = s["nota"], s["pasos"]
-        presentes = [v for v in s["variables"] if bool((os.environ.get(v) or "").strip())]
-        faltan = [v for v in s["variables"] if v not in presentes]
-        if not faltan:
-            estado = "configurada"
-        elif not presentes:
-            estado = "falta"
-        else:
-            estado = "parcial"
-        # Ojo: gettext(s["nombre"]) confunde al extractor de Babel (agarra el
-        # literal "nombre" del subíndice como si fuera el mensaje) — por eso
-        # cada valor pasa primero por una variable antes de traducirse.
-        nombre_valor, para_que_valor, costo_valor = s["nombre"], s["para_que"], s["costo"]
-        url_texto_valor = s["url_texto"]
-        tarjetas.append({
-            "id": s["id"],
-            "nombre": gettext(nombre_valor),
-            "para_que": gettext(para_que_valor),
-            "costo": gettext(costo_valor),
-            "estado": estado,
-            "url": s["url"],
-            "url_texto": gettext(url_texto_valor),
-            "variables": list(s["variables"]),
-            "faltan": faltan,
-            "nota": gettext(nota),
-            "opcional": bool(s.get("opcional")),
-            "pasos": [gettext(p).replace("{callback_meli}", callback) for p in pasos],
-        })
-    return tarjetas
+# Configuración › Puesta a punto: la lista de servicios y su estado viven en
+# llaves.py (los lee también alertas.py); estos alias son los nombres de
+# siempre para las plantillas y las pruebas.
+SERVICIOS_LLAVES = llaves.SERVICIOS
+_estado_llaves = llaves.estado
 
 
 def _llaves_visibles(tarjetas, rol):
@@ -2040,7 +2268,7 @@ def nueva_idea(cliente):
     platforms = request.form.getlist("platforms")
 
     if not idea_texto or not image_url:
-        flash("Escribe la idea y elige un personaje.", "error")
+        flash(gettext("Escribe la idea y elige un personaje."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     guia_estilo = marca_mod.guia_efectiva(cliente)
@@ -2048,7 +2276,7 @@ def nueva_idea(cliente):
         textos = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo,
                                                     idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
-        flash(f"No pude generar los prompts: {e}", "error")
+        flash(gettext("No pude generar los prompts: %(error)s", error=e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     aspect_ratio = _aspect_ratio_para_plataformas(platforms)
@@ -2058,7 +2286,7 @@ def nueva_idea(cliente):
     ]
     prompts_mod.agregar_idea(cliente, idea_texto, items)
 
-    flash(f"Generé {len(items)} prompts para la idea. Revísalos y apruébalos abajo.", "ok")
+    flash(gettext("Generé %(n)s prompts para la idea. Revísalos y apruébalos abajo.", n=len(items)), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2110,7 +2338,7 @@ def _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, prompt
                 campos["credits"] = est.get("credits")
             conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, **campos)
             bitacora.registrar(cliente, video_id, "imagen", "ok", local_path)
-            return "Imagen lista."
+            return idiomas.N_("Imagen lista.")
         except Exception as e:
             conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="error", error=str(e))
             bitacora.registrar(cliente, video_id, "imagen", "error", str(e))
@@ -2119,7 +2347,7 @@ def _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, prompt
     return trabajos.iniciar(
         job_id, trabajo,
         duracion_estimada=45 if proveedor == "higgsfield" else 20,
-        etapas=ETAPAS_IMAGEN,
+        etapas=ETAPAS_IMAGEN, cliente=cliente,
     )
 
 
@@ -2132,8 +2360,11 @@ def nueva_idea_visual(cliente):
     image_url = request.form.get("image_url", "").strip()
     platforms = request.form.getlist("platforms")
 
-    if not idea_texto or not image_url:
-        flash("Escribe la idea y elige un personaje.", "error")
+    # Solo uno de los personajes del proyecto (lo que ofrece el selector): la
+    # URL la descarga el servidor, así que una escrita a mano podía apuntar a
+    # una red interna (SSRF, auditoría de seguridad 2026-10-01).
+    if not idea_texto or image_url not in {p["url"] for p in _personajes(cliente) if p.get("url")}:
+        flash(gettext("Escribe la idea y elige un personaje."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     guia_estilo = marca_mod.guia_efectiva(cliente)
@@ -2141,7 +2372,7 @@ def nueva_idea_visual(cliente):
         escenas = generador_prompts.generar_conceptos_imagen(idea_texto, n=5, guia_estilo=guia_estilo,
                                                               idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
-        flash(f"No pude generar las escenas: {e}", "error")
+        flash(gettext("No pude generar las escenas: %(error)s", error=e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     idea_id = conceptos_imagen.crear_idea(cliente, idea_texto, escenas)
@@ -2154,7 +2385,7 @@ def nueva_idea_visual(cliente):
         for proveedor in conceptos_imagen.PROVEEDORES:
             _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, concepto["texto"], image_url)
 
-    flash(f"Generando {len(escenas)} escenas x 2 proveedores (10 imágenes)…", "ok")
+    flash(gettext("Generando %(n)s escenas x 2 proveedores (10 imágenes)…", n=len(escenas)), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2165,7 +2396,7 @@ def aprobar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
     data = conceptos_imagen.cargar(cliente)
     concepto = conceptos_imagen.encontrar_concepto(data, idea_id, concepto_id)
     if not concepto or proveedor not in concepto or not concepto[proveedor].get("url"):
-        flash("No encontré esa imagen para aprobar.", "error")
+        flash(gettext("No encontré esa imagen para aprobar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     guia_estilo = marca_mod.guia_efectiva(cliente)
@@ -2174,20 +2405,20 @@ def aprobar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
         animaciones = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo,
                                                          idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
-        flash(f"No pude generar las propuestas de animación: {e}", "error")
+        flash(gettext("No pude generar las propuestas de animación: %(error)s", error=e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="aprobado")
     conceptos_imagen.agregar_animaciones(cliente, idea_id, concepto_id, proveedor, animaciones)
 
-    flash("Imagen aprobada — elige cómo animarla abajo.", "ok")
+    flash(gettext("Imagen aprobada — elige cómo animarla abajo."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
 @app.route("/cliente/<cliente>/idea/<idea_id>/concepto/<concepto_id>/<proveedor>/descartar", methods=["POST"])
 def descartar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
     conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="descartado")
-    flash("Imagen descartada.", "ok")
+    flash(gettext("Imagen descartada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2202,7 +2433,7 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
     animacion = conceptos_imagen.encontrar_animacion(data, idea_id, concepto_id, proveedor, anim_id)
     concepto = conceptos_imagen.encontrar_concepto(data, idea_id, concepto_id)
     if not animacion or not concepto or not concepto[proveedor].get("url"):
-        flash("No encontré esa animación.", "error")
+        flash(gettext("No encontré esa animación."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     imagen_url = concepto[proveedor]["url"]
@@ -2267,17 +2498,17 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
         if animacion2:
             animacion2["estado"] = "video_generado"
             conceptos_imagen.guardar(cliente, data2)
-        return "Video listo, pendiente de revisión."
+        return idiomas.N_("Video listo, pendiente de revisión.")
 
     # ETAPAS_VIDEO sin ETAPA_DESCARGAR: el provider descarga por su cuenta dentro
     # de generar_video, así que ese paso no se puede anunciar por separado.
     if trabajos.iniciar(
         job_id, trabajo, duracion_estimada=130,
-        etapas=[(ETAPA_MODELO, 90), (ETAPA_GUARDAR_VIDEO, 10)],
+        etapas=[(ETAPA_MODELO, 90), (ETAPA_GUARDAR_VIDEO, 10)], cliente=cliente,
     ):
-        flash("Generando video…", "ok")
+        flash(gettext("Generando video…"), "ok")
     else:
-        flash("Ya se está generando ese video — espera a que termine.", "warn")
+        flash(gettext("Ya se está generando ese video — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2322,7 +2553,7 @@ def eliminar_idea_visual(cliente, idea_id):
     if idea_id in data:
         del data[idea_id]
         conceptos_imagen.guardar(cliente, data)
-        flash("Idea eliminada.", "ok")
+        flash(gettext("Idea eliminada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2334,11 +2565,15 @@ def _cat(valor):
     return catalogo_productos.categoria_valida(valor or catalogo_productos.CATEGORIA_POR_DEFECTO)
 
 
-@app.route("/cliente/<cliente>/productos/<producto_id>/imagen")
+@app.route("/cliente/<cliente>/productos/<path:producto_id>/imagen")
 def imagen_producto(cliente, producto_id):
-    """Sirve la foto representativa de un producto del catálogo directo del disco
-    (son fijas, no hace falta subirlas a R2)."""
-    producto = catalogo_productos.encontrar(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
+    """Sirve la foto representativa de un activo (`pid` o `pid/color`) directo
+    del disco. `<path:>` porque los ids de color llevan «/» (antes daban 404)."""
+    categoria = _cat(request.args.get("categoria") or request.form.get("categoria"))
+    producto = catalogo_productos.encontrar(cliente, producto_id, categoria=categoria)
+    if not producto and "/" not in producto_id:
+        entrada = catalogo_productos.encontrar_producto(cliente, producto_id, categoria)
+        producto = {"representativa": entrada["representativa"]} if entrada else None
     if not producto:
         flash(gettext("No encontré el producto %(id)s", id=producto_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
@@ -2354,18 +2589,22 @@ def _foto_o_miniatura(ruta):
     return send_file(ruta)
 
 
-@app.route("/cliente/<cliente>/productos/<producto_id>/imagen/<nombre>")
+@app.route("/cliente/<cliente>/productos/<path:producto_id>/imagen/<nombre>")
 def imagen_producto_archivo(cliente, producto_id, nombre):
-    """Sirve UNA foto concreta del producto — la pantalla de gestión muestra
-    todas las referencias, no solo la representativa."""
+    """Sirve UNA foto concreta: del producto (`pid`), de un color (`pid/color`,
+    o `pid` + `?variante=`). 404 ante cualquier id o color inválido. El
+    nombre se valida contra las imágenes que de verdad hay en esa carpeta
+    (no con `secure_filename`, que cambia «HOriginal - Beige_5.png» por
+    «HOriginal_-_Beige_5.png» y dejaba sin foto a los nombres con espacios)."""
     try:
-        carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
+        carpeta = catalogo_productos.carpeta_de(
+            cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")),
+            variante=(request.args.get("variante") or "").strip() or None)
     except ValueError:
         abort(404)
-    ruta = os.path.join(carpeta, secure_filename(nombre))
-    if not os.path.isfile(ruta):
+    if nombre != os.path.basename(nombre) or nombre not in catalogo_productos._imagenes_en(carpeta):
         abort(404)
-    return _foto_o_miniatura(ruta)
+    return _foto_o_miniatura(os.path.join(carpeta, nombre))
 
 
 def _productos_con_uso(cliente):
@@ -2586,19 +2825,30 @@ def crear_producto(cliente):
                                _campos_comerciales(request.form), desarchivar=True,
                                sofisticacion=_sofisticacion_form(request.form))
     flash(gettext("Producto creado: %(nombre)s (%(n)s foto(s)).", nombre=nombre, n=guardadas), "ok")
+    if volver == "catalogo":
+        # Desde el catálogo, el alta abre directo la ficha del producto nuevo.
+        return _volver_catalogo(cliente, categoria, producto_id)
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
-def _guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto"):
-    """Guarda las fotos en la carpeta del producto y devuelve cuántas entraron.
-    Quedan SOLO en disco a propósito: catalogo_productos las lee de ahí y el
-    swap las sube a R2 recién cuando se va a generar."""
-    carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria)
+def _guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto", variante=None):
+    """Guarda las fotos en la carpeta del producto (o de uno de sus colores,
+    con `variante`) y devuelve cuántas entraron. Quedan SOLO en disco a
+    propósito: catalogo_productos las lee de ahí y el swap las sube a R2
+    recién cuando se va a generar. ValueError (sin escribir nada) si
+    `variante` no es un color de la meta del producto: su carpeta no la
+    vería ningún listado."""
+    carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria, variante=variante)
+    if variante:
+        propio = catalogo_productos.cargar_meta(cliente, categoria).get(producto_id) or {}
+        variantes = propio.get("variantes")
+        if not isinstance(variantes, dict) or variante not in variantes:
+            raise ValueError(gettext("Ese color no existe."))
     os.makedirs(carpeta, exist_ok=True)
     guardadas = 0
     for archivo in archivos:
         nombre = secure_filename(archivo.filename)
-        if not nombre.lower().endswith(catalogo_productos.IMAGE_EXTS):
+        if not nombre.lower().endswith(catalogo_productos.IMAGE_EXTS) or _foto_subida_invalida(archivo):
             continue
         # Varias fotos con el mismo nombre (desde el celular todas llegan como
         # "image.jpeg") no se pisan: se numeran.
@@ -2627,7 +2877,7 @@ def actualizar_producto(cliente, producto_id):
         )
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+        return _volver_catalogo(cliente, categoria, producto_id)
     if categoria == "producto":
         # La fila comercial se crea aquí si el activo es anterior a que
         # existiera (no hay migración: se enlaza al primer uso).
@@ -2635,35 +2885,40 @@ def actualizar_producto(cliente, producto_id):
                                request.form.get("descripcion"), _campos_comerciales(request.form),
                                sofisticacion=_sofisticacion_form(request.form))
     flash(gettext("Producto actualizado."), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    return _volver_catalogo(cliente, categoria, producto_id)
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/imagenes/subir", methods=["POST"])
 def subir_imagen_producto(cliente, producto_id):
+    categoria = _cat(request.form.get("categoria"))
+    variante = (request.form.get("variante") or "").strip() or None
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not archivos:
         flash(gettext("No elegiste ninguna foto."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+        return _volver_catalogo(cliente, categoria, producto_id)
     try:
-        guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=_cat(request.form.get("categoria")))
+        guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=categoria, variante=variante)
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+        return _volver_catalogo(cliente, categoria, producto_id)
     if guardadas:
         flash(gettext("%(n)s foto(s) agregada(s).", n=guardadas), "ok")
     else:
         flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    return _volver_catalogo(cliente, categoria, producto_id)
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/imagenes/<nombre>/eliminar", methods=["POST"])
 def eliminar_imagen_producto(cliente, producto_id, nombre):
+    categoria = _cat(request.form.get("categoria"))
     try:
-        ok, mensaje = catalogo_productos.eliminar_imagen(cliente, producto_id, nombre, categoria=_cat(request.form.get("categoria")))
+        ok, mensaje = catalogo_productos.eliminar_imagen(
+            cliente, producto_id, nombre, categoria=categoria,
+            variante=(request.form.get("variante") or "").strip() or None)
     except ValueError as e:
         ok, mensaje = False, str(e)
     flash(mensaje, "ok" if ok else "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    return _volver_catalogo(cliente, categoria, producto_id)
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/eliminar", methods=["POST"])
@@ -2678,16 +2933,206 @@ def eliminar_producto(cliente, producto_id):
         catalogo_productos.eliminar(cliente, producto_id, categoria=categoria)
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+        return _volver_catalogo(cliente)
     if categoria == "producto":
         # La fila comercial NO se borra: se archiva (a mano, como en
         # prod_archivar) para que un experimento que ya la use no se quede
         # sin producto y para no perder precio/url si se vuelve a crear.
-        fila = tiendas.por_activo(cliente).get(producto_id)
+        fila = tiendas.por_activo(cliente).get(catalogo_productos.producto_base(producto_id))
         if fila and not fila["archivado"]:
             tiendas.marcar_producto(cliente, fila["id"], archivado=True)
     flash(gettext("Producto eliminado: %(nombre)s", nombre=nombre), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    return _volver_catalogo(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/colores", methods=["POST"])
+def catalogo_color_agregar(cliente, producto_id):
+    """«+ Color» de la ficha (spec §10.3): crea el color y guarda sus fotos;
+    en un producto plano con fotos exige el nombre del color actual."""
+    nombre = (request.form.get("nombre") or "").strip()
+    archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
+    if not nombre:
+        flash(gettext("Ponle un nombre al color."), "error")
+        return _volver_catalogo(cliente, "producto", producto_id)
+    try:
+        color_id = catalogo_productos.agregar_color(
+            cliente, producto_id, nombre, descripcion=request.form.get("descripcion") or "",
+            convertir_actual=(request.form.get("convertir_actual") or "").strip() or None)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_catalogo(cliente, "producto", producto_id)
+    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, variante=color_id) if archivos else 0
+    if archivos and not guardadas:
+        flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
+    flash(gettext("Color «%(nombre)s» agregado (%(n)s foto(s)).", nombre=nombre, n=guardadas), "ok")
+    return _volver_catalogo(cliente, "producto", producto_id)
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/colores/<color_id>/quitar", methods=["POST"])
+def catalogo_color_quitar(cliente, producto_id, color_id):
+    try:
+        catalogo_productos.quitar_color(cliente, producto_id, color_id)
+        flash(gettext("Color quitado."), "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return _volver_catalogo(cliente, "producto", producto_id)
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/fotos/<nombre>/mover", methods=["POST"])
+def catalogo_foto_mover(cliente, producto_id, nombre):
+    """Una foto de ambiente pasa a ser referencia del color `variante`."""
+    try:
+        final = catalogo_productos.mover_foto_a_color(cliente, producto_id, nombre, (request.form.get("variante") or "").strip())
+        flash(gettext("Foto asignada al color (%(nombre)s).", nombre=final), "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return _volver_catalogo(cliente, "producto", producto_id)
+
+
+@app.route("/cliente/<cliente>/catalogo/producto/<producto_id>/crear-con", methods=["POST"])
+def catalogo_crear_con(cliente, producto_id):
+    """«Crear con este producto» (spec §10.5): deja el color elegido (o el
+    primero con fotos) marcado en el diálogo del catálogo de Crear."""
+    variante = (request.form.get("variante") or "").strip()
+    activo_id = f"{producto_id}/{variante}" if variante else producto_id
+    activo = catalogo_productos.encontrar(cliente, activo_id, categoria="producto")
+    if not activo:
+        flash(gettext("Ese producto no tiene fotos de referencia todavía."), "error")
+        return _volver_catalogo(cliente, "producto", producto_id)
+    # La precarga vale una vez y solo en este proyecto (_prefill_para).
+    session["fp_prefill"] = {"cliente": cliente, "productos_catalogo": [f"producto:{activo['id']}"]}
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/catalogo/producto/<producto_id>/archivar", methods=["POST"])
+def catalogo_archivar(cliente, producto_id):
+    """«Archivar» / «Desarchivar» de la ficha (archivado=0): el producto
+    entero, todas sus filas (`tiendas.archivar_activo`). No borra nada —
+    carpeta, fotos, regla, colores e historial quedan—: sale de la galería
+    (sigue en «Archivados») y de los selectores de Crear, Cambiar producto,
+    Sprints, Nicho, Recrear y Flow Plus, salvo donde ya estaba elegido.
+    Vuelve a la ficha, que ofrece deshacerlo."""
+    if not _mismo_origen():
+        abort(403)
+    pid = catalogo_productos.producto_base(producto_id)
+    producto = catalogo_productos.encontrar_producto(cliente, pid, "producto")
+    if not producto:
+        flash(gettext("No encontré ese producto."), "error")
+        return _volver_catalogo(cliente)
+    archivar = (request.form.get("archivado") or "1") not in ("0", "false", "off")
+    tiendas.asegurar_manual(cliente, pid, producto["nombre"], producto.get("descripcion") or "")
+    tiendas.archivar_activo(cliente, pid, archivado=archivar)
+    if archivar:
+        flash(gettext("Archivaste «%(nombre)s»: ya no sale en la galería ni al elegir producto en Crear, Sprints o "
+                      "Nicho. No se borró nada y lo recuperas en Catálogo › Archivados.", nombre=producto["nombre"]), "ok")
+    else:
+        flash(gettext("Recuperaste «%(nombre)s»: vuelve a salir en la galería y al elegir producto.",
+                      nombre=producto["nombre"]), "ok")
+    return _volver_catalogo(cliente, "producto", pid)
+
+
+def _pagina(valor):
+    try:
+        return max(1, int(valor or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _usos_por_producto(cliente, productos, experimentos_exp=None, sesiones_cf=None, por_clave=None):
+    """{pid: catalogo_vista.contar_usos(...)} en UNA pasada por las sesiones
+    de Crear, una por los experimentos y una consulta a `campana`.
+    `sesiones_cf` (`creative_flow.cargar(cliente)`) y `por_clave`
+    (`_experimentos_por_activo(...)`) se leen aquí solo si el llamador no los
+    trae ya calculados — así un request que pide galería + usos no repite la
+    misma lectura de Crear/experimentos por cada helper (auditoría 2026-09-28)."""
+    if sesiones_cf is None:
+        sesiones_cf = creative_flow.cargar(cliente)
+    sesiones = [{str(x).casefold() for x in (e.get("productos_ids") or []) if x}
+                for e in sesiones_cf.values()]
+    if por_clave is None:
+        por_clave = _experimentos_por_activo(cliente, experimentos_exp, sesiones_cf)
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.campana.c.catalogo_id, sa.func.count())
+                            .where(db.campana.c.cliente == cliente).group_by(db.campana.c.catalogo_id)).all()
+    campanas = {str(k or "").casefold(): int(n) for k, n in filas}
+    return {p["id"]: catalogo_vista.contar_usos(catalogo_productos.claves_de(p), sesiones, por_clave, campanas)
+            for p in productos}
+
+
+_TRABAJOS_VACIOS = {"vincular": {}, "pedidos": {}, "tiendas": {}, "importar": None}
+
+
+@app.route("/cliente/<cliente>/catalogo/grid")
+@catalogo_productos.con_lecturas_memorizadas
+def catalogo_grid(cliente):
+    """Galería del catálogo (spec §10.2): fragmento con filtros, orden y páginas de 60."""
+    cat = _cat(request.args.get("cat"))
+    q = (request.args.get("q") or "").strip()
+    filtro = request.args.get("filtro") or "todos"
+    orden = request.args.get("orden") if request.args.get("orden") in catalogo_vista.ORDENES else "prioridad"
+    pagina = _pagina(request.args.get("pagina"))
+    productos = catalogo_productos.listar_productos(cliente, cat)
+    filas, sin_activo, usos, trabajos_grid = {}, [], {}, dict(_TRABAJOS_VACIOS)
+    if cat == "producto":
+        _asegurar_filas_producto(cliente, productos)
+        # Una sola lectura de Crear y de experimentos para todo el request
+        # (auditoría 2026-09-28): _productos_tienda_contexto y
+        # _usos_por_producto reciben por_clave/sesiones_cf ya calculados en
+        # vez de volver a pedirlos cada uno.
+        experimentos_exp = experimentos.cargar(cliente)
+        sesiones_cf = creative_flow.cargar(cliente)
+        por_clave = _experimentos_por_activo(cliente, experimentos_exp, sesiones_cf)
+        filas_tienda = _productos_tienda_contexto(cliente, experimentos_exp, por_clave)
+        filas = _producto_comercial_contexto(filas_tienda)
+        sin_activo = [f for f in filas_tienda if not f["activo_ok"]]
+        usos = _usos_por_producto(cliente, productos, experimentos_exp, sesiones_cf, por_clave)
+        trabajos_grid = _trabajos_productos(cliente, [], sin_activo)
+    todas = catalogo_vista.tarjetas(productos, filas, usos, sin_activo)
+    lista = catalogo_vista.ordenar(catalogo_vista.filtrar(todas, q, filtro), orden)
+    trozo, hay_mas = catalogo_vista.paginar(lista, pagina, catalogo_vista.POR_PAGINA)
+    return render_template("_catalogo_grid.html", cliente=cliente, cat=cat, tarjetas=trozo, hay_mas=hay_mas,
+                           pagina=pagina, contadores=catalogo_vista.contadores(todas), filtro=filtro, q=q, orden=orden,
+                           etiquetas_fuente=ETIQUETAS_FUENTE, trabajos_prod=trabajos_grid,
+                           categorias=catalogo_productos.CATEGORIAS)
+
+
+@app.route("/cliente/<cliente>/catalogo/<cat>/<path:activo_id>/ficha")
+def catalogo_ficha(cliente, cat, activo_id):
+    """Ficha de un activo (spec §10.3): fragmento para el panel lateral. Un id
+    de color abre la ficha de su producto con ese color elegido."""
+    cat = _cat(cat)
+    pid = catalogo_productos.producto_base(activo_id)
+    p = catalogo_productos.encontrar_producto(cliente, pid, cat)
+    if not p:
+        abort(404)
+    comercial = usos = None
+    trabajos_ficha = dict(_TRABAJOS_VACIOS)
+    swaps_usos = 0
+    if cat == "producto":
+        tiendas.asegurar_manual(cliente, pid, p["nombre"], p.get("descripcion") or "")
+        comercial = tiendas.por_activo(cliente).get(pid)
+        # Una sola lectura de Crear y de experimentos para este request
+        # (auditoría 2026-09-28), igual que en catalogo_grid.
+        experimentos_exp = experimentos.cargar(cliente)
+        sesiones_cf = creative_flow.cargar(cliente)
+        usos = _usos_por_producto(cliente, [p], experimentos_exp, sesiones_cf).get(pid)
+        if comercial:
+            trabajos_ficha = _trabajos_productos(cliente, [], [comercial])
+        swaps_usos = sum(1 for e in swaps_mod.cargar(cliente).values()
+                         if catalogo_productos.producto_base(e.get("producto_id")) == pid)
+    variante = activo_id.split("/", 1)[1] if "/" in activo_id else ""
+    ids_colores = [c["color_id"] for c in p["colores"]]
+    color_inicial = variante if variante in ids_colores else next(
+        (c["color_id"] for c in p["colores"] if not c["sin_fotos"]), ids_colores[0] if ids_colores else None)
+    return render_template(
+        "_catalogo_ficha.html", cliente=cliente, cat=cat, p=p, comercial=comercial, usos=usos,
+        color_inicial=color_inicial, trabajos_prod=trabajos_ficha,
+        precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
+        monedas_catalogo=sorted(PRESUPUESTO_MINIMO_DIARIO), moneda_catalogo=_moneda_por_defecto(cliente),
+        etiquetas_fuente=ETIQUETAS_FUENTE, tipos_producto=prompt_swap.TIPOS,
+        zonas_cuerpo=mapa_corporal.ZONAS, presets_cuerpo=mapa_corporal.PRESETS,
+        etiquetas_presets=mapa_corporal.ETIQUETAS_PRESETS, categorias=catalogo_productos.CATEGORIAS,
+        con_mapa=catalogo_productos.CATEGORIAS[cat]["con_mapa"], swaps_usos=swaps_usos)
 
 
 def _swap_items(cliente):
@@ -2729,7 +3174,7 @@ def _ctx_items_cf(cliente):
         guia_marca = ""
     return {
         # Id numérico de la pieza por sesión: la tarjeta enlaza «Probar en Meta»
-        # a la galería de Experimentos (#experimentos?piezas=<pieza_id>).
+        # a «Nuevo experimento» (exp_nuevo?piezas=<pieza_id>) con la pieza marcada.
         "pieza_ids": creative_flow.piezas_ids_por_legado(cliente),
         "guiones": creative_flow.guiones_base(cliente),
         "finales_por_cf": creative_flow.finales_por_sesion(cliente),
@@ -2739,13 +3184,53 @@ def _ctx_items_cf(cliente):
         # escanea el catálogo; memo por tupla de `productos_ids`, una sola
         # resolución por producto distinto en toda la lista, no por pieza.
         "productos_por_ids": {},
+        # El mismo texto en todas las tarjetas: una vez por lista (escala 2026-10-01).
+        "precio_revision": gastos.estimar("revision_pieza")["texto"],
     }
 
 
-def _armar_item_cf(cliente, cf_id, entry, data, ctx):
+def _job_final_vivo(cliente, cf_id, f, ctx):
+    """El trabajo vivo que está produciendo esa final, o None. Hay dos: el de
+    la vía automática (`tareas_fe.job_id_final`) y el «Producir» del editor
+    (`tareas_edicion.job_id_producir`, uno por edición). Sin mirar el segundo,
+    una final que se producía desde el editor parecía interrumpida («con
+    error» en el tablero, sin barra que recargue la página; revisión del
+    tablero, 2026-10-02). Las ediciones del proyecto se leen una sola vez y
+    solo si hace falta (una final «generando» sin trabajo automático)."""
+    if f.get("estado") != "generando":
+        return None
+    jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
+    if trabajos.en_curso(jid):
+        return jid
+    if f.get("variante"):
+        return None          # el editor no produce variantes
+    if "ediciones_ids_por_cf" not in ctx:
+        ids = {}
+        for e in ediciones.listar(cliente):
+            if e.get("cf_id"):
+                ids.setdefault(e["cf_id"], []).append(e["id"])
+        ctx["ediciones_ids_por_cf"] = ids
+    for eid in ctx["ediciones_ids_por_cf"].get(cf_id, []):
+        jid_editor = tareas_edicion.job_id_producir(cliente, eid, f["idioma"], f["pais"])
+        if trabajos.en_curso(jid_editor):
+            return jid_editor
+    return None
+
+
+def _hijas_b(data):
+    """cf_ids que ya tienen una hija de versión B (creative_flow.duplicar la
+    crea con derivado_de=cf_id, variante="B"), en UNA pasada: antes cada
+    tarjeta recorría todas las sesiones (n² con 1 000 piezas)."""
+    return {e.get("derivado_de") for e in data.values() if e.get("variante") == "B" and e.get("derivado_de")}
+
+
+def _armar_item_cf(cliente, cf_id, entry, data, ctx, ligero=False):
     """El dict de UNA sesión de Crear (lo que leen la tarjeta y el detalle).
     `data` es creative_flow.cargar(cliente) entero (para `tiene_hija_b`);
-    `ctx` viene de _ctx_items_cf."""
+    `ctx` viene de _ctx_items_cf. `ligero` (las listas de tarjetas) se salta
+    lo que solo el detalle muestra: el costo estimado y las reglas de la
+    doctrina (`_revision_doctrina.html`, que buscaban el producto de cada pieza
+    en el catálogo: el 25 % de la página, spec 2026-10-01-escala-y-monitoreo)."""
     import final_edition
     job_id = _job_id_creative_flow(cliente, cf_id)
     # trabajo_director solo tiene sentido (y solo se consulta la cola) en
@@ -2765,22 +3250,37 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx):
     # Si ya existe una hija de versión B (creative_flow.duplicar la crea con
     # derivado_de=cf_id, variante="B"), no tiene sentido ofrecer generarla de
     # nuevo desde la tarjeta del padre: la plantilla oculta la casilla.
-    item["tiene_hija_b"] = any(e.get("derivado_de") == cf_id and e.get("variante") == "B" for e in data.values())
+    if "hijas_b" not in ctx:
+        ctx["hijas_b"] = _hijas_b(data)
+    item["tiene_hija_b"] = cf_id in ctx["hijas_b"]
     # Estimado real vía wan3_client.estimate_video() en vez de un número
     # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
     # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
     # así el botón nunca muestra un costo distinto al que se cobra.
-    if entry.get("estado") in ("prompt_listo", "error"):
+    if entry.get("estado") in ("prompt_listo", "error") and not ligero:
         if entry.get("tipo") == "imagen":
             item["costo_estimado"] = flowplus_modelos.estimate_imagen(
                 entry.get("modelo") or flowplus_modelos.IMAGEN_POR_DEFECTO,
                 n_referencias=len(entry.get("referencias_urls") or []))
+        elif flowplus_modelos.es_hablado(entry.get("modelo")):
+            # Anuncio hablado (spec 2026-10-01 §6): «Reintentar» cobra por los
+            # segundos de la voz (estimate_video delega en estimate_hablado).
+            item["costo_estimado"] = flowplus_modelos.estimate_video(entry["modelo"], entry["duracion_objetivo"])
         else:
             mid = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
+            # Con videos de referencia (Wan 3.0, 2026-09-30): la duración que de
+            # verdad se pedirá y los segundos de entrada que WaveSpeed factura.
+            refs_sesion = entry.get("referencias") or []
+            segundos_ref = flowplus_modelos.segundos_videos(mid, refs_sesion)
             item["costo_estimado"] = flowplus_modelos.estimate_video(
-                mid, entry["duracion_objetivo"], con_sonido=entry.get("con_sonido", True) is not False,
-                calidad=entry.get("calidad") or "final")
-    item["modelo_nombre"] = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "Wan 3.0")
+                mid, flowplus_modelos.duracion_con_videos(mid, refs_sesion, entry["duracion_objetivo"]),
+                con_sonido=entry.get("con_sonido", True) is not False,
+                calidad=entry.get("calidad") or "final", **({"videos_ref_s": segundos_ref} if segundos_ref else {}))
+        if entry.get("tipo") != "imagen" and item["costo_estimado"].get("usd") is not None:
+            item["costo_estimado"] = dict(item["costo_estimado"])
+            item["costo_estimado"]["usd"] = round(item["costo_estimado"]["usd"] +
+                                                  gastos.costo_musica_estimada(entry.get("musica_estilo")), 4)
+    item["modelo_nombre"] = flowplus_modelos.nombre_modelo(entry.get("modelo")) or "Wan 3.0"
     # Final edition: solo tiene sentido sobre un video ya listo. Cada final
     # y el guion llevan su propio trabajo del worker para la barra de la UI.
     item["guion_base"] = None
@@ -2794,8 +3294,8 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx):
         jid_editor = tareas_edicion.job_id_desde_clon(cliente, cf_id)
         item["trabajo_editor"] = {"job_id": jid_editor} if trabajos.en_curso(jid_editor) else None
         for f in ctx["finales_por_cf"].get(cf_id, []):
-            jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
-            f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
+            jid = _job_final_vivo(cliente, cf_id, f, ctx)
+            f["trabajo"] = {"job_id": jid} if jid else None
             item["finales"].append(f)
     # Doctrina, bloque 3: revisión de la pieza terminada (video o imagen).
     # Las reglas son gratis y se calculan al renderizar; la revisión de
@@ -2807,37 +3307,38 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx):
         item["revision_error"] = entry.get("revision_doctrina_error")
         item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
         item["revision_n"] = doctrina_revisor.contar(item["revision"])
-        try:
-            clave = tuple(entry.get("productos_ids") or ())
-            if clave:
-                producto = ctx["productos_por_ids"].get(clave)
-                if producto is None:
-                    try:
-                        producto = final_edition._producto(cliente, entry, None) or {}
-                    except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
-                        producto = {}
-                    # Solo se recuerda lo que resolvió el catálogo (trae «pruebas»): el
-                    # producto de respaldo sale de los datos de ESTA pieza y no sirve a otra.
-                    if "pruebas" in producto or not producto:
-                        ctx["productos_por_ids"][clave] = producto
-                d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
-                                            guia=ctx["guia_marca"], producto=producto, caption=ctx["captions"].get(cf_id, ""))
-            else:
-                d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=ctx["guia_marca"],
-                                            caption=ctx["captions"].get(cf_id, ""))
-            item["reglas"] = doctrina_revisor.reglas(d)
-        except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
-            item["reglas"] = []
+        if not ligero:
+            try:
+                clave = tuple(entry.get("productos_ids") or ())
+                if clave:
+                    producto = ctx["productos_por_ids"].get(clave)
+                    if producto is None:
+                        try:
+                            producto = final_edition._producto(cliente, entry, None) or {}
+                        except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
+                            producto = {}
+                        # Solo se recuerda lo que resolvió el catálogo (trae «pruebas»): el
+                        # producto de respaldo sale de los datos de ESTA pieza y no sirve a otra.
+                        if "pruebas" in producto or not producto:
+                            ctx["productos_por_ids"][clave] = producto
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
+                                                guia=ctx["guia_marca"], producto=producto, caption=ctx["captions"].get(cf_id, ""))
+                else:
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=ctx["guia_marca"],
+                                                caption=ctx["captions"].get(cf_id, ""))
+                item["reglas"] = doctrina_revisor.reglas(d)
+            except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
+                item["reglas"] = []
         jid_rev = tareas_doctrina.job_id_revisar(cliente, cf_id)
         item["trabajo_revision"] = {"job_id": jid_rev} if trabajos.en_curso(jid_rev) else None
-        item["precio_revision"] = gastos.estimar("revision_pieza")["texto"]
+        item["precio_revision"] = ctx["precio_revision"]
     return item
 
 
-def _creative_flow_items(cliente):
+def _creative_flow_items(cliente, ligero=False):
     data = creative_flow.cargar(cliente)
     ctx = _ctx_items_cf(cliente)
-    return [_armar_item_cf(cliente, cf_id, entry, data, ctx)
+    return [_armar_item_cf(cliente, cf_id, entry, data, ctx, ligero=ligero)
             for cf_id, entry in sorted(data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True)]
 
 
@@ -2851,17 +3352,21 @@ def _creative_flow_item(cliente, cf_id):
     return _armar_item_cf(cliente, cf_id, entry, data, _ctx_items_cf(cliente))
 
 
-def _listas_crear_final(items, n=TARJETAS_POR_PAGINA):
-    """Lo que pintan Crear y Final edition (spec 2026-09-28 «tarjetas
-    ligeras»): las primeras `n` de cada lista y los totales para los
-    contadores de cabecera. `n=None` devuelve las listas completas (las rutas
-    de «Ver más» recortan ellas)."""
-    videos = [i for i in items if i.get("estado") == "video_listo" and (i.get("tipo") or "video") != "imagen"]
-    finales = [(i, f) for i in items for f in (i.get("finales") or [])]
-    corte = slice(0, n) if n else slice(None)
-    return {"crear": items[corte], "crear_total": len(items),
-            "final_videos": videos[corte], "final_videos_total": len(videos),
-            "finales": finales[corte], "finales_total": len(finales)}
+def _listas_crear(items, n=TARJETAS_POR_PAGINA):
+    """Lo que pinta Crear (spec 2026-09-28 «tarjetas ligeras»): las primeras
+    `n` piezas y el total para el contador de cabecera."""
+    return {"crear": items[:n], "crear_total": len(items)}
+
+
+def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA):
+    """Lo que pinta el tablero de Final edition (2026-10-02,
+    `final_edition.tablero`): las primeras `n` tarjetas de «En edición» y de
+    «Finalizados», sus totales y las cifras de la cabecera. Los videos listos
+    de Crear no van en la página: los trae el selector «+ Nueva» por fetch."""
+    t = fe_tablero.armar(items, ediciones_por_cf)
+    return {"fe_en_edicion": t["en_edicion"][:n], "fe_en_edicion_total": len(t["en_edicion"]),
+            "fe_finalizados": t["finalizados"][:n], "fe_finalizados_total": len(t["finalizados"]),
+            "fe_cifras": t["cifras"]}
 
 
 def _contexto_organico(cliente):
@@ -2876,6 +3381,12 @@ def _contexto_organico(cliente):
     }
 
 
+def _mis_voces_fe(cliente):
+    """Las voces propias del proyecto para el selector «Voz» de Final edition:
+    solo valor y nombre (el voice_id de MiniMax no sale a la página)."""
+    return [{"valor": v["valor"], "nombre": v["nombre"]} for v in voces_propias.listar(cliente)]
+
+
 def _contexto_final_edition(cliente):
     """Contexto que leen los detalles de Final edition: la página y las rutas
     de detalle (fe_detalle_video / fe_detalle_final) lo reciben igual."""
@@ -2883,6 +3394,7 @@ def _contexto_final_edition(cliente):
         **_contexto_organico(cliente),
         "paises_fe": fe_tipos.PAISES,
         "voces_fe": fal_audio.VOCES,
+        "mis_voces_fe": _mis_voces_fe(cliente),
         "estilos_fe": list(fe_tipos.ESTILOS_MUSICA),
         "nombres_estilos_musica": fe_tipos.NOMBRES_ESTILOS_MUSICA,
         "nombres_estilo_musica": fe_tipos.NOMBRES_ESTILO_MUSICA,
@@ -2904,8 +3416,9 @@ def ver_swap(cliente):
 # Solo modelos que ven la foto de referencia del producto y clonan la foto/video
 # original — nada que solo reciba una descripción en texto del calzado (eso
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
-# Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar).
-PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
+# Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar): vive en presupuesto_experimentos
+# (un solo lugar, E2 R4); aquí se conserva el nombre para quien lo lea desde dashboard.
+PRESUPUESTO_MINIMO_DIARIO = presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO
 # Rótulos del objetivo de Meta en «Probar en Meta › Avanzado» (Bloque 6). El
 # valor sigue siendo el enum de Meta; solo cambia lo que se lee (marcado con
 # N_, traducido donde se muestra con |traducir).
@@ -2949,11 +3462,11 @@ NOMBRES_PROVEEDOR_SWAP = {
 # constantes para que no puedan desincronizarse por un typo. Los pesos son
 # "qué fracción del tiempo se lleva más o menos cada paso" — la llamada al
 # modelo es de lejos la más larga.
-ETAPA_MODELO = "Generando con el modelo"
-ETAPA_DESCARGAR = "Descargando el resultado"
-ETAPA_MEZCLA = "Mezclando sonido"
-ETAPA_GUARDAR_VIDEO = "Guardando el video"
-ETAPA_GUARDAR_IMAGEN = "Guardando la imagen"
+ETAPA_MODELO = idiomas.N_("Generando con el modelo")
+ETAPA_DESCARGAR = idiomas.N_("Descargando el resultado")
+ETAPA_MEZCLA = idiomas.N_("Mezclando sonido")
+ETAPA_GUARDAR_VIDEO = idiomas.N_("Guardando el video")
+ETAPA_GUARDAR_IMAGEN = idiomas.N_("Guardando la imagen")
 # Las etapas propias del swap (subir original, preparar foto, mejorar, guardar
 # y evaluar) viven en tareas/swap.py junto con ETAPAS_SWAP_*.
 
@@ -2977,15 +3490,15 @@ ETAPAS_VIDEO = [
 # Los proveedores hablan en sus propios códigos de estado; esto es lo único
 # honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
 _FASES_PROVEEDOR = {
-    "IN_QUEUE": "en cola",
-    "IN_PROGRESS": "el modelo está trabajando",
-    "created": "en cola",
-    "processing": "el modelo está trabajando",
-    "queued": "en cola",
-    "starting": "arrancando",
-    "running": "el modelo está trabajando",
-    "in_progress": "el modelo está trabajando",
-    "pending": "en cola",
+    "IN_QUEUE": idiomas.N_("en cola"),
+    "IN_PROGRESS": idiomas.N_("el modelo está trabajando"),
+    "created": idiomas.N_("en cola"),
+    "processing": idiomas.N_("el modelo está trabajando"),
+    "queued": idiomas.N_("en cola"),
+    "starting": idiomas.N_("arrancando"),
+    "running": idiomas.N_("el modelo está trabajando"),
+    "in_progress": idiomas.N_("el modelo está trabajando"),
+    "pending": idiomas.N_("en cola"),
 }
 
 # Estados terminales: el poll también los emite en su última vuelta, pero mostrar
@@ -2994,10 +3507,13 @@ _FASES_PROVEEDOR = {
 _FASES_TERMINALES = ("COMPLETED", "completed", "succeeded", "success", "done")
 
 
-def _texto_fase(info):
-    """Traduce a español el estado crudo que reporta un proveedor durante el poll.
-    Con fallback: si aparece una fase que no conocemos se muestra tal cual en vez
-    de tragarse la información (los proveedores agregan estados sin avisar)."""
+def _texto_fase(info, cliente):
+    """Traduce el estado crudo que reporta un proveedor durante el poll, en el
+    idioma del PROYECTO (mensaje de fondo, spec §B8; mismo patrón que
+    tareas/flowplus.py): con el puesto en cola compuesto, estado_trabajo ya no
+    podría traducirlo al responder. Con fallback: si aparece una fase que no
+    conocemos se muestra tal cual en vez de tragarse la información (los
+    proveedores agregan estados sin avisar)."""
     if not info:
         return None
     fase = info.get("fase")
@@ -3007,19 +3523,21 @@ def _texto_fase(info):
     if not texto:
         return None
     posicion = info.get("queue_position")
-    if posicion is not None:
-        texto = f"{texto} (puesto {posicion})"
-    return texto
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        fase_traducida = gettext(texto)
+        if posicion is not None:
+            return gettext("%(fase)s (puesto %(n)s)", fase=fase_traducida, n=posicion)
+        return fase_traducida
 
 
-def _avisar_fase_de(job_id):
+def _avisar_fase_de(job_id, cliente):
     """Devuelve el callback on_progreso que esperan los clientes de proveedores
     (Higgsfield, fal.ai, WaveSpeed): traduce la fase cruda del poll y la publica
     como detalle del trabajo. Envuelto en try/except porque un fallo REPORTANDO
     jamás puede tumbar una generación que ya gastó créditos."""
     def avisar_fase(info):
         try:
-            texto = _texto_fase(info)
+            texto = _texto_fase(info, cliente)
             if texto:
                 trabajos.reportar(job_id, detalle=texto)
         except Exception:
@@ -3050,12 +3568,25 @@ def generar_swap(cliente):
         proveedor_video = "seedance25_edit"
 
     if not archivos:
-        flash("Sube al menos una foto o video primero.", "error")
+        flash(gettext("Sube al menos una foto o video primero."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    # Solo fotos y videos: el original se vuelve a servir desde este dominio
+    # (imagen_swap_original), así que un .html o .svg disfrazado sería un XSS
+    # almacenado (auditoría de seguridad 2026-10-01). Y un tope por envío:
+    # cada archivo encola una generación pagada.
+    if len(archivos) > MAX_SWAPS_POR_ENVIO:
+        flash(gettext("Sube máximo %(n)s archivos a la vez.", n=MAX_SWAPS_POR_ENVIO), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    if any(_ext_de(a.filename) not in IMAGE_EXTS + VIDEO_EXTS for a in archivos):
+        flash(gettext("Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    if any(_ext_de(a.filename) in IMAGE_EXTS and not _imagen_valida(a.stream) for a in archivos):
+        flash(gettext("No pude leer esa imagen."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     producto = catalogo_productos.encontrar(cliente, producto_id)
     if not producto:
-        flash("Elige un producto del catálogo.", "error")
+        flash(gettext("Elige un producto del catálogo."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     lanzados = 0
@@ -3064,11 +3595,11 @@ def generar_swap(cliente):
             lanzados += 1
 
     if lanzados == 1:
-        flash("Generando el swap…", "ok")
+        flash(gettext("Generando el swap…"), "ok")
     elif lanzados > 1:
-        flash(f"Generando {lanzados} swaps…", "ok")
+        flash(gettext("Generando %(n)s swaps…", n=lanzados), "ok")
     else:
-        flash("Ya se estaban generando esos swaps — espera a que terminen.", "warn")
+        flash(gettext("Ya se estaban generando esos swaps — espera a que terminen."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -3078,6 +3609,8 @@ def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, provee
     propia barra de progreso independiente."""
     nombre = secure_filename(archivo.filename)
     ext = os.path.splitext(nombre)[1].lower()
+    if ext not in IMAGE_EXTS + VIDEO_EXTS:
+        return False
     es_video = ext in VIDEO_EXTS
     tipo = "video" if es_video else "foto"
     proveedor = proveedor_video if es_video else proveedor_foto
@@ -3126,15 +3659,21 @@ def imagen_swap_original(cliente, swap_id):
     # bitácora guarda el resultado, no la entrada. Sin este guardia,
     # os.path.exists(None) revienta con TypeError y devuelve un 500.
     if not entry or not entry.get("foto_original_local") or not os.path.exists(entry["foto_original_local"]):
-        flash("No encontré la foto original.", "error")
+        flash(gettext("No encontré la foto original."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
-    return send_file(entry["foto_original_local"])
+    # El tipo sale de la lista blanca, nunca del nombre que mandó el navegador:
+    # un original viejo con otra extensión se descarga, no se abre aquí.
+    ruta = entry["foto_original_local"]
+    tipo = MIMETYPES_MEDIOS.get(_ext_de(ruta))
+    if tipo is None:
+        return send_file(ruta, mimetype="application/octet-stream", as_attachment=True)
+    return send_file(ruta, mimetype=tipo)
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/eliminar", methods=["POST"])
 def eliminar_swap(cliente, swap_id):
     swaps_mod.eliminar(cliente, swap_id)
-    flash("Eliminado.", "ok")
+    flash(gettext("Eliminado."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -3152,13 +3691,13 @@ def enviar_swap_a_publicidad(cliente, swap_id):
     data = swaps_mod.cargar(cliente)
     entry = data.get(swap_id)
     if not entry or not entry.get("resultado_url"):
-        flash("Ese swap todavía no tiene un resultado listo.", "error")
+        flash(gettext("Ese swap todavía no tiene un resultado listo."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
     nombre = producto["nombre"] if producto else entry.get("producto_id", "Swap")
     ads_mod.crear(cliente, "swap", swap_id, entry["resultado_url"], entry.get("tipo", "foto"), nombre)
-    flash("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza.", "ok")
+    flash(gettext("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -3167,12 +3706,12 @@ def enviar_video_a_publicidad(cliente, brief_id):
     data = estado_mod.cargar(cliente)
     entry = data.get(brief_id)
     if not entry or not entry.get("video_url"):
-        flash("Ese video todavía no tiene una URL pública lista.", "error")
+        flash(gettext("Ese video todavía no tiene una URL pública lista."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
     nombre = entry.get("title") or brief_id
     ads_mod.crear(cliente, "idea_visual", brief_id, entry["video_url"], "video", nombre)
-    flash("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza.", "ok")
+    flash(gettext("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -3269,18 +3808,20 @@ def meta_callback():
     sale de la sesión, nunca de la query, y el state es de un solo uso."""
     pendiente = session.pop("meta_oauth", None) or {}
     cliente = pendiente.get("cliente")
-    state_ok = bool(pendiente.get("state")) and request.args.get("state") == pendiente.get("state")
+    state_ok = bool(pendiente.get("state")) and secrets.compare_digest(
+        str(request.args.get("state") or "").encode(), str(pendiente.get("state")).encode())
     if not cliente or not state_ok:
-        flash("La autorización con Meta no coincide con esta sesión — vuelve a intentarlo desde Configuración › Conexiones.", "error")
+        flash(gettext("La autorización con Meta no coincide con esta sesión — vuelve a intentarlo desde Experimentos."),
+              "error")
         return _ir_a_flowmarketing(cliente) if cliente else redirect(url_for("index"))
     if not usuarios.puede_acceder(_sesion(), cliente):
-        flash("No tienes acceso a ese proyecto.", "error")
+        flash(gettext("No tienes acceso a ese proyecto."), "error")
         return redirect(url_for("index"))
 
     if request.args.get("error"):
         detalle = request.args.get("error_description") or request.args.get("error")
         bitacora.registrar(cliente, "meta", "conexion", "error", f"cancelado o denegado: {detalle}")
-        flash(f"Meta no autorizó la conexión: {detalle}", "error")
+        flash(gettext("Meta no autorizó la conexión: %(detalle)s", detalle=detalle), "error")
         return _ir_a_flowmarketing(cliente)
 
     code = request.args.get("code", "")
@@ -3311,13 +3852,13 @@ def meta_elegir(cliente):
         return bloqueo
     pendiente = meta_conexion.cargar_pendiente(cliente)
     if not pendiente:
-        flash("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\".", "error")
+        flash(gettext("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\"."), "error")
         return _ir_a_flowmarketing(cliente)
     activos = pendiente.get("activos") or {}
     cuentas = activos.get("ad_accounts") or []
     paginas = activos.get("pages") or []
     if not cuentas and not paginas:
-        flash("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\".", "error")
+        flash(gettext("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\"."), "error")
         return _ir_a_flowmarketing(cliente)
 
     if request.method == "GET":
@@ -3329,7 +3870,7 @@ def meta_elegir(cliente):
     cuenta = next((a for a in cuentas if a["id"] == request.form.get("ad_account_id")), None)
     pagina = next((p for p in paginas if p["id"] == request.form.get("page_id")), None)
     if not cuenta or not pagina:
-        flash("Elige una cuenta publicitaria y una Página de la lista.", "error")
+        flash(gettext("Elige una cuenta publicitaria y una Página de la lista."), "error")
         return redirect(url_for("meta_elegir", cliente=cliente))
 
     try:
@@ -3342,8 +3883,10 @@ def meta_elegir(cliente):
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
     bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name')}")
-    aviso = "" if pagina.get("ig_user_id") else " Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."
-    flash(f"Meta conectado: {cuenta.get('name')} · {pagina.get('name')}.{aviso}", "ok")
+    aviso = "" if pagina.get("ig_user_id") else " " + gettext(
+        "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook.")
+    flash(gettext("Meta conectado: %(cuenta)s · %(pagina)s.%(aviso)s",
+                  cuenta=cuenta.get("name"), pagina=pagina.get("name"), aviso=aviso), "ok")
     return _ir_a_flowmarketing(cliente)
 
 
@@ -3372,7 +3915,7 @@ def meta_cancelar(cliente):
     """Aborta una autorización a medias (borra solo meta.pendiente.json).
     No toca meta.json: si el proyecto ya estaba conectado, sigue conectado."""
     meta_conexion.borrar_pendiente(cliente)
-    flash("Conexión con Meta cancelada. Si ya tenías Meta conectado, sigue igual.", "ok")
+    flash(gettext("Conexión con Meta cancelada. Si ya tenías Meta conectado, sigue igual."), "ok")
     return _ir_a_flowmarketing(cliente)
 
 
@@ -3514,10 +4057,12 @@ def meta_agencia_conectar(cliente):
         flash(gettext("Esa Página no aparece entre las de tu portafolio; vuelve a buscar."), "error")
         return _ir_a_meta(cliente)
     if not page_id and page_id_manual:
-        if not activos["paginas_sin_dueno"] or not meta_agencia.pagina_de_socio(page_id_manual):
-            flash(gettext("Esa Página no está compartida con Creatv; revisa el paso 2 de la guía."), "error")
-            return _ir_a_meta(cliente)
-        page_id = page_id_manual
+        # Una Página escrita a mano no prueba de quién es (los ids de Página
+        # son públicos): la conecta Creatv después de revisarla (auditoría de
+        # seguridad 2026-10-01).
+        flash(gettext("Para conectar una Página escribiendo su ID, usa «Avisar a Creatv»: la revisamos y la "
+                      "conectamos nosotros."), "error")
+        return _ir_a_meta(cliente)
     try:
         detalle = meta_agencia.asignar(cliente, ad_account_id, page_id,
                                        asignado_por=f"cliente:{session.get('usuario')}", portafolio_id=portafolio)
@@ -3527,13 +4072,22 @@ def meta_agencia_conectar(cliente):
     proyectos.guardar_meta_forma(cliente, "agencia")
     nombre = proyectos.nombre_visible(cliente)
     cuenta = detalle.get("ad_account_nombre") or detalle.get("ad_account_id")
-    pagina = detalle.get("page_nombre") or detalle.get("page_id") or "sin Página"
-    bitacora.registrar(cliente, "meta", "agencia", "ok", f"conectado por el cliente {session.get('usuario')}: {cuenta} · {pagina}")
+    id_cuenta = detalle.get("ad_account_id")
+    pagina_real = detalle.get("page_nombre") or detalle.get("page_id")
+    bitacora.registrar(cliente, "meta", "agencia", "ok",
+                       f"conectado por el cliente {session.get('usuario')}: {cuenta} · {pagina_real or 'sin Página'}")
+
+    def _cuerpo_conexion():   # en el idioma de cada admin (notificaciones.avisar_admin)
+        sin_pagina = gettext("sin Página")
+        return gettext("El proyecto %(nombre)s (%(cliente)s) conectó por su cuenta: cuenta %(cuenta)s (%(id_cuenta)s) · "
+                       "Página %(pagina)s · portafolio %(portafolio)s.\n"
+                       "Revísalo en el panel de administración › Meta (agencia).",
+                       nombre=nombre, cliente=cliente, cuenta=cuenta, id_cuenta=id_cuenta,
+                       pagina=pagina_real or sin_pagina, portafolio=portafolio)
     notificaciones.avisar_admin(
-        "meta_conexion_cliente", f"{nombre} se conectó a Meta (agencia)",
-        f"El proyecto {nombre} ({cliente}) conectó por su cuenta: cuenta {cuenta} ({detalle.get('ad_account_id')}) · "
-        f"Página {pagina} · portafolio {portafolio}.\nRevísalo en el panel de administración › Meta (agencia).",
-        cliente=cliente)
+        "meta_conexion_cliente", lambda: gettext("%(nombre)s se conectó a Meta (agencia)", nombre=nombre),
+        _cuerpo_conexion, cliente=cliente)
+    pagina = pagina_real or gettext("sin Página")
     flash(gettext("Listo: Creatv ya gestiona tu Meta con %(cuenta)s · %(pagina)s.", cuenta=cuenta, pagina=pagina), "ok")
     if detalle.get("cambio_cuenta"):
         flash(gettext("La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse."), "warn")
@@ -3568,12 +4122,18 @@ def meta_agencia_avisar(cliente):
     nombre = proyectos.nombre_visible(cliente)
     bitacora.registrar(cliente, "meta", "agencia", "solicitud",
                        f"portafolio {portafolio} · cuenta {sol['ad_account_id'] or '?'} · Página {sol['page_id'] or '?'}")
+    cuenta_sol, pagina_sol, nota_sol = sol["ad_account_id"], sol["page_id"], sol["nota"]
+
+    def _cuerpo_solicitud():   # en el idioma de cada admin (notificaciones.avisar_admin)
+        no_indicada = gettext("no indicada")
+        return gettext("El proyecto %(nombre)s (%(cliente)s) compartió sus activos pero no los vio desde Configuración.\n"
+                       "Portafolio %(portafolio)s · cuenta %(cuenta)s · Página %(pagina)s.\n"
+                       "Nota: %(nota)s\nAsígnalo en el panel de administración › Meta (agencia).",
+                       nombre=nombre, cliente=cliente, portafolio=portafolio, cuenta=cuenta_sol or no_indicada,
+                       pagina=pagina_sol or no_indicada, nota=nota_sol or "—")
     notificaciones.avisar_admin(
-        "meta_solicitud", f"{nombre} pide conectar Meta (agencia)",
-        f"El proyecto {nombre} ({cliente}) compartió sus activos pero no los vio desde Configuración.\n"
-        f"Portafolio {portafolio} · cuenta {sol['ad_account_id'] or 'no indicada'} · Página {sol['page_id'] or 'no indicada'}.\n"
-        f"Nota: {sol['nota'] or '—'}\nAsígnalo en el panel de administración › Meta (agencia).",
-        cliente=cliente)
+        "meta_solicitud", lambda: gettext("%(nombre)s pide conectar Meta (agencia)", nombre=nombre),
+        _cuerpo_solicitud, cliente=cliente)
     flash(gettext("Listo: Creatv recibió tu solicitud y te avisa por correo cuando quede conectado."), "ok")
     return _ir_a_meta(cliente)
 
@@ -3608,10 +4168,15 @@ def meta_agencia_salir(cliente):
     proyectos.guardar_meta_forma(cliente, "propia")
     nombre = proyectos.nombre_visible(cliente)
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por el cliente {session.get('usuario')})")
-    notificaciones.avisar_admin("meta_cambio_forma", f"{nombre} dejó el modo agencia",
-                                f"El proyecto {nombre} ({cliente}) volvió a usar su propia app de Meta"
-                                + (" (su conexión anterior se restauró)." if restaurada else " (sin conexión todavía)."),
-                                cliente=cliente)
+
+    def _cuerpo_salida():   # en el idioma de cada admin (notificaciones.avisar_admin)
+        if restaurada:
+            return gettext("El proyecto %(nombre)s (%(cliente)s) volvió a usar su propia app de Meta "
+                           "(su conexión anterior se restauró).", nombre=nombre, cliente=cliente)
+        return gettext("El proyecto %(nombre)s (%(cliente)s) volvió a usar su propia app de Meta "
+                       "(sin conexión todavía).", nombre=nombre, cliente=cliente)
+    notificaciones.avisar_admin("meta_cambio_forma", lambda: gettext("%(nombre)s dejó el modo agencia", nombre=nombre),
+                                _cuerpo_salida, cliente=cliente)
     detalle_restaurada = gettext("Tu conexión anterior se restauró.") if restaurada else gettext("Sigue los pasos para registrar tu app y conectar.")
     flash(gettext("Listo: este proyecto vuelve a usar su propia app de Meta. %(detalle)s", detalle=detalle_restaurada), "ok")
     return _ir_a_meta(cliente)
@@ -3692,11 +4257,13 @@ def admin_meta_conectar():
     try:
         registro = meta_agencia.conectar(token, business_id)
     except meta_conexion.MetaConexionError as e:
-        flash(f"No pude conectar la agencia: {cola.sin_token(str(e))}", "error")
+        flash(gettext("No pude conectar la agencia: %(error)s", error=cola.sin_token(str(e))), "error")
         return _volver_admin_meta()
     bitacora.registrar("", "meta", "agencia", "ok", f"Business {registro.get('business_id')} conectado por {session.get('usuario')}")
-    flash(f"Agencia conectada: {registro.get('business_nombre')} (usuario del sistema "
-          f"{registro.get('usuario_nombre') or 'sin nombre'}). Ahora asigna cuenta y Página a cada proyecto.", "ok")
+    sin_nombre = gettext("sin nombre")
+    flash(gettext("Agencia conectada: %(business)s (usuario del sistema %(usuario)s). "
+                  "Ahora asigna cuenta y Página a cada proyecto.",
+                  business=registro.get("business_nombre"), usuario=registro.get("usuario_nombre") or sin_nombre), "ok")
     return _volver_admin_meta()
 
 
@@ -3711,12 +4278,14 @@ def admin_meta_desconectar():
         bitacora.registrar(cid, "meta", "agencia", "ok", "vuelve a modo propia: la agencia se desconectó")
     n = resultado.get("desasignados", 0)
     if not resultado.get("habia") and not n:
-        flash("La agencia no estaba conectada.", "warn")
+        flash(gettext("La agencia no estaba conectada."), "warn")
     elif n:
-        flash(f"Agencia desconectada. {n} proyecto{'s' if n != 1 else ''} volvi{'eron' if n != 1 else 'ó'} a modo propia "
-              "y se quedan sin conexión con Meta hasta que registren su app o vuelvas a asignarlos.", "ok")
+        flash(ngettext("Agencia desconectada. %(num)s proyecto volvió a modo propia y se quedan sin conexión con "
+                       "Meta hasta que registren su app o vuelvas a asignarlos.",
+                       "Agencia desconectada. %(num)s proyectos volvieron a modo propia y se quedan sin conexión con "
+                       "Meta hasta que registren su app o vuelvas a asignarlos.", n), "ok")
     else:
-        flash("Agencia desconectada. Ningún proyecto estaba asignado.", "ok")
+        flash(gettext("Agencia desconectada. Ningún proyecto estaba asignado."), "ok")
     return _volver_admin_meta()
 
 
@@ -3728,9 +4297,10 @@ def admin_meta_activos_actualizar():
     try:
         activos = meta_agencia.listar_activos(forzar=True)
     except meta_conexion.MetaConexionError as e:
-        flash(f"No pude leer los activos del Business: {cola.sin_token(str(e))}", "error")
+        flash(gettext("No pude leer los activos del Business: %(error)s", error=cola.sin_token(str(e))), "error")
         return _volver_admin_meta()
-    flash(f"Activos actualizados: {len(activos['ad_accounts'])} cuenta(s) publicitaria(s) y {len(activos['pages'])} Página(s).", "ok")
+    flash(gettext("Activos actualizados: %(cuentas)s cuenta(s) publicitaria(s) y %(paginas)s Página(s).",
+                  cuentas=len(activos["ad_accounts"]), paginas=len(activos["pages"])), "ok")
     return _volver_admin_meta()
 
 
@@ -3748,28 +4318,40 @@ def admin_meta_asignar(cliente):
     ad_account_id = (request.form.get("ad_account_id") or "").strip()
     page_id = (request.form.get("page_id") or "").strip() or None
     if not ad_account_id:
-        flash("Elige una cuenta publicitaria para asignar.", "error")
+        flash(gettext("Elige una cuenta publicitaria para asignar."), "error")
         return _volver_admin_meta()
     try:
         detalle = meta_agencia.asignar(cliente, ad_account_id, page_id, asignado_por=session.get("usuario"))
     except meta_conexion.MetaConexionError as e:
-        flash(f"No pude asignar {proyectos.nombre_visible(cliente)}: {cola.sin_token(str(e))}", "error")
+        flash(gettext("No pude asignar %(proyecto)s: %(error)s",
+                      proyecto=proyectos.nombre_visible(cliente), error=cola.sin_token(str(e))), "error")
         return _volver_admin_meta()
     cuenta = detalle.get("ad_account_nombre") or detalle.get("ad_account_id")
-    pagina = detalle.get("page_nombre") or detalle.get("page_id") or "sin Página"
-    bitacora.registrar(cliente, "meta", "agencia", "ok", f"asignado por {session.get('usuario')}: {cuenta} · {pagina}")
+    pagina_real = detalle.get("page_nombre") or detalle.get("page_id")
+    nombre = proyectos.nombre_visible(cliente)
+    bitacora.registrar(cliente, "meta", "agencia", "ok",
+                       f"asignado por {session.get('usuario')}: {cuenta} · {pagina_real or 'sin Página'}")
     meta_agencia.borrar_solicitud(cliente)  # asignar() ya la borra; acá también por si asignar fue reemplazado o falló a medias
-    notificaciones.avisar(cliente, "meta_conectado", "Meta quedó conectado en Creatv",
-                          f"Tu proyecto {proyectos.nombre_visible(cliente)} ya está conectado a Meta: cuenta {cuenta} · Página {pagina}. "
-                          "Ya puedes probar piezas en Experimentos y publicar contenido.")
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):   # el correo va en el idioma del proyecto
+        sin_pagina = gettext("sin Página")
+        asunto = gettext("Meta quedó conectado en Creatv")
+        cuerpo = gettext("Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. "
+                         "Ya puedes probar piezas en Experimentos y publicar contenido.",
+                         nombre=nombre, cuenta=cuenta, pagina=pagina_real or sin_pagina)
+    notificaciones.avisar(cliente, "meta_conectado", asunto, cuerpo)
     ig = f" · Instagram @{detalle['ig_username']}" if detalle.get("ig_username") else ""
-    flash(f"{proyectos.nombre_visible(cliente)} ahora lo gestiona Creatv en Meta: {cuenta} · {pagina}{ig}.", "ok")
+    pagina = pagina_real or gettext("sin Página")
+    flash(gettext("%(proyecto)s ahora lo gestiona Creatv en Meta: %(cuenta)s · %(pagina)s%(ig)s.",
+                  proyecto=nombre, cuenta=cuenta, pagina=pagina, ig=ig), "ok")
     if detalle.get("cambio_cuenta"):
-        flash("La cuenta publicitaria cambió: los experimentos anteriores de ese proyecto dejan de refrescarse.", "warn")
+        flash(gettext("La cuenta publicitaria cambió: los experimentos anteriores de ese proyecto dejan de refrescarse."),
+              "warn")
     if page_id and not detalle.get("ig_username"):
-        flash("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en Facebook.", "warn")
+        flash(gettext("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en "
+                      "Facebook."), "warn")
     if not page_id:
-        flash("Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para ese proyecto.", "warn")
+        flash(gettext("Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para "
+                      "ese proyecto."), "warn")
     return _volver_admin_meta()
 
 
@@ -3780,11 +4362,12 @@ def admin_meta_desasignar(cliente):
         abort(403)
     _cliente_o_404(cliente)
     if not meta_agencia.desasignar(cliente):
-        flash(f"{proyectos.nombre_visible(cliente)} no estaba en modo agencia.", "warn")
+        flash(gettext("%(proyecto)s no estaba en modo agencia.", proyecto=proyectos.nombre_visible(cliente)), "warn")
         return _volver_admin_meta()
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por {session.get('usuario')})")
-    flash(f"{proyectos.nombre_visible(cliente)} volvió a modo propia: si tenía su propia conexión se restauró; "
-          "si no, tendrá que registrar su app y conectar con Meta.", "ok")
+    flash(gettext("%(proyecto)s volvió a modo propia: si tenía su propia conexión se restauró; "
+                  "si no, tendrá que registrar su app y conectar con Meta.", proyecto=proyectos.nombre_visible(cliente)),
+          "ok")
     return _volver_admin_meta()
 
 
@@ -3796,9 +4379,10 @@ def admin_meta_solicitud_descartar(cliente):
     _cliente_o_404(cliente)
     if meta_agencia.borrar_solicitud(cliente):
         bitacora.registrar(cliente, "meta", "agencia", "ok", f"solicitud descartada por {session.get('usuario')}")
-        flash(f"Solicitud descartada. {proyectos.nombre_visible(cliente)} no recibe aviso.", "ok")
+        flash(gettext("Solicitud descartada. %(proyecto)s no recibe aviso.", proyecto=proyectos.nombre_visible(cliente)),
+              "ok")
     else:
-        flash("Ese proyecto no tenía solicitud pendiente.", "warn")
+        flash(gettext("Ese proyecto no tenía solicitud pendiente."), "warn")
     return _volver_admin_meta()
 
 
@@ -3811,6 +4395,7 @@ def admin_referentes():
     traer un barrido global (cliente=NULL) de Atria/Apify, y ver totales."""
     from referentes import datos as ref_datos, fuentes
     from referentes.fuentes.atria import limite_mensual, llamadas_este_mes
+    from referentes.fuentes import trendtrack
     from referentes.rutas import _consulta_desde, _entero
     import gastos
     from tareas import referentes as tareas_ref
@@ -3823,7 +4408,8 @@ def admin_referentes():
     fuente_llaves_faltantes = {t: fuentes.llaves_faltantes(t) for t in fuentes.tipos()}
     llaves_faltantes = fuentes.llaves_faltantes(fuente) if fuente else []
     precio_traer = None
-    if fuente and not llaves_faltantes and (consulta_traer.get("pagina_id") or consulta_traer.get("palabra")):
+    if (fuente and not llaves_faltantes and consulta_traer["modo"] in fuentes.modos(fuente)
+            and (consulta_traer.get("pagina_id") or consulta_traer.get("palabra"))):
         modulo = fuentes.por_tipo(fuente)
         try:
             est_fuente = modulo.estimar(consulta_traer, tope_traer)
@@ -3850,6 +4436,10 @@ def admin_referentes():
         [(f["nombre"], [f["descripcion"]]) for f in familias_sin_en], por_llamada=tareas_ref.FAMILIAS_POR_LLAMADA))
         if familias_sin_en else None)
 
+    info_familias_en = trabajos.consultar(tareas_ref.JOB_FAMILIAS_EN)
+    familias_en_error = ((info_familias_en.get("mensaje") or info_familias_en.get("error") or "")
+                         if info_familias_en and info_familias_en.get("estado") == "error" else None)
+
     return render_template("admin_referentes.html", url_swipe=tareas_ref.copycoders.URL_SWIPE,
                            trabajo=({"job_id": tareas_ref.trabajo_importacion()} if tareas_ref.trabajo_importacion() else None),
                            ultimo=(historial[0] if historial else None), historial=historial[:10],
@@ -3859,10 +4449,14 @@ def admin_referentes():
                            fuente=fuente, consulta_traer=consulta_traer, tope_traer=tope_traer,
                            precio_traer=precio_traer, fuente_llaves_faltantes=fuente_llaves_faltantes,
                            atria_llamadas=llamadas_este_mes(), atria_limite=limite_mensual(),
+                           trendtrack_creditos=trendtrack.creditos_este_mes(),
+                           trendtrack_saldo=trendtrack.creditos_restantes(),
                            fuentes_totales=ref_datos.opciones(None)["fuentes"],
                            barridos_otras_fuentes=barridos_otras_fuentes,
                            familias_sin_en=familias_sin_en, precio_familias_en=precio_familias_en,
-                           familias_en_en_curso=trabajos.en_curso(tareas_ref.JOB_FAMILIAS_EN))
+                           familias_en_en_curso=trabajos.en_curso(tareas_ref.JOB_FAMILIAS_EN),
+                           familias_en_error=familias_en_error,
+                           etiquetas_barrido=ref_datos.ETIQUETAS_ESTADO_BARRIDO)
 
 
 @app.route("/admin/referentes/importar", methods=["POST"])
@@ -3873,12 +4467,12 @@ def admin_referentes_importar():
     from tareas import referentes as tareas_ref
     url = (request.form.get("url") or "").strip() or tareas_ref.copycoders.URL_SWIPE
     if not url.startswith("https://go.copycoders.ai/"):
-        flash("Solo se importa desde go.copycoders.ai.", "error")
+        flash(gettext("Solo se importa desde go.copycoders.ai."), "error")
         return redirect(url_for("admin_referentes"))
     if tareas_ref.encolar_importar_copycoders(url, pedido_por=_sesion().get("usuario")):
-        flash("Importando el swipe file; la página se recarga sola cuando termine cada fase.", "ok")
+        flash(gettext("Importando el swipe file; la página se recarga sola cuando termine cada fase."), "ok")
     else:
-        flash("Ya hay una importación en curso.", "error")
+        flash(gettext("Ya hay una importación en curso."), "error")
     return redirect(url_for("admin_referentes"))
 
 
@@ -3895,17 +4489,20 @@ def admin_referentes_traer():
 
     fuente = request.form.get("fuente")
     if fuente not in fuentes.tipos():
-        flash("Elige una fuente.", "error")
+        flash(gettext("Elige una fuente."), "error")
         return redirect(url_for("admin_referentes"))
     if fuentes.llaves_faltantes(fuente):
-        flash("Esa fuente no está configurada.", "error")
+        flash(gettext("Esa fuente no está configurada."), "error")
         return redirect(url_for("admin_referentes"))
     consulta = _consulta_desde(request.form)
+    if consulta["modo"] not in fuentes.modos(fuente):
+        flash(gettext("Esa fuente no admite este tipo de búsqueda; busca por palabra clave o cambia de fuente."), "error")
+        return redirect(url_for("admin_referentes"))
     if consulta["modo"] == "marca" and not consulta["pagina_id"]:
-        flash("Pega un link del Ad Library o el id de la página.", "error")
+        flash(gettext("Pega un link del Ad Library o el id de la página."), "error")
         return redirect(url_for("admin_referentes"))
     if consulta["modo"] == "palabra" and not consulta["palabra"]:
-        flash("Escribe una palabra clave.", "error")
+        flash(gettext("Escribe una palabra clave."), "error")
         return redirect(url_for("admin_referentes"))
     from referentes import traducir
     try:
@@ -3923,7 +4520,7 @@ def admin_referentes_traer():
     est_clasificacion = gastos.estimar("clasificacion", n=tope, bilingue=True)
     usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
     tareas_ref.encolar_barrer(None, fuente, consulta, tope, usd_estimado, pedido_por=_sesion().get("usuario"))
-    flash("Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza.", "ok")
+    flash(gettext("Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza."), "ok")
     return redirect(url_for("admin_referentes"))
 
 
@@ -3981,9 +4578,9 @@ def admin_referentes_clasificar(barrido_id):
     from tareas import referentes as tareas_ref
     _barrido_global_o_404(ref_datos, barrido_id)
     if tareas_ref.encolar_clasificar_pendientes(None, barrido_id):
-        flash("Clasificando lo pendiente; la tabla se actualiza sola.", "ok")
+        flash(gettext("Clasificando lo pendiente; la tabla se actualiza sola."), "ok")
     else:
-        flash("Ya hay algo en curso para este barrido.", "error")
+        flash(gettext("Ya hay algo en curso para este barrido."), "error")
     return redirect(url_for("admin_referentes"))
 
 
@@ -3998,9 +4595,9 @@ def admin_referentes_reintentar_imagenes(barrido_id):
     from tareas import referentes as tareas_ref
     _barrido_global_o_404(ref_datos, barrido_id)
     if tareas_ref.encolar_reintentar_imagenes(None, barrido_id):
-        flash("Reintentando las imágenes que fallaron.", "ok")
+        flash(gettext("Reintentando las imágenes que fallaron."), "ok")
     else:
-        flash("Ya hay algo en curso para este barrido.", "error")
+        flash(gettext("Ya hay algo en curso para este barrido."), "error")
     return redirect(url_for("admin_referentes"))
 
 
@@ -4052,25 +4649,19 @@ def cambiar_estado_ad(cliente, ad_id):
         flash(gettext("Ese anuncio todavía no está publicado en Meta."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
-    # Serializado: meta_auth.configurar() escribe credenciales globales del
-    # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
-    # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
-    with _ENV_LOCK:
-        try:
-            creds = meta_conexion.credenciales_ads(cliente)
-            meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
-            # Activar/pausar los tres niveles: Meta solo entrega si campaña,
-            # conjunto Y anuncio están ACTIVE (se crean todos en pausa).
-            ids = entry.get("meta_ids") or {}
-            for oid in (campaign_id, ids.get("adset_id"), ids.get("ad_id")):
-                if oid:
-                    meta_campaign.actualizar_estado(oid, nuevo_estado)
-            ads_mod.actualizar(cliente, ad_id, estado="activo" if nuevo_estado == "ACTIVE" else "pausado")
-            flash(gettext("Listo.") if nuevo_estado == "ACTIVE" else gettext("Pausado."), "ok")
-        except Exception as e:
-            flash(gettext("No pude cambiar el estado: %(error)s", error=e), "error")
-        finally:
-            meta_auth.limpiar()
+    def cambiar(_creds):
+        # Los tres niveles se operan con el mismo lock que el worker de Meta.
+        ids = entry.get("meta_ids") or {}
+        for oid in (campaign_id, ids.get("adset_id"), ids.get("ad_id")):
+            if oid:
+                meta_campaign.actualizar_estado(oid, nuevo_estado)
+
+    try:
+        lanzador._con_credenciales(cliente, cambiar)
+        ads_mod.actualizar(cliente, ad_id, estado="activo" if nuevo_estado == "ACTIVE" else "pausado")
+        flash(gettext("Listo.") if nuevo_estado == "ACTIVE" else gettext("Pausado."), "ok")
+    except Exception as e:
+        flash(gettext("No pude cambiar el estado: %(error)s", error=cola.sin_token(str(e))), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -4188,6 +4779,27 @@ def _filtro_dinero(valor, moneda):
     return tablero.dinero(valor, moneda)
 
 
+@app.template_filter("fecha_corta")
+def _filtro_fecha_corta(valor):
+    """«2 oct» / «2 Oct» de una fecha ISO guardada (idiomas.fecha_corta, en el
+    idioma de quien mira); vacío si no se puede leer."""
+    try:
+        return idiomas.fecha_corta(datetime.fromisoformat(str(valor)[:19]))
+    except (TypeError, ValueError):
+        return ""
+
+
+@app.template_filter("horas_desde")
+def _filtro_horas_desde(valor):
+    """Horas enteras desde una fecha ISO guardada con db.ahora() (hora local, sin zona): el «al día hace N h» del
+    detalle de Meta en el centro de resultados. None si no se puede leer; nunca negativo."""
+    try:
+        antes = datetime.fromisoformat(str(valor)[:19])
+    except (TypeError, ValueError):
+        return None
+    return max(0, int((datetime.fromisoformat(db.ahora()) - antes).total_seconds() // 3600))
+
+
 @app.template_filter("roas")
 def _filtro_roas(valor):
     """ROAS con un decimal: 28,0 en español, 28.0 en inglés (idiomas.numero)."""
@@ -4195,14 +4807,21 @@ def _filtro_roas(valor):
 
 
 def _calcular_tablero(cliente):
-    """Todo lo que pinta la pestaña Tablero, de UNA carga de la base
-    (`tablero.cargar_datos`). Cada parte (resumen del mes, serie de 30 días,
-    top de ganadoras, alertas, CSV, gráfico) va en su propio try/except: si
-    una explota (Meta caída, tienda rota) llega como None con el nombre y la
-    clase del error en `errores` — nunca el mensaje, que podría arrastrar un
-    token — y la plantilla muestra «No se pudo calcular X» para esa parte y
-    pinta el resto. Si la carga misma falla, cada parte carga por su cuenta
-    (más lento, mismo resultado)."""
+    """Lo que el Tablero viejo aporta al centro de resultados (desde E2 ya no es
+    pestaña), de UNA carga de la base (`tablero.cargar_datos`): el resumen del
+    mes (el chip del menú, `_pauta_mes`), el total y el mes a mes (el
+    «Historial» plegado, `_exp_historial.html`), la generación, la tienda según
+    Triple Whale y el CSV del mes (lo lee `tab_descargar_csv`). Cada parte va en
+    su propio try/except: si una explota (Meta caída, tienda rota) llega como
+    None con el nombre y la clase del error en `errores` — nunca el mensaje, que
+    podría arrastrar un token — y la plantilla muestra «No se pudo calcular X»
+    para esa parte y pinta el resto. Si la carga misma falla, cada parte carga
+    por su cuenta (más lento, mismo resultado). La serie de 30 días, el top de
+    ganadoras y los dos gráficos ya no se calculan: desde E2 no los pinta nadie
+    (revisión final, 2026-10-03; el gráfico de Triple Whale lo arma su pestaña
+    con `app.extensions["grafico_tablero"]`). Las alertas tampoco son una parte:
+    las calcula alertas.py (que sigue leyendo `tablero.alertas`) y el centro
+    solo pinta su conteo, de `alertas_ctx` (spec alertas §7 y §12.9)."""
     ahora = db.ahora()
     out = {"ahora": ahora, "mes": idiomas.mes_largo(int(ahora[5:7])), "anio": ahora[:4], "errores": []}
     try:
@@ -4211,14 +4830,16 @@ def _calcular_tablero(cliente):
         datos = None
         print(f"[aviso] Tablero de {cliente}: no pude cargar los datos de una vez: {type(e).__name__}")
     partes = {
+        # El mes en curso solo lo usa el chip del menú lateral (_pauta_mes);
+        # los tiles son el total desde el inicio y debajo va el mes a mes.
         "resumen": lambda: tablero.resumen_mes(cliente, ahora, datos=datos),
-        "resumen_triple_whale": lambda: tablero.resumen_mes_triple_whale(cliente, ahora, datos=datos),
+        "total": lambda: tablero.resumen_total(cliente, ahora, datos=datos),
+        "total_triple_whale": lambda: tablero.resumen_total_triple_whale(cliente, ahora, datos=datos),
+        "meses": lambda: tablero.mes_a_mes(cliente, ahora, datos=datos),
+        "generacion_total": lambda: gastos.resumen_total(cliente, ahora),
         # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
         "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
-        "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
-        "serie_triple_whale": lambda: tablero.serie_diaria_triple_whale(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
-        "top": lambda: tablero.top_ganadoras(cliente, datos=datos),
-        "alertas": lambda: tablero.alertas(cliente, ahora, datos=datos),
+        # El CSV va en el contexto cacheado para que la descarga cuadre con lo que se ve (tab_descargar_csv).
         "csv": lambda: tablero.csv_mes(cliente, ahora, datos=datos),
     }
     for nombre, fn in partes.items():
@@ -4228,14 +4849,6 @@ def _calcular_tablero(cliente):
             out[nombre] = None
             out["errores"].append(f"{nombre}: {type(e).__name__}")
             print(f"[aviso] Tablero de {cliente}: no pude calcular {nombre}: {type(e).__name__}")
-    try:
-        out["grafico"] = _grafico_tablero(out["serie"]) if out["serie"] else None
-        out["grafico_triple_whale"] = _grafico_tablero(out["serie_triple_whale"]) if out["serie_triple_whale"] else None
-    except Exception as e:  # noqa: BLE001 — el gráfico es una parte más: si falla, se muestra el resto
-        out["grafico"] = None
-        out["grafico_triple_whale"] = None
-        out["errores"].append(f"grafico: {type(e).__name__}")
-        print(f"[aviso] Tablero de {cliente}: no pude dibujar el gráfico: {type(e).__name__}")
     return out
 
 
@@ -4256,12 +4869,14 @@ _TABLERO_LOCK = threading.Lock()
 def _clave_tablero(cliente):
     """(último id de metrica_snapshot, propuestas pendientes, nº de
     experimentos y su último actualizado_en, último actualizado_en de pieza,
-    nº y último actualizado_en de publicación orgánica) del proyecto: cinco
+    nº y último actualizado_en de publicación orgánica, copia de Triple
+    Whale, nº/último id/suma de los cobros de generación) del proyecto:
     consultas baratas con índice. Cualquier cambio que
     el tablero pinte (snapshot del worker, propuesta del motor, estado o
-    veredicto tocado por el dueño, publicación orgánica) mueve la clave."""
+    veredicto tocado por el dueño, publicación orgánica, cobro de un
+    proveedor) mueve la clave."""
     ms, ep, pr, ex, pub = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento, db.publicacion
-    tw = db.triple_whale
+    tw, gs = db.triple_whale, db.gasto
     with db.conectar() as con:
         ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
             ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
@@ -4276,18 +4891,37 @@ def _clave_tablero(cliente):
         # La tienda según Triple Whale (spec 2026-09-28 §13): conectar,
         # desconectar o una copia nueva mueven sus tiles.
         triple = con.execute(sa.select(sa.func.max(tw.c.actualizado_en)).where(tw.c.cliente == cliente)).scalar()
-    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple)
+        # La generación (tile total y columna del mes a mes): un cobro nuevo
+        # o uno que se actualiza (misma referencia, otro usd) mueve la clave.
+        cobros = con.execute(sa.select(sa.func.count(), sa.func.max(gs.c.id), sa.func.sum(gs.c.usd))
+                             .where(gs.c.cliente == cliente)).first()
+    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple,
+            tuple(cobros))
 
 
 def invalidar_tablero(cliente=None):
     """Olvida el tablero cacheado de un proyecto, en todos los idiomas (o de
-    todos los proyectos)."""
+    todos los proyectos), y con él sus alertas (spec alertas §5)."""
     with _TABLERO_LOCK:
         if cliente is None:
             _TABLERO_CACHE.clear()
         else:
             for clave_cache in [k for k in _TABLERO_CACHE if k[0] == cliente]:
                 _TABLERO_CACHE.pop(clave_cache, None)
+    invalidar_alertas(cliente)
+
+
+def _clave_tablero_de_la_peticion(cliente):
+    """`_clave_tablero` una sola vez por petición y proyecto: la leen el
+    Tablero (ver_cliente, el chip del sidebar) y la caché de alertas, y son 7
+    consultas. Se lee al pintar, después de lo que la ruta haya escrito. Fuera
+    de una petición (pruebas, scripts) se consulta cada vez."""
+    if not has_request_context():
+        return _clave_tablero(cliente)
+    memo = g.setdefault("_claves_tablero", {})
+    if cliente not in memo:
+        memo[cliente] = _clave_tablero(cliente)
+    return memo[cliente]
 
 
 def _contexto_tablero(cliente):
@@ -4295,7 +4929,7 @@ def _contexto_tablero(cliente):
     idioma, invalidada antes si cambia `_clave_tablero`. Si la clave no se
     puede consultar, se calcula sin caché."""
     try:
-        clave = _clave_tablero(cliente)
+        clave = _clave_tablero_de_la_peticion(cliente)
     except Exception as e:  # noqa: BLE001 — sin clave no hay caché, pero sí tablero
         print(f"[aviso] Tablero de {cliente}: no pude leer la clave de caché: {type(e).__name__}")
         return _calcular_tablero(cliente)
@@ -4309,6 +4943,151 @@ def _contexto_tablero(cliente):
     with _TABLERO_LOCK:
         _TABLERO_CACHE[clave_cache] = (ahora, clave, ctx)
     return ctx
+
+
+# Alertas (spec docs/superpowers/specs/2026-09-20-alertas-design.md §5 y §12):
+# el context processor las pinta en TODA página con <cliente> (burbuja del
+# sidebar, línea del Tablero, pestaña Alertas), así que `alertas.calcular` se
+# guarda ALERTAS_TTL_S por (proyecto, idioma): los títulos salen traducidos al
+# calcular. La caché guarda el cálculo COMPLETO y el rol se filtra al leer
+# (`alertas.visibles(..., calculadas=)`, que además lee los descartes en vivo:
+# una consulta por página). Se vacía antes del TTL cuando (1) cambia
+# `_clave_tablero` (un snapshot, una propuesta, una publicación orgánica: lo
+# que hace el worker, sin pasar por una ruta; la misma clave del Tablero, leída
+# una vez por petición), (2) la persona escribe algo en el proyecto (cualquier
+# POST/PUT/PATCH/DELETE que salga bien: `_alertas_tras_escribir`), y (3) al
+# descartar o restaurar, antes de redirigir (una lista vieja sin la alerta
+# podaría el descarte recién hecho). Así una alerta resuelta no se queda
+# hasta 60 s (revisión de la Task 5, 2026-10-02). Por proceso: aceptable.
+ALERTAS_TTL_S = 60
+_ALERTAS_CACHE = {}          # (cliente, idioma) -> (monotonic, clave del tablero, lista de alertas.calcular)
+_ALERTAS_LOCK = threading.Lock()
+
+
+def invalidar_alertas(cliente=None):
+    """Olvida las alertas calculadas de un proyecto en todos los idiomas (o
+    las de todos los proyectos)."""
+    with _ALERTAS_LOCK:
+        if cliente is None:
+            _ALERTAS_CACHE.clear()
+        else:
+            for clave_cache in [k for k in _ALERTAS_CACHE if k[0] == cliente]:
+                _ALERTAS_CACHE.pop(clave_cache, None)
+
+
+def _alertas_calculadas(cliente):
+    """`alertas.calcular(cliente)` con caché de ALERTAS_TTL_S por proyecto e
+    idioma, invalidada antes si cambia `_clave_tablero`. Si la clave no se
+    puede leer, manda solo el TTL."""
+    try:
+        clave = _clave_tablero_de_la_peticion(cliente)
+    except Exception as e:  # noqa: BLE001 — sin clave, la caché vive su TTL
+        print(f"[aviso] Alertas de {cliente}: no pude leer la clave del tablero: {type(e).__name__}")
+        clave = None
+    clave_cache = (cliente, idiomas.activo())
+    ahora = time.monotonic()
+    with _ALERTAS_LOCK:
+        entrada = _ALERTAS_CACHE.get(clave_cache)
+        if entrada and entrada[1] == clave and ahora - entrada[0] < ALERTAS_TTL_S:
+            return entrada[2]
+    lista = alertas.calcular(cliente)
+    with _ALERTAS_LOCK:
+        _ALERTAS_CACHE[clave_cache] = (ahora, clave, lista)
+    return lista
+
+
+def _contexto_alertas(cliente, rol):
+    """{visibles, descartadas, resumen} para quien mira: el cálculo cacheado,
+    sin las `solo_admin` salvo para un admin y sin lo descartado."""
+    return alertas.visibles(cliente, rol=rol, calculadas=_alertas_calculadas(cliente))
+
+
+@app.context_processor
+def _alertas_sidebar():
+    """`alertas_ctx` para toda página con <cliente> en la URL y sesión: la
+    burbuja del sidebar (también en las páginas de Sprints y Nicho, que no
+    pasan por ver_cliente), la línea del Tablero y la pestaña Alertas. Fuera
+    para los parciales JSON/fetch (sin sidebar) y la landing pública. Si el
+    cálculo revienta, la página sale sin alertas y el log dice solo la clase
+    del error (el mensaje podría arrastrar un token)."""
+    cliente = request.view_args.get("cliente") if request.view_args else None
+    if not cliente or "usuario" not in session or request.endpoint == "landing_cliente" or _quiere_json():
+        return {}
+    try:
+        return {"alertas_ctx": _contexto_alertas(cliente, session.get("rol"))}
+    except Exception as e:  # noqa: BLE001 — sin alertas, pero con página
+        print(f"[aviso] Alertas de {cliente}: {type(e).__name__}")
+        return {}
+
+
+# Lo que llega por formulario (spec alertas §5): fullmatch, no match — con
+# «$» un salto de línea al final pasaría —, y la clave con tope de largo.
+_CLAVE_ALERTA = re.compile(alertas.CLAVE_VALIDA)
+_HUELLA_ALERTA = re.compile(alertas.HUELLA_VALIDA)
+LARGO_MAX_CLAVE_ALERTA = 200
+
+
+def _clave_alerta_del_form(cliente):
+    """La clave del formulario, validada. Un no-admin no puede tocar una
+    alerta `solo_admin` (403, nada se escribe): los descartes son del proyecto,
+    y si un cliente descartara `saldo:wavespeed_recarga` o una `llave:*` se la
+    escondería al admin. Nunca solo ocultar el botón en la plantilla."""
+    clave = request.form.get("clave") or ""
+    if len(clave) > LARGO_MAX_CLAVE_ALERTA or not _CLAVE_ALERTA.fullmatch(clave):
+        abort(400)
+    if session.get("rol") != "admin" and alertas.es_solo_admin(clave, _alertas_calculadas(cliente)):
+        abort(403)
+    return clave
+
+
+@app.after_request
+def _alertas_tras_escribir(resp):
+    """Tras una escritura que salió bien (POST/PUT/PATCH/DELETE con status
+    < 400) en una ruta con <cliente>, las alertas de ese proyecto se vuelven a
+    calcular en la próxima página: subir un logo, conectar una tienda o
+    aprobar una propuesta quita su alerta enseguida, no a los 60 s. Corre
+    también para los Blueprints. Nunca toca la respuesta ni lanza."""
+    try:
+        if request.method in METODOS_QUE_ESCRIBEN and resp.status_code < 400:
+            cliente = request.view_args.get("cliente") if request.view_args else None
+            # El 302 de `_guard_por_cliente` también es < 400: sin acceso al
+            # proyecto no se vacía su caché (si no, cualquiera la mantendría fría).
+            if cliente and usuarios.puede_acceder(_sesion(), cliente):
+                invalidar_alertas(cliente)
+    except Exception as e:  # noqa: BLE001 — una caché vieja 60 s es mejor que una respuesta caída
+        print(f"[aviso] Alertas: no pude invalidar tras escribir: {type(e).__name__}")
+    return resp
+
+
+@app.route("/cliente/<cliente>/alertas/descartar", methods=["POST"])
+def alertas_descartar(cliente):
+    """Oculta una alerta mientras su situación (huella) no cambie. Solo
+    escribe el descarte, y solo de una alerta que existe en el cálculo actual
+    (una clave inventada no se guarda); no gasta, no lanza nada."""
+    huella = request.form.get("huella") or ""
+    if not _HUELLA_ALERTA.fullmatch(huella):
+        abort(400)
+    clave = _clave_alerta_del_form(cliente)
+    if not any(a["clave"] == clave for a in _alertas_calculadas(cliente)):
+        # Solo se descarta lo que existe: con una clave válida pero inventada, cualquiera con sesión llenaría
+        # `alerta_descartada` de filas que nunca se podrían podar (auditoría de seguridad, CWE-770). Si la alerta
+        # se resolvió entre que se pintó la página y el clic, tampoco hay nada que ocultar.
+        flash(gettext("Esa alerta ya no está."), "warn")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
+    alertas.descartar(cliente, clave, huella)
+    invalidar_alertas(cliente)
+    flash(gettext("Alerta descartada."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
+
+
+@app.route("/cliente/<cliente>/alertas/restaurar", methods=["POST"])
+def alertas_restaurar(cliente):
+    """Vuelve a mostrar una alerta descartada."""
+    clave = _clave_alerta_del_form(cliente)
+    alertas.restaurar(cliente, clave)
+    invalidar_alertas(cliente)
+    flash(gettext("Alerta restaurada."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="alertas"))
 
 
 @app.route("/cliente/<cliente>/tablero/mes.csv")
@@ -4336,11 +5115,12 @@ NOMBRES_TIPO_GASTO = {
     "video": idiomas.N_("Videos"), "imagen": idiomas.N_("Imágenes"), "swap": idiomas.N_("Cambios de producto"),
     "guion": idiomas.N_("Guiones"), "final": idiomas.N_("Finales"), "regla_producto": idiomas.N_("Reglas de producto (IA)"),
     "caption_organico": idiomas.N_("Textos orgánicos (IA)"), "musica": idiomas.N_("Música"),
-    "locucion": idiomas.N_("Locuciones (audios)"),
+    "locucion": idiomas.N_("Locuciones (audios)"), "voz_propia": idiomas.N_("Voces propias"),
     "refinar_prompt": idiomas.N_("Correcciones de prompt (Flow Plus)"), "guion_clips": idiomas.N_("Guiones a clips (Flow Plus)"),
     "ideas": idiomas.N_("Ideas de sprint (IA)"), "pedidos": idiomas.N_("Pedidos al cliente (IA)"),
     "revision": idiomas.N_("Revisión de la doctrina (IA)"),
-    "evaluacion": idiomas.N_("Evaluación de anuncios (IA)"), "otro": idiomas.N_("Otros"),
+    "evaluacion": idiomas.N_("Evaluación de anuncios (IA)"),
+    "transcripcion": idiomas.N_("Subtítulos (transcripción)"), "otro": idiomas.N_("Otros"),
 }
 
 
@@ -4445,19 +5225,81 @@ def gasto_csv(cliente):
     return resp
 
 
+def _volver_exp(cliente, eid=None):
+    """De vuelta a la pestaña Experimentos; con `eid`, abre ese experimento en el centro de resultados
+    (`#experimentos?exp=<id>`: el hash lleva el filtro, `static/exp_resultados.js` lo lee)."""
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor=f"experimentos?exp={eid}" if eid else "experimentos"))
+
+
+@app.route("/cliente/<cliente>/experimentos/resultados")
+@trabajos.con_vivos_precargados
+@experimentos.con_lecturas_memorizadas
+def exp_resultados(cliente):
+    """Fragmento del centro de resultados (E2): lo pide `static/exp_resultados.js` al abrir la pestaña y al cambiar
+    un filtro (`?dias=&exp=&pais=&pieza=&tipo=&moneda=`). Solo lee: nada gasta ni publica. El acceso al proyecto lo
+    decide `_guard_por_cliente`, como en las demás rutas de la página. Con `exp=<id>` suma la gestión de ese
+    experimento (sus acciones siguen siendo las rutas POST de siempre)."""
+    filtro = resultados.filtro_de(request.args)
+    r = resultados.contexto(cliente, filtro)
+    ctx = _contexto_experimentos(cliente)
+    elegido = next((e for e in ctx["experimentos"] if e["id"] == filtro.experimento_id), None)
+    # Las piezas elegibles solo viajan cuando algo del fragmento las pinta: el «Agregar pieza» de la gestión de un
+    # experimento en armado, o el «Meter en experimento» / «Probar en Meta» de un anuncio suelto que sigue en cola.
+    if (elegido and _acepta_piezas(elegido)) or any(a.get("estado") == "en_cola" for a in ctx["ads"].values()):
+        ctx["elegibles_exp"] = experimentos.elegibles(cliente)
+    try:
+        # La burbuja de alertas de la página no viaja en un fetch (_alertas_sidebar): la línea «N alertas…» sí.
+        alertas_ctx = _contexto_alertas(cliente, session.get("rol"))
+    except Exception as e:  # noqa: BLE001 — sin alertas, pero con fragmento
+        print(f"[aviso] Alertas de {cliente}: {type(e).__name__}")
+        alertas_ctx = None
+    # `precios`: el botón «Escribir texto con IA» de «Publicar orgánico» (en la gestión) muestra su precio ANTES de
+    # cobrar (regla 1); en la página venía de `_contexto_gasto`, y el fragmento ya no pasa por ahí.
+    return render_template("_exp_resultados.html", cliente=cliente, r=r, ex=elegido, tablero=_contexto_tablero(cliente),
+                           alertas_ctx=alertas_ctx, paises_fe=fe_tipos.PAISES, capacidades_meta=meta_conexion.estado(cliente),
+                           modo_meta=_modo_de(meta_conexion.cargar(cliente)), precios=_precios_pagina(), **ctx)
+
+
+@app.route("/cliente/<cliente>/experimentos/pieza/<int:ep_id>")
+def exp_pieza(cliente, ep_id):
+    """Panel de una pieza (E2): fragmento que se abre sobre el centro de resultados. Solo busca entre las piezas de
+    `cliente`: la de otro proyecto (o una que no existe) es un 404. Solo cuenta el periodo del filtro."""
+    p = resultados.pieza(cliente, ep_id, resultados.filtro_de(request.args))
+    if p is None:
+        abort(404)
+    return render_template("_exp_pieza.html", cliente=cliente, p=p, paises_fe=fe_tipos.PAISES,
+                           etiquetas_exp=_etiquetas_exp(), capacidades_meta=meta_conexion.estado(cliente),
+                           modo_meta=_modo_de(meta_conexion.cargar(cliente)), precios=_precios_pagina(),
+                           **_contexto_organico(cliente))
+
+
+@app.route("/cliente/<cliente>/experimentos/nuevo")
+@trabajos.con_vivos_precargados
+@experimentos.con_lecturas_memorizadas
+def exp_nuevo(cliente):
+    """«Nuevo experimento» en su propia ruta (E2): la galería de piezas, la barra y los tres pasos que hasta ahora
+    vivían arriba de la lista de experimentos. Misma URL que el POST de `exp_crear`, otro método. Llega con
+    `?piezas=1,2` (las marca), `?exp_nombre=&exp_destino=` (Catálogo) o sin nada."""
+    ctx = _contexto_experimentos(cliente, con_elegibles=True, con_organico=False)
+    return render_template("exp_nuevo.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           paises_fe=fe_tipos.PAISES, **ctx, **_contexto_meta(cliente, ctx["experimentos"]))
+
+
 @app.route("/cliente/<cliente>/experimentos/nuevo", methods=["POST"])
 def exp_crear(cliente):
     """Crea un experimento en 'armando' — sin piezas ni objetos en Meta
     todavía. Nunca gasta: eso solo ocurre en exp_lanzar y solo si la persona
     lo pide."""
-    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    volver = _volver_exp(cliente)
     if meta_conexion.estado(cliente).get("estado") != "conectado":
         flash(gettext("Conecta Meta en Experimentos antes de crear un experimento."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     nombre = (request.form.get("nombre") or "").strip()[:200]
     objetivo = request.form.get("objetivo") or ""
-    codigos = [p for p in request.form.getlist("paises") if p in fe_tipos.PAISES]
+    # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
+    # filas del mismo país y un conjunto huérfano en Meta (revisión final de E2, 2026-10-03).
+    codigos = list(dict.fromkeys(p for p in request.form.getlist("paises") if p in fe_tipos.PAISES))
     destino = (request.form.get("destino_url") or "").strip()
     try:
         dias = int(request.form.get("dias") or 7)
@@ -4492,6 +5334,11 @@ def exp_crear(cliente):
         flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
                       minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
         return volver
+    # Misma regla que «Nuevo experimento» (exp_probar): sin UI propia, pero una ruta POST armada a mano no se salta el total.
+    error = _error_de_presupuesto(moneda, codigos, paises, dias)
+    if error:
+        flash(error, "error")
+        return volver
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
         modo = "manual"   # nunca se sube de puerta por un valor raro en el form
@@ -4522,7 +5369,7 @@ def exp_crear(cliente):
                     n=len(paises), modo=modo,
                     atribucion=idiomas.traducir(experimentos.ETIQUETAS_ATRIBUCION.get(ex["atribucion"], ex["atribucion"]))))
     flash(gettext("Experimento «%(nombre)s» creado. Agrega piezas y lánzalo cuando esté listo.", nombre=nombre), "ok")
-    return volver
+    return _volver_exp(cliente, eid)
 
 
 def nombre_experimento_automatico(n_piezas, paises, cuando=None):
@@ -4533,19 +5380,56 @@ def nombre_experimento_automatico(n_piezas, paises, cuando=None):
                    piezas=ngettext("%(num)s pieza", "%(num)s piezas", n_piezas), paises=", ".join(sorted(paises)))
 
 
+def _mensaje_presupuesto(codigo, moneda, paises, dias, total):
+    """Lo que se le dice a la persona cuando `presupuesto_experimentos.validar` rechaza un presupuesto. Cada código
+    tiene su frase: «el reparto supera el total» nombra las cifras, para que se vea de dónde salió la cuenta."""
+    def cifra(v):
+        return idiomas.numero(v, 0 if float(v).is_integer() else 2)
+    if codigo == "total":
+        diario = sum(p["presupuesto_dia"] for p in paises)
+        return gettext("El reparto supera el total: %(diario)s %(moneda)s al día durante %(dias)s días son %(maximo)s %(moneda)s, "
+                       "y el total que pusiste es %(total)s %(moneda)s. Sube el total o baja el presupuesto de algún país; "
+                       "no se creó nada.", diario=cifra(diario), moneda=moneda, dias=dias, maximo=cifra(diario * dias),
+                       total=cifra(float(total or 0)))
+    if codigo == "precision":
+        if moneda in presupuesto_experimentos.EN_ENTEROS:
+            return gettext("El presupuesto diario de cada país va en cifras enteras en %(moneda)s.", moneda=moneda)
+        return gettext("El presupuesto diario de cada país no lleva más de dos decimales en %(moneda)s.", moneda=moneda)
+    if codigo == "minimo":
+        return gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en alguno de los países.",
+                       minimo=PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1), moneda=moneda)
+    return gettext("Revisa los números del presupuesto: el total, los días y el presupuesto diario de cada país.")
+
+
+def _error_de_presupuesto(moneda, codigos, paises, dias):
+    """None si el presupuesto del formulario (total, días y diario de cada país) es aceptable; si no, el aviso en
+    palabras. El servidor no se fía de lo que calculó el navegador: «Máximo que puede gastar» es verdad aunque alguien
+    arme el POST a mano, porque la suma de los diarios por los días no puede pasar del total (1 % de margen)."""
+    try:
+        presupuesto_experimentos.validar(request.form.get("tope_total"), dias,
+                                         [request.form.get(f"presupuesto_{p}") for p in codigos], moneda)
+    except presupuesto_experimentos.ErrorPresupuesto as e:
+        return _mensaje_presupuesto(e.codigo, moneda, paises, dias, request.form.get("tope_total"))
+    return None
+
+
 @app.route("/cliente/<cliente>/experimentos/probar", methods=["POST"])
 def exp_probar(cliente):
     """La galería primero: un solo POST crea el experimento, reparte las
     piezas por país y encola el lanzamiento (todo PAUSED en Meta). Valida lo
     mismo que exp_crear; si algo falla no queda nada creado. Activar sigue
-    siendo un clic aparte."""
-    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    siendo un clic aparte. Un error de validación (no queda nada creado) vuelve a «Nuevo experimento», donde está
+    el formulario, con las piezas ya marcadas; lo creado lleva al centro de resultados, a ese experimento."""
+    marcadas = ",".join(x for x in request.form.getlist("piezas") if x.isascii() and x.isdigit())
+    volver = redirect(url_for("exp_nuevo", cliente=cliente, **({"piezas": marcadas} if marcadas else {})))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
         flash(gettext("Conecta Meta en Experimentos antes de probar piezas."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
-    codigos = [p for p in request.form.getlist("paises") if p in fe_tipos.PAISES]
+    # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
+    # filas del mismo país y un conjunto huérfano en Meta (revisión final de E2, 2026-10-03).
+    codigos = list(dict.fromkeys(p for p in request.form.getlist("paises") if p in fe_tipos.PAISES))
     destino = (request.form.get("destino_url") or "").strip()
     try:
         piezas_ids = [int(x) for x in request.form.getlist("piezas")]
@@ -4588,6 +5472,11 @@ def exp_probar(cliente):
         flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
                       minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
         return volver
+    # E2 (R4): el reparto no puede pasar del total (la comprobación es del servidor, no del navegador).
+    error = _error_de_presupuesto(moneda, codigos, paises, dias)
+    if error:
+        flash(error, "error")
+        return volver
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
         modo = "manual"
@@ -4616,7 +5505,7 @@ def exp_probar(cliente):
         flash(gettext("«%(nombre)s»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta.", nombre=nombre), "ok")
     else:
         flash(gettext("«%(nombre)s» quedó creado; ya se estaba lanzando.", nombre=nombre), "warn")
-    return volver
+    return _volver_exp(cliente, eid)
 
 
 def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
@@ -4653,7 +5542,7 @@ def exp_agregar_pieza(cliente, eid):
     else:
         error = _agregar_pieza_validada(cliente, eid, pieza_id, pais)
         flash(error, "error") if error else flash(gettext("Pieza agregada."), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    return _volver_exp(cliente, eid)
 
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/piezas/<int:ep_id>/quitar", methods=["POST"])
@@ -4670,7 +5559,7 @@ def exp_quitar_pieza(cliente, eid, ep_id):
         flash(gettext("Pieza quitada."), "ok")
     else:
         flash(gettext("No pude quitar esa pieza (¿ya está en Meta?)."), "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    return _volver_exp(cliente, eid)
 
 
 @app.route("/cliente/<cliente>/experimentos/meter", methods=["POST"])
@@ -4692,6 +5581,8 @@ def exp_meter_pieza(cliente):
     else:
         error = _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais)
         flash(error, "error") if error else flash(gettext("Pieza enviada al experimento."), "ok")
+    if volver == "experimentos":
+        return _volver_exp(cliente, experimento_id or None)
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
@@ -4701,7 +5592,7 @@ def exp_lanzar(cliente, eid):
     todo PAUSED). Valida acá lo mismo que lanzador.lanzar para poder avisar
     por flash sin gastar un intento de la cola (max_intentos=1: un reintento
     automático a mitad de la cadena crearía objetos huérfanos en Meta)."""
-    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    volver = _volver_exp(cliente, eid)
     ex = experimentos.obtener(cliente, eid)
     if not ex:
         flash(gettext("Ese experimento no existe."), "error")
@@ -4739,7 +5630,7 @@ def exp_estado(cliente, eid):
     pais = (request.form.get("pais") or "").strip() or None
     if estado not in ("ACTIVE", "PAUSED"):
         flash(gettext("Estado inválido."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+        return _volver_exp(cliente, eid)
     with _ENV_LOCK:
         try:
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
@@ -4749,7 +5640,7 @@ def exp_estado(cliente, eid):
             flash(str(e), "error")
         except Exception as e:
             flash(gettext("No pude cambiar el estado: %(error)s", error=cola.sin_token(str(e))), "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    return _volver_exp(cliente, eid)
 
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/presupuesto", methods=["POST"])
@@ -4768,10 +5659,10 @@ def exp_presupuesto(cliente, eid):
         presupuesto_dia = float(request.form.get("presupuesto_dia") or 0)
     except ValueError:
         flash(gettext("El presupuesto debe ser un número."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+        return _volver_exp(cliente, eid)
     if not math.isfinite(presupuesto_dia) or presupuesto_dia < minimo:
         flash(gettext("El presupuesto diario mínimo es %(minimo)s %(moneda)s.", minimo=minimo, moneda=moneda), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+        return _volver_exp(cliente, eid)
     with _ENV_LOCK:
         try:
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
@@ -4781,7 +5672,7 @@ def exp_presupuesto(cliente, eid):
             flash(str(e), "error")
         except Exception as e:
             flash(gettext("No pude cambiar el presupuesto: %(error)s", error=cola.sin_token(str(e))), "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    return _volver_exp(cliente, eid)
 
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/refrescar", methods=["POST"])
@@ -4789,22 +5680,22 @@ def exp_refrescar(cliente, eid):
     ex = experimentos.obtener(cliente, eid)
     if not ex or not ex["meta_campaign_id"]:
         flash(gettext("Ese experimento todavía no está en Meta."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+        return _volver_exp(cliente, eid)
     job_id = tareas_exp.job_id_refrescar(cliente, eid)
     # M10: max_intentos=2 como la periódica (tareas/experimentos.py) — refrescar
     # nunca gasta, así que no hay razón para ser más estricto acá que allá.
     arranco = trabajos.encolar(job_id, "exp_refrescar", {"cliente": cliente, "experimento_id": eid},
-                               cliente=cliente, duracion_estimada=30, max_intentos=2)
+                               cliente=cliente, duracion_estimada=90, max_intentos=2)
     if arranco:
         flash(gettext("Actualizando resultados…"), "ok")
     else:
         flash(gettext("Ya se están actualizando."), "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    return _volver_exp(cliente, eid)
 
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/cerrar", methods=["POST"])
 def exp_cerrar(cliente, eid):
-    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    volver = _volver_exp(cliente, eid)
     ex = experimentos.obtener(cliente, eid)
     if not ex:
         flash(gettext("Ese experimento no existe."), "error")
@@ -4835,10 +5726,6 @@ def exp_cerrar(cliente, eid):
 
 # ---- Bloque 4: modo, reglas, propuestas, evaluar ahora ---------------------
 
-def _volver_exp(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
-
-
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/modo", methods=["POST"])
 def exp_modo(cliente, eid):
     """Cambia la puerta del experimento (manual/semi/auto). Solo cambia lo que
@@ -4847,13 +5734,13 @@ def exp_modo(cliente, eid):
     ex = experimentos.obtener(cliente, eid)
     if not ex:
         flash(gettext("Ese experimento no existe."), "error")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     if modo not in modos.MODOS:
         flash(gettext("Modo inválido."), "error")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     if ex["estado"] == "cerrado":
         flash(gettext("Un experimento cerrado no cambia de modo."), "error")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     if modo != ex["modo"]:
         experimentos.actualizar(cliente, eid, modo=modo)
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
@@ -4862,7 +5749,7 @@ def exp_modo(cliente, eid):
                                                   antes=ex["modo"], despues=modo),
                                           {"antes": ex["modo"], "despues": modo})
     flash(gettext("Modo: %(modo)s.", modo=modo), "ok")
-    return _volver_exp(cliente)
+    return _volver_exp(cliente, eid)
 
 
 def _flash_reglas_invalidas(errores):
@@ -4875,17 +5762,17 @@ def exp_reglas(cliente, eid):
     ex = experimentos.obtener(cliente, eid)
     if not ex:
         flash(gettext("Ese experimento no existe."), "error")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     reglas, errores = decisor.reglas_desde_formulario(request.form)
     if errores:
         _flash_reglas_invalidas(errores)
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     experimentos.actualizar(cliente, eid, reglas=reglas)
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
         experimentos.registrar_evento(cliente, eid, "reglas", gettext("Reglas del experimento actualizadas."),
                                       {"reglas": reglas})
     flash(gettext("Reglas guardadas. Lo vacío hereda de Configuración."), "ok")
-    return _volver_exp(cliente)
+    return _volver_exp(cliente, eid)
 
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/decidir", methods=["POST"])
@@ -4896,12 +5783,12 @@ def exp_decidir_ahora(cliente, eid):
     ex = experimentos.obtener(cliente, eid)
     if not ex or ex["estado"] != "corriendo":
         flash(gettext("Solo se evalúa un experimento que está corriendo."), "error")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     job_id = tareas_exp.job_id_decidir(cliente, eid)
     arranco = trabajos.encolar(job_id, "exp_decidir", {"cliente": cliente, "experimento_id": eid},
                                cliente=cliente, duracion_estimada=60, max_intentos=1)
     flash(gettext("Evaluando…") if arranco else gettext("Ya se está evaluando."), "ok" if arranco else "warn")
-    return _volver_exp(cliente)
+    return _volver_exp(cliente, eid)
 
 
 def _ep_id_evento(cliente, pr):
@@ -4976,23 +5863,24 @@ def prop_aprobar(cliente, pid):
     # propuestas.obtener/resolver filtran por cliente: una propuesta de otro
     # proyecto devuelve None y no se ejecuta nada.
     pr = propuestas.obtener(cliente, pid)
+    eid = pr["experimento_id"] if pr else None     # el clic vuelve al experimento de la propuesta
     if not pr or pr["estado"] != "pendiente":
         flash(gettext("Esa propuesta no existe o ya estaba resuelta."), "error")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     payload, error = (_overrides_organico(cliente, request.form, pr["payload"]) if pr["accion"] == "publicar_organico"
                       else (pr["payload"], None))
     if error:
         flash(error, "error")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     pr = propuestas.resolver(cliente, pid, "aprobada")
     if not pr:
         flash(gettext("Esa propuesta no existe o ya estaba resuelta."), "error")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     pr = dict(pr, payload=payload)
     error = _ejecutar_propuesta(cliente, pr)
     if error:
         flash(error, "error")
-    return _volver_exp(cliente)
+    return _volver_exp(cliente, eid)
 
 
 @app.route("/cliente/<cliente>/propuestas/<int:pid>/rechazar", methods=["POST"])
@@ -5000,7 +5888,8 @@ def prop_rechazar(cliente, pid):
     pr = propuestas.resolver(cliente, pid, "rechazada")
     if not pr:
         flash(gettext("Esa propuesta no existe o ya estaba resuelta."), "error")
-        return _volver_exp(cliente)
+        resuelta = propuestas.obtener(cliente, pid)          # ya resuelta: se sabe de qué experimento era
+        return _volver_exp(cliente, resuelta["experimento_id"] if resuelta else None)
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
         experimentos.registrar_evento(
             cliente, pr["experimento_id"], "propuesta",
@@ -5009,7 +5898,7 @@ def prop_rechazar(cliente, pid):
             {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
             ep_id=_ep_id_evento(cliente, pr))
     flash(gettext("Propuesta rechazada."), "ok")
-    return _volver_exp(cliente)
+    return _volver_exp(cliente, pr["experimento_id"])
 
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/propuestas/aprobar_todas", methods=["POST"])
@@ -5020,11 +5909,11 @@ def prop_aprobar_todas(cliente, eid):
     ex = experimentos.obtener(cliente, eid)
     if not ex:
         flash(gettext("Ese experimento no existe."), "error")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     pendientes = propuestas.pendientes(cliente, eid)
     if not pendientes:
         flash(gettext("No había propuestas pendientes."), "ok")
-        return _volver_exp(cliente)
+        return _volver_exp(cliente, eid)
     hechas = 0
     for pr in pendientes:
         aprobada = propuestas.resolver(cliente, pr["id"], "aprobada")
@@ -5038,7 +5927,7 @@ def prop_aprobar_todas(cliente, eid):
         hechas += 1
     if hechas:
         flash(gettext("%(hechas)s propuesta(s) ejecutada(s).", hechas=hechas), "ok")
-    return _volver_exp(cliente)
+    return _volver_exp(cliente, eid)
 
 
 # ---------- Bloque 7: publicación orgánica ----------
@@ -5063,14 +5952,15 @@ def _trabajos_organico(cliente, publicaciones_por_pieza):
     return out
 
 
-def _volver_org(cliente):
+def _volver_org(cliente, ep_id=None):
     """Vuelve a la pestaña de donde salió el clic (`volver` en el form):
     Final edition (final; desde 2026-09-27 las finales viven ahí), Crear
     (creativeflowplus: formularios pintados antes de la mudanza) o
-    Experimentos (por defecto)."""
+    Experimentos (por defecto; con la pieza de un experimento (`ep_id`), a ese experimento)."""
     volver = request.form.get("volver")
-    anchor = volver if volver in ("final", "creativeflowplus") else "experimentos"
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor=anchor))
+    if volver in ("final", "creativeflowplus"):
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
+    return _volver_exp(cliente, experimentos.experimento_de_pieza(cliente, ep_id) if ep_id else None)
 
 
 def _int_form(nombre):
@@ -5100,9 +5990,11 @@ def _encolar_organico(cliente, pieza_id, pub_ids):
                                 cliente=cliente, duracion_estimada=tareas_org.DURACION_PUBLICAR,
                                 etapas=tareas_org.ETAPAS_PUBLICAR, max_intentos=1)
     if not encolada:
+        # Se GUARDA en la fila: idioma del proyecto, no el de quien mira.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            error = gettext("Ya había una publicación de esta pieza en curso; reintenta cuando termine.")
         for pub_id in pub_ids:
-            organico.actualizar(cliente, pub_id, estado="error",
-                                error="Ya había una publicación de esta pieza en curso; reintenta cuando termine.")
+            organico.actualizar(cliente, pub_id, estado="error", error=error)
     return encolada
 
 
@@ -5142,33 +6034,33 @@ def org_publicar(cliente):
     pieza_id = _int_form("pieza_id") or (_pieza_de_ep(cliente, ep_id) if ep_id else None)
     if not pieza_id:
         flash(gettext("No encontré esa pieza."), "error")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     pedidas = [p for p in organico.ORDEN if p in request.form.getlist("plataformas")]
     if not pedidas:
         flash(gettext("Marca al menos una plataforma para publicar."), "error")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     canales = {c["plataforma"]: c for c in organico.canales(cliente)}
     sin_canal = [p for p in pedidas if not canales[p]["disponible"]]
     if sin_canal:
         flash(gettext("Sin canal conectado: %(canales)s. Actívalo en Configuración › Canales orgánicos. No se publicó nada.",
                       canales="; ".join(f"{idiomas.traducir(canales[p]['nombre'])} ({idiomas.traducir(canales[p]['motivo'])})"
                                        for p in sin_canal)), "error")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     textos = {p: {"caption": (request.form.get(f"caption_{p}") or "").strip(),
                   "titulo": (request.form.get(f"titulo_{p}") or "").strip() or None} for p in pedidas}
     sin_texto = [p for p in pedidas if not textos[p]["caption"]]
     if sin_texto:
         flash(gettext("Falta el texto para %(plataformas)s: escríbelo o pulsa «Escribir texto con IA». "
                       "No se publicó nada.", plataformas=_nombres_org(sin_texto)), "error")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     try:
         textos = organico.normalizar_captions(cliente, pieza_id, textos)
     except ValueError as e:
         flash(str(e), "error")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     if trabajos.en_curso(tareas_org.job_id_publicar(cliente, pieza_id)):
         flash(gettext("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine."), "warn")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
 
     pub_ids, creadas, saltadas = [], [], []
     for p in pedidas:
@@ -5182,19 +6074,21 @@ def org_publicar(cliente):
         except ValueError as e:
             # Creación parcial: lo ya creado no puede quedar `en_cola` sin tarea
             # (bloquearía la plataforma por unicidad); en `error` se reintenta.
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):     # se guarda: idioma del proyecto
+                error = gettext("No se creó la publicación en %(plataformas)s: %(error)s",
+                                plataformas=_nombres_org([p]), error=e)
             for pub_id in pub_ids:
-                organico.actualizar(cliente, pub_id, estado="error",
-                                    error=f"No se creó la publicación en {_nombres_org([p])}: {e}")
+                organico.actualizar(cliente, pub_id, estado="error", error=error)
             flash(gettext("%(error)s No se publicó nada.", error=e), "error")
-            return _volver_org(cliente)
+            return _volver_org(cliente, ep_id)
     if saltadas:
         flash(gettext("Ya estaba publicada (o en cola) en %(plataformas)s: no se publica dos veces.",
                       plataformas=_nombres_org(saltadas)), "warn")
     if not pub_ids:
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     if not _encolar_organico(cliente, pieza_id, pub_ids):
         flash(gettext("Ya había una publicación de esta pieza en curso; las nuevas quedaron para reintentar."), "error")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     if ep_id:
         eid = experimentos.experimento_de_pieza(cliente, ep_id)
         if eid:
@@ -5206,7 +6100,7 @@ def org_publicar(cliente):
                     {"accion": "publicar_organico", "plataformas": creadas, "publicaciones": pub_ids}, ep_id=ep_id)
     flash(gettext("Publicación orgánica en cola: %(plataformas)s. Te avisamos cuando salga.",
                   plataformas=_nombres_org(creadas)), "ok")
-    return _volver_org(cliente)
+    return _volver_org(cliente, ep_id)
 
 
 @app.route("/cliente/<cliente>/organico/<int:pub_id>/reintentar", methods=["POST"])
@@ -5217,37 +6111,38 @@ def org_reintentar(cliente, pub_id):
     sigue bloqueando un duplicado) y se encola de nuevo con el clic. Nada
     automático: max_intentos=1 en la tarea."""
     pub = organico.obtener(cliente, pub_id)
+    ep_id = pub and pub["experimento_pieza_id"]     # si salió de un experimento, el clic vuelve a él
     if not pub:
         flash(gettext("Esa publicación no existe."), "error")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     if pub["estado"] != "error":
         flash(gettext("Solo se reintenta una publicación que falló."), "error")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     if pub["id_externo"]:
         flash(gettext("Esa publicación ya se subió a %(plataforma)s (id %(id)s); "
                       "revisa la plataforma antes de volver a publicarla.",
                       plataforma=idiomas.traducir(pub["nombre_plataforma"]), id=pub["id_externo"]), "warn")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     vivas = {p["plataforma"] for p in organico.listar(cliente, pieza_id=pub["pieza_id"])
              if p["estado"] in organico.ESTADOS_VIVOS}
     if pub["plataforma"] in vivas:
         flash(gettext("Ya hay una publicación en curso o publicada para %(plataforma)s; no se reintenta.",
                       plataforma=idiomas.traducir(pub["nombre_plataforma"])), "warn")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     if trabajos.en_curso(tareas_org.job_id_publicar(cliente, pub["pieza_id"])):
         flash(gettext("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine."), "warn")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     try:
         organico.actualizar(cliente, pub_id, estado="en_cola", error=None)
     except ValueError as e:
         # Carrera con otra creación entre el chequeo y el UPDATE: gana el índice.
         flash(str(e), "warn")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     if not _encolar_organico(cliente, pub["pieza_id"], [pub_id]):
         flash(gettext("Ya había una publicación de esta pieza en curso; vuelve a intentarlo cuando termine."), "error")
-        return _volver_org(cliente)
+        return _volver_org(cliente, ep_id)
     flash(gettext("Reintentando en %(plataforma)s.", plataforma=idiomas.traducir(pub["nombre_plataforma"])), "ok")
-    return _volver_org(cliente)
+    return _volver_org(cliente, ep_id)
 
 
 @app.route("/cliente/<cliente>/config/reglas", methods=["POST"])
@@ -5291,24 +6186,51 @@ IMPORTAR_MAX_BYTES = 5 * 1024 * 1024
 def _volver_productos(cliente):
     """Las rutas `prod_*` vuelven al Catálogo: la pestaña Productos ya no
     existe (los productos importados viven en Catálogo › Productos)."""
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="catalogo"))
+    return _volver_catalogo(cliente)
+
+
+def _volver_catalogo(cliente, cat=None, activo_id=None):
+    """Volver a la pestaña Catálogo; con `cat` + `activo_id`, con la ficha de
+    ese producto abierta (`#catalogo?ficha=<cat>:<pid>`, spec §10.3)."""
+    ancla = "catalogo"
+    if cat and activo_id:
+        ancla = f"catalogo?ficha={cat}:{catalogo_productos.producto_base(activo_id)}"
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor=ancla))
+
+
+def _volver_fila(cliente, pid):
+    """Las rutas prod_* (fila `producto` por id numérico) vuelven a la ficha
+    del activo de esa fila si lo tiene; si no, a la galería."""
+    fila = tiendas.producto(cliente, pid) if pid else None
+    activo = (fila or {}).get("activo_catalogo_id")
+    if activo and catalogo_productos.existe(cliente, activo, "producto"):
+        return _volver_catalogo(cliente, "producto", activo)
+    return _volver_catalogo(cliente)
 
 
 def _volver_config(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
-def _experimentos_por_activo(cliente, experimentos_exp=None):
-    """{clave: {experimento_id, ...}} donde clave es el NOMBRE visible del
-    activo (lo que Crear guarda en `productos_ids`) o su id. Una pasada por
-    las sesiones de Crear y otra por las piezas de cada experimento — nunca
-    una consulta por producto. La pieza de un experimento apunta a su sesión
-    de Crear por el prefijo de `legado_id` (`<cf_id>` o `<cf_id>__<idioma>_<pais>`)."""
+def _experimentos_por_activo(cliente, experimentos_exp=None, sesiones_cf=None):
+    """{clave en minúsculas (casefold): {experimento_id, ...}} donde clave es
+    el NOMBRE visible del activo (lo que Crear guarda en `productos_ids`) o
+    su id — en minúsculas para que un color («Original — Pink») case con el
+    nombre de cualquiera de sus claves. Una pasada por las sesiones de Crear y
+    otra por las piezas de cada experimento — nunca una consulta por
+    producto. La pieza de un experimento apunta a su sesión de Crear por el
+    prefijo de `legado_id` (`<cf_id>` o `<cf_id>__<idioma>_<pais>`).
+    `experimentos_exp`/`sesiones_cf` (`creative_flow.cargar(cliente)`, ya con
+    su cf_id) se leen aquí solo si el llamador no los trae: quien ya cargó
+    esas dos fuentes para otra cosa en el mismo request las pasa y esta
+    función no vuelve a pedirlas (auditoría 2026-09-28)."""
     if experimentos_exp is None:
         experimentos_exp = experimentos.cargar(cliente)
+    if sesiones_cf is None:
+        sesiones_cf = creative_flow.cargar(cliente)
     claves_por_cf = {}
-    for cf_id, entry in creative_flow.cargar(cliente).items():
-        claves = {str(x) for x in (entry.get("productos_ids") or []) if x}
+    for cf_id, entry in sesiones_cf.items():
+        claves = {str(x).casefold() for x in (entry.get("productos_ids") or []) if x}
         if claves:
             claves_por_cf[cf_id] = claves
     por_clave = {}
@@ -5322,22 +6244,24 @@ def _experimentos_por_activo(cliente, experimentos_exp=None):
     return por_clave
 
 
-def _productos_tienda_contexto(cliente, experimentos_exp=None):
-    """Productos (con archivados: el filtro «mostrar archivados» es de la
-    plantilla) enriquecidos con `activo_ok` (su activo existe en el
-    catálogo) y `n_experimentos` (cuántos experimentos tienen piezas hechas
-    con ese activo)."""
-    por_clave = _experimentos_por_activo(cliente, experimentos_exp)
-    nombre_de_activo = {a["id"]: a["nombre"] for a in catalogo_productos.listar(cliente, "producto")}
+def _productos_tienda_contexto(cliente, experimentos_exp=None, por_clave=None):
+    """Productos (con archivados: el filtro es de la galería) enriquecidos
+    con `activo_ok` (su activo existe en el catálogo) y `n_experimentos`
+    (experimentos con piezas hechas con ese producto o cualquiera de sus
+    colores, por id o por nombre). `por_clave` (_experimentos_por_activo(...))
+    se calcula aquí solo si no lo trae ya el llamador."""
+    if por_clave is None:
+        por_clave = _experimentos_por_activo(cliente, experimentos_exp)
+    claves_por_pid = {p["id"]: catalogo_productos.claves_de(p)
+                      for p in catalogo_productos.listar_productos(cliente, "producto")}
     lista = tiendas.productos(cliente, incluir_archivados=True)
     for prod in lista:
         activo_id = prod.get("activo_catalogo_id")
         prod["activo_ok"] = bool(activo_id) and catalogo_productos.existe(cliente, activo_id, "producto")
+        claves = claves_por_pid.get(activo_id) or {"ids": {str(activo_id or "").casefold()} - {""}, "nombres": set()}
         ids_exp = set()
-        if activo_id:
-            ids_exp |= por_clave.get(activo_id, set())
-            ids_exp |= por_clave.get(nombre_de_activo.get(activo_id, ""), set())
-        ids_exp |= por_clave.get(prod.get("nombre") or "", set())
+        for k in claves["ids"] | claves["nombres"] | ({str(prod.get("nombre") or "").casefold()} - {""}):
+            ids_exp |= por_clave.get(k, set())
         prod["n_experimentos"] = len(ids_exp)
     return lista
 
@@ -5489,7 +6413,7 @@ def prod_prueba_agregar(cliente, pid):
         flash(gettext("Prueba guardada: Claude ya la puede usar con este producto."), "ok")
     except doctrina_producto.ErrorPrueba as e:
         flash(str(e), "error")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/pruebas/<prueba_id>/borrar", methods=["POST"])
@@ -5499,7 +6423,7 @@ def prod_prueba_borrar(cliente, pid, prueba_id):
         flash(gettext("No encontré ese producto."), "error")
     else:
         flash(gettext("Prueba borrada."), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/actualizar", methods=["POST"])
@@ -5516,7 +6440,7 @@ def prod_pedidos_actualizar(cliente, pid):
         flash(gettext("Armando lo que Claude necesita… la lista se actualiza sola."), "ok")
     else:
         flash(gettext("Ya se está armando la lista de este producto."), "error")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/responder", methods=["POST"])
@@ -5531,7 +6455,7 @@ def prod_pedido_responder(cliente, pid, pedido_id):
         flash(gettext("Gracias: quedó como prueba del producto y Claude ya la puede usar."), "ok")
     except doctrina_producto.ErrorPrueba as e:
         flash(str(e), "error")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/descartar", methods=["POST"])
@@ -5541,7 +6465,7 @@ def prod_pedido_descartar(cliente, pid, pedido_id):
         flash(gettext("Ese pedido ya no está abierto."), "error")
     else:
         flash(gettext("Listo: Claude no lo volverá a pedir."), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/marcar", methods=["POST"])
@@ -5568,22 +6492,22 @@ def prod_marcar(cliente, pid):
             campos["precio"] = precio
     except ValueError:
         flash(gettext("Revisa los números: prioridad entre 0 y 100, precio positivo."), "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     if "url_compra" in form:
         url = (form.get("url_compra") or "").strip()
         if url and not url.startswith(("http://", "https://")):
             flash(gettext("La URL de compra tiene que empezar por http:// o https://."), "error")
-            return _volver_productos(cliente)
+            return _volver_fila(cliente, pid)
         campos["url_compra"] = url or None
     if "moneda" in form:
         moneda = (form.get("moneda") or "").strip().upper()
         if moneda and not _MONEDA_RE.match(moneda):
             flash(gettext("La moneda va en código de 3 letras (COP, MXN, USD…)."), "error")
-            return _volver_productos(cliente)
+            return _volver_fila(cliente, pid)
         campos["moneda"] = moneda or None
     tiendas.marcar_producto(cliente, pid, **campos)
     flash(gettext("Producto actualizado."), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/archivar", methods=["POST"])
@@ -5599,7 +6523,7 @@ def prod_archivar(cliente, pid):
     archivar = (request.form.get("archivado") or "1") not in ("0", "false", "off")
     tiendas.marcar_producto(cliente, pid, archivado=archivar)
     flash(gettext("Producto archivado.") if archivar else gettext("Producto recuperado."), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/vincular", methods=["POST"])
@@ -5621,7 +6545,7 @@ def prod_vincular(cliente, pid):
                       nombre=prod.get("nombre") or pid), "ok")
     else:
         flash(gettext("Ya se está creando el activo de ese producto — espera a que termine."), "warn")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/fotos", methods=["POST"])
@@ -5640,7 +6564,7 @@ def prod_fotos_subir(cliente, pid):
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not archivos:
         flash(gettext("No elegiste ninguna foto."), "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     nombre = (prod.get("nombre") or "").strip() or gettext("Producto %(pid)s", pid=pid)
     enlazado = prod.get("activo_catalogo_id")
     if enlazado and catalogo_productos.existe(cliente, enlazado, "producto"):
@@ -5650,7 +6574,7 @@ def prod_fotos_subir(cliente, pid):
         flash(gettext("%(n)s foto(s) añadida(s) a «%(nombre)s».", n=guardadas, nombre=nombre) if guardadas
               else gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."),
               "ok" if guardadas else "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     base = catalogo_productos.id_desde_nombre(nombre)
     activo_id, sufijo = base, 2
     while catalogo_productos.existe(cliente, activo_id, "producto"):
@@ -5661,30 +6585,30 @@ def prod_fotos_subir(cliente, pid):
                                  producto_id=activo_id)
     except ValueError as e:
         flash(str(e), "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     guardadas = _guardar_fotos_producto(cliente, activo_id, archivos)
     if not guardadas:
         # Sin foto válida el activo no aparecería en el catálogo y la fila
         # quedaría enlazada a algo invisible: mejor deshacer.
         catalogo_productos.eliminar(cliente, activo_id, categoria="producto")
         flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
-        return _volver_productos(cliente)
+        return _volver_fila(cliente, pid)
     tiendas.marcar_producto(cliente, pid, activo_catalogo_id=activo_id)
     flash(gettext("«%(nombre)s» ya está en el catálogo con %(n)s foto(s).", nombre=nombre, n=guardadas), "ok")
-    return _volver_productos(cliente)
+    return _volver_fila(cliente, pid)
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/experimento", methods=["POST"])
 def prod_experimento(cliente, pid):
-    """Manda a Experimentos (la galería) con el nombre y la URL de destino del
+    """Manda a «Nuevo experimento» (la galería, `exp_nuevo`) con el nombre y la URL de destino del
     producto ya puestos en el paso 3 de «Probar en Meta» — la plantilla los
     lee de request.args (exp_nombre, exp_destino)."""
     prod = tiendas.producto(cliente, pid)
     if not prod:
         flash(gettext("No encontré ese producto."), "error")
         return _volver_productos(cliente)
-    return redirect(url_for("ver_cliente", cliente=cliente, exp_nombre=prod["nombre"] or "",
-                            exp_destino=prod.get("url_compra") or "", _anchor="experimentos"))
+    return redirect(url_for("exp_nuevo", cliente=cliente, exp_nombre=prod["nombre"] or "",
+                            exp_destino=prod.get("url_compra") or ""))
 
 
 def _encolar_sync_tienda(cliente, tienda_id, tipo, con_pedidos=True):
@@ -5715,8 +6639,13 @@ def _flash_sin_cifrado():
 
 @app.route("/cliente/<cliente>/config/tienda/conectar", methods=["POST"])
 def tienda_conectar(cliente):
-    """Shopify/WooCommerce: prueba las credenciales contra la tienda (inline,
-    una llamada corta), las guarda cifradas y encola la primera sync."""
+    """Shopify (con o sin llaves)/WooCommerce: prueba las credenciales contra
+    la tienda (inline, una llamada corta), las guarda cifradas y encola la
+    primera sync. `volver=catalogo` regresa a la pestaña Catálogo (el botón
+    «Traer de mi tienda» vive ahí); cualquier otro valor va a Configuración.
+    La Shopify sin llaves y la Admin API conviven: la sin llaves es la fuente
+    del catálogo (trae los colores) y la Admin API suma pedidos y atribución
+    (`tareas.tiendas.catalogo_desde_tienda_publica`; ruling final-5)."""
     bloqueo = _requiere_correo_verificado()
     if bloqueo:
         return bloqueo
@@ -5724,7 +6653,15 @@ def tienda_conectar(cliente):
         _flash_sin_cifrado()
         return _volver_config(cliente)
     tipo = (request.form.get("tipo") or "").strip()
-    if tipo == "shopify":
+    volver = request.form.get("volver") or "config"
+
+    def _volver():
+        return _volver_catalogo(cliente) if volver == "catalogo" else _volver_config(cliente)
+
+    if tipo == "shopify_publico":
+        dominio = (request.form.get("dominio") or "").strip()
+        creds = {"dominio": dominio}
+    elif tipo == "shopify":
         dominio = (request.form.get("dominio") or "").strip()
         creds = {"dominio": dominio, "token": (request.form.get("token") or "").strip()}
     elif tipo == "woo":
@@ -5732,23 +6669,31 @@ def tienda_conectar(cliente):
         dominio = re.sub(r"^https?://", "", url).strip("/").split("/")[0]
         creds = {"url": url, "ck": (request.form.get("ck") or "").strip(), "cs": (request.form.get("cs") or "").strip()}
     else:
-        flash(gettext("Ese tipo de tienda no se conecta desde aquí (Shopify o WooCommerce; MercadoLibre va por su botón)."), "error")
-        return _volver_config(cliente)
+        flash(gettext("Ese tipo de tienda no se conecta desde aquí (Shopify, Shopify sin llaves o WooCommerce; MercadoLibre va por su botón)."), "error")
+        return _volver()
     try:
-        resultado = conectores.por_tipo(tipo)(creds).probar()
+        cls = conectores.por_tipo(tipo)
+        resultado = cls(creds).probar()
     except (ErrorConector, ValueError) as e:
         flash(gettext("No pude conectar la tienda: %(error)s", error=cola.sin_token(str(e))), "error")
-        return _volver_config(cliente)
+        return _volver()
     except Exception as e:  # noqa: BLE001 — un fallo de red/parseo también se muestra, nunca se guarda a ciegas
         flash(gettext("No pude conectar la tienda: %(error)s", error=cola.sin_token(str(e) or type(e).__name__)), "error")
-        return _volver_config(cliente)
+        return _volver()
     nombre = str((resultado or {}).get("nombre") or "").strip() or None
-    tid = tiendas.conectar(cliente, tipo, creds, nombre=nombre, dominio=dominio or None)
-    n = _encolar_sync_tienda(cliente, tid, tipo)
+    dominio = str((resultado or {}).get("dominio") or dominio or "").strip() or None
+    if tipo == "shopify_publico":
+        creds = {"dominio": dominio}
+    tid = tiendas.conectar(cliente, tipo, creds, nombre=nombre, dominio=dominio)
+    n = _encolar_sync_tienda(cliente, tid, tipo, con_pedidos=bool(getattr(cls, "tiene_pedidos", True)))
     detalle = str((resultado or {}).get("detalle") or "").strip()
-    extra = gettext("Sincronizando el catálogo…") if n else gettext("Ya había una sincronización en curso.")
+    if tareas_tiendas.catalogo_desde_tienda_publica(cliente, {"tipo": tipo}):
+        # La sync de productos de la Admin API no tocará el catálogo (no trae colores).
+        extra = gettext("El catálogo sigue llegando desde la conexión sin llaves; la Admin API agrega pedidos y atribución.")
+    else:
+        extra = gettext("Sincronizando el catálogo…") if n else gettext("Ya había una sincronización en curso.")
     flash(gettext("Tienda %(nombre)s conectada. %(detalle)s %(extra)s", nombre=(nombre or dominio), detalle=detalle, extra=extra), "ok")
-    return _volver_config(cliente)
+    return _volver()
 
 
 @app.route("/cliente/<cliente>/config/tienda/meli/iniciar")
@@ -5783,7 +6728,8 @@ def meli_callback():
     es de un solo uso. Mismo patrón que meta_callback."""
     pendiente = session.pop("meli_oauth", None) or {}
     cliente = pendiente.get("cliente")
-    state_ok = bool(pendiente.get("state")) and request.args.get("state") == pendiente.get("state")
+    state_ok = bool(pendiente.get("state")) and secrets.compare_digest(
+        str(request.args.get("state") or "").encode(), str(pendiente.get("state")).encode())
     if not cliente or not state_ok:
         flash(gettext("La autorización con MercadoLibre no coincide con esta sesión — vuelve a intentarlo desde Configuración."), "error")
         return _volver_config(cliente) if cliente else redirect(url_for("index"))
@@ -5814,22 +6760,45 @@ def meli_callback():
 @app.route("/cliente/<cliente>/config/tienda/<int:tid>/sincronizar", methods=["POST"])
 def tienda_sync(cliente, tid):
     """Encola productos + pedidos. También para una tienda `rota`: volver a
-    sincronizar es como la persona comprueba que ya se arregló."""
+    sincronizar es como la persona comprueba que ya se arregló. `volver=catalogo`
+    regresa a la pestaña Catálogo (el botón «Sincronizar ahora» vive ahí)."""
+    volver = request.form.get("volver")
     t = tiendas.obtener(cliente, tid)
     if not t:
         flash(gettext("Esa tienda no existe."), "error")
         return _volver_config(cliente)
     n = _encolar_sync_tienda(cliente, tid, t["tipo"])
     flash(gettext("Sincronizando…") if n else gettext("Ya se está sincronizando esa tienda."), "ok" if n else "warn")
-    return _volver_config(cliente)
+    return _volver_catalogo(cliente) if volver == "catalogo" else _volver_config(cliente)
+
+
+def _fuente_de_tipo(tipo):
+    """La `fuente` con que el conector de ese tipo guarda sus productos
+    (`shopify_publico` y `shopify` comparten «shopify»); el tipo si no se sabe."""
+    try:
+        return getattr(conectores.por_tipo(tipo), "fuente", None) or tipo
+    except ValueError:
+        return tipo
 
 
 @app.route("/cliente/<cliente>/config/tienda/<int:tid>/desconectar", methods=["POST"])
 def tienda_desconectar(cliente, tid):
-    if tiendas.desconectar(cliente, tid):
-        flash(gettext("Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."), "ok")
-    else:
+    """Borra la tienda y archiva sus productos — salvo que OTRA tienda del
+    proyecto con la misma fuente (la Shopify sin llaves y la Admin API
+    conviven) los siga trayendo: entonces quedan como están."""
+    t = tiendas.obtener(cliente, tid)
+    if not t:
         flash(gettext("Esa tienda no existe."), "error")
+        return _volver_config(cliente)
+    fuente = _fuente_de_tipo(t["tipo"])
+    sigue = any(o["id"] != tid and _fuente_de_tipo(o["tipo"]) == fuente for o in tiendas.listar(cliente))
+    if not tiendas.desconectar(cliente, tid, archivar=not sigue):
+        flash(gettext("Esa tienda no existe."), "error")
+    elif sigue:
+        flash(gettext("Tienda desconectada. Sus productos siguen activos porque la otra conexión de la misma tienda "
+                      "los sigue trayendo; sus pedidos se conservan (no se borró nada)."), "ok")
+    else:
+        flash(gettext("Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."), "ok")
     return _volver_config(cliente)
 
 
@@ -5859,12 +6828,12 @@ def guardar_prompt(cliente, prompt_id):
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
-        flash(f"No encontré el prompt {prompt_id}", "error")
+        flash(gettext("No encontré el prompt %(prompt)s", prompt=prompt_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
     prompts_mod.guardar(cliente, data)
-    flash(f"Cambios guardados en {prompt_id}.", "ok")
+    flash(gettext("Cambios guardados en %(prompt)s.", prompt=prompt_id), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -5919,17 +6888,17 @@ def _lanzar_generacion_imagen(cliente, prompt_id):
         data = prompts_mod.cargar(cliente)
         _, item = prompts_mod.encontrar_prompt(data, prompt_id)
         if not item:
-            raise RuntimeError("El prompt ya no existe (¿se descartó mientras generaba?).")
+            raise RuntimeError(idiomas.N_("El prompt ya no existe (¿se descartó mientras generaba?)."))
         ok, error = _generar_imagen_candidata(
             cliente, prompt_id, item, job_id=job_id,
-            on_progreso=_avisar_fase_de(job_id),
+            on_progreso=_avisar_fase_de(job_id, cliente),
         )
         prompts_mod.guardar(cliente, data)
         if not ok:
             raise RuntimeError(error)
-        return "Imagen candidata lista."
+        return idiomas.N_("Imagen candidata lista.")
 
-    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45, etapas=ETAPAS_IMAGEN)
+    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45, etapas=ETAPAS_IMAGEN, cliente=cliente)
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar", methods=["POST"])
@@ -5939,16 +6908,16 @@ def aprobar_prompt(cliente, prompt_id):
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
-        flash(f"No encontré el prompt {prompt_id}", "error")
+        flash(gettext("No encontré el prompt %(prompt)s", prompt=prompt_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
     prompts_mod.guardar(cliente, data)
 
     if _lanzar_generacion_imagen(cliente, prompt_id):
-        flash(f"Generando imagen candidata para {prompt_id}…", "ok")
+        flash(gettext("Generando imagen candidata para %(prompt)s…", prompt=prompt_id), "ok")
     else:
-        flash(f"Ya se está generando la imagen de {prompt_id} — espera a que termine.", "warn")
+        flash(gettext("Ya se está generando la imagen de %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -5958,16 +6927,16 @@ def regenerar_imagen(cliente, prompt_id):
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
-        flash(f"No encontré el prompt {prompt_id}", "error")
+        flash(gettext("No encontré el prompt %(prompt)s", prompt=prompt_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
     prompts_mod.guardar(cliente, data)
 
     if _lanzar_generacion_imagen(cliente, prompt_id):
-        flash(f"Regenerando imagen candidata para {prompt_id}…", "ok")
+        flash(gettext("Regenerando imagen candidata para %(prompt)s…", prompt=prompt_id), "ok")
     else:
-        flash(f"Ya se está generando una imagen para {prompt_id} — espera a que termine.", "warn")
+        flash(gettext("Ya se está generando una imagen para %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -5978,7 +6947,7 @@ def aprobar_imagen(cliente, prompt_id):
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item or not item.get("imagen_url"):
-        flash(f"No encontré una imagen candidata para {prompt_id}", "error")
+        flash(gettext("No encontré una imagen candidata para %(prompt)s", prompt=prompt_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
@@ -5990,7 +6959,7 @@ def aprobar_imagen(cliente, prompt_id):
         data2 = prompts_mod.cargar(cliente)
         idea_id2, item2 = prompts_mod.encontrar_prompt(data2, prompt_id)
         if not item2:
-            raise RuntimeError("El prompt ya no existe (¿se descartó mientras generaba?).")
+            raise RuntimeError(idiomas.N_("El prompt ya no existe (¿se descartó mientras generaba?)."))
 
         out_dir = os.path.join(BASE_DIR, "salidas", cliente)
         os.makedirs(out_dir, exist_ok=True)
@@ -6006,7 +6975,7 @@ def aprobar_imagen(cliente, prompt_id):
         # on_progreso: el poll de Higgsfield ya sabía contar su fase cruda, pero
         # ningún llamador se la pedía — la barra se quedaba sin el "en cola / el
         # modelo está trabajando" durante los ~2 minutos que dura esto.
-        result = poll_until_done(launch["status_url"], on_progreso=_avisar_fase_de(job_id))
+        result = poll_until_done(launch["status_url"], on_progreso=_avisar_fase_de(job_id, cliente))
         higgsfield_url = extract_video_url(result)
         trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
         try:
@@ -6041,12 +7010,12 @@ def aprobar_imagen(cliente, prompt_id):
 
         del data2[idea_id2]["prompts"][prompt_id]
         prompts_mod.guardar(cliente, data2)
-        return "Video listo, pendiente de revisión."
+        return idiomas.N_("Video listo, pendiente de revisión.")
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130, etapas=ETAPAS_VIDEO):
-        flash(f"Generando el video de {prompt_id}…", "ok")
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130, etapas=ETAPAS_VIDEO, cliente=cliente):
+        flash(gettext("Generando el video de %(prompt)s…", prompt=prompt_id), "ok")
     else:
-        flash(f"Ya se está generando el video de {prompt_id} — espera a que termine.", "warn")
+        flash(gettext("Ya se está generando el video de %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6057,7 +7026,7 @@ def rechazar_prompt(cliente, prompt_id):
     if item:
         del data[idea_id]["prompts"][prompt_id]
         prompts_mod.guardar(cliente, data)
-        flash(f"Prompt {prompt_id} descartado, no se generó video (no gastó créditos).", "ok")
+        flash(gettext("Prompt %(prompt)s descartado, no se generó video (no gastó créditos).", prompt=prompt_id), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6067,7 +7036,7 @@ def eliminar_idea(cliente, idea_id):
     if idea_id in data:
         del data[idea_id]
         prompts_mod.guardar(cliente, data)
-        flash("Idea eliminada junto con sus prompts.", "ok")
+        flash(gettext("Idea eliminada junto con sus prompts."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6076,7 +7045,7 @@ def aprobar(cliente, brief_id):
     estado = estado_mod.cargar(cliente)
     entry = estado.get(brief_id)
     if not entry:
-        flash(f"No encontré {brief_id}", "error")
+        flash(gettext("No encontré %(video)s", video=brief_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     job_id = _job_id_publicar(cliente, brief_id)
@@ -6096,13 +7065,13 @@ def aprobar(cliente, brief_id):
         estado_mod.modificar(cliente, _publicado)
 
         if not ok:
-            raise RuntimeError("Se publicó, pero alguna plataforma falló — revisa la bitácora.")
-        return "Publicado en todas las plataformas."
+            raise RuntimeError(idiomas.N_("Se publicó, pero alguna plataforma falló — revisa la bitácora."))
+        return idiomas.N_("Publicado en todas las plataformas.")
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=90):
-        flash(f"Publicando {brief_id}…", "ok")
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=90, cliente=cliente):
+        flash(gettext("Publicando %(video)s…", video=brief_id), "ok")
     else:
-        flash(f"Ya se está publicando {brief_id} — espera a que termine.", "warn")
+        flash(gettext("Ya se está publicando %(video)s — espera a que termine.", video=brief_id), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -6114,24 +7083,28 @@ def rechazar(cliente, brief_id):
         estado[brief_id]["estado"] = "rechazado"
         return estado
     if estado_mod.modificar(cliente, _rechazar) is None:
-        flash(f"No encontré {brief_id}", "error")
+        flash(gettext("No encontré %(video)s", video=brief_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
-    flash(f"{brief_id} rechazado, no se publica.", "ok")
+    flash(gettext("%(video)s rechazado, no se publica.", video=brief_id), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
 @app.route("/cliente/<cliente>/crear/tarjetas")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def crear_tarjetas(cliente):
     """«Ver más» de Crear: las TARJETAS_POR_PAGINA siguientes (fragmento HTML;
     spec 2026-09-28 «tarjetas ligeras»)."""
     desde = _pagina_desde(request.args.get("desde"))
-    items = _creative_flow_items(cliente)
+    items = _creative_flow_items(cliente, ligero=True)
     return render_template("_crear_tarjetas_respuesta.html", cliente=cliente,
                            items=items[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(items))
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/detalle")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def cf_detalle(cliente, cf_id):
     """El detalle de una pieza (lo que antes iba embebido en un <template>
     por tarjeta); el modal lo pide al abrir. 404 si no es de este proyecto."""
@@ -6142,21 +7115,26 @@ def cf_detalle(cliente, cf_id):
 
 
 @app.route("/cliente/<cliente>/final/tarjetas")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def final_tarjetas(cliente):
-    """«Ver más» de Final edition: `lista=videos` (videos listos) o
-    `lista=finales`; las TARJETAS_POR_PAGINA siguientes desde `desde`."""
+    """«Ver más» del tablero de Final edition (`lista=en_edicion` o
+    `lista=finalizados`) y el selector «+ Nueva» (`lista=elegir`, los videos
+    listos de Crear): las TARJETAS_POR_PAGINA siguientes desde `desde`."""
     lista = request.args.get("lista")
-    if lista not in ("videos", "finales"):
+    if lista not in ("en_edicion", "finalizados", "elegir"):
         abort(400)
     desde = _pagina_desde(request.args.get("desde"))
-    completas = _listas_crear_final(_creative_flow_items(cliente), n=None)
-    todos = completas["final_videos"] if lista == "videos" else completas["finales"]
+    ctx = _contexto_final_edition(cliente)
+    t = fe_tablero.armar(_creative_flow_items(cliente, ligero=True), ctx["ediciones_por_cf"])
+    todos = t["elegibles" if lista == "elegir" else lista]
     return render_template("_final_tarjetas_respuesta.html", cliente=cliente, lista=lista,
-                           items=todos[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(todos),
-                           **_contexto_final_edition(cliente))
+                           items=todos[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(todos), **ctx)
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/detalle")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def fe_detalle_video(cliente, cf_id):
     """Detalle de un video listo en Final edition (guion, «Producir finales»,
     editor). 404 si no es un video listo de este proyecto."""
@@ -6168,6 +7146,8 @@ def fe_detalle_video(cliente, cf_id):
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/<final_id>/detalle")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
 def fe_detalle_final(cliente, cf_id, final_id):
     """Detalle de una final (capas, descargar, descartar, publicación orgánica)."""
     item = _creative_flow_item(cliente, cf_id)
@@ -6197,22 +7177,35 @@ def _volver_final(cliente):
 
 
 def _ediciones_por_cf(cliente):
-    """{cf_id: [ediciones de esa pieza, la más reciente primero]} para la
-    pestaña Final edition (filas sin el documento)."""
+    """{cf_id: [ediciones de esa pieza]} para la pestaña Final edition (filas
+    sin el documento): las de la persona primero, la más reciente primero, y
+    después los borradores automáticos (`ediciones.para_editar`: la primera es
+    la que abre «Editar», capa 4c), cada una con su `nombre_visible`."""
     out = {}
     for e in ediciones.listar(cliente):
         if e.get("cf_id"):
-            out.setdefault(e["cf_id"], []).append(e)
-    return out
+            out.setdefault(e["cf_id"], []).append({**e, "nombre_visible": ediciones.nombre_visible(e)})
+    return {cf: ediciones.para_editar(eds) for cf, eds in out.items()}
 
 
 def _precio_form(valor):
-    """Precio opcional del formulario -> float o None (vacío o basura = None)."""
-    valor = (valor or "").strip().replace(",", ".")
+    """Precio opcional: miles en grupos de tres y decimales con punto/coma."""
+    import math
+    import re
+    valor = (valor or "").strip()
     if not valor:
         return None
+    if "." in valor and "," in valor:
+        decimal = "." if valor.rfind(".") > valor.rfind(",") else ","
+        miles = "," if decimal == "." else "."
+        valor = valor.replace(miles, "").replace(decimal, ".")
+    elif re.fullmatch(r"[+-]?[1-9]\d{0,2}([.,]\d{3})+", valor):
+        valor = valor.replace(".", "").replace(",", "")
+    else:
+        valor = valor.replace(",", ".")
     try:
-        return float(valor)
+        precio = float(valor)
+        return precio if math.isfinite(precio) else None
     except ValueError:
         return None
 
@@ -6286,19 +7279,35 @@ def _sesion_con_video(cliente, cf_id):
     return entry
 
 
+def _sin_final_automatica(entry):
+    """True (con flash) si la sesión es un anuncio hablado: el guion con IA y
+    «Producir finales» le pondrían una segunda voz encima y una traducción no
+    movería los labios (spec 2026-10-01 §6). «Editar» sí sirve."""
+    if flowplus_modelos.es_sesion_hablada(entry):
+        flash(gettext("Este video ya habla; para otro idioma, haz otra pieza con el guion traducido."), "error")
+        return True
+    return False
+
+
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/preparar", methods=["POST"])
 def fe_preparar(cliente, cf_id):
     """Encola la escritura del guion base (capa 0, Anthropic). No produce nada."""
-    if _sesion_con_video(cliente, cf_id) is None:
+    entry = _sesion_con_video(cliente, cf_id)
+    if entry is None or _sin_final_automatica(entry):
         return _volver_final(cliente)
-    idioma_base = request.form.get("idioma_base") or "es"
+    # Decisión B (2026-09-28): el guion base no es por destino. La elección
+    # explícita del selector gana; sin ella (o con una que no vale), el idioma
+    # del proyecto.
+    idioma_base = request.form.get("idioma_base")
     if idioma_base not in IDIOMAS_FE:
-        idioma_base = "es"
+        idioma_base = idiomas.de_proyecto(cliente)
     opciones = {"precio": _precio_form(request.form.get("precio")), "idioma_base": idioma_base}
     encolado = trabajos.encolar(
         tareas_fe.job_id_guion(cliente, cf_id), "final_guion",
         {"cliente": cliente, "cf_id": cf_id, "opciones": opciones},
-        cliente=cliente, duracion_estimada=25, max_intentos=2,
+        # Un solo intento: el guion cobra (Whisper + Claude); un reintento automático pagaba
+        # otra vez y pisaba el gasto del primero con la misma referencia (2026-10-02).
+        cliente=cliente, duracion_estimada=25, max_intentos=1,
     )
     flash(gettext("Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises.") if encolado
           else gettext("Ya se estaba escribiendo el guion de esta pieza."), "ok")
@@ -6348,7 +7357,8 @@ def _destinos_form(valores):
 def fe_producir(cliente, cf_id):
     """Encola una tarea `final_producir` por cada destino marcado. Exige guion
     base ya preparado (y revisado): sin él no se gasta nada."""
-    if _sesion_con_video(cliente, cf_id) is None:
+    entry = _sesion_con_video(cliente, cf_id)
+    if entry is None or _sin_final_automatica(entry):
         return _volver_final(cliente)
     base = creative_flow.guion_base(cliente, cf_id)
     if not base:
@@ -6362,7 +7372,13 @@ def fe_producir(cliente, cf_id):
     idioma_base = base.get("idioma") if base.get("idioma") in IDIOMAS_FE else "es"
     voces_validas = {v for lista in fal_audio.VOCES.values() for v in lista}
     voz = request.form.get("voz") or ""
-    if voz not in voces_validas:
+    if audios.es_propia(voz):
+        # Una voz propia solo si es de ESTE proyecto y sigue existiendo: si se
+        # borró en otra pestaña no se cambia en silencio por otra voz.
+        if not voces_propias.resolver(cliente, voz):
+            flash(idiomas.traducir(audios.MENSAJES["voz_borrada"]), "error")
+            return _volver_final(cliente)
+    elif voz not in voces_validas:
         voz = (fal_audio.VOCES.get(idioma_base) or fal_audio.VOCES["es"])[0]
     estilo = request.form.get("estilo_musica") or ""
     cancion = mi_musica.resolver(cliente, estilo)
@@ -6458,6 +7474,10 @@ def _guardar_referencia_archivo(cliente, archivo, i):
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
         return False
+    if ext in IMAGE_EXTS:
+        motivo = _foto_subida_invalida(archivo)
+        if motivo:
+            raise ValueError(motivo)
     carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
     os.makedirs(carpeta, exist_ok=True)
     unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{i}{ext}"
@@ -6468,11 +7488,22 @@ def _guardar_referencia_archivo(cliente, archivo, i):
         frame_path = local_path + FRAME_SUFFIX
         _extraer_frame(local_path, frame_path)
         frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/referencias_flowplus/{unico}{FRAME_SUFFIX}")
-        referencias_flowplus.agregar(cliente, "video", url, frame_url=frame_url, origen="archivo", ruta_local=local_path, titulo=nombre)
+        referencias_flowplus.agregar(cliente, "video", url, frame_url=frame_url, origen="archivo", ruta_local=local_path,
+                                     titulo=nombre, duracion_s=_duracion_video(local_path))
     else:
         url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}")
         referencias_flowplus.agregar(cliente, "imagen", url, origen="archivo", ruta_local=local_path, titulo=nombre)
     return True
+
+
+def _duracion_video(ruta):
+    """Segundos de un video de referencia (ffprobe), a centésimas; None si no
+    se pudo medir. Nunca lanza: una medida que falla no frena la subida
+    (2026-09-30: Crear la usa para el límite de Wan 3.0 y su precio)."""
+    try:
+        return round(fe_cortes.duracion(ruta), 2) if ruta else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _quiere_json():
@@ -6528,23 +7559,30 @@ def fp_agregar_link(cliente):
     job_id = _job_id_link(cliente)
 
     def trabajo():
-        carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
-        base = f"link_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
-        try:
-            local_path, meta = referencias_link.descargar(url, carpeta, base)
-            r2_url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/referencias_flowplus/{base}.mp4")
-            frame_path = local_path + FRAME_SUFFIX
-            _extraer_frame(local_path, frame_path)
-            frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/referencias_flowplus/{base}{FRAME_SUFFIX}")
-            referencias_flowplus.agregar(cliente, "video", r2_url, frame_url=frame_url, origen=meta.get("fuente", "link"),
-                                         ruta_local=local_path, titulo=meta.get("titulo") or url)
-            bitacora.registrar(cliente, base, "flowplus_link", "ok", url)
-        except Exception as e:
-            bitacora.registrar(cliente, base, "flowplus_link", "error", str(e))
-            raise
+        # Un hilo de trabajos.iniciar no tiene petición: sin esto un LinkError
+        # saldría en el msgid (español). Lo que se arma adentro va en el idioma
+        # del proyecto; el return fijo lo traduce estado_trabajo para quien mira.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
+            base = f"link_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            try:
+                local_path, meta = referencias_link.descargar(url, carpeta, base)
+                r2_url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/referencias_flowplus/{base}.mp4")
+                frame_path = local_path + FRAME_SUFFIX
+                _extraer_frame(local_path, frame_path)
+                frame_url = r2_uploader.upload_image(frame_path,
+                                                     f"clientes/{cliente}/referencias_flowplus/{base}{FRAME_SUFFIX}")
+                referencias_flowplus.agregar(cliente, "video", r2_url, frame_url=frame_url,
+                                             origen=meta.get("fuente", "link"),
+                                             ruta_local=local_path, titulo=meta.get("titulo") or url,
+                                             duracion_s=_duracion_video(local_path))
+                bitacora.registrar(cliente, base, "flowplus_link", "ok", url)
+            except Exception as e:
+                bitacora.registrar(cliente, base, "flowplus_link", "error", str(e))
+                raise
         return idiomas.N_("Video del link agregado a las referencias.")
 
-    arranco = trabajos.iniciar(job_id, trabajo, duracion_estimada=40)
+    arranco = trabajos.iniciar(job_id, trabajo, duracion_estimada=40, cliente=cliente)
     if _quiere_json():
         return _respuesta_bandeja(cliente, mensaje=gettext("Descargando el video del link…") if arranco else None,
                                   error=None if arranco else gettext("Ya se está descargando un link — espera a que termine."))
@@ -6691,15 +7729,18 @@ def au_borrar(cliente, aid):
 
 @app.route("/cliente/<cliente>/audios/muestra", methods=["POST"])
 def au_muestra(cliente):
-    """Muestra corta de una voz (se sintetiza una vez para toda la plataforma,
-    la paga Creatv). En línea: fal tarda 2–4 s."""
+    """Muestra corta de una voz: una voz de la galería se sintetiza una vez
+    para toda la plataforma y la paga Creatv; una voz propia, una vez por
+    idioma y la paga el proyecto. En línea: fal tarda 2–4 s."""
     if not _mismo_origen():
         abort(403)
     voz, idioma = (request.form.get("voz") or "").strip(), (request.form.get("idioma") or "").strip()
-    if voz not in audios.voces() or idioma not in audios.IDIOMAS:
+    propia = audios.es_propia(voz)
+    valida = voces_propias.resolver(cliente, voz) if propia else voz in audios.voces()
+    if not valida or idioma not in audios.IDIOMAS:
         return jsonify({"ok": False, "error": gettext("Elige una voz y un idioma de la lista.")}), 400
     try:
-        url = audios.muestra(voz, idioma)
+        url = voces_propias.muestra(cliente, voz, idioma) if propia else audios.muestra(voz, idioma)
     except Exception as e:
         bitacora.registrar(cliente, voz, "audios", "muestra_error", str(e))
         return jsonify({"ok": False, "error": gettext("No pude generar la muestra (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__)}), 502
@@ -6729,6 +7770,118 @@ def au_descargar(cliente, aid):
     return resp
 
 
+# ------------------------------------------------------ Audios › Mis voces ---
+# (spec 2026-09-30) Voces propias con MiniMax: mismo patrón JSON que Audios.
+
+@lru_cache(maxsize=1)
+def _precios_clon():
+    """Tarifas por longitud e idioma: tabla pura, compartida por el proceso."""
+    return {idioma: [gastos.estimar("voz_clonada", nombre="x" * n, idioma=idioma)["usd"]
+                    for n in range(voces_propias.MAX_NOMBRE + 1)] for idioma in audios.IDIOMAS}
+
+
+@lru_cache(maxsize=1)
+def _precios_disenar():
+    """Tarifas por longitud e idioma del diseño, vista previa y estreno."""
+    return {idioma: [gastos.estimar("voz_disenada", nombre="x" * n, idioma=idioma)["usd"]
+                    for n in range(voces_propias.MAX_NOMBRE + 1)] for idioma in audios.IDIOMAS}
+
+
+def _contexto_mis_voces(cliente):
+    jid = tareas_voces.job_id(cliente)
+    return {"voces_propias": voces_propias.listar(cliente),
+            "trabajo_voz": {"job_id": jid} if trabajos.en_curso(jid) else None,
+            "precios_clon": _precios_clon(),
+            "precios_disenar": _precios_disenar(),
+            "precio_voz_clonada": gastos.estimar("voz_clonada"), "precio_voz_disenada": gastos.estimar("voz_disenada"),
+            "texto_consentimiento": voces_propias.TEXTO_CONSENTIMIENTO}
+
+
+def _respuesta_mis_voces(cliente, error=None, mensaje=None, job_id=None):
+    ctx = _contexto_mis_voces(cliente)
+    html = render_template("_audios_mis_voces.html", cliente=cliente, **ctx)
+    return jsonify({"ok": error is None, "html": html, "voces": ctx["voces_propias"], "trabajo": ctx["trabajo_voz"],
+                    "error": error, "mensaje": mensaje, "job_id": job_id}), (400 if error else 200)
+
+
+def _encolar_voz(cliente, payload):
+    """Una creación de voz a la vez por proyecto; paga, así que sin reintentos."""
+    jid = tareas_voces.job_id(cliente)
+    if trabajos.encolar(jid, "voz_propia_crear", {"cliente": cliente, **payload}, duracion_estimada=90,
+                        etapas=list(tareas_voces.ETAPAS), cliente=cliente, max_intentos=1):
+        return jid
+    return None
+
+
+@app.route("/cliente/<cliente>/audios/voces")
+def vp_lista(cliente):
+    return _respuesta_mis_voces(cliente)
+
+
+@app.route("/cliente/<cliente>/audios/voces/disenar", methods=["POST"])
+def vp_disenar(cliente):
+    if not _mismo_origen():
+        abort(403)
+    try:
+        payload = voces_propias.validar_disenar(request.form)
+    except voces_propias.EntradaInvalida as e:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(str(e)))
+    jid = _encolar_voz(cliente, payload)
+    if not jid:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["en_curso"]))
+    return _respuesta_mis_voces(cliente, mensaje=gettext("Creando la voz…"), job_id=jid)
+
+
+@app.route("/cliente/<cliente>/audios/voces/clonar", methods=["POST"])
+def vp_clonar(cliente):
+    """Primero la casilla y los campos; después la grabación a R2; al final la
+    tarea. Sin permiso no se guarda nada."""
+    if not _mismo_origen():
+        abort(403)
+    try:
+        payload = voces_propias.validar_clonar(request.form, session.get("usuario"))
+    except voces_propias.EntradaInvalida as e:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(str(e)))
+    if trabajos.en_curso(tareas_voces.job_id(cliente)):
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["en_curso"]))
+    archivo = request.files.get("grabacion")
+    if not archivo or not archivo.filename:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["archivo"]))
+    try:
+        g = voces_propias.guardar_grabacion(cliente, archivo, os.path.join(_client_dir(cliente), "tmp_voces"))
+    except voces_propias.EntradaInvalida as e:
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(str(e)))
+    except Exception as e:
+        bitacora.registrar(cliente, archivo.filename, "voces_propias", "error", str(e))
+        return _respuesta_mis_voces(cliente, error=gettext("No pude subir la grabación (%(tipo)s).", tipo=type(e).__name__))
+    payload["grabacion_id"] = g["id"]
+    jid = _encolar_voz(cliente, payload)
+    if not jid:
+        # Otra creación se encoló entre el chequeo de arriba y aquí: la grabación
+        # recién guardada no se queda en R2 sin voz — salvo que sea la misma fila
+        # (mismo archivo, mismo hash) que esa creación viva va a clonar.
+        viva = cola.consultar_por_job(tareas_voces.job_id(cliente)) or {}
+        if not (viva.get("estado") in ("pendiente", "en_curso")
+                and (viva.get("payload") or {}).get("grabacion_id") == g["id"]):
+            voces_propias._borrar_grabacion_si_huerfana(cliente, g["id"])
+        return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["en_curso"]))
+    return _respuesta_mis_voces(cliente, mensaje=gettext("Clonando la voz…"), job_id=jid)
+
+
+@app.route("/cliente/<cliente>/audios/voces/<int:vid>/borrar", methods=["POST"])
+def vp_borrar(cliente, vid):
+    if not _mismo_origen():
+        abort(403)
+    try:
+        voces_propias.borrar(cliente, vid)
+    except materiales.MaterialEnUso as e:
+        return _respuesta_mis_voces(cliente, error=str(e))
+    except Exception as e:
+        bitacora.registrar(cliente, str(vid), "voces_propias", "error", str(e))
+        return _respuesta_mis_voces(cliente, error=gettext("No pude borrarla (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__))
+    return _respuesta_mis_voces(cliente)
+
+
 @app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
 def fp_reusar(cliente, cf_id):
     """"Editar y crear otra a partir de esta": las referencias de esa pieza (sin
@@ -6740,6 +7893,12 @@ def fp_reusar(cliente, cf_id):
     if not entry:
         flash(gettext("No encontré esa pieza."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if flowplus_modelos.es_sesion_hablada(entry):
+        # Spec 2026-10-01 §6 y §10: «Editar y crear otra» no sirve para un
+        # anuncio hablado (no hay referencias ni prompt que reusar).
+        flash(gettext("«Editar y crear otra» todavía no sirve para un anuncio hablado: haz otra pieza en "
+                      "Crear › Anuncio hablado."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="hablado"))
     # Sin variables quemadas (pedido de Daniel, 2026-09-28): la bandeja queda
     # SOLO con las referencias de esta pieza — antes se sumaban a lo que
     # hubiera y las referencias «del pasado» se colaban en la pieza nueva.
@@ -6751,6 +7910,7 @@ def fp_reusar(cliente, cf_id):
         referencias_flowplus.agregar(
             cliente, r.get("tipo") or "imagen", r["url"], frame_url=r.get("frame_url"),
             origen="reutilizada", titulo=r.get("activo") or r.get("etiqueta"), producto=r.get("producto"),
+            duracion_s=r.get("duracion_s"),
         )
         ya.add(r["url"])
     if request.form.get("incluir_resultado") == "si" and entry.get("tipo") == "imagen" and entry.get("video_url") not in ya:
@@ -6794,6 +7954,21 @@ def _prefill_para(cliente):
     return pre
 
 
+def _registrar_usage_claude_interno(cliente, origen, uso):
+    """Las ayudas inmediatas de Claude las paga el proyecto interno de Creatv."""
+    if not uso:
+        return
+    try:
+        from nicho.avatares import costo_real
+        usd = costo_real(getattr(uso, "input_tokens", 0) or 0, getattr(uso, "output_tokens", 0) or 0)
+        gastos.registrar_seguro("_creatv", "otro", usd, f"claude:{origen}:{secrets.token_hex(6)}",
+                                detalle=gettext("Claude · %(origen)s", origen=origen), proveedor="anthropic",
+                                extra={"cliente": cliente})
+    except Exception:
+        # El registro nunca debe convertir una sugerencia utilizable en error.
+        logging.getLogger(__name__).warning("No pude registrar el gasto interno de Claude (%s)", origen)
+
+
 @app.route("/cliente/<cliente>/flowplus/describir", methods=["POST"])
 def fp_describir(cliente):
     """Claude mira las referencias de la bandeja y propone el texto del video.
@@ -6802,7 +7977,9 @@ def fp_describir(cliente):
     if not refs:
         return jsonify({"ok": False, "error": gettext("Agrega primero una imagen, un video o un link.")}), 400
     try:
-        texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente))
+        texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente),
+                                           idioma=idiomas.de_proyecto(cliente),
+                                           on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "describir_referencias", uso))
     except Exception as e:
         bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
         return jsonify({"ok": False, "error": gettext("No pude describir las referencias (%(tipo)s).", tipo=type(e).__name__)}), 502
@@ -6887,8 +8064,17 @@ def cf_crear_video(cliente):
         bandeja = [r for r in bandeja if r["id"] in set(usadas)]
     referencias = []
     for r in bandeja:
-        referencias.append({"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
-                            "etiqueta": r["etiqueta"], "origen": r.get("origen")})
+        ref = {"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
+               "etiqueta": r["etiqueta"], "origen": r.get("origen")}
+        if r["tipo"] == "video":
+            # Lo que dura el video (2026-09-30): lo medido al subirlo; las
+            # referencias anteriores se miden acá si el archivo sigue en disco
+            # (sin tocar la red en la petición: si no, lo mide el worker).
+            dur = r.get("duracion_s")
+            if dur is None and r.get("ruta_local") and os.path.exists(r["ruta_local"]):
+                dur = _duracion_video(r["ruta_local"])
+            ref["duracion_s"] = dur
+        referencias.append(ref)
     n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
 
     # Activos del catálogo (productos, personajes, entornos). El valor del
@@ -6967,11 +8153,44 @@ def cf_crear_video(cliente):
                           "Quita las que sobran o cambia de modelo — no se cobró nada.",
                           modelo=nombre_modelo, n=info_modelo.get("max_referencias"), sobran=", ".join(sobran)), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # Incidente 2026-09-30 (Forja): un video de referencia de 14,9 s y 20 s
+    # pedidos → WaveSpeed 1405 «exceeds 30s limit». Wan 3.0 no admite más de
+    # 15 s de videos de referencia ni más de 30 s entre entrada y salida: se
+    # avisa y no se genera. Nada se cobra.
+    problema = flowplus_modelos.problema_duracion(modelo, referencias, duracion_objetivo) if tipo == "video" else None
+    if problema:
+        info_modelo = flowplus_modelos.VIDEO[modelo]
+        segundos = format_decimal(problema["videos_s"], format="#,##0.#")
+        if problema["motivo"] == "videos_largos":
+            flash(gettext("Tus videos de referencia duran %(s)s s en total y %(modelo)s admite hasta %(max)s s. "
+                          "Recórtalos o quita alguno — no se cobró nada.",
+                          s=segundos, modelo=gettext(info_modelo["nombre"]), max=problema["maxima_videos"]), "error")
+        else:
+            flash(gettext("%(modelo)s no pasa de %(total)s s sumando tus videos de referencia (%(s)s s): el resultado "
+                          "puede durar hasta %(max)s s. Baja la duración o usa un video más corto — no se cobró nada.",
+                          modelo=gettext(info_modelo["nombre"]), total=info_modelo["max_total_con_videos"], s=segundos,
+                          max=problema["maxima"]), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+    # Receta de tomas (Etapa 3 del director, 2026-09-30): solo cuenta con
+    # «Crear super prompt»; «Generar video» manda el texto tal cual y la ignora.
+    plantilla = None
+    if tipo == "video" and request.form.get("modo_prompt") == "director":
+        plantilla = plantillas_anuncio.por_id(request.form.get("plantilla"))
+    if plantilla and plantilla["requiere_video"] and not any(
+            str(r.get("token") or "").startswith("Video ") for r in referencias):
+        nombre_receta = plantilla["nombre"]
+        flash(gettext("La receta «%(receta)s» necesita un video de referencia en la bandeja y el modelo Wan 3.0. "
+                      "Agrégalo o elige otra receta.", receta=gettext(nombre_receta)), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     if solo_texto:
         enfoque = "libre"
     else:
         enfoque = "persona" if any(r.get("categoria") == "personaje" for r in referencias) else "producto"
+        if plantilla and plantilla["enfoque"]:
+            # Con receta el enfoque lo fija la receta (spec §9); sin referencias sigue «libre».
+            enfoque = plantilla["enfoque"]
     info = flowplus_prompt.ENFOQUES[enfoque]
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [],
@@ -6983,7 +8202,7 @@ def cf_crear_video(cliente):
         con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
         con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo, musica_inicio_s=musica_inicio_s,
         prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma, mejorar_prompt=mejorar_prompt,
-        preset_camara=None, plantilla=None,
+        preset_camara=None, plantilla=plantilla["id"] if plantilla else None,
     )
     # Triple Whale: si el texto vino de «Llevar a Crear», la sesión recuerda de
     # qué idea salió (la pestaña enlaza idea → pieza → anuncio). Un valor raro
@@ -7042,12 +8261,12 @@ def cf_crear_video(cliente):
 
 
 def _encolar_director(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
-    """Encola la compilación del prompt (gratis, idempotente: max_intentos=2)."""
+    """Encola la compilación del prompt (gratis, idempotente: max_intentos=1)."""
     return trabajos.encolar(
         tareas_director.job_id(cliente, cf_id), "flowplus_director",
         {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": bool(auto_lanzar), "prioridad": int(prioridad)},
         cliente=cliente, duracion_estimada=tareas_director.DURACION_ESTIMADA, etapas=tareas_director.ETAPAS_DIRECTOR,
-        max_intentos=2, prioridad=prioridad,
+        max_intentos=1, prioridad=prioridad,
     )
 
 
@@ -7056,7 +8275,8 @@ def cf_guardar_prompt(cliente, cf_id):
     """Guarda las ediciones de la persona sobre el prompt A (lo que se manda)
     y el B. Solo en prompt_listo; un texto vacío no pisa nada. No llama a Claude."""
     entry = creative_flow.cargar(cliente).get(cf_id)
-    if not entry or entry.get("estado") != "prompt_listo":
+    # Un anuncio hablado no tiene prompt que editar (spec 2026-10-01 §6).
+    if not entry or entry.get("estado") != "prompt_listo" or flowplus_modelos.es_sesion_hablada(entry):
         flash(gettext("Ese prompt no se puede editar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     campos = {}
@@ -7086,7 +8306,8 @@ def cf_rearmar(cliente, cf_id):
     prompt_listo con el fallback) — mientras el director siga corriendo para
     ella, se sigue rechazando para no encolar una segunda compilación encima."""
     entry = creative_flow.cargar(cliente).get(cf_id)
-    if not entry or (entry.get("tipo") or "video") == "imagen":
+    # Ni una imagen ni un anuncio hablado (spec 2026-10-01 §6) pasan por el director.
+    if not entry or (entry.get("tipo") or "video") == "imagen" or flowplus_modelos.es_sesion_hablada(entry):
         flash(gettext("Esa sesión no se puede rearmar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     estado = entry.get("estado")
@@ -7141,7 +8362,9 @@ def fp_sugerir_sonido(cliente):
     e = cuerpo.get("enfoque")
     enfoque = e if isinstance(e, str) and e in flowplus_prompt.ENFOQUES else "producto"
     try:
-        texto = sonido_mod.sugerir_descripcion(escena, enfoque, idioma=idiomas.de_proyecto(cliente))
+        texto = sonido_mod.sugerir_descripcion(
+            escena, enfoque, idioma=idiomas.de_proyecto(cliente),
+            on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "sugerir_sonido", uso))
     except Exception as e:
         return jsonify({"error": gettext("No se pudo sugerir (%(tipo)s).", tipo=type(e).__name__)}), 502
     return jsonify({"sonido": texto})
@@ -7165,7 +8388,7 @@ def cf_generar_video(cliente, cf_id):
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    nombre_modelo = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre") or gettext("el modelo")
+    nombre_modelo = flowplus_modelos.nombre_modelo(entry.get("modelo")) or gettext("el modelo")
     es_imagen = (entry.get("tipo") or "video") == "imagen"
     que = gettext("la imagen") if es_imagen else gettext("el video")
     prompt_b = (entry.get("director") or {}).get("prompt_b")
@@ -7197,7 +8420,9 @@ def cf_generar_video(cliente, cf_id):
         flash(gettext("Generando %(que)s con %(modelo)s…", que=que, modelo=nombre_modelo), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
-_MENSAJE_INTERRUMPIDO = (
+# Se guarda como `error` de swaps, sesiones de Crear y conceptos de imagen, en
+# el idioma de cada proyecto (_reconciliar_huerfanos corre al arrancar, sin petición).
+_MENSAJE_INTERRUMPIDO = idiomas.N_(
     "La generación se interrumpió porque el servidor se reinició — vuelve a intentarlo."
 )
 
@@ -7224,6 +8449,8 @@ def _reconciliar_huerfanos():
         if not os.path.isdir(os.path.join(clientes_dir, cliente)):
             continue
         try:
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                interrumpido = gettext(_MENSAJE_INTERRUMPIDO)
             swaps_data = swaps_mod.cargar(cliente)
             tocado = False
             for swap_id, entry in swaps_data.items():
@@ -7231,7 +8458,7 @@ def _reconciliar_huerfanos():
                     if trabajos.en_curso(f"{cliente}__{swap_id}__swap"):
                         continue
                     entry["estado"] = "error"
-                    entry["error"] = _MENSAJE_INTERRUMPIDO
+                    entry["error"] = interrumpido
                     tocado = True
             if tocado:
                 swaps_mod.guardar(cliente, swaps_data)
@@ -7243,7 +8470,7 @@ def _reconciliar_huerfanos():
                     if trabajos.en_curso(f"{cliente}__{cf_id}__creative_flow"):
                         continue
                     entry["estado"] = "error"
-                    entry["error"] = _MENSAJE_INTERRUMPIDO
+                    entry["error"] = interrumpido
                     tocado = True
             if tocado:
                 creative_flow.guardar(cliente, cf_data)
@@ -7256,7 +8483,7 @@ def _reconciliar_huerfanos():
                         img = concepto.get(proveedor)
                         if img and img.get("estado") == "generando":
                             img["estado"] = "error"
-                            img["error"] = _MENSAJE_INTERRUMPIDO
+                            img["error"] = interrumpido
                             tocado = True
             if tocado:
                 conceptos_imagen.guardar(cliente, conceptos_data)
@@ -7276,8 +8503,9 @@ def _reconciliar_huerfanos():
         for eid, cliente in filas:
             if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
                 continue
-            experimentos.actualizar(cliente, eid, estado="error",
-                                     error="Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar.")
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                experimentos.actualizar(cliente, eid, estado="error",
+                                         error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))
     except Exception as e:
         print(f"[aviso] No pude reconciliar experimentos lanzando: {e}")
 
@@ -7329,9 +8557,12 @@ def _volver_tw(cliente):
 
 def _probar_triple_whale(llave, dominio, moneda):
     """None si la llave ve la tienda y puede consultar; si no, el motivo para
-    la persona (sin la llave)."""
+    la persona (sin la llave) SIN traducir: un msgid (N_) o el texto del
+    proveedor. Quien lo muestra o lo guarda lo pasa por idiomas.traducir en su
+    idioma (la respuesta, quien mira; el `error` guardado, el proyecto) sin
+    volver a llamar a Triple Whale."""
     if not triple_whale.validar_llave(llave):
-        return gettext("Triple Whale no reconoce esa llave (revocada o mal copiada).")
+        return idiomas.N_("Triple Whale no reconoce esa llave (revocada o mal copiada).")
     try:
         triple_whale.probar(llave, dominio, moneda)
     except triple_whale.ErrorTripleWhale as e:
@@ -7360,7 +8591,7 @@ def cfg_triple_whale_conectar(cliente):
     moneda = triple_whale.normalizar_moneda(request.form.get("moneda"))
     problema = _probar_triple_whale(llave, dominio, moneda)
     if problema:
-        flash(gettext("No pude conectar Triple Whale: %(error)s", error=problema), "error")
+        flash(gettext("No pude conectar Triple Whale: %(error)s", error=idiomas.traducir(problema)), "error")
         return _volver_tw(cliente)
     triple_whale_tiendas.conectar(cliente, llave, dominio, moneda=moneda,
                                   modelo_atribucion=request.form.get("modelo_atribucion"),
@@ -7386,10 +8617,14 @@ def cfg_triple_whale_probar(cliente):
     except cifrado.ErrorCifrado:
         llave = None
     problema = (_probar_triple_whale(llave, config["dominio_tienda"], config["moneda"]) if llave
-                else gettext("No se pudo leer la llave guardada: vuelve a conectar Triple Whale."))
+                else idiomas.N_("No se pudo leer la llave guardada: vuelve a conectar Triple Whale."))
     if problema:
-        triple_whale_tiendas.actualizar(cliente, estado="error", error=problema)
-        flash(gettext("La conexión con Triple Whale falló: %(error)s", error=problema), "error")
+        # El `error` guardado lo ve cualquiera que abra la pestaña después: idioma
+        # del proyecto. El flash es para quien tocó el botón: su idioma.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            guardado = idiomas.traducir(problema)
+        triple_whale_tiendas.actualizar(cliente, estado="error", error=guardado)
+        flash(gettext("La conexión con Triple Whale falló: %(error)s", error=idiomas.traducir(problema)), "error")
     else:
         triple_whale_tiendas.actualizar(cliente, estado="conectada", error=None)
         flash(gettext("Conexión con Triple Whale correcta."), "ok")

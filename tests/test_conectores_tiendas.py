@@ -21,6 +21,15 @@ def fixture(nombre):
         return json.load(f)
 
 
+@pytest.fixture(autouse=True)
+def _dns_publica(monkeypatch):
+    """Woo y la Admin API de Shopify solo llaman a hosts públicos
+    (`_http.pedir_tienda`): los dominios de prueba resuelven a una IP pública.
+    Los tests de SSRF pisan esto con su propio monkeypatch."""
+    from conectores import url as conector_url
+    monkeypatch.setattr(conector_url.socket, "getaddrinfo", lambda host, *a, **kw: [(2, 1, 6, "", ("93.184.216.34", 0))])
+
+
 # --- sesión falsa ------------------------------------------------------------
 
 class Respuesta:
@@ -29,6 +38,12 @@ class Respuesta:
         self._cuerpo = cuerpo
         self.headers = dict(headers or {})
         self.text = texto if texto is not None else (json.dumps(cuerpo) if cuerpo is not None else "")
+
+    def iter_content(self, chunk_size=65536):
+        yield self.text.encode('utf-8')
+
+    def close(self):
+        pass
 
     def json(self):
         if self._cuerpo is None:
@@ -39,7 +54,7 @@ class Respuesta:
 class SesionFalsa:
     """`manejador(metodo, url, kw) -> Respuesta | Exception`. Guarda cada
     llamada en `llamadas` (lista de dicts con metodo, url, params, json,
-    data, headers, auth, timeout)."""
+    data, headers, auth, timeout, allow_redirects)."""
 
     def __init__(self, manejador):
         self.manejador = manejador
@@ -48,7 +63,7 @@ class SesionFalsa:
     def request(self, metodo, url, **kw):
         llamada = {"metodo": metodo.upper(), "url": url, "params": kw.get("params") or {},
                    "json": kw.get("json"), "data": kw.get("data"), "headers": kw.get("headers") or {},
-                   "auth": kw.get("auth"), "timeout": kw.get("timeout")}
+                   "auth": kw.get("auth"), "timeout": kw.get("timeout"), "allow_redirects": kw.get("allow_redirects")}
         self.llamadas.append(llamada)
         resultado = self.manejador(llamada["metodo"], url, llamada)
         if isinstance(resultado, Exception):

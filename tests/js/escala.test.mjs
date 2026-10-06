@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  avisoTransicion, barrasOnda, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, estiloArrastre, etiquetaClip,
-  filaEnY, filasVisuales, fondoTira, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables, marcasRegla, msAPx,
-  msInsercion, nombreFila, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar, pedidoTransicion, puntoSoltar,
-  pxAMs, soltar, unionesConTransicion, VENTANA_PICOS_MS,
+  avisoTransicion, barrasOnda, bloquesSubtitulos, cabeceraFila, candidatosIman, corteCercano, DURACION_TRANSICION_MS, efectoTransicion,
+  estiloArrastre, etiquetaClip, filaEnY, filasVisuales, fondoFoto, fondoTira, FRACCION_STICKER, iman, imanBordes, indiceAgregarVideo, indiceDestino, ladosRecortables,
+  marcasRegla, msAPx, msInsercion, nombreFila, nombreTransicion, NOMBRES_TRANSICION, PASO_ONDA_PX, pasoRegla, pedidoAgregar, pedidoCortar,
+  pedidoTransicion, puntoSoltar, pxAMs, soltar, textoEfectoTransicion, unionesConTransicion, VENTANA_PICOS_MS,
 } from "../../static/editor/escala.js";
-import { TRANSICIONES } from "../../static/editor/operaciones.js";
-import { docBase } from "./doc_base.mjs";
+import { readFileSync } from "node:fs";
+import { normalizar, ponerTransicion, TRANSICIONES } from "../../static/editor/operaciones.js";
+import { docBase, DURACIONES } from "./doc_base.mjs";
 
 test("ms y px a una escala dada", () => {
   assert.equal(msAPx(1500, 80), 120);
@@ -365,10 +366,10 @@ test("pedidoAgregar con «+»: todo en el cabezal (el video, después del clip b
   assert.deepEqual(pedidoAgregar(doc, { tipo: "video", material: video }, en), ["agregarVideo", video, { indice: 1 }]);
   assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: imagen }, en), ["agregarImagen", imagen, 2500, {}]);
   assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: audio }, en), ["agregarAudio", audio, 2500, { rol: "musica" }]);
-  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "titulo" }, en), ["agregarTexto", 2500, "titulo"]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "titulo" }, en), ["agregarTexto", 2500, "titulo", {}]);
   assert.deepEqual(pedidoAgregar(doc, { tipo: "transicion", transicion: "fundido" }, { cabezalMs: 3000, seleccion: null }),
     ["ponerTransicion", "v0", "fundido", 500]);
-  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "precio" }, { cabezalMs: 1234.6 }), ["agregarTexto", 1235, "precio"]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "precio" }, { cabezalMs: 1234.6 }), ["agregarTexto", 1235, "precio", {}]);
   assert.equal(pedidoAgregar(doc, { tipo: "otra" }, en), null);
 });
 
@@ -384,10 +385,14 @@ test("pedidoAgregar al soltar: el video en su lugar de la principal, lo demás e
   assert.deepEqual(pedidoAgregar(doc, { tipo: "video", material: video }, { punto: { pistaId: null, tipo: null, tMs: 7000, indicePrincipal: null } }),
     ["agregarVideo", video, { indice: 2 }]);
   const imagen = { id: 8, tipo: "imagen" };
+  // Capa 5b (D1, D12): soltada en la fila del video entra como foto, en ese
+  // lugar de la principal; en cualquier otra fila sigue siendo una capa.
   assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: imagen }, { punto: sobreVideo, cabezalMs: 6000 }),
-    ["agregarImagen", imagen, 0, {}]);                          // la imagen es una capa en ese tiempo, aunque caiga en el video
+    ["agregarFoto", imagen, { indice: 0 }]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: imagen }, { punto: sobreTexto, cabezalMs: 6000 }),
+    ["agregarImagen", imagen, 5000, {}]);
   assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "llamado" }, { punto: sobreTexto, cabezalMs: 100 }),
-    ["agregarTexto", 5000, "llamado"]);
+    ["agregarTexto", 5000, "llamado", {}]);
   // una transición soltada: el corte más cercano al dedo (la selección no cuenta)
   assert.deepEqual(pedidoAgregar(tresClips(), { tipo: "transicion", transicion: "zoom" },
     { punto: { ...sobreTexto, tMs: 7500 }, seleccion: "v0" }), ["ponerTransicion", "v1", "zoom", 500]);
@@ -410,9 +415,51 @@ test("avisoTransicion: dice cuando la transición no cupo entera en el material"
   assert.equal(avisoTransicion(con(null), "ya-no-existe", "fundido"), null);
 });
 
+// ---- Capa 5b (Tarea 5): fotos, encuadre y transiciones que juntan ----
+
+test("pedidoAgregar de una imagen: «como clip» o soltada en la fila del video entra como foto; si no, como capa", () => {
+  const doc = docBase();
+  const foto = { id: 10, tipo: "imagen" };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500, como: "clip" }),
+    ["agregarFoto", foto, { indice: 1 }]);
+  const sobreVideo = { pistaId: "p_video", tipo: "video", tMs: 0, indicePrincipal: 1 };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: foto }, { punto: sobreVideo }),
+    ["agregarFoto", foto, { indice: 1 }]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500, como: "capa" }),
+    ["agregarImagen", foto, 2500, {}]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500 }),
+    ["agregarImagen", foto, 2500, {}]);
+  // ningún pedido de una imagen crea un superpuesto (video encima de video)
+  for (const r of [
+    pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500, como: "clip" }),
+    pedidoAgregar(doc, { tipo: "imagen", material: foto }, { punto: sobreVideo }),
+    pedidoAgregar(doc, { tipo: "imagen", material: foto }, { cabezalMs: 2500, como: "capa" }),
+  ]) assert.notEqual(r[0], "agregarSuperpuesto");
+});
+
+test("efectoTransicion: junta (solape recién nacida), corte (cola sin material) y nada si no cambió", () => {
+  const solape = ponerTransicion(docBase(), "v0", "fundido", 500, DURACIONES).doc;
+  assert.deepEqual(efectoTransicion(docBase(), solape, "v0"), { tipo: "junta", ms: 500 });
+
+  const antes = docBase();
+  antes.pistas[0].clips[0].transicion = { tipo: "fundido", duracion_ms: 500 };
+  const despues = normalizar(structuredClone(antes), { 1: 4000 });
+  assert.deepEqual(efectoTransicion(antes, despues, "v0"), { tipo: "corte" });
+
+  assert.equal(efectoTransicion(docBase(), docBase(), "v0"), null);
+  assert.equal(efectoTransicion(docBase(), docBase(), "no-existe"), null);
+});
+
+test("textoEfectoTransicion usa segundosTexto para la duración, como avisoTransicion", () => {
+  assert.equal(textoEfectoTransicion({ tipo: "junta", ms: 500 }, "Fundido"),
+    "«Fundido» quedó en la unión: junta los dos clips y el video quedó 0,5 s más corto.");
+  assert.equal(textoEfectoTransicion({ tipo: "corte" }, "Fundido"), "Esa unión quedó en corte: el primer clip no tiene video de sobra al final para la transición. Recorta un poco su final y vuelve a ponerla.");
+  assert.equal(textoEfectoTransicion(null, "Fundido"), null);
+});
+
 test("las transiciones de la biblioteca son las que el render hace, con su nombre", () => {
   assert.deepEqual(Object.keys(NOMBRES_TRANSICION), TRANSICIONES);
-  assert.equal(NOMBRES_TRANSICION.desenfoque, "Fundido a negro");       // el filtro real es fadeblack
+  assert.equal(nombreTransicion("desenfoque"), "Fundido a negro");       // el filtro real es fadeblack
 });
 
 test("unionesConTransicion: dónde marcar en la línea las uniones con transición", () => {
@@ -422,4 +469,103 @@ test("unionesConTransicion: dónde marcar en la línea las uniones con transici�
   doc.pistas[0].clips[2].transicion = { tipo: "zoom", duracion_ms: 400 };  // el último: no tiene unión
   assert.deepEqual(unionesConTransicion(doc), [{ clipId: "v0", ms: 4000, tipo: "fundido", duracion_ms: 500, nombre: "Fundido · 0,5 s" }]);
   assert.deepEqual(unionesConTransicion(docBase()), []);
+});
+
+// ---- Capa 5a (Task 7): la fila de solo lectura «Subtítulos» -----------------
+
+const ESTILOS_SUB = JSON.parse(readFileSync(new URL("../fixtures/subtitulos_eventos_casos.json", import.meta.url), "utf8")).estilos;
+const PALABRAS_SUB = ["Hola", "esto", "es", "Creatv", "hoy"].map((texto, i) => ({ t_ms: i * 300, dur_ms: 300, texto }));
+
+test("bloquesSubtitulos: las líneas de ventanas() con los topes del estilo", () => {
+  assert.deepEqual(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "karaoke"), [
+    { t_ms: 0, dur_ms: 1200, texto: "Hola esto es Creatv" }, { t_ms: 1200, dur_ms: 300, texto: "hoy" },
+  ]);
+  // palabra grande: una palabra por bloque (max_palabras 1)
+  assert.deepEqual(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "palabra_grande").map((b) => b.texto),
+    ["Hola", "esto", "es", "Creatv", "hoy"]);
+  assert.deepEqual(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "palabra_grande")[3], { t_ms: 900, dur_ms: 300, texto: "Creatv" });
+  // mínimo: hasta 5 palabras
+  assert.equal(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "minimal").length, 1);
+});
+
+test("bloquesSubtitulos: un estilo desconocido es karaoke; sin palabras (u ocultas), ningún bloque", () => {
+  assert.deepEqual(bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "raro"), bloquesSubtitulos(PALABRAS_SUB, ESTILOS_SUB, "karaoke"));
+  assert.deepEqual(bloquesSubtitulos([], ESTILOS_SUB, "karaoke"), []);
+  assert.deepEqual(bloquesSubtitulos(null, ESTILOS_SUB, "karaoke"), []);
+  // sin la tabla de estilos (datos viejos): de a 4, como siempre
+  assert.equal(bloquesSubtitulos(PALABRAS_SUB, null, "karaoke").length, 2);
+});
+
+// ---- Capa 5a (Task 8, fix round 1): las voces vuelven desde la biblioteca ----
+import { rolDeMaterial } from "../../static/editor/escala.js";
+
+test("rolDeMaterial: una grabación, una voz con IA o una locución entran como voz; lo demás, como música", () => {
+  for (const origen of ["grabacion", "voz", "locucion"]) assert.equal(rolDeMaterial({ tipo: "audio", origen }), "voz", origen);
+  for (const origen of ["subida", "musica", "crear", undefined]) assert.equal(rolDeMaterial({ tipo: "audio", origen }), "musica", String(origen));
+  assert.equal(rolDeMaterial(null), "musica");
+});
+
+test("pedidoAgregar de un audio de voz: rol voz y el idioma según el destino que se ve (nunca como música)", () => {
+  const doc = docBase();
+  const en = (destino) => ({ cabezalMs: 2500, destino });
+  const grab = { id: 20, tipo: "audio", origen: "grabacion", idioma: null };
+  const vozEs = { id: 21, tipo: "audio", origen: "voz", idioma: "es" };
+  const locEn = { id: 22, tipo: "audio", origen: "locucion", idioma: "en" };
+  // una grabación no dice su idioma: el del destino que se ve
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: grab }, en("es_CO")), ["agregarAudio", grab, 2500, { rol: "voz", idioma: "es" }]);
+  // la voz habla el idioma del destino: se etiqueta
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: vozEs }, en("es_CO")), ["agregarAudio", vozEs, 2500, { rol: "voz", idioma: "es" }]);
+  // habla otro: suena en todos (la biblioteca lo avisa)
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: locEn }, en("es_CO")), ["agregarAudio", locEn, 2500, { rol: "voz", idioma: null }]);
+  // sin destino todavía: sin etiqueta
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: grab }, en(null)), ["agregarAudio", grab, 2500, { rol: "voz", idioma: null }]);
+  // la música no cambia
+  const cancion = { id: 23, tipo: "audio", origen: "musica" };
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "audio", material: cancion }, en("es_CO")), ["agregarAudio", cancion, 2500, { rol: "musica" }]);
+});
+
+// ---- Capa 5b (Tarea 8, D12): una foto en la fila del video ----
+
+test("fondoFoto: la imagen repetida a lo largo del clip (la copia liviana si ya la tiene), sin tira", () => {
+  const clip = { id: "foto1", inicio_ms: 0, duracion_ms: 3000, material_id: 7, foto: true, recorte: { desde_ms: 0, hasta_ms: 3000 } };
+  assert.deepEqual(fondoFoto(clip, { id: 7, tipo: "imagen", url: "https://r2/f.png", url_proxy: "https://r2/f.proxy.jpg" }),
+    { imagen: "https://r2/f.proxy.jpg", tamano: "auto 100%", posicion: "0 0", repetir: "repeat-x" });
+  assert.deepEqual(fondoFoto(clip, { id: 7, tipo: "imagen", url: "https://r2/f.png", url_proxy: null }),
+    { imagen: "https://r2/f.png", tamano: "auto 100%", posicion: "0 0", repetir: "repeat-x" });
+  assert.equal(fondoFoto(clip, undefined), null);
+  assert.equal(fondoFoto(clip, { id: 7, tipo: "imagen" }), null);
+});
+
+// Revisión final de la capa 5b: «junta … quedó X más corto» solo cuando el
+// video de verdad quedó más corto (X = fin de antes − fin de después).
+test("efectoTransicion: cambiar el tipo o volver a poner la misma no «junta» nada; alargar la unión dice cuánto se acortó", () => {
+  const con500 = ponerTransicion(docBase(), "v0", "fundido", 500, DURACIONES).doc;
+  assert.equal(efectoTransicion(con500, ponerTransicion(con500, "v0", "deslizar", 500, DURACIONES).doc, "v0"), null);
+  assert.equal(efectoTransicion(con500, ponerTransicion(con500, "v0", "fundido", 500, DURACIONES).doc, "v0"), null);
+  const con800 = ponerTransicion(con500, "v0", "fundido", 800, DURACIONES).doc;
+  assert.deepEqual(efectoTransicion(con500, con800, "v0"), { tipo: "junta", ms: 300 });
+  assert.equal(efectoTransicion(con800, ponerTransicion(con800, "v0", "fundido", 500, DURACIONES).doc, "v0"), null,
+    "más corta a propósito: el video quedó más LARGO, nada que avisar");
+});
+
+// ---- Capa 5c (Tarea 8): stickers, emojis y plantillas desde la biblioteca ----
+
+test("pedidoAgregar de un sticker: una capa de imagen al 35 % y del color que trae; nunca una foto del video", () => {
+  const doc = docBase();
+  const sticker = { id: 21, tipo: "imagen", ancho: 512, alto: 351, tenible: true, origen: "sticker" };
+  const cosa = { tipo: "sticker", material: sticker, tinte: "#FFD400" };
+  assert.deepEqual(pedidoAgregar(doc, cosa, { cabezalMs: 2500 }), ["agregarImagen", sticker, 2500, { fraccion: 0.35, tinte: "#FFD400" }]);
+  assert.equal(FRACCION_STICKER, 0.35);
+  // soltado en el instante del dedo, aunque caiga en la fila del video y aunque se pida «como clip»
+  const sobreVideo = { pistaId: "p_video", tipo: "video", tMs: 1800, indicePrincipal: 1 };
+  assert.deepEqual(pedidoAgregar(doc, cosa, { punto: sobreVideo, cabezalMs: 6000, como: "clip" }),
+    ["agregarImagen", sticker, 1800, { fraccion: 0.35, tinte: "#FFD400" }]);
+});
+
+test("pedidoAgregar de un texto: lleva su `literal` solo si la cosa lo trae (un emoji); las muestras de siempre, nada", () => {
+  const doc = docBase();
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "emoji", literal: "🔥" }, { cabezalMs: 2500 }),
+    ["agregarTexto", 2500, "emoji", { literal: "🔥" }]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "oferta" }, { cabezalMs: 2500 }), ["agregarTexto", 2500, "oferta", {}]);
+  assert.deepEqual(pedidoAgregar(doc, { tipo: "texto", preset: "titulo" }, { cabezalMs: 2500 }), ["agregarTexto", 2500, "titulo", {}]);
 });

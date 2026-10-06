@@ -30,6 +30,7 @@ import os
 import shutil
 
 import requests
+from flask_babel import gettext, ngettext
 
 import catalogo_productos
 import creative_flow
@@ -38,6 +39,7 @@ import doctrina
 from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import producto as doctrina_producto
 import gastos
+import idiomas
 import marca
 import proyectos
 import tiendas
@@ -48,20 +50,21 @@ from storage import r2_uploader
 # Monkeypatchable en pruebas: raíz bajo la que viven salidas/ y clientes/.
 BASE_DIR = tipos.BASE_DIR
 
-# (nombre, duración estimada en s) — el mismo orden en que se ejecutan.
+# (nombre, duración estimada en s) — el mismo orden en que se ejecutan. Los
+# nombres se guardan en español (`N_`) y `estado_trabajo` los traduce al mostrarlos.
 ETAPAS_FINAL = (
-    ("Escribiendo el guion", 10),
-    ("Cortes", 5),
-    ("Voz", 25),
-    ("Música", 15),
-    ("Texto y render", 45),
+    (idiomas.N_("Escribiendo el guion"), 10),
+    (idiomas.N_("Cortes"), 5),
+    (idiomas.N_("Voz"), 25),
+    (idiomas.N_("Música"), 15),
+    (idiomas.N_("Texto y render"), 45),
 )
 
 COLOR_ACENTO_DEFECTO = texto.COLOR_ACENTO_DEFECTO
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 _TAMANOS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080), "4:5": (1080, 1350)}
 _OPCIONES_DEFECTO = {"voz": None, "estilo_musica": None, "precio": None, "precios": None, "con_voz": True,
-                     "con_musica": True, "idioma_base": "es", "duracion_s": None,
+                     "con_musica": True, "idioma_base": None, "duracion_s": None,
                      "variante": None, "variante_tipo": None,
                      # Capa "sonido" (spec estudio S2): el audio nativo del clon.
                      "con_sonido": True, "sonido": "nativo", "mezcla": mezcla.PRESET_DEFECTO, "volumenes": None}
@@ -93,7 +96,7 @@ def _clon_local(cliente, cf_id, entry):
         return local
     url = entry.get("video_url_crudo") or entry.get("video_url")
     if not url:
-        raise ValueError(f"La sesión {cf_id} no tiene video listo para producir.")
+        raise ValueError(gettext("La sesión %(cf_id)s no tiene video listo para producir.", cf_id=cf_id))
     sufijo = "_crudo" if entry.get("video_url_crudo") else ""
     destino = os.path.join(_carpeta_salidas(), cliente, "finales", "clones", f"{cf_id}{sufijo}.mp4")
     if os.path.exists(destino):
@@ -150,14 +153,18 @@ def _guia_marca(cliente):
 def _sesion(cliente, cf_id):
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry:
-        raise ValueError(f"No existe la sesión {cf_id} de {cliente}.")
+        raise ValueError(gettext("No existe la sesión %(cf_id)s de %(cliente)s.", cf_id=cf_id, cliente=cliente))
     return entry
 
 
 def _fila_producto(cliente, activo_id):
-    """Fila `producto` del activo (precio, moneda, url_compra); {} si no hay."""
+    """Fila `producto` del producto de `activo_id` (o de uno de sus colores);
+    {} si no hay."""
     try:
-        return tiendas.por_activo(cliente).get(activo_id) or {}
+        # Una lectura por petición en las páginas que pintan muchas tarjetas
+        # (catalogo_productos.lecturas_memorizadas): antes, una por producto.
+        por_activo = catalogo_productos.recordado(("por_activo", cliente), lambda: tiendas.por_activo(cliente))
+        return dict(por_activo.get(catalogo_productos.producto_base(activo_id)) or {})
     except Exception:  # noqa: BLE001 — precio y URL son un extra del guion, nunca lo tumban
         return {}
 
@@ -378,7 +385,8 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     (tests/CLI) siguen siendo idempotentes entre sí, como antes."""
     o = _opciones(opciones)
     entry = _sesion(cliente, cf_id)
-    idioma_base = o.get("idioma_base") or "es"
+    # Decisión B (2026-09-28): sin idioma elegido, el del proyecto.
+    idioma_base = o.get("idioma_base") or idiomas.de_proyecto(cliente)
     producto = _producto(cliente, entry, o.get("precio"))
     # Precio base del guion (D, regla de CLAUDE.md): el escrito por la persona
     # manda tal cual. Sin uno escrito, el de la tienda solo cuenta como precio
@@ -392,20 +400,34 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
         else:
             producto = dict(producto, precio=None, moneda=None)
     referencia, costo = _referencia(entry, idioma_base)
-    duracion_s = o.get("duracion_s") or cortes.duracion(_clon_local(cliente, cf_id, entry))
-    enfoque = entry.get("enfoque") or "producto"
-
     costo_whisper = costo
-    # Detectar canal óptimo de Triple Whale si existe
-    canal_optimo = _canal_optimo_triple_whale(cliente, cf_id)
-    # Un ángulo a medio llenar a mano (sin promesa o sin gancho) no manda: Claude
-    # decide uno completo y reemplaza el borrador (doctrina, bloque 2, §3.4).
-    angulo_sesion = entry.get("angulo") if _angulo_con_contenido(entry.get("angulo")) else None
-    guion_base, costo_guion = guion_mod.generar_guion_base(
-        producto, referencia, enfoque, float(duracion_s), idioma_base,
-        _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion,
-        aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente),
-                                                             producto=(producto or {}).get("nombre")))
+    try:
+        duracion_s = o.get("duracion_s") or cortes.duracion(_clon_local(cliente, cf_id, entry))
+        enfoque = entry.get("enfoque") or "producto"
+        # Detectar canal óptimo de Triple Whale si existe
+        canal_optimo = _canal_optimo_triple_whale(cliente, cf_id)
+        # Un ángulo a medio llenar a mano (sin promesa o sin gancho) no manda: Claude
+        # decide uno completo y reemplaza el borrador (doctrina, bloque 2, §3.4).
+        angulo_sesion = entry.get("angulo") if _angulo_con_contenido(entry.get("angulo")) else None
+        guion_base, costo_guion = guion_mod.generar_guion_base(
+            producto, referencia, enfoque, float(duracion_s), idioma_base,
+            _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion,
+            aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente),
+                                                                 producto=(producto or {}).get("nombre")))
+    except Exception as e:
+        # La transcripción de la referencia y las llamadas a Claude que ya se cobraron
+        # se anotan antes de devolver el error, sea un guion inválido o un fallo de la
+        # API a mitad de camino (PND-001). `costo_usd` lo pone `guion_mod`.
+        usd_guion = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+        pagado = round(costo + usd_guion, 4)
+        if pagado:
+            gastos.registrar_seguro(
+                cliente, "guion", pagado, f"guion:{cf_id}{ref_sufijo}", proveedor="anthropic",
+                detalle=(gettext("guion base %(idioma)s · no salió válido", idioma=idioma_base)
+                         if isinstance(e, guion_mod.GuionInvalido)
+                         else gettext("guion base %(idioma)s · se cortó después de cobrar", idioma=idioma_base)),
+                extra={"usd_guion": usd_guion, "usd_whisper": round(costo, 4)})
+        raise
     costo += float(costo_guion or 0.0)
     # Sin ángulo en la sesión, Claude ya lo decidió, corrigió y limpió junto
     # con el guion (B: `guion_mod.generar_guion_base` reusa su propia vuelta
@@ -425,7 +447,8 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     # "Volver a escribir con IA") deja la suya, sin pisar la anterior.
     gastos.registrar_seguro(
         cliente, "guion", round(costo, 4), f"guion:{cf_id}{ref_sufijo}", proveedor="anthropic",
-        detalle=f"guion base {idioma_base}" + (" + transcripción de la referencia" if costo_whisper else ""),
+        detalle=(gettext("guion base %(idioma)s + transcripción de la referencia", idioma=idioma_base)
+                 if costo_whisper else gettext("guion base %(idioma)s", idioma=idioma_base)),
         extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4)})
     # F: el ángulo se guarda AL FINAL — si esto falla, el guion (ya pagado) y
     # su gasto ya quedaron a salvo; una tarea nueva no vuelve a pagar por él.
@@ -465,6 +488,60 @@ def _parametro_capa_original(cliente, cf_id, idioma, pais, capa, clave):
     return (((original.get("capas") or {}).get(capa) or {}).get("parametros") or {}).get(clave)
 
 
+PROVEEDOR_VOZ_GALERIA = "fal/elevenlabs"
+PROVEEDOR_VOZ_PROPIA = "fal/minimax"
+
+
+def proveedor_voz(voz):
+    """El proveedor que se anota en la capa `voz`: las voces propias (Mis voces,
+    `vp:<id>`) se leen con MiniMax; las de la galería con ElevenLabs."""
+    import audios   # perezoso: audios importa final_edition.cortes/mezcla
+    return PROVEEDOR_VOZ_PROPIA if audios.es_propia(voz) else PROVEEDOR_VOZ_GALERIA
+
+
+def etiqueta_voz(cliente, voz):
+    """Cómo se nombra la voz en un mensaje: el nombre de la voz propia («Mis
+    voces» si ya no existe); la de la galería tal cual."""
+    import audios
+    import voces_propias
+    if not audios.es_propia(voz):
+        return voz
+    vp = voces_propias.resolver(cliente, voz)
+    return vp["nombre"] if vp else gettext("Mis voces")
+
+
+def _voz_propia_de_la_sesion(cliente, cf_id):
+    """La voz propia (que todavía existe) de la final ORIGINAL más reciente de
+    la sesión, o None. Las variantes no cuentan."""
+    import voces_propias   # perezoso: voces_propias importa final_edition.cortes
+    for f in reversed(creative_flow.finales(cliente, cf_id)):
+        if f.get("variante") is not None:
+            continue
+        voz = ((((f.get("capas") or {}).get("voz") or {}).get("parametros")) or {}).get("voz")
+        if voces_propias.resolver(cliente, voz):
+            return voz
+    return None
+
+
+def voz_variante(cliente, cf_id, idioma, pais, lista_voces, variante_tipo):
+    """La voz de una variante sin voz explícita (derivar y rescatar). Una voz
+    propia es la voz de la marca: si la final original de este destino —o, si
+    este destino no tiene original, la más reciente de la sesión— se narró con
+    una voz propia que todavía existe, la variante la conserva, sea de gancho o
+    de estructura (prueba otro guion, no otra persona). Si no, lo de siempre: la
+    de gancho usa «otra» de la galería (la que sigue a la original, o a la de
+    defecto si no hay original) y la de estructura, la de defecto."""
+    import voces_propias
+    original = _parametro_capa_original(cliente, cf_id, idioma, pais, "voz", "voz")
+    if original is None:
+        original = _voz_propia_de_la_sesion(cliente, cf_id)
+    if voces_propias.resolver(cliente, original):
+        return original
+    if variante_tipo == "hook":
+        return _siguiente(lista_voces, original or lista_voces[0])
+    return lista_voces[0]
+
+
 def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_sufijo=""):
     """Produce la pieza final `idioma`/`pais` de la sesión. Devuelve
     `(final_id, resumen)`; `resumen` es el dict de `creative_flow.finales`.
@@ -499,7 +576,8 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
     con un guion variado a partir del guion base (`guion.variar_guion`) — el
     guion base del concepto NO se toca. Si no se fija `voz`/`estilo_musica`,
     `hook` cambia la voz respecto a la final original del destino y
-    `estructura` cambia el estilo de música."""
+    `estructura` cambia el estilo de música; una voz propia que todavía existe
+    se conserva en las dos (`voz_variante`)."""
     o = _opciones(opciones)
     entry = _sesion(cliente, cf_id)
     avisar = on_etapa or (lambda nombre: None)
@@ -507,15 +585,16 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
     # `variante` y `variante_tipo` van juntos: sin el número la variante pisaría
     # la final original; sin el tipo se gastaría voz/música en una copia igual.
     if bool(variante_tipo) != (o.get("variante") is not None):
-        raise ValueError("Para producir una variante hay que indicar `variante` (número) y "
-                         "`variante_tipo` (hook | estructura) a la vez.")
+        raise ValueError(gettext("Para producir una variante hay que indicar `variante` (número) y "
+                                 "`variante_tipo` (hook | estructura) a la vez."))
     if variante_tipo and variante_tipo not in guion_mod.VARIANTES_GUION:
-        raise ValueError(
-            f"Tipo de variante no soportado: {variante_tipo}. Opciones: {sorted(guion_mod.VARIANTES_GUION)}")
+        raise ValueError(gettext("Tipo de variante no soportado: %(tipo)s. Opciones: %(opciones)s",
+                                 tipo=variante_tipo, opciones=sorted(guion_mod.VARIANTES_GUION)))
     # Capa sonido (S2): se valida ANTES de crear la fila final para que un
     # preset o modo desconocido no deje una pieza a medias en la base.
     if o.get("sonido") not in SONIDOS_VALIDOS:
-        raise ValueError(f"Capa de sonido no soportada: {o.get('sonido')}. Opciones: {SONIDOS_VALIDOS}")
+        raise ValueError(gettext("Capa de sonido no soportada: %(sonido)s. Opciones: %(opciones)s",
+                                 sonido=o.get("sonido"), opciones=SONIDOS_VALIDOS))
     volumenes = mezcla.volumenes_para(o.get("mezcla"), o.get("volumenes"))   # ValueError si el preset no existe
     pedir_sonido = bool(o.get("con_sonido", True)) and o.get("sonido") == "nativo"
 
@@ -530,6 +609,7 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
     degradada = False
 
     avisar(ETAPAS_FINAL[0][0])
+    variando = False
     try:
         # Guion base (una vez por sesión) — si aún no existe se escribe aquí.
         guion_base = creative_flow.guion_base(cliente, cf_id)
@@ -545,15 +625,21 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
         costo_variante = 0.0
         angulo_variante = None
         if variante_tipo:
+            variando = True
             guion_base, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, _guia_marca(cliente),
                                                                 angulo=entry.get("angulo"),
                                                                 contexto=o.get("contexto_variante"))
             costo += float(costo_variante or 0.0)
             angulo_variante = guion_base.pop("angulo_variante", None)
     except Exception as e:
+        # Lo que cobró una variante que no sirvió se anota en el gasto de la final; el
+        # guion base no entra aquí: `preparar_guion` anota el suyo (PND-001).
+        pagado = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4) if variando else 0.0
         capas["guion"] = {"proveedor": "anthropic", "parametros": {"variante_tipo": variante_tipo} if variante_tipo else {},
-                          "costo_usd": 0.0, "estado": "error", "error": str(e)}
+                          "costo_usd": pagado, "estado": "error", "error": str(e)}
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas)
+        if pagado:
+            _registrar_gasto_final(cliente, final_id, idioma, pais, pagado, capas, fallo=True, ref_sufijo=ref_sufijo)
         raise
     carpeta = _carpeta_final(cliente, final_id)
     shutil.rmtree(carpeta, ignore_errors=True)
@@ -588,7 +674,10 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
         try:
             guion, c = guion_mod.localizar_guion(guion_base, idioma, pais, precio, angulo=entry.get("angulo"))
         except Exception as e:
-            capa("guion", "anthropic", params_guion, costo_variante, estado="error", error=str(e))
+            # Lo que cobró una localización que no sirvió entra al gasto de la final (PND-001).
+            usd_loc = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+            costo += usd_loc
+            capa("guion", "anthropic", params_guion, costo_variante + usd_loc, estado="error", error=str(e))
             raise
         costo += float(c or 0.0)
         capa("guion", "anthropic", params_guion, float(c or 0.0) + costo_variante)
@@ -602,7 +691,7 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
             cortes_t = cortes.detectar_cortes(clon)
             segmentos = cortes.planificar_segmentos(duracion_clon, cortes_t, float(fin_guion))
             if not segmentos:
-                raise RuntimeError("El clon no da para ningún segmento.")
+                raise RuntimeError(gettext("El clon no da para ningún segmento."))
             duracion_final = float(segmentos[-1]["fin"])
         except Exception as e:
             capa("cortes", "ffmpeg", {}, estado="error", error=str(e))
@@ -627,34 +716,35 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
         archivo_voz, palabras = None, []
         voces = fal_audio.VOCES.get(idioma) or fal_audio.VOCES["es"]
         nombre_voz = o.get("voz")
-        if not nombre_voz and variante_tipo == "hook":
-            # Otra voz que la de la final original del destino (o la siguiente
-            # a la de defecto si no hay original).
-            nombre_voz = _siguiente(voces, _parametro_capa_original(cliente, cf_id, idioma, pais, "voz", "voz") or voces[0])
+        if not nombre_voz and variante_tipo:
+            # Una variante conserva la voz propia de la marca (la de la original
+            # del destino o, sin original, la de la sesión); si no hay, la de
+            # gancho rota la galería y la de estructura usa la de defecto (ver
+            # `voz_variante`).
+            nombre_voz = voz_variante(cliente, cf_id, idioma, pais, voces, variante_tipo)
         nombre_voz = nombre_voz or voces[0]
         if not o.get("con_voz", True):
-            capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="omitida")
+            capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, estado="omitida")
         else:
             try:
                 salida_voz, c = voz.sintetizar(guion, nombre_voz, os.path.join(carpeta, "voz"), cliente=cliente)
                 archivo_voz = salida_voz.get("archivo_voz")
                 palabras = salida_voz.get("palabras") or []
                 costo += float(c or 0.0)
-                capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, c)
+                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, c)
             except voz.ErrorPrimerBloque as e:
                 # El primer bloque (hook) falló: casi siempre algo
-                # determinístico (voz inválida para fal/ElevenLabs, texto
+                # determinístico (voz inválida o borrada de Mis voces, texto
                 # vacío) que fallaría igual en cualquier otro bloque —
                 # degradar aquí solo pagaría música por una pieza que de
                 # todos modos sale sin voz. Es fatal: no se genera música.
-                capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=str(e))
-                raise ValueError(
-                    f"No se pudo generar la voz (revisa la voz elegida, '{nombre_voz}'): {e}"
-                ) from e
+                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, estado="error", error=str(e))
+                raise ValueError(gettext("No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s",
+                                         voz=etiqueta_voz(cliente, nombre_voz), error=e)) from e
             except Exception as e:
                 degradada = True
                 archivo_voz, palabras = None, []
-                capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=str(e))
+                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, estado="error", error=str(e))
 
         # 3. Música (degradable)
         avisar(ETAPAS_FINAL[3][0])
@@ -735,18 +825,34 @@ def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=Fa
     cobró — con el detalle de qué capa falló y cuáles ya estaban pagadas
     (p. ej. "falló en render; voz y música cobradas"). `ref_sufijo` es el id
     de la tarea que pagó: sin él, reproducir el mismo destino (un cobro real
-    nuevo, tarea nueva) pisaría el gasto del intento anterior."""
+    nuevo, tarea nueva) pisaría el gasto del intento anterior. El detalle sale
+    en el idioma activo (en el worker, el del proyecto) con las etiquetas de
+    `tipos.ETIQUETAS_CAPA`; las claves de `extra` no cambian."""
     por_capa = {n: round(float(c.get("costo_usd") or 0.0), 4) for n, c in (capas or {}).items()}
     cobradas = [n for n, v in por_capa.items() if v > 0]
     usd = round(max(0.0, float(usd or 0.0)), 4)
+
+    def etiqueta(capa):
+        return idiomas.traducir(tipos.ETIQUETAS_CAPA.get(capa, capa))
+
+    destino = f"{idioma}_{pais}"
     if fallo:
         if usd <= 0:
             return
         fallida = next((n for n in reversed(list(capas or {})) if (capas[n] or {}).get("estado") == "error"), None)
-        detalle = f"{idioma}_{pais} · falló en {fallida or 'la producción'}; " + (
-            " y ".join(cobradas) + (" cobradas" if len(cobradas) > 1 else " cobrada") if cobradas else "nada cobrado")
+        # Los pedazos traducidos van a variables ANTES de la llamada: un
+        # `gettext` anidado dentro de `ngettext` le hace perder el plural al
+        # extractor de Babel (y el anidado tampoco entra al catálogo).
+        union = " " + gettext("y") + " "
+        capa_fallida = etiqueta(fallida) if fallida else gettext("la producción")
+        cobro = (ngettext("%(capas)s cobrada", "%(capas)s cobradas", len(cobradas),
+                          capas=union.join(etiqueta(n) for n in cobradas))
+                 if cobradas else gettext("nada cobrado"))
+        detalle = gettext("%(destino)s · falló en %(capa)s; %(cobro)s", destino=destino, capa=capa_fallida, cobro=cobro)
+    elif cobradas:
+        detalle = gettext("%(destino)s · %(capas)s", destino=destino, capas=", ".join(etiqueta(n) for n in cobradas))
     else:
-        detalle = f"{idioma}_{pais} · " + (", ".join(cobradas) if cobradas else "sin cobros (todo cacheado u omitido)")
+        detalle = gettext("%(destino)s · sin cobros (todo cacheado u omitido)", destino=destino)
     gastos.registrar_seguro(cliente, "final", usd, f"final:{final_id}{ref_sufijo}", detalle=detalle,
                             proveedor="fal/anthropic", extra={"capas": por_capa, "fallo": bool(fallo)})
 

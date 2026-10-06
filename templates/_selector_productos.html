@@ -37,12 +37,29 @@
       {% if lista %}
       {% if _modo == "checkbox" %}<p class="campo-label" style="margin:.6rem 0 .3rem;">{{ categorias[cid].plural if categorias is defined else _('Productos') }}</p>{% endif %}
       <div class="catalogo-productos">
-        {% for p in lista %}
+        {% for entradas in lista | agrupar_por_producto %}
+        {% if entradas | length > 1 or entradas[0].variante %}
+        {# Un producto con colores: un encabezado y un tile por color (spec 2026-09-28 §10.5). #}
+        <div class="producto-grupo">
+          <p class="producto-grupo-nombre">{{ entradas[0].nombre_producto }} <small>{{ ngettext('%(num)s color', '%(num)s colores', entradas | length) }}</small></p>
+          <div class="producto-grupo-tiles">
+            {% for p in entradas %}
+            <label class="producto-opcion" data-nombre="{{ (p.nombre_producto ~ ' ' ~ p.nombre) | lower }}">
+              <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
+              <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
+              <span>{{ p.nombre | replace(p.nombre_producto ~ ' — ', '') }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
+        {% set p = entradas[0] %}
         <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
           <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
           <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
           <span>{{ p.nombre }}</span>
         </label>
+        {% endif %}
         {% endfor %}
       </div>
       {% endif %}

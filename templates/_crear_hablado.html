@@ -1,0 +1,36 @@
+{# Crear › Anuncio hablado (spec docs/superpowers/specs/2026-10-01-crear-anuncio-hablado-design.md):
+   foto + guion + voz → un video donde la persona de la foto dice el guion
+   (P-Video-Avatar). Esta cáscara va en la página y no pesa: la cuadrícula de
+   fotos y la galería de voces (_hablado_panel.html) llegan por fetch
+   (hablado.panel) la primera vez que el modo se ve en pantalla. El JS vive en
+   static/hablado.js; sus textos, ya traducidos, en window.HB_TEXTOS. #}
+<div class="hb" id="hb"
+     data-url-panel="{{ url_for('hablado.panel', cliente=cliente) }}"
+     data-url-voz="{{ url_for('hablado.voz', cliente=cliente) }}"
+     data-url-crear="{{ url_for('hablado.crear', cliente=cliente) }}"
+     data-url-foto="{{ url_for('hablado.foto', cliente=cliente) }}"
+     data-url-muestra="{{ url_for('au_muestra', cliente=cliente) }}"
+     data-sep="{{ ',' if ',' in (0.5|usd) else '.' }}">
+  <p class="vacio hb-intro">{{ _('Elige una foto, escribe el guion y escucha la voz: la persona de la foto lo dice en video. Nada se cobra hasta que pulses «Escuchar la voz» o «Generar video».') }}</p>
+  <div id="hb-panel"><p class="vacio">{{ _('Cargando…') }}</p></div>
+  <p class="campo-error" id="hb-carga-error" hidden></p>
+</div>
+<script>
+  window.HB_TEXTOS = {
+    aprox: {{ _('≈')|tojson }},
+    sinConexion: {{ _('Se perdió la conexión; recarga la página.')|tojson }},
+    sinMuestra: {{ _('No pude generar la muestra; intenta de nuevo.')|tojson }},
+    creandoVoz: {{ _('Creando la voz…')|tojson }},
+    noSePudoVoz: {{ _('No se pudo crear la voz.')|tojson }},
+    noSePudoVideo: {{ _('No se pudo lanzar el video.')|tojson }},
+    dura: {{ _('Dura {s} s.')|tojson }},
+    subiendo: {{ _('Subiendo…')|tojson }},
+    errorSubir: {{ _('Error al subir; recarga la página.')|tojson }},
+    errorRed: {{ _('Error de red al subir.')|tojson }},
+    faltaFoto: {{ _('Falta elegir la foto.')|tojson }},
+    faltaVoz: {{ _('Escucha la voz con el texto y la voz de ahora para poder generar.')|tojson }},
+    vozHecha: {{ _('La voz quedó lista: toca «Escuchar la voz» para oírla (no se paga de nuevo).')|tojson }},
+    lanzando: {{ _('Lanzando el video…')|tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='hablado.js') }}" defer></script>

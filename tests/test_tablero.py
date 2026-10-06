@@ -55,6 +55,33 @@ def test_valor_en_y_delta_con_truncado():
     assert tablero.delta([], "2026-09-01T00:00:00", "2026-09-30T00:00:00", "gasto") == 0.0
 
 
+def test_ventas_medidas_solo_de_lo_que_mide_ventas():
+    """La regla de «ventas medibles» es una sola (`mide_ventas`: Pixel, tienda o Triple Whale en el snapshot de
+    cierre) y `ventas_medidas` suma TODO el gasto (la regla del Tablero: lo vendido sobre todo el gasto) y dice si
+    algo mide: el centro de resultados pinta «—» sin ninguno."""
+    import tablero
+    assert [tablero.mide_ventas({"fuente_ventas": f}) for f in ("meta", "tienda", "triple_whale", "ninguna", None)] == [
+        True, True, True, False, False]
+    assert tablero.mide_ventas(None) is False
+    pixel = [_snap("2026-09-01T08:00:00", gasto=100.0, compras=2, ingresos=300.0, fuente_ventas="meta")]
+    trafico = [_snap("2026-09-01T08:00:00", gasto=100.0, compras=0, ingresos=0.0, fuente_ventas="ninguna")]
+    a, b = (tablero._deltas_pieza(s, "2026-08-01T00:00:00", "2026-09-02T00:00:00") for s in (pixel, trafico))
+    assert a["mide"] is True and b["mide"] is False
+    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0,
+                                           "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
+    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0,
+                                              "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
+
+
+def test_pnd139_delta_no_resta_ingresos_de_fuentes_distintas():
+    import tablero
+    snaps = [_snap("2026-09-01T08:00:00", gasto=100, compras=1, ingresos=300, fuente_ventas="meta"),
+             _snap("2026-09-02T08:00:00", gasto=200, compras=2, ingresos=600, fuente_ventas="triple_whale")]
+    d = tablero._deltas_pieza(snaps, "2026-09-01T12:00:00", "2026-09-03T00:00:00")
+    assert d["gasto"] == 100 and d["compras"] is None
+    assert d["ingresos"] is None and d["roas_comparable"] is False
+
+
 def test_dinero_redondea_igual_que_main():
     """`tablero.dinero` pasa por `idiomas.numero` (revisión final fase 4,
     M2): confirma que el pre-redondeo llega hasta acá y no solo hasta
@@ -146,6 +173,137 @@ def test_resumen_mes_sin_experimentos(base_temporal, sin_red):
     assert r["por_moneda"] == {} and r["experimentos_corriendo"] == 0 and r["piezas_activas"] == 0
 
 
+# ---------- total desde el inicio y mes a mes ----------
+
+def _sembrar_meses(db):
+    """COP con actividad en julio, agosto y septiembre (uno exactamente a las
+    00:00 del 1 de septiembre, que es la base de septiembre como en
+    resumen_mes), USD solo en septiembre, un snapshot futuro respecto a AHORA
+    que no cuenta y generación en mayo (junio queda vacío) y septiembre."""
+    import experimentos as ex
+    import gastos
+    e_cop = _experimento(db, "Cojín", moneda="COP")
+    e_usd = _experimento(db, "Manta", moneda="USD", estado="pausado")
+    ep = _pieza_en(db, e_cop)
+    ep_usd = _pieza_en(db, e_usd, legado="cf_2__es_CO")
+    for t, g, c, i in (("2026-07-10T08:00:00", 100, 1, 1000), ("2026-07-31T20:00:00", 150, 1, 1000),
+                       ("2026-08-15T08:00:00", 400, 3, 5000), ("2026-09-01T00:00:00", 450, 3, 5000),
+                       ("2026-09-10T08:00:00", 600, 4, 7000), ("2026-09-20T08:00:00", 9000, 99, 1)):
+        ex.snapshot(ep, {"gasto": g, "compras": c, "ingresos": i, "impresiones": g * 10, "clics_enlace": c * 5,
+                         "fuente_ventas": "meta"}, tomado_en=t)
+    ex.snapshot(ep_usd, {"gasto": 12.5, "impresiones": 40}, tomado_en="2026-09-05T08:00:00")
+    gastos.registrar("acme", "video", 2.0, "video:mayo", creado_en="2026-05-15T10:00:00")
+    gastos.registrar("acme", "video", 0.5, "video:sep", creado_en="2026-09-05T10:00:00")
+    return ep, ep_usd
+
+
+def test_resumen_total_es_el_acumulado_hasta_ahora(base_temporal, sin_red):
+    import tablero
+    _sembrar_meses(base_temporal)
+    r = tablero.resumen_total("acme", ahora_iso=AHORA)
+    assert r["hasta"] == AHORA
+    assert r["por_moneda"]["COP"]["gasto"] == 600 and r["por_moneda"]["COP"]["compras"] == 4
+    assert r["por_moneda"]["COP"]["ingresos"] == 7000 and r["por_moneda"]["COP"]["roas"] == round(7000 / 600, 2)
+    assert r["por_moneda"]["USD"]["gasto"] == 12.5 and r["por_moneda"]["USD"]["roas"] == 0.0
+    assert r["experimentos_corriendo"] == 1 and r["piezas_activas"] == 2
+    assert r["propuestas_pendientes"] == 0 and r["ganadoras_publicadas"] == 0
+
+
+def test_resumen_total_no_vuelve_a_leer_los_snapshots(base_temporal, sin_red, monkeypatch):
+    """El total de una pieza es su último snapshot, que la carga del tablero
+    ya trae aunque solo pida la ventana del mes: no hace falta leer el
+    histórico entero."""
+    import experimentos as ex
+    import tablero
+    _sembrar_meses(base_temporal)
+    datos = tablero.cargar_datos("acme", AHORA)
+    leidas = []
+    monkeypatch.setattr(ex, "snapshots", lambda ep_id, desde=None: leidas.append(ep_id) or [])
+    r = tablero.resumen_total("acme", AHORA, datos=datos)
+    assert leidas == [] and r["por_moneda"]["COP"]["gasto"] == 600
+
+
+def test_resumen_total_triple_whale_solo_sus_experimentos(base_temporal, sin_red):
+    import experimentos as ex
+    import tablero
+    _sembrar_meses(base_temporal)
+    assert tablero.resumen_total_triple_whale("acme", AHORA) is None
+    e_tw = _experimento(base_temporal, "TW", atribucion="triple_whale")
+    ep = _pieza_en(base_temporal, e_tw, legado="cf_9__es_CO")
+    ex.snapshot(ep, {"gasto": 300, "compras": 5, "ingresos": 20000, "fuente_ventas": "triple_whale"},
+                tomado_en="2026-08-10T10:00:00")
+    r = tablero.resumen_total_triple_whale("acme", AHORA)
+    assert list(r["por_moneda"]) == ["COP"] and r["por_moneda"]["COP"]["gasto"] == 300
+    assert r["por_moneda"]["COP"]["ingresos"] == 20000 and r["experimentos_corriendo"] == 1
+
+
+def test_mes_a_mes_desglosa_pauta_y_generacion(base_temporal, sin_red):
+    import tablero
+    _sembrar_meses(base_temporal)
+    filas = tablero.mes_a_mes("acme", AHORA)
+    assert [f["mes"] for f in filas] == ["2026-09", "2026-08", "2026-07", "2026-06", "2026-05"]
+    assert [f["etiqueta"] for f in filas] == ["septiembre 2026", "agosto 2026", "julio 2026", "junio 2026",
+                                              "mayo 2026"]
+    sep, ago, jul, jun, may = filas
+    assert sep["por_moneda"]["COP"]["gasto"] == 150 and sep["por_moneda"]["COP"]["compras"] == 1
+    assert sep["por_moneda"]["COP"]["ingresos"] == 2000 and sep["por_moneda"]["USD"]["gasto"] == 12.5
+    assert sep["generacion"] == {"usd": 0.5, "n": 1}
+    # El snapshot de las 00:00 del 1 de septiembre cierra agosto.
+    assert ago["por_moneda"] == {"COP": ago["por_moneda"]["COP"]} and ago["por_moneda"]["COP"]["gasto"] == 300
+    assert ago["por_moneda"]["COP"]["compras"] == 2 and ago["por_moneda"]["COP"]["ingresos"] == 4000
+    assert ago["por_moneda"]["COP"]["roas"] == round(4000 / 300, 2) and ago["generacion"] == {"usd": 0.0, "n": 0}
+    assert jul["por_moneda"]["COP"]["gasto"] == 150 and jul["por_moneda"]["COP"]["ingresos"] == 1000
+    # Un mes sin nada entre dos con actividad sigue en la tabla; una moneda sin actividad no.
+    assert jun == {"mes": "2026-06", "etiqueta": "junio 2026", "por_moneda": {}, "generacion": {"usd": 0.0, "n": 0}}
+    assert may["por_moneda"] == {} and may["generacion"] == {"usd": 2.0, "n": 1}
+
+
+def test_mes_a_mes_cuadra_con_el_mes_en_curso_y_el_total(base_temporal, sin_red):
+    """La fila del mes en curso es exactamente resumen_mes, y la suma de los
+    meses es el total."""
+    import tablero
+    _sembrar_meses(base_temporal)
+    filas = tablero.mes_a_mes("acme", AHORA)
+    mes = tablero.resumen_mes("acme", AHORA)
+    assert filas[0]["por_moneda"] == mes["por_moneda"]
+    total = tablero.resumen_total("acme", AHORA)
+    for moneda in ("COP", "USD"):
+        for campo in ("gasto", "compras", "ingresos", "impresiones", "clics_enlace"):
+            suma = sum(f["por_moneda"].get(moneda, {}).get(campo, 0) for f in filas)
+            assert suma == total["por_moneda"][moneda][campo], (moneda, campo)
+
+
+def test_mes_a_mes_una_consulta_para_todas_las_piezas(base_temporal, sin_red, monkeypatch):
+    """Los cierres de mes salen de UNA consulta, no una por pieza ni por mes."""
+    import experimentos as ex
+    import sqlalchemy as sa
+    import db
+    import tablero
+    for k in range(6):
+        eid = _experimento(base_temporal, f"E{k}")
+        ep = _pieza_en(base_temporal, eid, legado=f"cf_{k}__es_CO")
+        for mes in ("06", "07", "08", "09"):
+            ex.snapshot(ep, {"gasto": int(mes) * 10}, tomado_en=f"2026-{mes}-10T08:00:00")
+    datos = tablero.cargar_datos("acme", AHORA)
+    sentencias = []
+
+    def _anotar(conn, cursor, sentencia, *_):
+        sentencias.append(sentencia)
+    sa.event.listen(db.engine(), "before_cursor_execute", _anotar)
+    try:
+        filas = tablero.mes_a_mes("acme", AHORA, datos=datos)
+    finally:
+        sa.event.remove(db.engine(), "before_cursor_execute", _anotar)
+    snaps = [s for s in sentencias if "metrica_snapshot" in s]
+    assert len(snaps) == 1, snaps
+    assert [f["por_moneda"]["COP"]["gasto"] for f in filas] == [6 * 10, 6 * 10, 6 * 10, 6 * 60]
+
+
+def test_mes_a_mes_sin_nada(base_temporal, sin_red):
+    import tablero
+    assert tablero.mes_a_mes("acme", AHORA) == []
+
+
 # ---------- serie_diaria ----------
 
 def test_serie_diaria_tres_dias(base_temporal, sin_red):
@@ -229,8 +387,8 @@ def test_snapshots_con_desde_trae_la_ventana_y_la_base(base_temporal):
 
 def test_cargar_datos_una_vez_y_contexto(base_temporal, sin_red, monkeypatch):
     """`contexto` deriva todas las partes de UNA carga: experimentos.cargar
-    y experimentos.snapshots se llaman una vez (por proyecto / por pieza),
-    y el resultado coincide con las funciones sueltas."""
+    y experimentos.snapshots_de se llaman una vez (por proyecto / para todas
+    las piezas), y el resultado coincide con las funciones sueltas."""
     import experimentos as ex
     import tablero
     eid = _experimento(base_temporal, "Cojín")
@@ -243,20 +401,21 @@ def test_cargar_datos_una_vez_y_contexto(base_temporal, sin_red, monkeypatch):
                "top": tablero.top_ganadoras("acme"), "alertas": tablero.alertas("acme", AHORA),
                "csv": tablero.csv_mes("acme", AHORA)}
     llamadas = {"cargar": 0, "snapshots": []}
-    cargar, snapshots = ex.cargar, ex.snapshots
+    cargar, snapshots_de = ex.cargar, ex.snapshots_de
 
     def _cargar(cliente):
         llamadas["cargar"] += 1
         return cargar(cliente)
 
-    def _snapshots(ep_id, desde=None):
+    def _snapshots_de(ep_ids, desde):
         llamadas["snapshots"].append(desde)
-        return snapshots(ep_id, desde=desde)
+        return snapshots_de(ep_ids, desde)
     monkeypatch.setattr(ex, "cargar", _cargar)
-    monkeypatch.setattr(ex, "snapshots", _snapshots)
+    monkeypatch.setattr(ex, "snapshots_de", _snapshots_de)
     ctx = tablero.contexto("acme", AHORA)
     assert llamadas["cargar"] == 1
-    # Una consulta por pieza, acotada a lo más temprano entre el mes y los 30 días.
+    # Una llamada para todas las piezas (dos consultas), acotada a lo más temprano
+    # entre el mes y los 30 días.
     assert llamadas["snapshots"] == ["2026-08-18T00:00:00"]
     assert ctx["ahora"] == AHORA
     for parte, valor in sueltas.items():
@@ -420,6 +579,38 @@ def test_alertas_tienda_rota_pixel_y_productos(base_temporal, sin_red):
     assert len(px) == 1 and "no tiene Pixel" in px[0]["texto"]
 
 
+def test_alerta_productos_cuenta_los_colores_del_producto(base_temporal, sin_red, tmp_path):
+    """Revisión final (catálogo por colores): Crear guarda en `productos_ids`
+    el NOMBRE del color («Original — Pink»), no el del producto; un producto
+    en prueba cuyo color está en un experimento corriendo NO debe alertar."""
+    import catalogo_productos
+    import creative_flow
+    import experimentos as ex
+    import tablero
+    import tiendas
+    sin_red.setattr(catalogo_productos, "BASE_DIR", str(tmp_path))
+    carpeta = tmp_path / "clientes" / "acme" / "productos" / "original"
+    for color in ("pink", "beige"):
+        (carpeta / color).mkdir(parents=True)
+        (carpeta / color / "01.jpg").write_bytes(b"\xff\xd8\xff\xe0fake-jpg")
+    catalogo_productos.guardar_meta("acme", {"original": {
+        "nombre": "Original", "variantes": {
+            "pink": {"nombre": "Original — Pink", "fuente_id": "v1"},
+            "beige": {"nombre": "Original — Beige", "fuente_id": "v2"}}}})
+    fila = tiendas.upsert_producto("acme", "shopify", "123", {"nombre": "Original"})
+    tiendas.marcar_producto("acme", fila, en_prueba=True, activo_catalogo_id="original")
+    creative_flow.crear("acme", [], ["Original — Pink"], [], "abrazo", 15, "cálido", "A", legado_id="cf_1")
+
+    def tipos():
+        return [x["tipo"] for x in tablero.alertas("acme", ahora_iso=AHORA)]
+
+    assert "productos_sin_experimento" in tipos()          # sin experimento: alerta
+    eid = _experimento(base_temporal, "Pink")
+    ep = _pieza_en(base_temporal, eid, legado="cf_1__es_CO")
+    ex.snapshot(ep, {"gasto": 1}, tomado_en="2026-09-16T09:30:00")
+    assert "productos_sin_experimento" not in tipos()      # su color está en un experimento corriendo
+
+
 # ---------- csv_mes ----------
 
 def test_csv_mes_cabecera_y_fila(base_temporal, sin_red):
@@ -490,3 +681,39 @@ def test_alerta_de_experimento_en_error_explica_el_json_de_meta(base_temporal, s
     assert a[0]["tipo"] == "experimento_error"
     assert "modo Desarrollo" in texto and "Live" in texto and "{" not in texto and "OAuthException" not in texto
     assert ".." not in texto
+
+
+def test_pnd118_tiendas_rotas_conservan_identidad(base_temporal, sin_red):
+    import tiendas
+    import alertas
+    sin_red.setattr(tiendas, 'listar', lambda c: [dict(id=i, tipo='shopify', nombre='tienda', estado='rota', error='falló') for i in (21, 22)])
+    avisos = [a for a in alertas._fuente_tablero('acme', AHORA) if a['clave'].startswith('tablero:tienda_rota')]
+    assert {a['clave'] for a in avisos} == {'tablero:tienda_rota:21', 'tablero:tienda_rota:22'}
+    assert len({a['huella'] for a in avisos}) == 2
+    alertas.descartar('acme', avisos[0]['clave'], avisos[0]['huella'])
+    # El descarte de una tienda no coincide con la identidad de la otra.
+    assert avisos[0]['clave'] != avisos[1]['clave']
+
+
+def test_pnd139_primera_venta_con_base_cero_no_se_pierde():
+    import tablero
+    snaps = [_snap('2026-09-01T08:00:00', gasto=100, compras=0, ingresos=0, fuente_ventas='ninguna'),
+             _snap('2026-09-02T08:00:00', gasto=200, compras=2, ingresos=600, fuente_ventas='meta')]
+    d = tablero._deltas_pieza(snaps, '2026-09-01T12:00:00', '2026-09-03T00:00:00')
+    assert d['compras'] == 2 and d['ingresos'] == 600
+    assert tablero._delta_ingresos(snaps, '2026-09-01T12:00:00', '2026-09-03T00:00:00') == 600
+
+
+def test_pnd138_csv_y_serie_no_mezclan_monedas(base_temporal, sin_red):
+    import csv
+    import io
+    import experimentos as ex
+    import tablero
+    eid = _experimento(base_temporal, 'Tienda', moneda='USD', atribucion='tienda', extra={'aviso_moneda':'COP'})
+    ep = _pieza_en(base_temporal, eid)
+    ex.snapshot(ep, {'gasto':100,'compras':2,'ingresos':400000,'fuente_ventas':'tienda'}, tomado_en='2026-09-15T23:00:00')
+    fila = list(csv.reader(io.StringIO(tablero.csv_mes('acme', ahora_iso=AHORA).lstrip('\ufeff')), delimiter=';'))[1]
+    assert fila[6:11] == ['100','2','','','USD']
+    dias = tablero.serie_diaria('acme', ahora_iso=AHORA)['dias']
+    assert dias[-1]['ingresos'] == 0
+    assert next(d for d in dias if d['dia'] == '2026-09-15')['ingresos'] is None

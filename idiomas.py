@@ -4,16 +4,31 @@ idioma:
 
   - de la persona (usuarios.json, campo "idioma"): en qué idioma ve las pantallas;
   - del proyecto (clientes/<c>/proyecto.json, campo "idioma"): en qué idioma
-    escribe Claude y salen los anuncios de ese proyecto (fases 3-6);
+    escribe Claude y salen los anuncios de ese proyecto (fases 3-5), lo que
+    se guarda o se manda (errores, `detalle` de gastos, eventos, mensajes de
+    tareas, correos) y el guion base de Final edition por defecto; cada final
+    sale en el idioma de su país destino (decisión B de Daniel, 2026-09-28);
   - antes del login, la cookie `idioma`.
 
 Sin campo = DEFECTO. Desde 2026-09-28 (decisión de Daniel) DEFECTO es "en" y
 ACTIVO_PARA_TODOS es True: todos los usuarios y proyectos que no eligieron
-idioma están en inglés, y el selector lo ve todo el mundo — aunque varias
-pantallas (Sprints, Nicho, Referentes, Final edition/editor, admin, el mapa
-del código) sigan solo en español hasta que cierren las fases 5-6. Los tests
-fijan "es"/False (tests/conftest.py) porque comparan textos en español;
-cualquiera puede volver a español desde Configuración › Cuenta y avisos.
+idioma están en inglés, y el selector lo ve todo el mundo. Desde el cierre de
+la fase 6 (2026-09) toda la app pasa por el catálogo. Quedan en español a
+propósito: el contenido del mapa del código (`mapa_codigo.html`, con
+`lang="es"`; solo su barra se traduce) y los textos de la doctrina
+(`doctrina/textos/*.md`, instrucciones internas para Claude), los mensajes de
+contrato de `final_edition/documento.validar` y los de
+`static/editor/operaciones.js` (`INTERNOS` en tests/test_i18n_editor.py), los
+prompts para los modelos de video e imagen con sus tokens `Image N` /
+`Video N` / `@Imagen N` (`prompt_swap.py`, `flowplus_prompt`). Las 9
+plantillas del flujo viejo «Nueva idea» también se traducen desde 2026-10-01
+(tests/test_i18n_nueva_idea.py). Una excepción a §B8: «Escribe aquí» y «Escribe el
+precio» (capa 4c), el texto inicial editable de un clip de texto nuevo del
+editor, salen en el idioma de quien mira (el navegador solo tiene su
+diccionario). Los tests fijan
+"es"/False (tests/conftest.py) porque comparan textos en español;
+tests/test_i18n_app_entera.py prueba los valores de producción. Cualquiera
+puede volver a español desde Configuración › Cuenta y avisos.
 
 El texto en español es la fuente (msgid); el inglés vive en
 translations/en/LC_MESSAGES/messages.po (catalogo_i18n.py lo extrae y compila).
@@ -21,6 +36,7 @@ Import liviano a propósito (flask_babel, usuarios y proyectos se importan dentr
 de las funciones): providers/ y otros módulos del worker importan N_ de acá.
 Formatos de fecha y número por idioma: activo, mes_largo, meses_cortos,
 fecha_corta, dia_mes, numero (Babel/CLDR)."""
+import functools
 import os
 import threading
 from contextlib import contextmanager
@@ -101,11 +117,8 @@ def de_proyecto(cliente):
 
 
 def guardar_de_proyecto(cliente, idioma):
-    import _json_store
     import proyectos
-    datos = proyectos.cargar(cliente)
-    datos["idioma"] = _validar(idioma)
-    _json_store.guardar(proyectos._path(cliente), datos)
+    proyectos.actualizar_campos(cliente, idioma=_validar(idioma))
 
 
 def de_tarea(tarea):
@@ -202,9 +215,56 @@ def numero(valor, decimales=0, idioma=None):
     hallazgo M2): sin este paso el español dejaba de coincidir con lo que
     mostraba main antes de esta rama."""
     from babel.numbers import format_decimal
-    patron = "#,##0" + ("." + "0" * int(decimales) if decimales else "")
     valor = float(f"{float(valor):.{int(decimales)}f}")
-    return format_decimal(valor, patron, locale=_loc(idioma))
+    return format_decimal(valor, _patron_numero(int(decimales)), locale=_locale_babel(_loc(idioma)))
+
+
+def _traducciones():
+    """`flask_babel.get_translations()` recordado por petición: el de Flask-Babel
+    pasa por varios LocalProxy y por `str(locale)` en CADA `_()` de una
+    plantilla (≈ 2 600 por carga de la página del proyecto, 18 % del tiempo,
+    medido el 2026-10-01). Se recuerda junto con el objeto `babel_locale` del
+    contexto: `force_locale` (idiomas.en_idioma) pone otro objeto, así que
+    dentro y después de él se vuelve a pedir — nunca sale otro idioma."""
+    from flask import g
+    from flask_babel import get_translations
+    if not g:
+        return get_translations()
+    loc = getattr(g.get("_flask_babel"), "babel_locale", None)
+    memo = g.get("_idiomas_traducciones")
+    if memo is not None and loc is not None and memo[0] is loc:
+        return memo[1]
+    t = get_translations()
+    g._idiomas_traducciones = (getattr(g.get("_flask_babel"), "babel_locale", None), t)
+    return t
+
+
+def instalar_gettext_rapido(app):
+    """Las mismas funciones que Flask-Babel instala en Jinja (mismo resultado:
+    Jinja escapa y formatea igual), pero con `_traducciones()`."""
+    app.jinja_env.install_gettext_callables(
+        gettext=lambda s: _traducciones().ugettext(s),
+        ngettext=lambda s, p, n: _traducciones().ungettext(s, p, n),
+        newstyle=True,
+        pgettext=lambda c, s: _traducciones().upgettext(c, s),
+        npgettext=lambda c, s, p, n: _traducciones().unpgettext(c, s, p, n),
+    )
+
+
+@functools.lru_cache(maxsize=None)
+def _locale_babel(codigo):
+    """`babel.Locale` ya resuelto: con el código como texto, Babel lo vuelve a
+    analizar en CADA número (≈ 0,2 ms; 500 números por carga de la página del
+    proyecto, medido el 2026-10-01)."""
+    from babel import Locale
+    return Locale.parse(codigo)
+
+
+@functools.lru_cache(maxsize=None)
+def _patron_numero(decimales):
+    """El patrón de `numero` ya analizado (format_decimal acepta el objeto)."""
+    from babel.numbers import parse_pattern
+    return parse_pattern("#,##0" + ("." + "0" * decimales if decimales else ""))
 
 
 def separador_decimal(idioma=None):

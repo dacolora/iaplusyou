@@ -19,6 +19,7 @@ en cualquier cuenta hace falta pasar la auditoría de Content Posting API.
 import argparse
 import os
 import json
+import secrets
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlencode, urlparse, parse_qs
@@ -39,6 +40,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
         params = parse_qs(urlparse(self.path).query)
         if "code" in params:
             _captured["code"] = params["code"][0]
+            _captured["state"] = (params.get("state") or [""])[0]
             body = b"Autorizado. Ya puedes cerrar esta pestana y volver a la terminal."
         else:
             body = b"No recibi un codigo de autorizacion. Revisa la terminal."
@@ -51,11 +53,13 @@ class _CallbackHandler(BaseHTTPRequestHandler):
         pass
 
 
-def _wait_for_code():
+def _wait_for_code(estado):
     server = HTTPServer(("localhost", 8766), _CallbackHandler)
     while "code" not in _captured:
         server.handle_request()
     server.server_close()
+    if not secrets.compare_digest((_captured.get("state") or "").encode(), estado.encode()):
+        raise RuntimeError("La respuesta de TikTok no trae el `state` de esta autorización; vuelve a correr el script.")
     return _captured["code"]
 
 
@@ -69,20 +73,24 @@ def main():
     if not client_key or not client_secret:
         raise RuntimeError("Faltan TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET en tu .env")
 
+    # `state` aleatorio y comprobado al volver: mientras esto espera, cualquier
+    # página abierta en el navegador podría llamar a localhost:8766/callback con
+    # el código de OTRA cuenta de TikTok y quedaría vinculada a este proyecto.
+    estado = secrets.token_urlsafe(24)
     auth_url = "https://www.tiktok.com/v2/auth/authorize/?" + urlencode(
         {
             "client_key": client_key,
             "scope": "video.publish,user.info.basic",
             "response_type": "code",
             "redirect_uri": REDIRECT_URI,
-            "state": "higgsfield_pipeline",
+            "state": estado,
         }
     )
     print("Abriendo el navegador para autorizar con TikTok...")
     print(f"Si no se abre solo, visita:\n{auth_url}\n")
     webbrowser.open(auth_url)
 
-    code = _wait_for_code()
+    code = _wait_for_code(estado)
 
     token_resp = requests.post(
         "https://open.tiktokapis.com/v2/oauth/token/",
@@ -106,8 +114,11 @@ def main():
     else:
         token_path = os.path.join(BASE_DIR, "token_tiktok.json")
 
-    with open(token_path, "w", encoding="utf-8") as f:
+    # 0600: el token da acceso a la cuenta; nadie más en la máquina debe leerlo.
+    fd = os.open(token_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(token_data, f)
+    os.chmod(token_path, 0o600)
 
     print(f"Listo. Autorización guardada en {token_path}")
 

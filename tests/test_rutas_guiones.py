@@ -27,7 +27,7 @@ def app(base_temporal, monkeypatch, tmp_path):
     (tmp_path / "clientes" / "otro").mkdir(parents=True)
     iniciados = []
     monkeypatch.setattr(trabajos, "iniciar",
-                        lambda job_id, fn, duracion_estimada=60, etapas=None: iniciados.append((job_id, fn, duracion_estimada)) or True)
+                        lambda job_id, fn, duracion_estimada=60, etapas=None, cliente=None: iniciados.append((job_id, fn, duracion_estimada)) or True)
     return {"dashboard": dashboard, "c": _cliente_admin(dashboard), "iniciados": iniciados}
 
 

@@ -26,7 +26,7 @@
    formulario dispare el refresco de ESE OTRO, contra una URL rota
    (`/undefined`) que termina en "No se pudo cargar.". #}
 {% set es_admin = session.get('rol') == 'admin' %}
-{% set fuente_lista = fuentes_tipos and not fuente_llaves_faltantes.get(fuente) %}
+{% set fuente_lista = fuentes_tipos and not fuente_llaves_faltantes.get(fuente) and not modo_no_admitido %}
 <div class="modal-form ref-traer">
   <header class="modal-form-cab">
     <h3>{{ _('Traer referentes') }}</h3>
@@ -60,6 +60,9 @@
       {% if es_admin %}{{ _('%(fuente)s todavía no está configurada: falta %(llaves)s en el .env del servidor.', fuente=fuentes_nombres.get(fuente, fuente) | traducir, llaves=fuente_llaves_faltantes[fuente] | join(', ')) }}{% else %}{{ _('%(fuente)s todavía no está configurada. Avísale al equipo de Creatv para activarla.', fuente=fuentes_nombres.get(fuente, fuente) | traducir) }}{% endif %}
     </p>
     {% endif %}
+    {% if modo_no_admitido %}
+    <p class="modal-form-aviso">{{ _('%(fuente)s solo busca por palabra clave: elige «Por palabra clave» o cambia de fuente.', fuente=fuentes_nombres.get(fuente, fuente) | traducir) }}</p>
+    {% endif %}
     </div>
 
     <section class="modal-form-seccion">
@@ -70,7 +73,7 @@
           <strong>{{ _('Por palabra clave') }}</strong>
           <small>{{ _('Anuncios que hablan de un tema o producto') }}</small>
         </label>
-        <label class="opcion-tarjeta">
+        <label class="opcion-tarjeta" data-no-fuente="trendtrack">
           <input type="radio" name="modo" value="marca" {% if consulta.modo == 'marca' %}checked{% endif %}>
           <strong>{{ _('De una marca') }}</strong>
           <small>{{ _('Todos los anuncios de una página de Facebook') }}</small>
@@ -84,6 +87,7 @@
       </div>
       {# Siempre en inglés (2026-09-27): referentes.traducir traduce la palabra al lanzar. #}
       <p class="modal-form-ayuda" data-solo="palabra">{{ _('Escríbela en español o en inglés: se traduce al inglés y se buscan anuncios en inglés, el mercado más grande (la traducción cuesta centavos).') }}</p>
+      <p class="modal-form-ayuda" data-solo-fuente="trendtrack">{{ _('TrendTrack mira los anuncios de Meta que ha registrado y se cobra en créditos de tu plan (un crédito por anuncio revisado). No filtra por formato: los anuncios que no son del formato elegido también gastan crédito, por eso se revisan hasta tres veces el máximo que pidas.') }}</p>
 
       <div class="modal-form-fila" data-solo-fuente="apify">
         <label class="modal-form-campo">{{ _('País de los anuncios') }}

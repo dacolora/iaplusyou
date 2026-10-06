@@ -248,3 +248,23 @@ def test_recolectar_dedup_links_y_busqueda_youtube(entorno, monkeypatch):
     vid00000001_calls = [kw for kw in yt.llamadas["commentThreads"] if kw.get("videoId") == "vid00000001"]
     assert len(vid00000001_calls) == 1
     assert f.aviso == ""
+
+
+@pytest.mark.parametrize('codigo,motivo', [(404,'videoNotFound'),(404,'commentThreadNotFound')])
+def test_pnd055_youtube_sigue_tras_video_roto(entorno, monkeypatch, codigo, motivo):
+    from nicho.fuentes import youtube
+    yt = _YouTube(busqueda=[_fixture('youtube_search.json')],
+                  hilos={'vid00000001':[_http_error(codigo,motivo)],
+                         'vid00000002':[_fixture('youtube_comment_threads.json')['pagina2']]})
+    monkeypatch.setattr(youtube,'cliente_api',lambda:yt)
+    comentarios = list(youtube.FuenteYouTube().recolectar({'palabras_clave':'foot pain'}))
+    assert [c['fuente_id'] for c in comentarios] == ['Ugx4']
+
+
+@pytest.mark.parametrize('codigo,motivo', [(400,'keyInvalid'),(401,'authError'),(403,'accessNotConfigured')])
+def test_pnd055_youtube_no_oculta_error_global(entorno, monkeypatch, codigo, motivo):
+    from nicho.fuentes import youtube, base
+    yt = _YouTube(busqueda=[_fixture('youtube_search.json')], hilos={'vid00000001':[_http_error(codigo,motivo)]})
+    monkeypatch.setattr(youtube,'cliente_api',lambda:yt)
+    with pytest.raises(base.ErrorFuente):
+        list(youtube.FuenteYouTube().recolectar({'palabras_clave':'foot pain'}))

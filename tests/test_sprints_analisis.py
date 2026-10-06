@@ -69,11 +69,11 @@ def test_analizar_video_usa_fotogramas_locales(monkeypatch, tmp_path):
         analisis.analizar({"tipo": "imagen", "url": "", "intencion": [], "descripcion": ""})
 
 
-def test_sugerir_personas_arma_prompt_y_colores(monkeypatch):
+def test_sugerir_personas_arma_prompt_y_colores(base_temporal, monkeypatch):
     from sprints import analisis, sugerencias
     import catalogo_productos, marca, proyectos
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "Luz natural, sin saturar.")
-    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [{"nombre": "Espejo LED", "descripcion": "redondo"}])
+    monkeypatch.setattr(catalogo_productos, "listar_productos", lambda c, cat="producto": [{"nombre": "Espejo LED", "descripcion": "redondo"}])
     monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Vidrios Sol")
     capturado = {}
     salida = {"personas": [
@@ -91,11 +91,36 @@ def test_sugerir_personas_arma_prompt_y_colores(monkeypatch):
     assert capturado["tope"] == 6000     # pensamiento adaptativo + doctrina: el tope viejo (1500) volvía sin texto
 
 
-def test_sugerir_personas_rechaza_json_malo(monkeypatch):
+def test_sugerir_personas_lista_cada_producto_una_vez_no_cada_color(base_temporal, monkeypatch, tmp_path):
+    """Revisión final (catálogo por colores): `listar()` da una entrada por
+    COLOR; el prompt de personas lista PRODUCTOS, uno por producto con su
+    descripción (`listar_productos`), no los 14 colores de una chancla."""
+    from sprints import analisis, sugerencias
+    import catalogo_productos, marca, proyectos
+    monkeypatch.setattr(catalogo_productos, "BASE_DIR", str(tmp_path))
+    carpeta = tmp_path / "clientes" / "acme" / "productos" / "original"
+    for color in ("pink", "beige"):
+        (carpeta / color).mkdir(parents=True)
+        (carpeta / color / "01.jpg").write_bytes(b"\xff\xd8\xff\xe0fake")
+    catalogo_productos.guardar_meta("acme", {"original": {"nombre": "Original", "descripcion": "chancla de goma", "variantes": {
+        "pink": {"nombre": "Original — Pink"}, "beige": {"nombre": "Original — Beige"}}}})
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Happy")
+    capturado = {}
+    salida = {"personas": [{"nombre": "Viajera", "resumen": "r", "descripcion": "d", "edad_rango": "25-35", "tono": "t",
+                            "senales_visuales": ["playa"], "palabras_clave": ["verano"]}]}
+    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700, system=None: capturado.update(c=content) or json.dumps(salida))
+    sugerencias.sugerir_personas("acme", cuantas=1)
+    texto = capturado["c"][0]["text"]
+    assert texto.count("- Original: chancla de goma") == 1
+    assert "Pink" not in texto and "Beige" not in texto
+
+
+def test_sugerir_personas_rechaza_json_malo(base_temporal, monkeypatch):
     from sprints import analisis, sugerencias
     import catalogo_productos, marca, proyectos
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
-    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [])
+    monkeypatch.setattr(catalogo_productos, "listar_productos", lambda c, cat="producto": [])
     monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "X")
     monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700, system=None: "nada")
     with pytest.raises(analisis.AnalisisInvalido):
@@ -124,11 +149,11 @@ def test_llamar_pasa_el_system_solo_si_viene(monkeypatch):
     assert vistos[1]["system"] == [{"type": "text", "text": "S"}]
 
 
-def test_sugerir_personas_coerciona_nombre_no_string(monkeypatch):
+def test_sugerir_personas_coerciona_nombre_no_string(base_temporal, monkeypatch):
     from sprints import analisis, sugerencias
     import catalogo_productos, marca, proyectos
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
-    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [])
+    monkeypatch.setattr(catalogo_productos, "listar_productos", lambda c, cat="producto": [])
     monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "X")
     capturado = {}
     salida = {"personas": [
@@ -169,11 +194,11 @@ def test_analizar_manda_la_doctrina_de_clasificar(monkeypatch):
     assert '"lead"' in content[0]["text"] and '"prueba"' in content[0]["text"] and '"gancho"' in content[0]["text"]
 
 
-def test_sugerir_personas_pide_la_consciencia_y_la_normaliza(monkeypatch):
+def test_sugerir_personas_pide_la_consciencia_y_la_normaliza(base_temporal, monkeypatch):
     import catalogo_productos, doctrina, marca, proyectos
     from sprints import analisis, sugerencias
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
-    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [])
+    monkeypatch.setattr(catalogo_productos, "listar_productos", lambda c, cat="producto": [])
     monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "X")
     base = {"resumen": "r", "descripcion": "d", "edad_rango": "30-40", "tono": "t", "senales_visuales": [], "palabras_clave": []}
     salida = {"personas": [dict(base, nombre="Con nivel", conciencia={"nivel": "Problem-aware", "detalle": "sabe que le duele"}),

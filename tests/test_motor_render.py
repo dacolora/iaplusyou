@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import subprocess
@@ -5,7 +6,7 @@ import subprocess
 import pytest
 from PIL import Image
 
-from final_edition import cortes, documento as d, motor
+from final_edition import cortes, documento as d, encuadre, fotos, geometria, motor
 from final_edition.motor import render as r
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures", "documentos", "video_basico.json")
@@ -15,14 +16,27 @@ FIX = os.path.join(os.path.dirname(__file__), "fixtures", "documentos", "video_b
 def medios(tmp_path_factory):
     carpeta = tmp_path_factory.mktemp("medios_editor")
     clon = str(carpeta / "clon.mp4"); voz = str(carpeta / "voz.wav"); musica = str(carpeta / "musica.wav")
-    png = str(carpeta / "t1.png"); foto = str(carpeta / "foto.png")
+    png = str(carpeta / "t1.png"); foto = str(carpeta / "foto.png"); horizontal = str(carpeta / "horizontal.mp4")
+    vertical = str(carpeta / "vertical.mp4"); rotado = str(carpeta / "rotado.mp4")
+    roja_azul = str(carpeta / "roja_azul.png"); roja_azul_jpg = str(carpeta / "foto_7.jpg")
     base = [cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y"]
     subprocess.run(base + ["-f", "lavfi", "-i", "testsrc2=size=540x960:rate=30", "-t", "8", "-pix_fmt", "yuv420p", clon], check=True)
+    subprocess.run(base + ["-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30", "-t", "4", "-pix_fmt", "yuv420p", horizontal], check=True)
+    subprocess.run(base + ["-f", "lavfi", "-i", "testsrc2=size=720x1280:rate=30", "-t", "2", "-pix_fmt", "yuv420p", vertical], check=True)
+    # grabado «de pie»: codificado 1280x720 con una marca de rotación de 90°
+    subprocess.run(base + ["-display_rotation:v:0", "90", "-i", horizontal, "-t", "2", "-c", "copy", rotado], check=True)
+    # capa 5b: una foto 400x200 roja a la izquierda y azul a la derecha,
+    # preparada como en `preparar_rutas` (rutas["foto:7"])
+    im = Image.new("RGB", (400, 200), (255, 0, 0))
+    im.paste((0, 0, 255), (200, 0, 400, 200))
+    im.save(roja_azul)
+    fotos.preparar(roja_azul, roja_azul_jpg)
     subprocess.run(base + ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "7", voz], check=True)
     subprocess.run(base + ["-f", "lavfi", "-i", "sine=frequency=220:sample_rate=44100", "-t", "4", musica], check=True)
     Image.new("RGBA", (400, 200), (255, 0, 0, 200)).save(png)
     Image.new("RGB", (800, 600), (0, 128, 255)).save(foto)
-    return {1: clon, 2: voz, 3: musica, "png:t1": png, "foto": foto}
+    return {1: clon, 2: voz, 3: musica, 4: horizontal, 5: vertical, 6: rotado, "foto:7": roja_azul_jpg,
+            "png:t1": png, "foto": foto}
 
 
 def _doc():
@@ -66,6 +80,21 @@ def test_sin_libass_se_omiten_subtitulos_y_avisa(tmp_path, medios, monkeypatch):
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("transicion", [None, {"tipo": "fundido", "duracion_ms": 500}])
+def test_un_video_horizontal_entre_verticales_se_renderiza(tmp_path, medios, transicion):
+    # Un video horizontal subido a una edición vertical: al llevarlo al
+    # cuadro, el `scale` deja una proporción de píxel apenas distinta de 1
+    # (3413:3414) y `concat` rechazaba el corte seco («Nothing was written»).
+    doc = _doc()
+    doc["pistas"][0]["clips"][0]["transicion"] = transicion
+    doc["pistas"][0]["clips"][1].update(material_id=4, recorte={"desde_ms": 0, "hasta_ms": 3500})
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 7.0) <= 0.3 and "audio" in streams
+
+
+@pytest.mark.slow
 def test_render_por_tramos_concatena_sin_recodificar(tmp_path, medios, monkeypatch):
     from final_edition.motor import tramos
     # Fuerza dos tramos en la frontera entre clips (sin transición) para
@@ -86,13 +115,64 @@ def test_render_por_tramos_concatena_sin_recodificar(tmp_path, medios, monkeypat
     assert abs(float(streams["audio"]["duration"]) - 7.0) <= 0.3
 
 
+@pytest.mark.slow
+def test_muchos_cortes_se_renderizan_por_tramos_con_su_audio(tmp_path, medios, monkeypatch):
+    # Incidente 2026-09-30: 32 cortes = 32 entradas de ffmpeg y ~3 GB de RAM.
+    # Con el presupuesto de videos, 10 cortes (fundidos y cámara lenta
+    # incluidos) salen por tramos y la unión conserva duración y audio.
+    from final_edition.motor import tramos
+    monkeypatch.setattr(tramos, "PRESUPUESTO_VIDEOS", 4)
+    doc = _doc()
+    base = doc["pistas"][0]["clips"][0]
+    clips = []
+    for i in range(10):
+        c = copy.deepcopy(base)
+        vel = 0.75 if i % 3 == 1 else 1.0
+        desde = 500 * (i % 6)
+        c.update(id=f"v{i}", inicio_ms=i * 700, duracion_ms=700, velocidad=vel,
+                 recorte={"desde_ms": desde, "hasta_ms": desde + round(700 * vel)},
+                 transicion={"tipo": "fundido", "duracion_ms": 200} if i % 2 == 0 and i < 9 else None)
+        clips.append(c)
+    doc["pistas"][0]["clips"] = clips
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert out["tramos"] >= 3
+    assert abs(dur - 7.0) <= 0.3 and "audio" in streams
+    assert abs(float(streams["audio"]["duration"]) - 7.0) <= 0.3
+    # la voz y la música cruzan todas las uniones sin un solo hueco
+    assert [t for t in _silencios(out["archivo"]) if t < 6.9] == []
+
+
+def _silencios(ruta, umbral_db=-45, minimo_s=0.005):
+    """Inicios (s) de los silencios de al menos `minimo_s` en el audio."""
+    err = subprocess.run([cortes.FFMPEG, "-hide_banner", "-nostats", "-i", ruta, "-af",
+                          f"silencedetect=noise={umbral_db}dB:d={minimo_s}", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    return [float(l.split("silence_start:")[1]) for l in err.splitlines() if "silence_start:" in l]
+
+
+@pytest.mark.slow
+def test_la_union_de_tramos_no_deja_huecos_en_el_audio(tmp_path, medios, monkeypatch):
+    # El AAC de cada tramo trae ~21 ms de relleno al principio; unido con
+    # `-c copy` sonaba como un corte en cada frontera. La voz y la música
+    # suenan de punta a punta (el final se apaga con su fundido de salida,
+    # por eso no cuenta): no debe haber ni un silencio antes.
+    from final_edition.motor import tramos
+    monkeypatch.setattr(tramos, "partir", lambda doc, presupuesto=None: [(0, 3500), (3500, 7000)])
+    doc = _doc()
+    doc["pistas"][0]["clips"][0]["transicion"] = None
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"))
+    assert out["tramos"] == 2
+    assert [t for t in _silencios(out["archivo"]) if t < 6.9] == []
+
+
 def test_fallo_a_mitad_de_tramos_no_deja_parciales(tmp_path, monkeypatch):
     from final_edition.motor import tramos
     monkeypatch.setattr(tramos, "partir", lambda doc, presupuesto=None: [(0, 3500), (3500, 7000)])
 
     llamadas = []
 
-    def _ejecutar_falso(plan, salida, ass_ruta=None, timeout=None):
+    def _ejecutar_falso(plan, salida, ass_ruta=None, timeout=None, opciones_audio=None):
         llamadas.append(salida)
         if len(llamadas) == 1:
             with open(salida, "w", encoding="utf-8") as f:
@@ -103,11 +183,14 @@ def test_fallo_a_mitad_de_tramos_no_deja_parciales(tmp_path, monkeypatch):
     monkeypatch.setattr(r, "ejecutar", _ejecutar_falso)
     # ejecutar() está mockeado (nunca toca ffmpeg ni disco salvo el archivo
     # falso de arriba), así que las rutas no necesitan existir de verdad.
-    rutas = {1: "/fake/clon.mp4", 2: "/fake/voz.wav", 3: "/fake/musica.wav", "png:t1": "/fake/t1.png"}
+    # "ass": con libass (el VPS) el compilador escribe ahí los subtítulos; sin
+    # esta ruta la prueba fallaba con KeyError solo en el servidor.
+    rutas = {1: "/fake/clon.mp4", 2: "/fake/voz.wav", 3: "/fake/musica.wav", "png:t1": "/fake/t1.png",
+             "ass": str(tmp_path / "s.ass")}
     salida = str(tmp_path / "f.mp4")
     with pytest.raises(RuntimeError, match="ffmpeg murió"):
         motor.renderizar(_doc(), rutas, salida)
-    assert not list(tmp_path.glob("f.mp4.tramo*.mp4"))
+    assert not list(tmp_path.glob("f.mp4.tramo*"))
     assert not os.path.exists(salida)
 
 
@@ -204,3 +287,338 @@ def test_clips_reordenados_de_la_misma_fuente_renderizan_su_tramo(tmp_path, medi
     streams, dur = _streams(out["archivo"])
     assert abs(dur - 7.0) <= 0.2
     assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+
+
+@pytest.mark.slow
+def test_musica_de_400_ms_con_fundido_de_1_s_renderiza(tmp_path, medios):
+    # Capa 4c (1/10), con ffmpeg real: un audio de menos de 1 s con el
+    # fundido de salida de la música (1 s) hacía `afade=t=out:st=-0.600` y
+    # ffmpeg rechazaba el grafo ("out of range"): la final salía en error.
+    doc = _doc()
+    m1 = doc["pistas"][3]["clips"][0]
+    m1.update(inicio_ms=6600, duracion_ms=400, recorte={"desde_ms": 0, "hasta_ms": 400})
+    m1["audio"].update(fundido_entrada_ms=0, fundido_salida_ms=1000)
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "corto.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert abs(dur - 7.0) <= 0.2 and "audio" in streams
+
+
+# ---- capa 5b: fotos en la principal y encuadre (renders reales) -----------
+
+def _cuadro(video, t_ms, tmp_path):
+    """El cuadro de `video` en `t_ms`, como imagen RGB de Pillow."""
+    png = str(tmp_path / f"cuadro_{t_ms}.png")
+    r.miniatura(video, png, t_ms)
+    return Image.open(png).convert("RGB")
+
+
+def _solo_principal(clips):
+    doc = d.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = clips
+    return d.resolver(d.validar(doc), "es", "CO")
+
+
+def _foto(clip_id="f1", inicio=0, dur=1000, **extra):
+    return {"id": clip_id, "inicio_ms": inicio, "duracion_ms": dur, "material_id": 7, "foto": True, **extra}
+
+
+@pytest.mark.slow
+def test_un_video_que_se_funde_en_una_foto_dura_lo_de_la_linea_de_tiempo(tmp_path, medios):
+    doc = _solo_principal([
+        {"id": "v0", "inicio_ms": 0, "duracion_ms": 2000, "material_id": 1, "recorte": {"desde_ms": 0, "hasta_ms": 2000},
+         "transicion": {"tipo": "fundido", "duracion_ms": 500}},
+        _foto(inicio=2000, dur=3000)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 5.0) <= 0.2 and "audio" not in streams
+
+
+@pytest.mark.slow
+def test_una_foto_con_zoom_lento_que_se_funde_en_un_video(tmp_path, medios):
+    # D2: la cola del fundido sale del mismo `loop` de la foto (2 s + 2 s = 4 s)
+    doc = _solo_principal([
+        _foto(dur=2000, ken_burns="in", transicion={"tipo": "fundido", "duracion_ms": 500, "modo": "solape"}),
+        {"id": "v1", "inicio_ms": 2000, "duracion_ms": 2000, "material_id": 1, "recorte": {"desde_ms": 0, "hasta_ms": 2000}}])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 4.0) <= 0.2
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("x, rojo", [(0, True), (1, False)])
+def test_encuadre_llenar_muestra_la_parte_elegida_de_la_foto(tmp_path, medios, x, rojo):
+    doc = _solo_principal([_foto(encuadre={"x": x}, ancho_px=400, alto_px=200)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    r_, _g, b = _cuadro(out["archivo"], 500, tmp_path).getpixel((540, 960))
+    if rojo:
+        assert r_ > 200 and b < 60
+    else:
+        assert b > 200 and r_ < 60
+
+
+@pytest.mark.slow
+def test_encuadre_ajustar_la_foto_entera_sobre_su_fondo_desenfocado(tmp_path, medios):
+    # 400x200 en 9:16: primer plano 1080x540 en las filas 690-1229; arriba y
+    # abajo, la misma foto llenando un lienzo chico, desenfocada y agrandada.
+    doc = _solo_principal([_foto(encuadre={"modo": "ajustar"}, ancho_px=400, alto_px=200)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    cuadro = _cuadro(out["archivo"], 500, tmp_path)
+    for punto in ((270, 960), (270, 700)):
+        r_, _g, b = cuadro.getpixel(punto)
+        assert r_ > 200 and b < 60, punto
+    for punto in ((810, 960), (810, 1220)):
+        r_, _g, b = cuadro.getpixel(punto)
+        assert b > 200 and r_ < 60, punto
+    for punto in ((540, 600), (540, 1300)):
+        r_, _g, b = cuadro.getpixel(punto)
+        assert r_ > 60 and b > 60, punto
+    # El punto que distingue «ajustar» de «llenar»: arriba a la izquierda, en
+    # «llenar» se ve la mitad roja pura; en «ajustar» el fondo desenfocado
+    # mezcla el rojo con el azul (revisión de la Tarea 3).
+    r_, _g, b = cuadro.getpixel((480, 300))
+    assert r_ > 60 and b > 60, (r_, b)
+
+
+@pytest.mark.slow
+def test_video_grabado_de_pie_con_encuadre_se_renderiza(tmp_path, medios):
+    info = cortes.ffprobe_json(medios[6])
+    stream = next(s for s in info["streams"] if s["codec_type"] == "video")
+    assert (stream["width"], stream["height"]) == (1280, 720)
+    ancho, alto = encuadre.medidas_visibles(stream)
+    assert (ancho, alto) == (720, 1280)
+    doc = _solo_principal([{"id": "v0", "inicio_ms": 0, "duracion_ms": 2000, "material_id": 6,
+                            "recorte": {"desde_ms": 0, "hasta_ms": 2000}, "encuadre": {"modo": "ajustar"},
+                            "ancho_px": ancho, "alto_px": alto}])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 2.0) <= 0.2
+
+
+@pytest.mark.slow
+def test_corte_seco_entre_un_horizontal_ajustado_y_un_vertical(tmp_path, medios):
+    # D3 con encuadre: el overlay del «ajustar» y el scale del vertical
+    # llegan al concat con la misma proporción de píxel.
+    doc = _solo_principal([
+        {"id": "v0", "inicio_ms": 0, "duracion_ms": 2000, "material_id": 4, "recorte": {"desde_ms": 0, "hasta_ms": 2000},
+         "encuadre": {"modo": "ajustar"}, "ancho_px": 1280, "alto_px": 720},
+        {"id": "v1", "inicio_ms": 2000, "duracion_ms": 2000, "material_id": 5, "recorte": {"desde_ms": 0, "hasta_ms": 2000},
+         "encuadre": {"modo": "llenar", "zoom": 1.5, "x": 0.2}, "ancho_px": 720, "alto_px": 1280}])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 4.0) <= 0.2
+
+
+@pytest.mark.slow
+def test_ocho_fotos_sin_sonido_salen_en_dos_tramos(tmp_path, medios):
+    doc = _solo_principal([_foto(f"f{i}", inicio=i * 1000, ken_burns="in" if i % 2 else None) for i in range(8)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert out["tramos"] == 2
+    assert abs(dur - 8.0) <= 0.3 and "audio" not in streams
+
+
+@pytest.mark.slow
+def test_tres_videos_con_zoom_2_salen_cada_uno_en_su_tramo(tmp_path, medios):
+    # Revisión final de la capa 5b (R7): un video acercado pesa ceil(zoom²)
+    # entradas, así que tres con zoom 2 (4 + 4 + 4 > 6) van en tres tramos;
+    # la unión dura y mide lo mismo que la línea de tiempo.
+    doc = _solo_principal([
+        {"id": f"v{i}", "inicio_ms": i * 1000, "duracion_ms": 1000, "material_id": 4,
+         "recorte": {"desde_ms": i * 1000, "hasta_ms": (i + 1) * 1000},
+         "encuadre": {"modo": "llenar" if i != 1 else "ajustar", "zoom": 2.0, "x": 0.3 * i},
+         "ancho_px": 1280, "alto_px": 720} for i in range(3)])
+    out = motor.renderizar(doc, medios, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert out["tramos"] == 3
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+    assert abs(dur - 3.0) <= 0.2
+
+
+# ---- Capa 5c (3/9): el texto v2 y el tinte en una edición de IMAGEN real ----
+# La principal es una imagen negra de 1080 × 1920 hecha con Pillow; el documento pasa por
+# `preparar_rutas` (rasteriza los textos y estampa sus medidas, como la tarea) y `motor.renderizar`
+# lo saca como PNG (sin pérdidas: los píxeles se pueden medir).
+
+_CENTRO = {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"}
+
+
+def _producir_imagen(carpeta, monkeypatch, capas, archivos=None):
+    """(imagen RGB de la final, documento con las medidas estampadas)."""
+    import shutil
+    import materiales
+    import tareas.edicion as te
+    carpeta.mkdir(parents=True, exist_ok=True)
+    negra = str(carpeta / "negra.png")
+    Image.new("RGB", (1080, 1920), (0, 0, 0)).save(negra)
+    archivos = {9: negra, **(archivos or {})}
+
+    def _obtener(cliente, mid, con=None):
+        with Image.open(archivos[mid]) as im:
+            return {"id": mid, "tipo": "imagen", "ancho": im.width, "alto": im.height}
+
+    def _descargar(mat, destino, *a, **k):
+        shutil.copyfile(archivos[mat["id"]], destino)
+        return destino
+    monkeypatch.setattr(materiales, "obtener", _obtener)
+    monkeypatch.setattr(materiales, "descargar", _descargar)
+    doc = d.nuevo_imagen("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "i1", "inicio_ms": 0, "duracion_ms": 0, "material_id": 9}]
+    doc["pistas"] += capas
+    doc = d.resolver(d.validar(doc), "es", "CO")
+    (carpeta / "trabajo").mkdir(exist_ok=True)
+    rutas = te.preparar_rutas("acme", doc, str(carpeta / "trabajo"))
+    out = motor.renderizar(doc, rutas, str(carpeta / "arte.png"))
+    with Image.open(out["archivo"]) as im:
+        return im.convert("RGB"), doc
+
+
+def _pista_texto(literal, estilo, **transform):
+    return {"id": "p_texto", "tipo": "texto", "clips": [
+        {"id": "t1", "inicio_ms": 0, "duracion_ms": 0, "texto": {"literal": literal}, "estilo": estilo,
+         "transform": {**_CENTRO, **transform}, "keyframes": []}]}
+
+
+def _caja_tinta(gris, umbral=128):
+    return gris.point(lambda v: 255 if v > umbral else 0).getbbox()
+
+
+def _grises_del_primer_borde(gris):
+    """En la fila del centro de la primera letra, los píxeles de luminancia intermedia
+    (40 < Y < 215) de la primera subida de fondo a letra, de izquierda a derecha."""
+    izq, arriba, _der, abajo = _caja_tinta(gris)
+    fila = (arriba + abajo) // 2
+    x = 0
+    while gris.getpixel((x, fila)) <= 40:
+        x += 1
+    grises = 0
+    while gris.getpixel((x, fila)) < 215:
+        grises += 1
+        x += 1
+    return grises
+
+
+@pytest.mark.slow
+def test_un_texto_v2_agrandado_sale_nitido_y_en_el_mismo_lugar(tmp_path, monkeypatch):
+    # D8, bug #8: «HHHH» de 38 px a escala 3. En v1 el PNG de 38 px se estira ×3 y el borde
+    # del palo se reparte en varios grises; en v2 el PNG se dibuja a 3× y el borde queda en 1–2.
+    # Con el código de antes las dos ediciones darían el número de v1.
+    estilo = {"fuente": "Inter-Bold", "tamano": 0.02, "color": "#FFFFFF"}
+    finales, clips = {}, {}
+    for nombre, est in (("v1", estilo), ("v2", {**estilo, "version": 2})):
+        final, doc = _producir_imagen(tmp_path / nombre, monkeypatch, [_pista_texto("HHHH", est, escala=3.0)])
+        finales[nombre] = final.convert("L")
+        clips[nombre] = doc["pistas"][1]["clips"][0]
+    grises = {k: _grises_del_primer_borde(g) for k, g in finales.items()}
+    print(f"\ngrises en el primer borde: v1={grises['v1']} v2={grises['v2']}")
+    assert grises["v2"] <= 2
+    assert grises["v1"] >= 3 and grises["v1"] > grises["v2"]
+    # v2 estampa su tamaño natural: la caja es natural × 3, del tamaño exacto del PNG (factor 3),
+    # así que `scale` no estira nada.
+    v2 = clips["v2"]
+    caja = geometria.caja(v2["transform"], v2["ancho_px"], v2["alto_px"], "9:16")
+    assert (caja["w"], caja["h"]) == (3 * v2["ancho_px"], 3 * v2["alto_px"])
+    # y el texto queda donde estaba en v1: la caja de v1 es la tinta medida por Pillow y la de v2
+    # la maqueta (avances, ascendente y descendente), y el borde de v1 está difuminado; las dos
+    # tintas coinciden a 2 px.
+    tinta = {k: _caja_tinta(g) for k, g in finales.items()}
+    print(f"tinta: v1={tinta['v1']} v2={tinta['v2']}")
+    for a, b in zip(tinta["v1"], tinta["v2"]):
+        assert abs(a - b) <= 2, tinta
+
+
+def _sticker_con_hueco(ruta):
+    """Un cuadrado blanco de 200 × 200 (opaco) con un círculo transparente en el medio."""
+    from PIL import ImageDraw
+    im = Image.new("RGBA", (200, 200), (255, 255, 255, 255))
+    ImageDraw.Draw(im).ellipse([50, 50, 150, 150], fill=(0, 0, 0, 0))
+    im.save(ruta)
+    return ruta
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("tinte, esquina", [("#FF0000", "roja"), (None, "blanca")])
+def test_un_sticker_con_tinte_sale_del_color_elegido_y_conserva_su_hueco(tmp_path, monkeypatch, tinte, esquina):
+    # D11.3: `lutrgb` reemplaza el color y conserva el alfa: la esquina del cuadrado sale del
+    # color del tinte y el círculo transparente deja ver el fondo negro.
+    tmp_path.mkdir(exist_ok=True)
+    sticker = _sticker_con_hueco(str(tmp_path / "sticker.png"))
+    capa = {"id": "s1", "inicio_ms": 0, "duracion_ms": 0, "material_id": 5, "transform": dict(_CENTRO),
+            "keyframes": []}
+    if tinte:
+        capa["tinte"] = tinte
+    final, _doc = _producir_imagen(tmp_path / "r", monkeypatch, [{"id": "p_sticker", "tipo": "imagen", "clips": [capa]}],
+                                   {5: sticker})
+    r_, g_, b_ = final.getpixel((440 + 5, 860 + 5))       # la caja va de (440, 860) a (640, 1060)
+    if esquina == "roja":
+        assert r_ > 200 and g_ < 40 and b_ < 40, (r_, g_, b_)
+    else:
+        assert min(r_, g_, b_) > 215, (r_, g_, b_)
+    assert max(final.getpixel((540, 960))) < 20                 # el hueco: el fondo negro
+
+
+@pytest.mark.slow
+def test_las_lineas_de_un_texto_v2_salen_donde_dice_la_maqueta(tmp_path, monkeypatch):
+    # D5.6: la maqueta parte la frase en 3 líneas; en la final, la fila de cada línea (0,3 × tam
+    # por encima de su base, a media altura de las minúsculas) tiene tinta blanca dentro de su
+    # tramo [x, x + ancho] y ninguna fuera de la caja del texto.
+    from final_edition import fuentes, tipografia
+    texto = "Envío gratis a todo el país en 24 horas"
+    estilo = {"fuente": "Inter-Bold", "tamano": 0.0375, "color": "#FFFFFF", "ancho_max": 0.5, "version": 2}
+    final, doc = _producir_imagen(tmp_path, monkeypatch, [_pista_texto(texto, estilo)])
+    clip = doc["pistas"][1]["clips"][0]
+    maqueta = tipografia.maquetar(texto, clip["estilo"], "9:16", fuentes.cargar_tabla())
+    assert len(maqueta["lineas"]) == 3
+    caja = geometria.caja(clip["transform"], clip["ancho_px"], clip["alto_px"], "9:16")
+    assert (caja["w"], caja["h"]) == (maqueta["ancho_px"], maqueta["alto_px"])
+    gris = final.convert("L")
+    for linea in maqueta["lineas"]:
+        fila = caja["y"] + int(linea["base"] - 0.3 * maqueta["tam"])
+        tinta = [x for x in range(1080) if gris.getpixel((x, fila)) > 128]
+        assert tinta, linea["texto"]
+        desde, hasta = caja["x"] + linea["x"], caja["x"] + linea["x"] + linea["ancho"]
+        assert desde - 1 <= min(tinta) and max(tinta) <= hasta + 1, (linea, min(tinta), max(tinta))
+        assert caja["x"] <= min(tinta) and max(tinta) < caja["x"] + caja["w"]
+
+
+@pytest.mark.slow
+def test_un_emoji_v2_sale_a_color_en_la_final(tmp_path, monkeypatch):
+    # D6.8 (R1), el riesgo 1 de la spec: el 🔥 de 200 px sale naranja/amarillo en la final, no
+    # como la silueta blanca. La Tarea 9 corre esta prueba en el VPS antes de desplegar.
+    from final_edition import fuentes, tipografia
+    if not fuentes.hay_emoji():
+        pytest.skip("sin la fuente de emojis (D6.5)")
+    estilo = {"fuente": "Inter-Bold", "tamano": 0.1042, "color": "#FFFFFF", "version": 2}
+    final, doc = _producir_imagen(tmp_path, monkeypatch, [_pista_texto("🔥", estilo)])
+    clip = doc["pistas"][1]["clips"][0]
+    tabla = fuentes.cargar_tabla()
+    maqueta = tipografia.maquetar("🔥", clip["estilo"], "9:16", tabla)
+    letra, e, tam = maqueta["letras"][0], tabla["emoji"], maqueta["tam"]
+    assert letra["fuente"] == "emoji" and tam == 200
+    caja = geometria.caja(clip["transform"], clip["ancho_px"], clip["alto_px"], "9:16")
+    centro_x = caja["x"] + letra["x"] + tipografia.ancho("🔥", "Inter-Bold", tam, tabla) / 2
+    centro_y = caja["y"] + letra["base"] - (e["asc"] - e["desc"]) * tam / e["upem"] / 2
+    r_, _g, b_ = final.getpixel((int(centro_x), int(centro_y)))
+    assert r_ > 180 and b_ < 90, (r_, _g, b_)
+    # y es el color de la capa de MÁS ARRIBA que cubre ese punto (las capas van en su orden; al
+    # revés, la llama naranja de afuera taparía la amarilla de adentro: G 144 en vez de 204). El
+    # margen es el de la ida y vuelta por yuv420p del render (medido: 252, 203, 76 por 255,
+    # 204, 77); en el PNG del rasterizador es exacto (test_rasterizar).
+    import io
+    from PIL import ImageDraw, ImageFont
+    fuente = ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), tam)
+    local = (int(letra["x"] + tipografia.ancho("🔥", "Inter-Bold", tam, tabla) / 2),
+             int(letra["base"] - (e["asc"] - e["desc"]) * tam / e["upem"] / 2))
+    cubren = []
+    for gid, c in fuentes.emoji_capas(letra["cp"]):
+        capa = Image.new("L", (clip["ancho_px"], clip["alto_px"]), 0)
+        ImageDraw.Draw(capa).text((tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"])),
+                                  chr(fuentes.PUA_CAPAS + gid), font=fuente, fill=255, anchor="ls")
+        if capa.getpixel(local) == 255:
+            cubren.append(c)
+    arriba = cubren[-1][:3]
+    print(f"\n🔥 en la final: {(r_, _g, b_)}; capa de arriba: {arriba}")
+    assert all(abs(a - b) <= 6 for a, b in zip((r_, _g, b_), arriba)), ((r_, _g, b_), arriba)

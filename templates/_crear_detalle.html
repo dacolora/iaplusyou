@@ -33,7 +33,7 @@
             {% endfor %}
           </div>
           {% endif %}
-          {% if item.estado == "prompt_listo" and item.tipo != "imagen" %}
+          {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.modo_crear != "hablado" %}
           <section class="fe-seccion">
             <h4 class="fe-titulo">{{ _('Prompt por planos') }}</h4>
             {% if item.director and item.director.estado == "fallback" %}
@@ -59,6 +59,14 @@
           {% if item.estado == "error" %}
           <p class="tag-error">{{ item.error }}</p>
           {% endif %}
+          {# Recrear como video, «igual» (spec 2026-09-30-recrear-fiel §12): esta imagen se anima sola. #}
+          {% if item.animar_error %}
+          <p class="tag-error">{{ item.animar_error }}</p>
+          {% elif item.animar_despues and item.animar_despues.cf_video %}
+          <p class="vacio">{{ _('Su video ya se lanzó: búscalo como «%(titulo)s».', titulo=item.animar_despues.titulo) }}</p>
+          {% elif item.animar_despues %}
+          <p class="vacio">{{ _('Cuando esta imagen esté lista, se anima sola en video.') }}</p>
+          {% endif %}
           {% if item.revision_estado %}{{ revision_doctrina(item, cliente) }}{% endif %}
 
           <div class="detalle-acciones">
@@ -69,7 +77,7 @@
             <a class="btn-generar btn-sm" href="#final?cf={{ item.id }}"
                onclick="var d = document.getElementById('generado-modal'); if (d) d.close(); location.hash = this.getAttribute('href'); return false;">{{ _('Llevar a final edition') }}</a>
             {% endif %}
-            {% if item.estado in ("video_listo", "error", "prompt_listo") %}
+            {% if item.estado in ("video_listo", "error", "prompt_listo") and item.modo_crear != "hablado" %}
             <form method="post" action="{{ url_for('fp_reusar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
               {% if item.estado == "video_listo" and item.tipo == "imagen" %}
               <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="incluir_resultado" value="si" checked> {{ _('Usar esta imagen como referencia') }}</label>
@@ -96,7 +104,7 @@
               <button type="submit" class="btn-generar btn-sm fp-generar-btn">{% if item.estado == "error" %}{{ _('Reintentar') }}{% elif item.estado == "prompt_listo" %}{{ _('Generar video') }}{% else %}{{ _('Generar') }}{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
             </form>
             {% endif %}
-            {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" %}
+            {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" and item.modo_crear != "hablado" %}
             <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
               <button type="submit" class="btn-sm">{{ _('Rearmar el prompt') }}</button>
             </form>
@@ -104,11 +112,10 @@
             <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('¿Descartar esta pieza?')|tojson }});' style="display:inline;">
               <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
             </form>
-            {# Galería primero: videos e imágenes listos van a Experimentos ya
-               marcados (#experimentos?piezas=<pieza_id>); el reload hace que la
-               pestaña lea el hash y abra los tres pasos. #}
+            {# Galería primero: videos e imágenes listos van a «Nuevo experimento» ya
+               marcados (exp_nuevo?piezas=<pieza_id>): esa página lee ?piezas= y abre los tres pasos. #}
             {% if item.estado == "video_listo" and item.pieza_id %}
-            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ item.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
+            <a class="btn-guardar btn-sm" href="{{ url_for('exp_nuevo', cliente=cliente, piezas=item.pieza_id) }}">{{ _('Probar en Meta') }}</a>
             {% endif %}
           </div>
         </div>

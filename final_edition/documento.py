@@ -4,7 +4,7 @@ proyecto del editor. Puro: sin base, sin ffmpeg, sin red.
 Reglas: tiempos en milisegundos enteros; posiciones en fracción del lienzo
 (0–1) y tamaños de texto en fracción de la altura; un texto es literal o
 variable; el precio de un país es el número escrito para ese país o no
-existe (nunca se convierte); máximo 8 pistas.
+existe (nunca se convierte); máximo 20 pistas.
 
 Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
   - la pista principal `video` es contigua desde 0 (el primer clip arranca en
@@ -41,16 +41,50 @@ Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
     destino y se conserva igual en cualquiera; `bloque` guarda el rol del
     guion que lo originó; en video/superpuesto, `ken_burns` es `None`,
     `"in"` o `"out"`; `origen` y `guion`, si vienen, deben ser objeto o
-    null — `validar` los conserva tal cual, sin mirar su contenido."""
+    null — `validar` los conserva tal cual, sin mirar su contenido;
+  - un clip de audio puede llevar `idioma` (`None` o dos letras, p. ej.
+    `"es"`; capa 5a, D10) — en cualquier otro tipo de pista falla;
+    `resolver` QUITA un clip de audio cuyo `idioma` no es el del destino,
+    ANTES de mirar `por_destino`;
+  - `subtitulos` (capa 5a, spec §2.1): además de `estilo_id` (desconocido
+    → `"karaoke"`, sin fallar) y `posicion`, lleva `escala` (0.6–1.6),
+    `resaltado` (`None` o `#RRGGBB`, el color de la palabra que suena) y
+    `visibles` (bool; `False` apaga los subtítulos en TODO destino); y
+    dos cosas que `subtitulos_fuente.py` usa para DERIVAR las palabras en
+    vez de guardarlas con tiempos absolutos (D1-D4): `fuentes` (por
+    idioma, qué se subtitula — `voz`, `sonido` o un `material` concreto;
+    clave ausente = legado con las `palabras` guardadas, lista vacía =
+    sin subtítulos) y `correcciones` (por `material_id` y por índice de
+    palabra de ESE material; `""` la quita). `palabras` sigue siendo el
+    respaldo de legado (absoluto, por destino);
+  - capa 5b (fotos, encuadre, transiciones que juntan): un clip de la
+    pista `video` puede ser `foto: true` (D1) — dura `duracion_ms`
+    (100–60 000 ms), su `recorte` se normaliza a `{0, duracion_ms}` y su
+    `velocidad` debe ser 1.0 (una foto no tiene tiempo de fuente ni
+    velocidad); `foto: false` quita la marca y el clip vuelve a ser un
+    video de siempre. `encuadre` (D4, `null`/ausente = llenar centrado sin
+    acercar) solo va en pistas `video` (videos y fotos), se guarda
+    completo (`encuadre.DEFECTO` rellena lo que falte) y si queda igual al
+    defecto se guarda `None`. `transicion.modo` (D9), si viene, debe ser
+    uno de `MODOS_TRANSICION` (`"solape"`: la transición JUNTA los dos
+    clips enteros, A cede sus últimos ms — lo hace `operaciones.js`, no
+    `validar`); ausente/`None` es la transición de cola de siempre. Un
+    documento sin ninguna de estas claves nuevas valida byte a byte igual
+    que antes de esta capa."""
 import copy
 import re
 
-from final_edition import tipos
+from flask_babel import gettext
+
+from final_edition import encuadre, tipos
 
 _CLAVE_RE = re.compile(r"^[a-z]{2}(_[A-Z]{2})?$")     # "es" o "es_CO": textos, voz, subtítulos, por_destino
 _DESTINO_RE = re.compile(r"^[a-z]{2}_[A-Z]{2}$")     # precios: siempre con país
 _FUENTE_RE = re.compile(r"^[A-Za-z0-9_-]{1,60}$")    # nombre de TTF en static/fonts, sin rutas ni extensión
 _COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$")
+_COLOR_SIN_ALFA_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")     # subtitulos.resaltado: sin canal alfa (D7)
+_IDIOMA_CLIP_RE = re.compile(r"^[a-z]{2}$")           # idioma de un clip de audio (D10)
+_DIGITOS_RE = re.compile(r"^[0-9]+$")                 # subtitulos.correcciones: claves material_id / índice
 VARIABLE_PRECIO = "precio"                          # texto variable reservado: el precio del destino
 KEN_BURNS = (None, "in", "out")
 _CONTORNO_DEFECTO = {"color": "#000000", "grosor": 0.002}
@@ -61,10 +95,27 @@ ESQUEMA_ACTUAL = 1
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 FORMATOS = {"9:16": (1080, 1920), "4:5": (1080, 1350), "1:1": (1080, 1080), "16:9": (1920, 1080)}
 TIPOS_PISTA = ("video", "superpuesto", "imagen", "texto", "subtitulos", "audio")
-MAX_PISTAS = 8
+# Capa 5c (prueba en vivo): eran 8, y un borrador automático ya usa 7 — con un
+# título y un sticker no cabía otro emoji ni otra plantilla. El render no depende
+# del número de pistas (motor/tramos.py reparte por capas y por clips de la
+# principal). Espejo: static/editor/operaciones.js (MAX_PISTAS).
+MAX_PISTAS = 20
 ANCLAS = ("centro", "sup_izq", "sup_der", "inf_izq", "inf_der")
 ROLES_AUDIO = ("voz", "musica", "sonido", "efecto", "subida", "grabacion")
+ESTILOS_SUBTITULOS = ("karaoke", "caja", "palabra_grande", "minimal")   # D7; motor/subtitulos los toma de aquí
+FUENTES_SUBTITULO = ("voz", "sonido", "material")                      # D4: qué deriva subtitulos_fuente.py
+MAX_FUENTES_SUBTITULO = 8
+MAX_CORRECCION = 120
 TRANSICIONES = ("corte", "fundido", "deslizar", "zoom", "desenfoque")
+# Capa 5b, D1/D9: una foto es un clip de la pista `video` con `foto: true`
+# (dura `duracion_ms`, nunca tiene tiempo de fuente); una transición nueva
+# puede JUNTAR los dos clips enteros (`modo: "solape"`, D9) en vez de vivir
+# de la cola de A — ausente/`None` sigue siendo la transición de cola de
+# siempre.
+FOTO_MIN_MS = 100
+FOTO_MAX_MS = 60000
+FOTO_DEFECTO_MS = 3000
+MODOS_TRANSICION = ("solape",)
 ANIMACIONES = ("ninguna", "aparecer", "deslizar", "rebote", "zoom", "maquina")
 _TRANSFORM_DEFECTO = {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"}
 _AUDIO_DEFECTO = {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}
@@ -191,6 +242,14 @@ def _validar_texto(clip, ruta):
     if tiene_lit == tiene_var:
         _fallar(f"{ruta}.texto debe ser literal o variable, no ambos ni ninguno.")
     estilo = {**_ESTILO_DEFECTO, **(clip.get("estilo") or {})}
+    # `version` (capa 5c, D1): ausente es el texto de siempre (v1, mismo PNG);
+    # 2 es el texto nuevo (el render y la maqueta lo componen con la tabla
+    # tipográfica). Nada más: no entra a `_ESTILO_DEFECTO`, así un documento
+    # de hoy no gana clave nueva al validarse.
+    if "version" in estilo:
+        v = estilo["version"]
+        if not isinstance(v, int) or isinstance(v, bool) or v != 2:
+            _fallar(f"{ruta}.estilo.version debe ser 2 o no estar (vino {v!r}).")
     if not isinstance(estilo.get("fuente"), str) or not _FUENTE_RE.match(estilo["fuente"]):
         # termina en static/fonts/<fuente>.ttf (rasterizar.py): ni vacío ni con rutas
         _fallar(f"{ruta}.estilo.fuente debe ser el nombre de una fuente de static/fonts (p. ej. Inter-Bold).")
@@ -224,6 +283,26 @@ def _validar_clip(clip, pista, i):
         _fallar(f"{ruta}.material_id es obligatorio en pistas de {tipo}.")
     if clip.get("material_id") is not None:
         _entero_positivo(clip["material_id"], f"{ruta}.material_id")
+    # `foto` (capa 5b, D1): un clip de la pista `video` que es una imagen
+    # fija en vez de un video — mismo contrato de tiempo salvo que nunca
+    # tiene tiempo de fuente (su `recorte` se normaliza a {0, duracion_ms})
+    # ni velocidad (siempre 1.0). `foto: false` vuelve al clip de siempre.
+    if "foto" in clip:
+        foto = clip["foto"]
+        if not isinstance(foto, bool):
+            _fallar(f"{ruta}.foto debe ser verdadero o falso (vino {foto!r}).")
+        if tipo != "video":
+            _fallar(f"{ruta}.foto solo va en la pista de video.")
+        if foto:
+            clip["foto"] = True
+        else:
+            clip.pop("foto")
+    es_foto = tipo == "video" and clip.get("foto") is True
+    if es_foto:
+        dur = clip.get("duracion_ms")
+        if not FOTO_MIN_MS <= dur <= FOTO_MAX_MS:
+            _fallar(f"{ruta}.duracion_ms de una foto debe estar entre {FOTO_MIN_MS} y {FOTO_MAX_MS} (vino {dur!r}).")
+        clip["recorte"] = {"desde_ms": 0, "hasta_ms": dur}
     if tipo in ("video", "superpuesto", "audio"):
         r = clip.get("recorte") or {}
         _entero_no_negativo(r.get("desde_ms", 0), f"{ruta}.recorte.desde_ms")
@@ -240,11 +319,19 @@ def _validar_clip(clip, pista, i):
             # el compilador no aplica `atempo` todavía: aceptar otra velocidad
             # daría un audio a ritmo normal con la duración de otro.
             _fallar(f"{ruta}.velocidad debe ser 1.0 en pistas de audio (atempo llega después).")
+        if es_foto and v != 1.0:
+            _fallar(f"{ruta}.velocidad: una foto va a velocidad 1.")
         clip["velocidad"] = v
         clip["audio"] = {**_AUDIO_DEFECTO, **(clip.get("audio") or {})}
         clip["audio"]["volumen"] = _fraccion(clip["audio"]["volumen"], f"{ruta}.audio.volumen")
     if tipo == "audio" and clip.get("rol_audio", "subida") not in ROLES_AUDIO:
         _fallar(f"{ruta}.rol_audio desconocido.")
+    if tipo == "audio":
+        idioma_clip = clip.get("idioma")
+        if idioma_clip is not None and not _IDIOMA_CLIP_RE.match(idioma_clip):
+            _fallar(f"{ruta}.idioma debe ser dos letras minúsculas o null (vino {idioma_clip!r}).")
+    elif clip.get("idioma") is not None:
+        _fallar(f"{ruta}.idioma solo puede ir en clips de audio (vino en un clip de {tipo!r}).")
     if tipo == "audio":
         pd = clip.get("por_destino")
         if pd is not None:
@@ -260,6 +347,41 @@ def _validar_clip(clip, pista, i):
             _fallar(f"{ruta}.bloque debe ser texto (el rol del guion) o null.")
     if tipo in ("video", "superpuesto") and clip.get("ken_burns") not in KEN_BURNS:
         _fallar(f"{ruta}.ken_burns debe ser null, 'in' u 'out'.")
+    # `encuadre` (capa 5b, D4): qué parte del cuadro se ve y cómo se
+    # compone cuando no coincide con el lienzo — solo en pistas `video`
+    # (videos y fotos). `null`/ausente = el llenado centrado de siempre.
+    # Se guarda completo (defaults rellenados); si queda igual a
+    # `encuadre.DEFECTO` se guarda `null` (un documento sin diferencias no
+    # carga nada nuevo al compilador ni a la vista previa).
+    if "encuadre" in clip:
+        if tipo != "video":
+            _fallar(f"{ruta}.encuadre solo va en la pista de video.")
+        enc = clip["encuadre"]
+        if enc is None:
+            clip["encuadre"] = None
+        else:
+            if not isinstance(enc, dict):
+                _fallar(f"{ruta}.encuadre debe ser un objeto o null.")
+            extra = sorted(set(enc) - {"modo", "zoom", "x", "y"})
+            if extra:
+                _fallar(f"{ruta}.encuadre: clave desconocida {extra[0]!r}.")
+            modo = enc.get("modo", encuadre.DEFECTO["modo"])
+            if modo not in encuadre.MODOS:
+                _fallar(f"{ruta}.encuadre.modo desconocido: {modo!r}.")
+            zoom = _numero(enc.get("zoom", encuadre.DEFECTO["zoom"]), f"{ruta}.encuadre.zoom",
+                           encuadre.ZOOM_MIN, encuadre.ZOOM_MAX)
+            x = _fraccion(enc.get("x", encuadre.DEFECTO["x"]), f"{ruta}.encuadre.x")
+            y = _fraccion(enc.get("y", encuadre.DEFECTO["y"]), f"{ruta}.encuadre.y")
+            lleno = {"modo": modo, "zoom": zoom, "x": x, "y": y}
+            clip["encuadre"] = None if lleno == encuadre.DEFECTO else lleno
+    # `tinte` (capa 5c, D8): el color con que se pinta una imagen de un solo
+    # color (un sticker `tenible`); `null`/ausente = la imagen tal cual.
+    if "tinte" in clip:
+        if tipo != "imagen":
+            _fallar(f"{ruta}.tinte solo va en clips de imagen.")
+        v = clip["tinte"]
+        if v is not None and (not isinstance(v, str) or not _COLOR_SIN_ALFA_RE.match(v)):
+            _fallar(f"{ruta}.tinte debe ser un color #RRGGBB (vino {v!r}).")
     if tipo != "audio":
         clip["transform"] = _validar_transform(clip.get("transform"), ruta)
         for k in ("ancho_px", "alto_px"):
@@ -272,6 +394,12 @@ def _validar_clip(clip, pista, i):
         _fallar(f"{ruta}.transicion.tipo desconocida: {tr.get('tipo')!r}.")
     if tr:
         _entero_no_negativo(tr.get("duracion_ms", 0), f"{ruta}.transicion.duracion_ms")
+        # `modo` (capa 5b, D9): ausente/`None` es la transición de cola de
+        # siempre; "solape" dice que A cedió sus últimos ms para juntar los
+        # dos clips enteros (la cuenta la hace `operaciones.js`, no `validar`).
+        modo_tr = tr.get("modo")
+        if modo_tr is not None and modo_tr not in MODOS_TRANSICION:
+            _fallar(f"{ruta}.transicion.modo desconocido: {modo_tr!r}.")
     an = clip.get("animacion")
     if an:
         for k in ("entrada", "salida"):
@@ -350,15 +478,71 @@ def validar(doc):
             if cid not in ids_texto:
                 _fallar(f"pngs[{cid!r}] no es un clip de texto del documento.")
             _entero_positivo(mid, f"pngs[{cid!r}]")
+    # Como `marca`/`pistas` arriba: un "subtitulos" de otro tipo (p. ej. "x")
+    # no se valida explícitamente aquí — revienta más abajo (`.get`) y cae en
+    # el `except (TypeError, AttributeError)` genérico de la ruta de guardar
+    # (`rutas_editor.guardar`), igual que esos otros campos.
     sub = doc.get("subtitulos") or {}
-    sub.setdefault("estilo_id", "karaoke")
+    sub["estilo_id"] = sub.get("estilo_id") if sub.get("estilo_id") in ESTILOS_SUBTITULOS else "karaoke"
     sub["posicion"] = _fraccion(sub.get("posicion", 0.78), "subtitulos.posicion")
+    sub["escala"] = _numero(sub.get("escala", 1.0), "subtitulos.escala", 0.6, 1.6)
+    resaltado = sub.get("resaltado")
+    if resaltado is not None and (not isinstance(resaltado, str) or not _COLOR_SIN_ALFA_RE.match(resaltado)):
+        _fallar(f"subtitulos.resaltado debe ser #RRGGBB o null (vino {resaltado!r}).")
+    sub["resaltado"] = resaltado
+    visibles = sub.get("visibles", True)
+    if not isinstance(visibles, bool):
+        _fallar(f"subtitulos.visibles debe ser verdadero o falso (vino {visibles!r}).")
+    sub["visibles"] = visibles
+    # `fuentes` (D4): por idioma/destino, qué deriva subtitulos_fuente.py;
+    # clave ausente = legado (usa `palabras` guardadas); lista vacía = sin
+    # subtítulos en ese idioma. `material` exige `material_id`; las otras
+    # fuentes no lo llevan; sin fuentes repetidas, máximo MAX_FUENTES_SUBTITULO.
+    fuentes = sub.get("fuentes") or {}
+    _validar_claves(fuentes, "subtitulos.fuentes")
+    for clave, lista in fuentes.items():
+        if not isinstance(lista, list) or len(lista) > MAX_FUENTES_SUBTITULO:
+            _fallar(f"subtitulos.fuentes[{clave!r}] debe ser una lista de hasta {MAX_FUENTES_SUBTITULO} fuentes.")
+        vistas = set()
+        for i, f in enumerate(lista):
+            if not isinstance(f, dict) or f.get("tipo") not in FUENTES_SUBTITULO:
+                _fallar(f"subtitulos.fuentes[{clave!r}][{i}].tipo debe ser uno de {FUENTES_SUBTITULO}.")
+            if f["tipo"] == "material":
+                _entero_positivo(f.get("material_id"), f"subtitulos.fuentes[{clave!r}][{i}].material_id")
+                marca = ("material", f["material_id"])
+            else:
+                if f.get("material_id") is not None:
+                    _fallar(f"subtitulos.fuentes[{clave!r}][{i}]: material_id solo va con tipo 'material'.")
+                marca = (f["tipo"],)
+            if marca in vistas:
+                _fallar(f"subtitulos.fuentes[{clave!r}] tiene una fuente repetida.")
+            vistas.add(marca)
+    sub["fuentes"] = fuentes
+    # `correcciones` (D3): por `material_id` (nunca por clip, que cambia de
+    # id al cortar) y por índice de palabra en `material.extra.palabras`;
+    # `""` quita la palabra. Tope MAX_CORRECCION caracteres por palabra.
+    correcciones = sub.get("correcciones") or {}
+    if not isinstance(correcciones, dict):
+        _fallar("subtitulos.correcciones debe ser un objeto.")
+    for mid, mapa in correcciones.items():
+        if not isinstance(mid, str) or not _DIGITOS_RE.match(mid) or int(mid) <= 0:
+            _fallar(f"subtitulos.correcciones: la clave {mid!r} debe ser un id de material > 0.")
+        if not isinstance(mapa, dict):
+            _fallar(f"subtitulos.correcciones[{mid!r}] debe ser un objeto.")
+        for indice, texto in mapa.items():
+            if not isinstance(indice, str) or not _DIGITOS_RE.match(indice):
+                _fallar(f"subtitulos.correcciones[{mid!r}]: el índice {indice!r} debe ser ≥ 0.")
+            if not isinstance(texto, str) or len(texto) > MAX_CORRECCION:
+                _fallar(f"subtitulos.correcciones[{mid!r}][{indice!r}] debe ser texto de hasta {MAX_CORRECCION} caracteres.")
+    sub["correcciones"] = correcciones
     sub.setdefault("palabras", {})
     _validar_claves(sub["palabras"], "subtitulos.palabras")
     for clave, palabras in sub["palabras"].items():
         for k, p in enumerate(palabras):
             _entero_no_negativo(p.get("t_ms"), f"subtitulos.palabras.{clave}[{k}].t_ms")
             _entero_no_negativo(p.get("dur_ms"), f"subtitulos.palabras.{clave}[{k}].dur_ms")
+            if not isinstance(p.get("texto"), str):
+                _fallar(f"subtitulos.palabras.{clave}[{k}].texto debe ser texto (vino {p.get('texto')!r}).")
     doc["subtitulos"] = sub
     var = doc.get("variables") or {}
     var.setdefault("textos", {})
@@ -491,9 +675,14 @@ def resolver(doc, idioma, pais):
     `{}`) queda tal cual, para cualquier destino. Si lo tiene: gana la
     clave exacta `<idioma>_<pais>` si está en el mapa (aunque sea `None`);
     si no, `<idioma>` si está; si ninguna, el clip SE QUITA — nunca cae al
-    `material_id` crudo del clip (la voz de otro idioma/país). `materiales`
-    se recalcula con lo que ESTE destino usa (las voces de otros idiomas
-    no se descargan al renderizar)."""
+    `material_id` crudo del clip (la voz de otro idioma/país). Antes de
+    mirar `por_destino`, un clip de audio con `idioma` distinto del de
+    este destino también se quita (D10). `subtitulos.visibles is False`
+    deja `subtitulos.palabras = []` (apagados en TODO destino); si no,
+    es el respaldo de legado — `subtitulos_fuente.aplicar` lo reemplaza
+    por las palabras derivadas cuando el destino tiene `fuentes`.
+    `materiales` se recalcula con lo que ESTE destino usa (las voces de
+    otros idiomas no se descargan al renderizar)."""
     res = copy.deepcopy(doc)
     textos = (res.get("variables") or {}).get("textos") or {}
     precios = (res.get("variables") or {}).get("precios") or {}
@@ -513,18 +702,22 @@ def resolver(doc, idioma, pais):
                             (res.get("pngs") or {}).pop(c["id"], None)
                             continue
                         if pais not in tipos.PAISES:
-                            raise DocumentoInvalido(f"No sé formatear precios de {pais}.")
+                            raise DocumentoInvalido(gettext("No sé formatear precios de %(pais)s.", pais=pais))
                         c["texto"] = {"literal": tipos.formatear_precio(precio, pais)}
                     else:
                         valor = valor_destino(textos.get(rol), idioma, pais)
                         if valor is None:
-                            raise VariableSinValor(f"El texto '{rol}' no tiene valor en {idioma}.")
+                            raise VariableSinValor(gettext("El texto '%(rol)s' no tiene valor en %(idioma)s.", rol=rol, idioma=idioma))
                         c["texto"] = {"literal": valor}
                 vivos.append(c)
             p["clips"] = vivos
         elif p["tipo"] == "audio":
             vivos = []
             for c in p["clips"]:
+                if c.get("idioma") is not None and c["idioma"] != idioma:
+                    # D10: un audio marcado para OTRO idioma no suena en este
+                    # destino — se mira ANTES de `por_destino`.
+                    continue
                 pd = c.get("por_destino") or {}
                 quitar = False
                 if pd:
@@ -548,8 +741,12 @@ def resolver(doc, idioma, pais):
                 if not quitar:
                     vivos.append(c)
             p["clips"] = vivos
-    palabras = valor_destino((res.get("subtitulos") or {}).get("palabras"), idioma, pais) or []
-    res["subtitulos"] = {**res.get("subtitulos", {}), "palabras": list(palabras)}
+    sub = res.get("subtitulos") or {}
+    if sub.get("visibles") is False:
+        palabras = []
+    else:
+        palabras = valor_destino(sub.get("palabras"), idioma, pais) or []
+    res["subtitulos"] = {**sub, "palabras": list(palabras)}
     res["destino"] = {"idioma": idioma, "pais": pais, "precio": precio}
     res["materiales"] = _materiales_de_clips(res)
     return res

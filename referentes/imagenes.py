@@ -26,15 +26,13 @@ def clave_r2(anuncio_id):
 
 def _bajar(url):
     # imagen_origen viene de la página externa (y en bloques futuros, de
-    # Atria/Apify): mismo riesgo de SSRF que conectores/url.py, misma guarda.
+    # Atria/Apify): mismo riesgo de SSRF que conectores/url.py, misma guarda
+    # — también en cada redirección (`abrir`), no solo en la primera URL.
     try:
-        permitido = conector_url.host_permitido(url)
+        r = conector_url.abrir(url, cabeceras={"User-Agent": "CreatvGaladsy/1.0"}, timeout=TIMEOUT)
     except conector_url.ErrorConector as e:
         raise ImagenInvalida(str(e)) from e
-    if not permitido:
-        raise ImagenInvalida("Esa URL no está permitida (apunta a una red interna o local).")
     try:
-        r = requests.get(url, timeout=TIMEOUT, stream=True, headers={"User-Agent": "CreatvGaladsy/1.0"})
         r.raise_for_status()
         trozos, total = [], 0
         for parte in r.iter_content(65536):
@@ -45,6 +43,10 @@ def _bajar(url):
         return b"".join(trozos)
     except requests.RequestException as e:
         raise ImagenInvalida(f"No se pudo bajar la imagen: {e.__class__.__name__}") from e
+    finally:
+        cerrar = getattr(r, "close", None)
+        if cerrar:
+            cerrar()
 
 
 def guardar_en_r2(anuncio_id, url_origen, carpeta):

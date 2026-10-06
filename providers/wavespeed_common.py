@@ -10,6 +10,7 @@ import time
 from contextlib import contextmanager
 
 import requests
+from flask_babel import gettext
 
 BASE_URL = "https://api.wavespeed.ai/api/v3"
 
@@ -18,13 +19,61 @@ def api_key():
     key = os.environ.get("WAVESPEED_API_KEY")
     if not key:
         raise RuntimeError(
-            "Falta WAVESPEED_API_KEY en tu .env. Consíguela en wavespeed.ai (API Keys)."
+            gettext("Falta WAVESPEED_API_KEY en tu .env. Consíguela en wavespeed.ai (API Keys).")
         )
     return key
 
 
 def headers():
     return {"Authorization": f"Bearer {api_key()}", "Content-Type": "application/json"}
+
+
+class SinSaldo(RuntimeError):
+    """WaveSpeed rechazó el pedido porque la cuenta de Creatv no tiene saldo
+    (incidente 2026-09-30: «Insufficient credits. Please top up your account
+    to continue.» salía crudo en la tarjeta). Es un RuntimeError para que todo
+    el manejo de errores de siempre lo siga atrapando; quien lo atrape lo
+    cuenta en palabras y avisa al administrador (saldo.marcar). Nada se lanzó,
+    así que nada se cobró."""
+
+    proveedor = "wavespeed"
+
+    def __init__(self, path, status, detalle):
+        self.path, self.status, self.detalle = path, status, detalle
+        super().__init__(f"WaveSpeed ({path}) respondió {status}: sin saldo en la cuenta ({detalle})")
+
+
+class PedidoRechazado(RuntimeError):
+    """WaveSpeed rechazó el pedido al lanzarlo (400, 422, 1405…) por algo que no
+    es el saldo: un parámetro que el modelo no acepta, una duración, una
+    referencia. Nada se lanzó, así que nada se cobró. `str(e)` sigue siendo el
+    texto técnico de siempre (bitácora, `tarea.error`); `mensaje` es lo que dijo
+    el proveedor, para contarlo en palabras en la tarjeta (PND-107: antes la
+    tarjeta mostraba el JSON crudo)."""
+
+    def __init__(self, path, status, mensaje, texto):
+        self.path, self.status, self.mensaje = path, status, mensaje
+        super().__init__(f"WaveSpeed ({path}) respondió {status}: {texto[:500]}")
+
+
+def error_de_respuesta(resp, path):
+    """La excepción para una respuesta no-ok al lanzar una predicción:
+    `SinSaldo` si WaveSpeed dice que la cuenta no tiene saldo (402, o su
+    mensaje de «insufficient credits» / «top up»), y `PedidoRechazado` — un
+    RuntimeError con el mismo texto de siempre — en cualquier otro caso."""
+    texto = resp.text or ""
+    mensaje = ""
+    try:
+        cuerpo = resp.json()
+        if isinstance(cuerpo, dict):
+            mensaje = str(cuerpo.get("message") or cuerpo.get("error") or "")
+    except ValueError:
+        pass
+    minusculas = (mensaje or texto).lower()
+    if (resp.status_code == 402 or ("insufficient" in minusculas and ("credit" in minusculas or "balance" in minusculas))
+            or "top up" in minusculas):
+        return SinSaldo(path, resp.status_code, (mensaje or texto)[:300])
+    return PedidoRechazado(path, resp.status_code, mensaje[:300], texto)
 
 
 class ErrorProveedor(RuntimeError):
@@ -37,11 +86,13 @@ class ErrorProveedor(RuntimeError):
     def __init__(self, nombre_modelo, estado, detalle=None, codigo=None, prediction_id=None, datos=None):
         self.nombre_modelo, self.estado, self.detalle = nombre_modelo, estado, detalle
         self.codigo, self.prediction_id, self.datos = codigo, prediction_id, datos
-        partes = [f"{nombre_modelo} no pudo generar: {detalle or estado}"]
+        # El texto se guarda (tarjeta de Crear, mensaje de la tarea): gettext en el
+        # idioma ambiente, que en el worker es el del proyecto.
+        partes = [gettext("%(modelo)s no pudo generar: %(detalle)s", modelo=nombre_modelo, detalle=detalle or estado)]
         if codigo is not None:
-            partes.append(f"(código {codigo})")
+            partes.append(gettext("(código %(codigo)s)", codigo=codigo))
         if prediction_id:
-            partes.append(f"· predicción {prediction_id}")
+            partes.append(gettext("· predicción %(id)s", id=prediction_id))
         super().__init__(" ".join(partes))
 
 
@@ -53,8 +104,9 @@ class EsperaAgotada(TimeoutError):
 
     def __init__(self, nombre_modelo, prediction_id, timeout_seconds):
         self.nombre_modelo, self.prediction_id, self.timeout_seconds = nombre_modelo, prediction_id, timeout_seconds
-        super().__init__(f"Se agotó el tiempo esperando el resultado de {nombre_modelo} "
-                         f"({int(timeout_seconds // 60)} min; predicción {prediction_id}).")
+        super().__init__(gettext("Se agotó el tiempo esperando el resultado de %(modelo)s (%(min)s min; "
+                                 "predicción %(id)s).", modelo=nombre_modelo, min=int(timeout_seconds // 60),
+                                 id=prediction_id))
 
 
 class EsperaInterrumpida(EsperaAgotada):
@@ -64,8 +116,9 @@ class EsperaInterrumpida(EsperaAgotada):
 
     def __init__(self, nombre_modelo, prediction_id, esperado_s):
         self.nombre_modelo, self.prediction_id, self.timeout_seconds = nombre_modelo, prediction_id, esperado_s
-        TimeoutError.__init__(self, f"Se cortó la espera de {nombre_modelo} porque el worker se está reiniciando "
-                                    f"(predicción {prediction_id}); se retoma sola.")
+        TimeoutError.__init__(self, gettext("Se cortó la espera de %(modelo)s porque el worker se está reiniciando "
+                                            "(predicción %(id)s); se retoma sola.",
+                                            modelo=nombre_modelo, id=prediction_id))
 
 
 # Parada del worker (`worker.main` la fija con `debe_parar`). Solo corta las

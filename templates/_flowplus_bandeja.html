@@ -8,7 +8,7 @@
 {% if referencias_bandeja %}
 <div class="crear-refs" id="fp-bandeja">
   {% for r in referencias_bandeja %}
-  <figure class="crear-ref{% if r.tipo == 'video' %} es-video{% endif %}">
+  <figure class="crear-ref{% if r.tipo == 'video' %} es-video{% endif %}"{% if r.tipo == 'video' and r.duracion_s is not none %} data-duracion="{{ r.duracion_s }}"{% endif %}>
     <img src="{{ r.frame_url }}" alt="" title="{{ r.titulo or '' }}">
     <figcaption>{{ r.etiqueta }}{% if r.origen not in ('archivo', None) %} · {{ r.origen }}{% endif %}</figcaption>
     {# Lo que ves es lo que se usa: viaja con el formulario de Crear (la bandeja es del proyecto). #}

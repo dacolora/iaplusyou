@@ -60,6 +60,7 @@
           l.hidden = !ok;
           if (ok) visibles++;
         });
+        document.querySelectorAll("#" + id + "-grilla .producto-grupo").forEach(function (g) { g.hidden = !g.querySelector(".producto-opcion:not([hidden])"); });
         vacio.style.display = (visibles === 0 && total > 0) ? "block" : "none";
       });
     }

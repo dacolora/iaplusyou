@@ -18,6 +18,22 @@ las fotos a mano.
      de duplicarla. Sin ninguna foto descargable no se crea activo: el
      producto queda con `activo_catalogo_id=None` y un aviso en `errores`.
 
+Si el producto trae colores (`extra.variantes` del conector, ver
+`conectores.base.normalizar_variante`), cada uno se guarda como una
+subcarpeta del activo (`catalogo_productos.agregar_color`/`actualizar_color`)
+con sus propias fotos; las fotos del producto van a la raíz como generales,
+nunca como referencia de un color. La regla de fidelidad se paga UNA sola
+vez por producto al crear el activo — nunca por color, nunca al refrescar.
+Un color que deja de venir de la tienda queda `disponible=False` sin borrar
+sus fotos; las fotos de un color ya existente solo se vuelven a bajar con
+`forzar_fotos` o si su subcarpeta está vacía. Un color ya guardado se
+reconoce por su `fuente_id` y, si cambió el id de su primera variante, por
+su nombre (`_color_existente`). Las fotos de la raíz de un activo YA ligado
+son de la tienda y nunca se vuelven un color (quedan como fotos de
+ambiente); solo al ADOPTAR una carpeta hecha a mano sus fotos pasan a un
+color con el nombre del producto. `resumen["colores"]` cuenta cuántos
+colores se crearon en la corrida.
+
 `max_activos` (opcional) acota cuántos productos SIN activo se ligan por
 corrida — el paso 2 baja fotos y llama a Claude, y el worker es de un solo
 hilo. El resto se guarda igual (paso 1) y cuenta en `resumen["pendientes"]`
@@ -270,6 +286,169 @@ def _reemplazar_fotos(carpeta, temporal):
         shutil.move(os.path.join(temporal, f), os.path.join(carpeta, f))
 
 
+def _variantes_de(prod):
+    """Colores que trae el conector en `extra.variantes` (§6 del spec)."""
+    vs = (prod.get("extra") or {}).get("variantes") or []
+    return [v for v in vs if isinstance(v, dict) and str(v.get("nombre") or "").strip()]
+
+
+def _activo_con_fotos(cliente, activo_id):
+    """True si el activo tiene alguna foto en la raíz o en algún color."""
+    carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
+    if _tiene_imagenes(carpeta):
+        return True
+    try:
+        sub = [d for d in os.listdir(carpeta) if os.path.isdir(os.path.join(carpeta, d))]
+    except OSError:
+        return False
+    return any(_tiene_imagenes(os.path.join(carpeta, d)) for d in sub)
+
+
+def _bajar_a(fotos, carpeta_destino, prod, errores, que=""):
+    """Descarga `fotos` a un temporal y, si bajó alguna, reemplaza las
+    numeradas de `carpeta_destino`. True si colocó al menos una. `que` (ya
+    pasado por gettext: el color o «fotos de ambiente») va antes del aviso."""
+    if not fotos:
+        if que:
+            errores.append(_aviso(prod, gettext("%(color)s: sin fotos en la tienda; revisa el catálogo.", color=que)))
+        return False
+    temporal = tempfile.mkdtemp(prefix="creatv_fotos_")
+    try:
+        rutas, fallidas = descargar_fotos(fotos, temporal)
+        if fallidas:
+            aviso = gettext("%(n)s foto(s) no se pudieron descargar.", n=fallidas)
+            errores.append(_aviso(prod, f"{que}: {aviso}" if que else aviso))
+        if not rutas:
+            return False
+        _reemplazar_fotos(carpeta_destino, temporal)
+        return True
+    finally:
+        shutil.rmtree(temporal, ignore_errors=True)
+
+
+def _color_existente(meta_variantes, var, fuente_ids_entrantes, nombre_producto="", ya_usados=()):
+    """color_id ya guardado para esta variante, o None si es un color nuevo.
+
+    1. Por `fuente_id`. En Shopify es el id de la PRIMERA variante del color,
+       que cambia si la tienda borra o reordena una talla.
+    2. Si no, por nombre: primero los colores cuyo nombre guardado es el de
+       esta variante («<producto> — <color>», o solo «<color>» si se hizo a
+       mano), sin distinguir mayúsculas; luego los ids que daría su nombre
+       (`id_desde_nombre` del color solo y del nombre completo, como
+       `catalogo_productos._id_color_desde_nombre`). Se adopta el primero que
+       no tenga `fuente_id` (hecho a mano, o el que dejó `convertir_actual`)
+       o cuyo `fuente_id` YA NO venga de la tienda (`fuente_ids_entrantes`:
+       quedó viejo). Un color cuyo fuente_id sí viene en esta sync es de
+       otra variante y nunca se funde por nombre: «Café» y «Cafe» con ids
+       distintos quedan como dos colores (`-2` vía `_color_id_libre`) y
+       cada uno se reconoce luego por su propio nombre guardado.
+    `ya_usados`: colores que otra variante de esta misma sync ya tomó."""
+    fid = str(var.get("fuente_id") or "")
+    if fid:
+        for cid, datos in meta_variantes.items():
+            if str((datos or {}).get("fuente_id") or "") == fid:
+                return cid
+    nombre = var["nombre"].strip()
+    completo = f"{nombre_producto} — {nombre}" if nombre_producto else nombre
+    nombres = {nombre.casefold(), completo.casefold()}
+    candidatos = [cid for cid, datos in meta_variantes.items()
+                  if str((datos or {}).get("nombre") or "").strip().casefold() in nombres]
+    for cid in (catalogo_productos.id_desde_nombre(nombre), catalogo_productos.id_desde_nombre(completo)):
+        if cid in meta_variantes and cid not in candidatos:
+            candidatos.append(cid)
+    entrantes = {str(f) for f in (fuente_ids_entrantes or ()) if f}
+    for cid in candidatos:
+        if cid in ya_usados:
+            continue
+        propio = str((meta_variantes.get(cid) or {}).get("fuente_id") or "")
+        if not propio or propio not in entrantes:
+            return cid
+    return None
+
+
+def _color_id_libre(meta_variantes, nombre):
+    base = catalogo_productos.id_desde_nombre(nombre)
+    cid, n = base, 2
+    while cid in meta_variantes:
+        cid = f"{base}-{n}"
+        n += 1
+    return cid
+
+
+def _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores, descargadas=None, convertir=True):
+    """Agrega los colores que falten, refresca los existentes (nombre, url,
+    disponible, fuente_id) y coloca sus fotos: de `descargadas`
+    ({índice: carpeta temporal}) si ya se bajaron, o descargándolas — colores
+    nuevos siempre; existentes solo con `forzar_fotos` o si no tienen
+    ninguna. Un color importado que ya no viene de la tienda queda
+    `disponible=False` (sus fotos no se borran). Devuelve cuántos se crearon.
+
+    `convertir`: si el activo es plano con fotos en la raíz, el primer color
+    nuevo las vuelve un color con el nombre del producto (`convertir_actual`)
+    — solo al ADOPTAR una carpeta hecha a mano. Un activo YA ligado a la
+    tienda pasa `convertir=False` (ruling I-6b): sus fotos de la raíz son de
+    la tienda y quedan como fotos de ambiente (`conservar_raiz=True`)."""
+    nombre_producto = (prod.get("nombre") or "").strip()
+    carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
+
+    def _existentes():
+        v = (catalogo_productos.cargar_meta(cliente).get(activo_id) or {}).get("variantes")
+        return dict(v) if isinstance(v, dict) else {}
+
+    existentes = _existentes()
+    entrantes = {str(v.get("fuente_id")) for v in variantes if v.get("fuente_id")}
+    nuevos, vistos = 0, set()
+    for i, var in enumerate(variantes):
+        nombre_color = f"{nombre_producto} — {var['nombre'].strip()}" if nombre_producto else var["nombre"].strip()
+        etiqueta = gettext("color «%(nombre)s»", nombre=var["nombre"])
+        datos = {"fuente_id": var.get("fuente_id"), "url_compra": var.get("url_compra"),
+                 "disponible": var.get("disponible", True) is not False}
+        cid = _color_existente(existentes, var, entrantes, nombre_producto, ya_usados=vistos)
+        if cid is None:
+            try:
+                cid = catalogo_productos.agregar_color(
+                    cliente, activo_id, nombre_color, color_id=_color_id_libre(existentes, var["nombre"]),
+                    convertir_actual=(nombre_producto or activo_id) if convertir else None,
+                    conservar_raiz=not convertir, **datos)
+            except ValueError as e:
+                errores.append(_aviso(prod, f"{etiqueta}: {e}"))
+                continue
+            existentes = _existentes()
+            nuevos += 1
+            bajar = True
+        else:
+            catalogo_productos.actualizar_color(cliente, activo_id, cid, nombre=nombre_color, **datos)
+            # La copia local también: la variante siguiente de esta misma sync
+            # tiene que ver el fuente_id nuevo (ya no está «viejo»).
+            existentes[cid] = {**(existentes.get(cid) or {}), **datos, "nombre": nombre_color}
+            bajar = forzar_fotos or not _tiene_imagenes(os.path.join(carpeta, cid))
+        vistos.add(cid)
+        destino = os.path.join(carpeta, cid)
+        if descargadas is not None:
+            if bajar and i in descargadas:
+                _reemplazar_fotos(destino, descargadas[i])
+        elif bajar:
+            _bajar_a(var.get("fotos") or [], destino, prod, errores, etiqueta)
+    for cid, datos in existentes.items():
+        if cid not in vistos and (datos or {}).get("fuente_id") and (datos or {}).get("disponible", True) is not False:
+            catalogo_productos.actualizar_color(cliente, activo_id, cid, disponible=False)
+    return nuevos
+
+
+def _completar_fotos(cliente, activo_id, prod, fotos, variantes, forzar_fotos, errores, convertir=True):
+    """Activo ya existente: colores (los nuevos siempre; los existentes según
+    `forzar_fotos`) y luego las fotos de la raíz — generales si hay colores,
+    la referencia si es plano — solo con `forzar_fotos` o si no hay ninguna.
+    `convertir` va a `_colocar_colores` (False para un activo ya ligado).
+    Devuelve cuántos colores se crearon."""
+    carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
+    nuevos = _colocar_colores(cliente, activo_id, prod, variantes, forzar_fotos, errores,
+                              convertir=convertir) if variantes else 0
+    if fotos and (forzar_fotos or not _tiene_imagenes(carpeta)):
+        _bajar_a(fotos, carpeta, prod, errores, gettext("fotos de ambiente") if variantes else "")
+    return nuevos
+
+
 # --- activo --------------------------------------------------------------------
 
 def _aviso(prod, texto):
@@ -301,45 +480,43 @@ def _id_activo_disponible(cliente, nombre, fuente_id, producto_id):
 
 def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
     """Liga el producto (fila `producto`) a un activo del catálogo de Crear.
-    Devuelve el `activo_id` (None si no se pudo). Si se pasa `errores` (lista),
-    ahí deja los avisos; nunca lanza por un producto concreto.
-    Nunca marca `activo_catalogo_id` en la fila del producto a menos que el
-    activo termine con al menos una imagen — un activo sin fotos no aparece
-    en `catalogo_productos.listar()`, y quedaría ligado a algo invisible que
-    nadie puede arreglar desde la UI.
+    Devuelve el `activo_id` (None si no se pudo). Con `extra.variantes`
+    (§7 del spec) cada color es una subcarpeta con sus fotos y las fotos del
+    producto van a la raíz como generales; sin variantes, todo como antes.
 
-    - Ya ligado y la carpeta existe → refresca nombre/descripción; fotos solo
-      con `forzar_fotos` (o si el activo se había quedado sin ninguna); la
-      regla no se toca.
+    - Ya ligado y la carpeta existe → refresca nombre/descripción (NUNCA la
+      regla), agrega los colores nuevos, refresca los existentes y solo
+      vuelve a bajar fotos con `forzar_fotos` o donde no haya ninguna. Las
+      fotos de su raíz son de la tienda: si era plano y ahora trae colores,
+      quedan como fotos de ambiente (nunca un color inventado con ellas).
     - No ligado → si otro producto ya reclamó el id derivado del nombre, se
-      desambigua (`-2`, `-3`…) en vez de colapsar los dos en un activo.
-      Descarga fotos a un temporal; sin ninguna, no hay activo. Si ya existe
-      la carpeta con ese id la adopta (fotos solo si no tenía o
-      `forzar_fotos`; si sigue sin ninguna, no se liga); si no,
-      `catalogo_productos.crear` con tipo inferido y regla de Claude, y mueve
-      las fotos adentro.
-    """
+      desambigua (`-2`, `-3`…). Si ya existe la carpeta con ese id (subida a
+      mano) se ADOPTA: sus fotos de raíz pasan a ser un color con el nombre
+      del producto y se le agregan los de la tienda. Si no, se baja TODO a un
+      temporal primero; sin ninguna foto no hay activo ni llamada a Claude;
+      con alguna, `catalogo_productos.crear` con tipo inferido y regla de
+      Claude, luego los colores y por último las generales.
+    Nunca deja un activo sin ninguna foto (no aparecería en listar())."""
     if errores is None:
         errores = []
     prod = tiendas.producto(cliente, producto_id)
     if prod is None:
-        errores.append(f"producto {producto_id}: no existe.")
+        errores.append(gettext("producto %(id)s: no existe.", id=producto_id))
         return None
     nombre = (prod.get("nombre") or "").strip()
     descripcion = (prod.get("descripcion") or "").strip()
     fotos = list(prod.get("fotos") or [])
+    variantes = _variantes_de(prod)
 
     activo_id = prod.get("activo_catalogo_id")
     if activo_id and catalogo_productos.existe(cliente, activo_id, CATEGORIA_ACTIVO):
         catalogo_productos.actualizar(cliente, activo_id, nombre=nombre, descripcion=descripcion or None,
                                       categoria=CATEGORIA_ACTIVO)
-        carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
-        if (forzar_fotos or not _tiene_imagenes(carpeta)) and fotos:
-            _bajar_y_colocar(cliente, activo_id, fotos, prod, errores)
+        _completar_fotos(cliente, activo_id, prod, fotos, variantes, forzar_fotos, errores, convertir=False)
         return activo_id
 
-    if not fotos:
-        errores.append(_aviso(prod, "sin fotos: no se creó el activo del catálogo."))
+    if not fotos and not any(v.get("fotos") for v in variantes):
+        errores.append(_aviso(prod, gettext("sin fotos: no se creó el activo del catálogo.")))
         return None
 
     activo_id = _id_activo_disponible(cliente, nombre, prod.get("fuente_id"), producto_id)
@@ -347,35 +524,44 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         # Mismo nombre que un activo subido a mano (y libre): se adopta, no se duplica.
         catalogo_productos.actualizar(cliente, activo_id, nombre=nombre, descripcion=descripcion or None,
                                       categoria=CATEGORIA_ACTIVO)
-        carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
-        if forzar_fotos or not _tiene_imagenes(carpeta):
-            # La carpeta adoptada puede no tener fotos (subida vacía, o una
-            # sync anterior que falló al bajarlas): se intenta igual, como si
-            # forzar_fotos estuviera activo.
-            if not _bajar_y_colocar(cliente, activo_id, fotos, prod, errores) and not _tiene_imagenes(carpeta):
-                errores.append(_aviso(prod, "sin fotos: no se enlazó al activo del catálogo."))
-                return None
+        _completar_fotos(cliente, activo_id, prod, fotos, variantes,
+                         forzar_fotos or not _activo_con_fotos(cliente, activo_id), errores)
+        if not _activo_con_fotos(cliente, activo_id):
+            errores.append(_aviso(prod, gettext("sin fotos: no se enlazó al activo del catálogo.")))
+            return None
         tiendas.marcar_producto(cliente, producto_id, activo_catalogo_id=activo_id)
         return activo_id
 
     temporal = tempfile.mkdtemp(prefix="creatv_fotos_")
     creado_ahora = False
     try:
-        rutas, fallidas = descargar_fotos(fotos, temporal)
-        if not rutas:
-            errores.append(_aviso(prod, "no se pudo descargar ninguna foto: no se creó el activo del catálogo."))
+        # Todo se baja ANTES de crear el activo y de pagar la regla.
+        raiz = os.path.join(temporal, "_raiz")
+        rutas_raiz, fallidas = descargar_fotos(fotos, raiz)
+        descargadas = {}
+        for i, var in enumerate(variantes):
+            carpeta_c = os.path.join(temporal, f"c{i}")
+            rutas_c, f = descargar_fotos(var.get("fotos") or [], carpeta_c)
+            fallidas += f
+            if rutas_c:
+                descargadas[i] = carpeta_c
+        if not rutas_raiz and not descargadas:
+            errores.append(_aviso(prod, gettext(
+                "no se pudo descargar ninguna foto: no se creó el activo del catálogo.")))
             return None
         if fallidas:
-            errores.append(_aviso(prod, f"{fallidas} foto(s) no se pudieron descargar."))
+            errores.append(_aviso(prod, gettext("%(n)s foto(s) no se pudieron descargar.", n=fallidas)))
         regla = generador_prompts.regla_fidelidad(nombre, descripcion, prod.get("categoria") or "",
                                                    idiomas.de_proyecto(cliente))
         if regla:
             # Claude respondió (una regla vacía es el fallback sin llamada o
             # con error, que no cobra). Tarifa fija: el SDK no devuelve el
             # precio y una llamada de ~600 tokens cuesta menos que ese tope.
+            # Se guarda: en el idioma del proyecto aunque algún día la llame una ruta.
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                detalle = gettext("regla de fidelidad de «%(nombre)s»", nombre=nombre)[:300]
             gastos.registrar_seguro(cliente, "regla_producto", gastos.TARIFAS["regla_producto"],
-                                    f"regla_producto:{producto_id}", proveedor="anthropic",
-                                    detalle=f"regla de fidelidad de «{nombre}»"[:300])
+                                    f"regla_producto:{producto_id}", proveedor="anthropic", detalle=detalle)
         tipo = inferir_tipo(nombre, descripcion, prod.get("categoria") or "")
         try:
             activo_id = catalogo_productos.crear(cliente, nombre, descripcion, tipo=tipo,
@@ -386,14 +572,16 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
             if not catalogo_productos.existe(cliente, activo_id, CATEGORIA_ACTIVO):
                 raise
         carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
-        _reemplazar_fotos(carpeta, temporal)
-        if not _tiene_imagenes(carpeta):
-            # No debería pasar (rutas no estaba vacío), pero por si acaso: no
-            # se deja un activo fantasma, y solo se borra la carpeta si la
-            # creó esta misma llamada (no la de otro producto en una carrera).
+        # Colores ANTES que las generales: con la raíz vacía agregar_color no
+        # convierte nada; las generales de un producto con colores no son referencia.
+        if variantes:
+            _colocar_colores(cliente, activo_id, prod, variantes, True, errores, descargadas=descargadas)
+        if rutas_raiz:
+            _reemplazar_fotos(carpeta, raiz)
+        if not _activo_con_fotos(cliente, activo_id):
             if creado_ahora:
                 catalogo_productos.eliminar(cliente, activo_id, CATEGORIA_ACTIVO)
-            errores.append(_aviso(prod, "sin fotos: no se creó el activo del catálogo."))
+            errores.append(_aviso(prod, gettext("sin fotos: no se creó el activo del catálogo.")))
             return None
     finally:
         shutil.rmtree(temporal, ignore_errors=True)
@@ -402,19 +590,9 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
 
 
 def _bajar_y_colocar(cliente, activo_id, fotos, prod, errores):
-    """Descarga a un temporal y, si bajó algo, reemplaza las fotos numeradas
-    del activo. True si colocó al menos una foto."""
-    temporal = tempfile.mkdtemp(prefix="creatv_fotos_")
-    try:
-        rutas, fallidas = descargar_fotos(fotos, temporal)
-        if not rutas:
-            return False
-        if fallidas:
-            errores.append(_aviso(prod, f"{fallidas} foto(s) no se pudieron descargar."))
-        _reemplazar_fotos(catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO), temporal)
-        return True
-    finally:
-        shutil.rmtree(temporal, ignore_errors=True)
+    """Envoltorio de compatibilidad sobre `_bajar_a` (por si algún test u otro
+    módulo la sigue llamando directo)."""
+    return _bajar_a(fotos, catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO), prod, errores)
 
 
 # --- lista ---------------------------------------------------------------------
@@ -435,7 +613,7 @@ def _activo_completo(cliente, prod):
     activo_id = prod.get("activo_catalogo_id")
     if not activo_id or not catalogo_productos.existe(cliente, activo_id, CATEGORIA_ACTIVO):
         return False
-    return _tiene_imagenes(catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO))
+    return _activo_con_fotos(cliente, activo_id)
 
 
 def _orden_pendientes(prod):
@@ -447,6 +625,19 @@ def _orden_pendientes(prod):
     extra = prod.get("extra") or {}
     return (1 if extra.get("vinculo_intentado_en") else 0, 0 if prod.get("en_prueba") else 1,
             -int(prod.get("prioridad") or 0), int(prod.get("id") or 0))
+
+
+def _n_colores(cliente, pid):
+    """Cuántos colores tiene guardados en la meta el activo ligado a `pid`
+    (0 si no está ligado o el activo no existe en disco). Sirve para contar
+    `resumen["colores"]` por diferencia sin cambiar la firma de
+    `vincular_activo`."""
+    prod = tiendas.producto(cliente, pid) or {}
+    aid = prod.get("activo_catalogo_id")
+    if not aid or not catalogo_productos.existe(cliente, aid, CATEGORIA_ACTIVO):
+        return 0
+    v = (catalogo_productos.cargar_meta(cliente).get(aid) or {}).get("variantes")
+    return len(v) if isinstance(v, dict) else 0
 
 
 def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, max_activos=None):
@@ -462,16 +653,16 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
     llama decide cómo completarlos (una corrida siguiente). `pendientes`
     solo cuenta los que NUNCA se intentaron: los que ya se intentaron y no
     dieron activo (sin fotos) no justifican otra corrida.
-    Devuelve {"nuevos", "actualizados", "activos", "pendientes", "errores": [str]}."""
-    resumen = {"nuevos": 0, "actualizados": 0, "activos": 0, "pendientes": 0, "errores": []}
+    Devuelve {"nuevos", "actualizados", "activos", "colores", "pendientes", "errores": [str]}."""
+    resumen = {"nuevos": 0, "actualizados": 0, "activos": 0, "colores": 0, "pendientes": 0, "errores": []}
     lista = list(productos_normalizados or [])
-    _progreso(on_progreso, "Guardando productos", f"{len(lista)} producto(s)")
+    _progreso(on_progreso, idiomas.N_("Guardando productos"), gettext("%(n)s producto(s)", n=len(lista)))
     ids = []
     for prod in lista:
         try:
             fuente_id = str(prod.get("fuente_id") or "").strip()
             if not fuente_id or not (prod.get("nombre") or "").strip():
-                resumen["errores"].append(_aviso(prod, "sin nombre o sin identificador; se omitió."))
+                resumen["errores"].append(_aviso(prod, gettext("sin nombre o sin identificador; se omitió.")))
                 continue
             existia = tiendas.producto_por_fuente(cliente, fuente, fuente_id) is not None
             if existia and (prod.get("extra") or {}).get("descripcion_cargada") is False:
@@ -483,7 +674,8 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
             ids.append(pid)
         except Exception as error:  # noqa: BLE001 — un producto malo no frena la lista
             log.warning("importar %s/%s: %s", cliente, fuente, error, exc_info=True)
-            resumen["errores"].append(_aviso(prod, f"no se pudo guardar ({type(error).__name__})."))
+            resumen["errores"].append(_aviso(prod, gettext("no se pudo guardar (%(tipo)s).",
+                                                           tipo=type(error).__name__)))
 
     ids_set = set(ids)
     guardados = {p["id"]: p for p in tiendas.productos(cliente, incluir_archivados=True) if p["id"] in ids_set}
@@ -498,16 +690,19 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, ma
     a_ligar = {p["id"] for p in pendientes}
     orden = [p["id"] for p in pendientes] + completos
     for i, pid in enumerate(orden, start=1):
-        _progreso(on_progreso, "Creando activos", f"{i} de {len(orden)}")
+        _progreso(on_progreso, idiomas.N_("Creando activos"), gettext("%(i)s de %(n)s", i=i, n=len(orden)))
         try:
+            antes = _n_colores(cliente, pid)
             if vincular_activo(cliente, pid, errores=resumen["errores"]):
                 resumen["activos"] += 1
             elif pid in a_ligar:
                 tiendas.anotar_extra(cliente, pid, vinculo_intentado_en=db.ahora())
+            resumen["colores"] += max(0, _n_colores(cliente, pid) - antes)
         except Exception as error:  # noqa: BLE001
             log.warning("vincular activo %s/%s: %s", cliente, pid, error, exc_info=True)
             prod = tiendas.producto(cliente, pid) or {}
-            resumen["errores"].append(_aviso(prod, f"no se pudo crear el activo ({type(error).__name__})."))
+            resumen["errores"].append(_aviso(prod, gettext("no se pudo crear el activo (%(tipo)s).",
+                                                           tipo=type(error).__name__)))
             if pid in a_ligar:
                 tiendas.anotar_extra(cliente, pid, vinculo_intentado_en=db.ahora())
     return resumen
@@ -518,7 +713,7 @@ def desde_archivo(cliente, ruta, nombre_archivo, on_progreso=None, max_activos=N
     ErrorConector si el archivo no se puede leer (la tarea lo muestra tal
     cual). Un archivo con más filas que el tope del lector deja el aviso
     en `errores` (la persona tiene que saber que se recortó)."""
-    _progreso(on_progreso, "Leyendo", os.path.basename(str(nombre_archivo or "")))
+    _progreso(on_progreso, idiomas.N_("Leyendo"), os.path.basename(str(nombre_archivo or "")))
     avisos = []
     lista = csv_excel.leer(ruta, nombre_archivo, avisos=avisos)
     resumen = importar_lista(cliente, "csv", lista, on_progreso=on_progreso, max_activos=max_activos)
@@ -528,7 +723,7 @@ def desde_archivo(cliente, ruta, nombre_archivo, on_progreso=None, max_activos=N
 
 def desde_url(cliente, url, on_progreso=None, max_activos=None):
     """Página de producto (conectores.url) → importar_lista(fuente="url")."""
-    _progreso(on_progreso, "Leyendo", None)
+    _progreso(on_progreso, idiomas.N_("Leyendo"), None)
     prod = conector_url.leer(url)
     return importar_lista(cliente, "url", [prod], on_progreso=on_progreso, max_activos=max_activos)
 
@@ -538,6 +733,8 @@ def resumen_texto(resumen):
     partes = [gettext("%(n)s producto(s) nuevo(s)", n=resumen.get("nuevos", 0)),
               gettext("%(n)s actualizado(s)", n=resumen.get("actualizados", 0)),
               gettext("%(n)s con activo en el catálogo", n=resumen.get("activos", 0))]
+    if resumen.get("colores"):
+        partes.append(gettext("%(n)s color(es) nuevo(s)", n=resumen["colores"]))
     texto = ", ".join(partes) + "."
     pendientes = int(resumen.get("pendientes") or 0)
     if pendientes:

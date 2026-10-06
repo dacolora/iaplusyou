@@ -1,0 +1,93 @@
+{# Alertas: todo lo que necesita la atención de quien mira, calculado al vuelo
+   (alertas.py) y cacheado 60 s (dashboard._alertas_calculadas). Contexto:
+   `alertas_ctx` del context processor _alertas_sidebar ({visibles,
+   descartadas, resumen}, ya filtrado por rol; no viene si el cálculo falló) y
+   las constantes alertas_grupos / alertas_nombres_grupo / alertas_nombres_nivel
+   / alertas_nombres_tab de ver_cliente (N_, se traducen con |traducir). Solo
+   lectura salvo los dos POST (descartar, restaurar): nada de aquí gasta, lanza
+   ni publica. El título y el detalle se pintan escapados (el detalle de
+   `saldo:wavespeed_recarga` trae la URL de recarga como texto). Los «Ir a …»
+   con data-ir-tab / data-ancla los maneja el script de cliente.html. Spec:
+   docs/superpowers/specs/2026-09-20-alertas-design.md §6 y §12. #}
+{% set ac = alertas_ctx if alertas_ctx is defined and alertas_ctx else none %}
+
+<div class="panel-cabecera">
+  <div>
+    <h2>{{ _('Alertas') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Lo que necesita tu atención en este proyecto, revisado cada vez que entras. Una alerta descartada vuelve sola si su situación cambia.') }}</p>
+    {% if ac and ac.resumen.n %}
+    {# Solo los niveles que tienen alertas: «1 bloquea · 3 piden atención · 1 informativa». #}
+    {% set r = ac.resumen %}
+    {% set partes = [ngettext('%(num)s bloquea', '%(num)s bloquean', r.bloquea) if r.bloquea else '',
+                     ngettext('%(num)s pide atención', '%(num)s piden atención', r.atencion) if r.atencion else '',
+                     ngettext('%(num)s informativa', '%(num)s informativas', r.info) if r.info else ''] %}
+    <p class="panel-cabecera-desc alertas-resumen"><strong>{{ partes | select | join(' · ') }}</strong></p>
+    {% endif %}
+  </div>
+</div>
+
+{% if ac is none %}
+<p class="tag-error">{{ _('No se pudieron calcular las alertas. Recarga la página; si sigue, avisa a Creatv.') }}</p>
+{% else %}
+{% if ac.resumen.n == 0 %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Todo en orden') }}</p>
+  <p class="estado-vacio-texto">{{ _('Nada necesita tu atención ahora mismo.') }}</p>
+</div>
+{% endif %}
+
+{% for grupo in alertas_grupos %}
+{% set lista = ac.visibles | selectattr("grupo", "equalto", grupo) | list %}
+{% if lista %}
+<section class="alertas-grupo" id="alertas-{{ grupo }}">
+  <h3>{{ alertas_nombres_grupo[grupo] | traducir }} <span class="alertas-n">{{ lista | length }}</span></h3>
+  <ul class="alertas-lista">
+    {% for a in lista %}
+    <li class="alerta alerta-{{ a.nivel }}">
+      <span class="alerta-nivel">{{ alertas_nombres_nivel[a.nivel] | traducir }}</span>
+      <div class="alerta-cuerpo">
+        <strong class="alerta-titulo">{{ a.titulo }}</strong>
+        {% if a.detalle %}<p class="alerta-detalle">{{ a.detalle }}</p>{% endif %}
+      </div>
+      <div class="alerta-acciones">
+        {% set pestana = (alertas_nombres_tab.get(a.tab) | traducir) if a.tab in alertas_nombres_tab else a.tab %}
+        {% if a.url %}
+        <a class="alerta-ir" href="{{ a.url }}">{{ _('Ir a %(tab)s →', tab=pestana) }}</a>
+        {% elif a.tab %}
+        <a class="alerta-ir" href="#{{ a.tab }}" data-ir-tab="{{ a.tab }}"{% if a.ancla %} data-ancla="{{ a.ancla }}"{% endif %}>{{ _('Ir a %(tab)s →', tab=pestana) }}</a>
+        {% endif %}
+        <form method="post" action="{{ url_for('alertas_descartar', cliente=cliente) }}" class="alerta-form">
+          <input type="hidden" name="clave" value="{{ a.clave }}">
+          <input type="hidden" name="huella" value="{{ a.huella }}">
+          <button type="submit" class="btn-xs" title="{{ _('Ocultarla hasta que su situación cambie') }}">{{ _('Descartar') }}</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endfor %}
+
+{% if ac.descartadas %}
+<details class="alertas-descartadas">
+  <summary>{{ _('Descartadas (%(n)s)', n=ac.descartadas | length) }}</summary>
+  <ul class="alertas-lista">
+    {% for a in ac.descartadas %}
+    <li class="alerta alerta-descartada">
+      <div class="alerta-cuerpo">
+        <strong class="alerta-titulo">{{ a.titulo }}</strong>
+        <p class="alerta-detalle">{{ _('Descartada el %(fecha)s.', fecha=a.descartada_en | fecha_corta) }}</p>
+      </div>
+      <div class="alerta-acciones">
+        <form method="post" action="{{ url_for('alertas_restaurar', cliente=cliente) }}" class="alerta-form">
+          <input type="hidden" name="clave" value="{{ a.clave }}">
+          <button type="submit" class="btn-xs">{{ _('Restaurar') }}</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+{% endif %}

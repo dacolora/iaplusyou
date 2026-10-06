@@ -1,6 +1,6 @@
 <div class="prompt-row imagen-row">
   <div class="prompt-row-num">{{ p.numero }}</div>
-  <img class="imagen-candidata" src="{{ p.imagen_url }}" alt="imagen candidata" onclick="window.open(this.src)">
+  <img class="imagen-candidata" src="{{ p.imagen_url }}" alt="{{ _('imagen candidata') }}" onclick="window.open(this.src)">
   <form method="post" action="{{ url_for('guardar_prompt', cliente=cliente, prompt_id=p.id) }}" class="prompt-row-form">
     <div class="prompt-solo-lectura">{{ p.prompt }}</div>
 
@@ -11,12 +11,12 @@
       </select>
       <input type="number" name="cfg_scale" min="0" max="1" step="0.01" value="{{ p.cfg_scale }}" class="mini-input" title="cfg_scale">
       <span class="costo-mini">
-        {% if p.credits is not none %}~{{ "%.2f"|format(p.credits) }} cr video (${{ "%.2f"|format(p.usd) }}){% else %}costo desconocido{% endif %}
+        {% if p.credits is not none %}{{ _('~%(cr)s cr video ($%(usd)s)', cr="%.2f"|format(p.credits), usd="%.2f"|format(p.usd)) }}{% else %}{{ _('costo desconocido') }}{% endif %}
       </span>
       {% for pl in p.platforms %}
       <span class="plataforma-chip">{{ pl }}</span>
       {% else %}
-      <span class="plataforma-chip">sin plataformas</span>
+      <span class="plataforma-chip">{{ _('sin plataformas') }}</span>
       {% endfor %}
     </div>
 
@@ -25,22 +25,22 @@
         class="btn-guardar btn-sm"
         type="submit"
         formaction="{{ url_for('regenerar_imagen', cliente=cliente, prompt_id=p.id) }}"
-        onclick="return confirm('¿Generar otra imagen candidata? Esto gasta créditos de nuevo (~1.5cr).');"
-      >Regenerar imagen</button>
+        onclick='return confirm({{ _("¿Generar otra imagen candidata? Esto gasta créditos de nuevo (~1.5cr).")|tojson }});'
+      >{{ _('Regenerar imagen') }}</button>
       <button
         class="btn-aprobar btn-sm"
         type="submit"
         formaction="{{ url_for('aprobar_imagen', cliente=cliente, prompt_id=p.id) }}"
-        onclick="return confirm('¿Generar el video final con esta imagen? Esto gasta créditos de Higgsfield.');"
-      >Aprobar imagen y generar video</button>
+        onclick='return confirm({{ _("¿Generar el video final con esta imagen? Esto gasta créditos de Higgsfield.")|tojson }});'
+      >{{ _('Aprobar imagen y generar video') }}</button>
     </div>
   </form>
   <form
     method="post"
     action="{{ url_for('rechazar_prompt', cliente=cliente, prompt_id=p.id) }}"
-    onsubmit="return confirm('¿Descartar? No se genera video.');"
+    onsubmit='return confirm({{ _("¿Descartar? No se genera video.")|tojson }});'
     class="prompt-row-descartar"
   >
-    <button class="btn-rechazar btn-sm" type="submit" title="Descartar">✕</button>
+    <button class="btn-rechazar btn-sm" type="submit" title="{{ _('Descartar') }}">✕</button>
   </form>
 </div>

@@ -38,12 +38,17 @@ class _Visible(HTMLParser):
         if abre:
             self.vistos.add(el_id)
         is_void = tag in VACIOS
+        # translate="no" (HTML estándar: «no traducir esto») marca un
+        # identificador que se pinta tal cual, p. ej. el código de idioma de
+        # un destino de Final edition («en» = inglés, no la preposición): su
+        # subárbol no se mira, igual que un <script>.
+        oculta = tag in ("script", "style", "template") or (a.get("translate") or "").lower() == "no"
         if not is_void:
-            self.pila.append((tag, abre))
+            self.pila.append((tag, abre, oculta))
             self.region += abre
-            self.oculto += tag in ("script", "style", "template")
+            self.oculto += oculta
         # Inspect attributes if we're in a region, OR if this is a void element with matching id
-        should_inspect = (self.region and not self.oculto) or (abre and is_void and not self.oculto)
+        should_inspect = ((self.region and not self.oculto) or (abre and is_void and not self.oculto)) and not oculta
         if should_inspect:
             self.trozos += [a[k] for k in ATRIBUTOS if a.get(k)]
             if tag in ("input", "button") and a.get("type") in ("submit", "button") and a.get("value"):
@@ -55,12 +60,12 @@ class _Visible(HTMLParser):
             self.handle_endtag(tag)
 
     def handle_endtag(self, tag):
-        if tag not in [t for t, _abre in self.pila]:
+        if tag not in [t for t, _abre, _oculta in self.pila]:
             return
         while self.pila:
-            t, abre = self.pila.pop()
+            t, abre, oculta = self.pila.pop()
             self.region -= abre
-            self.oculto -= t in ("script", "style", "template")
+            self.oculto -= oculta
             if t == tag:
                 break
 
@@ -104,3 +109,20 @@ def espanol_en_plantilla(ruta):
         # Keep only string literals (start with ', ", or `) that have Spanish marks
         hallazgos += [t for t in tokens if t[0] in ("'", '"', "`") and _con_marca(t)]
     return hallazgos
+
+
+# Palabras españolas que MARCAS no incluye (a propósito: en HTML darían falsos
+# positivos) y que sí delatan un texto suelto en CÓDIGO: etiquetas cortas del
+# editor («Guardado», «Pista»), etapas («Renderizando») y mensajes sin tildes
+# («Ya se estaba preparando ese video.»). Solo lo usan las guardias de código
+# (tests/test_i18n_mensajes.py, tests/test_i18n_editor.py).
+MARCAS_CODIGO = re.compile(
+    r"\b(?:ya|se|esa|ese|eso|esos|esas|este|esta|estos|estas|listo|lista|listos|listas|hecho|hecha|"
+    r"falta|faltan|borrados?|borradas?|elige|marca|destinos?|pista|voz|sonido|efecto|textos?|imagen|encima|"
+    r"precio|pausar|reproducir|guardado|guardando|cambios|recarga|recargar|cortar|duplicar|borrar|velocidad|"
+    r"archivos?|produciendo|preparando|cargando|pudo|pudieron|materiales|renderizando|subiendo|uniendo|"
+    r"tramos?|inexistente|interrumpida|interrumpido|agregado)\b", re.I)
+
+
+def espanol_en_codigo(texto):
+    return _con_marca(texto) or bool(MARCAS_CODIGO.search(texto))

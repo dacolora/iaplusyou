@@ -41,6 +41,9 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import requests
+from flask_babel import gettext
+
+from idiomas import N_
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -63,6 +66,8 @@ _cache_estado = {}
 _cache_pixel = {}
 # Un Pixel "vivo" es uno que disparó en la última semana: con menos, las
 # compras que reporte Meta no sirven para juzgar piezas (atribución "pixel").
+# Si cambia, cambian también los dos textos fijos de estado_pixel que dicen «7 días»
+# (son msgid de N_: no pueden llevar el número como variable).
 _PIXEL_DIAS_VIVO = 7
 
 # Un meta.pendiente.json abandonado (el usuario cerró la pestaña en la
@@ -92,7 +97,8 @@ class ModoAgenciaError(MetaConexionError, ValueError):
 def _env_obligatoria(clave, para_que):
     valor = os.environ.get(clave, "").strip()
     if not valor:
-        raise MetaConexionError(f"Falta {clave} en el .env — hace falta para {para_que}.")
+        raise MetaConexionError(gettext("Falta %(clave)s en el .env — hace falta para %(para_que)s.",
+                                        clave=clave, para_que=para_que))
     return valor
 
 
@@ -114,12 +120,13 @@ def cargar_app(cliente):
 
 def guardar_app(cliente, datos):
     """Valida y guarda las tres credenciales de la app del proyecto (0600)."""
-    _rechazar_si_agencia(cliente, "registrar una app propia")
+    _rechazar_si_agencia(cliente, gettext("registrar una app propia"))
     limpio = {}
     for campo in CAMPOS_APP:
         valor = str((datos or {}).get(campo) or "").strip()
         if not valor:
-            raise MetaConexionError(f"Falta {campo}: los tres datos de la app de Meta son obligatorios.")
+            raise MetaConexionError(gettext("Falta %(campo)s: los tres datos de la app de Meta son obligatorios.",
+                                            campo=campo))
         limpio[campo] = valor
     _escribir_atomico(_path_app(cliente), limpio)
 
@@ -142,15 +149,15 @@ def app_publica(cliente):
 def _app_obligatoria(cliente, para_que):
     app = cargar_app(cliente)
     if not app:
-        raise MetaConexionError(
-            f"Este proyecto no tiene registrada su app de Meta — hace falta para {para_que}.")
+        raise MetaConexionError(gettext(
+            "Este proyecto no tiene registrada su app de Meta — hace falta para %(para_que)s.", para_que=para_que))
     return app
 
 
 def redirect_uri():
     return _env_obligatoria(
         "META_REDIRECT_URI",
-        "armar la URL de vuelta desde Meta (tiene que coincidir con la registrada en la app)",
+        gettext("armar la URL de vuelta desde Meta (tiene que coincidir con la registrada en la app)"),
     )
 
 
@@ -164,8 +171,8 @@ def url_dialogo(cliente, state):
     panel de esa app) define el tipo de token y los permisos.
     override_default_response_type va por si la configuración pide token de
     usuario del sistema."""
-    _rechazar_si_agencia(cliente, "conectar con una app propia")
-    app = _app_obligatoria(cliente, "abrir el diálogo de Meta")
+    _rechazar_si_agencia(cliente, gettext("conectar con una app propia"))
+    app = _app_obligatoria(cliente, gettext("abrir el diálogo de Meta"))
     params = {
         "client_id": app["app_id"],
         "config_id": app["login_config_id"],
@@ -244,9 +251,9 @@ def modo(cliente):
 
 def _rechazar_si_agencia(cliente, para_que):
     if modo(cliente) == MODO_AGENCIA:
-        raise ModoAgenciaError(
-            f"Este proyecto está gestionado por Creatv (modo agencia): no se puede {para_que}. "
-            "Un admin tiene que volverlo a modo propia primero.")
+        raise ModoAgenciaError(gettext(
+            "Este proyecto está gestionado por Creatv (modo agencia): no se puede %(para_que)s. "
+            "Un admin tiene que volverlo a modo propia primero.", para_que=para_que))
 
 
 def cargar(cliente):
@@ -272,9 +279,9 @@ def guardar(cliente, datos, permitir_agencia=False):
     meta.pendiente.json viejo) pisaría la asignación del admin — I2 del
     review de Task 1."""
     if not permitir_agencia and modo(cliente) == MODO_AGENCIA:
-        raise ModoAgenciaError(
+        raise ModoAgenciaError(gettext(
             "Este proyecto está gestionado por Creatv (modo agencia): no se puede guardar una "
-            "conexión propia encima. Un admin tiene que desasignarlo primero.")
+            "conexión propia encima. Un admin tiene que desasignarlo primero."))
     _escribir_atomico(_path(cliente), datos)
     _cache_estado.pop(cliente, None)
     _cache_pixel.pop(cliente, None)
@@ -292,9 +299,9 @@ def borrar(cliente):
     explícita (meta_agencia.desasignar, gateada a admin en Task 2), no un
     efecto secundario de un botón "desconectar" pensado para modo propia."""
     if modo(cliente) == MODO_AGENCIA:
-        raise ModoAgenciaError(
+        raise ModoAgenciaError(gettext(
             "Este proyecto está gestionado por Creatv (modo agencia): no se puede desconectar así. "
-            "Un admin tiene que desasignarlo (Volver a modo propia).")
+            "Un admin tiene que desasignarlo (Volver a modo propia)."))
     return _borrar_crudo(cliente)
 
 
@@ -349,9 +356,10 @@ def credenciales_ads(cliente):
     Meta (con el prefijo act_); meta_ads/auth lo normaliza."""
     datos = cargar(cliente)
     if datos and datos.get("modo") == MODO_AGENCIA and not datos.get("token"):
-        raise MetaConexionError("La agencia no está conectada — un admin tiene que conectar el Business de Creatv.")
+        raise MetaConexionError(gettext(
+            "La agencia no está conectada — un admin tiene que conectar el Business de Creatv."))
     if not datos or not datos.get("token") or not datos.get("ad_account_id"):
-        raise MetaConexionError("Este proyecto no tiene Meta conectado — conéctalo en Configuración › Conexiones.")
+        raise MetaConexionError(gettext("Este proyecto no tiene Meta conectado — conéctalo en Experimentos."))
     return {
         "token": datos["token"],
         "ad_account_id": datos["ad_account_id"],
@@ -370,7 +378,7 @@ def _graph_get(edge, token, params=None, timeout=30):
     try:
         resp = requests.get(f"{GRAPH_URL}/{edge}", params=p, timeout=timeout)
     except requests.exceptions.RequestException as e:
-        raise MetaConexionError(f"No pude hablar con Meta ({type(e).__name__}).") from None
+        raise MetaConexionError(gettext("No pude hablar con Meta (%(error)s).", error=type(e).__name__)) from None
     try:
         datos = resp.json() if resp.content else {}
     except ValueError:
@@ -378,14 +386,14 @@ def _graph_get(edge, token, params=None, timeout=30):
     if not resp.ok or "error" in datos:
         err = datos.get("error") or {}
         mensaje = err.get("message") or f"HTTP {resp.status_code}"
-        raise MetaConexionError(f"Meta respondió: {mensaje}", codigo=err.get("code"))
+        raise MetaConexionError(gettext("Meta respondió: %(mensaje)s", mensaje=mensaje), codigo=err.get("code"))
     return datos
 
 
 def cambiar_code_por_token(cliente, code):
     """Servidor a servidor: el único lugar donde se usa el app_secret del proyecto."""
-    _rechazar_si_agencia(cliente, "cambiar un código de autorización por un token")
-    app = _app_obligatoria(cliente, "cambiar el código por un token")
+    _rechazar_si_agencia(cliente, gettext("cambiar un código de autorización por un token"))
+    app = _app_obligatoria(cliente, gettext("cambiar el código por un token"))
     params = {
         "client_id": app["app_id"],
         "client_secret": app["app_secret"],
@@ -395,14 +403,15 @@ def cambiar_code_por_token(cliente, code):
     try:
         resp = requests.get(f"{GRAPH_URL}/oauth/access_token", params=params, timeout=30)
     except requests.exceptions.RequestException as e:
-        raise MetaConexionError(f"No pude hablar con Meta ({type(e).__name__}).") from None
+        raise MetaConexionError(gettext("No pude hablar con Meta (%(error)s).", error=type(e).__name__)) from None
     try:
         datos = resp.json() if resp.content else {}
     except ValueError:
         datos = {}
     if not resp.ok or "error" in datos or not datos.get("access_token"):
         err = datos.get("error") or {}
-        raise MetaConexionError(f"Meta no aceptó la autorización: {err.get('message') or 'sin token'}",
+        motivo = err.get("message") or gettext("sin token")
+        raise MetaConexionError(gettext("Meta no aceptó la autorización: %(motivo)s", motivo=motivo),
                                 codigo=err.get("code"))
     expira_en = None
     if datos.get("expires_in"):
@@ -475,9 +484,10 @@ def estado(cliente):
         # cuál es para no reconectar en vano.
         import meta_agencia  # noqa: PLC0415
         if meta_agencia._registro_ilegible():
-            motivo = "La credencial de agencia es ilegible (¿cambió FLASK_SECRET_KEY?): un admin tiene que volver a conectarla."
+            motivo = gettext("La credencial de agencia es ilegible (¿cambió FLASK_SECRET_KEY?): "
+                             "un admin tiene que volver a conectarla.")
         else:
-            motivo = "La agencia no está conectada"
+            motivo = gettext("La agencia no está conectada")
         return {"estado": "roto", "detalle": _detalle(datos), "verificado": True, "motivo": motivo}
     if not datos or not datos.get("token"):
         return {"estado": "sin_conectar", "detalle": {}, "verificado": True}
@@ -560,6 +570,8 @@ def estado_pixel(cliente, solo_cache=False):
       sin_datos     hay pixel pero nunca disparó, o no en los últimos 7 días
       ok            disparó en los últimos 7 días
       error         la API falló (detalle sin token)
+    El `detalle` fijo es un msgid (N_): se cachea para todos los que miran y
+    la plantilla lo muestra con |traducir; el de un error es el texto del error.
     Con `solo_cache=True` nunca llama a Graph: devuelve lo cacheado o None
     si no hay nada vigente — para rutas POST (crear experimento) que no
     pueden esperar hasta 30 s bajo el lock de Meta — y para ver_cliente, que
@@ -574,7 +586,7 @@ def estado_pixel(cliente, solo_cache=False):
 
     resultado = {"estado": "sin_conexion", "pixel_id": None, "nombre": None, "ultimo_disparo": None, "detalle": ""}
     if estado(cliente).get("estado") != "conectado":
-        resultado["detalle"] = "Meta no está conectado."
+        resultado["detalle"] = N_("Meta no está conectado.")
     else:
         try:
             pixels = _listar_pixels_con_credenciales(cliente)
@@ -583,18 +595,17 @@ def estado_pixel(cliente, solo_cache=False):
             resultado.update(estado="error", detalle=cola.sin_token(str(e)))
         else:
             if not pixels:
-                resultado.update(estado="sin_pixel", detalle="La cuenta publicitaria no tiene ningún Pixel.")
+                resultado.update(estado="sin_pixel", detalle=N_("La cuenta publicitaria no tiene ningún Pixel."))
             else:
                 pixel, fecha = _pixel_mas_reciente(pixels)
                 resultado.update(pixel_id=pixel.get("id"), nombre=pixel.get("name"),
                                  ultimo_disparo=pixel.get("last_fired_time"))
                 if fecha is None:
-                    resultado.update(estado="sin_datos", detalle="El Pixel existe pero nunca ha disparado.")
+                    resultado.update(estado="sin_datos", detalle=N_("El Pixel existe pero nunca ha disparado."))
                 elif datetime.now(timezone.utc) - fecha <= timedelta(days=_PIXEL_DIAS_VIVO):
-                    resultado.update(estado="ok", detalle="El Pixel disparó en los últimos 7 días.")
+                    resultado.update(estado="ok", detalle=N_("El Pixel disparó en los últimos 7 días."))
                 else:
-                    resultado.update(estado="sin_datos",
-                                     detalle=f"El Pixel lleva más de {_PIXEL_DIAS_VIVO} días sin disparar.")
+                    resultado.update(estado="sin_datos", detalle=N_("El Pixel lleva más de 7 días sin disparar."))
     _cache_pixel[cliente] = (ahora, resultado)
     return resultado
 

@@ -72,7 +72,9 @@ def test_preparar_encola_final_guion(base_temporal, monkeypatch):
     t = llamadas[0]
     assert t["tipo"] == "final_guion"
     assert t["job_id"] == f"acme__{cf_id}__final_guion"
-    assert t["max_intentos"] == 2 and t["duracion_estimada"] == 25 and t["cliente"] == "acme"
+    # Un solo intento: el guion cobra (Whisper + Claude) y un reintento automático pagaba otra vez y
+    # sobrescribía el gasto del primero con la misma referencia (revisión de PND-001, 2026-10-02).
+    assert t["max_intentos"] == 1 and t["duracion_estimada"] == 25 and t["cliente"] == "acme"
     assert t["payload"] == {"cliente": "acme", "cf_id": cf_id,
                             "opciones": {"precio": 89900.0, "idioma_base": "es"}}
 
@@ -235,6 +237,43 @@ def test_producir_voz_o_estilo_invalidos_usan_defecto(base_temporal, monkeypatch
     assert o["con_sonido"] is False and o["mezcla"] == "equilibrada" and o["sonido"] == "nativo"
 
 
+def _voz_propia(cliente="acme", nombre="Astrid", voice_id="mmx_1"):
+    import materiales
+    import voces_propias
+    return materiales.registrar(
+        cliente, tipo="audio", origen=voces_propias.ORIGEN, url=f"https://r2/vp_{voice_id}.mp3",
+        hash=materiales.hash_clave("voz_propia", "minimax", voice_id), bytes=10, duracion_ms=3000, costo_usd=3.0,
+        extra={"nombre": nombre, "forma": "disenada", "proveedor": "minimax", "voice_id": voice_id,
+               "idioma_muestra": "es", "estrenada": True})
+
+
+def test_producir_con_voz_propia_la_pasa_tal_cual(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import dashboard
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)
+    v = _voz_propia()
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    c = _cliente_admin(dashboard)
+    c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir",
+           data={"destinos": ["es_CO", "en_US"], "voz": f"vp:{v['id']}", "con_voz": "si"})
+    assert [l["payload"]["opciones"]["voz"] for l in llamadas] == [f"vp:{v['id']}"] * 2
+
+
+def test_producir_con_voz_propia_borrada_o_ajena_no_encola(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import dashboard
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)
+    ajena = _voz_propia(cliente="otro")
+    _no_encolar(monkeypatch, dashboard)
+    c = _cliente_admin(dashboard)
+    for valor in (f"vp:{ajena['id']}", "vp:999999"):
+        r = c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={"destinos": ["es_CO"], "voz": valor})
+        assert r.status_code == 302
+    assert sum("Mis voces" in m for m in _flashes(c)) == 2
+
+
 # ---------- guardar guion ----------
 
 def _form_guion(guion, **cambios):
@@ -353,6 +392,7 @@ def test_ver_cliente_pasa_contexto_fe(base_temporal, monkeypatch):
 def _entorno_plantilla():
     import jinja2
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    import catalogo_productos
     import gastos
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(raiz, "templates")),
                              extensions=["jinja2.ext.i18n"])
@@ -362,17 +402,24 @@ def _entorno_plantilla():
     env.globals.update(doctrina.globales_plantilla())   # editor del ángulo (doctrina, bloque 2)
     env.filters["usd"] = gastos.formatear   # mismo filtro que registra dashboard (costos «US$ 0,07»)
     env.filters["traducir"] = lambda x: x   # idiomas.traducir necesita un app de Flask-Babel; acá no hay ninguno
+    # _selector_productos.html (incluida por _tab_creativeflowplus.html) agrupa
+    # colores con este filtro (Task 14) — sin registrarlo acá, un catálogo no
+    # vacío revienta con TemplateRuntimeError: No filter named 'agrupar_por_producto'.
+    env.filters["agrupar_por_producto"] = catalogo_productos.agrupar_por_producto
     return env
 
 
-def _contexto_minimo(items):
+def _contexto_minimo(items, activos_por_categoria=None, categorias=None, productos=None):
+    import gastos
     from final_edition import tipos
     from providers import fal_audio
     return dict(
         creative_flow_items=items, cliente="acme", logos=[],
+        tarifa_musica_crear=gastos.costo_musica_estimada("generada"),
         modelos_flowplus_video={}, modelos_flowplus_imagen={}, preferencias_flowplus={},
         preferencias_sonido={"con_sonido": True, "musica_al_crear": ""},
-        fp_prefill=None, activos_por_categoria={}, categorias={}, productos=[],
+        fp_prefill=None, activos_por_categoria=activos_por_categoria if activos_por_categoria is not None else {},
+        categorias=categorias if categorias is not None else {}, productos=productos if productos is not None else [],
         referencias_bandeja=[], trabajo_link=None, capacidades_meta={},
         paises_fe=tipos.PAISES, voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
         nombres_estilo_musica=tipos.NOMBRES_ESTILO_MUSICA,
@@ -398,11 +445,13 @@ def _item_video_listo(**extra):
 # tarjeta. Acá se renderizan las dos piezas por separado, con el mismo
 # contexto que reciben en dashboard.
 def _listas(items):
-    """Lo que dashboard._listas_crear_final le da a las pestañas."""
-    videos = [i for i in items if i.get("estado") == "video_listo" and (i.get("tipo") or "video") != "imagen"]
-    finales = [(i, f) for i in items for f in (i.get("finales") or [])]
-    return dict(crear=items, crear_total=len(items), final_videos=videos, final_videos_total=len(videos),
-                finales=finales, finales_total=len(finales))
+    """Lo que dashboard._listas_crear y dashboard._tablero_final le dan a las
+    pestañas (el tablero de Final edition, 2026-10-02)."""
+    from final_edition import tablero
+    t = tablero.armar(items, {})
+    return dict(crear=items, crear_total=len(items),
+                fe_en_edicion=t["en_edicion"], fe_en_edicion_total=len(t["en_edicion"]),
+                fe_finalizados=t["finalizados"], fe_finalizados_total=len(t["finalizados"]), fe_cifras=t["cifras"])
 
 
 def _tab_final(env, items):
@@ -415,14 +464,41 @@ def _detalle_video_fe(env, item):
     return env.get_template("_final_detalle_respuesta.html").render(**_contexto_minimo([item]), item=item, f=None)
 
 
-def _tab_crear(env, items):
+def _tab_crear(env, items, activos_por_categoria=None, categorias=None, productos=None):
     """La pestaña Crear: formulario + tarjetas + JS del modal."""
-    return env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo(items), **_listas(items))
+    return env.get_template("_tab_creativeflowplus.html").render(
+        **_contexto_minimo(items, activos_por_categoria=activos_por_categoria, categorias=categorias, productos=productos),
+        **_listas(items))
 
 
 def _detalle_crear(env, item):
     """Lo que responde cf_detalle para esa pieza."""
     return env.get_template("_crear_detalle_respuesta.html").render(**_contexto_minimo([item]), item=item)
+
+
+def test_tab_crear_con_catalogo_agrupa_los_colores():
+    """Regresión (Task 14, ronda de arreglos 1): _entorno_plantilla es un
+    jinja2.Environment aparte del de dashboard.app y necesita su propio
+    registro de `agrupar_por_producto` — con `activos_por_categoria` vacío
+    (el contexto mínimo de siempre) el filtro nunca se ejecuta de verdad
+    porque vive dentro de `{% if lista %}`, así que esta prueba, a propósito,
+    le da un catálogo con un producto de dos colores (forma real de
+    catalogo_productos.listar()) para que el filtro corra y, si algún día
+    falta el registro, truene con TemplateRuntimeError en vez de quedar en
+    verde por accidente."""
+    import catalogo_productos
+    env = _entorno_plantilla()
+    catalogo = [
+        {"id": "original/pink", "producto_id": "original", "nombre_producto": "Original",
+         "nombre": "Original — Pink", "variante": "pink", "categoria": "producto"},
+        {"id": "original/beige", "producto_id": "original", "nombre_producto": "Original",
+         "nombre": "Original — Beige", "variante": "beige", "categoria": "producto"},
+    ]
+    html = _tab_crear(env, [], activos_por_categoria={"producto": catalogo},
+                      categorias=catalogo_productos.CATEGORIAS, productos=catalogo)
+    dialogo = html.split('id="fp-catalogo"', 1)[1].split("</dialog>", 1)[0]
+    assert 'class="producto-grupo"' in dialogo
+    assert 'value="producto:original/pink"' in dialogo and 'value="producto:original/beige"' in dialogo
 
 
 def test_plantilla_sin_guion_ofrece_preparar():
@@ -484,8 +560,15 @@ def test_plantilla_con_guion_y_finales_renderiza():
     assert "trabajo-acme__cf_1__en_US__final" in tarjetas
     assert "generado-badge" in tarjetas
     assert "ffmpeg murió" in html
-    # la clon + 3 finales en las cuadrículas (el selector del JS no cuenta)
-    assert len(re.findall(r'data-cf="[\w-]+"', tarjetas)) == 4
+    # Tablero (2026-10-02): la clon en «En edición» (una final produciéndose
+    # y otra con error, con sus banderas) y solo la final lista en
+    # «Finalizados» (el selector del JS no cuenta).
+    assert len(re.findall(r'data-cf="[\w-]+"', tarjetas)) == 2
+    assert "1 produciéndose" in tarjetas and "1 con error" in tarjetas
+    # Cada final, una bandera con su estado (la lista en verde, la viva
+    # brillando, la de error en rojo).
+    assert 'class="fe-bandera-ok" title="es_CO' in tarjetas and 'class="fe-bandera-vivo" title="en_US' in tarjetas
+    assert 'class="fe-bandera-error" title="pt_BR' in tarjetas
     assert "Final de Producto" in tarjetas
     # I4: es_CO ya tiene una final -> hint + checkbox marcado para confirm(); en_US y pt_BR no.
     assert "ya producida — se reemplaza" in html
@@ -511,6 +594,34 @@ def test_plantilla_clon_mudo_desmarca_el_sonido():
     assert "este clon no trae sonido" in html
 
 
+def test_plantilla_ofrece_mis_voces_solo_si_hay():
+    env = _entorno_plantilla()
+    item = _item_video_listo(guion_base=GUION_BASE)   # «Producir finales» solo sale con guion
+    ctx = dict(_contexto_minimo([item]), item=item, f=None)
+    con = env.get_template("_final_detalle_respuesta.html").render(
+        **ctx, mis_voces_fe=[{"valor": "vp:7", "nombre": "Astrid"}])
+    assert '<optgroup label="Mis voces">' in con and '<option value="vp:7">Astrid</option>' in con
+    selector_voz = con.split('<select name="voz">', 1)[1].split("</select>", 1)[0]
+    assert '<option value="vp:7">Astrid</option>' in selector_voz     # en el selector «Voz», no en otro
+    sin = env.get_template("_final_detalle_respuesta.html").render(**ctx, mis_voces_fe=[])
+    assert "Mis voces" not in sin
+
+
+def test_tablero_final_degradada_es_finalizada_y_su_bandera_va_en_verde():
+    """Una «degradada» (sin voz o sin música) es un video terminado: va a
+    Finalizados con su aviso, y en la tarjeta de su video que sigue en edición
+    (otra final con error) su bandera es «lista», no roja."""
+    env = _entorno_plantilla()
+    base = {"video_url": "https://r2/f.mp4", "url_miniatura": None, "duracion_s": 8.0, "costo_usd": None,
+            "capas": {}, "guion": None, "trabajo": None}
+    finales = [dict(base, id="cf_1__es_CO", idioma="es", pais="CO", estado="degradada", error=None),
+               dict(base, id="cf_1__en_US", idioma="en", pais="US", estado="error", error="ffmpeg", video_url=None)]
+    tarjetas = _tab_final(env, [_item_video_listo(finales=finales)])
+    assert 'class="fe-bandera-ok" title="es_CO' in tarjetas and 'class="fe-bandera-error" title="en_US' in tarjetas
+    assert 'data-cf="cf_1__es_CO"' in tarjetas and "Sin voz/música" in tarjetas
+    assert 'data-cf="cf_1__en_US"' not in tarjetas
+
+
 def test_plantilla_imagen_no_muestra_final_edition():
     """Una imagen no entra a Final edition: la pestaña no la lista y Crear no
     ofrece «Llevar a final edition» (un video listo sí)."""
@@ -518,7 +629,7 @@ def test_plantilla_imagen_no_muestra_final_edition():
     imagen = _item_video_listo(tipo="imagen")
     html = _tab_final(env, [imagen])
     assert 'data-cf="cf_1"' not in html and "Preparar guion con IA" not in html
-    assert "Videos listos (0)" in html
+    assert "0 videos listos en Crear" in html
     crear = _tab_crear(env, [imagen]) + _detalle_crear(env, imagen)    # la tarjeta y su detalle (por fetch)
     marcado = re.sub(r"<script>.*?</script>", "", crear, flags=re.S)   # lo que se ve, sin los comentarios del JS
     assert "Llevar a final edition" not in marcado and "Final edition" not in marcado
@@ -774,3 +885,75 @@ def test_ruta_revisar_encola_solo_piezas_terminadas(base_temporal, monkeypatch):
     c.post("/cliente/acme/creative_flow/cf_no_existe/revisar")
     assert encoladas == [("acme", cf_id)]
 
+
+
+def test_selector_de_idioma_base_marca_el_idioma_del_proyecto():
+    """Decisión B (2026-09-28): el selector se queda; de entrada marca el
+    idioma del proyecto (`idioma_proyecto`, del context processor) y, sin él,
+    «es» como hasta hoy."""
+    env = _entorno_plantilla()
+    item = _item_video_listo()
+    en_ingles = env.get_template("_final_detalle_respuesta.html").render(
+        **_contexto_minimo([item]), item=item, f=None, idioma_proyecto="en")
+    assert 'name="idioma_base"' in en_ingles
+    assert '<option value="en" selected>' in en_ingles and '<option value="es" selected>' not in en_ingles
+    sin_proyecto = _detalle_video_fe(env, item)
+    assert '<option value="es" selected>' in sin_proyecto and '<option value="en" selected>' not in sin_proyecto
+
+
+def test_boton_producir_con_sin_n():
+    env = _entorno_plantilla()
+    html = _detalle_video_fe(env, _item_video_listo(guion_base=GUION_BASE))
+    assert 'data-plantilla="Producir {n} finales' in html and 'data-sin-n="Producir finales' in html
+    # Un solo destino: «Producir 1 final», no «Producir 1 finales» (fix round 1).
+    assert 'data-plantilla-uno="Producir 1 final' in html and "Producir 1 finales" not in html
+    tab = _tab_final(env, [_item_video_listo(guion_base=GUION_BASE)])
+    assert "btn.dataset.sinN" in tab and "replace('Producir {n} finales'" not in tab
+    assert "n === 1 ? btn.dataset.plantillaUno" in tab
+
+
+@pytest.mark.parametrize("enviado, esperado", [(None, "en"), ("pt", "pt"), ("es", "es"), ("fr", "en")])
+def test_preparar_idioma_base_elegido_o_el_del_proyecto(base_temporal, monkeypatch, enviado, esperado):
+    """Decisión B (2026-09-28): el guion base no es por destino. Sin elección
+    (o con una que no vale) sale en el idioma del proyecto; la elección
+    explícita del selector gana."""
+    import dashboard
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    cf_id = _sesion_video_listo()
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    datos = {"precio": "24.99", **({"idioma_base": enviado} if enviado else {})}
+    _cliente_admin(dashboard).post(f"/cliente/acme/creative_flow/{cf_id}/final/preparar", data=datos)
+    assert llamadas[0]["payload"]["opciones"] == {"precio": 24.99, "idioma_base": esperado}
+
+
+def test_decision_b_un_proyecto_en_ingles_produce_co_en_espanol(base_temporal, monkeypatch):
+    """Decisión B (Daniel, 2026-09-28; reemplaza §B5 y el «Final edition» de
+    §Pruebas del spec): en un proyecto en inglés el destino CO sigue siendo
+    `es_CO` — la final se localiza en español con precio en COP — y la clave
+    queda `<cf_id>__es_CO`."""
+    import creative_flow as cf
+    import dashboard
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    base_en = dict(GUION_BASE, idioma="en", pais="US")
+    item = _item_video_listo(guion_base=base_en)
+    html = _entorno_plantilla().get_template("_final_detalle_respuesta.html").render(
+        **_contexto_minimo([item]), item=item, f=None, idioma_proyecto="en")
+    assert 'name="destinos" value="es_CO"' in html
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, base_en)
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    _cliente_admin(dashboard).post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={
+        "destinos": ["es_CO"], "voz": "Rachel", "estilo_musica": "energetico", "precio_es_CO": "89900"})
+    (t,) = llamadas
+    assert t["job_id"] == f"acme__{cf_id}__es_CO__final"
+    assert (t["payload"]["idioma"], t["payload"]["pais"]) == ("es", "CO")
+    assert t["payload"]["opciones"]["precios"] == {"es_CO": 89900.0}
+    assert cf.final_por_legado("acme", f"{cf_id}__es_CO")["estado"] == "generando"
+
+
+def test_contexto_minimo_pasa_tarifa_musica_del_servidor(monkeypatch):
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio, 'COSTO_USD_POR_PISTA_MUSICA', .037)
+    assert _contexto_minimo([])['tarifa_musica_crear'] == .037

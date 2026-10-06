@@ -20,11 +20,13 @@ import anthropic
 import doctrina
 import flowplus_prompt
 import idiomas
+import plantillas_anuncio
 from providers import flowplus_modelos
+from guiones.claude import tokens_entrada_equivalentes
+from nicho.avatares import costo_real
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 MAX_TOKENS = 4000
-COSTO_LLAMADA_USD = 0.01
 VERSION = 1
 MAX_CARACTERES_PROMPT = 2500
 
@@ -41,8 +43,9 @@ _PARAMETRO_ESCRITO = re.compile(r"\b(\d+:\d+|\d{3,4}p|\d+ ?fps|\d+ segundos? de 
 
 
 class DirectorError(Exception):
-    def __init__(self, motivo):
+    def __init__(self, motivo, costo_usd=0.0):
         self.motivo = motivo
+        self.costo_usd = costo_usd
         super().__init__(f"El director no pudo armar los planos: {motivo}")
 
 
@@ -155,8 +158,9 @@ def _mensaje(sesion, idioma):
     con_sonido = bool(sesion.get("con_sonido"))
     lineas.append(f"SONIDO: {'sí' if con_sonido else 'no'}" + (f" — {sesion['sonido_texto']}" if con_sonido and sesion.get("sonido_texto") else ""))
     lineas.append(f"PRESET: {sesion.get('preset_camara') or 'auto'}")
-    if sesion.get("plantilla"):
-        lineas.append(f"PLANTILLA: {json.dumps(sesion['plantilla'], ensure_ascii=False)}")
+    plantilla = plantillas_anuncio.por_id(sesion.get("plantilla"))
+    if plantilla:
+        lineas += plantillas_anuncio.bloque_director(plantilla, sesion.get("duracion_objetivo"), refs)
     ctx = sesion.get("contexto") or {}
     if ctx.get("persona"):
         lineas.append(f"AUDIENCIA: {json.dumps(ctx['persona'], ensure_ascii=False)}")
@@ -257,17 +261,25 @@ def compilar(cliente, sesion, idioma="es"):
     if duracion <= 0:
         raise DirectorError("la sesión no tiene duración")
     n = n_planos(duracion)
+    plantilla = plantillas_anuncio.por_id(sesion.get("plantilla"))
+    if plantilla:
+        # Con receta, al menos un plano por acto (spec §9).
+        n = plantillas_anuncio.n_planos(plantilla, duracion, n)
     cierre = flowplus_modelos.cierre_sonido(modelo)
     idioma = "en" if idioma == "en" else "es"
     system = doctrina.bloque_system("video", extra=_system(familia, cierre, n, duracion, idioma), idioma=idioma)
     mensajes = [{"role": "user", "content": _mensaje(sesion, idioma)}]
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     ultimo_error = None
+    entrada = salida = 0
     for _intento in range(2):
         try:
             resp = client.messages.create(model=MODEL, max_tokens=MAX_TOKENS, system=system, messages=mensajes)
         except Exception as e:
-            raise DirectorError(f"Anthropic: {e}") from e
+            raise DirectorError(f"Anthropic: {e}", costo_real(entrada, salida, MODEL)) from e
+        uso = getattr(resp, "usage", None)
+        entrada += tokens_entrada_equivalentes(uso)
+        salida += int(getattr(uso, "output_tokens", 0) or 0)
         texto = "".join(getattr(b, "text", "") for b in resp.content)
         if getattr(resp, "stop_reason", None) == "max_tokens":
             # Se cortó a mitad de la respuesta: ni vale la pena intentar
@@ -292,6 +304,8 @@ def compilar(cliente, sesion, idioma="es"):
             mensajes = mensajes + [{"role": "assistant", "content": texto},
                                    {"role": "user", "content": f"Tu respuesta anterior no sirvió ({ultimo_error}). Responde solo el JSON pedido."}]
             continue
-        resultado.update({"modelo_claude": MODEL, "version": VERSION, "usd": COSTO_LLAMADA_USD})
+        except Exception as e:
+            raise DirectorError(str(e), costo_real(entrada, salida, MODEL)) from e
+        resultado.update({"modelo_claude": MODEL, "version": VERSION, "usd": costo_real(entrada, salida, MODEL)})
         return resultado
-    raise DirectorError(ultimo_error or "respuesta inválida")
+    raise DirectorError(ultimo_error or "respuesta inválida", costo_real(entrada, salida, MODEL))

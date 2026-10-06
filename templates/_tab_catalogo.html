@@ -1,24 +1,70 @@
+{# Catálogo (spec 2026-09-28 §10): galería por fragmento (catalogo_grid) con
+   filtros en el hash (#catalogo?cat=&filtro=&q=&orden=), ficha en un panel
+   lateral (catalogo_ficha, #catalogo?ficha=<cat>:<pid>), «+ Nuevo» y
+   «Traer de mi tienda» como desplegables. Contexto de ver_cliente:
+   categorias, n_por_categoria, logos, tiendas_cliente, trabajos_prod,
+   columnas_csv, precios, monedas_catalogo, moneda_catalogo, tipos_producto,
+   zonas_cuerpo, presets_cuerpo, etiquetas_presets, personajes. #}
 <div class="panel-cabecera">
   <div>
     <h2>{{ _('Catálogo') }}</h2>
-    <p class="panel-cabecera-desc">{{ _('Todo lo que la IA debe reproducir <strong>exacto</strong>: tus productos, la cara de tu marca y tus espacios. Cada activo lleva fotos de referencia y una regla de consistencia que va en cada generación. Un producto lleva además su precio y su URL de compra, se marca «en prueba» y desde aquí se le crea un experimento.') }}</p>
+    <p class="panel-cabecera-desc">{{ _('Todo lo que la IA debe reproducir <strong>exacto</strong>: tus productos con sus colores, la cara de tu marca y tus espacios. Cada uno lleva fotos de referencia y una regla de consistencia que va en cada generación; un producto lleva además su precio y su URL de compra.') }}</p>
+  </div>
+  <div class="panel-cabecera-acciones">
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-producto" data-cat-solo="producto">{{ _('+ Nuevo producto') }}</button>
+    <button type="button" class="btn-sm" data-abrir-detalle="cat-traer" data-cat-solo="producto">{{ _('Traer de mi tienda') }}</button>
   </div>
 </div>
 
 <div class="cat-tabs" id="cat-tabs">
   {% for cid, c in categorias.items() %}
-  <button type="button" class="cat-tab" data-cat="{{ cid }}">{{ c.plural|traducir }} <span class="cat-n">{{ activos_por_categoria[cid] | length }}</span></button>
+  <button type="button" class="cat-tab" data-cat="{{ cid }}">{{ c.plural|traducir }} <span class="cat-n" data-n-cat="{{ cid }}">{{ n_por_categoria[cid] }}</span></button>
   {% endfor %}
   <button type="button" class="cat-tab" data-cat="logo">{{ _('Logos') }} <span class="cat-n">{{ logos | length }}</span></button>
 </div>
 
 {% for cid, c in categorias.items() %}
 <div class="cat-panel" data-cat="{{ cid }}" hidden>
-  <p class="vacio" style="padding-top:0;">{{ c.descripcion_ui|traducir }}</p>
+  {% if cid == 'producto' %}
+  {% for t in tiendas_cliente %}{% set trabajo_t = trabajos_prod.tiendas.get(t.id) %}{% if trabajo_t %}
+  <div class="idea-block cat-sync">
+    <div class="idea-header"><div><span class="idea-label">{{ _('Sincronizando') }}</span><div class="idea-texto">{{ _('Leyendo %(nombre)s y creando los productos…', nombre=(t.nombre or t.dominio or t.tipo)) }}</div></div></div>
+    {# id propio (no "trabajo-<job_id>"): Configuración › Conexiones pinta su
+       propia barra para el mismo job_id, y getElementById solo encuentra la
+       primera — con el mismo id, la de Configuración se queda sin dueño. #}
+    <div class="barra-progreso" id="cat-sync-{{ trabajo_t.job_id }}" data-poll-job="{{ trabajo_t.job_id }}"><div class="barra-progreso-fill"></div></div>
+    <div class="progreso-texto"></div>
+  </div>
+  {% endif %}{% endfor %}
+  {% endif %}
 
-  <details class="comparacion-modelos" style="margin-top:0;">
-    <summary class="btn-generar btn-sm">{{ _('+ Nuevo %(nombre)s', nombre=(c.nombre|traducir|lower)) }}</summary>
+  <div class="cat-toolbar">
+    <input type="search" class="cat-buscador" placeholder="{{ _('Buscar por nombre o color…') }}" aria-label="{{ _('Buscar') }}" data-cat-q>
+    {% if cid == 'producto' %}
+    <div class="cat-chips-filtro" role="group" aria-label="{{ _('Filtrar') }}">
+      <button type="button" class="chip activo" data-cat-filtro="todos">{{ _('Todos') }} <span data-n="todos"></span></button>
+      <button type="button" class="chip" data-cat-filtro="en_prueba">{{ _('En prueba') }} <span data-n="en_prueba"></span></button>
+      <button type="button" class="chip" data-cat-filtro="sin_precio">{{ _('Sin precio') }} <span data-n="sin_precio"></span></button>
+      <button type="button" class="chip" data-cat-filtro="sin_url">{{ _('Sin URL') }} <span data-n="sin_url"></span></button>
+      <button type="button" class="chip" data-cat-filtro="sin_fotos">{{ _('Sin fotos') }} <span data-n="sin_fotos"></span></button>
+      <button type="button" class="chip" data-cat-filtro="archivados">{{ _('Archivados') }} <span data-n="archivados"></span></button>
+    </div>
+    <select class="cat-orden" data-cat-orden data-busqueda aria-label="{{ _('Orden') }}">
+      <option value="prioridad">{{ _('Por prioridad') }}</option>
+      <option value="nombre">{{ _('Por nombre') }}</option>
+    </select>
+    {% endif %}
+  </div>
+
+  <div class="cat-grid-wrap" data-cat-grid="{{ cid }}" data-url="{{ url_for('catalogo_grid', cliente=cliente) }}"><p class="vacio">{{ _('Cargando…') }}</p></div>
+
+  {% if cid == 'producto' %}{% include "_catalogo_importar.html" %}{% endif %}
+
+  <details class="comparacion-modelos cat-nuevo" id="nuevo-{{ cid }}">
+    <summary class="btn-guardar btn-sm">{{ _('+ Nuevo %(nombre)s', nombre=(c.nombre|traducir|lower)) }}</summary>
     <div class="comparacion-contenido">
+      <p class="vacio" style="padding-top:0;">{{ c.descripcion_ui|traducir }}</p>
+      {# ⇩ el <form> de alta se copia tal cual del _tab_catalogo.html anterior (líneas 19–69) ⇩ #}
       <form method="post" action="{{ url_for('crear_producto', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea" style="margin-bottom:0;">
         <input type="hidden" name="categoria" value="{{ cid }}">
         <input type="hidden" name="volver" value="catalogo">
@@ -67,22 +113,12 @@
       </form>
     </div>
   </details>
-
-  {% if cid == 'producto' %}
-  {# Importar (CSV/Excel, URL, tienda) es la opción secundaria: lo normal es
-     crear el producto arriba con sus fotos. Los importados que llegaron sin
-     fotos esperan en su bloque hasta que se las suban. #}
-  {% include "_catalogo_importar.html" %}
-  {% include "_catalogo_sin_fotos.html" %}
+  {% if cid == 'personaje' %}
+  <details class="comparacion-modelos" style="margin-top:1rem;">
+    <summary class="btn-guardar btn-sm">{{ _('Personajes del flujo anterior') }}</summary>
+    <div class="comparacion-contenido">{% include "_seccion_personajes.html" %}</div>
+  </details>
   {% endif %}
-
-  <h2 style="margin-top:1.4rem;">{{ _('%(plural)s (%(n)s)', plural=(c.plural|traducir), n=(activos_por_categoria[cid] | length)) }}</h2>
-  {% if not activos_por_categoria[cid] %}
-  <p class="vacio">{{ _('Todavía no hay %(plural)s. Crea el primero arriba', plural=(c.plural|traducir|lower)) }}{% if cid == 'producto' %} {{ _('o tráelos de un archivo, una URL o tu tienda') }}{% endif %}.</p>
-  {% endif %}
-  {% with productos=activos_por_categoria[cid], categoria_actual=cid, con_mapa=c.con_mapa %}
-  {% include "_catalogo_lista.html" %}
-  {% endwith %}
 </div>
 {% endfor %}
 
@@ -106,27 +142,18 @@
   {% endif %}
 </div>
 
-<script>
-  (function () {
-    var tabs = document.querySelectorAll('#cat-tabs .cat-tab');
-    var paneles = document.querySelectorAll('.cat-panel');
-    var KEY = 'catalogo-cat-{{ cliente }}';
-    function activar(cat) {
-      tabs.forEach(function (t) { t.classList.toggle('activo', t.dataset.cat === cat); });
-      paneles.forEach(function (p) { p.hidden = p.dataset.cat !== cat; });
-      try { localStorage.setItem(KEY, cat); } catch (e) {}
-    }
-    tabs.forEach(function (t) { t.addEventListener('click', function () { activar(t.dataset.cat); }); });
-    var inicial = null;
-    try { inicial = localStorage.getItem(KEY); } catch (e) {}
-    activar(inicial && document.querySelector('.cat-panel[data-cat="' + inicial + '"]') ? inicial : 'producto');
-  })();
-</script>
+<div class="tablero-fondo" id="catalogo-fondo" hidden></div>
+<aside class="tablero-panel cat-panel-lateral" id="catalogo-panel" hidden aria-label="{{ _('Ficha') }}" data-url-base="{{ url_for('ver_cliente', cliente=cliente) }}">
+  <div id="catalogo-panel-cuerpo"></div>
+</aside>
 
 <script>
-  (function () {
-    // Cada maniquí se maneja solo, porque hay uno por producto en la página.
-    document.querySelectorAll('.maniqui-wrap').forEach(function (wrap) {
+  // Maniquíes: los del formulario de alta (en la página) y los de la ficha
+  // (fragmento por fetch: sus <script> no corren, así que el panel llama esto).
+  window.iniciarManiquis = function (raiz) {
+    (raiz || document).querySelectorAll('.maniqui-wrap').forEach(function (wrap) {
+      if (wrap.dataset.listo) return;
+      wrap.dataset.listo = '1';
       var contenedor = wrap.parentElement;
       var checks = contenedor.querySelectorAll('.maniqui-checks input[type="checkbox"]');
       if (!checks.length) return;
@@ -134,7 +161,6 @@
       checks.forEach(function (c) { porZona[c.value] = c; });
       var resumen = wrap.querySelector('.maniqui-resumen');
       var zonas = wrap.querySelectorAll('.maniqui-zonas path');
-
       function pintar() {
         var activas = [];
         zonas.forEach(function (z) {
@@ -146,7 +172,6 @@
           ? {{ _('%(n)s zona(s) marcada(s). El modelo va a recibir la ubicación y la proporción exactas.', n='__N__')|tojson }}.replace('__N__', activas.length)
           : {{ _('Sin zonas: el producto no va sobre una persona (una cobija, un objeto de escena).')|tojson }};
       }
-
       zonas.forEach(function (z) {
         z.addEventListener('click', function () {
           var c = porZona[z.dataset.zona];
@@ -155,7 +180,6 @@
           pintar();
         });
       });
-
       wrap.querySelectorAll('.maniqui-preset').forEach(function (b) {
         b.addEventListener('click', function () {
           var ids = (b.dataset.preset || '').split(',').filter(Boolean);
@@ -163,12 +187,285 @@
           pintar();
         });
       });
-
       pintar();
+    });
+  };
+  window.iniciarManiquis(document);
+
+  (function () {
+    var raiz = document.getElementById('tab-catalogo');
+    var tabs = raiz.querySelectorAll('#cat-tabs .cat-tab');
+    var paneles = raiz.querySelectorAll('.cat-panel');
+    var KEY = 'catalogo-cat-{{ cliente }}';
+    var KEY_TAB = 'tab-activa-{{ cliente }}';
+    var H = {'X-Requested-With': 'fetch'};
+    var estado = {cat: 'producto', filtro: 'todos', q: '', orden: 'prioridad'};
+    var panel = document.getElementById('catalogo-panel');
+    var cuerpo = document.getElementById('catalogo-panel-cuerpo');
+    var fondo = document.getElementById('catalogo-fondo');
+    var fichaActual = null, peticionFicha = 0, peticionGrid = 0, cargado = {};
+
+    function leerHash() {
+      var h = location.hash || '', out = {};
+      if (h.indexOf('#catalogo') !== 0) return out;
+      var i = h.indexOf('?');
+      if (i >= 0) new URLSearchParams(h.slice(i + 1)).forEach(function (v, k) { if (v) out[k] = v; });
+      return out;
+    }
+    function escribirHash() {
+      if ((location.hash || '').indexOf('#catalogo') !== 0) return;
+      var q = new URLSearchParams();
+      if (estado.cat !== 'producto') q.set('cat', estado.cat);
+      if (estado.filtro !== 'todos') q.set('filtro', estado.filtro);
+      if (estado.q) q.set('q', estado.q);
+      if (estado.orden !== 'prioridad') q.set('orden', estado.orden);
+      if (fichaActual) q.set('ficha', fichaActual);
+      var s = q.toString();
+      history.replaceState(null, '', '#catalogo' + (s ? '?' + s : ''));
+    }
+    // Las barras de un fragmento (importar, crear activo, pedidos) no traen
+    // <script>: se arrancan buscando [data-poll-job].
+    function arrancarBarras(nodo) {
+      nodo.querySelectorAll('[data-poll-job]').forEach(function (el) {
+        if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
+      });
+    }
+    arrancarBarras(raiz);
+
+    // ---- Galería ----
+    function wrapDe(cat) { return raiz.querySelector('.cat-grid-wrap[data-cat-grid="' + cat + '"]'); }
+    function pintarContadores(cat, grid) {
+      var p = raiz.querySelector('.cat-panel[data-cat="' + cat + '"]');
+      p.querySelectorAll('[data-n]').forEach(function (s) {
+        var v = grid.getAttribute('data-n-' + s.dataset.n);
+        s.textContent = v === null || v === '0' ? '' : v;
+      });
+    }
+    function cargarGrid(cat, pagina, anexar) {
+      var wrap = wrapDe(cat);
+      if (!wrap) return;
+      var q = new URLSearchParams({cat: cat, pagina: String(pagina || 1)});
+      if (cat === 'producto') { q.set('filtro', estado.filtro); q.set('orden', estado.orden); }
+      if (estado.q) q.set('q', estado.q);
+      var mia = ++peticionGrid;
+      if (!anexar) wrap.innerHTML = '<p class="vacio">' + {{ _('Cargando…')|tojson }} + '</p>';
+      fetch(wrap.dataset.url + '?' + q.toString(), {headers: H})
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+        .then(function (html) {
+          if (mia !== peticionGrid) return;
+          if (anexar) {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            var grid = wrap.querySelector('.cat-grid');
+            var viejoMas = grid.querySelector('.cat-mas');
+            if (viejoMas) viejoMas.remove();
+            var tarjetas = grid.querySelector('.cat-tarjetas');
+            tmp.querySelectorAll('.cat-tarjeta').forEach(function (t) { tarjetas.appendChild(t); });
+            var mas = tmp.querySelector('.cat-mas');
+            if (mas) grid.appendChild(mas);
+          } else {
+            wrap.innerHTML = html;
+          }
+          cargado[cat] = true;
+          var g = wrap.querySelector('.cat-grid');
+          if (g) pintarContadores(cat, g);
+          arrancarBarras(wrap);
+        })
+        .catch(function () {
+          if (mia === peticionGrid) wrap.innerHTML = '<p class="campo-error">' + {{ _('No se pudo cargar el catálogo. Revisa tu conexión e intenta de nuevo.')|tojson }} + '</p>';
+        });
+    }
+    function pintarControles() {
+      raiz.querySelectorAll('[data-cat-q]').forEach(function (i) { i.value = estado.q; });
+      raiz.querySelectorAll('[data-cat-filtro]').forEach(function (b) { b.classList.toggle('activo', b.dataset.catFiltro === estado.filtro); });
+      raiz.querySelectorAll('[data-cat-orden]').forEach(function (s) { s.value = estado.orden; });
+    }
+    function activar(cat, recargar) {
+      tabs.forEach(function (t) { t.classList.toggle('activo', t.dataset.cat === cat); });
+      paneles.forEach(function (p) { p.hidden = p.dataset.cat !== cat; });
+      estado.cat = cat;
+      try { localStorage.setItem(KEY, cat); } catch (e) {}
+      if (cat !== 'logo' && (recargar || !cargado[cat])) cargarGrid(cat, 1, false);
+      escribirHash();
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { estado.q = ''; estado.filtro = 'todos'; pintarControles(); activar(t.dataset.cat, true); });
+    });
+    var temporizador = null;
+    raiz.querySelectorAll('[data-cat-q]').forEach(function (i) {
+      i.addEventListener('input', function () {
+        clearTimeout(temporizador);
+        temporizador = setTimeout(function () { estado.q = i.value.trim(); escribirHash(); cargarGrid(estado.cat, 1, false); }, 300);
+      });
+    });
+    raiz.querySelectorAll('[data-cat-filtro]').forEach(function (b) {
+      b.addEventListener('click', function () { estado.filtro = b.dataset.catFiltro; pintarControles(); escribirHash(); cargarGrid('producto', 1, false); });
+    });
+    raiz.querySelectorAll('[data-cat-orden]').forEach(function (s) {
+      s.addEventListener('change', function () { estado.orden = s.value; escribirHash(); cargarGrid('producto', 1, false); });
+    });
+    raiz.addEventListener('click', function (ev) {
+      var mas = ev.target.closest('[data-cat-mas]');
+      if (mas) { mas.disabled = true; cargarGrid(estado.cat, parseInt(mas.dataset.catMas, 10), true); return; }
+      var tarjeta = ev.target.closest('[data-abrir-ficha]');
+      if (tarjeta && !ev.target.closest('form, a, button')) { abrirFicha(tarjeta.dataset.abrirFicha); return; }
+      // «+ Nuevo producto» / «Traer de mi tienda» desde la cabecera: primero la categoría.
+      var abrir = ev.target.closest('[data-abrir-detalle][data-cat-solo]');
+      if (abrir && estado.cat !== abrir.dataset.catSolo) activar(abrir.dataset.catSolo, false);
+    });
+    raiz.addEventListener('keydown', function (ev) {
+      var t = ev.target.closest('[data-abrir-ficha]');
+      if (t && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); abrirFicha(t.dataset.abrirFicha); }
+    });
+    // Confirmaciones: el nombre viaja en data-nombre (escapado por Jinja) y el
+    // mensaje se arma en JS — nunca texto de plantilla dentro de un literal.
+    document.addEventListener('submit', function (ev) {
+      var f = ev.target;
+      if (f.classList.contains('prod-form-archivar')) {
+        var msg = {{ _('¿Archivar «%(nombre)s»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Archivados»).', nombre='__NOMBRE__')|tojson }}.replace('__NOMBRE__', f.dataset.nombre || '');
+        if (!confirm(msg)) ev.preventDefault();
+      } else if (f.classList.contains('cat-form-quitar-color')) {
+        var msg2 = {{ _('¿Quitar el color «%(nombre)s» con sus fotos? No se puede deshacer.', nombre='__NOMBRE__')|tojson }}.replace('__NOMBRE__', f.dataset.nombre || '');
+        if (!confirm(msg2)) ev.preventDefault();
+      }
+    });
+
+    // ---- Ficha (panel lateral) ----
+    var MSG_SIN_GUARDAR = {{ _('Tienes cambios sin guardar en esta ficha. ¿Cerrarla igual?')|tojson }};
+    // Un campo de la ficha editado y sin guardar (base.html lo marca con data-sucio).
+    function fichaSucia() { return !!cuerpo.querySelector('[data-sucio]'); }
+    function mostrar() { panel.hidden = false; fondo.hidden = false; document.body.classList.add('panel-abierto'); }
+    function ocultar() { panel.hidden = true; fondo.hidden = true; document.body.classList.remove('panel-abierto'); }
+    function cerrar() {
+      ocultar(); cuerpo.innerHTML = ''; fichaActual = null; escribirHash();
+    }
+    // Escape, el fondo y la ✕: con algo escrito sin guardar, se pregunta antes.
+    function pedirCerrar() {
+      if (fichaSucia() && !confirm(MSG_SIN_GUARDAR)) return;
+      cerrar();
+    }
+    // Salir de la pestaña (un hash que no es #catalogo o la barra lateral):
+    // con cambios sin guardar el panel solo se OCULTA — su contenido y
+    // fichaActual quedan — y vuelve al regresar a Catálogo; sin cambios se
+    // cierra como siempre. Ocultarlo también suelta el scroll del body
+    // (panel-abierto), que si no quedaba bloqueado en la pestaña nueva.
+    function salirDeCatalogo() {
+      if (panel.hidden) return;
+      if (fichaSucia()) ocultar(); else cerrar();
+    }
+    function volverACatalogo() {
+      if (!fichaActual || !panel.hidden || !cuerpo.firstChild) return;
+      mostrar(); escribirHash();
+    }
+    function abrirFicha(clave) {
+      var partes = clave.split(':'), cat = partes[0], id = partes.slice(1).join(':');
+      var mismo = fichaActual === clave;
+      if (fichaActual && fichaSucia()) {
+        // La misma ficha con cambios no se vuelve a pedir (se perderían); otra
+        // ficha la reemplaza solo si la persona acepta perderlos.
+        if (mismo || !confirm(MSG_SIN_GUARDAR)) { mostrar(); escribirHash(); return; }
+      }
+      fichaActual = clave; mostrar(); escribirHash();
+      var scroll = mismo ? panel.scrollTop : 0;
+      if (!mismo) cuerpo.innerHTML = '<p class="vacio">' + {{ _('Cargando…')|tojson }} + '</p>';
+      var mia = ++peticionFicha;
+      var url = panel.dataset.urlBase + '/catalogo/' + encodeURIComponent(cat) + '/' + id.split('/').map(encodeURIComponent).join('/') + '/ficha';
+      fetch(url, {headers: H})
+        .then(function (r) {
+          if (r.status === 404) {
+            if (mia === peticionFicha) cuerpo.innerHTML = '<div class="estado-vacio"><p class="estado-vacio-titulo">' + {{ _('Este activo ya no existe')|tojson }} + '</p><p class="estado-vacio-texto">' + {{ _('Pudo borrarse en otra pestaña.')|tojson }} + '</p></div>';
+            return null;
+          }
+          if (!r.ok) throw new Error();
+          return r.text();
+        })
+        .then(function (html) {
+          if (html === null || mia !== peticionFicha) return;
+          cuerpo.innerHTML = html;
+          panel.scrollTop = scroll;
+          arrancarBarras(cuerpo);
+          window.iniciarManiquis(cuerpo);
+        })
+        .catch(function () {
+          if (mia === peticionFicha) cuerpo.innerHTML = '<p class="campo-error">' + {{ _('No se pudo abrir la ficha. Revisa tu conexión e intenta de nuevo.')|tojson }} + '</p>';
+        });
+    }
+    fondo.addEventListener('click', pedirCerrar);
+    panel.addEventListener('click', function (ev) {
+      if (ev.target.closest('[data-panel-cerrar]')) { pedirCerrar(); return; }
+      var color = ev.target.closest('[data-color]');
+      if (!color) return;
+      panel.querySelectorAll('[data-color]').forEach(function (b) { b.setAttribute('aria-selected', b === color ? 'true' : 'false'); });
+      panel.querySelectorAll('[data-color-fotos]').forEach(function (d) { d.hidden = d.dataset.colorFotos !== color.dataset.color; });
+      // (por landmark, no por clase: una cadena con «-con» dispara el
+      // detector de español suelto de tests/test_i18n_plantillas.py — es el
+      // único <select name=variante> dentro del <footer> de la ficha).
+      var sel = panel.querySelector('footer select[name=variante]');
+      if (sel) sel.value = color.dataset.color;
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Escape' || panel.hidden) return;
+      // Con el modal «¿Eliminar este producto?» abierto, Escape cierra solo el
+      // modal (lo hace su propio script). Se busca aquí y no al cargar: el
+      // modal está DESPUÉS de este <script> en la página.
+      var modalEliminar = document.getElementById('modal-eliminar-producto');
+      if (modalEliminar && !modalEliminar.hidden) return;
+      pedirCerrar();
+    });
+    window.catalogo = {abrirFicha: abrirFicha, cerrar: cerrar, recargar: function () { cargarGrid(estado.cat, 1, false); }};
+
+    // ---- Arranque: el hash manda; si no, la categoría recordada. La galería
+    // solo se pide cuando la pestaña Catálogo está (o entra) a la vista.
+    function enCatalogo() {
+      if ((location.hash || '').indexOf('#catalogo') === 0 || /^#productos(?:\?|$)/.test(location.hash || '')) return true;
+      if (location.hash && location.hash !== '#') return false;
+      try { return localStorage.getItem(KEY_TAB) === 'catalogo'; } catch (e) { return false; }
+    }
+    var arrancado = false;
+    function arrancar() {
+      if (arrancado) return;
+      arrancado = true;
+      var h = leerHash();
+      var inicial = h.cat || null;
+      if (!inicial) { try { inicial = localStorage.getItem(KEY); } catch (e) {} }
+      if (!raiz.querySelector('.cat-panel[data-cat="' + inicial + '"]')) inicial = 'producto';
+      estado.filtro = h.filtro || 'todos'; estado.q = h.q || ''; estado.orden = h.orden || 'prioridad';
+      pintarControles();
+      activar(inicial, true);
+      if (h.ficha) abrirFicha(h.ficha);
+    }
+    if (enCatalogo()) arrancar();
+    document.querySelectorAll('.sidebar-item[data-tab="catalogo"]').forEach(function (b) { b.addEventListener('click', arrancar); });
+    // Un enlace de la ficha a otra pestaña («Dónde se usó») cambia el hash a
+    // algo que no es #catalogo: el panel sale de la vista (salirDeCatalogo:
+    // se cierra, o se oculta si tiene cambios sin guardar). Un clic en la
+    // barra lateral cambia de pestaña con history.replaceState, que no
+    // dispara hashchange, así que se hace también ahí; al volver a Catálogo
+    // por la barra, la ficha oculta reaparece en el turno siguiente
+    // (cliente.html pone #catalogo DESPUÉS de este listener).
+    document.querySelectorAll('.sidebar-item[data-tab]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.dataset.tab !== 'catalogo') salirDeCatalogo();
+        else setTimeout(volverACatalogo, 0);
+      });
+    });
+    window.addEventListener('hashchange', function () {
+      if ((location.hash || '').indexOf('#catalogo') !== 0) {
+        salirDeCatalogo();
+        return;
+      }
+      if (!arrancado) { arrancar(); return; }
+      var h = leerHash();
+      if (h.ficha && h.ficha !== fichaActual) abrirFicha(h.ficha);
+      else volverACatalogo();
+      if (h.cat && h.cat !== estado.cat) activar(h.cat, true);
     });
   })();
 </script>
 
+{# ⇩ el modal «¿Eliminar este producto?» y su script se copian tal cual del
+   _tab_catalogo.html anterior (líneas 172–230): funciona igual para el botón
+   de la ficha, que llega con los mismos data-* ⇩ #}
 {# Modal de confirmación para borrar un producto. Se pide modal y no un
    confirm() del navegador porque la acción es IRREVERSIBLE (borra la carpeta y
    todas sus fotos del disco) y hay que poder mostrar el detalle: cuántas fotos
@@ -228,9 +525,3 @@
     });
   })();
 </script>
-
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-{# Los personajes son insumo igual que los productos: viven en el catálogo, no
-   en la página de crear. #}
-{% include "_seccion_personajes.html" %}

@@ -1,0 +1,165 @@
+{
+ "version": 1,
+ "stickers": [
+  {
+   "id": "flecha_recta",
+   "categoria": "flechas",
+   "archivo": "flecha_recta.png",
+   "ancho": 512,
+   "alto": 351,
+   "color": "#FFD400"
+  },
+  {
+   "id": "flecha_curva",
+   "categoria": "flechas",
+   "archivo": "flecha_curva.png",
+   "ancho": 512,
+   "alto": 323,
+   "color": "#FFD400"
+  },
+  {
+   "id": "flecha_mano",
+   "categoria": "flechas",
+   "archivo": "flecha_mano.png",
+   "ancho": 512,
+   "alto": 444,
+   "color": "#FFD400"
+  },
+  {
+   "id": "flecha_abajo",
+   "categoria": "flechas",
+   "archivo": "flecha_abajo.png",
+   "ancho": 410,
+   "alto": 512,
+   "color": "#FFD400"
+  },
+  {
+   "id": "circulo_mano",
+   "categoria": "marcas",
+   "archivo": "circulo_mano.png",
+   "ancho": 512,
+   "alto": 459,
+   "color": "#E11D48"
+  },
+  {
+   "id": "subrayado_mano",
+   "categoria": "marcas",
+   "archivo": "subrayado_mano.png",
+   "ancho": 512,
+   "alto": 181,
+   "color": "#E11D48"
+  },
+  {
+   "id": "tachado_mano",
+   "categoria": "marcas",
+   "archivo": "tachado_mano.png",
+   "ancho": 512,
+   "alto": 188,
+   "color": "#E11D48"
+  },
+  {
+   "id": "chulo",
+   "categoria": "marcas",
+   "archivo": "chulo.png",
+   "ancho": 512,
+   "alto": 416,
+   "color": "#E11D48"
+  },
+  {
+   "id": "equis",
+   "categoria": "marcas",
+   "archivo": "equis.png",
+   "ancho": 498,
+   "alto": 512,
+   "color": "#E11D48"
+  },
+  {
+   "id": "exclamacion",
+   "categoria": "marcas",
+   "archivo": "exclamacion.png",
+   "ancho": 142,
+   "alto": 512,
+   "color": "#E11D48"
+  },
+  {
+   "id": "estallido",
+   "categoria": "formas",
+   "archivo": "estallido.png",
+   "ancho": 512,
+   "alto": 510,
+   "color": "#FFD400"
+  },
+  {
+   "id": "estrella",
+   "categoria": "formas",
+   "archivo": "estrella.png",
+   "ancho": 512,
+   "alto": 489,
+   "color": "#FFD400"
+  },
+  {
+   "id": "estrellas_5",
+   "categoria": "formas",
+   "archivo": "estrellas_5.png",
+   "ancho": 512,
+   "alto": 103,
+   "color": "#FFD400"
+  },
+  {
+   "id": "corazon",
+   "categoria": "formas",
+   "archivo": "corazon.png",
+   "ancho": 512,
+   "alto": 464,
+   "color": "#FFD400"
+  },
+  {
+   "id": "etiqueta",
+   "categoria": "formas",
+   "archivo": "etiqueta.png",
+   "ancho": 512,
+   "alto": 436,
+   "color": "#FFD400"
+  },
+  {
+   "id": "cinta",
+   "categoria": "formas",
+   "archivo": "cinta.png",
+   "ancho": 512,
+   "alto": 238,
+   "color": "#FFD400"
+  },
+  {
+   "id": "circulo",
+   "categoria": "formas",
+   "archivo": "circulo.png",
+   "ancho": 512,
+   "alto": 512,
+   "color": "#FFD400"
+  },
+  {
+   "id": "burbuja",
+   "categoria": "formas",
+   "archivo": "burbuja.png",
+   "ancho": 512,
+   "alto": 480,
+   "color": "#FFD400"
+  },
+  {
+   "id": "rayo",
+   "categoria": "formas",
+   "archivo": "rayo.png",
+   "ancho": 336,
+   "alto": 512,
+   "color": "#FFD400"
+  },
+  {
+   "id": "destellos",
+   "categoria": "formas",
+   "archivo": "destellos.png",
+   "ancho": 512,
+   "alto": 486,
+   "color": "#FFD400"
+  }
+ ]
+}

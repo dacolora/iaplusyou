@@ -14,10 +14,10 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSS = os.path.join(RAIZ, "static", "style.css")
 MAPA = os.path.join(RAIZ, "templates", "mapa_codigo.html")
 PLANTILLAS = sorted(glob.glob(os.path.join(RAIZ, "templates", "*.html")))
-ARCHIVOS = [CSS] + PLANTILLAS
+ARCHIVOS = [CSS] + sorted(glob.glob(os.path.join(RAIZ, "static", "estilos", "**", "*.css"), recursive=True)) + PLANTILLAS
 
-PANEL = (0x1A, 0x1D, 0x24)      # --panel oscuro: la superficie contra la que se mide
-PANEL_2 = (0x23, 0x27, 0x33)    # --panel-2
+PANEL = (0x0B, 0x1A, 0x33)      # --panel oscuro: la superficie contra la que se mide
+PANEL_2 = (0x10, 0x22, 0x3F)    # --panel-2
 LUMINANCIA_MAX_FONDO = 0.4      # por encima, un fondo o un borde "se ve claro" sobre la app
 CONTRASTE_MIN_TEXTO = 3.0       # piso para cualquier texto con color a mano
 NOMBRADOS = {"white": (255, 255, 255), "black": (0, 0, 0)}
@@ -126,7 +126,7 @@ def test_controles_nativos_oscuros():
     assert re.search(r"color-scheme\s*:\s*dark", _root(_leer(CSS)))
 
 
-def test_texto_morado_legible():
+def test_texto_de_acento_legible():
     raiz = _root(_leer(CSS))
     m = re.search(r"--accent-texto\s*:\s*(#[0-9a-fA-F]{6})", raiz)
     assert m, "falta --accent-texto en :root"
@@ -140,5 +140,8 @@ def test_texto_morado_legible():
 
 
 def test_colores_del_tablero_validados():
-    # Validados con dataviz/scripts/validate_palette.js --mode dark --surface "#1a1d24".
-    assert "--tb-gasto: #8b6cf0; --tb-ingresos: #19a676; --tb-warn: #fab219;" in _leer(CSS)
+    # Validados con dataviz/scripts/validate_palette.js --mode dark --surface "#0b1a33" (2026-10-02): todo PASS;
+    # el par del Tablero (ingresos azul, gasto naranja) da ΔE 26,8 para daltónicos y 31,8 normal.
+    css = _leer(CSS)
+    assert "--serie-1: #3987e5;" in css and "--serie-2: #d95926;" in css
+    assert "--tb-gasto: var(--serie-2); --tb-ingresos: var(--serie-1); --tb-warn: #fab219;" in css

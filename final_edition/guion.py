@@ -7,6 +7,9 @@ duración objetivo) y `localizar_guion` lo traduce/adapta a otro idioma y país
 `tipos.validar_guion` y, si hay errores, piden UNA corrección a Claude antes de
 rendirse con `GuionInvalido`.
 
+Decisión B (2026-09-28): el guion base y las variantes van en el idioma del
+proyecto con la orden de idioma; la localización, en el del país destino.
+
 Forma del guion:
 {"bloques": [{"rol", "texto_pantalla", "texto_voz", "inicio_s", "fin_s"}],
  "idioma", "pais", "moneda", "precio_texto"}
@@ -17,8 +20,10 @@ import math
 import os
 
 import anthropic
+from flask_babel import gettext
 
 import doctrina
+import idiomas
 from final_edition import tipos
 
 # Mismo patrón que generador_prompts (replicado para no acoplar este módulo al
@@ -27,17 +32,21 @@ MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 # Sonnet 5 piensa antes de responder y eso sale del mismo tope; con la
 # doctrina y el ángulo en la salida, 1500 se quedaba corto.
 MAX_TOKENS = 4000
-COSTO_LLAMADA_USD = 0.01
 
 PALABRAS_POR_SEGUNDO = 2.5
 MAX_PALABRAS_PANTALLA = 6
 
 
 class GuionInvalido(Exception):
-    """El guion sigue inválido después de pedir corrección a Claude."""
-    def __init__(self, errores):
+    """El guion sigue inválido después de pedir corrección a Claude. Su texto
+    es el `error` que ve la persona en la final: se arma con gettext (el
+    worker corre en el idioma del proyecto). `costo_usd` es lo que ya cobraron
+    las llamadas que no sirvieron: quien la atrapa lo anota como gasto. Una
+    excepción de la API después de una llamada pagada lleva el mismo atributo."""
+    def __init__(self, errores, costo_usd=0.0):
         self.errores = list(errores)
-        super().__init__("Guion inválido: " + "; ".join(self.errores))
+        self.costo_usd = round(float(costo_usd or 0.0), 4)
+        super().__init__(gettext("Guion inválido: %(errores)s", errores="; ".join(self.errores)))
 
 
 def _api_key():
@@ -166,12 +175,20 @@ NUNCA su texto literal ni su marca.
 {formato}"""
 
 
+def _orden(idioma):
+    """El idioma para `doctrina.bloque_system(idioma=)`: la orden va solo si
+    es un idioma de la app (es/en). Un guion base viejo en portugués sigue
+    sin orden — `idiomas.orden_idioma("pt")` caería al inglés."""
+    return idiomas.normalizar(idioma)
+
+
 def _system_generar(duracion_s, idioma_base, canal_optimo=None, con_angulo=False):
     """System del guion base: doctrina (con caché) + reglas. Sin ángulo en la
     sesión, la doctrina incluye la rebanada de ángulo y se le pide decidirlo."""
     rebanadas = ("guion", "gancho") if con_angulo else ("angulo", "guion", "gancho")
     return doctrina.bloque_system(*rebanadas, extra=_reglas_generar(duracion_s, idioma_base, canal_optimo,
-                                                                     pedir_angulo=not con_angulo))
+                                                                     pedir_angulo=not con_angulo),
+                                  idioma=_orden(idioma_base))
 
 
 def _formato_json_localizado(idioma, pais, moneda, precio_texto):
@@ -289,13 +306,30 @@ def _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto, angulo=No
 # ---------------------------------------------------------------- Claude ---
 
 def _llamar(client, system, mensajes):
+    """(texto, usd). El costo sale del `usage` que devuelve Anthropic, con la
+    caché de la doctrina contada como en `guiones.claude` (PND-001: era un
+    US$ 0,01 fijo por llamada y un guion real cuesta ≈ 0,04–0,05, así que el
+    gasto del proyecto quedaba en un cuarto de lo cobrado)."""
     resp = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         system=system,
         messages=mensajes,
     )
-    return "".join(block.text for block in resp.content if block.type == "text").strip()
+    usd = _usd(getattr(resp, "usage", None))
+    if getattr(resp, "stop_reason", None) == "max_tokens":
+        raise GuionInvalido([gettext("La respuesta de Claude salió incompleta. Intenta con un guion más corto.")],
+                            costo_usd=usd)
+    texto = "".join(block.text for block in resp.content if block.type == "text").strip()
+    return texto, usd
+
+
+def _usd(uso):
+    from guiones.claude import tokens_entrada_equivalentes
+    from nicho.avatares import costo_real
+    if uso is None:
+        return 0.0
+    return costo_real(tokens_entrada_equivalentes(uso), int(getattr(uso, "output_tokens", 0) or 0), modelo=MODEL)
 
 
 def _parsear(texto):
@@ -358,8 +392,8 @@ def _errores_de_cifras(guion, datos_texto):
     for b in guion.get("bloques") or []:
         texto = f"{b.get('texto_pantalla') or ''} {b.get('texto_voz') or ''}"
         for cifra in doctrina.verificar_cifras(texto, datos_texto):
-            errores.append(f"La cifra «{cifra}» del bloque {b.get('rol')} no está en los datos: reescríbelo sin ella "
-                           "o con el dato real.")
+            errores.append(gettext("La cifra «%(cifra)s» del bloque %(rol)s no está en los datos: reescríbelo "
+                                   "sin ella o con el dato real.", cifra=cifra, rol=b.get("rol")))
     return errores
 
 
@@ -381,12 +415,20 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
     errores = []
     guion_sin_bloqueo = None
     for intento in range(2):
-        texto = _llamar(client, system, mensajes)
-        costo += COSTO_LLAMADA_USD
+        try:
+            texto, usd = _llamar(client, system, mensajes)
+        except Exception as e:
+            # La corrección falló (timeout, 529, conexión) después de que la primera
+            # llamada YA se cobró: lo pagado viaja con el error para que se anote.
+            e.costo_usd = round(costo + float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+            if guion_sin_bloqueo is not None:
+                return guion_sin_bloqueo, e.costo_usd
+            raise
+        costo += usd
         guion = _parsear(texto)
         extra = []
         if guion is None:
-            errores = ["JSON inválido"]
+            errores = [gettext("JSON inválido")]
         else:
             guion = ajustar(guion)
             errores = tipos.validar_guion(guion, duracion_s)
@@ -409,7 +451,7 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
             ]
     if guion_sin_bloqueo is not None:
         return guion_sin_bloqueo, costo
-    raise GuionInvalido(errores)
+    raise GuionInvalido(errores, costo_usd=costo)
 
 
 # ---------------------------------------------------------------- API ---
@@ -603,7 +645,8 @@ def variar_guion(guion_base, variante_tipo, marca, angulo=None, contexto=None):
         return g
 
     return _generar_con_correccion(
-        doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE),
+        doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE,
+                               idioma=_orden(idioma)),
         _mensaje_variar(base, variante_tipo, marca, angulo=angulo, contexto=contexto),
         duracion_s, ajustar, _datos_verificables(base, doctrina.texto_verificable(angulo),
                                                  _precio_verificable(base.get("precio_base"), pais)),

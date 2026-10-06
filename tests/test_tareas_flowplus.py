@@ -723,3 +723,392 @@ def test_recuperar_video_sin_prediccion_o_descartada_termina_limpio(base_tempora
     assert "nada que recuperar" in msg.lower() and cf.cargar("acme")[cid]["estado"] == "error"
     msg = fp.recuperar_video({"id": 12, "payload": {"cliente": "acme", "cf_id": "cf_no_existe"}, "job_id": "j"})
     assert "descart" in msg.lower()
+
+
+# --- Incidente 2026-09-30: sin saldo y Wan con videos de referencia ----------
+
+def _sin_saldo():
+    from providers import wavespeed_common as wc
+    return wc.SinSaldo("alibaba/wan-3.0/reference-to-video", 400,
+                       "Insufficient credits. Please top up your account to continue.")
+
+
+def test_video_sin_saldo_se_explica_avisa_y_no_persigue_una_prediccion_vieja(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from datetime import datetime
+    cid = _sesion_video(cf, monkeypatch, tmp_path,
+                        prediccion={"id": "vieja", "modelo": "wan3", "en": datetime.now().isoformat(timespec="seconds")})
+    marcas = []
+    monkeypatch.setattr(fp.saldo, "marcar", lambda proveedor, detalle="", cliente="": marcas.append((proveedor, cliente)) or True)
+
+    def _gen(*a, **k):
+        raise _sin_saldo()
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 21, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "error"
+    assert "saldo" in e["error"] and "ni se cobró nada" in e["error"]
+    assert "Insufficient" not in e["error"] and "{" not in e["error"]
+    assert marcas == [("wavespeed", "acme")]
+
+
+def test_un_pedido_rechazado_al_lanzar_se_cuenta_en_palabras(base_temporal, monkeypatch, tmp_path):
+    """PND-107: un 400/1405 de WaveSpeed al lanzar salía en la tarjeta como su JSON crudo."""
+    import json as _json
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path)
+    cuerpo = {"code": 1405, "message": "The total duration of reference videos must not exceed 15 seconds."}
+
+    def _gen(*a, **k):
+        raise wc.PedidoRechazado("alibaba/wan-3.0/reference-to-video", 400, cuerpo["message"], _json.dumps(cuerpo))
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 23, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "error"
+    assert "no aceptó el pedido" in e["error"] and "no se cobró" in e["error"]
+    assert "must not exceed 15 seconds" in e["error"]          # el motivo del proveedor, legible
+    assert "{" not in e["error"] and "alibaba/" not in e["error"]
+
+
+def _rechazo(status, mensaje=""):
+    from providers import wavespeed_common as wc
+    return wc.PedidoRechazado("alibaba/wan-3.0/reference-to-video", status, mensaje, mensaje or "<html>error</html>")
+
+
+@pytest.mark.parametrize("status, esperado, promete_no_cobro", [
+    (400, "no aceptó el pedido (respuesta 400)", True),          # sin mensaje legible
+    (401, "rechazó la llave de Creatv", True),
+    (403, "rechazó la llave de Creatv", True),
+    (429, "demasiados pedidos", True),
+    (502, "falla de su lado", False),                          # un 5xx no garantiza que no se cobró
+])
+def test_cada_rechazo_de_wavespeed_dice_lo_que_paso(base_temporal, monkeypatch, tmp_path, status, esperado,
+                                                     promete_no_cobro):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path)
+
+    def _gen(*a, **k):
+        raise _rechazo(status)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 24, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    error = cf.cargar("acme")[cid]["error"]
+    assert esperado in error and "<html>" not in error and "alibaba/" not in error
+    assert ("se cobró nada" in error) is promete_no_cobro   # «no se cobró nada» o «ni se cobró nada»
+    assert ("Ajusta la duración" in error) is False        # solo para un motivo del proveedor que lo diga
+
+
+def test_un_rechazo_al_lanzar_no_persigue_una_prediccion_vieja(base_temporal, monkeypatch, tmp_path):
+    """Revisión de PND-107: con una predicción de un intento anterior en la sesión, un rechazo nuevo se
+    iba a esperar ESA predicción y la cerraba como si fuera este video (y anotaba su gasto otra vez)."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from datetime import datetime
+    vieja = {"id": "vieja", "modelo": "wan3", "en": datetime.now().isoformat(timespec="seconds")}
+    cid = _sesion_video(cf, monkeypatch, tmp_path, prediccion=vieja)
+
+    def _gen(*a, **k):
+        raise _rechazo(422, "duration must be <= 15")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 25, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "error" and "duration must be <= 15" in e["error"]
+
+
+def test_imagen_sin_saldo_se_explica_y_avisa(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "posa", 5, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P")
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    marcas = []
+    monkeypatch.setattr(fp.saldo, "marcar", lambda proveedor, detalle="", cliente="": marcas.append(proveedor) or True)
+
+    def _gen(*a, **k):
+        raise _sin_saldo()
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_imagen({"id": 22, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "error" and "saldo" in e["error"] and "Insufficient" not in e["error"]
+    assert marcas == ["wavespeed"]
+
+
+def test_imagen_rechazada_por_el_proveedor_se_cuenta_en_palabras(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "posa", 5, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P")
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+
+    def _gen(*a, **k):
+        raise wc.ErrorProveedor("Seedream V5.0 Pro", "failed", "Content flagged as potentially sensitive.",
+                                codigo=1200, prediction_id="p9")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_imagen({"id": 23, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    assert "sensible" in cf.cargar("acme")[cid]["error"]
+
+
+def test_una_generacion_que_sale_bien_quita_el_aviso_de_saldo(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path)
+    _fakes_de_cierre(monkeypatch)
+    limpiados = []
+    monkeypatch.setattr(fp.saldo, "limpiar", lambda proveedor: limpiados.append(proveedor))
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    fp.ejecutar_video({"id": 24, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+
+    img = cf.crear("acme", [], [], [], "posa", 5, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", img, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", lambda *a, **k: "https://prov/i.png")
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_imagen", lambda m, n_referencias=1: {"credits": None, "usd": 0.1})
+    monkeypatch.setattr(fp.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
+    fp.ejecutar_imagen({"id": 25, "payload": {"cliente": "acme", "cf_id": img}, "job_id": "j2"})
+    assert limpiados == ["wavespeed", "wavespeed"]
+
+
+def _sesion_wan_con_video(cf, monkeypatch, tmp_path, duracion, video):
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "cambia al personaje", duracion, "", "A", referencias_urls=["https://x/v.jpg"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="wan3", prompt_relleno="P",
+                  aspect_ratio="9:16", referencias=[video])
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    return cid
+
+
+def test_preparar_recorta_wan_para_no_pasar_de_30_con_el_video(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    video = {"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/v.jpg", "etiqueta": "@Video 1",
+             "duracion_s": 14.9}
+    cid = _sesion_wan_con_video(cf, monkeypatch, tmp_path, 20, video)
+    _, referencias, videos_ref, duracion, *_ = fp._preparar("acme", cid)
+    assert videos_ref == ["https://x/v.mp4"] and referencias == [] and duracion == 15
+
+
+def test_preparar_mide_el_video_si_la_sesion_no_trae_su_duracion(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    video = {"tipo": "video", "url": "https://x/v2.mp4", "frame_url": "https://x/v2.jpg", "etiqueta": "@Video 1"}
+    cid = _sesion_wan_con_video(cf, monkeypatch, tmp_path, 25, video)
+    medidos = []
+    monkeypatch.setattr(fp.cortes, "duracion", lambda ruta: medidos.append(ruta) or 12.0)
+    assert fp._preparar("acme", cid)[3] == 18
+    assert medidos == ["https://x/v2.mp4"]
+
+
+def test_el_gasto_de_wan_incluye_los_segundos_del_video_de_referencia(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    video = {"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/v.jpg", "etiqueta": "@Video 1",
+             "duracion_s": 14.9}
+    cid = _sesion_wan_con_video(cf, monkeypatch, tmp_path, 15, video)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.estado_mod, "cargar", lambda c: {})
+    monkeypatch.setattr(fp.estado_mod, "guardar", lambda c, d: None)
+    fp.ejecutar_video({"id": 26, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    assert cf.cargar("acme")[cid]["usd"] == 3.0
+    (g,) = [g for g in gastos.historial("acme") if g["referencia"] == f"video:{cid}:t26"]
+    assert g["usd"] == 3.0
+
+
+def _imagen_lista_para_generar(cf, fp, monkeypatch, tmp_path, **extra):
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], ["Rose"], [], "Recrear: X · igual", 0, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P",
+                  **extra)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", lambda *a, **k: "https://prov/i.png")
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_imagen", lambda m, n_referencias=1: {"credits": 2, "usd": 0.1})
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    return cid
+
+
+ANIMAR = {"modelo": "wan3", "duracion": 8, "formato": "9:16", "prompt": "ANIMA", "con_sonido": True,
+          "titulo": "Recrear: X · igual · video"}
+
+
+def test_imagen_fiel_lista_lanza_su_animacion(base_temporal, monkeypatch, tmp_path):
+    """Recrear como video (spec §12): al quedar lista la imagen fiel, el worker
+    lanza el video que la anima, con la imagen subida como única referencia."""
+    import creative_flow as cf
+    import flowplus_lanzar
+    import tareas.flowplus as fp
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzados.append(entry) or True)
+    cid = _imagen_lista_para_generar(cf, fp, monkeypatch, tmp_path, animar_despues=dict(ANIMAR))
+    fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    imagen = cf.cargar("acme")[cid]
+    assert imagen["estado"] == "video_listo" and len(lanzados) == 1
+    assert lanzados[0]["referencias_urls"] == [imagen["video_url"]] and lanzados[0]["modelo"] == "wan3"
+    assert imagen["animar_despues"]["cf_video"] and not imagen.get("animar_error")
+
+
+def test_imagen_fiel_si_no_se_puede_lanzar_el_video_queda_lista_con_el_aviso(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from referentes import recrear
+
+    def roto(*a, **k):
+        raise RuntimeError("base ocupada")
+    monkeypatch.setattr(recrear, "lanzar_animacion", roto)
+    cid = _imagen_lista_para_generar(cf, fp, monkeypatch, tmp_path, animar_despues=dict(ANIMAR))
+    msg = fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    imagen = cf.cargar("acme")[cid]
+    assert imagen["estado"] == "video_listo" and "lista" in msg
+    assert "RuntimeError" in imagen["animar_error"]
+
+
+def test_imagen_fallida_no_lanza_ningun_video(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from referentes import recrear
+    monkeypatch.setattr(recrear, "lanzar_animacion", lambda *a, **k: pytest.fail("no debía animar"))
+    cid = _imagen_lista_para_generar(cf, fp, monkeypatch, tmp_path, animar_despues=dict(ANIMAR))
+
+    def falla(*a, **k):
+        raise RuntimeError("proveedor caído")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", falla)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    assert cf.cargar("acme")[cid]["estado"] == "error"
+
+
+def test_recuperar_descarga_no_duplica_cobro(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path, prediccion={"id": "pagada", "modelo": "wan3"})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("descarga")))
+    with pytest.raises(RuntimeError, match="descarga"):
+        fp.ejecutar_video({"id": 31, "payload": {"cliente": "acme", "cf_id": cid}})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(wc, "poll_hasta_listo", lambda *a, **k: {"outputs": ["https://prov/v.mp4"]})
+    fp.recuperar_video({"id": 32, "payload": {"cliente": "acme", "cf_id": cid}})
+    assert gastos.resumen_mes("acme")["total"] == pytest.approx(0.8)
+    assert [g["referencia"] for g in gastos.historial("acme")] == [f"video:{cid}:t31"]
+
+
+def test_reintentar_video_no_reutiliza_referencia_anterior(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path, prediccion={'id': 'pagada', 'modelo': 'wan3'})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(fp.flowplus_modelos, 'generar_video', lambda *a, **k: 'https://prov/v.mp4')
+    monkeypatch.setattr(fp.requests, 'get', lambda *a, **k: (_ for _ in ()).throw(RuntimeError('descarga')))
+    with pytest.raises(RuntimeError): fp.ejecutar_video({'id': 31, 'payload': {'cliente': 'acme', 'cf_id': cid}})
+    _fakes_de_cierre(monkeypatch)
+    fp.ejecutar_video({'id': 40, 'payload': {'cliente': 'acme', 'cf_id': cid}})
+    assert {g['referencia']: g['usd'] for g in gastos.historial('acme')} == {f'video:{cid}:t31': .8, f'video:{cid}:t40': .8}
+
+
+def test_fallo_guardar_prediccion_no_impide_registrar_video(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path, prediccion={'id': 'pagada', 'modelo': 'wan3'})
+    _fakes_de_cierre(monkeypatch)
+    original = cf.actualizar
+    def actualizar(*a, **kw):
+        if 'prediccion' in kw: raise RuntimeError('sesión')
+        return original(*a, **kw)
+    monkeypatch.setattr(cf, 'actualizar', actualizar)
+    with pytest.raises(RuntimeError, match='sesión'):
+        fp._terminar_video('acme', cid, 'j', f'video:{cid}:t40', cf.cargar('acme')[cid], [], 8, 'P', [], 'wan3', 'final', 'https://prov/v.mp4')
+    assert gastos.historial('acme')[0]['usd'] == pytest.approx(.8)
+
+
+def test_recuperar_con_musica_registra_componentes_una_vez(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    cid = _sesion_video(cf, monkeypatch, tmp_path, musica_estilo='calmado', prediccion={'id': 'pagada', 'modelo': 'wan3'})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(fp.flowplus_modelos, 'generar_video', lambda *a, **k: 'https://prov/v.mp4')
+    monkeypatch.setattr(fp.requests, 'get', lambda *a, **k: (_ for _ in ()).throw(RuntimeError('descarga')))
+    with pytest.raises(RuntimeError): fp.ejecutar_video({'id': 31, 'payload': {'cliente': 'acme', 'cf_id': cid}})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(wc, 'poll_hasta_listo', lambda *a, **k: {'outputs': ['https://prov/v.mp4']})
+    monkeypatch.setattr(fp.cortes, 'duracion', lambda *a: 8)
+    monkeypatch.setattr(fp.musica, 'obtener_pista', lambda *a: ({'archivo': 'pista', 'url': 'https://r2/m.mp3'}, .02))
+    monkeypatch.setattr(fp.mezcla, 'mezclar_musica', lambda *a: {'volumenes': {}})
+    tarea = {'id': 32, 'payload': {'cliente': 'acme', 'cf_id': cid}}
+    fp.recuperar_video(tarea)
+    fp.recuperar_video(tarea)
+    assert {g['referencia']: g['usd'] for g in gastos.historial('acme')} == {f'video:{cid}:t31': .8, f'video:{cid}:t32:musica': .02}
+
+
+def test_pnd125_registra_musica_si_falla_guardar_video_listo(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+
+    cid = _sesion_video(cf, monkeypatch, tmp_path, musica_estilo='calmado', prediccion={'id': 'pagada', 'modelo': 'wan3'})
+    cf.actualizar('acme', cid, prediccion={'id': 'pagada', 'modelo': 'wan3', 'referencia_gasto': f'video:{cid}:t31'})
+    _fakes_de_cierre(monkeypatch)
+    gastos.registrar_seguro('acme', 'video', .8, f'video:{cid}:t31', proveedor='wavespeed')
+    monkeypatch.setattr(fp.cortes, 'duracion', lambda *a: 8)
+    monkeypatch.setattr(fp.musica, 'obtener_pista', lambda *a: ({'archivo': 'pista', 'url': 'https://r2/m.mp3'}, .02))
+    monkeypatch.setattr(fp.mezcla, 'mezclar_musica', lambda *a: {'volumenes': {}})
+    original = cf.actualizar
+
+    def falla_video_listo(cliente, cf_id, **campos):
+        if campos.get('estado') == 'video_listo':
+            raise RuntimeError('falló persistencia final')
+        return original(cliente, cf_id, **campos)
+
+    monkeypatch.setattr(cf, 'actualizar', falla_video_listo)
+    with pytest.raises(RuntimeError, match='persistencia final'):
+        fp._terminar_video('acme', cid, 'j32', f'video:{cid}:t32', cf.cargar('acme')[cid], [], 8,
+                           'P', [], 'wan3', 'final', 'https://prov/v.mp4', recuperado=True)
+
+    por_ref = {g['referencia']: g['usd'] for g in gastos.historial('acme')}
+    assert por_ref == {f'video:{cid}:t31': pytest.approx(.8), f'video:{cid}:t32:musica': pytest.approx(.02)}
+
+
+def test_pnd125_recuperar_cache_no_reduce_el_cobro_original(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path, musica_estilo='calmado', prediccion={'id':'pagada','modelo':'wan3'})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(fp.cortes, 'duracion', lambda *a: 8)
+    costos = iter([.02, 0])  # pista obtenida y luego la misma pista en caché
+    monkeypatch.setattr(fp.musica, 'obtener_pista', lambda *a: ({'archivo':'pista','url':'https://r2/m.mp3'}, next(costos)))
+    monkeypatch.setattr(fp.mezcla, 'mezclar_musica', lambda *a: {'volumenes':{}})
+    original = cf.actualizar
+    def fallo(cliente, cf_id, **campos):
+        if campos.get('estado') == 'video_listo':
+            raise RuntimeError('persistencia final')
+        return original(cliente, cf_id, **campos)
+    monkeypatch.setattr(cf, 'actualizar', fallo)
+    with pytest.raises(RuntimeError):
+        fp._terminar_video('acme',cid,'j31',f'video:{cid}:t31',cf.cargar('acme')[cid],[],8,'P',[],'wan3','final','https://prov/v.mp4')
+    monkeypatch.setattr(cf, 'actualizar', original)
+    fp._terminar_video('acme',cid,'j32',f'video:{cid}:t32',cf.cargar('acme')[cid],[],8,'P',[],'wan3','final','https://prov/v.mp4',recuperado=True)
+    fila, = gastos.historial('acme')
+    assert fila['usd'] == pytest.approx(.82)
+    assert fila['extra']['usd_musica'] == .02
+    assert cf.cargar('acme')[cid]['capas']['musica']['url'] == 'https://r2/m.mp3'

@@ -1,0 +1,80 @@
+/* Fondo galáctico de toda la plataforma (2026-10-06, Creatv Galadsy; base.html, .fondo-galaxia): nebulosas en los
+   azules del logo que derivan despacio, un núcleo que gira, dos capas de estrellas que titilan y una retícula tenue.
+   Todo son degradados (sin filter: blur), así el movimiento es barato de pintar. Sin movimiento con
+   prefers-reduced-motion (base.css apaga todas las animaciones). */
+.fondo-galaxia { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.fondo-galaxia > span { position: absolute; will-change: transform; }
+
+.galaxia-nebulosa { inset: -25%; }
+.galaxia-nebulosa.n1 {
+  background-image:
+    radial-gradient(38% 22% at 22% 30%, var(--galaxia-azul), transparent 70%),
+    radial-gradient(30% 18% at 70% 62%, var(--galaxia-azul-suave), transparent 70%);
+  animation: galaxia-nebulosa-a 38s ease-in-out infinite alternate;
+}
+.galaxia-nebulosa.n2 {
+  background-image:
+    radial-gradient(34% 16% at 62% 34%, var(--galaxia-electrico), transparent 72%),
+    radial-gradient(26% 14% at 34% 74%, var(--galaxia-electrico-suave), transparent 72%);
+  transform: rotate(-22deg);
+  animation: galaxia-nebulosa-b 46s ease-in-out infinite alternate;
+}
+.galaxia-nebulosa.n3 {
+  background-image: radial-gradient(22% 10% at 82% 14%, var(--galaxia-cian), transparent 72%);
+  transform: rotate(-22deg);
+  animation: galaxia-nebulosa-c 30s ease-in-out infinite alternate;
+}
+
+/* Núcleo: un remolino que gira muy despacio. */
+.galaxia-nucleo {
+  left: 50%; top: 42%; width: 120vmax; height: 120vmax; margin: -60vmax 0 0 -60vmax;
+  background-image: conic-gradient(from 0deg, transparent 0deg, var(--galaxia-velo-1) 40deg, transparent 90deg,
+    var(--galaxia-velo-2) 180deg, transparent 230deg, var(--galaxia-velo-3) 300deg, transparent 360deg);
+  -webkit-mask-image: radial-gradient(circle, currentColor 0%, transparent 60%);
+  mask-image: radial-gradient(circle, currentColor 0%, transparent 60%);
+  animation: galaxia-gira 160s linear infinite;
+}
+
+/* Cada capa de estrellas se desplaza exactamente un mosaico por vuelta: el bucle no salta. */
+.galaxia-estrellas { left: 0; right: 0; bottom: 0; background-repeat: repeat; }
+.galaxia-estrellas.e1 {
+  top: -360px;
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, var(--estrella), transparent),
+    radial-gradient(1px 1px at 140px 90px, var(--estrella-tenue), transparent),
+    radial-gradient(1.5px 1.5px at 260px 170px, var(--estrella-azul), transparent),
+    radial-gradient(1px 1px at 330px 40px, var(--estrella-tenue), transparent),
+    radial-gradient(1px 1px at 90px 240px, var(--estrella-azul), transparent),
+    radial-gradient(1.5px 1.5px at 210px 310px, var(--estrella), transparent);
+  background-size: 380px 360px;
+  animation: galaxia-estrellas-1 140s linear infinite, galaxia-titila 6s ease-in-out infinite alternate;
+}
+.galaxia-estrellas.e2 {
+  top: -600px;
+  background-image:
+    radial-gradient(2px 2px at 60px 80px, var(--estrella-azul), transparent),
+    radial-gradient(1.5px 1.5px at 420px 260px, var(--estrella), transparent),
+    radial-gradient(2px 2px at 300px 480px, var(--estrella-tenue), transparent);
+  background-size: 620px 600px;
+  animation: galaxia-estrellas-2 90s linear infinite, galaxia-titila 4.5s ease-in-out infinite alternate-reverse;
+}
+
+.galaxia-reticula {
+  inset: 0;
+  background-image:
+    linear-gradient(var(--reticula) 1px, transparent 1px),
+    linear-gradient(90deg, var(--reticula) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 55% at 50% 25%, currentColor 15%, transparent 75%);
+  mask-image: radial-gradient(ellipse 75% 55% at 50% 25%, currentColor 15%, transparent 75%);
+  animation: galaxia-reticula 20s linear infinite;
+}
+
+@keyframes galaxia-nebulosa-a { to { transform: translate(6%, 5%) scale(1.08); } }
+@keyframes galaxia-nebulosa-b { to { transform: rotate(-16deg) translate(-7%, 6%) scale(1.05); } }
+@keyframes galaxia-nebulosa-c { to { transform: rotate(-26deg) translate(-8%, 4%); opacity: .6; } }
+@keyframes galaxia-gira { to { transform: rotate(360deg); } }
+@keyframes galaxia-estrellas-1 { to { transform: translateY(360px); } }
+@keyframes galaxia-estrellas-2 { to { transform: translateY(600px); } }
+@keyframes galaxia-titila { from { opacity: .45; } to { opacity: 1; } }
+@keyframes galaxia-reticula { to { background-position: 0 64px, 0 0; } }

@@ -1,11 +1,17 @@
-"""Pestaña Tablero (Bloque 6): render de ver_cliente con datos sembrados,
-estado vacío, descarga CSV, aislamiento entre proyectos y tolerancia a que
-una parte del tablero explote (`_contexto_tablero`). Sin red: meta_conexion
-y tiendas se fingen con monkeypatch, como en test_tablero."""
+"""El Tablero (Bloque 6) fundido en Experimentos (E2, spec 2026-10-02): lo que antes era la pestaña Tablero ahora
+vive en el centro de resultados — los totales y el mes a mes en el historial (sección 09 de `exp_resultados`), el
+gráfico de 30 días en «Día a día» (sección 02), las ganadoras en el ranking (sección 05), la línea de alertas en
+«Necesita tu decisión» — y la pestaña ya no existe (`tablero` resuelve a `experimentos`, que es la primera y la de
+por defecto). Se prueba el render de la página y del fragmento con datos sembrados, el estado vacío, la descarga
+CSV, el aislamiento entre proyectos y la tolerancia a que una parte del tablero explote (`_contexto_tablero`).
+Sin red: meta_conexion y tiendas se fingen con monkeypatch, como en test_tablero."""
+import json
+
 import pytest
 
 import idiomas
 from tests.test_experimentos_db import PAISES, _pieza
+from tests.test_rutas_experimentos import _resultados
 
 AHORA = "2026-09-16T10:00:00"
 
@@ -56,47 +62,141 @@ def _sembrar(base_temporal):
     return eid, ep
 
 
+def _historial(c, **filtro):
+    """El historial (sección 09 de `exp_resultados`): los totales, el mes a mes y la tienda según Triple Whale, que
+    eran el cuerpo de la pestaña Tablero."""
+    html = _resultados(c, **filtro)
+    return html[html.index("Historial mes a mes"):]
+
+
+def _seccion_alertas(html):
+    ini = html.index('<section id="tab-alertas"')
+    return html[ini:html.index('<section id="tab-', ini + 10)]
+
+
+def _mes_a_mes(tb):
+    ini = tb.index('class="tb-meses')
+    return tb[ini:tb.index("</table>", ini)]
+
+
+def _datos_graficos(html):
+    """El JSON que el JS del centro dibuja (`#cr-datos`)."""
+    ini = html.index('id="cr-datos">') + len('id="cr-datos">')
+    return json.loads(html[ini:html.index("</script>", ini)])
+
+
+def _dia_de_meta(base_temporal, ep, fecha, **campos):
+    """Una fila de `metrica_dia` (el detalle día a día de Meta, que dibuja la sección 02)."""
+    import db
+    base = dict(impresiones=500, alcance=400, frecuencia=1.2, clics=12, clics_enlace=10, gasto=5.0, cpm=10.0,
+                vistas_3s=100, reproducciones=300, p25=90, p50=60, p75=40, p95=20, p100=10, thruplay=30,
+                tiempo_medio_s=3.0, visitas_pagina=6, carrito=2, pago_iniciado=1, compras_meta=1, ingresos_meta=30.0)
+    base.update(campos)
+    with db.conectar() as con:
+        con.execute(db.metrica_dia.insert().values(experimento_pieza_id=ep, fecha=fecha, actualizado_en=fecha + "T12:00:00",
+                                                   **base))
+
+
 def test_tablero_con_datos(app, base_temporal, monkeypatch):
-    eid, _ep = _sembrar(base_temporal)
+    eid, ep = _sembrar(base_temporal)
+    _dia_de_meta(base_temporal, ep, "2026-09-15")
     _reloj(monkeypatch)
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
-    html = r.get_data(as_text=True)
-    assert "Tablero · septiembre 2026" in html
-    assert 'id="tab-tablero"' in html
-    # Tiles del mes (deltas, no acumulados): gasto 250, compras 2, ingresos 7.000, ROAS 28.
-    assert "250 COP" in html and "7.000 COP" in html
-    assert "ROAS" in html and "28,0" in html
-    assert "Experimentos corriendo" in html and "Propuestas pendientes" in html
-    # Gráfico de 30 días: SVG inline con barras (gasto) y línea (ingresos).
-    assert "<svg" in html and 'class="tb-grafico"' in html
-    assert "tb-barra" in html and "tb-linea" in html
-    # Top ganadoras: nombre de la pieza, bandera, motivo y enlace al experimento.
-    assert "Final es_CO" in html and "🇨🇴" in html
-    assert "ROAS por encima del umbral" in html
-    assert f"?exp={eid}#experimentos" in html
-    # Alertas: no hay ninguna que urja salvo que el experimento corriendo lleva 11 h sin métricas.
-    assert "11 h sin métricas nuevas de Meta" in html
-    assert "Descargar CSV del mes" in html and "/cliente/acme/tablero/mes.csv" in html
+    pagina = r.get_data(as_text=True)
+    # La pestaña Tablero se fundió en Experimentos (la primera): no hay panel ni botón «tablero» y la página no trae
+    # los totales (llegan en el fragmento de resultados).
+    assert 'id="tab-tablero"' not in pagina and 'data-tab="tablero"' not in pagina
+    exp = pagina[pagina.index('<section id="tab-experimentos"'):pagina.index('<section id="tab-alertas"')]
+    assert "<h2>Experimentos</h2>" in exp and "Tablero · septiembre 2026" not in pagina
+    html = _resultados(app["c"])
+    hist = html[html.index("Historial mes a mes"):]
+    # Tiles: el total desde el inicio (el último acumulado): gasto 350, compras 3, ingresos 12.000, ROAS 34,3.
+    tiles = hist[:hist.index('class="tb-meses')]
+    assert "Gasto total" in tiles and "350 COP" in tiles and "12.000 COP" in tiles and "34,3" in tiles
+    assert "Gasto del mes" not in tiles and "250 COP" not in tiles
+    assert "Experimentos corriendo" in tiles and "Propuestas pendientes" in tiles
+    # Mes a mes: septiembre (250, 2, 7.000, ROAS 28) arriba de agosto (100, 1, 5.000, ROAS 50).
+    meses = _mes_a_mes(hist)
+    assert "Mes a mes" in hist
+    assert meses.index("septiembre 2026") < meses.index("agosto 2026")
+    sep = meses[meses.index("septiembre 2026"):meses.index("agosto 2026")]
+    assert "250 COP" in sep and "7.000 COP" in sep and "28,0" in sep and "<td" in sep
+    ago = meses[meses.index("agosto 2026"):]
+    assert "100 COP" in ago and "5.000 COP" in ago and "50,0" in ago
+    # El gráfico de 30 días (SVG del Tablero) lo reemplaza «Día a día» (sección 02): el JS dibuja las barras de
+    # gasto y la línea de la métrica con el JSON del fragmento, que lleva el gasto de cada día.
+    assert 'data-cr-grafico="dia"' in html and 'class="tb-grafico"' not in html
+    serie = _datos_graficos(html)["serie"]
+    assert serie["gasto"][serie["dias"].index("2026-09-15")] == 250.0 and serie["moneda"] == "COP"
+    # «Top 5 ganadoras» lo reemplaza el ranking de piezas (sección 05): nombre, bandera y veredicto de la pieza; el
+    # motivo del veredicto va en la gestión del experimento y la tarjeta del experimento (07) lleva a esa gestión.
+    ranking = html[html.index('id="cr-ranking"'):html.index('aria-labelledby="cr-s06"')]
+    assert "Final es_CO" in ranking and "🇨🇴" in ranking and "cr-v-ganadora" in ranking
+    assert "ROAS por encima del umbral" in _resultados(app["c"], exp=eid)
+    assert f'href="#experimentos?exp={eid}"' in html
+    # Alertas: el experimento corriendo lleva 11 h sin métricas. La lista vive en la pestaña Alertas; el centro de
+    # resultados solo dice cuántas hay.
+    al = _seccion_alertas(pagina)
+    assert "11 h sin métricas nuevas de Meta" in al
+    assert "11 h sin métricas nuevas de Meta" not in html and "alertas necesitan tu atención" in html
+    assert "Descargar CSV del mes" in pagina and "/cliente/acme/tablero/mes.csv" in pagina
+    # m3 (revisión final de E2): una sola vez, en la cabecera; el historial del fragmento ya no lo repite
+    assert exp.count("Descargar CSV del mes") == 1 and "Descargar CSV del mes" not in html
 
 
 def test_tablero_vacio(app, base_temporal, monkeypatch):
+    import alertas
+    monkeypatch.setattr(alertas, "calcular", lambda cliente, ahora_iso=None: [])
+    app["dashboard"].invalidar_alertas()
     _reloj(monkeypatch)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert "Tablero · septiembre 2026" in html
-    assert "Crea tu primer experimento" in html
-    assert "Sin alertas" in html
-    assert "sin ventas medibles" in html
+    pagina = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert "<h2>Experimentos</h2>" in pagina and 'id="tab-tablero"' not in pagina
+    html = _resultados(app["c"])
+    # «Crea tu primer experimento» lo reemplaza el estado vacío del centro, con su botón.
+    assert "Todavía no hay experimentos" in html and "+ Nuevo experimento" in html
+    # Sin alertas ni propuestas: «Sin alertas. Todo en orden.» ya no tiene línea propia; lo dice «Nada por decidir»
+    # y la línea de alertas solo sale cuando hay (el conteo vive en la burbuja del menú).
+    assert "Nada por decidir" in html and "cr-alertas-linea" not in html and "Sin alertas. Todo en orden." not in html
+    hist = html[html.index("Historial mes a mes"):]
+    assert "sin ventas medibles" in hist
     assert "tb-barra" not in html   # sin datos no se pinta un gráfico vacío
+    assert 'data-cr-grafico="dia"' not in html and "Sin datos en este periodo" in html
+    assert "Mes a mes" in hist and 'class="tb-meses' not in hist
+    assert "Todavía no hay gasto en ningún mes" in hist
+
+
+def test_tablero_resume_las_alertas_en_una_linea(app, base_temporal, monkeypatch):
+    """Spec alertas §7 y §12.9: la lista vive en la pestaña Alertas; el centro de resultados (donde se fundió el
+    Tablero) dice cuántas hay en «Necesita tu decisión» y enlaza allá."""
+    import alertas
+    lista = [alertas._alerta("llave:r2", alertas.huella(), "bloquea", "puesta_a_punto", "Falta R2", "d", "settings"),
+             alertas._alerta("proyecto:logo", alertas.huella(), "info", "faltantes", "Sin logos", "d", "settings")]
+    monkeypatch.setattr(alertas, "calcular", lambda cliente, ahora_iso=None: [dict(a) for a in lista])
+    app["dashboard"].invalidar_alertas()
+    tb = _resultados(app["c"])
+    assert "2 alertas necesitan tu atención" in tb
+    assert "Nada por decidir" not in tb          # m1: con alertas y sin propuestas, solo la línea de alertas
+    assert 'href="#alertas" data-ir-tab="alertas">Ver Alertas' in tb
+    assert "tb-alerta" not in tb and "Falta R2" not in tb and "Sin logos" not in tb
+    monkeypatch.setattr(alertas, "calcular", lambda cliente, ahora_iso=None: [dict(lista[1])])
+    app["dashboard"].invalidar_alertas()
+    tb = _resultados(app["c"])
+    assert "1 alerta necesita tu atención" in tb
 
 
 def test_tablero_pestana_por_defecto_y_sidebar(app, base_temporal):
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert 'data-tab="tablero"' in html
-    # El sidebar lista Tablero antes que Crear.
-    assert html.index('data-tab="tablero"') < html.index('data-tab="creativeflowplus"')
-    # Sin hash ni pestaña recordada, la página abre en el Tablero.
-    assert "activar(paneles[inicial] ? inicial : 'tablero')" in html
+    # El Tablero ya no es pestaña: sale del menú y de los paneles; Experimentos lo absorbe y va primero.
+    assert 'data-tab="tablero"' not in html and 'id="tab-tablero"' not in html and "tablero:" not in html
+    assert 'data-tab="experimentos"' in html
+    # El sidebar lista Experimentos antes que Crear (y que Alertas), y su panel es el primero de la página.
+    assert html.index('data-tab="experimentos"') < html.index('data-tab="alertas"') < html.index('data-tab="creativeflowplus"')
+    assert html.index('id="tab-experimentos"') < html.index('id="tab-alertas"') < html.index('id="tab-creativeflowplus"')
+    # Sin hash ni pestaña recordada, la página abre en Experimentos; un hash o una pestaña recordada «tablero»
+    # (de antes de E2) también caen ahí.
+    assert "activar(paneles[inicial] ? inicial : 'experimentos')" in html
+    assert "t === 'ads' || t === 'tablero') return 'experimentos'" in html
 
 
 def test_csv_del_mes(app, base_temporal, monkeypatch):
@@ -132,15 +232,20 @@ def test_contexto_tablero_tolera_una_parte_rota(app, base_temporal, monkeypatch)
         raise RuntimeError("token=SECRETO Meta caída")
     monkeypatch.setattr(tablero, "alertas", _explota)
     ctx = d._contexto_tablero("acme")
-    assert ctx["alertas"] is None
-    assert ctx["resumen"] is not None and ctx["serie"] is not None and ctx["top"]
-    assert ctx["errores"] == ["alertas: RuntimeError"]   # sin el mensaje: podría traer un token
+    assert "alertas" not in ctx                          # el Tablero ya no calcula alertas: lo hace alertas.py
+    assert ctx["resumen"] is not None and ctx["total"] is not None and ctx["meses"]
+    assert ctx["errores"] == []
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert "No se pudo calcular las alertas" in html
+    # La fuente `tablero` de alertas.py falló: sale en Alertas con solo el nombre de la clase.
+    al = _seccion_alertas(html)
+    assert "No se pudo revisar tablero" in al and "RuntimeError" in al
     assert "SECRETO" not in html
-    assert "250 COP" in html and "Final es_CO" in html   # el resto se sigue mostrando
+    # El resto se sigue mostrando: el centro de resultados (donde se fundió el Tablero) trae el gasto y la pieza.
+    resultados = _resultados(app["c"])
+    assert "SECRETO" not in resultados
+    assert "250 COP" in resultados and "Final es_CO" in resultados
 
 
 def test_grafico_tablero_geometria(app):
@@ -219,8 +324,15 @@ def test_top_ganadora_de_experimento_cerrado_lo_avisa(app, base_temporal, monkey
     eid, _ep = _sembrar(base_temporal)
     ex.actualizar("acme", eid, estado="cerrado")
     _reloj(monkeypatch)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert "Cojín abrazable (cerrado)" in html
+    # «Top 5 ganadoras» ya no existe: la ganadora de un experimento cerrado sigue en el ranking de piezas (05) y su
+    # experimento, en la lista (07), dice que está cerrado.
+    html = _resultados(app["c"])
+    ranking = html[html.index('id="cr-ranking"'):html.index('aria-labelledby="cr-s06"')]
+    assert "Final es_CO" in ranking and "cr-v-ganadora" in ranking
+    lista = html[html.index('aria-labelledby="cr-s07"'):]
+    tarjeta = lista[lista.index('<a data-cr-filtro href="#experimentos?exp=%d"' % eid):]
+    tarjeta = tarjeta[:tarjeta.index("</a>")]
+    assert "Cojín abrazable" in tarjeta and "cr-estado-cerrado" in tarjeta and "<small>cerrado" in tarjeta
 
 
 def test_contexto_tablero_cachea_60s_e_invalida_con_snapshot(app, base_temporal, monkeypatch):
@@ -254,11 +366,11 @@ def test_contexto_tablero_cachea_60s_e_invalida_con_snapshot(app, base_temporal,
     ex.actualizar("acme", eid, estado="pausado")
     ctx4 = d._contexto_tablero("acme")
     assert ctx4 is not ctx3 and ctx4["resumen"]["experimentos_corriendo"] == 0
-    # Y un cambio en una pieza (veredicto): desaparece del top al instante.
+    # Y un cambio en una pieza (veredicto): el CSV del mes lo dice al instante.
     monkeypatch.setattr(d.db, "ahora", lambda: "2026-09-16T10:00:02")
     ex.actualizar_pieza("acme", ep, veredicto="perdedor")
     ctx4b = d._contexto_tablero("acme")
-    assert ctx4b is not ctx4 and ctx4b["top"] == []
+    assert ctx4b is not ctx4 and "perdedor" in ctx4b["csv"] and "perdedor" not in ctx4["csv"]
     # TTL: pasados 60 s se recalcula aunque nada cambie.
     reloj["t"] += 60
     ctx5 = d._contexto_tablero("acme")
@@ -310,44 +422,95 @@ def test_contexto_tablero_rinde_con_20_experimentos(app, base_temporal, monkeypa
     ctx = d._contexto_tablero("acme")
     duracion = time.perf_counter() - inicio
     assert ctx["errores"] == []
-    assert ctx["resumen"]["experimentos_corriendo"] == 20 and len(ctx["top"]) == 5
-    assert len(ctx["serie"]["dias"]) == 30 and ctx["csv"].count("\n") == 61
+    assert ctx["resumen"]["experimentos_corriendo"] == 20 and ctx["total"]["experimentos_corriendo"] == 20
+    assert ctx["meses"] and ctx["csv"].count("\n") == 61
     print(f"\n_contexto_tablero frío 20x3x90: {duracion * 1000:.0f} ms")
     assert duracion < 0.5, f"{duracion:.3f}s"
 
 
-def test_contexto_tablero_tolera_grafico_roto(app, base_temporal, monkeypatch):
+def test_contexto_tablero_solo_calcula_lo_que_alguien_pinta(app, base_temporal, monkeypatch):
+    """m2 de la revisión final de E2: la serie de 30 días, el top de ganadoras y los dos gráficos del Tablero viejo se
+    calculaban en cada carga y nadie los leía. El CSV se queda (lo lee `tab_descargar_csv`)."""
+    import tablero
     d = app["dashboard"]
     _sembrar(base_temporal)
     _reloj(monkeypatch)
-    monkeypatch.setattr(d, "_grafico_tablero", lambda serie: (_ for _ in ()).throw(ZeroDivisionError("x")))
+    for nombre in ("serie_diaria", "serie_diaria_triple_whale", "top_ganadoras"):
+        monkeypatch.setattr(tablero, nombre, lambda *a, **k: pytest.fail("nadie lo pinta"))
+    monkeypatch.setattr(d, "_grafico_tablero", lambda serie: pytest.fail("nadie lo pinta"))
     ctx = d._contexto_tablero("acme")
-    assert ctx["grafico"] is None and ctx["serie"] is not None
-    assert "grafico: ZeroDivisionError" in ctx["errores"]
-    r = app["c"].get("/cliente/acme")
-    assert r.status_code == 200 and "250 COP" in r.get_data(as_text=True)
+    assert not {"serie", "serie_triple_whale", "top", "grafico", "grafico_triple_whale"} & set(ctx)
+    assert ctx["errores"] == [] and ctx["csv"] and ctx["total"] is not None and ctx["meses"]
 
 
-def test_tile_generacion_este_mes(app, base_temporal, monkeypatch):
-    """Task 3: junto al gasto de pauta va lo pagado en generación (tabla
-    `gasto`, USD) este mes; fuera del mes no cuenta. Lleva a Configuración."""
+def test_contexto_tablero_tolera_el_mes_a_mes_roto(app, base_temporal, monkeypatch):
+    import tablero
+    d = app["dashboard"]
+    _sembrar(base_temporal)
+    _reloj(monkeypatch)
+    monkeypatch.setattr(tablero, "mes_a_mes", lambda *a, **k: (_ for _ in ()).throw(ZeroDivisionError("x")))
+    ctx = d._contexto_tablero("acme")
+    assert ctx["meses"] is None and ctx["total"] is not None
+    assert "meses: ZeroDivisionError" in ctx["errores"]
+    hist = _historial(app["c"])
+    assert "No se pudo calcular el desglose por mes." in hist and "350 COP" in hist     # el total sigue
+
+
+def test_tile_generacion_total_y_por_mes(app, base_temporal, monkeypatch):
+    """Junto al gasto de pauta va lo pagado en generación (tabla `gasto`,
+    USD): el tile es el total desde el inicio y la tabla lo abre por mes.
+    Lleva a Configuración."""
     import gastos
     _sembrar(base_temporal)
     gastos.registrar("acme", "video", 0.85, "video:cf_1", detalle="wan3 · 8 s", creado_en="2026-09-10T09:00:00")
     gastos.registrar("acme", "guion", 0.02, "guion:cf_1", creado_en="2026-09-11T09:00:00")
     gastos.registrar("acme", "video", 5.0, "video:viejo", creado_en="2026-08-20T09:00:00")
     _reloj(monkeypatch)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    tb = html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
-    ini = tb.index("Generación este mes")
+    tb = _historial(app["c"])
+    ini = tb.index("Generación total")
     tile = tb[tb.rindex("<a", 0, ini):tb.index("</a>", ini)]
-    assert "US$ 0,87" in tile and "2 cobro(s) a proveedores" in tile
+    assert "US$ 5,87" in tile and "3 cobro(s) a proveedores" in tile
     assert 'data-ir-tab="settings"' in tile
-    assert "250 COP" in tb   # la pauta sigue en su moneda, al lado
+    assert "350 COP" in tb   # la pauta sigue en su moneda, al lado
+    meses = _mes_a_mes(tb)
+    assert "US$ 0,87" in meses[meses.index("septiembre 2026"):meses.index("agosto 2026")]
+    assert "US$ 5,00" in meses[meses.index("agosto 2026"):]
 
 
 def test_tile_generacion_sin_gasto(app, base_temporal, monkeypatch):
     _reloj(monkeypatch)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    tb = html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
-    assert "Generación este mes" in tb and "US$ 0,00" in tb and "sin generación pagada" in tb
+    tb = _historial(app["c"])
+    assert "Generación total" in tb and "US$ 0,00" in tb and "sin generación pagada" in tb
+
+
+def test_mes_a_mes_una_fila_por_moneda(app, base_temporal, monkeypatch):
+    """Pauta en dos monedas el mismo mes: una fila por moneda, nunca se
+    convierte; la generación va una sola vez, en la primera fila del mes."""
+    import experimentos as ex
+    import gastos
+    _sembrar(base_temporal)
+    eid = ex.crear("acme", "Manta USA", PAISES, "OUTCOME_TRAFFIC", 7, 500.0, "https://t", "USD")
+    ep = ex.agregar_pieza("acme", eid, _pieza(base_temporal, legado="cf_9__es_CO"), "CO")
+    ex.snapshot(ep, {"gasto": 12.5, "impresiones": 40}, tomado_en="2026-09-05T08:00:00")
+    gastos.registrar("acme", "video", 0.85, "video:cf_1", creado_en="2026-09-10T09:00:00")
+    _reloj(monkeypatch)
+    meses = _mes_a_mes(_historial(app["c"]))
+    sep = meses[meses.index("septiembre 2026"):meses.index("agosto 2026")]
+    assert sep.count("<tr") == 2 and "250 COP" in sep and "12,50 USD" in sep
+    assert sep.count("US$ 0,85") == 1
+
+
+def test_contexto_tablero_invalida_con_un_cobro_nuevo(app, base_temporal, monkeypatch):
+    """La generación está en el tablero cacheado: un cobro nuevo lo
+    invalida al instante, como un snapshot."""
+    import gastos
+    d = app["dashboard"]
+    _sembrar(base_temporal)
+    _reloj(monkeypatch)
+    monkeypatch.setattr(d.time, "monotonic", lambda: 1000.0)
+    ctx1 = d._contexto_tablero("acme")
+    assert ctx1["generacion_total"] == {"total": 0.0, "n": 0}
+    gastos.registrar("acme", "video", 0.85, "video:cf_1", creado_en="2026-09-10T09:00:00")
+    ctx2 = d._contexto_tablero("acme")
+    assert ctx2 is not ctx1 and ctx2["generacion_total"] == {"total": 0.85, "n": 1}
+    assert ctx2["meses"][0]["generacion"] == {"usd": 0.85, "n": 1}

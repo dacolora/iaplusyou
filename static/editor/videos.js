@@ -47,6 +47,9 @@ export class Videos {
   }
 
   _obtener(clip, ahora) {
+    // D1/D2 (capa 5b): una foto nunca pide un <video> (ni para dibujarla ni
+    // al precargar la que sigue) — vista.js la dibuja con su copia liviana.
+    if (clip.foto) return null;
     const mid = Number(clip.material_id);
     if (this.fallidos.has(mid)) return null;
     let e = this.elementos.get(clip.id);

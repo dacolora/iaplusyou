@@ -1,6 +1,6 @@
 # Crear: director de prompts por planos, presets de cámara y plantillas de anuncio — diseño
 
-Fecha: 2026-09-18. Estado: aprobado; Etapa 1 implementada (plan `docs/superpowers/plans/2026-09-18-director-prompts-etapa1.md`), Etapas 2 y 3 pendientes. Cambia el paso de prompt de Crear (FlowPlus) y deja intactos el
+Fecha: 2026-09-18. Estado: aprobado; Etapa 1 implementada (plan `docs/superpowers/plans/2026-09-18-director-prompts-etapa1.md`), Etapa 3 implementada en Crear el 2026-09-30 (ver la nota al final de §9), Etapa 2 pendiente. Cambia el paso de prompt de Crear (FlowPlus) y deja intactos el
 worker de generación (`tareas/flowplus.py`), los proveedores (`providers/`), Final
 edition, Sprints (salvo el punto de encolado) y el motor de experimentos.
 
@@ -367,6 +367,22 @@ reparten dentro de los actos. Con plantilla, el enfoque se fija por la plantilla
 (hoy es automático por catálogo: se conserva esa regla cuando no hay plantilla).
 Conectar el producto sigue siendo el catálogo; rellenar desde el link de una tienda
 queda fuera.
+
+> **Implementado 2026-09-30 (pedido de Daniel: «un esquema de frames, de tomas»).**
+> Diferencias con lo de arriba, como decisiones de implementación:
+> - **Ocho recetas**: las siete de la tabla más **«Antes y después»** (el problema, el
+>   producto haciendo el cambio y el resultado a la vista), la primera de la lista, porque
+>   es lo que Daniel pidió el 2026-09-22 («escenas que muestren un resultado asombroso»).
+> - Ninguna receta pide «solo y sin nadie» ni «el producto quieto» (regla de Daniel del
+>   2026-09-22): `producto_estudio` cierra con el producto de frente y un último movimiento
+>   suave, y `producto_entorno` deja entrar una mano si hace falta para usarlo.
+> - `requiere` se reduce a `requiere_video` (solo `recrear_referencia`, que exige un
+>   `Video N`: video en la bandeja con Wan 3.0). `preset_sugerido` es `camara_inicial`, un id
+>   de `flowplus_prompt.CAMARAS`, porque la Etapa 2 (presets con nombre) no existe todavía.
+> - Número de planos: `max(tabla por duración, actos)`, con tope de un plano cada 2 s, para
+>   que ningún acto se coma a otro (8 s con tres actos = tres planos).
+> - Solo en Crear y solo con «Crear super prompt»: «Generar video» la ignora. Sprints sigue
+>   usando `banco_prompts.py` como contexto de ideas.
 
 ## 10. Costos y estimados
 

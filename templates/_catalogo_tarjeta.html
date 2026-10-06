@@ -1,0 +1,63 @@
+{# Una tarjeta de la galería (spec §10.2). `t` viene de catalogo_vista.tarjetas;
+   `cat`, `cliente`, `etiquetas_fuente`, `trabajos_prod` del contexto del grid. #}
+{% if t.tipo == 'activo' %}
+<article class="cat-tarjeta{% if t.archivado %} prod-archivado{% endif %}" id="producto-{{ t.id }}" data-abrir-ficha="{{ cat }}:{{ t.id }}" tabindex="0" role="button" aria-label="{{ t.nombre }}">
+  <div class="cat-tarjeta-media">
+    <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=t.id, categoria=cat, w=320) }}" alt="" loading="lazy">
+    {% if t.n_colores %}<span class="cat-chip">{{ ngettext('%(num)s color', '%(num)s colores', t.n_colores) }}</span>{% endif %}
+  </div>
+  <div class="cat-tarjeta-texto">
+    <strong>{{ t.nombre }}</strong>
+    {% if t.colores %}
+    <span class="cat-colores">
+      {% for c in t.colores[:6] %}{% if c.sin_fotos %}<span class="cat-color-punto cat-color-sin-fotos" title="{{ c.nombre }}"></span>{% else %}<img class="cat-color-punto" src="{{ url_for('imagen_producto', cliente=cliente, producto_id=c.id, categoria=cat, w=320) }}" alt="" title="{{ c.nombre }}" loading="lazy">{% endif %}{% endfor %}
+      {% if t.colores | length > 6 %}<small>+{{ t.colores | length - 6 }}</small>{% endif %}
+    </span>
+    {% endif %}
+    {% if cat == 'producto' %}
+    <span class="cat-tarjeta-precio">{% if t.precio is not none %}{{ t.precio | dinero(t.moneda or '') }}{% else %}<span class="vacio" style="padding:0;">{{ _('sin precio') }}</span>{% endif %}</span>
+    <span class="cat-chips">
+      {% if t.fuente %}<span class="tag-estado badge-fuente badge-fuente-{{ t.fuente }}">{{ etiquetas_fuente.get(t.fuente, t.fuente)|traducir }}</span>{% endif %}
+      {% if t.archivado %}<span class="tag-estado">{{ _('archivado') }}</span>{% endif %}
+      {% if t.en_prueba %}<span class="tag-estado tag-en-uso">{{ _('en prueba') }}</span>{% endif %}
+      {% if not t.url_compra %}<span class="tag-estado">{{ _('sin URL') }}</span>{% endif %}
+      {% if t.usos %}<span class="tag-estado">{{ _('usado en %(n)s', n=t.usos) }}</span>{% endif %}
+    </span>
+    {% else %}
+    <small class="vacio" style="padding:0;">{{ _('%(n)s foto(s)', n=t.n_fotos) }}</small>
+    {% endif %}
+  </div>
+</article>
+{% else %}
+{% set p = t.fila %}
+{% set trabajo_v = trabajos_prod.vincular.get(p.id) %}
+<article class="cat-tarjeta cat-tarjeta-sinfotos{% if p.archivado %} prod-archivado{% endif %}" id="producto-fila-{{ p.id }}" data-archivado="{{ 1 if p.archivado else 0 }}">
+  <div class="cat-tarjeta-media">
+    {% set foto = p.url_imagen_principal or (p.fotos[0] if p.fotos else None) %}
+    {% if foto %}<img src="{{ foto }}" alt="" loading="lazy">{% else %}<span class="cat-tarjeta-vacia"></span>{% endif %}
+    <span class="cat-chip">{{ _('archivado') if p.archivado else _('Sin fotos') }}</span>
+  </div>
+  <div class="cat-tarjeta-texto">
+    <strong>{{ p.nombre }}</strong>
+    <span class="cat-tarjeta-precio">{% if p.precio is not none %}{{ p.precio | dinero(p.moneda or '') }}{% else %}<span class="vacio" style="padding:0;">{{ _('sin precio') }}</span>{% endif %}</span>
+    <span class="cat-chips">
+      <span class="tag-estado badge-fuente badge-fuente-{{ p.fuente }}">{{ etiquetas_fuente.get(p.fuente, p.fuente)|traducir }}</span>
+      {% if p.n_experimentos %}<span class="tag-estado">{{ _('en %(n)s experimento(s)', n=p.n_experimentos) }}</span>{% endif %}
+    </span>
+    <div class="cat-tarjeta-acciones">
+      {% if p.archivado %}
+      <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline"><input type="hidden" name="archivado" value="0"><button class="btn-guardar btn-xs">{{ _('Recuperar') }}</button></form>
+      {% else %}
+      <form method="post" action="{{ url_for('prod_fotos_subir', cliente=cliente, pid=p.id) }}" enctype="multipart/form-data" class="inline prod-form-fotos" title="{{ _('Elige las fotos desde tu computador: se crea el producto en el catálogo con ellas.') }}">
+        <label class="btn-generar btn-xs prod-subir-fotos">{{ _('Subir fotos') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden></label>
+      </form>
+      {% if p.fotos %}
+      <form method="post" action="{{ url_for('prod_vincular', cliente=cliente, pid=p.id) }}" class="inline"><button class="btn-guardar btn-xs" {% if trabajo_v %}disabled{% endif %}>{% if trabajo_v %}{{ _('Creando activo…') }}{% else %}{{ _('Crear activo desde las fotos de la tienda') }}{% endif %}</button></form>
+      {% if trabajo_v %}<div class="barra-progreso" id="trabajo-{{ trabajo_v.job_id }}" data-poll-job="{{ trabajo_v.job_id }}"><div class="barra-progreso-fill"></div></div><div class="progreso-texto"></div>{% endif %}
+      {% else %}<small class="vacio" style="padding:0;">{{ _('la tienda no trajo fotos') }}</small>{% endif %}
+      <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline prod-form-archivar" data-nombre="{{ p.nombre }}"><button class="btn-rechazar btn-xs">{{ _('Archivar') }}</button></form>
+      {% endif %}
+    </div>
+  </div>
+</article>
+{% endif %}

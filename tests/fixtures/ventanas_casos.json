@@ -278,5 +278,222 @@
  {
   "esperado": [],
   "palabras": []
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 600,
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 300,
+      "texto": "mundo"
+     }
+    ],
+    "t_ms": 0
+   },
+   {
+    "dur_ms": 300,
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 600,
+      "texto": "extraordinario"
+     }
+    ],
+    "t_ms": 600
+   }
+  ],
+  "max_caracteres": 22,
+  "max_ms": 1800,
+  "max_palabras": 4,
+  "palabras": [
+   {
+    "dur_ms": 300,
+    "t_ms": 0,
+    "texto": "Hola"
+   },
+   {
+    "dur_ms": 300,
+    "t_ms": 300,
+    "texto": "mundo"
+   },
+   {
+    "dur_ms": 300,
+    "t_ms": 600,
+    "texto": "extraordinario"
+   }
+  ]
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 300,
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     }
+    ],
+    "t_ms": 0
+   }
+  ],
+  "max_caracteres": 22,
+  "max_ms": 1800,
+  "max_palabras": 4,
+  "palabras": [
+   {
+    "dur_ms": 300,
+    "t_ms": 0,
+    "texto": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   }
+  ]
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 600,
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "a/b"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 300,
+      "texto": "c//d"
+     }
+    ],
+    "t_ms": 0
+   }
+  ],
+  "max_caracteres": 22,
+  "max_ms": 1800,
+  "max_palabras": 4,
+  "palabras": [
+   {
+    "dur_ms": 300,
+    "t_ms": 0,
+    "texto": "a\\b"
+   },
+   {
+    "dur_ms": 300,
+    "t_ms": 300,
+    "texto": "c\\\\d"
+   }
+  ]
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 900,
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "𝔸𝔹𝔺𝔻𝔼𝔽"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 300,
+      "texto": "𝔸𝔹𝔺𝔻𝔼𝔽"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 600,
+      "texto": "𝔸𝔹𝔺𝔻𝔼𝔽"
+     }
+    ],
+    "t_ms": 0
+   }
+  ],
+  "max_caracteres": 22,
+  "max_ms": 1800,
+  "max_palabras": 4,
+  "palabras": [
+   {
+    "dur_ms": 300,
+    "t_ms": 0,
+    "texto": "𝔸𝔹𝔺𝔻𝔼𝔽"
+   },
+   {
+    "dur_ms": 300,
+    "t_ms": 300,
+    "texto": "𝔸𝔹𝔺𝔻𝔼𝔽"
+   },
+   {
+    "dur_ms": 300,
+    "t_ms": 600,
+    "texto": "𝔸𝔹𝔺𝔻𝔼𝔽"
+   }
+  ]
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 900,
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "acción"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 300,
+      "texto": "ñandú"
+     },
+     {
+      "dur_ms": 300,
+      "t_ms": 600,
+      "texto": "pingüino"
+     }
+    ],
+    "t_ms": 0
+   },
+   {
+    "dur_ms": 300,
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 900,
+      "texto": "ok"
+     }
+    ],
+    "t_ms": 900
+   }
+  ],
+  "max_caracteres": 22,
+  "max_ms": 1800,
+  "max_palabras": 4,
+  "palabras": [
+   {
+    "dur_ms": 300,
+    "t_ms": 0,
+    "texto": "acción"
+   },
+   {
+    "dur_ms": 300,
+    "t_ms": 300,
+    "texto": "ñandú"
+   },
+   {
+    "dur_ms": 300,
+    "t_ms": 600,
+    "texto": "pingüino"
+   },
+   {
+    "dur_ms": 300,
+    "t_ms": 900,
+    "texto": "ok"
+   }
+  ]
  }
 ]

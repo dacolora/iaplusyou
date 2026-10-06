@@ -3,6 +3,7 @@
   edicion_proxy     {cliente, material_id}                                     max_intentos=3
   edicion_desde_clon {cliente, cf_id}                                          max_intentos=2
   material_de_pieza {cliente, cf_id}                                           max_intentos=2
+  material_transcribir {cliente, edicion_id, material_ids, idioma}             max_intentos=1
   materiales_limpiar {}                                                         periódica diaria
 `edicion_producir` renderiza el documento CONGELADO en la versión (no el
 vivo), así lo que se produjo siempre se puede volver a ver. Contrato con la
@@ -14,25 +15,48 @@ duracion_estimada=estimar.segundos(doc), etapas=ETAPAS_EDICION)`. `idioma` y
 porque forman parte del nombre de la carpeta de trabajo. `edicion_desde_clon`
 (capa 4a, «Editar este video») hace el trabajo pesado de
 `final_edition.edicion_clon.crear` (bajar el clon, medirlo) fuera del hilo de
-Flask; no paga nada, así que un reintento no importa (`max_intentos=2`)."""
+Flask; no paga nada, así que un reintento no importa (`max_intentos=2`).
+`material_transcribir` (editor capa 5a, D5/D6) paga Whisper una vez por
+material (`final_edition/transcripcion.py`) y sigue con los demás si uno
+falla — lo que sí se transcribió no se pierde."""
+import logging
 import math
 import os
 import re
 import shutil
 import subprocess
 
+from flask_babel import gettext, ngettext
+
+import audios
 import cola
 import creative_flow
 import ediciones
+import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, mezcla, motor, rasterizar
+from final_edition import cortes, encuadre, fotos, mezcla, motor, rasterizar, subtitulos_fuente, tipografia, transcripcion
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
+from idiomas import N_
 from storage import r2_uploader
-from tareas import al_interrumpir, registrar
+from tareas import al_interrumpir, errores_voz, ref_sufijo, registrar
 
-ETAPAS_EDICION = (("Preparando materiales", 15), ("Renderizando", 70), ("Subiendo", 15))
+log = logging.getLogger(__name__)
+
+# N_: se guardan en español y `estado_trabajo` las traduce para quien mira.
+ETAPAS_EDICION = ((N_("Preparando materiales"), 15), (N_("Renderizando"), 70), (N_("Subiendo"), 15))
+# Editor capa 5a: etapas de `material_transcribir` y mensajes finales de las
+# tareas de audio del editor (también usado por `editor_voz`, Task 6).
+ETAPAS_TRANSCRIBIR = ((N_("Preparando el audio"), 20), (N_("Transcribiendo"), 70), (N_("Guardando"), 10))
+# Task 6: etapas de `editor_voz` (TTS + Whisper sobre la voz).
+ETAPAS_VOZ = ((N_("Creando la voz"), 60), (N_("Preparando sus subtítulos"), 30), (N_("Guardando"), 10))
+MENSAJES_AUDIO_EDITOR = {
+    "subtitulos_listos": N_("Subtítulos listos."),
+    "voz_lista": N_("Voz lista."),
+    # nada los genera solo después: se dice dónde hacerlo (revisión final)
+    "voz_sin_palabras": N_("La voz quedó lista, pero no se pudieron sacar sus subtítulos: puedes generarlos desde «Subtítulos»."),
+}
 _EXT = {"video": "mp4", "imagen": "png", "audio": "wav", "png_texto": "png", "proxy": "mp4"}
 _IDIOMA_RE = re.compile(r"[a-z]{2}")
 _PAIS_RE = re.compile(r"[A-Z]{2}")
@@ -56,7 +80,7 @@ def generar_proxy(original, destino):
 def _extension(tipo):
     ext = _EXT.get(tipo)
     if not ext:
-        raise RuntimeError(f"Tipo de material sin extensión conocida: {tipo}")
+        raise RuntimeError(gettext("Tipo de material sin extensión conocida: %(tipo)s", tipo=tipo))
     return ext
 
 
@@ -66,6 +90,14 @@ def job_id_producir(cliente, edicion_id, idioma, pais):
 
 def job_id_proxy(cliente, material_id):
     return f"{cliente}__mat{int(material_id)}__proxy"
+
+
+def job_id_transcribir(cliente, edicion_id):
+    return f"{cliente}__ed{int(edicion_id)}__subtitulos"
+
+
+def job_id_voz(cliente, edicion_id):
+    return f"{cliente}__ed{int(edicion_id)}__voz"
 
 
 def job_id_desde_clon(cliente, cf_id):
@@ -83,14 +115,68 @@ def _carpeta(cliente, nombre):
     return c
 
 
+def _palabras_por_material(cliente, resuelto):
+    """`{material_id: palabras}` (D1/D5, capa 5a) solo para los materiales
+    del documento RESUELTO que ya tienen `extra.palabras` (una lista: una
+    transcripción vacía cuenta como hecha). Lo que usa
+    `subtitulos_fuente.derivar` antes de renderizar."""
+    salida = {}
+    for mid in resuelto.get("materiales") or []:
+        mat = materiales.obtener(cliente, mid)
+        palabras = (mat or {}).get("extra") or {}
+        palabras = palabras.get("palabras")
+        if isinstance(palabras, list):
+            salida[int(mid)] = palabras
+    return salida
+
+
+def _preparar_principal(doc, filas, rutas, carpeta):
+    """La pista principal de video (editor capa 5b, D2/D6): revisa que cada
+    clip `foto` sea una imagen y cada clip de video un video, prepara UNA vez
+    por material la copia de cada foto (`rutas["foto:<id>"]`,
+    `fotos.preparar`) y estampa en los clips con `encuadre` las medidas que
+    se VEN — siempre, pisando lo que traigan: de la foto preparada (ya
+    derecha) o del primer stream de video de ffprobe con su rotación
+    (`encuadre.medidas_visibles`, una vez por material). Un clip sin
+    `encuadre` no se mide (el compilador usa el llenado de siempre)."""
+    principal = documento_mod.pista_principal(doc)
+    if not principal or principal.get("tipo") != "video":
+        return
+    medidas = {}
+    for cl in principal.get("clips") or []:
+        mid = int(cl["material_id"])
+        tipo = filas[mid].get("tipo")
+        if cl.get("foto"):
+            if tipo != "imagen":
+                raise RuntimeError(gettext("El clip «%(clip)s» es una foto, pero su archivo no es una imagen.",
+                                           clip=cl["id"]))
+            clave = f"foto:{mid}"
+            if clave not in rutas:
+                destino = os.path.join(carpeta, f"foto_{mid}.jpg")
+                medidas[clave] = fotos.preparar(rutas[mid], destino)
+                rutas[clave] = destino
+        else:
+            if tipo != "video":
+                raise RuntimeError(gettext("El clip «%(clip)s» del video no es un video.", clip=cl["id"]))
+            clave = mid
+            if cl.get("encuadre") and clave not in medidas:
+                info = cortes.ffprobe_json(rutas[mid])
+                stream = next((st for st in info.get("streams") or [] if st.get("codec_type") == "video"), None)
+                medidas[clave] = encuadre.medidas_visibles(stream)
+        if cl.get("encuadre"):
+            cl["ancho_px"], cl["alto_px"] = (int(v) for v in medidas[clave])
+
+
 def preparar_rutas(cliente, doc, carpeta):
     """Baja los materiales del documento a `carpeta` y devuelve `rutas`
-    ({material_id: ruta, "png:<clip_id>": ruta, "ass": ruta}). De paso, con
-    las filas ya en mano: estampa `ancho_px`/`alto_px` en los clips `imagen`
-    que no los traen (tamaño natural medido al subir), rasteriza con Pillow
-    los clips de texto sin `pngs` y pasa los recortes por
-    `compilador.verificar_recortes` con las duraciones reales (`duracion_ms`
-    de la fila, cuando el proxy ya la midió) — modifica `doc` en el sitio."""
+    ({material_id: ruta, "foto:<material_id>": ruta, "png:<clip_id>": ruta,
+    "ass": ruta}). De paso, con las filas ya en mano: revisa y prepara la
+    pista principal (`_preparar_principal`: fotos y medidas del encuadre),
+    estampa `ancho_px`/`alto_px` en los clips `imagen` que no los traen
+    (tamaño natural medido al subir), rasteriza con Pillow los clips de
+    texto sin `pngs` y pasa los recortes por `compilador.verificar_recortes`
+    con las duraciones reales (`duracion_ms` de la fila, cuando el proxy ya
+    la midió) — modifica `doc` en el sitio."""
     rutas = {"ass": os.path.join(carpeta, "subtitulos.ass")}
     ids = set(int(x) for x in doc.get("materiales") or [])
     for p in doc.get("pistas") or []:
@@ -101,10 +187,11 @@ def preparar_rutas(cliente, doc, carpeta):
     for mid in sorted(ids):
         mat = materiales.obtener(cliente, mid)
         if not mat:
-            raise RuntimeError(f"Falta el material {mid} de este proyecto.")
+            raise RuntimeError(gettext("Falta el material %(mid)s de este proyecto.", mid=mid))
         filas[mid] = mat
         destino = os.path.join(carpeta, f"{mid}.{_extension(mat['tipo'])}")
         rutas[mid] = materiales.descargar(mat, destino)
+    _preparar_principal(doc, filas, rutas, carpeta)
     for clip_id, mid in (doc.get("pngs") or {}).items():
         mat = materiales.obtener(cliente, mid)
         if mat:
@@ -121,9 +208,14 @@ def preparar_rutas(cliente, doc, carpeta):
                 continue
             literal = (cl.get("texto") or {}).get("literal")
             if literal is None:
-                raise RuntimeError(f"El clip de texto {cl['id']} no está resuelto (¿falta documento.resolver?).")
+                raise RuntimeError(gettext("El clip de texto %(clip)s no está resuelto (¿falta documento.resolver?).",
+                                           clip=cl["id"]))
+            # Un texto v2 se dibuja al tamaño más grande en que se ve (capa 5c,
+            # D8) y devuelve su tamaño natural, que es el que se estampa; v1 no
+            # usa `escala_max`.
             medidas = rasterizar.png_texto(literal, cl.get("estilo") or {}, doc["formato"],
-                                           os.path.join(carpeta, f"png_{cl['id']}.png"))
+                                           os.path.join(carpeta, f"png_{cl['id']}.png"),
+                                           escala_max=tipografia.escala_max(cl))
             rutas[clave] = os.path.join(carpeta, f"png_{cl['id']}.png")
             cl["ancho_px"], cl["alto_px"] = medidas["ancho_px"], medidas["alto_px"]
     for p in doc.get("pistas") or []:
@@ -151,12 +243,12 @@ def renderizar_final(cliente, final_id, version_id, idioma, pais, avisar=None):
     # idioma/pais forman el nombre de la carpeta de trabajo: se validan
     # ANTES de tocar el disco (un `../x` no debe ni crearla).
     if not isinstance(idioma, str) or not _IDIOMA_RE.fullmatch(idioma):
-        raise ValueError(f"idioma inválido: {idioma!r} (se esperan dos letras minúsculas).")
+        raise ValueError(gettext("idioma inválido: %(idioma)s (se esperan dos letras minúsculas).", idioma=repr(idioma)))
     if not isinstance(pais, str) or not _PAIS_RE.fullmatch(pais):
-        raise ValueError(f"país inválido: {pais!r} (se esperan dos letras mayúsculas).")
+        raise ValueError(gettext("país inválido: %(pais)s (se esperan dos letras mayúsculas).", pais=repr(pais)))
     v = ediciones.version(cliente, version_id)
     if not v:
-        raise RuntimeError("No existe esa versión de la edición.")
+        raise RuntimeError(gettext("No existe esa versión de la edición."))
     carpeta = _carpeta(cliente, f"{v['edicion_id']}_{idioma}_{pais}")
     # Como mucho una corrida fallida por destino queda en disco: un
     # reintento arranca de carpeta limpia (vacía pero existente).
@@ -164,6 +256,10 @@ def renderizar_final(cliente, final_id, version_id, idioma, pais, avisar=None):
     os.makedirs(carpeta, exist_ok=True)
     avisar(ETAPAS_EDICION[0][0])
     doc = documento_mod.resolver(documento_mod.validar(documento_mod.migrar(v["documento"])), idioma, pais)
+    # D1 (capa 5a): los subtítulos se derivan del audio AQUÍ, sobre el
+    # documento ya resuelto para este destino — nunca antes (`resolver` ya
+    # aplicó `por_destino` y quitó los audios de otro idioma).
+    doc = subtitulos_fuente.aplicar(doc, _palabras_por_material(cliente, doc))
     rutas = preparar_rutas(cliente, doc, carpeta)
     avisar(ETAPAS_EDICION[1][0])
     es_imagen = documento_mod.duracion_ms(doc) == 0
@@ -199,10 +295,12 @@ def ejecutar_producir(tarea):
                                               url_miniatura=res["url_miniatura"], duracion_s=res["duracion_s"],
                                               capas={"render": {"edicion_version_id": res["version_id"], "tramos": res["tramos"],
                                                                 "con_ass": res["con_ass"]}}):
-            raise RuntimeError(f"La final {final_id} no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
+            raise RuntimeError(gettext("La final %(final)s no existe; la ruta debe crearla con creative_flow.crear_final "
+                                       "antes de encolar.", final=final_id))
         if not ediciones.apuntar_final(cliente, final_id, res["version_id"]):
-            raise RuntimeError(f"La final {final_id} no existe en pieza; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
-        return f"Final {p['idioma']}/{p['pais']} lista."
+            raise RuntimeError(gettext("La final %(final)s no existe en pieza; la ruta debe crearla con "
+                                       "creative_flow.crear_final antes de encolar.", final=final_id))
+        return gettext("Final %(destino)s lista.", destino=f"{p['idioma']}/{p['pais']}")
     except Exception as e:
         # I3 (capa 1): nunca un token crudo en la columna de error.
         creative_flow.actualizar_final(cliente, final_id, estado="error",
@@ -214,7 +312,10 @@ def ejecutar_producir(tarea):
 def _interrumpido(tarea, mensaje):
     p = tarea.get("payload") or {}
     if p.get("cliente") and p.get("final_id"):
-        error = f"interrumpido: {cola.recortar(cola.sin_token(str(mensaje)), 500)}"
+        # Se guarda en la final (la pestaña Final edition lo muestra): el idioma del
+        # proyecto. El hook no pasa por worker.ejecutar (como tareas/nicho.py).
+        with idiomas.en_idioma(idiomas.de_proyecto(p["cliente"])):
+            error = gettext("interrumpido: %(mensaje)s", mensaje=cola.recortar(cola.sin_token(str(mensaje)), 500))
         creative_flow.actualizar_final(p["cliente"], p["final_id"], estado="error", error=error)
 
 
@@ -242,23 +343,28 @@ def ejecutar_proxy(tarea):
     cliente, mid = p["cliente"], int(p["material_id"])
     mat = materiales.obtener(cliente, mid)
     if not mat:
-        return "Material inexistente."
+        return gettext("Material inexistente.")
     # Cheap fix (review): el tipo se valida ANTES de bajar nada — un material
-    # sin proxy (imagen, png_texto, proxy, tira, forma_onda) no debe ni
-    # crear su carpeta de trabajo.
-    if mat["tipo"] not in ("video", "audio"):
-        return "Sin proxy para este tipo."
+    # sin proxy (png_texto, proxy, tira, forma_onda) no debe ni crear su
+    # carpeta de trabajo.
+    if mat["tipo"] not in ("video", "audio", "imagen"):
+        return gettext("Sin proxy para este tipo.")
     carpeta = _carpeta(cliente, f"proxy_{mid}")
     try:
         original = materiales.descargar(mat, os.path.join(carpeta, f"orig.{_extension(mat['tipo'])}"))
-        extra = dict(mat.get("extra") or {})
+        previo = mat.get("extra") or {}      # foto del inicio: solo para decidir, nunca se reescribe
+        nuevos = {}                          # SOLO lo que esta tarea calcula
         campos = {}
         if mat["tipo"] == "video":
             info = cortes.ffprobe_json(original)
             v = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
             dur_s = cortes.duracion(original)
-            campos.update(ancho=v.get("width"), alto=v.get("height"), duracion_ms=int(round(dur_s * 1000)))
-            extra["tiene_audio"] = mezcla.tiene_audio(original)
+            # D6: las medidas que se VEN (un grabado «de pie» viene
+            # codificado acostado, con una marca de rotación), no las de
+            # ffprobe tal cual.
+            ancho, alto = encuadre.medidas_visibles(v)
+            campos.update(ancho=ancho, alto=alto, duracion_ms=int(round(dur_s * 1000)))
+            nuevos["tiene_audio"] = mezcla.tiene_audio(original)
             proxy = os.path.join(carpeta, "proxy.mp4")
             generar_proxy(original, proxy)
             tira = os.path.join(carpeta, "tira.jpg")
@@ -267,19 +373,39 @@ def ejecutar_proxy(tarea):
             celdas = max(1, int(math.ceil(dur_s)))
             cortes.ffmpeg(["-i", original, "-vf", f"fps=1,scale=160:-2,tile={celdas}x1", "-frames:v", "1", "-q:v", "6", tira], timeout=600)
             campos["url_proxy"] = r2_uploader.upload_file(proxy, f"clientes/{cliente}/materiales/{mid}_proxy.mp4", "video/mp4")
-            extra["tira_url"] = r2_uploader.upload_file(tira, f"clientes/{cliente}/materiales/{mid}_tira.jpg", "image/jpeg")
-            extra["proxy_version"] = PROXY_VERSION
-            if "cortes_ms" not in extra:
+            nuevos["tira_url"] = r2_uploader.upload_file(tira, f"clientes/{cliente}/materiales/{mid}_tira.jpg", "image/jpeg")
+            nuevos["proxy_version"] = PROXY_VERSION
+            if "cortes_ms" not in previo:
                 # `insumos.clon` ya los midió al crear el material (I4,
                 # plan-mandated capa 2): no repetir el trabajo de `scdet`.
-                extra["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
+                nuevos["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
+        elif mat["tipo"] == "imagen":
+            # D13: la copia liviana para la vista previa (lado largo <=
+            # fotos.LADO_LIGERA, con su alfa si la trae) — nunca tira ni
+            # picos, que son solo de video/audio.
+            ruta, content_type, ancho, alto = fotos.ligera(original, carpeta)
+            ext = "png" if content_type == "image/png" else "jpg"
+            campos["url_proxy"] = r2_uploader.upload_file(ruta, f"clientes/{cliente}/materiales/{mid}_proxy.{ext}", content_type)
+            if not mat.get("ancho") or not mat.get("alto"):
+                # D6: un material viejo (o de otra vía) puede no traer las
+                # medidas que se VEN — se llenan con las de la copia liviana
+                # (ya derecha) en vez de dejarlas vacías.
+                campos["ancho"], campos["alto"] = ancho, alto
         else:  # audio (único otro tipo posible tras el chequeo de arriba)
             campos["duracion_ms"] = int(round(cortes.duracion(original) * 1000))
-            extra["picos"] = _picos(original)
-        import db
-        with db.conectar() as con:
-            con.execute(db.material.update().where(db.material.c.id == mid).values(extra=extra, actualizado_en=db.ahora(), **campos))
-        return "Proxy listo."
+            nuevos["picos"] = _picos(original)
+        # D5 (capa 5a) y revisión final: `extra` se leyó al EMPEZAR y se
+        # escribe minutos después (ffmpeg real de por medio). Se mezclan SOLO
+        # las claves que esta tarea calculó, contra el `extra` VIVO: lo que otra
+        # tarea guardó mientras tanto (`palabras`, un `nombre` nuevo…) nunca
+        # vuelve a su valor viejo, y una clave ajena (`cliente`, `material_id`)
+        # nunca choca con los argumentos de `actualizar_extra`.
+        materiales.actualizar_extra(cliente, mid, **nuevos)
+        if campos:
+            import db
+            with db.conectar() as con:
+                con.execute(db.material.update().where(db.material.c.id == mid).values(actualizado_en=db.ahora(), **campos))
+        return gettext("Proxy listo.")
     finally:
         # A diferencia de edicion_producir, acá no hay una fila "final" que
         # deje en error para depurar — la carpeta de trabajo siempre se
@@ -287,10 +413,105 @@ def ejecutar_proxy(tarea):
         shutil.rmtree(carpeta, ignore_errors=True)
 
 
+@registrar("material_transcribir")
+def ejecutar_transcribir(tarea):
+    """Transcribe cada material de `material_ids` que todavía lo necesite
+    (D5): un id de otro proyecto o que ya no exista se ignora sin más, y si
+    uno falla se sigue con los demás — lo que sí se transcribió (y su gasto)
+    no se pierde. Al final, si alguno falló, avisa cuántos."""
+    p = tarea["payload"]
+    cliente, edicion_id, idioma = p["cliente"], p["edicion_id"], p["idioma"]
+    jid = tarea.get("job_id") or job_id_transcribir(cliente, edicion_id)
+    avisar = lambda n: trabajos.reportar(jid, etapa=n)
+    carpeta = _carpeta(cliente, f"transcribir_{edicion_id}")
+    avisar(ETAPAS_TRANSCRIBIR[0][0])
+    fallos = 0
+    try:
+        for mid in p.get("material_ids") or []:
+            mat = materiales.obtener(cliente, mid)
+            if not mat or not transcripcion.necesita(mat):
+                continue
+            avisar(ETAPAS_TRANSCRIBIR[1][0])
+            ref = f"transcripcion:{mid}{ref_sufijo(tarea)}"
+            try:
+                transcripcion.transcribir(cliente, mat, idioma, carpeta, ref)
+            except Exception:  # noqa: BLE001 — sigue con los demás; el gasto de este ya quedó si alcanzó a pagar
+                log.exception("material_transcribir (tarea %s): material %s falló", tarea.get("id"), mid)
+                fallos += 1
+        avisar(ETAPAS_TRANSCRIBIR[2][0])
+        if fallos:
+            raise RuntimeError(ngettext("No se pudo transcribir %(num)s archivo.",
+                                        "No se pudieron transcribir %(num)s archivos.", fallos))
+        # Babel 2.18 no extrae bien un gettext(dict[clave]) (confunde el `[`
+        # con el paréntesis de la llamada y «ve» la clave como mensaje) — se
+        # saca a una variable antes, como ya hace el resto del código con
+        # ngettext(gettext(...)).
+        mensaje = MENSAJES_AUDIO_EDITOR["subtitulos_listos"]
+        return gettext(mensaje)
+    finally:
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
+# El mismo saneado que Audios, Mis voces y Anuncio hablado (tareas/errores_voz.py):
+# solo un msgid fijo pasa tal cual; cualquier otro error (p. ej. de fal, que
+# repite el input — el texto de la persona) sale como este mensaje con su tipo,
+# porque el estado de trabajos no pide sesión (D13).
+MENSAJE_ERROR_VOZ = N_("No pude crear la voz; intenta de nuevo (%(tipo)s).")
+
+
+@registrar("editor_voz")
+def ejecutar_voz(tarea):
+    try:
+        return _generar_voz(tarea)
+    except Exception as e:  # noqa: BLE001 — todo error sale por errores_voz.publico
+        raise errores_voz.publico(e, tarea, "editor_voz", MENSAJE_ERROR_VOZ) from e
+
+
+def _generar_voz(tarea):
+    """Voz con IA dentro del editor (D9, Task 6): TTS (caché compartida con
+    Crear › Audios, `audios.voz_cruda`) y, enseguida, Whisper sobre esa voz —
+    así «Generar subtítulos» con ella sale gratis. Si Whisper falla, la voz
+    (ya pagada) se entrega igual y el mensaje final lo avisa — nunca se
+    pierde lo pagado, y el mensaje nunca lleva el texto de la persona (D13:
+    el estado de trabajos no pide sesión)."""
+    p = tarea["payload"]
+    cliente, edicion_id = p["cliente"], p["edicion_id"]
+    texto, voz, idioma = p["texto"], p["voz"], p["idioma"]
+    velocidad = p.get("velocidad") or "normal"
+    jid = tarea.get("job_id") or job_id_voz(cliente, edicion_id)
+    avisar = lambda n: trabajos.reportar(jid, etapa=n)
+    carpeta = _carpeta(cliente, f"voz_{edicion_id}")
+    avisar(ETAPAS_VOZ[0][0])
+    try:
+        # Gasto `locucion:<hash12>:t<tarea>` (lo arma audios.voz_cruda, la misma de Crear › Audios
+        # y del anuncio hablado: caché por hash, nunca se paga dos veces).
+        mat, _creada = audios.voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo(tarea), carpeta=carpeta)
+        avisar(ETAPAS_VOZ[1][0])
+        sin_palabras = False
+        if transcripcion.necesita(mat):
+            ref_t = f"transcripcion:{mat['id']}{ref_sufijo(tarea)}"
+            try:
+                mat = transcripcion.transcribir(cliente, mat, idioma, carpeta, ref_t)
+            except Exception:  # noqa: BLE001 — la voz (ya pagada) se entrega igual
+                log.exception("editor_voz (tarea %s): no se pudo transcribir la voz %s", tarea.get("id"), mat["id"])
+                sin_palabras = True
+        avisar(ETAPAS_VOZ[2][0])
+        if (mat.get("extra") or {}).get("picos") is None:
+            trabajos.encolar(job_id_proxy(cliente, mat["id"]), "edicion_proxy",
+                             {"cliente": cliente, "material_id": mat["id"]}, duracion_estimada=60,
+                             cliente=cliente, max_intentos=3, prioridad=1)
+        materiales.marcar_uso([mat["id"]])
+        # Mismo truco que arriba: Babel 2.18 no extrae bien gettext(dict[clave]).
+        mensaje = MENSAJES_AUDIO_EDITOR["voz_sin_palabras"] if sin_palabras else MENSAJES_AUDIO_EDITOR["voz_lista"]
+        return gettext(mensaje)
+    finally:
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
 @registrar("materiales_limpiar")
 def ejecutar_limpiar(tarea):
     n = materiales.limpiar_sin_uso(dias=30)
-    return f"{n} materiales efímeros borrados."
+    return gettext("%(n)s materiales efímeros borrados.", n=n)
 
 
 @registrar("edicion_desde_clon")
@@ -300,9 +521,9 @@ def ejecutar_desde_clon(tarea):
     from final_edition import edicion_clon
     p = tarea["payload"]
     if not isinstance(p.get("cf_id"), str) or not _CF_RE.fullmatch(p["cf_id"]):
-        raise ValueError(f"cf_id inválido: {p.get('cf_id')!r}")
+        raise ValueError(gettext("cf_id inválido: %(cf)s", cf=repr(p.get("cf_id"))))
     eid = edicion_clon.crear(p["cliente"], p["cf_id"], _carpeta(p["cliente"], f"clon_{p['cf_id']}"))
-    return f"Edición {eid} lista para editar."
+    return gettext("Edición %(id)s lista para editar.", id=eid)
 
 
 @registrar("material_de_pieza")
@@ -316,6 +537,6 @@ def ejecutar_material_de_pieza(tarea):
     from final_edition import biblioteca
     p = tarea["payload"]
     if not isinstance(p.get("cf_id"), str) or not _CF_RE.fullmatch(p["cf_id"]):
-        raise ValueError(f"cf_id inválido: {p.get('cf_id')!r}")
+        raise ValueError(gettext("cf_id inválido: %(cf)s", cf=repr(p.get("cf_id"))))
     mat = biblioteca.materializar_pieza(p["cliente"], p["cf_id"], _carpeta(p["cliente"], f"material_{p['cf_id']}"))
-    return f"Material {mat['id']} listo."
+    return gettext("Material %(id)s listo.", id=mat["id"])

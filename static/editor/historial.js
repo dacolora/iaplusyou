@@ -20,9 +20,16 @@ export class Historial {
     this._ultimoTiempo = 0;
   }
 
+  // ¿Un `aplicar` con esta clave, ahora, se fusionaría con el paso anterior?
+  // La página lo pregunta ANTES de operar para derivar un gesto de su base
+  // (vinculos.operarGesto, revisión final de la capa 5b).
+  fusionaria(clave) {
+    return clave !== null && clave === this._ultimaClave && this.ahora() - this._ultimoTiempo < 800;
+  }
+
   aplicar(doc, { clave = null } = {}) {
+    const fusiona = this.fusionaria(clave);
     const ahora = this.ahora();
-    const fusiona = clave !== null && clave === this._ultimaClave && ahora - this._ultimoTiempo < 800;
     if (!fusiona) {
       this.pasado.push(this.actual);
       if (this.pasado.length > this.limite) this.pasado.shift();

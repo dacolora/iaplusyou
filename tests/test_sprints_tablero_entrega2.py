@@ -386,6 +386,18 @@ def test_precio_de_regenerar_respeta_el_sonido_de_la_sesion(con_ideas, monkeypat
     assert "Regenerar (US$ %.2f)" % sin in piezas and "Regenerar (US$ %.2f)" % con not in piezas
 
 
+def test_pnd127_precio_de_regenerar_suma_musica_generada(con_ideas, monkeypatch, tmp_path):
+    import creative_flow
+    from providers import flowplus_modelos
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    creative_flow.actualizar('acme', cfs[iv], modelo='kling_o3_pro', musica_estilo='calmado')
+    datos.actualizar_idea('acme', iv, duracion_s=15)
+    base = flowplus_modelos.estimate_video('kling_o3_pro', 15, con_sonido=True)['usd']
+    html = con_ideas['c'].get(f'/cliente/acme/sprints/{sid}/campanas/{cid}/piezas').data.decode()
+    assert 'Regenerar (US$ %.2f)' % (base + .02) in html
+
+
 def test_contadores_de_piezas_en_singular_y_plural(con_ideas, monkeypatch, tmp_path):
     """«1 aprobadas» / «1 listas»: con uno va en singular (panel, revisión y entrega)."""
     from sprints import datos
@@ -432,6 +444,22 @@ def test_estado_del_sprint_con_tilde(app):
                                            '{{ chip_estado("revision") }} {{ chip_estado("listo_para_generar") }}').render()
     assert 'estado-sprint-revision">revisión</span>' in html
     assert 'estado-sprint-listo_para_generar">listo para generar</span>' in html
+
+
+def test_estado_del_sprint_con_mayuscula_solo_al_principio():
+    """La etiqueta del sprint salía «Ready To Generate» (2026-10-01): el CSS
+    ponía `text-transform: capitalize` (mayúscula en cada palabra). Ahora solo
+    la primera letra (`::first-letter`, que funciona porque .tag-estado es
+    inline-block): «Ready to generate», «Listo para generar»."""
+    import os
+    import re
+    css = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "style.css"),
+               encoding="utf-8").read()
+    reglas = re.findall(r"\.estado-sprint(?![-\w])([^{]*)\{([^}]*)\}", css)
+    assert reglas, "no encontré las reglas de .estado-sprint"
+    assert not any("capitalize" in cuerpo for _, cuerpo in reglas)
+    assert any("::first-letter" in selector and "uppercase" in cuerpo for selector, cuerpo in reglas)
+    assert re.search(r"\.tag-estado\s*\{[^}]*display:\s*inline-block", css)
 
 
 def test_js_del_panel_espera_el_angulo_y_conserva_lo_escrito():

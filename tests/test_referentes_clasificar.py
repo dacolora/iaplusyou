@@ -59,6 +59,28 @@ def test_validar_nunca_duplica_el_prefijo_emerging():
     assert clasificar.validar(data, vocab)["familia_nueva"]["nombre"] == "Recipe Card"
 
 
+def test_validar_ignora_tambien_el_prefijo_new():
+    """Incidente 2026-10-01: copycoders nombra familias «NEW: X» y «EMERGING: X»
+    y Claude a veces propone la misma con el otro prefijo; como solo se ignoraba
+    «EMERGING:», nacieron «EMERGING: NEW: Escalation Warning», «EMERGING: NEW:
+    Borrowed-Interface Screenshot» y «EMERGING: Seasonal Countdown CTA», copias
+    de familias que ya existían (se fusionaron a mano)."""
+    vocab = ["Borrowed-Interface Screenshot", "NEW: Seasonal Countdown CTA", "EMERGING: Escalation Warning"]
+    casos = (("NEW: Borrowed-Interface Screenshot", "Borrowed-Interface Screenshot"),
+             ("Seasonal Countdown CTA", "NEW: Seasonal Countdown CTA"),
+             ("NEW: Escalation Warning", "EMERGING: Escalation Warning"),
+             ("emerging: new: escalation warning", "EMERGING: Escalation Warning"))
+    for propuesto, existente in casos:
+        for data in ({"familia": propuesto, "familia_nueva": None},
+                     {"familia": None, "familia_nueva": {"nombre": propuesto, "descripcion": "d"}}):
+            r = clasificar.validar({"etapa": "BOF", "consciencia": "most-aware", "dolor": "x", "firma": "f", **data}, vocab)
+            assert r["familia"] == existente and r["familia_nueva"] is None, (propuesto, data)
+    # Una nueva de verdad se guarda sin ninguno de los dos prefijos (la tarea agrega «EMERGING:» una vez).
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": None, "dolor": "x", "firma": "f",
+            "familia_nueva": {"nombre": "NEW: EMERGING: Recipe Card", "descripcion": "d"}}
+    assert clasificar.validar(data, vocab)["familia_nueva"]["nombre"] == "Recipe Card"
+
+
 def test_validar_etapa_invalida_falla():
     data = {"etapa": "XOF", "consciencia": "unaware", "familia": None,
             "familia_nueva": {"nombre": "X", "descripcion": "d"}, "dolor": "x", "firma": "f"}

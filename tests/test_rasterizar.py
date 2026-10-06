@@ -55,3 +55,413 @@ def test_color_con_alfa_y_opacidad():
     assert r.color("#7c3aed") == (0x7c, 0x3a, 0xed, 255)
     assert r.color("#000000C8") == (0, 0, 0, 200)
     assert r.color("#FFFFFF", 0.5) == (255, 255, 255, 128)
+
+
+# ---- Capa 4c (10/10): emojis ----
+# Pillow dibuja con Inter / Space Grotesk, que no traen emojis: cada uno salía
+# como la caja de «carácter que falta». El rasterizador los quita.
+
+def test_quita_lo_que_la_fuente_no_puede_dibujar_y_deja_lo_demas():
+    assert r.sin_glifos_faltantes("🔥 50% OFF ✅", "Inter-Bold") == "50% OFF"
+    assert r.sin_glifos_faltantes("Hecho en 🇨🇴 con 👨‍👩‍👧", "Inter-Bold") == "Hecho en con"
+    texto = "¡Envío gratis!\nñ á é ü $ 89.900 – 50 % ®"
+    assert r.sin_glifos_faltantes(texto, "Inter-Bold") == texto                 # nada que quitar: tal cual
+    assert r.sin_glifos_faltantes("★ Top", "Inter-Bold") == "★ Top"             # Inter trae la estrella
+    assert r.sin_glifos_faltantes("★ Top", "SpaceGrotesk-Bold") == "Top"        # Space Grotesk no
+    assert r.sin_glifos_faltantes("🔥🔥", "Inter-Bold") == ""
+
+
+def test_el_png_de_un_texto_con_emoji_no_lleva_la_caja(tmp_path):
+    estilo = _estilo(HOOK)
+    con = r.png_texto("🔥 Oferta", estilo, "9:16", str(tmp_path / "con.png"))
+    sin = r.png_texto("Oferta", estilo, "9:16", str(tmp_path / "sin.png"))
+    assert con == sin
+    assert Image.open(str(tmp_path / "con.png")).tobytes() == Image.open(str(tmp_path / "sin.png")).tobytes()
+
+
+# ---- Capa 5c (3/9): el texto v2 (spec D3, D5.7, D6.8, D8) ----
+
+import hashlib
+import io
+import json
+import os
+
+import PIL
+from PIL import ImageFont, features
+
+from final_edition import fuentes, tipografia
+
+HUELLAS = os.path.join(os.path.dirname(__file__), "fixtures", "rasterizar_v1.json")
+
+
+def _pixeles(ruta):
+    return hashlib.sha256(Image.open(ruta).convert("RGBA").tobytes()).hexdigest()
+
+
+def test_un_texto_v1_da_el_mismo_png_que_antes_de_la_capa_5c(tmp_path):
+    # D3: un texto sin `estilo.version` se produce IGUAL. Las huellas se tomaron con el código de
+    # antes de tocar rasterizar.py (Step 0 de la Tarea 3); dependen de Pillow y FreeType.
+    with open(HUELLAS, encoding="utf-8") as f:
+        ref = json.load(f)
+    hoy = (PIL.__version__, features.version("freetype2"))
+    if hoy != (ref["pillow"], ref["freetype"]):
+        pytest.skip(f"las huellas son de Pillow {ref['pillow']} / FreeType {ref['freetype']}; aquí hay {hoy}")
+    assert len(ref["casos"]) == 4
+    for i, caso in enumerate(ref["casos"]):
+        ruta = str(tmp_path / f"{i}.png")
+        assert r.png_texto(caso["texto"], caso["estilo"], caso["formato"], ruta) == caso["medidas"], caso["texto"]
+        assert _pixeles(ruta) == caso["sha256"], caso["texto"]
+
+
+V2 = {"fuente": "Inter-Bold", "tamano": 0.05, "color": "#FFFFFF", "version": 2}
+
+
+@pytest.mark.parametrize("escala_max, lado", [(None, (221, 125)), (1.0, (221, 125)), (2, (442, 250)), (9, (884, 500))])
+def test_un_texto_v2_devuelve_lo_natural_y_se_dibuja_a_su_factor(tmp_path, escala_max, lado):
+    # D8: el PNG mide natural × factor (escala 2 → 2; 9 → el tope, 4), pero lo que se estampa en el
+    # clip y coloca geometria.caja es el tamaño NATURAL de la maqueta (221 × 125 para «Hola» a 96 px).
+    ruta = str(tmp_path / "h.png")
+    extra = {} if escala_max is None else {"escala_max": escala_max}
+    assert r.png_texto("Hola", V2, "9:16", ruta, **extra) == {"ancho_px": 221, "alto_px": 125}
+    im = Image.open(ruta)
+    assert im.mode == "RGBA" and im.size == lado
+    assert im.getpixel((0, 0))[3] == 0 and im.getbbox() is not None
+
+
+def test_un_texto_v2_quita_lo_que_ninguna_fuente_trae(tmp_path):
+    # D5.2: Space Grotesk no trae «✓» y la fuente de emojis tampoco: se quita (con el espacio que
+    # queda en el borde) y el PNG es el de «Envío».
+    estilo = {**V2, "fuente": "SpaceGrotesk-Bold"}
+    maqueta = tipografia.maquetar("✓ Envío", estilo, "9:16", fuentes.cargar_tabla())
+    assert maqueta["texto"] == "Envío" and maqueta["quitados"] == ["✓"]
+    con = r.png_texto("✓ Envío", estilo, "9:16", str(tmp_path / "con.png"))
+    sin = r.png_texto("Envío", estilo, "9:16", str(tmp_path / "sin.png"))
+    assert con == sin == {"ancho_px": maqueta["ancho_px"], "alto_px": maqueta["alto_px"]}
+    assert _pixeles(str(tmp_path / "con.png")) == _pixeles(str(tmp_path / "sin.png"))
+
+
+def test_un_texto_v2_con_contorno_lo_pinta_por_fuera_y_rellena_por_dentro(tmp_path):
+    # D5.7: tres pasadas letra por letra; el contorno (grosor 0,003 × 1920 = 6 px) va por fuera
+    # del palo de la «H» y el relleno por dentro, en el origen que da la maqueta.
+    estilo = {**V2, "contorno": {"color": "#FF0000", "grosor": 0.003}}
+    ruta = str(tmp_path / "h.png")
+    r.png_texto("H", estilo, "9:16", ruta)
+    maqueta = tipografia.maquetar("H", estilo, "9:16", fuentes.cargar_tabla())
+    letra = maqueta["letras"][0]
+    x0, base = tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"])
+    mascara, desplazamiento = ImageFont.truetype(r.ruta_fuente("Inter-Bold"), maqueta["tam"]).getmask2("H", anchor="ls")
+    izq = desplazamiento[0] + mascara.getbbox()[0]                    # donde empieza la tinta del palo
+    im = Image.open(ruta)
+    fila = base - 20
+    assert im.getpixel((x0 + izq - 3, fila)) == (255, 0, 0, 255)       # en medio del contorno, por fuera
+    assert im.getpixel((x0 + izq + 8, fila)) == (255, 255, 255, 255)   # el centro del palo: el relleno
+    assert im.getpixel((x0 + izq - 9, fila))[3] == 0                   # pasado el contorno: nada
+
+
+def test_un_texto_v2_con_una_fuente_que_no_esta_falla_como_siempre(tmp_path, monkeypatch):
+    with pytest.raises(r.FuenteNoDisponible, match="^La fuente NoExiste no está en static/fonts.$"):
+        r.png_texto("Hola", {**V2, "fuente": "NoExiste"}, "9:16", str(tmp_path / "a.png"))
+    # la TTF está pero la tabla no la trae: tampoco sale un ValueError pelado
+    tabla = fuentes.cargar_tabla()
+    sin_inter = {**tabla, "fuentes": {k: v for k, v in tabla["fuentes"].items() if k != "Inter-Bold"}}
+    monkeypatch.setattr(fuentes, "cargar_tabla", lambda: sin_inter)
+    with pytest.raises(r.FuenteNoDisponible, match="^La fuente Inter-Bold no está en static/fonts.$"):
+        r.png_texto("Hola", V2, "9:16", str(tmp_path / "b.png"))
+
+
+def _emoji_al_centro(tmp_path, texto="🔥", **estilo):
+    """El píxel del centro de la caja de la primera letra de emoji (ancho de su avance, alto de su
+    ascendente y descendente) en el PNG de un texto v2 de 200 px."""
+    est = {**V2, "tamano": 0.1042, **estilo}
+    ruta = str(tmp_path / "e.png")
+    r.png_texto(texto, est, "9:16", ruta)
+    tabla = fuentes.cargar_tabla()
+    maqueta = tipografia.maquetar(texto, est, "9:16", tabla)
+    assert maqueta["tam"] == 200
+    letra = next(l for l in maqueta["letras"] if l["fuente"] == "emoji")
+    e = tabla["emoji"]
+    av = tipografia.ancho(chr(letra["cp"]), est["fuente"], maqueta["tam"], tabla)
+    arriba = letra["base"] - e["asc"] * maqueta["tam"] / e["upem"]
+    abajo = letra["base"] + e["desc"] * maqueta["tam"] / e["upem"]
+    return Image.open(ruta).getpixel((int(letra["x"] + av / 2), int((arriba + abajo) / 2)))
+
+
+@pytest.mark.skipif(not fuentes.hay_emoji(), reason="sin la fuente de emojis (D6.5)")
+def test_un_emoji_v2_sale_a_color_y_no_como_silueta(tmp_path):
+    # D6.8 (R1): cada capa de color del 🔥 se dibuja en su color; la silueta blanca del texto o la
+    # caja vacía de `embedded_color` no pasan.
+    px = _emoji_al_centro(tmp_path)
+    assert px[0] > 180 and px[2] < 90 and px[3] > 200, px
+
+
+@pytest.mark.skipif(not fuentes.hay_emoji(), reason="sin la fuente de emojis (D6.5)")
+def test_una_capa_translucida_del_emoji_se_compone_encima_de_la_anterior(tmp_path):
+    # 🎯 trae una capa negra al 20 % (alfa 51) encima de las rojas y blancas. Compuesta, el emoji
+    # sigue opaco debajo de ella; pintada con `draw.text` directo (que REEMPLAZA el alfa del
+    # lienzo por el de la tinta) esos píxeles quedarían con alfa 51, como agujeros.
+    capas = fuentes.emoji_capas(ord("🎯"))
+    assert (0, 0, 0, 51) in [c for _g, c in capas]
+    from PIL import ImageDraw
+    estilo = {**V2, "tamano": 0.1042}
+    ruta = str(tmp_path / "d.png")
+    r.png_texto("🎯", estilo, "9:16", ruta)
+    render = Image.open(ruta)
+    maqueta = tipografia.maquetar("🎯", estilo, "9:16", fuentes.cargar_tabla())
+    letra = maqueta["letras"][0]
+    origen = (tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"]))
+    fuente = ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), maqueta["tam"])
+
+    def a_lo_bruto(cuales):
+        im = Image.new("RGBA", render.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        for gid, c in cuales:
+            d.text(origen, chr(fuentes.PUA_CAPAS + gid), font=fuente, fill=c, anchor="ls")
+        return list(im.getdata())
+
+    sin_la_translucida = a_lo_bruto([cap for cap in capas if cap[1] != (0, 0, 0, 51)])
+    con_todas = a_lo_bruto(capas)
+    huecos = [i for i, p in enumerate(con_todas) if p[3] == 51 and sin_la_translucida[i][3] == 255]
+    assert len(huecos) > 100                                  # la capa al 20 % sí cae sobre algo opaco
+    pix = list(render.getdata())
+    assert all(pix[i][3] == 255 for i in huecos)              # compuesta: ahí sigue opaco
+
+
+# ---- Capa 5c (3/9, arreglo): lo que la revisión vio sin prueba ----
+
+ADORNOS = {"contorno": {"color": "#FF0000", "grosor": 0.003},                  # 6 px
+           "sombra": {"color": "#0000FF", "dx": 0.005, "dy": 0.005},          # 10 px
+           "fondo": {"color": "#00FF00", "opacidad": 1.0, "radio": 0.0105,    # radio 20 px
+                     "relleno_x": 0.02, "relleno_y": 0.02, "ancho": None}}
+
+
+def _palo_de_la_h(tam, fila_rel):
+    """(izquierda, derecha) de la tinta del primer palo de la «H» de Inter Bold a `tam` px en
+    la fila `fila_rel` (relativa a la línea de base), medidos desde el origen de la letra."""
+    mascara, (dx, dy) = ImageFont.truetype(r.ruta_fuente("Inter-Bold"), tam).getmask2("H", anchor="ls")
+    fila = fila_rel - dy
+    xs = [x for x in range(mascara.size[0]) if mascara.getpixel((x, fila)) > 128]
+    izq = xs[0]
+    der = izq
+    while der + 1 < mascara.size[0] and mascara.getpixel((der + 1, fila)) > 128:
+        der += 1
+    return dx + izq, dx + der
+
+
+def test_a_factor_2_el_contorno_la_sombra_y_el_fondo_tambien_se_multiplican(tmp_path):
+    # D5.7/D8: a f = 2 todo se dibuja ×2 — el trazo del contorno (12 px, no 6), el
+    # desplazamiento de la sombra (20 px, no 10), la caja del fondo y su radio (40 px, no 20).
+    estilo = {**V2, **ADORNOS}
+    ruta = str(tmp_path / "h.png")
+    assert r.png_texto("H", estilo, "9:16", ruta, escala_max=2) == {"ancho_px": 188, "alto_px": 233}
+    im = Image.open(ruta)
+    assert im.size == (376, 466)
+    f = 2
+    m = tipografia.maquetar("H", estilo, "9:16", fuentes.cargar_tabla())
+    g, s = 6 * f, 10 * f
+    letra = m["letras"][0]
+    x0, base = tipografia.redondear(letra["x"] * f), tipografia.redondear(letra["base"] * f)
+    izq, der = _palo_de_la_h(m["tam"] * f, -40)
+    verde, rojo, azul = (0, 255, 0, 255), (255, 0, 0, 255), (0, 0, 255, 255)
+    # contorno: 12 px por fuera del palo (a 1×, a 9 px ya estaría el fondo)
+    assert im.getpixel((x0 + izq - g + 3, base - 40)) == rojo
+    assert im.getpixel((x0 + izq - g - 3, base - 40)) == verde
+    # sombra: el palo corrido 20 px y engordado 12; su borde de abajo, en base + 20 + 12
+    # (a 1× acabaría en base + 10 + 6 y ahí ya estaría el fondo)
+    centro = x0 + (izq + der) // 2 + s
+    assert im.getpixel((centro, base + s + g - 4)) == azul
+    assert im.getpixel((centro, base + s + g + 3)) == verde
+    # fondo: la caja llega a (margen + caja_w)·f, con radio 40 (a 1× la esquina a 9 px sería fondo)
+    margen, caja_w, caja_h = m["margen"] * f, m["caja_w"] * f, m["caja_h"] * f
+    medio = margen + caja_h // 2
+    assert im.getpixel((margen + caja_w - 1, medio)) == verde          # el último píxel de la caja…
+    assert im.getpixel((margen + caja_w, medio))[3] == 0               # …y el siguiente ya no (el rectángulo de Pillow es inclusivo)
+    assert m["radio"] == 20
+    assert im.getpixel((margen + 9, margen + 9))[3] == 0                 # fuera del arco de radio 40
+    assert im.getpixel((margen + 20, margen + 20)) == verde              # dentro
+
+
+@pytest.mark.parametrize("f", [1, 2, 3])
+@pytest.mark.parametrize("radio", [0.0105, 1.0])
+def test_el_fondo_v2_mide_caja_por_f_exacto_como_el_fillrect_del_lienzo(tmp_path, f, radio):
+    # Pillow pinta INCLUSIVO hasta (x1, y1); el lienzo del navegador (`fillRect` de caja_w·f × caja_h·f) acaba
+    # un píxel antes. El PNG de v2 acaba donde acaba el del navegador, en las cuatro orillas y a cualquier f
+    # (también con la píldora, de radio igual a media altura).
+    estilo = {**V2, "fondo": {**ADORNOS["fondo"], "radio": radio}}
+    ruta = str(tmp_path / "f.png")
+    r.png_texto("Hola", estilo, "9:16", ruta, escala_max=f)
+    im = Image.open(ruta)
+    m = tipografia.maquetar("Hola", estilo, "9:16", fuentes.cargar_tabla())
+    assert im.size == (m["ancho_px"] * f, m["alto_px"] * f)
+    x0, y0 = m["margen"] * f, m["margen"] * f
+    x1, y1 = x0 + m["caja_w"] * f, y0 + m["caja_h"] * f           # la primera columna / fila FUERA de la caja
+    cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+    verde = (0, 255, 0, 255)
+    assert im.getpixel((x1 - 1, cy)) == verde and im.getpixel((x1, cy))[3] == 0          # derecha
+    assert im.getpixel((x0, cy)) == verde and im.getpixel((x0 - 1, cy))[3] == 0          # izquierda
+    assert im.getpixel((cx, y1 - 1)) == verde and im.getpixel((cx, y1))[3] == 0          # abajo
+    assert im.getpixel((cx, y0)) == verde and im.getpixel((cx, y0 - 1))[3] == 0          # arriba
+    pintados = sum(1 for px in im.getdata() if px == verde)
+    assert pintados <= m["caja_w"] * f * m["caja_h"] * f                                  # nunca más que la caja
+
+
+def test_un_fondo_v2_sin_caja_no_falla(tmp_path):
+    # texto vacío y sin relleno: la caja mide 0 y no hay nada que pintar (con el último píxel -1 Pillow lanzaría)
+    estilo = {**V2, "fondo": {**ADORNOS["fondo"], "relleno_x": 0.0, "relleno_y": 0.0}}
+    medidas = r.png_texto("", estilo, "9:16", str(tmp_path / "v.png"))
+    assert Image.open(str(tmp_path / "v.png")).getbbox() is None
+    assert medidas["ancho_px"] > 0
+
+
+@pytest.mark.skipif(not fuentes.hay_emoji(), reason="sin la fuente de emojis (D6.5)")
+def test_un_emoji_v2_no_lleva_sombra_ni_contorno(tmp_path):
+    # D5.7: las letras de emoji van solo en la pasada de relleno. El 🔥 con contorno y sombra y
+    # el 🔥 sin nada dan los mismos píxeles en el área del emoji (corrida por lo que el contorno
+    # y la sombra agrandan la caja) más 12 px de aire, que alcanzan a la sombra (10 + 6).
+    tabla = fuentes.cargar_tabla()
+    e = tabla["emoji"]
+    recortes = []
+    for i, est in enumerate(({**V2, "tamano": 0.1042},
+                             {**V2, "tamano": 0.1042, "contorno": ADORNOS["contorno"], "sombra": ADORNOS["sombra"]})):
+        ruta = str(tmp_path / f"{i}.png")
+        r.png_texto("🔥", est, "9:16", ruta)
+        m = tipografia.maquetar("🔥", est, "9:16", tabla)
+        letra, tam = m["letras"][0], m["tam"]
+        ox, oy = tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"])
+        av = tipografia.ancho("🔥", "Inter-Bold", tam, tabla)
+        aire = 12
+        caja = (ox - aire, oy - int(e["asc"] * tam / e["upem"]) - aire - 1,
+                ox + int(av) + aire + 1, oy + int(e["desc"] * tam / e["upem"]) + aire + 1)
+        recortes.append(Image.open(ruta).convert("RGBA").crop(caja))
+    assert recortes[1].getbbox() is not None
+    assert recortes[0].tobytes() == recortes[1].tobytes()
+
+
+def _emoji_de_referencia(texto, estilo):
+    """El PNG que debería salir para un texto v2 de UN emoji: sus capas compuestas en orden,
+    cada una en una capa del lienzo entero, con la fuente derivada; y el color de la capa
+    de más arriba que cubre (alfa 255) cada píxel."""
+    from PIL import ImageDraw
+    tabla = fuentes.cargar_tabla()
+    m = tipografia.maquetar(texto, estilo, "9:16", tabla)
+    letra = m["letras"][0]
+    origen = (tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"]))
+    fuente = ImageFont.truetype(io.BytesIO(fuentes.fuente_emoji_capas()), m["tam"])
+    lienzo = Image.new("RGBA", (m["ancho_px"], m["alto_px"]), (0, 0, 0, 0))
+    mascaras = []
+    for gid, c in fuentes.emoji_capas(letra["cp"]):
+        capa = Image.new("RGBA", lienzo.size, (0, 0, 0, 0))
+        ImageDraw.Draw(capa).text(origen, chr(fuentes.PUA_CAPAS + gid), font=fuente, fill=c or r.color(estilo["color"]),
+                                  anchor="ls")
+        lienzo.alpha_composite(capa)
+        mascaras.append((capa.getchannel("A"), c or r.color(estilo["color"])))
+
+    def arriba(xy):
+        cubre = [c for alfa, c in mascaras if alfa.getpixel(xy) == 255]
+        return cubre[-1] if cubre else None
+    return lienzo, arriba, m
+
+
+@pytest.mark.skipif(not fuentes.hay_emoji(), reason="sin la fuente de emojis (D6.5)")
+def test_las_capas_del_emoji_van_en_su_orden(tmp_path):
+    # D6.8: de abajo hacia arriba, como las da `emoji_capas`. Al revés, la llama amarilla de
+    # adentro quedaría tapada por la naranja de afuera.
+    estilo = {**V2, "tamano": 0.1042}
+    ruta = str(tmp_path / "f.png")
+    r.png_texto("🔥", estilo, "9:16", ruta)
+    render = Image.open(ruta).convert("RGBA")
+    referencia, arriba, m = _emoji_de_referencia("🔥", estilo)
+    tabla = fuentes.cargar_tabla()
+    e, letra, tam = tabla["emoji"], m["letras"][0], m["tam"]
+    centro = (int(letra["x"] + tipografia.ancho("🔥", "Inter-Bold", tam, tabla) / 2),
+              int(letra["base"] - (e["asc"] - e["desc"]) * tam / e["upem"] / 2))
+    esperado = arriba(centro)
+    assert esperado == (255, 204, 77, 255)                               # el centro es de la llama de adentro
+    assert all(abs(a - b) <= 2 for a, b in zip(render.getpixel(centro), esperado)), (render.getpixel(centro), esperado)
+    assert render.tobytes() == referencia.tobytes()
+
+
+def test_la_sombra_translucida_se_compone_sobre_el_fondo(tmp_path):
+    # D5.7: cada letra se COMPONE sobre lo que hay debajo. Con `draw.text` directo, la sombra
+    # al 78 % (#000000C8) reemplazaría el alfa del fondo opaco y dejaría ver el video por ahí.
+    estilo = {**V2, "sombra": {"color": "#000000C8", "dx": 0.005, "dy": 0.005}, "fondo": ADORNOS["fondo"]}
+    ruta = str(tmp_path / "s.png")
+    r.png_texto("H", estilo, "9:16", ruta)
+    im = Image.open(ruta)
+    m = tipografia.maquetar("H", estilo, "9:16", fuentes.cargar_tabla())
+    letra = m["letras"][0]
+    x0, base = tipografia.redondear(letra["x"]), tipografia.redondear(letra["base"])
+    izq, der = _palo_de_la_h(m["tam"], -10)
+    solo_sombra = (x0 + (izq + der) // 2 + 10, base + 6)       # debajo de la línea de base: el relleno no llega
+    px = im.getpixel(solo_sombra)
+    assert px[3] == 255, px
+    assert all(abs(a - b) <= 2 for a, b in zip(px[:3], (0, 55, 0))), px    # negro al 78 % sobre verde
+
+
+# ---- Capa 5c (revisión final, 2026-10-02) ----
+
+def test_las_fuentes_v2_se_abren_sin_raqm_aunque_pillow_lo_traiga(monkeypatch):
+    # C1: con Raqm (el Pillow 12.3 del VPS) Pillow aplica las formas contextuales aun a una letra sola: Pacifico
+    # salía en «forma final» (la «a» de 55 px en vez de 72) y la vista previa dibuja el glifo base. Aquí no hay
+    # Raqm: se simula que sí (`HAVE_RAQM`), que es lo que decide el motor por defecto, y las dos cachés de v2
+    # tienen que abrir igual con `Layout.BASIC`. El efecto en los píxeles solo se ve con Raqm (la comprobación
+    # del VPS, sección 3, lo mira letra por letra).
+    monkeypatch.setattr(ImageFont.core, "HAVE_RAQM", True)
+    r._fuente_v2.cache_clear()
+    r._fuente_emoji_v2.cache_clear()
+    try:
+        assert ImageFont.truetype(r.ruta_fuente("Pacifico-Regular"), 40).layout_engine == ImageFont.Layout.RAQM
+        assert r._fuente_v2(r.ruta_fuente("Pacifico-Regular"), 40).layout_engine == ImageFont.Layout.BASIC
+        if fuentes.hay_emoji():
+            assert r._fuente_emoji_v2(40).layout_engine == ImageFont.Layout.BASIC
+    finally:
+        r._fuente_v2.cache_clear()
+        r._fuente_emoji_v2.cache_clear()
+
+
+@pytest.mark.parametrize("alineacion, escala_max", [("derecha", 1), ("centro", 2)])
+def test_el_origen_de_una_letra_en_medio_pixel_redondea_hacia_arriba(tmp_path, alineacion, escala_max):
+    # D5.7: el origen de cada letra es `redondear(x·f)` (medio hacia arriba, como el lienzo), no `round()` (al par).
+    # «Hoy» en Space Grotesk a 125 px: alineado a la derecha su «H» empieza en x = 4,5 (a factor 1), y centrado en
+    # x = 4,25 (8,5 a factor 2). `round()` daría 4 y 8; el lienzo, 5 y 9: la tinta de la «H» se corre un píxel.
+    estilo = {**V2, "fuente": "SpaceGrotesk-Bold", "tamano": 0.0651, "alineacion": alineacion}
+    m = tipografia.maquetar("Hoy", estilo, "9:16", fuentes.cargar_tabla())
+    f = tipografia.factor_nitidez(escala_max, m["ancho_px"], m["alto_px"])
+    assert (m["tam"], f) == (125, escala_max)
+    x = m["letras"][0]["x"] * f
+    assert x % 1 == 0.5 and round(x) != tipografia.redondear(x)          # el caso en que los dos redondeos difieren
+    ruta = str(tmp_path / "hoy.png")
+    r.png_texto("Hoy", estilo, "9:16", ruta, escala_max=escala_max)
+    fuente = ImageFont.truetype(r.ruta_fuente("SpaceGrotesk-Bold"), m["tam"] * f, layout_engine=ImageFont.Layout.BASIC)
+    mascara, (dx, _dy) = fuente.getmask2("H", anchor="ls")
+    tinta_h = dx + mascara.getbbox()[0]                                    # de su origen a su primera columna con tinta
+    assert Image.open(ruta).getbbox()[0] == tipografia.redondear(x) + tinta_h
+
+
+def test_con_editor_sin_emoji_el_render_quita_el_emoji_con_la_misma_tabla_que_la_pagina(tmp_path, monkeypatch):
+    # La válvula `EDITOR_SIN_EMOJI=1` (si la fuente de emojis diera problemas en el servidor): la tabla sale sin
+    # emojis para la página (`vista_previa.config_navegador`) y para el render, así que el 🔥 se quita en los dos
+    # y el PNG no lleva nada naranja.
+    from final_edition import vista_previa
+    monkeypatch.setenv("EDITOR_SIN_EMOJI", "1")
+    fuentes.cargar_tabla.cache_clear()
+    try:
+        tabla_pagina = vista_previa.config_navegador()["tipografia"]
+        assert tabla_pagina["emoji"] is None
+        m = tipografia.maquetar("🔥 hola", V2, "9:16", tabla_pagina)
+        assert m["texto"] == "hola" and m["quitados"] == ["🔥"]
+        assert all(l["fuente"] == "texto" and l["cp"] != 0x1F525 for l in m["letras"])
+        ruta = str(tmp_path / "sin.png")
+        assert r.png_texto("🔥 hola", V2, "9:16", ruta) == {"ancho_px": m["ancho_px"], "alto_px": m["alto_px"]}
+        px = Image.open(ruta).convert("RGBA").tobytes()
+        naranjas = [i for i in range(0, len(px), 4) if px[i + 3] > 0 and px[i] > 180 and px[i + 2] < 90]
+        assert naranjas == []
+        assert _pixeles(ruta) == _pixeles_de(tmp_path, "hola")
+    finally:
+        monkeypatch.delenv("EDITOR_SIN_EMOJI")
+        fuentes.cargar_tabla.cache_clear()
+
+
+def _pixeles_de(tmp_path, texto):
+    ruta = str(tmp_path / "referencia.png")
+    r.png_texto(texto, V2, "9:16", ruta)
+    return _pixeles(ruta)

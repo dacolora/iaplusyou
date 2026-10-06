@@ -152,11 +152,19 @@ def _token(sesion, ll):
 
 
 def _get(sesion, token, ll, ruta, params):
-    """GET a oauth.reddit.com. None si 404; ErrorFuente en 401/403 u otro código."""
+    """None ante un recurso inválido/no disponible; permisos globales siguen siendo error."""
     r = _http.pedir(sesion, "GET", URL_API + ruta, "Reddit", params={**params, "raw_json": 1},
                     headers={"Authorization": f"bearer {token}", "User-Agent": ll["REDDIT_USER_AGENT"]})
-    if r.status_code == 404:
+    recurso = ruta.startswith(("/r/", "/comments/"))
+    if r.status_code == 404 or (recurso and r.status_code in (400, 410, 422)):
         return None
+    if recurso and r.status_code == 403:
+        try:
+            motivo = (r.json() or {}).get("reason")
+        except (ValueError, AttributeError):
+            motivo = None
+        if motivo in ("private", "banned", "quarantined"):
+            return None
     if r.status_code in (401, 403):
         raise ErrorFuente(gettext("Reddit rechazó la llamada (¿la app perdió permisos o el user agent no describe la app?)."))
     if r.status_code != 200:
@@ -193,7 +201,7 @@ class FuenteReddit(Fuente):
             _token(_http.sesion(), _llaves())
         except ErrorFuente as e:
             return {"ok": False, "detalle": e.usuario}
-        return {"ok": True, "detalle": "Reddit aceptó las llaves (solo lectura)."}
+        return {"ok": True, "detalle": gettext("Reddit aceptó las llaves (solo lectura).")}
 
     def recolectar(self, params, avanzar=None):
         p = normalizar_params(params)
@@ -221,7 +229,7 @@ class FuenteReddit(Fuente):
                 vistos.add(i)
                 pendientes.append(i)
         for n, post_id in enumerate(pendientes, start=1):
-            avanzar(N_("Leyendo comentarios"), f"post {n} de {len(pendientes)}")
+            avanzar(N_("Leyendo comentarios"), gettext("post %(n)s de %(total)s", n=n, total=len(pendientes)))
             _http.dormir(PAUSA)
             try:
                 data = _get(sesion, token, ll, f"/comments/{post_id}", {"sort": "top", "limit": p["max_comentarios_por_post"], "depth": 2})

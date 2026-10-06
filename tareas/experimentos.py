@@ -11,7 +11,7 @@ Bloque 7: un ganador, además de escalar y derivar, pide `publicar_organico`
 canal orgánico conectado y la pieza no tiene ya una publicación viva.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -27,6 +27,7 @@ import experimentos
 import gastos
 import idiomas
 import lanzador
+import meta_detalle
 import notificaciones
 import organico
 import propuestas
@@ -35,7 +36,7 @@ import trabajos
 from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import diagnostico as doctrina_diagnostico
 from nicho.avatares import costo_real, modelo_actual
-from tareas import al_interrumpir, ref_sufijo, registrar
+from tareas import Continuar, al_interrumpir, ref_sufijo, registrar
 
 log = logging.getLogger("creatv.tareas.experimentos")
 
@@ -50,6 +51,10 @@ def job_id_refrescar(cliente, experimento_id):
 
 def job_id_decidir(cliente, experimento_id):
     return f"{cliente}__exp{experimento_id}__decidir"
+
+
+def job_id_detalle(cliente, experimento_id):
+    return f"{cliente}__exp{experimento_id}__detalle"
 
 
 @al_interrumpir("exp_lanzar")
@@ -72,7 +77,43 @@ def exp_lanzar(tarea):
 def exp_refrescar(tarea):
     p = tarea["payload"]
     n = lanzador.refrescar(p["cliente"], p["experimento_id"])
+    # Detalle para el centro de resultados (spec 2026-10-02 §3.3): después del
+    # refresco de siempre y en su propio try — el decisor depende de lo de arriba,
+    # no de esto, y un fallo aquí nunca debe tumbar la tarea.
+    try:
+        meta_detalle.refrescar_detalle(p["cliente"], p["experimento_id"])
+    except Exception as e:  # noqa: BLE001
+        # warning y no exception: la traza completa podría traer el token de Meta; el texto va sin token.
+        log.warning("Detalle de Meta falló en exp_refrescar (%s, exp %s): %s", p["cliente"], p["experimento_id"],
+                    cola.sin_token(str(e)))
     return gettext("Métricas actualizadas (%(n)s anuncios).", n=n)
+
+
+# Vueltas que se reintenta el detalle cuando Meta pide esperar, y cuánto se espera entre una y otra.
+VUELTAS_DETALLE = 3
+ESPERA_DETALLE = timedelta(minutes=30)
+
+
+@registrar("exp_detalle")
+def exp_detalle(tarea):
+    """Solo el detalle de Meta (carga inicial al desplegar E1, o de un
+    experimento que ya no corre). Lectura: no cobra. Si Meta pide esperar (límite
+    de llamadas) sigue con otra `exp_detalle` en media hora, hasta 3 vueltas
+    (`payload["vuelta"]`): nada de decir «al día» con lo que falta."""
+    p = tarea["payload"]
+    r = meta_detalle.refrescar_detalle(p["cliente"], p["experimento_id"])
+    vuelta = int(p.get("vuelta") or 0)
+    if r["limite"]:
+        if vuelta < VUELTAS_DETALLE:
+            return Continuar("exp_detalle", {**p, "vuelta": vuelta + 1}, ejecutar_desde=datetime.now() + ESPERA_DETALLE,
+                             mensaje=gettext("Meta pidió esperar: el detalle se reintenta en 30 minutos (reintento %(n)s de %(total)s).",
+                                             n=vuelta + 1, total=VUELTAS_DETALLE))
+        return gettext("Meta siguió pidiendo esperar después de varios intentos: el detalle quedó incompleto. "
+                       "Actualiza el experimento más tarde para completarlo.")
+    if r["errores"]:
+        return gettext("Detalle de Meta incompleto: falló %(partes)s.", partes=", ".join(sorted(r["errores"])))
+    return gettext("Detalle de Meta al día (%(dias)s días de anuncios, %(desgloses)s filas de desglose).",
+                   dias=r["dias"], desgloses=r["desgloses"])
 
 
 def _experimentos_en(estados):
@@ -89,7 +130,7 @@ def exp_refrescar_todos(tarea):
     filas = _experimentos_en(("corriendo", "decidido"))
     for eid, cliente in filas:
         cola.encolar("exp_refrescar", {"cliente": cliente, "experimento_id": eid}, cliente=cliente,
-                     job_id=job_id_refrescar(cliente, eid), duracion_estimada=30, max_intentos=2)
+                     job_id=job_id_refrescar(cliente, eid), duracion_estimada=90, max_intentos=2)
     return gettext("%(n)s experimentos en cola.", n=len(filas))
 
 
@@ -217,7 +258,7 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     except doctrina_diagnostico.ErrorDiagnostico as e:
         if e.tokens_entrada or e.tokens_salida:
             gastos.registrar_seguro(cliente, "revision", costo_real(e.tokens_entrada, e.tokens_salida), referencia,
-                                    proveedor="anthropic", detalle="diagnóstico de perdedora · respuesta inválida",
+                                    proveedor="anthropic", detalle=gettext("diagnóstico de perdedora · respuesta inválida"),
                                     extra={"tokens_entrada": e.tokens_entrada, "tokens_salida": e.tokens_salida,
                                            "modelo": modelo_actual()})
         error = {"error": cola.sin_token(str(e))[:200], "pistas": doctrina_diagnostico.pistas(
@@ -235,7 +276,7 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
         return None
     usd = costo_real(ent, sal)
     gastos.registrar_seguro(cliente, "revision", usd, referencia, proveedor="anthropic",
-                            detalle="diagnóstico de perdedora",
+                            detalle=gettext("diagnóstico de perdedora"),
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     d = dict(d, version=doctrina_diagnostico.VERSION, modelo=modelo_actual(), usd=usd, en=db.ahora())
     causas = ", ".join(idiomas.traducir(doctrina.CAUSAS_NOMBRE.get(c["codigo"], c["codigo"])) for c in d["causas"])
@@ -282,15 +323,25 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
     if v["veredicto"] == "ganador":
         # Antes de las acciones: si escalar/derivar/orgánico lanzan, la línea ya quedó.
         _aprender(cliente, ex, pz, v, None)
-    # Una pieza de imagen no se deriva ni se rescata (derivaciones rechaza
-    # las sesiones de imagen: sería un evento `error`, o una propuesta que
-    # falla al aprobarla). Ganadora: solo escala. Perdedora: solo se pausa.
+    # Una pieza de imagen o un anuncio hablado no se deriva ni se rescata
+    # (derivaciones rechaza esas sesiones: sería un evento `error`, o una
+    # propuesta que falla al aprobarla; al hablado una re-edición le pondría
+    # otra voz encima). Ganadora: solo escala. Perdedora: solo se pausa.
+    # `sin_derivar` lo arma experimentos._piezas; `es_imagen` cubre las piezas
+    # que no lo traen.
     es_imagen = bool(pz.get("es_imagen"))
-    if es_imagen and accion in ("escalar_y_derivar", "rescatar"):
-        experimentos.registrar_evento(cliente, ex["id"], "imagen",
-                                      gettext("%(nombre)s (%(pais)s): Pieza de imagen: sin rescate/derivación "
-                                              "(solo videos).", nombre=pz["nombre"], pais=pz["pais"]),
-                                      {"accion": accion}, ep_id=ep_id)
+    sin_derivar = bool(pz.get("sin_derivar") or es_imagen)
+    if sin_derivar and accion in ("escalar_y_derivar", "rescatar"):
+        if es_imagen:
+            experimentos.registrar_evento(cliente, ex["id"], "imagen",
+                                          gettext("%(nombre)s (%(pais)s): Pieza de imagen: sin rescate/derivación "
+                                                  "(solo videos).", nombre=pz["nombre"], pais=pz["pais"]),
+                                          {"accion": accion}, ep_id=ep_id)
+        else:
+            experimentos.registrar_evento(cliente, ex["id"], "hablado",
+                                          gettext("%(nombre)s (%(pais)s): Anuncio hablado: sin rescate/derivación "
+                                                  "(pondría otra voz encima).", nombre=pz["nombre"], pais=pz["pais"]),
+                                          {"accion": accion}, ep_id=ep_id)
     if accion == "escalar_y_derivar":
         # "escalar" es una acción por país (sube el presupuesto del conjunto
         # en Meta), no por pieza: con varios ganadores del mismo país en una
@@ -303,7 +354,7 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
         else:
             resultado["escalados"].add(pz["pais"])
             _pedir(cliente, ex["id"], "escalar", {"pais": pz["pais"], "ep_id": ep_id}, v["motivo"], resultado)
-        if not es_imagen:
+        if not sin_derivar:
             _pedir(cliente, ex["id"], "derivar", {"ep_id": ep_id}, v["motivo"], resultado)
         resultado["ganadores"].append(pz)
         _pedir_publicacion_organica(cliente, ex, pz, v["motivo"], resultado)
@@ -316,7 +367,7 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
         # deja de gastar aunque Claude tarde o el worker muera en el medio) y
         # ANTES del rescate, al que informa.
         diagnostico, diagnosticado = _diag(), True
-        if not es_imagen:
+        if not sin_derivar:
             decision = doctrina_diagnostico.decision_rescate(diagnostico)
             payload = {"ep_id": ep_id}
             if decision["salto"]:

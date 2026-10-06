@@ -145,3 +145,26 @@ test("renovar: suelta solo los videos del material que ya tiene copia liviana y 
   v.sincronizar(doc, 4250, false);
   assert.equal(v.elementoDe(doc.pistas[0].clips[1]).atributos.src, "/otro_proxy.mp4");
 });
+
+// ---- Foto en la principal (D1-D2, capa 5b, Tarea 4): nunca un <video> ----
+
+test("una foto en la principal nunca crea <video>, tampoco al precargar la que sigue", () => {
+  creados.length = 0;
+  const doc = { formato: "9:16", pistas: [{ id: "p", tipo: "video", clips: [
+    { id: "f0", material_id: 4, foto: true, inicio_ms: 0, duracion_ms: 1500, recorte: { desde_ms: 0, hasta_ms: 1500 } },
+    { id: "v0", material_id: 1, inicio_ms: 1500, duracion_ms: 4000, recorte: { desde_ms: 0, hasta_ms: 4000 } },
+  ] }] };
+  // material 4 EXISTE y dice "video" (caso adversario): igual se salta por
+  // `clip.foto`, nunca por falta de material.
+  const mats = { ...MATS, 4: { tipo: "video", url: "/foto.mp4", url_proxy: "/foto_proxy.mp4" } };
+  const v = new Videos(mats, () => {});
+  // f0 (foto) activa; v0 ya está a PRECARGA_MS (500 ms): se precarga
+  v.sincronizar(doc, 1000, false);
+  assert.equal(v.elementoDe(doc.pistas[0].clips[0]), null, "f0: nunca un <video>");
+  assert.equal(creados.length, 1, "un solo <video> creado");
+  assert.equal(v.elementoDe(doc.pistas[0].clips[1]), creados[0], "el único <video> es el de v0");
+  // v0 ya activa: sigue siendo el mismo <video>, nunca uno nuevo
+  v.sincronizar(doc, 2700, false);
+  assert.equal(v.elementoDe(doc.pistas[0].clips[0]), null);
+  assert.equal(creados.length, 1);
+});

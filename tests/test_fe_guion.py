@@ -9,9 +9,20 @@ class _Bloque:
         self.text = texto
 
 
+class _Uso:
+    """`usage` de Anthropic. Por defecto 1 000 de entrada y 800 de salida, que con los precios de
+    claude-sonnet-5 (US$ 2 y 10 por millón) dan US$ 0,01 justos por llamada."""
+    def __init__(self, entrada=1000, salida=800, cache_escrita=0, cache_leida=0):
+        self.input_tokens = entrada
+        self.output_tokens = salida
+        self.cache_creation_input_tokens = cache_escrita
+        self.cache_read_input_tokens = cache_leida
+
+
 class _Resp:
-    def __init__(self, texto):
+    def __init__(self, texto, uso=None):
         self.content = [_Bloque(texto)]
+        self.usage = uso or _Uso()
 
 
 class _Llamadas:
@@ -30,7 +41,8 @@ def _instalar_fake(monkeypatch, respuestas):
             registro.kwargs.append(kw)
             if not registro.respuestas:
                 raise AssertionError("Claude recibió más llamadas de las esperadas")
-            return _Resp(registro.respuestas.pop(0))
+            respuesta = registro.respuestas.pop(0)
+            return _Resp(*respuesta) if isinstance(respuesta, tuple) else _Resp(respuesta)
 
     class FakeAnthropic:
         def __init__(self, api_key=None):
@@ -193,6 +205,59 @@ def test_generar_guion_base_dos_invalidas_lanza(monkeypatch):
         guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
     assert len(reg.kwargs) == 2
     assert any("supera la duración objetivo" in e for e in exc.value.errores)
+
+
+def test_el_costo_sale_de_los_tokens_que_cobra_anthropic(monkeypatch):
+    """PND-001: era US$ 0,01 fijo por llamada y un guion real cuesta ≈ 0,04–0,05: el gasto del proyecto
+    quedaba en un cuarto de lo cobrado. Ahora sale del `usage`, con la caché como en guiones.claude."""
+    from final_edition import guion
+    uso = _Uso(entrada=3000, salida=4000, cache_leida=10000)
+    _instalar_fake(monkeypatch, [(json.dumps(dict(_guion_valido(), angulo=ANG)), uso)])
+    _, costo = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    # (3 000 + 10 000 × 0,1) × US$ 2/M + 4 000 × US$ 10/M
+    assert costo == pytest.approx(0.048)
+
+
+def test_guion_invalido_lleva_lo_que_ya_se_pago(monkeypatch):
+    """Las dos llamadas se cobraron aunque el guion no sirva: quien atrapa el error tiene que poder anotarlas."""
+    from final_edition import guion
+    malo = _guion_valido()
+    malo["bloques"][-1]["fin_s"] = 14.0
+    _instalar_fake(monkeypatch, [(json.dumps(malo), _Uso(2000, 3000)), (json.dumps(malo), _Uso(2500, 3500))])
+    with pytest.raises(guion.GuionInvalido) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert exc.value.costo_usd == pytest.approx((2000 * 2 + 3000 * 10 + 2500 * 2 + 3500 * 10) / 1e6)
+
+
+def test_si_la_correccion_se_corta_viaja_lo_que_cobro_la_primera(monkeypatch):
+    from final_edition import guion
+    malo = _guion_valido()
+    malo["bloques"][-1]["fin_s"] = 14.0
+    reg = _instalar_fake(monkeypatch, [(json.dumps(malo), _Uso(2000, 3000))])
+    original = reg.respuestas
+
+    class Cortada(Exception):
+        pass
+
+    from final_edition import guion as mod
+    cliente_real = mod.anthropic.Anthropic
+
+    class ConCorte:
+        def __init__(self, api_key=None):
+            self._real = cliente_real(api_key=api_key)
+            self.messages = self
+            self.n = 0
+
+        def create(self, **kw):
+            self.n += 1
+            if self.n == 2:
+                raise Cortada("529 overloaded")
+            return self._real.messages.create(**kw)
+    monkeypatch.setattr(mod.anthropic, "Anthropic", ConCorte)
+    with pytest.raises(Cortada) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert exc.value.costo_usd == pytest.approx((2000 * 2 + 3000 * 10) / 1e6)
+    assert original == []
 
 
 def test_localizar_guion_a_en_us(monkeypatch):
@@ -558,3 +623,108 @@ def test_variar_recibe_el_contexto_de_la_derivacion(monkeypatch):
     reg = _instalar_fake(monkeypatch, [json.dumps(variante)])
     guion.variar_guion(_guion_valido(), "hook", "", angulo=ANG)
     assert "Usa el arranque" not in reg.kwargs[0]["messages"][0]["content"]
+
+
+def test_guion_base_y_variante_llevan_la_orden_de_idioma(monkeypatch):
+    """Decisión B (2026-09-28): el guion base y sus variantes no son por
+    destino — siguen la regla de la fase 3 (orden al principio y al final)."""
+    import idiomas
+    from final_edition import guion
+    variante = dict(_guion_valido(idioma="en", pais="US"), angulo_variante={"lead": "secreto", "gancho": "Look at this"})
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido(idioma="en", pais="US")), json.dumps(variante)])
+    g, _ = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "en", "", "", angulo=ANG)
+    assert reg.kwargs[0]["system"][1]["text"].count(idiomas.orden_idioma("en")) == 2
+    guion.variar_guion(g, "hook", "", angulo=ANG)
+    assert reg.kwargs[1]["system"][1]["text"].count(idiomas.orden_idioma("en")) == 2
+
+
+def test_localizar_no_lleva_la_orden_del_proyecto(monkeypatch):
+    """La localización es por destino: el idioma lo dice su propio prompt."""
+    import idiomas
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido(idioma="en", pais="US"))])
+    guion.localizar_guion(_guion_valido(), "en", "US", 89.90)
+    texto = _sys(reg.kwargs[0])
+    assert idiomas.orden_idioma("en") not in texto and idiomas.orden_idioma("es") not in texto
+
+
+def test_un_guion_base_en_portugues_no_recibe_orden(monkeypatch):
+    """`orden_idioma("pt")` caería al inglés: un guion en un idioma que la app
+    no tiene va sin orden, como antes."""
+    import idiomas
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido(idioma="pt", pais="BR"))])
+    guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "pt", "", "", angulo=ANG)
+    texto = _sys(reg.kwargs[0])
+    assert idiomas.orden_idioma("en") not in texto and idiomas.orden_idioma("es") not in texto
+
+
+def test_guion_invalido_en_el_idioma_de_quien_lo_ve(monkeypatch):
+    """Revisión final de la fase 6: el error guardado de una final cuyo guion
+    falla dos veces empezaba con «Guion inválido:» también en inglés. Se arma
+    con gettext (el worker corre en el idioma del proyecto); en español, el
+    texto de siempre, byte a byte."""
+    import idiomas
+    from final_edition import guion
+    inventado = _guion_valido()
+    inventado["bloques"][0]["texto_pantalla"] = "3x más duración"
+    with idiomas.en_idioma("en"):
+        _instalar_fake(monkeypatch, ["esto no es json", "tampoco"])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value) == "Invalid script: Invalid JSON"
+        _instalar_fake(monkeypatch, [json.dumps(inventado), json.dumps(inventado)])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value).startswith("Invalid script: The figure “3x” in the hook block")
+        assert "inválido" not in str(e.value) and "cifra" not in str(e.value)
+    with idiomas.en_idioma("es"):
+        _instalar_fake(monkeypatch, ["esto no es json", "tampoco"])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value) == "Guion inválido: JSON inválido"
+        _instalar_fake(monkeypatch, [json.dumps(inventado), json.dumps(inventado)])
+        with pytest.raises(guion.GuionInvalido) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+        assert str(e.value) == ("Guion inválido: La cifra «3x» del bloque hook no está en los datos: reescríbelo "
+                                "sin ella o con el dato real.")
+
+
+def test_respuesta_cortada_no_paga_correccion_y_conserva_costo(monkeypatch):
+    from final_edition import guion
+    original = _Resp.__init__
+    def init(self, *a, **k):
+        original(self, *a, **k)
+        self.stop_reason = "max_tokens"
+    monkeypatch.setattr(_Resp, "__init__", init)
+    reg = _instalar_fake(monkeypatch, ['{"bloques": [', json.dumps(_guion_valido())])
+    with pytest.raises(guion.GuionInvalido) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10, "es", "", "")
+    assert len(reg.kwargs) == 1
+    assert exc.value.costo_usd == pytest.approx(0.01)
+
+
+@pytest.mark.parametrize('fallo', ['cortada', 'red'])
+def test_correccion_fallida_conserva_primera_valida_y_costo(monkeypatch, fallo):
+    from final_edition import guion
+    from types import SimpleNamespace
+    primera = _guion_valido()
+    respuestas = [SimpleNamespace(content=[_Bloque(json.dumps(primera))], usage=_Uso(), stop_reason='end_turn')]
+    if fallo == 'cortada':
+        respuestas.append(SimpleNamespace(content=[_Bloque('{')], usage=_Uso(2000, 800), stop_reason='max_tokens'))
+    else:
+        e = RuntimeError('red')
+        e.costo_usd = .012
+        respuestas.append(e)
+    llamadas = []
+    def llamar(**kw):
+        llamadas.append(kw)
+        r = respuestas.pop(0)
+        if isinstance(r, Exception): raise r
+        return r
+    monkeypatch.setattr(guion, '_api_key', lambda: 'llave-de-prueba')
+    monkeypatch.setattr(guion.anthropic, 'Anthropic', lambda **kw: SimpleNamespace(messages=SimpleNamespace(create=llamar)))
+    resultado, costo = guion._generar_con_correccion('', 'guion', 10, lambda g: g, errores_extra=lambda g: ['ángulo pendiente'])
+    assert resultado == primera
+    assert costo == pytest.approx(.022)
+    assert len(llamadas) == 2

@@ -317,3 +317,185 @@ def test_adaptar_lleva_las_pruebas_del_producto(monkeypatch):
     resultado, _, _ = recrear.adaptar(_referente(), _familia(), producto, "titular viejo")
     assert "<pruebas_producto>- El 98 % repite la compra (comentario real de un comprador)</pruebas_producto>" in pedido["texto"]
     assert not any("cifra_no_verificada" in f for f in resultado["angulo"]["faltantes"])
+
+
+# --- Recrear fiel (spec 2026-09-30-recrear-fiel) ---
+
+def _lectura(**cambios):
+    base = {"version": 1, "composicion": "Two sandals side by side on a white background, seen from above",
+            "producto": "heeled sandal", "unidades": 2, "personas": False,
+            "textos": [{"texto": "50% OFF", "rol": "oferta", "ubicacion": "top center"},
+                       {"texto": "Comfort all day", "rol": "titular", "ubicacion": "bottom"},
+                       {"texto": "Inochhi", "rol": "marca", "ubicacion": "bottom right"}]}
+    base.update(cambios)
+    return base
+
+
+def test_instruccion_textos_reemplaza_deja_y_quita():
+    from referentes import recrear
+    linea = recrear.instruccion_textos(_lectura(), ["40% OFF", "Comfort all day", ""], True, "en")
+    assert linea.startswith("Texts in the image, each in the same position, size, font style and color as in Image 1:")
+    assert "replace “50% OFF” with “40% OFF”" in linea and "keep “Comfort all day”" in linea
+    assert "remove “Inochhi”" in linea and linea.endswith("No other text.")
+    es = recrear.instruccion_textos(_lectura(), ["40% OFF", "Comfort all day", ""], True, "es")
+    assert "cambia «50% OFF» por «40% OFF»" in es and "deja «Comfort all day»" in es and "quita «Inochhi»" in es
+
+
+def test_instruccion_textos_sin_texto_y_sin_lectura():
+    from referentes import recrear
+    assert recrear.instruccion_textos(_lectura(), ["40% OFF", "x", ""], False, "en") == "No text anywhere in the image."
+    assert recrear.instruccion_textos(_lectura(), ["", "", ""], True, "en") == "No text anywhere in the image."
+    assert recrear.instruccion_textos(_lectura(textos=[]), [], True, "es") == "Ningún texto en la imagen."
+    literal = recrear.instruccion_textos(None, [], True, "en")
+    assert "Keep the texts of Image 1" in literal and "remove any brand name" in literal
+
+
+def test_armar_prompt_con_linea_de_textos_reemplaza_el_titular():
+    from referentes import recrear
+    p = recrear.armar_prompt(_referente(), _familia(), _producto(), "", "SE ACABA HOY", "1:1",
+                             linea_textos="Ningún texto en la imagen.")
+    assert "Ningún texto en la imagen." in p and "SE ACABA HOY" not in p
+    p2 = recrear.armar_prompt(_referente(), _familia(), _producto(), "", "SE ACABA HOY", "1:1", linea_textos="")
+    assert "SE ACABA HOY" not in p2 and "Texto en la imagen" not in p2
+
+
+def test_armar_prompt_fiel_lleva_la_composicion_y_no_la_guia():
+    from referentes import recrear
+    p = recrear.armar_prompt_fiel(_lectura(), _producto(), "No text anywhere in the image.", "1:1", idioma="en")
+    assert p.startswith("1:1 format. Edit Image 1 and keep it identical:")
+    assert "Image 1 shows: Two sandals side by side on a white background, seen from above." in p
+    assert "every “heeled sandal” in Image 1 becomes the product in Image 2 and 3: Espejo LED." in p
+    assert "marco negro mate" in p                                    # la regla de fidelidad del producto
+    assert "Show exactly 2 units, in the same places and with the same orientation as in Image 1." in p
+    assert "ignore its pose, angle, background and any hands, feet or people in them." in p
+    assert "Do not add people, hands, feet or anything that is not in Image 1." in p
+    assert "No text anywhere in the image." in p and "No logos or names of other brands." in p
+    assert "Why it works" not in p and "Brand style guide" not in p and "Pain point" not in p
+
+
+def test_armar_prompt_fiel_con_personas_una_unidad_y_sin_lectura():
+    from referentes import recrear
+    p = recrear.armar_prompt_fiel(_lectura(personas=True, unidades=1), _producto(referencias=["/a.jpg"]), "", "9:16",
+                                  idioma="en")
+    assert "Keep the people, hands or feet exactly as they are in Image 1." in p and "Do not add people" not in p
+    assert "Show exactly 1 unit, in the same place" in p and "the product in Image 2:" in p
+    sin = recrear.armar_prompt_fiel(None, _producto(), "", "9:16", idioma="es")
+    assert sin.startswith("Formato 9:16. Edita Image 1 y déjala idéntica")
+    assert "Image 1 muestra" not in sin and "exactamente" not in sin
+    assert "Cambia solo el producto: el producto de Image 1 pasa a ser el producto de Image 2 y 3" in sin
+    assert "No agregues nada que no esté en Image 1." in sin
+
+
+def test_adaptar_con_textos_los_alinea_y_quita_la_marca(monkeypatch):
+    from referentes import recrear
+    pedido = {}
+
+    def falso(texto, max_tokens):
+        pedido["texto"] = texto
+        return (json.dumps({"angulo": ANGULO_RECREAR, "textos": ["40% OFF", 7, "HappyFlops", "sobra"],
+                            "prompt": "Con Image 1 e Image 2"}), 200, 60)
+    monkeypatch.setattr(recrear, "_llamar", falso)
+    resultado, _, _ = recrear.adaptar(_referente(), _familia(), _producto(), "", textos=["50% OFF", "Comfort all day", ""],
+                                      traer=True, lectura=_lectura())
+    assert resultado["textos"] == ["40% OFF", "Comfort all day", ""]   # 7 no es texto → queda; la marca → ""
+    assert resultado["prompt"] == "Con Image 1 e Image 2"
+    assert "<textos_originales>" in pedido["texto"] and "1. «50% OFF» (oferta, top center)" in pedido["texto"]
+    assert "exactamente 3 textos" in pedido["texto"]
+
+
+def test_adaptar_sin_traer_textos_no_los_toca(monkeypatch):
+    from referentes import recrear
+    pedido = {}
+
+    def falso(texto, max_tokens):
+        pedido["texto"] = texto
+        return (json.dumps({"angulo": ANGULO_RECREAR, "textos": ["otro"], "prompt": "P"}), 10, 5)
+    monkeypatch.setattr(recrear, "_llamar", falso)
+    resultado, _, _ = recrear.adaptar(_referente(), _familia(), _producto(), "", textos=["50% OFF", "x", ""],
+                                      traer=False, lectura=_lectura())
+    assert resultado["textos"] == ["50% OFF", "x", ""] and "la imagen va sin ningún texto" in pedido["texto"]
+
+
+def test_adaptar_acepta_respuesta_sin_titular(monkeypatch):
+    from referentes import recrear
+    monkeypatch.setattr(recrear, "_llamar", lambda texto, max_tokens: (json.dumps({"angulo": ANGULO_RECREAR,
+                                                                                    "textos": [], "prompt": "P"}), 1, 1))
+    resultado, _, _ = recrear.adaptar(_referente(), _familia(), _producto(), "")
+    assert resultado["prompt"] == "P" and resultado["textos"] == [] and resultado["titular"] == ""
+
+
+def test_la_descripcion_sin_punto_no_se_pega_a_la_regla():
+    from referentes import recrear
+    producto = _producto(descripcion="chanclas de goma, color beige", regla="Reproduce it identical.")
+    for p in (recrear.armar_prompt(_referente(), _familia(), producto, "", "", "1:1"),
+              recrear.armar_prompt_fiel(_lectura(), producto, "", "1:1", idioma="en")):
+        assert "color beige. Reproduce it identical." in p
+
+
+# --- Recrear como video: la imagen fiel se anima (spec §12) ---
+
+def test_armar_prompt_animar_parte_de_la_imagen_y_no_cambia_nada():
+    from referentes import recrear
+    p = recrear.armar_prompt_animar(_producto(), con_sonido=True, idioma="en")
+    assert p.startswith("Image 1 is the first frame of the video: animate it as it is.")
+    assert "the product (Espejo LED)" in p and "any texts still and readable" in p
+    assert "do not change, add or remove anything" in p and "Static camera with a slight push-in." in p
+    assert "SOUND: natural ambient sound of the scene. No spoken dialogue and no background music." in p
+    es = recrear.armar_prompt_animar(_producto(), con_sonido=False, idioma="es")
+    assert es.startswith("Image 1 es el primer fotograma del video") and "SONIDO" not in es
+
+
+def _sesion_imagen_con_animacion(cliente="acme", **animar):
+    import creative_flow
+    cf = creative_flow.crear(cliente, [], ["Espejo LED"], [], "Recrear: X · igual", 0, "", "A",
+                             referencias_urls=["https://r2/ref.jpg", "https://r2/p1.png"], platforms=[])
+    datos_animar = {"modelo": "seedance25", "duracion": 8, "formato": "9:16", "prompt": "ANIMA", "con_sonido": True,
+                    "titulo": "Recrear: X · igual · video"}
+    datos_animar.update(animar)
+    creative_flow.actualizar(cliente, cf, tipo="imagen", modelo="seedream_v5_pro", referente_id=7,
+                             recrear_modo="fiel", animar_despues=datos_animar)
+    return cf
+
+
+def test_lanzar_animacion_crea_y_lanza_un_solo_video(base_temporal, monkeypatch):
+    import creative_flow
+    import flowplus_lanzar
+    from referentes import recrear
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzados.append(cf_id) or True)
+    cf_img = _sesion_imagen_con_animacion()
+    cf_vid = recrear.lanzar_animacion("acme", cf_img, "https://r2/fiel.png")
+    sesiones = creative_flow.cargar("acme")
+    video = sesiones[cf_vid]
+    assert lanzados == [cf_vid]
+    assert video["tipo"] == "video" and video["modelo"] == "seedance25" and video["duracion_objetivo"] == 8
+    assert video["referencias_urls"] == ["https://r2/fiel.png"] and video["prompt_relleno"] == "ANIMA"
+    assert video["accion_central"] == "Recrear: X · igual · video" and video["recrear_modo"] == "fiel_video"
+    assert video["imagen_origen"] == cf_img and video["referente_id"] == 7 and video["con_sonido"] is True
+    assert sesiones[cf_img]["animar_despues"]["cf_video"] == cf_vid
+    # Un segundo intento no crea otro video ni vuelve a lanzar.
+    assert recrear.lanzar_animacion("acme", cf_img, "https://r2/fiel.png") == cf_vid and lanzados == [cf_vid]
+
+
+def test_lanzar_animacion_sin_pedido_no_hace_nada(base_temporal, monkeypatch):
+    import creative_flow
+    import flowplus_lanzar
+    from referentes import recrear
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda *a, **k: pytest.fail("no debía lanzar"))
+    cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "X", 0, "", "A")
+    antes = set(creative_flow.cargar("acme"))
+    assert recrear.lanzar_animacion("acme", cf, "https://r2/x.png") is None
+    assert set(creative_flow.cargar("acme")) == antes
+
+
+
+def test_lanzar_animacion_de_la_variacion_marca_su_modo(base_temporal, monkeypatch):
+    import creative_flow
+    import flowplus_lanzar
+    from referentes import recrear
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda *a, **k: True)
+    cf_img = _sesion_imagen_con_animacion(titulo="Recrear: X · variación · video")
+    creative_flow.actualizar("acme", cf_img, recrear_modo="libre")
+    cf_vid = recrear.lanzar_animacion("acme", cf_img, "https://r2/var.png")
+    video = creative_flow.cargar("acme")[cf_vid]
+    assert video["recrear_modo"] == "libre_video" and video["accion_central"] == "Recrear: X · variación · video"

@@ -98,7 +98,7 @@ def proponer(video_id, llamar=None):
                 v["cliente"], "recorte", video_id, _sistema(idiomas.de_proyecto(v["cliente"])),
                 _mensajes(lineas, cfg["duracion_objetivo"], wps, duracion.estimado_previo(lineas, wps, aire)),
                 f"Proponer qué quitar · {(v['guion']['titulo'] or '')[:50]} · v{v['version_n']}",
-                llamar_fn=llamar, max_tokens=4000, timeout=120)
+                llamar_fn=llamar, max_tokens=12000, timeout=120)
             if error:
                 datos.fallar(video_id, error, usd)
                 return

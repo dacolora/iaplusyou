@@ -31,15 +31,22 @@ from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from dotenv import load_dotenv
+from PIL import Image
+from flask_babel import gettext
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import cola
 import db
 import idiomas
+import monitoreo
+import registro_app
 import tareas
 from providers import wavespeed_common
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Como en dashboard.py: Pillow rechaza una imagen-bomba (pocos KB que se
+# descomprimen a cientos de MB) desde el doble de esto, no desde ~180 MP.
+Image.MAX_IMAGE_PIXELS = 64_000_000
 log = logging.getLogger("creatv.worker")
 
 # (tipo, cada_segundos). Los tipos se registran en tareas/. El orden importa
@@ -52,10 +59,16 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               ("materiales_limpiar", 86400),
               # Auditoría 2026-09-28: salidas/ crecía 2 GB cada dos semanas, tarea
               # sumaba ~485 filas vacías al día y la base solo se respaldaba a mano.
-              ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400)]
+              ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
+              # Salud (spec 2026-10-01): los errores resueltos viejos no se acumulan.
+              ("errores_limpiar", 86400),
+              # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
+              # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
+              ("cadena_vigilar", 60)]
 
-# Carril de Crear: generaciones que casi todo el tiempo esperan al proveedor.
-CARRIL_CREAR = ("flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flowplus_director")
+# Carril de Crear: generaciones que casi todo el tiempo esperan al proveedor
+# (también la voz del anuncio hablado, que no debe esperar detrás de un render).
+CARRIL_CREAR = ("flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flowplus_director", "hablado_voz")
 HILOS_CREAR = 4
 HILOS_LOTE = 2
 PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida desde Crear
@@ -106,14 +119,16 @@ def ejecutar(tarea):
     """Corre la tarea en el idioma de su proyecto (spec 2026-09-26 §B8): todo
     gettext de adentro — motivos, eventos, avisos, el mensaje que devuelve y
     el texto de una excepción — sale en ese idioma."""
-    fn = tareas.REGISTRO.get(tarea["tipo"])
-    if fn is None:
-        raise RuntimeError(f"tipo de tarea desconocido: {tarea['tipo']}")
     with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+        fn = tareas.REGISTRO.get(tarea["tipo"])
+        if fn is None:
+            raise RuntimeError(gettext("tipo de tarea desconocido: %(tipo)s", tipo=tarea["tipo"]))
         return fn(tarea)
 
 
-MENSAJE_INTERRUMPIDA = "Se interrumpió por un reinicio del servidor. Vuelve a intentar."
+# Se guarda en la entidad de atrás (sesión, swap, anuncio): va en el idioma
+# del proyecto de cada tarea — gettext dentro de idiomas.en_idioma(de_tarea).
+MENSAJE_INTERRUMPIDA = idiomas.N_("Se interrumpió por un reinicio del servidor. Vuelve a intentar.")
 
 
 def en_vuelo():
@@ -135,7 +150,8 @@ def recuperar_interrumpidas(minutos):
         if hook is None:
             continue
         try:
-            hook(t, MENSAJE_INTERRUMPIDA)
+            with idiomas.en_idioma(idiomas.de_tarea(t)):
+                hook(t, gettext(MENSAJE_INTERRUMPIDA))
             log.info("tarea %s interrumpida → entidad marcada en error", t["id"])
         except Exception as e:  # noqa: BLE001 — el hook nunca tumba al worker
             log.error("tarea %s interrumpida: el hook de %s falló: %s", t["id"], t["tipo"], cola.sin_token(e))
@@ -158,7 +174,11 @@ def _correr(tarea):
     except ContinuacionPerdida as e:
         log.error("tarea %s: no se pudo encolar su continuación: %s", tarea["id"], cola.sin_token(e))
     except Exception as e:  # noqa: BLE001 — el worker nunca muere por una tarea
-        log.error("tarea %s falló: %s\n%s", tarea["id"], cola.sin_token(e), cola.sin_token(traceback.format_exc()))
+        # A /admin/salud agrupado por tipo de tarea y lugar (no por id: el log.error
+        # de abajo no vuelve a contarlo).
+        monitoreo.registrar_excepcion(e, "worker", ruta=tarea["tipo"], cliente=tarea.get("cliente"))
+        log.error("tarea %s falló: %s\n%s", tarea["id"], cola.sin_token(e), cola.sin_token(traceback.format_exc()),
+                  extra={"sin_monitoreo": True})
         cola.fallar(tarea["id"], f"{type(e).__name__}: {e}")
 
 
@@ -181,11 +201,15 @@ def _terminar_y_encolar(tarea, siguiente):
         except Exception as e:  # noqa: BLE001
             ultimo = e
             time.sleep(1 + intento)
-    cola.fallar(tarea["id"], f"No se pudo encolar la continuación ({type(ultimo).__name__}: {ultimo})")
+    # Este hilo ya salió de ejecutar (y de su idioma): lo que se guarda va en el del proyecto.
+    with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+        cola.fallar(tarea["id"], gettext("No se pudo encolar la continuación (%(error)s)",
+                                         error=f"{type(ultimo).__name__}: {ultimo}"))
     hook = tareas.AL_INTERRUMPIR.get(tarea["tipo"])
     if hook is not None:
         try:
-            hook(tarea, MENSAJE_INTERRUMPIDA)
+            with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+                hook(tarea, gettext(MENSAJE_INTERRUMPIDA))
         except Exception as e:  # noqa: BLE001 — el gancho nunca tumba al worker
             log.error("tarea %s: el gancho de %s falló: %s", tarea["id"], tarea["tipo"], cola.sin_token(e))
     raise ContinuacionPerdida(str(ultimo))
@@ -282,6 +306,8 @@ def esperar_hilos(timeout=None):
 def main():
     load_dotenv(os.path.join(BASE_DIR, ".env"))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
+    # data/logs/worker.log (lo lee /admin/salud/registros) y log.error → errores agrupados.
+    registro_app.configurar("worker")
     tareas.cargar_todas()
     signal.signal(signal.SIGINT, _pedir_parada)
     signal.signal(signal.SIGTERM, _pedir_parada)
@@ -301,7 +327,8 @@ def main():
         except KeyboardInterrupt:
             _pedir_parada(signal.SIGINT, None)
         except Exception as e:  # noqa: BLE001
-            log.error("repartir falló: %s", cola.sin_token(e))
+            monitoreo.registrar_excepcion(e, "worker", ruta="repartir")
+            log.error("repartir falló: %s", cola.sin_token(e), extra={"sin_monitoreo": True})
             time.sleep(5)
     if en_vuelo():
         log.info("esperando que terminen %s tareas en curso", len(en_vuelo()))

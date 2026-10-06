@@ -142,7 +142,7 @@ def _pagada_aunque_falle(tarea, bid, lote, detalle, llamada, *args):
     except copycoders.FormatoInvalido as e:
         if e.tokens_entrada or e.tokens_salida:
             _registrar_traduccion(tarea, bid, f"{lote}:fallida", e.tokens_entrada, e.tokens_salida,
-                                  f"{detalle} (respuesta inutilizable: {e})")
+                                  gettext("%(detalle)s (respuesta inutilizable: %(error)s)", detalle=detalle, error=e))
         raise
 
 
@@ -153,11 +153,11 @@ def _fase_traducir(tarea, p, bid, avanzar):
         pendientes = datos.sin_traducir(limite=TRAMO)
         if not pendientes:
             break
-        trad, ent, sal = _pagada_aunque_falle(tarea, bid, f"firmas{lote}", "traducción de firmas copycoders",
+        trad, ent, sal = _pagada_aunque_falle(tarea, bid, f"firmas{lote}", gettext("traducción de firmas copycoders"),
                                               copycoders.traducir_firmas, [(r["id"], r["firma"]) for r in pendientes])
         if datos.marcar_traducidas(list(trad.items())):
             progreso = True
-        _registrar_traduccion(tarea, bid, f"firmas{lote}", ent, sal, "traducción de firmas copycoders")
+        _registrar_traduccion(tarea, bid, f"firmas{lote}", ent, sal, gettext("traducción de firmas copycoders"))
         if not trad:
             break
     familias = [f for f in datos.familias() if not (f["descripcion"] or "").strip()]
@@ -166,12 +166,13 @@ def _fase_traducir(tarea, p, bid, avanzar):
         for f in familias[:FAMILIAS_POR_LLAMADA]:
             ejemplos[f["nombre"]] = [r["firma"] for r in datos.listar_por_familia(f["nombre"], limite=3) if r.get("firma")]
         desc, ent, sal = _pagada_aunque_falle(tarea, bid, f"familias{len(familias)}",
-                                              "descripción de familias copycoders",
+                                              gettext("descripción de familias copycoders"),
                                               copycoders.describir_familias, list(ejemplos.items()))
         for f in familias:
             if f["nombre"] in desc:
                 datos.familia_actualizar(f["id"], desc[f["nombre"]])
-        _registrar_traduccion(tarea, bid, f"familias{len(familias)}", ent, sal, "descripción de familias copycoders")
+        _registrar_traduccion(tarea, bid, f"familias{len(familias)}", ent, sal,
+                              gettext("descripción de familias copycoders"))
     quedan = bool(datos.sin_traducir(limite=1))
     # Solo re-encolar por firmas si esta pasada avanzó algo: si una pasada
     # completa no tradujo ni una fila (Claude omitió las mismas otra vez), la
@@ -259,13 +260,13 @@ def ejecutar_familias_en(tarea):
         except copycoders.FormatoInvalido as e:
             if e.tokens_entrada or e.tokens_salida:
                 _registrar_familias_en(tarea, n, e.tokens_entrada, e.tokens_salida,
-                                       f"familias en inglés (respuesta inutilizable: {e})")
+                                       gettext("familias en inglés (respuesta inutilizable: %(error)s)", error=e))
             raise
         for f in tanda:
             if f["nombre"] in desc:
                 datos.familia_actualizar(f["id"], descripcion_en=desc[f["nombre"]])
                 escritas += 1
-        _registrar_familias_en(tarea, n, ent, sal, "familias en inglés")
+        _registrar_familias_en(tarea, n, ent, sal, gettext("familias en inglés"))
     return gettext("Descripciones en inglés: %(n)s de %(total)s.", n=escritas, total=len(pendientes))
 
 
@@ -305,6 +306,7 @@ def _job_continuacion_barrer(job_id):
 def _continuar_barrer(tarea, payload, bid, tipo=TIPO_BARRER):
     cuando = (datetime.now() + timedelta(seconds=ESPERA_CONT)).isoformat(timespec="seconds")
     cola.encolar(tipo, payload, job_id=_job_continuacion_barrer(tarea.get("job_id") or job_id_barrer(bid)),
+                cliente=tarea.get("cliente"),
                 duracion_estimada=1800, etapas=ETAPAS_BARRER, ejecutar_desde=cuando, max_intentos=1, prioridad=2)
 
 
@@ -317,7 +319,7 @@ def encolar_barrer(cliente, fuente, consulta, tope, usd_estimado, pedido_por=Non
     trabajos.encolar(job_id_barrer(bid), TIPO_BARRER,
                      {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
                       "consulta": {**consulta, "fuente": fuente}, "tope": tope},
-                     duracion_estimada=1800, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2)
+                     duracion_estimada=1800, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2, cliente=cliente)
     return bid
 
 
@@ -333,7 +335,7 @@ def encolar_clasificar_pendientes(cliente, barrido_id):
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_CLASIFICAR,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "clasificando",
                       "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
-                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2)
+                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2, cliente=cliente)
     return True
 
 
@@ -349,7 +351,7 @@ def encolar_reintentar_imagenes(cliente, barrido_id):
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_BARRER,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "imagenes",
                       "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
-                     duracion_estimada=600, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2)
+                     duracion_estimada=600, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2, cliente=cliente)
     return True
 
 
@@ -389,14 +391,8 @@ def _fase_trayendo(tarea, p, bid, avanzar):
 
     try:
         for pagina, cursor_siguiente, meta in fuente_mod.traer(consulta, tope - traidos_total, avanzar_trayendo, cursor=cursor):
-            for a in pagina:
-                if not a or not a.get("anuncio_id") or not a.get("imagen_origen"):
-                    continue
-                a = dict(a, fuente=consulta["fuente"])
-                _, creado = datos.guardar_referente(a, cliente=p["cliente"], barrido_id=bid)
-                traidos_total += 1
-                nuevos_total += int(creado)
-            cursor_final = cursor_siguiente
+            if (meta or {}).get("aviso"):
+                aviso_parcial = meta["aviso"]
             costo_real = (meta or {}).get("costo_real")
             # La referencia no varía por página dentro de esta misma tarea: si una
             # fuente futura reportara costo_real en MÁS de una página en una sola
@@ -408,13 +404,23 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             if costo_real:
                 gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                         f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
-                                        detalle=f"{consulta['fuente']}: {len(pagina)} anuncio(s) reales")
+                                        detalle=gettext("%(fuente)s: %(n)s anuncio(s) reales", fuente=consulta["fuente"],
+                                                        n=len(pagina)), proveedor=consulta["fuente"],
+                                        extra={k: v for k, v in (meta or {}).items() if k != "costo_real"})
                 # Mismo mecanismo que `_fase_clasificando` con su gasto de
                 # Claude (Important 1 del review final): sin esto, el costo
                 # real de Apify queda solo en `gastos` y "Mis barridos"
                 # sigue mostrando Costo 0.00 aunque ya se haya pagado.
                 b2 = datos.barrido(bid) or {}
                 datos.actualizar_barrido(bid, usd_real=round(float(b2.get("usd_real") or 0.0) + costo_real, 4))
+            for a in pagina:
+                if not a or not a.get("anuncio_id") or not a.get("imagen_origen"):
+                    continue
+                a = dict(a, fuente=consulta["fuente"])
+                _, creado = datos.guardar_referente(a, cliente=p["cliente"], barrido_id=bid)
+                traidos_total += 1
+                nuevos_total += int(creado)
+            cursor_final = cursor_siguiente
             if traidos_total - int(b.get("traidos") or 0) >= TRAMO:
                 break
     except ErrorFuente as e:
@@ -427,7 +433,9 @@ def _fase_trayendo(tarea, p, bid, avanzar):
         if costo_real:
             gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                     f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
-                                    detalle=f"{consulta['fuente']}: corrida cobrada pero no se pudo leer del todo")
+                                    detalle=gettext("%(fuente)s: corrida cobrada pero no se pudo leer del todo",
+                                                    fuente=consulta["fuente"]), proveedor=consulta["fuente"],
+                                    extra=getattr(e, "extra_gasto", {}))
             # Mismo motivo que en el bucle de arriba: esto también es plata
             # ya pagada y debe verse en "Mis barridos", aunque la corrida
             # haya terminado en error total.
@@ -462,7 +470,8 @@ def _fase_imagenes_barrer(tarea, p, bid, avanzar):
     avanzar(ETAPA_GUARDAR_IMAGENES)
     for r in datos.pendientes_imagen(barrido_id=bid, limite=TRAMO):
         try:
-            url = imagenes.guardar_en_r2(r["anuncio_id"], r["imagen_origen"], CARPETA)
+            clave = f"{r['anuncio_id']}_r{r['id']}" if r.get("cliente") else r["anuncio_id"]
+            url = imagenes.guardar_en_r2(clave, r["imagen_origen"], CARPETA)
             datos.marcar_imagen(r["id"], "ok", url)
         except Exception:
             # Igual que en copycoders: una imagen mala no debe abortar el

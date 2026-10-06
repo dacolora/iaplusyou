@@ -1,433 +1,215 @@
-{# Card de investigación automática de Nicho Parte 3. Contexto: investigacion,
-   etiquetas_inv, etiquetas_paso, etiquetas_paso_estado (nicho.rutas.ver). #}
-<div class="card-nicho card-investigacion">
-  <div class="card-title">
-    <h3>{{ _('Investigación automática') }}</h3>
-    {% if investigacion.estado %}
-      <span class="badge badge-{{ investigacion.estado }}">{{ (etiquetas_inv.get(investigacion.estado, investigacion.estado)|traducir)|upper }}</span>
-    {% else %}
-      <span class="badge badge-neutral">{{ _('Sin iniciar') }}</span>
+{# Tarjeta «Investigar el nicho» (spec 2026-09-21 Parte 3 §8). Contexto de nicho.rutas.ver:
+   investigacion (resumen), trabajo_inv, productos_investigados, paises_estudio, plataformas_inv,
+   redes_inv, topes_inv, limites_inv, pais_inv, nombre_pais_inv, etiquetas_inv, etiquetas_paso,
+   etiquetas_paso_estado, fuentes_nombre (N_, con |traducir), idiomas (avatares.IDIOMAS: código → nombre, N_).
+   La barra de progreso lleva data-poll-job (base.html la sondea y recarga al terminar cada paso). #}
+{% macro chip_tienda(p) %}
+<label class="fe-destino"><input type="checkbox" name="plataformas" value="{{ p.clave }}" data-paises="{{ p.paises }}" data-orden="{{ p.orden }}"{% if p.faltan %} disabled data-sin-llave="1"{% elif p.mercado == 'local' %} checked{% endif %}> {{ p.nombre }}<span class="nicho-inv-casa"{% if p.mercado == 'local' %} hidden{% endif %}> ({{ p.casa_nombre|traducir }})</span>{% if p.faltan %} <small class="vacio">({{ _('falta %(llaves)s', llaves=p.faltan|join(', ')) }})</small>{% endif %}</label>
+{% endmacro %}
+{% set inv = investigacion %}
+{% set viva = inv.estado and inv.estado not in ('lista', 'detenida', 'interrumpida') %}
+<section class="swap-card nicho-inv" id="investigacion">
+  <div class="nicho-inv-cabecera">
+    <h3>{{ _('Investigar el nicho') }}</h3>
+    {% if inv.estado %}<span class="tag-estado nicho-inv-estado-{{ inv.estado }}">{{ etiquetas_inv.get(inv.estado, inv.estado)|traducir }}</span>{% endif %}
+  </div>
+  <p class="vacio">{{ _('Apruebas una cifra y el sistema busca productos del nicho en las tiendas del país, elige los que son del nicho, trae sus reseñas y arma los avatares. Nadie marca nada a mano.') }}</p>
+
+  {% if inv.estado %}
+  <p class="nicho-inv-cifras">
+    {{ _('Gastado %(gastado)s de %(aprobado)s aprobados', gastado=inv.gastado|usd, aprobado=inv.aprobado|usd) }}
+    {% if inv.productos %} · {{ _('%(n)s producto(s) encontrados', n=inv.productos) }}{% endif %}
+    {% if inv.relevantes %} · {{ _('%(n)s del nicho', n=inv.relevantes) }}{% endif %}
+    {% if inv.resenas %} · {{ _('%(n)s comentario(s) nuevos', n=inv.resenas) }}{% endif %}
+  </p>
+  {% if inv.consultas %}<p class="vacio">{{ _('Búsquedas:') }} {% for c in inv.consultas %}<span class="tag-estado">{{ c }}</span> {% endfor %}{% for codigo, lista in inv.consultas_por_idioma.items() if codigo != inv.idioma_consultas %}<small>({{ idiomas.get(codigo, codigo)|traducir }})</small> {% for c in lista %}<span class="tag-estado">{{ c }}</span> {% endfor %}{% endfor %}</p>{% endif %}
+  <ol class="nicho-inv-pasos">
+    {% for paso in inv.orden %}
+    {% set info = inv.pasos.get(paso, {}) %}
+    {% set e = info.estado or 'pendiente' %}
+    <li class="nicho-inv-paso paso-{{ e }}">
+      <span class="nicho-inv-paso-nombre">{{ etiquetas_paso.get(paso, paso)|traducir }}</span>
+      <span class="tag-estado">{{ etiquetas_paso_estado.get(e, e)|traducir }}</span>
+      {% if info.productos %}<small>{{ _('%(n)s producto(s)', n=info.productos) }}</small>{% endif %}
+      {% if info.relevantes %}<small>{{ _('%(n)s del nicho', n=info.relevantes) }}</small>{% endif %}
+      {% if info.nuevos %}<small>{{ _('%(n)s comentario(s) nuevos', n=info.nuevos) }}</small>{% endif %}
+      {% if info.usd %}<small>{{ info.usd|usd }}</small>{% endif %}
+      {% if info.aviso %}<small class="nicho-inv-aviso">{{ info.aviso|traducir }}</small>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% if trabajo_inv %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo_inv.job_id }}" data-poll-job="{{ trabajo_inv.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div><span class="progreso-texto">{{ etiquetas_paso.get(trabajo_inv.paso, trabajo_inv.paso)|traducir }}…</span></div>
+  {% endif %}
+  {% if inv.detenida_por %}<p class="tag-estado sprint-aviso">{{ _('Detenida: %(motivo)s', motivo=inv.detenida_por|traducir) }}</p>{% endif %}
+  {% if inv.ultimo_error %}<p class="vacio">{{ _('Último error: %(error)s', error=inv.ultimo_error) }}</p>{% endif %}
+  <div class="acciones">
+    {% if viva %}
+    <form method="post" action="{{ url_for('nicho.investigacion_cancelar', cliente=cliente, eid=estudio.id) }}" class="inline"
+          onsubmit='return confirm({{ _("¿Cancelar la investigación? El paso que está corriendo termina (y se cobra) y no se lanza el siguiente.")|tojson }});'>
+      <button type="submit" class="btn-sm btn-peligro">{{ _('Cancelar') }}</button>
+    </form>
+    {% elif inv.estado in ('detenida', 'interrumpida') and not estudio.archivado %}
+    <form method="post" action="{{ url_for('nicho.investigacion_reanudar', cliente=cliente, eid=estudio.id) }}" class="inline">
+      <button type="submit" class="btn-generar btn-sm">{{ _('Reanudar') }}</button>
+    </form>
     {% endif %}
   </div>
-
-  {% if not investigacion.estado %}
-    {# Formulario para iniciar investigación. "lista"/"detenida"/"interrumpida"
-       tienen su propia rama más abajo (con su botón de reanudar/reintentar) --
-       antes esta condición los interceptaba a todos aquí primero, dejando esas
-       ramas dedicadas como código muerto que nunca se alcanzaba. #}
-    <form method="post" action="{{ url_for('nicho.investigacion_iniciar', cliente=cliente, eid=estudio.id) }}" class="form-investigacion">
-      <fieldset>
-        <legend>{{ _('Configura tu investigación') }}</legend>
-        
-        <div class="form-group">
-          <label for="inv_pais">{{ _('País:') }}</label>
-          <select id="inv_pais" name="pais" required>
-            <option value="">{{ _('-- Selecciona --') }}</option>
-            <option value="CO" {% if estudio.pais == 'CO' %}selected{% endif %}>Colombia</option>
-            <option value="MX" {% if estudio.pais == 'MX' %}selected{% endif %}>{{ _('México') }}</option>
-            <option value="AR" {% if estudio.pais == 'AR' %}selected{% endif %}>Argentina</option>
-            <option value="BR" {% if estudio.pais == 'BR' %}selected{% endif %}>{{ _('Brasil') }}</option>
-            <option value="CL" {% if estudio.pais == 'CL' %}selected{% endif %}>Chile</option>
-            <option value="PE" {% if estudio.pais == 'PE' %}selected{% endif %}>{{ _('Perú') }}</option>
-            <option value="US" {% if estudio.pais == 'US' %}selected{% endif %}>USA</option>
-            <option value="ES" {% if estudio.pais == 'ES' %}selected{% endif %}>{{ _('España') }}</option>
-            <option value="SE" {% if estudio.pais == 'SE' %}selected{% endif %}>{{ _('Suecia') }}</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>{{ _('Plataformas de búsqueda:') }}</label>
-          <div class="chips">
-            <label class="chip">
-              <input type="checkbox" name="plataformas" value="amazon"> Amazon
-            </label>
-            <label class="chip">
-              <input type="checkbox" name="plataformas" value="meli"> Mercado Libre
-            </label>
-            <label class="chip">
-              <input type="checkbox" name="plataformas" value="tiktok_shop"> TikTok Shop
-            </label>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>{{ _('Redes sociales:') }}</label>
-          <div class="chips">
-            <label class="chip">
-              <input type="checkbox" name="redes" value="reddit"> Reddit
-            </label>
-            <label class="chip">
-              <input type="checkbox" name="redes" value="youtube"> YouTube
-            </label>
-          </div>
-        </div>
-
-        <div class="form-group" id="cost-estimate" style="display: none;">
-          <label>{{ _('Costo estimado:') }}</label>
-          <div class="cost-breakdown">
-            <p id="cost-text" class="cost-total">{{ _('Calculando...') }}</p>
-            <details>
-              <summary>{{ _('Desglose') }}</summary>
-              <div id="cost-details"></div>
-            </details>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="inv_presupuesto">{{ _('Presupuesto a aprobar (USD):') }}</label>
-          <input type="number" id="inv_presupuesto" name="presupuesto_usd" min="0.01" step="0.01" 
-                 placeholder="{{ _('Ej: %(n)s', n='10.00') }}" required>
-          <small>{{ _('Aproximadamente %(precio)s', precio=price_estimate) }}</small>
-        </div>
-
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">{{ _('Iniciar investigación') }}</button>
-          <button type="button" class="btn btn-secondary" onclick="this.form.reset()">{{ _('Limpiar') }}</button>
-        </div>
-      </fieldset>
-    </form>
-
-    <script>
-    (function() {
-      const form = document.querySelector('.form-investigacion');
-      const costEstimate = document.getElementById('cost-estimate');
-      const costText = document.getElementById('cost-text');
-      const costDetails = document.getElementById('cost-details');
-      const presupuesto = document.getElementById('inv_presupuesto');
-      const TXT_ERROR = {{ _('Error: %(error)s', error='{error}')|tojson }};
-      const TXT_EJ = {{ _('Ej: %(n)s', n='{n}')|tojson }};
-      const TXT_BUSQUEDA = {{ _('búsqueda')|tojson }}, TXT_RESENAS = {{ _('reseñas')|tojson }};
-      const TXT_AVATARES = {{ _('Avatares')|tojson }}, TXT_ERROR_COSTO = {{ _('Error calculando costo')|tojson }};
-
-      async function calcularCosto() {
-        const pais = document.getElementById('inv_pais').value;
-        const plataformas = Array.from(document.querySelectorAll('input[name="plataformas"]:checked')).map(x => x.value).join(',');
-        const redes = Array.from(document.querySelectorAll('input[name="redes"]:checked')).map(x => x.value).join(',');
-
-        if (!pais) {
-          costEstimate.style.display = 'none';
-          return;
-        }
-
-        try {
-          const response = await fetch(
-            `/cliente/{{ cliente }}/nicho/{{ estudio.id }}/investigacion/estimar?pais=${pais}&plataformas=${plataformas}&redes=${redes}`,
-            { headers: { 'Accept': 'application/json' } }
-          );
-          const data = await response.json();
-          if (data.error) {
-            costText.textContent = TXT_ERROR.replace('{error}', function () { return data.error; });
-          } else {
-            costText.textContent = `Total: ${data.texto}`;
-            presupuesto.placeholder = TXT_EJ.replace('{n}', function () { return String(data.total_usd); });
-            
-            if (data.filas && data.filas.length > 0) {
-              costDetails.innerHTML = data.filas.map(f => 
-                `<div class="cost-row"><strong>${f.nombre}</strong>: $${f.busqueda_usd} ${TXT_BUSQUEDA} + $${f.resenas_usd} ${TXT_RESENAS}</div>`
-              ).join('') + 
-              `<div class="cost-row"><strong>Claude</strong>: $${data.claude_usd}</div>` +
-              `<div class="cost-row"><strong>${TXT_AVATARES}</strong>: $${data.avatares_usd}</div>`;
-            }
-          }
-          costEstimate.style.display = 'block';
-        } catch (e) {
-          costText.textContent = TXT_ERROR_COSTO;
-        }
-      }
-
-      document.getElementById('inv_pais').addEventListener('change', calcularCosto);
-      document.querySelectorAll('input[name="plataformas"], input[name="redes"]').forEach(el => {
-        el.addEventListener('change', calcularCosto);
-      });
-    })();
-    </script>
-
-  {% elif investigacion.estado in ('consultas', 'buscando', 'seleccionando', 'resenas', 'redes', 'generando') %}
-    {# Investigación en curso #}
-    <div class="investigacion-progress">
-      <div class="progress-bar">
-        <div class="progress-fill" style="width: 50%;"></div>
-      </div>
-      <p class="progress-text">{{ _('Paso actual:') }} <strong>{{ etiquetas_inv.get(investigacion.estado, investigacion.estado)|traducir }}</strong></p>
-      
-      {% if investigacion.pasos %}
-        <details>
-          <summary>{{ _('Detalles de pasos') }}</summary>
-          <ul class="pasos-list">
-            {% for paso, info in investigacion.pasos.items() %}
-              <li>
-                <span class="paso-name">{{ etiquetas_paso.get(paso, paso)|traducir }}</span>
-                <span class="paso-estado badge-{{ info.estado or 'pendiente' }}">
-                  {{ etiquetas_paso_estado.get(info.estado or 'pendiente', info.estado)|traducir }}
-                </span>
-                {% if info.productos %}<span class="badge">{{ _('%(n)s productos', n=info.productos) }}</span>{% endif %}
-                {% if info.relevantes %}<span class="badge">{{ _('%(n)s relevantes', n=info.relevantes) }}</span>{% endif %}
-              </li>
-            {% endfor %}
-          </ul>
-        </details>
-      {% endif %}
-
-      <div class="investigacion-actions">
-        <form method="post" action="{{ url_for('nicho.investigacion_cancelar', cliente=cliente, eid=estudio.id) }}" style="display: inline;">
-          <button type="submit" class="btn btn-sm btn-secondary">{{ _('Cancelar investigación') }}</button>
-        </form>
-      </div>
-    </div>
-
-  {% elif investigacion.estado == 'lista' %}
-    {# Investigación completada #}
-    <div class="investigacion-resultado">
-      <div class="alert alert-success">
-        <strong>{{ _('Investigación completada') }}</strong>
-      </div>
-      
-      {% set resumen = investigacion %}
-      <div class="resultado-stats">
-        <div class="stat">
-          <span class="label">{{ _('Consultas:') }}</span>
-          <span class="value">{{ resumen.consultas | length }}</span>
-        </div>
-        <div class="stat">
-          <span class="label">{{ _('Productos encontrados:') }}</span>
-          <span class="value">{{ resumen.productos }}</span>
-        </div>
-        <div class="stat">
-          <span class="label">{{ _('Relevantes:') }}</span>
-          <span class="value">{{ resumen.relevantes }}</span>
-        </div>
-        <div class="stat">
-          <span class="label">{{ _('Gasto:') }}</span>
-          <span class="value">${{ "%.2f" | format(resumen.gastado) }}</span>
-        </div>
-      </div>
-
-      {% if resumen.consultas %}
-        <div class="consultas-usadas">
-          <h4>{{ _('Consultas usadas:') }}</h4>
-          <ul>
-            {% for c in resumen.consultas %}
-              <li>{{ c }}</li>
-            {% endfor %}
-          </ul>
-        </div>
-      {% endif %}
-
-      <div class="investigacion-actions">
-        <form method="post" action="{{ url_for('nicho.investigacion_reanudar', cliente=cliente, eid=estudio.id) }}" style="display: inline;">
-          <button type="submit" class="btn btn-sm btn-primary">{{ _('Investigar de nuevo') }}</button>
-        </form>
-        <button class="btn btn-sm btn-secondary" onclick="this.closest('.card-investigacion').remove()">{{ _('Cerrar') }}</button>
-      </div>
-    </div>
-
-  {% elif investigacion.estado in ('detenida', 'interrumpida') %}
-    {# Investigación pausada #}
-    <div class="investigacion-pausa">
-      <div class="alert alert-warning">
-        <strong>{{ _('Investigación pausada') }}</strong>
-        {% if investigacion.detenida_por %}
-          <p>{{ _('Razón: %(motivo)s', motivo=investigacion.detenida_por|traducir) }}</p>
-        {% endif %}
-      </div>
-
-      {% if investigacion.ultimo_error %}
-        <div class="alert alert-error">
-          <strong>{{ _('Último error:') }}</strong>
-          <p>{{ investigacion.ultimo_error }}</p>
-        </div>
-      {% endif %}
-
-      <div class="investigacion-actions">
-        <form method="post" action="{{ url_for('nicho.investigacion_reanudar', cliente=cliente, eid=estudio.id) }}" style="display: inline;">
-          <button type="submit" class="btn btn-sm btn-primary">{{ _('Reanudar investigación') }}</button>
-        </form>
-        <button class="btn btn-sm btn-secondary" onclick="this.closest('.card-investigacion').remove()">{{ _('Cerrar') }}</button>
-      </div>
-    </div>
+  {% if productos_investigados %}
+  <details class="nicho-inv-productos">
+    <summary>{{ _('Productos encontrados (%(n)s)', n=productos_investigados|length) }}</summary>
+    <table class="tabla-apilada nicho-inv-tabla">
+      <thead><tr><th>{{ _('Plataforma') }}</th><th>{{ _('Producto') }}</th><th>{{ _('Precio') }}</th><th>{{ _('Estrellas') }}</th><th>{{ _('Reseñas') }}</th><th>{{ _('¿Del nicho?') }}</th><th>{{ _('Traídas') }}</th></tr></thead>
+      <tbody>
+      {% for p in productos_investigados %}
+      <tr>
+        <td>{{ fuentes_nombre.get(p.plataforma, p.plataforma)|traducir }}</td>
+        <td>{% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.titulo }}</a>{% else %}{{ p.titulo }}{% endif %}{% if p.marca %} <small class="vacio">{{ p.marca }}</small>{% endif %}</td>
+        <td>{% if p.precio is not none %}{{ p.precio }} {{ p.moneda or '' }}{% else %}—{% endif %}</td>
+        <td>{{ p.estrellas if p.estrellas is not none else '—' }}</td>
+        <td>{% if p.n_resenas is not none %}{{ p.n_resenas }}{% elif (p.extra or {}).get('vendidos') %}<small class="vacio">{{ ngettext('%(num)s vendido', '%(num)s vendidos', p.extra.vendidos) }}</small>{% else %}—{% endif %}</td>
+        <td>{% if p.relevante is none %}—{% elif p.relevante %}✓{% else %}✗{% endif %}{% if p.motivo %} <small class="vacio">{{ p.motivo }}</small>{% endif %}</td>
+        <td>{{ p.resenas_traidas }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
   {% endif %}
-</div>
+  {% endif %}
 
-<style>
-.card-investigacion {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 1.5rem;
-  margin: 1rem 0;
-}
-
-.card-investigacion .card-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
-}
-
-.card-investigacion h3 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0.5rem 0;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.chip input {
-  cursor: pointer;
-}
-
-.chip:has(input:checked) {
-  background: rgba(124, 58, 237, .16);
-  border-color: var(--accent);
-}
-
-.cost-breakdown {
-  background: var(--panel);
-  padding: 1rem;
-  border-radius: 4px;
-  border-left: 3px solid var(--accent);
-}
-
-.cost-total {
-  font-weight: bold;
-  color: var(--accent-texto);
-  margin: 0 0 0.5rem 0;
-}
-
-.cost-row {
-  padding: 0.25rem 0;
-  font-size: 0.9rem;
-}
-
-.investigacion-progress {
-  padding: 1rem;
-}
-
-.progress-bar {
-  height: 8px;
-  background: var(--panel-hover);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 1rem;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #19a676, var(--ok));
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
-}
-
-.progress-text {
-  margin: 0.5rem 0;
-  font-size: 0.95rem;
-}
-
-.pasos-list {
-  list-style: none;
-  padding: 0;
-  margin: 0.5rem 0;
-}
-
-.pasos-list li {
-  padding: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: var(--panel);
-  border-radius: 4px;
-  margin-bottom: 0.25rem;
-}
-
-.paso-name {
-  font-family: monospace;
-  font-size: 0.9rem;
-  flex: 1;
-}
-
-.resultado-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-  margin: 1rem 0;
-}
-
-.stat {
-  background: var(--panel);
-  padding: 1rem;
-  border-radius: 4px;
-  text-align: center;
-}
-
-.stat .label {
-  display: block;
-  font-size: 0.85rem;
-  color: var(--muted);
-  margin-bottom: 0.5rem;
-}
-
-.stat .value {
-  display: block;
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: var(--accent-texto);
-}
-
-.consultas-usadas {
-  background: var(--panel);
-  padding: 1rem;
-  border-radius: 4px;
-  margin: 1rem 0;
-}
-
-.consultas-usadas h4 {
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-}
-
-.consultas-usadas ul {
-  margin: 0;
-  padding-left: 1.5rem;
-}
-
-.investigacion-actions {
-  margin-top: 1rem;
-  display: flex;
-  gap: 0.5rem;
-}
-
-.badge-consultas { background: rgba(96, 165, 250, .16); color: #93c5fd; }
-.badge-buscando { background: var(--warn-fondo); color: var(--warn); }
-.badge-seleccionando { background: rgba(244, 114, 182, .16); color: #f9a8d4; }
-.badge-resenas { background: rgba(167, 139, 250, .16); color: var(--accent-texto); }
-.badge-redes { background: rgba(45, 212, 191, .16); color: #5eead4; }
-.badge-generando { background: var(--ok-fondo); color: var(--ok); }
-.badge-lista { background: var(--ok-fondo); color: var(--ok); }
-.badge-detenida { background: var(--warn-fondo); color: var(--warn); }
-.badge-interrumpida { background: var(--error-fondo); color: var(--error); }
-.badge-neutral { background: var(--panel-hover); color: var(--muted); }
-.badge-pendiente { background: var(--panel-hover); color: var(--muted); }
-.badge-hecho { background: var(--ok-fondo); color: var(--ok); }
-.badge-en_curso { background: var(--warn-fondo); color: var(--warn); }
-.badge-error { background: var(--error-fondo); color: var(--error); }
-</style>
+  {% if not viva %}
+  <details class="nicho-inv-nueva" {% if not inv.estado %}open{% endif %}>
+    <summary>{{ _('Investigar de nuevo') if inv.estado else _('Investigar') }}</summary>
+    {% if not (estudio.tema or '').strip() %}
+    <p class="tag-estado sprint-aviso">{{ _('Escribe primero qué investigar (Editar estudio › Qué investigar).') }}</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('nicho.investigacion_iniciar', cliente=cliente, eid=estudio.id) }}" class="form-experimento" id="form-investigar">
+      <div class="fe-opciones">
+        <label>{{ _('País') }}
+          <select name="pais">{% for codigo, nombre in paises_estudio %}<option value="{{ codigo }}"{% if codigo == pais_inv %} selected{% endif %}>{{ nombre|traducir }}</option>{% endfor %}</select>
+        </label>
+      </div>
+      {% if plataformas_inv %}
+      {% set otras_inv = plataformas_inv|selectattr('mercado', 'equalto', 'otro')|list %}
+      <fieldset class="nicho-inv-chips" id="inv-tiendas-locales">
+        <legend>{{ _('Tiendas de %(pais)s', pais=nombre_pais_inv|traducir) }}</legend>
+        {% for p in plataformas_inv if p.mercado == 'local' %}{{ chip_tienda(p) }}{% endfor %}
+      </fieldset>
+      <fieldset class="nicho-inv-chips" id="inv-tiendas-otras"{% if not otras_inv %} hidden{% endif %}>
+        <legend>{{ _('De otros mercados') }}</legend>
+        {% for p in otras_inv %}{{ chip_tienda(p) }}{% endfor %}
+      </fieldset>
+      <button type="button" class="btn-sm" id="inv-marcar-todas">{{ _('Marcar todas') }}</button>
+      {% else %}
+      <fieldset class="nicho-inv-chips">
+        <legend>{{ _('Tiendas') }}</legend>
+        <p class="vacio">{{ _('Todavía no hay tiendas disponibles.') }}</p>
+      </fieldset>
+      {% endif %}
+      <fieldset class="nicho-inv-chips">
+        <legend>{{ _('Redes') }}</legend>
+        {% for r in redes_inv %}
+        <label class="fe-destino"><input type="checkbox" name="redes" value="{{ r.clave }}"{% if r.faltan %} disabled{% else %} checked{% endif %}> {{ r.nombre }}{% if r.faltan %} <small class="vacio">({{ _('falta %(llaves)s', llaves=r.faltan|join(', ')) }})</small>{% endif %}</label>
+        {% endfor %}
+      </fieldset>
+      <details>
+        <summary>{{ _('Ajustes') }}</summary>
+        <div class="fe-opciones">
+          <label>{{ _('Búsquedas') }} <input type="number" name="consultas" value="{{ topes_inv.consultas }}" min="{{ limites_inv.consultas[0] }}" max="{{ limites_inv.consultas[1] }}" class="mini-input"></label>
+          <label>{{ _('Productos por búsqueda') }} <input type="number" name="productos_por_consulta" value="{{ topes_inv.productos_por_consulta }}" min="{{ limites_inv.productos_por_consulta[0] }}" max="{{ limites_inv.productos_por_consulta[1] }}" class="mini-input"></label>
+          <label>{{ _('Productos elegidos por tienda') }} <input type="number" name="productos_elegidos" value="{{ topes_inv.productos_elegidos }}" min="{{ limites_inv.productos_elegidos[0] }}" max="{{ limites_inv.productos_elegidos[1] }}" class="mini-input"></label>
+          <label>{{ _('Reseñas por producto') }} <input type="number" name="resenas_por_producto" value="{{ topes_inv.resenas_por_producto }}" min="{{ limites_inv.resenas_por_producto[0] }}" max="{{ limites_inv.resenas_por_producto[1] }}" class="mini-input"></label>
+        </div>
+      </details>
+      <div class="nicho-inv-estimado" id="inv-estimado" aria-live="polite">≈ …</div>
+      <input type="hidden" name="total_visto" value="">
+      <button type="submit" class="btn-generar btn-sm" id="inv-enviar" disabled>{{ _('Investigar') }}</button>
+      <small class="vacio">{{ _('Es un tope: cada corrida lleva su techo de cobro y el gasto real queda en Configuración › Gasto.') }}</small>
+    </form>
+  </details>
+  <script>
+  (function () {
+    var form = document.getElementById('form-investigar');
+    if (!form) return;
+    var base = {{ url_for('nicho.investigacion_estimar', cliente=cliente, eid=estudio.id)|tojson }};
+    var out = document.getElementById('inv-estimado'), boton = document.getElementById('inv-enviar');
+    var visto = form.querySelector('input[name="total_visto"]');
+    var locales = document.getElementById('inv-tiendas-locales'), otras = document.getElementById('inv-tiendas-otras');
+    var sinTema = {{ (not (estudio.tema or '').strip())|tojson }};
+    var TXT_BOTON = {{ _('Investigar (≈ %(costo)s)', costo='__C__')|tojson }};
+    var TXT_CONFIRMA = {{ _('La investigación cobra hasta %(costo)s (búsquedas, reseñas y Claude). ¿Seguimos?', costo='__C__')|tojson }};
+    var TXT_SIN = {{ _('Todavía no hay estimado; espera un momento y vuelve a intentar.')|tojson }};
+    var TXT_BUSQUEDA = {{ _('búsqueda')|tojson }}, TXT_RESENAS = {{ _('reseñas')|tojson }};
+    var TXT_AVATARES = {{ _('Avatares')|tojson }}, TXT_TOTAL = {{ _('Total')|tojson }};
+    var TXT_TIENDAS_DE = {{ _('Tiendas de %(pais)s', pais='__P__')|tojson }};
+    // Las tiendas en el orden del registro: cambiar de país las mueve de grupo sin desordenarlas.
+    var chips = Array.prototype.slice.call(form.querySelectorAll('input[name="plataformas"]'))
+      .sort(function (a, b) { return Number(a.dataset.orden) - Number(b.dataset.orden); });
+    var pedidas = 0, ultimo = null;
+    function params() {
+      var q = new URLSearchParams();
+      q.set('pais', form.elements.pais.value);
+      form.querySelectorAll('input[name="plataformas"]:checked:not(:disabled)').forEach(function (x) { q.append('plataformas', x.value); });
+      form.querySelectorAll('input[name="redes"]:checked:not(:disabled)').forEach(function (x) { q.append('redes', x.value); });
+      ['consultas', 'productos_por_consulta', 'productos_elegidos', 'resenas_por_producto'].forEach(function (k) { q.set(k, form.elements[k].value); });
+      return q.toString();
+    }
+    function porPais() {
+      // «Tiendas de <país>» (tienen sitio ahí o venden en todo el mundo) y «De otros mercados» (buscan en su
+      // sitio principal). Solo la tienda que cambia de grupo vuelve a lo de entrada: las del país marcadas,
+      // las de otros mercados no (spec Parte 4 §4).
+      if (!locales || !otras) return;
+      var sel = form.elements.pais, p = sel.value;
+      locales.querySelector('legend').textContent = TXT_TIENDAS_DE.replace('__P__', sel.options[sel.selectedIndex].text);
+      chips.forEach(function (x) {
+        var cubre = x.dataset.paises === '*' || (' ' + x.dataset.paises + ' ').indexOf(' ' + p + ' ') >= 0;
+        var label = x.closest('label'), destino = cubre ? locales : otras;
+        if (label.parentNode !== destino && x.dataset.sinLlave !== '1') x.checked = cubre;
+        destino.appendChild(label);
+        var casa = label.querySelector('.nicho-inv-casa');
+        if (casa) casa.hidden = cubre;
+      });
+      otras.hidden = !otras.querySelector('input[name="plataformas"]');
+    }
+    function fila(texto) { var d = document.createElement('div'); d.textContent = texto; out.appendChild(d); }
+    function pintar() {
+      var clave = params(), mia = ++pedidas;
+      ultimo = null; boton.disabled = true; visto.value = '';
+      fetch(base + '?' + clave, {headers: {'Accept': 'application/json'}})
+        .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, d: d}; }); })
+        .then(function (res) {
+          if (mia !== pedidas) return;
+          out.textContent = '';
+          if (!res.ok) { fila(res.d.error || '≈ ?'); return; }
+          var d = res.d;
+          d.filas.forEach(function (f) { fila((f.etiqueta || f.nombre) + ': ' + f.busqueda_texto + ' ' + TXT_BUSQUEDA + ' + ' + f.resenas_texto + ' ' + TXT_RESENAS); });
+          fila('Claude: ' + d.claude_texto);
+          fila(TXT_AVATARES + ': ' + d.avatares_texto);
+          fila(TXT_TOTAL + ': ' + d.texto);
+          ultimo = {clave: clave, d: d};
+          visto.value = d.total_usd;
+          boton.textContent = TXT_BOTON.replace('__C__', d.texto);
+          boton.disabled = sinTema;
+        })
+        .catch(function () { if (mia === pedidas) out.textContent = '≈ ?'; });
+    }
+    var todas = document.getElementById('inv-marcar-todas');
+    if (todas) todas.addEventListener('click', function () {
+      chips.forEach(function (x) { if (!x.disabled) x.checked = true; });
+      pintar();
+    });
+    // Solo el país reagrupa las tiendas: porPais() vuelve a colgar cada chip y le quitaría el foco a la casilla
+    // que se acaba de marcar con el teclado.
+    form.addEventListener('change', function (ev) { if (ev.target === form.elements.pais) porPais(); pintar(); });
+    form.addEventListener('input', function (ev) { if (ev.target.type === 'number') pintar(); });
+    form.addEventListener('submit', function (ev) {
+      if (!ultimo || ultimo.clave !== params()) { ev.preventDefault(); ev.stopPropagation(); alert(TXT_SIN); pintar(); return; }
+      if (!confirm(TXT_CONFIRMA.replace('__C__', ultimo.d.texto))) { ev.preventDefault(); ev.stopPropagation(); }
+    });
+    porPais();
+    pintar();
+  })();
+  </script>
+  {% endif %}
+</section>

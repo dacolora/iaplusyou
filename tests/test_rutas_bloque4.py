@@ -1,12 +1,12 @@
 """Rutas del Bloque 4 en dashboard: modo, reglas, propuestas (aprobar /
 rechazar / aprobar todas), evaluar ahora, las reglas por defecto del motor
-(que viven en Experimentos › «Reglas del motor», ruta cfg_reglas) y en
+(que viven en Experimentos › «Cómo decide el motor», ruta cfg_reglas) y en
 Configuración el correo de avisos. Las rutas validan y delegan;
 acciones.ejecutar (que toca Meta) se reemplaza por un fake."""
 import pytest
 
 from tests.test_experimentos_db import PAISES, _pieza
-from tests.test_rutas_experimentos import _cliente_admin
+from tests.test_rutas_experimentos import _cliente_admin, _resultados
 
 
 @pytest.fixture()
@@ -234,8 +234,14 @@ def test_render_pestana_con_propuesta_y_veredicto(app, base_temporal):
     ex.actualizar("acme", eid, reglas={"ctr_min": 1.7}, estado="corriendo", meta_campaign_id="c1")
     propuestas.crear("acme", eid, "escalar", {"pais": "CO", "ep_id": ep}, "ganador en CO")
     r = app["c"].get("/cliente/acme")
-    html = r.data.decode()
+    pagina = r.data.decode()
     assert r.status_code == 200
+    # E2: la pestaña de la página es un armazón; lo de cada experimento llega en el fragmento de resultados. La
+    # propuesta pendiente sale en «Necesita tu decisión» (sin elegir experimento); la gestión, con `?exp=<id>`.
+    assert 'id="cr-resultados"' in _seccion(pagina, "experimentos")
+    decision = _resultados(app["c"])
+    assert "Aprobar" in decision and "Aprobar todo lo pendiente" in decision and "ganador en CO" in decision
+    html = _resultados(app["c"], exp=eid)
     assert "Aprobar" in html and "Aprobar todo lo pendiente" in html
     assert "veredicto-ganador" in html and "CTR 2.1% sobre el mínimo" in html
     assert "Escalón 2/3" in html
@@ -244,9 +250,10 @@ def test_render_pestana_con_propuesta_y_veredicto(app, base_temporal):
     assert 'value="1.7"' in html   # override propio de ctr_min
     assert 'id="exp-%d"' % eid in html
     # Reglas del motor: formulario (prefijo cfg → cfg_reglas) dentro de
-    # Experimentos, y ni rastro en Configuración, que solo enlaza.
-    exp, cfg = _seccion(html, "experimentos"), _seccion(html, "settings")
-    assert "Reglas del motor (valen para todos los experimentos)" in exp
+    # Experimentos (en su armazón, para que el enlace de Configuración lo
+    # encuentre sin esperar al fetch), y ni rastro en Configuración, que solo enlaza.
+    exp, cfg = _seccion(pagina, "experimentos"), _seccion(pagina, "settings")
+    assert "Cómo decide el motor" in exp and "Reglas del motor (valen" not in exp
     assert "/cliente/acme/config/reglas" in exp and 'id="cfg-ctr_min"' in exp
     assert "/cliente/acme/config/reglas" not in cfg and 'id="cfg-ctr_min"' not in cfg
     assert "Reglas por defecto de los experimentos" not in cfg
@@ -266,7 +273,7 @@ def test_tab_lista_las_piezas_de_una_propuesta_activar(app, base_temporal):
     ep_co, ep_mx = [p["id"] for p in ex.piezas("acme", eid)]
     ex.actualizar("acme", eid, estado="pausado", meta_campaign_id="c1")
     propuestas.crear("acme", eid, "activar", {"ep_ids": [ep_co, ep_mx]}, "derivación d1 lista: 2 pieza(s) nueva(s)")
-    html = app["c"].get("/cliente/acme").data.decode()
+    html = _resultados(app["c"])
     assert "Final es_CO (CO), Final es_MX (MX)" in html
     assert "derivación d1 lista" in html
 
@@ -283,7 +290,7 @@ def test_propuesta_muestra_precio_estimado(app, base_temporal):
     propuestas.crear("acme", eid, "derivar", {"ep_id": ep, "precio_estimado": {"usd": 1.234, "texto": "US$ 1,23 aprox."}}, "ganador")
     propuestas.crear("acme", eid, "rescatar", {"ep_id": ep, "precio_estimado": {"usd": None, "texto": "precio no disponible"}}, "perdedor")
     propuestas.crear("acme", eid, "pausar", {"ep_id": ep}, "CTR bajo")
-    html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "experimentos")
+    html = _resultados(app["c"])
     props = html[html.index("Propuestas pendientes (3)"):]
     derivar = props[props.index('exp-propuesta-derivar'):props.index("</li>", props.index('exp-propuesta-derivar'))]
     assert 'class="exp-propuesta-precio"' in derivar and "≈ US$ 1,23" in derivar and "aprox." not in derivar
@@ -291,3 +298,79 @@ def test_propuesta_muestra_precio_estimado(app, base_temporal):
     assert "precio no disponible" in rescatar and "≈" not in rescatar
     pausar = props[props.index('exp-propuesta-pausar'):props.index("</li>", props.index('exp-propuesta-pausar'))]
     assert "exp-propuesta-precio" not in pausar
+
+
+# ---- «Cómo decide el motor»: las reglas en palabras (E2 R4, spec 2026-10-02 §4.7) --------------------------------
+
+import re  # noqa: E402
+
+CAMPOS_DE_REGLAS = ["ventana_horas", "impresiones_min", "gasto_min_x_presupuesto", "cpc_max", "ctr_min", "thruplay_min",
+                    "ventana_ventas_horas", "cpa_max", "roas_min", "escalar_pct_dia", "escalar_tope_dia", "n_reediciones",
+                    "n_regeneraciones"]
+
+
+def _texto_visible(html):
+    """Lo que ve la persona: el HTML sin etiquetas (los `name=`, `id=` y `for=` quedan en los atributos, no aquí)."""
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))
+
+
+def _formulario_de_reglas(html, prefijo):
+    ini = html.index('<p class="vacio reglas-intro">', html.index(f'id="{prefijo}-ventana_horas"') - 4000)
+    return html[ini:html.index("</fieldset>", html.index(f'id="{prefijo}-n_regeneraciones"')) + len("</fieldset>")]
+
+
+def test_cada_regla_del_decisor_esta_en_un_solo_grupo_y_tiene_su_frase():
+    import decisor
+    en_grupos = [k for _titulo, claves in decisor.GRUPOS_REGLAS for k in claves]
+    assert sorted(en_grupos) == sorted(decisor.REGLAS_DEFECTO) == sorted(CAMPOS_DE_REGLAS)     # ninguna se pierde ni se repite
+    assert set(decisor.ETIQUETAS) == set(decisor.REGLAS_DEFECTO)
+    assert [t for t, _ in decisor.GRUPOS_REGLAS] == ["Antes de juzgar una pieza", "Cuándo pierde por tráfico",
+                                                      "Cuándo gana o pierde por ventas", "Qué hace con una ganadora"]
+    # las frases del brief, tal cual: sin claves de código ni siglas sueltas
+    assert decisor.ETIQUETAS["gasto_min_x_presupuesto"] == "Días de su presupuesto diario que debe haber gastado"
+    assert decisor.ETIQUETAS["ventana_horas"] == "Horas mínimas corriendo"
+    assert decisor.ETIQUETAS["thruplay_min"] == "Parte mínima que ve el video completo (0–1)"
+    # lo que es dinero dice en qué moneda (la de la cuenta de Meta), y lo que cuesta dice que se cobra
+    for clave in ("cpc_max", "cpa_max", "escalar_tope_dia"):
+        assert decisor.ETIQUETAS[clave].endswith("(en la moneda de la cuenta)"), clave
+    assert decisor.ETIQUETAS["cpa_max"] == "Costo por compra máximo (en la moneda de la cuenta)"
+    assert "se cobra" in decisor.ETIQUETAS["n_regeneraciones"] and "video nuevo" in decisor.ETIQUETAS["n_regeneraciones"]
+    assert all("_" not in str(v) for v in decisor.ETIQUETAS.values())
+
+
+def test_el_cajon_del_proyecto_dice_las_reglas_en_palabras_y_en_cuatro_grupos(app):
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    exp = _seccion(html, "experimentos")
+    assert '<summary class="swap-card-resumen">Cómo decide el motor</summary>' in exp
+    form = _formulario_de_reglas(exp, "cfg")
+    assert form.count("<fieldset") == 4
+    for titulo in ("Antes de juzgar una pieza", "Cuándo pierde por tráfico", "Cuándo gana o pierde por ventas", "Qué hace con una ganadora"):
+        assert f"<legend>{titulo}</legend>" in form
+    assert "El motor espera a tener evidencia y después compara cada pieza con estas reglas. Vacío = el valor de fábrica (en gris)." in form
+    visible = _texto_visible(form)
+    assert "Días de su presupuesto diario que debe haber gastado" in visible
+    for clave in CAMPOS_DE_REGLAS:
+        assert clave not in visible, clave                       # ninguna clave de código a la vista...
+        assert f'name="{clave}"' in form                         # ...y cada campo conserva su name: el POST no cambia
+    assert "<code>" not in form
+    assert 'action="/cliente/acme/config/reglas"' in exp
+
+
+def test_la_gestion_de_un_experimento_usa_las_mismas_reglas_en_palabras_y_su_misma_ruta(app):
+    eid = _experimento()
+    html = _resultados(app["c"], exp=eid)
+    assert "<summary>Cómo decide el motor</summary>" in html
+    form = _formulario_de_reglas(html, f"exp{eid}")
+    assert form.count("<fieldset") == 4 and "Vacío = la regla del proyecto (en gris)." in form
+    assert "Días de su presupuesto diario que debe haber gastado" in _texto_visible(form)
+    assert all(clave not in _texto_visible(form) for clave in CAMPOS_DE_REGLAS)
+    assert all(f'name="{clave}"' in form for clave in CAMPOS_DE_REGLAS)
+    assert f'action="/cliente/acme/experimentos/{eid}/reglas"' in html
+
+
+def test_guardar_las_reglas_en_palabras_sigue_guardando_por_clave(app):
+    """El POST no cambió: los mismos `name`, las mismas rutas, el mismo resultado."""
+    import experimentos as ex
+    eid = _experimento()
+    app["c"].post(f"/cliente/acme/experimentos/{eid}/reglas", data={"gasto_min_x_presupuesto": "3", "sin_cpc_max": "1"})
+    assert ex.obtener("acme", eid)["reglas"] == {"gasto_min_x_presupuesto": 3.0, "cpc_max": None}

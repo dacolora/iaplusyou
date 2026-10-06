@@ -6,8 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as op from "../../static/editor/operaciones.js";
 import {
-  alternarSilencio, AYUDA_VACIA, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, claveForma,
-  COLORES, escalaDePorcentaje, formaDe, MENSAJE_CONFLICTO, mensajeRechazo, modelo, motivoRechazo, textoPorcentaje,
+  alternarSilencio, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioSombra, claveForma,
+  COLORES, escalaDePorcentaje, formaDe, mensajeConflicto, mensajeRechazo, modelo, motivoRechazo, textoPorcentaje,
   textoSegundos, textoVelocidad, TRANSICION_MS,
 } from "../../static/editor/propiedades_modelo.js";
 import { docBase } from "./doc_base.mjs";
@@ -20,7 +20,7 @@ const clipDe = (d, id) => d.pistas.flatMap((p) => p.clips).find((c) => c.id === 
 function docCompleto() {
   const conImagen = op.agregarImagen(docBase(), IMAGEN, 0, {}, INFO);
   const conMusica = op.agregarAudio(conImagen.doc, { id: 2 }, 0, { rol: "musica" }, INFO);
-  const conTexto = op.agregarTexto(conMusica.doc, 4000, "titulo", INFO);
+  const conTexto = op.agregarTexto(conMusica.doc, 4000, "titulo", {}, INFO);
   return { doc: conTexto.doc, imagen: conImagen.seleccion, musica: conMusica.seleccion, titulo: conTexto.seleccion };
 }
 
@@ -45,7 +45,7 @@ test("modelo sin nada elegido: la mezcla de la edición y qué hacer", () => {
   const d = docBase();
   const m = modelo(d, null);
   assert.equal(m.forma, "documento");
-  assert.equal(m.ayuda, AYUDA_VACIA);
+  assert.equal(m.ayuda, "Elige algo en la línea de tiempo o en el video para cambiarlo.");
   assert.equal(m.mezcla, "equilibrada");
   assert.equal(m.aMedida, false);
   assert.deepEqual(m.opcionesMezcla.map((o) => [o.valor, o.texto]),
@@ -73,7 +73,7 @@ test("modelo de un video: velocidad, sonido de la escena, zoom lento, transició
   assert.equal(m.kenBurns, "in");
   assert.equal(modelo(d, "v1", { info: INFO }).kenBurns, "out");
   assert.deepEqual(m.transicion, { disponible: true, motivo: null, tipo: "corte", duracionMs: TRANSICION_MS.defecto,
-    min: 200, max: 1500, paso: 100 });
+    min: 200, max: 1500, paso: 100, ayuda: "Junta los dos clips: el video queda tan corto como dure la transición." });
   assert.deepEqual(m.transiciones.map((t) => t.texto), ["Corte", "Fundido", "Deslizar", "Zoom", "Fundido a negro"]);
   assert.equal(m.puedeBorrar, true);
   // el último video no tiene transición hacia el siguiente
@@ -112,8 +112,7 @@ test("modelo de un texto: el texto del destino, fuente, tamaño en px, color con
   assert.equal(m.forma, "texto");
   assert.deepEqual(m.texto, { valor: "Escribe aquí", editable: true, destino: "es_CO", nota: null });
   assert.equal(m.fuente, "Inter-Bold");
-  assert.deepEqual(m.fuentes.map((f) => f.valor), ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"]);
-  assert.ok(m.fuentes.every((f) => f.texto));
+  assert.deepEqual(m.fuentes, [], "sin el catálogo de la página no hay fuentes que ofrecer");
   assert.deepEqual(m.tamano, { px: 72, min: 12, max: 200 });
   assert.equal(m.color, "#FFFFFF");
   // la paleta: blanco, negro, el color de marca, amarillo y rojo; marcado el que tiene
@@ -127,12 +126,12 @@ test("modelo de un texto: el texto del destino, fuente, tamaño en px, color con
   assert.equal(m.animacion, "ninguna");
   assert.deepEqual(m.centrado, { x: true, y: false });     // el título entra arriba (y = 0.2)
   // el precio entra en píldora del color de marca; el llamado, en caja blanca
-  const precio = op.agregarTexto(docBase(), 0, "precio", INFO);
+  const precio = op.agregarTexto(docBase(), 0, "precio", {}, INFO);
   assert.deepEqual(modelo(precio.doc, precio.seleccion).fondo, { tipo: "pildora", color: "#7C3AED", opacidad: 100 });
-  const llamado = op.agregarTexto(docBase(), 0, "llamado", INFO);
+  const llamado = op.agregarTexto(docBase(), 0, "llamado", {}, INFO);
   assert.deepEqual(modelo(llamado.doc, llamado.seleccion).fondo, { tipo: "caja", color: "#FFFFFF", opacidad: 90 });
   assert.equal(modelo(llamado.doc, llamado.seleccion).paleta.find((c) => c.elegido).nombre, "Negro");
-  const sub = op.agregarTexto(docBase(), 0, "subtitulo", INFO);
+  const sub = op.agregarTexto(docBase(), 0, "subtitulo", {}, INFO);
   assert.deepEqual(modelo(sub.doc, sub.seleccion).sombra, { activo: true });
   // un texto con lo mínimo (el de docBase): los valores por defecto del documento
   const t1 = modelo(docBase(), "t1");
@@ -284,16 +283,16 @@ test("un video de una edición sin sonido de la escena muestra el volumen en 0 (
 });
 
 test("mensajeRechazo: con la edición cambiada en otra pestaña lo dice así (no «debajo del video»); si no, el porqué", () => {
-  assert.equal(MENSAJE_CONFLICTO, "La edición cambió en otra pestaña: recarga la página para seguir.");
+  assert.equal(mensajeConflicto(), "La edición cambió en otra pestaña: recarga la página para seguir.");
   // en conflicto la operación en sí se podía: el motivo es el conflicto
-  assert.equal(mensajeRechazo(docBase(), "cambiar", ["t1", { transform: { x: 0.5 } }], INFO, { conflicto: true }), MENSAJE_CONFLICTO);
+  assert.equal(mensajeRechazo(docBase(), "cambiar", ["t1", { transform: { x: 0.5 } }], INFO, { conflicto: true }), mensajeConflicto());
   assert.match(mensajeRechazo(docBase(), "ponerTransicion", ["v1", "fundido", 500], INFO), /último/);
   assert.match(mensajeRechazo(docBase(), "cambiar", ["t1", { transform: { x: 0.5 } }], INFO), /No se pudo hacer ese cambio/);
 });
 
 test("Propiedades: una operación rechazada vuelve a pintar el control con el valor real y dice el porqué", async () => {
   const { Propiedades } = await import("../../static/editor/propiedades.js");
-  for (const [conflicto, esperado] of [[true, MENSAJE_CONFLICTO], [false, /último/]]) {
+  for (const [conflicto, esperado] of [[true, mensajeConflicto()], [false, /último/]]) {
     const dichos = [];
     const falsa = {
       editor: { operar: () => false, operarCon: () => false, doc: () => docBase(), info: () => INFO, enConflicto: () => conflicto },
@@ -309,4 +308,348 @@ test("Propiedades: una operación rechazada vuelve a pintar el control con el va
     if (typeof esperado === "string") assert.equal(dichos[0][0], esperado);
     else assert.match(dichos[0][0], esperado);
   }
+});
+
+// ---- Capa 5a (Task 8): «Suena en» y «Subtítulos de este audio» ----
+import { cambioSuenaEn } from "../../static/editor/propiedades_modelo.js";
+
+const NOMBRES_IDIOMA = { es: "Español", en: "English", pt: "Português" };
+
+test("modelo de un audio de voz: «Suena en» con su idioma; la música no lo trae", () => {
+  const { doc, musica } = docCompleto();
+  // una voz agregada en el editor (D8/D9) con el idioma del destino que se veía
+  const conVoz = op.agregarAudio(doc, { id: 3 }, 0, { rol: "voz", idioma: "es" }, INFO);
+  const m = modelo(conVoz.doc, conVoz.seleccion, { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA });
+  assert.equal(m.forma, "audio");
+  assert.deepEqual(m.suena_en, {
+    valor: "es",
+    opciones: [{ valor: "es", texto: "Solo en Español" }, { valor: "", texto: "Todos los idiomas" }],
+  });
+  assert.equal(m.subtitulos, true);
+  // viendo otro destino, también se puede pasar a ese idioma
+  const enOtro = modelo(conVoz.doc, conVoz.seleccion, { destino: "en_US", nombresIdioma: NOMBRES_IDIOMA });
+  assert.deepEqual(enOtro.suena_en.opciones.map((o) => o.valor), ["es", "en", ""]);
+  assert.equal(enOtro.suena_en.opciones[1].texto, "Solo en English");
+  // sin idioma: suena en todos, y ofrece el del destino que se ve
+  const todos = op.agregarAudio(doc, { id: 3 }, 0, { rol: "voz" }, INFO);
+  const mt = modelo(todos.doc, todos.seleccion, { destino: "pt_BR", nombresIdioma: NOMBRES_IDIOMA });
+  assert.deepEqual(mt.suena_en, {
+    valor: "", opciones: [{ valor: "pt", texto: "Solo en Português" }, { valor: "", texto: "Todos los idiomas" }],
+  });
+  // un idioma sin nombre conocido se escribe con su código
+  assert.equal(modelo(todos.doc, todos.seleccion, { destino: "fr_FR" }).suena_en.opciones[0].texto, "Solo en fr");
+  // la música (y un efecto) no dicen en qué idioma hablan, pero sí ofrecen sus subtítulos
+  const mm = modelo(doc, musica, { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA });
+  assert.equal(mm.suena_en, null);
+  assert.equal(mm.subtitulos, true);
+  // la voz del guion ya se ajusta sola a cada país (por_destino): no lleva «Suena en»
+  const guion = structuredClone(doc);
+  guion.pistas.find((p) => p.id === "p_voz").clips[0].por_destino = { es_CO: { material_id: 2, duracion_ms: 3000 } };
+  assert.equal(modelo(guion, "a1", { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA }).suena_en, null);
+  // una voz de guion (`bloque`) tampoco, aunque todavía no tenga por_destino: la vía
+  // automática se lo pone al sumar un destino, y un `idioma` dejaría fuera la voz
+  // pagada del otro país (esVozDeGuion, la misma prueba de la pestaña Subtítulos)
+  const conBloque = structuredClone(doc);
+  conBloque.pistas.find((p) => p.id === "p_voz").clips[0].bloque = "b1";
+  assert.equal(modelo(conBloque, "a1", { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA }).suena_en, null);
+  assert.equal(op.esVozDeGuion(conBloque.pistas.find((p) => p.id === "p_voz").clips[0]), true);
+  // una voz sin bloque ni por_destino (agregada a mano) sí lo lleva
+  assert.equal(modelo(doc, "a1", { destino: "es_CO", nombresIdioma: NOMBRES_IDIOMA }).suena_en.valor, "");
+});
+
+test("cambioSuenaEn: lo que pide «Suena en» a operaciones.cambiar", () => {
+  assert.deepEqual(cambioSuenaEn("es"), { idioma: "es" });
+  assert.deepEqual(cambioSuenaEn(""), { idioma: null });
+  assert.deepEqual(cambioSuenaEn(null), { idioma: null });
+  const { doc } = docCompleto();
+  const conVoz = op.agregarAudio(doc, { id: 3 }, 0, { rol: "voz", idioma: "es" }, INFO);
+  const r = op.cambiar(conVoz.doc, conVoz.seleccion, cambioSuenaEn(""), INFO);
+  assert.equal(clipDe(r.doc, conVoz.seleccion).idioma, undefined);
+  const r2 = op.cambiar(r.doc, conVoz.seleccion, cambioSuenaEn("en"), INFO);
+  assert.equal(clipDe(r2.doc, conVoz.seleccion).idioma, "en");
+});
+
+// ---- Capa 5b (Tarea 7): la foto en «Editar» y el bloque «Encuadre» ----
+import {
+  cambioCentrarEncuadre, cambioModoEncuadre, cambioZoomEncuadre, modeloEncuadre, msDeDuracionFoto, textoDuracionFoto,
+} from "../../static/editor/propiedades_modelo.js";
+
+const FOTO = { id: 4, tipo: "imagen", ancho: 600, alto: 400 };
+function docConFoto() {
+  const r = op.agregarFoto(docBase(), FOTO, { despuesDe: "v0" }, INFO);
+  return { doc: r.doc, foto: r.seleccion };
+}
+
+test("una foto de la principal tiene su formulario: duración, encuadre, zoom lento, transición y borrar", () => {
+  const { doc, foto } = docConFoto();
+  assert.equal(formaDe(doc, foto), "foto");
+  const m = modelo(doc, foto, { info: INFO });
+  assert.equal(m.forma, "foto");
+  assert.equal(m.clipId, foto);
+  assert.equal(claveForma(m), `foto:${foto}`);
+  assert.equal(m.nombre, "Foto");
+  assert.equal(m.duracionMs, 3000);
+  assert.deepEqual(m.duracion, { min: 100, max: op.FOTO_MAX_MS, paso: 100 });
+  assert.equal(m.nota, "Una foto no tiene sonido ni velocidad: cambia cuánto dura.");
+  assert.equal("velocidad" in m, false);
+  assert.equal("sonido" in m, false);
+  assert.equal(m.kenBurns, null);
+  assert.equal(m.encuadre.modo, "ajustar");                // 600×400 en 9:16: entra con el fondo desenfocado (D7)
+  assert.equal(m.transicion.disponible, true);              // va antes de v1
+  assert.equal(m.transicion.tipo, "corte");
+  assert.match(m.transicion.ayuda, /Junta los dos clips/);
+  assert.deepEqual(m.transiciones.map((x) => x.valor), op.TRANSICIONES);
+  assert.equal(m.puedeBorrar, true);
+  assert.equal(m.motivoBorrar, null);
+  // con zoom lento y otra duración
+  const larga = op.cambiarDuracionFoto(op.cambiar(doc, foto, { ken_burns: "out" }, INFO).doc, foto, 4500, INFO).doc;
+  const m2 = modelo(larga, foto, { info: INFO });
+  assert.equal(m2.duracionMs, 4500);
+  assert.equal(m2.kenBurns, "out");
+  // la última foto no tiene transición hacia el siguiente
+  const ultima = op.agregarFoto(docBase(), FOTO, { despuesDe: "v1" }, INFO);
+  const m3 = modelo(ultima.doc, ultima.seleccion, { info: INFO });
+  assert.equal(m3.transicion.disponible, false);
+  assert.equal(m3.transicion.ayuda, null);
+});
+
+test("el video también trae su encuadre (por defecto: llenar, sin acercar, centrado)", () => {
+  const d = docBase();
+  const m = modelo(d, "v0", { info: INFO });
+  assert.equal(m.encuadre.modo, "llenar");
+  assert.equal(m.encuadre.zoomPct, 100);
+  assert.equal(m.encuadre.centrado, true);
+  assert.equal(m.encuadre.sinMargen, false);               // sin medidas no se sabe: no lo dice
+  assert.deepEqual(m.encuadre.opciones, [
+    { valor: "llenar", texto: "Llenar" }, { valor: "ajustar", texto: "Ajustar con fondo desenfocado" }]);
+  const ajustado = op.cambiar(d, "v0", { encuadre: { modo: "ajustar", zoom: 1.5 } }, INFO).doc;
+  const e = modelo(ajustado, "v0", { info: INFO }).encuadre;
+  assert.deepEqual([e.modo, e.zoomPct, e.centrado], ["ajustar", 150, true]);
+  const corrido = op.cambiar(d, "v0", { encuadre: { x: 0.3 } }, INFO).doc;
+  assert.equal(modelo(corrido, "v0", { info: INFO }).encuadre.centrado, false);
+});
+
+test("modeloEncuadre: sin margen solo si el cuadro mide justo el lienzo (llenar, sin acercar, misma proporción)", () => {
+  const clip = { encuadre: null };
+  assert.equal(modeloEncuadre(clip, { medidas: [1080, 1920], formato: "9:16" }).sinMargen, true);
+  assert.equal(modeloEncuadre(clip, { medidas: [540, 960], formato: "9:16" }).sinMargen, true);
+  assert.equal(modeloEncuadre(clip, { medidas: [400, 200], formato: "9:16" }).sinMargen, false);
+  assert.equal(modeloEncuadre({ encuadre: { zoom: 1.5 } }, { medidas: [1080, 1920], formato: "9:16" }).sinMargen, false);
+  assert.equal(modeloEncuadre(clip).sinMargen, false);
+  assert.deepEqual(modeloEncuadre({ encuadre: { modo: "ajustar", zoom: 2.25 } }).zoomPct, 225);
+  // el modelo del panel toma las medidas de quien dibuja; si no, las del material
+  const d = docBase();
+  assert.equal(modelo(d, "v0", { info: INFO, medidasPrincipal: () => [1080, 1920] }).encuadre.sinMargen, true);
+  assert.equal(modelo(d, "v0", { info: INFO, materiales: { 1: { ancho: 1080, alto: 1920 } } }).encuadre.sinMargen, true);
+  assert.equal(modelo(d, "v0", { info: INFO, materiales: { 1: { ancho: 1920, alto: 1080 } } }).encuadre.sinMargen, false);
+});
+
+// Revisión final de la capa 5b: un margen más chico que el imán cuenta como
+// «sin margen» (igual que encuadre.sinMargen), y la ayuda habla de «la
+// imagen» (sirve para un video y para una foto).
+test("modeloEncuadre: un margen menor que el imán (1080×1918) es «sin margen», y los textos hablan de la imagen", () => {
+  const m = modeloEncuadre({ encuadre: null }, { medidas: [1080, 1918], formato: "9:16" });
+  assert.equal(m.sinMargen, true);
+  assert.equal(m.aviso, "Acerca la imagen para poder moverla.");
+  assert.equal(m.ayuda, "Arrastra la imagen para elegir qué parte se ve; la esquina la acerca.");
+  assert.equal(modeloEncuadre({ encuadre: { modo: "ajustar" } }, { medidas: [1080, 1918], formato: "9:16" }).sinMargen, true);
+  assert.equal(modeloEncuadre({ encuadre: null }, { medidas: [1110, 1920], formato: "9:16" }).sinMargen, false);
+});
+
+test("los cambios del bloque «Encuadre» son los que acepta operaciones.cambiar", () => {
+  assert.deepEqual(cambioModoEncuadre("ajustar"), { encuadre: { modo: "ajustar" } });
+  assert.deepEqual(cambioZoomEncuadre(150), { encuadre: { zoom: 1.5 } });
+  assert.deepEqual(cambioCentrarEncuadre(), { encuadre: { x: 0.5, y: 0.5 } });
+  let d = docBase();
+  for (const c of [cambioModoEncuadre("ajustar"), cambioZoomEncuadre(150), { encuadre: { x: 0.2 } }, cambioCentrarEncuadre()]) {
+    d = op.cambiar(d, "v0", c, INFO).doc;
+  }
+  assert.deepEqual(clipDe(d, "v0").encuadre, { modo: "ajustar", zoom: 1.5, x: 0.5, y: 0.5 });
+  // de vuelta a llenar y sin acercar: sin encuadre (el de siempre)
+  d = op.cambiar(op.cambiar(d, "v0", cambioModoEncuadre("llenar"), INFO).doc, "v0", cambioZoomEncuadre(100), INFO).doc;
+  assert.equal(clipDe(d, "v0").encuadre, null);
+});
+
+test("la transición dice que junta los dos clips cuando no hay una o es «solape»; una de cola no", () => {
+  const d = docBase();
+  assert.match(modelo(d, "v0", { info: INFO }).transicion.ayuda, /queda tan corto/);
+  const solape = op.ponerTransicion(d, "v0", "fundido", 500, INFO).doc;
+  assert.equal(clipDe(solape, "v0").transicion.modo, "solape");
+  assert.match(modelo(solape, "v0", { info: INFO }).transicion.ayuda, /queda tan corto/);
+  const cola = docBase();
+  clipDe(cola, "v0").transicion = { tipo: "fundido", duracion_ms: 500 };   // la de un borrador automático
+  assert.equal(modelo(cola, "v0", { info: INFO }).transicion.ayuda, null);
+  assert.equal(modelo(d, "v1", { info: INFO }).transicion.ayuda, null);     // el último: no hay transición
+});
+
+test("la duración de la foto se escribe en segundos con la coma y se lee con coma o punto", () => {
+  assert.equal(textoDuracionFoto(3000), "3");
+  assert.equal(textoDuracionFoto(2500), "2,5");
+  assert.equal(textoDuracionFoto(100), "0,1");
+  assert.equal(textoDuracionFoto(60000), "60");
+  assert.equal(msDeDuracionFoto("2,5"), 2500);
+  assert.equal(msDeDuracionFoto("2.5"), 2500);
+  assert.equal(msDeDuracionFoto(" 3 s "), 3000);
+  assert.equal(msDeDuracionFoto("0,1"), 100);
+  assert.equal(msDeDuracionFoto("1,26"), 1300);            // de a 100 ms
+  assert.equal(msDeDuracionFoto(""), null);
+  assert.equal(msDeDuracionFoto("tres"), null);
+  assert.equal(msDeDuracionFoto("-2"), null);
+});
+
+// ---- Capa 5c (Tarea 7): ancho del texto, fuentes por familia, avisos de lo que no sale y el color de un sticker ----
+import { readFileSync } from "node:fs";
+import {
+  avisosTexto, CATEGORIAS_FUENTE, cambioAncho, cambioSinLimite,
+} from "../../static/editor/propiedades_modelo.js";
+
+const TABLA = JSON.parse(readFileSync(new URL("../../static/editor/tipografia.json", import.meta.url), "utf8"));
+const T0 = { ...TABLA, emoji: null };
+const T_E = { ...T0, emoji: { id: "E", upem: 1000, asc: 900, desc: 200,
+  avances: [[0x2764, [1000]], [0x1F44D, [1000]], [0x1F468, [1000]], [0x1F525, [1000]]] } };
+// Un catálogo de 4 (dos clásicas, una de impacto, una con serifa), desordenado a propósito.
+const CATALOGO_4 = [
+  { id: "Inter-Bold", nombre: "Inter Bold", categoria: "clasicas" },
+  { id: "DMSerifDisplay-Regular", nombre: "DM Serif Display", categoria: "serifa" },
+  { id: "Anton-Regular", nombre: "Anton", categoria: "impacto" },
+  { id: "SpaceGrotesk-Bold", nombre: "Space Grotesk", categoria: "clasicas" },
+];
+const STICKER = { id: 9, tipo: "imagen", ancho: 512, alto: 512, tenible: true };
+const v2 = (fuente) => ({ estilo: { fuente, version: 2 } });
+const v1 = (fuente) => ({ estilo: { fuente } });
+
+test("modelo de un texto: «Ancho del texto» en % y «Sin límite» (D7.2)", () => {
+  const titulo = op.agregarTexto(docBase(), 0, "titulo", {}, INFO);
+  assert.deepEqual(modelo(titulo.doc, titulo.seleccion).ancho, { pct: 86, sinLimite: false, min: 30, max: 100 });
+  const precio = op.agregarTexto(docBase(), 0, "precio", {}, INFO);
+  assert.deepEqual(modelo(precio.doc, precio.seleccion).ancho, { pct: 86, sinLimite: true, min: 30, max: 100 });
+  const llamado = op.agregarTexto(docBase(), 0, "llamado", {}, INFO);
+  assert.equal(modelo(llamado.doc, llamado.seleccion).ancho.pct, 80);
+  // un texto de antes sin ancho (el de docBase) no tiene límite; el del borrador (0,8889) se ve redondeado
+  assert.deepEqual(modelo(docBase(), "t1").ancho, { pct: 86, sinLimite: true, min: 30, max: 100 });
+  const borrador = docBase();
+  clipDe(borrador, "t1").estilo.ancho_max = 0.8889;
+  assert.deepEqual(modelo(borrador, "t1").ancho, { pct: 89, sinLimite: false, min: 30, max: 100 });
+  clipDe(borrador, "t1").estilo.ancho_max = 0.1;                 // más angosto de lo que ofrece el deslizador
+  assert.equal(modelo(borrador, "t1").ancho.pct, 30);
+  // v2: si el texto ya es nuevo
+  assert.equal(modelo(titulo.doc, titulo.seleccion).v2, true);
+  assert.equal(modelo(docBase(), "t1").v2, false);
+});
+
+test("cambioAncho y cambioSinLimite: el % del deslizador acotado a 30–100, «Sin límite» es null", () => {
+  assert.deepEqual(cambioAncho(50), { estilo: { ancho_max: 0.5 } });
+  assert.deepEqual(cambioAncho(120), { estilo: { ancho_max: 1 } });
+  assert.deepEqual(cambioAncho(5), { estilo: { ancho_max: 0.3 } });
+  assert.deepEqual(cambioAncho(86), { estilo: { ancho_max: 0.86 } });
+  assert.deepEqual(cambioSinLimite(true), { estilo: { ancho_max: null } });
+  assert.deepEqual(cambioSinLimite(false), { estilo: { ancho_max: op.ANCHO_TEXTO.defecto } });
+  // y operaciones.cambiar los aplica (y pasa el texto a v2)
+  const d = op.cambiar(docBase(), "t1", cambioAncho(50), INFO).doc;
+  assert.deepEqual([clipDe(d, "t1").estilo.ancho_max, clipDe(d, "t1").estilo.version], [0.5, 2]);
+});
+
+test("modelo de un texto: las fuentes agrupadas por familia, en el orden de las familias y solo las que tienen fuentes (D9.4)", () => {
+  assert.deepEqual(CATEGORIAS_FUENTE, ["clasicas", "impacto", "redondeadas", "manuscritas", "serifa"]);
+  const titulo = op.agregarTexto(docBase(), 0, "titulo", {}, INFO);
+  const m = modelo(titulo.doc, titulo.seleccion, { catalogoFuentes: CATALOGO_4, tabla: T0 });
+  assert.deepEqual(m.fuentes, [
+    { categoria: "clasicas", texto: "Clásicas",
+      fuentes: [{ valor: "Inter-Bold", texto: "Inter Bold" }, { valor: "SpaceGrotesk-Bold", texto: "Space Grotesk" }] },
+    { categoria: "impacto", texto: "De impacto", fuentes: [{ valor: "Anton-Regular", texto: "Anton" }] },
+    { categoria: "serifa", texto: "Con serifa", fuentes: [{ valor: "DMSerifDisplay-Regular", texto: "DM Serif Display" }] },
+  ]);
+  // el catálogo entero (el de la página): cinco familias con sus nombres, ninguna vacía
+  const todas = op.FUENTES.map((id) => ({ id, nombre: id, categoria: null }));
+  const reales = [["clasicas", 4], ["impacto", 3], ["redondeadas", 1], ["manuscritas", 2], ["serifa", 1]];
+  let i = 0;
+  for (const [cat, n] of reales) for (let k = 0; k < n; k++) todas[i++].categoria = cat;
+  const completo = modelo(titulo.doc, titulo.seleccion, { catalogoFuentes: todas });
+  assert.deepEqual(completo.fuentes.map((g) => [g.categoria, g.texto, g.fuentes.length]), [
+    ["clasicas", "Clásicas", 4], ["impacto", "De impacto", 3], ["redondeadas", "Redondeadas", 1],
+    ["manuscritas", "Manuscritas", 2], ["serifa", "Con serifa", 1]]);
+  // una categoría que no se conoce no se ofrece (no sale un grupo sin nombre)
+  const rara = modelo(titulo.doc, titulo.seleccion, { catalogoFuentes: [...CATALOGO_4, { id: "X-Bold", nombre: "X", categoria: "rara" }] });
+  assert.equal(rara.fuentes.length, 3);
+});
+
+test("avisosTexto: lo que no sale en el video (v2), lo simplificado y el texto de antes con emojis (v1)", () => {
+  assert.deepEqual(avisosTexto(v2("SpaceGrotesk-Bold"), "✓ Envío", T0),
+    [{ texto: "No sale en el video: «✓» (esta fuente no los tiene).", accion: null }]);
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "👍🏽 listo", T_E),
+    [{ texto: "Las banderas, los tonos de piel y los emojis compuestos salen simplificados.", accion: null }]);
+  assert.deepEqual(avisosTexto(v1("Inter-Bold"), "Hola 🔥", T0),
+    [{ texto: "Este texto es de antes: sus emojis no salen en el video.", accion: "actualizar" }]);
+  assert.deepEqual(avisosTexto(v1("Inter-Bold"), "Hola, ¿qué tal? Ñandú", T0), []);
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "Hola 🔥", T_E), [], "con la fuente de emojis, el 🔥 sale");
+  // varios que faltan: unidos sin separador, cada uno una vez y en el orden en que aparecen
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "🔥 hola 🍕 🔥", T0),
+    [{ texto: "No sale en el video: «🔥🍕» (esta fuente no los tiene).", accion: null }]);
+  // los dos avisos juntos: lo que falta primero
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "👍🏽 🍕", T_E).map((a) => a.texto), [
+    "No sale en el video: «🍕» (esta fuente no los tiene).",
+    "Las banderas, los tonos de piel y los emojis compuestos salen simplificados."]);
+  // sin tabla, o con una fuente que la tabla no trae: nada (y no lanza)
+  assert.deepEqual(avisosTexto(v2("Inter-Bold"), "Hola 🔥", null), []);
+  assert.deepEqual(avisosTexto(v2("Inexistente-Bold"), "Hola 🔥", T0), []);
+  assert.deepEqual(avisosTexto({}, "Hola 🔥", T0), []);
+});
+
+test("avisosTexto: una tilde escrita aparte (pegada de un PDF) no es algo que no sale, ni en v1 ni en v2", () => {
+  // «ENVÍO GRATIS a todo el país» con cada tilde como letra + U+0301 (y «ñ» como n + U+0303): los dos motores
+  // pasan a NFC; antes la tabla, que no trae las marcas sueltas, las quitaba y el aviso mostraba una «́» sola.
+  const pegado = "ENVÍO GRATIS a todo el país, ñ";
+  assert.notEqual(pegado, pegado.normalize("NFC"));
+  for (const fuente of ["Inter-Bold", "Poppins-ExtraBold"]) {
+    assert.deepEqual(avisosTexto(v1(fuente), pegado, T0), [], `v1 ${fuente}: no es «Este texto es de antes…»`);
+    assert.deepEqual(avisosTexto(v2(fuente), pegado, T0), [], `v2 ${fuente}`);
+  }
+  // un emoji de verdad en un texto de antes sigue avisando, aunque lleve tildes escritas aparte
+  assert.deepEqual(avisosTexto(v1("Inter-Bold"), `${pegado} 🔥`, T0),
+    [{ texto: "Este texto es de antes: sus emojis no salen en el video.", accion: "actualizar" }]);
+});
+
+test("modelo de un texto: los avisos van con el texto que se ve, y el de antes ofrece «Mostrar los emojis»", () => {
+  const conEmoji = op.editarTexto(docBase(), "t1", "Hola 🔥", "es", INFO).doc;      // al escribir, pasa a v2
+  assert.deepEqual(modelo(conEmoji, "t1", { tabla: T0 }).avisos,
+    [{ texto: "No sale en el video: «🔥» (esta fuente no los tiene).", accion: null }]);
+  assert.deepEqual(modelo(conEmoji, "t1", { tabla: T_E }).avisos, []);
+  const viejo = docBase();
+  clipDe(viejo, "t1").texto = { literal: "Hola 🔥" };                               // un borrador de antes
+  assert.deepEqual(modelo(viejo, "t1", { tabla: T_E }).avisos,
+    [{ texto: "Este texto es de antes: sus emojis no salen en el video.", accion: "actualizar" }]);
+  assert.deepEqual(modelo(viejo, "t1").avisos, [], "sin la tabla, nada que decir");
+  const actualizado = op.actualizarTexto(viejo, "t1", INFO).doc;
+  assert.deepEqual(modelo(actualizado, "t1", { tabla: T_E }).avisos, []);
+});
+
+test("modelo de una imagen: el color solo si su material se tiñe (un sticker)", () => {
+  const r = op.agregarImagen(docBase(), STICKER, 0, { fraccion: 0.35, tinte: "#FFD400" }, INFO);
+  const m = modelo(r.doc, r.seleccion, { materiales: { 9: STICKER } });
+  assert.equal(m.tinte.activo, true);
+  assert.equal(m.tinte.color, "#FFD400");
+  assert.deepEqual(m.tinte.paleta.map((c) => c.color), ["#FFFFFF", "#000000", "#7C3AED", "#FFD60A", "#E53935"]);
+  assert.deepEqual(m.tinte.paleta.filter((c) => c.elegido), []);
+  const blanco = op.cambiar(r.doc, r.seleccion, { tinte: "#FFFFFF" }, INFO).doc;
+  assert.deepEqual(modelo(blanco, r.seleccion, { materiales: { 9: STICKER } }).tinte.paleta.filter((c) => c.elegido).map((c) => c.nombre),
+    ["Blanco"]);
+  // sin tinte: el sticker se ve blanco (su PNG es blanco)
+  const sin = op.cambiar(r.doc, r.seleccion, { tinte: null }, INFO).doc;
+  assert.deepEqual([modelo(sin, r.seleccion, { materiales: { 9: STICKER } }).tinte.activo,
+    modelo(sin, r.seleccion, { materiales: { 9: STICKER } }).tinte.color], [false, "#FFFFFF"]);
+  // una foto (no se tiñe) o un material que no se conoce: sin color
+  const { doc, imagen } = docCompleto();
+  assert.equal(modelo(doc, imagen, { materiales: { 4: IMAGEN } }).tinte, null);
+  assert.equal(modelo(r.doc, r.seleccion).tinte, null);
+});
+
+test("claveForma de una imagen: distinta si su material se tiñe (el formulario se rehace cuando llega tarde a la vista previa)", () => {
+  const r = op.agregarImagen(docBase(), STICKER, 0, { fraccion: 0.35, tinte: "#FFD400" }, INFO);
+  const sin = claveForma(modelo(r.doc, r.seleccion));
+  const con = claveForma(modelo(r.doc, r.seleccion, { materiales: { 9: STICKER } }));
+  assert.equal(sin, `imagen:${r.seleccion}`);
+  assert.notEqual(con, sin);
+  assert.equal(con, `imagen:${r.seleccion}:tinte`);
+  // lo demás sigue como estaba
+  assert.equal(claveForma(modelo(r.doc, null)), "documento:");
 });

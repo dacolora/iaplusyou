@@ -5,12 +5,17 @@ anuncio por pieza. Este módulo es solo datos (SQLAlchemy Core); las llamadas a
 Meta viven en lanzador.py. Campañas (ads.py) sigue usando el experimento legado
 "Anuncios sueltos" y no pasa por aquí.
 """
+import contextlib
+import copy
+import functools
 import json
+import threading
 
 import sqlalchemy as sa
 from flask_babel import gettext
 
 import db
+import idiomas
 from doctrina import revisor as doctrina_revisor
 from idiomas import N_
 
@@ -158,13 +163,13 @@ def crear_hijo(cliente, padre_id, nombre, pieza_origen_ep_id):
     ahora = db.ahora()
     with db.conectar() as con:
         if not _bloquear(con, db.experimento, padre_id, cliente):
-            raise ValueError("Ese experimento no existe.")
+            raise ValueError(gettext("Ese experimento no existe."))
         existente = _hijo_existente(con, cliente, padre_id, pieza_origen_ep_id)
         if existente:
             return existente
         f = _fila_experimento(con, cliente, padre_id)
         if not f:
-            raise ValueError("Ese experimento no existe.")
+            raise ValueError(gettext("Ese experimento no existe."))
         m = f._mapping
         e = db.experimento
         extra_padre = m[e.c.extra] or {}
@@ -333,6 +338,11 @@ def crear_con_piezas(cliente, datos, combinaciones):
         atribucion = atribucion_sugerida(cliente)
     if atribucion not in ATRIBUCIONES:
         raise ValueError(gettext("Atribución no válida: %(atribucion)s (usa pixel, tienda o ninguna).", atribucion=repr(atribucion)))
+    # El evento se guarda: en el idioma del proyecto, no en el de quien marcó
+    # las piezas en la galería (la ruta exp_probar).
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        mensaje_creado = gettext("Experimento creado desde la galería con %(anuncios)s anuncio(s) en %(paises)s país(es)",
+                                 anuncios=len(finales), paises=len(paises_exp))
     with db.conectar() as con:
         eid = con.execute(db.experimento.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=datos["nombre"], modo=datos.get("modo", "manual"),
@@ -347,7 +357,7 @@ def crear_con_piezas(cliente, datos, combinaciones):
                 pais=pais, estado="en_cola", veredicto="pendiente", escalon_rescate=0, extra={}))
         con.execute(db.evento.insert().values(
             cliente=cliente, creado_en=ahora, experimento_id=eid, tipo="creado",
-            mensaje=f"Experimento creado desde la galería con {len(finales)} anuncio(s) en {len(paises_exp)} país(es)",
+            mensaje=mensaje_creado,
             datos={}))
     return eid
 
@@ -395,11 +405,11 @@ def marcar_pieza(cliente, ep_id, **flags):
     ep = db.experimento_pieza
     with db.conectar() as con:
         if not _bloquear(con, ep, ep_id, cliente):
-            raise ValueError("Esa pieza no está en el experimento.")
+            raise ValueError(gettext("Esa pieza no está en el experimento."))
         f = con.execute(sa.select(ep.c.extra).where(
             ep.c.id == ep_id, ep.c.cliente == cliente)).first()
         if f is None:
-            raise ValueError("Esa pieza no está en el experimento.")
+            raise ValueError(gettext("Esa pieza no está en el experimento."))
         extra = {**(f._mapping[ep.c.extra] or {}), **flags}
         con.execute(ep.update().where(ep.c.id == ep_id, ep.c.cliente == cliente)
                     .values(actualizado_en=db.ahora(), extra=extra))
@@ -440,6 +450,39 @@ def snapshots(ep_id, desde=None):
         ventana = con.execute(sa.select(ms).where(ms.c.experimento_pieza_id == ep_id, ms.c.tomado_en >= desde)
                               .order_by(ms.c.id))
         return ([_snapshot_a_dict(base)] if base else []) + [_snapshot_a_dict(f) for f in ventana]
+
+
+def snapshots_de(ep_ids, desde):
+    """{ep_id: snapshots(ep_id, desde)} de muchas piezas en DOS consultas (la
+    ventana y, con ROW_NUMBER, la última anterior a `desde` de cada una) en vez
+    de dos por pieza: el panel del admin suma la pauta de TODOS los anuncios
+    (415 consultas con 200 anuncios, medido el 2026-10-01). Las piezas sin
+    snapshots no aparecen."""
+    ids = sorted({int(i) for i in ep_ids})
+    if not ids:
+        return {}
+    ms = db.metrica_snapshot
+    out = {}
+    with db.conectar() as con:
+        for trozo in (ids[i:i + 500] for i in range(0, len(ids), 500)):
+            orden = sa.func.row_number().over(partition_by=ms.c.experimento_pieza_id,
+                                              order_by=(ms.c.tomado_en.desc(), ms.c.id.desc())).label("rn")
+            previas = sa.select(ms, orden).where(ms.c.experimento_pieza_id.in_(trozo), ms.c.tomado_en < desde).subquery()
+            for f in con.execute(sa.select(previas).where(previas.c.rn == 1)):
+                m = f._mapping
+                out.setdefault(m["experimento_pieza_id"], []).append(_snapshot_a_dict_crudo(m))
+            for f in con.execute(sa.select(ms).where(ms.c.experimento_pieza_id.in_(trozo), ms.c.tomado_en >= desde)
+                                 .order_by(ms.c.experimento_pieza_id, ms.c.id)):
+                out.setdefault(f._mapping[ms.c.experimento_pieza_id], []).append(_snapshot_a_dict(f))
+    return out
+
+
+def _snapshot_a_dict_crudo(m):
+    """_snapshot_a_dict de una fila cuyas columnas se leen por nombre (una subconsulta)."""
+    out = {c: m[c] for c in _SNAP_COLS}
+    out.update(m["extra"] or {})
+    out["tomado_en"] = m["tomado_en"]
+    return out
 
 
 def snapshot(ep_id, metricas, tomado_en=None):
@@ -486,6 +529,9 @@ def _piezas(con, cliente, experimento_id):
             "veredicto_motivo": m[ep.c.veredicto_motivo], "veredicto_en": m[ep.c.veredicto_en],
             "nombre": nombre[:80], "url_video": m["url_video"], "url_miniatura": m["url_miniatura"], "tipo": tipo,
             "es_imagen": m["tipo"] == "imagen", "url_imagen": m["url_video"] if m["tipo"] == "imagen" else None,
+            # Ni una imagen ni un anuncio hablado se derivan ni se rescatan
+            # (spec 2026-10-01 §6): tareas/experimentos corta ahí.
+            "sin_derivar": m["tipo"] == "imagen" or c_extra.get("modo_crear") == "hablado",
             "idioma": m["p_idioma"], "legado_id": m["p_legado"], "duracion_s": m["duracion_s"],
             "metricas": _ultima_metrica(con, m[ep.c.id]), "creado_en": m[ep.c.creado_en],
             "extra": m[ep.c.extra] or {}, "escalon_rescate": m[ep.c.escalon_rescate] or 0,
@@ -576,12 +622,52 @@ def _a_dict(con, f, limite_eventos):
     }
 
 
-def cargar(cliente):
+# ---- lecturas memorizadas por petición (centro de resultados, 2026-10-02) ----
+# `cargar` es la lectura pesada de la pantalla (cada experimento con sus piezas, la última métrica de cada una y
+# sus eventos) y una página la pedía varias veces: el fragmento de resultados, la gestión del experimento, el
+# Tablero del historial y las alertas lo cargan cada uno por su lado (tablero.cargar_datos →
+# experimentos.cargar). Dentro de `lecturas_memorizadas()` —solo en rutas GET que pintan y no escriben— se lee UNA
+# vez por proyecto y cada llamada recibe su copia, así quien la modifique no le cambia nada a la siguiente. Fuera
+# (rutas que escriben, el worker) todo sigue igual. No se invalida al escribir: no se usa donde se escribe.
+_MEMO = threading.local()
+
+
+@contextlib.contextmanager
+def lecturas_memorizadas():
+    if getattr(_MEMO, "d", None) is not None:
+        yield
+        return
+    _MEMO.d = {}
+    try:
+        yield
+    finally:
+        _MEMO.d = None
+
+
+def con_lecturas_memorizadas(fn):
+    """Decorador para una ruta GET que solo pinta (gunicorn reutiliza los hilos: el memo se descarta al salir)."""
+    @functools.wraps(fn)
+    def envoltura(*args, **kwargs):
+        with lecturas_memorizadas():
+            return fn(*args, **kwargs)
+    return envoltura
+
+
+def _leer_todos(cliente):
     with db.conectar() as con:
         filas = con.execute(sa.select(db.experimento).where(
             db.experimento.c.cliente == cliente, db.experimento.c.legado.is_(False))
             .order_by(db.experimento.c.id.desc()))
         return [_a_dict(con, f, 30) for f in filas]
+
+
+def cargar(cliente):
+    memo = getattr(_MEMO, "d", None)
+    if memo is None:
+        return _leer_todos(cliente)
+    if cliente not in memo:
+        memo[cliente] = _leer_todos(cliente)
+    return copy.deepcopy(memo[cliente])
 
 
 def obtener(cliente, experimento_id):
@@ -630,6 +716,7 @@ def elegibles(cliente):
             sprint = extra_c.get("sprint") if isinstance(extra_c.get("sprint"), dict) else None
             origen = "final" if tipo == "final" else ("sprint" if sprint else "crear")
             out.append({"pieza_id": m[pz.c.id], "legado_id": m[pz.c.legado_id], "tipo": tipo, "es_imagen": es_imagen,
+                        "sin_derivar": es_imagen or extra_c.get("modo_crear") == "hablado",
                         "nombre": nombre[:80], "url_video": m[pz.c.url_video], "url_miniatura": m[pz.c.url_miniatura],
                         "idioma": m[pz.c.idioma], "pais": m[pz.c.pais] if tipo == "final" else None,
                         "duracion_s": m[pz.c.duracion_s], "formato": m[pz.c.aspect_ratio],

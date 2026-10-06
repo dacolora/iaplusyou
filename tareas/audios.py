@@ -6,15 +6,16 @@ import os
 import shutil
 
 import audios
-import gastos
 import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, tipos
+from final_edition import cortes, tipos  # noqa: F401
+# cortes: sin uso directo (lo usa audios.voz_cruda); las pruebas parchean
+# ta.cortes, que es el mismo módulo.
 from final_edition import musica as fe_musica
-from providers import fal_audio
+from providers import fal_audio  # noqa: F401
 from storage import r2_uploader
-from tareas import ref_sufijo, registrar
+from tareas import errores_voz, ref_sufijo, registrar
 
 ETAPAS = ((idiomas.N_("Sintetizando la voz"), 55), (idiomas.N_("Mezclando con la música"), 30), (idiomas.N_("Guardando"), 15))
 
@@ -27,6 +28,9 @@ MENSAJES = {
     "repetido": idiomas.N_("Ya tenías este audio con ese texto, voz y música: está en Tus audios."),
     "solo_voz": idiomas.N_("Audio listo solo con la voz: la canción ya no estaba en Mi música."),
 }
+# Cualquier otro error (ver errores_voz.publico): el gasto ya quedó registrado
+# en _generar, apenas fal cobró.
+MENSAJE_ERROR = idiomas.N_("No pude crear el audio; intenta de nuevo (%(tipo)s).")
 
 
 def job_id(cliente):
@@ -39,6 +43,13 @@ def carpeta_trabajo(cliente, h):
 
 @registrar("audio_generar")
 def ejecutar(tarea):
+    try:
+        return _generar(tarea)
+    except Exception as e:  # noqa: BLE001 — todo error sale por errores_voz.publico
+        raise errores_voz.publico(e, tarea, "audio_generar", MENSAJE_ERROR) from e
+
+
+def _generar(tarea):
     p = tarea["payload"]
     cliente = p["cliente"]
     texto, voz, idioma = p["texto"], p["voz"], p["idioma"]
@@ -59,20 +70,12 @@ def ejecutar(tarea):
     carpeta = carpeta_trabajo(cliente, h_audio)
     os.makedirs(carpeta, exist_ok=True)
     trabajos.reportar(jid, etapa=ETAPAS[0][0])
-    ref = f"locucion:{h_voz[:12]}{ref_sufijo(tarea)}"
 
-    def _tts():
-        r = fal_audio.tts(texto, voz, idioma, velocidad=audios.VELOCIDADES[velocidad])
-        usd = float(r.get("costo_usd") or 0.0)
-        # fal ya cobró: el gasto queda aunque lo que sigue falle.
-        gastos.registrar_seguro(cliente, "locucion", usd, ref,
-                                detalle=f"ElevenLabs · {len(texto)} caracteres · {voz}", proveedor="fal/elevenlabs")
-        local = audios.descargar_url(r["url"], os.path.join(carpeta, f"voz_{h_voz[:16]}.mp3"))
-        url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h_voz[:16]}.mp3", "audio/mpeg")
-        return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": os.path.getsize(local),
-                "duracion_ms": int(round(cortes.duracion(local) * 1000)), "costo_usd": usd,
-                "extra": {"texto": texto, "voz": voz, "idioma": idioma, "velocidad": velocidad, "local": local}}
-    voz_mat, creada = materiales.obtener_o_crear(cliente, h_voz, _tts)
+    # La voz cruda es la misma que usa el anuncio hablado (audios.voz_cruda):
+    # caché por hash y gasto `locucion` apenas el proveedor cobra; el mp3 queda
+    # en la carpeta de trabajo (extra.local) para mezclarlo sin volver a bajarlo.
+    voz_mat, creada = audios.voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo(tarea), carpeta=carpeta)
+    voz_nombre = (voz_mat.get("extra") or {}).get("voz") or voz
     costo = float(voz_mat.get("costo_usd") or 0.0) if creada else 0.0
     voz_local = materiales.descargar(voz_mat, os.path.join(carpeta, "voz.mp3"))
 
@@ -96,8 +99,8 @@ def ejecutar(tarea):
         url = r2_uploader.upload_file(salida, f"clientes/{cliente}/materiales/locucion_{h_audio[:16]}.mp3", "audio/mpeg")
         return {"tipo": "audio", "origen": audios.ORIGEN, "url": url, "bytes": os.path.getsize(salida),
                 "duracion_ms": mezcla["duracion_ms"], "costo_usd": costo, "padre_id": voz_mat["id"],
-                "extra": {"nombre": nombre, "texto": texto, "voz": voz, "idioma": idioma, "velocidad": velocidad,
-                          "volumen": volumen, "musica": musica_info}}
+                "extra": {"nombre": nombre, "texto": texto, "voz": voz_nombre, "voz_ref": voz, "idioma": idioma,
+                          "velocidad": velocidad, "volumen": volumen, "musica": musica_info}}
     materiales.obtener_o_crear(cliente, h_audio, _subir)
     shutil.rmtree(carpeta, ignore_errors=True)
     if musica_info and musica_info["estado"] == "ausente":

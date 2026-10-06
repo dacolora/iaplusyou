@@ -86,3 +86,67 @@ def test_terminar_recorte_filtra_linea_1(base_temporal):
     assert datos.terminar_recorte(vid, [1, 3], {"1": "x", "3": "y"}, [1, 3], 0.0) is True
     v = datos.video("acme", vid)
     assert v["recorte"] == {"propuesta": [3], "motivos": {"3": "y"}, "quitadas": [3]}
+
+
+def _armar(vid):
+    from guiones import clips
+    from tests.fixtures_guiones import PLAN, fake
+    from guiones import datos
+    datos.empezar("acme", vid, "armando", ("configurando",))
+    clips.armar(vid, llamar=fake(PLAN))
+
+
+def test_imagenes_por_escena_solo_con_la_version_armada(base_temporal):
+    from guiones import datos, escenas
+    from guiones.refinador import Conflicto, NoExiste
+    _, vid = video_nuevo()
+    with pytest.raises(Conflicto):
+        datos.modificar_imagenes_escenas("acme", vid, lambda est, v: escenas.usar(est, v, 1, "r1", False))
+    _armar(vid)
+    est = datos.modificar_imagenes_escenas("acme", vid, lambda est, v: escenas.usar(est, v, 1, "r1", False))
+    assert est["escenas"] == {"1": ["r2"]}
+    assert escenas.por_escena(datos.video("acme", vid))[0]["claves"] == ["r2"]
+    with pytest.raises(NoExiste):
+        datos.modificar_imagenes_escenas("otro", vid, lambda est, v: est)
+
+
+def test_version_nueva_hereda_las_imagenes_subidas(base_temporal):
+    from guiones import datos, escenas
+    _, vid = video_nuevo()
+    _armar(vid)
+    foto = {"material_id": 7, "url": "https://r2/x.jpg", "nombre": "doctor"}
+    datos.modificar_imagenes_escenas("acme", vid, lambda est, v: escenas.poner_ref(est, v, 1, foto))
+    datos.modificar_imagenes_escenas("acme", vid, lambda est, v: escenas.agregar_extra(est, v, dict(foto, material_id=8), 1))
+    nuevo = datos.nueva_version("acme", vid, config=dict(CONFIG, duracion_objetivo=30))
+    est = escenas.estado(datos.video("acme", nuevo))
+    assert est["refs"] == {"1": foto} and [x["id"] for x in est["extra"]] == ["x1"] and est["escenas"] == {}
+
+
+def test_version_con_otro_bloque_conserva_lo_elegido(base_temporal):
+    from guiones import clips, datos, escenas
+    _, vid = video_nuevo()
+    _armar(vid)
+    datos.modificar_imagenes_escenas("acme", vid, lambda est, v: escenas.usar(est, v, 2, "r1", False))
+    nuevo = clips.version_con_bloque("acme", vid, {"conteo_objetos": "Exactly two."})
+    assert escenas.por_escena(datos.video("acme", nuevo))[1]["claves"] == ["r2"]
+
+
+def test_modificar_cadena_y_cadenas_vivas(base_temporal):
+    from guiones import cadena, datos, escenas
+    from guiones.refinador import Conflicto, NoExiste
+    _, vid = video_nuevo()
+    with pytest.raises(Conflicto):
+        datos.modificar_cadena("acme", vid, lambda est, v: est)
+    _armar(vid)
+    assert datos.cadenas_vivas() == []
+    est = datos.modificar_cadena("acme", vid, lambda est, v: cadena.aprobar(v, 1, 1.5, "admin", "t"))
+    assert est["estado"] == "corriendo" and cadena.estado(datos.video("acme", vid))["aprobado_usd"] == 1.5
+    assert datos.cadenas_vivas() == [("acme", vid)]
+    with pytest.raises(NoExiste):
+        datos.modificar_cadena("otro", vid, lambda est, v: est)
+    # con la cadena corriendo no se cambian las imágenes de las escenas
+    with pytest.raises(Conflicto):
+        datos.modificar_imagenes_escenas("acme", vid, lambda e, v: escenas.usar(e, v, 1, "r1", False))
+    datos.modificar_cadena("acme", vid, lambda est, v: cadena.detenida(est))
+    assert datos.cadenas_vivas() == []
+    datos.modificar_imagenes_escenas("acme", vid, lambda e, v: escenas.usar(e, v, 1, "r1", False))

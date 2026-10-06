@@ -4,7 +4,7 @@
    barras llevan data-poll-job y base.html arranca el sondeo. Se importa
    `with context` (usa cliente, url_for y _). #}
 {% macro tarjeta_crear(item) %}
-    <div class="generado" data-cf="{{ item.id }}" data-detalle="{{ url_for('cf_detalle', cliente=cliente, cf_id=item.id) }}" tabindex="0" role="button">
+    <div class="generado" id="cf-{{ item.id }}" data-cf="{{ item.id }}" data-detalle="{{ url_for('cf_detalle', cliente=cliente, cf_id=item.id) }}" tabindex="0" role="button">
       <div class="generado-media">
         {% if item.estado == "video_listo" and item.tipo == "imagen" %}
         <img src="{{ item.video_url }}" alt="" loading="lazy">
@@ -65,7 +65,7 @@
       </div>
       <div class="generado-pie">
         <strong>{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}</strong>
-        {% if item.variante %}<span class="generado-badge">{{ _('Versión %(v)s', v=item.variante) }}</span>{% elif item.director and item.director.prompt_b %}<span class="generado-badge">{{ _('Versión A') }}</span>{% endif %}
+        {% if item.variante %}<span class="generado-badge">{{ _('Versión %(v)s', v=item.variante) }}</span>{% elif item.tiene_hija_b %}<span class="generado-badge">{{ _('Versión A') }}</span>{% endif %}
         {% if item.revision_estado in ("bien", "mejorar") %}<span class="generado-badge" title="{{ _('Revisión de la doctrina') }}">{% if item.revision_estado == "bien" %}{{ _('Doctrina: bien') }}{% else %}{{ _('Doctrina: %(n)s por mejorar', n=item.revision_n) }}{% endif %}</span>{% endif %}
         {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.ver', cliente=cliente, sid=item.sprint.sprint_id, panel=item.sprint.campana_id, paso='piezas') }}" title="{{ item.sprint.sprint_nombre }}">{{ _('Sprint · Campaña %(n)s', n=item.sprint.campana_n) }}</a>{% endif %}
         <small>{{ item.modelo_nombre|traducir }}{% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="{{ _('El video trae el sonido de la escena') }}">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="{{ _('El proveedor entregó el video sin pista de audio') }}">{{ _('🔇 sin sonido') }}</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="{{ _('Música al crear: %(estilo)s', estilo=item.capas.musica.estilo) }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>

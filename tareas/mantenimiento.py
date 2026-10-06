@@ -13,6 +13,9 @@ almacenamiento del 2026-09-28: nada se limpiaba nunca).
                        (Connection.backup, seguro con WAL), conserva las
                        últimas RESPALDOS_CONSERVAR. Antes solo había
                        respaldos a mano en cada despliegue.
+  errores_limpiar {}   diaria — monitoreo.limpiar: los errores resueltos o
+                       silenciados de hace más de 90 días y lo que pase de
+                       2 000 filas (spec 2026-10-01-escala-y-monitoreo §6).
 Ninguna gasta ni toca R2.
 """
 import logging
@@ -21,8 +24,11 @@ import sqlite3
 import time
 from datetime import datetime
 
+from flask_babel import gettext
+
 import cola
 import db
+import monitoreo
 from tareas import registrar
 
 log = logging.getLogger(__name__)
@@ -116,16 +122,22 @@ def respaldar_db(conservar=RESPALDOS_CONSERVAR, carpeta=None):
 @registrar("salidas_limpiar")
 def ejecutar_salidas_limpiar(tarea):
     n, total = limpiar_salidas()
-    return f"{n} archivos borrados de salidas/ ({total / 1e6:.0f} MB)."
+    return gettext("%(n)s archivos borrados de salidas/ (%(mb)s MB).", n=n, mb=f"{total / 1e6:.0f}")
 
 
 @registrar("cola_limpiar")
 def ejecutar_cola_limpiar(tarea):
     n = cola.limpiar_terminadas()
-    return f"{n} tareas viejas borradas."
+    return gettext("%(n)s tareas viejas borradas.", n=n)
 
 
 @registrar("db_respaldar")
 def ejecutar_db_respaldar(tarea):
     destino = respaldar_db()
-    return f"Respaldo en {destino}." if destino else "La base no es SQLite: sin respaldo."
+    return gettext("Respaldo en %(ruta)s.", ruta=destino) if destino else gettext("La base no es SQLite: sin respaldo.")
+
+
+@registrar("errores_limpiar")
+def ejecutar_errores_limpiar(tarea):
+    n = monitoreo.limpiar()
+    return gettext("%(n)s errores viejos borrados.", n=n)

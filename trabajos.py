@@ -33,6 +33,7 @@ justo la mentira que este módulo trata de evitar.
 import functools
 import logging
 import math
+import re
 import threading
 import time
 from datetime import datetime
@@ -130,14 +131,18 @@ def _purgar():
         _TRABAJOS.pop(jid, None)
 
 
-def iniciar(job_id, fn, duracion_estimada=60, etapas=None):
+def iniciar(job_id, fn, duracion_estimada=60, etapas=None, cliente=None):
     """Lanza fn() en un hilo aparte, salvo que ya haya un trabajo en curso con
     este mismo job_id (entonces no hace nada). Devuelve True si lo lanzó,
     False si ya estaba en curso (ese es el guardado contra doble clic).
 
     etapas (opcional): [(nombre, peso), ...] con los pasos reales del trabajo,
     en orden. fn() los va anunciando con reportar(job_id, etapa=...). Si no se
-    declaran, el comportamiento es el de siempre: una sola barra de 0 a 100."""
+    declaran, el comportamiento es el de siempre: una sola barra de 0 a 100.
+
+    cliente: el proyecto dueño. Es lo que deja a una persona de ese proyecto
+    ver la barra en /trabajo/<job_id>/estado (ver `dueno`); sin él, solo el
+    administrador la ve."""
     with _LOCK:
         existente = _TRABAJOS.get(job_id)
         if existente and existente["estado"] == "en_progreso":
@@ -147,6 +152,7 @@ def iniciar(job_id, fn, duracion_estimada=60, etapas=None):
         preparadas = _preparar_etapas(etapas, duracion_estimada)
         _TRABAJOS[job_id] = {
             "estado": "en_progreso",
+            "cliente": cliente,
             "inicio": ahora,
             "fin": None,
             "duracion_estimada": duracion_estimada,
@@ -176,6 +182,12 @@ def iniciar(job_id, fn, duracion_estimada=60, etapas=None):
                     t["mensaje"] = mensaje or "Listo."
                     t["fin"] = time.time()
         except Exception as e:
+            # A /admin/salud: agrupado por la acción (lo último del job_id), no por
+            # el job entero, que lleva proyecto e ids.
+            import monitoreo
+            partes = str(job_id).split("__")
+            monitoreo.registrar_excepcion(e, "hilo", ruta=re.sub(r"\d+", "N", partes[-1])[:80],
+                                          cliente=partes[0] if len(partes) > 1 else None)
             with _LOCK:
                 t = _TRABAJOS.get(job_id)
                 if t:
@@ -259,6 +271,20 @@ def en_curso(job_id):
         return job_id in vivos
     fila = cola.consultar_por_job(job_id)
     return bool(fila and fila["estado"] in ("pendiente", "en_curso"))
+
+
+def dueno(job_id):
+    """Proyecto dueño del trabajo (el `cliente` de iniciar() o el de la fila
+    de la cola), o None si no existe o no tiene dueño (periódicas, barridos
+    globales, hilos lanzados sin `cliente`). El endpoint de estado lo usa para
+    que nadie lea la barra —ni el error, que puede traer datos— de un trabajo
+    de otro proyecto."""
+    with _LOCK:
+        t = _TRABAJOS.get(job_id)
+        if t:
+            return t.get("cliente")
+    fila = cola.consultar_por_job(job_id)
+    return (fila or {}).get("cliente")
 
 
 def consultar(job_id):

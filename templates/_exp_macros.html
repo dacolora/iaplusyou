@@ -1,0 +1,97 @@
+{# Macros del centro de resultados (E2): las comparten el fragmento (`_exp_resultados.html`) y el panel de una pieza
+   (`_exp_pieza.html`). Se importan `with context` (los textos van por _() en el idioma de quien mira). Todo lo que
+   viene de Meta o de la base pasa por el autoescape: nunca |safe. Los colores van por clases (static/estilos/
+   pantallas/experimentos.css); en línea solo el largo de una barra (`--alto` / `--ancho`). #}
+
+{# Un número con el formato del indicador; `corto` quita la moneda (tablas: la moneda va una vez en la sección). #}
+{% macro valor(v, formato='decimal', moneda='USD', corto=false) -%}
+{%- if v is none -%}—
+{%- elif formato == 'dinero' -%}{{ v|tw_num(0 if v|abs >= 1000 else 2) }}{% if not corto %}<span class="cr-moneda"> {{ moneda }}</span>{% endif %}
+{%- elif formato == 'veces' -%}{{ v|roas }}×
+{%- elif formato == 'pct' -%}{{ v|tw_num(2 if v|abs < 10 else 1) }} %
+{%- elif formato == 'entero' -%}{{ v|tw_num(0) }}
+{%- else -%}{{ v|tw_num(2) }}
+{%- endif -%}
+{%- endmacro %}
+
+{# Encabezado numerado de una sección: «01 Resumen del periodo», con un lado derecho opcional (leyenda, chips). #}
+{% macro cabecera(n, titulo, id=none) -%}
+<header class="cr-seccion-cab"{% if id %} id="{{ id }}"{% endif %}><span class="cr-numero">{{ n }}</span><h3>{{ titulo }}</h3>{{ caller() if caller else '' }}</header>
+{%- endmacro %}
+
+{% macro veredicto(v) -%}
+<span class="cr-veredicto cr-v-{{ v.clase }}">{{ v.etiqueta }}</span>
+{%- endmacro %}
+
+{# Los indicadores (12 en el resumen, los mismos de la pieza en su panel). La tendencia la dibuja el JS. Compras,
+   ingresos, ROAS y costo por compra sin nada que mida ventas (`i.sin_ventas`, resultados._DE_VENTAS) dicen «—» y
+   «sin ventas medibles», como el Tablero: nunca un 0,0× falso. #}
+{% macro kpis(indicadores, moneda) %}
+<ul class="cr-kpis">
+  {% for i in indicadores %}
+  <li class="cr-kpi{% if i.clave == 'roas' %} cr-kpi-destacado{% endif %}">
+    <span class="cr-kpi-etiqueta">{{ i.etiqueta }}</span>
+    <strong class="cr-cifra">{{ valor(i.valor, i.formato, moneda) }}</strong>
+    <div class="cr-kpi-pie">
+      {% if i.ventas_cambiaron %}<small class="cr-neutro">{{ _('Las ventas cambiaron de fuente en este período') }}</small>
+      {% elif i.roas_no_comparable %}<small class="cr-neutro">{{ _('ROAS no comparable') }}</small>
+      {% elif i.valor is none %}<small class="cr-neutro">{{ _('sin ventas medibles') if i.sin_ventas else _('sin datos') }}</small>
+      {% elif i.cambio %}<small class="cr-cambio cr-{{ i.cambio.sentido }}">{% if i.cambio.flecha %}{{ i.cambio.flecha }} {% endif %}{{ i.cambio.texto }}</small>
+      {% elif i.clave == 'frecuencia' %}<small class="cr-neutro">{{ _('sana por debajo de %(n)s', n=2.5|roas) }}</small>
+      {% else %}<small class="cr-neutro">{{ _('Sin comparación') }}</small>{% endif %}
+      {% if i.gasto_sin_ventas and not i.sin_ventas %}<small class="cr-neutro">{{ _('incluye %(gasto)s de gasto sin ventas medibles', gasto=i.gasto_sin_ventas|dinero(moneda)) }}</small>{% endif %}
+      <svg class="cr-spark" data-cr-spark='{{ i.tendencia|tojson }}' viewBox="0 0 72 24" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
+{# Desglose en barras (edad, género, dispositivo): la barra mide la métrica (ROAS o CTR) contra la mejor fila. #}
+{% macro barras(filas, titulo, metrica='roas') %}
+<section class="cr-tarjeta cr-desglose">
+  <h4>{{ titulo }} <small>· {{ _('ROAS') if metrica == 'roas' else _('CTR') }}</small></h4>
+  {% if filas %}
+  {% set tope = namespace(v=0) %}{% for f in filas %}{% if f[metrica] is not none and f[metrica] > tope.v %}{% set tope.v = f[metrica] %}{% endif %}{% endfor %}
+  <ul class="cr-barras">
+    {% for f in filas %}
+    <li class="cr-barras-fila">
+      <span class="cr-barras-etiqueta">{{ f.etiqueta }}</span>
+      <strong class="cr-cifra">{{ valor(f[metrica], 'veces' if metrica == 'roas' else 'pct') }}</strong>
+      <span class="cr-barra{% if f[metrica] is not none and tope.v and f[metrica] == tope.v %} cr-barra-mejor{% endif %}" style="--ancho: {{ ((f[metrica] or 0) / tope.v * 100)|round(1) if tope.v else 0 }}%"></span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="cr-vacio">{{ _('Sin datos de Meta para este desglose') }}</p>{% endif %}
+</section>
+{% endmacro %}
+
+{# Desglose en tabla (región): gasto y métrica. #}
+{% macro tabla(filas, titulo, metrica='roas') %}
+<section class="cr-tarjeta cr-desglose">
+  <h4>{{ titulo }}</h4>
+  {% if filas %}
+  <table class="cr-tabla cr-tabla-corta">
+    <thead><tr><th>{{ _('Segmento') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('ROAS') if metrica == 'roas' else _('CTR') }}</th></tr></thead>
+    <tbody>
+      {% for f in filas %}<tr><th scope="row">{{ f.etiqueta }}</th><td class="cr-cifra">{{ valor(f.gasto, 'dinero', corto=true) }}</td><td class="cr-cifra">{{ valor(f[metrica], 'veces' if metrica == 'roas' else 'pct') }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="cr-vacio">{{ _('Sin datos de Meta para este desglose') }}</p>{% endif %}
+</section>
+{% endmacro %}
+
+{# Dona de ubicaciones (parte del gasto) con su leyenda; el JS dibuja los arcos en el mismo orden y color. #}
+{% macro dona_ubicacion(filas) %}
+<section class="cr-tarjeta cr-desglose">
+  <h4>{{ _('Ubicación (gasto)') }}</h4>
+  {% if filas %}
+  <div class="cr-dona-caja">
+    <svg class="cr-dona" data-cr-dona='{{ filas|tojson }}' viewBox="0 0 100 100" role="img" aria-label="{{ _('Gasto por ubicación') }}"></svg>
+    <ul class="cr-leyenda">
+      {% for f in filas %}<li><span class="cr-punto-leyenda cr-serie-{{ (loop.index0 % 8) + 1 }}" aria-hidden="true"></span><span class="cr-leyenda-texto">{{ f.etiqueta }}</span> <strong class="cr-cifra">{{ valor(f.pct_gasto, 'pct') }}</strong></li>{% endfor %}
+    </ul>
+  </div>
+  {% else %}<p class="cr-vacio">{{ _('Sin datos de Meta para este desglose') }}</p>{% endif %}
+</section>
+{% endmacro %}

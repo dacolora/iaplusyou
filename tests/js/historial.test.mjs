@@ -53,3 +53,22 @@ test("los pasos con la misma clave se fusionan solo dentro de 800 ms; deshacer/r
   h.aplicar("j");                                 // sin clave (null): nunca fusiona
   assert.equal(h.deshacer(), "i");
 });
+
+// Revisión final de la capa 5b: la página pregunta ANTES de operar si el paso
+// se fusionaría (para derivar el gesto de su base).
+test("fusionaria dice si un aplicar con esa clave se fusionaría con el paso anterior", () => {
+  const h = new Historial("a");
+  let ahora = 0;
+  h.ahora = () => ahora;
+  assert.equal(h.fusionaria("k"), false);
+  h.aplicar("b", { clave: "k" });
+  ahora = 500;
+  assert.equal(h.fusionaria("k"), true);
+  assert.equal(h.fusionaria("otra"), false);
+  assert.equal(h.fusionaria(null), false);
+  ahora = 1400;
+  assert.equal(h.fusionaria("k"), false);
+  ahora = 600;
+  h.deshacer();
+  assert.equal(h.fusionaria("k"), false);
+});

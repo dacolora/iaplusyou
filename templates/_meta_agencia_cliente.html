@@ -39,7 +39,7 @@
         {% endfor %}
         <label><input type="radio" name="page_id" value=""{% if not agencia_activos.pages %} checked{% endif %}> {{ _('Sin Página (solo anuncios)') }}</label>
         {% if agencia_activos.paginas_sin_dueno %}
-        <label>{{ _('ID de tu Página (Meta no nos dijo de quién es cada Página compartida)') }} <input name="page_id_manual" inputmode="numeric" pattern="[0-9]*"></label>
+        <p class="vacio" style="padding-top:0;">{{ _('Meta no nos dijo de quién es cada Página compartida. Conecta sin Página o usa «Avisar a Creatv» (abajo) con el ID de tu Página y la conectamos nosotros.') }}</p>
         {% endif %}
       </fieldset>
       <button type="submit" class="btn-generar">{{ _('Conectar') }}</button>
@@ -50,6 +50,9 @@
       <input type="hidden" name="portafolio_id" value="{{ agencia_portafolio }}"><input type="hidden" name="refrescar" value="1">
       <button type="submit" class="btn-guardar btn-sm">{{ _('Volver a buscar') }}</button>
     </form>
+    {% endif %}
+  {% endif %}
+  {% if agencia_portafolio and (agencia_activos_error or (agencia_activos is not none and (not agencia_activos.ad_accounts or agencia_activos.paginas_sin_dueno))) %}
     <details class="meta-avisar"><summary>{{ _('Avisar a Creatv para que lo termine a mano') }}</summary>
       <form method="post" action="{{ url_for('meta_agencia_avisar', cliente=cliente) }}">
         <input type="hidden" name="portafolio_id" value="{{ agencia_portafolio }}">
@@ -59,7 +62,6 @@
         <button type="submit" class="btn-guardar btn-sm">{{ _('Avisar a Creatv') }}</button>
       </form>
     </details>
-    {% endif %}
   {% endif %}
 
   {% if agencia_solicitud %}

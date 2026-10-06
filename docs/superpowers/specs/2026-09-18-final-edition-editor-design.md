@@ -97,7 +97,7 @@ Reglas que hacen que el mismo documento sirva para todo:
   producir. La composición no depende del idioma.
 - El precio de un país es el número escrito para ese país o no existe; **nunca se
   convierte** entre monedas (regla vigente).
-- Máximo 8 pistas. Sin keyframes manuales: `keyframes` solo los escribe una
+- Máximo 8 pistas (20 desde la capa 5c, 2026-10-02: un borrador ya usa 7). Sin keyframes manuales: `keyframes` solo los escribe una
   animación predefinida (entrada/salida/Ken Burns) y el motor los interpreta.
 
 ### 1.2 Módulos
@@ -201,6 +201,41 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   Siguen fuera: video sobre video (PIP), filtros de color, rotación, foto como clip de la
 >   principal (entra como capa de imagen con «Llenar la pantalla») y la traducción del editor
 >   (fase 6 de idioma).
+> - **Capa 4c** (2026-09-29, diez arreglos de confianza tras la auditoría
+>   `.superpowers/sdd/capa4c/auditoria-capcut-4b.md`, sin pagar nada): los fundidos de un audio
+>   nunca pasan de su duración (`normalizar` los acota en proporción; cortar un audio no deja
+>   bajón en el corte; el compilador tiene su tope: `st >= 0`); «deslizar» guarda su duración
+>   (400 ms) y baja el 8 % de la altura del lienzo en los dos motores; **nada alarga el video**
+>   tampoco al mover, alargar por la derecha o duplicar una capa (se topa en el fin de la
+>   principal); los avisos de carga se recalculan tras cada cambio y un clip que pide material
+>   de más se acorta al abrir; los errores técnicos (render, validador) quedan en «Detalle
+>   técnico» / `title`; con la sesión vencida el editor lo dice; «Precio» entra como «Escribe
+>   el precio»; «Borrar» en la biblioteca (solo lo subido o un video de Crear preparado, nunca
+>   algo que use una edición viva o congelada); «Editar» abre la edición de la persona antes que
+>   el «Borrador automático · …»; y el rasterizador quita los caracteres que la fuente no
+>   dibuja (emojis) en vez de cajas, con aviso en el panel.
+> - **Capa 5a implementada** (2026-10-01, spec `2026-09-30-editor-capa5a-subtitulos-voz-design.md`):
+>   subtítulos automáticos y voz en off. Decisiones que ajustan la letra de §4: los subtítulos se
+>   DERIVAN al resolver cada destino desde las palabras del material (la fuente elegida por idioma
+>   y las correcciones por material e índice), así que siguen todos los cortes; los cuatro estilos
+>   salen de una lista de eventos compartida (karaoke resalta con color, ya no con `\k`); tienen
+>   pestaña propia («Subtítulos») y una fila de solo lectura en la línea de tiempo; transcribir y la
+>   voz con IA se pagan con el precio en el botón; grabar con el micrófono es gratis. Siguen fuera:
+>   cambiar tiempos de una palabra, traducir subtítulos (capa 5d), más estilos y animaciones
+>   (capa 5c), arrastrar los subtítulos sobre el video.
+> - **Capa 5b implementada** (2026-10-01, spec `2026-09-30-editor-capa5b-fotos-encuadre-design.md`): ajusta la letra
+>   de §4: la foto es un clip de la pista principal (no una pista aparte), el «fondo desenfocado» es una opción por
+>   clip («Ajustar con fondo desenfocado»; al agregar uno que no llena el marco entra así) y no algo automático del
+>   formato, el paneo manual es el encuadre (arrastrar y acercar sobre el video), las transiciones nuevas juntan los
+>   dos clips (el video queda tan corto como la transición) y lo de encima sigue a su clip (vínculos derivados en la
+>   página, interruptor «Vincular»). Siguen fuera: PIP (video sobre video), filtros, rotación y el Producir por país.
+> - **Capa 5c-1 implementada** (2026-10-02, spec `2026-10-01-editor-capa5c-textos-graficos-design.md`): de §4
+>   «Texto» quedan hechos el ajuste de línea con su ancho, 11 fuentes de anuncio (no ~20: las de un anuncio que vende,
+>   agrupadas por familia) y los emojis a color en la final; los stickers son 20 gráficos propios sin palabras, del
+>   color que se elija, más los emojis y seis plantillas de texto para vender; las zonas seguras de TikTok, Reels y
+>   Shorts son guías y avisos en la página. El texto sale de una maqueta compartida entre el servidor y la vista
+>   previa (texto v2); los textos viejos se producen igual. Siguen fuera (capa 5c-2): animaciones de texto además de
+>   «deslizar», rotación, escala y opacidad animadas, filtros de color.
 >
 > Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
 > - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,
@@ -448,7 +483,7 @@ panel contextual: propiedades de lo seleccionado (abajo en celular, derecha en c
 - **Atajos** en computador: espacio, S (cortar), Supr, Cmd/Ctrl+Z/Shift+Z,
   flechas por fotograma, +/− zoom del timeline.
 - **Fuera**: keyframes manuales, chroma key, curvas de color, pistas anidadas,
-  más de 8 pistas.
+  más de 20 pistas (8 hasta la capa 5c).
 
 Tecnología: Preact + htm **vendorizados** en `static/vendor/` (sin CDN) para los
 paneles; dos `<canvas>` con módulos propios; eventos de puntero (dedo y mouse

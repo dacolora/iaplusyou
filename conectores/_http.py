@@ -18,6 +18,7 @@ de cada conector, que sabe qué significa en su API. Nunca se registran
 cabeceras ni cuerpos: lo único que llega al usuario es el código HTTP.
 """
 import time
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -66,13 +67,37 @@ def pedir(sesion, metodo, url, nombre="la tienda", reintentar=True, **kw):
             raise ErrorConector(f"Error de red al hablar con {nombre}.")
         if r.status_code >= 500 and not reintento_5xx:
             reintento_5xx = True
+            if kw.get("stream"):
+                r.close()
             time.sleep(ESPERA_5XX)
             continue
         if r.status_code == 429 and not reintento_429:
             reintento_429 = True
-            time.sleep(_espera_429(r))
+            espera = _espera_429(r)
+            if kw.get("stream"):
+                r.close()
+            time.sleep(espera)
             continue
         return r
+
+
+CODIGOS_REDIRECCION = (301, 302, 303, 307, 308)
+
+
+def pedir_tienda(sesion, metodo, url, nombre="la tienda", **kw):
+    """`pedir` hacia una tienda cuya dirección escribió el cliente (Woo, la
+    Admin API de Shopify): solo hosts públicos (sin esto, el servidor llamaba
+    a lo que fuera, p. ej. 169.254.169.254 — SSRF) y sin seguir redirecciones,
+    porque las claves van en cada petición y requests las reenviaría al
+    destino de la redirección (auditoría de seguridad 2026-10-01)."""
+    from .url import host_permitido   # conectores.url importa base, no _http: sin ciclo
+    if not host_permitido(url):
+        raise ErrorConector("Esa dirección no está permitida (apunta a una red interna o local).")
+    r = pedir(sesion, metodo, url, nombre=nombre, allow_redirects=False, **kw)
+    if r.status_code in CODIGOS_REDIRECCION:
+        destino = urlparse(urljoin(url, (r.headers or {}).get("Location") or "")).hostname or "?"
+        raise ErrorConector(f"{nombre} redirige a otra dirección ({destino}): escribe esa dirección al conectar.")
+    return r
 
 
 def error_generico(respuesta, nombre="la tienda"):

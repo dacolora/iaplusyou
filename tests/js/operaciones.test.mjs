@@ -5,7 +5,7 @@ import {
   OperacionInvalida, recortar, VELOCIDADES,
 } from "../../static/editor/operaciones.js";
 import * as op from "../../static/editor/operaciones.js";
-import { docBase, DURACIONES } from "./doc_base.mjs";
+import { docBase, docConVozYPalabras, DURACIONES, INFO_PALABRAS } from "./doc_base.mjs";
 
 const principal = (d) => d.pistas[0].clips.map((c) => [c.id, c.inicio_ms, c.duracion_ms, c.recorte.desde_ms, c.recorte.hasta_ms]);
 const sonido = (d) => d.pistas.find((p) => p.id === "p_sonido").clips.map((c) => [c.inicio_ms, c.duracion_ms, c.recorte.desde_ms]);
@@ -289,19 +289,20 @@ test("agregarAudio toma la duración de la fuente entera y distingue el fundido 
     assert.equal(c.audio.fundido_salida_ms, rol === "musica" ? 1000 : 0);
     assert.equal(c.rol_audio, rol);
   }
-  invalida(() => op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "voz" }, INFO), /rol/i);
 });
 
 test("agregarTexto usa tamaños fraccionarios del lienzo y el fondo de marca en el preset precio", () => {
   for (const [preset, px, y] of [["titulo", 72, 0.2], ["subtitulo", 48, 0.75], ["precio", 56, 0.6], ["llamado", 52, 0.85]]) {
-    const r = puro((d) => op.agregarTexto(d, 500, preset, INFO));
+    const r = puro((d) => op.agregarTexto(d, 500, preset, {}, INFO));
     const c = clipDe(r.doc, r.seleccion);
     assert.equal(c.estilo.tamano, px / 1920);
     assert.equal(c.transform.y, y);
-    assert.equal(c.texto.literal, preset === "precio" ? "$ 0" : "Escribe aquí");
+    // capa 4c (7/10): el precio entra como un pedido de escribirlo, nunca como «$ 0» (que salía así si se olvidaba)
+    assert.equal(c.texto.literal, preset === "precio" ? "Escribe el precio" : "Escribe aquí");
+    assert.doesNotMatch(c.texto.literal, /\d|\$/);
     if (preset === "precio") assert.equal(c.estilo.fondo.color, "#7c3aed");
   }
-  invalida(() => op.agregarTexto(docBase(), 0, "otro", INFO), /texto/i);
+  invalida(() => op.agregarTexto(docBase(), 0, "otro", {}, INFO), /texto/i);
 });
 
 test("cortarClip parte el recorte en audio, solo el tiempo en texto (y copia el png), sin tocar la principal aparte", () => {
@@ -318,11 +319,16 @@ test("cortarClip parte el recorte en audio, solo el tiempo en texto (y copia el 
   invalida(() => op.cortarClip(docBase(), "s0", 1000, INFO), /sonido/);
 });
 
-test("ponerTransicion normaliza la cola contra el material y rechaza el último clip o uno fuera de la principal", () => {
-  for (const tipo of ["corte", "fundido", "deslizar", "zoom", "desenfoque"]) {
+test("ponerTransicion rechaza el último clip o uno fuera de la principal; toda transición nueva nace solape (D9)", () => {
+  // Capa 5b (D9): sobre un documento del borrador sin ninguna transición
+  // todavía, ponerTransicion siempre crea una «solape» — A cede sus ms
+  // (docBase: material de sobra, así que los 500 ms pedidos caben enteros).
+  for (const tipo of ["fundido", "deslizar", "zoom", "desenfoque"]) {
     const r = puro((d) => op.ponerTransicion(d, "v0", tipo, 500, INFO));
-    assert.deepEqual(clipDe(r.doc, "v0").transicion, tipo === "corte" ? null : { tipo, duracion_ms: 500 });
+    assert.deepEqual(clipDe(r.doc, "v0").transicion, { tipo, duracion_ms: 500, modo: "solape" });
   }
+  const sinNada = puro((d) => op.ponerTransicion(d, "v0", "corte", 500, INFO));
+  assert.equal(clipDe(sinNada.doc, "v0").transicion, null);
   invalida(() => op.ponerTransicion(docBase(), "v1", "fundido", 500, INFO), /último/);
   invalida(() => op.ponerTransicion(docBase(), "t1", "fundido", 500, INFO), /principal/);
   invalida(() => op.ponerTransicion(docBase(), "v0", "inventada", 500, INFO), /transición/);
@@ -449,7 +455,7 @@ test("normalizar nunca crea p_sonido: cualquier edición de un documento sin son
   assert.ok(!tienePista(normalizar(structuredClone(d), INFO), "p_sonido"));
   for (const r of [
     op.moverA(d, "t1", 2500, INFO), op.cambiar(d, "t1", { transform: { x: 0.3 } }, INFO), op.cortarEn(d, 2000, INFO),
-    op.duplicar(d, "v0", INFO), op.cambiarVelocidad(d, "v1", 1, INFO), op.agregarTexto(d, 0, "titulo", INFO),
+    op.duplicar(d, "v0", INFO), op.cambiarVelocidad(d, "v1", 1, INFO), op.agregarTexto(d, 0, "titulo", {}, INFO),
     op.agregarVideo(d, { id: 3 }, {}, INFO),                     // un video sin sonido tampoco la abre
   ]) assert.ok(!tienePista(r.doc, "p_sonido"), "apareció el sonido de la escena");
 });
@@ -501,10 +507,10 @@ test("agregarAudio: la música y los efectos terminan donde termina el video", (
 });
 
 test("agregarTexto y agregarImagen con el cabezal al final: 3 s que terminan al final; más adentro, se acortan", () => {
-  const titulo = op.agregarTexto(docBase(), 8000, "titulo", INFO);
+  const titulo = op.agregarTexto(docBase(), 8000, "titulo", {}, INFO);
   const t = clipDe(titulo.doc, titulo.seleccion);
   assert.deepEqual([t.inicio_ms, t.duracion_ms], [5000, 3000]);
-  const casi = op.agregarTexto(docBase(), 7950, "subtitulo", INFO);            // a menos de MIN_CLIP_MS del final
+  const casi = op.agregarTexto(docBase(), 7950, "subtitulo", {}, INFO);            // a menos de MIN_CLIP_MS del final
   assert.deepEqual([clipDe(casi.doc, casi.seleccion).inicio_ms, clipDe(casi.doc, casi.seleccion).duracion_ms], [5000, 3000]);
   const img = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 7000, {}, INFO);
   assert.deepEqual([clipDe(img.doc, img.seleccion).inicio_ms, clipDe(img.doc, img.seleccion).duracion_ms], [7000, 1000]);
@@ -545,4 +551,756 @@ test("agregarAudio: la música no cae en la pista de la voz; va con otra música
   const efecto = op.agregarAudio(r.doc, { id: 2 }, 0, { rol: "efecto" }, INFO);
   const pe = efecto.doc.pistas.find((p) => p.clips.some((c) => c.id === efecto.seleccion));
   assert.ok(![pista.id, "p_voz", "p_sonido"].includes(pe.id), pe.id);
+});
+
+// ---- Capa 4c (1/10): los fundidos nunca pasan de la duración del clip ----
+// Un audio de menos de 1 s con el fundido de salida de 1 s de la música hacía
+// que el render pidiera `afade ... st=-0.600` y ffmpeg fallaba.
+const INFO_CORTO = { ...INFO_LARGO, 7: { duracion_ms: 400 } };
+const fundidos = (c) => [c.audio.fundido_entrada_ms, c.audio.fundido_salida_ms];
+const caben = (c, contexto) => assert.ok(c.audio.fundido_entrada_ms + c.audio.fundido_salida_ms <= c.duracion_ms,
+  `${contexto}: fundidos ${fundidos(c)} en un clip de ${c.duracion_ms} ms`);
+
+test("agregar un audio corto (o música cerca del final) deja los fundidos dentro del clip", () => {
+  const corto = puro((d) => op.agregarAudio(d, { id: 7 }, 2000, { rol: "musica" }, INFO_CORTO));
+  const c = clipDe(corto.doc, corto.seleccion);
+  assert.equal(c.duracion_ms, 400);
+  caben(c, "música de 400 ms");
+  assert.deepEqual(fundidos(c), [0, 400]);
+  const alFinal = op.agregarAudio(docBase(), { id: 6 }, 7600, { rol: "musica" }, INFO_CORTO);
+  const f = clipDe(alFinal.doc, alFinal.seleccion);
+  assert.equal(f.duracion_ms, 400);
+  caben(f, "música que entra a 0,4 s del final");
+});
+
+test("cortar música: la mitad izquierda pierde el fundido de salida y la derecha el de entrada (y lo que queda cabe)", () => {
+  const base = docBase();
+  const conMusica = op.agregarAudio(base, { id: 2 }, 0, { rol: "musica" }, INFO);
+  const id = conMusica.seleccion;
+  const conEntrada = op.cambiar(conMusica.doc, id, { audio: { fundido_entrada_ms: 500 } }, INFO).doc;
+  const r = puro((d) => op.cortarClip(d, id, 2600, INFO), conEntrada);
+  const izq = clipDe(r.doc, id);
+  const der = clipDe(r.doc, r.seleccion);
+  assert.deepEqual(fundidos(izq), [500, 0], "la izquierda conserva su entrada y no baja al cortar");
+  assert.equal(der.duracion_ms, 400);
+  assert.equal(der.audio.fundido_entrada_ms, 0, "la derecha no sube de nuevo al cortar");
+  caben(der, "mitad derecha de 400 ms");
+  assert.ok(der.audio.fundido_salida_ms > 0, "la derecha conserva (acotado) el fundido del final");
+});
+
+test("recortar o cambiar los fundidos de un audio nunca los deja más largos que el clip", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "musica" }, INFO);
+  const id = conMusica.seleccion;
+  const corto = op.recortar(conMusica.doc, id, "fin", -2700, INFO).doc;
+  caben(clipDe(corto, id), "música recortada a 300 ms");
+  const desdeInicio = op.recortar(conMusica.doc, id, "inicio", 2800, INFO).doc;
+  caben(clipDe(desdeInicio, id), "música recortada desde el inicio");
+  const pedidos = op.cambiar(corto, id, { audio: { fundido_entrada_ms: 900, fundido_salida_ms: 900 } }, INFO).doc;
+  const c = clipDe(pedidos, id);
+  caben(c, "fundidos pedidos de más");
+  assert.deepEqual(fundidos(c), [150, 150], "se acortan los dos en proporción");
+});
+
+// ---- Capa 4c (2/10): «Animación de entrada: Deslizar» de verdad ----
+test("cambiar animacion.entrada guarda la duración (400 ms) y «ninguna» la quita", () => {
+  const r = puro((d) => op.cambiar(d, "t1", { animacion: { entrada: "deslizar" } }, INFO));
+  assert.deepEqual(clipDe(r.doc, "t1").animacion, { entrada: "deslizar", duracion_ms: op.DURACION_ANIMACION_MS });
+  assert.equal(op.DURACION_ANIMACION_MS, 400);
+  const quitada = op.cambiar(r.doc, "t1", { animacion: { entrada: "ninguna" } }, INFO).doc;
+  assert.equal(clipDe(quitada, "t1").animacion, null);
+});
+
+// ---- Capa 4c (3/10): nada que se mueva, alargue o duplique alarga el video ----
+// El video dura lo que su fila más larga; más allá de la principal el render
+// congela el último cuadro. docBase: la principal termina en 8000.
+const noPisa = (pista, clip) => pista.clips.every((c) => c === clip
+  || c.inicio_ms + c.duracion_ms <= clip.inicio_ms || c.inicio_ms >= clip.inicio_ms + clip.duracion_ms);
+
+test("moverA se detiene en fin − duración (texto y audio)", () => {
+  const movido = puro((d) => op.moverA(d, "t1", 7500, INFO));
+  assert.equal(clipDe(movido.doc, "t1").inicio_ms, 6000);
+  assert.equal(finDoc(movido.doc), 8000);
+  assert.equal(clipDe(op.moverA(docBase(), "a1", 9000, INFO).doc, "a1").inicio_ms, 5000);
+  assert.equal(clipDe(op.moverA(docBase(), "t1", 2500, INFO).doc, "t1").inicio_ms, 2500);   // dentro, igual que antes
+});
+
+test("alargar el borde derecho de un texto, una imagen o la música se topa en el fin", () => {
+  const texto = op.recortar(docBase(), "t1", "fin", 99999, INFO).doc;
+  assert.deepEqual([clipDe(texto, "t1").inicio_ms, clipDe(texto, "t1").duracion_ms], [1000, 7000]);
+  const img = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 1000, { duracionMs: 2000 }, INFO);
+  const imgLarga = op.recortar(img.doc, img.seleccion, "fin", 99999, INFO).doc;
+  assert.equal(finDoc(imgLarga), 8000);
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 1000, { rol: "musica" }, INFO);    // 1000–4000, en bucle
+  const musicaLarga = op.recortar(musica.doc, musica.seleccion, "fin", 99999, INFO).doc;
+  assert.deepEqual([clipDe(musicaLarga, musica.seleccion).duracion_ms, finDoc(musicaLarga)], [7000, 8000]);
+});
+
+test("duplicar una capa que no cabe después la pone terminando en el fin, sin pisar al original", () => {
+  const alFinal = op.moverA(docBase(), "t1", 5000, INFO).doc;                              // t1: 5000–7000
+  const dup = puro((d) => op.duplicar(d, "t1", INFO), alFinal);
+  const copia = clipDe(dup.doc, dup.seleccion);
+  assert.deepEqual([copia.inicio_ms, copia.duracion_ms], [6000, 2000]);
+  assert.equal(finDoc(dup.doc), 8000);
+  const fila = dup.doc.pistas.find((p) => p.clips.includes(copia));
+  assert.ok(noPisa(fila, copia), "la copia no se encima al original en su fila");
+  assert.equal(fila.tipo, "texto");
+  // si cabe justo después, va justo después (como siempre)
+  const cabe = op.duplicar(docBase(), "t1", INFO);
+  assert.deepEqual([clipDe(cabe.doc, cabe.seleccion).inicio_ms], [3000]);
+});
+
+test("una capa que ya pasa del fin (la voz de un borrador) no se corre ni se alarga más allá; hacia atrás sí", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].inicio_ms = 7000;                                                    // t1: 7000–9000
+  assert.equal(clipDe(op.moverA(d, "t1", 7500, INFO).doc, "t1").inicio_ms, 7000);
+  assert.equal(clipDe(op.moverA(d, "t1", 3000, INFO).doc, "t1").inicio_ms, 3000);
+  assert.equal(clipDe(op.recortar(d, "t1", "fin", 500, INFO).doc, "t1").duracion_ms, 2000);
+  assert.equal(clipDe(op.recortar(d, "t1", "fin", -500, INFO).doc, "t1").duracion_ms, 1500);
+  const larga = docBase();
+  larga.pistas[1].clips[0].duracion_ms = 9000;                                              // t1 más larga que el video
+  invalida(() => op.duplicar(larga, "t1", INFO), /no cabe/);
+});
+
+test("arreglo 4: un «deslizar» guardado sin duración (capa 4b) la recibe al normalizar; «ninguna» y otras entradas no se tocan", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].animacion = { entrada: "deslizar" };
+  const r = puro((x) => op.moverA(x, "t1", 2000, INFO), d);
+  assert.deepEqual(clipDe(r.doc, "t1").animacion, { entrada: "deslizar", duracion_ms: op.DURACION_ANIMACION_MS });
+  const con = docBase();
+  con.pistas[1].clips[0].animacion = { entrada: "deslizar", duracion_ms: 250 };
+  assert.equal(clipDe(op.normalizar(con, INFO), "t1").animacion.duracion_ms, 250, "la que ya tenía se respeta");
+  const ninguna = docBase();
+  ninguna.pistas[1].clips[0].animacion = { entrada: "ninguna" };
+  assert.deepEqual(clipDe(op.normalizar(ninguna, INFO), "t1").animacion, { entrada: "ninguna" });
+});
+
+// ---- Capa 5a (Tarea 4): subtítulos y voz ---------------------------------
+
+// Como `puro`, pero para operaciones que no seleccionan ningún clip (las de
+// subtítulos: `seleccion` siempre queda en `null`, D4/D3/D7).
+function puroSinSeleccion(fn, base = docBase()) {
+  const antes = structuredClone(base);
+  const r = fn(base);
+  assert.deepEqual(base, antes, "no debe tocar el documento de entrada");
+  assert.notEqual(r.doc, base);
+  assert.equal(r.seleccion, null, "la selección no cambia");
+  return r;
+}
+
+test("ponerFuentesSubtitulos valida el idioma y cada fuente, y normaliza sin repetidas", () => {
+  const vacio = puroSinSeleccion((d) => op.ponerFuentesSubtitulos(d, "en", [], DURACIONES));
+  assert.deepEqual(vacio.doc.subtitulos.fuentes, { en: [] });
+  const conVoz = op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "voz" }], DURACIONES).doc;
+  assert.deepEqual(conVoz.subtitulos.fuentes, { es: [{ tipo: "voz" }] });
+  const conMaterial = op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "material", material_id: "2" }], DURACIONES).doc;
+  assert.deepEqual(conMaterial.subtitulos.fuentes, { es: [{ tipo: "material", material_id: 2 }] });
+  // dos veces la misma fuente: queda una sola (documento.validar rechaza las repetidas)
+  const repetida = op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "voz" }, { tipo: "voz" }], DURACIONES).doc;
+  assert.deepEqual(repetida.subtitulos.fuentes.es, [{ tipo: "voz" }]);
+  // dos destinos no se pisan
+  const dos = op.ponerFuentesSubtitulos(conVoz, "en", [{ tipo: "sonido" }], DURACIONES).doc;
+  assert.deepEqual(dos.subtitulos.fuentes, { es: [{ tipo: "voz" }], en: [{ tipo: "sonido" }] });
+  invalida(() => op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "material" }], DURACIONES), /fuente de subtítulos/);
+  invalida(() => op.ponerFuentesSubtitulos(docBase(), "esp", [{ tipo: "voz" }], DURACIONES), /idioma/);
+  invalida(() => op.ponerFuentesSubtitulos(docBase(), "es", [{ tipo: "otra" }], DURACIONES), /fuente de subtítulos/);
+});
+
+// Fix round 1: documento.validar rechaza una lista de más de MAX_FUENTES_SUBTITULO
+// fuentes DISTINTAS; el tope se mira DESPUÉS de quitar repetidas.
+test("ponerFuentesSubtitulos rechaza más de MAX_FUENTES_SUBTITULO fuentes distintas (contadas después de quitar repetidas)", () => {
+  const distintas = (n) => [
+    { tipo: "voz" }, { tipo: "sonido" },
+    ...Array.from({ length: n - 2 }, (_, i) => ({ tipo: "material", material_id: i + 1 })),
+  ];
+  const ocho = op.ponerFuentesSubtitulos(docBase(), "es", distintas(op.MAX_FUENTES_SUBTITULO), DURACIONES).doc;
+  assert.equal(ocho.subtitulos.fuentes.es.length, op.MAX_FUENTES_SUBTITULO);
+  invalida(
+    () => op.ponerFuentesSubtitulos(docBase(), "es", distintas(op.MAX_FUENTES_SUBTITULO + 1), DURACIONES),
+    /demasiadas fuentes/,
+  );
+  // 9 fuentes, pero una repetida: al quitar la repetida quedan 8 distintas: pasa
+  const nueveConRepetida = [...distintas(op.MAX_FUENTES_SUBTITULO), { tipo: "voz" }];
+  const pasaIgual = op.ponerFuentesSubtitulos(docBase(), "es", nueveConRepetida, DURACIONES).doc;
+  assert.equal(pasaIgual.subtitulos.fuentes.es.length, op.MAX_FUENTES_SUBTITULO);
+});
+
+const PALABRAS_A1 = [
+  { t_ms: 0, dur_ms: 400, texto: "Hola" },
+  { t_ms: 500, dur_ms: 300, texto: "mundo" },
+  { t_ms: 900, dur_ms: 200, texto: "bien" },
+];
+const INFO_SUB = { ...DURACIONES, 2: { duracion_ms: 3000, palabras: PALABRAS_A1 } };
+
+test("corregirPalabra recorta espacios, borra la corrección al volver al original, y «» quita la palabra", () => {
+  const r = puroSinSeleccion((d) => op.corregirPalabra(d, 2, 0, "  Creatv  ", INFO_SUB));
+  assert.deepEqual(r.doc.subtitulos.correcciones, { 2: { 0: "Creatv" } });
+  const devuelta = op.corregirPalabra(r.doc, 2, 0, "Hola", INFO_SUB).doc;
+  assert.deepEqual(devuelta.subtitulos.correcciones, {});
+  const devueltaNull = op.corregirPalabra(r.doc, 2, 0, null, INFO_SUB).doc;
+  assert.deepEqual(devueltaNull.subtitulos.correcciones, {});
+  const quitada = op.corregirPalabra(docBase(), 2, 1, "", INFO_SUB).doc;
+  assert.deepEqual(quitada.subtitulos.correcciones, { 2: { 1: "" } });
+  // dos correcciones en el mismo material conviven
+  const dos = op.corregirPalabra(quitada, 2, 2, "ok", INFO_SUB).doc;
+  assert.deepEqual(dos.subtitulos.correcciones, { 2: { 1: "", 2: "ok" } });
+  invalida(() => op.corregirPalabra(docBase(), 2, 99, "x", INFO_SUB), /ya no está/);
+  invalida(() => op.corregirPalabra(docBase(), 2, 0, "x".repeat(121), INFO_SUB), /120/);
+});
+
+// Revisión final (m3c): el video final dibuja los subtítulos con Inter, que no
+// trae emojis, y la vista previa sí los mostraría: se quitan al corregir (con
+// sus uniones y variantes), y una corrección que era SOLO emojis no borra la
+// palabra en silencio — se rechaza con un aviso en palabras.
+test("corregirPalabra quita los emojis; solo emojis se rechaza; el largo se cuenta en caracteres", () => {
+  const con = op.corregirPalabra(docBase(), 2, 0, "Hola 😀 👍🏽 mundo", INFO_SUB).doc;
+  assert.deepEqual(con.subtitulos.correcciones, { 2: { 0: "Hola mundo" } });
+  const familia = op.corregirPalabra(docBase(), 2, 0, "👨‍👩‍👧familia❤️🇨🇴", INFO_SUB).doc;
+  assert.deepEqual(familia.subtitulos.correcciones, { 2: { 0: "familia" } });
+  const marca = op.corregirPalabra(docBase(), 2, 0, "Creatv® ™ ©", INFO_SUB).doc;      // la fuente sí los trae
+  assert.deepEqual(marca.subtitulos.correcciones, { 2: { 0: "Creatv® ™ ©" } });
+  const igual = op.corregirPalabra(docBase(), 2, 0, "Hola🎉", INFO_SUB).doc;            // sin el emoji es la original
+  assert.deepEqual(igual.subtitulos.correcciones, {});
+  invalida(() => op.corregirPalabra(docBase(), 2, 0, " 😀 🎉 ", INFO_SUB), /emoji/i);
+  assert.deepEqual(op.corregirPalabra(docBase(), 2, 1, "", INFO_SUB).doc.subtitulos.correcciones, { 2: { 1: "" } });
+  // 120 letras fuera del plano básico son 120 caracteres (240 unidades de UTF-16): entran, como en Python
+  const astral = "\u{1D538}".repeat(op.MAX_CORRECCION);
+  assert.equal(op.corregirPalabra(docBase(), 2, 0, astral, INFO_SUB).doc.subtitulos.correcciones[2][0], astral);
+  invalida(() => op.corregirPalabra(docBase(), 2, 0, astral + "\u{1D538}", INFO_SUB), /120/);
+});
+
+test("quitarLinea quita cada palabra de la línea de una", () => {
+  const r = puroSinSeleccion((d) => op.quitarLinea(d, [
+    { material_id: 2, indice: 0 }, { material_id: 2, indice: 1 }, { material_id: 2, indice: 2 },
+  ], INFO_SUB));
+  assert.deepEqual(r.doc.subtitulos.correcciones, { 2: { 0: "", 1: "", 2: "" } });
+});
+
+test("cambiarSubtitulos acota posición/escala, normaliza el color y rechaza una clave fuera de la lista blanca", () => {
+  const r = puroSinSeleccion((d) => op.cambiarSubtitulos(d, {
+    estilo_id: "minimal", posicion: 0.99, escala: 3, resaltado: "#3ddc84", visibles: false,
+  }, DURACIONES));
+  assert.deepEqual(r.doc.subtitulos, {
+    estilo_id: "minimal", posicion: 0.95, escala: 1.6, resaltado: "#3DDC84", visibles: false, palabras: {},
+  });
+  const sinResaltado = op.cambiarSubtitulos(docBase(), { resaltado: null }, DURACIONES).doc;
+  assert.equal(sinResaltado.subtitulos.resaltado, null);
+  invalida(() => op.cambiarSubtitulos(docBase(), { fuente: "x" }, DURACIONES), /No se puede cambiar/);
+  invalida(() => op.cambiarSubtitulos(docBase(), { estilo_id: "x" }, DURACIONES), /estilo de subtítulos/);
+});
+
+test("agregarAudio de voz comparte pista con la voz (p_voz), sin fundido de salida, y guarda el idioma", () => {
+  const r = puro((d) => op.agregarAudio(d, { id: 2 }, 4000, { rol: "voz", idioma: "es" }, INFO));
+  const c = clipDe(r.doc, r.seleccion);
+  assert.equal(c.rol_audio, "voz");
+  assert.equal(c.idioma, "es");
+  assert.equal(c.audio.fundido_salida_ms, 0);
+  const pista = r.doc.pistas.find((p) => p.clips.includes(c));
+  assert.equal(pista.id, "p_voz");
+  assert.equal(pista.clips.length, 2, "comparte la pista con la voz que ya había (a1)");
+  // la música sigue sin caer en la pista de la voz
+  const musica = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO);
+  assert.notEqual(musica.doc.pistas.find((p) => p.clips.some((cl) => cl.id === musica.seleccion)).id, "p_voz");
+  invalida(() => op.agregarAudio(docBase(), { id: 2 }, 0, { rol: "voz", idioma: "esp" }, INFO), /idioma/);
+});
+
+test("agregarAudio de voz se corta si el video no tiene tanto tiempo libre (vozCortada)", () => {
+  const video7s = op.recortar(docBase(), "v1", "fin", -1000, DURACIONES).doc;   // principal: 4000 + 3000 = 7000
+  const infoVoz = { ...INFO, 8: { duracion_ms: 9000 } };
+  const r = op.agregarAudio(video7s, { id: 8 }, 1000, { rol: "voz" }, infoVoz);
+  const c = clipDe(r.doc, r.seleccion);
+  assert.equal(c.duracion_ms, 6000);
+  assert.equal(op.vozCortada(video7s, r.doc, r.seleccion, infoVoz), 6000);
+  // una voz que entra entera no se reporta como cortada
+  const entera = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "voz" }, INFO);
+  assert.equal(op.vozCortada(docBase(), entera.doc, entera.seleccion, INFO), null);
+  // un clip que ya existía antes de este `antes` no se reporta (no es "la voz que se acaba de agregar")
+  assert.equal(op.vozCortada(r.doc, r.doc, r.seleccion, infoVoz), null);
+});
+
+test("cambiar(idioma) solo se cambia en audio y valida el formato", () => {
+  const r = puro((d) => op.cambiar(d, "a1", { idioma: "en" }, INFO));
+  assert.equal(clipDe(r.doc, "a1").idioma, "en");
+  const sinIdioma = op.cambiar(r.doc, "a1", { idioma: null }, INFO).doc;
+  assert.equal(clipDe(sinIdioma, "a1").idioma, undefined);
+  invalida(() => op.cambiar(docBase(), "t1", { idioma: "en" }, INFO), /idioma no es válido/);
+  invalida(() => op.cambiar(docBase(), "a1", { idioma: "english" }, INFO), /idioma no es válido/);
+});
+
+test("adoptarVozComoFuente deja los mismos subtítulos, ahora derivados de la voz (D14)", () => {
+  const doc = docConVozYPalabras();
+  const adoptado = op.adoptarVozComoFuente(doc, INFO_PALABRAS);
+  assert.notEqual(adoptado, doc, "devuelve un documento nuevo cuando sí adopta");
+  assert.deepEqual(adoptado.subtitulos.fuentes, { es: [{ tipo: "voz" }] });
+  assert.deepEqual(adoptado.subtitulos.palabras, doc.subtitulos.palabras, "las palabras de legado no se tocan: las deriva subtitulos_fuente.aplicar");
+  assert.equal(doc.subtitulos.fuentes, undefined, "el documento de entrada no se tocó");
+});
+
+test("adoptarVozComoFuente no hace nada si ya hay fuentes, si no hay voz, o si falta transcribir una voz por destino", () => {
+  const conFuentes = docConVozYPalabras();
+  conFuentes.subtitulos.fuentes = { en: [] };
+  assert.equal(op.adoptarVozComoFuente(conFuentes, INFO_PALABRAS), conFuentes);
+
+  const sinPalabrasGuardadas = docConVozYPalabras();
+  sinPalabrasGuardadas.subtitulos.palabras = {};
+  assert.equal(op.adoptarVozComoFuente(sinPalabrasGuardadas, INFO_PALABRAS), sinPalabrasGuardadas);
+
+  const sinVoz = docConVozYPalabras();
+  sinVoz.pistas = sinVoz.pistas.filter((p) => p.id !== "p_voz");
+  assert.equal(op.adoptarVozComoFuente(sinVoz, INFO_PALABRAS), sinVoz);
+
+  const conPorDestino = docConVozYPalabras();
+  conPorDestino.pistas[2].clips[0].por_destino = { en_US: { material_id: 5, duracion_ms: 2000 } };
+  assert.equal(op.adoptarVozComoFuente(conPorDestino, INFO_PALABRAS), conPorDestino);   // material 5 no trae palabras
+
+  // con TODAS las voces (incluida la de por_destino) transcritas, sí adopta
+  const infoCompleta = { ...INFO_PALABRAS, 5: { duracion_ms: 2000, palabras: [] } };
+  assert.notEqual(op.adoptarVozComoFuente(conPorDestino, infoCompleta), conPorDestino);
+});
+
+// ---- Capa 5b (Tarea 5): fotos, encuadre y transiciones que juntan ----
+const M4 = { id: 4, tipo: "imagen", ancho: 1000, alto: 1000 };
+const M5 = { id: 5, tipo: "imagen", ancho: 1080, alto: 1920 };
+const totalPrincipal = (doc) => doc.pistas[0].clips.reduce((s, c) => s + c.duracion_ms, 0);
+
+test("agregarFoto inserta una foto en la principal con su encuadre automático (D1, D7)", () => {
+  const { doc, seleccion } = op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES);
+  assert.equal(seleccion, "foto_2");
+  const foto = doc.pistas[0].clips[1];
+  assert.deepEqual([foto.id, foto.inicio_ms, foto.duracion_ms], ["foto_2", 4000, 3000]);
+  assert.deepEqual(foto.recorte, { desde_ms: 0, hasta_ms: 3000 });
+  assert.deepEqual(foto.encuadre, { modo: "ajustar", zoom: 1, x: 0.5, y: 0.5 });
+  assert.deepEqual([doc.pistas[0].clips[2].id, doc.pistas[0].clips[2].inicio_ms], ["v1", 7000]);
+  assert.deepEqual(doc.pistas.find((p) => p.id === "p_sonido").clips.map((c) => c.id), ["s_v0", "s_v1"]);
+
+  const conM5 = op.agregarFoto(docBase(), M5, { indice: 1 }, DURACIONES).doc.pistas[0].clips[1];
+  assert.equal(conM5.encuadre, undefined);
+
+  invalida(() => op.agregarFoto(docBase(), { id: 1, tipo: "video" }, { indice: 1 }, DURACIONES), /no es una imagen/);
+});
+
+test("agregarVideo rechaza una imagen y calcula el encuadre automático de sus medidas (D7)", () => {
+  invalida(() => op.agregarVideo(docBase(), { id: 4, tipo: "imagen" }, {}, DURACIONES), /foto/);
+  const conEncuadre = op.agregarVideo(docBase(), { id: 3, tipo: "video", ancho: 1920, alto: 1080 }, { despuesDe: "v1" },
+    { ...DURACIONES, 3: 1500 }).doc;
+  const clip3 = conEncuadre.pistas[0].clips.find((c) => c.material_id === 3);
+  assert.deepEqual(clip3.encuadre, { modo: "ajustar", zoom: 1, x: 0.5, y: 0.5 });
+  const sinMedidas = op.agregarVideo(docBase(), { id: 3 }, { despuesDe: "v1" }, { ...DURACIONES, 3: 1500 }).doc;
+  assert.equal(sinMedidas.pistas[0].clips.find((c) => c.material_id === 3).encuadre, undefined);
+});
+
+test("cambiarDuracionFoto acota entre MIN_CLIP_MS y FOTO_MAX_MS y recoloca la principal", () => {
+  const conFoto = () => op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  const a = op.cambiarDuracionFoto(conFoto(), "foto_2", 5000, DURACIONES).doc;
+  assert.deepEqual([a.pistas[0].clips[1].duracion_ms, a.pistas[0].clips[2].inicio_ms], [5000, 9000]);
+  assert.equal(op.cambiarDuracionFoto(conFoto(), "foto_2", 70000, DURACIONES).doc.pistas[0].clips[1].duracion_ms, op.FOTO_MAX_MS);
+  assert.equal(op.cambiarDuracionFoto(conFoto(), "foto_2", 50, DURACIONES).doc.pistas[0].clips[1].duracion_ms, MIN_CLIP_MS);
+  invalida(() => op.cambiarDuracionFoto(conFoto(), "v0", 5000, DURACIONES), /no es una foto/);
+});
+
+test("recortar y cortarEn tratan una foto sin velocidad ni material que mirar (D1, D9)", () => {
+  const conFoto = () => op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  const fin = op.recortar(conFoto(), "foto_2", "fin", -1000, DURACIONES).doc.pistas[0].clips[1];
+  assert.equal(fin.duracion_ms, 2000);
+  const inicio = op.recortar(conFoto(), "foto_2", "inicio", 500, DURACIONES).doc.pistas[0].clips[1];
+  assert.deepEqual([inicio.duracion_ms, inicio.recorte], [2500, { desde_ms: 0, hasta_ms: 2500 }]);
+  const alargada = op.recortar(conFoto(), "foto_2", "inicio", -2000, DURACIONES).doc.pistas[0].clips[1];
+  assert.equal(alargada.duracion_ms, 5000);
+
+  const { doc } = op.cortarEn(conFoto(), 5000, DURACIONES);
+  const [f1, f2] = doc.pistas[0].clips.filter((c) => c.foto);
+  assert.deepEqual([f1.duracion_ms, f1.recorte], [1000, { desde_ms: 0, hasta_ms: 1000 }]);
+  assert.deepEqual([f2.duracion_ms, f2.recorte], [2000, { desde_ms: 0, hasta_ms: 2000 }]);
+
+  invalida(() => op.cambiarVelocidad(conFoto(), "foto_2", 2, DURACIONES), /no tiene velocidad/);
+});
+
+test("cambiar admite un encuadre válido, lo fusiona con el actual y lo limpia (D4)", () => {
+  let d = op.cambiar(docBase(), "v0", { encuadre: { modo: "ajustar" } }, DURACIONES).doc;
+  assert.deepEqual(d.pistas[0].clips[0].encuadre, { modo: "ajustar", zoom: 1, x: 0.5, y: 0.5 });
+  d = op.cambiar(d, "v0", { encuadre: { modo: "llenar" } }, DURACIONES).doc;
+  assert.equal(d.pistas[0].clips[0].encuadre, null);
+  d = op.cambiar(d, "v0", { encuadre: { zoom: 9 } }, DURACIONES).doc;
+  assert.equal(d.pistas[0].clips[0].encuadre.zoom, 4);
+  invalida(() => op.cambiar(docBase(), "v0", { encuadre: { rotacion: 1 } }, DURACIONES), /encuadre\.rotacion no se puede cambiar/);
+  invalida(() => op.cambiar(docBase(), "v0", { encuadre: { modo: "estirar" } }, DURACIONES), /Ese encuadre no existe \(estirar\)/);
+  invalida(() => op.cambiar(docBase(), "t1", { encuadre: { modo: "ajustar" } }, DURACIONES), /El encuadre se cambia solo/);
+  const sinEnc = op.cambiar(docBase(), "v0", { encuadre: null }, DURACIONES).doc;
+  assert.equal(sinEnc.pistas[0].clips[0].encuadre, null);
+});
+
+test("ponerTransicion nace solape, cede sus ms y los devuelve al quitarla o al cambiar la duración (D9)", () => {
+  let d = op.ponerTransicion(docBase(), "v0", "fundido", 500, DURACIONES).doc;
+  assert.deepEqual([d.pistas[0].clips[0].duracion_ms, d.pistas[0].clips[0].recorte, d.pistas[0].clips[0].transicion, d.pistas[0].clips[1].inicio_ms],
+    [3500, { desde_ms: 0, hasta_ms: 3500 }, { tipo: "fundido", duracion_ms: 500, modo: "solape" }, 3500]);
+
+  d = op.ponerTransicion(d, "v0", "deslizar", 500, DURACIONES).doc;
+  assert.deepEqual(d.pistas[0].clips[0].transicion, { tipo: "deslizar", duracion_ms: 500, modo: "solape" });
+  assert.equal(d.pistas[0].clips[0].duracion_ms, 3500);   // solo cambió el tipo
+
+  d = op.ponerTransicion(d, "v0", "fundido", 800, DURACIONES).doc;
+  assert.equal(d.pistas[0].clips[0].duracion_ms, 3200);
+
+  d = op.ponerTransicion(d, "v0", "corte", 0, DURACIONES).doc;
+  assert.deepEqual([d.pistas[0].clips[0].duracion_ms, d.pistas[0].clips[0].transicion, d.pistas[0].clips[1].inicio_ms], [4000, null, 4000]);
+});
+
+function dosClipsEnteros(dur2 = 1500, id2 = 3) {
+  const sinV1 = op.borrar(docBase(), "v1", DURACIONES).doc;
+  const extendido = op.recortar(sinV1, "v0", "fin", 4000, DURACIONES).doc;
+  return op.agregarVideo(extendido, { id: id2 }, { despuesDe: "v0" }, { ...DURACIONES, [id2]: dur2 }).doc;
+}
+
+test("ponerTransicion siempre nace solape entre dos clips enteros, aunque el material no tenga cola (D9)", () => {
+  const base = dosClipsEnteros();
+  assert.deepEqual(base.pistas[0].clips.map((c) => c.duracion_ms), [8000, 1500]);
+  const con500 = op.ponerTransicion(base, "v0", "fundido", 500, { ...DURACIONES, 3: 1500 }).doc;
+  assert.deepEqual([con500.pistas[0].clips[0].duracion_ms, con500.pistas[0].clips[0].transicion],
+    [7500, { tipo: "fundido", duracion_ms: 500, modo: "solape" }]);
+
+  const corto = dosClipsEnteros(250, 7);
+  invalida(() => op.ponerTransicion(corto, "v0", "fundido", 500, { ...DURACIONES, 7: 250 }), /cortos/);
+
+  const clip400 = dosClipsEnteros(400, 7);
+  const con400 = op.ponerTransicion(clip400, "v0", "fundido", 500, { ...DURACIONES, 7: 400 }).doc;
+  assert.equal(con400.pistas[0].clips[0].transicion.duracion_ms, 300);
+});
+
+test("una transición de cola existente (sin modo) sigue cambiando como antes (D9)", () => {
+  const d = docBase();
+  d.pistas[0].clips[0].transicion = { tipo: "fundido", duracion_ms: 500 };
+  const con800 = op.ponerTransicion(d, "v0", "fundido", 800, DURACIONES).doc;
+  assert.deepEqual([con800.pistas[0].clips[0].duracion_ms, con800.pistas[0].clips[0].transicion],
+    [4000, { tipo: "fundido", duracion_ms: 800 }]);
+});
+
+test("normalizar deshace el solape si el clip queda último (D9)", () => {
+  const conSolape = op.ponerTransicion(docBase(), "v0", "fundido", 500, DURACIONES).doc;
+  const { doc } = op.moverPrincipal(conSolape, "v0", 1, DURACIONES);
+  const v0 = doc.pistas[0].clips.find((c) => c.id === "v0");
+  assert.deepEqual([doc.pistas[0].clips.at(-1).id, v0.duracion_ms, v0.transicion], ["v0", 4000, null]);
+  assert.equal(totalPrincipal(doc), 8000);
+});
+
+test("una foto como A cede sus ms igual que un video (D9)", () => {
+  const conFoto = op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  const { doc } = op.ponerTransicion(conFoto, "foto_2", "fundido", 500, DURACIONES);
+  assert.equal(doc.pistas[0].clips.find((c) => c.id === "foto_2").duracion_ms, 2500);
+});
+
+// Revisión final de la capa 5b: una foto de 60 s que recupera lo que había
+// cedido a una transición «solape» pasaba de FOTO_MAX_MS (60,5 s) y desde ahí
+// cada guardado fallaba en documento.validar.
+function foto60ConSolape() {
+  let d = op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  d = op.cambiarDuracionFoto(d, "foto_2", 60000, DURACIONES).doc;
+  d = op.ponerTransicion(d, "foto_2", "fundido", 500, DURACIONES).doc;
+  assert.equal(d.pistas[0].clips[1].duracion_ms, 59500);
+  return op.cambiarDuracionFoto(d, "foto_2", 60000, DURACIONES).doc;   // otra vez 60 s, con 500 cedidos
+}
+const fotoDe = (doc) => doc.pistas[0].clips.find((c) => c.id === "foto_2");
+
+test("una foto de 60 s nunca pasa de FOTO_MAX_MS al recuperar lo que cedió a un solape", () => {
+  const base = foto60ConSolape();
+  assert.equal(fotoDe(base).duracion_ms, 60000);
+  for (const [nombre, hacer] of [
+    ["quitar la transición", (d) => op.ponerTransicion(d, "foto_2", "corte", 0, DURACIONES)],
+    ["cambiar su duración", (d) => op.ponerTransicion(d, "foto_2", "fundido", 300, DURACIONES)],
+    ["borrar el siguiente", (d) => op.borrar(d, "v1", DURACIONES)],
+    ["reordenar el siguiente", (d) => op.moverPrincipal(d, "v1", 0, DURACIONES)],
+  ]) {
+    const foto = fotoDe(hacer(structuredClone(base)).doc);
+    assert.ok(foto.duracion_ms <= op.FOTO_MAX_MS, `${nombre}: ${foto.duracion_ms}`);
+    assert.deepEqual(foto.recorte, { desde_ms: 0, hasta_ms: foto.duracion_ms }, nombre);
+  }
+});
+
+test("normalizar acota a FOTO_MAX_MS cualquier foto de la principal y la recoloca", () => {
+  const d = op.agregarFoto(docBase(), M4, { indice: 1 }, DURACIONES).doc;
+  d.pistas[0].clips[1].duracion_ms = 61000;
+  d.pistas[0].clips[1].recorte = { desde_ms: 0, hasta_ms: 61000 };
+  const n = op.normalizar(d, DURACIONES);
+  assert.deepEqual([n.pistas[0].clips[1].duracion_ms, n.pistas[0].clips[1].recorte, n.pistas[0].clips[2].inicio_ms],
+    [60000, { desde_ms: 0, hasta_ms: 60000 }, 64000]);
+});
+
+// ---- Capa 5c (Tarea 7): textos v2, ancho, plantillas para vender y el tinte de un sticker ----
+const STICKER = { id: 9, tipo: "imagen", ancho: 512, alto: 512 };
+const estiloDe = (r) => clipDe(r.doc, r.seleccion).estilo;
+const sinVersion = (doc, id = "t1") => !("version" in clipDe(doc, id).estilo);
+
+test("FUENTES es el catálogo de fuentes (D9) y ANCHO_TEXTO el ancho del texto (D7)", () => {
+  assert.deepEqual(op.FUENTES, ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold", "Poppins-ExtraBold", "ArchivoBlack-Regular",
+    "Anton-Regular", "BebasNeue-Regular", "LilitaOne-Regular", "Pacifico-Regular", "CaveatBrush-Regular", "DMSerifDisplay-Regular"]);
+  assert.deepEqual(op.ANCHO_TEXTO, { min: 0.3, max: 1, defecto: 0.86 });
+});
+
+test("agregarTexto: todo texto nuevo nace v2 y con su ancho (D3, D7.1)", () => {
+  for (const [preset, ancho] of [["titulo", 0.86], ["subtitulo", 0.86], ["llamado", 0.8], ["precio", null]]) {
+    const e = estiloDe(puro((d) => op.agregarTexto(d, 0, preset, {}, INFO)));
+    assert.equal(e.version, 2, preset);
+    assert.equal(e.ancho_max, ancho, preset);
+  }
+});
+
+test("agregarTexto: las plantillas para vender, con su fuente, su palabra, su color y su fondo (D12.1)", () => {
+  const ALTO = 1920;
+  const tabla = [
+    ["oferta", "Anton-Regular", 96, "#FFFFFF", "OFERTA", { color: "#E11D48", radio: 0.01 }, null],
+    ["nuevo", "BebasNeue-Regular", 110, "#111111", "NUEVO", { color: "#FFD400", radio: 1 }, null],
+    ["descuento", "ArchivoBlack-Regular", 120, "#FFD400", "-50 %", null, { color: "#111111", grosor: 6 / ALTO }],
+    ["envio", "Poppins-ExtraBold", 56, "#FFFFFF", "ENVÍO GRATIS", { color: "#16A34A", radio: 1 }, null],
+    ["ultimas", "Poppins-ExtraBold", 52, "#FFFFFF", "¡ÚLTIMAS UNIDADES!", { color: "#111111", radio: 0.01 }, null],
+    ["mas_vendido", "LilitaOne-Regular", 64, "#111111", "MÁS VENDIDO", { color: "#FFD400", radio: 1 }, null],
+  ];
+  for (const [preset, fuente, px, color, literal, fondo, contorno] of tabla) {
+    const r = puro((d) => op.agregarTexto(d, 0, preset, {}, INFO));
+    const c = clipDe(r.doc, r.seleccion);
+    assert.equal(c.texto.literal, literal, preset);
+    assert.equal(c.estilo.fuente, fuente, preset);
+    assert.equal(c.estilo.tamano, px / ALTO, preset);
+    assert.equal(c.estilo.color, color, preset);
+    assert.equal(c.estilo.version, 2, preset);
+    assert.equal(c.estilo.ancho_max, null, preset);
+    assert.equal(c.transform.y, 0.35, preset);
+    assert.equal(c.estilo.sombra, null, preset);
+    if (fondo) {
+      assert.equal(c.estilo.fondo.color, fondo.color, preset);
+      assert.equal(c.estilo.fondo.radio, fondo.radio, preset);
+      assert.equal(c.estilo.fondo.opacidad, 1, preset);
+    } else {
+      assert.equal(c.estilo.fondo, null, preset);
+    }
+    assert.deepEqual(c.estilo.contorno, contorno, preset);
+  }
+  // «-50 %» lleva espacio duro (U+00A0): nunca se parte
+  const descuento = op.agregarTexto(docBase(), 0, "descuento", {}, INFO);
+  assert.deepEqual([...clipDe(descuento.doc, descuento.seleccion).texto.literal].map((ch) => ch.codePointAt(0)),
+    [0x2D, 0x35, 0x30, 0xA0, 0x25]);
+});
+
+test("agregarTexto: la fuente de una plantilla es la preferida si está en FUENTES; si no, su respaldo (Inter-Bold)", () => {
+  for (const [preset, def] of Object.entries(op.PRESETS_TEXTO)) {
+    assert.ok(op.FUENTES.includes(def.fuente), `${preset}: ${def.fuente}`);
+    if (def.respaldo !== undefined) assert.equal(def.respaldo, "Inter-Bold", preset);
+  }
+  assert.equal(op.fuenteDePreset(op.PRESETS_TEXTO.oferta), "Anton-Regular");
+  const sinAnton = op.FUENTES.filter((f) => f !== "Anton-Regular");
+  assert.equal(op.fuenteDePreset(op.PRESETS_TEXTO.oferta, sinAnton), "Inter-Bold");
+  assert.equal(op.fuenteDePreset({ ...op.PRESETS_TEXTO.mas_vendido, fuente: "Inexistente-Regular" }), "Inter-Bold");
+  assert.equal(op.fuenteDePreset(op.PRESETS_TEXTO.titulo), "Inter-Bold");
+  // los presets no se cambian desde afuera
+  assert.throws(() => { op.PRESETS_TEXTO.oferta.fuente = "Pacifico-Regular"; }, TypeError);
+});
+
+test("agregarTexto: una plantilla cuya fuente no está en FUENTES nace con su respaldo (Inter-Bold)", () => {
+  // como si Daniel no hubiera aprobado Anton ni Lilita One: el controlador las saca del catálogo
+  const quitadas = ["Anton-Regular", "LilitaOne-Regular"];
+  const antes = [...op.FUENTES];
+  op.FUENTES.splice(0, op.FUENTES.length, ...antes.filter((f) => !quitadas.includes(f)));
+  try {
+    for (const preset of ["oferta", "mas_vendido"]) {
+      const r = op.agregarTexto(docBase(), 0, preset, {}, INFO);
+      assert.equal(clipDe(r.doc, r.seleccion).estilo.fuente, "Inter-Bold", preset);
+    }
+    const nuevo = op.agregarTexto(docBase(), 0, "nuevo", {}, INFO);
+    assert.equal(clipDe(nuevo.doc, nuevo.seleccion).estilo.fuente, "BebasNeue-Regular", "la que sí está, se queda");
+  } finally {
+    op.FUENTES.splice(0, op.FUENTES.length, ...antes);
+  }
+  assert.deepEqual(op.FUENTES, antes);
+});
+
+test("agregarTexto «emoji»: pide el emoji; nace a 160 px, sin fondo, contorno ni sombra y sin límite de ancho (D12.2)", async () => {
+  invalida(() => op.agregarTexto(docBase(), 0, "emoji", {}, INFO), /^Elige un emoji\.$/);
+  invalida(() => op.agregarTexto(docBase(), 0, "emoji", { literal: "  " }, INFO), /^Elige un emoji\.$/);
+  const r = puro((d) => op.agregarTexto(d, 0, "emoji", { literal: "🔥" }, INFO));
+  const c = clipDe(r.doc, r.seleccion);
+  assert.equal(c.texto.literal, "🔥");
+  assert.equal(c.estilo.tamano, 160 / 1920);
+  assert.deepEqual([c.estilo.fondo, c.estilo.contorno, c.estilo.sombra, c.estilo.ancho_max], [null, null, null, null]);
+  assert.deepEqual([c.estilo.fuente, c.estilo.version, c.transform.y], ["Inter-Bold", 2, 0.4]);
+  // `literal` también reemplaza la palabra de otra plantilla
+  const sale = op.agregarTexto(docBase(), 0, "oferta", { literal: "SALE" }, INFO);
+  assert.equal(clipDe(sale.doc, sale.seleccion).texto.literal, "SALE");
+  // la página agrega `info` al final (vinculos.operar): las opciones van antes, como en agregarImagen
+  const vinc = await import("../../static/editor/vinculos.js");
+  const pagina = vinc.operar(op.agregarTexto, docBase(), [0, "emoji", { literal: "🔥" }], INFO);
+  assert.equal(clipDe(pagina.doc, pagina.seleccion).texto.literal, "🔥");
+  const sinOpciones = vinc.operar(op.agregarTexto, docBase(), [0, "titulo", {}], INFO);
+  assert.equal(clipDe(sinOpciones.doc, sinOpciones.seleccion).texto.literal, "Escribe aquí");
+});
+
+test("un texto viejo (v1) pasa a v2 al cambiarle el contenido, el estilo o el tamaño; moverlo no (D3)", () => {
+  assert.ok(sinVersion(docBase()));
+  assert.equal(clipDe(puro((d) => op.editarTexto(d, "t1", "Hola 🔥", "es", INFO)).doc, "t1").estilo.version, 2);
+  assert.equal(clipDe(op.cambiar(docBase(), "t1", { estilo: { color: "#000000" } }, INFO).doc, "t1").estilo.version, 2);
+  assert.equal(clipDe(op.cambiar(docBase(), "t1", { transform: { escala: 2 } }, INFO).doc, "t1").estilo.version, 2);
+  for (const [nombre, hacer] of [
+    ["x", (d) => op.cambiar(d, "t1", { transform: { x: 0.3 } }, INFO)],
+    ["x, y y opacidad", (d) => op.cambiar(d, "t1", { transform: { x: 0.3, y: 0.2, opacidad: 0.5 } }, INFO)],
+    ["moverA", (d) => op.moverA(d, "t1", 2000, INFO)],
+    ["recortar", (d) => op.recortar(d, "t1", "fin", -500, INFO)],
+    ["animación", (d) => op.cambiar(d, "t1", { animacion: { entrada: "deslizar" } }, INFO)],
+  ]) {
+    const doc = hacer(docBase()).doc;
+    assert.ok(sinVersion(doc), nombre);
+    assert.deepEqual(clipDe(doc, "t1").estilo, clipDe(docBase(), "t1").estilo, `${nombre}: el estilo queda byte a byte`);
+  }
+  // el estilo que ya tenía se conserva al pasar a v2
+  const v2 = clipDe(op.cambiar(docBase(), "t1", { transform: { escala: 2 } }, INFO).doc, "t1").estilo;
+  assert.deepEqual(v2, { fuente: "Inter-Bold", version: 2 });
+  // una imagen agrandada no gana estilo
+  const img = op.agregarImagen(docBase(), STICKER, 0, {}, INFO);
+  assert.equal(clipDe(op.cambiar(img.doc, img.seleccion, { transform: { escala: 2 } }, INFO).doc, img.seleccion).estilo, undefined);
+});
+
+test("editarTexto de una variable pasa a v2 todos los textos que la muestran (todos cambiaron de contenido)", () => {
+  const base = docBase();
+  base.pistas[1].clips[0].texto = { variable: "gancho" };
+  base.variables.textos = { gancho: { es: "Hola" } };
+  const dup = duplicar(base, "t1", INFO).doc;
+  assert.ok(sinVersion(dup, "t1") && sinVersion(dup, "t1_2"));
+  const r = op.editarTexto(dup, "t1", "Hola 🔥", "es", INFO).doc;
+  assert.equal(clipDe(r, "t1").estilo.version, 2);
+  assert.equal(clipDe(r, "t1_2").estilo.version, 2);
+});
+
+test("actualizarTexto: un texto viejo pasa a v2 en un paso; uno v2 queda igual; solo en textos", () => {
+  const base = docBase();
+  base.pngs = { t1: 20 };
+  const r = puro((d) => op.actualizarTexto(d, "t1", INFO), base);
+  assert.equal(r.seleccion, "t1");
+  assert.equal(clipDe(r.doc, "t1").estilo.version, 2);
+  assert.equal(clipDe(r.doc, "t1").texto.literal, "Hola");
+  assert.deepEqual(r.doc.pngs, {}, "lo que se dibujó como v1 ya no vale");
+  assert.deepEqual(op.actualizarTexto(r.doc, "t1", INFO).doc, r.doc);
+  const yaV2 = docBase();
+  yaV2.pistas[1].clips[0].estilo.version = 2;
+  const igual = op.actualizarTexto(yaV2, "t1", INFO);
+  assert.deepEqual(igual.doc, yaV2, "igual en contenido (ni siquiera se normaliza)");
+  assert.equal(igual.seleccion, "t1");
+  invalida(() => op.actualizarTexto(docBase(), "v0", INFO), /^El estilo solo se cambia en clips de texto\.$/);
+  invalida(() => op.actualizarTexto(docBase(), "nada", INFO), /ya no existe/);
+});
+
+test("cambiar(tinte): solo en imágenes; el color en mayúsculas, null lo quita y lo demás es de contrato", () => {
+  const { doc, seleccion: img } = op.agregarImagen(docBase(), STICKER, 0, {}, INFO);
+  const r = puro((d) => op.cambiar(d, img, { tinte: "#ff0000" }, INFO), doc);
+  assert.equal(clipDe(r.doc, img).tinte, "#FF0000");
+  assert.equal(r.seleccion, img);
+  const sin = op.cambiar(r.doc, img, { tinte: null }, INFO).doc;
+  assert.ok(!("tinte" in clipDe(sin, img)));
+  for (const malo of ["rojo", "#FF000080", "#F00", 7, true]) {
+    invalida(() => op.cambiar(doc, img, { tinte: malo }, INFO), /^tinte debe ser un color #RRGGBB\.$/);
+  }
+  invalida(() => op.cambiar(docBase(), "t1", { tinte: "#FF0000" }, INFO), /^El color se cambia solo en los stickers\.$/);
+  invalida(() => op.cambiar(docBase(), "v0", { tinte: "#FF0000" }, INFO), /^El color se cambia solo en los stickers\.$/);
+  invalida(() => op.cambiar(docBase(), "a1", { tinte: null }, INFO), /^El color se cambia solo en los stickers\.$/);
+});
+
+test("cambiar(estilo.fuente) acepta todo el catálogo y rechaza lo demás con el mensaje de contrato", () => {
+  for (const f of op.FUENTES.filter((x) => x !== "Inter-Bold")) {          // t1 ya está en Inter-Bold
+    const d = op.cambiar(docBase(), "t1", { estilo: { fuente: f } }, INFO).doc;
+    assert.deepEqual([clipDe(d, "t1").estilo.fuente, clipDe(d, "t1").estilo.version], [f, 2]);
+  }
+  invalida(() => op.cambiar(docBase(), "t1", { estilo: { fuente: "Comic" } }, INFO), /^Esa fuente no está disponible \(Comic\)\.$/);
+});
+
+test("agregarImagen: `fraccion` del ancho del lienzo y `tinte` (un sticker); sin opciones, lo de siempre", () => {
+  const r = puro((d) => op.agregarImagen(d, STICKER, 0, { fraccion: 0.35, tinte: "#FFD400" }, INFO));
+  const c = clipDe(r.doc, r.seleccion);
+  assert.equal(c.transform.escala, 0.73828125);              // 0,35 × 1080 / 512
+  assert.equal(c.tinte, "#FFD400");
+  const sin = op.agregarImagen(docBase(), STICKER, 0, {}, INFO);
+  assert.equal(clipDe(sin.doc, sin.seleccion).transform.escala, 1.265625);   // 0,6 × 1080 / 512
+  assert.ok(!("tinte" in clipDe(sin.doc, sin.seleccion)));
+  const nulo = op.agregarImagen(docBase(), STICKER, 0, { tinte: null }, INFO);
+  assert.ok(!("tinte" in clipDe(nulo.doc, nulo.seleccion)));
+  const minusculas = op.agregarImagen(docBase(), STICKER, 0, { tinte: "#ffd400" }, INFO);
+  assert.equal(clipDe(minusculas.doc, minusculas.seleccion).tinte, "#FFD400");
+  invalida(() => op.agregarImagen(docBase(), STICKER, 0, { tinte: "amarillo" }, INFO), /^tinte debe ser un color #RRGGBB\.$/);
+  // `llenar` sigue mandando sobre `fraccion`
+  const llena = op.agregarImagen(docBase(), STICKER, 0, { llenar: true, fraccion: 0.35 }, INFO);
+  assert.equal(clipDe(llena.doc, llena.seleccion).transform.escala, 3.75);   // 1920 / 512
+});
+
+// Ruling del controlador (Tarea 7, arreglo): un cambio que no cambia nada no
+// convierte. Tocar el color que un texto viejo ya tiene (o soltar el asa en la
+// misma escala) no lo pasa a v2: no se guarda nada ni se mueven los saltos de
+// línea de un anuncio que ya existe.
+test("cambiar con el mismo estilo o la misma escala no pasa a v2 un texto viejo (ni toca su png)", () => {
+  const viejo = () => {
+    const d = docBase();
+    Object.assign(clipDe(d, "t1").estilo, { tamano: 72 / 1920, color: "#FFFFFF", alineacion: "centro", ancho_max: 0.8889,
+      contorno: { color: "#000000", grosor: 4 / 1920 }, sombra: null, fondo: null });
+    d.pngs = { t1: 20 };
+    return d;
+  };
+  for (const [nombre, cambios] of [
+    ["el mismo color", { estilo: { color: "#FFFFFF" } }],
+    ["la misma fuente", { estilo: { fuente: "Inter-Bold" } }],
+    ["el mismo tamaño", { estilo: { tamano: 72 } }],
+    ["la misma alineación", { estilo: { alineacion: "centro" } }],
+    ["el mismo ancho", { estilo: { ancho_max: 0.8889 } }],
+    ["el mismo contorno", { estilo: { contorno: { color: "#000000" } } }],
+    ["sin fondo otra vez", { estilo: { fondo: null } }],
+    ["nada", { estilo: {} }],
+    ["la misma escala", { transform: { escala: 1 } }],
+    ["la misma escala y otra x", { transform: { escala: 1, x: 0.3 } }],
+  ]) {
+    const antes = viejo();
+    const d = op.cambiar(antes, "t1", cambios, INFO).doc;
+    assert.ok(sinVersion(d), `${nombre}: no cambió nada que se dibuje`);
+    assert.deepEqual(clipDe(d, "t1").estilo, clipDe(antes, "t1").estilo, `${nombre}: el estilo queda byte a byte`);
+    assert.deepEqual(d.pngs, { t1: 20 }, `${nombre}: lo dibujado sigue valiendo`);
+  }
+  // y lo que sí cambia, convierte (y suelta el png)
+  for (const cambios of [{ estilo: { color: "#FFFFFE" } }, { estilo: { ancho_max: 0.5 } }, { transform: { escala: 1.01 } }]) {
+    const d = op.cambiar(viejo(), "t1", cambios, INFO).doc;
+    assert.equal(clipDe(d, "t1").estilo.version, 2, JSON.stringify(cambios));
+    assert.deepEqual(d.pngs, {}, JSON.stringify(cambios));
+  }
+});
+
+// ---- Capa 5c (prueba en vivo): el tope de pistas es 20, no 8 ----
+// Un borrador automático ya usa 7 pistas; con un título en fila nueva y un sticker,
+// el siguiente sticker, emoji o plantilla que se pisara fallaba con «demasiadas pistas».
+const PNG = { id: 4, ancho: 600, alto: 400 };
+
+test("MAX_PISTAS es 20 (el espejo de documento.MAX_PISTAS)", () => {
+  assert.equal(op.MAX_PISTAS, 20);
+});
+
+test("cada capa que se pisa abre su fila hasta el tope; la siguiente se rechaza con «demasiadas pistas»", () => {
+  let d = docBase();
+  const antes = d.pistas.length;
+  assert.ok(antes < 8);
+  for (let i = antes; i < op.MAX_PISTAS; i++) {
+    d = op.agregarImagen(d, PNG, 0, { duracionMs: 1000 }, INFO).doc;
+    assert.equal(d.pistas.length, i + 1, `la capa ${i - antes + 1} abre su fila`);
+  }
+  assert.equal(d.pistas.length, op.MAX_PISTAS);
+  invalida(() => op.agregarImagen(d, PNG, 0, { duracionMs: 1000 }, INFO), /demasiadas pistas/);
+  invalida(() => op.agregarTexto(d, 1500, "titulo", {}, INFO), /demasiadas pistas/);   // pisa a t1
+  // `pistaLibre` → `pistaNueva`: lo que sí cabe en una fila existente no abre otra
+  assert.equal(op.pistaLibre(d, "texto", "p_texto", 3500, 500).id, "p_texto");
+  invalida(() => op.pistaLibre(d, "texto", "p_texto", 1000, 500), /demasiadas pistas/);
+  assert.equal(d.pistas.length, op.MAX_PISTAS, "el rechazo no deja una pista a medias");
+});
+
+test("un borrador de 7 pistas con un título y un sticker acepta otro emoji y otra plantilla", () => {
+  // el borrador: video, texto, voz, sonido (docBase) + música + logo + efecto = 7 pistas
+  let d = docBase();
+  d = op.agregarAudio(d, { id: 2 }, 0, { rol: "musica" }, INFO).doc;
+  d = op.agregarImagen(d, PNG, 0, { duracionMs: 1000 }, INFO).doc;
+  d = op.agregarAudio(d, { id: 2 }, 0, { rol: "efecto" }, INFO).doc;
+  assert.equal(d.pistas.length, 7);
+  d = op.agregarTexto(d, 1500, "titulo", {}, INFO).doc;                 // un título sobre el texto: fila nueva
+  d = op.agregarImagen(d, PNG, 0, { duracionMs: 1000 }, INFO).doc;      // un sticker sobre el logo: fila nueva
+  const ocho = d.pistas.length;
+  assert.ok(ocho >= 8, `${ocho} pistas`);
+  d = op.agregarTexto(d, 1500, "emoji", { literal: "🔥" }, INFO).doc;   // lo que con 8 pistas fallaba
+  d = op.agregarTexto(d, 1500, "oferta", {}, INFO).doc;
+  assert.ok(d.pistas.length > ocho, `de ${ocho} a ${d.pistas.length} pistas`);
+  assert.ok(d.pistas.length <= op.MAX_PISTAS);
 });

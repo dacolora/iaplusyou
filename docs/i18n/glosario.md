@@ -52,6 +52,42 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 | Arranque (lead) | Lead |
 | Sofisticación | Sophistication |
 | Prueba (de un producto) | Proof |
+| Final edition (la pestaña) | Final edition |
+| Guion base | Base script |
+| Localizar | Localize |
+| Variante | Variant |
+| Capa | Layer |
+| Mezcla | Mix |
+| Sonido de la escena | Scene sound |
+| Edición (del editor) | Edit |
+| Vista previa | Preview |
+| Línea de tiempo | Timeline |
+| Pista | Track |
+| Cabezal | Playhead |
+| Cortar (en el cabezal) | Split |
+| Recortar | Trim |
+| Tramo (del render) | Segment |
+| Copia liviana (proxy) | Lightweight copy |
+| Producir | Produce |
+| Biblioteca (del editor) | Library |
+| Medios | Media |
+| Transición | Transition |
+| Corte (transición) | Cut |
+| Fundido | Fade |
+| Fundido a negro | Fade to black |
+| Deslizar | Slide |
+| Zoom lento | Slow zoom |
+| Llamado (texto de muestra) | Call to action |
+| Contorno | Outline |
+| Sombra | Shadow |
+| Fondo (de un texto) | Background |
+| Subir (un archivo) | Upload |
+| Editar (el panel) | Edit |
+| Fuente (tipografía del editor, `msgctxt "editor"`) | Font |
+| Fuente (de un dato o de las ventas: de dónde sale) | Source |
+| Detalle de Meta (día a día, desgloses y rankings de `meta_detalle.py`) | Meta details |
+| Detalle de Meta al día hace N h | Meta details updated N h ago |
+| Indicadores (del centro de resultados) | Key metrics |
 
 ## Reglas de estilo
 
@@ -59,6 +95,8 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 - Mayúscula solo al inicio de la frase, igual que el español (nunca Title Case en inglés).
 - Emojis, `·` y marcadores `%(x)s` quedan intactos — se copian tal cual, nunca se traducen ni se
   reordenan.
+- Los marcadores `{n}`, `{mensaje}`… de los textos del editor (`final_edition/textos_editor.py`) se
+  copian intactos, igual que `%(x)s`.
 - Las etiquetas HTML dentro de una frase quedan intactas y en el mismo lugar relativo (la frase
   completa es un solo `msgid`, nunca partida en varios).
 - Comillas: « » y las rectas `" "` en español se convierten a comillas curvas `“ ”` en el `msgstr`

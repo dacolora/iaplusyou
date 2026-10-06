@@ -29,6 +29,7 @@ import requests
 import sqlalchemy as sa
 from flask_babel import gettext
 
+import catalogo_productos
 import cola
 import db
 import experimentos
@@ -176,8 +177,11 @@ def crear(cliente, pieza_id, plataforma, caption, titulo=None, origen="manual", 
     nombre = PLATAFORMAS[plataforma]["nombre"]
     p = db.publicacion
     with db.conectar() as con:
-        if _fila_pieza(con, cliente, pieza_id) is None:
+        pieza = _fila_pieza(con, cliente, pieza_id)
+        if pieza is None:
             raise ValueError(gettext("Esa pieza no existe en este proyecto."))
+        if pieza.tipo == "imagen":
+            raise ValueError(gettext("Solo se pueden publicar videos por este camino."))
         if ep_id is not None:
             ep = con.execute(sa.select(db.experimento_pieza.c.pieza_id).where(
                 db.experimento_pieza.c.id == ep_id, db.experimento_pieza.c.cliente == cliente)).first()
@@ -355,12 +359,14 @@ def contexto_pieza(cliente, pieza_id):
     if activos:
         mapa = tiendas.por_activo(cliente)
         for a in activos:
-            if a in mapa:                                 # sesiones viejas: guardaban el id
-                producto = mapa[a]
+            fila = mapa.get(catalogo_productos.producto_base(a))  # sesiones viejas: guardaban el id
+            if fila:
+                producto = fila
                 break
             act = _activo(cliente, a)                     # hoy se guarda el nombre visible
-            if act and act.get("id") in mapa:
-                producto = mapa[act["id"]]
+            fila = mapa.get(catalogo_productos.producto_base((act or {}).get("id") or ""))
+            if fila:
+                producto = fila
                 break
     if producto is None and ex and ex[1]:
         producto = tiendas.producto(cliente, ex[1])
@@ -549,10 +555,15 @@ def redactar(cliente, pieza_id, plataformas):
     if cobrar:
         # Se cobró la llamada (tarifa fija). La referencia lleva la hora
         # porque cada "Escribir con IA" es una llamada nueva.
+        # El `detalle` se guarda: en el idioma del proyecto aunque lo pida una
+        # ruta (Escribir con IA) mirada en otro idioma.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            detalle = gettext("texto para %(plataformas)s de la pieza %(pieza)s",
+                              plataformas=", ".join(plataformas), pieza=pieza_id)
         gastos.registrar_seguro(
             cliente, "caption_organico", gastos.TARIFAS["caption_organico"],
             f"caption_organico:{pieza_id}:{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            proveedor="anthropic", detalle=f"texto para {', '.join(plataformas)} de la pieza {pieza_id}")
+            proveedor="anthropic", detalle=detalle)
     out = {}
     for p in plataformas:
         t = textos.get(p) if isinstance(textos.get(p), dict) else None
@@ -634,18 +645,18 @@ def publicar(cliente, pub_ids, on_etapa=None):
         video_url = pz._mapping[db.pieza.c.url_video] if pz is not None else None
         local = os.path.join(_dir_salidas(cliente), f"{pieza_id}.mp4")
         try:
-            avisar("Descargando")
+            avisar(idiomas.N_("Descargando"))
             try:
                 if not video_url:
-                    raise RuntimeError("La pieza no tiene video.")
+                    raise RuntimeError(gettext("La pieza no tiene video."))
                 _descargar(video_url, local)
             except Exception as e:  # noqa: BLE001 — sin video no hay nada que publicar en ninguna plataforma
                 for pub in grupo:
-                    _fallar(cliente, pub, f"No pude descargar el video: {e}", resultado)
+                    _fallar(cliente, pub, gettext("No pude descargar el video: %(error)s", error=e), resultado)
                 continue
             for pub in grupo:
                 p = pub["plataforma"]
-                avisar("Publicando")
+                avisar(idiomas.N_("Publicando"))
                 actualizar(cliente, pub["id"], estado="publicando", error=None)
                 # TikTok no tiene un campo de caption separado: `title` ES el
                 # texto de la publicación (post_info.title), así que ahí va
@@ -696,7 +707,7 @@ def _confirmar_tiktok(cliente, pub, publish_id, token_path, espera, resultado):
         # Solo cuando TikTok respondió FAILED (un token ausente o la red caída
         # levantan otra cosa y NO significan que el video no salió).
         actualizar(cliente, pub["id"], id_externo=None, url=None)
-        _fallar(cliente, pub, f"TikTok rechazó el video: {e}", resultado)
+        _fallar(cliente, pub, gettext("TikTok rechazó el video: %(error)s", error=e), resultado)
         return "error"
     except Exception as e:  # noqa: BLE001 — red/token: no sabemos, no es un FAILED
         log.warning("No pude consultar el estado en TikTok de %s (publicación %s): %s", publish_id, pub["id"],
@@ -721,7 +732,8 @@ def _marcar_publicada(cliente, pub, id_externo, url, resultado):
     nombre = PLATAFORMAS.get(p, {}).get("nombre", p)
     try:
         actualizar(cliente, pub["id"], estado="publicada", error=None, publicado_en=db.ahora())
-        _evento(cliente, pub, "publicacion", f"Publicada en {nombre}" + (f": {url}" if url else ""),
+        _evento(cliente, pub, "publicacion",
+                gettext("Publicada en %(nombre)s", nombre=idiomas.traducir(nombre)) + (f": {url}" if url else ""),
                 {"plataforma": p, "id_externo": id_externo, "url": url, "publicacion_id": pub["id"]})
     except Exception:  # noqa: BLE001 — nunca `error` después de subir
         log.exception("Publicación %s subida a %s (id %s) pero no pude marcarla publicada; queda publicando.",
@@ -733,7 +745,8 @@ def _fallar(cliente, pub, error, resultado):
     actualizar(cliente, pub["id"], estado="error", error=texto)
     resultado["error"].append(pub["id"])
     nombre = PLATAFORMAS.get(pub["plataforma"], {}).get("nombre", pub["plataforma"])
-    _evento(cliente, pub, "error", f"No se pudo publicar en {nombre}: {texto}",
+    _evento(cliente, pub, "error", gettext("No se pudo publicar en %(nombre)s: %(error)s",
+                                           nombre=idiomas.traducir(nombre), error=texto),
             {"plataforma": pub["plataforma"], "publicacion_id": pub["id"]})
 
 
@@ -778,4 +791,5 @@ def interrumpir(cliente, pub_ids):
         con.execute(p.update().where(p.c.cliente == cliente, p.c.id.in_(list(pub_ids)), p.c.estado == "publicando",
                                      p.c.id_externo.is_(None))
                     .values(actualizado_en=db.ahora(), estado="error",
-                            error="La publicación se interrumpió antes de terminar; revisa la plataforma antes de reintentar."))
+                            error=gettext("La publicación se interrumpió antes de terminar; revisa la plataforma "
+                                          "antes de reintentar.")))

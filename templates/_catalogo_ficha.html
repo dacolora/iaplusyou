@@ -1,0 +1,185 @@
+{# Ficha de un activo del catálogo (spec 2026-09-28 §10.3): fragmento por
+   fetch (catalogo_ficha) dentro de #catalogo-panel. Sus <script> no corren:
+   el JS vive en _tab_catalogo.html. Contexto: cliente, cat, p
+   (listar_productos), comercial (fila producto o None), usos, color_inicial,
+   trabajos_prod, precio_pedidos, monedas_catalogo, moneda_catalogo,
+   etiquetas_fuente, tipos_producto, zonas_cuerpo, presets_cuerpo,
+   etiquetas_presets, categorias, con_mapa, swaps_usos. #}
+{% set prefijo_color = p.nombre ~ ' — ' %}
+{# Archivado (2026-10-01): todas sus filas archivadas (tiendas.activos_archivados). #}
+{% set archivado = cat == 'producto' and comercial and comercial.archivado %}
+<div class="cat-ficha" data-cat="{{ cat }}" data-id="{{ p.id }}">
+  <header class="panel-campana-cab">
+    <div>
+      <h2>{{ p.nombre }}</h2>
+      <small class="vacio" style="padding:0;">{{ categorias[cat].nombre|traducir }}
+        {% if comercial %} · <span class="tag-estado badge-fuente badge-fuente-{{ comercial.fuente }}">{{ etiquetas_fuente.get(comercial.fuente, comercial.fuente)|traducir }}</span>
+        {% if archivado %}<span class="tag-estado">{{ _('archivado') }}</span>{% endif %}
+        {% if comercial.en_prueba %}<span class="tag-estado tag-en-uso">{{ _('en prueba') }}</span>{% endif %}
+        {% if comercial.prioridad %}<span class="tag-estado">{{ _('prioridad %(n)s', n=comercial.prioridad) }}</span>{% endif %}{% endif %}
+      </small>
+    </div>
+    <button type="button" class="btn-xs" data-panel-cerrar aria-label="{{ _('Cerrar') }}">✕</button>
+  </header>
+
+  {% if archivado %}
+  <div class="cat-ficha-archivado">
+    <p>{{ _('Archivado: no sale en la galería ni al elegir producto en Crear, Sprints o Nicho. Sus fotos, colores e historial siguen intactos.') }}</p>
+    <form method="post" action="{{ url_for('catalogo_archivar', cliente=cliente, producto_id=p.id) }}"><input type="hidden" name="archivado" value="0"><button type="submit" class="btn-generar btn-sm">{{ _('Desarchivar') }}</button></form>
+  </div>
+  {% endif %}
+
+  {% if comercial %}
+  <p class="cat-ficha-precio">
+    {% if comercial.precio is not none %}<strong>{{ comercial.precio | dinero(comercial.moneda or '') }}</strong>{% else %}<span class="vacio" style="padding:0;">{{ _('sin precio') }}</span>{% endif %}
+    {% set rango = (comercial.extra or {}).get('precios') %}
+    {% if rango %} <small class="vacio" style="padding:0;">{{ _('(de %(min)s a %(max)s)', min=(rango.min | dinero(comercial.moneda or '')), max=(rango.max | dinero(comercial.moneda or ''))) }}</small>{% endif %}
+    {% if comercial.url_compra and comercial.url_compra.startswith(("http://", "https://")) %} · <a href="{{ comercial.url_compra }}" target="_blank" rel="noopener">{{ comercial.url_compra | truncate(48, True) }}</a>{% elif not comercial.url_compra %} · <span class="vacio" style="padding:0;">{{ _('sin URL de compra') }}</span>{% endif %}
+  </p>
+  {% if comercial.fuente != 'manual' %}
+  <p class="vacio cat-sincronizado" style="font-size:.76rem;padding:0;">{{ _('Sincronizado de %(fuente)s: la tienda manda sobre el nombre, la descripción y los colores; el precio, la URL de compra, «en prueba» y la prioridad que pongas aquí se respetan.', fuente=(etiquetas_fuente.get(comercial.fuente, comercial.fuente)|traducir)) }}</p>
+  {% endif %}
+  {% endif %}
+
+  <section class="panel-seccion cat-ficha-fotos">
+    {% if p.tiene_colores %}
+    <h3>{{ ngettext('%(num)s color', '%(num)s colores', p.n_colores) }}</h3>
+    <div class="cat-colores-tira" role="tablist">
+      {% for c in p.colores %}
+      <button type="button" role="tab" class="cat-color-ficha{% if c.sin_fotos %} sin-fotos{% endif %}{% if not c.disponible %} no-disponible{% endif %}" data-color="{{ c.color_id }}" aria-selected="{{ 'true' if c.color_id == color_inicial else 'false' }}" title="{{ c.nombre }}{% if not c.disponible %} · {{ _('ya no está en la tienda') }}{% endif %}">
+        {% if not c.sin_fotos %}<img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=c.id, categoria=cat, w=320) }}" alt="" loading="lazy">{% else %}<span class="cat-color-vacio"></span>{% endif %}
+        <span>{{ c.nombre | replace(prefijo_color, '') }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    {% for c in p.colores %}
+    <div class="cat-color-fotos" data-color-fotos="{{ c.color_id }}" {% if c.color_id != color_inicial %}hidden{% endif %}>
+      <div class="producto-gestion-fotos">
+        {% for img in c.imagenes %}
+        <div class="producto-gestion-foto">
+          <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=cat, variante=c.color_id, w=320) }}" alt="{{ img }}" loading="lazy">
+          <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ cat }}"><input type="hidden" name="variante" value="{{ c.color_id }}"><button type="submit" title="{{ _('Quitar esta foto') }}">✕</button></form>
+        </div>
+        {% endfor %}
+        {% if c.sin_fotos %}<p class="vacio" style="padding:0;">{{ _('Este color no tiene fotos todavía: súbele una para que el modelo lo reproduzca.') }}</p>{% endif %}
+      </div>
+      <div class="panel-acciones">
+        <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data" class="inline"><input type="hidden" name="categoria" value="{{ cat }}"><input type="hidden" name="variante" value="{{ c.color_id }}">
+          <label class="btn-guardar btn-xs prod-subir-fotos">{{ _('Subir fotos a este color') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden></label>
+        </form>
+        <form method="post" action="{{ url_for('catalogo_color_quitar', cliente=cliente, producto_id=p.id, color_id=c.color_id) }}" class="inline cat-form-quitar-color" data-nombre="{{ c.nombre }}"><button type="submit" class="btn-rechazar btn-xs">{{ _('Quitar color') }}</button></form>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <h3>{{ _('Fotos de referencia') }} ({{ p.imagenes | length }})</h3>
+    <div class="producto-gestion-fotos">
+      {% for img in p.imagenes %}
+      <div class="producto-gestion-foto">
+        <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=cat, w=320) }}" alt="{{ img }}" loading="lazy">
+        <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ cat }}"><button type="submit" title="{{ _('Quitar esta foto') }}">✕</button></form>
+      </div>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data" class="inline"><input type="hidden" name="categoria" value="{{ cat }}">
+      <label class="btn-guardar btn-xs prod-subir-fotos">{{ _('Subir fotos') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden></label>
+    </form>
+    {% endif %}
+    {% if cat == 'producto' %}
+    <details class="cat-nuevo-color">
+      <summary class="btn-xs">{{ _('+ Color') }}</summary>
+      <form method="post" action="{{ url_for('catalogo_color_agregar', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data" class="form-nueva-idea">
+        <label class="campo-label">{{ _('Nombre del color') }}<input type="text" name="nombre" placeholder="{{ _('ej. Rosa') }}" required></label>
+        {% if not p.tiene_colores and p.imagenes %}
+        <label class="campo-label">{{ _('¿De qué color son las fotos actuales?') }}<input type="text" name="convertir_actual" value="{{ p.nombre }}" required></label>
+        <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Las fotos que ya tiene pasan a ser ese color; el nuevo color lleva las suyas.') }}</p>
+        {% endif %}
+        <label class="campo-label">{{ _('Fotos del color') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple></label>
+        <button type="submit" class="btn-generar btn-sm">{{ _('Agregar color') }}</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+
+  {% if p.tiene_colores %}
+  <section class="panel-seccion">
+    <h3>{{ _('Fotos de ambiente') }} ({{ p.fotos_generales | length }})</h3>
+    <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('No son referencia del producto: asígnalas a un color para que el modelo las use.') }}</p>
+    <div class="producto-gestion-fotos">
+      {% for img in p.fotos_generales %}
+      <div class="producto-gestion-foto cat-foto-general">
+        <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=cat, w=320) }}" alt="{{ img }}" loading="lazy">
+        <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ cat }}"><button type="submit" title="{{ _('Quitar esta foto') }}">✕</button></form>
+        <form method="post" action="{{ url_for('catalogo_foto_mover', cliente=cliente, producto_id=p.id, nombre=img) }}" class="cat-form-mover">
+          <select name="variante" data-busqueda onchange="this.form.submit()" aria-label="{{ _('Asignar a color') }}">
+            <option value="">{{ _('Asignar a color…') }}</option>
+            {% for c in p.colores %}<option value="{{ c.color_id }}">{{ c.nombre | replace(prefijo_color, '') }}</option>{% endfor %}
+          </select>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data" class="inline"><input type="hidden" name="categoria" value="{{ cat }}">
+      <label class="btn-guardar btn-xs prod-subir-fotos">{{ _('Subir fotos de ambiente') }}<input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden></label>
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="panel-seccion">
+    <h3>{{ _('Datos') }}</h3>
+    <form method="post" action="{{ url_for('actualizar_producto', cliente=cliente, producto_id=p.id) }}" class="form-nueva-idea"><input type="hidden" name="categoria" value="{{ cat }}">
+      <div class="fila-campos-idea">
+        <div><label class="campo-label">{{ _('Nombre') }}</label><input type="text" name="nombre" value="{{ p.nombre }}" required></div>
+        {% if con_mapa %}
+        <div><label class="campo-label">{{ _('Tipo') }}</label>
+          <select name="tipo">{% for tid, t in tipos_producto.items() %}<option value="{{ tid }}" {% if p.tipo == tid %}selected{% endif %}>{{ t.etiqueta|traducir }}</option>{% endfor %}</select></div>
+        {% endif %}
+      </div>
+      <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Descripción') }}</label>
+      <textarea name="descripcion" rows="2">{{ p.descripcion }}</textarea>
+      <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Regla de consistencia (opcional)') }}</label>
+      <input type="text" name="regla" value="{{ p.regla_propia or '' }}" placeholder="{{ _('Lo que nunca debe cambiar en este activo') }}">
+      {% if con_mapa %}
+      <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Mapa corporal') }}</label>
+      {% with zonas=zonas_cuerpo, presets=presets_cuerpo, etiquetas_presets=etiquetas_presets, seleccionadas=p.zonas %}{% include "_maniqui.html" %}{% endwith %}
+      {% if p.mapa_texto %}<details style="margin-top:.4rem;"><summary class="btn-guardar btn-sm">{{ _('Ver la instrucción exacta que recibe el modelo →') }}</summary><p class="vacio" style="font-size:.76rem;margin-top:.5rem;">{{ p.mapa_texto }}</p></details>{% endif %}
+      {% endif %}
+      {% if cat == 'producto' %}{% with prefijo="ficha-" ~ p.id %}{% include "_catalogo_campos_comerciales.html" %}{% endwith %}{% endif %}
+      <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Guardar cambios') }}</button>
+    </form>
+  </section>
+
+  {% if cat == 'producto' and comercial %}{% include "_producto_doctrina.html" %}{% endif %}
+
+  {% if usos %}
+  <section class="panel-seccion">
+    <h3>{{ _('Dónde se usó') }}</h3>
+    <p class="panel-sub">
+      <a href="#creativeflowplus">{{ _('Piezas de Crear: %(n)s', n=usos.piezas) }}</a> ·
+      <a href="#experimentos">{{ _('Experimentos: %(n)s', n=usos.experimentos) }}</a> ·
+      <a href="#sprints">{{ _('Campañas de sprints: %(n)s', n=usos.campanas) }}</a>
+      {% if swaps_usos %} · {{ _('%(n)s resultado(s) de «Cambiar producto»', n=swaps_usos) }}{% endif %}
+    </p>
+  </section>
+  {% endif %}
+
+  <footer class="panel-campana-pie">
+    <div class="panel-acciones">
+      {% if cat == 'producto' and not archivado %}
+      <form method="post" action="{{ url_for('catalogo_crear_con', cliente=cliente, producto_id=p.id) }}" class="inline cat-crear-con">
+        {% if p.tiene_colores %}<select name="variante" data-busqueda aria-label="{{ _('Color') }}">{% for c in p.colores if not c.sin_fotos %}<option value="{{ c.color_id }}" {% if c.color_id == color_inicial %}selected{% endif %}>{{ c.nombre | replace(prefijo_color, '') }}</option>{% endfor %}</select>{% endif %}
+        <button type="submit" class="btn-generar btn-sm">{{ _('Crear con este producto') }}</button>
+      </form>
+      {% if comercial %}
+      <form method="post" action="{{ url_for('prod_experimento', cliente=cliente, pid=comercial.id) }}" class="inline"><button type="submit" class="btn-guardar btn-sm">{{ _('Crear experimento') }}</button></form>
+      {% endif %}
+      {% endif %}
+    </div>
+    <div class="cat-pie-quitar">
+      {% if cat == 'producto' and comercial and not archivado %}
+      <form method="post" action="{{ url_for('catalogo_archivar', cliente=cliente, producto_id=p.id) }}" title="{{ _('Lo saca de la galería y de los selectores de Crear, Sprints y Nicho sin borrar nada. Se deshace con «Desarchivar».') }}"><input type="hidden" name="archivado" value="1"><button type="submit" class="btn-sm">{{ _('Archivar') }}</button></form>
+      {% endif %}
+      <button type="button" class="btn-eliminar-producto btn-sm" data-producto-id="{{ p.id }}" data-producto-nombre="{{ p.nombre }}" data-fotos="{{ p.n_fotos }}" data-usos="{{ swaps_usos or 0 }}" data-accion="{{ url_for('eliminar_producto', cliente=cliente, producto_id=p.id) }}" data-categoria="{{ cat }}">{{ _('Eliminar') }}</button>
+    </div>
+  </footer>
+</div>

@@ -124,23 +124,25 @@ def test_conectar_rechaza_cuenta_o_pagina_ajenas(cliente, app, monkeypatch):
     assert any("cuenta publicitaria no aparece" in m for m in mensajes) and any("Página no aparece" in m for m in mensajes)
 
 
-def test_conectar_pagina_manual_solo_cuando_meta_no_dio_dueno(cliente, app, monkeypatch):
+def test_conectar_no_acepta_una_pagina_escrita_a_mano(cliente, app, monkeypatch):
+    """Auditoría de seguridad 2026-10-01: un id de Página es público y no
+    prueba de quién es; escrita a mano, la Página la conecta Creatv tras
+    revisarla («Avisar a Creatv»). Sin Página, la cuenta sí se conecta."""
     _fake_conectada(app, monkeypatch)
     sin_dueno = {**ACTIVOS_777, "pages": [], "paginas_sin_dueno": True}
     monkeypatch.setattr(app["ma"], "activos_de_portafolio", lambda portafolio_id, cliente=None, forzar=False: sin_dueno)
-    monkeypatch.setattr(app["ma"], "pagina_de_socio", lambda page_id: {"id": "p3", "name": "Página Otro"} if page_id == "p3" else None)
     asignaciones = []
     monkeypatch.setattr(app["ma"], "asignar", lambda *a, **k: asignaciones.append(a) or dict(DETALLE_OK))
-    _post(cliente, "/cliente/acme/meta/agencia/conectar", portafolio_id="77700077700", ad_account_id="act_9", page_id="", page_id_manual="p9")
-    assert asignaciones == [] and any("no está compartida con Creatv" in m for m in _flashes(cliente["c"]))
     _post(cliente, "/cliente/acme/meta/agencia/conectar", portafolio_id="77700077700", ad_account_id="act_9", page_id="", page_id_manual="p3")
-    assert asignaciones == [("acme", "act_9", "p3")]
+    assert asignaciones == [] and any("Avisar a Creatv" in m for m in _flashes(cliente["c"]))
+    _post(cliente, "/cliente/acme/meta/agencia/conectar", portafolio_id="77700077700", ad_account_id="act_9", page_id="")
+    assert asignaciones == [("acme", "act_9", None)]
 
 
 def test_conectar_y_avisar_exigen_correo_verificado(app, monkeypatch):
     _fake_conectada(app, monkeypatch)
     d = app["dashboard"]
-    monkeypatch.setattr(d.usuarios, "obtener", lambda u: {"usuario": u, "rol": "cliente", "correo_verificado": False})
+    monkeypatch.setattr(d.usuarios, "obtener", lambda u: {"usuario": u, "rol": "cliente", "cliente": "acme", "correo_verificado": False})
     llamadas = []
     monkeypatch.setattr(app["ma"], "asignar", lambda *a, **k: llamadas.append(a))
     monkeypatch.setattr(app["ma"], "solicitar", lambda *a, **k: llamadas.append(a))
@@ -248,13 +250,26 @@ def test_sin_resultados_ofrece_volver_a_buscar_y_avisar(cliente, app, monkeypatc
     assert 'action="/cliente/acme/meta/agencia/avisar"' in html and "Avisar a Creatv" in html
 
 
-def test_pagina_manual_solo_si_meta_no_dio_dueno(cliente, app, monkeypatch):
+def test_sin_dueno_de_paginas_ofrece_avisar_y_no_pide_la_pagina_a_mano(cliente, app, monkeypatch):
     _fake_conectada(app, monkeypatch)
     proyectos.guardar_meta_forma("acme", "agencia")
     sin_dueno = {**ACTIVOS_777, "pages": [], "paginas_sin_dueno": True}
     monkeypatch.setattr(app["ma"], "activos_de_portafolio", lambda portafolio_id, cliente=None, forzar=False: sin_dueno)
     html = _html(cliente, "/cliente/acme?agencia_portafolio=77700077700")
-    assert 'name="page_id_manual"' in html
+    assert 'name="page_id_manual"' not in html
+    assert 'action="/cliente/acme/meta/agencia/conectar"' in html and 'action="/cliente/acme/meta/agencia/avisar"' in html
+
+
+def test_portafolio_de_otro_proyecto_muestra_el_error_y_avisar(cliente, app, monkeypatch):
+    _fake_conectada(app, monkeypatch)
+    proyectos.guardar_meta_forma("acme", "agencia")
+
+    def ocupado(portafolio_id, cliente=None, forzar=False):
+        raise app["ma"].MetaAgenciaError("Ese portafolio ya está conectado a otro proyecto de Creatv.")
+    monkeypatch.setattr(app["ma"], "activos_de_portafolio", ocupado)
+    html = _html(cliente, "/cliente/acme?agencia_portafolio=77700077700")
+    assert "ya está conectado a otro proyecto" in html
+    assert 'action="/cliente/acme/meta/agencia/conectar"' not in html and 'action="/cliente/acme/meta/agencia/avisar"' in html
 
 
 def test_solicitud_pendiente_se_ve_con_cancelar(cliente, app, monkeypatch):
@@ -295,3 +310,57 @@ def test_conectado_en_propia_ofrece_pasar_a_agencia(cliente, app, monkeypatch):
     html = _html(cliente)
     assert "Meta conectado" in html and 'name="forma" value="agencia"' in html and "Cambiar de forma" in html
     assert TOKEN_FALSO not in html
+
+
+# ---- avisos a los admins en el idioma de cada uno (fase 6 del idioma) ----
+
+def test_avisos_al_admin_se_arman_en_cada_idioma(cliente, app, monkeypatch):
+    """Las tres rutas pasan a avisar_admin funciones (no texto) que se llaman
+    por admin en su idioma; avisar_admin se traga cualquier excepción, así que
+    aquí se llaman de verdad: en español dan el texto de siempre, en inglés
+    el del catálogo."""
+    import idiomas
+    capturados = {}
+    monkeypatch.setattr(cliente["d"].notificaciones, "avisar_admin",
+                        lambda tipo, asunto, cuerpo, cliente="": capturados.update({tipo: (asunto, cuerpo)}) or 1)
+    _fake_conectada(app, monkeypatch)
+    monkeypatch.setattr(app["ma"], "activos_de_portafolio", lambda portafolio_id, cliente=None, forzar=False: ACTIVOS_777)
+    monkeypatch.setattr(app["ma"], "asignar", lambda *a, **k: dict(DETALLE_OK))
+    _post(cliente, "/cliente/acme/meta/agencia/conectar", portafolio_id="77700077700", ad_account_id="act_9", page_id="p2")
+    _post(cliente, "/cliente/acme/meta/agencia/avisar", portafolio_id="77700077700", ad_account_id="act_9", nota="no veo nada")
+    _asignar_en_disco("acme", propia_respaldo={"token": TOKEN_FALSO, "ad_account_id": "act_1", "page_id": "p1"})
+    _post(cliente, "/cliente/acme/meta/agencia/salir")
+    assert set(capturados) == {"meta_conexion_cliente", "meta_solicitud", "meta_cambio_forma"}
+    assert all(callable(a) and callable(c) for a, c in capturados.values())
+    n = proyectos.nombre_visible("acme")
+
+    def textos(idioma):
+        with idiomas.en_idioma(idioma):
+            return {tipo: (a(), c()) for tipo, (a, c) in capturados.items()}
+
+    es = textos("es")
+    assert es["meta_conexion_cliente"] == (
+        f"{n} se conectó a Meta (agencia)",
+        f"El proyecto {n} (acme) conectó por su cuenta: cuenta Cuenta Socio (act_9) · Página Página Cliente · "
+        "portafolio 77700077700.\nRevísalo en el panel de administración › Meta (agencia).")
+    assert es["meta_solicitud"] == (
+        f"{n} pide conectar Meta (agencia)",
+        f"El proyecto {n} (acme) compartió sus activos pero no los vio desde Configuración.\n"
+        "Portafolio 77700077700 · cuenta act_9 · Página no indicada.\n"
+        "Nota: no veo nada\nAsígnalo en el panel de administración › Meta (agencia).")
+    assert es["meta_cambio_forma"] == (
+        f"{n} dejó el modo agencia",
+        f"El proyecto {n} (acme) volvió a usar su propia app de Meta (su conexión anterior se restauró).")
+    en = textos("en")
+    assert en["meta_conexion_cliente"] == (
+        f"{n} connected to Meta (agency)",
+        f"The project {n} (acme) connected on its own: account Cuenta Socio (act_9) · Page Página Cliente · "
+        "portfolio 77700077700.\nReview it in the admin panel › Meta (agency).")
+    assert en["meta_solicitud"] == (
+        f"{n} asks to connect Meta (agency)",
+        f"The project {n} (acme) shared its assets but didn't see them from Settings.\n"
+        "Portfolio 77700077700 · account act_9 · Page not given.\n"
+        "Note: no veo nada\nAssign it in the admin panel › Meta (agency).")
+    assert en["meta_cambio_forma"] == (
+        f"{n} left agency mode",
+        f"The project {n} (acme) went back to using its own Meta app (its previous connection was restored).")

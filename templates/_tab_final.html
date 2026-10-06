@@ -11,36 +11,100 @@
 {# Tarjetas y detalles (spec 2026-09-28 «tarjetas ligeras»): 24 por lista,
    «Ver más» y el detalle por fetch; bloque_organico y editor_angulo los
    importa _final_detalle.html. #}
-{% from "_final_tarjetas.html" import lista_videos_fe, lista_finales_fe with context %}
-<header class="panel-cabecera">
+{# Tablero (pedido de Daniel, 2026-10-02, `final_edition.tablero`): la pestaña
+   ya no repite la lista de Crear. «En edición» = videos ya empezados,
+   «Finalizados» = finales listas (una por país); los videos listos se eligen
+   en «+ Nueva final edition», que los pide por fetch al abrirse. El aspecto
+   (azul marino y azul eléctrico) es de esta sección: el CSS redefine las
+   variables de la base visual dentro de #tab-final (bloque «Final edition:
+   tablero» al final de style.css), así el detalle y sus formularios lo toman
+   sin estilos aparte. #}
+{% from "_final_tarjetas.html" import lista_en_edicion_fe, lista_finalizados_fe with context %}
+{% from "_final_macros.html" import icono_fe with context %}
+<header class="panel-cabecera fe-hero">
   <div>
-    <h2>Final edition</h2>
-    <p class="panel-cabecera-desc">Convierte un video de Crear en un anuncio terminado: guion con IA, voz, música, textos y subtítulos, en el idioma y con el precio de cada país. Abre cada edición en el editor para verla antes de publicarla.</p>
+    <p class="fe-sobretitulo">{{ _('Tablero') }}</p>
+    <h2>{{ _('Final edition') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Convierte un video de Crear en un anuncio terminado: guion con IA, voz, música, textos y subtítulos, en el idioma y con el precio de cada país. Abre cada edición en el editor para verla antes de publicarla.') }}</p>
+  </div>
+  <div class="panel-cabecera-acciones">
+    <button type="button" class="btn-generar" data-fe-elegir>{{ icono_fe("mas") }} {{ _('Nueva final edition') }}</button>
   </div>
 </header>
 
-<section class="fe-pestana-bloque">
-  <h3>Videos listos ({{ final_videos_total }})</h3>
-  {% if not final_videos_total %}
-  <div class="estado-vacio">Todavía no hay videos listos. Genera uno en <a href="#creativeflowplus">Crear</a> y vuelve aquí para terminarlo.</div>
+<ul class="fe-cifras" aria-label="{{ _('Resumen') }}">
+  <li class="fe-cifra"><span class="fe-cifra-icono">{{ icono_fe("editar") }}</span><div><small>{{ _('En edición') }}</small><strong>{{ fe_cifras.en_edicion }}</strong></div></li>
+  <li class="fe-cifra"><span class="fe-cifra-icono">{{ icono_fe("produciendo") }}</span><div><small>{{ _('Produciéndose') }}</small><strong>{{ fe_cifras.produciendo }}</strong></div></li>
+  <li class="fe-cifra"><span class="fe-cifra-icono">{{ icono_fe("listo") }}</span><div><small>{{ _('Finalizados') }}</small><strong>{{ fe_cifras.finalizados }}</strong></div></li>
+  <li class="fe-cifra"><span class="fe-cifra-icono">{{ icono_fe("paises") }}</span><div><small>{{ _('Países') }}</small><strong>{{ fe_cifras.paises }}</strong></div></li>
+  {% if fe_cifras.costo_usd %}
+  <li class="fe-cifra"><span class="fe-cifra-icono">{{ icono_fe("costo") }}</span><div><small>{{ _('Costaron las finales listas') }}</small><strong>{{ fe_cifras.costo_usd | usd }}</strong></div></li>
   {% endif %}
-  <div class="generados-grid" id="fe-videos" data-tarjetas="{{ url_for('final_tarjetas', cliente=cliente, lista='videos') }}">
-    {{ lista_videos_fe(final_videos, 0, final_videos_total) }}
-  </div>
-</section>
+</ul>
 
-<section class="fe-pestana-bloque" style="margin-top:2rem;">
-  <h3>Finales ({{ finales_total }})</h3>
-  {% if not finales_total %}
-  <p class="vacio">Todavía no hay finales. Abre un video de arriba, prepara el guion y elige los países.</p>
-  {% endif %}
-  <div class="generados-grid" id="fe-finales" data-tarjetas="{{ url_for('final_tarjetas', cliente=cliente, lista='finales') }}">
-    {{ lista_finales_fe(finales, 0, finales_total) }}
+<ol class="fe-flujo" aria-label="{{ _('Cómo funciona') }}">
+  <li><span class="fe-flujo-icono">{{ icono_fe("video") }}</span><strong>{{ _('Elige un video') }}</strong><small>{{ _('De los listos en Crear') }}</small></li>
+  <li><span class="fe-flujo-icono">{{ icono_fe("cortar") }}</span><strong>{{ _('Edítalo') }}</strong><small>{{ _('Corta, textos y música, gratis') }}</small></li>
+  <li><span class="fe-flujo-icono">{{ icono_fe("voz") }}</span><strong>{{ _('Localízalo') }}</strong><small>{{ _('Guion, voz y precio por país') }}</small></li>
+  <li><span class="fe-flujo-icono">{{ icono_fe("producir") }}</span><strong>{{ _('Prodúcelo') }}</strong><small>{{ _('Ves el precio antes de cobrar') }}</small></li>
+  <li><span class="fe-flujo-icono">{{ icono_fe("publicar") }}</span><strong>{{ _('Publícalo') }}</strong><small>{{ _('Listo para Meta o redes') }}</small></li>
+</ol>
+
+<div class="fe-columnas">
+  <section class="fe-columna" aria-labelledby="fe-col-edicion">
+    <header class="fe-columna-cab">
+      <span class="fe-numero" aria-hidden="true">01</span>
+      <div>
+        <h3 id="fe-col-edicion">{{ _('En edición') }} <span class="fe-contador">{{ fe_en_edicion_total }}</span></h3>
+        <p>{{ _('Videos que ya empezaste: guion, editor o finales en camino.') }}</p>
+      </div>
+    </header>
+    <div class="generados-grid fe-grid" id="fe-editando" data-tarjetas="{{ url_for('final_tarjetas', cliente=cliente, lista='en_edicion') }}">
+      <button type="button" class="fe-nueva" data-fe-elegir>
+        <span class="fe-nueva-icono">{{ icono_fe("mas") }}</span>
+        <strong>{{ _('Nueva final edition') }}</strong>
+        <small>{{ ngettext('%(num)d video listo en Crear', '%(num)d videos listos en Crear', fe_cifras.elegibles) }}</small>
+      </button>
+      {{ lista_en_edicion_fe(fe_en_edicion, 0, fe_en_edicion_total) }}
+    </div>
+  </section>
+
+  <section class="fe-columna" aria-labelledby="fe-col-finalizados">
+    <header class="fe-columna-cab">
+      <span class="fe-numero" aria-hidden="true">02</span>
+      <div>
+        <h3 id="fe-col-finalizados">{{ _('Finalizados') }} <span class="fe-contador">{{ fe_finalizados_total }}</span></h3>
+        <p>{{ _('Finales listas para publicar, una por país.') }}</p>
+      </div>
+    </header>
+    {% if not fe_finalizados_total %}
+    <div class="estado-vacio fe-vacio">
+      <span class="fe-vacio-icono">{{ icono_fe("listo") }}</span>
+      <p class="estado-vacio-texto">{{ _('Todavía no hay finales listas. Aparecen aquí apenas una termina de producirse.') }}</p>
+    </div>
+    {% endif %}
+    <div class="generados-grid fe-grid" id="fe-finalizados" data-tarjetas="{{ url_for('final_tarjetas', cliente=cliente, lista='finalizados') }}">
+      {{ lista_finalizados_fe(fe_finalizados, 0, fe_finalizados_total) }}
+    </div>
+  </section>
+</div>
+
+<dialog id="fe-elegir" class="generado-modal fe-elegir-modal" aria-labelledby="fe-elegir-titulo">
+  <button type="button" class="generado-cerrar" id="fe-elegir-cerrar" aria-label="{{ _('Cerrar') }}">×</button>
+  <div class="fe-elegir-cuerpo">
+    <header class="fe-columna-cab">
+      <span class="fe-numero" aria-hidden="true">{{ icono_fe("mas") }}</span>
+      <div>
+        <h3 id="fe-elegir-titulo">{{ _('Nueva final edition') }}</h3>
+        <p>{{ _('Elige un video listo de Crear y se abre en el editor, gratis. El guion con IA y cada final muestran su precio antes de cobrar.') }}</p>
+      </div>
+    </header>
+    <div class="generados-grid fe-grid" id="fe-elegibles" data-tarjetas="{{ url_for('final_tarjetas', cliente=cliente, lista='elegir') }}"></div>
   </div>
-</section>
+</dialog>
 
 <dialog id="fe-modal" class="generado-modal">
-  <button type="button" class="generado-cerrar" id="fe-modal-cerrar" aria-label="Cerrar">×</button>
+  <button type="button" class="generado-cerrar" id="fe-modal-cerrar" aria-label="{{ _('Cerrar') }}">×</button>
   <div id="fe-modal-cuerpo" class="generado-modal-cuerpo"></div>
 </dialog>
 <script>
@@ -68,7 +132,7 @@
       if (cb.dataset.yaProducida) reemplaza = true;
     });
     if (!reemplaza) return true;
-    return confirm('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).');
+    return confirm({{ _('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).')|tojson }});
   };
   (function () {
     var panel = document.getElementById('tab-final');
@@ -80,19 +144,75 @@
       if (!card.dataset.detalle) return;
       abrirDetalleRemoto(modal, cuerpo, card.dataset.detalle, alInsertar);
     }
+    // «+ Nueva final edition» (tablero, 2026-10-02): los videos listos de
+    // Crear no van en la página; se piden la primera vez que se abre el
+    // selector (y «Ver más» trae los siguientes). Elegir uno cierra el
+    // selector y abre su detalle, el mismo de siempre.
+    var elegir = document.getElementById('fe-elegir');
+    var elegibles = document.getElementById('fe-elegibles');
+    function abrirElegir() {
+      if (!elegibles.dataset.cargado) {
+        elegibles.dataset.cargado = '1';
+        elegibles.innerHTML = '';
+        elegibles.appendChild(Object.assign(document.createElement('p'), { className: 'vacio', textContent: {{ _('Cargando…')|tojson }} }));
+        fetch(elegibles.dataset.tarjetas + '&desde=0', { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+          .then(function (html) { elegibles.innerHTML = html; })
+          .catch(function () {
+            delete elegibles.dataset.cargado;      // al volver a abrirlo, lo intenta otra vez
+            elegibles.innerHTML = '';
+            elegibles.appendChild(Object.assign(document.createElement('p'), { className: 'vacio', textContent: {{ _('No se pudo cargar. Cierra y vuelve a intentar.')|tojson }} }));
+          });
+      }
+      if (!elegir.open) elegir.showModal();
+    }
+    document.getElementById('fe-elegir-cerrar').addEventListener('click', function () { elegir.close(); });
+    elegir.addEventListener('click', function (e) { if (e.target === elegir) elegir.close(); });
+    // «Ir a Crear» (sin videos listos) cambia de pestaña: el selector no se queda encima.
+    window.addEventListener('hashchange', function () { if (elegir.open) elegir.close(); });
     // Delegado sobre la pestaña: las tarjetas que agrega «Ver más» funcionan
     // igual (spec 2026-09-28 «tarjetas ligeras»).
     panel.addEventListener('click', function (e) {
+      if (e.target.closest('[data-fe-elegir]')) { abrirElegir(); return; }
       var mas = e.target.closest('[data-siguiente]');
       if (mas) { cargarMas(mas); return; }
       var card = e.target.closest('.generado');
-      if (card && !e.target.closest('form, a, button')) abrir(card);
+      if (card && !e.target.closest('form, a, button')) elegirOAbrir(card);
     });
     panel.addEventListener('keydown', function (e) {
       var card = e.target.closest('.generado');
       if (!card || e.target !== card) return;
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(card); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); elegirOAbrir(card); }
     });
+    function elegirOAbrir(card) {
+      if (elegir.contains(card)) { irAlEditor(card); return; }
+      abrir(card);
+    }
+    // Elegir en «+ Nueva» va directo al editor (pedido de Daniel,
+    // 2026-10-02), por el mismo camino que «Editar» del detalle: la edición
+    // que ya tiene, o la preparación gratis (POST a editor.desde_clon, que
+    // vuelve acá con «&abrir=editor» y entra sola al terminar), o esperar la
+    // que ya está en curso. Un segundo clic no hace nada.
+    function irAlEditor(card) {
+      if (card.dataset.abriendo) return;
+      card.dataset.abriendo = '1';
+      var velo = document.createElement('div');
+      velo.className = 'generado-velo fe-abriendo';
+      velo.appendChild(Object.assign(document.createElement('span'), { className: 'generado-estado', textContent: {{ _('Abriendo el editor…')|tojson }} }));
+      card.querySelector('.generado-media').appendChild(velo);
+      if (card.dataset.editorUrl) { location.href = card.dataset.editorUrl; return; }
+      if (card.dataset.desdeClon) {
+        var form = document.createElement('form');
+        form.method = 'post';
+        form.action = card.dataset.desdeClon;
+        document.body.appendChild(form);
+        form.submit();
+        return;
+      }
+      elegir.close();
+      var destino = '#final?cf=' + encodeURIComponent(card.dataset.cf) + '&abrir=editor';
+      if (location.hash === destino) desdeHash(); else location.hash = destino;
+    }
     panel.addEventListener('mouseover', function (e) {
       var card = e.target.closest('.generado');
       if (!card || card.contains(e.relatedTarget)) return;
@@ -132,13 +252,13 @@
       var btn = form && form.querySelector('.fe-producir-btn');
       if (!btn) return;
       var n = form.querySelectorAll('input[name="destinos"]:checked').length;
-      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.plantilla.replace('Producir {n} finales', 'Producir finales');
+      btn.textContent = n === 1 ? btn.dataset.plantillaUno : n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.sinN;
     });
     cuerpo.addEventListener('submit', function (e) {
       var form = e.target;
       if (form.classList.contains('fe-producir') && !form.querySelectorAll('input[name="destinos"]:checked').length) {
         e.preventDefault();
-        alert('Marca al menos un destino.');
+        alert({{ _('Marca al menos un destino.')|tojson }});
       }
     });
     // #final?cf=<id> (el botón «Llevar a final edition» de Crear): abre esa pieza.
@@ -149,7 +269,7 @@
       if (!m) return;
       var cf;
       try { cf = decodeURIComponent(m[1]); } catch (e) { return; }   // un «%» suelto escrito a mano
-      var card = panel.querySelector('#fe-videos .generado[data-cf="' + CSS.escape(cf) + '"]');
+      var card = panel.querySelector('#fe-editando .generado[data-cf="' + CSS.escape(cf) + '"]');
       // Editor capa 4b (9/9): «Editar» encola el trabajo y vuelve acá con
       // &abrir=editor; cuando iniciarPolling() termina, recarga la MISMA
       // URL (mismo hash) — si para entonces la tarjeta ya tiene su edición
@@ -157,9 +277,18 @@
       // trabajo_editor sigue en curso), se entra directo al editor en vez
       // de abrir el detalle. Si la tarjeta no llegó a pintarse (paginada
       // fuera de las primeras 24), se cae al detalle remoto de siempre.
-      if (card && /[?&]abrir=editor(?:&|$)/.test(location.hash) && card.dataset.editorUrl) {
+      var aEditor = /[?&]abrir=editor(?:&|$)/.test(location.hash);
+      if (card && aEditor && card.dataset.editorUrl) {
         history.replaceState(null, '', location.pathname + location.search + '#final?cf=' + encodeURIComponent(cf));
         location.href = card.dataset.editorUrl;
+        return;
+      }
+      // Mientras se prepara para el editor no se abre el detalle encima del
+      // tablero (tablero, 2026-10-02): la tarjeta ya muestra su barra
+      // («Preparando para el editor…»); se la lleva a la vista y se resalta.
+      if (card && aEditor) {
+        card.classList.add('fe-resaltada');
+        card.scrollIntoView({ block: 'center', behavior: 'smooth' });
         return;
       }
       if (card) { abrir(card); return; }

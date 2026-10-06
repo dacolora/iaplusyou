@@ -40,7 +40,7 @@ def _instalar_fake(monkeypatch, respuestas):
             return _Resp(texto, stop_reason=stop_reason)
 
     class FakeAnthropic:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=None):
             self.messages = _Messages()
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "clave-test")
@@ -103,7 +103,50 @@ def test_compilar_devuelve_prompts_a_y_b_compuestos_con_armar(monkeypatch):
     assert "ENFOQUE: producto — el producto es el protagonista" in reg.kwargs[0]["messages"][0]["content"]
     assert "No dialogue. No background music." in r["prompt_a"] and "ESTILO DE MARCA: Luz natural." in r["prompt_a"]
     assert "macro" in r["prompt_b"] and r["prompt_b"] != r["prompt_a"] and r["diferencia_b"].startswith("Arranca")
-    assert r["planos"][0]["camara"] == "dolly_in" and r["usd"] == 0.01 and r["version"] == 1
+    assert r["planos"][0]["camara"] == "dolly_in" and r["usd"] == 0.0 and r["version"] == 1
+
+
+TRES_A = ("dolly_in", "orbita_corta", "estatico")
+TRES_B = ("macro_a_abierto", "travelling_lateral", "cenital")
+
+
+def test_con_receta_pide_un_plano_por_acto_y_le_pasa_los_actos_en_segundos(monkeypatch):
+    """Etapa 3 (spec §9): 8 s son 2 planos por la tabla, pero «Antes y después»
+    tiene 3 actos, así que se piden 3 y Claude recibe los actos en segundos."""
+    import director
+    reg = _instalar_fake(monkeypatch, [_respuesta(cams_a=TRES_A, cams_b=TRES_B)])
+    r = director.compilar("acme", _sesion(plantilla="antes_despues"))
+    assert "exactamente 3 para 8 s" in _sys(reg.kwargs[0])
+    msg = reg.kwargs[0]["messages"][0]["content"]
+    assert "PLANTILLA: «Antes y después»" in msg and "- Acto 1 · 0-2 s · " in msg and "- Acto 3 · 5-8 s · " in msg
+    assert "Cámara del primer plano de la versión A: dolly_in" in msg and "La IDEA manda" in msg
+    assert r["prompt_a"].count("Shot ") == 3
+
+
+def test_con_receta_dos_planos_no_alcanzan_y_se_pide_correccion(monkeypatch):
+    import director
+    reg = _instalar_fake(monkeypatch, [_respuesta(), _respuesta(cams_a=TRES_A, cams_b=TRES_B)])
+    r = director.compilar("acme", _sesion(plantilla="antes_despues"))
+    assert len(reg.kwargs) == 2 and "se esperaban 3 planos" in reg.kwargs[1]["messages"][-1]["content"]
+    assert r["prompt_a"].count("Shot ") == 3
+
+
+def test_receta_desconocida_se_ignora(monkeypatch):
+    import director
+    reg = _instalar_fake(monkeypatch, [_respuesta()])
+    r = director.compilar("acme", _sesion(plantilla="no_existe"))
+    assert "PLANTILLA" not in reg.kwargs[0]["messages"][0]["content"] and r["prompt_a"].count("Shot ") == 2
+
+
+def test_recrear_referencia_nombra_el_video_y_no_trae_actos(monkeypatch):
+    import director
+    refs = [{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1", "url": "https://x/1.png", "frame_url": "https://x/1.png"},
+            {"tipo": "video", "etiqueta": "@Video 1", "token": "Video 1", "url": "https://x/v.mp4", "frame_url": "https://x/v.png"}]
+    reg = _instalar_fake(monkeypatch, [_respuesta()])
+    director.compilar("acme", _sesion(plantilla="recrear_referencia", referencias=refs))
+    msg = reg.kwargs[0]["messages"][0]["content"]
+    assert "PLANTILLA: «Recrear mi video de referencia»" in msg and "estructura de Video 1" in msg and "Acto" not in msg
+    assert "exactamente 2 para 8 s" in _sys(reg.kwargs[0])
 
 
 def test_rechaza_planos_que_no_suman_y_pide_correccion_una_vez(monkeypatch):
@@ -280,3 +323,49 @@ def test_sin_angulo_el_mensaje_del_director_no_trae_bloque(monkeypatch):
     reg = _instalar_fake(monkeypatch, [_respuesta()])
     director.compilar("acme", _sesion())
     assert "ÁNGULO" not in reg.kwargs[0]["messages"][0]["content"]
+
+
+def test_compilar_cuenta_usage_incluida_cache_y_correccion(monkeypatch):
+    import director
+    from types import SimpleNamespace
+    from guiones.claude import tokens_entrada_equivalentes
+    from nicho.avatares import costo_real
+    uso = SimpleNamespace(input_tokens=1000, output_tokens=100, cache_creation_input_tokens=2000, cache_read_input_tokens=3000)
+    original = _Resp.__init__
+    def init(self, *a, **kw):
+        original(self, *a, **kw)
+        self.usage = uso
+    monkeypatch.setattr(_Resp, "__init__", init)
+    _instalar_fake(monkeypatch, ["JSON roto", _respuesta()])
+    r = director.compilar("acme", _sesion())
+    assert r["usd"] == costo_real(2 * tokens_entrada_equivalentes(uso), 200, director.MODEL)
+
+
+def test_director_error_conserva_lo_pagado_antes_de_fallo_api(monkeypatch):
+    import director
+    from types import SimpleNamespace
+    original = _Resp.__init__
+    def init(self, *a, **kw):
+        original(self, *a, **kw)
+        self.usage = SimpleNamespace(input_tokens=1000, output_tokens=100)
+    monkeypatch.setattr(_Resp, "__init__", init)
+    _instalar_fake(monkeypatch, ["JSON roto"])
+    with pytest.raises(director.DirectorError) as exc:
+        director.compilar("acme", _sesion())
+    assert exc.value.costo_usd > 0
+
+
+def test_error_inesperado_del_compositor_conserva_usage(monkeypatch):
+    import director
+    from types import SimpleNamespace
+    original = _Resp.__init__
+    def init(self, *a, **kw):
+        original(self, *a, **kw)
+        self.usage = SimpleNamespace(input_tokens=1000, output_tokens=100)
+    monkeypatch.setattr(_Resp, '__init__', init)
+    llamadas = _instalar_fake(monkeypatch, [_respuesta()])
+    monkeypatch.setattr(director, '_validar_y_componer', lambda *a: (_ for _ in ()).throw(OverflowError('n infinito')))
+    with pytest.raises(director.DirectorError) as exc:
+        director.compilar('acme', _sesion())
+    assert exc.value.costo_usd > 0
+    assert len(llamadas.kwargs) == 1

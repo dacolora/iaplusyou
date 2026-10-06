@@ -24,8 +24,7 @@
   </div>
   {% endfor %}
   {% if trabajo_pedidos %}
-  <div class="barra-progreso" id="trabajo-{{ trabajo_pedidos.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
-  <script>iniciarPolling({{ trabajo_pedidos.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_pedidos.job_id) | tojson }});</script>
+  <div class="barra-progreso" id="trabajo-{{ trabajo_pedidos.job_id }}" data-poll-job="{{ trabajo_pedidos.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
   {% else %}
   <form method="post" action="{{ url_for('prod_pedidos_actualizar', cliente=cliente, pid=comercial.id) }}" class="inline">
     <button type="submit" class="btn-sm">{{ _('Actualizar lo que Claude necesita (%(precio)s)', precio=precio_pedidos) }}</button>

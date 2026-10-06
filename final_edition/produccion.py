@@ -15,10 +15,13 @@ import copy
 import os
 import re
 
+from flask_babel import gettext
+
 import cola
 import creative_flow
 import ediciones
 import final_edition
+import idiomas
 from final_edition import ETAPAS_FINAL, borrador, cortes, guion as guion_mod, insumos, mezcla, musica as musica_mod, tipos
 from final_edition import voz as voz_mod
 from providers import fal_audio
@@ -94,14 +97,26 @@ def _voces_bloques(cliente, guion, nombre_voz, carpeta):
     return voces, round(costo, 4)
 
 
+def _opciones_receta(cliente, o):
+    """Las opciones con que se calcula la receta del borrador. Con una voz
+    propia, `voz` lleva también su `voice_id`: el id de la fila (`vp:<id>`) se
+    puede reutilizar en SQLite tras borrar la voz y la receta no puede tomar un
+    borrador hecho con otra voz. Las de la galería quedan igual (sus recetas de
+    siempre se siguen reutilizando)."""
+    import voces_propias   # perezoso: voces_propias importa final_edition.cortes
+    vp = voces_propias.resolver(cliente, o.get("voz"))
+    return {**o, "voz": f"{o['voz']}:{vp['voice_id']}"} if vp else o
+
+
 def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
     """La edición-borrador de la sesión para esta receta: la reutiliza si
     existe (y no quedó degradada) o la crea pagando solo lo que falte.
     `guion` es el base o el variado (variante); la receta se calcula con el
-    BASE + las opciones (`borrador.receta`). Devuelve (edicion, capas,
-    costo_nuevo, creada). Reporta «Cortes», «Voz» y «Música» solo al crear."""
+    BASE + las opciones (`borrador.receta` sobre `_opciones_receta`). Devuelve
+    (edicion, capas, costo_nuevo, creada). Reporta «Cortes», «Voz» y «Música»
+    solo al crear."""
     formato = borrador.formato_de(entry.get("aspect_ratio"))
-    rec = borrador.receta(guion_base, o, formato)
+    rec = borrador.receta(guion_base, _opciones_receta(cliente, o), formato)
     existente = ediciones.buscar_origen(cliente, cf_id, rec)
     if existente:
         capas = copy.deepcopy(((existente["documento"].get("origen") or {}).get("capas")) or {})
@@ -122,7 +137,7 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
         fin_guion = (guion.get("bloques") or [{}])[-1].get("fin_s") or duracion_clon
         segmentos = cortes.planificar_segmentos(duracion_clon, cortes_s, float(fin_guion))
         if not segmentos:
-            raise RuntimeError("El clon no da para ningún segmento.")
+            raise RuntimeError(gettext("El clon no da para ningún segmento."))
         _capa(capas, "cortes", "ffmpeg", {"cortes": cortes_s, "segmentos": len(segmentos)})
         duracion_final = float(segmentos[-1]["fin"])
         # 1b. sonido de la escena (gratis; el clon mudo no degrada la pieza)
@@ -138,21 +153,23 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
         # 2. voz por bloque (degradable, salvo el primer bloque)
         avisar(ETAPAS_FINAL[2][0])
         voces = None
+        proveedor_voz = final_edition.proveedor_voz(o.get("voz"))
         if not o.get("con_voz", True):
-            _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, estado="omitida")
+            _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, estado="omitida")
         else:
             try:
                 voces, c = _voces_bloques(cliente, guion, o.get("voz"), carpeta)
                 costo += c
-                _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, c)
+                _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, c)
             except voz_mod.ErrorPrimerBloque as e:
-                _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, estado="error", error=_mensaje(e))
-                raise VozFatal(f"No se pudo generar la voz (revisa la voz elegida, '{o.get('voz')}'): {e}",
-                              round(costo, 4), capas) from e
+                _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, estado="error", error=_mensaje(e))
+                raise VozFatal(gettext("No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s",
+                                       voz=final_edition.etiqueta_voz(cliente, o.get("voz")), error=e),
+                               round(costo, 4), capas) from e
             except VozIncompleta as e:
                 degradada, voces = True, None
                 costo += e.costo
-                _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, e.costo, estado="error", error=_mensaje(e))
+                _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, e.costo, estado="error", error=_mensaje(e))
         # 3. música (degradable)
         avisar(ETAPAS_FINAL[3][0])
         musica = None
@@ -180,7 +197,10 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
         doc = borrador.armar_documento(guion, segmentos, clon, voces, musica, marca, formato,
                                        {"con_sonido": pedir_sonido, "mezcla": o.get("mezcla"), "volumenes": o.get("volumenes")},
                                        origen=origen)
-        nombre = "Borrador" if o.get("variante") is None else f"Variante {int(o['variante'])} ({o.get('variante_tipo')})"
+        # El nombre de la edición se guarda: sale en el idioma activo (en el worker, el del proyecto).
+        nombre = (gettext("Borrador") if o.get("variante") is None else
+                  gettext("Variante %(n)s (%(tipo)s)", n=int(o["variante"]),
+                          tipo=idiomas.traducir(tipos.ETIQUETAS_VARIANTE.get(o.get("variante_tipo"), o.get("variante_tipo")))))
         nombre += " · " + (entry.get("accion_central") or cf_id)[:60]
         edicion = ediciones.crear(cliente, "video", nombre, doc, cf_id=cf_id, creada_por="final_edition")
         return edicion, capas, round(costo, 4), True
@@ -250,20 +270,26 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
             costo += float(c or 0.0)
             _capa(capas, "guion", "anthropic", params, c)
             voces = None
-            hay_pista_voz = any(p["tipo"] == "audio" and any(cl.get("rol_audio") == "voz" for cl in p["clips"]) for p in doc["pistas"])
+            # D11 (capa 5a): solo cuentan las voces DEL GUION (con `bloque`)
+            # — una voz agregada en el editor no debe pagarse ni traducirse
+            # aquí.
+            hay_pista_voz = any(p["tipo"] == "audio" and any(borrador.es_voz_de_guion(cl) for cl in p["clips"])
+                               for p in doc["pistas"])
             if con_voz and hay_pista_voz:
                 carpeta = _carpeta_borrador(cliente, edicion.get("cf_id") or f"ed{edicion['id']}")
+                proveedor_voz = final_edition.proveedor_voz(nombre_voz)
                 try:
                     voces, cv = _voces_bloques(cliente, g, nombre_voz, carpeta)
                     costo += cv
-                    _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, cv)
+                    _capa(capas, "voz", proveedor_voz, {"voz": nombre_voz}, cv)
                 except voz_mod.ErrorPrimerBloque as e:
-                    _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=_mensaje(e))
-                    raise VozFatal(f"No se pudo generar la voz (revisa la voz elegida, '{nombre_voz}'): {e}",
-                                  round(costo, 4), capas) from e
+                    _capa(capas, "voz", proveedor_voz, {"voz": nombre_voz}, estado="error", error=_mensaje(e))
+                    raise VozFatal(gettext("No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s",
+                                           voz=final_edition.etiqueta_voz(cliente, nombre_voz), error=e),
+                                   round(costo, 4), capas) from e
                 except VozIncompleta as e:
                     costo += e.costo
-                    _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, e.costo, estado="error", error=_mensaje(e))
+                    _capa(capas, "voz", proveedor_voz, {"voz": nombre_voz}, e.costo, estado="error", error=_mensaje(e))
 
             def aplicar(d):
                 return borrador.agregar_destino(d, g, voces, precio)
@@ -274,7 +300,13 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
     except Exception as e:
         # Lo pagado y las capas construidas viajan con cualquier fallo (un
         # Conflicto al guardar, un proveedor caído) para que `producir` lo registre.
-        e.costo_pagado = round(costo, 4)
+        # Un guion que salió inválido (o una API que se cortó a mitad) trae además lo que
+        # cobraron sus llamadas, y su capa lo dice: sin ella el gasto decía «nada cobrado» (PND-001).
+        usd_guion = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+        if usd_guion:
+            _capa(capas, "guion", "anthropic", {"idioma": idioma, "pais": pais, "precio": precio}, usd_guion,
+                  estado="error", error=_mensaje(e))
+        e.costo_pagado = round(costo + usd_guion, 4)
         e.capas_pagadas = capas
         raise
 
@@ -288,21 +320,24 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
     variante_tipo = o.get("variante_tipo")
     # Validaciones ANTES de tocar la fila final (como siempre).
     if bool(variante_tipo) != (o.get("variante") is not None):
-        raise ValueError("Para producir una variante hay que indicar `variante` (número) y "
-                         "`variante_tipo` (hook | estructura) a la vez.")
+        raise ValueError(gettext("Para producir una variante hay que indicar `variante` (número) y "
+                                 "`variante_tipo` (hook | estructura) a la vez."))
     if variante_tipo and variante_tipo not in guion_mod.VARIANTES_GUION:
-        raise ValueError(
-            f"Tipo de variante no soportado: {variante_tipo}. Opciones: {sorted(guion_mod.VARIANTES_GUION)}")
+        raise ValueError(gettext("Tipo de variante no soportado: %(tipo)s. Opciones: %(opciones)s",
+                                 tipo=variante_tipo, opciones=sorted(guion_mod.VARIANTES_GUION)))
     if o.get("sonido") not in final_edition.SONIDOS_VALIDOS:
-        raise ValueError(f"Capa de sonido no soportada: {o.get('sonido')}. Opciones: {final_edition.SONIDOS_VALIDOS}")
+        raise ValueError(gettext("Capa de sonido no soportada: %(sonido)s. Opciones: %(opciones)s",
+                                 sonido=o.get("sonido"), opciones=final_edition.SONIDOS_VALIDOS))
     mezcla.volumenes_para(o.get("mezcla"), o.get("volumenes"))   # ValueError si el preset no existe
     if pais not in tipos.PAISES:
-        raise ValueError(f"País no soportado: {pais}. Opciones: {sorted(tipos.PAISES)}")
+        raise ValueError(gettext("País no soportado: %(pais)s. Opciones: %(opciones)s",
+                                 pais=pais, opciones=sorted(tipos.PAISES)))
     if not isinstance(idioma, str) or not re.fullmatch(r"[a-z]{2}", idioma):
         # Misma forma que `tareas.edicion.renderizar_final` (idioma/país arman
         # el nombre de la carpeta de trabajo más abajo): se valida ANTES de
         # gastar un centavo, no cuando el render ya pagó todo lo anterior.
-        raise ValueError(f"Idioma no soportado: {idioma!r} (se esperan dos letras minúsculas).")
+        raise ValueError(gettext("Idioma no soportado: %(idioma)s (se esperan dos letras minúsculas).",
+                                 idioma=repr(idioma)))
 
     final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=o.get("variante"))
     costo, costo_base, costo_variante = 0.0, 0.0, 0.0
@@ -320,12 +355,12 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         # Voz y estilo concretos ANTES de la receta (la receta los incluye).
         lista_voces = fal_audio.VOCES.get(guion_base.get("idioma") or "es") or fal_audio.VOCES["es"]
         if not o.get("voz"):
-            o["voz"] = lista_voces[0]
-            if variante_tipo == "hook":
-                # Otra voz que la de la final original del destino (o la
-                # siguiente a la de defecto si no hay original).
-                o["voz"] = final_edition._siguiente(
-                    lista_voces, final_edition._parametro_capa_original(cliente, cf_id, idioma, pais, "voz", "voz") or lista_voces[0])
+            # Una variante conserva la voz propia de la marca (la de la original
+            # del destino o, sin original, la de la sesión); si no hay, la de
+            # gancho rota la galería y la de estructura usa la de defecto (ver
+            # `voz_variante`).
+            o["voz"] = (final_edition.voz_variante(cliente, cf_id, idioma, pais, lista_voces, variante_tipo)
+                        if variante_tipo else lista_voces[0])
         if not o.get("estilo_musica"):
             producto = final_edition._producto(cliente, entry, None)
             estilo = musica_mod.elegir_estilo(producto.get("tipo"), entry.get("enfoque"))
@@ -334,15 +369,24 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
                     tipos.ESTILOS_MUSICA, final_edition._parametro_capa_original(cliente, cf_id, idioma, pais, "musica", "estilo") or estilo)
             o["estilo_musica"] = estilo
         guion_trabajo = guion_base
-        if variante_tipo and ediciones.buscar_origen(cliente, cf_id, borrador.receta(guion_base, o, formato)) is None:
+        if variante_tipo and ediciones.buscar_origen(cliente, cf_id,
+                                                     borrador.receta(guion_base, _opciones_receta(cliente, o), formato)) is None:
             # La variante se escribe UNA vez por receta: los demás destinos
             # de la misma variante la leen del documento (doc["guion"]).
             # Doctrina, bloque 4: la variante recibe el ángulo de la sesión y el
             # contexto de la derivación (arranque objetivo, ganchos usados,
             # diagnóstico, aprendizajes). Antes iba sin ángulo.
-            guion_trabajo, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, final_edition._guia_marca(cliente),
-                                                                   angulo=entry.get("angulo"),
-                                                                   contexto=o.get("contexto_variante"))
+            try:
+                guion_trabajo, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo,
+                                                                       final_edition._guia_marca(cliente),
+                                                                       angulo=entry.get("angulo"),
+                                                                       contexto=o.get("contexto_variante"))
+            except Exception as e:
+                # Las llamadas que no sirvieron (guion inválido o API cortada a mitad) ya
+                # se cobraron: viajan al `except` de abajo, que las anota en el gasto de
+                # la final (PND-001).
+                e.costo_pagado = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+                raise
             costo += float(costo_variante or 0.0)
             # El arranque y el gancho que la variante eligió quedan dentro del
             # guion del borrador (doc["guion"]): los otros destinos de la misma
@@ -354,9 +398,16 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             _capa(capas, "guion", "anthropic",
                   {"idioma": idioma, "pais": pais, "precio": None, "variante_tipo": variante_tipo}, costo_variante)
     except Exception as e:
-        _capa(capas, "guion", "anthropic", {"variante_tipo": variante_tipo} if variante_tipo else {},
+        # Una variante que salió inválida ya cobró sus llamadas (`costo_pagado`): se anota en el
+        # gasto de la final. El guion base no entra aquí: `preparar_guion` anota el suyo (PND-001).
+        pagado = round(float(getattr(e, "costo_pagado", 0.0) or 0.0), 4)
+        _capa(capas, "guion", "anthropic", {"variante_tipo": variante_tipo} if variante_tipo else {}, pagado,
               estado="error", error=_mensaje(e))
-        creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas))
+        creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas),
+                                       costo_usd=round(costo + pagado, 4))
+        if pagado:
+            final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, pagado, _ordenar(capas),
+                                                fallo=True, ref_sufijo=ref_sufijo)
         raise
 
     try:
@@ -397,7 +448,7 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         if "voz" in capas_t:
             previa = capas.get("voz") or {}
             estado = "error" if "error" in (previa.get("estado"), capas_t["voz"]["estado"]) else capas_t["voz"]["estado"]
-            _capa(capas, "voz", "fal/elevenlabs", capas_t["voz"]["parametros"],
+            _capa(capas, "voz", final_edition.proveedor_voz(o["voz"]), capas_t["voz"]["parametros"],
                   float(previa.get("costo_usd") or 0.0) + capas_t["voz"]["costo_usd"], estado=estado,
                   error=capas_t["voz"].get("error") or previa.get("error"))
         # (`guion_destino` arma un dict nuevo sin `angulo_variante`: el ángulo de
@@ -441,7 +492,9 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             cliente, final_id, estado="degradada" if degradada else "listo", url_video=res["url_video"],
             url_miniatura=res["url_miniatura"], duracion_s=float(res["duracion_s"]), capas=capas,
             costo_usd=round(costo, 4), guion=guion, error=None):
-        raise RuntimeError(f"La final {final_id} no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
+        raise RuntimeError(gettext("La final %(final_id)s no existe; la ruta debe crearla con "
+                                   "creative_flow.crear_final antes de encolar.", final_id=final_id))
     if not ediciones.apuntar_final(cliente, final_id, version["id"]):
-        raise RuntimeError(f"La final {final_id} no existe en pieza; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
+        raise RuntimeError(gettext("La final %(final_id)s no existe en pieza; la ruta debe crearla con "
+                                   "creative_flow.crear_final antes de encolar.", final_id=final_id))
     return final_id, creative_flow.final_por_legado(cliente, final_id)

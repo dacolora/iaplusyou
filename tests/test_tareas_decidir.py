@@ -370,7 +370,8 @@ def test_periodica_decidir_registrada():
                                  ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600),
                                  ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
                                  ("materiales_limpiar", 86400),
-                                 ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400)]
+                                 ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
+                                 ("errores_limpiar", 86400), ("cadena_vigilar", 60)]
 
 
 def test_semi_perdedora_se_pausa_ya_y_el_rescate_queda_propuesto(ent, monkeypatch):

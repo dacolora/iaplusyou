@@ -8,6 +8,7 @@ import re
 import pytest
 
 import idiomas
+from tests.conftest import JPG_VALIDO
 from tests.i18n_util import _con_marca, espanol_visible
 
 CLAVES = [
@@ -23,6 +24,7 @@ def app_i18n(base_temporal, tmp_path, monkeypatch):
     import dashboard
     import proyectos
     monkeypatch.setenv("FLASK_SECRET_KEY", "clave-de-prueba-larga-1234567890")
+    monkeypatch.setenv("CREATV_LOGS", str(tmp_path / "logs"))
     for v in CLAVES:
         monkeypatch.delenv(v, raising=False)
     monkeypatch.setattr(dashboard, "_client_dir", lambda cliente: str(tmp_path / "clientes" / cliente))
@@ -327,21 +329,82 @@ def _experimento_sembrado():
                               7, 100000, "https://shop.example/p", "COP", atribucion="ninguna")
 
 
-def test_experimentos_admin_en_ingles(admin_en):
-    _experimento_sembrado()
-    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("tab-experimentos",))
+FRAGMENTO = "/cliente/acme/experimentos/resultados"
+
+
+def _experimento_con_pieza(base_temporal):
+    """Un experimento con una pieza de video que ya gastó: el fragmento de resultados tiene tarjetas, tabla de ranking
+    y evolución, y el panel de la pieza (`exp_pieza`) tiene algo que mostrar. Devuelve (eid, ep_id)."""
+    import experimentos as ex
+    from tests.test_experimentos_db import _pieza
+    eid = _experimento_sembrado()
+    pid = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
+    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    ex.snapshot(ep, {"impresiones": 1000, "clics_enlace": 20, "gasto": 100.0, "ctr": 2.0, "cpc": 5.0})
+    return eid, ep
+
+
+def _meta_conectada(app_i18n, monkeypatch):
+    """Con Meta conectada «Nuevo experimento» pinta sus pasos (sin conectar, solo el aviso de conectar)."""
+    monkeypatch.setattr(app_i18n.meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
+
+
+def _urls_del_centro(eid, ep):
+    """Dónde vive ahora lo que antes pintaba la pestaña de Experimentos: el fragmento (sin y con un experimento
+    elegido, con un periodo y con un filtro de tipo), el panel de una pieza y «Nuevo experimento»."""
+    return [FRAGMENTO, f"{FRAGMENTO}?exp={eid}", f"{FRAGMENTO}?dias=30&tipo=video",
+            f"/cliente/acme/experimentos/pieza/{ep}", "/cliente/acme/experimentos/nuevo"]
+
+
+def test_experimentos_admin_en_ingles(admin_en, app_i18n, base_temporal, monkeypatch):
+    _meta_conectada(app_i18n, monkeypatch)
+    eid, ep = _experimento_con_pieza(base_temporal)
+    html = html_de(admin_en, "/cliente/acme")
+    assert "Results center" in html and "Loading results…" in html and "How the engine decides" in html
+    fugas = espanol_visible(html, ("tab-experimentos",))
     assert not fugas, fugas[:15]
+    for url in _urls_del_centro(eid, ep):
+        fugas = espanol_visible(html_de(admin_en, url))
+        assert not fugas, (url, fugas[:15])
 
 
-def test_experimentos_cliente_en_ingles(cliente_en):
-    _experimento_sembrado()
+def test_experimentos_cliente_en_ingles(cliente_en, app_i18n, base_temporal, monkeypatch):
+    _meta_conectada(app_i18n, monkeypatch)
+    eid, ep = _experimento_con_pieza(base_temporal)
     fugas = espanol_visible(html_de(cliente_en, "/cliente/acme"), ("tab-experimentos",))
     assert not fugas, fugas[:15]
+    for url in _urls_del_centro(eid, ep):
+        fugas = espanol_visible(html_de(cliente_en, url))
+        assert not fugas, (url, fugas[:15])
 
 
-def test_etiquetas_de_estado_en_ingles(admin_en):
-    _experimento_sembrado()
-    html = html_de(admin_en, "/cliente/acme")
+def test_centro_de_resultados_dice_lo_suyo_en_ingles(admin_en, app_i18n, base_temporal, monkeypatch):
+    """Textos concretos del centro (no solo «sin español»: una cadena sin traducir que se lee igual en inglés, como
+    «Total» o «CPC», no la atrapa la heurística), en el fragmento, en la gestión, en el panel y en «Nuevo»."""
+    _meta_conectada(app_i18n, monkeypatch)
+    eid, ep = _experimento_con_pieza(base_temporal)
+    html = html_de(admin_en, FRAGMENTO)
+    for texto in ("Needs your decision", "Period summary", "Day by day", "Where people drop off", "Piece ranking",
+                  "By country", "What the project has already learned", "Month-by-month history",
+                  "+ New experiment", "Since the start", "All experiments", "All pieces", "Video only"):
+        assert texto in html, texto
+    assert "Resumen del periodo" not in html and "Historial mes a mes" not in html
+    gestion = html_de(admin_en, f"{FRAGMENTO}?exp={eid}")
+    assert "Selected experiment" in gestion and "See all experiments" in gestion and "How the engine decides" in gestion
+    assert "Elegido" not in gestion
+    panel = html_de(admin_en, f"/cliente/acme/experimentos/pieza/{ep}")
+    for texto in ("Key metrics", "Day by day", "Who sees it", "Activity log", "Test in another experiment", "See in Create",
+                  "See its experiment", "No events yet."):
+        assert texto in panel, texto
+    nuevo = html_de(admin_en, "/cliente/acme/experimentos/nuevo")
+    for texto in ("01 · Pieces", "02 · Where", "03 · Total and days", "04 · Review", "Back to results",
+                  "Quick test", "Standard", "Strong", "Adjust the split", "Nothing is spent until you press Activate"):
+        assert texto in nuevo, texto
+
+
+def test_etiquetas_de_estado_en_ingles(admin_en, base_temporal):
+    eid, _ep = _experimento_con_pieza(base_temporal)
+    html = html_de(admin_en, f"{FRAGMENTO}?exp={eid}")
     assert ">drafting<" in html and ">queued<" in html
     assert ">armando<" not in html and ">en_cola<" not in html
 
@@ -370,7 +433,7 @@ def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypat
     # creado con..." — el caso que el hallazgo pide comprobar explícitamente.
     admin_en.post("/cliente/acme/experimentos/nuevo", data={
         "nombre": "Test EN", "objetivo": "OUTCOME_TRAFFIC", "paises": ["CO"], "presupuesto_CO": "20000",
-        "dias": "7", "tope_total": "100000", "destino_url": "https://shop.example/p", "atribucion": "ninguna",
+        "dias": "7", "tope_total": "150000", "destino_url": "https://shop.example/p", "atribucion": "ninguna",
     }, headers=MISMO_ORIGEN)
     eid = ex.cargar("acme")[0]["id"]
     propuestas.crear("acme", eid, "escalar", {"pais": "CO"}, "ganador")
@@ -378,7 +441,9 @@ def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypat
         {"id": "d1", "tipo": "rescatar", "estado": "produciendo", "origen_ep_id": None, "motivo": "", "items": []},
     ]})
 
-    html = html_de(admin_en, "/cliente/acme")
+    # La gestión de un experimento (etiquetas, propuestas, derivaciones, eventos) vive en el fragmento del centro
+    # de resultados con el experimento elegido, ya no en la página del proyecto.
+    html = html_de(admin_en, f"{FRAGMENTO}?exp={eid}")
     # atribución (tag del experimento + <select> Avanzado)
     assert "atribución ninguna" not in html and "attribution none" in html
     assert ">ninguna<" not in html
@@ -391,25 +456,42 @@ def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypat
     assert "Experimento creado" not in html and "Experiment created" in html
 
 
+def _cobro_de_septiembre():
+    """Un cobro de generación: la tabla «Mes a mes» tiene una fila con el
+    nombre del mes, que sale del tablero cacheado."""
+    import gastos
+    gastos.registrar("acme", "video", 0.85, "video:cf_1", creado_en="2026-09-10T09:00:00")
+
+
 def test_tablero_en_ingles(admin_en, monkeypatch):
+    """El Tablero ya no es una pestaña (E2, 2026-10-03): su total y su «Mes a mes» viven en el «Historial» del
+    fragmento del centro de resultados."""
     import dashboard
     dashboard._TABLERO_CACHE.clear()
+    _cobro_de_septiembre()
     monkeypatch.setattr(dashboard.db, "ahora", lambda: "2026-09-26T10:00:00")
-    html = html_de(admin_en, "/cliente/acme")
-    assert "Dashboard · September 2026" in html
-    fugas = espanol_visible(html, ("tab-tablero",))
+    html = html_de(admin_en, FRAGMENTO)
+    assert "Month-by-month history" in html and "Month by month" in html and "September 2026" in html
+    assert "<h2>Tablero</h2>" not in html and "Mes a mes" not in html
+    fugas = espanol_visible(html)
     assert not fugas, fugas[:15]
+    # La página del proyecto ya no trae una pestaña Tablero.
+    assert 'id="tab-tablero"' not in html_de(admin_en, "/cliente/acme")
 
 
 def test_tablero_no_mezcla_idiomas_en_la_cache(app_i18n, monkeypatch):
     app_i18n._TABLERO_CACHE.clear()
+    _cobro_de_septiembre()
     monkeypatch.setattr(app_i18n.db, "ahora", lambda: "2026-09-26T10:00:00")
     c = app_i18n.app.test_client()
     with c.session_transaction() as s:
         s["usuario"], s["rol"], s["cliente"] = "admin", "admin", None
-    assert "Tablero · septiembre 2026" in html_de(c, "/cliente/acme")
+    html = html_de(c, FRAGMENTO)
+    assert "Historial mes a mes" in html and "Mes a mes" in html and "septiembre 2026" in html
     idiomas.guardar_de_usuario("admin", "en")
-    assert "Dashboard · September 2026" in html_de(c, "/cliente/acme")
+    html = html_de(c, FRAGMENTO)
+    assert "Month-by-month history" in html and "Month by month" in html and "September 2026" in html
+    assert "septiembre 2026" not in html
 
 
 def test_csv_del_tablero_con_encabezados_en_ingles(admin_en):
@@ -438,15 +520,17 @@ def test_landing_en_el_idioma_del_proyecto(app_i18n, tmp_path, monkeypatch):
 def test_catalogo_producto_con_doctrina_en_ingles(admin_en):
     """Merge de main (doctrina, bloque 2): la ficha de un producto trae el
     selector de sofisticación, «Lo que Claude necesita» y las pruebas del
-    producto (_catalogo_campos_comerciales.html, _producto_doctrina.html,
-    _catalogo_lista.html). Datos sembrados en inglés."""
+    producto (_catalogo_campos_comerciales.html, _producto_doctrina.html).
+    Desde la Tarea 12 la ficha es un fragmento propio (catalogo_ficha), no
+    parte de la página — el flash de «Prueba guardada» sí sigue viéndose ahí.
+    Datos sembrados en inglés."""
     import io
 
     import tiendas
     from doctrina import producto as doctrina_producto
     r = admin_en.post("/cliente/acme/productos/crear", headers=MISMO_ORIGEN, content_type="multipart/form-data",
                       data={"nombre": "Blue Cushion", "descripcion": "soft", "categoria": "producto", "volver": "catalogo",
-                            "imagenes": (io.BytesIO(b"\xff\xd8\xff\xe0fake-jpg"), "a.jpg")})
+                            "imagenes": (io.BytesIO(JPG_VALIDO), "a.jpg")})
     assert r.status_code == 302
     pid = tiendas.por_activo("acme")["blue_cushion"]["id"]
     admin_en.post(f"/cliente/acme/productos/{pid}/pruebas", data={"texto": "Filling of 1,200 g", "fuente": "ficha"},
@@ -455,15 +539,18 @@ def test_catalogo_producto_con_doctrina_en_ingles(admin_en):
                                                          {"texto": "Tell us the warranty", "para_que": "figure"}])
     html = html_de(admin_en, "/cliente/acme")
     assert "Proof saved: Claude can now use it with this product." in html
-    assert "What Claude needs" in html and "2 requests from Claude" in html and "Let Claude decide" in html
     fugas = espanol_visible(html, ("tab-catalogo",))
+    assert not fugas, fugas[:15]
+    ficha = html_de(admin_en, "/cliente/acme/catalogo/producto/blue_cushion/ficha")
+    assert "What Claude needs" in ficha and "Paste a buyer review" in ficha and "Let Claude decide" in ficha
+    fugas = espanol_visible(ficha)
     assert not fugas, fugas[:15]
 
 
 def test_experimentos_doctrina_en_ingles(admin_en):
     """Merge de main (doctrina, bloque 3): las constantes del aviso del paso 3
     salen en inglés (el marcado lo cubre test_experimentos_admin_en_ingles)."""
-    html = html_de(admin_en, "/cliente/acme")
+    html = html_de(admin_en, "/cliente/acme/experimentos/nuevo")
     assert "Doctrine: {n} to improve" in html
     assert "chosen pieces have points to improve according to the doctrine" in html
 
@@ -631,3 +718,254 @@ def test_mis_barridos_en_ingles(admin_en, monkeypatch):
     assert "25 Sep · 15:04" in html
     fugas = espanol_visible(html)
     assert not fugas, fugas[:15]
+
+
+# ---- Fase 6, Task 1: Final edition y los parciales de Crear por fetch -----
+
+GUION_EN = {"idioma": "en", "pais": "US", "moneda": None, "precio_texto": None, "precio_base": None, "bloques": [
+    {"rol": "hook", "texto_pantalla": "Hello", "texto_voz": "Hello there", "inicio_s": 0, "fin_s": 1.5},
+    {"rol": "problema", "texto_pantalla": "It hurts", "texto_voz": "Your feet hurt", "inicio_s": 1.5, "fin_s": 3},
+    {"rol": "producto", "texto_pantalla": "Flip-flops", "texto_voz": "These flip-flops", "inicio_s": 3, "fin_s": 5},
+    {"rol": "prueba", "texto_pantalla": "Thousands", "texto_voz": "Thousands wear them", "inicio_s": 5, "fin_s": 6.5},
+    {"rol": "cta", "texto_pantalla": "Order today", "texto_voz": "Order yours", "inicio_s": 6.5, "fin_s": 8}]}
+
+
+def _final_sembrado():
+    """Un video listo con guion, una final lista con capas y una edición en el
+    editor, todo con datos en inglés (una fuga de un dato no es de la UI)."""
+    import creative_flow as cf
+    import ediciones
+    import materiales
+    from final_edition import documento
+    cf_id = cf.crear("acme", [], ["Rose flip-flop"], [], "the person walks", 8, "", "A")
+    cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2.test/clon.mp4", enfoque="producto")
+    cf.guardar_guion_base("acme", cf_id, GUION_EN)
+    fid = cf.crear_final("acme", cf_id, "en", "US")
+    cf.actualizar_final("acme", fid, estado="listo", url_video="https://r2.test/f.mp4",
+                        url_miniatura="https://r2.test/f.png", duracion_s=8.0, costo_usd=0.12,
+                        capas={"guion": {"proveedor": "anthropic", "estado": "ok", "costo_usd": 0.02},
+                               "voz": {"proveedor": "fal/elevenlabs", "estado": "omitida"},
+                               "musica": {"proveedor": "fal/stable-audio", "estado": "error", "error": "timeout"}})
+    clon = materiales.registrar("acme", tipo="video", origen="crear", url="https://r2.test/clon.mp4", hash="h-fe-clon",
+                                bytes=10, duracion_ms=8000, ancho=1080, alto=1920)
+    doc = documento.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "v0", "inicio_ms": 0, "duracion_ms": 4000, "material_id": clon["id"],
+                                  "recorte": {"desde_ms": 0, "hasta_ms": 4000}}]
+    ediciones.crear("acme", "video", "Rose flip-flop cut", doc, cf_id=cf_id)
+    return cf_id, fid
+
+
+def test_translate_no_salta_solo_el_codigo_de_idioma():
+    """El código de idioma de un destino («en» = inglés, un identificador que
+    no se traduce, §B6) va en un <span translate="no"> y el detector no lo
+    mira; «en» suelto sigue siendo la preposición española y sí cuenta."""
+    codigos = ('<span class="generado-badge">🇺🇸 <span translate="no">en</span></span>'
+               '<small>(<span translate="no">en</span>)</small>'
+               '<p class="detalle-texto">🇺🇸 United States · <span translate="no">en</span></p>')
+    assert espanol_visible(codigos) == []
+    fugas = ('<p>Genera uno en <a>Crear</a></p><p>Filtra en</p><p>Guarda (en)</p>'
+             '<p>Genera uno en Crear</p><p>Qué pasó · en</p>')
+    assert espanol_visible(fugas) == ["Genera uno en", "Filtra en", "Guarda (en)", "Genera uno en Crear", "Qué pasó · en"]
+    # Solo el subárbol marcado: lo que sigue después del </span> vuelve a contar.
+    assert espanol_visible('<p><span translate="no">en</span> Guardar</p>') == ["Guardar"]
+
+
+def test_pestana_final_edition_en_ingles(admin_en):
+    _final_sembrado()
+    html = html_de(admin_en, "/cliente/acme")
+    fugas = espanol_visible(html, ("tab-final",))
+    assert not fugas, fugas[:15]
+    # Tablero (2026-10-02): la final lista va a «Finished»; nada en edición.
+    assert ">Editing <" in html and ">Finished <" in html and "New final edition" in html
+    assert 'fe-contador">1<' in html and "1 ready video in Create" in html
+
+
+@pytest.mark.parametrize("ruta", ["final/detalle", "final/{fid}/detalle"])
+def test_detalles_de_final_edition_en_ingles(admin_en, ruta):
+    cf_id, fid = _final_sembrado()
+    html = html_de(admin_en, f"/cliente/acme/creative_flow/{cf_id}/" + ruta.format(fid=fid))
+    fugas = espanol_visible(html)
+    assert not fugas, (ruta, fugas[:15])
+    for crudo in (">omitida<", ">musica<", ">Lista<", "2. problema<", ">equilibrada<"):   # lo que MARCAS no ve
+        assert crudo not in html, crudo
+
+
+@pytest.mark.parametrize("url", ["/cliente/acme/final/tarjetas?lista=elegir&desde=0",
+                                 "/cliente/acme/final/tarjetas?lista=en_edicion&desde=0",
+                                 "/cliente/acme/final/tarjetas?lista=finalizados&desde=0",
+                                 "/cliente/acme/crear/tarjetas?desde=0",
+                                 "/cliente/acme/creative_flow/{cf}/detalle"])
+def test_tarjetas_y_detalle_por_fetch_en_ingles(admin_en, url):
+    cf_id, _fid = _final_sembrado()
+    fugas = espanol_visible(html_de(admin_en, url.format(cf=cf_id)))
+    assert not fugas, (url, fugas[:15])
+
+
+# ---- Fase 6, Task 2: el editor ------------------------------------------------
+
+def test_editor_en_ingles(admin_en):
+    from tests.test_rutas_editor import _datos, _edicion
+    ed, _clon, _voz = _edicion()
+    html = html_de(admin_en, f"/cliente/acme/ediciones/{ed['id']}")
+    assert '<html lang="en">' in html
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]
+    datos = _datos(html)
+    assert datos["idioma_ui"] == "en"
+    assert datos["textos"]["guardado.ok"] == "Saved"
+
+
+def test_mensajes_del_editor_en_ingles(admin_en):
+    """`_edicion()` no está unida a un video de Crear: producir responde 400
+    con su mensaje, en el idioma de quien mira. La subida de la biblioteca
+    (capa 4b) sin archivo, igual."""
+    from tests.test_rutas_editor import _edicion
+    ed, _clon, _voz = _edicion()
+    r = admin_en.post(f"/cliente/acme/ediciones/{ed['id']}/producir", json={"version_n": 1, "destinos": ["es_CO"]})
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "This edit isn't linked to a Create video: it can't be produced from here yet."
+    r = admin_en.post("/cliente/acme/ediciones/materiales/subir", data={})
+    assert r.status_code == 400 and r.get_json()["error"] == "Choose a file."
+
+
+# ---- Fase 6, Task 4: Crear › Cambiar producto y restos de Configuración -----
+
+def test_cambiar_producto_en_ingles(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("crear-modo-cambiar",))
+    assert not fugas, fugas[:15]
+
+
+def _apartado_gasto(html):
+    """Solo Configuración › Gasto: el Tablero de la misma página ya dice
+    «1 charge to providers →» (otro msgid) y taparía lo que se prueba."""
+    ini = html.index('id="config-ap-gasto"')
+    fin = html.find('<section class="config-apartado"', ini + 1)
+    return html[ini:fin if fin != -1 else None]
+
+
+def test_un_cobro_en_singular_en_ingles(admin_en):
+    import gastos
+    gastos.registrar("acme", "video", 0.5, "video:x", detalle="wan3 · 5 s", proveedor="wavespeed")
+    gasto = _apartado_gasto(html_de(admin_en, "/cliente/acme"))
+    assert "1 charge to providers" in gasto and "charge(s)" not in gasto
+
+
+def test_un_cobro_en_espanol_no_cambia(app_i18n):
+    """El plural inglés sale de ngettext con el MISMO msgid en las dos formas:
+    el español se ve igual. Falla antes del cambio por la primera línea."""
+    import os
+    import gastos
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, "templates", "_tab_settings.html"), encoding="utf-8") as f:
+        assert "ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores'" in f.read()
+    gastos.registrar("acme", "video", 0.5, "video:x", detalle="wan3 · 5 s", proveedor="wavespeed")
+    c = app_i18n.app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"], s["rol"], s["cliente"] = "admin", "admin", None
+    assert "1 cobro(s) a proveedores" in _apartado_gasto(html_de(c, "/cliente/acme"))   # admin sin idioma = es
+
+
+def test_csv_del_gasto_con_encabezados_en_ingles(admin_en):
+    texto = admin_en.get("/cliente/acme/gasto/mes.csv").get_data(as_text=True)
+    assert texto.lstrip("﻿").splitlines()[0] == "date;type;provider;reference;detail;usd"
+
+
+def test_error_de_link_en_ingles(tmp_path):
+    import referencias_link
+    with idiomas.en_idioma("en"), pytest.raises(referencias_link.LinkError) as e:
+        referencias_link.descargar("ftp://algo", str(tmp_path), "x")
+    assert str(e.value) == "That doesn't look like a link (it must start with http:// or https://)."
+
+
+def test_describir_referencias_en_el_idioma_pedido(monkeypatch):
+    import anthropic
+    import generador_prompts
+    import referencias_link
+    visto = {}
+
+    class _Resp:
+        content = [type("B", (), {"type": "text", "text": "A sandal on the sand."})()]
+
+    class _Cliente:
+        def __init__(self, api_key=None, max_retries=0):
+            self.messages = self
+
+        def create(self, **kw):
+            visto.update(kw)
+            return _Resp()
+
+    monkeypatch.setattr(anthropic, "Anthropic", _Cliente)
+    monkeypatch.setattr(generador_prompts, "_api_key", lambda: "sk-test")
+    referencias_link.describir([{"etiqueta": "@Imagen 1", "tipo": "imagen", "url": "https://r2/a.jpg"}], idioma="en")
+    texto = visto["messages"][0]["content"][0]["text"]
+    orden = idiomas.orden_idioma("en")
+    assert texto.startswith(orden) and texto.rstrip().endswith(orden) and "Describe en inglés" in texto
+
+
+# ---- Fase 6, Task 5: admin, Meta y el mapa ---------------------------------
+
+@pytest.mark.parametrize("url", ["/admin/meta", "/admin/referentes"])
+def test_paginas_de_admin_en_ingles(admin_en, url):
+    fugas = espanol_visible(html_de(admin_en, url))
+    assert not fugas, (url, fugas[:15])
+
+
+def test_aviso_de_fallo_de_las_familias_en_ingles(admin_en, monkeypatch):
+    import dashboard
+    from tareas import referentes as tareas_ref
+    real = dashboard.trabajos.consultar
+    monkeypatch.setattr(dashboard.trabajos, "consultar", lambda job_id: (
+        {"estado": "error", "mensaje": "boom"} if job_id == tareas_ref.JOB_FAMILIAS_EN else real(job_id)))
+    assert "The last batch of English descriptions failed: boom" in html_de(admin_en, "/admin/referentes")
+
+
+def test_meta_elegir_en_ingles(cliente_en, monkeypatch):
+    import dashboard
+    monkeypatch.setattr(dashboard.meta_conexion, "cargar_pendiente", lambda c: {
+        "usuario_meta": "Glow Owner",
+        "activos": {"ad_accounts": [{"id": "act_1", "name": "Glow Ads", "currency": "USD"}],
+                    "pages": [{"id": "9", "name": "Glow Page", "ig_username": None}]}})
+    fugas = espanol_visible(html_de(cliente_en, "/cliente/acme/meta/elegir"))
+    assert not fugas, fugas[:15]
+
+
+def test_detalle_del_pixel_se_traduce_al_mostrarlo(admin_en, monkeypatch):
+    import dashboard
+    monkeypatch.setattr(dashboard.meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
+    monkeypatch.setattr(dashboard.meta_conexion, "estado_pixel", lambda c, solo_cache=False: {
+        "estado": "sin_pixel", "pixel_id": None, "nombre": None, "ultimo_disparo": None,
+        "detalle": "La cuenta publicitaria no tiene ningún Pixel."})
+    assert "The ad account has no Pixel." in html_de(admin_en, "/cliente/acme")
+
+
+def test_barra_del_mapa_en_ingles(admin_en):
+    html = html_de(admin_en, "/mapa")
+    fugas = espanol_visible(html, ("mapa-barra",))
+    assert not fugas, fugas
+    assert "This map is internal documentation and is written in Spanish." in html
+
+
+def test_csv_del_panel_con_encabezados_en_ingles(admin_en):
+    texto = admin_en.get("/panel/gasto.csv").get_data(as_text=True)
+    assert texto.lstrip("﻿").splitlines()[0] == "project;date;type;provider;reference;detail;usd"
+
+
+def test_estados_de_barrido_del_admin_con_etiqueta(admin_en):
+    """Fix round 1 (F6-17): los estados de barrido de /admin/referentes se ven
+    con su etiqueta (la de «Mis barridos»), no con la clave cruda."""
+    from referentes import datos
+    for _ in range(2):   # dos importaciones: la última va en la frase, la otra en el historial
+        bid = datos.crear_barrido(None, "copycoders", {"url": "https://go.copycoders.ai/x"}, 100)
+        datos.actualizar_barrido(bid, estado="parcial", traidos=3, nuevos=2, con_imagen=1)
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "shoes", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, estado="parcial", traidos=5)
+    html = html_de(admin_en, "/admin/referentes")
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]
+    assert ">parcial<" not in html and html.count("Incomplete") == 3   # frase, historial y barridos globales
+
+
+def test_fixture_idioma_aisla_registros_locales(app_i18n, tmp_path):
+    from pathlib import Path
+    ruta = Path(app_i18n.registro_app.ruta('web'))
+    assert tmp_path in ruta.parents

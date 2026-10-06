@@ -78,6 +78,60 @@ def test_voz_bloque_transcripcion_vacia_cuenta_como_hecha(entorno, monkeypatch):
     assert len(ll["whisper"]) == 1              # una transcripción vacía cuenta como hecha: no se repite
 
 
+def _voz_propia(cliente="acme", nombre="Ana", voice_id="mmx_1"):
+    import materiales
+    import voces_propias
+    return materiales.registrar(
+        cliente, tipo="audio", origen=voces_propias.ORIGEN, url=f"https://r2/vp_{voice_id}.mp3",
+        hash=materiales.hash_clave("voz_propia", "minimax", voice_id), bytes=10, duracion_ms=3000, costo_usd=3.0,
+        extra={"nombre": nombre, "forma": "disenada", "proveedor": "minimax", "voice_id": voice_id,
+               "idioma_muestra": "sv", "estrenada": False})
+
+
+@pytest.fixture()
+def minimax(monkeypatch):
+    from providers import fal_audio
+    llamadas = []
+    monkeypatch.setattr(fal_audio, "tts_minimax", lambda texto, voice_id, idioma, velocidad=None, timeout=180:
+                        llamadas.append((texto, voice_id, idioma))
+                        or {"url": "https://fal/mm.mp3", "costo_usd": 0.03, "duracion_ms": 1000})
+    return llamadas
+
+
+def test_voz_bloque_con_voz_propia_lee_con_minimax_y_la_estrena(entorno, minimax):
+    import materiales
+    ins, ll = entorno["insumos"], entorno["llamadas"]
+    v = _voz_propia()
+    mat, costo = ins.voz_bloque("acme", "Hola a todos", f"vp:{v['id']}", "en", 1500, entorno["carpeta"])
+    assert minimax == [("Hola a todos", "mmx_1", "en")] and ll["tts"] == []          # ElevenLabs ni se toca
+    assert costo == pytest.approx(0.04) and mat["origen"] == "voz" and mat["extra"]["voz"] == f"vp:{v['id']}"
+    assert mat["hash"] == materiales.hash_clave("voz", "Hola a todos", "minimax", "mmx_1", "en")
+    assert "mmx_1" not in str(mat["extra"])                                     # el voice_id no se copia
+    assert materiales.obtener("acme", v["id"])["extra"]["estrenada"] is True
+    mat2, costo2 = ins.voz_bloque("acme", "Hola a todos", f"vp:{v['id']}", "en", 1500, entorno["carpeta"])
+    assert mat2["id"] == mat["id"] and costo2 == 0.0 and len(minimax) == 1 and len(ll["whisper"]) == 1
+
+
+def test_voz_bloque_cachea_por_voice_id_no_por_el_id_de_la_fila(entorno, minimax):
+    import materiales
+    ins = entorno["insumos"]
+    v = _voz_propia()
+    mat, _ = ins.voz_bloque("acme", "Hola a todos", f"vp:{v['id']}", "es", 1500, entorno["carpeta"])
+    # Otra voz que terminó con el mismo id (SQLite reutiliza el de una fila borrada): otro material.
+    materiales.actualizar_extra("acme", v["id"], voice_id="mmx_2")
+    mat2, costo2 = ins.voz_bloque("acme", "Hola a todos", f"vp:{v['id']}", "es", 1500, entorno["carpeta"])
+    assert mat2["id"] != mat["id"] and costo2 > 0 and [m[1] for m in minimax] == ["mmx_1", "mmx_2"]
+
+
+def test_voz_bloque_voz_propia_borrada_o_ajena_no_llama_a_nadie(entorno, minimax):
+    ins, ll = entorno["insumos"], entorno["llamadas"]
+    ajena = _voz_propia(cliente="otro")
+    for valor in (f"vp:{ajena['id']}", "vp:999999", "vp:abc"):
+        with pytest.raises(ValueError, match="Mis voces"):
+            ins.voz_bloque("acme", "Hola a todos", valor, "es", 1500, entorno["carpeta"])
+    assert minimax == [] and ll["tts"] == [] and ll["whisper"] == []
+
+
 @_sin_ffmpeg
 def test_clon_registra_medidas_local_y_encola_el_proxy(base_temporal, tmp_path, monkeypatch):
     import cola

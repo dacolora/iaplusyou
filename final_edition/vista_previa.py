@@ -5,32 +5,43 @@ configuración que el motor del navegador comparte con el de ffmpeg — sacada
 de los módulos de Python, nunca copiada a mano. Solo lectura: no cambia el
 documento ni paga nada; encolar proxies es gratis (edicion_proxy)."""
 import copy
-import glob
-import os
+import re
 
+import audios
+import idiomas
 import materiales
 import trabajos
-from final_edition import estimar, mezcla
+from final_edition import estimar, fuentes as catalogo_fuentes, mezcla
 from final_edition.documento import FORMATOS
 from final_edition.motor import compilador, subtitulos
 from tareas import edicion as tareas_edicion
 
 VENTANA_PICOS_MS = 50   # tareas.edicion._picos(ventana_ms=50): un pico cada 50 ms
-_FUENTES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "fonts")
+# `@font-face` de la fuente de emojis en la página (capa 5c): la familia que
+# usa el lienzo y el archivo, relativo a `static/`.
+EMOJI_NAVEGADOR = {"familia": "CreatvEmoji", "archivo": "fonts/emoji/TwemojiMozilla.ttf"}
 
 
 def fuentes():
-    """Nombres de las TTF de static/fonts (sin extensión): son los nombres
-    que usan `estilo.fuente` y las @font-face de la página."""
-    return sorted(os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(_FUENTES_DIR, "*.ttf")))
+    """Ids de las fuentes del catálogo (`final_edition.fuentes.catalogo`): son
+    los nombres que usan `estilo.fuente` y las @font-face de la página. La
+    fuente de emojis, que vive en una subcarpeta, nunca aparece aquí."""
+    return [f["id"] for f in catalogo_fuentes.catalogo()]
 
 
 def config_navegador():
+    tipografia = catalogo_fuentes.cargar_tabla()
     return {
         "formatos": {k: list(v) for k, v in FORMATOS.items()},
         "fps": 30,
         "ventana_picos_ms": VENTANA_PICOS_MS,
         "fuentes": fuentes(),
+        # capa 5c: el catálogo con nombre y categoría (el selector de fuentes),
+        # la tabla tipográfica leída de las TTF (con la que el navegador mide
+        # igual que Python) y la fuente de emojis, o None si no hay.
+        "catalogo_fuentes": catalogo_fuentes.catalogo(),
+        "tipografia": tipografia,
+        "emoji": dict(EMOJI_NAVEGADOR) if tipografia["emoji"] else None,
         "mezcla": {
             "presets": mezcla.PRESETS,
             "preset_defecto": mezcla.PRESET_DEFECTO,
@@ -43,28 +54,54 @@ def config_navegador():
     }
 
 
-def material_para(m):
+_IDIOMA_RE = re.compile(r"^[a-z]{2}$")
+
+
+def material_para(m, con_palabras=False):
     """La forma que el navegador necesita de UN material: original + proxy +
     lo medido + lo derivado del proxy (picos, tira), más lo que la
     biblioteca (spec editor capa 4b, Task 1) necesita para mostrarlo sin
-    volver a tocar la base: `tiene_audio`, `nombre` y `origen`."""
+    volver a tocar la base: `tiene_audio`, `nombre` y `origen`; y
+    `mi_musica` (capa 4c): una canción de Mi música — también con origen
+    `subida` si se subió — que se borra solo en Crear, nunca desde el editor
+    (`mi_musica.py` le pone `extra.fuente`). Capa 5a: `tiene_palabras` va
+    siempre (si ya se transcribió); `palabras` solo con `con_palabras=True`
+    (la biblioteca general no las manda: 200 materiales con sus palabras
+    pesarían cientos de KB — spec riesgo 6)."""
     extra = m.get("extra") or {}
-    return {"id": m["id"], "tipo": m["tipo"], "url": m["url"], "url_proxy": m.get("url_proxy"),
-            "duracion_ms": m.get("duracion_ms"), "ancho": m.get("ancho"), "alto": m.get("alto"),
-            "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
-            "tira_url": extra.get("tira_url"), "tiene_audio": extra.get("tiene_audio"),
-            "nombre": extra.get("nombre"), "origen": m["origen"]}
+    d = {"id": m["id"], "tipo": m["tipo"], "url": m["url"], "url_proxy": m.get("url_proxy"),
+         "duracion_ms": m.get("duracion_ms"), "ancho": m.get("ancho"), "alto": m.get("alto"),
+         "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
+         "tira_url": extra.get("tira_url"), "tiene_audio": extra.get("tiene_audio"),
+         "nombre": extra.get("nombre"), "origen": m["origen"], "mi_musica": es_de_mi_musica(m),
+         "tiene_palabras": isinstance(extra.get("palabras"), list),
+         # capa 5c: una imagen de un solo color que se puede teñir (un sticker)
+         "tenible": bool(extra.get("tenible")),
+         # capa 5a (Task 8, fix round 1): el idioma que habla una voz con IA o
+         # una locución, para decidir con qué idioma entra al agregarla
+         "idioma": extra["idioma"] if _IDIOMA_RE.fullmatch(str(extra.get("idioma") or "")) else None}
+    if con_palabras:
+        d["palabras"] = extra.get("palabras")
+    return d
+
+
+def es_de_mi_musica(m):
+    """Una canción de Mi música (subida o creada con ElevenLabs): `mi_musica.py`
+    guarda `extra.fuente` en todas; ninguna otra subida lo lleva."""
+    return bool((m.get("extra") or {}).get("fuente"))
 
 
 def materiales_para(cliente, doc):
     """{material_id: material_para(m)} de los materiales del documento que
-    existen para ESTE cliente (un id ajeno no aparece)."""
+    existen para ESTE cliente (un id ajeno no aparece). Con sus palabras
+    (capa 5a): la página del editor las necesita para derivar los
+    subtítulos (`subtitulos_fuente.aplicar`) sin otra vuelta al servidor."""
     out = {}
     for mid in doc.get("materiales") or []:
         m = materiales.obtener(cliente, int(mid))
         if not m:
             continue
-        out[int(mid)] = material_para(m)
+        out[int(mid)] = material_para(m, con_palabras=True)
     return out
 
 
@@ -73,12 +110,16 @@ def faltantes(doc, mats):
 
 
 def pendientes(mats):
-    """Videos sin proxy o con proxy de una receta anterior, y audios sin
-    picos (el agache de la música los necesita)."""
+    """Videos sin proxy o con proxy de una receta anterior, imágenes sin su
+    copia liviana (D13) y audios sin picos (el agache de la música los
+    necesita)."""
     out = []
     for mid, m in mats.items():
         if m["tipo"] == "video":
             if not m.get("url_proxy") or (m.get("proxy_version") or 1) < tareas_edicion.PROXY_VERSION:
+                out.append(mid)
+        elif m["tipo"] == "imagen":
+            if not m.get("url_proxy"):
                 out.append(mid)
         elif m["tipo"] == "audio" and m.get("picos") is None:
             out.append(mid)
@@ -136,9 +177,23 @@ def documento_para_vista(doc, mats):
     return copia, None
 
 
+def _voces_traducidas():
+    """`audios.fichas_voces()` con `genero_nombre` y `tono` traducidos (son
+    msgids N_): la galería de voces del editor (D9/D12) no tiene plantilla
+    Jinja que los traduzca sola, a diferencia de Crear › Audios."""
+    salida = []
+    for ficha in audios.fichas_voces():
+        salida.append({**ficha, "genero_nombre": idiomas.traducir(ficha["genero_nombre"]),
+                       "tono": idiomas.traducir(ficha["tono"])})
+    return salida
+
+
 def datos_pagina(cliente, edicion, urls):
+    from final_edition import biblioteca   # import tardío: biblioteca importa este módulo
     mats = materiales_para(cliente, edicion["documento"])
     doc, aviso = documento_para_vista(edicion["documento"], mats)
+    job_subtitulos = tareas_edicion.job_id_transcribir(cliente, edicion["id"])
+    job_voz = tareas_edicion.job_id_voz(cliente, edicion["id"])
     return {
         "edicion": {"id": edicion["id"], "nombre": edicion["nombre"], "version_n": edicion["version_n"]},
         "documento": doc,
@@ -150,5 +205,17 @@ def datos_pagina(cliente, edicion, urls):
         "config": config_navegador(),
         "estimado_s": estimar.segundos(doc),
         "cf_id": edicion.get("cf_id"),
+        # Capa 5a: idiomas disponibles para transcribir y si ya hay una
+        # transcripción corriendo en esta edición (la barra sigue viva si la
+        # página se recarga mientras tanto).
+        "subtitulos": {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA},
+        # Task 6: voz con IA (la galería de Crear › Audios) y grabación con el micrófono.
+        "voces": _voces_traducidas(),
+        "voz": {"idiomas": list(audios.IDIOMAS), "nombres_idioma": audios.NOMBRES_IDIOMA,
+               "velocidades": {k: idiomas.traducir(v) for k, v in audios.NOMBRES_VELOCIDAD.items()},
+               "max_caracteres": audios.MAX_CARACTERES, "idioma_defecto": audios.idioma_defecto(cliente)},
+        "grabacion": {"max_ms": biblioteca.MAX_GRABACION_MS, "max_bytes": materiales.LIMITES["audio"][0]},
+        "trabajos_vivos": {"subtitulos": job_subtitulos if trabajos.en_curso(job_subtitulos) else None,
+                           "voz": job_voz if trabajos.en_curso(job_voz) else None},
         "urls": urls,
     }

@@ -111,11 +111,16 @@ def _cf_id_de(pz):
 
 def _rechazar_imagen(cliente, cf_id):
     """Una sesión de imagen no tiene video que cortar: `producir` fallaría
-    después de gastar el guion. Se rechaza antes de planificar nada."""
+    después de gastar el guion. Un anuncio hablado ya trae su voz: una
+    re-edición le pondría otra encima (spec 2026-10-01 §6). Se rechazan antes
+    de planificar nada."""
     sesion = creative_flow.cargar(cliente).get(cf_id) or {}
     if sesion.get("tipo") == "imagen":
         raise ValueError(gettext(
             "Esa pieza viene de una sesión de imagen: no se puede derivar ni rescatar (no hay video)."))
+    if flowplus_modelos.es_sesion_hablada(sesion):
+        raise ValueError(gettext(
+            "Esa pieza es un anuncio hablado: no se puede derivar ni rescatar (pondría otra voz encima)."))
 
 
 def _idiomas(pz, paises_ex, solo=None):
@@ -222,6 +227,21 @@ def modelo_regeneracion(sesion, k):
     return _otro(flowplus_modelos.VIDEO, sesion.get("modelo") or flowplus_modelos.VIDEO_POR_DEFECTO, k)
 
 
+def _voz_vigente(cliente, voz):
+    """`voz` si se puede usar todavía, o None. Una voz propia (`vp:<id>`) se
+    propaga solo si `voces_propias.resolver` aún la encuentra, como en
+    `final_edition._voz_propia_de_la_sesion`: borrada, la final fallaría con
+    «esa voz ya no está» y se queda la voz por defecto de antes (sin `voz`
+    explícita). Una voz de la galería no se resuelve: pasa tal cual."""
+    import audios
+    import voces_propias   # perezoso: voces_propias importa final_edition.cortes
+    if not voz:
+        return None
+    if audios.es_propia(voz) and not voces_propias.resolver(cliente, voz):
+        return None
+    return voz
+
+
 def _item_regeneracion(cliente, cf_id, k, idiomas):
     """Sesión nueva (k-ésima regeneración, k >= 0) con otro modelo de video y
     otro enfoque que el original; el clon se genera en `avanzar`. Una pieza de
@@ -233,8 +253,14 @@ def _item_regeneracion(cliente, cf_id, k, idiomas):
         enfoque = "libre"
     else:
         enfoque = _otro(ENFOQUES, sesion.get("enfoque") or ENFOQUES[0], k)
+    voces = {}
+    for f in creative_flow.finales(cliente, cf_id):
+        if f.get("variante") is None:
+            voz = _voz_vigente(cliente, (((f.get("capas") or {}).get("voz") or {}).get("parametros") or {}).get("voz"))
+            if voz:
+                voces[f"{f['idioma']}_{f['pais']}"] = voz
     nuevo = creative_flow.duplicar(cliente, cf_id, modelo=modelo, enfoque=enfoque)
-    return {"clase": "regeneracion", "variante": None, "variante_tipo": None, "cf_id": nuevo,
+    return {"clase": "regeneracion", "voces": voces, "variante": None, "variante_tipo": None, "cf_id": nuevo,
             "paises": list(idiomas), "idiomas": dict(idiomas), "estado": "produciendo_clon",
             "finales": {}, "ep_ids": [], "error": None}
 
@@ -262,7 +288,7 @@ def _guardar(cliente, experimento_id, derivacion):
         extra["derivaciones"] = sorted(lista, key=_numero)
         return extra
     if experimentos.actualizar_extra(cliente, experimento_id, _poner) is None:
-        raise ValueError("Ese experimento no existe.")
+        raise ValueError(gettext("Ese experimento no existe."))
     return derivacion["id"]
 
 
@@ -507,7 +533,14 @@ def _avanzar_finales(cliente, experimento_id, d, item):
         if clave not in item["finales"]:
             if opciones is None:
                 opciones = _opciones_de(item, cliente)
-            item["finales"][clave] = _encolar_final(cliente, item["cf_id"], idioma, pais, opciones)
+            opciones_destino = dict(opciones)
+            voces = item.get("voces") or {}
+            if voces:
+                # La voz pudo borrarse entre planificar y avanzar: se revisa otra vez.
+                voz = _voz_vigente(cliente, voces.get(clave) or list(voces.values())[-1])
+                if voz:
+                    opciones_destino["voz"] = voz
+            item["finales"][clave] = _encolar_final(cliente, item["cf_id"], idioma, pais, opciones_destino)
             continue
         estado, error = _estado_final(cliente, item["finales"][clave])
         if estado in _ESTADOS_FINAL_OK:

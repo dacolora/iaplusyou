@@ -8,6 +8,7 @@ copiadas tal cual de dashboard.py (que conserva las suyas para el pipeline
 viejo de Higgsfield); lo mismo las constantes ETAPA_* que usa
 ETAPAS_CREATIVE_FLOW — deben seguir siendo las mismas cadenas.
 """
+import math
 import os
 from datetime import datetime, timedelta
 
@@ -20,6 +21,7 @@ import creative_flow
 import estado as estado_mod
 import gastos
 import idiomas
+import saldo
 import trabajos
 from final_edition import cortes, mezcla, musica
 from idiomas import N_
@@ -102,6 +104,7 @@ def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musi
     usd_modelo = float((costo or {}).get("usd") or 0.0)
     gastos.registrar_seguro(
         cliente, tipo, round(usd_modelo + float(usd_musica or 0.0), 4), referencia, detalle=detalle,
+        conservar_mayor=True,
         proveedor=PROVEEDOR,
         extra={"modelo": modelo, "usd_modelo": round(usd_modelo, 4), "usd_musica": round(float(usd_musica or 0.0), 4),
                "credits": (costo or {}).get("credits")},
@@ -235,6 +238,9 @@ def _mensaje_error(e, cliente):
     proveedor se cuenta en palabras (antes salía el JSON crudo de Kling); el
     tiempo agotado dice que el video suele terminar igual y cómo recuperarlo."""
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        if isinstance(e, wavespeed_common.SinSaldo):
+            # Incidente 2026-09-30: antes salía el JSON crudo de WaveSpeed.
+            return saldo.mensaje_tarjeta(e.proveedor)
         if isinstance(e, wavespeed_common.EsperaAgotada):
             return gettext("WaveSpeed seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). "
                            "El video suele terminar igual y se cobra: espera unos minutos y toca «Recuperar el video» "
@@ -251,6 +257,25 @@ def _mensaje_error(e, cliente):
                                modelo=e.nombre_modelo, detalle=e.detalle or e.estado, codigo=e.codigo)
             return gettext("%(modelo)s no pudo generar: %(detalle)s. Un intento fallido normalmente no se cobra.",
                            modelo=e.nombre_modelo, detalle=e.detalle or e.estado)
+        if isinstance(e, wavespeed_common.PedidoRechazado):
+            # PND-107: antes salía el JSON crudo de WaveSpeed en la tarjeta. Cada tipo de
+            # rechazo dice lo suyo; un 5xx NO promete que no se cobró (WaveSpeed pudo
+            # haber creado la predicción sin devolver su id).
+            if e.status in (401, 403):
+                return gettext("WaveSpeed rechazó la llave de Creatv (respuesta %(status)s): no se generó ni se cobró "
+                               "nada. Avísale al administrador.", status=e.status)
+            if e.status == 429:
+                return gettext("WaveSpeed está recibiendo demasiados pedidos (respuesta 429): no se generó ni se "
+                               "cobró nada. Vuelve a intentarlo en unos minutos.")
+            if e.status >= 500:
+                return gettext("WaveSpeed tuvo una falla de su lado (respuesta %(status)s) y no confirmó el pedido. "
+                               "Espera unos minutos antes de volver a generar; si se repite, cambia de modelo.",
+                               status=e.status)
+            if e.mensaje:
+                return gettext("WaveSpeed no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el "
+                               "formato o las referencias y vuelve a generar.", motivo=e.mensaje)
+            return gettext("WaveSpeed no aceptó el pedido (respuesta %(status)s) y no se cobró nada. Vuelve a "
+                           "intentarlo en unos minutos; si se repite, cambia de modelo.", status=e.status)
         return str(e)
 
 
@@ -283,16 +308,51 @@ def _preparar(cliente, cf_id):
         modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.IMAGEN else flowplus_modelos.IMAGEN_POR_DEFECTO
         # Sin formato en la sesión, Seedream sigue a la primera imagen (None).
         aspect_ratio = flowplus_modelos.ajustar_formato(modelo, entry.get("aspect_ratio"), tipo="imagen") if entry.get("aspect_ratio") else None
+    elif flowplus_modelos.es_hablado(entry.get("modelo")):
+        # Anuncio hablado (spec 2026-10-01 §5): el modelo es el de la sesión,
+        # la duración la de la voz (ya en duracion_objetivo) y el formato sale
+        # de la foto: nada que ajustar.
+        modelo = entry["modelo"]
+        aspect_ratio = None
     else:
         modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
         # Última barrera antes de gastar: nunca se pide una duración o un formato
         # que el modelo rechaza (Kling llega a 15 s; Seedance no elige formato
         # salvo sin ninguna imagen, cuando va por su ruta de solo texto).
         duracion = flowplus_modelos.ajustar_duracion(modelo, duracion)
+        if videos_ref and flowplus_modelos.VIDEO[modelo].get("max_total_con_videos"):
+            # Wan 3.0 con videos de referencia (incidente 2026-09-30, 1405 en
+            # Forja): entrada + salida no pasan de 30 s. Las sesiones anteriores
+            # no guardaban la duración del video: se mide acá. La entry que sale
+            # de acá lleva las duraciones, así el gasto las factura igual.
+            entry["referencias"] = _con_duraciones(entry.get("referencias") or [])
+            duracion = flowplus_modelos.duracion_con_videos(modelo, entry["referencias"], duracion)
         aspect_ratio = flowplus_modelos.ajustar_formato(modelo, aspect_ratio,
                                                         solo_texto=not referencias and not videos_ref)
     calidad = entry.get("calidad") if entry.get("calidad") in flowplus_modelos.CALIDADES else "final"
     return entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo, calidad
+
+
+def _con_duraciones(referencias):
+    """Copia de las referencias con `duracion_s` en cada video (medida con
+    ffprobe sobre su URL pública cuando la sesión no la traía; si no se puede
+    medir queda None y ese video no cuenta para el límite ni para el precio)."""
+    salida = []
+    for r in referencias:
+        if r.get("tipo") == "video" and r.get("duracion_s") is None and r.get("url"):
+            try:
+                r = dict(r, duracion_s=round(cortes.duracion(r["url"]), 2))
+            except Exception:  # noqa: BLE001 — sin duración, el proveedor decide
+                r = dict(r, duracion_s=None)
+        salida.append(r)
+    return salida
+
+
+def _kw_videos(modelo, entry):
+    """`videos_ref_s` para estimate_video solo cuando hay videos que el
+    modelo factura (Wan 3.0); vacío si no, así el estimado de siempre no cambia."""
+    segundos = flowplus_modelos.segundos_videos(modelo, entry.get("referencias") or [])
+    return {"videos_ref_s": segundos} if segundos else {}
 
 
 @registrar("flowplus_imagen")
@@ -327,13 +387,17 @@ def ejecutar_imagen(tarea):
         bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
-        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
+        if isinstance(e, wavespeed_common.SinSaldo):
+            saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(e, cliente))
         if costo is not None:
             # El modelo ya cobró aunque la descarga fallara: queda registrado.
             _registrar_gasto(cliente, "imagen", costo, ref, modelo,
-                             f"{modelo} · {len(referencias)} referencia(s) · falló al descargar; el modelo ya cobró")
+                             gettext("%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró",
+                                     modelo=modelo, n=len(referencias)))
         raise
-    _registrar_gasto(cliente, "imagen", costo, ref, modelo, f"{modelo} · {len(referencias)} referencia(s)")
+    _registrar_gasto(cliente, "imagen", costo, ref, modelo,
+                     gettext("%(modelo)s · %(n)s referencia(s)", modelo=modelo, n=len(referencias)))
     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
     try:
         imagen_url = r2_uploader.upload_image(out_path, f"clientes/{cliente}/flowplus/{cf_id}.png")
@@ -346,7 +410,23 @@ def ejecutar_imagen(tarea):
         # deja obsoleta la revisión (y el error) de la doctrina anterior.
         revision_doctrina=None, revision_doctrina_error=None,
     )
+    saldo.limpiar("wavespeed")   # salió bien: hay saldo
+    if isinstance(entry.get("animar_despues"), dict):
+        _animar_imagen(cliente, cf_id, imagen_url)
     return N_("Imagen de FlowPlus lista.")
+
+
+def _animar_imagen(cliente, cf_id, imagen_url):
+    """Recrear como video, «igual» (spec 2026-09-30-recrear-fiel §12): la imagen
+    fiel ya está lista y pagada; ahora se lanza el video que la anima. Nunca
+    tumba la tarea: si lanzar falla, la imagen queda lista con el aviso."""
+    from referentes import recrear      # perezoso: recrear importa flowplus_lanzar, que importa este módulo
+    try:
+        recrear.lanzar_animacion(cliente, cf_id, imagen_url)
+    except Exception as e:  # noqa: BLE001
+        creative_flow.actualizar(cliente, cf_id, animar_error=gettext(
+            "La imagen está lista, pero no se pudo lanzar su video (%(tipo)s). Usa «Editar y crear otra a partir de "
+            "esta» para animarla.", tipo=type(e).__name__))
 
 
 @registrar("flowplus_video")
@@ -368,14 +448,27 @@ def ejecutar_video(tarea):
         # cortable(): si el worker se reinicia, la espera se corta y la retoma
         # flowplus_recuperar por el id de la predicción (nada se pierde).
         with wavespeed_common.cortable(plazo_s=ESPERA_PRIMERA):
-            video_url_wan = flowplus_modelos.generar_video(
-                modelo, prompt_texto, referencias, duracion,
-                aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
-                videos=videos_ref if modelo == "wan3" else None,
-                con_sonido=con_sonido, calidad=calidad,
-                # «Que Wan mejore mi prompt»: solo si la persona marcó la casilla.
-                mejorar_prompt=bool(entry.get("mejorar_prompt")),
-            )
+            if flowplus_modelos.es_hablado(modelo):
+                # Anuncio hablado (spec 2026-10-01 §5): la persona de la foto
+                # dice la voz ya pagada; «Cómo se mueve» va tal cual (vacío =
+                # no se manda y el modelo usa el suyo).
+                hablado = entry.get("hablado") or {}
+                video_url_wan = flowplus_modelos.generar_hablado(
+                    modelo, hablado["foto_url"], hablado["voz_url"], hablado.get("movimiento") or None,
+                    hablado.get("resolucion") or flowplus_modelos.RESOLUCION_HABLADO, on_progreso=avisar_fase,
+                )
+            else:
+                video_url_wan = flowplus_modelos.generar_video(
+                    modelo, prompt_texto, referencias, duracion,
+                    aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
+                    videos=videos_ref if modelo == "wan3" else None,
+                    con_sonido=con_sonido, calidad=calidad,
+                    # «Que Wan mejore mi prompt»: solo si la persona marcó la casilla.
+                    mejorar_prompt=bool(entry.get("mejorar_prompt")),
+                    # Cadena de escenas de Flow Plus: la escena arranca en el último
+                    # fotograma de la anterior y conserva los elementos de Kling.
+                    imagen_inicial=entry.get("imagen_inicial"), elementos=entry.get("elementos"),
+                )
     except wavespeed_common.EsperaAgotada as e:
         # Se acabó la espera (o se cortó por un reinicio) pero WaveSpeed sigue:
         # se sigue esperando solo, en otra tarea del carril de Crear.
@@ -385,12 +478,22 @@ def ejecutar_video(tarea):
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         actual = _sesion_o_vacia(cliente, cf_id)
-        if not isinstance(e, wavespeed_common.ErrorProveedor) and (actual.get("prediccion") or {}).get("id"):
+        sin_saldo = isinstance(e, wavespeed_common.SinSaldo)
+        if sin_saldo:
+            # El lanzamiento se rechazó: no hay predicción nueva que esperar (una
+            # vieja de un intento anterior no es este video) y nada se cobró.
+            saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
+        # Un pedido que WaveSpeed rechazó al lanzar no creó ninguna predicción: una que
+        # haya en la sesión es de un intento anterior y no es este video (revisión de PND-107).
+        rechazado = isinstance(e, wavespeed_common.PedidoRechazado)
+        if (not isinstance(e, wavespeed_common.ErrorProveedor) and not sin_saldo and not rechazado
+                and (actual.get("prediccion") or {}).get("id")):
             # Ya se lanzó y se paga: un corte de red o un 5xx mientras se
             # esperaba no borra la predicción; se la sigue esperando.
             return _seguir_esperando(cliente, cf_id, actual["prediccion"]["id"], modelo, actual)
         campos = {"estado": "error", "error": _mensaje_error(e, cliente)}
-        if not isinstance(e, wavespeed_common.EsperaAgotada):
+        if not isinstance(e, (wavespeed_common.EsperaAgotada, wavespeed_common.SinSaldo,
+                              wavespeed_common.PedidoRechazado)):
             # Un rechazo del proveedor no deja nada que recuperar; el tiempo
             # agotado sí: la predicción sigue viva y su id ya está en la sesión.
             campos["prediccion"] = None
@@ -420,9 +523,9 @@ def recuperar_video(tarea):
         creative_flow.actualizar(cliente, cf_id, estado="error",
                                  error=entry.get("error") or gettext("No hay nada que recuperar: genera de nuevo."))
         return gettext("No hay nada que recuperar en esta pieza.")
-    if pred.get("modelo") in flowplus_modelos.VIDEO:
+    if pred.get("modelo") in flowplus_modelos.VIDEO or flowplus_modelos.es_hablado(pred.get("modelo")):
         modelo = pred["modelo"]
-    nombre = flowplus_modelos.VIDEO[modelo]["nombre"]
+    nombre = flowplus_modelos.nombre_modelo(modelo) or modelo
     avisar_fase = _avisar_fase_de(job_id, cliente)
     trabajos.reportar(job_id, etapa=ETAPA_MODELO)
     try:
@@ -432,7 +535,7 @@ def recuperar_video(tarea):
         outputs = resultado.get("outputs") or []
         if not outputs:
             raise wavespeed_common.ErrorProveedor(nombre, resultado.get("status") or "completed",
-                                                  detalle="terminó sin ninguna salida", prediction_id=pred["id"],
+                                                  detalle=gettext("terminó sin ninguna salida"), prediction_id=pred["id"],
                                                   datos=resultado)
     except wavespeed_common.EsperaAgotada:
         edad = _edad_s(pred)
@@ -473,28 +576,47 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.mp4")
 
+    # La predicción conserva la referencia del intento que pagó, aunque la
+    # descarga se cierre desde otra tarea (PND-109, 2026-10-02).
+    ref_intento = ref
     costo = None
-    detalle_gasto = (f"{modelo} · {int(duracion)} s" + ("" if con_sonido else " · sin sonido")
-                     + (" · borrador 480p" if calidad == "borrador" else "") + (" · recuperado" if recuperado else ""))
+    # El `detalle` del gasto se guarda (Configuración › Gasto): en el idioma del
+    # proyecto, que ya puso worker.ejecutar.
+    partes = [f"{modelo} · {int(duracion)} s"]
+    if not con_sonido:
+        partes.append(gettext("sin sonido"))
+    if calidad == "borrador":
+        partes.append(gettext("borrador 480p"))
+    if recuperado:
+        partes.append(gettext("recuperado"))
+    detalle_gasto = " · ".join(partes)
 
     try:
-        costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=con_sonido, calidad=calidad)
+        costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=con_sonido, calidad=calidad,
+                                                **_kw_videos(modelo, entry))
+        pred = (_sesion_o_vacia(cliente, cf_id).get("prediccion") or {}).copy()
+        if pred.get("id"):
+            if recuperado:
+                ref = pred.get("referencia_gasto") or ref
+            pred["referencia_gasto"] = ref
+            creative_flow.actualizar(cliente, cf_id, prediccion=pred)
         trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
         resp = requests.get(video_url_wan, timeout=180)
         resp.raise_for_status()
         os.makedirs(out_dir, exist_ok=True)     # por si la limpieza diaria la borró mientras bajaba
         with open(out_path, "wb") as f:
             f.write(resp.content)
+        _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto)
         bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
     except Exception as e:
         # El video existe en WaveSpeed y ya se cobró: la sesión conserva la
         # predicción, así que «Recuperar el video» puede volver a bajarlo.
+        if costo is not None:
+            # Registrar antes de persistir el error: esa escritura también puede fallar.
+            _registrar_gasto(cliente, "video", costo, ref, modelo,
+                             detalle_gasto + " · " + gettext("falló al descargar; el modelo ya cobró"))
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
-        if costo is not None:
-            # El modelo ya cobró aunque la descarga fallara: queda registrado.
-            _registrar_gasto(cliente, "video", costo, ref, modelo,
-                             detalle_gasto + " · falló al descargar; el modelo ya cobró")
         raise
 
     # --- Mezcla: ¿trajo sonido? ¿pidió música? (degradable: el video ya está pagado) ---
@@ -519,6 +641,14 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
             else:
                 pista, c = musica.obtener_pista(estilo_musica, float(duracion))
             usd_musica = float(c or 0.0)  # ya se cobró al obtener la pista, se cuenta aunque falle la mezcla
+            if usd_musica > 0:
+                if ref != ref_intento:
+                    gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
+                                           proveedor="fal", detalle=detalle_gasto,
+                                           extra={"usd_musica": usd_musica})
+                else:
+                    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto,
+                                     usd_musica=usd_musica)
             mezclado = os.path.join(out_dir, f"{cf_id}_musica.mp4")
             resultado = mezcla.mezclar_musica(out_path, pista["archivo"], mezclado, duracion_real)
             archivo_final = mezclado
@@ -552,6 +682,21 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         except Exception:
             video_url_crudo = video_url_wan
 
+    if estilo_musica and not musica.es_propia(estilo_musica):
+        estado_musica = (capas.get("musica") or {}).get("estado")
+        detalle_gasto += " + " + gettext("música %(estilo)s", estilo=estilo_musica) + (
+            (" (" + gettext("falló la mezcla; la pista ya se cobró") + ")") if estado_musica == "error" else "")
+    if ref != ref_intento and usd_musica:
+        # Una pista nueva es un cobro del intento de recuperación, separado
+        # del video que ya pagó la tarea original.
+        gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
+                               proveedor="fal", detalle=detalle_gasto,
+                               extra={"usd_musica": usd_musica})
+        usd_musica = 0.0
+    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
+
+    # El gasto de la pista ya quedó anotado si fallara persistir video_listo.
+    # Las referencias hacen idempotente una recuperación de esta misma tarea.
     creative_flow.actualizar(
         cliente, cf_id, estado="video_listo", video_url=video_url, video_local=archivo_final,
         video_url_crudo=video_url_crudo, video_local_crudo=out_path,
@@ -563,11 +708,8 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         # deja obsoleta la revisión (y el error) de la doctrina anterior.
         revision_doctrina=None, revision_doctrina_error=None,
     )
-    if estilo_musica and not musica.es_propia(estilo_musica):
-        estado_musica = (capas.get("musica") or {}).get("estado")
-        detalle_gasto += f" + música {estilo_musica}" + (" (falló la mezcla; la pista ya se cobró)"
-                                                          if estado_musica == "error" else "")
-    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
+    if not recuperado:
+        saldo.limpiar("wavespeed")   # un video nuevo salió bien: hay saldo (uno recuperado ya estaba pagado)
 
     registro = {
         "prompt": prompt_texto,

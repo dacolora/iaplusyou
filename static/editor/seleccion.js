@@ -1,6 +1,7 @@
 // Selección en píxeles del lienzo, compartiendo la geometría del reproductor.
+import { cajaVisible, completo as encuadreCompleto, moverEncuadre, zoomEncuadre } from "./encuadre.js";
 import { FORMATOS } from "./formatos.js";
-import { CAPA_DEFECTO, capasEn, posicionCapa, tamanoCapaImagen } from "./tiempo.js";
+import { activo, CAPA_DEFECTO, capasEn, pistaPrincipal, posicionCapa, tamanoCapaImagen } from "./tiempo.js";
 
 const acotar = (n, a, b) => Math.max(a, Math.min(b, n));
 
@@ -117,14 +118,19 @@ export function escalarDesdeAsa(transform, caja, dxPx, dyPx) {
 
 // Qué se tocó en (px, py): el asa de lo elegido, su caja (arrastrarla mueve lo
 // elegido aunque haya otra capa encima; un toque sin arrastrar elige la de
-// arriba: `alTocar`), otra capa (la de más arriba) o nada. `asa`: la de lo
+// arriba: `alTocar`), otra capa (la de más arriba), el video (capa 5b, D8:
+// con `medidasPrincipal`, el clip de la principal del cabezal —`encuadre`,
+// arrastrar mueve qué parte se ve— y, si es lo elegido, su asa —
+// `asa_encuadre`, lo acerca—) o nada (fuera del lienzo). `asa`: la de lo
 // elegido cuando lo tocado es su asa o su caja (el cursor la usa), si no null.
 // Dentro de la caja el asa alcanza como mucho TOPE_ASA_CAJA de su lado corto:
 // en un logo chico, el radio entero del asa se comería casi toda la caja y
 // tocarlo para moverlo lo agrandaría. Afuera de la caja, el radio entero.
 const TOPE_ASA_CAJA = 0.35;
 
-export function gestoEn(doc, tMs, px, py, { seleccion = null, materiales = {}, medidasTexto = {}, radioAsa = 0, margenAsa = 0 } = {}) {
+export function gestoEn(doc, tMs, px, py, {
+  seleccion = null, materiales = {}, medidasTexto = {}, radioAsa = 0, margenAsa = 0, medidasPrincipal = null,
+} = {}) {
   const arriba = capaEnPunto(doc, tMs, px, py, materiales, medidasTexto);
   const elegida = cajaElegida(doc, tMs, seleccion, materiales, medidasTexto);
   const asa = elegida ? asaDe(elegida, elegida.ancla, doc.formato, margenAsa) : null;
@@ -134,8 +140,62 @@ export function gestoEn(doc, tMs, px, py, { seleccion = null, materiales = {}, m
     return { tipo: "asa", id: seleccion, alTocar: seleccion, caja: elegida, asa };
   }
   if (adentro) return { tipo: "caja", id: seleccion, alTocar: arriba ?? seleccion, caja: elegida, asa };
+  // D8 (capa 5b): el clip de la principal que suena en el cabezal — solo si
+  // quien llama sabe medirlo (sin `medidasPrincipal`, lo de antes: el video
+  // no se toca). Su asa, si es lo elegido, gana como la de una capa elegida
+  // (aunque otra capa la tape); su caja no: tocar una capa la elige.
+  const principal = medidasPrincipal ? clipPrincipalEn(doc, tMs) : null;
+  const encuadre = principal ? gestoEncuadre(doc, principal, medidasPrincipal) : null;
+  if (encuadre && principal.id === seleccion) {
+    const asaP = asaDe(encuadre.caja, "centro", doc.formato, margenAsa);
+    const radioP = dentro(encuadre.caja, px, py)
+      ? Math.min(radioAsa, TOPE_ASA_CAJA * Math.min(encuadre.caja.ancho, encuadre.caja.alto)) : radioAsa;
+    if (Math.hypot(px - asaP.x, py - asaP.y) <= radioP) return { ...encuadre, tipo: "asa_encuadre", asa: asaP };
+  }
   if (arriba) return { tipo: "caja", id: arriba, alTocar: arriba, caja: cajaElegida(doc, tMs, arriba, materiales, medidasTexto), asa: null };
+  if (encuadre && dentroDelLienzo(doc.formato, px, py)) return { ...encuadre, tipo: "encuadre", asa: null };
   return { tipo: "vacio", id: null, alTocar: null, caja: null, asa: null };
+}
+
+// ---- El encuadre del clip de la principal (capa 5b, Tarea 7, D8) ----
+
+const lienzoDe = (formato) => FORMATOS[formato] ?? FORMATOS["9:16"];
+
+function dentroDelLienzo(formato, px, py) {
+  const [w, h] = lienzoDe(formato);
+  return px >= 0 && px <= w && py >= 0 && py <= h;
+}
+
+// El clip de la pista principal de VIDEO (videos y fotos: los que tienen
+// encuadre) que suena en `tMs` — en una transición, el que entra (D8) —, o
+// null (la edición de imagen, antes o después del video).
+export function clipPrincipalEn(doc, tMs) {
+  if (!doc) return null;
+  const p = pistaPrincipal(doc);
+  if (!p || p.tipo !== "video") return null;
+  return p.clips.find((c) => activo(c, tMs)) ?? null;
+}
+
+// Lo que comparten los dos gestos del encuadre: la caja que se ve
+// (encuadre.cajaVisible, la misma que dibuja lienzo.dibujarPrincipal), el
+// encuadre completo del comienzo y las medidas del cuadro (null si todavía
+// no se saben: el arrastre no mueve nada).
+function gestoEncuadre(doc, clip, medidasPrincipal) {
+  const medidas = medidasPrincipal(clip.id) ?? null;
+  const [w, h] = lienzoDe(doc.formato);
+  return {
+    id: clip.id, alTocar: clip.id, medidas, encuadre: encuadreCompleto(clip.encuadre),
+    caja: { ...cajaVisible(clip.encuadre, medidas, w, h), ancla: "centro" },
+  };
+}
+
+// La caja de selección del clip de la principal elegido (lienzo_interaccion
+// la pinta como la de una capa), o null si lo elegido no es el clip de la
+// principal que suena en `tMs` o no hay quien lo mida.
+export function cajaEncuadreElegida(doc, tMs, id, medidasPrincipal) {
+  if (!medidasPrincipal || id === null || id === undefined) return null;
+  const clip = clipPrincipalEn(doc, tMs);
+  return clip && clip.id === id ? gestoEncuadre(doc, clip, medidasPrincipal).caja : null;
 }
 
 // El cambio para operaciones.cambiar que pide un arrastre de (dx, dy) px del
@@ -144,7 +204,20 @@ export function gestoEn(doc, tMs, px, py, { seleccion = null, materiales = {}, m
 // `iman` px del LIENZO — quien llama pasa IMAN_PX × la proporción mostrada,
 // para que pegue igual con el dedo en un reproductor chico; sin `iman`, el de
 // moverCapa. El asa cambia la escala. Redondeado a 4 decimales, como el borrador.
-export function cambiosArrastre({ tipo, transform, caja, formato, iman }, dxPx, dyPx) {
+export function cambiosArrastre({ tipo, transform, caja, formato, iman, encuadre, medidas, asa }, dxPx, dyPx) {
+  // D8: el video. Arrastrar mueve qué parte se ve (sin medidas no se sabe
+  // cuánto: nada); el asa lo acerca. Cada uno pide solo SUS campos:
+  // operaciones.cambiar los fusiona sobre el encuadre de ese momento.
+  if (tipo === "encuadre") {
+    if (!medidas) return { cambios: null, guias: { ...SIN_GUIAS } };
+    const [w, h] = lienzoDe(formato);
+    const m = moverEncuadre(encuadre, medidas, w, h, dxPx, dyPx, iman === undefined ? {} : { iman });
+    return { cambios: { encuadre: { x: m.x, y: m.y } }, guias: m.guias };
+  }
+  if (tipo === "asa_encuadre") {
+    const [w, h] = lienzoDe(formato);
+    return { cambios: { encuadre: { zoom: zoomEncuadre(encuadre, asa, dxPx, dyPx, w, h) } }, guias: { ...SIN_GUIAS } };
+  }
   if (tipo === "asa") {
     return { cambios: { transform: { escala: r4(escalarDesdeAsa(transform, caja, dxPx, dyPx)) } }, guias: { ...SIN_GUIAS } };
   }
@@ -158,6 +231,17 @@ export function superaUmbral(dx, dy, tipoPuntero) {
 }
 
 // `previo`/`actual`: {t (ms), x, y (px de pantalla), id del clip tocado}.
+// Qué queda elegido después de un TOQUE (sin arrastrar) — revisión final de
+// la capa 5b: en el celular el video llena el lienzo y no hay «afuera» que
+// tocar, así que un segundo toque sobre el clip del video que ya estaba
+// elegido (`yaElegido`, medido al bajar el dedo) lo suelta (null). Su asa no
+// lo suelta, y las capas siguen como siempre: dentro de la caja de lo
+// elegido gana la de arriba (`alTocar`).
+export function eleccionTrasToque({ tipo, alTocar, yaElegido }) {
+  if (tipo === "encuadre" && yaElegido) return null;
+  return alTocar;
+}
+
 export function esDobleToque(previo, actual, { ms = DOBLE_TOQUE.ms, distancia = DOBLE_TOQUE.distancia } = {}) {
   if (!previo || !actual || previo.id === null || previo.id === undefined || previo.id !== actual.id) return false;
   const dt = actual.t - previo.t;
@@ -165,8 +249,10 @@ export function esDobleToque(previo, actual, { ms = DOBLE_TOQUE.ms, distancia = 
 }
 
 export function cursorEn(gesto) {
-  if (gesto?.tipo === "asa") return gesto.asa.sx * gesto.asa.sy > 0 ? "nwse-resize" : "nesw-resize";
-  return gesto?.tipo === "caja" ? "move" : "";
+  if (gesto?.tipo === "asa" || gesto?.tipo === "asa_encuadre") {
+    return gesto.asa.sx * gesto.asa.sy > 0 ? "nwse-resize" : "nesw-resize";
+  }
+  return gesto?.tipo === "caja" || gesto?.tipo === "encuadre" ? "move" : "";
 }
 
 // Una caja (o un punto) del lienzo en % de su tamaño: la capa del DOM la

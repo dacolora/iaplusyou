@@ -10,6 +10,7 @@
 <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir" hidden></form>
 <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" id="fp-form-link" hidden></form>
 
+{% include "_aviso_sin_saldo.html" %}
 <div class="crear-comp" id="crear-comp">
   <div class="crear-comp-arriba">
     <div id="fp-bandeja-wrap">
@@ -76,7 +77,7 @@
             <div class="crear-menu crear-menu-ancho" id="fp-menu-modelo" hidden>
               <div class="crear-opciones" data-solo-video>
                 {% for id, m in modelos_flowplus_video.items() %}
-                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-max-videos="{{ m.max_videos }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
+                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-usd-borrador="{{ tarifas_flowplus_borrador[id] }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-max-videos="{{ m.max_videos }}" data-max-total="{{ m.max_total_con_videos or '' }}" data-max-videos-s="{{ m.max_videos_s or '' }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
                 {% endfor %}
               </div>
               <div class="crear-opciones" data-solo-imagen hidden>
@@ -189,7 +190,18 @@
       {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
          cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
          quien tiene una idea pero quiere que la IA arme los planos. Nunca obligatorio. #}
-      <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('¿No sabes qué escribir?') }} <strong>{{ _('Crear super prompt con IA (gratis)') }}</strong></button>
+      <div class="crear-super" data-solo-video>
+        <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('¿No sabes qué escribir?') }} <strong>{{ _('Crear super prompt con IA (gratis)') }}</strong></button>
+        {# Receta de tomas (Etapa 3 del director, 2026-09-30): solo la usa «Crear
+           super prompt»; «Generar video» manda el texto tal cual. #}
+        <label class="crear-receta"><span>{{ _('Receta de tomas') }}</span>
+          <select name="plantilla" id="fp-plantilla">
+            <option value="">{{ _('Sin receta') }}</option>
+            {% for p in plantillas_anuncio %}<option value="{{ p.id }}" data-desc="{{ p.descripcion|traducir }}"{% if p.requiere_video %} data-requiere-video{% endif %}>{{ p.nombre|traducir }}</option>{% endfor %}
+          </select>
+        </label>
+        <p class="crear-nota crear-receta-desc" id="fp-plantilla-desc" hidden></p>
+      </div>
       {# Sin variables quemadas (2026-09-28): todo vuelve a los valores del proyecto y la bandeja se vacía. #}
       <button type="button" class="crear-enlace crear-enlace-gris" id="fp-empezar" title="{{ _('Vacía el texto, el sonido, la música, la bandeja y el catálogo; la duración, el modelo y el formato vuelven a los del proyecto.') }}">{{ _('Empezar de cero') }}</button>
     </div>
@@ -375,8 +387,9 @@
       var st = document.getElementById('fp-sonido'); if (st && prefill.sonido_texto) st.value = prefill.sonido_texto;
       var mu = document.getElementById('fp-musica'); if (mu && typeof prefill.musica_estilo === 'string') mu.value = prefill.musica_estilo;
       if (inicioInput && prefill.musica_inicio_s) inicioInput.value = prefill.musica_inicio_s;
-      var ca = document.getElementById('fp-calidad'); if (ca) ca.checked = prefill.calidad === 'borrador';
+      var ca = document.getElementById('fp-calidad'); if (ca && prefill.calidad) ca.checked = prefill.calidad === 'borrador';
       var me = document.getElementById('fp-mejorar'); if (me) me.checked = !!prefill.mejorar_prompt;
+      var pl = document.getElementById('fp-plantilla'); if (pl && prefill.plantilla) pl.value = prefill.plantilla;
       setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
     }
     // Lo que el modelo admite manda: duraciones fuera de su rango y formatos que
@@ -421,6 +434,41 @@
       var larga = document.getElementById('fp-duracion-larga');
       if (larga) larga.hidden = parseInt(duracion.value, 10) <= 15;
     }
+    // Segundos de los videos de la bandeja que el modelo recibe como video
+    // (solo Wan 3.0, el único con data-max-total), para su límite y su precio
+    // (2026-09-30). Mismas cuentas que flowplus_modelos.segundos_videos y
+    // segundos_facturables_referencia.
+    function segundosVideosBandeja(m) {
+      if (!m || !m.dataset.maxTotal) return [];
+      var maxVid = parseInt(m.dataset.maxVideos || '0', 10);
+      var segs = [];
+      Array.prototype.forEach.call(document.querySelectorAll('#fp-bandeja-wrap #fp-bandeja figure.es-video'), function (fig, i) {
+        if (i < maxVid && fig.dataset.duracion) segs.push(parseFloat(fig.dataset.duracion));
+      });
+      return segs;
+    }
+    function facturablesEntrada(segs) {
+      if (!segs.length) return 0;
+      var total = segs.reduce(function (a, d) { return a + Math.min(15, Math.max(1, d)); }, 0);
+      return Math.ceil(Math.min(15, total) - 1e-9);
+    }
+    // Receta de tomas: «Recrear mi video de referencia» necesita un video en la
+    // bandeja y Wan 3.0 (el único que recibe el video como video); el servidor
+    // lo vuelve a revisar. La descripción de la receta elegida va debajo.
+    var receta = document.getElementById('fp-plantilla');
+    var recetaDesc = document.getElementById('fp-plantilla-desc');
+    function pintarReceta(m, esImagen) {
+      if (!receta) return;
+      var conVideo = !!(m && m.value === 'wan3' && document.querySelector('#fp-bandeja-wrap #fp-bandeja figure.es-video'));
+      Array.prototype.forEach.call(receta.options, function (o) {
+        if (o.hasAttribute('data-requiere-video')) o.disabled = !conVideo;
+      });
+      if (receta.selectedOptions.length && receta.selectedOptions[0].disabled) receta.value = '';
+      var o = receta.selectedOptions[0];
+      var elegida = !!(o && o.value) && !esImagen;
+      recetaDesc.hidden = !elegida;
+      recetaDesc.textContent = elegida ? o.dataset.desc + ' ' + {{ _('Se usa al crear el super prompt; «Generar video» manda tu texto tal cual.')|tojson }} : '';
+    }
     function refrescar() {
       var esImagen = tipoActual() === 'imagen';
       comp.querySelectorAll('[data-solo-video]').forEach(function (el) { el.hidden = esImagen; });
@@ -428,6 +476,8 @@
       var m = modeloActual();
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
+      pintarReceta(m, esImagen);
+      var usdMusica = {{ tarifa_musica_crear|tojson }};
       var usd = 0;
       var conSonido = document.getElementById('fp-check-sonido');
       if (m) {
@@ -435,9 +485,11 @@
           usd = parseFloat(m.dataset.usd);
         } else {
           var seg = parseFloat(m.dataset.usdSeg);
-          var calidad = document.getElementById('fp-calidad'); if (calidad && calidad.checked && m.value === 'wan3') seg = seg - parseFloat(m.dataset.usdSeg) + 0.05; // tarifa 480p de Wan (wan3_client.COSTO_USD_POR_SEGUNDO)
+          var calidad = document.getElementById('fp-calidad'); if (calidad && calidad.checked && m.value === 'wan3') seg = parseFloat(m.dataset.usdBorrador); // misma tarifa que estimate_video
           if (conSonido && !conSonido.checked) seg -= parseFloat(m.dataset.recargo || '0');
-          usd = seg * parseInt(duracion.value, 10) + ((musicaSel && musicaSel.value && !esPropia(musicaSel.value)) ? 0.02 : 0);
+          // Wan 3.0 factura también los segundos de sus videos de referencia (2026-09-30).
+          usd = seg * (parseInt(duracion.value, 10) + facturablesEntrada(segundosVideosBandeja(m)))
+                + ((musicaSel && musicaSel.value && !esPropia(musicaSel.value)) ? usdMusica : 0);
         }
       }
       // «Generar» (video o imagen) cobra al generar con el texto de la persona;
@@ -453,7 +505,7 @@
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
     form.addEventListener('change', function (e) { if (e.target.name === 'productos_catalogo') refrescar(); });
-    ['fp-check-sonido', 'fp-musica', 'fp-calidad', 'fp-mejorar'].forEach(function (id) {
+    ['fp-check-sonido', 'fp-musica', 'fp-calidad', 'fp-mejorar', 'fp-plantilla'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', refrescar);
     });
@@ -629,6 +681,17 @@
     }
     pintarCatalogo();
     refrescar();
+
+    // «Crear con este producto» desde el Catálogo: llega el color marcado, en
+    // la misma precarga de arriba (una vez y solo en este proyecto, _prefill_para).
+    if (prefill && prefill.productos_catalogo) {
+      prefill.productos_catalogo.forEach(function (v) {
+        var cb = form.querySelector('input[name=productos_catalogo][value="' + String(v).replace(/"/g, '') + '"]');
+        if (cb) { cb.checked = true; cb.dispatchEvent(new Event('change', {bubbles: true})); }
+      });
+      pintarCatalogo();
+      refrescar();
+    }
 
     // Chips @Imagen N / @Video N de la bandeja: insertan la etiqueta en el texto.
     var chips = document.getElementById('fp-etiquetas');
@@ -939,6 +1002,29 @@
     var AVISO_REFS = {{ _('__MODELO__ usa hasta __N__ referencias: no usaría __SOBRAN__. Quita las que sobran o cambia de modelo.')|tojson }};
     var AVISO_REFS_UNA = {{ _('__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una.')|tojson }};
     var refsSobrantes = [];
+    var bloqueoDuracion = '';
+    // Wan 3.0 con videos de referencia (incidente 2026-09-30, Forja): juntos
+    // hasta 15 s, y entrada + salida hasta 30 s (flowplus_modelos.problema_duracion).
+    var AVISO_VIDEOS_LARGOS = {{ _('Tus videos de referencia duran __S__ s en total y __MODELO__ admite hasta __MAX__ s. Recórtalos o quita alguno.')|tojson }};
+    var AVISO_TOTAL_VIDEOS = {{ _('__MODELO__ no pasa de __TOTAL__ s sumando tus videos de referencia (__S__ s): el resultado puede durar hasta __MAX__ s. Baja la duración o usa un video más corto.')|tojson }};
+    function problemaDuracion(m, esImagen) {
+      if (esImagen) return '';
+      var segs = segundosVideosBandeja(m);
+      if (!segs.length) return '';
+      var total = Math.round(segs.reduce(function (a, d) { return a + d; }, 0) * 100) / 100;
+      var sTxt = (Math.round(total * 10) / 10).toLocaleString(document.documentElement.lang || undefined);
+      var maxVidS = parseFloat(m.dataset.maxVideosS || '0');
+      if (maxVidS && total > maxVidS) {
+        return AVISO_VIDEOS_LARGOS.replace('__S__', sTxt).replace('__MODELO__', m.dataset.nombre).replace('__MAX__', String(maxVidS));
+      }
+      var maxTotal = parseFloat(m.dataset.maxTotal);
+      var maxima = Math.floor(maxTotal - total);
+      if (parseInt(duracion.value, 10) > maxima) {
+        return AVISO_TOTAL_VIDEOS.replace('__MODELO__', m.dataset.nombre).replace('__TOTAL__', String(maxTotal))
+          .replace('__S__', sTxt).replace('__MAX__', String(maxima));
+      }
+      return '';
+    }
     function etiquetaDe(fig) {
       var cap = fig.querySelector('figcaption');
       return cap ? cap.textContent.split(' · ')[0].trim() : '';
@@ -965,20 +1051,30 @@
     }
     function avisarRefs(m, esImagen) {
       refsSobrantes = [];
+      bloqueoDuracion = '';
       if (!avisoRefs) return;
       var pillModelo = document.getElementById('fp-pill-modelo');
       if (!m) { avisoRefs.hidden = true; return; }
       var r = refsDeMas(m, esImagen);
       refsSobrantes = r.sobran;
-      if (!r.sobran.length) { avisoRefs.hidden = true; return; }
-      var plantilla = r.maxImg === 1 ? AVISO_REFS_UNA : AVISO_REFS;
-      avisoRefs.textContent = plantilla.replace('__MODELO__', m.dataset.nombre).replace('__N__', String(r.maxImg))
-        .replace('__PRIMERA__', r.primera).replace('__SOBRAN__', r.sobran.join(', '));
-      avisoRefs.hidden = false;
-      if (pillModelo) pillModelo.classList.add('co' + 'n-aviso');
+      bloqueoDuracion = problemaDuracion(m, esImagen);
+      var mensajes = [];
+      if (r.sobran.length) {
+        var plantilla = r.maxImg === 1 ? AVISO_REFS_UNA : AVISO_REFS;
+        mensajes.push(plantilla.replace('__MODELO__', m.dataset.nombre).replace('__N__', String(r.maxImg))
+          .replace('__PRIMERA__', r.primera).replace('__SOBRAN__', r.sobran.join(', ')));
+        if (pillModelo) pillModelo.classList.add('co' + 'n-aviso');
+      }
+      if (bloqueoDuracion) {
+        mensajes.push(bloqueoDuracion);
+        var pillDuracion = document.getElementById('fp-pill-duracion');
+        if (pillDuracion) pillDuracion.classList.add('co' + 'n-aviso');
+      }
+      avisoRefs.textContent = mensajes.join(' ');
+      avisoRefs.hidden = !mensajes.length;
     }
     form.addEventListener('submit', function (e) {
-      if (refsSobrantes.length) { e.preventDefault(); avisoRefs.hidden = false; avisoRefs.scrollIntoView({block: 'center'}); }
+      if (refsSobrantes.length || bloqueoDuracion) { e.preventDefault(); avisoRefs.hidden = false; avisoRefs.scrollIntoView({block: 'center'}); }
     });
     avisarRefs(modeloActual(), tipoActual() === 'imagen');
 

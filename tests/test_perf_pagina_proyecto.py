@@ -39,7 +39,11 @@ def _sembrar(n, con_final=True, con_caption=True, desde=0):
                                  video_url=f"https://r2/videos/{cf_id}.mp4", guion_base=f"guion {i}" if i % 2 else None)
         if con_final:
             fid = creative_flow.crear_final("acme", cf_id, "es", "CO")
-            creative_flow.actualizar_final("acme", fid, estado="lista", url_video=f"https://r2/finales/{fid}.mp4")
+            # Tablero de Final edition (2026-10-02): la mitad lista (Finalizados) y
+            # la mitad con error (su video queda en «En edición»), para que las
+            # dos columnas tengan tarjetas.
+            creative_flow.actualizar_final("acme", fid, estado="listo" if i % 2 == 0 else "error",
+                                           url_video=f"https://r2/finales/{fid}.mp4")
         if con_caption:
             pid = creative_flow.pieza_id_por_legado("acme", cf_id)
             organico.crear("acme", pid, "instagram", f"caption viejo {i}")
@@ -75,7 +79,7 @@ def test_lecturas_por_proyecto_coinciden_con_las_por_pieza(base_temporal):
     assert set(por_sesion) == set(ids)
     for cf in ids:
         assert por_sesion[cf] == creative_flow.finales("acme", cf)
-        assert len(por_sesion[cf]) == 1 and por_sesion[cf][0]["estado"] == "lista"
+        assert len(por_sesion[cf]) == 1 and por_sesion[cf][0]["estado"] in ("listo", "error")
     captions = revisor.ultimos_captions("acme")
     assert captions == {cf: revisor.ultimo_caption("acme", cf) for cf in ids}
     assert all(v.startswith("caption nuevo") for v in captions.values())
@@ -135,8 +139,9 @@ def test_la_pagina_no_embebe_detalles_ni_pasa_de_24_tarjetas(app):
     html = app["c"].get("/cliente/acme").data.decode()
     assert '<template class="generado-detalle">' not in html
     # En Crear la cuadrícula cierra antes del modal; en Final edition cada
-    # cuadrícula va en su propio <section>.
-    cierres = {"crear-generados": '<dialog id="generado-modal"', "fe-videos": "</section>", "fe-finales": "</section>"}
+    # columna del tablero va en su propio <section>.
+    cierres = {"crear-generados": '<dialog id="generado-modal"', "fe-editando": "</section>",
+               "fe-finalizados": "</section>"}
     for grid, cierre in cierres.items():
         assert f'id="{grid}"' in html
         seg = html.split(f'id="{grid}"')[1].split(cierre)[0]

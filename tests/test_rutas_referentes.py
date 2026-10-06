@@ -211,7 +211,7 @@ def test_recrear_formulario_precio_y_prompt(app):
     assert "Image 1" in html and "Image 2 y 3" in html and "Titular 0" in html
     assert "Generar imagen" in html and "Como video" in html and "Adaptar con IA" in html
     html_video = c.get(f"/cliente/acme/referentes/{ids[0]}/recrear?tipo=video").data.decode()
-    assert "Generar video" in html_video and "Cámara fija" in html_video
+    assert "Generar 2 videos" in html_video and "Cámara fija" in html_video
     assert c.get(f"/cliente/acme/referentes/{ids[0]}/recrear?producto_id=espejo_led").status_code == 200
 
 
@@ -1120,7 +1120,7 @@ def test_recrear_adaptar_descarta_una_sofisticacion_invalida_del_catalogo(app, m
     tiendas.anotar_extra("acme", fila, sofisticacion=9)
     visto = {}
 
-    def falso_adaptar(referente, familia, producto, titular_actual, guia="", idioma="es"):
+    def falso_adaptar(referente, familia, producto, titular_actual, guia="", idioma="es", **kw):
         visto["sofisticacion"] = producto.get("sofisticacion")
         return {"titular": "T", "prompt": "P", "angulo": {}}, 10, 5
     monkeypatch.setattr(recrear, "adaptar", falso_adaptar)
@@ -1146,3 +1146,397 @@ def test_filtros_plegables_en_el_celular(app):
     css = open("static/style.css", encoding="utf-8").read()
     assert ".ref-filtros { display: contents; }" in css
     assert ".ref-filtros:not(.abierto) { display: none; }" in css
+
+
+# ------------------------------------------------------------- TrendTrack ---
+
+def _estimar_trendtrack(monkeypatch):
+    from referentes.fuentes import trendtrack
+    monkeypatch.setenv("TRENDTRACK_API_KEY", "tt_test")
+    monkeypatch.setattr(trendtrack, "estimar", lambda consulta, tope: {
+        "usd_fuente": 0.0, "llamadas": 6, "detalle": "hasta 300 créditos de TrendTrack"})
+
+
+def test_traer_form_trendtrack_por_palabra_muestra_precio_y_oculta_lo_de_atria(app, monkeypatch):
+    _estimar_trendtrack(monkeypatch)
+    html = app["c"].get("/cliente/acme/referentes/traer?fuente=trendtrack&modo=palabra&palabra=foot+pain&tope=100",
+                        headers={"X-Requested-With": "fetch"}).data.decode()
+    assert "hasta 300 créditos de TrendTrack" in html
+    assert 'value="trendtrack"' in html and 'data-no-fuente="trendtrack"' in html
+    assert "solo busca por palabra clave" not in html                  # el aviso es solo para el modo marca
+    assert "disabled" not in html[html.index('id="traer-enviar"'):html.index('id="traer-enviar"') + 80]
+
+
+def test_traer_form_trendtrack_en_modo_marca_avisa_y_no_deja_enviar(app, monkeypatch):
+    _estimar_trendtrack(monkeypatch)
+    llamadas = []
+    monkeypatch.setattr("referentes.fuentes.trendtrack.estimar", lambda c, t: llamadas.append(c) or {})
+    html = app["c"].get("/cliente/acme/referentes/traer?fuente=trendtrack&modo=marca&pagina_id=123",
+                        headers={"X-Requested-With": "fetch"}).data.decode()
+    assert "solo busca por palabra clave" in html and llamadas == []   # ni siquiera estima
+    boton = html[html.index('id="traer-enviar"'):]
+    assert "disabled" in boton[:boton.index(">")]
+
+
+def test_traer_post_trendtrack_en_modo_marca_no_lanza(app, monkeypatch):
+    from tareas import referentes as tr
+    _estimar_trendtrack(monkeypatch)
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    r = app["c"].post("/cliente/acme/referentes/traer", headers={"Sec-Fetch-Site": "same-origin"},
+                      data={"fuente": "trendtrack", "modo": "marca", "pagina_id": "123", "tope": "50"}, follow_redirects=True)
+    assert "no admite este tipo de búsqueda" in r.data.decode() and llamadas == []
+
+
+def test_traer_post_trendtrack_por_palabra_lanza_el_barrido(app, monkeypatch):
+    from tareas import referentes as tr
+    _estimar_trendtrack(monkeypatch)
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    r = app["c"].post("/cliente/acme/referentes/traer", headers={"Sec-Fetch-Site": "same-origin"},
+                      data={"fuente": "trendtrack", "modo": "palabra", "palabra": "foot pain", "tope": "50"})
+    assert r.status_code == 302 and len(llamadas) == 1
+    assert llamadas[0][1] == "trendtrack" and llamadas[0][2]["palabra"] and llamadas[0][3] == 50
+
+
+def test_traer_post_trendtrack_sin_llave_no_lanza(app, monkeypatch):
+    from tareas import referentes as tr
+    monkeypatch.delenv("TRENDTRACK_API_KEY", raising=False)
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    r = app["c"].post("/cliente/acme/referentes/traer", headers={"Sec-Fetch-Site": "same-origin"},
+                      data={"fuente": "trendtrack", "modo": "palabra", "palabra": "foot pain"}, follow_redirects=True)
+    assert "no está configurada" in r.data.decode() and llamadas == []
+
+
+def test_admin_trendtrack_modo_marca_no_lanza_y_el_panel_muestra_los_creditos(app, monkeypatch):
+    from referentes.fuentes import trendtrack
+    from tareas import referentes as tr
+    _estimar_trendtrack(monkeypatch)
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    c = app["c"]
+    r = c.post("/admin/referentes/traer", headers={"Sec-Fetch-Site": "same-origin"},
+               data={"fuente": "trendtrack", "modo": "marca", "pagina_id": "123"}, follow_redirects=True)
+    assert "no admite este tipo de búsqueda" in r.data.decode() and llamadas == []
+    trendtrack._sumar_creditos(42)
+    trendtrack._guardar_saldo({"X-Credits-Remaining": "19958"})
+    html = c.get("/admin/referentes?fuente=trendtrack&modo=palabra&palabra=foot+pain").data.decode()
+    assert "TrendTrack: 42 créditos gastados" in html and "le quedaban 19958 créditos" in html
+    assert "Traer y clasificar ≈ US$" in html
+    # sin llave, el contador no se muestra
+    monkeypatch.delenv("TRENDTRACK_API_KEY")
+    assert "TrendTrack: 42 créditos" not in c.get("/admin/referentes").data.decode()
+
+
+# --- Recrear fiel (spec 2026-09-30-recrear-fiel) ---
+
+LECTURA = {"version": 1, "composicion": "Two sandals side by side on a white background, seen from above",
+           "producto": "heeled sandal", "unidades": 2, "personas": False, "ancho": 1080, "alto": 1080,
+           "textos": [{"texto": "50% OFF", "rol": "oferta", "ubicacion": "top center"},
+                      {"texto": "Inochhi", "rol": "marca", "ubicacion": "bottom right"}]}
+
+
+def _con_lectura(rid, **cambios):
+    from referentes import datos
+    datos.guardar_lectura(rid, dict(LECTURA, **cambios))
+
+
+def _sin_r2_ni_lanzar(monkeypatch):
+    import flowplus_lanzar
+    monkeypatch.setattr("referentes.recrear.r2_uploader.upload_image", lambda local, clave: f"https://r2/{clave}")
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzados.append(cf_id) or True)
+    return lanzados
+
+
+def test_recrear_leer_guarda_una_vez_y_cobra_una_vez(app, monkeypatch):
+    import gastos
+    from referentes import datos, lectura
+    ids = _sembrar()
+    llamadas = []
+    monkeypatch.setattr(lectura, "leer", lambda r: llamadas.append(r["id"]) or (dict(LECTURA, modelo="m"), 900, 300))
+    monkeypatch.setattr(lectura, "medir", lambda url: (1080, 1350))
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/leer", headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200 and r.get_json() == {"ok": True, "cobrado": True}
+    guardada = datos.referente("acme", ids[0])["extra"]["lectura"]
+    assert guardada["composicion"] == LECTURA["composicion"] and (guardada["ancho"], guardada["alto"]) == (1080, 1350)
+    gasto = gastos.historial("acme", limite=1)[0]
+    assert gasto["tipo"] == "adaptar_referente" and gasto["usd"] > 0 and "lectura" in gasto["detalle"]
+    r2 = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/leer")
+    assert r2.get_json() == {"ok": True, "cobrado": False} and llamadas == [ids[0]]
+    assert len(gastos.historial("acme", limite=10)) == 1
+
+
+def test_recrear_leer_falla_registra_lo_pagado_y_no_guarda(app, monkeypatch):
+    import gastos
+    from referentes import datos, lectura
+    ids = _sembrar()
+
+    def invalida(r):
+        e = lectura.LecturaInvalida("Claude no describió la composición.")
+        e.tokens_entrada, e.tokens_salida = 700, 40
+        raise e
+    monkeypatch.setattr(lectura, "leer", invalida)
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/leer")
+    assert r.status_code == 502 and "composición" in r.get_json()["error"]
+    assert "lectura" not in (datos.referente("acme", ids[0])["extra"] or {})
+    assert gastos.historial("acme", limite=1)[0]["usd"] > 0
+
+    def caida(r):
+        raise ConnectionError("x")
+    monkeypatch.setattr(lectura, "leer", caida)
+    r2 = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/leer")
+    assert r2.status_code == 502 and "ConnectionError" in r2.get_json()["error"]
+    assert app["c"].post("/cliente/acme/referentes/999999/recrear/leer").status_code == 404
+
+
+def test_recrear_post_de_otro_sitio_403(app):
+    ids = _sembrar()
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/leer", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    r2 = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar", data={"producto_id": "espejo_led"},
+                       headers={"Sec-Fetch-Site": "cross-site"})
+    assert r2.status_code == 403
+
+
+def test_recrear_formulario_sin_lectura_pide_leer(app):
+    ids = _sembrar()
+    html = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear").data.decode()
+    assert "data-recrear-leer" in html and "Leyendo la referencia" in html
+    assert f"/cliente/acme/referentes/{ids[0]}/recrear/leer" in html
+    assert 'name="traer_textos"' in html and 'value="9:16" selected' in html
+    assert 'name="modo" value="fiel"' in html and 'name="modo" value="libre"' in html
+    assert "Generar 2 imágenes" in html and 'name="prompt_fiel"' in html
+
+
+def test_recrear_formulario_con_lectura_pinta_textos_y_formato_cercano(app):
+    ids = _sembrar()
+    _con_lectura(ids[0])
+    html = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear").data.decode()
+    assert "data-recrear-leer" not in html
+    assert 'name="texto_0"' in html and 'value="50% OFF"' in html
+    assert 'name="texto_1"' in html and "Inochhi" in html          # la marca: vacía, con el original de pista
+    assert 'name="texto_1" maxlength="200" value=""' in html
+    assert 'value="1:1" selected' in html                            # 1080×1080 → 1:1
+    assert "Image 1 muestra" in html                                 # el prompt fiel ya trae la composición
+
+
+def test_recrear_formulario_sin_textos_en_la_referencia(app):
+    ids = _sembrar()
+    _con_lectura(ids[0], textos=[])
+    html = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear").data.decode()
+    assert "Esta referencia no tiene textos dentro de la imagen." in html and 'name="texto_0"' not in html
+
+
+def test_recrear_formulario_recarga_conserva_lo_escrito(app):
+    ids = _sembrar()
+    _con_lectura(ids[0])
+    html = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear?campos_vista=1&texto_0=40%25+OFF"
+                        f"&modos_vista=1&modo=fiel&formato=4:5&formato_elegido=1").data.decode()
+    assert 'value="40% OFF"' in html and 'value="4:5" selected' in html and 'data-elegido="1"' in html
+    assert 'name="traer_textos" value="1" data-recrear-traer checked' not in html   # casilla apagada al no venir
+    assert 'value="libre" data-recrear-modo checked' not in html and 'value="fiel" data-recrear-modo checked' in html
+
+
+def test_recrear_generar_dos_imagenes_fiel_primero(app, monkeypatch):
+    import creative_flow
+    ids = _sembrar()
+    _con_lectura(ids[0])
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                      data={"producto_id": "espejo_led", "formato": "1:1", "tipo": "imagen", "campos_vista": "1",
+                            "traer_textos": "1", "texto_0": "40% OFF", "texto_1": "", "modos_vista": "1",
+                            "modo": ["fiel", "libre"], "prompt": "viejo", "prompt_fiel": "viejo"})
+    assert r.status_code == 302 and len(lanzados) == 2
+    sesiones = creative_flow.cargar("acme")
+    fiel, libre = sesiones[lanzados[0]], sesiones[lanzados[1]]
+    assert fiel["recrear_modo"] == "fiel" and libre["recrear_modo"] == "libre"
+    assert fiel["prompt_relleno"] != "viejo" and "Edita Image 1" in fiel["prompt_relleno"]
+    assert "cambia «50% OFF» por «40% OFF»" in fiel["prompt_relleno"] and "quita «Inochhi»" in fiel["prompt_relleno"]
+    assert "cambia «50% OFF» por «40% OFF»" in libre["prompt_relleno"] and "Sigue la ESTRUCTURA" in libre["prompt_relleno"]
+    assert fiel["accion_central"] == "Recrear: 40% OFF · igual" and libre["accion_central"] == "Recrear: 40% OFF · variación"
+    assert fiel["referencias_urls"] == libre["referencias_urls"] and fiel["referente_id"] == ids[0]
+
+
+def test_recrear_generar_respeta_el_prompt_editado_y_un_solo_modo(app, monkeypatch):
+    import creative_flow
+    ids = _sembrar()
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "1:1", "tipo": "imagen", "campos_vista": "1",
+                        "modos_vista": "1", "modo": "fiel", "prompt_fiel": "MI PROMPT", "prompt_fiel_editado": "1"})
+    assert len(lanzados) == 1
+    entry = creative_flow.cargar("acme")[lanzados[0]]
+    assert entry["prompt_relleno"] == "MI PROMPT" and entry["recrear_modo"] == "fiel"
+
+
+def test_recrear_generar_sin_modos_o_editado_vacio_no_crea_nada(app, monkeypatch):
+    import creative_flow
+    ids = _sembrar()
+    _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "1:1", "tipo": "imagen", "campos_vista": "1",
+                        "modos_vista": "1"})
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "1:1", "tipo": "imagen", "campos_vista": "1",
+                        "modos_vista": "1", "modo": "libre", "prompt": "  ", "prompt_editado": "1"})
+    assert creative_flow.cargar("acme") == {}
+
+
+def test_recrear_generar_video_una_sola_pieza_sin_texto(app, monkeypatch):
+    import creative_flow
+    ids = _sembrar()
+    _con_lectura(ids[0])
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1",
+                        "modo": ["fiel", "libre"]})
+    assert len(lanzados) == 1
+    entry = creative_flow.cargar("acme")[lanzados[0]]
+    assert entry["tipo"] == "video" and "Ningún texto en la imagen." in entry["prompt_relleno"]
+    assert "Cámara fija" in entry["prompt_relleno"] and " · " not in entry["accion_central"]
+
+
+def test_recrear_adaptar_devuelve_textos_alineados(app, monkeypatch):
+    import json
+    from referentes import recrear
+    ids = _sembrar()
+    _con_lectura(ids[0])
+    monkeypatch.setattr(recrear, "_llamar", lambda texto, max_tokens: (json.dumps(
+        {"textos": ["40% OFF", "Marca X"], "prompt": "P", "angulo": {}}), 100, 30))
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar",
+                      json={"producto_id": "espejo_led", "textos": ["50% OFF", ""], "traer_textos": True})
+    assert r.status_code == 200 and r.get_json()["textos"] == ["40% OFF", ""]
+
+
+def test_pestana_referentes_trae_el_js_de_recrear_fiel():
+    """El JS del formulario vive en la pestaña (los <script> de un fragmento
+    cargado por fetch nunca corren): que no se pierda nada de Recrear fiel."""
+    import pathlib
+    texto = pathlib.Path("templates/_tab_referentes.html").read_text(encoding="utf-8")
+    for marca in ("data-recrear-leer", "data-recrear-modo", "data-recrear-editado", "data-recrear-texto",
+                  "lecturasEnCurso", "formato_elegido", "modos_vista", "traer_textos", "ref:fragmento"):
+        assert marca in texto, marca
+
+
+# --- Recrear como video: igual (imagen fiel animada) y variación (spec §12) ---
+
+def test_recrear_formulario_video_ofrece_igual_variacion_y_modelo(app):
+    ids = _sembrar()
+    _con_lectura(ids[0])
+    html = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear?tipo=video").data.decode()
+    assert 'name="modo" value="fiel"' in html and 'name="modo" value="libre"' in html
+    assert 'name="modelo_animar"' in html and 'value="seedance25" selected' in html and 'value="wan3"' in html
+    assert 'name="prompt_fiel"' in html and 'name="prompt_animar"' in html and "primer fotograma" in html
+    assert "Generar 2 videos" in html and 'data-texto-fiel="' in html and 'data-texto-libre="' in html
+    # Las dos partes cuestan lo mismo (imagen + animación): el mismo precio en las dos.
+    import re
+    assert re.search(r'data-texto-fiel="[^"]*≈ ([^"]+)"', html).group(1) == \
+        re.search(r'data-texto-libre="[^"]*≈ ([^"]+)"', html).group(1)
+    con_wan = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear?tipo=video&modelo_animar=wan3").data.decode()
+    assert 'value="wan3" selected' in con_wan
+
+
+def test_recrear_video_igual_crea_la_imagen_que_se_anima_y_la_variacion(app, monkeypatch):
+    import creative_flow
+    ids = _sembrar()
+    _con_lectura(ids[0])
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                      data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1",
+                            "traer_textos": "1", "texto_0": "40% OFF", "texto_1": "", "modos_vista": "1",
+                            "modo": ["fiel", "libre"], "modelo_animar": "wan3"})
+    assert r.status_code == 302 and len(lanzados) == 2
+    sesiones = creative_flow.cargar("acme")
+    imagen, variacion = sesiones[lanzados[0]], sesiones[lanzados[1]]
+    assert imagen["tipo"] == "imagen" and imagen["modelo"] == "seedream_v5_pro" and imagen["recrear_modo"] == "fiel"
+    assert "Edita Image 1" in imagen["prompt_relleno"] and "cambia «50% OFF» por «40% OFF»" in imagen["prompt_relleno"]
+    animar = imagen["animar_despues"]
+    assert animar["modelo"] == "wan3" and animar["duracion"] == 8 and animar["formato"] == "9:16"
+    assert "primer fotograma" in animar["prompt"] and animar["titulo"] == "Recrear: 40% OFF · igual · video"
+    assert imagen["accion_central"] == "Recrear: 40% OFF · igual"
+    # La variación también pasa por una imagen que después se anima (como «igual»).
+    assert variacion["tipo"] == "imagen" and variacion["modelo"] == "seedream_v5_pro" and variacion["recrear_modo"] == "libre"
+    assert variacion["accion_central"] == "Recrear: 40% OFF · variación"
+    assert "Sigue la ESTRUCTURA" in variacion["prompt_relleno"] and "Cámara fija" not in variacion["prompt_relleno"]
+    assert "cambia «50% OFF» por «40% OFF»" in variacion["prompt_relleno"]
+    animar_var = variacion["animar_despues"]
+    assert animar_var["modelo"] == "wan3" and animar_var["titulo"] == "Recrear: 40% OFF · variación · video"
+    assert animar_var["prompt"] == animar["prompt"]
+
+
+def test_recrear_video_modelo_desconocido_usa_seedance_y_respeta_el_prompt_editado(app, monkeypatch):
+    import creative_flow
+    ids = _sembrar()
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1",
+                        "modos_vista": "1", "modo": "fiel", "modelo_animar": "otro",
+                        "prompt_animar": "MI ANIMACION", "prompt_animar_editado": "1"})
+    assert len(lanzados) == 1
+    animar = creative_flow.cargar("acme")[lanzados[0]]["animar_despues"]
+    assert animar["modelo"] == "seedance25" and animar["prompt"] == "MI ANIMACION"
+
+
+def test_recrear_video_con_el_formulario_viejo_sigue_siendo_un_solo_video(app, monkeypatch):
+    """Un formulario de video abierto antes del despliegue no manda
+    `modos_vista`: hace un solo video, como antes, y nunca la animación
+    (nadie paga una imagen + Seedance sin haberlo visto)."""
+    import creative_flow
+    ids = _sembrar()
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1"})
+    assert len(lanzados) == 1
+    entry = creative_flow.cargar("acme")[lanzados[0]]
+    assert entry["tipo"] == "video" and "animar_despues" not in entry
+
+
+def test_pestana_referentes_trae_el_js_de_recrear_como_video():
+    import pathlib
+    texto = pathlib.Path("templates/_tab_referentes.html").read_text(encoding="utf-8")
+    for marca in ('modelo_animar', "'data-texto-' + clave"):
+        assert marca in texto, marca
+
+
+def test_detalle_de_crear_dice_que_la_imagen_se_anima(app, monkeypatch):
+    import creative_flow
+    import trabajos
+    monkeypatch.setattr(trabajos, "en_curso", lambda job_id: False)
+    cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "Recrear: X · igual", 0, "", "A")
+    creative_flow.actualizar("acme", cf, tipo="imagen", estado="video_generando",
+                             animar_despues={"modelo": "wan3", "titulo": "Recrear: X · igual · video"})
+    html = app["c"].get(f"/cliente/acme/creative_flow/{cf}/detalle").data.decode()
+    assert "se anima sola en video" in html
+    creative_flow.actualizar("acme", cf, estado="video_listo",
+                             animar_despues={"modelo": "wan3", "titulo": "Recrear: X · igual · video", "cf_video": "cf_2"})
+    assert "Recrear: X · igual · video" in app["c"].get(f"/cliente/acme/creative_flow/{cf}/detalle").data.decode()
+    creative_flow.actualizar("acme", cf, animar_error="La imagen está lista, pero no se pudo lanzar su video (X).")
+    assert "no se pudo lanzar su video" in app["c"].get(f"/cliente/acme/creative_flow/{cf}/detalle").data.decode()
+
+
+def test_recrear_video_usa_el_formato_mas_parecido_que_admite_el_modelo(app, monkeypatch):
+    """Wan 3.0 no tiene 4:5: va a 3:4 (el más parecido), no al 9:16 por defecto."""
+    import creative_flow
+    ids = _sembrar()
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "4:5", "tipo": "video", "campos_vista": "1",
+                        "modos_vista": "1", "modo": ["fiel", "libre"], "modelo_animar": "wan3"})
+    imagen, variacion = (creative_flow.cargar("acme")[c] for c in lanzados)
+    assert imagen["aspect_ratio"] == "4:5" and imagen["animar_despues"]["formato"] == "3:4"
+    assert variacion["aspect_ratio"] == "4:5" and variacion["animar_despues"]["formato"] == "3:4"
+
+
+
+def test_recrear_video_con_el_formulario_viejo_usa_el_prompt_de_video(app, monkeypatch):
+    """El camino viejo (sin `modos_vista`) sigue mandando el prompt de video
+    (cámara y sonido), no el de imagen."""
+    import creative_flow
+    ids = _sembrar()
+    lanzados = _sin_r2_ni_lanzar(monkeypatch)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1"})
+    entry = creative_flow.cargar("acme")[lanzados[0]]
+    assert entry["tipo"] == "video" and "Cámara fija" in entry["prompt_relleno"]

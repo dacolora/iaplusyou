@@ -1,0 +1,138 @@
+---
+name: ui
+description: "Pantallas de Creatv: el sistema de static/estilos/ y la base visual común, el celular, las tarjetas ligeras con detalle por fetch, las barras de progreso con data-poll-job y las reglas de rendimiento de la página del proyecto. Cargar antes de agregar o cambiar una pantalla, una tarjeta, una lista, una barra de progreso, o tocar cliente.html, base.html o style.css."
+---
+
+# Pantallas: base visual, celular y rendimiento de la página
+
+> Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
+
+**Sistema de estilos (2026-10-02, pedido de Daniel: el azul de la referencia en toda la plataforma y un lugar
+para cambiar el diseño):** `static/estilos/` es la fuente; `static/style.css` es generado y se guarda en git.
+Edita la carpeta y corre `python3 estilos.py construir`; `test_la_hoja_es_la_generada` falla si se edita la hoja a
+mano, y `python3 estilos.py comprobar` verifica que esté al día. `ORDEN` une las capas: `tokens.css`, `legado/`
+en su número, `base.css`, `componentes/`, `pantallas/`. Los valores de diseño nuevos van en `tokens.css`; los
+colores literales restantes de `legado/` son la excepción transitoria: solo se vacía, con el trinquete
+`TECHO_COLORES_LEGADO` en `tests/test_estilos_sistema.py` (199 al cerrar la entrega 1). Los estilos en línea
+sin colores tampoco crecen (`TECHO_ESTILOS_EN_LINEA`: 414). Un componente nuevo lleva archivo en `componentes/`,
+macro en `templates/_componentes.html` si tiene marcado, sección `data-componente="<nombre>"` en la Guía
+`/admin/estilos` y una línea aquí. Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
+una sola vez en `ORDEN`; sin `@import`. `base.css` respeta `prefers-reduced-motion` y pinta los enlaces sin clase
+con `:where(a) { color: var(--accent-texto) }` (sin ella Chrome los deja lila y, visitados, morados); un `<button>`
+con clase que no pinta su fondo queda con el gris del navegador: dale fondo o súmalo al secundario de la base
+visual (como `.menu-movil` y `.au-filtro`). Las animaciones se limitan a `ANIMACIONES_PERMITIDAS` y el pulso nuevo
+a elementos vivos. El editor usa `--fondo-video` detrás del
+reproductor y `--fondo-lienzo` en el canvas, sin brillos: la paleta de la interfaz no cambia los colores que se
+renderizan dentro del video (spec §12).
+
+**UI base** (2026-09-25/26, specs `2026-09-25-base-visual-comun` and `2026-09-26-movil`): the
+block «Base visual común (2026-09-25)» in `static/estilos/legado/03-base-visual-comun-2026-09-25-spec.css`
+(or its component after migration) is the source of truth for
+fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.btn`/classless
+`button` = secondary), `summary`, the tab header (`.panel-cabecera` > text div with `h2` +
+`.panel-cabecera-desc`, plus `.panel-cabecera-acciones`) and `.estado-vacio`; new screens reuse
+those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
+top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
+screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
+(`tests/test_base_visual.py`, `tests/test_movil.py`). Phone review of every screen (2026-09-28, CSS block «Celular: revisión de pantallas» in `static/estilos/legado/07-celular-revision-de-pantallas-2026-09-28.css`): auto-fill grids use `minmax(min(100%, X), 1fr)` (never a bare fixed minimum — a test rejects it), card galleries (Crear, Final edition, Experimentos, Referentes) are 2 columns ≤ 760 px, button/filter rows (`.acciones`, summaries) wrap, long ids/JSON/URLs break instead of pushing the page, and data tables (`tabla-admin`, `tabla-tiendas`, `tabla-productos`, `gasto-tabla`, `sprint-entrega`, `gpg-tabla`, or opt-in `tabla-apilada`) become one card per row ≤ 640 px with each value labelled from its column header (`static/tablas.js` copies the `<th>` text to `data-etiqueta`, also for tables inserted later by fetch); `.solo-teclado` hides keyboard-only hints on touch screens. Crear's «Desde referencias» form is a **composer**
+(spec `2026-09-27-crear-compositor`, CSS block «Crear: compositor»): a card whose top half is the bandeja
+(OUTSIDE `#form-flowplus`, it carries its own `<form>`s) and whose bottom half is the form, with a bar of pills
+whose menus hold the real radios/selects — the selects stay the hidden source of truth and the menus draw chips
+from them —, so the POST to `cf_crear_video` is unchanged; upload/link inputs reach their empty outside forms via
+`form=`, the catalog opens as a `<dialog>` (`_selector_productos.html` with `sel_dialogo=True`; «Cambiar producto»
+keeps its `<details>`), and Enter in a one-line input never submits it (it used to generate and charge).
+
+**Final edition y la paleta global** (2026-10-02: Daniel pidió «un branding de este estilo» con una
+referencia tecnológica — azul marino, azul eléctrico con brillo, números en círculos, íconos en recuadros,
+flujo con flechas): la paleta vive en `tokens.css` para TODA la app; Final edition ya no redefine variables
+dentro de `#tab-final`. Sus reglas propias siguen en `legado/11-final-edition-tablero-2026-10-02-daniel.css`
+hasta la entrega de componentes comunes. Las superficies siguen oscuras (`test_modo_oscuro`: luminancia
+≤ 0,05) y `--cian`, que pasa de 0,4, va solo en texto, trazos SVG y sombras. Íconos: macro `icono_fe(nombre)` de `_final_macros.html` (SVG en línea, `currentColor`). Ojo con los
+nombres de selectores en el JS de una plantilla: `tests/i18n_util.py` lee como español suelto un literal con «en»,
+«nueva», «de»… (por eso `#fe-editando` y `data-fe-elegir`). Un panel oculto del navegador integrado no pinta cuadros
+de `<video>` en las capturas: miniaturas negras ahí no son un error (comprobar `readyState`).
+
+**Rendimiento y almacenamiento (auditoría 2026-09-28, tras el incidente de la página que se
+quedaba cargando):** `/cliente/<c>` trae todas las pestañas en un solo HTML (3 MB en happyflops:
+Crear, Final edition y Experimentos repiten las mismas piezas con sus `<template>` de detalle), así
+que lo que se agrega ahí le cuesta a TODAS las cargas. Reglas que salieron de la auditoría: los
+`<video>` de listas nacen `preload="none" data-precarga` (base.html los pide al entrar en pantalla;
+`tests/test_referentes_copycoders_proyecto.py` rechaza `preload="metadata"`) y las `<img>` van
+`loading="lazy"`; las fotos del catálogo se piden con `?w=320` (`catalogo_productos.miniatura`,
+Pillow, caché en `data/miniaturas/`); nada de una consulta por tarjeta: `ver_cliente` corre bajo
+`trabajos.con_vivos_precargados` (UNA lectura de los job_ids vivos para todos los `en_curso`) y la
+lista de Crear usa `creative_flow.guiones_base`/`finales_por_sesion` y
+`doctrina.revisor.ultimos_captions` (`tests/test_perf_pagina_proyecto.py` falla si el número de
+consultas vuelve a crecer con las piezas); `informe.completo` solo se arma para el admin; los
+estáticos con `?v=` salen `immutable` un año (`/static/editor/` sigue `no-cache`); la biblioteca de
+copycoders está apagada por proyecto hasta que la persona la trae (`proyectos.referentes_copycoders`).
+Mantenimiento diario en el worker (`tareas/mantenimiento.py`): `salidas_limpiar` borra de `salidas/`
+lo que tenga más de 14 días (todo lo de ahí es copia de trabajo: el video vive en R2 y
+`publicador.archivo_local`, `final_edition._clon_local`, `materiales.descargar` y `sprints.qa`
+lo vuelven a bajar), `cola_limpiar` purga las `tarea` cerradas (7 días; periódicas, 1 día) y
+`db_respaldar` guarda `data/respaldos/creatv_<fecha>.db` (`Connection.backup`, 7 copias). Sigue
+pendiente (no se hizo): borrar en R2 lo rechazado/descartado y las versiones viejas de finales,
+`materiales_limpiar` no borra nada porque los proxies viven en la fila del video (no son `EFIMEROS`),
+`metrica_snapshot` inserta cada 2 h aunque nada cambie.
+**Tarjetas ligeras y detalle bajo demanda** (spec
+`docs/superpowers/specs/2026-09-28-tarjetas-ligeras-detalle-bajo-demanda-design.md`): el 61 % de
+la página eran los `<template class="generado-detalle">` de Crear y Final edition (1,86 MB de 3,03).
+Ya no existen: las tarjetas son macros (`_crear_tarjetas.html`: `tarjeta_crear`/`lista_crear`;
+`_final_tarjetas.html`, desde el tablero del 2026-10-02: `tarjeta_pieza_fe`/`tarjeta_final_fe`/
+`tarjeta_elegir_fe` y sus `lista_*_fe`), la página pinta las 24 más recientes por lista
+(`TARJETAS_POR_PAGINA`, `_listas_crear` y `_tablero_final`; los contadores muestran el total) y «Ver más»
+pide las siguientes a `crear_tarjetas` / `final_tarjetas?lista=en_edicion|finalizados|elegir`
+(`?desde=N`, `_pagina_desde`). El detalle llega por fetch al
+abrir la tarjeta (`data-detalle` → `cf_detalle`, `fe_detalle_video`, `fe_detalle_final`; macros en
+`_crear_detalle.html` / `_final_detalle.html`, armadas con `_creative_flow_item(cliente, cf_id)` y
+`_contexto_final_edition(cliente)`, que incluye `_contexto_organico`), nunca se cachea, y
+`base.html` lo pinta con `abrirDetalleRemoto(modal, cuerpo, url, alInsertar)` («Cargando…» al
+instante, solo el último pedido gana). `#final?cf=<id>` abre la pieza aunque no esté pintada.
+Reglas: **ninguna barra de progreso lleva `<script>`** — todas `data-poll-job="<job_id>"` sobre el
+`div.barra-progreso#trabajo-<job_id>` y `arrancarSondeos(raiz)` (DOMContentLoaded + el
+MutationObserver de `data-precarga`) arranca el sondeo de lo que aparezca; los clics de tarjetas
+van delegados sobre la cuadrícula (las agregadas por «Ver más» funcionan igual); el sondeo se pausa
+con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minuto → 5 s a los 5 min).
+`tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto. Fuera de
+alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por fragmentos (**hecho el
+2026-10-03**: ver «Experimentos: armazón + fragmento»; Catálogo ya carga su galería y su ficha por fragmento desde
+2026-09-30: ver «Catálogo ecommerce y conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos
+(el de `experimentos.cargar` sigue: PND-134), el flujo viejo «Nueva idea».
+
+**Experimentos: armazón + fragmento** (E2, 2026-10-03; skill `experimentos`): `#tab-experimentos` solo pinta el armazón
+(`_tab_experimentos.html`). Los resultados llegan por `fetch` a `exp_resultados` (fragmento `_exp_resultados.html`, con el filtro
+en el hash), el panel de una pieza a `exp_pieza` (`<dialog id="cr-panel">`, `_exp_pieza.html`) y «Nuevo experimento» es una
+página aparte, `exp_nuevo`, a pantalla completa con «← Volver a resultados». Por eso el HTML de `/cliente/<c>` ya NO trae las
+piezas elegibles (la galería), el tablero ni la gestión por experimento: lo que Experimentos necesite pintar se agrega al
+fragmento, no a la página (la regla de «Rendimiento y almacenamiento»: lo pesado llega por fragmento). Sus estilos viven en
+`static/estilos/pantallas/experimentos.css` (clases `cr-*`: el fragmento, el panel y la gestión) y
+`pantallas/experimento-nuevo.css` (la página nueva); las `exp-*` viejas siguen en `legado/` hasta que se vacíe.
+`static/style.css` es GENERADO: se reconstruye con `python3 estilos.py construir` y no se edita a mano. Reglas que ya cumple y
+que no hay que romper: los `<video>` nacen `preload="none" data-precarga` y las `<img>` `loading="lazy"`; la barra de progreso
+de un experimento lleva `data-poll-job` (nunca `<script>`); nada de una consulta por tarjeta (`tests/test_rutas_resultados.py`
+mide el fragmento); en el celular los gráficos SVG escalan por `viewBox` y las tablas son `tabla-apilada`; los colores van por
+tokens (`--ok`, `--error`, `--warn` y sus `-fondo` para mejor, peor y recuperándose; `--serie-N` para series; `--cian` solo en
+texto, trazos y sombras) y siempre con ▲/▼, porque el significado no puede depender del color. El JS no pasa por Jinja: sus
+textos viajan en `#cr-textos` (JSON) ya traducidos por el servidor.
+
+**Alertas en pantalla** (2026-10-02, skill `alertas`): el centro de resultados de Experimentos (que absorbió el Tablero el 2026-10-03) no lista alertas, solo una línea («N alertas necesitan tu atención → Ver Alertas», `.cr-alertas-linea` en `_exp_resultados.html`); la lista vive en la pestaña Alertas (`_tab_alertas.html`, `#alertas`) y la burbuja del sidebar sale de `alertas_ctx`, el mismo dato del context processor `_alertas_sidebar`, que se calcula en cada página (caché de 60 s): una consulta por tarjeta ahí cuesta en todas las pantallas.
+
+Precios del compositor y clon (2026-10-02, PND-011/016): el JS recibe tarifas y tablas calculadas en servidor; no duplica el precio del proveedor. La tarifa de música viene del servidor, desde gastos.costo_musica_estimada. La tabla de clon se cachea por proceso y varía con nombre e idioma antes del clic; se refresca también al vaciar el nombre después de clonar (revisión 2026-10-02).
+
+PND-028/031/044 (2026-10-03, lote 2): «Versión A» requiere una hija B real; los enlaces de los diálogos de Referentes cierran el diálogo antes de cambiar de pestaña. Experimentos conserva la selección por pieza/país al reconstruir la cuadrícula y cuenta cero casillas sin sustituirlo por el total. Pruebas renderizadas con Node; la revisión visual a 375 px sigue a cargo del integrador.
+
+PND-130/133 (2026-10-05, lote 4): en celular las cifras de Final edition colocan el icono encima para que la etiqueta use todo el ancho, sin cortar palabras: overflow-wrap normal solo dentro de @media max-width 760px; escritorio y .fe-flujo small conservan anywhere (revisión de Codex, 2026-10-05). El detalle remoto rechaza respuestas redirigidas (sesión vencida) antes de leer su HTML; conserva el aviso de error y no arranca sondeos. La revisión visual a 375 px la hace Claude.
+
+## Marca Creatv Galadsy y fondo galáctico (2026-10-06)
+
+- La marca es **Creatv Galadsy** (pedido de Camilo, 2026-10-06; antes Creatv Machine/Flow). El logo son tres máscaras
+  PNG con alfa (`static/img/galadsy-simbolo|nombre|logo.png`) que `componentes/marca.css` pinta con `currentColor`
+  (`.marca-mark`, `.marca-texto`, `.marca-logo`); el favicon es `galadsy-icono.png`. `cuentas.NOMBRE_PLATAFORMA` es el
+  nombre de los correos.
+- `componentes/fondo-galaxia.css` + el bloque `.fondo-galaxia` de `base.html` (reemplazó a `.fondo-ambiente`): nebulosas,
+  núcleo, estrellas y retícula, solo degradados con tokens `--galaxia-*`, `--estrella*`, `--reticula`. Va **en azul**:
+  Camilo eligió respetar la decisión de Daniel del 2026-10-02 (sin morado) en vez del violeta del logo. Sus animaciones
+  (`galaxia-*`) y las de la portada (`portada-vitrina`, `portada-cadena`) están en `ANIMACIONES_PERMITIDAS`.
+- La barra superior es `--velo-cabecera` con `backdrop-filter`, para que el fondo se vea detrás.
+- La portada (`templates/index.html`, `pantallas/portada.css`): videos e imágenes livianos en `static/landing/`
+  (480 px, sin audio, ≤ 8 s); la barrita del flujo es una transición de ancho que dispara `.flujo-llena`.

@@ -1,0 +1,125 @@
+/* ============================================================
+   Tokens — sistema de estilos (spec docs/superpowers/specs/2026-10-02-sistema-de-estilos-design.md §4).
+   El ÚNICO archivo con valores escritos a mano. Paleta azul: la del tablero de Final edition, ahora global.
+   Contrastes sobre --panel #0b1a33: --text 15,7:1 · --muted 7,3:1 · --muted-2 6:1 · --accent-texto 7,8:1 ·
+   --cian 9:1 · --ok 8,7:1 · --warn 9:1 · --error 5,9:1 · --serie-1 4,8:1 · --serie-2 4,5:1 · blanco sobre
+   --accent 5:1. --cian pasa de 0,4 de luminancia: SOLO texto, trazos, íconos y sombras, nunca fondo ni borde
+   (tests/test_modo_oscuro.py). Solo tema oscuro.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  /* Superficies y texto */
+  --bg: #050d1f;
+  --panel: #0b1a33;
+  --panel-2: #10223f;
+  --panel-hover: #152b4e;
+  --border: #1c3a66;
+  --border-soft: rgba(80, 150, 255, 0.16);
+  --text: #eef4ff;
+  --muted: #93a9cc;
+  --muted-2: #8299bd;
+
+  /* Acento azul: --accent para superficies llenas (letra blanca); --accent-texto para enlaces y textos */
+  --accent: #1d6ae0;
+  --accent-2: #2f8cff;
+  --accent-grad: linear-gradient(135deg, #1a5fd0, #2a7ff0);
+  --accent-texto: #5cb4ff;
+
+  /* Luz: solo texto, trazos, íconos y sombras */
+  --cian: #38c8ff;
+  --brillo: rgba(47, 140, 255, 0.4);
+
+  /* Estados (siempre con texto o ícono, nunca solo color) */
+  --ok: #3ecf8e;
+  --warn: #e8b339;
+  --error: #ff5f7a;
+  --ok-fondo: rgba(62, 207, 142, 0.14);
+  --warn-fondo: rgba(232, 179, 57, 0.14);
+  --error-fondo: rgba(255, 95, 122, 0.14);
+
+  /* Series de gráficos, en orden fijo (dataviz, validadas sobre #0b1a33 el 2026-10-02) */
+  --serie-1: #3987e5;
+  --serie-2: #d95926;
+  --serie-3: #199e70;
+  --serie-4: #c98500;
+  --serie-5: #d55181;
+  --serie-6: #008300;
+  --serie-7: #9085e9;
+  --serie-8: #e66767;
+  --tb-gasto: var(--serie-2); --tb-ingresos: var(--serie-1); --tb-warn: #fab219;
+
+  /* Excepciones con nombre */
+  --fondo-logo: #e9e9f0;
+  --fondo-video: #121417;
+  --fondo-lienzo: #000000;
+
+  /* Tipografía */
+  --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --t-sobretitulo: 0.72rem;
+  --t-chico: 0.82rem;
+  --t-base: 1rem;
+  --t-titulo: 1.35rem;
+  --t-cifra: 2rem;
+  --t-gigante: 4.5rem;
+
+  /* Espacios */
+  --esp-1: 4px;
+  --esp-2: 8px;
+  --esp-3: 12px;
+  --esp-4: 16px;
+  --esp-5: 24px;
+  --esp-6: 32px;
+  --esp-7: 48px;
+
+  /* Radios */
+  --radius-sm: 8px;
+  --radius-icono: 12px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pastilla: 999px;
+
+  /* Sombras y brillos */
+  --shadow: 0 12px 32px rgba(0, 4, 16, 0.55);
+  --shadow-soft: 0 4px 18px rgba(0, 6, 20, 0.55);
+  --shadow-glow: 0 0 0 1px rgba(47, 140, 255, 0.55), 0 8px 28px rgba(30, 120, 255, 0.35);
+  --brillo-sm: 0 0 8px var(--brillo);
+  --brillo-md: 0 0 16px var(--brillo);
+  --fondo-escena:
+    radial-gradient(900px 420px at 92% -14%, rgba(47, 140, 255, 0.22), transparent 62%),
+    radial-gradient(700px 380px at -10% 110%, rgba(56, 200, 255, 0.08), transparent 60%),
+    radial-gradient(rgba(120, 170, 255, 0.07) 1px, transparent 1.5px) 0 0 / 22px 22px;
+
+  /* Fondo galáctico (2026-10-06, Creatv Galadsy): nebulosas en los azules del logo, estrellas y retícula. Solo
+     fondo detrás de todo, con alfa: compuestos sobre --bg quedan oscuros. */
+  --galaxia-azul: rgba(29, 90, 230, 0.55);
+  --galaxia-azul-suave: rgba(29, 90, 230, 0.34);
+  --galaxia-electrico: rgba(47, 140, 255, 0.42);
+  --galaxia-electrico-suave: rgba(47, 140, 255, 0.26);
+  --galaxia-cian: rgba(56, 200, 255, 0.24);
+  --galaxia-velo-1: rgba(47, 140, 255, 0.10);
+  --galaxia-velo-2: rgba(29, 90, 230, 0.10);
+  --galaxia-velo-3: rgba(56, 200, 255, 0.07);
+  --estrella: rgba(238, 244, 255, 0.85);
+  --estrella-tenue: rgba(238, 244, 255, 0.55);
+  --estrella-azul: rgba(150, 205, 255, 0.85);
+  --reticula: rgba(80, 150, 255, 0.05);
+  /* Velos: la barra superior y las superficies de la portada dejan ver el fondo. */
+  --velo-cabecera: rgba(5, 13, 31, 0.72);
+  --panel-velo: rgba(11, 26, 51, 0.74);
+  --panel-velo-2: rgba(11, 26, 51, 0.55);
+  --resalte-fondo: rgba(29, 106, 224, 0.16);
+  --resalte-borde: rgba(92, 180, 255, 0.45);
+  --resalte-borde-fuerte: rgba(92, 180, 255, 0.7);
+  --sombra-media: rgba(0, 4, 16, 0.7);
+  --degradado-lema: linear-gradient(100deg, #2f8cff, #38c8ff 50%, #bfe6ff);
+
+  /* Movimiento */
+  --pulso: 1.6s;
+
+  /* Disposición */
+  --sidebar-w: 232px;
+  --sidebar-w-plegada: 72px;
+}

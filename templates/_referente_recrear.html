@@ -1,18 +1,24 @@
 {# Formulario «Recrear con mi producto» (referentes.recrear_form), cargado en
-   el mismo <dialog> que la ficha. Contexto: cliente, r (referente), productos
-   (catalogo_productos.listar, solo con fotos), producto (elegido o None),
-   tipo (imagen|video), formato, formatos, titular, prompt, precio
-   (gastos.estimar o None sin producto), precio_adaptar. #}
+   el mismo <dialog> que la ficha. Spec 2026-09-30-recrear-fiel. Contexto:
+   cliente, r, productos, producto (o None), tipo (imagen|video), formato,
+   formatos, formato_elegido, lectura (dict o None: aún no leída), traer_textos,
+   textos (valor de cada campo), modos (["fiel","libre"]), prompt (variación),
+   prompt_fiel, prompt_animar (video), etiquetas_rol, precio (por imagen),
+   precios_video (spec §12: imagen, animar{modelo}, duracion{modelo}),
+   modelos_animar, modelo_animar, nombres_video, precio_adaptar, precio_leer. Todo el JS vive en _tab_referentes.html (los
+   <script> de un fragmento cargado por fetch nunca corren). #}
 <div class="ref-recrear">
   <p class="ref-recrear-titulo"><strong>{{ _('Recrear «%(titular)s» con mi producto', titular=r.titular or r.id) }}</strong></p>
   {% if not productos %}
   <p class="vacio">{{ _('Todavía no tienes productos con fotos en el catálogo.') }}
-    <a href="#catalogo" onclick="document.querySelector('.sidebar-item[data-tab=catalogo]').click(); return false;">{{ _('Ir a Catálogo →') }}</a></p>
+    <a href="#catalogo" onclick="this.closest('dialog').close(); document.querySelector('.sidebar-item[data-tab=catalogo]').click(); return false;">{{ _('Ir a Catálogo →') }}</a></p>
   {% else %}
   <form method="post" action="{{ url_for('referentes.recrear_generar', cliente=cliente, rid=r.id) }}" class="form-nueva-idea ref-recrear-form"
         data-recrear="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id) }}"
-        data-adaptar="{{ url_for('referentes.recrear_adaptar', cliente=cliente, rid=r.id) }}">
+        data-adaptar="{{ url_for('referentes.recrear_adaptar', cliente=cliente, rid=r.id) }}"
+        data-leer="{{ url_for('referentes.recrear_leer', cliente=cliente, rid=r.id) }}">
     <input type="hidden" name="tipo" value="{{ tipo }}">
+    <input type="hidden" name="campos_vista" value="1">
     <input type="hidden" name="angulo" value="" data-recrear-campo="angulo">
     <div class="fe-opciones">
       <label>{{ _('Producto') }}
@@ -21,24 +27,94 @@
         </select>
       </label>
       <label>{{ _('Formato') }}
-        <select name="formato" data-recrear-campo="formato">
+        <select name="formato" data-recrear-campo="formato" {% if formato_elegido %}data-elegido="1"{% endif %}>
           {% for f in formatos %}<option value="{{ f }}" {% if f == formato %}selected{% endif %}>{{ f }}</option>{% endfor %}
         </select>
       </label>
     </div>
-    <label>{{ _('Titular') }}
-      <input type="text" name="titular" maxlength="200" value="{{ titular }}" data-recrear-campo="titular">
-    </label>
-    <label>{{ _('Prompt') }}
-      <textarea name="prompt" rows="6" data-recrear-campo="prompt">{{ prompt }}</textarea>
-    </label>
+
+    <fieldset class="ref-recrear-bloque">
+      <legend>{{ _('Textos de la referencia') }}</legend>
+      {% if not lectura %}
+      <p class="ref-recrear-leyendo" data-recrear-leer>{{ _('Leyendo la referencia…') }}{% if precio_leer.usd is not none %} ≈ {{ precio_leer.usd | usd }}{% endif %}</p>
+      <label class="modal-form-check"><input type="checkbox" name="traer_textos" value="1" data-recrear-traer {% if traer_textos %}checked{% endif %}><span>{{ _('Traer los textos de la referencia') }}</span></label>
+      {% elif lectura.textos %}
+      <label class="modal-form-check"><input type="checkbox" name="traer_textos" value="1" data-recrear-traer {% if traer_textos %}checked{% endif %}><span>{{ _('Traer los textos de la referencia') }}</span></label>
+      <div class="ref-recrear-textos" data-recrear-campos-texto {% if not traer_textos %}hidden{% endif %}>
+        {% for t in lectura.textos %}
+        <label>{{ etiquetas_rol[t.rol]|traducir }}{% if t.ubicacion %} · {{ t.ubicacion }}{% endif %}
+          <input type="text" name="texto_{{ loop.index0 }}" maxlength="200" value="{{ textos[loop.index0] }}" data-recrear-texto
+                 placeholder="{% if t.rol == 'marca' %}{{ _('«%(texto)s»: se quita', texto=t.texto) }}{% else %}{{ _('Vacío: se quita') }}{% endif %}">
+        </label>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="ref-recrear-leyendo">{{ _('Esta referencia no tiene textos dentro de la imagen.') }}</p>
+      <input type="hidden" name="traer_textos" value="1">
+      {% endif %}
+    </fieldset>
+
+    {# Precios del botón por combinación (spec §12): «igual» y «variación» cuestan
+       lo mismo; en video cada una es una imagen + su animación. #}
+    {% if tipo == "imagen" %}
+      {% set usd_fiel = precio.usd if precio and precio.usd is not none else none %}
+      {% set usd_libre = usd_fiel %}
+    {% else %}
+      {% set pv = precios_video or {} %}
+      {% set usd_fiel = (pv.imagen.usd + pv.animar[modelo_animar].usd) if pv and pv.imagen.usd is not none and pv.animar[modelo_animar].usd is not none else none %}
+      {% set usd_libre = usd_fiel %}
+    {% endif %}
+    {% set p_fiel = (' ≈ ' ~ (usd_fiel | usd)) if usd_fiel is not none else '' %}
+    {% set p_libre = (' ≈ ' ~ (usd_libre | usd)) if usd_libre is not none else '' %}
+    {% set p_dos = (' ≈ ' ~ ((usd_fiel + usd_libre) | usd)) if usd_fiel is not none and usd_libre is not none else '' %}
+    {% if tipo == "imagen" %}
+      {% set texto_0, texto_fiel, texto_libre, texto_2 = _('Elige al menos una imagen'), _('Generar imagen') ~ p_fiel, _('Generar imagen') ~ p_libre, _('Generar 2 imágenes') ~ p_dos %}
+    {% else %}
+      {% set texto_0, texto_fiel, texto_libre, texto_2 = _('Elige al menos un video'), _('Generar el video igual') ~ p_fiel, _('Generar la variación') ~ p_libre, _('Generar 2 videos') ~ p_dos %}
+    {% endif %}
+
+    <fieldset class="ref-recrear-bloque">
+      <legend>{% if tipo == "imagen" %}{{ _('Imágenes') }}{% else %}{{ _('Videos') }}{% endif %}</legend>
+      <input type="hidden" name="modos_vista" value="1">
+      <label class="modal-form-check"><input type="checkbox" name="modo" value="fiel" data-recrear-modo {% if 'fiel' in modos %}checked{% endif %}><span>{{ _('Igual a la referencia') }} · <small>{{ _('mismas posiciones, ángulo y fondo; solo cambia el producto') }}</small></span></label>
+      <label class="modal-form-check"><input type="checkbox" name="modo" value="libre" data-recrear-modo {% if 'libre' in modos %}checked{% endif %}><span>{{ _('Variación') }} · <small>{{ _('la estructura de la referencia, más libre y con la guía de tu marca') }}</small></span></label>
+      {% if tipo == "video" %}
+      <p class="ayuda">{{ _('Cada video se hace en dos pasos: primero la imagen y después se anima.') }}</p>
+      <label class="ref-recrear-animar">{{ _('Animar con') }}
+        <select name="modelo_animar" data-recrear-campo="modelo_animar">
+          {% for m in modelos_animar %}<option value="{{ m }}" {% if m == modelo_animar %}selected{% endif %}>{{ nombres_video[m]|traducir }}{% if precios_video and precios_video.animar[m].usd is not none %} · ≈ {{ precios_video.animar[m].usd | usd }} ({{ precios_video.duracion[m] }} s){% endif %}{% if m == 'seedance25' %} · {{ _('arranca exactamente desde la imagen') }}{% endif %}</option>{% endfor %}
+        </select>
+      </label>
+      {% endif %}
+    </fieldset>
+
+    <details class="ref-recrear-prompts">
+      <summary>{{ _('Ver o editar los prompts') }}</summary>
+      <p class="ayuda">{{ _('Se arman con lo de arriba al generar. Si escribes aquí, se usa tal cual.') }}</p>
+      <label>{% if tipo == "imagen" %}{{ _('Igual a la referencia') }}{% else %}{{ _('Igual: la imagen') }}{% endif %}
+        <textarea name="prompt_fiel" rows="6" data-recrear-prompt="prompt_fiel">{{ prompt_fiel }}</textarea>
+      </label>
+      <input type="hidden" name="prompt_fiel_editado" value="" data-recrear-editado="prompt_fiel">
+      {% if tipo == "video" %}
+      <label>{{ _('La animación (los dos videos)') }}
+        <textarea name="prompt_animar" rows="4" data-recrear-prompt="prompt_animar">{{ prompt_animar }}</textarea>
+      </label>
+      <input type="hidden" name="prompt_animar_editado" value="" data-recrear-editado="prompt_animar">
+      {% endif %}
+      <label>{% if tipo == "imagen" %}{{ _('Variación') }}{% else %}{{ _('Variación: la imagen') }}{% endif %}
+        <textarea name="prompt" rows="6" data-recrear-campo="prompt" data-recrear-prompt="prompt">{{ prompt }}</textarea>
+      </label>
+      <input type="hidden" name="prompt_editado" value="" data-recrear-editado="prompt">
+    </details>
+
     <div class="ref-recrear-acciones">
       <button type="button" class="btn-guardar btn-sm" data-recrear-adaptar>{{ _('Adaptar con IA') }}{% if precio_adaptar.usd is not none %} ≈ {{ precio_adaptar.usd | usd }}{% endif %}</button>
+      <button type="submit" class="btn-generar btn-sm" data-recrear-generar
+              data-texto-0="{{ texto_0 }}" data-texto-fiel="{{ texto_fiel }}" data-texto-libre="{{ texto_libre }}"
+              data-texto-2="{{ texto_2 }}" {% if not modos %}disabled{% endif %}>{% if modos|length == 2 %}{{ texto_2 }}{% elif 'fiel' in modos %}{{ texto_fiel }}{% elif modos %}{{ texto_libre }}{% else %}{{ texto_0 }}{% endif %}</button>
       {% if tipo == "imagen" %}
-      <button type="submit" class="btn-generar btn-sm">{{ _('Generar imagen') }}{% if precio and precio.usd is not none %} ≈ {{ precio.usd | usd }}{% endif %}</button>
       <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="video">{{ _('Como video ▸') }}</button>
       {% else %}
-      <button type="submit" class="btn-generar btn-sm">{{ _('Generar video') }}{% if precio and precio.usd is not none %} ≈ {{ precio.usd | usd }}{% endif %}</button>
       <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="imagen">{{ _('← Como imagen') }}</button>
       {% endif %}
     </div>

@@ -5,15 +5,17 @@ import os
 import tempfile
 
 import requests
+from flask_babel import gettext
 
 import gastos
 import mi_musica
 import trabajos
+from idiomas import N_
 from providers import fal_audio
 from tareas import ref_sufijo, registrar
 
 DURACION_S = 60
-ETAPAS = (("Componiendo con ElevenLabs", 85), ("Guardando en Mi música", 15))
+ETAPAS = ((N_("Componiendo con ElevenLabs"), 85), (N_("Guardando en Mi música"), 15))
 
 
 def job_id(cliente):
@@ -40,9 +42,9 @@ def ejecutar(tarea):
                 f.write(r.content)
             cancion = mi_musica.registrar_generada(cliente, local, prompt, instrumental, usd)
     except Exception:
-        gastos.registrar_seguro(cliente, "musica", usd, ref, detalle=detalle + " · falló al guardar; fal ya cobró",
+        gastos.registrar_seguro(cliente, "musica", usd, ref, detalle=gettext("%(detalle)s · falló al guardar; fal ya cobró", detalle=detalle),
                                 proveedor="fal/elevenlabs")
         raise
     gastos.registrar_seguro(cliente, "musica", usd, ref, detalle=detalle, proveedor="fal/elevenlabs",
                             extra={"material_id": cancion["id"]})
-    return f"Canción lista en Mi música: {cancion['nombre']}"
+    return gettext("Canción lista en Mi música: %(nombre)s", nombre=cancion["nombre"])
