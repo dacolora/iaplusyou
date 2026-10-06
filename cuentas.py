@@ -37,7 +37,7 @@ import usuarios
 
 log = logging.getLogger("creatv.cuentas")
 
-NOMBRE_PLATAFORMA = "Creatv Adstra"
+NOMBRE_PLATAFORMA = "Creatv Galadsy"
 TIPOS = ("verificacion", "restablecer")
 VENCIMIENTO_S = {"verificacion": 24 * 3600, "restablecer": 3600}
 TOKEN_BYTES = 32
