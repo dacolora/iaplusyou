@@ -120,7 +120,11 @@ def test_sin_morados():
 _RE_COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:white|black)\b(?!-)")
 _RE_VALOR = re.compile(r":\s*([^;{}]+)")
 ANIMACIONES_PERMITIDAS = {"pulso", "aparece-card", "exp-pulso", "fe-pulso", "flash-in", "girar", "gp-latido",
-                          "gp-recien", "rayas-progreso", "shimmer"}
+                          "gp-recien", "rayas-progreso", "shimmer",
+                          # Fondo galáctico de toda la plataforma y la vitrina de la portada (Creatv Galadsy, 2026-10-06)
+                          "galaxia-nebulosa-a", "galaxia-nebulosa-b", "galaxia-nebulosa-c", "galaxia-gira",
+                          "galaxia-estrellas-1", "galaxia-estrellas-2", "galaxia-titila", "galaxia-reticula",
+                          "portada-vitrina", "portada-cadena"}
 TECHO_COLORES_LEGADO = 199     # medido el 2026-10-02 al cerrar la paleta azul; solo baja
 TECHO_ESTILOS_EN_LINEA = 414   # medido el 2026-10-02 con la Guía; solo baja
 

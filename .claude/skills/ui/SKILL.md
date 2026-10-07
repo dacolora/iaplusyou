@@ -122,3 +122,17 @@ Precios del compositor y clon (2026-10-02, PND-011/016): el JS recibe tarifas y 
 PND-028/031/044 (2026-10-03, lote 2): «Versión A» requiere una hija B real; los enlaces de los diálogos de Referentes cierran el diálogo antes de cambiar de pestaña. Experimentos conserva la selección por pieza/país al reconstruir la cuadrícula y cuenta cero casillas sin sustituirlo por el total. Pruebas renderizadas con Node; la revisión visual a 375 px sigue a cargo del integrador.
 
 PND-130/133 (2026-10-05, lote 4): en celular las cifras de Final edition colocan el icono encima para que la etiqueta use todo el ancho, sin cortar palabras: overflow-wrap normal solo dentro de @media max-width 760px; escritorio y .fe-flujo small conservan anywhere (revisión de Codex, 2026-10-05). El detalle remoto rechaza respuestas redirigidas (sesión vencida) antes de leer su HTML; conserva el aviso de error y no arranca sondeos. La revisión visual a 375 px la hace Claude.
+
+## Marca Creatv Galadsy y fondo galáctico (2026-10-06)
+
+- La marca es **Creatv Galadsy** (pedido de Camilo, 2026-10-06; antes Creatv Machine/Flow). El logo son tres máscaras
+  PNG con alfa (`static/img/galadsy-simbolo|nombre|logo.png`) que `componentes/marca.css` pinta con `currentColor`
+  (`.marca-mark`, `.marca-texto`, `.marca-logo`); el favicon es `galadsy-icono.png`. `cuentas.NOMBRE_PLATAFORMA` es el
+  nombre de los correos.
+- `componentes/fondo-galaxia.css` + el bloque `.fondo-galaxia` de `base.html` (reemplazó a `.fondo-ambiente`): nebulosas,
+  núcleo, estrellas y retícula, solo degradados con tokens `--galaxia-*`, `--estrella*`, `--reticula`. Va **en azul**:
+  Camilo eligió respetar la decisión de Daniel del 2026-10-02 (sin morado) en vez del violeta del logo. Sus animaciones
+  (`galaxia-*`) y las de la portada (`portada-vitrina`, `portada-cadena`) están en `ANIMACIONES_PERMITIDAS`.
+- La barra superior es `--velo-cabecera` con `backdrop-filter`, para que el fondo se vea detrás.
+- La portada (`templates/index.html`, `pantallas/portada.css`): videos e imágenes livianos en `static/landing/`
+  (480 px, sin audio, ≤ 8 s); la barrita del flujo es una transición de ancho que dispara `.flujo-llena`.

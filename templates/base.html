@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ _('Pipeline') }}{% endblock %} · Creatv Flow</title>
+  <title>{% block title %}{{ _('Pipeline') }}{% endblock %}{% if self.title()|trim != 'Creatv Galadsy' %} · Creatv Galadsy{% endif %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/galadsy-icono.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script>
     // Textos compartidos del JS de esta plantilla (spec 2026-09-26 §Task 4):
@@ -413,7 +414,15 @@
   </script>
 </head>
 <body class="{% if request.view_args and request.view_args.cliente %}con-sidebar{% endif %}">
-  <div class="fondo-ambiente" aria-hidden="true"></div>
+  <div class="fondo-galaxia" aria-hidden="true">
+    <span class="galaxia-nebulosa n1"></span>
+    <span class="galaxia-nebulosa n2"></span>
+    <span class="galaxia-nebulosa n3"></span>
+    <span class="galaxia-nucleo"></span>
+    <span class="galaxia-estrellas e1"></span>
+    <span class="galaxia-estrellas e2"></span>
+    <span class="galaxia-reticula"></span>
+  </div>
   {% if request.view_args and request.view_args.cliente %}
   {% include "_sidebar.html" %}
   <div class="sidebar-fondo" id="sidebar-fondo"></div>
@@ -424,9 +433,9 @@
       <span aria-hidden="true">☰</span> {{ _('Menú') }}
     </button>
     {% endif %}
-    <a class="marca-header" href="{{ url_for('index') }}">
-      <span class="marca-mark"></span>
-      <span class="marca-texto">Creatv<span class="marca-punto">Flow</span></span>
+    <a class="marca-header" href="{{ url_for('index') }}" aria-label="Creatv Galadsy">
+      <span class="marca-mark" aria-hidden="true"></span>
+      <span class="marca-texto" aria-hidden="true"></span>
     </a>
     {% if request.view_args and request.view_args.cliente %}
     <nav class="header-nav">

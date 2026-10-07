@@ -49,7 +49,7 @@ def _tope(n, por_item):
 
 
 def descargar_html(url):
-    r = requests.get(url, timeout=60, headers={"User-Agent": "CreatvMachine/1.0"}, stream=True)
+    r = requests.get(url, timeout=60, headers={"User-Agent": "CreatvGaladsy/1.0"}, stream=True)
     r.raise_for_status()
     trozos, total = [], 0
     for parte in r.iter_content(65536):

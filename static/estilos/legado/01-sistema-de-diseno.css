@@ -21,17 +21,6 @@ body {
   overflow-x: hidden;
 }
 
-.fondo-ambiente {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(600px 400px at 8% -5%, rgba(77, 141, 255, 0.14), transparent 60%),
-    radial-gradient(700px 500px at 95% 10%, rgba(47, 140, 255, 0.12), transparent 60%),
-    radial-gradient(900px 600px at 50% 110%, rgba(77, 141, 255, 0.07), transparent 60%);
-}
-
 /* ---------- header ---------- */
 
 /* Solo la barra superior de la página (base.html: <body><header>). Las
@@ -45,7 +34,9 @@ body > header {
   z-index: 10;
   padding: 1rem 2rem;
   border-bottom: 1px solid var(--border-soft);
-  background: var(--bg);
+  background: var(--velo-cabecera);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   gap: 1rem 1.5rem;
@@ -61,21 +52,6 @@ body > header {
   text-decoration: none;
   color: var(--text);
 }
-.marca-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--accent-grad);
-  box-shadow: 0 0 16px rgba(77, 141, 255, 0.4);
-  flex: 0 0 auto;
-}
-.marca-texto {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.15rem;
-  letter-spacing: -0.02em;
-}
-.marca-punto { color: var(--accent-texto); }
 
 .header-nav {
   display: flex;

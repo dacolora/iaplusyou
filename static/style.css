@@ -94,6 +94,30 @@
     radial-gradient(700px 380px at -10% 110%, rgba(56, 200, 255, 0.08), transparent 60%),
     radial-gradient(rgba(120, 170, 255, 0.07) 1px, transparent 1.5px) 0 0 / 22px 22px;
 
+  /* Fondo galáctico (2026-10-06, Creatv Galadsy): nebulosas en los azules del logo, estrellas y retícula. Solo
+     fondo detrás de todo, con alfa: compuestos sobre --bg quedan oscuros. */
+  --galaxia-azul: rgba(29, 90, 230, 0.55);
+  --galaxia-azul-suave: rgba(29, 90, 230, 0.34);
+  --galaxia-electrico: rgba(47, 140, 255, 0.42);
+  --galaxia-electrico-suave: rgba(47, 140, 255, 0.26);
+  --galaxia-cian: rgba(56, 200, 255, 0.24);
+  --galaxia-velo-1: rgba(47, 140, 255, 0.10);
+  --galaxia-velo-2: rgba(29, 90, 230, 0.10);
+  --galaxia-velo-3: rgba(56, 200, 255, 0.07);
+  --estrella: rgba(238, 244, 255, 0.85);
+  --estrella-tenue: rgba(238, 244, 255, 0.55);
+  --estrella-azul: rgba(150, 205, 255, 0.85);
+  --reticula: rgba(80, 150, 255, 0.05);
+  /* Velos: la barra superior y las superficies de la portada dejan ver el fondo. */
+  --velo-cabecera: rgba(5, 13, 31, 0.72);
+  --panel-velo: rgba(11, 26, 51, 0.74);
+  --panel-velo-2: rgba(11, 26, 51, 0.55);
+  --resalte-fondo: rgba(29, 106, 224, 0.16);
+  --resalte-borde: rgba(92, 180, 255, 0.45);
+  --resalte-borde-fuerte: rgba(92, 180, 255, 0.7);
+  --sombra-media: rgba(0, 4, 16, 0.7);
+  --degradado-lema: linear-gradient(100deg, #2f8cff, #38c8ff 50%, #bfe6ff);
+
   /* Movimiento */
   --pulso: 1.6s;
 
@@ -125,17 +149,6 @@ body {
   overflow-x: hidden;
 }
 
-.fondo-ambiente {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(600px 400px at 8% -5%, rgba(77, 141, 255, 0.14), transparent 60%),
-    radial-gradient(700px 500px at 95% 10%, rgba(47, 140, 255, 0.12), transparent 60%),
-    radial-gradient(900px 600px at 50% 110%, rgba(77, 141, 255, 0.07), transparent 60%);
-}
-
 /* ---------- header ---------- */
 
 /* Solo la barra superior de la página (base.html: <body><header>). Las
@@ -149,7 +162,9 @@ body > header {
   z-index: 10;
   padding: 1rem 2rem;
   border-bottom: 1px solid var(--border-soft);
-  background: var(--bg);
+  background: var(--velo-cabecera);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   gap: 1rem 1.5rem;
@@ -165,21 +180,6 @@ body > header {
   text-decoration: none;
   color: var(--text);
 }
-.marca-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--accent-grad);
-  box-shadow: 0 0 16px rgba(77, 141, 255, 0.4);
-  flex: 0 0 auto;
-}
-.marca-texto {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.15rem;
-  letter-spacing: -0.02em;
-}
-.marca-punto { color: var(--accent-texto); }
 
 .header-nav {
   display: flex;
@@ -1240,7 +1240,6 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .landing-hero h1 { font-size: clamp(2rem, 4.2vw, 3.1rem); max-width: none; margin-bottom: 1rem; }
 .landing-cta { display: flex; gap: .7rem; flex-wrap: wrap; margin-top: 1.6rem; }
 .landing-cta a { text-decoration: none; display: inline-flex; align-items: center; padding: .8rem 1.3rem; font-size: .95rem; }
-.landing-modelos { padding: 1.2rem 0 0; font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; }
 .landing-hero-visual { position: relative; height: 380px; }
 .landing-tarjeta { position: absolute; width: 170px; aspect-ratio: 9/13; border-radius: 16px; background: var(--accent-grad); box-shadow: var(--shadow); padding: .7rem; display: flex; flex-direction: column; justify-content: flex-end; color: #fff; }
 .landing-tarjeta .generado-tipo { position: absolute; top: .6rem; left: .6rem; }
@@ -1250,17 +1249,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .landing-tarjeta.t2 { left: 38%; top: 0; z-index: 2; background: linear-gradient(160deg, var(--accent-2), var(--accent)); }
 .landing-tarjeta.t3 { left: 66%; top: 60px; transform: rotate(7deg); background: linear-gradient(160deg, #4d8dff, var(--accent-2)); }
 
-.landing-features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 1rem 0 3rem; }
-.landing-features article { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.3rem 1.2rem; }
-.landing-icono { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: 10px; background: rgba(29, 106, 224,.1); color: var(--accent-texto); font-size: 1.1rem; margin-bottom: .8rem; }
-.landing-features h3 { margin: 0 0 .4rem; font-family: var(--font-display); font-size: 1.05rem; }
-.landing-features p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.5; }
 
-.landing-pasos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 3.5rem; }
-.landing-pasos > div { display: grid; grid-template-columns: auto 1fr; gap: .2rem .9rem; align-items: center; }
-.landing-pasos span { grid-row: span 2; width: 40px; height: 40px; border-radius: 50%; background: var(--accent-grad); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; }
-.landing-pasos strong { font-family: var(--font-display); }
-.landing-pasos p { margin: 0; color: var(--muted); font-size: .84rem; }
 
 .landing-empezar { display: grid; grid-template-columns: 1fr 1.2fr; gap: 2.5rem; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 2.2rem; }
 .landing-empezar h2 { margin: 0 0 .4rem; font-size: 1.6rem; }
@@ -1272,10 +1261,8 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 @media (max-width: 900px) {
   .landing-hero { grid-template-columns: 1fr; }
   .landing-hero-visual { height: 300px; }
-  .landing-features { grid-template-columns: repeat(2, 1fr); }
-  .landing-pasos, .landing-empezar { grid-template-columns: 1fr; }
+  .landing-empezar { grid-template-columns: 1fr; }
 }
-@media (max-width: 560px) { .landing-features { grid-template-columns: 1fr; } }
 
 /* Campañas: resultados del anuncio */
 .ad-resultados { margin: .8rem 0 1rem; padding: .9rem 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; }
@@ -3325,6 +3312,124 @@ body.panel-abierto { overflow: hidden; }
 /* Enlaces: sin esta regla el navegador los pinta lila (#9e9eff) y morados al visitarlos (#d0adf0) en tema oscuro.
    :where() no suma especificidad, así que cualquier clase con su propio color le gana. */
 :where(a) { color: var(--accent-texto); }
+/* ── estilos/componentes/marca.css ── */
+/* Marca Creatv Galadsy (2026-10-06): el símbolo y el nombre son máscaras (PNG con alfa en static/img/galadsy-*)
+   pintadas con el color del texto, así siguen el tema sin un segundo juego de archivos. */
+.marca-mark,
+.marca-texto,
+.marca-logo {
+  display: inline-block;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: left center;
+  mask-position: left center;
+}
+.marca-mark {
+  width: 26px;
+  height: 28px;
+  -webkit-mask-image: url("img/galadsy-simbolo.png");
+  mask-image: url("img/galadsy-simbolo.png");
+}
+.marca-texto {
+  width: 80px;
+  height: 27px;
+  -webkit-mask-image: url("img/galadsy-nombre.png");
+  mask-image: url("img/galadsy-nombre.png");
+}
+/* Logo completo (símbolo + nombre) de las páginas principales: portada, login, recuperar, restablecer, legales. */
+.marca-logo {
+  width: 250px;
+  height: 68px;
+  max-width: 100%;
+  margin-bottom: var(--esp-4);
+  -webkit-mask-image: url("img/galadsy-logo.png");
+  mask-image: url("img/galadsy-logo.png");
+}
+/* ── estilos/componentes/fondo-galaxia.css ── */
+/* Fondo galáctico de toda la plataforma (2026-10-06, Creatv Galadsy; base.html, .fondo-galaxia): nebulosas en los
+   azules del logo que derivan despacio, un núcleo que gira, dos capas de estrellas que titilan y una retícula tenue.
+   Todo son degradados (sin filter: blur), así el movimiento es barato de pintar. Sin movimiento con
+   prefers-reduced-motion (base.css apaga todas las animaciones). */
+.fondo-galaxia { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.fondo-galaxia > span { position: absolute; will-change: transform; }
+
+.galaxia-nebulosa { inset: -25%; }
+.galaxia-nebulosa.n1 {
+  background-image:
+    radial-gradient(38% 22% at 22% 30%, var(--galaxia-azul), transparent 70%),
+    radial-gradient(30% 18% at 70% 62%, var(--galaxia-azul-suave), transparent 70%);
+  animation: galaxia-nebulosa-a 38s ease-in-out infinite alternate;
+}
+.galaxia-nebulosa.n2 {
+  background-image:
+    radial-gradient(34% 16% at 62% 34%, var(--galaxia-electrico), transparent 72%),
+    radial-gradient(26% 14% at 34% 74%, var(--galaxia-electrico-suave), transparent 72%);
+  transform: rotate(-22deg);
+  animation: galaxia-nebulosa-b 46s ease-in-out infinite alternate;
+}
+.galaxia-nebulosa.n3 {
+  background-image: radial-gradient(22% 10% at 82% 14%, var(--galaxia-cian), transparent 72%);
+  transform: rotate(-22deg);
+  animation: galaxia-nebulosa-c 30s ease-in-out infinite alternate;
+}
+
+/* Núcleo: un remolino que gira muy despacio. */
+.galaxia-nucleo {
+  left: 50%; top: 42%; width: 120vmax; height: 120vmax; margin: -60vmax 0 0 -60vmax;
+  background-image: conic-gradient(from 0deg, transparent 0deg, var(--galaxia-velo-1) 40deg, transparent 90deg,
+    var(--galaxia-velo-2) 180deg, transparent 230deg, var(--galaxia-velo-3) 300deg, transparent 360deg);
+  -webkit-mask-image: radial-gradient(circle, currentColor 0%, transparent 60%);
+  mask-image: radial-gradient(circle, currentColor 0%, transparent 60%);
+  animation: galaxia-gira 160s linear infinite;
+}
+
+/* Cada capa de estrellas se desplaza exactamente un mosaico por vuelta: el bucle no salta. */
+.galaxia-estrellas { left: 0; right: 0; bottom: 0; background-repeat: repeat; }
+.galaxia-estrellas.e1 {
+  top: -360px;
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, var(--estrella), transparent),
+    radial-gradient(1px 1px at 140px 90px, var(--estrella-tenue), transparent),
+    radial-gradient(1.5px 1.5px at 260px 170px, var(--estrella-azul), transparent),
+    radial-gradient(1px 1px at 330px 40px, var(--estrella-tenue), transparent),
+    radial-gradient(1px 1px at 90px 240px, var(--estrella-azul), transparent),
+    radial-gradient(1.5px 1.5px at 210px 310px, var(--estrella), transparent);
+  background-size: 380px 360px;
+  animation: galaxia-estrellas-1 140s linear infinite, galaxia-titila 6s ease-in-out infinite alternate;
+}
+.galaxia-estrellas.e2 {
+  top: -600px;
+  background-image:
+    radial-gradient(2px 2px at 60px 80px, var(--estrella-azul), transparent),
+    radial-gradient(1.5px 1.5px at 420px 260px, var(--estrella), transparent),
+    radial-gradient(2px 2px at 300px 480px, var(--estrella-tenue), transparent);
+  background-size: 620px 600px;
+  animation: galaxia-estrellas-2 90s linear infinite, galaxia-titila 4.5s ease-in-out infinite alternate-reverse;
+}
+
+.galaxia-reticula {
+  inset: 0;
+  background-image:
+    linear-gradient(var(--reticula) 1px, transparent 1px),
+    linear-gradient(90deg, var(--reticula) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 55% at 50% 25%, currentColor 15%, transparent 75%);
+  mask-image: radial-gradient(ellipse 75% 55% at 50% 25%, currentColor 15%, transparent 75%);
+  animation: galaxia-reticula 20s linear infinite;
+}
+
+@keyframes galaxia-nebulosa-a { to { transform: translate(6%, 5%) scale(1.08); } }
+@keyframes galaxia-nebulosa-b { to { transform: rotate(-16deg) translate(-7%, 6%) scale(1.05); } }
+@keyframes galaxia-nebulosa-c { to { transform: rotate(-26deg) translate(-8%, 4%); opacity: .6; } }
+@keyframes galaxia-gira { to { transform: rotate(360deg); } }
+@keyframes galaxia-estrellas-1 { to { transform: translateY(360px); } }
+@keyframes galaxia-estrellas-2 { to { transform: translateY(600px); } }
+@keyframes galaxia-titila { from { opacity: .45; } to { opacity: 1; } }
+@keyframes galaxia-reticula { to { background-position: 0 64px, 0 0; } }
 /* ── estilos/pantallas/guia-estilos.css ── */
 /* Guía de estilos — solo /admin/estilos (spec 2026-10-02-sistema-de-estilos §8).
    Muestras de los tokens y del marcado real de la base visual común. */
@@ -3841,3 +3946,116 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 #exp-nuevo input { max-width: 100%; box-sizing: border-box; }
 #exp-nuevo [hidden] { display: none !important; }
 @media (max-width: 760px) { #exp-nuevo .exp-recorrido { gap: 4px; } #exp-nuevo .exp-recorrido span { flex: 1 1 40%; } #exp-nuevo .fe-opciones { flex-wrap: wrap; } #exp-nuevo .exp-resumen { padding: 16px; } }
+/* ── estilos/pantallas/portada.css ── */
+/* Portada Creatv Galadsy (templates/index.html, 2026-10-06): «Run more GALADSY», flujo interactivo, vitrina que corre,
+   planes, cadena del ciclo, cierre y la tecnología al final. Lo base del héroe (.landing-hero, .landing-cta,
+   .landing-tarjeta, .landing-empezar) sigue en legado/02. */
+
+/* Las tarjetas del héroe y la vitrina llevan un video o una imagen de fondo; el velo de abajo deja leer el título. */
+.landing-tarjeta { overflow: hidden; isolation: isolate; }
+.landing-tarjeta::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(to top, var(--sombra-media), transparent 45%); }
+.landing-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; display: block; }
+.landing-tarjeta strong { text-shadow: 0 1px 6px var(--sombra-media); }
+
+/* Héroe */
+.landing-lema { font-size: clamp(2.8rem, 6.4vw, 5rem); line-height: 1; letter-spacing: -0.035em; margin: 0 0 var(--esp-4); max-width: none; }
+.landing-degradado { background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.landing-bajada { font-family: var(--font-display); font-weight: 600; font-size: clamp(1.25rem, 2.4vw, 1.85rem); line-height: 1.2; letter-spacing: -0.015em; margin: 0 0 var(--esp-5); max-width: 24ch; }
+.landing-sin { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--esp-2); color: var(--muted); font-size: var(--t-base); }
+.landing-sin li { display: flex; align-items: center; gap: var(--esp-3); }
+.landing-sin li::before { content: "✕"; display: inline-flex; width: 1.4rem; height: 1.4rem; align-items: center; justify-content: center; border-radius: 50%; font-size: .7rem; color: var(--accent-texto); background: var(--resalte-fondo); border: 1px solid var(--resalte-borde); flex: 0 0 auto; }
+
+/* Encabezados de sección: la misma letra del título principal. */
+.landing-seccion-cabecera { margin-bottom: var(--esp-5); max-width: 60ch; }
+.landing-etiqueta { display: inline-block; font-family: var(--font-display); font-size: var(--t-sobretitulo); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-texto); margin-bottom: var(--esp-3); }
+h2.landing-titulo { font-family: var(--font-display); font-size: clamp(1.8rem, 3.6vw, 2.8rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; color: var(--text); text-transform: none; margin: 0 0 var(--esp-3); display: block; }
+h2.landing-titulo::before { content: none; }
+.landing-seccion-sub { margin: 0; color: var(--muted); font-size: 1.05rem; line-height: 1.5; }
+
+/* Flujo interactivo: cada paso es un botón; el panel muestra el activo y avanza solo (index.html). */
+.landing-flujo { margin: var(--esp-4) 0 5rem; }
+.flujo-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: var(--esp-5); align-items: stretch; }
+.flujo-pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--esp-2); }
+.flujo-paso { position: relative; width: 100%; display: grid; grid-template-columns: auto 1fr; gap: var(--esp-4); align-items: center; text-align: left; padding: var(--esp-4) 1.1rem; border-radius: var(--radius); border: 1px solid var(--border); background: var(--panel-velo); color: var(--muted); font: inherit; cursor: pointer; overflow: hidden; transition: border-color .2s, background .2s, color .2s, transform .2s; }
+.flujo-paso:hover { color: var(--text); border-color: var(--resalte-borde); }
+.flujo-paso.activo { color: var(--text); border-color: var(--resalte-borde-fuerte); background: var(--resalte-fondo); box-shadow: var(--shadow-glow); transform: translateX(4px); }
+.flujo-num { font-family: var(--font-display); font-weight: 700; font-size: .8rem; letter-spacing: .06em; color: var(--accent-texto); }
+.flujo-paso-titulo { font-family: var(--font-display); font-weight: 600; font-size: 1.02rem; }
+/* La barrita de avance es una transición de ancho (no una animación): la clase .flujo-llena la dispara. */
+.flujo-barra { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; }
+.flujo-barra::after { content: ""; display: block; height: 100%; width: 0; background: var(--accent-grad); }
+.flujo-auto:not(.flujo-manual) .flujo-paso.activo.flujo-llena .flujo-barra::after { width: 100%; transition: width var(--flujo-duracion, 5000ms) linear; }
+.flujo-panel { position: relative; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); overflow: hidden; min-height: 420px; }
+.flujo-vista { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.flujo-vista[hidden] { display: none; }
+.flujo-vista.activo { animation: aparece-card .45s ease; }
+.flujo-media { position: relative; isolation: isolate; overflow: hidden; }
+.flujo-texto { padding: var(--esp-6) var(--esp-5); display: flex; flex-direction: column; justify-content: flex-end; gap: var(--esp-3); background-image: linear-gradient(to top, var(--resalte-fondo), transparent 60%); }
+.flujo-texto h3 { margin: 0; font-family: var(--font-display); font-size: 1.5rem; line-height: 1.15; letter-spacing: -0.02em; }
+.flujo-texto p { margin: 0; color: var(--muted); line-height: 1.55; }
+
+/* Vitrina: una cinta que corre de derecha a izquierda. La lista va dos veces: correr la mitad (más medio espacio)
+   cierra el bucle sin salto. */
+.landing-vitrina { margin: 0 0 3.5rem; }
+.landing-vitrina-carril {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, currentColor 6%, currentColor 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, currentColor 6%, currentColor 94%, transparent);
+}
+.landing-vitrina-pista { display: flex; gap: var(--esp-4); width: max-content; margin: 0; padding: var(--esp-2) 0; list-style: none; animation: portada-vitrina 60s linear infinite; }
+.landing-vitrina-carril:hover .landing-vitrina-pista { animation-play-state: paused; }
+@keyframes portada-vitrina { from { transform: translateX(0); } to { transform: translateX(calc(-50% - var(--esp-2))); } }
+.landing-vitrina-pieza { position: relative; flex: 0 0 auto; height: 356px; aspect-ratio: 9/16; border-radius: var(--radius-lg); overflow: hidden; isolation: isolate; background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow-soft); }
+.landing-vitrina-pieza .generado-tipo { position: absolute; top: .6rem; left: .6rem; }
+
+/* Planes */
+.landing-planes { margin: 0 0 4.5rem; scroll-margin-top: 90px; }
+.planes-grilla { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--esp-4); }
+.plan { position: relative; display: flex; flex-direction: column; gap: var(--esp-1); padding: var(--esp-5) 1.2rem 1.2rem; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); transition: transform .2s, border-color .2s; }
+.plan:hover { transform: translateY(-4px); border-color: var(--resalte-borde); }
+.plan p { margin: var(--esp-2) 0 1.2rem; color: var(--muted); font-size: .88rem; line-height: 1.5; flex: 1; }
+.plan-cifra { font-family: var(--font-display); font-weight: 700; font-size: 2.6rem; letter-spacing: -0.04em; line-height: 1; }
+.plan-cifra-texto { font-size: 1.55rem; letter-spacing: -0.02em; }
+.plan-unidad { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-texto); }
+.plan-boton { text-decoration: none; display: flex; justify-content: center; padding: .7rem 1rem; font-size: .9rem; }
+.plan-destacado { border-color: var(--resalte-borde-fuerte); background-image: linear-gradient(180deg, var(--resalte-fondo), transparent 60%); box-shadow: var(--shadow-glow); }
+.plan-cinta { position: absolute; top: -.7rem; left: 1.2rem; padding: .2rem .6rem; border-radius: var(--radius-pastilla); background: var(--accent-grad); color: var(--text); font-size: .7rem; font-weight: 600; }
+.plan-custom { background-image: linear-gradient(160deg, var(--galaxia-velo-2), transparent 55%); }
+
+/* Cadena Referencia → Crear → Editar → Lanzar → Escalar: un brillo la recorre, eslabón por eslabón. */
+.landing-cadena { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--esp-3) var(--esp-4); margin: 0 0 4.5rem; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.1rem, 2.6vw, 1.8rem); letter-spacing: -0.02em; }
+.cadena-eslabon { padding: .45rem 1rem; border-radius: var(--radius-pastilla); border: 1px solid var(--border); background: var(--panel-velo); animation: portada-cadena 5s ease-in-out infinite; animation-delay: calc(var(--i) * .6s); }
+.cadena-flecha { color: var(--accent-texto); }
+@keyframes portada-cadena {
+  0%, 30%, 100% { border-color: var(--border); box-shadow: none; }
+  12% { border-color: var(--resalte-borde-fuerte); box-shadow: var(--brillo-md); }
+}
+
+/* Cierre y tecnología */
+.landing-final { text-align: center; margin: 0 0 4rem; padding: 3.5rem 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--resalte-borde); background: var(--panel-velo-2); background-image: radial-gradient(ellipse at 50% 0%, var(--galaxia-electrico-suave), transparent 65%); }
+.landing-final .landing-bajada { margin-left: auto; margin-right: auto; max-width: none; }
+.landing-final .landing-cta { justify-content: center; }
+h2.landing-lema { display: block; color: var(--text); text-transform: none; font-size: clamp(2.4rem, 6vw, 4.4rem); font-weight: 700; }
+h2.landing-lema::before { content: none; }
+.landing-tecnologia { text-align: center; max-width: 62ch; margin: 3.5rem auto 0; }
+h2.landing-titulo-chico { font-size: clamp(1.3rem, 2.6vw, 1.8rem); }
+.landing-tecnologia .landing-seccion-sub { font-size: .95rem; }
+.landing-modelos { margin: var(--esp-4) 0 0; font-weight: 300; font-size: .72rem; letter-spacing: .08em; color: var(--muted-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-vitrina-carril { overflow-x: auto; }
+}
+@media (max-width: 1000px) {
+  .planes-grilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .plan-custom { grid-column: 1 / -1; }
+}
+@media (max-width: 900px) {
+  .flujo-cuerpo { grid-template-columns: 1fr; }
+  .flujo-panel { min-height: 380px; }
+}
+@media (max-width: 560px) {
+  .planes-grilla { grid-template-columns: 1fr; }
+  .flujo-vista { grid-template-columns: 1fr; grid-template-rows: 220px auto; }
+  .flujo-panel { min-height: 440px; }
+  .landing-vitrina-pieza { height: 268px; }
+}

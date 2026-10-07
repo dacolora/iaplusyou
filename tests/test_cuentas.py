@@ -372,7 +372,7 @@ def test_enviar_verificacion_manda_enlace_con_token_valido(base_temporal, envios
     assert len(envios) == 1
     e = envios[0]
     assert e["para"] == "ana@ejemplo.com"
-    assert "Creatv Machine" in e["asunto"] and "correo" in e["asunto"].lower()
+    assert "Creatv Galadsy" in e["asunto"] and "correo" in e["asunto"].lower()
     filas = _filas(base_temporal)
     assert len(filas) == 1 and filas[0]["tipo"] == "verificacion" and filas[0]["ip"] == "1.2.3.4"
     # El enlace del cuerpo lleva el token crudo (sin doble barra) y ese token sirve.
@@ -380,7 +380,7 @@ def test_enviar_verificacion_manda_enlace_con_token_valido(base_temporal, envios
     linea = next(l for l in e["cuerpo"].splitlines() if l.startswith(prefijo))
     token = linea[len(prefijo):]
     assert token and cuentas._hash(token) == filas[0]["token_hash"]
-    assert linea in e["html"] and "Creatv Machine" in e["html"] and "24 horas" in e["cuerpo"]
+    assert linea in e["html"] and "Creatv Galadsy" in e["html"] and "24 horas" in e["cuerpo"]
     assert "ana" in e["cuerpo"]
     assert cuentas.consumir("verificacion", token) == {"usuario": "ana", "correo": "ana@ejemplo.com"}
     # El token nunca pasa por los logs.
@@ -393,7 +393,7 @@ def test_enviar_restablecer_manda_enlace_y_vence_en_una_hora(base_temporal, envi
     import cuentas
     assert cuentas.enviar_restablecer("ana", "ana@ejemplo.com", "https://app.ejemplo.com") is True
     e = envios[0]
-    assert "contraseña" in e["asunto"].lower() and "Creatv Machine" in e["asunto"]
+    assert "contraseña" in e["asunto"].lower() and "Creatv Galadsy" in e["asunto"]
     prefijo = "https://app.ejemplo.com/restablecer/"
     token = next(l for l in e["cuerpo"].splitlines() if l.startswith(prefijo))[len(prefijo):]
     assert "1 hora" in e["cuerpo"] and prefijo + token in e["html"]

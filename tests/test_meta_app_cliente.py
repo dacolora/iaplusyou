@@ -1,7 +1,7 @@
 """Cada proyecto trae SU propia app de Meta (id, secret, config de login):
 clientes/<cliente>/meta_app.json. meta_conexion nunca vuelve a leer
 META_APP_ID / META_APP_SECRET / META_LOGIN_CONFIG_ID del entorno — un
-proyecto es un mundo aparte y CreatvMachine solo opera con sus credenciales."""
+proyecto es un mundo aparte y Creatv Galadsy solo opera con sus credenciales."""
 import json
 import os
 import stat

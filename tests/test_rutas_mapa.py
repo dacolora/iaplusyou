@@ -28,7 +28,7 @@ def test_admin_ve_el_mapa_completo(dashboard):
     r = _cliente_admin(dashboard).get("/mapa")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert "Mapa de Creatv Machine" in html
+    assert "Mapa de Creatv Galadsy" in html
     assert 'id="svg-mapa"' in html            # el diagrama con el recorrido del clic
     assert 'id="inv"' in html                 # el inventario con buscador
     assert "Antes de exponerlo" in html       # la sección de riesgos, solo para el admin

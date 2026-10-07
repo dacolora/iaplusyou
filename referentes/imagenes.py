@@ -29,7 +29,7 @@ def _bajar(url):
     # Atria/Apify): mismo riesgo de SSRF que conectores/url.py, misma guarda
     # — también en cada redirección (`abrir`), no solo en la primera URL.
     try:
-        r = conector_url.abrir(url, cabeceras={"User-Agent": "CreatvMachine/1.0"}, timeout=TIMEOUT)
+        r = conector_url.abrir(url, cabeceras={"User-Agent": "CreatvGaladsy/1.0"}, timeout=TIMEOUT)
     except conector_url.ErrorConector as e:
         raise ImagenInvalida(str(e)) from e
     try:

@@ -92,6 +92,30 @@
     radial-gradient(700px 380px at -10% 110%, rgba(56, 200, 255, 0.08), transparent 60%),
     radial-gradient(rgba(120, 170, 255, 0.07) 1px, transparent 1.5px) 0 0 / 22px 22px;
 
+  /* Fondo galáctico (2026-10-06, Creatv Galadsy): nebulosas en los azules del logo, estrellas y retícula. Solo
+     fondo detrás de todo, con alfa: compuestos sobre --bg quedan oscuros. */
+  --galaxia-azul: rgba(29, 90, 230, 0.55);
+  --galaxia-azul-suave: rgba(29, 90, 230, 0.34);
+  --galaxia-electrico: rgba(47, 140, 255, 0.42);
+  --galaxia-electrico-suave: rgba(47, 140, 255, 0.26);
+  --galaxia-cian: rgba(56, 200, 255, 0.24);
+  --galaxia-velo-1: rgba(47, 140, 255, 0.10);
+  --galaxia-velo-2: rgba(29, 90, 230, 0.10);
+  --galaxia-velo-3: rgba(56, 200, 255, 0.07);
+  --estrella: rgba(238, 244, 255, 0.85);
+  --estrella-tenue: rgba(238, 244, 255, 0.55);
+  --estrella-azul: rgba(150, 205, 255, 0.85);
+  --reticula: rgba(80, 150, 255, 0.05);
+  /* Velos: la barra superior y las superficies de la portada dejan ver el fondo. */
+  --velo-cabecera: rgba(5, 13, 31, 0.72);
+  --panel-velo: rgba(11, 26, 51, 0.74);
+  --panel-velo-2: rgba(11, 26, 51, 0.55);
+  --resalte-fondo: rgba(29, 106, 224, 0.16);
+  --resalte-borde: rgba(92, 180, 255, 0.45);
+  --resalte-borde-fuerte: rgba(92, 180, 255, 0.7);
+  --sombra-media: rgba(0, 4, 16, 0.7);
+  --degradado-lema: linear-gradient(100deg, #2f8cff, #38c8ff 50%, #bfe6ff);
+
   /* Movimiento */
   --pulso: 1.6s;
 
