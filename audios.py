@@ -8,7 +8,7 @@ finales pero con su propio hash, que incluye la velocidad). Las muestras de
 voz viven en el cliente interno `_creatv` y las paga Creatv. No importa
 final_edition.musica al cargar (esa importa mi_musica; la tarea la usa).
 
-Desde el 2026-09-30 habla diez idiomas y decide el motor por voz e idioma
+Desde el 2026-09-30 habla once idiomas y decide el motor por voz e idioma
 (`motor_de`): ElevenLabs Multilingual v2, Turbo v2.5 para el noruego y
 MiniMax para las voces propias (`voces_propias.py`)."""
 import os
@@ -32,10 +32,10 @@ ORIGEN = "locucion"
 ORIGEN_VOZ = "voz"
 CLIENTE_MUESTRAS = "_creatv"
 VERSION_MUESTRA = 1
-IDIOMAS = ("es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs")
+IDIOMAS = ("es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs", "nl")
 # Cada idioma en su propia lengua (así lo reconoce quien lo habla).
 NOMBRES_IDIOMA = {"es": "Español", "en": "English", "pt": "Português", "de": "Deutsch", "fr": "Français",
-                  "it": "Italiano", "fi": "Suomi", "sv": "Svenska", "no": "Norsk", "cs": "Čeština"}
+                  "it": "Italiano", "fi": "Suomi", "sv": "Svenska", "no": "Norsk", "cs": "Čeština", "nl": "Nederlands"}
 # Idiomas que Multilingual v2 no habla: la galería los lee con Turbo v2.5 y
 # el idioma forzado (spec 2026-09-30 §2).
 IDIOMAS_TURBO = ("no",)
@@ -66,6 +66,7 @@ FRASES_MUESTRA = {
     "sv": "Hej, jag heter {voz}. Så här låter min röst i din annons.",
     "no": "Hei, jeg heter {voz}. Slik høres stemmen min ut i annonsen din.",
     "cs": "Dobrý den, jsem {voz}. Takhle zní můj hlas ve vaší reklamě.",
+    "nl": "Hallo, ik ben {voz}. Zo klinkt mijn stem in jouw advertentie.",
 }
 # msgids: la ruta los traduce con idiomas.traducir al responder.
 MENSAJES = {

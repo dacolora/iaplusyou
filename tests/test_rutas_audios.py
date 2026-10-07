@@ -283,7 +283,7 @@ def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
     assert 'id="au-vp-descripcion"' in html and "US$ 1,52" in html and "US$ 3,01" in html
     assert "data-url-vp-clonar=" in html and "data-url-vp-lista=" in html
     sel = html.split('id="au-idioma"')[1].split("</select>")[0]
-    assert sel.count("<option") == 10 and "Norsk" in sel and "Čeština" in sel and "Suomi" in sel
+    assert sel.count("<option") == 11 and "Nederlands" in sel and "Norsk" in sel and "Čeština" in sel and "Suomi" in sel
     assert "Idioma del texto" in html
     # Pestañas del panel accesibles (revisión Task 6): cada una dice si está
     # elegida y qué formulario controla; los formularios son sus tabpanel.

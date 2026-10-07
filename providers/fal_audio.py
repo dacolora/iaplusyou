@@ -52,6 +52,7 @@ COSTO_VISTA_PREVIA_DISENO_POR_CARACTER = 0.00003
 IDIOMAS_MINIMAX = {
     "es": "Spanish", "en": "English", "pt": "Portuguese", "de": "German", "fr": "French",
     "it": "Italian", "fi": "Finnish", "sv": "Swedish", "no": "Norwegian", "cs": "Czech",
+    "nl": "Dutch",
 }
 
 # Eleven Music vía fal (verificado en fal.ai/models/fal-ai/elevenlabs/music el
