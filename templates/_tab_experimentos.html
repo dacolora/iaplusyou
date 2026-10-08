@@ -108,6 +108,7 @@
       <label>{{ _('Días') }} <input type="number" name="dias" value="7" min="1" max="90"></label>
     </div>
     <p class="exp-resumen" id="exp-resumen"></p>
+    <p class="exp-resumen" id="exp-resumen-reparto" hidden>{{ _('El presupuesto diario de cada país se reparte entre las tiendas.') }}</p>
     <div class="exp-pasos-botones"><button type="button" class="btn-sm" data-ir="1">{{ _('← Atrás') }}</button> <button type="button" class="btn-guardar btn-sm" data-ir="3">{{ _('Siguiente →') }}</button></div>
   </section>
 
@@ -433,6 +434,7 @@
     var abrir = document.getElementById('exp-abrir-pasos');
     var paises = Array.prototype.slice.call(form.querySelectorAll('.exp-pais-check'));
     var cuenta = document.getElementById('exp-resumen');
+    var reparto = document.getElementById('exp-resumen-reparto');
     var cuadricula = document.getElementById('exp-cuadricula');
     var nombre = document.getElementById('exp-nombre');
     var minimo = parseFloat(form.dataset.minimo || '0'), moneda = form.dataset.moneda || '';
@@ -501,6 +503,7 @@
     }
     function refrescarCuenta() {
       var n = marcadas().length, ps = paisesMarcados();
+      if (reparto) reparto.hidden = tiendasApp() < 2;
       // En apps cada casilla son tantos anuncios como tiendas (las plataformas se expanden en el servidor).
       var anuncios = (cuadricula.querySelectorAll('input[name=combinaciones]:checked').length || combinaciones().length) * tiendasApp();
       var dia = 0;

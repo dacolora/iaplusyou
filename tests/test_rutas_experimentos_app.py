@@ -129,6 +129,10 @@ def test_formulario_trae_campos_de_tienda_y_objetivo_no_sugerido(app, base_tempo
     assert 'name="app_ios_url"' in html and 'name="app_android_url"' in html
     assert 'name="app_id" inputmode="numeric" value="1234567890"' in html
     assert "data-solo-app hidden" in html and "data-solo-no-app" in html
+    # Con dos tiendas el resumen avisa que el presupuesto del país se reparte (oculto hasta entonces).
+    assert ('id="exp-resumen-reparto" hidden>El presupuesto diario de cada país se reparte entre las tiendas.</p>'
+            in html)
+    assert "reparto.hidden = tiendasApp() < 2" in html
 
 
 def test_arbol_de_app_deja_pausar_y_cambiar_presupuesto(app, base_temporal):
