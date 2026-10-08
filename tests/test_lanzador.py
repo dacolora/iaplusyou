@@ -30,10 +30,10 @@ class MetaFalsa:
                                       actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         creative = types.SimpleNamespace(subir_video=lambda url, titulo="", dry_run=False, esperar_seg=180: "vid_1",
                                          crear_creative_video=lambda nombre, vid, mini, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False, url_tags=None:
-                                         self._id("creative", link=link, url_tags=url_tags, cta_type=cta_type),
+                                         self._id("creative", nombre=nombre, link=link, url_tags=url_tags, cta_type=cta_type),
                                          crear_creative_imagen=lambda nombre, imagen_url, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False, url_tags=None:
-                                         self._id("creative_imagen", link=link, imagen_url=imagen_url, url_tags=url_tags, cta_type=cta_type))
-        ad = types.SimpleNamespace(crear_ad=lambda nombre, adset_id, creative_id, dry_run=False: self._id("ad", adset_id=adset_id),
+                                         self._id("creative_imagen", nombre=nombre, link=link, imagen_url=imagen_url, url_tags=url_tags, cta_type=cta_type))
+        ad = types.SimpleNamespace(crear_ad=lambda nombre, adset_id, creative_id, dry_run=False: self._id("ad", nombre=nombre, adset_id=adset_id),
                                    actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         insights = types.SimpleNamespace(obtener_resultados=lambda ad_id, objetivo=None:
                                          {"impresiones": 100, "reach": 90, "alcance": 90, "clics_enlace": 4, "ctr": 4.0, "cpc": 0.5,
@@ -134,6 +134,25 @@ def test_app_dos_plataformas_crea_un_conjunto_por_pais_y_plataforma(entorno_app)
     por_pais = {p["pais"]: p["meta_adsets"] for p in ex["paises"]}
     assert all(pz["meta_adset_id"] == por_pais[pz["pais"]][pz["extra"]["plataforma"]] for pz in ex["piezas"])
     assert all(pz["estado"] == "pausado" and pz["meta_ad_id"] for pz in ex["piezas"])
+
+
+def test_app_el_anuncio_y_el_creative_llevan_la_tienda_en_el_nombre(entorno_app):
+    """Revisión final, ola 2 (2026-10-08): en Meta la misma pieza tiene un anuncio por tienda; el sufijo los
+    distingue. Fuera de apps el nombre no cambia."""
+    e = entorno_app
+    e["lanzador"].lanzar("acme", e["eid"])
+    ads = [kw["nombre"] for t, kw in e["meta"].llamadas if t == "ad"]
+    creatives = [kw["nombre"] for t, kw in e["meta"].llamadas if t == "creative"]
+    assert len(ads) == 4 and sum(n.endswith(" · iOS") for n in ads) == 2 and sum(n.endswith(" · Android") for n in ads) == 2
+    assert sorted(creatives) == sorted(ads)
+    assert all(" — CO · " in n or " — MX · " in n for n in ads)
+
+
+def test_trafico_el_nombre_del_anuncio_no_lleva_tienda(entorno):
+    entorno["lanzador"].lanzar("acme", entorno["eid"])
+    ads = [kw["nombre"] for t, kw in entorno["meta"].llamadas if t == "ad"]
+    assert ads and not any("iOS" in n or "Android" in n for n in ads)
+    assert all(n.endswith((" — CO", " — MX")) for n in ads)
 
 
 def test_app_el_anuncio_lleva_la_url_de_tienda_sin_utm(entorno_app):

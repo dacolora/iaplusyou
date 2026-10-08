@@ -133,7 +133,8 @@
         {% for pz in e.piezas if pz.pais == p.pais %}
         <li class="exp-pieza exp-pieza-{{ pz.estado }}">
           <span class="exp-pieza-mini">{% if pz.url_miniatura %}<img src="{{ pz.url_miniatura }}" alt="" loading="lazy">{% elif pz.es_imagen %}<img src="{{ pz.url_imagen }}" alt="" loading="lazy">{% elif pz.url_video %}<video src="{{ pz.url_video }}" muted playsinline preload="none" data-precarga></video>{% endif %}</span>
-          <span class="exp-pieza-nombre">{{ pz.nombre }} <small>({{ etiquetas_exp.tipo.get(pz.tipo, pz.tipo)|traducir }})</small> <span class="tag-estado">{{ etiquetas_exp.pieza.get(pz.estado, pz.estado)|traducir }}</span>
+          <span class="exp-pieza-nombre">{{ pz.nombre }} <small>({{ etiquetas_exp.tipo.get(pz.tipo, pz.tipo)|traducir }})</small>
+            {%- set plat = {'ios': 'iOS', 'android': 'Android'}.get((pz.extra or {}).get('plataforma')) %}{% if plat %} <span class="tag-estado" title="{{ _('Tienda de la app') }}">{{ plat }}</span>{% endif %} <span class="tag-estado">{{ etiquetas_exp.pieza.get(pz.estado, pz.estado)|traducir }}</span>
             {% if pz.metricas.estado_meta_texto %}<small>· {{ pz.metricas.estado_meta_texto }}</small>{% endif %}
             {% if pz.veredicto and pz.veredicto != "pendiente" %}<span class="veredicto veredicto-{{ pz.veredicto }}" title="{{ pz.veredicto_motivo or '' }}">{{ etiquetas_exp.veredicto.get(pz.veredicto, pz.veredicto)|traducir }}</span>{% endif %}
             {% if pz.escalon_rescate %}<span class="tag-estado tag-escalon" title="{{ _('Rescates intentados sobre esta pieza') }}">{{ _('Escalón %(n)s/3', n=pz.escalon_rescate) }}</span>{% endif %}

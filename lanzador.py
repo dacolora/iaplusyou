@@ -182,13 +182,16 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
             link, extra_creative = app[f"{plat}_url"], {"cta_type": "INSTALL_MOBILE_APP"}
         else:
             link, extra_creative = url_destino(ex["destino_url"], pz["id"]), kw_tags
+        # En apps la misma pieza tiene un anuncio por tienda: el sufijo « · iOS» /
+        # « · Android» los distingue en el Administrador de anuncios de Meta.
+        nombre_anuncio = f"{pz['nombre']} — {pz['pais']}" + (f" · {app_tiendas.OS_META[plat]}" if plat else "")
         experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adset_id)
         creative_id = pz["meta_creative_id"]
         if not creative_id:
             if pz.get("es_imagen"):
                 # Imagen: ni subida de video ni miniatura; el creative lleva la URL pública.
                 creative_id = meta_creative.crear_creative_imagen(
-                    f"{pz['nombre']} — {pz['pais']}", pz["url_imagen"], ex["nombre"],
+                    nombre_anuncio, pz["url_imagen"], ex["nombre"],
                     link, instagram_user_id=creds.get("ig_user_id"), **extra_creative)["id"]
             else:
                 video_id = (pz.get("extra") or {}).get("meta_video_id")
@@ -200,10 +203,10 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
                     experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=video_id)
                 mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
                 creative_id = meta_creative.crear_creative_video(
-                    f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
+                    nombre_anuncio, video_id, mini, ex["nombre"],
                     link, instagram_user_id=creds.get("ig_user_id"), **extra_creative)["id"]
             experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
-        ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adset_id, creative_id)["id"]
+        ad_id = meta_ad.crear_ad(nombre_anuncio, adset_id, creative_id)["id"]
         experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",
                                       presupuesto_dia_actual=next(p["presupuesto_dia"] for p in ex["paises"] if p["pais"] == pz["pais"]))
         experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",

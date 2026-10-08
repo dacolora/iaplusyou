@@ -156,6 +156,45 @@ def test_arbol_de_app_deja_pausar_y_cambiar_presupuesto(app, base_temporal):
     assert "20.000" in activar_todo, activar_todo
 
 
+def test_cada_fila_de_app_dice_su_tienda_en_la_gestion_y_en_el_panel(app, base_temporal):
+    """Revisión final, ola 2 (2026-10-08): las dos filas de una pieza (una por tienda) se veían iguales; ahora cada
+    una lleva el chip «iOS» o «Android» en la gestión, en el ranking y en el panel de la pieza."""
+    import re
+    import experimentos as ex
+    clon = _clon(base_temporal)
+    app["c"].post("/cliente/acme/experimentos/probar", data=_form_app(clon))
+    (e,) = ex.cargar("acme")
+    ex.actualizar_pais("acme", e["id"], "CO", meta_adsets={"ios": "111", "android": "222"}, estado="pausado")
+    ex.actualizar("acme", e["id"], estado="pausado", meta_campaign_id="999")
+    for pz in e["piezas"]:
+        ex.actualizar_pieza("acme", pz["id"], meta_ad_id=f"ad{pz['id']}", estado="pausado")
+    chip = r'<span class="tag-estado" title="Tienda de la app">(iOS|Android)</span>'
+    html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={e['id']}",
+                        headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
+    gestion = html[html.index('id="cr-gestion-titulo"'):]
+    assert sorted(set(re.findall(chip, gestion))) == ["Android", "iOS"]
+    for pz in e["piezas"]:
+        panel = app["c"].get(f"/cliente/acme/experimentos/pieza/{pz['id']}",
+                             headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
+        esperado = {"ios": "iOS", "android": "Android"}[pz["extra"]["plataforma"]]
+        assert re.findall(chip, panel) == [esperado], panel[:400]
+
+
+def test_fila_que_no_es_de_app_no_lleva_chip_de_tienda(app, base_temporal):
+    import experimentos as ex
+    clon = _clon(base_temporal)
+    eid = ex.crear("acme", "Web", [{"pais": "CO", "idioma": "es", "presupuesto_dia": 20000.0}], "OUTCOME_TRAFFIC", 7,
+                   500000.0, "https://tienda.co/p", "COP")
+    ep = ex.agregar_pieza("acme", eid, clon, "CO")
+    ex.actualizar("acme", eid, estado="pausado", meta_campaign_id="999")
+    ex.actualizar_pieza("acme", ep, meta_ad_id="ad1", estado="pausado")
+    html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}",
+                        headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
+    panel = app["c"].get(f"/cliente/acme/experimentos/pieza/{ep}",
+                         headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
+    assert "Tienda de la app" not in html and "Tienda de la app" not in panel
+
+
 def test_app_id_no_se_guarda_si_falla_la_creacion(app, base_temporal, monkeypatch):
     import experimentos as ex
     import meta_conexion

@@ -36,6 +36,7 @@ from typing import Optional
 import sqlalchemy as sa
 from flask_babel import gettext
 
+import app_tiendas
 import db
 import decisor
 import doctrina
@@ -991,6 +992,8 @@ def piezas(carga, reglas_cliente):
         escalon = pz.get("escalon_rescate") or 0
         out.append({
             "ep_id": ep_id, "experimento_id": ex["id"], "nombre": pz["nombre"], "pais": pz["pais"], "es_imagen": es_imagen,
+            # Apps: «iOS» / «Android» (la misma pieza tiene una fila por tienda); None en los demás.
+            "plataforma": app_tiendas.OS_META.get((pz.get("extra") or {}).get("plataforma")),
             "url_miniatura": pz.get("url_miniatura"), "url_video": pz.get("url_video"),
             "metrica": metrica, "serie": serie_p, "promedio": promedio,
             "gasto": round(dinero["gasto"], 2), "ctr": detalle["ctr"], "gancho": detalle["gancho"], "cpc": detalle["cpc"],
