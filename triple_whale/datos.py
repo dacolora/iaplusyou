@@ -1,6 +1,7 @@
 """Único escritor (y lector) de `tw_anuncio_dia`, `tw_tienda_dia`,
-`tw_producto_dia` y `tw_evaluacion` (spec 2026-09-28 §3). Solo SQLAlchemy
-Core; nada de Flask ni de la API de Triple Whale.
+`tw_producto_dia`, `tw_evaluacion` (spec 2026-09-28 §3), `tw_creativo` y
+`tw_analisis` (tarjetas, spec 2026-10-08 §3). Solo SQLAlchemy Core; nada de
+Flask ni de la API de Triple Whale.
 
 Desde 2026-10-08 (spec de varias tiendas §6.1) cada copia es de una tienda
 (`tienda_id`): las escrituras reciben la tienda y las lecturas `tienda_id`
@@ -458,3 +459,119 @@ def piezas_de_evaluacion(cliente, evaluacion_id):
                 "url_video": url_video, "creado_en": creado_en})
     return salida
 
+
+
+# ------------------------------------------------ creativos (spec tarjetas §3.1) ---
+COLUMNAS_CREATIVO = ("tipo", "imagen_url", "video_url", "titulo", "copy", "cta", "duracion_s")
+
+
+def reemplazar_creativos(cliente, tienda_id, registros):
+    """Upsert del anuncio tal cual (`registros`: canal, ad_id y COLUMNAS_CREATIVO). Sin tienda: el mismo anuncio
+    llega igual por todas. Un valor vacío no pisa uno guardado (la consulta mínima o un tramo sin él). Como los
+    demás `reemplazar_*`, no escribe si la tienda ya no es del proyecto."""
+    t = db.tw_creativo
+    ahora = db.ahora()
+    with db.conectar() as con:
+        if not _tienda_existe(con, cliente, tienda_id):
+            return
+        for r in registros:
+            valores = {c: r.get(c) for c in COLUMNAS_CREATIVO if r.get(c) not in (None, "")}
+            con.execute(insert_sqlite(t).values(cliente=cliente, canal=r["canal"], ad_id=r["ad_id"],
+                                                actualizado_en=ahora, **valores)
+                        .on_conflict_do_update(index_elements=["cliente", "canal", "ad_id"],
+                                               set_=dict(valores, actualizado_en=ahora)))
+
+
+def _por_claves(tabla, cliente, claves):
+    """Condición `(canal, ad_id) IN claves` sobre `tabla` del cliente (una consulta para toda una página)."""
+    pares = sorted({(str(c), str(a)) for c, a in claves})
+    return sa.and_(tabla.c.cliente == cliente,
+                   sa.or_(*[sa.and_(tabla.c.canal == c, tabla.c.ad_id == a) for c, a in pares]))
+
+
+def creativos(cliente, claves):
+    """{(canal, ad_id): {COLUMNAS_CREATIVO}} de esos anuncios, en una consulta."""
+    if not claves:
+        return {}
+    t = db.tw_creativo
+    with db.conectar() as con:
+        filas = con.execute(sa.select(t).where(_por_claves(t, cliente, claves))).all()
+    return {(f.canal, f.ad_id): {c: getattr(f, c) for c in COLUMNAS_CREATIVO} for f in filas}
+
+
+# ------------------------------------------------- análisis (spec tarjetas §3.2) ---
+
+def crear_analisis(cliente, tienda_id, canal, ad_id, desde, hasta, moneda, foto, pedido_por=None):
+    ahora = db.ahora()
+    t = db.tw_analisis
+    with db.conectar() as con:
+        return con.execute(t.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, tienda_id=tienda_id, canal=canal, ad_id=str(ad_id),
+            estado="en_cola", desde=desde, hasta=hasta, moneda=moneda, foto=dict(foto or {}), resultado={}, medios={},
+            usd=0.0, pedido_por=pedido_por)).inserted_primary_key[0]
+
+
+def actualizar_analisis(analisis_id, **campos):
+    if "estado" in campos and campos["estado"] not in ESTADOS_EVALUACION:
+        raise ValueError(f"estado inválido: {campos['estado']}")
+    t = db.tw_analisis
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.id == analisis_id)
+                           .values(actualizado_en=db.ahora(), **campos)).rowcount == 1
+
+
+def analisis_anuncio(cliente, analisis_id):
+    t = db.tw_analisis
+    with db.conectar() as con:
+        fila = con.execute(sa.select(t).where(t.c.id == analisis_id, t.c.cliente == cliente)).first()
+    return dict(fila._mapping) if fila else None
+
+
+def ultimos_analisis(cliente, claves):
+    """{(canal, ad_id): fila} con el análisis más nuevo de cada anuncio, en UNA consulta."""
+    if not claves:
+        return {}
+    t = db.tw_analisis
+    ultimo = (sa.select(sa.func.max(t.c.id)).where(_por_claves(t, cliente, claves))
+              .group_by(t.c.canal, t.c.ad_id))
+    with db.conectar() as con:
+        filas = con.execute(sa.select(t).where(t.c.id.in_(ultimo))).all()
+    return {(f.canal, f.ad_id): dict(f._mapping) for f in filas}
+
+
+def analisis_en_curso(cliente, canal, ad_id):
+    t = db.tw_analisis
+    with db.conectar() as con:
+        return con.execute(sa.select(t.c.id).where(
+            t.c.cliente == cliente, t.c.canal == canal, t.c.ad_id == str(ad_id),
+            t.c.estado.in_(("en_cola", "analizando"))).limit(1)).first() is not None
+
+
+def borrar_analisis(cliente, analisis_id):
+    t = db.tw_analisis
+    with db.conectar() as con:
+        return con.execute(t.delete().where(t.c.id == analisis_id, t.c.cliente == cliente)).rowcount == 1
+
+
+def piezas_de_analisis(cliente, analisis_ids):
+    """{analisis_id: [{"cf_id", "pieza_id", "titulo", "estado"}]} — piezas de Crear que nacieron de la versión
+    mejorada de cada análisis (`concepto.extra.tw_idea.analisis_id`), en una consulta."""
+    ids = sorted({int(a) for a in analisis_ids or []})
+    if not ids:
+        return {}
+    import creative_flow
+    cp, pz = db.concepto, db.pieza
+    aid = sa.func.json_extract(cp.c.extra, "$.tw_idea.analisis_id")
+    q = (sa.select(aid.label("aid"), cp.c.legado_id, pz.c.id, cp.c.extra, pz.c.estado)
+         .select_from(cp.join(pz, pz.c.concepto_id == cp.c.id))
+         .where(cp.c.cliente == cliente, cp.c.legado_id.isnot(None), pz.c.tipo != "final", aid.in_(ids))
+         .order_by(pz.c.id))
+    salida = {}
+    with db.conectar() as con:
+        for a, cf_id, pid, extra, estado in con.execute(q):
+            extra = extra or {}
+            titulo = " ".join(str(extra.get("accion_central") or "").split())[:80] or cf_id
+            salida.setdefault(int(a), []).append({
+                "cf_id": cf_id, "pieza_id": pid, "titulo": titulo,
+                "estado": extra.get("estado_legado") or creative_flow._PIEZA_A_ESTADO.get(estado, estado)})
+    return salida

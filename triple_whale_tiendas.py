@@ -189,6 +189,12 @@ def _borrar_copias(con, cliente, tienda_id=None):
         con.execute(q)
 
 
+def _borrar_creativos(con, cliente):
+    """El anuncio tal cual (tw_creativo) no depende de la tienda ni de la atribución: se va solo cuando el proyecto
+    se queda sin tiendas (spec tarjetas §3.1)."""
+    con.execute(db.tw_creativo.delete().where(db.tw_creativo.c.cliente == cliente))
+
+
 def _pais_libre(con, cliente, pais, salvo_id=None):
     """Lanza `PaisOcupado` si OTRA tienda del proyecto ya usa ese país."""
     if not pais:
@@ -339,9 +345,10 @@ def cambiar_ajustes(cliente, moneda=None, modelo_atribucion=None, ventana_atribu
 
 
 def quitar(cliente, tienda_id):
-    """Quita una tienda y sus copias; si era la última, quita también los ajustes del proyecto. Las
-    evaluaciones con IA (ya pagadas) se conservan. Si era la tienda de las columnas viejas de `triple_whale`,
-    las vacía (`_vaciar_conexion_vieja`). Devuelve si había tienda que quitar."""
+    """Quita una tienda y sus copias; si era la última, quita también los ajustes del proyecto y los anuncios
+    tal cual (`tw_creativo`). Las evaluaciones y los análisis con IA (ya pagados) se conservan. Si era la tienda
+    de las columnas viejas de `triple_whale`, las vacía (`_vaciar_conexion_vieja`). Devuelve si había tienda que
+    quitar."""
     t = db.tw_tienda
     with db.conectar() as con:
         fila = con.execute(sa.select(t.c.id, t.c.dominio).where(t.c.cliente == cliente, t.c.id == tienda_id)).first()
@@ -352,13 +359,15 @@ def quitar(cliente, tienda_id):
         _vaciar_conexion_vieja(con, cliente, fila.dominio)
         if not con.execute(sa.select(t.c.id).where(t.c.cliente == cliente)).first():
             con.execute(db.triple_whale.delete().where(db.triple_whale.c.cliente == cliente))
+            _borrar_creativos(con, cliente)
     return True
 
 
 def desconectar(cliente):
     """Quita todas las tiendas del proyecto, sus copias y los ajustes (solo la usan las pruebas).
-    Las evaluaciones con IA se conservan."""
+    Las evaluaciones y los análisis con IA se conservan."""
     with db.conectar() as con:
         _borrar_copias(con, cliente)
+        _borrar_creativos(con, cliente)
         con.execute(db.tw_tienda.delete().where(db.tw_tienda.c.cliente == cliente))
         con.execute(db.triple_whale.delete().where(db.triple_whale.c.cliente == cliente))
