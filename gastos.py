@@ -110,8 +110,12 @@ TARIFAS = {
     # Inicial; se ajusta con lo medido en la prueba real.
     "diagnostico_pieza": 0.03,
     # Triple Whale, «Cómo mejorarlo» (spec 2026-10-08 tarjetas §6.1): una llamada con visión (hasta 8 fotogramas),
-    # la doctrina en el system (caché) y hasta 12 000 tokens de salida. Inicial; se ajusta con la medición real.
-    "analisis_anuncio_tw": 0.08,
+    # la doctrina en el system (caché) y hasta 12 000 tokens de salida.
+    # Medido en la prueba real (2026-10-08, claude-sonnet-5, 4 anuncios de happyflops, caché caliente): una llamada
+    # US$ 0,067–0,084; 1 de 4 necesitó la corrección (US$ 0,16 en total, la primera con la caché fría: US$ 0,095);
+    # Whisper ≤ US$ 0,0014. Esperado ≈ 0,075 × 1,25 + Whisper; redondeado hacia arriba. Informe:
+    # docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md (PND-171).
+    "analisis_anuncio_tw": 0.10,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una

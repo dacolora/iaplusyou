@@ -229,8 +229,10 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   (`mejorar.es_mp4`, B4: it is a third-party file and an odd demuxer must not get it; ffprobe runs with
   `-protocol_whitelist file` and fails closed); otherwise the thumbnail.
 - **«Cómo mejorarlo» (`triple_whale/mejorar.py`, task `tw_analizar_anuncio`).** Price first:
-  `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.08 + Whisper by the video's duration (30 s when
-  unknown). The 0.08 is an initial guess, not measured (PND-171). `max_intentos=1`, `job_id`
+  `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.10 + Whisper by the video's duration (30 s when
+  unknown). The 0.10 is measured (real run 2026-10-08, 4 happyflops ads, `docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md`):
+  one call US$ 0,067–0,084 with a warm cache, US$ 0,095 cold (the cache write), US$ 0,16 when the correction call was
+  needed (1 of 4); Whisper ≤ US$ 0,0014 (PND-171). `max_intentos=1`, `job_id`
   `<cliente>__tw_anuncio__<canal>__<ad_id>`: a second click launches nothing. `id_valido` is a `fullmatch` because `$`
   lets a trailing newline through and «p1%0A» would be its own job, a second paid analysis; `encolar_analisis` refuses
   invalid ids. Spend: Whisper as `transcripcion`/fal `tw_anuncio:<aid>:t<tarea>:voz`, Claude as `evaluacion`/anthropic
@@ -309,8 +311,8 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   is one extra click (PND-176). The card's «Costo por venta» compares with the ad's CHANNEL (`cpa_canal`), not the
   account (spec §2.1, D4): the rings already measure inside the channel and the account's figure is mostly Meta's, so a
   Snapchat or TikTok ad looked cheap or expensive just for its channel; the verdict still uses the account's CPA.
-- **Out of this change (spec §13, PND-171 to PND-178).** Measuring the tariff with `eval-claude` (4 real ads, ≈ US$ 0,35,
-  Daniel's yes first); «v1 vs v2 ring by ring» and «change only the hook»; predict before spending; new Meta copy;
-  TikTok videos without frames; the retention-by-quarters curve; Whisper `language: null`
-  (`fal_audio.transcribir_palabras(url, None)`) never sent to the real fal API: if fal rejects it, the task goes on
+- **Out of this change (spec §13, PND-172 to PND-178).** «v1 vs v2 ring by ring» and «change only the hook»; predict
+  before spending; new Meta copy; TikTok videos without frames; the retention-by-quarters curve; Whisper
+  `language: null` (`fal_audio.transcribir_palabras(url, None)`): fal accepted it in the real run of 2026-10-08 (3 of 4
+  ads transcribed, Norwegian and English), PND-177 only waits to be closed; if fal ever rejects it, the task goes on
   without voice.

@@ -67,7 +67,7 @@ La pestaña abre así (de arriba abajo):
 │           │ TENDENCIA 7 DÍAS  Se está cansando          │
 │           │ ✓ Gancho fuerte ✓ Mucho clic ✗ Se cansa     │
 │           │ ▸ Texto del anuncio                         │
-│           │ [Cómo mejorarlo · US$ 0,08] [Referentes]    │
+│           │ [Cómo mejorarlo · US$ 0,10] [Referentes]    │
 └───────────┴────────────────────────────────────────────┘
 ```
 
@@ -261,7 +261,7 @@ consultas con 12 y con 24 anuncios y exige el mismo número.
 ### 6.1 Precio
 
 `gastos.estimar("analisis_anuncio_tw", segundos=)`: Claude con visión (tarifa nueva `analisis_anuncio_tw`, que
-arranca en US$ 0,08 y se ajusta con la medición de §11.3) + Whisper por la duración del video
+medida en la prueba real del 2026-10-08, US$ 0,10: ver §11.3) + Whisper por la duración del video
 (`fal_audio.costo_whisper`, ≈ US$ 0,001 por un anuncio de 30 s). Sin duración conocida se estiman 30 s. El botón y
 su `data-confirmar` muestran el precio; «precio no disponible» si `estimar` no lo sabe.
 
@@ -466,6 +466,9 @@ Meta), modelo real. Se mide tokens, `stop_reason`, costo, si valida, si cada raz
 son concretos. Cuesta ≈ US$ 0,35 y se pide el sí de Daniel con ese precio antes de correrla. La tarifa
 `analisis_anuncio_tw` se ajusta al costo medido.
 
+**Hecha el 2026-10-08** (Daniel dio el sí): 4 anuncios, US$ 0,3874 en total, todos válidos; la tarifa pasó de 0,08 a
+0,10. Resultado y notas de calidad en `docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md`.
+
 ### 11.4 Verlo
 
 Captura de la pestaña en escritorio y en celular con datos sembrados (memoria «ver la UI sin contraseña»), antes de
@@ -507,5 +510,5 @@ mezclar. Revisión de `revisor`, `guardian-gasto` y `auditor-seguridad`.
   posterior.
 - «Pausar/Activar en Meta» en la tarjeta de una pieza de Creatv: hoy solo está en «Ver como tabla» (§2.1).
 - Whisper con `language: null` (la voz de un anuncio, `mejorar.transcribir`): nunca se mandó a la API real de fal; si
-  la rechaza, el análisis sigue sin voz. Y la tarifa `analisis_anuncio_tw` (0,08) es una cifra inicial hasta la medición
-  de §11.3.
+  la rechaza, el análisis sigue sin voz (la prueba real del 2026-10-08 la aceptó: 3 de 4 anuncios con voz transcrita).
+  La tarifa `analisis_anuncio_tw` ya no es inicial: se midió y quedó en 0,10 (§11.3).
