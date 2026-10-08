@@ -6047,8 +6047,8 @@ msgid "Error al subir; recarga la página."
 msgstr "Upload error; reload the page."
 
 #, python-format
-msgid "Error al traer métricas de Triple Whale: %(error)s"
-msgstr "Error fetching Triple Whale metrics: %(error)s"
+msgid "Error al traer métricas de Triple Whale de %(tienda)s: %(error)s"
+msgstr "Error fetching Triple Whale metrics for %(tienda)s: %(error)s"
 
 msgid "Error de red al subir."
 msgstr "Network error while uploading."
@@ -6789,6 +6789,9 @@ msgstr "This reference has no text inside the image."
 
 msgid "Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."
 msgstr "This session has no reference images — discard it and create a new one."
+
+msgid "Esta tienda comparte cuenta publicitaria: para evaluar anuncios conviene «Todas las tiendas»."
+msgstr "This store shares an ad account: to evaluate ads, use “All stores”."
 
 msgid "Esta versión no admite esa acción ahora."
 msgstr "This version doesn't support that action right now."
@@ -15595,6 +15598,9 @@ msgstr "A person with the product: an attention-grabbing hook, natural use and a
 msgid "Una persona real usando el producto de forma natural; el producto sigue siendo el protagonista."
 msgstr "A real person using the product naturally; the product is still the star."
 
+msgid "Una pieza sin país no tiene tienda de Triple Whale: se usan las ventas de Meta."
+msgstr "A piece without a country has no Triple Whale store: Meta sales are used."
+
 msgid "Una por línea"
 msgstr "One per line"
 
@@ -19452,8 +19458,8 @@ msgid "¿Quitar la app de Meta de este proyecto? Tendrás que registrarla de nue
 msgstr "Remove this project's Meta app? You'll have to register it again to reconnect."
 
 #, python-format
-msgid "¿Quitar la tienda %(tienda)s? Se borran sus métricas copiadas y sus ventas dejan de contar en los experimentos de su país (las evaluaciones con IA se conservan)."
-msgstr "Remove the store %(tienda)s? Its copied metrics are deleted and its sales stop counting in its country's experiments (AI evaluations are kept)."
+msgid "¿Quitar la tienda %(tienda)s? Se borran sus métricas copiadas y los experimentos de su país pasan a usar las ventas de Meta (las evaluaciones con IA se conservan)."
+msgstr "Remove the store %(tienda)s? Its copied metrics are deleted and its country's experiments switch to Meta sales (AI evaluations are kept)."
 
 #, python-format
 msgid "¿Quitar los %(n)s comentarios de %(fuente)s?"

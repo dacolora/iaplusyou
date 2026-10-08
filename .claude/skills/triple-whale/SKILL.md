@@ -41,7 +41,11 @@ rejected because it would split catalog, pieces and sprints. Spec
   `zona_horaria`, `estado`, `error`, `ultima_sincronizacion`, `extra` = `backfill_desde`/`ultimo_resumen`/`gasto_7d`;
   unique per (cliente, dominio) and per (cliente, pais) when the country is set). `triple_whale` is now the PROJECT's
   settings (currency, model, window, `extra` = `avisados`/`aviso_sin_ventas`), one row while there is at least one store;
-  its old connection columns are unused but kept so the previous deploy can still run. The three copies
+  its old connection columns are unused but kept so the previous deploy can still run; they are only written to EMPTY
+  them: when the store they name (`dominio_tienda`) is removed or reconnected with ANOTHER key, `llave` and
+  `dominio_tienda` become None and the row stays with its settings and avisos (`_vaciar_conexion_vieja`; 2026-10-08,
+  security audit: an old copy of a rotated key must not linger). `tw_tienda` has AUTOINCREMENT (db.py and 0032):
+  a removed store's id is never reused, so an old evaluation's `tienda_id` never takes another store's name. The three copies
   (`tw_anuncio_dia`, `tw_tienda_dia`, `tw_producto_dia`) carry `tienda_id` (NOT NULL, no FK) inside their unique keys.
 - **Single writer.** `triple_whale_tiendas.py` writes `tw_tienda` and `triple_whale`: `agregar(cliente, llave, dominio,
   pais=None, moneda, modelo_atribucion, ventana_atribucion, zona_horaria)` (guesses the country from the domain; a
@@ -55,15 +59,28 @@ rejected because it would split catalog, pieces and sprints. Spec
   «Todas» is, per (canal, ad_id, fecha), the MAX of the channel measures (the same ad arrives through every store that
   shares an ad account: its spend counts once) and the SUM of the Pixel measures (each store attributes its own
   orders). `serie_tienda(None)` sums the stores and subtracts from `gasto` the duplicated ad spend of that day
-  (`_duplicado_por_dia`: Σ over ads of sum − max) and gives it back to `utilidad_neta`; `gasto_duplicado` says if
-  any is shared (the panel shows a note). `top_productos(None)` groups by normalized name (each store has its own
-  product ids); `por_tienda` is the «Por tienda» table in one query. The panel (`panel.contexto(cliente, dias,
+  (`_duplicado_por_dia`: Σ over ads of sum − max) and gives it back to `utilidad_neta`; `gasto_duplicado(cliente,
+  desde, hasta, tienda_id=None)` says if any is shared: None = that Σ, a store = ITS spend on the (canal, ad, day)
+  that also bring spend through another store of the project (one query). The panel uses the scope being viewed, so
+  a store with its own ad account shows no note, and a store that shares one repeats a line next to «Evaluar con IA»
+  recommending «Todas las tiendas» (2026-10-08, spend guardian: evaluating one store alone reads the other countries'
+  ad spend). `top_productos(None)` groups by normalized name (each store has its own
+  product ids); `por_tienda` is the «Por tienda» table in one query (the panel orders its rows like
+  `triple_whale_tiendas.tiendas`, the selector's order). The panel (`panel.contexto(cliente, dias,
   canal, tienda_id)`, `?tienda=` in `ver_panel`) has a store selector; with one store it is always that one.
 - **Avisos** (`triple_whale/avisos.py`) always look at «Todas»: `tw_sincronizar` calls `avisos.revisar_y_avisar`
   only when no OTHER sync of the project is still queued or running (`syncs_en_curso`), so the LAST one to finish
   warns once with everything fresh. «Evaluar con IA» evaluates the selected scope and saves it in
   `tw_evaluacion.extra` (`tienda_id`, `pais`; None = Todas).
-- **Atribución de experimentos** by the store of the piece's country: see below (`lanzador._tienda_tw_de`).
+- **Atribución de experimentos** by the store of the piece's country: see below (`lanzador._tienda_tw_de`). A single
+  store serves every country ONLY if it has no country; a store WITH a country serves only that country's pieces,
+  even when it is the only one (2026-10-08, spend guardian: a Swedish piece read with the Norwegian Pixel got 0
+  purchases → «perdedor» → the decisor paused it on its own in semi/auto).
+- **Keys never in text.** `triple_whale.tachar_llave(texto, llave)` / `triple_whale_tiendas.sin_llave(cliente,
+  tienda_id, texto)` strike the exact key value (Triple Whale may echo it without «key=», which `cola.sin_token` does
+  not catch): in `_probar_triple_whale` (flash and saved `error`), in the experiment evento «Error al traer métricas
+  de Triple Whale de <país o dominio>», in `ultimo_resumen.fallos` and in the sync task's error (2026-10-08,
+  security audit).
 - **Removed store.** Every `datos.reemplazar_*` checks inside its transaction that the store still belongs to the
   cliente (`_tienda_existe`) and writes nothing if not: a sync that was running when the store was removed must not
   leave orphan rows that «Todas» (filters only by cliente) would count.
@@ -71,11 +88,10 @@ rejected because it would split catalog, pieces and sprints. Spec
   `PaisOcupado` -> flash) and `cfg_triple_whale_adivinar_pais` (GET, `{"pais": "NO"}` or null from the typed domain;
   reads text only, calls nobody). The project has ONE currency, model and window for all its stores (happyflops: USD).
 - Not done yet (spec §13): European countries are not in `final_edition.tipos.PAISES` (PND-146), several Meta ad
-  accounts per project (PND-147), and no SQL has run against a real store: the first copy of happyflops-norge
-  after the deploy is the test.
+  accounts per project (PND-147), the residuals of the final reviews (PND-148), and no SQL has run against a real
+  store: the first copy of happyflops-norge after the deploy is the test.
 
-The
-**Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is
+The **Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is
 no Tablero tab) fetches its panel
 (`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: store KPIs (MER, AOV, new customers,
 vs. previous period), ad KPIs, alerts, a day-by-day chart drawn by the old Tablero's `dashboard._grafico_tablero`
@@ -92,10 +108,11 @@ winning own ad as a project referente (fuente `triple_whale`, `anuncio_id = tw:<
 Experiments with `atribucion="triple_whale"`: `lanzador.refrescar` keeps traffic, spend and ad status from
 Meta (the old path skipped Meta, so rejections went unseen) and overrides purchases/revenue with the Pixel
 orders of THE STORE OF THE PIECE'S COUNTRY (`lanzador._tienda_tw_de`: the country's store, or the only one if the
-project has one; `datos.totales_anuncio` raises `ValueError` without a store) from `tw_anuncio_dia` since the piece was
+project has one WITHOUT a country; `datos.totales_anuncio` raises `ValueError` without a store) from `tw_anuncio_dia` since the piece was
 created (after `sync.sincronizar_si_hace_falta` once per store used, outside the Meta lock). A piece whose country
-has no store (with 2+ stores) keeps Meta's sales and leaves ONE evento per experiment and country
-(`extra.aviso_sin_tienda_tw`). Every `datos.reemplazar_*` checks inside its transaction that the store still
+has no store keeps Meta's sales and leaves ONE evento per experiment and country
+(`extra.aviso_sin_tienda_tw`); a piece WITHOUT a country does the same with the mark "" and its own text «Una pieza
+sin país no tiene tienda de Triple Whale…» (2026-10-08, spend guardian: before it fell to Meta silently). Every `datos.reemplazar_*` checks inside its transaction that the store still
 exists for the cliente (a removed store's running sync writes nothing). Currency comes from the project's
 `ajustes`; another currency → ROAS 0 + one evento, like `tienda`. `"triple_whale"`
 stays in `tablero.FUENTES_VENTAS` and `decisor.py`'s `con_atribucion`. With Triple Whale connected, every
