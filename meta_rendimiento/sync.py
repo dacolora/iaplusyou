@@ -3,6 +3,10 @@ anuncios, métricas por día de la cuenta y de cada anuncio, alcance por ventana
 
 Leer de Meta no cobra. La primera copia trae 13 meses de cuenta y 90 días de anuncio; después solo se repasan
 los últimos 7 días (Meta reatribuye compras de días pasados, así que ese rango se borra y se vuelve a escribir).
+La primera copia va del tramo más NUEVO al más viejo y apunta hasta dónde llegó (`cuenta_desde`, `anuncios_desde`):
+si Meta pide esperar a mitad (límite de uso), la siguiente corrida repasa lo reciente y sigue desde ahí hacia atrás
+en vez de empezar de nuevo. Leer de Meta cuenta contra el límite de uso de la cuenta, así que el listado completo de
+anuncios (pausados y limpieza de archivados) se hace como mucho una vez cada 20 horas.
 Una `ErrorGraph` sube tal cual: la tarea la anota en la cuenta; aquí la cuenta queda en «copiando», nunca «ok»
 a medias. Los textos de error ya vienen traducidos y sin token (graph.py)."""
 import json
@@ -37,6 +41,7 @@ ESTADOS = ["ACTIVE", "PAUSED", "WITH_ISSUES", "IN_PROCESS", "PENDING_REVIEW", "D
 # está archivado o borrado y se queda sin estado.
 ESTADOS_ANUNCIO = ["ACTIVE", "WITH_ISSUES", "PENDING_REVIEW", "DISAPPROVED", "IN_PROCESS"]
 ESTADOS_ANUNCIO_PAUSADOS = ["PAUSED", "ADSET_PAUSED", "CAMPAIGN_PAUSED"]
+HORAS_LISTADO_COMPLETO = 20
 CODIGO_PARAMETRO_INVALIDO = 100
 LIMITE_PAGINA = 500
 LIMITE_ANUNCIOS = 100   # con `creative{…}` Meta responde «reduce the amount of data» a 500 por página
@@ -202,17 +207,53 @@ def _listar(act, token, edge, campos, estados, limite=LIMITE_PAGINA):
         max_paginas=MAX_PAGINAS_LISTADO)
 
 
-def _desde(hoy, dias_atras, ya_hecho, ultima):
-    """Primer día a pedir. Primera vez: toda la ventana inicial (`dias_atras` días antes de hoy). Después: los
-    últimos 7 días, o desde el ÚLTIMO día ya copiado si pasó más tiempo (cubre el hueco; ese día se repite porque
-    la copia de ese día pudo hacerse con el día a medias), sin pasar de la ventana inicial."""
+def _fecha(texto):
+    try:
+        return date.fromisoformat(str(texto)[:10])
+    except ValueError:
+        return None
+
+
+def _tramos_atras(desde, hasta, dias):
+    """[desde, hasta] partido en tramos de hasta `dias` días, del más NUEVO al más viejo."""
+    b = hasta
+    while b >= desde:
+        a = max(desde, b - timedelta(days=dias - 1))
+        yield a.isoformat(), b.isoformat()
+        b = a - timedelta(days=1)
+
+
+def _plan(hoy, dias_atras, tramo, hecho, marcador, ultima):
+    """Los tramos a pedir, en orden, como (desde, hasta, es_relleno). `es_relleno` = parte de la primera copia
+    (tras cada uno se apunta hasta dónde se llegó).
+
+    - Primera vez (sin `hecho` ni `marcador`): toda la ventana inicial (`dias_atras` días antes de hoy), del tramo
+      más nuevo al más viejo.
+    - Ya hecha: lo reciente = los últimos 7 días, o desde el ÚLTIMO día ya copiado si pasó más tiempo (cubre el
+      hueco; ese día se repite porque pudo copiarse con el día a medias), sin pasar de la ventana inicial.
+    - Relleno a medias (`marcador` = el día más viejo ya copiado): lo reciente como arriba, y después sigue hacia
+      atrás desde el día anterior al marcador hasta el fondo de la ventana."""
     tope = hoy - timedelta(days=dias_atras)
-    if not ya_hecho:
-        return tope
+    marca = None if hecho else _fecha(marcador)
+    if not hecho and marca is None:
+        return [(a, b, True) for a, b in _tramos_atras(tope, hoy, tramo)]
     desde = hoy - timedelta(days=DIAS_RECOPIA - 1)
-    if ultima:
-        desde = min(desde, date.fromisoformat(ultima))
-    return max(desde, tope)
+    ultimo = _fecha(ultima) or marca
+    if ultimo:
+        desde = min(desde, ultimo)
+    plan = [(a, b, False) for a, b in _tramos(max(desde, tope), hoy, tramo)]
+    if marca:
+        plan += [(a, b, True) for a, b in _tramos_atras(tope, marca - timedelta(days=1), tramo)]
+    return plan
+
+
+def _listado_vencido(marca):
+    """True si el listado completo de anuncios nunca se hizo o se hizo hace más de 20 horas."""
+    try:
+        return datetime.fromisoformat(db.ahora()) - datetime.fromisoformat(str(marca)) > timedelta(
+            hours=HORAS_LISTADO_COMPLETO)
+    except (TypeError, ValueError):
+        return True
 
 
 def _por_pagina(filas, nombres):
@@ -296,39 +337,47 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     objetos = objetos_de([], conjuntos, [], moneda)
     n_objetos += datos.guardar_objetos(cliente, act, objetos)
     datos.marcar_sin_estado(cliente, act, "conjunto", [o["objeto_id"] for o in objetos])
-    # Anuncios: primero los que entregan o esperan (con creativo), luego los pausados (campos ligeros). Solo
-    # cuando LAS DOS listas terminaron se quita el estado a los que no salieron en ninguna (archivados o borrados).
+    # Anuncios: siempre los que entregan o esperan (con creativo). Los pausados (campos ligeros) y la limpieza de
+    # los archivados solo cuando el último listado completo tiene más de 20 horas: son miles de filas y cada página
+    # cuenta contra el límite de uso de la cuenta. Solo cuando LAS DOS listas terminaron se quita el estado a los que
+    # no salieron en ninguna (archivados o borrados).
+    completo = _listado_vencido(extra.get("listado_completo_en"))
     anuncios = _listar(act, token, "ads", CAMPOS_ANUNCIO, ESTADOS_ANUNCIO, LIMITE_ANUNCIOS)
     objetos = objetos_de([], [], anuncios, moneda)
     n_objetos += datos.guardar_objetos(cliente, act, objetos)
     vistos = {o["objeto_id"] for o in objetos}
     anuncios = objetos = None
-    pausados = _listar(act, token, "ads", CAMPOS_ANUNCIO_LIGERO, ESTADOS_ANUNCIO_PAUSADOS)
-    objetos = objetos_de([], [], [], moneda, anuncios_ligeros=pausados)
-    n_objetos += datos.guardar_objetos(cliente, act, objetos)
-    vistos.update(o["objeto_id"] for o in objetos)
-    pausados = objetos = None
-    datos.marcar_sin_estado(cliente, act, "anuncio", vistos)
+    if completo:
+        pausados = _listar(act, token, "ads", CAMPOS_ANUNCIO_LIGERO, ESTADOS_ANUNCIO_PAUSADOS)
+        objetos = objetos_de([], [], [], moneda, anuncios_ligeros=pausados)
+        n_objetos += datos.guardar_objetos(cliente, act, objetos)
+        vistos.update(o["objeto_id"] for o in objetos)
+        pausados = objetos = None
+        datos.marcar_sin_estado(cliente, act, "anuncio", vistos)
+        cuentas.actualizar_extra(cliente, act, {"listado_completo_en": db.ahora()})
     vistos = None
 
     # 3 y 4. Métricas por día de la cuenta y de cada anuncio. Se lee hasta qué día hay datos ANTES de escribir.
-    desde_cuenta = _desde(hoy, DIAS_CUENTA_INICIAL, cuenta_hecha, datos.ultima_fecha(cliente, act, "cuenta"))
-    desde_anuncio = _desde(hoy, DIAS_ANUNCIO_INICIAL - 1, anuncios_hecho, datos.ultima_fecha(cliente, act, "anuncio"))
-    tramos_cuenta = list(_tramos(desde_cuenta, hoy, TRAMO_CUENTA))
-    tramos_anuncio = list(_tramos(desde_anuncio, hoy, TRAMO_ANUNCIO))
-    total = len(tramos_cuenta) + len(tramos_anuncio)
+    plan_cuenta = _plan(hoy, DIAS_CUENTA_INICIAL, TRAMO_CUENTA, cuenta_hecha, extra.get("cuenta_desde"),
+                        datos.ultima_fecha(cliente, act, "cuenta"))
+    plan_anuncio = _plan(hoy, DIAS_ANUNCIO_INICIAL - 1, TRAMO_ANUNCIO, anuncios_hecho, extra.get("anuncios_desde"),
+                         datos.ultima_fecha(cliente, act, "anuncio"))
+    desde_cuenta = min(_fecha(a) for a, _, _ in plan_cuenta)
+    total = len(plan_cuenta) + len(plan_anuncio)
     hecho = 0
     dias_cuenta = filas_anuncio = 0
-    for a, b in tramos_cuenta:
+    for a, b, relleno in plan_cuenta:
         etapa(ETAPA_METRICAS, 30 + 55.0 * hecho / total)
         filas = graph.paginar(f"{act}/insights", token, {
             "level": "account", "time_increment": 1, "time_range": _rango(a, b), "fields": CAMPOS_CUENTA_DIA,
             "limit": LIMITE_PAGINA})
         dias_cuenta += datos.reemplazar_cuenta_dias(cliente, act, a, b, [fila_cuenta(f) for f in filas])
         filas = None
+        if relleno:   # hasta dónde llegó la primera copia: si Meta pide esperar, la siguiente sigue desde aquí
+            cuentas.actualizar_extra(cliente, act, {"cuenta_desde": a})
         hecho += 1
     cuentas.actualizar_extra(cliente, act, {"backfill_cuenta": True})
-    for a, b in tramos_anuncio:
+    for a, b, relleno in plan_anuncio:
         etapa(ETAPA_METRICAS, 30 + 55.0 * hecho / total)
         # Cada página de insights se vuelve filas chicas y se suelta (una fila cruda pesa ~8 KB): en un tramo
         # grande las filas crudas nunca viven todas a la vez.
@@ -339,6 +388,8 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
         filas_anuncio += datos.reemplazar_anuncio_dias(cliente, act, a, b, filas)
         datos.guardar_objetos(cliente, act, list(nombres.values()))
         filas = nombres = None
+        if relleno:
+            cuentas.actualizar_extra(cliente, act, {"anuncios_desde": a})
         hecho += 1
     cuentas.actualizar_extra(cliente, act, {"backfill_anuncios": True})
 

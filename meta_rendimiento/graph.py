@@ -128,14 +128,19 @@ def paginar(edge, token, params=None, max_paginas=200, timeout=60, por_pagina=No
     return total if por_pagina is not None else filas
 
 
-def informe(ad_account_id, token, params, espera_max_s=600, intervalo_s=5, dormir=time.sleep, por_pagina=None):
+def informe(ad_account_id, token, params, espera_max_s=600, intervalo_s=5, dormir=time.sleep, por_pagina=None,
+            intervalo_max_s=30):
     """Insights asíncronos (para level=ad con muchos días): crea el informe, espera
     a «Job Completed» y devuelve sus filas. ErrorGraph si falla o tarda más de `espera_max_s`.
-    Con `por_pagina` (ver `paginar`) las filas se entregan página a página y se devuelve cuántas fueron."""
+    Con `por_pagina` (ver `paginar`) las filas se entregan página a página y se devuelve cuántas fueron.
+
+    Sondea con una espera que crece (5, 10, 15, 20, 25, 30, 30… s): cada sondeo cuenta contra el límite de uso de
+    la cuenta, y con siete cuentas cada 3 horas un sondeo fijo cada 5 s lo agotaba. La suma de las esperas nunca
+    pasa de `espera_max_s` (la última se acorta)."""
     run = post(f"{ad_account_id}/insights", token, params).get("report_run_id")
     if not run:
         raise ErrorGraph(gettext("Meta no creó el informe de métricas."))
-    esperado = 0.0
+    esperado, sondeos = 0.0, 0
     while True:
         estado = get(str(run), token, {"fields": "async_status,async_percent_completion"})
         st = estado.get("async_status")
@@ -145,8 +150,10 @@ def informe(ad_account_id, token, params, espera_max_s=600, intervalo_s=5, dormi
             raise ErrorGraph(gettext("Meta no pudo armar el informe de métricas (%(estado)s).", estado=st))
         if esperado >= espera_max_s:
             raise ErrorGraph(gettext("El informe de Meta tardó demasiado; la próxima copia lo reintenta."))
-        dormir(intervalo_s)
-        esperado += intervalo_s
+        sondeos += 1
+        paso = min(intervalo_s * sondeos, intervalo_max_s, espera_max_s - esperado)
+        dormir(paso)
+        esperado += paso
     return paginar(f"{run}/insights", token, {"limit": 500}, max_paginas=MAX_PAGINAS_INFORME,
                    por_pagina=por_pagina)
 

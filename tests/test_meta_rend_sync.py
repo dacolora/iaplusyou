@@ -30,7 +30,7 @@ class FakeGraph:
 
     def __init__(self, monkeypatch, info=None, campanas=None, conjuntos=None, anuncios=None, filas_anuncio=None,
                  falla_informe=None, falla_ventana=None, falla_anuncios=None, anuncios_pausados=None,
-                 falla_pausados=None):
+                 falla_pausados=None, falla_informe_n=None, falla_cuenta_n=None):
         self.info = info if info is not None else {
             "name": "HappyFlops SE", "currency": "SEK", "timezone_name": "Europe/Stockholm",
             "account_status": 1, "disable_reason": 0, "amount_spent": "12345", "spend_cap": "0"}
@@ -48,6 +48,8 @@ class FakeGraph:
         self.filas_anuncio = filas_anuncio
         self.falla_informe, self.falla_ventana, self.falla_anuncios = falla_informe, falla_ventana, falla_anuncios
         self.falla_pausados = falla_pausados
+        self.falla_informe_n = falla_informe_n   # solo falla_informe en el informe número N (1 = el primero)
+        self.falla_cuenta_n = falla_cuenta_n     # un límite de Meta (17) en la consulta de cuenta por día número N
         self.paginas_informe = []   # cuántas páginas entregó cada informe al callback (None = devolvió la lista)
         self.llamadas = []
         self.asegurar = []
@@ -100,11 +102,16 @@ class FakeGraph:
         if params["level"] == "campaign":
             return [{"campaign_id": "c1", "reach": str(int(params["date_preset"][5:-1]) * 10), "frequency": "2.0"}]
         assert params["level"] == "account" and params["time_increment"] == 1
+        if self.falla_cuenta_n and len(self.de("paginar", "/insights")) - self._de_campana() == self.falla_cuenta_n:
+            raise graph.ErrorGraph("Meta pidió esperar", codigo=17)
         return [dict(FILA_META, date_start=d) for d in _dias(json.loads(params["time_range"]))]
+
+    def _de_campana(self):
+        return len([1 for e, p in self.de("paginar", "/insights") if p["level"] == "campaign"])
 
     def informe(self, ad_account_id, token, params, espera_max_s=600, intervalo_s=5, dormir=None, por_pagina=None):
         self._marca("informe", ad_account_id, params)
-        if self.falla_informe:
+        if self.falla_informe and (self.falla_informe_n is None or len(self.de("informe")) == self.falla_informe_n):
             raise self.falla_informe
         assert params["level"] == "ad" and params["time_increment"] == 1
         if self.filas_anuncio is not None:
@@ -197,18 +204,20 @@ def test_primera_copia_pide_395_dias_de_cuenta_y_90_de_anuncio(cuenta, monkeypat
     g = FakeGraph(monkeypatch)
     r = sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
     desde_c, desde_a = HOY - timedelta(days=395), HOY - timedelta(days=89)
-    # Cuenta: 5 tramos de 90 días seguidos hasta hoy.
+    # Cuenta: 5 tramos de 90 días seguidos hasta hoy, del más NUEVO al más viejo (el último queda corto).
     tramos_c = [json.loads(p["time_range"]) for e, p in g.de("paginar", "/insights") if p["level"] == "account"]
     assert len(tramos_c) == 5
-    assert tramos_c[0]["since"] == desde_c.isoformat() and tramos_c[-1]["until"] == HOY.isoformat()
-    for ant, sig in zip(tramos_c, tramos_c[1:]):
-        assert date.fromisoformat(sig["since"]) == date.fromisoformat(ant["until"]) + timedelta(days=1)
+    assert tramos_c[0]["until"] == HOY.isoformat() and tramos_c[-1]["since"] == desde_c.isoformat()
+    for nuevo, viejo in zip(tramos_c, tramos_c[1:]):
+        assert date.fromisoformat(nuevo["since"]) == date.fromisoformat(viejo["until"]) + timedelta(days=1)
     assert all((date.fromisoformat(t["until"]) - date.fromisoformat(t["since"])).days <= 89 for t in tramos_c)
     # Anuncio: informes asíncronos de 10 días (nueve), cuyas páginas se procesan una a una: sync nunca recibe la
     # lista cruda de un tramo (graph.informe devuelve solo la cuenta cuando hay callback).
     tramos_a = [json.loads(p["time_range"]) for e, p in g.de("informe")]
     assert len(tramos_a) == 9 and sync.TRAMO_ANUNCIO == 10
-    assert tramos_a[0]["since"] == desde_a.isoformat() and tramos_a[-1]["until"] == HOY.isoformat()
+    assert tramos_a[0]["until"] == HOY.isoformat() and tramos_a[-1]["since"] == desde_a.isoformat()   # nuevo -> viejo
+    for nuevo, viejo in zip(tramos_a, tramos_a[1:]):
+        assert date.fromisoformat(nuevo["since"]) == date.fromisoformat(viejo["until"]) + timedelta(days=1)
     assert all((date.fromisoformat(t["until"]) - date.fromisoformat(t["since"])).days <= 9 for t in tramos_a)
     assert len(g.paginas_informe) == 9 and None not in g.paginas_informe
     assert all(p["fields"] == sync.CAMPOS_ANUNCIO_DIA for e, p in g.de("informe"))
@@ -226,6 +235,8 @@ def test_primera_copia_pide_395_dias_de_cuenta_y_90_de_anuncio(cuenta, monkeypat
     assert c["zona_horaria"] == "Europe/Stockholm" and c["nombre"] == "HappyFlops SE"
     assert c["extra"]["backfill_hecho"] is True
     assert c["extra"]["backfill_cuenta"] is True and c["extra"]["backfill_anuncios"] is True
+    assert c["extra"]["cuenta_desde"] == desde_c.isoformat() and c["extra"]["anuncios_desde"] == desde_a.isoformat()
+    assert c["extra"]["listado_completo_en"]
     assert c["extra"]["cuenta"] == {"account_status": 1, "disable_reason": 0, "amount_spent": "12345", "spend_cap": "0"}
     # Las tasas piden la moneda de la cuenta para todo el rango de cuenta.
     (a, k), = g.asegurar
@@ -487,29 +498,154 @@ def test_pasada_mas_de_una_semana_la_recopia_cubre_el_hueco(cuenta, monkeypatch)
     assert datos.ultima_fecha(CLI, ACT, "anuncio") == despues.isoformat()
 
 
-def test_desde_sin_hueco_son_siete_dias_y_con_hueco_nunca_pasa_de_la_ventana_inicial():
+def test_plan_primera_vez_hueco_y_relleno_a_medias():
     hoy = date(2026, 10, 8)
-    # Primera vez: toda la ventana inicial, aunque ya haya datos de una copia que no terminó.
-    assert sync._desde(hoy, 395, False, "2026-10-07") == hoy - timedelta(days=395)
-    assert sync._desde(hoy, 89, False, None) == hoy - timedelta(days=89)
-    # Después: los últimos 7 días (hoy - 6)...
-    assert sync._desde(hoy, 395, True, "2026-10-08") == date(2026, 10, 2)
-    assert sync._desde(hoy, 395, True, "2026-10-04") == date(2026, 10, 2)
-    assert sync._desde(hoy, 395, True, None) == date(2026, 10, 2)
+
+    def plan(*a):
+        return [(x, y) for x, y, _ in sync._plan(hoy, *a)]
+
+    def rellenos(*a):
+        return [r for _, _, r in sync._plan(hoy, *a)]
+
+    # Primera vez: toda la ventana inicial, del tramo más nuevo al más viejo, todo relleno (aunque ya haya datos
+    # de una copia que no apuntó hasta dónde llegó).
+    p = plan(89, 10, False, None, "2026-10-07")
+    assert len(p) == 9 and p[0] == ("2026-09-29", "2026-10-08") and p[-1] == ("2026-07-11", "2026-07-20")
+    assert all(rellenos(89, 10, False, None, None))
+    # Ya hecha: los últimos 7 días (hoy - 6) ...
+    for ultima in ("2026-10-08", "2026-10-04", None):
+        assert plan(395, 90, True, None, ultima) == [("2026-10-02", "2026-10-08")]
+    assert not any(rellenos(395, 90, True, None, None))
     # ... o desde el último día copiado si pasó más tiempo (se repite ese día) ...
-    assert sync._desde(hoy, 395, True, "2026-09-26") == date(2026, 9, 26)
+    assert plan(89, 10, True, None, "2026-09-26") == [("2026-09-26", "2026-10-05"), ("2026-10-06", "2026-10-08")]
     # ... pero nunca más atrás de la ventana inicial (cuenta 395 días, anuncio 89).
-    assert sync._desde(hoy, 395, True, "2024-01-01") == hoy - timedelta(days=395)
-    assert sync._desde(hoy, 89, True, "2026-01-01") == hoy - timedelta(days=89)
+    assert plan(395, 90, True, None, "2024-01-01")[0][0] == str(hoy - timedelta(days=395))
+    assert plan(89, 10, True, None, "2026-01-01")[0][0] == str(hoy - timedelta(days=89))
+    # Relleno a medias (marcador = el día más viejo ya copiado): lo reciente y, después, hacia atrás desde el día
+    # anterior al marcador hasta el fondo de la ventana.
+    p = sync._plan(hoy, 89, 10, False, "2026-09-09", "2026-10-08")
+    assert p[0] == ("2026-10-02", "2026-10-08", False)
+    assert p[1:] == [("2026-08-30", "2026-09-08", True), ("2026-08-20", "2026-08-29", True),
+                     ("2026-08-10", "2026-08-19", True), ("2026-07-31", "2026-08-09", True),
+                     ("2026-07-21", "2026-07-30", True), ("2026-07-11", "2026-07-20", True)]
+    # Marcador ya en el fondo de la ventana (o un marcador ilegible): no queda relleno / se empieza de nuevo.
+    assert sync._plan(hoy, 89, 10, False, "2026-07-11", "2026-10-08") == [("2026-10-02", "2026-10-08", False)]
+    assert len(sync._plan(hoy, 89, 10, False, "basura", "2026-10-08")) == 9
+    # Con la copia hecha el marcador sobra.
+    assert sync._plan(hoy, 89, 10, True, "2026-09-09", "2026-10-08") == [("2026-10-02", "2026-10-08", False)]
 
 
-def test_un_informe_que_falla_no_borra_los_dias_de_anuncio_ya_copiados(cuenta, monkeypatch):
-    FakeGraph(monkeypatch)
+# --------------------------------- R13: menos llamadas a Meta y relleno que se reanuda ---
+
+def _listados_de_anuncios(g):
+    return [p for e, p in g.de("paginar") if e.endswith("/ads")]
+
+
+def _hace(horas):
+    return (datetime.now() - timedelta(hours=horas)).isoformat(timespec="seconds")
+
+
+def test_el_listado_completo_de_anuncios_se_hace_como_mucho_cada_20_horas(cuenta, monkeypatch):
+    datos.guardar_objetos(CLI, ACT, [{"nivel": "anuncio", "objeto_id": "viejo", "nombre": "V", "estado": "ACTIVE"}])
+    pausado = {"id": "pau", "name": "P", "adset_id": "s1", "campaign_id": "c1", "effective_status": "PAUSED"}
+    g = FakeGraph(monkeypatch, anuncios_pausados=[pausado])
+    # Corrida 1: sin marca, listado completo (activos + pausados), limpieza de archivados y marca nueva.
     sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
-    desde = (HOY - timedelta(days=89)).isoformat()
-    assert datos.totales_por_anuncio(CLI, [ACT], desde, HOY.isoformat())[0]["dias_con_gasto"] == 90
-    # El informe sube (p. ej. «más páginas de las esperadas»): el tramo no se reemplaza a medias.
-    FakeGraph(monkeypatch, falla_informe=graph.ErrorGraph("Meta devolvió más páginas de las esperadas"))
+    assert len(_listados_de_anuncios(g)) == 2
+    assert _objeto("anuncio", "viejo")["estado"] is None and _objeto("anuncio", "pau")["estado"] == "PAUSED"
+    marca = cuentas.cuenta(CLI, ACT)["extra"]["listado_completo_en"]
+    assert marca
+
+    # Corrida 2 enseguida: solo los activos; ni los pausados ni la limpieza de anuncios. Campañas y conjuntos sí
+    # se vuelven a listar completos y se limpian.
+    datos.guardar_objetos(CLI, ACT, [{"nivel": "anuncio", "objeto_id": "otro", "nombre": "O", "estado": "ACTIVE"},
+                                     {"nivel": "campana", "objeto_id": "c2", "nombre": "C2", "estado": "ACTIVE"},
+                                     {"nivel": "conjunto", "objeto_id": "s2", "nombre": "S2", "estado": "ACTIVE"}])
+    g.llamadas.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    listados = _listados_de_anuncios(g)
+    assert len(listados) == 1 and "creative{" in listados[0]["fields"]
+    assert _objeto("anuncio", "otro")["estado"] == "ACTIVE"              # no se llamó a marcar_sin_estado de anuncios
+    assert _objeto("anuncio", "pau")["estado"] == "PAUSED"
+    assert _objeto("campana", "c2")["estado"] is None and _objeto("conjunto", "s2")["estado"] is None
+    assert cuentas.cuenta(CLI, ACT)["extra"]["listado_completo_en"] == marca   # la marca no se toca
+
+    # Corrida con la marca de hace 19 horas: todavía no.
+    cuentas.actualizar_extra(CLI, ACT, {"listado_completo_en": _hace(19)})
+    g.llamadas.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert len(_listados_de_anuncios(g)) == 1 and _objeto("anuncio", "otro")["estado"] == "ACTIVE"
+
+    # Corrida 3 con la marca de hace 21 horas: otra vez completo, limpia lo que ya no existe y renueva la marca.
+    vieja = _hace(21)
+    cuentas.actualizar_extra(CLI, ACT, {"listado_completo_en": vieja})
+    g.llamadas.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert len(_listados_de_anuncios(g)) == 2
+    assert _objeto("anuncio", "otro")["estado"] is None and _objeto("anuncio", "pau")["estado"] == "PAUSED"
+    assert cuentas.cuenta(CLI, ACT)["extra"]["listado_completo_en"] > vieja
+
+
+def test_si_el_listado_de_pausados_falla_no_se_apunta_el_listado_completo(cuenta, monkeypatch):
+    FakeGraph(monkeypatch, falla_pausados=graph.ErrorGraph("Meta pidió esperar", codigo=17))
     with pytest.raises(graph.ErrorGraph):
         sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
-    assert datos.totales_por_anuncio(CLI, [ACT], desde, HOY.isoformat())[0]["dias_con_gasto"] == 90
+    assert not cuentas.cuenta(CLI, ACT)["extra"].get("listado_completo_en")   # la próxima corrida lo reintenta
+    g = FakeGraph(monkeypatch)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert len(_listados_de_anuncios(g)) == 2
+
+
+def _fechas(tabla):
+    with db.conectar() as con:
+        return [r[0] for r in con.execute(sa.select(tabla.c.fecha).where(tabla.c.cliente == CLI)).all()]
+
+
+def test_el_relleno_de_anuncios_se_reanuda_desde_el_tramo_que_falto(cuenta, monkeypatch):
+    # Meta pide esperar (17) al pedir el informe del tramo 4 de 9: los tramos 1 a 3 (los más nuevos) ya quedaron.
+    FakeGraph(monkeypatch, falla_informe=graph.ErrorGraph("Meta pidió esperar", codigo=17), falla_informe_n=4)
+    with pytest.raises(graph.ErrorGraph):
+        sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    extra = cuentas.cuenta(CLI, ACT)["extra"]
+    assert extra["backfill_cuenta"] is True and not extra.get("backfill_anuncios") and not extra.get("backfill_hecho")
+    assert extra["anuncios_desde"] == (HOY - timedelta(days=29)).isoformat()
+    assert sorted(_fechas(db.meta_anuncio_dia)) == [(HOY - timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
+
+    # Siguiente corrida: lo reciente (hoy - 6) y los tramos que faltaron, del más nuevo al más viejo.
+    g = FakeGraph(monkeypatch)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    pedidos = [(json.loads(p["time_range"])["since"], json.loads(p["time_range"])["until"]) for e, p in g.de("informe")]
+    d = lambda n: (HOY - timedelta(days=n)).isoformat()   # noqa: E731
+    assert pedidos == [(d(6), d(0))] + [(d(10 * k + 9), d(10 * k)) for k in range(3, 9)]
+    assert len([1 for e, p in g.de("paginar", "/insights") if p["level"] == "account"]) == 1   # la cuenta, solo lo reciente
+    extra = cuentas.cuenta(CLI, ACT)["extra"]
+    assert extra["backfill_anuncios"] is True and extra["backfill_hecho"] is True
+    # Ni faltan ni se repiten días: 90 días distintos, uno por fila (el anuncio a1 tiene gasto cada día).
+    fechas = _fechas(db.meta_anuncio_dia)
+    assert len(fechas) == 90 and sorted(set(fechas)) == sorted(d(i) for i in range(90))
+    # Y la siguiente ya solo repasa lo reciente.
+    g.llamadas.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert [(json.loads(p["time_range"])["since"]) for e, p in g.de("informe")] == [d(6)]
+
+
+def test_el_relleno_de_la_cuenta_tambien_se_reanuda(cuenta, monkeypatch):
+    # Meta pide esperar al pedir el tramo 3 de 5 de la cuenta (90 días cada uno): quedan los dos más nuevos.
+    FakeGraph(monkeypatch, falla_cuenta_n=3)
+    with pytest.raises(graph.ErrorGraph):
+        sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    d = lambda n: (HOY - timedelta(days=n)).isoformat()   # noqa: E731
+    extra = cuentas.cuenta(CLI, ACT)["extra"]
+    assert extra["cuenta_desde"] == d(179) and not extra.get("backfill_cuenta")
+    assert len(_fechas(db.meta_cuenta_dia)) == 180
+    g = FakeGraph(monkeypatch)
+    r = sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    pedidos = [(json.loads(p["time_range"])["since"], json.loads(p["time_range"])["until"])
+               for e, p in g.de("paginar", "/insights") if p["level"] == "account"]
+    assert pedidos == [(d(6), d(0)), (d(269), d(180)), (d(359), d(270)), (d(395), d(360))]
+    fechas = _fechas(db.meta_cuenta_dia)
+    assert len(fechas) == 396 and sorted(set(fechas)) == sorted(d(i) for i in range(396))
+    assert r["desde"] == d(395) and g.asegurar[0][0][1] == d(395)
+    extra = cuentas.cuenta(CLI, ACT)["extra"]
+    assert extra["backfill_cuenta"] is True and extra["backfill_anuncios"] is True
+    assert len(g.de("informe")) == 9    # los anuncios no habían empezado: sus 90 días enteros, nuevo -> viejo

@@ -240,6 +240,29 @@ def test_informe_usa_un_tope_de_paginas_holgado_y_sube_si_aun_asi_lo_pasa(http, 
         graph.informe("act_1", TOKEN, {}, dormir=lambda s: None, por_pagina=lambda filas: None)
 
 
+def test_informe_sondea_con_una_espera_que_crece_hasta_30_segundos(http):
+    http["respuestas"] = ([_Resp({"report_run_id": "9"})] + [_Resp({"async_status": "Job Running"}) for _ in range(9)]
+                          + [_Resp({"async_status": "Job Completed"}), _Resp({"data": [], "paging": {}})])
+    esperas = []
+    assert graph.informe("act_1", TOKEN, {}, dormir=esperas.append) == []
+    assert esperas == [5, 10, 15, 20, 25, 30, 30, 30, 30]
+
+
+def test_informe_la_suma_de_las_esperas_no_pasa_del_maximo(http):
+    http["respuestas"] = [_Resp({"report_run_id": "9"})] + [_Resp({"async_status": "Job Running"}) for _ in range(40)]
+    esperas = []
+    with pytest.raises(graph.ErrorGraph) as e:
+        graph.informe("act_1", TOKEN, {}, espera_max_s=600, dormir=esperas.append)
+    assert "tardó demasiado" in str(e.value)
+    assert esperas[:7] == [5, 10, 15, 20, 25, 30, 30] and sum(esperas) == 600 and esperas[-1] <= 30
+    # Con un máximo que no es múltiplo de la espera, la última se acorta en vez de pasarse.
+    http["respuestas"] = [_Resp({"report_run_id": "9"})] + [_Resp({"async_status": "Job Running"}) for _ in range(9)]
+    esperas.clear()
+    with pytest.raises(graph.ErrorGraph):
+        graph.informe("act_1", TOKEN, {}, espera_max_s=12, intervalo_s=5, dormir=esperas.append)
+    assert esperas == [5, 7]
+
+
 def test_informe_fallido_o_eterno(http):
     http["respuestas"] = [_Resp({"report_run_id": "9"}), _Resp({"async_status": "Job Failed"})]
     with pytest.raises(graph.ErrorGraph):
