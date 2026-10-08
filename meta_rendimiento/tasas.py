@@ -64,11 +64,11 @@ def asegurar(monedas, desde, hasta, hoy=None):
         log.warning("tasas parse dates: %s", type(e).__name__)
         return
 
-    # Wrap monedas normalization in guard (catch TypeError if monedas is None)
+    # Wrap monedas normalization in guard (monedas None o no iterable; los elementos que no son texto se ignoran)
     try:
-        monedas_set = {(s or "").upper() for s in monedas} - {"", "USD"}
-    except TypeError:
-        log.warning("tasas monedas type: %s", type(None).__name__)
+        monedas_set = {m.strip().upper() for m in monedas if isinstance(m, str)} - {"", "USD"}
+    except TypeError as e:
+        log.warning("tasas monedas: %s", type(e).__name__)
         return
 
     desde_buffer = (desde_d - timedelta(days=_HOLGURA_DIAS)).isoformat()
