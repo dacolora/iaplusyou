@@ -204,15 +204,140 @@ def totales_anuncio(cliente, tienda_id, canal, ad_id, desde, hasta=None):
     return fila
 
 
-def serie_anuncios(cliente, tienda_id, desde, hasta):
-    """Por día: gasto de anuncios e ingresos atribuidos por el Pixel."""
-    d = _anuncio_dia(cliente, tienda_id, desde, hasta)
+def serie_anuncios(cliente, tienda_id, desde, hasta, canal=None):
+    """Por día: gasto de anuncios e ingresos atribuidos por el Pixel (de un canal, si se pide)."""
+    d = _anuncio_dia(cliente, tienda_id, desde, hasta, canal)
     q = (sa.select(d.c.fecha, sa.func.coalesce(sa.func.sum(d.c.gasto), 0).label("gasto"),
                    sa.func.coalesce(sa.func.sum(d.c.ingresos), 0).label("ingresos"),
                    sa.func.coalesce(sa.func.sum(d.c.pedidos), 0).label("pedidos"))
          .group_by(d.c.fecha).order_by(d.c.fecha))
     with db.conectar() as con:
         return [dict(r._mapping) for r in con.execute(q)]
+
+
+# ----------------------------------------------- resultados de la tienda ---
+# Spec 2026-10-08-tw-resultados §3.4: un anuncio es «nuevo» sus primeros 14 días contando desde su primer día con
+# gasto en la copia del alcance (una tienda o todas: con todas, el primer gasto en cualquiera de ellas).
+
+DIAS_NUEVO = 14
+
+
+def _primeros_dias(cliente, tienda_id):
+    """Subconsulta (canal, ad_id, primer_dia): el primer día con gasto de cada anuncio en toda la copia."""
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente, t.c.gasto > 0] + ([t.c.tienda_id == tienda_id] if tienda_id is not None else [])
+    return (sa.select(t.c.canal, t.c.ad_id, sa.func.min(t.c.fecha).label("primer_dia"))
+            .where(*cond).group_by(t.c.canal, t.c.ad_id).subquery())
+
+
+def _medidas_dia(cliente, tienda_id, desde, hasta, canal=None, con_nombre=False):
+    """Como `_anuncio_dia` pero solo con gasto (MAX entre tiendas), ventas y pedidos del Pixel (SUMA): las
+    consultas de «Resultados» no necesitan las otras 30 columnas y agregarlas costaba casi medio segundo con los
+    60 000 anuncios-día de happyflops."""
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta]
+    if tienda_id is not None:
+        cond.append(t.c.tienda_id == tienda_id)
+    if canal:
+        cond.append(t.c.canal == canal)
+    columnas = [sa.func.max(t.c.gasto).label("gasto"), sa.func.sum(t.c.ingresos).label("ingresos"),
+                sa.func.sum(t.c.pedidos).label("pedidos")] + ([sa.func.max(t.c.anuncio).label("anuncio")]
+                                                              if con_nombre else [])
+    return (sa.select(t.c.canal, t.c.ad_id, t.c.fecha, *columnas).where(*cond)
+            .group_by(t.c.canal, t.c.ad_id, t.c.fecha).subquery())
+
+
+def _es_nuevo(fecha_col, primer_dia_col):
+    return fecha_col <= sa.func.date(primer_dia_col, f"+{DIAS_NUEVO - 1} day")
+
+
+def _con_primer_dia(d, p):
+    return d.join(p, sa.and_(p.c.canal == d.c.canal, p.c.ad_id == d.c.ad_id))
+
+
+def gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal=None):
+    """{fecha: gasto de los anuncios nuevos ese día}, de los días con algún anuncio con gasto."""
+    d, p = _medidas_dia(cliente, tienda_id, desde, hasta, canal), _primeros_dias(cliente, tienda_id)
+    q = (sa.select(d.c.fecha, sa.func.coalesce(sa.func.sum(
+            sa.case((_es_nuevo(d.c.fecha, p.c.primer_dia), d.c.gasto), else_=0)), 0))
+         .select_from(_con_primer_dia(d, p)).where(d.c.gasto > 0).group_by(d.c.fecha))
+    with db.conectar() as con:
+        return {f: float(g or 0) for f, g in con.execute(q)}
+
+
+def gasto_por_canal(cliente, tienda_id, desde, hasta):
+    """{fecha: {canal: {"gasto", "ingresos"}}} de los canales con gasto ese día (los ingresos son del Pixel).
+    Direct, Klaviyo, orgánico y demás fuentes sin gasto no entran: no son anuncios."""
+    d = _medidas_dia(cliente, tienda_id, desde, hasta)
+    q = (sa.select(d.c.fecha, d.c.canal, sa.func.sum(d.c.gasto), sa.func.coalesce(sa.func.sum(d.c.ingresos), 0))
+         .group_by(d.c.fecha, d.c.canal).having(sa.func.sum(d.c.gasto) > 0))
+    salida = {}
+    with db.conectar() as con:
+        for f, canal, gasto, ingresos in con.execute(q):
+            salida.setdefault(f, {})[canal] = {"gasto": float(gasto or 0), "ingresos": float(ingresos or 0)}
+    return salida
+
+
+def anuncios_del_dia(cliente, tienda_id, fecha, canal=None, limite=5):
+    """Los anuncios con gasto ese día, de más a menos ventas del Pixel, con su primer día y si eran nuevos."""
+    d = _medidas_dia(cliente, tienda_id, fecha, fecha, canal, con_nombre=True)
+    p = _primeros_dias(cliente, tienda_id)
+    q = (sa.select(d.c.canal, d.c.ad_id, d.c.anuncio, d.c.gasto, d.c.ingresos, d.c.pedidos, p.c.primer_dia,
+                   _es_nuevo(d.c.fecha, p.c.primer_dia).label("nuevo"))
+         .select_from(_con_primer_dia(d, p)).where(d.c.gasto > 0)
+         .order_by(d.c.ingresos.desc(), d.c.gasto.desc(), d.c.ad_id).limit(limite))
+    with db.conectar() as con:
+        filas = [dict(r._mapping) for r in con.execute(q)]
+    for f in filas:
+        f["nuevo"] = bool(f["nuevo"])
+        for k in ("gasto", "ingresos", "pedidos"):
+            f[k] = float(f[k] or 0)
+    return filas
+
+
+def arrancaron_el(cliente, tienda_id, fecha, canal=None):
+    """Cuántos anuncios tuvieron su primer día con gasto ese día."""
+    p = _primeros_dias(cliente, tienda_id)
+    q = sa.select(sa.func.count()).select_from(p).where(p.c.primer_dia == fecha,
+                                                        *([p.c.canal == canal] if canal else []))
+    with db.conectar() as con:
+        return int(con.execute(q).scalar() or 0)
+
+
+def cohortes(cliente, tienda_id, desde, hasta, canal=None, conocido_desde=None):
+    """Creativos por mes de arranque en [desde, hasta] (spec §2.5): por mes, anuncios con gasto en el periodo,
+    gasto e ingresos del Pixel; gasto e ingresos de nuevos y de establecidos solo en días con antigüedad
+    conocida (≥ `conocido_desde`); y cuántos anuncios arrancaron dentro del periodo (desde `conocido_desde`
+    si es más tarde: antes no se sabe si arrancaron ahí o venían de antes de la copia). Dos consultas."""
+    d, p = _medidas_dia(cliente, tienda_id, desde, hasta, canal), _primeros_dias(cliente, tienda_id)
+    mes = sa.func.substr(p.c.primer_dia, 1, 7)
+    conocido = d.c.fecha >= (conocido_desde or desde)
+    nuevo = _es_nuevo(d.c.fecha, p.c.primer_dia)
+
+    def suma_si(cond, col):
+        return sa.func.coalesce(sa.func.sum(sa.case((cond, col), else_=0)), 0)
+
+    q = (sa.select(mes.label("mes"),
+                   sa.func.count(sa.distinct(sa.case((d.c.gasto > 0, d.c.canal + ":" + d.c.ad_id)))).label("anuncios"),
+                   sa.func.coalesce(sa.func.sum(d.c.gasto), 0).label("gasto"),
+                   sa.func.coalesce(sa.func.sum(d.c.ingresos), 0).label("ingresos"),
+                   suma_si(sa.and_(conocido, nuevo), d.c.gasto).label("g_n"),
+                   suma_si(sa.and_(conocido, nuevo), d.c.ingresos).label("i_n"),
+                   suma_si(sa.and_(conocido, sa.not_(nuevo)), d.c.gasto).label("g_e"),
+                   suma_si(sa.and_(conocido, sa.not_(nuevo)), d.c.ingresos).label("i_e"))
+         .select_from(_con_primer_dia(d, p)).group_by(mes).order_by(mes))
+    qp = sa.select(sa.func.count()).select_from(p).where(p.c.primer_dia >= max(desde, conocido_desde or desde),
+                                                         p.c.primer_dia <= hasta,
+                                                         *([p.c.canal == canal] if canal else []))
+    with db.conectar() as con:
+        filas = [dict(r._mapping) for r in con.execute(q)]
+        probados = int(con.execute(qp).scalar() or 0)
+    return {"meses": [{"mes": f["mes"], "anuncios": int(f["anuncios"] or 0), "gasto": float(f["gasto"]),
+                       "ingresos": float(f["ingresos"])} for f in filas if f["anuncios"] or f["ingresos"]],
+            "nuevos": {"gasto": sum(float(f["g_n"]) for f in filas), "ingresos": sum(float(f["i_n"]) for f in filas)},
+            "establecidos": {"gasto": sum(float(f["g_e"]) for f in filas),
+                             "ingresos": sum(float(f["i_e"]) for f in filas)},
+            "probados": probados}
 
 
 def _duplicado_por_dia(cliente, desde, hasta):
@@ -248,6 +373,30 @@ def gasto_duplicado(cliente, desde, hasta, tienda_id=None):
             t.c.cliente == cliente, t.c.tienda_id == tienda_id, t.c.fecha >= desde, t.c.fecha <= hasta, en_otra)
     with db.conectar() as con:
         return float(con.execute(q).scalar() or 0)
+
+
+def inicio_para_antiguedad(cliente, tienda_id=None):
+    """Desde qué día la copia de anuncios cubre el alcance entero: con una tienda, su primer día copiado; con
+    «Todas», el primero de la tienda que empezó a copiarse MÁS TARDE (revisión 2026-10-08: con el más viejo, los
+    anuncios de una tienda conectada después pasaban por nuevos). Un solo MIN por tienda, sobre el índice."""
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente] + ([t.c.tienda_id == tienda_id] if tienda_id is not None else [])
+    q = sa.select(sa.func.min(t.c.fecha)).where(*cond).group_by(t.c.tienda_id)
+    with db.conectar() as con:
+        inicios = [r[0] for r in con.execute(q) if r[0]]
+    return max(inicios) if inicios else None
+
+
+def primer_dia_copia(cliente, tienda_id=None):
+    """El primer día copiado (anuncios o tienda) del alcance, o None: dos MIN sobre los índices, sin agregar
+    columnas (el detalle de un día lo pide en cada clic)."""
+    fechas = []
+    for t in (db.tw_anuncio_dia, db.tw_tienda_dia):
+        cond = [t.c.cliente == cliente] + ([t.c.tienda_id == tienda_id] if tienda_id is not None else [])
+        with db.conectar() as con:
+            fechas.append(con.execute(sa.select(sa.func.min(t.c.fecha)).where(*cond)).scalar())
+    fechas = [str(f)[:10] for f in fechas if f]
+    return min(fechas) if fechas else None
 
 
 def primer_dia_tienda(cliente, tienda_id=None):

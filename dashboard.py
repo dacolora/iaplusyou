@@ -1996,6 +1996,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
     gestion = experimentos_exp if gestion_id is None else [e for e in experimentos_exp if e["id"] == gestion_id]
     trabajos_exp = {}
     for e in gestion:
+        e["datos_viejos"] = experimentos.datos_viejos(e)
         if e["estado"] == "lanzando":
             jid = tareas_exp.job_id_lanzar(cliente, e["id"])
             if trabajos.en_curso(jid):
@@ -2021,6 +2022,8 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
         "objetivo_exp_sugerido": experimentos.objetivo_sugerido(cliente, atribucion_sug),
         "nombres_objetivo_exp": NOMBRES_OBJETIVO_EXP,
         "app_id_guardado": meta_conexion.cargar_app_anunciada(cliente),
+        "limites_diarios_exp": {e["id"]: {p["pais"]: presupuesto_experimentos.limite_diario(e, p["pais"])
+                                           for p in e["paises"]} for e in gestion},
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
         "moneda_exp": moneda_exp,
@@ -2207,7 +2210,7 @@ def ver_cliente(cliente):
         swaps=_swap_items(cliente),
         creative_flow_items=cf_items,
         **_listas_crear(cf_items),
-        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"]),
+        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"], cliente=cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         aviso_saldo=saldo.vigente("wavespeed"),
@@ -3383,12 +3386,12 @@ def _listas_crear(items, n=TARJETAS_POR_PAGINA):
     return {"crear": items[:n], "crear_total": len(items)}
 
 
-def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA):
+def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA, cliente=None):
     """Lo que pinta el tablero de Final edition (2026-10-02,
     `final_edition.tablero`): las primeras `n` tarjetas de «En edición» y de
     «Finalizados», sus totales y las cifras de la cabecera. Los videos listos
     de Crear no van en la página: los trae el selector «+ Nueva» por fetch."""
-    t = fe_tablero.armar(items, ediciones_por_cf)
+    t = fe_tablero.armar(items, ediciones_por_cf, gastos.total_tipo(cliente, "final") if cliente else None)
     return {"fe_en_edicion": t["en_edicion"][:n], "fe_en_edicion_total": len(t["en_edicion"]),
             "fe_finalizados": t["finalizados"][:n], "fe_finalizados_total": len(t["finalizados"]),
             "fe_cifras": t["cifras"]}
@@ -4717,89 +4720,6 @@ def eliminar_ad(cliente, ad_id):
 
 # ---------- Tablero (Bloque 6) ----------
 
-# Geometría del gráfico de 30 días (viewBox fija; el SVG escala al ancho).
-_TB_ANCHO, _TB_ALTO = 720, 220
-_TB_MARGEN = {"izq": 60, "der": 12, "arriba": 12, "abajo": 26}
-
-
-def _nice_max(valor):
-    """Máximo «bonito» para el eje: el primer 1/2/2,5/5/10 × 10^n que cubre
-    el valor, para que las 4 marcas queden en números redondos."""
-    if valor <= 0:
-        return 1.0
-    exp = 10 ** math.floor(math.log10(valor))
-    for f in (1, 2, 2.5, 5, 10):
-        if f * exp >= valor:
-            return float(f * exp)
-    return float(10 * exp)
-
-
-def _compacto(valor):
-    """Etiqueta corta para el eje: 1,2 M / 250 k / 12 en español; 1.2 M / 250 k /
-    12 en inglés (idiomas.separador_decimal — el recorte de ceros es a medida,
-    así que no usa `idiomas.numero` completo)."""
-    v = float(valor or 0)
-    if v >= 1_000_000:
-        t = f"{v / 1_000_000:.1f}".rstrip("0").rstrip(".") + " M"
-    elif v >= 1_000:
-        t = f"{v / 1_000:.1f}".rstrip("0").rstrip(".") + " k"
-    elif v == int(v):
-        t = str(int(v))
-    else:
-        t = f"{v:.2f}".rstrip("0").rstrip(".")   # 0,5 y 0,25, no 0,50
-    return t.replace(".", idiomas.separador_decimal())
-
-
-def _grafico_tablero(serie):
-    """Coordenadas listas para pintar la serie de 30 días como SVG inline:
-    barras de gasto y línea de ingresos sobre UN solo eje (las dos son dinero
-    en `serie.moneda`, así que comparten escala), 4 marcas + máximo redondeado,
-    etiqueta de fecha cada 5 días y un `titulo` por día para el tooltip nativo.
-    None si no hay días o todo es cero (la plantilla muestra el estado vacío
-    en vez de un gráfico en blanco)."""
-    dias = (serie or {}).get("dias") or []
-    moneda = (serie or {}).get("moneda") or tablero.MONEDA_POR_DEFECTO
-    if not dias:
-        return None
-    tope = max(max(float(d["gasto"] or 0), float(d["ingresos"] or 0)) for d in dias)
-    if tope <= 0:
-        return None
-    maximo = _nice_max(tope)
-    m = _TB_MARGEN
-    ancho_plot = _TB_ANCHO - m["izq"] - m["der"]
-    alto_plot = _TB_ALTO - m["arriba"] - m["abajo"]
-    base_y = m["arriba"] + alto_plot
-    paso = ancho_plot / len(dias)
-    ancho_barra = max(2.0, paso - 2)   # 2px de aire entre barras
-
-    def y_de(v):
-        return round(base_y - (float(v or 0) / maximo) * alto_plot, 2)
-
-    salida = []
-    for i, d in enumerate(dias):
-        dd, mm = d["dia"][8:10], d["dia"][5:7]
-        fecha_dia = date(int(d["dia"][0:4]), int(mm), int(dd))
-        x = m["izq"] + i * paso
-        gasto, ingresos = float(d["gasto"] or 0), float(d["ingresos"] or 0)
-        salida.append({
-            "dia": d["dia"], "gasto": gasto, "ingresos": ingresos, "compras": int(d.get("compras") or 0),
-            "x": round(x, 2), "x_centro": round(x + paso / 2, 2), "ancho": round(ancho_barra, 2),
-            "gasto_y": y_de(gasto), "ingresos_y": y_de(ingresos),
-            "etiqueta": idiomas.dia_mes(fecha_dia) if i % 5 == 0 else "",
-            "titulo": gettext("%(dd)s/%(mm)s · gasto %(gasto)s · ingresos %(ingresos)s",
-                              dd=dd, mm=mm, gasto=tablero.dinero(gasto, moneda),
-                              ingresos=tablero.dinero(ingresos, moneda)),
-        })
-    marcas = [{"valor": maximo * k / 4, "y": y_de(maximo * k / 4), "texto": _compacto(maximo * k / 4)} for k in range(5)]
-    puntos = " ".join(f"{d['x_centro']},{d['ingresos_y']}" for d in salida)
-    return {"ancho": _TB_ANCHO, "alto": _TB_ALTO, "margen": m, "base_y": base_y, "maximo": maximo, "moneda": moneda,
-            "marcas": marcas, "dias": salida, "puntos_linea": puntos}
-
-
-# La pestaña Triple Whale (Blueprint) pinta el mismo gráfico que el Tablero.
-app.extensions["grafico_tablero"] = _grafico_tablero
-
-
 @app.template_filter("dinero")
 def _filtro_dinero(valor, moneda):
     """«1.250.000 COP» / «12,50 USD» (la misma regla que las alertas)."""
@@ -4845,8 +4765,8 @@ def _calcular_tablero(cliente):
     para esa parte y pinta el resto. Si la carga misma falla, cada parte carga
     por su cuenta (más lento, mismo resultado). La serie de 30 días, el top de
     ganadoras y los dos gráficos ya no se calculan: desde E2 no los pinta nadie
-    (revisión final, 2026-10-03; el gráfico de Triple Whale lo arma su pestaña
-    con `app.extensions["grafico_tablero"]`). Las alertas tampoco son una parte:
+    (revisión final, 2026-10-03; la pestaña Triple Whale tiene su propia gráfica
+    desde 2026-10-08, «Resultados de tu tienda»). Las alertas tampoco son una parte:
     las calcula alertas.py (que sigue leyendo `tablero.alertas`) y el centro
     solo pinta su conteo, de `alertas_ctx` (spec alertas §7 y §12.9)."""
     ahora = db.ahora()

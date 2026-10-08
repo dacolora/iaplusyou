@@ -110,7 +110,7 @@ def test_cifras_del_tablero():
                                 _final("US", estado="generando", trabajo={"job_id": "j"}, idioma="en")])
     b = _video("cf_b", finales=[dict(_final("CO", costo=None), id="cf_b__es_CO")])
     c = _video("cf_c")
-    t = tablero.armar([a, b, c], {})
+    t = tablero.armar([a, b, c], {}, costo_finales=0.75)
     assert t["cifras"] == {"en_edicion": 1, "produciendo": 1, "finalizados": 3, "paises": 2, "costo_usd": 0.75,
                            "elegibles": 3}
     assert tablero.armar([c], {})["cifras"]["costo_usd"] is None

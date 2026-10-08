@@ -25,6 +25,7 @@
 <div id="tw-panel" data-url="{{ url_for('triple_whale.ver_panel', cliente=cliente) }}">
   <p class="vacio">{{ _('Cargando las métricas de Triple Whale…') }}</p>
 </div>
+<script src="{{ url_for('static', filename='tw_resultados.js') }}" defer></script>
 <script>
   (function () {
     var cont = document.getElementById('tw-panel');
@@ -50,6 +51,8 @@
         .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
         .then(function (html) {
           cont.innerHTML = html;
+          // «Resultados de tu tienda»: la gráfica la dibuja static/tw_resultados.js (los <script> del fragmento no corren).
+          if (window.TwResultados) window.TwResultados.iniciar(cont);
           cont.querySelectorAll('[data-poll-job]').forEach(function (el) {
             if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
           });

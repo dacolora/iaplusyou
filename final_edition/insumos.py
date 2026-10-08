@@ -129,14 +129,17 @@ def musica(cliente, estilo, segundos):
     `musica.obtener_pista` como material `audio`/`musica` del proyecto. La
     URL es la de la caché global en R2 (`musica/...`): no se resube."""
     pista, costo = musica_mod.obtener_pista(estilo, segundos)
-    h = materiales.hash_clave("musica", estilo, os.path.basename(pista["archivo"]))
+    try:
+        h = materiales.hash_clave("musica", estilo, os.path.basename(pista["archivo"]))
 
-    def _registrar():
-        return {"tipo": "audio", "origen": "musica", "url": pista["url"], "bytes": os.path.getsize(pista["archivo"]),
-                "duracion_ms": ms(cortes.duracion(pista["archivo"])), "costo_usd": float(costo or 0.0),
-                "extra": {"estilo": estilo, "local": pista["archivo"]}}
-    mat, _ = materiales.obtener_o_crear(cliente, h, _registrar)
-    return mat, round(float(costo or 0.0), 4)
+        def _registrar():
+            return {"tipo": "audio", "origen": "musica", "url": pista["url"], "bytes": os.path.getsize(pista["archivo"]),
+                    "duracion_ms": ms(cortes.duracion(pista["archivo"])), "costo_usd": float(costo or 0.0),
+                    "extra": {"estilo": estilo, "local": pista["archivo"]}}
+        mat, _ = materiales.obtener_o_crear(cliente, h, _registrar)
+        return mat, round(float(costo or 0.0), 4)
+    except Exception as e:
+        raise musica_mod.PistaPagadaError(e, float(costo or 0.0), pista.get("url")) from e
 
 
 def voz_bloque(cliente, texto_voz, voz, idioma, ventana_ms, carpeta):
@@ -165,49 +168,55 @@ def voz_bloque(cliente, texto_voz, voz, idioma, ventana_ms, carpeta):
         h = materiales.hash_clave("voz", texto_voz, voz, idioma)
     os.makedirs(carpeta, exist_ok=True)
 
-    def _tts():
-        if propia:
-            r = voces_propias.sintetizar(cliente, propia, texto_voz, idioma)
-        else:
-            r = fal_audio.tts_galeria(texto_voz, voz, idioma)      # el noruego, por Turbo
-        local = _descargar(r["url"], os.path.join(carpeta, f"voz_{h[:16]}.mp3"))
-        url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h[:16]}.mp3", "audio/mpeg")
-        return {"tipo": "audio", "origen": "voz", "url": url, "bytes": os.path.getsize(local),
-                "duracion_ms": ms(cortes.duracion(local)), "costo_usd": float(r.get("costo_usd") or 0.0),
-                "extra": {"texto": texto_voz, "voz": voz, "idioma": idioma, "local": local}}
-    cruda, creada = materiales.obtener_o_crear(cliente, h, _tts)
-    costo = float(cruda.get("costo_usd") or 0.0) if creada else 0.0
-
-    dur = int(cruda["duracion_ms"] or 0)
-    ventana_ms = max(1, int(ventana_ms))
-    factor = min(FACTOR_MAX, dur / ventana_ms) if dur > ventana_ms else 1.0
-    tope = ventana_ms + SOLAPE_MAX_MS
-    recortado = factor > 1.0 and dur / factor > tope
-    mat = cruda
-    if factor > 1.0:
-        h2 = materiales.hash_clave("voz_ajustada", cruda["id"], f"{factor:.4f}", tope if recortado else 0)
-
-        def _ajustar():
-            crudo_local = materiales.descargar(cruda, os.path.join(carpeta, f"voz_{h[:16]}_crudo.mp3"))
-            local = os.path.join(carpeta, f"voz_{h2[:16]}.mp3")
-            args = ["-i", crudo_local, "-filter:a", f"atempo={factor:.4f}"]
-            if recortado:
-                args += ["-t", f"{tope / 1000.0:.3f}"]
-            cortes.ffmpeg(args + [local], timeout=120)
-            url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h2[:16]}.mp3", "audio/mpeg")
+    costo = 0.0
+    try:
+        def _tts():
+            nonlocal costo
+            if propia:
+                r = voces_propias.sintetizar(cliente, propia, texto_voz, idioma)
+            else:
+                r = fal_audio.tts_galeria(texto_voz, voz, idioma)      # el noruego, por Turbo
+            costo += float(r.get("costo_usd") or 0.0)
+            local = _descargar(r["url"], os.path.join(carpeta, f"voz_{h[:16]}.mp3"))
+            url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h[:16]}.mp3", "audio/mpeg")
             return {"tipo": "audio", "origen": "voz", "url": url, "bytes": os.path.getsize(local),
-                    "duracion_ms": ms(cortes.duracion(local)), "padre_id": cruda["id"],
-                    "extra": {"texto": texto_voz, "voz": voz, "idioma": idioma, "factor": round(factor, 3),
-                              "recortado": recortado, "local": local}}
-        mat, _ = materiales.obtener_o_crear(cliente, h2, _ajustar)
+                    "duracion_ms": ms(cortes.duracion(local)), "costo_usd": float(r.get("costo_usd") or 0.0),
+                    "extra": {"texto": texto_voz, "voz": voz, "idioma": idioma, "local": local}}
+        cruda, creada = materiales.obtener_o_crear(cliente, h, _tts)
 
-    if "palabras" not in (mat.get("extra") or {}):
-        t = fal_audio.transcribir_palabras(mat["url"], idioma)
-        palabras = []
-        for p in t.get("palabras") or []:
-            ini = ms(p.get("inicio") or 0.0)
-            fin = max(ini, ms(p.get("fin") or 0.0))
-            palabras.append({"t_ms": ini, "dur_ms": fin - ini, "texto": p.get("texto", "")})
-        mat = materiales.actualizar_extra(cliente, mat["id"], palabras=palabras)
-        costo += float(t.get("costo_usd") or 0.0)
-    return mat, round(costo, 4)
+        dur = int(cruda["duracion_ms"] or 0)
+        ventana_ms = max(1, int(ventana_ms))
+        factor = min(FACTOR_MAX, dur / ventana_ms) if dur > ventana_ms else 1.0
+        tope = ventana_ms + SOLAPE_MAX_MS
+        recortado = factor > 1.0 and dur / factor > tope
+        mat = cruda
+        if factor > 1.0:
+            h2 = materiales.hash_clave("voz_ajustada", cruda["id"], f"{factor:.4f}", tope if recortado else 0)
+
+            def _ajustar():
+                crudo_local = materiales.descargar(cruda, os.path.join(carpeta, f"voz_{h[:16]}_crudo.mp3"))
+                local = os.path.join(carpeta, f"voz_{h2[:16]}.mp3")
+                args = ["-i", crudo_local, "-filter:a", f"atempo={factor:.4f}"]
+                if recortado:
+                    args += ["-t", f"{tope / 1000.0:.3f}"]
+                cortes.ffmpeg(args + [local], timeout=120)
+                url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h2[:16]}.mp3", "audio/mpeg")
+                return {"tipo": "audio", "origen": "voz", "url": url, "bytes": os.path.getsize(local),
+                        "duracion_ms": ms(cortes.duracion(local)), "padre_id": cruda["id"],
+                        "extra": {"texto": texto_voz, "voz": voz, "idioma": idioma, "factor": round(factor, 3),
+                                  "recortado": recortado, "local": local}}
+            mat, _ = materiales.obtener_o_crear(cliente, h2, _ajustar)
+
+        if "palabras" not in (mat.get("extra") or {}):
+            t = fal_audio.transcribir_palabras(mat["url"], idioma)
+            costo += float(t.get("costo_usd") or 0.0)
+            palabras = []
+            for p in t.get("palabras") or []:
+                ini = ms(p.get("inicio") or 0.0)
+                fin = max(ini, ms(p.get("fin") or 0.0))
+                palabras.append({"t_ms": ini, "dur_ms": fin - ini, "texto": p.get("texto", "")})
+            mat = materiales.actualizar_extra(cliente, mat["id"], palabras=palabras)
+        return mat, round(costo, 4)
+    except Exception as e:
+        e.costo_usd = round(costo + float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+        raise

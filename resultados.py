@@ -43,6 +43,7 @@ import doctrina
 import gastos
 import idiomas
 import proyectos
+import experimentos
 import tablero
 from idiomas import N_
 
@@ -321,9 +322,9 @@ def _roas(v):
     """ROAS de `tablero.ventas_medidas` (lo vendido sobre TODO el gasto, redondeado como el Tablero): None si nada
     mide ventas o no hubo gasto (nunca un 0 falso de algo que no mide). Redondea ingresos y gasto antes de dividir,
     como `tablero._resumen_periodo`, para que el decimal que se muestra sea siempre el mismo."""
-    if not v.get("roas_comparable", True) or not (v["mide"] and v["gasto"] > 0):
+    if not v.get("roas_comparable", True) or not (v["mide"] and v.get("gasto_roas", v["gasto"]) > 0):
         return None
-    return round(round(v["ingresos"], 2) / round(v["gasto"], 2), 2) if round(v["gasto"], 2) > 0 else None
+    return round(round(v["ingresos"], 2) / round(v.get("gasto_roas", v["gasto"]), 2), 2) if round(v.get("gasto_roas", v["gasto"]), 2) > 0 else None
 
 
 def _con_ventas(gasto, v):
@@ -331,10 +332,12 @@ def _con_ventas(gasto, v):
     el gasto de todo, y compras, ingresos, ROAS y costo por compra sobre ese mismo gasto mientras algo de lo elegido
     mida ventas. Sin nada que mida, las ventas son None: la pantalla dice «—» y «sin ventas medibles», no 0."""
     mide = v["mide"]
-    return {"gasto": round(gasto, 2), "compras": v["compras"] if mide else None,
+    # La moneda ajena impide comparar ingresos, pero no contar pedidos ni calcular CPA.
+    mide_compras = mide or bool(v.get("excluidos"))
+    return {"gasto": round(gasto, 2), "compras": v["compras"] if mide_compras else None,
             "ingresos": round(v["ingresos"], 2) if mide and v.get("roas_comparable", True) else None,
-            "roas": _roas(v), "roas_comparable": v.get("roas_comparable", True),
-            "cpa": v["gasto"] / v["compras"] if mide and not v.get("ventas_cambiaron") and v["compras"] else None, "mide_ventas": mide,
+            "roas": _roas(v), "excluidos": v.get("excluidos", 0), "roas_comparable": v.get("roas_comparable", True),
+            "cpa": v["gasto"] / v["compras"] if mide_compras and not v.get("ventas_cambiaron") and v["compras"] else None, "mide_ventas": mide,
             "gasto_sin_ventas": v.get("gasto_sin_ventas", 0.0), "ventas_cambiaron": v.get("ventas_cambiaron", False)}
 
 
@@ -442,7 +445,7 @@ def indicadores(carga):
         anterior = None if previo is None else previo[clave]
         out.append({"clave": clave, "etiqueta": gettext(etiqueta), "formato": formato, "valor": actual[clave],
                     "anterior": anterior, "cambio": cambio(actual[clave], anterior, mejor, formato),
-                    "tendencia": curvas[clave],
+                    "tendencia": curvas[clave], "excluidos": actual.get("excluidos", 0) if clave in ("roas", "ingresos") else 0,
                     # «—» por «sin ventas medibles», no por «sin datos» (la plantilla elige la nota)
                     "sin_ventas": clave in _DE_VENTAS and not actual["mide_ventas"],
                     "roas_no_comparable": clave in _DE_VENTAS and (
@@ -1059,6 +1062,7 @@ def experimentos_tarjetas(carga):
         tope, gasto = float(ex.get("tope_total") or 0), float((ex.get("resumen") or {}).get("gasto") or 0)
         out.append({"id": ex["id"], "nombre": ex["nombre"], "estado": ex["estado"], "gasto": gasto, "tope": tope,
                     "pct_tope": min(100.0, gasto / tope * 100) if tope > 0 else None,
+                    "datos_viejos": experimentos.datos_viejos(ex, carga.datos.ahora),
                     "dia": _dia_del_experimento(ex, carga.datos.ahora), "dias": ex.get("dias"),
                     "n_piezas": len(ex.get("piezas") or []), "paises": [p["pais"] for p in ex.get("paises") or []],
                     "ganadoras": sum(1 for pz in ex.get("piezas") or [] if pz.get("veredicto") == "ganador"),

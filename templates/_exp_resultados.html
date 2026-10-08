@@ -249,7 +249,7 @@
       <span class="cr-experimento-cab">
         {% if e.pct_tope is not none %}<svg class="cr-dona-tope" data-cr-dona-pct="{{ e.pct_tope }}" viewBox="0 0 44 44" role="img" aria-label="{{ _('Tope usado: %(pct)s %%', pct=e.pct_tope|round(0)|int) }}"></svg>{% endif %}
         <span class="cr-experimento-titulo"><strong>{{ e.nombre }}</strong>
-          <small>{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}{% if e.dia is not none and e.dias %} · {{ _('día %(dia)s de %(dias)s', dia=e.dia, dias=e.dias) }}{% endif %}</small></span>
+          <small>{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}{% if e.datos_viejos and e.estado == "corriendo" %} · {{ _('datos viejos') }}{% endif %}{% if e.dia is not none and e.dias %} · {{ _('día %(dia)s de %(dias)s', dia=e.dia, dias=e.dias) }}{% endif %}</small></span>
       </span>
       <span class="cr-experimento-linea">{{ ngettext('%(num)s pieza', '%(num)s piezas', e.n_piezas) }} · {{ e.paises|join(' · ') }} · {{ _('ROAS') if e.metrica == 'roas' else _('CTR') }} {{ _('ROAS no comparable') if e.metrica == 'roas' and not e.roas_comparable else valor(e.valor, 'veces' if e.metrica == 'roas' else 'pct') }}{% if e.metrica == 'roas' and not e.mide_ventas %} ({{ _('sin ventas medibles') }}){% endif %}{% if e.ganadoras %} · {{ ngettext('%(num)s ganadora', '%(num)s ganadoras', e.ganadoras) }}{% endif %}</span>
       <small class="cr-muted">{{ _('Gastado %(gasto)s de %(tope)s', gasto=valor(e.gasto, 'dinero', corto=true), tope=e.tope|dinero(r.moneda)) }}{% if e.mejor %} · {{ _('mejor: %(nombre)s', nombre=e.mejor) }}{% endif %}</small>

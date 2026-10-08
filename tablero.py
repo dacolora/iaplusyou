@@ -126,6 +126,8 @@ def _delta_ingresos(snaps, desde_iso, hasta_iso):
 
 
 def _ventas_comparables(base, cierre, hubo_ventas=False):
+    if (base or {}).get("ventas_no_disponibles") or (cierre or {}).get("ventas_no_disponibles"):
+        return False
     # Un cero inicial sirve de base; un respaldo ciego tras medir ventas no.
     if mide_ventas(base) and mide_ventas(cierre):
         return base.get("fuente_ventas") == cierre.get("fuente_ventas")
@@ -162,6 +164,7 @@ def _moneda_del_delta(ex, d):
             and any((d[k] or 0) > 0 for k in ("gasto", "compras", "impresiones", "ingresos"))):
         d["ingresos"] = None
         d["roas_comparable"] = False
+        d["moneda_ajena"] = ex.get("id") or id(ex)
     return d
 
 
@@ -191,15 +194,26 @@ def ventas_medidas(deltas):
     final de E2, 2026-10-04: 3,0× donde el Tablero decía 1,0×)."""
     out = {"mide": False, "gasto": 0.0, "compras": 0, "ingresos": 0.0, "roas_comparable": True,
            "gasto_sin_ventas": 0.0, "ventas_cambiaron": False}
+    excluidos = set()
+    out["gasto_roas"] = 0.0
+    comparables = 0
     for d in deltas:
-        out["mide"] = out["mide"] or bool(d["mide"])
         out["gasto"] += d["gasto"]
         out["compras"] += d["compras"] or 0
-        out["ingresos"] += d["ingresos"] or 0
-        out["roas_comparable"] = out["roas_comparable"] and d.get("roas_comparable", True)
+        if d.get("moneda_ajena"):
+            excluidos.add(d["moneda_ajena"])
+        else:
+            out["mide"] = out["mide"] or bool(d["mide"] and d.get("roas_comparable", True))
+            comparables += 1
+            out["gasto_roas"] += d["gasto"]
+            out["ingresos"] += d["ingresos"] or 0
+            out["roas_comparable"] = out["roas_comparable"] and d.get("roas_comparable", True)
         out["ventas_cambiaron"] = out["ventas_cambiaron"] or d.get("ventas_cambiaron", False)
         if not d["mide"]:
             out["gasto_sin_ventas"] += d["gasto"]
+    out["excluidos"] = len(excluidos)
+    if excluidos and not comparables:
+        out["roas_comparable"] = False
     if out["ventas_cambiaron"]:
         out["compras"] = None
     if not out["roas_comparable"]:
@@ -308,7 +322,7 @@ def _resumen_periodo(exps, filas, desde_iso, hasta_iso, atribucion_filtro=None):
     """Calcula resumen filtrando por atribución si se pide.
     Si atribucion_filtro es None, no filtra. Si es una tupla/lista, solo
     incluye experimentos cuyo atribucion esté en esa tupla."""
-    por_moneda = {}
+    por_moneda, deltas_por_moneda = {}, {}
     for ex, _pz, snaps in filas:
         # Filtrar por atribución si se pide
         if atribucion_filtro is not None and ex.get("atribucion") not in atribucion_filtro:
@@ -319,16 +333,20 @@ def _resumen_periodo(exps, filas, desde_iso, hasta_iso, atribucion_filtro=None):
             d["mide"] = True
         g["mide_ventas"] = g["mide_ventas"] or d["mide"]
         _moneda_del_delta(ex, d)
+        deltas_por_moneda.setdefault(_moneda(ex), []).append(d)
         g["roas_comparable"] = g["roas_comparable"] and d["roas_comparable"]
         g["ventas_cambiaron"] = g["ventas_cambiaron"] or d["ventas_cambiaron"]
         for k in ("gasto", "compras", "ingresos", "clics_enlace", "impresiones"):
             g[k] += d[k] or 0
         if d["gasto"] > 0 or d["impresiones"] > 0:
             g["anuncios"] += 1
-    for g in por_moneda.values():
+    for moneda, g in por_moneda.items():
+        v = ventas_medidas(deltas_por_moneda[moneda])
+        g.update(mide_ventas=v["mide"], roas_comparable=v["roas_comparable"], excluidos=v["excluidos"],
+                 ingresos=v["ingresos"], gasto_roas=v["gasto_roas"])
         g["gasto"] = round(g["gasto"], 2)
-        g["ingresos"] = round(g["ingresos"], 2)
-        g["roas"] = _roas(g["ingresos"], g["gasto"]) if g["roas_comparable"] else None
+        g["ingresos"] = round(g["ingresos"] or 0, 2)
+        g["roas"] = _roas(g["ingresos"], g["gasto_roas"]) if g["roas_comparable"] and g["mide_ventas"] else None
         if not g["roas_comparable"]:
             g["ingresos"] = None
         if g["ventas_cambiaron"]:

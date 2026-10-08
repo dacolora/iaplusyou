@@ -84,7 +84,16 @@ def cargar(cliente):
          .order_by(db.concepto.c.id))
     with db.conectar() as con:
         filas = con.execute(q).fetchall()
-    return {f._mapping[db.concepto.c.legado_id]: _a_dict(_Cols(f, db.concepto), _Cols(f, db.pieza)) for f in filas}
+    items = {f._mapping[db.concepto.c.legado_id]: _a_dict(_Cols(f, db.concepto), _Cols(f, db.pieza)) for f in filas}
+    if items:
+        import gastos
+        for cf_id, costo in gastos.costos_sesiones(cliente).items():
+            if cf_id in items:
+                item = items[cf_id]
+                item["usd"] = costo["usd"]
+                if "musica" in item["capas"]:
+                    item["capas"]["musica"]["costo_usd"] = costo["usd_musica"]
+    return items
 
 
 def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,

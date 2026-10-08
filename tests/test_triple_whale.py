@@ -248,3 +248,19 @@ def test_conectadas_lista_las_tiendas_con_llave(base):
     b = triple_whale_tiendas.conectar("b", "tw_x", "b.myshopify.com")
     a = triple_whale_tiendas.conectar("a", "tw_y", "a.myshopify.com")
     assert triple_whale_tiendas.conectadas() == [("a", a), ("b", b)]
+
+
+def test_consultas_usan_las_columnas_reales_de_triple_whale():
+    """PND-150 (2026-10-08): con la tienda real, `products_info` trae product_name, product_sku,
+    product_name_quantity_sold y product_name_price, y `blended_stats_tvf()` no tiene net_profit. Pedir
+    las columnas viejas dejaba la copia sin productos y la tienda en su versión mínima (sin clientes nuevos)."""
+    completa, minima = triple_whale.consultas_productos()
+    for consulta in (completa, minima):
+        for real in ("p.product_name", "p.product_sku", "p.product_name_quantity_sold", "p.product_name_price"):
+            assert real in consulta
+        for vieja in ("products_info.title", "products_info.sku", "products_info.quantity", "products_info.price"):
+            assert vieja not in consulta
+    assert "net_discount_amount_for_product" in completa
+    tienda_completa, _ = triple_whale.consultas_tienda()
+    assert "net_profit" not in tienda_completa
+    assert "new_customer_revenue" in tienda_completa and "new_customer_orders" in tienda_completa

@@ -37,8 +37,8 @@ class TripleWhaleFalso:
     def __call__(self, llave, shop, consulta, desde, hasta, moneda=None):
         tabla = ("pixel" if "pixel_joined_tvf" in consulta else "tienda" if "blended_stats_tvf" in consulta
                  else "productos" if "orders_table" in consulta else "ads")
-        completa = ("outbound_clicks" in consulta or "sessions" in consulta or "net_profit" in consulta
-                    or "products_info.title" in consulta)
+        completa = ("outbound_clicks" in consulta or "sessions" in consulta or "new_customer_revenue" in consulta
+                    or "net_discount_amount_for_product" in consulta)
         self.llamadas.append((tabla, "completa" if completa else "minima", desde, hasta, moneda, llave, shop))
         if self.error:
             raise self.error
