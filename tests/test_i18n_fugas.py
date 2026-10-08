@@ -345,7 +345,7 @@ def _experimento_con_pieza(base_temporal):
 
 
 def _meta_conectada(app_i18n, monkeypatch):
-    """Con Meta conectada «Nuevo experimento» pinta sus pasos (sin conectar, solo el aviso de conectar)."""
+    """Con Meta conectada «Nuevo experimento» pinta sus pasos (sin conectar vuelve a la pestaña, desde 2026-10-08)."""
     monkeypatch.setattr(app_i18n.meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
 
 
@@ -411,7 +411,7 @@ def test_etiquetas_de_estado_en_ingles(admin_en, base_temporal):
 
 def test_flash_de_experimentos_en_ingles(admin_en):
     admin_en.post("/cliente/acme/experimentos/probar", data={}, headers=MISMO_ORIGEN)
-    assert "Connect Meta in Experiments before testing pieces." in html_de(admin_en, "/cliente/acme")
+    assert "Connect Meta in Settings › Connections before testing pieces." in html_de(admin_en, "/cliente/acme")
 
 
 def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypatch):
@@ -547,9 +547,10 @@ def test_catalogo_producto_con_doctrina_en_ingles(admin_en):
     assert not fugas, fugas[:15]
 
 
-def test_experimentos_doctrina_en_ingles(admin_en):
+def test_experimentos_doctrina_en_ingles(admin_en, app_i18n, monkeypatch):
     """Merge de main (doctrina, bloque 3): las constantes del aviso del paso 3
     salen en inglés (el marcado lo cubre test_experimentos_admin_en_ingles)."""
+    _meta_conectada(app_i18n, monkeypatch)
     html = html_de(admin_en, "/cliente/acme/experimentos/nuevo")
     assert "Doctrine: {n} to improve" in html
     assert "chosen pieces have points to improve according to the doctrine" in html

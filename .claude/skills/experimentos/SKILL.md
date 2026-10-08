@@ -87,6 +87,19 @@ updates. Notifications (`notificaciones.avisar`: propuesta, ganador, rechazo_met
 error_lanzamiento) go by SMTP when `SMTP_HOST` is set and the project has a
 `correo_notificaciones`; otherwise they are only eventos.
 
+**Sin Meta conectado** (2026-10-08, pedido de Daniel: happyflops tenía Triple Whale y no Meta, y la pestaña le mostraba
+la tabla vacía y una galería que dejaba marcar piezas que después no se podían lanzar): `ver_cliente` pone
+`exp_sin_meta = not meta_conectado and not experimentos.hay_historial(cliente)` (un EXISTS: experimento no legado o
+anuncio suelto; con Meta conectado ni se consulta). Con `exp_sin_meta` la pestaña es SOLO la tarjeta `#exp-sin-meta`
+(«Conecta Meta…» o, con `estado == "roto"`, «La conexión con Meta se cortó»; una línea más si hay Triple Whale) con el
+botón a Configuración › Conexiones › Meta (`data-ir-tab="settings" data-ancla="config-meta"`): ni resultados, ni
+reglas del motor, ni CSV, y Configuración esconde su enlace a las reglas. Con historial y sin Meta se ven los
+resultados con un aviso, pero ningún «+ Nuevo experimento» (tampoco en `_exp_resultados.html` ni el `data-url-nuevo`).
+`exp_nuevo` sin Meta redirige a `#experimentos` (no pinta la galería) y `exp_probar`/`exp_crear` avisan «Conecta Meta en
+Configuración › Conexiones…». Y la página del proyecto abre en Crear en vez de Experimentos (`cliente.html`), también
+si Experimentos quedó como la pestaña recordada; un `#experimentos` explícito la sigue abriendo. Pruebas:
+`tests/test_experimentos_sin_meta.py`.
+
 There is also NO Campañas tab any more: `_tab_ads.html` is gone, `nueva_campana`/`publicar_ad`
 are no-ops that flash and redirect, and the legacy "Anuncios sueltos" (Forja's ads) render
 read-only inside the centro de resultados, plegados en su «Historial» (`_anuncios_sueltos.html`: KPIs, pausar/activar,
