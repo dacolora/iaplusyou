@@ -474,11 +474,12 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
         except Exception as exc:
             sin_volver = []
             for adset_id in cambiados:
+                if centavos_antes <= 0:   # sin valor anterior conocido no hay a qué volver
+                    sin_volver.append(adset_id)
+                    continue
                 try:
-                    if centavos_antes <= 0:
-                        raise ValueError("sin presupuesto anterior")
                     meta_adset.actualizar_presupuesto(adset_id, centavos_antes)
-                except Exception:
+                except Exception:  # noqa: BLE001 — mejor esfuerzo: se avisa abajo
                     sin_volver.append(adset_id)
             if sin_volver:
                 mensaje = gettext("No se pudo cambiar el presupuesto en todos los conjuntos del país; "
