@@ -775,12 +775,20 @@ msgid "%(nombre)s (%(pais)s): anuncio %(estado_meta)s en Meta, el decisor no la 
 msgstr "%(nombre)s (%(pais)s): ad %(estado_meta)s on Meta, the decision engine won't evaluate it until it's fixed or replaced."
 
 #, python-format
+msgid "%(nombre)s (%(pais)s): diagnóstico no disponible (el mismo de la otra tienda)."
+msgstr "%(nombre)s (%(pais)s): diagnosis not available (same as the other store)."
+
+#, python-format
 msgid "%(nombre)s (%(pais)s): diagnóstico no disponible."
 msgstr "%(nombre)s (%(pais)s): diagnosis not available."
 
 #, python-format
 msgid "%(nombre)s (%(pais)s): diagnóstico no disponible: %(error)s"
 msgstr "%(nombre)s (%(pais)s): diagnosis not available: %(error)s"
+
+#, python-format
+msgid "%(nombre)s (%(pais)s): el mismo diagnóstico de la otra tienda: %(causas)s — siguiente: %(que)s."
+msgstr "%(nombre)s (%(pais)s): same diagnosis as the other store: %(causas)s — next: %(que)s."
 
 #, python-format
 msgid "%(nombre)s (%(pais)s): escalado ya pedido en esta pasada."
@@ -4855,8 +4863,15 @@ msgid "El presupuesto debe ser un número."
 msgstr "The budget must be a number."
 
 #, python-format
+msgid "El presupuesto diario de %(pais)s se reparte entre %(n)s tiendas y cada parte tiene que alcanzar el mínimo de Meta (%(minimo)s %(moneda)s)."
+msgstr "%(pais)s's daily budget is split across %(n)s stores and each share has to reach Meta's minimum (%(minimo)s %(moneda)s)."
+
+#, python-format
 msgid "El presupuesto diario de cada país se reparte entre %(n)s tiendas y cada parte tiene que alcanzar el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s."
 msgstr "Each country's daily budget is split across %(n)s stores and each share has to reach Meta's minimum (%(minimo)s %(moneda)s) in: %(paises)s."
+
+msgid "El presupuesto diario de cada país se reparte entre las tiendas."
+msgstr "Each country's daily budget is split across the stores."
 
 msgid "El presupuesto diario debe ser mayor que cero."
 msgstr "The daily budget must be greater than zero."
@@ -10155,6 +10170,12 @@ msgstr "I couldn't calculate the 30-day series."
 
 msgid "No se pudo calcular las alertas."
 msgstr "I couldn't calculate the alerts."
+
+msgid "No se pudo cambiar el presupuesto en todos los conjuntos del país; quedó a medias: revisa los conjuntos en Meta."
+msgstr "Couldn't change the budget on all of the country's ad sets; it was left half-changed: check the ad sets on Meta."
+
+msgid "No se pudo cambiar el presupuesto en todos los conjuntos del país; se dejó como estaba."
+msgstr "Couldn't change the budget on all of the country's ad sets; it was left as it was."
 
 msgid "No se pudo cargar el catálogo. Revisa tu conexión e intenta de nuevo."
 msgstr "Couldn't load the catalog. Check your connection and try again."
