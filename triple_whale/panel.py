@@ -369,10 +369,12 @@ def elegir_analisis(a, filas, alcance=None, vivo=False):
     lista = bool(mismo and mismo["estado"] == "lista")
     viejo = lista and es_viejo(a, mismo, alcance)
     fresco = lista and not viejo
+    en_curso = bool(mismo and mismo["estado"] in ("en_cola", "analizando"))
     otro_alcance = mismo is None and otro is not None
     return {"mismo": mismo, "otro": otro, "fila": mismo or otro, "viejo": viejo, "fresco": fresco,
             "otro_alcance": otro_alcance, "vivo": bool(vivo),
-            "ofrecer": not vivo and a["veredicto"] != "sin_datos" and not fresco and not otro_alcance}
+            "ofrecer": (not vivo and a["veredicto"] != "sin_datos" and not fresco and not otro_alcance
+                        and not en_curso)}
 
 
 def medio_tarjeta(a):
@@ -396,16 +398,24 @@ def medio_tarjeta(a):
     return {"enlace": enlace} if enlace else {}
 
 
-def enriquecer(cliente, tarjetas, ev, analisis_por_clave, alcance=None):
+def _elegir(cliente, a, analisis_por_clave, vivos, alcance):
+    job = tareas_tw.job_id_analisis(cliente, a["canal"], a["ad_id"])
+    return job, elegir_analisis(a, analisis_por_clave.get((a["canal"], a["ad_id"])), alcance, vivo=job in vivos)
+
+
+def enriquecer(cliente, tarjetas, ev, analisis_por_clave, alcance=None, vivos=None):
     """Lo que cada tarjeta necesita además de la evaluación, sin consultas por tarjeta: creativos, piezas de Creatv,
-    análisis, barras vivas, precio, costo por venta del canal y piezas nacidas de la versión mejorada. `alcance`
-    ({"tienda_id", "desde", "hasta"}) decide si un análisis listo es viejo o de otro alcance (spec §6.6)."""
+    análisis, barras vivas, precio, costo por venta del canal y piezas nacidas de la versión mejorada.
+    `analisis_por_clave` = `datos.analisis_de_anuncios` (todas las filas de cada anuncio) y `elegir_analisis` decide
+    cuál cuenta en `alcance` ({"tienda_id", "canal", "desde", "hasta"}, spec §6.6). `vivos` = los job ids vivos si
+    quien llama ya los leyó (la galería), para no leerlos dos veces."""
     claves = [(a["canal"], a["ad_id"]) for a in tarjetas]
     creativos = datos.creativos(cliente, claves)
     meta_ids = [a["ad_id"] for a in tarjetas if a["canal"] == triple_whale.CANAL_META]
     creatv = datos.piezas_creatv(cliente, meta_ids)
-    vivos = tareas_tw.analisis_vivos(cliente)
-    listos = [f["id"] for f in analisis_por_clave.values() if f["estado"] == "lista"]
+    vivos = tareas_tw.analisis_vivos(cliente) if vivos is None else vivos
+    elegidos = {(a["canal"], a["ad_id"]): _elegir(cliente, a, analisis_por_clave, vivos, alcance) for a in tarjetas}
+    listos = [e["fila"]["id"] for _, e in elegidos.values() if e["fila"] and e["fila"]["estado"] == "lista"]
     hechas = datos.piezas_de_analisis(cliente, listos)
     cpa_canal = {c["canal"]: (c["gasto"] / c["pedidos"] if c["pedidos"] else None) for c in ev["cuenta"]["canales"]}
     for a in tarjetas:
@@ -413,33 +423,25 @@ def enriquecer(cliente, tarjetas, ev, analisis_por_clave, alcance=None):
         a["creativo"] = creativos.get(k) or {}
         a["creatv"] = creatv.get(a["ad_id"]) if a["canal"] == triple_whale.CANAL_META else None
         a["medio"] = medio_tarjeta(a)
-        fila = analisis_por_clave.get(k)
+        job, e = elegidos[k]
+        fila = e["fila"]
         a["analisis"] = fila
-        lista = bool(fila and fila["estado"] == "lista")
-        a["analisis_viejo"] = lista and es_viejo(a, fila, alcance)
-        a["analisis_otro_alcance"] = lista and not mismo_alcance(fila, alcance)
-        job = tareas_tw.job_id_analisis(cliente, a["canal"], a["ad_id"])
-        a["job_analisis"] = job if job in vivos else None
+        a["analisis_viejo"] = e["viejo"]
+        a["analisis_otro_alcance"] = e["otro_alcance"]
+        a["ofrecer_analisis"] = e["ofrecer"]                # el botón principal pagado: la misma regla que el lote
+        a["job_analisis"] = job if e["vivo"] else None
         a["precio_analisis"] = gastos.estimar("analisis_anuncio_tw", segundos=a["creativo"].get("duracion_s"))
         a["cpa_canal"] = cpa_canal.get(a["canal"])
         a["piezas_mejora"] = hechas.get(fila["id"], []) if fila else []
     return tarjetas
 
 
-def _fresco_o_vivo(a, fila, alcance=None):
-    """En cola, corriendo, o listo y no viejo (uno de otro alcance cuenta como fresco: no se vuelve a ofrecer)."""
-    if not fila:
-        return False
-    if fila["estado"] in ("en_cola", "analizando"):
-        return True
-    return fila["estado"] == "lista" and not es_viejo(a, fila, alcance)
-
-
 def galeria(cliente, ev, veredicto="", pagina=1, alcance=None):
     """Una página de la galería (spec §5.2) y el lote «Analizar los N que más gastaron» (§6.4): los N de más gasto
-    del filtro, mirando TODOS sus anuncios (no solo los primeros), que no tengan un análisis fresco ni en curso. Lee
-    los análisis de la página y de los candidatos en una consulta por tramo de claves (`datos.ultimos_analisis`).
-    `alcance` = {"tienda_id", "desde", "hasta"} del que se mira (ver `es_viejo`)."""
+    del filtro, mirando TODOS sus anuncios (no solo los primeros), a los que su tarjeta les ofrece el botón principal
+    (`elegir_analisis`: sin análisis fresco de este alcance, sin uno listo de otro, sin tarea viva). Lee los análisis
+    de la página y de los candidatos en una consulta por tramo de claves (`datos.analisis_de_anuncios`).
+    `alcance` = {"tienda_id", "canal", "desde", "hasta"} del que se mira (ver `mismo_alcance`)."""
     veredicto = veredicto if veredicto in FILTROS_GALERIA else ""
     try:
         pagina = max(1, int(pagina or 1))
@@ -449,9 +451,10 @@ def galeria(cliente, ev, veredicto="", pagina=1, alcance=None):
     tarjetas = lista[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]
     candidatos = [a for a in lista if a["veredicto"] != "sin_datos"]
     claves = {(a["canal"], a["ad_id"]) for a in tarjetas + candidatos}
-    por_clave = datos.ultimos_analisis(cliente, list(claves))
-    enriquecer(cliente, tarjetas, ev, por_clave, alcance)
-    elegibles = [a for a in candidatos if not _fresco_o_vivo(a, por_clave.get((a["canal"], a["ad_id"])), alcance)]
+    por_clave = datos.analisis_de_anuncios(cliente, list(claves))
+    vivos = tareas_tw.analisis_vivos(cliente)
+    enriquecer(cliente, tarjetas, ev, por_clave, alcance, vivos=vivos)
+    elegibles = [a for a in candidatos if _elegir(cliente, a, por_clave, vivos, alcance)[1]["ofrecer"]]
     lote = elegibles[:N_LOTE]
     unidad = gastos.estimar("analisis_anuncio_tw")["usd"] or 0
     conteo = {f: len(filtrar(ev["anuncios"], f)) for f in FILTROS_GALERIA}

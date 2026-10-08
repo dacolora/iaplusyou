@@ -95,7 +95,9 @@
       {% elif fila and fila.estado in ('en_cola', 'analizando') %}
       <p class="vacio tw-ia-frase">{{ _('En cola…') }}</p>
       {% endif %}
-      {% if not a.job_analisis and a.veredicto != 'sin_datos' and (not fila or fila.estado == 'error' or a.analisis_viejo) %}
+      {#- `ofrecer_analisis` (panel.elegir_analisis) es la misma regla que decide el lote: sin tarea viva, con datos, sin
+          uno fresco de este alcance ni uno listo de otro. -#}
+      {% if a.ofrecer_analisis %}
       {% set precio = a.precio_analisis.texto if a.precio_analisis else _('precio no disponible') %}
       {% set etiqueta = _('Intentar otra vez') if fila and fila.estado == 'error' else (_('Analizar otra vez') if fila else _('Cómo mejorarlo')) %}
       <form method="post" class="tw-analizar" data-tw-async

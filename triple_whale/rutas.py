@@ -167,7 +167,7 @@ def tarjeta(cliente, canal, ad_id):
              None)
     if a is None:
         abort(404)
-    panel.enriquecer(cliente, [a], alc["ev"], datos.ultimos_analisis(cliente, [(canal, ad_id)]), alcance=alc)
+    panel.enriquecer(cliente, [a], alc["ev"], datos.analisis_de_anuncios(cliente, [(canal, ad_id)]), alcance=alc)
     return render_template("_tw_galeria_fragmento.html", modo="tarjeta", a=a, **_contexto_galeria(cliente, alc))
 
 
@@ -235,7 +235,7 @@ def analizar_anuncio(cliente, canal, ad_id):
         abort(404)
     ok, mensaje = _pedir_analisis(cliente, alc, a)
     if _quiere_json():
-        panel.enriquecer(cliente, [a], alc["ev"], datos.ultimos_analisis(cliente, [(canal, ad_id)]), alcance=alc)
+        panel.enriquecer(cliente, [a], alc["ev"], datos.analisis_de_anuncios(cliente, [(canal, ad_id)]), alcance=alc)
         html = render_template("_tw_galeria_fragmento.html", modo="tarjeta", a=a, **_contexto_galeria(cliente, alc))
         return {"ok": ok, "mensaje": mensaje, "html": html}
     flash(mensaje, "ok" if ok else "warn")

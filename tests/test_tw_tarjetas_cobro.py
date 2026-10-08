@@ -143,3 +143,73 @@ def test_una_pestana_vieja_no_paga_otra_vez_un_analisis_fresco(app):  # noqa: F8
     [fila] = _filas("p1")
     datos.actualizar_analisis(fila["id"], foto=dict(fila["foto"], m=dict(fila["foto"]["m"], gasto=1.0)))
     assert _analizar(app, "p1", json=True).get_json()["ok"] and _n_filas() == 2
+
+
+# ------------------------------------------------------------------- A2: todos los análisis del anuncio ---
+
+def test_ida_y_vuelta_entre_periodos_no_vuelve_a_ofrecer(app):  # noqa: F811
+    """7 días → 30 días → 7 días: el de 30 (más nuevo) no esconde el de 7, que sigue fresco."""
+    _conectar()
+    _sembrar_con_snapchat()
+    _analizar(app, "p1", dias="7")
+    _el_worker_termino("La de siete días.")
+    _analizar(app, "p1", dias="30")                       # «Analizar con estos datos» en 30 días
+    _el_worker_termino("La de treinta días.")
+    assert _n_filas() == 2
+    html = _tarjeta(app, "p1", dias="7")
+    assert "La de siete días." in html and "La de treinta días." not in html
+    assert "Analizado con los datos del" not in html and "Analizar con estos datos" not in html
+    assert "Cómo mejorarlo" not in html and "Analizar otra vez" not in html
+    alc = panel.alcance("acme", 7)
+    assert ("facebook-ads", "p1") not in panel.galeria("acme", alc["ev"], alcance=alc)["lote"]["elegibles"]
+    d = _analizar(app, "p1", dias="7", json=True).get_json()
+    assert d["ok"] is False and _n_filas() == 2
+    assert "La de treinta días." in _tarjeta(app, "p1", dias="30")
+
+
+def test_el_error_de_otro_alcance_no_ofrece_intentar_otra_vez(app):  # noqa: F811
+    """Uno fresco de 7 días y uno de 30 que falló después: en 7 se ve el de 7, sin «Intentar otra vez» ni lote."""
+    _conectar()
+    _sembrar_con_snapchat()
+    _analizar(app, "p1", dias="7")
+    _el_worker_termino("La de siete días.")
+    alc30 = panel.alcance("acme", 30)
+    error = datos.crear_analisis("acme", alc30["tienda_id"], "facebook-ads", "p1", alc30["desde"], alc30["hasta"],
+                                 "USD", {})
+    datos.actualizar_analisis(error, estado="error", error="Claude no respondió a tiempo.")
+    html = _tarjeta(app, "p1", dias="7")
+    assert "La de siete días." in html and "Intentar otra vez" not in html and "Claude no respondió" not in html
+    alc7 = panel.alcance("acme", 7)
+    assert ("facebook-ads", "p1") not in panel.galeria("acme", alc7["ev"], alcance=alc7)["lote"]["elegibles"]
+    # En 30 días ese error sí es el suyo.
+    assert "Intentar otra vez" in _tarjeta(app, "p1", dias="30")
+    # Y un anuncio cuyo único análisis es un error de otro alcance se ve como nuevo: «Cómo mejorarlo».
+    solo_error = datos.crear_analisis("acme", alc30["tienda_id"], "facebook-ads", "p2", alc30["desde"],
+                                      alc30["hasta"], "USD", {})
+    datos.actualizar_analisis(solo_error, estado="error", error="Claude no respondió a tiempo.")
+    html = _tarjeta(app, "p2", dias="7")
+    assert "Cómo mejorarlo" in html and "Intentar otra vez" not in html and "Claude no respondió" not in html
+    assert ("facebook-ads", "p2") in panel.galeria("acme", alc7["ev"], alcance=alc7)["lote"]["elegibles"]
+
+
+def test_elegir_analisis():
+    a = {"veredicto": "perdedor", "m": {"gasto": 100.0}}
+    alc = {"tienda_id": 1, "canal": None, "desde": "2026-09-24", "hasta": "2026-09-30"}
+
+    def fila(i, estado, desde="2026-09-24", hasta="2026-09-30", veredicto="perdedor"):
+        return {"id": i, "estado": estado, "tienda_id": 1, "desde": desde, "hasta": hasta,
+                "foto": {"veredicto": veredicto, "m": {"gasto": 100.0}}}
+    fresco7, error30 = fila(1, "lista"), fila(2, "error", desde="2026-09-01")
+    lista30 = fila(3, "lista", desde="2026-09-01")
+    e = panel.elegir_analisis(a, [error30, fresco7], alc)
+    assert e["fila"] is fresco7 and e["fresco"] and not e["ofrecer"] and not e["otro_alcance"]
+    e = panel.elegir_analisis(a, [lista30, error30], alc)
+    assert e["fila"] is lista30 and e["otro_alcance"] and not e["ofrecer"]
+    e = panel.elegir_analisis(a, [error30], alc)
+    assert e["fila"] is None and e["ofrecer"]
+    viejo = fila(4, "lista", veredicto="ganador")
+    e = panel.elegir_analisis(a, [lista30, viejo], alc)
+    assert e["fila"] is viejo and e["viejo"] and e["ofrecer"]
+    e = panel.elegir_analisis(a, [], alc, vivo=True)
+    assert not e["ofrecer"] and e["vivo"]
+    assert not panel.elegir_analisis(dict(a, veredicto="sin_datos"), [], alc)["ofrecer"]
