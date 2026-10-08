@@ -221,7 +221,7 @@ def _adsets_de_pais(p):
     experimentos de Instalaciones de la app (`meta_adsets`, orden ios, android)
     o el único conjunto del país (`meta_adset_id`) en los demás."""
     if p.get("meta_adsets"):
-        return [i for i in (p["meta_adsets"] or {}).values() if i]
+        return [i for i in p["meta_adsets"].values() if i]
     return [p["meta_adset_id"]] if p.get("meta_adset_id") else []
 
 
@@ -559,7 +559,10 @@ def activar_pieza(cliente, ep_id):
     'pausado' (queda 'corriendo' mientras otro país siga activo). Mirar solo
     ex['estado'] dejaría ese conjunto en PAUSED en Meta con el anuncio ACTIVE
     encima — sin entrega — igual que hace cambiar_estado con pais=, que
-    reactiva el conjunto incondicionalmente dentro de esa rama."""
+    reactiva el conjunto incondicionalmente dentro de esa rama.
+    Excepción, Instalaciones de la app: cada plataforma tiene su propio
+    conjunto, y se reactiva siempre el de la pieza (aunque el país figure
+    «activo» por la pieza de la otra plataforma)."""
     ex, pz = _experimento_de_pieza(cliente, ep_id)
     if ex["estado"] not in ("pausado", "corriendo", "decidido"):
         raise ValueError(gettext("Ese experimento todavía no está en Meta."))

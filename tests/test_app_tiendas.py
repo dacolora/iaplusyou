@@ -9,6 +9,9 @@ def test_plataforma_de_url():
     assert t.plataforma_de_url("http://play.google.com/store/apps/details?id=com.x") is None
     assert t.plataforma_de_url("https://tienda.co/p") is None
     assert t.plataforma_de_url("") is None
+    for falsa in ("https://apps.apple.com.evil.com/x", "https://play.google.com@evil.com/x",
+                  "https://evil.com/play.google.com"):
+        assert t.plataforma_de_url(falsa) is None
 
 
 def test_validar_urls_devuelve_solo_las_presentes():

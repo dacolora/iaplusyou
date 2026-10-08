@@ -167,10 +167,17 @@ def cargar_app_anunciada(cliente):
     return (datos or {}).get("app_id") or None
 
 
-def guardar_app_anunciada(cliente, app_id):
+def validar_app_anunciada(app_id):
+    """Devuelve el App ID limpio o levanta MetaConexionError. Solo dígitos
+    ASCII: `isdigit()` solo acepta también «٣» o «²»."""
     valor = str(app_id or "").strip()
-    if not (valor.isdigit() and 5 <= len(valor) <= 20):
+    if not (valor.isascii() and valor.isdigit() and 5 <= len(valor) <= 20):
         raise MetaConexionError(gettext("El App ID de Meta son solo números (lo encuentras en Meta for Developers)."))
+    return valor
+
+
+def guardar_app_anunciada(cliente, app_id):
+    valor = validar_app_anunciada(app_id)
     _escribir_atomico(_path_app_anunciada(cliente), {"app_id": valor})
 
 
