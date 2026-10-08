@@ -55,7 +55,7 @@ movimiento_saldo                         -- el libro; nunca se borra ni se edita
   recarga_id       Integer     NULL      -- recarga / anulacion
   job_id           String(160) NULL      -- el trabajo del worker que lo originó (§5)
   tarea_id         Integer     NULL
-  concepto         String(120) NOT NULL  -- en el idioma del proyecto al escribirlo
+  concepto         String(120) NOT NULL  -- código (tipo de gasto, recarga_bold…); se traduce al pintar
   detalle          String(300)
   usuario          String(80)  NULL      -- quién hizo un ajuste o una recarga manual
   extra            JSON
@@ -122,9 +122,8 @@ por culpa del cobro.
 2. `milesimas = ceil(usd × margen × 1000)`, con el margen vigente al primer registro del gasto (queda en
    `extra.margen`).
 3. Si `entregado` es falso (§3.4) → escribe `no_cobrado` con `milesimas = 0` y en `extra.precio` lo que habría costado.
-4. Si no → escribe `cobro` con `−milesimas`, el concepto (nombre del tipo de gasto en el idioma del proyecto, §9) y el
+4. Si no → escribe `cobro` con `−milesimas`, el concepto (el código del tipo de gasto) y el
    `job_id`/`tarea_id` del contexto (§5).
-5. Si la tarea de ese gasto ya terminó en error (puede pasar si el registro llega tarde) → escribe además el `reverso`.
 
 ### 3.2 Proyectos que no cobraban
 
@@ -253,9 +252,10 @@ Configuración › Gasto muestra **solo al admin** (§7).
   formatearse con `gastos.texto_precio(usd)`, que multiplica por el margen del proyecto de la petición en curso
   (`flask.g.margen_precio`, fijado por un `before_request` a partir del `<cliente>` de la URL; fuera de una petición o en
   un proyecto que no cobra, el margen es 1). Agrega también `usd_precio`.
-- Crear y los demás formularios que calculan en el navegador con `data-usd-*`: `base.html` expone
-  `data-margen-precio` en `<body>` y la función común que formatea «≈ US$» multiplica por él. El plan lista cada
-  `data-usd-*` y cada «≈» armado en JS.
+- Crear y los demás formularios que calculan en el navegador (`data-usd`, `data-usd-seg`, `data-usd-borrador`,
+  `data-recargo`, `data-usd-caracter` en `_tab_creativeflowplus.html`, `_crear_audios.html`, `_hablado_panel.html`,
+  `_crear_detalle.html`) reciben el valor ya multiplicado desde el servidor con el filtro Jinja **`|precio`**
+  (`usd × g.margen_precio`). Igual las tarifas visibles («$0,050/s»). El JavaScript no cambia.
 - Prueba de humo obligatoria: renderiza las pestañas del proyecto como cliente de un proyecto que cobra con margen 1,5 y
   un costo conocido, y falla si aparece la cifra del costo en lugar de la del precio.
 
