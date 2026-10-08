@@ -30,7 +30,7 @@
     {% endif %}
     <label class="campo-label">{{ _('Periodo') }}
       <select data-tw-param="dias">
-        {% for d in tw.periodos %}<option value="{{ d }}" {% if d == tw.dias %}selected{% endif %}>{{ _('Últimos %(n)s días', n=d) }}</option>{% endfor %}
+        {% for d in tw.periodos %}<option value="{{ d }}" {% if d == tw.dias %}selected{% endif %}>{{ _('Últimos %(n)s días', n=d) if d else _('Desde el inicio') }}</option>{% endfor %}
       </select>
     </label>
     {% if tw.canales | length > 1 %}
@@ -85,7 +85,7 @@
 {% if tw.tienda and not tw.canal %}
 {% set t = tw.tienda %}
 <section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Tu tienda') }}</h3><small class="vacio">{{ _('Del %(desde)s al %(hasta)s, contra los %(n)s días anteriores', desde=tw.desde, hasta=tw.hasta, n=tw.dias) }}</small></div>
+  <div class="tb-seccion-cab"><h3>{{ _('Tu tienda') }}</h3><small class="vacio">{% if tw.dias %}{{ _('Del %(desde)s al %(hasta)s, contra los %(n)s días anteriores', desde=tw.desde, hasta=tw.hasta, n=tw.dias) }}{% else %}{{ _('Del %(desde)s al %(hasta)s: todo lo copiado de Triple Whale', desde=tw.desde, hasta=tw.hasta) }}{% endif %}</small></div>
   <div class="tb-tiles">
     <div class="kpi-tile"><span>{{ _('Ingresos') }}</span><strong>{{ t.ingresos | dinero(moneda) }}</strong><small>{{ t.variacion.get('ingresos') | tw_var }}</small></div>
     <div class="kpi-tile"><span>{{ _('Pedidos') }}</span><strong>{{ t.pedidos | tw_num }}</strong><small>{{ t.variacion.get('pedidos') | tw_var }}</small></div>
@@ -100,10 +100,10 @@
 {# ---------- por tienda (solo «Todas» con 2+ tiendas) ---------- #}
 {% if tw.por_tienda %}
 <section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Por tienda') }}</h3><small class="vacio">{{ _('Cada país contra sus %(n)s días anteriores: dónde conviene poner el presupuesto.', n=tw.dias) }}</small></div>
+  <div class="tb-seccion-cab"><h3>{{ _('Por tienda') }}</h3><small class="vacio">{% if tw.dias %}{{ _('Cada país contra sus %(n)s días anteriores: dónde conviene poner el presupuesto.', n=tw.dias) }}{% else %}{{ _('Cada país desde el inicio: dónde conviene poner el presupuesto.') }}{% endif %}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla tw-por-tienda">
-      <thead><tr><th>{{ _('Tienda') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Gasto en publicidad') }}</th><th>MER</th><th>{{ _('vs. periodo anterior') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Tienda') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Gasto en publicidad') }}</th><th>MER</th>{% if tw.dias %}<th>{{ _('vs. periodo anterior') }}</th>{% endif %}</tr></thead>
       <tbody>
         {% for f in tw.por_tienda %}
         <tr>
@@ -112,7 +112,7 @@
           <td>{{ f.actual.pedidos | tw_num }}</td>
           <td>{{ f.actual.gasto | dinero(moneda) }}</td>
           <td>{% if f.mer %}{{ f.mer | roas }}×{% else %}—{% endif %}</td>
-          <td>{{ f.variacion_ingresos | tw_var or '—' }}</td>
+          {% if tw.dias %}<td>{{ f.variacion_ingresos | tw_var or '—' }}</td>{% endif %}
         </tr>
         {% endfor %}
       </tbody>
@@ -220,7 +220,7 @@
   <div class="tb-seccion-cab"><h3>{{ _('Lo que más se vende') }}</h3><small class="vacio">{{ _('Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos.') }}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla">
-      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('%% de la tienda') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Unidades') }}</th><th>{{ _('vs. periodo anterior') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('%% de la tienda') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Unidades') }}</th>{% if tw.dias %}<th>{{ _('vs. periodo anterior') }}</th>{% endif %}</tr></thead>
       <tbody>
         {% for p in tw.productos %}
         <tr>
@@ -233,7 +233,7 @@
           <td>{{ p.pct_ingresos | tw_pct(0) }}</td>
           <td>{{ p.pedidos | tw_num }}</td>
           <td>{{ p.unidades | tw_num }}</td>
-          <td>{{ p.variacion | tw_var or '—' }}</td>
+          {% if tw.dias %}<td>{{ p.variacion | tw_var or '—' }}</td>{% endif %}
         </tr>
         {% endfor %}
       </tbody>

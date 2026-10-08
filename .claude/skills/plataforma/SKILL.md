@@ -132,10 +132,15 @@ guessing. Reads: `resumen_mes` (the month), `resumen_total` (everything since th
 `por_mes`, `historial`, `csv_mes` and `csv_todo` — Configuración › Gasto shows the month AND the total since the start
 with a month-by-month table and «Descargar CSV de todo» (`gasto_csv_todo`), and the admin panel card shows both figures
 (`admin.generacion_total`): on 2026-10-07 the screens only said «este mes» (US$ 66) and the US$ 200 of earlier months
-looked lost. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
-shown next to generation spend in its own currency. UI: sidebar chip "Este mes: US$ X
-generación · Y pauta" (context processor, template renders only, cached), Configuración ›
-Gasto (by type, history, CSV), Tablero tile, admin panel column.
+looked lost. **Since 2026-10-08 every spend figure is a total since the start, never the month** (Daniel: «quiero que
+todas las métricas aparezcan en la totalidad, no por mes, porque confunden a mis clientes»): the sidebar chip says
+«Gasto total: US$ X generación · Y pauta» (`_chip_gasto(gastos.resumen_total, _pauta_mes(ctx, "total"))`, context processor,
+cached), Configuración › Gasto shows «Generación total», «Pauta total», «Por tipo» since the start (`gastos.resumen_todo`),
+the history and ONE «Descargar CSV» (`gasto_csv_todo`; `/gasto/mes.csv` still answers but nothing links it), and the
+admin panel (`admin.resumen`, `desde=tablero.INICIO`) counts generation, ad spend and pieces since the start; only its
+«Historial» table and its CSV stay per month (bookkeeping for invoices). Meta spend is NOT in `gasto` — it comes from
+`metrica_snapshot` via `tablero` and is shown next to generation spend in its own currency. A new screen with money
+shows the total; do not bring back «este mes».
 
 **Cobros recuperados (2026-10-02, PND-109):** la identidad y la referencia del cobro original viajan en la predicción; una recuperación conserva ese id de tarea. Un gasto nuevo de música pertenece a la tarea que la obtuvo. Ver la regla de recuperación de `crear`.
 

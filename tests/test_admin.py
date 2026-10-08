@@ -41,30 +41,31 @@ def _pieza(db, cliente, estado="listo", creado_en="2026-09-05T10:00:00"):
             tipo="video", estado=estado, capas={}, extra={}))
 
 
-def test_generacion_del_mes_por_proyecto_y_por_tipo(admin, base_temporal):
+def test_generacion_desde_el_inicio_por_proyecto_y_por_tipo(admin, base_temporal):
     import gastos
     gastos.registrar("acme", "video", 1.3, "video:1", creado_en="2026-09-03T11:00:00")
     gastos.registrar("acme", "swap", 0.5, "swap:1", creado_en="2026-09-10T11:00:00")
-    gastos.registrar("acme", "video", 5.0, "video:ago", creado_en="2026-08-20T11:00:00")   # mes anterior
+    gastos.registrar("acme", "video", 5.0, "video:ago", creado_en="2026-08-20T11:00:00")   # mes anterior: cuenta
     gastos.registrar("beta", "final", 0.2, "final:1", creado_en="2026-09-15T11:00:00")
 
     r = admin.resumen(["acme", "beta"], ahora_iso=AHORA)
 
+    # Desde 2026-10-08 el panel cuenta todo desde el inicio (Daniel: el mes confundía).
     acme, beta = r["proyectos"]
-    assert acme["id"] == "acme" and acme["generacion_usd"] == 1.8 and acme["cobros"] == 2
-    assert acme["por_tipo"] == {"video": 1.3, "swap": 0.5}
+    assert acme["id"] == "acme" and acme["generacion_usd"] == 6.8 and acme["cobros"] == 3
+    assert acme["por_tipo"] == {"video": 6.3, "swap": 0.5}
     assert beta["generacion_usd"] == 0.2 and beta["por_tipo"] == {"final": 0.2}
-    assert r["totales"]["generacion_usd"] == 2.0 and r["totales"]["cobros"] == 3
-    assert r["totales"]["por_tipo"] == {"video": 1.3, "swap": 0.5, "final": 0.2}
+    assert r["totales"]["generacion_usd"] == 7.0 and r["totales"]["cobros"] == 4
+    assert r["totales"]["por_tipo"] == {"video": 6.3, "swap": 0.5, "final": 0.2}
     # Desde el inicio (2026-10-07): el mes anterior cuenta en el total, no en el mes.
     assert acme["generacion_total_usd"] == 6.8 and acme["cobros_total"] == 3
     assert beta["generacion_total_usd"] == 0.2 and beta["cobros_total"] == 1
     assert r["totales"]["generacion_total_usd"] == 7.0 and r["totales"]["cobros_total"] == 4
 
 
-def test_pauta_del_mes_incluye_anuncios_sueltos_por_moneda(admin, base_temporal):
+def test_pauta_desde_el_inicio_incluye_anuncios_sueltos_por_moneda(admin, base_temporal):
     _, ep_legado = _exp(base_temporal, "acme", moneda="COP", legado=True)
-    _snap(base_temporal, ep_legado, "2026-08-30T00:00:00", 1000)      # acumulado antes del mes: es la base
+    _snap(base_temporal, ep_legado, "2026-08-30T00:00:00", 1000)      # antes del mes: cuenta en el total
     _snap(base_temporal, ep_legado, "2026-09-14T02:08:14", 7226)
     _, ep_usd = _exp(base_temporal, "acme", moneda="USD")
     _snap(base_temporal, ep_usd, "2026-09-10T00:00:00", 12.5)
@@ -74,9 +75,9 @@ def test_pauta_del_mes_incluye_anuncios_sueltos_por_moneda(admin, base_temporal)
     r = admin.resumen(["acme", "beta"], ahora_iso=AHORA)
 
     acme, beta = r["proyectos"]
-    assert acme["pauta"] == {"COP": 6226.0, "USD": 12.5}
+    assert acme["pauta"] == {"COP": 7226.0, "USD": 12.5}
     assert beta["pauta"] == {"COP": 300.0}
-    assert r["totales"]["pauta"] == {"COP": 6526.0, "USD": 12.5}
+    assert r["totales"]["pauta"] == {"COP": 7526.0, "USD": 12.5}
 
 
 def test_piezas_experimentos_conexiones_y_actividad(admin, base_temporal):
@@ -84,7 +85,7 @@ def test_piezas_experimentos_conexiones_y_actividad(admin, base_temporal):
     _pieza(base_temporal, "acme", "listo", "2026-09-05T10:00:00")
     _pieza(base_temporal, "acme", "degradada", "2026-09-06T10:00:00")
     _pieza(base_temporal, "acme", "generando", "2026-09-07T10:00:00")   # aún no es una pieza generada
-    _pieza(base_temporal, "acme", "listo", "2026-08-07T10:00:00")       # mes anterior
+    _pieza(base_temporal, "acme", "listo", "2026-08-07T10:00:00")       # mes anterior: cuenta en el total
     _exp(base_temporal, "acme", legado=False, estado="corriendo")
     _exp(base_temporal, "acme", legado=True, estado="corriendo")        # anuncios sueltos: no es un experimento
     _exp(base_temporal, "acme", legado=False, estado="cerrado")
@@ -96,12 +97,12 @@ def test_piezas_experimentos_conexiones_y_actividad(admin, base_temporal):
     r = admin.resumen(["acme", "beta"], ahora_iso=AHORA)
 
     acme, beta = r["proyectos"]
-    assert acme["piezas_mes"] == 2 and beta["piezas_mes"] == 0
+    assert acme["piezas_mes"] == 3 and beta["piezas_mes"] == 0
     assert acme["experimentos_corriendo"] == 1 and beta["experimentos_corriendo"] == 0
     assert acme["meta"] == "conectado" and beta["meta"] == "sin_conectar"
     assert acme["tiendas"] == 1 and beta["tiendas"] == 0
     assert acme["ultima_actividad"] is not None and beta["ultima_actividad"] is None
-    assert r["totales"]["piezas_mes"] == 2 and r["totales"]["experimentos_corriendo"] == 1
+    assert r["totales"]["piezas_mes"] == 3 and r["totales"]["experimentos_corriendo"] == 1
 
 
 def test_aprobaciones_pendientes_desde_estado_videos(admin, monkeypatch):
@@ -180,8 +181,8 @@ def test_gasto_de_creatv_aparece_aparte_nunca_mezclado_con_proyectos(admin, base
     r = admin.resumen(["acme"], ahora_iso=AHORA)
 
     assert r["totales"]["generacion_usd"] == 1.0   # _creatv nunca se mezcla con el gasto de proyectos
-    assert r["totales"]["creatv_usd"] == 2.5 and r["totales"]["creatv_cobros"] == 1
-    assert r["totales"]["creatv_por_tipo"] == {"otro": 2.5}
+    assert r["totales"]["creatv_usd"] == 2.8 and r["totales"]["creatv_cobros"] == 2   # desde el inicio
+    assert r["totales"]["creatv_por_tipo"] == {"otro": 2.8}
     assert r["meses"][0]["mes"] == "2026-09" and r["meses"][0]["creatv"] == 2.5 and r["meses"][0]["total"] == 1.0
     assert r["meses"][1]["mes"] == "2026-08" and r["meses"][1]["creatv"] == 0.3 and r["meses"][1]["total"] == 0.0
 

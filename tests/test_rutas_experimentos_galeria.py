@@ -37,12 +37,11 @@ def test_galeria_lista_piezas_y_no_hay_formulario_viejo(app, base_temporal):
     assert 'data-pais="CO"' in html   # la final sabe su país para el reparto
 
 
-def test_galeria_sin_meta_no_deja_probar(app, monkeypatch, base_temporal):
+def test_galeria_sin_meta_no_se_muestra(app, monkeypatch, base_temporal):
     _pieza(base_temporal)
     monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
-    html = _html(app)
-    assert 'id="exp-galeria"' in html and "Conecta Meta arriba para probar" in html
-    assert 'action="/cliente/acme/experimentos/probar"' not in html
+    r = app["c"].get("/cliente/acme/experimentos/nuevo")
+    assert r.status_code == 302 and 'id="exp-galeria"' not in r.get_data(as_text=True)
 
 
 def test_arbol_pinta_miniatura_o_video(app, base_temporal):

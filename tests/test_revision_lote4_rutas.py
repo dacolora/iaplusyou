@@ -1,4 +1,3 @@
-import re
 import pytest
 from tests.test_rutas_resultados import _experimento, _pieza_en, _kpi_roas, AJAX, _proyectos_en_tmp  # noqa: F401
 from tests.test_rutas_experimentos import app  # noqa: F401
@@ -27,7 +26,7 @@ def test_sonda_pixel_sin_gasto_historial(app, base_temporal, atribucion):
     ex.snapshot(ep, {"impresiones": 1, "gasto": 0.0})
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
     hist = html[html.index('class="tb-tiles"'):]
-    tiles = hist[:hist.index('class="tb-meses')]
+    tiles = hist[:]
     assert '0,0×' not in tiles
     assert '<strong class="tb-sin-dato">—</strong>' in tiles
     assert '0,0×' not in hist
@@ -61,16 +60,13 @@ def test_pnd138_historial_meses_previos_comparables(app, base_temporal, monkeypa
     # Sin snapshots: no hay actividad; ni siquiera el Total pierde su ROAS.
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
     hist = html[html.index('class="tb-tiles"'):]
-    tiles = hist[:hist.index('class="tb-meses')]
+    tiles = hist[:]
     assert '<strong>3,0×</strong>' in tiles and 'ROAS no comparable' not in tiles
     ex.snapshot(ep2, dict(gasto=10, compras=1, ingresos=40000, fuente_ventas="tienda"), tomado_en="2026-09-12T08:00:00")
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
-    meses = html[html.index('class="tb-meses'):]
-    meses = meses[:meses.index('</table>')]
-    filas = re.findall(r'<tr[^>]*>(.*?)</tr>', meses, re.S)
-    for mes in ('julio 2026', 'agosto 2026'):
-        fila = next(f for f in filas if mes in f)
-        assert '<td class="num">3,0×</td>' in fila and 'ROAS no comparable' not in fila
+    # La tabla por mes que vigilaba esto se quitó el 2026-10-08 (solo totales); los meses previos los sigue
+    # cubriendo tablero.mes_a_mes en tests/test_tablero.py.
+    assert 'class="tb-meses' not in html
 
 
 def test_pnd139_centro_e_historial_cambio_de_fuente(app, base_temporal, monkeypatch):
@@ -96,8 +92,6 @@ def test_pnd139_centro_e_historial_cambio_de_fuente(app, base_temporal, monkeypa
     assert 'Las ventas cambiaron de fuente en este período' in _kpi_roas(html)
     hist = html[html.index('class="tb-tiles"'):]
     assert 'Las ventas cambiaron de fuente en este período' in hist
-    tiles = hist[:hist.index('class="tb-meses')]
+    tiles = hist[:]
     assert '<strong>—</strong>' in tiles and '<strong>None</strong>' not in tiles
-    meses = hist[hist.index('class="tb-meses'):]
-    septiembre = next(f for f in re.findall(r'<tr[^>]*>(.*?)</tr>', meses, re.S) if 'septiembre 2026' in f)
-    assert septiembre.count('—') >= 3
+    assert 'class="tb-meses' not in hist          # sin tabla por mes desde 2026-10-08
