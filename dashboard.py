@@ -373,6 +373,9 @@ app.register_blueprint(rutas_editor.bp)
 import hablado_rutas  # noqa: E402  (Crear › Anuncio hablado: panel, foto, voz y video)
 app.register_blueprint(hablado_rutas.bp)
 
+from cobros import rutas as cobros_rutas  # noqa: E402  (recargas del saldo con Bold y su webhook)
+app.register_blueprint(cobros_rutas.bp)
+
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
 # distintos podrían solaparse y pisarse las credenciales una a la otra — este
@@ -427,6 +430,12 @@ def _verificar_host():
 
 METODOS_QUE_ESCRIBEN = frozenset(("POST", "PUT", "PATCH", "DELETE"))
 
+# Los ÚNICOS POST que aceptan otro origen (cobros 7/11, spec 2026-10-08 §11):
+# el webhook de Bold lo manda el servidor de Bold, no un navegador nuestro. Su
+# protección es la firma HMAC del cuerpo (cobros.recargas.procesar_webhook), no
+# la cookie ni Sec-Fetch-Site. Por nombre de endpoint, nunca por prefijo de URL.
+ENDPOINTS_OTRO_ORIGEN = frozenset(("cobros.bold_webhook",))
+
 
 @app.before_request
 def _solo_mismo_origen():
@@ -436,8 +445,11 @@ def _solo_mismo_origen():
     un POST desde otro subdominio del mismo sitio ni el «login CSRF» (un
     formulario ajeno que inicia sesión con la cuenta del atacante). La app no
     recibe webhooks ni POST legítimos de otros sitios: los callbacks de OAuth
-    son GET."""
+    son GET. La única excepción, el webhook firmado de Bold, va en
+    ENDPOINTS_OTRO_ORIGEN."""
     if request.method not in METODOS_QUE_ESCRIBEN or _mismo_origen():
+        return None
+    if request.endpoint in ENDPOINTS_OTRO_ORIGEN:
         return None
     mensaje = gettext("Pedido rechazado: no viene de esta página.")
     if request.is_json or request.headers.get("X-Requested-With") == "fetch":
@@ -448,11 +460,12 @@ def _solo_mismo_origen():
 # Rutas de cuentas que deben funcionar aunque la sesión esté vencida o el
 # usuario ya no exista (verificar el correo o restablecer la contraseña se
 # abren desde un enlace, muchas veces sin sesión): el guard de sesión no las
-# cierra.
+# cierra. El webhook de Bold no tiene sesión (lo llama el servidor de Bold):
+# una cookie vieja que llegara con él no puede convertirlo en un 302.
 ENDPOINTS_SIN_GUARD_SESION = frozenset((
     "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
     "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
-    "cambiar_idioma", "salud_publica",
+    "cambiar_idioma", "salud_publica", "cobros.bold_webhook",
 ))
 
 

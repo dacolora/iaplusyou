@@ -691,6 +691,10 @@ msgid "%(n)s propuesta(s) pendiente(s)"
 msgstr "%(n)s proposal(s) pending"
 
 #, python-format
+msgid "%(n)s recargas revisadas"
+msgstr "%(n)s top-ups checked"
+
+#, python-format
 msgid "%(n)s referencia(s) agregada(s)."
 msgstr "%(n)s reference(s) added."
 
@@ -2678,6 +2682,38 @@ msgstr "White"
 
 msgid "Bloque del video (se repite en cada clip)"
 msgstr "Video block (repeats in every clip)"
+
+msgid "Bold anuló este pago y lo descontamos de tu saldo."
+msgstr "Bold voided this payment and we deducted it from your balance."
+
+#, python-format
+msgid "Bold anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de su saldo."
+msgstr "Bold voided top-up %(ref)s for %(cliente)s: we deducted %(monto)s from its balance."
+
+#, python-format
+msgid "Bold anuló una recarga de %(cliente)s"
+msgstr "Bold voided a top-up for %(cliente)s"
+
+#, python-format
+msgid "Bold no aceptó el pedido (HTTP %(codigo)s)"
+msgstr "Bold did not accept the request (HTTP %(codigo)s)"
+
+msgid "Bold no devolvió un link de pago válido"
+msgstr "Bold did not return a valid payment link"
+
+#, python-format
+msgid "Bold no pudo abrir el pago: %(motivo)s. Intenta de nuevo en un rato."
+msgstr "Bold could not open the payment: %(motivo)s. Try again in a while."
+
+#, python-format
+msgid "Bold no respondió el estado (HTTP %(codigo)s)"
+msgstr "Bold did not return the status (HTTP %(codigo)s)"
+
+msgid "Bold rechazó el pago. No se te cobró nada."
+msgstr "Bold declined the payment. You were not charged."
+
+msgid "Bold respondió algo que no es JSON"
+msgstr "Bold replied with something that is not JSON"
 
 msgid "Bolso o accesorio que se carga"
 msgstr "Bag or accessory that's carried"
@@ -5245,6 +5281,9 @@ msgstr "A Meta page id is digits only."
 msgid "El id del Business está en <em>Configuración del negocio › Información del negocio</em>."
 msgstr "The Business id is in <em>Business settings › Business info</em>."
 
+msgid "El link de pago venció sin pagarse."
+msgstr "The payment link expired without being paid."
+
 msgid ""
 "El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia\n"
 "  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.\n"
@@ -5281,6 +5320,9 @@ msgstr "The market has already seen similar promises (sophistication %(sof)s) an
 
 msgid "El momento del mes no es válido."
 msgstr "The moment of the month isn't valid."
+
+msgid "El monto tiene que ser un número distinto de 0, con hasta 2 decimales."
+msgstr "The amount must be a number other than 0, with up to 2 decimals."
 
 msgid "El motor espera a tener evidencia y después compara cada pieza con estas reglas. Vacío = el valor de fábrica (en gris)."
 msgstr "The engine waits until it has evidence, then compares each piece against these rules. Empty = the factory value (in gray)."
@@ -5509,6 +5551,9 @@ msgstr "The text “{texto}” ends up under the {plataforma} interface ({zona})
 #, python-brace-format
 msgid "El texto «{texto}» se sale del video: achícalo o baja su ancho."
 msgstr "The text “{texto}” goes off the video: shrink it or reduce its width."
+
+msgid "El tipo tiene que ser recarga o ajuste."
+msgstr "The type must be top-up or adjustment."
 
 #, python-format
 msgid "El token no ve el Business %(business)s (%(error)s). Revisa que el usuario del sistema pertenezca a ese Business Manager y tenga permiso business_management."
@@ -6933,6 +6978,9 @@ msgstr "This project doesn't have Meta connected — connect it in FlowMarketing
 msgid "Este proyecto no tiene registrada su app de Meta — hace falta para %(para_que)s."
 msgstr "This project hasn't registered its Meta app — it's needed to %(para_que)s."
 
+msgid "Este proyecto no usa saldo prepagado."
+msgstr "This project does not use a prepaid balance."
+
 msgid "Este proyecto tiene su propia conexión con Meta. Pasarlo a modo agencia la guarda como respaldo (se restaura con «Volver a propia») y sus anuncios pasan a operarse con la cuenta que asignes. ¿Seguir?"
 msgstr "This project has its own connection with Meta. Switching it to agency mode keeps that as a backup (restored with “Back to own app”) and its ads start running with the account you assign. Continue?"
 
@@ -7253,6 +7301,9 @@ msgstr "FLASK_SECRET_KEY is missing from the .env: without it the agency token c
 msgid "Falta PLATAFORMA_URL en el .env: los enlaces de los correos y el host aceptado no están fijos."
 msgstr "PLATAFORMA_URL is missing from .env: email links and the accepted host are not pinned."
 
+msgid "Falta PLATAFORMA_URL en el servidor"
+msgstr "PLATAFORMA_URL is missing on the server"
+
 msgid "Falta WAVESPEED_API_KEY en tu .env. Consíguela en wavespeed.ai (API Keys)."
 msgstr "WAVESPEED_API_KEY is missing from your .env. Get it at wavespeed.ai (API Keys)."
 
@@ -7355,6 +7406,9 @@ msgstr "Missing data: objective, at least one country, days (1–90), cap, ages 
 
 msgid "Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."
 msgstr "The key or the store domain is missing (for example mystore.myshopify.com)."
+
+msgid "Faltan las llaves de Bold"
+msgstr "The Bold keys are missing"
 
 msgid "Faltan los datos de la campaña."
 msgstr "The campaign's data is missing."
@@ -8351,6 +8405,9 @@ msgstr "Login configuration id"
 msgid "Identificador de la app"
 msgstr "App id"
 
+msgid "Identificador de link inválido"
+msgstr "Invalid link identifier"
+
 msgid "Idioma"
 msgstr "Language"
 
@@ -9098,6 +9155,10 @@ msgid "La página pública de UN producto: leo nombre, precio y fotos de sus dat
 msgstr "The public page of ONE product: I read the name, price and photos from its structured data."
 
 #, python-format
+msgid "La recarga va de US$ %(min)s a US$ %(max)s, en dólares enteros."
+msgstr "A top-up goes from US$ %(min)s to US$ %(max)s, in whole dollars."
+
+#, python-format
 msgid "La receta «%(receta)s» necesita un video de referencia en la bandeja y el modelo Wan 3.0. Agrégalo o elige otra receta."
 msgstr "The “%(receta)s” recipe needs a reference video in the tray and the Wan 3.0 model. Add one or pick another recipe."
 
@@ -9314,6 +9375,9 @@ msgstr "The slowest (over 1 s)"
 msgid "Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí."
 msgstr "Whoever administers the server sets them in the <code>.env</code> file; they're not written from here."
 
+msgid "Las recargas en línea todavía no están disponibles; escríbenos para recargar."
+msgstr "Online top-ups are not available yet; write to us to top up."
+
 msgid "Las reglas del decisor están en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experimentos →</a>"
 msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experiments →</a>"
 
@@ -9453,6 +9517,10 @@ msgstr "Done: the copycoders library now shows up in References."
 msgid "Listo: la versión de Claude es ahora el prompt vigente."
 msgstr "Done: Claude's version is now the current prompt."
 
+#, python-format
+msgid "Listo: sumamos %(monto)s a tu saldo."
+msgstr "Done: we added %(monto)s to your balance."
+
 msgid "Listo: volviste al prompt original."
 msgstr "Done: you reverted to the original prompt."
 
@@ -9477,6 +9545,10 @@ msgstr "Reaching people is expensive (high CPM): the audience is saturated or th
 
 msgid "Llegaste a los 5 minutos: la grabación se detuvo."
 msgstr "You reached 5 minutes: the recording stopped."
+
+#, python-format
+msgid "Llegó un evento %(tipo)s de Bold con la referencia «%(ref)s», que no es de ninguna recarga de Creatv. Revísalo en el panel de Bold."
+msgstr "A Bold %(tipo)s event arrived with the reference “%(ref)s”, which does not belong to any Creatv top-up. Check it in the Bold dashboard."
 
 msgid "Llenar"
 msgstr "Fill"
@@ -11128,6 +11200,10 @@ msgstr "Couldn't save."
 
 msgid "No se pudo guardar: el servidor respondió con un error. Recarga la página e intenta de nuevo."
 msgstr "Couldn't save: the server responded with an error. Reload the page and try again."
+
+#, python-format
+msgid "No se pudo hablar con Bold (%(tipo)s)"
+msgstr "Could not reach Bold (%(tipo)s)"
 
 msgid "No se pudo hablar con Notion; intenta de nuevo en un momento."
 msgstr "Couldn't reach Notion; try again in a moment."
@@ -12817,9 +12893,19 @@ msgstr "Rebuild the prompt"
 msgid "Reason for failure with those solutions"
 msgstr "Reason for failure with those solutions"
 
+msgid "Recarga"
+msgstr "Top-up"
+
+#, python-format
+msgid "Recarga Creatv · %(proyecto)s"
+msgstr "Creatv top-up · %(proyecto)s"
+
 #, python-format
 msgid "Recarga acreditada en %(cliente)s"
 msgstr "Top-up credited to %(cliente)s"
+
+msgid "Recarga de saldo"
+msgstr "Balance top-up"
 
 msgid "Recarga esta página. TikTok no tiene título aparte: el texto de la publicación es el caption completo (sin enlaces; se agrega «Link en bio»)."
 msgstr "Reload this page. TikTok has no separate title: the post's text is the full caption (no links; “Link in bio” gets added)."
@@ -15455,6 +15541,9 @@ msgstr "USD %(usd)s spent"
 msgid "Ubicación (gasto)"
 msgstr "Placement (spend)"
 
+msgid "Un ajuste necesita una nota."
+msgstr "An adjustment needs a note."
+
 msgid "Un anuncio que lleva semanas al aire, o que la marca duplicó en muchas variantes, casi siempre es uno que está vendiendo. Déjalos vacíos para no filtrar."
 msgstr "An ad that has been running for weeks, or that the brand duplicated into many variants, is almost always one that's selling. Leave them empty to not filter."
 
@@ -15490,6 +15579,9 @@ msgstr "An experiment with one piece and one country is an ad; with several piec
 
 msgid "Un hecho real"
 msgstr "A real fact"
+
+msgid "Un pago de Bold no corresponde a ninguna recarga"
+msgstr "A Bold payment does not match any top-up"
 
 msgid "Un solo lugar por video: si nombras varios cuartos, el modelo los recorre."
 msgstr "One single place per video: if you name several rooms, the model walks through them."
@@ -15574,6 +15666,9 @@ msgstr "One per line"
 
 msgid "Una por línea; por ejemplo, los diálogos exactos del guion. Claude no las puede tocar."
 msgstr "One per line; for example, the exact dialogue lines from the script. Claude can't touch them."
+
+msgid "Una recarga manual es positiva; para descontar, usa un ajuste."
+msgstr "A manual top-up is positive; to deduct, use an adjustment."
 
 msgid "Una referencia cuenta cuando tiene descripción. Dinos qué quieres reutilizar de cada una: eso es lo que Claude analiza y lo que después arma las ideas."
 msgstr "A reference counts once it has a description. Tell us what you want to reuse from each one: that's what Claude analyzes and what later builds the ideas."
@@ -15844,6 +15939,12 @@ msgstr "Verdict"
 msgid "Verificado"
 msgstr "Verified"
 
+msgid "Verificando tu pago…"
+msgstr "Checking your payment…"
+
+msgid "Verificar"
+msgstr "Check"
+
 msgid "Versiones nuevas del guion al derivar"
 msgstr "New script versions when deriving"
 
@@ -16016,6 +16117,9 @@ msgstr "Back to the panel"
 msgid "Volver al reparto automático"
 msgstr "Back to the automatic split"
 
+msgid "Volver al saldo"
+msgstr "Back to balance"
+
 msgid "Volver al tablero"
 msgstr "Back to the board"
 
@@ -16162,6 +16266,9 @@ msgstr "Worker and queue"
 #, python-format
 msgid "Y %(n)s anuncio(s) más con poco gasto que no se muestran."
 msgstr "And %(n)s more ad(s) with little spend that aren't shown."
+
+msgid "Ya abriste muchas recargas en la última hora. Espera un rato o escríbenos."
+msgstr "You opened too many top-ups in the last hour. Wait a while or write to us."
 
 #, python-format
 msgid "Ya estaba publicada (o en cola) en %(plataformas)s: no se publica dos veces."

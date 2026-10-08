@@ -1,0 +1,21 @@
+{# Vuelta del checkout de Bold (cobros 7/11). Plantilla mínima: la Task 8 la
+   reemplaza por la página con su sondeo (static/cobros.js). Nunca acredita:
+   solo muestra el estado que dio el servidor de Bold y ofrece «Verificar». #}
+{% extends "base.html" %}
+{% block title %}{{ _('Recarga') }}{% endblock %}
+{% block content %}
+<div class="panel-cabecera">
+  <div>
+    <h2>{{ _('Recarga de saldo') }}</h2>
+    <p class="panel-cabecera-desc" id="recarga-texto">{{ texto }}</p>
+  </div>
+</div>
+<div class="acciones">
+  {% if recarga.estado == 'pendiente' and recarga.medio == 'bold' %}
+  <form method="post" action="{{ url_for('cobros.recarga_verificar', cliente=cliente, rid=recarga.id) }}">
+    <button type="submit" class="btn-generar">{{ _('Verificar') }}</button>
+  </form>
+  {% endif %}
+  <a class="btn" href="{{ url_for('ver_cliente', cliente=cliente) }}#config-ap-saldo">{{ _('Volver al saldo') }}</a>
+</div>
+{% endblock %}

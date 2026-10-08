@@ -8,7 +8,10 @@ almacenamiento del 2026-09-28: nada se limpiaba nunca).
                        materiales.descargar, sprints.qa.archivo_local,
                        publicador.archivo_local).
   cola_limpiar {}      diaria — cola.limpiar_terminadas: filas hecha/error
-                       viejas y las periódicas vacías.
+                       viejas y las periódicas vacías; también las reservas
+                       de saldo cuyo trabajo ya no está vivo
+                       (cobros.libro.limpiar_reservas_muertas: ya no cuentan,
+                       solo ocupan filas).
   db_respaldar {}      diaria — copia de data/creatv.db en data/respaldos/
                        (Connection.backup, seguro con WAL), conserva las
                        últimas RESPALDOS_CONSERVAR. Antes solo había
@@ -128,6 +131,13 @@ def ejecutar_salidas_limpiar(tarea):
 @registrar("cola_limpiar")
 def ejecutar_cola_limpiar(tarea):
     n = cola.limpiar_terminadas()
+    try:
+        from cobros import libro  # noqa: PLC0415
+        reservas = libro.limpiar_reservas_muertas()
+        if reservas:
+            log.info("%s reservas de saldo sin trabajo vivo borradas", reservas)
+    except Exception:  # noqa: BLE001 — limpiar reservas no frena la limpieza de la cola
+        log.exception("no se pudieron limpiar las reservas de saldo")
     return gettext("%(n)s tareas viejas borradas.", n=n)
 
 

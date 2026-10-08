@@ -74,6 +74,7 @@ TIPOS_EXENTOS_DE_COBRO = {
     "cola_limpiar": "periódica de mantenimiento",
     "db_respaldar": "periódica de mantenimiento",
     "errores_limpiar": "periódica de mantenimiento",
+    "cobros_verificar_recargas": "consulta a Bold, no cobra",
 }
 
 
@@ -119,4 +120,4 @@ def cargar_todas():
     """Importa los módulos con tareas reales. Se llama desde worker.main(), no
     al importar el paquete, para que los tests puedan registrar tareas falsas
     sin arrastrar proveedores externos."""
-    from tareas import audios, cadena, director, doctrina, edicion, experimentos, final_edition, flowplus, hablado, investigacion, mantenimiento, meta, musica, nicho, organico, referentes, sprints, swap, tiendas, triple_whale, voces_propias  # noqa: F401
+    from tareas import audios, cadena, cobros, director, doctrina, edicion, experimentos, final_edition, flowplus, hablado, investigacion, mantenimiento, meta, musica, nicho, organico, referentes, sprints, swap, tiendas, triple_whale, voces_propias  # noqa: F401
