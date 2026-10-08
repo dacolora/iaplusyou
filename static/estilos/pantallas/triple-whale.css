@@ -1,0 +1,24 @@
+/* ============================================================
+   Triple Whale: la conexión con varias tiendas (spec 2026-10-08 §6.2). Uso:
+   _triple_whale_conectar.html dentro de la pestaña #tab-triplewhale: tarjetas
+   `.tw-tienda` (una por tienda conectada) en la rejilla `.tw-tiendas`, sus
+   acciones y el selector «Cambiar país», más `.tw-campo`/`.tw-nota` de los
+   formularios (antes eran estilos en línea). Las reglas viejas de la pestaña
+   (.tw-barra, .tw-aviso…) siguen en legado/06.
+   ============================================================ */
+
+.tw-conexion-titulo { margin: 0 0 .5rem; font-size: var(--t-base); }
+.tw-tiendas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: .7rem; margin: 0 0 .8rem; }
+.tw-tienda { display: flex; flex-direction: column; gap: .35rem; min-width: 0; padding: .75rem .85rem; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); font-size: .84rem; }
+.tw-tienda-error { border-color: var(--error); }
+.tw-tienda-cabeza { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; }
+.tw-tienda-nombre { font-size: .95rem; }
+.tw-tienda-dato { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.tw-tienda-error-texto { margin: 0; overflow-wrap: anywhere; }
+.tw-tienda-pais summary { cursor: pointer; }
+.tw-tienda-form { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .4rem 0 0; }
+.tw-tienda-form select { flex: 1 1 10rem; min-width: 0; }
+.tw-tienda-acciones { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: auto; }
+.tw-tienda-acciones form.inline { margin: 0; }
+.tw-campo { margin-top: .6rem; }
+.tw-nota { padding-top: .3rem; font-size: .76rem; }

@@ -1,74 +1,119 @@
-{# Conexión con Triple Whale (llave, tienda y atribución): vive en la pestaña
-   Triple Whale desde 2026-09-28 (hasta entonces estaba en Configuración ›
-   Conexiones). Sin conectar muestra el formulario abierto; conectado, el
-   estado con «Probar conexión», «Desconectar» y los ajustes de atribución
-   (#tw-ajustes, que abre el enlace «Ajustes» del panel). La sincronización y
-   su barra viven en el panel (_tw_panel.html). Contexto de ver_cliente:
-   triple_whale_conectado, cifrado_ok, tw_monedas, tw_modelos, tw_ventanas. #}
+{# Conexión con Triple Whale: vive en la pestaña Triple Whale desde 2026-09-28
+   (hasta entonces estaba en Configuración › Conexiones). Varias tiendas, una
+   por país (spec 2026-10-08 §6.2): una tarjeta por tienda (bandera, país,
+   dominio, estado, error, última copia) con «Probar conexión», «Cambiar país»
+   (<details> con el selector; abierto en una tienda sin país) y «Quitar»;
+   los ajustes de atribución del proyecto en #tw-ajustes (los abre el enlace
+   «Ajustes» del panel); y «+ Agregar otra tienda» (#tw-agregar), abierto si no
+   hay ninguna, con llave, dominio y país. Sin tiendas ese formulario trae
+   también moneda, modelo y ventana. El JS que adivina el país al salir del
+   dominio vive en _tab_triple_whale.html. La sincronización y su barra viven
+   en el panel (_tw_panel.html). Contexto de ver_cliente: tw_tiendas,
+   tw_paises, triple_whale_conectado, cifrado_ok, tw_monedas, tw_modelos,
+   tw_ventanas. #}
 {% macro tw_opciones_atribucion(modelo_actual, ventana_actual, moneda_actual) %}
-    <label class="campo-label" style="margin-top:.6rem;">{{ _('Moneda de las cifras') }}</label>
+    <label class="campo-label tw-campo">{{ _('Moneda de las cifras') }}</label>
     <select name="moneda" {% if not cifrado_ok %}disabled{% endif %}>
       {% for m in tw_monedas %}<option value="{{ m }}" {% if m == moneda_actual %}selected{% endif %}>{{ m }}</option>{% endfor %}
     </select>
-    <label class="campo-label" style="margin-top:.6rem;">{{ _('Modelo de atribución') }}</label>
+    <label class="campo-label tw-campo">{{ _('Modelo de atribución') }}</label>
     <select name="modelo_atribucion" {% if not cifrado_ok %}disabled{% endif %}>
       {% for m in tw_modelos %}<option value="{{ m }}" {% if m == modelo_actual %}selected{% endif %}>{{ m }}</option>{% endfor %}
     </select>
-    <label class="campo-label" style="margin-top:.6rem;">{{ _('Ventana de atribución') }}</label>
+    <label class="campo-label tw-campo">{{ _('Ventana de atribución') }}</label>
     {% set nombres_ventana = {"1_day": _("1 día"), "7_days": _("7 días"), "14_days": _("14 días"), "28_days": _("28 días"), "lifetime": _("Toda la vida del cliente (lifetime)")} %}
     <select name="ventana_atribucion" {% if not cifrado_ok %}disabled{% endif %}>
       {% for v in tw_ventanas %}<option value="{{ v }}" {% if v == ventana_actual %}selected{% endif %}>{{ nombres_ventana.get(v, v) }}</option>{% endfor %}
     </select>
-    <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">
+    <p class="vacio tw-nota">
       {{ _('Para comparar anuncios entre sí sirve «Triple Attribution» con 7 días; para cuadrar con las ventas totales, «Linear All» o «Total Impact».') }}
     </p>
+{% endmacro %}
+{# El selector de país: `vacio` es el texto de la primera opción (valor ""), o none para no ofrecerla.
+   translate="no": los nombres ya vienen de Babel en el idioma de quien mira, y en inglés CLDR trae
+   «Réunion» o «El Salvador», que la barrida de español (tests/i18n_util.py) leería como fugas. #}
+{% macro tw_selector_pais(actual, vacio, requerido=false) %}
+    <select name="pais" translate="no" aria-label="{{ _('País de la tienda') }}" {% if requerido %}required{% endif %} {% if not cifrado_ok %}disabled{% endif %}>
+      {% if vacio %}<option value="">{{ vacio }}</option>{% endif %}
+      {% for codigo, nombre in tw_paises %}<option value="{{ codigo }}"{% if codigo == actual %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+    </select>
 {% endmacro %}
 <section id="tw-conexion" class="tw-conexion">
 {% if not cifrado_ok %}
 <p class="tag-error">{{ _('Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de Triple Whale. Ponla y reinicia para habilitar este formulario.') }}</p>
 {% endif %}
 
-{% if triple_whale_conectado %}
+{% if tw_tiendas %}
 {% set tw_c = triple_whale_conectado %}
-<div class="pixel-estado {% if tw_c.estado == 'error' %}pixel-estado-error{% else %}pixel-estado-ok{% endif %}">
-  {% if tw_c.estado == 'error' %}
-  <span class="tag-estado tag-descartado">{{ _('con error') }}</span>
-  {% else %}
-  <span class="tag-estado tag-en-uso">{{ _('conectado') }}</span>
-  {% endif %}
-  <strong>{{ tw_c.dominio_tienda }}</strong>
-  <small class="vacio" style="padding:0;display:block;margin-top:.3rem;">{{ _('Modelo:') }} {{ tw_c.modelo_atribucion }} · {{ _('Ventana:') }} {{ tw_c.ventana_atribucion }} · {{ tw_c.moneda }}</small>
-  {% if tw_c.estado == 'error' and tw_c.error %}<p class="tag-error" style="margin:.4rem 0 0;">{{ tw_c.error }}</p>{% endif %}
-  <div style="margin-top:.5rem;">
-    <form method="post" action="{{ url_for('cfg_triple_whale_probar', cliente=cliente) }}" class="inline"><button class="btn-guardar btn-xs">{{ _('Probar conexión') }}</button></form>
-    <form method="post" action="{{ url_for('cfg_triple_whale_desconectar', cliente=cliente) }}" class="inline" onsubmit='return confirm({{ _('¿Desconectar Triple Whale? Se borran las métricas copiadas y se quita la atribución por este canal (las evaluaciones con IA se conservan).')|tojson }});'><button class="btn-rechazar btn-xs">{{ _('Desconectar') }}</button></form>
-  </div>
-  <details class="swap-card" id="tw-ajustes" style="margin-top:.6rem;">
-    <summary class="swap-card-resumen">{{ _('Cambiar moneda o atribución') }}</summary>
-    <form method="post" action="{{ url_for('cfg_triple_whale_ajustes', cliente=cliente) }}" class="form-nueva-idea">
-      {{ tw_opciones_atribucion(tw_c.modelo_atribucion, tw_c.ventana_atribucion, tw_c.moneda) }}
-      <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('Al cambiar la atribución o la moneda se borran las métricas copiadas y se vuelven a traer los 90 días.') }}</p>
-      <button type="submit" class="btn-guardar btn-sm">{{ _('Guardar') }}</button>
-    </form>
-  </details>
+<h3 class="tw-conexion-titulo">{{ _('Tiendas conectadas') }}</h3>
+<div class="tw-tiendas">
+  {% for t in tw_tiendas %}
+  <article class="tw-tienda {% if t.estado == 'error' %}tw-tienda-error{% endif %}" id="tw-tienda-{{ t.id }}">
+    <div class="tw-tienda-cabeza">
+      <strong class="tw-tienda-nombre">{% if t.pais %}{{ t.bandera }} {{ t.nombre }}{% else %}{{ _('Sin país') }}{% endif %}</strong>
+      {% if t.estado == 'error' %}
+      <span class="tag-estado tag-descartado">{{ _('con error') }}</span>
+      {% else %}
+      <span class="tag-estado tag-en-uso">{{ _('conectada') }}</span>
+      {% endif %}
+    </div>
+    <p class="tw-tienda-dato">{{ t.dominio }}</p>
+    <p class="tw-tienda-dato">{% if t.ultima_sincronizacion %}{{ _('Última copia: %(fecha)s', fecha=t.ultima_sincronizacion | replace('T', ' ')) }}{% else %}{{ _('Todavía sin copia') }}{% endif %}</p>
+    {% if t.estado == 'error' and t.error %}<p class="tag-error tw-tienda-error-texto">{{ t.error }}</p>{% endif %}
+    {% if not t.pais %}<p class="tw-aviso tag-advertencia">{{ _('Elige el país de esta tienda: así los experimentos de ese país usan sus ventas.') }}</p>{% endif %}
+    <details class="tw-tienda-pais" {% if not t.pais %}open{% endif %}>
+      <summary>{{ _('Cambiar país') }}</summary>
+      <form method="post" action="{{ url_for('cfg_triple_whale_pais', cliente=cliente) }}" class="tw-tienda-form">
+        <input type="hidden" name="tienda_id" value="{{ t.id }}">
+        {{ tw_selector_pais(t.pais, _('Elige un país') if not t.pais else none, requerido=true) }}
+        <button type="submit" class="btn-guardar btn-xs">{{ _('Guardar') }}</button>
+      </form>
+      <p class="vacio tw-nota">{{ _('Sus métricas copiadas no cambian.') }}</p>
+    </details>
+    <div class="tw-tienda-acciones">
+      <form method="post" action="{{ url_for('cfg_triple_whale_probar', cliente=cliente) }}" class="inline">
+        <input type="hidden" name="tienda_id" value="{{ t.id }}">
+        <button class="btn-guardar btn-xs">{{ _('Probar conexión') }}</button>
+      </form>
+      <form method="post" action="{{ url_for('cfg_triple_whale_desconectar', cliente=cliente) }}" class="inline" data-confirmar="{{ _('¿Quitar la tienda %(tienda)s? Se borran sus métricas copiadas y sus ventas dejan de contar en los experimentos de su país (las evaluaciones con IA se conservan).', tienda=(t.nombre if t.pais else t.dominio)) }}">
+        <input type="hidden" name="tienda_id" value="{{ t.id }}">
+        <button class="btn-rechazar btn-xs">{{ _('Quitar') }}</button>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
 </div>
-{% else %}
-<details class="swap-card" open>
-  <summary class="swap-card-resumen">+ {{ _('Conectar Triple Whale') }}</summary>
-  <form method="post" action="{{ url_for('cfg_triple_whale_conectar', cliente=cliente) }}" class="form-nueva-idea" id="form-triple-whale">
+
+<details class="swap-card" id="tw-ajustes">
+  <summary class="swap-card-resumen">{{ _('Ajustes de atribución (todas las tiendas)') }}</summary>
+  <p class="vacio tw-nota">{{ _('Modelo:') }} {{ tw_c.modelo_atribucion }} · {{ _('Ventana:') }} {{ tw_c.ventana_atribucion }} · {{ tw_c.moneda }}</p>
+  <form method="post" action="{{ url_for('cfg_triple_whale_ajustes', cliente=cliente) }}" class="form-nueva-idea">
+    {{ tw_opciones_atribucion(tw_c.modelo_atribucion, tw_c.ventana_atribucion, tw_c.moneda) }}
+    <p class="vacio tw-nota">{{ _('Al cambiar la atribución o la moneda se borran las métricas copiadas de todas las tiendas y se vuelven a traer los 90 días.') }}</p>
+    <button type="submit" class="btn-guardar btn-sm">{{ _('Guardar') }}</button>
+  </form>
+</details>
+{% endif %}
+
+<details class="swap-card" id="tw-agregar" {% if not tw_tiendas %}open{% endif %}>
+  <summary class="swap-card-resumen">+ {% if tw_tiendas %}{{ _('Agregar otra tienda') }}{% else %}{{ _('Conectar Triple Whale') }}{% endif %}</summary>
+  <form method="post" action="{{ url_for('cfg_triple_whale_conectar', cliente=cliente) }}" class="form-nueva-idea" id="form-triple-whale"
+        data-adivinar="{{ url_for('cfg_triple_whale_adivinar_pais', cliente=cliente) }}">
     <label class="campo-label">{{ _('Llave API de Triple Whale') }}</label>
     <input type="password" name="llave_api" autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}>
-    <label class="campo-label" style="margin-top:.6rem;">{{ _('Dominio de la tienda (el shop-id de Triple Whale)') }}</label>
+    <label class="campo-label tw-campo">{{ _('Dominio de la tienda (el shop-id de Triple Whale)') }}</label>
     <input type="text" name="dominio_tienda" placeholder="mitienda.myshopify.com" required {% if not cifrado_ok %}disabled{% endif %}>
-    {{ tw_opciones_atribucion("Triple Attribution", "lifetime", "USD") }}
-    <ol class="vacio" style="padding-top:.3rem;font-size:.76rem;">
+    <label class="campo-label tw-campo">{{ _('País de la tienda') }}</label>
+    {{ tw_selector_pais(none, _('Detectar por el dominio')) }}
+    <p class="vacio tw-nota">{{ _('Cada tienda vende a un país: sus ventas cuentan en los experimentos de ese país. Lo adivinamos por el dominio; confírmalo o cámbialo.') }}</p>
+    {% if not tw_tiendas %}{{ tw_opciones_atribucion("Triple Attribution", "lifetime", "USD") }}{% endif %}
+    <ol class="vacio tw-nota">
       <li>{{ _('En Triple Whale ve a <a href="https://app.triplewhale.com/api-keys" target="_blank" rel="noopener">Settings › API Keys</a> y genera una llave con los permisos de lectura (consultas SQL / Data Out, Summary Page y Pixel Attribution). Se muestra una sola vez: cópiala.') }}</li>
       <li>{{ _('El dominio es el <code>shop-id</code> que aparece en la URL de Triple Whale (por ejemplo <code>?shop-id=mitienda.myshopify.com</code>).') }}</li>
       <li>{{ _('Desde que lo conectes, los anuncios que Creatv lance en Meta llevan solos los parámetros de rastreo de Triple Whale. A los que ya estaban, o a los que crees fuera de Creatv, ponles en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>.') }}</li>
     </ol>
-    <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('La llave se guarda cifrada y solo se usa para leer. Probamos la conexión antes de guardarla.') }}</p>
-    <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Conectar Triple Whale') }}</button>
+    <p class="vacio tw-nota">{{ _('La llave se guarda cifrada y solo se usa para leer. Probamos la conexión antes de guardarla.') }}</p>
+    <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{% if tw_tiendas %}{{ _('Agregar tienda') }}{% else %}{{ _('Conectar Triple Whale') }}{% endif %}</button>
   </form>
 </details>
-{% endif %}
 </section>

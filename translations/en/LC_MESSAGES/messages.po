@@ -203,6 +203,10 @@ msgid "%(detalle)s · falló al guardar; fal ya cobró"
 msgstr "%(detalle)s · saving failed; fal already charged"
 
 #, python-format
+msgid "%(dominio)s ahora es la tienda de %(pais)s. Sus métricas no cambian."
+msgstr "%(dominio)s is now the %(pais)s store. Its metrics don't change."
+
+#, python-format
 msgid "%(error)s (si Claude alcanzó a responder, este intento sí se cobró)"
 msgstr "%(error)s (if Claude managed to respond, this attempt was charged)"
 
@@ -1943,6 +1947,9 @@ msgstr "Add the voice (you already have it, free)"
 msgid "Agregar las marcadas"
 msgstr "Add the checked ones"
 
+msgid "Agregar otra tienda"
+msgstr "Add another store"
+
 msgid "Agregar pieza"
 msgstr "Add piece"
 
@@ -1951,6 +1958,9 @@ msgstr "Add proof"
 
 msgid "Agregar referencias"
 msgstr "Add references"
+
+msgid "Agregar tienda"
+msgstr "Add store"
 
 #, python-brace-format
 msgid "Agregar un texto «{nombre}»"
@@ -2001,14 +2011,17 @@ msgstr "Adjust the split"
 msgid "Ajustes"
 msgstr "Settings"
 
+msgid "Ajustes de atribución (todas las tiendas)"
+msgstr "Attribution settings (all stores)"
+
 msgid "Ajustes guardados. Volvemos a traer las métricas con la nueva atribución."
 msgstr "Settings saved. We're pulling the metrics again with the new attribution."
 
 msgid "Al aire hace al menos"
 msgstr "Running for at least"
 
-msgid "Al cambiar la atribución o la moneda se borran las métricas copiadas y se vuelven a traer los 90 días."
-msgstr "Changing the attribution or the currency deletes the copied metrics and pulls the 90 days again."
+msgid "Al cambiar la atribución o la moneda se borran las métricas copiadas de todas las tiendas y se vuelven a traer los 90 días."
+msgstr "Changing the attribution or the currency deletes the copied metrics of every store and pulls the 90 days again."
 
 msgid "Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro."
 msgstr "When connecting, choose that Page: its page token (<code>page_id</code>) gets saved to publish videos on the wall."
@@ -2897,6 +2910,9 @@ msgstr "Every loser is diagnosed on its own (%(precio)s) and leaves its line her
 msgid "Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué."
 msgstr "Each card shows the QA: ✓ passes, ✗ fails; tap the QA row to read why."
 
+msgid "Cada tienda vende a un país: sus ventas cuentan en los experimentos de ese país. Lo adivinamos por el dominio; confírmalo o cámbialo."
+msgstr "Each store sells to one country: its sales count in that country's experiments. We guess it from the domain; confirm or change it."
+
 msgid "Cada video se hace en dos pasos: primero la imagen y después se anima."
 msgstr "Each video is made in two steps: first the image, then it's animated."
 
@@ -2957,8 +2973,8 @@ msgstr "Change the product in a photo or video"
 msgid "Cambiar la configuración"
 msgstr "Change the configuration"
 
-msgid "Cambiar moneda o atribución"
-msgstr "Change currency or attribution"
+msgid "Cambiar país"
+msgstr "Change country"
 
 msgid "Cambiar presupuesto"
 msgstr "Change budget"
@@ -3755,8 +3771,9 @@ msgstr "Current connection"
 msgid "Conexión con Meta cancelada. Si ya tenías Meta conectado, sigue igual."
 msgstr "Meta connection canceled. If you already had Meta connected, it stays the same."
 
-msgid "Conexión con Triple Whale correcta."
-msgstr "Triple Whale connection works."
+#, python-format
+msgid "Conexión con Triple Whale correcta: %(tienda)s."
+msgstr "Triple Whale connection works: %(tienda)s."
 
 msgid "Conexión de la agencia"
 msgstr "Agency connection"
@@ -4632,6 +4649,9 @@ msgstr "Technical detail"
 
 msgid "Detalle técnico (para soporte)"
 msgstr "Technical detail (for support)"
+
+msgid "Detectar por el dominio"
+msgstr "Detect from the domain"
 
 msgid "Detener"
 msgstr "Stop"
@@ -5616,6 +5636,12 @@ msgstr "Choose the language the text is written in: each voice's sample plays in
 msgid "Elige el modo del video: diálogo a cámara o voz en off."
 msgstr "Choose the video mode: on-camera dialogue or voice-over."
 
+msgid "Elige el país de esta tienda: así los experimentos de ese país usan sus ventas."
+msgstr "Choose this store's country so that country's experiments use its sales."
+
+msgid "Elige el país de la tienda."
+msgstr "Choose the store's country."
+
 msgid "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio)."
 msgstr "Choose the account that will send it (Gmail, Outlook or the domain's email)."
 
@@ -5655,6 +5681,9 @@ msgstr "Pick an emoji."
 
 msgid "Elige un idioma de la lista."
 msgstr "Pick a language from the list."
+
+msgid "Elige un país"
+msgstr "Choose a country"
 
 msgid "Elige un producto"
 msgstr "Choose a product"
@@ -11692,6 +11721,9 @@ msgstr "Country"
 msgid "País (solo Apify)"
 msgstr "Country (Apify only)"
 
+msgid "País de la tienda"
+msgstr "Store country"
+
 msgid "País de los anuncios"
 msgstr "Ads' country"
 
@@ -12616,6 +12648,10 @@ msgstr "It's now in Experiments › Standalone ads — create an experiment with
 
 msgid "Quitamos la biblioteca de copycoders de este proyecto. Puedes volver a traerla cuando quieras."
 msgstr "We removed the copycoders library from this project. You can bring it back whenever you want."
+
+#, python-format
+msgid "Quitamos la tienda %(tienda)s y sus métricas copiadas; las evaluaciones con IA se conservan."
+msgstr "We removed the store %(tienda)s and its copied metrics; AI evaluations are kept."
 
 msgid "Quitar"
 msgstr "Remove"
@@ -13885,6 +13921,9 @@ msgstr "No music"
 msgid "Sin nombre"
 msgstr "Untitled"
 
+msgid "Sin país"
+msgstr "No country"
+
 msgid "Sin pedidos atribuidos en el periodo: los veredictos se apoyan solo en el tráfico (gancho, retención, clic), así que no hay ganadores ni perdedores todavía."
 msgstr "No attributed orders in the period: verdicts rely only on traffic (hook, hold, click), so there are no winners or losers yet."
 
@@ -14406,6 +14445,9 @@ msgstr "Suggest from the library (free)"
 msgid "Superior al promedio"
 msgstr "Above average"
 
+msgid "Sus métricas copiadas no cambian."
+msgstr "Its copied metrics don't change."
+
 msgid "Sus números de los últimos 7 días cayeron frente a los 7 anteriores: prepara variantes antes de que se apague."
 msgstr "Its numbers for the last 7 days dropped against the 7 before: prepare variants before it dies out."
 
@@ -14589,6 +14631,10 @@ msgstr "Store"
 msgid "Tienda %(nombre)s conectada. %(detalle)s %(extra)s"
 msgstr "Store %(nombre)s connected. %(detalle)s %(extra)s"
 
+#, python-format
+msgid "Tienda de %(pais)s conectada (%(dominio)s). Estamos trayendo sus últimos 90 días de métricas; mira la pestaña Triple Whale en unos minutos."
+msgstr "%(pais)s store connected (%(dominio)s). We're pulling its last 90 days of metrics; check the Triple Whale tab in a few minutes."
+
 msgid "Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."
 msgstr "Store disconnected. Its products were archived and its orders are kept (nothing was deleted)."
 
@@ -14597,6 +14643,9 @@ msgstr "Store disconnected. Its products stay active because the other connectio
 
 msgid "Tiendas"
 msgstr "Stores"
+
+msgid "Tiendas conectadas"
+msgstr "Connected stores"
 
 #, python-format
 msgid "Tiendas de %(pais)s"
@@ -15199,12 +15248,6 @@ msgstr "TrendTrack: the plan's request limit was reached; try again in a while."
 
 msgid "Triple Whale"
 msgstr "Triple Whale"
-
-msgid "Triple Whale conectado. Estamos trayendo los últimos 90 días de métricas; mira la pestaña Triple Whale en unos minutos."
-msgstr "Triple Whale connected. We're pulling the last 90 days of metrics; check the Triple Whale tab in a few minutes."
-
-msgid "Triple Whale desconectado. Se borraron las métricas copiadas; las evaluaciones con IA se conservan."
-msgstr "Triple Whale disconnected. The copied metrics were deleted; AI evaluations are kept."
 
 #, python-format
 msgid "Triple Whale no aceptó la consulta de %(partes)s en %(tienda)s. El resto de las métricas sí llegó."
@@ -16192,6 +16235,10 @@ msgstr "There are already final cuts for those markets made another way (they ma
 #, python-brace-format
 msgid "Ya hay finales de {destinos} hechas por otro camino (pueden tener voz). Si produces, estas las reemplazan."
 msgstr "There are already final cuts for {destinos} made another way (they may have voice). If you produce, these replace them."
+
+#, python-format
+msgid "Ya hay otra tienda de %(pais)s en este proyecto: cámbiale el país o quítala antes."
+msgstr "This project already has another %(pais)s store: change its country or remove it first."
 
 msgid "Ya hay un QA en curso para esa pieza."
 msgstr "A QA is already in progress for that piece."
@@ -19289,9 +19336,6 @@ msgstr "Discard? No video is generated."
 msgid "¿Desconectar Meta de este proyecto? No se borra nada en Meta."
 msgstr "Disconnect Meta from this project? Nothing gets deleted on Meta."
 
-msgid "¿Desconectar Triple Whale? Se borran las métricas copiadas y se quita la atribución por este canal (las evaluaciones con IA se conservan)."
-msgstr "Disconnect Triple Whale? The copied metrics are deleted and attribution through this channel is removed (AI evaluations are kept)."
-
 msgid "¿Desconectar esta tienda? Sus productos quedan archivados; no se borra nada en la tienda."
 msgstr "Disconnect this store? Its products get archived; nothing is deleted in the store."
 
@@ -19402,6 +19446,10 @@ msgstr "Remove this logo?"
 
 msgid "¿Quitar la app de Meta de este proyecto? Tendrás que registrarla de nuevo para volver a conectar."
 msgstr "Remove this project's Meta app? You'll have to register it again to reconnect."
+
+#, python-format
+msgid "¿Quitar la tienda %(tienda)s? Se borran sus métricas copiadas y sus ventas dejan de contar en los experimentos de su país (las evaluaciones con IA se conservan)."
+msgstr "Remove the store %(tienda)s? Its copied metrics are deleted and its sales stop counting in its country's experiments (AI evaluations are kept)."
 
 #, python-format
 msgid "¿Quitar los %(n)s comentarios de %(fuente)s?"

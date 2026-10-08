@@ -31,3 +31,9 @@ def test_nombre_pais_y_nombres_compuestos():
     assert paises.nombre_pais("NO", "es") == "Noruega"
     assert paises.nombre_pais("ZZ", "es") == "ZZ"
     assert paises.adivinar_pais("tienda-new-zealand.myshopify.com") == "NZ"
+
+
+def test_es_pais():
+    assert paises.es_pais("NO") and paises.es_pais("no") and paises.es_pais(" se ")
+    assert not paises.es_pais("XX") and not paises.es_pais("EU") and not paises.es_pais("")
+    assert not paises.es_pais(None) and not paises.es_pais("NOR")

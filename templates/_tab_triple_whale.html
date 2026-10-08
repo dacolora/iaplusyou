@@ -92,3 +92,37 @@
   })();
 </script>
 {% endif %}
+<script>
+  /* Conexión (_triple_whale_conectar.html, incluido arriba en los dos estados):
+     confirmar «Quitar» una tienda y, al salir del campo dominio, preseleccionar
+     el país que adivina el servidor (solo si el selector sigue en «Detectar por
+     el dominio»; si la persona ya eligió uno, no se toca). */
+  (function () {
+    var con = document.getElementById('tw-conexion');
+    if (!con) return;
+    con.addEventListener('submit', function (ev) {
+      var f = ev.target.closest('form[data-confirmar]');
+      if (f && !window.confirm(f.dataset.confirmar)) ev.preventDefault();
+    });
+    var form = document.getElementById('form-triple-whale');
+    if (!form) return;
+    var dominio = form.querySelector('[name="dominio_tienda"]');
+    var pais = form.querySelector('select[name="pais"]');
+    if (!dominio || !pais || !form.dataset.adivinar) return;
+    var ultimo = '';
+    function adivinar() {
+      var valor = dominio.value.trim();
+      if (!valor || valor === ultimo || pais.value) return;
+      ultimo = valor;
+      fetch(form.dataset.adivinar + '?dominio=' + encodeURIComponent(valor), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.pais || pais.value) return;
+          if (pais.querySelector('option[value="' + d.pais + '"]')) pais.value = d.pais;
+        })
+        .catch(function () { /* sin red: el servidor vuelve a adivinar al enviar */ });
+    }
+    dominio.addEventListener('change', adivinar);
+    dominio.addEventListener('blur', adivinar);
+  })();
+</script>

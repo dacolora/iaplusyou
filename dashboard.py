@@ -94,6 +94,7 @@ import conectores
 import tiendas
 import triple_whale
 import triple_whale_tiendas
+from triple_whale import paises as tw_paises
 import tablero
 import resultados
 import admin
@@ -2126,6 +2127,9 @@ def ver_cliente(cliente):
     ctx_meta = _contexto_meta(cliente, ctx_exp["experimentos"])
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
+    # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
+    tw_tiendas = [dict(t, nombre=triple_whale_panel.nombre_tienda(t), bandera=tw_paises.bandera(t["pais"]))
+                  for t in (triple_whale_conectado or {}).get("tiendas", [])]
     # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
     # la página solo trae contadores por categoría y lo que Crear necesita.
     activos_producto = _productos_con_uso(cliente)
@@ -2216,6 +2220,7 @@ def ver_cliente(cliente):
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
         tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
+        tw_tiendas=tw_tiendas, tw_paises=tw_paises.paises_opciones(idiomas.activo()),
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         cifrado_ok=cifrado.disponible(),
@@ -4876,7 +4881,7 @@ def _clave_tablero(cliente):
     veredicto tocado por el dueño, publicación orgánica, cobro de un
     proveedor) mueve la clave."""
     ms, ep, pr, ex, pub = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento, db.publicacion
-    tw, gs = db.triple_whale, db.gasto
+    gs = db.gasto
     with db.conectar() as con:
         ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
             ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
@@ -4888,13 +4893,13 @@ def _clave_tablero(cliente):
         # Bloque 7: una publicación orgánica nueva o que cambió de estado
         # mueve el tile «Ganadoras publicadas» y la alerta de ganadora sin publicar.
         publicaciones = con.execute(sa.select(sa.func.count(), sa.func.max(pub.c.actualizado_en)).where(pub.c.cliente == cliente)).first()
-        # La tienda según Triple Whale (spec 2026-09-28 §13): conectar,
-        # desconectar o una copia nueva mueven sus tiles.
-        triple = con.execute(sa.select(sa.func.max(tw.c.actualizado_en)).where(tw.c.cliente == cliente)).scalar()
         # La generación (tile total y columna del mes a mes): un cobro nuevo
         # o uno que se actualiza (misma referencia, otro usd) mueve la clave.
         cobros = con.execute(sa.select(sa.func.count(), sa.func.max(gs.c.id), sa.func.sum(gs.c.usd))
                              .where(gs.c.cliente == cliente)).first()
+    # La tienda según Triple Whale (spec 2026-09-28 §13 y 2026-10-08 §9): agregar o
+    # quitar una tienda, cambiarle el país, los ajustes o una copia nueva mueven sus tiles.
+    triple = triple_whale_tiendas.firma(cliente)
     return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple,
             tuple(cobros))
 
@@ -8594,8 +8599,11 @@ def _probar_triple_whale(llave, dominio, moneda):
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/conectar", methods=["POST"])
 def cfg_triple_whale_conectar(cliente):
-    """Prueba la llave contra la tienda (una consulta corta), la guarda
-    cifrada y encola la primera copia: los últimos 90 días de métricas."""
+    """Agrega una tienda (o reconecta la del mismo dominio): prueba la llave
+    contra la tienda (una consulta corta), la guarda cifrada con su país y
+    encola su primera copia, los últimos 90 días de métricas. El país llega
+    del formulario o se adivina por el dominio; sin país no se guarda nada
+    (spec 2026-10-08 §6.2 y §10)."""
     if not _mismo_origen():
         abort(403)
     bloqueo = _requiere_correo_verificado()
@@ -8610,53 +8618,123 @@ def cfg_triple_whale_conectar(cliente):
     if not llave or not dominio:
         flash(gettext("Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."), "error")
         return _volver_tw(cliente)
-    moneda = triple_whale.normalizar_moneda(request.form.get("moneda"))
+    # El país va siempre explícito a `agregar`: el del formulario o, si llegó
+    # vacío, el que dice el dominio. Sin ninguno no se guarda (una reconexión
+    # tampoco adivina a escondidas).
+    pais = (request.form.get("pais") or "").strip().upper() or tw_paises.adivinar_pais(dominio)
+    if not pais or not tw_paises.es_pais(pais):
+        flash(gettext("Elige el país de la tienda."), "error")
+        return _volver_tw(cliente)
+    ocupada = triple_whale_tiendas.tienda_de_pais(cliente, pais)
+    if ocupada and ocupada["dominio"] != dominio:
+        _flash_pais_ocupado(pais)       # antes de llamar a Triple Whale: no hace falta probar nada
+        return _volver_tw(cliente)
+    ajustes = triple_whale_tiendas.ajustes(cliente)
+    moneda = ajustes["moneda"] if ajustes else triple_whale.normalizar_moneda(request.form.get("moneda"))
     problema = _probar_triple_whale(llave, dominio, moneda)
     if problema:
         flash(gettext("No pude conectar Triple Whale: %(error)s", error=idiomas.traducir(problema)), "error")
         return _volver_tw(cliente)
-    triple_whale_tiendas.conectar(cliente, llave, dominio, moneda=moneda,
-                                  modelo_atribucion=request.form.get("modelo_atribucion"),
-                                  ventana_atribucion=request.form.get("ventana_atribucion"))
-    tareas_tw.encolar_sync(cliente)
-    flash(gettext("Triple Whale conectado. Estamos trayendo los últimos 90 días de métricas; mira la pestaña "
-                  "Triple Whale en unos minutos."), "ok")
+    try:
+        tienda_id = triple_whale_tiendas.agregar(cliente, llave, dominio, pais, moneda=moneda,
+                                                 modelo_atribucion=request.form.get("modelo_atribucion"),
+                                                 ventana_atribucion=request.form.get("ventana_atribucion"))
+    except triple_whale_tiendas.PaisOcupado as e:      # otra pestaña la conectó mientras tanto
+        _flash_pais_ocupado(e.pais)
+        return _volver_tw(cliente)
+    tareas_tw.encolar_sync(cliente, tienda_id)
+    flash(gettext("Tienda de %(pais)s conectada (%(dominio)s). Estamos trayendo sus últimos 90 días de métricas; "
+                  "mira la pestaña Triple Whale en unos minutos.",
+                  pais=tw_paises.nombre_pais(pais, idiomas.activo()), dominio=dominio), "ok")
     return _volver_tw(cliente)
+
+
+def _flash_pais_ocupado(pais):
+    flash(gettext("Ya hay otra tienda de %(pais)s en este proyecto: cámbiale el país o quítala antes.",
+                  pais=tw_paises.nombre_pais(pais, idiomas.activo())), "error")
+
+
+def _tienda_tw_del_form(cliente):
+    """La tienda del `tienda_id` del formulario, verificando que sea de este
+    proyecto (aislamiento); si no es, 404."""
+    try:
+        tienda_id = int(request.form.get("tienda_id") or "")
+    except ValueError:
+        abort(404)
+    tienda = triple_whale_tiendas.tienda(cliente, tienda_id)
+    if not tienda:
+        abort(404)
+    return tienda
+
+
+def _nombre_tienda_tw(tienda):
+    """«Noruega (happyflops-norge.myshopify.com)» en el idioma de quien mira, o
+    solo el dominio si la tienda no tiene país."""
+    if not tienda.get("pais"):
+        return tienda["dominio"]
+    return f'{tw_paises.nombre_pais(tienda["pais"], idiomas.activo())} ({tienda["dominio"]})'
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/probar", methods=["POST"])
 def cfg_triple_whale_probar(cliente):
-    """Vuelve a probar la llave guardada contra la tienda y deja el resultado
-    en el estado de la conexión."""
+    """Vuelve a probar la llave guardada de UNA tienda contra Triple Whale y
+    deja el resultado en su estado."""
     if not _mismo_origen():
         abort(403)
-    config = triple_whale_tiendas.obtener(cliente)
-    if not config:
-        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
-        return _volver_tw(cliente)
+    tienda = _tienda_tw_del_form(cliente)
     try:
-        llave = triple_whale_tiendas.obtener_llave(cliente)
+        llave = triple_whale_tiendas.obtener_llave(cliente, tienda["id"])
     except cifrado.ErrorCifrado:
         llave = None
-    problema = (_probar_triple_whale(llave, config["dominio_tienda"], config["moneda"]) if llave
+    ajustes = triple_whale_tiendas.ajustes(cliente) or {}
+    problema = (_probar_triple_whale(llave, tienda["dominio"], ajustes.get("moneda")) if llave
                 else idiomas.N_("No se pudo leer la llave guardada: vuelve a conectar Triple Whale."))
     if problema:
         # El `error` guardado lo ve cualquiera que abra la pestaña después: idioma
         # del proyecto. El flash es para quien tocó el botón: su idioma.
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
             guardado = idiomas.traducir(problema)
-        triple_whale_tiendas.actualizar(cliente, estado="error", error=guardado)
+        triple_whale_tiendas.actualizar_tienda(cliente, tienda["id"], estado="error", error=guardado)
         flash(gettext("La conexión con Triple Whale falló: %(error)s", error=idiomas.traducir(problema)), "error")
     else:
-        triple_whale_tiendas.actualizar(cliente, estado="conectada", error=None)
-        flash(gettext("Conexión con Triple Whale correcta."), "ok")
+        triple_whale_tiendas.actualizar_tienda(cliente, tienda["id"], estado="conectada", error=None)
+        flash(gettext("Conexión con Triple Whale correcta: %(tienda)s.", tienda=_nombre_tienda_tw(tienda)), "ok")
     return _volver_tw(cliente)
+
+
+@app.route("/cliente/<cliente>/cfg_triple_whale/pais", methods=["POST"])
+def cfg_triple_whale_pais(cliente):
+    """Cambia el país de una tienda ya conectada. Sus cifras no se tocan (las
+    copias van por tienda, no por país)."""
+    if not _mismo_origen():
+        abort(403)
+    tienda = _tienda_tw_del_form(cliente)
+    pais = (request.form.get("pais") or "").strip().upper()
+    if not tw_paises.es_pais(pais):
+        flash(gettext("Elige el país de la tienda."), "error")
+        return _volver_tw(cliente)
+    try:
+        triple_whale_tiendas.cambiar_pais(cliente, tienda["id"], pais)
+    except triple_whale_tiendas.PaisOcupado as e:
+        _flash_pais_ocupado(e.pais)
+        return _volver_tw(cliente)
+    flash(gettext("%(dominio)s ahora es la tienda de %(pais)s. Sus métricas no cambian.", dominio=tienda["dominio"],
+                  pais=tw_paises.nombre_pais(pais, idiomas.activo())), "ok")
+    return _volver_tw(cliente)
+
+
+@app.route("/cliente/<cliente>/cfg_triple_whale/adivinar_pais")
+def cfg_triple_whale_adivinar_pais(cliente):
+    """`{"pais": "NO"}` o `{"pais": null}` para el dominio que se está
+    escribiendo en el formulario. Solo lee el texto: no llama a nadie."""
+    return jsonify({"pais": tw_paises.adivinar_pais((request.args.get("dominio") or "")[:300])})
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/ajustes", methods=["POST"])
 def cfg_triple_whale_ajustes(cliente):
-    """Cambia moneda, modelo o ventana de atribución sin volver a pegar la
-    llave. Si algo cambió, lo copiado se borra y se vuelve a traer."""
+    """Cambia moneda, modelo o ventana de atribución (del proyecto: valen para
+    todas las tiendas) sin volver a pegar llaves. Si algo cambió, lo copiado
+    de todas se borra y se vuelve a traer."""
     if not _mismo_origen():
         abort(403)
     if not triple_whale_tiendas.obtener(cliente):
@@ -8674,13 +8752,15 @@ def cfg_triple_whale_ajustes(cliente):
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/desconectar", methods=["POST"])
 def cfg_triple_whale_desconectar(cliente):
-    """Quita la conexión y las métricas copiadas (las evaluaciones con IA ya
-    pagadas se conservan)."""
+    """Quita UNA tienda y sus métricas copiadas; las de las otras tiendas no se
+    tocan. Con la última se van también los ajustes. Las evaluaciones con IA
+    ya pagadas se conservan siempre."""
     if not _mismo_origen():
         abort(403)
-    triple_whale_tiendas.desconectar(cliente)
-    flash(gettext("Triple Whale desconectado. Se borraron las métricas copiadas; las evaluaciones con IA se "
-                  "conservan."), "ok")
+    tienda = _tienda_tw_del_form(cliente)
+    triple_whale_tiendas.quitar(cliente, tienda["id"])
+    flash(gettext("Quitamos la tienda %(tienda)s y sus métricas copiadas; las evaluaciones con IA se conservan.",
+                  tienda=_nombre_tienda_tw(tienda)), "ok")
     return _volver_tw(cliente)
 
 

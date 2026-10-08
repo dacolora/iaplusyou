@@ -151,7 +151,7 @@ def test_publicar_crea_campana_y_deja_pausado(base_temporal, monkeypatch):
     monkeypatch.setattr(tm.meta_ad, "crear_ad", lambda nombre, adset_id, creative_id: {"id": "a1"})
     monkeypatch.setattr(tm.bitacora, "registrar", lambda *a, **k: None)
     # Con Triple Whale conectado, el creative lleva sus parámetros de rastreo.
-    monkeypatch.setattr(tm.triple_whale_tiendas, "obtener", lambda cliente: {"dominio_tienda": "acme.myshopify.com"})
+    monkeypatch.setattr(tm.triple_whale_tiendas, "tiendas", lambda cliente: [{"id": 1, "dominio": "acme.myshopify.com"}])
 
     msg = tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, "objetivo": "OUTCOME_TRAFFIC", "presupuesto_diario": 20000.0,
                                    "dias": 3, "pais": "CO", "edad_min": 18, "edad_max": 45,

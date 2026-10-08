@@ -79,6 +79,13 @@ def adivinar_pais(dominio):
     return None
 
 
+def es_pais(codigo):
+    """True si `codigo` (con o sin mayúsculas) es un país del selector: lo que llega de un
+    formulario se valida con esto antes de guardarlo."""
+    _construir()
+    return (codigo or "").strip().upper() in _validos
+
+
 def bandera(codigo):
     """«NO» -> la bandera (dos indicadores regionales)."""
     c = (codigo or "").upper()
