@@ -456,7 +456,7 @@
   {{ _('Cómo salen marcados el sonido de la escena y la música al abrir Crear. En cada generación se puede cambiar. Los lotes de los sprints usan esto tal cual.') }}
 </p>
 <form method="post" action="{{ url_for('guardar_preferencias_sonido', cliente=cliente) }}" class="form-nueva-idea">
-  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if preferencias_sonido.con_sonido %}checked{% endif %}> {{ _('Sonido de la escena (audio nativo del modelo; Kling cobra %(precio)s por segundo más)', precio=(modelos_flowplus_video.kling_o3_pro.audio_nativo.recargo_usd_s|precio|usd_fino)) }}</label>
+  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if preferencias_sonido.con_sonido %}checked{% endif %}> {{ _('Sonido de la escena (audio nativo del modelo; Kling: %(precio)s más por segundo)', precio=(modelos_flowplus_video.kling_o3_pro.audio_nativo.recargo_usd_s|precio|usd_fino)) }}</label>
   <div style="margin-top:.6rem;">
     <label class="campo-label">{{ _('Música al crear') }}</label>
     <select name="musica_al_crear">

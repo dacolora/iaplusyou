@@ -9524,8 +9524,8 @@ msgstr "What Claude couldn't find in the data"
 msgid "Lo que Claude sabe de este prompt"
 msgstr "What Claude knows about this prompt"
 
-msgid "Lo que costaría producir lo que pide esta propuesta (precio aproximado de los proveedores)"
-msgstr "What it would cost to produce what this proposal is asking for (approximate provider price)"
+msgid "Lo que costaría producir lo que pide esta propuesta (precio aproximado)"
+msgstr "What it would cost to produce what this proposal asks for (approximate price)"
 
 msgid "Lo que dicen los subtítulos"
 msgstr "What the subtitles say"
@@ -14161,8 +14161,8 @@ msgid "Sonido de la escena"
 msgstr "Scene sound"
 
 #, python-format
-msgid "Sonido de la escena (audio nativo del modelo; Kling cobra %(precio)s por segundo más)"
-msgstr "Scene sound (the model's native audio; Kling charges %(precio)s more per second)"
+msgid "Sonido de la escena (audio nativo del modelo; Kling: %(precio)s más por segundo)"
+msgstr "Scene sound (the model's native audio; Kling: %(precio)s more per second)"
 
 #, python-format
 msgid "Sprint %(nombre)s · Campaña %(n)s"

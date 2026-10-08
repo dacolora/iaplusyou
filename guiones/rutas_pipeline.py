@@ -615,15 +615,12 @@ def cadena_aprobar(cliente, vid):
         if desde != ks[0] and not cadena.puede_rehacer(est, desde, ks[0]):
             raise Conflicto(gettext("Para rehacer desde esa escena hace falta el último cuadro de la anterior."))
         precio = cadena.precio(v, desde, list(((est or {}).get("elementos") or {}).keys()))
-        try:
-            visto = float(cuerpo.get("total_visto"))
-        except (TypeError, ValueError):
-            visto = None
-        # `total_visto` viaja como costo (data-gpg-cuerpo); el texto, como lo
-        # ve la persona (cobros, spec 2026-10-08 §6).
+        # `total_visto` es lo que la persona vio (precio, con margen si el
+        # proyecto cobra; cobros, spec 2026-10-08 §6): vuelve a costo una sola vez.
+        visto = gastos.costo_de_precio(cuerpo.get("total_visto"))
         if visto is None or abs(visto - precio) > 0.005:
             return jsonify({"error": gettext("El precio cambió: ahora es ≈ US$ %(precio)s. Revisa y vuelve a aprobar.",
-                                             precio=f"{gastos.precio(precio):.2f}"), "precio": precio}), 409
+                                             precio=f"{gastos.precio(precio):.2f}"), "precio": gastos.precio(precio)}), 409
         # Cobros (spec 2026-10-08 §5): la cadena entera se pide antes de
         # aprobarla; cada escena vuelve a pedir y reservar lo suyo al encolarse.
         libro.exigir(cliente, precio)

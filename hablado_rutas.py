@@ -5,7 +5,6 @@ el modo), subir una foto (gratis), la voz (cacheada o la tarea `hablado_voz`,
 que paga una vez) y crear el video (sesión de Crear + `flowplus_lanzar.lanzar`).
 `dashboard._guard_por_cliente` protege estas rutas porque la URL lleva
 <cliente>; aquí se rechazan los POST que el navegador marca de otro sitio."""
-import math
 import os
 
 from flask import Blueprint, get_template_attribute, jsonify, render_template, request, url_for
@@ -97,13 +96,7 @@ def _costo_visto(valor):
     """El `precio_visto` del navegador (precio, con margen) → el costo que
     compara `hablado.crear_pieza` y que pide `libro.exigir`; None si no es un
     número razonable. Con margen 1 (proyecto que no cobra) es el mismo valor."""
-    try:
-        visto = float(valor)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(visto) or not 0 < visto < 1000:
-        return None
-    return visto / gastos.margen_vigente()
+    return gastos.costo_de_precio(valor)
 
 
 @bp.route("/voz", methods=["POST"])

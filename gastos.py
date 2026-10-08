@@ -201,6 +201,21 @@ def precio(usd, cliente=None):
     return round(float(usd) * margen, 4)
 
 
+def costo_de_precio(valor):
+    """Lo que la persona vio y devolvió el navegador (un precio, con el margen
+    de la petición) → el costo, para compararlo con el costo recalculado o
+    pedírselo al libro: la ÚNICA vuelta de precio a costo (spec 2026-10-08 §6:
+    al navegador de un proyecto que cobra nunca le llega el costo). None si no
+    es un número finito entre 0 y 1 000 (excluidos)."""
+    try:
+        v = float(valor)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(v) or not 0 < v < 1000:
+        return None
+    return v / margen_vigente()
+
+
 def texto_precio(usd):
     """El «US$ 0,30 aprox.» de un costo, ya con el margen de la petición."""
     return _texto_estimado(precio(usd))

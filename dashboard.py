@@ -5208,16 +5208,18 @@ def _filtro_usd_fino(valor):
 
 
 @app.template_filter("precio")
-@jinja2.pass_eval_context
-def _filtro_precio(_eval_ctx, usd):
+@jinja2.pass_context
+def _filtro_precio(_contexto, usd):
     """Cobros (spec 2026-10-08 §6): un costo en dólares → lo que ve la persona
     (× el margen del proyecto de la petición; 1.0 si no cobra), sin formatear:
     `data-usd-seg="{{ m.usd_por_segundo_efectivo|precio }}"`,
     `{{ est.usd|precio|usd }}`. Lo que vuelve al servidor para compararlo o
     cobrarlo (`total_visto`, `precio_visto`) es costo, nunca pasa por aquí.
-    `pass_eval_context` para que Jinja no lo resuelva al compilar sobre una
-    constante (`{{ 0.04|precio }}` quedaría con el margen de la primera
-    petición que compiló la plantilla, para todos los proyectos)."""
+    `pass_context` para que Jinja no lo resuelva al compilar sobre una
+    constante: Jinja 3.1 pliega todo filtro sobre una constante salvo los que
+    piden el contexto (`pass_eval_context` no basta), y `{{ 0.04|precio }}`
+    quedaría con el margen de la primera petición que compiló la plantilla,
+    para todos los proyectos."""
     if usd is None or usd == "":
         return usd
     try:

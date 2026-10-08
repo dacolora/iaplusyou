@@ -401,7 +401,7 @@ def apify_estimar(cliente, eid):
         est = apify_actores.estimar(request.args.get("actor") or "", request.args.get("max") or 1)
     except ErrorFuente as e:
         return jsonify({"error": str(e)}), 400
-    return jsonify({**est, "texto": gastos.formatear(gastos.precio(est["usd"]))})
+    return jsonify({**est, "usd": gastos.precio(est["usd"]), "texto": gastos.formatear(gastos.precio(est["usd"]))})
 
 
 # ----------------------------------------------------------- avatares ---
@@ -583,10 +583,8 @@ def completar(cliente, eid):
     if not e["avatares"]:
         flash(gettext("No hay avatares incompletos que completar."), "ok")
         return volver
-    try:
-        visto = float(request.form.get("total_visto") or 0)
-    except ValueError:
-        visto = 0.0
+    # `total_visto` es el precio que vio (cobros §6): vuelve a costo una sola vez.
+    visto = gastos.costo_de_precio(request.form.get("total_visto")) or 0.0
     if e["usd"] > visto + 0.005:
         flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.", costo=gastos.formatear(gastos.precio(e["usd"]))), "error")
         return volver
@@ -686,13 +684,16 @@ def investigacion_estimar(cliente, eid):
         e = investigacion.estimar(est, pais, plats, redes, topes)
     except (datos.ErrorDatos, ErrorFuente, ValueError) as ex:
         return jsonify({"error": str(ex)}), 400
-    # Los `*_texto` son lo que ve la persona (cobros §6: con margen); los `*_usd`
-    # siguen siendo costo: `total_usd` vuelve como `total_visto` y se compara
-    # con el costo recalculado.
-    filas = [{**f, "busqueda_texto": _ver(f["busqueda_usd"]), "resenas_texto": _ver(f["resenas_usd"]),
+    # Todo lo que sale va como lo ve la persona (cobros §6: con margen, también
+    # los `*_usd`): `total_usd` vuelve como `total_visto` y la ruta que inicia
+    # lo pasa a costo con `gastos.costo_de_precio`.
+    filas = [{**f, "busqueda_usd": gastos.precio(f["busqueda_usd"]), "resenas_usd": gastos.precio(f["resenas_usd"]),
+              "busqueda_texto": _ver(f["busqueda_usd"]), "resenas_texto": _ver(f["resenas_usd"]),
               "etiqueta": f["nombre"] if f["mercado"] == "local"
               else f"{f['nombre']} ({idiomas.traducir(datos.NOMBRES_PAIS.get(f['sitio'], f['sitio']))})"} for f in e["filas"]]
-    return jsonify({**e, "filas": filas, "claude_texto": _ver(e["claude_usd"]), "avatares_texto": _ver(e["avatares_usd"]),
+    return jsonify({**e, "filas": filas, "claude_usd": gastos.precio(e["claude_usd"]),
+                    "avatares_usd": gastos.precio(e["avatares_usd"]), "total_usd": gastos.precio(e["total_usd"]),
+                    "claude_texto": _ver(e["claude_usd"]), "avatares_texto": _ver(e["avatares_usd"]),
                     "texto": _ver(e["total_usd"]), "pais": pais, "plataformas": plats, "redes": redes, "topes": topes})
 
 
@@ -714,7 +715,7 @@ def investigacion_iniciar(cliente, eid):
     try:
         pais, plats, redes, topes = _pedido_investigacion(request.form, est, cliente)
         estimado = investigacion.estimar(est, pais, plats, redes, topes)
-        visto = float(request.form.get("total_visto") or 0)
+        visto = gastos.costo_de_precio(request.form.get("total_visto")) or 0.0   # precio visto → costo (cobros §6)
     except (datos.ErrorDatos, ErrorFuente, ValueError) as ex:
         flash(str(ex), "error")
         return _volver(cliente, eid)

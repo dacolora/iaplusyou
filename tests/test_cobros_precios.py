@@ -5,6 +5,8 @@ import re
 
 import pytest
 
+from tests.test_rutas_guiones_pipeline import catalogo_vacio, subidas  # noqa: F401 — fixtures
+
 MARGEN = 1.5
 
 
@@ -175,7 +177,7 @@ def test_las_tarifas_escritas_en_configuracion_llevan_el_margen(libro, pagina):
     assert f"(+{gastos.formatear(wavespeed_imagen.COSTO_USD_UPSCALE * MARGEN)}, solo aplica a fotos)" in html
     assert f"{gastos.formatear(fal_audio.COSTO_USD_POR_PISTA_MUSICA * MARGEN)} solo la primera vez" in html
     recargo = flowplus_modelos.VIDEO["kling_o3_pro"]["audio_nativo"]["recargo_usd_s"] * MARGEN
-    assert f"Kling cobra US$ {recargo:.3f}".replace(".", ",") + " por segundo más" in html
+    assert f"Kling: US$ {recargo:.3f}".replace(".", ",") + " más por segundo" in html
     assert "0,028" not in html and "+$0.04" not in html and "USD 0,02" not in html
 
 
@@ -220,14 +222,6 @@ def test_sin_cobros_el_anuncio_hablado_sigue_igual(hablado_app):
     assert r.status_code == 200
 
 
-def test_la_cadena_de_escenas_compara_el_costo_y_avisa_con_el_precio():
-    """`total_visto` viaja como costo en data-gpg-cuerpo; solo el texto lleva margen."""
-    import re as _re
-    src = open("templates/_gpg_cadena.html", encoding="utf-8").read()
-    assert '"total_visto": C.precio}' in src and '"total_visto": f.rehacer_precio}' in src
-    assert len(_re.findall(r"\(C\.precio \| precio\)", src)) == 2
-
-
 # --- Nicho: el texto con margen, la cifra que vuelve como costo -----------------------------
 
 @pytest.fixture()
@@ -238,18 +232,118 @@ def nicho_app(libro, monkeypatch, tmp_path):
     return fixture_nicho.__wrapped__(None, monkeypatch, tmp_path)
 
 
-def test_nicho_estimados_muestran_precio_y_devuelven_costo(libro, nicho_app):
+def _exigidos(monkeypatch, modulo):
+    """Lo que `modulo.libro.exigir` recibe (sin cambiar lo que hace)."""
+    pedidos = []
+    original = modulo.libro.exigir
+    monkeypatch.setattr(modulo.libro, "exigir", lambda c, usd, **k: (pedidos.append(usd), original(c, usd, **k))[1])
+    return pedidos
+
+
+def _como_user_acme(c):
+    with c.session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    return c
+
+
+def test_nicho_al_navegador_solo_precios_y_al_libro_el_costo(libro, nicho_app, monkeypatch):
     import gastos
-    from nicho import datos
+    from nicho import avatares, datos, investigacion
+    from nicho import rutas as nicho_rutas
     _cobra(libro, milesimas=50_000)
-    c = nicho_app["c"]
+    c = _como_user_acme(nicho_app["c"])
     eid = datos.crear_estudio("acme", "X", tema="pantuflas", pais="SE")
     d = c.get(f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar?actor=tiktok_comentarios&max=400").get_json()
-    assert d["usd"] == 0.5 and d["texto"] == gastos.formatear(0.5 * MARGEN)
+    assert d["usd"] == 0.75 and d["texto"] == gastos.formatear(0.5 * MARGEN)    # costo 0,50: no llega
     d = c.get(f"/cliente/acme/nicho/{eid}/investigacion/estimar?pais=SE&plataformas=amazon&consultas=2").get_json()
-    assert d["texto"] == gastos.formatear(d["total_usd"] * MARGEN)             # se ve el precio…
-    assert d["claude_texto"] == gastos.formatear(d["claude_usd"] * MARGEN)
-    # …y `total_usd` (lo que el formulario manda como `total_visto`) sigue siendo el costo recalculable
-    from nicho import investigacion
     e = investigacion.estimar(datos.estudio("acme", eid), "SE", ["amazon"], [], investigacion.normalizar_topes({"consultas": 2}))
-    assert d["total_usd"] == e["total_usd"]
+    assert d["total_usd"] == round(e["total_usd"] * MARGEN, 4) and d["texto"] == gastos.formatear(e["total_usd"] * MARGEN)
+    assert d["claude_usd"] == round(e["claude_usd"] * MARGEN, 4) and d["avatares_usd"] == round(e["avatares_usd"] * MARGEN, 4)
+    assert d["filas"][0]["busqueda_usd"] == round(e["filas"][0]["busqueda_usd"] * MARGEN, 4)
+    # Iniciar con el precio visto: arranca y el libro recibe el COSTO
+    pedidos = _exigidos(monkeypatch, nicho_rutas)
+    monkeypatch.setattr(nicho_rutas.tareas_investigacion, "avanzar", lambda c_, e_: None)
+    r = c.post(f"/cliente/acme/nicho/{eid}/investigacion",
+               data={"pais": "SE", "plataformas": "amazon", "consultas": "2", "total_visto": str(d["total_usd"])})
+    assert r.status_code == 302 and pedidos == [pytest.approx(e["total_usd"])]
+    assert datos.investigacion("acme", eid).get("estado")                       # arrancó
+    # Completar avatares: el hidden lleva el precio; con él se encola, con el costo no
+    monkeypatch.setattr(avatares, "estimar_completar", lambda cl, ei: {"usd": 0.4, "avatares": 2})
+    html = c.get(f"/cliente/acme/nicho/{eid}").get_data(as_text=True)
+    assert 'name="total_visto"' in html, "el formulario de completar no se pintó"
+    assert 'name="total_visto" value="0.6"' in html and 'value="0.4"' not in html
+    encolados = []
+    monkeypatch.setattr(nicho_rutas.tareas_nicho, "encolar_completar",
+                        lambda cl, ei, costo_estimado=None: encolados.append(costo_estimado) or True)
+    datos.actualizar_investigacion("acme", eid, lambda i: {**i, "estado": "lista"})
+    c.post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": "0.4"})  # el costo NO es lo que vio
+    assert encolados == []
+    c.post(f"/cliente/acme/nicho/{eid}/completar", data={"total_visto": "0.6"})
+    assert encolados == [0.4]
+
+
+@pytest.fixture()
+def editor_app(libro, monkeypatch):
+    monkeypatch.setenv("FLASK_SECRET_KEY", "clave-de-prueba-larga-1234567890")
+    import dashboard
+    import trabajos
+    dashboard.app.config["TESTING"] = True
+    monkeypatch.setattr(trabajos, "encolar", lambda *a, **k: True)
+    return dashboard
+
+
+def test_editor_estimados_solo_con_precio(libro, editor_app):
+    import gastos
+    from tests.test_rutas_editor import _edicion
+    _cobra(libro, milesimas=50_000)
+    ed, _c, _v = _edicion()
+    c = _como_user_acme(editor_app.app.test_client())
+    j = c.post(f"/cliente/acme/ediciones/{ed['id']}/voz/estimar",
+               json={"texto": "Hola mundo", "voz": "Rachel", "idioma": "es", "velocidad": "normal"}).get_json()
+    costo = gastos.estimar("voz_editor", caracteres=len("Hola mundo"))["usd"]
+    assert j["usd"] == round(costo * MARGEN, 4) and j["usd"] != costo
+    assert j["precio"] == gastos.formatear(costo * MARGEN) + " aprox."
+
+
+@pytest.fixture()
+def pipeline(libro, monkeypatch, tmp_path):
+    from tests.test_rutas_guiones_pipeline import app as fixture_pipeline
+    return fixture_pipeline.__wrapped__(None, monkeypatch, tmp_path)
+
+
+def test_cadena_de_escenas_ve_el_precio_y_cobra_el_costo(libro, pipeline, monkeypatch, catalogo_vacio, subidas):
+    import re as _re
+
+    from guiones import cadena, datos
+    from guiones import rutas_pipeline
+    from tests.test_rutas_guiones_pipeline import BASE, _con_imagenes, _video_armado
+    gid, vid = _video_armado(pipeline)
+    _con_imagenes(pipeline, vid, subidas)
+    _cobra(libro, milesimas=50_000)
+    c = _como_user_acme(pipeline["c"])
+    costo = cadena.precio(datos.video("acme", vid))
+    html = c.get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    vistos = [float(x) for x in _re.findall(r'&#34;total_visto&#34;: ([0-9.]+)|"total_visto": ([0-9.]+)', html) for x in x if x]
+    assert vistos == [round(costo * MARGEN, 6)]                                  # al navegador, solo el precio
+    assert f"{costo * MARGEN:.2f}" in html
+    pedidos = _exigidos(monkeypatch, rutas_pipeline)
+    r = c.post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": costo})        # el costo NO es lo que vio
+    assert r.status_code == 409 and r.get_json()["precio"] == round(costo * MARGEN, 4) and pedidos == []
+    r = c.post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": vistos[0]})
+    assert r.status_code == 202, r.get_json()
+    assert pedidos and all(p == pytest.approx(costo) for p in pedidos)          # la ruta y el encolar: costo
+    assert cadena.estado(datos.video("acme", vid))["aprobado_usd"] == costo
+
+
+def test_el_filtro_no_se_congela_al_compilar(libro):
+    """Jinja pliega al compilar los filtros sobre constantes: la MISMA plantilla
+    compilada, pintada con dos márgenes, tiene que dar dos cifras."""
+    import dashboard
+    from flask import g
+    plantilla = dashboard.app.jinja_env.from_string("{{ 2|precio }}|{% if margen_precio() == 1 %}sin{% else %}con{% endif %}")
+    with dashboard.app.test_request_context("/cliente/acme"):
+        g.margen_precio = MARGEN
+        assert plantilla.render() == "3.0|con"
+    with dashboard.app.test_request_context("/cliente/acme"):
+        g.margen_precio = 1.0
+        assert plantilla.render() == "2.0|sin"

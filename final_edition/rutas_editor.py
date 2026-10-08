@@ -312,7 +312,7 @@ def subtitulos_estimar(cliente, edicion_id):
         return jsonify({"faltan": [], "segundos": 0, "usd": 0, "precio": "", "gratis": True})
     estimado = gastos.estimar("transcripcion", segundos=segundos, sin_duracion=sin_duracion)
     return jsonify({"faltan": faltan, "segundos": None if sin_duracion else round(segundos, 1),
-                    "usd": estimado["usd"], "precio": estimado["texto"], "gratis": False})
+                    "usd": estimado["usd_precio"], "precio": estimado["texto"], "gratis": False})   # con margen (cobros §6)
 
 
 @bp.post("/<int:edicion_id>/subtitulos/transcribir", endpoint="transcribir")
@@ -402,7 +402,7 @@ def voz_estimar(cliente, edicion_id):
     solo_subtitulos = bool(existente) and not ya_existe
     estimado = gastos.estimar("voz_editor", caracteres=len(texto), solo_subtitulos=solo_subtitulos,
                               duracion_ms=existente.get("duracion_ms") if existente else None)
-    return jsonify({"caracteres": len(texto), "usd": estimado["usd"], "precio": estimado["texto"],
+    return jsonify({"caracteres": len(texto), "usd": estimado["usd_precio"], "precio": estimado["texto"],   # con margen (cobros §6)
                     "ya_existe": ya_existe, "solo_subtitulos": solo_subtitulos})
 
 
