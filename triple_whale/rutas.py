@@ -224,7 +224,7 @@ def _pedir_analisis(cliente, alc, a):
     foto = mejorar.foto(a, creativos.get((a["canal"], a["ad_id"])), cuenta,
                         mejorar.ganadores_del_canal(ev, a, creativos))
     foto["alcance_canal"] = alc.get("canal")     # el filtro de canal del panel también es del alcance (revisión final, A3)
-    aid =datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
+    aid = datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
                                alc["config"]["moneda"], foto, pedido_por=session.get("usuario"))
     try:
         encolada = tareas_tw.encolar_analisis(cliente, aid, a["canal"], a["ad_id"])
