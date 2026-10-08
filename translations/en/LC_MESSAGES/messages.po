@@ -149,8 +149,16 @@ msgstr[0] "%(capas)s charged"
 msgstr[1] "%(capas)s charged"
 
 #, python-format
+msgid "%(cliente)s recargó %(monto)s (%(medio)s)."
+msgstr "%(cliente)s topped up %(monto)s (%(medio)s)."
+
+#, python-format
 msgid "%(color)s: sin fotos en la tienda; revisa el catálogo."
 msgstr "%(color)s: no photos in the store; check the catalog."
+
+#, python-format
+msgid "%(concepto)s no llegó. No descontamos %(monto)s de tu saldo."
+msgstr "%(concepto)s didn't arrive. We did not deduct %(monto)s from your balance."
 
 #, python-format
 msgid "%(correo)s: abre el enlace que te mandamos o pide uno nuevo en Configuración › Cuenta. Sin correo confirmado no puedes conectar Meta ni una tienda."
@@ -5248,6 +5256,10 @@ msgstr "The sprint batch “%(nombre)s” finished: %(listas)s piece(s) ready an
 msgid "El lugar y la luz; el producto entra a cuadro y se ve funcionando ahí."
 msgstr "The place and the light; the product enters the frame and is seen working there."
 
+#, python-format
+msgid "El margen va de %(min)s a %(max)s."
+msgstr "The margin ranges from %(min)s to %(max)s."
+
 msgid "El material de cerca, un giro que muestra la forma completa y un cierre de lucimiento sobre el producto."
 msgstr "The material up close, a turn that shows the whole shape and a hero close on the product."
 
@@ -5493,6 +5505,9 @@ msgstr "The text “{texto}” goes off the video: shrink it or reduce its width
 #, python-format
 msgid "El token no ve el Business %(business)s (%(error)s). Revisa que el usuario del sistema pertenezca a ese Business Manager y tenga permiso business_management."
 msgstr "The token can't see the Business %(business)s (%(error)s). Check that the system user belongs to that Business Manager and has the business_management permission."
+
+msgid "El umbral no puede ser negativo."
+msgstr "The threshold cannot be negative."
 
 msgid "El usuario debe tener entre 3 y 40 caracteres: solo minúsculas, números, puntos, guiones y guiones bajos."
 msgstr "The username must be between 3 and 40 characters: only lowercase letters, numbers, dots, hyphens and underscores."
@@ -12786,6 +12801,10 @@ msgstr "Rebuild the prompt"
 msgid "Reason for failure with those solutions"
 msgstr "Reason for failure with those solutions"
 
+#, python-format
+msgid "Recarga acreditada en %(cliente)s"
+msgstr "Top-up credited to %(cliente)s"
+
 msgid "Recarga esta página. TikTok no tiene título aparte: el texto de la publicación es el caption completo (sin enlaces; se agrega «Link en bio»)."
 msgstr "Reload this page. TikTok has no separate title: the post's text is the full caption (no links; “Link in bio” gets added)."
 
@@ -13367,6 +13386,14 @@ msgstr "Knows they have the problem, but doesn't know of solutions"
 
 msgid "Sacando fotogramas"
 msgstr "Extracting frames"
+
+#, python-format
+msgid "Saldo insuficiente: esto cuesta ≈ %(precio)s y tienes %(disponible)s disponibles. Recarga para seguir."
+msgstr "Insufficient balance: this costs ≈ %(precio)s and you have %(disponible)s available. Top up to continue."
+
+#, python-format
+msgid "Saldo insuficiente: tienes %(disponible)s disponibles. Recarga para seguir."
+msgstr "Insufficient balance: you have %(disponible)s available. Top up to continue."
 
 msgid "Sale de lo que elegiste en «Imágenes de cada escena»."
 msgstr "Comes from what you chose in “Images for each scene”."
@@ -14375,6 +14402,10 @@ msgstr "Suggest with AI (%(precio)s)"
 msgid "Sugerir de la biblioteca (gratis)"
 msgstr "Suggest from the library (free)"
 
+#, python-format
+msgid "Sumamos %(monto)s a tu saldo (%(medio)s)."
+msgstr "We added %(monto)s to your balance (%(medio)s)."
+
 msgid "Superior al promedio"
 msgstr "Above average"
 
@@ -14457,6 +14488,10 @@ msgstr "You're missing camera-movement or transition references and there are %(
 
 msgid "Te mandamos un enlace para confirmarlo; con él también recuperas la contraseña si la olvidas."
 msgstr "We'll send you a link to confirm it; you can also use it to recover your password if you forget it."
+
+#, python-format
+msgid "Te quedan %(monto)s. Recarga para seguir creando."
+msgstr "You have %(monto)s left. Top up to keep creating."
 
 msgid "Temporada agregada desde el calendario."
 msgstr "Season added from the calendar."
@@ -15281,8 +15316,14 @@ msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · 
 msgid "Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
 msgstr "Your project uses its own Meta app: CreatvMachine operates only with your credentials and your data doesn't pass through any third-party app."
 
+msgid "Tu recarga se acreditó"
+msgstr "Your top-up was credited"
+
 msgid "Tu respuesta"
 msgstr "Your answer"
+
+msgid "Tu saldo está bajo"
+msgstr "Your balance is low"
 
 msgid "Tu sesión se cerró; entra de nuevo."
 msgstr "Your session closed; log in again."
@@ -15504,6 +15545,9 @@ msgstr "A person with the product: an attention-grabbing hook, natural use and a
 
 msgid "Una persona real usando el producto de forma natural; el producto sigue siendo el protagonista."
 msgstr "A real person using the product naturally; the product is still the star."
+
+msgid "Una pieza falló y no se te cobró"
+msgstr "A piece failed and you were not charged"
 
 msgid "Una por línea"
 msgstr "One per line"
