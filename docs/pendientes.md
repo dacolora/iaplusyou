@@ -124,8 +124,8 @@ como `plata` por sus cobros o por poder activar pauta.
 ## Cerrados al revisar
 
 Lote 5, partes A y B, Codex, 2026-10-07 a 2026-10-08: arreglos y preguntas
-registrados en las filas; informe y expectativas antiguas cambiadas en
-`docs/superpowers/relevos/2026-10-08-codex-lote5-a-b.md`.
+registrados en las filas; el informe de Codex y la lista de expectativas antiguas cambiadas quedaron en el commit
+ea5739ce (mensaje) y en la revisión del 2026-10-08, no en un archivo del repo.
 La suite A terminó con `10 failed, 6162 passed, 1 skipped, 3 warnings in 284.68s (0:04:44)`;
 tras ajustar sus pruebas antiguas se ejecutó B. La suite A+B terminó con
 `2 failed, 6207 passed, 1 skipped, 3 warnings in 305.22s (0:05:05)`.
@@ -136,8 +136,8 @@ vigilados por mutaciones, lectura pesada prohibida en la página del proyecto, m
 restaurado a ecef5555 e inventario separado, TikTok Compartir/fotos, aviso del director
 redactado y aviso de presupuesto junto al botón en el único resumen vivo.
 PND-100 vuelve a Abiertos, bloqueado por Daniel; PND-146 sigue abierto para lote 6.
-Verificación dirigida solicitada: `198 passed in 24.30s`.
-Única suite completa de estas correcciones: `6223 passed, 1 skipped, 3 warnings in 414.93s (0:06:54)`.
+Verificación dirigida solicitada: `196 passed` (sin la prueba de i18n que fijaba textos, retirada por Claude).
+Suite completa de estas correcciones (Claude, 920433ca): `6221 passed, 1 skipped, 3 warnings`.
 Sin red, proveedores reales ni commits. No hubo verificación visual; corresponde a Claude
 mirar el mapa y el aviso junto al botón y revisar los caminos de gasto pendientes de PND-146.
 
@@ -173,13 +173,12 @@ Fallos: `tests/test_modo_oscuro.py::test_superficies_oscuras[mapa_codigo.html]`
 `tests/test_rutas_exp_nuevo_presupuesto.py::test_solo_un_resumen_anuncia_sus_cambios_al_lector_de_pantalla`
 (`assert 2 == 1`). PND-100 vuelve a abiertos y PND-136 conserva deudas y preguntas para Daniel. Después de esta suite
 no se cambia código ni expectativas y no se repite la suite. Catálogo sin fuzzy.
-Informe y lista de expectativas antiguas A+B: `docs/superpowers/relevos/2026-10-08-codex-lote5-a-b.md`.
 
-Corrección posterior de las dos regresiones del lote 5, 2026-10-08, pedida por Daniel:
+Corrección posterior de las dos regresiones del lote 5, 2026-10-08, pedida por Claude:
 pruebas antiguas intactas; style del mapa idéntico a HEAD; exp-minimo hereda del único resumen vivo.
 Sin arreglos: `4 failed in 1.65s`; restaurados: `4 passed in 1.24s`;
 dirigidas relacionadas: `227 passed in 5.36s`. Única suite completa de esta corrección:
-`6210 passed, 1 skipped, 3 warnings in 284.71s (0:04:44)`. PND-100 vuelve a Cerrados al revisar;
+`6210 passed, 1 skipped, 3 warnings in 284.71s (0:04:44)`. PND-100 volvió después a Abiertos (bloqueado por Daniel);
 PND-136 conserva sus restantes preguntas/deudas. No hubo commits ni red.
 
 Validación original del lote 4, 2026-10-05, sin red, proveedores reales ni commits: única ejecución completa
