@@ -82,7 +82,7 @@ instead of double-launching. Tasks that spend credits are queued with
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
-`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has two lanes:
+`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has three lanes (the third one, `lectura`, is below):
 `CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`, `hablado_voz`)
 runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
 `HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
@@ -97,6 +97,15 @@ transaction (`cola.terminar_y_encolar`, retried; if it still fails the task goes
 start gives its task back (`cola.devolver`). **`dashboard.py` runs with `use_reloader=False`
 on purpose**: Flask's auto-reloader kills the whole process on file changes, which
 would silently abort any in-flight background generation.
+
+**Lane `lectura` (2026-10-08, ruling R16 of «Meta rendimiento»):** `CARRIL_LECTURA = ("meta_rend_sincronizar",)`
+runs in its own single thread (`HILOS_LECTURA = 1`), and the general lane excludes both `CARRIL_CREAR` and
+`CARRIL_LECTURA`. Why: the first copy of one Meta ad account measured on the real API takes 8 min (Norway) to
+14 min (Netherlands), about an hour for happyflops' 7 accounts; on the single general thread that would have
+blocked experiment launches and refreshes, Triple Whale and the stores for that long. Copies of different accounts
+still run one after another (Meta's rate limits are per user+app, shared across accounts). It is free (reading
+Meta never charges, `max_intentos=2`). `meta_rend_sincronizar_todas` and `meta_rend_limpiar` stay in the general
+lane (instant). A new long, free, read-only sync can join this lane; anything that charges stays out of it.
 
 **Higgsfield API wrapper** (`higgsfield_client.py`): all calls follow launch ->
 `poll_until_done(status_url)` -> extract-result, for both video (`kling-2.1-pro`,

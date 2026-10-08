@@ -1,13 +1,17 @@
 """
 Worker de Creatv Machine: proceso aparte de gunicorn (servicio systemd
-creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en dos
-carriles (spec 2026-09-28-crear-sin-cola):
+creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en tres
+carriles (spec 2026-09-28-crear-sin-cola; el de lectura, spec 2026-10-08 meta rendimiento):
 
 - **crear**: las generaciones de Crear (`CARRIL_CREAR`) en hasta `HILOS_CREAR`
   hilos a la vez — casi todo su tiempo es esperar al proveedor, y una espera
   colgada (Wan 3.0 llegó a 20 min) ya no deja a las demás en fila. Los lotes de
   Sprints (prioridad < 5) ocupan como mucho `HILOS_LOTE`, así una pieza suelta
   siempre encuentra hilo.
+- **lectura**: la copia de las cuentas de Meta (`CARRIL_LECTURA`, `meta_rend_sincronizar`)
+  en un solo hilo (`HILOS_LECTURA`): la primera copia de una cuenta tarda de 8 a 14 minutos
+  (medido con la API real) y no debe dejar al carril general —lanzar y refrescar
+  experimentos, Triple Whale, tiendas— esperando una hora. Gratis: leer de Meta no cobra.
 - **general**: todo lo demás, de a una y en orden, como siempre (renders con
   1 CPU, Meta, periódicas…).
 
@@ -76,6 +80,13 @@ CARRIL_CREAR = ("flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flow
 HILOS_CREAR = 4
 HILOS_LOTE = 2
 PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida desde Crear
+
+# Carril de lectura (ruling R16, 2026-10-08): la copia de rendimiento de Meta, UN hilo propio. Las copias de
+# varias cuentas siguen una detrás de otra (los límites de uso de Meta son por usuario y app, no por cuenta), pero
+# ya no ocupan el único hilo general. Las periódicas `meta_rend_sincronizar_todas` y `meta_rend_limpiar` son
+# instantáneas y se quedan en el general.
+CARRIL_LECTURA = ("meta_rend_sincronizar",)
+HILOS_LECTURA = 1
 
 # Parada limpia: SIGINT/SIGTERM (systemd manda SIGINT, TimeoutStopSec=600) solo
 # levantan esta bandera; el supervisor deja de repartir y espera a sus hilos.
@@ -265,7 +276,8 @@ def _ocupados():
     crear = [v for v in vuelo if v["carril"] == "crear"]
     lotes = [v for v in crear if v["prioridad"] < PRIORIDAD_SUELTA]
     general = [v for v in vuelo if v["carril"] == "general"]
-    return len(crear), len(lotes), len(general)
+    lectura = [v for v in vuelo if v["carril"] == "lectura"]
+    return len(crear), len(lotes), len(general), len(lectura)
 
 
 def repartir():
@@ -277,7 +289,7 @@ def repartir():
     encolar_periodicas()
     arrancadas = 0
     while not debe_parar():
-        crear, lotes, _ = _ocupados()
+        crear, lotes, _, _ = _ocupados()
         if crear >= HILOS_CREAR:
             break
         tarea = cola.reclamar(tipos=CARRIL_CREAR, prioridad_min=PRIORIDAD_SUELTA if lotes >= HILOS_LOTE else None)
@@ -286,8 +298,12 @@ def repartir():
         if not _lanzar(tarea, "crear"):
             break
         arrancadas += 1
+    if not debe_parar() and _ocupados()[3] < HILOS_LECTURA:
+        tarea = cola.reclamar(tipos=CARRIL_LECTURA)
+        if tarea is not None and _lanzar(tarea, "lectura"):
+            arrancadas += 1
     if not debe_parar() and _ocupados()[2] == 0:
-        tarea = cola.reclamar(excluir_tipos=CARRIL_CREAR)
+        tarea = cola.reclamar(excluir_tipos=tuple(CARRIL_CREAR) + tuple(CARRIL_LECTURA))
         if tarea is not None and _lanzar(tarea, "general"):
             arrancadas += 1
     return arrancadas

@@ -253,3 +253,76 @@ def test_continuar_acepta_una_fecha_de_verdad(base_temporal):
                                                         "ejecutar_desde": datetime.now() + timedelta(minutes=1)})
     assert isinstance(cola.consultar_por_id(nueva)["ejecutar_desde"], str)
     assert cola.reclamar() is None      # todavía no le toca
+
+
+# --- Carril de lectura (ruling R16, 2026-10-08): la copia de Meta no frena al carril general ---
+
+def _bloqueante_de_meta(monkeypatch):
+    """Sustituye (solo en esta prueba) la copia real de Meta por una que espera, y cuenta cuántas corren a la vez."""
+    import tareas
+    arrancadas, soltar, activas = [], threading.Event(), {"ahora": 0, "maximo": 0}
+    candado = threading.Lock()
+
+    def _copia(t):
+        with candado:
+            arrancadas.append(t["id"])
+            activas["ahora"] += 1
+            activas["maximo"] = max(activas["maximo"], activas["ahora"])
+        try:
+            soltar.wait(5)
+        finally:
+            with candado:
+                activas["ahora"] -= 1
+        return "ok"
+    monkeypatch.setitem(tareas.REGISTRO, "meta_rend_sincronizar", _copia)
+    return arrancadas, soltar, activas
+
+
+def test_el_carril_de_lectura_es_la_copia_de_meta_y_nada_mas():
+    import worker
+    assert worker.CARRIL_LECTURA == ("meta_rend_sincronizar",) and worker.HILOS_LECTURA == 1
+    assert not set(worker.CARRIL_LECTURA) & set(worker.CARRIL_CREAR)
+
+
+def test_una_copia_de_meta_en_curso_no_frena_al_carril_general(w, monkeypatch):
+    import cola
+    copias, soltar_meta, _ = _bloqueante_de_meta(monkeypatch)
+    general, soltar_general = _bloqueante("prueba_render")
+    m = cola.encolar("meta_rend_sincronizar", {}, job_id="hf__meta_rend__act_1", prioridad=2)
+    g = cola.encolar("prueba_render", {})
+    assert w.repartir() == 2
+    assert _esperar(lambda: copias == [m] and general == [g])    # corren a la vez, cada una en su carril
+    soltar_meta.set(); soltar_general.set()
+    w.esperar_hilos(timeout=5)
+    assert {cola.consultar_por_id(i)["estado"] for i in (m, g)} == {"hecha"}
+
+
+def test_dos_copias_de_meta_nunca_corren_a_la_vez_y_el_general_no_toma_ninguna(w, monkeypatch):
+    import cola
+    copias, soltar, activas = _bloqueante_de_meta(monkeypatch)
+    m1 = cola.encolar("meta_rend_sincronizar", {}, job_id="hf__meta_rend__act_1", prioridad=2)
+    m2 = cola.encolar("meta_rend_sincronizar", {}, job_id="hf__meta_rend__act_2", prioridad=2)
+    assert w.repartir() == 1
+    assert _esperar(lambda: copias == [m1])
+    for _ in range(3):                  # el carril general está libre y aun así no toma la segunda
+        assert w.repartir() == 0
+    assert copias == [m1] and cola.consultar_por_id(m2)["estado"] == "pendiente"
+    soltar.set()
+    assert _esperar(lambda: w.repartir() >= 0 and copias == [m1, m2])     # la segunda entra cuando la primera acaba
+    w.esperar_hilos(timeout=5)
+    assert activas["maximo"] == 1 and cola.consultar_por_id(m2)["estado"] == "hecha"
+
+
+def test_el_general_sigue_tomando_lo_demas_aunque_haya_copias_de_meta_esperando(w, monkeypatch):
+    import cola
+    copias, soltar, _ = _bloqueante_de_meta(monkeypatch)
+    general, soltar_general = _bloqueante("prueba_render")
+    for act in ("act_1", "act_2"):
+        cola.encolar("meta_rend_sincronizar", {}, job_id=f"hf__meta_rend__{act}", prioridad=2)
+    w.repartir()
+    assert _esperar(lambda: len(copias) == 1)
+    g = cola.encolar("prueba_render", {})
+    w.repartir()
+    assert _esperar(lambda: general == [g])
+    soltar.set(); soltar_general.set()
+    w.esperar_hilos(timeout=5)

@@ -197,6 +197,19 @@ def test_interrumpida_deja_en_error_solo_a_la_que_estaba_copiando(hf):
     assert cuentas.cuenta("hf", "act_2")["estado"] == "ok"
 
 
+def test_interrumpida_no_toca_la_cuenta_de_otro_proyecto(hf):
+    cuentas.elegir("otro", [{"id": "act_77", "name": "Otro", "currency": "USD"}])
+    for cliente, act in (("hf", "act_1"), ("hf", "act_2"), ("otro", "act_77")):
+        cuentas.actualizar(cliente, act, estado="copiando")
+    t._sync_interrumpida(_tarea("act_1"), "reinicio")
+    assert [cuentas.cuenta(c, a)["estado"] for c, a in (("hf", "act_1"), ("hf", "act_2"), ("otro", "act_77"))] == \
+        ["error", "copiando", "copiando"]
+    # Un payload con el proyecto equivocado para esa cuenta no la toca (la cuenta es de «hf», no de «otro»).
+    cuentas.actualizar("hf", "act_1", estado="copiando")
+    t._sync_interrumpida(_tarea("act_1", cliente="otro"), "reinicio")
+    assert cuentas.cuenta("hf", "act_1")["estado"] == "copiando"
+
+
 # ------------------------------------------------------- periódicas ---
 
 def test_todas_encola_una_por_cuenta_de_cada_proyecto(hf):
@@ -233,6 +246,7 @@ def test_registradas_y_periodicas_en_el_worker():
     tareas.cargar_todas()
     assert {"meta_rend_sincronizar", "meta_rend_sincronizar_todas", "meta_rend_limpiar"} <= set(tareas.REGISTRO)
     assert tareas.AL_INTERRUMPIR["meta_rend_sincronizar"] is t._sync_interrumpida
+    assert "meta_rend_sincronizar" in worker.CARRIL_LECTURA and "meta_rend_sincronizar_todas" not in worker.CARRIL_LECTURA
     periodicas = dict(worker.PERIODICAS)
     assert periodicas["meta_rend_sincronizar_todas"] == 10800 and periodicas["meta_rend_limpiar"] == 86400
     tipos = [tipo for tipo, _ in worker.PERIODICAS]

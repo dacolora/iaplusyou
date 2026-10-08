@@ -8,7 +8,6 @@
 Un error de Meta (o cualquier otro) deja ESA cuenta en estado `error` con el motivo en palabras y sin token, y sube
 para que la cola reintente; las demás cuentas del proyecto no se enteran. Si Meta pidió esperar (límite de uso) pasa
 lo mismo: el reintento o la siguiente periódica sigue donde se quedó, porque la copia inicial se reanuda."""
-import logging
 from datetime import date, timedelta
 
 from flask_babel import gettext
@@ -18,8 +17,6 @@ import meta_conexion
 import trabajos
 from meta_rendimiento import cuentas, datos, graph, sync
 from tareas import al_interrumpir, registrar
-
-log = logging.getLogger("creatv.tareas.meta_rendimiento")
 
 TIPO_SYNC = "meta_rend_sincronizar"
 TIPO_TODAS = "meta_rend_sincronizar_todas"
