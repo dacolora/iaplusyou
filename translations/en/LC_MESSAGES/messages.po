@@ -14162,6 +14162,9 @@ msgstr "No brand references yet."
 msgid "Sin referencias ni producto: el modelo recibe el texto tal cual, sin marca ni logos."
 msgstr "No references or product: the model gets the text as-is, with no brand or logos."
 
+msgid "Sin saldo no se puede generar nada nuevo. Recarga en Configuración › Saldo y recargas y sigues donde ibas."
+msgstr "Nothing new can be generated without a balance. Top up in Settings › Balance and top-ups and pick up where you left off."
+
 msgid "Sin saldo: recarga para seguir generando."
 msgstr "No balance: top up to keep generating."
 
@@ -14741,6 +14744,13 @@ msgstr "We'll send you a link to confirm it; you can also use it to recover your
 msgid "Te quedan %(monto)s. Recarga para seguir creando."
 msgstr "You have %(monto)s left. Top up to keep creating."
 
+#, python-format
+msgid "Te quedan %(saldo)s. Recarga en Configuración › Saldo y recargas antes de que se acabe."
+msgstr "You have %(saldo)s left. Top up in Settings › Balance and top-ups before it runs out."
+
+msgid "Te quedaste sin saldo"
+msgstr "You are out of balance"
+
 msgid "Temporada agregada desde el calendario."
 msgstr "Season added from the calendar."
 
@@ -14862,6 +14872,9 @@ msgstr "You have unsaved changes here. Close the details anyway?"
 
 msgid "Tienes cambios sin guardar, por eso no se recargó sola."
 msgstr "You have unsaved changes, so it didn't reload on its own."
+
+msgid "Tienes una recarga sin terminar"
+msgstr "You have an unfinished top-up"
 
 #, python-format
 msgid "TikTok rechazó el video: %(error)s"
@@ -15582,6 +15595,9 @@ msgstr "Your balance now:"
 msgid "Tu saldo está bajo"
 msgstr "Your balance is low"
 
+msgid "Tu saldo se está acabando"
+msgstr "Your balance is running low"
+
 msgid "Tu sesión se cerró; entra de nuevo."
 msgstr "Your session closed; log in again."
 
@@ -15814,6 +15830,10 @@ msgstr "One per line"
 
 msgid "Una por línea; por ejemplo, los diálogos exactos del guion. Claude no las puede tocar."
 msgstr "One per line; for example, the exact dialogue lines from the script. Claude can't touch them."
+
+#, python-format
+msgid "Una recarga de %(monto)s con Bold sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."
+msgstr "A %(monto)s top-up with Bold is still pending. If you already paid, it is credited on its own in a few minutes; if not, create a new link in Settings › Balance and top-ups."
 
 msgid "Una recarga manual es positiva; para descontar, usa un ajuste."
 msgstr "A manual top-up is positive; to deduct, use an adjustment."
