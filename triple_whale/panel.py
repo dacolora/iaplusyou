@@ -279,7 +279,8 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
         "ultima_copia": (min(copias) if len(copias) == len(en_alcance) else None) if copias else None,
         "por_tienda": (_por_tienda(cliente, tiendas_por_id, desde, hasta, desde_prev, hasta_prev)
                        if varias and tienda_actual is None else []),
-        "gasto_duplicado": datos.gasto_duplicado(cliente, desde, hasta) if varias else 0.0,
+        # La nota de cuenta compartida mira el alcance: una tienda con cuenta propia no la lleva.
+        "gasto_duplicado": datos.gasto_duplicado(cliente, desde, hasta, tienda_id) if varias else 0.0,
         "jobs_sync": jobs_sync,
         "sync_ocupado": all(t["id"] in ocupadas for t in en_alcance),
         "rango": datos.rango(cliente, tienda_id), "ev": ev, "anuncios": ev["anuncios"][:MAX_FILAS],

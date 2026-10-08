@@ -5,7 +5,8 @@
    una idea a Crear o guardar un anuncio en Referentes (nada se genera). Sin
    <script>: el JS está en _tab_triple_whale.html. Varias tiendas (spec
    2026-10-08 §6.2): con 2+ tiendas, selector «Tienda» (`data-tw-param="tienda"`),
-   «Por tienda» en «Todas», la nota de cuenta compartida si `gasto_duplicado` y
+   «Por tienda» en «Todas», la nota de cuenta compartida si `gasto_duplicado` (del
+   alcance que se mira; viendo una tienda, repetida junto a «Evaluar con IA») y
    una barra `data-poll-job` por copia en curso. #}
 {% if not tw.conectado %}
 <p class="vacio">{{ _('Triple Whale ya no está conectado en este proyecto.') }}</p>
@@ -259,6 +260,9 @@
     <input type="hidden" name="tienda" value="{{ actual.id if actual else '' }}">
     <button type="submit" class="btn-generar btn-sm">{{ _('Evaluar %(n)s anuncio(s) con IA · %(precio)s', n=tw.muestra_ia | length, precio=precio) }}</button>
   </form>
+  {% if actual and tw.gasto_duplicado > 0 %}
+  <p class="tag-advertencia tw-aviso">{{ _('Esta tienda comparte cuenta publicitaria: para evaluar anuncios conviene «Todas las tiendas».') }}</p>
+  {% endif %}
   {% else %}
   <p class="vacio">{{ _('Hacen falta al menos dos anuncios con datos en este periodo para evaluar con IA.') }}</p>
   {% endif %}

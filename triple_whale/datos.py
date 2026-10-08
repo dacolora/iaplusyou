@@ -227,12 +227,27 @@ def _duplicado_por_dia(cliente, desde, hasta):
             .group_by(por_anuncio.c.fecha).subquery())
 
 
-def gasto_duplicado(cliente, desde, hasta):
+def gasto_duplicado(cliente, desde, hasta, tienda_id=None):
     """Gasto de anuncios que llega repetido por varias tiendas en [desde, hasta]
-    (mayor que 0 = hay tiendas que comparten cuenta publicitaria)."""
-    d = _duplicado_por_dia(cliente, desde, hasta)
+    (mayor que 0 = hay tiendas que comparten cuenta publicitaria). Sin tienda
+    («Todas»): Σ por (canal, anuncio, día) de suma − máximo, lo que «Todas»
+    contaría de más. Con tienda: el gasto de ESA tienda en los (canal, anuncio,
+    día) que también traen gasto por otra tienda del proyecto; una tienda con
+    cuenta propia da 0 aunque otras dos compartan (revisión del guardián del
+    gasto, 2026-10-08). Una sola consulta, siempre filtrada por cliente."""
+    if tienda_id is None:
+        d = _duplicado_por_dia(cliente, desde, hasta)
+        q = sa.select(sa.func.coalesce(sa.func.sum(d.c.duplicado), 0))
+    else:
+        t, o = db.tw_anuncio_dia, db.tw_anuncio_dia.alias("otra")
+        en_otra = (sa.select(o.c.id).where(o.c.cliente == cliente, o.c.tienda_id != tienda_id,
+                                           o.c.canal == t.c.canal, o.c.ad_id == t.c.ad_id,
+                                           o.c.fecha == t.c.fecha, o.c.gasto > 0)
+                   .exists())
+        q = sa.select(sa.func.coalesce(sa.func.sum(t.c.gasto), 0)).where(
+            t.c.cliente == cliente, t.c.tienda_id == tienda_id, t.c.fecha >= desde, t.c.fecha <= hasta, en_otra)
     with db.conectar() as con:
-        return float(con.execute(sa.select(sa.func.coalesce(sa.func.sum(d.c.duplicado), 0))).scalar() or 0)
+        return float(con.execute(q).scalar() or 0)
 
 
 def serie_tienda(cliente, tienda_id, desde, hasta):

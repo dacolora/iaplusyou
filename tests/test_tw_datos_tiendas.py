@@ -129,6 +129,26 @@ def test_serie_tienda_todas_resta_el_gasto_duplicado(dos):
     assert (solo["gasto"], solo["ingresos"], solo["utilidad_neta"]) == (100, 300, 50)
 
 
+def test_gasto_duplicado_de_una_tienda_es_solo_lo_que_comparte_con_otra(dos):
+    """Revisión del guardián del gasto (2026-10-08): viendo UNA tienda, el gasto duplicado es el de ESA
+    tienda en los (canal, anuncio, día) que también llegan por otra tienda del proyecto; una tercera
+    tienda con cuenta propia no comparte nada aunque otras dos sí."""
+    se, no, otro = dos
+    dk = tt.agregar("acme", "llave-dk", "acme-dk.myshopify.com", pais="DK")
+    # Suecia: A (compartido con Noruega) y S (solo suyo). Una sola llamada: reemplazar pisa el rango.
+    datos.reemplazar_anuncios_canal("acme", se, DIA, DIA, [_canal("A", gasto=30), _canal("S", gasto=7)])
+    datos.reemplazar_anuncios_canal("acme", no, DIA, DIA2, [_canal("A", gasto=25),
+                                                            _canal("A", DIA2, gasto=99)])  # DIA2: solo Noruega
+    _anuncio_en("acme", dk, "D", gasto=40, pedidos=2)            # cuenta propia de Dinamarca
+    _anuncio_en("otro", otro, "D", gasto=50, pedidos=1)          # otro proyecto: no cuenta
+
+    assert datos.gasto_duplicado("acme", DIA, DIA2) == 25        # como antes: Σ (suma − máximo)
+    assert datos.gasto_duplicado("acme", DIA, DIA2, tienda_id=se) == 30
+    assert datos.gasto_duplicado("acme", DIA, DIA2, tienda_id=no) == 25
+    assert datos.gasto_duplicado("acme", DIA, DIA2, tienda_id=dk) == 0
+    assert datos.gasto_duplicado("acme", DIA2, DIA2, tienda_id=no) == 0
+
+
 def test_reemplazar_tienda_no_borra_la_otra(dos):
     se, no, _ = dos
     datos.reemplazar_tienda("acme", se, DIA, DIA, [{"fecha": DIA, "ingresos": 10}])

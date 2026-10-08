@@ -361,6 +361,35 @@ def test_panel_sin_cuenta_compartida_no_pone_la_nota(app):  # noqa: F811
     assert "Por tienda" in html and NOTA_COMPARTIDA not in html
 
 
+NOTA_EVALUAR = "Esta tienda comparte cuenta publicitaria: para evaluar anuncios conviene"
+
+
+def test_nota_de_cuenta_compartida_segun_la_tienda_que_se_mira(app):  # noqa: F811
+    """Revisión del guardián del gasto (2026-10-08): la nota sale del gasto duplicado del alcance que se
+    mira. Una tercera tienda con cuenta propia no la muestra; una que comparte la repite junto a «Evaluar
+    con IA» (evaluarla sola lee el gasto de los anuncios de los otros países); «Todas» no repite."""
+    no, se = _dos_tiendas()
+    dk = _conectar(dominio="happyflops-danmark.myshopify.com", pais="DK", llave="tw_llave_dk_3")
+    canal, pixel = [], []
+    for dia in range(10):
+        f = _hace(dia)
+        for ad, gasto, pedidos in (("d1", 30, 2), ("d2", 25, 0)):
+            canal.append({"canal": "facebook-ads", "ad_id": ad, "fecha": f, "anuncio": f"Anuncio {ad}",
+                          "gasto": gasto, "impresiones": 2000, "clics": 40, "utm_ok": True})
+            pixel.append({"canal": "facebook-ads", "ad_id": ad, "fecha": f, "pedidos": pedidos, "ingresos": pedidos * 90})
+    datos.reemplazar_anuncios_canal("acme", dk, _hace(9), _hace(0), canal)
+    datos.reemplazar_anuncios_pixel("acme", dk, _hace(9), _hace(0), pixel)
+
+    propia = app["c"].get(f"/cliente/acme/triple-whale/panel?tienda={dk}").data.decode()
+    assert "Anuncio d1" in propia and NOTA_COMPARTIDA not in propia and NOTA_EVALUAR not in propia
+    compartida = app["c"].get(f"/cliente/acme/triple-whale/panel?tienda={se}").data.decode()
+    assert NOTA_COMPARTIDA in compartida and NOTA_EVALUAR in compartida
+    ia = compartida[compartida.index('id="tw-ia"'):]
+    assert NOTA_EVALUAR in ia and "Todas las tiendas" in ia
+    todas = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    assert NOTA_COMPARTIDA in todas and NOTA_EVALUAR not in todas
+
+
 def test_tienda_de_otro_proyecto_o_invalida_es_todas(app):  # noqa: F811
     _dos_tiendas()
     ajena = _conectar(cliente="otro", dominio="otro-norge.myshopify.com")
