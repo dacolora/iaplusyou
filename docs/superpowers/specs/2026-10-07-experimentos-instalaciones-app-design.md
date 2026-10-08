@@ -74,7 +74,7 @@ Verificado en la documentación de Meta (2026-10-07): para promoción de apps, `
 
 ### Decisor y métricas
 - Sin cambios de lógica: el objetivo cae en la puerta de tráfico (CPC/CTR; ThruPlay se omite para imágenes). La puerta de
-  ventas no aplica (sin atribución). El texto del veredicto dice «clic a la tienda», no «instalación».
+  ventas no aplica (sin atribución).
 - `metrica_snapshot` no cambia. Cuando exista SDK se agrega la columna de instalaciones.
 
 ### Plata
@@ -112,3 +112,7 @@ allí y después se sube el puntero. Publicar en ese repositorio externo se cons
 1. Si `LINK_CLICKS` no se acepta para apps, la v1 depende del SDK y se re-plantea (se sabe en la prueba real).
 2. Una fila por plataforma duplica las cifras por pieza en la galería; si estorba se agrupa solo en la vista.
 3. Anuncios de imagen y video comparten creative de tienda; el video de reels exige relaciones de aspecto de Meta, igual que hoy.
+4. Limitación conocida de la v1 (revisión final, 2026-10-08): el ranking top-tercio del decisor ordena juntas las filas
+   de iOS y Android de un país, aunque vivan en conjuntos distintos y compitan por públicos distintos. Una tienda con
+   CTR más bajo por naturaleza puede caer al tercio de abajo sin perder contra su propia tienda. Si estorba, el ranking
+   se hace por país y plataforma.
