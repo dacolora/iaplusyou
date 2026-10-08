@@ -35,8 +35,9 @@ def entorno(base_temporal, monkeypatch, tmp_path):
         estado["links"].append(k)
         return {"link_id": f"LNK_PRUEBA{len(estado['links'])}", "url": URL_BOLD}
 
-    def estado_link(link_id):
+    def estado_link(link_id, tiempo=bold.TIEMPO):
         estado["consultas"] += 1
+        estado.setdefault("tiempos", []).append(tiempo)
         if isinstance(estado["status"], Exception):
             raise estado["status"]
         return dict(estado["status"])
@@ -47,6 +48,7 @@ def entorno(base_temporal, monkeypatch, tmp_path):
         monkeypatch.setattr(avisos, nombre, lambda *a, _n=nombre, **k: estado["avisos"].append((_n, a)))
     monkeypatch.setattr(avisos, "admin", lambda tipo, *a, **k: estado["avisos"].append(("admin", tipo)))
     monkeypatch.setattr(recargas, "_en_segundo_plano", lambda fn: fn())   # avisos en el mismo hilo
+    monkeypatch.setattr(recargas, "_SIN_FIRMA", {"desde": None, "n": 0, "avisado": False})   # cupo por proceso
     libro.configurar("acme", usuario="admin", cobrar=True)
     estado.update(db=base_temporal, libro=libro, recargas=recargas, bold=bold)
     return estado
@@ -623,3 +625,155 @@ def test_boton_verificar(entorno, cliente_http):
     r = c.post(f"/cliente/acme/saldo/recarga/{rid}/verificar")
     assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#config-ap-saldo")
     assert _recarga(entorno["db"], rid)["estado"] == "expirada"
+
+
+# --- ronda de arreglos 1 ----------------------------------------------------------------------
+
+def test_los_eventos_sin_firma_tienen_cupo_por_hora(entorno, monkeypatch):
+    """Cada POST sin firma escribía una fila y tomaba el candado de escritura:
+    cualquiera podía crecer la tabla y competir con los cobros. Pasado el cupo
+    se responde 401 sin tocar la base."""
+    import cuentas
+    recargas = entorno["recargas"]
+    llamadas = []
+    real = cuentas.limite_ok
+    monkeypatch.setattr(cuentas, "limite_ok", lambda *a, **k: llamadas.append(a) or real(*a, **k))
+    cuerpo = _evento(ref="cv-1-1")
+    for _ in range(recargas.TOPE_SIN_FIRMA_HORA + 5):
+        assert _webhook(recargas, cuerpo, firma="0" * 64) == (401, "firma_invalida")
+    assert len(_eventos(entorno["db"])) == recargas.TOPE_SIN_FIRMA_HORA
+    assert len(llamadas) == recargas.TOPE_SIN_FIRMA_HORA   # pasado el cupo del proceso, ni el contador global
+
+
+def test_el_cupo_sin_firma_es_global(entorno):
+    """Otro proceso (otro hilo de gunicorn) ya gastó el cupo global: este no escribe."""
+    import cuentas
+    recargas = entorno["recargas"]
+    for _ in range(recargas.TOPE_SIN_FIRMA_HORA):
+        assert cuentas.limite_ok("bold:sinfirma", recargas.TOPE_SIN_FIRMA_HORA, 3600)
+    assert _webhook(recargas, _evento(ref="x"), firma="0" * 64) == (401, "firma_invalida")
+    assert _eventos(entorno["db"]) == []
+
+
+def test_el_cupo_sin_firma_se_renueva_cada_hora(entorno, monkeypatch):
+    recargas = entorno["recargas"]
+    reloj = {"t": 1000.0}
+    monkeypatch.setattr(recargas, "_reloj", lambda: reloj["t"])
+    recargas._SIN_FIRMA.update(n=recargas.TOPE_SIN_FIRMA_HORA, desde=1000.0)
+    _webhook(recargas, _evento(ref="x"), firma="0" * 64)
+    assert _eventos(entorno["db"]) == []
+    reloj["t"] += 3601
+    _webhook(recargas, _evento(ref="x"), firma="0" * 64)
+    assert len(_eventos(entorno["db"])) == 1
+
+
+def test_la_limpieza_diaria_borra_los_eventos_sin_firma_viejos(entorno):
+    from tareas import mantenimiento
+    db, recargas = entorno["db"], entorno["recargas"]
+    _, ref = _pendiente(entorno)
+    _webhook(recargas, _evento(ref=ref, evento="ev-firmado"))
+    _webhook(recargas, _evento(ref=ref, evento="ev-viejo-firmado"))
+    _webhook(recargas, _evento(ref="x", evento="sf-viejo"), firma="0" * 64)
+    _webhook(recargas, _evento(ref="x", evento="sf-nuevo"), firma="0" * 64)
+    viejo = (datetime.now() - timedelta(days=31)).isoformat(timespec="seconds")
+    pe = db.pago_evento
+    with db.conectar() as con:
+        con.execute(pe.update().where(pe.c.evento_id == "ev-viejo-firmado").values(recibido_en=viejo))
+        sin_firma = [r.id for r in con.execute(sa.select(pe.c.id).where(pe.c.firma_ok.is_(False)).order_by(pe.c.id))]
+        con.execute(pe.update().where(pe.c.id == sin_firma[0]).values(recibido_en=viejo))
+    mantenimiento.ejecutar_cola_limpiar({"payload": {}})
+    quedan = _eventos(db)
+    assert sorted(e["evento_id"] for e in quedan if e["firma_ok"]) == ["ev-firmado", "ev-viejo-firmado"]
+    assert [e["id"] for e in quedan if not e["firma_ok"]] == [sin_firma[1]]
+
+
+def test_json_anidado_sin_fin_es_invalido(entorno):
+    cuerpo = b"[" * 60000
+    assert len(cuerpo) <= entorno["recargas"].MAX_CUERPO
+    assert _webhook(entorno["recargas"], cuerpo) == (400, "invalido")
+
+
+def test_verificar_pendientes_para_con_bold_caido(entorno):
+    """Con Bold caído no se espera por cada recarga (el carril general del
+    worker es uno solo): a la primera caída, la vuelta termina."""
+    for _ in range(3):
+        _pendiente(entorno)
+    entorno["status"] = entorno["bold"].ErrorBold("No se pudo hablar con Bold (Timeout)", caida=True)
+    assert entorno["recargas"].verificar_pendientes() == 0
+    assert entorno["consultas"] == 1
+    assert [r["estado"] for r in _recargas(entorno["db"])] == ["pendiente"] * 3
+
+
+def test_verificar_pendientes_sigue_si_el_error_no_es_caida(entorno):
+    for _ in range(3):
+        _pendiente(entorno)
+    entorno["status"] = entorno["bold"].ErrorBold("Bold no respondió el estado (HTTP 404)")
+    entorno["recargas"].verificar_pendientes()
+    assert entorno["consultas"] == 3
+
+
+def test_verificar_pendientes_tiene_tope_de_tiempo(entorno, monkeypatch):
+    recargas = entorno["recargas"]
+    for _ in range(3):
+        _pendiente(entorno)
+    reloj = {"t": 0.0}
+
+    def avanza():
+        reloj["t"] += 40
+        return reloj["t"]
+    monkeypatch.setattr(recargas, "_reloj", avanza)
+    recargas.verificar_pendientes()
+    assert entorno["consultas"] < 3
+
+
+def test_verificar_pendientes_usa_el_tiempo_largo_y_la_pagina_el_corto(entorno, cliente_http):
+    rid, _ = _pendiente(entorno)
+    entorno["recargas"].verificar_pendientes()
+    cliente_http.como("user_acme").get(f"/cliente/acme/saldo/recarga/{rid}/estado")
+    assert entorno["tiempos"] == [entorno["bold"].TIEMPO, entorno["bold"].TIEMPO_INTERACTIVO]
+
+
+def test_estado_no_consulta_si_ya_hay_una_consulta_de_esa_recarga(entorno, cliente_http, monkeypatch):
+    from cobros import rutas
+    rid, _ = _pendiente(entorno)
+    monkeypatch.setattr(rutas, "_EN_CURSO", {rid})
+    j = cliente_http.como("user_acme").get(f"/cliente/acme/saldo/recarga/{rid}/estado").get_json()
+    assert j["estado"] == "pendiente" and entorno["consultas"] == 0
+
+
+def test_estado_no_consulta_si_ya_hay_dos_consultas_a_bold(entorno, cliente_http, monkeypatch):
+    import threading
+    from cobros import rutas
+    rid, _ = _pendiente(entorno)
+    sem = threading.BoundedSemaphore(2)
+    monkeypatch.setattr(rutas, "_SEMAFORO", sem)
+    sem.acquire(); sem.acquire()
+    try:
+        r = cliente_http.como("user_acme").get(f"/cliente/acme/saldo/recarga/{rid}/estado")
+        assert r.get_json()["estado"] == "pendiente" and entorno["consultas"] == 0
+        r = cliente_http.post(f"/cliente/acme/saldo/recarga/{rid}/verificar")
+        assert r.status_code == 302 and entorno["consultas"] == 0
+    finally:
+        sem.release(); sem.release()
+
+
+def test_estado_suelta_la_marca_y_el_semaforo_aunque_bold_reviente(entorno, cliente_http, monkeypatch):
+    from cobros import rutas
+    rid, _ = _pendiente(entorno)
+
+    def revienta(*a, **k):
+        raise RuntimeError("inesperado")
+    monkeypatch.setattr(entorno["recargas"], "verificar", revienta)
+    c = cliente_http.como("user_acme")
+    with pytest.raises(RuntimeError):
+        c.get(f"/cliente/acme/saldo/recarga/{rid}/estado")
+    assert rutas._EN_CURSO == set()
+    assert rutas._SEMAFORO.acquire(blocking=False) and rutas._SEMAFORO.acquire(blocking=False)
+    rutas._SEMAFORO.release(); rutas._SEMAFORO.release()
+
+
+def test_un_monto_invalido_no_gasta_el_tope_por_hora(entorno, cliente_http):
+    c = cliente_http.como("user_acme")
+    for _ in range(12):
+        c.post("/cliente/acme/saldo/recargar", data={"usd": "5"})
+    assert c.post("/cliente/acme/saldo/recargar", data={"usd": "50"}).headers["Location"] == URL_BOLD

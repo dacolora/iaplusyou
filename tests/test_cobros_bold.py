@@ -180,3 +180,38 @@ def test_firma_con_secreta_vacia_solo_en_modo_pruebas(bold, monkeypatch):
     monkeypatch.setenv("BOLD_PRUEBAS", "1")
     assert bold.firma_valida(cuerpo, firma_vacia) is True
     assert bold.firma_valida(cuerpo, _firma(SECRETA, cuerpo)) is False
+
+
+# --- ronda de arreglos 1: Bold caído y tiempos de espera --------------------------------------
+
+@pytest.mark.parametrize("status,caida", [(400, False), (404, False), (500, True), (503, True)])
+def test_error_http_dice_si_bold_esta_caido(bold, monkeypatch, status, caida):
+    monkeypatch.setattr(bold.requests, "get", lambda *a, **k: _Respuesta(status, {}))
+    monkeypatch.setattr(bold.requests, "post", lambda *a, **k: _Respuesta(status, {}))
+    with pytest.raises(bold.ErrorBold) as e:
+        bold.estado_link("LNK_ABC123")
+    assert e.value.caida is caida
+    with pytest.raises(bold.ErrorBold) as e:
+        bold.crear_link(referencia="cv-1-1", usd=50, descripcion="x", callback_url="https://a/b")
+    assert e.value.caida is caida
+
+
+def test_sin_red_es_bold_caido_y_un_id_raro_no(bold, monkeypatch):
+    def caida(*a, **k):
+        raise bold.requests.Timeout("lento")
+    monkeypatch.setattr(bold.requests, "get", caida)
+    with pytest.raises(bold.ErrorBold) as e:
+        bold.estado_link("LNK_ABC123")
+    assert e.value.caida is True
+    with pytest.raises(bold.ErrorBold) as e:
+        bold.estado_link("no-es-un-link")
+    assert e.value.caida is False
+
+
+def test_estado_link_usa_el_tiempo_de_espera_pedido(bold, monkeypatch):
+    vistos = []
+    monkeypatch.setattr(bold.requests, "get",
+                        lambda url, headers=None, timeout=None: vistos.append(timeout) or _Respuesta(200, {"status": "ACTIVE"}))
+    bold.estado_link("LNK_ABC123")
+    bold.estado_link("LNK_ABC123", tiempo=bold.TIEMPO_INTERACTIVO)
+    assert vistos == [15, (3, 5)]

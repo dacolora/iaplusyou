@@ -17,12 +17,19 @@ from flask_babel import gettext
 
 BASE = "https://integrations.api.bold.co"
 CHECKOUT = "https://checkout.bold.co/"
-TIEMPO = 15
+TIEMPO = 15                 # worker y crear el link: Bold puede tardar
+TIEMPO_INTERACTIVO = (3, 5)  # (conectar, leer) de un sondeo de la página: no retener un hilo de gunicorn
 _LINK = re.compile(r"LNK_[A-Za-z0-9]+")
 
 
 class ErrorBold(Exception):
-    """Bold no respondió lo esperado. El texto va en palabras y sin llaves."""
+    """Bold no respondió lo esperado. El texto va en palabras y sin llaves.
+    `caida` = Bold no está disponible (red, tiempo agotado o HTTP 5xx): quien
+    consulta muchas recargas seguidas para ahí en vez de esperar por cada una."""
+
+    def __init__(self, mensaje, caida=False):
+        super().__init__(mensaje)
+        self.caida = bool(caida)
 
 
 def _identidad():
@@ -47,10 +54,10 @@ def _datos(respuesta):
 
 def _sin_red(e):
     # Solo el nombre del error: el texto de una excepción de requests puede traer la URL o cabeceras.
-    return ErrorBold(gettext("No se pudo hablar con Bold (%(tipo)s)", tipo=type(e).__name__))
+    return ErrorBold(gettext("No se pudo hablar con Bold (%(tipo)s)", tipo=type(e).__name__), caida=True)
 
 
-def crear_link(*, referencia, usd, descripcion, callback_url, correo=None, horas=24):
+def crear_link(*, referencia, usd, descripcion, callback_url, correo=None, horas=24, tiempo=TIEMPO):
     if not configurado():
         raise ErrorBold(gettext("Faltan las llaves de Bold"))
     cuerpo = {
@@ -64,11 +71,12 @@ def crear_link(*, referencia, usd, descripcion, callback_url, correo=None, horas
     if correo:
         cuerpo["payer_email"] = correo
     try:
-        r = requests.post(f"{BASE}/online/link/v1", json=cuerpo, headers=_cabeceras(), timeout=TIEMPO)
+        r = requests.post(f"{BASE}/online/link/v1", json=cuerpo, headers=_cabeceras(), timeout=tiempo)
     except requests.RequestException as e:
         raise _sin_red(e) from None
     if r.status_code >= 400:
-        raise ErrorBold(gettext("Bold no aceptó el pedido (HTTP %(codigo)s)", codigo=r.status_code))
+        raise ErrorBold(gettext("Bold no aceptó el pedido (HTTP %(codigo)s)", codigo=r.status_code),
+                        caida=r.status_code >= 500)
     d = _datos(r)
     link, url = d.get("payment_link"), d.get("url")
     if not link or not url or not str(url).startswith(CHECKOUT):
@@ -76,15 +84,16 @@ def crear_link(*, referencia, usd, descripcion, callback_url, correo=None, horas
     return {"link_id": str(link)[:40], "url": str(url)}
 
 
-def estado_link(link_id):
+def estado_link(link_id, tiempo=TIEMPO):
     if not _LINK.fullmatch(str(link_id or "")):
         raise ErrorBold(gettext("Identificador de link inválido"))
     try:
-        r = requests.get(f"{BASE}/online/link/v1/{link_id}", headers=_cabeceras(), timeout=TIEMPO)
+        r = requests.get(f"{BASE}/online/link/v1/{link_id}", headers=_cabeceras(), timeout=tiempo)
     except requests.RequestException as e:
         raise _sin_red(e) from None
     if r.status_code >= 400:
-        raise ErrorBold(gettext("Bold no respondió el estado (HTTP %(codigo)s)", codigo=r.status_code))
+        raise ErrorBold(gettext("Bold no respondió el estado (HTTP %(codigo)s)", codigo=r.status_code),
+                        caida=r.status_code >= 500)
     d = _datos(r)
     total = d.get("total")
     return {"status": str(d.get("status") or "").upper(), "transaction_id": d.get("transaction_id"),

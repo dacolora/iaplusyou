@@ -25,6 +25,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import cola
+import cuentas
 import db
 import idiomas
 from cobros import avisos, bold, libro
@@ -35,6 +36,15 @@ MIN_USD = 10
 MAX_USD = 1000
 MAX_CUERPO = 65536          # tope del cuerpo del webhook (spec §9.3)
 HORAS_VIGENTE = 26          # el link vence a las 24 h; 2 h de gracia para el webhook o la consulta
+# Eventos con firma inválida: cuántos se anotan por hora (por proceso y en total).
+# Cada uno escribe y toma el candado de escritura de SQLite; sin tope, cualquiera
+# podía crecer la tabla y competir con los cobros (revisión 2026-10-08).
+TOPE_SIN_FIRMA_HORA = 50
+DIAS_SIN_FIRMA = 30          # la limpieza diaria borra los más viejos
+TOPE_VUELTA_S = 60           # verificar_pendientes no retiene el carril general más que esto
+_reloj = time.monotonic
+_SIN_FIRMA = {"desde": None, "n": 0, "avisado": False}
+_CANDADO_SIN_FIRMA = threading.Lock()
 PROVEEDOR = "bold"
 MEDIO_BOLD = "Bold"
 MEDIO_MANUAL = "manual"
@@ -89,7 +99,7 @@ def _fila(con, recarga_id):
 
 # ------------------------------------------------------------------- crear ---
 
-def _usd_entero(usd):
+def validar_usd(usd):
     """Dólares enteros de MIN_USD a MAX_USD: un int o un texto de dígitos."""
     mensaje = gettext("La recarga va de US$ %(min)s a US$ %(max)s, en dólares enteros.", min=MIN_USD, max=MAX_USD)
     if isinstance(usd, bool):
@@ -110,7 +120,7 @@ def crear(cliente, usd, usuario, correo=None):
     {"id", "url"} (la url del checkout de Bold). Lanza ValueError (monto o
     configuración, sin escribir nada) o bold.ErrorBold (la recarga queda
     `rechazada` con el motivo en `nota`)."""
-    usd = _usd_entero(usd)
+    usd = validar_usd(usd)
     base = _plataforma_url()
     if not base:
         raise ValueError(gettext("Falta PLATAFORMA_URL en el servidor"))
@@ -208,6 +218,40 @@ def _aplicar(con, tipo, ref, pago_id, data):
     return "anulada", fila
 
 
+def _cupo_sin_firma():
+    """¿Se puede anotar otro evento sin firma? Primero un contador en memoria
+    (sin tocar la base: pasado el cupo del proceso, ni el candado), después el
+    global en kv (`cuentas.limite_ok`), que cuenta todos los procesos."""
+    ahora = _reloj()
+    with _CANDADO_SIN_FIRMA:
+        if _SIN_FIRMA["desde"] is None or ahora - _SIN_FIRMA["desde"] >= 3600:
+            _SIN_FIRMA.update(desde=ahora, n=0, avisado=False)
+        if _SIN_FIRMA["n"] >= TOPE_SIN_FIRMA_HORA:
+            if not _SIN_FIRMA["avisado"]:
+                _SIN_FIRMA["avisado"] = True
+                log.warning("más de %s eventos de Bold con firma inválida en una hora: no se anotan más",
+                            TOPE_SIN_FIRMA_HORA)
+            return False
+        _SIN_FIRMA["n"] += 1
+    try:
+        if cuentas.limite_ok("bold:sinfirma", TOPE_SIN_FIRMA_HORA, 3600):
+            return True
+    except Exception:  # noqa: BLE001 — sin contador no se anota; la respuesta sigue siendo 401
+        log.exception("no se pudo contar un evento de Bold con firma inválida")
+        return False
+    log.warning("cupo global de eventos de Bold con firma inválida agotado: no se anota")
+    return False
+
+
+def limpiar_eventos_sin_firma(dias=DIAS_SIN_FIRMA):
+    """La limpieza diaria (tareas.mantenimiento, cola_limpiar): los eventos con
+    firma inválida de hace más de `dias`. Los firmados no se borran nunca."""
+    pe = db.pago_evento
+    limite = (datetime.now() - timedelta(days=dias)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        return con.execute(pe.delete().where(pe.c.firma_ok.is_(False), pe.c.recibido_en < limite)).rowcount
+
+
 def _guardar_sin_firma(evento_id, tipo, ref):
     """Un evento con firma inválida queda anotado, sin el cuerpo. Su evento_id
     propio es único (no el que dice traer): quien mande sin firma el id de un
@@ -235,7 +279,7 @@ def procesar_webhook(cuerpo, firma):
     firma_ok = bold.firma_valida(cuerpo, firma)
     try:
         ev = json.loads(cuerpo.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):   # RecursionError: «[[[[…» anidado sin fin
         return 400, "invalido"
     if not isinstance(ev, dict):
         return 400, "invalido"
@@ -245,7 +289,8 @@ def procesar_webhook(cuerpo, firma):
     ref = str(_dict(data.get("metadata")).get("reference") or "")[:60] or None
     pago_id = str(data.get("payment_id") or ev.get("subject") or "")[:40] or None
     if not firma_ok:
-        _guardar_sin_firma(evento_id, tipo, ref)
+        if _cupo_sin_firma():
+            _guardar_sin_firma(evento_id, tipo, ref)
         return 401, "firma_invalida"
     if not evento_id:
         return 400, "invalido"
@@ -293,19 +338,19 @@ def _avisar_evento(resultado, tipo, ref, fila):
 
 # ----------------------------------------------------- verificar (respaldo) ---
 
-def _verificar(recarga_id):
-    """(estado, consultado): consultado=False si Bold no respondió."""
+def _verificar(recarga_id, tiempo=bold.TIEMPO):
+    """(estado, error): error = el ErrorBold si Bold no respondió, o None."""
     with db.conectar() as con:
         fila = _fila(con, recarga_id)
     if fila is None:
-        return None, True
+        return None, None
     if fila["medio"] != "bold" or fila["estado"] != "pendiente" or not fila["link_id"]:
-        return fila["estado"], True
+        return fila["estado"], None
     try:
-        est = bold.estado_link(fila["link_id"])
+        est = bold.estado_link(fila["link_id"], tiempo=tiempo)
     except bold.ErrorBold as e:
         log.warning("no se pudo verificar la recarga %s con Bold: %s", recarga_id, cola.sin_token(str(e)))
-        return "pendiente", False
+        return "pendiente", e
     r = db.recarga
     status = est.get("status")
     acreditada = False
@@ -329,15 +374,16 @@ def _verificar(recarga_id):
     if acreditada:
         _avisar_acreditada(fila["cliente"], fila["milesimas"], MEDIO_BOLD)
     with db.conectar() as con:
-        return (_fila(con, recarga_id) or {}).get("estado"), True
+        return (_fila(con, recarga_id) or {}).get("estado"), None
 
 
-def verificar(recarga_id):
+def verificar(recarga_id, tiempo=bold.TIEMPO):
     """Pregunta a Bold por el link de una recarga `bold/pendiente` y aplica lo
     que diga: PAID acredita (mismo cambio condicional que el webhook, así que
     correr los dos no acredita dos veces), EXPIRED la vence. Con Bold caído la
-    deja pendiente. Devuelve el estado (None si la recarga no existe)."""
-    return _verificar(recarga_id)[0]
+    deja pendiente. Devuelve el estado (None si la recarga no existe).
+    `tiempo`: la espera de la consulta; la página pasa bold.TIEMPO_INTERACTIVO."""
+    return _verificar(recarga_id, tiempo=tiempo)[0]
 
 
 def verificar_pendientes():
@@ -345,6 +391,10 @@ def verificar_pendientes():
     de más de HORAS_VIGENTE que Bold no dio por pagadas. Una vieja se consulta
     una última vez antes de vencerla (el pago pudo entrar sin que llegara el
     webhook) y, si Bold no responde, se deja para la próxima vuelta.
+
+    Corre en el carril general del worker (uno solo): con Bold caído (red,
+    tiempo agotado, HTTP 5xx) la vuelta termina a la primera caída, y nunca
+    pasa de TOPE_VUELTA_S; las que quedan van en la próxima vuelta.
     Devuelve cuántas revisó."""
     r = db.recarga
     limite = (datetime.now() - timedelta(hours=HORAS_VIGENTE)).isoformat(timespec="seconds")
@@ -352,14 +402,21 @@ def verificar_pendientes():
         filas = con.execute(sa.select(r.c.id, r.c.creada_en).where(r.c.medio == "bold", r.c.estado == "pendiente")
                             .order_by(r.c.id)).all()
     revisadas = 0
+    inicio = _reloj()
     for fila in filas:
+        if _reloj() - inicio > TOPE_VUELTA_S:
+            log.warning("verificar recargas: tope de %s s; quedan para la próxima vuelta", TOPE_VUELTA_S)
+            break
         try:
-            estado, consultado = _verificar(fila.id)
+            estado, error = _verificar(fila.id)
         except Exception:  # noqa: BLE001 — una recarga rara no frena las demás
             log.exception("no se pudo verificar la recarga %s", fila.id)
             continue
+        if error is not None and error.caida:
+            log.warning("verificar recargas: Bold no responde; la vuelta para aquí")
+            break
         revisadas += 1
-        if estado == "pendiente" and consultado and str(fila.creada_en) < limite:
+        if estado == "pendiente" and error is None and str(fila.creada_en) < limite:
             with db.conectar() as con:
                 con.execute(r.update().where(r.c.id == fila.id, r.c.estado == "pendiente")
                             .values(estado="expirada", actualizada_en=db.ahora()))

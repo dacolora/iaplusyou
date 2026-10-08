@@ -26,6 +26,12 @@ TOPE_RECARGAS_HORA = 10
 ESPERA_VERIFICAR = 3        # segundos entre dos consultas a Bold por la misma recarga
 _ULTIMA_VERIFICACION = {}   # recarga_id -> time.monotonic() de la última consulta (por proceso)
 _CANDADO = threading.Lock()
+# Con Bold colgado, cada sondeo de la página retendría un hilo de gunicorn: una
+# sola consulta en vuelo por recarga y como mucho dos consultas de la web a la vez
+# (sin esperar: si no hay cupo se responde el estado guardado), con espera corta
+# (bold.TIEMPO_INTERACTIVO). La tarea periódica del worker usa la espera larga.
+_EN_CURSO = set()
+_SEMAFORO = threading.BoundedSemaphore(2)
 
 
 def _volver(cliente):
@@ -49,10 +55,30 @@ def _toca_verificar(recarga_id):
 
 
 def _verificar_si_toca(recarga):
-    if recarga["medio"] == "bold" and recarga["estado"] == "pendiente" and _toca_verificar(recarga["id"]):
-        recargas.verificar(recarga["id"])
-        return recargas.obtener(recarga["cliente"], recarga["id"])
-    return recarga
+    """Pregunta a Bold si toca y hay cupo; si no, devuelve la recarga tal cual."""
+    rid = recarga["id"]
+    if recarga["medio"] != "bold" or recarga["estado"] != "pendiente":
+        return recarga
+    with _CANDADO:
+        if rid in _EN_CURSO:
+            return recarga
+    if not _toca_verificar(rid):
+        return recarga
+    if not _SEMAFORO.acquire(blocking=False):
+        return recarga
+    try:
+        with _CANDADO:
+            if rid in _EN_CURSO:
+                return recarga
+            _EN_CURSO.add(rid)
+        try:
+            recargas.verificar(rid, tiempo=bold.TIEMPO_INTERACTIVO)
+        finally:
+            with _CANDADO:
+                _EN_CURSO.discard(rid)
+    finally:
+        _SEMAFORO.release()
+    return recargas.obtener(recarga["cliente"], rid)
 
 
 def texto_estado(recarga):
@@ -79,6 +105,11 @@ def recargar(cliente):
     if not bold.configurado():
         flash(gettext("Las recargas en línea todavía no están disponibles; escríbenos para recargar."), "error")
         return _volver(cliente)
+    try:
+        usd = recargas.validar_usd(request.form.get("usd", ""))   # antes del tope: un monto mal escrito no lo gasta
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver(cliente)
     if not cuentas.limite_ok(f"recarga:{cliente}", TOPE_RECARGAS_HORA, 3600):
         flash(gettext("Ya abriste muchas recargas en la última hora. Espera un rato o escríbenos."), "error")
         return _volver(cliente)
@@ -86,7 +117,7 @@ def recargar(cliente):
     cuenta = usuarios.obtener(usuario) or {}
     correo = (cuenta.get("correo") or "").strip() if cuenta.get("correo_verificado") else ""
     try:
-        r = recargas.crear(cliente, request.form.get("usd", ""), usuario, correo=correo or None)
+        r = recargas.crear(cliente, usd, usuario, correo=correo or None)
     except ValueError as e:
         flash(str(e), "error")
         return _volver(cliente)
@@ -129,11 +160,12 @@ def recarga_verificar(cliente, rid):
 
 @bp.post("/pagos/bold/webhook")
 def bold_webhook():
-    """Bold avisa un pago. Cuerpo crudo con tope de 64 KB (también si llega sin
-    Content-Length), firma verificada en recargas, respuesta sin cuerpo."""
+    """Bold avisa un pago. Cuerpo crudo con tope de 64 KB (por Content-Length
+    antes de leer y por lo leído después), firma verificada en recargas,
+    respuesta sin cuerpo."""
     if (request.content_length or 0) > recargas.MAX_CUERPO:
         return "", 413
-    cuerpo = request.stream.read(recargas.MAX_CUERPO + 1)
+    cuerpo = request.get_data(cache=False, as_text=False)
     if len(cuerpo) > recargas.MAX_CUERPO:
         return "", 413
     status, _resultado = recargas.procesar_webhook(cuerpo, request.headers.get("x-bold-signature"))
